@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { describeMediaMismatch, matchMediaIdentity, mediaBasename, mediaMtimeWarning } from '../../src/media-identity.ts';
+import { describeMediaMismatch, matchMediaIdentity, mediaBasename, mediaMtimeWarning } from '../../shared/media/io/media-identity.ts';
 
 test('identical metadata matches without a warning', () => {
   assert.deepEqual(matchMediaIdentity({ name: 'a/clip.mp4', size: 12, lastModified: 100 }, { name: 'clip.mp4', size: 12, lastModified: 100 }), { ok: true, mtimeChanged: false });

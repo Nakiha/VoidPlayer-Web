@@ -1,6 +1,6 @@
-import { WorkerRpc } from '../../src/worker-rpc.ts';
-import { workerReply } from '../../src/worker-protocol.ts';
-import type { FfmpegCommands, PacketCommands, WorkerRequest } from '../../src/worker-protocol.ts';
+import { WorkerRpc } from '../../src/media/workers/worker-rpc.ts';
+import { workerReply } from '../../src/media/workers/worker-protocol.ts';
+import type { FfmpegCommands, PacketCommands, WorkerRequest } from '../../src/media/workers/worker-protocol.ts';
 
 // Compiled by build and the registered contract test; never executed.
 export function workerProtocolTypeChecks(ffmpeg: WorkerRpc, packet: WorkerRpc<PacketCommands>) {
@@ -36,4 +36,4 @@ export function workerProtocolTypeChecks(ffmpeg: WorkerRpc, packet: WorkerRpc<Pa
 }
 
 // @ts-expect-error TS decoding must carry the same source/build namespace
-const missingTsIdentity: import('../../src/worker-protocol.ts').WorkerRequest<import('../../src/worker-protocol.ts').PacketCommands,'init'> = {id:1,type:'init',container:'ts',input:{file:new Blob()},glueURL:'core.js'};
+const missingTsIdentity: import('../../src/media/workers/worker-protocol.ts').WorkerRequest<import('../../src/media/workers/worker-protocol.ts').PacketCommands,'init'> = {id:1,type:'init',container:'ts',input:{file:new Blob()},glueURL:'core.js'};

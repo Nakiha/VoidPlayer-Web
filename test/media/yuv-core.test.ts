@@ -6,9 +6,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { openFFmpegMedia } from '../../src/ffmpeg-media.ts';
-import { openPacketMedia } from '../../src/packet-media.ts';
-import { validateDescription } from '../../src/frame-description.ts';
+import { openFFmpegMedia } from '../../src/media/decoding/ffmpeg-media.ts';
+import { openPacketMedia } from '../../src/media/decoding/packet-media.ts';
+import { validateDescription } from '../../shared/media/frame-description.ts';
 
 for(const mt of [false,true])test(`real ${mt?'mt':'single'} core planes equal independent FFmpeg raw decode, including seek/reset`,async()=>{
   const suffix=mt?'-mt':'';

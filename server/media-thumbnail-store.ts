@@ -8,7 +8,7 @@ import type { IndexDatabase } from './sqlite.ts';
 import { AdminError } from './admin-error.ts';
 import {
   THUMB_CACHE_LIMIT_BYTES, THUMB_MAX_BYTES, validateThumbnailImage,
-} from '../src/thumbnails/contract.ts';
+} from '../shared/thumbnails/contract.ts';
 
 const ID_PATTERN = /^[0-9a-f]{24}$/;
 const RECIPE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9;._-]{0,127}$/;

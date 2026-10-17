@@ -1,6 +1,6 @@
 import { t, msg } from '../i18n.ts';
-import type { CacheEntry } from '../../server/caches.ts';
-import type { RootReasonCode } from '../../server/admin.ts';
+import type { CacheEntry } from '../../shared/service/caches.ts';
+import type { RootReasonCode } from '../../shared/service/admin.ts';
 /** Actionable UI context plus unchanged diagnostic, never raw-text branching. */
 export function requestError(error: unknown) {
   const value = error as {status?: number; message?: string; code?: string};

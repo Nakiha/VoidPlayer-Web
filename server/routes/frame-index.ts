@@ -1,9 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { JS_TS_INDEX_BYTES } from '../../src/ts-packet-index.ts';
-import { FLV_INDEX_BYTES } from '../../src/flv-index-cache.ts';
-import { FFMPEG_INDEX_BYTES } from '../../src/ffmpeg-index-cache.ts';
-import { FLV_MEDIA_INDEX_IDENTITY, parseMediaIndexIdentity } from '../../src/media-index-identity.ts';
-import type { MediaIndexIdentity, MediaIndexKind } from '../../src/media-index-identity.ts';
+import { JS_TS_INDEX_BYTES } from '../../shared/media/indexing/ts-packet-index.ts';
+import { FLV_INDEX_BYTES } from '../../shared/media/indexing/flv-index-cache.ts';
+import { FFMPEG_INDEX_BYTES } from '../../shared/media/indexing/ffmpeg-index-cache.ts';
+import { FLV_MEDIA_INDEX_IDENTITY, parseMediaIndexIdentity } from '../../shared/media/indexing/media-index-identity.ts';
+import type { MediaIndexIdentity, MediaIndexKind } from '../../shared/media/indexing/media-index-identity.ts';
 import { AdminError, adminWriteAllowed } from '../admin.ts';
 import { adminErrorBody } from '../admin-error.ts';
 import { sendJson } from '../http-utils.ts';

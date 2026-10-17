@@ -11,7 +11,7 @@ try {
     await page.route('**/presentation-test', route => route.fulfill({ contentType: 'text/html', body: '<div class="frame-stage"><canvas id="source" width="2" height="2"></canvas></div>' }));
     await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/presentation-test`);
     const result = await page.evaluate(async () => {
-      const { paintFrame, captureFrame, setPresentationGeometry, disposePresentation } = await import('/src/presenter.ts');
+      const { paintFrame, captureFrame, setPresentationGeometry, disposePresentation } = await import('/src/presentation/presenter.ts');
       const { VideoSample } = await import('/node_modules/mediabunny/dist/modules/src/index.js');
       const source = document.getElementById('source');
       const geometry = { width: 200, height: 200, imageWidth: 200, imageHeight: 200, zoom: 1, offsetX: 0, offsetY: 0, dpr: 1 };
@@ -20,7 +20,8 @@ try {
       const original = source.getContext.bind(source);
       source.getContext = (...args) => { if (args[0] === '2d') sourceContexts++; return original(...args); };
       const colors = new Uint8ClampedArray([255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,255,255]);
-      const {rgbaDescription,sampleDescription}=await import('/src/frame-description.ts');
+      const {rgbaDescription}=await import('/shared/media/frame-description.ts');
+      const {sampleDescription}=await import('/src/media/decoding/frame-resource.ts');
       const rgba = pixels => ({ description:rgbaDescription(2,2),kind: 'rgba8', width: 2, height: 2, pixels });
       paintFrame(source, rgba(colors));
       const eager = sourceContexts;
@@ -57,7 +58,7 @@ try {
     assert.equal(result.surfaces, 0);
     console.log(`PASS ${name}: direct native/RGBA upload, lazy pixels, rotation, buffer recycling, 2D fallback and cleanup`);
     const hdrResults = await page.evaluate(async () => {
-      const { paintFrame, captureFrame, setPresentationGeometry, disposePresentation } = await import('/src/presenter.ts');
+      const { paintFrame, captureFrame, setPresentationGeometry, disposePresentation } = await import('/src/presentation/presenter.ts');
       const { VideoSample } = await import('/node_modules/mediabunny/dist/modules/src/index.js');
       const source = document.getElementById('source');
       const geometry = { width: 200, height: 200, imageWidth: 200, imageHeight: 200, zoom: 1, offsetX: 0, offsetY: 0, dpr: 1 };
@@ -69,7 +70,7 @@ try {
           format: 'I420', codedWidth: 2, codedHeight: 2, timestamp,
           colorSpace: { primaries: 'bt2020', transfer, matrix: 'bt2020-ncl', fullRange: false },
         }));
-        const {sampleDescription}=await import('/src/frame-description.ts');
+        const {sampleDescription}=await import('/src/media/decoding/frame-resource.ts');
         const frame = sample => ({ description:sampleDescription(sample,16),kind: 'video-sample', width: 2, height: 2, sample });
         const pixels = () => [...captureFrame(source).getContext('2d').getImageData(0, 0, 2, 2).data];
         const primed = makeSample(0), clone = primed.clone();
@@ -110,9 +111,9 @@ try {
     }
     console.log(`PASS ${name}: PQ/HLG clone metadata and first/play/seek pixel consistency; SDR direct upload restored`);
     const yuvResults=await page.evaluate(async()=>{
-      const {paintFrame,captureFrame,setPresentationGeometry,disposePresentation}=await import('/src/presenter.ts');
+      const {paintFrame,captureFrame,setPresentationGeometry,disposePresentation}=await import('/src/presentation/presenter.ts');
       const {yuvFixture}=await import('/test/helpers/yuv-fixture.ts');
-      const {yuvToRgba}=await import('/src/yuv-color.ts');
+      const {yuvToRgba}=await import('/shared/color/yuv-color.ts');
       const source=document.getElementById('source'),results=[];
       for(const depth of [8,10,12,16])for(const semi of [false,true])for(const full of [false,true])for(const matrix of ['bt709','smpte170m','bt2020-ncl']){
         const f=yuvFixture(depth,semi,full,matrix);
@@ -147,7 +148,7 @@ try {
       }
       for(const zoom of [.25,.6,1,3]){
         const f=yuvFixture(),rgba=yuvToRgba(f.description,f.pixels);
-        const {rgbaDescription}=await import('/src/frame-description.ts');
+        const {rgbaDescription}=await import('/shared/media/frame-description.ts');
         setPresentationGeometry(source,{width:13,height:11,imageWidth:5,imageHeight:3,zoom,offsetX:1.2,offsetY:-.4,dpr:2});
         const read=()=>{const gl=document.querySelector('.frame-presentation').getContext('webgl');const out=new Uint8Array(gl.drawingBufferWidth*gl.drawingBufferHeight*4);gl.readPixels(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight,gl.RGBA,gl.UNSIGNED_BYTE,out);return out;};
         paintFrame(source,{kind:'yuv',description:f.description,pixels:f.pixels,width:5,height:3});const actual=read();

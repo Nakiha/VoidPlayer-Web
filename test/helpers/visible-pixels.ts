@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { FrameDescription } from '../../src/frame-description.ts';
+import type { FrameDescription } from '../../shared/media/frame-description.ts';
 /** Compare full-precision visible samples across cropped and coded allocations.
  * Deliberately independent of presenter/color conversion and excludes padding. */
 export function visiblePixelHash(description: FrameDescription, bytes: ArrayBuffer | Uint8Array | Uint8ClampedArray): string {

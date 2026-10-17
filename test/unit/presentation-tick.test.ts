@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {schedulePresentationTick} from '../../src/presentation-tick.ts';
+import {schedulePresentationTick} from '../../src/presentation/presentation-tick.ts';
 
 test('visible playback recovers from a starved rAF and cancels the late callback',async()=>{
  const oldRaf=globalThis.requestAnimationFrame,oldCancel=globalThis.cancelAnimationFrame,oldDoc=Object.getOwnPropertyDescriptor(globalThis,'document');

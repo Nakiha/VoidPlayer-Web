@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   bitrateAt, bucketize, buildBytePrefixSum, lowerBound, niceCeiling, rangeSumBytes, shouldBucketize,
-} from '../../src/analysis/statistics.ts';
+} from '../../shared/analysis/metadata/statistics.ts';
 
 test('码率滑窗按真实时间窗归集：1s 窗内 1MB 对应 8Mbps', () => {
   // 10 帧，每帧 100KB，均匀分布在 1s 内。

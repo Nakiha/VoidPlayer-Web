@@ -1,11 +1,11 @@
 import { t, msg } from '../../i18n.ts';
 import { indexProgressLabel } from '../index-progress.ts';
-import { installTimeInput } from '../../time-input.ts';
-import { parseTimeInput } from '../../time-input.ts';
-import type { Slot, Mark } from '../../model.ts';
-import { formatTime } from '../../model.ts';
+import { installTimeInput } from '../time-input.ts';
+import { parseTimeInput } from '../../../shared/review/time-input.ts';
+import type { Slot, Mark } from '../../../shared/review/model.ts';
+import { formatTime } from '../../../shared/review/model.ts';
 import { colorLabel, rangeLabel } from '../media-labels.ts';
-import { isHdrTransfer } from '../../presentation-color.ts';
+import { isHdrTransfer } from '../../presentation/presentation-color.ts';
 import { markSymbol, identifyMark, bindMarkHover } from '../mark-symbol.ts';
 import { seekTarget, showSeekPreview } from '../seek-preview.ts';
 import { icon } from '../icons.ts';

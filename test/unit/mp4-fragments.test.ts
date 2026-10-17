@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readMp4Configurations } from '../../src/mp4-config.ts';
+import { readMp4Configurations } from '../../shared/media/containers/mp4-config.ts';
 const u32 = (...values: number[]) => { const b = Buffer.alloc(values.length * 4); values.forEach((n, i) => b.writeUInt32BE(n >>> 0, i * 4)); return b; };
 const u64 = (n: bigint) => { const b = Buffer.alloc(8); b.writeBigUInt64BE(n); return b; };
 const box = (type: string, ...parts: Uint8Array[]) => { const b = Buffer.concat(parts); return Buffer.concat([u32(b.length + 8), Buffer.from(type), b]); };
@@ -71,7 +71,7 @@ test('fragment metadata/sample budgets are enforced before allocating sample arr
 });
 
 test('sparse metadata reads use exact physical ranges, preserve ordinary cache and stop after close', async () => {
-  const { RangeReader } = await import('../../src/range-reader.ts');
+  const { RangeReader } = await import('../../shared/media/io/range-reader.ts');
   const data = new Uint8Array(1024 * 1024), blob = new Blob([data]), slice = blob.slice.bind(blob), ranges: [number, number][] = [];
   blob.slice = (a = 0, b = blob.size, type) => { ranges.push([a, b]); return slice(a, b, type); };
   const source = new RangeReader({ file: blob });
@@ -83,7 +83,7 @@ test('sparse metadata reads use exact physical ranges, preserve ordinary cache a
 });
 
 test('fragment packet locators validate moof offsets but never assign discontinuous AU identities', async () => {
-  const { validateFragmentPacket } = await import('../../src/mp4-config.ts'), config = await read(fixture());
+  const { validateFragmentPacket } = await import('../../shared/media/containers/mp4-config.ts'), config = await read(fixture());
   const packet = { sequenceNumber: config.fragmentSequenceNumbers![0], byteLength: 3, type: 'delta', timestamp: 1 };
   validateFragmentPacket(config, 0, packet, 1000);
   assert.throws(() => validateFragmentPacket(config, 0, { ...packet, sequenceNumber: 0 }, 1000), /mapping/);

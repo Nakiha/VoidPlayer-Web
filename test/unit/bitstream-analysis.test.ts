@@ -1,17 +1,17 @@
-import { summaryOf, packLegacy } from '../../src/bitstream-analysis/products.ts';
+import { summaryOf, packLegacy } from '../../shared/analysis/bitstream/products.ts';
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 // Local service fixtures use the same independently fetched current manifest.
 let fixtureLocation:PropertyDescriptor|undefined,fixtureFetch:typeof fetch;
 beforeEach(()=>{fixtureLocation=Object.getOwnPropertyDescriptor(globalThis,'location');fixtureFetch=globalThis.fetch;Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});globalThis.fetch=async()=>new Response(JSON.stringify({buildId:'test'}));});
 afterEach(()=>{globalThis.fetch=fixtureFetch;if(fixtureLocation)Object.defineProperty(globalThis,'location',fixtureLocation);else Reflect.deleteProperty(globalThis,'location');});
-import { inspectPacketPicture } from "../../src/packet-picture.ts";
+import { inspectPacketPicture } from "../../shared/media/codecs/packet-picture.ts";
 import {
   pictureId,
   validateResult,
-} from "../../src/bitstream-analysis/contract.ts";
-import { AnalysisCache } from "../../src/bitstream-analysis/cache.ts";
-import type { AnalysisResult } from "../../src/bitstream-analysis/contract.ts";
+} from "../../shared/analysis/bitstream/contract.ts";
+import { AnalysisCache } from "../../shared/analysis/bitstream/cache.ts";
+import type { AnalysisResult } from "../../shared/analysis/bitstream/contract.ts";
 const result = (): AnalysisResult => ({
   schema: 1,
   codec: "h264",
@@ -142,7 +142,7 @@ test("cache uses persistent picture identity and releases detached copies", () =
 });
 test("coded crop and rotation share the presenter rectangle and have an exact inverse", async () => {
   const { codedToViewport, viewportToCoded } = await import(
-    "../../src/analysis-overlay/geometry.ts"
+    "../../src/ui/analysis/picture-overlay/geometry.ts"
   );
   for (const rotation of [0, 90, 180, 270]) {
     const token: any = {
@@ -168,7 +168,7 @@ test("coded crop and rotation share the presenter rectangle and have an exact in
   }
 });
 test("atomic cache rejects corrupted and incomplete chunks; quota evicts old pictures", async () => {
-  const { AnalysisStore } = await import("../../server/analysis/store.ts");
+  const { AnalysisStore } = await import("../../server/analysis/bitstream/store.ts");
   const { mkdtemp, writeFile, rm } = await import("node:fs/promises"),
     { tmpdir } = await import("node:os"),
     { join } = await import("node:path");
@@ -211,8 +211,8 @@ test("VVC 8-bit luma QP extends to 63 while AVC and HEVC stop at 51", () => {
 
 test("failure transport preserves stable categories and never classifies by message text", async () => {
   const { AnalysisFailure, failureInfo, restoreFailure, coreFailure } =
-    await import("../../src/bitstream-analysis/failure.ts");
-  const { MediaOpenError } = await import("../../src/media-errors.ts");
+    await import("../../shared/analysis/bitstream/failure.ts");
+  const { MediaOpenError } = await import("../../shared/media/io/media-errors.ts");
   for (const [code, kind] of [
     ["unsupported-container", "unsupported"],
     ["no-safe-anchor-within-budget", "unsupported"],
@@ -262,7 +262,7 @@ test("failure transport preserves stable categories and never classifies by mess
 });
 
 test('GOP grouping follows AU order, preserves open-GOP dependence and splits configuration changes', async () => {
-  const { groupAnalysisGops, gopForAu } = await import('../../src/bitstream-analysis/stream.ts');
+  const { groupAnalysisGops, gopForAu } = await import('../../shared/analysis/bitstream/stream.ts');
   const packets = [0, 1, 2, 3, 4, 5].map(au => ({ au, pts: [0, 3, 1, 2, 5, 4][au], dts: au,
     key: au === 0 || au === 3, configuration: au < 5 ? 0 : 1, size: 6, offset: au * 6 }));
   const groups = groupAnalysisGops(packets);
@@ -275,7 +275,7 @@ test('GOP grouping follows AU order, preserves open-GOP dependence and splits co
 });
 
 test('stream progress waits for transport completion after all pictures, and follows a growing duration', async () => {
-  const { BitstreamAnalysisService } = await import('../../src/bitstream-analysis/service.ts');
+  const { BitstreamAnalysisService } = await import('../../src/analysis/bitstream/service.ts');
   const service = new BitstreamAnalysisService(() => {});
   let release!: () => void, reached!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; }), pending = new Promise<void>(resolve => { reached = resolve; });
@@ -286,7 +286,7 @@ test('stream progress waits for transport completion after all pictures, and fol
     progress({ pictures: 1, totalPictures: 1, checkedUs: 1000, totalUs: 1000, indexComplete: true, waitingForIndex: false });
     reached(); await gate;
   };
-  const source = { info: {}, bitstreamFile: new Blob() } as import('../../src/media.ts').MediaSource;
+  const source = { info: {}, bitstreamFile: new Blob() } as import('../../src/media/source.ts').MediaSource;
   const run = service.requestStream(source, { mode: 'stream', sourceVersion: 'local:uuid', firstPtsUs: 0, durationUs: 100 }, 'A');
   await pending;
   assert.equal(service.state.state, 'pending'); assert.equal(service.state.stream!.pictures, 1);
@@ -295,7 +295,7 @@ test('stream progress waits for transport completion after all pictures, and fol
   assert.equal(service.state.state, 'ready'); assert.equal(complete.totalUs, 1000); assert.equal(complete.checkedUs, 1000);
 });
 
-import { readNalus, validateDiagram, DiagramStore, referenceLayers } from '../../src/bitstream-analysis/diagrams.ts';
+import { readNalus, validateDiagram, DiagramStore, referenceLayers } from '../../shared/analysis/bitstream/diagrams.ts';
 test('inferred reference layers repeat between I/P anchors without climbing across historical B references', () => {
   for (const codec of ['h264', 'hevc', 'vvc'] as const) {
   const store = new DiagramStore(), records: AnalysisResult[] = [];
@@ -427,7 +427,7 @@ test('whole-film summaries survive raw eviction and sparse gaps remain explicit'
 
 
 test('container parameter sets parse independently of frame NALs with bounded AVC/HEVC/VVC records', async () => {
-  const { readContainerHeader, validateContainerHeader } = await import('../../src/bitstream-analysis/diagrams.ts');
+  const { readContainerHeader, validateContainerHeader } = await import('../../shared/analysis/bitstream/diagrams.ts');
   const avc = Uint8Array.from([1,100,0,31,255,225,0,2,103,1,1,0,2,104,1]);
   const array = (type: number, payload: number[]) => [type,0,1,0,payload.length,...payload];
   const hevc = Uint8Array.from([1,...Array(21).fill(0),3,...array(32,[64,1]),...array(33,[66,1]),...array(34,[68,1])]);
@@ -446,7 +446,7 @@ test('container parameter sets parse independently of frame NALs with bounded AV
 });
 
 test('container configurations survive detail eviction without changing frame totals or type filters', async () => {
-  const { DiagramStore, readContainerHeader } = await import('../../src/bitstream-analysis/diagrams.ts');
+  const { DiagramStore, readContainerHeader } = await import('../../shared/analysis/bitstream/diagrams.ts');
   const store = new DiagramStore(1200), r = result();
   r.nalus=[{offset:4,size:20,type:5,temporalId:0,layer:0}];
   r.containerHeader=readContainerHeader('h264',Uint8Array.from([1,100,0,31,255,225,0,2,103,1,1,0,2,104,1]));
@@ -502,7 +502,7 @@ test('DTS summaries survive eviction and never substitute PTS for missing DTS', 
 });
 
 test('parallel cache writers share quota and protect other jobs unread chunks', async () => {
-  const { AnalysisStore } = await import('../../server/analysis/store.ts');
+  const { AnalysisStore } = await import('../../server/analysis/bitstream/store.ts');
   const { mkdtemp, rm } = await import('node:fs/promises'), { tmpdir } = await import('node:os'), { join } = await import('node:path');
   const folder = await mkdtemp(join(tmpdir(), 'vp-parallel-cache-'));
   const a = 'a'.repeat(64), b = 'b'.repeat(64), protectedFiles = new Set<string>();
@@ -520,7 +520,7 @@ test('parallel cache writers share quota and protect other jobs unread chunks', 
 });
 
 test('required reference ABI rejects old or incomplete cores before analysis', async () => {
-  const { validateAnalysisCore, REFERENCE_EXPORTS } = await import('../../src/bitstream-analysis/core-abi.ts');
+  const { validateAnalysisCore, REFERENCE_EXPORTS } = await import('../../shared/analysis/bitstream/core-abi.ts');
   const current = Object.fromEntries(REFERENCE_EXPORTS.map(name => [name, () => name === '_vpa_reference_abi' ? 1 : 0]));
   current._vpa_abi = () => 1;
   assert.throws(() => validateAnalysisCore(current), /known timestamp feed/);
@@ -535,7 +535,7 @@ test('required reference ABI rejects old or incomplete cores before analysis', a
 });
 
 test('retry admission distinguishes transient failures from unsupported capabilities', async () => {
-  const { canRetryAnalysis, AnalysisFailure } = await import('../../src/bitstream-analysis/failure.ts');
+  const { canRetryAnalysis, AnalysisFailure } = await import('../../shared/analysis/bitstream/failure.ts');
   for (const code of ['internal-error', 'resource-limit', 'cancelled'] as const) {
     const reason = new AnalysisFailure(code, code).info;
     assert.equal(canRetryAnalysis({state:reason.kind, reason}), true);
@@ -549,7 +549,7 @@ test('retry admission distinguishes transient failures from unsupported capabili
 
 test('session preserves source completion across eviction, multiple picture tasks, failure and replacement', async () => {
   const { ReviewSession } = await import('../../src/session.ts');
-  const { rgbaDescription } = await import('../../src/frame-description.ts');
+  const { rgbaDescription } = await import('../../shared/media/frame-description.ts');
   const workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
   const locationDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'location');
   const originalFetch=globalThis.fetch;globalThis.fetch=async()=>new Response(JSON.stringify({buildId:'test'}));
@@ -579,7 +579,7 @@ test('session preserves source completion across eviction, multiple picture task
     bitstreamFile:new Blob(['fixture']),
     async frameAt(time: number) { const au=Math.min(2,Math.floor(time/100)); return {kind:'video-sample',ptsUs:au*100,sourcePtsUs:100+au*100,durationUs:100,description:rgbaDescription(16,16),width:16,height:16,byteSize:1024,sourcePicture:{...result().picture,au},close(){}}; },
     async framesAfter(){return[];}, async *framesFrom(){}, dispose(){},
-  } as unknown as import('../../src/media.ts').MediaSource;
+  } as unknown as import('../../src/media/source.ts').MediaSource;
   const session = new ReviewSession((_slot,frame)=>{frame.presentedCommit=++commit;});
   try {
     await session.load('A',async()=>source);
@@ -617,7 +617,7 @@ test('session preserves source completion across eviction, multiple picture task
 
 
 test('remote queue wait does not consume decoder time and repeated polling never renews a stalled stream', async () => {
-  const { AnalysisPollingBudget } = await import('../../src/bitstream-analysis/task-pool.ts');
+  const { AnalysisPollingBudget } = await import('../../shared/analysis/bitstream/task-pool.ts');
   const picture = new AnalysisPollingBudget(false, 0);
   picture.observe({state:'queued',seq:0}, 60000);
   picture.observe({state:'running',seq:1}, 119000);
@@ -652,7 +652,7 @@ const localTransportCases = [
 ] as const;
 for (const { mode, failure } of localTransportCases) {
   test(`local analysis ${mode} ${failure} owns pending/timer/listeners without poisoning recovery`, async t => {
-    const { BitstreamAnalysisService } = await import('../../src/bitstream-analysis/service.ts');
+    const { BitstreamAnalysisService } = await import('../../src/analysis/bitstream/service.ts');
     const { getEventListeners } = await import('node:events');
     const workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
     const locationDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'location');
@@ -696,10 +696,10 @@ for (const { mode, failure } of localTransportCases) {
         if (fail && failure === 'index-provider') throw new Error('injected index provider failure');
         return Promise.resolve({ packets: 1, complete: true });
       },
-    } as unknown as import('../../src/media.ts').MediaSource;
+    } as unknown as import('../../src/media/source.ts').MediaSource;
     const wireResult = mode === 'stream' ? { ...result(), picture: { ...result().picture, au: 0 },
       gop: { startAu: 0, endAu: 1, configuration: 0, anchor: 'closed' as const } } : result();
-    const token: import('../../src/bitstream-analysis/contract.ts').PresentedFrameToken = {
+    const token: import('../../shared/analysis/bitstream/contract.ts').PresentedFrameToken = {
       slot: 'A', generation: 1, commit: 1, picture: result().picture, sourcePtsUs: 100, normalizedMediaUs: 0,
       timeMapping: 'source-microseconds-minus-first-pts',
       geometry: { codedWidth: 16, codedHeight: 16, visibleRect: { x: 0, y: 0, width: 16, height: 16 }, displayWidth: 16, displayHeight: 16, rotation: 0 },
@@ -772,7 +772,7 @@ for (const { mode, failure } of localTransportCases) {
 }
 
 test('viewport analysis selects intersecting GOPs using the requested PTS or DTS axis', async () => {
-  const { viewportAnalysisGops } = await import('../../src/bitstream-analysis/stream.ts');
+  const { viewportAnalysisGops } = await import('../../shared/analysis/bitstream/stream.ts');
   const packets = Array.from({ length: 6 }, (_, au) => ({ au, pts: 100 + au * 10, dts: 90 + au * 10, configuration: 0, key: au % 2 === 0 })) as any;
   assert.deepEqual(viewportAnalysisGops(packets, 100, { startUs: 25, endUs: 35, axis: 'pts' }).map(group => [group.startAu, group.endAu]), [[2, 4]]);
   assert.deepEqual(viewportAnalysisGops(packets, 100, { startUs: 25, endUs: 35, axis: 'dts' }).map(group => [group.startAu, group.endAu]), [[4, 6]]);
@@ -780,9 +780,9 @@ test('viewport analysis selects intersecting GOPs using the requested PTS or DTS
 });
 
 test('pause and resume retain confirmed analysis coverage without borrowing another source generation', async t => {
-  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream.ts');
-  const { BitstreamAnalysisService } = await import('../../src/bitstream-analysis/service.ts');
-  const { AnalysisFailure } = await import('../../src/bitstream-analysis/failure.ts');
+  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream-analysis.ts');
+  const { BitstreamAnalysisService } = await import('../../src/analysis/bitstream/service.ts');
+  const { AnalysisFailure } = await import('../../shared/analysis/bitstream/failure.ts');
   let runs = 0, reached!: () => void, generation = 1;
   const pending = new Promise<void>(resolve => { reached = resolve; }), states: any[] = [];
   const instance = {};
@@ -811,7 +811,7 @@ test('pause and resume retain confirmed analysis coverage without borrowing anot
 
 
 test('automatic viewports preserve explicit work and coalesce to the latest window', async () => {
-  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream.ts');
+  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream-analysis.ts');
   const instance = {}, executed: number[] = [];
   const coordinator = new BitstreamSessionCoordinator({ track: () => ({ instance, generation: 1, available: true }), subscribeInvalidation: () => () => {}, changed() {} });
   let release!: () => void, started!: () => void, explicitSignal!: AbortSignal;
@@ -831,7 +831,7 @@ test('automatic viewports preserve explicit work and coalesce to the latest wind
 });
 
 test('viewport reports index waiting before opening bounded metadata and cancels cleanly', async () => {
-  const { analyzeStream } = await import('../../src/bitstream-analysis/runner.ts');
+  const { analyzeStream } = await import('../../shared/analysis/bitstream/runner.ts');
   const controller = new AbortController(); let reads = 0, waiting = false;
   await assert.rejects(analyzeStream({ size: 100_000_000, async read() { reads++; throw new Error('metadata read before frontier'); }, close() {} },
     { mode: 'stream', sourceVersion: 'viewport', firstPtsUs: 0, durationUs: 1000, window: { startUs: 0, endUs: 100, axis: 'pts' } },
@@ -842,7 +842,7 @@ test('viewport reports index waiting before opening bounded metadata and cancels
 
 
 test('queued automatic work cannot cross a source generation or restart after cancellation', async () => {
-  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream.ts');
+  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream-analysis.ts');
   const instance = {}; let generation = 1;
   const coordinator = new BitstreamSessionCoordinator({ track: () => ({ instance, generation, available: true }), subscribeInvalidation: () => () => {}, changed() {} });
   let release!: () => void, started!: () => void;
@@ -856,7 +856,7 @@ test('queued automatic work cannot cross a source generation or restart after ca
 });
 
 test('a newer automatic window cancels active automatic work', async () => {
-  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream.ts');
+  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream-analysis.ts');
   const instance = {}, coordinator = new BitstreamSessionCoordinator({ track: () => ({ instance, generation: 1, available: true }), subscribeInvalidation: () => () => {}, changed() {} });
   let started!: () => void, oldSignal!: AbortSignal;
   const ready = new Promise<void>(r => { started = r; });

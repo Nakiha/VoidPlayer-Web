@@ -1,5 +1,5 @@
 import { parentPort } from 'node:worker_threads';
-import { rangeBlobReader } from '../../src/range-bridge-reader.ts';
+import { rangeBlobReader } from '../../src/media/io/range-bridge-reader.ts';
 parentPort!.on('message', ({ shared, size, start, end }) => {
   try {
     const adapter = rangeBlobReader(shared, size, request => parentPort!.postMessage(request));

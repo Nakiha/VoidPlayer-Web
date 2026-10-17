@@ -4,9 +4,9 @@ import { open, readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { analyzePicture } from "../../src/bitstream-analysis/runner.ts";
-import { openAnalysisInput } from "../../src/bitstream-analysis/input.ts";
-import { viewportAnalysisGops } from "../../src/bitstream-analysis/stream.ts";
+import { analyzePicture } from "../../shared/analysis/bitstream/runner.ts";
+import { openAnalysisInput } from "../../shared/analysis/bitstream/input.ts";
+import { viewportAnalysisGops } from "../../shared/analysis/bitstream/stream.ts";
 const fixtures = JSON.parse(
   await readFile(
     new URL(
@@ -42,7 +42,7 @@ async function core() {
 }
 for (const fixture of fixtures)
   test(`viewport ${fixture.codec} analyzes only intersecting GOPs and reuses cached pictures`, async () => {
-    const { analyzeStream } = await import("../../src/bitstream-analysis/runner.ts");
+    const { analyzeStream } = await import("../../shared/analysis/bitstream/runner.ts");
     const input = await openAnalysisInput(await reader(fixture.file), new AbortController().signal);
     const firstPtsUs = Math.min(...input.packets.map(packet => packet.pts));
     const packet = input.packets[Math.min(100, input.packets.length - 1)];
@@ -147,7 +147,7 @@ test("random rear H264 target uses a closed IDR and agrees with sequential analy
 });
 test("bounded range uses one decoder and drains each picture before accepting more input", async () => {
   const { analyzeRange } = await import(
-    "../../src/bitstream-analysis/runner.ts"
+    "../../shared/analysis/bitstream/runner.ts"
   );
   const results = [] as any[],
     module = await core();
@@ -560,7 +560,7 @@ test("corrupted AU is never marked exact and closes its isolated core", async ()
 });
 
 for (const fixture of fixtures) test(`whole ${fixture.codec} stream keeps one decoder across GOP/chunks and drains every AU`, async () => {
-  const { analyzeStream } = await import('../../src/bitstream-analysis/runner.ts');
+  const { analyzeStream } = await import('../../shared/analysis/bitstream/runner.ts');
   const module = await core(), originalOpen = module._vpa_open, originalFeed = module._vpa_feed;
   let opens = 0, feeds = 0, pictures = 0;
   module._vpa_open = (...args: any[]) => { opens++; return originalOpen(...args); };
@@ -590,7 +590,7 @@ for (const fixture of fixtures) test(`whole ${fixture.codec} stream keeps one de
 });
 
 test('cancelling a continuous stream preserves completed pictures and closes its reader/core', async () => {
-  const { analyzeStream } = await import('../../src/bitstream-analysis/runner.ts');
+  const { analyzeStream } = await import('../../shared/analysis/bitstream/runner.ts');
   const controller = new AbortController(), module = await core(), input = await reader(fixtures[0].file);
   const close = input.close; let closed = 0, pictures = 0;
   input.close = () => { closed++; close(); };
@@ -603,8 +603,8 @@ test('cancelling a continuous stream preserves completed pictures and closes its
 });
 
 test('continuous execution reopens only on a verified configuration boundary and retains stable AU identity', async () => {
-  const { inspectPacketPicture } = await import('../../src/packet-picture.ts');
-  const { groupAnalysisGops } = await import('../../src/bitstream-analysis/stream.ts');
+  const { inspectPacketPicture } = await import('../../shared/media/codecs/packet-picture.ts');
+  const { groupAnalysisGops } = await import('../../shared/analysis/bitstream/stream.ts');
   const signal = new AbortController().signal;
   const input = await openAnalysisInput(await reader(fixtures[0].file), signal, true);
   const groups = groupAnalysisGops(input.packets);
@@ -630,8 +630,8 @@ test('continuous execution reopens only on a verified configuration boundary and
 });
 
 for (const fixture of fixtures) test(`incremental ${fixture.codec} index emits results before EOF and resumes the same decoder`, async () => {
-  const { analyzeStream } = await import('../../src/bitstream-analysis/runner.ts');
-  const { groupAnalysisGops } = await import('../../src/bitstream-analysis/stream.ts');
+  const { analyzeStream } = await import('../../shared/analysis/bitstream/runner.ts');
+  const { groupAnalysisGops } = await import('../../shared/analysis/bitstream/stream.ts');
   const plan = await openAnalysisInput(await reader(fixture.file), new AbortController().signal, true);
   const groups = groupAnalysisGops(plan.packets), total = plan.packets.length;
   const boundary = groups[1].startAu;
@@ -659,7 +659,7 @@ for (const fixture of fixtures) test(`incremental ${fixture.codec} index emits r
 });
 
 test('cancellation while waiting for the first index GOP closes the reader without opening a decoder', async () => {
-  const { analyzeStream } = await import('../../src/bitstream-analysis/runner.ts');
+  const { analyzeStream } = await import('../../shared/analysis/bitstream/runner.ts');
   const module = await core(), controller = new AbortController(), input = await reader(fixtures[0].file);
   let closed = 0, opens = 0;
   const close = input.close, open = module._vpa_open;
@@ -673,8 +673,8 @@ test('cancellation while waiting for the first index GOP closes the reader witho
 
 test('native metadata adapter drives the analysis frontier without waiting for its full enumeration', async () => {
   const { Input, BlobSource, MP4 } = await import('mediabunny');
-  const { NativeAnalysisAdapter } = await import('../../src/analysis/native-adapter.ts');
-  const { analyzeStream } = await import('../../src/bitstream-analysis/runner.ts');
+  const { NativeAnalysisAdapter } = await import('../../src/analysis/metadata/native-adapter.ts');
+  const { analyzeStream } = await import('../../shared/analysis/bitstream/runner.ts');
   const input = new Input({ source: new BlobSource(new Blob([await readFile(resolve('fixtures/video', fixtures[0].file))])), formats: [MP4] });
   const track = (await input.getPrimaryVideoTrack())!;
   const adapter = new NativeAnalysisAdapter(track, 'native-stream', 0, 10000000);
@@ -700,8 +700,8 @@ test('native metadata adapter drives the analysis frontier without waiting for i
 });
 
 for (const fixture of fixtures) test(`sparse ${fixture.codec} ranges reuse exact pictures and decode only missing output`, async () => {
-  const { analyzeRange } = await import('../../src/bitstream-analysis/runner.ts');
-  const { pictureId } = await import('../../src/bitstream-analysis/contract.ts');
+  const { analyzeRange } = await import('../../shared/analysis/bitstream/runner.ts');
+  const { pictureId } = await import('../../shared/analysis/bitstream/contract.ts');
   const signal = new AbortController().signal;
   const index = await openAnalysisInput(await reader(fixture.file), signal);
   const firstPtsUs = Math.min(...index.packets.map(p => p.pts));
@@ -737,7 +737,7 @@ for (const fixture of fixtures) test(`sparse ${fixture.codec} ranges reuse exact
 });
 
 test('sparse range rejects obsolete, partial, wrong-picture and incomplete-capability cache entries', async () => {
-  const { analyzeRange } = await import('../../src/bitstream-analysis/runner.ts');
+  const { analyzeRange } = await import('../../shared/analysis/bitstream/runner.ts');
   const signal = new AbortController().signal;
   const target = { sourceVersion: 'cache-validation', firstPtsUs: 0, startUs: 0, endUs: 10000 };
   let expected: any;
@@ -790,7 +790,7 @@ test('VVC geometry, QP, intra/inter/skip and L0/L1 agree with independent VTM bl
 });
 
 for(const fixture of fixtures)test(`whole ${fixture.codec} cache resumes holes with bounded reference preroll and no duplicate pictures`,async()=>{
-  const {groupAnalysisGops}=await import('../../src/bitstream-analysis/stream.ts');
+  const {groupAnalysisGops}=await import('../../shared/analysis/bitstream/stream.ts');
   const {gzipSync,gunzipSync}=await import('node:zlib');
   const signal=new AbortController().signal;
   const makeInput=async()=>{

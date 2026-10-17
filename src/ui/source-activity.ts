@@ -3,7 +3,7 @@ import { onLanguageChange, t, msg } from '../i18n.ts';
 import { loadStageLabel } from './media-progress.ts';
 import { icon } from './icons.ts';
 import { progressRingMarkup } from './progress-ring.ts';
-import type { MediaLoadStatus } from '../media-progress.ts';
+import type { MediaLoadStatus } from '../media/progress.ts';
 import type { ReviewSession } from '../session.ts';
 
 /** One persistent view of the shared session's load, including Agent loads. */

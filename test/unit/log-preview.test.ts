@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SessionLog } from '../../src/log.ts';
-import { logPreview, LOG_PREVIEW_CHAR_LIMIT } from '../../src/log-preview.ts';
+import { SessionLog } from '../../src/logging/log.ts';
+import { logPreview, LOG_PREVIEW_CHAR_LIMIT } from '../../src/logging/preview.ts';
 test('large reports have bounded paginated previews without losing export data', () => {
   const log = new SessionLog();
   for (let i = 0; i < 2000; i++) log.append('info', 'media', `event ${i}`, { detail: 'x'.repeat(800), details: Array(20).fill('y'.repeat(800)) });

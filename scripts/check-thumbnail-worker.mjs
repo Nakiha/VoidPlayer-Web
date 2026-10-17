@@ -17,11 +17,11 @@ try {
         const { offerFirstFrameCandidate } = await import('/src/thumbnails/offer.ts');
         const { runThumbnailTask } = await import('/src/thumbnails/tasks.ts');
         const { thumbnailState } = await import('/src/thumbnails/state.ts');
-        const { rgbaDescription } = await import('/src/frame-description.ts');
+        const { rgbaDescription } = await import('/shared/media/frame-description.ts');
         const { getLiveObjectUrl } = await import('/src/thumbnails/client.ts');
         const { getLocalThumbnail } = await import('/src/thumbnails/local-store.ts');
-        const { renderThumbnailCanvas } = await import('/src/presenter.ts');
-        const { yuvToRgba } = await import('/src/yuv-color.ts');
+        const { renderThumbnailCanvas } = await import('/src/presentation/presenter.ts');
+        const { yuvToRgba } = await import('/shared/color/yuv-color.ts');
         const small = renderThumbnailCanvas({ kind: 'rgba8', width: 2, height: 2,
           description: rgbaDescription(2, 2), pixels: Uint8ClampedArray.from([
             0,0,0,255, 255,255,255,255, 255,255,255,255, 0,0,0,255,

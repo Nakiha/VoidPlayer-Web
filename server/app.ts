@@ -1,6 +1,6 @@
 import { StaticAssets } from './static-assets.ts';
-import { AnalysisScheduler } from './analysis/scheduler.ts';
-import { handleAnalysisRoutes } from './analysis/routes.ts';
+import { AnalysisScheduler } from './analysis/bitstream/scheduler.ts';
+import { handleAnalysisRoutes } from './analysis/bitstream/routes.ts';
 import { randomUUID } from 'node:crypto';
 import { guestActor, browserUserId } from './identity.ts';
 import { createServer } from 'node:http';

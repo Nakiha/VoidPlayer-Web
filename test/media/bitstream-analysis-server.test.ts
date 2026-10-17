@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { createMediaServer } from "../../server/app.ts";
 import { MediaLibraryIndex } from "../../server/library.ts";
-import { AnalysisScheduler } from "../../server/analysis/scheduler.ts";
+import { AnalysisScheduler } from "../../server/analysis/bitstream/scheduler.ts";
 async function fixture(
   root = resolve("fixtures/video"),
   name = "h264_9s_1920x1080.mp4",
@@ -283,7 +283,7 @@ test("legal interlaced and high-depth inputs report the same capability reasons 
   const { open } = await import("node:fs/promises");
   const { pathToFileURL } = await import("node:url");
   const { analyzePicture } = await import(
-    "../../src/bitstream-analysis/runner.ts"
+    "../../shared/analysis/bitstream/runner.ts"
   );
   const media = await mkdtemp(join(tmpdir(), "vp-analysis-limit-input-"));
   try {
@@ -519,7 +519,7 @@ test('shared library index discovers GOPs before all batches arrive; cancel deta
     'testsrc2=size=128x64:rate=30:duration=10', '-an', '-c:v', 'libx264', '-g', '30', '-bf', '0',
     '-x264-params', 'scenecut=0:open-gop=0', join(media, name)]);
   const f = await fixture(media, name), scheduler = new AnalysisScheduler(f.library, coreDir, join(f.folder, 'analysis'));
-  const {FLV_MEDIA_INDEX_IDENTITY:identity}=await import('../../src/media-index-identity.ts');
+  const {FLV_MEDIA_INDEX_IDENTITY:identity}=await import('../../shared/media/indexing/media-index-identity.ts');
   const streamTarget = { mode: 'stream' as const, sourceVersion: `${f.entry.id}@${f.entry.version}`, firstPtsUs: 0, durationUs: 10000000, indexIdentity: identity };
   const call = f.library.indexJobs.call.bind(f.library.indexJobs),startBuild=f.library.indexJobs.startBuild.bind(f.library.indexJobs);
   let release = false;
@@ -830,7 +830,7 @@ test('large library FLV viewport reuses the shared index and decodes only inters
   try {
     const demand = await scheduler.submit(f.entry.id, f.entry.version!, {
       mode: 'stream', sourceVersion: `${f.entry.id}@${f.entry.version}`, firstPtsUs: 2000000, durationUs: 10000000,
-      indexIdentity: (await import('../../src/media-index-identity.ts')).FLV_MEDIA_INDEX_IDENTITY,
+      indexIdentity: (await import('../../shared/media/indexing/media-index-identity.ts')).FLV_MEDIA_INDEX_IDENTITY,
       window: { startUs: 4000000, endUs: 4100000, axis: 'pts' },
     }, 'viewport');
     const state = await wait(scheduler, demand.requestId, 'viewport');
@@ -878,7 +878,7 @@ test('readable stream deadline permits slow advancing work but rejects idle hear
 });
 
 test('summary pages resume without duplicate writes; warm work has zero decode and metadata stays independent of blocks',async()=>{
- const {encodeProduct}=await import('../../src/bitstream-analysis/products.ts');
+ const {encodeProduct}=await import('../../shared/analysis/bitstream/products.ts');
  const f=await fixture(resolve('fixtures/video'),'mhw_hevc_fullrange_bt709_3s.mp4'),scheduler=new AnalysisScheduler(f.library,coreDir,join(f.folder,'analysis'));
  const sourceVersion=`${f.entry.id}@${f.entry.version}`,request={mode:'stream' as const,product:'summary' as const,sourceVersion,firstPtsUs:0,durationUs:3000000,window:{startUs:500000,endUs:700000,axis:'pts' as const}};
  const writes=new Map<number,number>(),put=scheduler.store.putOutput.bind(scheduler.store);scheduler.store.putOutput=(id,value,protectedFiles)=>{writes.set(value.picture.au,(writes.get(value.picture.au)??0)+1);return put(id,value,protectedFiles);};
@@ -904,7 +904,7 @@ test('summary pages resume without duplicate writes; warm work has zero decode a
 });
 
 test('large legacy chunks stop below 32 at the cumulative byte reservation and last consumer releases the worker',async()=>{
- const {PRODUCT_LIMIT}=await import('../../src/bitstream-analysis/products.ts');const {BUDGET}=await import('../../src/bitstream-analysis/contract.ts');const f=await fixture(resolve('fixtures/video'),'mhw_hevc_fullrange_bt709_3s.mp4'),scheduler=new AnalysisScheduler(f.library,coreDir,join(f.folder,'analysis'));
+ const {PRODUCT_LIMIT}=await import('../../shared/analysis/bitstream/products.ts');const {BUDGET}=await import('../../shared/analysis/bitstream/contract.ts');const f=await fixture(resolve('fixtures/video'),'mhw_hevc_fullrange_bt709_3s.mp4'),scheduler=new AnalysisScheduler(f.library,coreDir,join(f.folder,'analysis'));
  try{const request=await scheduler.submit(f.entry.id,f.entry.version!,{mode:'stream',sourceVersion:`${f.entry.id}@${f.entry.version}`,firstPtsUs:0,durationUs:3000000,window:{startUs:500000,endUs:700000,axis:'pts'}},'slow');let stable=0,previous=-1,status;
   for(let i=0;i<500;i++){status=await scheduler.streamStatus(request.requestId,'slow',0);assert.ok(status);assert.ok(['queued','running'].includes(status.state),JSON.stringify(status));stable=status.published===previous?stable+1:0;previous=status.published!;if(stable>=8&&status.published!>0)break;await new Promise(r=>setTimeout(r,25));}
   assert.ok(status&&status.published!>0&&status.published!<32);assert.ok(status.chunks.reduce((n,ref)=>n+(ref.bytes??0),0)<=PRODUCT_LIMIT.inFlight && status.chunks.reduce((n,ref)=>n+(ref.bytes??0),0)+BUDGET.resultBytes>PRODUCT_LIMIT.inFlight);scheduler.release(request.requestId,'slow');await scheduler.close();assert.equal(scheduler.resources().running,0);
@@ -914,14 +914,14 @@ test('large legacy chunks stop below 32 at the cumulative byte reservation and l
 test('explicit legacy index namespace rejects old valid records and preserves current single/stream retry hits',async()=>{
  const media=await mkdtemp(join(tmpdir(),'vp-legacy-index-'));(await import('node:child_process')).execFileSync('ffmpeg',['-y','-v','error','-f','lavfi','-i','testsrc2=size=64x64:rate=5:duration=1','-an','-c:v','libx264','-g','5','-bf','0',join(media,'namespace.flv')]);
  const f=await fixture(media,'namespace.flv'),scheduler=new AnalysisScheduler(f.library,coreDir,join(f.folder,'legacy-index-namespace'));
- const {FLV_MEDIA_INDEX_IDENTITY:identity}=await import('../../src/media-index-identity.ts');
+ const {FLV_MEDIA_INDEX_IDENTITY:identity}=await import('../../shared/media/indexing/media-index-identity.ts');
  try{
   const old=await scheduler.submit(f.entry.id,f.entry.version!,target(f.entry),'owner'),oldState=await wait(scheduler,old.requestId,'owner');assert.equal(oldState.state,'complete');const oldId=oldState.resultUrl!.match(/chunks\/([a-f0-9]{64})/)![1];const valid=await scheduler.store.get(oldId);assert.ok(valid,'old implicit namespace is a valid checksummed full result');
   const next=await scheduler.submit(f.entry.id,f.entry.version!,{...target(f.entry),indexIdentity:identity},'owner');assert.equal(next.cacheHit,false,'explicit index must not authorize the old valid namespace');const nextState=await wait(scheduler,next.requestId,'owner');assert.equal(nextState.state,'complete');const nextId=nextState.resultUrl!.match(/chunks\/([a-f0-9]{64})/)![1];assert.notEqual(nextId,oldId);
   const retry=await scheduler.submit(f.entry.id,f.entry.version!,{...target(f.entry),indexIdentity:identity},'owner');assert.equal(retry.cacheHit,true);
   const restarted=new AnalysisScheduler(f.library,coreDir,join(f.folder,'legacy-index-namespace'));try{assert.equal((await restarted.submit(f.entry.id,f.entry.version!,{...target(f.entry),indexIdentity:identity},'owner')).cacheHit,true,'current explicit namespace survives scheduler restart');}finally{await restarted.close();}
   const keys=scheduler as unknown as {pictureChunk:(work:{target:{sourceVersion:string;indexIdentity:typeof identity};buildId:string},picture:NonNullable<typeof valid>['picture'])=>string};
-  const a=keys.pictureChunk({target:{sourceVersion:valid.picture.sourceVersion,indexIdentity:identity},buildId:valid.buildId},valid.picture),b=keys.pictureChunk({target:{sourceVersion:valid.picture.sourceVersion,indexIdentity:{kind:'ffmpeg',streamKey:'video:0',schemaVersion:(await import('../../src/ffmpeg-index-cache.ts')).FFMPEG_INDEX_SCHEMA,indexerBuild:'a'.repeat(40)}},buildId:valid.buildId},valid.picture);assert.equal(a,nextId);assert.notEqual(a,b);assert.equal(await scheduler.store.get(b),null);
+  const a=keys.pictureChunk({target:{sourceVersion:valid.picture.sourceVersion,indexIdentity:identity},buildId:valid.buildId},valid.picture),b=keys.pictureChunk({target:{sourceVersion:valid.picture.sourceVersion,indexIdentity:{kind:'ffmpeg',streamKey:'video:0',schemaVersion:(await import('../../shared/media/indexing/ffmpeg-index-cache.ts')).FFMPEG_INDEX_SCHEMA,indexerBuild:'a'.repeat(40)}},buildId:valid.buildId},valid.picture);assert.equal(a,nextId);assert.notEqual(a,b);assert.equal(await scheduler.store.get(b),null);
   const stream=await scheduler.submit(f.entry.id,f.entry.version!,{mode:'stream',sourceVersion:valid.picture.sourceVersion,indexIdentity:identity,firstPtsUs:0,durationUs:10000000,window:{startUs:0,endUs:1000,axis:'pts'}},'owner');let cursor=0,seen=false;
   for(let i=0;i<1000;i++){const status=await scheduler.streamStatus(stream.requestId,'owner',cursor);assert.ok(status);for(const ref of status.chunks){assert.notEqual(ref.id,oldId);if(ref.au===0){assert.equal(ref.id,nextId);seen=true;}cursor=ref.cursor;}if(status.state==='complete'&&cursor===status.published)break;assert.ok(!['error','limited','cancelled'].includes(status.state),JSON.stringify(status));await new Promise(r=>setTimeout(r,5));}assert.ok(seen);
  }finally{await scheduler.close();await f.close();await rm(media,{recursive:true,force:true});}

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { preferredVideoConfig } from '../../src/decoder-policy.ts';
+import { preferredVideoConfig } from '../../src/media/policy/decoder-policy.ts';
 // Only the SPS prefix needed for the declared reorder bound; geometry stays unknown.
 function hevcDescription(reorder = 0) {
   const ue = (v: number) => { const bits = (v + 1).toString(2); return '0'.repeat(bits.length - 1) + bits; };
@@ -32,7 +32,7 @@ test('hardware preference is attempted before automatic browser decoding', async
 });
 
 test('FLV capability rejection records both preferences without claiming hardware use', async t => {
-  const { nativeFlvDecoder } = await import('../../src/flv-decoder.ts');
+  const { nativeFlvDecoder } = await import('../../src/media/decoding/flv-decoder.ts');
   const saved = Object.getOwnPropertyDescriptor(globalThis, 'VideoDecoder');
   Object.defineProperty(globalThis, 'VideoDecoder', { configurable: true, value: { isConfigSupported: async (config: VideoDecoderConfig) => ({ supported: false, config }) } });
   t.after(() => { if (saved) Object.defineProperty(globalThis, 'VideoDecoder', saved); else Reflect.deleteProperty(globalThis, 'VideoDecoder'); });
@@ -44,7 +44,7 @@ test('FLV capability rejection records both preferences without claiming hardwar
 });
 
 test('opaque native output remains WebCodecs through receive without allocation or cloning', async t => {
-  const { nativeFlvDecoder } = await import('../../src/flv-decoder.ts');
+  const { nativeFlvDecoder } = await import('../../src/media/decoding/flv-decoder.ts');
   let output!: (frame: VideoFrame) => void;
   class Decoder {
     state = 'configured';
@@ -78,8 +78,8 @@ test('opaque native output remains WebCodecs through receive without allocation 
 });
 
 test('4K opaque batches drain with backpressure and no skipped packet after deferred input', async t => {
-  const { nativeFlvDecoder } = await import('../../src/flv-decoder.ts');
-  const { PacketTimeline } = await import('../../src/packet-timeline.ts');
+  const { nativeFlvDecoder } = await import('../../src/media/decoding/flv-decoder.ts');
+  const { PacketTimeline } = await import('../../src/media/decoding/packet-timeline.ts');
   let closeCount = 0, submitted = 0;
   class Chunk { timestamp: number; constructor(init: EncodedVideoChunkInit) { this.timestamp = init.timestamp; } }
   class Decoder {
@@ -124,8 +124,8 @@ test('4K opaque batches drain with backpressure and no skipped packet after defe
 });
 
 for (const [reorder, batch] of [[2, 1], [16, 17]]) test(`native HEVC retains late B pictures, tail and bounded backpressure (reorder=${reorder})`, async t => {
-  const { nativeFlvDecoder } = await import('../../src/flv-decoder.ts');
-  const { PacketTimeline } = await import('../../src/packet-timeline.ts');
+  const { nativeFlvDecoder } = await import('../../src/media/decoding/flv-decoder.ts');
+  const { PacketTimeline } = await import('../../src/media/decoding/packet-timeline.ts');
   let submitted = 0, created = 0, closed = 0;
   class Chunk { timestamp: number; constructor(init: EncodedVideoChunkInit) { this.timestamp = init.timestamp; } }
   class Decoder {
@@ -175,7 +175,7 @@ for (const [reorder, batch] of [[2, 1], [16, 17]]) test(`native HEVC retains lat
 });
 
 test('native HEVC declines unknown reorder bounds before accepting input', async t => {
-  const { nativeFlvDecoder } = await import('../../src/flv-decoder.ts');
+  const { nativeFlvDecoder } = await import('../../src/media/decoding/flv-decoder.ts');
   const events: Record<string, unknown>[] = [];
   assert.equal(await nativeFlvDecoder({ codec: 'hevc', description: new Uint8Array(), packets: [], order: [], firstPts: 0, duration: 0, durations: [] }, undefined, event => events.push(event)), null);
   assert.equal(events[0].reason, 'hevc-reorder-unknown');

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isAnnexB, nalRanges } from '../../src/nal-framing.ts';
-import { inspectPacketPicture } from '../../src/packet-picture.ts';
+import { isAnnexB, nalRanges } from '../../shared/media/codecs/nal-framing.ts';
+import { inspectPacketPicture } from '../../shared/media/codecs/packet-picture.ts';
 const annex=Uint8Array.of(0,0,0,1,0x40,1,0x80);
 
 test('HEVC Annex-B and length-prefixed framing expose the same NAL bytes and preserve IDR-only anchor evidence',()=>{

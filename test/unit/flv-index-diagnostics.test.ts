@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildFlvIndex, extendFlvIndex, FlvReader, scanFlv, flvMediaTiming, flvIndexWarning } from '../../src/flv-demux.ts';
-import type { FlvPacket } from '../../src/flv-demux.ts';
-import { syntheticFlv } from '.././flv-fixture.ts';
+import { buildFlvIndex, extendFlvIndex, FlvReader, scanFlv, flvMediaTiming, flvIndexWarning } from '../../shared/media/containers/flv-demux.ts';
+import type { FlvPacket } from '../../shared/media/containers/flv-demux.ts';
+import { syntheticFlv } from '../flv-fixture.ts';
 
 const description = new Uint8Array([1]);
 function packets(count: number): FlvPacket[] {
@@ -63,7 +63,7 @@ test('broken merge inputs are not mislabeled as duplicate source timestamps', ()
 });
 
 test('resumed scan accepts duplicate source PTS and cache roundtrip retains every packet', async () => {
-  const { serializeFlvIndex, parseFlvIndex } = await import('../../src/flv-index-cache.ts');
+  const { serializeFlvIndex, parseFlvIndex } = await import('../../shared/media/indexing/flv-index-cache.ts');
   const bytes = syntheticFlv();
   const clean = new FlvReader({ file: new Blob([bytes]) });
   const complete = await scanFlv(clean); clean.close();

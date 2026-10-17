@@ -1,4 +1,4 @@
-import { httpFetch } from '.././http-request.ts';
+import { httpFetch } from '../http-request.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
@@ -7,7 +7,7 @@ import path from 'node:path';
 import { mediaId, resolveMediaPath, scanLibrary } from '../../server/library.ts';
 import { createMediaServer } from '../../server/app.ts';
 import { Input, UrlSource, ALL_FORMATS } from 'mediabunny';
-import { inspectVideoTrack } from '../../src/media.ts';
+import { inspectVideoTrack } from '../../src/media/source.ts';
 
 async function withFixture(fn: (root: string) => Promise<void>) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'vp-lib-'));

@@ -1,10 +1,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {executeAnalysisAttempt, executionPolicy, hasExecutionExtension} from '../../src/bitstream-analysis/execution.ts';
-import {RETRY_FULL} from '../../src/bitstream-analysis/execution-error.ts';
-import {AnalysisFailure, coreFailure} from '../../src/bitstream-analysis/failure.ts';
-import {metadataBudgetBytes, PRODUCT_LIMIT} from '../../src/bitstream-analysis/products.ts';
-import type {AnalysisOutput} from '../../src/bitstream-analysis/products.ts';
+import {executeAnalysisAttempt, executionPolicy, hasExecutionExtension} from '../../shared/analysis/bitstream/execution.ts';
+import {RETRY_FULL} from '../../shared/analysis/bitstream/execution-error.ts';
+import {AnalysisFailure, coreFailure} from '../../shared/analysis/bitstream/failure.ts';
+import {metadataBudgetBytes, PRODUCT_LIMIT} from '../../shared/analysis/bitstream/products.ts';
+import type {AnalysisOutput} from '../../shared/analysis/bitstream/products.ts';
 const result=(au:number,attempt:string):AnalysisOutput=>({picture:{au},attempt,blocks:[]} as unknown as AnalysisOutput);
 const cost=(r:AnalysisOutput)=>metadataBudgetBytes(r)+40;
 const policyOptions=()=>({fast:true,policy:executionPolicy(),signal:new AbortController().signal});

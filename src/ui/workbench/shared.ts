@@ -1,5 +1,5 @@
 import type { ReviewSession } from '../../session.ts';
-import type { Slot } from '../../model.ts';
+import type { Slot } from '../../../shared/review/model.ts';
 import type { WorkspaceState, Panel } from '../workspace-state.ts';
 import type { SourceCatalog } from '../source-catalog.ts';
 

@@ -1,10 +1,10 @@
 import { analysisRetryButton } from './analysis/retry.ts';
-import { SLOTS, formatTime } from '../model.ts';
-import type { Slot } from '../model.ts';
-import type { AnalysisBlock, ReadonlyAnalysisResult, PresentedFrameToken } from '../bitstream-analysis/contract.ts';
+import { SLOTS, formatTime } from '../../shared/review/model.ts';
+import type { Slot } from '../../shared/review/model.ts';
+import type { AnalysisBlock, ReadonlyAnalysisResult, PresentedFrameToken } from '../../shared/analysis/bitstream/contract.ts';
 import type { ReviewSession } from '../session.ts';
 import { t, msg } from '../i18n.ts';
-import { failureInfo, canRetryAnalysis } from '../bitstream-analysis/failure.ts';
+import { failureInfo, canRetryAnalysis } from '../../shared/analysis/bitstream/failure.ts';
 import { bitstreamReasonText } from './bitstream-reasons.ts';
 import { installChoiceMenu } from './choice-menu.ts';
 import { installNumericChoice } from './numeric-choice.ts';
@@ -19,7 +19,7 @@ type State = ReturnType<ReviewSession['getState']>;
 type Mode = 'blocks' | 'qp' | 'modes';
 type Entry = {
   sourceId: string;
-  overlay?: import('../analysis-overlay/controller.ts').ReturnOverlay;
+  overlay?: import('./analysis/picture-overlay/controller.ts').ReturnOverlay;
   loading?: Promise<void>;
   tooltip?: HTMLOutputElement;
   request?: AbortController;
@@ -131,7 +131,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
   }
   async function ensureOverlay(slot: Slot, entry: Entry) {
     if (entry.overlay) return;
-    if (!entry.loading) entry.loading = import('../analysis-overlay/controller.ts').then(({ createAnalysisOverlay }) => {
+    if (!entry.loading) entry.loading = import('./analysis/picture-overlay/controller.ts').then(({ createAnalysisOverlay }) => {
       if (entries.get(slot) !== entry || !entry.enabled || life.signal.aborted) return;
       entry.overlay = createAnalysisOverlay(session, slot, canvases[slot]);
       entry.overlay.setMode(mode);

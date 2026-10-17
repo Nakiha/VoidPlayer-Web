@@ -1,8 +1,8 @@
 import { open, stat } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
-import { scanFlv } from '../src/flv-demux.ts';
-import type { FlvScanReader } from '../src/flv-demux.ts';
-import { serializeFlvIndex } from '../src/flv-index-cache.ts';
+import { scanFlv } from '../shared/media/containers/flv-demux.ts';
+import type { FlvScanReader } from '../shared/media/containers/flv-demux.ts';
+import { serializeFlvIndex } from '../shared/media/indexing/flv-index-cache.ts';
 import { fileVersion } from './library.ts';
 import { AdminError } from './admin-error.ts';
 import type { FfmpegIndexBuildProgress } from './frame-index-builder.ts';

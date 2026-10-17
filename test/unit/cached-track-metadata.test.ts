@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { inspectCachedTracks } from '../../src/cached-track-metadata.ts';
-import { attachCachedTrackMetadata } from '../../src/cached-track-metadata-client.ts';
-import { RangeReader } from '../../src/range-reader.ts';
-import type { MediaSource } from '../../src/media.ts';
+import { inspectCachedTracks } from '../../shared/media/containers/cached-track-metadata.ts';
+import { attachCachedTrackMetadata } from '../../src/media/indexing/cached-track-metadata-client.ts';
+import { RangeReader } from '../../shared/media/io/range-reader.ts';
+import type { MediaSource } from '../../src/media/source.ts';
 const box = (name: string, ...data: Uint8Array[]) => { const b = Buffer.concat([Buffer.alloc(8), ...data]); b.writeUInt32BE(b.length); b.write(name,4); return b; };
 const handler = (name: string) => { const b = Buffer.alloc(12); b.write(name,8); return box('hdlr', b); };
 function mp4(codec?: string, channels = 2) {

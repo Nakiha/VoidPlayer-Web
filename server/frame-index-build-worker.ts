@@ -1,16 +1,16 @@
 import { buildJsTsIndexDocument } from './js-ts-index-builder.ts';
-import {TsCombinationNotMigrated} from '../src/ts-packet-source.ts';
+import {TsCombinationNotMigrated} from '../shared/media/containers/ts-packet-source.ts';
 import { parentPort, workerData } from 'node:worker_threads';
 import { openIndexDatabase } from './sqlite.ts';
 import { prepareFrameIndex, FrameIndexStore } from './frame-index-store.ts';
-import { encodeBase64 } from '../src/ffmpeg-index-cache.ts';
+import { encodeBase64 } from '../shared/media/indexing/ffmpeg-index-cache.ts';
 import { AdminError } from './admin-error.ts';
 import { buildFlvIndexDocument } from './flv-index-builder.ts';
 import { buildFfmpegIndexDocument, hasServerIndexCore } from './frame-index-builder.ts';
 import type { FfmpegIndexBuildProgress } from './frame-index-builder.ts';
 import type { FfmpegIndexBuildBatch, FfmpegIndexStreamMetadata } from './frame-index-builder.ts';
 import type { FfmpegIndexBuildProfile } from './frame-index-builder.ts';
-import type { MediaIndexIdentity } from '../src/media-index-identity.ts';
+import type { MediaIndexIdentity } from '../shared/media/indexing/media-index-identity.ts';
 
 const db = openIndexDatabase(workerData.database);
 db.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000;');

@@ -1,16 +1,16 @@
-import {parseJsPacketIndex} from '../src/js-packet-index-cache.ts';
-import { JS_TS_INDEX_BYTES } from '../src/ts-packet-index.ts';
+import { parseJsPacketIndex } from '../shared/media/indexing/js-packet-index-parser.ts';
+import { JS_TS_INDEX_BYTES } from '../shared/media/indexing/ts-packet-index.ts';
 import type { FrameIndexManifest, FrameIndexBatch } from './frame-index-protocol.ts';
 import type { IndexDatabase } from './sqlite.ts';
 import { randomUUID, createHash } from 'node:crypto';
 import { AdminError } from './admin-error.ts';
-import { FLV_INDEX_BYTES, FLV_INDEX_SCHEMA, parseFlvIndex, serializeFlvIndex } from '../src/flv-index-cache.ts';
-import type { FlvIndexDocument } from '../src/flv-index-cache.ts';
-import { FFMPEG_INDEX_BYTES, FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_RECORD_LIMIT, encodeBase64, parseFfmpegIndex, lastFfmpegPts, FFMPEG_NO_TIMESTAMP } from '../src/ffmpeg-index-cache.ts';
-import { FLV_MEDIA_INDEX_IDENTITY, JS_TS_MEDIA_INDEX_IDENTITY, JS_MATROSKA_MEDIA_INDEX_IDENTITY } from '../src/media-index-identity.ts';
-import type { MediaIndexIdentity, MediaIndexKind } from '../src/media-index-identity.ts';
-import { validFfmpegRecovery } from '../src/index-integrity.ts';
-import type { FfmpegIndexRecovery } from '../src/index-integrity.ts';
+import { FLV_INDEX_BYTES, FLV_INDEX_SCHEMA, parseFlvIndex, serializeFlvIndex } from '../shared/media/indexing/flv-index-cache.ts';
+import type { FlvIndexDocument } from '../shared/media/indexing/flv-index-cache.ts';
+import { FFMPEG_INDEX_BYTES, FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_RECORD_LIMIT, encodeBase64, parseFfmpegIndex, lastFfmpegPts, FFMPEG_NO_TIMESTAMP } from '../shared/media/indexing/ffmpeg-index-cache.ts';
+import { FLV_MEDIA_INDEX_IDENTITY, JS_TS_MEDIA_INDEX_IDENTITY, JS_MATROSKA_MEDIA_INDEX_IDENTITY } from '../shared/media/indexing/media-index-identity.ts';
+import type { MediaIndexIdentity, MediaIndexKind } from '../shared/media/indexing/media-index-identity.ts';
+import { validFfmpegRecovery } from '../shared/media/indexing/index-integrity.ts';
+import type { FfmpegIndexRecovery } from '../shared/media/indexing/index-integrity.ts';
 
 export type FrameIndexKind = MediaIndexKind;
 
@@ -198,7 +198,7 @@ export class FrameIndexStore {
       .run(packets, scannedBytes, Date.now(), id, version, ...identityArgs(identity), buildId);
   }
 
-  finishBuild(id: string, version: string, identity: MediaIndexIdentity, epoch: number, buildId: string, scannedBytes: number, stablePresentationUs: number, frames: number, recovery: FfmpegIndexRecovery & Pick<import('../src/ffmpeg-index-cache.ts').FfmpegIndexMetadata, 'analysisConfiguration'> = {}) {
+  finishBuild(id: string, version: string, identity: MediaIndexIdentity, epoch: number, buildId: string, scannedBytes: number, stablePresentationUs: number, frames: number, recovery: FfmpegIndexRecovery & Pick<import('../shared/media/indexing/ffmpeg-index-cache.ts').FfmpegIndexMetadata, 'analysisConfiguration'> = {}) {
     this.db.exec('BEGIN IMMEDIATE');
     try {
       if (epoch !== this.epoch) throw new AdminError(409, '索引缓存已被清理，请重新请求。');

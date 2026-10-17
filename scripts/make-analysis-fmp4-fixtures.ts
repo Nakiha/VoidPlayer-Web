@@ -1,5 +1,5 @@
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
-import { openAnalysisInput } from '../src/bitstream-analysis/input.ts';
+import { openAnalysisInput } from '../shared/analysis/bitstream/input.ts';
 const box = (type: string, ...parts: Uint8Array[]) => { const data = Buffer.concat(parts), head = Buffer.alloc(8); head.writeUInt32BE(data.length + 8); head.write(type, 4); return Buffer.concat([head, data]); };
 const u32 = (...values: number[]) => { const b = Buffer.alloc(values.length * 4); values.forEach((v, i) => b.writeUInt32BE(v >>> 0, i * 4)); return b; };
 function children(bytes: Buffer): { type: string, payload: Buffer }[] {

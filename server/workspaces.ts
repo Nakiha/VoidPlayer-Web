@@ -1,3 +1,5 @@
+import type {SavedWorkspace} from '../shared/service/workspaces.ts';
+export type {SavedWorkspace} from '../shared/service/workspaces.ts';
 import { mkdirSync, chmodSync } from 'node:fs';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
@@ -6,11 +8,11 @@ import type { IndexDatabase } from './sqlite.ts';
 import type { Actor } from './identity.ts';
 import { AdminError } from './admin-error.ts';
 import { ANNOTATION_BYTES } from './annotations.ts';
-import { parseWorkspace } from '../src/workspace-file.ts';
-import type { WorkspaceFile } from '../src/workspace-file.ts';
+import { parseWorkspace } from '../shared/review/workspace-file.ts';
+import type { WorkspaceFile } from '../shared/review/workspace-file.ts';
 
 export const WORKSPACE_BYTES = 32 * 1024 * 1024;
-export type SavedWorkspace = { id: string; name: string; owner: string; ownerName?: string; createdAt: string; updatedAt: string; updatedBy: string; revision: number; bytes: number; tracks: number; marks: number; space: string | null };
+
 const columns = 'id,name,owner,created_at AS createdAt,updated_at AS updatedAt,updated_by AS updatedBy,revision,bytes,tracks,marks,space';
 /** User-authored documents are separate from the rebuildable media index.
  * SQLite transactions commit metadata, content and revision together. */

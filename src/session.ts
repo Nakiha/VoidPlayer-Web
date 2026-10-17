@@ -1,35 +1,36 @@
-import type { PresentedFrameToken } from './bitstream-analysis/contract.ts';
-import type { BitstreamAnalysisService, DeepAnalysisState } from './bitstream-analysis/service.ts';
-import { AnalysisFailure } from './bitstream-analysis/failure.ts';
-import { BitstreamSessionCoordinator, trackSourceVersion } from './session/bitstream.ts';
-import { OpportunisticAudio } from './opportunistic-audio.ts';
-import { mediaDiagnostic } from './media-errors.ts';
-import type { MediaDiagnostic } from './media-errors.ts';
+import type { PresentedFrameToken } from '../shared/analysis/bitstream/contract.ts';
+import type { BitstreamAnalysisService, DeepAnalysisState } from './analysis/bitstream/service.ts';
+import { AnalysisFailure } from '../shared/analysis/bitstream/failure.ts';
+import { BitstreamSessionCoordinator, trackSourceVersion } from './session/bitstream-analysis.ts';
+import { OpportunisticAudio } from './media/audio/opportunistic-audio.ts';
+import { mediaDiagnostic } from '../shared/media/io/media-errors.ts';
+import type { MediaDiagnostic } from '../shared/media/io/media-errors.ts';
 import { unavailableSource } from './session/unavailable-source.ts';
-import { getPresentationChannel, setPresentationChannel } from './presentation-channel.ts';
+import { getPresentationChannel, setPresentationChannel } from './presentation/presentation-channel.ts';
 import { SessionResources } from './session/resources.ts';
-import { schedulePresentationTick } from './presentation-tick.ts';
-import { getColorMode, setColorMode, getReferenceDecode, setReferenceDecode, type ReferenceDecode, type ColorMode } from './color-mode.ts';
-import { getColorOutput, setColorOutput, defaultColorOutput } from './color-output.ts';
-import type { ColorOutput } from './color-output.ts';
-import type { AnnotationDocument } from './annotation-record.ts';import {recordPresentedFrame,updateMediaInfo} from './media-state.ts';
-import type { MediaLoadStatus, MediaOpenProgress } from './media-progress.ts';
-import { abortableLoad } from './media-abort.ts';
-import { parseWorkspace, workspaceUrl } from './workspace-file.ts';
-import type { ComparisonConditions, WorkspaceFile } from './workspace-file.ts';
-import { Viewport } from './viewport.ts';
-import { SLOTS } from './model.ts';
+import { schedulePresentationTick } from './presentation/presentation-tick.ts';
+import { getColorMode, setColorMode, getReferenceDecode, setReferenceDecode } from './media/policy/color-mode.ts';
+import { type ReferenceDecode, type ColorMode } from '../shared/color/decode-policy-types.ts';
+import { getColorOutput, setColorOutput, defaultColorOutput } from '../shared/color/color-output.ts';
+import type { ColorOutput } from '../shared/color/color-output.ts';
+import type { AnnotationDocument } from '../shared/review/annotation-record.ts';import {recordPresentedFrame,updateMediaInfo} from './media/state.ts';
+import type { MediaLoadStatus, MediaOpenProgress } from './media/progress.ts';
+import { abortableLoad } from '../shared/media/io/media-abort.ts';
+import { parseWorkspace, workspaceUrl } from '../shared/review/workspace-file.ts';
+import type { ComparisonConditions, WorkspaceFile } from '../shared/review/workspace-file.ts';
+import { Viewport } from '../shared/presentation/viewport.ts';
+import { SLOTS } from '../shared/review/model.ts';
 import { applyMarkEdit, buildMark, mergeStoredMarks } from './session/marks.ts';
-import { getTrackAnalysisCapabilities, locateTrackAnalysisSample, queryTrackAnalysis, rankTrackAnalysisFrame, resolveTrackAnalysisSeek } from './session/analysis.ts';
+import { getTrackAnalysisCapabilities, locateTrackAnalysisSample, queryTrackAnalysis, rankTrackAnalysisFrame, resolveTrackAnalysisSeek } from './session/metadata-analysis.ts';
 import { currentColorEvidence, currentComparisonConditions, isSameColorConfiguration, persistColorConfiguration, validateColorTransition } from './session/color.ts';
 import { offerSessionThumbnail } from './session/thumbnail.ts';
-import { describeMediaMismatch, matchMediaIdentity } from './media-identity.ts';
-import { FrameQueue, PlaybackMeasurements } from './playback.ts';
-import { planBackwardStep, planForwardStep, slotValue, timeUs } from './model.ts';
-import type { FrameInfo, Mark, MediaInfo, Slot } from './model.ts';
-import type { DecodedFrame, MediaSource } from './media.ts';
-import type { AnalysisAxis, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample, AnalysisStatus } from './analysis/types.ts';
-import { contextLog, log, operationContext, traceOperation, withLogContext } from './log.ts';
+import { describeMediaMismatch, matchMediaIdentity } from '../shared/media/io/media-identity.ts';
+import { FrameQueue, PlaybackMeasurements } from './session/playback.ts';
+import { planBackwardStep, planForwardStep, slotValue, timeUs } from '../shared/review/model.ts';
+import type { FrameInfo, Mark, MediaInfo, Slot } from '../shared/review/model.ts';
+import type { DecodedFrame, MediaSource } from './media/source.ts';
+import type { AnalysisAxis, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample, AnalysisStatus } from '../shared/analysis/metadata/types.ts';
+import { contextLog, log, operationContext, traceOperation, withLogContext } from './logging/log.ts';
 
 const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 
@@ -324,15 +325,15 @@ export class ReviewSession {
     this.bitstream.cancel(slot);
   }
   pauseBitstreamAnalysis(slot: Slot) { slotValue(slot); this.bitstream.pause(slot); }
-  resumeBitstreamAnalysis(slot: Slot, window?: import('./bitstream-analysis/contract.ts').AnalysisStreamTarget['window']) {
+  resumeBitstreamAnalysis(slot: Slot, window?: import('../shared/analysis/bitstream/contract.ts').AnalysisStreamTarget['window']) {
     slotValue(slot);
     if (this.getBitstreamAnalysisState(slot).state !== 'paused') throw new AnalysisFailure('invalid-request', 'Analysis is not paused');
     return this.requestBitstreamStream(slot, undefined, window ?? this.getBitstreamAnalysisState(slot).stream?.window,'explicit',this.getBitstreamAnalysisState(slot).stream?.product);
   }
-  requestBitstreamViewport(slot: Slot, window: NonNullable<import('./bitstream-analysis/contract.ts').AnalysisStreamTarget['window']>) {
+  requestBitstreamViewport(slot: Slot, window: NonNullable<import('../shared/analysis/bitstream/contract.ts').AnalysisStreamTarget['window']>) {
     return this.requestBitstreamStream(slot, undefined, window, 'automatic', 'summary');
   }
-  async requestBitstreamStream(slot: Slot, signal?: AbortSignal, window?: import('./bitstream-analysis/contract.ts').AnalysisStreamTarget['window'], intent: 'explicit' | 'automatic' = 'explicit', product?:'summary'|'blocks') {
+  async requestBitstreamStream(slot: Slot, signal?: AbortSignal, window?: import('../shared/analysis/bitstream/contract.ts').AnalysisStreamTarget['window'], intent: 'explicit' | 'automatic' = 'explicit', product?:'summary'|'blocks') {
     const track = this.tracks.get(slot);
     const progress = await this.runBitstreamTask(slot, signal, { state: 'pending', stream: { slot, checkedUs: 0,
       totalUs: window ? window.endUs - window.startUs : Math.ceil(track?.source.info.durationUs ?? 0), pictures: 0, totalPictures: 0, ...(window ? { window } : {}) } }, (service, taskSignal) => {
@@ -349,10 +350,10 @@ export class ReviewSession {
   queryBitstreamDiagrams(slot: Slot, startAu?: number, limit = 128) {
     return this.bitstream.queryDiagrams(slot, this.tracks.get(slot), this.getPresentedFrame(slot), startAu, limit);
   }
-  bitstreamChartDomain(slot: Slot, axis: import('./analysis/types.ts').AnalysisAxis = 'pts') {
+  bitstreamChartDomain(slot: Slot, axis: import('../shared/analysis/metadata/types.ts').AnalysisAxis = 'pts') {
     return this.bitstream.chartDomain(slot, this.tracks.get(slot), axis);
   }
-  queryBitstreamChart(slot: Slot, startUs?: number, endUs?: number, pixelWidth = 512, axis: import('./analysis/types.ts').AnalysisAxis = 'pts') {
+  queryBitstreamChart(slot: Slot, startUs?: number, endUs?: number, pixelWidth = 512, axis: import('../shared/analysis/metadata/types.ts').AnalysisAxis = 'pts') {
     return this.bitstream.queryChart(slot, this.tracks.get(slot), this.getPresentedFrame(slot), startUs, endUs, pixelWidth, axis);
   }
   cachedBitstreamAnalysis(slot:Slot,presented?:PresentedFrameToken){const token=presented??this.getPresentedFrame(slot);return token?this.bitstream.queries?.cached(token)??null:null;}

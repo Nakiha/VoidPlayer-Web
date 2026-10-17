@@ -1,6 +1,6 @@
 # Session bitstream analysis ownership
 
-`ReviewSession` remains the single UI/Agent facade. `session/bitstream.ts` owns the existing bitstream task bookkeeping; it receives only an opaque track instance, generation and availability snapshot, an invalidation subscription and a state-change notification. It receives no mutable Session, track, source or decoded frame.
+`ReviewSession` remains the single UI/Agent facade. `src/session/bitstream-analysis.ts` owns the existing bitstream task bookkeeping; it receives only an opaque track instance, generation and availability snapshot, an invalidation subscription and a state-change notification. It receives no mutable Session, track, source or decoded frame.
 
 | Owner | Responsibility |
 | --- | --- |

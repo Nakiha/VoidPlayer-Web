@@ -1,5 +1,5 @@
 import { t, msg } from '../i18n.ts';
-import { colorLabel as sourceColorLabel } from '../media-metadata.ts';
+import { colorLabel as sourceColorLabel } from '../media/metadata.ts';
 
 // Keep language dependencies out of the metadata used by demuxers and workers.
 export const colorLabel = (value: string | null | undefined) => value ? sourceColorLabel(value) : t(msg("metadata.unspecified", "未标记"));

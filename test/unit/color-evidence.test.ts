@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compareRgba, summarizeRgba } from '../../src/color-evidence.ts';
+import { compareRgba, summarizeRgba } from '../../src/presentation/color-evidence.ts';
 
 test('RGB evidence measures signed channel shifts and ignores alpha', () => {
   const a = new Uint8ClampedArray([0, 100, 255, 0, 20, 40, 60, 255]);

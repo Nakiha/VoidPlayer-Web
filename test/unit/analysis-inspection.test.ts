@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import {
   bitrateAtT, buildInspection, coarsenBucketsShared, estimateBaseBucketWidth,
   getDerived, localRateAtT, referenceAtT,
-} from '../../src/analysis/inspection.ts';
-import type { AnalysisResult } from '../../src/analysis/types.ts';
-import type { Slot } from '../../src/model.ts';
+} from '../../shared/analysis/metadata/inspection.ts';
+import type { AnalysisResult } from '../../shared/analysis/metadata/types.ts';
+import type { Slot } from '../../shared/review/model.ts';
 
 function makeResult(samples: { t: number; size: number }[], bitrate: { t: number; mbps: number | null }[] = [], coverage = { start: 0, end: 2_000_000 }): AnalysisResult {
   return {

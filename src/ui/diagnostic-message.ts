@@ -1,4 +1,4 @@
-import type { MediaDiagnostic } from '../media-errors.ts';
+import type { MediaDiagnostic } from '../../shared/media/io/media-errors.ts';
 import { msg, t } from '../i18n.ts';
 import { classifyUserError } from '../session/errors.ts';
 

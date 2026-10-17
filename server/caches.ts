@@ -1,3 +1,6 @@
+import type {CacheOverview} from '../shared/service/admin.ts';
+import type {CacheKind,CacheEntry} from '../shared/service/caches.ts';
+export type {CacheKind,CacheEntry} from '../shared/service/caches.ts';
 import { stat, statfs } from 'node:fs/promises';
 import path from 'node:path';
 import type { FrameIndexStore } from './frame-index-store.ts';
@@ -5,12 +8,12 @@ import type { MediaThumbnailStore } from './media-thumbnail-store.ts';
 import type { AnnotationStore } from './annotations.ts';
 import { AdminError } from './admin-error.ts';
 
-export type CacheKind = 'frame-indexes' | 'annotation-previews' | 'media-thumbnails';
-export type CacheEntry = { id: string; version: string; scope?: string; name: string; detail: string; nameCode?: 'frame-annotation'; detailData?: {kind:'frames';root:string;format:string;frames:number} | {kind:'thumbnail';root:string;width:number;height:number} | {kind:'annotation';space:string;text:string}; bytes: number; updatedAt: number; previewUrl?: string };
+
+
 export class CacheManager {
   private directory: string; private frames: FrameIndexStore; private annotations: AnnotationStore; private thumbnails: MediaThumbnailStore | null;
   constructor(directory: string, frames: FrameIndexStore, annotations: AnnotationStore, thumbnails: MediaThumbnailStore | null = null) { this.directory=directory; this.frames=frames; this.annotations=annotations; this.thumbnails=thumbnails; }
-  async overview() {
+  async overview(): Promise<CacheOverview> {
     const frames = this.frames.list(), previews = this.annotations.previewList();
     const thumbs = this.thumbnails?.overview() ?? { count: 0, bytes: 0, limitBytes: 256 * 1024 * 1024, epoch: 0 };
     const definitions = [

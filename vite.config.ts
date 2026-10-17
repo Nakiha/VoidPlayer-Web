@@ -27,7 +27,8 @@ async function buildInfo() {
       else if (/\.(ts|js|mjs|css)$/.test(entry.name)) hash.update(relative).update(readFileSync(resolve(directory, entry.name)));
     }
   }
-  hashSources(sourceDir);
+  hashSources(sourceDir, 'src/');
+  hashSources(resolve(import.meta.dirname, 'shared'), 'shared/');
   for (const file of ['package-lock.json', 'index.html', 'admin/index.html', 'public/theme-init.js', 'public/startup-guard.js']) hash.update(file).update(readFileSync(resolve(import.meta.dirname, file)));
   const wasmDigests = Object.fromEntries(['voidplayer-core.wasm', 'voidplayer-core-mt.wasm'].map(name => {
     try { return [name, createHash('sha256').update(readFileSync(resolve(coreDir, name))).digest('hex')]; }
@@ -84,7 +85,7 @@ export default defineConfig({
     },
     transform: transformBuildInfo,
     handleHotUpdate({ file, server }) {
-      if (normalizePath(file).startsWith(normalizePath(sourceDir)) || normalizePath(file).startsWith(normalizePath(coreDir))) {
+      if (normalizePath(file).startsWith(normalizePath(sourceDir)) || normalizePath(file).startsWith(normalizePath(resolve(import.meta.dirname, 'shared'))) || normalizePath(file).startsWith(normalizePath(coreDir))) {
         const module = server.moduleGraph.getModuleById(infoFile);
         if (module) server.moduleGraph.invalidateModule(module);
       }

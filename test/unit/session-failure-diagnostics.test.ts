@@ -1,8 +1,8 @@
-import { rgbaDescription } from '../../src/frame-description.ts';
+import { rgbaDescription } from '../../shared/media/frame-description.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ReviewSession } from '../../src/session.ts';
-import type { MediaSource } from '../../src/media.ts';
+import type { MediaSource } from '../../src/media/source.ts';
 
 // 与 session.test.ts 相同的轻量片源替身。
 function media(name = 'A', starts = [0, 40000, 120000, 160000], end = 200000) {
@@ -26,7 +26,7 @@ function media(name = 'A', starts = [0, 40000, 120000, 160000], end = 200000) {
 }
 
 test('track failure snapshot carries failure message and pendingRelink', async () => {
-  const { getLogEvents } = await import('../../src/log.ts');
+  const { getLogEvents } = await import('../../src/logging/log.ts');
   const fixture = media('failure-diagnostics');
   fixture.source.framesFrom = async function* () {
     yield await fixture.source.frameAt(0);

@@ -54,13 +54,13 @@ try {
     try {
       await page.locator('input').setInputFiles(path);
       entry.probe = await page.evaluate(async ({ times, images, fileNumber }) => {
-        const { openFlvMedia } = await import('/src/flv-media.ts');
-        const { paintFrame, captureFrame, setPresentationGeometry } = await import('/src/presenter.ts');
-        const { presentationColor } = await import('/src/presentation-color.ts');
-        const { yuvToRgba } = await import('/src/yuv-color.ts');
-        const { summarizeRgba, compareRgba } = await import('/src/color-evidence.ts');
+        const { openFlvMedia } = await import('/src/media/decoding/flv-media.ts');
+        const { paintFrame, captureFrame, setPresentationGeometry } = await import('/src/presentation/presenter.ts');
+        const { presentationColor } = await import('/src/presentation/presentation-color.ts');
+        const { yuvToRgba } = await import('/shared/color/yuv-color.ts');
+        const { summarizeRgba, compareRgba } = await import('/src/presentation/color-evidence.ts');
         const { buildInfo } = await import('/src/build-info.ts');
-        const { readLogs } = await import('/src/log.ts');
+        const { readLogs } = await import('/src/logging/log.ts');
         const sinceSeq = (await readLogs({ limit: 1 })).lastSeq;
         const file = document.querySelector('input').files[0], sources = {}, results = [];
         const result = { buildInfo, userAgent: navigator.userAgent, secureContext: isSecureContext, crossOriginIsolated, native: {}, wasm: {}, frames: results };

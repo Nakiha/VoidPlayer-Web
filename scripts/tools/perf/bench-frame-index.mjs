@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { instantiateCore } from '../../../src/wasm-core.ts';
+import { instantiateCore } from '../../../shared/wasm/core.ts';
 import { MediaLibraryIndex } from '../../../server/library.ts';
 
 const inputPath = process.argv[2];

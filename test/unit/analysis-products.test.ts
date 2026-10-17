@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { AnalysisResult } from '../../src/bitstream-analysis/contract.ts';
-import { OwnedBlocks, packLegacy, summaryOf, legacyOf, encodeProduct, decodeProduct, validateProduct, PRODUCT_LIMIT } from '../../src/bitstream-analysis/products.ts';
-import { DiagramStore } from '../../src/bitstream-analysis/diagrams.ts';
+import type { AnalysisResult } from '../../shared/analysis/bitstream/contract.ts';
+import { OwnedBlocks, packLegacy, summaryOf, legacyOf, encodeProduct, decodeProduct, validateProduct, PRODUCT_LIMIT } from '../../shared/analysis/bitstream/products.ts';
+import { DiagramStore } from '../../shared/analysis/bitstream/diagrams.ts';
 const result = (): AnalysisResult => ({
   schema: 1,
   codec: "h264",
@@ -83,7 +83,7 @@ test('same source build or stream changes replace raw records AND coarse chart e
   }
 });
 test('summary cannot authorize block cache and corruption survives corrected checksums', async () => {
-  const {AnalysisCache}=await import('../../src/bitstream-analysis/cache.ts');
+  const {AnalysisCache}=await import('../../shared/analysis/bitstream/cache.ts');
   const cache=new AnalysisCache(),r=result();cache.put(r);
   const first=cache.peek(r.picture);assert.ok(first);
   // 32MiB exact-block LRU: many bounded, disjoint source frames evict the first.
@@ -95,13 +95,13 @@ test('summary cannot authorize block cache and corruption survives corrected che
   assert.throws(()=>validateProduct({...summaryOf(r),capabilities:{...r.capabilities,blocks:'unsupported'}}));
 });
 test('bounded response rejects lying content length without allocating beyond the admitted size', async () => {
-  const {readBoundedResponse}=await import('../../src/bitstream-analysis/products.ts');
+  const {readBoundedResponse}=await import('../../shared/analysis/bitstream/products.ts');
   const response=new Response(new Uint8Array(20),{headers:{'content-length':'4'}});
   await assert.rejects(readBoundedResponse(response),/Oversized/);
   await assert.rejects(readBoundedResponse(new Response('x',{headers:{'content-length':String(PRODUCT_LIMIT.frame+1)}})),/budget/);
 });
 test('summary pages enforce complete namespace and checksum; block magic is unambiguous', async () => {
-  const {AnalysisStore}=await import('../../server/analysis/store.ts');const {mkdtemp,rm,readFile,writeFile}=await import('node:fs/promises');const {tmpdir}=await import('node:os');const {join}=await import('node:path');const {createHash}=await import('node:crypto');const {productKey}=await import('../../src/bitstream-analysis/products.ts');
+  const {AnalysisStore}=await import('../../server/analysis/bitstream/store.ts');const {mkdtemp,rm,readFile,writeFile}=await import('node:fs/promises');const {tmpdir}=await import('node:os');const {join}=await import('node:path');const {createHash}=await import('node:crypto');const {productKey}=await import('../../shared/analysis/bitstream/products.ts');
   const folder=await mkdtemp(join(tmpdir(),'analysis-products-'));try{
     const store=new AnalysisStore(folder),r=result(),summary=summaryOf(r),id=createHash('sha256').update(productKey({...r.picture,au:0},r.buildId,null,'summary')).digest('hex');
     await store.putOutput(id,summary);assert.deepEqual(await store.getOutput(id,3),summary);
@@ -113,7 +113,7 @@ test('summary pages enforce complete namespace and checksum; block magic is unam
 });
 
 test('service warms explicit summaries without workers, preserves exact blocks, and invalidates old build overlays', async () => {
- const {BitstreamAnalysisService}=await import('../../src/bitstream-analysis/service.ts');const {makeDemandPlan}=await import('../../src/bitstream-analysis/demand.ts');
+ const {BitstreamAnalysisService}=await import('../../src/analysis/bitstream/service.ts');const {makeDemandPlan}=await import('../../shared/analysis/bitstream/demand.ts');
  const previous={Worker:Object.getOwnPropertyDescriptor(globalThis,'Worker'),location:Object.getOwnPropertyDescriptor(globalThis,'location'),fetch:globalThis.fetch};
  let build='test',created=0;
  const r=result();r.picture.au=0;r.sourcePtsUs=100;r.sourceDtsUs=null;r.nalus=[{offset:0,size:1,type:5,temporalId:0,layer:0}];r.gop={startAu:0,endAu:1,configuration:0,anchor:'closed'};
@@ -133,7 +133,7 @@ test('service warms explicit summaries without workers, preserves exact blocks, 
 });
 
 test('same GOP viewport moves retain one worker, latest window, pause release and AU-set resume', async () => {
- const {ReviewSession}=await import('../../src/session.ts');const {rgbaDescription}=await import('../../src/frame-description.ts');const {makeDemandPlan}=await import('../../src/bitstream-analysis/demand.ts');
+ const {ReviewSession}=await import('../../src/session.ts');const {rgbaDescription}=await import('../../shared/media/frame-description.ts');const {makeDemandPlan}=await import('../../shared/analysis/bitstream/demand.ts');
  const previous={Worker:Object.getOwnPropertyDescriptor(globalThis,'Worker'),location:Object.getOwnPropertyDescriptor(globalThis,'location'),fetch:globalThis.fetch};
  const packets=Array.from({length:3},(_,au)=>({au,configuration:0,pts:100+au*100,dts:null,offset:0,size:1,key:au===0}));
  let created=0,terminated=0,repairs=0,releaseMiddle!:()=>void,reached!:()=>void;const firstReached=new Promise<void>(r=>{reached=r;});
@@ -145,7 +145,7 @@ test('same GOP viewport moves retain one worker, latest window, pause release an
   else{(session as any).bitstream.root.diagrams.clear();for(let au=0;au<2;au++)this.onmessage?.({data:{event:'coverage',picture:frame(au).picture,buildId:'test'}});this.onmessage?.({data:{event:'chunk',result:summaryOf(frame(2))}});progress(3);this.onmessage?.({data:{ok:true}});}
  });}}
  Object.defineProperty(globalThis,'Worker',{configurable:true,value:WorkerMock});Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});globalThis.fetch=async()=>new Response(JSON.stringify({buildId:'test'}));
- const source={info:{id:'local:uuid',name:'coalescing.mp4',size:1,lastModified:0,codec:'h264',decoder:'webcodecs',width:16,height:16,firstPtsUs:100,durationUs:300},bitstreamFile:new Blob(['x']),async frameAt(time:number){const au=Math.min(2,Math.floor(time/100));return{kind:'video-sample',ptsUs:au*100,sourcePtsUs:100+au*100,durationUs:100,description:rgbaDescription(16,16),width:16,height:16,byteSize:1024,sourcePicture:frame(au).picture,close(){}};},async framesAfter(){return[];},async *framesFrom(){},dispose(){}} as unknown as import('../../src/media.ts').MediaSource;
+ const source={info:{id:'local:uuid',name:'coalescing.mp4',size:1,lastModified:0,codec:'h264',decoder:'webcodecs',width:16,height:16,firstPtsUs:100,durationUs:300},bitstreamFile:new Blob(['x']),async frameAt(time:number){const au=Math.min(2,Math.floor(time/100));return{kind:'video-sample',ptsUs:au*100,sourcePtsUs:100+au*100,durationUs:100,description:rgbaDescription(16,16),width:16,height:16,byteSize:1024,sourcePicture:frame(au).picture,close(){}};},async framesAfter(){return[];},async *framesFrom(){},dispose(){}} as unknown as import('../../src/media/source.ts').MediaSource;
  let commit=0;const session=new ReviewSession((_slot,frame)=>{frame.presentedCommit=++commit;});const oldWindow={startUs:0,endUs:100,axis:'pts' as const},newWindow={startUs:100,endUs:200,axis:'pts' as const};
  try{
   await session.load('A',async()=>source);const first=session.requestBitstreamViewport('A',oldWindow).catch(()=>{});await firstReached;
@@ -156,13 +156,13 @@ test('same GOP viewport moves retain one worker, latest window, pause release an
 });
 
 test('unsupported product modes fail explicitly at admission',async()=>{
- const {validateTarget,validateRange}=await import('../../src/bitstream-analysis/contract.ts');
+ const {validateTarget,validateRange}=await import('../../shared/analysis/bitstream/contract.ts');
  assert.throws(()=>validateTarget({sourceVersion:'x',sourcePtsUs:0,normalizedMediaUs:0,product:'summary'}),/Summary requires/);
  assert.throws(()=>validateRange({sourceVersion:'x',firstPtsUs:0,startUs:0,endUs:1,product:'blocks'}),/require a stream or exact-picture/);
 });
 
 test('exact request rejects cross-product, index and build payloads before cache authorization',async()=>{
- const {BitstreamAnalysisService}=await import('../../src/bitstream-analysis/service.ts');const {JS_TS_MEDIA_INDEX_IDENTITY}=await import('../../src/media-index-identity.ts');
+ const {BitstreamAnalysisService}=await import('../../src/analysis/bitstream/service.ts');const {JS_TS_MEDIA_INDEX_IDENTITY}=await import('../../shared/media/indexing/media-index-identity.ts');
  const previous={Worker:Object.getOwnPropertyDescriptor(globalThis,'Worker'),location:Object.getOwnPropertyDescriptor(globalThis,'location'),fetch:globalThis.fetch};let outgoing:any,expected='test';
  class WorkerMock{onmessage?:({data}:{data:any})=>void;onerror:any;onmessageerror:any;terminate(){}postMessage(data:any){if(data.target)queueMicrotask(()=>this.onmessage?.({data:{ok:true,result:outgoing}}));}}
  Object.defineProperty(globalThis,'Worker',{configurable:true,value:WorkerMock});Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});globalThis.fetch=async()=>new Response(JSON.stringify({buildId:expected}));
@@ -183,14 +183,14 @@ test('exact request rejects cross-product, index and build payloads before cache
 });
 
 test('maximum admitted NAL metadata fits products, oversized metadata/pages fail before body allocation',async()=>{
- const {AnalysisStore}=await import('../../server/analysis/store.ts');const {mkdtemp,rm,writeFile}=await import('node:fs/promises');const {tmpdir}=await import('node:os');const {join}=await import('node:path');
+ const {AnalysisStore}=await import('../../server/analysis/bitstream/store.ts');const {mkdtemp,rm,writeFile}=await import('node:fs/promises');const {tmpdir}=await import('node:os');const {join}=await import('node:path');
  const r=result();r.nalus=Array.from({length:4096},(_,i)=>({offset:i*1000,size:100,type:5,temporalId:0,layer:0}));r.containerHeader={box:'avcC',byteLength:512,nalus:Array.from({length:256},(_,i)=>({offset:i*2,size:1,type:7,temporalId:0,layer:0}))};
  const value=packLegacy(r),wire=await encodeProduct(value);assert.ok(wire.length<PRODUCT_LIMIT.frame);assert.equal((await decodeProduct(wire)).validatedBlockCount,1);
  assert.throws(()=>validateProduct({...summaryOf(r),extra:'x'.repeat(PRODUCT_LIMIT.metadata+1)} as any),/budget/);
  const folder=await mkdtemp(join(tmpdir(),'analysis-page-budget-'));try{const store=new AnalysisStore(folder),id='d'.repeat(64);await writeFile(store.productFile(id),'{'+ ' '.repeat(PRODUCT_LIMIT.page));assert.equal(await store.getOutput(id,0),null);}finally{await rm(folder,{recursive:true,force:true});}
 });
 test('valid binary header with low length byte 123 cannot be mistaken for a JSON page',async()=>{
- const {AnalysisStore}=await import('../../server/analysis/store.ts');const {mkdtemp,rm,readFile}=await import('node:fs/promises');const {tmpdir}=await import('node:os');const {join}=await import('node:path');
+ const {AnalysisStore}=await import('../../server/analysis/bitstream/store.ts');const {mkdtemp,rm,readFile}=await import('node:fs/promises');const {tmpdir}=await import('node:os');const {join}=await import('node:path');
  const folder=await mkdtemp(join(tmpdir(),'analysis-magic-'));try{
   let found:ReturnType<typeof packLegacy>|undefined;
   for(let n=1;n<=256;n++){const r=result();r.picture.sourceVersion='s'.repeat(n);const value=packLegacy(r),wire=await encodeProduct(value);if(new DataView(wire.buffer).getUint32(4,true)%256===123){found=value;break;}}
@@ -201,7 +201,7 @@ test('valid binary header with low length byte 123 cannot be mistaken for a JSON
 test('single-picture summary preserves same-identity verified stream GOP',()=>{const store=new DiagramStore(),r=result();r.nalus=[{offset:0,size:1,type:5,temporalId:0,layer:0}];r.gop={startAu:0,endAu:30,configuration:0,anchor:'closed'};store.put(r);const single={...r};delete single.gop;store.put(single);assert.deepEqual(store.summaryAt(r.picture.sourceVersion,r.picture.au)?.gop,r.gop);store.put({...single,buildId:'new'});assert.equal(store.summaryAt(r.picture.sourceVersion,r.picture.au)?.gop,undefined);});
 
 test('SPS layout proves exact crop across plane padding; unknown/malformed layouts fail closed',async()=>{
- const {matchesAnalysisLayout}=await import('../../src/bitstream-analysis/contract.ts');const r=result(),token={geometry:{codedWidth:16,codedHeight:18,visibleRect:{x:0,y:0,width:16,height:16}}} as import('../../src/bitstream-analysis/contract.ts').PresentedFrameToken;
+ const {matchesAnalysisLayout}=await import('../../shared/analysis/bitstream/contract.ts');const r=result(),token={geometry:{codedWidth:16,codedHeight:18,visibleRect:{x:0,y:0,width:16,height:16}}} as import('../../shared/analysis/bitstream/contract.ts').PresentedFrameToken;
  assert.equal(matchesAnalysisLayout(r,token),false);r.sourceLayout={provenance:'configuration-sps-v1',configuration:0,codedWidth:16,codedHeight:16,visibleRect:{x:0,y:0,width:16,height:16}};assert.equal(matchesAnalysisLayout(r,token),true);
  const packed=packLegacy(r);assert.deepEqual((await decodeProduct(await encodeProduct(packed))).sourceLayout,r.sourceLayout);assert.deepEqual(legacyOf(packed).sourceLayout,r.sourceLayout);
  assert.equal(matchesAnalysisLayout(r,{...token,geometry:{...token.geometry,visibleRect:{x:0,y:1,width:16,height:15}}}),false);
@@ -209,30 +209,30 @@ test('SPS layout proves exact crop across plane padding; unknown/malformed layou
 });
 
 test('stream rejects wrong build products and plans before raw/cache coverage, including retained plans',async()=>{
- const {BitstreamAnalysisService}=await import('../../src/bitstream-analysis/service.ts');const {makeDemandPlan}=await import('../../src/bitstream-analysis/demand.ts');
+ const {BitstreamAnalysisService}=await import('../../src/analysis/bitstream/service.ts');const {makeDemandPlan}=await import('../../shared/analysis/bitstream/demand.ts');
  const previous={Worker:Object.getOwnPropertyDescriptor(globalThis,'Worker'),location:Object.getOwnPropertyDescriptor(globalThis,'location'),fetch:globalThis.fetch};let mode='valid';
  const frame={...result(),picture:{...result().picture,au:0},nalus:[{offset:0,size:1,type:5,temporalId:0,layer:0}],gop:{startAu:0,endAu:1,configuration:0,anchor:'closed' as const}};
  const packets=[{au:0,configuration:0,pts:100,dts:null,offset:0,size:1,key:true}];
  class WorkerMock{onmessage?:({data}:{data:any})=>void;onerror:any;onmessageerror:any;terminate(){}postMessage(data:any){if(!data.target)return;queueMicrotask(()=>{this.onmessage?.({data:{event:'plan',plan:makeDemandPlan(packets,data.target,mode==='plan'?'wrong':'test')}});const r={...frame,buildId:mode==='result'?'wrong':'test'};this.onmessage?.({data:{event:'chunk',result:data.target.product==='summary'?summaryOf(r):data.target.product==='blocks'?packLegacy(r):r}});this.onmessage?.({data:{event:'progress',progress:{pictures:1,totalPictures:1,checkedUs:100,totalUs:100,indexComplete:true}}});this.onmessage?.({data:{ok:true}});});}}
  Object.defineProperty(globalThis,'Worker',{configurable:true,value:WorkerMock});Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});globalThis.fetch=async()=>new Response(JSON.stringify({buildId:'test'}));
- try{for(const product of [undefined,'summary','blocks'] as const)for(const bad of ['plan','result','retained']){const service=new BitstreamAnalysisService(()=>{}),source={info:{},bitstreamFile:new Blob(['x'])} as any,target={mode:'stream' as const,product,sourceVersion:frame.picture.sourceVersion,firstPtsUs:100,durationUs:100,window:{startUs:0,endUs:100,axis:'pts' as const}};if(bad==='retained'){mode='valid';await service.requestStream(source,target,'A');(service as unknown as {diagrams:DiagramStore}).diagrams.clear();}mode=bad==='plan'?'plan':'result';const cache=(service as unknown as {cache:import('../../src/bitstream-analysis/cache.ts').AnalysisCache}).cache;let puts=0;const put=cache.put.bind(cache);cache.put=(...args)=>{puts++;put(...args);};await assert.rejects(service.requestStream(source,target,'A'),/build identity mismatch/);assert.equal(puts,0);assert.equal(service.state.state,'error');assert.equal((service as unknown as {diagrams:DiagramStore}).diagrams.queryChart(frame.picture.sourceVersion,0,1000).count,0);service.dispose();}}
+ try{for(const product of [undefined,'summary','blocks'] as const)for(const bad of ['plan','result','retained']){const service=new BitstreamAnalysisService(()=>{}),source={info:{},bitstreamFile:new Blob(['x'])} as any,target={mode:'stream' as const,product,sourceVersion:frame.picture.sourceVersion,firstPtsUs:100,durationUs:100,window:{startUs:0,endUs:100,axis:'pts' as const}};if(bad==='retained'){mode='valid';await service.requestStream(source,target,'A');(service as unknown as {diagrams:DiagramStore}).diagrams.clear();}mode=bad==='plan'?'plan':'result';const cache=(service as unknown as {cache:import('../../shared/analysis/bitstream/cache.ts').AnalysisCache}).cache;let puts=0;const put=cache.put.bind(cache);cache.put=(...args)=>{puts++;put(...args);};await assert.rejects(service.requestStream(source,target,'A'),/build identity mismatch/);assert.equal(puts,0);assert.equal(service.state.state,'error');assert.equal((service as unknown as {diagrams:DiagramStore}).diagrams.queryChart(frame.picture.sourceVersion,0,1000).count,0);service.dispose();}}
  finally{globalThis.fetch=previous.fetch;for(const key of ['Worker','location'] as const){if(previous[key])Object.defineProperty(globalThis,key,previous[key]!);else Reflect.deleteProperty(globalThis,key);}}
 });
 
 test('full legacy and blocks streams pause at 30 and resume by readable coverage without duplicate delivery or put',async()=>{
- const {BitstreamAnalysisService}=await import('../../src/bitstream-analysis/service.ts');
+ const {BitstreamAnalysisService}=await import('../../src/analysis/bitstream/service.ts');
  const previous={Worker:Object.getOwnPropertyDescriptor(globalThis,'Worker'),location:Object.getOwnPropertyDescriptor(globalThis,'location'),fetch:globalThis.fetch};
  try{for(const product of [undefined,'blocks'] as const){let created=0,terminated=0,reached!:()=>void;const paused=new Promise<void>(r=>{reached=r;}),fresh:number[]=[],covered:number[]=[];
  const frame=(au:number)=>({...result(),picture:{...result().picture,au},sourcePtsUs:100+au*100,gop:{startAu:0,endAu:60,configuration:0,anchor:'closed' as const}});
  class WorkerMock{onmessage?:({data}:{data:any})=>void;onerror:any;onmessageerror:any;id=++created;au=0;stopped=false;owned:any;terminate(){this.stopped=true;terminated++;}emit(data:any){if(!this.stopped)queueMicrotask(()=>{if(!this.stopped)this.onmessage?.({data});});}next(){if(this.au===60){this.emit({ok:true});return;}this.emit({event:'cache',picture:frame(this.au).picture,buildId:'test'});}postMessage(data:any){if(data.target){this.next();return;}if(data.event==='cache'){this.owned=data.result;if(data.result){covered.push(this.au);this.emit({event:'coverage',picture:frame(this.au).picture,buildId:'test',gop:frame(this.au).gop,product});}else{fresh.push(this.au);this.emit({event:'chunk',result:product==='blocks'?packLegacy(frame(this.au)):frame(this.au)});}return;}if(data.ok){this.emit({event:'progress',progress:{pictures:this.au+1,totalPictures:60,checkedUs:(this.au+1)*100,totalUs:6000,indexComplete:true}});this.au++;if(this.id===1&&this.au===30){reached();return;}this.next();}}}
  Object.defineProperty(globalThis,'Worker',{configurable:true,value:WorkerMock});Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});globalThis.fetch=async()=>new Response(JSON.stringify({buildId:'test'}));
- const service=new BitstreamAnalysisService(()=>{}),cache=(service as unknown as {cache:import('../../src/bitstream-analysis/cache.ts').AnalysisCache}).cache,puts:number[]=[],put=cache.put.bind(cache);cache.put=(...args)=>{puts.push(args[0].picture.au);put(...args);};const source={info:{},bitstreamFile:new Blob(['x'])} as any,target={mode:'stream' as const,product,sourceVersion:result().picture.sourceVersion,firstPtsUs:100,durationUs:6000};
+ const service=new BitstreamAnalysisService(()=>{}),cache=(service as unknown as {cache:import('../../shared/analysis/bitstream/cache.ts').AnalysisCache}).cache,puts:number[]=[],put=cache.put.bind(cache);cache.put=(...args)=>{puts.push(args[0].picture.au);put(...args);};const source={info:{},bitstreamFile:new Blob(['x'])} as any,target={mode:'stream' as const,product,sourceVersion:result().picture.sourceVersion,firstPtsUs:100,durationUs:6000};
  const controller=new AbortController(),first=service.requestStream(source,target,'A',controller.signal);const cancelled=assert.rejects(first);await paused;controller.abort();await cancelled;assert.equal(puts.length,30);const complete=await service.requestStream(source,target,'A');assert.equal(complete.pictures,60);assert.deepEqual(fresh,Array.from({length:60},(_,i)=>i));assert.deepEqual(covered,Array.from({length:30},(_,i)=>i));assert.deepEqual(puts,fresh);assert.equal(new Set(puts).size,60);assert.equal(terminated,2);service.dispose();}}
  finally{globalThis.fetch=previous.fetch;for(const key of ['Worker','location'] as const){if(previous[key])Object.defineProperty(globalThis,key,previous[key]!);else Reflect.deleteProperty(globalThis,key);}}
 });
 
 test('shared forks reject late old manifest and result namespaces while same-build concurrency remains valid',async t=>{
- const {BitstreamAnalysisService}=await import('../../src/bitstream-analysis/service.ts');
+ const {BitstreamAnalysisService}=await import('../../src/analysis/bitstream/service.ts');
  const saved={fetch:globalThis.fetch,location:Object.getOwnPropertyDescriptor(globalThis,'location')};Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});
  const source={info:{},bitstreamFile:new Blob(['x'])} as any;
  const token=(r:AnalysisResult)=>({picture:r.picture,sourcePtsUs:r.sourcePtsUs,normalizedMediaUs:0,geometry:{codedWidth:16,codedHeight:16,visibleRect:{x:0,y:0,width:16,height:16}}}) as any;
@@ -246,7 +246,7 @@ test('shared forks reject late old manifest and result namespaces while same-bui
 });
 
 test('shared stream forks cannot reauthorize late old summaries or manifests over a newer namespace',async t=>{
- const {BitstreamAnalysisService}=await import('../../src/bitstream-analysis/service.ts');const saved={fetch:globalThis.fetch,location:Object.getOwnPropertyDescriptor(globalThis,'location')};Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});
+ const {BitstreamAnalysisService}=await import('../../src/analysis/bitstream/service.ts');const saved={fetch:globalThis.fetch,location:Object.getOwnPropertyDescriptor(globalThis,'location')};Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});
  const source={info:{},bitstreamFile:new Blob(['x'])} as any,target={mode:'stream' as const,product:'summary' as const,sourceVersion:'local:uuid',firstPtsUs:0,durationUs:1000};
  try{for(const late of ['manifest','result','same-build']){const root=new BitstreamAnalysisService(()=>{}),a=root.fork(()=>{}),b=root.fork(()=>{});let release!:()=>void,started!:()=>void,calls=0;const gate=new Promise<void>(r=>{release=r;}),ready=new Promise<void>(r=>{started=r;});const old={...result(),nalus:[{offset:0,size:1,type:5,temporalId:0,layer:0}],buildId:late==='same-build'?'new':'old',gop:{startAu:0,endAu:5,configuration:0,anchor:'closed' as const}},fresh={...old,buildId:'new',picture:{...old.picture,au:4}};
  globalThis.fetch=async()=>{if(++calls===1){if(late==='manifest'){started();await gate;}return new Response(JSON.stringify({buildId:old.buildId}));}return new Response(JSON.stringify({buildId:'new'}));};
@@ -257,7 +257,7 @@ test('shared stream forks cannot reauthorize late old summaries or manifests ove
 
 
 test('evicted shared namespace cannot be revived by a late picture or plan',async t=>{
- const {BitstreamAnalysisService}=await import('../../src/bitstream-analysis/service.ts');const {makeDemandPlan}=await import('../../src/bitstream-analysis/demand.ts');const saved={fetch:globalThis.fetch,location:Object.getOwnPropertyDescriptor(globalThis,'location')};Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});globalThis.fetch=async()=>new Response(JSON.stringify({buildId:'test'}));
+ const {BitstreamAnalysisService}=await import('../../src/analysis/bitstream/service.ts');const {makeDemandPlan}=await import('../../shared/analysis/bitstream/demand.ts');const saved={fetch:globalThis.fetch,location:Object.getOwnPropertyDescriptor(globalThis,'location')};Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});globalThis.fetch=async()=>new Response(JSON.stringify({buildId:'test'}));
  const service=new BitstreamAnalysisService(()=>{}),source={info:{},bitstreamFile:new Blob(['x'])} as any,r=result(),token={picture:r.picture,sourcePtsUs:r.sourcePtsUs,normalizedMediaUs:0,geometry:{codedWidth:16,codedHeight:16,visibleRect:{x:0,y:0,width:16,height:16}}} as any;
  try{t.mock.method(service as any,'local',async()=>{(service as any).contexts.clear();return packLegacy(r);});await assert.rejects(service.request(source,token),/namespace superseded/);assert.equal((service as any).contexts.size,0);assert.equal(service.cached(token),null);
  const target={mode:'stream' as const,product:'summary' as const,sourceVersion:r.picture.sourceVersion,firstPtsUs:100,durationUs:100,window:{startUs:0,endUs:100,axis:'pts' as const}};(service as any).streamBuild={sequence:(service as any).sequence,buildId:'test'};const plan=makeDemandPlan([{au:0,configuration:0,pts:100,dts:null,offset:0,size:1,key:true}],target,'test');assert.throws(()=>(service as any).acceptPlan(plan,target),/namespace superseded/);assert.equal((service as any).contexts.size,0);assert.equal((service as any).plans.size,0);

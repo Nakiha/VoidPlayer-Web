@@ -1,5 +1,5 @@
 import { msg, t } from '../i18n.ts';
-import type { MediaLoadStage } from '../media-progress.ts';
+import type { MediaLoadStage } from '../media/progress.ts';
 const stages = {
  queued: msg('progress.queued', '正在准备载入'), download: msg('progress.download', '正在读取视频数据'),
  decode: msg('progress.decode', '正在选择解码方式'), inspect: msg('progress.inspect', '正在读取视频信息'),
@@ -8,4 +8,4 @@ const stages = {
 };
 export const loadStageLabel = (stage: MediaLoadStage) => t(stages[stage]);
 
-export type { MediaLoadStage } from '../media-progress.ts';
+export type { MediaLoadStage } from '../media/progress.ts';

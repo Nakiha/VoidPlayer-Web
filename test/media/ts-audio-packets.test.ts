@@ -5,11 +5,11 @@ import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
-import {JsContainerEngine} from '../../src/js-container-engine.ts';
-import {openJsTsAnalysisInput} from '../../src/bitstream-analysis/js-ts-input.ts';
-import {analyzePicture} from '../../src/bitstream-analysis/runner.ts';
+import {JsContainerEngine} from '../../src/media/decoding/js-container-engine.ts';
+import {openJsTsAnalysisInput} from '../../shared/analysis/bitstream/js-ts-input.ts';
+import {analyzePicture} from '../../shared/analysis/bitstream/runner.ts';
 import {loadTsCore} from '../helpers/media/ts-analysis.ts';
-import {CachedContainerAudio} from '../../src/cached-container-audio.ts';
+import {CachedContainerAudio} from '../../src/media/audio/cached-container-audio.ts';
 import {visiblePixelHash} from '../helpers/visible-pixels.ts';
 
 test('H264 TS with interleaved AAC keeps JS packet playback, independent exact analysis and cached audio',async()=>{

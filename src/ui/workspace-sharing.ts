@@ -1,8 +1,8 @@
 import { t, msg, onLanguageChange } from '../i18n.ts';
-import type { SavedWorkspace } from '../saved-workspaces.ts';
-import type { WorkspaceFile } from '../workspace-file.ts';
-import { prepareSharedWorkspace } from '../shared-workspace.ts';
-import { randomUUID } from '../uuid.ts';
+import type { SavedWorkspace } from '../review/saved-workspaces.ts';
+import type { WorkspaceFile } from '../../shared/review/workspace-file.ts';
+import { prepareSharedWorkspace } from '../review/shared-workspace.ts';
+import { randomUUID } from '../../shared/utils/uuid.ts';
 import { icon } from './icons.ts';
 import type { ToastStack } from './toast.ts';
 

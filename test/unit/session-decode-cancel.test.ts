@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ReviewSession } from '../../src/session.ts';
-import { rgbaDescription } from '../../src/frame-description.ts';
-import type { MediaSource } from '../../src/media.ts';
+import { rgbaDescription } from '../../shared/media/frame-description.ts';
+import type { MediaSource } from '../../src/media/source.ts';
 
 function deferred<T>() {
   let resolve!: (v: T) => void;

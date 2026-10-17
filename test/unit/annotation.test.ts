@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { drawingsValue, drawingStrokeWidth } from '../../src/annotation.ts';
+import { drawingsValue, drawingStrokeWidth } from '../../shared/review/annotation.ts';
 
 test('annotation workspace geometry is finite and copied before entering the session', () => {
   const source = [{ tool: 'pen', points: [{ x: 0, y: 1 }, { x: .5, y: .5 }] }, { tool: 'text', points: [{ x: .1, y: .2 }], text: '边缘' }];
@@ -17,7 +17,7 @@ test('annotation workspace geometry is finite and copied before entering the ses
 
 
 test('multi-view drafts require every media identity and frame anchor to match', async () => {
-  const { annotationAnchorsCurrent } = await import('../../src/annotation.ts');
+  const { annotationAnchorsCurrent } = await import('../../shared/review/annotation.ts');
   const anchors = [{ slot:'A', mediaId:'first', ptsUs:100 }, { slot:'D', mediaId:'last', ptsUs:99 }];
   const tracks = [{slot:'A', id:'first', frame:{ptsUs:100}}, {slot:'D', id:'last', frame:{ptsUs:99}}];
   assert.equal(annotationAnchorsCurrent(anchors, tracks), true);
@@ -28,7 +28,7 @@ test('multi-view drafts require every media identity and frame anchor to match',
 });
 
 test('object movement/resizing extends beyond the video and erasing splits vector ink', async () => {
-  const { moveDrawing, resizeDrawing, eraseAt } = await import('../../src/annotation-geometry.ts');
+  const { moveDrawing, resizeDrawing, eraseAt } = await import('../../shared/review/annotation-geometry.ts');
   const pen = { tool: 'pen' as const, id: 'stroke', color: '#112233', width: .004, strokeWidth: 4, points: [{ x: .1, y: .5 }, { x: .9, y: .5 }] };
   const moved = moveDrawing(pen, .9, -.9);
   assert.deepEqual(moved.points, [{ x: 1, y: -.4 }, { x: 1.8, y: -.4 }]);
@@ -48,7 +48,7 @@ test('object movement/resizing extends beyond the video and erasing splits vecto
 });
 
 test('sampling threshold uses actual source-to-device pixel scale', async () => {
-  const { presentationSampling } = await import('../../src/presentation-surface.ts');
+  const { presentationSampling } = await import('../../src/presentation/presentation-surface.ts');
   const geometry = { width: 1000, height: 600, imageWidth: 500, imageHeight: 300, zoom: 2, offsetX: 0, offsetY: 0, dpr: 1 };
   assert.equal(presentationSampling(1920, geometry), 'bilinear');
   assert.equal(presentationSampling(1920, { ...geometry, dpr: 2 }), 'nearest');

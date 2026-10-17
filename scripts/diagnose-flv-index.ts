@@ -3,8 +3,8 @@
 import { openAsBlob } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
-import { FlvReader, scanFlv, buildFlvIndex, extendFlvIndex, flvIndexWarning } from '../src/flv-demux.ts';
-import type { FlvCheckpoint } from '../src/flv-demux.ts';
+import { FlvReader, scanFlv, buildFlvIndex, extendFlvIndex, flvIndexWarning } from '../shared/media/containers/flv-demux.ts';
+import type { FlvCheckpoint } from '../shared/media/containers/flv-demux.ts';
 
 const path = process.argv[2];
 if (!path) throw new Error('Usage: node scripts/diagnose-flv-index.ts /path/to/file.flv');

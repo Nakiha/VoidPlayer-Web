@@ -1,17 +1,18 @@
 import { t, onLanguageChange, msg } from '../i18n.ts';
-import { randomUUID } from '../uuid.ts';
-import { captureFrame } from '../presenter.ts';
+import { randomUUID } from '../../shared/utils/uuid.ts';
+import { captureFrame } from '../presentation/presenter.ts';
 import { annotationThumbnails, thumbnailSignature } from './annotation-thumbnails.ts';
 import { publishMarkPreview } from './mark-preview-publish.ts';
 import { installColorMenu } from './color-menu.ts';
 import { installChoiceMenu, strokePreview } from './choice-menu.ts';
 import { matchesShortcut } from './shortcuts.ts';
 import type { Shortcut } from './shortcuts.ts';
-import { SLOTS } from '../model.ts';
-import type { Slot } from '../model.ts';
-import { DEFAULT_ANNOTATION_COLOR, drawAnnotations, annotationAnchorsCurrent, drawingStrokeWidth } from '../annotation.ts';
-import type { Drawing, Point } from '../annotation.ts';
-import { drawingBounds, moveDrawing, resizeDrawing, eraseAt } from '../annotation-geometry.ts';
+import { SLOTS } from '../../shared/review/model.ts';
+import type { Slot } from '../../shared/review/model.ts';
+import { DEFAULT_ANNOTATION_COLOR, annotationAnchorsCurrent, drawingStrokeWidth } from '../../shared/review/annotation.ts';
+import { drawAnnotations } from './annotations/draw.ts';
+import type { Drawing, Point } from '../../shared/review/annotation.ts';
+import { drawingBounds, moveDrawing, resizeDrawing, eraseAt } from '../../shared/review/annotation-geometry.ts';
 import { renderAnnotations, svgElement, textElement, annotationFrameRect } from './annotation-svg.ts';
 import type { ReviewSession } from '../session.ts';
 

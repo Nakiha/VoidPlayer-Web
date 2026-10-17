@@ -8,7 +8,7 @@ import os from 'node:os';
 import { webkit, chromium } from 'playwright';
 import { MediaLibraryIndex } from '../server/library.ts';
 import { createMediaServer } from '../server/app.ts';
-import { THUMB_RECIPE_VERSION } from '../src/thumbnails/contract.ts';
+import { THUMB_RECIPE_VERSION } from '../shared/thumbnails/contract.ts';
 
 const directory = await mkdtemp(path.join(os.tmpdir(), 'vp-thumb-ui-'));
 const media = path.join(directory, 'archive');

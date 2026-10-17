@@ -5,15 +5,13 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 
 ## 结构
 
-- `src/`：页面与会话。`session.ts` 是 UI 和 Agent 共用的唯一会话 facade；`session/marks.ts` 标注纯逻辑（校验、构造、持久化归并）；`media.ts`
-  WebCodecs 路径；`ffmpeg-media.ts` + `ffmpeg-worker.ts` WASM 回退（Worker 内运行）；
-  `presenter.ts` 唯一决定帧如何上屏；`viewport.ts` 对比布局（并排/分屏）、缩放、
-  平移与像素尺寸模式的纯几何/状态（DOM 接线在 `main.ts`，视图装配在 `ui/view-bindings.ts`，手势在 `ui/viewport-gestures.ts`，标注走独立视口 SVG viewBox，视频走 viewport-sized WebGL 采样 +
-  clip-path，不动解码路径）；`log.ts` / `log-panel.ts` / `log-storage.ts`
-  本地诊断日志；`agent.ts` WebMCP 工具；`library.ts` / `ui/source-catalog.ts` / `ui/workbench.ts` 媒体库与工具区；`ui/workbench/` 下 `tracks.ts` 轨道窗格、`sources.ts` 片源窗格、`shared.ts` 装配契约；`ui/track-drag.ts` 排序输入；`ui/seek-preview.ts` 时间预览/标注吸附；`ui/source-actions.ts` 服务连接和文件操作。
-- `src/mp4-engine.ts` / `mp4-config.ts`：远程 MP4 的 TS 包索引和 VVC 配置；与 FLV 共用 `packet-media.ts` / `packet-worker.ts`。`range-reader.ts` 有界缓存；`range-bridge.ts` 仅供 AVI / MPEG-PS / MPEG video 残余容器路径的同步 AVIO 读取。
-- `src/flv-demux.ts` / `flv-engine.ts` / `flv-decoder.ts`：共享 FLV 扫描器（媒体库由服务端 Worker 本地读盘建索引，本地文件由客户端 Worker 建索引）及压缩包解码；`flv-media.ts` 接入共享 MediaSource。FLV 不进入 FFmpeg 解封装。
-- `server/`：基于 Node API 的服务（本地 SQLite 持久化索引 + 后台扫描 + Range + 静态网页 + 内网自选用户身份）；`app.ts` 只做装配与分发，路由按域在 `routes/{connection,content,state}.ts`（`context.ts` 为共享请求上下文），HTTP 基元在 `http-utils.ts`；`tls.ts` 用 WebCrypto 与打包内的 X.509 库签发便携证书；开发使用 Node 24+，`standalone.ts` 用固定 Bun 编译成独立程序；`config.ts` / `runtime.ts` 为共享配置与运行入口。
+- `src/main.ts` 页面入口；`src/session.ts` 是 UI 与 Agent 共用的唯一会话 facade；`src/session/` 保存标注、播放、色彩、元数据分析与深度码流任务的会话协调。
+- `shared/`：无宿主依赖的公共实现。`media/{containers,codecs,indexing,io}/` 保存容器解析、压缩包身份、索引与字节读取；`analysis/metadata/` 保存包统计、滑窗、排序与查询；`analysis/bitstream/` 保存深度码流契约、NALU/GOP、执行器与缓存；`review/`、`presentation/viewport.ts`、`color/`、`thumbnails/`、`service/` 保存相应纯逻辑和数据契约。
+- `src/media/`：`source.ts` 为 WebCodecs 入口；`decoding/` 保存 FFmpeg/packet/FLV/JS 容器后端及 Worker，`indexing/` 保存浏览器索引客户端与 IndexedDB 适配，`audio/` 只观察已有缓存，`policy/` 保存解码选择，`io/` 保存同步 Range 桥接，`workers/` 保存 RPC 与协议。
+- `src/presentation/presenter.ts` 唯一决定帧如何上屏；同目录保存 WebGPU/WebGL、HDR 与 YUV 呈现。`shared/presentation/viewport.ts` 保存纯几何与状态，DOM 接线在 `src/ui/view-bindings.ts` 和 `src/ui/viewport-gestures.ts`。
+- `src/analysis/{metadata,bitstream}/` 保存浏览器分析适配、Worker 与服务；`src/ui/analysis/` 保存面板与图表，`chart-overlay.ts` 为图表覆盖层，`picture-overlay/` 为源画面宏块/QP 覆盖层；`src/session/{metadata-analysis,bitstream-analysis}.ts` 协调会话行为。
+- `src/review/` 保存评审与工作区浏览器客户端；`src/services/` 保存媒体库、连接、身份和文件客户端；`src/logging/` 保存本地诊断；面板与交互位于 `src/ui/`，管理页面位于 `src/admin/`。
+- `server/`：Node 服务，`app.ts` 负责装配；路由在 `routes/`，深度分析服务在 `analysis/bitstream/`，配置与运行入口在 `config.ts` / `runtime.ts`。共享代码统一从 `shared/` 引入，禁止服务端与浏览器层互相引用（包括类型）。
 - `scripts/dev.ts` 同进程启动 Vite 和媒体 API；`scripts/service.mjs` 管理 macOS 用户服务；`deploy/` 为便携运行与自动用户使用说明。
 - `test/{unit,contract,media}/`：node:test，无浏览器依赖；`helpers/` 为可复用模块，顶层旧文件为兼容入口。WASM 用例在 Node worker_threads 里跑真实 core。
 - `scripts/testing/`：统一清单、构建、生命周期与报告接入；`browser/{ui,annotations,media,workspace}/` 保存领域浏览器用例，顶层 `check-*-browser.mjs` 保留兼容入口。
@@ -30,7 +28,7 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 - UI 与 Agent 必须共用 `session.ts` 的行为，不允许各自实现。
 - 日志只留本地（IndexedDB），上传仅由用户在日志面板显式触发。
 - 解码路径选择按失败阶段决定（`MediaOpenError.stage`），不要新增“整体 try/catch 换路径”。
-- 帧资源必须显式 `close()`；解码后端不直接画 canvas（必须经过 `presenter.ts`）。
+- 帧资源必须显式 `close()`；解码后端不直接画 canvas（必须经过 `src/presentation/presenter.ts`）。
 - WASM core 的构建和裁剪在 `VoidPlayer-FFmpeg-Build` 仓库（分支 `wasm`），本仓库只消费产物。
 - 标注坐标相对源帧，可延伸到视频外的对应视口；线宽 `strokeWidth` 存 CSS 像素，不随缩放变化。网格 < 视频 < 标注 < 半透明 UI；不要在标注 SVG 上加视频边界裁剪。
 - 标注以矢量对象保存，UI/Agent 编辑共用 `session.updateMark`；采样策略由 presenter / presentation-surface 负责，缩小 LINEAR、放大 NEAREST，不放大 CSS 的中间位图。
@@ -38,6 +36,8 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 ## 验证
 
 ```sh
+npm run check:boundaries # 宿主依赖、模块归属与 Worker 入口
+npm run check:shared     # 无 DOM 类型的共享层编译
 npm run test:fast        # 无媒体/core/浏览器依赖的快速逻辑与基础设施契约
 npm run test:contract    # 清单、生命周期、发布与执行报告契约
 npm run test:browser:all # 完整自动化浏览器套件（单次构建，独立结果）

@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {localJsSourceVersion,parseJsPacketIndex} from '../../src/js-packet-index-cache.ts';
-import {jsDecodeIndex} from '../../src/js-decode-index.ts';
-import {MATROSKA_PACKET_BUILD} from '../../src/matroska-packet-index.ts';
-import {readContainerHeader,validateContainerHeader} from '../../src/bitstream-analysis/diagrams.ts';
-import {inspectPacketPicture} from '../../src/packet-picture.ts';
-import {matroskaClocks,matroskaStructure,matroskaFfv1Configuration} from '../../src/matroska-clocks.ts';
-import {TsCombinationNotMigrated} from '../../src/ts-packet-source.ts';
+import { localJsSourceVersion } from '../../src/media/indexing/js-packet-index-cache.ts';
+import { parseJsPacketIndex } from '../../shared/media/indexing/js-packet-index-parser.ts';
+import {jsDecodeIndex} from '../../src/media/indexing/js-decode-index.ts';
+import {MATROSKA_PACKET_BUILD} from '../../shared/media/containers/matroska-packet-index.ts';
+import {readContainerHeader,validateContainerHeader} from '../../shared/analysis/bitstream/diagrams.ts';
+import {inspectPacketPicture} from '../../shared/media/codecs/packet-picture.ts';
+import {matroskaClocks,matroskaStructure,matroskaFfv1Configuration} from '../../shared/media/containers/matroska-clocks.ts';
+import {TsCombinationNotMigrated} from '../../shared/media/containers/ts-packet-source.ts';
 
 const ebml=(id:string,...parts:Uint8Array[])=>{const data=Buffer.concat(parts);assert.ok(data.length<127);return Buffer.concat([Buffer.from(id,'hex'),Buffer.from([0x80|data.length]),data]);};
 const block=(flags=0,track=1)=>Buffer.from([0x80|track,0,0,flags,0x82,0]);

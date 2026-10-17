@@ -1,3 +1,5 @@
+import type {MeasurementKind,MeasurementResult} from '../shared/service/measurement.ts';
+export type {MeasurementKind,MeasurementResult} from '../shared/service/measurement.ts';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -7,16 +9,8 @@ import { AdminError } from './admin-error.ts';
 import { MediaLibraryIndex, fileVersion } from './library.ts';
 
 const MiB = 1024 * 1024;
-export type MeasurementKind = 'download' | 'upload' | 'storage' | 'concurrent';
-export type MeasurementResult = {
-  id: string; kind: MeasurementKind; owner: string;
-  state: 'preparing' | 'running' | 'stopping' | 'completed' | 'cancelled' | 'failed';
-  seconds: number; limitBytes: number; concurrency: number; startedAt: string;
-  bytes: number; requests: number; errors: number; elapsedMs: number; activeRequests: number;
-  errorCode?: 'measurement-failed'; reason?: 'duration' | 'limit' | 'user' | 'client' | 'error' | 'shutdown'; error?: string;
-  media?: { id: string; name: string; root: string; size: number; version: string };
-  client?: { bytes: number; requests: number; elapsedMs: number };
-};
+
+
 type Job = { result: MeasurementResult; controller: AbortController; timer: ReturnType<typeof setTimeout>; at: number; reserved: number; offset: number; preparing: boolean; file?: string; data?: Buffer; done: Promise<void>; resolve: () => void };
 export const measurementActive = (r: MeasurementResult) => ['preparing', 'running', 'stopping'].includes(r.state);
 

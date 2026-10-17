@@ -1,7 +1,7 @@
-import { currentActor } from '../identity.ts';
+import { currentActor } from '../services/identity.ts';
 import { t, th, msg, formatDate, onLanguageChange } from '../i18n.ts';
-import type { WorkspaceCheckpoints, CheckpointSummary, CheckpointUsage } from '../workspace-checkpoint.ts';
-import type { WorkspaceFile } from '../workspace-file.ts';
+import type { WorkspaceCheckpoints, CheckpointSummary, CheckpointUsage } from '../review/workspace-checkpoint.ts';
+import type { WorkspaceFile } from '../../shared/review/workspace-file.ts';
 import { icon } from './icons.ts';
 
 export function checkpointHistoryShell() {

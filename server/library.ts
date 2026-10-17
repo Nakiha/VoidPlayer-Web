@@ -1,3 +1,4 @@
+import type {LibraryScanStatus} from '../shared/service/admin.ts';
 import { FrameIndexJobs } from './frame-index-jobs.ts';
 import { FrameIndexStore } from './frame-index-store.ts';
 import { MediaThumbnailStore } from './media-thumbnail-store.ts';
@@ -6,7 +7,7 @@ import { promises as fs } from 'node:fs';
 import type { Stats } from 'node:fs';
 import path from 'node:path';
 import { LibraryStore, normalizeRoots, mediaId } from './library-store.ts';
-import { THUMB_RECIPE_VERSION } from '../src/thumbnails/contract.ts';
+import { THUMB_RECIPE_VERSION } from '../shared/thumbnails/contract.ts';
 import type { MediaRoot, RootRecord, StoredMedia } from './library-store.ts';
 import { DirectoryChanges, DirectoryWatchHints } from './library-watch.ts';
 import type { DirectoryScope } from './library-watch.ts';
@@ -68,7 +69,7 @@ export class MediaLibraryIndex {
     this.timer = setInterval(() => { void this.refresh().catch(() => {}); }, this.options.ttlMs ?? 30000);
     this.timer.unref();
   }
-  status() {
+  status(): LibraryScanStatus {
     const job = this.store.db.prepare('SELECT * FROM scan_jobs ORDER BY id DESC LIMIT 1').get() ?? null;
     const roots = this.store.db.prepare('SELECT id,name,state,error,scanned_at AS scannedAt FROM roots WHERE active=1 ORDER BY name,id').all();
     return { ready: this.ready, scanning: !!this.pending, job, roots, watch: this.watchers?.status() ?? null, queuedDirectories: this.changes.size, errorDetailsTruncated: Number(job?.errors ?? 0) > 1000 };

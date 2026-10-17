@@ -1,7 +1,7 @@
-import { SLOTS } from '../model.ts';
+import { SLOTS } from '../../shared/review/model.ts';
 import type { ReviewSession } from '../session.ts';
-import { log } from '../log.ts';
-import { PanMomentumFilter, Viewport, classifyWheel, normalizeWheelDelta, wheelZoomFactor } from '../viewport.ts';
+import { log } from '../logging/log.ts';
+import { PanMomentumFilter, Viewport, classifyWheel, normalizeWheelDelta, wheelZoomFactor } from '../../shared/presentation/viewport.ts';
 
 export type ViewportGestureDeps = {
   $<T extends Element = HTMLElement>(id: string): T;

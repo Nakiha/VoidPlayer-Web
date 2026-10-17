@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
-import { openAnalysisInput } from '../../src/bitstream-analysis/input.ts';
-import { analyzePicture, analyzeRange, analyzeStream } from '../../src/bitstream-analysis/runner.ts';
-import { pictureId } from '../../src/bitstream-analysis/contract.ts';
-import { FlvEngine } from '../../src/flv-engine.ts';
-import { FLV_MEDIA_INDEX_IDENTITY } from '../../src/media-index-identity.ts';
-import { validateStream } from '../../src/bitstream-analysis/contract.ts';
+import { openAnalysisInput } from '../../shared/analysis/bitstream/input.ts';
+import { analyzePicture, analyzeRange, analyzeStream } from '../../shared/analysis/bitstream/runner.ts';
+import { pictureId } from '../../shared/analysis/bitstream/contract.ts';
+import { FlvEngine } from '../../src/media/decoding/flv-engine.ts';
+import { FLV_MEDIA_INDEX_IDENTITY } from '../../shared/media/indexing/media-index-identity.ts';
+import { validateStream } from '../../shared/analysis/bitstream/contract.ts';
 const signal = new AbortController().signal;
 const answers = JSON.parse(await readFile('docs/fixtures/bitstream-analysis-answers.json', 'utf8'));
 async function reader(file: string) {
@@ -147,7 +147,7 @@ test('duplicate FLV source timestamps reject analysis and actual playback omits 
 
 for (const codec of ['h264', 'hevc', 'vvc']) test(`media library FLV ${codec}: independent stream index, cache restart and corrupt-hole repair`, async () => {
   const { MediaLibraryIndex } = await import('../../server/library.ts');
-  const { AnalysisScheduler } = await import('../../server/analysis/scheduler.ts');
+  const { AnalysisScheduler } = await import('../../server/analysis/bitstream/scheduler.ts');
   const { mkdtemp, rm, mkdir, copyFile, writeFile } = await import('node:fs/promises');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
@@ -219,9 +219,9 @@ test('FLV adapter preserves anomalous DTS and signed CTS instead of repairing th
 });
 
 test('library FLV frontier uses validated scanner progress and a parsed final document, never FFmpeg binary records', async () => {
-  const { libraryAnalysisIndex } = await import('../../server/analysis/index.ts');
-  const { serializeFlvIndex } = await import('../../src/flv-index-cache.ts');
-  const { demuxFlv } = await import('../../src/flv-demux.ts');
+  const { libraryAnalysisIndex } = await import('../../server/analysis/bitstream/index.ts');
+  const { serializeFlvIndex } = await import('../../shared/media/indexing/flv-index-cache.ts');
+  const { demuxFlv } = await import('../../shared/media/containers/flv-demux.ts');
   const source = await reader('fixtures/flv-analysis/legacy-h264.flv');
   const index = await demuxFlv(source);
   let onProgress: any, done = false, unsubscribed = false;
@@ -265,9 +265,9 @@ test('cancelled FLV adapter acquisition closes its independently owned reader ex
 });
 
 test('source-bound FLV snapshot keeps two rear requests local at underlying Blob IO', async () => {
-  const { RangeReader } = await import('../../src/range-reader.ts');
-  const { demuxFlv } = await import('../../src/flv-demux.ts');
-  const { serializeFlvIndex } = await import('../../src/flv-index-cache.ts');
+  const { RangeReader } = await import('../../shared/media/io/range-reader.ts');
+  const { demuxFlv } = await import('../../shared/media/containers/flv-demux.ts');
+  const { serializeFlvIndex } = await import('../../shared/media/indexing/flv-index-cache.ts');
   const bytes = await readFile('fixtures/flv-analysis/legacy-h264.flv');
   const index = await demuxFlv(await reader('fixtures/flv-analysis/legacy-h264.flv'));
   const document = serializeFlvIndex(index, bytes.length);
@@ -290,7 +290,7 @@ test('source-bound FLV snapshot keeps two rear requests local at underlying Blob
 });
 
 test('MP4 decode tick table is opt-in and ordinary playback config does not read STTS payload', async () => {
-  const { readMp4Configurations } = await import('../../src/mp4-config.ts');
+  const { readMp4Configurations } = await import('../../shared/media/containers/mp4-config.ts');
   const { Input, BufferSource, ALL_FORMATS } = await import('mediabunny');
   const bytes = await readFile('fixtures/video/h264_9s_1920x1080.mp4');
   const media = new Input({ source: new BufferSource(bytes), formats: ALL_FORMATS });

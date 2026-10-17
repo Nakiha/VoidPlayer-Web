@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSourceQuerier, runSourceQuery, locateSampleById } from '../../src/analysis/adapters.ts';
-import { coverageFor } from '../../src/analysis/inspection.ts';
-import type { SourceQueryContext } from '../../src/analysis/adapters.ts';
+import { createSourceQuerier, runSourceQuery, locateSampleById } from '../../shared/analysis/metadata/adapters.ts';
+import { coverageFor } from '../../shared/analysis/metadata/inspection.ts';
+import type { SourceQueryContext } from '../../shared/analysis/metadata/adapters.ts';
 
 const ctx: SourceQueryContext = {
   mediaId: 'm1',
@@ -169,8 +169,8 @@ test('展示序排名：重排包表的 PTS 秩与二分一致，重复 PTS 共�
   assert.throws(() => querier.rank(mixed, 0, 'pts' as never, NaN), /有限/);
 });
 
-import { FfmpegPacketIndex } from '../../src/analysis/ffmpeg-adapter.ts';
-import { FFMPEG_NO_TIMESTAMP, ffmpegTicksToUs } from '../../src/ffmpeg-index-cache.ts';
+import { FfmpegPacketIndex } from '../../shared/analysis/metadata/ffmpeg-adapter.ts';
+import { FFMPEG_NO_TIMESTAMP, ffmpegTicksToUs } from '../../shared/media/indexing/ffmpeg-index-cache.ts';
 
 function ffmpegRecords(packets: { pts: bigint; dts: bigint; ordinal: number; size: number }[]) {
   const bytes = new Uint8Array(packets.length * 48), view = new DataView(bytes.buffer);
@@ -217,7 +217,7 @@ test('untimed FFmpeg packets remain addressable without inventing bitrate or tim
 });
 
 test('FFmpeg presentation batches expose only a contiguous decode-order frontier', async () => {
-  const { FfmpegPacketIndex } = await import('../../src/analysis/ffmpeg-adapter.ts');
+  const { FfmpegPacketIndex } = await import('../../shared/analysis/metadata/ffmpeg-adapter.ts');
   const index = new FfmpegPacketIndex();
   const batch = (ordinals: number[]) => {
     const records = new Uint8Array(ordinals.length * 48), view = new DataView(records.buffer);

@@ -63,7 +63,7 @@ test('工作区还原基准：还原时已知身份不被后续同集合事件�
 
 import { installLazyAnalysisPanel } from '../../src/ui/analysis/lazy-panel.ts';
 import type { ReviewSession } from '../../src/session.ts';
-import type { AnalysisViewState } from '../../src/workspace-file.ts';
+import type { AnalysisViewState } from '../../shared/review/workspace-file.ts';
 
 function deferred<T>() {
   let resolve!: (value: T) => void, reject!: (error: unknown) => void;

@@ -1,4 +1,4 @@
-import { DEFAULT_ANALYSIS_CONCURRENCY, validAnalysisConcurrency } from './analysis/limits.ts';
+import { DEFAULT_ANALYSIS_CONCURRENCY, validAnalysisConcurrency } from './analysis/bitstream/limits.ts';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';

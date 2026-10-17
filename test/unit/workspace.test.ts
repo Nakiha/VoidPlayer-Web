@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { WorkspaceState, marksForTrack, trackTiming } from '../../src/ui/workspace-state.ts';
 import type { ReviewTrack } from '../../src/ui/workspace-state.ts';
 import { SourceCatalog, sourceInUse } from '../../src/ui/source-catalog.ts';
-import type { Mark } from '../../src/model.ts';
+import type { Mark } from '../../shared/review/model.ts';
 
 const track: ReviewTrack = { id: 'new', slot: 'A', name: 'clip.mp4', size: 10, lastModified: 1,
   codec: 'avc1', decoder: 'webcodecs', width: 1920, height: 1080, durationUs: 1000000, firstPtsUs: 10000,
@@ -125,7 +125,7 @@ test('used library entries match source IDs, not same-named files in other roots
   const { sourceInUse, sourceKey } = await import('../../src/ui/source-catalog.ts');
   const metadata = {name:'same.mp4',size:123,lastModified:456};
   const item = {...metadata,key:sourceKey(metadata),libraryId:'root-a-file'};
-  const loaded = {...metadata,id:'decoded-id',source:{kind:'library' as const,id:'root-a-file',url:'/api/media/root-a-file'}} as import('../../src/model.ts').MediaInfo;
+  const loaded = {...metadata,id:'decoded-id',source:{kind:'library' as const,id:'root-a-file',url:'/api/media/root-a-file'}} as import('../../shared/review/model.ts').MediaInfo;
   assert.equal(sourceInUse(item, [loaded]), true);
   assert.equal(sourceInUse({...item,libraryId:'root-b-file'}, [loaded]), false);
   assert.equal(sourceInUse(item, []), false);

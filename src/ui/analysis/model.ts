@@ -1,13 +1,13 @@
-import type { Slot } from '../../model.ts';
-import type { AnalysisResult } from '../../analysis/types.ts';
-import { niceCeiling, shouldBucketize } from '../../analysis/statistics.ts';
-import { groupSamples } from '../../analysis/grouping.ts';
-import type { GroupSampleRef, TimeGroup } from '../../analysis/grouping.ts';
-import { coarsenBucketsShared, estimateBaseBucketWidth, isBucketGridCompatible, planSharedCoarseWidth } from '../../analysis/inspection.ts';
-import { canLayoutRaw, layoutMergedBuckets, layoutMergedSamples, chartBarWidth } from '../analysis-geometry.ts';
-import type { AnalysisGlyph, BucketGlyph, SampleGlyph } from '../analysis-geometry.ts';
-import { computeLayout, desiredHeight, plotGeometry } from '../analysis-canvas.ts';
-import type { CanvasColors, CanvasModel, CanvasTrack } from '../analysis-canvas.ts';
+import type { Slot } from '../../../shared/review/model.ts';
+import type { AnalysisResult } from '../../../shared/analysis/metadata/types.ts';
+import { niceCeiling, shouldBucketize } from '../../../shared/analysis/metadata/statistics.ts';
+import { groupSamples } from '../../../shared/analysis/metadata/grouping.ts';
+import type { GroupSampleRef, TimeGroup } from '../../../shared/analysis/metadata/grouping.ts';
+import { coarsenBucketsShared, estimateBaseBucketWidth, isBucketGridCompatible, planSharedCoarseWidth } from '../../../shared/analysis/metadata/inspection.ts';
+import { canLayoutRaw, layoutMergedBuckets, layoutMergedSamples, chartBarWidth } from './geometry.ts';
+import type { AnalysisGlyph, BucketGlyph, SampleGlyph } from './geometry.ts';
+import { computeLayout, desiredHeight, plotGeometry } from './canvas.ts';
+import type { CanvasColors, CanvasModel, CanvasTrack } from './canvas.ts';
 import type { AnalysisPreferences } from './preferences.ts';
 
 const GROUP_TOLERANCE_US = 2000;

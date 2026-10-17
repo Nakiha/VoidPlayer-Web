@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { hevcGeometry, hevcReorderFrames, parseHevcSpsGeometry, verifyHevcFrame } from '../../src/hevc-geometry.ts';
-import { flvDecoderConfig, FlvReader, demuxFlv } from '../../src/flv-demux.ts';
+import { hevcGeometry, hevcReorderFrames, parseHevcSpsGeometry } from '../../shared/media/codecs/hevc-geometry.ts';
+import { verifyHevcFrame } from '../../src/media/decoding/hevc-frame.ts';
+import { flvDecoderConfig, FlvReader, demuxFlv } from '../../shared/media/containers/flv-demux.ts';
 import { resolutionFlv } from '../../scripts/flv-resolution-fixture.ts';
 
 function sps(chroma = 1, right = 8, reorder = 0, ordering = [reorder], allOrdering = false) {

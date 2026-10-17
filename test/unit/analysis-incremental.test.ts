@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createSourceQuerier, sortByAxis, mergeAppendedSort } from '../../src/analysis/adapters.ts';
-import type { SourceQueryContext } from '../../src/analysis/adapters.ts';
+import { createSourceQuerier, sortByAxis, mergeAppendedSort } from '../../shared/analysis/metadata/adapters.ts';
+import type { SourceQueryContext } from '../../shared/analysis/metadata/adapters.ts';
 
 function ctxFor(mediaId = 'm1'): SourceQueryContext {
   return {
@@ -102,7 +102,7 @@ test('REVIEW-04: 大包表渐进查询有界（样本/桶/曲线封顶，不抛�
 
 
 test('native metadata worker matches the shared statistics and owns transferred batches', async () => {
-  const { NativeAnalysisClient } = await import('../../src/analysis/native-client.ts');
+  const { NativeAnalysisClient } = await import('../../src/analysis/metadata/native-client.ts');
   const client = new NativeAnalysisClient();
   try {
     const batch = new Float64Array([80_000, 300, 0, 0, 100, 1, 40_000, 200, 0]);
@@ -120,7 +120,7 @@ test('native metadata worker matches the shared statistics and owns transferred 
 });
 
 test('native analysis cancellation and disposal settle callers while keeping metadata available', async () => {
-  const { NativeAnalysisClient } = await import('../../src/analysis/native-client.ts');
+  const { NativeAnalysisClient } = await import('../../src/analysis/metadata/native-client.ts');
   const client = new NativeAnalysisClient(), count = 100_000;
   const batch = new Float64Array(count * 3);
   for (let i = 0; i < count; i++) { batch[i*3] = i*40_000; batch[i*3+1] = 1000; batch[i*3+2] = i%50===0 ? 1 : 0; }
@@ -136,8 +136,8 @@ test('native analysis cancellation and disposal settle callers while keeping met
   await assert.rejects(client.call('rank', { firstPtsUs: 0, axis: 'pts', tUs: 0 }), /disposed/);
 });
 
-import { createCooperativeQuerier, driveAnalysis } from '../../src/analysis/cooperative.ts';
-import { finishAnalysisSteps } from '../../src/analysis/adapters.ts';
+import { createCooperativeQuerier, driveAnalysis } from '../../shared/analysis/metadata/cooperative.ts';
+import { finishAnalysisSteps } from '../../shared/analysis/metadata/adapters.ts';
 
 test('cooperative full and appended queries preserve the shared statistics including DTS and duplicate timestamps', () => {
   const cooperative = createCooperativeQuerier(), synchronous = createSourceQuerier(), context = ctxFor();
@@ -167,7 +167,7 @@ test('abandoning partial index work preserves the prior cache and a later append
 });
 test('real worker cancellation stops an executing sort and executing statistics, retaining metadata for the next request', async t => {
   const { Worker } = await import('node:worker_threads');
-  const worker = new Worker(new URL('../../src/analysis/native-worker.ts', import.meta.url));
+  const worker = new Worker(new URL('../../src/analysis/metadata/native-worker.ts', import.meta.url));
   t.after(async () => { await worker.terminate(); });
   const messages: any[] = [];
   worker.on('message', message => messages.push(message));

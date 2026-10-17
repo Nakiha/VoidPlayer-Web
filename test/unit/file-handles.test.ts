@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FileHandleError, handleKey, restoreHandleFile, saveFileHandle, supportsFileHandles } from '../../src/file-handles.ts';
-import type { FsFileHandle, HandleRecord, HandleStore } from '../../src/file-handles.ts';
+import { FileHandleError, handleKey, restoreHandleFile, saveFileHandle, supportsFileHandles } from '../../src/services/file-handles.ts';
+import type { FsFileHandle, HandleRecord, HandleStore } from '../../src/services/file-handles.ts';
 
 const memoryStore = () => {
   const map = new Map<string, HandleRecord>();

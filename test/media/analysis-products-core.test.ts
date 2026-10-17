@@ -1,11 +1,11 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {open,readFile} from 'node:fs/promises';
-import {analyzeStream} from '../../src/bitstream-analysis/runner.ts';
-import {openAnalysisInput} from '../../src/bitstream-analysis/input.ts';
-import {summaryOf,packLegacy,validateProduct,legacyOf} from '../../src/bitstream-analysis/products.ts';
-import type {AnalysisOutput,AnalysisBlocks,AnalysisSummary} from '../../src/bitstream-analysis/products.ts';
-import {DiagramStore} from '../../src/bitstream-analysis/diagrams.ts';
+import {analyzeStream} from '../../shared/analysis/bitstream/runner.ts';
+import {openAnalysisInput} from '../../shared/analysis/bitstream/input.ts';
+import {summaryOf,packLegacy,validateProduct,legacyOf} from '../../shared/analysis/bitstream/products.ts';
+import type {AnalysisOutput,AnalysisBlocks,AnalysisSummary} from '../../shared/analysis/bitstream/products.ts';
+import {DiagramStore} from '../../shared/analysis/bitstream/diagrams.ts';
 import {pathToFileURL} from 'node:url';
 import {resolve} from 'node:path';
 const manifest=JSON.parse(await readFile('public/vendor/voidplayer-analysis/manifest.json','utf8'));

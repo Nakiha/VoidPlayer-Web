@@ -1,12 +1,12 @@
 import { t, msg, onLanguageChange } from '../i18n.ts';
-import { WorkspaceCheckpoints, checkpointTabId, CheckpointCapacityError } from '../workspace-checkpoint.ts';
+import { WorkspaceCheckpoints, checkpointTabId, CheckpointCapacityError } from '../review/workspace-checkpoint.ts';
 import { installCheckpointHistory } from './checkpoint-history.ts';
-import { currentActor } from '../identity.ts';
+import { currentActor } from '../services/identity.ts';
 import type { ReviewSession } from '../session.ts';
-import type { WorkspaceFile } from '../workspace-file.ts';
+import type { WorkspaceFile } from '../../shared/review/workspace-file.ts';
 import type { ToastStack } from './toast.ts';
-import { referenceVersion } from '../media-reference.ts';
-import { localCacheKey, serverCacheKey } from '../thumbnails/contract.ts';
+import { referenceVersion } from '../../shared/media/io/media-reference.ts';
+import { localCacheKey, serverCacheKey } from '../../shared/thumbnails/contract.ts';
 import { fillThumbnailImage, serverThumbnailImageUrl } from '../thumbnails/client.ts';
 import { icon } from './icons.ts';
 

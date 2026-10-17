@@ -1,4 +1,4 @@
-import type { MediaIndexIdentity } from '../src/media-index-identity.ts';
+import type { MediaIndexIdentity } from '../shared/media/indexing/media-index-identity.ts';
 
 export type FrameIndexManifest = {
   epoch: number;

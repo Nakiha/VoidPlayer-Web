@@ -1,5 +1,5 @@
 import { msg, t, formatNumber } from '../i18n.ts';
-import type { MediaInfo } from '../model.ts';
+import type { MediaInfo } from '../../shared/review/model.ts';
 export function indexProgressLabel(info: Pick<MediaInfo, 'indexState' | 'indexProgress' | 'indexWaiting'>): string {
   if(info.indexState !== 'building')return '';
   const p=info.indexProgress; const percent=p&&p.totalBytes>0?Math.min(99.9,100*p.scannedBytes/p.totalBytes).toFixed(1):'0.0';

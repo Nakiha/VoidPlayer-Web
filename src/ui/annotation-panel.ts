@@ -1,5 +1,5 @@
-import type { Mark, Slot } from '../model.ts';
-import { formatTime } from '../model.ts';
+import type { Mark, Slot } from '../../shared/review/model.ts';
+import { formatTime } from '../../shared/review/model.ts';
 import { annotationThumbnails } from './annotation-thumbnails.ts';
 import { createIconButton } from './controls.ts';
 import { icon } from './icons.ts';

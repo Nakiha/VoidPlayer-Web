@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setLanguage } from '../../src/i18n.ts';
 import { requestError, rootReason, cacheDetail, cacheName } from '../../src/admin/diagnostics.ts';
-import { apiError } from '../../src/api-error.ts';
+import { apiError } from '../../src/services/api-error.ts';
 import { AdminError, adminErrorBody } from '../../server/admin-error.ts';
 import { CacheManager } from '../../server/caches.ts';
 import type { CacheEntry } from '../../server/caches.ts';

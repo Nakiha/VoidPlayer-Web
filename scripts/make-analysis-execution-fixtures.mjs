@@ -1,4 +1,4 @@
-import {nalRanges} from '../src/nal-framing.ts';
+import {nalRanges} from '../shared/media/codecs/nal-framing.ts';
 import{readFile,writeFile,mkdir}from'node:fs/promises';import{execFileSync}from'node:child_process';import path from'node:path';
 const root=path.resolve(import.meta.dirname,'..'),out=path.join(root,'fixtures/analysis-execution');await mkdir(out,{recursive:true});
 const args=['-v','error','-f','lavfi','-i','testsrc2=size=320x184:rate=24','-frames:v','48','-c:v','libx265','-pix_fmt','yuv420p','-x265-params','pools=none:frame-threads=1:keyint=24:min-keyint=24:scenecut=0:open-gop=0:bframes=3:b-adapt=0:log-level=error','-f','hevc','-y',path.join(out,'base.hevc')];execFileSync('ffmpeg',args);

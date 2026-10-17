@@ -1,11 +1,11 @@
 import { requestError } from './diagnostics.ts';
-import { apiError } from '../api-error.ts';
+import { apiError } from '../services/api-error.ts';
 import { localizedText, localizedAttribute, type LocalizedValue } from '../ui/live-localization.ts';
 import { onLanguageChange, formatDate, formatNumber, t, th, msg } from '../i18n.ts';
 import { installChoiceMenu } from '../ui/choice-menu.ts';
 import { icon } from '../ui/icons.ts';
-import type { MeasurementResult, MeasurementKind } from '../../server/measurement.ts';
-import type { LibraryEntry, LibraryPage } from '../library.ts';
+import type { MeasurementResult, MeasurementKind } from '../../shared/service/measurement.ts';
+import type { LibraryEntry, LibraryPage } from '../services/library.ts';
 const kindLabels = (): Record<MeasurementKind, string> => ({ download: t(msg("admin.speedDownload", "下载速度")), upload: t(msg("admin.speedUpload", "上传速度")), storage: t(msg("admin.speedStorage", "服务器读取速度")), concurrent: t(msg("admin.speedConcurrent", "多路视频读取")) });
 const descriptionLabels = (): Record<MeasurementKind, string> => ({
   download: t(msg("admin.descDownload", "服务器 → 浏览器，传输内存数据，不读取媒体文件。")),

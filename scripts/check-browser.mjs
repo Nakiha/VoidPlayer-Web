@@ -887,12 +887,12 @@ try {
     const markup=await page.locator('body').innerHTML();
     const entry=path.join(temporary,'analysis-recovery.ts');
     await writeFile(entry, `export {ReviewSession} from ${JSON.stringify(path.join(root,'src/session.ts'))};
-      export {BitstreamAnalysisService} from ${JSON.stringify(path.join(root,'src/bitstream-analysis/service.ts'))};
-      export {AnalysisFailure} from ${JSON.stringify(path.join(root,'src/bitstream-analysis/failure.ts'))};
+      export {BitstreamAnalysisService} from ${JSON.stringify(path.join(root,'src/analysis/bitstream/service.ts'))};
+      export {AnalysisFailure} from ${JSON.stringify(path.join(root,'shared/analysis/bitstream/failure.ts'))};
       export {installBitstreamControls} from ${JSON.stringify(path.join(root,'src/ui/bitstream-controls.ts'))};
-      export {installAnalysisPanel} from ${JSON.stringify(path.join(root,'src/ui/analysis-panel.ts'))};
-      export {rgbaDescription} from ${JSON.stringify(path.join(root,'src/frame-description.ts'))};
-      export {packLegacy,summaryOf} from ${JSON.stringify(path.join(root,'src/bitstream-analysis/products.ts'))};`);
+      export {installAnalysisPanel} from ${JSON.stringify(path.join(root,'src/ui/analysis/panel.ts'))};
+      export {rgbaDescription} from ${JSON.stringify(path.join(root,'shared/media/frame-description.ts'))};
+      export {packLegacy,summaryOf} from ${JSON.stringify(path.join(root,'shared/analysis/bitstream/products.ts'))};`);
     const fixture=await buildFixture({configFile:false,logLevel:'silent',build:{write:false,minify:false,
       lib:{entry,formats:['iife'],name:'RecoveryFixture'},rolldownOptions:{output:{codeSplitting:false}}}});
     const script=[fixture].flat().flatMap(output=>output.output).find(output=>output.type==='chunk').code;
@@ -987,9 +987,14 @@ try {
     await page.waitForFunction(()=>document.querySelector('[data-edge=end]')?.getAttribute('aria-valuenow')==='20000000');
     await handles.nth(1).press('ArrowLeft');
     await page.waitForFunction(()=>document.querySelector('[data-edge=end]')?.getAttribute('aria-valuenow')==='19900000');
+    // The native popover positions after opening. Wait for actionable geometry
+    // before retaining coordinates for the explicit pointer-capture gesture.
+    await handles.nth(1).hover(); await settle(page);
     const pointer=await handles.nth(1).boundingBox();
     await page.mouse.move(pointer.x+pointer.width/2,pointer.y+pointer.height/2);
-    await page.mouse.down(); await page.mouse.move(pointer.x-20,pointer.y+pointer.height/2); await page.mouse.up();
+    await page.mouse.down();
+    await page.waitForFunction(()=>document.querySelector('.analysis-window-handle.end')?.dataset.dragging==='true');
+    await page.mouse.move(pointer.x-20,pointer.y+pointer.height/2); await page.mouse.up();
     await page.waitForFunction(()=>+document.querySelector('[data-edge=end]').getAttribute('aria-valuenow')<19900000);
     await page.evaluate(()=>{const saved=recovery.chart.getAnalysisState();recovery.chart.restoreAnalysisState({...saved,view:{start:15_000_000,end:19_900_000}});});
     await page.waitForFunction(()=>document.querySelector('[data-edge=end]')?.getAttribute('aria-valuenow')==='19900000');

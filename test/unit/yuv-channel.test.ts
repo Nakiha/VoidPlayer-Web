@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { yuvChannelGray, yuvToRgba } from '../../src/yuv-color.ts';
-import { yuvFixture } from '.././helpers/yuv-fixture.ts';
-import { Viewport } from '../../src/viewport.ts';
-import { getPresentationChannel, setPresentationChannel, presentationChannelCode } from '../../src/presentation-channel.ts';
-import type { PresentationChannel } from '../../src/presentation-channel.ts';
-import { parseWorkspace } from '../../src/workspace-file.ts';
+import { yuvChannelGray, yuvToRgba } from '../../shared/color/yuv-color.ts';
+import { yuvFixture } from '../helpers/yuv-fixture.ts';
+import { Viewport } from '../../shared/presentation/viewport.ts';
+import { getPresentationChannel, setPresentationChannel, presentationChannelCode } from '../../src/presentation/presentation-channel.ts';
+import type { PresentationChannel } from '../../src/presentation/presentation-channel.ts';
+import { parseWorkspace } from '../../shared/review/workspace-file.ts';
 
 test('Y channel maps limited/full luma endpoints to black/white gray', () => {
   for (const full of [false, true]) {

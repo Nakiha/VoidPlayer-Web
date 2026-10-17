@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { prepareYuvFrame } from '../../src/yuv-frame.ts';
-import { getColorMode, setColorMode } from '../../src/color-mode.ts';
-import { rgbaDescription } from '../../src/frame-description.ts';
-import type { DecodedFrame } from '../../src/media.ts';
+import { prepareYuvFrame } from '../../src/media/decoding/yuv-frame.ts';
+import { getColorMode, setColorMode } from '../../src/media/policy/color-mode.ts';
+import { rgbaDescription } from '../../shared/media/frame-description.ts';
+import type { DecodedFrame } from '../../src/media/source.ts';
 
 test('browser mode retains native color ownership without an active GPU surface',async()=>{
   const previous=getColorMode();let copied=0,closed=0;
@@ -37,7 +37,7 @@ test('opaque and rejected native copies retain browser resources; other failures
 });
 
 test('normal native copies release the decoder sample before queuing and recycle only closed buffers',async()=>{
-  const {createYuvBufferPool}=await import('../../src/yuv-frame.ts');
+  const {createYuvBufferPool}=await import('../../src/media/decoding/yuv-frame.ts');
   const pool=createYuvBufferPool();let closed=0;
   const make=()=>({kind:'video-sample',byteSize:6,width:2,height:2,description:rgbaDescription(2,2,{format:'I420',byteLength:6,stride:null}),sample:{rotation:90,toVideoFrame:()=>({codedWidth:2,codedHeight:2,allocationSize:()=>6,copyTo:async(out:Uint8Array)=>{out.set([16,235,16,235,128,128]);return [{offset:0,stride:2},{offset:4,stride:1},{offset:5,stride:1}];},close(){}})},close(){closed++;}} as unknown as DecodedFrame);
   const a=await prepareYuvFrame(make(),pool);const b=await prepareYuvFrame(make(),pool);

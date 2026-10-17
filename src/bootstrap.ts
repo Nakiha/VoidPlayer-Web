@@ -16,7 +16,7 @@ let disposeLanguage = () => {};
 try {
   if (!globalThis.isSecureContext || location.pathname === '/connection') {
     disposeLanguage = await initializeLanguage();
-    const { showConnectionGuide } = await import('./connection-guide.ts');
+    const { showConnectionGuide } = await import('./ui/connection-guide.ts');
     const ready = showConnectionGuide({ automatic: location.pathname !== '/connection' });
     revealApp(); // The guide is usable while its connection probe is still pending.
     await ready;

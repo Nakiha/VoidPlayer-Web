@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { prerollMp4 } from '../../scripts/flv-resolution-fixture.ts';
-import { openPacketMedia } from '../../src/packet-media.ts';
+import { openPacketMedia } from '../../src/media/decoding/packet-media.ts';
 
 test('FFmpeg pre-roll discard packets do not become an unrenderable first frame', async () => {
   const file = new File([Uint8Array.from(await prerollMp4())], 'preroll.mp4');

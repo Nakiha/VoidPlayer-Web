@@ -29,8 +29,8 @@ for(const [browserName,engine] of Object.entries({chromium,webkit})){
       }));
       await page.goto(base+'/fate-test');
       const rows=await Promise.race([page.evaluate(async ({url,name,remote,ref})=>{
-        const {openMedia,openMediaFromUrl}=await import('/src/media.ts');
-        const {paintFrame,captureFrame,setPresentationGeometry,disposePresentation}=await import('/src/presenter.ts');
+        const {openMedia,openMediaFromUrl}=await import('/src/media/source.ts');
+        const {paintFrame,captureFrame,setPresentationGeometry,disposePresentation}=await import('/src/presentation/presenter.ts');
         const {pixelSignature,checkFrame,checkSequence,expectedAt}=await import('/scripts/fate-oracle.ts');
         const bytes=await (await fetch(url)).arrayBuffer(), rows=[];
         for(let round=0;round<2;round++){

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openFFmpegContainerFromUrl } from '../../src/ffmpeg-media.ts';
-import { rgbaDescription } from '../../src/frame-description.ts';
+import { openFFmpegContainerFromUrl } from '../../src/media/decoding/ffmpeg-media.ts';
+import { rgbaDescription } from '../../shared/media/frame-description.ts';
 
 const description = rgbaDescription(1, 1);
 const originTicks = 90_000;

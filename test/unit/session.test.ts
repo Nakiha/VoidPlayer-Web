@@ -1,13 +1,13 @@
-import { rgbaDescription } from '../../src/frame-description.ts';
+import { rgbaDescription } from '../../shared/media/frame-description.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ReviewSession } from '../../src/session.ts';
-import {getColorOutput,setColorOutput,defaultColorOutput} from '../../src/color-output.ts';
-import {getColorMode,setColorMode,getReferenceDecode,setReferenceDecode} from '../../src/color-mode.ts';
-import { minFrameDurationUs, planBackwardStep, planForwardStep, regionValue, timeUs, SLOTS } from '../../src/model.ts';
+import {getColorOutput,setColorOutput,defaultColorOutput} from '../../shared/color/color-output.ts';
+import {getColorMode,setColorMode,getReferenceDecode,setReferenceDecode} from '../../src/media/policy/color-mode.ts';
+import { minFrameDurationUs, planBackwardStep, planForwardStep, regionValue, timeUs, SLOTS } from '../../shared/review/model.ts';
 import { reviewTools } from '../../src/agent.ts';
-import type { MediaSource } from '../../src/media.ts';
-import type { AnnotationDocument } from '../../src/annotation-record.ts';
+import type { MediaSource } from '../../src/media/source.ts';
+import type { AnnotationDocument } from '../../shared/review/annotation-record.ts';
 
 function deferred<T>() { let resolve!: (v: T) => void; const promise = new Promise<T>(r => resolve = r); return { promise, resolve }; }
 test('reference decoder changes reload tracks and roll back failed depth changes',async()=>{
@@ -716,7 +716,7 @@ test('cancelling while showing the first frame releases the incoming decoder exa
 
 test('shared load status reports stages and terminal results, ignoring progress from a cancelled load', { timeout: 2000 }, async () => {
   const session = new ReviewSession(() => {}), pending = deferred<MediaSource>(), started = deferred<void>();
-  let report!: import('../../src/media-progress.ts').MediaOpenProgress;
+  let report!: import('../../src/media/progress.ts').MediaOpenProgress;
   const loading = session.load('A', async (_, progress) => { report = progress; progress('index'); started.resolve(); return pending.promise; }, 'capture.ts');
   const rejected = assert.rejects(loading, { name: 'AbortError' });
   assert.equal(session.getState().mediaLoad?.stage, 'queued');
@@ -830,7 +830,7 @@ test('removal that clamps the clock invalidates surviving producers before repos
 });
 
 test('playback failure records queue and track snapshots before releasing readers', async () => {
-  const { getLogEvents } = await import('../../src/log.ts');
+  const { getLogEvents } = await import('../../src/logging/log.ts');
   const fixture = media('failure-snapshot');
   fixture.source.framesFrom = async function* () {
     yield await fixture.source.frameAt(0);

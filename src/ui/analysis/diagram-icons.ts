@@ -1,4 +1,4 @@
-import type { AnalysisDiagram } from '../../analysis/types.ts';
+import type { AnalysisDiagram } from '../../../shared/analysis/metadata/types.ts';
 
 // Dedicated chart symbols share a 24px grid and the toolbar's theme color.
 const shapes: Record<AnalysisDiagram, string> = {

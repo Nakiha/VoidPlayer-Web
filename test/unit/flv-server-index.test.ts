@@ -7,11 +7,11 @@ import path from 'node:path';
 import {MediaLibraryIndex,fileVersion} from '../../server/library.ts';
 import {buildFlvIndexDocument} from '../../server/flv-index-builder.ts';
 import {createMediaServer} from '../../server/app.ts';
-import {FlvEngine} from '../../src/flv-engine.ts';
-import {FlvReader,demuxFlv} from '../../src/flv-demux.ts';
-import {serializeFlvIndex} from '../../src/flv-index-cache.ts';
-import {FLV_MEDIA_INDEX_IDENTITY} from '../../src/media-index-identity.ts';
-import {syntheticFlv} from '.././flv-fixture.ts';
+import {FlvEngine} from '../../src/media/decoding/flv-engine.ts';
+import {FlvReader,demuxFlv} from '../../shared/media/containers/flv-demux.ts';
+import {serializeFlvIndex} from '../../shared/media/indexing/flv-index-cache.ts';
+import {FLV_MEDIA_INDEX_IDENTITY} from '../../shared/media/indexing/media-index-identity.ts';
+import {syntheticFlv} from '../flv-fixture.ts';
 
 function damagedFlv(vvc=false){
  const bytes=syntheticFlv(),at=bytes.length-25;
@@ -92,7 +92,7 @@ test('local FLV scans without a service; a failed library build never silently s
 });
 
 test('cold, warm and restarted FLV analysis subscribers accept complete manifests without a build ID', async () => {
- const {libraryAnalysisIndex}=await import('../../server/analysis/index.ts');
+ const {libraryAnalysisIndex}=await import('../../server/analysis/bitstream/index.ts');
  const dir=await mkdtemp(path.join(tmpdir(),'vp-flv-null-build-')),media=path.join(dir,'media');
  await mkdir(media);const file=path.join(media,'clip.flv');await writeFile(file,syntheticFlv());
  const database=path.join(dir,'library.sqlite');

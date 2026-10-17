@@ -25,7 +25,7 @@ try {
   await page.route('**/hlg-test', route => route.fulfill({ contentType: 'text/html', body: '<body></body>' }));
   await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/hlg-test`);
   const results = await page.evaluate(async ({ size, expected }) => {
-    const { Mp4Engine } = await import('/src/mp4-engine.ts');
+    const { Mp4Engine } = await import('/src/media/decoding/mp4-engine.ts');
     const { createHlgPixelSampler, hlgSignatureDifference, hlgSignatureHasSpatialVariation } = await import('/scripts/hlg-pixel-signature.mjs');
     const assert = (value, message) => { if (!value) throw Error(message); };
     const url = new URL('/fixtures/video/dolby_hlg_1080p30.mp4', location.href).href;

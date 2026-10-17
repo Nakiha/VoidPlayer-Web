@@ -1,5 +1,5 @@
 import { t, msg } from "../i18n.ts";
-import type { AnalysisReasonCode } from "../bitstream-analysis/failure.ts";
+import type { AnalysisReasonCode } from "../../shared/analysis/bitstream/failure.ts";
 export function bitstreamReasonText(code: AnalysisReasonCode): string {
   switch (code) {
     case "unsupported-container":

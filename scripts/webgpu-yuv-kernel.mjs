@@ -1,1 +1,1 @@
-export { yuvKernel } from '../src/webgpu-yuv-kernel.mjs';
+export { yuvKernel } from '../src/presentation/webgpu-yuv-kernel.mjs';

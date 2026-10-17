@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { FFMPEG_INDEX_RECORD_BYTES, lastFfmpegPts, FFMPEG_NO_TIMESTAMP } from '../../src/ffmpeg-index-cache.ts';
-import type { MediaIndexIdentity } from '../../src/media-index-identity.ts';
+import { FFMPEG_INDEX_RECORD_BYTES, lastFfmpegPts, FFMPEG_NO_TIMESTAMP } from '../../shared/media/indexing/ffmpeg-index-cache.ts';
+import type { MediaIndexIdentity } from '../../shared/media/indexing/media-index-identity.ts';
 import { AdminError } from '../admin.ts';
 import type { RouteContext } from './context.ts';
 

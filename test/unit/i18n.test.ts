@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createLocaleController, resolveLocale, parseLanguagePreference } from '../../src/i18n/locale.ts';
-import { mediaDiagnostic, MediaOpenError } from '../../src/media-errors.ts';
+import { mediaDiagnostic, MediaOpenError } from '../../shared/media/io/media-errors.ts';
 import { diagnosticMessage } from '../../src/ui/diagnostic-message.ts';
 import { setLanguage, t, th, msg } from '../../src/i18n.ts';
-import { formatTime } from '../../src/model.ts';
-import { parseTimeInput } from '../../src/time-input.ts';
+import { formatTime } from '../../shared/review/model.ts';
+import { parseTimeInput } from '../../shared/review/time-input.ts';
 
 test('locale normalization and initialization contract', () => {
  assert.equal(parseLanguagePreference('zh-TW'),'system');

@@ -1,0 +1,377 @@
+import { prepareYuvFrame, createYuvBufferPool } from './decoding/yuv-frame.ts';
+import { getColorMode,getReferenceDecode } from './policy/color-mode.ts';
+import type { ColorMode, ReferenceDecode } from '../../shared/color/decode-policy-types.ts';
+import { probeContainer } from './policy/container-probe.ts';
+import { openSoftwareMedia } from './decoding/software-media.ts';
+import { openMediaPlan } from './policy/media-policy.ts';
+import type { MediaInfoChange } from './state.ts';
+import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample } from '../../shared/analysis/metadata/types.ts';
+import { avcGeometry, nativeAvcCompatible } from '../../shared/media/codecs/avc-geometry.ts';
+import { readMp4Configurations } from '../../shared/media/containers/mp4-config.ts';
+import { hevcDisplayOrder } from '../../shared/media/codecs/hevc-timeline.ts';
+import { RangeReader } from '../../shared/media/io/range-reader.ts';
+import { sampleDescription } from './decoding/frame-resource.ts';
+import type { FrameDescription } from '../../shared/media/frame-description.ts';
+import type { MediaOpenProgress } from './progress.ts';
+export type { MediaOpenProgress } from './progress.ts';
+import { loadAborted, onLoadAbort } from '../../shared/media/io/media-abort.ts';
+import { randomUUID } from '../../shared/utils/uuid.ts';
+import type { RandomAccessInput } from '../../shared/media/io/range-reader.ts';
+import { MediaOpenError } from '../../shared/media/io/media-errors.ts';
+import { Input, BlobSource, UrlSource, ALL_FORMATS, IsobmffInputFormat, VideoSampleSink, UnsupportedInputFormatError } from 'mediabunny';
+import type { CachedAudioBatch } from '../../shared/media/audio-types.ts';
+import type { VideoSample } from 'mediabunny';
+import { NativeAnalysisAdapter } from '../analysis/metadata/native-adapter.ts';
+import type { MediaInfo, FrameInfo } from '../../shared/review/model.ts';
+import { contextLog } from '../logging/log.ts';
+import { preferredVideoConfig } from './policy/decoder-policy.ts';
+
+export interface DecodedFrame extends FrameInfo {
+  presentedCommit?: number;
+  readonly sourcePicture?: import('../../shared/analysis/bitstream/contract.ts').SourcePictureKey;
+  /** Filled only by the presenter after a successful paint; never decoder tags. */
+  presentation?: import('../../shared/review/model.ts').PresentationInfo;
+  readonly description: FrameDescription;
+  readonly copyMs?: number;
+  readonly rotation?: number;
+  /** Resource form: a WebCodecs sample, YUV planes, or RGBA8 pixels. The presenter decides
+   *  how a kind reaches the canvas; backends never paint. */
+  readonly kind: 'video-sample' | 'rgba8' | 'yuv';
+  readonly width: number;
+  readonly height: number;
+  /** Approximate bytes held by this frame, for queue memory budgets. */
+  readonly byteSize: number;
+  readonly sample?: VideoSample;
+  readonly pixels?: Uint8ClampedArray;
+  close(): void;
+}
+export interface MediaSource {
+  /** Retained reference only; no analysis instance or IO until explicit request. */
+  bitstreamFile?: Blob;
+  /** Read-only confirmed packet frontier; starts metadata indexing, never seeks. */
+  getBitstreamIndex?(): Promise<import('../../shared/analysis/bitstream/stream.ts').AnalysisIndexFrontier>;
+  getBitstreamFfmpegIndex?(): Promise<import('../../shared/media/indexing/ffmpeg-index-cache.ts').FfmpegIndexDocument>;
+  getBitstreamFlvIndex?(): Promise<import("../../shared/media/indexing/flv-index-cache.ts").FlvIndexDocument>;
+  bitstreamIndexIdentity?: import('../../shared/media/indexing/media-index-identity.ts').MediaIndexIdentity;
+  info: MediaInfo;
+  /** Cache-only, bounded metadata inspection; never enables audio output. */
+  requestCachedMetadata?(): void;
+  setMetadataInspectionEnabled?(enabled: boolean): void;
+  /** Fire-and-forget cache observation; implementations must never read missing bytes. */
+  requestCachedAudio?(ptsUs: number, generation: number): void;
+  setCachedAudioEnabled?(enabled: boolean): void;
+  onCachedAudio?: (generation: number, batch: CachedAudioBatch) => void;
+  /** Background container indexing can extend duration after the first frame. */
+  onInfoChange?: (change?:MediaInfoChange) => void;
+  ensureIndexed?(ptsUs?: number): Promise<void>;
+  /** Container adapters may verify or replace only the decoder while retaining
+   * their existing demux/index session. This is used by reference-color admission. */
+  admitReference?(depth: number): Promise<MediaSource>;
+  /** Change presentation/decoder policy over the existing container session. */
+  reconfigureColorMode?(mode: ColorMode, decode: ReferenceDecode, signal?: AbortSignal): Promise<void>;
+  frameAt(ptsUs: number): Promise<DecodedFrame>;
+  framesAfter(ptsUs: number, count: number): Promise<DecodedFrame[]>;
+  /** Sequential presentation-order frames starting at ptsUs, for playback. */
+  framesFrom(ptsUs: number): AsyncGenerator<DecodedFrame>;
+  /** Continue after an already displayed frame without re-decoding its GOP. */
+  framesFollowing?(ptsUs: number): AsyncGenerator<DecodedFrame>;
+  /**
+   * 可选的只读码流分析查询（顶部分析面板与 Agent 共用）。返回压缩样本
+   * 负载统计，不解码、不 seek；缺失能力时方法不存在，调用方显示
+   * pending/unsupported，不伪造数据。
+   */
+  getAnalysisCapability?(): AnalysisCapability;
+  queryAnalysis?(query: AnalysisQuery & { requestId: number }): Promise<AnalysisResult>;
+  /**
+   * 展示序排名（只读，不解码）：归一化媒体时间 tUs 在 axis 下的排名，
+   * 即 axis 时间严格小于 tUs 的样本数。复用分析查询的有序轴缓存，
+   * O(log N) 且不物化样本数组；索引构建中返回暂定值。
+   */
+  rankAnalysisTime?(tUs: number, axis: AnalysisAxis): Promise<AnalysisRank>;
+  analysisSampleAtNumber?(number: number, axis: AnalysisAxis): Promise<{ ptsUs: number | null; complete: boolean }>;
+  /**
+   * 按样本身份（桶峰值等）有界定位单个样本，不依赖某次查询是否返回了 raw 列表。
+   * 身份格式由 adapter 层解析；未索引/不属于本媒体返回 null。
+   */
+  locateAnalysisSample?(sampleId: string): Promise<AnalysisSample | null>;
+  dispose(): void;
+}
+export async function inspectVideoTrack(input: Input) {
+  let format;
+  try { format = await input.getFormat(); }
+  catch (error) {
+    if (error instanceof UnsupportedInputFormatError) throw new MediaOpenError('container', '无法识别文件封装：当前原型不支持此格式，或文件已损坏。');
+    throw error;
+  }
+  const track = await input.getPrimaryVideoTrack();
+  if (!track) throw new MediaOpenError('container', `已识别 ${format.name}，但未找到当前媒体库可读取的视频轨道。可能没有视频，也可能轨道编码尚不支持。`);
+  if (!await track.getCodec()) {
+    const id = await track.getInternalCodecId();
+    const names: Record<string, string> = { V_FFV1: 'FFV1', vvc1: 'H.266 / VVC', vvi1: 'H.266 / VVC' };
+    const codec = id == null ? '未识别的编码' : names[String(id)] ?? String(id);
+    throw new MediaOpenError('codec', `已识别 ${format.name}，但当前网页媒体库尚未接入 ${codec} 视频编码。`);
+  }
+  const codec = await track.getCodecParameterString() ?? (await track.getCodec())!;
+  return { track, codec, format: format.name };
+}
+export interface MediaMeta { name: string; size: number; lastModified: number; }
+
+// Where opening failed decides whether the WASM fallback can help: container
+// and codec stages can (mediabunny/WebCodecs gaps); input and resource stages
+// cannot (a network error or an oversized file fails identically on retry).
+export { MediaOpenError } from '../../shared/media/io/media-errors.ts';
+export type { OpenStage } from '../../shared/media/io/media-errors.ts';
+/** File and URL differ only in byte access. Container adapters are selected
+ * once, before the shared native/software/reference policy is applied. */
+async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftware?: () => Promise<MediaSource>, onProgress?: MediaOpenProgress, signal?: AbortSignal): Promise<MediaSource> {
+  const pipelineStartedAt = performance.now();
+  const container = await probeContainer(input, signal);
+  const packetMp4 = container === 'isobmff';
+  const mp4DemuxPlan = packetMp4 ? 'packet' : null;
+  const reference = getColorMode() === 'reference', preference = getReferenceDecode();
+  const colorMode = reference ? 'reference' : 'browser';
+  let nativeOpens = 0, softwareOpens = 0;
+  const libraryReference='url' in input?input.library:undefined;
+  const libraryId=libraryReference?.id,mediaVersion=libraryReference?.version;
+  const tsAdmission = container==='mpegts'||container==='matroska' ? await (await import('./decoding/js-container-media.ts')).admitJsContainerMedia(container==='mpegts'?'ts':'matroska',input,meta,
+    libraryId&&mediaVersion?`${libraryId}@${mediaVersion}`:randomUUID(),{signal,onProgress,rawNative:reference,
+      ...(reference?{}:{nativeColorMode:'browser' as const})}) : undefined;
+  try {
+    const packetJs=tsAdmission?.kind==='js-packet-static';
+    const ffmpegPlan = container !== 'flv' && !packetMp4 && !packetJs;
+    const openMp4Packet = async (forceWasm: boolean) => {
+      const { openPacketMedia } = await import('./decoding/packet-media.ts');
+      return openPacketMedia('mp4', input, meta, { signal, onProgress, rawNative: reference,
+        ...(reference ? {} : { nativeColorMode: 'browser' as const }), forceWasm });
+    };
+    const openFfmpeg = async () => {
+      const { openFFmpegMedia, openFFmpegContainerFromUrl } = await import('./decoding/ffmpeg-media.ts');
+      return 'file' in input ? openFFmpegMedia(input.file as File, { signal, onProgress })
+        : openFFmpegContainerFromUrl(input.url, meta, { signal, onProgress });
+    };
+    const software = packetJs ? () => tsAdmission.open(true) : customSoftware ?? (packetMp4 ? () => openMp4Packet(true)
+      : ffmpegPlan ? openFfmpeg : () => openSoftwareMedia(input, meta, { signal, onProgress }, container));
+    const countedSoftware = async () => { softwareOpens++; return software(); };
+    const native = async () => {
+      nativeOpens++;
+      return container === 'flv'
+        ? (async () => { const { openFlvMedia } = await import('./decoding/flv-media.ts'); return openFlvMedia(input, meta, { signal, onProgress, rawNative: reference }); })()
+        : packetJs ? tsAdmission.open(false) : packetMp4 ? openMp4Packet(false)
+          : ffmpegPlan && !customSoftware ? openFfmpeg()
+            : openWebCodecsInput(new Input({ source: 'file' in input ? new BlobSource(input.file) : new UrlSource(input.url), formats: ALL_FORMATS }), meta, signal, onProgress, input, reference);
+    };
+    contextLog().info('media', '媒体适配器选择', { container, mp4DemuxPlan, tsDemuxPlan:tsAdmission?.kind, input: 'file' in input ? 'local' : 'remote', reference,
+      preference: reference ? preference.decoder : 'hardware', software: packetJs?(container==='matroska'?'packet-matroska':'packet-ts'):container === 'flv' ? 'packet-flv' : container === 'isobmff' ? 'packet-mp4' : 'ffmpeg-container' });
+    contextLog().info('media', '媒体管线追踪', {
+      phase: 'container-selected', mediaId: libraryId, mediaVersion, container,
+      demuxBackend: packetJs?(container==='matroska'?'js-matroska-packets':'js-ts-packets'):container === 'flv' ? 'flv-engine' : container === 'isobmff' && packetMp4 ? 'mp4-packet' : 'ffmpeg-wasm',
+      indexBackend: packetJs?(container==='matroska'?'js-matroska-packet-index':'js-ts-packet-index'):container === 'flv' ? 'flv-packet-index' : container === 'isobmff' && packetMp4 ? 'mp4-sample-index' : 'ffmpeg-index',
+      decoderPreference: reference ? preference.decoder : 'hardware', colorMode,
+    });
+    const source = await openMediaPlan({ meta, input, reference, softwareOnly: reference && preference.decoder === 'software', depth: preference.depth,
+      native, software: countedSoftware, nativeOwnsFallback: packetJs || (packetMp4 || ffmpegPlan) && !customSoftware, onProgress, signal });
+    source.info.container = container;
+    if ('file' in input) source.bitstreamFile = input.file;
+    const demuxBackend = packetJs?(container==='matroska'?'js-matroska-packets':'js-ts-packets'):container === 'flv' ? 'flv-engine'
+      : container === 'isobmff' && packetMp4 ? 'mp4-packet' : 'ffmpeg-wasm';
+    contextLog().info('media', '媒体管线追踪', {
+      phase: 'first-frame-ready', mediaId: libraryId, mediaVersion, container, demuxBackend,
+      indexBackend: source.info.indexBackend ?? source.info.indexSource ?? source.info.indexKind ?? 'container',
+      decoderBackend: source.info.decoder, colorMode,
+      firstPtsUs: source.info.firstPtsUs, durationUs: source.info.durationUs,
+      stableCoverageUs: source.info.stableCoverageUs, seekAnchorCount: source.info.seekAnchorCount,
+      firstFrameReadyMs: Math.round(performance.now() - pipelineStartedAt),
+      nativeOpenCount: nativeOpens, softwareOpenCount: softwareOpens,
+    });
+    return source;
+  } finally {if(tsAdmission?.kind==='js-packet-static')tsAdmission.close();}
+}
+
+export async function openMedia(file: File, openFallback: ((file: File) => Promise<MediaSource>) | undefined = undefined, onProgress?: MediaOpenProgress, signal?: AbortSignal): Promise<MediaSource> {
+  loadAborted(signal);
+  if (!(file instanceof File) || file.size === 0) throw new MediaOpenError('input', '请选择非空的视频文件。');
+  return openInput({ file }, file, openFallback ? () => openFallback(file) : undefined, onProgress, signal);
+}
+
+export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallback: ((url: string, meta: MediaMeta) => Promise<MediaSource>) | undefined = undefined, onProgress?: MediaOpenProgress, signal?: AbortSignal, library?:import('../../shared/media/io/library-reference-types.ts').LibraryIndexReference): Promise<MediaSource> {
+  loadAborted(signal);
+  if (!meta.size) {
+    const head = await fetch(url, { method: 'HEAD', signal });
+    if (!head.ok) throw new MediaOpenError('input', `读取媒体文件信息失败（${head.status}）。`);
+    meta = { ...meta, size: Number(head.headers.get('content-length')) };
+  }
+  if (!Number.isSafeInteger(meta.size) || meta.size <= 0) throw new MediaOpenError('input', '媒体文件长度无效。');
+  return openInput({ url, size: meta.size, ...(library?{library}:{}) }, meta, openFallback ? () => openFallback(url, meta) : undefined, onProgress, signal);
+}
+
+async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortSignal, onProgress?: MediaOpenProgress, access?:RandomAccessInput, rawNative=false): Promise<MediaSource> {
+  const detachAbort = onLoadAbort(signal, () => input.dispose());
+  let primed: VideoSample | null = null;
+  try {
+    loadAborted(signal);
+    if (!globalThis.isSecureContext || typeof VideoDecoder === 'undefined') {
+    // No WebCodecs at all is a decode-capability gap, not an input error:
+    // the WASM fallback exists precisely for that case.
+    throw new MediaOpenError('decode', '当前浏览器不支持 WebCodecs。请通过 localhost 或 HTTPS，在支持的桌面浏览器中打开。');
+    }
+    onProgress?.('inspect');
+    const { track, codec, format } = await inspectVideoTrack(input);
+    if (!await track.canDecode()) throw new MediaOpenError('decode', `已识别 ${format} / ${codec}，但当前浏览器不支持该编码配置的解码。`);
+    const rawConfig = await track.getDecoderConfig();
+    if(rawConfig?.codec.startsWith('avc')&&rawConfig.description){
+      const raw=rawConfig.description;
+      const bytes=ArrayBuffer.isView(raw)?new Uint8Array(raw.buffer,raw.byteOffset,raw.byteLength):new Uint8Array(raw);
+      if(!nativeAvcCompatible(avcGeometry(bytes)))throw new MediaOpenError('decode','此 AVC 配置需要保守软件重排/隔行解码，浏览器能力探测不足以保证完整输出。');
+    }
+    let indexWarning: string | undefined;
+    if(access&&(await input.getFormat()) instanceof IsobmffInputFormat){
+      const reader=new RangeReader(access);
+      const detach=onLoadAbort(signal,()=>reader.close());
+      try{
+        const configs=await readMp4Configurations(reader,track.id);
+        indexWarning = configs.warning;
+        if(configs.descriptions.length>1)throw new MediaOpenError('codec','多配置 MP4 需要按 sample description 切换解码器。');
+        if ((configs.availableSamples !== undefined && configs.availableSamples < configs.sampleSizes!.length)
+          || (await track.getCodec()==='hevc'&&await hevcDisplayOrder(reader,configs,()=>onProgress?.('index')))) {
+          input.dispose();
+          const {openPacketMedia}=await import('./decoding/packet-media.ts');
+          return await openPacketMedia('mp4',access,meta,{signal,onProgress,rawNative});
+        }
+      } finally{detach();reader.close();}
+    }
+    const config = rawConfig ? await preferredVideoConfig(rawConfig) : null;
+    if (!config) throw new MediaOpenError('decode', `浏览器无法解码 ${codec}，将尝试软件回退。`);
+    onProgress?.('index');
+    let first = await track.getFirstTimestamp();
+    const end = await track.computeDuration();
+    if (!Number.isFinite(first) || !Number.isFinite(end) || end <= first) throw new MediaOpenError('container', '无法确定视频的有效时间范围。');
+    const sink = new VideoSampleSink(track, { hardwareAcceleration: config.hardwareAcceleration });
+    // A TS capture may start before a decodable keyframe. Capability alone
+    // does not prove frame 0 exists: prime inside the staged open operation.
+    onProgress?.('first-frame');
+    primed = await firstDecodableSample(sink, first);
+    loadAborted(signal);
+    first = primed.timestamp;
+    if (!Number.isFinite(first) || first >= end) throw new MediaOpenError('decode', '首个可解码画面不在有效时间范围内。');
+    // Color metadata comes from the container (mediabunny), not from decoded
+    // frames: WebKit resolves VideoFrame.colorSpace to presentation values.
+    const color = await track.getColorSpace().catch(() => null);
+    const info: MediaInfo = {
+      id: randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
+      codec, decoder: 'webcodecs', width: track.displayWidth, height: track.displayHeight,
+      hardwareAcceleration: config.hardwareAcceleration,
+      indexKind: 'container', seekStrategy: 'browser',
+      firstPtsUs: Math.round(first * 1e6), durationUs: Math.round((end - first) * 1e6),
+      colorSource: 'container', ...(indexWarning ? { indexWarning } : {}),
+      ...(color ? { color: { primaries: color.primaries ?? null, transfer: color.transfer ?? null, matrix: color.matrix ?? null, fullRange: color.fullRange ?? null } } : {}),
+    };
+    // Frames carry their resource and kind; the presenter (src/presentation/presenter.ts)
+    // decides how to paint them.
+    const yuvPool=createYuvBufferPool();
+    const wrap = async (sample: VideoSample): Promise<DecodedFrame> => {
+      let description: FrameDescription;
+      try { description=sampleDescription(sample);if(info.color){description.sourceColor={...info.color};description.sourceColorOrigin='container';} } catch(error) {sample.close();throw error;}
+      const byteSize=description.byteLength;
+      const nativeFrame:DecodedFrame = {
+      description,
+      kind: 'video-sample',
+      width: sample.displayWidth,
+      height: sample.displayHeight,
+      byteSize,
+      sample,
+      ptsUs: Math.round((sample.timestamp - first) * 1e6),
+      sourcePtsUs: Math.round(sample.timestamp * 1e6),
+      durationUs: Math.round(sample.duration * 1e6),
+      close: () => sample.close(),
+      };
+      const frame=rawNative?nativeFrame:await prepareYuvFrame(nativeFrame,yuvPool);
+      if(disposed) {frame.close(); throw new DOMException("媒体已释放。", "AbortError");}
+      return frame;
+    };
+    let disposed = false;
+    const iterators = new Set<AsyncGenerator<VideoSample>>();
+    const samples = (time: number) => { const iterator = sink.samples(time); iterators.add(iterator); return iterator; };
+    // 只读分析用独立包游标懒枚举，不干扰播放；面板从未打开则不产生额外 IO。
+    // 枚举进展经 onInfoChange 触发会话 emit，面板据此重查（只读，不重扫）。
+    let analysisNotify: (() => void) | undefined;
+    const analysis = new NativeAnalysisAdapter(track, info.id, info.firstPtsUs, info.durationUs, () => analysisNotify?.());
+    const source: MediaSource = {
+      info,
+      getAnalysisCapability: () => analysis.getCapability(),
+      getBitstreamIndex: () => analysis.bitstreamFrontier(),
+      queryAnalysis: query => analysis.query(query),
+      locateAnalysisSample: sampleId => analysis.locate(sampleId),
+      rankAnalysisTime: (tUs, axis) => Promise.resolve(analysis.rank(tUs, axis)),
+      analysisSampleAtNumber: (number, axis) => Promise.resolve(analysis.sampleAtNumber(number, axis)),
+      async frameAt(ptsUs) {
+        // Resolve timestamps in the same nearest-microsecond domain that we
+        // expose in state and exports (e.g. a 30 fps frame starts at .033333…).
+        if (ptsUs === 0 && primed) return wrap(primed.clone());
+        const sample = await sink.getSample(first + (ptsUs + 0.5) / 1e6);
+        if (disposed) { sample?.close(); throw new DOMException('媒体已释放。', 'AbortError'); }
+        if (!sample) throw new Error(`时间 ${ptsUs} µs 没有可解码的画面。`);
+        return wrap(sample);
+      },
+      async framesAfter(ptsUs, count) {
+        // Iterate presentation order and keep true successors, so VFR and
+        // timestamp gaps cannot strand stepping on a duration-based guess.
+        // Start just before the current frame: its rounded start may sit a
+        // fraction of a microsecond below ptsUs.
+        const frames: DecodedFrame[] = [];
+        const iterator = samples(first + Math.max(0, ptsUs - 1) / 1e6);
+        try {
+          for await (const sample of iterator) {
+            const frame = await wrap(sample);
+            if (frame.ptsUs <= ptsUs) { frame.close(); continue; }
+            frames.push(frame);
+            if (frames.length >= count) break;
+          }
+        } catch (error) { frames.forEach(frame => frame.close()); throw error; }
+        finally {
+          iterators.delete(iterator);
+          await iterator.return(undefined);
+        }
+        return frames;
+      },
+      async *framesFrom(ptsUs) {
+        // Sequential iterator: the sink pre-decodes ahead, so playback no
+        // longer pays a keyframe seek per frame like sparse getSample does.
+        const iterator = samples(first + Math.max(0, ptsUs - 1) / 1e6);
+        try {
+          for await (const sample of iterator) yield wrap(sample);
+        } finally {
+          iterators.delete(iterator);
+          await iterator.return(undefined);
+        }
+      },
+      dispose: () => {
+        if (disposed) return; disposed = true;yuvPool.dispose();
+        analysis.close();
+        // Return the sink iterators directly, even if an outer queue is waiting
+        // on next(). This wakes the sink pump so its finally closes the decoder.
+        for (const iterator of iterators) void iterator.return(undefined).catch(() => {});
+        iterators.clear(); primed?.close(); primed = null; input.dispose();
+      },
+    };
+    analysisNotify = () => source.onInfoChange?.();
+    return source;
+  } catch (error) { primed?.close(); input.dispose(); loadAborted(signal); throw error; }
+  finally { detachAbort(); }
+}
+
+/** Preserve the real source timestamp when the capture starts before a GOP. */
+export async function firstDecodableSample(sink: Pick<VideoSampleSink, 'getSample' | 'samples'>, first: number): Promise<VideoSample> {
+  const sample = await sink.getSample(first + 0.5 / 1e6);
+  if (sample) return sample;
+  const frames = sink.samples(first);
+  let decoded: VideoSample | undefined;
+  try {
+    const next = await frames.next();
+    decoded = next.done ? undefined : next.value;
+    if (decoded) return decoded;
+    throw new MediaOpenError('decode', '视频没有可解码的首帧。');
+  } finally {
+    try { await frames.return(undefined); }
+    catch (error) { decoded?.close(); throw error; }
+  }
+}

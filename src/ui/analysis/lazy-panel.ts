@@ -1,9 +1,9 @@
 import type { ReviewSession } from '../../session.ts';
-import type { AnalysisViewState } from '../../workspace-file.ts';
-import type { AnalysisHooks, installAnalysisPanel } from '../analysis-panel.ts';
+import type { AnalysisViewState } from '../../../shared/review/workspace-file.ts';
+import type { AnalysisHooks, installAnalysisPanel } from './panel.ts';
 import { loadAnalysisPreferences } from './preferences.ts';
 import { reconcileTrackSelection } from '../track-selection.ts';
-import type { Slot } from '../../model.ts';
+import type { Slot } from '../../../shared/review/model.ts';
 
 type Action = Parameters<typeof installAnalysisPanel>[1];
 type Panel = ReturnType<typeof installAnalysisPanel>;
@@ -12,7 +12,7 @@ type Loader = () => Promise<{ installAnalysisPanel: typeof installAnalysisPanel 
 /** Preserve snapshots and restore intent before the optional UI is loaded.
  * Closing or disposing during import never reopens or mounts a stale panel. */
 export function installLazyAnalysisPanel(session: ReviewSession, act: Action, hooks: AnalysisHooks,
-  load: Loader = () => import('../analysis-panel.ts')) {
+  load: Loader = () => import('./panel.ts')) {
   let panel: Panel | undefined, loading: Promise<void> | undefined, open = hooks.isOpen();
   let restored = false;
   const preferences = loadAnalysisPreferences();

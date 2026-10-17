@@ -7,7 +7,7 @@ import { X509Certificate } from 'node:crypto';
 import { prepareTls, parseTls } from '../../server/tls.ts';
 import { loadConfig } from '../../server/config.ts';
 import { startService } from '../../server/runtime.ts';
-import { httpFetch } from '.././http-request.ts';
+import { httpFetch } from '../http-request.ts';
 
 test('portable CA persists across restarts/moves and reissues for changed LAN addresses', async () => {
   const temp = await mkdtemp(path.join(tmpdir(), 'vp-tls-'));

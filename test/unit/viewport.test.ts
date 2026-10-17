@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   PanMomentumFilter, Viewport, unobscuredFitArea, fitReference, wheelZoomFactor, ZOOM_MAX, classifyWheel, fitContain, fittedSize, normalizeWheelDelta,
-} from '../../src/viewport.ts';
+} from '../../shared/presentation/viewport.ts';
 
 test('fitContain letterboxes without upscaling past the slot', () => {
   assert.deepEqual(fitContain(2000, 1000, 3840, 2160), { width: 1777.7777777777778, height: 1000 });
@@ -219,7 +219,7 @@ test('ordinary wheel preserves notch speed and malformed deltas cannot poison zo
 
 
 test('wipe seam and opaque stroke share physical pixel boundaries at fractional panel origins',async()=>{
-  const {splitPixelGeometry}=await import('../../src/viewport.ts');
+  const {splitPixelGeometry}=await import('../../shared/presentation/viewport.ts');
   for(const dpr of [1,1.25,1.5,2,3]) for(const left of [0,.25,160.375]) for(const fraction of [-.1,0,.333,.501,1,1.1]) {
     const result=splitPixelGeometry(fraction,749.5,left,dpr);
     const physical=(left+result.x)*dpr;

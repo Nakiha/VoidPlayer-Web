@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseFfmpegIndex, serializeFfmpegIndex } from '../../src/ffmpeg-index-cache.ts';
+import { parseFfmpegIndex, serializeFfmpegIndex } from '../../shared/media/indexing/ffmpeg-index-cache.ts';
 
 const metadata = {
   size: 1024, codec: 'mpeg2video', timeBaseNum: 1, timeBaseDen: 90000,

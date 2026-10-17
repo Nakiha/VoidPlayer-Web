@@ -19,7 +19,7 @@ try{
   await page.evaluate(async()=>{
     const {savedWorkspaceShell,installSavedWorkspaces}=await import('/src/ui/saved-workspaces.ts');
     const {installWorkspaceSharing}=await import('/src/ui/workspace-sharing.ts');
-    const {chooseIdentity}=await import('/src/identity.ts');const {Viewport}=await import('/src/viewport.ts');const {installToasts}=await import('/src/ui/toast.ts');
+    const {chooseIdentity}=await import('/src/services/identity.ts');const {Viewport}=await import('/shared/presentation/viewport.ts');const {installToasts}=await import('/src/ui/toast.ts');
     document.body.innerHTML=`<header class="topbar"><button id="workspace-share"></button></header><div id="settings"><div id="settings-pane-workspace">${savedWorkspaceShell()}</div></div>`;
     await chooseIdentity({name:'测试用户',mode:'create'});const life=new AbortController();
     const snapshot=()=>({schema:'voidplayer-workspace',version:1,name:saved.name(),generatedAt:new Date().toISOString(),serverUrl:location.origin,positionUs:0,tracks:[{slot:'A',mediaId:'sample',offsetUs:0}],media:[{id:'sample',name:'sample.mp4',size:100,lastModified:10,codec:'h264',decoder:'webcodecs',width:100,height:100,durationUs:1000,firstPtsUs:0,source:{kind:'library',id:'a'.repeat(24),url:`${location.origin}/api/media/${'a'.repeat(24)}?v=${'b'.repeat(24)}`}}],marks:[],viewport:new Viewport().snapshot()});

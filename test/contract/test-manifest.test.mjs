@@ -74,7 +74,7 @@ test('Node implementations have one classified owner while every old command rem
   }
 });
 test('coverage floor retains original commands, required cells and CI membership', () => {
-  const baseline = JSON.parse(readFileSync(new URL('.././testing-coverage-baseline.json', import.meta.url), 'utf8'));
+  const baseline = JSON.parse(readFileSync(new URL('../testing-coverage-baseline.json', import.meta.url), 'utf8'));
   for (const cell of baseline) {
     const row = testManifest.cases.find(row => row.id === cell.id);
     assert.ok(row, `lost case ${cell.id}`);

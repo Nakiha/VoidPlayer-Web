@@ -17,7 +17,7 @@ await mkdir(output,{recursive:true});
 const server=await createServer({configLoader:'runner',cacheDir:resolve('artifacts/color/webgpu-vite-cache'),server:{host:'127.0.0.1',port:0}});
 let browser, deadline;
 const probeDigest=createHash('sha256');
-for(const name of ['diagnose-webgpu-color.mjs','../src/webgpu-color-surface.mjs','../src/webgpu-yuv-kernel.mjs'])probeDigest.update(await readFile(new URL(name,import.meta.url)));
+for(const name of ['diagnose-webgpu-color.mjs','../src/presentation/webgpu-color-surface.mjs','../src/presentation/webgpu-yuv-kernel.mjs'])probeDigest.update(await readFile(new URL(name,import.meta.url)));
 const report={probeDigest:probeDigest.digest('hex'),environment:{platform:platform(),release:release(),arch:arch()},startedAt:new Date().toISOString(),browserName,gpuMode,skipThroughput,measurement:'SDR source-sized GPU capture; excludes physical display. Throughput probe is not session playback benchmark.'};
 try {
  await server.listen();
@@ -32,11 +32,11 @@ try {
  await page.locator('input').setInputFiles(process.argv.slice(2).map(p=>resolve(p)));
  report.result=await page.evaluate(async({gpuMode,skipThroughput})=>{
   const {createExternalSurface,wasmVideoFrame}=await import('/scripts/webgpu-color-surface.mjs');
-  const {openPacketMedia}=await import('/src/packet-media.ts');
-  const {resolveYuvColor,validateYuv,yuvToRgba,yuvSample}=await import('/src/yuv-color.ts');
-  const {compareRgba}=await import('/src/color-evidence.ts');
+  const {openPacketMedia}=await import('/src/media/decoding/packet-media.ts');
+  const {resolveYuvColor,validateYuv,yuvToRgba,yuvSample}=await import('/shared/color/yuv-color.ts');
+  const {compareRgba}=await import('/src/presentation/color-evidence.ts');
   const {buildInfo}=await import('/src/build-info.ts');
-  const {prepareYuvFrame}=await import('/src/yuv-frame.ts');
+  const {prepareYuvFrame}=await import('/src/media/decoding/yuv-frame.ts');
   const result={buildInfo,files:[],synthetic:[],readbacksDuringThroughput:0};
   const canvas=document.createElement('canvas');document.querySelector('main').append(canvas);
   const gpu=await createExternalSurface(canvas,undefined,gpuMode==='strict'?'external':gpuMode);result.adapter=gpu.adapter;
@@ -129,7 +129,7 @@ try {
       const surfaces=await Promise.all(modes.map(async()=>{
         const c=document.createElement('canvas');const stage=document.createElement('div');stage.className='frame-stage';stage.append(c);document.querySelector('main').append(stage);
         if(gpuMode!=='strict')return{c:stage,s:await createExternalSurface(c,gpu.device,gpuMode)};
-        const {paintFrame,setPresentationGeometry}=await import('/src/presenter.ts');
+        const {paintFrame,setPresentationGeometry}=await import('/src/presentation/presenter.ts');
         return{c:stage,s:{errors:[],present(f,w,h){setPresentationGeometry(c,{width:w,height:h,imageWidth:w,imageHeight:h,zoom:1,offsetX:0,offsetY:0,dpr:1});paintFrame(c,f);},
           async drain(){const gl=stage.querySelector('.frame-presentation')?.getContext('webgl');if(!gl)throw new Error('Strict benchmark requires WebGL');gl.finish();},dispose(){setPresentationGeometry(c,null);}}};
       }));

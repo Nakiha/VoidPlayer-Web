@@ -1,5 +1,5 @@
-import { fetchLibraryPage, LibraryChangedError } from '../library.ts';
-import type { LibraryPage, LibraryEntry } from '../library.ts';
+import { fetchLibraryPage, LibraryChangedError } from '../services/library.ts';
+import type { LibraryPage, LibraryEntry } from '../services/library.ts';
 import { installChoiceMenu } from './choice-menu.ts';
 import { onLanguageChange, t, msg , th } from '../i18n.ts';
 import { createIconButton } from './controls.ts';

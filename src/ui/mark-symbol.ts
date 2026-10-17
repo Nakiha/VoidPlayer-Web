@@ -1,4 +1,4 @@
-import { markIdentity } from '../mark-identity.ts';
+import { markIdentity } from '../review/mark-identity.ts';
 import { svgElement } from './annotation-svg.ts';
 
 export function markSymbol(id: string) {

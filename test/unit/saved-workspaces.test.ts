@@ -1,4 +1,4 @@
-import { httpFetch as fetch } from '.././http-request.ts';
+import { httpFetch as fetch } from '../http-request.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
@@ -10,8 +10,8 @@ import { WorkspaceStore, WORKSPACE_BYTES } from '../../server/workspaces.ts';
 import { openIndexDatabase } from '../../server/sqlite.ts';
 import { loadConfig } from '../../server/config.ts';
 import { startService } from '../../server/runtime.ts';
-import { Viewport } from '../../src/viewport.ts';
-import { parseWorkspace } from '../../src/workspace-file.ts';
+import { Viewport } from '../../shared/presentation/viewport.ts';
+import { parseWorkspace } from '../../shared/review/workspace-file.ts';
 const alice = { id: 'alice', name: 'Alice' }, bob = { id: 'bob', name: 'Bob' };
 const document = () => parseWorkspace({ schema: 'voidplayer-workspace', version: 1, generatedAt: new Date().toISOString(), serverUrl: 'http://example.test/', positionUs: 200, tracks: [{ slot: 'A', mediaId: 'sample', offsetUs: 0 }], media: [{ id: 'sample', name: 'sample.mp4', size: 100, lastModified: 10, codec: 'h264', decoder: 'webcodecs', width: 100, height: 100, durationUs: 1000, firstPtsUs: 0 }], marks: [], viewport: new Viewport().snapshot(), layout: { panels: { inspector: true, subtracks: true, sources: true }, selected: 'A', dockHeight: 260, marksExpanded: true } });
 async function temporary(run: (root: string) => Promise<void>) { const root = await fs.mkdtemp(path.join(os.tmpdir(), 'vp-workspaces-')); try { await run(root); } finally { await fs.rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); } }

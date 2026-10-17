@@ -1,14 +1,14 @@
-import {ffmpegAnalysisConfiguration} from '../src/ffmpeg-analysis-config.ts';
+import {ffmpegAnalysisConfiguration} from '../shared/media/indexing/ffmpeg-analysis-config.ts';
 import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
 import type { Stats } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { instantiateCore } from '../src/wasm-core.ts';
-import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_SCHEMA, FFMPEG_NO_TIMESTAMP } from '../src/ffmpeg-index-cache.ts';
-import type { FfmpegIndexMetadata } from '../src/ffmpeg-index-cache.ts';
-import type { MediaIndexIdentity } from '../src/media-index-identity.ts';
+import { instantiateCore } from '../shared/wasm/core.ts';
+import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_SCHEMA, FFMPEG_NO_TIMESTAMP } from '../shared/media/indexing/ffmpeg-index-cache.ts';
+import type { FfmpegIndexMetadata } from '../shared/media/indexing/ffmpeg-index-cache.ts';
+import type { MediaIndexIdentity } from '../shared/media/indexing/media-index-identity.ts';
 
 export function hasServerIndexCore(coreDir: string): boolean {
   return existsSync(path.join(coreDir, 'voidplayer-core.js')) && existsSync(path.join(coreDir, 'voidplayer-core.wasm'));

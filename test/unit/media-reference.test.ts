@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mediaActionUrl, pinLibraryReference } from '../../src/media-reference.ts';
+import { mediaActionUrl, pinLibraryReference } from '../../shared/media/io/media-reference.ts';
 import { SourceCatalog } from '../../src/ui/source-catalog.ts';
-import type { MediaInfo } from '../../src/model.ts';
-import { LibraryAccessError } from '../../src/source-access.ts';
+import type { MediaInfo } from '../../shared/review/model.ts';
+import { LibraryAccessError } from '../../shared/media/io/source-access.ts';
 import { libraryAccessMessage } from '../../src/ui/source-access-message.ts';
 const id = 'a'.repeat(24), version = 'b'.repeat(24), base = 'https://media.example/player';
 const entry = { id, name: 'clip.mp4', root: 'archive', size: 12, lastModified: 12345, version, state: 'ready' };

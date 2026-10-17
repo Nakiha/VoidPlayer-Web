@@ -13,7 +13,7 @@
 - `layout`：工具区展开状态、选中轨道、子轨道高度、标注列展开和宽度、文件名列宽度。导入时按当前窗口约束尺寸。
 - `thumbnails`：已生成的 JPEG 标注预览。可省略；不影响矢量标注还原。
 
-解析、版本检查及输入验证在 `src/workspace-file.ts`；`ReviewSession.restoreWorkspace` 在全部片源和目标帧就绪后替换会话，失败/取消时释放新解码器并保留原会话。界面、`window.voidPlayer` 和 WebMCP 的 workspace 工具共用同一条导入路径。
+解析、版本检查及输入验证在 `shared/review/workspace-file.ts`；`ReviewSession.restoreWorkspace` 在全部片源和目标帧就绪后替换会话，失败/取消时释放新解码器并保留原会话。界面、`window.voidPlayer` 和 WebMCP 的 workspace 工具共用同一条导入路径。
 
 本地文件需重新授权选择，按名称、大小和修改时间匹配；也可将工作区和原视频一起拖入。此匹配不是内容哈希。媒体库引用按绝对 URL 打开，导入前检查 HTTP 状态和文件大小；服务迁移、权限变化或片源被替换时会报告失败。不同域部署仍受浏览器 CORS 和 HTTPS 混合内容规则约束，不绕过服务访问控制。
 
@@ -27,7 +27,7 @@
 
 - `version: 2`、`presentation: "voidplayer-color-v2"`。
 - `colorMode` 为 reference / browser；`referenceDecode.decoder` 为 software / hardware，depth 为 1/2/4/8。
-- `colorOutput` 保存请求目标 target（sdr / hdr）、HDR 参考白 hdrWhiteNits（80–400）和完整 preview 策略参数。默认值与验证在 `src/color-output.ts` / `src/hdr-policy.ts`。
+- `colorOutput` 保存请求目标 target（sdr / hdr）、HDR 参考白 hdrWhiteNits（80–400）和完整 preview 策略参数。默认值与验证在 `shared/color/color-output.ts` / `shared/color/hdr-policy.ts`。
 - `outputColorSpace` 必须与请求目标一致：sdr 为 srgb，hdr 为 display-p3。它记录请求条件，不证明接收设备已实际输出 HDR。
 
 导入在打开片源前应用这些条件，并使用现有呈现重建钩子；事务取消或严格恢复失败会回滚。通道、缩放、布局等仍由 viewport / layout 保存。旧 version 1 比较块（`voidplayer-sdr-v1` / srgb）恢复默认 SDR 输出条件；没有 comparison 的旧文件沿用当前设置并提示。不认识的版本/契约、非法参数或不一致的目标/色域拒绝导入，避免悄悄更换比较条件。

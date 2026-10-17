@@ -1,4 +1,4 @@
-import {openPacketMedia} from '../../src/packet-media.ts';
+import {openPacketMedia} from '../../src/media/decoding/packet-media.ts';
 import {Worker} from 'node:worker_threads';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,9 +8,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { MediaLibraryIndex } from '../../server/library.ts';
-import { instantiateCore } from '../../src/wasm-core.ts';
+import { instantiateCore } from '../../shared/wasm/core.ts';
 import { createMediaServer } from '../../server/app.ts';
-import { openFFmpegMedia, openFFmpegContainerFromUrl } from '../../src/ffmpeg-media.ts';
+import { openFFmpegMedia, openFFmpegContainerFromUrl } from '../../src/media/decoding/ffmpeg-media.ts';
 
 test('cold and warm server corruption prefixes import the same decode boundary and exact seek pixels', { timeout: 60000 }, async () => {
   const coreDir = process.env.WASM_CORE_DIR || path.resolve('public/vendor/voidplayer-core');
@@ -31,7 +31,7 @@ test('cold and warm server corruption prefixes import the same decode boundary a
     let boundary: number | undefined, duration: number | undefined;
     for (const phase of ['cold', 'warm']) {
       const origin=new URL(url).origin;
-      const workerFactory=()=>new Worker(new URL('data:text/javascript,'+encodeURIComponent(`globalThis.location={origin:${JSON.stringify(origin)},href:${JSON.stringify(origin+'/')}};await import(${JSON.stringify(new URL('../../src/packet-worker.ts',import.meta.url).href)});`))) as unknown as globalThis.Worker;
+      const workerFactory=()=>new Worker(new URL('data:text/javascript,'+encodeURIComponent(`globalThis.location={origin:${JSON.stringify(origin)},href:${JSON.stringify(origin+'/')}};await import(${JSON.stringify(new URL('../../src/media/decoding/packet-worker.ts',import.meta.url).href)});`))) as unknown as globalThis.Worker;
       const source=await openPacketMedia('ts',{url,size:damaged.length,library:{origin,id:entry.id,version:entry.version!}},{name:'damaged.ts',size:damaged.length,lastModified:0},{...deps,workerFactory,forceWasm:true,sourceVersion:`${entry.id}@${entry.version}`});
       try {
         await source.ensureIndexed?.();
@@ -126,7 +126,7 @@ import { statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { buildFfmpegIndexDocument } from '../../server/frame-index-builder.ts';
-import { FfmpegPacketIndex } from '../../src/analysis/ffmpeg-adapter.ts';
+import { FfmpegPacketIndex } from '../../shared/analysis/metadata/ffmpeg-adapter.ts';
 
 test('shared residual AVI/PS/elementary records match ffprobe packet identity and compressed bytes without scan decoding', async t => {
   const coreDir = process.env.WASM_CORE_DIR || path.resolve('public/vendor/voidplayer-core');

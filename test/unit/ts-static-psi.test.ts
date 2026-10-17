@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { staticTsPsi } from '../../src/ts-static-psi.ts';
-import { TsCombinationNotMigrated } from '../../src/ts-packet-source.ts';
-import { MediaOpenError } from '../../src/media-errors.ts';
+import { staticTsPsi } from '../../shared/media/containers/ts-static-psi.ts';
+import { TsCombinationNotMigrated } from '../../shared/media/containers/ts-packet-source.ts';
+import { MediaOpenError } from '../../shared/media/io/media-errors.ts';
 function crc(data:number[]){let value=0xffffffff;for(const byte of data){value^=byte<<24;for(let bit=0;bit<8;bit++)value=(value<<1)^(value&0x80000000?0x04c11db7:0);}return [value>>>24,(value>>>16)&255,(value>>>8)&255,value&255];}
 const section=(data:number[])=>Uint8Array.from([...data,...crc(data)]);
 const pat=section([0,0xb0,13,0,1,0xc1,0,0,0,1,0xe1,0]);

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { bucketWidthFor, canSatisfy } from '../../src/analysis/view-cache.ts';
-import type { ViewCacheEntry } from '../../src/analysis/view-cache.ts';
+import { bucketWidthFor, canSatisfy } from '../../shared/analysis/metadata/view-cache.ts';
+import type { ViewCacheEntry } from '../../shared/analysis/metadata/view-cache.ts';
 
 const base: ViewCacheEntry = {
   slot: 'A', sourceVersion: 'm@10', indexRevision: 10,
@@ -111,7 +111,7 @@ test('区间未被完整覆盖不可复用', () => {
 
 import { createAnalysisQueries } from '../../src/ui/analysis/queries.ts';
 import type { AnalysisQuerySnapshot, AnalysisQueryTrack } from '../../src/ui/analysis/queries.ts';
-import type { AnalysisQuery, AnalysisResult } from '../../src/analysis/types.ts';
+import type { AnalysisQuery, AnalysisResult } from '../../shared/analysis/metadata/types.ts';
 
 const complete = { hasSize: true, hasDts: false, keySource: 'container', pictureType: 'key-only', qp: 'unsupported', indexState: 'complete' } as const;
 function queryHarness(t: { after(fn: () => void): void }) {

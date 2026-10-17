@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { AnnotationStore } from '../../server/annotations.ts';
-import type { AnnotationDocument } from '../../src/annotation-record.ts';
+import type { AnnotationDocument } from '../../shared/review/annotation-record.ts';
 const alice = { id: 'alice', name: 'Alice' }, bob = { id: 'bob', name: 'Bob' };
 const document = (id='mark'): AnnotationDocument => ({ media: [{id:'media',name:'a.mp4',size:10,lastModified:1,codec:'avc1',decoder:'webcodecs',width:320,height:180,durationUs:1000000,firstPtsUs:0,source:{kind:'library',id:'library',url:'http://localhost/api/media/library?v=one'}}], mark:{id,text:'original',severity:3,origin:'human',createdAt:'2026-09-08',slot:'A',mediaId:'media',frame:{ptsUs:0,sourcePtsUs:0,durationUs:40000},comparison:[],region:null,drawings:[]} });
 test('annotation writes are versioned, idempotent and never resurrect tombstones', () => {

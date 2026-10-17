@@ -1,7 +1,7 @@
 import { verifyFrontendIdentity } from './release-version.mjs';
 import { httpFetch } from '../test/http-request.ts';
 import { syntheticFlv } from '../test/flv-fixture.ts';
-import { FLV_INDEX_SCHEMA } from '../src/flv-index-cache.ts';
+import { FLV_INDEX_SCHEMA } from '../shared/media/indexing/flv-index-cache.ts';
 import { verifySavedWorkspaces, verifyWorkspaceRestore } from './workspace-acceptance.mjs';
 import { verifyMeasurements } from './measurement-acceptance.mjs';
 import { openIndexDatabase } from '../server/sqlite.ts';
@@ -79,6 +79,7 @@ try {
   assert.ok(!(await readdir(folder)).some(n => ['server', 'node_modules', 'package.json', 'logs'].includes(n)));
   const snapshotFiles = execFileSync(tar, ['-tzf', path.join(folder, 'source.tar.gz')], { encoding: 'utf8' }).replaceAll('\\', '/');
   assert.match(snapshotFiles, /locales\/scope\.json/); assert.match(snapshotFiles, /locales\/en\.json/); assert.match(snapshotFiles, /locales\/messages\.json/);
+  assert.match(snapshotFiles, /shared\/analysis\/bitstream\/runner\.ts/); assert.match(snapshotFiles, /tsconfig\.shared\.json/);
   assert.match(snapshotFiles, /admin\/index\.html/); assert.match(snapshotFiles, /public\/theme-init\.js/);
   executable = path.join(folder, manifest.executable);
   assert.equal(run(['--version']).trim(), `VoidPlayer ${manifest.appVersion} (${manifest.revision}${manifest.dirty ? '-dirty' : ''})`); assert.match(run(['--help']), /--init/);

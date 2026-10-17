@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { THUMB_POST_BODY_MAX, THUMB_RECIPE_VERSION, thumbnailImageUrl } from '../../src/thumbnails/contract.ts';
+import { THUMB_POST_BODY_MAX, THUMB_RECIPE_VERSION, thumbnailImageUrl } from '../../shared/thumbnails/contract.ts';
 import { AdminError, adminWriteAllowed } from '../admin.ts';
 import { adminErrorBody } from '../admin-error.ts';
 import { sendJson } from '../http-utils.ts';
