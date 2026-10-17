@@ -319,7 +319,7 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
   // All topbar view controls key off the same empty-session flag: no tracks,
   // no inspector/subtracks/analysis/arrangement/reset. Sources stays enabled so an
   // empty session can still browse the library; share keys off canShare().
-  for (const id of ['arrangement', 'reset-view', 'toggle-inspector', 'toggle-subtracks', 'toggle-analysis']) {
+  for (const id of ['arrangement', 'toggle-inspector', 'toggle-subtracks', 'toggle-analysis']) {
     $<HTMLButtonElement>(id).disabled = !loaded;
   }
   pixelMenu.sync(viewport.pixelSize,viewport.pixelSize==='uniform'?tr(msg("player.uniformPixels", "统一像素")):tr(msg("player.fillView", "填满视图")),loaded);
@@ -467,7 +467,6 @@ $('show-all-tracks').onclick = () => {
   for (const track of tracks) if (!track.visible) session.setTrackVisibility(track.slot, true);
   if (tracks[0]) document.querySelector<HTMLButtonElement>(`[data-inspect="${tracks[0].slot}"]`)?.focus();
 };
-$('reset-view').onclick = () => { viewport.reset(); fitTask.schedule(); syncZoomSelect(session.getState().tracks.length > 0); };
 for (const slot of SLOTS) $(`recover-${slot}`).onclick = () => {
   const stage = $(`stage-${slot}`);
   const split = viewport.mode === 'split' && fittedTracks.size === 2;

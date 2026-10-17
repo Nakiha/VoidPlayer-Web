@@ -57,7 +57,7 @@
     "source": "展开上屏详情",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:117",
+      "src/ui/shell.ts:116",
       "src/ui/source-activity.ts:124"
     ]
   },
@@ -107,7 +107,7 @@
     "source": "上屏轨道",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:117"
+      "src/ui/shell.ts:116"
     ]
   },
   "activity.retryOrPickAnother": {
@@ -3640,9 +3640,9 @@
     "locations": [
       "src/ui/bitstream-controls.ts:55",
       "src/ui/bitstream-controls.ts:167",
-      "src/ui/shell.ts:82",
-      "src/ui/shell.ts:82",
-      "src/ui/shell.ts:90"
+      "src/ui/shell.ts:81",
+      "src/ui/shell.ts:81",
+      "src/ui/shell.ts:89"
     ]
   },
   "bitstream.overlayMode": {
@@ -5323,7 +5323,7 @@
     "params": {},
     "locations": [
       "src/main.ts:74",
-      "src/main.ts:581"
+      "src/main.ts:580"
     ]
   },
   "player.aBFrameStartDifferenceMs": {
@@ -5397,7 +5397,7 @@
     "source": "退出全屏",
     "params": {},
     "locations": [
-      "src/main.ts:484"
+      "src/main.ts:483"
     ]
   },
   "player.fallback": {
@@ -5479,7 +5479,7 @@
     "source": "标注地址无效。",
     "params": {},
     "locations": [
-      "src/main.ts:634"
+      "src/main.ts:633"
     ]
   },
   "player.lastSeekMs": {
@@ -5502,7 +5502,7 @@
     "source": "轨道没有可读取的画面。",
     "params": {},
     "locations": [
-      "src/main.ts:595"
+      "src/main.ts:594"
     ]
   },
   "player.notLoaded": {
@@ -5611,7 +5611,7 @@
     "source": "这条标注已在回收站。",
     "params": {},
     "locations": [
-      "src/main.ts:636"
+      "src/main.ts:635"
     ]
   },
   "player.trackDisabledFrameUpdatesHaveStoppedPlease": {
@@ -6450,31 +6450,31 @@
     "source": "添加标注",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:130",
-      "src/ui/shell.ts:130"
+      "src/ui/shell.ts:129",
+      "src/ui/shell.ts:129"
     ]
   },
   "shell.addLocalFilesToTheListLocal": {
     "source": "选择本地文件加入列表（仅本机预览，不上传）",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:115"
+      "src/ui/shell.ts:114"
     ]
   },
   "shell.addLocalVideo": {
     "source": "添加本地视频",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:32",
-      "src/ui/shell.ts:32",
-      "src/ui/shell.ts:61"
+      "src/ui/shell.ts:31",
+      "src/ui/shell.ts:31",
+      "src/ui/shell.ts:60"
     ]
   },
   "shell.allTrackAnnotations": {
     "source": "所有轨道标注",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:129"
+      "src/ui/shell.ts:128"
     ]
   },
   "shell.annotationColor": {
@@ -6482,24 +6482,24 @@
     "params": {},
     "locations": [
       "src/ui/drawing-editor.ts:207",
-      "src/ui/shell.ts:96",
-      "src/ui/shell.ts:96"
+      "src/ui/shell.ts:95",
+      "src/ui/shell.ts:95"
     ]
   },
   "shell.annotationToolbar": {
     "source": "标注工具条",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:81",
-      "src/ui/shell.ts:81",
-      "src/ui/shell.ts:91"
+      "src/ui/shell.ts:80",
+      "src/ui/shell.ts:80",
+      "src/ui/shell.ts:90"
     ]
   },
   "shell.annotationTools": {
     "source": "标注工具",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:92"
+      "src/ui/shell.ts:91"
     ]
   },
   "shell.annotations": {
@@ -6507,7 +6507,7 @@
     "params": {},
     "locations": [
       "src/ui/settings-shell.ts:68",
-      "src/ui/shell.ts:131"
+      "src/ui/shell.ts:130"
     ]
   },
   "shell.arrangeTracksInAGrid": {
@@ -6523,8 +6523,8 @@
     "params": {},
     "locations": [
       "src/ui/settings-shell.ts:67",
-      "src/ui/shell.ts:37",
-      "src/ui/shell.ts:49",
+      "src/ui/shell.ts:36",
+      "src/ui/shell.ts:48",
       "src/ui/workbench.ts:79"
     ]
   },
@@ -6532,15 +6532,15 @@
     "source": "浏览媒体库",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:61",
-      "src/ui/shell.ts:61"
+      "src/ui/shell.ts:60",
+      "src/ui/shell.ts:60"
     ]
   },
   "shell.cancelAdding": {
     "source": "取消添加",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:41"
+      "src/ui/shell.ts:40"
     ]
   },
   "shell.centerTrackKeepingZoom": {
@@ -6549,35 +6549,35 @@
       "p30": "string | number"
     },
     "locations": [
-      "src/ui/shell.ts:61"
+      "src/ui/shell.ts:60"
     ]
   },
   "shell.checkingConnection10OpenServerSettingsNew": {
     "source": "正在检查连接\n打开服务管理（新标签页）",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:36"
+      "src/ui/shell.ts:35"
     ]
   },
   "shell.checkingLibraryConnectionOpenServerSettingsNew": {
     "source": "正在检查媒体库连接，打开服务管理（新标签页）",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:36"
+      "src/ui/shell.ts:35"
     ]
   },
   "shell.chooseAViewToReplace": {
     "source": "选择要替换的视图",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:41"
+      "src/ui/shell.ts:40"
     ]
   },
   "shell.chooseLocalFiles": {
     "source": "选择本地文件",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:115"
+      "src/ui/shell.ts:114"
     ]
   },
   "shell.closeTrack": {
@@ -6586,21 +6586,21 @@
       "p0": "string | number"
     },
     "locations": [
-      "src/ui/shell.ts:59"
+      "src/ui/shell.ts:58"
     ]
   },
   "shell.closeTrack2": {
     "source": "关闭轨道",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:59"
+      "src/ui/shell.ts:58"
     ]
   },
   "shell.collapseTrackInfo": {
     "source": "收起轨道信息",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:45"
+      "src/ui/shell.ts:44"
     ]
   },
   "shell.comparisonLayout": {
@@ -6616,7 +6616,7 @@
       "p0": "string | number"
     },
     "locations": [
-      "src/ui/shell.ts:57"
+      "src/ui/shell.ts:56"
     ]
   },
   "shell.deleteSelection": {
@@ -6624,8 +6624,8 @@
     "params": {},
     "locations": [
       "src/ui/settings-shell.ts:68",
-      "src/ui/shell.ts:102",
-      "src/ui/shell.ts:102"
+      "src/ui/shell.ts:101",
+      "src/ui/shell.ts:101"
     ]
   },
   "shell.dragToolbar": {
@@ -6634,8 +6634,8 @@
     "locations": [
       "src/ui/bitstream-controls.ts:164",
       "src/ui/bitstream-controls.ts:165",
-      "src/ui/shell.ts:93",
-      "src/ui/shell.ts:93"
+      "src/ui/shell.ts:92",
+      "src/ui/shell.ts:92"
     ]
   },
   "shell.editAnnotationsForVideo": {
@@ -6644,29 +6644,29 @@
       "p28": "string | number"
     },
     "locations": [
-      "src/ui/shell.ts:61"
+      "src/ui/shell.ts:60"
     ]
   },
   "shell.ellipse": {
     "source": "椭圆",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:94"
+      "src/ui/shell.ts:93"
     ]
   },
   "shell.eraser": {
     "source": "橡皮擦",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:94"
+      "src/ui/shell.ts:93"
     ]
   },
   "shell.finishAnnotating": {
     "source": "结束标注",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:103",
-      "src/ui/shell.ts:103"
+      "src/ui/shell.ts:102",
+      "src/ui/shell.ts:102"
     ]
   },
   "shell.focusMode": {
@@ -6674,8 +6674,8 @@
     "params": {},
     "locations": [
       "src/ui/settings-shell.ts:67",
-      "src/ui/shell.ts:87",
-      "src/ui/shell.ts:87",
+      "src/ui/shell.ts:86",
+      "src/ui/shell.ts:86",
       "src/ui/viewport-chrome.ts:17",
       "src/ui/viewport-chrome.ts:18"
     ]
@@ -6684,9 +6684,9 @@
     "source": "全屏",
     "params": {},
     "locations": [
-      "src/main.ts:484",
-      "src/ui/shell.ts:83",
-      "src/ui/shell.ts:83"
+      "src/main.ts:483",
+      "src/ui/shell.ts:82",
+      "src/ui/shell.ts:82"
     ]
   },
   "shell.inspectTrack": {
@@ -6695,29 +6695,29 @@
       "p4": "string | number"
     },
     "locations": [
-      "src/ui/shell.ts:55"
+      "src/ui/shell.ts:54"
     ]
   },
   "shell.line": {
     "source": "线条",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:94"
+      "src/ui/shell.ts:93"
     ]
   },
   "shell.localFiles": {
     "source": "本地文件",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:115",
-      "src/ui/shell.ts:115"
+      "src/ui/shell.ts:114",
+      "src/ui/shell.ts:114"
     ]
   },
   "shell.locateFile": {
     "source": "定位文件",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:58"
+      "src/ui/shell.ts:57"
     ]
   },
   "shell.locateTrackFile": {
@@ -6726,7 +6726,7 @@
       "p0": "string | number"
     },
     "locations": [
-      "src/ui/shell.ts:58"
+      "src/ui/shell.ts:57"
     ]
   },
   "shell.logs": {
@@ -6741,15 +6741,15 @@
     "source": "下一帧",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:77",
-      "src/ui/shell.ts:77"
+      "src/ui/shell.ts:76",
+      "src/ui/shell.ts:76"
     ]
   },
   "shell.offset": {
     "source": "偏移",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:128"
+      "src/ui/shell.ts:127"
     ]
   },
   "shell.openSettings": {
@@ -6757,7 +6757,7 @@
     "params": {},
     "locations": [
       "src/ui/settings-shell.ts:67",
-      "src/ui/shell.ts:39"
+      "src/ui/shell.ts:38"
     ]
   },
   "shell.openVideo": {
@@ -6766,29 +6766,29 @@
       "p16": "string | number"
     },
     "locations": [
-      "src/ui/shell.ts:60"
+      "src/ui/shell.ts:59"
     ]
   },
   "shell.orDropFilesHere": {
     "source": "或将文件拖入这里",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:61"
+      "src/ui/shell.ts:60"
     ]
   },
   "shell.pen": {
     "source": "画笔",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:94"
+      "src/ui/shell.ts:93"
     ]
   },
   "shell.pixelSizeMode": {
     "source": "像素尺寸模式",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:27",
-      "src/ui/shell.ts:27"
+      "src/ui/shell.ts:26",
+      "src/ui/shell.ts:26"
     ]
   },
   "shell.play": {
@@ -6796,7 +6796,7 @@
     "params": {},
     "locations": [
       "src/main.ts:348",
-      "src/ui/shell.ts:77"
+      "src/ui/shell.ts:76"
     ]
   },
   "shell.playPause": {
@@ -6804,30 +6804,30 @@
     "params": {},
     "locations": [
       "src/ui/settings-shell.ts:67",
-      "src/ui/shell.ts:77"
+      "src/ui/shell.ts:76"
     ]
   },
   "shell.playbackControls": {
     "source": "播放功能",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:76"
+      "src/ui/shell.ts:75"
     ]
   },
   "shell.previousFrame": {
     "source": "上一帧",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:77",
-      "src/ui/shell.ts:77"
+      "src/ui/shell.ts:76",
+      "src/ui/shell.ts:76"
     ]
   },
   "shell.recentlyOpened": {
     "source": "最近打开",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:61",
-      "src/ui/shell.ts:61"
+      "src/ui/shell.ts:60",
+      "src/ui/shell.ts:60"
     ]
   },
   "shell.recorded": {
@@ -6836,14 +6836,14 @@
     "locations": [
       "src/ui/drawing-editor.ts:146",
       "src/ui/drawing-editor.ts:206",
-      "src/ui/shell.ts:105"
+      "src/ui/shell.ts:104"
     ]
   },
   "shell.rectangle": {
     "source": "矩形",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:94"
+      "src/ui/shell.ts:93"
     ]
   },
   "shell.redo": {
@@ -6851,36 +6851,22 @@
     "params": {},
     "locations": [
       "src/ui/settings-shell.ts:68",
-      "src/ui/shell.ts:101",
-      "src/ui/shell.ts:101"
-    ]
-  },
-  "shell.resetView": {
-    "source": "重置视图",
-    "params": {},
-    "locations": [
-      "src/ui/shell.ts:25"
-    ]
-  },
-  "shell.resetViewCenterAt1": {
-    "source": "重置视图：恢复 1× 并居中",
-    "params": {},
-    "locations": [
-      "src/ui/shell.ts:25"
+      "src/ui/shell.ts:100",
+      "src/ui/shell.ts:100"
     ]
   },
   "shell.resizeBitstreamAnalysis": {
     "source": "调整码流分析高度",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:50"
+      "src/ui/shell.ts:49"
     ]
   },
   "shell.resizeFilenameColumn": {
     "source": "调整文件名列宽度",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:128"
+      "src/ui/shell.ts:127"
     ]
   },
   "shell.resizeRecent": {
@@ -6903,42 +6889,42 @@
     "source": "调整片源宽度",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:43"
+      "src/ui/shell.ts:42"
     ]
   },
   "shell.resizeTrackInfoPanel": {
     "source": "调整轨道信息宽度",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:43"
+      "src/ui/shell.ts:42"
     ]
   },
   "shell.resizeTracksPanel": {
     "source": "调整子轨道高度",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:126"
+      "src/ui/shell.ts:125"
     ]
   },
   "shell.seekToTime": {
     "source": "定位时间",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:78"
+      "src/ui/shell.ts:77"
     ]
   },
   "shell.selectMove": {
     "source": "选择 / 移动",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:94"
+      "src/ui/shell.ts:93"
     ]
   },
   "shell.selectTrackToInspect": {
     "source": "选择检查轨道",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:46"
+      "src/ui/shell.ts:45"
     ]
   },
   "shell.settings": {
@@ -6946,7 +6932,7 @@
     "params": {},
     "locations": [
       "src/ui/settings-shell.ts:16",
-      "src/ui/shell.ts:39"
+      "src/ui/shell.ts:38"
     ]
   },
   "shell.share": {
@@ -6954,7 +6940,7 @@
     "params": {},
     "locations": [
       "src/ui/saved-workspaces.ts:11",
-      "src/ui/shell.ts:33",
+      "src/ui/shell.ts:32",
       "src/ui/workspace-sharing.ts:31"
     ]
   },
@@ -6962,29 +6948,29 @@
     "source": "共用播放控制",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:75"
+      "src/ui/shell.ts:74"
     ]
   },
   "shell.sharedTimelineMicroseconds": {
     "source": "共用时间轴，微秒",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:79"
+      "src/ui/shell.ts:78"
     ]
   },
   "shell.showAllTracks": {
     "source": "显示所有轨道",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:69"
+      "src/ui/shell.ts:68"
     ]
   },
   "shell.showAnnotationCards": {
     "source": "显示标注卡片",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:130",
-      "src/ui/shell.ts:130"
+      "src/ui/shell.ts:129",
+      "src/ui/shell.ts:129"
     ]
   },
   "shell.sideBySide": {
@@ -6998,7 +6984,7 @@
     "source": "片源载入状态",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:116"
+      "src/ui/shell.ts:115"
     ]
   },
   "shell.sources": {
@@ -7006,8 +6992,8 @@
     "params": {},
     "locations": [
       "src/ui/settings-shell.ts:67",
-      "src/ui/shell.ts:37",
-      "src/ui/shell.ts:110",
+      "src/ui/shell.ts:36",
+      "src/ui/shell.ts:109",
       "src/ui/workbench.ts:79"
     ]
   },
@@ -7022,7 +7008,7 @@
     "source": "分割线位置",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:63"
+      "src/ui/shell.ts:62"
     ]
   },
   "shell.startVersionAbout": {
@@ -7031,7 +7017,7 @@
       "revision": "string | number"
     },
     "locations": [
-      "src/ui/shell.ts:61"
+      "src/ui/shell.ts:60"
     ]
   },
   "shell.strokeWidth": {
@@ -7039,8 +7025,8 @@
     "params": {},
     "locations": [
       "src/ui/drawing-editor.ts:207",
-      "src/ui/shell.ts:97",
-      "src/ui/shell.ts:97"
+      "src/ui/shell.ts:96",
+      "src/ui/shell.ts:96"
     ]
   },
   "shell.switchToGridLayout": {
@@ -7055,7 +7041,7 @@
     "source": "文字",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:94"
+      "src/ui/shell.ts:93"
     ]
   },
   "shell.textSize": {
@@ -7063,15 +7049,15 @@
     "params": {},
     "locations": [
       "src/ui/drawing-editor.ts:207",
-      "src/ui/shell.ts:98",
-      "src/ui/shell.ts:98"
+      "src/ui/shell.ts:97",
+      "src/ui/shell.ts:97"
     ]
   },
   "shell.timeRuler": {
     "source": "时间标尺",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:128"
+      "src/ui/shell.ts:127"
     ]
   },
   "shell.toggleSideBySideSplit": {
@@ -7087,8 +7073,8 @@
     "source": "轨道",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:45",
-      "src/ui/shell.ts:128"
+      "src/ui/shell.ts:44",
+      "src/ui/shell.ts:127"
     ]
   },
   "shell.trackActions": {
@@ -7097,14 +7083,14 @@
       "p0": "string | number"
     },
     "locations": [
-      "src/ui/shell.ts:56"
+      "src/ui/shell.ts:55"
     ]
   },
   "shell.trackActions2": {
     "source": "轨道操作",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:56"
+      "src/ui/shell.ts:55"
     ]
   },
   "shell.trackInfo": {
@@ -7112,8 +7098,8 @@
     "params": {},
     "locations": [
       "src/ui/settings-shell.ts:67",
-      "src/ui/shell.ts:37",
-      "src/ui/shell.ts:44",
+      "src/ui/shell.ts:36",
+      "src/ui/shell.ts:43",
       "src/ui/workbench.ts:79"
     ]
   },
@@ -7122,8 +7108,8 @@
     "params": {},
     "locations": [
       "src/ui/settings-shell.ts:67",
-      "src/ui/shell.ts:37",
-      "src/ui/shell.ts:125",
+      "src/ui/shell.ts:36",
+      "src/ui/shell.ts:124",
       "src/ui/workbench.ts:79"
     ]
   },
@@ -7131,14 +7117,14 @@
     "source": "点击轨道旁的眼睛图标，或显示所有轨道以继续查看。",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:68"
+      "src/ui/shell.ts:67"
     ]
   },
   "shell.tracksHiddenTitle": {
     "source": "所有轨道已隐藏",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:67"
+      "src/ui/shell.ts:66"
     ]
   },
   "shell.undo": {
@@ -7146,15 +7132,15 @@
     "params": {},
     "locations": [
       "src/ui/settings-shell.ts:68",
-      "src/ui/shell.ts:100",
-      "src/ui/shell.ts:100"
+      "src/ui/shell.ts:99",
+      "src/ui/shell.ts:99"
     ]
   },
   "shell.videoComparison": {
     "source": "视频对比",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:52"
+      "src/ui/shell.ts:51"
     ]
   },
   "shell.videoCurrentFrameTime": {
@@ -7163,7 +7149,7 @@
       "p9": "string | number"
     },
     "locations": [
-      "src/ui/shell.ts:56"
+      "src/ui/shell.ts:55"
     ]
   },
   "shell.videoDecodedFrame": {
@@ -7172,14 +7158,14 @@
       "p24": "string | number"
     },
     "locations": [
-      "src/ui/shell.ts:61"
+      "src/ui/shell.ts:60"
     ]
   },
   "shell.viewIsOffscreenCenter": {
     "source": "画面已移出 · 居中",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:61"
+      "src/ui/shell.ts:60"
     ]
   },
   "shell.viewLayout": {
@@ -7193,28 +7179,28 @@
     "source": "画面工具",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:80"
+      "src/ui/shell.ts:79"
     ]
   },
   "shell.waitingForASource": {
     "source": "等待添加片源",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:118"
+      "src/ui/shell.ts:117"
     ]
   },
   "shell.workspacePanels": {
     "source": "工作区功能",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:35"
+      "src/ui/shell.ts:34"
     ]
   },
   "shell.yuvChannels": {
     "source": "YUV 通道",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:28"
+      "src/ui/shell.ts:27"
     ]
   },
   "shell.yuvChannelsRawYuvFramesOnly": {
@@ -7222,15 +7208,15 @@
     "params": {},
     "locations": [
       "src/main.ts:332",
-      "src/ui/shell.ts:28"
+      "src/ui/shell.ts:27"
     ]
   },
   "shell.zoom": {
     "source": "画面缩放",
     "params": {},
     "locations": [
-      "src/ui/shell.ts:26",
-      "src/ui/shell.ts:26"
+      "src/ui/shell.ts:25",
+      "src/ui/shell.ts:25"
     ]
   },
   "sourceAccess.libraryChanged": {
@@ -7299,7 +7285,7 @@
     "params": {},
     "locations": [
       "src/ui/library-file-menu.ts:29",
-      "src/ui/shell.ts:57",
+      "src/ui/shell.ts:56",
       "src/ui/source-actions.ts:56"
     ]
   },

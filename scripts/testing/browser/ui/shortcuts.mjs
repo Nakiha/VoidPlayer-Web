@@ -42,7 +42,7 @@ await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {vi
     const context=canvas.getContext('2d');context.fillStyle=getComputedStyle(e).backgroundColor;
     context.fillRect(0,0,1,1);return Array.from(context.getImageData(0,0,1,1).data);
   });
-  for (const id of ['previous','next','reset-view']) {
+  for (const id of ['previous','next','arrangement']) {
     await page.locator(`#${id}`).click();
     await page.waitForFunction(()=>!window.voidPlayer.getState().busy);
     // macOS WebKit does not focus every button on pointer clicks. Reproduce

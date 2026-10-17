@@ -905,8 +905,6 @@ export interface Sources {
   "shell.recorded": "已记录";
   "shell.rectangle": "矩形";
   "shell.redo": "重做";
-  "shell.resetView": "重置视图";
-  "shell.resetViewCenterAt1": "重置视图：恢复 1× 并居中";
   "shell.resizeBitstreamAnalysis": "调整码流分析高度";
   "shell.resizeFilenameColumn": "调整文件名列宽度";
   "shell.resizeRecent": "调整最近打开列表宽度（{side, select, left {左} other {右}}侧）";
@@ -2041,8 +2039,6 @@ export interface MessageParameters {
   "shell.recorded": {  };
   "shell.rectangle": {  };
   "shell.redo": {  };
-  "shell.resetView": {  };
-  "shell.resetViewCenterAt1": {  };
   "shell.resizeBitstreamAnalysis": {  };
   "shell.resizeFilenameColumn": {  };
   "shell.resizeRecent": { "side": string | number };

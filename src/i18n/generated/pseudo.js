@@ -907,8 +907,6 @@ export default {
   "shell.recorded": () => "［R~e~c~o~r~d~e~d~ ········］",
   "shell.rectangle": () => "［R~e~c~t~a~n~g~l~e~ ········］",
   "shell.redo": () => "［R~e~d~o~ ········］",
-  "shell.resetView": () => "［R~e~s~e~t~ v~i~e~w~ ········］",
-  "shell.resetViewCenterAt1": () => "［R~e~s~e~t~ v~i~e~w~: c~e~n~t~e~r~ a~t~ 1× ········］",
   "shell.resizeBitstreamAnalysis": () => "［R~e~s~i~z~e~ b~i~t~s~t~r~e~a~m~ a~n~a~l~y~s~i~s~ ········］",
   "shell.resizeFilenameColumn": () => "［R~e~s~i~z~e~ f~i~l~e~n~a~m~e~ c~o~l~u~m~n~ ········］",
   "shell.resizeRecent": (d) => "［R~e~s~i~z~e~ r~e~c~e~n~t~ l~i~s~t~ (" + select(d.side, { left: "l~e~f~t~", other: "r~i~g~h~t~" }) + " s~i~d~e~) ········］",

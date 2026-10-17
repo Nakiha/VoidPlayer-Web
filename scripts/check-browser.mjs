@@ -817,7 +817,7 @@ try {
     await page.waitForFunction(() => document.getAnimations().every(animation => animation.playState !== 'running'));
     await page.evaluate(() => window.voidPlayer.setViewport({ mode: 'side-by-side', zoom: 2, offsetX: 20, offsetY: 15 }));
     await settle(page);
-    await page.locator('#reset-view').click(); await settle(page);
+    await page.evaluate(() => window.voidPlayer.setViewport({ zoom: 1, offsetX: 0, offsetY: 0 })); await settle(page);
     assert.equal(await page.evaluate(() => window.voidPlayer.getViewport().zoom), 1);
     await page.evaluate(() => window.voidPlayer.setViewport({ offsetX: 1200, offsetY: -500 }));
     await settle(page);

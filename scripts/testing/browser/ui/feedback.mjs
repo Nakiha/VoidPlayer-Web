@@ -43,7 +43,7 @@ await withBrowserFixture({ caseName: 'feedback', engine: name, pageOptions: {vie
    document.getElementById('control-tooltip').addEventListener('beforetoggle',e=>{if(e.newState==='open')window.tooltipOpens++;});
  });
  const tip=page.locator('#control-tooltip');
- for(const id of ['arrangement','reset-view','toggle-inspector','toggle-subtracks','toggle-sources']){
+ for(const id of ['arrangement','toggle-inspector','toggle-subtracks','toggle-sources']){
    const button=page.locator(`#${id}`);
    await page.mouse.move(5,5);await button.hover();await tip.waitFor({state:'visible'});
    await page.evaluate(()=>window.tooltipOpens=0);
@@ -53,7 +53,7 @@ await withBrowserFixture({ caseName: 'feedback', engine: name, pageOptions: {vie
    await page.mouse.move(5,5);await button.hover();await tip.waitFor({state:'visible'});
  }
  // Tab focus still exposes the tooltip; pointer focus does not suppress keyboard help.
- await page.locator('#reset-view').click();await page.keyboard.press('Tab');
+ await page.locator('#arrangement').click();await page.keyboard.press('Tab');
  await page.locator('#zoom-select').focus();await tip.waitFor({state:'visible'});
  assert.equal(await page.evaluate(()=>document.activeElement.id),'zoom-select');
  await page.locator('#play').focus();

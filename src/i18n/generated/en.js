@@ -907,8 +907,6 @@ export default {
   "shell.recorded": () => "Recorded",
   "shell.rectangle": () => "Rectangle",
   "shell.redo": () => "Redo",
-  "shell.resetView": () => "Reset view",
-  "shell.resetViewCenterAt1": () => "Reset view: center at 1×",
   "shell.resizeBitstreamAnalysis": () => "Resize bitstream analysis",
   "shell.resizeFilenameColumn": () => "Resize filename column",
   "shell.resizeRecent": (d) => "Resize recent list (" + select(d.side, { left: "left", other: "right" }) + " side)",

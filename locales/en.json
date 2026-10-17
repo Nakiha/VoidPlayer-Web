@@ -3653,14 +3653,6 @@
     "source": "重做",
     "translation": "Redo"
   },
-  "shell.resetView": {
-    "source": "重置视图",
-    "translation": "Reset view"
-  },
-  "shell.resetViewCenterAt1": {
-    "source": "重置视图：恢复 1× 并居中",
-    "translation": "Reset view: center at 1×"
-  },
   "shell.resizeBitstreamAnalysis": {
     "source": "调整码流分析高度",
     "translation": "Resize bitstream analysis"
