@@ -1,5 +1,5 @@
 import type { RangeReadRequest } from './worker-protocol.ts';
-import { MediaOpenError } from './media-errors.ts';
+import { MediaOpenError } from '../shared/media/io/media-errors.ts';
 
 /** Synchronous Blob AVIO adapter. Allocation size is independent of the fixed
  * transport window; only the decoder worker blocks on each bounded transfer. */

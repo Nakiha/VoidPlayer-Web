@@ -42,10 +42,10 @@ try {
     await page.goto(`http://127.0.0.1:${vite.httpServer.address().port}/native-hdr-test`);
     const result=await page.evaluate(async({fixtures,width,height})=>{
       const {setColorMode}=await import('/src/color-mode.ts');setColorMode('browser');
-      const {setColorOutput,defaultColorOutput}=await import('/src/color-output.ts');setColorOutput({...defaultColorOutput(),target:'hdr'});
+      const {setColorOutput,defaultColorOutput}=await import('/shared/color/color-output.ts');setColorOutput({...defaultColorOutput(),target:'hdr'});
       const {createExternalSurface}=await import('/src/webgpu-color-surface.mjs');
       const {VideoSample}=await import('/node_modules/mediabunny/dist/modules/src/index.js');
-      const {sampleDescription}=await import('/src/frame-description.ts');
+      const {sampleDescription}=await import('/shared/media/frame-description.ts');
       const {initializeGpuPresentation,gpuGeometry,disposeGpuPresentation}=await import('/src/webgpu-presenter.ts');
       const {paintFrame}=await import('/src/presenter.ts');
       const source=document.querySelector('#source'),surface=await createExternalSurface(document.createElement('canvas'));

@@ -42,7 +42,7 @@ try{for(const channel of ['chrome','msedge'])for(let repeat=0;repeat<2;repeat++)
     window.pipelineCase={source,slots,backend,depth};return{info:source.info,isolated:crossOriginIsolated,hardwareConcurrency:navigator.hardwareConcurrency};
    };
    window.runPipeline=async()=>{
-    const {source,slots,backend,depth}=window.pipelineCase,{yuvSample}=await import('/src/yuv-color.ts');
+    const {source,slots,backend,depth}=window.pipelineCase,{yuvSample}=await import('/shared/color/yuv-color.ts');
     const free=[...slots],queue=[],fences=[],pts=[],fingerprints=[],copy=[],sync=[],submit=[];
     let ended=false,failure,wakeConsumer,wakeProducer,peakOwned=0,owned=0,copyActive=0,peakCopyActive=0,peakGpuPending=0;
     const start=performance.now();

@@ -1,5 +1,5 @@
-import { randomUUID } from './uuid.ts';
-import type { Drawing, Point } from './annotation.ts';
+import { randomUUID } from '../shared/utils/uuid.ts';
+import type { Drawing, Point } from '../shared/review/annotation.ts';
 export type Bounds = { x: number; y: number; width: number; height: number };
 
 export function drawingBounds(d: Drawing, aspect = 1): Bounds {

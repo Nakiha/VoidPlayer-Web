@@ -25,7 +25,7 @@ try{
    const {initializeGpuPresentation,keepNativeGpuResource}=await import('/src/webgpu-presenter.ts');
    const {paintFrame,captureFrame,setPresentationGeometry,disposePresentation}=await import('/src/presenter.ts');
    const {VideoSample}=await import('/node_modules/mediabunny/dist/modules/src/index.js');
-   const {sampleDescription,rgbaDescription}=await import('/src/frame-description.ts');
+   const {sampleDescription,rgbaDescription}=await import('/shared/media/frame-description.ts');
    const adapter=await navigator.gpu?.requestAdapter();
    const environment={userAgent:navigator.userAgent,adapter:adapter?.info?{vendor:adapter.info.vendor,architecture:adapter.info.architecture,device:adapter.info.device,description:adapter.info.description,isFallbackAdapter:adapter.info.isFallbackAdapter}:null};
    const source=document.querySelector('#source');
@@ -74,7 +74,7 @@ try{
     const expected=[y+2*(1-kr)*v,y-2*kb*(1-kb)/kg*u-2*kr*(1-kr)/kg*v,y+2*(1-kb)*u].map(n=>Math.round(Math.max(0,Math.min(1,n))*255));
     paintFrame(source,{kind:'yuv',description:d,pixels,width:2,height:2});colorVectors.push({matrix,fullRange,expected,got:pixelRead().bytes.slice(0,3)});
    }
-   const {yuvToRgba}=await import('/src/yuv-color.ts');
+   const {yuvToRgba}=await import('/shared/color/yuv-color.ts');
    const chromaCases=[];
    const glStage=document.createElement('div');glStage.className='frame-stage';const glSource=document.createElement('canvas');glStage.append(glSource);document.body.append(glStage);setPresentationGeometry(glSource,geometry);
    for(const depth of [8,10,16])for(const semi of [false,true])for(const siting of [null,1,2,3,4,5,6]){

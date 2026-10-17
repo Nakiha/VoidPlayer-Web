@@ -5,7 +5,7 @@ import path from 'node:path';
 import { webkit } from 'playwright';
 import { loadConfig } from '../server/config.ts';
 import { startService } from '../server/runtime.ts';
-import { Viewport } from '../src/viewport.ts';
+import { Viewport } from '../shared/presentation/viewport.ts';
 const root = await mkdtemp(path.join(os.tmpdir(), 'vp-workspace-list-'));
 let service, browser;
 try {

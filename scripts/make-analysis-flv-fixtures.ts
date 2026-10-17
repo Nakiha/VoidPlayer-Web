@@ -1,6 +1,6 @@
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
-import { openAnalysisInput } from '../src/bitstream-analysis/input.ts';
-import { inspectPacketPicture } from '../src/packet-picture.ts';
+import { openAnalysisInput } from '../shared/analysis/bitstream/input.ts';
+import { inspectPacketPicture } from '../shared/media/codecs/packet-picture.ts';
 
 // Remux byte-identical codec inputs into both supported FLV framings. The
 // original independent codec answers stay applicable by source decode ordinal.

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {dirname,join} from 'node:path';
 import {createHash} from 'node:crypto';
-import type {FrameDescription} from '../../../src/frame-description.ts';
+import type {FrameDescription} from '../../../shared/media/frame-description.ts';
 
 /** Independent native decoder; only selected visible frames are materialized. */
 export function nativeFrames(file:string,positions:number[],format:string,frameBytes:number,decoderOptions:string[]=[]){

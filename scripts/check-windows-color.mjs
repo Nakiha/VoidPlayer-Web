@@ -115,7 +115,7 @@ try{
      const {openMedia}=await import('/src/media.ts');
      const {paintFrame,captureFrame,setPresentationGeometry}=await import('/src/presenter.ts');
      const {compareRgba}=await import('/src/color-evidence.ts');
-     const {yuvSample}=await import('/src/yuv-color.ts');
+     const {yuvSample}=await import('/shared/color/yuv-color.ts');
      const file=document.querySelector('input').files[0];
      const reference=new Uint8Array(await(await fetch(`/color-reference/${c.name}`)).arrayBuffer());
      const source=await openMedia(file,async()=>{const {readLogs}=await import('/src/log.ts');throw new Error(`Native decoder unavailable: ${JSON.stringify((await readLogs({limit:10})).events)}`);});

@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rgbaDescription } from '../../src/frame-description.ts';
+import { rgbaDescription } from '../../shared/media/frame-description.ts';
 import type { DecodedFrame } from '../../src/media.ts';
 import { offerFirstFrameCandidate, settleOffer } from '../../src/thumbnails/offer.ts';
 import type { FirstFrameContext } from '../../src/thumbnails/offer.ts';
 import { thumbnailState } from '../../src/thumbnails/state.ts';
-import { THUMB_FRAME_BUDGET_BYTES } from '../../src/thumbnails/contract.ts';
+import { THUMB_FRAME_BUDGET_BYTES } from '../../shared/thumbnails/contract.ts';
 
 function context(overrides: Partial<FirstFrameContext> = {}): FirstFrameContext {
   return {

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { randomUUID } from '../../src/uuid.ts';
+import { randomUUID } from '../../shared/utils/uuid.ts';
 test('UUID generation uses random bytes without needing secure-context randomUUID', () => {
   const original = crypto.randomUUID;
   Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: undefined });

@@ -1,6 +1,6 @@
 import { aacConfig } from './flv-cached-audio.ts';
-import type { CachedAudioBatch, CachedAudioConfig, CachedWindow } from './audio-types.ts';
-import type { AudioPeek } from './cached-container-audio.ts';
+import type { CachedAudioBatch, CachedAudioConfig, CachedWindow } from '../shared/media/audio-types.ts';
+import type { AudioPeek } from '../shared/media/audio-types.ts';
 
 /** AAC/ADTS in cached TS packets. Only scans video-owned windows, never seeks IO. */
 export class TsCachedAudio {

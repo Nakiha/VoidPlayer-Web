@@ -1,6 +1,6 @@
 import { apiError } from './api-error.ts';
 import { currentActor } from './identity.ts';
-import type { AnnotationOperation, AnnotationPage, AnnotationRecord } from './annotation-record.ts';
+import type { AnnotationOperation, AnnotationPage, AnnotationRecord } from '../shared/review/annotation-record.ts';
 export class AnnotationClient {
   constructor(private signal: AbortSignal) {}
   async request<T>(url: string, method='GET', body?: unknown, actor=currentActor()?.id): Promise<T> {

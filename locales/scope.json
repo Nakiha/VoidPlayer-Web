@@ -40,6 +40,7 @@
     "src/ui/annotation-svg.ts",
     "src/ui/annotation-sync.ts",
     "src/ui/annotation-thumbnails.ts",
+    "src/ui/annotations/draw.ts",
     "src/ui/appearance.ts",
     "src/ui/bitstream-controls.ts",
     "src/ui/bitstream-reasons.ts",
@@ -153,7 +154,7 @@
         "src/ffmpeg-media.ts",
         "src/packet-media.ts",
         "src/saved-workspaces.ts",
-        "src/workspace-file.ts",
+        "shared/review/workspace-file.ts",
         "src/library.ts"
       ],
       "reason": "Original underlying diagnostic reasons are retained alongside localized UI context. Stable root reason codes, cache display data, HTTP status/code metadata and measurement error codes cover server-owned admin summaries; codec reference capability errors retain their existing semantic codes."

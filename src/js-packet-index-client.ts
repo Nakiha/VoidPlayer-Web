@@ -1,12 +1,13 @@
 import {MediaIndexClient} from './media-index-client.ts';
-import {JS_TS_MEDIA_INDEX_IDENTITY,JS_MATROSKA_MEDIA_INDEX_IDENTITY} from './media-index-identity.ts';
-import {parseJsPacketIndex} from './js-packet-index-cache.ts';
-import {sealJsIndex} from './js-index-proof.ts';
-import {MediaOpenError} from './media-errors.ts';
-import {onLoadAbort} from './media-abort.ts';
-import type {MediaIndexScanProgress} from './media-index-types.ts';
-import {TsCombinationNotMigrated} from './ts-packet-source.ts';
-import {verifyLibraryIndexReference,type LibraryIndexReference} from './library-index-reference.ts';
+import {JS_TS_MEDIA_INDEX_IDENTITY,JS_MATROSKA_MEDIA_INDEX_IDENTITY} from '../shared/media/indexing/media-index-identity.ts';
+import { parseJsPacketIndex } from '../shared/media/indexing/js-packet-index-parser.ts';
+import {sealJsIndex} from '../shared/media/indexing/js-index-proof.ts';
+import {MediaOpenError} from '../shared/media/io/media-errors.ts';
+import {onLoadAbort} from '../shared/media/io/media-abort.ts';
+import type {MediaIndexScanProgress} from '../shared/media/indexing/media-index-types.ts';
+import {TsCombinationNotMigrated} from '../shared/media/containers/ts-packet-source.ts';
+import { verifyLibraryIndexReference } from './library-index-reference.ts';
+import { type LibraryIndexReference } from '../shared/media/io/library-reference-types.ts';
 /** Authority is this authenticated, source/version-bound server endpoint. Raw
  * snapshots received from arbitrary callers never get this runtime proof. */
 export async function loadServerJsIndex(url:string,version:string,size:number,format:'ts'|'matroska',signal:AbortSignal,progress?:(p:MediaIndexScanProgress)=>void,reference?:LibraryIndexReference){

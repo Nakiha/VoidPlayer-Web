@@ -29,7 +29,7 @@ function ffv1Representation(bytes:Buffer,legacy:boolean):Buffer<ArrayBuffer>{
  return Buffer.from(rewrite(bytes));
 }
 
-const core=new URL('../../public/vendor/voidplayer-core/',import.meta.url);
+const core=new URL('../../public/vendor/voidplayer-core',import.meta.url);
 for(const [kind,encoder] of [['ts','mpeg2video'],['ts','libx264'],['ts','libx265'],['flv','libx264']] as const)test(`${kind}/${encoder} damaged tails retain real decoded frames, playback and backward seek`,{timeout:60000},async()=>{
   const dir=await mkdtemp(path.join(tmpdir(),'vp-tail-'));
   try {

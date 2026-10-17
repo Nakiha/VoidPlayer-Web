@@ -5,10 +5,10 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { MediaLibraryIndex } from '../../server/library.ts';
-import { demuxFlv, FlvReader } from '../../src/flv-demux.ts';
-import { serializeFlvIndex } from '../../src/flv-index-cache.ts';
-import { syntheticFlv } from '.././flv-fixture.ts';
-import { FLV_MEDIA_INDEX_IDENTITY } from '../../src/media-index-identity.ts';
+import { demuxFlv, FlvReader } from '../../shared/media/containers/flv-demux.ts';
+import { serializeFlvIndex } from '../../shared/media/indexing/flv-index-cache.ts';
+import { syntheticFlv } from '../flv-fixture.ts';
+import { FLV_MEDIA_INDEX_IDENTITY } from '../../shared/media/indexing/media-index-identity.ts';
 
 test('identity-aware cache RPC checks media version and clear epoch', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'vp-index-worker-')); await mkdir(path.join(root, 'media'));

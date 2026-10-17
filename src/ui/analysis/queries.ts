@@ -1,6 +1,6 @@
-import type { Slot } from '../../model.ts';
-import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisResult } from '../../analysis/types.ts';
-import { shouldBucketize } from '../../analysis/statistics.ts';
+import type { Slot } from '../../../shared/review/model.ts';
+import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisResult } from '../../../shared/analysis/metadata/types.ts';
+import { shouldBucketize } from '../../../shared/analysis/metadata/statistics.ts';
 import { bucketWidthFor, canSatisfy, clampPixelWidth } from '../../analysis/view-cache.ts';
 import type { ViewCacheEntry } from '../../analysis/view-cache.ts';
 import { LOCAL_RATE_WINDOW_US } from '../../analysis/inspection.ts';

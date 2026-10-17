@@ -10,7 +10,7 @@ import { EncodedPacketSink } from 'mediabunny';
 import type { InputVideoTrack } from 'mediabunny';
 import { NativeAnalysisClient } from './native-client.ts';
 import type { SourceQueryContext } from './adapters.ts';
-import type { AnalysisCapability, AnalysisQuery, AnalysisResult, AnalysisSample } from './types.ts';
+import type { AnalysisCapability, AnalysisQuery, AnalysisResult, AnalysisSample } from '../../shared/analysis/metadata/types.ts';
 
 const MAX_PACKETS = 2_000_000;
 const YIELD_EVERY = 128;

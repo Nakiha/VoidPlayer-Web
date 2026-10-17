@@ -1,6 +1,6 @@
 import type { MediaSource } from './media.ts';
-import type { AudioPeek } from './cached-container-audio.ts';
-import { inspectCachedTracks } from './cached-track-metadata.ts';
+import type { AudioPeek } from '../shared/media/audio-types.ts';
+import { inspectCachedTracks } from '../shared/media/containers/cached-track-metadata.ts';
 import { updateMediaInfo } from './media-state.ts';
 
 /** One coalesced, bounded query for the visible inspector. No parser worker or

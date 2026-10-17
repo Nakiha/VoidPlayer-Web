@@ -4,11 +4,11 @@
 // 文件级配置头、容器头不分摊。sample/packet 不保证对应一张输出画面时，
 // UI 称「样本大小」。
 
-import { bitrateAt, buildBytePrefixSum, lowerBound } from './statistics.ts';
-import type { BucketResult } from './statistics.ts';
+import { bitrateAt, buildBytePrefixSum, lowerBound } from '../../shared/analysis/metadata/statistics.ts';
+import type { BucketResult } from '../../shared/analysis/metadata/statistics.ts';
 import type {
   AnalysisBucket, AnalysisCapability, AnalysisQuery, AnalysisResult, AnalysisSample, BitratePoint,
-} from './types.ts';
+} from '../../shared/analysis/metadata/types.ts';
 
 /** 查询所需的最小包视图；offset 等解码定位字段不在这里。 */
 export interface PacketView {

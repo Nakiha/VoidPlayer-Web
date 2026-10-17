@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveYuvColor, yuvToRgba, validateYuv } from '../../src/yuv-color.ts';
-import { yuvFixture } from '.././helpers/yuv-fixture.ts';
+import { resolveYuvColor, yuvToRgba, validateYuv } from '../../shared/color/yuv-color.ts';
+import { yuvFixture } from '../helpers/yuv-fixture.ts';
 
 test('SDR reference endpoints retain exact 8/10/12/16 bit ranges and neutral chroma',()=>{
   for(const depth of [8,10,12,16])for(const full of [false,true])for(const semi of [false,true]){

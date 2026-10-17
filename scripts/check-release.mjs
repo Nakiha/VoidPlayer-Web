@@ -1,7 +1,7 @@
 import { verifyFrontendIdentity } from './release-version.mjs';
 import { httpFetch } from '../test/http-request.ts';
 import { syntheticFlv } from '../test/flv-fixture.ts';
-import { FLV_INDEX_SCHEMA } from '../src/flv-index-cache.ts';
+import { FLV_INDEX_SCHEMA } from '../shared/media/indexing/flv-index-cache.ts';
 import { verifySavedWorkspaces, verifyWorkspaceRestore } from './workspace-acceptance.mjs';
 import { verifyMeasurements } from './measurement-acceptance.mjs';
 import { openIndexDatabase } from '../server/sqlite.ts';

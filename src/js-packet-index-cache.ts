@@ -1,10 +1,9 @@
-import type {TsPacketReader} from './ts-packet-source.ts';
-import {parseTsPacketIndex} from './ts-packet-index.ts';
-import {parseMatroskaPacketIndex} from './matroska-packet-index.ts';
-import type {JsPacketIndex} from './matroska-packet-index.ts';
-import {isSealedJsIndex,sealJsIndex} from './js-index-proof.ts';
-import {MediaOpenError} from './media-errors.ts';
-import {abortableWait,abortableLoad} from './media-abort.ts';
+import {parseJsPacketIndex} from '../shared/media/indexing/js-packet-index-parser.ts';
+import type {TsPacketReader} from '../shared/media/containers/ts-packet-source.ts';
+import type {JsPacketIndex} from '../shared/media/containers/matroska-packet-index.ts';
+import {isSealedJsIndex,sealJsIndex} from '../shared/media/indexing/js-index-proof.ts';
+import {MediaOpenError} from '../shared/media/io/media-errors.ts';
+import {abortableWait,abortableLoad} from '../shared/media/io/media-abort.ts';
 
 export const JS_PACKET_CACHE_DATABASE='voidplayer-js-packet-index-v1';
 const maximumBytes=64*1024*1024;
@@ -45,7 +44,6 @@ async function key(db:IDBDatabase,signal?:AbortSignal){
   signal?.throwIfAborted();
   if(!stored){stored=candidate;store.put(stored,'complete-scan');}await done;return stored;
 }
-export function parseJsPacketIndex(value:unknown,version:string,size:number){return parseTsPacketIndex(value,version,size)??parseMatroskaPacketIndex(value,version,size);}
 const cacheKey=(version:string,format:'ts'|'matroska')=>`${format}:${version}`;
 /** Only a completed parser can write. HMAC authority is a separately persisted
  * non-extractable key; editing payload/completeness/checksum cannot mint a new

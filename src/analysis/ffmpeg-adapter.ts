@@ -1,7 +1,7 @@
-import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_RECORD_LIMIT, FFMPEG_NO_TIMESTAMP, ffmpegTicksToUs } from '../ffmpeg-index-cache.ts';
+import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_RECORD_LIMIT, FFMPEG_NO_TIMESTAMP, ffmpegTicksToUs } from '../../shared/media/indexing/ffmpeg-index-cache.ts';
 import { createSourceQuerier, toSample } from './adapters.ts';
 import type { PacketView, SourceQueryContext } from './adapters.ts';
-import type { AnalysisAxis, AnalysisQuery, AnalysisResult, AnalysisSample } from './types.ts';
+import type { AnalysisAxis, AnalysisQuery, AnalysisResult, AnalysisSample } from '../../shared/analysis/metadata/types.ts';
 
 export interface FfmpegAnalysisSummary { packetCount: number; hasDts: boolean; confirmedPackets: number }
 

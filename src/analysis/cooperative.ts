@@ -1,7 +1,7 @@
 import { executeSortedQuerySteps } from './adapters.ts';
 import type { PacketView, SortedAxis, SourceQueryContext } from './adapters.ts';
-import type { AnalysisQuery, AnalysisResult } from './types.ts';
-import { lowerBound } from './statistics.ts';
+import type { AnalysisQuery, AnalysisResult } from '../../shared/analysis/metadata/types.ts';
+import { lowerBound } from '../../shared/analysis/metadata/statistics.ts';
 
 const BATCH = 4096;
 /** Stable bounded merges, including prefix construction. No native full-array

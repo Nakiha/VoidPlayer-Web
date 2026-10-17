@@ -1,6 +1,6 @@
 import { log } from './log.ts';
-import { SLOTS } from './model.ts';
-import type { Slot } from './model.ts';
+import { SLOTS } from '../shared/review/model.ts';
+import type { Slot } from '../shared/review/model.ts';
 import { dropFileHandles } from './file-handles.ts';
 import type { FsFileHandle } from './file-handles.ts';
 

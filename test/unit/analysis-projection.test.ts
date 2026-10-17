@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildAxisIndex, decideLayout, matchPairsStrict, panTimeRange, projectToSession, zoomTimeRange } from '../../src/analysis/projection.ts';
-import type { AnalysisSample } from '../../src/analysis/types.ts';
+import type { AnalysisSample } from '../../shared/analysis/metadata/types.ts';
 
 const sample = (id: string, ordinal: number, pts: number | null, dts: number | null = pts): AnalysisSample => ({
   sampleId: id, decodeOrdinal: ordinal, containerPtsUs: pts, effectivePtsUs: pts, dtsUs: dts,

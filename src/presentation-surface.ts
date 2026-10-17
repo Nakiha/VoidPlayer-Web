@@ -1,5 +1,5 @@
 import { createYuvSurface } from './yuv-surface.ts';
-import type { FrameDescription } from './frame-description.ts';
+import type { FrameDescription } from '../shared/media/frame-description.ts';
 /** A viewport-sized surface avoids rasterizing a fitted image and magnifying
  * that intermediate bitmap. Texture minification is bilinear, magnification
  * is nearest-neighbour, independent of CSS zoom and devicePixelRatio. */

@@ -12,7 +12,7 @@ try{
  await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/native-yuv-lifecycle`);
  const result=await page.evaluate(async()=>{
   const {nativeYuvSource}=await import('/src/native-yuv-source.ts');
-  const {rgbaDescription}=await import('/src/frame-description.ts');
+  const {rgbaDescription}=await import('/shared/media/frame-description.ts');
   const NativeWorker=globalThis.Worker,workers=[],transfers=[],samples=[],readbacks=[];let upstreamDisposed=0,hold=false,releaseHeld;
   class TrackedWorker extends NativeWorker{
    constructor(...args){super(...args);this.terminations=0;this.timestamps=new Map();workers.push(this);this.addEventListener('message',({data})=>{if(data.buffer)readbacks.push({id:data.id,pts:this.timestamps.get(data.id),values:visible(new Uint8Array(data.buffer),data.layout)});});}

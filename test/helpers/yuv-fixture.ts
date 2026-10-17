@@ -1,5 +1,5 @@
-import { rgbaDescription } from '../../src/frame-description.ts';
-import type { FrameDescription } from '../../src/frame-description.ts';
+import { rgbaDescription } from '../../shared/media/frame-description.ts';
+import type { FrameDescription } from '../../shared/media/frame-description.ts';
 export function yuvFixture(depth=8, semi=false, full=false, matrix='bt709', width=5, height=3, shift=0) {
   const bytes=depth>8?2:1, cw=Math.ceil(width/2), ch=Math.ceil(height/2);
   let length=0;

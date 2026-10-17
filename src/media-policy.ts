@@ -1,12 +1,12 @@
 import type { MediaSource, MediaMeta } from './media.ts';
-import type { RandomAccessInput } from './range-reader.ts';
+import type { RandomAccessInput } from '../shared/media/io/range-reader.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
-import { MediaOpenError } from './media-errors.ts';
-import { abortableLoad, loadAborted } from './media-abort.ts';
+import { MediaOpenError } from '../shared/media/io/media-errors.ts';
+import { abortableLoad, loadAborted } from '../shared/media/io/media-abort.ts';
 import { contextLog } from './log.ts';
 import { explainMediaFailure } from './media-diagnostics.ts';
 import { admitReferenceSource, referenceSource } from './reference-source.ts';
-import type { ReferenceDecode } from './color-mode.ts';
+import type { ReferenceDecode } from '../shared/color/decode-policy-types.ts';
 
 export interface MediaOpenPlan {
   meta: MediaMeta; input: RandomAccessInput; reference: boolean;

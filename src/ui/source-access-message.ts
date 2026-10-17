@@ -1,6 +1,6 @@
 import { t, msg } from '../i18n.ts';
 
-import type { LibraryAccessProblem, LocalAccessProblem } from '../source-access.ts';
+import type { LibraryAccessProblem, LocalAccessProblem } from '../../shared/media/io/source-access.ts';
 
 /** Shared reasons for history rows and workspace restoration. */
 export function libraryAccessMessage(name: string, reason: LibraryAccessProblem) {

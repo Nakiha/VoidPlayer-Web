@@ -1,7 +1,7 @@
 // One JPEG encoder contract for every thumbnail input kind and execution context.
 import {
   THUMB_JPEG_QUALITY, THUMB_JPEG_FALLBACK_QUALITY, THUMB_MAX_BYTES,
-} from './contract.ts';
+} from '../../shared/thumbnails/contract.ts';
 
 export type ThumbnailCanvas = OffscreenCanvas | HTMLCanvasElement;
 

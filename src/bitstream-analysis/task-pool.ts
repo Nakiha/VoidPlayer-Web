@@ -1,4 +1,4 @@
-import { AnalysisFailure } from './failure.ts';
+import { AnalysisFailure } from '../../shared/analysis/bitstream/failure.ts';
 
 /** Queue waiting is distinct from decoder work; polling alone is not progress. */
 export class AnalysisPollingBudget {

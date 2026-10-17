@@ -1,8 +1,8 @@
 import { Worker } from 'node:worker_threads';
 import { randomUUID } from 'node:crypto';
 import { AdminError } from './admin-error.ts';
-import { mediaIndexIdentityKey } from '../src/media-index-identity.ts';
-import type { MediaIndexIdentity } from '../src/media-index-identity.ts';
+import { mediaIndexIdentityKey } from '../shared/media/indexing/media-index-identity.ts';
+import type { MediaIndexIdentity } from '../shared/media/indexing/media-index-identity.ts';
 import type { FrameIndexOperation, FrameIndexCallArgs, FrameIndexResult, FrameIndexResponse } from './frame-index-protocol.ts';
 
 type PendingRequest = { resolve(value: unknown): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> };

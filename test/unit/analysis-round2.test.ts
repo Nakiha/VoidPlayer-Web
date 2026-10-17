@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { runSourceQuery } from '../../src/analysis/adapters.ts';
 import type { SourceQueryContext } from '../../src/analysis/adapters.ts';
 import { groupSamples } from '../../src/analysis/grouping.ts';
-import { shouldBucketize } from '../../src/analysis/statistics.ts';
+import { shouldBucketize } from '../../shared/analysis/metadata/statistics.ts';
 
 const baseCap = {
   hasSize: true, hasDts: true, keySource: 'container' as const,

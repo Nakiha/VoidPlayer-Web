@@ -1,7 +1,7 @@
 // 时间投影、稳定顺序与多轨匹配的纯算法（无 DOM、无 IO）。
 // sessionUs = normalizedMediaUs + offsetUs；正偏移表示该轨延后。
 
-import type { AnalysisSample } from './types.ts';
+import type { AnalysisSample } from '../../shared/analysis/metadata/types.ts';
 
 export const projectToSession = (normalizedMediaUs: number, offsetUs: number): number =>
   normalizedMediaUs + offsetUs;

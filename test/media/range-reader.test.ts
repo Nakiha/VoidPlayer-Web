@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { Worker } from 'node:worker_threads';
-import { RangeReader } from '../../src/range-reader.ts';
+import { RangeReader } from '../../shared/media/io/range-reader.ts';
 import { createRangeBridge } from '../../src/range-bridge.ts';
 import { WorkerRpc } from '../../src/ffmpeg-media.ts';
 
@@ -32,7 +32,7 @@ test('Range cache is bounded, pinned to a file version and validates response bo
 test('Synchronous FFmpeg AVIO requests bounded chunks through the async bridge and preserves IO errors', { timeout: 30000 }, async t => {
   const {mkdtemp,rm}=await import('node:fs/promises'),{tmpdir}=await import('node:os'),{join}=await import('node:path'),{execFileSync}=await import('node:child_process');const directory=await mkdtemp(join(tmpdir(),'vp-residual-avio-'));t.after(()=>rm(directory,{recursive:true,force:true}));const file=join(directory,'ffv1.avi');execFileSync('ffmpeg',['-y','-v','error','-i','fixtures/video/ffv1_yuv422p_8bit.mkv','-an','-c:v','copy','-f','avi',file]);
   const bytes=await readFile(file);
-  const core = new URL('../../public/vendor/voidplayer-core/', import.meta.url);
+  const core = new URL('../../public/vendor/voidplayer-core', import.meta.url);
   let requests = 0, fail = false;
   t.mock.method(globalThis, 'fetch', async (_url: unknown, options: RequestInit) => {
     requests++;

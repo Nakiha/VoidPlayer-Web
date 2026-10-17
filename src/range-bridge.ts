@@ -1,5 +1,5 @@
-import { RangeReader } from './range-reader.ts';
-import { MediaOpenError } from './media-errors.ts';
+import { RangeReader } from '../shared/media/io/range-reader.ts';
+import { MediaOpenError } from '../shared/media/io/media-errors.ts';
 
 /** FFmpeg remains synchronous inside its worker; fetch and cancellation remain async outside it. */
 export function createRangeBridge(worker: Worker, url: string, size: number) {

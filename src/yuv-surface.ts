@@ -1,5 +1,5 @@
-import type { FrameDescription } from './frame-description.ts';
-import { resolveYuvColor, yuvCoefficients, validateYuv, chromaOffset } from './yuv-color.ts';
+import type { FrameDescription } from '../shared/media/frame-description.ts';
+import { resolveYuvColor, yuvCoefficients, validateYuv, chromaOffset } from '../shared/color/yuv-color.ts';
 import { getPresentationChannel, presentationChannelCode } from './presentation-channel.ts';
 import { hdrPreviewGlsl } from './hdr-shader.ts';
 

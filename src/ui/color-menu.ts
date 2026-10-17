@@ -1,4 +1,4 @@
-import { DEFAULT_ANNOTATION_COLOR } from '../annotation.ts';
+import { DEFAULT_ANNOTATION_COLOR } from '../../shared/review/annotation.ts';
 import { onLanguageChange, t, msg } from '../i18n.ts';
 import { installMenu } from './menu.ts';
 

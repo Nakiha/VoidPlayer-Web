@@ -1,18 +1,18 @@
 import type { FfmpegAnalysisSummary } from './analysis/ffmpeg-adapter.ts';
 import type { WasmFrameOutput } from './wasm-frame.ts';
-import type { MediaIndexIdentity } from './media-index-identity.ts';
-import type { FfmpegIndexRecovery } from './index-integrity.ts';
-import type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest } from './media-index-types.ts';
+import type { MediaIndexIdentity } from '../shared/media/indexing/media-index-identity.ts';
+import type { FfmpegIndexRecovery } from '../shared/media/indexing/index-integrity.ts';
+import type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest } from '../shared/media/indexing/media-index-types.ts';
 import type { MediaLoadStage } from './media-progress.ts';
-import type { OpenStage } from './media-errors.ts';
-import type { PacketInput } from './flv-demux.ts';
+import type { OpenStage } from '../shared/media/io/media-errors.ts';
+import type { PacketInput } from '../shared/media/containers/flv-demux.ts';
 import type { FlvEngine, PreparedFlv } from './flv-engine.ts';
 import type { TsEngine } from './ts-engine.ts';
 import type { Mp4Engine } from './mp4-engine.ts';
 import type { PacketFrame } from './flv-decoder.ts';
-import type { CachedWindow, CachedAudioBatch } from './audio-types.ts';
-import type { MediaInfo } from './model.ts';
-import type { AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample } from './analysis/types.ts';
+import type { CachedWindow, CachedAudioBatch } from '../shared/media/audio-types.ts';
+import type { MediaInfo } from '../shared/review/model.ts';
+import type { AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample } from '../shared/analysis/metadata/types.ts';
 
 // Command maps are the single wire contract for callers and Worker responders.
 // No result type is selected by the caller. Engine imports above are type-only.
@@ -46,7 +46,7 @@ export interface FfmpegInitResult extends FfmpegIndexRecovery {
 }
 
 export interface FfmpegCommands {
-  'analysis-ffmpeg-index': Command<{ctx: number; size: number}, import('./ffmpeg-index-cache.ts').FfmpegIndexDocument>;
+  'analysis-ffmpeg-index': Command<{ctx: number; size: number}, import('../shared/media/indexing/ffmpeg-index-cache.ts').FfmpegIndexDocument>;
   'peek-audio': Command<{ offset: number; length: number; ctx?: number; windows?: boolean }, null>;
   'observe-audio': Command<{ ctx: number; enabled: boolean }, null>;
   analysis: Command<{ ctx: number } & AnalysisOrigin & Omit<AnalysisQuery, 'signal'> & { durationUs: number; coverageUs: { start: number; end: number } | null }, AnalysisResult>;
@@ -62,18 +62,18 @@ type Empty = Record<string, never>;
 type SoftwareOptions = { glueURL: string; wasmBinary?: Uint8Array; threads?: number };
 type AnalysisOrigin = { mediaId?: string; firstPtsUs?: number };
 export interface PacketCommands {
-  'prepare-js':Command<{input:PacketInput;sourceVersion:string;format:'ts'|'matroska';persistent?:boolean},{admitted:true;session:string;index:import('./matroska-packet-index.ts').JsPacketIndex}|{admitted:false;reason:string}>;
-  'analysis-js-index':Command<Empty,import('./matroska-packet-index.ts').JsPacketIndex>;
+  'prepare-js':Command<{input:PacketInput;sourceVersion:string;format:'ts'|'matroska';persistent?:boolean},{admitted:true;session:string;index:import('../shared/media/containers/matroska-packet-index.ts').JsPacketIndex}|{admitted:false;reason:string}>;
+  'analysis-js-index':Command<Empty,import('../shared/media/containers/matroska-packet-index.ts').JsPacketIndex>;
   'prepare-ts': Command<{input: PacketInput; sourceVersion: string},
-    {admitted: true; session: string; index: import('./ts-packet-index.ts').TsPacketIndex} | {admitted: false; reason: string}>;
+    {admitted: true; session: string; index: import('../shared/media/indexing/ts-packet-index.ts').TsPacketIndex} | {admitted: false; reason: string}>;
   'peek-audio': Command<{ offset: number; length: number; ctx?: number; windows?: boolean }, null>;
   'cached-audio': Command<{ pts: number; generation: number }, null>;
   prepare: Command<{ input: PacketInput }, PreparedFlv>;
   native: Command<Empty, PacketInitResult | null>;
   init: Command<SoftwareOptions & { input: PacketInput; forceWasm?: boolean } & ({container: 'ts'|'matroska'; sourceVersion: string; preparedTsSession?: string;persistent?:boolean} | {container?: 'flv' | 'mp4'; prepared?: PreparedFlv}), PacketInitResult>;
-  'analysis-ts-index': Command<Empty, import('./ts-packet-index.ts').TsPacketIndex>;
-  'analysis-flv-index': Command<Empty, import('./flv-index-cache.ts').FlvIndexDocument>;
-  'analysis-index': Command<Empty, import('./bitstream-analysis/stream.ts').AnalysisIndexFrontier>;
+  'analysis-ts-index': Command<Empty, import('../shared/media/indexing/ts-packet-index.ts').TsPacketIndex>;
+  'analysis-flv-index': Command<Empty, import('../shared/media/indexing/flv-index-cache.ts').FlvIndexDocument>;
+  'analysis-index': Command<Empty, import('../shared/analysis/bitstream/stream.ts').AnalysisIndexFrontier>;
   'complete-index': Command<Empty, Awaited<ReturnType<FlvEngine['completeIndex']>>>;
   'reference-witness': Command<SoftwareOptions, PacketFrame>;
   'switch-software': Command<SoftwareOptions, Awaited<ReturnType<FlvEngine['switchToSoftware']>> | Awaited<ReturnType<Mp4Engine['switchToSoftware']>> | Awaited<ReturnType<TsEngine['switchToSoftware']>>>;
@@ -94,7 +94,7 @@ export type WorkerRequest<C extends CommandsShape<C>, K extends keyof C = keyof 
 export type WorkerSuccess<C extends CommandsShape<C>, K extends keyof C = keyof C> = {
   [P in K]: { id: number; ok: true; data: C[P]['response']; diagnostics?: Record<string, unknown>[] };
 }[K];
-export type WorkerFailure = { id: number; ok: false; error: string; stack?: string; stage?: OpenStage; code?: import('./media-errors.ts').MediaErrorCode };
+export type WorkerFailure = { id: number; ok: false; error: string; stack?: string; stage?: OpenStage; code?: import('../shared/media/io/media-errors.ts').MediaErrorCode };
 export type IndexBatch = { analysis?: FfmpegAnalysisSummary; ctx: number; ticks: number[]; durations: number[]; stableCoverageUs: number; seekAnchorCount: number; buildId: string; indexIdentity?: MediaIndexIdentity; indexTrace?: MediaIndexClientTrace };
 export type IndexError = { ctx?: number; error: string; stage?: OpenStage };
 export type IndexProgress = { scannedBytes: number; totalBytes: number; packets: number; bytesRead?:number; durationUs?: number };

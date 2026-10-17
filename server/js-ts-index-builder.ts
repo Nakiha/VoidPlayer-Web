@@ -1,11 +1,11 @@
-import {TsContainerPacketSource} from '../src/mpeg2-ts-packet-source.ts';
+import {TsContainerPacketSource} from '../shared/media/containers/mpeg2-ts-packet-source.ts';
 import { open, stat } from 'node:fs/promises';
-import {MatroskaPacketSource} from '../src/matroska-packet-source.ts';
-import { TsPacketSource } from '../src/ts-packet-source.ts';
-import type { TsPacketReader } from '../src/ts-packet-source.ts';
+import {MatroskaPacketSource} from '../shared/media/containers/matroska-packet-source.ts';
+import { TsPacketSource } from '../shared/media/containers/ts-packet-source.ts';
+import type { TsPacketReader } from '../shared/media/containers/ts-packet-source.ts';
 import { fileVersion } from './library.ts';
 import { AdminError } from './admin-error.ts';
-import type { MediaIndexScanProgress } from '../src/media-index-types.ts';
+import type { MediaIndexScanProgress } from '../shared/media/indexing/media-index-types.ts';
 
 /** Disk indexing owns no decoder/core; the client and server use the same parser. */
 export async function buildJsTsIndexDocument(filePath: string, size: number, version: string, sourceVersion: string,

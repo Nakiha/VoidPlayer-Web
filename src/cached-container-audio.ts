@@ -1,7 +1,9 @@
+import type {AudioPeek} from '../shared/media/audio-types.ts';
+export type {AudioPeek} from '../shared/media/audio-types.ts';
 import { Input, CustomSource, MP4, QTFF, MATROSKA, WEBM, MPEG_TS, EncodedPacketSink, MpegTsInputFormat } from 'mediabunny';
-import type { CachedAudioBatch, CachedAudioConfig, CachedWindow } from './audio-types.ts';
+import type { CachedAudioBatch, CachedAudioConfig, CachedWindow } from '../shared/media/audio-types.ts';
 
-export type AudioPeek = (offset: number, length: number) => Promise<Uint8Array | undefined>;
+
 import { TsCachedAudio } from './ts-cached-audio.ts';
 class CacheMiss extends Error {}
 

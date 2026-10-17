@@ -1,4 +1,4 @@
-import type { AnnotationDocument } from './annotation-record.ts';
+import type { AnnotationDocument } from '../shared/review/annotation-record.ts';
 
 /** 本地待保存的单条编辑意图：seq 只增，用于区分“新编辑”与“旧重试”。 */
 export type PendingEdit = {

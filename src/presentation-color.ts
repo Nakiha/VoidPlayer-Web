@@ -1,5 +1,5 @@
-import { resolveYuvColor } from './yuv-color.ts';
-import type { FrameDescription } from './frame-description.ts';
+import { resolveYuvColor } from '../shared/color/yuv-color.ts';
+import type { FrameDescription } from '../shared/media/frame-description.ts';
 
 /** HDR transfer identities shared by policy, GPU admission and UI tags.
  * Canonical resources use 'pq'/'hlg'; the 'smpte2084'/'arib-std-b67' spellings

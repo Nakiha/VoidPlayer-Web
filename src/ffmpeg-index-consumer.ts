@@ -1,9 +1,9 @@
-import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_RECORD_LIMIT, parseFfmpegIndex, FFMPEG_INDEX_SCHEMA, lastFfmpegPts, FFMPEG_NO_TIMESTAMP } from './ffmpeg-index-cache.ts';
+import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_RECORD_LIMIT, parseFfmpegIndex, FFMPEG_INDEX_SCHEMA, lastFfmpegPts, FFMPEG_NO_TIMESTAMP } from '../shared/media/indexing/ffmpeg-index-cache.ts';
 import { decodeIndexBase64 } from './index-stream-encoding.ts';
-import { validFfmpegRecovery } from './index-integrity.ts';
+import { validFfmpegRecovery } from '../shared/media/indexing/index-integrity.ts';
 import type { IndexStreamCursor, IndexStreamEventResult } from './index-stream-transport.ts';
-import type { MediaIndexIdentity } from './media-index-identity.ts';
-import type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest, MediaIndexScanProgress, ServerIndexResult } from './media-index-types.ts';
+import type { MediaIndexIdentity } from '../shared/media/indexing/media-index-identity.ts';
+import type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest, MediaIndexScanProgress, ServerIndexResult } from '../shared/media/indexing/media-index-types.ts';
 
 function sameRecordIdentity(a: MediaIndexRecordManifest, b: MediaIndexRecordManifest): boolean {
   if (a.epoch !== b.epoch || a.buildId !== b.buildId || a.recordBytes !== b.recordBytes

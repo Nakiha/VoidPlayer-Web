@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
-import { openAnalysisInput } from '../../src/bitstream-analysis/input.ts';
-import { analyzePicture } from '../../src/bitstream-analysis/runner.ts';
+import { openAnalysisInput } from '../../shared/analysis/bitstream/input.ts';
+import { analyzePicture } from '../../shared/analysis/bitstream/runner.ts';
 import { Mp4Engine } from '../../src/mp4-engine.ts';
 const signal = new AbortController().signal;
 async function reader(file: string) { const data = await readFile(file); return { size: data.length, async read(o: number, n: number) { return data.subarray(o, o + n); }, close() {} }; }
@@ -30,9 +30,9 @@ for (const codec of ['h264', 'hevc', 'vvc']) test(`finite fMP4 ${codec}: byte id
 });
 
 for (const codec of ['h264', 'hevc', 'vvc']) test(`fMP4 ${codec}: cross-fragment range, whole drain, cache holes, cancellation and actual rear Blob IO`, async () => {
-  const { analyzeRange, analyzeStream } = await import('../../src/bitstream-analysis/runner.ts');
-  const { pictureId } = await import('../../src/bitstream-analysis/contract.ts');
-  const { RangeReader } = await import('../../src/range-reader.ts');
+  const { analyzeRange, analyzeStream } = await import('../../shared/analysis/bitstream/runner.ts');
+  const { pictureId } = await import('../../shared/analysis/bitstream/contract.ts');
+  const { RangeReader } = await import('../../shared/media/io/range-reader.ts');
   const file = `fixtures/fmp4-analysis/fragmented-${codec}.mp4`, input = await openAnalysisInput(await reader(file), signal), cache = new Map<string, any>();
   const range = { sourceVersion: 'fmp4-test', firstPtsUs: input.packets[0].pts, startUs: 280000, endUs: 480000 };
   await analyzeRange(await reader(file), range, await core(), 'test', signal, async r => { cache.set(pictureId(r.picture), r); });

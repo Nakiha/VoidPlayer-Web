@@ -1,5 +1,5 @@
-export type ColorMode = 'reference' | 'browser';
-export type ReferenceDecode = {decoder:'hardware'|'software';depth:1|2|4|8};
+import type {ColorMode,ReferenceDecode} from '../shared/color/decode-policy-types.ts';
+export type {ColorMode,ReferenceDecode} from '../shared/color/decode-policy-types.ts';
 let referenceDecode:ReferenceDecode={decoder:'hardware',depth:2};
 export const getReferenceDecode=():ReferenceDecode=>({...referenceDecode});
 export function setReferenceDecode(value:ReferenceDecode){

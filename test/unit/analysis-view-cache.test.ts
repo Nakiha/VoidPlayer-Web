@@ -111,7 +111,7 @@ test('区间未被完整覆盖不可复用', () => {
 
 import { createAnalysisQueries } from '../../src/ui/analysis/queries.ts';
 import type { AnalysisQuerySnapshot, AnalysisQueryTrack } from '../../src/ui/analysis/queries.ts';
-import type { AnalysisQuery, AnalysisResult } from '../../src/analysis/types.ts';
+import type { AnalysisQuery, AnalysisResult } from '../../shared/analysis/metadata/types.ts';
 
 const complete = { hasSize: true, hasDts: false, keySource: 'container', pictureType: 'key-only', qp: 'unsupported', indexState: 'complete' } as const;
 function queryHarness(t: { after(fn: () => void): void }) {

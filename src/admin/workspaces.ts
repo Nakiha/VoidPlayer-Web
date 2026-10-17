@@ -5,7 +5,7 @@ import { formatDate, formatNumber, t, th, msg } from '../i18n.ts';
 import { emptyState, properties } from './presentation.ts';
 import { SavedWorkspaceClient } from '../saved-workspaces.ts';
 import type { WorkspaceRecord, SavedWorkspace } from '../saved-workspaces.ts';
-import { compressWorkspace } from '../workspace-file.ts';
+import { compressWorkspace } from '../../shared/review/workspace-file.ts';
 import { icon } from '../ui/icons.ts';
 export function workspaceAdminShell() {
   return `<section id="pane-workspaces" class="admin-logs" hidden><header class="admin-heading"><div><h1>${th(msg("admin.wsTitle", "工作区"))}</h1><p>${th(msg("admin.wsDesc", "打开已保存的评审，或修改名称、下载副本。"))}</p></div><button id="admin-workspaces-refresh" class="icon-button" aria-label="${th(msg("admin.refreshWorkspaces", "刷新工作区"))}">${icon('refresh')}</button></header>

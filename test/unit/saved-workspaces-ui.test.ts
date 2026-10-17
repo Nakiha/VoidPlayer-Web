@@ -6,8 +6,8 @@ import { setImmediate } from 'node:timers/promises';
 import { currentActor, identityHealth } from '../../src/identity.ts';
 import type { Actor } from '../../src/identity.ts';
 import type { WorkspaceRecord } from '../../src/saved-workspaces.ts';
-import type { WorkspaceFile } from '../../src/workspace-file.ts';
-import { Viewport } from '../../src/viewport.ts';
+import type { WorkspaceFile } from '../../shared/review/workspace-file.ts';
+import { Viewport } from '../../shared/presentation/viewport.ts';
 
 // Vite's SVG imports are presentation-only; exercise the real controller and
 // network client without adding a browser or DOM package to unit tests.

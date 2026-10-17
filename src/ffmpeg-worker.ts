@@ -1,4 +1,4 @@
-import {ffmpegAnalysisConfiguration} from './ffmpeg-analysis-config.ts';
+import {ffmpegAnalysisConfiguration} from '../shared/media/indexing/ffmpeg-analysis-config.ts';
 import { FfmpegPacketIndex } from './analysis/ffmpeg-adapter.ts';
 import { workerReply } from './worker-protocol.ts';
 import type { FfmpegCommands, FfmpegInitResult, WorkerMessage, WorkerRequest, IndexInput } from './worker-protocol.ts';
@@ -6,14 +6,14 @@ import type { FfmpegCommands, FfmpegInitResult, WorkerMessage, WorkerRequest, In
 import { rangeBlobReader } from './range-bridge-reader.ts';
 import { ObservedBytes } from './observed-bytes.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
-import { MediaOpenError } from './media-errors.ts';
-import { validFfmpegRecovery } from './index-integrity.ts';
-import type { FfmpegIndexRecovery } from './index-integrity.ts';
-import { randomUUID } from './uuid.ts';
-import { loadCore } from './wasm-core.ts';
+import { MediaOpenError } from '../shared/media/io/media-errors.ts';
+import { validFfmpegRecovery } from '../shared/media/indexing/index-integrity.ts';
+import type { FfmpegIndexRecovery } from '../shared/media/indexing/index-integrity.ts';
+import { randomUUID } from '../shared/utils/uuid.ts';
+import { loadCore } from './media/decoding/core-loader.ts';
 import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
-import type { MediaIndexTrace, MediaIndexRecordBatch, MediaIndexRecordManifest } from './media-index-types.ts';
-import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_SCHEMA, parseFfmpegIndex, serializeFfmpegIndex, FFMPEG_NO_TIMESTAMP, lastFfmpegPts } from './ffmpeg-index-cache.ts';
+import type { MediaIndexTrace, MediaIndexRecordBatch, MediaIndexRecordManifest } from '../shared/media/indexing/media-index-types.ts';
+import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_SCHEMA, parseFfmpegIndex, serializeFfmpegIndex, FFMPEG_NO_TIMESTAMP, lastFfmpegPts } from '../shared/media/indexing/ffmpeg-index-cache.ts';
 // Web Worker hosting the self-built FFmpeg WASM core. Decoding is synchronous
 // CPU work; it must never run on the UI thread. The page talks to this worker
 // over a small RPC: init (open + first presentable frame), index-input (already

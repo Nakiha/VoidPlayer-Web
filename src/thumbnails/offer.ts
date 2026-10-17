@@ -4,7 +4,7 @@ import type { SessionResources } from '../session/resources.ts';
 // dedupe, budget checks and one independent resource reference. Heavy work
 // (render, encode, store, upload) continues in tasks.ts off the hot path.
 
-import { THUMB_FRAME_BUDGET_BYTES, THUMB_HOLD_MS } from './contract.ts';
+import { THUMB_FRAME_BUDGET_BYTES, THUMB_HOLD_MS } from '../../shared/thumbnails/contract.ts';
 import { thumbnailState } from './state.ts';
 import type { OfferResult } from './state.ts';
 import { presentationColor } from '../presentation-color.ts';

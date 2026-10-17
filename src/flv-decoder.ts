@@ -1,23 +1,24 @@
-import {isAnnexB} from './nal-framing.ts';
-import { avcHasIdr, avcGeometry, nativeAvcCompatible, avcInBandDescription } from './avc-geometry.ts';
+import type {PacketDecodeIndex,PacketDecodePacket} from '../shared/media/indexing/packet-decode-index.ts';
+export type {PacketDecodeIndex,PacketDecodePacket} from '../shared/media/indexing/packet-decode-index.ts';
+import {isAnnexB} from '../shared/media/codecs/nal-framing.ts';
+import { avcHasIdr, avcGeometry, nativeAvcCompatible, avcInBandDescription } from '../shared/media/codecs/avc-geometry.ts';
 import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
-import { videoFrameDescription } from './frame-description.ts';
-import type { FrameDescription } from './frame-description.ts';
-import { hevcGeometry, hevcReorderFrames, verifyHevcFrame, hevcAnnexBDecoderConfig } from './hevc-geometry.ts';
-import { MediaOpenError } from './media-errors.ts';
-import { flvDecoderConfig } from './flv-demux.ts';
-import type { FlvIndex, FlvPacket } from './flv-demux.ts';
-import type { MediaInfo } from './model.ts';
+import { videoFrameDescription } from './media/decoding/frame-resource.ts';
+import type { FrameDescription } from '../shared/media/frame-description.ts';
+import { hevcGeometry, hevcReorderFrames, hevcAnnexBDecoderConfig } from '../shared/media/codecs/hevc-geometry.ts';
+import { verifyHevcFrame } from './media/decoding/hevc-frame.ts';
+import { MediaOpenError } from '../shared/media/io/media-errors.ts';
+import { flvDecoderConfig } from '../shared/media/containers/flv-demux.ts';
+import type { FlvIndex, FlvPacket } from '../shared/media/containers/flv-demux.ts';
+import type { MediaInfo } from '../shared/review/model.ts';
 import { ffmpegColorInfo } from './media-metadata.ts';
 import { preferredVideoConfig } from './decoder-policy.ts';
-import { loadCore } from './wasm-core.ts';
+import { loadCore } from './media/decoding/core-loader.ts';
 
 /** pts is the logical source clock; a platform resource's internal timestamp
  * may use a shifted decoder clock and must never be used as frame identity. */
-export interface PacketFrame { rotation?: 0 | 90 | 180 | 270; packetPicture?: import('./packet-picture.ts').PacketPicture; durationUs?: number; description: FrameDescription; pts: number; width: number; height: number; frame?: VideoFrame; pixels?: ArrayBuffer; }
+export interface PacketFrame { rotation?: 0 | 90 | 180 | 270; packetPicture?: import('../shared/media/codecs/packet-picture.ts').PacketPicture; durationUs?: number; description: FrameDescription; pts: number; width: number; height: number; frame?: VideoFrame; pixels?: ArrayBuffer; }
 export type FlvFrame = PacketFrame;
-export type PacketDecodePacket = Omit<FlvPacket, 'dts'> & { dts: number | null; identityKnown?: boolean };
-export type PacketDecodeIndex = Omit<FlvIndex, 'packets' | 'codec'> & { codec: FlvIndex['codec'] | 'vp8' | 'vp9' | 'ffv1' | 'mpeg2video' | 'mpeg4' | 'mjpeg' | 'prores'; codecParameters?:import('./matroska-clocks.ts').PacketCodecParameters; codecConfigurations?:import('./matroska-clocks.ts').PacketCodecParameters[]; packets: PacketDecodePacket[] };
 type PacketConfiguration = Pick<PacketDecodeIndex, 'codec' | 'description' | 'codecParameters'>;
 function packetDecoderConfig(index: PacketConfiguration): VideoDecoderConfig | null {
   if(index.codec==='hevc'&&isAnnexB(index.description))return hevcAnnexBDecoderConfig(index.description);

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { rgbaDescription, validateDescription } from '../../src/frame-description.ts';
+import { rgbaDescription, validateDescription } from '../../shared/media/frame-description.ts';
 import { readWasmFrame } from '../../src/wasm-frame.ts';
 test('frame boundary rejects invalid allocation, stride and crop before presentation',()=>{
   const description=rgbaDescription(256,128);
@@ -19,7 +19,7 @@ test('WASM ABI validates version and signed size before allocating or reading pi
 });
 
 test('resource accounting preserves copy sizes and only tolerates unsupported pixel access', async () => {
-  const { videoFrameDescription } = await import('../../src/frame-description.ts');
+  const { videoFrameDescription } = await import('../../src/media/decoding/frame-resource.ts');
   const frame = { codedWidth: 32, codedHeight: 16, displayWidth: 32, displayHeight: 16, visibleRect: null,
     format: 'NV12', colorSpace: {}, allocationSize: () => 768 } as unknown as VideoFrame;
   assert.equal(videoFrameDescription(frame).byteLength, 768);

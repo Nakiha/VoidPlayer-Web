@@ -1,7 +1,7 @@
 import { t, msg, onLanguageChange } from '../i18n.ts';
-import { DEFAULT_ANNOTATION_COLOR, drawingStrokeWidth } from '../annotation.ts';
+import { DEFAULT_ANNOTATION_COLOR, drawingStrokeWidth } from '../../shared/review/annotation.ts';
 import type { PresentationGeometry } from '../presentation-surface.ts';
-import type { Drawing } from '../annotation.ts';
+import type { Drawing } from '../../shared/review/annotation.ts';
 const views = new WeakMap<SVGSVGElement, PresentationGeometry>();
 /** Keep SVG in the untransformed stage; viewBox maps its vector coordinates
  * to the same image rectangle as the presenter, without a CSS bitmap scale. */

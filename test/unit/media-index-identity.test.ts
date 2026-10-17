@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   FLV_MEDIA_INDEX_IDENTITY, mediaIndexIdentityKey, parseMediaIndexIdentity,
-} from '../../src/media-index-identity.ts';
+} from '../../shared/media/indexing/media-index-identity.ts';
 
 test('media index identity validates format, stream, schema, and indexer build', () => {
   const flv = new URLSearchParams('stream=video%3A0&schema=3&indexer=flv-demux-v3');

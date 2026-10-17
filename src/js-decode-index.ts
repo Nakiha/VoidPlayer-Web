@@ -1,8 +1,8 @@
-import {tsDecodeIndex} from './ts-packet-source.ts';
-import type {JsPacketIndex} from './matroska-packet-index.ts';
-import type {PacketDecodeIndex} from './flv-decoder.ts';
-import {isSealedJsIndex} from './js-index-proof.ts';
-import {MediaOpenError} from './media-errors.ts';
+import {tsDecodeIndex} from '../shared/media/containers/ts-packet-source.ts';
+import type {JsPacketIndex} from '../shared/media/containers/matroska-packet-index.ts';
+import type { PacketDecodeIndex } from '../shared/media/indexing/packet-decode-index.ts';
+import {isSealedJsIndex} from '../shared/media/indexing/js-index-proof.ts';
+import {MediaOpenError} from '../shared/media/io/media-errors.ts';
 export function jsDecodeIndex(index:JsPacketIndex):PacketDecodeIndex {
   if(index.kind==='js-ts-packets')return tsDecodeIndex(index);
   if(!isSealedJsIndex(index))throw new MediaOpenError('container','Unverified complete Matroska index');

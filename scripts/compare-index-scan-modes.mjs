@@ -7,7 +7,7 @@ import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } fro
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { instantiateCore } from '../src/wasm-core.ts';
+import { instantiateCore } from '../shared/wasm/core.ts';
 
 const args = process.argv.slice(2);
 const inputArg = args.find(arg => !arg.startsWith('--'));

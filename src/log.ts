@@ -1,4 +1,4 @@
-import { randomUUID } from './uuid.ts';
+import { randomUUID } from '../shared/utils/uuid.ts';
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 export type LogCategory = 'ui' | 'session' | 'media' | 'agent' | 'error';
 export type OperationContext = { operationId: string; parentOperationId?: string; source: string };

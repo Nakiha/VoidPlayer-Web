@@ -8,11 +8,11 @@ import { installBitstreamDiagrams, type BitstreamDiagram } from "./analysis/bits
 // 面板开关与高度由 workbench 统一管理（右上功能区、拖拽手势与子轨道同契约）；
 // 本模块只负责内容、查询与绘制。下拉全部使用项目 choice-menu 控件。
 
-import { SLOTS } from '../model.ts';
-import type { Slot } from '../model.ts';
+import { SLOTS } from '../../shared/review/model.ts';
+import type { Slot } from '../../shared/review/model.ts';
 import type { ReviewSession } from '../session.ts';
-import type { AnalysisDiagram, AnalysisCapability } from '../analysis/types.ts';
-import { BITRATE_WINDOW_OPTIONS_US, DEFAULT_BITRATE_WINDOW_US } from '../analysis/statistics.ts';
+import type { AnalysisDiagram, AnalysisCapability } from '../../shared/analysis/metadata/types.ts';
+import { BITRATE_WINDOW_OPTIONS_US, DEFAULT_BITRATE_WINDOW_US } from '../../shared/analysis/metadata/statistics.ts';
 import type { TimeGroup } from '../analysis/grouping.ts';
 import type { DirectTarget, InspectionState } from '../analysis/inspection.ts';
 import { pickGlyph, paddedChartDomain, containerChartColumn, chartFrameHoverStart } from './analysis-geometry.ts';
@@ -22,7 +22,7 @@ import { analysisDiagramIcon } from './analysis/diagram-icons.ts';
 import { bitstreamReasonText } from './bitstream-reasons.ts';
 import { onLanguageChange, t, th, msg } from '../i18n.ts';
 import { reconcileTrackSelection } from './track-selection.ts';
-import type { AnalysisViewState } from '../workspace-file.ts';
+import type { AnalysisViewState } from '../../shared/review/workspace-file.ts';
 import {
   computeLayout, drawAnalysis, plotGeometry, tOf,
 } from './analysis-canvas.ts';

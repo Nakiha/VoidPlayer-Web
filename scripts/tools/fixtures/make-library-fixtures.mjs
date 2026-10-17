@@ -3,7 +3,7 @@
 import { mkdtemp, mkdir, writeFile, readFile, copyFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
-import { sha256 } from '../.././check-release-set.mjs';
+import { sha256 } from '../../check-release-set.mjs';
 
 const parent = path.resolve(process.argv[2] || '.run');
 await mkdir(parent, { recursive: true });

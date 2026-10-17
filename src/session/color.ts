@@ -1,6 +1,7 @@
-import { getColorMode, getReferenceDecode, type ColorMode, type ReferenceDecode } from '../color-mode.ts';
-import { getColorOutput, validateColorOutput, type ColorOutput } from '../color-output.ts';
-import type { ComparisonConditions } from '../workspace-file.ts';
+import { getColorMode, getReferenceDecode } from '../color-mode.ts';
+import { type ColorMode, type ReferenceDecode } from '../../shared/color/decode-policy-types.ts';
+import { getColorOutput, validateColorOutput, type ColorOutput } from '../../shared/color/color-output.ts';
+import type { ComparisonConditions } from '../../shared/review/workspace-file.ts';
 
 export const currentColorEvidence = () =>
   getColorMode() === 'reference'

@@ -1,37 +1,36 @@
 import { prepareYuvFrame, createYuvBufferPool } from './yuv-frame.ts';
 import { getColorMode,getReferenceDecode } from './color-mode.ts';
-import type { ColorMode, ReferenceDecode } from './color-mode.ts';
+import type { ColorMode, ReferenceDecode } from '../shared/color/decode-policy-types.ts';
 import { probeContainer } from './container-probe.ts';
 import { openSoftwareMedia } from './software-media.ts';
 import { openMediaPlan } from './media-policy.ts';
 import type { MediaInfoChange } from './media-state.ts';
-import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample } from './analysis/types.ts';
-import { avcGeometry, nativeAvcCompatible } from './avc-geometry.ts';
-import { readMp4Configurations } from './mp4-config.ts';
-import { hevcDisplayOrder } from './hevc-timeline.ts';
-import { RangeReader } from './range-reader.ts';
-import { sampleDescription } from './frame-description.ts';
-import type { FrameDescription } from './frame-description.ts';
+import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample } from '../shared/analysis/metadata/types.ts';
+import { avcGeometry, nativeAvcCompatible } from '../shared/media/codecs/avc-geometry.ts';
+import { readMp4Configurations } from '../shared/media/containers/mp4-config.ts';
+import { hevcDisplayOrder } from '../shared/media/codecs/hevc-timeline.ts';
+import { RangeReader } from '../shared/media/io/range-reader.ts';
+import { sampleDescription } from './media/decoding/frame-resource.ts';
+import type { FrameDescription } from '../shared/media/frame-description.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
 export type { MediaOpenProgress } from './media-progress.ts';
-import { loadAborted, onLoadAbort } from './media-abort.ts';
-import { randomUUID } from './uuid.ts';
-import type { RandomAccessInput } from './range-reader.ts';
-import { MediaOpenError } from './media-errors.ts';
+import { loadAborted, onLoadAbort } from '../shared/media/io/media-abort.ts';
+import { randomUUID } from '../shared/utils/uuid.ts';
+import type { RandomAccessInput } from '../shared/media/io/range-reader.ts';
+import { MediaOpenError } from '../shared/media/io/media-errors.ts';
 import { Input, BlobSource, UrlSource, ALL_FORMATS, IsobmffInputFormat, VideoSampleSink, UnsupportedInputFormatError } from 'mediabunny';
-import type { CachedAudioBatch } from './audio-types.ts';
+import type { CachedAudioBatch } from '../shared/media/audio-types.ts';
 import type { VideoSample } from 'mediabunny';
 import { NativeAnalysisAdapter } from './analysis/native-adapter.ts';
-import type { MediaInfo, FrameInfo } from './model.ts';
+import type { MediaInfo, FrameInfo } from '../shared/review/model.ts';
 import { contextLog } from './log.ts';
 import { preferredVideoConfig } from './decoder-policy.ts';
 
 export interface DecodedFrame extends FrameInfo {
   presentedCommit?: number;
-  readonly sourcePicture?: import('./bitstream-analysis/contract.ts').SourcePictureKey;
+  readonly sourcePicture?: import('../shared/analysis/bitstream/contract.ts').SourcePictureKey;
   /** Filled only by the presenter after a successful paint; never decoder tags. */
-  presentation?: { requestedTarget: 'sdr' | 'hdr'; actualTarget: 'sdr' | 'hdr'; captureTarget: 'sdr'; executor: string; contract: string;
-    displayHdr: boolean; outputColorSpace: 'srgb' | 'display-p3'; outputFormat: 'unorm8' | 'float16'; toneMapping: 'standard' | 'extended'; fallbackReason?: string };
+  presentation?: import('../shared/review/model.ts').PresentationInfo;
   readonly description: FrameDescription;
   readonly copyMs?: number;
   readonly rotation?: number;
@@ -50,10 +49,10 @@ export interface MediaSource {
   /** Retained reference only; no analysis instance or IO until explicit request. */
   bitstreamFile?: Blob;
   /** Read-only confirmed packet frontier; starts metadata indexing, never seeks. */
-  getBitstreamIndex?(): Promise<import('./bitstream-analysis/stream.ts').AnalysisIndexFrontier>;
-  getBitstreamFfmpegIndex?(): Promise<import('./ffmpeg-index-cache.ts').FfmpegIndexDocument>;
-  getBitstreamFlvIndex?(): Promise<import("./flv-index-cache.ts").FlvIndexDocument>;
-  bitstreamIndexIdentity?: import('./media-index-identity.ts').MediaIndexIdentity;
+  getBitstreamIndex?(): Promise<import('../shared/analysis/bitstream/stream.ts').AnalysisIndexFrontier>;
+  getBitstreamFfmpegIndex?(): Promise<import('../shared/media/indexing/ffmpeg-index-cache.ts').FfmpegIndexDocument>;
+  getBitstreamFlvIndex?(): Promise<import("../shared/media/indexing/flv-index-cache.ts").FlvIndexDocument>;
+  bitstreamIndexIdentity?: import('../shared/media/indexing/media-index-identity.ts').MediaIndexIdentity;
   info: MediaInfo;
   /** Cache-only, bounded metadata inspection; never enables audio output. */
   requestCachedMetadata?(): void;
@@ -120,8 +119,8 @@ export interface MediaMeta { name: string; size: number; lastModified: number; }
 // Where opening failed decides whether the WASM fallback can help: container
 // and codec stages can (mediabunny/WebCodecs gaps); input and resource stages
 // cannot (a network error or an oversized file fails identically on retry).
-export { MediaOpenError } from './media-errors.ts';
-export type { OpenStage } from './media-errors.ts';
+export { MediaOpenError } from '../shared/media/io/media-errors.ts';
+export type { OpenStage } from '../shared/media/io/media-errors.ts';
 /** File and URL differ only in byte access. Container adapters are selected
  * once, before the shared native/software/reference policy is applied. */
 async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftware?: () => Promise<MediaSource>, onProgress?: MediaOpenProgress, signal?: AbortSignal): Promise<MediaSource> {
@@ -194,7 +193,7 @@ export async function openMedia(file: File, openFallback: ((file: File) => Promi
   return openInput({ file }, file, openFallback ? () => openFallback(file) : undefined, onProgress, signal);
 }
 
-export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallback: ((url: string, meta: MediaMeta) => Promise<MediaSource>) | undefined = undefined, onProgress?: MediaOpenProgress, signal?: AbortSignal, library?:import('./library-index-reference.ts').LibraryIndexReference): Promise<MediaSource> {
+export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallback: ((url: string, meta: MediaMeta) => Promise<MediaSource>) | undefined = undefined, onProgress?: MediaOpenProgress, signal?: AbortSignal, library?:import('../shared/media/io/library-reference-types.ts').LibraryIndexReference): Promise<MediaSource> {
   loadAborted(signal);
   if (!meta.size) {
     const head = await fetch(url, { method: 'HEAD', signal });

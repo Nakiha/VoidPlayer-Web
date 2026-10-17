@@ -6,7 +6,7 @@ try {
   const page=await browser.newPage({locale:'zh-CN'});page.on('console',m=>console.error(m.text()));page.on('pageerror',e=>console.error(e));await page.goto(process.env.BASE_URL??'http://127.0.0.1:5199');
   const result=await page.evaluate(async()=>{
     const {yuvFixture}=await import('/test/helpers/yuv-fixture.ts');
-    const {yuvToRgba}=await import('/src/yuv-color.ts');
+    const {yuvToRgba}=await import('/shared/color/yuv-color.ts');
     const {createYuvSurface}=await import('/src/yuv-surface.ts');
     const {createExternalSurface}=await import('/src/webgpu-color-surface.mjs');
     const {setPresentationChannel}=await import('/src/presentation-channel.ts');

@@ -1,7 +1,7 @@
 import type { FrameIndexJobs } from '../../server/frame-index-jobs.ts';
 import { frameIndexReply } from '../../server/frame-index-protocol.ts';
 import type { FrameIndexRequest, FrameIndexBatch } from '../../server/frame-index-protocol.ts';
-import { FLV_MEDIA_INDEX_IDENTITY as identity } from '../../src/media-index-identity.ts';
+import { FLV_MEDIA_INDEX_IDENTITY as identity } from '../../shared/media/indexing/media-index-identity.ts';
 
 // Compiled by build and node-frame-index-worker; never executed.
 export function frameIndexProtocolTypeChecks(jobs: FrameIndexJobs) {

@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { MediaLibraryIndex } from '../../server/library.ts';
-import { instantiateCore } from '../../src/wasm-core.ts';
+import { instantiateCore } from '../../shared/wasm/core.ts';
 import { createMediaServer } from '../../server/app.ts';
 import { openFFmpegMedia, openFFmpegContainerFromUrl } from '../../src/ffmpeg-media.ts';
 

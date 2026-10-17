@@ -1,13 +1,13 @@
-import { rgbaDescription } from '../../src/frame-description.ts';
+import { rgbaDescription } from '../../shared/media/frame-description.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ReviewSession } from '../../src/session.ts';
-import {getColorOutput,setColorOutput,defaultColorOutput} from '../../src/color-output.ts';
+import {getColorOutput,setColorOutput,defaultColorOutput} from '../../shared/color/color-output.ts';
 import {getColorMode,setColorMode,getReferenceDecode,setReferenceDecode} from '../../src/color-mode.ts';
-import { minFrameDurationUs, planBackwardStep, planForwardStep, regionValue, timeUs, SLOTS } from '../../src/model.ts';
+import { minFrameDurationUs, planBackwardStep, planForwardStep, regionValue, timeUs, SLOTS } from '../../shared/review/model.ts';
 import { reviewTools } from '../../src/agent.ts';
 import type { MediaSource } from '../../src/media.ts';
-import type { AnnotationDocument } from '../../src/annotation-record.ts';
+import type { AnnotationDocument } from '../../shared/review/annotation-record.ts';
 
 function deferred<T>() { let resolve!: (v: T) => void; const promise = new Promise<T>(r => resolve = r); return { promise, resolve }; }
 test('reference decoder changes reload tracks and roll back failed depth changes',async()=>{

@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { reviewTools } from '../../src/agent.ts';
 import { ReviewSession } from '../../src/session.ts';
 import { sessionLog } from '../../src/log.ts';
-import { rgbaDescription } from '../../src/frame-description.ts';
+import { rgbaDescription } from '../../shared/media/frame-description.ts';
 import type { MediaSource } from '../../src/media.ts';
-import type { AnalysisQuery } from '../../src/analysis/types.ts';
+import type { AnalysisQuery } from '../../shared/analysis/metadata/types.ts';
 
 function toolsWithSpy() {
   const calls: { method: string; args: unknown[] }[] = [];

@@ -4,7 +4,7 @@ import { localizedText, localizedAttribute, type LocalizedValue } from '../ui/li
 import { onLanguageChange, formatDate, formatNumber, t, th, msg } from '../i18n.ts';
 import { installChoiceMenu } from '../ui/choice-menu.ts';
 import { icon } from '../ui/icons.ts';
-import type { MeasurementResult, MeasurementKind } from '../../server/measurement.ts';
+import type { MeasurementResult, MeasurementKind } from '../../shared/service/measurement.ts';
 import type { LibraryEntry, LibraryPage } from '../library.ts';
 const kindLabels = (): Record<MeasurementKind, string> => ({ download: t(msg("admin.speedDownload", "下载速度")), upload: t(msg("admin.speedUpload", "上传速度")), storage: t(msg("admin.speedStorage", "服务器读取速度")), concurrent: t(msg("admin.speedConcurrent", "多路视频读取")) });
 const descriptionLabels = (): Record<MeasurementKind, string> => ({

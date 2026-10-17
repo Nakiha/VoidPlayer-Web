@@ -1,7 +1,7 @@
-import { MediaOpenError } from './media-errors.ts';
+import { MediaOpenError } from '../shared/media/io/media-errors.ts';
 import { ffmpegColorInfo } from './media-metadata.ts';
-import { rgbaDescription, validateDescription } from './frame-description.ts';
-import type { FrameDescription } from './frame-description.ts';
+import { rgbaDescription, validateDescription } from '../shared/media/frame-description.ts';
+import type { FrameDescription } from '../shared/media/frame-description.ts';
 export type WasmFrameOutput = { pts: number; duration: number; description: FrameDescription; pixels: ArrayBuffer; picture?: {au: number; stream: string; configuration: number} };
 export function requireFrameAbi(core: any): void {
   if (typeof core._vp_frame_info!=='function' || typeof core._vp_frame_format!=='function') throw new MediaOpenError('decode','WASM core 缺少完整帧描述接口，请同步当前锁定版本。');

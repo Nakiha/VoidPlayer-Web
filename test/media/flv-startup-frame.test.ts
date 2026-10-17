@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { FlvEngine } from '../../src/flv-engine.ts';
 import { FlvIndexClient } from '../../src/flv-index-client.ts';
-import { demuxFlv, FlvReader } from '../../src/flv-demux.ts';
+import { demuxFlv, FlvReader } from '../../shared/media/containers/flv-demux.ts';
 
 for (const finish of ['complete', 'dispose'] as const) test(`repeated native startup seeks stay independent of a blocked index and release retained frames on ${finish}`, async t => {
   let created = 0, closed = 0, submitted = 0, flushed = 0;

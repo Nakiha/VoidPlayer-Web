@@ -28,7 +28,7 @@ async function digest(root, names) {
   return hash.digest('hex');
 }
 export async function buildFingerprint(root) {
-  const bytes = await digest(root, ['src', 'locales', 'server', 'scripts', 'test', 'public', 'index.html', 'admin/index.html', 'package.json', 'package-lock.json', 'tsconfig.json', 'vite.config.ts']);
+  const bytes = await digest(root, ['src', 'shared', 'locales', 'server', 'scripts', 'test', 'public', 'index.html', 'admin/index.html', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.shared.json', 'vite.config.ts']);
   let revision = 'archive';
   try { revision = execFileSync('git', ['describe', '--always', '--dirty'], { cwd: root, encoding: 'utf8', stdio: 'pipe' }).trim(); } catch {}
   const configuration = Object.fromEntries(Object.entries(process.env).filter(([key]) => /^(VITE_|VOIDPLAYER_RELEASE_TAG$|NODE_ENV$|NODE_OPTIONS$)/.test(key)).sort(([a], [b]) => a.localeCompare(b)));

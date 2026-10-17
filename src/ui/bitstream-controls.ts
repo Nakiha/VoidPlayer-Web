@@ -1,10 +1,10 @@
 import { analysisRetryButton } from './analysis/retry.ts';
-import { SLOTS, formatTime } from '../model.ts';
-import type { Slot } from '../model.ts';
-import type { AnalysisBlock, ReadonlyAnalysisResult, PresentedFrameToken } from '../bitstream-analysis/contract.ts';
+import { SLOTS, formatTime } from '../../shared/review/model.ts';
+import type { Slot } from '../../shared/review/model.ts';
+import type { AnalysisBlock, ReadonlyAnalysisResult, PresentedFrameToken } from '../../shared/analysis/bitstream/contract.ts';
 import type { ReviewSession } from '../session.ts';
 import { t, msg } from '../i18n.ts';
-import { failureInfo, canRetryAnalysis } from '../bitstream-analysis/failure.ts';
+import { failureInfo, canRetryAnalysis } from '../../shared/analysis/bitstream/failure.ts';
 import { bitstreamReasonText } from './bitstream-reasons.ts';
 import { installChoiceMenu } from './choice-menu.ts';
 import { installNumericChoice } from './numeric-choice.ts';

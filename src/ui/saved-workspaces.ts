@@ -2,7 +2,7 @@ import { t, msg, th, onLanguageChange, formatDate } from '../i18n.ts';
 import { currentActor, identityHealth } from '../identity.ts';
 import { SavedWorkspaceClient } from '../saved-workspaces.ts';
 import type { SavedWorkspace } from '../saved-workspaces.ts';
-import type { WorkspaceFile } from '../workspace-file.ts';
+import type { WorkspaceFile } from '../../shared/review/workspace-file.ts';
 import { prepareSharedWorkspace } from '../shared-workspace.ts';
 import { icon } from './icons.ts';
 import { checkpointHistoryShell } from './checkpoint-history.ts';

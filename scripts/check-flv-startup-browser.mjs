@@ -7,7 +7,7 @@ import { resolutionFlv, prerollMp4 } from './flv-resolution-fixture.ts';
 import { openGopFlv } from './open-gop-fixture.ts';
 import { startupFixture } from './flv-startup-fixture.ts';
 import { chooseTestGuest } from './test-identity.mjs';
-import { formatTime } from '../src/model.ts';
+import { formatTime } from '../shared/review/model.ts';
 import { withinBrowserPhase, recordBrowserEvidence, saveBrowserFailure } from './browser-failure-evidence.mjs';
 const browserName = process.argv[2] ?? 'chromium';
 let browser, page, fixture, evidence;

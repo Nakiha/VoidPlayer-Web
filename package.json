@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/dev.ts",
-    "build": "npm run i18n:check && npm run check:boundaries && tsc --noEmit && vite build",
+    "build": "npm run i18n:check && npm run check:boundaries && npm run check:shared && tsc --noEmit && vite build",
     "icons:generate": "node scripts/make-icons.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "test": "node scripts/run-tests.mjs unit",
@@ -82,7 +82,8 @@
     "i18n:compile": "node scripts/i18n.mjs compile",
     "test:hdr:browser": "node scripts/run-tests.mjs --alias test:hdr:browser",
     "test:hdr:native": "node scripts/run-tests.mjs --alias test:hdr:native",
-    "check:boundaries": "node scripts/testing/module-boundaries.mjs"
+    "check:boundaries": "node scripts/testing/module-boundaries.mjs",
+    "check:shared": "tsc -p tsconfig.shared.json"
   },
   "dependencies": {
     "@messageformat/runtime": "3.0.2",

@@ -6,15 +6,15 @@ import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { Worker as NodeWorker } from 'node:worker_threads';
 import { execFileSync } from 'node:child_process';
-import { TsPacketSource, tsDecodeIndex, tsPictureStream, parseTsPacketIndex, TS_PACKET_BUILD } from '../../src/ts-packet-source.ts';
-import { RangeReader } from '../../src/range-reader.ts';
+import { TsPacketSource, tsDecodeIndex, tsPictureStream, parseTsPacketIndex, TS_PACKET_BUILD } from '../../shared/media/containers/ts-packet-source.ts';
+import { RangeReader } from '../../shared/media/io/range-reader.ts';
 import { PacketTimeline } from '../../src/packet-timeline.ts';
 import { wasmFlvDecoder } from '../../src/flv-decoder.ts';
 import { visiblePixelHash } from '../helpers/visible-pixels.ts';
 import {nativeFrames,nativeVisibleHash} from '../helpers/media/native-pixels.ts';
-import { openJsTsAnalysisInput } from '../../src/bitstream-analysis/js-ts-input.ts';
-import { analyzePicture } from '../../src/bitstream-analysis/runner.ts';
-import { pictureId } from '../../src/bitstream-analysis/contract.ts';
+import { openJsTsAnalysisInput } from '../../shared/analysis/bitstream/js-ts-input.ts';
+import { analyzePicture } from '../../shared/analysis/bitstream/runner.ts';
+import { pictureId } from '../../shared/analysis/bitstream/contract.ts';
 import { loadTsCore } from '../helpers/media/ts-analysis.ts';
 
 const version = 'js-ts-static-source-v1';
@@ -103,7 +103,7 @@ test('a serialized complete document in a fresh runtime rebuilds instead of trus
         try {const index=await source.open(workerData.index);parentPort.postMessage({reused:source.indexReused,packets:index.packets.length,bytes:source.bytesRead});}
         finally {source.close();parentPort.close();}
       })().catch(error=>{throw error;});
-    `,{eval:true,workerData:{bytes,index,version,module:pathToFileURL(resolve('src/ts-packet-source.ts')).href}});
+    `,{eval:true,workerData:{bytes,index,version,module:pathToFileURL(resolve('shared/media/containers/ts-packet-source.ts')).href}});
     const result=await new Promise<{reused:boolean;packets:number;bytes:number}>((resolve,reject)=>{
       timer=setTimeout(()=>reject(new Error('fresh-runtime verification timed out')),15000);
       worker!.once('message',resolve);worker!.once('error',reject);
@@ -137,8 +137,8 @@ test('analysis retains verified clone authority after the playback original is c
     import assert from 'node:assert/strict';
     import {readFile} from 'node:fs/promises';
     import {setImmediate} from 'node:timers/promises';
-    import {TsPacketSource} from './src/ts-packet-source.ts';
-    import {openJsTsAnalysisInput} from './src/bitstream-analysis/js-ts-input.ts';
+    import {TsPacketSource} from './shared/media/containers/ts-packet-source.ts';
+    import {openJsTsAnalysisInput} from './shared/analysis/bitstream/js-ts-input.ts';
     const bytes=await readFile('fixtures/ts-analysis/h264-static.ts');
     let weak,input;
     await(async()=>{

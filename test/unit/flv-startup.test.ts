@@ -1,11 +1,11 @@
 import type { PacketCommands } from '../../src/worker-protocol.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { demuxFlv, scanFlv, FlvReader } from '../../src/flv-demux.ts';
-import { serializeFlvIndex, parseFlvIndex } from '../../src/flv-index-cache.ts';
+import { demuxFlv, scanFlv, FlvReader } from '../../shared/media/containers/flv-demux.ts';
+import { serializeFlvIndex, parseFlvIndex } from '../../shared/media/indexing/flv-index-cache.ts';
 import { WorkerRpc } from '../../src/ffmpeg-media.ts';
 
-import { syntheticFlv } from '.././flv-fixture.ts';
+import { syntheticFlv } from '../flv-fixture.ts';
 
 test('FLV startup stops at one packet; background scan resumes and produces the exact full index', async () => {
   const file = new Blob([syntheticFlv()]); const reader = new FlvReader({ file });
@@ -90,7 +90,7 @@ test('a timed-out multithread decoder reuses the startup checkpoint without rest
 
 test('background index failure during a yielded frame rejects playback instead of reporting EOF', async t => {
   const { openPacketMedia } = await import('../../src/packet-media.ts');
-  const { rgbaDescription } = await import('../../src/frame-description.ts');
+  const { rgbaDescription } = await import('../../shared/media/frame-description.ts');
   const saved = Object.getOwnPropertyDescriptor(globalThis, 'document');
   Object.defineProperty(globalThis, 'document', { configurable: true, value: { baseURI: 'https://example.invalid/' } });
   t.after(() => { if (saved) Object.defineProperty(globalThis, 'document', saved); else Reflect.deleteProperty(globalThis, 'document'); });
@@ -129,7 +129,7 @@ test('scanner publishes immutable validated prefixes while the next range is blo
   let release!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });
   reader.read = async (offset, size) => { if (offset > 65536) await gate; return read(offset, size); };
-  const prefixes: import('../../src/flv-demux.ts').FlvCheckpoint[] = [];
+  const prefixes: import('../../shared/media/containers/flv-demux.ts').FlvCheckpoint[] = [];
   const scan = scanFlv(reader, undefined, startup, false, prefix => prefixes.push(prefix));
   try {
     await new Promise(resolve => setTimeout(resolve, 650));

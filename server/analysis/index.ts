@@ -1,10 +1,10 @@
-import {parseJsPacketIndex} from '../../src/js-packet-index-cache.ts';
-import type {JsPacketIndex} from '../../src/matroska-packet-index.ts';
-import { parseFlvIndex, FLV_INDEX_BYTES } from '../../src/flv-index-cache.ts';
+import { parseJsPacketIndex } from '../../shared/media/indexing/js-packet-index-parser.ts';
+import type {JsPacketIndex} from '../../shared/media/containers/matroska-packet-index.ts';
+import { parseFlvIndex, FLV_INDEX_BYTES } from '../../shared/media/indexing/flv-index-cache.ts';
 import type { MediaLibraryIndex } from '../library.ts';
-import type { MediaIndexIdentity } from '../../src/media-index-identity.ts';
-import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_BYTES, parseFfmpegIndex } from '../../src/ffmpeg-index-cache.ts';
-import { AnalysisFailure } from '../../src/bitstream-analysis/failure.ts';
+import type { MediaIndexIdentity } from '../../shared/media/indexing/media-index-identity.ts';
+import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_BYTES, parseFfmpegIndex } from '../../shared/media/indexing/ffmpeg-index-cache.ts';
+import { AnalysisFailure } from '../../shared/analysis/bitstream/failure.ts';
 
 /** A separate read-only subscriber to the shared streaming index. Presentation
  * records may be reordered: only a contiguous AU prefix is safe for decoding. */
@@ -16,7 +16,7 @@ export async function libraryAnalysisIndex(library: MediaLibraryIndex, id: strin
   let buildError: unknown;
   let jsDocument:JsPacketIndex|undefined;
   let flvPrefix = 0, flvComplete = false;
-  let flvDocument: import("../../src/flv-index-cache.ts").FlvIndexDocument | undefined;
+  let flvDocument: import("../../shared/media/indexing/flv-index-cache.ts").FlvIndexDocument | undefined;
   const build = library.indexJobs.startBuild({ id, version, size: metadata.size, filePath, epoch, identity }, {
     onProgress(progress) {
       // Shared FLV scanner publishes only append-only validated source packets.

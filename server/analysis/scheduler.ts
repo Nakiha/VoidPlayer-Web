@@ -1,8 +1,9 @@
-import {validateDemandPlan} from '../../src/bitstream-analysis/demand.ts';
-import type {DemandPlan} from '../../src/bitstream-analysis/demand.ts';
-import { analysisIndexIdentity, isProduct, isSummary, validateOutput, productKey, metadata, metadataBudgetBytes, PRODUCT_LIMIT, encodeProduct } from '../../src/bitstream-analysis/products.ts';
-import type { AnalysisOutput } from '../../src/bitstream-analysis/products.ts';
-import { FLV_MEDIA_INDEX_IDENTITY, JS_TS_MEDIA_INDEX_IDENTITY,JS_MATROSKA_MEDIA_INDEX_IDENTITY } from '../../src/media-index-identity.ts';
+import type {AnalysisResources} from '../../shared/service/admin.ts';
+import {validateDemandPlan} from '../../shared/analysis/bitstream/demand.ts';
+import type {DemandPlan} from '../../shared/analysis/bitstream/demand.ts';
+import { analysisIndexIdentity, isProduct, isSummary, validateOutput, productKey, metadata, metadataBudgetBytes, PRODUCT_LIMIT, encodeProduct } from '../../shared/analysis/bitstream/products.ts';
+import type { AnalysisOutput } from '../../shared/analysis/bitstream/products.ts';
+import { FLV_MEDIA_INDEX_IDENTITY, JS_TS_MEDIA_INDEX_IDENTITY,JS_MATROSKA_MEDIA_INDEX_IDENTITY } from '../../shared/media/indexing/media-index-identity.ts';
 import { DEFAULT_ANALYSIS_CONCURRENCY, validAnalysisConcurrency, ANALYSIS_WORKER_HEAP_BYTES } from './limits.ts';
 import { Worker } from "node:worker_threads";
 import { randomUUID, createHash } from "node:crypto";
@@ -17,27 +18,27 @@ import {
   validateRange,
   validateStream,
   pictureId,
-} from "../../src/bitstream-analysis/contract.ts";
+} from "../../shared/analysis/bitstream/contract.ts";
 import type {
   AnalysisResult,
   AnalysisTarget,
   AnalysisRangeTarget,
   AnalysisStreamTarget,
-} from "../../src/bitstream-analysis/contract.ts";
+} from "../../shared/analysis/bitstream/contract.ts";
 import { libraryAnalysisIndex } from "./index.ts";
 import { AnalysisStore } from "./store.ts";
 import {
   AnalysisFailure,
   failureInfo,
   restoreFailure,
-} from "../../src/bitstream-analysis/failure.ts";
-import type { AnalysisFailureInfo } from "../../src/bitstream-analysis/failure.ts";
+} from "../../shared/analysis/bitstream/failure.ts";
+import type { AnalysisFailureInfo } from "../../shared/analysis/bitstream/failure.ts";
 import type { MediaLibraryIndex } from "../library.ts";
 declare const VOIDPLAYER_COMPILED: boolean;
 import type { StreamChunkRef } from './store.ts';
-import type { StreamProgress } from '../../src/bitstream-analysis/stream.ts';
+import type { StreamProgress } from '../../shared/analysis/bitstream/stream.ts';
 type Work = {
-  counters?:import("../../src/bitstream-analysis/counters.ts").AnalysisCounters;
+  counters?:import("../../shared/analysis/bitstream/counters.ts").AnalysisCounters;
   plan?:DemandPlan;
   published: number;
   pending: StreamChunkRef[];
@@ -85,7 +86,7 @@ export class AnalysisScheduler {
     // Reductions only affect future admission; existing workers keep their slots.
     this.pump();
   }
-  resources() {
+  resources(): AnalysisResources {
     return { concurrency: this.concurrency, running: this.running.size, queued: [...this.work.values()].filter(work => work.state === "queued").length };
   }
   private pendingSubmissions = 0;
@@ -371,7 +372,7 @@ export class AnalysisScheduler {
     return files;
   }
   private outputFile(work:Work,id:string) { return work.target.product ? this.store.productFile(id) : this.store.chunkFile(id); }
-  private pictureChunk(work:Work,picture:import('../../src/bitstream-analysis/contract.ts').SourcePictureKey) {
+  private pictureChunk(work:Work,picture:import('../../shared/analysis/bitstream/contract.ts').SourcePictureKey) {
     if (work.target.product) {
       const member = work.target.product === 'summary' ? {...picture,au:Math.floor(picture.au/32)*32} : picture;
       return createHash('sha256').update(productKey(member,work.buildId,work.target.indexIdentity ?? null,work.target.product)).digest('hex');

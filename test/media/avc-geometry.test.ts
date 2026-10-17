@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {Input,BlobSource,ALL_FORMATS} from 'mediabunny';
-import {avcGeometry,nativeAvcCompatible} from '../../src/avc-geometry.ts';
+import {avcGeometry,nativeAvcCompatible} from '../../shared/media/codecs/avc-geometry.ts';
 for(const [file,interlaced,reorder,height] of [
   ['h264--h264_4bf_pyramid_nobsrestriction.mp4',false,null,240],
   ['h264--interlaced_crop.mp4',true,2,360],
@@ -17,7 +17,7 @@ for(const [file,interlaced,reorder,height] of [
 });
 
 test('AVC key chunks require IDR NALs, not a container recovery flag', async () => {
-  const { avcHasIdr } = await import('../../src/avc-geometry.ts');
+  const { avcHasIdr } = await import('../../shared/media/codecs/avc-geometry.ts');
   for (const lengthBytes of [1, 2, 4]) {
     const description = Uint8Array.of(1, 100, 0, 31, lengthBytes - 1, 0, 0);
     const packet = new Uint8Array(lengthBytes + 1); packet[lengthBytes - 1] = 1;

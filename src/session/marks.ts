@@ -1,10 +1,10 @@
-import { annotationMediaKey } from '../annotation-record.ts';
-import type { AnnotationDocument } from '../annotation-record.ts';
-import { drawingsValue } from '../annotation.ts';
-import { regionValue, slotValue } from '../model.ts';
-import type { FrameInfo, Mark, MediaInfo, Slot } from '../model.ts';
-import { randomUUID } from '../uuid.ts';
-import { discussionValue } from '../mark-discussion.ts';
+import { annotationMediaKey } from '../../shared/review/annotation-record.ts';
+import type { AnnotationDocument } from '../../shared/review/annotation-record.ts';
+import { drawingsValue } from '../../shared/review/annotation.ts';
+import { regionValue, slotValue } from '../../shared/review/model.ts';
+import type { FrameInfo, Mark, MediaInfo, Slot } from '../../shared/review/model.ts';
+import { randomUUID } from '../../shared/utils/uuid.ts';
+import { discussionValue } from '../../shared/review/mark-discussion.ts';
 
 /** Pure mark helpers shared by UI and Agent through ReviewSession. No decoder/clock access. */
 

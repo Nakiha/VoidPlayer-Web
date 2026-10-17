@@ -1,6 +1,6 @@
 import { t, th, getLocaleRevision, msg } from '../i18n.ts';
 import { icon } from './icons.ts';
-import type { ColorMode } from '../color-mode.ts';
+import type { ColorMode } from '../../shared/color/decode-policy-types.ts';
 
 type Node = [Parameters<typeof icon>[0], string, string];
 const connector = '<svg class="color-flow-connector color-flow-connector-horizontal" viewBox="0 0 60 12" aria-hidden="true" focusable="false"><path d="M1 6H13M47 6H59M55 2L59 6L55 10" /></svg><svg class="color-flow-connector color-flow-connector-vertical" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 1V15M4 11L8 15L12 11" /></svg>';

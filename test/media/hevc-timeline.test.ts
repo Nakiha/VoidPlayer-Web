@@ -3,16 +3,16 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { Input, BlobSource, ALL_FORMATS, EncodedPacketSink } from 'mediabunny';
-import { RangeReader } from '../../src/range-reader.ts';
-import { readMp4Configurations } from '../../src/mp4-config.ts';
-import { HevcPictureOrder, hevcDisplayOrder, recoveredHevcTimes } from '../../src/hevc-timeline.ts';
+import { RangeReader } from '../../shared/media/io/range-reader.ts';
+import { readMp4Configurations } from '../../shared/media/containers/mp4-config.ts';
+import { HevcPictureOrder, hevcDisplayOrder, recoveredHevcTimes } from '../../shared/media/codecs/hevc-timeline.ts';
 import { Mp4Engine } from '../../src/mp4-engine.ts';
 import { wasmFlvDecoder } from '../../src/flv-decoder.ts';
 
 const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 test('HEVC recovery agrees with native FFmpeg picture order and preserves every frame through seeks', {timeout:120000}, async () => {
   const bytes = await readFile(new URL('../../fixtures/video/h265_10s_1920x1080.mp4',import.meta.url));
-  const oracle = JSON.parse(await readFile(new URL('.././hevc-order-reference.json',import.meta.url),'utf8'));
+  const oracle = JSON.parse(await readFile(new URL('../hevc-order-reference.json',import.meta.url),'utf8'));
   assert.equal(hash(bytes),oracle.sha256);
   const blob = new Blob([bytes]), reader = new RangeReader({file:blob});
   const input = new Input({source:new BlobSource(blob),formats:ALL_FORMATS});
@@ -23,7 +23,7 @@ test('HEVC recovery agrees with native FFmpeg picture order and preserves every 
   assert.equal(await hevcDisplayOrder(reader,{...configs,compositionOffsets:configs.compositionOffsets!.map((_,i)=>i?1:0)}),null);
   await assert.rejects(hevcDisplayOrder({read:async()=>{throw Error('network failure');}},configs),/network failure/);
   assert.equal(await hevcDisplayOrder(reader,{...configs,sampleSizes:[1,...configs.sampleSizes!.slice(1)]}),null);
-  const core = new URL('../../public/vendor/voidplayer-core/',import.meta.url);
+  const core = new URL('../../public/vendor/voidplayer-core',import.meta.url);
   const glue = new URL('voidplayer-core.js',core).href, wasm = await readFile(new URL('voidplayer-core.wasm',core));
   const raw = await wasmFlvDecoder({codec:'hevc',description:configs.descriptions[0]},glue,wasm);
   const reference:string[]=[];

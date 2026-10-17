@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { containerFromHeader, probeContainer } from '../../src/container-probe.ts';
 import { openMediaPlan } from '../../src/media-policy.ts';
-import { MediaOpenError } from '../../src/media-errors.ts';
+import { MediaOpenError } from '../../shared/media/io/media-errors.ts';
 import type { MediaOpenPlan } from '../../src/media-policy.ts';
 import type { MediaSource } from '../../src/media.ts';
 

@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { RangeReader } from '../../src/range-reader.ts';
+import { RangeReader } from '../../shared/media/io/range-reader.ts';
 import { FlvCachedAudio, aacConfig } from '../../src/flv-cached-audio.ts';
 import { OpportunisticAudio } from '../../src/opportunistic-audio.ts';
-import type { FlvIndex } from '../../src/flv-demux.ts';
+import type { FlvIndex } from '../../shared/media/containers/flv-demux.ts';
 import type { MediaSource } from '../../src/media.ts';
-import type { CachedAudioBatch } from '../../src/audio-types.ts';
+import type { CachedAudioBatch } from '../../shared/media/audio-types.ts';
 import { CachedContainerAudio } from '../../src/cached-container-audio.ts';
 import { ObservedBytes } from '../../src/observed-bytes.ts';
 import { TsCachedAudio } from '../../src/ts-cached-audio.ts';

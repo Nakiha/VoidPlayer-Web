@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {chromaOffset,yuvReconstructedSample,type YuvLayout} from '../../src/yuv-color.ts';
+import {chromaOffset,yuvReconstructedSample,type YuvLayout} from '../../shared/color/yuv-color.ts';
 test('chroma reconstruction respects left/center siting and clamps to valid samples',()=>{
  const l:YuvLayout={bitDepth:8,bitShift:0,subsampleX:1,subsampleY:1,semiplanar:false,chromaLocation:1,planes:[{offset:0,stride:4,width:4,height:2},{offset:8,stride:2,width:2,height:1},{offset:10,stride:2,width:2,height:1}]};
  const data=new Uint8Array([100,100,100,100,100,100,100,100,64,192,128,128]);

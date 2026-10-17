@@ -1,5 +1,5 @@
-import type { Slot } from '../../model.ts';
-import type { AnalysisCapability, AnalysisResult } from '../../analysis/types.ts';
+import type { Slot } from '../../../shared/review/model.ts';
+import type { AnalysisCapability, AnalysisResult } from '../../../shared/analysis/metadata/types.ts';
 import { buildInspection } from '../../analysis/inspection.ts';
 import type { DirectTarget, InspectionState } from '../../analysis/inspection.ts';
 import type { AnalysisGlyph } from '../analysis-geometry.ts';

@@ -1,8 +1,10 @@
-import {MediaOpenError} from './media-errors.ts';
+import type {LibraryIndexReference} from '../shared/media/io/library-reference-types.ts';
+export type {LibraryIndexReference} from '../shared/media/io/library-reference-types.ts';
+import {MediaOpenError} from '../shared/media/io/media-errors.ts';
 
 /** A reference carried only by the library loading path. Its fields are not
  * proof: each consumer verifies the application's own origin and metadata. */
-export interface LibraryIndexReference {origin:string;id:string;version:string;}
+
 export function ownLibraryIndexReference(id:string,version:string):LibraryIndexReference {
   const origin=globalThis.location?.origin;
   if(!origin||!/^https?:$/.test(new URL(origin).protocol)||!/^[0-9a-f]{24}$/.test(id)||!version)

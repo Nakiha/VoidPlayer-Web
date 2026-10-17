@@ -1,17 +1,18 @@
-import { emptyCounters, countCore, countProduct } from './counters.ts';
-import { analysisIndexIdentity, isProduct } from './products.ts';
-import type { AnalysisOutput } from './products.ts';
+import {loadLocalJsIndex,saveLocalJsIndex} from '../js-packet-index-cache.ts';
+import { emptyCounters, countCore, countProduct } from '../../shared/analysis/bitstream/counters.ts';
+import { analysisIndexIdentity, isProduct } from '../../shared/analysis/bitstream/products.ts';
+import type { AnalysisOutput } from '../../shared/analysis/bitstream/products.ts';
 import { coreAssetUrl } from '../core-url.ts';
-import { validateAnalysisCore } from './core-abi.ts';
-import { RangeReader } from "../range-reader.ts";
-import { analyzePicture, analyzeRange, analyzeStream } from "./runner.ts";
-import { failureInfo } from "./failure.ts";
-let snapshotReply: ((value: import("./types.ts").AnalysisIndexSnapshot) => void) | undefined;
+import { validateAnalysisCore } from '../../shared/analysis/bitstream/core-abi.ts';
+import { RangeReader } from "../../shared/media/io/range-reader.ts";
+import { analyzePicture, analyzeRange, analyzeStream } from "../../shared/analysis/bitstream/runner.ts";
+import { failureInfo } from "../../shared/analysis/bitstream/failure.ts";
+let snapshotReply: ((value: import("../../shared/analysis/bitstream/types.ts").AnalysisIndexSnapshot) => void) | undefined;
 let cacheReply: ((value: AnalysisOutput | null) => void) | undefined;
 const cachedResults = new Set<string>();
 let pendingCacheKey="";
 let acknowledgement: ((accepted:boolean) => void) | undefined;
-let indexReply: ((index: import('./stream.ts').AnalysisIndexFrontier) => void) | undefined;
+let indexReply: ((index: import('../../shared/analysis/bitstream/stream.ts').AnalysisIndexFrontier) => void) | undefined;
 const scope = globalThis as unknown as {
   onmessage: (event: MessageEvent) => void;
   postMessage: (data: unknown, transfer?: Transferable[]) => void;
@@ -41,12 +42,13 @@ scope.onmessage = async ({ data }) => {
       validateAnalysisCore(core);
       counters.init++; counters.initMs+=performance.now()-initStarted; return countCore(core,counters);
     };
-    const snapshot = () => new Promise<import('./types.ts').AnalysisIndexSnapshot>(resolve => {
+    const snapshot = () => new Promise<import('../../shared/analysis/bitstream/types.ts').AnalysisIndexSnapshot>(resolve => {
       snapshotReply = resolve; scope.postMessage({event:'snapshot'});
     });
     const makeReader = () => {
       return Object.assign(new RangeReader({file:data.file}), {
-        ...(data.externalSnapshot ? {flvIndex: async () => await snapshot() as import('../flv-index-cache.ts').FlvIndexDocument} : {}),
+        indexCache: {load:loadLocalJsIndex,save:saveLocalJsIndex},
+        ...(data.externalSnapshot ? {flvIndex: async () => await snapshot() as import('../../shared/media/indexing/flv-index-cache.ts').FlvIndexDocument} : {}),
       });
     };
     if (data.target.mode === 'stream' || 'startUs' in data.target) {

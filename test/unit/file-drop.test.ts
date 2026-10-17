@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { bindFileDrop, dropSlots } from '../../src/file-drop.ts';
-import type { Slot } from '../../src/model.ts';
+import type { Slot } from '../../shared/review/model.ts';
 
 test('file drop targets explicit tracks, fills empty slots, and rejects overflow before loading', () => {
   assert.deepEqual(dropSlots(1, []), ['A']);

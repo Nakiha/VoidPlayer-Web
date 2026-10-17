@@ -1,4 +1,4 @@
-import type { Mark } from '../model.ts';
+import type { Mark } from '../../shared/review/model.ts';
 export const thumbnailSignature = (mark: Mark) => JSON.stringify([mark.frame, mark.text, mark.drawings ?? []]);
 /** Session-only preview cache shared by the editor, list and seek tooltip.
  * No DOM dependencies, persistence or media decoding on read. */

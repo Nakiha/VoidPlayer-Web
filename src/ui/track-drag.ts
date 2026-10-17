@@ -1,5 +1,5 @@
 import { nearestTrackIndex } from './workspace-state.ts';
-import type { Slot } from '../model.ts';
+import type { Slot } from '../../shared/review/model.ts';
 import type { ReviewSession } from '../session.ts';
 
 /** Pointer sorting also works on touch devices; buttons keep their own action. */

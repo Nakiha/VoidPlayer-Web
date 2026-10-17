@@ -1,6 +1,6 @@
 import { sourceKey } from './ui/source-catalog.ts';
-import { matchMediaIdentity } from './media-identity.ts';
-import type { LocalAccessProblem } from './source-access.ts';
+import { matchMediaIdentity } from '../shared/media/io/media-identity.ts';
+import type { LocalAccessProblem } from '../shared/media/io/source-access.ts';
 
 /** Persistent local-file access via File System Access handles.
  *

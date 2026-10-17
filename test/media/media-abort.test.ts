@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { getEventListeners } from 'node:events';
-import { abortableWait } from '../../src/media-abort.ts';
+import { abortableWait } from '../../shared/media/io/media-abort.ts';
 import { firstDecodableSample, MediaOpenError } from '../../src/media.ts';
 import type { VideoSample } from 'mediabunny';
 import { openFFmpegMedia } from '../../src/ffmpeg-media.ts';

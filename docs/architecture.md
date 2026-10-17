@@ -1,5 +1,13 @@
 # 架构与行为边界
 
+## 模块与宿主边界
+
+`shared/` 保存浏览器与服务端共用的媒体解析、索引、分析计算和数据契约，按领域分目录。`src/` 拥有浏览器资源与交互；`server/` 拥有文件系统、数据库和 HTTP 服务。两类宿主都可引用共享层，不能互相引用；类型引用也遵守同一规则。
+
+`npm run check:boundaries` 检查静态导入、类型引用、重新导出、字面量动态加载和 Worker URL，拒绝缺失入口及共享层的宿主依赖。共享层不允许计算式模块加载，包依赖仅准入可在两个宿主执行的 Mediabunny。`npm run check:shared` 在没有 DOM 类型的环境中编译共享层；边界负例和真实工程检查均进入 fast/source 与构建。
+
+共享分析引擎通过 `AnalysisReader.indexCache` 使用可选的宿主缓存接口；浏览器 Worker 接入 IndexedDB，服务端使用自身已验证的索引。共享实现不创建浏览器存储、VideoFrame 或 Canvas。WebAssembly 的局部类型契约仅描述两个宿主共用的标准接口，不向工程安装 DOM 全局类型。构建指纹、前端来源摘要和发布源码包均包含 `shared/`。
+
 ## 会话与时间
 
 `src/session.ts` 的 `ReviewSession` 是 UI 与 Agent 共用的行为入口。轨道为 A–H，时间单位是整数微秒，每个片源首个视频时间戳归零后再应用轨道偏移。
@@ -19,9 +27,9 @@ FFmpeg 容器回退原本就调用 `vp_index_build` 扫描包建立 PTS/时长�
 | 路径 | 入口 | 边界 |
 | --- | --- | --- |
 | WebCodecs | `src/media.ts` | Mediabunny 解封装，通过文件或 HTTP Range 读取；浏览器负责支持的编码组合 |
-| MP4 压缩包 | `src/mp4-engine.ts`、`src/hevc-timeline.ts`、`src/packet-media.ts`、`src/packet-worker.ts` | TS 读取包索引，按 GOP 读取压缩数据；缺失重排时间的 HEVC 可恢复显示序并继续 WebCodecs，其余包回退由 WASM 解码 |
+| MP4 压缩包 | `src/mp4-engine.ts`、`shared/media/codecs/hevc-timeline.ts`、`src/packet-media.ts`、`src/packet-worker.ts` | TS 读取包索引，按 GOP 读取压缩数据；缺失重排时间的 HEVC 可恢复显示序并继续 WebCodecs，其余包回退由 WASM 解码 |
 | FFmpeg 解封装回退 | `src/ffmpeg-media.ts`、`src/ffmpeg-worker.ts` | 仅用于尚不能用 TS 压缩包路径处理的文件；本地 Blob AVIO、远程 Range AVIO，不在浏览器整文件下载或写入 MEMFS；Node 本地文件测试仍有 512 MiB 上限 |
-| FLV | `src/flv-media.ts`、`src/flv-engine.ts`、`src/flv-demux.ts`、`src/flv-decoder.ts` | Worker 内分块/Range 解封装，WebCodecs 或 packet-only WASM 解码；不使用整文件 MEMFS |
+| FLV | `src/flv-media.ts`、`src/flv-engine.ts`、`shared/media/containers/flv-demux.ts`、`src/flv-decoder.ts` | Worker 内分块/Range 解封装，WebCodecs 或 packet-only WASM 解码；不使用整文件 MEMFS |
 
 FLV 支持标准 AVC、legacy HEVC、private AV1/VVC，以及单轨 Enhanced FLV 的 avc1/hvc1/av01/vvc1。重复配置头可接受；支持从关键帧开始的同编码配置与分辨率切换，按配置段解码、drain 和定位，显示帧提交时才更新尺寸。中途更换编码种类、切换缺少关键帧、多轨 Enhanced FLV 和不支持的编码会返回诊断。它是可定位的文件播放器，不是 HTTP-FLV/RTMP 直播客户端。
 

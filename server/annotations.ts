@@ -5,8 +5,8 @@ import { openIndexDatabase } from './sqlite.ts';
 import { AdminError } from './admin-error.ts';
 import type { CacheEntry } from './caches.ts';
 import type { Actor } from './identity.ts';
-import { annotationAnchor, parseAnnotationDocument } from '../src/annotation-record.ts';
-import type { AnnotationOperation, AnnotationRecord, AnnotationPage } from '../src/annotation-record.ts';
+import { annotationAnchor, parseAnnotationDocument } from '../shared/review/annotation-record.ts';
+import type { AnnotationOperation, AnnotationRecord, AnnotationPage } from '../shared/review/annotation-record.ts';
 
 const validId = (id: unknown): id is string => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,200}$/.test(id);
 export const ANNOTATION_BYTES = 512 * 1024;

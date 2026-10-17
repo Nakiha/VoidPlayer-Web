@@ -1,7 +1,7 @@
 import { t, msg } from '../../i18n.ts';
-import { canRetryAnalysis } from '../../bitstream-analysis/failure.ts';
+import { canRetryAnalysis } from '../../../shared/analysis/bitstream/failure.ts';
 import type { DeepAnalysisState } from '../../bitstream-analysis/service.ts';
-import type { Slot } from '../../model.ts';
+import type { Slot } from '../../../shared/review/model.ts';
 import { createIconButton } from '../controls.ts';
 
 /** Explicit recovery is separate from visibility and automatic admission. */

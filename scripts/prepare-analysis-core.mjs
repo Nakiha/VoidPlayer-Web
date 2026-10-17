@@ -1,6 +1,6 @@
 import {verifyCoreCapabilities} from './core-capabilities.mjs';
 import { pathToFileURL } from 'node:url';
-import { validateAnalysisCore } from '../src/bitstream-analysis/core-abi.ts';
+import { validateAnalysisCore } from '../shared/analysis/bitstream/core-abi.ts';
 import { readFile, mkdir, cp, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";

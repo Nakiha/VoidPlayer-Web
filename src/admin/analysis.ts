@@ -1,10 +1,8 @@
 import { th, t, msg } from '../i18n.ts';
 import { localizedText, type LocalizedValue } from '../ui/live-localization.ts';
 import { rootReason, requestError } from './diagnostics.ts';
-import type { AdminController } from '../../server/admin.ts';
+import type {AnalysisSettings as Settings,AnalysisResources as Resources} from '../../shared/service/admin.ts';
 
-type Settings = Awaited<ReturnType<AdminController['analysisSettings']>>;
-type Resources = ReturnType<AdminController['analysis']['resources']>;
 export function analysisSettingsShell() {
   return `<form id="analysis-resources" class="admin-panel">
     <h2>${th(msg('admin.analysisResources', '分析资源'))}</h2>

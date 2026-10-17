@@ -7,9 +7,9 @@ import { MediaLibraryIndex } from '../../server/library.ts';
 import { AdminController } from '../../server/admin.ts';
 import { loadConfig } from '../../server/config.ts';
 import { createMediaServer } from '../../server/app.ts';
-import { demuxFlv, FlvReader } from '../../src/flv-demux.ts';
-import { serializeFlvIndex } from '../../src/flv-index-cache.ts';
-import { syntheticFlv } from '.././flv-fixture.ts';
+import { demuxFlv, FlvReader } from '../../shared/media/containers/flv-demux.ts';
+import { serializeFlvIndex } from '../../shared/media/indexing/flv-index-cache.ts';
+import { syntheticFlv } from '../flv-fixture.ts';
 
 test('shared frame indexes persist, respect versions and clear permissions, and expire only for confirmed removal', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'vp-frame-index-'));

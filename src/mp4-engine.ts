@@ -1,16 +1,17 @@
 import type { MediaOpenProgress } from './media-progress.ts';
 import { Input, CustomSource, MP4, QTFF, EncodedPacketSink } from 'mediabunny';
 import type { EncodedPacket } from 'mediabunny';
-import {avcGeometry} from './avc-geometry.ts';
-import { MediaOpenError } from './media-errors.ts';
-import { RangeReader } from './range-reader.ts';
+import {avcGeometry} from '../shared/media/codecs/avc-geometry.ts';
+import { MediaOpenError } from '../shared/media/io/media-errors.ts';
+import { RangeReader } from '../shared/media/io/range-reader.ts';
 import { Mp4CachedMetadata } from './mp4-cached-metadata.ts';
-import type { RandomAccessInput } from './range-reader.ts';
-import { readMp4Configurations, validateFragmentPacket } from './mp4-config.ts';
+import type { RandomAccessInput } from '../shared/media/io/range-reader.ts';
+import { readMp4Configurations, validateFragmentPacket } from '../shared/media/containers/mp4-config.ts';
 import { wasmPacketDecoder, nativePacketDecoder } from './flv-decoder.ts';
-import type { PacketDecodeIndex, PacketDecoder, PacketFrame } from './flv-decoder.ts';
-import { hevcDisplayOrder, recoveredHevcTimes } from './hevc-timeline.ts';
-import type { FlvCodec, FlvIndex, FlvPacket } from './flv-demux.ts';
+import type { PacketDecoder, PacketFrame } from './flv-decoder.ts';
+import type { PacketDecodeIndex } from '../shared/media/indexing/packet-decode-index.ts';
+import { hevcDisplayOrder, recoveredHevcTimes } from '../shared/media/codecs/hevc-timeline.ts';
+import type { FlvCodec, FlvIndex, FlvPacket } from '../shared/media/containers/flv-demux.ts';
 import { PacketTimeline } from './packet-timeline.ts';
 
 /** Packet tables are decode anchors; actual output frames own display time. */

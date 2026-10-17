@@ -6,17 +6,17 @@ import {tmpdir} from 'node:os';
 import {pathToFileURL} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import {JsContainerEngine} from '../../src/js-container-engine.ts';
-import {openJsPacketAnalysisInput} from '../../src/bitstream-analysis/js-ts-input.ts';
-import {analyzePicture} from '../../src/bitstream-analysis/runner.ts';
-import {jsPictureStream} from '../../src/matroska-packet-index.ts';
+import {openJsPacketAnalysisInput} from '../../shared/analysis/bitstream/js-ts-input.ts';
+import {analyzePicture} from '../../shared/analysis/bitstream/runner.ts';
+import {jsPictureStream} from '../../shared/media/containers/matroska-packet-index.ts';
 import {loadTsCore} from '../helpers/media/ts-analysis.ts';
 import {nativeFrames,nativeVisibleHash} from '../helpers/media/native-pixels.ts';
 import {visiblePixelHash} from '../helpers/visible-pixels.ts';
-import type {MatroskaPacketIndex} from '../../src/matroska-packet-index.ts';
-import {MatroskaPacketSource} from '../../src/matroska-packet-source.ts';
-import {TsCombinationNotMigrated} from '../../src/ts-packet-source.ts';
-import {RangeReader} from '../../src/range-reader.ts';
-import {MediaOpenError} from '../../src/media-errors.ts';
+import type {MatroskaPacketIndex} from '../../shared/media/containers/matroska-packet-index.ts';
+import {MatroskaPacketSource} from '../../shared/media/containers/matroska-packet-source.ts';
+import {TsCombinationNotMigrated} from '../../shared/media/containers/ts-packet-source.ts';
+import {RangeReader} from '../../shared/media/io/range-reader.ts';
+import {MediaOpenError} from '../../shared/media/io/media-errors.ts';
 import {wasmFlvDecoder} from '../../src/flv-decoder.ts';
 import {IDBFactory,IDBDatabase} from 'fake-indexeddb';
 import {localJsSourceVersion,saveLocalJsIndex,loadLocalJsIndex,JS_PACKET_CACHE_DATABASE} from '../../src/js-packet-index-cache.ts';
@@ -89,6 +89,13 @@ for(const name of names)test(`JS ${name}: real 600-picture packet decode, raw cl
   }
   const reader=()=>{let closed=false;return{size:bytes.length,async read(at:number,n:number){assert.equal(closed,false);return bytes.subarray(at,at+n);},close(){closed=true;},get closed(){return closed;}};};
   if(index.codec==='h264'||index.codec==='hevc'){
+   let loads=0,saves=0;
+   const hostCached=await openJsPacketAnalysisInput(format,{...reader(),indexCache:{async load(){loads++;return index;},async save(){saves++;}}},index.sourceVersion,new AbortController().signal);
+   assert.equal(loads,1,'shared analysis delegates persistence to the explicit host cache');assert.equal(saves,0,'reusing a proven index does not rewrite host storage');assert.equal(hostCached.packets.length,600);hostCached.close();
+   const failed=reader(),cacheError=new Error('host cache failed');
+   await assert.rejects(openJsPacketAnalysisInput(format,{...failed,indexCache:{async load(){throw cacheError;},async save(){}}},index.sourceVersion,new AbortController().signal),error=>error===cacheError);
+   assert.equal(failed.closed,true,'host cache failure closes the independent analysis reader');
+
    input=await openJsPacketAnalysisInput(format,reader(),index.sourceVersion,new AbortController().signal,index);
    const packet=input.packets[560],picture=input.picture(packet,index.sourceVersion),core=await loadTsCore();
    core._vpd_open=()=>{throw new Error('Analysis WASM container forbidden');};

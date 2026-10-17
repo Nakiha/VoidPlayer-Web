@@ -1,14 +1,14 @@
-import { serializeFlvIndex } from './flv-index-cache.ts';
+import { serializeFlvIndex } from '../shared/media/indexing/flv-index-cache.ts';
 import { workerReply } from './worker-protocol.ts';
 import type { PacketCommands, WorkerRequest, WorkerMessage } from './worker-protocol.ts';
 
 import {JsContainerEngine} from './js-container-engine.ts';
 import { TsEngine } from './ts-engine.ts';
-import { TsCombinationNotMigrated } from './ts-packet-source.ts';
-import { randomUUID } from './uuid.ts';
+import { TsCombinationNotMigrated } from '../shared/media/containers/ts-packet-source.ts';
+import { randomUUID } from '../shared/utils/uuid.ts';
 import { Mp4Engine } from './mp4-engine.ts';
 import { FlvEngine } from './flv-engine.ts';
-import { MediaOpenError } from './media-errors.ts';
+import { MediaOpenError } from '../shared/media/io/media-errors.ts';
 import { createSourceQuerier, locateSampleById } from './analysis/adapters.ts';
 
 async function start() {

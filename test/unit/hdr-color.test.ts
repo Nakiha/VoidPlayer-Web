@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { HDR_PREVIEW_POLICY, hdrTransfer, pqToNits, hlgToScene, hdrToDisplayNits, hdrToDisplayP3, hdrToSdrPreview, hdrYuvToRgba, resolveHdrPreviewPlan, validateHdrPreviewPolicy } from '../../src/hdr-color.ts';
-import { resolveYuvColor } from '../../src/yuv-color.ts';
+import { HDR_PREVIEW_POLICY, hdrTransfer, pqToNits, hlgToScene, hdrToDisplayNits, hdrToDisplayP3, hdrToSdrPreview, hdrYuvToRgba, resolveHdrPreviewPlan, validateHdrPreviewPolicy } from '../../shared/color/hdr-color.ts';
+import { resolveYuvColor } from '../../shared/color/yuv-color.ts';
 import { isHdrTransfer } from '../../src/presentation-color.ts';
 import { yuvFixture } from '../helpers/yuv-fixture.ts';
 

@@ -1,7 +1,7 @@
-import { FLV_INDEX_BYTES, parseFlvIndex, serializeFlvIndex } from './flv-index-cache.ts';
-import type { FlvIndex } from './flv-demux.ts';
-import { MediaOpenError } from './media-errors.ts';
-import type { MediaIndexScanProgress } from './media-index-types.ts';
+import { FLV_INDEX_BYTES, parseFlvIndex, serializeFlvIndex } from '../shared/media/indexing/flv-index-cache.ts';
+import type { FlvIndex } from '../shared/media/containers/flv-demux.ts';
+import { MediaOpenError } from '../shared/media/io/media-errors.ts';
+import type { MediaIndexScanProgress } from '../shared/media/indexing/media-index-types.ts';
 import { MediaIndexClient } from './media-index-client.ts';
 
 /** Library files require a server index; local files have no service dependency. */

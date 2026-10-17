@@ -1,12 +1,12 @@
-import type { AnalysisAxis } from '../analysis/types.ts';
-import type { PresentedFrameToken } from '../bitstream-analysis/contract.ts';
-import { AnalysisFailure, failureInfo } from '../bitstream-analysis/failure.ts';
+import type { AnalysisAxis } from '../../shared/analysis/metadata/types.ts';
+import type { PresentedFrameToken } from '../../shared/analysis/bitstream/contract.ts';
+import { AnalysisFailure, failureInfo } from '../../shared/analysis/bitstream/failure.ts';
 import type { BitstreamAnalysisService, DeepAnalysisState } from '../bitstream-analysis/service.ts';
 import { AnalysisTaskPool } from '../bitstream-analysis/task-pool.ts';
 import type { MediaSource } from '../media.ts';
-import { referenceVersion } from '../media-reference.ts';
-import type { Slot } from '../model.ts';
-import { slotValue } from '../model.ts';
+import { referenceVersion } from '../../shared/media/io/media-reference.ts';
+import type { Slot } from '../../shared/review/model.ts';
+import { slotValue } from '../../shared/review/model.ts';
 
 export function trackSourceVersion(source: MediaSource): string {
   return source.info.source ? `${source.info.source.id}@${referenceVersion(source.info.source.url)}` : source.info.id;

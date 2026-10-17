@@ -1,6 +1,6 @@
 import type { ReviewSession } from '../../session.ts';
-import type { Slot } from '../../model.ts';
-import type { AnalysisResult } from '../../analysis/types.ts';
+import type { Slot } from '../../../shared/review/model.ts';
+import type { AnalysisResult } from '../../../shared/analysis/metadata/types.ts';
 import type { DirectTarget, InspectionState } from '../../analysis/inspection.ts';
 import { panTimeRange, zoomTimeRange } from '../../analysis/projection.ts';
 import { t, msg } from '../../i18n.ts';

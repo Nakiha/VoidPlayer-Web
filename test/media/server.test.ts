@@ -1,4 +1,4 @@
-import { httpFetch } from '.././http-request.ts';
+import { httpFetch } from '../http-request.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';

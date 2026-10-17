@@ -1,4 +1,4 @@
-import type { Slot } from '../../model.ts';
+import type { Slot } from '../../../shared/review/model.ts';
 import type { InspectionState, TrackInspection } from '../../analysis/inspection.ts';
 import { t, msg } from '../../i18n.ts';
 import { formatAxis } from '../analysis-canvas.ts';

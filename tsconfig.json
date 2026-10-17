@@ -19,6 +19,7 @@
   },
   "include": [
     "src",
+    "shared",
     "test",
     "server",
     "scripts/*.ts"

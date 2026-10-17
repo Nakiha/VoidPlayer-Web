@@ -1,5 +1,5 @@
 import type { ReviewSession } from '../../session.ts';
-import type { Slot } from '../../model.ts';
+import type { Slot } from '../../../shared/review/model.ts';
 import { getLocale, t, msg } from '../../i18n.ts';
 import { formatAxis } from '../analysis-canvas.ts';
 import type { AnalysisPreferences } from './preferences.ts';

@@ -1,8 +1,8 @@
-import { emptyCounters, countCore, countProduct } from '../../src/bitstream-analysis/counters.ts';
-import { isProduct } from '../../src/bitstream-analysis/products.ts';
-import type { AnalysisOutput } from '../../src/bitstream-analysis/products.ts';
-import {sealJsIndex} from '../../src/js-index-proof.ts';
-import { validateAnalysisCore } from '../../src/bitstream-analysis/core-abi.ts';
+import { emptyCounters, countCore, countProduct } from '../../shared/analysis/bitstream/counters.ts';
+import { isProduct } from '../../shared/analysis/bitstream/products.ts';
+import type { AnalysisOutput } from '../../shared/analysis/bitstream/products.ts';
+import {sealJsIndex} from '../../shared/media/indexing/js-index-proof.ts';
+import { validateAnalysisCore } from '../../shared/analysis/bitstream/core-abi.ts';
 import { parentPort, workerData } from "node:worker_threads";
 import { open, readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
@@ -11,12 +11,12 @@ import {
   AnalysisFailure,
   failureInfo,
   restoreFailure,
-} from "../../src/bitstream-analysis/failure.ts";
+} from "../../shared/analysis/bitstream/failure.ts";
 import {
   analyzePicture,
   analyzeRange,
   analyzeStream,
-} from "../../src/bitstream-analysis/runner.ts";
+} from "../../shared/analysis/bitstream/runner.ts";
 try {
   const file = await open(workerData.filePath, "r");
   const stat = await file.stat();
@@ -81,7 +81,7 @@ try {
     let pendingCacheKey="";
     let cacheReply: ((value: AnalysisOutput | null) => void) | undefined;
     let acknowledgement: { resolve(): void; reject(error: unknown): void } | undefined;
-    let indexReply: { resolve(value: import('../../src/bitstream-analysis/stream.ts').AnalysisIndexFrontier): void; reject(error: unknown): void } | undefined;
+    let indexReply: { resolve(value: import('../../shared/analysis/bitstream/stream.ts').AnalysisIndexFrontier): void; reject(error: unknown): void } | undefined;
     parentPort!.on('message', message => {
       if (message.type === 'cache') {
         const reply = cacheReply; cacheReply = undefined; if(message.result)cachedResults.add(JSON.stringify([message.result.picture,message.result.buildId]));else cachedResults.delete(pendingCacheKey); reply?.(message.result ?? null);

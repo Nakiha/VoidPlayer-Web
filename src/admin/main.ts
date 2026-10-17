@@ -10,7 +10,7 @@ import { chooseInitialIdentity } from '../ui/identity-onboarding.ts';
 import { installAnnotationAdmin } from './annotations.ts';
 import { emptyState } from './presentation.ts';
 import { installCaches } from './caches.ts';
-import { randomUUID } from '../uuid.ts';
+import { randomUUID } from '../../shared/utils/uuid.ts';
 // Theme palettes load via render-blocking links in admin/index.html (same as the
 // player entry); feature styles load here in cascade order.
 import '../themes/accessibility.css';
@@ -21,14 +21,14 @@ import { icon } from '../ui/icons.ts';
 import { installWorkspaceAdmin } from './workspaces.ts';
 import { installMeasurements } from './measurement.ts';
 import { adminShell, PANES } from './shell.ts';
-import type { AdminController } from '../../server/admin.ts';
-import type { MediaLibraryIndex } from '../../server/library.ts';
+import type {AdminStatus,RootConfiguration as RootConfig,LogPage,LogDocument,LibraryScanStatus} from '../../shared/service/admin.ts';
+
 
 type Root = { id: string; name: string; path: string };
-type RootConfig = Awaited<ReturnType<AdminController['roots']>>;
-type LogEntry = Awaited<ReturnType<AdminController['logs']>>['entries'][number];
-type Scan = ReturnType<MediaLibraryIndex['status']> & { errors: Record<string, unknown>[]; offset: number };
-type Status = ReturnType<AdminController['status']> & { identity: { id: string; name: string }; http: { activeRequests: number; connections: number; completedRequests: number; abortedRequests: number }; recentRequests: Record<string, unknown>[] };
+
+type LogEntry = LogPage['entries'][number];
+type Scan = LibraryScanStatus & { errors: Record<string, unknown>[]; offset: number };
+type Status = AdminStatus & { identity: { id: string; name: string }; http: { activeRequests: number; connections: number; completedRequests: number; abortedRequests: number }; recentRequests: Record<string, unknown>[] };
 const disposeLanguage = await initializeLanguage();
 const life = new AbortController();
 installFocusFeedback(life.signal);
@@ -134,7 +134,7 @@ async function loadScan() {
 function clearLog() { $('log-json').closest<HTMLElement>('.admin-log-detail')!.dataset.empty = 'true'; selectedLog = null; logDocument = undefined; ++logSequence; localizedText($('log-json'), () => ''); ($('log-json') as HTMLTextAreaElement).value = ''; text('log-description', () => t(msg("admin.selectLog", "选择一份日志查看内容"))); $('download-log').setAttribute('disabled', ''); $('delete-log').setAttribute('disabled', ''); $('delete-log-confirm').hidden = true; }
 async function loadLogs() {
   const sequence = ++listSequence;
-  const page = await api<Awaited<ReturnType<AdminController['logs']>>>(`/api/admin/logs?before=${encodeURIComponent(logCursor)}`);
+  const page = await api<LogPage>(`/api/admin/logs?before=${encodeURIComponent(logCursor)}`);
   if (sequence !== listSequence) return;
   const users = await api<{ users: { id: string; name: string }[] }>('/api/users').catch(() => ({ users: [] }));
   if (sequence !== listSequence) return;
@@ -153,7 +153,7 @@ async function loadLogs() {
     button.append(title, detail); button.onclick = () => void act(async () => {
       clearLog(); selectedLog = entry; const request = ++logSequence;
       for (const row of $('log-list').querySelectorAll('button')) row.setAttribute('aria-pressed', String(row === button));
-      const result = await api<Awaited<ReturnType<AdminController['readLog']>>>(`/api/admin/logs/${encodeURIComponent(entry.name)}?v=${entry.version}`);
+      const result = await api<LogDocument>(`/api/admin/logs/${encodeURIComponent(entry.name)}?v=${entry.version}`);
       if (request !== logSequence) return;
       $('log-json').closest<HTMLElement>('.admin-log-detail')!.dataset.empty = 'false'; logDocument = result.document; ($('log-json') as HTMLTextAreaElement).value = JSON.stringify(result.document, null, 2);
       const receipt = (result.document as { serverReceipt?: { id?: string; actorId?: string } })?.serverReceipt;

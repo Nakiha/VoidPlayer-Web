@@ -1,7 +1,7 @@
-import { ANALYSIS_DIAGRAMS, type AnalysisDiagram } from '../../analysis/types.ts';
-import { SLOTS } from '../../model.ts';
-import type { Slot } from '../../model.ts';
-import { BITRATE_WINDOW_OPTIONS_US, DEFAULT_BITRATE_WINDOW_US } from '../../analysis/statistics.ts';
+import { ANALYSIS_DIAGRAMS, type AnalysisDiagram } from '../../../shared/analysis/metadata/types.ts';
+import { SLOTS } from '../../../shared/review/model.ts';
+import type { Slot } from '../../../shared/review/model.ts';
+import { BITRATE_WINDOW_OPTIONS_US, DEFAULT_BITRATE_WINDOW_US } from '../../../shared/analysis/metadata/statistics.ts';
 
 export const PREF_KEY = 'voidplayer.analysis.v2';
 const LEGACY_PREF_KEY = 'voidplayer.analysis.v1';

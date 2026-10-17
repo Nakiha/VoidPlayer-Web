@@ -1,12 +1,13 @@
-import type { PacketDecodeIndex, PacketDecodePacket, PacketDecoder, PacketFrame } from './flv-decoder.ts';
-import { inspectPacketPicture } from './packet-picture.ts';
-import { MediaOpenError } from './media-errors.ts';
+import type { PacketDecoder, PacketFrame } from './flv-decoder.ts';
+import type { PacketDecodeIndex, PacketDecodePacket } from '../shared/media/indexing/packet-decode-index.ts';
+import { inspectPacketPicture } from '../shared/media/codecs/packet-picture.ts';
+import { MediaOpenError } from '../shared/media/io/media-errors.ts';
 import { packetDecodeError } from './flv-decoder.ts';
 /** Packet metadata chooses a decode anchor, never the identity of an output
  * frame. Only receive() establishes display PTS; playback drains real outputs. */
 export class PacketTimeline {
   private cursor=0;
-  private pictures = new Map<number, import('./packet-picture.ts').PacketPicture>();
+  private pictures = new Map<number, import('../shared/media/codecs/packet-picture.ts').PacketPicture>();
   private configuration=-1;
   private drained=false;
   private started=false;
@@ -24,7 +25,7 @@ export class PacketTimeline {
     for (const [pts, picture] of this.pictures) if (!this.validPicture(pts, picture)) this.pictures.delete(pts);
     if (this.pending?.packetPicture && !this.validPicture(this.pending.pts, this.pending.packetPicture)) this.pending.packetPicture = undefined;
   }
-  private validPicture(pts: number, picture: import('./packet-picture.ts').PacketPicture) {
+  private validPicture(pts: number, picture: import('../shared/media/codecs/packet-picture.ts').PacketPicture) {
     if (!this.identityStable() || picture.stream !== this.pictureStream) return false;
     const { order, packets } = this.index;
     let lo = 0, hi = order.length;

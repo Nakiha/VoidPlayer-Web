@@ -1,11 +1,11 @@
-import { FLV_MEDIA_INDEX_IDENTITY } from './media-index-identity.ts';
-import type { MediaIndexIdentity, MediaIndexKind } from './media-index-identity.ts';
+import { FLV_MEDIA_INDEX_IDENTITY } from '../shared/media/indexing/media-index-identity.ts';
+import type { MediaIndexIdentity, MediaIndexKind } from '../shared/media/indexing/media-index-identity.ts';
 import { decodeIndexBase64 } from './index-stream-encoding.ts';
 import { IndexStreamTransport } from './index-stream-transport.ts';
 import type { IndexStreamEventResult } from './index-stream-transport.ts';
 import { FfmpegIndexConsumer } from './ffmpeg-index-consumer.ts';
-import type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest, MediaIndexScanProgress, ServerIndexResult } from './media-index-types.ts';
-export type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest, MediaIndexScanProgress, ServerIndexResult } from './media-index-types.ts';
+import type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest, MediaIndexScanProgress, ServerIndexResult } from '../shared/media/indexing/media-index-types.ts';
+export type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest, MediaIndexScanProgress, ServerIndexResult } from '../shared/media/indexing/media-index-types.ts';
 
 const STREAM_BATCH_BYTES = 64 * 1024;
 

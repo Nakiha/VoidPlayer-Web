@@ -2,7 +2,7 @@ export type AnalysisAction = (action: () => unknown | Promise<unknown>, name?: s
 export const MIN_ANALYSIS_SPAN_US = 10_000;
 /** One session-time viewport for overview and deep bitstream diagrams. */
 export interface AnalysisViewport {
-  axis(): import('../../analysis/types.ts').AnalysisAxis;
+  axis(): import('../../../shared/analysis/metadata/types.ts').AnalysisAxis;
   range(): { start: number; end: number };
   domain(): { start: number; end: number };
   containerColumn(): { timeUs: number; widthUs: number };
@@ -14,7 +14,7 @@ export interface ChartHover {
   timeUs: number;
   /** Continuous pointer position on the selected session time axis; frame identity remains snapped. */
   cursorTimeUs?: number;
-  slot?: import('../../model.ts').Slot;
+  slot?: import('../../../shared/review/model.ts').Slot;
   au?: number;
   sourceVersion?: string;
   /** DTS cannot be used as PTS without an indexed frame mapping. */

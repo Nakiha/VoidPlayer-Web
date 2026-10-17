@@ -57,7 +57,7 @@ try {
         const { openFlvMedia } = await import('/src/flv-media.ts');
         const { paintFrame, captureFrame, setPresentationGeometry } = await import('/src/presenter.ts');
         const { presentationColor } = await import('/src/presentation-color.ts');
-        const { yuvToRgba } = await import('/src/yuv-color.ts');
+        const { yuvToRgba } = await import('/shared/color/yuv-color.ts');
         const { summarizeRgba, compareRgba } = await import('/src/color-evidence.ts');
         const { buildInfo } = await import('/src/build-info.ts');
         const { readLogs } = await import('/src/log.ts');

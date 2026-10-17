@@ -17,7 +17,7 @@ try {
     await page.route('**/hdr-color-test', route => route.fulfill({ contentType: 'text/html', body: '<canvas id="gl" width="1" height="1"></canvas>' }));
     await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/hdr-color-test`);
     const result = await page.evaluate(async requireWebGpu => {
-      const { hdrToSdrPreview, hdrToDisplayNits, hdrToDisplayP3, HDR_PREVIEW_POLICY } = await import('/src/hdr-color.ts');
+      const { hdrToSdrPreview, hdrToDisplayNits, hdrToDisplayP3, HDR_PREVIEW_POLICY } = await import('/shared/color/hdr-color.ts');
       const { hdrPreviewGlsl, hdrPreviewWgsl } = await import('/src/hdr-shader.ts');
       const vectors = [];
       for (const transfer of ['pq', 'hlg']) {
@@ -107,10 +107,10 @@ try {
       }
       let extended;
       if(requireWebGpu){
-        const {setColorOutput,defaultColorOutput}=await import('/src/color-output.ts');
+        const {setColorOutput,defaultColorOutput}=await import('/shared/color/color-output.ts');
         const {createExternalSurface}=await import('/src/webgpu-color-surface.mjs');
         const {yuvFixture}=await import('/test/helpers/yuv-fixture.ts');
-        const {yuvToRgba}=await import('/src/yuv-color.ts');
+        const {yuvToRgba}=await import('/shared/color/yuv-color.ts');
         const {setColorMode,getColorMode}=await import('/src/color-mode.ts');const previousMode=getColorMode();setColorMode('reference');
         const original=window.matchMedia;
         // Simulates capability only to exercise the extended canvas. These
@@ -134,7 +134,7 @@ try {
           const native=new VideoFrame(new Uint16Array([64,940,64,940,512,512]),{format:'I420P10',codedWidth:2,codedHeight:2,timestamp:0,colorSpace:{matrix:'bt2020-ncl',primaries:'bt2020',transfer:'pq',fullRange:false}});
           try{surface.present(native);const raw=await surface.captureHdrPixels();const nativeMax=Math.max(...raw);extended={simulatedDisplayCapability:true,max,maxPreview,maxCapture,nativeMax,nativeHdrEnabledInProduct:false};}
           finally{native.close();}
-          const {renderThumbnailCanvas}=await import('/src/presenter.ts');const {hdrYuvToRgba}=await import('/src/hdr-color.ts');
+          const {renderThumbnailCanvas}=await import('/src/presenter.ts');const {hdrYuvToRgba}=await import('/shared/color/hdr-color.ts');
           const thumbFrame=yuvFixture(10,false,false,'bt2020-ncl',3,2);thumbFrame.description.color.transfer='pq';
           setColorOutput({...defaultColorOutput(),target:'hdr',preview:{...HDR_PREVIEW_POLICY,sourcePeakNits:4000}});
           const thumb=renderThumbnailCanvas({kind:'yuv',...thumbFrame,width:3,height:2},3);

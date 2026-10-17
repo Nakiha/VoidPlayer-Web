@@ -1,4 +1,4 @@
-import { getColorOutput } from './color-output.ts';
+import { getColorOutput } from '../shared/color/color-output.ts';
 import { log } from './log.ts';
 import { getColorMode } from './color-mode.ts';
 import { getPresentationChannel } from './presentation-channel.ts';
@@ -7,9 +7,9 @@ import { createExternalSurface } from './webgpu-color-surface.mjs';
 import type { GpuSurface } from './webgpu-color-surface.mjs';
 import type { DecodedFrame } from './media.ts';
 import type { PresentationGeometry } from './presentation-surface.ts';
-import { resolveYuvColor } from './yuv-color.ts';
+import { resolveYuvColor } from '../shared/color/yuv-color.ts';
 import { isHdrTransfer } from './presentation-color.ts';
-import { validateDescription } from './frame-description.ts';
+import { validateDescription } from '../shared/media/frame-description.ts';
 import { GpuPresentationGuard } from './gpu-presentation-guard.ts';
 
 // Browser compensation is diagnostic-only: a neutral decoded probe cannot

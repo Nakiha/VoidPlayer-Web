@@ -1,10 +1,10 @@
-import type { CachedWindow, CachedAudioBatch } from './audio-types.ts';
-import { randomUUID } from './uuid.ts';
-import { MediaOpenError } from './media-errors.ts';
-import type { OpenStage } from './media-errors.ts';
+import type { CachedWindow, CachedAudioBatch } from '../shared/media/audio-types.ts';
+import { randomUUID } from '../shared/utils/uuid.ts';
+import { MediaOpenError } from '../shared/media/io/media-errors.ts';
+import type { OpenStage } from '../shared/media/io/media-errors.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
 import { contextLog } from './log.ts';
-import type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest } from './media-index-types.ts';
+import type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest } from '../shared/media/indexing/media-index-types.ts';
 import type { FfmpegCommands, FfmpegInitResult as InitResult, WorkerMessage, IndexBatch, IndexError, IndexEvent, IndexInputPayload, CommandsShape } from './worker-protocol.ts';
 
 export class WorkerRpc<C extends CommandsShape<C> = FfmpegCommands> {

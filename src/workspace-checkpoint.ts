@@ -1,5 +1,5 @@
-import { parseWorkspace } from './workspace-file.ts';
-import type { WorkspaceFile } from './workspace-file.ts';
+import { parseWorkspace } from '../shared/review/workspace-file.ts';
+import type { WorkspaceFile } from '../shared/review/workspace-file.ts';
 import { LocalDatabase } from './local-database.ts';
 export type WorkspaceCheckpoint = { id: string; actor: string; updatedAt: number; document: WorkspaceFile };
 export type CheckpointSummary = Pick<WorkspaceCheckpoint, 'id' | 'updatedAt'> & { name: string; tracks: number; marks: number };

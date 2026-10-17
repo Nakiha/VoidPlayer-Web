@@ -1,6 +1,6 @@
 import type { InspectionState } from '../../analysis/inspection.ts';
-import type { AnalysisAxis, AnalysisResult } from '../../analysis/types.ts';
-import type { Slot } from '../../model.ts';
+import type { AnalysisAxis, AnalysisResult } from '../../../shared/analysis/metadata/types.ts';
+import type { Slot } from '../../../shared/review/model.ts';
 import type { AnalysisGlyph, BucketGlyph, SampleGlyph } from '../analysis-geometry.ts';
 
 export interface AnalysisTestHookSnapshot {

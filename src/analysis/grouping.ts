@@ -3,7 +3,7 @@
 // 稳定排序，再以组锚点为基准归并，避免链式吸附。
 // 同轨重复时间戳保留多个成员，不覆盖；缺席轨道留空，不复制、不填零。
 
-import type { Slot } from '../model.ts';
+import type { Slot } from '../../shared/review/model.ts';
 
 export interface GroupSampleRef {
   sampleId: string;

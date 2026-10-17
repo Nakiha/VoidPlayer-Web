@@ -1,6 +1,6 @@
-import type { MediaInfo } from '../model.ts';
+import type { MediaInfo } from '../../shared/review/model.ts';
 import type { LibraryEntry } from '../library.ts';
-import type { LibraryAccessProblem } from '../source-access.ts';
+import type { LibraryAccessProblem } from '../../shared/media/io/source-access.ts';
 
 export type RecentSource = { key: string; name: string; size: number; lastModified: number; libraryId?: string; libraryRootId?: string; version?: string; openedAt?: number };
 export type SourceItem = RecentSource & { file?: File; library?: LibraryEntry; libraryProblem?: LibraryAccessProblem };

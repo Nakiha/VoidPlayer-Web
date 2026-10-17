@@ -9,9 +9,9 @@ import {Worker} from 'node:worker_threads';
 import {FrameIndexJobs} from '../../server/frame-index-jobs.ts';
 import { MediaLibraryIndex, fileVersion } from '../../server/library.ts';
 import { createMediaServer } from '../../server/app.ts';
-import { TsPacketSource } from '../../src/ts-packet-source.ts';
-import { parseTsPacketIndex } from '../../src/ts-packet-index.ts';
-import { JS_TS_MEDIA_INDEX_IDENTITY, parseMediaIndexIdentity } from '../../src/media-index-identity.ts';
+import { TsPacketSource } from '../../shared/media/containers/ts-packet-source.ts';
+import { parseTsPacketIndex } from '../../shared/media/indexing/ts-packet-index.ts';
+import { JS_TS_MEDIA_INDEX_IDENTITY, parseMediaIndexIdentity } from '../../shared/media/indexing/media-index-identity.ts';
 import { MediaIndexClient } from '../../src/media-index-client.ts';
 import { prepareFrameIndex } from '../../server/frame-index-store.ts';
 

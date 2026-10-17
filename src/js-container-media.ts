@@ -1,11 +1,11 @@
-import {MediaOpenError} from './media-errors.ts';
+import {MediaOpenError} from '../shared/media/io/media-errors.ts';
 import { openPacketMedia } from './packet-media.ts';
 import { WorkerRpc } from './worker-rpc.ts';
 import type { PacketCommands } from './worker-protocol.ts';
-import type { RandomAccessInput } from './range-reader.ts';
+import type { RandomAccessInput } from '../shared/media/io/range-reader.ts';
 import type { MediaMeta, MediaSource } from './media.ts';
 import type { FallbackDeps } from './ffmpeg-media.ts';
-import { loadAborted, onLoadAbort } from './media-abort.ts';
+import { loadAborted, onLoadAbort } from '../shared/media/io/media-abort.ts';
 import { contextLog } from './log.ts';
 
 export type JsContainerAdmission = {

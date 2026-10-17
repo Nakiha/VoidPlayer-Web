@@ -1,11 +1,11 @@
-import { SLOTS } from '../model.ts';
-import type { Slot } from '../model.ts';
+import { SLOTS } from '../../shared/review/model.ts';
+import type { Slot } from '../../shared/review/model.ts';
 import { setPresentationGeometry } from '../presenter.ts';
 import type { ReviewSession } from '../session.ts';
 import { setAnnotationViewport } from './annotation-svg.ts';
 import { installPixelGrid } from './pixel-grid.ts';
 import { needsViewRecovery } from './view-recovery.ts';
-import { Viewport, fitReference, fittedSize, splitPixelGeometry, unobscuredFitArea } from '../viewport.ts';
+import { Viewport, fitReference, fittedSize, splitPixelGeometry, unobscuredFitArea } from '../../shared/presentation/viewport.ts';
 
 export type FittedTrack = { width: number; height: number; sourceWidth: number; sourceHeight: number; centerY: number };
 

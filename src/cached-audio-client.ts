@@ -1,6 +1,6 @@
 import type { MediaSource } from './media.ts';
-import type { CachedWindow } from './audio-types.ts';
-import type { AudioPeek } from './cached-container-audio.ts';
+import type { CachedWindow } from '../shared/media/audio-types.ts';
+import type { AudioPeek } from '../shared/media/audio-types.ts';
 
 /** One parser worker only for the explicitly audible track; mute releases it. */
 export function attachCachedContainerAudio(source: MediaSource, peek: AudioPeek, observe?: (enabled: boolean) => void, windows: () => Promise<CachedWindow[]> = async () => []) {

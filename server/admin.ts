@@ -1,3 +1,5 @@
+import type {AdminStatus,RootConfiguration,LogPage,LogDocument,AnalysisSettings,RootReasonCode} from '../shared/service/admin.ts';
+export type {RootReasonCode} from '../shared/service/admin.ts';
 import { AnalysisScheduler } from './analysis/scheduler.ts';
 import { MAX_ANALYSIS_CONCURRENCY, validAnalysisConcurrency } from './analysis/limits.ts';
 import { promises as fs, constants } from 'node:fs';
@@ -44,7 +46,7 @@ async function atomicWrite(file: string, text: string) {
 }
 const logName = (name: string) => /^voidplayer-log-[A-Za-z0-9_.-]{1,180}\.json$/.test(name);
 
-export type RootReasonCode = 'external-change' | 'cli-override' | 'no-source' | 'not-writable';
+
 export class AdminController {
   readonly config: ServiceConfig;
   readonly library: MediaLibraryIndex;
@@ -67,7 +69,7 @@ export class AdminController {
   private cpuPercent = 0;
   constructor(config: ServiceConfig, library: MediaLibraryIndex, build = { version: 'development', revision: 'source' }) { this.config = config; this.library = library; this.build = build; this.measurements = new Measurements(library); this.workspaces = new WorkspaceStore(path.join(config.dataDir, 'workspaces.sqlite')); this.annotations = new AnnotationStore(path.join(config.dataDir, 'annotations.sqlite')); }
   get caches() { return new CacheManager(this.config.dataDir, this.library.frameIndexes, this.annotations, this.library.thumbnails); }
-  status() {
+  status(): AdminStatus {
     const now = performance.now(), elapsed = now - this.cpuAt;
     if (elapsed >= 500) {
       const current = process.cpuUsage();
@@ -77,7 +79,7 @@ export class AdminController {
     const memory = process.memoryUsage();
     return { ...this.build, analysis: this.analysis.resources(), runtime: process.versions.bun ? `Bun ${process.versions.bun}` : `Node ${process.versions.node}`, platform: `${process.platform} ${process.arch}`, uptimeSeconds: process.uptime(), cpuPercent: this.cpuPercent, logicalCpus: os.availableParallelism(), memory: { rss: memory.rss, heapUsed: memory.heapUsed, systemTotal: os.totalmem(), systemFree: os.freemem() }, dataDir: this.config.dataDir, logsEnabled: !!this.config.logsDir, library: this.library.status() };
   }
-  async roots() {
+  async roots(): Promise<RootConfiguration> {
     const origin = this.config.origin;
     const changed = !!origin && configRevision(await configText(origin.file)) !== origin.revision;
     const writeAccess = !!origin && await fs.access(path.dirname(origin.file), constants.W_OK).then(() => true, () => false);
@@ -109,7 +111,7 @@ export class AdminController {
     this.config.mediaRoots = roots; origin.revision = configRevision(after);
     return this.roots();
   }
-  async analysisSettings() {
+  async analysisSettings(): Promise<AnalysisSettings> {
     const origin = this.config.origin;
     const changed = !!origin && configRevision(await configText(origin.file)) !== origin.revision;
     const writeAccess = !!origin && await fs.access(path.dirname(origin.file), constants.W_OK).then(() => true, () => false);
@@ -136,7 +138,7 @@ export class AdminController {
     this.analysis.setConcurrency(input.concurrency);
     return this.analysisSettings();
   }
-  async logs(before = '', limit = 40) {
+  async logs(before = '', limit = 40): Promise<LogPage> {
     if (!this.config.logsDir) return { entries: [], next: null, enabled: false };
     if (before && !logName(before)) throw new AdminError(400, '日志分页位置无效。');
     // Keep only the next page while walking the directory. Large log folders
@@ -162,7 +164,7 @@ export class AdminController {
     if (version && fileVersion(stat) !== version) throw new AdminError(409, '日志已改变，请重新载入。');
     return { file, stat };
   }
-  async readLog(name: string, version: string | null) {
+  async readLog(name: string, version: string | null): Promise<LogDocument> {
     const { file, stat } = await this.logFile(name, version);
     if (stat.size > 11 * 1024 * 1024) throw new AdminError(413, '日志超过预览大小上限。');
     const handle = await fs.open(file, 'r');

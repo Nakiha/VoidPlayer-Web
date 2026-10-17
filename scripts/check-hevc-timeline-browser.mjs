@@ -4,7 +4,7 @@ import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {Input,BlobSource,ALL_FORMATS,EncodedPacketSink} from 'mediabunny';
 import {wasmFlvDecoder} from '../src/flv-decoder.ts';
-import {yuvPixelRgb} from '../src/yuv-color.ts';
+import {yuvPixelRgb} from '../shared/color/yuv-color.ts';
 import {createServer} from 'vite';
 import {webkit,chromium} from 'playwright';
 const selectedBrowser=process.argv[2],selectedInput=process.argv[3];
@@ -17,7 +17,7 @@ const oracle=JSON.parse(await readFile(new URL('../test/hevc-order-reference.jso
 assert.equal(createHash('sha256').update(bytes).digest('hex'),oracle.sha256);
 const input=new Input({source:new BlobSource(new Blob([bytes])),formats:ALL_FORMATS});
 const track=await input.getPrimaryVideoTrack(),config=await track.getDecoderConfig();
-const core=new URL('../public/vendor/voidplayer-core/',import.meta.url);
+const core=new URL('../public/vendor/voidplayer-core',import.meta.url);
 const decoder=await wasmFlvDecoder({codec:'hevc',description:new Uint8Array(config.description)},new URL('voidplayer-core.js',core).href,await readFile(new URL('voidplayer-core.wasm',core)));
 const refs=[];
 audit('software-oracle-start');
@@ -52,7 +52,7 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
         const progress=(stage,detail={})=>console.log('hevc-timeline: '+JSON.stringify({stage,remote,elapsedMs:Math.round(performance.now()-started),...detail}));
         const {openMedia,openMediaFromUrl}=await import('/src/media.ts');
         const {paintFrame,captureFrame,disposePresentation,setPresentationGeometry}=await import('/src/presenter.ts');
-        const {yuvPixelRgb}=await import('/src/yuv-color.ts');
+        const {yuvPixelRgb}=await import('/shared/color/yuv-color.ts');
         const url='/fixtures/video/'+name,bytes=await(await fetch(url)).arrayBuffer(),rows=[];
         const sourceCanvas=document.querySelector('canvas');
         const control=new OffscreenCanvas(1920,1080),controlContext=control.getContext('2d',{willReadFrequently:true});

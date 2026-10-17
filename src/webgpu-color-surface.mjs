@@ -1,8 +1,9 @@
 import { yuvKernel } from './webgpu-yuv-kernel.mjs';
-import { resolveYuvColor, validateYuv, yuvCoefficients, chromaOffset } from './yuv-color.ts';
+import { resolveYuvColor, validateYuv, yuvCoefficients, chromaOffset } from '../shared/color/yuv-color.ts';
 import { getPresentationChannel, presentationChannelCode } from './presentation-channel.ts';
-import { getColorOutput, hdrDisplayAvailable } from './color-output.ts';
-import { hdrTransfer } from './hdr-policy.ts';
+import { getColorOutput } from '../shared/color/color-output.ts';
+import {hdrDisplayAvailable} from './presentation/display-capabilities.ts';
+import { hdrTransfer } from '../shared/color/hdr-policy.ts';
 import { createBrowserHdrBridge } from './browser-hdr-bridge.mjs';
 // One submission per microtask across canvases. Flush before overwriting a
 // resource already referenced by queued commands. Frame closure follows submit.

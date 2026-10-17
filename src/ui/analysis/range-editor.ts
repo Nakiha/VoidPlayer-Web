@@ -1,6 +1,6 @@
 import { msg, t } from '../../i18n.ts';
-import { formatTime } from '../../model.ts';
-import type { Slot } from '../../model.ts';
+import { formatTime } from '../../../shared/review/model.ts';
+import type { Slot } from '../../../shared/review/model.ts';
 import { panTimeRange, zoomOverviewRange } from '../../analysis/projection.ts';
 import type { ReviewSession } from '../../session.ts';
 import { installTimeInput, parseTimeInput } from '../../time-input.ts';

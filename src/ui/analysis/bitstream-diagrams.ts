@@ -1,10 +1,10 @@
 import type { ReviewSession } from '../../session.ts';
-import type { Slot } from '../../model.ts';
+import type { Slot } from '../../../shared/review/model.ts';
 import { AXIS_H, drawTimeAxis, drawHitRect, drawHitPoint, plotGeometry, formatAxis as formatTime } from '../analysis-canvas.ts';
 import { chartBarWidth, referenceNodeRadius, representativeIntervalUs, chartFrameHoverStart } from '../analysis-geometry.ts';
 import { panTimeRange, zoomTimeRange } from '../../analysis/projection.ts';
-import { diagramTime, naluName } from '../../bitstream-analysis/diagrams.ts';
-import type { DiagramPicture, DiagramBucket } from '../../bitstream-analysis/diagrams.ts';
+import { diagramTime, naluName } from '../../../shared/analysis/bitstream/diagrams.ts';
+import type { DiagramPicture, DiagramBucket } from '../../../shared/analysis/bitstream/diagrams.ts';
 import { t, msg } from '../../i18n.ts';
 import { MIN_ANALYSIS_SPAN_US, type AnalysisAction, type AnalysisViewport, type ChartHover } from './shared.ts';
 import { analysisDetailTable, analysisMetricValue, analysisTrackBadge, installFloatingAnalysisCard } from './card.ts';

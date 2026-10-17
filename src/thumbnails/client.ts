@@ -6,7 +6,7 @@ import { ThumbnailUrlCache } from './url-cache.ts';
 import {
   THUMB_RECIPE_VERSION, THUMB_MAX_PENDING_UPLOADS, THUMB_MAX_PENDING_UPLOAD_BYTES,
   THUMB_STATUS_TIMEOUT_MS, serverCacheKey, thumbnailImageUrl, thumbnailStatusUrl,
-} from './contract.ts';
+} from '../../shared/thumbnails/contract.ts';
 import { thumbnailState } from './state.ts';
 import { getLocalThumbnail } from './local-store.ts';
 

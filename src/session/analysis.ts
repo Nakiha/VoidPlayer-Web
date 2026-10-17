@@ -1,8 +1,8 @@
-import type { AnalysisAxis, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample, AnalysisStatus } from '../analysis/types.ts';
+import type { AnalysisAxis, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample, AnalysisStatus } from '../../shared/analysis/metadata/types.ts';
 import type { MediaSource } from '../media.ts';
-import { abortableWait } from '../media-abort.ts';
-import type { Slot } from '../model.ts';
-import { slotValue } from '../model.ts';
+import { abortableWait } from '../../shared/media/io/media-abort.ts';
+import type { Slot } from '../../shared/review/model.ts';
+import { slotValue } from '../../shared/review/model.ts';
 
 export interface SessionAnalysisTrack {
   readonly source: MediaSource;

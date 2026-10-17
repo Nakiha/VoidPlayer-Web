@@ -6,7 +6,7 @@ import path from 'node:path';
 import { loadConfig } from '../../server/config.ts';
 import { startService } from '../../server/runtime.ts';
 import { connectionDetails } from '../../server/connection-guide.ts';
-import { httpFetch } from '.././http-request.ts';
+import { httpFetch } from '../http-request.ts';
 
 test('HTTP and HTTPS share pages and APIs, with a certificate-matching player destination', async () => {
   const temp = await mkdtemp(path.join(tmpdir(), 'vp-guide-')); let service;

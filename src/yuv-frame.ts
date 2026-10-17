@@ -1,7 +1,7 @@
 import { keepNativeGpuResource } from './webgpu-presenter.ts';
 import { getColorMode } from './color-mode.ts';
 import type { DecodedFrame } from './media.ts';
-import { resolveYuvColor, validateYuv } from './yuv-color.ts';
+import { resolveYuvColor, validateYuv } from '../shared/color/yuv-color.ts';
 
 /** One recycled CPU buffer per source; never shares bytes with a live frame. */
 export function createYuvBufferPool(){

@@ -1,5 +1,5 @@
 import { CachedContainerAudio } from './cached-container-audio.ts';
-import type { CachedWindow } from './audio-types.ts';
+import type { CachedWindow } from '../shared/media/audio-types.ts';
 let parser: CachedContainerAudio | undefined;
 let nextId = 0, busy = false;
 let latest: { ptsUs: number; generation: number } | undefined;

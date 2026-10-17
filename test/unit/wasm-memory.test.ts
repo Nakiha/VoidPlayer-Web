@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Worker } from 'node:worker_threads';
-import { liveHeap } from '../../src/wasm-core.ts';
+import { liveHeap } from '../../shared/wasm/core.ts';
 import { checkedHeap } from '../../src/flv-decoder.ts';
 
 for (const shared of [false, true]) test(`live WASM heap survives ${shared ? 'other-thread shared' : 'detached nonshared'} memory growth`, async () => {

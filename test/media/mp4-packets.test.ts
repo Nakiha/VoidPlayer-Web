@@ -1,4 +1,4 @@
-import { packetFixture } from '.././packet-fixture.ts';
+import { packetFixture } from '../packet-fixture.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -9,7 +9,7 @@ import {nativeFrames,nativeVisibleHash,nativeVisibleFrameBytes,nativeVideoMetada
 import {mkdtemp,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-const core = new URL('../../public/vendor/voidplayer-core/', import.meta.url);
+const core = new URL('../../public/vendor/voidplayer-core', import.meta.url);
 
 for (const name of ['h266_10s_1920x1080.mp4', 'h264_high422p_1s_320x180.mp4', 'hevc-packet-1080p.mp4']) {
   test(`MP4 packet WASM ${name}: metadata-only indexing and exact pixels across GOP seeks and EOF`, { timeout: 120000 }, async () => {

@@ -1,6 +1,6 @@
-import { RangeReader } from './range-reader.ts';
-import type { RandomAccessInput } from './range-reader.ts';
-import { loadAborted, onLoadAbort } from './media-abort.ts';
+import { RangeReader } from '../shared/media/io/range-reader.ts';
+import type { RandomAccessInput } from '../shared/media/io/range-reader.ts';
+import { loadAborted, onLoadAbort } from '../shared/media/io/media-abort.ts';
 
 export type ContainerKind = 'flv' | 'isobmff' | 'mpegts' | 'matroska' | 'other';
 /** Routing hint, not validation: the selected demuxer still validates input.

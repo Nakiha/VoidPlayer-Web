@@ -1,14 +1,14 @@
-import { pictureId, matchesAnalysisLayout } from "../bitstream-analysis/contract.ts";
+import { pictureId, matchesAnalysisLayout } from "../../shared/analysis/bitstream/contract.ts";
 import type {
   ReadonlyAnalysisResult,
   PresentedFrameToken,
-} from "../bitstream-analysis/contract.ts";
+} from "../../shared/analysis/bitstream/contract.ts";
 import { codedToViewport, viewportToCoded } from "./geometry.ts";
 import { observePresentationGeometry } from "../presenter.ts";
 import { presentationRect } from "../presentation-surface.ts";
 import type { PresentationGeometry } from "../presentation-surface.ts";
 import type { ReviewSession } from "../session.ts";
-import type { Slot } from "../model.ts";
+import type { Slot } from "../../shared/review/model.ts";
 export function createAnalysisOverlay(
   session: ReviewSession,
   slot: Slot,

@@ -4,7 +4,7 @@ import {
   THUMB_RECIPE_VERSION, THUMB_STREAM_SELECTOR, THUMB_MAX_EDGE, THUMB_MAX_BYTES,
   serverCacheKey, localCacheKey, thumbnailImageUrl, thumbnailStatusUrl,
   parseJpegDimensions, validateThumbnailImage, isProbablyJpeg,
-} from '../../src/thumbnails/contract.ts';
+} from '../../shared/thumbnails/contract.ts';
 
 /** Minimal valid JPEG: SOI + APP0 + SOF0(320x240) + EOI. */
 function jpeg320x240(): Uint8Array {

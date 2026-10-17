@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {execFileSync} from 'node:child_process';
-import {TsPacketSource} from '../../../src/ts-packet-source.ts';
-import type {TsPacketIndex} from '../../../src/ts-packet-index.ts';
+import {TsPacketSource} from '../../../shared/media/containers/ts-packet-source.ts';
+import type {TsPacketIndex} from '../../../shared/media/indexing/ts-packet-index.ts';
 export async function loadTsCore(playback=false) {
  const file=resolve(playback?'public/vendor/voidplayer-core/voidplayer-core.js':'public/vendor/voidplayer-analysis/voidplayer-analysis.js');
  return (await import(pathToFileURL(file).href)).default({wasmBinary:fs.readFileSync(file.replace(/\.js$/,'.wasm'))});

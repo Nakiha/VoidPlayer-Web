@@ -6,7 +6,7 @@ import { once } from "node:events";
 import { createServer } from "node:net";
 import path from "node:path";
 import os from "node:os";
-import { validateResult } from "../src/bitstream-analysis/contract.ts";
+import { validateResult } from "../shared/analysis/bitstream/contract.ts";
 const root = path.resolve(import.meta.dirname, "..");
 const archive = path.resolve(
   process.argv[2] ??

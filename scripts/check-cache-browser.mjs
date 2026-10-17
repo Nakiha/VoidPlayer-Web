@@ -8,8 +8,8 @@ import { loadConfig } from '../server/config.ts';
 import { startService } from '../server/runtime.ts';
 import { AnnotationStore } from '../server/annotations.ts';
 import { syntheticFlv } from '../test/flv-fixture.ts';
-import { demuxFlv, FlvReader } from '../src/flv-demux.ts';
-import { serializeFlvIndex } from '../src/flv-index-cache.ts';
+import { demuxFlv, FlvReader } from '../shared/media/containers/flv-demux.ts';
+import { serializeFlvIndex } from '../shared/media/indexing/flv-index-cache.ts';
 const root=path.resolve(import.meta.dirname,'..'),temp=await mkdtemp(path.join(os.tmpdir(),'vp-cache-browser-')),name=process.argv[2]??'webkit';
 let service,browser,annotations;
 try {

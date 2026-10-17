@@ -2,7 +2,7 @@
 // thumbnail, never the load. Full frames are never queued — at most one extra
 // candidate is held, with its own deadline independent of encode/store/upload.
 
-import { THUMB_HOLD_MS, THUMB_MAX_BYTES, THUMB_MAX_EDGE } from './contract.ts';
+import { THUMB_HOLD_MS, THUMB_MAX_BYTES, THUMB_MAX_EDGE } from '../../shared/thumbnails/contract.ts';
 import { thumbnailState } from './state.ts';
 import { settleOffer } from './offer.ts';
 import type { AcceptedOffer } from './offer.ts';

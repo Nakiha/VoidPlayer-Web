@@ -1,7 +1,7 @@
 import { apiError } from './api-error.ts';
 import { currentActor, identityHealth } from './identity.ts';
-import type { SavedWorkspace } from '../server/workspaces.ts';
-import type { WorkspaceFile } from './workspace-file.ts';
+import type { SavedWorkspace } from '../shared/service/workspaces.ts';
+import type { WorkspaceFile } from '../shared/review/workspace-file.ts';
 export type { SavedWorkspace };
 export type WorkspaceRecord = SavedWorkspace & { document: WorkspaceFile };
 export type WorkspacePage = { entries: SavedWorkspace[]; next: string | null };

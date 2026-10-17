@@ -2,7 +2,7 @@
 // 各轨自身的帧间隔决定公共时间单元，跨轨的小幅错位不缩窄柱宽；缺席留空，不复制。
 // 所有交互几何保持 CSS 像素，DPR 只影响栅格化。
 
-import type { Slot } from '../model.ts';
+import type { Slot } from '../../shared/review/model.ts';
 import type { TimeGroup } from '../analysis/grouping.ts';
 
 export interface Rect { x: number; y: number; width: number; height: number }

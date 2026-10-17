@@ -9,12 +9,12 @@ import { once } from 'node:events';
 import { execFileSync } from 'node:child_process';
 import { WorkerRpc } from '../../src/worker-rpc.ts';
 import type { PacketCommands } from '../../src/worker-protocol.ts';
-import { tsPictureStream } from '../../src/ts-packet-index.ts';
+import { tsPictureStream } from '../../shared/media/indexing/ts-packet-index.ts';
 import { visiblePixelHash } from '../helpers/visible-pixels.ts';
 import {nativeFrames,nativeVisibleHash} from '../helpers/media/native-pixels.ts';
 import { loadTsCore } from '../helpers/media/ts-analysis.ts';
-import { openJsTsAnalysisInput } from '../../src/bitstream-analysis/js-ts-input.ts';
-import { analyzePicture } from '../../src/bitstream-analysis/runner.ts';
+import { openJsTsAnalysisInput } from '../../shared/analysis/bitstream/js-ts-input.ts';
+import { analyzePicture } from '../../shared/analysis/bitstream/runner.ts';
 
 test('real packet Worker TS engine drains, seeks and shares exact identity with independent codec analysis without container WASM', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'voidplayer-js-ts-engine-'));
@@ -123,7 +123,7 @@ test('real late PSI changes defer the declared combination, while bad CRC remain
 
 test('native and software first-frame failures release each actual timeline decoder once', async () => {
   const {TsEngine}=await import('../../src/ts-engine.ts');
-  const {MediaOpenError}=await import('../../src/media-errors.ts');
+  const {MediaOpenError}=await import('../../shared/media/io/media-errors.ts');
   const bytes=await readFile('fixtures/ts-analysis/h264-static.ts');
   const closed={native:0,software:0};
   const failed=(name:'native'|'software'):import('../../src/flv-decoder.ts').PacketDecoder=>({
@@ -176,7 +176,7 @@ test('real Worker concurrent index requests reject during initialization and rem
 
 test('native first-frame decode failure uses real packet WASM with the same verified JS index',async()=>{
   const {TsEngine}=await import('../../src/ts-engine.ts');
-  const {MediaOpenError}=await import('../../src/media-errors.ts');
+  const {MediaOpenError}=await import('../../shared/media/io/media-errors.ts');
   const bytes=await readFile('fixtures/ts-analysis/h264-static.ts');
   const directory=await mkdtemp(join(tmpdir(),'voidplayer-ts-native-failure-'));
   const glue=pathToFileURL(resolve('public/vendor/voidplayer-core/voidplayer-core.js')).href;

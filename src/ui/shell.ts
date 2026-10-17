@@ -1,14 +1,14 @@
 import { t, th, msg } from '../i18n.ts';
 import { settingsShell } from './settings-shell.ts';
-import { DEFAULT_ANNOTATION_COLOR } from '../annotation.ts';
+import { DEFAULT_ANNOTATION_COLOR } from '../../shared/review/annotation.ts';
 import { buildInfo } from '../build-info.ts';
-import { SLOTS } from '../model.ts';
+import { SLOTS } from '../../shared/review/model.ts';
 import { iconButton } from './controls.ts';
 import { icon } from './icons.ts';
 import { playbackIcon } from './playback-icon.ts';
 import { PANEL_SHORTCUTS, shortcutTooltip } from './shortcuts.ts';
 import type { Shortcut } from './shortcuts.ts';
-import type { Slot } from '../model.ts';
+import type { Slot } from '../../shared/review/model.ts';
 
 const panelButton = (id: 'inspector' | 'analysis' | 'subtracks' | 'sources', label: string, glyph: 'info' | 'chart' | 'rows' | 'film', extra = '') =>
   iconButton({ glyph, label, tooltip: shortcutTooltip(label, PANEL_SHORTCUTS[id]), iconClass: extra, attributes: { id: `toggle-${id}`, 'aria-controls': `${id}-panel`, 'aria-expanded': 'false' } });

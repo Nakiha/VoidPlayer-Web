@@ -1,5 +1,5 @@
-import type { WorkspaceFile } from './workspace-file.ts';
-import { pinLibraryReference } from './media-reference.ts';
+import type { WorkspaceFile } from '../shared/review/workspace-file.ts';
+import { pinLibraryReference } from '../shared/media/io/media-reference.ts';
 
 /** Sharing stores references, never uploads the user's local videos. */
 export async function prepareSharedWorkspace(value: WorkspaceFile) {

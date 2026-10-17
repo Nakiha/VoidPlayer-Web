@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Viewport } from '../../src/viewport.ts';
+import { Viewport } from '../../shared/presentation/viewport.ts';
 import { installViewportGestures } from '../../src/ui/viewport-gestures.ts';
 
 class ElementStub extends EventTarget {

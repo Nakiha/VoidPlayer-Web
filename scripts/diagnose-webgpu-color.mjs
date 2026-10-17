@@ -33,7 +33,7 @@ try {
  report.result=await page.evaluate(async({gpuMode,skipThroughput})=>{
   const {createExternalSurface,wasmVideoFrame}=await import('/scripts/webgpu-color-surface.mjs');
   const {openPacketMedia}=await import('/src/packet-media.ts');
-  const {resolveYuvColor,validateYuv,yuvToRgba,yuvSample}=await import('/src/yuv-color.ts');
+  const {resolveYuvColor,validateYuv,yuvToRgba,yuvSample}=await import('/shared/color/yuv-color.ts');
   const {compareRgba}=await import('/src/color-evidence.ts');
   const {buildInfo}=await import('/src/build-info.ts');
   const {prepareYuvFrame}=await import('/src/yuv-frame.ts');

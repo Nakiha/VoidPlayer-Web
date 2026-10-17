@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { groupSamples } from '../../src/analysis/grouping.ts';
 import { canLayoutRaw, layoutMergedSamples, layoutMergedBuckets, pickGlyph, valueToY, sampleBarWidth, chartBarWidth, referenceNodeRadius, paddedChartDomain, containerChartColumn, layoutAnalysisCards, floatingAvoidanceShift } from '../../src/ui/analysis-geometry.ts';
-import type { Slot } from '../../src/model.ts';
+import type { Slot } from '../../shared/review/model.ts';
 
 const mediaBySlot = new Map<Slot, { mediaId: string; sourceVersion: string; indexRevision: number }>([
   ['A', { mediaId: 'mA', sourceVersion: 'mA@5', indexRevision: 5 }],

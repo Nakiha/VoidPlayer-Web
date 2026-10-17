@@ -2,8 +2,8 @@ import { yuvFixture } from '../helpers/yuv-fixture.ts';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {nativeYuvSource,verifyNativeWitness} from '../../src/native-yuv-source.ts';
-import {yuvToRgba} from '../../src/yuv-color.ts';
-import {rgbaDescription} from '../../src/frame-description.ts';
+import {yuvToRgba} from '../../shared/color/yuv-color.ts';
+import {rgbaDescription} from '../../shared/media/frame-description.ts';
 import type {DecodedFrame,MediaSource} from '../../src/media.ts';
 
 const color={matrix:'bt709',primaries:'bt709',transfer:'bt709',fullRange:false};

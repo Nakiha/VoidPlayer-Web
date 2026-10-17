@@ -1,5 +1,5 @@
-import type { FlvIndex } from './flv-demux.ts';
-import type { CachedAudioBatch, CachedAudioConfig } from './audio-types.ts';
+import type { FlvIndex } from '../shared/media/containers/flv-demux.ts';
+import type { CachedAudioBatch, CachedAudioConfig } from '../shared/media/audio-types.ts';
 
 type CachedBytes = { peek(offset: number, length: number): Uint8Array | undefined };
 const u24 = (b: Uint8Array, p: number) => b[p] * 65536 + b[p + 1] * 256 + b[p + 2];

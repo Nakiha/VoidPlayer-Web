@@ -1,10 +1,10 @@
 import { probeContainer } from './container-probe.ts';
 import type { ContainerKind } from './container-probe.ts';
-import type { RandomAccessInput } from './range-reader.ts';
+import type { RandomAccessInput } from '../shared/media/io/range-reader.ts';
 import type { FallbackDeps } from './ffmpeg-media.ts';
 import type { MediaMeta, MediaSource } from './media.ts';
-import { MediaOpenError } from './media-errors.ts';
-import { loadAborted } from './media-abort.ts';
+import { MediaOpenError } from '../shared/media/io/media-errors.ts';
+import { loadAborted } from '../shared/media/io/media-abort.ts';
 import { contextLog } from './log.ts';
 
 /** One software adapter selection for local files, URLs and native witnesses.

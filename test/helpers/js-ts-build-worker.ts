@@ -1,6 +1,6 @@
 import {parentPort,workerData} from 'node:worker_threads';
 import {open} from 'node:fs/promises';
-import {TsPacketSource} from '../../src/ts-packet-source.ts';
+import {TsPacketSource} from '../../shared/media/containers/ts-packet-source.ts';
 
 parentPort!.on('message',async request=>{
   const handle=await open(request.filePath,'r');

@@ -1,9 +1,9 @@
 import type { ReviewSession } from '../../session.ts';
-import type { AnalysisViewState } from '../../workspace-file.ts';
+import type { AnalysisViewState } from '../../../shared/review/workspace-file.ts';
 import type { AnalysisHooks, installAnalysisPanel } from '../analysis-panel.ts';
 import { loadAnalysisPreferences } from './preferences.ts';
 import { reconcileTrackSelection } from '../track-selection.ts';
-import type { Slot } from '../../model.ts';
+import type { Slot } from '../../../shared/review/model.ts';
 
 type Action = Parameters<typeof installAnalysisPanel>[1];
 type Panel = ReturnType<typeof installAnalysisPanel>;

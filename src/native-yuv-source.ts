@@ -1,7 +1,7 @@
 import type {DecodedFrame,MediaSource} from './media.ts';
-import {MediaOpenError} from './media-errors.ts';
-import {chromaOffset,resolveYuvColor,validateYuv,yuvSample,visibleChromaBounds} from './yuv-color.ts';
-import { hdrTransfer } from './hdr-policy.ts';
+import {MediaOpenError} from '../shared/media/io/media-errors.ts';
+import {chromaOffset,resolveYuvColor,validateYuv,yuvSample,visibleChromaBounds} from '../shared/color/yuv-color.ts';
+import { hdrTransfer } from '../shared/color/hdr-policy.ts';
 
 /** Certify a same-PTS raw-plane witness, never fit browser RGB output. */
 export function verifyNativeWitness(native:DecodedFrame,reference:DecodedFrame){

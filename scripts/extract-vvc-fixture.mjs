@@ -2,8 +2,8 @@
 // Only container tables and packet bytes are read; no video is decoded.
 import { readFile } from 'node:fs/promises';
 import { Input, BufferSource, MP4, EncodedPacketSink } from 'mediabunny';
-import { RangeReader } from '../src/range-reader.ts';
-import { readMp4Configurations } from '../src/mp4-config.ts';
+import { RangeReader } from '../shared/media/io/range-reader.ts';
+import { readMp4Configurations } from '../shared/media/containers/mp4-config.ts';
 const bytes = await readFile(process.argv[2]);
 const input = new Input({ source: new BufferSource(bytes), formats: [MP4] });
 const reader = new RangeReader({ file: new Blob([bytes]) });

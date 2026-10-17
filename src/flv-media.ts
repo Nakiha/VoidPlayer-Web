@@ -1,5 +1,5 @@
 import { openPacketMedia } from './packet-media.ts';
-import type { FlvInput } from './flv-demux.ts';
+import type { FlvInput } from '../shared/media/containers/flv-demux.ts';
 import type { MediaMeta } from './media.ts';
 import type { FallbackDeps } from './ffmpeg-media.ts';
 

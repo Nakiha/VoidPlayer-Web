@@ -2,10 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SessionResources } from '../../src/session/resources.ts';
 import { FrameQueue } from '../../src/playback.ts';
-import { rgbaDescription } from '../../src/frame-description.ts';
+import { rgbaDescription } from '../../shared/media/frame-description.ts';
 import { ThumbnailUrlCache } from '../../src/thumbnails/url-cache.ts';
 import { thumbnailEvictions } from '../../src/thumbnails/local-store.ts';
-import { localCacheKey, THUMB_RECIPE_VERSION } from '../../src/thumbnails/contract.ts';
+import { localCacheKey, THUMB_RECIPE_VERSION } from '../../shared/thumbnails/contract.ts';
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
 test('shared queue budget reserves concurrent pulls, preserves required frames and releases stopped/late frames', async () => {

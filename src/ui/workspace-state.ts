@@ -1,4 +1,4 @@
-import type { MediaInfo, Mark, FrameInfo, Slot } from '../model.ts';
+import type { MediaInfo, Mark, FrameInfo, Slot } from '../../shared/review/model.ts';
 
 export type Panel = 'inspector' | 'subtracks' | 'sources' | 'analysis';
 export type ReviewTrack = MediaInfo & { slot: Slot; frame: FrameInfo | null; offsetUs?:number };

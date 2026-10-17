@@ -9,14 +9,14 @@ import {pathToFileURL} from 'node:url';
 import {Worker} from 'node:worker_threads';
 import {MediaLibraryIndex} from '../../server/library.ts';
 import {createMediaServer} from '../../server/app.ts';
-import {JS_TS_MEDIA_INDEX_IDENTITY,JS_MATROSKA_MEDIA_INDEX_IDENTITY} from '../../src/media-index-identity.ts';
+import {JS_TS_MEDIA_INDEX_IDENTITY,JS_MATROSKA_MEDIA_INDEX_IDENTITY} from '../../shared/media/indexing/media-index-identity.ts';
 import {MediaIndexClient} from '../../src/media-index-client.ts';
 import {WorkerRpc} from '../../src/worker-rpc.ts';
 import type {PacketCommands} from '../../src/worker-protocol.ts';
 import {loadServerJsIndex} from '../../src/js-packet-index-client.ts';
-import {TsCombinationNotMigrated} from '../../src/ts-packet-source.ts';
-import {MatroskaPacketSource} from '../../src/matroska-packet-source.ts';
-import {RangeReader} from '../../src/range-reader.ts';
+import {TsCombinationNotMigrated} from '../../shared/media/containers/ts-packet-source.ts';
+import {MatroskaPacketSource} from '../../shared/media/containers/matroska-packet-source.ts';
+import {RangeReader} from '../../shared/media/io/range-reader.ts';
 import {JsContainerEngine} from '../../src/js-container-engine.ts';
 import {ownLibraryIndexReference} from '../../src/library-index-reference.ts';
 

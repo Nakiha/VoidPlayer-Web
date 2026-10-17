@@ -1,5 +1,5 @@
-import { mediaDiagnostic } from './media-errors.ts';
-import type { MediaDiagnostic } from './media-errors.ts';
+import { mediaDiagnostic } from '../shared/media/io/media-errors.ts';
+import type { MediaDiagnostic } from '../shared/media/io/media-errors.ts';
 import { diagnosticMessage } from './ui/diagnostic-message.ts';
 import { mountLocalizedShell } from './ui/localized-shell.ts';
 import { installLanguageControls } from './ui/language.ts';
@@ -24,10 +24,10 @@ import { installChoiceMenu } from './ui/choice-menu.ts';
 import { installNumericChoice } from './ui/numeric-choice.ts';
 import { installHeaderActions } from './ui/header-actions.ts';
 import { installTopbarCompact } from './ui/topbar-compact.ts';
-import { SLOTS } from './model.ts';
+import { SLOTS } from '../shared/review/model.ts';
 import { installTooltips } from './ui/tooltips.ts';
 import { installToasts } from './ui/toast.ts';
-import { AnalysisFailure } from './bitstream-analysis/failure.ts';
+import { AnalysisFailure } from '../shared/analysis/bitstream/failure.ts';
 import { createTrackToasts } from './ui/track-toasts.ts';
 import { installBrandEffects } from './ui/brand-effects.ts';
 import { animatePlaybackIcon } from './ui/playback-icon.ts';
@@ -50,8 +50,8 @@ import { installViewportChrome } from './ui/viewport-chrome.ts';
 import { installPixelGrid } from './ui/pixel-grid.ts';
 import { openMedia } from './media.ts';
 import { ReviewSession } from './session.ts';
-import { formatTime } from './model.ts';
-import type { Slot } from './model.ts';
+import { formatTime } from '../shared/review/model.ts';
+import type { Slot } from '../shared/review/model.ts';
 import { registerReviewTools, reviewTools } from './agent.ts';
 import { bindFileDrop } from './file-drop.ts';
 import { handleKey, saveFileHandle } from './file-handles.ts';
@@ -61,8 +61,8 @@ import { startBrowserLogging } from './log-storage.ts';
 import { installLogPanel } from './log-panel.ts';
 import { paintFrame, captureFrame, disposePresentation, bindPresentationResources } from './presenter.ts';
 import { setPresentationChannel } from './presentation-channel.ts';
-import { Viewport, ZOOM_PRESETS, ZOOM_MIN, ZOOM_MAX } from './viewport.ts';
-import type { ChannelMode, PixelSizeMode, ViewportSnapshot } from './viewport.ts';
+import { Viewport, ZOOM_PRESETS, ZOOM_MIN, ZOOM_MAX } from '../shared/presentation/viewport.ts';
+import type { ChannelMode, PixelSizeMode, ViewportSnapshot } from '../shared/presentation/viewport.ts';
 
 const stopLogging = startBrowserLogging();
 const uiEvents = new AbortController();
@@ -82,7 +82,8 @@ const removeBrandEffects = installBrandEffects($<HTMLButtonElement>('brand-about
   () => settings.openPane('about', $<HTMLElement>('brand-about')));
 const canvases = Object.fromEntries(SLOTS.map(slot => [slot, $<HTMLCanvasElement>(`canvas-${slot}`)])) as Record<Slot, HTMLCanvasElement>;
 const {setColorMode,setReferenceDecode}=await import('./color-mode.ts');
-const {setColorOutput,hdrDisplayAvailable}=await import('./color-output.ts');
+const {setColorOutput}=await import('../shared/color/color-output.ts');
+const {hdrDisplayAvailable}=await import('./presentation/display-capabilities.ts');
 try{const saved=localStorage.getItem('voidplayer.color-output');if(saved)setColorOutput(JSON.parse(saved));}catch{}
 try{const saved=localStorage.getItem('voidplayer.reference-decode');if(saved)setReferenceDecode(JSON.parse(saved));}catch{}
 let savedColorMode:'reference'|'browser'='browser';

@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { AnalysisResult } from '../../src/bitstream-analysis/contract.ts';
-import { OwnedBlocks, packLegacy, summaryOf, legacyOf, encodeProduct, decodeProduct, validateProduct, PRODUCT_LIMIT } from '../../src/bitstream-analysis/products.ts';
-import { DiagramStore } from '../../src/bitstream-analysis/diagrams.ts';
+import type { AnalysisResult } from '../../shared/analysis/bitstream/contract.ts';
+import { OwnedBlocks, packLegacy, summaryOf, legacyOf, encodeProduct, decodeProduct, validateProduct, PRODUCT_LIMIT } from '../../shared/analysis/bitstream/products.ts';
+import { DiagramStore } from '../../shared/analysis/bitstream/diagrams.ts';
 const result = (): AnalysisResult => ({
   schema: 1,
   codec: "h264",
@@ -95,13 +95,13 @@ test('summary cannot authorize block cache and corruption survives corrected che
   assert.throws(()=>validateProduct({...summaryOf(r),capabilities:{...r.capabilities,blocks:'unsupported'}}));
 });
 test('bounded response rejects lying content length without allocating beyond the admitted size', async () => {
-  const {readBoundedResponse}=await import('../../src/bitstream-analysis/products.ts');
+  const {readBoundedResponse}=await import('../../shared/analysis/bitstream/products.ts');
   const response=new Response(new Uint8Array(20),{headers:{'content-length':'4'}});
   await assert.rejects(readBoundedResponse(response),/Oversized/);
   await assert.rejects(readBoundedResponse(new Response('x',{headers:{'content-length':String(PRODUCT_LIMIT.frame+1)}})),/budget/);
 });
 test('summary pages enforce complete namespace and checksum; block magic is unambiguous', async () => {
-  const {AnalysisStore}=await import('../../server/analysis/store.ts');const {mkdtemp,rm,readFile,writeFile}=await import('node:fs/promises');const {tmpdir}=await import('node:os');const {join}=await import('node:path');const {createHash}=await import('node:crypto');const {productKey}=await import('../../src/bitstream-analysis/products.ts');
+  const {AnalysisStore}=await import('../../server/analysis/store.ts');const {mkdtemp,rm,readFile,writeFile}=await import('node:fs/promises');const {tmpdir}=await import('node:os');const {join}=await import('node:path');const {createHash}=await import('node:crypto');const {productKey}=await import('../../shared/analysis/bitstream/products.ts');
   const folder=await mkdtemp(join(tmpdir(),'analysis-products-'));try{
     const store=new AnalysisStore(folder),r=result(),summary=summaryOf(r),id=createHash('sha256').update(productKey({...r.picture,au:0},r.buildId,null,'summary')).digest('hex');
     await store.putOutput(id,summary);assert.deepEqual(await store.getOutput(id,3),summary);
@@ -113,7 +113,7 @@ test('summary pages enforce complete namespace and checksum; block magic is unam
 });
 
 test('service warms explicit summaries without workers, preserves exact blocks, and invalidates old build overlays', async () => {
- const {BitstreamAnalysisService}=await import('../../src/bitstream-analysis/service.ts');const {makeDemandPlan}=await import('../../src/bitstream-analysis/demand.ts');
+ const {BitstreamAnalysisService}=await import('../../src/bitstream-analysis/service.ts');const {makeDemandPlan}=await import('../../shared/analysis/bitstream/demand.ts');
  const previous={Worker:Object.getOwnPropertyDescriptor(globalThis,'Worker'),location:Object.getOwnPropertyDescriptor(globalThis,'location'),fetch:globalThis.fetch};
  let build='test',created=0;
  const r=result();r.picture.au=0;r.sourcePtsUs=100;r.sourceDtsUs=null;r.nalus=[{offset:0,size:1,type:5,temporalId:0,layer:0}];r.gop={startAu:0,endAu:1,configuration:0,anchor:'closed'};
@@ -133,7 +133,7 @@ test('service warms explicit summaries without workers, preserves exact blocks, 
 });
 
 test('same GOP viewport moves retain one worker, latest window, pause release and AU-set resume', async () => {
- const {ReviewSession}=await import('../../src/session.ts');const {rgbaDescription}=await import('../../src/frame-description.ts');const {makeDemandPlan}=await import('../../src/bitstream-analysis/demand.ts');
+ const {ReviewSession}=await import('../../src/session.ts');const {rgbaDescription}=await import('../../shared/media/frame-description.ts');const {makeDemandPlan}=await import('../../shared/analysis/bitstream/demand.ts');
  const previous={Worker:Object.getOwnPropertyDescriptor(globalThis,'Worker'),location:Object.getOwnPropertyDescriptor(globalThis,'location'),fetch:globalThis.fetch};
  const packets=Array.from({length:3},(_,au)=>({au,configuration:0,pts:100+au*100,dts:null,offset:0,size:1,key:au===0}));
  let created=0,terminated=0,repairs=0,releaseMiddle!:()=>void,reached!:()=>void;const firstReached=new Promise<void>(r=>{reached=r;});
@@ -156,13 +156,13 @@ test('same GOP viewport moves retain one worker, latest window, pause release an
 });
 
 test('unsupported product modes fail explicitly at admission',async()=>{
- const {validateTarget,validateRange}=await import('../../src/bitstream-analysis/contract.ts');
+ const {validateTarget,validateRange}=await import('../../shared/analysis/bitstream/contract.ts');
  assert.throws(()=>validateTarget({sourceVersion:'x',sourcePtsUs:0,normalizedMediaUs:0,product:'summary'}),/Summary requires/);
  assert.throws(()=>validateRange({sourceVersion:'x',firstPtsUs:0,startUs:0,endUs:1,product:'blocks'}),/require a stream or exact-picture/);
 });
 
 test('exact request rejects cross-product, index and build payloads before cache authorization',async()=>{
- const {BitstreamAnalysisService}=await import('../../src/bitstream-analysis/service.ts');const {JS_TS_MEDIA_INDEX_IDENTITY}=await import('../../src/media-index-identity.ts');
+ const {BitstreamAnalysisService}=await import('../../src/bitstream-analysis/service.ts');const {JS_TS_MEDIA_INDEX_IDENTITY}=await import('../../shared/media/indexing/media-index-identity.ts');
  const previous={Worker:Object.getOwnPropertyDescriptor(globalThis,'Worker'),location:Object.getOwnPropertyDescriptor(globalThis,'location'),fetch:globalThis.fetch};let outgoing:any,expected='test';
  class WorkerMock{onmessage?:({data}:{data:any})=>void;onerror:any;onmessageerror:any;terminate(){}postMessage(data:any){if(data.target)queueMicrotask(()=>this.onmessage?.({data:{ok:true,result:outgoing}}));}}
  Object.defineProperty(globalThis,'Worker',{configurable:true,value:WorkerMock});Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});globalThis.fetch=async()=>new Response(JSON.stringify({buildId:expected}));
@@ -201,7 +201,7 @@ test('valid binary header with low length byte 123 cannot be mistaken for a JSON
 test('single-picture summary preserves same-identity verified stream GOP',()=>{const store=new DiagramStore(),r=result();r.nalus=[{offset:0,size:1,type:5,temporalId:0,layer:0}];r.gop={startAu:0,endAu:30,configuration:0,anchor:'closed'};store.put(r);const single={...r};delete single.gop;store.put(single);assert.deepEqual(store.summaryAt(r.picture.sourceVersion,r.picture.au)?.gop,r.gop);store.put({...single,buildId:'new'});assert.equal(store.summaryAt(r.picture.sourceVersion,r.picture.au)?.gop,undefined);});
 
 test('SPS layout proves exact crop across plane padding; unknown/malformed layouts fail closed',async()=>{
- const {matchesAnalysisLayout}=await import('../../src/bitstream-analysis/contract.ts');const r=result(),token={geometry:{codedWidth:16,codedHeight:18,visibleRect:{x:0,y:0,width:16,height:16}}} as import('../../src/bitstream-analysis/contract.ts').PresentedFrameToken;
+ const {matchesAnalysisLayout}=await import('../../shared/analysis/bitstream/contract.ts');const r=result(),token={geometry:{codedWidth:16,codedHeight:18,visibleRect:{x:0,y:0,width:16,height:16}}} as import('../../shared/analysis/bitstream/contract.ts').PresentedFrameToken;
  assert.equal(matchesAnalysisLayout(r,token),false);r.sourceLayout={provenance:'configuration-sps-v1',configuration:0,codedWidth:16,codedHeight:16,visibleRect:{x:0,y:0,width:16,height:16}};assert.equal(matchesAnalysisLayout(r,token),true);
  const packed=packLegacy(r);assert.deepEqual((await decodeProduct(await encodeProduct(packed))).sourceLayout,r.sourceLayout);assert.deepEqual(legacyOf(packed).sourceLayout,r.sourceLayout);
  assert.equal(matchesAnalysisLayout(r,{...token,geometry:{...token.geometry,visibleRect:{x:0,y:1,width:16,height:15}}}),false);
@@ -209,7 +209,7 @@ test('SPS layout proves exact crop across plane padding; unknown/malformed layou
 });
 
 test('stream rejects wrong build products and plans before raw/cache coverage, including retained plans',async()=>{
- const {BitstreamAnalysisService}=await import('../../src/bitstream-analysis/service.ts');const {makeDemandPlan}=await import('../../src/bitstream-analysis/demand.ts');
+ const {BitstreamAnalysisService}=await import('../../src/bitstream-analysis/service.ts');const {makeDemandPlan}=await import('../../shared/analysis/bitstream/demand.ts');
  const previous={Worker:Object.getOwnPropertyDescriptor(globalThis,'Worker'),location:Object.getOwnPropertyDescriptor(globalThis,'location'),fetch:globalThis.fetch};let mode='valid';
  const frame={...result(),picture:{...result().picture,au:0},nalus:[{offset:0,size:1,type:5,temporalId:0,layer:0}],gop:{startAu:0,endAu:1,configuration:0,anchor:'closed' as const}};
  const packets=[{au:0,configuration:0,pts:100,dts:null,offset:0,size:1,key:true}];
@@ -257,7 +257,7 @@ test('shared stream forks cannot reauthorize late old summaries or manifests ove
 
 
 test('evicted shared namespace cannot be revived by a late picture or plan',async t=>{
- const {BitstreamAnalysisService}=await import('../../src/bitstream-analysis/service.ts');const {makeDemandPlan}=await import('../../src/bitstream-analysis/demand.ts');const saved={fetch:globalThis.fetch,location:Object.getOwnPropertyDescriptor(globalThis,'location')};Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});globalThis.fetch=async()=>new Response(JSON.stringify({buildId:'test'}));
+ const {BitstreamAnalysisService}=await import('../../src/bitstream-analysis/service.ts');const {makeDemandPlan}=await import('../../shared/analysis/bitstream/demand.ts');const saved={fetch:globalThis.fetch,location:Object.getOwnPropertyDescriptor(globalThis,'location')};Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});globalThis.fetch=async()=>new Response(JSON.stringify({buildId:'test'}));
  const service=new BitstreamAnalysisService(()=>{}),source={info:{},bitstreamFile:new Blob(['x'])} as any,r=result(),token={picture:r.picture,sourcePtsUs:r.sourcePtsUs,normalizedMediaUs:0,geometry:{codedWidth:16,codedHeight:16,visibleRect:{x:0,y:0,width:16,height:16}}} as any;
  try{t.mock.method(service as any,'local',async()=>{(service as any).contexts.clear();return packLegacy(r);});await assert.rejects(service.request(source,token),/namespace superseded/);assert.equal((service as any).contexts.size,0);assert.equal(service.cached(token),null);
  const target={mode:'stream' as const,product:'summary' as const,sourceVersion:r.picture.sourceVersion,firstPtsUs:100,durationUs:100,window:{startUs:0,endUs:100,axis:'pts' as const}};(service as any).streamBuild={sequence:(service as any).sequence,buildId:'test'};const plan=makeDemandPlan([{au:0,configuration:0,pts:100,dts:null,offset:0,size:1,key:true}],target,'test');assert.throws(()=>(service as any).acceptPlan(plan,target),/namespace superseded/);assert.equal((service as any).contexts.size,0);assert.equal((service as any).plans.size,0);

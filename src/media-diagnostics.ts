@@ -1,6 +1,6 @@
-import { MediaOpenError } from './media-errors.ts';
-import { RangeReader, type RandomAccessInput } from './range-reader.ts';
-import { loadAborted, onLoadAbort } from './media-abort.ts';
+import { MediaOpenError } from '../shared/media/io/media-errors.ts';
+import { RangeReader, type RandomAccessInput } from '../shared/media/io/range-reader.ts';
+import { loadAborted, onLoadAbort } from '../shared/media/io/media-abort.ts';
 
 // Stream types from FFmpeg libavformat/mpegts.h and mpegts.c (ISO/IEC 13818-1).
 // 0x06 is private PES, not HEVC. Never infer its codec without descriptors.

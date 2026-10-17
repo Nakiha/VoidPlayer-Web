@@ -5,7 +5,7 @@ import { runSourceQuery } from '../../src/analysis/adapters.ts';
 import { bitrateAtT, localRateAtT, coarsenBucketsShared, isBucketGridCompatible, planSharedCoarseWidth, LOCAL_RATE_WINDOW_US } from '../../src/analysis/inspection.ts';
 import { canSatisfy, clampPixelWidth, bucketWidthFor } from '../../src/analysis/view-cache.ts';
 import { ReviewSession } from '../../src/session.ts';
-import { rgbaDescription } from '../../src/frame-description.ts';
+import { rgbaDescription } from '../../shared/media/frame-description.ts';
 import type { MediaSource } from '../../src/media.ts';
 
 const cap = { hasSize: true, hasDts: true, keySource: 'container' as const, pictureType: 'key-only' as const, qp: 'unsupported' as const, indexState: 'complete' as const };

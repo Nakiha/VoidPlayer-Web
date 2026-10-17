@@ -7,8 +7,8 @@ import { installResizeGesture } from './resize-gesture.ts';
 import { installPanelMotion, animatePanelLayout } from './panel-motion.ts';
 import { installPanelResize } from './panel-resize.ts';
 import type { ReviewSession } from '../session.ts';
-import { SLOTS } from '../model.ts';
-import type { Slot } from '../model.ts';
+import { SLOTS } from '../../shared/review/model.ts';
+import type { Slot } from '../../shared/review/model.ts';
 import { installAnnotationPanel } from './annotation-panel.ts';
 import { installLazyAnalysisPanel } from './analysis/lazy-panel.ts';
 import { WorkspaceState } from './workspace-state.ts';
@@ -195,7 +195,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     render, renderProgress, refreshLibrary: () => sources.refreshLibrary(), selected: () => view.selected,
     rememberFile(file: File) { sources.rememberFile(file); },
     getState: () => ({ panels: { ...view.panels }, selected: view.selected, dockHeight, marksExpanded: annotations.expanded(), filenameWidth: trackColumns.width(), sources: sources.sourcesLayout(), analysisView: analysis.getAnalysisState() }),
-    async restore(layout: import('../workspace-file.ts').WorkspaceLayout) {
+    async restore(layout: import('../../shared/review/workspace-file.ts').WorkspaceLayout) {
       view.panels = { ...layout.panels, analysis: layout.panels.analysis ?? false }; view.selected = layout.selected;
       annotations.setExpanded(layout.marksExpanded); resize(layout.dockHeight);
       if (layout.filenameWidth !== undefined) trackColumns.resize(layout.filenameWidth);

@@ -1,13 +1,13 @@
-import {analysisIndexIdentity} from './products.ts';
-import type {ProductIndexIdentity} from './products.ts';
+import {analysisIndexIdentity} from '../../shared/analysis/bitstream/products.ts';
+import type {ProductIndexIdentity} from '../../shared/analysis/bitstream/products.ts';
 import {coreAssetUrl} from '../core-url.ts';
-import {emptyCounters} from './counters.ts';
-import type {AnalysisCounters} from './counters.ts';
-import { validateDemandPlan, demandKey } from './demand.ts';
-import type { DemandPlan } from './demand.ts';
-import { isProduct, isSummary, legacyOf, summaryOf, validateOutput, readBoundedResponse, decodeProduct, PRODUCT_LIMIT } from './products.ts';
-import type { AnalysisOutput } from './products.ts';
-import { DiagramStore } from "./diagrams.ts";
+import {emptyCounters} from '../../shared/analysis/bitstream/counters.ts';
+import type {AnalysisCounters} from '../../shared/analysis/bitstream/counters.ts';
+import { validateDemandPlan, demandKey } from '../../shared/analysis/bitstream/demand.ts';
+import type { DemandPlan } from '../../shared/analysis/bitstream/demand.ts';
+import { isProduct, isSummary, legacyOf, summaryOf, validateOutput, readBoundedResponse, decodeProduct, PRODUCT_LIMIT } from '../../shared/analysis/bitstream/products.ts';
+import type { AnalysisOutput } from '../../shared/analysis/bitstream/products.ts';
+import { DiagramStore } from "../../shared/analysis/bitstream/diagrams.ts";
 import { AnalysisPollingBudget } from './task-pool.ts';
 import { AnalysisCache } from "./cache.ts";
 import {
@@ -19,20 +19,20 @@ import {
   validateTarget,
   validateRange,
   validateStream,
-} from "./contract.ts";
+} from "../../shared/analysis/bitstream/contract.ts";
 import type {
   AnalysisResult,
   AnalysisTarget,
   AnalysisRangeTarget,
   AnalysisStreamTarget,
   PresentedFrameToken,
-} from "./contract.ts";
+} from "../../shared/analysis/bitstream/contract.ts";
 import type { MediaSource } from "../media.ts";
-import { referenceVersion } from "../media-reference.ts";
-import { AnalysisFailure, failureInfo, restoreFailure } from "./failure.ts";
-import type { AnalysisFailureInfo } from "./failure.ts";
-import type { StreamProgress } from './stream.ts';
-import type { Slot } from '../model.ts';
+import { referenceVersion } from "../../shared/media/io/media-reference.ts";
+import { AnalysisFailure, failureInfo, restoreFailure } from "../../shared/analysis/bitstream/failure.ts";
+import type { AnalysisFailureInfo } from "../../shared/analysis/bitstream/failure.ts";
+import type { StreamProgress } from '../../shared/analysis/bitstream/stream.ts';
+import type { Slot } from '../../shared/review/model.ts';
 export type DeepAnalysisState = {
   counters?:AnalysisCounters;
   /** Source coverage survives later picture tasks; current task is state/stream. */
@@ -56,8 +56,8 @@ export class BitstreamAnalysisService {
   private cache = new AnalysisCache();
   private diagrams = new DiagramStore();
   queryDiagrams(sourceVersion: string, au: number | null, sourcePtsUs: number, startAu?: number, limit?: number) { return this.diagrams.query(sourceVersion, au, sourcePtsUs, startAu, limit); }
-  queryChart(sourceVersion: string, startUs: number, endUs: number, pixelWidth: number, axis: import('../analysis/types.ts').AnalysisAxis = 'pts') { return this.diagrams.queryChart(sourceVersion, startUs, endUs, pixelWidth, axis); }
-  chartBounds(sourceVersion: string, axis: import('../analysis/types.ts').AnalysisAxis) { return this.diagrams.chartBounds(sourceVersion, axis); }
+  queryChart(sourceVersion: string, startUs: number, endUs: number, pixelWidth: number, axis: import('../../shared/analysis/metadata/types.ts').AnalysisAxis = 'pts') { return this.diagrams.queryChart(sourceVersion, startUs, endUs, pixelWidth, axis); }
+  chartBounds(sourceVersion: string, axis: import('../../shared/analysis/metadata/types.ts').AnalysisAxis) { return this.diagrams.chartBounds(sourceVersion, axis); }
   private admission={next:0};
   private contexts=new Map<string,{buildId:string;indexIdentity:ProductIndexIdentity|null;ticket:number}>();
   private displayDemandWindow?:AnalysisStreamTarget["window"];
@@ -428,8 +428,8 @@ export class BitstreamAnalysisService {
     signal: AbortSignal,
     consume: (result: AnalysisOutput, coverage?:boolean) => void,
     onProgress?: (progress: StreamProgress) => void,
-    frontier?: () => Promise<import('./stream.ts').AnalysisIndexFrontier>,
-    snapshot?: () => Promise<import("./types.ts").AnalysisIndexSnapshot>,
+    frontier?: () => Promise<import('../../shared/analysis/bitstream/stream.ts').AnalysisIndexFrontier>,
+    snapshot?: () => Promise<import("../../shared/analysis/bitstream/types.ts").AnalysisIndexSnapshot>,
   ): Promise<void> {
     signal.throwIfAborted();
     const worker = new Worker(new URL("./local-worker.ts", import.meta.url), {
@@ -599,7 +599,7 @@ export class BitstreamAnalysisService {
     file: Blob,
     target: AnalysisTarget,
     signal: AbortSignal,
-    snapshot?: () => Promise<import("./types.ts").AnalysisIndexSnapshot>,
+    snapshot?: () => Promise<import("../../shared/analysis/bitstream/types.ts").AnalysisIndexSnapshot>,
   ): Promise<AnalysisOutput> {
     signal.throwIfAborted();
     const worker = new Worker(new URL("./local-worker.ts", import.meta.url), {

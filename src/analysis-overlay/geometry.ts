@@ -1,6 +1,6 @@
 import { presentationRect } from "../presentation-surface.ts";
 import type { PresentationGeometry } from "../presentation-surface.ts";
-import type { PresentedFrameToken } from "../bitstream-analysis/contract.ts";
+import type { PresentedFrameToken } from "../../shared/analysis/bitstream/contract.ts";
 export function codedToViewport(
   x: number,
   y: number,

@@ -1,7 +1,7 @@
 import type { MediaSource, DecodedFrame } from './media.ts';
-import { MediaOpenError } from './media-errors.ts';
+import { MediaOpenError } from '../shared/media/io/media-errors.ts';
 import { isHdrTransfer } from './presentation-color.ts';
-import { resolveYuvColor } from './yuv-color.ts';
+import { resolveYuvColor } from '../shared/color/yuv-color.ts';
 import { contextLog } from './log.ts';
 
 /** Give the verified origin frame to the session's first presentation. */

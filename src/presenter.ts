@@ -1,16 +1,17 @@
 import type { SessionResources } from './session/resources.ts';
 import { gpuPaint, gpuCapture, gpuGeometry, gpuFallbackGeometry, disposeGpuPresentation } from './webgpu-presenter.ts';
-import { yuvToRgba, yuvPixelRgb, resolveYuvColor } from './yuv-color.ts';
+import { yuvToRgba, yuvPixelRgb, resolveYuvColor } from '../shared/color/yuv-color.ts';
 import { getPresentationChannel } from './presentation-channel.ts';
-import { validateDescription } from './frame-description.ts';
+import { validateDescription } from '../shared/media/frame-description.ts';
 import { presentationColor } from './presentation-color.ts';
-import { THUMB_MAX_EDGE } from './thumbnails/contract.ts';
+import { THUMB_MAX_EDGE } from '../shared/thumbnails/contract.ts';
 import { createPresentationSurface } from './presentation-surface.ts';
 import type { PresentationGeometry } from './presentation-surface.ts';
 import type { DecodedFrame } from './media.ts';
 import { log } from './log.ts';
-import { getColorOutput, hdrDisplayAvailable } from './color-output.ts';
-import { HDR_PREVIEW_POLICY } from './hdr-policy.ts';
+import { getColorOutput } from '../shared/color/color-output.ts';
+import {hdrDisplayAvailable} from './presentation/display-capabilities.ts';
+import { HDR_PREVIEW_POLICY } from '../shared/color/hdr-policy.ts';
 
 // Presentation is the only place that decides HOW a decoded frame reaches the
 // canvas. Backends deliver timestamps plus a resource (WebCodecs sample or

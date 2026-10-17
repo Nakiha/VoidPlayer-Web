@@ -7,7 +7,7 @@ import { MediaLibraryIndex } from '../../server/library.ts';
 import { AdminController } from '../../server/admin.ts';
 import { loadConfig } from '../../server/config.ts';
 import { createMediaServer } from '../../server/app.ts';
-import { THUMB_RECIPE_VERSION } from '../../src/thumbnails/contract.ts';
+import { THUMB_RECIPE_VERSION } from '../../shared/thumbnails/contract.ts';
 
 function jpeg320x240(): Uint8Array<ArrayBuffer> {
   return Uint8Array.from([

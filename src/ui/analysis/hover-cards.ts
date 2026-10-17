@@ -1,7 +1,7 @@
 import type { InspectionState } from '../../analysis/inspection.ts';
-import type { AnalysisDiagram } from '../../analysis/types.ts';
+import type { AnalysisDiagram } from '../../../shared/analysis/metadata/types.ts';
 import { msg, t } from '../../i18n.ts';
-import type { Slot } from '../../model.ts';
+import type { Slot } from '../../../shared/review/model.ts';
 import { computeLayout, formatAxis, plotGeometry } from '../analysis-canvas.ts';
 import type { CanvasModel } from '../analysis-canvas.ts';
 import { layoutAnalysisCards } from '../analysis-geometry.ts';

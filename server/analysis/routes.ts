@@ -1,4 +1,4 @@
-import { isProduct, encodeProduct, PRODUCT_SCHEMA } from '../../src/bitstream-analysis/products.ts';
+import { isProduct, encodeProduct, PRODUCT_SCHEMA } from '../../shared/analysis/bitstream/products.ts';
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { RouteContext } from "../routes/context.ts";
 import { sendJson } from "../http-utils.ts";
@@ -7,11 +7,11 @@ import type { AnalysisScheduler } from "./scheduler.ts";
 import {
   AnalysisFailure,
   failureInfo,
-} from "../../src/bitstream-analysis/failure.ts";
+} from "../../shared/analysis/bitstream/failure.ts";
 import {
   ANALYSIS_RECIPE,
   ANALYZER_VERSION,
-} from "../../src/bitstream-analysis/contract.ts";
+} from "../../shared/analysis/bitstream/contract.ts";
 export async function handleAnalysisRoutes(
   ctx: RouteContext,
   req: IncomingMessage,

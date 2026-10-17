@@ -2,8 +2,8 @@
 // 直接 glyph 身份只负责主高亮与精确点击。纯逻辑，无 DOM。
 // 与 tooltip/绘制解耦：调用方先算 InspectionState，再分别渲染表格与高亮。
 
-import type { AnalysisCapability, AnalysisResult, AnalysisSample } from './types.ts';
-import type { Slot } from '../model.ts';
+import type { AnalysisCapability, AnalysisResult, AnalysisSample } from '../../shared/analysis/metadata/types.ts';
+import type { Slot } from '../../shared/review/model.ts';
 
 export type CoverageState = 'known' | 'pending' | 'outside' | 'error' | 'unsupported';
 export type RateKind = 'display-fps' | 'sample-rate';

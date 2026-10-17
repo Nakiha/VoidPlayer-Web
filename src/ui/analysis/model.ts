@@ -1,6 +1,6 @@
-import type { Slot } from '../../model.ts';
-import type { AnalysisResult } from '../../analysis/types.ts';
-import { niceCeiling, shouldBucketize } from '../../analysis/statistics.ts';
+import type { Slot } from '../../../shared/review/model.ts';
+import type { AnalysisResult } from '../../../shared/analysis/metadata/types.ts';
+import { niceCeiling, shouldBucketize } from '../../../shared/analysis/metadata/statistics.ts';
 import { groupSamples } from '../../analysis/grouping.ts';
 import type { GroupSampleRef, TimeGroup } from '../../analysis/grouping.ts';
 import { coarsenBucketsShared, estimateBaseBucketWidth, isBucketGridCompatible, planSharedCoarseWidth } from '../../analysis/inspection.ts';

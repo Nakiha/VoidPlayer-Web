@@ -2,12 +2,12 @@ import { FlvCachedAudio } from './flv-cached-audio.ts';
 import { PacketTimeline } from './packet-timeline.ts';
 import { FlvIndexClient } from './flv-index-client.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
-import { MediaOpenError } from './media-errors.ts';
-import { scanFlv, flvDecoderConfig, flvIndexWarning, flvIndexIntegrity, flvMediaTiming, FlvReader } from './flv-demux.ts';
-import type { FlvInput, FlvIndex, FlvCheckpoint } from './flv-demux.ts';
+import { MediaOpenError } from '../shared/media/io/media-errors.ts';
+import { scanFlv, flvDecoderConfig, flvIndexWarning, flvIndexIntegrity, flvMediaTiming, FlvReader } from '../shared/media/containers/flv-demux.ts';
+import type { FlvInput, FlvIndex, FlvCheckpoint } from '../shared/media/containers/flv-demux.ts';
 import { nativeFlvDecoder, wasmFlvDecoder, packetDecodeError } from './flv-decoder.ts';
 import type { PacketDecoder, FlvFrame } from './flv-decoder.ts';
-import type { RangeVersion } from './range-reader.ts';
+import type { RangeVersion } from '../shared/media/io/range-reader.ts';
 
 export interface PreparedFlv extends FlvCheckpoint { version: RangeVersion; }
 

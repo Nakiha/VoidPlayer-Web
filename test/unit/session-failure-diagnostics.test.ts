@@ -1,4 +1,4 @@
-import { rgbaDescription } from '../../src/frame-description.ts';
+import { rgbaDescription } from '../../shared/media/frame-description.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ReviewSession } from '../../src/session.ts';

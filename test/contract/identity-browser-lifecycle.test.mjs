@@ -6,7 +6,7 @@ import path from 'node:path';
 import { createServer } from 'node:net';
 import { loadConfig } from '../../server/config.ts';
 import { startService } from '../../server/runtime.ts';
-import { httpFetch } from '.././http-request.ts';
+import { httpFetch } from '../http-request.ts';
 import { identityBrowserService, cleanupIdentityBrowser } from '../../scripts/identity-browser-lifecycle.mjs';
 
 for (const host of [undefined, '127.0.0.1']) test(`identity HTTPS restart (${host ?? 'default host'}) keeps its origin when the adjacent guide port is occupied`, async () => {

@@ -9,9 +9,9 @@ import { AdminError } from '../../server/admin-error.ts';
 import { AdminController } from '../../server/admin.ts';
 import { loadConfig } from '../../server/config.ts';
 import { createMediaServer } from '../../server/app.ts';
-import { FFMPEG_INDEX_RECORD_BYTES, serializeFfmpegIndex } from '../../src/ffmpeg-index-cache.ts';
-import type { MediaIndexIdentity } from '../../src/media-index-identity.ts';
-import { syntheticFlv } from '.././flv-fixture.ts';
+import { FFMPEG_INDEX_RECORD_BYTES, serializeFfmpegIndex } from '../../shared/media/indexing/ffmpeg-index-cache.ts';
+import type { MediaIndexIdentity } from '../../shared/media/indexing/media-index-identity.ts';
+import { syntheticFlv } from '../flv-fixture.ts';
 
 const indexerBuild = 'a'.repeat(40);
 const identity: MediaIndexIdentity = { kind: 'ffmpeg', streamKey: 'video:0', schemaVersion: 3, indexerBuild };

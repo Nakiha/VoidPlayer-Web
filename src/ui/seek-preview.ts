@@ -1,5 +1,5 @@
 import { t, msg, onLanguageChange } from '../i18n.ts';
-import { formatTime } from '../model.ts';
+import { formatTime } from '../../shared/review/model.ts';
 import { annotationThumbnails } from './annotation-thumbnails.ts';
 
 export type TimeMark = { id: string; text: string; frame: { ptsUs: number } };

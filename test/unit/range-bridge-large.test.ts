@@ -5,7 +5,7 @@ import { createRangeBridge } from '../../src/range-bridge.ts';
 
 for (const mode of ['large', 'eof', 'past-eof', 'cancel', 'short', 'version', 'limit', 'invalid']) test(`synchronous Range bridge: ${mode}`, { timeout: 15000 }, async t => {
   const start = 2 ** 32 + 123, length = mode === 'limit' ? 65 * 1024 * 1024 : 9 * 1024 * 1024 + 17, size = start + length;
-  const worker = new Worker(new URL('.././range-bridge-worker.ts', import.meta.url));
+  const worker = new Worker(new URL('../range-bridge-worker.ts', import.meta.url));
   const bridge = createRangeBridge(worker as unknown as globalThis.Worker, 'https://test.invalid/large', size);
   let requests = 0;
   t.mock.method(globalThis, 'fetch', async (_url: unknown, options: RequestInit) => {

@@ -1,5 +1,5 @@
 import { LocalDatabase } from './local-database.ts';
-import type { AnnotationDocument, AnnotationOperation, AnnotationRecord } from './annotation-record.ts';
+import type { AnnotationDocument, AnnotationOperation, AnnotationRecord } from '../shared/review/annotation-record.ts';
 export type AnnotationDraft = { key: string; space: string; actor: string; id: string; base: number; desired: AnnotationDocument | null; generation: number; attempt?: AnnotationOperation; sentGeneration?: number; conflict?: string };
 export type AnnotationPreview = { url: string; width: number; height: number; signature?: string };
 export class AnnotationStorage {

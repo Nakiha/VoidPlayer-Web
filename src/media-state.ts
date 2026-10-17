@@ -1,4 +1,4 @@
-import type {MediaInfo} from './model.ts';
+import type {MediaInfo} from '../shared/review/model.ts';
 import type {MediaSource,DecodedFrame} from './media.ts';
 import {contextLog} from './log.ts';
 export type MediaInfoChange={revision:number;reason:'index'|'presented-frame'|'identity'|'cached-metadata';changed:string[];before:MediaInfo;after:MediaInfo};

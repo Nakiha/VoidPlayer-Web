@@ -1,4 +1,4 @@
-import type { MediaInfo } from './model.ts';
+import type { MediaInfo } from '../shared/review/model.ts';
 export function indexProgressLabel(info: Pick<MediaInfo, 'indexState' | 'indexProgress' | 'indexWaiting'>): string {
   if (info.indexState !== 'building') return '';
   const p = info.indexProgress;

@@ -2,7 +2,7 @@
 // official FATE files. Coded pictures are unchanged; only TS/PES clocks change.
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
-const source='mpegts--h264small.ts',dir=new URL('../fixtures/fate/',import.meta.url);
+const source='mpegts--h264small.ts',dir=new URL('../fixtures/fate',import.meta.url);
 const manifest=JSON.parse(await readFile(new URL('./fate-timestamp-samples.json',import.meta.url)));
 const original=await readFile(new URL(source,dir)),sha=b=>createHash('sha256').update(b).digest('hex');
 if(sha(original)!==manifest.find(s=>s.file===source).sha256)throw Error('FATE input checksum mismatch');

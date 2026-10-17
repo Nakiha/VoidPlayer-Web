@@ -1,4 +1,4 @@
-import type { AnalysisQuery, AnalysisResult, AnalysisSample } from './types.ts';
+import type { AnalysisQuery, AnalysisResult, AnalysisSample } from '../../shared/analysis/metadata/types.ts';
 import type { SourceQueryContext } from './adapters.ts';
 
 export interface NativeAnalysisCommands {

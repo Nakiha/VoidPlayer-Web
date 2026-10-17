@@ -170,7 +170,7 @@ test('展示序排名：重排包表的 PTS 秩与二分一致，重复 PTS 共�
 });
 
 import { FfmpegPacketIndex } from '../../src/analysis/ffmpeg-adapter.ts';
-import { FFMPEG_NO_TIMESTAMP, ffmpegTicksToUs } from '../../src/ffmpeg-index-cache.ts';
+import { FFMPEG_NO_TIMESTAMP, ffmpegTicksToUs } from '../../shared/media/indexing/ffmpeg-index-cache.ts';
 
 function ffmpegRecords(packets: { pts: bigint; dts: bigint; ordinal: number; size: number }[]) {
   const bytes = new Uint8Array(packets.length * 48), view = new DataView(bytes.buffer);

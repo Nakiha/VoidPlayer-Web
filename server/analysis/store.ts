@@ -1,6 +1,6 @@
-import {parseBudgetedJson,admitJson} from '../../src/bitstream-analysis/json-budget.ts';
-import { encodeProduct, decodeProduct, metadataBudgetBytes, productKey, isProduct, validateProduct, PRODUCT_LIMIT } from '../../src/bitstream-analysis/products.ts';
-import type { AnalysisOutput, AnalysisProduct, AnalysisSummary } from '../../src/bitstream-analysis/products.ts';
+import {parseBudgetedJson,admitJson} from '../../shared/analysis/bitstream/json-budget.ts';
+import { encodeProduct, decodeProduct, metadataBudgetBytes, productKey, isProduct, validateProduct, PRODUCT_LIMIT } from '../../shared/analysis/bitstream/products.ts';
+import type { AnalysisOutput, AnalysisProduct, AnalysisSummary } from '../../shared/analysis/bitstream/products.ts';
 import { createHash, randomUUID } from "node:crypto";
 import {
   open,
@@ -17,9 +17,9 @@ import path from "node:path";
 import {
   BUDGET,
   validateResult,
-} from "../../src/bitstream-analysis/contract.ts";
-import type { AnalysisGop, AnalysisResult } from "../../src/bitstream-analysis/contract.ts";
-import { AnalysisFailure } from '../../src/bitstream-analysis/failure.ts';
+} from "../../shared/analysis/bitstream/contract.ts";
+import type { AnalysisGop, AnalysisResult } from "../../shared/analysis/bitstream/contract.ts";
+import { AnalysisFailure } from '../../shared/analysis/bitstream/failure.ts';
 const digest = (value: string) =>
   createHash("sha256").update(value).digest("hex");
 /** File descriptor size and format admission precede the body allocation. */
@@ -32,7 +32,7 @@ async function readBoundedFile(file:string,max:number,jsonLimit?:number):Promise
   }finally{await handle.close();}
 }
 /** Each picture is one independently committed chunk. No incomplete chunk is visible. */
-export interface StreamChunkRef { id: string; cursor: number; gop: AnalysisGop; au?:number; bytes?:number; product?:'summary'|'blocks'; encoding?:string; picture?:import("../../src/bitstream-analysis/contract.ts").SourcePictureKey }
+export interface StreamChunkRef { id: string; cursor: number; gop: AnalysisGop; au?:number; bytes?:number; product?:'summary'|'blocks'; encoding?:string; picture?:import("../../shared/analysis/bitstream/contract.ts").SourcePictureKey }
 export class AnalysisStore {
   readonly directory: string;
   readonly quota: number;

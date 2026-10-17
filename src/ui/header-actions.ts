@@ -1,5 +1,5 @@
 import { bindMenuTrigger } from './menu.ts';
-import { SLOTS } from '../model.ts';
+import { SLOTS } from '../../shared/review/model.ts';
 
 /** Move the same controls into the top layer when a four-column caption is narrow. */
 export function installHeaderActions() {

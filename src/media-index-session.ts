@@ -1,7 +1,7 @@
-import { FFMPEG_INDEX_BYTES } from './ffmpeg-index-cache.ts';
+import { FFMPEG_INDEX_BYTES } from '../shared/media/indexing/ffmpeg-index-cache.ts';
 import { MediaIndexClient } from './media-index-client.ts';
-import type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest, MediaIndexScanProgress } from './media-index-types.ts';
-import type { MediaIndexIdentity } from './media-index-identity.ts';
+import type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest, MediaIndexScanProgress } from '../shared/media/indexing/media-index-types.ts';
+import type { MediaIndexIdentity } from '../shared/media/indexing/media-index-identity.ts';
 
 export type MediaIndexSessionState = 'building' | 'complete' | 'error';
 
