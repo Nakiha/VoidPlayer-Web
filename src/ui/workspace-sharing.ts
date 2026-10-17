@@ -1,5 +1,4 @@
-import { mountLocalizedShell } from './localized-shell.ts';
-import { t, msg, th, onLanguageChange, formatDate } from '../i18n.ts';
+import { t, msg, onLanguageChange } from '../i18n.ts';
 import type { SavedWorkspace } from '../saved-workspaces.ts';
 import type { WorkspaceFile } from '../workspace-file.ts';
 import { prepareSharedWorkspace } from '../shared-workspace.ts';
@@ -17,19 +16,11 @@ export function installWorkspaceSharing(options: {
   scope(): string;
   canShare(): boolean;
   isOpening(): boolean;
-  closeSettings(): void | Promise<void>;
   toasts: ToastStack;
   report(error: unknown): void;
 }) {
   const buttons = ['workspace-share', 'saved-workspace-share'].map(id => document.getElementById(id) as HTMLButtonElement);
-  const dialog = document.createElement('dialog');
-  dialog.id = 'workspace-share-link'; dialog.className = 'workspace-share-link glass';
-  dialog.setAttribute('aria-labelledby', 'workspace-share-title');
-  const shareShell = () => `<header class="dialog-heading"><h2 id="workspace-share-title">${th(msg('sharing.title', '工作区链接'))}</h2><button class="icon-button" aria-label="${th(msg('sharing.close', '关闭分享'))}">${icon('close')}</button></header><p>${th(msg('sharing.editableLink', '打开链接可还原并编辑这个工作区。'))}</p><label>${th(msg('sharing.link', '链接'))}<input readonly aria-label="${th(msg('sharing.title', '工作区链接'))}"></label>`;
-  mountLocalizedShell(dialog, shareShell, options.signal);
-  document.body.append(dialog);
-  const input = dialog.querySelector<HTMLInputElement>('input')!;
-  let epoch = 0, busy = false, renderedBusy: boolean | undefined, focus: HTMLElement | null = null;
+  let epoch = 0, busy = false, renderedBusy: boolean | undefined;
   let pending: { id: string; document: WorkspaceFile; previous?: SavedWorkspace; pinned: boolean; attached: boolean } | undefined;
 
   function update() {
@@ -37,24 +28,18 @@ export function installWorkspaceSharing(options: {
     if (renderedBusy !== busy) {
       renderedBusy = busy;
       for (const button of buttons) {
-        const copyButton = button.id === 'saved-workspace-share';
-        button.innerHTML = `${busy ? icon('refresh', 'share-spinner') : icon(copyButton ? 'copy' : 'export')}<span>${busy ? t(msg("sharing.saving", "正在保存")) : copyButton ? t(msg("sharing.copyLink", "复制链接")) : t(msg("shell.share", "分享"))}</span>`;
+        button.innerHTML = `${busy ? icon('refresh', 'share-spinner') : icon('shareNetwork')}<span>${busy ? t(msg("sharing.saving", "正在保存")) : t(msg("shell.share", "分享"))}</span>`;
       }
     }
   }
   onLanguageChange(() => { renderedBusy = undefined; update(); }, options.signal);
   async function copy(url: string) {
-    try { await navigator.clipboard.writeText(url); options.toasts.show(() => t(msg('sharing.editableCopied', '工作区链接已复制，接收者可编辑和保存'))); }
-    catch {
-      await options.closeSettings();
-      if (options.signal.aborted) return;
-      input.value = url; if (!dialog.open) dialog.showModal(); input.focus(); input.select();
-    }
+    await navigator.clipboard.writeText(url);
+    options.toasts.show(() => t(msg('sharing.editableCopied', '工作区链接已复制，接收者可编辑和保存')));
   }
   async function create(trigger?: HTMLElement) {
     if (busy) throw new Error(t(msg("workspace.saving", "工作区正在保存，请稍后再分享。")));
     if (options.isOpening()) throw new Error(t(msg("workspace.saving", "工作区正在保存，请稍后再分享。")));
-    focus = trigger ?? buttons[0];
     // A retry retains the same request and ID if the server response was lost.
     const previous = options.binding();
     pending ??= { id: previous?.id ?? randomUUID(), document: structuredClone(options.snapshot()), previous, pinned: false, attached: !!previous?.space && options.scope() === previous.space };
@@ -81,8 +66,12 @@ export function installWorkspaceSharing(options: {
     } finally { busy = false; update(); }
   }
   for (const button of buttons) button.addEventListener('click', () => void create(button).catch(() => {}), {signal:options.signal});
-  dialog.querySelector('button')!.onclick = () => dialog.close();
-  dialog.addEventListener('close', () => focus?.focus());
   update();
-  return { create, update, async copySaved(id: string, trigger: HTMLElement) { focus = trigger; await copy(new URL(`/?workspace=${encodeURIComponent(id)}`, location.origin).href); }, detach() { epoch++; pending = undefined; }, dispose() { dialog.remove(); } };
+  return { create, update, async copySaved(id: string) {
+    try { await copy(new URL(`/?workspace=${encodeURIComponent(id)}`, location.origin).href); }
+    catch (error) {
+      if (!options.signal.aborted) options.toasts.show(error instanceof Error ? error.message : String(error), { kind: 'error', durationMs: 0 });
+      throw error;
+    }
+  }, detach() { epoch++; pending = undefined; }, dispose() {} };
 }

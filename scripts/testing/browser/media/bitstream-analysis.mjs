@@ -20,6 +20,11 @@ async function selectDiagrams(page, choice) {
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
 
+async function openRangeEditor(page) {
+  if (!await page.locator('#analysis-range-editor').evaluate(e=>e.matches(':popover-open'))) await page.locator('#analysis-range-trigger').click();
+  await page.waitForFunction(()=>document.querySelector('#analysis-range-trigger').getAttribute('aria-expanded')==='true');
+}
+
 // Seed a one-second inspection window using the shared axis gesture. The old
 // current-frame button is replaced by independent zoom in/out controls.
 async function inspectCurrentWindow(page) {
@@ -111,6 +116,15 @@ execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi
 // asynchronous playback indexing and an independent append-only analysis cursor.
 for(const name of ['stream.mp4','incremental.mp4','stream-2.mp4'])await copyFile(path.join(limitsDir,name),path.join(limitsDir,'queue-'+name));
 for(const action of ['continue','cancel'])execFileSync('ffmpeg',['-y','-v','error','-i',path.join(limitsDir,'incremental.mp4'),'-an','-c:v','copy','-f','flv',path.join(limitsDir,`incremental-${action}.flv`)]);
+const referenceFixtures = [];
+if (navigationOnly) {
+  execFileSync('ffmpeg',['-y','-hide_banner','-loglevel','error','-f','lavfi','-i','testsrc2=size=128x64:rate=30:duration=3','-an','-c:v','libx265','-x265-params','pools=1:frame-threads=1:log-level=error:temporal-layers=0:bframes=7:b-adapt=0:keyint=60:min-keyint=60:scenecut=0',path.join(limitsDir,'hevc-reference.mp4')]);
+  referenceFixtures.push('hevc-reference.mp4');
+  if (process.env.ANALYSIS_REFERENCE_SAMPLE) {
+    await copyFile(process.env.ANALYSIS_REFERENCE_SAMPLE,path.join(limitsDir,'user-reference.mp4'));
+    referenceFixtures.push('user-reference.mp4');
+  }
+}
 await withBrowserFixture(
   {
     caseName: navigationOnly ? 'bitstream-analysis-navigation' : layoutOnly ? 'bitstream-analysis-layout' : matrixOnly ? matrixCase+(desktopPerformance?'-desktop':'') : diagramsOnly ? 'bitstream-analysis-diagrams' : incrementalOnly ? "bitstream-analysis-index" : "bitstream-analysis",
@@ -205,8 +219,8 @@ await withBrowserFixture(
         for (const [button,label] of [[zoomIn,'放大'],[full,'全时段']]) {
           await button.hover(); await page.waitForFunction(text=>{const e=document.querySelector('#control-tooltip');return !e.hidden&&e.textContent===text;},label);
         }
-        const navigationPlacement=await page.locator('.analysis-range-navigation').evaluate(e=>({top:e.getBoundingClientRect().top,bottom:e.getBoundingClientRect().bottom,header:document.querySelector('.analysis-head').getBoundingClientRect().bottom,charts:document.querySelector('.analysis-charts').getBoundingClientRect().top}));
-        assert.ok(navigationPlacement.top>=navigationPlacement.header&&navigationPlacement.bottom<=navigationPlacement.charts,'range controls sit between toolbar and charts');
+        assert.equal(await page.locator('.analysis-range-navigation').isVisible(),false,'range navigator is not permanently displayed');
+        assert.equal(await page.locator('#analysis-panel .analysis-range-navigation').count(),0,'editor consumes no chart space');
         await call('seek_review',{ptsUs:2_500_000});
         const beforeZoom=await page.locator('#analysis-shared-axis').evaluate(c=>({start:+c.dataset.viewStart,end:+c.dataset.viewEnd}));
         const beforePosition=(await call('get_review_session')).positionUs;
@@ -220,6 +234,7 @@ await withBrowserFixture(
         await page.waitForFunction(span=>{const d=document.querySelector('#analysis-shared-axis').dataset;return Math.abs(+d.viewEnd-+d.viewStart-span)<=2||(d.viewStart===d.domainStart&&d.viewEnd===d.domainEnd);},beforeZoom.end-beforeZoom.start);
         await full.click();
         assert.equal((await call('get_review_session')).positionUs,beforePosition,'zoom and full-duration buttons never seek');
+        await openRangeEditor(page);
         const start=page.locator('.analysis-window-handle.start'),end=page.locator('.analysis-window-handle.end');
         await page.waitForFunction(()=>+document.querySelector('.analysis-window-handle.start').getAttribute('aria-valuenow')===0);
         await end.press('Home'); for(let i=0;i<4;i++)await end.press('ArrowRight');
@@ -230,7 +245,7 @@ await withBrowserFixture(
         });
         const navigation=page.locator('#analysis-range-axis'),bounds=await navigation.boundingBox();
         const domain=await navigation.evaluate(e=>({start:+e.dataset.domainStart,end:+e.dataset.domainEnd}));
-        const target=7_000_000,x=bounds.x+46+(target-domain.start)/(domain.end-domain.start)*(bounds.width-46-16);
+        const target=7_000_000,x=bounds.x+10+(target-domain.start)/(domain.end-domain.start)*(bounds.width-20);
         const view=(await call('export_workspace')).layout.analysisView.view;
         await page.mouse.click(x,bounds.y+3);
         await page.waitForFunction(t=>Math.abs(window.voidPlayer.getState().positionUs-t)<100_000,target);
@@ -244,6 +259,7 @@ await withBrowserFixture(
         assert.ok(Math.abs(outsideZoom.start+outsideZoom.end-beforeOutsideZoom.start-beforeOutsideZoom.end)<=2,'zoom uses the viewport centre when the playhead is outside');
         await zoomOut.click();
         await page.waitForFunction(span=>{const d=document.querySelector('#analysis-shared-axis').dataset;return Math.abs(+d.viewEnd-+d.viewStart-span)<=2;},beforeOutsideZoom.end-beforeOutsideZoom.start);
+        await openRangeEditor(page);
         const band=page.locator('.analysis-window-band'),box=await band.boundingBox();
         assert.ok(box.width<64,'fixture exercises a narrow window');
         assert.equal(await page.evaluate(({x,y})=>document.elementFromPoint(x,y)?.classList.contains('analysis-window-band'),{x:box.x+box.width/2,y:box.y+1}),true,'narrow window centre belongs to pan, not an edge handle');
@@ -260,29 +276,84 @@ await withBrowserFixture(
         await start.press('ArrowRight');
         await page.waitForFunction(s=>+document.querySelector('.analysis-window-handle.start').getAttribute('aria-valuenow')>s,moved.start);
         assert.equal((await call('get_review_session')).positionUs,position,'edge resize does not seek');
+        assert.equal(await page.locator('#analysis-range-time-start .analysis-range-time-text').textContent(),await start.getAttribute('aria-valuetext'),'dragged range and editable time stay synchronized');
         await call('seek_review',{ptsUs:+await start.getAttribute('aria-valuenow')});
         for(const width of [360,1280]) {
           await page.setViewportSize({width,height:720});
           await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+          await openRangeEditor(page);
           const railBox=await navigation.boundingBox();
-          await page.mouse.move(railBox.x+46+(railBox.width-62)*.5,railBox.y+3);
+          await page.mouse.move(railBox.x+10+(railBox.width-20)*.5,railBox.y+3);
           assert.equal(await page.locator('.analysis-range-hover').isVisible(),true,'hover adds a separate triangle on the rail');
           assert.equal(await page.locator('#analysis-range-time-hover').isVisible(),true,'hover time appears below the rail');
           const fills=await page.locator('.analysis-range-time.current, .analysis-range-time.hover').evaluateAll(es=>es.map(e=>getComputedStyle(e).backgroundColor));
           assert.notEqual(fills[0],fills[1],'current and hover times have different emphasis');
           const times=await page.locator('.analysis-range-time').evaluateAll(es=>es.filter(e=>!e.hidden).map(e=>({text:e.textContent,left:e.getBoundingClientRect().left,right:e.getBoundingClientRect().right,top:e.getBoundingClientRect().top,bottom:e.getBoundingClientRect().bottom})).sort((a,b)=>a.left-b.left));
-          assert.equal(times.length,4);
+          assert.equal(times.length,4,'start, current, end and hover readouts all stay mounted');
           assert.ok(times.every(e=>e.left>=0&&e.right<=width),`permanent range times stay on screen at ${width}px`);
           for(let i=1;i<times.length;i++) assert.ok(times[i].left>=times[i-1].right+6||times[i].top>=times[i-1].bottom||times[i-1].top>=times[i].bottom,'coincident start/current and close end times do not overlap');
           assert.equal(await page.locator('#analysis-range-time-start').textContent(),await start.getAttribute('aria-valuetext'));
         }
+        const editorBounds=await page.locator('#analysis-range-editor').boundingBox();
+        assert.ok(editorBounds.x>=0&&editorBounds.x+editorBounds.width<=1280,'popover stays inside the viewport');
+        const anchoring=await page.evaluate(()=>{const e=document.querySelector('#analysis-range-editor').getBoundingClientRect(),t=document.querySelector('#analysis-range-trigger').getBoundingClientRect();return {dx:Math.abs((e.left+e.width/2)-(t.left+t.width/2)),gap:e.top-t.bottom};});
+        assert.ok(anchoring.dx<=1&&anchoring.gap>=4&&anchoring.gap<=10,'range editor stays centered under its trigger');
+        const materials=await page.evaluate(()=>['analysis-range-editor','annotation-toolbar'].map(id=>{const s=getComputedStyle(document.getElementById(id));return {background:s.backgroundColor,filter:s.backdropFilter||s.webkitBackdropFilter,border:s.border,borderRadius:s.borderRadius};}));
+        assert.deepEqual(materials[0],materials[1],'range editor shares the annotation toolbar glass backplane');
+        // 编辑两个端点各自提交，先从全时段开始，两个方向都有合法空间。
+        await full.click();
+        await openRangeEditor(page);
+        // 点击起止胶囊直接编辑：编辑框必须精确覆盖原文字盒，胶囊本身不动。
+        const pillBefore=await page.locator('#analysis-range-time-start').boundingBox();
+        await page.locator('#analysis-range-time-start').click();
+        const startInput=page.locator('#analysis-range-input-start');
+        await startInput.waitFor({state:'visible'});
+        assert.equal(await page.locator('#analysis-range-time-start').getAttribute('data-editing'),'true','editing switches the capsule to its wireframe state');
+        await page.waitForFunction(()=>getComputedStyle(document.querySelector('#analysis-range-time-start')).backgroundColor==='rgba(0, 0, 0, 0)');
+        const editingStyle=await page.locator('#analysis-range-time-start').evaluate(e=>{const s=getComputedStyle(e);return {border:s.borderTopColor,text:s.color};});
+        assert.notEqual(editingStyle.border,'rgba(0, 0, 0, 0)','wireframe editing keeps an accent outline');
+        assert.equal(editingStyle.text,editingStyle.border,'wireframe text and outline share the accent');
+        const pillAfter=await page.locator('#analysis-range-time-start').boundingBox();
+        assert.deepEqual({x:pillAfter.x,y:pillAfter.y,width:pillAfter.width,height:pillAfter.height},{x:pillBefore.x,y:pillBefore.y,width:pillBefore.width,height:pillBefore.height},'editing never moves or resizes the time capsule');
+        const timeOverlay=await page.evaluate(()=>{const text=document.querySelector('#analysis-range-time-start .analysis-range-time-text').getBoundingClientRect(),input=document.querySelector('#analysis-range-input-start').getBoundingClientRect();return [input.left-text.left,input.top-text.top,input.width-text.width,input.height-text.height].map(value=>Math.abs(value));});
+        assert.ok(timeOverlay.every(delta=>delta<.5),'time input exactly overlays the capsule text box');
+        const seekBeforeEdit=(await call('get_review_session')).positionUs;
+        await startInput.fill('00:02.000');
+        await page.locator('#analysis-range-time-end').click();
+        const endInput=page.locator('#analysis-range-input-end');
+        await endInput.fill('00:01.000');
+        await call('seek_review',{ptsUs:seekBeforeEdit});
+        assert.equal(await startInput.inputValue(),'00:02.000','frame updates preserve the draft after focus moves to the other field');
+        await endInput.press('Enter');
+        assert.equal(await page.locator('.analysis-range-error').isVisible(),true,'reversed range stays open with an inline error');
+        await endInput.fill('00:04.000');
+        await endInput.press('Enter');
+        await page.waitForFunction(()=>document.querySelector('#analysis-range-trigger span').textContent.includes('00:04.000'));
+        assert.deepEqual((await call('export_workspace')).layout.analysisView.view,{start:2_000_000,end:4_000_000});
+        assert.equal((await call('get_review_session')).positionUs,seekBeforeEdit,'editing chart range does not seek');
+        assert.equal(await page.locator('#analysis-range-editor').evaluate(e=>e.matches(':popover-open')),true,'committing a time keeps the editor open for the next edit');
+        assert.match(await page.locator('#analysis-range-trigger').innerText(),/00:02.000.*00:04.000/);
         await page.screenshot({path:artifact(`navigation-${input}.png`)});
+        await page.locator('#analysis-range-editor').screenshot({path:artifact(`range-editor-${input}.png`)});
+        await page.locator('#analysis-range-time-end').press('Escape');
+        await page.waitForFunction(()=>document.querySelector('#analysis-range-trigger').getAttribute('aria-expanded')==='false');
+        assert.equal(await page.locator('#analysis-range-trigger').evaluate(e=>e===document.activeElement),true,'Escape closes editor and restores trigger focus');
+        await openRangeEditor(page);
         const hoveredPosition=(await call('get_review_session')).positionUs;
         await page.mouse.move(1,1);
         assert.equal(await page.locator('.analysis-range-hover').isHidden(),true,'leaving the rail removes the hover triangle');
         assert.equal(await page.locator('#analysis-range-time-hover').isHidden(),true,'leaving the rail removes only the hover time');
         assert.equal((await call('get_review_session')).positionUs,hoveredPosition,'hover does not seek');
         // Cached viewport work must not make the completed track pill pulse.
+        // 先把窗口平移到片头，再逐端编辑成缓存命中区间（不触发整片重扫）。
+        await band.press('Home');
+        await page.locator('#analysis-range-time-end').click();
+        await page.locator('#analysis-range-input-end').fill('00:00.574');
+        await page.locator('#analysis-range-input-end').press('Enter');
+        await page.locator('#analysis-range-time-start').click();
+        await page.locator('#analysis-range-input-start').fill('00:00.264');
+        await page.locator('#analysis-range-input-start').press('Enter');
+        await page.waitForFunction(()=>document.querySelector('#analysis-range-trigger span').textContent.includes('00:00.264'));
         await selectDiagrams(page,['bitrate','size','nalu-size']);
         await page.waitForFunction(()=>window.voidPlayer.tools.find(t=>t.name==='get_bitstream_analysis_state').execute({slot:'A'}).state==='ready');
         const progressAction=page.locator('.analysis-track-control[data-slot="A"] .analysis-progress-action');
@@ -292,6 +363,7 @@ await withBrowserFixture(
           const sample=()=>{window.__progressWidths.push(document.querySelector('.analysis-progress-action').getBoundingClientRect().width);if(window.__sampleProgress)requestAnimationFrame(sample);};sample();
         });
         await zoomIn.click();await zoomOut.click();
+        await openRangeEditor(page);
         await start.press('ArrowRight');
         await band.press('ArrowRight');await band.press('ArrowLeft');
         await selectDiagrams(page,['bitrate','size','references']);await selectDiagrams(page,['bitrate','size','nalu-size']);
@@ -321,7 +393,43 @@ await withBrowserFixture(
           assert.equal(await progressAction.isVisible(),false,'completed progress action is hidden after its animation');
         } finally {release();await page.unroute(pattern);}
       }
-      assert.deepEqual(errors,[]);console.log(`PASS ${engine}: local/library chart axis, full-clip position, seek, narrow-window pan and edge resize`);return;
+      for (const name of referenceFixtures) for (const input of ['local-file','library']) {
+        await call('remove_review_track',{slot:'A'});
+        if (input==='local-file') await page.locator('#file-A').setInputFiles(path.join(limitsDir,name));
+        else await call('load_library_item',{slot:'A',id:library.entries.find(e=>e.name===name).id});
+        await stable();await selectDiagrams(page,['bitrate','size','references']);
+        await page.locator('#analysis-resize').press('End');
+        await page.locator('[data-seg="full"]').click();
+        await call('request_bitstream_stream',{slot:'A',product:'summary'});
+        const chart=await call('query_bitstream_chart',{slot:'A',pixelWidth:4096});
+        if (chart.aggregated) {
+          // The public chart API deliberately buckets views above 256 frames.
+          // Read bounded windows to inspect every retained reference record.
+          for(let start=chart.domain.start;start<chart.domain.end;start+=2_000_000) {
+            const part=await call('query_bitstream_chart',{slot:'A',startUs:start,endUs:Math.min(chart.domain.end,start+2_000_000),pixelWidth:4096});
+            chart.pictures.push(...part.pictures);
+          }
+        }
+        assert.ok(chart.pictures.length>60,'reference regression uses real decoded frame summaries');
+        assert.ok(chart.pictures.every(p=>p.nalus.filter(n=>n.type<=31).every(n=>n.temporalId===0)),'fixture has no signaled HEVC temporal sublayers');
+        assert.ok(chart.pictures.some(p=>p.referenceLayer?.level>=2),'hierarchical B references remain separated despite all-zero Temporal IDs');
+        assert.ok(chart.pictures.every(p=>p.referenceLayer?.source==='inferred'),'inferred hierarchy is never presented as a signaled temporal layer');
+        const referenceCanvas=page.locator('#bitstream-diagram-references');
+        await page.waitForFunction(()=>+document.querySelector('#bitstream-diagram-references').dataset.maxLayer>=2);
+        await call('seek_review',{ptsUs:name==='user-reference.mp4'?14_033_333:1_500_000});
+        await inspectCurrentWindow(page);
+        const axis=await page.locator('#analysis-shared-axis').evaluate(e=>({start:+e.dataset.viewStart,end:+e.dataset.viewEnd}));
+        const zoomed=await call('query_bitstream_chart',{slot:'A',startUs:axis.start,endUs:axis.end,pixelWidth:4096});
+        const levels=new Map(chart.pictures.map(p=>[p.picture.au,p.referenceLayer]));
+        assert.ok(zoomed.pictures.length>0);
+        for(const p of zoomed.pictures)assert.deepEqual(p.referenceLayer,levels.get(p.picture.au),'zoom retains levels computed with off-screen anchors');
+        await page.waitForFunction(()=>+document.querySelector('#bitstream-diagram-references').dataset.maxLayer>=2);
+        assert.equal(await referenceCanvas.getAttribute('data-layer-source'),'inferred');
+        await page.waitForFunction(()=>document.querySelector('#bitstream-diagram-references').clientHeight>=60);
+        await writeFile(artifact(`reference-layers-${name}-${input}.json`),JSON.stringify({frames:chart.pictures.length,levels:[...new Set(chart.pictures.map(p=>p.referenceLayer?.level))],zoom:zoomed.pictures.map(p=>({au:p.picture.au,layer:p.referenceLayer,refs:p.references}))},null,2));
+        await page.locator('#analysis-panel').screenshot({path:artifact(`reference-layers-${name}-${input}.png`)});
+      }
+      assert.deepEqual(errors,[]);console.log(`PASS ${engine}: local/library range navigation, tooltips, progress transitions and all-zero-TID HEVC reference hierarchy`);return;
     }
     if (layoutOnly) {
       for (const input of ['local-file', 'library']) {
@@ -421,6 +529,12 @@ await withBrowserFixture(
         await page.setViewportSize({width:520,height:786});
         assert.equal(await page.locator('.bitstream-toolbar-title').isVisible(),false,'the title is the first content hidden on narrower viewports');
         assert.ok(await page.locator('#bitstream-inspector').evaluate(el=>el.offsetHeight<=28),'compact controls delay toolbar wrapping');
+        // 窄视口下帧号列表整行换位，而不是把轨道控件挤到只剩一条缝。
+        await page.waitForFunction(()=>document.querySelector('.analysis-head').classList.contains('status-stacked'));
+        const headRows=await page.evaluate(()=>{const head=document.querySelector('.analysis-head'),tools=document.querySelector('.analysis-tools'),status=document.querySelector('.analysis-status');const toolRect=tools.getBoundingClientRect(),statusRect=status.getBoundingClientRect(),headRect=head.getBoundingClientRect();return {stacked:head.classList.contains('status-stacked'),separate:Math.round(statusRect.top-toolRect.bottom)>=-2,statusFullWidth:Math.abs(statusRect.width-(headRect.width-16))<=2,toolsInsideHead:toolRect.right<=headRect.right+1};});
+        assert.deepEqual(headRows,{stacked:true,separate:true,statusFullWidth:true,toolsInsideHead:true},'narrow viewports give the frame numbers their own row');
+        await page.setViewportSize({width:1280,height:786});
+        await page.waitForFunction(()=>!document.querySelector('.analysis-head').classList.contains('status-stacked'));
         await page.setViewportSize({width:821,height:786});
         await page.waitForFunction(()=>{const popup=document.querySelector('#analysis-overlay-panel'), bar=document.querySelector('#annotation-toolbar');const a=popup.getBoundingClientRect(), b=bar.getBoundingClientRect();return a.bottom<=b.top-4 || a.top>=b.bottom+4;});
         const sharedChrome=await page.evaluate(()=>['analysis-overlay-panel','annotation-toolbar'].map(id=>{const e=document.getElementById(id),s=getComputedStyle(e);return {padding:s.padding,background:s.backgroundColor,border:s.border,borderRadius:s.borderRadius,shadow:s.boxShadow,filter:s.backdropFilter,height:e.getBoundingClientRect().height};}));
@@ -2006,8 +2120,9 @@ await withBrowserFixture(
       assert.ok(compactGeometry.every(c => Math.abs(c.left - compactGeometry[0].left) <= 1 && Math.abs(c.right - compactGeometry[0].right) <= 1), 'every chart shares the overview plot boundaries');
       const sharedAxis = page.locator('#analysis-shared-axis');
       assert.equal(await sharedAxis.isVisible(), true);
+      await openRangeEditor(page);
       const rangeStart = page.locator('.analysis-window-handle.start');
-      const rangePreview = page.locator('#analysis-range-time-start');
+      const rangePreview = page.locator('#analysis-range-time-start .analysis-range-time-text');
       await rangeStart.hover();
       assert.equal(await rangePreview.isVisible(), true, 'range start time remains visible');
       assert.equal(await rangePreview.textContent(), await rangeStart.getAttribute('aria-valuetext'));
@@ -2028,7 +2143,7 @@ await withBrowserFixture(
       await page.mouse.move(0, 0);
       assert.equal(await rangePreview.isVisible(), true, 'keyboard focus retains the permanent range time');
       await rangeStart.press('ArrowRight');
-      await page.waitForFunction(() => document.querySelector('#analysis-range-time-start').textContent === document.querySelector('.analysis-window-handle.start').getAttribute('aria-valuetext'));
+      await page.waitForFunction(() => document.querySelector('#analysis-range-time-start .analysis-range-time-text').textContent === document.querySelector('.analysis-window-handle.start').getAttribute('aria-valuetext'));
       await rangeStart.press('Home');
       await page.waitForFunction(() => {
         const axis = document.querySelector('#analysis-shared-axis').dataset, chart = document.querySelector('#analysis-canvas').dataset;
@@ -2069,7 +2184,7 @@ await withBrowserFixture(
       assert.ok(axisDomains.full[1]-axisDomains.full[0] > axisDomains.chart[1]-axisDomains.chart[0], 'full-clip navigator retains its independent absolute scale');
       const navBox = await navigator.boundingBox();
       const targetTime = Math.round((axisDomains.full[1]-Math.max(0,axisDomains.full[0]))*.7);
-      const targetX = navBox.x + 46 + (targetTime-axisDomains.full[0])/(axisDomains.full[1]-axisDomains.full[0])*(navBox.width-46-16);
+      const targetX = navBox.x + 10 + (targetTime-axisDomains.full[0])/(axisDomains.full[1]-axisDomains.full[0])*(navBox.width-20);
       const viewBeforeSeek = (await call('export_workspace')).layout.analysisView.view;
       await page.mouse.click(targetX, navBox.y+3);
       await page.waitForFunction(t => Math.abs(window.voidPlayer.getState().positionUs-t)<100_000,targetTime);
@@ -2097,7 +2212,6 @@ await withBrowserFixture(
         const style = getComputedStyle(panel), minimum = +document.querySelector('#analysis-resize').getAttribute('aria-valuemin');
         const available = minimum - document.querySelector('.analysis-head').getBoundingClientRect().height
           - document.querySelector('.analysis-shared-axis').getBoundingClientRect().height
-          - document.querySelector('.analysis-range-navigation').getBoundingClientRect().height - 16
           - parseFloat(style.borderTopWidth) - parseFloat(style.borderBottomWidth);
         const rowHeights=JSON.parse(document.querySelector('#analysis-canvas').dataset.rowHeights);
         return { available, overviewMinimum:rowHeights.length*Math.max(36,available)+document.querySelector('#analysis-load-metrics').getBoundingClientRect().height, height: charts.clientHeight, overview: document.querySelector('.analysis-overview').getBoundingClientRect().height,

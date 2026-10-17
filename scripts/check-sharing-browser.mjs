@@ -79,11 +79,11 @@ try{
   await page.locator('#workspace-share').click();await page.waitForFunction(()=>document.querySelector('#workspace-share').getAttribute('aria-busy')==='false');assert.equal(await page.evaluate(()=>window.testClipboard),link);
   assert.equal((await page.request.get(base+'/api/workspaces?all=1').then(r=>r.json())).entries.length,1);
   await other.reload();await other.waitForFunction(()=>window.voidPlayer?.getState().tracks.length===1&&!window.voidPlayer.getState().busy);
-  // Clipboard fallback is the only share dialog, with just a selectable link.
-  await other.evaluate(()=>Object.defineProperty(navigator.clipboard,'writeText',{value:async()=>{throw new Error('denied');}}));await other.locator('#workspace-share').click();await other.locator('#workspace-share-link').waitFor({state:'visible'});
-  assert.equal(await other.locator('[aria-label="工作区链接"]').inputValue(),link);assert.equal(await other.locator('#review-history,#review-snapshot,#review-publish').count(),0);
+  // Clipboard denial surfaces as an error toast; there is no link panel.
+  await other.evaluate(()=>Object.defineProperty(navigator.clipboard,'writeText',{value:async()=>{throw new Error('denied');}}));await other.locator('#workspace-share').click();await other.locator('.toast-error').waitFor({state:'visible'});
+  assert.equal(await other.locator('#workspace-share-link').count(),0);assert.equal(await other.locator('#review-history,#review-snapshot,#review-publish').count(),0);
   for(const scheme of ['light','dark']){await other.emulateMedia({colorScheme:scheme});await other.screenshot({path:path.join(evidence,`02-${scheme}.png`)});}
-  await other.setViewportSize({width:390,height:844});assert.ok(await other.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await other.screenshot({path:path.join(evidence,'03-narrow.png')});await other.getByRole('button',{name:'关闭分享',exact:true}).click();
+  await other.setViewportSize({width:390,height:844});assert.ok(await other.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await other.screenshot({path:path.join(evidence,'03-narrow.png')});await other.locator('.toast-error .toast-close').click();
   await service.close();service=await startService(config);await service.library.refresh();await other.reload();await other.waitForFunction(()=>window.voidPlayer?.getState().positionUs===400000&&!window.voidPlayer.getState().busy);await other.waitForFunction(id=>window.voidPlayer.getState().marks.some(m=>m.id===id),later.id);
   // Source deletion makes the saved link show a missing source, not an immutable copy.
   await rm(path.join(root,'media/sample.mp4'));await service.library.refresh();await other.reload();await other.waitForFunction(()=>window.voidPlayer?.getState().tracks[0]?.pendingRelink && !window.voidPlayer.getState().busy);

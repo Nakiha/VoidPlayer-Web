@@ -297,9 +297,10 @@ test('stream progress waits for transport completion after all pictures, and fol
 
 import { readNalus, validateDiagram, DiagramStore, referenceLayers } from '../../src/bitstream-analysis/diagrams.ts';
 test('inferred reference layers repeat between I/P anchors without climbing across historical B references', () => {
+  for (const codec of ['h264', 'hevc', 'vvc'] as const) {
   const store = new DiagramStore(), records: AnalysisResult[] = [];
   const put = (au: number, pts: number, frameType: 'I' | 'P' | 'B', refs: number[]) => {
-    const r = result(); r.picture.au = au; r.sourcePtsUs = pts * 1000;
+    const r = result(); r.codec = codec; r.picture.au = au; r.sourcePtsUs = pts * 1000;
     r.nalus = [{ offset: 4, size: 20, type: frameType === 'I' ? 5 : 1, temporalId: 0, layer: 0 }];
     r.references = { kind: 'active-lists', state: 'ready', poc: pts, frameType, edges: refs.map((au, i) => ({ au, list: i % 2 as 0 | 1 })) };
     records.push(r); store.put(r);
@@ -329,6 +330,7 @@ test('inferred reference layers repeat between I/P anchors without climbing acro
   assert.equal(replay.queryChart('local:uuid', 0, 100_000).pictures[0].referenceLayer?.provisional, true);
   for (const r of [...records].reverse()) replay.put(r);
   assert.deepEqual(replay.queryChart('local:uuid', 0, 100_000).pictures.map(p => p.referenceLayer), whole.map(p => p.referenceLayer));
+  }
 });
 test('signaled VCL temporal IDs take priority; metadata IDs and fake AVC zeros never stand in for temporal layers', () => {
   for (const codec of ['hevc', 'vvc'] as const) {
@@ -337,7 +339,11 @@ test('signaled VCL temporal IDs take priority; metadata IDs and fake AVC zeros n
     p.nalus = [{ offset: 4, size: 20, type: 1, temporalId: 2, layer: 0 }, { offset: 24, size: 10, type: codec === 'hevc' ? 39 : 23, temporalId: 0, layer: 0 }];
     assert.deepEqual(referenceLayers([p as any]).get(3), { level: 2, source: 'temporal-id' }, 'SEI must not force an otherwise valid temporal ID to zero');
     p.nalus[0].temporalId = 0;
-    assert.deepEqual(referenceLayers([p as any]).get(3), { level: 0, source: 'temporal-id' }, 'a real T0 stays T0');
+    assert.deepEqual(referenceLayers([p as any]).get(3), { level: 0, source: 'inferred' }, 'a single all-zero sublayer falls back to the reference hierarchy');
+    const higher = structuredClone(p); higher.picture.au = 4; higher.nalus![0].temporalId = 1;
+    assert.deepEqual(referenceLayers([p as any, higher as any]).get(3), { level: 0, source: 'temporal-id' }, 'T0 remains signaled when the configuration has actual temporal sublayers');
+    higher.picture.configuration = 1;
+    assert.equal(referenceLayers([p as any, higher as any]).get(3)?.source, 'inferred', 'another configuration cannot establish temporal sublayers for this one');
     p.nalus.push({ offset: 34, size: 10, type: 1, temporalId: 1, layer: 0 });
     assert.equal(referenceLayers([p as any]).get(3)?.source, 'inferred', 'conflicting VCL IDs cannot be presented as a signaled layer');
   }

@@ -23,14 +23,14 @@ function drawContainerBar(ctx: CanvasRenderingContext2D, x: number, y: number, w
 const seconds = (us: number) => `${(us / 1e6).toFixed(3)}s`;
 type CardPresentation = { size: boolean; types: boolean; header?: boolean };
 type Point = { x: number; y: number; picture?: DiagramPicture; bucket?: DiagramBucket };
-export function installBitstreamDiagrams(host: HTMLElement, session: ReviewSession, act: AnalysisAction, signal: AbortSignal, viewport: AnalysisViewport, options: { hiddenTypes: Set<number>; filterChanged(): void; hover(value: ChartHover | null, clientX?: number, clientY?: number): void; pinned(): boolean; layoutChanged?(): void; rendered?(): void; slotColor?(): string; inspection(): { status: string; pending: boolean; percent: number; state: string; name: string } }) {
+export function installBitstreamDiagrams(host: HTMLElement, session: ReviewSession, act: AnalysisAction, signal: AbortSignal, viewport: AnalysisViewport, options: { hiddenTypes: Set<number>; filterChanged(): void; hover(value: ChartHover | null, clientX?: number, clientY?: number): void; pinned(): boolean; layoutChanged?(): void; rendered?(): void; slotColor?(): string; avoid?(): DOMRect | undefined; inspection(): { status: string; pending: boolean; percent: number; state: string; name: string } }) {
   host.innerHTML = `<div class="bitstream-diagram-head"><div class="bitstream-diagram-navigation"><strong></strong><output></output></div><div class="bitstream-diagram-legend"></div></div><div class="bitstream-diagram-plot"><canvas tabindex="0" role="img" ></canvas><div class="bitstream-diagram-empty"><div class="bitstream-empty-copy"><strong role="status"></strong><span></span></div><button type="button" class="bitstream-empty-action"></button></div></div><output class="bitstream-diagram-detail" aria-live="polite"></output>`;
   const canvas = host.querySelector('canvas')!, ctx = canvas.getContext('2d')!;
   const plot = host.querySelector<HTMLElement>('.bitstream-diagram-plot')!;
   const label = host.querySelector('output')!, detail = host.querySelector<HTMLOutputElement>('.bitstream-diagram-detail')!;
   const empty = host.querySelector<HTMLElement>('.bitstream-diagram-empty')!, legend = host.querySelector<HTMLElement>('.bitstream-diagram-legend')!;
   const emptyTitle = empty.querySelector('strong')!, emptyDescription = empty.querySelector('span')!, emptyAction = empty.querySelector('button')!;
-  const headerCard = installFloatingAnalysisCard(canvas, signal, () => host.getBoundingClientRect(), true);
+  const headerCard = installFloatingAnalysisCard(canvas, signal, () => host.getBoundingClientRect(), true, options.avoid);
   headerCard.element.classList.add('analysis-view-card', 'analysis-container-card');
   headerCard.element.dataset.origin = 'container';
   let headerGeometry: { x: number; width: number; timeUs: number; widthUs: number } | null = null;

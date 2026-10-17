@@ -18,11 +18,23 @@ export type DiagramPicture = Pick<AnalysisResult, 'picture' | 'sourcePtsUs' | 's
 export interface ReferenceLayer { level: number; source: 'temporal-id' | 'inferred'; provisional?: boolean }
 
 /** This is a display hierarchy, not proof of block-level prediction or SVC.
- * Use signaled VCL temporal IDs when available. Otherwise keep each interval
+ * Use signaled VCL temporal IDs when the configuration actually has sublayers.
+ * Encoders may mark every picture T0 despite hierarchical B references; that
+ * single temporal sublayer does not describe the reference display hierarchy.
+ * Otherwise keep each interval
  * between consecutive I/P anchors independent of older active-list candidates.
  * Work from retained source records, not the viewport, so zoom cannot change levels. */
 export function referenceLayers(pictures: readonly DiagramPicture[]): Map<number, ReferenceLayer> {
   const ready = pictures.filter(p => p.references?.state === 'ready');
+  const temporalIds = new Map<number, number>();
+  const layeredConfigurations = new Set<number>();
+  for (const p of ready) {
+    const vcl = p.nalus.filter(n => p.codec === 'hevc' ? n.type <= 31 : p.codec === 'vvc' && n.type <= 11);
+    if (!vcl.length || !vcl.every(n => n.temporalId === vcl[0].temporalId)) continue;
+    const id = vcl[0].temporalId;
+    temporalIds.set(p.picture.au, id);
+    if (id > 0) layeredConfigurations.add(p.picture.configuration);
+  }
   const byAu = new Map(ready.map(p => [p.picture.au, p]));
   const anchors = new Map<number, DiagramPicture[]>();
   for (const p of ready) if (p.references!.frameType !== 'B') {
@@ -43,9 +55,9 @@ export function referenceLayers(pictures: readonly DiagramPicture[]): Map<number
   }
   const output = new Map<number, ReferenceLayer>();
   for (const p of [...ready].sort((a, b) => a.picture.au - b.picture.au)) {
-    const vcl = p.nalus.filter(n => p.codec === 'hevc' ? n.type <= 31 : p.codec === 'vvc' && n.type <= 11);
-    if (vcl.length && vcl.every(n => n.temporalId === vcl[0].temporalId)) {
-      output.set(p.picture.au, { level: vcl[0].temporalId, source: 'temporal-id' });
+    const temporalId = temporalIds.get(p.picture.au);
+    if (temporalId !== undefined && layeredConfigurations.has(p.picture.configuration)) {
+      output.set(p.picture.au, { level: temporalId, source: 'temporal-id' });
       continue;
     }
     if (p.references!.frameType !== 'B') { output.set(p.picture.au, { level: 0, source: 'inferred' }); continue; }

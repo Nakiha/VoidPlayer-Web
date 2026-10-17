@@ -507,3 +507,20 @@ export function layoutAnalysisCards(cards: readonly { height: number; preferredT
   }
   return { tops, scroll, totalHeight };
 }
+
+/** 顶部面板内浮层的避让：悬浮卡片与区间编辑器相交时整体让位。
+ *  与视口内两个拖拽面板同一契约——优先向下完整让开，其次向上；两侧都放不下时
+ *  朝空间更大的一侧移动，并始终限制在窗口内（配合 CSS 过渡即为动画让位）。 */
+export function floatingAvoidanceShift(
+  rect: { top: number; left: number; width: number; height: number },
+  peer: { top: number; left: number; right: number; bottom: number },
+  viewportHeight: number, gap = 8, margin = 8,
+) {
+  if (rect.left + rect.width <= peer.left - gap || rect.left >= peer.right + gap) return 0;
+  if (rect.top + rect.height <= peer.top - gap || rect.top >= peer.bottom + gap) return 0;
+  const down = peer.bottom + gap - rect.top, up = peer.top - gap - rect.top - rect.height;
+  if (rect.top + down + rect.height <= viewportHeight - margin) return down;
+  if (rect.top + up >= margin) return up;
+  const roomBelow = Math.max(0, viewportHeight - margin - rect.top - rect.height), roomAbove = Math.max(0, rect.top - margin);
+  return roomBelow >= roomAbove ? Math.min(down, roomBelow) : Math.max(up, -roomAbove);
+}

@@ -923,6 +923,7 @@ try {
       // Cache eviction below follows the coordinator's read-only query owner.
       Object.defineProperty(recovery,'root',{get:()=>session.bitstream.queries});
       if(session.getBitstreamAnalysisState('A').state!=='idle'||recovery.root!==undefined)throw Error('Recovery fixture must begin with the real idle coordinator');
+      document.getElementById('analysis-range-editor')?.remove();
       document.getElementById('analysis-panel').replaceChildren();document.getElementById('analysis-panel').hidden=false;
       const life=new AbortController();
       const chart=installAnalysisPanel(session,async run=>{await run();},{signal:life.signal,isOpen:()=>false,selectedSlot:()=> 'A'}); recovery.chart=chart;
@@ -977,6 +978,8 @@ try {
     const attempts=await page.evaluate(()=>recovery.streams);
     await page.locator('#bitstream-close').click();await page.locator('#toggle-analysis-overlay').click();await settle(page);
     assert.equal(await page.evaluate(()=>recovery.streams),attempts,'unsupported capability is never retried automatically');
+    await page.locator('#analysis-range-trigger').click();
+    await page.waitForFunction(()=>document.querySelector('#analysis-range-editor').matches(':popover-open'));
     const handles=page.locator('.analysis-window-handle');
     assert.equal(await handles.count(),2);
     assert.equal(await handles.nth(1).getAttribute('aria-valuenow'),'10000000','fresh view shows the first ten seconds');

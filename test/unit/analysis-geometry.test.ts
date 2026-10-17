@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { groupSamples } from '../../src/analysis/grouping.ts';
-import { canLayoutRaw, layoutMergedSamples, layoutMergedBuckets, pickGlyph, valueToY, sampleBarWidth, chartBarWidth, referenceNodeRadius, paddedChartDomain, containerChartColumn, layoutAnalysisCards } from '../../src/ui/analysis-geometry.ts';
+import { canLayoutRaw, layoutMergedSamples, layoutMergedBuckets, pickGlyph, valueToY, sampleBarWidth, chartBarWidth, referenceNodeRadius, paddedChartDomain, containerChartColumn, layoutAnalysisCards, floatingAvoidanceShift } from '../../src/ui/analysis-geometry.ts';
 import type { Slot } from '../../src/model.ts';
 
 const mediaBySlot = new Map<Slot, { mediaId: string; sourceVersion: string; indexRevision: number }>([
@@ -319,4 +319,14 @@ test('complete tooltip cards push neighbours and avoid viewport edges', () => {
   const short = layoutAnalysisCards(cards, 8, 260);
   assert.equal(short.scroll, true);
   assert.deepEqual(short.tops, [8, 196, 324], 'oversized stack scrolls without cropping any card');
+});
+
+test('top-panel floating cards yield to the range editor like the viewport panels', () => {
+  const peer = { top: 78, left: 298, right: 638, bottom: 128 };
+  assert.equal(floatingAvoidanceShift({ top: 100, left: 700, width: 200, height: 90 }, peer, 720), 0, 'cards to the side of the editor keep their place');
+  assert.equal(floatingAvoidanceShift({ top: 150, left: 400, width: 200, height: 90 }, peer, 720), 0, 'cards already clear of the editor keep their place');
+  assert.equal(floatingAvoidanceShift({ top: 104, left: 424, width: 204, height: 102 }, peer, 720), 32, 'an overlapping card moves fully below the editor with one gap');
+  assert.equal(floatingAvoidanceShift({ top: 100, left: 400, width: 200, height: 30 }, peer, 150), -60, 'a short card moves above the editor when below has no room');
+  assert.equal(floatingAvoidanceShift({ top: 88, left: 400, width: 200, height: 200 }, peer, 320), -80, 'when neither side clears, the card clamps towards the roomier side');
+  assert.equal(floatingAvoidanceShift({ top: 384, left: 424, width: 204, height: 300 }, { top: 378, left: 298, right: 638, bottom: 428 }, 720), -314, 'cards below the editor move up to keep their full content visible');
 });

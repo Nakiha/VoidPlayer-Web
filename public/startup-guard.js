@@ -1,12 +1,11 @@
 // Independent of the module graph: a failed bootstrap dependency must still
-// leave a visible way to retry. Never treat later media/worker errors as startup.
+// surface the fallback card instead of a blank page. Never treat later
+// media/worker errors as startup. Recovery is the browser's own reload;
+// the card states the failure without promising a retry.
 (() => {
   const app = document.getElementById('app');
   const fallback = document.getElementById('startup-fallback');
   if (!app || !fallback) return;
-  const reload = document.getElementById('startup-reload');
-  const retry = () => location.reload();
-  reload?.addEventListener('click', retry);
   let finished = false;
   const timer = setTimeout(fail, 15000);
   function release() {

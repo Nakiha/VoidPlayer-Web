@@ -176,7 +176,9 @@ kbd { background: var(--surface-input); border-radius: 4px; padding: 2px 6px; fo
 /* One report surface: actions, preview and feedback stay together. */
 .log-panel { gap: 14px; }
 .log-session-row { flex-shrink: 0; gap: 6px; }
-.log-session-row .icon-button { flex-shrink: 0; background: transparent; }
+.settings-section-title .section-title-info { display: inline-flex; margin-left: 6px; color: var(--text-secondary); vertical-align: -3px; cursor: help; }
+.settings-section-title .section-title-info .icon { width: 14px; height: 14px; }
+.settings-section-title .section-title-info:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .log-description-field { display: grid; gap: 8px; flex-shrink: 0; }
 .log-description-field label { font-size: 13px; font-weight: 500; }
 .log-description-field label span { margin-left: 4px; color: var(--text-secondary); font-size: 12px; font-weight: 400; }
@@ -193,8 +195,6 @@ kbd { background: var(--surface-input); border-radius: 4px; padding: 2px 6px; fo
 .log-feedback p + p:not([hidden]) { margin-top: 4px; }
 .log-storage, .log-result[data-error=true] { color: var(--action-danger); }
 .log-result button { padding: 0; margin-left: 4px; color: var(--accent); background: transparent; min-height: 0; }
-.log-help { position: fixed; inset: auto; margin: 0; width: min(320px, calc(100vw - 24px)); padding: 16px; border: 0; border-radius: 10px; background: var(--surface-panel); color: var(--text); box-shadow: 0 8px 30px #0003; font: 13px/1.6 var(--font-ui); }
-.log-help p { margin: 8px 0 0; color: var(--text-secondary); }
 @media (max-width: 600px) {
   .log-report-toolbar { flex-wrap: wrap; }
   .log-actions { margin-left: auto; }
@@ -371,9 +371,10 @@ kbd { background: var(--surface-input); border-radius: 4px; padding: 2px 6px; fo
 .workspace-current-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .workspace-current-row input { flex: 1; width: 0; text-overflow: ellipsis; }
 .workspace-current-actions { display: flex; flex: none; align-items: center; gap: 6px; }
-.workspace-current-actions button { flex: none; margin: 0; white-space: nowrap; font-size: 12px; border: 0; box-shadow: none; background: transparent; transition: none; }
+.workspace-current-actions button { flex: none; margin: 0; white-space: nowrap; font-size: 12px; border: 0; box-shadow: none; background: var(--surface-control); transition: none; }
 .workspace-current-actions #saved-workspace-save { background: var(--segment-selected-fill); }
-.workspace-current-actions button:hover:not(:disabled) { background: var(--segment-selected-fill); color: var(--text); }
+.workspace-current-actions button:hover:not(:disabled) { filter: brightness(1.07); }
+.workspace-current-actions #saved-workspace-save:hover:not(:disabled) { background: var(--segment-selected-fill); }
 .workspace-list-columns, .saved-workspace-row { grid-template-columns: minmax(0, 1fr) max-content; }
 .workspace-list-columns > span:last-child { display: block; width: 88px; text-align: center; }
 .saved-workspace-row { align-items: center; gap: 8px; }

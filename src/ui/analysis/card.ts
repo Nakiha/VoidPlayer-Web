@@ -2,6 +2,7 @@ import type { Slot } from '../../model.ts';
 import type { InspectionState, TrackInspection } from '../../analysis/inspection.ts';
 import { t, msg } from '../../i18n.ts';
 import { formatAxis } from '../analysis-canvas.ts';
+import { floatingAvoidanceShift } from '../analysis-geometry.ts';
 
 /** Reuse the player track badge and its theme-owned slot colors in every tooltip. */
 export function analysisTrackBadge(slot: Slot | undefined, color?: string) {
@@ -49,8 +50,9 @@ export function analysisMetricValue(cell: HTMLElement, value: string, unit?: str
 export function installAnalysisCard(canvas: HTMLCanvasElement, options: {
   signal: AbortSignal; colors(): ReadonlyMap<Slot, string>; pinned(): boolean;
   visibleRows?(): { bitrate: boolean; size: boolean; qp?: boolean }; qpValue?(slot: Slot, time: number): number|null; panelBounds?(): DOMRect; beside?: boolean;
+  avoid?(): DOMRect | undefined;
 }) {
-  const floating = installFloatingAnalysisCard(canvas, options.signal, options.panelBounds, options.beside);
+  const floating = installFloatingAnalysisCard(canvas, options.signal, options.panelBounds, options.beside, options.avoid);
   const cardEl = floating.element;
   function stateText(s: string): string {
     switch (s) {
@@ -197,7 +199,7 @@ export function installAnalysisCard(canvas: HTMLCanvasElement, options: {
 }
 
 /** Shared glass surface, removed with its owner and clamped to the visible viewport. */
-export function installFloatingAnalysisCard(canvas: HTMLCanvasElement, signal: AbortSignal, panelBounds?: () => DOMRect, beside = false) {
+export function installFloatingAnalysisCard(canvas: HTMLCanvasElement, signal: AbortSignal, panelBounds?: () => DOMRect, beside = false, avoid?: () => DOMRect | undefined) {
   const layer = document.createElement('div'); layer.className = 'analysis-float-layer'; layer.setAttribute('aria-hidden', 'true');
   const element = document.createElement('div'); element.className = 'analysis-card'; element.hidden = true;
   layer.append(element); document.body.append(layer);
@@ -219,8 +221,17 @@ export function installFloatingAnalysisCard(canvas: HTMLCanvasElement, signal: A
     const x = beside ? fitsRight ? clientX + gap : clientX - width - gap
       : Math.max(left, Math.min(right - width, clientX - width / 2));
     element.dataset.side = beside ? fitsRight ? 'right' : 'left' : 'below';
-    element.style.left = `${Math.round(Math.max(8, Math.min(innerWidth - width - 8, x)))}px`;
-    element.style.top = `${Math.round(managed ? clientY ?? 0 : beside ? Math.max(8, Math.min(innerHeight - height - 8, clientY ?? rect.top + 4)) : top)}px`;
+    const targetLeft = Math.round(Math.max(8, Math.min(innerWidth - width - 8, x)));
+    const targetTop = Math.round(managed ? clientY ?? 0 : beside ? Math.max(8, Math.min(innerHeight - height - 8, clientY ?? rect.top + 4)) : top);
+    element.style.left = `${targetLeft}px`;
+    element.style.top = `${targetTop}px`;
+    // 顶部面板内的其它浮层（区间编辑器）优先：相交时卡片带动画地上下让位。
+    // 独立卡片挂在共享浮层里，坐标相对父层，需要换算到窗口坐标再避让。
+    const peer = avoid?.();
+    const parentTop = managed ? element.parentElement?.getBoundingClientRect().top ?? 0 : 0;
+    const shift = peer ? Math.round(floatingAvoidanceShift({ top: targetTop + parentTop, left: targetLeft, width, height }, peer, innerHeight)) : 0;
+    element.style.setProperty('--floating-offset-y', `${shift}px`);
+    if (!managed && !beside && shift > 0) element.style.maxHeight = `${Math.max(0, innerHeight - (targetTop + shift) - 8)}px`;
     element.classList.toggle('is-scrollable', element.scrollHeight > element.clientHeight);
   }
   const managePosition = (parent: HTMLElement) => { managed = true; parent.append(element); };

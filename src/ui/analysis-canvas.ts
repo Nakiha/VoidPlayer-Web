@@ -56,10 +56,11 @@ export interface CanvasGeom {
 export const AXIS_H = 22;
 const GUTTER = 46;
 const RIGHT_PADDING = 16;
-/** 纯视图几何（无数据也可定位）：hover/框选/滚轮在首帧数据到达前即可用。 */
-export function plotGeometry(widthCss: number): { gutter: number; plotW: number; width: number } {
+/** 纯视图几何（无数据也可定位）：hover/框选/滚轮在首帧数据到达前即可用。
+ *  区间轨道没有轴标签，可用更小的首尾留白。 */
+export function plotGeometry(widthCss: number, gutter = GUTTER, rightPadding = RIGHT_PADDING): { gutter: number; plotW: number; width: number } {
   const width = Math.max(1, Math.floor(widthCss));
-  return { gutter: GUTTER, plotW: Math.max(1, width - GUTTER - RIGHT_PADDING), width };
+  return { gutter, plotW: Math.max(1, width - gutter - rightPadding), width };
 }
 
 export function computeLayout(model: CanvasModel): CanvasGeom {

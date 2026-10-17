@@ -24,9 +24,9 @@ try{
     await chooseIdentity({name:'测试用户',mode:'create'});const life=new AbortController();
     const snapshot=()=>({schema:'voidplayer-workspace',version:1,name:saved.name(),generatedAt:new Date().toISOString(),serverUrl:location.origin,positionUs:0,tracks:[{slot:'A',mediaId:'sample',offsetUs:0}],media:[{id:'sample',name:'sample.mp4',size:100,lastModified:10,codec:'h264',decoder:'webcodecs',width:100,height:100,durationUs:1000,firstPtsUs:0,source:{kind:'library',id:'a'.repeat(24),url:`${location.origin}/api/media/${'a'.repeat(24)}?v=${'b'.repeat(24)}`}}],marks:[],viewport:new Viewport().snapshot()});
     let sharing;
-    const saved=installSavedWorkspaces({signal:life.signal,snapshot,open:async()=>{window.openCount=(window.openCount??0)+1;return true;},copyLink:(id,trigger)=>sharing.copySaved(id,trigger),canSave:()=>true,report:e=>{throw e;}});
+    const saved=installSavedWorkspaces({signal:life.signal,snapshot,open:async()=>{window.openCount=(window.openCount??0)+1;return true;},copyLink:id=>sharing.copySaved(id),canSave:()=>true,report:e=>{throw e;}});
     Object.defineProperty(navigator.clipboard,'writeText',{configurable:true,value:async value=>{window.copied=value;}});
-    let scope='local';sharing=installWorkspaceSharing({signal:life.signal,snapshot,binding:saved.binding,save:saved.share,toasts:installToasts(life.signal),closeSettings:async()=>{},openSpace:async space=>{scope=space;},scope:()=>scope,isOpening:saved.isOpening,canShare:()=>true,report:e=>{throw e;}});
+    let scope='local';sharing=installWorkspaceSharing({signal:life.signal,snapshot,binding:saved.binding,save:saved.share,toasts:installToasts(life.signal),openSpace:async space=>{scope=space;},scope:()=>scope,isOpening:saved.isOpening,canShare:()=>true,report:e=>{throw e;}});
   });
   await page.locator('#saved-workspace-name').fill('初次评审');await page.locator('#saved-workspace-save').click();await page.locator('.saved-workspace-open strong').filter({hasText:'初次评审'}).waitFor();
   let release;const gate=new Promise(resolve=>release=resolve);await page.route('**/api/workspaces/share',async route=>{if(route.request().method()==='POST')await gate;await route.continue();});
@@ -37,7 +37,7 @@ try{
   const id=new URL(link).searchParams.get('workspace');const shared=await page.request.get(new URL('/api/workspaces/'+id,link).href).then(r=>r.json());assert.equal(shared.name,'更名工作区','sharing and saving bind to the same writable workspace');
   await page.locator('#workspace-share').click();await page.waitForFunction(()=>document.querySelector('#workspace-share').getAttribute('aria-busy')==='false');assert.equal(await page.evaluate(()=>window.copied),link);
   const records=await page.request.get(new URL('/api/workspaces?all=1',link).href).then(r=>r.json());assert.equal(records.entries.length,1);assert.equal(records.entries[0].name,'更名工作区');assert.deepEqual(errors,[]);
-  assert.equal(await page.locator('#saved-workspace-share').textContent(),'复制链接');
+  assert.equal(await page.locator('#saved-workspace-share').textContent(),'分享');
   const response=await page.request.post(new URL('/api/workspaces',link).href,{headers:{origin:new URL(link).origin,'x-voidplayer-action':'workspace'},data:{name:'另一工作区',document:shared.document}});assert.equal(response.status(),201);const another=await response.json();
   await page.evaluate(()=>document.getElementById('settings').dispatchEvent(new CustomEvent('settings-pane-change',{detail:'workspace'})));
   const copy=page.getByRole('button',{name:'复制工作区链接：另一工作区',exact:true});await copy.waitFor();
@@ -47,7 +47,9 @@ try{
   assert.equal(page.url(),address,'copying a saved row does not navigate');assert.equal(await page.evaluate(()=>window.openCount??0),0,'copy is independent of opening a row');
   assert.equal((await page.request.get(new URL(`/api/workspaces/${another.id}`,link).href).then(r=>r.json())).revision,1,'copying a saved link does not overwrite its contents');
   await page.evaluate(()=>Object.defineProperty(navigator.clipboard,'writeText',{value:async()=>{throw new Error('denied');}}));await copy.click();
-  await page.locator('#workspace-share-link').waitFor({state:'visible'});assert.equal(new URL(await page.locator('[aria-label="工作区链接"]').inputValue()).searchParams.get('workspace'),another.id);
+  await page.locator('.toast.toast-error').waitFor({state:'visible'});
+  assert.equal(await page.locator('#workspace-share-link').count(),0,'row copy failure surfaces an error toast, not a link panel');
+  assert.deepEqual(errors,['Error: denied'],'the denied copy is reported once through the error toast path');errors.length=0;
   assert.deepEqual(errors,[]);
   console.log('PASS: one-click share/save, shared busy UI, writable rename and one workspace URL');
 }finally{await browser?.close();await vite?.close();await service?.close();await rm(root,{recursive:true,force:true});}

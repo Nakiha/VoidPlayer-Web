@@ -330,6 +330,7 @@ export interface Sources {
   "analysis.diagramUnanalyzed": "此范围尚未收到检查结果。";
   "analysis.diagrams": "分析图示";
   "analysis.dtsOrder": "DTS序";
+  "analysis.editRange": "编辑图表区间";
   "analysis.editTrackFrameNumber": "轨道 {slot} {axis}帧号，点击编辑";
   "analysis.emptyAllHidden": "已全部隐藏，请在工具条中选择要对比的轨道。";
   "analysis.emptyNoVideo": "尚未载入视频。载入后可在此检查码率与帧大小走向。";
@@ -357,6 +358,7 @@ export interface Sources {
   "analysis.inferredLayer": "推断层级";
   "analysis.inferredLayerHint": "按相邻 I/P 锚帧间的局部参考关系推断，不代表码流标记的时间层。* 表示参考信息不完整。";
   "analysis.inferredLayerPartial": "推断层级（参考信息不完整）";
+  "analysis.invalidRange": "请输入片源范围内的起止时间，结束时间须晚于起始时间。";
   "analysis.layoutMerged": "码流合并";
   "analysis.layoutRows": "码流分轨";
   "analysis.loadMetrics": "负载率指标";
@@ -392,7 +394,9 @@ export interface Sources {
   "analysis.qpPending": "QP 分析中…";
   "analysis.qpUnavailable": "QP 暂无可用结果";
   "analysis.queryFailed": "轨道 {slot} 查询失败：{error}";
+  "analysis.rangeEnd": "结束时间";
   "analysis.rangeNavigator": "区间";
+  "analysis.rangeStart": "起始时间";
   "analysis.referenceCanvas": "帧参考关系图。横轴为整片时间；总览显示帧类型分布，放大后显示参考金字塔和连线。方向键选择，回车查看。";
   "analysis.referenceLegend": "L0 实线 · L1 长虚线 · 点线指向视图外参考帧；活动参考列表不表示每个块都使用该参考帧。";
   "analysis.referenceMissing": "参考记录不可用";
@@ -487,8 +491,7 @@ export interface Sources {
   "bitstream.unsupportedLayout": "此画面布局或编码工具暂不支持精确遮罩。";
   "bitstream.unsupportedQpDepth": "此位深的 QP 暂不支持，块和模式仍可查看。";
   "bootstrap.brandDescription": "· 视频对比";
-  "bootstrap.reload": "重新加载";
-  "bootstrap.startupFailed": "页面未能加载，请刷新重试。";
+  "bootstrap.startupFailed": "页面未能加载。";
   "bootstrap.startupTitle": "启动未完成";
   "brandCinema.detour": "出去转一圈。";
   "brandCinema.everyFrame": "每一帧，都值得看见。";
@@ -642,14 +645,14 @@ export interface Sources {
   "logPanel.downloadLogs": "下载日志";
   "logPanel.downloadStarted": "下载已开始。";
   "logPanel.history": "历史";
-  "logPanel.keepsTheLast3SessionsLocallyFor": "本机保留最近 3 次会话，最长 7 天。";
+  "logPanel.keepsTheLast3SessionsLocallyFor": "本机保留最近 3 次会话最长 7 天。";
   "logPanel.localLogs": "本地日志";
   "logPanel.localSavingFailedDownloadABackupOf": "本地保存失败，请下载日志备份。";
   "logPanel.logContents": "日志内容";
   "logPanel.logPages": "日志分页";
   "logPanel.logSession": "日志会话";
   "logPanel.logsCopied": "日志已复制。";
-  "logPanel.logsIncludeDeviceInformationFilenamesActionsAnd": "日志包含设备信息、文件名、操作记录及你填写的问题描述，不含视频或标注正文。";
+  "logPanel.logsIncludeDeviceInformationFilenamesActionsAnd": "日志包含设备信息、文件名、操作记录及你填写的问题描述不含视频或标注正文。";
   "logPanel.logsUploadedFilenameCopied": "日志已上传，文件名已复制：{p0}";
   "logPanel.logsUploadedUnableToCopyFilename": "日志已上传，无法自动复制文件名：{p0}";
   "logPanel.noLogsYet": "暂无日志";
@@ -659,7 +662,7 @@ export interface Sources {
   "logPanel.problemDescriptionOptional": "问题描述（选填）";
   "logPanel.sendLogs": "发送日志";
   "logPanel.sendTo": "发送到";
-  "logPanel.sentToTheCurrentServerOnlyWhen": "仅点击“发送日志”后，才发送到当前服务器。";
+  "logPanel.sentToTheCurrentServerOnlyWhen": "仅点击“发送日志”后才发送到当前服务器。";
   "logPanel.unableToConnectToThisServerRetry": "无法连接当前服务器，请重试或下载日志。";
   "logPanel.unableToReadLogHistory": "历史日志读取异常：{p0}";
   "logPanel.uploadFailed": "上传失败（{p0}）{p1}";
@@ -846,13 +849,10 @@ export interface Sources {
   "settingsShell.videoDecoding": "视频解码";
   "settingsShell.workspace": "工作区";
   "sharing.addVideo": "请先添加视频再分享。";
-  "sharing.close": "关闭分享";
   "sharing.copyLink": "复制链接";
   "sharing.editableCopied": "工作区链接已复制，接收者可编辑和保存";
-  "sharing.editableLink": "打开链接可还原并编辑这个工作区。";
   "sharing.link": "链接";
   "sharing.saving": "正在保存";
-  "sharing.title": "工作区链接";
   "shell.aboutVoidplayer": "关于 VoidPlayer";
   "shell.addAnnotation": "添加标注";
   "shell.addLocalFilesToTheListLocal": "选择本地文件加入列表（仅本机预览，不上传）";
@@ -1466,6 +1466,7 @@ export interface MessageParameters {
   "analysis.diagramUnanalyzed": {  };
   "analysis.diagrams": {  };
   "analysis.dtsOrder": {  };
+  "analysis.editRange": {  };
   "analysis.editTrackFrameNumber": { "axis": string | number; "slot": string | number };
   "analysis.emptyAllHidden": {  };
   "analysis.emptyNoVideo": {  };
@@ -1493,6 +1494,7 @@ export interface MessageParameters {
   "analysis.inferredLayer": {  };
   "analysis.inferredLayerHint": {  };
   "analysis.inferredLayerPartial": {  };
+  "analysis.invalidRange": {  };
   "analysis.layoutMerged": {  };
   "analysis.layoutRows": {  };
   "analysis.loadMetrics": {  };
@@ -1528,7 +1530,9 @@ export interface MessageParameters {
   "analysis.qpPending": {  };
   "analysis.qpUnavailable": {  };
   "analysis.queryFailed": { "error": string | number; "slot": string | number };
+  "analysis.rangeEnd": {  };
   "analysis.rangeNavigator": {  };
+  "analysis.rangeStart": {  };
   "analysis.referenceCanvas": {  };
   "analysis.referenceLegend": {  };
   "analysis.referenceMissing": {  };
@@ -1623,7 +1627,6 @@ export interface MessageParameters {
   "bitstream.unsupportedLayout": {  };
   "bitstream.unsupportedQpDepth": {  };
   "bootstrap.brandDescription": {  };
-  "bootstrap.reload": {  };
   "bootstrap.startupFailed": {  };
   "bootstrap.startupTitle": {  };
   "brandCinema.detour": {  };
@@ -1982,13 +1985,10 @@ export interface MessageParameters {
   "settingsShell.videoDecoding": {  };
   "settingsShell.workspace": {  };
   "sharing.addVideo": {  };
-  "sharing.close": {  };
   "sharing.copyLink": {  };
   "sharing.editableCopied": {  };
-  "sharing.editableLink": {  };
   "sharing.link": {  };
   "sharing.saving": {  };
-  "sharing.title": {  };
   "shell.aboutVoidplayer": {  };
   "shell.addAnnotation": {  };
   "shell.addLocalFilesToTheListLocal": {  };

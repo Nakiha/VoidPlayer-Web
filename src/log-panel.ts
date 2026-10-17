@@ -10,23 +10,16 @@ export function installLogPanel(container: HTMLElement, toasts: ToastStack) {
   const dialog = document.getElementById('settings') as HTMLDialogElement;
   const pane = document.getElementById('settings-pane-logs')!;
   const panel = document.createElement('div'); panel.className = 'log-panel';
-  const stopPanelLanguage = mountLocalizedShell(panel, () => `<div class="settings-section"><h4 class="settings-section-title">${th(msg("logPanel.uploadLogs", "上传日志"))}</h4><div class="settings-card log-settings-card"><div class="log-session-row"><button type="button" id="log-session" class="settings-choice" aria-label="${th(msg("logPanel.logSession", "日志会话"))}"></button><button type="button" class="icon-button" id="log-help-toggle" aria-label="${th(msg("logPanel.aboutLogs", "日志说明"))}" data-tooltip="${th(msg("logPanel.aboutLogs", "日志说明"))}" popovertarget="log-help">${icon('info')}</button></div>
+  const stopPanelLanguage = mountLocalizedShell(panel, () => {
+    const tip = [th(msg("logPanel.keepsTheLast3SessionsLocallyFor", "本机保留最近 3 次会话最长 7 天。")), th(msg("logPanel.logsIncludeDeviceInformationFilenamesActionsAnd", "日志包含设备信息、文件名、操作记录及你填写的问题描述不含视频或标注正文。")), th(msg("logPanel.sentToTheCurrentServerOnlyWhen", "仅点击“发送日志”后才发送到当前服务器。"))].join("\n");
+    return `<div class="settings-section"><h4 class="settings-section-title">${th(msg("logPanel.uploadLogs", "上传日志"))}<span class="section-title-info" role="img" tabindex="0" aria-label="${th(msg("logPanel.aboutLogs", "日志说明"))}" data-tooltip="${tip}">${icon('info')}</span></h4><div class="settings-card log-settings-card"><div class="log-session-row"><button type="button" id="log-session" class="settings-choice" aria-label="${th(msg("logPanel.logSession", "日志会话"))}"></button></div>
     <div class="log-description-field"><textarea id="log-description" aria-label="${th(msg("logPanel.problemDescriptionOptional", "问题描述（选填）"))}" maxlength="${LOG_DESCRIPTION_LIMIT}" rows="1" placeholder="${th(msg("logPanel.whatHappenedHowCanItBeReproduced", "遇到了什么问题？如何复现？"))}" spellcheck="false"></textarea></div>
     <div class="log-send-footer"><p class="settings-caption log-destination">${th(msg("logPanel.sendTo", "发送到"))} <span></span><br>${th(msg("logPanel.uploadedOnlyWhenYouClickSend", "仅在点击发送时上传"))}</p><div class="log-submit-row"><button type="button" data-action="download">${icon('download')}${th(msg("logPanel.downloadLogs", "下载日志"))}</button><button type="button" class="primary" data-action="upload">${icon('export')}${th(msg("logPanel.sendLogs", "发送日志"))}</button></div></div>
     </div><div class="log-feedback" hidden><p class="log-storage" role="status" hidden></p><p class="log-result" role="status" hidden></p></div>
-    </div><section class="settings-section log-details"><h4 class="settings-section-title">${th(msg("logPanel.localLogs", "本地日志"))}</h4><section class="settings-card log-report" aria-label="${th(msg("logPanel.localLogs", "本地日志"))}"><header class="log-report-toolbar"><span class="log-preview-status" role="status"></span><div class="log-detail-actions"><div class="log-preview-navigation" role="group" aria-label="${th(msg("logPanel.logPages", "日志分页"))}"><button type="button" data-page="previous">${th(msg("logPanel.previousPage", "上一页"))}</button><button type="button" data-page="next">${th(msg("savedWorkspaces.nextPage", "下一页"))}</button></div><button type="button" data-action="copy">${icon('copy')}${th(msg("logPanel.copyLogs", "复制日志"))}</button></div></header><textarea class="log-json" aria-label="${th(msg("logPanel.logContents", "日志内容"))}" readonly spellcheck="false" wrap="off"></textarea></section></section>`);
+    </div><section class="settings-section log-details"><h4 class="settings-section-title">${th(msg("logPanel.localLogs", "本地日志"))}</h4><section class="settings-card log-report" aria-label="${th(msg("logPanel.localLogs", "本地日志"))}"><header class="log-report-toolbar"><span class="log-preview-status" role="status"></span><div class="log-detail-actions"><div class="log-preview-navigation" role="group" aria-label="${th(msg("logPanel.logPages", "日志分页"))}"><button type="button" data-page="previous">${th(msg("logPanel.previousPage", "上一页"))}</button><button type="button" data-page="next">${th(msg("savedWorkspaces.nextPage", "下一页"))}</button></div><button type="button" data-action="copy">${icon('copy')}${th(msg("logPanel.copyLogs", "复制日志"))}</button></div></header><textarea class="log-json" aria-label="${th(msg("logPanel.logContents", "日志内容"))}" readonly spellcheck="false" wrap="off"></textarea></section></section>`;
+  });
   container.append(panel);
   panel.querySelector('.log-destination span')!.textContent = location.host;
-  const help = document.createElement('div'); help.id = 'log-help'; help.className = 'log-help'; help.setAttribute('popover', 'auto');
-  const stopHelpLanguage = mountLocalizedShell(help, () => `<strong>${th(msg("logPanel.aboutLogs", "日志说明"))}</strong><p>${th(msg("logPanel.keepsTheLast3SessionsLocallyFor", "本机保留最近 3 次会话，最长 7 天。"))}</p><p>${th(msg("logPanel.logsIncludeDeviceInformationFilenamesActionsAnd", "日志包含设备信息、文件名、操作记录及你填写的问题描述，不含视频或标注正文。"))}</p><p>${th(msg("logPanel.sentToTheCurrentServerOnlyWhen", "仅点击“发送日志”后，才发送到当前服务器。"))}</p>`);
-  dialog.append(help);
-  help.addEventListener('beforetoggle', event => {
-    if ((event as ToggleEvent).newState !== 'open') return;
-    const rect = panel.querySelector('#log-help-toggle')!.getBoundingClientRect();
-    help.style.left = `${Math.max(12, Math.min(rect.right - 320, innerWidth - 332))}px`;
-    help.style.top = `${Math.min(rect.bottom + 8, innerHeight - 230)}px`;
-  });
-  const closeHelp = () => { if (help.matches(':popover-open')) help.hidePopover(); };
   let selectedSession = '', busy = false, syncing = false, refreshRequested = false, disposed = false, generation = 0, snapshotGeneration = 0;
   let sessions: { value: string; label: string }[] = [];
   let sessionDates: { sessionId: string; current: boolean; startedAt: string }[] = [];
@@ -126,7 +119,6 @@ export function installLogPanel(container: HTMLElement, toasts: ToastStack) {
   });
   controls();
   const onPaneChange = () => {
-    closeHelp();
     if (dialog.open && !pane.hidden) { message(); fitDescription(); storageStatus(); syncVisibleLogs(); }
     else { refreshRequested = false; ++generation; ++snapshotGeneration; }
   };
@@ -178,7 +170,7 @@ export function installLogPanel(container: HTMLElement, toasts: ToastStack) {
       toast(() => t(msg("logPanel.logsUploadedUnableToCopyFilename", "日志已上传，无法自动复制文件名：{p0}"), { p0: body.name }), true);
     }
   }));
-  const onClose = () => { closeHelp(); document.body.append(toasts.stack); refreshRequested = false; ++generation; ++snapshotGeneration; };
+  const onClose = () => { document.body.append(toasts.stack); refreshRequested = false; ++generation; ++snapshotGeneration; };
   dialog.addEventListener('close', onClose);
-  return () => { stopPanelLanguage(); stopHelpLanguage(); stopDynamicLanguage(); disposed = true; ++generation; ++snapshotGeneration; menu.dispose(); unsubscribe(); help.remove(); dialog.removeEventListener('settings-pane-change', onPaneChange); dialog.removeEventListener('close', onClose); window.removeEventListener('resize', fitDescription); window.removeEventListener('focus', syncVisibleLogs); document.removeEventListener('visibilitychange', onVisibilityChange); clearInterval(syncTimer); panel.remove(); };
+  return () => { stopPanelLanguage(); stopDynamicLanguage(); disposed = true; ++generation; ++snapshotGeneration; menu.dispose(); unsubscribe(); dialog.removeEventListener('settings-pane-change', onPaneChange); dialog.removeEventListener('close', onClose); window.removeEventListener('resize', fitDescription); window.removeEventListener('focus', syncVisibleLogs); document.removeEventListener('visibilitychange', onVisibilityChange); clearInterval(syncTimer); panel.remove(); };
 }

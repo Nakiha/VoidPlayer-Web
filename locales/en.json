@@ -1321,6 +1321,10 @@
     "source": "DTS序",
     "translation": "DTS order"
   },
+  "analysis.editRange": {
+    "source": "编辑图表区间",
+    "translation": "Edit chart range"
+  },
   "analysis.editTrackFrameNumber": {
     "source": "轨道 {slot} {axis}帧号，点击编辑",
     "translation": "Track {slot} {axis} frame number; activate to edit"
@@ -1428,6 +1432,10 @@
   "analysis.inferredLayerPartial": {
     "source": "推断层级（参考信息不完整）",
     "translation": "Inferred layer (incomplete references)"
+  },
+  "analysis.invalidRange": {
+    "source": "请输入片源范围内的起止时间，结束时间须晚于起始时间。",
+    "translation": "Enter times within the source range, with the end after the start."
   },
   "analysis.layoutMerged": {
     "source": "码流合并",
@@ -1574,9 +1582,17 @@
     "source": "轨道 {slot} 查询失败：{error}",
     "translation": "Track {slot} query failed: {error}"
   },
+  "analysis.rangeEnd": {
+    "source": "结束时间",
+    "translation": "End time"
+  },
   "analysis.rangeNavigator": {
     "source": "区间",
     "translation": "Range"
+  },
+  "analysis.rangeStart": {
+    "source": "起始时间",
+    "translation": "Start time"
   },
   "analysis.referenceCanvas": {
     "source": "帧参考关系图。横轴为整片时间；总览显示帧类型分布，放大后显示参考金字塔和连线。方向键选择，回车查看。",
@@ -1973,13 +1989,9 @@
     "source": "· 视频对比",
     "translation": "· Video comparison"
   },
-  "bootstrap.reload": {
-    "source": "重新加载",
-    "translation": "Reload"
-  },
   "bootstrap.startupFailed": {
-    "source": "页面未能加载，请刷新重试。",
-    "translation": "The page failed to load. Refresh and retry."
+    "source": "页面未能加载。",
+    "translation": "The page failed to load."
   },
   "bootstrap.startupTitle": {
     "source": "启动未完成",
@@ -2600,7 +2612,7 @@
     "translation": "History"
   },
   "logPanel.keepsTheLast3SessionsLocallyFor": {
-    "source": "本机保留最近 3 次会话，最长 7 天。",
+    "source": "本机保留最近 3 次会话最长 7 天。",
     "translation": "Keeps the last 3 sessions locally for up to 7 days."
   },
   "logPanel.localLogs": {
@@ -2628,7 +2640,7 @@
     "translation": "Logs copied."
   },
   "logPanel.logsIncludeDeviceInformationFilenamesActionsAnd": {
-    "source": "日志包含设备信息、文件名、操作记录及你填写的问题描述，不含视频或标注正文。",
+    "source": "日志包含设备信息、文件名、操作记录及你填写的问题描述不含视频或标注正文。",
     "translation": "Logs include device information, filenames, actions and your problem description, but no video or annotation text."
   },
   "logPanel.logsUploadedFilenameCopied": {
@@ -2668,7 +2680,7 @@
     "translation": "Send to"
   },
   "logPanel.sentToTheCurrentServerOnlyWhen": {
-    "source": "仅点击“发送日志”后，才发送到当前服务器。",
+    "source": "仅点击“发送日志”后才发送到当前服务器。",
     "translation": "Sent to the current server only when you click “Send logs”."
   },
   "logPanel.unableToConnectToThisServerRetry": {
@@ -3417,10 +3429,6 @@
     "source": "请先添加视频再分享。",
     "translation": "Add a video before sharing."
   },
-  "sharing.close": {
-    "source": "关闭分享",
-    "translation": "Close sharing"
-  },
   "sharing.copyLink": {
     "source": "复制链接",
     "translation": "Copy link"
@@ -3429,10 +3437,6 @@
     "source": "工作区链接已复制，接收者可编辑和保存",
     "translation": "Workspace link copied. Recipients can edit and save."
   },
-  "sharing.editableLink": {
-    "source": "打开链接可还原并编辑这个工作区。",
-    "translation": "Open this link to restore and edit the workspace."
-  },
   "sharing.link": {
     "source": "链接",
     "translation": "Link"
@@ -3440,10 +3444,6 @@
   "sharing.saving": {
     "source": "正在保存",
     "translation": "Saving"
-  },
-  "sharing.title": {
-    "source": "工作区链接",
-    "translation": "Workspace link"
   },
   "shell.aboutVoidplayer": {
     "source": "关于 VoidPlayer",

@@ -1,3 +1,4 @@
+import { parseTimeInput, installTimeInput } from '../time-input.ts';
 import { icon } from './icons.ts';
 import { analysisRetryButton } from './analysis/retry.ts';
 import { animatePlaybackIcon } from './playback-icon.ts';
@@ -18,6 +19,7 @@ import type { DirectTarget, InspectionState } from '../analysis/inspection.ts';
 import { pickGlyph, paddedChartDomain, containerChartColumn, chartFrameHoverStart, layoutAnalysisCards } from './analysis-geometry.ts';
 import type { AnalysisGlyph, BucketGlyph, SampleGlyph } from './analysis-geometry.ts';
 import { installChoiceMenu } from './choice-menu.ts';
+import { bindMenuTrigger } from './menu.ts';
 import { analysisDiagramIcon } from './analysis/diagram-icons.ts';
 import { bitstreamReasonText } from './bitstream-reasons.ts';
 import { onLanguageChange, t, th, msg } from '../i18n.ts';
@@ -89,6 +91,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         <button type="button" id="analysis-window" class="choice-trigger" aria-label="${th(msg("analysis.bitrateWindow", "码率窗口"))}" title="${th(msg("analysis.bitrateWindowTitle", "码率窗口：视频样本负载码率的滑动时间窗（真实时间窗，非 N 帧窗）"))}"></button>
         <button type="button" id="analysis-layout" class="choice-trigger" aria-label="${th(msg("analysis.multiTrackLayout", "多轨布局"))}" title="${th(msg("analysis.multiTrackLayoutTitle", "只影响码率和帧大小；NALU 与帧参考始终按轨道分开显示。"))}"></button>
         <div class="analysis-zoom-controls">
+          <button type="button" id="analysis-range-trigger" class="analysis-range-trigger" aria-haspopup="dialog" aria-expanded="false" aria-controls="analysis-range-editor"><span></span></button>
           <button type="button" id="analysis-zoom-in" class="icon-button">${icon('zoomIn')}</button>
           <button type="button" id="analysis-zoom-out" class="icon-button">${icon('zoomOut')}</button>
           <button type="button" class="icon-button" data-seg="full">${icon('fullRange')}</button>
@@ -139,11 +142,56 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   const sharedAxis = document.createElement('canvas'); sharedAxis.id = 'analysis-shared-axis'; sharedAxis.setAttribute('aria-hidden', 'true');
   sharedAxisHost.append(sharedAxis); charts.after(sharedAxisHost);
   const rangeNavigation = document.createElement('div'); rangeNavigation.className = 'analysis-range-navigation';
+  // 区间轨道没有刻度标签：只留一点边距，把手和胶囊贴近面板两侧。
+  const RAIL_INSET = 10;
   const rangeAxis = document.createElement('canvas'); rangeAxis.id = 'analysis-range-axis';
   rangeAxis.tabIndex = 0; rangeAxis.setAttribute('role', 'slider');
   const rangeLabel = document.createElement('span'); rangeLabel.className = 'analysis-range-label';
   const rangePlayhead = document.createElement('span'); rangePlayhead.className = 'analysis-range-playhead'; rangePlayhead.setAttribute('aria-hidden', 'true');
-  rangeNavigation.append(rangeAxis, rangeLabel, rangePlayhead); section.querySelector('.analysis-head')!.after(rangeNavigation);
+  const rangeTrigger = $<HTMLButtonElement>('#analysis-range-trigger');
+  const rangeEditor = document.createElement('div'); rangeEditor.id = 'analysis-range-editor'; rangeEditor.className = 'popup-menu analysis-range-editor';
+  rangeEditor.setAttribute('popover', 'auto'); rangeEditor.setAttribute('role', 'dialog');
+  const rangeError = document.createElement('p'); rangeError.className = 'analysis-range-error'; rangeError.setAttribute('role', 'status'); rangeError.hidden = true;
+  rangeNavigation.append(rangeAxis, rangeLabel, rangePlayhead); rangeLabel.hidden = true;
+  rangeEditor.append(rangeNavigation, rangeError); document.body.append(rangeEditor);
+  const closeRangeEditor = () => {
+    cancelRangeEdits();
+    if (rangeEditor.matches(':popover-open')) rangeEditor.hidePopover();
+    rangeTrigger.setAttribute('aria-expanded','false');
+  };
+  // 打开/关闭由显式点击处理（与项目下拉菜单同一契约）：原生 popovertarget 在
+  // “按下轻触关闭 + 点击再打开”的竞态里会让触发器无法重新打开面板。
+  const openRangeEditor = () => { if (!rangeTrigger.disabled && !rangeEditor.matches(':popover-open')) rangeEditor.showPopover(); };
+  bindMenuTrigger(rangeTrigger, rangeEditor, openRangeEditor, closeRangeEditor, signal);
+  // 与触发按钮居中对齐；放不下时翻到上方，并始终留在视口内。
+  function positionRangeEditor() {
+    if (!rangeEditor.matches(':popover-open')) return;
+    const rect = rangeTrigger.getBoundingClientRect(), width = rangeEditor.offsetWidth, height = rangeEditor.offsetHeight;
+    const gap = 6, margin = 8;
+    rangeEditor.style.left = `${Math.max(margin, Math.min(innerWidth-width-margin, rect.left + (rect.width-width)/2))}px`;
+    rangeEditor.style.top = `${Math.max(margin, rect.bottom+gap+height<=innerHeight-margin ? rect.bottom+gap : rect.top-height-gap)}px`;
+    refreshCardAvoidance();
+  }
+  rangeEditor.addEventListener('toggle', () => {
+    const expanded = rangeEditor.matches(':popover-open'); rangeTrigger.setAttribute('aria-expanded', String(expanded));
+    if (!expanded) { refreshCardAvoidance(); return; }
+    ensureRangeEditors(); rangeError.hidden = true; rangeBand.focus({ preventScroll: true });
+    sharedAxisSignature = ''; renderSharedAxis(); positionRangeEditor();
+  }, {signal});
+  rangeEditor.addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeRangeEditor(); rangeTrigger.focus(); } }, {signal});
+  window.addEventListener('resize', () => { if (rangeEditor.matches(':popover-open')) { sharedAxisSignature = ''; renderSharedAxis(); positionRangeEditor(); } }, {signal});
+  // 工具条可横向滚动：触发按钮移动时编辑器跟随，锚定关系不脱钩。
+  rangeTrigger.closest('.analysis-tools')?.addEventListener('scroll', positionRangeEditor, {signal, passive:true});
+  // 触发按钮的标签随区间变化；居中锚定必须跟随按钮自身的宽度。
+  const rangeTriggerObs = new ResizeObserver(() => { positionRangeEditor(); syncHeadStack(); });
+  rangeTriggerObs.observe(rangeTrigger);
+  // 编辑器自身的高度也会随胶囊换行变化，卡片避让要跟着新的矩形重算。
+  const rangeEditorObs = new ResizeObserver(() => { positionRangeEditor(); refreshCardAvoidance(); });
+  rangeEditorObs.observe(rangeEditor);
+  function rangeGeometry() { return plotGeometry(Math.max(1, rangeNavigation.clientWidth || Math.min(460, innerWidth-48)), RAIL_INSET, RAIL_INSET); }
+  /** 编辑器打开时作为顶部面板内的浮层对等方：悬浮卡片据此避让。 */
+  const rangeEditorBounds = () => rangeEditor.matches(':popover-open') ? rangeEditor.getBoundingClientRect() : undefined;
+
   const rangeBand = document.createElement('span'); rangeBand.className = 'analysis-window-band'; rangeBand.tabIndex = 0; rangeBand.setAttribute('role', 'slider');
   const rangeHandles = (['start', 'end'] as const).map(edge => {
     const button = document.createElement('button'); button.type = 'button'; button.className = `analysis-window-handle ${edge}`;
@@ -158,23 +206,118 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     time.hidden = kind === 'hover';
     time.id = `analysis-range-time-${kind}`; rangeNavigation.append(time); return time;
   });
+  // 起止胶囊：点击后原位切换为时间输入，回车/失焦提交、Escape 还原。
+  // 草稿归输入框自己（installTimeInput），外部刷新只写显示文本，不覆盖未提交的编辑。
+  type RangeEdge = 'start' | 'end';
+  const rangeEdges = new Map<RangeEdge, { pill: HTMLElement; text: HTMLElement; input: HTMLInputElement; label: string }>();
+  let rangeEditorsReady = false;
+  for (const [edge, index] of [['start', 0], ['end', 2]] as const) {
+    const pill = rangeTimes[index];
+    const text = document.createElement('span'); text.className = 'analysis-range-time-text';
+    const input = document.createElement('input'); input.className = 'analysis-range-time-input';
+    input.id = `analysis-range-input-${edge}`; input.type = 'text'; input.autocomplete = 'off'; input.spellcheck = false; input.hidden = true;
+    pill.classList.add('editable'); pill.tabIndex = 0; pill.setAttribute('role', 'button');
+    pill.append(text, input);
+    rangeEdges.set(edge, { pill, text, input, label: '' });
+  }
+  const edgeIndex: Record<RangeEdge, number> = { start: 0, end: 1 };
+  const edgeValue = (edge: RangeEdge) => {
+    const domain = dataDomainBounds(), range = viewRange();
+    return edge === 'start' ? Math.max(domain.start, range.start) : Math.min(domain.end, range.end);
+  };
+  /** 胶囊显示文本与可访问名称跟随把手；编辑中的输入框不受影响。 */
+  function syncRangeEdges() {
+    for (const [edge, state] of rangeEdges) {
+      const value = rangeHandles[edgeIndex[edge]].getAttribute('aria-valuetext') ?? formatAxis(edgeValue(edge));
+      if (state.text.textContent !== value) state.text.textContent = value;
+      state.pill.setAttribute('aria-label', state.label ? `${state.label} ${value}` : value);
+    }
+  }
+  /** 结束编辑态：恢复显示文本并清掉线框标记（可重复调用）。 */
+  function endRangeEdit(edge: RangeEdge) {
+    const { pill, text, input } = rangeEdges.get(edge)!;
+    input.hidden = true; text.style.visibility = ''; pill.removeAttribute('data-editing');
+    layoutRangeTimes();
+  }
+  /** 放弃未提交的草稿：还原为当前区间值再失焦（提交随后因值未变而空转）。 */
+  function cancelRangeEdits() {
+    for (const [edge, { input }] of rangeEdges) {
+      if (input.hidden) continue;
+      input.value = formatAxis(edgeValue(edge));
+      input.blur();
+      // 失焦事件在窗口未聚焦时可能不到达，外观必须自行复位。
+      rangeError.hidden = true;
+      endRangeEdit(edge);
+    }
+  }
+  /** 首次打开才接线：installTimeInput 立即读取会话范围，须等视图函数就绪。 */
+  function ensureRangeEditors() {
+    if (rangeEditorsReady) return;
+    rangeEditorsReady = true;
+    for (const edge of ['start', 'end'] as const) {
+      const { pill, text, input } = rangeEdges.get(edge)!;
+      const show = () => {
+        if (!input.hidden) return;
+        rangeError.hidden = true;
+        // 编辑框精确覆盖文字盒：胶囊高度、位置与字号在编辑期间完全不变。
+        // 绝对定位的 left/top 相对内边距盒，描边宽度按实际计算值扣除。
+        const box = text.getBoundingClientRect(), pillBox = pill.getBoundingClientRect();
+        const pillStyle = getComputedStyle(pill);
+        input.style.left = `${box.left-pillBox.left-(parseFloat(pillStyle.borderLeftWidth)||0)}px`;
+        input.style.top = `${box.top-pillBox.top-(parseFloat(pillStyle.borderTopWidth)||0)}px`;
+        input.style.width = `${box.width}px`; input.style.height = `${box.height}px`;
+        text.style.visibility = 'hidden'; input.hidden = false; pill.dataset.editing = 'true';
+        layoutRangeTimes(); input.focus(); input.select();
+      };
+      let keyboardExit = false;
+      pill.addEventListener('click', show, { signal });
+      pill.addEventListener('keydown', event => {
+        if (event.target === input) return;
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); show(); }
+      }, { signal });
+      input.addEventListener('keydown', event => { if (event.key === 'Escape' || event.key === 'Enter') keyboardExit = true; }, { signal, capture: true });
+      input.addEventListener('focus', () => { keyboardExit = false; }, { signal });
+      input.addEventListener('blur', () => {
+        rangeError.hidden = true; endRangeEdit(edge);
+        // 键盘提交/取消后焦点回到胶囊，下一次 Escape 才能关闭编辑器。
+        if (keyboardExit) { keyboardExit = false; pill.focus({ preventScroll: true }); }
+      }, { signal });
+      installTimeInput(input, {
+        read: () => edgeValue(edge), format: formatAxis,
+        parse: raw => {
+          try {
+            const value = parseTimeInput(raw, 's', true), domain = dataDomainBounds(), range = viewRange();
+            const min = edge === 'start' ? domain.start : Math.max(domain.start, range.start) + MIN_SPAN_US;
+            const max = edge === 'start' ? range.end - MIN_SPAN_US : domain.end;
+            if (value < min || value > max) throw new Error(t(msg('analysis.invalidRange', '请输入片源范围内的起止时间，结束时间须晚于起始时间。')));
+            rangeError.hidden = true;
+            return value;
+          } catch (error) {
+            rangeError.textContent = error instanceof Error ? error.message : String(error);
+            rangeError.hidden = false;
+            throw error;
+          }
+        },
+        commit: async value => { const range = viewRange(); rangeError.hidden = true; setView(edge === 'start' ? value : range.start, edge === 'start' ? range.end : value); },
+      });
+    }
+  }
   function layoutRangeTimes() {
-    const geometry = sharedAxisGeometry(), left = geometry.gutter, right = left + geometry.plotW;
+    const geometry = rangeGeometry(), left = geometry.gutter, right = left + geometry.plotW;
     const anchors = [parseFloat(rangeHandles[0].style.left), parseFloat(rangePlayhead.style.left), parseFloat(rangeHandles[1].style.left), parseFloat(rangeHover.style.left)];
     const labels = rangeTimes.flatMap((element, index) => element.hidden ? [] : [{element, index, anchor:anchors[index], width:element.offsetWidth, left:0}])
       .sort((a,b) => a.anchor-b.anchor || a.index-b.index);
     const gap = 8;
     const stacked = labels.reduce((sum,label)=>sum+label.width,0)+Math.max(0,labels.length-1)*gap > geometry.plotW;
     rangeNavigation.style.setProperty('--range-navigation-height', `${stacked ? 28+(labels.length-1)*20 : 28}px`);
-    let previous = left-gap;
-    for (const label of labels) {
+    for (const [position, label] of labels.entries()) {
       label.left = Math.max(left, Math.min(right-label.width, label.anchor-label.width/2));
-      if (!stacked) label.left = Math.max(label.left, previous+gap);
-      previous = label.left+label.width;
-    }
-    if (!stacked) {
-      let next = right+gap;
-      for (const label of [...labels].reverse()) { label.left = Math.min(label.left,next-gap-label.width); next=label.left; }
+      if (stacked) continue;
+      // 同一行：自左向右排布，同时给右侧未放置的标签留出最小间距，
+      // 总宽已确认可容纳，因此每个标签都不会越过轨道边界或彼此重叠。
+      const remaining = labels.slice(position+1).reduce((sum,next)=>sum+next.width+gap,0);
+      const cursor = position ? labels[position-1].left+labels[position-1].width+gap : left;
+      label.left = Math.max(cursor, Math.min(label.left, right-remaining-label.width));
     }
     for (const [row,label] of labels.entries()) {
       label.element.style.left = `${label.left}px`; label.element.style.top = `${12+(stacked ? row*20 : 0)}px`;
@@ -209,8 +352,6 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     const panelMinimum = parseFloat(panelStyle.getPropertyValue('--analysis-min-height')) || 140;
     const chromeHeight = $<HTMLElement>('.analysis-head').getBoundingClientRect().height
       + sharedAxisHost.getBoundingClientRect().height
-      + rangeNavigation.getBoundingClientRect().height
-      + (parseFloat(getComputedStyle(rangeNavigation).marginTop) || 0) + (parseFloat(getComputedStyle(rangeNavigation).marginBottom) || 0)
       + (parseFloat(panelStyle.borderTopWidth) || 0) + (parseFloat(panelStyle.borderBottomWidth) || 0);
     const viewMinimum = Math.max(1, panelMinimum - chromeHeight);
     const plotMinimum = Math.max(36, viewMinimum - 25); // Compact legend and separator.
@@ -283,7 +424,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     });
     const overview = overviewVisible();
     overviewHost.hidden = !overview;
-    for (const control of $<HTMLElement>('.analysis-tools').children) (control as HTMLElement).hidden = !overview && control.id !== 'analysis-axis' && (control as HTMLElement).dataset.seg !== 'full';
+    for (const control of $<HTMLElement>('.analysis-tools').children) (control as HTMLElement).hidden = !overview && !(control as HTMLElement).classList.contains('analysis-zoom-controls') && control.id !== 'analysis-axis' && (control as HTMLElement).dataset.seg !== 'full';
     $<HTMLElement>('#analysis-window').hidden = !prefs.showBitrate || !loadMetrics.has('bitrate');
     loadLegend.hidden = !prefs.showBitrate;
     loadLabel.textContent=t(prefs.axis==='pts'?msg('analysis.presentationLoad','展示负载率'):msg('analysis.streamSection','码流'));
@@ -313,7 +454,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
           axis: () => prefs.axis, range: () => viewRange(), domain: () => domainBounds(), containerColumn: () => containerColumn(), set: (start, end) => setView(start, end),
         }, { hiddenTypes: filters.get(slot)!.hiddenTypes, filterChanged: () => { clearSharedHover(); refreshDeep(); }, hover: hoverDeep,
           pinned: () => inspection.state.pinned != null, layoutChanged: syncNaluMinimum, rendered: positionIndividualCards,
-          inspection: () => inspectionUi(slot), slotColor: () => slotColors.get(slot) ?? '#888' });
+          inspection: () => inspectionUi(slot), slotColor: () => slotColors.get(slot) ?? '#888', avoid: rangeEditorBounds });
         deepPanels.set(key, { mode, slot, host, abort, panel });
       }
     }
@@ -344,6 +485,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     // The time axis belongs to the panel, even when its only view is the overview.
     sharedAxisHost.hidden = diagrams.size === 0;
     rangeNavigation.hidden = sharedAxisHost.hidden;
+    if (sharedAxisHost.hidden) closeRangeEditor();
     overviewHost.style.setProperty('--overview-weight', String(Math.max(1, overviewRows)));
     overviewHost.style.setProperty('--overview-min-height', `calc(max(36px, var(--analysis-view-min-height)) * ${Math.max(1, overviewRows)} + ${prefs.showBitrate ? 25 : 0}px)`);
     none.hidden = diagrams.size > 0; noneCopy.textContent = t(msg('analysis.chooseCharts', '选择要显示的图表。'));
@@ -370,7 +512,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   // abort 时移除，平时 pointer-events:none 不拦截输入。
   const card = installAnalysisCard(canvas, { signal, colors: () => slotColors, pinned: () => inspection.state.pinned != null,
     visibleRows: () => ({ bitrate: prefs.showBitrate && loadMetrics.has('bitrate'), size: prefs.showSize, qp: prefs.showBitrate && loadMetrics.has('qp') }),
-    qpValue: (slot,time)=>qpAt(slot,time),
+    qpValue: (slot,time)=>qpAt(slot,time), avoid: rangeEditorBounds,
     panelBounds: () => section.getBoundingClientRect() });
   const cardEl = card.element;
   cardEl.classList.add('analysis-linked-card');
@@ -393,7 +535,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
 
   const overviewCard = installAnalysisCard(canvas, { signal, colors: () => slotColors, pinned: () => inspection.state.pinned != null,
     visibleRows: () => ({ bitrate: prefs.showBitrate && loadMetrics.has('bitrate'), size: prefs.showSize, qp: prefs.showBitrate && loadMetrics.has('qp') }),
-    qpValue: (slot,time)=>qpAt(slot,time),
+    qpValue: (slot,time)=>qpAt(slot,time), avoid: rangeEditorBounds,
     panelBounds: () => cardGroupBounds('overview') ?? canvas.getBoundingClientRect(), beside: true });
   overviewCard.element.classList.add('analysis-view-card'); overviewCard.element.dataset.diagram = 'overview';
   overviewCard.managePosition(individualLayer);
@@ -446,6 +588,12 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     for (const [i, item] of pending.entries()) item.card.position(item.x, layout.tops[i] - 8);
   }
 
+  /** 区间编辑器开合或移动后重算卡片避让：与视口两个拖拽面板同一契约。 */
+  function refreshCardAvoidance() {
+    const x = inspection.state.lastClient?.x ?? canvas.getBoundingClientRect().left + fracToPx(inspection.state.hoverUs ?? 0);
+    positionFloat(x);
+  }
+
   function renderIndividual(snapshot: InspectionState) {
     cardEl.hidden = true;
     if (overviewVisible()) { overviewCard.render(snapshot, null); overviewCard.element.dataset.hoverTime = String(sharedHover!.timeUs); }
@@ -454,7 +602,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       const group: CardGroup = `${kind}:${slot}`;
       let floating = individualCards.get(group);
       if (!floating) {
-        floating = installFloatingAnalysisCard(host.querySelector('canvas')!, signal, () => cardGroupBounds(group) ?? host.getBoundingClientRect(), true);
+        floating = installFloatingAnalysisCard(host.querySelector('canvas')!, signal, () => cardGroupBounds(group) ?? host.getBoundingClientRect(), true, rangeEditorBounds);
         floating.element.classList.add('analysis-view-card'); floating.element.dataset.diagram = kind; floating.element.dataset.slot = slot;
         floating.managePosition(individualLayer);
         individualCards.set(group, floating); retainCardLeave(floating.element);
@@ -715,7 +863,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   });
   sharedAxis.addEventListener('dblclick', () => { clearSharedHover(); setView(null); }, { signal });
   const rangeTimeAt = (clientX: number) => {
-    const domain = dataDomainBounds(), geometry = sharedAxisGeometry();
+    const domain = dataDomainBounds(), geometry = rangeGeometry();
     const fraction = Math.max(0, Math.min(1, (clientX - rangeAxis.getBoundingClientRect().left - geometry.gutter) / geometry.plotW));
     return Math.max(0, Math.min(durationUs, Math.round(domain.start + fraction * (domain.end - domain.start))));
   };
@@ -723,7 +871,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     if (prefs.axis === 'pts') void act(() => session.seek(rangeTimeAt(clientX)), 'ui.analysis-range-seek');
   };
   function positionRangeHover() {
-    const geometry = sharedAxisGeometry();
+    const geometry = rangeGeometry();
     const x = rangeHoverClientX == null ? -1 : rangeHoverClientX-rangeAxis.getBoundingClientRect().left;
     const hidden = !open || sharedAxisHost.hidden || x < geometry.gutter || x > geometry.gutter+geometry.plotW;
     rangeHover.hidden = rangeTimes[3].hidden = hidden;
@@ -751,14 +899,14 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   let rangeDrag: { x: number; start: number; end: number; moved: boolean } | undefined;
   rangeBand.addEventListener('pointerdown', event => {
     if (event.button !== 0) return;
-    event.preventDefault(); rangeDrag = { x: event.clientX, ...viewRange(), moved: false };
+    cancelRangeEdits(); event.preventDefault(); rangeDrag = { x: event.clientX, ...viewRange(), moved: false };
     rangeBand.setPointerCapture(event.pointerId);
   }, { signal });
   rangeBand.addEventListener('pointermove', event => {
     if (!rangeDrag || !rangeBand.hasPointerCapture(event.pointerId)) return;
     if (!rangeDrag.moved && Math.abs(event.clientX - rangeDrag.x) < 3) return;
     rangeDrag.moved = true; rangeBand.dataset.dragging = 'true';
-    const domain = dataDomainBounds(), delta = Math.round((event.clientX - rangeDrag.x) / sharedAxisGeometry().plotW * (domain.end - domain.start));
+    const domain = dataDomainBounds(), delta = Math.round((event.clientX - rangeDrag.x) / rangeGeometry().plotW * (domain.end - domain.start));
     const next = panTimeRange(rangeDrag.start, rangeDrag.end, delta, domainBounds()); setView(next.start, next.end);
   }, { signal });
   rangeBand.addEventListener('pointerup', event => {
@@ -781,10 +929,10 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       if (handle.dataset.edge === 'start') setView(Math.max(domain.start, Math.min(range.end - MIN_SPAN_US, value)), range.end);
       else setView(Math.max(domain.start, range.start), Math.min(domain.end, Math.max(Math.max(domain.start, range.start) + MIN_SPAN_US, value)));
     };
-    handle.addEventListener('pointerdown', event => { if (event.button !== 0) return; event.preventDefault(); dragOrigin = { x: event.clientX, value: Number(handle.getAttribute('aria-valuenow')) }; handle.dataset.dragging = 'true'; handle.setPointerCapture(event.pointerId); }, { signal });
+    handle.addEventListener('pointerdown', event => { if (event.button !== 0) return; cancelRangeEdits(); event.preventDefault(); dragOrigin = { x: event.clientX, value: Number(handle.getAttribute('aria-valuenow')) }; handle.dataset.dragging = 'true'; handle.setPointerCapture(event.pointerId); }, { signal });
     handle.addEventListener('pointermove', event => {
       if (!handle.hasPointerCapture(event.pointerId) || !dragOrigin) return;
-      const domain = dataDomainBounds(), geometry = sharedAxisGeometry();
+      const domain = dataDomainBounds(), geometry = rangeGeometry();
       apply(Math.round(dragOrigin.value + (event.clientX - dragOrigin.x) / geometry.plotW * (domain.end - domain.start)));
     }, { signal });
     handle.addEventListener('pointerup', event => { if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId); }, { signal });
@@ -939,6 +1087,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   function refreshTools() {
     const dtsOk = allHaveDts();
     const hasTracks = selectedTracks().length > 0;
+    rangeTrigger.disabled = !hasTracks; if (!hasTracks || !open) closeRangeEditor();
     if (hasTracks && prefs.axis === 'dts' && !dtsOk) { prefs.axis = 'pts'; save(); }
     refreshDiagram();
     updateStatus();
@@ -956,10 +1105,18 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     windowMenu.sync(String(prefs.windowUs), WINDOW_LABELS[prefs.windowUs] ?? '', selectedTracks().length > 0);
     layoutMenu.sync(prefs.layoutMode, layoutLabel(prefs.layoutMode), true);
     $<HTMLElement>('#analysis-layout').hidden = !overviewVisible() || selectedTracks().length < 2;
+    syncHeadStack();
   }
 
   /** Static chrome follows the UI language; dynamic parts re-render below. */
   function localizeChrome() {
+    const rangeName = t(msg('analysis.editRange', '编辑图表区间'));
+    rangeTrigger.setAttribute('aria-label', rangeName); rangeTrigger.dataset.tooltip = rangeName; rangeEditor.setAttribute('aria-label', rangeName);
+    // 起止胶囊即时间输入：名称随语言更新，显示值由 syncRangeEdges 跟随区间。
+    rangeEdges.get('start')!.label = t(msg('analysis.rangeStart', '起始时间'));
+    rangeEdges.get('end')!.label = t(msg('analysis.rangeEnd', '结束时间'));
+    for (const state of rangeEdges.values()) state.input.setAttribute('aria-label', state.label);
+    syncRangeEdges();
     tools.setAttribute('aria-label', t(msg("analysis.tools", "分析选项")));
     tracksEl.setAttribute('aria-label', t(msg("analysis.compareTracks", "对比轨道")));
     // Choice menus mirror the trigger label into the popup; refresh both ends
@@ -1015,16 +1172,18 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     sharedAxisCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     sharedAxisCtx.clearRect(0, 0, width, AXIS_H);
     drawTimeAxis(sharedAxisCtx, { width, height: AXIS_H, viewStart: range.start, viewEnd: range.end, colors });
-    rangeAxis.style.width = `${width}px`; rangeAxis.style.height = `${AXIS_H}px`;
-    rangeAxis.width = Math.round(width * dpr); rangeAxis.height = Math.round(AXIS_H * dpr);
+    const navWidth = Math.max(1, rangeNavigation.clientWidth || Math.min(460, innerWidth-48));
+    rangeAxis.style.width = `${navWidth}px`; rangeAxis.style.height = `${AXIS_H}px`;
+    rangeAxis.width = Math.round(navWidth * dpr); rangeAxis.height = Math.round(AXIS_H * dpr);
     rangeAxisCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     rangeAxis.dataset.timeAxis = 'false';
     rangeLabel.textContent = t(msg('analysis.rangeNavigator', '区间'));
+    rangeTrigger.querySelector('span')!.textContent = `${formatAxis(Math.max(domain.start,range.start))} – ${formatAxis(Math.min(domain.end,range.end))}`;
     rangeAxis.setAttribute('aria-label', t(msg('analysis.fullTimelinePosition', '全片播放位置')));
     rangeBand.setAttribute('aria-label', t(msg('analysis.panVisibleRange', '平移图表可见区间')));
     rangeBand.setAttribute('aria-valuemin', String(domain.start)); rangeBand.setAttribute('aria-valuemax', String(Math.max(domain.start, domain.end-(range.end-range.start))));
     rangeBand.setAttribute('aria-valuenow', String(range.start)); rangeBand.setAttribute('aria-valuetext', `${formatAxis(range.start)} – ${formatAxis(range.end)}`);
-    const geometry = plotGeometry(width);
+    const geometry = rangeGeometry();
     const dataDomain = dataDomainBounds();
     const selectionStart = Math.max(dataDomain.start, range.start), selectionEnd = Math.min(dataDomain.end, range.end);
     const xFor = (time: number) => geometry.gutter + Math.max(0, Math.min(1, (time - domain.start) / (domain.end - domain.start))) * geometry.plotW;
@@ -1041,6 +1200,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       rangeAxisCtx.lineTo(xFor(window.startUs + track.offsetUs + (window.endUs - window.startUs) * stream.checkedUs / stream.totalUs), 3); rangeAxisCtx.stroke();
     }
     rangeAxisCtx.globalAlpha = 1;
+    rangeNavigation.style.setProperty('--range-handle-inset', `${Math.min(8, Math.max(0,xFor(selectionEnd)-xFor(selectionStart))/4)}px`);
     rangeBand.style.left = `${xFor(selectionStart)}px`; rangeBand.style.width = `${Math.max(0, xFor(selectionEnd) - xFor(selectionStart))}px`;
     for (const handle of rangeHandles) {
       const value = handle.dataset.edge === 'start' ? selectionStart : selectionEnd;
@@ -1048,15 +1208,14 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       handle.setAttribute('aria-label', t(handle.dataset.edge === 'start' ? msg('analysis.visibleStart', '图表可见区间起点') : msg('analysis.visibleEnd', '图表可见区间终点')));
       handle.setAttribute('aria-valuemin', String(dataDomain.start)); handle.setAttribute('aria-valuemax', String(dataDomain.end)); handle.setAttribute('aria-valuenow', String(value)); handle.setAttribute('aria-valuetext', value < 0 ? formatAxis(value) : formatTime(value));
     }
-    rangeTimes[0].textContent = rangeHandles[0].getAttribute('aria-valuetext');
-    rangeTimes[2].textContent = rangeHandles[1].getAttribute('aria-valuetext');
+    syncRangeEdges();
     positionRangePlayhead();
     const chartDomain = fullRange();
     sharedAxis.dataset.domainStart = String(chartDomain.start); sharedAxis.dataset.domainEnd = String(chartDomain.end);
     sharedAxis.dataset.axisStart = String(range.start); sharedAxis.dataset.axisEnd = String(range.end);
     rangeAxis.dataset.domainStart = String(domain.start); rangeAxis.dataset.domainEnd = String(domain.end);
     sharedAxis.dataset.viewStart = String(range.start); sharedAxis.dataset.viewEnd = String(range.end);
-    sharedAxis.dataset.plotLeft = String(geometry.gutter); sharedAxis.dataset.plotRight = String(geometry.gutter + geometry.plotW);
+    sharedAxis.dataset.plotLeft = String(plotGeometry(width).gutter); sharedAxis.dataset.plotRight = String(plotGeometry(width).gutter + plotGeometry(width).plotW);
     sharedAxis.dataset.timeAxis = 'true';
   }
 
@@ -1229,7 +1388,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     rangeAxis.setAttribute('aria-valuenow', String(positionUs)); rangeAxis.setAttribute('aria-valuetext', formatTime(positionUs));
     rangeTimes[1].hidden = rangePlayhead.hidden;
     if (rangePlayhead.hidden) { positionRangeHover(); return; }
-    const domain = dataDomainBounds(), geometry = sharedAxisGeometry();
+    const domain = dataDomainBounds(), geometry = rangeGeometry();
     const fraction = Math.max(0, Math.min(1, (positionUs - domain.start) / Math.max(1, domain.end - domain.start)));
     rangePlayhead.style.left = `${geometry.gutter + fraction * geometry.plotW}px`;
     rangePlayhead.dataset.positionUs = String(positionUs);
@@ -1400,6 +1559,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     render();
     if (open) { refreshTools(); scheduleQuery(true); }
     else {
+      closeRangeEditor();
       inspection.invalidate(); clearSharedHover();
       cardEl.hidden = true;
       for (const { panel } of deepPanels.values()) panel.hideCard();
@@ -1549,11 +1709,35 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   // 同行靠右（margin-left:auto），换行独占一行时左对齐。margin 翻转不改变
   // 换行判定本身（只吸收/释放空白），不会形成布局抖动回路。
   const headEl = section.querySelector('.analysis-head')!;
+  const statusItems = $<HTMLElement>('#analysis-status-items');
+  // 一行放不下「轨道控件 + 帧号列表」时，让帧号列表整体换到第二行，而不是把
+  // 控件压窄（按内容宽度判定，而不是按当前被压缩后的盒子，避免来回抖动）。
+  function syncHeadStack() {
+    const headStyle = getComputedStyle(headEl);
+    const inner = headEl.clientWidth - (parseFloat(headStyle.paddingLeft) || 0) - (parseFloat(headStyle.paddingRight) || 0);
+    const gap = parseFloat(headStyle.columnGap) || 0;
+    const contentWidth = (host: HTMLElement) => {
+      const hostGap = parseFloat(getComputedStyle(host).columnGap) || 0;
+      let width = 0, count = 0;
+      for (const child of host.children) {
+        const element = child as HTMLElement;
+        if (element.hidden) continue;
+        const rect = element.getBoundingClientRect();
+        if (!rect.width) continue;
+        width += rect.width; count++;
+      }
+      return count > 1 ? width + hostGap * (count - 1) : width;
+    };
+    const primary = section.querySelector<HTMLElement>('.analysis-primary')?.getBoundingClientRect().width ?? 0;
+    const required = primary + contentWidth(tools) + contentWidth(statusItems) + gap * 2;
+    headEl.classList.toggle('status-stacked', required > inner + .5);
+  }
   const wrapObs = new ResizeObserver(() => {
     if (signal.aborted) return;
     const toolsBottom = tools.getBoundingClientRect().bottom;
     const statusTop = statusEl.getBoundingClientRect().top;
     headEl.classList.toggle('status-wrapped', statusTop - toolsBottom > 2);
+    syncHeadStack();
   });
   wrapObs.observe(tools);
   wrapObs.observe(statusEl);
@@ -1582,6 +1766,8 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     resizer_obs.disconnect();
     wrapObs.disconnect();
     themeChanges.disconnect();
+    closeRangeEditor(); rangeEditor.remove();
+    rangeTriggerObs.disconnect(); rangeEditorObs.disconnect();
     windowMenu.dispose();
     layoutMenu.dispose();
   }, { once: true });

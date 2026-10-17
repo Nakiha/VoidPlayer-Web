@@ -30,7 +30,7 @@ export function shell() {
     <span class="toolbar-spacer"></span>
     <div class="topbar-primary-actions">
       <button id="open" class="add-video" aria-label="${th(msg("shell.addLocalVideo", "添加本地视频"))}">${icon('filePlus')}<span>${th(msg("shell.addLocalVideo", "添加本地视频"))}</span></button>
-      <button id="workspace-share" class="add-video" disabled>${icon('export')}<span>${th(msg("shell.share", "分享"))}</span></button>
+      <button id="workspace-share" class="add-video" disabled>${icon('shareNetwork')}<span>${th(msg("shell.share", "分享"))}</span></button>
     </div>
     <div class="topbar-utility-actions"><div class="panel-switches" role="group" aria-label="${th(msg("shell.workspacePanels", "工作区功能"))}">
       <span class="connection-control"><a href="/admin" target="_blank" rel="opener" id="server-status" class="icon-button connection-status" data-state="checking" aria-label="${th(msg("shell.checkingLibraryConnectionOpenServerSettingsNew", "正在检查媒体库连接，打开服务管理（新标签页）"))}" data-tooltip="${th(msg("shell.checkingConnection10OpenServerSettingsNew", "正在检查连接\n打开服务管理（新标签页）"))}"><span class="connection-dot" aria-hidden="true"></span></a></span>

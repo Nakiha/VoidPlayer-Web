@@ -95,6 +95,7 @@
     "src/ui/theme.ts",
     "src/ui/toast.ts",
     "src/ui/tooltips.ts",
+    "src/ui/topbar-compact.ts",
     "src/ui/track-column-resize.ts",
     "src/ui/track-drag.ts",
     "src/ui/track-selection.ts",

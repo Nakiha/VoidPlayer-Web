@@ -43,8 +43,7 @@ try {
   try {
     fallback.querySelector('#startup-title')!.textContent = t(msg('bootstrap.startupTitle', '启动未完成'));
     fallback.querySelector('.startup-brand span')!.textContent = t(msg('bootstrap.brandDescription', '· 视频对比'));
-    fallback.querySelector('#startup-description')!.textContent = t(msg("bootstrap.startupFailed", "页面未能加载，请刷新重试。"));
-    fallback.querySelector('#startup-reload span')!.textContent = t(msg("bootstrap.reload", "重新加载"));
+    fallback.querySelector('#startup-description')!.textContent = t(msg("bootstrap.startupFailed", "页面未能加载。"));
   } catch { /* Keep the built-in Chinese fallback. */ }
 }
 

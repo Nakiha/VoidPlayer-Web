@@ -62,19 +62,21 @@ try {
       await page.close();
     }
     // Static bootstrap dependencies fail before bootstrap's try/catch runs.
-    // Also cover the entry itself and main's dynamic import, with a real retry.
+    // Also cover the entry itself and main's dynamic import, with a real retry
+    // through the browser's own reload (the card states the failure only).
     for (const target of ['**/src/bootstrap.ts*', '**/src/i18n/generated/zh-CN.js*', '**/src/main.ts*', '**/@messageformat_runtime.js*']) {
       const failed = await browser.newPage({locale:'zh-CN'});
       let blocked = 0;
       await failed.route(target, route => { blocked++; return route.fulfill({ status: 504, body: 'Outdated Optimize Dep' }); });
       await failed.goto(base);
-      await failed.locator('#startup-reload').waitFor({state:'visible',timeout:5000});
+      await failed.locator('#startup-fallback').waitFor({state:'visible',timeout:5000});
       // Dynamic imports can begin after the document's load event.
       assert.ok(blocked > 0, `failure injection must reach ${target}`);
       assert.equal(await failed.locator('#app').evaluate(el => el.inert), false);
       assert.equal(await failed.locator('#app').isVisible(), false);
+      assert.equal(await failed.locator('#startup-reload').count(), 0, 'the failure card offers no retry button');
       await failed.unroute(target);
-      await failed.locator('#startup-reload').click();
+      await failed.reload();
       await failed.locator('#settings-open').waitFor({state:'visible'});
       assert.equal(await failed.locator('#startup-fallback').isVisible(), false);
       await failed.close();
@@ -85,31 +87,30 @@ try {
     built.on('pageerror', error => builtErrors.push(error.message));
     await built.route('**/assets/player-*.js', route => route.fulfill({status:504, headers:{'cache-control':'no-store'}, body:'Unavailable module'}));
     await built.goto(builtBase);
-    await built.locator('#startup-reload').waitFor({state:'visible', timeout:5000});
+    await built.locator('#startup-fallback').waitFor({state:'visible', timeout:5000});
     assert.equal(await built.locator('#app').isVisible(), false);
     for (const theme of ['dark', 'light']) {
       await built.emulateMedia({ colorScheme: theme });
       await built.reload();
-      await built.locator('#startup-reload').waitFor({state:'visible'});
+      await built.locator('#startup-fallback').waitFor({state:'visible'});
       assert.equal(await built.locator('html').getAttribute('data-theme'), theme);
       for (const width of [320, 1280]) {
         await built.setViewportSize({width, height:720});
         const card = await built.locator('.startup-card').boundingBox();
         assert.ok(card.x >= 0 && card.x + card.width <= width, 'failure card fits narrow and desktop widths');
         assert.equal(await built.locator('#startup-title').textContent(), '启动未完成');
-        assert.equal(await built.locator('#startup-reload').evaluate(el => el.tagName), 'BUTTON');
-        await built.locator('#startup-reload').focus();
-        assert.equal(await built.locator('#startup-reload').evaluate(el => getComputedStyle(el).outlineStyle), 'solid');
+        assert.equal(await built.locator('#startup-description').textContent(), '页面未能加载。');
+        assert.equal(await built.locator('#startup-reload').count(), 0, 'the failure card offers no retry button');
         await built.screenshot({path:`/tmp/voidplayer-startup-failure-${name}-${theme}-${width}.png`});
       }
     }
     await built.unroute('**/assets/player-*.js');
-    await built.locator('#startup-reload').click();
+    await built.reload();
     await built.locator('#settings-open').waitFor({state:'visible'});
     assert.equal(await built.locator('#startup-fallback').isVisible(), false);
     assert.deepEqual(builtErrors, []);
     await built.close();
-    // A hanging request has no error event. The deadline exposes retry, while
+    // A hanging request has no error event. The deadline exposes the fallback, while
     // a late successful load must be able to replace the fallback with the UI.
     const slow = await browser.newPage({locale:'zh-CN'});
     await slow.clock.install();
@@ -119,7 +120,7 @@ try {
     await slow.goto(base, {waitUntil:'commit'});
     await slow.locator('#startup-fallback').waitFor({state:'attached'});
     await slow.clock.fastForward(15001);
-    await slow.locator('#startup-reload').waitFor({state:'visible'});
+    await slow.locator('#startup-fallback').waitFor({state:'visible'});
     assert.equal(await slow.locator('#app').isVisible(), false);
     release();
     await slow.clock.resume();
@@ -134,7 +135,7 @@ try {
     assert.equal(await slow.locator('#startup-fallback').isVisible(), false);
     await slow.close();
     await browser.close(); browser = undefined;
-    console.log(`PASS ${name}: early theme, shell-first reveal, complete first UI frame, development/built entry/static/dynamic module failures, optimized dependency 504, retry, timeout/late recovery and disarmed guard`);
+    console.log(`PASS ${name}: early theme, shell-first reveal, complete first UI frame, development/built entry/static/dynamic module failures, optimized dependency 504, fallback without retry, timeout/late recovery and disarmed guard`);
   }
 } finally {
   await browser?.close(); await web?.close(); await service?.close();

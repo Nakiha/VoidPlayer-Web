@@ -81,7 +81,11 @@ try{
   assert.equal(await page.locator('.log-feedback').isVisible(),false);
   await page.locator('#settings').screenshot({path:`/tmp/voidplayer-log-report-${theme}-${name}.png`});
  }
- await page.locator('#log-help-toggle').click();assert.equal(await page.locator('#log-help').evaluate(el=>el.matches(':popover-open')),true);await page.keyboard.press('Escape');
+ await page.locator('.section-title-info').hover();
+await page.waitForFunction(() => { const tip = document.querySelector('#control-tooltip'); return tip instanceof HTMLElement && !tip.hidden && (tip.textContent ?? '').includes('最近 3 次会话'); });
+assert.match(await page.locator('#control-tooltip').textContent() ?? '', /保留最近 3 次会话[\s\S]*发送日志/);
+await page.locator('.section-title-info').click();
+await page.waitForFunction(() => document.querySelector('#control-tooltip').hidden);
  assert.equal(await page.locator('#settings').evaluate(el=>el.open),true);
  const downloaded=page.waitForEvent('download');void downloaded.catch(()=>{});await page.locator('.log-panel [data-action=download]').click();
  const document=JSON.parse(await readFile(await(await downloaded).path(),'utf8'));

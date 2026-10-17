@@ -14,7 +14,7 @@
 .bitstream-track-progress.is-waiting .ring-value { stroke-dashoffset:75; }
 .bitstream-track-progress.is-waiting .analysis-progress-ring { animation:inspection-spin 1.2s linear infinite; }
 .bitstream-toolbar-divider { width:1px; height:22px; background:var(--divider); flex:none; }
-.bitstream-inspector .choice-trigger { min-width:0; min-height:var(--button-size); padding:3px 6px; font:inherit; }
+.bitstream-inspector .choice-trigger { min-width:0; min-height:var(--button-size); padding:3px 6px; font:inherit; background:transparent; }
 #bitstream-opacity-control { width:72px; flex:none; }
 .bitstream-inspector .icon-button { padding:0; background:transparent; }
 .bitstream-hit-tooltip { position:absolute; z-index:6; padding:5px 8px; width:max-content; max-width:calc(100% - 16px); box-sizing:border-box; border-radius:6px; color:var(--text); background:var(--preview-fill); box-shadow:var(--popover-shadow); font:12px/1.45 var(--font-ui); white-space:pre-line; overflow-wrap:anywhere; pointer-events:none; }
