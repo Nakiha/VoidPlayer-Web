@@ -36,6 +36,54 @@ test('CRLF checkout artifacts validate against deterministic LF generation',()=>
  }finally{rmSync(temp,{recursive:true});}
 });
 
+function withCatalogProject(run) {
+ const temp=mkdtempSync(join(tmpdir(),'vp-i18n-inventory-'));
+ try {
+  mkdirSync(join(temp,'src'));mkdirSync(join(temp,'locales'));
+  writeFileSync(join(temp,'src/a.ts'),"msg('greeting','你好 {name}');\nmsg('greeting','你好 {name}');\n");
+  writeFileSync(join(temp,'locales/en.json'),JSON.stringify({greeting:{source:'你好 {name}',translation:'Hello {name}'}}));
+  writeFileSync(join(temp,'locales/scope.json'),JSON.stringify({files:[],exceptions:[]}));
+  generate(temp,'extract');generate(temp,'compile');run(temp);
+ } finally {rmSync(temp,{recursive:true,force:true});}
+}
+
+test('moving descriptors and inserting comments only refresh the ignored location index',()=>withCatalogProject(temp=>{
+ const tracked=['locales/messages.json','locales/en.json',...readdirSync(join(temp,'src/i18n/generated')).map(name=>'src/i18n/generated/'+name)];
+ const before=tracked.map(file=>readFileSync(join(temp,file),'utf8'));
+ const index=join(temp,'.run/i18n/message-locations.json');
+ assert.deepEqual(JSON.parse(readFileSync(index,'utf8')).greeting,['src/a.ts:1','src/a.ts:2']);
+ assert.deepEqual(JSON.parse(before[0]),{greeting:{source:'你好 {name}',params:{name:'string | number'}}});
+ mkdirSync(join(temp,'src/nested'));
+ writeFileSync(join(temp,'src/nested/moved.ts'),"// comment\n\n// another comment\n"+readFileSync(join(temp,'src/a.ts'),'utf8'));
+ rmSync(join(temp,'src/a.ts'));rmSync(join(temp,'.run'),{recursive:true});
+ generate(temp,'check');
+ assert.equal(existsSync(join(temp,'.run')),false,'check neither requires nor writes the location index');
+ generate(temp,'extract');generate(temp,'compile');generate(temp,'check');
+ assert.deepEqual(tracked.map(file=>readFileSync(join(temp,file),'utf8')),before,'committed inventory, translations and compiled bytes remain identical');
+ assert.deepEqual(JSON.parse(readFileSync(index,'utf8')).greeting,['src/nested/moved.ts:4','src/nested/moved.ts:5']);
+}));
+
+test('stable inventories still reject semantic additions, removals, source changes and parameter drift',()=>{
+ const cases=[
+  {name:'missing translation',source:"msg('new','新增');",error:/Missing English translation/},
+  {name:'stale translation',source:"msg('greeting','您好 {name}');",error:/Stale translation/},
+  {name:'new descriptor with translation',source:"msg('greeting','你好 {name}');msg('new','新增');",catalog:{greeting:{source:'你好 {name}',translation:'Hello {name}'},new:{source:'新增',translation:'New'}},error:/Outdated message inventory/},
+  {name:'removed descriptor and translation',source:'export {};',catalog:{},error:/Outdated message inventory/},
+  {name:'reviewed source change',source:"msg('greeting','您好 {name}');",catalog:{greeting:{source:'您好 {name}',translation:'Hello {name}'}},error:/Outdated message inventory/},
+  {name:'reviewed parameter change',source:"msg('greeting','你好 {user}');",catalog:{greeting:{source:'你好 {user}',translation:'Hello {user}'}},error:/Outdated message inventory/},
+ ];
+ for(const row of cases)withCatalogProject(temp=>{
+  writeFileSync(join(temp,'src/a.ts'),row.source);
+  if(row.catalog)writeFileSync(join(temp,'locales/en.json'),JSON.stringify(row.catalog));
+  assert.throws(()=>generate(temp,'check'),row.error,row.name);
+ });
+ withCatalogProject(temp=>{
+  const file=join(temp,'locales/messages.json'),inventory=JSON.parse(readFileSync(file,'utf8'));
+  inventory.greeting.params.name='number';writeFileSync(file,JSON.stringify(inventory,null,2)+'\n');
+  assert.throws(()=>generate(temp,'check'),/Outdated message inventory/);
+ });
+});
+
 test('scope completeness catches new hardcoded copy and does not mask unused exceptions',()=>{
  const temp=mkdtempSync(join(tmpdir(),'vp-i18n-scope-'));try{
   mkdirSync(join(temp,'src'));mkdirSync(join(temp,'locales'));

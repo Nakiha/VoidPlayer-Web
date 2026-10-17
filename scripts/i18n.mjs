@@ -91,11 +91,18 @@ export function pseudo(source) {
   out=emit(ast);return `［${out} ········］`;
 }
 export function generate(root,mode='check') {
-  const messages=extract(root);const location=resolve(root,'locales/en.json');const catalog=JSON.parse(readFileSync(location,'utf8'));
+  const extracted=extract(root);
+  // Only semantic content belongs in Git. Moving a descriptor must not change
+  // the inventory or compiled catalogs; keep fresh navigation data locally.
+  const messages=Object.fromEntries(Object.entries(extracted).map(([id,{source,params}])=>[id,{source,params}]));
+  const location=resolve(root,'locales/en.json');const catalog=JSON.parse(readFileSync(location,'utf8'));
   if(mode==='extract'){
     const next={};for(const [id,m]of Object.entries(messages)){next[id]=catalog[id]??{source:m.source,translation:'',needsReview:true};if(next[id].source!==m.source)next[id].needsReview=true;}
     writeFileSync(location,JSON.stringify(next,null,2)+'\n');
-    mkdirSync(resolve(root,'locales'),{recursive:true});writeFileSync(resolve(root,'locales/messages.json'),JSON.stringify(messages,null,2)+'\n');return;
+    mkdirSync(resolve(root,'locales'),{recursive:true});writeFileSync(resolve(root,'locales/messages.json'),JSON.stringify(messages,null,2)+'\n');
+    const directory=resolve(root,'.run/i18n');mkdirSync(directory,{recursive:true});
+    const locations=Object.fromEntries(Object.entries(extracted).map(([id,m])=>[id,m.locations]));
+    writeFileSync(resolve(directory,'message-locations.json'),JSON.stringify(locations,null,2)+'\n');return messages;
   }
   validate(messages,catalog);
   validateScope(root);
