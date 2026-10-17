@@ -14,6 +14,18 @@ const { page, artifact, engine, limitsDir, errors, call, stable, library, refere
         if (input==='local-file') await page.locator('#file-A').setInputFiles(path.join(limitsDir,'incremental.mp4'));
         else await call('load_library_item',{slot:'A',id:library.entries.find(e=>e.name==='incremental.mp4').id});
         await stable(); await selectDiagrams(page,'overview');
+        // Progress, coverage and resize redraws must preserve an unchanged
+        // trigger label: replacing its text during a press loses WebKit clicks.
+        await page.locator('#analysis-range-trigger > span').evaluate(label=>{
+          window.__rangeLabelRewrites=[];
+          window.__rangeLabelObserver=new MutationObserver(records=>{
+            for(const record of records) {
+              const text=nodes=>[...nodes].map(node=>node.textContent).join('');
+              if(record.removedNodes.length&&text(record.removedNodes)===text(record.addedNodes))window.__rangeLabelRewrites.push(text(record.addedNodes));
+            }
+          });
+          window.__rangeLabelObserver.observe(label,{childList:true});
+        });
         const zoomIn=page.locator('#analysis-zoom-in'),zoomOut=page.locator('#analysis-zoom-out'),full=page.locator('[data-seg="full"]');
         assert.equal(await zoomIn.locator('svg').count(),1);assert.equal(await zoomOut.locator('svg').count(),1);assert.equal(await full.locator('svg').count(),1);
         assert.equal(await page.locator('#analysis-current').count(),0);
@@ -193,6 +205,8 @@ const { page, artifact, engine, limitsDir, errors, call, stable, library, refere
           assert.ok(completion.widths.some(w=>w>0&&w<25),'completion shrinks smoothly through intermediate widths');
           assert.equal(await progressAction.isVisible(),false,'completed progress action is hidden after its animation');
         } finally {release();await page.unroute(pattern);}
+        const labelRewrites=await page.evaluate(()=>{window.__rangeLabelObserver.disconnect();return window.__rangeLabelRewrites;});
+        assert.deepEqual(labelRewrites,[],'range progress and layout refreshes preserve unchanged trigger text nodes');
       }
 
       for (const name of referenceFixtures) for (const input of ['local-file','library']) {

@@ -384,7 +384,11 @@ export function installAnalysisRangeEditor(deps: AnalysisRangeEditorDeps) {
     rangeAxisCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     rangeAxis.dataset.timeAxis = 'false';
     rangeLabel.textContent = t(msg('analysis.rangeNavigator', '区间'));
-    rangeTrigger.querySelector('span')!.textContent = `${formatAxis(Math.max(domain.start, range.start))} – ${formatAxis(Math.min(domain.end, range.end))}`;
+    const triggerLabel = rangeTrigger.querySelector('span')!;
+    const rangeText = `${formatAxis(Math.max(domain.start, range.start))} – ${formatAxis(Math.min(domain.end, range.end))}`;
+    // Coverage/progress can redraw this axis during a pointer press. WebKit
+    // drops the click if that redraw replaces the text node under the pointer.
+    if (triggerLabel.textContent !== rangeText) triggerLabel.textContent = rangeText;
     rangeAxis.setAttribute('aria-label', t(msg('analysis.fullTimelinePosition', '全片播放位置')));
     rangeBand.setAttribute('aria-label', t(msg('analysis.panVisibleRange', '平移图表可见区间')));
     rangeBand.setAttribute('aria-valuemin', String(domain.start)); rangeBand.setAttribute('aria-valuemax', String(Math.max(domain.start, domain.end - (range.end - range.start))));
