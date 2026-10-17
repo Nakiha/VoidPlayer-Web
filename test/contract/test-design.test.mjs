@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { testManifest, selectCases, validateManifest } from '../../scripts/testing/manifest.mjs';
 import { parseAnalysisOptions, analysisResponsibilities } from '../../scripts/testing/analysis/plan.mjs';
 import { describeTestPlan } from '../../scripts/testing/execution-plan.mjs';
@@ -69,6 +69,8 @@ test('legacy analysis modes have explicit independent responsibilities and rejec
 
 test('every behavior stage is an importable function without starting a browser or generating media', async () => {
   const stages = new Set(Object.values(analysisResponsibilities).flatMap(spec => spec.stages));
+  const files = readdirSync(new URL('../../scripts/testing/analysis/scenarios/', import.meta.url)).filter(file => file.endsWith('.mjs'));
+  assert.deepEqual(files.sort(), [...stages].map(stage => `${stage}.mjs`).sort(), 'every scenario must have a declared responsibility and execution path');
   for (const stage of stages) {
     const module = await import(`../../scripts/testing/analysis/scenarios/${stage}.mjs`);
     assert.equal(typeof module.run, 'function', stage);
