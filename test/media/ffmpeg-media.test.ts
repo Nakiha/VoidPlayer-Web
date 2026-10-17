@@ -23,7 +23,7 @@ test('floorIndex and nextIndex resolve frame navigation boundaries', () => {
 // --- real WASM decode against the repository's sample files ---
 
 async function nodeCoreDeps(): Promise<FallbackDeps> {
-  const coreDir = new URL('../../public/vendor/voidplayer-core', import.meta.url);
+  const coreDir = new URL('../../public/vendor/voidplayer-core/', import.meta.url);
   let wasmBinary;
   try { wasmBinary = await readFile(new URL('voidplayer-core.wasm', coreDir)); }
   catch {

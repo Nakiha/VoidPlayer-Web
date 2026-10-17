@@ -9,7 +9,7 @@ import { RangeReader } from '../../shared/media/io/range-reader.ts';
 import { openFFmpegMedia, openFFmpegMediaFromUrl } from '../../src/media/decoding/ffmpeg-media.ts';
 import { MediaOpenError } from '../../shared/media/io/media-errors.ts';
 
-const core = new URL('../../public/vendor/voidplayer-core', import.meta.url);
+const core = new URL('../../public/vendor/voidplayer-core/', import.meta.url);
 const deps = async () => ({ glueURL: new URL('voidplayer-core.js', core).href, wasmBinary: await readFile(new URL('voidplayer-core.wasm', core)) });
 async function serve(bytes: Uint8Array, size = bytes.length) {
   const requests: { start: number; end: number }[] = [];

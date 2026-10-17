@@ -7,7 +7,7 @@ import { ReviewSession } from '../../src/session.ts';
 
 test('first decoded frame precedes a server build; completed indexes are persisted and reused', { timeout: 30000 }, async () => {
   const f = await startupFixture(true);
-  const core = new URL('../../public/vendor/voidplayer-core', import.meta.url);
+  const core = new URL('../../public/vendor/voidplayer-core/', import.meta.url);
   const deps = { glueURL: new URL('voidplayer-core.js', core).href, wasmBinary: await readFile(new URL('voidplayer-core.wasm', core)), forceWasm: true };
   const input = { url: `${f.base}/api/media/${f.entry.id}?v=${f.entry.version}`, size: f.entry.size };
   const drawn: number[] = [], startupPixels: Buffer[] = [];
@@ -57,7 +57,7 @@ test('first decoded frame precedes a server build; completed indexes are persist
 
 test('real packet playback advances before a blocked sparse tail is indexed', { timeout: 30000 }, async () => {
   const f = await startupFixture(true, true, false);
-  const core = new URL('../../public/vendor/voidplayer-core', import.meta.url);
+  const core = new URL('../../public/vendor/voidplayer-core/', import.meta.url);
   const source = await openFlvMedia({ url: `${f.base}/raw/${f.entry.id}?v=${f.entry.version}`, size: f.entry.size }, f.entry,
     { glueURL: new URL('voidplayer-core.js', core).href, wasmBinary: await readFile(new URL('voidplayer-core.wasm', core)), forceWasm: true });
   const iterator = source.framesFrom(0);
@@ -78,7 +78,7 @@ test('real packet playback advances before a blocked sparse tail is indexed', { 
 
 test('joining a remote FLV at 2.5 seconds waits only for its prefix and never redraws the existing track', { timeout: 30000 }, async () => {
   const f = await startupFixture(true);
-  const core = new URL('../../public/vendor/voidplayer-core', import.meta.url);
+  const core = new URL('../../public/vendor/voidplayer-core/', import.meta.url);
   const deps = { glueURL: new URL('voidplayer-core.js', core).href, wasmBinary: await readFile(new URL('voidplayer-core.wasm', core)), forceWasm: true };
   const local = new File([await readFile(new URL('../../fixtures/flv/standard-h264.flv', import.meta.url))], 'local.flv');
   const draws: { slot: string; pts: number }[] = [], session = new ReviewSession((slot, frame) => draws.push({ slot, pts: frame.ptsUs }));

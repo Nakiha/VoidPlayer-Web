@@ -1,13 +1,30 @@
 import {execFileSync,spawnSync} from 'node:child_process';
 import {buildFingerprint} from '../../scripts/testing/build.mjs';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, readdirSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { checkModuleBoundaries, moduleEdges } from '../../scripts/testing/module-boundaries.mjs';
 const root = path.resolve(import.meta.dirname, '../..');
 test('production modules respect host boundaries and resolve their relative imports and Worker URLs', () => checkModuleBoundaries(root));
+test('vendor directory URLs retain asset resolution without installed binaries', () => {
+  const manifest=JSON.parse(readFileSync(path.join(root,'scripts/testing/manifest.json'),'utf8'));
+  const folders=new Set(['core','analysis-core'].flatMap(name=>manifest.fixtures[name].paths.map(file=>path.dirname(path.join(root,file)))));
+  function check(directory) {
+    for(const entry of readdirSync(directory,{withFileTypes:true})) {
+      const file=path.join(directory,entry.name);
+      if(entry.isDirectory()) check(file);
+      else if(/\.(?:ts|mjs|js)$/.test(file)) for(const edge of moduleEdges(readFileSync(file,'utf8'),file)) {
+        if(edge.kind!=='url'||!edge.specifier?.startsWith('.')) continue;
+        const target=path.resolve(path.dirname(file),edge.specifier);
+        if(folders.has(target)) assert.equal(new URL('probe.asset',new URL(edge.specifier,pathToFileURL(file))).href,pathToFileURL(path.join(target,'probe.asset')).href,`${path.relative(root,file)}: vendor directory URL changes the asset base`);
+      }
+    }
+  }
+  for(const directory of ['src','server','shared','scripts','test']) check(path.join(root,directory));
+});
 test('module dependencies include types, re-exports, literal loads and Worker URLs', () => {
   assert.deepEqual(moduleEdges(`import type {A} from './a.ts'; export {b} from './b.ts'; type C=import('./c.ts').C; import('./d.ts'); require('./e.ts'); new Worker(new URL('./worker.ts',import.meta.url));`, 'probe.ts').map(e=>e.specifier), ['./a.ts','./b.ts','./c.ts','./d.ts','./e.ts','./worker.ts']);
 });

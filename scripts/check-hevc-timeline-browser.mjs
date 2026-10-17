@@ -17,7 +17,7 @@ const oracle=JSON.parse(await readFile(new URL('../test/hevc-order-reference.jso
 assert.equal(createHash('sha256').update(bytes).digest('hex'),oracle.sha256);
 const input=new Input({source:new BlobSource(new Blob([bytes])),formats:ALL_FORMATS});
 const track=await input.getPrimaryVideoTrack(),config=await track.getDecoderConfig();
-const core=new URL('../public/vendor/voidplayer-core',import.meta.url);
+const core=new URL('../public/vendor/voidplayer-core/',import.meta.url);
 const decoder=await wasmFlvDecoder({codec:'hevc',description:new Uint8Array(config.description)},new URL('voidplayer-core.js',core).href,await readFile(new URL('voidplayer-core.wasm',core)));
 const refs=[];
 audit('software-oracle-start');

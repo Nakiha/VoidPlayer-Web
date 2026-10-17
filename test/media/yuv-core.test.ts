@@ -12,7 +12,7 @@ import { validateDescription } from '../../shared/media/frame-description.ts';
 
 for(const mt of [false,true])test(`real ${mt?'mt':'single'} core planes equal independent FFmpeg raw decode, including seek/reset`,async()=>{
   const suffix=mt?'-mt':'';
-  const core=new URL('../../public/vendor/voidplayer-core',import.meta.url);
+  const core=new URL('../../public/vendor/voidplayer-core/',import.meta.url);
   const deps={glueURL:new URL(`voidplayer-core${suffix}.js`,core).href,wasmBinary:await readFile(new URL(`voidplayer-core${suffix}.wasm`,core))};
   for(const name of ['ffv1_yuv422p_8bit.mkv','ffv1_yuv444p10le.mkv','mhw_hevc_fullrange_bt709_3s.mp4','h266_10s_1920x1080.mp4']){
     const url=new URL(`../../fixtures/video/${name}`,import.meta.url);
@@ -49,7 +49,7 @@ test('real core retains odd-sized 16-bit planes and SAR without RGBA quantizatio
     const decoded=execFileSync(ffmpeg,['-v','error','-i',path,'-frames:v','1','-f','rawvideo','-pix_fmt','yuv444p16le','pipe:1']);
     const tags=JSON.parse(execFileSync('ffprobe',['-v','error','-select_streams','v:0','-show_entries','stream=color_primaries,color_transfer,color_space','-of','json',path],{encoding:'utf8'})).streams[0];
     for(const suffix of ['', '-mt']){
-      const core=new URL('../../public/vendor/voidplayer-core',import.meta.url);
+      const core=new URL('../../public/vendor/voidplayer-core/',import.meta.url);
       const odd=new File([data],'odd.mkv');const source=await openPacketMedia('matroska',{file:odd},odd,{forceWasm:true,sourceVersion:'odd-16-bit',glueURL:new URL(`voidplayer-core${suffix}.js`,core).href,wasmBinary:await readFile(new URL(`voidplayer-core${suffix}.wasm`,core))});
       try{assert.equal(source.info.color?.primaries,tags.color_primaries??null);assert.equal(source.info.color?.transfer,tags.color_transfer??null);assert.equal(source.info.color?.matrix,tags.color_space??null);const frame=await source.frameAt(0);assert.equal(frame.description.yuv!.bitDepth,16);assert.equal(frame.description.width,5);assert.equal(frame.description.height,3);assert.equal(frame.description.displayWidth,7);assert.equal(hash(frame.pixels!),hash(decoded),JSON.stringify({actual:[...frame.pixels!.slice(0,24)],reference:[...decoded.slice(0,24)],input:[...raw.slice(0,24)]}));frame.close();}finally{source.dispose();}
     }

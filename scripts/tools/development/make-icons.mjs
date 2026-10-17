@@ -3,7 +3,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
-const publicDir = new URL('../../../public', import.meta.url);
+const publicDir = new URL('../../../public/', import.meta.url);
 const svg = await readFile(new URL('favicon.svg', publicDir), 'utf8');
 const browser = await chromium.launch({ headless: true });
 try {

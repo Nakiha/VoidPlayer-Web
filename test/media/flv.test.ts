@@ -8,7 +8,7 @@ import { demuxFlv, FlvReader } from '../../shared/media/containers/flv-demux.ts'
 import { openFlvMedia } from '../../src/media/decoding/flv-media.ts';
 
 const names = ['standard-h264', 'legacy-hevc', 'private-av1', 'private-vvc', 'enhanced-hevc', 'enhanced-av1', 'enhanced-vvc'];
-const core = new URL('../../public/vendor/voidplayer-core', import.meta.url);
+const core = new URL('../../public/vendor/voidplayer-core/', import.meta.url);
 async function fixture(name: string) {
   const bytes = await readFile(new URL(`../../fixtures/flv/${name}.flv`, import.meta.url)).catch(() => { throw new Error('缺少 FLV 样片，请先运行 python3 scripts/make-flv-fixtures.py'); });
   const ref = JSON.parse(await readFile(new URL(`../../fixtures/flv/${name}.json`, import.meta.url), 'utf8'));

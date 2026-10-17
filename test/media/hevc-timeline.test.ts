@@ -23,7 +23,7 @@ test('HEVC recovery agrees with native FFmpeg picture order and preserves every 
   assert.equal(await hevcDisplayOrder(reader,{...configs,compositionOffsets:configs.compositionOffsets!.map((_,i)=>i?1:0)}),null);
   await assert.rejects(hevcDisplayOrder({read:async()=>{throw Error('network failure');}},configs),/network failure/);
   assert.equal(await hevcDisplayOrder(reader,{...configs,sampleSizes:[1,...configs.sampleSizes!.slice(1)]}),null);
-  const core = new URL('../../public/vendor/voidplayer-core',import.meta.url);
+  const core = new URL('../../public/vendor/voidplayer-core/',import.meta.url);
   const glue = new URL('voidplayer-core.js',core).href, wasm = await readFile(new URL('voidplayer-core.wasm',core));
   const raw = await wasmFlvDecoder({codec:'hevc',description:configs.descriptions[0]},glue,wasm);
   const reference:string[]=[];
