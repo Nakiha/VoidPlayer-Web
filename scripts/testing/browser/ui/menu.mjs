@@ -160,12 +160,19 @@ await withBrowserFixture({ caseName: 'menu', engine: name, pageOptions: { viewpo
   }
   // A future dark palette must also control opaque/high-contrast fallbacks.
   await page.addStyleTag({content: ':root, :root[data-theme] { --surface-input-solid: #252932; --contrast-text-secondary: #e4e7ed; --swatch-selection-fill: #353b45; }'});
-  // drawing-color is a hidden value store, but it is a bare input with no
-  // background override, so it still paints the shared input fill. Check it
-  // instead, using the same input fallback and exact expected color.
+  // Test the shared input fill on a rendered control. drawing-color is a hidden
+  // value store in a closed toolbar; its computed paint is not a visible contract.
   await page.keyboard.press('Escape');
-  await page.waitForFunction(() => getComputedStyle(document.querySelector('#drawing-color')).backgroundColor === 'rgb(37, 41, 50)');
-  assert.equal(await page.locator('#drawing-color').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(37, 41, 50)');
+  const inputProbe = await page.evaluateHandle(() => {
+    const input = document.createElement('input');
+    input.setAttribute('aria-label', 'High contrast input probe');
+    document.body.append(input);
+    return input;
+  });
+  await page.waitForFunction(input => getComputedStyle(input).backgroundColor === 'rgb(37, 41, 50)', inputProbe);
+  assert.equal(await inputProbe.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(37, 41, 50)');
+  await inputProbe.evaluate(e => e.remove());
+  await inputProbe.dispose();
   await page.waitForFunction(() => getComputedStyle(document.querySelector('.transport .duration')).color === 'rgb(228, 231, 237)');
   assert.equal(await page.locator('.transport .duration').evaluate(e=>getComputedStyle(e).color),'rgb(228, 231, 237)');
   await page.keyboard.press('Escape');await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });await page.keyboard.press('n');

@@ -2494,7 +2494,7 @@
     "source": "编辑图表区间",
     "params": {},
     "locations": [
-      "src/ui/analysis/range-editor.ts:429"
+      "src/ui/analysis/range-editor.ts:431"
     ]
   },
   "analysis.editTrackFrameNumber": {
@@ -2989,7 +2989,7 @@
     "source": "结束时间",
     "params": {},
     "locations": [
-      "src/ui/analysis/range-editor.ts:433"
+      "src/ui/analysis/range-editor.ts:435"
     ]
   },
   "analysis.rangeNavigator": {
@@ -3003,7 +3003,7 @@
     "source": "起始时间",
     "params": {},
     "locations": [
-      "src/ui/analysis/range-editor.ts:432"
+      "src/ui/analysis/range-editor.ts:434"
     ]
   },
   "analysis.referenceCanvas": {
@@ -3332,14 +3332,14 @@
     "source": "图表可见区间终点",
     "params": {},
     "locations": [
-      "src/ui/analysis/range-editor.ts:414"
+      "src/ui/analysis/range-editor.ts:416"
     ]
   },
   "analysis.visibleStart": {
     "source": "图表可见区间起点",
     "params": {},
     "locations": [
-      "src/ui/analysis/range-editor.ts:414"
+      "src/ui/analysis/range-editor.ts:416"
     ]
   },
   "analysis.zoomIn": {

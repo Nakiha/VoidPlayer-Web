@@ -15,6 +15,9 @@ try {
  const base=`http://127.0.0.1:${service.server.address().port}`;
  browser=await(name==='chromium'?chromium:webkit).launch({headless:true});
  const context=await browser.newContext({locale:'zh-CN', viewport:{width:1512,height:850},colorScheme:'dark'}), errors=[];
+ // Agent calls have no click activation; explicitly allow the real clipboard
+ // write used by share_workspace in headless Chromium.
+ if(name==='chromium')await context.grantPermissions(['clipboard-write'],{origin:base});
  context.on('page',page=>page.on('pageerror',error=>errors.push(error.message)));
  const call=(page,name,args={})=>page.evaluate(({name,args})=>window.voidPlayer.tools.find(t=>t.name===name).execute(args),{name,args});
  await context.addInitScript(()=>window.addEventListener('voidplayer-annotation-status',event=>{window.testAnnotationStatus=event.detail;}));

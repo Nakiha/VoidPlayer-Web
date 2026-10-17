@@ -406,7 +406,9 @@ export function installAnalysisRangeEditor(deps: AnalysisRangeEditorDeps) {
       rangeAxisCtx.lineTo(xFor(window.startUs + track.offsetUs + (window.endUs - window.startUs) * stream.checkedUs / stream.totalUs), 3); rangeAxisCtx.stroke();
     }
     rangeAxisCtx.globalAlpha = 1;
-    rangeNavigation.style.setProperty('--range-handle-inset', `${Math.min(8, Math.max(0, xFor(selectionEnd) - xFor(selectionStart)) / 4)}px`);
+    // Leave 3px on each side of the band midpoint free of the 32px handles,
+    // so a narrow selection can still be dragged without resizing an edge.
+    rangeNavigation.style.setProperty('--range-handle-inset', `${Math.min(8, Math.max(0, (xFor(selectionEnd) - xFor(selectionStart)) / 2 - 3))}px`);
     rangeBand.style.left = `${xFor(selectionStart)}px`; rangeBand.style.width = `${Math.max(0, xFor(selectionEnd) - xFor(selectionStart))}px`;
     for (const handle of rangeHandles) {
       const value = handle.dataset.edge === 'start' ? selectionStart : selectionEnd;
