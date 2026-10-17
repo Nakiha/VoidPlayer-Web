@@ -59,7 +59,7 @@ UI 和 Agent 都通过 `session.updateMark` 修改对象，保留 ID 与帧锚�
 
 ## 按需分析面板
 
-`src/ui/analysis/panel.ts` 负责装配工具条、会话订阅和视图更新。独立模块分别拥有偏好迁移（`src/ui/analysis/preferences.ts`）、查询与缓存生命周期（`queries.ts`）、纯图表模型（`model.ts`）、悬停/冻结检查状态（`inspection-state.ts`）、指针与键盘生命周期（`gestures.ts`）、帧号查询和编辑（`status.ts`）、悬浮卡片 DOM（`card.ts`）以及独立覆盖层绘制（`overlay.ts`）。面板按首次打开加载；输入、帧号编辑和样本定位仍共用 session facade，不形成第二套会话行为。
+`src/ui/analysis/panel.ts` 负责装配工具条、会话订阅和视图更新。独立模块分别拥有偏好迁移（`src/ui/analysis/preferences.ts`）、查询与缓存生命周期（`queries.ts`）、纯图表模型（`model.ts`）、悬停/冻结检查状态（`inspection-state.ts`）、指针与键盘生命周期（`gestures.ts`）、帧号查询和编辑（`status.ts`）、悬浮卡片 DOM（`card.ts`）以及图表覆盖层绘制（`chart-overlay.ts`）。源画面宏块/QP 覆盖层独立放在 `picture-overlay/`。面板按首次打开加载；输入、帧号编辑和样本定位仍共用 session facade，不形成第二套会话行为。
 
 原生分析 Worker 在有界计算批次之间处理取消消息；同步包查询与协作式查询共用桶、滑窗与覆盖计算口径。取消只丢弃该请求的半成品，元数据包表和此前完整索引仍可供下一次查询使用。
 
