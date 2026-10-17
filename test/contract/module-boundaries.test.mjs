@@ -58,7 +58,9 @@ test('shared edits invalidate prepared frontend builds',async()=>{
 });
 
 test('frontend root stays limited to application entrypoints',()=>project({'src/new-helper.ts':'export const x=1;'},root=>assert.throws(()=>checkModuleBoundaries(root),/unowned frontend root module/)));
-test('analysis modules declare metadata or bitstream responsibility',()=>project({'src/analysis/another-name.ts':'export const x=1;'},root=>assert.throws(()=>checkModuleBoundaries(root),/analysis must declare/)));
+test('analysis modules declare metadata or bitstream responsibility in every layer',()=>{
+  for(const layer of ['src','shared','server']) project({[`${layer}/analysis/another-name.ts`]:'export const x=1;'},root=>assert.throws(()=>checkModuleBoundaries(root),/analysis must declare/));
+});
 
 test('embedded Bun Worker addresses resolve from the compiled server root',()=>{
  const scheduler="new Worker(new URL(typeof VOIDPLAYER_COMPILED !== 'undefined' && VOIDPLAYER_COMPILED ? './analysis/worker.ts' : './worker.ts',import.meta.url));";
