@@ -369,6 +369,6 @@ Release aliases keep the browser default-archive `-` token. Explicit archives by
 
 ## 模块边界与目录维护
 
-`node-module-boundaries` 随 fast、contract、source 执行，构建也运行同一边界扫描。检查覆盖生产目录中的静态与类型导入、重新导出、字面量动态加载和 Worker URL；不存在的相对依赖会直接失败。前后端不能互相引用，共享层不能引用任何宿主，外部包仅准入 Mediabunny。计算式加载仅保留登记的资源加载入口；新增入口需明确其职责。负例覆盖间接越界、类型引用、Worker 缺失、计算式加载和未归属的顶层模块。
+`node-module-boundaries` 随 fast、contract、source 执行，构建也运行同一边界扫描。检查覆盖生产目录中的静态与类型导入、重新导出、字面量动态加载和 Worker URL；不存在的相对依赖会直接失败。独立 Bun 程序的条件 Worker 地址按编译后服务根目录校验，Node 地址按源码位置校验，发布回归另从真实原生包启动验证。前后端不能互相引用，共享层不能引用任何宿主，外部包仅准入 Mediabunny。计算式加载仅保留登记的资源加载入口；新增入口需明确其职责。负例覆盖间接越界、类型引用、Worker 缺失、计算式加载和未归属的顶层模块。
 
 共享层另以 `tsconfig.shared.json` 在无 DOM 类型环境编译，真实编译负例证明 window、document、IndexedDB、VideoFrame 不可进入共享代码。标准 Fetch/Blob、AbortSignal 与 WebAssembly 可由两种宿主使用。共享源码及其类型配置参与准备构建指纹、前端来源摘要和发布源码包，移动公共实现后不能复用过期构建。

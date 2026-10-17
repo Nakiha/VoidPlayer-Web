@@ -79,6 +79,7 @@ try {
   assert.ok(!(await readdir(folder)).some(n => ['server', 'node_modules', 'package.json', 'logs'].includes(n)));
   const snapshotFiles = execFileSync(tar, ['-tzf', path.join(folder, 'source.tar.gz')], { encoding: 'utf8' }).replaceAll('\\', '/');
   assert.match(snapshotFiles, /locales\/scope\.json/); assert.match(snapshotFiles, /locales\/en\.json/); assert.match(snapshotFiles, /locales\/messages\.json/);
+  assert.match(snapshotFiles, /shared\/analysis\/bitstream\/runner\.ts/); assert.match(snapshotFiles, /tsconfig\.shared\.json/);
   assert.match(snapshotFiles, /admin\/index\.html/); assert.match(snapshotFiles, /public\/theme-init\.js/);
   executable = path.join(folder, manifest.executable);
   assert.equal(run(['--version']).trim(), `VoidPlayer ${manifest.appVersion} (${manifest.revision}${manifest.dirty ? '-dirty' : ''})`); assert.match(run(['--help']), /--init/);

@@ -16,7 +16,11 @@ export function moduleEdges(code, file) {
     else if (ts.isImportTypeNode(node)) add(node.argument.literal, 'type');
     else if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || ts.isIdentifier(node.expression) && node.expression.text === 'require')) add(node.arguments[0], 'load');
     else if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'URL'
-      && node.arguments?.[1]?.getText(tree) === 'import.meta.url') add(node.arguments[0], 'url');
+      && node.arguments?.[1]?.getText(tree) === 'import.meta.url') {
+      const target=node.arguments[0];
+      if(target && ts.isConditionalExpression(target) && target.condition.getText(tree).includes('VOIDPLAYER_COMPILED')) { add(target.whenTrue,'compiled-url');add(target.whenFalse,'url'); }
+      else add(target,'url');
+    }
     ts.forEachChild(node, visit);
   }
   visit(tree); return edges;
@@ -40,7 +44,7 @@ export function checkModuleBoundaries(root) {
       if (from.startsWith('shared/')) assert.ok(edge.specifier === 'mediabunny', `${from}: shared code imports host package ${edge.specifier}`);
       continue;
     }
-    const target = path.resolve(path.dirname(file), edge.specifier), to = portable(path.relative(root, target));
+    const target = path.resolve(edge.kind === 'compiled-url' ? path.join(root,'server') : path.dirname(file), edge.specifier), to = portable(path.relative(root, target));
     assert.ok(!to.startsWith('../'), `${from}: dependency escapes project: ${to}`);
     assert.ok(existsSync(target), `${from}: missing ${edge.kind} dependency: ${to}`);
     if (from.startsWith('src/')) assert.ok(!to.startsWith('server/'), `${from}: frontend imports server ${to}`);

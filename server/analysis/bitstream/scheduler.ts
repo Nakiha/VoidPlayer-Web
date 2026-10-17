@@ -446,7 +446,7 @@ export class AnalysisScheduler {
       const worker = (work.worker = new Worker(
         new URL(
           typeof VOIDPLAYER_COMPILED !== "undefined" && VOIDPLAYER_COMPILED
-            ? "./analysis/worker.ts"
+            ? "./analysis/bitstream/worker.ts"
             : "./worker.ts",
           import.meta.url,
         ),
