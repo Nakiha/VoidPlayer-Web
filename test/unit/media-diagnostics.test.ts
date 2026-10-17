@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { probeTsVideo, explainMediaFailure } from '../../src/media-diagnostics.ts';
+import { probeTsVideo, explainMediaFailure } from '../../src/media/diagnostics.ts';
 import { MediaOpenError } from '../../shared/media/io/media-errors.ts';
 
 function section(body: number[]) {

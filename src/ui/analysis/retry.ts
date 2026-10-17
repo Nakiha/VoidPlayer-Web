@@ -1,6 +1,6 @@
 import { t, msg } from '../../i18n.ts';
 import { canRetryAnalysis } from '../../../shared/analysis/bitstream/failure.ts';
-import type { DeepAnalysisState } from '../../bitstream-analysis/service.ts';
+import type { DeepAnalysisState } from '../../analysis/bitstream/service.ts';
 import type { Slot } from '../../../shared/review/model.ts';
 import { createIconButton } from '../controls.ts';
 

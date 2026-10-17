@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Worker } from 'node:worker_threads';
-import { createRangeBridge } from '../../src/range-bridge.ts';
+import { createRangeBridge } from '../../src/media/io/range-bridge.ts';
 
 for (const mode of ['large', 'eof', 'past-eof', 'cancel', 'short', 'version', 'limit', 'invalid']) test(`synchronous Range bridge: ${mode}`, { timeout: 15000 }, async t => {
   const start = 2 ** 32 + 123, length = mode === 'limit' ? 65 * 1024 * 1024 : 9 * 1024 * 1024 + 17, size = start + length;

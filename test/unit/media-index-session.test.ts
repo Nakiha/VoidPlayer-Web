@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { FfmpegMediaIndexSession } from '../../src/media-index-session.ts';
+import { FfmpegMediaIndexSession } from '../../src/media/indexing/media-index-session.ts';
 
 const identity = { kind: 'ffmpeg' as const, streamKey: 'video:0', schemaVersion: 3, indexerBuild: 'a'.repeat(40) };
 const sink = (overrides: Record<string, (...args: any[]) => void> = {}) => ({
@@ -50,6 +50,6 @@ test('disposing an FFmpeg index session aborts its HTTP subscriber', async () =>
 });
 
 test('the FFmpeg decoder worker has no index transport or client dependency', async () => {
-  const worker = await readFile(new URL('../../src/ffmpeg-worker.ts', import.meta.url), 'utf8');
+  const worker = await readFile(new URL('../../src/media/decoding/ffmpeg-worker.ts', import.meta.url), 'utf8');
   assert.doesNotMatch(worker, /MediaIndexClient|IndexStreamTransport|frame-index/);
 });

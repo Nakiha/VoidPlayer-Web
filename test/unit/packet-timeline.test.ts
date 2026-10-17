@@ -1,8 +1,8 @@
 import type { PacketDecodeIndex } from '../../shared/media/indexing/packet-decode-index.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {PacketTimeline} from '../../src/packet-timeline.ts';
-import type {PacketDecoder,FlvFrame} from '../../src/flv-decoder.ts';
+import {PacketTimeline} from '../../src/media/decoding/packet-timeline.ts';
+import type {PacketDecoder,FlvFrame} from '../../src/media/decoding/flv-decoder.ts';
 import type {FlvIndex} from '../../shared/media/containers/flv-demux.ts';
 import {rgbaDescription} from '../../shared/media/frame-description.ts';
 import { buildFlvIndex } from '../../shared/media/containers/flv-demux.ts';

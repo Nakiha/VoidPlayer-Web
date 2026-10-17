@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript-ast';
 
 const portable = file => file.replaceAll('\\', '/');
+const computedLoaders = new Set(['src/i18n.ts','src/media/decoding/core-loader.ts','src/analysis/bitstream/local-worker.ts','server/frame-index-builder.ts','server/analysis/bitstream/worker.ts']);
+const entrypoints = new Set(['bootstrap.ts','agent.ts','build-info.ts','env.d.ts','i18n.ts','main.ts','session.ts']);
 const codeFile = file => /\.(?:[cm]?js|[cm]?ts|tsx)$/.test(file);
 export function moduleEdges(code, file) {
   const tree = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true), edges = [];
@@ -33,7 +35,7 @@ export function checkModuleBoundaries(root) {
   assert.ok(files.length, 'No production modules found');
   for (const file of files) for (const edge of moduleEdges(readFileSync(file, 'utf8'), file)) {
     const from = portable(path.relative(root, file));
-    if (edge.specifier === null) { assert.ok(!from.startsWith('shared/'), `${from}: shared code uses a computed module load`); continue; }
+    if (edge.specifier === null) { assert.ok(computedLoaders.has(from), `${from}: unregistered computed module load`); continue; }
     if (!edge.specifier.startsWith('.')) {
       if (from.startsWith('shared/')) assert.ok(edge.specifier === 'mediabunny', `${from}: shared code imports host package ${edge.specifier}`);
       continue;
@@ -45,6 +47,12 @@ export function checkModuleBoundaries(root) {
     if (from.startsWith('shared/')) assert.ok(!/^(src|server)\//.test(to), `${from}: shared code imports host ${to}`);
     if (from.startsWith('server/') && to.startsWith('src/')) assert.ok(false, `${from}: server imports frontend ${to}`);
     edges.push({ from, to, kind: edge.kind });
+  }
+  for (const file of files) {
+    const name = portable(path.relative(root, file));
+    if (name.startsWith('src/') && !name.slice(4).includes('/')) assert.ok(entrypoints.has(name.slice(4)), `${name}: unowned frontend root module`);
+    assert.ok(!/^src\/(bitstream-analysis|analysis-overlay)\//.test(name), `${name}: obsolete analysis namespace`);
+    for (const layer of ['shared','src']) if (name.startsWith(`${layer}/analysis/`)) assert.match(name, new RegExp(`^${layer}/analysis/(metadata|bitstream)/`), `${name}: analysis must declare metadata or bitstream responsibility`);
   }
   return { files: files.length, edges };
 }

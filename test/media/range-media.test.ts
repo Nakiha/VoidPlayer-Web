@@ -1,4 +1,4 @@
-import {openPacketMedia} from '../../src/packet-media.ts';
+import {openPacketMedia} from '../../src/media/decoding/packet-media.ts';
 import { packetFixture } from '../packet-fixture.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -6,7 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { visiblePixelHash } from '../helpers/visible-pixels.ts';
 import { RangeReader } from '../../shared/media/io/range-reader.ts';
-import { openFFmpegMedia, openFFmpegMediaFromUrl } from '../../src/ffmpeg-media.ts';
+import { openFFmpegMedia, openFFmpegMediaFromUrl } from '../../src/media/decoding/ffmpeg-media.ts';
 import { MediaOpenError } from '../../shared/media/io/media-errors.ts';
 
 const core = new URL('../../public/vendor/voidplayer-core', import.meta.url);

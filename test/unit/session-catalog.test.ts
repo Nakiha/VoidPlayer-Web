@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ReviewSession } from '../../src/session.ts';
 import { rgbaDescription } from '../../shared/media/frame-description.ts';
-import type { MediaSource } from '../../src/media.ts';
+import type { MediaSource } from '../../src/media/source.ts';
 
 function media(name = 'A', starts = [0, 40000, 120000, 160000], end = 200000) {
   let closed = 0, disposed = 0;
@@ -70,7 +70,7 @@ test('relink accepts a modified-time change but still rejects size or name misma
 });
 
 test('partial workspace restoration logs the full unavailable source reason without losing marks', async () => {
-  const { getLogEvents } = await import('../../src/log.ts');
+  const { getLogEvents } = await import('../../src/logging/log.ts');
   const source = new ReviewSession(() => {}), restored = new ReviewSession(() => {});
   try {
     await source.load('A', async () => media('clip').source);

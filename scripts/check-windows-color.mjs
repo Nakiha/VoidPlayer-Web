@@ -100,7 +100,7 @@ try{
    await page.route('**/color-reference/*',async r=>{const c=cases.find(c=>r.request().url().endsWith('/'+c.name));if(!c)return r.abort();await r.fulfill({contentType:'application/octet-stream',body:await readFile(c.reference)});});
    await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/windows-color${pipeline==='unified'?'?colorPipeline=unified':''}`);
    entry.environment=await page.evaluate(async()=>{
-    const {initializeGpuPresentation,keepNativeGpuResource}=await import('/src/webgpu-presenter.ts');
+    const {initializeGpuPresentation,keepNativeGpuResource}=await import('/src/presentation/webgpu-presenter.ts');
     await initializeGpuPresentation([...document.querySelectorAll('canvas')]);
     const adapter=await navigator.gpu?.requestAdapter(),i=adapter?.info;
     const {buildInfo}=await import('/src/build-info.ts');
@@ -112,13 +112,13 @@ try{
     try{
     await page.locator('input').setInputFiles(c.video);
     const result=await page.evaluate(async({c,w,h,pipeline,sourceProbe,realWasm})=>{
-     const {openMedia}=await import('/src/media.ts');
-     const {paintFrame,captureFrame,setPresentationGeometry}=await import('/src/presenter.ts');
-     const {compareRgba}=await import('/src/color-evidence.ts');
+     const {openMedia}=await import('/src/media/source.ts');
+     const {paintFrame,captureFrame,setPresentationGeometry}=await import('/src/presentation/presenter.ts');
+     const {compareRgba}=await import('/src/presentation/color-evidence.ts');
      const {yuvSample}=await import('/shared/color/yuv-color.ts');
      const file=document.querySelector('input').files[0];
      const reference=new Uint8Array(await(await fetch(`/color-reference/${c.name}`)).arrayBuffer());
-     const source=await openMedia(file,async()=>{const {readLogs}=await import('/src/log.ts');throw new Error(`Native decoder unavailable: ${JSON.stringify((await readLogs({limit:10})).events)}`);});
+     const source=await openMedia(file,async()=>{const {readLogs}=await import('/src/logging/log.ts');throw new Error(`Native decoder unavailable: ${JSON.stringify((await readLogs({limit:10})).events)}`);});
      let software;
      const canvases=[document.querySelector('#native'),document.querySelector('#planes')];
      const result={name:c.name,info:source.info,ffprobe:c.probe,referenceFrames:c.referenceFrames,referenceSha256:c.referenceSha256,pairs:[]};
@@ -129,7 +129,7 @@ try{
       a.push(...data.slice((y*w+x)*4,(y*w+x)*4+4));
      }return new Uint8ClampedArray(a);};
      try{
-      if(realWasm){const {openPacketMedia}=await import('/src/packet-media.ts');software=await openPacketMedia('mp4',{file},file,{forceWasm:true});result.softwareInfo=software.info;}
+      if(realWasm){const {openPacketMedia}=await import('/src/media/decoding/packet-media.ts');software=await openPacketMedia('mp4',{file},file,{forceWasm:true});result.softwareInfo=software.info;}
       for(const [index,pts] of c.times.entries()){
        let frame,softwareFrame;
        try{
@@ -195,7 +195,7 @@ try{
     console.log(`${channel} ${c.name}: interior max ${Math.max(...result.pairs.map(p=>p.interior.max))}, full max ${Math.max(...result.pairs.map(p=>p.full.max))}`);
     }catch(e){entry.cases.push({name:c.name,error:String(e),passed:false});failed=true;console.error(`${channel} ${c.name}: ${e}`);}
    }
-   entry.logs=await page.evaluate(async()=>{const {disposePresentation}=await import('/src/presenter.ts');disposePresentation();const {readLogs}=await import('/src/log.ts');return await readLogs({limit:100});});
+   entry.logs=await page.evaluate(async()=>{const {disposePresentation}=await import('/src/presentation/presenter.ts');disposePresentation();const {readLogs}=await import('/src/logging/log.ts');return await readLogs({limit:100});});
    if(tracing){const done=new Promise(resolve=>tracing.once('Tracing.tracingComplete',resolve));await tracing.send('Tracing.end');await done;}
    if(entry.pageErrors.length)failed=true;
   }catch(e){entry.error=String(e);failed=true;console.error(`${channel}: ${e}`);}

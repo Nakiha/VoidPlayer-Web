@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildAxisIndex, decideLayout, matchPairsStrict, panTimeRange, projectToSession, zoomTimeRange } from '../../src/analysis/projection.ts';
+import { buildAxisIndex, decideLayout, matchPairsStrict, panTimeRange, projectToSession, zoomTimeRange } from '../../shared/analysis/metadata/projection.ts';
 import type { AnalysisSample } from '../../shared/analysis/metadata/types.ts';
 
 const sample = (id: string, ordinal: number, pts: number | null, dts: number | null = pts): AnalysisSample => ({
@@ -76,7 +76,7 @@ test('平移钳制在两端，不丢区间宽度', () => {
 
 
 test('overview zoom anchors to the displayed full-domain time after prior zoom', async () => {
-  const { zoomOverviewRange } = await import('../../src/analysis/projection.ts');
+  const { zoomOverviewRange } = await import('../../shared/analysis/metadata/projection.ts');
   const next = zoomOverviewRange({ start: 200, end: 400 }, { start: 0, end: 1000 }, 0.75, 0.5, 10);
   assert.deepEqual(next, { start: 700, end: 800 });
 });

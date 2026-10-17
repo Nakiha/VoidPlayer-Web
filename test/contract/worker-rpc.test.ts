@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { Worker as NodeWorker } from 'node:worker_threads';
-import { WorkerRpc } from '../../src/worker-rpc.ts';
-import { workerReply } from '../../src/worker-protocol.ts';
-import type { FfmpegInitResult, IndexBatch, PacketCommands } from '../../src/worker-protocol.ts';
+import { WorkerRpc } from '../../src/media/workers/worker-rpc.ts';
+import { workerReply } from '../../src/media/workers/worker-protocol.ts';
+import type { FfmpegInitResult, IndexBatch, PacketCommands } from '../../src/media/workers/worker-protocol.ts';
 
 function browserWorker() {
   const listeners = new Map<string, (event: { data?: unknown; message?: string }) => void>();

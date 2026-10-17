@@ -28,7 +28,7 @@ test('multi-view drafts require every media identity and frame anchor to match',
 });
 
 test('object movement/resizing extends beyond the video and erasing splits vector ink', async () => {
-  const { moveDrawing, resizeDrawing, eraseAt } = await import('../../src/annotation-geometry.ts');
+  const { moveDrawing, resizeDrawing, eraseAt } = await import('../../shared/review/annotation-geometry.ts');
   const pen = { tool: 'pen' as const, id: 'stroke', color: '#112233', width: .004, strokeWidth: 4, points: [{ x: .1, y: .5 }, { x: .9, y: .5 }] };
   const moved = moveDrawing(pen, .9, -.9);
   assert.deepEqual(moved.points, [{ x: 1, y: -.4 }, { x: 1.8, y: -.4 }]);
@@ -48,7 +48,7 @@ test('object movement/resizing extends beyond the video and erasing splits vecto
 });
 
 test('sampling threshold uses actual source-to-device pixel scale', async () => {
-  const { presentationSampling } = await import('../../src/presentation-surface.ts');
+  const { presentationSampling } = await import('../../src/presentation/presentation-surface.ts');
   const geometry = { width: 1000, height: 600, imageWidth: 500, imageHeight: 300, zoom: 2, offsetX: 0, offsetY: 0, dpr: 1 };
   assert.equal(presentationSampling(1920, geometry), 'bilinear');
   assert.equal(presentationSampling(1920, { ...geometry, dpr: 2 }), 'nearest');

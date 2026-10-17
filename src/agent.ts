@@ -1,12 +1,12 @@
-import { frameIndexTools } from './frame-index-admin.ts';
+import { frameIndexTools } from './services/frame-index.ts';
 import { ANNOTATION_COORD_LIMIT } from '../shared/review/annotation.ts';
 import { SLOTS } from '../shared/review/model.ts';
-import { benchmarkPlayback } from './benchmark.ts';
+import { benchmarkPlayback } from './session/benchmark.ts';
 import type { ReviewSession } from './session.ts';
 import { slotValue, timeUs } from '../shared/review/model.ts';
-import { getLogSessions, readLogs, traceOperation } from './log.ts';
-import { fetchLibraryPage, fetchLibraryItem, openLibraryItem } from './library.ts';
-import { validateToolInput, type ToolInputSchema } from './tool-input.ts';
+import { getLogSessions, readLogs, traceOperation } from './logging/log.ts';
+import { fetchLibraryPage, fetchLibraryItem, openLibraryItem } from './services/library.ts';
+import { validateToolInput, type ToolInputSchema } from './agent/tool-input.ts';
 
 type Tool = { name: string; description: string; inputSchema: object; annotations: { readOnlyHint: boolean; untrustedContentHint: boolean }; execute: (input: unknown) => unknown };
 type Registry = { registerTool: (tool: Tool, options: { signal: AbortSignal }) => unknown };

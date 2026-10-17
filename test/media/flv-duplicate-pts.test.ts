@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { FlvReader, scanFlv } from '../../shared/media/containers/flv-demux.ts';
-import { openFlvMedia } from '../../src/flv-media.ts';
+import { openFlvMedia } from '../../src/media/decoding/flv-media.ts';
 
 test('real WASM decodes every packet through duplicate PTS and seeks back to the same pixels', async () => {
   const bytes = await readFile(new URL('../../fixtures/flv/standard-h264.flv', import.meta.url));

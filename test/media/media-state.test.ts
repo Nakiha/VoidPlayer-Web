@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {updateMediaInfo,recordPresentedFrame} from '../../src/media-state.ts';
+import {updateMediaInfo,recordPresentedFrame} from '../../src/media/state.ts';
 import {rgbaDescription} from '../../shared/media/frame-description.ts';
-import type {DecodedFrame,MediaSource} from '../../src/media.ts';
+import type {DecodedFrame,MediaSource} from '../../src/media/source.ts';
 import {ReviewSession} from '../../src/session.ts';
-import {openPacketMedia} from '../../src/packet-media.ts';
+import {openPacketMedia} from '../../src/media/decoding/packet-media.ts';
 import type {MediaInfo} from '../../shared/review/model.ts';
-import type {MediaInfoChange} from '../../src/media-state.ts';
+import type {MediaInfoChange} from '../../src/media/state.ts';
 test('metadata changes increment one revision and emit detached complete snapshots',()=>{
   const events:MediaInfoChange[]=[];
   const source={info:{id:'test',name:'test',size:1,lastModified:0,codec:'h264',decoder:'webcodecs',width:256,height:128,durationUs:40000,firstPtsUs:0} as MediaInfo,onInfoChange:(c?:MediaInfoChange)=>events.push(c!)};

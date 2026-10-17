@@ -1,7 +1,7 @@
 import type {AdminStatus,RootConfiguration,LogPage,LogDocument,AnalysisSettings,RootReasonCode} from '../shared/service/admin.ts';
 export type {RootReasonCode} from '../shared/service/admin.ts';
-import { AnalysisScheduler } from './analysis/scheduler.ts';
-import { MAX_ANALYSIS_CONCURRENCY, validAnalysisConcurrency } from './analysis/limits.ts';
+import { AnalysisScheduler } from './analysis/bitstream/scheduler.ts';
+import { MAX_ANALYSIS_CONCURRENCY, validAnalysisConcurrency } from './analysis/bitstream/limits.ts';
 import { promises as fs, constants } from 'node:fs';
 import type { IncomingMessage } from 'node:http';
 import path from 'node:path';

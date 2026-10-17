@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GpuPresentationGuard } from '../../src/gpu-presentation-guard.ts';
+import { GpuPresentationGuard } from '../../src/presentation/gpu-presentation-guard.ts';
 
 function deferred<T>() {
   let resolve!: (v: T) => void;

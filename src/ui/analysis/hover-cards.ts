@@ -1,10 +1,10 @@
-import type { InspectionState } from '../../analysis/inspection.ts';
+import type { InspectionState } from '../../../shared/analysis/metadata/inspection.ts';
 import type { AnalysisDiagram } from '../../../shared/analysis/metadata/types.ts';
 import { msg, t } from '../../i18n.ts';
 import type { Slot } from '../../../shared/review/model.ts';
-import { computeLayout, formatAxis, plotGeometry } from '../analysis-canvas.ts';
-import type { CanvasModel } from '../analysis-canvas.ts';
-import { layoutAnalysisCards } from '../analysis-geometry.ts';
+import { computeLayout, formatAxis, plotGeometry } from './canvas.ts';
+import type { CanvasModel } from './canvas.ts';
+import { layoutAnalysisCards } from './geometry.ts';
 import { chartHoverStyle, CHART_HOVER_STYLE_EVENT } from '../chart-hover-style.ts';
 import type { BitstreamDiagram, installBitstreamDiagrams } from './bitstream-diagrams.ts';
 import { analysisTrackBadge, installAnalysisCard, installFloatingAnalysisCard } from './card.ts';

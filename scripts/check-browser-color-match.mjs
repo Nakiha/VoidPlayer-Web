@@ -123,11 +123,11 @@ try {
       });
       await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/browser-match`);
       entry.environment = await page.evaluate(async () => {
-        const { setColorMode, getColorMode } = await import('/src/color-mode.ts');
+        const { setColorMode, getColorMode } = await import('/src/media/policy/color-mode.ts');
         setColorMode('browser');
-        const { initializeGpuPresentation } = await import('/src/webgpu-presenter.ts');
+        const { initializeGpuPresentation } = await import('/src/presentation/webgpu-presenter.ts');
         await initializeGpuPresentation([...document.querySelectorAll('canvas')]);
-        const { detectGpuProfile } = await import('/src/webgpu-calibration.ts');
+        const { detectGpuProfile } = await import('/src/presentation/webgpu-calibration.ts');
         const profile = await detectGpuProfile().catch(() => null);
         const adapter = await navigator.gpu?.requestAdapter(), info = adapter?.info;
         const { buildInfo } = await import('/src/build-info.ts');
@@ -142,14 +142,14 @@ try {
         try {
           await page.locator('input').setInputFiles(c.video);
           const result = await page.evaluate(async ({ c, w, h }) => {
-            const { openMedia } = await import('/src/media.ts');
-            const { openPacketMedia } = await import('/src/packet-media.ts');
-            const { paintFrame, captureFrame, setPresentationGeometry } = await import('/src/presenter.ts');
-            const { compareRgba } = await import('/src/color-evidence.ts');
+            const { openMedia } = await import('/src/media/source.ts');
+            const { openPacketMedia } = await import('/src/media/decoding/packet-media.ts');
+            const { paintFrame, captureFrame, setPresentationGeometry } = await import('/src/presentation/presenter.ts');
+            const { compareRgba } = await import('/src/presentation/color-evidence.ts');
             const file = document.querySelector('input').files[0];
             const reference = new Uint8Array(await (await fetch(`/color-reference/${c.name}`)).arrayBuffer());
             const native = await openMedia(file, async () => {
-              const { readLogs } = await import('/src/log.ts');
+              const { readLogs } = await import('/src/logging/log.ts');
               throw new Error(`Native decoder unavailable: ${JSON.stringify((await readLogs({ limit: 10 })).events)}`);
             });
             if (native.info.decoder !== 'webcodecs') {
@@ -242,9 +242,9 @@ try {
         } catch (e) { entry.cases.push({ name: c.name, error: String(e), passed: false }); failed = true; console.error(`${channel} ${c.name}: ${e}`); }
       }
       entry.logs = await page.evaluate(async () => {
-        const { disposePresentation } = await import('/src/presenter.ts');
+        const { disposePresentation } = await import('/src/presentation/presenter.ts');
         disposePresentation();
-        const { readLogs } = await import('/src/log.ts');
+        const { readLogs } = await import('/src/logging/log.ts');
         return await readLogs({ limit: 100 });
       });
       if (entry.pageErrors.length) failed = true;

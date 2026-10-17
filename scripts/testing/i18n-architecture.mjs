@@ -6,7 +6,7 @@ import ts from 'typescript-ast';
 // Worker URL edges are explicit roots. Traverse relative runtime imports,
 // re-exports and literal dynamic imports; type-only and package edges are excluded.
 // Computed imports/require and arbitrary new Worker URLs are outside this check.
-export const MEDIA_ROOTS = ['src/media.ts', 'src/presenter.ts', 'src/ffmpeg-worker.ts', 'src/packet-worker.ts', 'src/thumbnails/pixel-worker.ts'];
+export const MEDIA_ROOTS = ['src/media/source.ts', 'src/presentation/presenter.ts', 'src/media/decoding/ffmpeg-worker.ts', 'src/media/decoding/packet-worker.ts', 'src/thumbnails/pixel-worker.ts'];
 
 export function checkMediaTranslationBoundary(root) {
   const visited = new Set();

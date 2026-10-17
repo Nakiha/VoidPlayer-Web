@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseTimeInput} from '../../src/time-input.ts';
+import { parseTimeInput } from '../../shared/review/time-input.ts';
 test('inline time accepts seconds and timecodes; offset defaults to signed milliseconds',()=>{
   for(const s of ['3.3','00:03.300','3.3s','3300ms','3300 ms']) assert.equal(parseTimeInput(s),3300000);
   assert.equal(parseTimeInput('1:02:03.004'),3723004000);

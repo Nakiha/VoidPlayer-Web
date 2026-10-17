@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { visiblePixelHash } from '../helpers/visible-pixels.ts';
 import {fileURLToPath} from 'node:url';
-import { Mp4Engine } from '../../src/mp4-engine.ts';
+import { Mp4Engine } from '../../src/media/decoding/mp4-engine.ts';
 import {nativeFrames,nativeVisibleHash,nativeVisibleFrameBytes,nativeVideoMetadata,nativeSeekFrame} from '../helpers/media/native-pixels.ts';
 import {mkdtemp,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -37,7 +37,7 @@ for (const name of ['h266_10s_1920x1080.mp4', 'h264_high422p_1s_320x180.mp4', 'h
 }
 
 test('MP4 packet worker shares the session frame contract, handles EOF and releases pending work', async () => {
-  const { openPacketMedia } = await import('../../src/packet-media.ts');
+  const { openPacketMedia } = await import('../../src/media/decoding/packet-media.ts');
   const bytes = await readFile(new URL('../../fixtures/video/h264_high422p_1s_320x180.mp4', import.meta.url));
   const source = await openPacketMedia('mp4', { file: new Blob([bytes]) }, { name: 'high422.mp4', size: bytes.length, lastModified: 0 }, {
     glueURL: new URL('voidplayer-core.js', core).href, wasmBinary: await readFile(new URL('voidplayer-core.wasm', core)),

@@ -1,9 +1,9 @@
-import type { PacketCommands } from '../../src/worker-protocol.ts';
+import type { PacketCommands } from '../../src/media/workers/worker-protocol.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { demuxFlv, scanFlv, FlvReader } from '../../shared/media/containers/flv-demux.ts';
 import { serializeFlvIndex, parseFlvIndex } from '../../shared/media/indexing/flv-index-cache.ts';
-import { WorkerRpc } from '../../src/ffmpeg-media.ts';
+import { WorkerRpc } from '../../src/media/decoding/ffmpeg-media.ts';
 
 import { syntheticFlv } from '../flv-fixture.ts';
 
@@ -57,7 +57,7 @@ test('remote scan coalesces requests while normal reads stay small and version-p
 });
 
 test('a timed-out multithread decoder reuses the startup checkpoint without restarting inspection', async t => {
-  const { openPacketMedia } = await import('../../src/packet-media.ts');
+  const { openPacketMedia } = await import('../../src/media/decoding/packet-media.ts');
   const saved = ['document', 'crossOriginIsolated'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
   Object.defineProperty(globalThis, 'document', { configurable: true, value: { baseURI: 'https://example.invalid/' } });
   Object.defineProperty(globalThis, 'crossOriginIsolated', { configurable: true, value: true });
@@ -89,7 +89,7 @@ test('a timed-out multithread decoder reuses the startup checkpoint without rest
 });
 
 test('background index failure during a yielded frame rejects playback instead of reporting EOF', async t => {
-  const { openPacketMedia } = await import('../../src/packet-media.ts');
+  const { openPacketMedia } = await import('../../src/media/decoding/packet-media.ts');
   const { rgbaDescription } = await import('../../shared/media/frame-description.ts');
   const saved = Object.getOwnPropertyDescriptor(globalThis, 'document');
   Object.defineProperty(globalThis, 'document', { configurable: true, value: { baseURI: 'https://example.invalid/' } });

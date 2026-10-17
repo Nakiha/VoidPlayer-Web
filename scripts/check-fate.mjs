@@ -1,9 +1,9 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
-import { openFlvMedia } from '../src/flv-media.ts';
-import { openFFmpegMedia } from '../src/ffmpeg-media.ts';
-import { openPacketMedia } from '../src/packet-media.ts';
+import { openFlvMedia } from '../src/media/decoding/flv-media.ts';
+import { openFFmpegMedia } from '../src/media/decoding/ffmpeg-media.ts';
+import { openPacketMedia } from '../src/media/decoding/packet-media.ts';
 import { pixelSignature, planeSignature, checkFrame, checkSequence, expectedAt, classify } from './fate-oracle.ts';
 import { yuvToRgba } from '../shared/color/yuv-color.ts';
 const manifest = JSON.parse(await readFile(new URL('./fate-samples.json', import.meta.url)));

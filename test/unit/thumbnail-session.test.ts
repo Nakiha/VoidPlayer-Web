@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { rgbaDescription } from '../../shared/media/frame-description.ts';
 import { ReviewSession } from '../../src/session.ts';
-import type { DecodedFrame, MediaSource } from '../../src/media.ts';
+import type { DecodedFrame, MediaSource } from '../../src/media/source.ts';
 import { thumbnailState } from '../../src/thumbnails/state.ts';
 
 function sampleMedia(name = 'A', starts = [0, 40000], end = 80000) {

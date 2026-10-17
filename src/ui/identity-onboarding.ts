@@ -1,4 +1,4 @@
-import { chooseIdentity, currentActor, identityHealth } from '../identity.ts';
+import { chooseIdentity, currentActor, identityHealth } from '../services/identity.ts';
 import { onLanguageChange, t, th, msg } from '../i18n.ts';
 import { icon } from './icons.ts';
 

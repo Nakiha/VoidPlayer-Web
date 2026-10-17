@@ -8,7 +8,7 @@ import {openAnalysisInput} from '../../shared/analysis/bitstream/input.ts';
 import {isAnnexB,nalRanges} from '../../shared/media/codecs/nal-framing.ts';
 import {pictureId} from '../../shared/analysis/bitstream/contract.ts';
 import {TsPacketSource,readTsPesClocks} from '../../shared/media/containers/ts-packet-source.ts';
-import {JsContainerEngine} from '../../src/js-container-engine.ts';
+import {JsContainerEngine} from '../../src/media/decoding/js-container-engine.ts';
 import {JS_TS_MEDIA_INDEX_IDENTITY} from '../../shared/media/indexing/media-index-identity.ts';
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -148,7 +148,7 @@ test('unconsumed whole IO remains bounded until a result is acknowledged',async(
  }finally{f.close();}
 });
 test('library TS whole, cache restart and corrupt-hole repair use independent source-bound demux',async()=>{
- const {MediaLibraryIndex}=await import('../../server/library.ts');const {AnalysisScheduler}=await import('../../server/analysis/scheduler.ts');
+ const {MediaLibraryIndex}=await import('../../server/library.ts');const {AnalysisScheduler}=await import('../../server/analysis/bitstream/scheduler.ts');
  const {mkdtemp,rm,mkdir,copyFile,writeFile}=await import('node:fs/promises');const {tmpdir}=await import('node:os');const {join,resolve}=await import('node:path');const {execFileSync}=await import('node:child_process');
  const temp=await mkdtemp(join(tmpdir(),'vp-ts-library-')),media=join(temp,'media');await mkdir(media);
  execFileSync('ffmpeg',['-y','-v','error','-copyts','-i','fixtures/ts-analysis/h264-static.ts','-map','0:v:0','-an','-c:v','copy','-frames:v','120','-mpegts_copyts','1','-f','mpegts',join(media,'short.ts')]);

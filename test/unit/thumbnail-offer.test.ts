@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { rgbaDescription } from '../../shared/media/frame-description.ts';
-import type { DecodedFrame } from '../../src/media.ts';
+import type { DecodedFrame } from '../../src/media/source.ts';
 import { offerFirstFrameCandidate, settleOffer } from '../../src/thumbnails/offer.ts';
 import type { FirstFrameContext } from '../../src/thumbnails/offer.ts';
 import { thumbnailState } from '../../src/thumbnails/state.ts';

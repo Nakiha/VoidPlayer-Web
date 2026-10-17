@@ -1,8 +1,8 @@
 import type { Slot } from '../../../shared/review/model.ts';
-import type { InspectionState, TrackInspection } from '../../analysis/inspection.ts';
+import type { InspectionState, TrackInspection } from '../../../shared/analysis/metadata/inspection.ts';
 import { t, msg } from '../../i18n.ts';
-import { formatAxis } from '../analysis-canvas.ts';
-import { floatingAvoidanceShift } from '../analysis-geometry.ts';
+import { formatAxis } from './canvas.ts';
+import { floatingAvoidanceShift } from './geometry.ts';
 
 /** Reuse the player track badge and its theme-owned slot colors in every tooltip. */
 export function analysisTrackBadge(slot: Slot | undefined, color?: string) {

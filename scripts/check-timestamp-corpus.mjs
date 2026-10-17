@@ -5,7 +5,7 @@ import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {createServer} from 'vite';
 import {webkit,chromium} from 'playwright';
-import {openFFmpegMedia} from '../src/ffmpeg-media.ts';
+import {openFFmpegMedia} from '../src/media/decoding/ffmpeg-media.ts';
 import {pixelSignature,checkSequence,checkFrame,expectedAt} from './fate-oracle.ts';
 const official=JSON.parse(await readFile(new URL('./fate-timestamp-samples.json',import.meta.url)));
 const derived=JSON.parse(await readFile(new URL('../fixtures/fate/timestamps/manifest.json',import.meta.url)));
@@ -59,8 +59,8 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
     try{
       await page.route('**/timestamp-audit',r=>r.fulfill({contentType:'text/html',headers:{'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp'},body:'<canvas></canvas>'}));await page.goto(base+'/timestamp-audit');
       const rows=await Promise.race([page.evaluate(async({file,remote,ref})=>{
-        const {openMedia,openMediaFromUrl}=await import('/src/media.ts');
-        const {paintFrame,captureFrame,disposePresentation}=await import('/src/presenter.ts');
+        const {openMedia,openMediaFromUrl}=await import('/src/media/source.ts');
+        const {paintFrame,captureFrame,disposePresentation}=await import('/src/presentation/presenter.ts');
         const {pixelSignature,checkSequence,checkFrame,expectedAt}=await import('/scripts/fate-oracle.ts');
         const url=new URL('/timestamp-fixture/'+file,location.href).href,bytes=await(await fetch(url)).arrayBuffer(),rows=[];
         for(let round=0;round<2;round++){

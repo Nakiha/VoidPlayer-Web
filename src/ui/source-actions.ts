@@ -1,4 +1,4 @@
-import { identityHealth } from '../identity.ts';
+import { identityHealth } from '../services/identity.ts';
 import { SLOTS } from '../../shared/review/model.ts';
 import type { ReviewSession } from '../session.ts';
 import type { Slot } from '../../shared/review/model.ts';

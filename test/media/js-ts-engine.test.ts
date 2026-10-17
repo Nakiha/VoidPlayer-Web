@@ -7,8 +7,8 @@ import { pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { once } from 'node:events';
 import { execFileSync } from 'node:child_process';
-import { WorkerRpc } from '../../src/worker-rpc.ts';
-import type { PacketCommands } from '../../src/worker-protocol.ts';
+import { WorkerRpc } from '../../src/media/workers/worker-rpc.ts';
+import type { PacketCommands } from '../../src/media/workers/worker-protocol.ts';
 import { tsPictureStream } from '../../shared/media/indexing/ts-packet-index.ts';
 import { visiblePixelHash } from '../helpers/visible-pixels.ts';
 import {nativeFrames,nativeVisibleHash} from '../helpers/media/native-pixels.ts';
@@ -23,7 +23,7 @@ test('real packet Worker TS engine drains, seeks and shares exact identity with 
   // Trap the actual loaded core API, rather than inferring routing from names.
   const wrapper = join(directory, 'packet-only.mjs');
   await writeFile(wrapper, `import load from ${JSON.stringify(glue)}; export default async function(options) { const core = await load(options); core._vp_open = () => { throw new Error('container WASM forbidden'); }; return core; }`);
-  const worker = new Worker(new URL('../../src/packet-worker.ts', import.meta.url));
+  const worker = new Worker(new URL('../../src/media/decoding/packet-worker.ts', import.meta.url));
   const rpc = new WorkerRpc<PacketCommands>(worker as unknown as globalThis.Worker);
   try {
     const admitted = await rpc.call('prepare-ts', {input:{file:new Blob([bytes])},sourceVersion:'engine-ts-v1'});
@@ -78,7 +78,7 @@ test('real packet Worker TS engine drains, seeks and shares exact identity with 
 
 test('admitted multislice and MBAFF TS prepare without a decoder and never claim exact picture identity', async () => {
   for (const name of ['progressive-two-slices.ts','mbaff.ts']) {
-    const worker = new Worker(new URL('../../src/packet-worker.ts', import.meta.url));
+    const worker = new Worker(new URL('../../src/media/decoding/packet-worker.ts', import.meta.url));
     const rpc = new WorkerRpc<PacketCommands>(worker as unknown as globalThis.Worker);
     try {
       const bytes = await readFile(`fixtures/ts-analysis/${name}`);
@@ -110,7 +110,7 @@ test('real late PSI changes defer the declared combination, while bad CRC remain
     let crc=0xffffffff;
     for(const b of bytes.subarray(sectionStart,sectionEnd-4)){crc^=b<<24;for(let i=0;i<8;i++)crc=(crc<<1)^(crc&0x80000000?0x04c11db7:0);}
     new DataView(bytes.buffer).setUint32(sectionEnd-4,(crc>>>0)^(badCrc?1:0));
-    const worker=new Worker(new URL('../../src/packet-worker.ts',import.meta.url));
+    const worker=new Worker(new URL('../../src/media/decoding/packet-worker.ts',import.meta.url));
     const rpc=new WorkerRpc<PacketCommands>(worker as unknown as globalThis.Worker);
     try {
       const request=rpc.call('prepare-ts',{input:{file:new Blob([bytes])},sourceVersion:'psi-boundary'},[],60000);
@@ -122,11 +122,11 @@ test('real late PSI changes defer the declared combination, while bad CRC remain
 });
 
 test('native and software first-frame failures release each actual timeline decoder once', async () => {
-  const {TsEngine}=await import('../../src/ts-engine.ts');
+  const {TsEngine}=await import('../../src/media/decoding/ts-engine.ts');
   const {MediaOpenError}=await import('../../shared/media/io/media-errors.ts');
   const bytes=await readFile('fixtures/ts-analysis/h264-static.ts');
   const closed={native:0,software:0};
-  const failed=(name:'native'|'software'):import('../../src/flv-decoder.ts').PacketDecoder=>({
+  const failed=(name:'native'|'software'):import('../../src/media/decoding/flv-decoder.ts').PacketDecoder=>({
     kind:name==='native'?'webcodecs':'ffmpeg-wasm',reset(){},receive(){return null;},drain:async()=>{},
     async send(){throw new MediaOpenError('decode',`${name} first frame failed`);},close(){closed[name]++;},
   });
@@ -153,7 +153,7 @@ test('real Worker concurrent index requests reject during initialization and rem
       ...(range?{'content-range':`bytes ${start}-${end}/${bytes.length}`}:{})});res.end(bytes.subarray(start,end+1));
   });
   await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
-  const worker=new Worker(new URL('../../src/packet-worker.ts',import.meta.url));
+  const worker=new Worker(new URL('../../src/media/decoding/packet-worker.ts',import.meta.url));
   const rpc=new WorkerRpc<PacketCommands>(worker as unknown as globalThis.Worker);
   try {
     const init=rpc.call('init',{container:'ts',sourceVersion:'ready-race',input:{url:`http://127.0.0.1:${(server.address() as import('node:net').AddressInfo).port}/video`,size:bytes.length},
@@ -175,7 +175,7 @@ test('real Worker concurrent index requests reject during initialization and rem
 });
 
 test('native first-frame decode failure uses real packet WASM with the same verified JS index',async()=>{
-  const {TsEngine}=await import('../../src/ts-engine.ts');
+  const {TsEngine}=await import('../../src/media/decoding/ts-engine.ts');
   const {MediaOpenError}=await import('../../shared/media/io/media-errors.ts');
   const bytes=await readFile('fixtures/ts-analysis/h264-static.ts');
   const directory=await mkdtemp(join(tmpdir(),'voidplayer-ts-native-failure-'));
@@ -210,7 +210,7 @@ for(const mode of ['advancing','stalled'] as const)test(`product prepare-ts ${mo
     res.once('close',()=>clearTimeout(timer));
   });
   await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
-  const worker=new Worker(new URL('../../src/packet-worker.ts',import.meta.url));
+  const worker=new Worker(new URL('../../src/media/decoding/packet-worker.ts',import.meta.url));
   const rpc=new WorkerRpc<PacketCommands>(worker as unknown as globalThis.Worker);
   const advances:{wall:number;data:any}[]=[];worker.on('message',message=>{if(message.type==='index-progress')advances.push({wall:performance.now(),data:message.data});});
   await assert.rejects(rpc.call('analysis-index',{},[],2000),/not ready/);
@@ -234,10 +234,10 @@ for(const mode of ['advancing','stalled'] as const)test(`product prepare-ts ${mo
 });
 
 test('product TS admission abort settles a genuinely held Range request and terminates its own worker',{timeout:10000},async()=>{
-  const {createServer}=await import('node:http'),{admitTsMedia}=await import('../../src/ts-media.ts');
+  const {createServer}=await import('node:http'),{admitTsMedia}=await import('../../src/media/decoding/ts-media.ts');
   const bytes=await readFile('fixtures/ts-analysis/h264-static.ts');let entered!:()=>void;const requested=new Promise<void>(resolve=>{entered=resolve;});
   const server=createServer(()=>entered());await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
-  const worker=new Worker(new URL('../../src/packet-worker.ts',import.meta.url));const exited=once(worker,'exit');const abort=new AbortController();
+  const worker=new Worker(new URL('../../src/media/decoding/packet-worker.ts',import.meta.url));const exited=once(worker,'exit');const abort=new AbortController();
   const pending=admitTsMedia({url:`http://127.0.0.1:${(server.address() as {port:number}).port}/held.ts`,size:bytes.length},{name:'held.ts',size:bytes.length,lastModified:0},'product-cancel',
     {signal:abort.signal,workerFactory:()=>worker as unknown as globalThis.Worker});void pending.catch(()=>{});
   try{
@@ -266,7 +266,7 @@ test('actual product prepare-ts examines a second same-packet PMT section before
     }else if(mode==='crc')second[second.length-1]^=1;
     bytes.set(second,end);
     if(mode==='adaptation'){bytes[packetAt+3]=(bytes[packetAt+3]&15)|0x30;bytes[packetAt+4]=184;}
-    const worker=new Worker(new URL('../../src/packet-worker.ts',import.meta.url)),rpc=new WorkerRpc<PacketCommands>(worker as unknown as globalThis.Worker);
+    const worker=new Worker(new URL('../../src/media/decoding/packet-worker.ts',import.meta.url)),rpc=new WorkerRpc<PacketCommands>(worker as unknown as globalThis.Worker);
     try{
       const pending=rpc.call('prepare-ts',{input:{file:new Blob([bytes])},sourceVersion:`second-section-${mode}`},[],60000,true);
       if(mode==='crc'||mode==='adaptation')await assert.rejects(pending,mode==='crc'?/invalid PSI CRC/:/invalid PSI adaptation length/);

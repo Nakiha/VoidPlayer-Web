@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { Worker } from 'node:worker_threads';
 import { RangeReader } from '../../shared/media/io/range-reader.ts';
-import { createRangeBridge } from '../../src/range-bridge.ts';
-import { WorkerRpc } from '../../src/ffmpeg-media.ts';
+import { createRangeBridge } from '../../src/media/io/range-bridge.ts';
+import { WorkerRpc } from '../../src/media/decoding/ffmpeg-media.ts';
 
 test('Range cache is bounded, pinned to a file version and validates response bodies', async t => {
   let requests = 0, invalid = '', cancelled = 0;
@@ -43,7 +43,7 @@ test('Synchronous FFmpeg AVIO requests bounded chunks through the async bridge a
   });
   for (const failing of [false, true]) {
     fail = failing;
-    const worker = new Worker(new URL('../../src/ffmpeg-worker.ts', import.meta.url));
+    const worker = new Worker(new URL('../../src/media/decoding/ffmpeg-worker.ts', import.meta.url));
     const bridge = createRangeBridge(worker as unknown as globalThis.Worker, 'https://test.invalid/video', bytes.length);
     const rpc = new WorkerRpc(worker as unknown as globalThis.Worker, () => bridge.close());
     try {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {Input,BlobSource,ALL_FORMATS,EncodedPacketSink} from 'mediabunny';
-import {wasmFlvDecoder} from '../src/flv-decoder.ts';
+import {wasmFlvDecoder} from '../src/media/decoding/flv-decoder.ts';
 import {yuvPixelRgb} from '../shared/color/yuv-color.ts';
 import {createServer} from 'vite';
 import {webkit,chromium} from 'playwright';
@@ -50,8 +50,8 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
       const rows=await Promise.race([page.evaluate(async({name,remote,refs,order})=>{
         const started=performance.now();
         const progress=(stage,detail={})=>console.log('hevc-timeline: '+JSON.stringify({stage,remote,elapsedMs:Math.round(performance.now()-started),...detail}));
-        const {openMedia,openMediaFromUrl}=await import('/src/media.ts');
-        const {paintFrame,captureFrame,disposePresentation,setPresentationGeometry}=await import('/src/presenter.ts');
+        const {openMedia,openMediaFromUrl}=await import('/src/media/source.ts');
+        const {paintFrame,captureFrame,disposePresentation,setPresentationGeometry}=await import('/src/presentation/presenter.ts');
         const {yuvPixelRgb}=await import('/shared/color/yuv-color.ts');
         const url='/fixtures/video/'+name,bytes=await(await fetch(url)).arrayBuffer(),rows=[];
         const sourceCanvas=document.querySelector('canvas');
@@ -73,7 +73,7 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
         let nativeRefs;
         const nativeReference=async()=>{
           const {Input,BlobSource,ALL_FORMATS,EncodedPacketSink}=await import('/node_modules/mediabunny/dist/bundles/mediabunny.mjs');
-          const {preferredVideoConfig}=await import('/src/decoder-policy.ts');
+          const {preferredVideoConfig}=await import('/src/media/policy/decoder-policy.ts');
           const input=new Input({source:new BlobSource(new Blob([bytes])),formats:ALL_FORMATS});
           const refs=new Array(600),rank=new Array(600),pending=[];let failure,decoder;
           order.forEach((packet,index)=>rank[packet]=index);

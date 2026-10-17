@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ReviewSession } from '../../src/session.ts';
-import { getColorMode, getReferenceDecode, setColorMode, setReferenceDecode } from '../../src/color-mode.ts';
+import { getColorMode, getReferenceDecode, setColorMode, setReferenceDecode } from '../../src/media/policy/color-mode.ts';
 import { type ColorMode, type ReferenceDecode } from '../../shared/color/decode-policy-types.ts';
-import { getPresentationChannel, setPresentationChannel } from '../../src/presentation-channel.ts';
+import { getPresentationChannel, setPresentationChannel } from '../../src/presentation/presentation-channel.ts';
 import { rgbaDescription } from '../../shared/media/frame-description.ts';
-import { getLogEvents } from '../../src/log.ts';
-import type { DecodedFrame, MediaSource } from '../../src/media.ts';
+import { getLogEvents } from '../../src/logging/log.ts';
+import type { DecodedFrame, MediaSource } from '../../src/media/source.ts';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;

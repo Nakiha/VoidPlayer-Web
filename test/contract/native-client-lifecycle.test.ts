@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Worker } from 'node:worker_threads';
 import { once, getEventListeners, EventEmitter } from 'node:events';
-import { NativeAnalysisClient } from '../../src/analysis/native-client.ts';
+import { NativeAnalysisClient } from '../../src/analysis/metadata/native-client.ts';
 
 test('browser metadata messageerror releases pending, abort and transport listeners without affecting a second client',async()=>{
   const listeners=new Map<string,Function>();let stopped=0,posted!:()=>void;

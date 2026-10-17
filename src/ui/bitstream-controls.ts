@@ -19,7 +19,7 @@ type State = ReturnType<ReviewSession['getState']>;
 type Mode = 'blocks' | 'qp' | 'modes';
 type Entry = {
   sourceId: string;
-  overlay?: import('../analysis-overlay/controller.ts').ReturnOverlay;
+  overlay?: import('./analysis/picture-overlay/controller.ts').ReturnOverlay;
   loading?: Promise<void>;
   tooltip?: HTMLOutputElement;
   request?: AbortController;
@@ -131,7 +131,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
   }
   async function ensureOverlay(slot: Slot, entry: Entry) {
     if (entry.overlay) return;
-    if (!entry.loading) entry.loading = import('../analysis-overlay/controller.ts').then(({ createAnalysisOverlay }) => {
+    if (!entry.loading) entry.loading = import('./analysis/picture-overlay/controller.ts').then(({ createAnalysisOverlay }) => {
       if (entries.get(slot) !== entry || !entry.enabled || life.signal.aborted) return;
       entry.overlay = createAnalysisOverlay(session, slot, canvases[slot]);
       entry.overlay.setMode(mode);

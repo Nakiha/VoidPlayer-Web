@@ -1,10 +1,10 @@
-import {PacketTimeline} from '../../src/packet-timeline.ts';
+import {PacketTimeline} from '../../src/media/decoding/packet-timeline.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { demuxFlv, scanFlv, FlvReader, flvIndexWarning, flvIndexIntegrity, FLV_RESYNC_BYTES } from '../../shared/media/containers/flv-demux.ts';
 import { serializeFlvIndex, parseFlvIndex } from '../../shared/media/indexing/flv-index-cache.ts';
-import { FlvEngine } from '../../src/flv-engine.ts';
-import { checkedHeap } from '../../src/flv-decoder.ts';
+import { FlvEngine } from '../../src/media/decoding/flv-engine.ts';
+import { checkedHeap } from '../../src/media/decoding/flv-decoder.ts';
 import { syntheticFlv } from '../flv-fixture.ts';
 
 async function index(bytes: Uint8Array) {

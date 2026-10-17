@@ -13,7 +13,7 @@ test('ICU validation rejects stale/missing translations, malformed syntax, wrong
  assert.deepEqual(parameters(pseudo('{count, plural, one {One {name}} other {# {name}}}')),{count:'number',name:'string | number'});
 });
 test('catalog paths normalize Windows separators and keep nested source locations portable',()=>{
- assert.equal(portablePath('src\\ui\\analysis-canvas.ts'),'src/ui/analysis-canvas.ts');
+ assert.equal(portablePath('src\\ui\\analysis\\canvas.ts'),'src/ui/analysis/canvas.ts');
  const inventory=extract(root);for(const message of Object.values(inventory))for(const location of message.locations)assert.ok(!location.includes('\\'),location);
 });
 
@@ -118,7 +118,7 @@ test('static certificate emphasis preserves safe shell topology in English and p
 
 test('administration scope includes actual recursive modules and connection guide',()=>{
  const scope=JSON.parse(readFileSync(join(root,'locales/scope.json'),'utf8'));
- assert.ok(scope.files.includes('src/connection-guide.ts'));
+ assert.ok(scope.files.includes('src/ui/connection-guide.ts'));
  for(const file of readdirSync(join(root,'src/admin')).filter(f=>f.endsWith('.ts')))assert.ok(scope.files.includes('src/admin/'+file),file);
  assert.ok(!scope.notCovered.some(e=>e.files?.includes('src/admin.ts')));
  const tree=ts.createSourceFile('measurement.ts',readFileSync(join(root,'src/admin/measurement.ts'),'utf8'),ts.ScriptTarget.Latest,true);
@@ -129,10 +129,10 @@ test('administration scope includes actual recursive modules and connection guid
 // Exercise the same checker used above against complete temporary graphs.
 test('media architecture negative fixtures reject missing roots and thumbnail dependencies',async t=>{
  const temp=mkdtempSync(join(tmpdir(),'vp-media-translation-'));
- const actualRoots=['src/media.ts','src/presenter.ts','src/ffmpeg-worker.ts','src/packet-worker.ts','src/thumbnails/pixel-worker.ts'];
+ const actualRoots=['src/media/source.ts','src/presentation/presenter.ts','src/media/decoding/ffmpeg-worker.ts','src/media/decoding/packet-worker.ts','src/thumbnails/pixel-worker.ts'];
  try{
   mkdirSync(join(temp,'src/thumbnails'),{recursive:true});
-  for(const file of actualRoots)writeFileSync(join(temp,file),'export {};');
+  for(const file of actualRoots){mkdirSync(join(temp,file,'..'),{recursive:true});writeFileSync(join(temp,file),'export {};');}
   await t.test('each mandatory root must exist',()=>{
    checkMediaTranslationBoundary(temp);
    for(const file of actualRoots){

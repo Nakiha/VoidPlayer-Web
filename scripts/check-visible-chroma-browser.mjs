@@ -7,9 +7,9 @@ try {
   const result=await page.evaluate(async()=>{
     const {yuvFixture}=await import('/test/helpers/yuv-fixture.ts');
     const {yuvToRgba}=await import('/shared/color/yuv-color.ts');
-    const {createYuvSurface}=await import('/src/yuv-surface.ts');
-    const {createExternalSurface}=await import('/src/webgpu-color-surface.mjs');
-    const {setPresentationChannel}=await import('/src/presentation-channel.ts');
+    const {createYuvSurface}=await import('/src/presentation/yuv-surface.ts');
+    const {createExternalSurface}=await import('/src/presentation/webgpu-color-surface.mjs');
+    const {setPresentationChannel}=await import('/src/presentation/presentation-channel.ts');
     const canvas=document.createElement('canvas');canvas.width=3;canvas.height=1;
     const gl=canvas.getContext('webgl',{preserveDrawingBuffer:true});if(!gl)throw new Error('WebGL unavailable');
     const surface=createYuvSurface(gl),gpuCanvas=document.createElement('canvas');

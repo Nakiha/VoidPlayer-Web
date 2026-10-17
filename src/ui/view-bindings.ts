@@ -1,6 +1,6 @@
 import { SLOTS } from '../../shared/review/model.ts';
 import type { Slot } from '../../shared/review/model.ts';
-import { setPresentationGeometry } from '../presenter.ts';
+import { setPresentationGeometry } from '../presentation/presenter.ts';
 import type { ReviewSession } from '../session.ts';
 import { setAnnotationViewport } from './annotation-svg.ts';
 import { installPixelGrid } from './pixel-grid.ts';

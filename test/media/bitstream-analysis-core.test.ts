@@ -673,7 +673,7 @@ test('cancellation while waiting for the first index GOP closes the reader witho
 
 test('native metadata adapter drives the analysis frontier without waiting for its full enumeration', async () => {
   const { Input, BlobSource, MP4 } = await import('mediabunny');
-  const { NativeAnalysisAdapter } = await import('../../src/analysis/native-adapter.ts');
+  const { NativeAnalysisAdapter } = await import('../../src/analysis/metadata/native-adapter.ts');
   const { analyzeStream } = await import('../../shared/analysis/bitstream/runner.ts');
   const input = new Input({ source: new BlobSource(new Blob([await readFile(resolve('fixtures/video', fixtures[0].file))])), formats: [MP4] });
   const track = (await input.getPrimaryVideoTrack())!;

@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { resolutionFlv } from '../../scripts/flv-resolution-fixture.ts';
 import { demuxFlv, FlvReader } from '../../shared/media/containers/flv-demux.ts';
 import { serializeFlvIndex, parseFlvIndex } from '../../shared/media/indexing/flv-index-cache.ts';
-import { openFlvMedia } from '../../src/flv-media.ts';
+import { openFlvMedia } from '../../src/media/decoding/flv-media.ts';
 
 for (const codec of ['h264', 'hevc']) {
   test(`FLV ${codec} configuration and resolution change survives playback, reverse seek and cache serialization`, async () => {

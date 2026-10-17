@@ -1,9 +1,9 @@
 import { rgbaDescription } from '../../shared/media/frame-description.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { FrameQueue, PlaybackMeasurements } from '../../src/playback.ts';
-import { assessPlayback } from '../../src/benchmark.ts';
-import { WorkerRpc } from '../../src/ffmpeg-media.ts';
+import { FrameQueue, PlaybackMeasurements } from '../../src/session/playback.ts';
+import { assessPlayback } from '../../src/session/benchmark.ts';
+import { WorkerRpc } from '../../src/media/decoding/ffmpeg-media.ts';
 const turn = () => new Promise<void>(r => setTimeout(r, 0));
 
 test('presentation ticks before the next frame cannot bypass queue backpressure', async () => {

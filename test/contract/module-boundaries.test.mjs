@@ -25,7 +25,7 @@ test('shared Node dependencies fail closed',()=>project({'shared/a.ts':"import f
 
 test('shared code rejects computed loads and browser packages',()=>{
   for(const code of ["import(modulePath)","require(modulePath)","import 'react-dom'"])
-    project({'shared/a.ts':code},root=>assert.throws(()=>checkModuleBoundaries(root),/shared code/));
+    project({'shared/a.ts':code},root=>assert.throws(()=>checkModuleBoundaries(root),/computed module load|host package/));
 });
 test('shared sources compile without a DOM type environment',()=>{
   execFileSync(process.execPath,[path.join(root,'node_modules/typescript/bin/tsc'),'-p',path.join(root,'tsconfig.shared.json')],{cwd:root,stdio:'pipe'});
@@ -39,3 +39,6 @@ test('shared edits invalidate prepared frontend builds',async()=>{
   const temp=mkdtempSync(path.join(os.tmpdir(),'vp-shared-build-'));
   try{mkdirSync(path.join(temp,'shared'));writeFileSync(path.join(temp,'shared/value.ts'),'export const value=1;');const before=await buildFingerprint(temp);writeFileSync(path.join(temp,'shared/value.ts'),'export const value=2;');assert.notEqual(await buildFingerprint(temp),before);}finally{rmSync(temp,{recursive:true,force:true});}
 });
+
+test('frontend root stays limited to application entrypoints',()=>project({'src/new-helper.ts':'export const x=1;'},root=>assert.throws(()=>checkModuleBoundaries(root),/unowned frontend root module/)));
+test('analysis modules declare metadata or bitstream responsibility',()=>project({'src/analysis/another-name.ts':'export const x=1;'},root=>assert.throws(()=>checkModuleBoundaries(root),/analysis must declare/)));

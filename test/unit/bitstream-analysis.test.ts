@@ -10,7 +10,7 @@ import {
   pictureId,
   validateResult,
 } from "../../shared/analysis/bitstream/contract.ts";
-import { AnalysisCache } from "../../src/bitstream-analysis/cache.ts";
+import { AnalysisCache } from "../../shared/analysis/bitstream/cache.ts";
 import type { AnalysisResult } from "../../shared/analysis/bitstream/contract.ts";
 const result = (): AnalysisResult => ({
   schema: 1,
@@ -142,7 +142,7 @@ test("cache uses persistent picture identity and releases detached copies", () =
 });
 test("coded crop and rotation share the presenter rectangle and have an exact inverse", async () => {
   const { codedToViewport, viewportToCoded } = await import(
-    "../../src/analysis-overlay/geometry.ts"
+    "../../src/ui/analysis/picture-overlay/geometry.ts"
   );
   for (const rotation of [0, 90, 180, 270]) {
     const token: any = {
@@ -168,7 +168,7 @@ test("coded crop and rotation share the presenter rectangle and have an exact in
   }
 });
 test("atomic cache rejects corrupted and incomplete chunks; quota evicts old pictures", async () => {
-  const { AnalysisStore } = await import("../../server/analysis/store.ts");
+  const { AnalysisStore } = await import("../../server/analysis/bitstream/store.ts");
   const { mkdtemp, writeFile, rm } = await import("node:fs/promises"),
     { tmpdir } = await import("node:os"),
     { join } = await import("node:path");
@@ -275,7 +275,7 @@ test('GOP grouping follows AU order, preserves open-GOP dependence and splits co
 });
 
 test('stream progress waits for transport completion after all pictures, and follows a growing duration', async () => {
-  const { BitstreamAnalysisService } = await import('../../src/bitstream-analysis/service.ts');
+  const { BitstreamAnalysisService } = await import('../../src/analysis/bitstream/service.ts');
   const service = new BitstreamAnalysisService(() => {});
   let release!: () => void, reached!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; }), pending = new Promise<void>(resolve => { reached = resolve; });
@@ -286,7 +286,7 @@ test('stream progress waits for transport completion after all pictures, and fol
     progress({ pictures: 1, totalPictures: 1, checkedUs: 1000, totalUs: 1000, indexComplete: true, waitingForIndex: false });
     reached(); await gate;
   };
-  const source = { info: {}, bitstreamFile: new Blob() } as import('../../src/media.ts').MediaSource;
+  const source = { info: {}, bitstreamFile: new Blob() } as import('../../src/media/source.ts').MediaSource;
   const run = service.requestStream(source, { mode: 'stream', sourceVersion: 'local:uuid', firstPtsUs: 0, durationUs: 100 }, 'A');
   await pending;
   assert.equal(service.state.state, 'pending'); assert.equal(service.state.stream!.pictures, 1);
@@ -502,7 +502,7 @@ test('DTS summaries survive eviction and never substitute PTS for missing DTS', 
 });
 
 test('parallel cache writers share quota and protect other jobs unread chunks', async () => {
-  const { AnalysisStore } = await import('../../server/analysis/store.ts');
+  const { AnalysisStore } = await import('../../server/analysis/bitstream/store.ts');
   const { mkdtemp, rm } = await import('node:fs/promises'), { tmpdir } = await import('node:os'), { join } = await import('node:path');
   const folder = await mkdtemp(join(tmpdir(), 'vp-parallel-cache-'));
   const a = 'a'.repeat(64), b = 'b'.repeat(64), protectedFiles = new Set<string>();
@@ -579,7 +579,7 @@ test('session preserves source completion across eviction, multiple picture task
     bitstreamFile:new Blob(['fixture']),
     async frameAt(time: number) { const au=Math.min(2,Math.floor(time/100)); return {kind:'video-sample',ptsUs:au*100,sourcePtsUs:100+au*100,durationUs:100,description:rgbaDescription(16,16),width:16,height:16,byteSize:1024,sourcePicture:{...result().picture,au},close(){}}; },
     async framesAfter(){return[];}, async *framesFrom(){}, dispose(){},
-  } as unknown as import('../../src/media.ts').MediaSource;
+  } as unknown as import('../../src/media/source.ts').MediaSource;
   const session = new ReviewSession((_slot,frame)=>{frame.presentedCommit=++commit;});
   try {
     await session.load('A',async()=>source);
@@ -617,7 +617,7 @@ test('session preserves source completion across eviction, multiple picture task
 
 
 test('remote queue wait does not consume decoder time and repeated polling never renews a stalled stream', async () => {
-  const { AnalysisPollingBudget } = await import('../../src/bitstream-analysis/task-pool.ts');
+  const { AnalysisPollingBudget } = await import('../../shared/analysis/bitstream/task-pool.ts');
   const picture = new AnalysisPollingBudget(false, 0);
   picture.observe({state:'queued',seq:0}, 60000);
   picture.observe({state:'running',seq:1}, 119000);
@@ -652,7 +652,7 @@ const localTransportCases = [
 ] as const;
 for (const { mode, failure } of localTransportCases) {
   test(`local analysis ${mode} ${failure} owns pending/timer/listeners without poisoning recovery`, async t => {
-    const { BitstreamAnalysisService } = await import('../../src/bitstream-analysis/service.ts');
+    const { BitstreamAnalysisService } = await import('../../src/analysis/bitstream/service.ts');
     const { getEventListeners } = await import('node:events');
     const workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
     const locationDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'location');
@@ -696,7 +696,7 @@ for (const { mode, failure } of localTransportCases) {
         if (fail && failure === 'index-provider') throw new Error('injected index provider failure');
         return Promise.resolve({ packets: 1, complete: true });
       },
-    } as unknown as import('../../src/media.ts').MediaSource;
+    } as unknown as import('../../src/media/source.ts').MediaSource;
     const wireResult = mode === 'stream' ? { ...result(), picture: { ...result().picture, au: 0 },
       gop: { startAu: 0, endAu: 1, configuration: 0, anchor: 'closed' as const } } : result();
     const token: import('../../shared/analysis/bitstream/contract.ts').PresentedFrameToken = {
@@ -780,8 +780,8 @@ test('viewport analysis selects intersecting GOPs using the requested PTS or DTS
 });
 
 test('pause and resume retain confirmed analysis coverage without borrowing another source generation', async t => {
-  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream.ts');
-  const { BitstreamAnalysisService } = await import('../../src/bitstream-analysis/service.ts');
+  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream-analysis.ts');
+  const { BitstreamAnalysisService } = await import('../../src/analysis/bitstream/service.ts');
   const { AnalysisFailure } = await import('../../shared/analysis/bitstream/failure.ts');
   let runs = 0, reached!: () => void, generation = 1;
   const pending = new Promise<void>(resolve => { reached = resolve; }), states: any[] = [];
@@ -811,7 +811,7 @@ test('pause and resume retain confirmed analysis coverage without borrowing anot
 
 
 test('automatic viewports preserve explicit work and coalesce to the latest window', async () => {
-  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream.ts');
+  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream-analysis.ts');
   const instance = {}, executed: number[] = [];
   const coordinator = new BitstreamSessionCoordinator({ track: () => ({ instance, generation: 1, available: true }), subscribeInvalidation: () => () => {}, changed() {} });
   let release!: () => void, started!: () => void, explicitSignal!: AbortSignal;
@@ -842,7 +842,7 @@ test('viewport reports index waiting before opening bounded metadata and cancels
 
 
 test('queued automatic work cannot cross a source generation or restart after cancellation', async () => {
-  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream.ts');
+  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream-analysis.ts');
   const instance = {}; let generation = 1;
   const coordinator = new BitstreamSessionCoordinator({ track: () => ({ instance, generation, available: true }), subscribeInvalidation: () => () => {}, changed() {} });
   let release!: () => void, started!: () => void;
@@ -856,7 +856,7 @@ test('queued automatic work cannot cross a source generation or restart after ca
 });
 
 test('a newer automatic window cancels active automatic work', async () => {
-  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream.ts');
+  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream-analysis.ts');
   const instance = {}, coordinator = new BitstreamSessionCoordinator({ track: () => ({ instance, generation: 1, available: true }), subscribeInvalidation: () => () => {}, changed() {} });
   let started!: () => void, oldSignal!: AbortSignal;
   const ready = new Promise<void>(r => { started = r; });

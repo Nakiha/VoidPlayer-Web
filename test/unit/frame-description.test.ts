@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { rgbaDescription, validateDescription } from '../../shared/media/frame-description.ts';
-import { readWasmFrame } from '../../src/wasm-frame.ts';
+import { readWasmFrame } from '../../src/media/decoding/wasm-frame.ts';
 test('frame boundary rejects invalid allocation, stride and crop before presentation',()=>{
   const description=rgbaDescription(256,128);
   assert.doesNotThrow(()=>validateDescription(description,256*128*4));
@@ -31,7 +31,7 @@ test('resource accounting preserves copy sizes and only tolerates unsupported pi
 });
 
 test('presentation uses delivered color, distinguishes unsupported software HDR, and resets on SDR', async () => {
-  const { presentationColor } = await import('../../src/presentation-color.ts');
+  const { presentationColor } = await import('../../src/presentation/presentation-color.ts');
   const hdr = { primaries: 'bt2020', transfer: 'pq', matrix: 'bt2020-ncl', fullRange: false };
   const sdr = { primaries: 'bt709', transfer: 'bt709', matrix: 'rgb', fullRange: true };
   for (const transfer of ['pq', 'hlg']) {

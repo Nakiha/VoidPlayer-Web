@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { openGopFlv } from '../../scripts/open-gop-fixture.ts';
-import { FlvEngine } from '../../src/flv-engine.ts';
+import { FlvEngine } from '../../src/media/decoding/flv-engine.ts';
 import { flvMediaTiming } from '../../shared/media/containers/flv-demux.ts';
 import { parseFlvIndex, serializeFlvIndex } from '../../shared/media/indexing/flv-index-cache.ts';
-import { openFlvMedia } from '../../src/flv-media.ts';
+import { openFlvMedia } from '../../src/media/decoding/flv-media.ts';
 
 const bytes = await openGopFlv();
 test('open-GOP completion and cached indexes preserve the startup clock and signed preroll', async () => {

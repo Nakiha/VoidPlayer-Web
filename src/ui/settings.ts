@@ -2,8 +2,8 @@ import { t, onLanguageChange, msg } from '../i18n.ts';
 import { settingsPanes } from './settings-shell.ts';
 import { matchesShortcut } from './shortcuts.ts';
 import { chartHoverStyle, setChartHoverStyle, CHART_HOVER_STYLE_EVENT, type ChartHoverStyle } from './chart-hover-style.ts';
-import { analysisConcurrency, setAnalysisConcurrency, ANALYSIS_CONCURRENCY_EVENT } from './analysis-concurrency.ts';
-import { MAX_ANALYSIS_CONCURRENCY } from '../bitstream-analysis/task-pool.ts';
+import { analysisConcurrency, setAnalysisConcurrency, ANALYSIS_CONCURRENCY_EVENT } from './analysis/concurrency.ts';
+import { MAX_ANALYSIS_CONCURRENCY } from '../../shared/analysis/bitstream/task-pool.ts';
 import { installChoiceMenu } from './choice-menu.ts';
 import { installSourceScrollbar } from './source-scrollbar.ts';
 

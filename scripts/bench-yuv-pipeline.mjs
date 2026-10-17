@@ -25,8 +25,8 @@ try{for(const channel of ['chrome','msedge'])for(let repeat=0;repeat<2;repeat++)
   await page.route('**/pipeline-test',r=>r.fulfill({headers:{'cross-origin-opener-policy':'same-origin','cross-origin-embedder-policy':'require-corp'},contentType:'text/html',body:'<input type="file"><div class="frame-stage"><canvas id="retain"></canvas></div><canvas id="output"></canvas>'}));
   await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/pipeline-test`);await page.locator('input').setInputFiles(resolve(process.argv[2]??'fixtures/video/mhw_hevc_fullrange_bt709_3s.mp4'));
   await page.evaluate(async()=>{
-   const {initializeGpuPresentation}=await import('/src/webgpu-presenter.ts');await initializeGpuPresentation([document.querySelector('#retain')]);
-   const {createExternalSurface}=await import('/src/webgpu-color-surface.mjs');
+   const {initializeGpuPresentation}=await import('/src/presentation/webgpu-presenter.ts');await initializeGpuPresentation([document.querySelector('#retain')]);
+   const {createExternalSurface}=await import('/src/presentation/webgpu-color-surface.mjs');
    const surface=await createExternalSurface(document.querySelector('#output'),undefined,'planes');
    surface.setGeometry({width:960,height:540,imageWidth:960,imageHeight:540,zoom:1,offsetX:0,offsetY:0,dpr:1});
    const workerURL=URL.createObjectURL(new Blob([`onmessage=async({data:{frame,buffer}})=>{try{
@@ -36,7 +36,7 @@ try{for(const channel of ['chrome','msedge'])for(let repeat=0;repeat<2;repeat++)
    }catch(error){postMessage({error:String(error)});}finally{frame.close();}};`],{type:'text/javascript'}));
    window.preparePipeline=async({backend,depth})=>{
     const file=document.querySelector('input').files[0];
-    const source=backend==='wasm'?await(await import('/src/packet-media.ts')).openPacketMedia('mp4',{file},file,{forceWasm:true}):await(await import('/src/media.ts')).openMedia(file,()=>{throw Error('Native decoder required');});
+    const source=backend==='wasm'?await(await import('/src/media/decoding/packet-media.ts')).openPacketMedia('mp4',{file},file,{forceWasm:true}):await(await import('/src/media/source.ts')).openMedia(file,()=>{throw Error('Native decoder required');});
     const warm=await source.frameAt(0);warm.close();
     const slots=Array.from({length:depth},(_,id)=>({id,worker:backend==='worker'?new Worker(workerURL):null,buffer:undefined}));
     window.pipelineCase={source,slots,backend,depth};return{info:source.info,isolated:crossOriginIsolated,hardwareConcurrency:navigator.hardwareConcurrency};

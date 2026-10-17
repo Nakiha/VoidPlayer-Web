@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { IndexStreamTransport } from '../../src/index-stream-transport.ts';
+import { IndexStreamTransport } from '../../src/media/indexing/index-stream-transport.ts';
 
 const encoder = new TextEncoder();
 

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { Input, BufferSource, ALL_FORMATS } from 'mediabunny';
-import { inspectVideoTrack, openMedia } from '../../src/media.ts';
+import { inspectVideoTrack, openMedia } from '../../src/media/source.ts';
 
 async function sample(name: string) {
   return new Input({ source: new BufferSource(await readFile(new URL(`../../fixtures/video/${name}`, import.meta.url))), formats: ALL_FORMATS });

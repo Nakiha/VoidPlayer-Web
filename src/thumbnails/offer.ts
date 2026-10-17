@@ -7,8 +7,8 @@ import type { SessionResources } from '../session/resources.ts';
 import { THUMB_FRAME_BUDGET_BYTES, THUMB_HOLD_MS } from '../../shared/thumbnails/contract.ts';
 import { thumbnailState } from './state.ts';
 import type { OfferResult } from './state.ts';
-import { presentationColor } from '../presentation-color.ts';
-import type { DecodedFrame } from '../media.ts';
+import { presentationColor } from '../presentation/presentation-color.ts';
+import type { DecodedFrame } from '../media/source.ts';
 
 export type { OfferResult };
 

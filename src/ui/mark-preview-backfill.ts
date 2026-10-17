@@ -1,7 +1,7 @@
-import { captureFrame } from '../presenter.ts';
+import { captureFrame } from '../presentation/presenter.ts';
 import { DEFAULT_ANNOTATION_COLOR } from '../../shared/review/annotation.ts';
 import { drawAnnotations } from './annotations/draw.ts';
-import { log } from '../log.ts';
+import { log } from '../logging/log.ts';
 import type { Slot } from '../../shared/review/model.ts';
 import type { ReviewSession } from '../session.ts';
 import { annotationThumbnails, thumbnailSignature } from './annotation-thumbnails.ts';

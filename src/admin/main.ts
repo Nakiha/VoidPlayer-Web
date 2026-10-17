@@ -1,6 +1,6 @@
 import { installAnalysisSettings } from './analysis.ts';
 import { requestError, rootReason } from './diagnostics.ts';
-import { apiError } from '../api-error.ts';
+import { apiError } from '../services/api-error.ts';
 import { mountLocalizedShell } from '../ui/localized-shell.ts';
 import { installLanguageControls } from '../ui/language.ts';
 import { installFocusFeedback } from '../ui/focus-feedback.ts';

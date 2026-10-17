@@ -6,8 +6,8 @@ import { Input, BlobSource, ALL_FORMATS, EncodedPacketSink } from 'mediabunny';
 import { RangeReader } from '../../shared/media/io/range-reader.ts';
 import { readMp4Configurations } from '../../shared/media/containers/mp4-config.ts';
 import { HevcPictureOrder, hevcDisplayOrder, recoveredHevcTimes } from '../../shared/media/codecs/hevc-timeline.ts';
-import { Mp4Engine } from '../../src/mp4-engine.ts';
-import { wasmFlvDecoder } from '../../src/flv-decoder.ts';
+import { Mp4Engine } from '../../src/media/decoding/mp4-engine.ts';
+import { wasmFlvDecoder } from '../../src/media/decoding/flv-decoder.ts';
 
 const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 test('HEVC recovery agrees with native FFmpeg picture order and preserves every frame through seeks', {timeout:120000}, async () => {

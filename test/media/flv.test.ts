@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { FlvEngine } from '../../src/flv-engine.ts';
+import { FlvEngine } from '../../src/media/decoding/flv-engine.ts';
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { demuxFlv, FlvReader } from '../../shared/media/containers/flv-demux.ts';
-import { openFlvMedia } from '../../src/flv-media.ts';
+import { openFlvMedia } from '../../src/media/decoding/flv-media.ts';
 
 const names = ['standard-h264', 'legacy-hevc', 'private-av1', 'private-vvc', 'enhanced-hevc', 'enhanced-av1', 'enhanced-vvc'];
 const core = new URL('../../public/vendor/voidplayer-core', import.meta.url);

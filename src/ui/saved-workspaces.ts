@@ -1,9 +1,9 @@
 import { t, msg, th, onLanguageChange, formatDate } from '../i18n.ts';
-import { currentActor, identityHealth } from '../identity.ts';
-import { SavedWorkspaceClient } from '../saved-workspaces.ts';
-import type { SavedWorkspace } from '../saved-workspaces.ts';
+import { currentActor, identityHealth } from '../services/identity.ts';
+import { SavedWorkspaceClient } from '../review/saved-workspaces.ts';
+import type { SavedWorkspace } from '../review/saved-workspaces.ts';
 import type { WorkspaceFile } from '../../shared/review/workspace-file.ts';
-import { prepareSharedWorkspace } from '../shared-workspace.ts';
+import { prepareSharedWorkspace } from '../review/shared-workspace.ts';
 import { icon } from './icons.ts';
 import { checkpointHistoryShell } from './checkpoint-history.ts';
 export function savedWorkspaceShell() {

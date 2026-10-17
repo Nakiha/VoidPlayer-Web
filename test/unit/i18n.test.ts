@@ -5,7 +5,7 @@ import { mediaDiagnostic, MediaOpenError } from '../../shared/media/io/media-err
 import { diagnosticMessage } from '../../src/ui/diagnostic-message.ts';
 import { setLanguage, t, th, msg } from '../../src/i18n.ts';
 import { formatTime } from '../../shared/review/model.ts';
-import { parseTimeInput } from '../../src/time-input.ts';
+import { parseTimeInput } from '../../shared/review/time-input.ts';
 
 test('locale normalization and initialization contract', () => {
  assert.equal(parseLanguagePreference('zh-TW'),'system');

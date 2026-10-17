@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { openAnalysisInput } from '../../shared/analysis/bitstream/input.ts';
 import { analyzePicture } from '../../shared/analysis/bitstream/runner.ts';
-import { Mp4Engine } from '../../src/mp4-engine.ts';
+import { Mp4Engine } from '../../src/media/decoding/mp4-engine.ts';
 const signal = new AbortController().signal;
 async function reader(file: string) { const data = await readFile(file); return { size: data.length, async read(o: number, n: number) { return data.subarray(o, o + n); }, close() {} }; }
 async function core() { return (await import(pathToFileURL(resolve('public/vendor/voidplayer-analysis/voidplayer-analysis.js')).href)).default(); }
@@ -106,7 +106,7 @@ test('real video-copy fMP4 with audio traf keeps video payload/config and playba
 
 for (const codec of ['h264', 'hevc', 'vvc']) test(`media library fMP4 ${codec}: independent stream index, cache restart and corrupt-hole repair`, async () => {
   const { MediaLibraryIndex } = await import('../../server/library.ts');
-  const { AnalysisScheduler } = await import('../../server/analysis/scheduler.ts');
+  const { AnalysisScheduler } = await import('../../server/analysis/bitstream/scheduler.ts');
   const { mkdtemp, rm, mkdir, copyFile, writeFile } = await import('node:fs/promises');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');

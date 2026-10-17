@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openMediaFromUrl } from '../../src/media.ts';
+import { openMediaFromUrl } from '../../src/media/source.ts';
 
 test('HTTP fallback probes bounded bytes then passes URL and metadata without a whole-file memory cap', async () => {
   const meta = { name: 'test.mp4', size: 10 * 1024 ** 3, lastModified: 1 };

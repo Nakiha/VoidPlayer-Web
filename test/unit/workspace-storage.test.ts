@@ -1,11 +1,11 @@
 import 'fake-indexeddb/auto';
 import { test } from 'node:test';
 import { IDBFactory } from 'fake-indexeddb';
-import { AnnotationStorage } from '../../src/annotation-storage.ts';
-import { LocalDatabase } from '../../src/local-database.ts';
+import { AnnotationStorage } from '../../src/review/annotation-storage.ts';
+import { LocalDatabase } from '../../src/storage/local-database.ts';
 import assert from 'node:assert/strict';
 import { getLocalThumbnail, putLocalThumbnail, closeThumbnailDatabase, LOCAL_THUMB_BYTES, LOCAL_THUMB_COUNT } from '../../src/thumbnails/local-store.ts';
-import { WorkspaceCheckpoints, checkpointTabId } from '../../src/workspace-checkpoint.ts';
+import { WorkspaceCheckpoints, checkpointTabId } from '../../src/review/workspace-checkpoint.ts';
 import { Viewport } from '../../shared/presentation/viewport.ts';
 import type { WorkspaceFile } from '../../shared/review/workspace-file.ts';
 const workspace = (): WorkspaceFile => ({ schema: 'voidplayer-workspace', version: 1, generatedAt: new Date().toISOString(), serverUrl: 'http://localhost/', positionUs: 0, tracks: [], media: [], marks: [], viewport: new Viewport().snapshot() });

@@ -1,8 +1,8 @@
 import { t, onLanguageChange, msg } from '../i18n.ts';
 import { chooseInitialIdentity } from './identity-onboarding.ts';
 import { installChoiceMenu } from './choice-menu.ts';
-import { chooseIdentity, currentActor, identityHealth } from '../identity.ts';
-import type { Actor } from '../identity.ts';
+import { chooseIdentity, currentActor, identityHealth } from '../services/identity.ts';
+import type { Actor } from '../services/identity.ts';
 
 export function installIdentitySettings(setActor: (actor: Actor | null) => void) {
   const life = new AbortController();

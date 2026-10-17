@@ -10,15 +10,15 @@ import {Worker} from 'node:worker_threads';
 import {MediaLibraryIndex} from '../../server/library.ts';
 import {createMediaServer} from '../../server/app.ts';
 import {JS_TS_MEDIA_INDEX_IDENTITY,JS_MATROSKA_MEDIA_INDEX_IDENTITY} from '../../shared/media/indexing/media-index-identity.ts';
-import {MediaIndexClient} from '../../src/media-index-client.ts';
-import {WorkerRpc} from '../../src/worker-rpc.ts';
-import type {PacketCommands} from '../../src/worker-protocol.ts';
-import {loadServerJsIndex} from '../../src/js-packet-index-client.ts';
+import {MediaIndexClient} from '../../src/media/indexing/media-index-client.ts';
+import {WorkerRpc} from '../../src/media/workers/worker-rpc.ts';
+import type {PacketCommands} from '../../src/media/workers/worker-protocol.ts';
+import {loadServerJsIndex} from '../../src/media/indexing/js-packet-index-client.ts';
 import {TsCombinationNotMigrated} from '../../shared/media/containers/ts-packet-source.ts';
 import {MatroskaPacketSource} from '../../shared/media/containers/matroska-packet-source.ts';
 import {RangeReader} from '../../shared/media/io/range-reader.ts';
-import {JsContainerEngine} from '../../src/js-container-engine.ts';
-import {ownLibraryIndexReference} from '../../src/library-index-reference.ts';
+import {JsContainerEngine} from '../../src/media/decoding/js-container-engine.ts';
+import {ownLibraryIndexReference} from '../../src/media/indexing/library-index-reference.ts';
 
 test('an unregistered HTTP service with a library-shaped URL cannot authorize dropped and renumbered AU records',async()=>{
  const temp=await mkdtemp(join(tmpdir(),'vp-unregistered-index-')),file=join(temp,'twelve.webm'),id='a'.repeat(24),version='b'.repeat(24),sourceVersion=`${id}@${version}`;
@@ -65,7 +65,7 @@ test('JS library indexes persist across server and consumer Worker restarts; cor
   const e=library!.browse().entries.find(e=>e.name==='hevc.mkv')!,version=`${e.id}@${e.version}`;
   // Node has no document origin. This fixture explicitly hosts the real
   // library application at base, including its fresh consumer Worker's origin.
-  const worker=new Worker(new URL('data:text/javascript,'+encodeURIComponent(`globalThis.location={origin:${JSON.stringify(base)},href:${JSON.stringify(base+'/')}};await import(${JSON.stringify(new URL('../../src/packet-worker.ts',import.meta.url).href)});`))),rpc=new WorkerRpc<PacketCommands>(worker as unknown as globalThis.Worker);
+  const worker=new Worker(new URL('data:text/javascript,'+encodeURIComponent(`globalThis.location={origin:${JSON.stringify(base)},href:${JSON.stringify(base+'/')}};await import(${JSON.stringify(new URL('../../src/media/decoding/packet-worker.ts',import.meta.url).href)});`))),rpc=new WorkerRpc<PacketCommands>(worker as unknown as globalThis.Worker);
   try{
    const input={url:`${base}/api/media/${e.id}?v=${e.version}`,size:e.size,library:ownLibraryIndexReference(e.id,e.version!)},prepared=await rpc.call('prepare-js',{input,sourceVersion:version,format:'matroska',persistent:true});
    if(!prepared.admitted)assert.fail(prepared.reason);

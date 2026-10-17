@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { connectionTarget } from '../../src/connection.ts';
+import { connectionTarget } from '../../src/services/connection.ts';
 import { localRequest, setClientAddress } from '../../server/reveal.ts';
 import type { IncomingMessage } from 'node:http';
 

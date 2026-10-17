@@ -1,14 +1,14 @@
 import { t, msg, onLanguageChange } from '../i18n.ts';
 import type { ReviewSession } from '../session.ts';
-import { AnnotationStorage } from '../annotation-storage.ts';
-import type { AnnotationDraft } from '../annotation-storage.ts';
-import { AnnotationClient } from '../annotation-client.ts';
+import { AnnotationStorage } from '../review/annotation-storage.ts';
+import type { AnnotationDraft } from '../review/annotation-storage.ts';
+import { AnnotationClient } from '../review/annotation-client.ts';
 import type { AnnotationDocument, AnnotationRecord } from '../../shared/review/annotation-record.ts';
 import { annotationMediaKey } from '../../shared/review/annotation-record.ts';
-import { currentActor, identityHealth } from '../identity.ts';
+import { currentActor, identityHealth } from '../services/identity.ts';
 import { randomUUID } from '../../shared/utils/uuid.ts';
-import { AnnotationPendingQueue } from '../annotation-pending.ts';
-import type { PendingEdit } from '../annotation-pending.ts';
+import { AnnotationPendingQueue } from '../review/annotation-pending.ts';
+import type { PendingEdit } from '../review/annotation-pending.ts';
 import { annotationThumbnails, thumbnailSignature } from './annotation-thumbnails.ts';
 import { publishMarkPreview } from './mark-preview-publish.ts';
 

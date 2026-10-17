@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { groupSamples, correspondenceCoverage } from '../../src/analysis/grouping.ts';
-import type { GroupSampleRef } from '../../src/analysis/grouping.ts';
+import { groupSamples, correspondenceCoverage } from '../../shared/analysis/metadata/grouping.ts';
+import type { GroupSampleRef } from '../../shared/analysis/metadata/grouping.ts';
 
 const ref = (
   sampleId: string, axisUs: number, ordinal = 0, slotExtra = '',

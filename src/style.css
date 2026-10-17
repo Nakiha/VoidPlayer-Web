@@ -1,4 +1,4 @@
-@import './button-feedback.css';
+@import './ui/button-feedback.css';
 
 /* Layout and interaction only; appearance and density come from themes/.
    Keep standard backdrop-filter after its prefix so minification preserves it. */

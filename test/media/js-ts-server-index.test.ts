@@ -12,7 +12,7 @@ import { createMediaServer } from '../../server/app.ts';
 import { TsPacketSource } from '../../shared/media/containers/ts-packet-source.ts';
 import { parseTsPacketIndex } from '../../shared/media/indexing/ts-packet-index.ts';
 import { JS_TS_MEDIA_INDEX_IDENTITY, parseMediaIndexIdentity } from '../../shared/media/indexing/media-index-identity.ts';
-import { MediaIndexClient } from '../../src/media-index-client.ts';
+import { MediaIndexClient } from '../../src/media/indexing/media-index-client.ts';
 import { prepareFrameIndex } from '../../server/frame-index-store.ts';
 
 const fixture = () => readFile('fixtures/ts-analysis/h264-static.ts');

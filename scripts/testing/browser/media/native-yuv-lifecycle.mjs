@@ -11,7 +11,7 @@ try{
  await page.route('**/native-yuv-lifecycle',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><title>Native readback lifecycle</title>'}));
  await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/native-yuv-lifecycle`);
  const result=await page.evaluate(async()=>{
-  const {nativeYuvSource}=await import('/src/native-yuv-source.ts');
+  const {nativeYuvSource}=await import('/src/media/decoding/native-yuv-source.ts');
   const {rgbaDescription}=await import('/shared/media/frame-description.ts');
   const NativeWorker=globalThis.Worker,workers=[],transfers=[],samples=[],readbacks=[];let upstreamDisposed=0,hold=false,releaseHeld;
   class TrackedWorker extends NativeWorker{

@@ -6,10 +6,10 @@ import { THUMB_HOLD_MS, THUMB_MAX_BYTES, THUMB_MAX_EDGE } from '../../shared/thu
 import { thumbnailState } from './state.ts';
 import { settleOffer } from './offer.ts';
 import type { AcceptedOffer } from './offer.ts';
-import { renderThumbnailCanvas } from '../presenter.ts';
+import { renderThumbnailCanvas } from '../presentation/presenter.ts';
 import { putLocalThumbnail } from './local-store.ts';
 import { publishLocalThumbnail, uploadThumbnail } from './client.ts';
-import { log } from '../log.ts';
+import { log } from '../logging/log.ts';
 import { encodeThumbnailCanvas } from './encode.ts';
 
 let queueDepth = 0;

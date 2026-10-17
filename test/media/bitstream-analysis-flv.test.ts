@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 import { openAnalysisInput } from '../../shared/analysis/bitstream/input.ts';
 import { analyzePicture, analyzeRange, analyzeStream } from '../../shared/analysis/bitstream/runner.ts';
 import { pictureId } from '../../shared/analysis/bitstream/contract.ts';
-import { FlvEngine } from '../../src/flv-engine.ts';
+import { FlvEngine } from '../../src/media/decoding/flv-engine.ts';
 import { FLV_MEDIA_INDEX_IDENTITY } from '../../shared/media/indexing/media-index-identity.ts';
 import { validateStream } from '../../shared/analysis/bitstream/contract.ts';
 const signal = new AbortController().signal;
@@ -147,7 +147,7 @@ test('duplicate FLV source timestamps reject analysis and actual playback omits 
 
 for (const codec of ['h264', 'hevc', 'vvc']) test(`media library FLV ${codec}: independent stream index, cache restart and corrupt-hole repair`, async () => {
   const { MediaLibraryIndex } = await import('../../server/library.ts');
-  const { AnalysisScheduler } = await import('../../server/analysis/scheduler.ts');
+  const { AnalysisScheduler } = await import('../../server/analysis/bitstream/scheduler.ts');
   const { mkdtemp, rm, mkdir, copyFile, writeFile } = await import('node:fs/promises');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
@@ -219,7 +219,7 @@ test('FLV adapter preserves anomalous DTS and signed CTS instead of repairing th
 });
 
 test('library FLV frontier uses validated scanner progress and a parsed final document, never FFmpeg binary records', async () => {
-  const { libraryAnalysisIndex } = await import('../../server/analysis/index.ts');
+  const { libraryAnalysisIndex } = await import('../../server/analysis/bitstream/index.ts');
   const { serializeFlvIndex } = await import('../../shared/media/indexing/flv-index-cache.ts');
   const { demuxFlv } = await import('../../shared/media/containers/flv-demux.ts');
   const source = await reader('fixtures/flv-analysis/legacy-h264.flv');

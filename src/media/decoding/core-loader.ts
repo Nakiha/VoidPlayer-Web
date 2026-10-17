@@ -1,5 +1,5 @@
 import {instantiateCore} from '../../../shared/wasm/core.ts';
-import { coreAssetUrl } from '../../core-url.ts';
+import { coreAssetUrl } from './core-url.ts';
 export async function loadCore(glueURL: string, binary?: Uint8Array) {
   const mod = await import(/* @vite-ignore */ glueURL);
   if (!binary) {

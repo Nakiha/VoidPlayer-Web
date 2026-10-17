@@ -1,6 +1,6 @@
 import { t, msg } from '../i18n.ts';
-import { mediaUrl } from '../library.ts';
-import type { LibraryEntry } from '../library.ts';
+import { mediaUrl } from '../services/library.ts';
+import type { LibraryEntry } from '../services/library.ts';
 import { mediaActionUrl } from '../../shared/media/io/media-reference.ts';
 import { libraryLocationExpression } from './library-link.ts';
 import { installContextMenu } from './context-menu.ts';

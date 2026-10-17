@@ -41,13 +41,13 @@ try {
     await page.route('**/native-hdr-test',r=>r.fulfill({contentType:'text/html',body:'<article class="frame-stage"><canvas id="source"></canvas></article>'}));
     await page.goto(`http://127.0.0.1:${vite.httpServer.address().port}/native-hdr-test`);
     const result=await page.evaluate(async({fixtures,width,height})=>{
-      const {setColorMode}=await import('/src/color-mode.ts');setColorMode('browser');
+      const {setColorMode}=await import('/src/media/policy/color-mode.ts');setColorMode('browser');
       const {setColorOutput,defaultColorOutput}=await import('/shared/color/color-output.ts');setColorOutput({...defaultColorOutput(),target:'hdr'});
-      const {createExternalSurface}=await import('/src/webgpu-color-surface.mjs');
+      const {createExternalSurface}=await import('/src/presentation/webgpu-color-surface.mjs');
       const {VideoSample}=await import('/node_modules/mediabunny/dist/modules/src/index.js');
       const {sampleDescription}=await import('/shared/media/frame-description.ts');
-      const {initializeGpuPresentation,gpuGeometry,disposeGpuPresentation}=await import('/src/webgpu-presenter.ts');
-      const {paintFrame}=await import('/src/presenter.ts');
+      const {initializeGpuPresentation,gpuGeometry,disposeGpuPresentation}=await import('/src/presentation/webgpu-presenter.ts');
+      const {paintFrame}=await import('/src/presentation/presenter.ts');
       const source=document.querySelector('#source'),surface=await createExternalSurface(document.createElement('canvas'));
       await initializeGpuPresentation([source]);
       const rows=[],measure=async(frame,label)=>{

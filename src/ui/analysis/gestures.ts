@@ -1,12 +1,12 @@
 import type { ReviewSession } from '../../session.ts';
 import type { Slot } from '../../../shared/review/model.ts';
 import type { AnalysisResult } from '../../../shared/analysis/metadata/types.ts';
-import type { DirectTarget, InspectionState } from '../../analysis/inspection.ts';
-import { panTimeRange, zoomTimeRange } from '../../analysis/projection.ts';
+import type { DirectTarget, InspectionState } from '../../../shared/analysis/metadata/inspection.ts';
+import { panTimeRange, zoomTimeRange } from '../../../shared/analysis/metadata/projection.ts';
 import { t, msg } from '../../i18n.ts';
-import { plotGeometry, tOf, xOf } from '../analysis-canvas.ts';
-import type { CanvasModel } from '../analysis-canvas.ts';
-import type { AnalysisGlyph, SampleGlyph, BucketGlyph } from '../analysis-geometry.ts';
+import { plotGeometry, tOf, xOf } from './canvas.ts';
+import type { CanvasModel } from './canvas.ts';
+import type { AnalysisGlyph, SampleGlyph, BucketGlyph } from './geometry.ts';
 import type { createInspectionController } from './inspection-state.ts';
 import { MIN_ANALYSIS_SPAN_US as MIN_SPAN_US } from './shared.ts';
 import type { AnalysisAction } from './shared.ts';

@@ -1,4 +1,4 @@
-import {openPacketMedia} from '../../src/packet-media.ts';
+import {openPacketMedia} from '../../src/media/decoding/packet-media.ts';
 import {createHash} from 'node:crypto';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -6,8 +6,8 @@ import {execFileSync} from 'node:child_process';
 import {mkdtemp,readFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {openFFmpegMedia} from '../../src/ffmpeg-media.ts';
-import {openFlvMedia} from '../../src/flv-media.ts';
+import {openFFmpegMedia} from '../../src/media/decoding/ffmpeg-media.ts';
+import {openFlvMedia} from '../../src/media/decoding/flv-media.ts';
 
 // Keep encoded pictures unchanged while exercising both Matroska codec mappings.
 // Rebuild element lengths and omit offset-based seek tables after rewriting tracks.

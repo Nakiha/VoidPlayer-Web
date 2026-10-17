@@ -1,9 +1,9 @@
 import type { Slot } from '../../../shared/review/model.ts';
 import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisResult } from '../../../shared/analysis/metadata/types.ts';
 import { shouldBucketize } from '../../../shared/analysis/metadata/statistics.ts';
-import { bucketWidthFor, canSatisfy, clampPixelWidth } from '../../analysis/view-cache.ts';
-import type { ViewCacheEntry } from '../../analysis/view-cache.ts';
-import { LOCAL_RATE_WINDOW_US } from '../../analysis/inspection.ts';
+import { bucketWidthFor, canSatisfy, clampPixelWidth } from '../../../shared/analysis/metadata/view-cache.ts';
+import type { ViewCacheEntry } from '../../../shared/analysis/metadata/view-cache.ts';
+import { LOCAL_RATE_WINDOW_US } from '../../../shared/analysis/metadata/inspection.ts';
 
 export interface AnalysisQueryTrack {
   slot: Slot; mediaId: string; offsetUs: number; durationUs: number; sourceGen: number;

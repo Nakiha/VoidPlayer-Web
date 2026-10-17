@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { bucketWidthFor, canSatisfy } from '../../src/analysis/view-cache.ts';
-import type { ViewCacheEntry } from '../../src/analysis/view-cache.ts';
+import { bucketWidthFor, canSatisfy } from '../../shared/analysis/metadata/view-cache.ts';
+import type { ViewCacheEntry } from '../../shared/analysis/metadata/view-cache.ts';
 
 const base: ViewCacheEntry = {
   slot: 'A', sourceVersion: 'm@10', indexRevision: 10,

@@ -1,11 +1,11 @@
 import { requestError, cacheName, cacheDetail } from './diagnostics.ts';
-import { apiError } from '../api-error.ts';
+import { apiError } from '../services/api-error.ts';
 import { localizedText, localizedAttribute, type LocalizedValue } from '../ui/live-localization.ts';
 import { formatDate, formatNumber, t, th, msg } from '../i18n.ts';
 import type {CacheEntry,CacheKind} from '../../shared/service/caches.ts';
 import type {CacheOverview as Overview} from '../../shared/service/admin.ts';
 import { icon } from '../ui/icons.ts';
-import { frameIndexTools } from '../frame-index-admin.ts';
+import { frameIndexTools } from '../services/frame-index.ts';
 import { emptyState } from './presentation.ts';
 
 type Page = { entries: CacheEntry[]; nextOffset: number | null; count: number };

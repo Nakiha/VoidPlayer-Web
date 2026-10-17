@@ -28,8 +28,8 @@ const fileStat = statSync(inputPath);
 // diagnostic full decode from the retired C progressive-prefix implementation.
 const signatureFd=openSync(inputPath,'r'),signature=Buffer.alloc(1);try{readSync(signatureFd,signature,0,1,0);}finally{closeSync(signatureFd);}
 if(signature[0]===0x47){
-  const {JsContainerEngine}=await import('../src/js-container-engine.ts');
-  const {wasmFlvDecoder}=await import('../src/flv-decoder.ts');
+  const {JsContainerEngine}=await import('../src/media/decoding/js-container-engine.ts');
+  const {wasmFlvDecoder}=await import('../src/media/decoding/flv-decoder.ts');
   const directory=process.env.WASM_CORE_DIR||path.resolve('public/vendor/voidplayer-core'),url=pathToFileURL(path.join(directory,'voidplayer-core.js')).href,binary=readFileSync(path.join(directory,'voidplayer-core.wasm'));
   const run=async diagnostic=>{
     const fd=openSync(inputPath,'r');let bytesRead=0,reads=0,decoded=0,softwareOpens=0;

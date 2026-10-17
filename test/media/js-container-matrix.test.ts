@@ -5,7 +5,7 @@ import {resolve,join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {pathToFileURL} from 'node:url';
 import {execFileSync} from 'node:child_process';
-import {JsContainerEngine} from '../../src/js-container-engine.ts';
+import {JsContainerEngine} from '../../src/media/decoding/js-container-engine.ts';
 import {openJsPacketAnalysisInput} from '../../shared/analysis/bitstream/js-ts-input.ts';
 import {analyzePicture} from '../../shared/analysis/bitstream/runner.ts';
 import {jsPictureStream} from '../../shared/media/containers/matroska-packet-index.ts';
@@ -17,9 +17,9 @@ import {MatroskaPacketSource} from '../../shared/media/containers/matroska-packe
 import {TsCombinationNotMigrated} from '../../shared/media/containers/ts-packet-source.ts';
 import {RangeReader} from '../../shared/media/io/range-reader.ts';
 import {MediaOpenError} from '../../shared/media/io/media-errors.ts';
-import {wasmFlvDecoder} from '../../src/flv-decoder.ts';
+import {wasmFlvDecoder} from '../../src/media/decoding/flv-decoder.ts';
 import {IDBFactory,IDBDatabase} from 'fake-indexeddb';
-import {localJsSourceVersion,saveLocalJsIndex,loadLocalJsIndex,JS_PACKET_CACHE_DATABASE} from '../../src/js-packet-index-cache.ts';
+import {localJsSourceVersion,saveLocalJsIndex,loadLocalJsIndex,JS_PACKET_CACHE_DATABASE} from '../../src/media/indexing/js-packet-index-cache.ts';
 
 const names=['h264.ts','hevc.ts','h264.mkv','hevc.mkv','hevc10.ts','hevc10.mkv','hevc-audio.mkv','vp8.webm','vp9.webm'] as const;
 test('real 20-picture VP9 WebM rejects a later invisible SimpleBlock during initial admission',async()=>{

@@ -13,9 +13,9 @@ try{for(const channel of ['chrome','msedge']){
   await page.route('**/readback-test',r=>r.fulfill({headers:{'cross-origin-opener-policy':'same-origin','cross-origin-embedder-policy':'require-corp'},contentType:'text/html',body:'<input type="file"><div class="frame-stage"><canvas></canvas></div>'}));
   await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/readback-test`);await page.locator('input').setInputFiles(file);
   const results=await page.evaluate(async()=>{
-   const {openMedia}=await import('/src/media.ts');
-   const {initializeGpuPresentation,disposeGpuPresentation}=await import('/src/webgpu-presenter.ts');
-   const {createExternalSurface}=await import('/src/webgpu-color-surface.mjs');
+   const {openMedia}=await import('/src/media/source.ts');
+   const {initializeGpuPresentation,disposeGpuPresentation}=await import('/src/presentation/webgpu-presenter.ts');
+   const {createExternalSurface}=await import('/src/presentation/webgpu-color-surface.mjs');
    await initializeGpuPresentation([document.querySelector('canvas')]); // retain native samples
    const source=await openMedia(document.querySelector('input').files[0],()=>{throw Error('Native decode required');});
    const canvas=document.createElement('canvas');canvas.width=640;canvas.height=360;document.body.append(canvas);

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { colorLabel, ffmpegColorInfo, rangeLabel } from '../../src/media-metadata.ts';
+import { colorLabel, ffmpegColorInfo, rangeLabel } from '../../src/media/metadata.ts';
 
 test('FFmpeg range enums distinguish limited TV, full PC and unspecified metadata', () => {
   assert.equal(rangeLabel(ffmpegColorInfo({colorRange:1}).fullRange), '有限范围 (TV)');

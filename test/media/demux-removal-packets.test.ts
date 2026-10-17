@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
 import {resolve} from 'node:path';
 import {execFileSync} from 'node:child_process';
-import {JsContainerEngine} from '../../src/js-container-engine.ts';
+import {JsContainerEngine} from '../../src/media/decoding/js-container-engine.ts';
 import {visiblePixelHash} from '../helpers/visible-pixels.ts';
 import {nativeFrames,nativeVisibleHash} from '../helpers/media/native-pixels.ts';
 
@@ -33,7 +33,7 @@ for(const [name,format,count] of [
 });
 
 for(const [name,codec] of [['mpeg4.mp4','mpeg4'],['mjpeg.mov','mjpeg'],['prores.mov','prores']] as const)test(`JS ${name}: preserve existing decoder with sample-table packets and native pixel oracle`,async()=>{
- const {Mp4Engine}=await import('../../src/mp4-engine.ts'),path=resolve('fixtures/demux-removal',name),bytes=await readFile(path),engine=new Mp4Engine({file:new Blob([bytes])});
+ const {Mp4Engine}=await import('../../src/media/decoding/mp4-engine.ts'),path=resolve('fixtures/demux-removal',name),bytes=await readFile(path),engine=new Mp4Engine({file:new Blob([bytes])});
  try{
   const opened=await engine.open(pathToFileURL(resolve('public/vendor/voidplayer-core/voidplayer-core.js')).href,await readFile('public/vendor/voidplayer-core/voidplayer-core.wasm'),true);
   assert.equal(opened.codec,codec);assert.equal(opened.times.length,24);

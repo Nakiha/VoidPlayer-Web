@@ -22,8 +22,8 @@ try{
   await page.route(/\/gpu-presentation-test(?:\?.*)?$/,r=>r.fulfill({contentType:'text/html',body:'<div class="frame-stage"><canvas id="source"></canvas></div>'}));
   await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/gpu-presentation-test${unified?'?colorPipeline=unified':''}`);
   const report=await page.evaluate(async(unified)=>{
-   const {initializeGpuPresentation,keepNativeGpuResource}=await import('/src/webgpu-presenter.ts');
-   const {paintFrame,captureFrame,setPresentationGeometry,disposePresentation}=await import('/src/presenter.ts');
+   const {initializeGpuPresentation,keepNativeGpuResource}=await import('/src/presentation/webgpu-presenter.ts');
+   const {paintFrame,captureFrame,setPresentationGeometry,disposePresentation}=await import('/src/presentation/presenter.ts');
    const {VideoSample}=await import('/node_modules/mediabunny/dist/modules/src/index.js');
    const {sampleDescription,rgbaDescription}=await import('/shared/media/frame-description.ts');
    const adapter=await navigator.gpu?.requestAdapter();
@@ -97,7 +97,7 @@ try{
    await new Promise(resolve=>setTimeout(resolve,50));
    if(source.closest('.frame-stage').querySelectorAll('.frame-presentation').length!==1||!source.classList.contains('frame-source'))throw new Error('GPU handoff retained a GL surface or late context loss reset source visibility');
    disposePresentation();
-   const {readLogs}=await import('/src/log.ts');
+   const {readLogs}=await import('/src/logging/log.ts');
    return{environment,logs:await readLogs({limit:50}),results,depths,colorVectors,chromaCases,executor,contract,fallback,resumedExecutor,remaining:document.querySelectorAll('.frame-presentation').length};
   },unified);
   evidence.results.push({name,version:browser.version(),report});

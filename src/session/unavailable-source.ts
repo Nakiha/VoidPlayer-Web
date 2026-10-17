@@ -1,5 +1,5 @@
 import type { MediaInfo } from '../../shared/review/model.ts';
-import type { MediaSource } from '../media.ts';
+import type { MediaSource } from '../media/source.ts';
 /** A reference placeholder owns no decoder and never fabricates a frame. */
 export function unavailableSource(info: MediaInfo): MediaSource {
   const unavailable = () => { throw new Error('片源待重新关联。'); };

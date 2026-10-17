@@ -887,10 +887,10 @@ try {
     const markup=await page.locator('body').innerHTML();
     const entry=path.join(temporary,'analysis-recovery.ts');
     await writeFile(entry, `export {ReviewSession} from ${JSON.stringify(path.join(root,'src/session.ts'))};
-      export {BitstreamAnalysisService} from ${JSON.stringify(path.join(root,'src/bitstream-analysis/service.ts'))};
+      export {BitstreamAnalysisService} from ${JSON.stringify(path.join(root,'src/analysis/bitstream/service.ts'))};
       export {AnalysisFailure} from ${JSON.stringify(path.join(root,'shared/analysis/bitstream/failure.ts'))};
       export {installBitstreamControls} from ${JSON.stringify(path.join(root,'src/ui/bitstream-controls.ts'))};
-      export {installAnalysisPanel} from ${JSON.stringify(path.join(root,'src/ui/analysis-panel.ts'))};
+      export {installAnalysisPanel} from ${JSON.stringify(path.join(root,'src/ui/analysis/panel.ts'))};
       export {rgbaDescription} from ${JSON.stringify(path.join(root,'shared/media/frame-description.ts'))};
       export {packLegacy,summaryOf} from ${JSON.stringify(path.join(root,'shared/analysis/bitstream/products.ts'))};`);
     const fixture=await buildFixture({configFile:false,logLevel:'silent',build:{write:false,minify:false,

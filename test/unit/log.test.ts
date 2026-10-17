@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SessionLog, logData, readLogPage, traceOperation, operationContext, sessionLog, log, exportLog, withLogDescription, LOG_DESCRIPTION_LIMIT } from '../../src/log.ts';
-import type { LogDocument, LogStorage } from '../../src/log.ts';
-import { retainLogs } from '../../src/log-storage.ts';
+import { SessionLog, logData, readLogPage, traceOperation, operationContext, sessionLog, log, exportLog, withLogDescription, LOG_DESCRIPTION_LIMIT } from '../../src/logging/log.ts';
+import type { LogDocument, LogStorage } from '../../src/logging/log.ts';
+import { retainLogs } from '../../src/logging/storage.ts';
 import { reviewTools } from '../../src/agent.ts';
 import { ReviewSession } from '../../src/session.ts';
 

@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { computeLayout, desiredHeight, drawAnalysis, drawTimeAxis, xOf } from '../../src/ui/analysis-canvas.ts';
-import type { CanvasModel } from '../../src/ui/analysis-canvas.ts';
-import { groupSamples } from '../../src/analysis/grouping.ts';
-import { layoutMergedSamples } from '../../src/ui/analysis-geometry.ts';
+import { computeLayout, desiredHeight, drawAnalysis, drawTimeAxis, xOf } from '../../src/ui/analysis/canvas.ts';
+import type { CanvasModel } from '../../src/ui/analysis/canvas.ts';
+import { groupSamples } from '../../shared/analysis/metadata/grouping.ts';
+import { layoutMergedSamples } from '../../src/ui/analysis/geometry.ts';
 
 function mockCtx(recorded: { fillRect: number[][]; fillText: unknown[][]; lineTo?: number[][] }) {
   return new Proxy({}, {

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AnnotationPendingQueue } from '../../src/annotation-pending.ts';
-import type { PendingEdit } from '../../src/annotation-pending.ts';
+import { AnnotationPendingQueue } from '../../src/review/annotation-pending.ts';
+import type { PendingEdit } from '../../src/review/annotation-pending.ts';
 
 function deferred<T>() {
   let resolve!: (v: T) => void, reject!: (e: unknown) => void;

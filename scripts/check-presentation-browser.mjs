@@ -11,7 +11,7 @@ try {
     await page.route('**/presentation-test', route => route.fulfill({ contentType: 'text/html', body: '<div class="frame-stage"><canvas id="source" width="2" height="2"></canvas></div>' }));
     await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/presentation-test`);
     const result = await page.evaluate(async () => {
-      const { paintFrame, captureFrame, setPresentationGeometry, disposePresentation } = await import('/src/presenter.ts');
+      const { paintFrame, captureFrame, setPresentationGeometry, disposePresentation } = await import('/src/presentation/presenter.ts');
       const { VideoSample } = await import('/node_modules/mediabunny/dist/modules/src/index.js');
       const source = document.getElementById('source');
       const geometry = { width: 200, height: 200, imageWidth: 200, imageHeight: 200, zoom: 1, offsetX: 0, offsetY: 0, dpr: 1 };
@@ -57,7 +57,7 @@ try {
     assert.equal(result.surfaces, 0);
     console.log(`PASS ${name}: direct native/RGBA upload, lazy pixels, rotation, buffer recycling, 2D fallback and cleanup`);
     const hdrResults = await page.evaluate(async () => {
-      const { paintFrame, captureFrame, setPresentationGeometry, disposePresentation } = await import('/src/presenter.ts');
+      const { paintFrame, captureFrame, setPresentationGeometry, disposePresentation } = await import('/src/presentation/presenter.ts');
       const { VideoSample } = await import('/node_modules/mediabunny/dist/modules/src/index.js');
       const source = document.getElementById('source');
       const geometry = { width: 200, height: 200, imageWidth: 200, imageHeight: 200, zoom: 1, offsetX: 0, offsetY: 0, dpr: 1 };
@@ -110,7 +110,7 @@ try {
     }
     console.log(`PASS ${name}: PQ/HLG clone metadata and first/play/seek pixel consistency; SDR direct upload restored`);
     const yuvResults=await page.evaluate(async()=>{
-      const {paintFrame,captureFrame,setPresentationGeometry,disposePresentation}=await import('/src/presenter.ts');
+      const {paintFrame,captureFrame,setPresentationGeometry,disposePresentation}=await import('/src/presentation/presenter.ts');
       const {yuvFixture}=await import('/test/helpers/yuv-fixture.ts');
       const {yuvToRgba}=await import('/shared/color/yuv-color.ts');
       const source=document.getElementById('source'),results=[];

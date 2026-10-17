@@ -75,7 +75,7 @@ try {
     else errors.push(text);
   });
   const panelRequests = [];
-  page.on('request', request => { if (/\/analysis-panel-[^/]+\.js/.test(request.url())) panelRequests.push(request.url()); });
+  page.on('request', request => { if (/\/panel-[^/]+\.js/.test(request.url())) panelRequests.push(request.url()); });
   await page.goto(base);
   await page.waitForFunction(() => window.voidPlayer);
   if (await page.locator('#identity-welcome').isVisible().catch(() => false)) {

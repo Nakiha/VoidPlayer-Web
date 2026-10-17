@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   bitrateAtT, buildInspection, coarsenBucketsShared, estimateBaseBucketWidth,
   getDerived, localRateAtT, referenceAtT,
-} from '../../src/analysis/inspection.ts';
+} from '../../shared/analysis/metadata/inspection.ts';
 import type { AnalysisResult } from '../../shared/analysis/metadata/types.ts';
 import type { Slot } from '../../shared/review/model.ts';
 

@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { localJsSourceVersion } from '../../src/js-packet-index-cache.ts';
+import { localJsSourceVersion } from '../../src/media/indexing/js-packet-index-cache.ts';
 import { parseJsPacketIndex } from '../../shared/media/indexing/js-packet-index-parser.ts';
-import {jsDecodeIndex} from '../../src/js-decode-index.ts';
+import {jsDecodeIndex} from '../../src/media/indexing/js-decode-index.ts';
 import {MATROSKA_PACKET_BUILD} from '../../shared/media/containers/matroska-packet-index.ts';
 import {readContainerHeader,validateContainerHeader} from '../../shared/analysis/bitstream/diagrams.ts';
 import {inspectPacketPicture} from '../../shared/media/codecs/packet-picture.ts';

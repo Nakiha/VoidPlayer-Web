@@ -2,10 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { getEventListeners } from 'node:events';
 import { abortableWait } from '../../shared/media/io/media-abort.ts';
-import { firstDecodableSample, MediaOpenError } from '../../src/media.ts';
+import { firstDecodableSample, MediaOpenError } from '../../src/media/source.ts';
 import type { VideoSample } from 'mediabunny';
-import { openFFmpegMedia } from '../../src/ffmpeg-media.ts';
-import { openPacketMedia } from '../../src/packet-media.ts';
+import { openFFmpegMedia } from '../../src/media/decoding/ffmpeg-media.ts';
+import { openPacketMedia } from '../../src/media/decoding/packet-media.ts';
 
 // A capture can begin in a GOP: its first packet timestamp need not have a frame.
 test('first-frame probing accepts the first actual frame after a timestamp gap and closes the iterator', async () => {

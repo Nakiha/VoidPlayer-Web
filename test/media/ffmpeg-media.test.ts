@@ -1,11 +1,11 @@
-import {openPacketMedia} from '../../src/packet-media.ts';
+import {openPacketMedia} from '../../src/media/decoding/packet-media.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { floorIndex, nextIndex, openFFmpegMedia } from '../../src/ffmpeg-media.ts';
-import { openMedia } from '../../src/media.ts';
-import type { FallbackDeps } from '../../src/ffmpeg-media.ts';
-import type { MediaSource } from '../../src/media.ts';
+import { floorIndex, nextIndex, openFFmpegMedia } from '../../src/media/decoding/ffmpeg-media.ts';
+import { openMedia } from '../../src/media/source.ts';
+import type { FallbackDeps } from '../../src/media/decoding/ffmpeg-media.ts';
+import type { MediaSource } from '../../src/media/source.ts';
 
 // --- pure index navigation ---
 
@@ -31,7 +31,7 @@ async function nodeCoreDeps(): Promise<FallbackDeps> {
   }
   return { glueURL: new URL('voidplayer-core.js', coreDir).href, wasmBinary };
 }
-async function openSample(name: string, onProgress?: import('../../src/media-progress.ts').MediaOpenProgress): Promise<MediaSource> {
+async function openSample(name: string, onProgress?: import('../../src/media/progress.ts').MediaOpenProgress): Promise<MediaSource> {
   const deps = await nodeCoreDeps();
   const data = await readFile(new URL(`../../fixtures/video/${name}`, import.meta.url));
   const file=new File([data],name);return openPacketMedia(name.endsWith('.mkv')?'matroska':name.endsWith('.ts')?'ts':'mp4',{file},file,{...deps,onProgress,forceWasm:true,sourceVersion:name});

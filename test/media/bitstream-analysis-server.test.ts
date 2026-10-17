@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { createMediaServer } from "../../server/app.ts";
 import { MediaLibraryIndex } from "../../server/library.ts";
-import { AnalysisScheduler } from "../../server/analysis/scheduler.ts";
+import { AnalysisScheduler } from "../../server/analysis/bitstream/scheduler.ts";
 async function fixture(
   root = resolve("fixtures/video"),
   name = "h264_9s_1920x1080.mp4",

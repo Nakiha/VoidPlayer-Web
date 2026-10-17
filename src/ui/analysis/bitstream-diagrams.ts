@@ -1,8 +1,8 @@
 import type { ReviewSession } from '../../session.ts';
 import type { Slot } from '../../../shared/review/model.ts';
-import { AXIS_H, drawTimeAxis, drawHitRect, drawHitPoint, plotGeometry, formatAxis as formatTime } from '../analysis-canvas.ts';
-import { chartBarWidth, referenceNodeRadius, representativeIntervalUs, chartFrameHoverStart } from '../analysis-geometry.ts';
-import { panTimeRange, zoomTimeRange } from '../../analysis/projection.ts';
+import { AXIS_H, drawTimeAxis, drawHitRect, drawHitPoint, plotGeometry, formatAxis as formatTime } from './canvas.ts';
+import { chartBarWidth, referenceNodeRadius, representativeIntervalUs, chartFrameHoverStart } from './geometry.ts';
+import { panTimeRange, zoomTimeRange } from '../../../shared/analysis/metadata/projection.ts';
 import { diagramTime, naluName } from '../../../shared/analysis/bitstream/diagrams.ts';
 import type { DiagramPicture, DiagramBucket } from '../../../shared/analysis/bitstream/diagrams.ts';
 import { t, msg } from '../../i18n.ts';

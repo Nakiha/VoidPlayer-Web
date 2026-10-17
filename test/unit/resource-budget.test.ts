@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SessionResources } from '../../src/session/resources.ts';
-import { FrameQueue } from '../../src/playback.ts';
+import { FrameQueue } from '../../src/session/playback.ts';
 import { rgbaDescription } from '../../shared/media/frame-description.ts';
 import { ThumbnailUrlCache } from '../../src/thumbnails/url-cache.ts';
 import { thumbnailEvictions } from '../../src/thumbnails/local-store.ts';

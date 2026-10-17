@@ -80,8 +80,8 @@ npm run test:suite -- ci-native-console --platform win32 --list
 
 ### 解码 Worker 的消息契约
 
-`src/worker-protocol.ts` 定义 FFmpeg 与 packet Worker 的命令、请求、响应和渐进索引事件。
-`WorkerRpc` 位于 `src/worker-rpc.ts`；FFmpeg 的旧导出保留兼容。调用者只传命令和对应参数，
+`src/media/workers/worker-protocol.ts` 定义 FFmpeg 与 packet Worker 的命令、请求、响应和渐进索引事件。
+`WorkerRpc` 位于 `src/media/workers/worker-rpc.ts`；FFmpeg 的旧导出保留兼容。调用者只传命令和对应参数，
 响应从命令推导；Worker 用 `workerReply` 按请求命令检查回包。索引输入单独按 action 区分，
 不占用新的 RPC 或改变 ready/batch/complete/error 的确认顺序。
 
@@ -208,7 +208,7 @@ node scripts/bench-playback.mjs webkit
 node scripts/bench-playback.mjs chromium
 ```
 
-`BASE_URL` 选择服务地址，`BENCH_REPEATS` 默认 3，`BENCH_DURATION_MS` 默认 8000。`--headless` 为离屏自动化运行。场景和阈值分别以 `scripts/bench-playback.mjs`、`src/benchmark.ts` 为准。
+`BASE_URL` 选择服务地址，`BENCH_REPEATS` 默认 3，`BENCH_DURATION_MS` 默认 8000。`--headless` 为离屏自动化运行。场景和阈值分别以 `scripts/bench-playback.mjs`、`src/session/benchmark.ts` 为准。
 
 播放基准通过 Agent `benchmark_review` 和脚本运行，设置页不提供手动检查入口。它检查呈现帧、速度、等待、卡顿、同步和暂停后的旧帧；失败场景使脚本返回非零退出码。
 
@@ -366,3 +366,9 @@ Every `test`/`test:*` npm command now delegates to the catalog runner. The 48 mi
 Unreferenced thin forwarding paths listed in `docs/evidence/retired-test-entrypoints.json` are retired: use their npm alias or `node scripts/run-tests.mjs --case <id>`. Their case IDs and canonical implementations remain, and `retiredAlias` is accepted only with the checked-in matching retirement record and an absent forwarding file. Documented/imported/workflow-used forwarding entries remain compatible. A legacy top-level test glob is not the complete unit suite; `npm test` discovers every canonical unit case, including retired aliases, exactly once.
 
 Release aliases keep the browser default-archive `-` token. Explicit archives bypass only the latest-release fixture; default archive selection still requires that metadata. HEVC alias `--engine` selects only that engine's local/remote cases and conflicts or unsupported engines fail before execution.
+
+## 模块边界与目录维护
+
+`node-module-boundaries` 随 fast、contract、source 执行，构建也运行同一边界扫描。检查覆盖生产目录中的静态与类型导入、重新导出、字面量动态加载和 Worker URL；不存在的相对依赖会直接失败。前后端不能互相引用，共享层不能引用任何宿主，外部包仅准入 Mediabunny。计算式加载仅保留登记的资源加载入口；新增入口需明确其职责。负例覆盖间接越界、类型引用、Worker 缺失、计算式加载和未归属的顶层模块。
+
+共享层另以 `tsconfig.shared.json` 在无 DOM 类型环境编译，真实编译负例证明 window、document、IndexedDB、VideoFrame 不可进入共享代码。标准 Fetch/Blob、AbortSignal 与 WebAssembly 可由两种宿主使用。共享源码及其类型配置参与准备构建指纹、前端来源摘要和发布源码包，移动公共实现后不能复用过期构建。

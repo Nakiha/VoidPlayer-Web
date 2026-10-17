@@ -32,7 +32,7 @@ test('development serves the admin entry for status-link and direct URLs', async
     const player = await (await fetch(base + '/')).text();
     assert.match(player, /\/src\/bootstrap\.ts/);
     assert.doesNotMatch(player, /id="admin-app"/);
-    for (const route of ['/src/packet-worker.ts?worker_file&type=module', '/node_modules/vite/dist/client/env.mjs']) {
+    for (const route of ['/src/media/decoding/packet-worker.ts?worker_file&type=module', '/node_modules/vite/dist/client/env.mjs']) {
       const resource = await fetch(base + route);
       assert.equal(resource.status, 200);
       assert.equal(resource.headers.get('cross-origin-resource-policy'), 'same-origin');

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { startupFixture } from '../../scripts/flv-startup-fixture.ts';
-import { openFlvMedia } from '../../src/flv-media.ts';
+import { openFlvMedia } from '../../src/media/decoding/flv-media.ts';
 import { ReviewSession } from '../../src/session.ts';
 
 test('first decoded frame precedes a server build; completed indexes are persisted and reused', { timeout: 30000 }, async () => {

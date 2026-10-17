@@ -1,11 +1,12 @@
 import { msg, t } from '../../i18n.ts';
 import { formatTime } from '../../../shared/review/model.ts';
 import type { Slot } from '../../../shared/review/model.ts';
-import { panTimeRange, zoomOverviewRange } from '../../analysis/projection.ts';
+import { panTimeRange, zoomOverviewRange } from '../../../shared/analysis/metadata/projection.ts';
 import type { ReviewSession } from '../../session.ts';
-import { installTimeInput, parseTimeInput } from '../../time-input.ts';
-import { AXIS_H, drawTimeAxis, formatAxis, plotGeometry } from '../analysis-canvas.ts';
-import type { CanvasColors } from '../analysis-canvas.ts';
+import { installTimeInput } from '../time-input.ts';
+import { parseTimeInput } from '../../../shared/review/time-input.ts';
+import { AXIS_H, drawTimeAxis, formatAxis, plotGeometry } from './canvas.ts';
+import type { CanvasColors } from './canvas.ts';
 import { bindMenuTrigger } from '../menu.ts';
 import { installChartNavigation } from './chart-navigation.ts';
 import { MIN_ANALYSIS_SPAN_US as MIN_SPAN_US } from './shared.ts';
