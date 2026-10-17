@@ -14,7 +14,8 @@ import { loadCore } from './wasm-core.ts';
 
 /** pts is the logical source clock; a platform resource's internal timestamp
  * may use a shifted decoder clock and must never be used as frame identity. */
-export interface FlvFrame { rotation?: 0 | 90 | 180 | 270; packetPicture?: import('./packet-picture.ts').PacketPicture; durationUs?: number; description: FrameDescription; pts: number; width: number; height: number; frame?: VideoFrame; pixels?: ArrayBuffer; }
+export interface PacketFrame { rotation?: 0 | 90 | 180 | 270; packetPicture?: import('./packet-picture.ts').PacketPicture; durationUs?: number; description: FrameDescription; pts: number; width: number; height: number; frame?: VideoFrame; pixels?: ArrayBuffer; }
+export type FlvFrame = PacketFrame;
 export type PacketDecodePacket = Omit<FlvPacket, 'dts'> & { dts: number | null; identityKnown?: boolean };
 export type PacketDecodeIndex = Omit<FlvIndex, 'packets' | 'codec'> & { codec: FlvIndex['codec'] | 'vp8' | 'vp9' | 'ffv1' | 'mpeg2video' | 'mpeg4' | 'mjpeg' | 'prores'; codecParameters?:import('./matroska-clocks.ts').PacketCodecParameters; codecConfigurations?:import('./matroska-clocks.ts').PacketCodecParameters[]; packets: PacketDecodePacket[] };
 type PacketConfiguration = Pick<PacketDecodeIndex, 'codec' | 'description' | 'codecParameters'>;
@@ -32,10 +33,13 @@ export interface PacketDecoder {
   /** false means input was not accepted: drain receive() and retry this packet. */
   send(bytes: Uint8Array, packet: PacketDecodePacket): Promise<void | boolean>;
   snapshot?(): Record<string, unknown>;
-  receive(minimum: number, recycle?: ArrayBuffer): FlvFrame | null;
+  receive(minimum: number, recycle?: ArrayBuffer): PacketFrame | null;
   drain(): Promise<void>;
   close(): void;
 }
+
+export const nativePacketDecoder = nativeFlvDecoder;
+export const wasmPacketDecoder = wasmFlvDecoder;
 
 export async function nativeFlvDecoder(index: PacketDecodeIndex, initialConfig?: VideoDecoderConfig, diagnostic: (event: Record<string, unknown>) => void = () => {}): Promise<PacketDecoder | null> {
   if(index.codec==='h264'&&!nativeAvcCompatible(avcGeometry(index.description))){ diagnostic({ reason: 'avc-reorder-policy', codec: index.codec }); return null; }

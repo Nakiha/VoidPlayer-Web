@@ -1,4 +1,3 @@
-import { parseTimeInput, installTimeInput } from '../time-input.ts';
 import { icon } from './icons.ts';
 import { analysisRetryButton } from './analysis/retry.ts';
 import { animatePlaybackIcon } from './playback-icon.ts';
@@ -9,24 +8,23 @@ import { installBitstreamDiagrams, type BitstreamDiagram } from "./analysis/bits
 // 面板开关与高度由 workbench 统一管理（右上功能区、拖拽手势与子轨道同契约）；
 // 本模块只负责内容、查询与绘制。下拉全部使用项目 choice-menu 控件。
 
-import { SLOTS, formatTime } from '../model.ts';
+import { SLOTS } from '../model.ts';
 import type { Slot } from '../model.ts';
 import type { ReviewSession } from '../session.ts';
 import type { AnalysisDiagram, AnalysisCapability } from '../analysis/types.ts';
 import { BITRATE_WINDOW_OPTIONS_US, DEFAULT_BITRATE_WINDOW_US } from '../analysis/statistics.ts';
 import type { TimeGroup } from '../analysis/grouping.ts';
 import type { DirectTarget, InspectionState } from '../analysis/inspection.ts';
-import { pickGlyph, paddedChartDomain, containerChartColumn, chartFrameHoverStart, layoutAnalysisCards } from './analysis-geometry.ts';
-import type { AnalysisGlyph, BucketGlyph, SampleGlyph } from './analysis-geometry.ts';
+import { pickGlyph, paddedChartDomain, containerChartColumn, chartFrameHoverStart } from './analysis-geometry.ts';
+import type { AnalysisGlyph } from './analysis-geometry.ts';
 import { installChoiceMenu } from './choice-menu.ts';
-import { bindMenuTrigger } from './menu.ts';
 import { analysisDiagramIcon } from './analysis/diagram-icons.ts';
 import { bitstreamReasonText } from './bitstream-reasons.ts';
 import { onLanguageChange, t, th, msg } from '../i18n.ts';
 import { reconcileTrackSelection } from './track-selection.ts';
 import type { AnalysisViewState } from '../workspace-file.ts';
 import {
-  AXIS_H, computeLayout, drawAnalysis, drawTimeAxis, formatAxis, plotGeometry, tOf,
+  computeLayout, drawAnalysis, plotGeometry, tOf,
 } from './analysis-canvas.ts';
 import type { CanvasColors, CanvasModel } from './analysis-canvas.ts';
 import { loadAnalysisPreferences as loadPrefs, selectedAnalysisDiagrams, PREF_KEY } from './analysis/preferences.ts';
@@ -35,14 +33,14 @@ import { buildAnalysisModel } from './analysis/model.ts';
 import { createAnalysisQueries } from './analysis/queries.ts';
 import type { AnalysisQueryTrack } from './analysis/queries.ts';
 import { installAnalysisStatus } from './analysis/status.ts';
-import { chartHoverStyle, CHART_HOVER_STYLE_EVENT } from './chart-hover-style.ts';
-import { analysisTrackBadge, installAnalysisCard, installFloatingAnalysisCard } from './analysis/card.ts';
+import { installAnalysisHoverCards } from './analysis/hover-cards.ts';
 import { createInspectionController } from './analysis/inspection-state.ts';
 import { drawAnalysisOverlay } from './analysis/overlay.ts';
 import { installAnalysisGestures } from './analysis/gestures.ts';
-import { installChartNavigation } from './analysis/chart-navigation.ts';
 import { installFilterGestures } from './analysis/filter-gestures.ts';
-import { panTimeRange, zoomOverviewRange, zoomTimeRange } from '../analysis/projection.ts';
+import { installAnalysisRangeEditor } from './analysis/range-editor.ts';
+import { publishAnalysisTestHook } from './analysis/test-hook.ts';
+import { zoomTimeRange } from '../analysis/projection.ts';
 import './analysis-panel.css';
 
 import type { ChartHover, AnalysisAction as Action } from './analysis/shared.ts';
@@ -138,194 +136,27 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   const emptyDiagramHost = document.createElement('div'); emptyDiagramHost.id = 'analysis-empty-diagrams';
   emptyDiagramHost.className = 'analysis-diagram-toggles'; emptyDiagramHost.setAttribute('role', 'group'); none.append(emptyDiagramHost);
   charts.append(overviewHost, none); section.querySelector('.analysis-head')!.after(charts);
-  const sharedAxisHost = document.createElement('div'); sharedAxisHost.className = 'analysis-shared-axis'; sharedAxisHost.hidden = true;
-  const sharedAxis = document.createElement('canvas'); sharedAxis.id = 'analysis-shared-axis'; sharedAxis.setAttribute('aria-hidden', 'true');
-  sharedAxisHost.append(sharedAxis); charts.after(sharedAxisHost);
-  const rangeNavigation = document.createElement('div'); rangeNavigation.className = 'analysis-range-navigation';
-  // 区间轨道没有刻度标签：只留一点边距，把手和胶囊贴近面板两侧。
-  const RAIL_INSET = 10;
-  const rangeAxis = document.createElement('canvas'); rangeAxis.id = 'analysis-range-axis';
-  rangeAxis.tabIndex = 0; rangeAxis.setAttribute('role', 'slider');
-  const rangeLabel = document.createElement('span'); rangeLabel.className = 'analysis-range-label';
-  const rangePlayhead = document.createElement('span'); rangePlayhead.className = 'analysis-range-playhead'; rangePlayhead.setAttribute('aria-hidden', 'true');
   const rangeTrigger = $<HTMLButtonElement>('#analysis-range-trigger');
-  const rangeEditor = document.createElement('div'); rangeEditor.id = 'analysis-range-editor'; rangeEditor.className = 'popup-menu analysis-range-editor';
-  rangeEditor.setAttribute('popover', 'auto'); rangeEditor.setAttribute('role', 'dialog');
-  const rangeError = document.createElement('p'); rangeError.className = 'analysis-range-error'; rangeError.setAttribute('role', 'status'); rangeError.hidden = true;
-  rangeNavigation.append(rangeAxis, rangeLabel, rangePlayhead); rangeLabel.hidden = true;
-  rangeEditor.append(rangeNavigation, rangeError); document.body.append(rangeEditor);
-  const closeRangeEditor = () => {
-    cancelRangeEdits();
-    if (rangeEditor.matches(':popover-open')) rangeEditor.hidePopover();
-    rangeTrigger.setAttribute('aria-expanded','false');
-  };
-  // 打开/关闭由显式点击处理（与项目下拉菜单同一契约）：原生 popovertarget 在
-  // “按下轻触关闭 + 点击再打开”的竞态里会让触发器无法重新打开面板。
-  const openRangeEditor = () => { if (!rangeTrigger.disabled && !rangeEditor.matches(':popover-open')) rangeEditor.showPopover(); };
-  bindMenuTrigger(rangeTrigger, rangeEditor, openRangeEditor, closeRangeEditor, signal);
-  // 与触发按钮居中对齐；放不下时翻到上方，并始终留在视口内。
-  function positionRangeEditor() {
-    if (!rangeEditor.matches(':popover-open')) return;
-    const rect = rangeTrigger.getBoundingClientRect(), width = rangeEditor.offsetWidth, height = rangeEditor.offsetHeight;
-    const gap = 6, margin = 8;
-    rangeEditor.style.left = `${Math.max(margin, Math.min(innerWidth-width-margin, rect.left + (rect.width-width)/2))}px`;
-    rangeEditor.style.top = `${Math.max(margin, rect.bottom+gap+height<=innerHeight-margin ? rect.bottom+gap : rect.top-height-gap)}px`;
-    refreshCardAvoidance();
-  }
-  rangeEditor.addEventListener('toggle', () => {
-    const expanded = rangeEditor.matches(':popover-open'); rangeTrigger.setAttribute('aria-expanded', String(expanded));
-    if (!expanded) { refreshCardAvoidance(); return; }
-    ensureRangeEditors(); rangeError.hidden = true; rangeBand.focus({ preventScroll: true });
-    sharedAxisSignature = ''; renderSharedAxis(); positionRangeEditor();
-  }, {signal});
-  rangeEditor.addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeRangeEditor(); rangeTrigger.focus(); } }, {signal});
-  window.addEventListener('resize', () => { if (rangeEditor.matches(':popover-open')) { sharedAxisSignature = ''; renderSharedAxis(); positionRangeEditor(); } }, {signal});
-  // 工具条可横向滚动：触发按钮移动时编辑器跟随，锚定关系不脱钩。
-  rangeTrigger.closest('.analysis-tools')?.addEventListener('scroll', positionRangeEditor, {signal, passive:true});
-  // 触发按钮的标签随区间变化；居中锚定必须跟随按钮自身的宽度。
-  const rangeTriggerObs = new ResizeObserver(() => { positionRangeEditor(); syncHeadStack(); });
-  rangeTriggerObs.observe(rangeTrigger);
-  // 编辑器自身的高度也会随胶囊换行变化，卡片避让要跟着新的矩形重算。
-  const rangeEditorObs = new ResizeObserver(() => { positionRangeEditor(); refreshCardAvoidance(); });
-  rangeEditorObs.observe(rangeEditor);
-  function rangeGeometry() { return plotGeometry(Math.max(1, rangeNavigation.clientWidth || Math.min(460, innerWidth-48)), RAIL_INSET, RAIL_INSET); }
-  /** 编辑器打开时作为顶部面板内的浮层对等方：悬浮卡片据此避让。 */
-  const rangeEditorBounds = () => rangeEditor.matches(':popover-open') ? rangeEditor.getBoundingClientRect() : undefined;
-
-  const rangeBand = document.createElement('span'); rangeBand.className = 'analysis-window-band'; rangeBand.tabIndex = 0; rangeBand.setAttribute('role', 'slider');
-  const rangeHandles = (['start', 'end'] as const).map(edge => {
-    const button = document.createElement('button'); button.type = 'button'; button.className = `analysis-window-handle ${edge}`;
-    button.dataset.edge = edge; button.setAttribute('role', 'slider');
-    return button;
+  const rangeControl = installAnalysisRangeEditor({
+    signal, charts, rangeTrigger, session, act,
+    isOpen: () => open,
+    axis: () => prefs.axis,
+    positionUs: () => positionUs,
+    durationUs: () => durationUs,
+    hasTracks: () => tracks.length > 0,
+    selectedTracks: () => selectedTracks(),
+    dataDomainBounds: () => dataDomainBounds(),
+    domainBounds: span => domainBounds(span),
+    fullRange: () => fullRange(),
+    viewRange: () => viewRange(),
+    setView: (start, end) => setView(start, end),
+    colors: () => colors,
+    slotColors: () => slotColors,
+    clearSharedHover: () => clearSharedHover(),
+    refreshCardAvoidance: () => refreshCardAvoidance(),
+    syncHeadStack: () => syncHeadStack(),
   });
-  rangeNavigation.append(rangeBand, ...rangeHandles);
-  const rangeHover = document.createElement('span'); rangeHover.className = 'analysis-range-hover'; rangeHover.hidden = true; rangeHover.setAttribute('aria-hidden', 'true'); rangeNavigation.append(rangeHover);
-  let rangeHoverClientX: number | undefined;
-  const rangeTimes = (['start', 'current', 'end', 'hover'] as const).map(kind => {
-    const time = document.createElement('time'); time.className = `analysis-range-time ${kind}`;
-    time.hidden = kind === 'hover';
-    time.id = `analysis-range-time-${kind}`; rangeNavigation.append(time); return time;
-  });
-  // 起止胶囊：点击后原位切换为时间输入，回车/失焦提交、Escape 还原。
-  // 草稿归输入框自己（installTimeInput），外部刷新只写显示文本，不覆盖未提交的编辑。
-  type RangeEdge = 'start' | 'end';
-  const rangeEdges = new Map<RangeEdge, { pill: HTMLElement; text: HTMLElement; input: HTMLInputElement; label: string }>();
-  let rangeEditorsReady = false;
-  for (const [edge, index] of [['start', 0], ['end', 2]] as const) {
-    const pill = rangeTimes[index];
-    const text = document.createElement('span'); text.className = 'analysis-range-time-text';
-    const input = document.createElement('input'); input.className = 'analysis-range-time-input';
-    input.id = `analysis-range-input-${edge}`; input.type = 'text'; input.autocomplete = 'off'; input.spellcheck = false; input.hidden = true;
-    pill.classList.add('editable'); pill.tabIndex = 0; pill.setAttribute('role', 'button');
-    pill.append(text, input);
-    rangeEdges.set(edge, { pill, text, input, label: '' });
-  }
-  const edgeIndex: Record<RangeEdge, number> = { start: 0, end: 1 };
-  const edgeValue = (edge: RangeEdge) => {
-    const domain = dataDomainBounds(), range = viewRange();
-    return edge === 'start' ? Math.max(domain.start, range.start) : Math.min(domain.end, range.end);
-  };
-  /** 胶囊显示文本与可访问名称跟随把手；编辑中的输入框不受影响。 */
-  function syncRangeEdges() {
-    for (const [edge, state] of rangeEdges) {
-      const value = rangeHandles[edgeIndex[edge]].getAttribute('aria-valuetext') ?? formatAxis(edgeValue(edge));
-      if (state.text.textContent !== value) state.text.textContent = value;
-      state.pill.setAttribute('aria-label', state.label ? `${state.label} ${value}` : value);
-    }
-  }
-  /** 结束编辑态：恢复显示文本并清掉线框标记（可重复调用）。 */
-  function endRangeEdit(edge: RangeEdge) {
-    const { pill, text, input } = rangeEdges.get(edge)!;
-    input.hidden = true; text.style.visibility = ''; pill.removeAttribute('data-editing');
-    layoutRangeTimes();
-  }
-  /** 放弃未提交的草稿：还原为当前区间值再失焦（提交随后因值未变而空转）。 */
-  function cancelRangeEdits() {
-    for (const [edge, { input }] of rangeEdges) {
-      if (input.hidden) continue;
-      input.value = formatAxis(edgeValue(edge));
-      input.blur();
-      // 失焦事件在窗口未聚焦时可能不到达，外观必须自行复位。
-      rangeError.hidden = true;
-      endRangeEdit(edge);
-    }
-  }
-  /** 首次打开才接线：installTimeInput 立即读取会话范围，须等视图函数就绪。 */
-  function ensureRangeEditors() {
-    if (rangeEditorsReady) return;
-    rangeEditorsReady = true;
-    for (const edge of ['start', 'end'] as const) {
-      const { pill, text, input } = rangeEdges.get(edge)!;
-      const show = () => {
-        if (!input.hidden) return;
-        rangeError.hidden = true;
-        // 编辑框精确覆盖文字盒：胶囊高度、位置与字号在编辑期间完全不变。
-        // 绝对定位的 left/top 相对内边距盒，描边宽度按实际计算值扣除。
-        const box = text.getBoundingClientRect(), pillBox = pill.getBoundingClientRect();
-        const pillStyle = getComputedStyle(pill);
-        input.style.left = `${box.left-pillBox.left-(parseFloat(pillStyle.borderLeftWidth)||0)}px`;
-        input.style.top = `${box.top-pillBox.top-(parseFloat(pillStyle.borderTopWidth)||0)}px`;
-        input.style.width = `${box.width}px`; input.style.height = `${box.height}px`;
-        text.style.visibility = 'hidden'; input.hidden = false; pill.dataset.editing = 'true';
-        layoutRangeTimes(); input.focus(); input.select();
-      };
-      let keyboardExit = false;
-      pill.addEventListener('click', show, { signal });
-      pill.addEventListener('keydown', event => {
-        if (event.target === input) return;
-        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); show(); }
-      }, { signal });
-      input.addEventListener('keydown', event => { if (event.key === 'Escape' || event.key === 'Enter') keyboardExit = true; }, { signal, capture: true });
-      input.addEventListener('focus', () => { keyboardExit = false; }, { signal });
-      input.addEventListener('blur', () => {
-        rangeError.hidden = true; endRangeEdit(edge);
-        // 键盘提交/取消后焦点回到胶囊，下一次 Escape 才能关闭编辑器。
-        if (keyboardExit) { keyboardExit = false; pill.focus({ preventScroll: true }); }
-      }, { signal });
-      installTimeInput(input, {
-        read: () => edgeValue(edge), format: formatAxis,
-        parse: raw => {
-          try {
-            const value = parseTimeInput(raw, 's', true), domain = dataDomainBounds(), range = viewRange();
-            const min = edge === 'start' ? domain.start : Math.max(domain.start, range.start) + MIN_SPAN_US;
-            const max = edge === 'start' ? range.end - MIN_SPAN_US : domain.end;
-            if (value < min || value > max) throw new Error(t(msg('analysis.invalidRange', '请输入片源范围内的起止时间，结束时间须晚于起始时间。')));
-            rangeError.hidden = true;
-            return value;
-          } catch (error) {
-            rangeError.textContent = error instanceof Error ? error.message : String(error);
-            rangeError.hidden = false;
-            throw error;
-          }
-        },
-        commit: async value => { const range = viewRange(); rangeError.hidden = true; setView(edge === 'start' ? value : range.start, edge === 'start' ? range.end : value); },
-      });
-    }
-  }
-  function layoutRangeTimes() {
-    const geometry = rangeGeometry(), left = geometry.gutter, right = left + geometry.plotW;
-    const anchors = [parseFloat(rangeHandles[0].style.left), parseFloat(rangePlayhead.style.left), parseFloat(rangeHandles[1].style.left), parseFloat(rangeHover.style.left)];
-    const labels = rangeTimes.flatMap((element, index) => element.hidden ? [] : [{element, index, anchor:anchors[index], width:element.offsetWidth, left:0}])
-      .sort((a,b) => a.anchor-b.anchor || a.index-b.index);
-    const gap = 8;
-    const stacked = labels.reduce((sum,label)=>sum+label.width,0)+Math.max(0,labels.length-1)*gap > geometry.plotW;
-    rangeNavigation.style.setProperty('--range-navigation-height', `${stacked ? 28+(labels.length-1)*20 : 28}px`);
-    for (const [position, label] of labels.entries()) {
-      label.left = Math.max(left, Math.min(right-label.width, label.anchor-label.width/2));
-      if (stacked) continue;
-      // 同一行：自左向右排布，同时给右侧未放置的标签留出最小间距，
-      // 总宽已确认可容纳，因此每个标签都不会越过轨道边界或彼此重叠。
-      const remaining = labels.slice(position+1).reduce((sum,next)=>sum+next.width+gap,0);
-      const cursor = position ? labels[position-1].left+labels[position-1].width+gap : left;
-      label.left = Math.max(cursor, Math.min(label.left, right-remaining-label.width));
-    }
-    for (const [row,label] of labels.entries()) {
-      label.element.style.left = `${label.left}px`; label.element.style.top = `${12+(stacked ? row*20 : 0)}px`;
-    }
-  }
-  const sharedAxisCtx = sharedAxis.getContext('2d');
-  const rangeAxisCtx = rangeAxis.getContext('2d');
-  let sharedAxisSignature = '';
+  const { sharedAxisHost, rangeNavigation, bounds: rangeEditorBounds, close: closeRangeEditor, render: renderSharedAxis, positionPlayhead: positionRangePlayhead } = rangeControl;
   type DeepEntry = { mode: BitstreamDiagram; slot: Slot; host: HTMLElement; abort: AbortController; panel: ReturnType<typeof installBitstreamDiagrams> };
   const deepPanels = new Map<string, DeepEntry>();
   const naluGroups = new Map<Slot, HTMLElement>();
@@ -508,189 +339,53 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   const hoverEl = $<HTMLElement>('.analysis-hover');
   const emptyEl = $<HTMLElement>('.analysis-empty');
   const noticeEl = $<HTMLElement>('.analysis-notice');
-  // 悬浮卡片挂在 body 顶层（fixed），彻底脱离分析面板的 overflow 裁剪；
-  // abort 时移除，平时 pointer-events:none 不拦截输入。
-  const card = installAnalysisCard(canvas, { signal, colors: () => slotColors, pinned: () => inspection.state.pinned != null,
-    visibleRows: () => ({ bitrate: prefs.showBitrate && loadMetrics.has('bitrate'), size: prefs.showSize, qp: prefs.showBitrate && loadMetrics.has('qp') }),
-    qpValue: (slot,time)=>qpAt(slot,time), avoid: rangeEditorBounds,
-    panelBounds: () => section.getBoundingClientRect() });
-  const cardEl = card.element;
-  cardEl.classList.add('analysis-linked-card');
-  type CardGroup = 'overview' | `nalu:${Slot}` | `references:${Slot}`;
-  const individualLayer = document.createElement('div'); individualLayer.className = 'analysis-float-layer analysis-individual-layer';
-  individualLayer.setAttribute('aria-hidden', 'true'); document.body.append(individualLayer);
-  signal.addEventListener('abort', () => individualLayer.remove(), { once: true });
-  const individualCards = new Map<CardGroup, { element: HTMLElement; position(x: number, y?: number): void; managePosition(parent: HTMLElement): void }>();
-  function cardGroupBounds(group: CardGroup): DOMRect | undefined {
-    if (group === 'overview') {
-      if (!overviewVisible()) return;
-      const rect = canvas.getBoundingClientRect();
-      const plotHeight = lastModel ? computeLayout(lastModel).axisY : rect.height;
-      return new DOMRect(rect.left, rect.top, rect.width, plotHeight);
-    }
-    const [kind, slot] = group.split(':') as ['nalu' | 'references', Slot];
-    if (kind === 'nalu') return (naluGroups.get(slot) ?? deepFor('nalu-size', slot)?.host ?? deepFor('nalu-types', slot)?.host)?.getBoundingClientRect();
-    return deepFor('references', slot)?.host.getBoundingClientRect();
-  }
-
-  const overviewCard = installAnalysisCard(canvas, { signal, colors: () => slotColors, pinned: () => inspection.state.pinned != null,
-    visibleRows: () => ({ bitrate: prefs.showBitrate && loadMetrics.has('bitrate'), size: prefs.showSize, qp: prefs.showBitrate && loadMetrics.has('qp') }),
-    qpValue: (slot,time)=>qpAt(slot,time), avoid: rangeEditorBounds,
-    panelBounds: () => cardGroupBounds('overview') ?? canvas.getBoundingClientRect(), beside: true });
-  overviewCard.element.classList.add('analysis-view-card'); overviewCard.element.dataset.diagram = 'overview';
-  overviewCard.managePosition(individualLayer);
-  individualCards.set('overview', overviewCard);
-  function retainCardLeave(element: HTMLElement) {
-    element.addEventListener('pointerleave', event => {
-      if (!(event.relatedTarget instanceof Node) || (!charts.contains(event.relatedTarget) && !hoverCardsContain(event.relatedTarget))) clearSharedHover();
-    }, { signal });
-  }
-  for (const { element } of individualCards.values()) retainCardLeave(element);
-  function hideIndividualCards() { for (const { element } of individualCards.values()) element.hidden = true; }
-  function hoverCardsContain(node: Node) { return cardEl.contains(node) || [...individualCards.values()].some(card => card.element.contains(node)); }
-  function cardText() { return cardEl.hidden ? [...individualCards.values()].filter(card => !card.element.hidden).map(card => card.element.textContent).join(' · ') : cardEl.textContent ?? ''; }
-  function positionIndividualCards() {
-    if (!sharedHover || chartHoverStyle() !== 'separate') return;
-    const clip = charts.getBoundingClientRect();
-    const pending: { card: { element: HTMLElement; position(x: number, y?: number): void }; x: number; height: number; preferredTop: number; order: number; top: number; bottom: number; centerY: number }[] = [];
-    const widths = new Map<string, number>();
-    for (const [mode, card] of individualCards) {
-      const rect = cardGroupBounds(mode);
-      if (!rect) { card.element.hidden = true; continue; }
-      const top = Math.max(8, clip.top, rect.top) + 2;
-      const bottom = Math.min(innerHeight - 8, clip.bottom, rect.bottom) - 2;
-      if (bottom - top < 24) { card.element.hidden = true; continue; }
-      const time = mode === 'overview' ? inspection.state.hoverUs ?? sharedHover.timeUs : sharedHover.cursorTimeUs ?? sharedHover.timeUs;
-      const geometry = plotGeometry(rect.width);
-      const range = viewRange(), x = rect.left + geometry.gutter + (time - range.start) / Math.max(1, range.end - range.start) * geometry.plotW;
-      card.element.hidden = false;
-      card.element.style.width = '';
-      card.position(x, 0);
-      const kind = card.element.dataset.diagram!;
-      widths.set(kind, Math.max(widths.get(kind) ?? 0, card.element.offsetWidth));
-      const height = card.element.offsetHeight;
-      // Prefer the owner's centre in a stack, or follow the pointer in a single chart.
-      // Keep full height when the owner is too short, then move neighbouring cards.
-      const centerY = Number(overviewVisible()) + deepPanels.size > 1 || sharedPointerY == null ? (top + bottom) / 2 : sharedPointerY;
-      const preferredTop = height <= bottom - top ? Math.max(top, Math.min(bottom - height, centerY - height / 2)) : centerY - height / 2;
-      pending.push({ card, x, height, preferredTop, order: rect.top, top, bottom, centerY });
-    }
-    for (const item of pending) {
-      item.card.element.style.width = `${widths.get(item.card.element.dataset.diagram!)!}px`;
-      item.height = item.card.element.offsetHeight;
-      item.preferredTop = item.height <= item.bottom - item.top ? Math.max(item.top, Math.min(item.bottom - item.height, item.centerY - item.height / 2)) : item.centerY - item.height / 2;
-    }
-    pending.sort((a, b) => a.order - b.order);
-    const layout = layoutAnalysisCards(pending, 8, innerHeight - 8);
-    const wasScrollable = individualLayer.classList.contains('is-scrollable');
-    individualLayer.classList.toggle('is-scrollable', layout.scroll);
-    if (!layout.scroll || !wasScrollable) individualLayer.scrollTop = 0;
-    for (const [i, item] of pending.entries()) item.card.position(item.x, layout.tops[i] - 8);
-  }
-
-  /** 区间编辑器开合或移动后重算卡片避让：与视口两个拖拽面板同一契约。 */
-  function refreshCardAvoidance() {
-    const x = inspection.state.lastClient?.x ?? canvas.getBoundingClientRect().left + fracToPx(inspection.state.hoverUs ?? 0);
-    positionFloat(x);
-  }
-
-  function renderIndividual(snapshot: InspectionState) {
-    cardEl.hidden = true;
-    if (overviewVisible()) { overviewCard.render(snapshot, null); overviewCard.element.dataset.hoverTime = String(sharedHover!.timeUs); }
-    for (const { mode, slot, host, panel } of detailPanels()) {
-      const kind = mode === 'references' ? 'references' : 'nalu';
-      const group: CardGroup = `${kind}:${slot}`;
-      let floating = individualCards.get(group);
-      if (!floating) {
-        floating = installFloatingAnalysisCard(host.querySelector('canvas')!, signal, () => cardGroupBounds(group) ?? host.getBoundingClientRect(), true, rangeEditorBounds);
-        floating.element.classList.add('analysis-view-card'); floating.element.dataset.diagram = kind; floating.element.dataset.slot = slot;
-        floating.managePosition(individualLayer);
-        individualCards.set(group, floating); retainCardLeave(floating.element);
-      }
-      floating.element.replaceChildren(panel.details(trackHover(slot, sharedHover!, snapshot), { size: diagrams.has('nalu-size'), types: diagrams.has('nalu-types') }).element);
-      floating.element.dataset.hoverTime = String(sharedHover!.timeUs);
-    }
-    positionIndividualCards();
-  }
-  window.addEventListener(CHART_HOVER_STYLE_EVENT, () => { hideIndividualCards(); cardEl.hidden = true; if (sharedHover && inspection.state.lastInspection) renderCombined(inspection.state.pinned ?? inspection.state.lastInspection, inspection.state.lastClient?.x ?? null); }, { signal });
-  charts.addEventListener('scroll', positionIndividualCards, { signal, capture: true });
-  function clearSharedHover() {
-    if (inspection.state.pinned) return;
-    sharedHover = null;
-    sharedPointerY = null;
-    inspection.state.hoverUs = null; inspection.state.lastInspection = null; inspection.state.kbInspect = false;
-    hoverEl.hidden = true; cardEl.hidden = true; hideIndividualCards();
-    canvas.dataset.hoverTime = ''; canvas.dataset.hoverCursorTime = '';
-    for (const { panel } of deepPanels.values()) panel.highlight(null);
-    refreshOverlay(); publishTestHook();
-  }
-  function detailPanels() {
-    return [...deepPanels.values()].filter(entry => entry.mode !== 'nalu-types' || !deepFor('nalu-size', entry.slot));
-  }
   function trackHover(slot: Slot, value: ChartHover, snapshot = inspection.state.pinned ?? inspection.state.lastInspection): ChartHover {
     if (value.slot === slot && value.au !== undefined) return value;
     const reference = snapshot?.tracks.find(track => track.slot === slot)?.reference;
     return reference ? { ...value, slot, au: reference.sample.decodeOrdinal, sourceVersion: undefined, timeUs: reference.axisUs }
       : { ...value, sourceVersion: undefined };
   }
+  const hoverCards = installAnalysisHoverCards({
+    signal, section, charts, canvas,
+    slotColors: () => slotColors,
+    pinned: () => inspection.state.pinned != null,
+    visibleRows: () => ({ bitrate: prefs.showBitrate && loadMetrics.has('bitrate'), size: prefs.showSize, qp: prefs.showBitrate && loadMetrics.has('qp') }),
+    qpAt: (slot, time) => qpAt(slot, time),
+    avoid: rangeEditorBounds,
+    overviewVisible,
+    lastModel: () => lastModel,
+    naluGroup: slot => naluGroups.get(slot),
+    deepFor,
+    deepPanels: () => deepPanels.values(),
+    deepPanelCount: () => deepPanels.size,
+    diagrams: () => diagrams,
+    tracks: () => tracks,
+    viewRange: () => viewRange(),
+    sharedHover: () => sharedHover,
+    sharedPointerY: () => sharedPointerY,
+    hoverUs: () => inspection.state.hoverUs,
+    activeInspection: () => inspection.state.pinned ?? inspection.state.lastInspection,
+    lastClientX: () => inspection.state.lastClient?.x ?? null,
+    fracToPx: t => fracToPx(t),
+    trackHover,
+    clearSharedHover: () => clearSharedHover(),
+  });
+  const { cardEl, contains: hoverCardsContain, text: cardText, positionIndividual: positionIndividualCards, positionFloat, refreshAvoidance: refreshCardAvoidance, renderCombined } = hoverCards;
+  function clearSharedHover() {
+    if (inspection.state.pinned) return;
+    sharedHover = null;
+    sharedPointerY = null;
+    inspection.state.hoverUs = null; inspection.state.lastInspection = null; inspection.state.kbInspect = false;
+    hoverEl.hidden = true; hoverCards.hideAll();
+    canvas.dataset.hoverTime = ''; canvas.dataset.hoverCursorTime = '';
+    for (const { panel } of deepPanels.values()) panel.highlight(null);
+    refreshOverlay(); publishTestHook();
+  }
   function syncHighlights() {
     canvas.dataset.hoverTime = inspection.state.hoverUs == null ? '' : String(inspection.state.hoverUs);
     canvas.dataset.hoverCursorTime = canvas.dataset.hoverTime;
     for (const { slot, panel } of deepPanels.values()) panel.highlight(sharedHover ? trackHover(slot, sharedHover) : null);
     positionHover(); refreshOverlay();
-  }
-  function renderCombined(snapshot: InspectionState, x: number | null) {
-    if (chartHoverStyle() === 'separate') { renderIndividual(snapshot); return; }
-    hideIndividualCards();
-    // Reuse canonical metric formatting, but keep each track's readouts together.
-    overviewCard.render(snapshot, null); overviewCard.element.hidden = true;
-    const overview = overviewCard.element.querySelector<HTMLTableElement>('.analysis-overview-grid')!;
-    cardEl.replaceChildren(); cardEl.hidden = false;
-    const modes: BitstreamDiagram[] = [];
-    if (diagrams.has('nalu-size')) modes.push('nalu-size'); else if (diagrams.has('nalu-types')) modes.push('nalu-types');
-    if (diagrams.has('references')) modes.push('references');
-    const widths = [...(overviewVisible() ? [180] : []), ...modes.map(mode => mode === 'references' ? 240 : 250)];
-    for (const [index, track] of snapshot.tracks.entries()) {
-      const row = document.createElement('article'); row.className = 'analysis-track-details'; row.dataset.slot = track.slot;
-      const heading = document.createElement('div'); heading.className = 'analysis-card-track';
-      const badge = analysisTrackBadge(track.slot);
-      const name = document.createElement('span'); name.textContent = tracks.find(entry => entry.slot === track.slot)?.name ?? ''; name.className = 'analysis-card-track-name';
-      const time = document.createElement('span'); time.className = 'analysis-card-track-time';
-      let hitTimeUs = track.reference?.axisUs;
-      heading.append(badge, name, time); row.append(heading);
-      const grid = document.createElement('div'); grid.className = 'analysis-combined-grid'; row.append(grid);
-      if (overviewVisible()) {
-        const part = document.createElement('section'); part.className = 'analysis-card-section'; part.dataset.diagram = 'overview';
-        part.style.setProperty('--section-width', '180px');
-        const title = document.createElement('strong'); title.textContent = t(msg('analysis.streamSection', '码流'));
-        const table = document.createElement('table'); table.className = 'fl-grid analysis-stream-grid';
-        const cols = document.createElement('colgroup'); cols.append(document.createElement('col'), document.createElement('col')); cols.firstElementChild!.className = 'analysis-card-label-col'; table.append(cols);
-        const body = table.createTBody();
-        for (const metric of overview.tBodies[0].rows) {
-          const clone = metric.cloneNode(true) as HTMLTableRowElement;
-          for (let i = clone.cells.length - 1; i > 0; i--) if (i !== index + 1) clone.deleteCell(i);
-          body.append(clone);
-        }
-        part.append(title, table); grid.append(part);
-      }
-      for (const mode of modes) {
-        const entry = deepFor(mode, track.slot); if (!entry) continue;
-        const part = document.createElement('section'); part.className = 'analysis-card-section'; part.dataset.diagram = mode; part.dataset.slot = track.slot;
-        const title = document.createElement('strong'); title.textContent = mode === 'references' ? t(msg('analysis.referenceSection','帧参考')) : 'NALU';
-        part.style.setProperty('--section-width', mode === 'references' ? '240px' : '250px');
-        const { element: contents, timeUs } = entry.panel.details(trackHover(track.slot, sharedHover!, snapshot), {
-          size: diagrams.has('nalu-size'), types: diagrams.has('nalu-types'), header: false,
-        });
-        if (timeUs !== undefined) hitTimeUs = timeUs;
-        part.append(title, contents); grid.append(part);
-      }
-      time.dataset.hitTime = hitTimeUs === undefined ? '' : String(hitTimeUs);
-      time.textContent = hitTimeUs === undefined ? '—' : `${formatAxis(hitTimeUs)} · ${snapshot.axis.toUpperCase()}`;
-      cardEl.append(row);
-    }
-    cardEl.style.setProperty('--combined-card-width', `${widths.reduce((sum, width) => sum + width, 0) + Math.max(0, widths.length - 1) * 8 + 18}px`);
-    cardEl.dataset.hoverTime = String(sharedHover!.timeUs);
-    card.position(x ?? canvas.getBoundingClientRect().left + fracToPx(inspection.state.hoverUs ?? snapshot.inspectionTimeUs));
   }
   function renderFloat(snapshot: InspectionState | null, x: number | null) {
     if (!snapshot) { clearSharedHover(); return; }
@@ -715,14 +410,6 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     inspection.state.lastClient = null;
     syncHighlights(); renderCombined(snapshot, x ?? null); publishTestHook();
   }
-  charts.addEventListener('pointerleave', event => {
-    if (!(event.relatedTarget instanceof Node) || !hoverCardsContain(event.relatedTarget)) clearSharedHover();
-  }, { signal });
-  cardEl.addEventListener('pointerleave', event => {
-    if (!(event.relatedTarget instanceof Node) || !charts.contains(event.relatedTarget)) clearSharedHover();
-  }, { signal });
-  charts.addEventListener('keydown', event => { if (event.key === 'Escape' && !inspection.state.pinned) clearSharedHover(); }, { signal });
-  const positionFloat = (x: number) => chartHoverStyle() === 'separate' ? positionIndividualCards() : card.position(x);
   const live = $<HTMLElement>('output');
   // 查询与检查状态分别由独立模块持有。
 
@@ -842,106 +529,6 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   function requestRender() {
     if (viewRaf || signal.aborted) return;
     viewRaf = requestAnimationFrame(() => { viewRaf = 0; if (!signal.aborted) render(); });
-  }
-
-  const sharedAxisGeometry = () => plotGeometry(sharedAxis.clientWidth);
-  installChartNavigation({ canvas: sharedAxis, signal, enabled: () => open && !sharedAxisHost.hidden && tracks.length > 0,
-    plotWidth: () => sharedAxisGeometry().plotW,
-    zoom(factor, clientX) {
-      clearSharedHover();
-      const geometry = sharedAxisGeometry(), range = viewRange();
-      const fraction = Math.max(0, Math.min(1, (clientX - sharedAxis.getBoundingClientRect().left - geometry.gutter) / geometry.plotW));
-      const next = zoomOverviewRange(range, fullRange(), fraction, factor, MIN_SPAN_US);
-      setView(next.start, next.end);
-    },
-    pan(pixels) {
-      clearSharedHover();
-      const range = viewRange(), shift = Math.round(pixels / sharedAxisGeometry().plotW * (fullRange().end - fullRange().start));
-      const next = panTimeRange(range.start, range.end, shift, domainBounds());
-      setView(next.start, next.end);
-    },
-  });
-  sharedAxis.addEventListener('dblclick', () => { clearSharedHover(); setView(null); }, { signal });
-  const rangeTimeAt = (clientX: number) => {
-    const domain = dataDomainBounds(), geometry = rangeGeometry();
-    const fraction = Math.max(0, Math.min(1, (clientX - rangeAxis.getBoundingClientRect().left - geometry.gutter) / geometry.plotW));
-    return Math.max(0, Math.min(durationUs, Math.round(domain.start + fraction * (domain.end - domain.start))));
-  };
-  const seekFromRange = (clientX: number) => {
-    if (prefs.axis === 'pts') void act(() => session.seek(rangeTimeAt(clientX)), 'ui.analysis-range-seek');
-  };
-  function positionRangeHover() {
-    const geometry = rangeGeometry();
-    const x = rangeHoverClientX == null ? -1 : rangeHoverClientX-rangeAxis.getBoundingClientRect().left;
-    const hidden = !open || sharedAxisHost.hidden || x < geometry.gutter || x > geometry.gutter+geometry.plotW;
-    rangeHover.hidden = rangeTimes[3].hidden = hidden;
-    if (!hidden) {
-      const domain = dataDomainBounds();
-      const time = Math.round(domain.start+(x-geometry.gutter)/geometry.plotW*(domain.end-domain.start));
-      rangeHover.style.left = `${x}px`;
-      rangeHover.dataset.positionUs = String(time);
-      rangeTimes[3].textContent = time < 0 ? formatAxis(time) : formatTime(time);
-    }
-    layoutRangeTimes();
-  }
-  rangeNavigation.addEventListener('pointermove', event => {
-    rangeHoverClientX = event.pointerType === 'touch' ? undefined : event.clientX;
-    positionRangeHover();
-  }, { signal });
-  rangeNavigation.addEventListener('pointerleave', () => { rangeHoverClientX = undefined; positionRangeHover(); }, { signal });
-  rangeAxis.addEventListener('click', event => seekFromRange(event.clientX), { signal });
-  rangeAxis.addEventListener('keydown', event => {
-    if (prefs.axis !== 'pts' || !['Home', 'End', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
-    event.preventDefault();
-    const value = event.key === 'Home' ? 0 : event.key === 'End' ? durationUs : positionUs + (event.key === 'ArrowLeft' ? -1 : 1) * 1_000_000;
-    void act(() => session.seek(Math.max(0, Math.min(durationUs, value))), 'ui.analysis-range-seek');
-  }, { signal });
-  let rangeDrag: { x: number; start: number; end: number; moved: boolean } | undefined;
-  rangeBand.addEventListener('pointerdown', event => {
-    if (event.button !== 0) return;
-    cancelRangeEdits(); event.preventDefault(); rangeDrag = { x: event.clientX, ...viewRange(), moved: false };
-    rangeBand.setPointerCapture(event.pointerId);
-  }, { signal });
-  rangeBand.addEventListener('pointermove', event => {
-    if (!rangeDrag || !rangeBand.hasPointerCapture(event.pointerId)) return;
-    if (!rangeDrag.moved && Math.abs(event.clientX - rangeDrag.x) < 3) return;
-    rangeDrag.moved = true; rangeBand.dataset.dragging = 'true';
-    const domain = dataDomainBounds(), delta = Math.round((event.clientX - rangeDrag.x) / rangeGeometry().plotW * (domain.end - domain.start));
-    const next = panTimeRange(rangeDrag.start, rangeDrag.end, delta, domainBounds()); setView(next.start, next.end);
-  }, { signal });
-  rangeBand.addEventListener('pointerup', event => {
-    if (!rangeDrag) return;
-    if (!rangeDrag.moved) seekFromRange(event.clientX);
-    if (rangeBand.hasPointerCapture(event.pointerId)) rangeBand.releasePointerCapture(event.pointerId);
-  }, { signal });
-  rangeBand.addEventListener('lostpointercapture', () => { rangeDrag = undefined; delete rangeBand.dataset.dragging; }, { signal });
-  rangeBand.addEventListener('keydown', event => {
-    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-    event.preventDefault();
-    const range = viewRange(), domain = fullRange();
-    const delta = event.key === 'Home' ? domain.start-range.start : event.key === 'End' ? domain.end-range.end : (event.key === 'ArrowLeft' ? -1 : 1)*(event.shiftKey ? 1_000_000 : 100_000);
-    const next = panTimeRange(range.start, range.end, delta, domainBounds()); setView(next.start, next.end);
-  }, { signal });
-  for (const handle of rangeHandles) {
-    let dragOrigin: { x: number; value: number } | undefined;
-    const apply = (value: number) => {
-      const range = viewRange(), domain = dataDomainBounds();
-      if (handle.dataset.edge === 'start') setView(Math.max(domain.start, Math.min(range.end - MIN_SPAN_US, value)), range.end);
-      else setView(Math.max(domain.start, range.start), Math.min(domain.end, Math.max(Math.max(domain.start, range.start) + MIN_SPAN_US, value)));
-    };
-    handle.addEventListener('pointerdown', event => { if (event.button !== 0) return; cancelRangeEdits(); event.preventDefault(); dragOrigin = { x: event.clientX, value: Number(handle.getAttribute('aria-valuenow')) }; handle.dataset.dragging = 'true'; handle.setPointerCapture(event.pointerId); }, { signal });
-    handle.addEventListener('pointermove', event => {
-      if (!handle.hasPointerCapture(event.pointerId) || !dragOrigin) return;
-      const domain = dataDomainBounds(), geometry = rangeGeometry();
-      apply(Math.round(dragOrigin.value + (event.clientX - dragOrigin.x) / geometry.plotW * (domain.end - domain.start)));
-    }, { signal });
-    handle.addEventListener('pointerup', event => { if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId); }, { signal });
-    handle.addEventListener('lostpointercapture', () => { dragOrigin = undefined; delete handle.dataset.dragging; }, { signal });
-    handle.addEventListener('keydown', event => {
-      const domain = dataDomainBounds(), value = Number(handle.getAttribute('aria-valuenow'));
-      if (event.key === 'Home' || event.key === 'End') { event.preventDefault(); apply(event.key === 'Home' ? domain.start : domain.end); }
-      else if (['ArrowLeft', 'ArrowRight'].includes(event.key)) { event.preventDefault(); apply(value + (event.key === 'ArrowLeft' ? -1 : 1) * (event.shiftKey ? 1_000_000 : 100_000)); }
-    }, { signal });
   }
 
   const selectedTracks = () => tracks.filter(t => prefs.selected.includes(t.slot));
@@ -1110,13 +697,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
 
   /** Static chrome follows the UI language; dynamic parts re-render below. */
   function localizeChrome() {
-    const rangeName = t(msg('analysis.editRange', '编辑图表区间'));
-    rangeTrigger.setAttribute('aria-label', rangeName); rangeTrigger.dataset.tooltip = rangeName; rangeEditor.setAttribute('aria-label', rangeName);
-    // 起止胶囊即时间输入：名称随语言更新，显示值由 syncRangeEdges 跟随区间。
-    rangeEdges.get('start')!.label = t(msg('analysis.rangeStart', '起始时间'));
-    rangeEdges.get('end')!.label = t(msg('analysis.rangeEnd', '结束时间'));
-    for (const state of rangeEdges.values()) state.input.setAttribute('aria-label', state.label);
-    syncRangeEdges();
+    rangeControl.localize();
     tools.setAttribute('aria-label', t(msg("analysis.tools", "分析选项")));
     tracksEl.setAttribute('aria-label', t(msg("analysis.compareTracks", "对比轨道")));
     // Choice menus mirror the trigger label into the popup; refresh both ends
@@ -1146,7 +727,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
 
   function localize() {
     status.invalidate();
-    card.reset();
+    hoverCards.reset();
     localizeChrome();
     refreshTools();
     updateStatus();
@@ -1159,69 +740,12 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
 
   // ---- 绘制：时间分组 → 统一几何 → 绘图与命中共用 ----
 
-  function renderSharedAxis() {
-    if (!open || sharedAxisHost.hidden || !sharedAxisCtx || !rangeAxisCtx) { sharedAxisSignature = ''; return; }
-    const width = Math.max(1, Math.floor(charts.clientWidth));
-    const range = viewRange(), domain = dataDomainBounds(), dpr = Math.min(2, window.devicePixelRatio || 1);
-    const coverage = selectedTracks().map(track => ({ track, state: session.getBitstreamAnalysisState(track.slot) }));
-    const signature = JSON.stringify([width, range, domain, dpr, colors, coverage.map(({track,state}) => [track.slot, state.stream, state.completedStream])]);
-    if (signature === sharedAxisSignature) return;
-    sharedAxisSignature = signature;
-    sharedAxis.style.width = `${width}px`; sharedAxis.style.height = `${AXIS_H}px`;
-    sharedAxis.width = Math.round(width * dpr); sharedAxis.height = Math.round(AXIS_H * dpr);
-    sharedAxisCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    sharedAxisCtx.clearRect(0, 0, width, AXIS_H);
-    drawTimeAxis(sharedAxisCtx, { width, height: AXIS_H, viewStart: range.start, viewEnd: range.end, colors });
-    const navWidth = Math.max(1, rangeNavigation.clientWidth || Math.min(460, innerWidth-48));
-    rangeAxis.style.width = `${navWidth}px`; rangeAxis.style.height = `${AXIS_H}px`;
-    rangeAxis.width = Math.round(navWidth * dpr); rangeAxis.height = Math.round(AXIS_H * dpr);
-    rangeAxisCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    rangeAxis.dataset.timeAxis = 'false';
-    rangeLabel.textContent = t(msg('analysis.rangeNavigator', '区间'));
-    rangeTrigger.querySelector('span')!.textContent = `${formatAxis(Math.max(domain.start,range.start))} – ${formatAxis(Math.min(domain.end,range.end))}`;
-    rangeAxis.setAttribute('aria-label', t(msg('analysis.fullTimelinePosition', '全片播放位置')));
-    rangeBand.setAttribute('aria-label', t(msg('analysis.panVisibleRange', '平移图表可见区间')));
-    rangeBand.setAttribute('aria-valuemin', String(domain.start)); rangeBand.setAttribute('aria-valuemax', String(Math.max(domain.start, domain.end-(range.end-range.start))));
-    rangeBand.setAttribute('aria-valuenow', String(range.start)); rangeBand.setAttribute('aria-valuetext', `${formatAxis(range.start)} – ${formatAxis(range.end)}`);
-    const geometry = rangeGeometry();
-    const dataDomain = dataDomainBounds();
-    const selectionStart = Math.max(dataDomain.start, range.start), selectionEnd = Math.min(dataDomain.end, range.end);
-    const xFor = (time: number) => geometry.gutter + Math.max(0, Math.min(1, (time - domain.start) / (domain.end - domain.start))) * geometry.plotW;
-    rangeAxisCtx.strokeStyle = colors.grid; rangeAxisCtx.beginPath();
-    rangeAxisCtx.lineWidth = 2;
-    rangeAxisCtx.moveTo(xFor(dataDomain.start), 3); rangeAxisCtx.lineTo(xFor(dataDomain.end), 3); rangeAxisCtx.stroke();
-    rangeAxisCtx.globalAlpha = .35;
-    for (const { track, state } of coverage) {
-      const stream = state.stream ?? state.completedStream;
-      if (!stream || !stream.totalUs) continue;
-      const window = 'window' in stream && stream.window ? stream.window : { startUs: 0, endUs: track.durationUs };
-      rangeAxisCtx.strokeStyle = slotColors.get(track.slot) ?? colors.delta; rangeAxisCtx.beginPath();
-      rangeAxisCtx.moveTo(xFor(window.startUs + track.offsetUs), 3);
-      rangeAxisCtx.lineTo(xFor(window.startUs + track.offsetUs + (window.endUs - window.startUs) * stream.checkedUs / stream.totalUs), 3); rangeAxisCtx.stroke();
-    }
-    rangeAxisCtx.globalAlpha = 1;
-    rangeNavigation.style.setProperty('--range-handle-inset', `${Math.min(8, Math.max(0,xFor(selectionEnd)-xFor(selectionStart))/4)}px`);
-    rangeBand.style.left = `${xFor(selectionStart)}px`; rangeBand.style.width = `${Math.max(0, xFor(selectionEnd) - xFor(selectionStart))}px`;
-    for (const handle of rangeHandles) {
-      const value = handle.dataset.edge === 'start' ? selectionStart : selectionEnd;
-      handle.style.left = `${xFor(value)}px`;
-      handle.setAttribute('aria-label', t(handle.dataset.edge === 'start' ? msg('analysis.visibleStart', '图表可见区间起点') : msg('analysis.visibleEnd', '图表可见区间终点')));
-      handle.setAttribute('aria-valuemin', String(dataDomain.start)); handle.setAttribute('aria-valuemax', String(dataDomain.end)); handle.setAttribute('aria-valuenow', String(value)); handle.setAttribute('aria-valuetext', value < 0 ? formatAxis(value) : formatTime(value));
-    }
-    syncRangeEdges();
-    positionRangePlayhead();
-    const chartDomain = fullRange();
-    sharedAxis.dataset.domainStart = String(chartDomain.start); sharedAxis.dataset.domainEnd = String(chartDomain.end);
-    sharedAxis.dataset.axisStart = String(range.start); sharedAxis.dataset.axisEnd = String(range.end);
-    rangeAxis.dataset.domainStart = String(domain.start); rangeAxis.dataset.domainEnd = String(domain.end);
-    sharedAxis.dataset.viewStart = String(range.start); sharedAxis.dataset.viewEnd = String(range.end);
-    sharedAxis.dataset.plotLeft = String(plotGeometry(width).gutter); sharedAxis.dataset.plotRight = String(plotGeometry(width).gutter + plotGeometry(width).plotW);
-    sharedAxis.dataset.timeAxis = 'true';
-  }
-
   function qpChart(slot: Slot) {
-    const range=viewRange();
-    return session.queryBitstreamChart(slot,range.start,range.end,Math.max(32,Math.min(4096,plotWidthCss())),prefs.axis);
+    const range = viewRange(), domain = session.bitstreamChartDomain(slot, prefs.axis);
+    if (!domain) return null;
+    const start = Math.max(domain.start, range.start), end = Math.min(domain.end, range.end);
+    if (end <= start) return null;
+    return session.queryBitstreamChart(slot, start, end, Math.max(32, Math.min(4096, plotWidthCss())), prefs.axis);
   }
   function qpAt(slot: Slot,time: number): number|null {
     const data=qpChart(slot); if(!data)return null;
@@ -1381,22 +905,6 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     playheadEl.style.left = `${fracToPx(positionUs)}px`;
   }
 
-  function positionRangePlayhead() {
-    rangePlayhead.hidden = prefs.axis === 'dts' || !open || sharedAxisHost.hidden;
-    rangeAxis.setAttribute('aria-disabled', String(prefs.axis === 'dts'));
-    rangeAxis.setAttribute('aria-valuemin', '0'); rangeAxis.setAttribute('aria-valuemax', String(durationUs));
-    rangeAxis.setAttribute('aria-valuenow', String(positionUs)); rangeAxis.setAttribute('aria-valuetext', formatTime(positionUs));
-    rangeTimes[1].hidden = rangePlayhead.hidden;
-    if (rangePlayhead.hidden) { positionRangeHover(); return; }
-    const domain = dataDomainBounds(), geometry = rangeGeometry();
-    const fraction = Math.max(0, Math.min(1, (positionUs - domain.start) / Math.max(1, domain.end - domain.start)));
-    rangePlayhead.style.left = `${geometry.gutter + fraction * geometry.plotW}px`;
-    rangePlayhead.dataset.positionUs = String(positionUs);
-    const text = formatTime(positionUs);
-    if (rangeTimes[1].textContent !== text) rangeTimes[1].textContent = text;
-    positionRangeHover();
-  }
-
   function positionHover() {
     if (inspection.state.hoverUs == null || inspection.state.hoverUs < viewRange().start || inspection.state.hoverUs > viewRange().end) {
       hoverEl.hidden = true;
@@ -1463,53 +971,17 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   /** 只读测试快照：布局 glyph 身份与当前检查状态，供浏览器回归精确断言。
    * 只在 QA 钩子启用时构建：生产 hover 不为 2000 条 glyph 摘要与 DOM 几何读取付费。 */
   function publishTestHook() {
-    try {
-      const w = window as unknown as { __vpAnalysis?: unknown; __vpAnalysisQA?: boolean };
-      if (!w.__vpAnalysisQA) return;
-      const active = inspection.state.pinned ?? inspection.state.lastInspection;
-      const plotRect = plot.getBoundingClientRect();
-      const visibleCard = cardEl.hidden ? [...individualCards.values()].find(card => !card.element.hidden)?.element : cardEl;
-      const flRect = visibleCard?.getBoundingClientRect() ?? null;
-      w.__vpAnalysis = {
-        view: viewRange(),
-        axis: prefs.axis,
-        queryPending: queries.pendingSlots,
-        queryResults: [...results].map(([slot, result]) => ({ slot, requestId: result.requestId,
-          bucketGrid: result.bucketGrid, samples: result.samples.length, truncated: result.truncated })),
-        pinned: inspection.state.pinned != null,
-        plot: { x: plotRect.x, y: plotRect.y, width: plotRect.width, height: plotRect.height },
-        float: flRect ? { x: flRect.x, y: flRect.y, width: flRect.width, height: flRect.height } : null,
-        inspection: active ? {
-          t: active.inspectionTimeUs,
-          tracks: active.tracks.map(t => ({
-            slot: t.slot,
-            bitrate: t.bitrate.value,
-            rate: t.localRate.value,
-            refId: t.reference?.sample.sampleId ?? null,
-            refAxis: t.reference?.axisUs ?? null,
-            coverage: t.coverageState,
-          })),
-          direct: active.directTarget,
-        } : null,
-        glyphs: lastGlyphs.slice(0, 2000).map(g => {
-          if (g.kind === 'sample') {
-            const s = g as SampleGlyph;
-            return {
-              kind: 'sample', slot: s.slot, id: s.sampleId, axisUs: s.axisUs,
-              stacked: s.stackedCount > 1, width: s.rect.width,
-              cx: s.interactionRect.x + s.interactionRect.width / 2,
-              cy: s.interactionRect.y + s.interactionRect.height / 2,
-            };
-          }
-          const b = g as BucketGlyph;
-          return {
-            kind: 'bucket', slot: b.slot, startUs: b.startUs, endUs: b.endUs, width: b.rect.width,
-            cx: b.interactionRect.x + b.interactionRect.width / 2,
-            cy: b.interactionRect.y + b.interactionRect.height / 2,
-          };
-        }),
-      };
-    } catch { /* 测试钩子不得影响面板。 */ }
+    publishAnalysisTestHook(() => ({
+      view: viewRange(),
+      axis: prefs.axis,
+      pendingSlots: queries.pendingSlots,
+      results,
+      pinned: inspection.state.pinned != null,
+      plot,
+      visibleCard: hoverCards.visibleCard(),
+      active: inspection.state.pinned ?? inspection.state.lastInspection,
+      glyphs: lastGlyphs,
+    }));
   }
 
   /**
@@ -1766,8 +1238,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     resizer_obs.disconnect();
     wrapObs.disconnect();
     themeChanges.disconnect();
-    closeRangeEditor(); rangeEditor.remove();
-    rangeTriggerObs.disconnect(); rangeEditorObs.disconnect();
+    closeRangeEditor();
     windowMenu.dispose();
     layoutMenu.dispose();
   }, { once: true });

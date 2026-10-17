@@ -182,7 +182,7 @@ export function installAnalysisCard(canvas: HTMLCanvasElement, options: {
     for (const [slot, dot] of flBadges) dot.style.background = options.colors().get(slot) ?? '#888';
     for (const tr of insp.tracks) {
       const [b, f, s] = formatCells(tr);
-      const qp=options.qpValue?.(tr.slot,tr.reference?.axisUs ?? insp.inspectionTimeUs);
+      const qp=rows&&!rows.qp?null:options.qpValue?.(tr.slot,tr.reference?.axisUs ?? insp.inspectionTimeUs);
       const vals: Record<string, string> = { bitrate: b, rate: f, size: s, qp:qp==null?'—':qp.toFixed(1) };
       for (const [m, text] of Object.entries(vals)) {
         const el = flCells.get(`${m}:${tr.slot}`);
