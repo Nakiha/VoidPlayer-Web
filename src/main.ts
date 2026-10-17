@@ -323,7 +323,11 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
     $<HTMLButtonElement>(id).disabled = !loaded;
   }
   pixelMenu.sync(viewport.pixelSize,viewport.pixelSize==='uniform'?tr(msg("player.uniformPixels", "统一像素")):tr(msg("player.fillView", "填满视图")),loaded);
-  channelMenu.sync(viewport.channel, channelLabels()[viewport.channel], loaded);
+  // 通道隔离只对原始平面帧生效（见 presenter 按 frame.kind 守卫）：浏览器色彩下
+  // 实际输出恒为 RGB。这里显示实际生效的通道，已存的 viewport.channel 原样保留，
+  // 切回自有色彩时仍恢复，避免丢掉用户的选择。
+  const effectiveChannel = state.colorMode === 'reference' ? viewport.channel : 'rgb';
+  channelMenu.sync(effectiveChannel, channelLabels()[effectiveChannel], loaded);
   $<HTMLElement>('channel-select').dataset.tooltip = state.colorMode === 'reference'
     ? tr(msg("shell.yuvChannelsRawYuvFramesOnly", "YUV 通道：仅原始平面帧生效")) : tr(msg("player.yuvChannelsSwitchToManagedColorFirst", "YUV 通道：请先切换为自有色彩"));
   syncZoomSelect(loaded);

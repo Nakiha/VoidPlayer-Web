@@ -225,7 +225,10 @@ dd { text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-n
    （2px），使车道比标尺宽 6px，同时与 track-column-resize.ts 的可用宽度计算
    （... - 2 * --tool-inset - --timeline-column-gap）和 themes/README.md 记录的
    「时间轴列间隔」不符。这里不再覆写，让车道沿用 .track-lane 的 --timeline-column-gap。 */
-.track-duration { position: absolute; left: 0; top: var(--tool-inset); min-height: calc(var(--control-height) - 2 * var(--tool-inset)); height: calc(var(--control-height) - 2 * var(--tool-inset)); padding: 0 var(--space-2); border-radius: var(--radius-small); border: var(--control-border-width) solid var(--border); background: var(--track-fill); font: var(--text-xs)/1 var(--font-mono); color: var(--text-secondary); justify-content: flex-end; }
+.track-duration { position: absolute; left: 0; top: var(--tool-inset); min-height: calc(var(--control-height) - 2 * var(--tool-inset)); height: calc(var(--control-height) - 2 * var(--tool-inset)); padding: 0 var(--space-2); border-radius: var(--radius-small); border: var(--control-border-width) solid var(--border); background: var(--track-fill); font: var(--text-xs)/1 var(--font-mono); color: var(--text-secondary); justify-content: flex-end; white-space: nowrap; }
+.track-duration[data-label=outside-right] { justify-content: flex-start; }
+.track-duration[data-label=outside-left] { justify-content: flex-end; }
+.track-duration[data-label=truncate] { justify-content: flex-start; overflow: hidden; text-overflow: ellipsis; }
 .subtrack-row.selected .track-duration, .subtrack-row.selected .track-duration:hover:not(:disabled) { background: var(--track-active); }
 .track-marker { position: absolute; top: 0; transform: translateX(-50%); width: var(--control-small-height); height: var(--control-height); padding: 0; background: transparent; border: 0; color: var(--mark-color); z-index: 2; }
 .track-marker:hover:not(:disabled), .track-marker.mark-linked-hover { background: transparent; }
@@ -543,7 +546,12 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .viewport-tool-grip { cursor: grab; touch-action: none; }
 .drawing-divider { width: 1px; height: 22px; background: var(--border); margin: 0 3px; }
 #drawing-error { margin: 4px; color: var(--warning-text); font-size: var(--text-sm); }
-.source-row.is-located { box-shadow: inset 0 0 0 1px var(--accent); }
+.source-row.is-located { position: relative; }
+.source-row.is-located::after { content: ''; position: absolute; inset: 0; border-radius: inherit;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  pointer-events: none; opacity: 1; animation: source-locate-flash 1.8s ease-out forwards; }
+@keyframes source-locate-flash { 0% { opacity: 1; } 55% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .source-row.is-located::after { animation: none; } }
 .source-row.in-use { background: var(--surface-selected); color: var(--accent); }
 .source-row.in-use .source-meta { color: var(--accent); }
 
@@ -852,7 +860,7 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .toast { pointer-events: auto; display: flex; align-items: center; gap: 4px; width: max-content; max-width: calc(100vw - 32px); padding: 4px 4px 4px 8px; border: 1px solid var(--border); border-radius: 9px; background: var(--viewport-chrome-fill); color: var(--text); box-shadow: var(--annotation-toolbar-shadow); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); font-size: var(--text-ui); overflow-wrap: anywhere; transition: opacity var(--toast-enter-duration, 120ms) ease-out, transform var(--toast-enter-duration, 120ms) ease-out; }
 @keyframes toast-appear { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
 .toast-enter { animation: toast-appear var(--toast-enter-duration, 120ms) ease-out; }
-.toast-leaving { opacity: 0; transform: translateY(-6px); transition: opacity var(--toast-exit-duration, 220ms) var(--panel-motion-easing, ease-out), transform var(--toast-exit-duration, 220ms) var(--panel-motion-easing, ease-out); }
+.toast-leaving { opacity: 0; transform: translateY(-6px); overflow: hidden; transition: opacity var(--toast-exit-duration, 220ms) var(--panel-motion-easing, ease-out), transform var(--toast-exit-duration, 220ms) var(--panel-motion-easing, ease-out), height var(--toast-exit-duration, 220ms) var(--panel-motion-easing, ease-out), padding-top var(--toast-exit-duration, 220ms) var(--panel-motion-easing, ease-out), padding-bottom var(--toast-exit-duration, 220ms) var(--panel-motion-easing, ease-out), margin-top var(--toast-exit-duration, 220ms) var(--panel-motion-easing, ease-out), margin-bottom var(--toast-exit-duration, 220ms) var(--panel-motion-easing, ease-out), border-top-width var(--toast-exit-duration, 220ms) var(--panel-motion-easing, ease-out), border-bottom-width var(--toast-exit-duration, 220ms) var(--panel-motion-easing, ease-out); }
 .toast-message { flex: 1; min-width: 0; }
 .toast-warning { background: var(--warning-fill); color: var(--warning-text); border-color: color-mix(in srgb, var(--warning-text) 35%, var(--border)); }
 .toast-error { background: var(--toast-error-fill); color: var(--toast-error-text); border-color: var(--toast-error-border); }

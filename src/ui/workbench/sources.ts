@@ -645,7 +645,12 @@ export function createSourcesPane(shared: WorkbenchShared) {
     const row = [...document.querySelectorAll<HTMLElement>('#source-list .source-row, #local-list .source-row')].find(row => row.dataset.sourceKey === key);
     if (!row || signal.aborted) return;
     clearTimeout(locateHighlight);
-    document.querySelectorAll('.source-row.is-located').forEach(row => row.classList.remove('is-located'));
+    for (const existing of document.querySelectorAll<HTMLElement>('.source-row.is-located')) {
+      if (existing !== row) existing.classList.remove('is-located');
+    }
+    // Same-row rapid clicks must restart the CSS animation: remove + reflow + add.
+    row.classList.remove('is-located');
+    void row.offsetWidth;
     row.classList.add('is-located');
     const list = row.closest<HTMLElement>('#source-list, .local-sources')!;
     const box = row.getBoundingClientRect(), bounds = list.getBoundingClientRect();

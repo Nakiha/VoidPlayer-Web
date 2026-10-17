@@ -68,8 +68,25 @@ export function installToasts(signal?: AbortSignal) {
     clearTimeout(timer);
     const ms = exitDuration(stack);
     el.classList.remove('toast-enter');
-    el.classList.add('toast-leaving');
     if (!ms) { remove(el); return; }
+    // Collapse in place so the toasts below glide up instead of jumping:
+    // the leaving toast keeps its height explicitly, then shrinks to zero
+    // (absorbing its flex gap via a negative margin) before removal.
+    const gap = Number.parseFloat(getComputedStyle(stack).gap) || 0;
+    const last = !el.nextElementSibling;
+    el.style.height = `${el.offsetHeight}px`;
+    el.style.overflow = 'hidden';
+    void el.offsetHeight;
+    el.classList.add('toast-leaving');
+    el.style.height = '0px';
+    el.style.paddingTop = '0px';
+    el.style.paddingBottom = '0px';
+    el.style.borderTopWidth = '0px';
+    el.style.borderBottomWidth = '0px';
+    if (stack.childElementCount > 1 && gap > 0) {
+      if (last) el.style.marginTop = `${-gap}px`;
+      else el.style.marginBottom = `${-gap}px`;
+    }
     setTimeout(() => remove(el), ms);
   }
 

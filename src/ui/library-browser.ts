@@ -171,11 +171,18 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
       await load(false, true);
     },
     async reveal(entry: LibraryEntry) {
+      const targetRoot = entry.rootId ?? '';
+      const targetDir = entry.name.includes('/') ? entry.name.slice(0, entry.name.lastIndexOf('/')) : '';
+      // Fast path: already visible — highlight only, no list rebuild (avoids full flicker).
+      if (!recent && search === '' && appliedSearch === '' && page?.entries.some(item => item.id === entry.id)) return true;
+      const sameScope = !recent && !all && root === targetRoot && directory === targetDir && search === '' && appliedSearch === '' && !!page;
       clearTimeout(searchTimer); request?.abort(); sequence++;
-      root = entry.rootId ?? ''; directory = entry.name.includes('/') ? entry.name.slice(0, entry.name.lastIndexOf('/')) : '';
+      root = targetRoot; directory = targetDir;
       search = ''; all = false; recent = false;
-      input.value = ''; page = null; appliedScope = ''; appliedSearch = ''; pendingSearch = false; render();
-      let append = false;
+      input.value = ''; pendingSearch = false;
+      // Keep the current page visible until the new one publishes: no
+      // page=null + render() empty flash. load() updates controls and swaps atomically.
+      let append = sameScope;
       do {
         const previousOffset = (page as LibraryPage | null)?.nextOffset;
         const pending = load(append, !append), ticket = sequence;

@@ -30,6 +30,46 @@ export function createTracksPane(shared: WorkbenchShared) {
   const cursors = new Map<Slot, { current: HTMLElement; hover: HTMLElement; startUs: number; endUs: number }>();
 
   function hideSeekPreview() { $('subtrack-preview').hidden = true; for (const c of cursors.values()) c.hover.hidden = true; }
+
+  // Duration text must never leave the lane. The bar keeps its true
+  // proportional width; when it is narrower than its text, the text spills
+  // toward the roomier side (empty lane), never outside the lane.
+  function fitDurationLabels() {
+    const list = document.getElementById('subtrack-list');
+    if (!list) return;
+    for (const seek of list.querySelectorAll<HTMLElement>('.track-duration')) {
+      const lane = seek.closest('.track-lane') as HTMLElement | null;
+      if (!lane || lane.clientWidth === 0) { delete seek.dataset.label; continue; }
+      const range = document.createRange();
+      range.selectNodeContents(seek);
+      const textW = range.getBoundingClientRect().width;
+      if (!(textW > 0)) { delete seek.dataset.label; continue; }
+      const cs = getComputedStyle(seek);
+      const pad = (Number.parseFloat(cs.paddingLeft) || 0) + (Number.parseFloat(cs.paddingRight) || 0);
+      if (textW + pad <= seek.clientWidth + 1) { delete seek.dataset.label; continue; }
+      if (lane.clientWidth < textW + pad) { seek.dataset.label = 'truncate'; continue; }
+      const barLeft = seek.offsetLeft;
+      const barRight = barLeft + seek.offsetWidth;
+      // Text starts/ends ~6px inside the bar edges (border + padding).
+      if (barLeft + 6 + textW <= lane.clientWidth) seek.dataset.label = 'outside-right';
+      else if (barRight - 6 - textW >= 0) seek.dataset.label = 'outside-left';
+      else seek.dataset.label = 'truncate';
+    }
+  }
+  let labelFrame = 0;
+  const queueLabelFit = () => {
+    if (labelFrame || shared.lifecyle.signal.aborted) return;
+    labelFrame = requestAnimationFrame(() => { labelFrame = 0; fitDurationLabels(); });
+  };
+  {
+    const list = document.getElementById('subtrack-list');
+    if (list) {
+      const watcher = new ResizeObserver(queueLabelFit);
+      watcher.observe(list);
+      shared.lifecyle.signal.addEventListener('abort', () => watcher.disconnect(), { once: true });
+    }
+    void (document as Document & { fonts?: { ready: Promise<unknown> } }).fonts?.ready.then(queueLabelFit);
+  }
   function previewPosition(ptsUs: number, durationUs: number) {
     for (const c of cursors.values()) { c.hover.style.left = `${trackTimelineRatio(ptsUs, c.startUs, c.endUs, durationUs) * 100}%`; c.hover.hidden = false; }
   }
@@ -226,6 +266,7 @@ export function createTracksPane(shared: WorkbenchShared) {
         label.append(name); row.append(label, offset, lane, audio, visibility); list.append(row);
       }
       if (!state.tracks.length) list.append(text('p', t(msg("tracks.loadAVideoToViewTracksAnd", "载入视频后查看轨道与标记")), 'panel-empty'));
+      queueLabelFit();
     }
     // Selection changes state in place; keep row, offset input and seek nodes.
     for (const row of $('subtrack-list').querySelectorAll<HTMLElement>('.subtrack-row')) {
