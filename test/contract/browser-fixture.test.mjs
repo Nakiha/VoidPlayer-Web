@@ -22,6 +22,22 @@ test('normal fixture completion isolates data and closes every resource in rever
   assert.equal(await withBrowserFixture(options,async fixture=>{await fixture.ready();return 'done';}),'done');
   assert.deepEqual(events,['page','context','browser','server','temp']);await assert.rejects(access(getTemp()));
 }));
+test('failure phases retain immutable baselines and completed steps without replacing the original error', async () => scenario(async ({ options, directory }) => {
+  const baseline = { view: { start: 0, end: 40000 } }, primary = new Error('wrong zoom');
+  await assert.rejects(withBrowserFixture(options, async fixture => {
+    fixture.checkpoint('zoom-baseline', baseline);
+    baseline.view.end = 99999;
+    await fixture.phase('load', async () => {});
+    await fixture.phase('zoom', async () => { throw primary; }, { expectedSpan: 20000 });
+  }), error => error === primary);
+  const report = JSON.parse(await readFile(path.join(directory, 'fixture-test-failure.json'), 'utf8'));
+  assert.equal(report.phase, 'zoom');
+  assert.equal(report.checkpoints[0].details.view.end, 40000);
+  assert.deepEqual(report.phases.map(step => [step.name, step.status]), [['load', 'passed'], ['zoom', 'failed']]);
+  assert.equal(report.phases[1].details.expectedSpan, 20000);
+  assert.equal(report.phases[1].error, 'wrong zoom');
+  assert.ok(report.phases.every(step => step.durationMs >= 0));
+}));
 test('assertion failure retains original error, state/DOM and all cleanup errors',async()=>scenario(async({options,events,browser,directory})=>{
   const primary=new Error('assertion failed');browser.close=async()=>{events.push('browser');throw Error('close broke');};
   await assert.rejects(withBrowserFixture(options,async()=>{throw primary;}),error=>error===primary);

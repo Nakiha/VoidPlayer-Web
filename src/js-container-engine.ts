@@ -6,8 +6,8 @@ import type {JsPacketIndex} from './matroska-packet-index.ts';
 import {jsPictureStream} from './matroska-packet-index.ts';
 import {jsDecodeIndex} from './js-decode-index.ts';
 import { PacketTimeline } from './packet-timeline.ts';
-import { nativeFlvDecoder, wasmFlvDecoder } from './flv-decoder.ts';
-import type { FlvFrame, PacketDecodeIndex, PacketDecoder } from './flv-decoder.ts';
+import { nativePacketDecoder, wasmPacketDecoder } from './flv-decoder.ts';
+import type { PacketFrame, PacketDecodeIndex, PacketDecoder } from './flv-decoder.ts';
 import type { PacketView } from './analysis/adapters.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
 import type { IndexProgress } from './worker-protocol.ts';
@@ -29,21 +29,21 @@ export class JsContainerEngine {
   private document?: JsPacketIndex;
   private statistics?: {packets: PacketView[]};
   private timeline?: PacketTimeline;
-  private primed: FlvFrame | null = null;
+  private primed: PacketFrame | null = null;
   private closed = false;
   private indexPacketsScanned=0;
   private indexOrigin:'client'|'server'='client';
   private outputSize?: { width: number; height: number };
-  private createNative:typeof nativeFlvDecoder;
-  private createSoftware:typeof wasmFlvDecoder;
+  private createNative:typeof nativePacketDecoder;
+  private createSoftware:typeof wasmPacketDecoder;
   private prefix?:Uint8Array;
 
   constructor(input: RandomAccessInput, sourceVersion: string,
-    decoders: {native?:typeof nativeFlvDecoder;software?:typeof wasmFlvDecoder;persistent?:boolean} = {}, format:'ts'|'matroska'='ts') {
+    decoders: {native?:typeof nativePacketDecoder;software?:typeof wasmPacketDecoder;persistent?:boolean} = {}, format:'ts'|'matroska'='ts') {
     this.format=format;this.reader = new RangeReader(input);
     this.input=input;this.sourceVersion=sourceVersion;this.persistent=!!decoders.persistent;
-    this.createNative=decoders.native??nativeFlvDecoder;
-    this.createSoftware=decoders.software??wasmFlvDecoder;
+    this.createNative=decoders.native??nativePacketDecoder;
+    this.createSoftware=decoders.software??wasmPacketDecoder;
   }
   cachedWindows() {
     const windows=new Map(this.reader.cachedWindows().map(w=>[w.offset,w]));
@@ -161,7 +161,7 @@ export class JsContainerEngine {
   }
   private async replaceDecoder(decoder: PacketDecoder) {
     const next = this.makeTimeline(decoder);
-    let first:FlvFrame;
+    let first:PacketFrame;
     try {first=await this.first(next,this.index!.firstPts);}
     catch(error){next.close();throw error;}
     // Commit only after the candidate produced a valid actual frame. A failed

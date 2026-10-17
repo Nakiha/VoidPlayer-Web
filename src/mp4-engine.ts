@@ -7,10 +7,9 @@ import { RangeReader } from './range-reader.ts';
 import { Mp4CachedMetadata } from './mp4-cached-metadata.ts';
 import type { RandomAccessInput } from './range-reader.ts';
 import { readMp4Configurations, validateFragmentPacket } from './mp4-config.ts';
-import { wasmFlvDecoder, nativeFlvDecoder } from './flv-decoder.ts';
-import type { PacketDecodeIndex,PacketDecoder } from './flv-decoder.ts';
+import { wasmPacketDecoder, nativePacketDecoder } from './flv-decoder.ts';
+import type { PacketDecodeIndex, PacketDecoder, PacketFrame } from './flv-decoder.ts';
 import { hevcDisplayOrder, recoveredHevcTimes } from './hevc-timeline.ts';
-import type { FlvFrame } from './flv-decoder.ts';
 import type { FlvCodec, FlvIndex, FlvPacket } from './flv-demux.ts';
 import { PacketTimeline } from './packet-timeline.ts';
 
@@ -24,11 +23,11 @@ export class Mp4Engine {
   private packets:EncodedPacket[]=[];
   private index!:PacketDecodeIndex;
   private timeline?:PacketTimeline;
-  private primed:FlvFrame|null=null;
+  private primed:PacketFrame|null=null;
   private nativeConfig?:VideoDecoderConfig;
   private displayBounds:{width:number;height:number}[]=[];
   private rotation: 0 | 90 | 180 | 270 = 0;
-  private displayed(frame: FlvFrame): FlvFrame {
+  private displayed(frame: PacketFrame): PacketFrame {
     const original=frame.description,bounds=this.displayBounds[frame.packetPicture?.configuration??0];
     let d=original;
     if(bounds&&(bounds.width<d.width||bounds.height<d.height)){const width=Math.min(bounds.width,d.width),height=Math.min(bounds.height,d.height);
@@ -100,15 +99,15 @@ export class Mp4Engine {
       // Keep those inputs on the JS packet table with the verified WASM decoder.
       this.nativeConfig=containerCrop||configs.descriptions.length>1||['mpeg4','mjpeg','prores'].includes(codec)?undefined:await track.getDecoderConfig()??undefined;
       onProgress?.('decoder');
-      const native=!forceWasm&&this.nativeConfig?await nativeFlvDecoder(this.index,this.nativeConfig):null;
-      const decoder:PacketDecoder=native||await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
+      const native=!forceWasm&&this.nativeConfig?await nativePacketDecoder(this.index,this.nativeConfig):null;
+      const decoder:PacketDecoder=native||await wasmPacketDecoder(this.index,glueURL,wasmBinary,threads);
       this.timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size),true);
       onProgress?.('first-frame');
       try { this.primed=await this.timeline.at(recovered?firstPts:Math.max(0,firstPts)); }
       catch(error) {
         if(decoder.kind!=='webcodecs'||!(error instanceof MediaOpenError)||error.stage!=='decode')throw error;
         this.timeline.close();this.timeline=undefined;
-        const software=await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
+        const software=await wasmPacketDecoder(this.index,glueURL,wasmBinary,threads);
         this.timeline=new PacketTimeline(this.index,software,packet=>this.reader.read(packet.offset,packet.size),true);
         this.primed=await this.timeline.at(recovered?firstPts:Math.max(0,firstPts));
       }
@@ -131,9 +130,9 @@ export class Mp4Engine {
   }
   async next(pts:number,recycle?:ArrayBuffer){const frame=await this.timeline!.next(pts,recycle);return frame?this.displayed(frame):null;}
   /** Produce a first-frame software witness from this MP4 index and reader. */
-  async referenceWitness(glueURL:string,wasmBinary?:Uint8Array,threads=1):Promise<FlvFrame>{
+  async referenceWitness(glueURL:string,wasmBinary?:Uint8Array,threads=1):Promise<PacketFrame>{
     if(this.timeline?.decoder.kind!=='webcodecs'||!this.timeline)throw new MediaOpenError('decode','MP4 原生解码器尚未就绪。');
-    const decoder=await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
+    const decoder=await wasmPacketDecoder(this.index,glueURL,wasmBinary,threads);
     const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size),true);
     try{return this.displayed(await timeline.at(this.primed?.pts??this.index.packets[this.index.order[0]].pts));}
     finally{timeline.close();}
@@ -141,10 +140,10 @@ export class Mp4Engine {
   /** Replace the active decoder without rebuilding the MP4 sample table. */
   async switchToSoftware(glueURL:string,wasmBinary?:Uint8Array,threads=1){
     if(this.timeline?.decoder.kind==='webcodecs'){
-      const decoder=await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
+      const decoder=await wasmPacketDecoder(this.index,glueURL,wasmBinary,threads);
       const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size),true);
       const target=this.primed?.pts??this.index.packets[this.index.order[0]].pts;
-      let primed:FlvFrame;
+      let primed:PacketFrame;
       try{primed=await timeline.at(target);}catch(error){timeline.close();throw error;}
       this.primed?.frame?.close();this.timeline.close();this.timeline=timeline;this.primed=primed;
     }
@@ -153,11 +152,11 @@ export class Mp4Engine {
   /** Restore WebCodecs without reopening the MP4 input or rebuilding its sample table. */
   async switchToNative(){
     if(this.timeline?.decoder.kind==='ffmpeg-wasm'&&this.nativeConfig){
-      const decoder=await nativeFlvDecoder(this.index,this.nativeConfig);
+      const decoder=await nativePacketDecoder(this.index,this.nativeConfig);
       if(decoder){
         const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size),true);
         const target=this.primed?.pts??this.index.packets[this.index.order[0]].pts;
-        let primed:FlvFrame;
+        let primed:PacketFrame;
         try{primed=await timeline.at(target);}catch(error){timeline.close();if(error instanceof MediaOpenError&&error.stage==='decode')return this.decoderInfo();throw error;}
         this.primed?.frame?.close();this.timeline.close();this.timeline=timeline;this.primed=primed;
       }

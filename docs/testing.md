@@ -82,6 +82,34 @@ node scripts/run-tests.mjs uncovered --prepared
 
 13 类回归（menu、settings、theme、shortcuts、feedback、mark-cards、color-settings、metadata、stepping、timeline、annotation、annotation-rendering、workspace）已迁入 `scripts/testing/browser-fixture.mjs`：每个 case 独占临时 SQLite、随机端口、浏览器/context 与产物目录，正常完成、断言失败、部分启动失败、超时、取消均按逆序清理。失败产物包含 case/engine/阶段、原始异常、控制台、页面错误、Range 请求、可用的会话状态、截图与 DOM。清理异常单独写入 `cleanup-errors.json`，不会替换原始异常。公共 fixture 接管 SIGINT/SIGTERM/SIGHUP，旧单项脚本直接中断也会先完成资源清理，并在结束后移除信号监听；浏览器关闭由 fixture 统一负责。可信 HTTPS/身份、服务重启、Range 故障注入、Vite 测试页及原生包浏览器保留专用生命周期和服务扩展；它们仍由统一 runner 执行并登记既有产物目录。主题的受限存储 context 与设置的 DPR 2 context 通过 `newContext` 登记；额外 context 的启动失败或取消也属于同一 case 的清理范围。扩展服务在开始监听或等待 ready 前可用 `defer` 注册部分启动资源。连接与身份的普通 HTTP 测试共用 `http-origin.mjs`，将虚拟测试域名的 HTTP 请求转到临时 loopback 服务，保留页面的不安全 origin；HTTPS 请求不匹配此转发，仍验证真实证书信任。
 
+### 浏览器测试约定与失败取证
+
+测试入口首先声明环境前提，操作后的断言等待可观察的完成状态：
+
+- 通过 Agent 调用分享不带点击激活；Chromium case 必须为当前服务 origin 显式授予 `clipboard-write`，不可全局放开权限。专门验证剪贴板拒绝的用例保留拒绝路径。不同引擎只配置其支持的权限，不以捕获权限错误后继续执行代替授权。
+- 通用夹具的 `ready()` 已等待动态入口发布 `window.voidPlayer.tools`。专用生命周期在导航、重载后也必须等待实际需要的 API/会话状态，再调用工具。
+- `scripts/testing/browser-contracts.mjs` 的 `waitForDialogClosed(page)` 同时等待设置对话框退出、关闭标记清除和焦点归还。其他对话框显式传 selector/invoker；不要求焦点时显式传 `{ invoker: null }`。不要只等元素隐藏后立刻发送快捷键。
+- 主题/高对比度变化使用 `settleAppearance(page)` 等待有限动画完成及布局刷新；忽略持续动画，但不禁用动画、不降低动态效果配置。颜色检查针对可渲染的控件或有标识的临时 probe，不读隐藏值存储器的绘制样式。既有 tooltip 延迟、暂停稳定性等有意观测窗口仍保留。
+- 比较基线在相关前置操作完成后采集。拖动、seek、换源后重新获取所需基线，不沿用旧视窗。异步索引需明确等待状态或明确测试增量状态。缩放目标必须处于可达范围；测试手势生效时还须证明前后范围确实不同，零位移不能算通过。
+
+公共夹具支持给等待命名并记录操作前现场：
+
+```js
+checkpoint('scroll-baseline', { view, scrollTop });
+await phase('scroll-charts', () => page.waitForFunction(
+  before => document.querySelector('.analysis-charts').scrollTop > before,
+  scrollTop,
+), { expectedView: view });
+```
+
+`checkpoint(name, details)` 在调用时克隆数据；`phase(name, action, details?)` 保留步骤状态、开始时间、耗时及原始错误，遵守既有逐操作和整例期限。两类记录各保留最近 50 条。完成的步骤不会把后续普通断言误标为之前的步骤。优先标记关键操作和边界，不把每个点击包装成阶段；记录有用的基线和预期，避免保存帧数据。
+
+失败 JSON（`schemaVersion: 2`）在访问浏览器前先落盘。现有字段继续保留，并增加步骤/基线、浏览器与视口/DPR、媒体查询、主题、焦点、打开的对话框/菜单，以及关键控件的几何、计算样式和图表 dataset。Range 和普通 API 请求分别记录总数、待完成数和最近 100 条；另保留最近 100 条 HTTP/网络失败（包括静态资源）。控制台和页面错误也各保留最近 100 条，不记录请求体。截图、DOM、会话状态和界面摘要独立尽力采集；崩溃、超时或采集失败不能替换原始异常。
+
+需要重启服务的标注持久化 case 保留专用生命周期，但共用取证器，统一 runner 下在逐 case 产物目录保存各页面的阶段和现场，随现有 CI 报告上传；直接运行时默认写入 `.run/playback-reports/annotation-persistence-<engine>/`。公共夹具报告同样遵循逐 case 产物目录及直接运行的默认目录。读取失败证据时先看统一 runner 的 `results.json`，再看阶段、基线、实际图表 dataset 和网络记录；不要只凭超时判断 runner 抖动。
+
+`browser-contracts-{webkit,chromium}` 已登记在 `browser` / `uncovered`，不依赖媒体、core 或构建。它们故意触发一次真实页面超时，只有确认等待约定、原始失败、JSON/DOM/截图取证均正确才通过；其 `*-failure.*` 是预期的测试产物，不代表该 case 失败。Node 契约同时覆盖请求缓冲淘汰后的总数、不可变基线及清理异常。
+
 ### 覆盖下限与兼容入口
 
 `test/testing-coverage-baseline.json` 保存迁移时已有 case × engine × platform × input、执行命令、required 属性与 CI 归属下限；`test/test-manifest.test.mjs` 检查每格仍存在。`uncovered` 保留原有 20 格，并补齐此前遗漏的 16 格；CI 按 Chromium/WebKit 拆分执行。FLV startup 两引擎、HEVC 的两引擎 × 本地/远程（各两次重开）、FATE 内部矩阵和原生 Node/Bun 三平台验证都保留。完整 Node 验证仍由 `unit` 运行；`source` 提前独立验证无需媒体的逻辑；断言、媒体和参考结果不变。新增 case 必须显式登记，删除矩阵项或 required 属性会使契约失败。不得改写覆盖下限文件来掩盖覆盖减少；新增基础设施用例和工具可追加登记。

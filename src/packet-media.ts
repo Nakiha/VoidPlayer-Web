@@ -15,9 +15,9 @@ import { VideoSample } from 'mediabunny';
 import { floorIndex, WASM_CORE_GLUE_PATH, WASM_CORE_GLUE_PATH_MT, reserveFallbackThreads } from './ffmpeg-media.ts';
 import type { FallbackDeps } from './ffmpeg-media.ts';
 import type { MediaMeta, MediaSource, DecodedFrame } from './media.ts';
-import type { FlvInput } from './flv-demux.ts';
+import type { PacketInput } from './flv-demux.ts';
 import type { PreparedFlv } from './flv-engine.ts';
-import type { FlvFrame } from './flv-decoder.ts';
+import type { PacketFrame } from './flv-decoder.ts';
 import { contextLog } from './log.ts';
 import { getColorMode } from './color-mode.ts';
 import type { ColorMode, ReferenceDecode } from './color-mode.ts';
@@ -26,7 +26,7 @@ import { resolveYuvColor } from './yuv-color.ts';
 import type { MediaInfo } from './model.ts';
 import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample } from './analysis/types.ts';
 
-export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matroska', input: FlvInput, meta: MediaMeta, deps: FallbackDeps & { forceWasm?: boolean; sourceVersion?: string; preparedTs?: {rpc:WorkerRpc<PacketCommands>; session:string; hasDts:boolean} } = {}): Promise<MediaSource> {
+export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matroska', input: PacketInput, meta: MediaMeta, deps: FallbackDeps & { forceWasm?: boolean; sourceVersion?: string; preparedTs?: {rpc:WorkerRpc<PacketCommands>; session:string; hasDts:boolean} } = {}): Promise<MediaSource> {
   loadAborted(deps.signal);
   if((container==='ts'||container==='matroska') && !deps.sourceVersion)throw new MediaOpenError('input','JS TS source namespace is required');
   let reservation = reserveFallbackThreads();
@@ -149,7 +149,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
       if (disposed) throw new Error('媒体已释放。');
       if ((info.indexState as string) === 'error') throw new Error(info.indexError);
     };
-    const toDecodedFrame = async (frame: FlvFrame): Promise<DecodedFrame> => {
+    const toDecodedFrame = async (frame: PacketFrame): Promise<DecodedFrame> => {
       const position = floorIndex(times, frame.pts - info.firstPtsUs);
       if (disposed) { frame.frame?.close(); throw new Error('媒体已释放。'); }
       const sample = frame.frame ? new VideoSample(frame.frame, { rotation: frame.rotation ?? 0 }) : undefined;

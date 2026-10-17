@@ -40,8 +40,12 @@ test('messages use compiled ICU, escape user content, preserve ASCII timecode an
  const error=new MediaOpenError('decode','原始理由','reference-hdr-unsupported');
  const wrapped=new AggregateError([new Error('secondary'),error],'original');assert.equal(mediaDiagnostic(wrapped)?.code,'reference-hdr-unsupported');
  const label=diagnosticMessage('原始理由',mediaDiagnostic(error));assert.match(label,/Managed color/);assert.match(label,/reference-hdr-unsupported \/ decode/);assert.match(label,/原始理由/);
+ assert.equal(diagnosticMessage('请先打开视频。'),'Open a video first.');
+ assert.equal(diagnosticMessage('该片源已在视图中，不能重复添加。'),'This source is already in the view and cannot be added again.');
+ assert.equal(diagnosticMessage('未知底层错误'),'未知底层错误');
  assert.equal(formatTime(62034567),'01:02.034');assert.equal(parseTimeInput('01:02.035','s'),62035000);
  await setLanguage('zh-CN',{persist:false});assert.equal(formatTime(62034567),'01:02.034');
+ assert.equal(diagnosticMessage('请先打开视频。'),'请先打开视频。');
 });
 for (const count of [0, 1, 2]) {
  test(`admin count messages handle ${count} in English and Chinese`, async () => {

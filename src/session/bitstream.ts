@@ -1,7 +1,16 @@
-import type { Slot } from '../model.ts';
-import type { BitstreamAnalysisService, DeepAnalysisState } from '../bitstream-analysis/service.ts';
+import type { AnalysisAxis } from '../analysis/types.ts';
+import type { PresentedFrameToken } from '../bitstream-analysis/contract.ts';
 import { AnalysisFailure, failureInfo } from '../bitstream-analysis/failure.ts';
+import type { BitstreamAnalysisService, DeepAnalysisState } from '../bitstream-analysis/service.ts';
 import { AnalysisTaskPool } from '../bitstream-analysis/task-pool.ts';
+import type { MediaSource } from '../media.ts';
+import { referenceVersion } from '../media-reference.ts';
+import type { Slot } from '../model.ts';
+import { slotValue } from '../model.ts';
+
+export function trackSourceVersion(source: MediaSource): string {
+  return source.info.source ? `${source.info.source.id}@${referenceVersion(source.info.source.url)}` : source.info.id;
+}
 
 /** The instance is opaque: only Session can inspect or mutate a track/source. */
 export interface AnalysisTrackSnapshot {
@@ -140,6 +149,62 @@ export class BitstreamSessionCoordinator {
   complete(slot: Slot, generation: number, progress: NonNullable<DeepAnalysisState['completedStream']>) {
     this.completed.set(slot, { generation, progress });
     this.host.changed();
+  }
+
+  queryDiagrams(slot: Slot, track: { source: MediaSource; offsetUs: number; failure?: unknown } | undefined, token: PresentedFrameToken | null, startAu?: number, limit = 128) {
+    slotValue(slot);
+    if ((startAu !== undefined && (!Number.isSafeInteger(startAu) || startAu < 0)) || !Number.isInteger(limit) || limit < 1 || limit > 256) {
+      throw new AnalysisFailure('invalid-request', 'Invalid diagram window');
+    }
+    if (!track || track.failure) return null;
+    const version = trackSourceVersion(track.source);
+    const data = this.queries?.queryDiagrams(version, token?.picture?.au ?? null, token?.sourcePtsUs ?? track.source.info.firstPtsUs, startAu, limit);
+    return data ? { ...data, sourceVersion: version, firstPtsUs: track.source.info.firstPtsUs, offsetUs: track.offsetUs } : null;
+  }
+
+  chartDomain(slot: Slot, track: { source: MediaSource; offsetUs: number; failure?: unknown } | undefined, axis: AnalysisAxis = 'pts') {
+    slotValue(slot);
+    if (axis !== 'pts' && axis !== 'dts') throw new AnalysisFailure('invalid-request', 'Invalid chart time base');
+    if (!track || track.failure) return null;
+    const version = trackSourceVersion(track.source);
+    const bounds = this.queries?.chartBounds(version, axis);
+    const shift = track.offsetUs - track.source.info.firstPtsUs;
+    return {
+      start: Math.min(track.offsetUs, bounds ? bounds.start + shift : track.offsetUs),
+      end: Math.max(track.offsetUs + Math.max(1, track.source.info.durationUs), bounds ? bounds.end + shift : -Infinity),
+    };
+  }
+
+  queryChart(
+    slot: Slot,
+    track: { source: MediaSource; offsetUs: number; failure?: unknown } | undefined,
+    token: PresentedFrameToken | null,
+    startUs?: number,
+    endUs?: number,
+    pixelWidth = 512,
+    axis: AnalysisAxis = 'pts',
+  ) {
+    slotValue(slot);
+    if (
+      (axis !== 'pts' && axis !== 'dts') ||
+      !Number.isInteger(pixelWidth) || pixelWidth < 32 || pixelWidth > 4096 ||
+      (startUs !== undefined && !Number.isFinite(startUs)) ||
+      (endUs !== undefined && !Number.isFinite(endUs))
+    ) {
+      throw new AnalysisFailure('invalid-request', 'Invalid diagram viewport');
+    }
+    if (!track || track.failure) return null;
+    const domain = this.chartDomain(slot, track, axis)!;
+    const start = Math.max(domain.start, startUs ?? domain.start), end = Math.min(domain.end, endUs ?? domain.end);
+    if (end <= start) throw new AnalysisFailure('invalid-request', 'Empty diagram viewport');
+    const version = trackSourceVersion(track.source);
+    const firstPtsUs = track.source.info.firstPtsUs, offsetUs = track.offsetUs;
+    const data = this.queries?.queryChart(version, start + firstPtsUs - offsetUs, end + firstPtsUs - offsetUs, pixelWidth, axis) ??
+      { revision: 0, count: 0, codec: null, containerHeaders: [], types: [], pictures: [], buckets: [], aggregated: false, detailMissing: false };
+    return {
+      ...data, axis, sourceVersion: version, firstPtsUs, offsetUs, domain, startUs: start, endUs: end,
+      anchorAu: token?.picture?.au ?? null,
+    };
   }
 
   dispose() {

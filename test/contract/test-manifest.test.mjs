@@ -87,7 +87,8 @@ test('coverage floor retains original commands, required cells and CI membership
 });
 test('local and CI select the same applicable matrix; filters cannot fake engine/input support', () => {
   const linux = selectCases({ suite: 'uncovered', platform: 'linux' }).selected;
-  assert.equal(linux.length, 36);
+  assert.equal(linux.length, 38); // Original 36 cells plus the two real-browser infrastructure contracts.
+  for (const engine of ['webkit', 'chromium']) assert.ok(linux.some(row => row.id === `browser-contracts-${engine}`));
   assert.deepEqual(linux.map(row => row.id), selectCases({ suite: 'uncovered', platform: 'darwin' }).selected.map(row => row.id));
   assert.equal(selectCases({ suite: 'browser', engine: 'webkit', input: 'local' }).selected.filter(row => row.id.startsWith('hevc-timeline')).length, 1);
   const windows = selectCases({ suite: 'ci-native-console', platform: 'darwin' });

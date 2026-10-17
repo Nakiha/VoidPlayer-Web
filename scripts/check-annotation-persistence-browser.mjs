@@ -1,4 +1,6 @@
 import { chooseTestGuest } from './test-identity.mjs';
+import { recordBrowserEvidence, saveBrowserFailure } from './browser-failure-evidence.mjs';
+import { waitForDialogClosed } from './testing/browser-contracts.mjs';
 import assert from 'node:assert/strict';
 import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';
 import path from 'node:path';
@@ -7,29 +9,36 @@ import {webkit,chromium} from 'playwright';
 import {loadConfig} from '../server/config.ts';
 import {startService} from '../server/runtime.ts';
 const root=path.resolve(import.meta.dirname,'..'), temp=await mkdtemp(path.join(os.tmpdir(),'vp-annotation-sync-'));
-const name=process.argv[2]??'webkit';let service,browser;
+const name=process.argv[2]??'webkit';let service,browser,context,phase='startup';
+const pageEvidence=new Map();
 async function until(read, ready){const deadline=Date.now()+20000;while(Date.now()<deadline){const value=await read();if(ready(value))return value;await new Promise(r=>setTimeout(r,100));}throw new Error('Timed out waiting for persisted server state');}
 try {
  await writeFile(path.join(temp,'voidplayer.config.json'),JSON.stringify({mediaRoots:[{id:'qa',name:'QA',path:path.join(root,'fixtures/video')}],dataDir:'data',logsDir:null,staticDir:path.join(root,'dist'),indexWatch:false}));
  const config=await loadConfig([],'production',temp);config.port=0;service=await startService(config);await service.library.refresh();
  const base=`http://127.0.0.1:${service.server.address().port}`;
  browser=await(name==='chromium'?chromium:webkit).launch({headless:true});
- const context=await browser.newContext({locale:'zh-CN', viewport:{width:1512,height:850},colorScheme:'dark'}), errors=[];
- context.on('page',page=>page.on('pageerror',error=>errors.push(error.message)));
+ const errors=[];
+ context=await browser.newContext({locale:'zh-CN', viewport:{width:1512,height:850},colorScheme:'dark'});
+ // Agent calls have no click activation; explicitly allow the real clipboard
+ // write used by share_workspace in headless Chromium.
+ if(name==='chromium')await context.grantPermissions(['clipboard-write'],{origin:base});
+ context.on('page',page=>{pageEvidence.set(page,recordBrowserEvidence(page));page.on('pageerror',error=>errors.push(error.message));});
  const call=(page,name,args={})=>page.evaluate(({name,args})=>window.voidPlayer.tools.find(t=>t.name===name).execute(args),{name,args});
  await context.addInitScript(()=>window.addEventListener('voidplayer-annotation-status',event=>{window.testAnnotationStatus=event.detail;}));
  const a=await context.newPage();await a.goto(base);await chooseTestGuest(a);await a.waitForFunction(()=>window.voidPlayer);
  const library=await call(a,'list_library');await call(a,'load_library_item',{slot:'A',id:library.entries.find(e=>e.name==='ci_h264_smoke.mp4').id});
+ phase='share-workspace';
  await call(a,'share_workspace');await a.waitForFunction(()=>new URL(location.href).searchParams.has('workspace'));
  const workspace=new URL(a.url()).searchParams.get('workspace'),space=(await a.request.get(base+'/api/workspaces/'+workspace).then(r=>r.json())).space,endpoint=base+'/api/annotations/spaces/'+space,routePattern='**/api/annotations/spaces/'+space;
+ phase='shared-annotation-sync';
  const b=await context.newPage();await b.goto(a.url());await b.waitForFunction(()=>window.voidPlayer?.getState().tracks.length===1 && !window.voidPlayer.getState().busy);
  await b.locator('#settings-open').click();await b.locator('#settings-tab-workspace').click();
  assert.equal(await b.locator('#annotation-save-state, #settings-tab-annotations, #annotation-space-choice, #annotation-space-create, #annotation-publish').count(),0,'legacy sync controls are removed');
  const recoveryControls='#annotation-recovery, #annotation-sync-now, #annotation-drafts-export, #annotation-conflicts, #annotation-other-drafts';
- const checkWorkspace=async page=>{assert.equal(await page.locator(recoveryControls).count(),0,'annotation recovery controls are removed entirely');assert.deepEqual(await page.locator('.workspace-current-section button:visible').allTextContents(),['保存','复制链接'],'annotation state adds no workspace actions');};
+ const checkWorkspace=async page=>{assert.equal(await page.locator(recoveryControls).count(),0,'annotation recovery controls are removed entirely');assert.deepEqual(await page.locator('.workspace-current-section button:visible').allTextContents(),['保存','分享'],'annotation state adds no workspace actions');};
  const readDrafts=page=>page.evaluate(()=>new Promise((resolve,reject)=>{const request=indexedDB.open('voidplayer-annotations');request.onerror=()=>reject(request.error);request.onsuccess=()=>{const db=request.result,tx=db.transaction('drafts'),read=tx.objectStore('drafts').getAll();read.onsuccess=()=>resolve(read.result);read.onerror=()=>reject(read.error);tx.oncomplete=()=>db.close();};}));
  await checkWorkspace(b);
- await b.locator('#settings-close').click();
+ await b.locator('#settings-close').click();await waitForDialogClosed(b);
  const mark=await call(a,'add_review_mark',{slot:'A',text:'持久化标注'});
  await b.waitForFunction(id=>window.voidPlayer.getState().marks.some(mark=>mark.id===id),mark.id);
  assert.equal((await call(b,'get_review_session')).marks[0].text,'持久化标注');
@@ -37,6 +46,7 @@ try {
  await a.waitForFunction(id=>window.voidPlayer.getState().marks.some(mark=>mark.id===id),mark.id);
  const entries=await a.request.get(endpoint).then(r=>r.json());assert.equal(entries.entries.length,1);
 
+ phase='offline-edit-delete-conflict';
  // Hold only B's write path offline while A deletes the shared record.
  await b.route(routePattern,route=>route.request().method()==='POST'?route.abort():route.continue());
  await call(b,'update_review_mark',{id:mark.id,text:'离线编辑草稿'});
@@ -45,22 +55,23 @@ try {
  const del=await a.request.post(endpoint,{headers:{origin:base,'x-voidplayer-action':'annotation','x-voidplayer-actor':actor.id},data:{operationId:'delete-from-admin',id:mark.id,revision:1,action:'delete'}});assert.equal(del.status(),200);
  await b.locator('#settings-open').click();await b.locator('#settings-tab-workspace').click();
  await checkWorkspace(b);
- await b.locator('#settings-close').click();
+ await b.locator('#settings-close').click();await waitForDialogClosed(b);
  // This page sees the other writer's local draft but offers no takeover tools.
- await a.locator('#settings-open').click();await a.locator('#settings-tab-workspace').click();await checkWorkspace(a);await a.locator('#settings-close').click();
+ await a.locator('#settings-open').click();await a.locator('#settings-tab-workspace').click();await checkWorkspace(a);await a.locator('#settings-close').click();await waitForDialogClosed(a);
  await b.unroute(routePattern);
  await b.waitForFunction(()=>window.testAnnotationStatus?.state==='error');
  await b.locator('#settings-open').click();await b.locator('#settings-tab-workspace').click();
  await checkWorkspace(b);
  assert.ok((await call(b,'get_review_session')).marks.some(mark=>mark.text==='离线编辑草稿'),'conflicting draft survives remote deletion');
  assert.ok((await readDrafts(b)).some(draft=>draft.id===mark.id && draft.conflict && draft.desired?.mark.text==='离线编辑草稿'),'conflict remains safely stored without resurrecting the deleted server mark');
- await b.locator('#settings-close').click();
+ await b.locator('#settings-close').click();await waitForDialogClosed(b);
  const afterConflict=await a.request.get(endpoint).then(r=>r.json());
  assert.equal(afterConflict.entries.filter(entry=>!entry.deleted).length,0);
  assert.equal(afterConflict.entries.find(entry=>entry.id===mark.id).deleted,true);
  // Ordinary new annotations still save while an older draft conflicts.
  const copy=await call(b,'add_review_mark',{slot:'A',text:'正常新标注'});
  await a.waitForFunction(id=>window.voidPlayer.getState().marks.some(mark=>mark.id===id),copy.id);
+ phase='admin-versioned-writes';
  // Data management uses the same versioned write path and cannot move playback.
  const position=(await call(a,'get_review_session')).positionUs;
  const admin=await context.newPage();await admin.goto(base+'/admin');await admin.locator('[data-pane=annotations]').click();await admin.locator('#admin-annotation-space').click();await admin.locator(`#admin-annotation-space-menu [data-value="${space}"]`).click();
@@ -72,10 +83,11 @@ try {
  assert.equal((await call(a,'get_review_session')).positionUs,position);
  for(const scheme of ['dark','light']){await admin.emulateMedia({colorScheme:scheme});await admin.waitForFunction(s=>document.documentElement.dataset.theme===s,scheme);await admin.screenshot({path:`/tmp/voidplayer-annotation-admin-${scheme}-${name}.png`});}
  await b.locator('#settings-open').click();await b.locator('#settings-tab-workspace').click();await b.screenshot({path:`/tmp/voidplayer-annotation-save-${name}.png`});
- await b.locator('#settings-close').click();
+ await b.locator('#settings-close').click();await waitForDialogClosed(b);
  // Existing old workspaces must not overwrite current shared revisions.
  const saved=await call(a,'export_workspace');await a.evaluate(value=>window.voidPlayer.importWorkspace(value),saved);
  assert.equal((await a.request.get(endpoint).then(r=>r.json())).entries.find(entry=>entry.id===copy.id).revision,3);
+ phase='lost-acknowledgement-retry';
  // Lose an acknowledgement after the server commits, then reload the writer.
  let lost=false;
  await b.route(routePattern,async route=>{if(route.request().method()==='POST' && !lost){lost=true;await route.fetch();await route.abort();}else await route.continue();});
@@ -84,6 +96,7 @@ try {
  await b.reload();await b.waitForFunction(()=>window.voidPlayer?.getState().tracks.length===1 && !window.voidPlayer.getState().busy);
  await until(()=>readDrafts(b),drafts=>!drafts.some(draft=>draft.id===retry.id));
  const retried=await b.request.get(endpoint).then(r=>r.json());assert.equal(retried.entries.find(e=>e.id===retry.id).revision,1);await b.unroute(routePattern);
+ phase='editor-thumbnail-persistence';
  // Generate a real thumbnail through the editor and verify it reaches the cache separately.
  await b.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });await b.keyboard.press('n');await b.locator('[data-drawing-tool=rect]').click();
  const rectangle=await b.locator('#drawing-A').boundingBox();await b.mouse.move(rectangle.x+rectangle.width*.2,rectangle.y+rectangle.height*.2);await b.mouse.down();await b.mouse.move(rectangle.x+rectangle.width*.4,rectangle.y+rectangle.height*.5,{steps:6});await b.mouse.up();await b.locator('#mark-close').click();
@@ -93,14 +106,24 @@ try {
  await admin.screenshot({path:`/tmp/voidplayer-annotation-preview-${name}.png`});
  const downloadPromise=admin.waitForEvent('download');await admin.locator('#admin-annotation-export').click();const download=await downloadPromise;const exported=JSON.parse(await readFile(await download.path(),'utf8'));assert.equal(exported.schema,'voidplayer-workspace');assert.ok(exported.marks[0].drawings.length);
  const link=await admin.locator('#admin-annotation-open').getAttribute('href');const opened=await context.newPage();await opened.goto(base+link);await opened.waitForFunction(id=>window.voidPlayer?.getState().marks.some(m=>m.id===id),preview.id);await opened.waitForFunction(()=>!!window.testAnnotationStatus);await opened.close();
+ phase='local-quota-recovery';
  // A rejected local write must retain the in-memory draft and retry, never report success.
  await b.evaluate(()=>{const put=IDBObjectStore.prototype.put;window.rejectDraftWrites=true;IDBObjectStore.prototype.put=function(...args){if(this.name==='drafts' && window.rejectDraftWrites)throw new DOMException('Disk full','QuotaExceededError');return put.apply(this,args);};});
  await b.locator('#settings-open').click();await b.locator('#settings-tab-workspace').click();
  const quota=await call(b,'add_review_mark',{slot:'A',text:'本机写入失败后恢复'});await b.waitForFunction(()=>window.testAnnotationStatus?.message?.includes('本机保存失败'));assert.ok((await call(b,'get_review_session')).marks.some(m=>m.id===quota.id));
- await checkWorkspace(b);await b.locator('#settings-close').click();
+ await checkWorkspace(b);await b.locator('#settings-close').click();await waitForDialogClosed(b);
  await b.evaluate(()=>{window.rejectDraftWrites=false;window.dispatchEvent(new Event('focus'));});await until(()=>b.request.get(endpoint).then(r=>r.json()),page=>page.entries.some(e=>e.id===quota.id));
+ phase='service-restart';
  // Restart the actual service, keeping its data and address; confirmed revisions and JPEG survive.
  const port=service.server.address().port;await service.close();service=undefined;config.port=port;service=await startService(config);await service.library.refresh();
  const restored=await b.request.get(endpoint).then(r=>r.json());assert.ok(restored.entries.some(e=>e.id===retry.id));assert.equal((await b.request.get(base+preview.previewUrl)).status(),200);
  assert.deepEqual(errors,[]);console.log(`PASS ${name}: shared sync, reload, offline conflicting edit/delete without recovery UI, automatic retries, admin restore, snapshot isolation, lost acknowledgement, editor preview, export and service restart`);
+}catch(error){
+ const directory=process.env.VOIDPLAYER_TEST_ARTIFACTS??path.join(root,'.run/playback-reports',`annotation-persistence-${name}`);
+ await Promise.all([...pageEvidence].map(async([page,evidence],index)=>{
+  try{await saveBrowserFailure({page,directory,name:`page-${index}`,context:{caseName:'annotation-persistence',engine:name,phase},error,evidence});}
+  catch(cause){console.error('Annotation failure evidence could not be saved',cause);}
+ }));
+ if(!pageEvidence.size)try{await saveBrowserFailure({directory,name:'startup',context:{caseName:'annotation-persistence',engine:name,phase},error});}catch(cause){console.error(cause);}
+ throw error;
 }finally{await browser?.close();await service?.close();await rm(temp,{recursive:true,force:true});}

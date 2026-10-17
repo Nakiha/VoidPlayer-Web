@@ -127,7 +127,8 @@ export type { OpenStage } from './media-errors.ts';
 async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftware?: () => Promise<MediaSource>, onProgress?: MediaOpenProgress, signal?: AbortSignal): Promise<MediaSource> {
   const pipelineStartedAt = performance.now();
   const container = await probeContainer(input, signal);
-  const mp4DemuxPlan = container === 'isobmff' ? 'packet' : null;
+  const packetMp4 = container === 'isobmff';
+  const mp4DemuxPlan = packetMp4 ? 'packet' : null;
   const reference = getColorMode() === 'reference', preference = getReferenceDecode();
   const colorMode = reference ? 'reference' : 'browser';
   let nativeOpens = 0, softwareOpens = 0;
@@ -138,7 +139,6 @@ async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftwa
       ...(reference?{}:{nativeColorMode:'browser' as const})}) : undefined;
   try {
     const packetJs=tsAdmission?.kind==='js-packet-static';
-    const packetMp4 = container === 'isobmff' && mp4DemuxPlan === 'packet';
     const ffmpegPlan = container !== 'flv' && !packetMp4 && !packetJs;
     const openMp4Packet = async (forceWasm: boolean) => {
       const { openPacketMedia } = await import('./packet-media.ts');

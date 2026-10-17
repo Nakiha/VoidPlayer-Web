@@ -4,7 +4,8 @@ import type { RangeVersion } from './range-reader.ts';
 import { MediaOpenError } from './media-errors.ts';
 import type { IndexIntegrity } from './index-integrity.ts';
 
-export type FlvInput = import('./range-reader.ts').RandomAccessInput;
+export type PacketInput = import('./range-reader.ts').RandomAccessInput;
+export type FlvInput = PacketInput;
 export interface FlvScanReader { readonly size: number; read(offset: number, length: number): Promise<Uint8Array>; }
 export type FlvCodec = 'h264' | 'hevc' | 'av1' | 'vvc';
 export interface FlvPacket { sequenceNumber?:number; configuration?: number; discontinuity?: boolean; offset: number; size: number; pts: number; dts: number; key: boolean; originalPts?: number; }

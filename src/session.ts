@@ -1,7 +1,7 @@
 import type { PresentedFrameToken } from './bitstream-analysis/contract.ts';
 import type { BitstreamAnalysisService, DeepAnalysisState } from './bitstream-analysis/service.ts';
 import { AnalysisFailure } from './bitstream-analysis/failure.ts';
-import { BitstreamSessionCoordinator } from './session/bitstream.ts';
+import { BitstreamSessionCoordinator, trackSourceVersion } from './session/bitstream.ts';
 import { OpportunisticAudio } from './opportunistic-audio.ts';
 import { mediaDiagnostic } from './media-errors.ts';
 import type { MediaDiagnostic } from './media-errors.ts';
@@ -9,21 +9,20 @@ import { unavailableSource } from './session/unavailable-source.ts';
 import { getPresentationChannel, setPresentationChannel } from './presentation-channel.ts';
 import { SessionResources } from './session/resources.ts';
 import { schedulePresentationTick } from './presentation-tick.ts';
-import {getColorMode,setColorMode,getReferenceDecode,setReferenceDecode,type ReferenceDecode,type ColorMode} from './color-mode.ts';
-import { getColorOutput, setColorOutput, validateColorOutput, defaultColorOutput } from './color-output.ts';
+import { getColorMode, setColorMode, getReferenceDecode, setReferenceDecode, type ReferenceDecode, type ColorMode } from './color-mode.ts';
+import { getColorOutput, setColorOutput, defaultColorOutput } from './color-output.ts';
 import type { ColorOutput } from './color-output.ts';
 import type { AnnotationDocument } from './annotation-record.ts';import {recordPresentedFrame,updateMediaInfo} from './media-state.ts';
 import type { MediaLoadStatus, MediaOpenProgress } from './media-progress.ts';
-import { abortableLoad, abortableWait } from './media-abort.ts';
+import { abortableLoad } from './media-abort.ts';
 import { parseWorkspace, workspaceUrl } from './workspace-file.ts';
 import type { ComparisonConditions, WorkspaceFile } from './workspace-file.ts';
 import { Viewport } from './viewport.ts';
 import { SLOTS } from './model.ts';
 import { applyMarkEdit, buildMark, mergeStoredMarks } from './session/marks.ts';
-import { offerFirstFrameCandidate, settleOffer } from './thumbnails/offer.ts';
-import { thumbnailState } from './thumbnails/state.ts';
-import { localCacheKey, serverCacheKey } from './thumbnails/contract.ts';
-import { referenceVersion } from './media-reference.ts';
+import { getTrackAnalysisCapabilities, locateTrackAnalysisSample, queryTrackAnalysis, rankTrackAnalysisFrame, resolveTrackAnalysisSeek } from './session/analysis.ts';
+import { currentColorEvidence, currentComparisonConditions, isSameColorConfiguration, persistColorConfiguration, validateColorTransition } from './session/color.ts';
+import { offerSessionThumbnail } from './session/thumbnail.ts';
 import { describeMediaMismatch, matchMediaIdentity } from './media-identity.ts';
 import { FrameQueue, PlaybackMeasurements } from './playback.ts';
 import { planBackwardStep, planForwardStep, slotValue, timeUs } from './model.ts';
@@ -32,7 +31,6 @@ import type { DecodedFrame, MediaSource } from './media.ts';
 import type { AnalysisAxis, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample, AnalysisStatus } from './analysis/types.ts';
 import { contextLog, log, operationContext, traceOperation, withLogContext } from './log.ts';
 
-const currentColorEvidence = () => getColorMode() === 'reference' ? (getColorOutput().target==='hdr'?'reference-hdr-requested':'reference-sdr') : 'browser-match-approximate';
 const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 
 type Track = { visible?: boolean; pendingRelink?: boolean; source: MediaSource; frame: FrameInfo | null; offsetUs:number; failure?: { message: string; positionUs: number }; syncState?: 'index-wait' | 'catching-up';
@@ -98,11 +96,8 @@ export class ReviewSession {
   async setColorOutput(options:ColorOutput){return this.setColorMode(getColorMode()??'browser',getReferenceDecode(),options);}
   async refreshColorOutput(){return this.setColorMode(getColorMode()??'browser',getReferenceDecode(),getColorOutput(),true);}
   async setColorMode(mode:ColorMode,decode:ReferenceDecode=getReferenceDecode(),output:ColorOutput=getColorOutput(),force=false){
-    validateColorOutput(output);
-    if(mode!=='reference'&&mode!=='browser')throw new Error('未知色彩模式。');
-    if(this.changingColor)throw new Error('正在切换色彩模式。');
-    if(!['hardware','software'].includes(decode.decoder)||![1,2,4,8].includes(decode.depth))throw new Error('无效的解码路径或缓冲深度。');
-    if(!force&&getColorMode()===mode&&JSON.stringify(getReferenceDecode())===JSON.stringify(decode)&&JSON.stringify(getColorOutput())===JSON.stringify(output))return this.getState();
+    validateColorTransition(mode, decode, output, this.changingColor);
+    if (!force && isSameColorConfiguration(mode, decode, output)) return this.getState();
     ++this.analysisIntentSeq;
     this.changingColor=true;
     try{await this.run('color-mode',{mode},async (current, signal)=>{
@@ -151,7 +146,7 @@ export class ReviewSession {
           p.source.onInfoChange=()=>this.emit();
         }
         committed=true;
-        try{globalThis.localStorage?.setItem('voidplayer.color-mode',mode);globalThis.localStorage?.setItem('voidplayer.reference-decode',JSON.stringify(decode));globalThis.localStorage?.setItem('voidplayer.color-output',JSON.stringify(output));}catch{}
+        persistColorConfiguration(mode, decode, output);
       }catch(error){
         setColorMode(previous);setReferenceDecode(previousDecode);setColorOutput(previousOutput);
         const rollbackErrors = await this.rollbackPresentation(entries, current, signal, error, '色彩模式', reconfigured);
@@ -308,7 +303,7 @@ export class ReviewSession {
   async requestBitstreamRange(slot: Slot, startUs: number, endUs: number, signal?: AbortSignal) {
     const track = this.tracks.get(slot);
     return this.runBitstreamTask(slot, signal, { state: 'pending' }, (service, taskSignal) => {
-      const sourceVersion = track!.source.info.source ? `${track!.source.info.source.id}@${referenceVersion(track!.source.info.source.url)}` : track!.source.info.id;
+      const sourceVersion = trackSourceVersion(track!.source);
       return service.requestRange(track!.source, { sourceVersion, firstPtsUs: track!.source.info.firstPtsUs,
         startUs: startUs - track!.offsetUs, endUs: endUs - track!.offsetUs }, taskSignal);
     });
@@ -317,7 +312,7 @@ export class ReviewSession {
   getPresentedFrame(slot:Slot):PresentedFrameToken|null{
     slotValue(slot);const track=this.tracks.get(slot),token=this.presentedFrames.get(slot);
     if(!track||track.failure||!track.frame||!token||track.frame.sourcePtsUs!==token.sourcePtsUs)return null;
-    const version=track.source.info.source?`${track.source.info.source.id}@${referenceVersion(track.source.info.source.url)}`:track.source.info.id;if(token.picture&&token.picture.sourceVersion!==version)return null;
+    const version=trackSourceVersion(track.source);if(token.picture&&token.picture.sourceVersion!==version)return null;
     return structuredClone({...token,generation:track.sourceGen});
   }
   getBitstreamAnalysisState(slot?: Slot): DeepAnalysisState {
@@ -341,52 +336,24 @@ export class ReviewSession {
     const track = this.tracks.get(slot);
     const progress = await this.runBitstreamTask(slot, signal, { state: 'pending', stream: { slot, checkedUs: 0,
       totalUs: window ? window.endUs - window.startUs : Math.ceil(track?.source.info.durationUs ?? 0), pictures: 0, totalPictures: 0, ...(window ? { window } : {}) } }, (service, taskSignal) => {
-      const sourceVersion = track!.source.info.source ? `${track!.source.info.source.id}@${referenceVersion(track!.source.info.source.url)}` : track!.source.info.id;
+      const sourceVersion = trackSourceVersion(track!.source);
       return service.requestStream(track!.source, { mode: 'stream', product, sourceVersion,
         firstPtsUs: track!.source.info.firstPtsUs, durationUs: Math.ceil(track!.source.info.durationUs), ...(window ? { window } : {}) }, slot, taskSignal);
     }, intent);
     if (this.tracks.get(slot) === track && !window) {
-      const sourceVersion = track!.source.info.source ? `${track!.source.info.source.id}@${referenceVersion(track!.source.info.source.url)}` : track!.source.info.id;
+      const sourceVersion = trackSourceVersion(track!.source);
       this.bitstream.complete(slot, track!.sourceGen, { slot, sourceVersion, ...progress });
     }
     return progress;
   }
   queryBitstreamDiagrams(slot: Slot, startAu?: number, limit = 128) {
-    slotValue(slot);
-    if (startAu !== undefined && (!Number.isSafeInteger(startAu) || startAu < 0) || !Number.isInteger(limit) || limit < 1 || limit > 256) throw new AnalysisFailure('invalid-request', 'Invalid diagram window');
-    const track = this.tracks.get(slot);
-    if (!track || track.failure) return null;
-    const version = track.source.info.source ? `${track.source.info.source.id}@${referenceVersion(track.source.info.source.url)}` : track.source.info.id;
-    const token = this.getPresentedFrame(slot);
-    const data = this.bitstream.queries?.queryDiagrams(version, token?.picture?.au ?? null, token?.sourcePtsUs ?? track.source.info.firstPtsUs, startAu, limit);
-    return data ? { ...data, sourceVersion: version, firstPtsUs: track.source.info.firstPtsUs, offsetUs: track.offsetUs } : null;
+    return this.bitstream.queryDiagrams(slot, this.tracks.get(slot), this.getPresentedFrame(slot), startAu, limit);
   }
   bitstreamChartDomain(slot: Slot, axis: import('./analysis/types.ts').AnalysisAxis = 'pts') {
-    slotValue(slot);
-    if (axis !== 'pts' && axis !== 'dts') throw new AnalysisFailure('invalid-request', 'Invalid chart time base');
-    const track = this.tracks.get(slot);
-    if (!track || track.failure) return null;
-    const version = track.source.info.source ? `${track.source.info.source.id}@${referenceVersion(track.source.info.source.url)}` : track.source.info.id;
-    const bounds = this.bitstream.queries?.chartBounds(version, axis);
-    const shift = track.offsetUs - track.source.info.firstPtsUs;
-    return { start: Math.min(track.offsetUs, bounds ? bounds.start + shift : track.offsetUs), end: Math.max(track.offsetUs + Math.max(1, track.source.info.durationUs), bounds ? bounds.end + shift : -Infinity) };
+    return this.bitstream.chartDomain(slot, this.tracks.get(slot), axis);
   }
   queryBitstreamChart(slot: Slot, startUs?: number, endUs?: number, pixelWidth = 512, axis: import('./analysis/types.ts').AnalysisAxis = 'pts') {
-    slotValue(slot);
-    if ((axis !== 'pts' && axis !== 'dts') || !Number.isInteger(pixelWidth) || pixelWidth < 32 || pixelWidth > 4096 ||
-      (startUs !== undefined && !Number.isFinite(startUs)) || (endUs !== undefined && !Number.isFinite(endUs)))
-      throw new AnalysisFailure('invalid-request', 'Invalid diagram viewport');
-    const track = this.tracks.get(slot);
-    if (!track || track.failure) return null;
-    const domain = this.bitstreamChartDomain(slot, axis)!;
-    const start = Math.max(domain.start, startUs ?? domain.start), end = Math.min(domain.end, endUs ?? domain.end);
-    if (end <= start) throw new AnalysisFailure('invalid-request', 'Empty diagram viewport');
-    const version = track.source.info.source ? `${track.source.info.source.id}@${referenceVersion(track.source.info.source.url)}` : track.source.info.id;
-    const firstPtsUs = track.source.info.firstPtsUs, offsetUs = track.offsetUs;
-    const data = this.bitstream.queries?.queryChart(version, start + firstPtsUs - offsetUs, end + firstPtsUs - offsetUs, pixelWidth, axis) ??
-      { revision: 0, count: 0, codec: null, containerHeaders: [], types: [], pictures: [], buckets: [], aggregated: false, detailMissing: false };
-    return { ...data, axis, sourceVersion: version, firstPtsUs, offsetUs, domain, startUs: start, endUs: end,
-      anchorAu: this.getPresentedFrame(slot)?.picture?.au ?? null };
+    return this.bitstream.queryChart(slot, this.tracks.get(slot), this.getPresentedFrame(slot), startUs, endUs, pixelWidth, axis);
   }
   cachedBitstreamAnalysis(slot:Slot,presented?:PresentedFrameToken){const token=presented??this.getPresentedFrame(slot);return token?this.bitstream.queries?.cached(token)??null:null;}
   async requestBitstreamAnalysis(slot: Slot, signal?: AbortSignal) {
@@ -472,15 +439,7 @@ export class ReviewSession {
    * getState（structuredClone 全量复制），只走 queryAnalysis 按需范围查询。
    */
   getAnalysisCapabilities(): AnalysisStatus[] {
-    return [...this.tracks].map(([slot, t]) => ({
-      slot,
-      mediaId: t.source.info.id,
-      capability: t.source.getAnalysisCapability?.() ?? {
-        hasSize: false, hasDts: false, keySource: 'unavailable' as const,
-        pictureType: 'unavailable' as const, qp: 'unsupported' as const,
-        indexState: 'complete' as const, note: '该解码路径暂不支持码流分析。',
-      },
-    }));
+    return getTrackAnalysisCapabilities(this.tracks);
   }
   private analysisSeq = 0;
   /**
@@ -495,77 +454,14 @@ export class ReviewSession {
    * 重投影，不重扫。旧异步结果由调用方按 requestId 丢弃。
    */
   async queryAnalysis(slot: Slot, query: AnalysisQuery): Promise<AnalysisResult> {
-    slotValue(slot);
-    const { startUs, endUs, axis, pixelWidth, bitrateWindowUs } = query;
-    // 起点可为负：正偏移轨道的片内区间起点为 sessionStart - offset；
-    // DTS 轴本身也允许合法负时间（预滚），一律不钳到零。
-    if (!Number.isInteger(startUs) || !Number.isInteger(endUs)) {
-      throw new Error('分析查询区间必须是整数微秒。');
-    }
-    if (axis !== 'pts' && axis !== 'dts') throw new Error('时间基准必须是 pts 或 dts。');
-    if (!Number.isInteger(pixelWidth) || pixelWidth < 32 || pixelWidth > 4096) throw new Error('查询像素宽度超出范围。');
-    if (!Number.isInteger(bitrateWindowUs) || bitrateWindowUs <= 0) throw new Error('码率滑窗必须为正整数微秒。');
-    // 曲线区间缺省复用样本区间；显式传入时同样要求整数微秒与合法像素宽。
-    const hasCurve = query.curveStartUs !== undefined || query.curveEndUs !== undefined || query.curvePixelWidth !== undefined;
-    if (hasCurve) {
-      if (!Number.isInteger(query.curveStartUs) || !Number.isInteger(query.curveEndUs)) {
-        throw new Error('分析曲线区间必须是整数微秒。');
-      }
-      if (!Number.isInteger(query.curvePixelWidth) || (query.curvePixelWidth as number) < 32 || (query.curvePixelWidth as number) > 4096) {
-        throw new Error('曲线像素宽度超出范围。');
-      }
-    }
-    const track = this.tracks.get(slot);
-    if (!track) throw new Error('轨道尚未载入。');
-    if (track.failure) throw new Error(track.failure.message);
-    if (!track.source.queryAnalysis) throw new Error('该片源的解码路径暂不支持码流分析。');
-    const requestId = ++this.analysisSeq;
-    const offsetUs = track.offsetUs;
-    // 共享桶原点：会话域 0 对齐，换算到片内归一化域（会话原点 - offset）。
-    const bucketOriginUs = (query.bucketOriginUs ?? 0) - offsetUs;
-    const result = await track.source.queryAnalysis({
-      ...query, requestId, bucketOriginUs,
-      startUs: query.startUs - offsetUs, endUs: query.endUs - offsetUs,
-      ...(hasCurve ? {
-        curveStartUs: (query.curveStartUs as number) - offsetUs,
-        curveEndUs: (query.curveEndUs as number) - offsetUs,
-      } : {}),
-    });
-    const shift = (t: number) => t + offsetUs;
-    return {
-      ...result,
-      requestId,
-      // source 实例 generation 盖章：同 mediaId 重建（色彩模式切换等）后，
-      // 旧实例的异步结果与缓存不得被当成当前实例的数据。
-      sourceVersion: `${track.sourceGen}#${result.sourceVersion}`,
-      origin: { firstPtsUs: track.source.info.firstPtsUs, offsetUs },
-      samples: result.samples.map(s => ({
-        ...s,
-        effectivePtsUs: s.effectivePtsUs == null ? null : shift(s.effectivePtsUs),
-        dtsUs: s.dtsUs == null ? null : shift(s.dtsUs),
-      })),
-      buckets: result.buckets?.map(b => ({ ...b, startUs: shift(b.startUs), endUs: shift(b.endUs) })) ?? null,
-      bitrate: result.bitrate?.map(p => ({ ...p, tUs: shift(p.tUs) })) ?? null,
-      coverageUs: result.coverageUs ? { start: shift(result.coverageUs.start), end: shift(result.coverageUs.end) } : null,
-      sampleCoverageUs: result.sampleCoverageUs ? { start: shift(result.sampleCoverageUs.start), end: shift(result.sampleCoverageUs.end) } : (result.sampleCoverageUs ?? null),
-      bitrateRangeUs: result.bitrateRangeUs ? { start: shift(result.bitrateRangeUs.start), end: shift(result.bitrateRangeUs.end) } : (result.bitrateRangeUs ?? null),
-      bitrateStepUs: result.bitrateStepUs ?? null,
-      bucketGrid: result.bucketGrid ? { originUs: result.bucketGrid.originUs + offsetUs, widthUs: result.bucketGrid.widthUs } : (result.bucketGrid ?? null),
-    };
+    return queryTrackAnalysis(slot, this.tracks.get(slot), query, () => ++this.analysisSeq);
   }
   /**
    * 分析柱点击定位：无论 PTS 还是 DTS 图，一律定位到该样本的展示 PTS；
    * DTS 横坐标本身不是 seek 目标。预滚/无映射样本返回原因，不伪造跳转。
    */
   resolveAnalysisSeek(slot: Slot, sample: { effectivePtsUs: number | null }): { sessionPtsUs: number } | { reason: string } {
-    slotValue(slot);
-    const track = this.tracks.get(slot);
-    if (!track || track.failure) return { reason: '轨道尚未载入或已停用。' };
-    if (sample.effectivePtsUs == null) return { reason: '该样本没有可展示时间，无法定位。' };
-    // 预滚判断在片内可展示映射域做：源负时间加正 offset 后变正，不等于成了可显示帧。
-    const normalizedPts = sample.effectivePtsUs - track.offsetUs;
-    if (normalizedPts < 0) return { reason: '该样本位于轨道开始之前（预滚），没有可展示画面。' };
-    return { sessionPtsUs: Math.max(0, Math.round(sample.effectivePtsUs)) };
+    return resolveTrackAnalysisSeek(slot, this.tracks.get(slot), sample);
   }
   /**
    * 按稳定样本身份有界定位（桶峰值定位与 Agent 共用）：不依赖某次视口查询
@@ -574,49 +470,10 @@ export class ReviewSession {
    * 换片、重建、改 offset 或更新的定位/seek 意图使旧结果失效。
    */
   async locateAnalysisSample(slot: Slot, sampleId: string, opts?: { signal?: AbortSignal }): Promise<{ sample: AnalysisSample } | { reason: string }> {
-    slotValue(slot);
-    if (typeof sampleId !== 'string' || !sampleId) return { reason: '样本身份无效。' };
-    const track = this.tracks.get(slot);
-    if (!track || track.failure) return { reason: '轨道尚未载入或已停用。' };
-    if (!track.source.locateAnalysisSample) return { reason: '该片源的解码路径暂不支持按样本定位。' };
-    const gen = track.sourceGen;
-    const mediaId = track.source.info.id;
-    const offsetUs = track.offsetUs;
-    const source = track.source;
-    const locateFn = source.locateAnalysisSample;
-    if (!locateFn) return { reason: '该片源的解码路径暂不支持按样本定位。' };
-    // 只读定位不抢占意图序列：捕获当前序列，等待期间若有新定位/seek/
-    // 换片/改 offset（序列递增）则本次结果视为过期。
-    const token = this.analysisIntentSeq;
-    if (opts?.signal?.aborted) throw opts.signal.reason ?? new DOMException('定位已取消。', 'AbortError');
-    let found: AnalysisSample | null;
-    try {
-      const call = locateFn.call(source, sampleId);
-      // B3：共用 abortableWait，settled 后清理监听器，避免长期 signal 累积。
-      found = await abortableWait(call, opts?.signal);
-    } catch (error) {
-      // 旧实例在等待期间被释放（换片/重建）：按失效处理，不抛释放错误。
-      const current = this.tracks.get(slot);
-      if (!current || current.sourceGen !== gen || current.source.info.id !== mediaId) {
-        return { reason: '该样本不在当前索引中（可能已换片或索引尚未覆盖）。' };
-      }
-      throw error;
-    }
-    // 新定位意图、换片、重建、改 offset 使旧结果失效：静默丢弃，不覆盖新意图。
-    if (token !== this.analysisIntentSeq) return { reason: '定位已被更新的请求取代。' };
-    if (opts?.signal?.aborted) throw opts.signal.reason ?? new DOMException('定位已取消。', 'AbortError');
-    const current = this.tracks.get(slot);
-    if (!current || current.sourceGen !== gen || current.source.info.id !== mediaId || current.offsetUs !== offsetUs) {
-      return { reason: '该样本不在当前索引中（可能已换片或索引尚未覆盖）。' };
-    }
-    if (!found) return { reason: '该样本不在当前索引中（可能已换片或索引尚未覆盖）。' };
-    return {
-      sample: {
-        ...found,
-        effectivePtsUs: found.effectivePtsUs == null ? null : found.effectivePtsUs + offsetUs,
-        dtsUs: found.dtsUs == null ? null : found.dtsUs + offsetUs,
-      },
-    };
+    const located = await locateTrackAnalysisSample(
+      slot, s => this.tracks.get(s), () => this.analysisIntentSeq, () => this.analysisIntentSeq, sampleId, opts,
+    );
+    return 'sample' in located ? { sample: located.sample } : located;
   }
   /**
    * 展示序帧号（面板/Agent 共用，只读不解码）：会话 PTS 对应样本在
@@ -625,27 +482,7 @@ export class ReviewSession {
    * 会话层只做时间平移与实例校验；索引构建中返回暂定值。
    */
   async rankAnalysisFrame(slot: Slot, sessionPtsUs: number, axis: AnalysisAxis = 'pts'): Promise<AnalysisRank | { reason: string }> {
-    slotValue(slot);
-    if (!Number.isInteger(sessionPtsUs)) return { reason: '展示时间必须是整数微秒。' };
-    if (axis !== 'pts' && axis !== 'dts') return { reason: '时间基准必须是 pts 或 dts。' };
-    const track = this.tracks.get(slot);
-    if (!track || track.failure) return { reason: '轨道尚未载入或已停用。' };
-    const source = track.source;
-    if (!source.rankAnalysisTime) return { reason: '该片源的解码路径暂不支持展示序查询。' };
-    const gen = track.sourceGen;
-    const mediaId = source.info.id;
-    const offsetUs = track.offsetUs;
-    let rank: AnalysisRank;
-    try {
-      rank = await source.rankAnalysisTime(sessionPtsUs - offsetUs, axis);
-    } catch (error) {
-      return { reason: errorText(error) };
-    }
-    const current = this.tracks.get(slot);
-    if (!current || current.sourceGen !== gen || current.source.info.id !== mediaId || current.offsetUs !== offsetUs) {
-      return { reason: '该样本不在当前索引中（可能已换片或索引尚未覆盖）。' };
-    }
-    return rank;
+    return rankTrackAnalysisFrame(slot, s => this.tracks.get(s), sessionPtsUs, axis);
   }
   /** Resolve a displayed zero-based frame number through the same packet index as rankAnalysisFrame. */
   async seekAnalysisFrameNumber(slot: Slot, number: number, axis: AnalysisAxis = 'pts'): Promise<{ sessionPtsUs: number } | { reason: string }> {
@@ -684,45 +521,14 @@ export class ReviewSession {
    * 不依赖随机等待。
    */
   async seekAnalysisSample(slot: Slot, sampleId: string, opts?: { signal?: AbortSignal }): Promise<{ sessionPtsUs: number } | { reason: string }> {
-    slotValue(slot);
-    if (typeof sampleId !== 'string' || !sampleId) return { reason: '样本身份无效。' };
-    const track = this.tracks.get(slot);
-    if (!track || track.failure) return { reason: '轨道尚未载入或已停用。' };
-    if (!track.source.locateAnalysisSample) return { reason: '该片源的解码路径暂不支持按样本定位。' };
-    const gen = track.sourceGen;
-    const mediaId = track.source.info.id;
-    const offsetUs = track.offsetUs;
-    const source = track.source;
-    const locateFn = source.locateAnalysisSample;
-    if (!locateFn) return { reason: '该片源的解码路径暂不支持按样本定位。' };
-    const token = ++this.analysisIntentSeq;
-    if (opts?.signal?.aborted) throw opts.signal.reason ?? new DOMException('定位已取消。', 'AbortError');
-    let found: AnalysisSample | null;
-    try {
-      const call = locateFn.call(source, sampleId);
-      // B3：共用 abortableWait，settled 后清理监听器，避免长期 signal 累积。
-      found = await abortableWait(call, opts?.signal);
-    } catch (error) {
-      const current = this.tracks.get(slot);
-      if (!current || current.sourceGen !== gen || current.source.info.id !== mediaId) {
-        return { reason: '该样本不在当前索引中（可能已换片或索引尚未覆盖）。' };
-      }
-      throw error;
-    }
-    if (token !== this.analysisIntentSeq) return { reason: '定位已被更新的请求取代。' };
-    if (opts?.signal?.aborted) throw opts.signal.reason ?? new DOMException('定位已取消。', 'AbortError');
-    const current = this.tracks.get(slot);
-    if (!current || current.sourceGen !== gen || current.source.info.id !== mediaId || current.offsetUs !== offsetUs) {
-      return { reason: '该样本不在当前索引中（可能已换片或索引尚未覆盖）。' };
-    }
-    if (!found) return { reason: '该样本不在当前索引中（可能已换片或索引尚未覆盖）。' };
-    const projected = {
-      effectivePtsUs: found.effectivePtsUs == null ? null : found.effectivePtsUs + offsetUs,
-    };
-    const resolved = this.resolveAnalysisSeek(slot, projected);
+    const located = await locateTrackAnalysisSample(
+      slot, s => this.tracks.get(s), () => ++this.analysisIntentSeq, () => this.analysisIntentSeq, sampleId, opts,
+    );
+    if (!('sample' in located)) return located;
+    const resolved = this.resolveAnalysisSeek(slot, { effectivePtsUs: located.sample.effectivePtsUs });
     if (!('sessionPtsUs' in resolved)) return resolved;
     // 再次确认仍为最新意图后才产生 seek 副作用；seek 本身会成为新的意图。
-    if (token !== this.analysisIntentSeq) return { reason: '定位已被更新的请求取代。' };
+    if (located.token !== this.analysisIntentSeq) return { reason: '定位已被更新的请求取代。' };
     if (opts?.signal?.aborted) throw opts.signal.reason ?? new DOMException('定位已取消。', 'AbortError');
     try {
       await this.seek(resolved.sessionPtsUs);
@@ -1062,64 +868,8 @@ export class ReviewSession {
   private frameInfo(frame: FrameInfo): FrameInfo {
     return { ptsUs: frame.ptsUs, sourcePtsUs: frame.sourcePtsUs, durationUs: frame.durationUs };
   }
-  /**
-   * Thumbnail bypass for a committed first frame. Synchronous, non-throwing,
-   * and measured: validation, dedupe, budget and one independent resource
-   * reference only. file-first means the load resolved the media origin
-   * (localTarget===0) and the decoded frame is the timeline origin
-   * (frame.ptsUs===0 with its real sourcePtsUs recorded). Anything else —
-   * non-zero joins, workspace restores at an offset, track syncs — offers
-   * nothing and never seeks. No extra Range/MediaSource/frameAt/index work:
-   * see thumbnails/state.ts counters.
-   */
   private offerThumbnail(slot: Slot, source: MediaSource, frame: DecodedFrame, localTarget: number) {
-    const started = performance.now();
-    try {
-      const isFileFirst = localTarget === 0 && frame.ptsUs === 0;
-      const libraryId = source.info.source?.id;
-      const mediaVersion = referenceVersion(source.info.source?.url);
-      let cacheKey: string;
-      let kind: 'library' | 'local';
-      let epoch: number | undefined;
-      if (libraryId) {
-        // Without a reliable media version, a replaced same-name file would
-        // inherit the old cover: stay missing instead of uploading a cache.
-        if (!mediaVersion) {
-          thumbnailState.skip('upload:no-epoch-or-version');
-          log.debug('media', '首帧缩图候选未接受', { reason: 'upload:no-epoch-or-version', sourcePtsUs: frame.sourcePtsUs, decoder: source.info.decoder });
-          return;
-        }
-        kind = 'library';
-        cacheKey = serverCacheKey({ mediaId: libraryId, mediaVersion });
-        // Frozen at accept; a missing epoch means local-only this time, with
-        // no network wait while the full frame is held.
-        epoch = thumbnailState.cachedEpoch(cacheKey);
-      } else {
-        kind = 'local';
-        cacheKey = localCacheKey(source.info.name, source.info.size, source.info.lastModified);
-      }
-      const sourceGen = this.nextSourceGen;
-      const offered = offerFirstFrameCandidate({ resources: this.resources,
-        cacheKey, kind, libraryId, mediaVersion, sourceGen,
-        sourcePtsUs: frame.sourcePtsUs, isFileFirst, epoch,
-        byteSize: frame.byteSize, isLive: () => this.tracks.get(slot)?.source === source,
-      }, frame);
-      const offerResult = typeof offered === 'string' ? offered : offered.result;
-      log.debug('media', '首帧缩图候选已检查', {
-        result: offerResult, localTarget, framePtsUs: frame.ptsUs, sourcePtsUs: frame.sourcePtsUs,
-        kind: frame.kind, decoder: source.info.decoder,
-      });
-      if (typeof offered === 'string' || offered.result !== 'accepted') return;
-      // Detached continuation; the module is already cached via workbench init.
-      // An import failure must still release the held reference, never leak it.
-      void import('./thumbnails/tasks.ts').then(
-        tasks => tasks.runThumbnailTask(offered),
-        () => { offered.release(); settleOffer(offered.context.cacheKey, false); },
-      ).catch(() => {});
-    } catch (error) {
-      log.debug('media', '首帧缩图候选检查失败', { error: error instanceof Error ? error.message : String(error) });
-    }
-    finally { thumbnailState.noteHook(performance.now() - started); }
+    offerSessionThumbnail(slot, source, frame, localTarget, this.nextSourceGen, this.resources, () => this.tracks.get(slot)?.source === source);
   }
   private async drawAt(ptsUs: number, current: () => boolean, tracks = this.tracks, commit?: () => void, selected?: Map<Slot, DecodedFrame>, kept?: Set<Slot>, signal?: AbortSignal) {
     const entries = [...tracks].filter(([, t]) => !t.failure);
@@ -1419,9 +1169,7 @@ export class ReviewSession {
     return this.getState();
   }
   private comparisonConditions(): ComparisonConditions {
-    const output=getColorOutput();
-    return { version: 2, colorMode: getColorMode() ?? 'browser', referenceDecode: getReferenceDecode(),
-      presentation: 'voidplayer-color-v2', outputColorSpace: output.target==='hdr'?'display-p3':'srgb', colorOutput:output };
+    return currentComparisonConditions();
   }
   exportReview() {
     return structuredClone({ schema: 'voidplayer-web-review', version: 1, generatedAt: new Date().toISOString(),

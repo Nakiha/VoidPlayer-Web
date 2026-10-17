@@ -1,7 +1,6 @@
-import type { PacketDecodeIndex, PacketDecodePacket } from './flv-decoder.ts';
+import type { PacketDecodeIndex, PacketDecodePacket, PacketDecoder, PacketFrame } from './flv-decoder.ts';
 import { inspectPacketPicture } from './packet-picture.ts';
 import { MediaOpenError } from './media-errors.ts';
-import type { PacketDecoder, FlvFrame } from './flv-decoder.ts';
 import { packetDecodeError } from './flv-decoder.ts';
 /** Packet metadata chooses a decode anchor, never the identity of an output
  * frame. Only receive() establishes display PTS; playback drains real outputs. */
@@ -13,7 +12,7 @@ export class PacketTimeline {
   private started=false;
   private lastPts=-Infinity;
   private deliveredPts:number|null=null;
-  private pending:FlvFrame|null=null;
+  private pending:PacketFrame|null=null;
   private failure:unknown;
   private operation=0;
   private actualPacket:PacketDecodePacket|undefined;
@@ -65,7 +64,7 @@ export class PacketTimeline {
     this.segmentStart=this.cursor;
     await this.configure(config);this.started=true;this.lastPts=-Infinity;
   }
-  private async pull(recycle?:ArrayBuffer,minimum=Number.MIN_SAFE_INTEGER):Promise<FlvFrame|null>{
+  private async pull(recycle?:ArrayBuffer,minimum=Number.MIN_SAFE_INTEGER):Promise<PacketFrame|null>{
     if(this.pending){const f=this.pending;this.pending=null;if(f.packetPicture&&!this.validPicture(f.pts,f.packetPicture))f.packetPicture=undefined;return f;}
     for(;;){
       const frame=this.decoder.receive(minimum,recycle);
@@ -100,7 +99,7 @@ export class PacketTimeline {
   }
   private anchor=0;
   private anchorIndex(){return this.anchor;}
-  async at(target:number,recycle?:ArrayBuffer):Promise<FlvFrame>{
+  async at(target:number,recycle?:ArrayBuffer):Promise<PacketFrame>{
     return this.run(target,async()=>{
       await this.start(target);this.anchor=this.cursor;
       // The finite MPEG-2 adapter proves one frame picture per PES with known
@@ -113,7 +112,7 @@ export class PacketTimeline {
         const floor=packets[order[Math.max(0,lo-1)]];
         if(floor&&floor.identityKnown!==false)minimum=floor.pts;
       }
-      let previous:FlvFrame|null=null;
+      let previous:PacketFrame|null=null;
       try{
         for(;;){
           const f=await this.pull(recycle,minimum);recycle=undefined;
@@ -131,7 +130,7 @@ export class PacketTimeline {
       }catch(error){previous?.frame?.close();throw error;}
     });
   }
-  async next(after:number,recycle?:ArrayBuffer):Promise<FlvFrame|null>{
+  async next(after:number,recycle?:ArrayBuffer):Promise<PacketFrame|null>{
     return this.run(after,async()=>{
       if(!this.started||this.deliveredPts!==after){
         const f=await this.at(after);
