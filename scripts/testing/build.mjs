@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { readdir, readFile, writeFile, mkdir, rm } from 'node:fs/promises';
+import { readdir, readFile, writeFile, mkdir, rm, cp } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import path from 'node:path';
 import { runBrowserRegressions } from '../run-browser-regressions.mjs';
 
@@ -32,6 +33,17 @@ export async function buildFingerprint(root) {
   try { revision = execFileSync('git', ['describe', '--always', '--dirty'], { cwd: root, encoding: 'utf8', stdio: 'pipe' }).trim(); } catch {}
   const configuration = Object.fromEntries(Object.entries(process.env).filter(([key]) => /^(VITE_|VOIDPLAYER_RELEASE_TAG$|NODE_ENV$|NODE_OPTIONS$)/.test(key)).sort(([a], [b]) => a.localeCompare(b)));
   return createHash('sha256').update(JSON.stringify({ bytes, revision, configuration })).digest('hex');
+}
+
+// Running browsers must not serve a mutable dist while another local suite
+// rebuilds it. Copy into the owning fixture and fail setup if publication races
+// with the copy; both the served assets and build-info then share one identity.
+export async function snapshotBuild(source, target, { copy = cp } = {}) {
+  const expected = await digest(source, ['.']);
+  await copy(source, target, { recursive: true, mode: constants.COPYFILE_FICLONE });
+  const [current, snapshot] = await Promise.all([digest(source, ['.']), digest(target, ['.'])]);
+  if (current !== expected || snapshot !== expected) throw new Error('Frontend changed while taking a test snapshot; finish the build before starting this case');
+  return target;
 }
 export async function prepareBuild({ root, directory, output = process.stdout, signal, prepared = false, command = [process.platform === 'win32' ? 'npm.cmd' : 'npm', 'run', 'build'] }) {
   const fingerprint = await buildFingerprint(root);
