@@ -176,6 +176,15 @@ export class FlvEngine {
       return await timeline.at(firstPts);
     } finally { timeline.close(); }
   }
+  private adoptDecoder(decoder: PacketDecoder, timeline: PacketTimeline, primed: FlvFrame) {
+    // Index publication continues while the candidate primes asynchronously.
+    // Adopt the latest index and restart the finite priming cursor before use.
+    timeline.replaceIndex(this.index);
+    timeline.setGrowth(this.growing ? this.waitForGrowth : undefined);
+    this.primed?.frame?.close(); this.timeline?.close();
+    this.decoder = decoder; this.timeline = timeline; this.primed = primed;
+    this.retainStartup();
+  }
   /** Switch only the decoder after reference admission rejects native output.
    * The packet index, reader, and cache lifecycle remain owned by this engine. */
   async switchToSoftware(glueURL: string, wasmBinary?: Uint8Array, threads = 1) {
@@ -185,9 +194,7 @@ export class FlvEngine {
       const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size),true,()=>this.indexComplete);
       let primed:FlvFrame;
       try{primed=await timeline.at(target);}catch(error){timeline.close();throw error;}
-      this.primed?.frame?.close();this.timeline?.close();
-      this.decoder=decoder;this.timeline=timeline;this.primed=primed;
-      this.retainStartup();
+      this.adoptDecoder(decoder,timeline,primed);
     }
     return {
       codec: this.index.codec, decoder: this.decoder.kind, width: this.primed!.width, height: this.primed!.height,
@@ -204,8 +211,7 @@ export class FlvEngine {
         const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size),true,()=>this.indexComplete);
         let primed:FlvFrame;
         try{primed=await timeline.at(target);}catch(error){timeline.close();if(error instanceof MediaOpenError&&error.stage==='decode')return this.decoderInfo();throw error;}
-        this.primed?.frame?.close();this.timeline?.close();this.decoder=decoder;this.timeline=timeline;this.primed=primed;
-        this.retainStartup();
+        this.adoptDecoder(decoder,timeline,primed);
       }
     }
     return this.decoderInfo();

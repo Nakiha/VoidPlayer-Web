@@ -1,7 +1,7 @@
 import {PacketTimeline} from '../../src/media/decoding/packet-timeline.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { demuxFlv, scanFlv, FlvReader, flvIndexWarning, flvIndexIntegrity, FLV_RESYNC_BYTES } from '../../shared/media/containers/flv-demux.ts';
+import { buildFlvIndex, demuxFlv, scanFlv, FlvReader, flvIndexWarning, flvIndexIntegrity, FLV_RESYNC_BYTES } from '../../shared/media/containers/flv-demux.ts';
 import { serializeFlvIndex, parseFlvIndex } from '../../shared/media/indexing/flv-index-cache.ts';
 import { FlvEngine } from '../../src/media/decoding/flv-engine.ts';
 import { checkedHeap } from '../../src/media/decoding/flv-decoder.ts';
@@ -231,4 +231,49 @@ test('uncommitted configuration changes are rolled back when no safe recovery pi
  const result=await index(file);assert.equal(result.truncationReason,'no-random-access');
  assert.equal(result.configurations,undefined);assert.deepEqual(result.packets,(await index(bytes)).packets);
  assert.deepEqual(parseFlvIndex(serializeFlvIndex(result,file.length),file.length),result);
+});
+
+test('a decoder switch adopts an index published while its first output is pending', { timeout: 5000 }, async () => {
+  const description = new Uint8Array([0x81, 0, 0, 0]);
+  const packets = [0, 40_000, 80_000].map((pts, offset) => ({ pts, dts: pts, offset, size: 1, key: offset === 0 }));
+  const prefix = buildFlvIndex('av1', description, packets.slice(0, 1));
+  const full = buildFlvIndex('av1', description, packets);
+  let release!: () => void, first!: () => void, delayed = true;
+  const pending = new Promise<void>(resolve => { first = resolve; });
+  const previous = ['VideoDecoder', 'EncodedVideoChunk'].map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const);
+  class Decoder {
+    static async isConfigSupported() { return { supported: true }; }
+    state = 'configured';
+    callbacks: { output(frame: unknown): void };
+    constructor(callbacks: { output(frame: unknown): void }) { this.callbacks = callbacks; }
+    configure() {}
+    reset() {}
+    close() { this.state = 'closed'; }
+    async flush() {}
+    decode(chunk: { timestamp: number }) {
+      const frame = { timestamp: chunk.timestamp, format: 'NV12', codedWidth: 2, codedHeight: 2, displayWidth: 2, displayHeight: 2,
+        visibleRect: { x: 0, y: 0, width: 2, height: 2 }, colorSpace: { primaries: 'bt709', transfer: 'bt709', matrix: 'bt709', fullRange: false },
+        allocationSize: () => 6, close() {} };
+      if (delayed) { delayed = false; release = () => this.callbacks.output(frame); first(); }
+      else this.callbacks.output(frame);
+    }
+  }
+  Object.defineProperty(globalThis, 'VideoDecoder', { configurable: true, value: Decoder });
+  Object.defineProperty(globalThis, 'EncodedVideoChunk', { configurable: true, value: class { timestamp: number; constructor(init: { timestamp: number }) { this.timestamp = init.timestamp; } } });
+  const engine = new FlvEngine({ file: new Blob([new Uint8Array(3)]) });
+  const publish = (index: typeof prefix, complete: boolean) => Reflect.get(engine, 'publishIndex').call(engine, { index, complete, nextOffset: complete ? 3 : 1 });
+  engine.decoder = { kind: 'ffmpeg-wasm', reset() {}, async send() {}, receive() { return null; }, async drain() {}, close() {} };
+  try {
+    publish(prefix, false);
+    const switched = engine.switchToNative();
+    await pending; publish(full, true); release(); await switched;
+    const tail = await engine.at(80_000);
+    try { assert.equal(tail.pts, 80_000, 'the candidate must not retain its one-packet prefix'); } finally { tail.frame?.close(); }
+    const start = await engine.at(0); start.frame?.close();
+    const next = await engine.next(0);
+    try { assert.equal(next?.pts, 40_000, 'sequential playback restarts the finite priming cursor'); } finally { next?.frame?.close(); }
+  } finally {
+    engine.close();
+    for (const [name, descriptor] of previous) { if (descriptor) Object.defineProperty(globalThis, name, descriptor); else Reflect.deleteProperty(globalThis, name); }
+  }
 });
