@@ -45,7 +45,7 @@ try {
       const {setColorOutput,defaultColorOutput}=await import('/shared/color/color-output.ts');setColorOutput({...defaultColorOutput(),target:'hdr'});
       const {createExternalSurface}=await import('/src/presentation/webgpu-color-surface.mjs');
       const {VideoSample}=await import('/node_modules/mediabunny/dist/modules/src/index.js');
-      const {sampleDescription}=await import('/shared/media/frame-description.ts');
+      const {sampleDescription}=await import('/src/media/decoding/frame-resource.ts');
       const {initializeGpuPresentation,gpuGeometry,disposeGpuPresentation}=await import('/src/presentation/webgpu-presenter.ts');
       const {paintFrame}=await import('/src/presentation/presenter.ts');
       const source=document.querySelector('#source'),surface=await createExternalSurface(document.createElement('canvas'));

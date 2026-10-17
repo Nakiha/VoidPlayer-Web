@@ -38,6 +38,11 @@ for (const syntax of ["import './bad.ts'", "export * from './bad.ts'", "type A=i
 test('server cannot introduce a UI dependency, including type-only dependencies',()=>project({'server/a.ts':"import type {A} from '../src/ui.ts'",'src/ui.ts':'export interface A{}'},root=>assert.throws(()=>checkModuleBoundaries(root),/server imports frontend/)));
 test('frontend cannot import Node host implementation',()=>project({'src/a.ts':"import '../server/a.ts'",'server/a.ts':''},root=>assert.throws(()=>checkModuleBoundaries(root),/frontend imports server/)));
 test('missing Worker entries fail closed',()=>project({'src/a.ts':"new Worker(new URL('./missing.ts',import.meta.url))"},root=>assert.throws(()=>checkModuleBoundaries(root),/missing url dependency/)));
+test('browser harness imports validate both moved files and runtime exports',()=>{
+  for(const [code,pattern] of [["const {missing}=await import('/src/ui/example.ts')",/no runtime export missing/],["const {Shape}=await import('/src/ui/example.ts')",/no runtime export Shape/],["import('/src/ui/missing.ts')",/missing browser harness module/]])
+    project({'src/ui/example.ts':'export const present=1; export type Shape={};','scripts/probe.mjs':code},root=>assert.throws(()=>checkModuleBoundaries(root),pattern));
+  project({'shared/value.ts':'export const present=1;','src/ui/example.ts':"export {present} from '../../shared/value.ts'",'scripts/probe.mjs':"const {present:renamed}=await import('/src/ui/example.ts')"},root=>assert.equal(checkModuleBoundaries(root).harnessLoads,1));
+});
 test('shared Node dependencies fail closed',()=>project({'shared/a.ts':"import fs from 'node:fs'"},root=>assert.throws(()=>checkModuleBoundaries(root),/shared code imports host package/)));
 
 test('shared code rejects computed loads and browser packages',()=>{

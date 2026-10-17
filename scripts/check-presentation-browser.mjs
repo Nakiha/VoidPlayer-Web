@@ -20,7 +20,8 @@ try {
       const original = source.getContext.bind(source);
       source.getContext = (...args) => { if (args[0] === '2d') sourceContexts++; return original(...args); };
       const colors = new Uint8ClampedArray([255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,255,255]);
-      const {rgbaDescription,sampleDescription}=await import('/shared/media/frame-description.ts');
+      const {rgbaDescription}=await import('/shared/media/frame-description.ts');
+      const {sampleDescription}=await import('/src/media/decoding/frame-resource.ts');
       const rgba = pixels => ({ description:rgbaDescription(2,2),kind: 'rgba8', width: 2, height: 2, pixels });
       paintFrame(source, rgba(colors));
       const eager = sourceContexts;
@@ -69,7 +70,7 @@ try {
           format: 'I420', codedWidth: 2, codedHeight: 2, timestamp,
           colorSpace: { primaries: 'bt2020', transfer, matrix: 'bt2020-ncl', fullRange: false },
         }));
-        const {sampleDescription}=await import('/shared/media/frame-description.ts');
+        const {sampleDescription}=await import('/src/media/decoding/frame-resource.ts');
         const frame = sample => ({ description:sampleDescription(sample,16),kind: 'video-sample', width: 2, height: 2, sample });
         const pixels = () => [...captureFrame(source).getContext('2d').getImageData(0, 0, 2, 2).data];
         const primed = makeSample(0), clone = primed.clone();

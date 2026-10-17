@@ -25,7 +25,8 @@ try{
    const {initializeGpuPresentation,keepNativeGpuResource}=await import('/src/presentation/webgpu-presenter.ts');
    const {paintFrame,captureFrame,setPresentationGeometry,disposePresentation}=await import('/src/presentation/presenter.ts');
    const {VideoSample}=await import('/node_modules/mediabunny/dist/modules/src/index.js');
-   const {sampleDescription,rgbaDescription}=await import('/shared/media/frame-description.ts');
+   const {rgbaDescription}=await import('/shared/media/frame-description.ts');
+   const {sampleDescription}=await import('/src/media/decoding/frame-resource.ts');
    const adapter=await navigator.gpu?.requestAdapter();
    const environment={userAgent:navigator.userAgent,adapter:adapter?.info?{vendor:adapter.info.vendor,architecture:adapter.info.architecture,device:adapter.info.device,description:adapter.info.description,isFallbackAdapter:adapter.info.isFallbackAdapter}:null};
    const source=document.querySelector('#source');

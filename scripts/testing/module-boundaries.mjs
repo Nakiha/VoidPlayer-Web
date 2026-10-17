@@ -58,9 +58,44 @@ export function checkModuleBoundaries(root) {
     assert.ok(!/^src\/(bitstream-analysis|analysis-overlay)\//.test(name), `${name}: obsolete analysis namespace`);
     for (const layer of ['shared','src','server']) if (name.startsWith(`${layer}/analysis/`)) assert.match(name, new RegExp(`^${layer}/analysis/(metadata|bitstream)/`), `${name}: analysis must declare metadata or bitstream responsibility`);
   }
-  return { files: files.length, edges };
+  const harnessFiles = [];
+  function scanHarness(directory) {
+    if (!existsSync(directory)) return;
+    for (const entry of readdirSync(directory,{withFileTypes:true})) {
+      const file=path.join(directory,entry.name);
+      if(entry.isDirectory()) scanHarness(file); else if(codeFile(file)) harnessFiles.push(file);
+    }
+  }
+  for(const directory of ['scripts','test']) scanHarness(path.join(root,directory));
+  let program, checker, harnessLoads=0;
+  for(const file of harnessFiles) {
+    const tree=ts.createSourceFile(file,readFileSync(file,'utf8'),ts.ScriptTarget.Latest,true);
+    function visit(node) {
+      if(ts.isCallExpression(node)&&node.expression.kind===ts.SyntaxKind.ImportKeyword&&ts.isStringLiteralLike(node.arguments[0])&&/^\/(src|shared)\//.test(node.arguments[0].text)) {
+        const target=path.resolve(root,'.'+node.arguments[0].text),from=portable(path.relative(root,file));
+        assert.ok(target.startsWith(root+path.sep)&&existsSync(target),`${from}: missing browser harness module ${node.arguments[0].text}`);
+        harnessLoads++;
+        const binding=ts.isAwaitExpression(node.parent)?node.parent.parent:node.parent;
+        if(ts.isVariableDeclaration(binding)&&ts.isObjectBindingPattern(binding.name)) {
+          program??=ts.createProgram(files,{target:ts.ScriptTarget.ES2023,module:ts.ModuleKind.ESNext,moduleResolution:ts.ModuleResolutionKind.Bundler,allowImportingTsExtensions:true,allowJs:true,checkJs:false,types:[]});
+          checker??=program.getTypeChecker();
+          const source=program.getSourceFile(target),module=source&&checker.getSymbolAtLocation(source);
+          const exports=new Map(module?checker.getExportsOfModule(module).map(symbol=>[symbol.name,symbol]):[]);
+          for(const element of binding.name.elements) {
+            if(element.dotDotDotToken) continue;
+            const name=(element.propertyName??element.name).getText(tree).replace(/^['"]|['"]$/g,''),symbol=exports.get(name);
+            const value=symbol?.flags&ts.SymbolFlags.Alias?checker.getAliasedSymbol(symbol):symbol;
+            assert.ok(value&&(value.flags&ts.SymbolFlags.Value),`${from}: browser harness import ${node.arguments[0].text} has no runtime export ${name}`);
+          }
+        }
+      }
+      ts.forEachChild(node,visit);
+    }
+    visit(tree);
+  }
+  return { files: files.length, edges, harnessLoads };
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const result = checkModuleBoundaries(path.resolve(import.meta.dirname, '../..'));
-  console.log(`Module boundaries passed: ${result.files} modules, ${result.edges.length} relative dependencies`);
+  console.log(`Module boundaries passed: ${result.files} modules, ${result.edges.length} relative dependencies, ${result.harnessLoads} browser harness imports`);
 }

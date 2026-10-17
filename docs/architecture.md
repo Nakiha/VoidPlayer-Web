@@ -4,7 +4,7 @@
 
 `shared/` 保存浏览器与服务端共用的媒体解析、索引、分析计算和数据契约，按领域分目录。`src/` 拥有浏览器资源与交互；`server/` 拥有文件系统、数据库和 HTTP 服务。两类宿主都可引用共享层，不能互相引用；类型引用也遵守同一规则。
 
-`npm run check:boundaries` 检查静态导入、类型引用、重新导出、字面量动态加载和 Worker URL，拒绝缺失入口及共享层的宿主依赖。计算式模块加载仅允许五个已登记的 WASM/语言资源加载入口，共享层不允许计算式模块加载，包依赖仅准入可在两个宿主执行的 Mediabunny。`npm run check:shared` 在没有 DOM 类型的环境中编译共享层；边界负例和真实工程检查均进入 fast/source 与构建。
+`npm run check:boundaries` 检查静态导入、类型引用、重新导出、字面量动态加载和 Worker URL，拒绝缺失入口及共享层的宿主依赖；浏览器测试脚本显式加载 `/src/` 或 `/shared/` 时，还检查文件和解构读取的运行时导出，覆盖混合模块拆分后的入口迁移。计算式模块加载仅允许五个已登记的 WASM/语言资源加载入口，共享层不允许计算式模块加载，包依赖仅准入可在两个宿主执行的 Mediabunny。`npm run check:shared` 在没有 DOM 类型的环境中编译共享层；边界负例和真实工程检查均进入 fast/source 与构建。
 
 共享分析引擎通过 `AnalysisReader.indexCache` 使用可选的宿主缓存接口；浏览器 Worker 接入 IndexedDB，服务端使用自身已验证的索引。共享实现不创建浏览器存储、VideoFrame 或 Canvas。WebAssembly 的局部类型契约仅描述两个宿主共用的标准接口，不向工程安装 DOM 全局类型。构建指纹、前端来源摘要和发布源码包均包含 `shared/`。
 
