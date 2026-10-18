@@ -498,7 +498,9 @@ async function runPictureAttempt(
  * even when only one cache miss remains in a selected GOP.
  * A late pixel requirement discards their owners and opens a new full decoder
  * at the very same syntax-proven anchor. The input/index identities never change.
- * Open/dependent or unsealed work keeps the original continuous full path. */
+ * Open/dependent or unsealed work keeps the original continuous full path.
+ * HEVC and VVC both admit the attempt once the core exposes the execution
+ * extension and the anchor proof holds; the core decides config eligibility. */
 async function runPicture(...args: Parameters<typeof runPictureAttempt>): Promise<AnalysisOutput> {
   const [reader, target, factory, buildId, signal, options = {}] = args;
   if (target.product !== 'blocks' || options.stream || options.viewport ||
@@ -510,7 +512,7 @@ async function runPicture(...args: Parameters<typeof runPictureAttempt>): Promis
     const planned = await input.plan(target);
     const policy = options.executionPolicy ?? executionPolicy();
     let core = factory, fast = false, decodeEnd: number | undefined;
-    if (input.codec === 'hevc' && input.indexComplete && !policy.full) {
+    if ((input.codec === 'hevc' || input.codec === 'vvc') && input.indexComplete && !policy.full) {
       const group = gopForAu(groupAnalysisGops(input.packets), planned.target.au);
       // Do not start a no-pixels DPB from a container-key/open-GOP guess.
       const bounded = planned.start === group.startAu;
