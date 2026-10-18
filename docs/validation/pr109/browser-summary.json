@@ -1,0 +1,46 @@
+{
+  "headless": {
+    "old": {
+      "allPass": 0,
+      "total": 6,
+      "measured": 4,
+      "speedMedian": 0.25432640461354994,
+      "fpsMedian": 15.259587596474857,
+      "loadMsMedian": 485.5774999856949,
+      "startupMsMedian": 0.7524999678134918,
+      "p95GapMsMedian": 70.84750002622604
+    },
+    "new": {
+      "allPass": 0,
+      "total": 6,
+      "measured": 4,
+      "speedMedian": 0.25248605814335645,
+      "fpsMedian": 14.942653961296752,
+      "loadMsMedian": 420.28749999403954,
+      "startupMsMedian": 0.8324999809265137,
+      "p95GapMsMedian": 72.79249998927116
+    }
+  },
+  "headed": {
+    "old": {
+      "allPass": 6,
+      "total": 6,
+      "measured": 4,
+      "speedMedian": 0.9967570357661186,
+      "fpsMedian": 59.57802755712634,
+      "loadMsMedian": 564.919999986887,
+      "startupMsMedian": 0.8600000143051147,
+      "p95GapMsMedian": 23.037500023841858
+    },
+    "new": {
+      "allPass": 6,
+      "total": 6,
+      "measured": 4,
+      "speedMedian": 0.9974665433507379,
+      "fpsMedian": 59.74055598018094,
+      "loadMsMedian": 500.19500002264977,
+      "startupMsMedian": 0.887499988079071,
+      "p95GapMsMedian": 23.49500000476837
+    }
+  }
+}

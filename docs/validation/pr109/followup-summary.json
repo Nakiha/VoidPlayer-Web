@@ -1,0 +1,70 @@
+{
+  "date": "2026-10-19 Asia/Shanghai",
+  "webOriginalHead": "c398124e66dbd8724060c4a514b22a5df82ad503",
+  "ffmpegFix": "8998a1a670c81a04d144c36f9e2d3aa680c10720",
+  "ffmpegRef": "n9.0.2-vpsimd-sad-testfix",
+  "fullCleanStMtBuild": true,
+  "productionFiles": {
+    "voidplayer-core.js": {
+      "bytes": 79123,
+      "sha256": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+      "byteIdenticalToOriginalSimd": true
+    },
+    "voidplayer-core.wasm": {
+      "bytes": 6096217,
+      "sha256": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1",
+      "byteIdenticalToOriginalSimd": true
+    },
+    "voidplayer-core-mt.js": {
+      "bytes": 96806,
+      "sha256": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+      "byteIdenticalToOriginalSimd": true
+    },
+    "voidplayer-core-mt.wasm": {
+      "bytes": 6148397,
+      "sha256": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936",
+      "byteIdenticalToOriginalSimd": true
+    }
+  },
+  "asan": {
+    "originalCFirst": "expected heap-buffer-overflow",
+    "originalSimdFirst": "expected heap-buffer-overflow",
+    "inter": 2580,
+    "alfClassification": 2920,
+    "modes": [
+      "O1+ASan",
+      "O2"
+    ],
+    "failures": 0
+  },
+  "freshPinRegression": {
+    "directCore": {
+      "stFrames": 600,
+      "mtFrames": 600,
+      "matchesNativePixels": true
+    },
+    "app": {
+      "stFrames": 600,
+      "mtFrames": 600,
+      "seeks": [
+        599,
+        1,
+        360,
+        0,
+        598,
+        2,
+        599,
+        0
+      ],
+      "eof": true
+    },
+    "nativeMetadataIndependentlyVerified": false
+  },
+  "webBuild": "passed",
+  "webContractCases": {
+    "passed": 18,
+    "total": 18
+  },
+  "releaseCoreInterfacesAndProvenance": "passed",
+  "performance": "Historical 2026-10-18 records audited; no performance measurements were rerun during fresh compilation."
+}

@@ -1,0 +1,40 @@
+{
+  "source": {
+    "repository": "Nakiha/VoidPlayer-FFmpeg-Build",
+    "revision": "71d2ccbd2c5175dfcdffb48f8428695067227a7c",
+    "ffmpegRepository": "FFmpeg/FFmpeg",
+    "ffmpegRevision": "946fcce07b6dcd0331c8cc609192aeff5e1924f8",
+    "ffmpegRef": "n9.0.2",
+    "dav1dRepository": "videolan/dav1d",
+    "dav1dRevision": "42b2b24fb8819f1ed3643aa9cf2a62f03868e3aa",
+    "emscripten": "6.0.9",
+    "meson": "1.11.2",
+    "ninja": "1.13.0",
+    "demuxAbi": 0,
+    "pictureAbi": 1,
+    "capabilityAbi": 1,
+    "demuxers": [
+      "avi",
+      "mpegps",
+      "mpegvideo"
+    ]
+  },
+  "buildRun": "https://github.com/Nakiha/VoidPlayer-Web/actions/runs/38874102037",
+  "verifiedFiles": {
+    "LICENSES/COPYING.GPLv2": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+    "LICENSES/COPYING.GPLv3": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+    "LICENSES/COPYING.LGPLv2.1": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30",
+    "LICENSES/COPYING.LGPLv3": "da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768",
+    "LICENSES/FFmpeg-LICENSE.md": "2e1d16c72fd74e12063776371da757322f8b77589386532f4fd8634bde7de1af",
+    "LICENSES/FFmpeg-README.md": "7e30f809d40454ebc467cf473a063d7306f5eb836dca6b80668c4427d8845914",
+    "LICENSES/dav1d-COPYING": "b327887de263238deaa80c34cdd2ff3e0ba1d35db585ce14a37ce3e74ee389e9",
+    "capabilities-mt.json": "7d5721f96eabafacf34ab91c28cf7a778d9adf5c061420683b61792fe4f9eafe",
+    "capabilities.json": "adfdb15ac884463832086775788cd0358ba739047f6f70be4f9940738f9f2222",
+    "voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+    "voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc",
+    "voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+    "voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d",
+    "voidplayer-ffmpeg-manifest-mt.json": "2f82d61719f7a2784e67bd753c82edbd8bcf2cca936194e6dacb54a90f6e1f82",
+    "voidplayer-ffmpeg-manifest.json": "94fb04893ad28ef99469f04e11ccf0ad65c0718073d413ced0137ac906fe8333"
+  }
+}

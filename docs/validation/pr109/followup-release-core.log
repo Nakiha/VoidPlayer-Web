@@ -1,0 +1,5 @@
+[libdav1d @ 0x62a520] Frame size limit reduced from 2147483647 to 67108864.
+PASS voidplayer-core: required interfaces, invalid input, AV1 decoder
+[libdav1d @ 0x62b0e0] Frame size limit reduced from 2147483647 to 67108864.
+PASS voidplayer-core-mt: required interfaces, invalid input, AV1 decoder
+PASS decoder provenance and file hashes

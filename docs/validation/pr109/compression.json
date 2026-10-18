@@ -1,0 +1,12 @@
+{
+  "voidplayer-core.wasm": {
+    "bytes": 6096217,
+    "brotliQ9": 1522651,
+    "gzip9": 1869234
+  },
+  "voidplayer-core-mt.wasm": {
+    "bytes": 6148397,
+    "brotliQ9": 1529954,
+    "gzip9": 1880344
+  }
+}

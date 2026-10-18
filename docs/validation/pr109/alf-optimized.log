@@ -1,0 +1,7 @@
+filter: -124 39 128 14 -48 82 -113 105 -4 -9 110 10
+clip:   2 8 32 256 8 2 32 32 2 32 8 2
+ref row0: 99 122 127 178 186 132 130 99
+sim row0: 99 122 127 178 186 132 130 99
+scalar px0: curr=4 sums=(4 16 64 307 16 4) -> 99 (ref=99 sim=99)
+scalar px4: curr=107 sums=(0 -64 4 64 16 4) -> 64 (ref=186 sim=186)
+PASS: 2920 cases, 0 failures

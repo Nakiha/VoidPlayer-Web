@@ -1,0 +1,17 @@
+{
+  "package": "voidplayer-ffmpeg-wasm-mt-n9.0.2-vpsimd",
+  "target": "wasm32-emscripten",
+  "demuxAbi": 0,
+  "pictureAbi": 1,
+  "capabilityManifest": "capabilities-mt.json",
+  "ffmpegRef": "n9.0.2-vpsimd",
+  "ffmpegRemote": "https://github.com/Nakiha/FFmpeg.git",
+  "ffmpegRevision": "01cba57fc16f1d194762e6d3fabf256e7904b7ab",
+  "optimization": {"compile": "3", "link": "2", "lto": "0", "simd": "1"},
+  "builtAtUtc": "2026-10-18T07:35:14Z",
+  "libraries": ["avcodec", "avformat", "avutil", "swscale", "dav1d"],
+  "demuxers": "mpegps mpegvideo avi",
+  "decoders": "ffv1 h264 hevc mpeg1video mpeg2video mpeg4 mjpeg prores vvc vp8 vp9 libdav1d",
+  "audio": "not included",
+  "threading": "pthreads"
+}
