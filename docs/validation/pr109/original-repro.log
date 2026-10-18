@@ -1,0 +1,47 @@
+=================================================================
+==42==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x17042788 at pc 0x00002ce2 bp 0x1313f9b0 sp 0x1313f9bc
+READ of size 2 at 0x17042788 thread T0
+    #0 0x00002ce2  (<home>/Documents/Codex/2026-10-19/task/harness/original-repro.js+0x2ce2)
+
+0x17042788 is located 8 bytes after 1536-byte region [0x17042180,0x17042780)
+allocated by thread T0 here:
+    #0 0x0001bc3f in malloc+0x1bc3f (<home>/Documents/Codex/2026-10-19/task/harness/original-repro.js+0x1bc3f)
+    #1 0x00002a76 in __original_main+0x2a76 (<home>/Documents/Codex/2026-10-19/task/harness/original-repro.js+0x2a76)
+    #2 0x00003b4f in main+0x3b4f (<home>/Documents/Codex/2026-10-19/task/harness/original-repro.js+0x3b4f)
+    #3 0x80000eaf in callMain <home>/Documents/Codex/2026-10-19/task/harness/original-repro.js:3759:15
+    #4 0x80000eca in run <home>/Documents/Codex/2026-10-19/task/harness/original-repro.js:3786:22
+    #5 0x80000ed2  (JavaScript+0xed2)
+
+SUMMARY: AddressSanitizer: heap-buffer-overflow (<home>/Documents/Codex/2026-10-19/task/harness/original-repro.js+0x2cde)
+Shadow bytes around the buggy address:
+  0x17042500: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x17042580: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x17042600: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x17042680: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x17042700: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x17042780: fa[fa]fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x17042800: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x17042880: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x17042900: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x17042980: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x17042a00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==42==ABORTING

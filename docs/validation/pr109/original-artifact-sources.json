@@ -1,0 +1,76 @@
+{
+  "old": {
+    "files": {
+      "voidplayer-core.js": {
+        "sha256": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+        "bytes": 79123
+      },
+      "voidplayer-core-mt.wasm": {
+        "sha256": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc",
+        "bytes": 6127186
+      },
+      "voidplayer-core.wasm": {
+        "sha256": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d",
+        "bytes": 6074986
+      },
+      "voidplayer-core-mt.js": {
+        "sha256": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+        "bytes": 96806
+      }
+    },
+    "source": "Local cached CI artifact: <home>/Documents/yorune/VoidPlayer-Web/.run/pinned-cores-38874102037/release-core; verified every provenance.json file hash"
+  },
+  "new": {
+    "files": {
+      "voidplayer-core.js": {
+        "sha256": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+        "bytes": 79123
+      },
+      "voidplayer-core-mt.wasm": {
+        "sha256": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936",
+        "bytes": 6148397
+      },
+      "voidplayer-core.wasm": {
+        "sha256": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1",
+        "bytes": 6096217
+      },
+      "voidplayer-core-mt.js": {
+        "sha256": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+        "bytes": 96806
+      }
+    },
+    "source": "Local <home>/Documents/yorune/VoidPlayer.worktrees/core-playback-simd/dist/{voidplayer-ffmpeg-wasm-n9.0.2-vpsimd,voidplayer-ffmpeg-wasm-mt-n9.0.2-vpsimd}; clean Build 71d2ccbd, FFmpeg 01cba57f"
+  },
+  "fixed": {
+    "files": {
+      "voidplayer-core.js": {
+        "sha256": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+        "bytes": 79123
+      },
+      "voidplayer-core-mt.wasm": {
+        "sha256": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936",
+        "bytes": 6148397
+      },
+      "voidplayer-core.wasm": {
+        "sha256": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1",
+        "bytes": 6096217
+      },
+      "voidplayer-core-mt.js": {
+        "sha256": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+        "bytes": 96806
+      }
+    },
+    "source": "Relinked Build 71d2ccbd wrapper against same unmodified production libraries (harness/relink-fixed.sh); patch modifies only experiments; all four core file hashes identical to new"
+  },
+  "sample": {
+    "path": "<home>/Documents/Codex/2026-10-19/task/samples/h266_10s_1920x1080.mp4",
+    "sha256": "088a1b66b61bd23ceebe863720e80c6bac62ad379ae633c510326678de7954fd",
+    "bytes": 5018129
+  },
+  "nativeOracle": {
+    "path": "/opt/homebrew/Cellar/ffmpeg/8.1.2_1/bin/ffmpeg",
+    "version": "8.1.2",
+    "sha256": "dad4b30b36a1a999bfa4b6ffbde138bd17ee496c69e12eef638227dff2c6415c",
+    "exactSourceCommit": "not independently established; Homebrew version/build flags recorded"
+  }
+}

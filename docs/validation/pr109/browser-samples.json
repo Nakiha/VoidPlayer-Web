@@ -1,0 +1,2355 @@
+[
+  {
+    "variant": "old",
+    "order": "AB",
+    "round": 0,
+    "warmup": true,
+    "headless": false,
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version)",
+    "loadMs": 699.8049999475479,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": true,
+      "failures": [],
+      "startupMs": 1.26500004529953,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 3024.435000002384,
+        "mediaUs": 3017145,
+        "waitingMs": 6.235003573894504,
+        "firstAdvanceMs": 14.98499995470047,
+        "firstPresentationMs": 23.564999997615814,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 12441600,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "firstPtsUs": 3016667,
+            "lastPtsUs": 3066667,
+            "producerWaitMs": null,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9975896324429593,
+        "maxFrameLagUs": 16630,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 181,
+            "dropped": 0,
+            "fps": 59.845888570875985,
+            "maxGapMs": 25.410000026226044,
+            "p95GapMs": 24.694999992847443
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "7d5721f96eabafacf34ab91c28cf7a778d9adf5c061420683b61792fe4f9eafe",
+            "/vendor/voidplayer-core/capabilities.json": "adfdb15ac884463832086775788cd0358ba739047f6f70be4f9940738f9f2222",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d"
+          },
+          "builtAt": "2026-10-18T16:51:36.838Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d",
+            "voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc"
+          }
+        },
+        "page": "http://127.0.0.1:5289/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "old",
+    "order": "AB",
+    "round": 1,
+    "warmup": false,
+    "headless": false,
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version)",
+    "loadMs": 563.4350000023842,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": true,
+      "failures": [],
+      "startupMs": 0.7950000166893005,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 3030.589999973774,
+        "mediaUs": 3023710,
+        "waitingMs": 5.835003685951227,
+        "firstAdvanceMs": 15.060000002384186,
+        "firstPresentationMs": 25.0450000166893,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 12441600,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "firstPtsUs": 3016667,
+            "lastPtsUs": 3066667,
+            "producerWaitMs": null,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9977298149951549,
+        "maxFrameLagUs": 16650,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 181,
+            "dropped": 0,
+            "fps": 59.724344105130136,
+            "maxGapMs": 25.64000004529953,
+            "p95GapMs": 23.194999992847443
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "7d5721f96eabafacf34ab91c28cf7a778d9adf5c061420683b61792fe4f9eafe",
+            "/vendor/voidplayer-core/capabilities.json": "adfdb15ac884463832086775788cd0358ba739047f6f70be4f9940738f9f2222",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d"
+          },
+          "builtAt": "2026-10-18T16:51:36.838Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d",
+            "voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc"
+          }
+        },
+        "page": "http://127.0.0.1:5289/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "old",
+    "order": "AB",
+    "round": 2,
+    "warmup": false,
+    "headless": false,
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version)",
+    "loadMs": 566.4049999713898,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": true,
+      "failures": [],
+      "startupMs": 0.9100000262260437,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 3026.439999997616,
+        "mediaUs": 3015465,
+        "waitingMs": 10.965003917217262,
+        "firstAdvanceMs": 18.599999964237213,
+        "firstPresentationMs": 35.964999973773956,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 12441600,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "firstPtsUs": 3016667,
+            "lastPtsUs": 3066667,
+            "producerWaitMs": null,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9963736271006118,
+        "maxFrameLagUs": 16665,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 180,
+            "dropped": 0,
+            "fps": 59.475819775096085,
+            "maxGapMs": 35.964999973773956,
+            "p95GapMs": 23.194999992847443
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "7d5721f96eabafacf34ab91c28cf7a778d9adf5c061420683b61792fe4f9eafe",
+            "/vendor/voidplayer-core/capabilities.json": "adfdb15ac884463832086775788cd0358ba739047f6f70be4f9940738f9f2222",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d"
+          },
+          "builtAt": "2026-10-18T16:51:36.838Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d",
+            "voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc"
+          }
+        },
+        "page": "http://127.0.0.1:5289/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "new",
+    "order": "AB",
+    "round": 0,
+    "warmup": true,
+    "headless": false,
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version)",
+    "loadMs": 197.87999999523163,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": true,
+      "failures": [],
+      "startupMs": 1.090000033378601,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 3014.1800000071526,
+        "mediaUs": 3007060,
+        "waitingMs": 6.080003712177271,
+        "firstAdvanceMs": 13.629999995231628,
+        "firstPresentationMs": 30.69999998807907,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 12441600,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "firstPtsUs": 3000000,
+            "lastPtsUs": 3050000,
+            "producerWaitMs": null,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9976378318457638,
+        "maxFrameLagUs": 16650,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 180,
+            "dropped": 0,
+            "fps": 59.71773417631756,
+            "maxGapMs": 30.69999998807907,
+            "p95GapMs": 24
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "25de69e842ce2ce5eb6f55ec3aa15501bc9298b8ce410d66516583f756a8479f",
+            "/vendor/voidplayer-core/capabilities.json": "949751f3e462fd3213ccb57f366d2101e501cc21d787aea738e228a669f2fd3e",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1"
+          },
+          "builtAt": "2026-10-18T16:51:38.442Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1",
+            "voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936"
+          }
+        },
+        "page": "http://127.0.0.1:5290/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "new",
+    "order": "AB",
+    "round": 1,
+    "warmup": false,
+    "headless": false,
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version)",
+    "loadMs": 505.1850000023842,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": true,
+      "failures": [],
+      "startupMs": 0.925000011920929,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 3026.4199999570847,
+        "mediaUs": 3021515,
+        "waitingMs": 3.900003654956815,
+        "firstAdvanceMs": 13.314999997615814,
+        "firstPresentationMs": 27.0900000333786,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 12441600,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "firstPtsUs": 3016667,
+            "lastPtsUs": 3066667,
+            "producerWaitMs": null,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9983792732148365,
+        "maxFrameLagUs": 16663,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 181,
+            "dropped": 0,
+            "fps": 59.80663622450506,
+            "maxGapMs": 28.24500000476837,
+            "p95GapMs": 24.8850000500679
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "25de69e842ce2ce5eb6f55ec3aa15501bc9298b8ce410d66516583f756a8479f",
+            "/vendor/voidplayer-core/capabilities.json": "949751f3e462fd3213ccb57f366d2101e501cc21d787aea738e228a669f2fd3e",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1"
+          },
+          "builtAt": "2026-10-18T16:51:38.442Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1",
+            "voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936"
+          }
+        },
+        "page": "http://127.0.0.1:5290/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "new",
+    "order": "AB",
+    "round": 2,
+    "warmup": false,
+    "headless": false,
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version)",
+    "loadMs": 500.1650000214577,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": true,
+      "failures": [],
+      "startupMs": 0.8399999737739563,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 3026.2699999809265,
+        "mediaUs": 3019750,
+        "waitingMs": 5.520003848075868,
+        "firstAdvanceMs": 12.59500002861023,
+        "firstPresentationMs": 30.200000047683716,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 12441600,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "firstPtsUs": 3016667,
+            "lastPtsUs": 3066667,
+            "producerWaitMs": null,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9978455326256521,
+        "maxFrameLagUs": 16560,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 181,
+            "dropped": 0,
+            "fps": 59.809600597812086,
+            "maxGapMs": 30.200000047683716,
+            "p95GapMs": 22.514999985694885
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "25de69e842ce2ce5eb6f55ec3aa15501bc9298b8ce410d66516583f756a8479f",
+            "/vendor/voidplayer-core/capabilities.json": "949751f3e462fd3213ccb57f366d2101e501cc21d787aea738e228a669f2fd3e",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1"
+          },
+          "builtAt": "2026-10-18T16:51:38.442Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1",
+            "voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936"
+          }
+        },
+        "page": "http://127.0.0.1:5290/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "new",
+    "order": "BA",
+    "round": 0,
+    "warmup": true,
+    "headless": false,
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version)",
+    "loadMs": 195.99500000476837,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": true,
+      "failures": [],
+      "startupMs": 1.1800000071525574,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 3028.8700000047684,
+        "mediaUs": 3019945,
+        "waitingMs": 7.930003802776337,
+        "firstAdvanceMs": 19.694999992847443,
+        "firstPresentationMs": 33.69999998807907,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 12441600,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "firstPtsUs": 3016667,
+            "lastPtsUs": 3066667,
+            "producerWaitMs": null,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9970533565307345,
+        "maxFrameLagUs": 16578,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 180,
+            "dropped": 1,
+            "fps": 59.42810355007531,
+            "maxGapMs": 33.69999998807907,
+            "p95GapMs": 22.540000021457672
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "25de69e842ce2ce5eb6f55ec3aa15501bc9298b8ce410d66516583f756a8479f",
+            "/vendor/voidplayer-core/capabilities.json": "949751f3e462fd3213ccb57f366d2101e501cc21d787aea738e228a669f2fd3e",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1"
+          },
+          "builtAt": "2026-10-18T16:51:38.442Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1",
+            "voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936"
+          }
+        },
+        "page": "http://127.0.0.1:5290/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "new",
+    "order": "BA",
+    "round": 1,
+    "warmup": false,
+    "headless": false,
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version)",
+    "loadMs": 493.7549999952316,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": true,
+      "failures": [],
+      "startupMs": 0.8499999642372131,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 3019.4699999690056,
+        "mediaUs": 3004795,
+        "waitingMs": 13.685003643035891,
+        "firstAdvanceMs": 21.519999980926514,
+        "firstPresentationMs": 39.269999980926514,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 12441600,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "firstPtsUs": 3000000,
+            "lastPtsUs": 3050000,
+            "producerWaitMs": null,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9951398755512867,
+        "maxFrameLagUs": 16655,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 180,
+            "dropped": 0,
+            "fps": 59.61311091080477,
+            "maxGapMs": 39.269999980926514,
+            "p95GapMs": 22.89000004529953
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "25de69e842ce2ce5eb6f55ec3aa15501bc9298b8ce410d66516583f756a8479f",
+            "/vendor/voidplayer-core/capabilities.json": "949751f3e462fd3213ccb57f366d2101e501cc21d787aea738e228a669f2fd3e",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1"
+          },
+          "builtAt": "2026-10-18T16:51:38.442Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1",
+            "voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936"
+          }
+        },
+        "page": "http://127.0.0.1:5290/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "new",
+    "order": "BA",
+    "round": 2,
+    "warmup": false,
+    "headless": false,
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version)",
+    "loadMs": 500.22500002384186,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": true,
+      "failures": [],
+      "startupMs": 1.0699999928474426,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 3016.364999949932,
+        "mediaUs": 3007580,
+        "waitingMs": 7.755003833770756,
+        "firstAdvanceMs": 16.334999978542328,
+        "firstPresentationMs": 25.6599999666214,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 12441600,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "firstPtsUs": 3000000,
+            "lastPtsUs": 3050000,
+            "producerWaitMs": null,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9970875540758237,
+        "maxFrameLagUs": 16648,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 180,
+            "dropped": 0,
+            "fps": 59.674475735856824,
+            "maxGapMs": 27.85499995946884,
+            "p95GapMs": 24.099999964237213
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "25de69e842ce2ce5eb6f55ec3aa15501bc9298b8ce410d66516583f756a8479f",
+            "/vendor/voidplayer-core/capabilities.json": "949751f3e462fd3213ccb57f366d2101e501cc21d787aea738e228a669f2fd3e",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1"
+          },
+          "builtAt": "2026-10-18T16:51:38.442Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1",
+            "voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936"
+          }
+        },
+        "page": "http://127.0.0.1:5290/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "old",
+    "order": "BA",
+    "round": 0,
+    "warmup": true,
+    "headless": false,
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version)",
+    "loadMs": 209.58499997854233,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": true,
+      "failures": [],
+      "startupMs": 1.4550000429153442,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 3018.2800000309944,
+        "mediaUs": 3009870,
+        "waitingMs": 8.400003573894516,
+        "firstAdvanceMs": 17.405000030994415,
+        "firstPresentationMs": 35.30500000715256,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 12441600,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "firstPtsUs": 3016667,
+            "lastPtsUs": 3066667,
+            "producerWaitMs": null,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9972136448470956,
+        "maxFrameLagUs": 16593,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 180,
+            "dropped": 0,
+            "fps": 59.63661423000901,
+            "maxGapMs": 35.30500000715256,
+            "p95GapMs": 24.945000052452087
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "7d5721f96eabafacf34ab91c28cf7a778d9adf5c061420683b61792fe4f9eafe",
+            "/vendor/voidplayer-core/capabilities.json": "adfdb15ac884463832086775788cd0358ba739047f6f70be4f9940738f9f2222",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d"
+          },
+          "builtAt": "2026-10-18T16:51:36.838Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d",
+            "voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc"
+          }
+        },
+        "page": "http://127.0.0.1:5289/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "old",
+    "order": "BA",
+    "round": 1,
+    "warmup": false,
+    "headless": false,
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version)",
+    "loadMs": 571.4699999690056,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": true,
+      "failures": [],
+      "startupMs": 0.8450000286102295,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 3016.675000011921,
+        "mediaUs": 3006680,
+        "waitingMs": 9.000003557205197,
+        "firstAdvanceMs": 15.570000052452087,
+        "firstPresentationMs": 30.585000038146973,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 12441600,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "firstPtsUs": 3000000,
+            "lastPtsUs": 3050000,
+            "producerWaitMs": null,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9966867494801789,
+        "maxFrameLagUs": 16662,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 180,
+            "dropped": 0,
+            "fps": 59.66834345737897,
+            "maxGapMs": 30.585000038146973,
+            "p95GapMs": 22.880000054836273
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "7d5721f96eabafacf34ab91c28cf7a778d9adf5c061420683b61792fe4f9eafe",
+            "/vendor/voidplayer-core/capabilities.json": "adfdb15ac884463832086775788cd0358ba739047f6f70be4f9940738f9f2222",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d"
+          },
+          "builtAt": "2026-10-18T16:51:36.838Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d",
+            "voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc"
+          }
+        },
+        "page": "http://127.0.0.1:5289/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "old",
+    "order": "BA",
+    "round": 2,
+    "warmup": false,
+    "headless": false,
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version)",
+    "loadMs": 560.1650000214577,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": true,
+      "failures": [],
+      "startupMs": 0.875,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 3025.8349999785423,
+        "mediaUs": 3016235,
+        "waitingMs": 9.580003750324245,
+        "firstAdvanceMs": 17.375,
+        "firstPresentationMs": 28.97999995946884,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 12441600,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "firstPtsUs": 3016667,
+            "lastPtsUs": 3066667,
+            "producerWaitMs": null,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9968273220520583,
+        "maxFrameLagUs": 16622,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 180,
+            "dropped": 0,
+            "fps": 59.487711656873714,
+            "maxGapMs": 28.97999995946884,
+            "p95GapMs": 22.639999985694885
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "7d5721f96eabafacf34ab91c28cf7a778d9adf5c061420683b61792fe4f9eafe",
+            "/vendor/voidplayer-core/capabilities.json": "adfdb15ac884463832086775788cd0358ba739047f6f70be4f9940738f9f2222",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d"
+          },
+          "builtAt": "2026-10-18T16:51:36.838Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d",
+            "voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc"
+          }
+        },
+        "page": "http://127.0.0.1:5289/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "old",
+    "order": "AB",
+    "round": 0,
+    "warmup": true,
+    "loadMs": 631.1800000071526,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": false,
+      "failures": [
+        "below-realtime"
+      ],
+      "startupMs": 0.9950000047683716,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 3061.7950000166893,
+        "mediaUs": 816667,
+        "waitingMs": 2244.9180000381484,
+        "firstAdvanceMs": 71.06499999761581,
+        "firstPresentationMs": 71.37000000476837,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 1,
+            "bytes": 3110400,
+            "peakFrames": 1,
+            "peakBytes": 3110400,
+            "firstPtsUs": 816667,
+            "lastPtsUs": 816667,
+            "producerWaitMs": 0.4300000071525574,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.26672817742387994,
+        "maxFrameLagUs": 0,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 49,
+            "dropped": 0,
+            "fps": 16.003684113316833,
+            "maxGapMs": 71.93999999761581,
+            "p95GapMs": 70.91000002622604
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "7d5721f96eabafacf34ab91c28cf7a778d9adf5c061420683b61792fe4f9eafe",
+            "/vendor/voidplayer-core/capabilities.json": "adfdb15ac884463832086775788cd0358ba739047f6f70be4f9940738f9f2222",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d"
+          },
+          "builtAt": "2026-10-18T16:51:36.838Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d",
+            "voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc"
+          }
+        },
+        "page": "http://127.0.0.1:5289/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "old",
+    "order": "AB",
+    "round": 1,
+    "warmup": false,
+    "loadMs": 487.49000000953674,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": false,
+      "failures": [
+        "below-realtime"
+      ],
+      "startupMs": 0.6949999928474426,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 2995.264999985695,
+        "mediaUs": 833333,
+        "waitingMs": 2161.722000007154,
+        "firstAdvanceMs": 13.175000011920929,
+        "firstPresentationMs": 86.02499997615814,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 1,
+            "bytes": 3110400,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "firstPtsUs": 833333,
+            "lastPtsUs": 833333,
+            "producerWaitMs": 0.4100000262260437,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.278216785494432,
+        "maxFrameLagUs": 13610,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 47,
+            "dropped": 3,
+            "fps": 15.691432978459158,
+            "maxGapMs": 86.02499997615814,
+            "p95GapMs": 70.27000004053116
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "7d5721f96eabafacf34ab91c28cf7a778d9adf5c061420683b61792fe4f9eafe",
+            "/vendor/voidplayer-core/capabilities.json": "adfdb15ac884463832086775788cd0358ba739047f6f70be4f9940738f9f2222",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d"
+          },
+          "builtAt": "2026-10-18T16:51:36.838Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d",
+            "voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc"
+          }
+        },
+        "page": "http://127.0.0.1:5289/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "old",
+    "order": "AB",
+    "round": 2,
+    "warmup": false,
+    "loadMs": 492.32499998807907,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": false,
+      "failures": [
+        "below-realtime"
+      ],
+      "startupMs": 0.6550000309944153,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 3012.354999959469,
+        "mediaUs": 783333,
+        "waitingMs": 2228.806999985696,
+        "firstAdvanceMs": 78.56999999284744,
+        "firstPresentationMs": 78.85000002384186,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 1,
+            "bytes": 3110400,
+            "peakFrames": 1,
+            "peakBytes": 3110400,
+            "firstPtsUs": 783333,
+            "lastPtsUs": 783333,
+            "producerWaitMs": 0.3999999761581421,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.2600400683221399,
+        "maxFrameLagUs": 0,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 47,
+            "dropped": 0,
+            "fps": 15.602410738652113,
+            "maxGapMs": 78.85000002384186,
+            "p95GapMs": 68.90499997138977
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "7d5721f96eabafacf34ab91c28cf7a778d9adf5c061420683b61792fe4f9eafe",
+            "/vendor/voidplayer-core/capabilities.json": "adfdb15ac884463832086775788cd0358ba739047f6f70be4f9940738f9f2222",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d"
+          },
+          "builtAt": "2026-10-18T16:51:36.838Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d",
+            "voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc"
+          }
+        },
+        "page": "http://127.0.0.1:5289/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "new",
+    "order": "AB",
+    "round": 0,
+    "warmup": true,
+    "loadMs": 641.0649999976158,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": false,
+      "failures": [
+        "below-realtime"
+      ],
+      "startupMs": 1.1100000143051147,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 3017.270000040531,
+        "mediaUs": 783333,
+        "waitingMs": 2233.731999997617,
+        "firstAdvanceMs": 69,
+        "firstPresentationMs": 69.2600000500679,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 1,
+            "bytes": 3110400,
+            "peakFrames": 1,
+            "peakBytes": 3110400,
+            "firstPtsUs": 783333,
+            "lastPtsUs": 783333,
+            "producerWaitMs": 0.39499998092651367,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.25961647449166875,
+        "maxFrameLagUs": 0,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 47,
+            "dropped": 0,
+            "fps": 15.576995098008679,
+            "maxGapMs": 73.75,
+            "p95GapMs": 69.2600000500679
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "25de69e842ce2ce5eb6f55ec3aa15501bc9298b8ce410d66516583f756a8479f",
+            "/vendor/voidplayer-core/capabilities.json": "949751f3e462fd3213ccb57f366d2101e501cc21d787aea738e228a669f2fd3e",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1"
+          },
+          "builtAt": "2026-10-18T16:51:38.442Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1",
+            "voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936"
+          }
+        },
+        "page": "http://127.0.0.1:5290/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "new",
+    "order": "AB",
+    "round": 1,
+    "warmup": false,
+    "loadMs": 432.7150000333786,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": false,
+      "failures": [
+        "below-realtime",
+        "A:presentation-stall"
+      ],
+      "startupMs": 0.6600000262260437,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 3048.600000023842,
+        "mediaUs": 783333,
+        "waitingMs": 2264.9869999928487,
+        "firstAdvanceMs": 11.540000021457672,
+        "firstPresentationMs": 78.5799999833107,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 1,
+            "bytes": 3110400,
+            "peakFrames": 3,
+            "peakBytes": 9331200,
+            "firstPtsUs": 783333,
+            "lastPtsUs": 783333,
+            "producerWaitMs": 0.0549999475479126,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.2569484353453631,
+        "maxFrameLagUs": 12165,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 45,
+            "dropped": 2,
+            "fps": 14.76087384361611,
+            "maxGapMs": 131.83000004291534,
+            "p95GapMs": 78.5799999833107
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "25de69e842ce2ce5eb6f55ec3aa15501bc9298b8ce410d66516583f756a8479f",
+            "/vendor/voidplayer-core/capabilities.json": "949751f3e462fd3213ccb57f366d2101e501cc21d787aea738e228a669f2fd3e",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1"
+          },
+          "builtAt": "2026-10-18T16:51:38.442Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1",
+            "voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936"
+          }
+        },
+        "page": "http://127.0.0.1:5290/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "new",
+    "order": "AB",
+    "round": 2,
+    "warmup": false,
+    "loadMs": 418.88499999046326,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": false,
+      "failures": [
+        "below-realtime"
+      ],
+      "startupMs": 0.9750000238418579,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 2957.8550000190735,
+        "mediaUs": 750000,
+        "waitingMs": 2207.655000030996,
+        "firstAdvanceMs": 73.80000001192093,
+        "firstPresentationMs": 74.11500000953674,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 1,
+            "bytes": 3110400,
+            "peakFrames": 1,
+            "peakBytes": 3110400,
+            "firstPtsUs": 750000,
+            "lastPtsUs": 750000,
+            "producerWaitMs": 0.35500001907348633,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.253562125254674,
+        "maxFrameLagUs": 0,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 45,
+            "dropped": 0,
+            "fps": 15.21372751528044,
+            "maxGapMs": 74.11500000953674,
+            "p95GapMs": 71.31000000238419
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "25de69e842ce2ce5eb6f55ec3aa15501bc9298b8ce410d66516583f756a8479f",
+            "/vendor/voidplayer-core/capabilities.json": "949751f3e462fd3213ccb57f366d2101e501cc21d787aea738e228a669f2fd3e",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1"
+          },
+          "builtAt": "2026-10-18T16:51:38.442Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1",
+            "voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936"
+          }
+        },
+        "page": "http://127.0.0.1:5290/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "new",
+    "order": "BA",
+    "round": 0,
+    "warmup": true,
+    "loadMs": 670.875,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": false,
+      "failures": [
+        "below-realtime"
+      ],
+      "startupMs": 1.1650000214576721,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 2997.2799999713898,
+        "mediaUs": 750000,
+        "waitingMs": 2247.0500000119223,
+        "firstAdvanceMs": 73.92500001192093,
+        "firstPresentationMs": 74.57500004768372,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 1,
+            "bytes": 3110400,
+            "peakFrames": 1,
+            "peakBytes": 3110400,
+            "firstPtsUs": 750000,
+            "lastPtsUs": 750000,
+            "producerWaitMs": 0.4750000238418579,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.25022687236666546,
+        "maxFrameLagUs": 0,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 45,
+            "dropped": 0,
+            "fps": 15.013612341999927,
+            "maxGapMs": 76.77500003576279,
+            "p95GapMs": 74.57500004768372
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "25de69e842ce2ce5eb6f55ec3aa15501bc9298b8ce410d66516583f756a8479f",
+            "/vendor/voidplayer-core/capabilities.json": "949751f3e462fd3213ccb57f366d2101e501cc21d787aea738e228a669f2fd3e",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1"
+          },
+          "builtAt": "2026-10-18T16:51:38.442Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1",
+            "voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936"
+          }
+        },
+        "page": "http://127.0.0.1:5290/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "new",
+    "order": "BA",
+    "round": 1,
+    "warmup": false,
+    "loadMs": 416.585000038147,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": false,
+      "failures": [
+        "below-realtime"
+      ],
+      "startupMs": 0.7949999570846558,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 2983.175000011921,
+        "mediaUs": 750000,
+        "waitingMs": 2232.9599999785437,
+        "firstAdvanceMs": 68.625,
+        "firstPresentationMs": 68.87000000476837,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 1,
+            "bytes": 3110400,
+            "peakFrames": 1,
+            "peakBytes": 3110400,
+            "firstPtsUs": 750000,
+            "lastPtsUs": 750000,
+            "producerWaitMs": 0.3800000548362732,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.251409991032039,
+        "maxFrameLagUs": 0,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 45,
+            "dropped": 0,
+            "fps": 15.084599461922341,
+            "maxGapMs": 75.45000004768372,
+            "p95GapMs": 69.30500000715256
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "25de69e842ce2ce5eb6f55ec3aa15501bc9298b8ce410d66516583f756a8479f",
+            "/vendor/voidplayer-core/capabilities.json": "949751f3e462fd3213ccb57f366d2101e501cc21d787aea738e228a669f2fd3e",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1"
+          },
+          "builtAt": "2026-10-18T16:51:38.442Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1",
+            "voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936"
+          }
+        },
+        "page": "http://127.0.0.1:5290/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "new",
+    "order": "BA",
+    "round": 2,
+    "warmup": false,
+    "loadMs": 421.6899999976158,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": false,
+      "failures": [
+        "below-realtime"
+      ],
+      "startupMs": 0.8700000047683716,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 3040.3949999809265,
+        "mediaUs": 750000,
+        "waitingMs": 2290.204999983312,
+        "firstAdvanceMs": 72.45000004768372,
+        "firstPresentationMs": 72.73500001430511,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 1,
+            "bytes": 3110400,
+            "peakFrames": 1,
+            "peakBytes": 3110400,
+            "firstPtsUs": 750000,
+            "lastPtsUs": 750000,
+            "producerWaitMs": 0.3700000047683716,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.2466784743445194,
+        "maxFrameLagUs": 0,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 45,
+            "dropped": 0,
+            "fps": 14.800708460671164,
+            "maxGapMs": 74.92500001192093,
+            "p95GapMs": 74.27499997615814
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "25de69e842ce2ce5eb6f55ec3aa15501bc9298b8ce410d66516583f756a8479f",
+            "/vendor/voidplayer-core/capabilities.json": "949751f3e462fd3213ccb57f366d2101e501cc21d787aea738e228a669f2fd3e",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1"
+          },
+          "builtAt": "2026-10-18T16:51:38.442Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "00327efe4fbfab994422f3d84845db0dd62c4d1b5d8f30dda2a5a1a9385042d1",
+            "voidplayer-core-mt.wasm": "aaf5fd2232ae1ff5a7286c7e85bb53eb91c882511e667bdc31fb8e54efcf7936"
+          }
+        },
+        "page": "http://127.0.0.1:5290/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "old",
+    "order": "BA",
+    "round": 0,
+    "warmup": true,
+    "loadMs": 663.9350000023842,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": false,
+      "failures": [
+        "below-realtime"
+      ],
+      "startupMs": 1.1700000166893005,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 3023.6200000047684,
+        "mediaUs": 750000,
+        "waitingMs": 2273.415000021459,
+        "firstAdvanceMs": 79.61000001430511,
+        "firstPresentationMs": 80.04000002145767,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 1,
+            "bytes": 3110400,
+            "peakFrames": 1,
+            "peakBytes": 3110400,
+            "firstPtsUs": 750000,
+            "lastPtsUs": 750000,
+            "producerWaitMs": 0.4599999785423279,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.2480470429481275,
+        "maxFrameLagUs": 0,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 45,
+            "dropped": 0,
+            "fps": 14.88282257688765,
+            "maxGapMs": 80.04000002145767,
+            "p95GapMs": 71.72000002861023
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "7d5721f96eabafacf34ab91c28cf7a778d9adf5c061420683b61792fe4f9eafe",
+            "/vendor/voidplayer-core/capabilities.json": "adfdb15ac884463832086775788cd0358ba739047f6f70be4f9940738f9f2222",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d"
+          },
+          "builtAt": "2026-10-18T16:51:36.838Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d",
+            "voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc"
+          }
+        },
+        "page": "http://127.0.0.1:5289/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "old",
+    "order": "BA",
+    "round": 1,
+    "warmup": false,
+    "loadMs": 483.664999961853,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": false,
+      "failures": [
+        "below-realtime"
+      ],
+      "startupMs": 0.809999942779541,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 3016.7400000095367,
+        "mediaUs": 750000,
+        "waitingMs": 2266.5099999904646,
+        "firstAdvanceMs": 75.01499998569489,
+        "firstPresentationMs": 75.2849999666214,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 1,
+            "bytes": 3110400,
+            "peakFrames": 1,
+            "peakBytes": 3110400,
+            "firstPtsUs": 750000,
+            "lastPtsUs": 750000,
+            "producerWaitMs": 0.41499996185302734,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.24861274090496,
+        "maxFrameLagUs": 0,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 45,
+            "dropped": 0,
+            "fps": 14.916764454297601,
+            "maxGapMs": 77.8299999833107,
+            "p95GapMs": 73.33000004291534
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "7d5721f96eabafacf34ab91c28cf7a778d9adf5c061420683b61792fe4f9eafe",
+            "/vendor/voidplayer-core/capabilities.json": "adfdb15ac884463832086775788cd0358ba739047f6f70be4f9940738f9f2222",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d"
+          },
+          "builtAt": "2026-10-18T16:51:36.838Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d",
+            "voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc"
+          }
+        },
+        "page": "http://127.0.0.1:5289/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  },
+  {
+    "variant": "old",
+    "order": "BA",
+    "round": 2,
+    "warmup": false,
+    "loadMs": 482.2849999666214,
+    "isolated": true,
+    "hardwareConcurrency": 10,
+    "report": {
+      "passed": false,
+      "failures": [
+        "below-realtime"
+      ],
+      "startupMs": 0.8199999928474426,
+      "requestedWallMs": 3000,
+      "measurements": {
+        "wallMs": 3023.2549999952316,
+        "mediaUs": 750000,
+        "waitingMs": 2273.069999992849,
+        "firstAdvanceMs": 73.00499999523163,
+        "firstPresentationMs": 73.33000004291534,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 1,
+            "bytes": 3110400,
+            "peakFrames": 1,
+            "peakBytes": 3110400,
+            "firstPtsUs": 750000,
+            "lastPtsUs": 750000,
+            "producerWaitMs": 0.38499999046325684,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.24807698986727317,
+        "maxFrameLagUs": 0,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 45,
+            "dropped": 0,
+            "fps": 14.88461939203639,
+            "maxGapMs": 74.20999997854233,
+            "p95GapMs": 71.42500001192093
+          }
+        }
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "version": "1.0.0-preview.c398124e.dirty",
+          "revision": "c398124e66dbd8724060c4a514b22a5df82ad503",
+          "dirty": true,
+          "tag": "",
+          "coreAssetDigests": {
+            "/vendor/voidplayer-core/capabilities-mt.json": "7d5721f96eabafacf34ab91c28cf7a778d9adf5c061420683b61792fe4f9eafe",
+            "/vendor/voidplayer-core/capabilities.json": "adfdb15ac884463832086775788cd0358ba739047f6f70be4f9940738f9f2222",
+            "/vendor/voidplayer-core/voidplayer-core-mt.js": "91cf86d380b37831845935417b1253f80f5f9cdaf534a1e2e31efba9a014a08f",
+            "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc",
+            "/vendor/voidplayer-core/voidplayer-core.js": "f7b8cac292a8c1c6e04b7ecea2b811bc71414684b03070e42837af2c5b9b76ee",
+            "/vendor/voidplayer-core/voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d"
+          },
+          "builtAt": "2026-10-18T16:51:36.838Z",
+          "sourceDigest": "8d2394d15aa0127a5394f4baf9e50f4a5b916f909f8e660aa9b2e4c7a267390d",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "978c5d7392062a354ff46729bfe9d23ac79f01735994e6256a7ed9cccef15a6d",
+            "voidplayer-core-mt.wasm": "4d7e73dbbdfab41c8ff4333477f7fc24819fd660895342367e2ae9f6028fa1fc"
+          }
+        },
+        "page": "http://127.0.0.1:5289/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": false,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  }
+]

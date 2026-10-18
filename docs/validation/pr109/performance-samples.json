@@ -1,0 +1,738 @@
+[
+  {
+    "id": "st-AB",
+    "mode": "perf",
+    "variant": "old",
+    "suffix": "",
+    "buildId": "71d2ccbd2c5175dfcdffb48f8428695067227a7c",
+    "timescale": 60,
+    "keyPackets": [
+      0,
+      49,
+      113,
+      177,
+      241,
+      305,
+      369,
+      433,
+      497,
+      561
+    ],
+    "threads": 1,
+    "sample": "<home>/Documents/yorune/VoidPlayer-Web/fixtures/video/h266_10s_1920x1080.mp4",
+    "packetCount": 600,
+    "runs": [
+      {
+        "round": 0,
+        "coreMs": 12101.891514000017,
+        "totalMs": 12110.091541999998,
+        "frames": 600,
+        "eofFrames": 4,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      },
+      {
+        "round": 1,
+        "coreMs": 12092.490619999984,
+        "totalMs": 12100.154083,
+        "frames": 600,
+        "eofFrames": 4,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      },
+      {
+        "round": 2,
+        "coreMs": 11962.398768999905,
+        "totalMs": 11969.153999999999,
+        "frames": 600,
+        "eofFrames": 4,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      }
+    ],
+    "stderr": "Unsupported video codec (sample entry type 'vvc1').\nUnsupported video codec (sample entry type 'vvc1').\n"
+  },
+  {
+    "id": "st-AB",
+    "mode": "perf",
+    "variant": "new",
+    "suffix": "",
+    "buildId": "71d2ccbd2c5175dfcdffb48f8428695067227a7c",
+    "timescale": 60,
+    "keyPackets": [
+      0,
+      49,
+      113,
+      177,
+      241,
+      305,
+      369,
+      433,
+      497,
+      561
+    ],
+    "threads": 1,
+    "sample": "<home>/Documents/yorune/VoidPlayer-Web/fixtures/video/h266_10s_1920x1080.mp4",
+    "packetCount": 600,
+    "runs": [
+      {
+        "round": 0,
+        "coreMs": 10199.927768000043,
+        "totalMs": 10208.730125,
+        "frames": 600,
+        "eofFrames": 4,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      },
+      {
+        "round": 1,
+        "coreMs": 10147.50490499995,
+        "totalMs": 10155.689290999999,
+        "frames": 600,
+        "eofFrames": 4,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      },
+      {
+        "round": 2,
+        "coreMs": 10195.551568999948,
+        "totalMs": 10202.490250000003,
+        "frames": 600,
+        "eofFrames": 4,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      }
+    ],
+    "stderr": "Unsupported video codec (sample entry type 'vvc1').\nUnsupported video codec (sample entry type 'vvc1').\n"
+  },
+  {
+    "id": "st-BA",
+    "mode": "perf",
+    "variant": "new",
+    "suffix": "",
+    "buildId": "71d2ccbd2c5175dfcdffb48f8428695067227a7c",
+    "timescale": 60,
+    "keyPackets": [
+      0,
+      49,
+      113,
+      177,
+      241,
+      305,
+      369,
+      433,
+      497,
+      561
+    ],
+    "threads": 1,
+    "sample": "<home>/Documents/yorune/VoidPlayer-Web/fixtures/video/h266_10s_1920x1080.mp4",
+    "packetCount": 600,
+    "runs": [
+      {
+        "round": 0,
+        "coreMs": 10201.717824000007,
+        "totalMs": 10210.899958,
+        "frames": 600,
+        "eofFrames": 4,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      },
+      {
+        "round": 1,
+        "coreMs": 10112.461270000022,
+        "totalMs": 10120.7995,
+        "frames": 600,
+        "eofFrames": 4,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      },
+      {
+        "round": 2,
+        "coreMs": 10069.975403999892,
+        "totalMs": 10076.981958,
+        "frames": 600,
+        "eofFrames": 4,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      }
+    ],
+    "stderr": "Unsupported video codec (sample entry type 'vvc1').\nUnsupported video codec (sample entry type 'vvc1').\n"
+  },
+  {
+    "id": "st-BA",
+    "mode": "perf",
+    "variant": "old",
+    "suffix": "",
+    "buildId": "71d2ccbd2c5175dfcdffb48f8428695067227a7c",
+    "timescale": 60,
+    "keyPackets": [
+      0,
+      49,
+      113,
+      177,
+      241,
+      305,
+      369,
+      433,
+      497,
+      561
+    ],
+    "threads": 1,
+    "sample": "<home>/Documents/yorune/VoidPlayer-Web/fixtures/video/h266_10s_1920x1080.mp4",
+    "packetCount": 600,
+    "runs": [
+      {
+        "round": 0,
+        "coreMs": 12020.183280000027,
+        "totalMs": 12028.411958,
+        "frames": 600,
+        "eofFrames": 4,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      },
+      {
+        "round": 1,
+        "coreMs": 11943.752669999898,
+        "totalMs": 11951.571542,
+        "frames": 600,
+        "eofFrames": 4,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      },
+      {
+        "round": 2,
+        "coreMs": 11930.427392999994,
+        "totalMs": 11937.021832999999,
+        "frames": 600,
+        "eofFrames": 4,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      }
+    ],
+    "stderr": "Unsupported video codec (sample entry type 'vvc1').\nUnsupported video codec (sample entry type 'vvc1').\n"
+  },
+  {
+    "id": "mt-AB",
+    "mode": "perf",
+    "variant": "old",
+    "suffix": "-mt",
+    "buildId": "71d2ccbd2c5175dfcdffb48f8428695067227a7c",
+    "timescale": 60,
+    "keyPackets": [
+      0,
+      49,
+      113,
+      177,
+      241,
+      305,
+      369,
+      433,
+      497,
+      561
+    ],
+    "threads": 2,
+    "sample": "<home>/Documents/yorune/VoidPlayer-Web/fixtures/video/h266_10s_1920x1080.mp4",
+    "packetCount": 600,
+    "runs": [
+      {
+        "round": 0,
+        "coreMs": 6559.763936000006,
+        "totalMs": 6564.284125,
+        "frames": 600,
+        "eofFrames": 13,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      },
+      {
+        "round": 1,
+        "coreMs": 6700.25397400001,
+        "totalMs": 6705.89125,
+        "frames": 600,
+        "eofFrames": 13,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      },
+      {
+        "round": 2,
+        "coreMs": 6736.009529999965,
+        "totalMs": 6739.929542,
+        "frames": 600,
+        "eofFrames": 13,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      }
+    ],
+    "stderr": "Unsupported video codec (sample entry type 'vvc1').\nUnsupported video codec (sample entry type 'vvc1').\n"
+  },
+  {
+    "id": "mt-AB",
+    "mode": "perf",
+    "variant": "new",
+    "suffix": "-mt",
+    "buildId": "71d2ccbd2c5175dfcdffb48f8428695067227a7c",
+    "timescale": 60,
+    "keyPackets": [
+      0,
+      49,
+      113,
+      177,
+      241,
+      305,
+      369,
+      433,
+      497,
+      561
+    ],
+    "threads": 2,
+    "sample": "<home>/Documents/yorune/VoidPlayer-Web/fixtures/video/h266_10s_1920x1080.mp4",
+    "packetCount": 600,
+    "runs": [
+      {
+        "round": 0,
+        "coreMs": 5776.441599999995,
+        "totalMs": 5781.230750000001,
+        "frames": 600,
+        "eofFrames": 13,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      },
+      {
+        "round": 1,
+        "coreMs": 5739.176086999959,
+        "totalMs": 5744.261041000001,
+        "frames": 600,
+        "eofFrames": 13,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      },
+      {
+        "round": 2,
+        "coreMs": 5803.691857999982,
+        "totalMs": 5807.764583000002,
+        "frames": 600,
+        "eofFrames": 13,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      }
+    ],
+    "stderr": "Unsupported video codec (sample entry type 'vvc1').\nUnsupported video codec (sample entry type 'vvc1').\n"
+  },
+  {
+    "id": "mt-BA",
+    "mode": "perf",
+    "variant": "new",
+    "suffix": "-mt",
+    "buildId": "71d2ccbd2c5175dfcdffb48f8428695067227a7c",
+    "timescale": 60,
+    "keyPackets": [
+      0,
+      49,
+      113,
+      177,
+      241,
+      305,
+      369,
+      433,
+      497,
+      561
+    ],
+    "threads": 2,
+    "sample": "<home>/Documents/yorune/VoidPlayer-Web/fixtures/video/h266_10s_1920x1080.mp4",
+    "packetCount": 600,
+    "runs": [
+      {
+        "round": 0,
+        "coreMs": 5838.76291200001,
+        "totalMs": 5843.829583999999,
+        "frames": 600,
+        "eofFrames": 13,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      },
+      {
+        "round": 1,
+        "coreMs": 5870.138026000025,
+        "totalMs": 5875.732540999999,
+        "frames": 600,
+        "eofFrames": 13,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      },
+      {
+        "round": 2,
+        "coreMs": 5721.091687000018,
+        "totalMs": 5724.80775,
+        "frames": 600,
+        "eofFrames": 13,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      }
+    ],
+    "stderr": "Unsupported video codec (sample entry type 'vvc1').\nUnsupported video codec (sample entry type 'vvc1').\n"
+  },
+  {
+    "id": "mt-BA",
+    "mode": "perf",
+    "variant": "old",
+    "suffix": "-mt",
+    "buildId": "71d2ccbd2c5175dfcdffb48f8428695067227a7c",
+    "timescale": 60,
+    "keyPackets": [
+      0,
+      49,
+      113,
+      177,
+      241,
+      305,
+      369,
+      433,
+      497,
+      561
+    ],
+    "threads": 2,
+    "sample": "<home>/Documents/yorune/VoidPlayer-Web/fixtures/video/h266_10s_1920x1080.mp4",
+    "packetCount": 600,
+    "runs": [
+      {
+        "round": 0,
+        "coreMs": 6860.27819700001,
+        "totalMs": 6865.080416999999,
+        "frames": 600,
+        "eofFrames": 13,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      },
+      {
+        "round": 1,
+        "coreMs": 6855.862044,
+        "totalMs": 6861.318708999999,
+        "frames": 600,
+        "eofFrames": 13,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      },
+      {
+        "round": 2,
+        "coreMs": 6811.516078999988,
+        "totalMs": 6815.136334000001,
+        "frames": 600,
+        "eofFrames": 13,
+        "desc": {
+          "cw": 1920,
+          "ch": 1080,
+          "depth": 8,
+          "sx": 1,
+          "sy": 1,
+          "crop": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "layout": 1,
+          "bytes": 3110400
+        }
+      }
+    ],
+    "stderr": "Unsupported video codec (sample entry type 'vvc1').\nUnsupported video codec (sample entry type 'vvc1').\n"
+  }
+]
