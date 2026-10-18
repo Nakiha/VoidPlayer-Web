@@ -6,9 +6,9 @@ MP4/FLV 包索引仍走已有 TypeScript 路径。码流分析使用独立的
 
 ## 固定来源
 
-- 播放构建仓库：`Nakiha/VoidPlayer-FFmpeg-Build@36bd6662b873a291ac2a426ea99d1745a6e64235`（含标签校验及 coded crop 修复）；独立分析构建仍固定 `7c2f9b053e19961568b5ca4ecd5a23c123e2c73b`。
-- 播放/索引：`FFmpeg/FFmpeg@946fcce07b6dcd0331c8cc609192aeff5e1924f8`（n9.0.2）。
-- 分析：`Nakiha/FFmpeg@c160c1bb3f0faf3ac59b8fbf907a8e3fb604632e`，基于同一 n9.0.2，含有界采集、参考帧身份和几何补丁。
+- 播放构建仓库：`Nakiha/VoidPlayer-FFmpeg-Build@71d2ccbd2c5175dfcdffb48f8428695067227a7c`（选择并校验播放 SIMD backend）；分析构建固定 `11c73368a4a8fca138e459ed8bd168e2c34618ae`。
+- 播放/索引：`Nakiha/FFmpeg@01cba57fc16f1d194762e6d3fabf256e7904b7ab`（标签 `n9.0.2-vpsimd`），n9.0.2 加 VVC WebAssembly SIMD128 ALF/inter/分类后端，解码逐位不变。
+- 分析：`Nakiha/FFmpeg@b726b4e422075b1670244cb5953df1dcf400f421`，基于同一 n9.0.2，含有界采集、参考帧身份、几何补丁与 HEVC/VVC 无像素裁剪。
 - Emscripten 6.0.9、dav1d 1.5.1，未同时升级工具链或引入新解码功能。
 
 分析原基于 n8.1，播放原基于 n9.0.1；两者现在对齐 9.0.2。
