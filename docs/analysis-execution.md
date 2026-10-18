@@ -1,4 +1,4 @@
-# HEVC execution transaction
+# HEVC and VVC execution transaction
 
 Execution ABI1 is additive to block/reference ABI1. Old cores execute fully;
 old clients also get full execution from new cores because mode defaults to zero.
@@ -13,9 +13,12 @@ full-film work stays on the original full path. Summary, range, viewport and leg
 requests also keep full, incremental publication, even with one cache miss left in
 a GOP. This preserves summary first-result latency and pause/resume work while
 retaining the measured precise-frame benefit. The new Core extension's existing
-FFmpeg VPS/SPS/PPS parser decides whether the
-configuration really permits Main8 or strictly 10-bit Main10 pruning. PCM/TQB/
-extensions stay full. Main10 retains `unsupported-qp-depth`, unsupported QP
+FFmpeg parameter-set parser decides whether the
+configuration really permits HEVC Main8/Main10 or VVC Main10 4:2:0 8..10 bit
+pruning. PCM/TQB/extensions stay full; VVC in-band parameter changes, film grain
+and decoded-picture-hash SEI restart the transaction exactly like their HEVC
+counterparts and report the same reasons. Main10 retains `unsupported-qp-depth`,
+unsupported QP
 capability, null block QP and null mean. Existing exact block/mode/reference
 semantics do not imply accurate Main10 QP; the clipped unsigned callback cannot
 represent its signed range. This is an execution optimization, with no ABI or
@@ -47,17 +50,20 @@ on pause, so that experiment is not the product policy. Exact analysis only
 stages its requested picture, after its own packet/suffix SEI processing
 and necessary reference/reorder work; it does not validate unseen future AUs.
 
-The sorter dependency (Core PR9), FFmpeg analysis change (FFmpeg PR1) and Core
-execution change (Core PR10) have merged into their analysis target branches.
+The sorter dependency (Core PR9), FFmpeg analysis change (FFmpeg PR1), Core
+execution change (Core PR10) and the VVC pruning change (FFmpeg PR3, Core PR12)
+have merged into their analysis target branches.
 The Web analysis lock pins tested Core source
-`7331ad4ef11af8b7e30e1e5db1ee1b55a38c1681` and FFmpeg source
-`653cf4becc91425be3021a3f0347f6cdd3fd14ec`; both exact commits remain in the merged
-history. The clean exact-source CI artifact enables both HEVC pruning and H264
+`11c73368a4a8fca138e459ed8bd168e2c34618ae` and FFmpeg source
+`b726b4e422075b1670244cb5953df1dcf400f421`; both exact commits remain in the merged
+history. The clean exact-source artifact enables HEVC and VVC pruning and H264
 loop-filter discard. Execution media tests must run without extension-only skips
-against this pinned artifact. Older cores remain supported through full execution.
+against this pinned artifact; the VVC cases additionally require the synced h266
+sample and report that skip explicitly where it is missing. Older cores remain
+supported through full execution.
 
 H264 remains an incremental analysis path. The independent Core uses FFmpeg's
 existing loop-filter discard policy because its macroblock hook already omits
-pixel reconstruction. It is not an HEVC private transaction and still reports
+pixel reconstruction. It is not an HEVC/VVC private transaction and still reports
 fullOpen with no staged owners or fallback. QP/mode/reference semantics, full-GOP
 cache identities, error handling and playback remain unchanged.

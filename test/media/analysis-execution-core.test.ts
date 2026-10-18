@@ -1,5 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {existsSync} from 'node:fs';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -51,9 +52,8 @@ test('missing closed anchor is unsupported before allocating a decoder',async()=
  const data=await readFile('fixtures/analysis-execution/missing-anchor.mp4'),input=await openAnalysisInput(reader(data),new AbortController().signal),firstPtsUs=Math.min(...input.packets.map(p=>p.pts)),durationUs=input.sourceEndUs-firstPtsUs;input.close();
  await assert.rejects(analyzeStream(reader(data),{mode:'stream',product:'summary',sourceVersion:'missing-anchor',firstPtsUs,durationUs,window:{startUs:100000,endUs:300000,axis:'pts'}},()=>{throw Error('unsafe anchor allocated decoder');},manifest.buildId,new AbortController().signal,async()=>{throw Error('unsafe exact result escaped');},async()=>{}),error=>error instanceof Error&&'code' in error&&error.code==='no-safe-anchor-within-budget');
 });
-for(const [name,reason,fastOpen] of [['normal',null,1],['late-hash',4,1],['late-grain',3,1],['late-pps',2,1],['main10',null,1],['main10-late-hash',4,1],['main10-late-grain',3,1],['main10-late-pps',2,1],['open-gop',null,0]] as const)
-test(`HEVC precise blocks ${name}: same reference preroll and winning target`,{skip:!extension?'requires upstream execution ABI1; older pinned core remains full':false},async()=>{
- const data=await readFile(`fixtures/analysis-execution/${name}.mp4`),input=await openAnalysisInput(reader(data),new AbortController().signal),packet=input.packets[name==='open-gop'?36:12],picture=input.picture(packet,'exact-'+name),target={product:'blocks' as const,sourceVersion:'exact-'+name,sourcePtsUs:packet.pts,normalizedMediaUs:packet.pts-Math.min(...input.packets.map(p=>p.pts)),picture};input.close();let expected:AnalysisOutput|undefined,feeds=0;
+async function assertPreciseBlocks(name:string,au:number,fastOpen:number,reason:number|null) {
+ const data=await readFile(`fixtures/analysis-execution/${name}.mp4`),input=await openAnalysisInput(reader(data),new AbortController().signal),packet=input.packets[au],picture=input.picture(packet,'exact-'+name),target={product:'blocks' as const,sourceVersion:'exact-'+name,sourcePtsUs:packet.pts,normalizedMediaUs:packet.pts-Math.min(...input.packets.map(p=>p.pts)),picture};input.close();let expected:AnalysisOutput|undefined,feeds=0;
  for(const full of [true,false]){const counters=emptyCounters(),retries:number[]=[],factory=async()=>{const c=await create(),mode=c._vpa_execution_mode.bind(c);if(full)c._vpa_execution_mode=()=>mode(0);
   for(const method of ['_vpa_feed','_vpa_feed_known','_vpa_step']){const call=c[method].bind(c);c[method]=(...args:any[])=>{const value=call(...args);if(value===RETRY_FULL)retries.push(c._vpa_execution_reason());return value;};}return countCore(c,counters);};
   const result=await analyzePicture(reader(data),target,factory,manifest.buildId,new AbortController().signal);
@@ -63,7 +63,12 @@ test(`HEVC precise blocks ${name}: same reference preroll and winning target`,{s
    if(reason===null){assert.equal(counters.feed,feeds);assert.ok(feeds>1);assert.deepEqual(retries,[]);}else{assert.ok(counters.feed>feeds);assert.deepEqual(retries,[reason]);}
   }
  }
-});
+}
+for(const [name,reason,fastOpen] of [['normal',null,1],['late-hash',4,1],['late-grain',3,1],['late-pps',2,1],['main10',null,1],['main10-late-hash',4,1],['main10-late-grain',3,1],['main10-late-pps',2,1],['open-gop',null,0]] as const)
+test(`HEVC precise blocks ${name}: same reference preroll and winning target`,{skip:!extension?'requires upstream execution ABI1; older pinned core remains full':false},()=>assertPreciseBlocks(name,name==='open-gop'?36:12,fastOpen,reason));
+const vvcReady=['vvc','vvc-late-hash','vvc-late-pps','vvc-late-grain'].every(name=>existsSync(path.join('fixtures/analysis-execution',name+'.mp4')));
+for(const [name,reason,fastOpen] of [['vvc',null,1],['vvc-late-hash',4,1],['vvc-late-pps',2,1],['vvc-late-grain',3,1]] as const)
+test(`VVC precise blocks ${name}: same reference preroll and winning target`,{skip:!vvcReady?'VVC fixtures require the synced h266 sample':!extension?'requires upstream execution ABI1; older pinned core remains full':false},()=>assertPreciseBlocks(name,12,fastOpen,reason));
 test('a one-picture legacy range and a viewport with one missing blocks picture stay full',async()=>{
  const data=await readFile('fixtures/analysis-execution/normal.mp4'),input=await openAnalysisInput(reader(data),new AbortController().signal),packet=input.packets[12],firstPtsUs=Math.min(...input.packets.map(p=>p.pts)),durationUs=input.sourceEndUs-firstPtsUs;input.close();
  const cache=new Map<number,AnalysisOutput>(),target={mode:'stream' as const,product:'blocks' as const,sourceVersion:'one-miss',firstPtsUs,durationUs,window:{startUs:100000,endUs:200000,axis:'pts' as const}};
