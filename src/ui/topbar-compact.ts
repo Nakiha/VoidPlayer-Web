@@ -3,6 +3,7 @@
 export function installTopbarCompact(topbar: HTMLElement, signal: AbortSignal) {
   const primary = topbar.querySelector<HTMLElement>('.topbar-primary-actions');
   const utility = topbar.querySelector<HTMLElement>('.topbar-utility-actions');
+  const view = topbar.querySelector<HTMLElement>('.view-controls');
   let frame = 0;
   const sync = () => {
     frame = 0;
@@ -19,8 +20,14 @@ export function installTopbarCompact(topbar: HTMLElement, signal: AbortSignal) {
   resize.observe(topbar);
   if (primary) resize.observe(primary);
   if (utility) resize.observe(utility);
+  // Zoom / pixel-size / channel labels fill in after a source loads and widen
+  // this group without resizing the topbar itself. Measure it directly so the
+  // settings button is not pushed past the viewport.
+  if (view) resize.observe(view);
   window.addEventListener('resize', update, { signal });
   window.addEventListener('load', update, { signal });
+  // Late font metrics can also change label widths without a resize event.
+  void document.fonts.ready.then(update, () => {});
   signal.addEventListener('abort', () => { resize.disconnect(); if (frame) cancelAnimationFrame(frame); }, { once: true });
   update();
 }

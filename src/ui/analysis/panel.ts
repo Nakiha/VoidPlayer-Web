@@ -574,12 +574,16 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     const endUs = Math.min(Math.ceil(track.durationUs), Math.ceil(range.end - track.offsetUs));
     return { startUs, endUs, axis: prefs.axis };
   }
-  let automaticScheduled = false;
+  let automaticTimer = 0;
+  // Wheel / pinch / drag emit a view change every frame. Waiting for the range
+  // to settle avoids cancelling and restarting automatic work (and flashing the
+  // progress ring) while the pointer is still moving.
+  const AUTOMATIC_STREAM_SETTLE_MS = 250;
   function queueAutomaticStreams() {
-    if (automaticScheduled || signal.aborted) return;
-    automaticScheduled = true;
-    queueMicrotask(() => {
-      automaticScheduled = false;
+    if (signal.aborted) return;
+    if (automaticTimer) window.clearTimeout(automaticTimer);
+    automaticTimer = window.setTimeout(() => {
+      automaticTimer = 0;
       if (signal.aborted || !open || !([...diagrams].some(mode => mode !== 'bitrate' && mode !== 'size') || diagrams.has('bitrate') && loadMetrics.has('qp'))) return;
       for (const track of selectedTracks()) {
         const window = visibleAnalysisWindow(track.slot);
@@ -590,7 +594,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         void session.requestBitstreamViewport(track.slot, window).catch(() => { /* The facade publishes errors; never retry automatically. */ })
           .finally(() => { if (!signal.aborted) refreshStream(); });
       }
-    });
+    }, AUTOMATIC_STREAM_SETTLE_MS);
   }
 
   const retryButtons = new Map<Slot, ReturnType<typeof analysisRetryButton>>();
@@ -1230,6 +1234,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     for (const { abort } of deepPanels.values()) abort.abort();
     queries.dispose();
     window.clearTimeout(buildingTimer);
+    window.clearTimeout(automaticTimer);
     if (viewRaf) cancelAnimationFrame(viewRaf);
     if (resizeRaf) cancelAnimationFrame(resizeRaf);
     offSession();
