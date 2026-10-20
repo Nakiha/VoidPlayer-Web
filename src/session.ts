@@ -286,9 +286,9 @@ export class ReviewSession {
   getBitstreamAnalysisConcurrency() { return this.bitstream.concurrency; }
   setBitstreamAnalysisConcurrency(value: number) { this.bitstream.setConcurrency(value); }
   private async runBitstreamTask<T>(slot: Slot, signal: AbortSignal | undefined,
-    initial: DeepAnalysisState, run: (service: BitstreamAnalysisService, signal: AbortSignal) => Promise<T>, intent: 'explicit' | 'automatic' = 'explicit'): Promise<T> {
+    initial: DeepAnalysisState, run: (service: BitstreamAnalysisService, signal: AbortSignal) => Promise<T>, intent: 'explicit' | 'automatic' = 'explicit', streamTarget?: import('../shared/analysis/bitstream/contract.ts').AnalysisStreamTarget): Promise<T> {
     slotValue(slot);
-    return this.bitstream.run(slot, signal, initial, run, intent);
+    return this.bitstream.run(slot, signal, initial, run, intent, streamTarget);
   }
   constructor(draw: (slot: Slot, frame: DecodedFrame) => void) {
     this.draw=(slot,frame)=>{
@@ -335,12 +335,13 @@ export class ReviewSession {
   }
   async requestBitstreamStream(slot: Slot, signal?: AbortSignal, window?: import('../shared/analysis/bitstream/contract.ts').AnalysisStreamTarget['window'], intent: 'explicit' | 'automatic' = 'explicit', product?:'summary'|'blocks') {
     const track = this.tracks.get(slot);
-    const progress = await this.runBitstreamTask(slot, signal, { state: 'pending', stream: { slot, checkedUs: 0,
+    const target: import('../shared/analysis/bitstream/contract.ts').AnalysisStreamTarget | undefined = track ? { mode: 'stream', product, sourceVersion: trackSourceVersion(track.source),
+      firstPtsUs: track.source.info.firstPtsUs, durationUs: Math.ceil(track.source.info.durationUs),
+      ...(window ? { window } : {}), ...(track.source.bitstreamIndexIdentity ? { indexIdentity: track.source.bitstreamIndexIdentity } : {}) } : undefined;
+    const progress = await this.runBitstreamTask(slot, signal, { state: 'pending', stream: { slot, product, checkedUs: 0,
       totalUs: window ? window.endUs - window.startUs : Math.ceil(track?.source.info.durationUs ?? 0), pictures: 0, totalPictures: 0, ...(window ? { window } : {}) } }, (service, taskSignal) => {
-      const sourceVersion = trackSourceVersion(track!.source);
-      return service.requestStream(track!.source, { mode: 'stream', product, sourceVersion,
-        firstPtsUs: track!.source.info.firstPtsUs, durationUs: Math.ceil(track!.source.info.durationUs), ...(window ? { window } : {}) }, slot, taskSignal);
-    }, intent);
+      return service.requestStream(track!.source, target!, slot, taskSignal, intent === 'automatic' && product === 'summary');
+    }, intent, target);
     if (this.tracks.get(slot) === track && !window) {
       const sourceVersion = trackSourceVersion(track!.source);
       this.bitstream.complete(slot, track!.sourceGen, { slot, sourceVersion, ...progress });

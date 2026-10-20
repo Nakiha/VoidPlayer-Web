@@ -1,5 +1,6 @@
 import { icon } from '../icons.ts';
 import { analysisRetryButton } from './retry.ts';
+import { createSettledAnalysisDemand } from './settled-demand.ts';
 import { animatePlaybackIcon } from '../playback-icon.ts';
 import { installBitstreamDiagrams, type BitstreamDiagram } from "./bitstream-diagrams.ts";
 // 顶部码流分析面板：工具条 + Canvas + 覆盖层 + 会话共用查询。
@@ -574,27 +575,27 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     const endUs = Math.min(Math.ceil(track.durationUs), Math.ceil(range.end - track.offsetUs));
     return { startUs, endUs, axis: prefs.axis };
   }
-  let automaticTimer = 0;
-  // Wheel / pinch / drag emit a view change every frame. Waiting for the range
-  // to settle avoids cancelling and restarting automatic work (and flashing the
-  // progress ring) while the pointer is still moving.
-  const AUTOMATIC_STREAM_SETTLE_MS = 250;
+  function automaticDemands() {
+    if (signal.aborted || !open || !([...diagrams].some(mode => mode !== 'bitrate' && mode !== 'size') || diagrams.has('bitrate') && loadMetrics.has('qp'))) return [];
+    return selectedTracks().flatMap(track => {
+      const window = visibleAnalysisWindow(track.slot);
+      const identity = `${track.mediaId}:${track.sourceGen}:${JSON.stringify(window)}`, state = session.getBitstreamAnalysisState(track.slot);
+      if (window.endUs <= window.startUs || automaticStreams.get(track.slot) === identity || state.state === 'paused' || state.completedStream || caps.get(track.slot)?.indexState === 'error') return [];
+      return [{ slot: track.slot, window, identity }];
+    });
+  }
+  // Playback emits session updates every 100 ms. Only actual demand changes
+  // restart the settle delay, otherwise those updates can starve analysis.
+  const automaticDemand = createSettledAnalysisDemand(() => {
+    for (const { slot, window, identity } of automaticDemands()) {
+      automaticStreams.set(slot, identity);
+      void session.requestBitstreamViewport(slot, window).catch(() => { /* The facade publishes errors; never retry automatically. */ })
+        .finally(() => { if (!signal.aborted) refreshStream(); });
+    }
+  });
   function queueAutomaticStreams() {
-    if (signal.aborted) return;
-    if (automaticTimer) window.clearTimeout(automaticTimer);
-    automaticTimer = window.setTimeout(() => {
-      automaticTimer = 0;
-      if (signal.aborted || !open || !([...diagrams].some(mode => mode !== 'bitrate' && mode !== 'size') || diagrams.has('bitrate') && loadMetrics.has('qp'))) return;
-      for (const track of selectedTracks()) {
-        const window = visibleAnalysisWindow(track.slot);
-        if (window.endUs <= window.startUs) continue;
-        const identity = `${track.mediaId}:${track.sourceGen}:${JSON.stringify(window)}`, state = session.getBitstreamAnalysisState(track.slot);
-        if (automaticStreams.get(track.slot) === identity || state.state === 'paused' || state.completedStream || caps.get(track.slot)?.indexState === 'error') continue;
-        automaticStreams.set(track.slot, identity);
-        void session.requestBitstreamViewport(track.slot, window).catch(() => { /* The facade publishes errors; never retry automatically. */ })
-          .finally(() => { if (!signal.aborted) refreshStream(); });
-      }
-    }, AUTOMATIC_STREAM_SETTLE_MS);
+    const demands = automaticDemands();
+    automaticDemand.update(demands.length ? JSON.stringify(demands.map(({ slot, identity }) => [slot, identity])) : undefined);
   }
 
   const retryButtons = new Map<Slot, ReturnType<typeof analysisRetryButton>>();
@@ -1032,6 +1033,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   function setOpen(next: boolean) {
     if (open === next) return;
     open = next;
+    queueAutomaticStreams();
     render();
     if (open) { refreshTools(); scheduleQuery(true); }
     else {
@@ -1234,7 +1236,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     for (const { abort } of deepPanels.values()) abort.abort();
     queries.dispose();
     window.clearTimeout(buildingTimer);
-    window.clearTimeout(automaticTimer);
+    automaticDemand.dispose();
     if (viewRaf) cancelAnimationFrame(viewRaf);
     if (resizeRaf) cancelAnimationFrame(resizeRaf);
     offSession();

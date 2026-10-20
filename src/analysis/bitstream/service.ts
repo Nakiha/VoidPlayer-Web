@@ -81,10 +81,13 @@ export class BitstreamAnalysisService {
   fork(changed: () => void) {
     return new BitstreamAnalysisService(changed, { cache: this.cache, diagrams: this.diagrams, plans:this.plans,contexts:this.contexts,admission:this.admission });
   }
-  cancel() {
+  private cancelWork() {
     ++this.sequence;
     this.cancelActive?.();
     this.cancelActive = undefined;
+  }
+  cancel() {
+    this.cancelWork();
     this.state = { state: "cancelled", ...(this.state.stream ? { stream: this.state.stream } : {}) };
     this.changed();
   }
@@ -319,13 +322,48 @@ export class BitstreamAnalysisService {
       if (seq === this.sequence) this.cancelActive = undefined;
     }
   }
-  async requestStream(source: MediaSource, target: AnalysisStreamTarget, slot: Slot, signal?: AbortSignal) {
+  /** A synchronous admission hint, not permission to return cached data.
+   * requestStream must still revalidate the current build before accepting it. */
+  candidateStreamCoverage(target: AnalysisStreamTarget, expectedBuild?: string): StreamProgress | null {
+    const plan = this.plans.get(target.sourceVersion);
+    const context = this.contexts.get(target.sourceVersion);
+    if (target.product !== 'summary' || !target.window || !plan || !context ||
+        plan.buildId !== (expectedBuild ?? context.buildId) || plan.buildId !== context.buildId ||
+        JSON.stringify(analysisIndexIdentity(plan.indexIdentity)) !== JSON.stringify(analysisIndexIdentity(target.indexIdentity)) ||
+        JSON.stringify(context.indexIdentity) !== JSON.stringify(analysisIndexIdentity(target.indexIdentity)) ||
+        plan.firstPtsUs !== target.firstPtsUs) return null;
+    const key = demandKey(plan, target.window);
+    if (!key) return null;
+    const selected = new Set<number>(JSON.parse(key));
+    const times = new Map(plan.times.map(row => [row[0], row]));
+    let pictures = 0;
+    for (const group of plan.groups) {
+      if (!selected.has(group.startAu)) continue;
+      for (let au = group.startAu; au < group.endAu; au++) {
+        const row = times.get(au), entry = this.diagrams.summaryAt(target.sourceVersion, au);
+        if (!row || !entry || entry.buildId !== plan.buildId ||
+            JSON.stringify(entry.indexIdentity) !== JSON.stringify(analysisIndexIdentity(plan.indexIdentity)) ||
+            entry.sourcePtsUs !== row[1] || entry.sourceDtsUs !== row[2] ||
+            entry.picture.configuration !== group.configuration || entry.confidence !== 'exact') return null;
+        pictures++;
+      }
+    }
+    return pictures ? { pictures, totalPictures: pictures, checkedUs: target.window.endUs - target.window.startUs,
+      totalUs: target.window.endUs - target.window.startUs, indexComplete: true, waitingForIndex: false } : null;
+  }
+  async requestStream(source: MediaSource, target: AnalysisStreamTarget, slot: Slot, signal?: AbortSignal, quietPreparation = false) {
     target = { ...target, ...(source.bitstreamIndexIdentity ? { indexIdentity: source.bitstreamIndexIdentity } : {}) };
     try { validateStream(target); } catch (error) { return this.fail(restoreFailure(failureInfo(error))); }
     signal?.throwIfAborted();
-    this.cancel();
+    // An automatic viewport may already be covered. Validate its build and
+    // exact GOP coverage before announcing new work, rather than flashing a
+    // cancelled/pending state while only checking the cache.
+    quietPreparation = quietPreparation && this.candidateStreamCoverage(target) !== null;
+    if (quietPreparation) this.cancelWork(); else this.cancel();
     const preparationSequence=this.sequence;
-    this.state={state:'pending',stream:{slot,product:target.product,checkedUs:0,totalUs:target.window?target.window.endUs-target.window.startUs:target.durationUs,pictures:0,totalPictures:0,...(target.window?{window:target.window}:{})}};this.changed();
+    if (!quietPreparation) {
+      this.state={state:'pending',stream:{slot,product:target.product,checkedUs:0,totalUs:target.window?target.window.endUs-target.window.startUs:target.durationUs,pictures:0,totalPictures:0,...(target.window?{window:target.window}:{})}};this.changed();
+    }
     const plan=this.plans.get(target.sourceVersion);
     const admissionTicket=++this.admission.next;
     const expectedBuild=await this.currentBuild(source,preparationSequence,signal);
@@ -334,16 +372,11 @@ export class BitstreamAnalysisService {
     if(plan&&expectedBuild!==plan.buildId)this.plans.delete(target.sourceVersion);
     if(preparationSequence!==this.sequence)throw new AnalysisFailure('cancelled','Analysis preparation superseded');
     signal?.throwIfAborted();
-    if(target.product==='summary' && target.window && plan && expectedBuild===plan.buildId && JSON.stringify(analysisIndexIdentity(plan.indexIdentity))===JSON.stringify(analysisIndexIdentity(target.indexIdentity)) && plan.firstPtsUs===target.firstPtsUs) {
-      const key=demandKey(plan,target.window);
-      if(key) {
-        const groups=plan.groups.filter(g=>JSON.parse(key).includes(g.startAu)); let complete=true,pictures=0;
-        for(const group of groups)for(let au=group.startAu;au<group.endAu;au++) {
-          const row=plan.times.find(t=>t[0]===au);const entry=this.diagrams.summaryAt(target.sourceVersion,au);
-          if(!row||!entry||entry.buildId!==plan.buildId||JSON.stringify(entry.indexIdentity)!==JSON.stringify(analysisIndexIdentity(plan.indexIdentity))||entry.sourcePtsUs!==row[1]||entry.sourceDtsUs!==row[2]||entry.picture.configuration!==group.configuration||entry.confidence!=='exact'){complete=false;break;}pictures++;
-        }
-        if(complete && pictures){const progress={pictures,totalPictures:pictures,checkedUs:target.window.endUs-target.window.startUs,totalUs:target.window.endUs-target.window.startUs,indexComplete:true,waitingForIndex:false};this.state={state:'ready',cacheHit:true,counters:{...emptyCounters(),cacheHit:pictures,uniqueDelivered:pictures},stream:{slot,...progress,window:target.window}};this.changed();return progress;}
-      }
+    const cachedProgress = this.candidateStreamCoverage(target, expectedBuild);
+    if (cachedProgress) {
+      this.state = { state: 'ready', cacheHit: true, counters: { ...emptyCounters(), cacheHit: cachedProgress.pictures, uniqueDelivered: cachedProgress.pictures }, stream: { slot, product: target.product, ...cachedProgress, window: target.window } };
+      this.changed();
+      return cachedProgress;
     }
     if(preparationSequence!==this.sequence)throw new AnalysisFailure("cancelled","Analysis preparation superseded");
     this.displayDemandWindow=target.window;
