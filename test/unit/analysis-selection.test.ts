@@ -142,3 +142,48 @@ test('analysis gestures cancel queued hover and selection capture on closure/can
   signal.abort(); assert.equal(frames.size,0);
   pointer('pointermove',90); assert.equal(frames.size,0); assert.equal(updates,0);
 });
+
+
+import { createSettledAnalysisDemand } from '../../src/ui/analysis/settled-demand.ts';
+
+test('unchanged playback notifications cannot starve settled viewport analysis', t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let runs = 0;
+  const demand = createSettledAnalysisDemand(() => runs++);
+  demand.update('A:source-1:pts:0:1000');
+  for (let i = 0; i < 2; i++) {
+    t.mock.timers.tick(100);
+    demand.update('A:source-1:pts:0:1000');
+  }
+  t.mock.timers.tick(50);
+  assert.equal(runs, 1, 'the 250 ms deadline is independent of 100 ms playback updates');
+  demand.update('A:source-1:pts:0:1000');
+  t.mock.timers.tick(1000);
+  assert.equal(runs, 1, 'an unchanged demand is not started twice');
+  demand.dispose();
+});
+
+test('navigation settles only the latest demand and cancellation cannot revive it', t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let runs = 0;
+  const demand = createSettledAnalysisDemand(() => runs++);
+  for (const key of ['old-source', 'new-source', 'new-window', 'new-axis']) {
+    demand.update(key);
+    t.mock.timers.tick(100);
+  }
+  assert.equal(runs, 0);
+  t.mock.timers.tick(150);
+  assert.equal(runs, 1);
+  demand.update('pause-or-close');
+  demand.update(undefined);
+  t.mock.timers.tick(250);
+  assert.equal(runs, 1, 'paused, closed, or removed demand is cancelled');
+  demand.update('resumed');
+  t.mock.timers.tick(250);
+  assert.equal(runs, 2);
+  demand.update('unmount');
+  demand.dispose();
+  demand.update('after-unmount');
+  t.mock.timers.tick(1000);
+  assert.equal(runs, 2, 'disposal cancels queued work and ignores later notifications');
+});

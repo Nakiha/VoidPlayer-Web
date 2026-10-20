@@ -1,5 +1,5 @@
 import type { AnalysisAxis } from '../../shared/analysis/metadata/types.ts';
-import type { PresentedFrameToken } from '../../shared/analysis/bitstream/contract.ts';
+import type { AnalysisStreamTarget, PresentedFrameToken } from '../../shared/analysis/bitstream/contract.ts';
 import { AnalysisFailure, failureInfo } from '../../shared/analysis/bitstream/failure.ts';
 import type { BitstreamAnalysisService, DeepAnalysisState } from '../analysis/bitstream/service.ts';
 import { AnalysisTaskPool } from '../../shared/analysis/bitstream/task-pool.ts';
@@ -42,7 +42,7 @@ export class BitstreamSessionCoordinator {
   setConcurrency(value: number) { this.pool.setConcurrency(value); this.host.changed(); }
 
   async run<T>(slot: Slot, signal: AbortSignal | undefined, initial: DeepAnalysisState,
-    run: (service: BitstreamAnalysisService, signal: AbortSignal) => Promise<T>, intent: 'explicit' | 'automatic' = 'explicit'): Promise<T> {
+    run: (service: BitstreamAnalysisService, signal: AbortSignal) => Promise<T>, intent: 'explicit' | 'automatic' = 'explicit', streamTarget?: AnalysisStreamTarget): Promise<T> {
     const track = this.host.track(slot);
     if (!track?.available) throw new AnalysisFailure('invalid-request', 'Track unavailable');
     signal?.throwIfAborted();
@@ -71,12 +71,14 @@ export class BitstreamSessionCoordinator {
       matching.service.displayWindow(initial.stream.window); return await matching.result as T;
     }
     const previous = this.state(slot);
+    const quietPreparation = intent === 'automatic' && !!streamTarget && !!this.root?.candidateStreamCoverage(streamTarget);
     const retainedStream = initial.stream && previous.state === 'paused' && JSON.stringify(initial.stream.window) === JSON.stringify(previous.stream?.window) ? previous.stream : undefined;
     this.cancel(slot, true, true);
     const controller = new AbortController();
     let settle!: () => void;
     const settled = new Promise<void>(resolve => { settle = resolve; });
-    const task: AnalysisTask = { intent, settled, generation: track.generation, controller, retainedStream, state: { ...initial, ...(retainedStream ? { stream: retainedStream } : {}), queued: true } };
+    const task: AnalysisTask = { intent, settled, generation: track.generation, controller, retainedStream,
+      state: quietPreparation && previous.state !== 'pending' ? previous : { ...initial, ...(retainedStream ? { stream: retainedStream } : {}), queued: true } };
     let resultResolve!:(value:unknown)=>void,resultReject!:(error:unknown)=>void;task.result=new Promise((resolve,reject)=>{resultResolve=resolve;resultReject=reject;});void task.result.catch(()=>{});
     this.tasks.set(slot, task); this.lastSlot = slot;
     const abort = () => controller.abort(signal?.reason);
@@ -94,9 +96,16 @@ export class BitstreamSessionCoordinator {
         this.root = new BitstreamAnalysisService(() => this.host.changed()));
       const root = await this.loading;
       controller.signal.throwIfAborted();
-      task.service = root.fork(() => this.host.changed());
-      // From here the track service publishes its own running/terminal state.
-      task.state = undefined;
+      task.service = root.fork(() => {
+        // A superseded service must not publish into its replacement or clear
+        // the coordinator's paused snapshot.
+        if (this.tasks.get(slot) !== task || task.state?.state === 'paused') return;
+        task.state = undefined;
+        this.host.changed();
+      });
+      // Automatic summaries retain the previous result until the service has
+      // validated a cache hit or confirmed that new analysis is required.
+      if (!quietPreparation) task.state = undefined;
       const value=await run(task.service, controller.signal); resultResolve(value);return value;
     } catch (error) {
       resultReject(error);

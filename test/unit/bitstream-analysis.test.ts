@@ -867,3 +867,160 @@ test('a newer automatic window cancels active automatic work', async () => {
     await first; assert.equal(oldSignal.aborted, true); assert.equal(ran, true);
   } finally { coordinator.dispose(); }
 });
+
+
+test('automatic summary cache validation publishes no pending work, but misses and build changes do', async t => {
+  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream-analysis.ts');
+  const { BitstreamAnalysisService } = await import('../../src/analysis/bitstream/service.ts');
+  const { makeDemandPlan } = await import('../../shared/analysis/bitstream/demand.ts');
+  const instance = {}, states: any[] = [], invalidations = new Set<() => void>();
+  let generation = 1;
+  const coordinator = new BitstreamSessionCoordinator({
+    track: () => ({ instance, generation, available: true }),
+    subscribeInvalidation: listener => { invalidations.add(listener); return () => { invalidations.delete(listener); }; },
+    changed: () => states.push(coordinator.state('A')),
+  });
+  let starts = 0, build = 'test';
+  const packets = Array.from({ length: 4 }, (_, au) => ({ au, configuration: 0, pts: au * 100, dts: null, offset: au, size: 1, key: au % 2 === 0 }));
+  t.mock.method(BitstreamAnalysisService.prototype as any, 'localRange', async function (this: any, _file: unknown, target: any, signal: AbortSignal, consume: (r: unknown) => void, progress: (p: unknown) => void) {
+    starts++;
+    signal.throwIfAborted();
+    const plan = makeDemandPlan(packets, target, build)!;
+    this.acceptPlan(plan, target);
+    const groups = plan.groups.filter(group => plan.selected.includes(group.startAu));
+    let pictures = 0;
+    for (const group of groups) for (let au = group.startAu; au < group.endAu; au++) {
+      const frame = result();
+      frame.buildId = build; frame.picture.au = au; frame.sourcePtsUs = au * 100; frame.sourceDtsUs = null; frame.gop = group;
+      frame.nalus = [{ offset: 0, size: 1, type: 5, temporalId: 0, layer: 0 }];
+      consume(summaryOf(frame)); pictures++;
+    }
+    progress({ pictures, totalPictures: pictures, checkedUs: target.window.endUs - target.window.startUs, totalUs: target.window.endUs - target.window.startUs, indexComplete: true });
+  });
+  globalThis.fetch = async () => new Response(JSON.stringify({ buildId: build }));
+  const source = { info: {}, bitstreamFile: new Blob() } as any;
+  const run = (startUs: number, endUs: number) => {
+    const window = { startUs, endUs, axis: 'pts' as const };
+    return coordinator.run('A', undefined, { state: 'pending', stream: { slot: 'A', product: 'summary', checkedUs: 0, totalUs: endUs - startUs, pictures: 0, totalPictures: 0, window } },
+      (service, signal) => service.requestStream(source, { mode: 'stream', product: 'summary', sourceVersion: 'local:uuid', firstPtsUs: 0, durationUs: 400, window }, 'A', signal, true), 'automatic', { mode: 'stream', product: 'summary', sourceVersion: 'local:uuid', firstPtsUs: 0, durationUs: 400, window });
+  };
+  let release!: () => void;
+  try {
+    await run(0, 200);
+    assert.equal(starts, 1);
+    assert.ok(states.some(state => state.state === 'pending'), 'a cold miss exposes real, pausable work');
+    states.length = 0;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    globalThis.fetch = async () => { await gate; return new Response(JSON.stringify({ buildId: build })); };
+    const warm = run(10, 110);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(starts, 1);
+    assert.ok(states.every(state => state.state === 'ready' && !state.queued), 'manifest validation retains the ready result');
+    release(); await warm;
+    assert.equal(starts, 1, 'a covered pan starts no worker or analysis');
+    assert.ok(states.every(state => state.state === 'ready' && !state.queued));
+    assert.equal(coordinator.state('A').cacheHit, true);
+    states.length = 0;
+    globalThis.fetch = async () => new Response(JSON.stringify({ buildId: build }));
+    await run(210, 310);
+    assert.equal(starts, 2, 'an uncovered GOP still starts analysis');
+    assert.ok(states.some(state => state.state === 'pending'));
+    states.length = 0;
+    build = 'replacement';
+    await run(210, 310);
+    assert.equal(starts, 3, 'current build identity is still checked before cache reuse');
+    assert.ok(states.some(state => state.state === 'pending'));
+    for (const action of ['cancel', 'replace-source']) {
+      states.length = 0;
+      const gate = new Promise<void>(resolve => { release = resolve; });
+      globalThis.fetch = async () => { await gate; return new Response(JSON.stringify({ buildId: build })); };
+      const rejected = assert.rejects(run(220, 320));
+      await new Promise(resolve => setImmediate(resolve));
+      if (action === 'cancel') coordinator.cancel('A');
+      else { generation++; for (const listener of invalidations) listener(); }
+      release(); await rejected;
+      assert.equal(starts, 3, 'cancelled or replaced warm preparation cannot launch analysis');
+      assert.ok(states.every(state => state.state !== 'pending' && !state.queued));
+      assert.equal(coordinator.state('A').state, action === 'cancel' ? 'cancelled' : 'idle');
+      if (action === 'cancel') {
+        globalThis.fetch = async () => new Response(JSON.stringify({ buildId: build }));
+        await run(210, 310);
+        assert.equal(coordinator.state('A').state, 'ready', 'cancellation does not poison the valid cache');
+      }
+    }
+
+  } finally { release?.(); coordinator.dispose(); }
+});
+
+test('pausing a replacement viewport during cache preparation retains the newest resume window', async t => {
+  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream-analysis.ts');
+  const { BitstreamAnalysisService } = await import('../../src/analysis/bitstream/service.ts');
+  const { makeDemandPlan } = await import('../../shared/analysis/bitstream/demand.ts');
+  const packets = Array.from({ length: 3 }, (_, au) => ({ au, configuration: 0, pts: au * 100, dts: null, offset: au, size: 1, key: au < 2 }));
+  const instance = {}, windows: any[] = [];
+  const coordinator = new BitstreamSessionCoordinator({ track: () => ({ instance, generation: 1, available: true }), subscribeInvalidation: () => () => {}, changed() {} });
+  let started!: () => void, release!: () => void, holdWorker = true;
+  const startedPromise = new Promise<void>(resolve => { started = resolve; });
+  t.mock.method(BitstreamAnalysisService.prototype as any, 'localRange', async function (this: any, _file: unknown, target: any, signal: AbortSignal, consume: (r: unknown) => void, progress: (p: unknown) => void) {
+    windows.push(target.window);
+    this.acceptPlan(makeDemandPlan(packets, target, 'test'), target);
+    const cached = result(); cached.picture.au = 0; cached.sourcePtsUs = 0; cached.sourceDtsUs = null;
+    cached.nalus = [{ offset: 0, size: 1, type: 5, temporalId: 0, layer: 0 }];
+    cached.gop = { startAu: 0, endAu: 1, configuration: 0, anchor: 'closed' };
+    consume(summaryOf(cached));
+    if (holdWorker) {
+      progress({ pictures: 1, totalPictures: 3, checkedUs: 100, totalUs: 300, indexComplete: true });
+      started();
+      await new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
+    }
+    const frame = result(); frame.picture.au = 0; frame.gop = { startAu: 0, endAu: 1, configuration: 0, anchor: 'closed' };
+    consume(summaryOf(frame));
+    progress({ pictures: 1, totalPictures: 1, checkedUs: 100, totalUs: 100, indexComplete: true });
+  });
+  const source = { info: {}, bitstreamFile: new Blob() } as any;
+  const run = (window: { startUs: number; endUs: number; axis: 'pts' }, intent: 'automatic' | 'explicit' = 'automatic') => coordinator.run('A', undefined,
+    { state: 'pending', stream: { slot: 'A', product: 'summary', checkedUs: 0, totalUs: 100, pictures: 0, totalPictures: 0, window } },
+    (service, signal) => service.requestStream(source, { mode: 'stream', product: 'summary', sourceVersion: 'local:uuid', firstPtsUs: 0, durationUs: 300, window }, 'A', signal, intent === 'automatic'), intent, { mode: 'stream', product: 'summary', sourceVersion: 'local:uuid', firstPtsUs: 0, durationUs: 300, window });
+  const oldWindow = { startUs: 0, endUs: 300, axis: 'pts' as const }, newWindow = { startUs: 0, endUs: 100, axis: 'pts' as const };
+  try {
+    const old = run(oldWindow).catch(() => {}); await startedPromise;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    globalThis.fetch = async () => { await gate; return new Response(JSON.stringify({ buildId: 'test' })); };
+    const replacement = run(newWindow).catch(() => {});
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(coordinator.state('A').state, 'pending');
+    assert.deepEqual(coordinator.state('A').stream?.window, newWindow);
+    coordinator.pause('A'); release(); await Promise.all([old, replacement]);
+    assert.equal(coordinator.state('A').state, 'paused');
+    assert.deepEqual(coordinator.state('A').stream?.window, newWindow, 'late preparation cancellation cannot overwrite the paused demand');
+    assert.equal(windows.length, 1, 'the paused probe starts no replacement worker');
+    holdWorker = false;
+    await run(coordinator.state('A').stream!.window! as typeof newWindow, 'explicit');
+    assert.deepEqual(windows, [oldWindow], 'resuming the newly selected cached GOP needs no new worker');
+    assert.deepEqual(coordinator.state('A').stream?.window, newWindow);
+    assert.equal(coordinator.state('A').state, 'ready');
+  } finally { release?.(); coordinator.dispose(); }
+});
+
+test('cold automatic summaries retain visible admission queues behind another track', async () => {
+  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream-analysis.ts');
+  const instances = { A: {}, B: {}, C: {} };
+  const coordinator = new BitstreamSessionCoordinator({ track: slot => ({ instance: instances[slot as 'A' | 'B' | 'C'], generation: 1, available: true }), subscribeInvalidation: () => () => {}, changed() {} });
+  coordinator.setConcurrency(1);
+  let release!: () => void, started!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; }), ready = new Promise<void>(resolve => { started = resolve; });
+  const window = { startUs: 0, endUs: 100, axis: 'pts' as const };
+  const run = (slot: 'A' | 'B' | 'C') => coordinator.run(slot, undefined,
+    { state: 'pending', stream: { slot, product: 'summary', checkedUs: 0, totalUs: 100, pictures: 0, totalPictures: 0, window } },
+    async () => { if (slot === 'A') started(); await gate; }, 'automatic',
+    { mode: 'stream', product: 'summary', sourceVersion: slot, firstPtsUs: 0, durationUs: 100, window });
+  try {
+    const a = run('A'); await ready;
+    const b = run('B'), c = run('C');
+    assert.equal(coordinator.state('B').state, 'pending');
+    assert.equal(coordinator.state('B').queued, true);
+    assert.equal(coordinator.state('C').state, 'pending');
+    assert.equal(coordinator.state('C').queued, true);
+    release(); await Promise.all([a, b, c]);
+  } finally { release?.(); coordinator.dispose(); }
+});

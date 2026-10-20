@@ -33,6 +33,7 @@
     "src/ui/analysis/queries.ts",
     "src/ui/analysis/range-editor.ts",
     "src/ui/analysis/retry.ts",
+    "src/ui/analysis/settled-demand.ts",
     "src/ui/analysis/shared.ts",
     "src/ui/analysis/status.ts",
     "src/ui/analysis/test-hook.ts",

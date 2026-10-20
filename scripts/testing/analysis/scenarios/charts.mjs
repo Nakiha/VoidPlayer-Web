@@ -20,6 +20,22 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
       await page.locator('.toast-stack .toast').waitFor({ state: 'hidden' });
       const playback = await page.evaluate(() => ({ positionUs: window.voidPlayer.getState().positionUs, playing: window.voidPlayer.getState().playing }));
       const requestsBefore = requests.length;
+      const warmWorkers = [];
+      const recordWorker = worker => { if (/local-worker/.test(worker.url())) warmWorkers.push(worker.url()); };
+      page.on('worker', recordWorker);
+      await page.evaluate(() => {
+        window.__warmAnalysisStates = [];
+        window.__stopWarmAnalysisStates = window.voidPlayer.subscribeState(() => {
+          const state = window.voidPlayer.tools.find(t => t.name === 'get_bitstream_analysis_state').execute({ slot: 'A' });
+          window.__warmAnalysisStates.push({ state: state.state, queued: !!state.queued });
+        });
+      });
+      const settledCachedWindow = () => page.waitForFunction(() => {
+        const state = window.voidPlayer.tools.find(t => t.name === 'get_bitstream_analysis_state').execute({ slot: 'A' });
+        const chart = document.querySelector('.bitstream-diagrams canvas'), track = window.voidPlayer.getState().tracks.find(t => t.slot === 'A');
+        return state.state === 'ready' && state.cacheHit && state.stream?.window?.startUs === Math.max(0, Math.floor(+chart.dataset.axisStart - track.offsetUs)) &&
+          state.stream.window.endUs === Math.min(Math.ceil(track.durationUs), Math.ceil(+chart.dataset.axisEnd - track.offsetUs));
+      });
       const whole = await call('query_bitstream_chart', { slot: 'A' });
       assert.equal(whole.count, 300); assert.equal(whole.aggregated, true); assert.equal(whole.pictures.length, 0);
       assert.ok(whole.buckets.length <= 258); assert.equal(whole.buckets.reduce((sum, b) => sum + b.pictures, 0), 300);
@@ -31,14 +47,21 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
         assert.equal(await page.locator('.bitstream-diagram-navigation [data-page]').count(), 0);
         await chart.evaluate(c => { const r = c.getBoundingClientRect(); c.dispatchEvent(new WheelEvent('wheel', { ctrlKey: true, deltaY: -280 * Math.log(4), clientX: r.left + 46 + (r.width - 46 - 16) / 2, bubbles: true, cancelable: true })); });
         await page.waitForFunction(() => { const c = document.querySelector('.bitstream-diagrams canvas'); return c.dataset.aggregated === 'false' && +c.dataset.pictures > 60 && +c.dataset.pictures <= 80; });
+        await settledCachedWindow();
         const local = await chart.evaluate(c => window.voidPlayer.tools.find(t => t.name === 'query_bitstream_chart').execute({ slot: 'A', startUs: +c.dataset.axisStart, endUs: +c.dataset.axisEnd }));
         assert.ok(local.pictures.every(p => p.sourcePtsUs >= local.startUs && p.sourcePtsUs < local.endUs));
         if (input === 'library') await page.screenshot({ path: artifact(`whole-chart-${diagram}-zoomed.png`) });
         await page.locator('[data-seg="full"]').click();
         await page.waitForFunction(() => document.querySelector('.bitstream-diagrams canvas').dataset.aggregated === 'true');
+        await settledCachedWindow();
         if (input === 'library') await page.screenshot({ path: artifact(`whole-chart-${diagram}.png`) });
         assert.deepEqual(await page.evaluate(() => ({ positionUs: window.voidPlayer.getState().positionUs, playing: window.voidPlayer.getState().playing })), playback, 'whole-film overview and detail zoom never seek');
       }
+      const warmStates = await page.evaluate(() => { window.__stopWarmAnalysisStates(); return window.__warmAnalysisStates; });
+      page.off('worker', recordWorker);
+      assert.ok(warmStates.length > 0 && warmStates.every(state => state.state !== 'pending' && !state.queued), 'covered navigation never publishes transient analysis work');
+      assert.equal(warmWorkers.length, 0, 'covered navigation starts no local analysis worker');
+      assert.equal(requests.slice(requestsBefore).filter(r => r.method === 'POST' && /bitstream-analysis\/requests/.test(r.url)).length, 0, 'covered navigation starts no remote analysis task');
       assert.ok(requests.slice(requestsBefore).filter(r => r.method === 'POST' && /bitstream-analysis\/requests/.test(r.url)).every(r => r.target?.mode==='stream' && r.target.window), 'viewport navigation only requests visible GOPs');
       await inspectCurrentWindow(page);
       await page.waitForFunction(() => { const c = document.querySelector('.bitstream-diagrams canvas'); return c.dataset.aggregated === 'false' && Math.abs(+c.dataset.axisEnd - +c.dataset.axisStart - 1_000_000) <= 2; });
