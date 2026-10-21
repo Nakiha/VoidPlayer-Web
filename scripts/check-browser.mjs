@@ -807,6 +807,53 @@ try {
     assert.ok(Math.abs(compact.width-compactButton.width)<1,'compact zoom icon fills its entire control');
   });
 
+  await check('picture overlay opacity is linear from zero to full coverage', async page => {
+    const media=listing.entries.find(entry=>entry.name==='ci_h264_smoke.mp4');
+    await page.evaluate(id=>window.voidPlayer.tools.find(t=>t.name==='load_library_item').execute({id,slot:'A'}),media.id);
+    await page.waitForFunction(()=>!window.voidPlayer.getState().busy && !document.querySelector('#timeline').disabled);
+    await panels(page,false);await page.locator('#toggle-analysis-overlay').click();
+    await page.waitForFunction(()=>Number(document.querySelector('#bitstream-overlay-A')?.dataset.blocks)>0,undefined,{timeout:30000});
+    if(await page.locator('#bitstream-boundaries').getAttribute('aria-pressed')==='true')await page.locator('#bitstream-boundaries').click();
+    // Compare final browser pixels over two known underlays. Reading only the
+    // CSS opacity would miss an additional alpha baked into the canvas colors.
+    await page.addStyleTag({content:'#stage-A {background:var(--opacity-test-background,#fff)!important;} #image-A, #grid-A, #grid-label-A, #stage-A .frame-presentation {visibility:hidden!important;}'});
+    const sampleScreenshot=async point=>{
+      const png=await page.screenshot();
+      return page.evaluate(async({png,point})=>{
+        const bitmap=await createImageBitmap(new Blob([new Uint8Array(png)],{type:'image/png'}));
+        const canvas=document.createElement('canvas');canvas.width=bitmap.width;canvas.height=bitmap.height;
+        const ctx=canvas.getContext('2d');ctx.drawImage(bitmap,0,0);bitmap.close();
+        return [...ctx.getImageData(Math.floor(point.x*canvas.width/innerWidth),Math.floor(point.y*canvas.height/innerHeight),1,1).data].slice(0,3);
+      },{png:[...png],point});
+    };
+    for(const mode of ['qp','modes']) {
+      await page.locator(`#bitstream-mode [data-value="${mode}"]`).click();
+      const point=await page.locator('#bitstream-overlay-A').evaluate(canvas=>{
+        const ctx=canvas.getContext('2d'),pixels=ctx.getImageData(0,0,canvas.width,canvas.height).data,r=canvas.getBoundingClientRect();
+        for(let y=Math.floor(canvas.height*.25);y<canvas.height*.65;y++)for(let x=Math.floor(canvas.width*.25);x<canvas.width*.65;x++) {
+          const offset=(y*canvas.width+x)*4;
+          if(pixels[offset+3]!==255)continue;
+          let solid=true;
+          for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)for(let c=0;c<4;c++)if(pixels[((y+dy)*canvas.width+x+dx)*4+c]!==pixels[offset+c])solid=false;
+          if(solid)return {x:r.left+(x+.5)*r.width/canvas.width,y:r.top+(y+.5)*r.height/canvas.height,color:[...pixels.slice(offset,offset+3)]};
+        }
+        return null;
+      });
+      assert.ok(point,`${mode}: fill interiors contain fully opaque pixels`);
+      for(const opacity of [0,50,100]) {
+        await page.locator('#bitstream-opacity').click();await page.locator(`#bitstream-opacity-menu [data-value="${opacity}"]`).click();
+        await page.mouse.move(0,0);
+        for(const underlay of [0,255]) {
+          await page.locator('#stage-A').evaluate((e,value)=>e.style.setProperty('--opacity-test-background',`rgb(${value},${value},${value})`),underlay);
+          await settle(page);
+          const actual=await sampleScreenshot(point),expected=point.color.map(c=>c*opacity/100+underlay*(1-opacity/100));
+          actual.forEach((c,index)=>assert.ok(Math.abs(c-expected[index])<=3,`${mode} ${opacity}% over ${underlay}: ${actual} vs ${expected}`));
+          if(opacity===100&&underlay===0)await page.screenshot({path:path.join(screenshots,`${browserName}-${mode}-opaque.png`)});
+        }
+      }
+    }
+  },{viewport:{width:1000,height:800},deviceScaleFactor:2});
+
   await check('timeline preview floats above video without seeking and closes with settings', async page => {
     await page.locator('#file-A').setInputFiles(path.join(fixtures,'ci_h264_smoke.mp4'));
     await page.waitForFunction(()=>!window.voidPlayer.getState().busy && !document.querySelector('#timeline').disabled);

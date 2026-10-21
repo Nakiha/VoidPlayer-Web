@@ -59,7 +59,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
   const entries = new Map<Slot, Entry>();
   let lastState = session.getState();
   const life = new AbortController();
-  const opacityChoice = installNumericChoice('bitstream-opacity', { glyph: 'opacity', presets: [10, 25, 50, 75, 100], suffix: '%', min: 10, max: 100,
+  const opacityChoice = installNumericChoice('bitstream-opacity', { glyph: 'opacity', presets: [0, 10, 25, 50, 75, 100], suffix: '%', min: 0, max: 100,
     editLabel: () => t(msg('bitstream.editOpacity', '编辑不透明度')),
     choose(value) {
       opacity = value;

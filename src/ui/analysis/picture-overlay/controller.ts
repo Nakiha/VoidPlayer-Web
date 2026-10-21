@@ -100,7 +100,9 @@ export function createAnalysisOverlay(
     ctx.beginPath();
     ctx.rect(rect.x, rect.y, rect.width, rect.height);
     ctx.clip();
-    ctx.strokeStyle = "rgba(100,240,255,.8)";
+    // Canvas colors are opaque; the toolbar's single CSS opacity controls
+    // the final mix with the video, including the 0% and 100% endpoints.
+    ctx.strokeStyle = "rgb(100,240,255)";
     ctx.lineWidth = 1;
     // Keep every real edge, including subpixel blocks at fit. Discarding small
     // blocks creates holes exactly where partitioning is most detailed.
@@ -114,15 +116,15 @@ export function createAnalysisOverlay(
         w = Math.abs(z.x - a.x),
         h = Math.abs(z.y - a.y);
       if (fill === "qp" && b.qp !== null) {
-        ctx.fillStyle = `hsla(${240 - (b.qp / (result.codec === "vvc" ? 63 : 51)) * 240},90%,50%,.38)`;
+        ctx.fillStyle = `hsl(${240 - (b.qp / (result.codec === "vvc" ? 63 : 51)) * 240},90%,50%)`;
         ctx.fillRect(x, y, w, h);
       } else if (fill === "modes") {
         ctx.fillStyle =
           b.mode === "intra"
-            ? "rgba(64,200,255,.3)"
+            ? "rgb(64,200,255)"
             : b.mode === "skip"
-              ? "rgba(80,220,110,.3)"
-              : "rgba(255,160,60,.3)";
+              ? "rgb(80,220,110)"
+              : "rgb(255,160,60)";
         ctx.fillRect(x, y, w, h);
       }
       if (boundaries) ctx.rect(x, y, w, h);
