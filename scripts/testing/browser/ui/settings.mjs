@@ -125,6 +125,13 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
    await page.locator('[data-reference-decoder=hardware]').click();
    await page.waitForFunction(()=>document.querySelector('#color-flow-diagram').dataset.decoder==='hardware'&&document.querySelector('#color-flow-diagram').dataset.mode==='reference');
    const decoderGroup=page.locator('#reference-decoder');
+   const decoderPalette=await decoderGroup.evaluate(el=>{
+    const probe=document.createElement('span');el.append(probe);
+    const color=value=>{probe.style.backgroundColor=value;return getComputedStyle(probe).backgroundColor;};
+    const palette={selected:color('color-mix(in srgb, var(--accent) 12%, transparent)'),hover:color('color-mix(in srgb, var(--text) 16%, transparent)'),selectedHover:color('color-mix(in srgb, var(--accent) 28%, transparent)')};
+    probe.remove();return palette;
+   });
+   const segmentFill=locator=>locator.evaluate(async el=>{getComputedStyle(el).backgroundColor;await Promise.all(el.getAnimations().map(animation=>animation.finished));return getComputedStyle(el).backgroundColor;});
    await page.emulateMedia({reducedMotion:'no-preference'});
    for(const decoder of ['software','hardware']) {
     const selected=decoderGroup.locator(`[data-reference-decoder=${decoder}]`), other=decoderGroup.locator(`[data-reference-decoder=${decoder==='software'?'hardware':'software'}]`);
@@ -135,13 +142,17 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
     const sizes=await decoderGroup.locator('button').evaluateAll(buttons=>buttons.map(button=>button.getBoundingClientRect().width));
     assert.ok(Math.abs(sizes[0]-sizes[1])<1,'decoder segments have equal widths despite different label lengths');
     assert.notEqual(await decoderGroup.evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)','decoder options share a visible base');
-    await selected.evaluate(el=>Promise.all(el.getAnimations().map(animation=>animation.finished)));
-    const fill=await selected.evaluate(el=>getComputedStyle(el).backgroundColor);
-    assert.notEqual(fill,'rgba(0, 0, 0, 0)','selected decoder fills its segment');
+    await page.mouse.move(0,0);
+    const fill=await segmentFill(selected);
+    assert.equal(fill,decoderPalette.selected,'selected decoder uses the shared accent tint at rest');
     await other.hover();
-    await other.evaluate(el=>Promise.all(el.getAnimations().map(animation=>animation.finished)));
-    assert.equal(await other.evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)','hover does not make the other segment look selected');
+    assert.equal(await segmentFill(other),decoderPalette.hover,'unselected decoder uses shared neutral hover feedback');
+    assert.notEqual(decoderPalette.hover,fill,'neutral hover remains visually distinct from selected accent');
     assert.equal(await selected.evaluate(el=>getComputedStyle(el).backgroundColor),fill,'hover preserves the selected segment');
+    assert.equal(await other.getAttribute('aria-pressed'),'false','hover never selects the other decoder');
+    await selected.hover();
+    assert.equal(await segmentFill(selected),decoderPalette.selectedHover,'selected hover strengthens the accent feedback');
+    assert.equal(await segmentFill(other),'rgba(0, 0, 0, 0)','unselected feedback clears when the pointer leaves');
     assert.equal(await selected.evaluate(el=>getComputedStyle(el).transitionDuration),'0.24s, 0.24s','decoder buttons share the smooth color feedback');
     assert.equal(await decoderGroup.locator('[aria-pressed=true]').count(),1,'exactly one decoder is selected');
     await page.locator('#reference-decode-settings').screenshot({path:artifact(`voidplayer-decoder-segments-${decoder}-${name}.png`)});
@@ -294,7 +305,13 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
   assert.equal(await page.locator('#settings-tab-appearance').evaluate(el=>el.matches(':focus-visible')),true,'keyboard navigation keeps a visible focus cue');
   assert.notEqual(await page.locator('#settings-tab-appearance').evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)','keyboard focus uses a light background');
   await page.locator('#settings-tab-about').click();await page.locator('#settings-tab-appearance').click();
-  assert.equal(await page.locator('#settings-tab-appearance').evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)','pointer selection uses an underline without a filled tile');
+  const tabFeedback=await page.locator('#settings-tab-appearance').evaluate(el=>{
+   const probe=document.createElement('span');probe.style.background='color-mix(in srgb, var(--accent) 28%, transparent)';el.append(probe);
+   const expected=getComputedStyle(probe).backgroundColor;probe.remove();return {expected,actual:getComputedStyle(el).backgroundColor};
+  });
+  assert.equal(tabFeedback.actual,tabFeedback.expected,'the selected portrait tab shares accent hover feedback');
+  await page.mouse.move(0,0);
+  assert.equal(await page.locator('#settings-tab-appearance').evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)','pointer selection retains its underline without a filled tile at rest');
   assert.equal(await page.locator('#settings-tab-appearance').evaluate(el=>getComputedStyle(el,'::after').height),'2px');
   if(width===550) {
    for(const theme of ['light','dark']) {

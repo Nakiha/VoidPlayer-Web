@@ -48,9 +48,13 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
   const control=getComputedStyle(probe).backgroundColor;probe.remove();
   const navStyle=getComputedStyle(document.querySelector('.library-navigation'));
   const backplateStyle=getComputedStyle(document.querySelector('#source-tools'));
-  return {segment:bg('#layout-mode [aria-pressed=true]'),search:bg('.library-navigation'),control,filter:navStyle.backdropFilter || navStyle.webkitBackdropFilter,backplateFilter:backplateStyle.backdropFilter || backplateStyle.webkitBackdropFilter,placeholder:getComputedStyle(document.querySelector('#source-search'),'::placeholder').color,grid:document.querySelector('#grid-A').getContext('2d').strokeStyle};
+  const selected=document.querySelector('#layout-mode [aria-pressed=true]');
+  const segmentProbe=document.createElement('span');segmentProbe.style.background='color-mix(in srgb, var(--accent) 12%, transparent)';selected.append(segmentProbe);
+  const expectedSegment=getComputedStyle(segmentProbe).backgroundColor;segmentProbe.remove();
+  return {segment:bg('#layout-mode [aria-pressed=true]'),expectedSegment,search:bg('.library-navigation'),control,filter:navStyle.backdropFilter || navStyle.webkitBackdropFilter,backplateFilter:backplateStyle.backdropFilter || backplateStyle.webkitBackdropFilter,placeholder:getComputedStyle(document.querySelector('#source-search'),'::placeholder').color,grid:document.querySelector('#grid-A').getContext('2d').strokeStyle};
  });
-  assert.match(surfaces.segment,/rgba\(255, 255, 255,/,'selected segment uses a light overlay (--segment-selected-fill)');
+ assert.equal(surfaces.segment,surfaces.expectedSegment,'selected segment uses the shared translucent accent tint');
+ assert.notEqual(surfaces.segment,'rgba(0, 0, 0, 0)','selected feedback remains visible in the dark theme');
  assert.equal(surfaces.search,surfaces.control,'library navigation uses a thin control fill');
  assert.equal(surfaces.filter,'none');assert.equal(surfaces.backplateFilter,'blur(6px)');
   assert.equal(surfaces.placeholder,'rgb(182, 182, 182)');
@@ -83,8 +87,8 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  // (themes/accessibility.css), so the transport paints the opaque dark surface:
  // themes/dark.css --surface #212121.
  assert.equal(high.filter,'none');assert.equal(high.bg,'rgb(33, 33, 33)');
- await page.waitForFunction(() => getComputedStyle(document.querySelector('#layout-mode [aria-pressed=true]')).backgroundColor === 'rgb(59, 63, 70)');
- assert.equal(await page.locator('#layout-mode [aria-pressed=true]').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(59, 63, 70)');
+ await page.waitForFunction(() => getComputedStyle(document.querySelector('#layout-mode [aria-pressed=true]')).backgroundColor === 'rgb(38, 62, 91)');
+ assert.equal(await page.locator('#layout-mode [aria-pressed=true]').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(38, 62, 91)','high contrast uses the dark theme solid selected surface');
  assert.equal(await page.locator('.library-navigation').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(33, 33, 33)');
  await page.emulateMedia({contrast:'no-preference'});
  await settleAppearance();
