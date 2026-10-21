@@ -105,8 +105,10 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         assert.equal(await page.locator('#analysis-overlay-panel').isVisible(),true,'Escape in the value editor keeps the panel open');
         await page.locator('#bitstream-opacity').click(); await page.locator('#bitstream-opacity-menu [data-value="75"]').click();
         await page.setViewportSize({width:520,height:786});
-        assert.equal(await page.locator('.bitstream-toolbar-title').isVisible(),false,'the title is the first content hidden on narrower viewports');
-        assert.ok(await page.locator('#bitstream-inspector').evaluate(el=>el.offsetHeight<=64),'compact toolbar uses two deliberate rows');
+        assert.equal(await page.locator('.bitstream-toolbar-title').count(),0,'overlay toolbar has no redundant heading');
+        assert.equal(await page.locator('#bitstream-boundaries').textContent(),'','boundaries use only an icon');
+        assert.equal(await page.locator('#bitstream-boundaries').getAttribute('aria-label'),'块边界');
+        assert.ok(await page.locator('#bitstream-inspector').evaluate(el=>el.offsetHeight<=28),'compact dual-track toolbar stays on one row at 520px');
         // 窄视口下帧号列表整行换位，而不是把轨道控件挤到只剩一条缝。
         await page.waitForFunction(()=>document.querySelector('.analysis-head').classList.contains('status-stacked'));
         const headRows=await page.evaluate(()=>{const head=document.querySelector('.analysis-head'),tools=document.querySelector('.analysis-tools'),status=document.querySelector('.analysis-status');const toolRect=tools.getBoundingClientRect(),statusRect=status.getBoundingClientRect(),headRect=head.getBoundingClientRect();return {stacked:head.classList.contains('status-stacked'),separate:Math.round(statusRect.top-toolRect.bottom)>=-2,statusFullWidth:Math.abs(statusRect.width-(headRect.width-16))<=2,toolsInsideHead:toolRect.right<=headRect.right+1};});
@@ -117,6 +119,24 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         await page.waitForFunction(()=>{const popup=document.querySelector('#analysis-overlay-panel'), bar=document.querySelector('#annotation-toolbar');const a=popup.getBoundingClientRect(), b=bar.getBoundingClientRect();return a.bottom<=b.top-4 || a.top>=b.bottom+4;});
         const sharedChrome=await page.evaluate(()=>['analysis-overlay-panel','annotation-toolbar'].map(id=>{const e=document.getElementById(id),s=getComputedStyle(e);return {padding:s.padding,background:s.backgroundColor,border:s.border,borderRadius:s.borderRadius,shadow:s.boxShadow,filter:s.backdropFilter,height:e.getBoundingClientRect().height};}));
         assert.deepEqual(sharedChrome[0],sharedChrome[1],'viewport toolbars share material, inset and height');
+        const closeStyle = selector => page.locator(selector).evaluate(el => { const s=getComputedStyle(el); return {color:s.color,background:s.backgroundColor}; });
+        for (const colorScheme of ['dark', 'light']) {
+          await page.emulateMedia({colorScheme});
+          await page.locator('#remove-track-A').hover();
+          await page.locator('#remove-track-A').evaluate(el => Promise.all(el.getAnimations().map(animation => animation.finished)));
+          const referenceClose = await closeStyle('#remove-track-A');
+          for (const selector of ['#bitstream-close', '#mark-close']) {
+            await page.mouse.move(0,0);
+            const idleClose = await closeStyle(selector);
+            await page.locator(selector).hover();
+            await page.locator(selector).evaluate(el => Promise.all(el.getAnimations().map(animation => animation.finished)));
+            assert.deepEqual(await closeStyle(selector), referenceClose, `${selector} shares the library remove action's danger hover in ${colorScheme}`);
+            assert.notEqual(referenceClose.color, idleClose.color, 'hover changes the close glyph color');
+            assert.notEqual(referenceClose.background, idleClose.background, 'hover changes the close background');
+            if (colorScheme === 'dark') await page.locator(selector === '#bitstream-close' ? '#analysis-overlay-panel' : '#annotation-toolbar').screenshot({path:artifact(selector === '#bitstream-close' ? 'overlay-close-hover.png' : 'annotation-close-hover.png')});
+          }
+        }
+        await page.mouse.move(0,0);
         const overlayGrip=await page.locator('#bitstream-grip').boundingBox();
         const overlayBeforeDrag=await page.locator('#analysis-overlay-panel').boundingBox();
         await page.mouse.move(overlayGrip.x+overlayGrip.width/2,overlayGrip.y+overlayGrip.height/2);await page.mouse.down();
@@ -203,6 +223,7 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
           assert.ok(await page.locator('#bitstream-inspector').evaluate(host => host.scrollWidth <= host.clientWidth), `toolbar fits ${width}px`);
           const segments = await page.locator('#bitstream-mode button').evaluateAll(buttons => buttons.map(b => b.getBoundingClientRect().top));
           assert.ok(Math.max(...segments) - Math.min(...segments) < 1, 'fill choices stay together on a single row');
+          if (width >= 520) assert.ok(await page.locator('#bitstream-inspector').evaluate(host => host.offsetHeight <= 28), 'narrow dual-track controls stay on a single row without forced breakpoints');
           if (width === 520) await page.locator('#analysis-overlay-panel').screenshot({ path: artifact('overlay-segments-narrow.png') });
         }
         await page.setViewportSize({ width: 1280, height: 786 });
@@ -401,6 +422,90 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
           }
         }
       }
+
+      // The same controls over three real decoded videos in both UI themes.
+      // Contrast/alpha assertions complement saved screenshots; they do not infer
+      // universal contrast compliance from one static frame.
+      if (await page.locator('#analysis-panel').isVisible()) await page.locator('#toggle-analysis').click();
+      for (const slot of ['A','B']) await call('remove_review_track', {slot});
+      await page.setViewportSize({width:1280,height:900});
+      const controlStyle = selector => page.locator(selector).evaluate(el => {
+        const s=getComputedStyle(el),probe=document.createElement('canvas'); probe.width=probe.height=1;
+        const ctx=probe.getContext('2d');ctx.fillStyle=s.backgroundColor;ctx.fillRect(0,0,1,1);
+        return {background:s.backgroundColor,color:s.color,shadow:s.boxShadow,alpha:ctx.getImageData(0,0,1,1).data[3]/255,filter:s.backdropFilter || s.webkitBackdropFilter};
+      });
+      const settleControl = selector => page.locator(selector).evaluate(el => Promise.all(el.getAnimations().map(a=>a.finished)));
+      for (const [background, file] of [['bright','glass-bright.mp4'],['dark','glass-dark.mp4'],['complex','stream.mp4']]) {
+        await call('load_library_item', {slot:'A',id:library.entries.find(entry=>entry.name===file).id}); await stable();
+        // Cover the chrome as well as the picture center: fitted letterboxing
+        // would otherwise test the toolbar against the theme instead of video.
+        await page.evaluate(() => window.voidPlayer.setViewport({zoom:1.5}));
+        await openAnalysis('A');
+        await page.locator('#bitstream-overlay-A').waitFor({state:'visible'});
+        await hideOverlay();
+        await setMode('none');
+        if (await page.locator('#bitstream-boundaries').getAttribute('aria-pressed') === 'true') await page.locator('#bitstream-boundaries').click();
+        if (await page.locator('#toggle-annotations').getAttribute('aria-expanded') !== 'true') await page.locator('#toggle-annotations').click();
+        for (const colorScheme of ['dark','light']) {
+          await page.emulateMedia({colorScheme});
+          const before=await call('get_presented_frame',{slot:'A'});
+          let hoverReference;
+          for(const selector of ['#copy-path-A','#fullscreen','#toggle-chrome','[data-drawing-tool="eraser"]','#bitstream-boundaries','#settings-open']) {
+            await page.mouse.move(0,0);await settleControl(selector);
+            await page.locator(selector).hover();await settleControl(selector);
+            const hovered=await controlStyle(selector);
+            assert.ok(hovered.alpha>=.14 && hovered.alpha<.20, `${selector} retains transparent hover over ${background}/${colorScheme}: ${JSON.stringify(hovered)}`);
+            assert.equal(hovered.filter,'none','buttons never add a second backdrop filter');
+            if (hoverReference) {
+              assert.equal(hovered.background,hoverReference.background, 'all glass buttons share one neutral hover');
+              assert.equal(hovered.shadow,hoverReference.shadow,'all glass buttons share borderless hover');
+            } else hoverReference=hovered;
+            await page.mouse.down();await settleControl(selector);
+            const pressed=await controlStyle(selector);
+            assert.ok(pressed.alpha>hovered.alpha && pressed.alpha<.3, `${selector} press over ${background}/${colorScheme}: ${JSON.stringify({hovered,pressed})}`);
+            await page.mouse.move(0,0);await page.mouse.up();
+          }
+          await page.locator('#bitstream-opacity').hover();await settleControl('#bitstream-opacity-control');
+          assert.equal((await controlStyle('#bitstream-opacity-control')).background,hoverReference.background,'numeric controls highlight their whole wrapper');
+          assert.equal((await controlStyle('#bitstream-opacity')).alpha,0,'numeric child buttons stay transparent');
+          await page.locator('[data-drawing-tool="pen"]').hover();await settleControl('[data-drawing-tool="pen"]');
+          const selected=await controlStyle('[data-drawing-tool="pen"]');
+          assert.ok(selected.alpha<.35 && selected.color!==hoverReference.color,'selected tools retain an accent tint while hovered');
+          for(const selector of ['#bitstream-close','#mark-close','#remove-track-A']) {
+            await page.locator(selector).hover();await settleControl(selector);
+            const danger=await controlStyle(selector);
+            assert.ok(danger.alpha>0 && danger.alpha<.23,'danger hover remains a thin red layer');
+            assert.notEqual(danger.color,hoverReference.color);
+            await page.mouse.down();await settleControl(selector);
+            const pressed=await controlStyle(selector);
+            assert.equal(pressed.color,danger.color,'holding a close action retains its red glyph');
+            assert.ok(pressed.alpha>danger.alpha && pressed.alpha<.35,'danger press remains translucent');
+            await page.mouse.move(0,0);await page.mouse.up();
+          }
+          await page.locator('#copy-path-A').hover();await settleControl('#copy-path-A');
+          await page.screenshot({path:artifact(`glass-${background}-${colorScheme}-copy.png`)});
+          await page.locator('[data-drawing-tool="eraser"]').hover();await settleControl('[data-drawing-tool="eraser"]');
+          await page.screenshot({path:artifact(`glass-${background}-${colorScheme}-tools.png`)});
+          const bar=await page.locator('#annotation-toolbar').boundingBox();
+          const clip={x:Math.max(0,Math.floor(bar.x)-8),y:Math.max(0,Math.floor(bar.y)-24),width:Math.ceil(bar.width)+16,height:Math.min(Math.ceil(bar.height)+100,900-Math.max(0,Math.floor(bar.y)-24))};
+          await page.screenshot({path:artifact(`glass-${background}-${colorScheme}-detail.png`),clip});
+          assert.deepEqual(await call('get_presented_frame',{slot:'A'}),before,'hover/press feedback never changes the presented media frame');
+          rows.push({kind:'glass-controls',background,colorScheme,hover:hoverReference});
+        }
+      }
+      const paused=await call('get_presented_frame',{slot:'A'});
+      await page.evaluate(() => window.voidPlayer.play());
+      await page.locator('#copy-path-A').hover();
+      await page.waitForFunction(commit => window.voidPlayer.tools.find(t=>t.name==='get_presented_frame').execute({slot:'A'}).commit>commit,paused.commit);
+      await page.locator('#copy-path-A').hover();await settleControl('#copy-path-A');
+      const movingHover=await controlStyle('#copy-path-A');
+      assert.ok(movingHover.alpha>=.14 && movingHover.alpha<.20,`complex moving video retains the same transparent hover: ${JSON.stringify(movingHover)}`);
+      await page.evaluate(() => window.voidPlayer.pause());
+      await page.emulateMedia({contrast:'more'});
+      await page.locator('#copy-path-A').hover();await settleControl('#copy-path-A');
+      assert.equal((await controlStyle('#copy-path-A')).alpha,1,'increased contrast restores opaque feedback');
+      await page.emulateMedia({contrast:'no-preference'});
+      await page.mouse.move(0,0);
 
       assert.deepEqual(errors,[]);
 

@@ -6,3 +6,19 @@
   :root, :root[data-theme] { --control-border-width: 1px; --divider: var(--contrast-border); --border: var(--contrast-border); --border-soft: var(--contrast-border-soft); --text-secondary: var(--contrast-text-secondary); --text-subtle: var(--contrast-text-subtle); }
 }
 
+
+/* Reduced transparency and increased contrast retain solid control feedback. */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  :root, :root[data-theme] {
+    --glass-control-rest: var(--surface);
+    --glass-control-hover: var(--surface-hover);
+    --glass-control-pressed: color-mix(in srgb, var(--accent) 22%, var(--surface-panel));
+    --glass-control-selected: var(--surface-selected);
+    --glass-control-selected-pressed: color-mix(in srgb, var(--accent) 30%, var(--surface-panel));
+    --glass-control-selected-hover: color-mix(in srgb, var(--accent) 22%, var(--surface-panel));
+    --glass-control-focus: var(--glass-control-pressed);
+    --glass-control-danger: color-mix(in srgb, var(--action-danger) 12%, var(--surface-panel));
+    --glass-control-danger-pressed: color-mix(in srgb, var(--action-danger) 22%, var(--surface-panel));
+    --glass-control-edge: var(--contrast-border);
+  }
+}

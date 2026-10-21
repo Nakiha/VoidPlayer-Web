@@ -57,7 +57,7 @@ export function browserFailureSnapshot() {
       style: { display: style.display, visibility: style.visibility, opacity: style.opacity, backgroundColor: style.backgroundColor, color: style.color },
       expanded: element.getAttribute('aria-expanded'), open: element.hasAttribute('open'), closing: element.hasAttribute('data-closing') };
   }));
-  return { url: location.href, userAgent: navigator.userAgent, viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
+  return { url: location.href, userAgent: navigator.userAgent, visibility: document.visibilityState, focused: document.hasFocus(), viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
     media: { dark: matchMedia('(prefers-color-scheme: dark)').matches, contrast: matchMedia('(prefers-contrast: more)').matches, reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches },
     theme: document.documentElement.dataset.theme, focus: describe(document.activeElement),
     dialogs: [...document.querySelectorAll('dialog[open], [popover]:popover-open')].slice(0, 20).map(describe), probes };

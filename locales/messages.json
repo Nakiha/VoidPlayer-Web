@@ -2060,6 +2060,14 @@
     "source": "分析进度",
     "params": {}
   },
+  "bitstream.blockLabels": {
+    "source": "块内文字",
+    "params": {}
+  },
+  "bitstream.blockLabelsHint": {
+    "source": "显示 QP 或预测类型，小块自动隐藏文字",
+    "params": {}
+  },
   "bitstream.boundaries": {
     "source": "块边界",
     "params": {}

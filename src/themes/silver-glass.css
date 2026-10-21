@@ -20,7 +20,18 @@
   --transport-group-gap: var(--space-2); --transport-text-size: 12px;
   --transport-inset: 0px;
   --transport-text: var(--text); --transport-muted: var(--text-secondary);
-  --transport-hover: color-mix(in srgb, var(--surface-hover) 65%, transparent);
+  /* Thin interaction overlays over one shared glass backplate. */
+  --glass-control-rest: color-mix(in srgb, var(--text) 3%, transparent);
+  --glass-control-hover: color-mix(in srgb, var(--text) 16%, transparent);
+  --glass-control-pressed: color-mix(in srgb, var(--text) 20%, transparent);
+  --glass-control-selected: color-mix(in srgb, var(--accent) 12%, transparent);
+  --glass-control-selected-pressed: color-mix(in srgb, var(--accent) 32%, transparent);
+  --glass-control-selected-hover: color-mix(in srgb, var(--accent) 28%, transparent);
+  --glass-control-focus: color-mix(in srgb, var(--accent) 22%, transparent);
+  --glass-control-edge: color-mix(in srgb, var(--text) 12%, transparent);
+  --glass-control-danger: color-mix(in srgb, var(--action-danger) 18%, transparent);
+  --glass-control-danger-pressed: color-mix(in srgb, var(--action-danger) 22%, transparent);
+  --transport-hover: var(--glass-control-hover);
   --transport-rail: color-mix(in srgb, var(--text-secondary) 25%, transparent);
   --viewport-eye-inset: var(--space-2); --viewport-eye-fill: color-mix(in srgb, var(--surface) 70%, transparent);
   --panel-padding-inline: var(--space-4); --panel-padding-block: var(--space-2);
@@ -49,6 +60,12 @@
   --split-line: color-mix(in srgb, var(--surface-panel) 65%, var(--text-secondary)); --split-handle: var(--preview-fill);
   --timeline-track: #d5dae2; --timeline-track-size: 4px; --timeline-thumb-size: 10px; --timeline-pin-height: 18px; --timeline-pin-shape: polygon(0 0, 100% 0, 60% 33%, 60% 100%, 40% 100%, 40% 33%);
   --preview-fill: #f8f9fb;
+  --seek-preview-fill: linear-gradient(180deg, #ffffff14, #ffffff04), color-mix(in srgb, color-mix(in srgb, var(--accent) 20%, var(--surface)) 74%, transparent);
+  --seek-preview-edge: color-mix(in srgb, var(--accent) 30%, transparent);
+  --seek-preview-text-size: var(--text-title);
+  --seek-preview-padding: 4px 10px 12px;
+  --seek-preview-rim: linear-gradient(180deg, #ffffff90, #ffffff28 32%, var(--seek-preview-edge) 52%, #ffffff20 65%, #ffffff88 78%, #ffffff78);
+  --seek-preview-filter: blur(18px) saturate(1.25);
   /* Small, bounded surfaces only; no saturation pass or animated filters. */
   --menu-fill: color-mix(in srgb, var(--preview-fill) 76%, transparent);
   --menu-filter: blur(8px);

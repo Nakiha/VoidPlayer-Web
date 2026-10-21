@@ -14,6 +14,7 @@ import type { WorkspaceFile } from '../../shared/review/workspace-file.ts';
 import { mapSharedWorkspace } from '../review/shared-workspace.ts';
 import { SavedWorkspaceClient } from '../review/saved-workspaces.ts';
 import { annotationThumbnails } from './annotation-thumbnails.ts';
+import { publishMarkPreview } from './mark-preview-publish.ts';
 import { pinLibraryReference } from '../../shared/media/io/media-reference.ts';
 import { matchMediaIdentity } from '../../shared/media/io/media-identity.ts';
 import type { MediaIdentityMismatch } from '../../shared/media/io/media-identity.ts';
@@ -164,7 +165,9 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       } catch(error) { await rollback?.(); throw error; }
       finally { stopLayout?.(); }
       annotationThumbnails.clear();
-      for (const { id, ...image } of document.thumbnails ?? []) annotationThumbnails.set(id, image);
+      // Progressive restore may have already rendered the annotation cards.
+      // Hydrate through the shared publisher so those cards receive previews too.
+      for (const { id, ...image } of document.thumbnails ?? []) publishMarkPreview(id, image);
       if (!layout) await options.restore(document, fromShare);
       if (!fromShare) { sharing?.detach(); const url=new URL(location.href);url.searchParams.delete('workspace');url.searchParams.delete('share');url.searchParams.delete('review');history.replaceState(null,'',url); }
       saved?.detach(document.name);

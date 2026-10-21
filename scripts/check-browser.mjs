@@ -9,6 +9,7 @@ import { createMediaServer } from '../server/app.ts';
 import { MediaLibraryIndex } from '../server/library.ts';
 import { checkScrollBoundary } from './testing/scroll-boundary.mjs';
 import { build as buildFixture } from 'vite';
+import { withinBrowserPhase, recordBrowserEvidence, saveBrowserFailure } from './browser-failure-evidence.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const browserName = process.argv[2] ?? 'webkit';
@@ -39,27 +40,47 @@ try {
   browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless: true,...(browserName==='chromium'&&process.env.CHROME_EXECUTABLE_PATH?{executablePath:process.env.CHROME_EXECUTABLE_PATH}:{}) });
 
   let completedChecks = 0;
-  async function check(name, run, options = {}) {
+  async function check(name, run, {checkTimeoutMs = 60000, ...options} = {}) {
     const filter = process.argv.find(arg => arg.startsWith('--filter='))?.slice(9);
     if (filter && !name.includes(filter)) return;
     const page = await browser.newPage({locale:'zh-CN',  viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce', ...options });
     page.setDefaultTimeout(15000);
     const errors = [];
+    const evidence = recordBrowserEvidence(page), checkpoints = [], started = Date.now();
+    const checkpoint = (phase, details) => {
+      checkpoints.push({phase, details, elapsedMs:Date.now()-started});
+      if (process.env.VOIDPLAYER_UI_TRACE) console.log(`STEP ${name}: ${phase}`, JSON.stringify(details ?? {}));
+    };
     // ResizeObserver errors are failures too; never mask the regression being tested.
     page.on('pageerror', error => errors.push(error.message));
     try {
-      await page.goto(base);
-      await page.waitForFunction(() => window.voidPlayer);
-      await run(page);
-      await settle(page);
-      assert.deepEqual(errors, [], `${name}: unexpected browser errors`);
+      console.log(`RUN ${name}`);
+      await withinBrowserPhase(async () => {
+        await page.goto(base);
+        await page.waitForFunction(() => window.voidPlayer);
+        await run(page, checkpoint);
+        await settle(page);
+        assert.deepEqual(errors, [], `${name}: unexpected browser errors`);
+      }, checkTimeoutMs, {engine:browserName,caseName:name,phase:'UI check'});
       completedChecks++; console.log(`PASS ${name}`);
+    } catch (error) {
+      await saveBrowserFailure({page, directory:path.join(root,'.run/browser-fixtures',`ui-${browserName}`),
+        name:name.replace(/[^a-z0-9]+/gi,'-'), context:{engine:browserName,caseName:name,phase:checkpoints.at(-1)?.phase ?? 'UI check'}, error,evidence,extra:{checkpoints}});
+      throw error;
     } finally { await page.close(); }
   }
   async function settle(page) {
     await page.evaluate(() => new Promise(resolve => {
       requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     }));
+  }
+  async function releasePress(page, control) {
+    // Release in place without invoking the control. Dragging a held anchor
+    // outside starts native link drag-and-drop and can leave WebKit suspended.
+    await control.evaluate(el => el.addEventListener('click', event => {
+      event.preventDefault(); event.stopImmediatePropagation();
+    }, {once:true,capture:true}));
+    await page.mouse.up(); await page.mouse.move(0, 0);
   }
   async function panels(page, open) {
     for (const panel of ['inspector', 'sources', 'subtracks']) {
@@ -133,8 +154,8 @@ try {
       await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
       const expected = await page.evaluate(() => {
         const probe = document.createElement('span');
-        probe.style.background = 'color-mix(in srgb, var(--accent) 22%, var(--surface-panel))';
-        document.body.append(probe); const value = getComputedStyle(probe).backgroundColor; probe.remove(); return value;
+        probe.style.background = 'color-mix(in srgb, var(--accent) 22%, transparent)';
+        document.querySelector('#source-tools').append(probe); const value = getComputedStyle(probe).backgroundColor; probe.remove(); return value;
       });
       await page.locator('#library-location').click();
       await page.keyboard.press(tabKey);
@@ -170,7 +191,7 @@ try {
       const hover = await style(selector);
       await page.mouse.down(); await page.locator(selector).evaluate(el=>Promise.all(el.getAnimations().map(a=>a.finished)));
       const held = await style(selector);
-      await page.mouse.move(0, 0); await page.mouse.up();
+      await releasePress(page, page.locator(selector));
       return { hover, held };
     };
     const idle = await style('#server-status');
@@ -237,6 +258,91 @@ try {
     assert.equal(await page.locator('#source-search').inputValue(), '');
     assert.equal(await page.locator('#sources-search-toggle').getAttribute('aria-label'), '搜索片源');
   }, { viewport: { width: 581, height: 664 }, reducedMotion: 'no-preference' });
+
+  await check('workspace panel buttons share hover with floating controls', async page => {
+    await page.setViewportSize({width:1440,height:960});
+    const media=listing.entries.find(entry=>entry.name==='ci_h264_smoke.mp4');
+    await page.evaluate(id=>window.voidPlayer.tools.find(t=>t.name==='load_library_item').execute({id,slot:'A'}),media.id);
+    await page.waitForFunction(()=>!window.voidPlayer.getState().busy && window.voidPlayer.getState().tracks[0]?.frame);
+    for(const id of ['toggle-analysis','toggle-sources','toggle-subtracks']) if(await page.locator(`#${id}`).getAttribute('aria-expanded')!=='true') await page.locator(`#${id}`).click();
+    await page.waitForFunction(()=>+document.querySelector('#analysis-canvas').dataset.plotRight>0);
+    await page.locator('#analysis-zoom-in').click();
+    await page.waitForFunction(()=>!document.querySelector('#analysis-zoom-out').disabled);
+    const row=page.locator('#source-list .source-row').filter({has:page.locator('.filename',{hasText:'av1_10s_1920x1080.webm'})});
+    await row.waitFor();
+    const add=row.locator('.source-actions button');
+    const targets=[page.locator('#fullscreen'),page.locator('#server-status'),page.locator('#analysis-zoom-in'),page.locator('#analysis-zoom-out'),page.locator('#analysis-window'),page.locator('#analysis-range-trigger'),add,page.locator('#subtrack-add-mark')];
+    const read=control=>control.evaluate(el=>{
+      const s=getComputedStyle(el),c=document.createElement('canvas');c.width=c.height=1;
+      const ctx=c.getContext('2d');ctx.fillStyle=s.backgroundColor;ctx.fillRect(0,0,1,1);
+      return {background:s.backgroundColor,color:s.color,shadow:s.boxShadow,alpha:ctx.getImageData(0,0,1,1).data[3]/255};
+    });
+    const finish=control=>control.evaluate(el=>Promise.all(el.getAnimations().map(a=>a.finished)));
+    for(const theme of ['dark','light']) {
+      await page.emulateMedia({colorScheme:theme});
+      await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
+      let reference;
+      for(const control of targets) {
+        const name=await control.getAttribute('id') ?? await control.getAttribute('aria-label');
+        assert.ok(await control.isEnabled(),`${name} must be enabled before checking hover`);
+        await control.hover();await finish(control);
+        const hovered=await read(control);
+        assert.ok(hovered.alpha>=.14 && hovered.alpha<.20,`${theme} ${name}: borderless hover stays visible and translucent ${JSON.stringify(hovered)}`);
+        if(reference)assert.deepEqual(hovered,reference,`${name}: analysis, library, subtracks and viewport use identical ordinary hover`);else reference=hovered;
+        await page.mouse.down();await finish(control);
+        const held=await read(control);
+        assert.ok(held.alpha>hovered.alpha && held.alpha<.3,'ordinary press strengthens the same translucent material');
+        await releasePress(page, control);
+      }
+      for(const id of ['open','workspace-share']) {
+        const action=page.locator(`#${id}`);await action.hover();await finish(action);
+        const accentHover=await read(action);
+        const colors=await action.evaluate(e=>{
+          const s=getComputedStyle(e),ctx=document.createElement('canvas').getContext('2d');
+          ctx.fillStyle=s.getPropertyValue('--accent');const expected=ctx.fillStyle;
+          ctx.fillStyle=s.color;return {expected,actual:ctx.fillStyle};
+        });
+        assert.equal(colors.actual,colors.expected,`${id}: action hover retains the theme accent text`);
+        assert.ok(accentHover.alpha>reference.alpha&&accentHover.alpha<.35,'accent action hover is stronger than neutral hover');
+        assert.equal(accentHover.shadow,'none','accent hover also stays borderless');
+        const box=await action.boundingBox();
+        await page.screenshot({path:path.join(screenshots,`${browserName}-${id}-accent-hover-${theme}.png`),clip:{x:box.x-8,y:Math.max(0,box.y-4),width:box.width+16,height:box.height+8}});
+        await page.mouse.down();await finish(action);
+        assert.ok((await read(action)).alpha>accentHover.alpha,'press strengthens the accent layer');
+        await releasePress(page,action);
+      }
+      await add.hover();await finish(add);
+      const rowStyle=await read(row);
+      assert.equal(rowStyle.background,reference.background,'library row hover no longer paints an opaque patch');
+      const folder=page.locator('#source-list .library-folder').first();
+      await folder.hover();await finish(folder);
+      const folderStyle=await read(folder);
+      assert.deepEqual(folderStyle,rowStyle,'folder and file rows share their hover fill and have no button outline');
+      await page.screenshot({path:path.join(screenshots,`${browserName}-workspace-hover-folder-${theme}.png`)});
+      await add.hover();await finish(add);
+      await page.screenshot({path:path.join(screenshots,`${browserName}-workspace-hover-library-${theme}.png`)});
+      const libraryRow=await row.boundingBox();
+      await page.screenshot({path:path.join(screenshots,`${browserName}-workspace-hover-library-detail-${theme}.png`),clip:{x:Math.floor(libraryRow.x),y:Math.max(0,Math.floor(libraryRow.y)-20),width:Math.floor(libraryRow.width),height:140}});
+      await page.locator('#analysis-zoom-in').hover();await finish(page.locator('#analysis-zoom-in'));
+      await page.screenshot({path:path.join(screenshots,`${browserName}-workspace-hover-analysis-${theme}.png`)});
+      await page.locator('#analysis-panel').screenshot({path:path.join(screenshots,`${browserName}-workspace-hover-analysis-detail-${theme}.png`)});
+      await page.locator('#subtrack-add-mark').hover();await finish(page.locator('#subtrack-add-mark'));
+      await page.screenshot({path:path.join(screenshots,`${browserName}-workspace-hover-subtracks-${theme}.png`)});
+      await page.locator('.annotation-strip-tools').screenshot({path:path.join(screenshots,`${browserName}-workspace-hover-subtracks-detail-${theme}.png`)});
+      const selected=page.locator('#analysis-diagrams [data-value="bitrate"]');
+      await selected.hover();await finish(selected);
+      const active=await read(selected);
+      assert.ok(active.alpha>reference.alpha && active.alpha<.35,'selected analysis buttons keep their accent layer while hovered');
+      assert.notEqual(active.color,reference.color,'selected state stays distinct from neutral hover');
+      await page.locator('#settings-open').click();
+      await page.locator('#settings-tab-appearance').click();
+      await page.locator('#language-choice').hover();await finish(page.locator('#language-choice'));
+      assert.equal((await read(page.locator('#language-choice'))).background,reference.background,'settings dropdowns use the same hover material');
+      await page.locator('#settings-close').click();
+    }
+    await page.emulateMedia({contrast:'more'});await page.locator('#analysis-zoom-in').hover();
+    assert.equal((await read(page.locator('#analysis-zoom-in'))).alpha,1,'panel controls keep the solid high-contrast fallback');
+  });
 
   await check('recent list resizes symmetrically, preserves rows/scroll and remembers its width', async page => {
     await page.addInitScript(() => localStorage.setItem('voidplayer.sources.v1', JSON.stringify(Array.from({ length: 40 }, (_, i) => ({ name: `recent-${i}.mp4`, size: 1000, lastModified: 1000 + i })))));
@@ -522,14 +628,16 @@ try {
     }
   });
 
-  await check('topbar labels settle without oscillating after source load and breakpoint changes', async page => {
+  await check('topbar labels settle without oscillating after source load and breakpoint changes', async (page, checkpoint) => {
     const entry = listing.entries.find(item => item.name === 'ci_h264_smoke.mp4');
     const loadingFrames = page.evaluate(async () => {
       const rows = [], bar = document.querySelector('.topbar'), channel = document.querySelector('#channel-select');
-      for (let frame = 0; frame < 36; frame++) {
+      let readyFrames = 0;
+      while (readyFrames < 4) {
         await new Promise(resolve => requestAnimationFrame(resolve));
         rows.push({ enabled: !channel.disabled, open: document.querySelector('#open').getBoundingClientRect().width,
           overflow: bar.scrollWidth > bar.clientWidth + 1 });
+        if (!channel.disabled) readyFrames++;
       }
       return rows;
     });
@@ -540,10 +648,14 @@ try {
     assert.equal(new Set(loadedFrames.map(row => row.open)).size, 1, 'the add button never flashes a different width after controls become enabled');
     await page.evaluate(() => document.fonts.ready);
     for (const width of [813, 812, 814, 625, 620, 621, 624, 626, 619, 686, 685, 684, 766, 765, 764, 793, 900, 1120, 600, 570, 571, 569, 480, 375, 320]) {
+      checkpoint('Chinese toolbar frames', {width});
       await page.setViewportSize({ width, height: 780 }); await settle(page);
       const samples = await page.evaluate(async () => {
         const rows = [], bar = document.querySelector('.topbar'), open = document.querySelector('#open'), channel = document.querySelector('#channel-select');
-        for (let frame = 0; frame < 24; frame++) {
+        const start = performance.now();
+        // Observe several complete render cycles and a real-time stability
+        // window, without assuming headless WebKit runs at display refresh rate.
+        while (rows.length < 4 || performance.now() - start < 240) {
           await new Promise(resolve => requestAnimationFrame(resolve));
           rows.push({ width: open.getBoundingClientRect().width, channel: channel.getBoundingClientRect().width, classes: bar.className,
             scrollWidth: bar.scrollWidth, clientWidth: bar.clientWidth });
@@ -559,13 +671,17 @@ try {
     assert.equal(await page.locator('#channel-select > span').isVisible(), true);
     await page.screenshot({ path: path.join(screenshots, `topbar-coordinated-${browserName}.png`) });
     await page.locator('#settings-open').click(); await page.locator('#settings-tab-appearance').click();
+    checkpoint('switch to English');
     await page.locator('#language-choice').click(); await page.locator('#language-choice-menu [data-value=en]').click();
     await page.waitForFunction(() => document.documentElement.lang === 'en'); await page.locator('#settings-close').click();
+    await page.waitForFunction(() => !document.querySelector('#settings').open);
     for (const width of [625, 620, 621, 765, 766, 900, 1280]) {
+      checkpoint('English toolbar frames', {width});
       await page.setViewportSize({ width, height: 780 }); await settle(page);
       const widths = await page.evaluate(async () => {
         const values = [];
-        for (let frame = 0; frame < 16; frame++) {
+        const start = performance.now();
+        while (values.length < 4 || performance.now() - start < 240) {
           await new Promise(resolve => requestAnimationFrame(resolve));
           const bar = document.querySelector('.topbar');
           values.push([document.querySelector('#open').getBoundingClientRect().width, bar.scrollWidth, bar.clientWidth]);
@@ -637,30 +753,243 @@ try {
     assert.equal((await read()).share, true, 'share text returns when there is clear room');
     await page.setViewportSize({ width: 813, height: 786 }); await settle(page);
     await page.locator('.topbar').screenshot({ path: path.join(screenshots, `topbar-drag-stable-${browserName}.png`) });
-  }, { reducedMotion: 'no-preference', deviceScaleFactor: 2 });
+  }, { reducedMotion: 'no-preference', deviceScaleFactor: 2, checkTimeoutMs:120000 });
+
+  await check('numeric controls keep hover across icon, gap, value and outer padding', async page => {
+    await page.locator('#file-A').setInputFiles(path.join(fixtures,'ci_h264_smoke.mp4'));
+    await page.waitForFunction(()=>!window.voidPlayer.getState().busy && !document.querySelector('#timeline').disabled);
+    await panels(page,false); await page.locator('#toggle-analysis-overlay').click();
+    const segments=await page.locator('#bitstream-mode').evaluate(e=>{
+      const r=e.getBoundingClientRect(),icon=document.querySelector('#bitstream-boundaries').getBoundingClientRect();
+      return {padding:getComputedStyle(e).padding,height:r.height,iconHeight:icon.height,buttons:[...e.querySelectorAll('button')].map(b=>({height:b.getBoundingClientRect().height,top:b.getBoundingClientRect().top-r.top}))};
+    });
+    assert.equal(segments.padding,'0px');
+    assert.equal(segments.height,segments.iconHeight,'segment bar matches adjacent icon height');
+    for(const b of segments.buttons)assert.deepEqual(b,{height:segments.height,top:0},'segments fill the complete bar height');
+    const read=control=>control.evaluate(e=>({fill:getComputedStyle(e).backgroundColor,edge:getComputedStyle(e).boxShadow}));
+    const finish=control=>control.evaluate(e=>Promise.all(e.getAnimations().map(a=>a.finished)));
+    for(const theme of ['dark','light']) {
+      await page.emulateMedia({colorScheme:theme});
+      await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);await settle(page);
+      for(const id of ['zoom-select','bitstream-opacity']) {
+        const control=page.locator(`#${id}-control`),trigger=page.locator(`#${id}`),value=page.locator(`#${id}-value`);
+        assert.equal(await control.getAttribute('data-disabled'),'false');
+        await page.mouse.move(0,0);await finish(control);const idle=await read(control);
+        await trigger.hover();await finish(control);const hovered=await read(control);
+        assert.notEqual(hovered.fill,idle.fill);assert.equal(hovered.edge,'none','hover uses fill without an extra border');
+        const box=await control.boundingBox(),iconBox=await trigger.boundingBox(),valueBox=await value.boundingBox();
+        const misses=await control.evaluate(e=>{
+          const r=e.getBoundingClientRect(),misses=[];
+          for(let x=r.left+1;x<r.right;x++) {
+            const hit=document.elementFromPoint(x,r.top+r.height/2);
+            if(!hit?.closest('button')||!e.contains(hit.closest('button'))||getComputedStyle(hit).cursor!=='pointer')misses.push(x-r.left);
+          }
+          return misses;
+        });
+        assert.deepEqual(misses,[],`${id}: every point across the control hits a button with a pointer cursor`);
+        assert.ok(Math.abs(iconBox.x-box.x)<1&&Math.abs(iconBox.x+iconBox.width-valueBox.x)<1&&Math.abs(valueBox.x+valueBox.width-box.x-box.width)<1,'icon and value hit areas meet and fill the complete width');
+        const gap=(iconBox.x+iconBox.width+valueBox.x)/2, y=box.y+box.height/2;
+        for(const x of [box.x+2,iconBox.x+iconBox.width/2,gap,valueBox.x+valueBox.width/2,box.x+box.width-2]) {
+          await page.mouse.move(x,y);await finish(control);
+          assert.deepEqual(await read(control),hovered,`${theme} ${id}: the entire control keeps the same hover`);
+        }
+        await page.mouse.move(gap,y);await finish(control);
+        await page.screenshot({path:path.join(screenshots,`${browserName}-${id}-hover-gap-${theme}.png`),clip:{x:Math.max(0,box.x-20),y:Math.max(0,box.y-10),width:box.width+40,height:box.height+20}});
+        await trigger.click();await page.locator(`#${id}-menu`).waitFor({state:'visible'});await page.keyboard.press('Escape');
+        const label=await value.textContent();await value.click();
+        await page.locator(`#${id}-input`).waitFor({state:'visible'});await page.locator(`#${id}-input`).press('Escape');
+        assert.equal(await value.textContent(),label,'direct editing remains available and Escape cancels');
+      }
+    }
+    await page.locator('#bitstream-close').click();
+    await page.setViewportSize({width:320,height:800});await settle(page);
+    const compact=await page.locator('#zoom-select-control').boundingBox(),compactButton=await page.locator('#zoom-select').boundingBox();
+    assert.ok(Math.abs(compact.width-compactButton.width)<1,'compact zoom icon fills its entire control');
+  });
+
+  await check('picture overlay opacity is linear from zero to full coverage', async page => {
+    let analysisRequests=0;
+    page.on('request',request=>{if(request.url().includes('/api/bitstream-analysis/'))analysisRequests++;});
+    const media=listing.entries.find(entry=>entry.name==='ci_h264_smoke.mp4');
+    await page.evaluate(id=>window.voidPlayer.tools.find(t=>t.name==='load_library_item').execute({id,slot:'A'}),media.id);
+    await page.waitForFunction(()=>!window.voidPlayer.getState().busy && !document.querySelector('#timeline').disabled);
+    await panels(page,false);await page.locator('#toggle-analysis-overlay').click();
+    await page.waitForFunction(()=>Number(document.querySelector('#bitstream-overlay-A')?.dataset.blocks)>0,undefined,{timeout:30000});
+    if(await page.locator('#bitstream-boundaries').getAttribute('aria-pressed')==='true')await page.locator('#bitstream-boundaries').click();
+    // Compare final browser pixels over two known underlays. Reading only the
+    // CSS opacity would miss an additional alpha baked into the canvas colors.
+    await page.addStyleTag({content:'#stage-A {background:var(--opacity-test-background,#fff)!important;} #image-A, #grid-A, #grid-label-A, #stage-A .frame-presentation {visibility:hidden!important;}'});
+    const sampleScreenshot=async point=>{
+      const png=await page.screenshot();
+      return page.evaluate(async({png,point})=>{
+        const bitmap=await createImageBitmap(new Blob([new Uint8Array(png)],{type:'image/png'}));
+        const canvas=document.createElement('canvas');canvas.width=bitmap.width;canvas.height=bitmap.height;
+        const ctx=canvas.getContext('2d');ctx.drawImage(bitmap,0,0);bitmap.close();
+        return [...ctx.getImageData(Math.floor(point.x*canvas.width/innerWidth),Math.floor(point.y*canvas.height/innerHeight),1,1).data].slice(0,3);
+      },{png:[...png],point});
+    };
+    for(const mode of ['qp','modes']) {
+      await page.locator(`#bitstream-mode [data-value="${mode}"]`).click();
+      const point=await page.locator('#bitstream-overlay-A').evaluate(canvas=>{
+        const ctx=canvas.getContext('2d'),pixels=ctx.getImageData(0,0,canvas.width,canvas.height).data,r=canvas.getBoundingClientRect();
+        for(let y=Math.floor(canvas.height*.25);y<canvas.height*.65;y++)for(let x=Math.floor(canvas.width*.25);x<canvas.width*.65;x++) {
+          const offset=(y*canvas.width+x)*4;
+          if(pixels[offset+3]!==255)continue;
+          let solid=true;
+          for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)for(let c=0;c<4;c++)if(pixels[((y+dy)*canvas.width+x+dx)*4+c]!==pixels[offset+c])solid=false;
+          if(solid)return {x:r.left+(x+.5)*r.width/canvas.width,y:r.top+(y+.5)*r.height/canvas.height,color:[...pixels.slice(offset,offset+3)]};
+        }
+        return null;
+      });
+      assert.ok(point,`${mode}: fill interiors contain fully opaque pixels`);
+      for(const opacity of [0,50,100]) {
+        await page.locator('#bitstream-opacity').click();await page.locator(`#bitstream-opacity-menu [data-value="${opacity}"]`).click();
+        await page.mouse.move(0,0);
+        for(const underlay of [0,255]) {
+          await page.locator('#stage-A').evaluate((e,value)=>e.style.setProperty('--opacity-test-background',`rgb(${value},${value},${value})`),underlay);
+          await settle(page);
+          const actual=await sampleScreenshot(point),expected=point.color.map(c=>c*opacity/100+underlay*(1-opacity/100));
+          actual.forEach((c,index)=>assert.ok(Math.abs(c-expected[index])<=3,`${mode} ${opacity}% over ${underlay}: ${actual} vs ${expected}`));
+          if(opacity===100&&underlay===0)await page.screenshot({path:path.join(screenshots,`${browserName}-${mode}-opaque.png`)});
+        }
+      }
+    }
+    const toggle=page.locator('#bitstream-labels');
+    assert.equal(await toggle.getAttribute('aria-pressed'),'false','block labels start off');
+    assert.deepEqual(await toggle.evaluate(e=>[e.previousElementSibling.id,e.nextElementSibling.id]),['bitstream-mode','bitstream-opacity-control'],'text toggle sits between fill and opacity');
+    const requestsBeforeLabels=analysisRequests,positionBeforeLabels=await page.evaluate(()=>window.voidPlayer.getState().positionUs);
+    for(const mode of ['qp','modes']) {
+      await page.locator(`#bitstream-mode [data-value="${mode}"]`).click();
+      const plain=await page.locator('#bitstream-overlay-A').evaluate(c=>c.toDataURL());
+      await toggle.click();
+      await page.waitForFunction(()=>Number(document.querySelector('#bitstream-overlay-A').dataset.labels)>0);
+      const labeled=await page.locator('#bitstream-overlay-A').evaluate(c=>c.toDataURL());
+      assert.notEqual(labeled,plain,`${mode}: enabling labels paints real text pixels`);
+      await page.mouse.move(0,0);
+      await page.screenshot({path:path.join(screenshots,`${browserName}-${mode}-block-labels.png`)});
+      await page.setViewportSize({width:220,height:800});
+      await page.waitForFunction(()=>document.querySelector('#bitstream-overlay-A').dataset.labels==='0');
+      await page.setViewportSize({width:1000,height:800});
+      await page.waitForFunction(()=>Number(document.querySelector('#bitstream-overlay-A').dataset.labels)>0);
+      await toggle.click();
+      assert.equal(await page.locator('#bitstream-overlay-A').evaluate(c=>c.toDataURL()),plain,'turning labels off restores the exact original canvas');
+    }
+    assert.equal(await page.evaluate(()=>window.voidPlayer.getState().positionUs),positionBeforeLabels,'text controls never seek');
+    assert.equal(analysisRequests,requestsBeforeLabels,'text controls reuse the cached block analysis');
+  },{viewport:{width:1000,height:800},deviceScaleFactor:2});
+
+  await check('timeline preview floats above video without seeking and closes with settings', async page => {
+    await page.locator('#file-A').setInputFiles(path.join(fixtures,'ci_h264_smoke.mp4'));
+    await page.waitForFunction(()=>!window.voidPlayer.getState().busy && !document.querySelector('#timeline').disabled);
+    await panels(page,false); await settle(page);
+    const position=await page.evaluate(()=>window.voidPlayer.getState().positionUs);
+    const preview=page.locator('#timeline-preview');
+    for(const width of [1000,448,320,220]) {
+      await page.setViewportSize({width,height:800}); await settle(page);
+      const rail=await page.locator('#timeline').boundingBox();
+      for(const fraction of [.01,.5,.99]) {
+        await page.mouse.move(rail.x+rail.width*fraction,rail.y+rail.height/2);
+        await preview.waitFor({state:'visible'});
+        assert.equal(await preview.evaluate(e=>e.matches(':popover-open')),true,'preview escapes the transport backdrop root');
+        assert.match(await preview.innerText(),/^\d{2}:\d{2}\.\d{3}$/);
+        const rect=await preview.boundingBox();
+        assert.ok(rect.x>=7 && rect.x+rect.width<=width-7,'time capsule remains inside the viewport');
+        assert.ok(Math.abs(rect.y+rect.height-(rail.y+rail.height/2-9))<1,'glass pointer stays close to the visible rail');
+        const tick=await page.locator('#timeline-hover').boundingBox();
+        assert.ok(tick&&Math.abs(tick.y+tick.height/2-(rail.y+rail.height/2))<1,'hover tick is centered on the rail');
+        assert.ok(tick.y>rect.y+rect.height+3,'hover tick stays separate from the glass pointer');
+      }
+      assert.equal(await page.evaluate(()=>window.voidPlayer.getState().positionUs),position,'hover never seeks');
+    }
+    await page.keyboard.press('Tab'); await page.locator('#timeline').focus();
+    assert.equal(await page.locator('#timeline').evaluate(e=>document.activeElement===e),true);
+    assert.deepEqual(await page.locator('#timeline').evaluate(e=>{
+      const s=getComputedStyle(e);return [s.backgroundColor,s.boxShadow,s.outlineStyle];
+    }),['rgba(0, 0, 0, 0)','none','none'],'keyboard focus does not paint the oversized timeline hit area');
+    await page.locator('#settings-open').press('Enter');
+    await preview.waitFor({state:'hidden'});
+    assert.equal(await preview.evaluate(e=>e.matches(':popover-open')),false,'opening a modal clears the floating preview');
+    await page.locator('#settings-close').click();
+    await page.waitForFunction(()=>!document.querySelector('#settings').open);
+    const rail=await page.locator('#timeline').boundingBox();
+    await page.mouse.move(rail.x+rail.width/2,rail.y+rail.height/2);await preview.waitFor({state:'visible'});
+    await page.mouse.move(0,0);await preview.waitFor({state:'hidden'});
+    await page.locator('#timeline-hover').waitFor({state:'hidden'});
+  });
+
+  await check('timeline preview stays stable while indexing extends duration', async page => {
+    await page.locator('#file-A').setInputFiles(path.join(fixtures,'ci_h264_smoke.mp4'));
+    await page.waitForFunction(()=>!window.voidPlayer.getState().busy && !document.querySelector('#timeline').disabled);
+    await panels(page,false); await settle(page);
+    const rail=await page.locator('#timeline').boundingBox(), clientX=Math.round(rail.x+rail.width/2);
+    await page.mouse.move(clientX,rail.y+rail.height/2);
+    await page.locator('#timeline-preview').waitFor({state:'visible'});
+    const result=await page.evaluate(async clientX=>{
+      const input=document.querySelector('#timeline'), output=document.querySelector('#timeline-preview');
+      const time=output.querySelector('time'), text=time.firstChild;
+      const toggles=[],samples=[];
+      const toggle=event=>toggles.push(event.newState);
+      output.addEventListener('beforetoggle',toggle);
+      const painted=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      for(const [max,label] of [[59000000,'00:59.000'],[119000000,'01:59.000'],[12000000000,'200:00.000']]) {
+        input.max=String(max); document.querySelector('#duration').textContent=label;
+        // A sibling list can scroll as newly indexed files arrive.
+        document.querySelector('#source-list').dispatchEvent(new Event('scroll'));
+        await painted();
+        const r=input.getBoundingClientRect();
+        const ms=Math.floor(Math.round(Math.max(0,Math.min(1,(clientX-r.left)/r.width))*max)/1000);
+        const expected=`${Math.floor(ms/60000).toString().padStart(2,'0')}:${Math.floor(ms/1000%60).toString().padStart(2,'0')}.${(ms%1000).toString().padStart(3,'0')}`;
+        samples.push({visible:!output.hidden&&output.matches(':popover-open'),text:output.textContent,expected,sameNodes:output.querySelector('time')===time&&time.firstChild===text});
+      }
+      input.disabled=true; await painted();
+      const hiddenOnDisable=output.hidden&&!output.matches(':popover-open');
+      input.disabled=false; input.max='15000000000'; await painted();
+      const staysHidden=output.hidden&&!output.matches(':popover-open');
+      // A move queued just before leave must not resurrect the bubble.
+      input.dispatchEvent(new PointerEvent('pointermove',{clientX,bubbles:true}));
+      input.dispatchEvent(new PointerEvent('pointerleave'));
+      await painted();
+      const cancelled=output.hidden&&!output.matches(':popover-open');
+      output.removeEventListener('beforetoggle',toggle);
+      return {samples,toggles,hiddenOnDisable,staysHidden,cancelled};
+    },clientX);
+    for(const sample of result.samples) {
+      assert.equal(sample.visible,true,'index growth never closes/reopens the material');
+      assert.equal(sample.text,sample.expected,'a stationary pointer follows the new indexed duration');
+      assert.equal(sample.sameNodes,true,'the time label stays mounted across indexing updates');
+    }
+    assert.deepEqual(result.toggles,['closed'],'only disabling the source closes the preview');
+    assert.ok(result.hiddenOnDisable&&result.staysHidden&&result.cancelled,'loading and queued work cannot resurrect a dismissed preview');
+  });
 
   await check('toast entrance animates and respects reduced motion', async page => {
     await page.emulateMedia({reducedMotion:'no-preference'});
     await page.evaluate(() => {
-      window.toastFrames=[];
+      window.toastMidpoint=null;
       const observe=new MutationObserver(records=>{
         const toast=records.flatMap(record=>[...record.addedNodes]).find(node=>node instanceof HTMLElement && node.classList.contains('toast-warning'));
         if(!toast)return;
         observe.disconnect();
-        const sample=()=>{
-          window.toastFrames.push({opacity:+getComputedStyle(toast).opacity, animations:toast.getAnimations().map(animation=>animation.animationName)});
-          if(window.toastFrames.length<20)requestAnimationFrame(sample);
-        };
-        requestAnimationFrame(sample);
+        // A 120ms entrance can finish before the next frame on a throttled
+        // headless browser. Hold its actual animation at the midpoint to test
+        // the painted state, then resume and verify normal class cleanup.
+        const animation=toast.getAnimations().find(a=>a.animationName==='toast-appear');
+        if(!animation) { window.toastMidpoint={opacity:1,animations:[]}; return; }
+        animation.pause(); animation.currentTime=Number(animation.effect.getTiming().duration)/2;
+        requestAnimationFrame(()=>{
+          window.toastMidpoint={opacity:+getComputedStyle(toast).opacity,animations:toast.getAnimations().map(a=>a.animationName)};
+          animation.play();
+        });
       });
       observe.observe(document.body,{subtree:true,childList:true});
       void window.voidPlayer.loadFile('A',new File(['invalid'],'animated-toast.flv')).catch(()=>{});
     });
-    await page.waitForFunction(()=>window.toastFrames.length===20);
-    const frames=await page.evaluate(()=>window.toastFrames);
-    assert.ok(frames.some(frame=>frame.animations.includes('toast-appear') && frame.opacity>0 && frame.opacity<1),'entrance paints intermediate opacity');
-    assert.equal(frames.at(-1).opacity,1);
+    await page.waitForFunction(()=>window.toastMidpoint);
+    const midpoint=await page.evaluate(()=>window.toastMidpoint);
+    assert.ok(midpoint.animations.includes('toast-appear') && midpoint.opacity>0 && midpoint.opacity<1,'entrance paints intermediate opacity');
     const warning=page.locator('.toast-warning');
+    await page.waitForFunction(()=>!document.querySelector('.toast-warning')?.classList.contains('toast-enter'));
+    assert.equal(await warning.evaluate(el=>+getComputedStyle(el).opacity),1);
     assert.equal(await warning.evaluate(el=>el.classList.contains('toast-enter')),false,'finished entrance cleans its animation class');
     await warning.locator('.toast-close').click(); await warning.waitFor({state:'detached'});
     await page.emulateMedia({reducedMotion:'reduce'});
@@ -1028,15 +1357,18 @@ try {
           if (!pixel(8+offsetX+x*scale,8+offsetY+y*scale)[3]) throw Error(`Missing small edge at ${x},${y}, scale ${scale}, DPR ${dpr}`);
         }
         if (pixel(1,1)[3]) throw Error('Edges leaked outside the displayed picture');
-        overlay.setDisplay({fill:'none',boundaries:false});
+        overlay.setDisplay({fill:'none',boundaries:false,labels:false});
         if (ctx.getImageData(0,0,canvas.width,canvas.height).data.some(value=>value)) throw Error('Boundary-off must clear the canvas');
         if (!overlay.hit(8+offsetX+150*scale,8+offsetY+66*scale)) throw Error('Hover must remain available without visible boundaries');
         for(const fill of ['qp','modes']) {
-          overlay.setDisplay({fill,boundaries:false});
+          overlay.setDisplay({fill,boundaries:false,labels:false});
           const center=pixel(8+offsetX+152*scale,8+offsetY+68*scale);
-          if(!center[3] || center[3]>150) throw Error('Independent fill should contain no opaque boundary strokes');
+          // Both fixture fills have little blue, while boundary strokes are
+          // cyan. Fill alpha is now intentionally opaque before CSS opacity.
+          if(!center[3] || center[2]>=100) throw Error('Independent fill should contain no cyan boundary strokes');
+          if(scale>=.5 && pixel(8+offsetX+8*scale,8+offsetY+8*scale)[3]!==255) throw Error('Fill interiors must be opaque before toolbar opacity');
         }
-        overlay.setDisplay({fill:'none',boundaries:true});
+        overlay.setDisplay({fill:'none',boundaries:true,labels:false});
         rows.push({scale,dpr,blocks:blocks.length,metrics:canvas.analysisMetrics});
       }
       overlay.dispose();setPresentationGeometry(source,null);disposePresentation();stage.remove();

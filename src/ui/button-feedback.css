@@ -1,29 +1,30 @@
 /* Apply to the resting state too, so release fades back just like press. */
-button:not(.analysis-progress-action), .connection-status {
+button:not(.analysis-progress-action), .connection-status, .numeric-choice {
   transition: background-color 240ms ease, color 240ms ease !important;
 }
 
 button[role=tab]:not(.source-activity-track) { transition: none !important; }
 
-.connection-status:hover { background: var(--surface-hover); }
+.topbar .connection-status:hover { background: var(--surface-hover); }
 
 /* Press feedback takes precedence over component hover/selected fills, including
    primary buttons whose light text would be unreadable on a pale background. */
-button:active:not(:disabled):not([aria-disabled=true]):not([role=tab]):not(#settings-close):not(.remove-track):not(.analysis-window-handle),
+button:active:not(:disabled):not([aria-disabled=true]):not([role=tab]):not(#settings-close):not(#mark-close):not(#bitstream-close):not(.remove-track):not(.analysis-window-handle),
 .connection-status:active {
-  background: color-mix(in srgb, var(--accent) 22%, var(--surface-panel)) !important;
-  color: var(--text) !important;
+  background: var(--button-press-fill, color-mix(in srgb, var(--accent) 22%, var(--surface-panel))) !important;
+  color: var(--button-press-text, var(--text)) !important;
 }
 
-#settings-close:active:not(:disabled), .remove-track:active:not(:disabled),
+#settings-close:active:not(:disabled), #mark-close:active:not(:disabled), #bitstream-close:active:not(:disabled), .remove-track:active:not(:disabled),
 :root[data-keyboard-navigation] #settings-close:focus-visible:not(:disabled),
+:root[data-keyboard-navigation] :is(#mark-close, #bitstream-close):focus-visible:not(:disabled),
 :root[data-keyboard-navigation] .remove-track:focus-visible:not(:disabled) {
-  background: color-mix(in srgb, var(--action-danger) 22%, var(--surface-panel)) !important;
+  background: var(--button-danger-press-fill, color-mix(in srgb, var(--action-danger) 22%, var(--surface-panel))) !important;
   color: var(--action-danger) !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  button:not(.analysis-progress-action), .connection-status { transition: none !important; }
+  button:not(.analysis-progress-action), .connection-status, .numeric-choice { transition: none !important; }
 }
 :focus-visible { outline: none; }
 
@@ -31,7 +32,7 @@ button:active:not(:disabled):not([aria-disabled=true]):not([role=tab]):not(#sett
    A shortcut after a pointer click can match native focus-visible, so require
    explicit navigation as well. DOM focus and selected fills remain intact. */
 :root[data-keyboard-navigation] :where(button, a[href], summary, input, textarea, select, #analysis-canvas):focus-visible:where(:not(:disabled):not([aria-disabled=true]):not(.analysis-window-handle)) {
-  background: color-mix(in srgb, var(--accent) 22%, var(--surface-panel)) !important;
+  background: var(--button-focus-fill, color-mix(in srgb, var(--accent) 22%, var(--surface-panel))) !important;
   color: var(--text) !important;
 }
 

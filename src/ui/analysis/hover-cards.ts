@@ -201,7 +201,6 @@ export function installAnalysisHoverCards(deps: AnalysisHoverCardsDeps) {
       const grid = document.createElement('div'); grid.className = 'analysis-combined-grid'; row.append(grid);
       if (overviewVisible()) {
         const part = document.createElement('section'); part.className = 'analysis-card-section'; part.dataset.diagram = 'overview';
-        part.style.setProperty('--section-width', '180px');
         const title = document.createElement('strong'); title.textContent = t(msg('analysis.streamSection', '码流'));
         const table = document.createElement('table'); table.className = 'fl-grid analysis-stream-grid';
         const cols = document.createElement('colgroup'); cols.append(document.createElement('col'), document.createElement('col')); cols.firstElementChild!.className = 'analysis-card-label-col'; table.append(cols);
@@ -217,7 +216,6 @@ export function installAnalysisHoverCards(deps: AnalysisHoverCardsDeps) {
         const entry = deepFor(mode, track.slot); if (!entry) continue;
         const part = document.createElement('section'); part.className = 'analysis-card-section'; part.dataset.diagram = mode; part.dataset.slot = track.slot;
         const title = document.createElement('strong'); title.textContent = mode === 'references' ? t(msg('analysis.referenceSection', '帧参考')) : 'NALU';
-        part.style.setProperty('--section-width', mode === 'references' ? '240px' : '250px');
         const { element: contents, timeUs } = entry.panel.details(trackHover(track.slot, hover, snapshot), {
           size: activeDiagrams.has('nalu-size'), types: activeDiagrams.has('nalu-types'), header: false,
         });
@@ -228,7 +226,7 @@ export function installAnalysisHoverCards(deps: AnalysisHoverCardsDeps) {
       time.textContent = hitTimeUs === undefined ? '—' : `${formatAxis(hitTimeUs)} · ${snapshot.axis.toUpperCase()}`;
       cardEl.append(row);
     }
-    cardEl.style.setProperty('--combined-card-width', `${widths.reduce((sum, width) => sum + width, 0) + Math.max(0, widths.length - 1) * 8 + 18}px`);
+    cardEl.style.setProperty('--combined-card-width', `${widths.reduce((sum, width) => sum + width, 0) + Math.max(0, widths.length - 1) * 14 + 24}px`);
     cardEl.dataset.hoverTime = String(hover.timeUs);
     card.position(x ?? canvas.getBoundingClientRect().left + fracToPx(hoverUs() ?? snapshot.inspectionTimeUs));
   }

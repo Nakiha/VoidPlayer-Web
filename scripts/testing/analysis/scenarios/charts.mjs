@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import path from "node:path";
+import { writeFile } from 'node:fs/promises';
 import { selectDiagrams, openRangeEditor, inspectCurrentWindow } from '../controls.mjs';
+import { recordStatusEvidence, installStatusReadEvidence } from '../status-evidence.mjs';
+import { recordBrowserEvidence, saveBrowserFailure } from '../../../browser-failure-evidence.mjs';
 
 
 export async function run(context) {
@@ -65,10 +68,14 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
       if (input === 'library') {
         const workspace = await call('export_workspace');
         const freshContext = await context.browser.newContext({ locale: 'zh-CN', viewport: { width: 1280, height: 900 } });
+        let fresh, statuses, freshEvidence;
         try {
-          const fresh = await freshContext.newPage(), downloads = [], statuses = [];
+          fresh = await freshContext.newPage();
+          await fresh.addInitScript(installStatusReadEvidence);
+          freshEvidence = recordBrowserEvidence(fresh);
+          const downloads = [];
+          statuses = recordStatusEvidence(fresh, request => request.method() === 'GET' && /bitstream-analysis\/requests\/.*pack=gop/.test(request.url()));
           fresh.on('request', request => { if (/bitstream-analysis\/chunks\//.test(request.url())) downloads.push(request.url()); });
-          fresh.on('response', response => { if (response.request().method() === 'GET' && /bitstream-analysis\/requests\/.*pack=gop/.test(response.url())) statuses.push(response); });
           await fresh.addInitScript(() => { window.__vpAnalysisQA = true; });
           await fresh.goto(context.url);
           await fresh.waitForFunction(() => !!window.voidPlayer?.tools);
@@ -77,21 +84,40 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
           await fresh.waitForFunction(() => {
             const state = window.voidPlayer.tools.find(tool => tool.name === 'get_bitstream_analysis_state').execute({ slot: 'A' });
             return state.state === 'ready' && state.stream?.pictures === 300;
-          }).catch(async error => {
-            console.error('fresh-browser-cache-restore', await fresh.evaluate(() => ({
-              analysis: window.voidPlayer.tools.find(tool => tool.name === 'get_bitstream_analysis_state').execute({ slot: 'A' }),
-              workspace: window.voidPlayer.exportWorkspace(),
-            })), 'statuses', await Promise.all(statuses.map(response => response.json())));
-            await fresh.screenshot({ path: artifact('fresh-browser-cache-failure.png') }); throw error;
           });
           const state = await fresh.evaluate(() => window.voidPlayer.tools.find(tool => tool.name === 'get_bitstream_analysis_state').execute({ slot: 'A' }));
           assert.equal(state.counters.decodedAU, 0, 'a different browser reuses the server cache without decoding');
           assert.equal(downloads.length, 0, 'a different browser gets cached GOP packets rather than 300 picture downloads');
-          const packets = (await Promise.all(statuses.map(response => response.json()))).flatMap(state => state.chunks).filter(chunk => chunk.cachedGop);
+          const captured = await statuses.snapshot();
+          const reads = await fresh.evaluate(() => window.__vpStatusReads);
+          await writeFile(artifact('fresh-browser-status-evidence.json'), JSON.stringify({ transport: captured, reads }, null, 2));
+          for (const status of reads) {
+            if (status.state === 'cancelled') {
+              assert.equal(status.signalAborted, true, `unexplained reader cancellation: ${status.url}`);
+            } else {
+              assert.equal(status.state, 'complete', `application must finish reading the status: ${JSON.stringify(status)}`);
+              assert.equal(status.status, 200, `cached status HTTP error: ${status.url}`);
+              assert.equal(status.bodyError, undefined, `invalid consumed status body: ${JSON.stringify(status)}`);
+            }
+          }
+          const packets = reads.filter(status => status.state === 'complete').flatMap(status => status.body.chunks).filter(chunk => chunk.cachedGop);
           assert.equal(packets.reduce((sum, chunk) => sum + chunk.cachedGop.length, 0), 300);
-          assert.ok(packets.length < 300 && packets.every(packet => packet.cachedGop.length > 1));
+          assert.deepEqual(packets.flatMap(packet => packet.cachedGop.map(summary => summary.picture.au)).sort((a,b)=>a-b), Array.from({length:300},(_,au)=>au), 'the application consumes every fixture AU exactly once');
+          assert.ok(packets.length < 300 && packets.every(packet => packet.cached && packet.cachedGop.length > 1));
+          assert.equal(state.counters.cacheHit, 300);
+          assert.equal(state.counters.uniqueDelivered, 300);
+          console.log('CACHE_RESTORE_EVIDENCE', JSON.stringify({ pictures: 300, uniqueAU: 300, cachedPackets: packets.length,
+            decodedAU: state.counters.decodedAU, pictureDownloads: downloads.length, devtoolsAborts: captured.filter(status => status.state === 'failed').length }));
           await fresh.screenshot({ path: artifact('fresh-browser-cached-gops.png') });
-        } finally { await freshContext.close(); }
+        } catch (error) {
+          try {
+            await saveBrowserFailure({ page: fresh, directory: path.dirname(artifact('fresh-browser-cache')), name: 'fresh-browser-cache',
+              context: { engine: context.engine, caseName: 'fresh-browser-cache', phase: 'restore-cached-gops' }, error,
+              evidence: freshEvidence, extra: { statuses: await statuses?.snapshot(),
+                consumedStatuses: await fresh?.evaluate(() => window.__vpStatusReads).catch(cause => ({ error: cause.message })) } });
+          } catch (cause) { console.error('fresh-browser-cache: could not save failure scene', cause); }
+          throw error;
+        } finally { statuses?.dispose(); await freshContext.close(); }
       }
       assert.ok(requests.slice(requestsBefore).filter(r => r.method === 'POST' && /bitstream-analysis\/requests/.test(r.url)).every(r => r.target?.mode==='stream' && r.target.window), 'viewport navigation only requests visible GOPs');
       await inspectCurrentWindow(page);

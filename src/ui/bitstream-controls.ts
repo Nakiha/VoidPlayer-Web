@@ -41,26 +41,26 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
   const host = document.getElementById('bitstream-inspector')!;
   const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
   const panel = $('analysis-overlay-panel'), trigger = $('toggle-analysis-overlay');
-  let open = false, initialized = false, mode: Mode = 'none', boundaries = true, opacity = 75;
+  let open = false, initialized = false, mode: Mode = 'none', boundaries = true, labels = false, opacity = 75;
   host.innerHTML = `
     <button id="bitstream-grip" class="icon-button viewport-tool-grip" data-floating-grip type="button">${icon('grip')}</button>
-    <strong class="bitstream-toolbar-title" data-copy="controls"></strong>
     <div id="bitstream-tracks" class="bitstream-tracks" role="group"></div>
     <span class="bitstream-toolbar-divider" aria-hidden="true"></span>
-    <button id="bitstream-boundaries" class="bitstream-boundaries" type="button" aria-pressed="true">${icon('analysisOverlay')}<span></span></button>
+    <button id="bitstream-boundaries" class="icon-button bitstream-boundaries" type="button" aria-pressed="true">${icon('analysisOverlay')}</button>
     <div id="bitstream-mode" class="bitstream-fill segmented" role="group">
       ${(['none', 'qp', 'modes'] as Mode[]).map(value => `<button type="button" data-value="${value}" aria-pressed="${value === 'none'}"></button>`).join('')}
     </div>
+    <button id="bitstream-labels" class="icon-button" type="button" aria-pressed="false">${icon('text')}</button>
     <button id="bitstream-opacity" class="choice-trigger" type="button" aria-label="${t(msg('bitstream.opacity','不透明度'))}"></button>
     <button id="bitstream-close" class="icon-button" type="button">${icon('close')}</button>`;
   const copy = () => ({
-    controls: t(msg('bitstream.overlayControls','分析遮罩')), opacity: t(msg('bitstream.opacity','不透明度')),
+    opacity: t(msg('bitstream.opacity','不透明度')),
     mode: t(msg('bitstream.fillMode','填色')), boundaries: t(msg('bitstream.boundaries','块边界')),
   });
   const entries = new Map<Slot, Entry>();
   let lastState = session.getState();
   const life = new AbortController();
-  const opacityChoice = installNumericChoice('bitstream-opacity', { glyph: 'opacity', presets: [10, 25, 50, 75, 100], suffix: '%', min: 10, max: 100,
+  const opacityChoice = installNumericChoice('bitstream-opacity', { glyph: 'opacity', presets: [0, 10, 25, 50, 75, 100], suffix: '%', min: 0, max: 100,
     editLabel: () => t(msg('bitstream.editOpacity', '编辑不透明度')),
     choose(value) {
       opacity = value;
@@ -80,11 +80,14 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
   }, '.bitstream-track-control');
   const floating = installFloatingPanelAvoidance(panel, $('annotation-toolbar'), life.signal);
   function setOpen(value: boolean) {
+    const wasOpen = open;
     open = value && lastState.tracks.some(track=>!track.failure);
     panel.hidden = !open; trigger.setAttribute('aria-expanded', String(open));
     if (!open) { opacityChoice.close(); }
     if (open && !initialized) { initialized = true; setVisibility(hooks.selected(), true); }
-    render(); floating.update();
+    render();
+    if (open && !wasOpen) floating.place();
+    else floating.update();
   }
   trigger.onclick = () => setOpen(!open);
   $('bitstream-close').onclick = () => { setOpen(false); trigger.focus(); };
@@ -136,7 +139,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     if (!entry.loading) entry.loading = import('./analysis/picture-overlay/controller.ts').then(({ createAnalysisOverlay }) => {
       if (entries.get(slot) !== entry || !entry.enabled || life.signal.aborted) return;
       entry.overlay = createAnalysisOverlay(session, slot, canvases[slot]);
-      entry.overlay.setDisplay({ fill: mode, boundaries });
+      entry.overlay.setDisplay({ fill: mode, boundaries, labels });
       const canvas = $(`bitstream-overlay-${slot}`); canvas.style.opacity = String(opacity / 100);
       const result = cached(slot, entry); if (result) entry.overlay.setResult(result);
       const tooltip = document.createElement('output'); tooltip.className = 'bitstream-hit-tooltip'; tooltip.hidden = true;
@@ -156,8 +159,12 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     return (['none', 'qp', 'modes'] as Mode[]).filter(value => value === 'none' || capabilities.length > 0 && capabilities.every(result => value === 'qp' ? result.qp === 'ready' : result.modes === 'ready'));
   };
   function updateDisplay() {
-    for (const entry of entries.values()) entry.overlay?.setDisplay({ fill: mode, boundaries });
+    for (const entry of entries.values()) entry.overlay?.setDisplay({ fill: mode, boundaries, labels });
   }
+  $('bitstream-labels').addEventListener('click', () => {
+    labels = !labels;
+    updateDisplay(); render();
+  }, { signal: life.signal });
   $('bitstream-boundaries').addEventListener('click', () => {
     boundaries = !boundaries;
     updateDisplay(); render();
@@ -170,17 +177,19 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
   }, { signal: life.signal });
   function localize() {
     const labels = copy();
-    for (const node of host.querySelectorAll<HTMLElement>('[data-copy]')) node.textContent = labels[node.dataset.copy as keyof typeof labels];
     $('bitstream-grip').setAttribute('aria-label', t(msg('shell.dragToolbar','拖动工具条')));
     $('bitstream-grip').setAttribute('data-tooltip', t(msg('shell.dragToolbar','拖动工具条')));
     $('bitstream-close').setAttribute('aria-label', t(msg('bitstream.closeOverlay', '关闭分析遮罩')));
     trigger.setAttribute('aria-label', t(msg('bitstream.overlayControls','分析遮罩')));
     $('bitstream-tracks').setAttribute('aria-label', t(msg('analysis.compareTracks','对比轨道')));
     $('bitstream-mode').setAttribute('aria-label', labels.mode);
-    $('bitstream-boundaries').querySelector('span')!.textContent = labels.boundaries;
+    $('bitstream-boundaries').setAttribute('aria-label', labels.boundaries);
+    $('bitstream-boundaries').setAttribute('data-tooltip', labels.boundaries);
+    $('bitstream-labels').setAttribute('aria-label', t(msg('bitstream.blockLabels', '块内文字')));
+    $('bitstream-labels').setAttribute('data-tooltip', t(msg('bitstream.blockLabelsHint', '显示 QP 或预测类型，小块自动隐藏文字')));
     for (const button of $('bitstream-mode').querySelectorAll<HTMLButtonElement>('button')) button.textContent = modeLabel(button.dataset.value as Mode);
     $('bitstream-opacity').setAttribute('aria-label', labels.opacity);
-    render();
+    updateDisplay(); render();
   }
   function render(state: State = lastState) {
     lastState = state;
@@ -234,6 +243,8 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     const available = availableModes();
     if ([...entries.values()].some(entry => entry.enabled && entry.capabilities) && !available.includes(mode)) { mode = 'none'; updateDisplay(); }
     $('bitstream-boundaries').setAttribute('aria-pressed', String(boundaries));
+    $('bitstream-labels').setAttribute('aria-pressed', String(labels));
+    $('bitstream-labels').toggleAttribute('disabled', entries.size === 0);
     for (const button of $('bitstream-mode').querySelectorAll<HTMLButtonElement>('button')) {
       const value = button.dataset.value as Mode;
       button.disabled = !available.includes(value);

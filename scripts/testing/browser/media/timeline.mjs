@@ -36,10 +36,12 @@ const errors=[];page.on('pageerror',e=>errors.push(e.message));
  for(const ratio of [.001,.37,.999]){
    const x=rail.x+rail.width*ratio;await page.mouse.move(x,rail.y+rail.height/2);
    await page.locator('#timeline-hover').waitFor({state:'visible'});
-   const pin=await page.locator('#timeline-hover').boundingBox();assert.ok(Math.abs(pin.x+pin.width/2-x)<1,'hover triangle tracks exact pointer position');
+   const pin=await page.locator('#timeline-hover').boundingBox();assert.ok(Math.abs(pin.x+pin.width/2-x)<1,'hover tick tracks exact pointer position');
    const head=await page.evaluate(()=>{const current=getComputedStyle(document.querySelector('.timeline-playhead')),hover=getComputedStyle(document.querySelector('#timeline-hover'),'::before'),crop=getComputedStyle(document.querySelector('#timeline-hover'));return {current:[current.width,current.height,current.clipPath,current.backgroundColor],hover:[hover.width,hover.height,hover.clipPath,hover.backgroundColor],height:parseFloat(crop.height),fullHeight:parseFloat(current.height)};});
-   assert.deepEqual(head.hover,head.current,'hover crops the same progress pin, with identical geometry and color');
-   assert.ok(Math.abs(head.height-head.fullHeight*.33)<.02,'hover only exposes the pin head');
+   assert.deepEqual(head.hover,['2px','10px','none',head.current[3]],'hover is a short rectangular accent tick, distinct from the progress pin');
+   assert.match(head.current[2],/^polygon\(/,'the current position keeps its shaped progress pin');
+   assert.equal(head.height,10,'the hover tick keeps its fixed rail-crossing height');
+   assert.ok(Math.abs(pin.y+pin.height/2-(rail.y+rail.height/2))<.1,'hover tick stays vertically centered on the rail');
    if(process.env.TIMELINE_SCREENSHOT && ratio===.37)await page.locator('.transport').screenshot({path:artifact('voidplayer-timeline-hover.png')});
    await page.mouse.click(x,rail.y+rail.height/2);
    await page.waitForFunction(()=>!window.voidPlayer.getState().busy);
