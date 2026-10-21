@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [original, eof-release-only]
+        variant: [actual-consumer]
     env:
       DIAGNOSTIC_VARIANT: ${{ matrix.variant }}
     steps:
@@ -38,24 +38,6 @@ jobs:
       - run: npm ci
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: npx playwright install --with-deps chromium
-      - name: Apply controlled EOF cleanup experiment
-        if: matrix.variant == 'eof-release-only'
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('shared/analysis/bitstream/products.ts')
-          text, tail=p.read_text().split('export type FrameMetadata', 1)
-          old="const decoder = new TextDecoder(); let bytes = 0, text = '';"
-          assert text.count(old)==1
-          text=text.replace(old,"const decoder = new TextDecoder(); let bytes = 0, text = '', complete = false;")
-          old="const next = await reader.read(); if (next.done) break;"
-          assert text.count(old)==1
-          text=text.replace(old,"const next = await reader.read(); if (next.done) { complete = true; break; }")
-          old="} finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }"
-          assert text.count(old)==1
-          text=text.replace(old,"} finally { if (!complete) await reader.cancel().catch(() => {}); reader.releaseLock(); }")
-          p.write_text(text+'export type FrameMetadata'+tail)
-          PY
       - run: npm run build
       - name: Run both independent samples and retain every failure
         shell: bash

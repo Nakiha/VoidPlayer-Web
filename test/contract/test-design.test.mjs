@@ -7,7 +7,7 @@ import { describeTestPlan } from '../../scripts/testing/execution-plan.mjs';
 import { parseOptions } from '../../scripts/testing/options.mjs';
 import { runAnalysisGroups } from '../../scripts/testing/analysis/run.mjs';
 import { snapshotBuild } from '../../scripts/testing/build.mjs';
-import { recordStatusEvidence } from '../../scripts/testing/analysis/status-evidence.mjs';
+import { recordStatusEvidence, installStatusReadEvidence } from '../../scripts/testing/analysis/status-evidence.mjs';
 import { EventEmitter } from 'node:events';
 import { mkdtemp, mkdir, writeFile, readFile, rm, cp } from 'node:fs/promises';
 import os from 'node:os';
@@ -23,24 +23,73 @@ test('status evidence distinguishes headers from completed bodies and retains ca
   page.emit('request', complete); page.emit('requestfinished', complete);
   assert.deepEqual(await evidence.snapshot(), [
     {url:'/status?cancel',state:'failed',failure:'net::ERR_ABORTED'},
-    {url:'/status?complete',state:'finished',status:200,body:{chunks:[{cachedGop:[1,2,3]}]}},
+    {url:'/status?complete',state:'finished',status:200},
   ]);
   assert.equal(cancelledReads, 0, 'an aborted response is never parsed as a completed JSON packet');
   evidence.dispose();
   for (const name of ['request','requestfinished','requestfailed']) assert.equal(page.listenerCount(name), 0);
 });
 
-test('completed unreadable status bodies and unfinished requests remain visible failures', async () => {
+test('unavailable status metadata and unfinished requests remain visible', async () => {
   const page = new EventEmitter(), evidence = recordStatusEvidence(page, request => request.url().startsWith('/status'));
-  const broken = {url:()=>'/status?broken',response:async()=>({status:()=>200,json:async()=>{throw Error('invalid JSON');}})};
+  const broken = {url:()=>'/status?broken',response:async()=>{throw Error('missing response metadata');}};
   page.emit('request', broken); page.emit('requestfinished', broken);
   page.emit('request', {url:()=>'/status?pending'});
   page.emit('request', {url:()=>'/unrelated'});
   assert.deepEqual(await evidence.snapshot(), [
-    {url:'/status?broken',state:'finished',status:200,bodyError:'invalid JSON'},
+    {url:'/status?broken',state:'finished',metadataError:'missing response metadata'},
     {url:'/status?pending',state:'pending'},
   ]);
   evidence.dispose();
+});
+
+test('status read evidence observes the original application reader without extra fetches or reads', async () => {
+  const body={chunks:[{cachedGop:[{picture:{au:0}},{picture:{au:1}}]}]}, bytes=new TextEncoder().encode(JSON.stringify(body));
+  const response=new Response(new ReadableStream({start(controller){controller.enqueue(bytes);controller.close();}}));
+  let fetches=0;
+  const host={location:{href:'https://example.test/'},fetch:async()=>{fetches++;return response;}};
+  installStatusReadEvidence(host);
+  const returned=await host.fetch('/api/bitstream-analysis/requests/id?pack=gop');
+  assert.equal(returned,response);assert.equal(fetches,1);
+  assert.equal(response.body.locked,false,'the observer does not acquire a reader');
+  assert.equal(host.__vpStatusReads[0].state,'pending','headers alone never establish consumption');
+  const reader=returned.body.getReader(), first=await reader.read();
+  assert.equal(first.value,bytes,'the application receives the original byte array');
+  assert.equal(host.__vpStatusReads[0].body,undefined,'a partial read does not invent a completed body');
+  assert.equal((await reader.read()).done,true);reader.releaseLock();
+  assert.equal(response.body.locked,false);assert.equal(fetches,1);
+  assert.equal(host.__vpStatusReads[0].state,'complete');
+  assert.deepEqual(host.__vpStatusReads[0].body,body);
+});
+
+test('status read evidence preserves real cancellation errors and never counts an interrupted body', async () => {
+  const controller=new AbortController(), failure=new DOMException('cancelled by test','AbortError');
+  const response=new Response(new ReadableStream({start(stream){
+    stream.enqueue(new TextEncoder().encode('{"chunks":['));
+    controller.signal.addEventListener('abort',()=>stream.error(controller.signal.reason),{once:true});
+  }}));
+  let fetches=0;
+  const host={location:{href:'https://example.test/'},fetch:async()=>{fetches++;return response;}};
+  installStatusReadEvidence(host);
+  const returned=await host.fetch('/api/bitstream-analysis/requests/id?pack=gop',{signal:controller.signal}),reader=returned.body.getReader();
+  await reader.read();controller.abort(failure);
+  await assert.rejects(reader.read(),error=>error===failure);reader.releaseLock();
+  assert.equal(fetches,1);assert.equal(host.__vpStatusReads[0].state,'cancelled');
+  assert.equal(host.__vpStatusReads[0].signalAborted,true);
+  assert.equal(host.__vpStatusReads[0].body,undefined);
+});
+
+test('invalid completed JSON and unread bodies remain explicit evidence failures', async () => {
+  const responses=[new Response('{broken JSON'),new Response('{}')];
+  const host={location:{href:'https://example.test/'},fetch:async()=>responses.shift()};
+  installStatusReadEvidence(host);
+  const response=await host.fetch('/api/bitstream-analysis/requests/bad?pack=gop'),reader=response.body.getReader();
+  const first=await reader.read();assert.throws(()=>JSON.parse(new TextDecoder().decode(first.value)));
+  assert.equal((await reader.read()).done,true);reader.releaseLock();
+  assert.equal(host.__vpStatusReads[0].state,'complete');assert.ok(host.__vpStatusReads[0].bodyError);
+  assert.equal(host.__vpStatusReads[0].body,undefined);
+  await host.fetch('/api/bitstream-analysis/requests/unread?pack=gop');
+  assert.equal(host.__vpStatusReads[1].state,'pending');
 });
 
 test('served build snapshots survive later rebuilds and reject publication during capture', async () => {
