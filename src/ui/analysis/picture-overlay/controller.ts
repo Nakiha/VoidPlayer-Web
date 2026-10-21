@@ -9,6 +9,7 @@ import { presentationRect } from "../../../presentation/presentation-surface.ts"
 import type { PresentationGeometry } from "../../../presentation/presentation-surface.ts";
 import type { ReviewSession } from "../../../session.ts";
 import type { Slot } from "../../../../shared/review/model.ts";
+import { t, msg } from "../../../i18n.ts";
 type FillMode = "none" | "qp" | "modes";
 export function createAnalysisOverlay(
   session: ReviewSession,
@@ -25,12 +26,14 @@ export function createAnalysisOverlay(
     result: ReadonlyAnalysisResult | null = null,
     geometry: PresentationGeometry | null = null,
     fill: FillMode = "none",
-    boundaries = true;
+    boundaries = true,
+    labels = false;
   let lastDraw: {
     result: ReadonlyAnalysisResult;
     geometry: string;
     fill: FillMode;
     boundaries: boolean;
+    labels: boolean;
   } | null = null;
   const metrics = {
     presentations: 0,
@@ -49,6 +52,7 @@ export function createAnalysisOverlay(
     lastDraw = null;
     canvas.hidden = true;
     delete canvas.dataset.picture;
+    delete canvas.dataset.labels;
   };
   const draw = () => {
     if (
@@ -66,12 +70,12 @@ export function createAnalysisOverlay(
     if (!geometry) { canvas.hidden = true; return; }
     const g = geometry,
       rect = presentationRect(g);
-    const signature = JSON.stringify([g, token.geometry]);
+    const signature = JSON.stringify([g, token.geometry, labels ? document.documentElement.lang : ""]);
     if (
       lastDraw?.result === result &&
       lastDraw.geometry === signature &&
       lastDraw.fill === fill &&
-      lastDraw.boundaries === boundaries
+      lastDraw.boundaries === boundaries && lastDraw.labels === labels
     ) {
       metrics.skippedDraws++;
       canvas.dataset.commit = String(token.commit);
@@ -104,6 +108,14 @@ export function createAnalysisOverlay(
     // the final mix with the video, including the 0% and 100% endpoints.
     ctx.strokeStyle = "rgb(100,240,255)";
     ctx.lineWidth = 1;
+    const textLabels: { text: string; x: number; y: number }[] = [];
+    const textWidths = new Map<string, number>();
+    const modeLabels = {
+      intra: t(msg('bitstream.intra', '帧内')),
+      inter: t(msg('bitstream.inter', '帧间')),
+      skip: t(msg('bitstream.skip', '跳过')),
+    };
+    ctx.font = '600 11px sans-serif';
     // Keep every real edge, including subpixel blocks at fit. Discarding small
     // blocks creates holes exactly where partitioning is most detailed.
     // One batched stroke keeps shared edges from accumulating opacity.
@@ -128,14 +140,37 @@ export function createAnalysisOverlay(
         ctx.fillRect(x, y, w, h);
       }
       if (boundaries) ctx.rect(x, y, w, h);
+      if (labels && fill !== "none" && h >= 18) {
+        const text = fill === "qp" ? (b.qp === null ? null : String(b.qp)) : modeLabels[b.mode];
+        if (text) {
+          let textWidth = textWidths.get(text);
+          if (textWidth === undefined) { textWidth = ctx.measureText(text).width; textWidths.set(text, textWidth); }
+          const centerX = x + w / 2, centerY = y + h / 2;
+          // Test screen-space fit and visibility before retaining a label.
+          // Zoomed/panned offscreen blocks must not add invisible text work.
+          if (w >= textWidth + 8 && centerX - textWidth / 2 >= Math.max(0, rect.x) + 3 &&
+            centerX + textWidth / 2 <= Math.min(g.width, rect.x + rect.width) - 3 &&
+            centerY >= Math.max(0, rect.y) + 8 && centerY <= Math.min(g.height, rect.y + rect.height) - 8) {
+            textLabels.push({ text, x: centerX, y: centerY });
+          }
+        }
+      }
     }
     if (boundaries) ctx.stroke();
+    // Paint after all fills/edges so adjacent blocks cannot cover the text.
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#000'; ctx.fillStyle = '#fff'; ctx.lineWidth = 2.5;
+    for (const label of textLabels) {
+      ctx.strokeText(label.text, label.x, label.y);
+      ctx.fillText(label.text, label.x, label.y);
+    }
     ctx.restore();
     canvas.hidden = false;
     canvas.dataset.picture = pictureId(result.picture);
     canvas.dataset.commit = String(token.commit);
     canvas.dataset.blocks = String(result.blocks.length);
-    lastDraw = { result, geometry: signature, fill, boundaries };
+    canvas.dataset.labels = String(textLabels.length);
+    lastDraw = { result, geometry: signature, fill, boundaries, labels };
     metrics.draws++;
     if (metrics.drawTimesMs.length >= 2048) metrics.drawTimesMs.shift();
     metrics.drawTimesMs.push(performance.now() - started);
@@ -189,9 +224,10 @@ export function createAnalysisOverlay(
       result = session.cachedBitstreamAnalysis(slot, current);
       draw();
     },
-    setDisplay(value: { fill: FillMode; boundaries: boolean }) {
+    setDisplay(value: { fill: FillMode; boundaries: boolean; labels: boolean }) {
       fill = value.fill;
       boundaries = value.boundaries;
+      labels = value.labels;
       draw();
     },
     hit(x: number, y: number) {

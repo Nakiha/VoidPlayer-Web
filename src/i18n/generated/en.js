@@ -468,6 +468,8 @@ export default {
   "appearance.teal": () => "Teal",
   "bitstream.ambiguousIdentity": () => "The source picture cannot be uniquely identified; the exact overlay is hidden.",
   "bitstream.analysisProgress": () => "Analysis progress",
+  "bitstream.blockLabels": () => "Block labels",
+  "bitstream.blockLabelsHint": () => "Show QP or prediction type; hide labels in small blocks",
   "bitstream.boundaries": () => "Block boundaries",
   "bitstream.cancelled": () => "Analysis cancelled.",
   "bitstream.closeOverlay": () => "Close analysis overlay controls",

@@ -468,6 +468,8 @@ export default {
   "appearance.teal": () => "青色",
   "bitstream.ambiguousIdentity": () => "无法唯一确定源画面，已隐藏精确遮罩。",
   "bitstream.analysisProgress": () => "分析进度",
+  "bitstream.blockLabels": () => "块内文字",
+  "bitstream.blockLabelsHint": () => "显示 QP 或预测类型，小块自动隐藏文字",
   "bitstream.boundaries": () => "块边界",
   "bitstream.cancelled": () => "分析已取消。",
   "bitstream.closeOverlay": () => "关闭分析遮罩",

@@ -808,6 +808,8 @@ try {
   });
 
   await check('picture overlay opacity is linear from zero to full coverage', async page => {
+    let analysisRequests=0;
+    page.on('request',request=>{if(request.url().includes('/api/bitstream-analysis/'))analysisRequests++;});
     const media=listing.entries.find(entry=>entry.name==='ci_h264_smoke.mp4');
     await page.evaluate(id=>window.voidPlayer.tools.find(t=>t.name==='load_library_item').execute({id,slot:'A'}),media.id);
     await page.waitForFunction(()=>!window.voidPlayer.getState().busy && !document.querySelector('#timeline').disabled);
@@ -852,6 +854,28 @@ try {
         }
       }
     }
+    const toggle=page.locator('#bitstream-labels');
+    assert.equal(await toggle.getAttribute('aria-pressed'),'false','block labels start off');
+    assert.deepEqual(await toggle.evaluate(e=>[e.previousElementSibling.id,e.nextElementSibling.id]),['bitstream-mode','bitstream-opacity-control'],'text toggle sits between fill and opacity');
+    const requestsBeforeLabels=analysisRequests,positionBeforeLabels=await page.evaluate(()=>window.voidPlayer.getState().positionUs);
+    for(const mode of ['qp','modes']) {
+      await page.locator(`#bitstream-mode [data-value="${mode}"]`).click();
+      const plain=await page.locator('#bitstream-overlay-A').evaluate(c=>c.toDataURL());
+      await toggle.click();
+      await page.waitForFunction(()=>Number(document.querySelector('#bitstream-overlay-A').dataset.labels)>0);
+      const labeled=await page.locator('#bitstream-overlay-A').evaluate(c=>c.toDataURL());
+      assert.notEqual(labeled,plain,`${mode}: enabling labels paints real text pixels`);
+      await page.mouse.move(0,0);
+      await page.screenshot({path:path.join(screenshots,`${browserName}-${mode}-block-labels.png`)});
+      await page.setViewportSize({width:220,height:800});
+      await page.waitForFunction(()=>document.querySelector('#bitstream-overlay-A').dataset.labels==='0');
+      await page.setViewportSize({width:1000,height:800});
+      await page.waitForFunction(()=>Number(document.querySelector('#bitstream-overlay-A').dataset.labels)>0);
+      await toggle.click();
+      assert.equal(await page.locator('#bitstream-overlay-A').evaluate(c=>c.toDataURL()),plain,'turning labels off restores the exact original canvas');
+    }
+    assert.equal(await page.evaluate(()=>window.voidPlayer.getState().positionUs),positionBeforeLabels,'text controls never seek');
+    assert.equal(analysisRequests,requestsBeforeLabels,'text controls reuse the cached block analysis');
   },{viewport:{width:1000,height:800},deviceScaleFactor:2});
 
   await check('timeline preview floats above video without seeking and closes with settings', async page => {
@@ -1333,15 +1357,18 @@ try {
           if (!pixel(8+offsetX+x*scale,8+offsetY+y*scale)[3]) throw Error(`Missing small edge at ${x},${y}, scale ${scale}, DPR ${dpr}`);
         }
         if (pixel(1,1)[3]) throw Error('Edges leaked outside the displayed picture');
-        overlay.setDisplay({fill:'none',boundaries:false});
+        overlay.setDisplay({fill:'none',boundaries:false,labels:false});
         if (ctx.getImageData(0,0,canvas.width,canvas.height).data.some(value=>value)) throw Error('Boundary-off must clear the canvas');
         if (!overlay.hit(8+offsetX+150*scale,8+offsetY+66*scale)) throw Error('Hover must remain available without visible boundaries');
         for(const fill of ['qp','modes']) {
-          overlay.setDisplay({fill,boundaries:false});
+          overlay.setDisplay({fill,boundaries:false,labels:false});
           const center=pixel(8+offsetX+152*scale,8+offsetY+68*scale);
-          if(!center[3] || center[3]>150) throw Error('Independent fill should contain no opaque boundary strokes');
+          // Both fixture fills have little blue, while boundary strokes are
+          // cyan. Fill alpha is now intentionally opaque before CSS opacity.
+          if(!center[3] || center[2]>=100) throw Error('Independent fill should contain no cyan boundary strokes');
+          if(scale>=.5 && pixel(8+offsetX+8*scale,8+offsetY+8*scale)[3]!==255) throw Error('Fill interiors must be opaque before toolbar opacity');
         }
-        overlay.setDisplay({fill:'none',boundaries:true});
+        overlay.setDisplay({fill:'none',boundaries:true,labels:false});
         rows.push({scale,dpr,blocks:blocks.length,metrics:canvas.analysisMetrics});
       }
       overlay.dispose();setPresentationGeometry(source,null);disposePresentation();stage.remove();

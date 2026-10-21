@@ -468,6 +468,8 @@ export default {
   "appearance.teal": () => "［T~e~a~l~ ········］",
   "bitstream.ambiguousIdentity": () => "［T~h~e~ s~o~u~r~c~e~ p~i~c~t~u~r~e~ c~a~n~n~o~t~ b~e~ u~n~i~q~u~e~l~y~ i~d~e~n~t~i~f~i~e~d~; t~h~e~ e~x~a~c~t~ o~v~e~r~l~a~y~ i~s~ h~i~d~d~e~n~. ········］",
   "bitstream.analysisProgress": () => "［A~n~a~l~y~s~i~s~ p~r~o~g~r~e~s~s~ ········］",
+  "bitstream.blockLabels": () => "［B~l~o~c~k~ l~a~b~e~l~s~ ········］",
+  "bitstream.blockLabelsHint": () => "［S~h~o~w~ Q~P~ o~r~ p~r~e~d~i~c~t~i~o~n~ t~y~p~e~; h~i~d~e~ l~a~b~e~l~s~ i~n~ s~m~a~l~l~ b~l~o~c~k~s~ ········］",
   "bitstream.boundaries": () => "［B~l~o~c~k~ b~o~u~n~d~a~r~i~e~s~ ········］",
   "bitstream.cancelled": () => "［A~n~a~l~y~s~i~s~ c~a~n~c~e~l~l~e~d~. ········］",
   "bitstream.closeOverlay": () => "［C~l~o~s~e~ a~n~a~l~y~s~i~s~ o~v~e~r~l~a~y~ c~o~n~t~r~o~l~s~ ········］",
