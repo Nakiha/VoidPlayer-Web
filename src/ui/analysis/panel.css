@@ -305,9 +305,9 @@
 .bitstream-diagram-detail { padding:3px 8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-height:18px; flex:0 0 auto; }
 
 .bitstream-diagram-legend button { border:0; border-radius:4px; padding:2px 4px; background:transparent; color:inherit; font:inherit; cursor:pointer; }
-.bitstream-diagram-legend button:hover { background:var(--surface-button); }
+.bitstream-diagram-legend button:hover { background:var(--surface-hover); }
 .bitstream-diagram-legend button[aria-pressed="false"][data-nalu-type] { opacity:.4; text-decoration:line-through; }
-.bitstream-diagram-legend button[data-filter="all"][aria-pressed="true"] { color:var(--text); background:var(--surface-button); }
+.bitstream-diagram-legend button[data-filter="all"][aria-pressed="true"] { color:var(--accent); background:var(--surface-selected); }
 .bitstream-diagram-empty { position:absolute; inset:0; pointer-events:auto; }
 
 .multi-choice-menu .choice-check { width: 1em; flex: 0 0 auto; }

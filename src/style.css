@@ -155,7 +155,7 @@ dd { text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-n
 .source-tools { --source-control-fill: color-mix(in srgb, var(--surface-control) 45%, transparent); position: absolute; top: 0; left: 0; right: 0; z-index: 4; display: flex; align-items: center; gap: var(--space-1); margin: 0; padding: var(--panel-padding-block); min-height: var(--control-small-height); background: var(--viewport-chrome-fill); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); }
 .source-tools .icon-button { border: 0; background: transparent; flex: 0 0 auto; }
 .source-tools .crumbs-back, .source-tools > .icon-button, .source-tools .library-navigation, .source-tools #source-search-field { background: var(--source-control-fill); box-shadow: var(--control-shadow); }
-.source-tools .crumbs-back:hover:not(:disabled), .source-tools > .icon-button:hover:not(:disabled), .source-tools .library-navigation:hover { background: color-mix(in srgb, var(--surface-hover) 24%, transparent); }
+.source-tools .crumbs-back:hover:not(:disabled), .source-tools > .icon-button:hover:not(:disabled), .source-tools .library-navigation:hover { background: var(--glass-control-hover); }
 .source-tools .library-navigation { transition: background-color 240ms ease; }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) { .source-tools { --source-control-fill: var(--surface); } }
 .source-tools .crumbs-back:disabled { opacity: 1; color: var(--text-subtle); }
@@ -197,7 +197,7 @@ dd { text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-n
 .source-meta-copy { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-meta { display: flex; align-items: center; gap: var(--space-2); color: var(--text-secondary); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-section { position: sticky; top: 0; z-index: 1; margin: 0; padding: var(--space-2) var(--panel-padding-inline); font-size: var(--text-xs); font-weight: 600; color: var(--text-secondary); background: var(--surface-panel); border-top: 1px solid var(--divider); }
-.source-actions button:hover:not(:disabled) { color: var(--accent); background-color: var(--surface-selected); }
+.source-actions button:hover:not(:disabled) { color: var(--text); background-color: var(--surface-hover); }
 .source-actions .remove-track:hover:not(:disabled) { color: var(--action-danger); background-color: var(--action-danger-fill); }
 .source-actions { display: flex; align-items: center; gap: var(--tool-gap); }
 .source-actions button { width: var(--control-small-height); height: var(--control-small-height); min-height: var(--control-small-height); padding: 0; font-size: var(--text-xs); color: var(--text-secondary); background: transparent; transition: color var(--transition-fast), background-color var(--transition-fast); }
@@ -337,7 +337,7 @@ textarea { resize: vertical; min-height: 56px; max-height: 220px; padding: var(-
 .subtrack-row.track-drop-target::after { left: var(--space-3); right: var(--space-3); top: 0; height: 2px; }
 .subtrack-row.track-drop-target[data-drop-edge=after]::after { top: auto; bottom: 0; }
 .remove-track { background: transparent; color: var(--text-secondary); transition: color var(--transition-fast), background var(--transition-fast); }
-.remove-track:hover:not(:disabled) { color: var(--action-danger); background-color: var(--action-danger-fill); }
+.remove-track:hover:not(:disabled), #mark-close:hover:not(:disabled), #bitstream-close:hover:not(:disabled) { color: var(--action-danger); background-color: var(--action-danger-fill); }
 @media (prefers-reduced-motion: reduce) { .remove-track { transition: none; } }
 .subtrack-label { display: flex; align-items: center; min-width: 0; gap: var(--tool-gap); }
 .subtrack-name { flex: 1; }
@@ -718,6 +718,47 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
   backdrop-filter: var(--glass-filter);
   text-shadow: none;
 }
+.remove-track, .annotation-remove { --button-hover-text: var(--action-danger); }
+.primary { --button-hover-text: var(--accent-on); }
+.brand, .start-version button { --button-hover-text: var(--accent); }
+
+/* One interaction family across floating controls and workspace panels.
+   Each container retains its own material; buttons add only thin overlays. */
+:where(.viewport-tool-panel, .transport-dock, .card-heading, .annotation-preview, .topbar, .source-tools, .source-foot, .analysis-panel, .sources-panel, .subtracks-panel, .inspector-panel, #start-panel, #settings, .popup-menu) {
+  --surface-control: var(--glass-control-rest);
+  --surface-hover: var(--glass-control-hover);
+  --surface-selected: var(--glass-control-selected);
+  --annotation-toolbar-selected: var(--glass-control-selected);
+  --segment-fill: var(--glass-control-rest);
+  --segment-selected-fill: var(--glass-control-selected);
+  --viewport-eye-fill: var(--glass-control-hover);
+  --action-danger-fill: var(--glass-control-danger);
+  --button-press-fill: var(--glass-control-pressed);
+  --button-focus-fill: var(--glass-control-focus);
+  --button-danger-press-fill: var(--glass-control-danger-pressed);
+}
+:where(.viewport-tool-panel, .transport-dock, .card-heading, .annotation-preview, .topbar, .source-tools, .source-foot, .analysis-panel, .sources-panel, .subtracks-panel, .inspector-panel, #start-panel, #settings, .popup-menu) button:hover:not(:disabled):not([aria-disabled=true]):not(.numeric-choice > button) {
+  box-shadow: inset 0 0 0 1px var(--glass-control-edge);
+}
+:where(.viewport-tool-panel, .transport-dock, .card-heading, .annotation-preview, .topbar, .source-tools, .source-foot, .analysis-panel, .sources-panel, .subtracks-panel, .inspector-panel, #start-panel, #settings, .popup-menu) button:hover:not(:disabled):not([aria-disabled=true]):not(:is([aria-pressed=true], [aria-expanded=true], [aria-checked=true], [aria-selected=true])) {
+  color: var(--button-hover-text, var(--text));
+}
+:where(.viewport-tool-panel, .transport-dock, .card-heading, .annotation-preview, .topbar, .source-tools, .source-foot, .analysis-panel, .sources-panel, .subtracks-panel, .inspector-panel, #start-panel, #settings, .popup-menu) button:is([aria-pressed=true], [aria-expanded=true], [aria-checked=true], [aria-selected=true]):not(:disabled) {
+  background: var(--glass-control-selected);
+  color: var(--accent);
+  --button-press-fill: var(--glass-control-selected-pressed);
+  --button-press-text: var(--accent);
+}
+:where(.viewport-tool-panel, .transport-dock, .card-heading, .annotation-preview, .topbar, .source-tools, .source-foot, .analysis-panel, .sources-panel, .subtracks-panel, .inspector-panel, #start-panel, #settings, .popup-menu) button:is([aria-pressed=true], [aria-expanded=true], [aria-checked=true], [aria-selected=true]):hover:not(:disabled) {
+  background: var(--glass-control-selected-hover);
+}
+:where(.viewport-tool-panel, .transport-dock, .card-heading, .annotation-preview, .topbar, .source-tools, .source-foot, .analysis-panel, .sources-panel, .subtracks-panel, .inspector-panel, #start-panel, #settings, .popup-menu) .numeric-choice:has(button:hover:not(:disabled)) {
+  box-shadow: inset 0 0 0 1px var(--glass-control-edge);
+}
+:root[data-keyboard-navigation] :where(.viewport-tool-panel, .transport-dock, .card-heading, .annotation-preview, .topbar, .source-tools, .source-foot, .analysis-panel, .sources-panel, .subtracks-panel, .inspector-panel, #start-panel, #settings, .popup-menu) :focus-visible {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
 /* Resolve character count and padding on the input, not on :root where the
    inherited custom-property formula had already captured the old values. */
 #position.time-input { width: calc(var(--time-input-chars, 9) * 1ch + 2 * var(--time-input-padding) + 1px); padding: 0 var(--time-input-padding); }

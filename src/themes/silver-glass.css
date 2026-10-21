@@ -20,7 +20,18 @@
   --transport-group-gap: var(--space-2); --transport-text-size: 12px;
   --transport-inset: 0px;
   --transport-text: var(--text); --transport-muted: var(--text-secondary);
-  --transport-hover: color-mix(in srgb, var(--surface-hover) 65%, transparent);
+  /* Thin interaction overlays over one shared glass backplate. */
+  --glass-control-rest: color-mix(in srgb, var(--text) 3%, transparent);
+  --glass-control-hover: color-mix(in srgb, var(--text) 6%, transparent);
+  --glass-control-pressed: color-mix(in srgb, var(--text) 11%, transparent);
+  --glass-control-selected: color-mix(in srgb, var(--accent) 12%, transparent);
+  --glass-control-selected-pressed: color-mix(in srgb, var(--accent) 24%, transparent);
+  --glass-control-selected-hover: color-mix(in srgb, var(--accent) 18%, transparent);
+  --glass-control-focus: color-mix(in srgb, var(--accent) 22%, transparent);
+  --glass-control-edge: color-mix(in srgb, var(--text) 12%, transparent);
+  --glass-control-danger: color-mix(in srgb, var(--action-danger) 10%, transparent);
+  --glass-control-danger-pressed: color-mix(in srgb, var(--action-danger) 18%, transparent);
+  --transport-hover: var(--glass-control-hover);
   --transport-rail: color-mix(in srgb, var(--text-secondary) 25%, transparent);
   --viewport-eye-inset: var(--space-2); --viewport-eye-fill: color-mix(in srgb, var(--surface) 70%, transparent);
   --panel-padding-inline: var(--space-4); --panel-padding-block: var(--space-2);

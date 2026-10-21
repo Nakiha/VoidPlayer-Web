@@ -133,8 +133,8 @@ try {
       await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
       const expected = await page.evaluate(() => {
         const probe = document.createElement('span');
-        probe.style.background = 'color-mix(in srgb, var(--accent) 22%, var(--surface-panel))';
-        document.body.append(probe); const value = getComputedStyle(probe).backgroundColor; probe.remove(); return value;
+        probe.style.background = 'color-mix(in srgb, var(--accent) 22%, transparent)';
+        document.querySelector('#source-tools').append(probe); const value = getComputedStyle(probe).backgroundColor; probe.remove(); return value;
       });
       await page.locator('#library-location').click();
       await page.keyboard.press(tabKey);
@@ -237,6 +237,67 @@ try {
     assert.equal(await page.locator('#source-search').inputValue(), '');
     assert.equal(await page.locator('#sources-search-toggle').getAttribute('aria-label'), '搜索片源');
   }, { viewport: { width: 581, height: 664 }, reducedMotion: 'no-preference' });
+
+  await check('workspace panel buttons share hover with floating controls', async page => {
+    await page.setViewportSize({width:1440,height:960});
+    const media=listing.entries.find(entry=>entry.name==='ci_h264_smoke.mp4');
+    await page.evaluate(id=>window.voidPlayer.tools.find(t=>t.name==='load_library_item').execute({id,slot:'A'}),media.id);
+    await page.waitForFunction(()=>!window.voidPlayer.getState().busy && window.voidPlayer.getState().tracks[0]?.frame);
+    for(const id of ['toggle-analysis','toggle-sources','toggle-subtracks']) if(await page.locator(`#${id}`).getAttribute('aria-expanded')!=='true') await page.locator(`#${id}`).click();
+    await page.waitForFunction(()=>+document.querySelector('#analysis-canvas').dataset.plotRight>0);
+    await page.locator('#analysis-zoom-in').click();
+    await page.waitForFunction(()=>!document.querySelector('#analysis-zoom-out').disabled);
+    const row=page.locator('#source-list .source-row').filter({has:page.locator('.filename',{hasText:'av1_10s_1920x1080.webm'})});
+    await row.waitFor();
+    const add=row.locator('.source-actions button');
+    const targets=[page.locator('#fullscreen'),page.locator('#analysis-zoom-in'),page.locator('#analysis-zoom-out'),page.locator('#analysis-window'),page.locator('#analysis-range-trigger'),add,page.locator('#subtrack-add-mark')];
+    const read=control=>control.evaluate(el=>{
+      const s=getComputedStyle(el),c=document.createElement('canvas');c.width=c.height=1;
+      const ctx=c.getContext('2d');ctx.fillStyle=s.backgroundColor;ctx.fillRect(0,0,1,1);
+      return {background:s.backgroundColor,color:s.color,shadow:s.boxShadow,alpha:ctx.getImageData(0,0,1,1).data[3]/255};
+    });
+    const finish=control=>control.evaluate(el=>Promise.all(el.getAnimations().map(a=>a.finished)));
+    for(const theme of ['dark','light']) {
+      await page.emulateMedia({colorScheme:theme});
+      let reference;
+      for(const control of targets) {
+        const name=await control.getAttribute('id') ?? await control.getAttribute('aria-label');
+        assert.ok(await control.isEnabled(),`${name} must be enabled before checking hover`);
+        await control.hover();await finish(control);
+        const hovered=await read(control);
+        assert.ok(hovered.alpha>0 && hovered.alpha<.12,`${theme}: panel hover stays translucent ${JSON.stringify(hovered)}`);
+        if(reference)assert.deepEqual(hovered,reference,`${name}: analysis, library, subtracks and viewport use identical ordinary hover`);else reference=hovered;
+        await page.mouse.down();await finish(control);
+        const held=await read(control);
+        assert.ok(held.alpha>hovered.alpha && held.alpha<.2,'ordinary press strengthens the same translucent material');
+        await page.mouse.move(0,0);await page.mouse.up();
+      }
+      await add.hover();await finish(add);
+      const rowStyle=await read(row);
+      assert.equal(rowStyle.background,reference.background,'library row hover no longer paints an opaque patch');
+      await page.screenshot({path:path.join(screenshots,`${browserName}-workspace-hover-library-${theme}.png`)});
+      const libraryRow=await row.boundingBox();
+      await page.screenshot({path:path.join(screenshots,`${browserName}-workspace-hover-library-detail-${theme}.png`),clip:{x:Math.floor(libraryRow.x),y:Math.max(0,Math.floor(libraryRow.y)-20),width:Math.floor(libraryRow.width),height:140}});
+      await page.locator('#analysis-zoom-in').hover();await finish(page.locator('#analysis-zoom-in'));
+      await page.screenshot({path:path.join(screenshots,`${browserName}-workspace-hover-analysis-${theme}.png`)});
+      await page.locator('#analysis-panel').screenshot({path:path.join(screenshots,`${browserName}-workspace-hover-analysis-detail-${theme}.png`)});
+      await page.locator('#subtrack-add-mark').hover();await finish(page.locator('#subtrack-add-mark'));
+      await page.screenshot({path:path.join(screenshots,`${browserName}-workspace-hover-subtracks-${theme}.png`)});
+      await page.locator('.annotation-strip-tools').screenshot({path:path.join(screenshots,`${browserName}-workspace-hover-subtracks-detail-${theme}.png`)});
+      const selected=page.locator('#analysis-diagrams [data-value="bitrate"]');
+      await selected.hover();await finish(selected);
+      const active=await read(selected);
+      assert.ok(active.alpha>reference.alpha && active.alpha<.25,'selected analysis buttons keep their accent layer while hovered');
+      assert.notEqual(active.color,reference.color,'selected state stays distinct from neutral hover');
+      await page.locator('#settings-open').click();
+      await page.locator('#settings-tab-appearance').click();
+      await page.locator('#language-choice').hover();await finish(page.locator('#language-choice'));
+      assert.equal((await read(page.locator('#language-choice'))).background,reference.background,'settings dropdowns use the same hover material');
+      await page.locator('#settings-close').click();
+    }
+    await page.emulateMedia({contrast:'more'});await page.locator('#analysis-zoom-in').hover();
+    assert.equal((await read(page.locator('#analysis-zoom-in'))).alpha,1,'panel controls keep the solid high-contrast fallback');
+  });
 
   await check('recent list resizes symmetrically, preserves rows/scroll and remembers its width', async page => {
     await page.addInitScript(() => localStorage.setItem('voidplayer.sources.v1', JSON.stringify(Array.from({ length: 40 }, (_, i) => ({ name: `recent-${i}.mp4`, size: 1000, lastModified: 1000 + i })))));

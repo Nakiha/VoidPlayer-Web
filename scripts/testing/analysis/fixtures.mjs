@@ -18,7 +18,12 @@ export async function prepareAnalysisFixtures(directory, profiles) {
     '-f', 'lavfi', '-i', `testsrc2=size=128x64:rate=30:duration=${duration}`, '-an', '-c:v', 'libx264', '-g', '30', '-bf', '2',
     '-x264-params', 'scenecut=0:open-gop=0', path.join(directory, `${file}.mp4`),
   ]);
-  if (needs('streams')) await copyFile(path.join(directory, 'stream.mp4'), path.join(directory, 'stream-2.mp4'));
+  if (needs('streams')) {
+    await copyFile(path.join(directory, 'stream.mp4'), path.join(directory, 'stream-2.mp4'));
+    for (const [name, color] of [['bright', 'white'], ['dark', '0x080b12']]) ff([
+      '-f', 'lavfi', '-i', `color=${color}:size=640x360:rate=5:duration=1`, '-an', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', path.join(directory, `glass-${name}.mp4`),
+    ]);
+  }
   if (needs('queues')) for (const name of ['stream.mp4', 'incremental.mp4', 'stream-2.mp4']) await copyFile(path.join(directory, name), path.join(directory, 'queue-' + name));
   if (needs('index-flv')) for (const action of ['continue', 'cancel']) ff(['-i', path.join(directory, 'incremental.mp4'), '-an', '-c:v', 'copy', '-f', 'flv', path.join(directory, `incremental-${action}.flv`)]);
   const references = [];
