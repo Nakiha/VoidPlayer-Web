@@ -454,15 +454,15 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
             await page.mouse.move(0,0);await settleControl(selector);
             await page.locator(selector).hover();await settleControl(selector);
             const hovered=await controlStyle(selector);
-            assert.ok(hovered.alpha>0 && hovered.alpha<.12, `${selector} retains transparent hover over ${background}/${colorScheme}: ${JSON.stringify(hovered)}`);
+            assert.ok(hovered.alpha>=.14 && hovered.alpha<.20, `${selector} retains transparent hover over ${background}/${colorScheme}: ${JSON.stringify(hovered)}`);
             assert.equal(hovered.filter,'none','buttons never add a second backdrop filter');
             if (hoverReference) {
               assert.equal(hovered.background,hoverReference.background, 'all glass buttons share one neutral hover');
-              assert.equal(hovered.shadow,hoverReference.shadow,'all glass buttons share one thin edge');
+              assert.equal(hovered.shadow,hoverReference.shadow,'all glass buttons share borderless hover');
             } else hoverReference=hovered;
             await page.mouse.down();await settleControl(selector);
             const pressed=await controlStyle(selector);
-            assert.ok(pressed.alpha>hovered.alpha && pressed.alpha<.2, `${selector} press over ${background}/${colorScheme}: ${JSON.stringify({hovered,pressed})}`);
+            assert.ok(pressed.alpha>hovered.alpha && pressed.alpha<.3, `${selector} press over ${background}/${colorScheme}: ${JSON.stringify({hovered,pressed})}`);
             await page.mouse.move(0,0);await page.mouse.up();
           }
           await page.locator('#bitstream-opacity').hover();await settleControl('#bitstream-opacity-control');
@@ -470,16 +470,16 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
           assert.equal((await controlStyle('#bitstream-opacity')).alpha,0,'numeric child buttons stay transparent');
           await page.locator('[data-drawing-tool="pen"]').hover();await settleControl('[data-drawing-tool="pen"]');
           const selected=await controlStyle('[data-drawing-tool="pen"]');
-          assert.ok(selected.alpha<.25 && selected.color!==hoverReference.color,'selected tools retain an accent tint while hovered');
+          assert.ok(selected.alpha<.35 && selected.color!==hoverReference.color,'selected tools retain an accent tint while hovered');
           for(const selector of ['#bitstream-close','#mark-close','#remove-track-A']) {
             await page.locator(selector).hover();await settleControl(selector);
             const danger=await controlStyle(selector);
-            assert.ok(danger.alpha>0 && danger.alpha<.15,'danger hover remains a thin red layer');
+            assert.ok(danger.alpha>0 && danger.alpha<.23,'danger hover remains a thin red layer');
             assert.notEqual(danger.color,hoverReference.color);
             await page.mouse.down();await settleControl(selector);
             const pressed=await controlStyle(selector);
             assert.equal(pressed.color,danger.color,'holding a close action retains its red glyph');
-            assert.ok(pressed.alpha>danger.alpha && pressed.alpha<.25,'danger press remains translucent');
+            assert.ok(pressed.alpha>danger.alpha && pressed.alpha<.35,'danger press remains translucent');
             await page.mouse.move(0,0);await page.mouse.up();
           }
           await page.locator('#copy-path-A').hover();await settleControl('#copy-path-A');
@@ -499,7 +499,7 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
       await page.waitForFunction(commit => window.voidPlayer.tools.find(t=>t.name==='get_presented_frame').execute({slot:'A'}).commit>commit,paused.commit);
       await page.locator('#copy-path-A').hover();await settleControl('#copy-path-A');
       const movingHover=await controlStyle('#copy-path-A');
-      assert.ok(movingHover.alpha>0 && movingHover.alpha<.12,`complex moving video retains the same transparent hover: ${JSON.stringify(movingHover)}`);
+      assert.ok(movingHover.alpha>=.14 && movingHover.alpha<.20,`complex moving video retains the same transparent hover: ${JSON.stringify(movingHover)}`);
       await page.evaluate(() => window.voidPlayer.pause());
       await page.emulateMedia({contrast:'more'});
       await page.locator('#copy-path-A').hover();await settleControl('#copy-path-A');

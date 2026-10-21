@@ -280,18 +280,36 @@ try {
     const finish=control=>control.evaluate(el=>Promise.all(el.getAnimations().map(a=>a.finished)));
     for(const theme of ['dark','light']) {
       await page.emulateMedia({colorScheme:theme});
+      await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
       let reference;
       for(const control of targets) {
         const name=await control.getAttribute('id') ?? await control.getAttribute('aria-label');
         assert.ok(await control.isEnabled(),`${name} must be enabled before checking hover`);
         await control.hover();await finish(control);
         const hovered=await read(control);
-        assert.ok(hovered.alpha>0 && hovered.alpha<.12,`${theme} ${name}: panel hover stays translucent ${JSON.stringify(hovered)}`);
+        assert.ok(hovered.alpha>=.14 && hovered.alpha<.20,`${theme} ${name}: borderless hover stays visible and translucent ${JSON.stringify(hovered)}`);
         if(reference)assert.deepEqual(hovered,reference,`${name}: analysis, library, subtracks and viewport use identical ordinary hover`);else reference=hovered;
         await page.mouse.down();await finish(control);
         const held=await read(control);
-        assert.ok(held.alpha>hovered.alpha && held.alpha<.2,'ordinary press strengthens the same translucent material');
+        assert.ok(held.alpha>hovered.alpha && held.alpha<.3,'ordinary press strengthens the same translucent material');
         await releasePress(page, control);
+      }
+      for(const id of ['open','workspace-share']) {
+        const action=page.locator(`#${id}`);await action.hover();await finish(action);
+        const accentHover=await read(action);
+        const colors=await action.evaluate(e=>{
+          const s=getComputedStyle(e),ctx=document.createElement('canvas').getContext('2d');
+          ctx.fillStyle=s.getPropertyValue('--accent');const expected=ctx.fillStyle;
+          ctx.fillStyle=s.color;return {expected,actual:ctx.fillStyle};
+        });
+        assert.equal(colors.actual,colors.expected,`${id}: action hover retains the theme accent text`);
+        assert.ok(accentHover.alpha>reference.alpha&&accentHover.alpha<.35,'accent action hover is stronger than neutral hover');
+        assert.equal(accentHover.shadow,'none','accent hover also stays borderless');
+        const box=await action.boundingBox();
+        await page.screenshot({path:path.join(screenshots,`${browserName}-${id}-accent-hover-${theme}.png`),clip:{x:box.x-8,y:Math.max(0,box.y-4),width:box.width+16,height:box.height+8}});
+        await page.mouse.down();await finish(action);
+        assert.ok((await read(action)).alpha>accentHover.alpha,'press strengthens the accent layer');
+        await releasePress(page,action);
       }
       await add.hover();await finish(add);
       const rowStyle=await read(row);
@@ -314,7 +332,7 @@ try {
       const selected=page.locator('#analysis-diagrams [data-value="bitrate"]');
       await selected.hover();await finish(selected);
       const active=await read(selected);
-      assert.ok(active.alpha>reference.alpha && active.alpha<.25,'selected analysis buttons keep their accent layer while hovered');
+      assert.ok(active.alpha>reference.alpha && active.alpha<.35,'selected analysis buttons keep their accent layer while hovered');
       assert.notEqual(active.color,reference.color,'selected state stays distinct from neutral hover');
       await page.locator('#settings-open').click();
       await page.locator('#settings-tab-appearance').click();
@@ -741,17 +759,35 @@ try {
     await page.locator('#file-A').setInputFiles(path.join(fixtures,'ci_h264_smoke.mp4'));
     await page.waitForFunction(()=>!window.voidPlayer.getState().busy && !document.querySelector('#timeline').disabled);
     await panels(page,false); await page.locator('#toggle-analysis-overlay').click();
+    const segments=await page.locator('#bitstream-mode').evaluate(e=>{
+      const r=e.getBoundingClientRect(),icon=document.querySelector('#bitstream-boundaries').getBoundingClientRect();
+      return {padding:getComputedStyle(e).padding,height:r.height,iconHeight:icon.height,buttons:[...e.querySelectorAll('button')].map(b=>({height:b.getBoundingClientRect().height,top:b.getBoundingClientRect().top-r.top}))};
+    });
+    assert.equal(segments.padding,'0px');
+    assert.equal(segments.height,segments.iconHeight,'segment bar matches adjacent icon height');
+    for(const b of segments.buttons)assert.deepEqual(b,{height:segments.height,top:0},'segments fill the complete bar height');
     const read=control=>control.evaluate(e=>({fill:getComputedStyle(e).backgroundColor,edge:getComputedStyle(e).boxShadow}));
     const finish=control=>control.evaluate(e=>Promise.all(e.getAnimations().map(a=>a.finished)));
     for(const theme of ['dark','light']) {
-      await page.emulateMedia({colorScheme:theme}); await settle(page);
+      await page.emulateMedia({colorScheme:theme});
+      await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);await settle(page);
       for(const id of ['zoom-select','bitstream-opacity']) {
         const control=page.locator(`#${id}-control`),trigger=page.locator(`#${id}`),value=page.locator(`#${id}-value`);
         assert.equal(await control.getAttribute('data-disabled'),'false');
         await page.mouse.move(0,0);await finish(control);const idle=await read(control);
         await trigger.hover();await finish(control);const hovered=await read(control);
-        assert.notEqual(hovered.fill,idle.fill);assert.notEqual(hovered.edge,'none');
+        assert.notEqual(hovered.fill,idle.fill);assert.equal(hovered.edge,'none','hover uses fill without an extra border');
         const box=await control.boundingBox(),iconBox=await trigger.boundingBox(),valueBox=await value.boundingBox();
+        const misses=await control.evaluate(e=>{
+          const r=e.getBoundingClientRect(),misses=[];
+          for(let x=r.left+1;x<r.right;x++) {
+            const hit=document.elementFromPoint(x,r.top+r.height/2);
+            if(!hit?.closest('button')||!e.contains(hit.closest('button'))||getComputedStyle(hit).cursor!=='pointer')misses.push(x-r.left);
+          }
+          return misses;
+        });
+        assert.deepEqual(misses,[],`${id}: every point across the control hits a button with a pointer cursor`);
+        assert.ok(Math.abs(iconBox.x-box.x)<1&&Math.abs(iconBox.x+iconBox.width-valueBox.x)<1&&Math.abs(valueBox.x+valueBox.width-box.x-box.width)<1,'icon and value hit areas meet and fill the complete width');
         const gap=(iconBox.x+iconBox.width+valueBox.x)/2, y=box.y+box.height/2;
         for(const x of [box.x+2,iconBox.x+iconBox.width/2,gap,valueBox.x+valueBox.width/2,box.x+box.width-2]) {
           await page.mouse.move(x,y);await finish(control);
@@ -765,6 +801,10 @@ try {
         assert.equal(await value.textContent(),label,'direct editing remains available and Escape cancels');
       }
     }
+    await page.locator('#bitstream-close').click();
+    await page.setViewportSize({width:320,height:800});await settle(page);
+    const compact=await page.locator('#zoom-select-control').boundingBox(),compactButton=await page.locator('#zoom-select').boundingBox();
+    assert.ok(Math.abs(compact.width-compactButton.width)<1,'compact zoom icon fills its entire control');
   });
 
   await check('timeline preview floats above video without seeking and closes with settings', async page => {

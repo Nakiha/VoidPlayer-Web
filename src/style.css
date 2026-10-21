@@ -37,8 +37,8 @@ select { max-width: 100%; }
 .topbar { display: flex; align-items: center; flex: 0 0 var(--toolbar-height); height: var(--toolbar-height); gap: var(--control-gap); padding: var(--toolbar-padding-block) var(--toolbar-padding-inline); z-index: 10; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
 .topbar::-webkit-scrollbar { display: none; }
 .topbar-primary-actions, .topbar-utility-actions { display: flex; align-items: center; gap: var(--control-gap); min-width: 0; }
-.topbar .add-video { flex: 0 0 auto; height: var(--button-size); white-space: nowrap; color: var(--text); background: var(--surface-control); }
-.topbar .add-video:hover:not(:disabled) { color: var(--accent); background: var(--surface-selected); }
+.topbar .add-video { flex: 0 0 auto; height: var(--button-size); white-space: nowrap; color: var(--text); background: var(--surface-control); --button-hover-text: var(--accent); --button-press-text: var(--accent); --button-press-fill: var(--glass-control-selected-pressed); }
+.topbar .add-video:hover:not(:disabled) { color: var(--accent); background: var(--glass-control-selected-hover); }
 .topbar .add-video:disabled { cursor: default; }
 .brand { font-size: var(--text-brand); font-weight: 600; letter-spacing: -.4px; margin-right: var(--control-gap); white-space: nowrap; }
 /* 品牌按钮保持纯文字；静止悬停按需加载片头，点击打开关于。 */
@@ -299,7 +299,7 @@ textarea { resize: vertical; min-height: 56px; max-height: 220px; padding: var(-
 .topbar.topbar-measuring .topbar-primary-actions :is(#open, #workspace-share) > span { display: inline; }
 .topbar.topbar-measuring .view-controls > :is(#pixel-size, #channel-select):not(:disabled) { width: auto; min-width: 0; padding-inline: var(--control-gap); }
 .topbar.topbar-measuring :is(#pixel-size, #channel-select):not(:disabled) > span { display: inline; }
-.topbar.topbar-measuring .view-controls > #zoom-select-control:not([data-disabled=true]) { width: var(--zoom-control-width); flex-basis: var(--zoom-control-width); padding-inline: var(--control-gap); }
+.topbar.topbar-measuring .view-controls > #zoom-select-control:not([data-disabled=true]) { width: var(--zoom-control-width); flex-basis: var(--zoom-control-width); padding-inline: 0; }
 .topbar.topbar-measuring #zoom-select-control:not([data-disabled=true]) > .numeric-choice-value:not([hidden]) { display: inline-flex; }
 @media(max-width: 765px) {
   .side-panel { position: absolute; grid-row: 1 / 2; top: 0; bottom: 0; z-index: 6; width: min(var(--sources-width), 75vw); }
@@ -558,8 +558,10 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .palette-grid button:last-child .color-swatch { border-bottom-right-radius: 5px; }
 .palette-grid button[aria-checked=true] { z-index: 1; }
 .palette-grid button:hover { z-index: 2; }
-.palette-grid button:is([aria-checked=true], :hover)::before { content: ''; position: absolute; inset: -6px; border-radius: 12px; background: var(--swatch-selection-fill); box-shadow: var(--swatch-selection-shadow); pointer-events: none; }
-.palette-grid button:is([aria-checked=true], :hover) .color-swatch { position: relative; border: 1px solid var(--swatch-selection-border); border-radius: 6px; box-shadow: none; pointer-events: none; }
+.palette-grid button:is([aria-checked=true], :hover)::before { content: ''; position: absolute; inset: -6px; border-radius: 12px; background: var(--swatch-selection-fill); pointer-events: none; }
+.palette-grid button[aria-checked=true]::before { box-shadow: var(--swatch-selection-shadow); }
+.palette-grid button:is([aria-checked=true], :hover) .color-swatch { position: relative; border-radius: 6px; box-shadow: none; pointer-events: none; }
+.palette-grid button[aria-checked=true] .color-swatch { border: 1px solid var(--swatch-selection-border); }
 .viewport-tool-grip { cursor: grab; touch-action: none; }
 .drawing-divider { width: 1px; height: 22px; background: var(--border); margin: 0 3px; }
 #drawing-error { margin: 4px; color: var(--warning-text); font-size: var(--text-sm); }
@@ -680,9 +682,10 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .time-input[aria-invalid=true], .offset-input[aria-invalid=true] { outline: 1px solid var(--action-danger); outline-offset: -1px; }
 
 #zoom-select-control { width: var(--zoom-control-width); flex: 0 0 var(--zoom-control-width); }
-.numeric-choice { height: var(--button-size); flex: none; border-radius: var(--radius-control); }
-.numeric-choice > .numeric-choice-trigger { flex: none; width: var(--icon-size); }
+.numeric-choice { height: var(--button-size); flex: none; gap: 0; padding: 0; border-radius: var(--radius-control); }
+.numeric-choice > .numeric-choice-trigger { flex: none; width: calc(var(--icon-size) + 2 * var(--control-gap)); }
 .numeric-choice > :is(button, input) { min-height: 0; height: 100%; padding: 0; border: 0; box-shadow: none; background: transparent; font: inherit; color: inherit; }
+.numeric-choice > :is(.numeric-choice-value, .numeric-choice-input) { padding-right: var(--control-gap); }
 .numeric-choice-trigger > span, .numeric-choice-trigger > .icon:last-child { display: none; }
 .numeric-choice-value, .numeric-choice-input { flex: 1; min-width: 0; width: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .numeric-choice-input { border-radius: 0; outline: none; }
@@ -692,6 +695,8 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .numeric-choice > button:is(:hover, [aria-expanded=true]):not(:disabled) { background: transparent; }
 .numeric-choice[data-disabled=true] { opacity: var(--disabled-opacity); }
 .numeric-choice[data-disabled=true] > button:disabled { opacity: 1; }
+.topbar.compact-zoom #zoom-select, .view-controls > .numeric-choice[data-disabled=true] > .numeric-choice-trigger { width: 100%; }
+.topbar.topbar-measuring #zoom-select:not(:disabled) { width: calc(var(--icon-size) + 2 * var(--control-gap)); }
 .view-controls > #zoom-select-control[data-disabled=true] { width: var(--button-size); flex-basis: var(--button-size); padding-inline: 0; justify-content: center; }
 .view-controls > .numeric-choice[data-disabled=true] > .numeric-choice-value { display: none; }
 .view-controls > .choice-trigger > .icon:last-child { display: none; }
@@ -752,9 +757,6 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
   --button-focus-fill: var(--glass-control-focus);
   --button-danger-press-fill: var(--glass-control-danger-pressed);
 }
-:where(.viewport-tool-panel, .transport-dock, .card-heading, .annotation-preview, .topbar, .source-tools, .source-foot, .analysis-panel, .sources-panel, .subtracks-panel, .inspector-panel, #start-panel, #settings, .popup-menu) :is(button, .connection-status):hover:not(:disabled):not([aria-disabled=true]):not(.numeric-choice > button):not(.source-row) {
-  box-shadow: inset 0 0 0 1px var(--glass-control-edge);
-}
 :where(.viewport-tool-panel, .transport-dock, .card-heading, .annotation-preview, .topbar, .source-tools, .source-foot, .analysis-panel, .sources-panel, .subtracks-panel, .inspector-panel, #start-panel, #settings, .popup-menu) button:hover:not(:disabled):not([aria-disabled=true]):not(:is([aria-pressed=true], [aria-expanded=true], [aria-checked=true], [aria-selected=true])) {
   color: var(--button-hover-text, var(--text));
 }
@@ -766,9 +768,6 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 }
 :where(.viewport-tool-panel, .transport-dock, .card-heading, .annotation-preview, .topbar, .source-tools, .source-foot, .analysis-panel, .sources-panel, .subtracks-panel, .inspector-panel, #start-panel, #settings, .popup-menu) button:is([aria-pressed=true], [aria-expanded=true], [aria-checked=true], [aria-selected=true]):hover:not(:disabled) {
   background: var(--glass-control-selected-hover);
-}
-:where(.viewport-tool-panel, .transport-dock, .card-heading, .annotation-preview, .topbar, .source-tools, .source-foot, .analysis-panel, .sources-panel, .subtracks-panel, .inspector-panel, #start-panel, #settings, .popup-menu) .numeric-choice:hover:not([data-disabled=true]) {
-  box-shadow: inset 0 0 0 1px var(--glass-control-edge);
 }
 :root[data-keyboard-navigation] :where(.viewport-tool-panel, .transport-dock, .card-heading, .annotation-preview, .topbar, .source-tools, .source-foot, .analysis-panel, .sources-panel, .subtracks-panel, .inspector-panel, #start-panel, #settings, .popup-menu) :focus-visible {
   box-shadow: inset 0 0 0 1px var(--accent);

@@ -13,8 +13,6 @@
   --border: #4e4e4e; --border-soft: #404040; --divider: #ffffff14;
   --viewport-chrome-fill: color-mix(in srgb, var(--surface) 70%, transparent);
   --transport-muted: #dce1e9;
-  --glass-control-hover: color-mix(in srgb, var(--text) 9%, transparent);
-  --glass-control-pressed: color-mix(in srgb, var(--text) 15%, transparent);
   --glass-highlight: #ffffff12;
   --glass-shadow: 0 1px 2px #0003, inset 0 1px 0 var(--glass-highlight);
   --control-shadow: 0 1px 2px #0003, inset 0 1px 0 #ffffff12;

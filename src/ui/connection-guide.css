@@ -87,7 +87,7 @@
 .connection-help summary { margin-inline: auto; }
 .connection-help code { text-align: left; }
 @media (hover: hover) {
-  .connection-button:hover { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent); }
+  .connection-button:hover { background: color-mix(in srgb, var(--accent) 92%, var(--text)); }
   .connection-button.secondary:hover, .connection-retry:hover { background: var(--surface-hover); }
   .connection-guide summary:hover { color: var(--text); text-decoration: underline; }
 }
