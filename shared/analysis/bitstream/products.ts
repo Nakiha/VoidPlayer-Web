@@ -10,6 +10,24 @@ export type ProductIndexIdentity = MediaIndexIdentity | typeof MP4_ANALYSIS_INDE
 export const analysisIndexIdentity = (identity?:ProductIndexIdentity|null):ProductIndexIdentity => identity ?? MP4_ANALYSIS_INDEX;
 export const PRODUCT_SCHEMA = 2;
 export const PRODUCT_LIMIT = Object.freeze({ metadata: 1024 * 1024, page: 1024 * 1024, frame: 3 * 1024 * 1024, inFlight: 32 * 1024 * 1024, pageItems: 32 });
+/** Transport only: cached GOPs reuse the existing per-picture disk records. */
+export const SUMMARY_BATCH_LIMIT = Object.freeze({ bytes: 8 * 1024 * 1024, pictures: 8192 });
+export async function readSummaryStatus(response: Response): Promise<any> {
+  const limit = SUMMARY_BATCH_LIMIT.bytes + 1024 * 1024;
+  const length = response.headers.get('content-length');
+  if (length !== null && (!Number.isSafeInteger(Number(length)) || Number(length) <= 0 || Number(length) > limit)) throw new AnalysisFailure('resource-limit', 'Summary status transport budget exceeded');
+  const reader = response.body?.getReader(); if (!reader) throw Error('Missing summary status body');
+  const decoder = new TextDecoder(); let bytes = 0, text = '';
+  try {
+    for (;;) {
+      const next = await reader.read(); if (next.done) break;
+      bytes += next.value.byteLength;
+      if (bytes > limit) throw new AnalysisFailure('resource-limit', 'Summary status transport budget exceeded');
+      text += decoder.decode(next.value, { stream: true });
+    }
+    text += decoder.decode(); return JSON.parse(text);
+  } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+}
 export type FrameMetadata = Omit<AnalysisResult, 'blocks'>;
 interface ProductMetadata extends FrameMetadata {
   productSchema: 2;

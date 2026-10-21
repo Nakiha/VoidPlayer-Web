@@ -1,6 +1,6 @@
 import { emptyCounters, countCore, countProduct } from '../../../shared/analysis/bitstream/counters.ts';
-import { isProduct } from '../../../shared/analysis/bitstream/products.ts';
-import type { AnalysisOutput } from '../../../shared/analysis/bitstream/products.ts';
+import { isProduct, isSummary, metadataBudgetBytes, SUMMARY_BATCH_LIMIT } from '../../../shared/analysis/bitstream/products.ts';
+import type { AnalysisOutput, AnalysisSummary } from '../../../shared/analysis/bitstream/products.ts';
 import {sealJsIndex} from '../../../shared/media/indexing/js-index-proof.ts';
 import { validateAnalysisCore } from '../../../shared/analysis/bitstream/core-abi.ts';
 import { parentPort, workerData } from "node:worker_threads";
@@ -93,12 +93,33 @@ try {
         if (message.ok) ack?.resolve(); else ack?.reject(restoreFailure(message.reason, message.error ?? 'Analysis consumer stopped'));
       }
     });
+    const send = async (message: object, transfer: ArrayBuffer[] = []) => {
+      const acknowledged = new Promise<void>((resolve, reject) => { acknowledgement = { resolve, reject }; });
+      parentPort!.postMessage(message, transfer);
+      await acknowledged;
+    };
+    let cachedGop: AnalysisSummary[] = [], cachedBytes = 0;
+    const flushCachedGop = async () => {
+      if (!cachedGop.length) return;
+      const results = cachedGop; cachedGop = []; cachedBytes = 0;
+      await send({ type: 'cached-gop', results, counters: { ...counters } });
+    };
     const publish = async (result: AnalysisOutput) => {
+      const cached = cachedResults.has(JSON.stringify([result.picture,result.buildId]));
+      if (cached && isSummary(result) && result.gop && workerData.target.mode === 'stream') {
+        const bytes = metadataBudgetBytes(result) + 64;
+        if (cachedGop.length && (JSON.stringify(cachedGop[0].gop) !== JSON.stringify(result.gop) ||
+            cachedGop.length >= SUMMARY_BATCH_LIMIT.pictures || cachedBytes + bytes > SUMMARY_BATCH_LIMIT.bytes)) await flushCachedGop();
+        countProduct(result, true, counters); delivered.add(result.picture.au); counters.uniqueDelivered = delivered.size;
+        cachedGop.push(result); cachedBytes += bytes;
+        if (result.picture.au === result.gop.endAu - 1) await flushCachedGop();
+        return;
+      }
+      // New pictures remain incremental; cached members preceding a hole are
+      // delivered together before decoding that missing part of the GOP.
+      await flushCachedGop();
       const hit=cachedResults.has(JSON.stringify([result.picture,result.buildId]));countProduct(result,hit,counters);delivered.add(result.picture.au);counters.uniqueDelivered=delivered.size;
-      parentPort!.postMessage({ type: "chunk", result, counters:{...counters}, cacheHit:cachedResults.has(JSON.stringify([result.picture,result.buildId])) }, isProduct(result) && result.product === "blocks" ? [result.payload] : []);
-      await new Promise<void>((resolve, reject) => {
-        acknowledgement = { resolve, reject };
-      });
+      await send({ type: "chunk", result, counters:{...counters}, cacheHit:hit }, isProduct(result) && result.product === "blocks" ? [result.payload] : []);
     };
     if (workerData.target.mode === 'stream')
       await analyzeStream(reader, workerData.target, loadCore, (manifest.buildId ?? manifest.revision),
@@ -131,6 +152,7 @@ try {
           new AbortController().signal,
         ),
       );
+    await flushCachedGop();
     parentPort!.postMessage({type:"counters",counters});parentPort!.postMessage({ ok: true, type: "complete" });
   } finally {
     reader.close();

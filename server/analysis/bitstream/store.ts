@@ -32,7 +32,7 @@ async function readBoundedFile(file:string,max:number,jsonLimit?:number):Promise
   }finally{await handle.close();}
 }
 /** Each picture is one independently committed chunk. No incomplete chunk is visible. */
-export interface StreamChunkRef { id: string; cursor: number; gop: AnalysisGop; au?:number; bytes?:number; product?:'summary'|'blocks'; encoding?:string; picture?:import("../../../shared/analysis/bitstream/contract.ts").SourcePictureKey }
+export interface StreamChunkRef { id: string; cursor: number; gop: AnalysisGop; au?:number; bytes?:number; cached?:boolean; batchEnd?:number; product?:'summary'|'blocks'; encoding?:string; picture?:import("../../../shared/analysis/bitstream/contract.ts").SourcePictureKey }
 export class AnalysisStore {
   readonly directory: string;
   readonly quota: number;

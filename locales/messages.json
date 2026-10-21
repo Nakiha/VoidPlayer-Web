@@ -2076,6 +2076,10 @@
     "source": "编辑不透明度",
     "params": {}
   },
+  "bitstream.fillMode": {
+    "source": "填色",
+    "params": {}
+  },
   "bitstream.hideTrackOverlay": {
     "source": "隐藏轨道 {slot} 的遮罩",
     "params": {
@@ -2102,6 +2106,10 @@
     "source": "分析目标或区间无效。",
     "params": {}
   },
+  "bitstream.noFill": {
+    "source": "无",
+    "params": {}
+  },
   "bitstream.noSafeAnchor": {
     "source": "预滚预算内没有可验证的闭合 IDR 起点。",
     "params": {}
@@ -2112,10 +2120,6 @@
   },
   "bitstream.overlayControls": {
     "source": "分析遮罩",
-    "params": {}
-  },
-  "bitstream.overlayMode": {
-    "source": "显示内容",
     "params": {}
   },
   "bitstream.prediction": {

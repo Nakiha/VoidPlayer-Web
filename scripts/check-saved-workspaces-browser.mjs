@@ -61,7 +61,26 @@ try {
   const entries=(await(await fetch(base+'/api/workspaces')).json()).entries;assert.equal(entries.length,1);const id=entries[0].id;
   const record=await(await fetch(base+'/api/workspaces/'+id)).json();
   assert.equal(record.owner,identity.actor.id);assert.equal(record.document.marks.length,1);assert.equal(record.document.layout.sources.query,'h264');assert.equal(record.document.layout.sources.all,true);
-  const second=await context.newPage();await second.goto(base+'/?workspace='+id);
+  const second=await context.newPage();
+  let releaseWorkspace, releaseSource;
+  const workspaceGate = new Promise(resolve => { releaseWorkspace = resolve; });
+  const sourceGate = new Promise(resolve => { releaseSource = resolve; });
+  await second.route(base + '/api/workspaces/' + id, async route => { await workspaceGate; await route.continue(); });
+  const delayedMedia = record.document.media.find(media => media.id === record.document.tracks[1].mediaId);
+  await second.route('**/api/media/' + delayedMedia.source.id + '/metadata*', async route => { await sourceGate; await route.continue(); });
+  await second.goto(base+'/?workspace='+id);
+  await second.waitForFunction(() => !!window.voidPlayer?.tools);
+  assert.equal(await second.locator('#start-panel').isVisible(), false, 'workspace links enter the workbench while the document is still downloading');
+  assert.equal(await second.locator('.transport').isVisible(), true);
+  releaseWorkspace();
+  await second.waitForFunction(() => {
+    const state = window.voidPlayer.getState();
+    return state.busy && state.tracks.length === 2 && !!state.tracks[0].frame && state.tracks[1].pendingRelink;
+  });
+  assert.equal(await second.locator('#start-panel').isVisible(), false);
+  assert.equal(await second.locator('#image-A').isVisible(), true, 'the first track is presented while the later source is still opening');
+  await second.screenshot({ path: path.join(root, '.run/workspace-progressive-loading.png') });
+  releaseSource();
   await second.waitForFunction(()=>window.voidPlayer?.getState().tracks.length===2&&!window.voidPlayer.getState().busy&&document.querySelector('#source-search').value==='h264');
   assert.deepEqual((await second.evaluate(()=>window.voidPlayer.exportWorkspace())).layout.sources,record.document.layout.sources);
   await settings(second);await second.locator('#saved-workspace-name').fill('镜头评审二');await second.locator('#saved-workspace-name').press('Enter');

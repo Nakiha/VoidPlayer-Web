@@ -54,8 +54,8 @@ await withBrowserFixture({ caseName: 'bitstream-geometry', engine, roots: [direc
                 const toggle = page.locator('#bitstream-tracks [data-slot="A"]');
                 if (await toggle.getAttribute('aria-pressed') !== 'true')
                     await toggle.click();
-                await page.locator('#bitstream-mode').click();
-                await page.locator('#bitstream-mode-menu [data-value="blocks"]').click();
+                await page.locator('#bitstream-mode [data-value="none"]').click();
+                if (await page.locator('#bitstream-boundaries').getAttribute('aria-pressed') !== 'true') await page.locator('#bitstream-boundaries').click();
                 await page.locator('#bitstream-overlay-A').waitFor({ state: 'visible' });
                 // B gives split mode a real second track. The oracle below uses only fixture
                 // coordinates and the displayed image box, never production mapping helpers.

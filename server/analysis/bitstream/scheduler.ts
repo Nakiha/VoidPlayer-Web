@@ -1,8 +1,8 @@
 import type {AnalysisResources} from '../../../shared/service/admin.ts';
 import {validateDemandPlan} from '../../../shared/analysis/bitstream/demand.ts';
 import type {DemandPlan} from '../../../shared/analysis/bitstream/demand.ts';
-import { analysisIndexIdentity, isProduct, isSummary, validateOutput, productKey, metadata, metadataBudgetBytes, PRODUCT_LIMIT, encodeProduct } from '../../../shared/analysis/bitstream/products.ts';
-import type { AnalysisOutput } from '../../../shared/analysis/bitstream/products.ts';
+import { analysisIndexIdentity, isProduct, isSummary, validateOutput, productKey, metadata, metadataBudgetBytes, PRODUCT_LIMIT, SUMMARY_BATCH_LIMIT, encodeProduct } from '../../../shared/analysis/bitstream/products.ts';
+import type { AnalysisOutput, AnalysisSummary } from '../../../shared/analysis/bitstream/products.ts';
 import { FLV_MEDIA_INDEX_IDENTITY, JS_TS_MEDIA_INDEX_IDENTITY,JS_MATROSKA_MEDIA_INDEX_IDENTITY } from '../../../shared/media/indexing/media-index-identity.ts';
 import { DEFAULT_ANALYSIS_CONCURRENCY, validAnalysisConcurrency, ANALYSIS_WORKER_HEAP_BYTES } from './limits.ts';
 import { Worker } from "node:worker_threads";
@@ -41,6 +41,7 @@ type Work = {
   counters?:import("../../../shared/analysis/bitstream/counters.ts").AnalysisCounters;
   plan?:DemandPlan;
   published: number;
+  batchStart?: number;
   pending: StreamChunkRef[];
   page: StreamChunkRef[];
   progress?: StreamProgress;
@@ -330,7 +331,7 @@ export class AnalysisScheduler {
   }
   /** Cursor acknowledges only previously delivered descriptors. The worker
    * stalls at 32 unconsumed chunks; leases release disconnected consumers. */
-  async streamStatus(id: string, owner: string, after: number) {
+  async streamStatus(id: string, owner: string, after: number, packGops = false) {
     const status = this.status(id, owner), c = this.consumers.get(id);
     if (!status || !c) return null;
     if (!('mode' in c.work.target)) throw new AnalysisFailure('invalid-request', 'Cursor requires a stream request');
@@ -338,18 +339,56 @@ export class AnalysisScheduler {
       throw new AnalysisFailure('invalid-request', 'Invalid stream acknowledgement');
     c.cursor = after;
     const w = c.work;
+    const published = w.batchStart ?? w.published;
     this.advance(w);
     const refs: StreamChunkRef[] = [];
     let cursor = after;
-    while (cursor < w.published && refs.length < 32) {
+    while (cursor < published && refs.length < 32) {
       const page = await this.store.streamPage(w.id, Math.floor(cursor / 32));
-      const remaining = page.slice(cursor % 32, cursor % 32 + 32 - refs.length);
+      const remaining = page.slice(cursor % 32, cursor % 32 + Math.min(32 - refs.length, published - cursor));
       if (!remaining.length) throw new Error('Incomplete stream page');
       refs.push(...remaining); cursor += remaining.length;
     }
+    const chunks: (StreamChunkRef & { url: string; startCursor?: number; cachedGop?: AnalysisSummary[] })[] = [];
+    let bytes = 0;
+    for (const ref of refs) {
+      if (packGops && ref.cached && ref.batchEnd && w.target.product === 'summary') {
+        // One transport packet per cached GOP (or bounded part). Cursor values
+        // still acknowledge individual pictures, so older clients keep working.
+        const summaries: AnalysisSummary[] = [];
+        const end = ref.batchEnd;
+        if (end > published || end - ref.cursor + 1 > SUMMARY_BATCH_LIMIT.pictures) throw Error('Invalid cached GOP cursor');
+        if (ref.cursor <= after || ref.cursor <= (chunks.at(-1)?.cursor ?? after)) continue;
+        let current = ref.cursor;
+        while (current <= end) {
+          const page = await this.store.streamPage(w.id, Math.floor((current - 1) / 32));
+          for (const member of page.slice((current - 1) % 32)) {
+            if (current > end) break;
+            if (!member.cached || member.batchEnd !== end || member.cursor !== current || JSON.stringify(member.gop) !== JSON.stringify(ref.gop)) throw Error('Invalid cached GOP member');
+            const output = await this.store.getOutput(member.id, member.au);
+            if (!output || !isSummary(output) || output.buildId !== w.buildId || output.picture.sourceVersion !== w.target.sourceVersion || output.picture.au !== member.au ||
+                JSON.stringify(output.indexIdentity) !== JSON.stringify(analysisIndexIdentity(w.target.indexIdentity))) throw Error('Cached GOP member unavailable');
+            const value = { ...output, gop: member.gop };
+            const size = metadataBudgetBytes(value) + 64;
+            if (bytes + size > SUMMARY_BATCH_LIMIT.bytes) {
+              if (!summaries.length) throw new AnalysisFailure('resource-limit', 'Cached GOP transport budget exceeded');
+              break;
+            }
+            summaries.push(value); bytes += size; current++;
+          }
+          if (bytes >= SUMMARY_BATCH_LIMIT.bytes || (current <= end && summaries.length && bytes + PRODUCT_LIMIT.metadata > SUMMARY_BATCH_LIMIT.bytes)) break;
+        }
+        chunks.push({ ...ref, url: `/api/media/${w.mediaId}/bitstream-analysis/chunks/${ref.id}?v=${w.version}&au=${ref.au}`,
+          startCursor: ref.cursor, cursor: current - 1, cachedGop: summaries });
+        cursor = current - 1;
+        // A cached GOP is shown atomically; other GOPs follow in the next poll.
+        break;
+      }
+      chunks.push({ ...ref, url: `/api/media/${w.mediaId}/bitstream-analysis/chunks/${ref.id}?v=${w.version}${ref.au === undefined ? "" : `&au=${ref.au}`}` });
+    }
+    cursor = chunks.at(-1)?.cursor ?? after;
     c.delivered = Math.max(c.delivered, cursor);
-    return { ...status, chunks: refs.map(ref => ({ ...ref,
-      url: `/api/media/${w.mediaId}/bitstream-analysis/chunks/${ref.id}?v=${w.version}${ref.au === undefined ? "" : `&au=${ref.au}`}` })) };
+    return { ...status, published, chunks };
   }
   private advance(w: Work) {
     if (!('mode' in w.target)) return;
@@ -498,95 +537,122 @@ export class AnalysisScheduler {
             }
             return;
           }
-          if (m.type === "chunk") {
+          if (m.type === "chunk" || m.type === 'cached-gop') {
             if(m.counters)work.counters=m.counters;
             try {
-              if (work.state !== "running" || !work.consumers.size)
-                throw new Error("Analysis demand expired");
-              const result: AnalysisOutput = m.result;
-              validateOutput(result);
-              if (isProduct(result) ? result.product !== work.target.product || JSON.stringify(result.indexIdentity) !== JSON.stringify(analysisIndexIdentity(work.target.indexIdentity)) : work.target.product !== undefined) throw new Error('Worker product identity mismatch');
-              if (
-                result.picture.sourceVersion !== work.target.sourceVersion ||
-                result.buildId !== work.buildId
-              )
-                throw new Error("Analysis worker identity mismatch");
-              if (
-                !("startUs" in work.target) && !("mode" in work.target) &&
-                (result.sourcePtsUs !== work.target.sourcePtsUs ||
-                  (work.target.picture &&
-                    pictureId(result.picture) !==
-                      pictureId(work.target.picture)))
-              )
-                throw new Error("Analysis worker target mismatch");
-              if (
-                "startUs" in work.target &&
-                (result.sourcePtsUs <
-                  work.target.firstPtsUs + work.target.startUs ||
-                  result.sourcePtsUs >=
-                    work.target.firstPtsUs + work.target.endUs)
-              )
-                throw new Error("Analysis worker range identity mismatch");
-              if (!(await this.library.resolve(work.mediaId, work.version)))
-                throw new AnalysisFailure(
-                  "source-changed",
-                  "Analysis source changed during execution",
-                );
-              if (result.confidence !== "exact") {
-                // Unsupported summaries are transient lease-scoped control data,
-                // never committed as exact chunks or complete range coverage.
+              const batch = m.type === 'cached-gop';
+              const results: AnalysisOutput[] = batch ? m.results : [m.result];
+              if (batch) {
+                if (!('mode' in work.target) || work.target.product !== 'summary' || !Array.isArray(results) ||
+                    !results.length || results.length > SUMMARY_BATCH_LIMIT.pictures) throw Error('Invalid cached GOP batch');
+                let bytes = 0; const seen = new Set<number>(), group = JSON.stringify(results[0]?.gop);
+                for (const result of results) {
+                  validateOutput(result); bytes += metadataBudgetBytes(result) + 64;
+                  if (!isSummary(result) || !result.gop || JSON.stringify(result.gop) !== group || seen.has(result.picture.au) ||
+                      bytes > SUMMARY_BATCH_LIMIT.bytes) throw Error('Invalid cached GOP coverage');
+                  seen.add(result.picture.au);
+                }
+              }
+              const batchEnd = batch ? work.published + results.length : undefined;
+              if (batch) {
+                const bytes = results.reduce((sum, result) => sum + metadataBudgetBytes(result) + 64, 0);
+                while (work.pending.length && work.pending.reduce((sum, ref) => sum + (ref.bytes ?? BUDGET.resultBytes), 0) + bytes + PRODUCT_LIMIT.frame > PRODUCT_LIMIT.inFlight) {
+                  clearTimeout(timer);
+                  await new Promise<void>(resolve => { work.wake = resolve; });
+                  if (work.state !== 'running' || !work.consumers.size) throw new AnalysisFailure('cancelled', 'Analysis demand expired');
+                }
+              }
+              if (batch) work.batchStart = work.published;
+              const cacheHit = batch || m.cacheHit;
+              for (const [resultIndex, result] of results.entries()) {
+                if (work.state !== "running" || !work.consumers.size)
+                  throw new Error("Analysis demand expired");
+                validateOutput(result);
+                if (isProduct(result) ? result.product !== work.target.product || JSON.stringify(result.indexIdentity) !== JSON.stringify(analysisIndexIdentity(work.target.indexIdentity)) : work.target.product !== undefined) throw new Error('Worker product identity mismatch');
                 if (
-                  (!isProduct(result) && result.blocks.length) ||
-                  JSON.stringify(result).length > 16384
+                  result.picture.sourceVersion !== work.target.sourceVersion ||
+                  result.buildId !== work.buildId
                 )
+                  throw new Error("Analysis worker identity mismatch");
+                if (
+                  !("startUs" in work.target) && !("mode" in work.target) &&
+                  (result.sourcePtsUs !== work.target.sourcePtsUs ||
+                    (work.target.picture &&
+                      pictureId(result.picture) !==
+                        pictureId(work.target.picture)))
+                )
+                  throw new Error("Analysis worker target mismatch");
+                if (
+                  "startUs" in work.target &&
+                  (result.sourcePtsUs <
+                    work.target.firstPtsUs + work.target.startUs ||
+                    result.sourcePtsUs >=
+                      work.target.firstPtsUs + work.target.endUs)
+                )
+                  throw new Error("Analysis worker range identity mismatch");
+                if (!(await this.library.resolve(work.mediaId, work.version)))
+                  throw new AnalysisFailure(
+                    "source-changed",
+                    "Analysis source changed during execution",
+                  );
+                if (result.confidence !== "exact") {
+                  // Unsupported summaries are transient lease-scoped control data,
+                  // never committed as exact chunks or complete range coverage.
+                  if (
+                    (!isProduct(result) && result.blocks.length) ||
+                    JSON.stringify(result).length > 16384
+                  )
+                    throw new AnalysisFailure(
+                      "resource-limit",
+                      "Unsupported summary budget exceeded",
+                    );
+                  if(isProduct(result)&&result.product==='blocks'&&(result.validatedBlockCount!==0||result.payload.byteLength!==0))throw Error('Unsupported inline products must have empty records');
+                  work.unsupportedResult = result;
+                  const reason = new AnalysisFailure(
+                    result.reasonCodes?.[0] ?? "incomplete-reference-state",
+                    result.reasons.join("; ") || "Exact analysis is unsupported",
+                  );
+                  work.reason = reason.info;
+                  work.state = "unsupported";
+                  work.seq++;
+                  throw reason;
+                }
+                const chunk = 'startUs' in work.target || 'mode' in work.target ? this.pictureChunk(work,result.picture) : work.id;
+                const resultBytes = isProduct(result) ? (result.product === 'blocks' ? result.payload.byteLength : 0) + Buffer.byteLength(JSON.stringify(isProduct(result) && result.product === 'blocks' ? {...result,payload:undefined} : result)) + 40 : Math.min(BUDGET.resultBytes,result.blocks.length*128+metadataBudgetBytes(metadata(result))+64);
+                if (resultBytes > (isProduct(result) ? PRODUCT_LIMIT.frame : BUDGET.resultBytes)) throw new AnalysisFailure('resource-limit','Analysis frame budget exceeded');
+                if (!("mode" in work.target) && work.chunks.length >= 32)
                   throw new AnalysisFailure(
                     "resource-limit",
-                    "Unsupported summary budget exceeded",
+                    "Analysis chunk count budget exceeded",
                   );
-                if(isProduct(result)&&result.product==='blocks'&&(result.validatedBlockCount!==0||result.payload.byteLength!==0))throw Error('Unsupported inline products must have empty records');
-                work.unsupportedResult = result;
-                const reason = new AnalysisFailure(
-                  result.reasonCodes?.[0] ?? "incomplete-reference-state",
-                  result.reasons.join("; ") || "Exact analysis is unsupported",
-                );
-                work.reason = reason.info;
-                work.state = "unsupported";
-                work.seq++;
-                throw reason;
-              }
-              const chunk = 'startUs' in work.target || 'mode' in work.target ? this.pictureChunk(work,result.picture) : work.id;
-              const resultBytes = isProduct(result) ? (result.product === 'blocks' ? result.payload.byteLength : 0) + Buffer.byteLength(JSON.stringify(isProduct(result) && result.product === 'blocks' ? {...result,payload:undefined} : result)) + 40 : Math.min(BUDGET.resultBytes,result.blocks.length*128+metadataBudgetBytes(metadata(result))+64);
-              if (resultBytes > (isProduct(result) ? PRODUCT_LIMIT.frame : BUDGET.resultBytes)) throw new AnalysisFailure('resource-limit','Analysis frame budget exceeded');
-              if (!("mode" in work.target) && work.chunks.length >= 32)
-                throw new AnalysisFailure(
-                  "resource-limit",
-                  "Analysis chunk count budget exceeded",
-                );
-              if ('mode' in work.target) {
-                if (!result.gop) throw new Error('Missing stream GOP');
-                const ref: StreamChunkRef = { id: chunk, cursor: work.published + 1, gop: result.gop, picture:result.picture, au:result.picture.au, bytes:resultBytes, ...(isProduct(result)?{product:result.product,encoding:result.encoding}:{}) };
-                work.writing = new Set([this.outputFile(work,chunk),
-                  this.store.streamPageFile(work.id, Math.floor(work.published / 32))]);
-                const protectedFiles = this.protectedFiles();
-                if(!m.cacheHit || !await this.store.getOutput(chunk,result.picture.au)){const written=await this.store.putOutput(chunk, result, protectedFiles);if(typeof written==='number')ref.bytes=written;}
-                if (work.state !== 'running' || !work.consumers.size) throw new AnalysisFailure('cancelled', 'Analysis demand expired');
-                protectedFiles.add(this.outputFile(work,chunk));
-                const page = Math.floor(work.published / 32);
-                if (!(work.published % 32)) work.page = [];
-                work.page.push(ref);
-                await this.store.putStreamPage(work.id, page, work.page, protectedFiles);
-                work.published++; work.pending.push(ref); work.seq++; work.writing = undefined;
-                if (work.pending.length >= 32 || work.pending.reduce((sum,ref)=>sum+(ref.bytes ?? BUDGET.resultBytes),0) + (work.target.product ? PRODUCT_LIMIT.frame : BUDGET.resultBytes) > PRODUCT_LIMIT.inFlight) {
-                  clearTimeout(timer); // Consumer wait is governed by leases, not decoder stall time.
-                  await new Promise<void>(resolve => { work.wake = resolve; });
+                if ('mode' in work.target) {
+                  if (!result.gop) throw new Error('Missing stream GOP');
+                  const ref: StreamChunkRef = { id: chunk, cursor: work.published + 1, gop: result.gop, picture:result.picture, au:result.picture.au, bytes:resultBytes, ...(batch ? { cached: true, batchEnd } : {}), ...(isProduct(result)?{product:result.product,encoding:result.encoding}:{}) };
+                  work.writing = new Set([this.outputFile(work,chunk),
+                    this.store.streamPageFile(work.id, Math.floor(work.published / 32))]);
+                  const protectedFiles = this.protectedFiles();
+                  if(!cacheHit || !await this.store.getOutput(chunk,result.picture.au)){const written=await this.store.putOutput(chunk, result, protectedFiles);if(typeof written==='number')ref.bytes=written;}
+                  if (work.state !== 'running' || !work.consumers.size) throw new AnalysisFailure('cancelled', 'Analysis demand expired');
+                  protectedFiles.add(this.outputFile(work,chunk));
+                  const page = Math.floor(work.published / 32);
+                  if (!(work.published % 32)) work.page = [];
+                  work.page.push(ref);
+                  if (!batch || work.page.length === 32 || resultIndex === results.length - 1)
+                    await this.store.putStreamPage(work.id, page, work.page, protectedFiles);
+                  work.published++; work.pending.push(ref); work.seq++; work.writing = undefined;
+                  if (batch && resultIndex === results.length - 1) work.batchStart = undefined;
+                  if (resultIndex === results.length - 1 && (work.pending.length >= 32 || work.pending.reduce((sum,ref)=>sum+(ref.bytes ?? BUDGET.resultBytes),0) + (work.target.product ? PRODUCT_LIMIT.frame : BUDGET.resultBytes) > PRODUCT_LIMIT.inFlight)) {
+                    clearTimeout(timer); // Consumer wait is governed by leases, not decoder stall time.
+                    await new Promise<void>(resolve => { work.wake = resolve; });
+                  }
+                  if (work.state !== 'running' || !work.consumers.size) throw new AnalysisFailure('cancelled', 'Analysis demand expired');
+                } else {
+                  work.writing = new Set([this.outputFile(work,chunk)]);
+                  if(!cacheHit || !await this.store.getOutput(chunk,result.picture.au))await this.store.putOutput(chunk, result);
+                  work.chunks.push(chunk); work.seq++; work.writing = undefined;
                 }
-                if (work.state !== 'running' || !work.consumers.size) throw new AnalysisFailure('cancelled', 'Analysis demand expired');
-              } else {
-                work.writing = new Set([this.outputFile(work,chunk)]);
-                if(!m.cacheHit || !await this.store.getOutput(chunk,result.picture.au))await this.store.putOutput(chunk, result);
-                work.chunks.push(chunk); work.seq++; work.writing = undefined;
+                if ('mode' in work.target) armTimer();
               }
-              if ('mode' in work.target) armTimer();
               acknowledge({ ok: true });
             } catch (error) {
               acknowledge({

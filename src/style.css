@@ -280,30 +280,32 @@ textarea { resize: vertical; min-height: 56px; max-height: 220px; padding: var(-
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 [hidden] { display: none !important; }
 @media(max-width: 900px) { .frame-time { display: none; } }
-/* 主操作按钮按顶栏真实可用宽度折叠（JS 依溢出测量切换 compact-*），不按窗口宽度猜阈值：
-   只要放得下就保留带文字的大按钮。 */
+/* One controller coordinates primary and view labels against the same budget. */
+.topbar.compact-brand > .brand { display: none; }
 .topbar.compact-share .topbar-primary-actions #workspace-share,
 .topbar.compact-open .topbar-primary-actions #open { width: var(--button-size); padding: 0; }
 .topbar.compact-share .topbar-primary-actions #workspace-share > span,
 .topbar.compact-open .topbar-primary-actions #open > span { display: none; }
+.topbar.compact-pixel .view-controls > #pixel-size,
+.topbar.compact-channel .view-controls > #channel-select,
+.topbar.compact-zoom .view-controls > #zoom-select-control { width: var(--button-size); min-width: var(--button-size); height: var(--button-size); min-height: var(--button-size); padding: 0; justify-content: center; }
+.topbar.compact-zoom .view-controls > #zoom-select-control { flex-basis: var(--button-size); }
+.topbar.compact-pixel #pixel-size > span, .topbar.compact-channel #channel-select > span,
+.topbar.compact-zoom #zoom-select-control > .numeric-choice-value { display: none; }
+/* Expanded metrics are read synchronously, then removed before paint. These
+   rules do not depend on the previous compact state or media breakpoints. */
+.topbar.topbar-measuring > .brand { display: inline-flex; }
+.topbar.topbar-measuring .topbar-primary-actions :is(#open, #workspace-share) { width: auto; padding-inline: var(--control-padding-inline); }
+.topbar.topbar-measuring .topbar-primary-actions :is(#open, #workspace-share) > span { display: inline; }
+.topbar.topbar-measuring .view-controls > :is(#pixel-size, #channel-select):not(:disabled) { width: auto; min-width: 0; padding-inline: var(--control-gap); }
+.topbar.topbar-measuring :is(#pixel-size, #channel-select):not(:disabled) > span { display: inline; }
+.topbar.topbar-measuring .view-controls > #zoom-select-control:not([data-disabled=true]) { width: var(--zoom-control-width); flex-basis: var(--zoom-control-width); padding-inline: var(--control-gap); }
+.topbar.topbar-measuring #zoom-select-control:not([data-disabled=true]) > .numeric-choice-value:not([hidden]) { display: inline-flex; }
 @media(max-width: 765px) {
-  .brand { display: none; }
   .side-panel { position: absolute; grid-row: 1 / 2; top: 0; bottom: 0; z-index: 6; width: min(var(--sources-width), 75vw); }
   .inspector-panel { left: 0; } .sources-panel { right: 0; }
   .duration { display: none; }
   .subtrack-scroll { --track-label-width: 140px; }
-}
-@media(max-width: 685px) {
-  .view-controls > #pixel-size { width: var(--button-size); height: var(--button-size); min-height: var(--button-size); padding: 0; justify-content: center; }
-  .view-controls > #pixel-size > span, .view-controls > #pixel-size > .icon:last-child { display: none; }
-}
-@media(max-width: 620px) {
-  .view-controls > #channel-select { width: var(--button-size); height: var(--button-size); min-height: var(--button-size); padding: 0; justify-content: center; }
-  .view-controls > #channel-select > span, .view-controls > #channel-select > .icon:last-child { display: none; }
-}
-@media(max-width: 570px) {
-  .view-controls > #zoom-select { width: var(--button-size); height: var(--button-size); min-height: var(--button-size); flex: 0 0 var(--button-size); padding: 0; justify-content: center; }
-  .view-controls > #zoom-select > span, .view-controls > #zoom-select > .icon:last-child { display: none; }
 }
 @media(max-width: 420px) {
   .topbar, .view-controls, .topbar-primary-actions, .topbar-utility-actions, .panel-switches { column-gap: var(--space-1); }

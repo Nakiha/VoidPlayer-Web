@@ -213,6 +213,7 @@ const workspaceTransfer = installWorkspaceTransfer(session, {
   openSharedSpace: (space, seededIds) => seededIds ? annotationSync.attachWorkspace(space, seededIds) : annotationSync.openSpace(space),
   annotationScope: annotationSync.scope,
   identityReady: identitySettings.ready, act, toasts, closeSettings: settings.close, capture: () => ({ viewport: viewport.snapshot(), layout: workbench.getState() }),
+  openingChanged: () => render(),
   beforeRestore() { if (drawingEditor.active()) $('mark-close').click(); return annotationSync.snapshotMode(); },
   async restore(document, resumeCloudAnnotations) { if (!resumeCloudAnnotations) await annotationSync.captureSnapshot(); viewport.apply(document.viewport); setPresentationChannel(viewport.channel); await workbench.restore(document.layout ?? workbench.getState()); render(); },
 });
@@ -252,7 +253,8 @@ const channelMenu = installChoiceMenu('channel-select', () => (Object.keys(chann
 function syncZoomSelect(loaded:boolean) { zoomMenu.sync(String(viewport.zoom),`${+viewport.zoom.toFixed(2)}×`,loaded); }
 function render() {
   const state = session.getState();
-  const loaded = state.tracks.length > 0;
+  const openingWorkspace = $('app').hasAttribute('data-workspace-opening');
+  const loaded = state.tracks.length > 0 || openingWorkspace;
   const visibleTracks = state.tracks.filter(t => t.visible);
   $('tracks-hidden').hidden = !loaded || visibleTracks.length > 0;
   $('color-runtime-section').hidden = !loaded;
@@ -285,7 +287,7 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
   for (const card of cards) {
     const slot = card.dataset.slot as Slot;
     const index = visibleTracks.findIndex(t => t.slot === slot);
-    card.hidden = loaded ? index < 0 || (splitActive && index >= 2) : slot !== 'A';
+    card.hidden = state.tracks.length ? index < 0 || (splitActive && index >= 2) : slot !== 'A';
     card.style.order = String(Math.max(0, index));
     card.classList.toggle('view-first', index === 0 || !loaded);
     card.classList.toggle('view-second', index === 1);
@@ -296,7 +298,7 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
   for (const card of cards) card.querySelector<HTMLElement>('.card-heading')!.hidden = !loaded;
   for (const slot of SLOTS) {
     const t = state.tracks.find(t => t.slot === slot);
-    $(`empty-${slot}`).hidden = !!t;
+    $(`empty-${slot}`).hidden = !!t || openingWorkspace;
     $(`image-${slot}`).hidden = !t || !!t.pendingRelink;
     const name = $(`name-${slot}`);
     name.textContent = t ? fileBasename(t.name) : (slot === 'A' ? tr(msg("player.referenceVideo", "参考视频")) : tr(msg("player.comparisonVideo", "对比视频")));
@@ -354,7 +356,7 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
   timeline.setAttribute('aria-busy', String(state.busy));
   renderProgress(state.positionUs, state.durationUs);
   $('duration').textContent = formatTime(state.durationUs);
-  $('status').textContent = state.busy ? tr(msg("player.decoding", "正在解码…")) : state.playing ? tr(msg("player.playingMuted", "播放中 · 静音")) : loaded ? tr(msg("player.paused", "已暂停")) : tr(msg("player.waitingForVideo", "等待视频"));
+  $('status').textContent = openingWorkspace ? tr(msg('transfer.importing', '工作区正在导入，请等待完成。')) : state.busy ? tr(msg("player.decoding", "正在解码…")) : state.playing ? tr(msg("player.playingMuted", "播放中 · 静音")) : loaded ? tr(msg("player.paused", "已暂停")) : tr(msg("player.waitingForVideo", "等待视频"));
   $('decode').textContent = state.playback && state.playback.wallMs > 500 ? tr(msg("player.actualSpeed", "实际速度 {p0}×"), { p0: state.playback.speed.toFixed(2) }) : loaded ? tr(msg("player.lastSeekMs", "最近定位 {p0} ms"), { p0: state.lastDecodeMs }) : '—';
   renderTrackToasts(state.tracks);
   const warning = state.error;

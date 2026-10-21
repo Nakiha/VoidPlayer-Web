@@ -43,10 +43,22 @@ export async function handleAnalysisRoutes(
     }
     if (request) {
       if (req.method === "GET") {
+        if (url.searchParams.get('pack') === 'gop') {
+          const controller = new AbortController();
+          const abort = () => controller.abort(new AnalysisFailure('cancelled', 'Analysis result consumer disconnected'));
+          res.once('close', abort);
+          let release: () => void;
+          try { release = await scheduler.waitForResultRead(controller.signal); }
+          finally { res.off('close', abort); }
+          if (res.destroyed) { release(); return true; }
+          // Packed summaries use the same bounded read admission as frame
+          // downloads; retain their reservation until the response is drained.
+          res.once('finish', release); res.once('close', release);
+        }
         const after = url.searchParams.get('after');
         if (after !== null && !/^(0|[1-9][0-9]{0,6})$/.test(after))
           throw new AnalysisFailure('invalid-request', 'Invalid stream cursor');
-        const value = after === null ? scheduler.status(request[1], owner) : await scheduler.streamStatus(request[1], owner, Number(after));
+        const value = after === null ? scheduler.status(request[1], owner) : await scheduler.streamStatus(request[1], owner, Number(after), url.searchParams.get('pack') === 'gop');
         sendJson(
           res,
           value ? 200 : 404,

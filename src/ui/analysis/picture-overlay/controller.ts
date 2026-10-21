@@ -9,6 +9,7 @@ import { presentationRect } from "../../../presentation/presentation-surface.ts"
 import type { PresentationGeometry } from "../../../presentation/presentation-surface.ts";
 import type { ReviewSession } from "../../../session.ts";
 import type { Slot } from "../../../../shared/review/model.ts";
+type FillMode = "none" | "qp" | "modes";
 export function createAnalysisOverlay(
   session: ReviewSession,
   slot: Slot,
@@ -23,11 +24,13 @@ export function createAnalysisOverlay(
   let token: PresentedFrameToken | null = session.getPresentedFrame(slot),
     result: ReadonlyAnalysisResult | null = null,
     geometry: PresentationGeometry | null = null,
-    mode: "blocks" | "qp" | "modes" = "blocks";
+    fill: FillMode = "none",
+    boundaries = true;
   let lastDraw: {
     result: ReadonlyAnalysisResult;
     geometry: string;
-    mode: "blocks" | "qp" | "modes";
+    fill: FillMode;
+    boundaries: boolean;
   } | null = null;
   const metrics = {
     presentations: 0,
@@ -67,7 +70,8 @@ export function createAnalysisOverlay(
     if (
       lastDraw?.result === result &&
       lastDraw.geometry === signature &&
-      lastDraw.mode === mode
+      lastDraw.fill === fill &&
+      lastDraw.boundaries === boundaries
     ) {
       metrics.skippedDraws++;
       canvas.dataset.commit = String(token.commit);
@@ -98,7 +102,9 @@ export function createAnalysisOverlay(
     ctx.clip();
     ctx.strokeStyle = "rgba(100,240,255,.8)";
     ctx.lineWidth = 1;
-    // Batched path; skip subpixel block strokes at fit, retain detailed hit tests.
+    // Keep every real edge, including subpixel blocks at fit. Discarding small
+    // blocks creates holes exactly where partitioning is most detailed.
+    // One batched stroke keeps shared edges from accumulating opacity.
     ctx.beginPath();
     for (const b of result.blocks) {
       const a = codedToViewport(b.x, b.y, token, g),
@@ -107,10 +113,10 @@ export function createAnalysisOverlay(
         y = Math.min(a.y, z.y),
         w = Math.abs(z.x - a.x),
         h = Math.abs(z.y - a.y);
-      if (mode === "qp" && b.qp !== null) {
+      if (fill === "qp" && b.qp !== null) {
         ctx.fillStyle = `hsla(${240 - (b.qp / (result.codec === "vvc" ? 63 : 51)) * 240},90%,50%,.38)`;
         ctx.fillRect(x, y, w, h);
-      } else if (mode === "modes") {
+      } else if (fill === "modes") {
         ctx.fillStyle =
           b.mode === "intra"
             ? "rgba(64,200,255,.3)"
@@ -119,15 +125,15 @@ export function createAnalysisOverlay(
               : "rgba(255,160,60,.3)";
         ctx.fillRect(x, y, w, h);
       }
-      if (w >= 2 && h >= 2) ctx.rect(x, y, w, h);
+      if (boundaries) ctx.rect(x, y, w, h);
     }
-    ctx.stroke();
+    if (boundaries) ctx.stroke();
     ctx.restore();
     canvas.hidden = false;
     canvas.dataset.picture = pictureId(result.picture);
     canvas.dataset.commit = String(token.commit);
     canvas.dataset.blocks = String(result.blocks.length);
-    lastDraw = { result, geometry: signature, mode };
+    lastDraw = { result, geometry: signature, fill, boundaries };
     metrics.draws++;
     if (metrics.drawTimesMs.length >= 2048) metrics.drawTimesMs.shift();
     metrics.drawTimesMs.push(performance.now() - started);
@@ -181,8 +187,9 @@ export function createAnalysisOverlay(
       result = session.cachedBitstreamAnalysis(slot, current);
       draw();
     },
-    setMode(value: typeof mode) {
-      mode = value;
+    setDisplay(value: { fill: FillMode; boundaries: boolean }) {
+      fill = value.fill;
+      boundaries = value.boundaries;
       draw();
     },
     hit(x: number, y: number) {

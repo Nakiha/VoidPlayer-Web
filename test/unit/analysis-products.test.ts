@@ -263,3 +263,56 @@ test('evicted shared namespace cannot be revived by a late picture or plan',asyn
  const target={mode:'stream' as const,product:'summary' as const,sourceVersion:r.picture.sourceVersion,firstPtsUs:100,durationUs:100,window:{startUs:0,endUs:100,axis:'pts' as const}};(service as any).streamBuild={sequence:(service as any).sequence,buildId:'test'};const plan=makeDemandPlan([{au:0,configuration:0,pts:100,dts:null,offset:0,size:1,key:true}],target,'test');assert.throws(()=>(service as any).acceptPlan(plan,target),/namespace superseded/);assert.equal((service as any).contexts.size,0);assert.equal((service as any).plans.size,0);
  }finally{service.dispose();globalThis.fetch=saved.fetch;if(saved.location)Object.defineProperty(globalThis,'location',saved.location);else Reflect.deleteProperty(globalThis,'location');}
 });
+
+test('remote cached GOP transport validates and publishes the batch atomically without picture downloads', async () => {
+  const { BitstreamAnalysisService } = await import('../../src/analysis/bitstream/service.ts');
+  const { makeDemandPlan } = await import('../../shared/analysis/bitstream/demand.ts');
+  const saved = { fetch: globalThis.fetch, location: Object.getOwnPropertyDescriptor(globalThis, 'location') };
+  Object.defineProperty(globalThis, 'location', { configurable: true, value: { href: 'http://localhost/' } });
+  const target = { mode: 'stream' as const, product: 'summary' as const, sourceVersion: 'media@version', firstPtsUs: 100, durationUs: 80000,
+    window: { startUs: 0, endUs: 80000, axis: 'pts' as const } };
+  const source = { info: { source: { url: 'http://localhost/api/media/media?v=version' } } } as any;
+  const summaries = [0, 1].map(au => summaryOf({ ...result(), sourcePtsUs: 100 + au * 40000, sourceDtsUs: null,
+    picture: { ...result().picture, sourceVersion: target.sourceVersion, au }, gop: { startAu: 0, endAu: 2, configuration: 0, anchor: 'closed' },
+    nalus: [{ offset: 0, size: 1, type: 5, temporalId: 0, layer: 0 }] }));
+  const plan = makeDemandPlan([0, 1].map(au => ({ au, pts: 100 + au * 40000, dts: null, configuration: 0, offset: au, size: 1, key: au === 0 })), target, 'test');
+  let mode = 'valid', downloads = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (init?.method === 'DELETE') return Response.json({ ok: true });
+    if (url.includes('capabilities')) return Response.json({ buildId: 'test' });
+    if (init?.method === 'POST') return Response.json({ requestId: 'request' });
+    if (url.includes('/chunks/')) { downloads++; throw Error('unexpected picture download'); }
+    assert.equal(new URL(url).searchParams.get('pack'), 'gop');
+    const batch = structuredClone(summaries);
+    if (mode === 'build') batch[1].buildId = 'other';
+    if (mode === 'duplicate') batch[1] = batch[0];
+    return Response.json({ state: 'complete', seq: 1, buildId: 'test', published: 2, plan,
+      progress: { pictures: 2, totalPictures: 2, totalUs: 80000, checkedUs: 80000, indexComplete: true },
+      chunks: [{ startCursor: 1, cursor: mode === 'cursor' ? 3 : 2, cachedGop: batch }] });
+  };
+  try {
+    for (mode of ['valid', 'build', 'duplicate', 'cursor']) {
+      const counts: number[] = [], service = new BitstreamAnalysisService(() => { const count = service.state.stream?.pictures; if (count !== undefined) counts.push(count); });
+      if (mode === 'valid') {
+        assert.equal((await service.requestStream(source, target, 'A')).pictures, 2);
+        assert.ok(!counts.includes(1), 'a cached GOP becomes visible in a single publication');
+        assert.equal(service.queryChart(target.sourceVersion, 100, 80100, 100).count, 2);
+      } else {
+        await assert.rejects(service.requestStream(source, target, 'A'), /Invalid cached GOP/);
+        assert.equal(service.queryChart(target.sourceVersion, 100, 80100, 100).count, 0, 'invalid batches publish no partial chart');
+      }
+      service.dispose();
+    }
+    assert.equal(downloads, 0);
+  } finally { globalThis.fetch = saved.fetch; if (saved.location) Object.defineProperty(globalThis, 'location', saved.location); else Reflect.deleteProperty(globalThis, 'location'); }
+});
+
+test('cached GOP status bodies stay bounded even without a trustworthy content length', async () => {
+  const { readSummaryStatus, SUMMARY_BATCH_LIMIT } = await import('../../shared/analysis/bitstream/products.ts');
+  const maximum = SUMMARY_BATCH_LIMIT.bytes + 1024 * 1024;
+  await assert.rejects(readSummaryStatus(new Response('{}', { headers: { 'content-length': String(maximum + 1) } })), /transport budget/);
+  let cancelled = false;
+  const response = new Response(new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(maximum + 1)); }, cancel() { cancelled = true; } }));
+  await assert.rejects(readSummaryStatus(response), /transport budget/); assert.equal(cancelled, true);
+});

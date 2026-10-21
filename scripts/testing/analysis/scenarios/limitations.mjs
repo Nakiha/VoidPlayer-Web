@@ -36,9 +36,8 @@ const { page, limitsDir, checkpointOnly, call, analyze, hideOverlay, stable, lib
           await page
             .locator("#bitstream-overlay-A")
             .waitFor({ state: "visible" });
-          await page.locator('#bitstream-mode').click();
-          assert.equal(await page.locator('#bitstream-mode-menu [data-value="qp"]').count(), 0);
-          await page.locator('#bitstream-mode-menu [data-value="blocks"]').click();
+          assert.equal(await page.locator('#bitstream-mode [data-value="qp"]').isDisabled(), true, 'unavailable QP stays visible without shifting the segments');
+          await page.locator('#bitstream-mode [data-value="none"]').click();
           assert.match(
             await page.locator('#bitstream-tracks [data-slot="A"]').getAttribute('aria-description'),
             /位深.*QP/,

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, readFile, symlink, access, copyFile, open } from "node:fs/promises";
+import { mkdtemp, rm, readFile, symlink, access, copyFile, open, mkdir, unlink } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
@@ -900,6 +900,58 @@ test('summary pages resume without duplicate writes; warm work has zero decode a
   const warm=await scheduler.submit(f.entry.id,f.entry.version!,request,'owner');cursor=0;let complete;const warmReceived=new Set<number>(),warmWait=readableStreamWait('warm');
   for(;;){const state=await scheduler.streamStatus(warm.requestId,'owner',cursor);assert.ok(state);for(const ref of state.chunks){const value=await scheduler.store.getOutput(ref.id,ref.au);assert.ok(value&&'product' in value&&value.product==='summary');assert.equal(value.picture.au,ref.au);assert.ok(!warmReceived.has(value.picture.au));warmReceived.add(value.picture.au);cursor=ref.cursor;}warmWait.observe(snapshot(state,cursor,warmReceived.size));if(state.state==='complete'&&cursor===180){complete=state;warmWait.done();break;}assert.ok(['running','queued','complete'].includes(state.state),JSON.stringify(state));await new Promise(r=>setTimeout(r,5));}
   assert.equal(warmReceived.size,180);assert.ok(complete);for(const name of ['init','open','feed','step','decodedAU'] as const)assert.equal(complete.counters![name],0);assert.ok([...writes.values()].every(n=>n===1));scheduler.release(warm.requestId,'owner');
+  // A completely fresh client/server process receives cached GOP packets;
+  // only the manifest is present, so a decoder initialization would fail.
+  await scheduler.close();
+  const manifestOnly = join(f.folder, 'summary-manifest-only'); await mkdir(manifestOnly);
+  await copyFile(join(coreDir, 'manifest.json'), join(manifestOnly, 'manifest.json'));
+  const restarted = new AnalysisScheduler(f.library, manifestOnly, join(f.folder, 'analysis'));
+  restarted.store.putOutput = async () => { throw Error('warm GOP must reuse existing disk records'); };
+  try {
+    const packed = await restarted.submit(f.entry.id, f.entry.version!, request, 'fresh-machine');
+    let cursor = 0, packets = 0, firstPage = ''; const aus = new Set<number>(), started = performance.now();
+    const wait = readableStreamWait('warm-gop-packets');
+    for (;;) {
+      const state = await restarted.streamStatus(packed.requestId, 'fresh-machine', cursor, true); assert.ok(state);
+      assert.ok(['queued', 'running', 'complete'].includes(state.state), JSON.stringify(state));
+      for (const chunk of state.chunks) {
+        assert.ok(chunk.cachedGop?.length, 'warm cache is delivered inline rather than as per-picture URLs');
+        firstPage ||= chunk.id;
+        assert.equal(chunk.startCursor, cursor + 1); assert.equal(chunk.cursor, cursor + chunk.cachedGop.length);
+        for (const value of chunk.cachedGop) { assert.ok(!aus.has(value.picture.au)); aus.add(value.picture.au); }
+        packets++; cursor = chunk.cursor;
+      }
+      wait.observe(snapshot(state, cursor, aus.size));
+      if (state.state === 'complete' && cursor === state.published) {
+        assert.equal(state.counters?.decodedAU, 0); assert.equal(state.counters?.init, 0); break;
+      }
+      await new Promise(resolve => setTimeout(resolve, 5));
+    }
+    assert.equal(aus.size, 180); assert.equal(packets, 1, 'one GOP replaces 180 individual result downloads');
+    console.log(JSON.stringify({ event: 'cached-gop-restored', pictures: aus.size, packets, elapsedMs: performance.now() - started }));
+    restarted.release(packed.requestId, 'fresh-machine');
+    await unlink(restarted.store.productFile(firstPage));
+  } finally { await restarted.close(); }
+  const repair = new AnalysisScheduler(f.library, coreDir, join(f.folder, 'analysis'));
+  try {
+    const requestId = (await repair.submit(f.entry.id, f.entry.version!, request, 'repair')).requestId;
+    let cursor = 0, cold = 0, cached = 0; const aus = new Set<number>(), wait = readableStreamWait('mixed-cached-gop');
+    for (;;) {
+      const state = await repair.streamStatus(requestId, 'repair', cursor, true); assert.ok(state);
+      assert.ok(['queued', 'running', 'complete'].includes(state.state), JSON.stringify(state));
+      for (const chunk of state.chunks) {
+        const values = chunk.cachedGop ?? [await repair.store.getOutput(chunk.id, chunk.au)];
+        if (chunk.cachedGop) cached += values.length; else cold++;
+        for (const value of values) { assert.ok(value); assert.ok(!aus.has(value.picture.au)); aus.add(value.picture.au); }
+        cursor = chunk.cursor;
+      }
+      wait.observe(snapshot(state, cursor, aus.size));
+      if (state.state === 'complete' && cursor === state.published) { assert.equal(state.counters?.products, 32); break; }
+      await new Promise(resolve => setTimeout(resolve, 5));
+    }
+    assert.equal(aus.size, 180); assert.equal(cached, 148); assert.equal(cold, 32, 'only the evicted summary page is newly published frame by frame');
+    repair.release(requestId, 'repair');
+  } finally { await repair.close(); }
  }finally{await scheduler.close();await f.close();}
 });
 

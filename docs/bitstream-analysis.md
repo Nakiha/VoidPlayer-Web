@@ -185,8 +185,8 @@ blocks 使用 12-byte LE 记录：四个 uint16 几何值、int16 QP（-32768 �
 | 单产品 wire frame | 3 MiB；块数仍为 131072，分配 payload 前检查 count / stride / 长度 |
 | 服务端摘要页 | 32 个 AU / 1 MiB；按完整身份及 AU/32 分页，成员缺洞明确，页 key 与全部成员 namespace 一致 |
 | stream 引用页 | 32 项 / 64 KiB；包含产品、编码、AU 及成员身份 |
-| 每 work 未确认结果 | 同时不超过 32 项与 32 MiB；ACK 前还预留下一帧最坏 3 MiB 产品 / 8 MiB legacy，生产中帧包含在预算内 |
-| HTTP 结果读取 | 2 个并发 slot；每响应最多 3 MiB 产品 / 8 MiB legacy，读/编码结束且响应完成或断开后才释放 |
+| 每 work 未确认结果 | 新分析结果最多 32 项；已缓存 summary 可追加一个最多 8192 帧 / 8 MiB 的 GOP 包后等待确认，累计仍受 32 MiB 约束；ACK 前预留下一帧最坏 3 MiB 产品 / 8 MiB legacy |
+| HTTP 结果读取 | 2 个并发 slot；每响应最多 3 MiB 产品 / 8 MiB legacy；GOP 摘要最多 8 MiB，另预留 1 MiB 状态/计划开销；响应完成或断开后才释放 |
 | 会话存储 | 原有 blocks 32 MiB 与摘要 32 MiB，逻辑计量包含 payload、metadata 和只读 facade 估算；不增加第三份逐帧缓存 |
 | 服务端存储 | 原有共享 128 MiB / 1024 文件；摘要页、块、引用页及 manifest 共同计费，活跃 lease 保护未确认文件 |
 | 合并计划 | 最多 8 个 source epoch；每计划最多 2048 GOP / 8192 个所选 AU 时钟 / 256 KiB，超限不启用合并，仍走可靠原路径 |
@@ -194,6 +194,8 @@ blocks 使用 12-byte LE 记录：四个 uint16 几何值、int16 QP（-32768 �
 这些是格式、队列和逻辑存储准入，不是 RSS 或所有瞬时拷贝之和的承诺。metadata / frame 的限额大于早期原型草稿，目的是容纳旧的极端合法 NAL metadata；没有调高本地或服务端缓存来换取命中率。摘要页原子替换并校验所有成员，精确块单独有界保存；不能仅凭 processed 位图授权 raw 查询或遮罩。
 
 暂停终止 worker / decoder / reader / lease。恢复允许从闭合 anchor 重建参考链，但同消费者已持有摘要只收到小型 coverage 通知，不重复交付或 put 产品；进度按 AU 集合去重。cache reply 与 coverage 之间若发生淘汰，会回传仍独立拥有的合法摘要修复；服务端同样在发布引用前重验或重写失读产品，不能发布悬空覆盖。同 GOP 需求依据可靠包表的精确所选时钟和其他 GOP 的排除边界合并，不以 PTS 邻近猜测 AU。同集合中移动、后续 chunk、完成和暂停恢复都保留最新显示窗口。已暂停的用户任务不会自动继续。遮罩只读当前身份匹配的 blocks，检查 presented picture / PTS / coded geometry；缺块时不能用 summary 显示。暂停帧的精确需求可优先于自动 summary 任务，播放期间仍 cache-only。
+
+媒体库摘要恢复使用 `after` 游标和 `pack=gop`：服务端将已验证的同 GOP 缓存摘要合并在状态响应的 `cachedGop` 中，`startCursor` / `cursor` 覆盖包内各 picture 的原有确认序号。缓存缺口之前已有的成员也可成包交付；新解码结果继续逐帧发布。超过 8192 帧或 8 MiB 的 GOP 拆成有界包。浏览器先完整校验包的来源、build/index、GOP、重复 AU 和游标，再一次性发布图表更新；不再为缓存中的每帧发起 HTTP 下载，消费缓存包后立即继续请求后续 GOP。服务端复用既有摘要页，不另存 GOP 数据副本，也不新增浏览器持久结果缓存；新浏览器和服务重启后走相同流程。旧客户端仍可按每页 32 个引用消费相同 picture 游标。
 
 计数区分 init / open / feed / step / decodedAU、preroll、products、cacheHit、uniqueDelivered 和 readBytes；core 调用时间为 inclusive，不代表独立像素重建成本。payloadBytes 是实际发送产品内容的 UTF-8 metadata + owned payload，coverageBytes 单列小型通知，均不包括结构化克隆封装或 telemetry；legacy IPC 字节不可可靠直接观察，记 null，避免额外全量 JSON 序列化污染。HTTP wire 内容由浏览器 Content-Length 独立计量。逐 chunk 快照是截至最后确认 chunk 的观测下界；硬终止前未完成调用不可测。heap / Node RSS 只在明确采样点记录，不用累计 payload 或额度冒充峰值。
 
@@ -208,3 +210,10 @@ CI 运行字段/图表等价、零新增解码计数、预算、损坏和取消�
 Legacy JSON 的显式外部 indexIdentity 同时进入 single work key 和逐帧 chunk key；合法但没有当前显式index证明的旧namespace记录不得复用。隐式MP4 v1分支保持原tuple和hash不变，旧wire仍返回完整blocks。定向回归预置真实FLV旧namespace有效记录，确认显式请求cache miss、当前namespace单帧/stream共用、重试及scheduler重启命中，并确认不同显式index生成不同key。
 
 同源多轨 fork 共享一个有界 namespace 与单调 admission ticket。只有独立 manifest/capability 预检可以切换 build/index；不同 namespace 的迟到旧 ticket、旧 plan 和旧结果在 cache、摘要与覆盖写入前失败。同 namespace 并发不会互相取消。显式 blocks 单帧若带可信 picture，使用与 stream 相同的 schema/encoding/index 产品 key；单帧文件不必伪造 GOP，stream 由已验证的 cursor descriptor 补充当前 GOP。PTS-only 请求及隐式 legacy MP4 旧 key 保留既有语义。
+
+
+### 遮罩的填色与边界
+
+遮罩工具条使用独立的「块边界」开关和「无 / QP 热图 / 预测模式」填色分段按钮。默认无填色并显示边界；任意填色均可叠加或关闭边界。两者只改变显示，共享同一份当前帧 blocks，不触发新分析或增加缓存。未支持的填色保留按钮位置并禁用；悬停查询不依赖边界可见性。窄视口把填色组整体移到第二行，保留轨道、边界、透明度与关闭操作。
+
+边界绘制保留所有真实块，包括投影到不足 2 CSS px 的小块，不再按投影宽高丢弃整块边线。所有边线合并为一次描边，保持原始分块位置、当前显示区域裁剪与旋转映射，避免细分密集区域在缩小后出现局部空洞。

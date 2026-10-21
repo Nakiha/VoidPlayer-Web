@@ -62,6 +62,37 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
       assert.ok(warmStates.length > 0 && warmStates.every(state => state.state !== 'pending' && !state.queued), 'covered navigation never publishes transient analysis work');
       assert.equal(warmWorkers.length, 0, 'covered navigation starts no local analysis worker');
       assert.equal(requests.slice(requestsBefore).filter(r => r.method === 'POST' && /bitstream-analysis\/requests/.test(r.url)).length, 0, 'covered navigation starts no remote analysis task');
+      if (input === 'library') {
+        const workspace = await call('export_workspace');
+        const freshContext = await context.browser.newContext({ locale: 'zh-CN', viewport: { width: 1280, height: 900 } });
+        try {
+          const fresh = await freshContext.newPage(), downloads = [], statuses = [];
+          fresh.on('request', request => { if (/bitstream-analysis\/chunks\//.test(request.url())) downloads.push(request.url()); });
+          fresh.on('response', response => { if (response.request().method() === 'GET' && /bitstream-analysis\/requests\/.*pack=gop/.test(response.url())) statuses.push(response); });
+          await fresh.addInitScript(() => { window.__vpAnalysisQA = true; });
+          await fresh.goto(context.url);
+          await fresh.waitForFunction(() => !!window.voidPlayer?.tools);
+          if (await fresh.locator('#identity-welcome').isVisible()) await fresh.locator('#identity-welcome button[type=submit]').click();
+          await fresh.evaluate(document => window.voidPlayer.importWorkspace(document), workspace);
+          await fresh.waitForFunction(() => {
+            const state = window.voidPlayer.tools.find(tool => tool.name === 'get_bitstream_analysis_state').execute({ slot: 'A' });
+            return state.state === 'ready' && state.stream?.pictures === 300;
+          }).catch(async error => {
+            console.error('fresh-browser-cache-restore', await fresh.evaluate(() => ({
+              analysis: window.voidPlayer.tools.find(tool => tool.name === 'get_bitstream_analysis_state').execute({ slot: 'A' }),
+              workspace: window.voidPlayer.exportWorkspace(),
+            })), 'statuses', await Promise.all(statuses.map(response => response.json())));
+            await fresh.screenshot({ path: artifact('fresh-browser-cache-failure.png') }); throw error;
+          });
+          const state = await fresh.evaluate(() => window.voidPlayer.tools.find(tool => tool.name === 'get_bitstream_analysis_state').execute({ slot: 'A' }));
+          assert.equal(state.counters.decodedAU, 0, 'a different browser reuses the server cache without decoding');
+          assert.equal(downloads.length, 0, 'a different browser gets cached GOP packets rather than 300 picture downloads');
+          const packets = (await Promise.all(statuses.map(response => response.json()))).flatMap(state => state.chunks).filter(chunk => chunk.cachedGop);
+          assert.equal(packets.reduce((sum, chunk) => sum + chunk.cachedGop.length, 0), 300);
+          assert.ok(packets.length < 300 && packets.every(packet => packet.cachedGop.length > 1));
+          await fresh.screenshot({ path: artifact('fresh-browser-cached-gops.png') });
+        } finally { await freshContext.close(); }
+      }
       assert.ok(requests.slice(requestsBefore).filter(r => r.method === 'POST' && /bitstream-analysis\/requests/.test(r.url)).every(r => r.target?.mode==='stream' && r.target.window), 'viewport navigation only requests visible GOPs');
       await inspectCurrentWindow(page);
       await page.waitForFunction(() => { const c = document.querySelector('.bitstream-diagrams canvas'); return c.dataset.aggregated === 'false' && Math.abs(+c.dataset.axisEnd - +c.dataset.axisStart - 1_000_000) <= 2; });

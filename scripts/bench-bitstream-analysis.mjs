@@ -198,8 +198,7 @@ for (const variant of process.env.ANALYSIS_ONLY_BASELINE
                   await page
                     .locator(`#bitstream-overlay-${slot}`)
                     .waitFor({ state: "visible" });
-                  await page.locator('#bitstream-mode').click();
-                  await page.locator('#bitstream-mode-menu [data-value="qp"]').click();
+                  await page.locator('#bitstream-mode [data-value="qp"]').click();
                 }
                 await page.evaluate(
                   () =>

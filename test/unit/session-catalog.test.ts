@@ -88,3 +88,55 @@ test('partial workspace restoration logs the full unavailable source reason with
     assert.equal((failure?.data as { sourceKind: string }).sourceKind, 'local');
   } finally { await source.dispose(); await restored.dispose(); }
 });
+
+test('empty workspace restore publishes slots immediately and frames independently without disposing live sources', async () => {
+  const original = new ReviewSession(() => {}), restored = new ReviewSession(() => {});
+  const a = media('A'), b = media('B');
+  let release!: () => void, reached!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; }), waiting = new Promise<void>(resolve => { reached = resolve; });
+  try {
+    await original.load('A', async () => media('A').source);
+    await original.load('B', async () => media('B').source);
+    await original.setTrackOffset('B', 40000);
+    original.addMark({ slot: 'A', text: 'retained' });
+    const document = original.exportWorkspace('http://localhost/');
+    const restore = restored.restoreWorkspace(document, async (info, _signal, progress) => {
+      progress('inspect');
+      assert.equal(restored.getState().tracks.length, 2, 'all saved slots exist before opening the first file');
+      if (info.id === 'B') { reached(); await gate; return b.source; }
+      return a.source;
+    }, { allowUnavailable: true, progressive: true });
+    await waiting;
+    const partial = restored.getState();
+    assert.equal(partial.busy, true); assert.ok(partial.tracks[0].frame);
+    assert.equal(partial.tracks[1].pendingRelink, true);
+    assert.equal(partial.mediaLoad?.slot, 'B'); assert.equal(partial.mediaLoad?.state, 'loading');
+    assert.deepEqual(partial.marks, document.marks); assert.equal(a.disposed, 0);
+    release(); await restore;
+    assert.ok(restored.getState().tracks.every(track => track.frame && !track.pendingRelink));
+    assert.equal(restored.getState().tracks[1].offsetUs, 40000);
+    assert.equal(a.disposed, 0); assert.equal(b.disposed, 0);
+    await restored.seek(80000);
+  } finally { release?.(); await original.dispose(); await restored.dispose(); }
+  assert.equal(a.disposed, 1); assert.equal(b.disposed, 1);
+});
+
+test('cancelling progressive restoration preserves presented peers and disposes a late source', async () => {
+  const original = new ReviewSession(() => {}), restored = new ReviewSession(() => {});
+  const a = media('A'), late = media('B');
+  let release!: () => void, reached!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; }), waiting = new Promise<void>(resolve => { reached = resolve; });
+  try {
+    await original.load('A', async () => media('A').source); await original.load('B', async () => media('B').source);
+    const restoring = restored.restoreWorkspace(original.exportWorkspace('http://localhost/'), async info => {
+      if (info.id === 'B') { reached(); await gate; return late.source; } return a.source;
+    }, { allowUnavailable: true, progressive: true });
+    const rejected = assert.rejects(restoring, error => error instanceof Error && error.name === 'AbortError');
+    await waiting; restored.cancelLoad(); await rejected;
+    assert.ok(restored.getState().tracks[0].frame); assert.equal(a.disposed, 0);
+    assert.equal(restored.getState().mediaLoad?.state, 'cancelled');
+    release(); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(late.disposed, 1); assert.equal(restored.getState().tracks[1].pendingRelink, true);
+    await restored.seek(40000);
+  } finally { release?.(); await original.dispose(); await restored.dispose(); }
+});

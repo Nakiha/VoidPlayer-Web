@@ -522,6 +522,123 @@ try {
     }
   });
 
+  await check('topbar labels settle without oscillating after source load and breakpoint changes', async page => {
+    const entry = listing.entries.find(item => item.name === 'ci_h264_smoke.mp4');
+    const loadingFrames = page.evaluate(async () => {
+      const rows = [], bar = document.querySelector('.topbar'), channel = document.querySelector('#channel-select');
+      for (let frame = 0; frame < 36; frame++) {
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        rows.push({ enabled: !channel.disabled, open: document.querySelector('#open').getBoundingClientRect().width,
+          overflow: bar.scrollWidth > bar.clientWidth + 1 });
+      }
+      return rows;
+    });
+    await page.evaluate(async id => window.voidPlayer.tools.find(tool => tool.name === 'load_library_item').execute({ slot: 'A', id }), entry.id);
+    const loadedFrames = (await loadingFrames).filter(row => row.enabled);
+    assert.ok(loadedFrames.length > 0);
+    assert.ok(loadedFrames.every(row => !row.overflow), 'enabling RGB and zoom must fit before the next paint');
+    assert.equal(new Set(loadedFrames.map(row => row.open)).size, 1, 'the add button never flashes a different width after controls become enabled');
+    await page.evaluate(() => document.fonts.ready);
+    for (const width of [813, 812, 814, 625, 620, 621, 624, 626, 619, 686, 685, 684, 766, 765, 764, 793, 900, 1120, 600, 570, 571, 569, 480, 375, 320]) {
+      await page.setViewportSize({ width, height: 780 }); await settle(page);
+      const samples = await page.evaluate(async () => {
+        const rows = [], bar = document.querySelector('.topbar'), open = document.querySelector('#open'), channel = document.querySelector('#channel-select');
+        for (let frame = 0; frame < 24; frame++) {
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          rows.push({ width: open.getBoundingClientRect().width, channel: channel.getBoundingClientRect().width, classes: bar.className,
+            scrollWidth: bar.scrollWidth, clientWidth: bar.clientWidth });
+        }
+        return rows;
+      });
+      assert.equal(new Set(samples.map(row => JSON.stringify(row))).size, 1, `${width}px loaded toolbar oscillates: ${JSON.stringify(samples)}`);
+      if (width >= 600) assert.ok(samples[0].scrollWidth <= samples[0].clientWidth + 1, `${width}px loaded toolbar overflows: ${JSON.stringify(samples[0])}`);
+    }
+    await page.setViewportSize({ width: 625, height: 780 }); await settle(page);
+    assert.equal(await page.locator('#brand-about').isVisible(), false);
+    assert.equal(await page.locator('#open > span').isVisible(), false, 'right-side labels shrink before left-side view labels');
+    assert.equal(await page.locator('#channel-select > span').isVisible(), true);
+    await page.screenshot({ path: path.join(screenshots, `topbar-coordinated-${browserName}.png`) });
+    await page.locator('#settings-open').click(); await page.locator('#settings-tab-appearance').click();
+    await page.locator('#language-choice').click(); await page.locator('#language-choice-menu [data-value=en]').click();
+    await page.waitForFunction(() => document.documentElement.lang === 'en'); await page.locator('#settings-close').click();
+    for (const width of [625, 620, 621, 765, 766, 900, 1280]) {
+      await page.setViewportSize({ width, height: 780 }); await settle(page);
+      const widths = await page.evaluate(async () => {
+        const values = [];
+        for (let frame = 0; frame < 16; frame++) {
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          const bar = document.querySelector('.topbar');
+          values.push([document.querySelector('#open').getBoundingClientRect().width, bar.scrollWidth, bar.clientWidth]);
+        }
+        return values;
+      });
+      assert.equal(new Set(widths.map(value => JSON.stringify(value))).size, 1, `${width}px English toolbar changes width after settling`);
+      assert.ok(widths[0][1] <= widths[0][2] + 1, `${width}px English toolbar clips its controls`);
+    }
+  }, { viewport: { width: 625, height: 780 }, reducedMotion: 'no-preference' });
+
+  await check('topbar collapses brand then right actions then view labels without drag reversals', async page => {
+    const entry = listing.entries.find(item => item.name === 'ci_h264_smoke.mp4');
+    await page.evaluate(async id => window.voidPlayer.tools.find(tool => tool.name === 'load_library_item').execute({ slot: 'A', id }), entry.id);
+    await page.evaluate(() => document.fonts.ready);
+    const read = () => page.evaluate(() => {
+      const visible = selector => { const element = document.querySelector(selector); return getComputedStyle(element).display !== 'none' && element.getBoundingClientRect().width > 0; };
+      const bar = document.querySelector('.topbar');
+      return { width: innerWidth, brand: visible('#brand-about'), share: visible('#workspace-share > span'), open: visible('#open > span'),
+        pixel: visible('#pixel-size > span'), channel: visible('#channel-select > span'), zoom: visible('#zoom-select-value'),
+        overflow: bar.scrollWidth > bar.clientWidth + 1 };
+    });
+    const shrink = [], grow = [];
+    for (const direction of ['shrink', 'grow']) {
+      const widths = Array.from({ length: 76 }, (_, index) => 1100 - index * 8);
+      if (direction === 'grow') widths.reverse();
+      const rows = direction === 'shrink' ? shrink : grow;
+      await page.evaluate(() => {
+        window.__topbarDragFrames = [];
+        let handle;
+        const sample = () => {
+          const visible = selector => { const element = document.querySelector(selector); return getComputedStyle(element).display !== 'none' && element.getBoundingClientRect().width > 0; };
+          window.__topbarDragFrames.push({ brand: visible('#brand-about'), share: visible('#workspace-share > span'), open: visible('#open > span'),
+            pixel: visible('#pixel-size > span'), channel: visible('#channel-select > span'), zoom: visible('#zoom-select-value') });
+          handle = requestAnimationFrame(sample);
+        };
+        handle = requestAnimationFrame(sample); window.__stopTopbarDrag = () => cancelAnimationFrame(handle);
+      });
+      for (const width of widths) {
+        await page.setViewportSize({ width, height: 786 }); await settle(page);
+        const state = await read(); rows.push(state);
+        if (!state.share || !state.open) assert.equal(state.brand, false, `brand must shrink first: ${JSON.stringify(state)}`);
+        if (!state.pixel || !state.channel || !state.zoom) assert.ok(!state.brand && !state.share && !state.open, `view labels must shrink last: ${JSON.stringify(state)}`);
+        if (width >= 600) assert.equal(state.overflow, false, `${width}px toolbar overflows during ${direction}`);
+        const previous = rows.at(-2);
+        if (previous) for (const label of ['brand', 'share', 'open', 'pixel', 'channel', 'zoom']) {
+          if (direction === 'shrink' && !previous[label]) assert.equal(state[label], false, `${label} reappeared while narrowing`);
+          if (direction === 'grow' && previous[label]) assert.equal(state[label], true, `${label} disappeared while widening`);
+        }
+      }
+      const frames = await page.evaluate(() => { window.__stopTopbarDrag(); return window.__topbarDragFrames; });
+      for (let index = 1; index < frames.length; index++) for (const label of ['brand', 'share', 'open', 'pixel', 'channel', 'zoom']) {
+        if (direction === 'shrink' && !frames[index - 1][label]) assert.equal(frames[index][label], false, `${label} flashed visible during narrowing frame ${index}`);
+        if (direction === 'grow' && frames[index - 1][label]) assert.equal(frames[index][label], true, `${label} flashed hidden during widening frame ${index}`);
+      }
+    }
+    assert.ok(shrink.some(state => !state.brand && state.share && state.open), 'brand disappears before either right action');
+    const boundary = shrink.find(state => !state.share); assert.ok(boundary);
+    let threshold = boundary.width;
+    for (let width = boundary.width + 16; width >= boundary.width; width--) {
+      await page.setViewportSize({ width, height: 786 }); await settle(page);
+      if (!(await read()).share) { threshold = width; break; }
+    }
+    for (let index = 0; index < 16; index++) {
+      await page.setViewportSize({ width: threshold + (index % 2 ? -1 : 1), height: 786 }); await settle(page);
+      assert.equal((await read()).share, false, 'one-pixel drag jitter must not flash the share label');
+    }
+    await page.setViewportSize({ width: threshold + 16, height: 786 }); await settle(page);
+    assert.equal((await read()).share, true, 'share text returns when there is clear room');
+    await page.setViewportSize({ width: 813, height: 786 }); await settle(page);
+    await page.locator('.topbar').screenshot({ path: path.join(screenshots, `topbar-drag-stable-${browserName}.png`) });
+  }, { reducedMotion: 'no-preference', deviceScaleFactor: 2 });
+
   await check('toast entrance animates and respects reduced motion', async page => {
     await page.emulateMedia({reducedMotion:'no-preference'});
     await page.evaluate(() => {
@@ -876,6 +993,56 @@ try {
     assert.equal(await page.evaluate(() => document.activeElement?.dataset.dragSurface), 'A');
     for (const slot of ['C', 'D', 'E', 'F', 'G', 'H', 'A']) await page.locator(`#remove-track-${slot}`).click();
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'open');
+  });
+
+  await check('analysis overlay preserves dense small-block edges when scaled down', async page => {
+    const entry = path.join(temporary, 'overlay-raster.ts');
+    await writeFile(entry, `export {createAnalysisOverlay} from ${JSON.stringify(path.join(root, 'src/ui/analysis/picture-overlay/controller.ts'))};
+      export {setPresentationGeometry,disposePresentation} from ${JSON.stringify(path.join(root, 'src/presentation/presenter.ts'))};`);
+    const fixture = await buildFixture({ configFile:false, logLevel:'silent', build:{ write:false, minify:false,
+      lib:{ entry, formats:['iife'], name:'OverlayRasterFixture' }, rolldownOptions:{output:{codeSplitting:false}} } });
+    const script = [fixture].flat().flatMap(output => output.output).find(output => output.type === 'chunk').code;
+    await page.addScriptTag({ content:script });
+    const checks = await page.evaluate(() => {
+      const {createAnalysisOverlay,setPresentationGeometry,disposePresentation} = OverlayRasterFixture;
+      const stage = document.createElement('div'); stage.className = 'frame-stage';
+      const source = document.createElement('canvas'); stage.append(source); document.body.append(stage);
+      const picture = {sourceVersion:'dense-blocks',stream:'video',configuration:0,au:0,picture:0,layer:0,field:'frame'};
+      const token = {generation:1,commit:1,picture,sourcePtsUs:0,geometry:{codedWidth:256,codedHeight:128,visibleRect:{x:0,y:0,width:256,height:128},displayWidth:256,displayHeight:128,rotation:0}};
+      // The right half has real 4x4 partitions surrounded by 16x16 partitions.
+      // All those small blocks used to disappear below the 2 CSS px cutoff.
+      const blocks = [];
+      for (const [start,end,size] of [[0,128,16],[128,256,4]])
+        for (let y=0;y<128;y+=size) for(let x=start;x<end;x+=size) blocks.push({x,y,width:size,height:size,qp:28,mode:'inter'});
+      const result = {picture,width:256,height:128,sourcePtsUs:0,confidence:'exact',codec:'hevc',blocks};
+      const session = {getPresentedFrame:()=>token,cachedBitstreamAnalysis:()=>result,subscribePresentedFrames:()=>()=>{},subscribe:()=>()=>{}};
+      const overlay = createAnalysisOverlay(session,'A',source), rows = [];
+      overlay.setResult(result);
+      for (const dpr of [1,2]) for (const scale of [.125,.25,.4,.5,1]) {
+        const width=256*scale+16,height=128*scale+16,offsetX=.25,offsetY=.25;
+        setPresentationGeometry(source,{width,height,imageWidth:256*scale,imageHeight:128*scale,zoom:1,offsetX,offsetY,dpr});
+        const canvas=stage.querySelector('.analysis-picture-overlay'),ctx=canvas.getContext('2d');
+        const pixel=(x,y)=>ctx.getImageData(Math.floor(x*dpr),Math.floor(y*dpr),1,1).data;
+        // Independent oracle: source x=132,148,... are real small-block edges.
+        for (const x of [132,148,180,212,244]) for(const y of [10,34,66,98,118]) {
+          if (!pixel(8+offsetX+x*scale,8+offsetY+y*scale)[3]) throw Error(`Missing small edge at ${x},${y}, scale ${scale}, DPR ${dpr}`);
+        }
+        if (pixel(1,1)[3]) throw Error('Edges leaked outside the displayed picture');
+        overlay.setDisplay({fill:'none',boundaries:false});
+        if (ctx.getImageData(0,0,canvas.width,canvas.height).data.some(value=>value)) throw Error('Boundary-off must clear the canvas');
+        if (!overlay.hit(8+offsetX+150*scale,8+offsetY+66*scale)) throw Error('Hover must remain available without visible boundaries');
+        for(const fill of ['qp','modes']) {
+          overlay.setDisplay({fill,boundaries:false});
+          const center=pixel(8+offsetX+152*scale,8+offsetY+68*scale);
+          if(!center[3] || center[3]>150) throw Error('Independent fill should contain no opaque boundary strokes');
+        }
+        overlay.setDisplay({fill:'none',boundaries:true});
+        rows.push({scale,dpr,blocks:blocks.length,metrics:canvas.analysisMetrics});
+      }
+      overlay.dispose();setPresentationGeometry(source,null);disposePresentation();stage.remove();
+      return rows;
+    });
+    assert.equal(checks.length,10,'mixed partitions checked at five scales and two DPRs');
   });
 
   await check('analysis recovery preserves coverage and retries through production controls', async page => {

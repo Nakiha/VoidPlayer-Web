@@ -109,9 +109,14 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
   openSharedSpace(space: string, seededIds?: string[]): Promise<void>;
   annotationScope(): string;
   toasts: ToastStack;
+  openingChanged?(): void;
 }) {
   const input = document.getElementById('workspace-file') as HTMLInputElement;
   const lifetime = new AbortController(); let importing = false;
+  const params = new URL(location.href).searchParams;
+  const savedId = params.get('workspace'), legacyId = params.get('share') ?? params.get('review');
+  const openingLink = /^[a-f0-9-]{36}$/.test(savedId ?? legacyId ?? '');
+  document.getElementById('app')!.toggleAttribute('data-workspace-opening', openingLink);
   let saved: ReturnType<typeof installSavedWorkspaces> | undefined;
   let sharing: ReturnType<typeof installWorkspaceSharing> | undefined;
   function exportWorkspace() {
@@ -138,17 +143,29 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       const files = await resolveLocalFiles(active.filter(m => !m.source), supplied, !recovery, warnMtime, lifetime.signal, problems);
       if (!files) return false;
       const rollback=options.beforeRestore();
+      const progressive = session.getState().tracks.length === 0 && document.tracks.length > 0;
+      let layout: Promise<void> | undefined, stopLayout: (() => void) | undefined;
+      if (progressive) stopLayout = session.subscribe(() => {
+        if (layout || !session.getState().tracks.length) return;
+        stopLayout?.();
+        // Restore panels only after the shared facade has published its slots;
+        // an actually empty workbench deliberately closes the analysis panel.
+        layout = Promise.resolve(options.restore(document, fromShare));
+        void layout.catch(() => {});
+      });
       try { await session.restoreWorkspace(document, async (info, signal, progress) => {
         if (!info.source) { const file = files.get(info.id); if (!file) throw new FileHandleError(problems.get(info.id) ?? 'unavailable', localAccessMessage(info.name, problems.get(info.id) ?? 'unavailable')); return openMedia(file, undefined, progress, signal); }
         const pinned = await resolveLibraryReference(info, signal);
         if (pinned.mtimeChanged) warnMtime(info.name);
         const { mtimeChanged: _ignored, ...reference } = pinned;
         const source = await openMediaFromUrl(reference.url, info, undefined, progress, signal); updateMediaInfo(source,{source:reference},'identity'); return source;
-      }, { allowUnavailable: true });
+      }, { allowUnavailable: true, progressive });
+        await layout;
       } catch(error) { await rollback?.(); throw error; }
+      finally { stopLayout?.(); }
       annotationThumbnails.clear();
       for (const { id, ...image } of document.thumbnails ?? []) annotationThumbnails.set(id, image);
-      await options.restore(document, fromShare);
+      if (!layout) await options.restore(document, fromShare);
       if (!fromShare) { sharing?.detach(); const url=new URL(location.href);url.searchParams.delete('workspace');url.searchParams.delete('share');url.searchParams.delete('review');history.replaceState(null,'',url); }
       saved?.detach(document.name);
       if (!document.comparison) options.toasts.show(() => t(msg("transfer.legacyConditions", "旧工作区未记录比较条件，已沿用当前色彩和解码设置。")));
@@ -180,6 +197,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
     }
   }
   function updateMissing() {
+    if (session.getState().busy) return;
     const pending = session.getState().tracks.filter(t => t.pendingRelink);
     const signature = JSON.stringify(pending.map(t => [t.slot, t.id, t.failure?.message]));
     if (signature === missingSignature) return;
@@ -189,15 +207,14 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
   }
   const recovery = installWorkspaceRecovery(session, { snapshot: exportWorkspace, restore: document => importWorkspace(document, [], true), ready: options.identityReady, toasts: options.toasts });
   const unsubscribe = session.subscribe(() => { saved?.update(); sharing?.update(); updateMissing(); });
-  const params = new URL(location.href).searchParams;
-  const savedId = params.get('workspace'), legacyId=params.get('share') ?? params.get('review');
-  if (savedId && /^[a-f0-9-]{36}$/.test(savedId)) void options.identityReady.then(()=>saved!.open(savedId));
+  const finishOpening = () => { if (lifetime.signal.aborted) return; document.getElementById('app')!.removeAttribute('data-workspace-opening'); options.openingChanged?.(); };
+  if (savedId && /^[a-f0-9-]{36}$/.test(savedId)) void options.identityReady.then(()=>saved!.open(savedId)).catch(error=>options.toasts.show((error as Error).message,{kind:'error',durationMs:0})).finally(finishOpening);
   else if (legacyId && /^[a-f0-9-]{36}$/.test(legacyId)) void options.identityReady.then(async()=>{
     // Old share/review URLs join the same writable workspace flow.
     const client=new SavedWorkspaceClient(lifetime.signal);
     await client.request(`/api/${params.has('share')?'shares':'reviews'}/${legacyId}`);
     await saved!.open(legacyId);
-  }).catch(error=>options.toasts.show((error as Error).message,{kind:'error',durationMs:0}));
+  }).catch(error=>options.toasts.show((error as Error).message,{kind:'error',durationMs:0})).finally(finishOpening);
   input.addEventListener('change', () => { const file = input.files?.[0]; input.value = ''; if (file) void options.act(() => importFile(file), 'workspace.import'); }, { signal: lifetime.signal });
   return { exportWorkspace, importWorkspace, importFile, relinkMissing, shareWorkspace: sharing.create, dispose() { recovery.dispose(); dismissMissing?.(); lifetime.abort(); unsubscribe(); sharing.dispose(); } };
 }
