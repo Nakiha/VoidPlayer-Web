@@ -79,11 +79,14 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
   }, '.bitstream-track-control');
   const floating = installFloatingPanelAvoidance(panel, $('annotation-toolbar'), life.signal);
   function setOpen(value: boolean) {
+    const wasOpen = open;
     open = value && lastState.tracks.some(track=>!track.failure);
     panel.hidden = !open; trigger.setAttribute('aria-expanded', String(open));
     if (!open) { opacityChoice.close(); }
     if (open && !initialized) { initialized = true; setVisibility(hooks.selected(), true); }
-    render(); floating.update();
+    render();
+    if (open && !wasOpen) floating.place();
+    else floating.update();
   }
   trigger.onclick = () => setOpen(!open);
   $('bitstream-close').onclick = () => { setOpen(false); trigger.focus(); };

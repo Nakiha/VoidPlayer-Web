@@ -1,11 +1,11 @@
 /* Apply to the resting state too, so release fades back just like press. */
-button:not(.analysis-progress-action), .connection-status {
+button:not(.analysis-progress-action), .connection-status, .numeric-choice {
   transition: background-color 240ms ease, color 240ms ease !important;
 }
 
 button[role=tab]:not(.source-activity-track) { transition: none !important; }
 
-.connection-status:hover { background: var(--surface-hover); }
+.topbar .connection-status:hover { background: var(--surface-hover); }
 
 /* Press feedback takes precedence over component hover/selected fills, including
    primary buttons whose light text would be unreadable on a pale background. */
@@ -24,7 +24,7 @@ button:active:not(:disabled):not([aria-disabled=true]):not([role=tab]):not(#sett
 }
 
 @media (prefers-reduced-motion: reduce) {
-  button:not(.analysis-progress-action), .connection-status { transition: none !important; }
+  button:not(.analysis-progress-action), .connection-status, .numeric-choice { transition: none !important; }
 }
 :focus-visible { outline: none; }
 

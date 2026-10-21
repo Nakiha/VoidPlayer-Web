@@ -46,7 +46,7 @@ button.brand { border: 0; background: transparent; padding: 0; min-height: 0; bo
 /* Product title remains a plain button; the temporary effect copy animates independently. */
 button.brand:hover:not(:disabled) { background: transparent; }
 button.brand:hover, :root[data-keyboard-navigation] button.brand:focus-visible { color: var(--accent); }
-.topbar-utility-actions > .icon-button, .view-controls > .choice-trigger { border-color: transparent; background: var(--surface-control); }
+.topbar-utility-actions > .icon-button, .view-controls > .choice-trigger, .topbar .connection-status { border-color: transparent; border-radius: var(--radius-control); background: var(--surface-control); }
 .view-controls, .panel-switches { display: flex; align-items: center; gap: var(--control-gap); }
 .topbar .view-controls > .icon-button .icon,
 .topbar .view-controls > .choice-trigger > .icon:first-child,
@@ -341,7 +341,7 @@ textarea { resize: vertical; min-height: 56px; max-height: 220px; padding: var(-
 @media (prefers-reduced-motion: reduce) { .remove-track { transition: none; } }
 .subtrack-label { display: flex; align-items: center; min-width: 0; gap: var(--tool-gap); }
 .subtrack-name { flex: 1; }
-.connection-status { display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-small); background: transparent; text-decoration: none; }
+.connection-status { display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-small); background: transparent; color: var(--text); text-decoration: none; }
 .connection-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--connection-waiting); }
 .connection-status[data-state=connected] .connection-dot { background: var(--connection-ok); }
 .connection-status[data-state=disconnected] .connection-dot { background: var(--connection-error); }
@@ -354,6 +354,17 @@ input[type=range]::-moz-range-track { height: var(--timeline-track-size); border
 input[type=range]::-moz-range-progress { height: var(--timeline-track-size); background: var(--accent); }
 input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-height); border: 0; border-radius: 0; background: transparent; }
 .seek-preview { position: absolute; bottom: calc(100% + var(--space-2)); transform: translateX(-50%); max-width: min(320px, 100%); padding: var(--space-2) var(--space-3); border-radius: var(--radius-small); background: var(--preview-fill); color: var(--text); box-shadow: var(--popover-shadow); font: var(--text-xs)/1.5 var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; z-index: 9; }
+/* Time-only viewport preview floats as a compact glass capsule. Rich annotation
+   previews keep their existing card shape and thumbnail layout. */
+#timeline-preview { position: fixed; inset: 0 auto auto 0; transform: none; margin: 0; max-width: min(320px, calc(100vw - 16px)); padding: var(--seek-preview-padding); border: 0; border-radius: 0; background: var(--seek-preview-fill); -webkit-backdrop-filter: var(--seek-preview-filter); backdrop-filter: var(--seek-preview-filter); box-shadow: none; font: 500 var(--seek-preview-text-size)/1.3 var(--font-ui); font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+#timeline-preview::after { content: ''; position: absolute; inset: 0; background: var(--seek-preview-rim); mask: var(--seek-preview-outline) no-repeat; -webkit-mask: var(--seek-preview-outline) no-repeat; }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  #timeline-preview { background: var(--preview-fill); }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  #timeline-preview { background: var(--surface); border-color: var(--border); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
+  #timeline-preview::after { background: var(--border); }
+}
 .subtrack-scroll { overflow: auto; }
 .track-lane .seek-preview { bottom: 100%; }
 #replace-source-targets { display: flex; flex-direction: column; gap: var(--content-gap); }
@@ -517,7 +528,11 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .annotation-text { display: inline-block; max-width: 100%; min-width: 1ch; white-space: pre-wrap; overflow-wrap: anywhere; font-family: system-ui; font-weight: 500; line-height: 1.2; background: transparent; border: 0; margin: 0; padding: 0; vertical-align: top; }
 .annotation-text[contenteditable=true] { outline: 1px dashed var(--annotation-edit-outline); caret-color: currentColor; cursor: text; pointer-events: auto; user-select: text; }
 .annotation-text[contenteditable=true]:empty::before { content: attr(data-placeholder); opacity: .6; pointer-events: none; }
-.viewport-tool-panel { position: absolute; z-index: 5; width: max-content; max-width: calc(100% - 16px); padding: 4px; border: 1px solid var(--border); border-radius: 9px; box-shadow: var(--annotation-toolbar-shadow); }
+.viewport-tool-panel { position: absolute; z-index: 5; width: max-content; max-width: calc(100% - 16px); padding: 4px; border: 1px solid var(--border); border-radius: 9px; box-shadow: var(--annotation-toolbar-shadow); animation: viewport-tool-panel-enter 150ms ease-out; }
+/* Place a newly opened panel before fading it in; only later avoidance moves slide. */
+.viewport-tool-panel[data-positioning] { transition: none; }
+@keyframes viewport-tool-panel-enter { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .viewport-tool-panel { animation: none; } }
 .drawing-tools { display: flex; align-items: center; flex-wrap: nowrap; gap: 3px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior: contain; }
 .drawing-tools::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .drawing-tools > * { flex-shrink: 0; }
@@ -672,8 +687,8 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .numeric-choice-value, .numeric-choice-input { flex: 1; min-width: 0; width: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .numeric-choice-input { border-radius: 0; outline: none; }
 .numeric-choice-input[aria-invalid=true] { color: var(--action-danger); }
-.numeric-choice:has(button:hover:not(:disabled)) { background: var(--surface-hover); }
-.numeric-choice:has(:is(button[aria-expanded=true], input:focus)) { color: var(--accent); background: var(--surface-selected); }
+.numeric-choice:hover:not([data-disabled=true]) { background: var(--surface-hover); }
+.numeric-choice:has(:is(button[aria-expanded=true], input:focus)):not([data-disabled=true]) { color: var(--accent); background: var(--surface-selected); }
 .numeric-choice > button:is(:hover, [aria-expanded=true]):not(:disabled) { background: transparent; }
 .numeric-choice[data-disabled=true] { opacity: var(--disabled-opacity); }
 .numeric-choice[data-disabled=true] > button:disabled { opacity: 1; }
@@ -737,7 +752,7 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
   --button-focus-fill: var(--glass-control-focus);
   --button-danger-press-fill: var(--glass-control-danger-pressed);
 }
-:where(.viewport-tool-panel, .transport-dock, .card-heading, .annotation-preview, .topbar, .source-tools, .source-foot, .analysis-panel, .sources-panel, .subtracks-panel, .inspector-panel, #start-panel, #settings, .popup-menu) button:hover:not(:disabled):not([aria-disabled=true]):not(.numeric-choice > button) {
+:where(.viewport-tool-panel, .transport-dock, .card-heading, .annotation-preview, .topbar, .source-tools, .source-foot, .analysis-panel, .sources-panel, .subtracks-panel, .inspector-panel, #start-panel, #settings, .popup-menu) :is(button, .connection-status):hover:not(:disabled):not([aria-disabled=true]):not(.numeric-choice > button):not(.source-row) {
   box-shadow: inset 0 0 0 1px var(--glass-control-edge);
 }
 :where(.viewport-tool-panel, .transport-dock, .card-heading, .annotation-preview, .topbar, .source-tools, .source-foot, .analysis-panel, .sources-panel, .subtracks-panel, .inspector-panel, #start-panel, #settings, .popup-menu) button:hover:not(:disabled):not([aria-disabled=true]):not(:is([aria-pressed=true], [aria-expanded=true], [aria-checked=true], [aria-selected=true])) {
@@ -752,12 +767,16 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 :where(.viewport-tool-panel, .transport-dock, .card-heading, .annotation-preview, .topbar, .source-tools, .source-foot, .analysis-panel, .sources-panel, .subtracks-panel, .inspector-panel, #start-panel, #settings, .popup-menu) button:is([aria-pressed=true], [aria-expanded=true], [aria-checked=true], [aria-selected=true]):hover:not(:disabled) {
   background: var(--glass-control-selected-hover);
 }
-:where(.viewport-tool-panel, .transport-dock, .card-heading, .annotation-preview, .topbar, .source-tools, .source-foot, .analysis-panel, .sources-panel, .subtracks-panel, .inspector-panel, #start-panel, #settings, .popup-menu) .numeric-choice:has(button:hover:not(:disabled)) {
+:where(.viewport-tool-panel, .transport-dock, .card-heading, .annotation-preview, .topbar, .source-tools, .source-foot, .analysis-panel, .sources-panel, .subtracks-panel, .inspector-panel, #start-panel, #settings, .popup-menu) .numeric-choice:hover:not([data-disabled=true]) {
   box-shadow: inset 0 0 0 1px var(--glass-control-edge);
 }
 :root[data-keyboard-navigation] :where(.viewport-tool-panel, .transport-dock, .card-heading, .annotation-preview, .topbar, .source-tools, .source-foot, .analysis-panel, .sources-panel, .subtracks-panel, .inspector-panel, #start-panel, #settings, .popup-menu) :focus-visible {
   box-shadow: inset 0 0 0 1px var(--accent);
 }
+/* The range's large invisible hit area must not become a glowing field.
+   Indicate keyboard focus on its actual playhead instead. */
+:root[data-keyboard-navigation] #timeline:focus-visible { background: transparent !important; box-shadow: none; }
+:root[data-keyboard-navigation] .timeline-control:has(#timeline:focus-visible) .timeline-playhead { background: var(--text); }
 
 /* Resolve character count and padding on the input, not on :root where the
    inherited custom-property formula had already captured the old values. */
@@ -786,11 +805,11 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .transport .icon[data-icon=fit], .viewport-eye .icon { transform: scale(1.2); }
 
 
-.timeline-playhead, .timeline-hover::before { width: var(--timeline-thumb-size); height: var(--timeline-pin-height); clip-path: var(--timeline-pin-shape); background: var(--accent); pointer-events: none; }
+.timeline-playhead { width: var(--timeline-thumb-size); height: var(--timeline-pin-height); clip-path: var(--timeline-pin-shape); background: var(--accent); pointer-events: none; }
 .timeline-playhead { position: absolute; left: calc(100% * var(--progress-ratio, 0)); top: calc((100% - var(--timeline-pin-height)) / 2); transform: translateX(-50%); }
-/* Crop the existing pin at the neck: hover uses the very same head, without its stem. */
-.timeline-hover { position: absolute; top: 0; width: var(--timeline-thumb-size); height: calc(var(--timeline-pin-height) * .33); overflow: hidden; transform: translateX(-50%); pointer-events: none; }
-.timeline-hover::before { content: ''; display: block; }
+/* A short hover tick crosses only the rail, separate from the glass pointer. */
+.timeline-hover { position: absolute; left: 0; top: calc(50% - 5px); width: calc(var(--timeline-thumb-size) * .2); height: 10px; margin-left: calc(var(--timeline-thumb-size) * -.1); pointer-events: none; }
+.timeline-hover::before { content: ''; position: absolute; inset: 0; background: var(--accent); }
 
 
 .workspace-relink { width: min(540px, calc(100vw - 24px)); }
@@ -808,7 +827,6 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .library-navigation .choice-trigger > span { display: none; }
 #library-root-menu { width: var(--menu-trigger-width); }
 .library-navigation .choice-trigger > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.library-folder { width: 100%; justify-content: flex-start; text-align: left; border: 0; border-radius: 0; background: transparent; font-weight: 400; }
 .library-folder { width: 100%; justify-content: flex-start; text-align: left; border: 0; border-radius: 0; background: transparent; font-weight: 400; }
 .library-crumbs { flex-shrink: 0; display: flex; align-items: center; gap: var(--space-1); margin: 4px var(--panel-padding-inline) var(--panel-padding-block); padding: 0 var(--space-1); min-height: var(--control-small-height); background: var(--search-fill); border-radius: var(--radius-control); }
 .library-crumbs .icon-button { border: 0; background: transparent; flex: 0 0 auto; }

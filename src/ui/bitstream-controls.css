@@ -1,5 +1,5 @@
 /* The overlay controller is a peer of the annotation toolbar. */
-.analysis-overlay-panel { right:12px; bottom:60px; overflow:auto; transform:translateY(var(--floating-offset-y,0px)); transition:transform 180ms ease,max-height 180ms ease; animation:overlay-panel-enter 150ms ease-out; }
+.analysis-overlay-panel { right:12px; bottom:60px; overflow:auto; transform:translateY(var(--floating-offset-y,0px)); transition:transform 180ms ease,max-height 180ms ease; }
 .bitstream-inspector { display:flex; align-items:center; flex-wrap:wrap; gap:3px; padding:0; font:12px/1.45 var(--font-ui); }
 
 .bitstream-tracks { display:flex; align-items:center; flex-wrap:wrap; gap:3px; }
@@ -18,7 +18,6 @@
 .bitstream-inspector .icon-button { padding:0; background:transparent; }
 .bitstream-hit-tooltip { position:absolute; z-index:6; padding:5px 8px; width:max-content; max-width:calc(100% - 16px); box-sizing:border-box; border-radius:6px; color:var(--text); background:var(--preview-fill); box-shadow:var(--popover-shadow); font:12px/1.45 var(--font-ui); white-space:pre-line; overflow-wrap:anywhere; pointer-events:none; }
 #toggle-analysis-overlay[aria-expanded=true] { color:var(--accent); background:var(--annotation-toolbar-selected); }
-@keyframes overlay-panel-enter { from { opacity:0; } to { opacity:1; } }
 @media (prefers-reduced-motion:reduce) { .analysis-overlay-panel,.bitstream-track-progress { transition:none; animation:none; } .bitstream-track-progress.is-waiting .analysis-progress-ring { animation:none; } }
 
 .bitstream-track-item { display:inline-flex; align-items:center; gap:2px; }

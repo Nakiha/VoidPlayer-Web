@@ -60,6 +60,12 @@
   --split-line: color-mix(in srgb, var(--surface-panel) 65%, var(--text-secondary)); --split-handle: var(--preview-fill);
   --timeline-track: #d5dae2; --timeline-track-size: 4px; --timeline-thumb-size: 10px; --timeline-pin-height: 18px; --timeline-pin-shape: polygon(0 0, 100% 0, 60% 33%, 60% 100%, 40% 100%, 40% 33%);
   --preview-fill: #f8f9fb;
+  --seek-preview-fill: linear-gradient(180deg, #ffffff14, #ffffff04), color-mix(in srgb, color-mix(in srgb, var(--accent) 20%, var(--surface)) 74%, transparent);
+  --seek-preview-edge: color-mix(in srgb, var(--accent) 30%, transparent);
+  --seek-preview-text-size: var(--text-title);
+  --seek-preview-padding: 4px 10px 12px;
+  --seek-preview-rim: linear-gradient(180deg, #ffffff90, #ffffff28 32%, var(--seek-preview-edge) 52%, #ffffff20 65%, #ffffff88 78%, #ffffff78);
+  --seek-preview-filter: blur(18px) saturate(1.25);
   /* Small, bounded surfaces only; no saturation pass or animated filters. */
   --menu-fill: color-mix(in srgb, var(--preview-fill) 76%, transparent);
   --menu-filter: blur(8px);

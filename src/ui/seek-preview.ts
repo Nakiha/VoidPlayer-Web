@@ -51,24 +51,86 @@ export function syncTimelineProgress(input: HTMLInputElement) {
 
 export function bindTimelinePreview(input: HTMLInputElement, output: HTMLElement) {
   const marker = input.parentElement!.querySelector<HTMLElement>('.timeline-hover')!;
-  const hide = () => { output.hidden = true; marker.hidden = true; };
-  const preview = (x: number, ptsUs: number) => {
-    marker.style.left = `${x}px`; marker.hidden = false;
-    showSeekPreview(output, x, ptsUs);
+  const time = document.createElement('time');
+  const label = document.createTextNode('');
+  time.append(label); output.replaceChildren(time);
+  // Escape the transport's backdrop root, while retaining one material and
+  // text node throughout a hover (including incremental duration updates).
+  output.setAttribute('popover', 'manual');
+  let frame = 0, pointerX: number | null = null, keyboardUs: number | null = null;
+  let geometry: { rail: DOMRect; width: number; height: number } | null = null;
+  let shape = '', labelLength = 0, maximum = input.max;
+  const active = () => pointerX !== null || keyboardUs !== null;
+  const hide = () => {
+    cancelAnimationFrame(frame); frame = 0;
+    pointerX = keyboardUs = null; geometry = null;
+    if (output.matches(':popover-open')) output.hidePopover();
+    output.hidden = true; marker.hidden = true;
   };
+  const render = () => {
+    frame = 0;
+    if (!active() || input.disabled) { hide(); return; }
+    output.hidden = false;
+    if (!output.matches(':popover-open')) output.showPopover();
+    // Tabular numerals have a stable width. Only measure on entry, a real
+    // layout change, or crossing from two-digit to three-digit minutes.
+    const rail = geometry?.rail ?? input.getBoundingClientRect();
+    if (!rail.width || !rail.height) { hide(); return; }
+    const x = keyboardUs !== null || pointerX === null
+      ? Number(input.value) / Math.max(1, Number(input.max)) * rail.width
+      : Math.max(0, Math.min(rail.width, pointerX - rail.left));
+    marker.style.transform = `translate3d(${x}px, 0, 0)`;
+    marker.hidden = false;
+    const text = formatTime(keyboardUs ?? seekTarget(x, rail.width, Number(input.max)).ptsUs);
+    if (label.data !== text) label.data = text;
+    if (!geometry || text.length !== labelLength) {
+      const bounds = output.getBoundingClientRect();
+      geometry = { rail, width: bounds.width, height: bounds.height };
+      labelLength = text.length;
+    }
+    const { width, height } = geometry;
+    const left = Math.max(8, Math.min(innerWidth - width - 8, rail.left + x - width / 2));
+    const top = Math.max(4, rail.top + rail.height / 2 - height - 9);
+    const bodyHeight = height - 8, radius = bodyHeight / 2;
+    const tip = Math.max(radius + 10, Math.min(width - radius - 10,
+      left === rail.left + x - width / 2 ? width / 2 : Math.round((rail.left + x - left) * devicePixelRatio) / devicePixelRatio));
+    const key = `${width},${height},${tip}`;
+    if (key !== shape) {
+      // Rebuild only when the silhouette changes, not for every translated
+      // position: otherwise tiny float differences create new SVG mask images.
+      const d = `M ${radius} .5 H ${width - radius} A ${radius - .5} ${radius - .5} 0 0 1 ${width - .5} ${radius} A ${radius - .5} ${radius - .5} 0 0 1 ${width - radius} ${bodyHeight - .5} H ${tip + 12} C ${tip + 6} ${bodyHeight - .5} ${tip + 4} ${height - 4} ${tip + .6} ${height - 1} Q ${tip} ${height - .2} ${tip - .6} ${height - 1} C ${tip - 4} ${height - 4} ${tip - 6} ${bodyHeight - .5} ${tip - 12} ${bodyHeight - .5} H ${radius} A ${radius - .5} ${radius - .5} 0 0 1 .5 ${radius} A ${radius - .5} ${radius - .5} 0 0 1 ${radius} .5 Z`;
+      output.style.clipPath = `path("${d}")`;
+      output.style.setProperty('--seek-preview-outline', `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><path d="${d}" fill="none" stroke="white"/></svg>`)}")`);
+      shape = key;
+    }
+    output.style.transform = `translate3d(${left}px, ${top}px, 0)`;
+  };
+  const schedule = () => { if (active() && !frame) frame = requestAnimationFrame(render); };
   const update = (event: PointerEvent) => {
     if (input.disabled) { hide(); return; }
-    const rect = input.getBoundingClientRect();
-    const x = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
-    const target = seekTarget(x, rect.width, Number(input.max));
-    preview(x, target.ptsUs);
+    pointerX = event.clientX; keyboardUs = null; schedule();
   };
   input.addEventListener('pointermove', update);
   input.addEventListener('pointerenter', update);
   input.addEventListener('pointerleave', hide);
   input.addEventListener('blur', hide);
+  window.addEventListener('resize', hide);
+  window.addEventListener('scroll', event => {
+    // Indexing can scroll a sibling media-library list. That does not move
+    // this anchor and must not dismiss/reopen its glass preview.
+    if (event.target instanceof Node && event.target.contains(input)) hide();
+  }, true);
+  document.addEventListener('beforetoggle', event => {
+    if ((event as ToggleEvent).newState === 'open' && event.target instanceof Element &&
+      event.target.matches('dialog, .popup-menu, .header-actions[popover]')) hide();
+  }, true);
+  new ResizeObserver(() => { geometry = null; schedule(); }).observe(input);
+  new MutationObserver(() => {
+    if (input.disabled) { hide(); return; }
+    if (maximum !== input.max) { maximum = input.max; schedule(); }
+  }).observe(input, { attributes: true, attributeFilter: ['max', 'disabled'] });
   input.addEventListener('input', () => {
     syncTimelineProgress(input);
-    preview(Number(input.value) / Math.max(1, Number(input.max)) * input.clientWidth, Number(input.value));
+    keyboardUs = Number(input.value); schedule();
   });
 }

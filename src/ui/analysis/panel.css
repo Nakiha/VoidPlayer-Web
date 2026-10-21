@@ -370,12 +370,19 @@
   min-width: min(240px, calc(100vw - 16px));
   padding: 7px 9px; border: 0; line-height: 1.4;
   scrollbar-width: thin;
+  container-type: inline-size;
 }
 .analysis-linked-card table.fl-grid { width: 100%; table-layout: fixed; margin: 0; }
 .analysis-linked-card .analysis-card-label-col { width: 72px; }
 .analysis-linked-card > .analysis-overview-grid .analysis-card-label-col { width: 174px; }
-.analysis-combined-grid { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; margin-top: 5px; }
-.analysis-combined-grid > .analysis-card-section { flex: 1 1 var(--section-width, 200px); min-width: 0; }
+.analysis-combined-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 14px; align-items: stretch; margin-top: 5px; overflow: clip; }
+.analysis-combined-grid > .analysis-card-section { min-width: 0; }
+/* Section columns fit their minimum readable width, including a partial last
+   row. The track heading only needs a second line on genuinely small cards. */
+@container (max-width: 360px) {
+  .analysis-card-track { flex-wrap: wrap; }
+  .analysis-card-track-time { flex-basis: 100%; margin: 0 0 0 3px; font-size: 11px; color: var(--text-secondary); }
+}
 .analysis-linked-card .fl-grid th, .analysis-linked-card .fl-grid td { height: 21px; padding: 1px 0; }
 .analysis-linked-card .fl-grid th { padding-right: 8px; }
 .analysis-linked-card .fl-grid td + td { padding-left: 6px; }
@@ -384,7 +391,10 @@
 .analysis-linked-card .fl-grid thead th:last-child { padding-right: 0; }
 .analysis-linked-card .analysis-card-unit { min-width: 3ch; text-align: right; }
 .analysis-linked-card .analysis-card-section { position: relative; margin: 0; padding: 0 3px; border: 0; border-radius: 0; }
-.analysis-linked-card .analysis-card-section:not([hidden]) ~ .analysis-card-section:not([hidden])::before { content: ''; position: absolute; left: -4px; top: 3px; bottom: 3px; width: 1px; background: var(--border); }
+/* Rules sit in the grid gaps. Clipping naturally removes the first column's
+   left rule and the first row's top rule, regardless of how many columns fit. */
+.analysis-linked-card .analysis-card-section::before { content: ''; position: absolute; left: -7px; top: 4px; bottom: 4px; width: 1px; background: var(--divider); }
+.analysis-linked-card .analysis-card-section::after { content: ''; position: absolute; left: 3px; right: 3px; top: -7px; height: 1px; background: var(--divider); }
 .analysis-linked-card .analysis-card-section > strong { display: block; margin-bottom: 2px; }
 
 .analysis-linked-card.is-scrollable { pointer-events: auto; }
@@ -408,6 +418,7 @@
 .analysis-card-unit { display: inline-block; margin-left: 5px; color: var(--text-secondary); font-size: inherit; font-weight: 400; }
 .analysis-card .analysis-card-frame th, .analysis-card .analysis-card-frame td { color: var(--text-secondary); font-weight: 400; }
 .analysis-card .analysis-card-total th, .analysis-card .analysis-card-total td { border-top: 1px solid var(--border); padding-top: 4px; }
+.analysis-linked-card .analysis-card-total th, .analysis-linked-card .analysis-card-total td { border-top-color: var(--divider); padding-top: 5px; }
 /* Shared detail hierarchy for independent and embedded cards. */
 .analysis-card-depth { margin-left: 8px; padding: 1px 4px; border-radius: 4px; background: var(--surface-control); color: var(--text); }
 .analysis-card [data-kind="references"] { display: block; }
@@ -466,7 +477,7 @@
 .analysis-card-track-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-left:3px; font-weight:400; color:var(--text-secondary); }
 .analysis-card-track-time { flex-shrink:0; margin-left:8px; white-space:nowrap; font-variant-numeric:tabular-nums; }
 .analysis-track-details + .analysis-track-details { margin-top:7px; padding-top:5px; position:relative; }
-.analysis-track-details + .analysis-track-details::before { content:''; position:absolute; left:3px; right:3px; top:0; height:1px; background:var(--border); }
+.analysis-track-details + .analysis-track-details::before { content:''; position:absolute; left:3px; right:3px; top:0; height:1px; background:var(--divider); }
 .analysis-track-details .analysis-combined-grid { margin-top:3px; }
 .analysis-track-details .analysis-card-frame td { white-space:normal; overflow:visible; text-overflow:clip; overflow-wrap:anywhere; }
 .analysis-track-details .analysis-card-section p { white-space:normal; }
@@ -505,6 +516,7 @@
 .analysis-card [data-kind="nalu"] .analysis-card-frame td { flex: 0 0 auto; max-width: none; padding-left: 0; white-space: nowrap; overflow: visible; }
 /* Embedded sections may wrap only when their full row really cannot fit. */
 .analysis-linked-card [data-kind="nalu"] tbody .analysis-card-frame { min-width: 0; }
+.analysis-linked-card [data-kind="nalu"] tbody td { max-width: none; }
 .analysis-linked-card [data-kind="nalu"] .analysis-card-frame td { flex: 0 1 auto; min-width: 0; height: auto; white-space: normal; overflow-wrap: normal; }
 .analysis-load-legend { display:flex; align-items:center; flex-wrap:wrap; gap:8px; min-height:25px; padding:2px 8px; font-size:12px; }
 .analysis-load-legend button { display:inline-flex; align-items:center; gap:5px; padding:2px 4px; min-height:22px; border:0; background:transparent; color:var(--text); font:inherit; }

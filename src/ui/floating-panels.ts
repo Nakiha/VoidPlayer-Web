@@ -71,5 +71,17 @@ export function installFloatingPanelAvoidance(panel: HTMLElement, peer: HTMLElem
   changes.observe(peer, {attributes:true, attributeFilter:['hidden','style']});
   changes.observe(panel, {attributes:true, attributeFilter:['hidden']});
   window.addEventListener('resize', update, {signal});
-  return { update, dispose() { resize.disconnect(); changes.disconnect(); if(frame) cancelAnimationFrame(frame); } };
+  return {
+    update,
+    place() {
+      if (frame) cancelAnimationFrame(frame);
+      panel.setAttribute('data-positioning', '');
+      layout();
+      // Commit the initial avoidance position without transitioning from the
+      // hidden panel's old position. Its shared opacity entrance still runs.
+      panel.getBoundingClientRect();
+      panel.removeAttribute('data-positioning');
+    },
+    dispose() { resize.disconnect(); changes.disconnect(); if(frame) cancelAnimationFrame(frame); },
+  };
 }
