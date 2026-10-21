@@ -4,6 +4,7 @@ import { writeFile } from 'node:fs/promises';
 import { selectDiagrams, openRangeEditor, inspectCurrentWindow } from '../controls.mjs';
 import { recordStatusEvidence } from '../status-evidence.mjs';
 import { recordBrowserEvidence, saveBrowserFailure } from '../../../browser-failure-evidence.mjs';
+import { installStatusReadProbe } from '../status-read-probe.mjs';
 
 
 export async function run(context) {
@@ -71,6 +72,9 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
         let fresh, statuses, freshEvidence;
         try {
           fresh = await freshContext.newPage();
+          const navigations = [];
+          fresh.on('framenavigated', frame => { if (frame === fresh.mainFrame()) navigations.push(frame.url()); });
+          await fresh.addInitScript(installStatusReadProbe);
           freshEvidence = recordBrowserEvidence(fresh);
           const downloads = [];
           statuses = recordStatusEvidence(fresh, request => request.method() === 'GET' && /bitstream-analysis\/requests\/.*pack=gop/.test(request.url()));
@@ -94,6 +98,14 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
           assert.equal(state.counters.decodedAU, 0, 'a different browser reuses the server cache without decoding');
           assert.equal(downloads.length, 0, 'a different browser gets cached GOP packets rather than 300 picture downloads');
           const captured = await statuses.snapshot();
+          const reads = await fresh.evaluate(() => window.__statusReads);
+          const consumed = reads.flatMap(row => row.body?.chunks ?? []).flatMap(chunk => chunk.au ?? []);
+          const diag = { variant: process.env.DIAGNOSTIC_VARIANT, platform: process.platform, navigations,
+            state, reads, consumed, uniqueConsumed: new Set(consumed).size };
+          await writeFile(artifact('actual-consumer-evidence.json'), JSON.stringify(diag, null, 2));
+          console.log('ACTUAL_CONSUMER', JSON.stringify({ variant: diag.variant, platform: diag.platform, navigations, consumed: consumed.length,
+            uniqueConsumed: diag.uniqueConsumed, cancelsAfterEOF: reads.filter(row => row.events.some(event => event.operation === 'cancel' && event.afterEOF)).length,
+            signalAborts: reads.filter(row => row.abort).length, devtoolsAborts: captured.filter(row => row.state === 'failed').length }));
           await writeFile(artifact('fresh-browser-status-evidence.json'), JSON.stringify(captured, null, 2));
           for (const status of captured) {
             assert.notEqual(status.state, 'pending', `status request must settle: ${status.url}`);

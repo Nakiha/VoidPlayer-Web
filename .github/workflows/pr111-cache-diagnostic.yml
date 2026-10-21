@@ -1,0 +1,81 @@
+name: PR111 Linux cached GOP causal diagnostic
+on:
+  push:
+    branches: [codex/pr111-linux-cache-evidence-20261021]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  reader-cleanup:
+    name: Linux Chromium reader cleanup (${{ matrix.variant }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [original, eof-release-only]
+    env:
+      DIAGNOSTIC_VARIANT: ${{ matrix.variant }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/testing/prepare-ci-apt.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-core
+          path: public/vendor/voidplayer-core
+          run-id: 39667196135
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-analysis-core
+          path: public/vendor/voidplayer-analysis
+          run-id: 39667196135
+          github-token: ${{ github.token }}
+      - run: npm ci
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: npx playwright install --with-deps chromium
+      - name: Apply controlled EOF cleanup experiment
+        if: matrix.variant == 'eof-release-only'
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('shared/analysis/bitstream/products.ts')
+          text, tail=p.read_text().split('export type FrameMetadata', 1)
+          old="const decoder = new TextDecoder(); let bytes = 0, text = '';"
+          assert text.count(old)==1
+          text=text.replace(old,"const decoder = new TextDecoder(); let bytes = 0, text = '', complete = false;")
+          old="const next = await reader.read(); if (next.done) break;"
+          assert text.count(old)==1
+          text=text.replace(old,"const next = await reader.read(); if (next.done) { complete = true; break; }")
+          old="} finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }"
+          assert text.count(old)==1
+          text=text.replace(old,"} finally { if (!complete) await reader.cancel().catch(() => {}); reader.releaseLock(); }")
+          p.write_text(text+'export type FrameMetadata'+tail)
+          PY
+      - run: npm run build
+      - name: Run both independent samples and retain every failure
+        shell: bash
+        run: |
+          mkdir -p .run/diagnostics
+          git diff > .run/diagnostics/experiment.diff
+          set +e
+          failed=0
+          for iteration in 1 2; do
+            target=".run/diagnostics/${DIAGNOSTIC_VARIANT}-${iteration}"
+            VOIDPLAYER_TEST_ARTIFACTS="$target" node scripts/testing/browser/media/bitstream-analysis.mjs chromium --diagrams-only > "$target.log" 2>&1
+            result=$?
+            echo "$result" > "$target.exit-code"
+            cat "$target.log"
+            if [ "$result" -ne 0 ]; then failed=1; fi
+          done
+          exit "$failed"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr111-cache-${{ matrix.variant }}
+          path: .run/diagnostics/
+          if-no-files-found: error
