@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import path from "node:path";
+import { writeFile } from 'node:fs/promises';
 import { selectDiagrams, openRangeEditor, inspectCurrentWindow } from '../controls.mjs';
+import { recordStatusEvidence } from '../status-evidence.mjs';
+import { recordBrowserEvidence, saveBrowserFailure } from '../../../browser-failure-evidence.mjs';
 
 
 export async function run(context) {
@@ -65,17 +68,13 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
       if (input === 'library') {
         const workspace = await call('export_workspace');
         const freshContext = await context.browser.newContext({ locale: 'zh-CN', viewport: { width: 1280, height: 900 } });
+        let fresh, statuses, freshEvidence;
         try {
-          const fresh = await freshContext.newPage(), downloads = [], statuses = [];
+          fresh = await freshContext.newPage();
+          freshEvidence = recordBrowserEvidence(fresh);
+          const downloads = [];
+          statuses = recordStatusEvidence(fresh, request => request.method() === 'GET' && /bitstream-analysis\/requests\/.*pack=gop/.test(request.url()));
           fresh.on('request', request => { if (/bitstream-analysis\/chunks\//.test(request.url())) downloads.push(request.url()); });
-          fresh.on('response', response => {
-            if (response.request().method() !== 'GET' || !/bitstream-analysis\/requests\/.*pack=gop/.test(response.url())) return;
-            // Consume while Chromium still owns the response body. Keeping the
-            // Response until after restore can lose it to navigation/eviction.
-            // Handle rejection immediately, but fail the cache assertions below
-            // if any body could not be captured.
-            statuses.push(response.json().then(body => ({ body }), error => ({ error, url: response.url() })));
-          });
           await fresh.addInitScript(() => { window.__vpAnalysisQA = true; });
           await fresh.goto(context.url);
           await fresh.waitForFunction(() => !!window.voidPlayer?.tools);
@@ -88,19 +87,38 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
             console.error('fresh-browser-cache-restore', await fresh.evaluate(() => ({
               analysis: window.voidPlayer.tools.find(tool => tool.name === 'get_bitstream_analysis_state').execute({ slot: 'A' }),
               workspace: window.voidPlayer.exportWorkspace(),
-            })), 'statuses', await Promise.all(statuses));
+            })), 'statuses', await statuses.snapshot());
             await fresh.screenshot({ path: artifact('fresh-browser-cache-failure.png') }); throw error;
           });
           const state = await fresh.evaluate(() => window.voidPlayer.tools.find(tool => tool.name === 'get_bitstream_analysis_state').execute({ slot: 'A' }));
           assert.equal(state.counters.decodedAU, 0, 'a different browser reuses the server cache without decoding');
           assert.equal(downloads.length, 0, 'a different browser gets cached GOP packets rather than 300 picture downloads');
-          const captured = await Promise.all(statuses);
-          for (const status of captured) if (status.error) throw new Error(`Could not capture cached GOP status: ${status.url}`, { cause: status.error });
-          const packets = captured.flatMap(status => status.body.chunks).filter(chunk => chunk.cachedGop);
+          const captured = await statuses.snapshot();
+          await writeFile(artifact('fresh-browser-status-evidence.json'), JSON.stringify(captured, null, 2));
+          for (const status of captured) {
+            assert.notEqual(status.state, 'pending', `status request must settle: ${status.url}`);
+            if (status.state === 'failed') {
+              assert.ok(['net::ERR_ABORTED', 'cancelled', 'Load request cancelled'].includes(status.failure), `unexpected status transport failure: ${JSON.stringify(status)}`);
+            } else {
+              assert.equal(status.status, 200, `cached status HTTP error: ${status.url}`);
+              assert.equal(status.bodyError, undefined, `could not read completed status body: ${JSON.stringify(status)}`);
+            }
+          }
+          // Superseded viewport polls may be cancelled after headers. They
+          // deliver no packet; all 300 pictures must still arrive via successful
+          // responses, without decode or individual picture downloads.
+          const packets = captured.filter(status => status.state === 'finished').flatMap(status => status.body.chunks).filter(chunk => chunk.cachedGop);
           assert.equal(packets.reduce((sum, chunk) => sum + chunk.cachedGop.length, 0), 300);
           assert.ok(packets.length < 300 && packets.every(packet => packet.cachedGop.length > 1));
           await fresh.screenshot({ path: artifact('fresh-browser-cached-gops.png') });
-        } finally { await freshContext.close(); }
+        } catch (error) {
+          try {
+            await saveBrowserFailure({ page: fresh, directory: path.dirname(artifact('fresh-browser-cache')), name: 'fresh-browser-cache',
+              context: { engine: context.engine, caseName: 'fresh-browser-cache', phase: 'restore-cached-gops' }, error,
+              evidence: freshEvidence, extra: { statuses: await statuses?.snapshot() } });
+          } catch (cause) { console.error('fresh-browser-cache: could not save failure scene', cause); }
+          throw error;
+        } finally { statuses?.dispose(); await freshContext.close(); }
       }
       assert.ok(requests.slice(requestsBefore).filter(r => r.method === 'POST' && /bitstream-analysis\/requests/.test(r.url)).every(r => r.target?.mode==='stream' && r.target.window), 'viewport navigation only requests visible GOPs');
       await inspectCurrentWindow(page);

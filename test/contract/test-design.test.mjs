@@ -7,9 +7,41 @@ import { describeTestPlan } from '../../scripts/testing/execution-plan.mjs';
 import { parseOptions } from '../../scripts/testing/options.mjs';
 import { runAnalysisGroups } from '../../scripts/testing/analysis/run.mjs';
 import { snapshotBuild } from '../../scripts/testing/build.mjs';
+import { recordStatusEvidence } from '../../scripts/testing/analysis/status-evidence.mjs';
+import { EventEmitter } from 'node:events';
 import { mkdtemp, mkdir, writeFile, readFile, rm, cp } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+
+test('status evidence distinguishes headers from completed bodies and retains cancelled requests', async () => {
+  const page = new EventEmitter(), evidence = recordStatusEvidence(page, request => request.url().includes('/status'));
+  let cancelledReads = 0;
+  const cancelled = { url: () => '/status?cancel', failure: () => ({errorText:'net::ERR_ABORTED'}), response: () => { cancelledReads++; throw Error('body unavailable'); } };
+  const complete = { url: () => '/status?complete', response: async () => ({status:()=>200,json:async()=>({chunks:[{cachedGop:[1,2,3]}]})}) };
+  page.emit('request', cancelled); page.emit('response', { request: () => cancelled });
+  page.emit('requestfailed', cancelled);
+  page.emit('request', complete); page.emit('requestfinished', complete);
+  assert.deepEqual(await evidence.snapshot(), [
+    {url:'/status?cancel',state:'failed',failure:'net::ERR_ABORTED'},
+    {url:'/status?complete',state:'finished',status:200,body:{chunks:[{cachedGop:[1,2,3]}]}},
+  ]);
+  assert.equal(cancelledReads, 0, 'an aborted response is never parsed as a completed JSON packet');
+  evidence.dispose();
+  for (const name of ['request','requestfinished','requestfailed']) assert.equal(page.listenerCount(name), 0);
+});
+
+test('completed unreadable status bodies and unfinished requests remain visible failures', async () => {
+  const page = new EventEmitter(), evidence = recordStatusEvidence(page, request => request.url().startsWith('/status'));
+  const broken = {url:()=>'/status?broken',response:async()=>({status:()=>200,json:async()=>{throw Error('invalid JSON');}})};
+  page.emit('request', broken); page.emit('requestfinished', broken);
+  page.emit('request', {url:()=>'/status?pending'});
+  page.emit('request', {url:()=>'/unrelated'});
+  assert.deepEqual(await evidence.snapshot(), [
+    {url:'/status?broken',state:'finished',status:200,bodyError:'invalid JSON'},
+    {url:'/status?pending',state:'pending'},
+  ]);
+  evidence.dispose();
+});
 
 test('served build snapshots survive later rebuilds and reject publication during capture', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'vp-build-snapshot-'));
