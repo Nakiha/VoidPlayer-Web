@@ -68,7 +68,14 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
         try {
           const fresh = await freshContext.newPage(), downloads = [], statuses = [];
           fresh.on('request', request => { if (/bitstream-analysis\/chunks\//.test(request.url())) downloads.push(request.url()); });
-          fresh.on('response', response => { if (response.request().method() === 'GET' && /bitstream-analysis\/requests\/.*pack=gop/.test(response.url())) statuses.push(response); });
+          fresh.on('response', response => {
+            if (response.request().method() !== 'GET' || !/bitstream-analysis\/requests\/.*pack=gop/.test(response.url())) return;
+            // Consume while Chromium still owns the response body. Keeping the
+            // Response until after restore can lose it to navigation/eviction.
+            // Handle rejection immediately, but fail the cache assertions below
+            // if any body could not be captured.
+            statuses.push(response.json().then(body => ({ body }), error => ({ error, url: response.url() })));
+          });
           await fresh.addInitScript(() => { window.__vpAnalysisQA = true; });
           await fresh.goto(context.url);
           await fresh.waitForFunction(() => !!window.voidPlayer?.tools);
@@ -81,13 +88,15 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
             console.error('fresh-browser-cache-restore', await fresh.evaluate(() => ({
               analysis: window.voidPlayer.tools.find(tool => tool.name === 'get_bitstream_analysis_state').execute({ slot: 'A' }),
               workspace: window.voidPlayer.exportWorkspace(),
-            })), 'statuses', await Promise.all(statuses.map(response => response.json())));
+            })), 'statuses', await Promise.all(statuses));
             await fresh.screenshot({ path: artifact('fresh-browser-cache-failure.png') }); throw error;
           });
           const state = await fresh.evaluate(() => window.voidPlayer.tools.find(tool => tool.name === 'get_bitstream_analysis_state').execute({ slot: 'A' }));
           assert.equal(state.counters.decodedAU, 0, 'a different browser reuses the server cache without decoding');
           assert.equal(downloads.length, 0, 'a different browser gets cached GOP packets rather than 300 picture downloads');
-          const packets = (await Promise.all(statuses.map(response => response.json()))).flatMap(state => state.chunks).filter(chunk => chunk.cachedGop);
+          const captured = await Promise.all(statuses);
+          for (const status of captured) if (status.error) throw new Error(`Could not capture cached GOP status: ${status.url}`, { cause: status.error });
+          const packets = captured.flatMap(status => status.body.chunks).filter(chunk => chunk.cachedGop);
           assert.equal(packets.reduce((sum, chunk) => sum + chunk.cachedGop.length, 0), 300);
           assert.ok(packets.length < 300 && packets.every(packet => packet.cachedGop.length > 1));
           await fresh.screenshot({ path: artifact('fresh-browser-cached-gops.png') });
