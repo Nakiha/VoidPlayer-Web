@@ -43,7 +43,7 @@ test('real FLV and JS-TS commit headers agree with ffprobe and shared statistics
       const response = await fetch(endpoint), page = await response.json(); assert.equal(response.status, 200, JSON.stringify(page));
       const o = page.overview;
       assert.equal(o.technical.codec.value, doc.codec); assert.equal(o.evidence.provenance, 'server-scan');
-      assert.equal(o.recordCount, doc.packets.length); assert.equal(o.capabilities.records.ready, false);
+      assert.equal(o.recordCount, doc.packets.length); assert.equal(o.capabilities.records.ready, true);
       assert.equal(o.technical.durationUs.value, null); assert.equal(o.technical.decodedFrameCount.value, null);
       assert.equal(o.technical.frameRateMode.value, null); assert.equal(o.stablePresentationUs, null);
       let packets: { pts: number | null; dts: number | null; size: number; key: boolean }[];
@@ -71,6 +71,15 @@ test('real FLV and JS-TS commit headers agree with ffprobe and shared statistics
       assert.equal(o.statistics.payloadBytes, packets.reduce((n, p) => n + p.size, 0));
       assert.equal(o.statistics.indexKeyCount, packets.filter(p => p.key).length);
       assert.equal(o.coverage.continuousPresentation, null);
+      for (const axis of ['pts', 'dts'] as const) {
+        const response = await fetch(endpoint + `&view=records&axis=${axis}&startTick=-10000000&endTick=10000000&byteBudget=65536`);
+        const records = await response.json(); assert.equal(response.status, 200, JSON.stringify(records));
+        const expected = doc.packets.map((p: any, i: number) => ({ tick: identity.kind === 'flv' ? p[axis === 'pts' ? 2 : 3] : p.timing[axis], i }))
+          .filter((p: any) => p.tick !== null && p.tick >= -10000000 && p.tick < 10000000);
+        assert.deepEqual(records.records.map((r: any) => r.decodeOrdinal), expected.map((p: any) => String(p.i)));
+        assert.equal(records.exhausted, true); assert.equal(records.inspected, doc.packets.length);
+      }
+
       if (/^(tail|gap)/.test(entry.name)) {
         assert.equal(o.state, 'partial'); assert.equal(o.reason, entry.name.startsWith('tail') ? 'retained-prefix' : 'recovered-gaps');
         if (entry.name.startsWith('tail')) assert.equal(o.coverage.truncatedAt, identity.kind === 'flv' ? doc.truncatedAt : doc.indexTruncatedAt);

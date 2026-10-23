@@ -21,11 +21,11 @@
 - `schema=voidplayer-media-query, version=1, describedBy=/api/media/query-schema`。每页包含源版本、流身份、时基、覆盖、字段状态及分页上下文。
 - 文件 size 是字节，lastModified 是 Unix 毫秒。技术字段来自特定缓存流，有 value/status/source/reason；未知为 null。FFmpeg 的 codec、索引器报告的 width/height、时基与流号可用。新 FLV/TS 提交还提供容器、TS PID、初始配置头可解析的 coded/visible 尺寸；色彩标签、profile、SAR、rotation、位深、帧率性质等没有缓存证据就不推测。
 - 包记录保留原 PTS、DTS、duration 和 decodeOrdinal。64 位整数用十进制字符串避免精度损失。归一化 PTS 仅在 originVerified 时计算，取整与共享 FFmpeg 统计适配器一致。缺时间戳不替换成零或平均帧率。
-- 记录按缓存 PTS 序（未知 PTS 尾部）返回，包括 DTS 条件查询；decodeOrdinal 保留解码序，重复 PTS 不合并。时间条件不包含缺该 axis 的记录，`inspectedUntimed` 只统计本页检查到的缺失值。
+- FFmpeg 记录按缓存 PTS 序（未知 PTS 尾部）返回；FLV/TS 按原包数组顺序返回，包括 DTS 条件查询。`overview.recordSemantics` 明示排序、原始值过滤、时钟模数与未验证连续性；decodeOrdinal 保留解码序，重复 PTS 不合并。时间条件不包含缺该 axis 的记录，`inspectedUntimed` 只统计本页检查到的缺失值。
 - 粒度是容器 packet；不保证一包等于一个 sample/AU/decoded picture。containerKey 不是随机访问验证；I/P/B、QP 和验证结果保持 null。压缩 payload 字节不是像素内存或传输流量。
 - `not-indexed` 表示缓存缺失；`unknown` 表示旧格式/尚无语义适配；`partial` 包括构建中、失败、仅保留有效前段、FLV 恢复间隙和完整性未知；`complete` 要求终态且索引显式声明完整。`terminal` 与覆盖独立，完成的截断索引仍为 partial。
 - scannedBytes 是扫描进度，stablePresentationUs 是独立的排他稳定水位，不是媒体时长。上传/旧缓存未提供可信水位时为 null。终态索引也可能有缺 PTS/DTS 的包；不能因此假定 CFR、完整呈现帧数或有效评分输入。
-- 每页最多检查 2048 个缓存记录、返回 256 条，响应预算 8192–262144 字节。SQL 先用 octet_length 检查磁盘列长度；仅对不超过 64 KiB 的 batch 取最多 128 条记录的片段，超限/损坏缓存返回 index-cache-invalid，不展开大 TEXT。metadata 同样限制 32 KiB；不加载整份索引。库 I/O 在既有数据库 Worker 中执行，查询持有短只读事务；每个库至多接纳 8 个在途缓存查询，覆盖文件校验、数据库读取及响应完成/断开全过程；繁忙时返回 503 + Retry-After。摘要是本页返回条数、压缩字节和容器 key 数。
+- 每页最多检查 2048 个缓存记录、返回 256 条，响应预算 8192–262144 字节。SQL 先用 octet_length 检查磁盘列长度；仅对不超过 64 KiB 的 batch 取最多 128 条记录的片段，超限/损坏缓存返回 index-cache-invalid，不展开大 TEXT。metadata 同样限制 32 KiB。FLV/TS 使用独立分片布局，每页至多读取 256 KiB 包分片，64 条/64 KiB 每片，另有 8 KiB 语义头与 4 KiB 存储描述符；永不读取 seq=0。响应分页不是有界存储读取的替代。库 I/O 在既有数据库 Worker 中执行，查询持有短只读事务；每个库至多接纳 8 个在途缓存查询，覆盖文件校验、数据库读取及响应完成/断开全过程；繁忙时返回 503 + Retry-After。摘要是本页返回条数、压缩字节和容器 key 数。
 - 游标绑定媒体版本、索引身份、epoch、构建快照和查询条件；增长、失败、完成、替换或清理返回 409 `index-snapshot-changed`。丢弃旧页后重查，不混用两个快照。正在频繁增长的索引可能需要等构建稳定后才能完成多页统计。
 - 版本改变返回 `media-version-changed`；文件离线/路径边界失败返回 `media-unavailable`。响应不含绝对路径、内部配置或原始数据库错误。
 
@@ -35,13 +35,13 @@
 | --- | --- |
 | FFmpeg schema 3、已分批缓存、支持的流身份 | 技术信息、概览、原始 PTS/DTS 区间记录和分页统计；真实 AVI/FFV1、MPEG-PS/MPEG-2 用 ffprobe 包信息对照 |
 | 历史 FFmpeg 未拆分文档 | unknown / semantic-adapter-unavailable；读取不隐式迁移整份文档 |
-| 新提交 FLV schema 3 | 有界技术头、两条原始时间轴观察范围与统计；FLV 原生毫秒在缓存中缩放为整数微秒；截断/恢复间隙保持 partial，上传缓存不能证明完整扫描 |
-| 新提交 JS TS schema 2 | 有界技术头、原始 PES PTS/DTS 统计、PID 与有效呈现范围；原始时基 1/90000；派生 PTS 与缺失 raw PTS/DTS 分开 |
-| 旧 FLV / JS TS 缓存 | unknown / semantic-header-missing；保留原紧凑读取，查询不回填、不清理、不触发扫描 |
+| 新提交 FLV schema 3 | 有界技术头、两条原始时间轴观察范围、分片记录查询与分页统计；FLV 原生毫秒在缓存中缩放为整数微秒；截断/恢复间隙保持 partial，上传缓存不能证明完整扫描 |
+| 新提交 JS TS schema 2 | 有界技术头、原始 PES PTS/DTS 分片记录查询与统计、PID 与有效呈现范围；原始时基 1/90000；派生 PTS 与缺失 raw PTS/DTS 分开 |
+| 旧 FLV / JS TS 缓存 | 有 #126 语义头仍可读概览，无头则 unknown；记录不可用并明确要求显式重新索引，原 GUI 仍可读，查询不回填或扫描 |
 | JS Matroska 缓存 | 发现身份与构建状态；本阶段尚无语义适配 |
 | 没有支持缓存的 MP4、FLV、TS 等媒体 | 文件信息可读，缓存缺失为 not-probed / not-indexed；不暗中改用另一容器解析器或解码器 |
 
-本批不关闭 #120。MP4/Matroska 语义适配、FLV/TS 记录和时间范围查询、技术条件筛选的覆盖/未知统计、完整流列表与 codec/色彩探测、持久探测/建索引任务、优化按时间定位及跨页聚合服务仍待实现。大范围查询按游标渐进检查缓存，未新增一套媒体索引。文件名、尺寸、时长相似仅是检索线索，不能证明参考配对内容与时间对齐。
+本批不关闭 #120。MP4/Matroska 语义适配、技术条件筛选的覆盖/未知统计、完整流列表与 codec/色彩探测、持久探测/建索引任务、优化按时间定位及跨页聚合服务仍待实现。大范围查询按游标渐进检查缓存，未新增一套媒体索引。文件名、尺寸、时长相似仅是检索线索，不能证明参考配对内容与时间对齐。
 
 第一批开发固定依赖 #124 的 `036e951ad778725cbefd809487a76581ef58a592`。最终合并前必须基于合并后的 main 整合并重新验证；不修改 #124 的活动 UI、持久化浏览器测试或 identity CI，也不涉及评分、集群或 FFmpeg 实验。
 
@@ -58,7 +58,7 @@
 - `statistics.payloadBytes`、`indexKeyCount` 与原权威包表一致，涵盖未计时包；key 是索引解析器分类，不能推断 decoded picture、I/P/B、QP 或经过验证的逐帧随机访问。`evidence.geometryScope=initial-codec-configuration` 的尺寸只描述初始配置，不保证每张画面恒定。`indexedDurationUs` 标记 `derived`，复用索引跨度及尾包时长估计；`durationUs`（容器时长）仍未知，不强行判定 CFR/VFR。
 - FLV 的服务端扫描与经过结构验证的上传分别标为 `server-scan` / `validated-upload`。上传不证明完整扫描，`scannedBytes=null`、完整性未知。前缀与恢复间隙分别报告，终态不等于完整覆盖。TS `integrity` 沿用原解析器；`coverage.recovery` 单独保留 late-PSI 恢复方法，不伪造 FLV 间隙数。
 - FLV/TS 现有路径只提交终态文档，扫描中/失败记录未持久保存；因此 `cache-miss` **不能判断任务没有运行或已经失败**。本阶段不改变任务生命周期。若持久 manifest 明确标为 building/failed，概览保留 partial / 对应原因，不声称完成。
-- FLV/TS 的 `capabilities.records` 本阶段仍为 false，原因 `semantic-record-adapter-unavailable`；请求记录得到空数组、`summary=null`、`exhausted=false`，不会尝试读取整份 JSON。快照仍绑定头及源版本；不提供能跨版本混用的 FLV/TS 游标。
+- 第三小阶段已启用 FLV/TS 记录适配。仅新显式提交使用版本化分片；旧单文档缓存 `ready=false`，原因 `packet-storage-unavailable-explicit-reindex-required`，不回填。详见 [分片存储约定](media-record-storage.md)。
 
 普通 HTTP 示例（先从 browse 获得 ID/VERSION）：
 
@@ -76,3 +76,22 @@ curl -fsS --get "$BASE/api/media/$ID/index-query" \
 ```
 
 回归入口已登记在 manifest：`test/unit/committed-index-query.test.ts` 覆盖时间戳/缺值、旧库升级、错误头、超大文档、重复提交、失效和 HTTP；`test/media/committed-index-query.test.ts` 用 ffmpeg 临时生成 H.264 FLV、H.264/MPEG-2 TS，连同尾部损坏及 FLV 重同步，与共享索引统计及 ffprobe 对照，检查 GET/HEAD、info 和原 GUI 紧凑接口。测试媒体仅在临时目录生成，不上传样片。
+
+
+## FLV / TS 记录查询示例
+
+```sh
+curl -fsS --get "$BASE/api/media/$ID/index-query" \
+  --data-urlencode "v=$VERSION" --data-urlencode 'kind=flv' \
+  --data-urlencode 'stream=video:0' --data-urlencode 'schema=3' \
+  --data-urlencode 'indexer=flv-demux-v3' --data-urlencode 'view=records' \
+  --data-urlencode 'axis=dts' --data-urlencode 'startTick=0' \
+  --data-urlencode 'endTick=1000000' --data-urlencode 'limit=100' \
+  --data-urlencode 'byteBudget=65536'
+```
+
+此例查原始 FLV 缓存微秒的 `[0,1000000)`。TS 复制 info 中的身份，原始 ticks 为 1/90000。
+`durationTick` 不填派生时长；TS `effectiveDurationUs` 单独标注 index-derived，
+`timestampSource` 分开 flv-tag / pes / derived。缺 DTS 保留 null，不能使用 ffprobe 补推的值。
+FLV `normalizedPtsUs` 是减去首解码包 PTS 的原始值偏移，不展开 wrap；TS 归一化未知。
+断连通过共享取消标记中止数据库遍历；容量直到 Worker 真正结束才释放，超时也不能提前释放。

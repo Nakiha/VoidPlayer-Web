@@ -34,6 +34,9 @@ export async function handleMediaQueryRoutes(ctx: RouteContext, req: IncomingMes
   const match = /^\/api\/media\/([0-9a-f]{24})\/(info|index-query)$/.exec(url.pathname);
   if (!match && url.pathname !== MEDIA_QUERY_DICTIONARY) return false;
   const links = { describedBy: MEDIA_QUERY_DICTIONARY, help: '/agent/library.md', browse: '/api/library/browse?recursive=1' };
+  const cancellation = new SharedArrayBuffer(4);
+  const cancel = () => Atomics.store(new Int32Array(cancellation), 0, 1);
+  res.once('close', cancel);
   let completeHandling: (() => void) | undefined;
   try {
     if (req.method !== 'GET' && req.method !== 'HEAD') throw new AdminError(405, 'This endpoint is read-only.', 'method-not-allowed');
@@ -69,7 +72,7 @@ export async function handleMediaQueryRoutes(ctx: RouteContext, req: IncomingMes
         query = view === 'records' ? parseSemanticQuery(url.searchParams) : undefined;
       } catch (error) { throw new AdminError(400, (error as Error).message, 'invalid-index-query'); }
       if (!query && ['axis', 'startTick', 'endTick', 'limit', 'byteBudget', 'cursor'].some(key => url.searchParams.has(key))) throw new AdminError(400, 'Record parameters require view=records.', 'invalid-index-query');
-      body = { ...await library.indexJobs.call('semantic-query', { id, version, identity, query, cursor: url.searchParams.get('cursor') ?? undefined }), links };
+      body = { ...await library.indexJobs.call('semantic-query', { id, version, identity, query, cursor: url.searchParams.get('cursor') ?? undefined, cancellation }), links };
       if (query && Buffer.byteLength(JSON.stringify(body)) > query.byteBudget) throw new AdminError(413, 'Response context exceeds byteBudget.', 'response-budget-too-small');
     }
     if (res.destroyed) return true;
@@ -83,6 +86,7 @@ export async function handleMediaQueryRoutes(ctx: RouteContext, req: IncomingMes
     json(req, res, known ? error.status : 500, { error: known && error.status < 500 ? error.message : 'Cached media query failed.',
       code: known ? error.code : 'media-query-failed', requestId: ctx.requestId, links });
   } finally {
+    res.off('close', cancel);
     completeHandling?.();
   }
   return true;

@@ -72,8 +72,9 @@ GET /api/media/ID/index-query?v=VERSION&kind=KIND&stream=STREAM&schema=SCHEMA&in
 This overview separates not-indexed, unknown, partial and complete; terminal
 build completion alone does not prove complete source coverage. Inspect readiness.
 FFmpeg schema-3 record caches expose semantic packets. New FLV and JS-TS commits
-also expose bounded technical/coverage headers; their record adapter remains
-unavailable. Legacy FLV/TS rows return semantic-header-missing without migrating.
+also expose bounded technical/coverage headers and raw-clock record pages when
+packet storage is ready. Older FLV/TS caches require explicit reindexing for records
+(packet-storage-unavailable-explicit-reindex-required); reads never migrate them.
 Headers describe selected cached packets, not all streams or decoded pictures.
 coverage.pts/dts minTick/maxTick are inclusive observed extrema, not continuous
 coverage; count/missing are separate for each raw axis. TS derived effectivePtsUs
@@ -88,15 +89,21 @@ commit: cache-miss does not prove that no build is running or that one succeeded
 Existing compact frame-index routes remain compatible. No new probe/build task
 is provided here.
 
-For a ready FFmpeg record adapter, add view=records&axis=pts&startTick=0&endTick=90000&limit=100&byteBudget=65536
+For a ready record adapter, add view=records&axis=pts&startTick=0&endTick=90000&limit=100&byteBudget=65536
 for a bounded half-open interval in ORIGINAL stream ticks. 90000 ticks are one
 second only when the returned time base is 1/90000. axis=dts is also supported.
 Ticks and ordinals are decimal strings; missing timestamps are null. The exclusive
 endTick may be 9223372036854775808 to include the largest signed timestamp. Output stays
-in stored PTS order with untimed records last; decodeOrdinal is the original
-packet order. Packets are not necessarily decoded pictures or access units.
+in stored PTS order for FFmpeg (untimed last), and in source packet order for
+FLV/TS. decodeOrdinal is the original packet order. FLV/TS do not unwrap clocks
+or verify continuity; overview.recordSemantics states these limits. Packets are not necessarily decoded pictures or access units.
 Container key flags do not prove I-pictures or verified random access; QP and
-picture type remain null. Normalized microseconds require a verified origin.
+picture type remain null. FLV normalizedPtsUs is only a raw offset from the first
+decode-packet PTS, not elapsed time across wrap/discontinuity; TS normalization
+is unavailable. Missing DTS stays null even if ffprobe can derive it.
+FLV/TS read at most 256 KiB of packet chunks and inspect at most 2048 records per
+page; each chunk is at most 64 records/64 KiB. Read budgets may yield empty pages
+with a nextCursor. Continue those pages to finish the range summary.
 
 Follow nextCursor using identical source/version/identity/axis/range. An empty
 records page may still have a cursor: each page examines at most 2048 records,

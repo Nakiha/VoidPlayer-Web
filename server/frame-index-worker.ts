@@ -19,7 +19,7 @@ parentPort!.on('message', (request: FrameIndexRequest) => {
         send(frameIndexReply(request, queries.inventory(request.id, request.version, request.offset)));
         break;
       case 'semantic-query':
-        send(frameIndexReply(request, queries.query(request.id, request.version, request.identity, request.query, request.cursor)));
+        send(frameIndexReply(request, queries.query(request.id, request.version, request.identity, request.query, request.cursor, request.cancellation)));
         break;
       case 'epoch':
         send(frameIndexReply(request, store.epoch));
