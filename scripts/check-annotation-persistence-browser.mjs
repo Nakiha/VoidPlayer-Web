@@ -59,6 +59,9 @@ try {
  // This page sees the other writer's local draft but offers no takeover tools.
  await a.locator('#settings-open').click();await a.locator('#settings-tab-workspace').click();await checkWorkspace(a);await a.locator('#settings-close').click();await waitForDialogClosed(a);
  await b.unroute(routePattern);
+ // Offline transport errors already set state=error. Wait for the retried
+ // write's persisted revision conflict before checking its recovery state.
+ await until(()=>readDrafts(b),drafts=>drafts.some(draft=>draft.id===mark.id && draft.conflict));
  await b.waitForFunction(()=>window.testAnnotationStatus?.state==='error');
  await b.locator('#settings-open').click();await b.locator('#settings-tab-workspace').click();
  await checkWorkspace(b);

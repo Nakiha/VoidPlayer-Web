@@ -7,7 +7,9 @@ import { referenceVersion } from '../media/io/media-reference.ts';
 
 export type AnnotationDocument = { mark: Mark; media: MediaInfo[] };
 export type AnnotationRecord = { id: string; space: string; revision: number; sequence: number; deleted: boolean; updatedAt: string; updatedBy: string; document: AnnotationDocument };
-export type AnnotationOperation = { operationId: string; id: string; revision: number; action: 'put' | 'delete' | 'restore'; document?: AnnotationDocument };
+/** Client labels are attribution supplied by the caller, never authentication. */
+export type AnnotationClientIdentity = { kind: 'gui' | 'agent' | 'http'; id?: string };
+export type AnnotationOperation = { operationId: string; id: string; revision: number; action: 'put' | 'delete' | 'restore'; document?: AnnotationDocument; client?: AnnotationClientIdentity };
 export type AnnotationPage = { entries: AnnotationRecord[]; cursor: number; previewEpoch?: number; more: boolean };
 export function parseAnnotationDocument(value: unknown): AnnotationDocument {
   const input = value as AnnotationDocument;

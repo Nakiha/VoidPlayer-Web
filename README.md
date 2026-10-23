@@ -61,6 +61,7 @@ npm run serve
 
 - [文档导航](docs/README.md)：当前行为契约、验证入口及历史验收记录。
 - [架构与行为边界](docs/architecture.md)：会话、解码、呈现、标注与 Agent 接口。
+- [HTTP Agent 与操作同步](docs/agent-http.md)：渐进式能力发现、无页面标注操作与 GUI 活动记录；后续计划见 [roadmap #112](https://github.com/Nakiha/VoidPlayer-Web/issues/112)。
 - [验证说明](docs/testing.md)：统一测试套件、单项筛选、准备条件、CI 门禁与结果报告。
 - [主题与 UI 约定](src/themes/README.md)：颜色、材质、密度及主题适配边界。
 - [HDR 支持](docs/hdr-support.md)、[本地化维护](docs/localization.md)、[容器恢复边界](docs/container-recovery.md)。

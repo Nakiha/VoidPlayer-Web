@@ -61,7 +61,7 @@ export function createMediaServer(options: ServerOptions): Server {
     const started = performance.now();
     const requestId = randomUUID();
     res.setHeader('x-request-id', requestId);
-    res.setHeader('link', '</llms.txt>; rel="describedby"; type="text/plain"');
+    res.setHeader('link', '</llms.txt>; rel="describedby"; type="text/plain", </agent.md>; rel="alternate"; type="text/markdown", </api/agent>; rel="service-desc"; type="application/json"');
     let hostname = '';
     try { hostname = new URL(`http://${req.headers.host || 'localhost'}`).hostname; } catch {}
     if (encryptedRequest(req) || hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '[::1]' || /^127\./.test(hostname)) {
