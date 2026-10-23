@@ -116,6 +116,8 @@ node scripts/run-tests.mjs uncovered --prepared
 
 13 类回归（menu、settings、theme、shortcuts、feedback、mark-cards、color-settings、metadata、stepping、timeline、annotation、annotation-rendering、workspace）已迁入 `scripts/testing/browser-fixture.mjs`：每个 case 独占临时 SQLite、随机端口、浏览器/context 与产物目录，正常完成、断言失败、部分启动失败、超时、取消均按逆序清理。失败产物包含 case/engine/阶段、原始异常、控制台、页面错误、Range 请求、可用的会话状态、截图与 DOM。清理异常单独写入 `cleanup-errors.json`，不会替换原始异常。公共 fixture 接管 SIGINT/SIGTERM/SIGHUP，旧单项脚本直接中断也会先完成资源清理，并在结束后移除信号监听；浏览器关闭由 fixture 统一负责。可信 HTTPS/身份、服务重启、Range 故障注入、Vite 测试页及原生包浏览器保留专用生命周期和服务扩展；它们仍由统一 runner 执行并登记既有产物目录。主题的受限存储 context 与设置的 DPR 2 context 通过 `newContext` 登记；额外 context 的启动失败或取消也属于同一 case 的清理范围。扩展服务在开始监听或等待 ready 前可用 `defer` 注册部分启动资源。连接与身份的普通 HTTP 测试共用 `http-origin.mjs`，将虚拟测试域名的 HTTP 请求转到临时 loopback 服务，保留页面的不安全 origin；HTTPS 请求不匹配此转发，仍验证真实证书信任。
 
+原生包 `release-analysis` 在每次 spawn 时记录该子进程的 `close`，重启与删除临时程序前必须等待关闭；`exitCode` 已设置仍不能跳过管道和进程句柄的关闭等待。日志保留实际 PID、退出码和信号。5 秒正常关闭期限到期后尝试强制清理并再等最多 5 秒，但本例仍失败；缺失 `close` 不会被当作完成。仅在关闭确认后，删除目录对 Windows 短暂文件共享锁做有界重试，持续锁仍导致失败。分析断言的 PASS 前缀不能代替整例清理及后续 HTTP/HTTPS、Windows shutdown 检查的结果。
+
 ### 浏览器测试约定与失败取证
 
 测试入口首先声明环境前提，操作后的断言等待可观察的完成状态：
