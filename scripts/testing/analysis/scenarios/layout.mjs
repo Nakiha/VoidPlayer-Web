@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { selectDiagrams, inspectCurrentWindow } from '../controls.mjs';
+import { assertCachedDisplayReuse } from '../display-reuse.mjs';
 
 
 export async function run(context) {
@@ -179,6 +180,7 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         await page.locator('#bitstream-opacity-value').click();
         await page.locator('#bitstream-opacity-input').fill('75');await page.keyboard.press('Enter');
         assert.equal((await call('get_review_session')).positionUs,pictureBeforeControls.positionUs,'overlay controls never seek');
+        const analysisBeforeDisplay = await Promise.all(['A', 'B'].map(slot => call('get_bitstream_analysis_state', { slot })));
         const requestsBeforeDisplay = requests.length;
         const readOverlay = () => page.locator('#bitstream-overlay-A').evaluate(canvas => {
           const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
@@ -191,6 +193,13 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
           return { visible, cyan, checksum };
         });
         await setMode('none');
+        // Deterministically overlap the existing identityHealth GET with this
+        // display-only window; counting all requests would always false-fail.
+        await page.evaluate(async () => {
+          const response = await fetch('/api/health', { cache: 'no-store' });
+          if (!response.ok) throw new Error('Injected health poll failed');
+          await response.json();
+        });
         assert.equal(await page.locator('#bitstream-boundaries').getAttribute('aria-pressed'), 'true');
         assert.ok((await readOverlay()).visible > 0, 'boundaries alone draw pixels');
         await page.locator('#bitstream-boundaries').click();
@@ -211,7 +220,10 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         const boxWithoutDrawing = await page.locator('#bitstream-overlay-A').boundingBox();
         await page.locator('#stage-A').dispatchEvent('pointermove', { clientX: boxWithoutDrawing.x + boxWithoutDrawing.width / 2, clientY: boxWithoutDrawing.y + boxWithoutDrawing.height / 2 });
         await page.locator('.bitstream-hit-tooltip:visible').waitFor();
-        assert.equal(requests.length, requestsBeforeDisplay, 'display switches and hover reuse the existing block data');
+        const analysisAfterDisplay = await Promise.all(['A', 'B'].map(slot => call('get_bitstream_analysis_state', { slot })));
+        const displayRequestEvidence = assertCachedDisplayReuse(requests, requestsBeforeDisplay, page.url(), analysisBeforeDisplay, analysisAfterDisplay);
+        assert.ok(displayRequestEvidence.health.length >= 1, 'the injected health poll must be observed inside the guarded display window');
+        console.log('analysis-display-requests', JSON.stringify({ input, ...displayRequestEvidence }));
         await page.locator('#bitstream-boundaries').click();
         await setMode('qp');
         for (const slot of ['A','B']) await page.locator(`#stage-${slot}`).dispatchEvent('pointerleave');

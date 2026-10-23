@@ -10,6 +10,32 @@ import { browserRegressionSuites, runBrowserRegressions } from '../../scripts/ru
 import { observeTimelineProgress } from '../../scripts/timeline-progress.mjs';
 import { withinBrowserPhase, recordBrowserEvidence, saveBrowserFailure } from '../../scripts/browser-failure-evidence.mjs';
 import { trackChildShutdown } from '../../scripts/testing/lifecycle.mjs';
+import { assertCachedDisplayReuse } from '../../scripts/testing/analysis/display-reuse.mjs';
+
+test('a health poll inside display/hover reproduces the old total-count failure without new analysis', () => {
+  const base = 'http://127.0.0.1:43210/', state = [{ state: 'ready', counters: { open: 1, step: 12, products: 1 } }];
+  const requests = [{ method: 'GET', url: base + 'assets/overlay.js' }], baseline = requests.length;
+  requests.push({ method: 'GET', url: base + 'api/health' });
+  assert.throws(() => assert.equal(requests.length, baseline), /2 !== 1/, 'the original assertion deterministically mistakes unrelated polling for new block data');
+  const evidence = assertCachedDisplayReuse(requests, baseline, base, state, structuredClone(state));
+  assert.equal(evidence.health.length, 1); assert.equal(evidence.unexpected.length, 0);
+});
+
+test('display guard rejects every non-health request and new local analysis work', () => {
+  const base = 'http://127.0.0.1:43210/', state = [{ state: 'ready', counters: { open: 1, step: 12, products: 1 } }];
+  const health = { method: 'GET', url: base + 'api/health' };
+  for (const request of [
+    { method: 'POST', url: base + 'api/media/id/bitstream-analysis/requests' },
+    { method: 'GET', url: base + 'api/bitstream-analysis/requests/task' },
+    { method: 'GET', url: base + 'assets/local-worker.js' },
+    { method: 'GET', url: base + 'api/media/id' },
+    { method: 'HEAD', url: health.url }, { method: 'POST', url: health.url },
+    { method: 'GET', url: health.url + '?probe=1' }, { method: 'GET', url: health.url + '/extra' },
+    { method: 'GET', url: 'http://127.0.0.1:43211/api/health' },
+  ]) assert.throws(() => assertCachedDisplayReuse([health, request], 0, base, state, state), /reuse the existing block data/);
+  assert.throws(() => assertCachedDisplayReuse([health], 0, base, state, [{ state: 'pending' }]), /start no analysis task/);
+  assert.throws(() => assertCachedDisplayReuse([health], 0, base, state, [{ state: 'ready', counters: { ...state[0].counters, open: 2 } }]), /start no analysis task/);
+});
 
 function fakeChild() {
   const child = Object.assign(new EventEmitter(), { pid: 123, exitCode: null, signalCode: null, signals: [] });
