@@ -206,6 +206,9 @@ try {
   assert.equal(healthReads, beforeClick, 'clicking the entry must not trigger a health check');
   await management.close();
   await player.bringToFront();
+  // Capture the polling baseline only after foreground/close-triggered IO,
+  // so a visibility probe cannot masquerade as the timer-driven poll.
+  await player.waitForLoadState('networkidle');
   const beforePoll = healthReads;
   clockPhase='connected-poll';await advancePoll();
   await player.waitForFunction(() => document.querySelector('#server-status')?.dataset.state === 'connected');
