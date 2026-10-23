@@ -1,5 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { AGENT_GUIDE } from '../agent-guide.ts';
+import { AGENT_DOCUMENTS } from '../agent-guide.ts';
+import { agentManifest, serviceCapabilities } from '../../shared/service/agent.ts';
+import { agentErrorBody } from '../agent-errors.ts';
+import { AdminError } from '../admin-error.ts';
 import { connectionDetails } from '../connection-guide.ts';
 import { encryptedRequest } from '../tls.ts';
 import { localRequest } from '../reveal.ts';
@@ -26,17 +29,21 @@ export async function handleConnectionRoutes(ctx: RouteContext, req: IncomingMes
     res.end(req.method === 'HEAD' ? undefined : certificate);
     return true;
   }
-  if (url.pathname === '/llms.txt') {
+  const document = AGENT_DOCUMENTS[url.pathname];
+  if (document !== undefined || url.pathname === '/api/agent') {
     if (!['GET', 'HEAD'].includes(req.method ?? '')) {
-      res.setHeader('allow', 'GET, HEAD'); sendJson(res, 405, { error: 'read only' }); return true;
+      res.setHeader('allow', 'GET, HEAD'); sendJson(res, 405, agentErrorBody(new AdminError(405, 'read only', 'method-not-allowed'), ctx.requestId)); return true;
     }
-    res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8', 'content-length': Buffer.byteLength(AGENT_GUIDE), 'cache-control': 'no-cache' });
-    res.end(req.method === 'HEAD' ? undefined : AGENT_GUIDE);
+    const json = url.pathname === '/api/agent';
+    const body = json ? JSON.stringify(agentManifest({ capabilities: serviceCapabilities(!!options.admin, !!options.allowLocalReveal && localRequest(req)), libraryReady: ctx.library.ready, frontendAvailable: !!options.staticDir, actor: ctx.actor })) : document;
+    const type = json ? 'application/json' : url.pathname === '/llms.txt' ? 'text/plain' : 'text/markdown';
+    res.writeHead(200, { 'content-type': `${type}; charset=utf-8`, 'content-length': Buffer.byteLength(body), 'cache-control': json ? 'no-store' : 'no-cache' });
+    res.end(req.method === 'HEAD' ? undefined : body);
     return true;
   }
   if (url.pathname === '/favicon.ico' && !options.staticDir && ['GET', 'HEAD'].includes(req.method ?? '')) { res.writeHead(204); res.end(); return true; }
   if (url.pathname === '/api/health' && req.method === 'GET') {
-    sendJson(res, 200, { service: 'voidplayer-media', version: 1, actor: ctx.actor, capabilities: { admin: !!options.admin, workspaces: !!options.admin, annotations: !!options.admin, reveal: !!options.allowLocalReveal && localRequest(req) } });
+    sendJson(res, 200, { service: 'voidplayer-media', version: 1, actor: ctx.actor, capabilities: serviceCapabilities(!!options.admin, !!options.allowLocalReveal && localRequest(req)) });
     return true;
   }
   if (url.pathname === '/api/ready' && req.method === 'GET') {

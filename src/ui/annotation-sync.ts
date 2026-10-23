@@ -1,3 +1,6 @@
+import { mergeAnnotationEvents } from '../../shared/review/annotation-events.ts';
+import type { AnnotationEvent } from '../../shared/review/annotation-events.ts';
+import { installAnnotationActivity } from './annotation-activity.ts';
 import { t, msg, onLanguageChange } from '../i18n.ts';
 import type { ReviewSession } from '../session.ts';
 import { AnnotationStorage } from '../review/annotation-storage.ts';
@@ -14,6 +17,8 @@ import { publishMarkPreview } from './mark-preview-publish.ts';
 
 export function installAnnotationSync(session: ReviewSession, editing: () => boolean) {
   const storage = new AnnotationStorage(), life = new AbortController(), client = new AnnotationClient(life.signal);
+  const activity = installAnnotationActivity(life.signal);
+  let eventCursor: number | undefined, recentEvents: AnnotationEvent[] = [];
   let previewEpoch = 0, editGeneration=0, localFailure: string | (() => string) = '';
   // REVIEW-01：待保存队列按 key 串行、重试不产生新编辑版本。
   // stage() 只在用户新编辑时调用并递增 seq；sync() 重试复用快照 pending，
@@ -109,6 +114,39 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     const mark=session.getState().marks.find(mark=>mark.id===id);
     if(mark && preview.url.startsWith('data:image/jpeg;base64,') && thumbnailSignature(mark)===preview.signature)void storage.savePreview(scope,id,preview).catch(()=>{});
   },{signal:life.signal});
+  function resetActivity() {
+    eventCursor = undefined; recentEvents = []; activity.update(scope, recentEvents);
+  }
+  async function syncActivity(space: string, captured: number) {
+    try {
+      // A finite batch lets state sync proceed even when remote writers stay busy.
+      for (let batch = 0; batch < 5; batch++) {
+        const page = await client.events(space, eventCursor);
+        if (captured !== generation) return;
+        if (page.resetRequired) {
+          const records: AnnotationRecord[] = []; let after = 0, snapshot;
+          do {
+            snapshot = await client.changes(space, after);
+            if (captured !== generation) return;
+            records.push(...snapshot.entries); after = snapshot.cursor;
+          } while (snapshot.more);
+          await storage.replaceRecords(space, records);
+          if (captured !== generation) return;
+          cursor = after; versions.clear(); recentEvents = [];
+          // Activity is a recent-history view; repopulate it after rebuilding state.
+          const latest = await client.events(space);
+          if (captured !== generation) return;
+          recentEvents = mergeAnnotationEvents([], latest);
+        } else recentEvents = mergeAnnotationEvents(recentEvents, page);
+        eventCursor = page.cursor;
+        activity.update(space, recentEvents);
+        if (!page.more) break;
+      }
+    } catch (cause) {
+      // An activity failure must not block acknowledged writes or annotation sync.
+      if (captured === generation && !life.signal.aborted) activity.update(space, recentEvents, true);
+    }
+  }
   async function sync() {
     if(life.signal.aborted)return;
     if(working)return syncIdle;
@@ -124,7 +162,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
           if(captured!==generation)break;
           const draft=await storage.change(queued.key,current=>{
             if(!current || current.conflict)return current;
-            if(!current.attempt){current.attempt={operationId:randomUUID(),id:current.id,revision:current.base,action:current.desired?'put':'delete',...(current.desired?{document:current.desired}:{})};current.sentGeneration=current.generation;}
+            if(!current.attempt){current.attempt={operationId:randomUUID(),id:current.id,revision:current.base,action:current.desired?'put':'delete',client:{kind:'gui',id:owner},...(current.desired?{document:current.desired}:{})};current.sentGeneration=current.generation;}
             return current;
           });
           if(!draft?.attempt)continue;
@@ -144,6 +182,8 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
           }
         }
         if(captured!==generation)return;
+        await syncActivity(space, captured);
+        if(captured!==generation)return;
         let page;
         do {page=await client.changes(space,cursor);await storage.remember(page.entries);if(captured!==generation)return;cursor=page.cursor;previewEpoch=page.previewEpoch??0;}while(page.more);
         error='';
@@ -157,7 +197,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     // Restoring the current scope (e.g. failed-import rollback) must not
     // touch live marks: there is nothing to load that the session lacks.
     if(next===scope)return;
-    generation++;scope=next;try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();
+    generation++;scope=next;resetActivity();try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();
     const previous=[...managed];managed.clear();
     await syncIdle; await apply(previous); await sync();
   }
@@ -173,7 +213,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
   window.addEventListener('focus',()=>void sync(),{signal:life.signal});
   window.addEventListener('voidplayer-identity-change',()=>{
     const next=currentActor()?.id ?? 'local';if(next===actor)return;
-    generation++;actor=next;cursor=0;versions.clear();void apply().catch(e => { error=(e as Error).message;state(); });
+    generation++;actor=next;resetActivity();cursor=0;versions.clear();void apply().catch(e => { error=(e as Error).message;state(); });
   },{signal:life.signal});
   onLanguageChange(state, life.signal);
   void connect();
@@ -190,7 +230,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
       await syncIdle;
       if (pendingQueue.size || saving) throw new Error(t(msg("sync.savingDrafts", "本机草稿正在保存，请稍后重试。")));
       const snapshot=session.exportWorkspace(location.origin+'/');
-      generation++; scope=space; cursor=after; versions.clear(); managed.clear();
+      generation++; scope=space; resetActivity(); cursor=after; versions.clear(); managed.clear();
       for(const record of records.values())versions.set(record.id,record.revision);
       try{sessionStorage.setItem('voidplayer.annotation-space',space);}catch{}
       const ids=new Set([...snapshot.marks.map(mark=>mark.id),...seededIds]);
@@ -203,7 +243,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
       }
       await sync();
     },
-    snapshotMode(){if(pendingQueue.size)throw new Error(t(msg("sync.draftsUnsaved", "本机标注尚未保存，请等待自动保存完成。")));const previous=scope;generation++;scope='local';try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();managed.clear();state();return ()=>switchSpace(previous);},
+    snapshotMode(){if(pendingQueue.size)throw new Error(t(msg("sync.draftsUnsaved", "本机标注尚未保存，请等待自动保存完成。")));const previous=scope;generation++;scope='local';resetActivity();try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();managed.clear();state();return ()=>switchSpace(previous);},
     async captureSnapshot(){const snapshot=session.exportWorkspace(location.origin+'/');for(const mark of snapshot.marks){const ids=new Set([mark.mediaId,...mark.comparison.map(item=>item.mediaId)]);await enqueue(mark.id,{mark,media:snapshot.media.filter(media=>ids.has(media.id))},0);}},
     dispose(){life.abort();clearInterval(interval);unsubscribe();unsubscribeMarks();storage.close();},
   };

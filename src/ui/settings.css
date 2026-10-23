@@ -235,6 +235,11 @@ kbd { background: var(--surface-input); border-radius: 4px; padding: 2px 6px; fo
 .settings-file-actions > button, .identity-actions > button, .log-submit-row > button { flex: none; width: max-content; white-space: nowrap; margin-top: 0; }
 
 /* Stable settings rows; current workspace and saved records form two sections. */
+.annotation-activity summary { cursor: pointer; font-weight: 600; }
+.annotation-activity ol { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow: auto; }
+.annotation-activity li { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.annotation-activity li span, .annotation-activity time { font-size: 12px; color: var(--text-secondary); }
+.annotation-activity a { width: fit-content; }
 #settings-pane-identity .identity-form { grid-template-columns: 88px minmax(0, 1fr); margin-top: 20px; }
 #settings-pane-identity #identity-users { flex: 1; min-width: 0; }
 #settings-pane-identity #identity-switch-panel > label { margin: 0; }

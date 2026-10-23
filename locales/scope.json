@@ -37,6 +37,7 @@
     "src/ui/analysis/shared.ts",
     "src/ui/analysis/status.ts",
     "src/ui/analysis/test-hook.ts",
+    "src/ui/annotation-activity.ts",
     "src/ui/annotation-panel.ts",
     "src/ui/annotation-svg.ts",
     "src/ui/annotation-sync.ts",

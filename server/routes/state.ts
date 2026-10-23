@@ -1,3 +1,4 @@
+import { agentErrorBody } from '../agent-errors.ts';
 import { adminErrorBody } from '../admin-error.ts';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID, createHash } from 'node:crypto';
@@ -14,14 +15,15 @@ import type { RouteContext } from './context.ts';
 /** Identity, annotations, shares, workspaces and admin endpoints. Returns true when handled. */
 export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage, res: ServerResponse, url: URL): Promise<boolean> {
   const { options, library } = ctx;
+  const agentFailure = (status: number, code: string, message: string) => sendJson(res, status, agentErrorBody(new AdminError(status, message, code), ctx.requestId));
   if (url.pathname === '/api/users' && req.method === 'GET') {
     if (!options.admin) { sendJson(res, 503, { error: '当前服务未提供用户存储。' }); return true; }
     sendJson(res, 200, { users: options.admin.workspaces.users() });
     return true;
   }
   if (url.pathname === '/api/identity' && req.method === 'POST') {
-    if (!options.admin) { sendJson(res, 503, { error: '当前服务未提供用户存储。' }); return true; }
-    if (!adminWriteAllowed(req, 'identity')) { sendJson(res, 403, { error: '请从同源页面设置用户名。' }); return true; }
+    if (!options.admin) { agentFailure(503, 'storage-unavailable', '当前服务未提供用户存储。'); return true; }
+    if (!adminWriteAllowed(req, 'identity')) { agentFailure(403, 'origin-required', '设置身份需要匹配的 Origin 与 X-VoidPlayer-Action: identity。'); return true; }
     try {
       const body = await readAdminJson(req, 2048) as { name?: unknown; id?: unknown; guest?: unknown; mode?: unknown } | null;
       if (body?.mode !== undefined && ((body.mode !== 'rename' && body.mode !== 'create') || typeof body.name !== 'string' || body.id !== undefined || body.guest !== undefined)) throw new AdminError(400, '无效的用户操作。');
@@ -38,16 +40,22 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
         ctx.actor = options.admin.workspaces.identify(ctx.actor?.id, body.name, body.mode as 'rename' | 'create' | undefined);
       }
       res.setHeader('set-cookie', identityCookie(ctx.actor, encryptedRequest(req))); sendJson(res, 200, { actor: ctx.actor });
-    } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, adminErrorBody(error)); }
+    } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, agentErrorBody(error, ctx.requestId)); }
     return true;
   }
-  if (url.pathname === '/api/annotations/spaces' || url.pathname.startsWith('/api/annotations/spaces/')) {
-    if (!options.admin) { sendJson(res, 503, { error: '当前服务未提供标注存储。' }); return true; }
-    if (req.method !== 'GET' && !adminWriteAllowed(req, 'annotation')) { sendJson(res, 403, { error: '请从同源页面保存标注。' }); return true; }
-    if (!ctx.actor && req.method !== 'GET') { sendJson(res, 409, { error: '请先选择用户或以访客继续。' }); return true; }
-    if (req.headers['x-voidplayer-actor'] && req.headers['x-voidplayer-actor'] !== ctx.actor?.id) { sendJson(res, 409, { error: '用户已切换，草稿未提交。' }); return true; }
+  if (url.pathname === '/api/annotations/spaces' || url.pathname.startsWith('/api/annotations/spaces/') || url.pathname.startsWith('/api/annotations/events/')) {
+    if (!options.admin) { agentFailure(503, 'storage-unavailable', '当前服务未提供标注存储。'); return true; }
+    if (req.method !== 'GET' && !adminWriteAllowed(req, 'annotation')) { agentFailure(403, 'origin-required', '保存标注需要匹配的 Origin 与 X-VoidPlayer-Action: annotation。'); return true; }
+    if (!ctx.actor && req.method !== 'GET') { agentFailure(409, 'identity-required', '请先选择用户或以访客继续。'); return true; }
+    if (req.headers['x-voidplayer-actor'] && req.headers['x-voidplayer-actor'] !== ctx.actor?.id) { agentFailure(409, 'actor-changed', '用户已切换，草稿未提交。'); return true; }
     const store = options.admin.annotations;
     try {
+      const events = /^\/api\/annotations\/events\/([a-zA-Z0-9_-]{1,200})$/.exec(url.pathname);
+      if (events && req.method === 'GET') {
+        const after = url.searchParams.get('after');
+        if (after !== null && !/^\d+$/.test(after)) throw new AdminError(400, '操作同步位置无效。', 'invalid-event-cursor');
+        sendJson(res, 200, store.events(events[1], after === null ? undefined : Number(after))); return true;
+      }
       if (url.pathname === '/api/annotations/spaces') {
         if (req.method === 'GET') { sendJson(res, 200, store.spaces()); return true; }
         if (req.method === 'POST') { sendJson(res, 201, store.createSpace((await readAdminJson(req) as { name: unknown }).name)); return true; }
@@ -56,7 +64,7 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
       if (match) {
         const [, space, id, preview] = match;
         if (!id && req.method === 'GET') { sendJson(res, 200, url.searchParams.has('list') ? store.list(space, url.searchParams.get('search') ?? '', url.searchParams.get('deleted') === '1', Number(url.searchParams.get('before') ?? Number.MAX_SAFE_INTEGER)) : { ...store.changes(space, Number(url.searchParams.get('after') ?? 0)), previewEpoch: store.previewEpoch }); return true; }
-        if (!id && req.method === 'POST') { sendJson(res, 200, store.mutate(space, await readAdminJson(req, ANNOTATION_BYTES), ctx.actor!)); return true; }
+        if (!id && req.method === 'POST') { sendJson(res, 200, store.mutate(space, await readAdminJson(req, ANNOTATION_BYTES), ctx.actor!, ctx.requestId)); return true; }
         if (id === 'previews' && req.method === 'DELETE') { sendJson(res, 200, store.clearPreviews(space)); return true; }
         if (id && preview) {
           const revision = Number(url.searchParams.get('revision'));
@@ -71,10 +79,10 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
             sendJson(res, 200, store.putPreview(space, id, revision, Buffer.concat(chunks), Number(url.searchParams.get('epoch') ?? -1))); return true;
           }
         }
-        if (id && req.method === 'GET') { const record = store.read(space, id); if (!record) throw new AdminError(404, '标注不存在。'); sendJson(res, 200, record); return true; }
+        if (id && req.method === 'GET') { const record = store.read(space, id); if (!record) throw new AdminError(404, '标注不存在。', 'annotation-not-found'); sendJson(res, 200, record); return true; }
       }
-      sendJson(res, 405, { error: '不支持的标注操作。' }); return true;
-    } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, adminErrorBody(error)); return true; }
+      agentFailure(405, 'method-not-allowed', '不支持的标注操作。'); return true;
+    } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, agentErrorBody(error, ctx.requestId)); return true; }
   }
   function seedWorkspace(id: string) {
     const {record, seeds} = options.admin!.workspaces.sharedWorkspace(id);

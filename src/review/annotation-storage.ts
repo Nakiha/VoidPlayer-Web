@@ -42,6 +42,19 @@ export class AnnotationStorage {
       tx.oncomplete=()=>resolve();tx.onabort=()=>reject(tx.error);
     });
   }
+  /** Replace confirmed state atomically after a server cursor reset. Drafts remain separate. */
+  async replaceRecords(space: string, records: AnnotationRecord[]) {
+    const db = await this.database.open();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('records', 'readwrite'), store = tx.objectStore('records');
+      const keys = store.index('space').getAllKeys(space);
+      keys.onsuccess = () => {
+        for (const key of keys.result) store.delete(key);
+        for (const record of records) store.put({ ...record, key: `${space}/${record.id}` });
+      };
+      tx.oncomplete = () => resolve(); tx.onabort = () => reject(tx.error);
+    });
+  }
   async savePreview(space: string, id: string, preview: { url: string; width: number; height: number; signature?: string }) {
     const db=await this.database.open();await new Promise<void>((resolve,reject)=>{const tx=db.transaction('previews','readwrite');tx.objectStore('previews').put({...preview,key:`${space}/${id}`});tx.oncomplete=()=>resolve();tx.onabort=()=>reject(tx.error);});
   }

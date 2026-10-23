@@ -7,6 +7,14 @@
     "source": "折叠上屏详情",
     "translation": "Collapse presentation details"
   },
+  "activity.deleted": {
+    "source": "删除标注",
+    "translation": "Deleted annotation"
+  },
+  "activity.disconnected": {
+    "source": "活动连接中断，恢复后自动续读。",
+    "translation": "Activity is disconnected. Updates will resume when the connection returns."
+  },
   "activity.durationMinutesSeconds": {
     "source": "{m} 分 {s} 秒",
     "translation": "{m} min {s} s"
@@ -22,6 +30,10 @@
   "activity.elapsedWaiting": {
     "source": "已等待",
     "translation": "Waiting"
+  },
+  "activity.empty": {
+    "source": "此评审空间暂无操作记录。",
+    "translation": "No operations in this review space yet."
   },
   "activity.expandDetails": {
     "source": "展开上屏详情",
@@ -39,6 +51,10 @@
     "source": "载入失败",
     "translation": "Load failed"
   },
+  "activity.open": {
+    "source": "在新窗口打开标注",
+    "translation": "Open annotation in a new window"
+  },
   "activity.presentationFailed": {
     "source": "上屏失败",
     "translation": "Presentation failed"
@@ -51,13 +67,29 @@
     "source": "上屏轨道",
     "translation": "Presented tracks"
   },
+  "activity.recent": {
+    "source": "共享评审空间的最近操作；不会改变当前播放。",
+    "translation": "Recent operations in this shared review space. Playback is unchanged."
+  },
+  "activity.restored": {
+    "source": "恢复标注",
+    "translation": "Restored annotation"
+  },
   "activity.retryOrPickAnother": {
     "source": "请重试或选择其他片源",
     "translation": "Retry or pick another source"
   },
+  "activity.saved": {
+    "source": "保存标注",
+    "translation": "Saved annotation"
+  },
   "activity.stillWorking": {
     "source": "仍在处理，可取消或选择其他视频",
     "translation": "Still working; you can cancel or pick another video"
+  },
+  "activity.title": {
+    "source": "评审活动",
+    "translation": "Review activity"
   },
   "activity.trackDetails": {
     "source": "查看轨道 {slot} 的上屏信息",

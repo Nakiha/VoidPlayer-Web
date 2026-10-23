@@ -9,6 +9,14 @@
     "source": "折叠上屏详情",
     "params": {}
   },
+  "activity.deleted": {
+    "source": "删除标注",
+    "params": {}
+  },
+  "activity.disconnected": {
+    "source": "活动连接中断，恢复后自动续读。",
+    "params": {}
+  },
   "activity.durationMinutesSeconds": {
     "source": "{m} 分 {s} 秒",
     "params": {
@@ -30,6 +38,10 @@
     "source": "已等待",
     "params": {}
   },
+  "activity.empty": {
+    "source": "此评审空间暂无操作记录。",
+    "params": {}
+  },
   "activity.expandDetails": {
     "source": "展开上屏详情",
     "params": {}
@@ -49,6 +61,10 @@
     "source": "载入失败",
     "params": {}
   },
+  "activity.open": {
+    "source": "在新窗口打开标注",
+    "params": {}
+  },
   "activity.presentationFailed": {
     "source": "上屏失败",
     "params": {}
@@ -61,12 +77,28 @@
     "source": "上屏轨道",
     "params": {}
   },
+  "activity.recent": {
+    "source": "共享评审空间的最近操作；不会改变当前播放。",
+    "params": {}
+  },
+  "activity.restored": {
+    "source": "恢复标注",
+    "params": {}
+  },
   "activity.retryOrPickAnother": {
     "source": "请重试或选择其他片源",
     "params": {}
   },
+  "activity.saved": {
+    "source": "保存标注",
+    "params": {}
+  },
   "activity.stillWorking": {
     "source": "仍在处理，可取消或选择其他视频",
+    "params": {}
+  },
+  "activity.title": {
+    "source": "评审活动",
     "params": {}
   },
   "activity.trackDetails": {

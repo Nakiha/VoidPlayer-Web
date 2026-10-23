@@ -1,0 +1,44 @@
+/** Discovery describes this deployment without starting work or creating users. */
+export function serviceCapabilities(storageEnabled: boolean, revealEnabled: boolean) {
+  return { admin: storageEnabled, workspaces: storageEnabled, annotations: storageEnabled, reveal: revealEnabled };
+}
+type ServiceCapabilities = ReturnType<typeof serviceCapabilities>;
+export type AgentCapability = {
+  id: string;
+  implemented: boolean;
+  enabled: boolean;
+  readiness: 'ready' | 'index-warming' | 'needs-identity' | 'per-source' | 'requires-live-session' | 'unavailable';
+  requiresBrowser: boolean;
+  guide: string;
+};
+export const AGENT_TASKS = {
+  library: '/agent/library.md', workspaces: '/agent/workspaces.md', annotations: '/agent/annotations.md',
+  quality: '/agent/quality.md', liveSession: '/agent/live-session.md', errors: '/agent/errors.md',
+} as const;
+
+export function agentManifest(input: { capabilities: ServiceCapabilities; libraryReady: boolean; frontendAvailable?: boolean; actor: { id: string; name: string } | null }) {
+  const { capabilities: c, libraryReady, actor } = input;
+  const capabilities: AgentCapability[] = [
+    { id: 'library.browse', implemented: true, enabled: true, readiness: libraryReady ? 'ready' : 'index-warming', requiresBrowser: false, guide: AGENT_TASKS.library },
+    { id: 'media.read', implemented: true, enabled: true, readiness: 'per-source', requiresBrowser: false, guide: AGENT_TASKS.library },
+    { id: 'workspaces.read', implemented: true, enabled: c.workspaces, readiness: c.workspaces ? 'ready' : 'unavailable', requiresBrowser: false, guide: AGENT_TASKS.workspaces },
+    { id: 'annotations.write', implemented: true, enabled: c.annotations, readiness: !c.annotations ? 'unavailable' : actor ? 'ready' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.annotations },
+    { id: 'annotations.events', implemented: true, enabled: c.annotations, readiness: c.annotations ? 'ready' : 'unavailable', requiresBrowser: false, guide: AGENT_TASKS.annotations },
+    { id: 'quality.jobs', implemented: false, enabled: false, readiness: 'unavailable', requiresBrowser: false, guide: AGENT_TASKS.quality },
+    { id: 'session.view', implemented: true, enabled: !!input.frontendAvailable, readiness: input.frontendAvailable ? 'requires-live-session' : 'unavailable', requiresBrowser: true, guide: AGENT_TASKS.liveSession },
+    { id: 'bridge.local-mcp', implemented: false, enabled: false, readiness: 'unavailable', requiresBrowser: true, guide: AGENT_TASKS.liveSession },
+    { id: 'compute.workers', implemented: false, enabled: false, readiness: 'unavailable', requiresBrowser: false, guide: AGENT_TASKS.quality },
+  ];
+  return {
+    schema: 'voidplayer-agent', version: 1, service: 'voidplayer-media', actor,
+    links: { guide: '/agent.md', index: '/llms.txt', health: '/api/health', tasks: AGENT_TASKS },
+    capabilities,
+    writes: { identity: '/api/identity', identityIsAuthentication: false, originRequired: true,
+      actionHeader: 'X-VoidPlayer-Action', cookieRequired: true, completion: 'server-commit', guiAcknowledgementRequired: false },
+    annotations: { version: 1, spaces: '/api/annotations/spaces',
+      events: '/api/annotations/events/{space}?after={cursor}',
+      identity: ['space', 'id'], concurrency: 'expected-revision', idempotency: 'operationId',
+      frameTimeUnit: 'integer-microseconds', target: 'document.media + mark.mediaId + mark.frame',
+      slotMeaning: 'legacy-display-hint; no loaded track required' },
+  };
+}

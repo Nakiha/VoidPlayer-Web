@@ -37,7 +37,7 @@ export function installAnnotationAdmin(signal: AbortSignal, notice: (message: Lo
   }
   if(!more && !page.entries.length){const empty=document.createElement('p');empty.className='admin-caption';localizedText(empty, () => search?t(msg("admin.noMatchMarks", "没有匹配的标注")):deleted?t(msg("admin.trashEmpty", "回收站为空")):t(msg("admin.noMarksAdmin", "暂无标注")));$('-list').append(empty);}
  }
- async function mutate(action:'delete'|'restore'){if(!selected)return;await client.mutate(space,{operationId:randomUUID(),id:selected.id,revision:selected.revision,action});await load();}
+ async function mutate(action:'delete'|'restore'){if(!selected)return;await client.mutate(space,{operationId:randomUUID(),id:selected.id,revision:selected.revision,action,client:{kind:'gui'}});await load();}
  $('s-refresh').onclick=()=>void act(()=>load());$('s-next').onclick=()=>void act(()=>load(true));
  $('-search-button').onclick=()=>{search=$<HTMLInputElement>('-search').value.trim();void act(()=>load());};$('-search').onkeydown=event=>{if(event.key==='Enter')$('-search-button').click();};
  for(const [suffix,value]of [['active',false],['trash',true]] as const)$(`s-${suffix}`).onclick=()=>{deleted=value;$('s-active').setAttribute('aria-pressed',String(!deleted));$('s-trash').setAttribute('aria-pressed',String(deleted));void act(()=>load());};

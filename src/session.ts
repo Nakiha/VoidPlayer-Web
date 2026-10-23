@@ -20,7 +20,7 @@ import { parseWorkspace, workspaceUrl } from '../shared/review/workspace-file.ts
 import type { ComparisonConditions, WorkspaceFile } from '../shared/review/workspace-file.ts';
 import { Viewport } from '../shared/presentation/viewport.ts';
 import { SLOTS } from '../shared/review/model.ts';
-import { applyMarkEdit, buildMark, mergeStoredMarks } from './session/marks.ts';
+import { applyMarkEdit, buildMark, mergeStoredMarks } from '../shared/review/marks.ts';
 import { getTrackAnalysisCapabilities, locateTrackAnalysisSample, queryTrackAnalysis, rankTrackAnalysisFrame, resolveTrackAnalysisSeek } from './session/metadata-analysis.ts';
 import { currentColorEvidence, currentComparisonConditions, isSameColorConfiguration, persistColorConfiguration, validateColorTransition } from './session/color.ts';
 import { offerSessionThumbnail } from './session/thumbnail.ts';
@@ -1061,7 +1061,7 @@ export class ReviewSession {
     this.emit();
     return structuredClone(mark);
   }
-  updateMark(id: string, input: import('./session/marks.ts').MarkEdit) {
+  updateMark(id: string, input: import('../shared/review/marks.ts').MarkEdit) {
     const mark = this.marks.find(m => m.id === id);
     if (!mark) throw new Error('标注不存在。');
     const editingFrame = input.text !== undefined || input.drawings !== undefined;
