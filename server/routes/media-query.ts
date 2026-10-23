@@ -2,9 +2,25 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { RouteContext } from './context.ts';
 import { AdminError } from '../admin-error.ts';
 import { parseMediaIndexIdentity } from '../../shared/media/indexing/media-index-identity.ts';
-import { MEDIA_QUERY_DICTIONARY, MEDIA_QUERY_FIELDS, parseSemanticQuery } from '../../shared/media/indexing/semantic-query.ts';
+import { MEDIA_QUERY_DICTIONARY, MEDIA_QUERY_FIELDS, parseSemanticQuery, QUERY_CONCURRENCY_LIMIT } from '../../shared/media/indexing/semantic-query.ts';
+
+// Keep admission until the response drains/closes, including both filesystem
+// checks. Limiting the database RPC alone leaves completed results unbounded.
+const activeQueries = new WeakMap<RouteContext['library'], number>();
+function admit(library: RouteContext['library'], res: ServerResponse) {
+  const active = activeQueries.get(library) ?? 0;
+  if (active >= QUERY_CONCURRENCY_LIMIT) throw new AdminError(503, 'Cached media queries are busy; retry later.', 'media-query-busy');
+  activeQueries.set(library, active + 1);
+  const release = () => {
+    res.off('finish', release); res.off('close', release);
+    const remaining = (activeQueries.get(library) ?? 1) - 1;
+    if (remaining) activeQueries.set(library, remaining); else activeQueries.delete(library);
+  };
+  res.once('finish', release); res.once('close', release);
+}
 
 function json(req: IncomingMessage, res: ServerResponse, status: number, body: unknown) {
+  if (res.destroyed) return;
   const payload = JSON.stringify(body);
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'content-length': Buffer.byteLength(payload) });
   res.end(req.method === 'HEAD' ? undefined : payload);
@@ -25,8 +41,11 @@ export async function handleMediaQueryRoutes(ctx: RouteContext, req: IncomingMes
     const { library } = ctx, id = match[1], entry = library.metadata(id);
     if (!entry) throw new AdminError(404, 'Media is not in the configured library.', 'media-not-found');
     if (entry.version !== version) throw new AdminError(409, 'Media version changed; browse again.', 'media-version-changed');
+    if (res.destroyed) return true;
+    admit(library, res);
     // Stat/realpath only; same active-root, symlink and source-version boundary as byte serving.
     if (!await library.resolve(id, version)) throw new AdminError(409, 'Media is offline, changed or outside the configured roots.', 'media-unavailable');
+    if (res.destroyed) return true;
     let body: unknown;
     if (match[2] === 'info') {
       const rawOffset = url.searchParams.get('offset') ?? '0';
@@ -47,10 +66,12 @@ export async function handleMediaQueryRoutes(ctx: RouteContext, req: IncomingMes
       body = { ...await library.indexJobs.call('semantic-query', { id, version, identity, query, cursor: url.searchParams.get('cursor') ?? undefined }), links };
       if (query && Buffer.byteLength(JSON.stringify(body)) > query.byteBudget) throw new AdminError(413, 'Response context exceeds byteBudget.', 'response-budget-too-small');
     }
+    if (res.destroyed) return true;
     if (!await library.resolve(id, version)) throw new AdminError(409, 'Media changed while reading the cache.', 'media-unavailable');
     json(req, res, 200, body);
   } catch (error) {
     // Never expose raw filesystem/database errors, root paths or core locations.
+    if (res.destroyed) return true;
     const known = error instanceof AdminError;
     if (known && error.status === 503) res.setHeader('retry-after', '1');
     json(req, res, known ? error.status : 500, { error: known && error.status < 500 ? error.message : 'Cached media query failed.',

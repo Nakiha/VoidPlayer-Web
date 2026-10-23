@@ -61,7 +61,7 @@ test('shared query preserves 64-bit timestamps, missing values, reorder and half
   assert.equal(semanticRecord(view, 0, { ...clock, originVerified: false }).normalizedPtsUs, null);
   const q = parseSemanticQuery(new URLSearchParams({ startTick: huge.toString(), endTick: (huge + 1n).toString() }));
   assert.equal(recordMatches(r, q), true); assert.equal(recordMatches(r, { ...q, endTick: huge.toString() }), false); assert.equal(recordMatches(unknown, q), null);
-  for (const params of ['startTick=0&endTick=1&limit=0', 'startTick=1&endTick=1', 'startTick=0&endTick=9223372036854775808', 'startTick=0&endTick=1&axis=frame', 'startTick=0&endTick=1&byteBudget=999999']) assert.throws(() => parseSemanticQuery(new URLSearchParams(params)));
+  for (const params of ['startTick=0&endTick=1&limit=0', 'startTick=1&endTick=1', 'startTick=0&endTick=9223372036854775809', 'startTick=0&endTick=1&axis=frame', 'startTick=0&endTick=1&byteBudget=999999']) assert.throws(() => parseSemanticQuery(new URLSearchParams(params)));
 });
 
 test('headless discovery/search/info/cache misses never build, migrate, mutate or disclose paths', async t => {
@@ -146,5 +146,33 @@ test('cache query admission rejects excess in-flight work with retryable feedbac
   assert.equal(results.filter(result => result.status === 'fulfilled').length, 8);
   const rejected = results.filter(result => result.status === 'rejected'); assert.equal(rejected.length, 4);
   for (const result of rejected) { assert.equal(result.reason.status, 503); assert.equal(result.reason.code, 'media-query-busy'); }
+  assert.equal((await f.read(f.info)).technicalState, 'not-probed');
+});
+
+test('half-open ranges can select the largest signed 64-bit timestamp', async t => {
+  const f = await fixture(t), bytes = recordBytes(1), maximum = 9223372036854775807n;
+  bytes.writeBigInt64LE(maximum, 0); bytes.writeBigInt64LE(maximum, 8);
+  f.put(1, { records: bytes.toString('base64'), firstPts: maximum.toString() });
+  const page = await f.read(f.endpoint + '&view=records&startTick=9223372036854775807&endTick=9223372036854775808');
+  assert.equal(page.records.length, 1); assert.equal(page.records[0].ptsTick, maximum.toString());
+  assert.equal(page.records[0].normalizedPtsUs, '0'); assert.equal(page.exhausted, true);
+});
+
+test('HTTP admission covers source validation through response completion', { timeout: 10000 }, async t => {
+  const f = await fixture(t), original = f.library.resolve.bind(f.library);
+  let unblock!: () => void, arrived!: () => void, entered = 0;
+  const blocked = new Promise<void>(resolve => { unblock = resolve; });
+  const allEntered = new Promise<void>(resolve => { arrived = resolve; });
+  f.library.resolve = async (...args) => { entered++; if (entered === 8) arrived(); await blocked; return original(...args); };
+  const requests = Array.from({ length: 8 }, () => fetch(f.info));
+  try {
+    await allEntered;
+    // Admission must already apply while source validation is pending.
+    const overflow = fetch(f.info);
+    const result = await Promise.race([overflow, new Promise<'not-admitted-boundedly'>(resolve => setTimeout(() => resolve('not-admitted-boundedly'), 2000))]);
+    assert.notEqual(result, 'not-admitted-boundedly');
+    const response = result as Response; assert.equal(response.status, 503); assert.equal(response.headers.get('retry-after'), '1');
+    assert.equal((await response.json()).code, 'media-query-busy');
+  } finally { unblock(); await Promise.allSettled(requests); f.library.resolve = original; }
   assert.equal((await f.read(f.info)).technicalState, 'not-probed');
 });

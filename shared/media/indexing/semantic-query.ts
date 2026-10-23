@@ -7,6 +7,7 @@ export const MEDIA_QUERY_VERSION = 1;
 export const MEDIA_QUERY_DICTIONARY = '/api/media/query-schema';
 export const QUERY_SCAN_LIMIT = 2048;
 export const QUERY_RECORD_LIMIT = 256;
+export const QUERY_CONCURRENCY_LIMIT = 8;
 export type CachedField = { value: string | number | boolean | null; status: 'known' | 'unknown' | 'not-probed' | 'unsupported'; source: 'file-stat' | 'container-index' | 'unavailable'; reason?: string };
 export function cachedField(value: string | number | boolean | null, reason = 'not-stored-in-index'): CachedField {
   return value === null ? { value, status: 'unknown', source: 'unavailable', reason }
@@ -63,8 +64,8 @@ export function parseSemanticQuery(params: URLSearchParams): SemanticQuery {
   const axis = params.get('axis') ?? 'pts';
   if (axis !== 'pts' && axis !== 'dts') throw new Error('axis must be pts or dts');
   const startTick = params.get('startTick') ?? '', endTick = params.get('endTick') ?? '';
-  const integer = (s: string) => /^-?(?:0|[1-9][0-9]{0,18})$/.test(s) && BigInt(s) > FFMPEG_NO_TIMESTAMP && BigInt(s) <= 9223372036854775807n;
-  if (!integer(startTick) || !integer(endTick) || BigInt(startTick) >= BigInt(endTick)) throw new Error('startTick/endTick must be ordered signed 64-bit decimal ticks');
+  const integer = (s: string, maximum: bigint) => /^-?(?:0|[1-9][0-9]{0,18})$/.test(s) && BigInt(s) > FFMPEG_NO_TIMESTAMP && BigInt(s) <= maximum;
+  if (!integer(startTick, 9223372036854775807n) || !integer(endTick, 9223372036854775808n) || BigInt(startTick) >= BigInt(endTick)) throw new Error('Use ordered 64-bit decimal ticks; endTick may be 9223372036854775808 as the exclusive upper bound.');
   const limit = params.get('limit') ?? '100', budget = params.get('byteBudget') ?? '65536';
   if (!/^[1-9][0-9]*$/.test(limit) || Number(limit) > QUERY_RECORD_LIMIT) throw new Error('limit must be 1..256');
   if (!/^[1-9][0-9]*$/.test(budget) || Number(budget) < 8192 || Number(budget) > 262144) throw new Error('byteBudget must be 8192..262144');
@@ -139,10 +140,10 @@ export const MEDIA_QUERY_FIELDS = {
     exhausted: 'All records in this snapshot were examined. Does not imply the media index is complete.',
   },
   recordGranularity: 'container packet; not guaranteed one sample, access unit or decoded picture',
-  range: 'Half-open [startTick,endTick) in the selected original stream time base; axis pts or dts. Missing axis values are counted in inspectedUntimed and excluded from matches.',
+  range: 'Half-open [startTick,endTick) in the selected original stream time base; endTick may be 9223372036854775808 to include the largest signed timestamp; axis pts or dts. Missing axis values are counted in inspectedUntimed and excluded from matches.',
   order: 'Stored presentation order (PTS ascending, untimed tail), including DTS queries; decodeOrdinal preserves source decode order. Duplicate PTS are distinct records.',
   integers: 'All 64-bit ticks/ordinals and normalized microseconds are decimal strings; bounded counts/byte lengths are safe JSON integers.',
-  limits: { records: QUERY_RECORD_LIMIT, inspectedPerPage: QUERY_SCAN_LIMIT, responseBytes: 262144, identitiesPerPage: 16 },
+  limits: { records: QUERY_RECORD_LIMIT, inspectedPerPage: QUERY_SCAN_LIMIT, responseBytes: 262144, identitiesPerPage: 16, inFlightPerLibrary: QUERY_CONCURRENCY_LIMIT },
   sideEffects: 'No scans, decoding, builds, legacy cache migration, GUI or playback commands.',
 };
 export { FFMPEG_INDEX_RECORD_BYTES };

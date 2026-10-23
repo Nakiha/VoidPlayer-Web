@@ -78,7 +78,8 @@ frame-index routes remain compatible. No new probe/build task is provided here.
 Add view=records&axis=pts&startTick=0&endTick=90000&limit=100&byteBudget=65536
 for a bounded half-open interval in ORIGINAL stream ticks. 90000 ticks are one
 second only when the returned time base is 1/90000. axis=dts is also supported.
-Ticks and ordinals are decimal strings; missing timestamps are null. Output stays
+Ticks and ordinals are decimal strings; missing timestamps are null. The exclusive
+endTick may be 9223372036854775808 to include the largest signed timestamp. Output stays
 in stored PTS order with untimed records last; decodeOrdinal is the original
 packet order. Packets are not necessarily decoded pictures or access units.
 Container key flags do not prove I-pictures or verified random access; QP and
@@ -89,7 +90,8 @@ records page may still have a cursor: each page examines at most 2048 records,
 returns at most 256 records and respects byteBudget (8192–262144). The summary
 covers RETURNED RECORDS ONLY. Sum pages of the same snapshot for a range summary.
 exhausted means the snapshot was examined, not that the entire media is indexed.
-On 503 media-query-busy retry after Retry-After; at most 8 cache queries may be in flight.
+On 503 media-query-busy retry after Retry-After; at most 8 cache queries may be in flight
+from source validation through response completion/disconnect.
 On 409 index-snapshot-changed discard accumulated pages and restart without cursor;
 build progress, cache replacement and clearing invalidate cursors. These reads
 cannot control any GUI or playhead and reject build=1 instead of starting work.

@@ -1,3 +1,4 @@
+import { QUERY_CONCURRENCY_LIMIT } from '../shared/media/indexing/semantic-query.ts';
 import { Worker } from 'node:worker_threads';
 import { randomUUID } from 'node:crypto';
 import { AdminError } from './admin-error.ts';
@@ -121,7 +122,7 @@ export class FrameIndexJobs {
   async call<K extends FrameIndexOperation>(op: K, ...args: FrameIndexCallArgs<K>): Promise<FrameIndexResult<K>> {
     const [data = {}, transfer = [], timeoutMs = 60000] = args;
     if (this.closed) throw new AdminError(503, '索引服务已关闭。');
-    if ((op === 'cached-indexes' || op === 'semantic-query') && this.pending.size >= 8) {
+    if ((op === 'cached-indexes' || op === 'semantic-query') && this.pending.size >= QUERY_CONCURRENCY_LIMIT) {
       throw new AdminError(503, 'Cached media queries are busy; retry later.', 'media-query-busy');
     }
     const worker = this.databaseWorker();
