@@ -6,6 +6,7 @@ import os from 'node:os';
 import { webkit, chromium } from 'playwright';
 import { loadConfig } from '../server/config.ts';
 import { startService } from '../server/runtime.ts';
+import { advanceAdminPollClock } from './testing/admin-poll-clock.mjs';
 const root = path.resolve(import.meta.dirname, '..');
 const temporary = await mkdtemp(path.join(os.tmpdir(), 'vp-admin-browser-'));
 const browserName = process.argv[2] ?? 'webkit';
@@ -26,12 +27,25 @@ try {
   const context = await browser.newContext({locale:'zh-CN',  viewport: { width: 1200, height: 820 }, reducedMotion: 'reduce', colorScheme: 'light' });
   const player = await context.newPage(); const errors = [],clockTrace=[];let clockPhase='real-ui';
   context.on('requestfailed',request=>{let owner='unknown';try{owner=request.frame().page()===player?'player':'admin';}catch{}clockTrace.push({phase:clockPhase,event:'requestfailed',page:owner,url:request.url(),failure:request.failure(),at:Date.now()});});
-  player.on('pageerror', e => errors.push(e.message));
+  const observeErrors = (target, owner) => target.on('pageerror', error => {
+    errors.push(error.message);
+    clockTrace.push({ phase: clockPhase, event: 'pageerror', page: owner, url: target.url(), message: error.message, stack: error.stack, at: Date.now() });
+  });
+  context.on('request', request => {
+    if (new URL(request.url()).pathname !== '/api/library/browse') return;
+    let frame = 'unavailable'; try { frame = request.frame().url(); } catch {}
+    clockTrace.push({ phase: clockPhase, event: 'library-request', url: request.url(), frame, origin: request.headers().origin ?? null, at: Date.now() });
+  });
+  context.on('response', response => {
+    if (new URL(response.url()).pathname === '/api/library/browse') clockTrace.push({ phase: clockPhase, event: 'library-response', url: response.url(), status: response.status(), allowOrigin: response.headers()['access-control-allow-origin'] ?? null, at: Date.now() });
+  });
+  player.on('framenavigated', frame => { if (frame === player.mainFrame()) clockTrace.push({ phase: clockPhase, event: 'player-navigation', url: frame.url(), at: Date.now() }); });
+  observeErrors(player, 'player');
   await player.goto(base); await chooseTestGuest(player); await player.waitForFunction(() => document.getElementById('server-status')?.dataset.state === 'connected');
   await player.locator('#server-status').hover();
   await player.locator('#control-tooltip').filter({ hasText: '打开服务管理' }).waitFor({ state: 'visible' });
   let [page] = await Promise.all([context.waitForEvent('page', { timeout: 5000 }), player.locator('#server-status').click()]);
-  page.setDefaultTimeout(15000); page.on('pageerror', e => errors.push(e.message));
+  page.setDefaultTimeout(15000); observeErrors(page, 'admin-first');
   await page.waitForURL(base + '/admin'); await page.locator('#identity').filter({ hasText: '访客' }).waitFor();
   assert.equal(await player.url(), base + '/');
   // Returning to an existing player must retain its in-memory review and tab.
@@ -55,7 +69,7 @@ try {
   await orphan.waitForURL(base + '/admin'); await otherPlayer.close();
   await orphan.getByRole('link', { name: '返回播放器', exact: true }).click(); await orphan.waitForURL(base + '/'); await orphan.close();
   [page] = await Promise.all([context.waitForEvent('page'), player.locator('#server-status').click()]);
-  page.setDefaultTimeout(15000); page.on('pageerror', e => errors.push(e.message));
+  page.setDefaultTimeout(15000); observeErrors(page, 'admin-second');
   await page.locator('#identity').filter({ hasText: '访客' }).waitFor();
 
   await page.waitForFunction(() => document.getElementById('analysis-concurrency')?.value === '8');
@@ -184,7 +198,7 @@ try {
   // while its actual localhost response is still in flight.
   await player.waitForLoadState('networkidle');
   await player.clock.pauseAt(new Date(Date.now()+1000));
-  const advancePoll=async()=>{for(const ms of [5000,5100]){clockTrace.push({phase:clockPhase,event:'advance',ms,at:Date.now()});await player.clock.runFor(ms);await player.waitForLoadState('networkidle');}};
+  const advancePoll = () => advanceAdminPollClock(player, ms => clockTrace.push({ phase: clockPhase, event: 'advance', ms, at: Date.now() }));
   const beforeClick = healthReads;
   const [management] = await Promise.all([context.waitForEvent('page'), player.locator('#server-status').click()]);
   await management.getByRole('heading', { name: '概览', exact: true }).waitFor();

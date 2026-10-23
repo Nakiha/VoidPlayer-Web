@@ -10,6 +10,7 @@ import { openIndexDatabase } from '../server/sqlite.ts';
 import { chooseTestGuest } from './test-identity.mjs';
 import { recordBrowserEvidence, saveBrowserFailure } from './browser-failure-evidence.mjs';
 import { waitForDialogClosed } from './testing/browser-contracts.mjs';
+import { waitForAnnotationMedia, annotationWorkspacePlayable } from './testing/agent-annotations-ready.mjs';
 
 const root = path.resolve(import.meta.dirname, '..'), temp = await mkdtemp(path.join(os.tmpdir(), 'vp-agent-ui-'));
 const directory = process.env.VOIDPLAYER_TEST_ARTIFACTS ?? path.join(root, '.run/agent-annotations');
@@ -23,6 +24,8 @@ try {
   await writeFile(path.join(temp, 'voidplayer.config.json'), JSON.stringify({ mediaRoots: [{ id: 'qa', name: 'QA', path: path.join(temp, 'media') }], dataDir: 'data', logsDir: null, staticDir: path.join(root, 'dist'), indexWatch: false }));
   const config = await loadConfig([], 'production', temp); config.port = 0;
   service = await startService(config); await service.library.refresh();
+  // A completed scan can still contain freshly written, settling files.
+  await waitForAnnotationMedia(service.library, ['A.mp4', 'B.mp4']);
   const base = `http://127.0.0.1:${service.server.address().port}`;
   const identity = await fetch(base + '/api/identity', { method: 'POST', headers: { origin: base, 'content-type': 'application/json', 'x-voidplayer-action': 'identity' }, body: JSON.stringify({ name: 'Agent reviewer' }) });
   assert.equal(identity.status, 200);
@@ -49,7 +52,7 @@ try {
   const errors = []; context.on('page', page => page.on('pageerror', error => errors.push(error.message)));
   page = await context.newPage(); evidence = recordBrowserEvidence(page);
   const url = `${base}/?workspace=${workspace.id}`;
-  const ready = async target => { await target.waitForFunction(() => window.voidPlayer?.getState().tracks.length === 1 && !window.voidPlayer.getState().busy); };
+  const ready = async target => { await target.waitForFunction(annotationWorkspacePlayable); };
   await page.goto(url); await chooseTestGuest(page); await ready(page);
   await page.waitForFunction(() => !!document.querySelector('[data-operation-id="before-gui"]'));
   const read = () => page.evaluate(() => window.voidPlayer.getState());

@@ -11,6 +11,54 @@ import { observeTimelineProgress } from '../../scripts/timeline-progress.mjs';
 import { withinBrowserPhase, recordBrowserEvidence, saveBrowserFailure } from '../../scripts/browser-failure-evidence.mjs';
 import { trackChildShutdown } from '../../scripts/testing/lifecycle.mjs';
 import { assertCachedDisplayReuse } from '../../scripts/testing/analysis/display-reuse.mjs';
+import { waitForAnnotationMedia, annotationWorkspacePlayable } from '../../scripts/testing/agent-annotations-ready.mjs';
+import { advanceAdminPollClock } from '../../scripts/testing/admin-poll-clock.mjs';
+
+test('admin polling clock settles preexisting and newly scheduled real IO before advancing timeouts', async () => {
+  let pending = true, advanced = 0, waits = 0; const steps = [];
+  const page = { waitForLoadState: async state => { assert.equal(state, 'networkidle'); waits++; pending = false; },
+    clock: { runFor: async ms => { assert.equal(pending, false, 'real IO is settled before virtual time moves'); advanced += ms; pending = true; } } };
+  await advanceAdminPollClock(page, ms => steps.push(ms));
+  assert.equal(advanced, 10100); assert.deepEqual(steps, [...Array(10).fill(1000), 100]);
+  assert.equal(waits, 12); assert.equal(pending, false);
+});
+
+test('admin polling clock propagates genuine network and clock failures without CORS/error filtering', async () => {
+  const cors = new Error('access control checks'); let advanced = false;
+  await assert.rejects(advanceAdminPollClock({ waitForLoadState: async () => { throw cors; }, clock: { runFor: async () => { advanced = true; } } }), error => error === cors);
+  assert.equal(advanced, false);
+  const failure = new Error('clock failed');
+  await assert.rejects(advanceAdminPollClock({ waitForLoadState: async () => {}, clock: { runFor: async () => { throw failure; } } }), error => error === failure);
+});
+
+test('agent fixture observes pending-to-ready before snapshotting sources, without scanning or changing entries', async () => {
+  const a = { name: 'A.mp4', id: 'a'.repeat(24), version: '1'.repeat(24), state: 'pending' };
+  const b = { name: 'B.mp4', id: 'b'.repeat(24), version: '2'.repeat(24), state: 'ready' };
+  let reads = 0, clock = 0;
+  const library = { browse() { reads++; return { entries: [{ ...a, state: reads >= 3 ? 'ready' : a.state }, b] }; }, refresh() { throw Error('unexpected scan'); } };
+  const result = await waitForAnnotationMedia(library, ['A.mp4', 'B.mp4'], { timeoutMs: 100, pollMs: 25, now: () => clock, pause: async ms => { clock += ms; } });
+  assert.equal(reads, 3); assert.equal(clock, 50); assert.equal(a.state, 'pending');
+  assert.deepEqual(result.map(entry => entry.name), ['A.mp4', 'B.mp4']);
+});
+
+test('agent fixture readiness is bounded and preserves missing/offline failures', async () => {
+  let reads = 0, clock = 0;
+  const library = { browse() { reads++; return { entries: [{ name: 'A.mp4', state: 'pending' }] }; } };
+  await assert.rejects(waitForAnnotationMedia(library, ['A.mp4'], { timeoutMs: 50, pollMs: 25, now: () => clock, pause: async ms => { clock += ms; } }), /A.mp4:pending/);
+  assert.equal(reads, 3); assert.equal(clock, 50);
+  for (const state of ['missing', 'offline']) await assert.rejects(waitForAnnotationMedia({ browse: () => ({ entries: [{ name: 'A.mp4', state }] }) }, ['A.mp4']), new RegExp(`A.mp4:${state}`));
+});
+
+test('agent browser readiness rejects disabled/relink tracks that satisfied the old ready predicate', () => {
+  const failed = { busy: false, tracks: [{ name: 'A.mp4', pendingRelink: true, failure: { message: 'still being written' } }] };
+  assert.equal(failed.tracks.length === 1 && !failed.busy, true);
+  assert.throws(() => annotationWorkspacePlayable(failed), /still being written/);
+  assert.throws(() => annotationWorkspacePlayable({ busy: false, tracks: [{ pendingRelink: true }] }), /pending relink/);
+  assert.equal(annotationWorkspacePlayable({ busy: false, tracks: [{ frame: { ptsUs: 0 } }] }), true);
+  assert.equal(annotationWorkspacePlayable({ busy: true, tracks: [{ frame: { ptsUs: 0 } }] }), false);
+  assert.equal(annotationWorkspacePlayable({ busy: true, tracks: [{ pendingRelink: true, frame: null, failure: null }] }), false, 'progressive placeholders are still loading');
+  assert.equal(annotationWorkspacePlayable({ busy: false, tracks: [{}] }), false);
+});
 
 test('a health poll inside display/hover reproduces the old total-count failure without new analysis', () => {
   const base = 'http://127.0.0.1:43210/', state = [{ state: 'ready', counters: { open: 1, step: 12, products: 1 } }];
