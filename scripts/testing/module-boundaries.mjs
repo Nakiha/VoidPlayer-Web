@@ -56,7 +56,10 @@ export function checkModuleBoundaries(root) {
     const name = portable(path.relative(root, file));
     if (name.startsWith('src/') && !name.slice(4).includes('/')) assert.ok(entrypoints.has(name.slice(4)), `${name}: unowned frontend root module`);
     assert.ok(!/^src\/(bitstream-analysis|analysis-overlay)\//.test(name), `${name}: obsolete analysis namespace`);
-    for (const layer of ['shared','src','server']) if (name.startsWith(`${layer}/analysis/`)) assert.match(name, new RegExp(`^${layer}/analysis/(metadata|bitstream)/`), `${name}: analysis must declare metadata or bitstream responsibility`);
+    for (const layer of ['shared','src','server']) if (name.startsWith(`${layer}/analysis/`)) {
+      const domains = layer === 'shared' ? 'metadata|bitstream|quality' : 'metadata|bitstream';
+      assert.match(name, new RegExp(`^${layer}/analysis/(${domains})/`), `${name}: analysis must declare ${domains} responsibility`);
+    }
   }
   const harnessFiles = [];
   function scanHarness(directory) {
