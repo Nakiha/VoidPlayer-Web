@@ -140,6 +140,36 @@ test('different streams cannot supply separate halves of one technical conjuncti
   assert.deepEqual(result.candidates[0].evidence.map((e: any) => e.identity.streamKey), ['video:0', 'video:1']);
 });
 
+test('large identity inventories use the real primary-key prefix without sorting projected aliases', async t => {
+  const f = await fixture(t), entry = f.entries[0];
+  const insert = f.db.prepare("INSERT INTO media_index_manifests(media_id,media_version,kind,stream_key,schema_version,indexer_build,state,complete,frames,created_at,accessed_at,metadata_json) VALUES(?,?,'ffmpeg','video:0',3,?,'complete',1,1,0,0,?)");
+  f.db.exec('BEGIN');
+  try {
+    for (let i = 0; i < 4096; i++) {
+      const build = i.toString(16).padStart(40, '0');
+      insert.run(entry.id, entry.version!, build, JSON.stringify({ ...metadata, indexerBuild: build }));
+    }
+    f.db.exec('COMMIT');
+  } catch (error) { f.db.exec('ROLLBACK'); throw error; }
+  const plans: string[] = [];
+  const observed = {
+    exec: f.db.exec.bind(f.db), close() {},
+    prepare(sql: string) {
+      if (sql.includes('FROM media_index_manifests WHERE')) {
+        plans.push(...f.db.prepare('EXPLAIN QUERY PLAN ' + sql).all(entry.id, entry.version!, 9).map(row => String(row.detail)));
+      }
+      return f.db.prepare(sql);
+    },
+  };
+  const result = new MediaIndexQueryStore(observed).technicalFilter(f.query());
+  assert.equal(result.work.identitiesRead, 9); assert.equal(result.work.identitiesInspected, 8);
+  assert.equal(result.truncated, true);
+  assert.deepEqual(result.candidates[0].evidence.map(e => e.identity!.indexerBuild), Array.from({ length: 8 }, (_, i) => i.toString(16).padStart(40, '0')));
+  assert.ok(result.work.projectionReadBytes <= 9 * TECHNICAL_FILTER_LIMITS.projectionBytesPerIdentity);
+  assert.ok(plans.some(detail => /SEARCH media_index_manifests USING INDEX/.test(detail)), JSON.stringify(plans));
+  assert.ok(plans.every(detail => !/USE TEMP B-TREE|SCAN media_index_manifests/.test(detail)), JSON.stringify(plans));
+});
+
 test('evidence snapshot invalidates on same-connection replacement and other-connection writes, not only library revision', async t => {
   const f = await fixture(t); f.put();
   const q = f.query(), first = f.store.technicalFilter(q), revision = f.db.prepare('SELECT revision FROM library_revision').get()!.revision;

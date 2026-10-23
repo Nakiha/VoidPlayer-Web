@@ -73,7 +73,9 @@ export class MediaIndexQueryStore {
         const media = this.db.prepare('SELECT m.version,m.state,m.size FROM media m JOIN roots r ON r.id=m.root_id WHERE m.id=? AND r.active=1').get(source.id);
         if (!media || media.version !== source.version) changed();
         fingerprint.push(media);
-        const rows = this.db.prepare(`SELECT ${filterColumns} FROM media_index_manifests WHERE media_id=? AND media_version=? ORDER BY kind,stream_key,schema_version,indexer_build LIMIT ?`)
+        // Qualify raw key columns: the bounded CASE aliases in SELECT otherwise
+        // make SQLite sort every identity before LIMIT instead of seeking the PK.
+        const rows = this.db.prepare(`SELECT ${filterColumns} FROM media_index_manifests WHERE media_id=? AND media_version=? ORDER BY media_index_manifests.kind,media_index_manifests.stream_key,media_index_manifests.schema_version,media_index_manifests.indexer_build LIMIT ?`)
           .all(source.id, source.version, TECHNICAL_FILTER_LIMITS.identitiesPerCandidate + 1) as unknown as Row[];
         fingerprint.push(rows);
         identitiesRead += rows.length;
