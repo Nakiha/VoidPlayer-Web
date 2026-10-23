@@ -9,6 +9,61 @@ import os from 'node:os';
 import { browserRegressionSuites, runBrowserRegressions } from '../../scripts/run-browser-regressions.mjs';
 import { observeTimelineProgress } from '../../scripts/timeline-progress.mjs';
 import { withinBrowserPhase, recordBrowserEvidence, saveBrowserFailure } from '../../scripts/browser-failure-evidence.mjs';
+import { trackChildShutdown } from '../../scripts/testing/lifecycle.mjs';
+
+function fakeChild() {
+  const child = Object.assign(new EventEmitter(), { pid: 123, exitCode: null, signalCode: null, signals: [] });
+  child.kill = signal => { child.signals.push(signal); return true; };
+  return child;
+}
+
+test('native cleanup waits for close after exit and also observes close before stop', async () => {
+  for (const alreadyClosed of [false, true]) {
+    const child = fakeChild(), stop = trackChildShutdown(child);
+    child.exitCode = 0;
+    child.emit('exit', 0, null);
+    if (alreadyClosed) child.emit('close', 0, null);
+    let settled = false;
+    const pending = stop().then(result => { settled = true; return result; });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(settled, alreadyClosed);
+    assert.deepEqual(child.signals, [], 'already exited child must not be signalled');
+    if (!alreadyClosed) child.emit('close', 0, null);
+    assert.deepEqual(await pending, { pid: 123, code: 0, signal: null });
+    assert.equal(await stop(), await pending, 'repeat stop observes the same owned close');
+  }
+});
+
+test('native cleanup signals its owned child and keeps waiting through exit', async () => {
+  const child = fakeChild(), stop = trackChildShutdown(child);
+  const pending = stop();
+  assert.deepEqual(child.signals, ['SIGTERM']);
+  child.signalCode = 'SIGTERM';
+  child.emit('exit', null, 'SIGTERM');
+  child.emit('close', null, 'SIGTERM');
+  assert.deepEqual(await pending, { pid: 123, code: null, signal: 'SIGTERM' });
+});
+
+test('forced native cleanup remains a failed case even when SIGKILL closes the child', async () => {
+  const child = fakeChild(), stop = trackChildShutdown(child, { graceMs: 5, killMs: 20 });
+  child.kill = signal => {
+    child.signals.push(signal);
+    if (signal === 'SIGKILL') { child.signalCode = signal; child.emit('close', null, signal); }
+    return true;
+  };
+  await assert.rejects(stop(), /shutdown timed out.*closed during cleanup.*signal=SIGKILL/);
+  assert.deepEqual(child.signals, ['SIGTERM', 'SIGKILL']);
+});
+
+test('missing native close fails within the cleanup budget and spawn errors are retained', async () => {
+  const child = fakeChild(), stop = trackChildShutdown(child, { graceMs: 5, killMs: 5 });
+  await assert.rejects(stop(), /close still missing after 5 ms cleanup/);
+  const failed = fakeChild(), stopFailed = trackChildShutdown(failed);
+  const original = new Error('spawn failed');
+  failed.emit('error', original);
+  failed.emit('close', -2, null);
+  await assert.rejects(stopFailed(), error => error === original);
+});
 
 const silent = { write() {} };
 test('failed timeline still runs every later HLG/annotation engine and fails the aggregate', async () => {

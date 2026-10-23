@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { spawn, execFileSync } from "node:child_process";
-import { once } from "node:events";
+import { trackChildShutdown } from "./testing/lifecycle.mjs";
 import { createServer } from "node:net";
 import path from "node:path";
 import os from "node:os";
@@ -18,18 +18,13 @@ const fixtures = path.resolve(
   process.argv[3] ?? path.join(root, "fixtures/video"),
 );
 const temp = await mkdtemp(path.join(os.tmpdir(), "vp-analysis-release-"));
-let child,
+let child, stopChild,
   output = "";
 async function stop() {
-  if (!child || child.exitCode !== null) return;
-  const stopped = once(child, "close");
-  child.kill("SIGTERM");
-  const timer = setTimeout(() => child.kill("SIGKILL"), 5000);
-  try {
-    await stopped;
-  } finally {
-    clearTimeout(timer);
-  }
+  if (!stopChild) return;
+  const result = await stopChild();
+  stopChild = null;
+  console.log(`Native analysis process closed: pid=${result.pid}, code=${result.code}, signal=${result.signal}`);
 }
 try {
   const tar =
@@ -75,6 +70,7 @@ try {
       env,
       stdio: ["ignore", "pipe", "pipe"],
     });
+    stopChild = trackChildShutdown(child);
     child.stdout.on("data", (b) => (output += b));
     child.stderr.on("data", (b) => (output += b));
     for (let i = 0; i < 200; i++) {
@@ -210,5 +206,7 @@ try {
   );
 } finally {
   await stop();
-  await rm(temp, { recursive: true, force: true });
+  // Only retry transient file-sharing locks after the owned child has closed.
+  // Persistent locks still reject and fail the required release-analysis case.
+  await rm(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 }
