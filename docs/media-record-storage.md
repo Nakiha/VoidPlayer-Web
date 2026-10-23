@@ -18,7 +18,7 @@ SQLite 的 64 MiB TEXT 即使用 `substr(payload,32000000,256)` 或
 
 - `seq=0`：原文档元数据，在原属性位置保留 `packets:null`。语义查询永不读取此列。
 - `seq=1..N`：原 packets 数组的连续片段，不排序、不删包；每片至多 64 条、64 KiB。
-  封装 version/seq/first/packets/sha256，校验序号、固定片长、末片条数和内容校验和。
+  封装 version/commitId/seq/first/packets/sha256，校验序号、固定片长、末片条数和内容校验和。
 - `packet_storage`：独立 schema `voidplayer-packet-storage` version 1，至多 4 KiB；
   绑定唯一 commitId、来源版本、完整索引身份、总条数、片数、片长、原文档及元数据校验和。
   不保存另一份包索引或时间排序表。单片超限时提交失败，不降级为大 TEXT 查询。
@@ -26,7 +26,7 @@ SQLite 的 64 MiB TEXT 即使用 `substr(payload,32000000,256)` 或
   事务提交。任何失败全部回滚。重复/并发提交保留先提交的完整版本，不混用头或 seal。
 - 分片 INSERT/UPDATE/DELETE 触发器同时使存储描述符及语义头失效；UPDATE 更换身份
   时旧、新身份均失效。源版本、根目录和清理沿用原失效机制。
-- GUI 原 compact JSON / NDJSON 路径在单一事务快照中重组这些权威片段，检查完整文档
+- GUI 原 compact JSON / NDJSON 路径在单一事务快照中校验 seal 并重组这些权威片段，检查完整文档
   hash，保留原对象及线协议。GUI 本来就取完整文档；它不是有界语义查询的读取路径。
 
 升级仅添加可空列和触发器，旧缓存不自动回填、改写或迁移。带 #126 头的旧缓存仍可读概览；

@@ -36,7 +36,6 @@ export class FrameIndexStore {
     if (!row.packet_storage) {
       // An invalidated sharded cache must not masquerade as a legacy document.
       if (row.last_seq !== 0 || rows.length !== 1) return null;
-      try { if (!Array.isArray(JSON.parse(rows[0].payload).packets)) return null; } catch { return null; }
       return rows[0].payload;
     }
     const storage = packetStorage(String(row.packet_storage), identity, `${id}@${version}`, Number(row.frames), Number(row.last_seq));
@@ -63,7 +62,13 @@ export class FrameIndexStore {
 
   has(id: string, version: string, kind: FrameIndexKind = 'flv', identity?: MediaIndexIdentity): boolean {
     const selected = identity ?? (kind === 'flv' ? FLV_MEDIA_INDEX_IDENTITY : undefined);
-    if((selected?.kind==='js-ts'||selected?.kind==='js-matroska')&&!this.validJsTsCache(id,version,selected))return false;
+    if (selected?.kind === 'js-ts' || selected?.kind === 'js-matroska') {
+      // The seal and reconstructed document must come from the same snapshot;
+      // a concurrent clear/recommit must never make us delete its valid winner.
+      this.db.exec('BEGIN');
+      try { const valid = this.validJsTsCache(id, version, selected); this.db.exec('COMMIT'); return valid; }
+      catch (error) { this.db.exec('ROLLBACK'); throw error; }
+    }
     if (!selected) return !!this.db.prepare('SELECT 1 FROM media_index_manifests WHERE media_id=? AND media_version=? AND kind=? AND complete=1')
       .get(id, version, kind);
     return !!this.db.prepare('SELECT 1 FROM media_index_manifests WHERE media_id=? AND media_version=? AND ' + identityWhere + ' AND complete=1')

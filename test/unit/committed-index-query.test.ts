@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
 import { MediaLibraryIndex } from '../../server/library.ts';
 import { createMediaServer } from '../../server/app.ts';
 import { openIndexDatabase } from '../../server/sqlite.ts';
-import { prepareFrameIndex } from '../../server/frame-index-store.ts';
+import { FrameIndexStore, prepareFrameIndex } from '../../server/frame-index-store.ts';
 import { MediaIndexQueryStore } from '../../server/media-index-query.ts';
 import { FLV_MEDIA_INDEX_IDENTITY as flv, JS_TS_MEDIA_INDEX_IDENTITY as ts } from '../../shared/media/indexing/media-index-identity.ts';
 import type { MediaIndexIdentity } from '../../shared/media/indexing/media-index-identity.ts';
@@ -238,7 +238,7 @@ test('invalidated, missing, duplicated, oversized, corrupt and future packet sto
   const doc = { ...f.flvDoc, packets: Array.from({ length: 130 }, (_, i) => [40 + i, 1, i * 1000, i * 1000, Number(i === 0)]) };
   const query = { axis: 'pts' as const, startTick: '0', endTick: '9999999', limit: 256, byteBudget: 262144 };
   const store = new MediaIndexQueryStore(f.db);
-  for (const damage of ['missing', 'duplicate', 'oversized', 'syntax', 'checksum', 'version', 'packet', 'frames', 'bytes'] as const) {
+  for (const damage of ['missing', 'duplicate', 'oversized', 'syntax', 'checksum', 'version', 'packet', 'frames', 'bytes', 'commit'] as const) {
     f.library.frameIndexes.remove(); f.commit(doc);
     const saved = f.db.prepare('SELECT packet_storage,semantic_json FROM media_index_manifests').get()!;
     const chunk = JSON.parse(String(f.db.prepare('SELECT payload FROM media_index_batches WHERE seq=1').get()!.payload));
@@ -251,6 +251,7 @@ test('invalidated, missing, duplicated, oversized, corrupt and future packet sto
     else {
       if (damage === 'checksum') chunk.sha256 = '0'.repeat(64);
       if (damage === 'version') chunk.version = 2;
+      if (damage === 'commit') chunk.commitId = '0'.repeat(36);
       if (damage === 'packet') { chunk.packets[2][0] = -1; chunk.sha256 = createHash('sha256').update(JSON.stringify(chunk.packets)).digest('hex'); }
       const payload = JSON.stringify(chunk);
       f.db.prepare('UPDATE media_index_batches SET payload=?,bytes=? WHERE seq=1').run(payload, Buffer.byteLength(payload));
@@ -298,4 +299,34 @@ test('cancellation interrupts bounded traversal and closes the read snapshot', a
   assert.equal((new MediaIndexQueryStore(f.db).query(f.entry.id, f.entry.version!, flv, query) as any).records.length, 4);
   const alreadyCancelled = f.library.indexJobs.call('semantic-query', { id: f.entry.id, version: f.entry.version!, identity: flv, query, cancellation });
   await assert.rejects(alreadyCancelled, (e: any) => e.code === 'media-query-cancelled');
+});
+
+
+test('JS cache seal and packets use one snapshot across a concurrent clear and replacement', async t => {
+  const f = await fixture(t), writer = f.library.frameIndexes;
+  writer.commit(f.entry.id, f.entry.version!, prepareFrameIndex(f.tsDoc, f.entry.size, ts, f.source), 0);
+  const replacement = structuredClone(f.tsDoc); replacement.packets[0].size++;
+  let replaced = false;
+  const reader = new FrameIndexStore(new Proxy(f.db, { get(target, key) {
+    if (key === 'prepare') return (sql: string) => {
+      const statement = target.prepare(sql);
+      if (!sql.startsWith('SELECT metadata_json FROM media_index_manifests')) return statement;
+      return new Proxy(statement, { get(s, method) {
+        if (method === 'get') return (...args: any[]) => {
+          const row = s.get(...args);
+          if (!replaced) {
+            replaced = true; writer.remove();
+            writer.commit(f.entry.id, f.entry.version!, prepareFrameIndex(replacement, f.entry.size, ts, f.source), writer.epoch);
+          }
+          return row;
+        };
+        const value = Reflect.get(s, method); return typeof value === 'function' ? value.bind(s) : value;
+      } });
+    };
+    const value = Reflect.get(target, key); return typeof value === 'function' ? value.bind(target) : value;
+  } }));
+  assert.equal(reader.has(f.entry.id, f.entry.version!, 'js-ts', ts), true);
+  assert.equal(replaced, true);
+  assert.equal(writer.has(f.entry.id, f.entry.version!, 'js-ts', ts), true);
+  assert.deepEqual(JSON.parse(writer.getJson(f.entry.id, f.entry.version!, 'js-ts', ts)).index, replacement);
 });

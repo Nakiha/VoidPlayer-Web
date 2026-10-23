@@ -17,15 +17,15 @@ export const invalidPackets = (): never => { throw new AdminError(409, 'Cached p
 export function preparePacketStorage(text: string, sourceVersion: string, identity: MediaIndexIdentity) {
   const document = JSON.parse(text), packets: unknown[] = document.packets;
   document.packets = null; // Keep the original property position for the JS document seal.
-  const metadata = JSON.stringify(document);
+  const metadata = JSON.stringify(document), commitId = randomUUID();
   const chunks: { payload: string; frames: number }[] = [];
   for (let first = 0; first < packets.length; first += PACKET_CHUNK_RECORDS) {
     const part = packets.slice(first, first + PACKET_CHUNK_RECORDS);
-    const payload = JSON.stringify({ version: 1, seq: chunks.length + 1, first, packets: part, sha256: sha(JSON.stringify(part)) });
+    const payload = JSON.stringify({ version: 1, commitId, seq: chunks.length + 1, first, packets: part, sha256: sha(JSON.stringify(part)) });
     if (Buffer.byteLength(payload) > PACKET_CHUNK_BYTES) throw new AdminError(413, 'Packet chunk exceeds storage budget.', 'packet-storage-too-large');
     chunks.push({ payload, frames: part.length });
   }
-  const storage: PacketStorage = { schema, version: 1, commitId: randomUUID(), sourceVersion, identity, records: packets.length, chunks: chunks.length,
+  const storage: PacketStorage = { schema, version: 1, commitId, sourceVersion, identity, records: packets.length, chunks: chunks.length,
     chunkRecords: PACKET_CHUNK_RECORDS, chunkBytes: PACKET_CHUNK_BYTES, documentSha256: sha(text), metadataSha256: sha(metadata) };
   return { metadata, chunks, storage };
 }
@@ -47,7 +47,7 @@ export function readPacketChunk(payload: string, seq: number, frames: number, st
   try {
     const c = JSON.parse(payload), first = (seq - 1) * PACKET_CHUNK_RECORDS;
     const expected = Math.min(PACKET_CHUNK_RECORDS, storage.records - first);
-    if (c.version !== 1 || c.seq !== seq || c.first !== first || frames !== expected
+    if (c.version !== 1 || c.commitId !== storage.commitId || c.seq !== seq || c.first !== first || frames !== expected
       || !Array.isArray(c.packets) || c.packets.length !== expected || c.sha256 !== sha(JSON.stringify(c.packets))) return invalidPackets();
     return c.packets;
   } catch { return invalidPackets(); }
