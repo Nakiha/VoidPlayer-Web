@@ -369,3 +369,124 @@ test('pre-shard FLV and TS caches retain overview, GUI and seals while record re
     assert.deepEqual(JSON.parse(f.library.frameIndexes.getJson(f.entry.id, f.entry.version!, identity.kind, identity)).index, JSON.parse(prepared.text));
   }
 });
+
+test('GUI getJson keeps a read-only WAL snapshot when another connection commits during reconstruction', async t => {
+  const f = await fixture(t), writer = openIndexDatabase(path.join(f.dir, 'index.sqlite'));
+  try {
+    for (const [doc, identity] of [[f.flvDoc, flv], [f.tsDoc, ts]] as const) {
+      f.library.frameIndexes.remove();
+      const prepared = prepareFrameIndex(doc, f.entry.size, identity, f.source);
+      f.library.frameIndexes.commit(f.entry.id, f.entry.version!, prepared, f.library.frameIndexes.epoch);
+      writer.exec('UPDATE media_index_manifests SET accessed_at=0');
+      let wrote = false;
+      const reader = new FrameIndexStore(new Proxy(f.db, { get(target, key) {
+        if (key === 'prepare') return (sql: string) => {
+          const statement = target.prepare(sql);
+          if (!sql.startsWith('SELECT') || !sql.includes('media_index_manifests')) return statement;
+          return new Proxy(statement, { get(s, method) {
+            if (method === 'get') return (...args: any[]) => {
+              const row = s.get(...args);
+              if (!wrote) { wrote = true; writer.exec('UPDATE library_revision SET revision=revision+1'); }
+              return row;
+            };
+            const value = Reflect.get(s, method); return typeof value === 'function' ? value.bind(s) : value;
+          } });
+        };
+        const value = Reflect.get(target, key); return typeof value === 'function' ? value.bind(target) : value;
+      } }));
+      const result = JSON.parse(reader.getJson(f.entry.id, f.entry.version!, identity.kind, identity));
+      assert.equal(wrote, true);
+      assert.deepEqual(result.index, JSON.parse(prepared.text));
+      assert.ok(Number(writer.prepare('SELECT accessed_at FROM media_index_manifests').get()!.accessed_at) > 0);
+    }
+  } finally { writer.close(); }
+});
+
+test('a busy post-snapshot LRU update cannot fail a validated GUI response', async t => {
+  const f = await fixture(t); f.commit(); f.db.exec('PRAGMA busy_timeout=0');
+  f.db.exec('UPDATE media_index_manifests SET accessed_at=0');
+  const writer = openIndexDatabase(path.join(f.dir, 'index.sqlite'));
+  let locked = false;
+  try {
+    const reader = new FrameIndexStore(new Proxy(f.db, { get(target, key) {
+      if (key === 'prepare') return (sql: string) => {
+        const statement = target.prepare(sql);
+        if (!sql.startsWith('SELECT complete,frames,last_seq,packet_storage')) return statement;
+        return new Proxy(statement, { get(s, method) {
+          if (method === 'get') return (...args: any[]) => {
+            const row = s.get(...args);
+            writer.exec('BEGIN IMMEDIATE; UPDATE library_revision SET revision=revision+1'); locked = true;
+            return row;
+          };
+          const value = Reflect.get(s, method); return typeof value === 'function' ? value.bind(s) : value;
+        } });
+      };
+      const value = Reflect.get(target, key); return typeof value === 'function' ? value.bind(target) : value;
+    } }));
+    assert.deepEqual(JSON.parse(reader.getJson(f.entry.id, f.entry.version!)).index, f.flvDoc);
+    assert.equal(locked, true); assert.equal(f.db.prepare('SELECT accessed_at FROM media_index_manifests').get()!.accessed_at, 0);
+    writer.exec('ROLLBACK'); locked = false;
+    assert.deepEqual(JSON.parse(f.library.frameIndexes.getJson(f.entry.id, f.entry.version!)).index, f.flvDoc);
+  } finally { if (locked) writer.exec('ROLLBACK'); writer.close(); }
+});
+
+test('invalid JS GUI reads remain read-only; explicit has cleanup still permits rebuilding', async t => {
+  const f = await fixture(t), store = f.library.frameIndexes;
+  store.commit(f.entry.id, f.entry.version!, prepareFrameIndex(f.tsDoc, f.entry.size, ts, f.source), 0);
+  f.db.exec("UPDATE media_index_batches SET payload='{bad' WHERE seq=1");
+  const before = f.db.prepare('SELECT * FROM media_index_manifests').all();
+  assert.equal(JSON.parse(store.getJson(f.entry.id, f.entry.version!, 'js-ts', ts)).index, null);
+  assert.deepEqual(f.db.prepare('SELECT * FROM media_index_manifests').all(), before);
+  assert.equal(store.has(f.entry.id, f.entry.version!, 'js-ts', ts), false);
+  assert.equal(store.list().count, 0);
+  store.commit(f.entry.id, f.entry.version!, prepareFrameIndex(f.tsDoc, f.entry.size, ts, f.source), store.epoch);
+  assert.deepEqual(JSON.parse(store.getJson(f.entry.id, f.entry.version!, 'js-ts', ts)).index, f.tsDoc);
+});
+
+test('JS invalid-cache cleanup rechecks a valid replacement after closing the read snapshot', async t => {
+  const f = await fixture(t), writer = f.library.frameIndexes;
+  writer.commit(f.entry.id, f.entry.version!, prepareFrameIndex(f.tsDoc, f.entry.size, ts, f.source), 0);
+  f.db.exec("UPDATE media_index_batches SET payload='{bad' WHERE seq=1");
+  const replacement = structuredClone(f.tsDoc); replacement.packets[0].size++;
+  let replaced = false;
+  const reader = new FrameIndexStore(new Proxy(f.db, { get(target, key) {
+    if (key === 'exec') return (sql: string) => {
+      target.exec(sql);
+      if (sql === 'COMMIT' && !replaced) {
+        replaced = true; writer.remove();
+        writer.commit(f.entry.id, f.entry.version!, prepareFrameIndex(replacement, f.entry.size, ts, f.source), writer.epoch);
+      }
+    };
+    const value = Reflect.get(target, key); return typeof value === 'function' ? value.bind(target) : value;
+  } }));
+  assert.equal(reader.has(f.entry.id, f.entry.version!, 'js-ts', ts), true);
+  assert.equal(replaced, true);
+  assert.deepEqual(JSON.parse(writer.getJson(f.entry.id, f.entry.version!, 'js-ts', ts)).index, replacement);
+});
+
+test('post-snapshot LRU touch is bound to the returned commit, not a concurrent replacement', async t => {
+  const f = await fixture(t), writer = f.library.frameIndexes;
+  writer.commit(f.entry.id, f.entry.version!, prepareFrameIndex(f.tsDoc, f.entry.size, ts, f.source), 0);
+  const replacement = structuredClone(f.tsDoc); replacement.packets[0].size++;
+  let replaced = false;
+  const reader = new FrameIndexStore(new Proxy(f.db, { get(target, key) {
+    if (key === 'prepare') return (sql: string) => {
+      if (sql.startsWith('UPDATE media_index_manifests SET accessed_at=') && !replaced) {
+        replaced = true;
+        const other = openIndexDatabase(path.join(f.dir, 'index.sqlite'));
+        try {
+          // Same-epoch replacement, as in corrupt-cache eviction/rebuild.
+          other.exec('PRAGMA foreign_keys=ON; DELETE FROM media_index_manifests');
+          writer.commit(f.entry.id, f.entry.version!, prepareFrameIndex(replacement, f.entry.size, ts, f.source), writer.epoch);
+          other.exec('UPDATE media_index_manifests SET accessed_at=0');
+        } finally { other.close(); }
+      }
+      return target.prepare(sql);
+    };
+    const value = Reflect.get(target, key); return typeof value === 'function' ? value.bind(target) : value;
+  } }));
+  const response = JSON.parse(reader.getJson(f.entry.id, f.entry.version!, 'js-ts', ts));
+  assert.equal(replaced, true); assert.deepEqual(response.index, f.tsDoc);
+  assert.equal(f.db.prepare('SELECT accessed_at FROM media_index_manifests').get()!.accessed_at, 0);
+  assert.deepEqual(JSON.parse(writer.getJson(f.entry.id, f.entry.version!, 'js-ts', ts)).index, replacement);
+});

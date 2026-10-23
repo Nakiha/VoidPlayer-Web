@@ -9,6 +9,7 @@ import { setImmediate as nextTurn } from 'node:timers/promises';
 import { MediaLibraryIndex } from '../../server/library.ts';
 import { createMediaServer } from '../../server/app.ts';
 import { openIndexDatabase } from '../../server/sqlite.ts';
+import { FrameIndexStore } from '../../server/frame-index-store.ts';
 import { FFMPEG_NO_TIMESTAMP, ffmpegTicksToUs } from '../../shared/media/indexing/ffmpeg-index-cache.ts';
 import { semanticRecord, recordMatches, parseSemanticQuery, describeCachedIndex } from '../../shared/media/indexing/semantic-query.ts';
 
@@ -258,4 +259,48 @@ test('disconnect cancels record work but holds admission until the database call
     assert.equal((await overflow.json()).code, 'media-query-busy'); assert.equal(tokens.length, 8);
   } finally { unblock(); await nextTurn(); await nextTurn(); mocked.mock.restore(); }
   assert.equal((await f.read(f.info)).technicalState, 'not-probed');
+});
+
+
+test('FFmpeg GUI reassembly does not upgrade a WAL snapshot after a competing connection commit', async t => {
+  const f = await fixture(t); f.put();
+  const writer = openIndexDatabase(path.join(f.dir, 'index.sqlite')); let wrote = false;
+  try {
+    const reader = new FrameIndexStore(new Proxy(f.db, { get(target, key) {
+      if (key === 'prepare') return (sql: string) => {
+        const statement = target.prepare(sql);
+        if (!sql.startsWith('SELECT epoch,metadata_json FROM frame_index_epoch,media_index_manifests')) return statement;
+        return new Proxy(statement, { get(s, method) {
+          if (method === 'get') return (...args: any[]) => { const row = s.get(...args); writer.exec('UPDATE library_revision SET revision=revision+1'); wrote = true; return row; };
+          const value = Reflect.get(s, method); return typeof value === 'function' ? value.bind(s) : value;
+        } });
+      };
+      const value = Reflect.get(target, key); return typeof value === 'function' ? value.bind(target) : value;
+    } }));
+    const response = JSON.parse(reader.getJson(f.entry.id, f.entry.version!, 'ffmpeg', identity));
+    assert.equal(wrote, true); assert.equal(response.index.count, 3);
+    assert.equal(response.index.records, recordBytes(3).toString('base64'));
+  } finally { writer.close(); }
+});
+
+
+test('FFmpeg post-snapshot LRU touch does not update a different build in the same epoch', async t => {
+  const f = await fixture(t); f.put(3); let replaced = false;
+  const writer = openIndexDatabase(path.join(f.dir, 'index.sqlite'));
+  try {
+    const reader = new FrameIndexStore(new Proxy(f.db, { get(target, key) {
+      if (key === 'prepare') return (sql: string) => {
+        if (sql.startsWith('UPDATE media_index_manifests SET accessed_at=') && !replaced) {
+          replaced = true; writer.exec('PRAGMA foreign_keys=ON; DELETE FROM media_index_manifests');
+          f.put(4); writer.exec('UPDATE media_index_manifests SET accessed_at=0');
+        }
+        return target.prepare(sql);
+      };
+      const value = Reflect.get(target, key); return typeof value === 'function' ? value.bind(target) : value;
+    } }));
+    const response = JSON.parse(reader.getJson(f.entry.id, f.entry.version!, 'ffmpeg', identity));
+    assert.equal(replaced, true); assert.equal(response.index.count, 3);
+    const row = writer.prepare('SELECT frames,accessed_at FROM media_index_manifests').get()!;
+    assert.equal(row.frames, 4); assert.equal(row.accessed_at, 0);
+  } finally { writer.close(); }
 });

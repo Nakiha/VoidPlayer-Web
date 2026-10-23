@@ -47,10 +47,9 @@ export class FrameIndexStore {
    * A separate stored seal detects damaged documents after process restart. */
   private validJsTsCache(id: string, version: string, identity: MediaIndexIdentity) {
     const row=this.db.prepare('SELECT metadata_json FROM media_index_manifests WHERE media_id=? AND media_version=? AND '+identityWhere+' AND complete=1').get(id,version,...identityArgs(identity));
-    if(!row)return false;
+    if(!row)return null; // A cache miss needs no eviction transaction.
     let valid=false;
     try {valid=JSON.parse(String(row.metadata_json)).jsIndexSha256===createHash('sha256').update(this.storedDocument(id,version,identity) ?? '').digest('hex');} catch {}
-    if(!valid)this.db.prepare('DELETE FROM media_index_manifests WHERE media_id=? AND media_version=? AND '+identityWhere).run(id,version,...identityArgs(identity));
     return valid;
   }
 
@@ -66,8 +65,19 @@ export class FrameIndexStore {
       // The seal and reconstructed document must come from the same snapshot;
       // a concurrent clear/recommit must never make us delete its valid winner.
       this.db.exec('BEGIN');
-      try { const valid = this.validJsTsCache(id, version, selected); this.db.exec('COMMIT'); return valid; }
+      let valid: boolean | null;
+      try { valid = this.validJsTsCache(id, version, selected); this.db.exec('COMMIT'); }
       catch (error) { this.db.exec('ROLLBACK'); throw error; }
+      if (valid !== false) return valid === true;
+      // Corrupt-cache eviction is a separate write transaction. Revalidate under
+      // the writer lock so a concurrent valid replacement cannot be deleted.
+      this.db.exec('BEGIN IMMEDIATE');
+      try {
+        valid = this.validJsTsCache(id, version, selected);
+        if (valid === false) this.db.prepare('DELETE FROM media_index_manifests WHERE media_id=? AND media_version=? AND ' + identityWhere)
+          .run(id, version, ...identityArgs(selected));
+        this.db.exec('COMMIT'); return valid === true;
+      } catch (error) { this.db.exec('ROLLBACK'); throw error; }
     }
     if (!selected) return !!this.db.prepare('SELECT 1 FROM media_index_manifests WHERE media_id=? AND media_version=? AND kind=? AND complete=1')
       .get(id, version, kind);
@@ -78,29 +88,46 @@ export class FrameIndexStore {
   /** GUI compatibility: reassemble the single authoritative packet table under
    * one snapshot. Semantic queries never enter this whole-document path. */
   getJson(id: string, version: string, kind: FrameIndexKind = 'flv', identity?: MediaIndexIdentity): string {
+    const selected = identity ?? (kind === 'flv' ? FLV_MEDIA_INDEX_IDENTITY : undefined);
     this.db.exec('BEGIN');
-    try { const result = this.readJson(id, version, kind, identity); this.db.exec('COMMIT'); return result; } catch (error) { this.db.exec('ROLLBACK'); throw error; }
+    let result: { json: string; hit: boolean };
+    let touch: { buildId: string | null; packetStorage: string | null; epoch: number } | undefined;
+    try {
+      result = this.readJson(id, version, kind, identity);
+      if (result.hit && selected) {
+        const row = this.db.prepare('SELECT build_id,packet_storage FROM media_index_manifests WHERE media_id=? AND media_version=? AND ' + identityWhere + ' AND complete=1')
+          .get(id, version, ...identityArgs(selected));
+        if (row) touch = { buildId: typeof row.build_id === 'string' ? row.build_id : null,
+          packetStorage: typeof row.packet_storage === 'string' ? row.packet_storage : null, epoch: this.epoch };
+      }
+      this.db.exec('COMMIT');
+    }
+    catch (error) { this.db.exec('ROLLBACK'); throw error; }
+    if (touch && selected) {
+      // LRU is advisory. A reader must never upgrade its WAL snapshot to write,
+      // and a contended/failed touch must not discard the validated document.
+      try { this.db.prepare('UPDATE media_index_manifests SET accessed_at=? WHERE media_id=? AND media_version=? AND ' + identityWhere
+        + ' AND complete=1 AND build_id IS ? AND packet_storage IS ? AND (SELECT epoch FROM frame_index_epoch WHERE id=1)=?')
+        .run(Date.now(), id, version, ...identityArgs(selected), touch.buildId, touch.packetStorage, touch.epoch); } catch {}
+    }
+    return result.json;
   }
 
-  private readJson(id: string, version: string, kind: FrameIndexKind, identity?: MediaIndexIdentity): string {
+  private readJson(id: string, version: string, kind: FrameIndexKind, identity?: MediaIndexIdentity): { json: string; hit: boolean } {
     const selected = identity ?? (kind === 'flv' ? FLV_MEDIA_INDEX_IDENTITY : undefined);
-    if((selected?.kind==='js-ts'||selected?.kind==='js-matroska')&&!this.validJsTsCache(id,version,selected))return JSON.stringify({epoch:this.epoch,index:null});
-    if (!selected) return JSON.stringify({ epoch: this.epoch, index: null });
+    if((selected?.kind==='js-ts'||selected?.kind==='js-matroska')&&!this.validJsTsCache(id,version,selected))return { json: JSON.stringify({epoch:this.epoch,index:null}), hit: false };
+    if (!selected) return { json: JSON.stringify({ epoch: this.epoch, index: null }), hit: false };
     if (selected.kind === 'ffmpeg') {
       const row = this.db.prepare('SELECT epoch,metadata_json FROM frame_index_epoch,media_index_manifests WHERE frame_index_epoch.id=1 AND media_id=? AND media_version=? AND ' + identityWhere + ' AND complete=1').get(id, version, ...identityArgs(selected));
       if (row?.metadata_json) {
         const rows = this.db.prepare('SELECT payload FROM media_index_batches WHERE media_id=? AND media_version=? AND ' + identityWhere + ' ORDER BY seq').all(id, version, ...identityArgs(selected)) as { payload: string }[];
-        this.db.prepare('UPDATE media_index_manifests SET accessed_at=? WHERE media_id=? AND media_version=? AND ' + identityWhere)
-          .run(Date.now(), id, version, ...identityArgs(selected));
         const metadata = JSON.parse(String(row.metadata_json)) as Record<string, unknown>;
         const records = Buffer.concat(rows.map(item => Buffer.from(item.payload, 'base64'))).toString('base64');
-        return JSON.stringify({ epoch: Number(row.epoch), index: { ...metadata, records } });
+        return { json: JSON.stringify({ epoch: Number(row.epoch), index: { ...metadata, records } }), hit: true };
       }
     }
     const document = this.storedDocument(id, version, selected);
-    if (document) this.db.prepare('UPDATE media_index_manifests SET accessed_at=? WHERE media_id=? AND media_version=? AND ' + identityWhere)
-      .run(Date.now(), id, version, ...identityArgs(selected));
-    return '{"epoch":' + this.epoch + ',"index":' + (document ?? 'null') + '}';
+    return { json: '{"epoch":' + this.epoch + ',"index":' + (document ?? 'null') + '}', hit: document !== null };
   }
 
   put(id: string, version: string, size: number, value: unknown, epoch: unknown, identity: MediaIndexIdentity = FLV_MEDIA_INDEX_IDENTITY) {
