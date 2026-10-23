@@ -234,3 +234,28 @@ test('HTTP disconnect retains admission until source validation settles', { time
     });
   }
 });
+
+test('disconnect cancels record work but holds admission until the database call actually settles', { timeout: 15000 }, async t => {
+  const f = await fixture(t);
+  let unblock!: () => void, arrived!: () => void, closed!: () => void;
+  const gate = new Promise<void>(resolve => { unblock = resolve; });
+  const entered = new Promise<void>(resolve => { arrived = resolve; });
+  const allClosed = new Promise<void>(resolve => { closed = resolve; });
+  const tokens: SharedArrayBuffer[] = []; let closedCount = 0;
+  f.server.on('request', (_req, res) => res.once('close', () => { if (++closedCount === 8) closed(); }));
+  const mocked = t.mock.method(f.library.indexJobs, 'call', async (_op: unknown, data: { cancellation: SharedArrayBuffer }) => {
+    tokens.push(data.cancellation); if (tokens.length === 8) arrived();
+    await gate;
+    return { overview: {}, records: [] };
+  });
+  const controllers = Array.from({ length: 8 }, () => new AbortController());
+  const endpoint = f.endpoint + '&view=records&startTick=0&endTick=1';
+  const requests = Promise.allSettled(controllers.map(c => fetch(endpoint, { signal: c.signal })));
+  try {
+    await entered; controllers.forEach(c => c.abort()); await requests; await allClosed;
+    for (const token of tokens) assert.equal(Atomics.load(new Int32Array(token), 0), 1);
+    const overflow = await fetch(endpoint); assert.equal(overflow.status, 503);
+    assert.equal((await overflow.json()).code, 'media-query-busy'); assert.equal(tokens.length, 8);
+  } finally { unblock(); await nextTurn(); await nextTurn(); mocked.mock.restore(); }
+  assert.equal((await f.read(f.info)).technicalState, 'not-probed');
+});

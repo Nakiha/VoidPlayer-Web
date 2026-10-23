@@ -125,14 +125,24 @@ export class FrameIndexJobs {
     if ((op === 'cached-indexes' || op === 'semantic-query') && this.pending.size >= QUERY_CONCURRENCY_LIMIT) {
       throw new AdminError(503, 'Cached media queries are busy; retry later.', 'media-query-busy');
     }
+    const isQuery = op === 'semantic-query' || op === 'cached-indexes';
+    const queryData = data as { cancellation?: SharedArrayBuffer };
+    if (op === 'semantic-query') queryData.cancellation ??= new SharedArrayBuffer(4);
+    let timedOut = false;
     const worker = this.databaseWorker();
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
+        if (isQuery) {
+          // Keep capacity until the worker acknowledges completion/cancellation.
+          timedOut = true;
+          if (queryData.cancellation) Atomics.store(new Int32Array(queryData.cancellation), 0, 1);
+          return;
+        }
         this.pending.delete(id);
         reject(new AdminError(503, '索引数据库操作超时，请稍后重试。'));
       }, timeoutMs);
-      this.pending.set(id, { resolve: value => resolve(value as FrameIndexResult<K>), reject, timer });
+      this.pending.set(id, { resolve: value => timedOut ? reject(new AdminError(503, '索引数据库操作超时，请稍后重试。')) : resolve(value as FrameIndexResult<K>), reject, timer });
       try { worker.postMessage({ rpcId: id, op, ...data }, transfer); }
       catch (error) {
         clearTimeout(timer);

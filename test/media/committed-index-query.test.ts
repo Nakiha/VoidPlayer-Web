@@ -43,7 +43,7 @@ test('real FLV and JS-TS commit headers agree with ffprobe and shared statistics
       const response = await fetch(endpoint), page = await response.json(); assert.equal(response.status, 200, JSON.stringify(page));
       const o = page.overview;
       assert.equal(o.technical.codec.value, doc.codec); assert.equal(o.evidence.provenance, 'server-scan');
-      assert.equal(o.recordCount, doc.packets.length); assert.equal(o.capabilities.records.ready, false);
+      assert.equal(o.recordCount, doc.packets.length); assert.equal(o.capabilities.records.ready, true);
       assert.equal(o.technical.durationUs.value, null); assert.equal(o.technical.decodedFrameCount.value, null);
       assert.equal(o.technical.frameRateMode.value, null); assert.equal(o.stablePresentationUs, null);
       let packets: { pts: number | null; dts: number | null; size: number; key: boolean }[];

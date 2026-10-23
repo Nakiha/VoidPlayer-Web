@@ -195,3 +195,24 @@ for (const terminal of ['messageerror', 'error'] as const) {
     }
   });
 }
+
+test('query timeout keeps pending capacity until its worker acknowledges the cancelled operation', async t => {
+  const root = await mkdtemp(path.join(tmpdir(), 'vp-query-timeout-'));
+  const library = new MediaLibraryIndex([], { database: path.join(root, 'index.sqlite'), watch: false });
+  const jobs = library.indexJobs;
+  try {
+    await jobs.call('epoch');
+    const worker = (jobs as any).worker as import('node:worker_threads').Worker;
+    const post = t.mock.method(worker, 'postMessage', () => {});
+    const selection = { id: 'a'.repeat(24), version: 'b'.repeat(24), identity: FLV_MEDIA_INDEX_IDENTITY, cancellation: new SharedArrayBuffer(4) };
+    let settled = false;
+    const pending = jobs.call('semantic-query', selection, [], 1).finally(() => { settled = true; });
+    const rejected = assert.rejects(pending, /超时/);
+    await new Promise<void>(r => setTimeout(r, 20));
+    assert.equal(settled, false); assert.equal((jobs as any).pending.size, 1);
+    assert.equal(Atomics.load(new Int32Array(selection.cancellation), 0), 1);
+    const message = post.mock.calls[0].arguments[0] as any;
+    worker.emit('message', { rpcId: message.rpcId, value: {} });
+    await rejected; assert.equal((jobs as any).pending.size, 0);
+  } finally { await library.close(); await rm(root, { recursive: true, force: true }); }
+});

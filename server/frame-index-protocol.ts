@@ -15,7 +15,7 @@ type Command<Request, Response> = { request: Request; response: Response };
 export interface FrameIndexCommands {
   epoch: Command<Record<string, never>, number>;
   'cached-indexes': Command<{ id: string; version: string; offset: number }, ReturnType<import('./media-index-query.ts').MediaIndexQueryStore['inventory']>>;
-  'semantic-query': Command<Target & { query?: import('../shared/media/indexing/semantic-query.ts').SemanticQuery; cursor?: string }, ReturnType<import('./media-index-query.ts').MediaIndexQueryStore['query']>>;
+  'semantic-query': Command<Target & { query?: import('../shared/media/indexing/semantic-query.ts').SemanticQuery; cursor?: string; cancellation?: SharedArrayBuffer }, ReturnType<import('./media-index-query.ts').MediaIndexQueryStore['query']>>;
   has: Command<Target, boolean>;
   get: Command<Target, Uint8Array>;
   put: Command<Target & { size: number; bytes: Uint8Array }, { ok: boolean }>;

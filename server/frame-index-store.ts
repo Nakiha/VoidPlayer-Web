@@ -1,3 +1,4 @@
+import { preparePacketStorage, packetStorage, restorePacketDocument, invalidPackets } from './committed-packet-storage.ts';
 import { flvCommittedHeader, tsCommittedHeader, COMMITTED_HEADER_BYTES } from '../shared/media/indexing/committed-index-header.ts';
 import type { CommittedIndexHeader, ScanEvidence } from '../shared/media/indexing/committed-index-header.ts';
 import { parseJsPacketIndex } from '../shared/media/indexing/js-packet-index-parser.ts';
@@ -28,13 +29,28 @@ export class FrameIndexStore {
   constructor(db: IndexDatabase) { this.db = db; }
   get epoch(): number { return Number(this.db.prepare('SELECT epoch FROM frame_index_epoch WHERE id=1').get()!.epoch); }
 
+  private storedDocument(id: string, version: string, identity: MediaIndexIdentity): string | null {
+    const row = this.db.prepare('SELECT complete,frames,last_seq,packet_storage FROM media_index_manifests WHERE media_id=? AND media_version=? AND ' + identityWhere).get(id, version, ...identityArgs(identity));
+    if (!row?.complete) return null;
+    const rows = this.db.prepare('SELECT seq,payload,frames FROM media_index_batches WHERE media_id=? AND media_version=? AND ' + identityWhere + ' ORDER BY seq').all(id, version, ...identityArgs(identity)) as { seq: number; payload: string; frames: number }[];
+    if (!row.packet_storage) {
+      // An invalidated sharded cache must not masquerade as a legacy document.
+      if (row.last_seq !== 0 || rows.length !== 1) return null;
+      try { if (!Array.isArray(JSON.parse(rows[0].payload).packets)) return null; } catch { return null; }
+      return rows[0].payload;
+    }
+    const storage = packetStorage(String(row.packet_storage), identity, `${id}@${version}`, Number(row.frames), Number(row.last_seq));
+    if (!storage || rows[0]?.seq !== 0) return invalidPackets();
+    return restorePacketDocument(rows[0].payload, rows.slice(1), storage);
+  }
+
   /** JS documents can only be committed by the server's completed parser.
    * A separate stored seal detects damaged documents after process restart. */
   private validJsTsCache(id: string, version: string, identity: MediaIndexIdentity) {
-    const row=this.db.prepare('SELECT m.metadata_json,b.payload FROM media_index_manifests m JOIN media_index_batches b USING(media_id,media_version,kind,stream_key,schema_version,indexer_build) WHERE m.media_id=? AND m.media_version=? AND m.'+identityWhere.replaceAll(' AND ',' AND m.')+' AND m.complete=1 AND b.seq=0').get(id,version,...identityArgs(identity));
+    const row=this.db.prepare('SELECT metadata_json FROM media_index_manifests WHERE media_id=? AND media_version=? AND '+identityWhere+' AND complete=1').get(id,version,...identityArgs(identity));
     if(!row)return false;
     let valid=false;
-    try {valid=JSON.parse(String(row.metadata_json)).jsIndexSha256===createHash('sha256').update(String(row.payload)).digest('hex');} catch {}
+    try {valid=JSON.parse(String(row.metadata_json)).jsIndexSha256===createHash('sha256').update(this.storedDocument(id,version,identity) ?? '').digest('hex');} catch {}
     if(!valid)this.db.prepare('DELETE FROM media_index_manifests WHERE media_id=? AND media_version=? AND '+identityWhere).run(id,version,...identityArgs(identity));
     return valid;
   }
@@ -54,9 +70,14 @@ export class FrameIndexStore {
       .get(id, version, ...identityArgs(selected));
   }
 
-  /** Stored documents are validated on ingress. This returns the complete
-   * document without parsing and stringifying its large record payload. */
+  /** GUI compatibility: reassemble the single authoritative packet table under
+   * one snapshot. Semantic queries never enter this whole-document path. */
   getJson(id: string, version: string, kind: FrameIndexKind = 'flv', identity?: MediaIndexIdentity): string {
+    this.db.exec('BEGIN');
+    try { const result = this.readJson(id, version, kind, identity); this.db.exec('COMMIT'); return result; } catch (error) { this.db.exec('ROLLBACK'); throw error; }
+  }
+
+  private readJson(id: string, version: string, kind: FrameIndexKind, identity?: MediaIndexIdentity): string {
     const selected = identity ?? (kind === 'flv' ? FLV_MEDIA_INDEX_IDENTITY : undefined);
     if((selected?.kind==='js-ts'||selected?.kind==='js-matroska')&&!this.validJsTsCache(id,version,selected))return JSON.stringify({epoch:this.epoch,index:null});
     if (!selected) return JSON.stringify({ epoch: this.epoch, index: null });
@@ -71,14 +92,10 @@ export class FrameIndexStore {
         return JSON.stringify({ epoch: Number(row.epoch), index: { ...metadata, records } });
       }
     }
-    const row = this.db.prepare(
-      'SELECT epoch,(SELECT b.payload FROM media_index_batches b JOIN media_index_manifests m USING(media_id,media_version,kind,stream_key,schema_version,indexer_build) ' +
-      'WHERE b.media_id=? AND b.media_version=? AND b.kind=? AND b.stream_key=? AND b.schema_version=? AND b.indexer_build=? AND b.seq=0 AND m.complete=1) ' +
-      'AS document FROM frame_index_epoch WHERE id=1',
-    ).get(id, version, ...identityArgs(selected))!;
-    if (row.document) this.db.prepare('UPDATE media_index_manifests SET accessed_at=? WHERE media_id=? AND media_version=? AND ' + identityWhere)
+    const document = this.storedDocument(id, version, selected);
+    if (document) this.db.prepare('UPDATE media_index_manifests SET accessed_at=? WHERE media_id=? AND media_version=? AND ' + identityWhere)
       .run(Date.now(), id, version, ...identityArgs(selected));
-    return '{"epoch":' + Number(row.epoch) + ',"index":' + (row.document ? String(row.document) : 'null') + '}';
+    return '{"epoch":' + this.epoch + ',"index":' + (document ?? 'null') + '}';
   }
 
   put(id: string, version: string, size: number, value: unknown, epoch: unknown, identity: MediaIndexIdentity = FLV_MEDIA_INDEX_IDENTITY) {
@@ -140,13 +157,20 @@ export class FrameIndexStore {
       if (this.db.prepare('SELECT 1 FROM media_index_manifests WHERE media_id=? AND media_version=? AND ' + identityWhere).get(id, version, ...identityArgs(identity))) {
         this.db.exec('COMMIT'); return { ok: true };
       }
+      const sharded = identity.kind === 'flv' || identity.kind === 'js-ts'
+        ? preparePacketStorage(text, `${id}@${version}`, identity) : undefined;
+      const parts = sharded ? [{ payload: sharded.metadata, frames: 0 }, ...sharded.chunks] : [{ payload: text, frames }];
+      const storedBytes = parts.reduce((sum, p) => sum + Buffer.byteLength(p.payload), 0);
       this.db.prepare(
-        "INSERT OR IGNORE INTO media_index_manifests(media_id,media_version,kind,stream_key,schema_version,indexer_build,state,last_seq,complete,scanned_bytes,stable_presentation_us,bytes,frames,created_at,accessed_at) VALUES(?,?,?,?,?,?,'complete',0,1,?,0,?,?,?,?)",
-      ).run(id, version, ...identityArgs(identity), scannedBytes, bytes, frames, now, now);
-      this.db.prepare(
-        'INSERT OR IGNORE INTO media_index_batches(media_id,media_version,kind,stream_key,schema_version,indexer_build,seq,payload,bytes,frames,created_at) VALUES(?,?,?,?,?,?,0,?,?,?,?)',
-      ).run(id, version, ...identityArgs(identity), text, bytes, frames, now);
-      if((identity.kind==='js-ts'||identity.kind==='js-matroska'))this.db.prepare('UPDATE media_index_manifests SET metadata_json=? WHERE media_id=? AND media_version=? AND '+identityWhere).run(JSON.stringify({jsIndexSha256:createHash('sha256').update(text).digest('hex')}),id,version,...identityArgs(identity));
+        "INSERT INTO media_index_manifests(media_id,media_version,kind,stream_key,schema_version,indexer_build,state,last_seq,complete,scanned_bytes,stable_presentation_us,bytes,frames,created_at,accessed_at) VALUES(?,?,?,?,?,?,'complete',?,1,?,0,?,?,?,?)",
+      ).run(id, version, ...identityArgs(identity), parts.length - 1, scannedBytes, storedBytes, frames, now, now);
+      for (const [seq, part] of parts.entries()) this.db.prepare(
+        'INSERT INTO media_index_batches(media_id,media_version,kind,stream_key,schema_version,indexer_build,seq,payload,bytes,frames,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+      ).run(id, version, ...identityArgs(identity), seq, part.payload, Buffer.byteLength(part.payload), part.frames, now);
+      if (sharded) this.db.prepare('UPDATE media_index_manifests SET packet_storage=? WHERE media_id=? AND media_version=? AND ' + identityWhere)
+        .run(JSON.stringify(sharded.storage), id, version, ...identityArgs(identity));
+      if ((identity.kind==='js-ts'||identity.kind==='js-matroska')) this.db.prepare('UPDATE media_index_manifests SET metadata_json=? WHERE media_id=? AND media_version=? AND '+identityWhere)
+        .run(JSON.stringify({jsIndexSha256:createHash('sha256').update(text).digest('hex')}),id,version,...identityArgs(identity));
       if (prepared.semanticHeader) {
         const header = prepared.semanticHeader;
         if (header.sourceVersion !== `${id}@${version}` || header.size !== scannedBytes || header.recordCount !== frames)
