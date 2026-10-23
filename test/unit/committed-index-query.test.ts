@@ -285,6 +285,14 @@ test('chunk insertion failure rolls back document, seal, header and manifest; re
   f.db.exec('DROP TRIGGER inject_chunk_failure'); f.commit(doc);
   assert.equal(f.db.prepare('SELECT count(*) AS n FROM media_index_batches').get()!.n, 4);
   assert.deepEqual(f.library.frameIndexes.get(f.entry.id, f.entry.version!).index, doc);
+  f.library.frameIndexes.remove();
+  const oversized = structuredClone(f.tsDoc) as any;
+  oversized.packets[0].extra = 'x'.repeat(65536);
+  const prepared = prepareFrameIndex(oversized, f.entry.size, ts, f.source);
+  assert.throws(() => f.library.frameIndexes.commit(f.entry.id, f.entry.version!, prepared, f.library.frameIndexes.epoch),
+    (e: any) => e.code === 'packet-storage-too-large');
+  assert.equal(f.db.prepare('SELECT count(*) AS n FROM media_index_manifests').get()!.n, 0);
+  assert.equal(f.db.prepare('SELECT count(*) AS n FROM media_index_batches').get()!.n, 0);
 });
 
 test('cancellation interrupts bounded traversal and closes the read snapshot', async t => {
