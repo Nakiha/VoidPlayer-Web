@@ -1,5 +1,6 @@
 import type { MediaIndexIdentity } from './media-index-identity.ts';
 import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_NO_TIMESTAMP } from './ffmpeg-index-cache.ts';
+import type { CommittedIndexHeader } from './committed-index-header.ts';
 
 /** Host-neutral, cache-only semantics. No media I/O or session state. */
 export const MEDIA_QUERY_SCHEMA = 'voidplayer-media-query';
@@ -8,7 +9,7 @@ export const MEDIA_QUERY_DICTIONARY = '/api/media/query-schema';
 export const QUERY_SCAN_LIMIT = 2048;
 export const QUERY_RECORD_LIMIT = 256;
 export const QUERY_CONCURRENCY_LIMIT = 8;
-export type CachedField = { value: string | number | boolean | null; status: 'known' | 'unknown' | 'not-probed' | 'unsupported'; source: 'file-stat' | 'container-index' | 'unavailable'; reason?: string };
+export type CachedField = { value: string | number | boolean | null; status: 'known' | 'unknown' | 'not-probed' | 'unsupported' | 'derived'; source: 'file-stat' | 'container-index' | 'codec-configuration' | 'index-observation' | 'unavailable'; reason?: string };
 export function cachedField(value: string | number | boolean | null, reason = 'not-stored-in-index'): CachedField {
   return value === null ? { value, status: 'unknown', source: 'unavailable', reason }
     : { value, status: 'known', source: 'container-index' };
@@ -16,6 +17,45 @@ export function cachedField(value: string | number | boolean | null, reason = 'n
 export interface CachedIndexState {
   complete: boolean; state: string; recordCount: number; scannedBytes: number;
   stablePresentationUs: number; metadata: Record<string, unknown> | null;
+  semanticHeader?: CommittedIndexHeader | null; semanticReason?: string;
+}
+function describeCommittedIndex(row: CachedIndexState | null, identity: MediaIndexIdentity) {
+  const h = row?.semanticHeader;
+  const state = !row ? 'not-indexed' : !h ? 'unknown' : row.complete && row.state === 'complete' && h.integrity === 'complete' ? 'complete' : 'partial';
+  const reason = !row ? 'cache-miss' : !h ? row.semanticReason ?? 'semantic-header-missing' : row.state === 'failed' ? 'build-failed'
+    : !row.complete ? 'build-in-progress' : h.integrity === 'prefix' ? 'retained-prefix' : h.integrity === 'recovered' ? 'recovered-gaps'
+    : h.integrity === 'unknown' ? 'integrity-unknown' : row.state !== 'complete' ? 'build-state-inconsistent' : null;
+  const technical: Record<string, CachedField> = {};
+  for (const key of ['codec', 'container', 'width', 'height', 'timeBaseNum', 'timeBaseDen', 'streamIndex', 'pid', 'profile', 'codedWidth', 'codedHeight', 'visibleWidth', 'visibleHeight', 'sar', 'rotation', 'bitDepth', 'pixelFormat', 'sourceColorPrimaries', 'sourceColorTransfer', 'sourceColorMatrix', 'sourceColorRange', 'durationUs', 'indexedDurationUs', 'frameRateMode', 'frameRate', 'bitrate', 'decodedFrameCount']) {
+    technical[key] = !row ? { value: null, status: 'not-probed', source: 'unavailable', reason: 'cache-miss' } : cachedField(null, h ? 'not-stored-in-index' : reason!);
+  }
+  if (h) {
+    for (const [key, value] of Object.entries({ codec: h.codec, container: h.container, timeBaseNum: h.timeBaseNum, timeBaseDen: h.timeBaseDen, streamIndex: 0, pid: h.pid })) technical[key] = cachedField(value);
+    for (const [key, field] of Object.entries({ width: 'width', height: 'height', visibleWidth: 'width', visibleHeight: 'height', codedWidth: 'codedWidth', codedHeight: 'codedHeight' } as const)) {
+      technical[key] = h.geometry ? { value: h.geometry[field], status: 'known', source: 'codec-configuration' } : cachedField(null, h.geometryReason!);
+    }
+    technical.durationUs = cachedField(null, 'container-duration-not-stored');
+    technical.indexedDurationUs = { value: h.indexedDurationUs, status: 'derived', source: 'index-observation', reason: 'indexed-span-with-estimated-tail' };
+  }
+  const axis = (a: CommittedIndexHeader['pts']) => ({ count: a.count, missing: a.missing, minTick: a.minTick, maxTick: a.maxTick });
+  return {
+    identity, state, reason, terminal: !!row?.complete, buildState: row?.state ?? null,
+    recordCount: h?.recordCount ?? null, scannedBytes: h?.scannedBytes ?? null, stablePresentationUs: null,
+    integrity: h?.integrity ?? 'unknown', technical,
+    clock: { timeBase: h ? { numerator: h.timeBaseNum, denominator: h.timeBaseDen, unit: 'seconds-per-tick' } : null,
+      firstPts: h?.originTick ?? null, originVerified: !!h && h.originTick !== null,
+      originBasis: h && h.originTick !== null ? 'first-decode-packet-pts' : 'not-established',
+      rangeDomain: identity.kind === 'flv' ? 'cached-source-microseconds' : 'original-pes-ticks',
+      nativeTimeBase: h ? { numerator: 1, denominator: identity.kind === 'flv' ? 1000 : 90000 } : null },
+    recordGranularity: identity.kind === 'flv' ? 'flv-video-tag-payload' : 'js-demux-packet',
+    coverage: h ? { scope: 'committed-packets-only', semantics: h.coverageSemantics, pts: axis(h.pts), dts: axis(h.dts),
+      effectivePtsUs: { min: h.effectivePtsUs.min, max: h.effectivePtsUs.max },
+      continuousPresentation: null, truncatedAt: h.truncatedAt, recoveredGapCount: h.recoveredGapCount, recovery: h.recovery } : null,
+    statistics: h ? { scope: 'committed-packets-only', payloadBytes: h.payloadBytes, indexKeyCount: h.keyCount } : null,
+    evidence: h ? { schema: h.schema, version: h.version, provenance: h.provenance, geometryScope: 'initial-codec-configuration', validation: 'validated-at-commit; header-checked-on-read; payload-not-rehashed' } : null,
+    capabilities: { overview: { implemented: true, enabled: true, ready: true },
+      records: { implemented: false, enabled: false, ready: false, reason: 'semantic-record-adapter-unavailable' } },
+  };
 }
 export function supportedCachedMetadata(identity: MediaIndexIdentity, m: Record<string, unknown> | null): boolean {
   return identity.kind === 'ffmpeg' && identity.schemaVersion === 3 && !!m
@@ -33,6 +73,7 @@ export function cachedIndexClock(m: Record<string, unknown> | null) {
   return { num: Number(m?.timeBaseNum), den: Number(m?.timeBaseDen), firstPts, originVerified: m?.originVerified === true && firstPts !== null };
 }
 export function describeCachedIndex(row: CachedIndexState | null, identity: MediaIndexIdentity) {
+  if (identity.kind === 'flv' || identity.kind === 'js-ts') return describeCommittedIndex(row, identity);
   const m = row?.metadata ?? null, ready = supportedCachedMetadata(identity, m), c = cachedIndexClock(ready ? m : null);
   const state = !row ? 'not-indexed' : !ready ? 'unknown' : row.complete && m!.indexIntegrity === 'complete' ? 'complete' : 'partial';
   const reason = !row ? 'cache-miss' : !ready ? 'semantic-adapter-unavailable' : m!.indexIntegrity === 'prefix' ? 'retained-prefix'
@@ -108,20 +149,32 @@ export const MEDIA_QUERY_FIELDS = {
     'file.size': 'File length in bytes, from a validated filesystem stat; not compressed video payload size.',
     'file.lastModified': 'Unix milliseconds from the library file version.',
     identity: 'Exact cache kind, streamKey, schemaVersion and indexerBuild. Never combine indexes from different identities or source versions.',
-    recordCount: 'Cached container packet count, not decoded frame count.',
+    recordCount: 'Cached packet count, not decoded frame count; null for missing/unrecognized FLV/TS semantic headers.',
+    recordGranularity: 'FLV video tag payload or JS demux packet as reported by its authoritative parser; neither guarantees one decoded picture.',
+    coverage: 'FLV/TS commit-time observations only. pts/dts minTick and maxTick are inclusive extrema in clock.timeBase, not continuous or half-open coverage. count and missing refer to raw source timestamps; effectivePtsUs also includes derived TS presentation timestamps and must not fill raw PTS/DTS.',
+    'coverage.continuousPresentation': 'Null: continuous presentation coverage has not been verified. Complete packet enumeration does not establish decode continuity.',
+    'coverage.recovery': 'TS parser recovery method, or null. Late-PSI recovery is distinct from FLV recoveredGapCount and does not invent a gap count.',
+    'coverage.truncatedAt': 'Source byte offset reported by the authoritative parser for a retained prefix; null when no truncation is recorded.',
+    statistics: 'FLV/TS committed-packets-only payloadBytes and indexKeyCount. These count the existing parser packet table, including untimed packets; index key classification does not establish decoded picture type.',
+    evidence: 'Small versioned commit-time header, bound to source version and cache identity. Read checks its checksum/schema/counters only, without rehashing the packet document. Atomic payload mutation invalidates this projection.',
+    'evidence.geometryScope': 'initial-codec-configuration: coded and visible dimensions parsed from the already cached initial SPS; unavailable for unsupported/oversized/changing configurations. Not per-picture verification.',
+    indexedDurationUs: 'Derived integer microseconds from the shared index span and estimated final packet duration. FLV uses first decode-packet PTS as origin; TS uses minimum effective PTS. Not container duration, CFR or decoded frame count.',
+    'clock.nativeTimeBase': 'Native FLV tags use 1/1000 seconds; cached source timestamps are scaled to 1/1000000 seconds. TS raw PES timestamps use 1/90000 seconds (33-bit, without inferred unwrap).',
+    'clock.originBasis': 'FLV: first-decode-packet-pts, matching flvMediaTiming. TS: not-established; no decoded/playback origin is inferred.',
+    semanticHeaderFailures: 'semantic-header-missing, semantic-header-too-large, semantic-header-invalid and semantic-header-version-unsupported return unknown without reading packets or migrating. A cache miss is not a build status: FLV/TS do not persist in-progress/failure records before their terminal commit.',
     snapshot: 'Opaque cache/query revision token. Changed tokens invalidate accumulated pages.',
     inspected: 'Records examined in this page, including nonmatches; at most 2048.',
     inspectedUntimed: 'Examined records without the selected axis timestamp; excluded from the range summary.',
     nextCursor: 'Continuation within the same source/version/identity/axis/range snapshot; null when exhausted or unavailable. Check readiness first.',
     capabilities: 'implemented is code support, enabled is deployment support, ready is availability for this exact cached source/stream.',
-    fieldStatuses: 'known: cached evidence; unknown: cache lacks a fact; not-probed: no cached probe/index; unsupported: field or operation has no adapter. No missing fact is zero.',
+    fieldStatuses: 'known: cached evidence; unknown: cache lacks a fact; not-probed: no cached probe/index; unsupported: field or operation has no adapter; derived: index-based estimate, not a container declaration. No missing fact is zero.',
     'technical.*': 'Each field has value, status, source and optional reason. Unknown is null, never zero. Values belong to the selected cached stream and source version.',
     codec: 'Container-index codec name; no decode verification.',
-    width: 'Indexer-reported stream width in pixels; coded/visible distinction is not stored.',
-    height: 'Indexer-reported stream height in pixels; coded/visible distinction is not stored.',
-    timeBaseNum: 'Numerator of seconds per original stream tick.',
-    timeBaseDen: 'Denominator of seconds per original stream tick.',
-    firstPts: 'Original stream origin in decimal ticks. Normalization allowed only when originVerified=true.',
+    width: 'Width in pixels from the stated source. FFmpeg stores indexer width without coded/visible distinction; FLV/TS geometry uses the initial codec configuration.',
+    height: 'Height in pixels from the stated source; see width and evidence.geometryScope.',
+    timeBaseNum: 'Numerator of seconds per tick in clock.rangeDomain; FLV cached ticks are scaled microseconds.',
+    timeBaseDen: 'Denominator of seconds per tick in clock.rangeDomain.',
+    firstPts: 'Origin in decimal clock.timeBase ticks; see clock.originBasis when present. Null if not established. Normalization allowed only when originVerified=true.',
     ptsTick: 'Original container presentation timestamp; signed decimal integer ticks, null if missing.',
     dtsTick: 'Original container decoding timestamp; signed decimal integer ticks, null if missing.',
     durationTick: 'Container packet duration in original ticks; null if absent/nonpositive.',
@@ -135,7 +188,7 @@ export const MEDIA_QUERY_FIELDS = {
     scannedBytes: 'Scanner progress in source bytes; not stable presentation coverage.',
     stablePresentationUs: 'Indexer watermark in integer microseconds, exclusive frontier; null without a verified origin or trustworthy streamed watermark. It is not media duration.',
     terminal: 'The cached build stopped successfully; independent of source coverage/integrity.',
-    state: 'not-indexed: no cache; unknown: legacy/unrecognized semantics; partial: building/failed/prefix/unknown-integrity; complete: terminal and explicitly complete integrity.',
+    state: 'not-indexed: no cache; unknown: legacy/unrecognized semantics; partial: building/failed/prefix/recovered-gaps/unknown-integrity; complete: terminal and explicitly complete integrity.',
     summary: 'Page-local summary of matched records only. Sum across all pages of the same snapshot; not a full-range claim on an intermediate page.',
     exhausted: 'All records in this snapshot were examined. Does not imply the media index is complete.',
   },
