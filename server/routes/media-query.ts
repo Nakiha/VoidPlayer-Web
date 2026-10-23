@@ -4,19 +4,24 @@ import { AdminError } from '../admin-error.ts';
 import { parseMediaIndexIdentity } from '../../shared/media/indexing/media-index-identity.ts';
 import { MEDIA_QUERY_DICTIONARY, MEDIA_QUERY_FIELDS, parseSemanticQuery, QUERY_CONCURRENCY_LIMIT } from '../../shared/media/indexing/semantic-query.ts';
 
-// Keep admission until the response drains/closes, including both filesystem
-// checks. Limiting the database RPC alone leaves completed results unbounded.
+// Keep admission until BOTH the handler has settled and the response has
+// drained/closed. A disconnected request may still have filesystem work pending.
 const activeQueries = new WeakMap<RouteContext['library'], number>();
 function admit(library: RouteContext['library'], res: ServerResponse) {
   const active = activeQueries.get(library) ?? 0;
   if (active >= QUERY_CONCURRENCY_LIMIT) throw new AdminError(503, 'Cached media queries are busy; retry later.', 'media-query-busy');
   activeQueries.set(library, active + 1);
+  let handled = false, responseDone = res.writableFinished || res.destroyed, released = false;
   const release = () => {
-    res.off('finish', release); res.off('close', release);
+    if (!handled || !responseDone || released) return;
+    released = true;
+    res.off('finish', completeResponse); res.off('close', completeResponse);
     const remaining = (activeQueries.get(library) ?? 1) - 1;
     if (remaining) activeQueries.set(library, remaining); else activeQueries.delete(library);
   };
-  res.once('finish', release); res.once('close', release);
+  const completeResponse = () => { responseDone = true; release(); };
+  res.once('finish', completeResponse); res.once('close', completeResponse);
+  return () => { handled = true; release(); };
 }
 
 function json(req: IncomingMessage, res: ServerResponse, status: number, body: unknown) {
@@ -29,6 +34,7 @@ export async function handleMediaQueryRoutes(ctx: RouteContext, req: IncomingMes
   const match = /^\/api\/media\/([0-9a-f]{24})\/(info|index-query)$/.exec(url.pathname);
   if (!match && url.pathname !== MEDIA_QUERY_DICTIONARY) return false;
   const links = { describedBy: MEDIA_QUERY_DICTIONARY, help: '/agent/library.md', browse: '/api/library/browse?recursive=1' };
+  let completeHandling: (() => void) | undefined;
   try {
     if (req.method !== 'GET' && req.method !== 'HEAD') throw new AdminError(405, 'This endpoint is read-only.', 'method-not-allowed');
     if (!match) { json(req, res, 200, MEDIA_QUERY_FIELDS); return true; }
@@ -42,7 +48,7 @@ export async function handleMediaQueryRoutes(ctx: RouteContext, req: IncomingMes
     if (!entry) throw new AdminError(404, 'Media is not in the configured library.', 'media-not-found');
     if (entry.version !== version) throw new AdminError(409, 'Media version changed; browse again.', 'media-version-changed');
     if (res.destroyed) return true;
-    admit(library, res);
+    completeHandling = admit(library, res);
     // Stat/realpath only; same active-root, symlink and source-version boundary as byte serving.
     if (!await library.resolve(id, version)) throw new AdminError(409, 'Media is offline, changed or outside the configured roots.', 'media-unavailable');
     if (res.destroyed) return true;
@@ -76,6 +82,8 @@ export async function handleMediaQueryRoutes(ctx: RouteContext, req: IncomingMes
     if (known && error.status === 503) res.setHeader('retry-after', '1');
     json(req, res, known ? error.status : 500, { error: known && error.status < 500 ? error.message : 'Cached media query failed.',
       code: known ? error.code : 'media-query-failed', requestId: ctx.requestId, links });
+  } finally {
+    completeHandling?.();
   }
   return true;
 }

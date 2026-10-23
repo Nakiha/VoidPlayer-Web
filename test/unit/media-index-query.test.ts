@@ -5,6 +5,7 @@ import { mkdtemp, mkdir, writeFile, rm, rename, symlink } from 'node:fs/promises
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { once } from 'node:events';
+import { setImmediate as nextTurn } from 'node:timers/promises';
 import { MediaLibraryIndex } from '../../server/library.ts';
 import { createMediaServer } from '../../server/app.ts';
 import { openIndexDatabase } from '../../server/sqlite.ts';
@@ -43,7 +44,7 @@ async function fixture(t: TestContext) {
   const put = (count = 3, extra = {}, untimed = false) => library.frameIndexes.put(entry.id, entry.version!, entry.size,
     { ...metadata(entry.size), count, records: recordBytes(count, 0, untimed).toString('base64'), indexIntegrity: 'complete', ...extra }, library.frameIndexes.epoch, identity);
   const read = async (url = endpoint) => { const res = await fetch(url); const body = await res.json(); assert.equal(res.status, 200, JSON.stringify(body)); return body; };
-  return { dir, media, library, entry, db, base, endpoint, info, put, read };
+  return { dir, media, library, entry, db, server, base, endpoint, info, put, read };
 }
 
 test('shared query preserves 64-bit timestamps, missing values, reorder and half-open ranges', () => {
@@ -175,4 +176,61 @@ test('HTTP admission covers source validation through response completion', { ti
     assert.equal((await response.json()).code, 'media-query-busy');
   } finally { unblock(); await Promise.allSettled(requests); f.library.resolve = original; }
   assert.equal((await f.read(f.info)).technicalState, 'not-probed');
+});
+
+test('HTTP disconnect retains admission until source validation settles', { timeout: 15000 }, async t => {
+  for (const phase of ['initial', 'final'] as const) for (const outcome of ['resolve', 'reject'] as const) {
+    await t.test(`${phase} validation ${outcome}`, async t => {
+      const f = await fixture(t), original = f.library.resolve.bind(f.library);
+      let unblock!: () => void, arrived!: () => void, closed!: () => void, settled!: () => void, initialReady!: () => void;
+      let entered = 0, finished = 0, closedCount = 0, resolveCalls = 0, databaseCalls = 0;
+      const blocked = new Promise<void>(resolve => { unblock = resolve; });
+      const allEntered = new Promise<void>(resolve => { arrived = resolve; });
+      const allClosed = new Promise<void>(resolve => { closed = resolve; });
+      const allSettled = new Promise<void>(resolve => { settled = resolve; });
+      const initialChecks = new Promise<void>(resolve => { initialReady = resolve; });
+      f.server.on('request', (_req, res) => res.once('close', () => { if (++closedCount === 8) closed(); }));
+      // A deterministic cached response lets the final-validation case reach its
+      // second filesystem check without depending on database RPC scheduling.
+      t.mock.method(f.library.indexJobs, 'call', async () => { databaseCalls++; return { indexes: [] }; });
+      f.library.resolve = async (...args) => {
+        resolveCalls++;
+        if (phase === 'final' && resolveCalls <= 8) {
+          if (resolveCalls === 8) initialReady();
+          await initialChecks;
+          return path.join(f.media, 'clip.mp4');
+        }
+        if (++entered === 8) arrived();
+        await blocked;
+        try {
+          if (outcome === 'reject') throw new Error('synthetic filesystem validation failure');
+          return await original(...args);
+        } finally { if (++finished === 8) settled(); }
+      };
+      const controllers = Array.from({ length: 8 }, () => new AbortController());
+      const requests = Promise.allSettled(controllers.map(controller => fetch(f.info, { signal: controller.signal })));
+      const overflowController = new AbortController();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await allEntered;
+        controllers.forEach(controller => controller.abort());
+        await requests; await allClosed;
+        const result = await Promise.race([
+          fetch(f.info, { signal: overflowController.signal }),
+          new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 1000); }),
+        ]);
+        assert.ok(result, 'disconnected requests must retain capacity while validation is pending');
+        assert.equal(result.status, 503); assert.equal(result.headers.get('retry-after'), '1');
+        assert.equal((await result.json()).code, 'media-query-busy');
+        assert.equal(entered, 8);
+      } finally {
+        clearTimeout(timer); overflowController.abort(); unblock();
+        await allSettled; await nextTurn(); f.library.resolve = original;
+      }
+      // Disconnected handlers must not start another cache read or validation.
+      assert.equal(databaseCalls, phase === 'initial' ? 0 : 8);
+      assert.equal(resolveCalls, phase === 'initial' ? 8 : 16);
+      assert.equal((await f.read(f.info)).technicalState, 'not-probed');
+    });
+  }
 });
