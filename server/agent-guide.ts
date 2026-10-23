@@ -11,7 +11,7 @@ serve the APIs. The remote player requires HTTPS for browser decoding.
 
 - [Start here](/agent.md): workflow and deployment boundaries.
 - [Runtime capabilities](/api/agent): implemented, enabled and ready are separate.
-- [Find media and read bytes](${AGENT_TASKS.library})
+- [Find media, inspect cached metadata and query indexes](${AGENT_TASKS.library})
 - [Identity and editable workspaces](${AGENT_TASKS.workspaces})
 - [Write annotations and follow operations](${AGENT_TASKS.annotations})
 - [Quality scoring availability](${AGENT_TASKS.quality})
@@ -59,10 +59,53 @@ Follow nextOffset until null using unchanged filters and the first page's revisi
 On 409 discard accumulated pages and restart offset=0 without revision.
 Directory pages additionally expose directories and moreDirectories.
 
-GET /api/media/ID/metadata?v=VERSION returns library/file metadata and thumbnail
-availability, not yet a full codec/stream metadata contract. Frame-index formats
-are still implementation-specific; the self-describing metadata/index surface is
-planned in #120. Do not invent codec, PTS, dimensions or scores.
+GET /api/media/ID/info?v=VERSION returns validated file properties and up to 16
+cached stream identities (nextOffset continues the inventory). It never opens
+media bytes, probes codecs, migrates legacy caches or builds an index. The
+inventory covers cached streams only, not all streams in the source. Technical
+fields carry value/status/source/reason; unknown values are null. Do not infer
+color, CFR/VFR, duration or decoded frame counts from absent fields.
+GET /api/media/query-schema explains schema version 1, fields, units and limits.
+
+Copy kind/streamKey/schemaVersion/indexerBuild from info into these parameters:
+GET /api/media/ID/index-query?v=VERSION&kind=KIND&stream=STREAM&schema=SCHEMA&indexer=BUILD
+This overview separates not-indexed, unknown, partial and complete; terminal
+build completion alone does not prove complete source coverage. Inspect readiness.
+FFmpeg schema-3 record caches expose semantic packets. Other caches and legacy
+unsplit documents currently report semantic-adapter-unavailable. Existing compact
+frame-index routes remain compatible. No new probe/build task is provided here.
+
+Add view=records&axis=pts&startTick=0&endTick=90000&limit=100&byteBudget=65536
+for a bounded half-open interval in ORIGINAL stream ticks. 90000 ticks are one
+second only when the returned time base is 1/90000. axis=dts is also supported.
+Ticks and ordinals are decimal strings; missing timestamps are null. Output stays
+in stored PTS order with untimed records last; decodeOrdinal is the original
+packet order. Packets are not necessarily decoded pictures or access units.
+Container key flags do not prove I-pictures or verified random access; QP and
+picture type remain null. Normalized microseconds require a verified origin.
+
+Follow nextCursor using identical source/version/identity/axis/range. An empty
+records page may still have a cursor: each page examines at most 2048 records,
+returns at most 256 records and respects byteBudget (8192–262144). The summary
+covers RETURNED RECORDS ONLY. Sum pages of the same snapshot for a range summary.
+exhausted means the snapshot was examined, not that the entire media is indexed.
+On 503 media-query-busy retry after Retry-After; at most 8 cache queries may be in flight.
+On 409 index-snapshot-changed discard accumulated pages and restart without cursor;
+build progress, cache replacement and clearing invalidate cursors. These reads
+cannot control any GUI or playhead and reject build=1 instead of starting work.
+
+Example (BASE is the service origin; ID/VERSION come from browse):
+
+    curl -fsS "$BASE/api/library/browse?recursive=1&search=clip&limit=20"
+    curl -fsS "$BASE/api/media/$ID/info?v=$VERSION"
+    curl -fsS "$BASE/api/media/query-schema"
+    curl -fsS --get "$BASE/api/media/$ID/index-query" --data-urlencode "v=$VERSION" --data-urlencode "kind=ffmpeg" --data-urlencode "stream=video:0" --data-urlencode "schema=3" --data-urlencode "indexer=$BUILD" --data-urlencode "view=records" --data-urlencode "startTick=$START" --data-urlencode "endTick=$END"
+
+Technical library filters and full codec/color probing remain unavailable. Use
+existing filename/path search, then inspect cached candidates; unprobed is not a
+negative technical match. Similar filenames, sizes or durations never prove that
+two sources contain the same content or are aligned reference/distorted pairs.
+The existing /metadata endpoint still provides its legacy file/thumbnail shape.
 
 GET /api/media/ID?v=VERSION&download=1 returns original bytes, not a transcode.
 HEAD returns Content-Length, Content-Type, ETag and Accept-Ranges without a body.

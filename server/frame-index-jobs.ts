@@ -109,7 +109,7 @@ export class FrameIndexJobs {
       if (!entry) return;
       clearTimeout(entry.timer);
       this.pending.delete(result.rpcId);
-      if (result.error) entry.reject(new AdminError(result.status ?? 500, result.error));
+      if (result.error) entry.reject(new AdminError(result.status ?? 500, result.error, result.code));
       else entry.resolve(result.value);
     });
     worker.on('error', fail);
@@ -121,6 +121,9 @@ export class FrameIndexJobs {
   async call<K extends FrameIndexOperation>(op: K, ...args: FrameIndexCallArgs<K>): Promise<FrameIndexResult<K>> {
     const [data = {}, transfer = [], timeoutMs = 60000] = args;
     if (this.closed) throw new AdminError(503, '索引服务已关闭。');
+    if ((op === 'cached-indexes' || op === 'semantic-query') && this.pending.size >= 8) {
+      throw new AdminError(503, 'Cached media queries are busy; retry later.', 'media-query-busy');
+    }
     const worker = this.databaseWorker();
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
