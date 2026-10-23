@@ -1,3 +1,4 @@
+import { handleMediaQueryRoutes } from './media-query.ts';
 import { handleThumbnailRoute } from './thumbnail.ts';
 import { handleFrameIndexRoute } from './frame-index.ts';
 import { adminErrorBody } from '../admin-error.ts';
@@ -14,6 +15,7 @@ import type { RouteContext } from './context.ts';
 /** Library, media bytes, frame indexes and user-submitted logs. Returns true when handled. */
 export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessage, res: ServerResponse, url: URL): Promise<boolean> {
   const { options, library } = ctx;
+  if (await handleMediaQueryRoutes(ctx, req, res, url)) return true;
   if (url.pathname === '/api/library/scan' && req.method === 'GET') {
     sendJson(res, 200, { ...library.status(), errors: library.errors() });
     return true;

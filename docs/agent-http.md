@@ -8,7 +8,7 @@
 
 HTTP 客户端先显式 POST `/api/identity` 并保存 cookie，再向 `/api/annotations/spaces/SPACE` 提交 `AnnotationOperation`。必须提供与服务匹配的 `Origin`、对应的 `X-VoidPlayer-Action` 和 JSON Content-Type。用户名与 `client` 是可信内网下的归属声明，不是身份认证；既有同源保护保持不变。
 
-持久目标由 space、标注 ID、`document.media` 中的源 ID/版本和 `mark.frame` 确定。现有文档仍带有 A–H 槽位与 decoder 来源字段；它们是兼容的显示/来源描述，不是要求 Agent 加载轨道或拥有浏览器。媒体描述必须来自已知工作区或实际探测，不能编造；接受标注不意味着服务器验证了帧内容或分数。自解释媒体元数据/索引仍由 #120 推进。
+持久目标由 space、标注 ID、`document.media` 中的源 ID/版本和 `mark.frame` 确定。现有文档仍带有 A–H 槽位与 decoder 来源字段；它们是兼容的显示/来源描述，不是要求 Agent 加载轨道或拥有浏览器。媒体描述必须来自已知工作区或实际探测，不能编造；接受标注不意味着服务器验证了帧内容或分数。自解释缓存媒体信息/索引的首批只读接口见 [媒体查询](media-query.md)；完整探测与技术条件筛选仍由 #120 跟踪。
 
 浏览器标注构造和编辑已移到 `shared/review/marks.ts`。`shared/review/annotation-command.ts` 定义与宿主无关的命令验证和持久状态转换；SQLite 适配器负责事务和序列。页面 GUI 与 WebMCP 继续共用 `ReviewSession` 视图行为。HTTP 业务命令不依赖 GUI 是否在线、播放状态、当前帧或选中轨道。
 

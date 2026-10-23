@@ -11,6 +11,14 @@ export function frameIndexProtocolTypeChecks(jobs: FrameIndexJobs) {
   const bytes: Promise<Uint8Array> = jobs.call('get', target);
   const batches: Promise<FrameIndexBatch[]> = jobs.call('stream-batches', { ...target, after: -1 });
   void [present, epoch, bytes, batches];
+  jobs.call('cached-indexes', { id: 'id', version: 'version', offset: 0 });
+  jobs.call('semantic-query', target);
+  // @ts-expect-error Inventory still requires an explicit source version.
+  jobs.call('cached-indexes', { id: 'id', offset: 0 });
+  // @ts-expect-error Index query cursors are opaque strings.
+  jobs.call('semantic-query', { ...target, cursor: 1 });
+  // @ts-expect-error 64-bit range endpoints must be decimal strings.
+  jobs.call('semantic-query', { ...target, query: { axis: 'pts', startTick: 0, endTick: '100', limit: 10, byteBudget: 65536 } });
   // @ts-expect-error Unknown operation.
   jobs.call('not-an-operation');
   // @ts-expect-error A target-bearing operation cannot omit data.
