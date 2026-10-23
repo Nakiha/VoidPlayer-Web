@@ -56,7 +56,8 @@ try {
   assert.equal((await read()).tracks[0].name, 'A.mp4');
   assert.equal((await read()).marks.length, 0, 'B annotations do not attach to a loaded A');
   await page.locator('#settings-open').click(); await page.locator('#settings-tab-workspace').click();
-  await page.locator('#annotation-activity summary').click();
+  assert.equal(await page.locator('#settings details, #settings summary').count(), 0, 'activity follows the flat settings layout');
+  assert.equal(await page.locator('[data-operation-id="before-gui"] a').isVisible(), true, 'activity is visible without expanding a disclosure');
   assert.match(await page.locator('#annotation-activity').textContent(), /Agent.*B\.mp4/s);
   await page.screenshot({ path: path.join(directory, 'activity-dark.png') });
   await page.locator('#settings-close').click(); await waitForDialogClosed(page);
@@ -84,7 +85,7 @@ try {
   const third = { ...second, operationId: 'focused-link', revision: 2, document: annotation(b, 'mark-B', 'Another background update') };
   const receipt = await submit(third); assert.deepEqual(await submit(third), receipt);
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await page.waitForFunction(() => document.querySelector('#annotation-activity summary').textContent.includes('(3)'));
+  await page.waitForFunction(() => document.querySelector('#annotation-activity-title').textContent.includes('(3)'));
   assert.equal(await focused.evaluate(element => element === document.activeElement), true);
   await page.locator('#saved-workspace-name').focus();
   await page.waitForFunction(() => !!document.querySelector('[data-operation-id="focused-link"]'));
@@ -119,7 +120,7 @@ try {
   page = await context.newPage(); evidence = recordBrowserEvidence(page); await page.goto(url); await ready(page);
   await page.waitForFunction(() => !!document.querySelector('[data-operation-id="gui-closed"]'));
   await page.locator('#settings-open').click(); await page.locator('#settings-tab-workspace').click();
-  await page.locator('#annotation-activity summary').click();
+  assert.equal(await page.locator('[data-operation-id="gui-closed"] a').isVisible(), true, 'reopened workspace shows activity directly');
   const [popup] = await Promise.all([context.waitForEvent('page'), page.locator('[data-operation-id="gui-closed"] a').click()]);
   await ready(popup);
   assert.equal((await popup.evaluate(() => window.voidPlayer.getState())).tracks[0].name, 'B.mp4');

@@ -3,10 +3,10 @@ import { formatTime } from '../../shared/review/model.ts';
 import { t, th, msg, formatDate, onLanguageChange } from '../i18n.ts';
 
 export function annotationActivityShell() {
-  return `<details id="annotation-activity" class="settings-section annotation-activity" hidden>
-    <summary>${th(msg('activity.title', '评审活动'))}</summary>
-    <p class="settings-caption" role="status"></p><ol></ol>
-  </details>`;
+  return `<section id="annotation-activity" class="settings-section annotation-activity" aria-labelledby="annotation-activity-title" hidden>
+    <h4 id="annotation-activity-title" class="settings-section-title">${th(msg('activity.title', '评审活动'))}</h4>
+    <p class="settings-caption" role="status"></p><ol class="settings-card"></ol>
+  </section>`;
 }
 
 /** A passive observer. Links only navigate after an explicit user action. */
@@ -15,7 +15,7 @@ export function installAnnotationActivity(signal: AbortSignal) {
   let scope = 'local', events: AnnotationEvent[] = [], failed = false;
   function render() {
     root.hidden = scope === 'local';
-    root.querySelector('summary')!.textContent = t(msg('activity.title', '评审活动')) + (events.length ? ` (${events.length})` : '');
+    root.querySelector('h4')!.textContent = t(msg('activity.title', '评审活动')) + (events.length ? ` (${events.length})` : '');
     root.querySelector('p')!.textContent = failed
       ? t(msg('activity.disconnected', '活动连接中断，恢复后自动续读。'))
       : events.length ? t(msg('activity.recent', '共享评审空间的最近操作；不会改变当前播放。')) : t(msg('activity.empty', '此评审空间暂无操作记录。'));
