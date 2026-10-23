@@ -177,8 +177,11 @@ test('older databases gain an empty header column without reading or rewriting c
 
 test('concurrent whole-document commits keep the winning packet table, header and JS seal together', async t => {
   const f = await fixture(t);
-  const modified = structuredClone(f.tsDoc); modified.packets[0].size += 100;
-  const prepared = [f.tsDoc, modified].map(doc => prepareFrameIndex(doc, f.entry.size, ts, f.source));
+  const original = { ...f.tsDoc, completeness: { state: 'complete', packets: 130 },
+    packets: Array.from({ length: 130 }, (_, au) => ({ ...f.tsDoc.packets[0], au, locator: au, pesOffset: 0, timestamp: (au + 1) / 10, ptsUs: (au + 1) * 100000,
+      timing: { pts: (au + 1) * 9000, dts: null, timebase: [1, 90000], origin: 'pes' } })) };
+  const modified = structuredClone(original); modified.packets[0].size += 100;
+  const prepared = [original, modified].map(doc => prepareFrameIndex(doc, f.entry.size, ts, f.source));
   const code = `const { parentPort, workerData } = require('node:worker_threads');
     Promise.all([import(workerData.storeModule), import(workerData.sqliteModule)]).then(([{FrameIndexStore},{openIndexDatabase}]) => {
       const db = openIndexDatabase(workerData.database); db.exec('PRAGMA busy_timeout=3000; PRAGMA foreign_keys=ON;');
@@ -329,4 +332,32 @@ test('JS cache seal and packets use one snapshot across a concurrent clear and r
   assert.equal(replaced, true);
   assert.equal(writer.has(f.entry.id, f.entry.version!, 'js-ts', ts), true);
   assert.deepEqual(JSON.parse(writer.getJson(f.entry.id, f.entry.version!, 'js-ts', ts)).index, replacement);
+});
+
+
+test('pre-shard FLV and TS caches retain overview, GUI and seals while record reads explicitly require reindexing', async t => {
+  const f = await fixture(t);
+  for (const [doc, identity] of [[f.flvDoc, flv], [f.tsDoc, ts]] as const) {
+    f.library.frameIndexes.remove();
+    const prepared = prepareFrameIndex(doc, f.entry.size, identity, f.source);
+    f.library.frameIndexes.commit(f.entry.id, f.entry.version!, prepared, f.library.frameIndexes.epoch);
+    const saved = f.db.prepare('SELECT semantic_json FROM media_index_manifests').get()!;
+    f.db.exec('DELETE FROM media_index_batches');
+    f.db.prepare('INSERT INTO media_index_batches(media_id,media_version,kind,stream_key,schema_version,indexer_build,seq,payload,bytes,frames,created_at) VALUES(?,?,?,?,?,?,0,?,?,?,0)')
+      .run(f.entry.id, f.entry.version!, identity.kind, identity.streamKey, identity.schemaVersion, identity.indexerBuild, prepared.text, prepared.bytes, prepared.frames);
+    f.db.prepare('UPDATE media_index_manifests SET last_seq=0,packet_storage=NULL,semantic_json=?').run(saved.semantic_json);
+    const before = f.db.prepare('SELECT * FROM media_index_manifests').all();
+    const queries = new MediaIndexQueryStore(new Proxy(f.db, { get(target, key) {
+      if (key === 'prepare') return (sql: string) => { assert.doesNotMatch(sql, /media_index_batches/i); return target.prepare(sql); };
+      const value = Reflect.get(target, key); return typeof value === 'function' ? value.bind(target) : value;
+    } }));
+    const page = queries.query(f.entry.id, f.entry.version!, identity, { axis: 'pts', startTick: '0', endTick: '999999999', limit: 100, byteBudget: 16384 }) as any;
+    assert.equal(page.overview.recordCount, prepared.frames); assert.equal(page.inspected, 0);
+    assert.equal(page.overview.capabilities.records.ready, false);
+    assert.equal(page.overview.capabilities.records.reason, 'packet-storage-unavailable-explicit-reindex-required');
+    f.library.frameIndexes.commit(f.entry.id, f.entry.version!, prepared, f.library.frameIndexes.epoch);
+    assert.deepEqual(f.db.prepare('SELECT * FROM media_index_manifests').all(), before, 'no duplicate-commit migration');
+    assert.equal(f.library.frameIndexes.has(f.entry.id, f.entry.version!, identity.kind, identity), true);
+    assert.deepEqual(JSON.parse(f.library.frameIndexes.getJson(f.entry.id, f.entry.version!, identity.kind, identity)).index, JSON.parse(prepared.text));
+  }
 });
