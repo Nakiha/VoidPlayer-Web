@@ -13,6 +13,55 @@ import { trackChildShutdown } from '../../scripts/testing/lifecycle.mjs';
 import { assertCachedDisplayReuse } from '../../scripts/testing/analysis/display-reuse.mjs';
 import { waitForAnnotationMedia, annotationWorkspacePlayable } from '../../scripts/testing/agent-annotations-ready.mjs';
 import { advanceAdminPollClock } from '../../scripts/testing/admin-poll-clock.mjs';
+import { observeNavigations } from '../../scripts/testing/navigation-diagnostics.mjs';
+
+function navigationFixture() {
+  const page = Object.assign(new EventEmitter(), { isClosed: () => false, url: () => 'http://127.0.0.1/', mainFrame: () => null });
+  const browser = Object.assign(new EventEmitter(), { isConnected: () => true });
+  const server = Object.assign(new EventEmitter(), { listening: true });
+  return { page, browser, server, url: 'http://127.0.0.1/' };
+}
+
+test('navigation diagnostics preserve the original reload failure without retries or swallowed assertions', async () => {
+  const events = [], original = new Error('WebKit encountered an internal error'); let calls = 0;
+  const diagnostics = observeNavigations({ ...navigationFixture(), output: row => events.push(row), probe: async () => ({ health: { status: 200 } }), snapshot: async () => ({ busy: false, tracks: [] }) });
+  await assert.rejects(diagnostics.reload('fresh-runtime-reload', async () => { calls++; throw original; }), error => error === original);
+  assert.equal(calls, 1); assert.deepEqual(events.map(row => row.event), ['before-reload', 'reload-failed', 'after-reload-failure']);
+  assert.equal(events[2].serverListening, true); assert.equal(events[2].resource.health.status, 200);
+  assert.equal(events[2].snapshot.busy, false); diagnostics.dispose();
+});
+
+test('navigation observation distinguishes Worker context closure, page crash and service/browser loss', () => {
+  const fixture = navigationFixture(), events = [];
+  const diagnostics = observeNavigations({ ...fixture, output: row => events.push(row) });
+  const worker = Object.assign(new EventEmitter(), { url: () => 'blob:http://127.0.0.1/worker' });
+  fixture.page.emit('worker', worker); assert.equal(events.at(-1).workerContextsOpen, 1);
+  worker.emit('close'); assert.equal(events.at(-1).event, 'worker-context-closed'); assert.equal(events.at(-1).workerContextsOpen, 0);
+  assert.equal(worker.listenerCount('close'), 0, 'closed Worker objects are not retained by diagnostic listeners');
+  fixture.page.emit('crash'); fixture.browser.emit('disconnected'); fixture.server.listening = false; fixture.server.emit('close');
+  assert.deepEqual(events.slice(-3).map(row => row.event), ['page-crash', 'browser-disconnected', 'server-close']);
+  assert.equal(events.at(-1).serverListening, false);
+  diagnostics.dispose(); const count = events.length; fixture.page.emit('close'); assert.equal(events.length, count, 'normal fixture teardown is no longer observed');
+});
+
+test('diagnostic probe/snapshot/output failures never replace a navigation failure or skip the successful operation', async () => {
+  const original = new Error('navigation failed'); let calls = 0;
+  const diagnostics = observeNavigations({ ...navigationFixture(), output: () => { throw Error('output failed'); },
+    probe: async () => { throw Error('probe failed'); }, snapshot: async () => { throw Error('snapshot failed'); } });
+  assert.equal(await diagnostics.reload('first', async () => { calls++; return 42; }), 42);
+  await assert.rejects(diagnostics.reload('second', async () => { calls++; throw original; }), error => error === original);
+  assert.equal(calls, 2); diagnostics.dispose();
+});
+
+test('navigation logging is bounded, omits data URLs and retains final reload evidence after noisy events', async () => {
+  const fixture = navigationFixture(), events = [];
+  const diagnostics = observeNavigations({ ...fixture, output: row => events.push(row), probe: async () => ({ health: { status: 200 } }) });
+  for (let n = 0; n < 1000; n++) fixture.page.emit('requestfailed', { url: () => 'data:image/jpeg;base64,private-pixels', isNavigationRequest: () => false, failure: () => ({ errorText: 'cancelled' }) });
+  await assert.rejects(diagnostics.reload('final', async () => { throw Error('reload still fails'); }), /reload still fails/);
+  assert.ok(events.length < 300); assert.ok(events.at(-1).omittedRows > 0);
+  assert.equal(events.at(-1).event, 'after-reload-failure'); assert.equal(JSON.stringify(events).includes('private-pixels'), false);
+  diagnostics.dispose();
+});
 
 test('admin polling clock settles preexisting and newly scheduled real IO before advancing timeouts', async () => {
   let pending = true, advanced = 0, waits = 0; const steps = [];
