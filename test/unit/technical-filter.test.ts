@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { once } from 'node:events';
 import { setImmediate as nextTurn } from 'node:timers/promises';
+import { DatabaseSync } from 'node:sqlite';
 import { MediaLibraryIndex } from '../../server/library.ts';
 import { createMediaServer } from '../../server/app.ts';
 import { MediaIndexQueryStore } from '../../server/media-index-query.ts';
@@ -121,7 +122,10 @@ test('FLV/TS use committed header geometry scope and never turn missing geometry
 
 test('bounded identity prefix and byte budgets never imply a complete inventory or hidden match', async t => {
   const f = await fixture(t);
-  for (let i = 0; i < 12; i++) f.put({}, f.entries[0], { ...identity, indexerBuild: i.toString(16).padStart(40, '0') });
+  for (let i = 0; i < 12; i++) f.put(i >= 9 ? { codec: 'hevc' } : {}, f.entries[0], { ...identity, indexerBuild: i.toString(16).padStart(40, '0') });
+  const hidden = f.store.query(f.entries[0].id, f.entries[0].version!, { ...identity, indexerBuild: (9).toString(16).padStart(40, '0') }).overview;
+  assert.equal(hidden.state, 'complete');
+  assert.equal(evaluateTechnicalEvidence(hidden, { codec: 'hevc' }).state, 'match', 'the tenth identity really is a matching witness outside the read prefix');
   const result = await f.read(f.url('codec=hevc&byteBudget=8192'));
   assert.equal(result.truncated, true); assert.equal(result.candidates[0].state, 'unknown'); assert.equal(result.nextCursor, null);
   assert.equal(result.work.projectionPasses, 2); assert.equal(result.work.identitiesInspected, 16); assert.equal(result.work.identitiesRead, 18);
@@ -151,23 +155,34 @@ test('large identity inventories use the real primary-key prefix without sorting
     }
     f.db.exec('COMMIT');
   } catch (error) { f.db.exec('ROLLBACK'); throw error; }
-  const plans: string[] = [];
-  const observed = {
-    exec: f.db.exec.bind(f.db), close() {},
-    prepare(sql: string) {
-      if (sql.includes('FROM media_index_manifests WHERE')) {
-        plans.push(...f.db.prepare('EXPLAIN QUERY PLAN ' + sql).all(entry.id, entry.version!, 9).map(row => String(row.detail)));
-      }
-      return f.db.prepare(sql);
-    },
-  };
-  const result = new MediaIndexQueryStore(observed).technicalFilter(f.query());
-  assert.equal(result.work.identitiesRead, 9); assert.equal(result.work.identitiesInspected, 8);
-  assert.equal(result.truncated, true);
-  assert.deepEqual(result.candidates[0].evidence.map(e => e.identity!.indexerBuild), Array.from({ length: 8 }, (_, i) => i.toString(16).padStart(40, '0')));
-  assert.ok(result.work.projectionReadBytes <= 9 * TECHNICAL_FILTER_LIMITS.projectionBytesPerIdentity);
-  assert.ok(plans.some(detail => /SEARCH media_index_manifests USING INDEX/.test(detail)), JSON.stringify(plans));
-  assert.ok(plans.every(detail => !/USE TEMP B-TREE|SCAN media_index_manifests/.test(detail)), JSON.stringify(plans));
+  const plans: string[] = [], counted = new DatabaseSync(f.database);
+  let projections = 0;
+  counted.function('filter_identity_visit', value => { projections++; return value; });
+  try {
+    const observed = {
+      exec: counted.exec.bind(counted), close() {},
+      prepare(sql: string) {
+        if (sql.includes('FROM media_index_manifests WHERE')) {
+          plans.push(...counted.prepare('EXPLAIN QUERY PLAN ' + sql).all(entry.id, entry.version!, 9).map(row => String(row.detail)));
+          // Count actual SQLite projection work, not merely returned rows. A
+          // sort by the SELECT alias evaluates this for all 4096 identities.
+          const expression = 'CASE WHEN octet_length(kind)<=16 THEN kind END';
+          assert.ok(sql.includes(expression));
+          return counted.prepare(sql.replace(expression, `filter_identity_visit(${expression})`));
+        }
+        return counted.prepare(sql);
+      },
+    };
+    const result = new MediaIndexQueryStore(observed).technicalFilter(f.query());
+    assert.equal(projections, 9, 'SQLite evaluates only the bounded prefix, even with 4096 identities');
+    assert.equal(result.work.identitiesRead, 9); assert.equal(result.work.identitiesInspected, 8);
+    assert.equal(result.truncated, true);
+    assert.deepEqual(result.candidates[0].evidence.map(e => e.identity!.indexerBuild), Array.from({ length: 8 }, (_, i) => i.toString(16).padStart(40, '0')));
+    assert.ok(result.work.projectionReadBytes <= 9 * TECHNICAL_FILTER_LIMITS.projectionBytesPerIdentity);
+    assert.ok(plans.some(detail => /SEARCH media_index_manifests USING INDEX/.test(detail)), JSON.stringify(plans));
+    assert.ok(plans.every(detail => !/USE TEMP B-TREE|SCAN media_index_manifests/.test(detail)), JSON.stringify(plans));
+    t.diagnostic(`4096 identities; projections=${projections}; plan=${JSON.stringify(plans)}`);
+  } finally { counted.close(); }
 });
 
 test('evidence snapshot invalidates on same-connection replacement and other-connection writes, not only library revision', async t => {
