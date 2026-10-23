@@ -124,9 +124,43 @@ Example (BASE is the service origin; ID/VERSION come from browse):
     curl -fsS --get "$BASE/api/media/$ID/index-query" --data-urlencode "v=$VERSION" --data-urlencode "kind=flv" --data-urlencode "stream=video:0" --data-urlencode "schema=3" --data-urlencode "indexer=flv-demux-v3"
     curl -fsS --get "$BASE/api/media/$ID/index-query" --data-urlencode "v=$VERSION" --data-urlencode "kind=ffmpeg" --data-urlencode "stream=video:0" --data-urlencode "schema=3" --data-urlencode "indexer=$BUILD" --data-urlencode "view=records" --data-urlencode "startTick=$START" --data-urlencode "endTick=$END"
 
-Technical library filters and full codec/color probing remain unavailable. Use
-existing filename/path search, then inspect cached candidates; unprobed is not a
-negative technical match. Similar filenames, sizes or durations never prove that
+GET /api/library/technical-filter?candidate=ID@VERSION&codec=h264&minWidth=1280&recordsReady=1
+screens 1–8 explicitly pinned candidates obtained from browse. Repeat candidate
+for multiple sources. Conditions are AND within ONE cache identity/stream; codec
+tokens compare case-insensitively without aliases. minWidth/maxWidth and
+minHeight/maxHeight are inclusive integers 1–16384. At least one condition is
+required; v1 only supports recordsReady=1. byteBudget is 8192–262144, default 65536.
+The field dictionary is under query-schema. Discovery advertises the v1 endpoint.
+
+Each returned evidence row is match/not-match/unknown for its exact identity.
+Source state is match when a returned witness matches, otherwise unknown;
+streamInventoryComplete=false means an unseen matching stream cannot be ruled
+out. Partial/legacy/unsupported/missing or conflicting evidence is unknown,
+never a known negative. Different identities cannot contribute different fields
+to one conjunction. FLV/TS sizes describe initial-codec-configuration; FFmpeg
+sizes describe cached-stream-metadata, not every picture. recordsReady describes
+the existing overview adapter capability only: packet payloads are not read or
+rehashed, and all chunks are not certified. Offline candidates remain unknown.
+
+This is a bounded ONE-SHOT query, not a library-wide scan or consistent pagination.
+It examines at most 8 identities plus one lookahead per candidate, twice for
+snapshot/revalidation. Each projected TEXT allocation is bounded (metadata
+32 KiB, semantic header 8 KiB, storage descriptor 4 KiB); no whole document or
+packet payload is loaded. Response bytes respect byteBudget. truncated=true
+means identities/evidence were omitted; libraryTotal and nextCursor are null.
+cursor/offset are rejected. Separate candidate batches are independent observations,
+not one snapshot; even an empty/truncated batch says nothing about full-library
+matches. Source versions and cache evidence are rechecked; on 409
+technical-evidence-changed discard this batch and restart from fresh browse.
+Unrelated database writes can conservatively require a restart. snapshot identifies
+the returned evidence and is not a reusable cursor. A disconnect cancels Worker
+work; the shared 8-query capacity remains occupied until work actually settles.
+These reads never probe, scan, index, migrate, decode, schedule jobs or move a
+playhead. Duration, bit depth, color and full-stream probing remain future work.
+
+    curl -fsS --get "$BASE/api/library/technical-filter" --data-urlencode "candidate=$ID@$VERSION" --data-urlencode 'codec=h264' --data-urlencode 'minWidth=1280' --data-urlencode 'recordsReady=1' --data-urlencode 'byteBudget=65536'
+
+Unprobed is not a negative technical match. Similar filenames, sizes or durations never prove that
 two sources contain the same content or are aligned reference/distorted pairs.
 The existing /metadata endpoint still provides its legacy file/thumbnail shape.
 

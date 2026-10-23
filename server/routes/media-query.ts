@@ -1,8 +1,10 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { createHash } from 'node:crypto';
 import type { RouteContext } from './context.ts';
 import { AdminError } from '../admin-error.ts';
 import { parseMediaIndexIdentity } from '../../shared/media/indexing/media-index-identity.ts';
 import { MEDIA_QUERY_DICTIONARY, MEDIA_QUERY_FIELDS, parseSemanticQuery, QUERY_CONCURRENCY_LIMIT } from '../../shared/media/indexing/semantic-query.ts';
+import { parseTechnicalFilter, TECHNICAL_FILTER_PATH } from '../../shared/media/indexing/technical-filter.ts';
 
 // Keep admission until BOTH the handler has settled and the response has
 // drained/closed. A disconnected request may still have filesystem work pending.
@@ -32,7 +34,8 @@ function json(req: IncomingMessage, res: ServerResponse, status: number, body: u
 }
 export async function handleMediaQueryRoutes(ctx: RouteContext, req: IncomingMessage, res: ServerResponse, url: URL): Promise<boolean> {
   const match = /^\/api\/media\/([0-9a-f]{24})\/(info|index-query)$/.exec(url.pathname);
-  if (!match && url.pathname !== MEDIA_QUERY_DICTIONARY) return false;
+  const technical = url.pathname === TECHNICAL_FILTER_PATH;
+  if (!match && !technical && url.pathname !== MEDIA_QUERY_DICTIONARY) return false;
   const links = { describedBy: MEDIA_QUERY_DICTIONARY, help: '/agent/library.md', browse: '/api/library/browse?recursive=1' };
   const cancellation = new SharedArrayBuffer(4);
   const cancel = () => Atomics.store(new Int32Array(cancellation), 0, 1);
@@ -40,6 +43,43 @@ export async function handleMediaQueryRoutes(ctx: RouteContext, req: IncomingMes
   let completeHandling: (() => void) | undefined;
   try {
     if (req.method !== 'GET' && req.method !== 'HEAD') throw new AdminError(405, 'This endpoint is read-only.', 'method-not-allowed');
+    if (technical) {
+      let query;
+      try { query = parseTechnicalFilter(url.searchParams); }
+      catch (error) { throw new AdminError(400, (error as Error).message, 'invalid-technical-filter'); }
+      const { library } = ctx;
+      completeHandling = admit(library, res);
+      const availability = async () => {
+        const available: boolean[] = [];
+        for (const source of query.sources) {
+          if (res.destroyed) return null;
+          const entry = library.metadata(source.id);
+          if (!entry || entry.id !== source.id || entry.version !== source.version) throw new AdminError(409, 'Candidate source changed; browse again.', 'technical-evidence-changed');
+          available.push(!!await library.resolve(source.id, source.version));
+        }
+        return available;
+      };
+      const before = await availability();
+      if (!before || res.destroyed) return true;
+      const cached = await library.indexJobs.call('technical-filter', { query, cancellation });
+      if (res.destroyed) return true;
+      const after = await availability();
+      if (!after || res.destroyed) return true;
+      if (JSON.stringify(before) !== JSON.stringify(after)) throw new AdminError(409, 'Candidate availability changed; restart.', 'technical-evidence-changed');
+      // A library revision alone cannot detect cache commits, eviction or clear.
+      // Recheck on the same worker with a fresh read snapshot after async stats.
+      const verified = await library.indexJobs.call('technical-filter', { query, expectedSnapshot: cached.snapshot, cancellation });
+      if (res.destroyed) return true;
+      const body = { ...cached, work: { ...cached.work, projectionPasses: 2, candidatesInspected: cached.work.candidatesInspected + verified.work.candidatesInspected,
+        identitiesInspected: cached.work.identitiesInspected + verified.work.identitiesInspected, identitiesRead: cached.work.identitiesRead + verified.work.identitiesRead,
+        projectionReadBytes: cached.work.projectionReadBytes + verified.work.projectionReadBytes },
+        snapshot: createHash('sha256').update(JSON.stringify([cached.snapshot, before])).digest('hex'), candidates: cached.candidates.map((candidate, i) => before[i] ? { ...candidate, availability: 'online' } : {
+        ...candidate, availability: 'unavailable', state: 'unknown', reason: 'source-unavailable', evidence: candidate.evidence.map(e => ({ ...e, state: 'unknown', reason: 'source-unavailable', checks: e.checks.map(c => ({ ...c, state: 'unknown' })) })),
+      }), links };
+      if (Buffer.byteLength(JSON.stringify(body)) > query.byteBudget) throw new AdminError(413, 'Response context exceeds byteBudget.', 'response-budget-too-small');
+      json(req, res, 200, body);
+      return true;
+    }
     if (!match) { json(req, res, 200, MEDIA_QUERY_FIELDS); return true; }
     const allowed = match[2] === 'info' ? ['v', 'offset'] : ['v', 'kind', 'stream', 'schema', 'indexer', 'view', 'axis', 'startTick', 'endTick', 'limit', 'byteBudget', 'cursor'];
     for (const key of url.searchParams.keys()) {

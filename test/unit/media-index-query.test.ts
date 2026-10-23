@@ -72,7 +72,7 @@ test('headless discovery/search/info/cache misses never build, migrate, mutate o
   f.library.indexJobs.startBuild = () => { throw Error('unexpected build'); };
   const manifest = await f.read(f.base + '/api/agent');
   assert.equal(manifest.capabilities.find((c: { id: string }) => c.id === 'media.cached-index-query').readiness, 'per-source');
-  assert.equal(manifest.capabilities.find((c: { id: string }) => c.id === 'media.technical-filter').implemented, false);
+  assert.equal(manifest.capabilities.find((c: { id: string }) => c.id === 'media.technical-filter').implemented, true);
   const search = await f.read(f.base + '/api/library/browse?recursive=1&search=clip&limit=1'); assert.equal(search.entries[0].id, f.entry.id);
   const info = await f.read(f.info); assert.equal(info.technicalState, 'not-probed'); assert.deepEqual(info.indexes, []);
   const missing = await f.read(); assert.equal(missing.overview.state, 'not-indexed'); assert.equal(missing.overview.capabilities.records.ready, false);

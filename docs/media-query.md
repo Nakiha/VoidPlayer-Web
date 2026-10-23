@@ -1,7 +1,7 @@
 # Agent 缓存媒体信息与索引查询（#120 分阶段交付）
 
 入口：`/llms.txt` → `/agent/library.md` → `/api/media/query-schema`。
-`/api/agent` 中 `media.cached-info`、`media.cached-index-query` 区分实现、部署启用和逐源就绪；`media.technical-filter` 仍不可用。
+`/api/agent` 中 `media.cached-info`、`media.cached-index-query`、`media.technical-filter` 区分实现、部署启用和逐源就绪。技术候选筛选 v1 见下文；不是全库探测。
 
 ## HTTP 工作流
 
@@ -29,6 +29,18 @@
 - 游标绑定媒体版本、索引身份、epoch、构建快照和查询条件；增长、失败、完成、替换或清理返回 409 `index-snapshot-changed`。丢弃旧页后重查，不混用两个快照。正在频繁增长的索引可能需要等构建稳定后才能完成多页统计。
 - 版本改变返回 `media-version-changed`；文件离线/路径边界失败返回 `media-unavailable`。响应不含绝对路径、内部配置或原始数据库错误。
 
+## 缓存技术候选筛选 v1
+
+从 browse 取得固定 ID/version 后，调用 `GET /api/library/technical-filter?candidate=ID@VERSION&codec=h264&minWidth=1280&recordsReady=1`。一次提供 1–8 个不重复 candidate；多源重复 candidate 参数。codec 为忽略大小写的精确 token，不做别名推断；minWidth/maxWidth、minHeight/maxHeight 为 1–16384 的闭区间，可组合，recordsReady 只支持 1。至少一个条件，byteBudget 为 8192–262144，默认 65536。共享字段契约发布在 `/api/media/query-schema` 的 `technicalFilter` 字段，`/api/agent` 的 `technicalFilter` 给出版本、入口和边界；可直接运行的 curl 在 `/agent/library.md`。
+
+所有条件必须由同一缓存身份与同一 stream 的证据满足，不能把一个身份的 codec 与另一个身份的尺寸拼成 match。每条 evidence 绑定完整 identity，给出 match/not-match/unknown、条件检查和 value/status/source/reason；旧 schema、缺失/不支持/partial/冲突均为 unknown，即便另一个条件已不匹配也不将不完整合取当已知反例。同 streamKey 的已知 codec/尺寸相互冲突时，相关证据保守降为 unknown。来源级有返回的匹配证据才为 match，否则始终 unknown：`streamInventoryComplete=false`，未观察到的流可能匹配，不能宣称整个源不含目标流。
+
+尺寸证据范围：FLV/TS 为 initial-codec-configuration，FFmpeg 为 cached-stream-metadata，不承诺每幅图像。recordsReady 只反映现有有界 overview 的记录适配器声明；不读取/重哈希包负载，不能证明每片均完好。离线候选保持 unknown，固定版本已改变或已不在允许根目录则 409。duration、位深、色彩、完整流 probe 留待后续，不关闭 #120。
+
+v1 是一次性有界候选查询，**没有一致分页**。每候选最多检查 8 个身份并读 1 个 lookahead，按复合主键前缀读取，无 COUNT/全库扫描；两次投影用于读取与最终验证。每身份只物化至多 32 KiB metadata、8 KiB semantic header、4 KiB packet descriptor，单次请求两轮总投影 TEXT 上限 6,488,064 字节，身份字符串另有限长。记录 document/packets/batches 不读取；响应不超过 byteBudget。达到身份/响应限制时 `truncated=true`，被省略的匹配证据不能留下隐藏 match。libraryTotal/nextCursor 始终 null，cursor/offset 参数拒绝；不同候选批次是独立观察，不可累计为同一快照的全库数量。
+
+每轮在短只读事务内读取同一快照，来源 stat/realpath 前后校验；其后在 Worker 用新快照复核。snapshot 绑定规范化条件、固定来源版本、可见投影、库 revision、连接变更计数、Worker 实例和已验证的来源可用性；它仅标识这次证据，不能复用为 cursor。索引新提交、增长、替换/清理、来源变化及同连接重建均可要求 409 `technical-evidence-changed` 后重新 browse/查询，不能只依赖 library_revision。无关数据库写入也可能保守触发 409。每库与其他缓存查询共享 8 个在途容量，断连/超时仍等 Worker 或尚未结束的来源校验返回后释放。只读查询不触碰 LRU，不触发 probe/扫描/建索引/迁移/解码/后台任务，不移动播放头；未改 FrameIndexStore 事务。
+
 ## 首批矩阵与未完成范围
 
 | 数据来源 | 本批行为 |
@@ -41,7 +53,7 @@
 | JS Matroska 缓存 | 发现身份与构建状态；本阶段尚无语义适配 |
 | 没有支持缓存的 MP4、FLV、TS 等媒体 | 文件信息可读，缓存缺失为 not-probed / not-indexed；不暗中改用另一容器解析器或解码器 |
 
-本批不关闭 #120。MP4/Matroska 语义适配、技术条件筛选的覆盖/未知统计、完整流列表与 codec/色彩探测、持久探测/建索引任务、优化按时间定位及跨页聚合服务仍待实现。大范围查询按游标渐进检查缓存，未新增一套媒体索引。文件名、尺寸、时长相似仅是检索线索，不能证明参考配对内容与时间对齐。
+本批不关闭 #120。MP4/Matroska 语义适配、全库技术条件筛选及覆盖/未知统计、完整流列表与 codec/色彩探测、持久探测/建索引任务、优化按时间定位及跨页聚合服务仍待实现。包记录的大范围查询按游标渐进检查缓存，技术候选筛选 v1 则不提供 cursor；未新增一套媒体索引。文件名、尺寸、时长相似仅是检索线索，不能证明参考配对内容与时间对齐。
 
 第一批开发固定依赖 #124 的 `036e951ad778725cbefd809487a76581ef58a592`。最终合并前必须基于合并后的 main 整合并重新验证；不修改 #124 的活动 UI、持久化浏览器测试或 identity CI，也不涉及评分、集群或 FFmpeg 实验。
 
