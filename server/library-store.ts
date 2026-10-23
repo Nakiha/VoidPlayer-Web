@@ -44,6 +44,7 @@ export class LibraryStore {
       const mediaIndexColumns = this.db.prepare('PRAGMA table_info(media_index_manifests)').all() as { name: string }[];
       const addMediaIndexBuildIdColumn = !mediaIndexColumns.some(column => column.name === 'build_id');
       const addMediaIndexMetadataColumn = !mediaIndexColumns.some(column => column.name === 'metadata_json');
+      const addMediaIndexSemanticColumn = !mediaIndexColumns.some(column => column.name === 'semantic_json');
       const addMediaIndexPacketsColumn = !mediaIndexColumns.some(column => column.name === 'packets');
       this.db.exec('PRAGMA journal_mode=WAL');
       this.db.exec(`
@@ -107,6 +108,16 @@ export class LibraryStore {
         ${addMediaIndexBuildIdColumn ? 'ALTER TABLE media_index_manifests ADD COLUMN build_id TEXT;' : ''}
         ${addMediaIndexMetadataColumn ? 'ALTER TABLE media_index_manifests ADD COLUMN metadata_json TEXT;' : ''}
         ${addMediaIndexPacketsColumn ? 'ALTER TABLE media_index_manifests ADD COLUMN packets INTEGER NOT NULL DEFAULT 0;' : ''}
+        ${addMediaIndexSemanticColumn ? 'ALTER TABLE media_index_manifests ADD COLUMN semantic_json TEXT;' : ''}
+        -- A payload mutation invalidates its commit-time projection without reading it.
+        ${['INSERT', 'UPDATE', 'DELETE'].map(event => `CREATE TRIGGER IF NOT EXISTS semantic_batch_${event.toLowerCase()} AFTER ${event} ON media_index_batches WHEN ${event === 'DELETE' ? 'old' : 'new'}.kind IN ('flv','js-ts')
+          BEGIN UPDATE media_index_manifests SET semantic_json=NULL WHERE media_id=${event === 'DELETE' ? 'old' : 'new'}.media_id
+            AND media_version=${event === 'DELETE' ? 'old' : 'new'}.media_version AND kind=${event === 'DELETE' ? 'old' : 'new'}.kind
+            AND stream_key=${event === 'DELETE' ? 'old' : 'new'}.stream_key AND schema_version=${event === 'DELETE' ? 'old' : 'new'}.schema_version
+            AND indexer_build=${event === 'DELETE' ? 'old' : 'new'}.indexer_build; END;`).join('\n')}
+        CREATE TRIGGER IF NOT EXISTS semantic_batch_update_old AFTER UPDATE ON media_index_batches WHEN old.kind IN ('flv','js-ts')
+          BEGIN UPDATE media_index_manifests SET semantic_json=NULL WHERE media_id=old.media_id AND media_version=old.media_version
+            AND kind=old.kind AND stream_key=old.stream_key AND schema_version=old.schema_version AND indexer_build=old.indexer_build; END;
         -- Preserve valid FLV cache rows during the one-time identity migration.
         INSERT OR IGNORE INTO media_index_manifests(
           media_id,media_version,kind,stream_key,schema_version,indexer_build,state,last_seq,complete,

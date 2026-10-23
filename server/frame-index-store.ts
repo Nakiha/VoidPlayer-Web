@@ -1,3 +1,5 @@
+import { flvCommittedHeader, tsCommittedHeader, COMMITTED_HEADER_BYTES } from '../shared/media/indexing/committed-index-header.ts';
+import type { CommittedIndexHeader, ScanEvidence } from '../shared/media/indexing/committed-index-header.ts';
 import { parseJsPacketIndex } from '../shared/media/indexing/js-packet-index-parser.ts';
 import { JS_TS_INDEX_BYTES } from '../shared/media/indexing/ts-packet-index.ts';
 import type { FrameIndexManifest, FrameIndexBatch } from './frame-index-protocol.ts';
@@ -133,6 +135,11 @@ export class FrameIndexStore {
         this.db.exec('COMMIT');
         return { ok: true };
       }
+      // Whole documents and their projections are immutable within one identity.
+      // A racing/duplicate submission must never attach a new header or seal to old packets.
+      if (this.db.prepare('SELECT 1 FROM media_index_manifests WHERE media_id=? AND media_version=? AND ' + identityWhere).get(id, version, ...identityArgs(identity))) {
+        this.db.exec('COMMIT'); return { ok: true };
+      }
       this.db.prepare(
         "INSERT OR IGNORE INTO media_index_manifests(media_id,media_version,kind,stream_key,schema_version,indexer_build,state,last_seq,complete,scanned_bytes,stable_presentation_us,bytes,frames,created_at,accessed_at) VALUES(?,?,?,?,?,?,'complete',0,1,?,0,?,?,?,?)",
       ).run(id, version, ...identityArgs(identity), scannedBytes, bytes, frames, now, now);
@@ -140,6 +147,16 @@ export class FrameIndexStore {
         'INSERT OR IGNORE INTO media_index_batches(media_id,media_version,kind,stream_key,schema_version,indexer_build,seq,payload,bytes,frames,created_at) VALUES(?,?,?,?,?,?,0,?,?,?,?)',
       ).run(id, version, ...identityArgs(identity), text, bytes, frames, now);
       if((identity.kind==='js-ts'||identity.kind==='js-matroska'))this.db.prepare('UPDATE media_index_manifests SET metadata_json=? WHERE media_id=? AND media_version=? AND '+identityWhere).run(JSON.stringify({jsIndexSha256:createHash('sha256').update(text).digest('hex')}),id,version,...identityArgs(identity));
+      if (prepared.semanticHeader) {
+        const header = prepared.semanticHeader;
+        if (header.sourceVersion !== `${id}@${version}` || header.size !== scannedBytes || header.recordCount !== frames)
+          throw new AdminError(409, 'Semantic header source changed.');
+        const json = JSON.stringify(header);
+        const envelope = JSON.stringify({ header, sha256: createHash('sha256').update(json).digest('hex') });
+        if (Buffer.byteLength(envelope) > COMMITTED_HEADER_BYTES) throw new AdminError(413, 'Semantic header exceeds budget.');
+        this.db.prepare('UPDATE media_index_manifests SET semantic_json=? WHERE media_id=? AND media_version=? AND ' + identityWhere)
+          .run(envelope, id, version, ...identityArgs(identity));
+      }
       this.evictCache(id, version, identity);
       this.db.exec('COMMIT');
       return { ok: true };
@@ -333,19 +350,22 @@ export type PreparedFrameIndex = {
   frames: number;
   scannedBytes: number;
   identity: MediaIndexIdentity;
+  semanticHeader?: CommittedIndexHeader;
 };
 
-export function prepareFrameIndex(value: unknown, size: number, identityOrKind: MediaIndexIdentity | FrameIndexKind = FLV_MEDIA_INDEX_IDENTITY, sourceVersion?: string): PreparedFrameIndex {
+export function prepareFrameIndex(value: unknown, size: number, identityOrKind: MediaIndexIdentity | FrameIndexKind = FLV_MEDIA_INDEX_IDENTITY, sourceVersion?: string, scan?: ScanEvidence): PreparedFrameIndex {
   if (size < 0 || !Number.isSafeInteger(size)) throw new AdminError(400, '媒体大小无效。');
   const expectedKind = typeof identityOrKind === 'string' ? identityOrKind : identityOrKind.kind;
   let identity: MediaIndexIdentity;
   let text: string, bytes: number, frames: number;
+  let semanticHeader: CommittedIndexHeader | undefined;
   if ((expectedKind === 'js-ts'||expectedKind==='js-matroska')) {
     const parsed = sourceVersion ? parseJsPacketIndex(value, sourceVersion, size) : undefined;
     if (!parsed||(parsed.kind==='js-ts-packets')!==(expectedKind==='js-ts')) throw new AdminError(400, 'JS TS 索引格式、源身份或范围无效。');
     identity = expectedKind==='js-ts'?JS_TS_MEDIA_INDEX_IDENTITY:JS_MATROSKA_MEDIA_INDEX_IDENTITY;
     if (typeof identityOrKind !== 'string' && identityArgs(identityOrKind).some((v,i)=>v !== identityArgs(identity)[i]))
       throw new AdminError(409, 'JS TS 索引身份与请求不匹配。');
+    if (parsed.kind === 'js-ts-packets') semanticHeader = tsCommittedHeader(parsed);
     text = JSON.stringify(parsed); bytes = Buffer.byteLength(text); frames = parsed.packets.length;
     if (bytes > JS_TS_INDEX_BYTES) throw new AdminError(413, 'JS TS 帧索引过大。');
   } else if (expectedKind === 'ffmpeg') {
@@ -373,7 +393,11 @@ export function prepareFrameIndex(value: unknown, size: number, identityOrKind: 
       || identityOrKind.indexerBuild !== FLV_MEDIA_INDEX_IDENTITY.indexerBuild
     )) throw new AdminError(409, 'FLV 索引身份与请求不匹配。');
     let document: FlvIndexDocument;
-    try { document = serializeFlvIndex(parseFlvIndex(value, size), size); }
+    try {
+      const index = parseFlvIndex(value, size);
+      document = serializeFlvIndex(index, size);
+      if (sourceVersion) semanticHeader = flvCommittedHeader(index, size, sourceVersion, scan);
+    }
     catch (error) { throw new AdminError(400, (error as Error).message); }
     identity = FLV_MEDIA_INDEX_IDENTITY;
     text = JSON.stringify(document);
@@ -381,5 +405,5 @@ export function prepareFrameIndex(value: unknown, size: number, identityOrKind: 
     frames = document.packets.length;
     if (bytes > FLV_INDEX_BYTES) throw new AdminError(413, '帧索引过大。');
   }
-  return { text, bytes, frames, scannedBytes: size, identity };
+  return { text, bytes, frames, scannedBytes: size, identity, semanticHeader };
 }

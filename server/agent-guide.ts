@@ -71,11 +71,24 @@ Copy kind/streamKey/schemaVersion/indexerBuild from info into these parameters:
 GET /api/media/ID/index-query?v=VERSION&kind=KIND&stream=STREAM&schema=SCHEMA&indexer=BUILD
 This overview separates not-indexed, unknown, partial and complete; terminal
 build completion alone does not prove complete source coverage. Inspect readiness.
-FFmpeg schema-3 record caches expose semantic packets. Other caches and legacy
-unsplit documents currently report semantic-adapter-unavailable. Existing compact
-frame-index routes remain compatible. No new probe/build task is provided here.
+FFmpeg schema-3 record caches expose semantic packets. New FLV and JS-TS commits
+also expose bounded technical/coverage headers; their record adapter remains
+unavailable. Legacy FLV/TS rows return semantic-header-missing without migrating.
+Headers describe selected cached packets, not all streams or decoded pictures.
+coverage.pts/dts minTick/maxTick are inclusive observed extrema, not continuous
+coverage; count/missing are separate for each raw axis. TS derived effectivePtsUs
+never fill absent raw PES PTS/DTS. FLV cached ticks are integer microseconds
+(native tags use milliseconds); TS raw PES ticks use 1/90000 seconds. No stable
+presentation watermark is inferred from a timestamp maximum or terminal state.
+initial-codec-configuration geometry is not a guarantee for every picture;
+indexedDurationUs is a derived span with an estimated tail, not container duration.
+FLV validated uploads cannot prove complete source coverage. Prefix and recovered
+gap indexes stay partial. FLV/TS build progress/failure is not persisted before
+commit: cache-miss does not prove that no build is running or that one succeeded.
+Existing compact frame-index routes remain compatible. No new probe/build task
+is provided here.
 
-Add view=records&axis=pts&startTick=0&endTick=90000&limit=100&byteBudget=65536
+For a ready FFmpeg record adapter, add view=records&axis=pts&startTick=0&endTick=90000&limit=100&byteBudget=65536
 for a bounded half-open interval in ORIGINAL stream ticks. 90000 ticks are one
 second only when the returned time base is 1/90000. axis=dts is also supported.
 Ticks and ordinals are decimal strings; missing timestamps are null. The exclusive
@@ -101,6 +114,7 @@ Example (BASE is the service origin; ID/VERSION come from browse):
     curl -fsS "$BASE/api/library/browse?recursive=1&search=clip&limit=20"
     curl -fsS "$BASE/api/media/$ID/info?v=$VERSION"
     curl -fsS "$BASE/api/media/query-schema"
+    curl -fsS --get "$BASE/api/media/$ID/index-query" --data-urlencode "v=$VERSION" --data-urlencode "kind=flv" --data-urlencode "stream=video:0" --data-urlencode "schema=3" --data-urlencode "indexer=flv-demux-v3"
     curl -fsS --get "$BASE/api/media/$ID/index-query" --data-urlencode "v=$VERSION" --data-urlencode "kind=ffmpeg" --data-urlencode "stream=video:0" --data-urlencode "schema=3" --data-urlencode "indexer=$BUILD" --data-urlencode "view=records" --data-urlencode "startTick=$START" --data-urlencode "endTick=$END"
 
 Technical library filters and full codec/color probing remain unavailable. Use

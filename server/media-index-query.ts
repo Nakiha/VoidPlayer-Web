@@ -1,3 +1,4 @@
+import { COMMITTED_HEADER_BYTES, COMMITTED_HEADER_SCHEMA, COMMITTED_HEADER_VERSION, validCommittedHeader } from '../shared/media/indexing/committed-index-header.ts';
 import { createHash } from 'node:crypto';
 import type { IndexDatabase } from './sqlite.ts';
 import { AdminError } from './admin-error.ts';
@@ -8,16 +9,28 @@ import type { SemanticQuery, SemanticRecord } from '../shared/media/indexing/sem
 
 const where = 'media_id=? AND media_version=? AND kind=? AND stream_key=? AND schema_version=? AND indexer_build=?';
 const args = (id: string, version: string, identity: MediaIndexIdentity) => [id, version, identity.kind, identity.streamKey, identity.schemaVersion, identity.indexerBuild];
-const columns = 'kind,stream_key,schema_version,indexer_build,build_id,state,complete,last_seq,frames,packets,scanned_bytes,stable_presentation_us,CASE WHEN octet_length(metadata_json)<=32768 THEN metadata_json END AS metadata_json,octet_length(metadata_json) AS metadata_length';
-type Row = { kind: string; stream_key: string; schema_version: number; indexer_build: string; build_id: string | null; state: string; complete: number; last_seq: number; frames: number; packets: number; scanned_bytes: number; stable_presentation_us: number; metadata_json: string | null; metadata_length: number | null };
+const columns = 'kind,stream_key,schema_version,indexer_build,build_id,state,complete,last_seq,frames,packets,scanned_bytes,stable_presentation_us,CASE WHEN octet_length(metadata_json)<=32768 THEN metadata_json END AS metadata_json,octet_length(metadata_json) AS metadata_length,CASE WHEN octet_length(semantic_json)<=8192 THEN semantic_json END AS semantic_json,octet_length(semantic_json) AS semantic_length,(SELECT size FROM media WHERE media.id=media_id AND media.version=media_version) AS source_size';
+type Row = { kind: string; stream_key: string; schema_version: number; indexer_build: string; build_id: string | null; state: string; complete: number; last_seq: number; frames: number; packets: number; scanned_bytes: number; stable_presentation_us: number; metadata_json: string | null; metadata_length: number | null; semantic_json: string | null; semantic_length: number | null; source_size: number };
 const header = { schema: MEDIA_QUERY_SCHEMA, version: MEDIA_QUERY_VERSION, describedBy: MEDIA_QUERY_DICTIONARY };
 function metadata(row: Row | undefined): Record<string, unknown> | null {
   if (!row?.metadata_json || Number(row.metadata_length) > 32768) return null;
   try { return JSON.parse(row.metadata_json); } catch { return null; }
 }
-function describe(row: Row | undefined, identity: MediaIndexIdentity) {
+function committedHeader(row: Row, identity: MediaIndexIdentity, sourceVersion: string) {
+  const unavailable = (semanticReason: string) => ({ semanticHeader: null, semanticReason });
+  if (row.semantic_length === null) return unavailable('semantic-header-missing');
+  if (row.semantic_length > COMMITTED_HEADER_BYTES) return unavailable('semantic-header-too-large');
+  try {
+    const envelope = JSON.parse(row.semantic_json!);
+    if (!envelope?.header || typeof envelope.sha256 !== 'string' || envelope.sha256 !== createHash('sha256').update(JSON.stringify(envelope.header)).digest('hex')) return unavailable('semantic-header-invalid');
+    if (envelope.header.schema !== COMMITTED_HEADER_SCHEMA || envelope.header.version !== COMMITTED_HEADER_VERSION) return unavailable('semantic-header-version-unsupported');
+    if (!validCommittedHeader(envelope.header, identity, sourceVersion, row.source_size, row.frames)) return unavailable('semantic-header-invalid');
+    return { semanticHeader: envelope.header };
+  } catch { return unavailable('semantic-header-invalid'); }
+}
+function describe(row: Row | undefined, identity: MediaIndexIdentity, sourceVersion: string) {
   return describeCachedIndex(row ? { complete: !!row.complete, state: row.state, recordCount: row.frames,
-    scannedBytes: row.scanned_bytes, stablePresentationUs: row.stable_presentation_us, metadata: metadata(row) } : null, identity);
+    scannedBytes: row.scanned_bytes, stablePresentationUs: row.stable_presentation_us, metadata: metadata(row), ...committedHeader(row, identity, sourceVersion) } : null, identity);
 }
 
 /** Deliberately bypass legacy streamManifest(): that entry may migrate a whole document. */
@@ -28,7 +41,7 @@ export class MediaIndexQueryStore {
     const rows = this.db.prepare(`SELECT ${columns} FROM media_index_manifests WHERE media_id=? AND media_version=? ORDER BY kind,stream_key,schema_version,indexer_build LIMIT 17 OFFSET ?`).all(id, version, offset) as unknown as Row[];
     return { ...header, indexes: rows.slice(0, 16).map(row => describe(row, {
       kind: row.kind as MediaIndexIdentity['kind'], streamKey: row.stream_key, schemaVersion: row.schema_version, indexerBuild: row.indexer_build,
-    })), nextOffset: rows.length > 16 ? offset + 16 : null, inventoryConsistency: 'per-request' };
+    }, `${id}@${version}`)), nextOffset: rows.length > 16 ? offset + 16 : null, inventoryConsistency: 'per-request' };
   }
   query(id: string, version: string, identity: MediaIndexIdentity, query?: SemanticQuery, cursor?: string) {
     this.db.exec('BEGIN');
@@ -37,7 +50,7 @@ export class MediaIndexQueryStore {
   }
   private read(id: string, version: string, identity: MediaIndexIdentity, query?: SemanticQuery, cursor?: string) {
     const row = this.db.prepare(`SELECT ${columns} FROM media_index_manifests WHERE ${where}`).get(...args(id, version, identity)) as Row | undefined;
-    const overview = describe(row, identity), m = metadata(row);
+    const overview = describe(row, identity, `${id}@${version}`), m = metadata(row);
     const epoch = this.db.prepare('SELECT epoch FROM frame_index_epoch WHERE id=1').get()!.epoch;
     const snapshot = createHash('sha256').update(JSON.stringify([id, version, identity, epoch, row ?? null, query ? [query.axis, query.startTick, query.endTick] : null])).digest('hex');
     const result = { ...header, source: { id, version }, snapshot, overview };
