@@ -1,3 +1,4 @@
+import type { MediaIndexIdentity } from './media-index-identity.ts';
 import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_NO_TIMESTAMP } from './ffmpeg-index-cache.ts';
 
 /** Host-neutral, cache-only semantics. No media I/O or session state. */
@@ -11,6 +12,52 @@ export function cachedField(value: string | number | boolean | null, reason = 'n
   return value === null ? { value, status: 'unknown', source: 'unavailable', reason }
     : { value, status: 'known', source: 'container-index' };
 }
+export interface CachedIndexState {
+  complete: boolean; state: string; recordCount: number; scannedBytes: number;
+  stablePresentationUs: number; metadata: Record<string, unknown> | null;
+}
+export function supportedCachedMetadata(identity: MediaIndexIdentity, m: Record<string, unknown> | null): boolean {
+  return identity.kind === 'ffmpeg' && identity.schemaVersion === 3 && !!m
+    && m.recordBytes === 48 && m.schema === 3 && m.kind === 'ffmpeg-container'
+    && typeof m.codec === 'string' && /^[a-z0-9_+-]{1,64}$/i.test(m.codec)
+    && Number.isSafeInteger(m.width) && Number(m.width) > 0 && Number(m.width) <= 16384
+    && Number.isSafeInteger(m.height) && Number(m.height) > 0 && Number(m.height) <= 16384
+    && Number.isSafeInteger(m.streamIndex) && Number(m.streamIndex) >= 0 && Number(m.streamIndex) <= 64
+    && m.indexerBuild === identity.indexerBuild && `video:${m.streamIndex}` === identity.streamKey
+    && Number.isSafeInteger(m.timeBaseNum) && Number(m.timeBaseNum) > 0 && Number(m.timeBaseNum) <= 1e9
+    && Number.isSafeInteger(m.timeBaseDen) && Number(m.timeBaseDen) > 0 && Number(m.timeBaseDen) <= 1e9;
+}
+export function cachedIndexClock(m: Record<string, unknown> | null) {
+  const firstPts = typeof m?.firstPts === 'string' && /^-?\d{1,19}$/.test(m.firstPts) && BigInt(m.firstPts) > -9223372036854775808n && BigInt(m.firstPts) <= 9223372036854775807n ? m.firstPts : null;
+  return { num: Number(m?.timeBaseNum), den: Number(m?.timeBaseDen), firstPts, originVerified: m?.originVerified === true && firstPts !== null };
+}
+export function describeCachedIndex(row: CachedIndexState | null, identity: MediaIndexIdentity) {
+  const m = row?.metadata ?? null, ready = supportedCachedMetadata(identity, m), c = cachedIndexClock(ready ? m : null);
+  const state = !row ? 'not-indexed' : !ready ? 'unknown' : row.complete && m!.indexIntegrity === 'complete' ? 'complete' : 'partial';
+  const reason = !row ? 'cache-miss' : !ready ? 'semantic-adapter-unavailable' : m!.indexIntegrity === 'prefix' ? 'retained-prefix'
+    : row.state === 'failed' ? 'build-failed' : !row.complete ? 'build-in-progress' : m!.indexIntegrity !== 'complete' ? 'integrity-unknown' : null;
+  const technical: Record<string, ReturnType<typeof cachedField>> = {};
+  for (const key of ['codec', 'width', 'height', 'timeBaseNum', 'timeBaseDen', 'streamIndex']) {
+    const value = ready ? m![key] : undefined;
+    technical[key] = cachedField((typeof value === 'number' && Number.isSafeInteger(value) && (key === 'streamIndex' ? value >= 0 : value > 0)) || (key === 'codec' && typeof value === 'string') ? value : null, reason ?? 'not-stored-in-index');
+  }
+  for (const key of ['container', 'profile', 'codedWidth', 'codedHeight', 'visibleWidth', 'visibleHeight', 'sar', 'rotation', 'bitDepth', 'pixelFormat', 'sourceColorPrimaries', 'sourceColorTransfer', 'sourceColorMatrix', 'sourceColorRange', 'durationUs', 'frameRateMode', 'frameRate', 'bitrate', 'decodedFrameCount']) {
+    technical[key] = !row ? { value: null, status: 'not-probed', source: 'unavailable', reason: 'cache-miss' } : cachedField(null);
+  }
+  return {
+    identity, state, reason, terminal: !!row?.complete, buildState: row?.state ?? null,
+    recordCount: row?.recordCount ?? null, scannedBytes: row?.scannedBytes ?? null,
+    // Uploads/legacy caches set 0 without deriving a watermark; do not claim coverage.
+    stablePresentationUs: ready && c.originVerified && Number(row?.stablePresentationUs) > 0 ? String(row!.stablePresentationUs) : null,
+    integrity: ready && (m!.indexIntegrity === 'complete' || m!.indexIntegrity === 'prefix') ? m!.indexIntegrity : 'unknown',
+    clock: { timeBase: ready ? { numerator: c.num, denominator: c.den, unit: 'seconds-per-tick' } : null,
+      firstPts: c.firstPts, originVerified: c.originVerified, rangeDomain: 'original-stream-ticks' },
+    technical,
+    capabilities: { overview: { implemented: true, enabled: true, ready: true },
+      records: { implemented: identity.kind === 'ffmpeg' && identity.schemaVersion === 3, enabled: identity.kind === 'ffmpeg' && identity.schemaVersion === 3, ready, reason: ready ? null : reason } },
+  };
+}
+
 export type SemanticQuery = { axis: 'pts' | 'dts'; startTick: string; endTick: string; limit: number; byteBudget: number };
 export function parseSemanticQuery(params: URLSearchParams): SemanticQuery {
   const axis = params.get('axis') ?? 'pts';
@@ -59,6 +106,14 @@ export const MEDIA_QUERY_FIELDS = {
   fields: {
     'file.size': 'File length in bytes, from a validated filesystem stat; not compressed video payload size.',
     'file.lastModified': 'Unix milliseconds from the library file version.',
+    identity: 'Exact cache kind, streamKey, schemaVersion and indexerBuild. Never combine indexes from different identities or source versions.',
+    recordCount: 'Cached container packet count, not decoded frame count.',
+    snapshot: 'Opaque cache/query revision token. Changed tokens invalidate accumulated pages.',
+    inspected: 'Records examined in this page, including nonmatches; at most 2048.',
+    inspectedUntimed: 'Examined records without the selected axis timestamp; excluded from the range summary.',
+    nextCursor: 'Continuation within the same source/version/identity/axis/range snapshot; null when exhausted or unavailable. Check readiness first.',
+    capabilities: 'implemented is code support, enabled is deployment support, ready is availability for this exact cached source/stream.',
+    fieldStatuses: 'known: cached evidence; unknown: cache lacks a fact; not-probed: no cached probe/index; unsupported: field or operation has no adapter. No missing fact is zero.',
     'technical.*': 'Each field has value, status, source and optional reason. Unknown is null, never zero. Values belong to the selected cached stream and source version.',
     codec: 'Container-index codec name; no decode verification.',
     width: 'Indexer-reported stream width in pixels; coded/visible distinction is not stored.',

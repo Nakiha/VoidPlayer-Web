@@ -9,7 +9,7 @@ import { MediaLibraryIndex } from '../../server/library.ts';
 import { createMediaServer } from '../../server/app.ts';
 import { openIndexDatabase } from '../../server/sqlite.ts';
 import { FFMPEG_NO_TIMESTAMP, ffmpegTicksToUs } from '../../shared/media/indexing/ffmpeg-index-cache.ts';
-import { semanticRecord, recordMatches, parseSemanticQuery } from '../../shared/media/indexing/semantic-query.ts';
+import { semanticRecord, recordMatches, parseSemanticQuery, describeCachedIndex } from '../../shared/media/indexing/semantic-query.ts';
 
 const identity = { kind: 'ffmpeg' as const, streamKey: 'video:0', schemaVersion: 3, indexerBuild: 'a'.repeat(40) };
 const selection = new URLSearchParams({ kind: identity.kind, stream: identity.streamKey, schema: '3', indexer: identity.indexerBuild }).toString();
@@ -55,6 +55,8 @@ test('shared query preserves 64-bit timestamps, missing values, reorder and half
   assert.equal(r.ptsTick, huge.toString()); assert.equal(r.dtsTick, (huge - 2n).toString());
   assert.equal(r.normalizedPtsUs, String(ffmpegTicksToUs(3n, 1, 90000))); assert.equal(r.decodeOrdinal, '1');
   assert.equal(r.randomAccessVerified, null); assert.equal(r.pictureType, null); assert.equal(r.qp, null);
+  const malformed = describeCachedIndex({ complete: true, state: 'complete', recordCount: 2, scannedBytes: 10000, stablePresentationUs: 0, metadata: { ...metadata(10000), width: '/private/not-a-dimension' } }, identity);
+  assert.equal(malformed.state, 'unknown'); assert.equal(JSON.stringify(malformed).includes('/private/'), false);
   const unknown = semanticRecord(view, 48, clock); assert.equal(unknown.ptsTick, null); assert.equal(unknown.dtsTick, null); assert.equal(unknown.durationTick, null); assert.equal(unknown.normalizedPtsUs, null);
   assert.equal(semanticRecord(view, 0, { ...clock, originVerified: false }).normalizedPtsUs, null);
   const q = parseSemanticQuery(new URLSearchParams({ startTick: huge.toString(), endTick: (huge + 1n).toString() }));
