@@ -97,7 +97,8 @@ export class FrameIndexStore {
       if (result.hit && selected) {
         const row = this.db.prepare('SELECT build_id,packet_storage FROM media_index_manifests WHERE media_id=? AND media_version=? AND ' + identityWhere + ' AND complete=1')
           .get(id, version, ...identityArgs(selected));
-        if (row) touch = { buildId: typeof row.build_id === 'string' ? row.build_id : null,
+        // NULL/NULL legacy rows have no unique commit token: never touch them.
+        if (row && (typeof row.build_id === 'string' || typeof row.packet_storage === 'string')) touch = { buildId: typeof row.build_id === 'string' ? row.build_id : null,
           packetStorage: typeof row.packet_storage === 'string' ? row.packet_storage : null, epoch: this.epoch };
       }
       this.db.exec('COMMIT');
@@ -194,8 +195,8 @@ export class FrameIndexStore {
       const parts = sharded ? [{ payload: sharded.metadata, frames: 0 }, ...sharded.chunks] : [{ payload: text, frames }];
       const storedBytes = parts.reduce((sum, p) => sum + Buffer.byteLength(p.payload), 0);
       this.db.prepare(
-        "INSERT INTO media_index_manifests(media_id,media_version,kind,stream_key,schema_version,indexer_build,state,last_seq,complete,scanned_bytes,stable_presentation_us,bytes,frames,created_at,accessed_at) VALUES(?,?,?,?,?,?,'complete',?,1,?,0,?,?,?,?)",
-      ).run(id, version, ...identityArgs(identity), parts.length - 1, scannedBytes, storedBytes, frames, now, now);
+        "INSERT INTO media_index_manifests(media_id,media_version,kind,stream_key,schema_version,indexer_build,state,last_seq,complete,scanned_bytes,stable_presentation_us,bytes,frames,created_at,accessed_at,build_id) VALUES(?,?,?,?,?,?,'complete',?,1,?,0,?,?,?,?,?)",
+      ).run(id, version, ...identityArgs(identity), parts.length - 1, scannedBytes, storedBytes, frames, now, now, sharded ? null : randomBuildId());
       for (const [seq, part] of parts.entries()) this.db.prepare(
         'INSERT INTO media_index_batches(media_id,media_version,kind,stream_key,schema_version,indexer_build,seq,payload,bytes,frames,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
       ).run(id, version, ...identityArgs(identity), seq, part.payload, Buffer.byteLength(part.payload), part.frames, now);
