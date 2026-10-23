@@ -1,6 +1,7 @@
 import type { MediaIndexIdentity } from './media-index-identity.ts';
 import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_NO_TIMESTAMP } from './ffmpeg-index-cache.ts';
 import type { CommittedIndexHeader } from './committed-index-header.ts';
+import { TECHNICAL_FILTER_FIELDS } from './technical-filter.ts';
 
 /** Host-neutral, cache-only semantics. No media I/O or session state. */
 export const MEDIA_QUERY_SCHEMA = 'voidplayer-media-query';
@@ -144,6 +145,7 @@ export function recordMatches(record: SemanticRecord, query: SemanticQuery): boo
   return tick === null ? null : BigInt(tick) >= BigInt(query.startTick) && BigInt(tick) < BigInt(query.endTick);
 }
 export const MEDIA_QUERY_FIELDS = {
+  technicalFilter: TECHNICAL_FILTER_FIELDS,
   schema: MEDIA_QUERY_SCHEMA, version: MEDIA_QUERY_VERSION,
   fields: {
     'file.size': 'File length in bytes, from a validated filesystem stat; not compressed video payload size.',

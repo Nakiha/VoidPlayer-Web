@@ -15,6 +15,9 @@ parentPort!.on('message', (request: FrameIndexRequest) => {
   try {
     const send = parentPort!.postMessage.bind(parentPort!);
     switch (request.op) {
+      case 'technical-filter':
+        send(frameIndexReply(request, queries.technicalFilter(request.query, request.expectedSnapshot, request.cancellation)));
+        break;
       case 'cached-indexes':
         send(frameIndexReply(request, queries.inventory(request.id, request.version, request.offset)));
         break;
