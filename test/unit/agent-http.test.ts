@@ -13,14 +13,21 @@ import { AGENT_DOCUMENTS } from '../../server/agent-guide.ts';
 import { agentManifest, serviceCapabilities } from '../../shared/service/agent.ts';
 
 test('runtime discovery separates implementation, deployment and source/session readiness', () => {
-  const manifest = agentManifest({ capabilities: serviceCapabilities(false, false), libraryReady: false, frontendAvailable: true, actor: null });
+  const manifest = agentManifest({ capabilities: serviceCapabilities(false, false), libraryReady: false, frontendAvailable: true, qualityJobsEnabled: true, actor: null });
   const byId = (id: string) => manifest.capabilities.find(capability => capability.id === id)!;
   assert.equal(byId('library.browse').readiness, 'index-warming');
   assert.equal(byId('media.read').readiness, 'per-source');
   assert.equal(byId('annotations.write').implemented, true);
   assert.equal(byId('annotations.write').enabled, false);
   assert.equal(byId('session.view').readiness, 'requires-live-session');
-  for (const id of ['quality.jobs', 'compute.workers', 'bridge.local-mcp']) assert.equal(byId(id).implemented, false);
+  assert.equal(byId('quality.jobs').implemented, true);assert.equal(byId('quality.jobs').readiness, 'needs-identity');
+  assert.equal(byId('quality.jobs').requiresBrowser, false);assert.deepEqual(manifest.qualityJobs.metrics, ['psnr']);
+  assert.equal(manifest.qualityJobs.scope, 'single-explicit-frame-pair');assert.equal(manifest.qualityJobs.submit, '/api/quality/jobs');
+  assert.equal(manifest.qualityJobs.observerDisconnectCancels, false);assert.equal(manifest.qualityJobs.automaticRetry, false);
+  assert.equal(manifest.qualityJobs.buildsIndexes, false);assert.equal(manifest.qualityJobs.sharedWork, false);
+  const temporary = agentManifest({capabilities:serviceCapabilities(false,false),libraryReady:true,actor:{id:'actor',name:'A'}}).capabilities.find(c=>c.id==='quality.jobs')!;
+  assert.equal(temporary.implemented,true);assert.equal(temporary.enabled,false);assert.equal(temporary.readiness,'unavailable');
+  for (const id of ['compute.workers', 'bridge.local-mcp']) assert.equal(byId(id).implemented, false);
 });
 
 test('ordinary HTTP discovers, attributes and commits annotations without frontend assets or a browser', async () => {
@@ -95,6 +102,10 @@ test('ordinary HTTP discovers, attributes and commits annotations without fronte
     }
     const ready = await (await fetch(base + '/api/agent', { headers: { cookie } })).json();
     assert.equal(ready.capabilities.find((c: { id: string }) => c.id === 'annotations.write').readiness, 'ready');
+    assert.equal(ready.capabilities.find((c: { id: string }) => c.id === 'quality.jobs').readiness, 'per-source');
+    assert.deepEqual(ready.qualityJobs.metrics, ['psnr']);
+    const jobs = await fetch(base + ready.qualityJobs.changes, {headers:{cookie}});
+    assert.equal(jobs.status, 200);assert.deepEqual((await jobs.json()).entries, [], 'discovery and annotation commands do not create scoring jobs');
     config.port = (service.server.address() as { port: number }).port;
     await service.close(); service = await startService(config, false);
     assert.deepEqual(await (await submit(operation)).json(), record);
@@ -117,4 +128,19 @@ test('read-only deployment advertises unavailable writes and still serves embedd
     assert.equal(response.status, 503); assert.equal((await response.json()).code, 'storage-unavailable');
     assert.equal((await fetch(base + '/agent/annotations.md')).status, 200);
   } finally { await new Promise<void>(resolve => server.close(() => resolve())); await library.close(); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('temporary library deployment never advertises or accepts durable jobs', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'vp-agent-temporary-'));
+  const library = new MediaLibraryIndex([dir], {watch:false});
+  const server = createMediaServer({roots:[dir],library,onLog(){}});
+  server.listen(0,'127.0.0.1');await once(server,'listening');
+  const base = `http://127.0.0.1:${(server.address() as {port:number}).port}`;
+  try {
+    const manifest = await fetch(base+'/api/agent').then(r=>r.json());
+    const capability = manifest.capabilities.find((c:{id:string})=>c.id==='quality.jobs');
+    assert.equal(capability.implemented,true);assert.equal(capability.enabled,false);assert.equal(capability.readiness,'unavailable');
+    const response = await fetch(base+'/api/quality/jobs',{headers:{cookie:'voidplayer-user=guest-00000000-0000-4000-8000-000000000001'}});
+    assert.equal(response.status,503);assert.equal((await response.json()).code,'quality-storage-unavailable');
+  } finally {await new Promise<void>(resolve=>server.close(()=>resolve()));await library.close();await rm(dir,{recursive:true,force:true});}
 });

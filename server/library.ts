@@ -37,8 +37,10 @@ export class MediaLibraryIndex {
   private closing?: Promise<void>;
   private coreDirectory: string;
   get quality() { return this.pairRunner ??= new LibraryPairRunner(this,this.coreDirectory); }
+  get durableQualityJobsEnabled() { return this.options.database !== undefined && this.options.database !== ':memory:'; }
   get qualityJobs() {
     if (this.closed) throw new AdminError(503,'Quality job service closed.','quality-service-unavailable');
+    if (!this.durableQualityJobsEnabled) throw new AdminError(503,'Durable quality jobs require a persistent library database.','quality-storage-unavailable');
     return this.jobService ??= new QualityJobService(this.indexDatabase + '.quality.sqlite', this.quality);
   }
   readonly frameIndexes: FrameIndexStore;

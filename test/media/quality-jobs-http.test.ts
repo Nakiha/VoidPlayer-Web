@@ -38,6 +38,9 @@ for(const [codec,depth]of [['h264',8],['hevc',8],['hevc',10]]as const)test(`dura
  for(const role of ['reference','distorted'])await writeFile(join(media,role+'.flv'),fixture.bytes);
  const start=async()=>{library=new MediaLibraryIndex([media],{database,watch:false});library.qualityJobs;await library.refresh();server=createMediaServer({library,roots:[media],onLog(){}});await new Promise<void>(resolve=>server!.listen(0,'127.0.0.1',resolve));return `http://127.0.0.1:${(server.address()as AddressInfo).port}`;};
  let base=await start();const cookie=`voidplayer-user=guest-${randomUUID()}`,headers={cookie,origin:base,'content-type':'application/json','x-voidplayer-action':'quality-job'};
+ const discovery=await fetch(base+'/api/agent',{headers:{cookie}}).then(r=>r.json());
+ assert.equal(discovery.capabilities.find((c:any)=>c.id==='quality.jobs').readiness,'per-source');
+ assert.deepEqual(discovery.qualityJobs.metrics,['psnr']);assert.equal(discovery.qualityJobs.scope,'single-explicit-frame-pair');
  const entries=(await fetch(base+'/api/library').then(r=>r.json())).entries,targets:PairTarget[]=[],proofs=[];
  for(const [au,role]of ['reference','distorted'].entries()){
   const entry=entries.find((e:any)=>e.name===role+'.flv');assert.ok(entry);
@@ -46,7 +49,7 @@ for(const [codec,depth]of [['h264',8],['hevc',8],['hevc',10]]as const)test(`dura
   targets.push({...proof.binding,sourcePtsUs:cache.index.packets[au][2],picture:{sourceVersion:`${entry.id}@${entry.version}`,stream:'video',configuration:0,au,picture:0,layer:0,field:'frame'}});
  }
  const input:QualityJobInput={schema:'voidplayer-psnr-frame-job',version:1,client:{id:'http-native-test',kind:'agent'},request:{pairing:'caller-specified',reference:targets[0],distorted:targets[1],roi:{x:2,y:4,width:24,height:20}}};
- const submit=()=>fetch(base+'/api/quality/jobs',{method:'POST',headers:{...headers,origin:base,'idempotency-key':'native-job'},body:JSON.stringify(input)});
+ const submit=()=>fetch(base+discovery.qualityJobs.submit,{method:'POST',headers:{...headers,origin:base,'idempotency-key':'native-job'},body:JSON.stringify(input)});
  const response=await submit();assert.equal(response.status,202);const accepted=await response.json();assert.equal(accepted.replayed,false);const id=accepted.job.id;
  assert.equal(accepted.job.submitted.requestId,response.headers.get('x-request-id'));assert.equal(response.headers.get('location'),`/api/quality/jobs/${id}`);
  const job=await terminal(base,id,{cookie});assert.equal(job.state,'completed',JSON.stringify(job));assert.equal(job.attempt?.number,1);assert.equal(job.progress.scoredPairs,1);

@@ -10,7 +10,7 @@
 
 分析名称按数据来源统一：`metadata` 指包元数据统计与曲线查询，`bitstream` 指需要深度解析的 NALU/GOP、参考关系和宏块/QP。共享计算、浏览器适配、会话协调和服务端分别保留各自宿主目录；图表与源画面覆盖层都归 UI。`src/` 顶层仅保留应用入口、构建信息、全局类型和样式，边界检查拒绝新增未归属的顶层代码模块。
 
-`shared/analysis/quality/` 保存 [源平面 PSNR](source-plane-psnr.md)、[内部帧对执行体](source-frame-pair-psnr.md)和共享的有界原始帧解码器；`shared/wasm/frame.ts` / `shared/media/ffmpeg-color.ts` 保存宿主中立的帧 ABI 和色彩枚举映射。浏览器 Blob 适配在 `src/analysis/quality/`；媒体库文件、可信缓存证据、Node/Bun Worker 与一次性 HTTP 调用在 `server/analysis/quality/`，见 [服务端闭环](source-library-psnr.md)。不依赖 Session 或呈现器，不自动配对；#121 持久任务未交付，`quality.jobs` 保持不可用。
+`shared/analysis/quality/` 保存 [源平面 PSNR](source-plane-psnr.md)、[内部帧对执行体](source-frame-pair-psnr.md)和共享的有界原始帧解码器；`shared/wasm/frame.ts` / `shared/media/ffmpeg-color.ts` 保存宿主中立的帧 ABI 和色彩枚举映射。浏览器 Blob 适配在 `src/analysis/quality/`；媒体库文件、可信缓存证据、Node/Bun Worker 与一次性 HTTP 调用在 `server/analysis/quality/`，见 [服务端闭环](source-library-psnr.md)。不依赖 Session 或呈现器，不自动配对；持久单帧 PSNR 的事务提交/幂等、服务持有执行、物理退出围栏和独占恢复在同目录 `job-*` 适配，见 [任务 v1](source-psnr-jobs.md)。`quality.jobs` 仅声明该受限范围，#121 没有整体完成。
 
 ## 会话与时间
 

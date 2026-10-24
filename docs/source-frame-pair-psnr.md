@@ -1,6 +1,6 @@
 # 内部可信单帧对 PSNR 桥 v1
 
-这是 #112 / #114 的一个可独立验收小切片。`FramePairClient.measure` 在一次性独立 Worker 中验证两侧已有缓存身份、读取单个闭合关键 AU、解码原始平面，然后调用 [PSNR 核心](source-plane-psnr.md)。没有接入 Session、播放游标、GUI、HTTP Agent 或媒体库自动取源；`quality.jobs` 仍为 unavailable，#114 未整体完成。本轮不实现 durable jobs、帧序列、自动对齐、SSIM 或 VMAF。
+这是 #112 / #114 的一个可独立验收小切片。`FramePairClient.measure` 在一次性独立 Worker 中验证两侧已有缓存身份、读取单个闭合关键 AU、解码原始平面，然后调用 [PSNR 核心](source-plane-psnr.md)。该内部入口不依赖 Session、播放游标或 GUI；媒体库一次性和持久 HTTP 适配分别见 [服务端闭环](source-library-psnr.md) 与 [任务 v1](source-psnr-jobs.md)。内部帧对执行体本身不实现 durable jobs、帧序列、自动对齐、SSIM 或 VMAF，#114 未整体完成。
 
 ## 受信任宿主边界
 

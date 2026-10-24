@@ -1,12 +1,14 @@
 # 单帧 PSNR 持久任务 v1
 
-这是 #121 的最小纵向切片，复用 [媒体库单帧执行器](source-library-psnr.md)，没有扩大像素、编解码器或来源范围。候选阶段仍保持 `quality.jobs` unavailable；只有真实 Linux/macOS/Windows 编译包验收完成后才更新发现能力。不要把本文的候选接口理解为 main 已开放的能力。
+这是 #121 的最小纵向切片，复用 [媒体库单帧执行器](source-library-psnr.md)，没有扩大像素、编解码器或来源范围。`quality.jobs` 的发现声明限定为本文的单帧 PSNR v1；开启前已经完成真实 Linux/macOS/Windows 编译包验收。`/api/agent` 的 qualityJobs 给出支持范围、端点、请求 schema 和预算。
 
 仅支持一个显式 reference/distorted 帧对、PSNR、偶数对齐 ROI、已有可信 FLV 缓存。H264/HEVC、渐进闭合关键 AU、明确色彩/色度位置、8/10 位 YUV420 和所有来源/预算限制保持不变。来源版本和缓存 token 由调用者明确指定；不自动配对、探测、建索引、重试、共享计算或恢复续算。不包含 SSIM/VMAF/CAMBI、帧序列、分布式、调高并发或后台评分 GUI；#114/#121 仍未整体完成。
 
 ## HTTP
 
 使用现有内网身份 cookie，所有写操作要求同源 Origin、`Content-Type: application/json`、`X-VoidPlayer-Action: quality-job`。身份和 client 均是自述归属，不是认证或权限凭据；按 actor 过滤只用于归属分组，不是安全隔离。服务仍应置于部署已有的访问边界内。GET 不创建用户或任务。
+
+仅配置了持久媒体库数据库的部署启用此能力。临时索引实例的 `quality.jobs.enabled=false/readiness=unavailable`，任务接口返回 503 quality-storage-unavailable，不把随实例销毁的数据声明为持久历史。
 
 先按一次性执行器文档注册来源、显式构建服务端可信缓存、发现两侧绑定并选定 AU/实际源 PTS。然后提交：
 

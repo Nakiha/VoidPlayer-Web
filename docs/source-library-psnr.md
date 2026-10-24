@@ -1,8 +1,8 @@
 # 媒体库单帧 PSNR 一次性 HTTP 闭环
 
-这是 #112 / #114 的受限纵向切片：注册媒体 → 显式服务端索引构建 → 缓存身份发现 → 独立 Node/Bun Worker 原始解码 → PSNR 与完整 provenance。评分不依赖 Session、已加载轨道、播放游标或 GUI 确认。`quality.frame-pair` 是逐源判断的一次性调用；`quality.jobs` 和 `compute.workers` 仍为 unavailable，#114 / #121 没有整体完成。
+这是 #112 / #114 的受限纵向切片：注册媒体 → 显式服务端索引构建 → 缓存身份发现 → 独立 Node/Bun Worker 原始解码 → PSNR 与完整 provenance。评分不依赖 Session、已加载轨道、播放游标或 GUI 确认。`quality.frame-pair` 是逐源判断的一次性调用；独立的持久单帧 PSNR 入口见 [任务 v1](source-psnr-jobs.md)，`compute.workers` 仍为 unavailable，#114 / #121 没有整体完成。
 
-没有持久 job/attempt/result、任务 ID、队列、恢复、结果缓存、自动重试、断线续作、帧序列、自动对齐、评分 GUI、SSIM/VMAF、分布式或性能达标承诺。连接断开取消本次调用；这与未来 durable job 的“断线不取消”是不同契约。
+本文的一次性接口不创建持久 job/attempt/result 或任务 ID，也不提供队列、恢复、结果缓存、自动重试、断线续作、帧序列、自动对齐、评分 GUI、SSIM/VMAF、分布式或性能达标承诺。连接断开取消本次调用；独立 durable job 的观察断线不取消，两种契约分开。
 
 ## 调用
 
