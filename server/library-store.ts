@@ -19,7 +19,7 @@ export function normalizeRoots(roots: MediaRoot[]): RootRecord[] {
 export interface StoredMedia { id: string; root_id: string; path: string; size: number; modified: number; version: string; state: string; generation: number; observed_at: number }
 // A separate SQLite transaction is a crash-released OS file lock. It avoids
 // stale PID files and never blocks readers of the actual metadata database.
-function lockDatabase(file: string): () => void {
+export function lockDatabase(file: string): () => void {
   if (file === ':memory:') return () => {};
   const lock = openIndexDatabase(file + '.lock');
   try { lock.exec('PRAGMA busy_timeout=0; BEGIN EXCLUSIVE;'); }

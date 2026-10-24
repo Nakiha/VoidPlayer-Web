@@ -43,9 +43,20 @@ try{
   },targets);
   assert.equal(value.execution.host,'node-worker');assert.equal(value.result.metric.bitDepth,sample.depth);assert.ok(value.result.metric.aggregate.sse>0);
   assert.equal(value.result.provenance.reference.mediaId,targets[0].mediaId);assert.equal(value.result.provenance.distorted.mediaId,targets[1].mediaId);
+  const durable=await page.evaluate(async({targets,depth})=>{
+   const response=await fetch('/api/quality/jobs',{method:'POST',headers:{'content-type':'application/json','x-voidplayer-action':'quality-job','idempotency-key':`gui-isolation-${depth}`},
+    body:JSON.stringify({schema:'voidplayer-psnr-frame-job',version:1,client:{id:'gui-isolation',kind:'browser'},request:{pairing:'caller-specified',reference:targets[0],distorted:targets[1],roi:{x:2,y:4,width:24,height:20}}})});
+   const accepted=await response.json();if(response.status!==202)throw Error(JSON.stringify(accepted));
+   for(let i=0;i<100;i++){
+    const job=await fetch(`/api/quality/jobs/${accepted.job.id}`).then(r=>r.json());
+    if(job.state==='completed')return {job,result:await fetch(job.result.url).then(r=>r.json())};
+    if(['failed','cancelled','interrupted'].includes(job.state))throw Error(JSON.stringify(job));await new Promise(resolve=>setTimeout(resolve,50));
+   }throw Error('Durable GUI-isolation job did not complete');
+  },{targets,depth:sample.depth});
+  assert.deepEqual(durable.result.value.result.metric,value.result.metric);assert.equal(durable.job.attempt.number,1);
   const after=await page.evaluate(()=>window.voidPlayer.exportWorkspace());assert.equal(after.positionUs,before.positionUs);assert.deepEqual(after.tracks,before.tracks);assert.deepEqual(after.viewport,before.viewport);assert.deepEqual(after.layout,before.layout);
-  rows.push({depth:sample.depth,sse:value.result.metric.aggregate.sse,sourcePtsUs:value.result.provenance.reference.decoded.sourcePtsUs,cursorUs:after.positionUs,loadedTracks:after.tracks});
+  rows.push({depth:sample.depth,sse:value.result.metric.aggregate.sse,sourcePtsUs:value.result.provenance.reference.decoded.sourcePtsUs,cursorUs:after.positionUs,loadedTracks:after.tracks,durableJobId:durable.job.id});
  }
  assert.deepEqual(errors,[]);const evidence=resolve(process.env.VOIDPLAYER_TEST_ARTIFACTS??`.run/library-pair-browser-${engine}`);await mkdir(evidence,{recursive:true});await page.screenshot({path:join(evidence,'cursor-unchanged.png')});await writeFile(join(evidence,'result.json'),JSON.stringify({engine,rows},null,2)+'\n');
- console.log(`PASS ${engine}: actual library HTTP PSNR 8/10-bit while a different GUI source retains tracks, cursor, viewport and layout`);
+ console.log(`PASS ${engine}: actual one-shot/durable library HTTP PSNR 8/10-bit while a different GUI source retains tracks, cursor, viewport and layout`);
 }finally{await browser?.close();await service?.close();await rm(dir,{recursive:true,force:true});}

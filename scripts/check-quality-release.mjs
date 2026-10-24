@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,readFile,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {spawn,execFileSync} from 'node:child_process';
+import {spawn,spawnSync,execFileSync} from 'node:child_process';
 import {randomUUID,createHash} from 'node:crypto';
 import {createServer} from 'node:net';
 import {trackChildShutdown} from './testing/lifecycle.mjs';
@@ -46,13 +46,32 @@ try{
    }
    assert.equal(value.result.metric.planes[name].sse,sse);assert.equal(value.result.metric.planes[name].samples,samples);aggregate+=sse;
   }
-  assert.equal(value.result.metric.aggregate.sse,aggregate);assert.ok(aggregate>0);assert.equal(value.request.actorId,cookie.slice('voidplayer-user='.length));assert.equal(value.request.id,response.headers.get('x-request-id'));rows.push({request,requestId:value.request.id,codec:sample.codec,depth:sample.depth,sse:aggregate,decoder:value.result.decoder,source:binding,execution:value.execution});
+  assert.equal(value.result.metric.aggregate.sse,aggregate);assert.ok(aggregate>0);assert.equal(value.request.actorId,cookie.slice('voidplayer-user='.length));assert.equal(value.request.id,response.headers.get('x-request-id'));
+  const input={schema:'voidplayer-psnr-frame-job',version:1,client:{id:'compiled-acceptance',kind:'agent'},request};
+  const jobHeaders={...headers,'x-voidplayer-action':'quality-job','idempotency-key':`compiled-${sample.codec}-${sample.depth}`};
+  const submitted=await fetch(base+'/api/quality/jobs',{method:'POST',headers:jobHeaders,body:JSON.stringify(input)}),accepted=await submitted.json();assert.equal(submitted.status,202,JSON.stringify(accepted));
+  assert.equal(accepted.job.submitted.requestId,submitted.headers.get('x-request-id'));let job;
+  await waitUntil(async()=>{job=await fetch(`${base}/api/quality/jobs/${accepted.job.id}`,{headers:{cookie}}).then(r=>r.json());if(['failed','cancelled','interrupted'].includes(job.state))throw Error(JSON.stringify(job));return job.state==='completed';},'Compiled durable job did not finish');
+  const stored=await fetch(`${base}/api/quality/jobs/${job.id}/result`,{headers:{cookie}}).then(r=>r.json());
+  assert.equal(stored.jobId,job.id);assert.equal(stored.attemptId,job.attempt.id);assert.equal(stored.submitted.actorId,cookie.slice('voidplayer-user='.length));
+  assert.deepEqual(stored.value.result.metric,value.result.metric);assert.deepEqual(stored.value.result.provenance,value.result.provenance);
+  assert.deepEqual(stored.value.result.decoder,value.result.decoder);assert.deepEqual(stored.value.sources,value.sources);assert.deepEqual(stored.value.execution,value.execution);
+  rows.push({request,requestId:value.request.id,codec:sample.codec,depth:sample.depth,sse:aggregate,decoder:value.result.decoder,source:binding,execution:value.execution,
+    durable:{input,job,stored,key:jobHeaders['idempotency-key']}});
  }
+ const duplicate=spawnSync(path.join(directory,manifest.executable),['--data-dir',data],{cwd,env,encoding:'utf8',timeout:10000,maxBuffer:1024*1024});
+ assert.equal(duplicate.error,undefined);assert.notEqual(duplicate.status,0);assert.match(duplicate.stdout+duplicate.stderr,/另一个实例/,'second compiled instance must not recover a live owner');
  await stopChild();stopChild=null;await start();
+ for(const row of rows){
+  const job=await fetch(`${base}/api/quality/jobs/${row.durable.job.id}`,{headers:{cookie}}).then(r=>r.json());assert.deepEqual(job,row.durable.job);
+  const stored=await fetch(`${base}/api/quality/jobs/${job.id}/result`,{headers:{cookie}}).then(r=>r.json());assert.deepEqual(stored,row.durable.stored);
+  const replay=await fetch(base+'/api/quality/jobs',{method:'POST',headers:{...headers,'x-voidplayer-action':'quality-job','idempotency-key':row.durable.key},body:JSON.stringify(row.durable.input)});
+  assert.equal(replay.status,200);const receipt=await replay.json();assert.equal(receipt.replayed,true);assert.deepEqual(receipt.job,job,'restart replay creates no new attempt');
+ }
  const first=rows[0],entry=entries.find(e=>e.name===`${first.codec}-${first.depth}.flv`);
  const rebound=await fetch(`${base}/api/media/${entry.id}/psnr-source?v=${entry.version}`,{headers:{cookie}});assert.equal(rebound.status,200);assert.deepEqual(await rebound.json(),first.source,'restart retains the actual server producer/cache binding');
  const rerun=await fetch(base+'/api/quality/psnr-pair',{method:'POST',headers,body:JSON.stringify(first.request)}),again=await rerun.json();assert.equal(rerun.status,200,JSON.stringify(again));assert.equal(again.result.metric.aggregate.sse,first.sse);assert.notEqual(again.request.id,first.requestId,'a fresh one-shot execution is not a cached task result');
  const capabilities=await fetch(base+'/api/agent',{headers:{cookie}}).then(r=>r.json());assert.equal(capabilities.capabilities.find(c=>c.id==='quality.jobs').implemented,false);assert.equal(capabilities.capabilities.find(c=>c.id==='quality.frame-pair').requiresBrowser,false);
  const report=path.resolve(process.env.VOIDPLAYER_TEST_ARTIFACTS??path.join(root,'.run/quality-release'));await mkdir(report,{recursive:true});await writeFile(path.join(report,'native-quality.json'),JSON.stringify({target:manifest.target,rows},null,2)+'\n');
- console.log(`PASS ${manifest.target}: compiled Bun quality Worker, real library/cache HTTP, 8/10-bit native SSE/provenance, producer restart, empty PATH`);
+ console.log(`PASS ${manifest.target}: compiled Bun quality Worker, real library/cache HTTP, 8/10-bit native SSE/provenance, durable jobs/idempotency/history restart, second-instance rejection, empty PATH`);
 }finally{if(stopChild)await stopChild();await rm(temp,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
