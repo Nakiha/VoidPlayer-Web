@@ -1,6 +1,8 @@
 # 源平面 PSNR 数值核心 v1
 
-这是 #114 的独立数值小切片，服务于 #112 路线图。`shared/analysis/quality/psnr.ts` 的 `measurePsnr` 在调用者提供的原始 YUV 平面上计算 CPU PSNR。没有媒体读取、解码、帧对齐、GUI 调用或持久任务；`quality.jobs` 保持未实现。此结果不能证明来源/帧配对正确，也不代表 #114、#120 或 #121 已完成。SSIM、分块证据、VMAF 和任务/GUI/Agent 适配后续交付。
+这是 #114 的独立数值小切片，服务于 #112 路线图。`shared/analysis/quality/psnr.ts` 的 `measurePsnr` 在调用者提供的原始 YUV 平面上计算 CPU PSNR。数值核心没有媒体读取、解码、帧对齐、GUI 调用或持久任务；`quality.jobs` 保持未实现。此结果不能证明来源/帧配对正确，也不代表 #114、#120 或 #121 已完成。SSIM、分块证据、VMAF 和任务/GUI/Agent 适配后续交付。
+
+后续内部单帧执行桥见 [单帧桥 v1](source-frame-pair-psnr.md)，其宿主身份边界独立于本数值核心，仍不提供持久任务或 GUI。
 
 ## 输入与可比性
 
