@@ -12,7 +12,7 @@ import {recordBrowserEvidence,saveBrowserFailure} from './browser-failure-eviden
 
 const root=path.resolve(import.meta.dirname,'..'),temp=await mkdtemp(path.join(os.tmpdir(),'vp-quality-annotation-ui-'));
 const engine=process.argv[2]??'chromium',directory=process.env.VOIDPLAYER_TEST_ARTIFACTS??path.join(root,'.run/quality-annotation',engine);
-let service,browser,page,evidence,phase='setup';
+let service,browser,page,evidence,failurePage,phase='setup';
 try {
  await mkdir(directory,{recursive:true});const mediaDir=path.join(temp,'media');await mkdir(mediaDir);
  const sample=JSON.parse(await readFile(path.join(root,'test/helpers/quality-http-samples.json'),'utf8')).samples.find(s=>s.codec==='h264'&&s.depth===8&&s.tagged);
@@ -69,6 +69,53 @@ try {
  const observed=await observer.evaluate(()=>window.voidPlayer.getState());assert.equal(observed.playing,true);assert.ok(observed.positionUs>beforeObserver.positionUs);assert.deepEqual(observed.tracks.map(t=>[t.slot,t.id]),beforeObserver.tracks.map(t=>[t.slot,t.id]));assert.equal(observed.marks.length,0);assert.equal(await observer.evaluate(()=>document.activeElement.id),'play');
  assert.equal(owner.pages().length,1);assert.equal(observerContext.pages().length,1);
  const privateAccess=await observer.evaluate(async id=>(await fetch(`/api/quality/jobs/${id}/result`)).status,job.id);assert.equal(privateAccess,404);
+ phase='activity-deep-link-with-evidence';
+ const sharedRecord=await fetch(`${base}/api/annotations/spaces/${space}/mark-B`).then(r=>r.json());
+ const beforeLink=await observer.evaluate(()=>window.voidPlayer.getState());
+ const playbackLog=await observer.evaluate(()=>window.voidPlayer.getLogs({limit:1}));
+ const jobRequests=[],trackJobRequest=request=>{if(new URL(request.url()).pathname.startsWith('/api/quality/jobs'))jobRequests.push(request.url());};
+ observerContext.on('request',trackJobRequest);
+ const isSnapshot=response=>{const url=new URL(response.url());return url.pathname===`/api/annotations/spaces/${space}`&&url.searchParams.has('after')&&response.status()===200;};
+ async function assertRestored(target,confirmation) {
+  const [,fresh]=await Promise.all([target.waitForFunction(annotationWorkspacePlayable),confirmation]);
+  const confirmed=(await fresh.json()).entries.find(record=>record.id==='mark-B');
+  assert.deepEqual(confirmed.document.mark.qualityEvidence,sharedRecord.document.mark.qualityEvidence,'shared service confirms the immutable facts after snapshot import');
+  await target.waitForFunction(()=>window.voidPlayer.getState().marks.find(mark=>mark.id==='mark-B')?.qualityEvidence?.[0]?.verification==='server-verified');
+  const restored=await target.evaluate(()=>({state:window.voidPlayer.getState(),workspace:window.voidPlayer.exportWorkspace()}));
+  assert.equal(restored.state.tracks.length,1);assert.equal(restored.state.tracks[0].id,source.id);assert.equal(restored.state.tracks[0].source.id,entry.id);
+  assert.equal(new URL(restored.state.tracks[0].source.url).searchParams.get('v'),entry.version);
+  assert.equal(restored.state.tracks[0].frame.sourcePtsUs,annotation.mark.frame.sourcePtsUs);
+  const mark=restored.state.marks.find(mark=>mark.id==='mark-B');assert.ok(mark);
+  assert.equal(mark.mediaId,source.id);assert.deepEqual(mark.frame,annotation.mark.frame);
+  assert.deepEqual(mark.qualityEvidence,sharedRecord.document.mark.qualityEvidence);
+  assert.deepEqual(mark.qualityEvidence[0].value.result.metric.roi,{x:2,y:4,width:24,height:20});
+  assert.equal(restored.workspace.version,2);
+ }
+ await observer.locator('#settings-open').click();await observer.locator('#settings-tab-workspace').click();
+ const operationId=JSON.parse(attachmentBodies[0]).operationId,activityLink=observer.locator(`[data-operation-id="${operationId}"] a`);
+ assert.equal(new URL(await activityLink.getAttribute('href'),base).searchParams.get('space'),space);
+ const activityConfirmation=observerContext.waitForEvent('response',{predicate:response=>isSnapshot(response)&&response.request().frame().page()!==observer});
+ const [linked]=await Promise.all([observer.waitForEvent('popup'),activityLink.click()]);
+ failurePage=linked;const previousEvidence=evidence;evidence=recordBrowserEvidence(linked);linked.on('pageerror',error=>errors.push(error.message));
+ await assertRestored(linked,activityConfirmation);
+
+ phase='admin-deep-link-with-evidence';
+ await linked.goto(base+'/admin');await linked.locator('[data-pane=annotations]').click();
+ await linked.locator('#admin-annotation-space').click();await linked.locator(`#admin-annotation-space-menu [data-value="${space}"]`).click();
+ await linked.locator('[data-annotation-id="mark-B"]').click();
+ const adminLink=linked.locator('#admin-annotation-open');assert.equal(new URL(await adminLink.getAttribute('href'),base).searchParams.get('annotation'),'mark-B');
+ assert.equal(new URL(await adminLink.getAttribute('href'),base).searchParams.get('space'),space);
+ const adminConfirmation=linked.waitForResponse(isSnapshot);await adminLink.click();await assertRestored(linked,adminConfirmation);
+ observerContext.off('request',trackJobRequest);assert.deepEqual(jobRequests,[],'opening shared evidence never probes the private job');
+ const inaccessible=await linked.evaluate(async id=>Promise.all(['','/result'].map(async suffix=>(await fetch(`/api/quality/jobs/${id}${suffix}`)).status)),job.id);assert.deepEqual(inaccessible,[404,404]);
+ assert.deepEqual(await fetch(`${base}/api/annotations/spaces/${space}/mark-B`).then(r=>r.json()),sharedRecord,'both view entries leave the shared annotation unchanged');
+ const afterLink=await observer.evaluate(()=>window.voidPlayer.getState());assert.equal(afterLink.playing,true);assert.ok(afterLink.positionUs>beforeLink.positionUs);assert.deepEqual(afterLink.tracks.map(track=>[track.slot,track.id,track.offsetUs]),beforeLink.tracks.map(track=>[track.slot,track.id,track.offsetUs]));assert.equal(afterLink.marks.length,0);
+ const navigationLog=await observer.evaluate(({sessionId,lastSeq})=>window.voidPlayer.getLogs({sessionId,sinceSeq:lastSeq,limit:2000}),playbackLog);
+ assert.equal(navigationLog.gap,false);assert.equal(navigationLog.hasMore,false);assert.deepEqual(navigationLog.events.filter(event=>['seek','restoreWorkspace'].includes(event.data?.action)),[],'explicit opens in another window never seek or restore the original session');
+ await linked.close();failurePage=undefined;evidence=previousEvidence;
+ console.log(`PASS ${engine}: activity and admin deep links preserve source/version/PTS/evidence and confirm shared service state without private job access or changing the original playback`);
+
+ phase='owner-evidence-view';
  await page.locator('[data-mark-id="mark-B"] .annotation-psnr-evidence').click();const facts=page.getByRole('dialog',{name:'PSNR evidence',exact:true});await facts.waitFor();assert.match(await facts.textContent(),/Verified by the originating service/);assert.match(await facts.textContent(),/cpu-number-sse-v1/);await page.screenshot({path:path.join(directory,'verified-evidence.png')});await facts.getByRole('button',{name:'Close',exact:true}).click();
 
  phase='agent-same-command-and-lost-response';
@@ -97,5 +144,5 @@ try {
  assert.equal((await page.evaluate(()=>window.voidPlayer.getState())).marks.length,0);assert.equal((await page.evaluate(()=>window.voidPlayer.getState())).tracks.length,0);
  const stored=await fetch(`${base}/api/annotations/spaces/${space}/mark-B`).then(r=>r.json());assert.equal(stored.document.mark.qualityEvidence.length,3);
  assert.deepEqual(errors,[]);console.log(`PASS ${engine}: real job → HTTP/GUI/Agent evidence, two windows/reconnect/playback isolation, export downgrade, late scope/track reply`);
-} catch(error){if(page)await saveBrowserFailure({page:page.isClosed()?undefined:page,directory,name:'quality-annotation',context:{caseName:'quality-annotation',engine,phase},error,evidence,extra:{annotationStatus:await page.evaluate(()=>window.__annotationStatus).catch(()=>null),drafts:await page.evaluate(async()=>{const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('voidplayer-annotations');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});try{return await new Promise((resolve,reject)=>{const r=db.transaction('drafts').objectStore('drafts').getAll();r.onsuccess=()=>resolve(r.result.map(d=>({key:d.key,space:d.space,id:d.id,base:d.base,conflict:d.conflict})));r.onerror=()=>reject(r.error);});}finally{db.close();}}).catch(()=>null)}}).catch(()=>{});throw error;}
+} catch(error){if(page)await saveBrowserFailure({page:(failurePage??page).isClosed()?undefined:(failurePage??page),directory,name:'quality-annotation',context:{caseName:'quality-annotation',engine,phase},error,evidence,extra:{annotationStatus:await page.evaluate(()=>window.__annotationStatus).catch(()=>null),drafts:await page.evaluate(async()=>{const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('voidplayer-annotations');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});try{return await new Promise((resolve,reject)=>{const r=db.transaction('drafts').objectStore('drafts').getAll();r.onsuccess=()=>resolve(r.result.map(d=>({key:d.key,space:d.space,id:d.id,base:d.base,conflict:d.conflict})));r.onerror=()=>reject(r.error);});}finally{db.close();}}).catch(()=>null)}}).catch(()=>{});throw error;}
 finally{await browser?.close();await service?.close();await rm(temp,{recursive:true,force:true});}

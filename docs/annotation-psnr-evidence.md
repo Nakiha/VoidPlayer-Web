@@ -120,5 +120,22 @@ disconnect/reconnect, replies, export/import downgrade and late replies after
 track/space replacement. `check-quality-release.mjs` verifies immutable evidence
 and replay across restart from the actual three-platform compiled packages.
 
+Annotation activity links and the administration page's “open in player” link
+restore the existing annotation through the same deep-link path. This wrapper
+selects v1/v2 with `evidenceWorkspaceVersion` without replacing annotation/media
+IDs, space, frame or evidence. External import still downgrades evidence; the
+shared-space snapshot confirms the service record again. The v1 attachment
+rejection remains mandatory.
+
+The browser regression explicitly clicks both links after a real job attachment
+from a non-owner window playing another source. It verifies original IDs, pinned
+source/version, actual source PTS, immutable ROI/evidence and service-confirmed
+verification, no annotation mutation, no implicit private-job lookup, and 404 for
+explicit non-owner job/result reads. The original window keeps playing its source.
+The previous test covered workspace restore and the evidence dialog but did not
+click either deep link. Before the wrapper fix, the new activity-link case fails
+with the v2-required toast and no restored track; this failure is retained as the
+regression's baseline.
+
 This slice does not complete #115, and it does not change performance gates or
 claim a cause/fix for the earlier WebKit reload/sharing failures.

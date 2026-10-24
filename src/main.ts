@@ -1,3 +1,4 @@
+import { evidenceWorkspaceVersion } from '../shared/review/quality-evidence.ts';
 import { attachQualityDialog } from './ui/quality-evidence.ts';
 import { mediaDiagnostic } from '../shared/media/io/media-errors.ts';
 import type { MediaDiagnostic } from '../shared/media/io/media-errors.ts';
@@ -639,7 +640,7 @@ if (annotationLink.has('annotation')) void act(async () => {
   const record=await new AnnotationClient(uiEvents.signal).read(space,id);
   if(record.deleted)throw new Error(tr(msg("player.thisAnnotationIsInTheRecycleBin", "这条标注已在回收站。")));
   const mark=record.document.mark;
-  const opened=await workspaceTransfer.importWorkspace({schema:'voidplayer-workspace',version:1,generatedAt:new Date().toISOString(),serverUrl:location.origin+'/',positionUs:mark.frame.ptsUs,tracks:[{slot:mark.slot,mediaId:mark.mediaId,offsetUs:0}],media:record.document.media,marks:[mark],viewport:viewport.snapshot()});
+  const opened=await workspaceTransfer.importWorkspace({schema:'voidplayer-workspace',version:evidenceWorkspaceVersion([mark]),generatedAt:new Date().toISOString(),serverUrl:location.origin+'/',positionUs:mark.frame.ptsUs,tracks:[{slot:mark.slot,mediaId:mark.mediaId,offsetUs:0}],media:record.document.media,marks:[mark],viewport:viewport.snapshot()});
   if(opened)await annotationSync.openSpace(space);
 },'annotation.open');
 
