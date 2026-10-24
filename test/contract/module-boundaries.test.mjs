@@ -63,11 +63,12 @@ test('shared edits invalidate prepared frontend builds',async()=>{
 });
 
 test('frontend root stays limited to application entrypoints',()=>project({'src/new-helper.ts':'export const x=1;'},root=>assert.throws(()=>checkModuleBoundaries(root),/unowned frontend root module/)));
-test('analysis modules declare responsibility; quality admits shared core and browser adapters only',()=>{
+test('analysis modules declare responsibility; quality admits shared core and isolated host adapters',()=>{
   for(const layer of ['src','shared','server']) project({[`${layer}/analysis/another-name.ts`]:'export const x=1;'},root=>assert.throws(()=>checkModuleBoundaries(root),/analysis must declare/));
   project({'shared/analysis/quality/score.ts':'export const x=1;'},root=>assert.doesNotThrow(()=>checkModuleBoundaries(root)));
   project({'src/analysis/quality/pair-worker.ts':'export const x=1;'},root=>assert.doesNotThrow(()=>checkModuleBoundaries(root)));
-  project({'server/analysis/quality/score.ts':'export const x=1;'},root=>assert.throws(()=>checkModuleBoundaries(root),/analysis must declare/));
+  project({'server/analysis/quality/score.ts':'export const x=1;'},root=>assert.doesNotThrow(()=>checkModuleBoundaries(root)));
+  project({'server/analysis/quality/score.ts':"import type { Value } from '../../../src/media/value.ts';",'src/media/value.ts':'export type Value=number;'},root=>assert.throws(()=>checkModuleBoundaries(root),/server imports frontend/));
 });
 
 test('embedded Bun Worker addresses resolve from the compiled server root',()=>{

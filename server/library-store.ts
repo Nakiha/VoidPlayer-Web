@@ -44,6 +44,7 @@ export class LibraryStore {
       const mediaIndexColumns = this.db.prepare('PRAGMA table_info(media_index_manifests)').all() as { name: string }[];
       const addMediaIndexBuildIdColumn = !mediaIndexColumns.some(column => column.name === 'build_id');
       const addMediaIndexMetadataColumn = !mediaIndexColumns.some(column => column.name === 'metadata_json');
+      const addMediaIndexProducerColumn = !mediaIndexColumns.some(column => column.name === 'producer_json');
       const addPacketStorageColumn = !mediaIndexColumns.some(column => column.name === 'packet_storage');
       const addMediaIndexSemanticColumn = !mediaIndexColumns.some(column => column.name === 'semantic_json');
       const addMediaIndexPacketsColumn = !mediaIndexColumns.some(column => column.name === 'packets');
@@ -108,6 +109,7 @@ export class LibraryStore {
         );
         ${addMediaIndexBuildIdColumn ? 'ALTER TABLE media_index_manifests ADD COLUMN build_id TEXT;' : ''}
         ${addMediaIndexMetadataColumn ? 'ALTER TABLE media_index_manifests ADD COLUMN metadata_json TEXT;' : ''}
+        ${addMediaIndexProducerColumn ? 'ALTER TABLE media_index_manifests ADD COLUMN producer_json TEXT;' : ''}
         ${addMediaIndexPacketsColumn ? 'ALTER TABLE media_index_manifests ADD COLUMN packets INTEGER NOT NULL DEFAULT 0;' : ''}
         ${addMediaIndexSemanticColumn ? 'ALTER TABLE media_index_manifests ADD COLUMN semantic_json TEXT;' : ''}
         ${addPacketStorageColumn ? 'ALTER TABLE media_index_manifests ADD COLUMN packet_storage TEXT;' : ''}

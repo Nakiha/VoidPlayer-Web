@@ -283,12 +283,41 @@ Only an explicit open action navigates to a mark; polling never changes playback
 focus or tracks. Local-only review has no server activity stream.
 `;
 
-const quality = `# Quality jobs: planned
+const quality = `# One-shot source-frame PSNR; durable jobs planned
 
 There is no server quality-job submission API yet. /api/agent advertises
 quality.jobs and compute.workers with implemented=false, enabled=false.
-Do not treat bitstream analysis, thumbnails or a browser connection as availability
-of PSNR, SSIM, VMAF, CAMBI or neural no-reference scoring.
+quality.frame-pair describes a separate, transport-scoped operation. It needs no
+browser, playback cursor, session or GUI acknowledgement. It is not a durable job.
+
+1. Select an ordinary intranet identity (see /agent/annotations.md). Identity is
+   not authentication. Use its cookie for the source lookup and execution.
+2. Explicitly build an existing FLV cache with GET
+   /api/media/{id}/frame-index?v={version}&build=1. Quality never builds an index.
+   A pre-existing client-uploaded cache cannot be blessed by a no-op build: clear
+   it explicitly through ordinary cache management and then build it separately.
+3. GET /api/media/{id}/psnr-source?v={version} returns binding and server parser
+   evidence. Missing, untrusted, stale or over-budget caches fail explicitly.
+4. POST /api/quality/psnr-pair with JSON, the identity cookie, same-origin Origin,
+   and X-VoidPlayer-Action: quality. Body: {pairing:'caller-specified', reference,
+   distorted, roi:{x,y,width,height}, budget?}. Each side is its returned binding
+   plus picture:{sourceVersion:'id@version',stream:'video',configuration:0,au,
+   picture:0,layer:0,field:'frame'} and integer-microsecond sourcePtsUs. Select AU
+   and PTS explicitly from the existing source index; equal PTS never pairs sources.
+
+Only complete, unrecovered, single-configuration FLV/Enhanced FLV, progressive
+H264/HEVC closed key pictures, and fully tagged 8/10-bit YUV420 are admitted.
+ROI uses the unrotated visible source grid and must be chroma-aligned. The response
+contains result (exact code-value SSE/MSE/PSNR and decoder build) plus complete
+source/cache/producer evidence. Media versions are stat-derived identities, not
+cryptographic content authentication. Sources stay inside registered library roots.
+
+One quality Worker excludes concurrent index builds/uploads and bitstream work.
+Busy admission returns 503; there is no queue. Disconnect cancels the request.
+Cancellation and timeout terminate the actual Worker before capacity is reused.
+Responses are not stored: there is no task ID, resume, retry, persisted history,
+SSIM/VMAF/CAMBI, distributed worker or scoring GUI. See docs/source-library-psnr.md
+in the repository for budgets, error codes, examples and exact trust boundaries.
 
 Roadmap: #114 frame/ROI metrics, #121 durable jobs/concurrency, #115 annotation
 evidence, #122 VMAF, #116 CAMBI, and later #123 compute workers. Jobs will use
