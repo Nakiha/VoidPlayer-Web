@@ -12,7 +12,7 @@ class Bits {
   se(){const n=this.ue();return n&1?(n+1)/2:-n/2;}
 }
 const ratios=[[1,1],[1,1],[12,11],[10,11],[16,11],[40,33],[24,11],[20,11],[32,11],[80,33],[18,11],[15,11],[64,33],[160,99],[4,3],[3,2],[2,1]];
-export function parseAvcSps(nal:Uint8Array):AvcGeometry {
+export function parseAvcSps(nal:Uint8Array,aspectWitness=false):AvcGeometry {
   if((nal[0]&31)!==7)throw new Error('not AVC SPS');
   const rbsp=[];for(let i=1;i<nal.length;i++){if(nal[i]===3&&i>=3&&nal[i-1]===0&&nal[i-2]===0)continue;rbsp.push(nal[i]);}
   const b=new Bits(Uint8Array.from(rbsp));const profile=b.read(8);b.skip(16);b.ue(31);
@@ -29,9 +29,9 @@ export function parseAvcSps(nal:Uint8Array):AvcGeometry {
   let x=0,y=0,right=0,bottom=0;
   if(b.read(1)){x=b.ue(32768)*subX;right=b.ue(32768)*subX;y=b.ue(32768)*subY;bottom=b.ue(32768)*subY;}
   const width=codedWidth-x-right,height=codedHeight-y-bottom;if(width<=0||height<=0)throw new Error('invalid AVC crop');
-  let sarNum=1,sarDen=1,maxReorderFrames:number|null=null;
+  let sarNum=1,sarDen=1,sarSpecified=false,maxReorderFrames:number|null=null;
   if(b.read(1)){
-    if(b.read(1)){const id=b.read(8);if(id===255){sarNum=b.read(16);sarDen=b.read(16);}else if(ratios[id])[sarNum,sarDen]=ratios[id];else throw new Error('invalid AVC SAR');}
+    if(b.read(1)){const id=b.read(8);sarSpecified=id!==0;if(id===255){sarNum=b.read(16);sarDen=b.read(16);}else if(ratios[id])[sarNum,sarDen]=ratios[id];else throw new Error('invalid AVC SAR');}
     if(b.read(1))b.skip(1);if(b.read(1)){b.skip(4);if(b.read(1))b.skip(24);}if(b.read(1)){b.ue();b.ue();}
     if(b.read(1))b.skip(65);
     const hrd=()=>{const count=b.ue(31);b.skip(8);for(let i=0;i<=count;i++){b.ue();b.ue();b.skip(1);}b.skip(20);};
@@ -39,19 +39,19 @@ export function parseAvcSps(nal:Uint8Array):AvcGeometry {
     if(b.read(1)){b.skip(1);b.ue();b.ue();b.ue();b.ue();maxReorderFrames=b.ue(16);b.ue(16);}
   }
   if(!sarNum||!sarDen)throw new Error('invalid AVC SAR');
-  return {codedWidth,codedHeight,x,y,width,height,sarNum,sarDen,interlaced:!frameOnly,maxReorderFrames};
+  return {codedWidth,codedHeight,x,y,width,height,sarNum,sarDen,interlaced:!frameOnly,maxReorderFrames,...(aspectWitness?{sarSpecified}:{})};
 }
-export function avcGeometry(description:Uint8Array):AvcGeometry|null {
+export function avcGeometry(description:Uint8Array,aspectWitness=false):AvcGeometry|null {
   try{
     if(isAnnexB(description)){
-      const values=nalRanges('h264',description,description).filter(n=>(description[n.offset]&31)===7).map(n=>parseAvcSps(description.subarray(n.offset,n.offset+n.size)));
+      const values=nalRanges('h264',description,description).filter(n=>(description[n.offset]&31)===7).map(n=>parseAvcSps(description.subarray(n.offset,n.offset+n.size),aspectWitness));
       return values.length&&values.every(v=>JSON.stringify(v)===JSON.stringify(values[0]))?values[0]:null;
     }
     if(description.length<7||description[0]!==1)return null;
     let offset=6;const values:AvcGeometry[]=[];
     for(let i=0;i<(description[5]&31);i++){
       if(offset+2>description.length)return null;const len=description[offset]*256+description[offset+1];offset+=2;
-      if(offset+len>description.length)return null;values.push(parseAvcSps(description.subarray(offset,offset+len)));offset+=len;
+      if(offset+len>description.length)return null;values.push(parseAvcSps(description.subarray(offset,offset+len),aspectWitness));offset+=len;
     }
     return values.length&&values.every(v=>JSON.stringify(v)===JSON.stringify(values[0]))?values[0]:null;
   }catch{return null;}

@@ -146,3 +146,21 @@ test('real partially tagged AVC source is rejected without filling missing prima
     error => error instanceof Error && 'code' in error && error.code === 'missing-color' && 'field' in error && error.field === 'reference.color');
   assert.equal(owner.terminated, true); assert.equal(owner.exited, true);
 });
+
+for(const [codec,depth] of [['h264',8],['hevc',10]] as const)
+ test(`real ${codec} ${depth}-bit exact SAR 1000:1001 is rejected for inspection despite 32px display rounding`,{timeout:90000},async t=>{
+  const {encodedPair}=await import('../helpers/library-pair-fixture.ts');
+  const {avcGeometry}=await import('../../shared/media/codecs/avc-geometry.ts');
+  const {hevcGeometry}=await import('../../shared/media/codecs/hevc-geometry.ts');
+  const {inspectFlvFramePair}=await import('../../shared/analysis/quality/frame-pair.ts');
+  const dir=await mkdtemp(join(tmpdir(),'vp-view-sar-'));t.after(()=>rm(dir,{recursive:true,force:true}));
+  const encoded=await encodedPair(dir,codec,depth,true,{num:1000,den:1001});
+  const probe=JSON.parse(execFileSync('ffprobe',['-v','error','-select_streams','v:0','-show_entries','stream=sample_aspect_ratio','-of','json',join(dir,`${codec}-${depth}-true-1000-1001.mp4`)],{encoding:'utf8'}));
+  assert.equal(probe.streams[0].sample_aspect_ratio,'1000:1001');
+  const geometry=codec==='h264'?avcGeometry(encoded.configuration):hevcGeometry(encoded.configuration);assert.ok(geometry);assert.equal(geometry.sarNum,1000);assert.equal(geometry.sarDen,1001);assert.equal(Math.round(geometry.width*geometry.sarNum/geometry.sarDen),32);
+  const a=await preparedPair(encoded.bytes),b=await preparedPair(encoded.bytes,'a'.repeat(24),1),request=pairRequest(a.target,b.target),owner=workerClient();
+  const measured=await owner.client.measure(request,[a.source,b.source],base,new AbortController().signal);
+  assert.equal(measured.provenance.reference.decoded.description.width,32);assert.equal(measured.provenance.reference.decoded.description.displayWidth,32,'the old integer display gate collides');assert.ok(measured.metric.aggregate.sse>0,'source-plane scoring contract still accepts this real source');
+  await assert.rejects(inspectFlvFramePair(request,[a.open(),b.open()],async()=>assert.fail('non-square SPS must be rejected before decoder admission'),new AbortController().signal),error=>error instanceof Error&&'code' in error&&error.code==='unsupported-source'&&/exact SPS SAR/.test(error.message));
+  assert.equal(owner.exited,true);
+ });

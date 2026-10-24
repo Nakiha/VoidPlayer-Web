@@ -1237,3 +1237,6 @@ export class ReviewSession {
     await this.queue.catch(() => {});
   }
 }
+
+// Isolated, immutable snapshots share the session facade without a playback timeline.
+export { QualityPairViewSession } from './session/quality-pair-view.ts';

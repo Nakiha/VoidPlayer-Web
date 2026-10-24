@@ -142,7 +142,10 @@ test('identity browser checks match the lightweight job while real PSNR evidence
     assert.deepEqual(row.fixtures,[],`${row.id}: identity job has no downloaded decoder/media`);
   }
   const evidence = selectCases({suite:'ci-cache',platform:'linux'}).selected.filter(row=>row.script==='scripts/check-quality-annotation-browser.mjs');
-  assert.deepEqual(evidence.flatMap(row=>row.engines).sort(),['chromium','webkit']);
+  assert.deepEqual(evidence.map(row=>[row.id,row.engines[0],row.command.at(-1)==='10'?10:8]),[
+    ['browser-quality-annotation-chromium','chromium',8],['browser-quality-pair-view-10-chromium','chromium',10],
+    ['browser-quality-annotation-webkit','webkit',8],['browser-quality-pair-view-10-webkit','webkit',10],
+  ]);
   for (const row of evidence) {
     assert.equal(row.required,true);
     assert.ok(row.fixtures.includes('core'),`${row.id}: real scoring cannot use a synthetic result`);

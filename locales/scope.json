@@ -12,6 +12,7 @@
     "src/admin/workspace-copy-name.ts",
     "src/admin/workspaces.ts",
     "src/main.ts",
+    "src/ui/quality-pair-view.ts",
     "src/ui/analysis/bitstream-diagrams.ts",
     "src/ui/analysis/canvas.ts",
     "src/ui/analysis/card.ts",

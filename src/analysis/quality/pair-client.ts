@@ -1,5 +1,7 @@
 import { FramePairError, pairBudget } from '../../../shared/analysis/quality/frame-pair.ts';
 import type { FramePairRequest, FramePairResult } from '../../../shared/analysis/quality/frame-pair.ts';
+import type { QualityEvidence } from '../../../shared/review/quality-evidence.ts';
+import type { InspectedFramePair } from '../../../shared/analysis/quality/frame-pair.ts';
 import type { PreparedPairSource } from './source.ts';
 
 export type PairWorker = { postMessage(data: unknown): void; onmessage: ((event: MessageEvent) => unknown) | null; onerror: ((event: ErrorEvent) => unknown) | null; onmessageerror: ((event: MessageEvent) => unknown) | null } & { terminate(): void | Promise<unknown> };
@@ -9,13 +11,18 @@ export class FramePairClient {
   private createWorker: () => PairWorker;
   constructor(createWorker: () => PairWorker = () => new Worker(new URL('./pair-worker.ts', import.meta.url), { type: 'module' })) { this.createWorker = createWorker; }
   measure(request: FramePairRequest, sources: [PreparedPairSource, PreparedPairSource], base: string, signal: AbortSignal): Promise<FramePairResult> {
-    const budget = pairBudget(request);
+    return this.run<FramePairResult>({request,sources,base},pairBudget(request).maxElapsedMs,signal);
+  }
+  inspect(evidence: QualityEvidence, base: string, signal: AbortSignal): Promise<InspectedFramePair> {
+    return this.run<InspectedFramePair>({mode:'inspect',evidence,base},30000,signal);
+  }
+  private run<T>(data:unknown, maxElapsedMs:number, signal:AbortSignal):Promise<T> {
     signal.throwIfAborted();
     if (this.active) return Promise.reject(new FramePairError('busy', 'A pair is already running'));
     this.active = true;
-    return new Promise((resolve, reject) => {
+    return new Promise<T>((resolve, reject) => {
       let worker: PairWorker | undefined, timer: ReturnType<typeof setTimeout> | undefined, settled = false;
-      const finish = (outcome: { ok: true; result: FramePairResult } | { ok: false; error: unknown }) => {
+      const finish = (outcome: { ok: true; result: T } | { ok: false; error: unknown }) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer); signal.removeEventListener('abort', abort);
@@ -37,9 +44,9 @@ export class FramePairClient {
         worker.onerror = event => finish({ ok: false, error: new FramePairError('decoder-error', event.message) });
         worker.onmessageerror = () => finish({ ok: false, error: new FramePairError('decoder-error', 'Worker message could not be decoded') });
         signal.addEventListener('abort', abort, { once: true });
-        timer = setTimeout(() => finish({ ok: false, error: new FramePairError('budget-exceeded', 'Worker execution deadline exceeded') }), budget.maxElapsedMs);
+        timer = setTimeout(() => finish({ ok: false, error: new FramePairError('budget-exceeded', 'Worker execution deadline exceeded') }), maxElapsedMs);
         if (signal.aborted) { abort(); return; }
-        worker.postMessage({ request, sources, base });
+        worker.postMessage(data);
       } catch (error) { finish({ ok: false, error }); }
     });
   }

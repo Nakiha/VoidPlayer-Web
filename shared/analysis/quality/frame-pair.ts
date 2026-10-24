@@ -6,6 +6,7 @@ import { scanFlv } from '../../media/containers/flv-demux.ts';
 import { nalRanges } from '../../media/codecs/nal-framing.ts';
 import { inspectPacketPicture } from '../../media/codecs/packet-picture.ts';
 import { avcGeometry } from '../../media/codecs/avc-geometry.ts';
+import type { HevcGeometry } from '../../media/codecs/hevc-geometry.ts';
 import { hevcGeometry, hevcFieldPictures } from '../../media/codecs/hevc-geometry.ts';
 import type { FrameDescription } from '../../media/frame-description.ts';
 import type { SourcePictureKey } from '../bitstream/contract.ts';
@@ -98,9 +99,18 @@ function configurationSets(codec: 'h264' | 'hevc', bytes: Uint8Array): Uint8Arra
   return sets;
 }
 
-/** Single-use, host-neutral execution body. Always run inside an owned killable Worker. */
-export async function measureFlvFramePair(request: FramePairRequest, sources: [CachedPairSource, CachedPairSource],
-  loadDecoder: (budget: PairBudget) => Promise<PairDecoder>, signal: AbortSignal): Promise<FramePairResult> {
+export type InspectedFramePair = Pick<FramePairResult, 'decoder' | 'provenance' | 'work'> & { frames: [DecodedPairFrame, DecodedPairFrame]; sourceGeometry: {reference:HevcGeometry;distorted:HevcGeometry} };
+/** Decoder display widths are rounded integers and cannot prove square SAR. */
+export function requireInspectionGeometry(g:HevcGeometry) {
+  if(!g||g.sarSpecified!==true||!Number.isSafeInteger(g.sarNum)||!Number.isSafeInteger(g.sarDen)||g.sarNum<1||g.sarDen<1||g.sarNum!==g.sarDen)
+    fail('unsupported-source','Inspection requires square pixels proven by exact SPS SAR; non-square or missing sample aspect ratio is unsupported');
+  if(g.x!==0||g.y!==0||g.width!==g.codedWidth||g.height!==g.codedHeight)
+    fail('unsupported-source','Inspection requires uncropped SPS geometry');
+}
+/** The exact source/cache/tag/AU admission and decoder are shared by measurement
+ * and explicit inspection. Inspection never invokes the numerical metric. */
+async function withFlvFramePair<T>(request: FramePairRequest, sources: [CachedPairSource, CachedPairSource],
+  loadDecoder: (budget: PairBudget) => Promise<PairDecoder>, signal: AbortSignal, accept: (pair: InspectedFramePair) => T, admitGeometry?: (geometry:HevcGeometry)=>void): Promise<T> {
   let decoder: PairDecoder | undefined;
   const started = performance.now(); let readBytes = 0;
   try {
@@ -113,7 +123,7 @@ export async function measureFlvFramePair(request: FramePairRequest, sources: [C
       });
     };
     check();
-    const frames: DecodedPairFrame[] = [], provenance: PairProvenance[] = [];
+    const frames: DecodedPairFrame[] = [], provenance: PairProvenance[] = [], sourceGeometry:HevcGeometry[]=[];
     for (let role = 0; role < 2; role++) {
       const source = sources[role], target = role ? request.distorted : request.reference;
       const doc = source.index;
@@ -125,9 +135,10 @@ export async function measureFlvFramePair(request: FramePairRequest, sources: [C
       try { index = parseFlvIndex(doc, target.size); } catch { fail('identity-mismatch', 'Invalid cached FLV document'); }
       if (index.codec !== 'h264' && index.codec !== 'hevc') fail('unsupported-source', 'v1 supports H.264/HEVC only');
       const codec = index.codec;
-      const geometry = codec === 'h264' ? avcGeometry(index.description) : hevcGeometry(index.description);
+      const geometry = codec === 'h264' ? avcGeometry(index.description,!!admitGeometry) : hevcGeometry(index.description,!!admitGeometry);
       if (!geometry || ('interlaced' in geometry && geometry.interlaced) || (codec === 'hevc' && hevcFieldPictures(index.description)))
         fail('unsupported-source', 'Progressive SPS geometry is required');
+      admitGeometry?.(geometry);sourceGeometry.push(structuredClone(geometry));
       if (geometry.codedWidth * geometry.codedHeight > budget.maxPixels) fail('budget-exceeded', 'SPS pixel budget exceeded');
       const packet = index.packets[target.picture.au];
       if (!packet || (packet.configuration ?? 0) !== 0 || packet.pts !== target.sourcePtsUs || !packet.key
@@ -189,12 +200,28 @@ export async function measureFlvFramePair(request: FramePairRequest, sources: [C
         packet: { offset: packet.offset, size: packet.size, sourceDtsUs: packet.dts }, validation: 'cached-au-source-tag-isolated-closed-picture-v1' });
     }
     check();
-    const metric = measurePsnr({ domain: 'source-yuv-code-values', reference: frames[0], distorted: frames[1], roi: request.roi,
-      budget: { maxSamples: request.budget?.maxSamples, maxInputBytes: request.budget?.maxInputBytes } });
+    const work:FramePairResult['work']={readBytes,packets:2,outputFrames:2,elapsedMs:performance.now()-started};
+    const value = accept({decoder:{...decoder!.version}, frames:frames as InspectedFramePair['frames'],
+      provenance:{reference:provenance[0],distorted:provenance[1]},sourceGeometry:{reference:sourceGeometry[0],distorted:sourceGeometry[1]},
+      work});
+    work.elapsedMs=performance.now()-started;
     check();
-    return { schema: 'voidplayer-frame-pair-psnr', version: 1, pairing: 'caller-specified',
-      correspondence: 'caller-specified-no-content-or-time-alignment', decoder: { ...decoder!.version }, metric,
-      provenance: { reference: provenance[0], distorted: provenance[1] },
-      work: { readBytes, packets: 2, outputFrames: 2, elapsedMs: performance.now() - started } };
+    return value;
   } finally { try { decoder?.close(); } finally { for (const source of sources) source.close(); } }
+}
+
+/** Single-use source-plane measurement; owned killable Worker required. */
+export function measureFlvFramePair(request: FramePairRequest, sources: [CachedPairSource, CachedPairSource],
+  loadDecoder: (budget: PairBudget) => Promise<PairDecoder>, signal: AbortSignal): Promise<FramePairResult> {
+  return withFlvFramePair(request,sources,loadDecoder,signal,pair=>{
+    const metric=measurePsnr({domain:'source-yuv-code-values',reference:pair.frames[0],distorted:pair.frames[1],roi:request.roi,
+      budget:{maxSamples:request.budget?.maxSamples,maxInputBytes:request.budget?.maxInputBytes}});
+    return {schema:'voidplayer-frame-pair-psnr',version:1,pairing:'caller-specified',
+      correspondence:'caller-specified-no-content-or-time-alignment',decoder:pair.decoder,metric,provenance:pair.provenance,work:pair.work};
+  });
+}
+/** Explicit raw-frame inspection; same admission, no score calculation. */
+export function inspectFlvFramePair(request: FramePairRequest, sources: [CachedPairSource, CachedPairSource],
+  loadDecoder: (budget: PairBudget) => Promise<PairDecoder>, signal: AbortSignal): Promise<InspectedFramePair> {
+  return withFlvFramePair(request,sources,loadDecoder,signal,pair=>pair,requireInspectionGeometry);
 }
