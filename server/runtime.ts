@@ -25,9 +25,8 @@ export async function startService(config: ServiceConfig, requireStatic = true, 
   const { staticOk } = await validateServiceConfig(config, requireStatic, false);
   const tls = config.tls ? await prepareTls(config.tls, config.dataDir) : undefined;
   const library = new MediaLibraryIndex(config.mediaRoots, { coreDir: process.env.VOIDPLAYER_WASM_CORE_DIR || path.join(config.staticDir,'vendor/voidplayer-core'), ttlMs: config.indexTtlMs, database: path.join(config.dataDir, 'library.sqlite'), settleMs: 1000, watch: config.indexWatch });
-  library.start();
   let admin: AdminController;
-  try { admin = new AdminController(config, library, build); } catch (error) { await library.close(); throw error; }
+  try { library.qualityJobs; library.start(); admin = new AdminController(config, library, build); } catch (error) { await library.close(); throw error; }
   const connection = tls ? { ...tls, port: config.port } : undefined;
   const gateway = new ProtocolGateway(), listeners: ManagedServer[] = [];
   const shared = { library, admin, connection, traffic:createTrafficState(), roots: library.roots, staticDir: staticOk ? config.staticDir : undefined, logsDir: config.logsDir ?? undefined,

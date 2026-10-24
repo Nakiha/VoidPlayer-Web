@@ -3,26 +3,10 @@ import type { RouteContext } from '../../routes/context.ts';
 import { adminWriteAllowed, readAdminJson } from '../../admin.ts';
 import { AdminError, adminErrorBody } from '../../admin-error.ts';
 import { sendJson } from '../../http-utils.ts';
-import { PAIR_LIMITS, pairBudget } from '../../../shared/analysis/quality/frame-pair.ts';
 import { FramePairError } from '../../../shared/analysis/quality/frame-pair.ts';
 import { PsnrError } from '../../../shared/analysis/quality/psnr.ts';
-import type { FramePairRequest } from '../../../shared/analysis/quality/frame-pair.ts';
+import { libraryPairRequest } from './request.ts';
 
-function keys(value:unknown,allowed:string[]) {
-  if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(key=>!allowed.includes(key)))
-    throw new AdminError(400,'Unknown or invalid quality request fields.','invalid-request');
-}
-export function libraryPairRequest(value:unknown):FramePairRequest {
-  keys(value,['pairing','reference','distorted','roi','budget']);const request=value as FramePairRequest;
-  for(const target of [request.reference,request.distorted]){
-    keys(target,['mediaId','mediaVersion','size','indexIdentity','indexBuildId','picture','sourcePtsUs']);
-    keys(target.picture,['sourceVersion','stream','configuration','au','picture','layer','field']);
-    keys(target.indexIdentity,['kind','streamKey','schemaVersion','indexerBuild']);
-  }
-  keys(request.roi,['x','y','width','height']);
-  if(request.budget!==undefined)keys(request.budget,[...Object.keys(PAIR_LIMITS),'maxSamples','maxInputBytes']);
-  pairBudget(request);return request;
-}
 
 export async function handleQualityRoutes(ctx:RouteContext,req:IncomingMessage,res:ServerResponse,url:URL) {
   const source=/^\/api\/media\/([a-f0-9]{24})\/psnr-source$/.exec(url.pathname);

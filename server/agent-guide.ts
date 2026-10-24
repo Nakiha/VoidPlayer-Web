@@ -283,12 +283,15 @@ Only an explicit open action navigates to a mark; polling never changes playback
 focus or tracks. Local-only review has no server activity stream.
 `;
 
-const quality = `# One-shot source-frame PSNR; durable jobs planned
+const quality = `# Source-frame PSNR and durable single-frame jobs v1
 
-There is no server quality-job submission API yet. /api/agent advertises
-quality.jobs and compute.workers with implemented=false, enabled=false.
-quality.frame-pair describes a separate, transport-scoped operation. It needs no
-browser, playback cursor, session or GUI acknowledgement. It is not a durable job.
+/api/agent describes quality.frame-pair and quality.jobs. Both support only
+explicit single-frame PSNR from registered library sources with trusted caches.
+The qualityJobs object gives the request schema, endpoints, source constraints
+and fixed budgets. compute.workers remains unavailable. Neither operation needs
+a browser, playback cursor, session or GUI acknowledgement.
+Durable jobs require a configured persistent library database; temporary-index
+deployments advertise them disabled and reject submission.
 
 1. Select an ordinary intranet identity (see /agent/annotations.md). Identity is
    not authentication. Use its cookie for the source lookup and execution.
@@ -312,21 +315,61 @@ contains result (exact code-value SSE/MSE/PSNR and decoder build) plus complete
 source/cache/producer evidence. Media versions are stat-derived identities, not
 cryptographic content authentication. Sources stay inside registered library roots.
 
-Source discovery and scoring each run in one owned, deadline-bound Worker.
+One-shot source discovery and scoring each run in one owned, deadline-bound Worker.
 The same quality admission excludes concurrent index builds/uploads and bitstream work.
 Busy admission returns 503; there is no queue. Disconnect cancels the request.
 Cancellation revokes new IO, drains any synchronous descriptor scope, then
 terminates the actual Worker before capacity is reused. The deadline rejects
 late success; kernel IO/physical termination latency can exceed it without
 releasing the still-owned budget.
-Responses are not stored: there is no task ID, resume, retry, persisted history,
-SSIM/VMAF/CAMBI, distributed worker or scoring GUI. See docs/source-library-psnr.md
-in the repository for budgets, error codes, examples and exact trust boundaries.
+One-shot responses are not stored. See docs/source-library-psnr.md for budgets,
+error codes, examples and exact trust boundaries.
+
+For a durable single-frame PSNR job, reuse the same explicit pair request:
+
+POST /api/quality/jobs with the identity cookie, same-origin Origin,
+Content-Type: application/json, X-VoidPlayer-Action: quality-job, and a bounded
+Idempotency-Key. JSON: {schema:'voidplayer-psnr-frame-job',version:1,
+client:{id:'review-agent',kind:'agent'},request:{pairing:'caller-specified',
+reference,distorted,roi:{x,y,width,height},budget?}}.
+
+202 means the submission transaction committed. A lost response or disconnected
+observer does not cancel computation. Replay the same actor/client/key and
+normalized request to recover the original job (200, replayed:true); a different
+request with that key is 409 idempotency-conflict. Replaying never starts another
+attempt or replaces original attribution.
+
+GET /api/quality/jobs/{jobId} for detail and /result for a versioned result.
+GET /api/quality/jobs?after=0&limit=50 returns the current actor's bounded change
+snapshots. Save cursor after the page, drain more=true, and deduplicate by ID and
+revision. cursor-ahead requires a new snapshot from zero. Polling is observation.
+POST /api/quality/jobs/{jobId}/cancel with the same write headers and JSON {} to
+cancel explicitly. Completed records are unchanged by a later cancellation.
+
+queued -> preparing -> running -> completed/failed; cancellation first records
+cancelling and commits cancelled only after physical Worker exit. The service
+owns execution and the shared admission, not the HTTP connection. There is one
+execution slot, four queued slots, two outstanding jobs per actor, a five-minute
+queue deadline, and the same maximum thirty-second Worker deadline. OS IO drain
+and physical exit may take longer while capacity remains occupied. Unknown
+decoded frame counts stay null; there is no invented percentage.
+
+Jobs retain original actor/client/request ID, source/cache identity, actual
+algorithm/decoder/runtime versions, exact SSE/MSE/PSNR and full provenance.
+Startup recovery requires an exclusive database owner and marks unfinished jobs
+interrupted, without automatic retry or continuation. Same-key replay returns
+that history; an explicit new key creates a new computation. History/result
+budgets reject overflow, never silently evict an old receipt. See
+docs/source-psnr-jobs.md for the protocol and remaining boundaries.
+
+There is no frame sequence, automatic alignment, SSIM/VMAF/CAMBI, shared work,
+automatic index construction, retry/resume, distributed worker or scoring GUI.
+These capabilities do not mean #114 or #121 is complete.
 
 Roadmap: #114 frame/ROI metrics, #121 durable jobs/concurrency, #115 annotation
-evidence, #122 VMAF, #116 CAMBI, and later #123 compute workers. Jobs will use
-explicit source versions independently of GUI playback. Worker media access is
-planned around LAN HTTP/Range; NAS/cache are optional.
+evidence, #122 VMAF, #116 CAMBI, and later #123 compute workers. The current
+single-instance jobs use explicit source versions independently of GUI playback;
+future remote Worker media access is planned around LAN HTTP/Range.
 `;
 
 const liveSession = `# Live view commands

@@ -35,7 +35,7 @@ export async function handleConnectionRoutes(ctx: RouteContext, req: IncomingMes
       res.setHeader('allow', 'GET, HEAD'); sendJson(res, 405, agentErrorBody(new AdminError(405, 'read only', 'method-not-allowed'), ctx.requestId)); return true;
     }
     const json = url.pathname === '/api/agent';
-    const body = json ? JSON.stringify(agentManifest({ capabilities: serviceCapabilities(!!options.admin, !!options.allowLocalReveal && localRequest(req)), libraryReady: ctx.library.ready, frontendAvailable: !!options.staticDir, actor: ctx.actor })) : document;
+    const body = json ? JSON.stringify(agentManifest({ capabilities: serviceCapabilities(!!options.admin, !!options.allowLocalReveal && localRequest(req)), libraryReady: ctx.library.ready, frontendAvailable: !!options.staticDir, qualityJobsEnabled: ctx.library.durableQualityJobsEnabled, actor: ctx.actor })) : document;
     const type = json ? 'application/json' : url.pathname === '/llms.txt' ? 'text/plain' : 'text/markdown';
     res.writeHead(200, { 'content-type': `${type}; charset=utf-8`, 'content-length': Buffer.byteLength(body), 'cache-control': json ? 'no-store' : 'no-cache' });
     res.end(req.method === 'HEAD' ? undefined : body);

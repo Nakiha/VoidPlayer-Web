@@ -10,6 +10,7 @@ export type QualityWorkerData = QualityTask & {database:string;coreDir:string;co
 type WorkerValue = LibraryPairBinding | LibraryPairResult;
 type Outcome<T> = {ok:true;value:T}|{ok:false;error:unknown};
 type QualityTimers={set(callback:()=>void,ms:number):ReturnType<typeof setTimeout>;clear(timer:ReturnType<typeof setTimeout>):void};
+export type QualityRunHooks = { admitted(): void; phase(phase: 'source' | 'resolve' | 'decode' | 'publish'): void };
 
 /** All source/resolve/final checks belong to this same killable Worker.
  * The main thread never awaits an unowned filesystem or database preflight. */
@@ -22,6 +23,7 @@ export class LibraryPairRunner {
   private coreDir:string;
   private createWorker:(data:QualityWorkerData)=>Worker;
   private timers:QualityTimers;
+  get stopUncertain(){return this.stopFailed;}
   constructor(library:MediaLibraryIndex,coreDir:string,
     createWorker=(data:QualityWorkerData)=>new Worker(new URL(typeof VOIDPLAYER_COMPILED!=='undefined'&&VOIDPLAYER_COMPILED?'./analysis/quality/worker.ts':'./worker.ts',import.meta.url),
       {workerData:data,resourceLimits:{maxOldGenerationSizeMb:256}}),timers:QualityTimers={set:(callback,ms)=>setTimeout(callback,ms),clear:timer=>clearTimeout(timer)}){this.library=library;this.coreDir=coreDir;this.createWorker=createWorker;this.timers=timers;}
@@ -29,14 +31,17 @@ export class LibraryPairRunner {
     if(!/^[a-f0-9]{24}$/.test(id)||!/^[a-f0-9]{24}$/.test(version))return Promise.reject(new AdminError(400,'Invalid media identity.','invalid-request'));
     return this.run({mode:'source',id,version},PAIR_LIMITS.maxElapsedMs,signal);
   }
-  measure(request:FramePairRequest,signal:AbortSignal):Promise<LibraryPairResult>{
+  measure(request:FramePairRequest,signal:AbortSignal,hooks?:QualityRunHooks):Promise<LibraryPairResult>{
     let budget;try{budget=pairBudget(request);}catch(error){return Promise.reject(error);}
-    return this.run({mode:'measure',request},budget.maxElapsedMs,signal);
+    return this.run({mode:'measure',request},budget.maxElapsedMs,signal,hooks);
   }
-  private run<T extends WorkerValue>(task:QualityTask,elapsedMs:number,signal:AbortSignal):Promise<T>{
+  private run<T extends WorkerValue>(task:QualityTask,elapsedMs:number,signal:AbortSignal,hooks?:QualityRunHooks):Promise<T>{
     if(this.closed)return Promise.reject(new AdminError(503,'Quality service closed.','busy'));
     let release:()=>void;
     try{signal.throwIfAborted();release=this.library.qualityAdmission.acquire();}catch(error){return Promise.reject(error);}
+    // Persist the attempt synchronously after admission and before any Worker can
+    // execute. A failed commit starts no work and immediately returns the permit.
+    try{hooks?.admitted();signal.throwIfAborted();}catch(error){release();return Promise.reject(error);}
     const controller=new AbortController(),combined=AbortSignal.any([signal,controller.signal]);
     const control=new Int32Array(new SharedArrayBuffer(8));
     const timer=this.timers.set(()=>controller.abort(new AdminError(413,'Quality execution deadline exceeded.','budget-exceeded')),elapsedMs);
@@ -69,8 +74,14 @@ export class LibraryPairRunner {
         ?new AdminError(413,'Quality Worker memory budget exceeded.','budget-exceeded'):new AdminError(500,'Quality Worker failed.','decoder-error')});
       const messageerror=()=>error(new Error('Quality Worker reply could not be deserialized'));
       const exit=()=>{exited=true;Atomics.notify(control,1);error(new Error('Quality Worker exited without a result'));};
-      const message=(data:{ok:boolean;value?:WorkerValue;error?:{message:string;code:string;status?:number}})=>{
+      const message=(data:{type?:string;phase?:string;ok:boolean;value?:WorkerValue;error?:{message:string;code:string;status?:number}})=>{
         if(finishing)return;
+        if(data?.type==='phase'){
+          if(['source','resolve','decode','publish'].includes(data.phase??'')){
+            try{hooks?.phase(data.phase as Parameters<QualityRunHooks['phase']>[0]);}catch(error){void finish({ok:false,error});}
+          }
+          return;
+        }
         const value=data?.value;
         const valid=task.mode==='source'?value&&'binding' in value&&value.binding.mediaId===task.id&&value.binding.mediaVersion===task.version
           :value&&'schema' in value&&value.schema==='voidplayer-library-frame-pair-psnr';

@@ -2,6 +2,8 @@ import type {LibraryScanStatus} from '../shared/service/admin.ts';
 import { FrameIndexJobs } from './frame-index-jobs.ts';
 import { QualityAdmission } from './quality-admission.ts';
 import { LibraryPairRunner } from './analysis/quality/runner.ts';
+import { QualityJobService } from './analysis/quality/job-service.ts';
+import { AdminError } from './admin-error.ts';
 import { FrameIndexStore } from './frame-index-store.ts';
 import { MediaThumbnailStore } from './media-thumbnail-store.ts';
 import { createHash } from 'node:crypto';
@@ -31,8 +33,16 @@ export class MediaLibraryIndex {
   readonly indexJobs: FrameIndexJobs;
   readonly qualityAdmission = new QualityAdmission();
   private pairRunner?: LibraryPairRunner;
+  private jobService?: QualityJobService;
+  private closing?: Promise<void>;
   private coreDirectory: string;
   get quality() { return this.pairRunner ??= new LibraryPairRunner(this,this.coreDirectory); }
+  get durableQualityJobsEnabled() { return this.options.database !== undefined && this.options.database !== ':memory:'; }
+  get qualityJobs() {
+    if (this.closed) throw new AdminError(503,'Quality job service closed.','quality-service-unavailable');
+    if (!this.durableQualityJobsEnabled) throw new AdminError(503,'Durable quality jobs require a persistent library database.','quality-storage-unavailable');
+    return this.jobService ??= new QualityJobService(this.indexDatabase + '.quality.sqlite', this.quality);
+  }
   readonly frameIndexes: FrameIndexStore;
   readonly thumbnails: MediaThumbnailStore;
   private pending: Promise<void> | null = null;
@@ -375,9 +385,10 @@ export class MediaLibraryIndex {
       return real;
     } catch { return null; }
   }
-  async close() {
-    if (this.closed) return;
+  close() { return this.closing ??= this.closeOwned(); }
+  private async closeOwned() {
     this.closed = true; this.stop();
+    await this.jobService?.close();
     await this.pairRunner?.close();await this.pending?.catch(() => {}); await this.indexJobs.close(); this.store.close();
   }
   /** Serialize configuration with scans. Persist first; a failed DB switch rolls
