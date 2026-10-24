@@ -135,6 +135,20 @@ test('compatibility entries point to registered domain implementations without c
   }
 });
 
+test('identity browser checks match the lightweight job while real PSNR evidence remains required with its core', () => {
+  // identity.yml installs only Chromium and intentionally downloads no decoder.
+  for (const row of selectCases({suite:'ci-identity-browser',platform:'linux'}).selected) {
+    assert.deepEqual(row.engines,['chromium'],`${row.id}: identity job installs Chromium only`);
+    assert.deepEqual(row.fixtures,[],`${row.id}: identity job has no downloaded decoder/media`);
+  }
+  const evidence = selectCases({suite:'ci-cache',platform:'linux'}).selected.filter(row=>row.script==='scripts/check-quality-annotation-browser.mjs');
+  assert.deepEqual(evidence.flatMap(row=>row.engines).sort(),['chromium','webkit']);
+  for (const row of evidence) {
+    assert.equal(row.required,true);
+    assert.ok(row.fixtures.includes('core'),`${row.id}: real scoring cannot use a synthetic result`);
+  }
+});
+
 test('identity source checks require no downloaded core, media or browser build', () => {
   for (const row of selectCases({ suite: 'ci-identity-unit' }).selected) {
     assert.deepEqual(row.fixtures, [], `${row.id}: identity unit job does not download fixtures`);

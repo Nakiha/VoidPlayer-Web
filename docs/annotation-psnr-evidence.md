@@ -111,6 +111,9 @@ commands. Conflicts require explicit reconciliation, not automatic revision bump
 digest, wrong source version/origin/PTS/ROI, edit preservation, count budget,
 concurrent revisions, event failure rollback, historical copies and restart/
 result-cleanup replay. Node and native Bun are required manifest cases.
+The real decoder browser cases are required in the complete CI `ci-cache` suite
+with an explicit `core` prerequisite. The separate lightweight identity workflow
+has no decoder and runs its existing synthetic Chromium cases.
 `scripts/check-quality-annotation-browser.mjs` runs Chromium and WebKit with real
 jobs, GUI and Agent commands, two windows, a different playing source, observation
 disconnect/reconnect, replies, export/import downgrade and late replies after
