@@ -53,11 +53,13 @@ export class QualityJobService {
     console.error('Quality job service stopped; durable state retained', error);
   }
   private wake() {
+    try {
     if (this.timer || this.closed || this.failed || this.store.counts().queued === 0) return;
     this.timer = setTimeout(() => {
       this.timer = undefined;
       try {this.store.expire(this.now());this.pump();this.wake();}catch(error){this.poison(error);}
     },250);this.timer.unref();
+    } catch (error) { this.poison(error); }
   }
   private pump() {
     if (this.closed || this.failed || this.active) return;
