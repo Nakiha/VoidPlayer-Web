@@ -1,0 +1,27 @@
+name: Verified pinned FATE fixtures
+description: Restore manifest-keyed bytes, verify every sample, and download missing files from the official source.
+runs:
+  using: composite
+  steps:
+    - name: Identify pinned FATE manifest set
+      id: manifest
+      shell: bash
+      run: |
+        fate_key=$(node scripts/sync-fate-samples.mjs --cache-key)
+        echo "key=$fate_key" >> "$GITHUB_OUTPUT"
+    - name: Restore pinned FATE bytes
+      id: restore
+      uses: actions/cache/restore@v4
+      with:
+        path: fixtures/fate
+        key: ${{ steps.manifest.outputs.key }}
+    - name: Verify all restored FATE bytes and acquire missing samples
+      id: verify
+      shell: bash
+      run: node scripts/sync-fate-samples.mjs
+    - name: Save complete verified FATE bytes before product tests
+      if: success() && steps.verify.outcome == 'success' && steps.restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: fixtures/fate
+        key: ${{ steps.manifest.outputs.key }}
