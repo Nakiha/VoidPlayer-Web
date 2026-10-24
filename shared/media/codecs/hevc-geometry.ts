@@ -5,6 +5,8 @@ import { isAnnexB, nalRanges } from './nal-framing.ts';
 export interface HevcGeometry {
   codedWidth: number; codedHeight: number; x: number; y: number; width: number; height: number;
   sarNum: number; sarDen: number;
+  /** Opt-in witness: false for absent VUI/aspect ratio or unspecified idc=0. */
+  sarSpecified?: boolean;
 }
 class Bits {
   private position = 0;
@@ -56,7 +58,7 @@ function hevcSpsHeader(nal: Uint8Array) {
   }
   return { b, pocBits, maxReorderFrames, codedWidth, codedHeight, left, top, width, height };
 }
-function parseSpsGeometry(nal: Uint8Array,fieldSequence?:(field:boolean)=>void): HevcGeometry {
+function parseSpsGeometry(nal: Uint8Array,fieldSequence?:(field:boolean)=>void,aspectWitness=false): HevcGeometry {
   const { b, pocBits, codedWidth, codedHeight, left, top, width, height } = hevcSpsHeader(nal);
   for (let i = 0; i < 6; i++) b.ue(32);
   if (b.read(1) && b.read(1)) {
@@ -80,11 +82,11 @@ function parseSpsGeometry(nal: Uint8Array,fieldSequence?:(field:boolean)=>void):
   }
   if (b.read(1)) { const count = b.ue(32); for (let i = 0; i < count; i++) b.skip(pocBits+1); }
   b.skip(2);
-  let sarNum = 1, sarDen = 1;
+  let sarNum = 1, sarDen = 1, sarSpecified=false;
   const vui=!!b.read(1);
   if(vui){
     if(b.read(1)){
-      const id = b.read(8);
+      const id = b.read(8);sarSpecified=id!==0;
       if (id === 255) { sarNum = b.read(16); sarDen = b.read(16); }
       else if (ratios[id]) [sarNum, sarDen] = ratios[id];
       else throw new Error('reserved aspect ratio');
@@ -97,9 +99,9 @@ function parseSpsGeometry(nal: Uint8Array,fieldSequence?:(field:boolean)=>void):
     }
   }else fieldSequence?.(false);
   if (!sarNum || !sarDen) throw new Error('invalid sample aspect ratio');
-  return { codedWidth, codedHeight, x: left, y: top, width, height, sarNum, sarDen };
+  return { codedWidth, codedHeight, x: left, y: top, width, height, sarNum, sarDen, ...(aspectWitness?{sarSpecified}:{}) };
 }
-export function parseHevcSpsGeometry(nal:Uint8Array):HevcGeometry{return parseSpsGeometry(nal);}
+export function parseHevcSpsGeometry(nal:Uint8Array,aspectWitness=false):HevcGeometry{return parseSpsGeometry(nal,undefined,aspectWitness);}
 /** Raw SPS field syntax, independent of container keys and output dimensions. */
 export function hevcFieldPictures(description:Uint8Array){let fields=false;for(const sps of hevcSpses(description))parseSpsGeometry(sps,value=>{fields ||=value;});return fields;}
 function hevcSpses(description: Uint8Array) {
@@ -132,9 +134,9 @@ export function hevcReorderFrames(description: Uint8Array): number | null {
   try { return Math.max(...hevcSpses(description).map(nal => hevcSpsHeader(nal).maxReorderFrames)); }
   catch { return null; }
 }
-export function hevcGeometry(description: Uint8Array): HevcGeometry | null {
+export function hevcGeometry(description: Uint8Array,aspectWitness=false): HevcGeometry | null {
   try {
-    const geometries = hevcSpses(description).map(parseHevcSpsGeometry);
+    const geometries = hevcSpses(description).map(nal=>parseHevcSpsGeometry(nal,aspectWitness));
     // Multiple simultaneously active SPS geometries need packet-level selection.
     return geometries.length && geometries.every(g => JSON.stringify(g) === JSON.stringify(geometries[0])) ? geometries[0] : null;
   } catch { return null; }

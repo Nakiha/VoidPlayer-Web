@@ -1,6 +1,12 @@
+import {waitForAnnotationMedia} from './agent-annotations-ready.mjs';
+import {encodedPair} from '../../test/helpers/library-pair-fixture.ts';
+import path from 'node:path';
+import {execFileSync} from 'node:child_process';
+import {avcGeometry} from '../../shared/media/codecs/avc-geometry.ts';
+import {hevcGeometry} from '../../shared/media/codecs/hevc-geometry.ts';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-export async function checkQualityPairView(linked,{space,annotationId,evidence,engine,sample}) {
+export async function checkQualityPairView(linked,{space,annotationId,evidence,engine,sample,onPage}) {
  if(await linked.locator('#subtracks-panel').isHidden())await linked.locator('#toggle-subtracks').click();
  if(await linked.locator('#toggle-marks').getAttribute('aria-expanded')==='false')await linked.locator('#toggle-marks').click();
  await linked.locator(`[data-mark-id="${annotationId}"] .annotation-psnr-evidence`).click();
@@ -21,8 +27,8 @@ export async function checkQualityPairView(linked,{space,annotationId,evidence,e
    });}
   };
  });
- const [page]=await Promise.all([linked.waitForEvent('popup'),link.click()]);
- await page.waitForFunction(()=>window.voidPlayerQualityPair?.getState().state==='ready'||window.voidPlayerQualityPair?.getState().state==='failed');
+ const [page]=await Promise.all([linked.waitForEvent('popup'),link.click()]);onPage?.(page);
+ await page.waitForFunction(()=>['ready','failed','cancelled','closed'].includes(window.voidPlayerQualityPair?.getState().state));
  const native=Buffer.from(sample.native,'base64'),frameBytes=native.length/2;
  const hashes=await page.evaluate(()=>window.__pairRaw);assert.deepEqual(hashes,[0,1].map(i=>createHash('sha256').update(native.subarray(i*frameBytes,(i+1)*frameBytes)).digest('hex')),'actual Worker original planes equal independently committed native FFmpeg frames');
  const state=await page.evaluate(()=>window.voidPlayerQualityPair.getState());assert.equal(state.state,'ready',JSON.stringify(state));
@@ -34,7 +40,7 @@ export async function checkQualityPairView(linked,{space,annotationId,evidence,e
  assert.notEqual(state.presented.reference.picture.au,state.presented.distorted.picture.au);assert.notEqual(state.presented.reference.sourcePtsUs,state.presented.distorted.sourcePtsUs);
  assert.ok(state.presented.reference.sourcePtsUs>0);assert.equal(state.presented.reference.sourcePtsUs,evidence.value.result.provenance.reference.sourcePtsUs);
  for(const side of ['reference','distorted']) {
-  const p=evidence.value.result.provenance[side],actual=state.presented[side];assert.deepEqual(actual.picture,p.picture);assert.equal(actual.sourceBinding.indexBuildId,p.indexBuildId);assert.deepEqual(actual.sourceBinding.indexIdentity,p.indexIdentity);
+  const p=evidence.value.result.provenance[side],actual=state.presented[side];assert.equal(actual.sourceGeometry.sarNum,actual.sourceGeometry.sarDen);assert.deepEqual(actual.picture,p.picture);assert.equal(actual.sourceBinding.indexBuildId,p.indexBuildId);assert.deepEqual(actual.sourceBinding.indexIdentity,p.indexIdentity);
  }
  async function checkRoi() {
   const result=await page.evaluate(()=>['reference','distorted'].map(side=>{
@@ -51,14 +57,37 @@ export async function checkQualityPairView(linked,{space,annotationId,evidence,e
  console.log(`PASS ${engine}: explicit shared-evidence pair viewer, actual unequal source PTS, same source/different AU, cache namespace/build, ROI/DPR/resize and GUI/Agent URL`);
  return {page,reference:{space,annotationId,evidenceId:evidence.id}};
 }
-export async function checkQualityPairFailures(pair,{base,headers,entry,service,mediaPath,writeFile}) {
+export async function checkQualityPairFailures(pair,{base,headers,entry,service,mediaPath,writeFile,sample}) {
  const {page,reference}=pair;
- const path=`**/api/annotations/spaces/${reference.space}/${reference.annotationId}`;
+ const routePattern=`**/api/annotations/spaces/${reference.space}/${reference.annotationId}`;
  let entered;const started=new Promise(r=>entered=r);let release;const gate=new Promise(r=>release=r);
- await page.route(path,async route=>{entered();await gate;await route.continue();});
+ await page.route(routePattern,async route=>{entered();await gate;await route.continue();});
  await page.evaluate(reference=>{window.__pairOpen=window.voidPlayerQualityPair.open(reference).then(()=>({ok:true}),error=>({ok:false,message:error.message}));},reference);await started;
  await page.getByRole('button',{name:'Cancel and release snapshots',exact:true}).click();release();
- const cancelled=await page.evaluate(()=>window.__pairOpen);assert.equal(cancelled.ok,false);assert.equal((await page.evaluate(()=>window.voidPlayerQualityPair.getState())).state,'cancelled');assert.equal((await page.evaluate(()=>window.voidPlayerQualityPair.resources())).totalBytes,0);await page.unroute(path);
+ const cancelled=await page.evaluate(()=>window.__pairOpen);assert.equal(cancelled.ok,false);assert.equal((await page.evaluate(()=>window.voidPlayerQualityPair.getState())).state,'cancelled');assert.equal((await page.evaluate(()=>window.voidPlayerQualityPair.resources())).totalBytes,0);await page.unroute(routePattern);
+ // A real encoded near-square SAR survives the old integer display-width
+ // gate. Complete and attach its actual job before the explicit view rejection.
+ const sar=await encodedPair(path.dirname(path.dirname(mediaPath)),sample.codec,sample.depth,true,{num:1000,den:1001});
+ const encodedFile=path.join(path.dirname(path.dirname(mediaPath)),`${sample.codec}-${sample.depth}-true-1000-1001.mp4`);
+ const probe=JSON.parse(execFileSync('ffprobe',['-v','error','-select_streams','v:0','-show_entries','stream=sample_aspect_ratio','-of','json',encodedFile],{encoding:'utf8'}));assert.equal(probe.streams[0].sample_aspect_ratio,'1000:1001');
+ const geometry=sample.codec==='h264'?avcGeometry(sar.configuration):hevcGeometry(sar.configuration);assert.equal(geometry.sarNum,1000);assert.equal(geometry.sarDen,1001);
+ await writeFile(path.join(path.dirname(mediaPath),'SAR.flv'),sar.bytes);await service.library.refresh();
+ const [sarEntry]=await waitForAnnotationMedia(service.library,['SAR.flv']);assert.ok(sarEntry);
+ const cacheResponse=await fetch(`${base}/api/media/${sarEntry.id}/frame-index?v=${sarEntry.version}&build=1`);assert.equal(cacheResponse.status,200,await cacheResponse.clone().text());const cache=await cacheResponse.json();
+ const proof=await fetch(`${base}/api/media/${sarEntry.id}/psnr-source?v=${sarEntry.version}`,{headers}).then(r=>r.json());
+ const target=au=>({...proof.binding,sourcePtsUs:cache.index.packets[au][2],picture:{sourceVersion:`${sarEntry.id}@${sarEntry.version}`,stream:'video',configuration:0,au,picture:0,layer:0,field:'frame'}});
+ const request={pairing:'caller-specified',reference:target(0),distorted:target(1),roi:{x:2,y:4,width:24,height:20}};
+ const submit=await fetch(base+'/api/quality/jobs',{method:'POST',headers:{...headers,'x-voidplayer-action':'quality-job','idempotency-key':'sar-view-negative'},body:JSON.stringify({schema:'voidplayer-psnr-frame-job',version:1,client:{id:'sar-view-negative',kind:'agent'},request})});assert.equal(submit.status,202);let job=(await submit.json()).job;
+ for(let n=0;n<200&&!['completed','failed','interrupted','cancelled'].includes(job.state);n++){await new Promise(r=>setTimeout(r,25));job=await fetch(`${base}/api/quality/jobs/${job.id}`,{headers}).then(r=>r.json());}assert.equal(job.state,'completed',JSON.stringify(job));
+ const value=await fetch(`${base}/api/quality/jobs/${job.id}/result`,{headers}).then(r=>r.json());const d=value.value.result.provenance.reference.decoded.description;assert.equal(d.width,32);assert.equal(d.displayWidth,32);
+ const source={id:'sar-source',name:'SAR.flv',size:sarEntry.size,lastModified:sarEntry.lastModified,codec:sample.codec,decoder:'ffmpeg-wasm',width:32,height:32,durationUs:2000000,firstPtsUs:target(0).sourcePtsUs,source:{kind:'library',id:sarEntry.id,url:`${base}/api/media/${sarEntry.id}?v=${sarEntry.version}`}};
+ const mark={id:'sar-mark',text:'SAR evidence',severity:3,origin:'agent',createdAt:new Date().toISOString(),slot:'A',mediaId:source.id,frame:{ptsUs:0,sourcePtsUs:target(0).sourcePtsUs,durationUs:1000000},comparison:[],region:null};
+ const post=async body=>{const r=await fetch(`${base}/api/annotations/spaces/${reference.space}`,{method:'POST',headers,body:JSON.stringify(body)});assert.equal(r.status,200,await r.clone().text());return r.json();};
+ await post({operationId:'sar-create',id:mark.id,revision:0,action:'put',document:{mark,media:[source]}});
+ const attached=await post({operationId:'sar-attach',id:mark.id,revision:1,action:'attach-quality-result',evidence:{jobId:job.id,attemptId:job.attempt.id,digest:job.result.digest,side:'reference'}});
+ const sarRejected=await page.evaluate(async r=>{try{await window.voidPlayerQualityPair.open(r);return null;}catch(error){return error.message;}},{space:reference.space,annotationId:mark.id,evidenceId:attached.document.mark.qualityEvidence[0].id});
+ assert.match(sarRejected,/exact SPS SAR/);assert.equal((await page.evaluate(()=>window.voidPlayerQualityPair.getState())).state,'failed');assert.equal(await page.locator('.quality-pair-roi rect').count(),0);assert.equal((await page.evaluate(()=>window.voidPlayerQualityPair.resources())).totalBytes,0);
+ console.log(`PASS real ${sample.codec} ${sample.depth}-bit 1000:1001 SAR: FFprobe exact ratio, completed score/attachment with rounded 32px width, viewer refuses original frames before presentation`);
  const clear=await fetch(base+'/api/admin/frame-indexes',{method:'DELETE',headers:{...headers,'x-voidplayer-action':'admin'}});assert.equal(clear.status,200);
  const missing=await page.evaluate(async r=>{try{await window.voidPlayerQualityPair.open(r);return null;}catch(error){return error.message;}},reference);assert.ok(missing);assert.equal((await page.evaluate(()=>window.voidPlayerQualityPair.getState())).state,'failed');assert.equal(await page.locator('.quality-pair-roi rect').count(),0);
  const index=await fetch(`${base}/api/media/${entry.id}/frame-index?v=${entry.version}`).then(r=>r.json());assert.equal(index.index,null,'viewer never rebuilds a missing cache');

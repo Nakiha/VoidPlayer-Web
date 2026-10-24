@@ -20,6 +20,7 @@ async function json(url:string,limit:number,signal:AbortSignal):Promise<any> {
 /** Runs only in the admitted killable one-shot Worker. GETs only; no build=1,
  * POST, job lookup or score call. Source/cache proof is checked again at publication. */
 export async function inspectLibraryEvidence(input:QualityEvidence,base:string,signal:AbortSignal) {
+  if(!globalThis.crypto?.subtle)throw new FramePairError('unsupported-source','Original-frame inspection requires HTTPS or localhost for cache digest verification');
   const origin=new URL(base).origin,evidence=pairViewEvidence(input,origin),expected=evidence.value;
   const sources:CachedPairSource[]=[];
   const sourceUrl=(side:typeof PAIR_VIEW_SIDES[number])=>new URL(`/api/media/${expected.sources[side].binding.mediaId}`,origin);

@@ -41,7 +41,8 @@ shared attachment before presentation so deletion/downgrade/replacement during a
 open cannot publish a late result.
 
 A successful presenter commit yields a **snapshot presentation token** containing
-its actual source PTS, SourcePictureKey, source/cache binding and geometry. This is
+its actual source PTS, SourcePictureKey, source/cache binding and exact SPS geometry
+(including the integer SAR numerator and denominator), alongside decoded geometry. This is
 separate from the ordinary playback token: a snapshot has no normalized media or
 session timeline. It must pass exact binding and geometry checks before either
 image or ROI is revealed. The normal playback token's missing index-build evidence
@@ -51,7 +52,12 @@ is not silently filled in from an attachment.
 
 The metric's ROI is in the **unrotated visible luma pixel grid**. V1 admits only an
 identity geometry: zero crop origin, visible/coded/output dimensions equal, and
-square pixels (`displayWidth/Height` equal the visible dimensions). Crop and SAR
+square pixels proven by explicit SPS SAR and exact `sarNum === sarDen`, with matching decoded
+dimensions. Rounded `displayWidth` equality alone is insufficient: a real 32px
+1000:1001 SAR rounds back to 32px and is still rejected before decoder admission.
+The opt-in parser witness also distinguishes missing/unspecified aspect ratios
+from explicit 1:1; missing evidence is rejected. Default playback parser results
+remain unchanged. The exact witness is retained and rechecked through presentation. Crop and SAR
 are rejected before decode/presentation instead of approximating their transforms.
 The isolated FLV raw picture is deliberately displayed unrotated; container display
 orientation is not applied. Any nonzero presentation rotation is rejected. This
@@ -69,6 +75,9 @@ new measurement or a claim that displayed RGB equals source YUV code values. No
 heatmap, SSIM/VMAF, sequence pairing or automatic correspondence is provided.
 
 ## Ownership, limits and verification
+
+Cache digest verification requires WebCrypto in HTTPS or localhost secure contexts;
+other hosts receive an explicit unsupported error before source probing.
 
 The view's 30-second cancellation/deadline signal covers annotation checks, source
 checks, cache transfer and decoding. The original pair budgets remain: 16 MiB exact
@@ -88,9 +97,15 @@ Registered Chromium/WebKit cases use real completed H.264 8-bit and HEVC 10-bit
 jobs attached through HTTP/GUI. They click an actual attachment link from a guest
 window, compare the Agent URL, and verify original source PTS (2s/3s, not normalized
 0), same source/different AU, namespace/build, ROI, DPR 2 and responsive resize.
-They preserve the original playing window and private-job 404/no-implicit-request
+Actual FFprobe-confirmed H.2648 and HEVC10 1000:1001 SAR fixtures complete real
+scoring/attachment with rounded 32px display width, then fail explicit inspection
+without presenting pixels or ROI. They preserve the original playing window and private-job 404/no-implicit-request
 assertions, check cancellation memory release, and explicitly clear/rebuild/change
-sources to prove fail-closed behavior without implicit index creation. Source
-units cover geometry/identity mismatch, metric-free inspection, shared attachment
-changes and late/cancel/close ownership races. Existing numerical and real-plane
+sources to prove fail-closed behavior without implicit index creation. The browser
+cancellation case blocks the first annotation GET; it does not claim cancellation
+inside actual decode. Source units use controlled dependencies for geometry/AU/PTS/
+namespace/build/decoder/color mismatches, attachment removal/downgrade and late/
+superseding/close ownership races. Existing real stalled-Worker cancellation tests
+cover the generic client's physical termination fence. Real media tests separately
+exercise exact-SAR rejection while normal source-plane scoring remains accepted. Existing numerical and real-plane
 regressions remain required. This advances #115; it does not complete the issue.

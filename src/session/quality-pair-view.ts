@@ -17,6 +17,7 @@ export class QualityPairViewSession {
   private value:PairViewState={state:'idle'};
   private frames?:[DecodedFrame,DecodedFrame];
   private inspected?:InspectedFramePair['provenance'];
+  private sourceGeometry?:InspectedFramePair['sourceGeometry'];
   private sequence=0;
   private controller?:AbortController;
   private pending:Promise<void>=Promise.resolve();
@@ -33,7 +34,7 @@ export class QualityPairViewSession {
   getState(){return structuredClone(this.value);}
   subscribe(listener:()=>void){this.listeners.add(listener);return()=>this.listeners.delete(listener);}
   private emit(){for(const listener of this.listeners)listener();}
-  private clear(){this.frames?.forEach(frame=>frame.close());this.frames=undefined;this.inspected=undefined;}
+  private clear(){this.frames?.forEach(frame=>frame.close());this.frames=undefined;this.inspected=undefined;this.sourceGeometry=undefined;}
   open(input:PairViewReference):Promise<void> {
     const reference=pairViewReference(input);if(this.closed)return Promise.reject(new Error('Pair viewer closed.'));
     const sequence=++this.sequence;this.controller?.abort(new DOMException('View superseded.','AbortError'));
@@ -60,7 +61,7 @@ export class QualityPairViewSession {
             ptsUs:0,sourcePtsUs:raw.pts,durationUs:1,byteSize:raw.pixels.byteLength,rotation:0,sourcePicture:structuredClone(p.picture),
             pixels:new Uint8ClampedArray(raw.pixels.buffer,raw.pixels.byteOffset,raw.pixels.byteLength),close(){if(!closed){closed=true;release();}}});
         }
-        current();this.frames=frames as [DecodedFrame,DecodedFrame];this.inspected=pair.provenance;frames=[];
+        current();this.frames=frames as [DecodedFrame,DecodedFrame];this.inspected=pair.provenance;this.sourceGeometry=pair.sourceGeometry;frames=[];
         this.value={state:'loading',reference,evidence};this.redraw();
         this.value={...this.value,state:'ready'};this.emit();
       }catch(error){for(const frame of frames)frame.close();if(sequence===this.sequence){this.clear();this.value={state:signal.aborted?'cancelled':'failed',reference,error:error instanceof Error?error.message:String(error)};this.emit();}throw error;}
@@ -74,7 +75,7 @@ export class QualityPairViewSession {
       const frame=this.frames[i];this.draw(side,frame);
       if(frame.presentedCommit===undefined)throw new Error('Frame was not successfully presented.');
       const d=frame.description,p=this.inspected![side];
-      const token:PairViewPresentation={commit:frame.presentedCommit,picture:structuredClone(frame.sourcePicture!),sourcePtsUs:frame.sourcePtsUs,
+      const token:PairViewPresentation={sourceGeometry:structuredClone(this.sourceGeometry![side]),commit:frame.presentedCommit,picture:structuredClone(frame.sourcePicture!),sourcePtsUs:frame.sourcePtsUs,
         sourceBinding:{mediaId:p.mediaId,mediaVersion:p.mediaVersion,size:p.size,indexIdentity:structuredClone(p.indexIdentity),indexBuildId:p.indexBuildId},
         geometry:{codedWidth:d.codedWidth,codedHeight:d.codedHeight,visibleRect:{...d.visibleRect},displayWidth:d.displayWidth,displayHeight:d.displayHeight,rotation:frame.rotation??0}};
       verifyPairViewPresentation(evidence,side,token);presented[side]=token;
