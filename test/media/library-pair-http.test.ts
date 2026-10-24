@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm,realpath,stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join,resolve } from 'node:path';
 import { Worker } from 'node:worker_threads';
+import { readdirSync,readlinkSync,realpathSync,statSync,openSync,closeSync,fstatSync } from 'node:fs';
 import { LibraryPairRunner } from '../../server/analysis/quality/runner.ts';
+import {fileStatWitness,sameFileStat} from '../../server/file-stat.ts';
 import type { AddressInfo } from 'node:net';
 import { MediaLibraryIndex } from '../../server/library.ts';
 import { createMediaServer } from '../../server/app.ts';
@@ -35,6 +37,15 @@ for(const [codec,depth] of [['h264',8],['hevc',8],['hevc',10]] as const)test(`HT
   const duplicate=Buffer.from(fixture.bytes),firstTag=13,secondTag=firstTag+15+5+fixture.configuration.length,thirdTag=secondTag+15+5+fixture.packets[0].length;
   duplicate.writeUIntBE(2000,thirdTag+4,3);duplicate[thirdTag+7]=0;
   await writeFile(join(media,'duplicate-pts.flv'),duplicate);
+ }
+ if(process.platform==='win32'){
+  const file=join(media,'reference.flv'),asyncPath=await realpath(file),syncPath=realpathSync(file);
+  const short=(value:string)=>value.split(/[\\/]/).some(part=>/~\d/.test(part));
+  const fd=openSync(file,'r');try{
+   console.info(JSON.stringify({event:'quality-windows-path-compatibility',asyncShort:short(asyncPath),syncShort:short(syncPath),equal:asyncPath===syncPath,
+    equalIgnoringCase:asyncPath.toLowerCase()===syncPath.toLowerCase(),sameCanonical:realpathSync(asyncPath)===syncPath,sameStatWitness:sameFileStat(fileStatWitness(await stat(file,{bigint:true})),fileStatWitness(statSync(file,{bigint:true}))),
+    descriptorMatchesPath:sameFileStat(fileStatWitness(fstatSync(fd,{bigint:true})),fileStatWitness(statSync(file,{bigint:true})))}));
+  }finally{closeSync(fd);}
  }
  const library=new MediaLibraryIndex([media],{database:join(dir,'library.sqlite'),watch:false});await library.refresh();
  const server=createMediaServer({library,roots:[media],onLog(){}});await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -129,6 +140,33 @@ for(const [codec,depth] of [['h264',8],['hevc',8],['hevc',10]] as const)test(`HT
    }finally{releaseStop();controller.abort();await result.catch(()=>{});await runner.close();}
   }
   delete (library as unknown as Record<string,unknown>).quality;
+  const descriptors=()=>process.platform!=='linux'?0:readdirSync('/proc/self/fd').filter(fd=>{try{return readlinkSync('/proc/self/fd/'+fd).startsWith(dir+'/');}catch{return false;}}).length;
+  for(const operation of ['measure','source'] as const)for(const phase of (operation==='measure'?['source','resolve','decode','publish']:['source','resolve','publish']))for(const mode of ['disconnect','deadline','close'] as const){
+   const descriptorBaseline=descriptors();
+   const state=new Int32Array(new SharedArrayBuffer(20));let releaseStop!:()=>void,stopping!:()=>void,worker!:Worker,deadline!:(()=>void);
+   const stopGate=new Promise<void>(resolve=>releaseStop=resolve),stopRequested=new Promise<void>(resolve=>stopping=resolve);
+   const clock=mode==='deadline'?{set(callback:()=>void,ms:number){assert.equal(ms,30000);deadline=callback;return {} as ReturnType<typeof setTimeout>;},clear(){}}:undefined;
+   const runner=new LibraryPairRunner(library,resolve('public/vendor/voidplayer-core'),data=>{
+    worker=new Worker(new URL('../helpers/quality-phase-worker.ts',import.meta.url),{workerData:{...data,hangPhase:phase,phaseState:state.buffer}});
+    const terminate=worker.terminate.bind(worker);worker.terminate=async()=>{stopping();await stopGate;return terminate();};return worker;
+   },clock);
+   Object.defineProperty(library,'quality',{value:runner,configurable:true});
+   const controller=new AbortController(),pending=operation==='measure'?fetch(base+'/api/quality/psnr-pair',{method:'POST',headers,body:JSON.stringify(request),signal:controller.signal}):fetch(`${base}/api/media/${targets[0].mediaId}/psnr-source?v=${targets[0].mediaVersion}`,{headers:{cookie},signal:controller.signal});
+   const checked=mode==='disconnect'?assert.rejects(pending,{name:'AbortError'}):pending.then(async response=>{assert.equal(response.status,mode==='deadline'?413:499);assert.equal((await response.json()).code,mode==='deadline'?'budget-exceeded':'cancelled');});void checked.catch(()=>{});
+   const waitFlag=async(index:number)=>{if(Atomics.load(state,index)===0)await (Atomics as typeof Atomics & {waitAsync(array:Int32Array,index:number,value:number,timeout:number):{value:Promise<string>|string}}).waitAsync(state,index,0,5000).value;assert.equal(Atomics.load(state,index),1,`${phase}/${mode}: expected phase/cancel/recovery marker ${index}`);};
+   let closing=Promise.resolve();
+   try{
+    await waitFlag(0);if(mode==='disconnect')controller.abort();else if(mode==='deadline')deadline();else closing=runner.close();
+    await stopRequested;await waitFlag(2);
+    if(mode!=='disconnect'){worker.postMessage({type:'resume'});await waitFlag(4);}
+    assert.equal(Atomics.load(state,3),0,'a late source/resolve/final check must never publish success');
+    assert.throws(()=>library.qualityAdmission.acquire(),{code:'quality-busy'},'late IO cannot release the still-owned stop budget');
+    releaseStop();await checked;await closing;await runner.close();
+    if(mode==='disconnect'){try{worker.postMessage({type:'resume'});}catch{}assert.equal(Atomics.load(state,4),0,'terminated source IO cannot resume after cancellation');}
+    assert.ok(descriptors()<=descriptorBaseline,`${operation}/${phase}/${mode}: owned source/database descriptors leaked after physical exit`);
+   }finally{releaseStop();controller.abort();try{worker?.postMessage({type:'resume'});}catch{}await checked.catch(()=>{});await runner.close();}
+   delete (library as unknown as Record<string,unknown>).quality;
+  }
   const gatedSource=await targetFor('gated-source.flv');
   for(const mutation of ['source-change','cache-clear'] as const){
    const gate=new Int32Array(new SharedArrayBuffer(8));

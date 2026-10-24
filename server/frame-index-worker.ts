@@ -15,9 +15,6 @@ parentPort!.on('message', (request: FrameIndexRequest) => {
   try {
     const send = parentPort!.postMessage.bind(parentPort!);
     switch (request.op) {
-      case 'psnr-source':
-        send(frameIndexReply(request, store.qualitySource(request.id, request.version)));
-        break;
       case 'technical-filter':
         send(frameIndexReply(request, queries.technicalFilter(request.query, request.expectedSnapshot, request.cancellation)));
         break;

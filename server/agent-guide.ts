@@ -312,9 +312,13 @@ contains result (exact code-value SSE/MSE/PSNR and decoder build) plus complete
 source/cache/producer evidence. Media versions are stat-derived identities, not
 cryptographic content authentication. Sources stay inside registered library roots.
 
-One quality Worker excludes concurrent index builds/uploads and bitstream work.
+Source discovery and scoring each run in one owned, deadline-bound Worker.
+The same quality admission excludes concurrent index builds/uploads and bitstream work.
 Busy admission returns 503; there is no queue. Disconnect cancels the request.
-Cancellation and timeout terminate the actual Worker before capacity is reused.
+Cancellation revokes new IO, drains any synchronous descriptor scope, then
+terminates the actual Worker before capacity is reused. The deadline rejects
+late success; kernel IO/physical termination latency can exceed it without
+releasing the still-owned budget.
 Responses are not stored: there is no task ID, resume, retry, persisted history,
 SSIM/VMAF/CAMBI, distributed worker or scoring GUI. See docs/source-library-psnr.md
 in the repository for budgets, error codes, examples and exact trust boundaries.
