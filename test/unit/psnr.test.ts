@@ -58,11 +58,15 @@ test('known unit errors preserve all 10-bit precision and the fixed code-value p
 });
 
 test('aggregate uses SSE/sample counts with 4:1:1 component weighting, never average dB', () => {
-  const result = measurePsnr(request(frame(), frame(8, { value: c => 16 + [2, 4, 8][c] })));
-  assert.deepEqual(Object.values(result.planes).map(p => [p.sse, p.samples, p.mse]), [[64, 16, 4], [64, 4, 16], [256, 4, 64]]);
-  assert.equal(result.aggregate.sse, 384); assert.equal(result.aggregate.samples, 24); assert.equal(result.aggregate.mse, 16);
-  assert.ok(Math.abs(db(result.aggregate.psnr) - 10 * Math.log10(255 ** 2 / 16)) < 1e-12);
-  assert.notEqual(db(result.aggregate.psnr), Object.values(result.planes).reduce((n, p) => n + db(p.psnr), 0) / 3);
+  // Geometric errors 2/4/8 accidentally make the unweighted dB mean equal the correct result.
+  const result = measurePsnr(request(frame(), frame(8, { value: c => 16 + [2, 4, 7][c] })));
+  assert.deepEqual(Object.values(result.planes).map(p => [p.sse, p.samples, p.mse]), [[64, 16, 4], [64, 4, 16], [196, 4, 49]]);
+  assert.equal(result.aggregate.sse, 324); assert.equal(result.aggregate.samples, 24); assert.equal(result.aggregate.mse, 13.5);
+  assert.ok(Math.abs(db(result.aggregate.psnr) - 10 * Math.log10(255 ** 2 / 13.5)) < 1e-12);
+  const meanDb = Object.values(result.planes).reduce((n, p) => n + db(p.psnr), 0) / 3;
+  const weightedMeanDb = (4 * db(result.planes.y.psnr) + db(result.planes.u.psnr) + db(result.planes.v.psnr)) / 6;
+  assert.ok(Math.abs(db(result.aggregate.psnr) - meanDb) > .1, 'incorrect unweighted dB averaging differs materially');
+  assert.ok(Math.abs(db(result.aggregate.psnr) - weightedMeanDb) > .1, 'sample weights must apply to SSE/count, not dB');
   const onePlane = measurePsnr(request(frame(), frame(8, { value: c => 16 + (c === 0 ? 1 : 0) })));
   assert.equal(onePlane.planes.u.psnr.kind, 'positive-infinity'); assert.equal(onePlane.aggregate.sse, 16);
   assert.equal(onePlane.aggregate.mse, 2 / 3); assert.equal(onePlane.aggregate.psnr.kind, 'finite');
