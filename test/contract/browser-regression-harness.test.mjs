@@ -11,6 +11,103 @@ import { observeTimelineProgress } from '../../scripts/timeline-progress.mjs';
 import { withinBrowserPhase, recordBrowserEvidence, saveBrowserFailure } from '../../scripts/browser-failure-evidence.mjs';
 import { trackChildShutdown } from '../../scripts/testing/lifecycle.mjs';
 import { assertCachedDisplayReuse } from '../../scripts/testing/analysis/display-reuse.mjs';
+import { waitForAnnotationMedia, annotationWorkspacePlayable } from '../../scripts/testing/agent-annotations-ready.mjs';
+import { advanceAdminPollClock } from '../../scripts/testing/admin-poll-clock.mjs';
+import { observeNavigations } from '../../scripts/testing/navigation-diagnostics.mjs';
+
+function navigationFixture() {
+  const page = Object.assign(new EventEmitter(), { isClosed: () => false, url: () => 'http://127.0.0.1/', mainFrame: () => null });
+  const browser = Object.assign(new EventEmitter(), { isConnected: () => true });
+  const server = Object.assign(new EventEmitter(), { listening: true });
+  return { page, browser, server, url: 'http://127.0.0.1/' };
+}
+
+test('navigation diagnostics preserve the original reload failure without retries or swallowed assertions', async () => {
+  const events = [], original = new Error('WebKit encountered an internal error'); let calls = 0;
+  const diagnostics = observeNavigations({ ...navigationFixture(), output: row => events.push(row), probe: async () => ({ health: { status: 200 } }), snapshot: async () => ({ busy: false, tracks: [] }) });
+  await assert.rejects(diagnostics.reload('fresh-runtime-reload', async () => { calls++; throw original; }), error => error === original);
+  assert.equal(calls, 1); assert.deepEqual(events.map(row => row.event), ['before-reload', 'reload-failed', 'after-reload-failure']);
+  assert.equal(events[2].serverListening, true); assert.equal(events[2].resource.health.status, 200);
+  assert.equal(events[2].snapshot.busy, false); diagnostics.dispose();
+});
+
+test('navigation observation distinguishes Worker context closure, page crash and service/browser loss', () => {
+  const fixture = navigationFixture(), events = [];
+  const diagnostics = observeNavigations({ ...fixture, output: row => events.push(row) });
+  const worker = Object.assign(new EventEmitter(), { url: () => 'blob:http://127.0.0.1/worker' });
+  fixture.page.emit('worker', worker); assert.equal(events.at(-1).workerContextsOpen, 1);
+  worker.emit('close'); assert.equal(events.at(-1).event, 'worker-context-closed'); assert.equal(events.at(-1).workerContextsOpen, 0);
+  assert.equal(worker.listenerCount('close'), 0, 'closed Worker objects are not retained by diagnostic listeners');
+  fixture.page.emit('crash'); fixture.browser.emit('disconnected'); fixture.server.listening = false; fixture.server.emit('close');
+  assert.deepEqual(events.slice(-3).map(row => row.event), ['page-crash', 'browser-disconnected', 'server-close']);
+  assert.equal(events.at(-1).serverListening, false);
+  diagnostics.dispose(); const count = events.length; fixture.page.emit('close'); assert.equal(events.length, count, 'normal fixture teardown is no longer observed');
+});
+
+test('diagnostic probe/snapshot/output failures never replace a navigation failure or skip the successful operation', async () => {
+  const original = new Error('navigation failed'); let calls = 0;
+  const diagnostics = observeNavigations({ ...navigationFixture(), output: () => { throw Error('output failed'); },
+    probe: async () => { throw Error('probe failed'); }, snapshot: async () => { throw Error('snapshot failed'); } });
+  assert.equal(await diagnostics.reload('first', async () => { calls++; return 42; }), 42);
+  await assert.rejects(diagnostics.reload('second', async () => { calls++; throw original; }), error => error === original);
+  assert.equal(calls, 2); diagnostics.dispose();
+});
+
+test('navigation logging is bounded, omits data URLs and retains final reload evidence after noisy events', async () => {
+  const fixture = navigationFixture(), events = [];
+  const diagnostics = observeNavigations({ ...fixture, output: row => events.push(row), probe: async () => ({ health: { status: 200 } }) });
+  for (let n = 0; n < 1000; n++) fixture.page.emit('requestfailed', { url: () => 'data:image/jpeg;base64,private-pixels', isNavigationRequest: () => false, failure: () => ({ errorText: 'cancelled' }) });
+  await assert.rejects(diagnostics.reload('final', async () => { throw Error('reload still fails'); }), /reload still fails/);
+  assert.ok(events.length < 300); assert.ok(events.at(-1).omittedRows > 0);
+  assert.equal(events.at(-1).event, 'after-reload-failure'); assert.equal(JSON.stringify(events).includes('private-pixels'), false);
+  diagnostics.dispose();
+});
+
+test('admin polling clock settles preexisting and newly scheduled real IO before advancing timeouts', async () => {
+  let pending = true, advanced = 0, waits = 0; const steps = [];
+  const page = { waitForLoadState: async state => { assert.equal(state, 'networkidle'); waits++; pending = false; },
+    clock: { runFor: async ms => { assert.equal(pending, false, 'real IO is settled before virtual time moves'); advanced += ms; pending = true; } } };
+  await advanceAdminPollClock(page, ms => steps.push(ms));
+  assert.equal(advanced, 10100); assert.deepEqual(steps, [...Array(10).fill(1000), 100]);
+  assert.equal(waits, 12); assert.equal(pending, false);
+});
+
+test('admin polling clock propagates genuine network and clock failures without CORS/error filtering', async () => {
+  const cors = new Error('access control checks'); let advanced = false;
+  await assert.rejects(advanceAdminPollClock({ waitForLoadState: async () => { throw cors; }, clock: { runFor: async () => { advanced = true; } } }), error => error === cors);
+  assert.equal(advanced, false);
+  const failure = new Error('clock failed');
+  await assert.rejects(advanceAdminPollClock({ waitForLoadState: async () => {}, clock: { runFor: async () => { throw failure; } } }), error => error === failure);
+});
+
+test('agent fixture observes pending-to-ready before snapshotting sources, without scanning or changing entries', async () => {
+  const a = { name: 'A.mp4', id: 'a'.repeat(24), version: '1'.repeat(24), state: 'pending' };
+  const b = { name: 'B.mp4', id: 'b'.repeat(24), version: '2'.repeat(24), state: 'ready' };
+  let reads = 0, clock = 0;
+  const library = { browse() { reads++; return { entries: [{ ...a, state: reads >= 3 ? 'ready' : a.state }, b] }; }, refresh() { throw Error('unexpected scan'); } };
+  const result = await waitForAnnotationMedia(library, ['A.mp4', 'B.mp4'], { timeoutMs: 100, pollMs: 25, now: () => clock, pause: async ms => { clock += ms; } });
+  assert.equal(reads, 3); assert.equal(clock, 50); assert.equal(a.state, 'pending');
+  assert.deepEqual(result.map(entry => entry.name), ['A.mp4', 'B.mp4']);
+});
+
+test('agent fixture readiness is bounded and preserves missing/offline failures', async () => {
+  let reads = 0, clock = 0;
+  const library = { browse() { reads++; return { entries: [{ name: 'A.mp4', state: 'pending' }] }; } };
+  await assert.rejects(waitForAnnotationMedia(library, ['A.mp4'], { timeoutMs: 50, pollMs: 25, now: () => clock, pause: async ms => { clock += ms; } }), /A.mp4:pending/);
+  assert.equal(reads, 3); assert.equal(clock, 50);
+  for (const state of ['missing', 'offline']) await assert.rejects(waitForAnnotationMedia({ browse: () => ({ entries: [{ name: 'A.mp4', state }] }) }, ['A.mp4']), new RegExp(`A.mp4:${state}`));
+});
+
+test('agent browser readiness rejects disabled/relink tracks that satisfied the old ready predicate', () => {
+  const failed = { busy: false, tracks: [{ name: 'A.mp4', pendingRelink: true, failure: { message: 'still being written' } }] };
+  assert.equal(failed.tracks.length === 1 && !failed.busy, true);
+  assert.throws(() => annotationWorkspacePlayable(failed), /still being written/);
+  assert.throws(() => annotationWorkspacePlayable({ busy: false, tracks: [{ pendingRelink: true }] }), /pending relink/);
+  assert.equal(annotationWorkspacePlayable({ busy: false, tracks: [{ frame: { ptsUs: 0 } }] }), true);
+  assert.equal(annotationWorkspacePlayable({ busy: true, tracks: [{ frame: { ptsUs: 0 } }] }), false);
+  assert.equal(annotationWorkspacePlayable({ busy: true, tracks: [{ pendingRelink: true, frame: null, failure: null }] }), false, 'progressive placeholders are still loading');
+  assert.equal(annotationWorkspacePlayable({ busy: false, tracks: [{}] }), false);
+});
 
 test('a health poll inside display/hover reproduces the old total-count failure without new analysis', () => {
   const base = 'http://127.0.0.1:43210/', state = [{ state: 'ready', counters: { open: 1, step: 12, products: 1 } }];
