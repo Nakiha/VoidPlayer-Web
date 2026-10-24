@@ -14,6 +14,7 @@
 | 媒体库与存储 | [媒体库索引](media-library-evolution.md)、[存储位置](library-location.md) |
 | 索引、定位与时间戳 | [渐进索引](progressive-indexing.md)、[统一索引](unified-indexing.md)、[FLV 时间线](flv-timeline.md)、[MP4 Range 边界](mp4-range-boundaries.md)、[时间戳兼容](timestamp-compatibility.md) |
 | 色彩与帧资源 | [色彩链路契约](color-pipeline.md)、[HDR 支持](hdr-support.md) |
+| 源平面质量测量 | [PSNR 核心](source-plane-psnr.md)、[内部单帧桥](source-frame-pair-psnr.md) |
 | 默认静音与单轨出声 | [顺带音频边界](opportunistic-audio.md) |
 | 外观与界面 | [主题约定](../src/themes/README.md)、[本地化维护](localization.md) |
 

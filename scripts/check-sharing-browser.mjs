@@ -8,6 +8,19 @@ import {startService} from '../server/runtime.ts';
 const root=await mkdtemp(path.join(os.tmpdir(),'vp-workspace-sharing-'));
 const name=process.argv[2]??'webkit';let service,browser;
 const evidence=path.resolve('.run/workspace-sharing-browser-'+name);await mkdir(evidence,{recursive:true});
+let phase='startup',closing=false,failed=false;
+const contexts=[];
+const diagnostic=(event,detail={})=>console.error(JSON.stringify({sharingDiagnostic:event,at:new Date().toISOString(),engine:name,phase,closing,...detail}));
+async function trace(context,label){
+  await context.tracing.start({screenshots:true,snapshots:true,sources:true});contexts.push({context,label});
+  context.on('close',()=>diagnostic('context-closed',{label}));
+}
+function watch(page,label,errors){
+  page.on('crash',()=>diagnostic('page-crashed',{label}));
+  page.on('close',()=>diagnostic('page-closed',{label}));
+  page.on('pageerror',error=>{errors.push(error.message);diagnostic('page-error',{label,message:error.message});});
+  page.on('requestfailed',request=>diagnostic('request-failed',{label,path:new URL(request.url()).pathname,failure:request.failure()}));
+}
 const call=(page,name,args={})=>page.evaluate(({name,args})=>window.voidPlayer.tools.find(t=>t.name===name).execute(args),{name,args});
 const settings=async page=>{if(!await page.locator('#settings').evaluate(e=>e.open))await page.locator('#settings-open').click();await page.locator('#settings-tab-workspace').click();await page.waitForFunction(()=>!document.querySelector('#saved-workspace-name').disabled);};
 try{
@@ -18,8 +31,9 @@ try{
   service=await startService(config);await service.library.refresh();config.port=service.server.address().port;
   const base=`http://127.0.0.1:${config.port}`;
   browser=await(name==='chromium'?chromium:webkit).launch({headless:true});
-  const context=await browser.newContext({locale:'zh-CN', viewport:{width:1280,height:900}}),page=await context.newPage(),errors=[];
-  const watch=p=>p.on('pageerror',e=>errors.push(e.message));watch(page);
+  browser.on('disconnected',()=>diagnostic('browser-disconnected'));
+  const context=await browser.newContext({locale:'zh-CN', viewport:{width:1280,height:900}});await trace(context,'sender');
+  const page=await context.newPage(),errors=[];watch(page,'sender',errors);phase='initial-share';
   await page.addInitScript(()=>Object.defineProperty(navigator.clipboard,'writeText',{value:async value=>{window.testClipboard=value;}}));
   await page.addInitScript(()=>window.addEventListener('voidplayer-annotation-status',event=>{window.testAnnotationStatus=event.detail;}));
   await page.goto(base);await page.locator('#identity-welcome [data-guest]').click();
@@ -41,7 +55,8 @@ try{
   assert.equal(await page.locator('dialog[open]').count(),0,'one click shares without a wizard');assert.equal(await page.locator('#review-sharing,#review-context').count(),0);
   const record=await page.request.get(base+'/api/workspaces/'+id).then(r=>r.json());assert.equal(record.name,'画质对比');assert.equal(record.document.marks.length,0);assert.equal(record.document.positionUs,200000);
   await page.screenshot({path:path.join(evidence,'01-one-click-sharing.png')});
-  const recipient=await browser.newContext({locale:'zh-CN', viewport:{width:1280,height:900}}),other=await recipient.newPage();watch(other);
+  const recipient=await browser.newContext({locale:'zh-CN', viewport:{width:1280,height:900}});await trace(recipient,'recipient');
+  const other=await recipient.newPage();watch(other,'recipient',errors);phase='recipient-restore';
   await other.goto(link);await other.locator('#identity-welcome [data-guest]').click();
   await other.waitForFunction(id=>window.voidPlayer?.getState().marks.some(m=>m.id===id) && !window.voidPlayer.getState().busy,later.id);
   assert.ok(!(await call(other,'get_review_session')).marks.some(m=>m.id===removed.id),'sharing must not resurrect a deletion');
@@ -62,6 +77,7 @@ try{
   // The session can finish restoring before the annotation-space request and
   // saved-record binding settle. Sharing in that gap must not create a copy.
   let releaseRestore;
+  phase='gated-restore';
   const restoreGate=new Promise(resolve=>releaseRestore=resolve);
   const spaceUrl=`**/api/annotations/spaces/${record.space}?*`;
   await page.route(spaceUrl,async route=>{await restoreGate;await route.continue();});
@@ -69,10 +85,13 @@ try{
   await page.locator('#saved-workspace-reload').click();await restoreReached;await page.waitForFunction(()=>window.voidPlayer.getState().positionUs===400000 && !window.voidPlayer.getState().busy);assert.equal((await call(page,'get_review_session')).tracks.length,1);
   assert.equal(await page.locator('#workspace-share').isDisabled(),true,'share waits for the restored server binding');
   await assert.rejects(page.evaluate(()=>window.voidPlayer.shareWorkspace()),/工作区正在保存/);
+  phase='restore-binding';diagnostic('restore-gate-release');
   releaseRestore();await page.waitForFunction(()=>!document.querySelector('#saved-workspace-name').disabled);await page.unroute(spaceUrl);
+  diagnostic('restore-binding-settled');phase='live-annotations';
   assert.equal(await page.locator('#workspace-share').isEnabled(),true);
   await page.waitForFunction(id=>window.voidPlayer.getState().marks.some(m=>m.id===id),mark.id);
   await page.evaluate(id=>window.voidPlayer.deleteMark(id),mark.id);await other.waitForFunction(id=>!window.voidPlayer.getState().marks.some(m=>m.id===id),mark.id);
+  phase='recipient-reload';
   await other.locator('#settings-close').click();await other.reload();await other.waitForFunction(()=>window.voidPlayer?.getState().tracks.length===1&&!window.voidPlayer.getState().busy);await other.waitForFunction(id=>window.voidPlayer.getState().marks.some(m=>m.id===id),later.id);
   assert.ok(!(await call(other,'get_review_session')).marks.some(m=>m.id===mark.id),'opening the link reads current annotations');
   // Sharing again saves to the existing workspace and copies the same address.
@@ -84,8 +103,14 @@ try{
   assert.equal(await other.locator('#workspace-share-link').count(),0);assert.equal(await other.locator('#review-history,#review-snapshot,#review-publish').count(),0);
   for(const scheme of ['light','dark']){await other.emulateMedia({colorScheme:scheme});await other.screenshot({path:path.join(evidence,`02-${scheme}.png`)});}
   await other.setViewportSize({width:390,height:844});assert.ok(await other.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await other.screenshot({path:path.join(evidence,'03-narrow.png')});await other.locator('.toast-error .toast-close').click();
+  phase='service-restart';
   await service.close();service=await startService(config);await service.library.refresh();await other.reload();await other.waitForFunction(()=>window.voidPlayer?.getState().positionUs===400000&&!window.voidPlayer.getState().busy);await other.waitForFunction(id=>window.voidPlayer.getState().marks.some(m=>m.id===id),later.id);
   // Source deletion makes the saved link show a missing source, not an immutable copy.
+  phase='missing-source';
   await rm(path.join(root,'media/sample.mp4'));await service.library.refresh();await other.reload();await other.waitForFunction(()=>window.voidPlayer?.getState().tracks[0]?.pendingRelink && !window.voidPlayer.getState().busy);
   assert.deepEqual(errors,[]);console.log(`PASS ${name}: one-click writable sharing, source/position/layout restoration, recipient saves, conflicts, live annotations/deletion, same URL, clipboard, restart and missing sources`);
-}finally{await browser?.close();await service?.close();await rm(root,{recursive:true,force:true});}
+}catch(error){failed=true;diagnostic('test-failed',{message:String(error),stack:error?.stack});throw error;}
+finally{
+  for(const {context,label} of contexts)try{await context.tracing.stop(failed?{path:path.join(evidence,`${label}-failure-${Date.now()}.zip`)}:{});}catch(error){diagnostic('trace-stop-failed',{label,message:String(error)});}
+  closing=true;diagnostic('cleanup-start');await browser?.close();await service?.close();await rm(root,{recursive:true,force:true});
+}

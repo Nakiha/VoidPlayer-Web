@@ -5,6 +5,7 @@ export interface Module {
 export type Imports = Record<string, Record<string, unknown>>;
 export class Memory {
     readonly buffer: ArrayBufferLike;
+    grow(delta: number): number;
 }
 export class Instance {
     constructor(module: Module, imports: Imports);
