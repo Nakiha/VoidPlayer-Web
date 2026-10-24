@@ -15,11 +15,11 @@ export class FramePairClient {
     this.active = true;
     return new Promise((resolve, reject) => {
       let worker: PairWorker | undefined, timer: ReturnType<typeof setTimeout> | undefined, settled = false;
-      const finish = (error?: unknown, result?: FramePairResult) => {
+      const finish = (outcome: { ok: true; result: FramePairResult } | { ok: false; error: unknown }) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer); signal.removeEventListener('abort', abort);
-        const release = () => { this.active = false; if (error) reject(error); else resolve(result!); };
+        const release = () => { this.active = false; if (outcome.ok) resolve(outcome.result); else reject(outcome.error); };
         if (worker) {
           worker.onmessage = worker.onerror = worker.onmessageerror = null;
           // Browser termination is synchronous; asynchronous test hosts must acknowledge exit.
@@ -27,20 +27,20 @@ export class FramePairClient {
         }
         release();
       };
-      const abort = () => finish(signal.reason);
+      const abort = () => finish({ ok: false, error: signal.reason });
       try {
         worker = this.createWorker();
         worker.onmessage = ({ data }) => {
-          if (data?.ok === true) finish(undefined, data.result);
-          else finish(new FramePairError(data?.code ?? 'decoder-error', data?.error ?? 'Invalid Worker reply', data?.field));
+          if (data?.ok === true) finish({ ok: true, result: data.result });
+          else finish({ ok: false, error: new FramePairError(data?.code ?? 'decoder-error', data?.error ?? 'Invalid Worker reply', data?.field) });
         };
-        worker.onerror = event => finish(new FramePairError('decoder-error', event.message));
-        worker.onmessageerror = () => finish(new FramePairError('decoder-error', 'Worker message could not be decoded'));
+        worker.onerror = event => finish({ ok: false, error: new FramePairError('decoder-error', event.message) });
+        worker.onmessageerror = () => finish({ ok: false, error: new FramePairError('decoder-error', 'Worker message could not be decoded') });
         signal.addEventListener('abort', abort, { once: true });
-        timer = setTimeout(() => finish(new FramePairError('budget-exceeded', 'Worker execution deadline exceeded')), budget.maxElapsedMs);
+        timer = setTimeout(() => finish({ ok: false, error: new FramePairError('budget-exceeded', 'Worker execution deadline exceeded') }), budget.maxElapsedMs);
         if (signal.aborted) { abort(); return; }
         worker.postMessage({ request, sources, base });
-      } catch (error) { finish(error); }
+      } catch (error) { finish({ ok: false, error }); }
     });
   }
 }

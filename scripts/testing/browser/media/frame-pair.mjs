@@ -42,9 +42,16 @@ try {
       let failure;
       try { await client.measure(invalid, sources, base, new AbortController().signal); }
       catch (error) { failure = { code: error.code, field: error.field }; }
-      return { result, equal, failure };
+      const cancellations = [];
+      for (const reason of [null, false, 0, '']) {
+        const abort = new AbortController(), pending = client.measure(request, sources, base, abort.signal);
+        abort.abort(reason);
+        cancellations.push(await pending.then(() => ({ state: 'fulfilled' }), error => ({ state: 'rejected', reason: error })));
+      }
+      return { result, equal, failure, cancellations };
     }, { request, a: { binding: a.source.binding, index: a.source.index }, b: { binding: b.source.binding, index: b.source.index }, flv: [...flv], base });
     assert.deepEqual(result.failure, { code: 'unsupported-format', field: 'roi.chroma-alignment' });
+    assert.deepEqual(result.cancellations, [null, false, 0, ''].map(reason => ({ state: 'rejected', reason })));
     assert.equal(result.result.metric.bitDepth, depth); assert.ok(result.result.metric.aggregate.sse > 0);
     assert.equal(result.equal.metric.aggregate.sse, 0); assert.equal(result.equal.metric.aggregate.psnr.kind, 'positive-infinity');
     assert.equal(result.result.provenance.distorted.picture.au, 1);

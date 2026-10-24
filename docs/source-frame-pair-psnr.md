@@ -29,13 +29,13 @@ v1 仅接受单配置、完整且无恢复缺口的 FLV / 单轨 Enhanced FLV，
 
 heap cap 在专用实例的 Emscripten JS `memory.grow` 路径上安装，并检查初始/调用后的实际 memory；当前锁定单线程 core 的分配器使用该路径。它不是任意第三方 WASM 的通用沙箱，也不是浏览器整个进程的 RSS 上限；代码、Blob、结构化克隆和 JavaScript 对象开销不等于 WASM heap。不得将未知 core 或 pthread core 接进此桥并宣称拥有同等上限。播放实例不传 cap 参数，沿用原来的装载行为。
 
-一个 `FramePairClient` 同时只准入一个 Worker，无队列。成功、失败、`error`、`messageerror`、初始发送失败、取消和超时共用终态清理：移除事件/abort listener、清 timer、真实 terminate，再释放容量。异步 Worker 适配器须等退出确认；终止失败时保留 busy，防止不确定存活的 Worker 与新任务重叠。同步 PSNR / WASM 无法靠 Worker 内 abort 消息抢占，所以宿主直接终止 Worker，不能仅发送取消通知后即重用准入槽。
+一个 `FramePairClient` 同时只准入一个 Worker，无队列。成功、失败、`error`、`messageerror`、初始发送失败、取消和超时共用终态清理：移除事件/abort listener、清 timer、真实 terminate，再释放容量。终态使用显式成功/失败标记，取消保留原始 `signal.reason`，包括 `null / false / 0 / 空字符串`，不能按错误值真伪区分成功。异步 Worker 适配器须等退出确认；终止失败时保留 busy，防止不确定存活的 Worker 与新任务重叠。同步 PSNR / WASM 无法靠 Worker 内 abort 消息抢占，所以宿主直接终止 Worker，不能仅发送取消通知后即重用准入槽。
 
 失败没有分数。身份与版本错误、缓存缺失、来源不支持、超预算、decoder 错误使用明确类别；数值核心的格式/色彩/ROI 错误保留原始 code。未将失败改成零分、缓存命中或降级路径。
 
 ## 验证入口与边界
 
-- `node --test test/unit/frame-pair.test.ts`：不同媒体/PTS 的明确配对，重复 PTS、错误 AU/PTS/namespace/build、版本漂移、缺缓存、源 tag/配置不一致、依赖 AU、多配置、ROI、读取/包/索引/像素/输出/样本预算，所有 Worker 终态、迟到消息和终止前准入，独立 memory.grow cap。
-- `node --test test/media/frame-pair.test.ts`：FFmpeg 现场生成 H.264 8 位及 HEVC 8/10 位，再以相同压缩 AU 构造 legacy/enhanced FLV；在真实 Node Worker 内运行生产浏览器 Worker 入口（仅适配消息与 file fetch），原始 WASM 平面的 ROI 每分量/aggregate 与独立原生 FFmpeg 解码码值的精确 SSE 一致。保留的真实播放帧像素不变，桥执行期间播放 decoder 的 reset/send/receive/drain 调用为零，之后 next 仍返回预期帧。另以真实不可合作 Worker 验证取消/超时等待退出后才能再次准入，及真实 WASM 的较小 heap 准入失败。
+- `node --test test/unit/frame-pair.test.ts`：不同媒体/PTS 的明确配对，重复 PTS、错误 AU/PTS/namespace/build、版本漂移、缺缓存、源 tag/配置不一致、依赖 AU、多配置、ROI、读取/包/索引/像素/输出/样本预算，所有 Worker 终态、四种假值取消原因的同步/异步拒绝、迟到消息和终止前准入，独立 memory.grow cap。
+- `node --test test/media/frame-pair.test.ts`：FFmpeg 现场生成 H.264 8 位及 HEVC 8/10 位，再以相同压缩 AU 构造 legacy/enhanced FLV；在真实 Node Worker 内运行生产浏览器 Worker 入口（仅适配消息与 file fetch），原始 WASM 平面的 ROI 每分量/aggregate 与独立原生 FFmpeg 解码码值的精确 SSE 一致。保留的真实播放帧像素不变，桥执行期间播放 decoder 的 reset/send/receive/drain 调用为零，之后 next 仍返回预期帧。在上述三种编码/位深与两种封装中，额外插入源配置里逐字节相同的 SPS/VPS 后仍须得到相同精确 SSE；只翻转其中一个字节必须明确拒绝。实际仅编码 matrix、缺少 primaries/transfer 标签的 AVC 通过真实取帧链路后必须返回 missing-color，不能补齐。另以真实不可合作 Worker 验证取消/超时等待退出后才能再次准入，及真实 WASM 的较小 heap 准入失败。
 
 单元用例登记在 source/fast/contract/unit；真实媒体用例登记在 media/ci-node-media/unit。`node scripts/testing/browser/media/frame-pair.mjs chromium` / `webkit` 还在真实浏览器中直接调用内部客户端，覆盖 8/10 位实际 Worker、相同图无穷 PSNR、非零误差与连续独立调用；它们登记在 browser / ci-analysis-ui / ci-analysis-browser，并不加载 Session 或 GUI。本轮没有 UI 接线或浏览器全产品质量流程。播放性能历史失败与 WebKit reload 内部错误的未知根因仍原样保留，本桥不能据此被称为“性能已达标”或“旧问题已修复”。

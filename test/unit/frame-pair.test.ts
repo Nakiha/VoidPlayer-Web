@@ -144,3 +144,39 @@ test('WASM memory growth cap rejects initial and subsequent over-budget allocati
   assert.throws(() => memory.grow(1), WasmMemoryBudgetError);
   assert.equal(memory.buffer.byteLength, 2 * 65536);
 });
+
+for (const reason of [null, false, 0, ''] as const) for (const asynchronous of [false, true])
+  test(`falsy abort ${JSON.stringify(reason)} with ${asynchronous ? 'asynchronous' : 'synchronous'} termination rejects and preserves admission ordering`, async () => {
+    const a = await fixture(), r = pairRequest(a.target), controller = new AbortController();
+    let acknowledge!: () => void, busyAtTermination: Promise<void> | undefined;
+    const stopped = new Promise<void>(resolve => { acknowledge = resolve; });
+    const workers: (PairWorker & { terminated: number })[] = [];
+    const client = new FramePairClient(() => {
+      const worker: PairWorker & { terminated: number } = { onmessage: null, onerror: null, onmessageerror: null, terminated: 0, postMessage() {},
+        terminate() {
+          this.terminated++;
+          busyAtTermination = assert.rejects(client.measure(r, [a.source, a.source], '', signal()), code('busy'));
+          if (asynchronous) return stopped;
+        } };
+      workers.push(worker); return worker;
+    });
+    let state = 'pending';
+    const observed = client.measure(r, [a.source, a.source], '', controller.signal).then(
+      value => { state = 'fulfilled'; return { kind: 'fulfilled' as const, value }; },
+      error => { state = 'rejected'; return { kind: 'rejected' as const, error }; });
+    controller.abort(reason);
+    const worker = workers[0];
+    assert.equal(worker.terminated, 1);
+    assert.equal(worker.onmessage, null); assert.equal(worker.onerror, null); assert.equal(worker.onmessageerror, null);
+    if (asynchronous) {
+      await Promise.resolve(); assert.equal(state, 'pending', 'promise must wait for actual termination acknowledgement');
+      await assert.rejects(client.measure(r, [a.source, a.source], '', signal()), code('busy'));
+      acknowledge();
+    }
+    assert.deepEqual(await observed, { kind: 'rejected', error: reason });
+    await busyAtTermination;
+    const nextAbort = new AbortController(), next = client.measure(r, [a.source, a.source], '', nextAbort.signal);
+    nextAbort.abort(); await assert.rejects(next, { name: 'AbortError' });
+    await busyAtTermination;
+    assert.equal(workers.length, 2); assert.equal(workers[1].terminated, 1);
+  });
