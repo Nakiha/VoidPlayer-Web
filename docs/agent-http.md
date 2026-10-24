@@ -29,3 +29,5 @@ HTTP 客户端先显式 POST `/api/identity` 并保存 cookie，再向 `/api/ann
 本阶段交付 #113 的 HTTP 入口与 #119 的首条持久业务链路：标注写入、可追踪事件、GUI 被动观察。工作区业务的统一命令迁移、持久评分任务、任务取消/进度/并发上限、结果证据和计算节点仍按 [roadmap #112](https://github.com/Nakiha/VoidPlayer-Web/issues/112) 推进。
 
 新增 Node 回归覆盖：无前端资源的 HTTP 操作、只读部署、Origin/身份检查、能力状态、重复请求、版本冲突、重启、事务回滚、v1 升级、事件分页及保留窗口。浏览器回归验证先由 HTTP 写入、之后打开 GUI 恢复，及播放 A 时收到 B 的操作仍保持轨道、播放与焦点。
+
+已完成单帧 PSNR 结果可通过同一标注命令入口的 `attach-quality-result` 显式共享到已有标注。精确任务/attempt/digest、媒体版本/实际源 PTS/ROI、幂等重放与导入降权规则见 [PSNR 标注证据](annotation-psnr-evidence.md)。任务私有读取权限不会因共享附件扩大。

@@ -4,7 +4,8 @@ import type { AnnotationOperation, AnnotationPage, AnnotationRecord } from '../.
 import { parseAnnotationOperation } from '../../shared/review/annotation-command.ts';
 import type { AnnotationEventPage } from '../../shared/review/annotation-events.ts';
 export class AnnotationClient {
-  constructor(private signal: AbortSignal) {}
+  private signal: AbortSignal;
+  constructor(signal: AbortSignal) { this.signal=signal; }
   async request<T>(url: string, method='GET', body?: unknown, actor=currentActor()?.id): Promise<T> {
     const response=await fetch(url,{method,cache:'no-store',headers:{...(actor?{'x-voidplayer-actor':actor}:{}),...(method==='GET'?{}:{'x-voidplayer-action':'annotation','content-type':'application/json'})},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.any([this.signal,AbortSignal.timeout(10000)])});
     const result=await response.json(); if(!response.ok)throw apiError(response.status, result);return result;

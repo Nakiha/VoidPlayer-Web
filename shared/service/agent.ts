@@ -53,6 +53,7 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
       actionHeader: 'X-VoidPlayer-Action', cookieRequired: true, completion: 'server-commit', guiAcknowledgementRequired: false },
     annotations: { version: 1, spaces: '/api/annotations/spaces',
       events: '/api/annotations/events/{space}?after={cursor}',
+      qualityEvidence: {action:'attach-quality-result',metric:'psnr',result:'completed-owned-job',target:'existing-primary-source-version-and-source-pts',roi:'original-visible-pixel-grid',immutable:true,maxCount:4,maxBytes:131072,importVerification:'historical',workspaceVersion:2},
       identity: ['space', 'id'], concurrency: 'expected-revision', idempotency: 'operationId',
       frameTimeUnit: 'integer-microseconds', target: 'document.media + mark.mediaId + mark.frame',
       slotMeaning: 'legacy-display-hint; no loaded track required' },

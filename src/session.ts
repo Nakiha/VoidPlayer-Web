@@ -1,3 +1,4 @@
+import { evidenceWorkspaceVersion } from '../shared/review/quality-evidence.ts';
 import type { PresentedFrameToken } from '../shared/analysis/bitstream/contract.ts';
 import type { BitstreamAnalysisService, DeepAnalysisState } from './analysis/bitstream/service.ts';
 import { AnalysisFailure } from '../shared/analysis/bitstream/failure.ts';
@@ -1082,7 +1083,7 @@ export class ReviewSession {
   }
   exportWorkspace(serverUrl: string): WorkspaceFile {
     const media = [...this.catalog.values()].map(info => ({ ...info, ...(info.source ? { source: { ...info.source, url: workspaceUrl(info.source.url, serverUrl) } } : {}) }));
-    return structuredClone({ schema: 'voidplayer-workspace', version: 1, generatedAt: new Date().toISOString(), serverUrl: workspaceUrl(serverUrl), positionUs: this.positionUs,
+    return structuredClone({ schema: 'voidplayer-workspace', version: evidenceWorkspaceVersion(this.marks), generatedAt: new Date().toISOString(), serverUrl: workspaceUrl(serverUrl), positionUs: this.positionUs,
       tracks: this.order.flatMap(slot => { const t = this.tracks.get(slot); return t ? [{ slot, mediaId: t.source.info.id, offsetUs: t.offsetUs, visible: t.visible !== false }] : []; }),
       comparison: this.comparisonConditions(),
       media, marks: this.marks, viewport: new Viewport().snapshot() });
@@ -1214,7 +1215,7 @@ export class ReviewSession {
     return currentComparisonConditions();
   }
   exportReview() {
-    return structuredClone({ schema: 'voidplayer-web-review', version: 1, generatedAt: new Date().toISOString(),
+    return structuredClone({ schema: 'voidplayer-web-review', version: evidenceWorkspaceVersion(this.marks), generatedAt: new Date().toISOString(),
       mediaIdentity: 'session-uuid-and-file-metadata-not-content-hash',
       frameEvidence: 'decoded-and-drawn-to-canvas', color: currentColorEvidence(),
       comparison: this.comparisonConditions(), comparisonScope: 'export-time', markComparisonConditions: 'not-recorded',

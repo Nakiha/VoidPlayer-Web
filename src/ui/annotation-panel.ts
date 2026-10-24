@@ -1,3 +1,4 @@
+import { showQualityEvidence } from './quality-evidence.ts';
 import type { Mark, Slot } from '../../shared/review/model.ts';
 import { formatTime } from '../../shared/review/model.ts';
 import { annotationThumbnails } from './annotation-thumbnails.ts';
@@ -42,6 +43,7 @@ export function installAnnotationPanel(
   remove: (id: string) => void,
   edit: (id: string, ptsUs: number, slot: Slot) => void,
   modeChanged: (expanded: boolean) => void,
+  attachQuality?: (id:string) => Promise<void>,
 ) {
   const dock = document.getElementById('subtracks-panel')!;
   const list = document.getElementById('selected-marks')!;
@@ -75,7 +77,14 @@ export function installAnnotationPanel(
       accept.onclick = () => { hidePreview(); remove(mark.id); toggle.focus(); };
       confirmation.append(label, cancel, accept); container.append(confirmation); cancel.focus();
     };
-    actions.append(removeButton); return actions;
+    actions.append(removeButton);
+    const attach=document.createElement('button');attach.type='button';attach.className='annotation-attach-psnr';attach.textContent=t(msg('quality.attach', '关联 PSNR'));
+    attach.onclick=e=>{e.stopPropagation();hidePreview();void attachQuality?.(mark.id);};actions.append(attach);
+    if(mark.qualityEvidence?.length){
+      const evidence=document.createElement('button');evidence.type='button';evidence.className='annotation-psnr-evidence';evidence.textContent=`PSNR (${mark.qualityEvidence.length})`;
+      evidence.onclick=e=>{e.stopPropagation();hidePreview();const snapshot=session.exportWorkspace(location.origin+'/');const original=snapshot.marks.find(m=>m.id===mark.id);if(original)showQualityEvidence(original,{mark:original,media:snapshot.media});};actions.append(evidence);
+    }
+    return actions;
   }
   // Strip cards and the hover preview share one layout; only the wrapper
   // differs (a seeking button in the strip, inert content in the dialog).
@@ -83,7 +92,7 @@ export function installAnnotationPanel(
     const row = document.createElement('div'); row.className = 'annotation-row'; row.dataset.slot = slot; identifyMark(row, mark.id);
     const entry = document.createElement(entryTag); entry.className = 'mark-entry';
     identifyMark(entry, mark.id); bindMarkHover(entry, mark.id);
-    entry.append(markContent(mark, slot, actions(mark, slot, row), session)); row.append(entry);
+    entry.append(markContent(mark, slot, undefined, session)); row.append(entry, actions(mark, slot, row));
     return { row, entry };
   }
   function showPreview(button: HTMLElement, mark: Mark, slot: Slot) {

@@ -261,6 +261,27 @@ GUI visibility may lag and is never part of the success condition.
 
 ## Follow operations
 
+Attach a completed PSNR result to an existing annotation with the same endpoint:
+{"operationId":"stable-attach-id","id":"annotation-id","revision":1,
+ "action":"attach-quality-result","client":{"kind":"agent"},
+ "evidence":{"jobId":"JOB","attemptId":"ATTEMPT","digest":"64-lowercase-hex-sha256","side":"reference"}}
+Obtain attemptId/digest from your completed /api/quality/jobs/JOB. This explicit
+sharing action publishes both source identities, ROI and immutable numerical and
+provenance facts to annotation viewers. It excludes private submission/client/
+idempotency data. Another actor cannot attach or inspect your private job.
+The selected side must match the annotation's primary library source ID/version,
+service origin, actual source PTS, and explicit region (if present), in the
+unrotated visible grid. No loaded track, pause, frame cursor, scoring, index
+building or new annotation is involved. Revision conflicts require reading and
+reconciling the annotation. Retry a lost response with the identical operationId
+and body: the receipt is checked before resolving a possibly expired result.
+mark.qualityEvidence holds at most four immutable attachments / 128 KiB total.
+Ordinary text/reply/region edits retain them; changing the region may make old
+facts inapplicable. GET annotation returns these explicitly shared facts without
+granting access to the original private job. Imports/copies are historical and
+cannot confer service verification. Exports with evidence require workspace or
+review version 2; old readers reject instead of silently dropping attachments.
+
 GET /api/annotations/events/SPACE returns the latest 50 retained operations.
 Add ?after=CURSOR to resume in ascending sequence (100 per page). Events include
 version, sequence, operationId, requestId when available, actor, declared client,

@@ -24,7 +24,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const HISTORY_KEY = 'voidplayer.sources.v1';
 function readHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]'); } catch { return []; } }
 
-export function installWorkbench(session: ReviewSession, act: Action, addMark: (slot: Slot, markId?: string) => void, notify: (message: string) => void = () => {}) {
+export function installWorkbench(session: ReviewSession, act: Action, addMark: (slot: Slot, markId?: string) => void, notify: (message: string) => void = () => {}, attachQuality?: (id:string)=>Promise<void>) {
   const view = new WorkspaceState();
   if (new URL(location.href).searchParams.get('library') === '1') view.panels.sources = true;
   const catalog = new SourceCatalog(readHistory(), { isolateLibraries: true });
@@ -42,7 +42,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     const style = getComputedStyle(workspace);
     return Number.parseFloat(style.getPropertyValue('--annotation-cards-height')) - Number.parseFloat(style.getPropertyValue('--annotation-symbols-height'));
   };
-  const annotations = installAnnotationPanel(session, ptsUs => void act(() => session.seek(ptsUs), 'ui.mark-seek'), id => void act(() => session.deleteMark(id), 'ui.mark-delete'), (id, ptsUs, slot) => void act(async () => { select(slot); await session.seek(ptsUs); addMark(slot, id); }, 'ui.mark-edit'), open => resize(dockHeight + (open ? 1 : -1) * annotationHeightDelta()));
+  const annotations = installAnnotationPanel(session, ptsUs => void act(() => session.seek(ptsUs), 'ui.mark-seek'), id => void act(() => session.deleteMark(id), 'ui.mark-delete'), (id, ptsUs, slot) => void act(async () => { select(slot); await session.seek(ptsUs); addMark(slot, id); }, 'ui.mark-edit'), open => resize(dockHeight + (open ? 1 : -1) * annotationHeightDelta()), attachQuality);
 
   // Panes must not call shared callbacks at factory top level: select/render
   // are hoisted function declarations, but resize/sources resolve later.

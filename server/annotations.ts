@@ -9,6 +9,8 @@ import { AnnotationCommandError, applyAnnotationOperation, parseAnnotationOperat
 import { annotationEvent } from '../shared/review/annotation-events.ts';
 import type { AnnotationEvent, AnnotationEventPage } from '../shared/review/annotation-events.ts';
 import type { AnnotationRecord, AnnotationPage } from '../shared/review/annotation-record.ts';
+import type { QualityEvidenceRef, QualityEvidence } from '../shared/review/quality-evidence.ts';
+import type { QualityJobResult } from '../shared/analysis/quality/jobs.ts';
 
 const validId = (id: unknown): id is string => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,200}$/.test(id);
 export const ANNOTATION_BYTES = 512 * 1024;
@@ -19,7 +21,7 @@ export class AnnotationStore {
     if (file !== ':memory:') mkdirSync(path.dirname(file), { recursive: true });
     const db = this.db = openIndexDatabase(file);
     const version = Number(db.prepare('PRAGMA user_version').get()!.user_version);
-    if (version > 2) { db.close(); throw new Error('标注数据库来自更新的程序。'); }
+    if (version > 3) { db.close(); throw new Error('标注数据库来自更新的程序。'); }
     db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=1000;
       CREATE TABLE IF NOT EXISTS spaces(id TEXT PRIMARY KEY,name TEXT NOT NULL,created_at TEXT NOT NULL);
       INSERT OR IGNORE INTO spaces VALUES('default','共享评审',strftime('%Y-%m-%dT%H:%M:%fZ','now'));
@@ -35,7 +37,7 @@ export class AnnotationStore {
       CREATE INDEX IF NOT EXISTS annotation_events_space ON annotation_events(space,sequence);
       CREATE TABLE IF NOT EXISTS annotation_event_floor(id INTEGER PRIMARY KEY,sequence INTEGER NOT NULL);
       INSERT OR IGNORE INTO annotation_event_floor SELECT 1,sequence FROM annotation_clock WHERE id=1;
-      PRAGMA user_version=2;`);
+      PRAGMA user_version=3;`);
   }
   spaces() { return this.db.prepare('SELECT id,name FROM spaces ORDER BY created_at,id').all(); }
   createSpace(name: unknown) {
@@ -79,7 +81,8 @@ export class AnnotationStore {
       this.db.exec('COMMIT'); return page;
     } catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
-  mutate(space: string, value: unknown, actor: Actor, requestId?: string): AnnotationRecord {
+  mutate(space: string, value: unknown, actor: Actor, requestId?: string,
+    quality?: { origin: string; resolve(ref: QualityEvidenceRef): QualityJobResult }): AnnotationRecord {
     this.space(space);
     this.db.exec('BEGIN IMMEDIATE');
     try {
@@ -92,7 +95,19 @@ export class AnnotationStore {
         this.db.exec('COMMIT'); return JSON.parse(String(receipt.result));
       }
       const current = this.read(space, operation.id), now = new Date().toISOString();
-      const document = applyAnnotationOperation(operation, current, actor, now);
+      let evidence: QualityEvidence | undefined;
+      if (operation.action === 'attach-quality-result') {
+        // Resolve after the receipt and revision check: a lost response can be
+        // replayed after source/result cleanup without consulting the private job.
+        if (!current || current.deleted || current.revision !== operation.revision)
+          throw new AnnotationCommandError(409, 'annotation-revision-conflict', 'Annotation changed or was deleted.');
+        if (!quality) throw new AdminError(503, 'Quality evidence is unavailable.', 'evidence-unavailable');
+        const result = quality.resolve(operation.evidence!);
+        evidence = {schema:'voidplayer-annotation-psnr',version:1,id:operation.operationId,ref:operation.evidence!,
+          serviceOrigin:quality.origin,completedAt:result.completedAt,attachedAt:now,attachedBy:{id:actor.id,name:actor.name},
+          verification:'server-verified',value:result.value};
+      }
+      const document = applyAnnotationOperation(operation, current, actor, now, evidence);
       const json = JSON.stringify(document);
       if (Buffer.byteLength(json) > ANNOTATION_BYTES) throw new AdminError(413, '单条标注内容过大。', 'annotation-too-large');
       this.db.exec('UPDATE annotation_clock SET sequence=sequence+1 WHERE id=1');
