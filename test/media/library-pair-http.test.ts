@@ -22,7 +22,15 @@ function nativeFrame(pixels:Uint8Array,depth:8|10){const bytes=depth===8?1:2;ret
  planes:[{offset:0,stride:32*bytes,width:32,height:32},{offset:1024*bytes,stride:16*bytes,width:16,height:16},{offset:1280*bytes,stride:16*bytes,width:16,height:16}]}})};}
 
 for(const [codec,depth] of [['h264',8],['hevc',8],['hevc',10]] as const)test(`HTTP library ${codec} ${depth}-bit: explicit server cache to actual Worker SSE/provenance`,{timeout:90000},async t=>{
- const dir=await mkdtemp(join(tmpdir(),'vp-library-pair-'));t.after(()=>rm(dir,{recursive:true,force:true}));
+ const dir=await mkdtemp(join(tmpdir(),'vp-library-pair-'));
+ let library:MediaLibraryIndex,server:ReturnType<typeof createMediaServer>;
+ // node:test after hooks run in registration order. Windows cannot remove an
+ // open SQLite database, so close every owner before attempting directory removal.
+ t.after(async()=>{
+  if(server)await new Promise<void>(resolve=>server.close(()=>resolve()));
+  if(library)await library.close();
+  await rm(dir,{recursive:true,force:true});
+ });
  const media=join(dir,'media');await mkdir(media);
  const fixture=await encodedPair(dir,codec,depth);
  await writeFile(join(media,'reference.flv'),fixture.bytes);await writeFile(join(media,'distorted.flv'),fixture.bytes);
@@ -47,9 +55,8 @@ for(const [codec,depth] of [['h264',8],['hevc',8],['hevc',10]] as const)test(`HT
     descriptorMatchesPath:sameFileStat(fileStatWitness(fstatSync(fd,{bigint:true})),fileStatWitness(statSync(file,{bigint:true})))}));
   }finally{closeSync(fd);}
  }
- const library=new MediaLibraryIndex([media],{database:join(dir,'library.sqlite'),watch:false});await library.refresh();
- const server=createMediaServer({library,roots:[media],onLog(){}});await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
- t.after(async()=>{await new Promise<void>(resolve=>server.close(()=>resolve()));await library.close();});
+ library=new MediaLibraryIndex([media],{database:join(dir,'library.sqlite'),watch:false});await library.refresh();
+ server=createMediaServer({library,roots:[media],onLog(){}});await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
  const base=`http://127.0.0.1:${(server.address() as AddressInfo).port}`,cookie=`voidplayer-user=guest-${randomUUID()}`;
  const entries=(await fetch(base+'/api/library').then(r=>r.json())).entries;
  const bindings:LibraryPairBinding[]=[],targets:PairTarget[]=[];
