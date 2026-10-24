@@ -523,6 +523,8 @@ jobs:
           sudo apt-get install -y ffmpeg libnss3-tools libdav1d-dev
           node scripts/make-playback-fixtures.mjs
       - name: Verify annotation persistence and unified cache management
+        env:
+          DEBUG: pw:browser
         if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
         run: node scripts/run-tests.mjs ci-cache --prepared
       - uses: actions/upload-artifact@v4
@@ -532,6 +534,8 @@ jobs:
           path: |
             /tmp/voidplayer-annotation-*.png
             /tmp/voidplayer-caches-*.png
+            .run/workspace-sharing-browser-*/
+            .run/test-suites/ci-cache/
           if-no-files-found: ignore
       - name: Test FLV native decode policy
         if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
