@@ -44,3 +44,9 @@ Vite 与独立程序共用 `release-version.mjs` 的版本规则。标签构建�
 这些是指定 Mac 的人工性能验收，不把其绝对时限纳入共享 CI；回归测试另在统一 manifest 注册。
 
 `analysis-products-pair.mjs` accepts `PRODUCT=summary|blocks|legacy`, `LIFECYCLE=1` / `PAUSE_ONLY=1`, `FULL_STREAM=1`, and `TRACE_PUTS=1` for actual 30-AU pause/resume coverage and per-AU consumer/server put evidence. Default five-pair summary measurements do not enable put tracing.
+
+## 固定 FATE 素材缓存
+
+`node scripts/sync-fate-samples.mjs` 校验两个固定 manifest 的每个素材（普通文件、精确字节数、SHA-256），只为缺失文件访问原始 `https://fate-suite.ffmpeg.org/` URL。损坏的已有文件立即失败，不静默替换；须调查后显式移除损坏缓存再准备。下载仍使用原来的三次有限传输重试，完整校验后以临时文件原子安装。`--verify` 禁止下载并要求全部存在；`--cache-key` 输出包含两份完整 manifest 的 SHA-256 键。
+
+完整 CI 的三个 FATE 消费 job 使用 `.github/actions/fate-fixtures`，按精确键恢复 `fixtures/fate`，每次恢复后（包括命中）仍完整校验，成功后立即保存，再开始产品回归。无宽泛恢复键，不改素材、测试或阈值。缓存只加速固定公开素材，不是信任来源；冷缓存/被驱逐/不完整时仍依赖官方源，官方不可达就失败。损坏的精确键不可覆盖，需显式处理远端坏缓存；不能靠下载替换隐藏问题。缓存保存与后续命中须看 Actions 实际日志确认，本地通过不证明远端已有种子或上游网络恢复。

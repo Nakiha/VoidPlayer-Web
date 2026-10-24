@@ -407,7 +407,8 @@ jobs:
           sudo apt-get install -y ffmpeg libnss3-tools libdav1d-dev
           npm run fixtures:flv
           npm run fixtures:hlg
-          node scripts/sync-fate-samples.mjs
+      - name: Prepare verified pinned FATE fixtures
+        uses: ./.github/actions/fate-fixtures
       - name: Restore pinned native raw-plane oracle
         id: oracle-cache
         uses: actions/cache@v4
@@ -478,7 +479,8 @@ jobs:
           sudo apt-get install -y ffmpeg libnss3-tools libdav1d-dev
           npm run fixtures:flv
           npm run fixtures:hlg
-          node scripts/sync-fate-samples.mjs
+      - name: Prepare verified pinned FATE fixtures
+        uses: ./.github/actions/fate-fixtures
       - name: Restore pinned native raw-plane oracle
         id: oracle-cache
         uses: actions/cache@v4
@@ -628,7 +630,8 @@ jobs:
           sudo apt-get install -y ffmpeg
           npm run fixtures:flv
           npm run fixtures:hlg
-          node scripts/sync-fate-samples.mjs
+      - name: Prepare verified pinned FATE fixtures
+        uses: ./.github/actions/fate-fixtures
       - run: npx playwright install --with-deps chromium webkit
       - run: node scripts/run-tests.mjs --prepare
       - name: Verify regressions that no other job runs

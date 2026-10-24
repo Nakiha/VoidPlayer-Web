@@ -1,15 +1,13 @@
-import {readFile,writeFile,mkdir} from 'node:fs/promises';
-import {createHash} from 'node:crypto';
-import {downloadPinnedSample} from '../../testing/pinned-download.ts';
-const samples=[...JSON.parse(await readFile(new URL('../../fate-samples.json',import.meta.url))),
-  ...JSON.parse(await readFile(new URL('../../fate-timestamp-samples.json',import.meta.url)))];
-await mkdir('fixtures/fate',{recursive:true});
-for(const sample of samples){
-  const path=new URL('../../../fixtures/fate/'+sample.file,import.meta.url);
-  const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
-  const existing=await readFile(path).catch(()=>null);
-  if(existing && hash(existing)===sample.sha256)continue;
-  const bytes=await downloadPinnedSample(sample);
-  await writeFile(path,bytes);
-  console.log(`downloaded ${sample.file} (${bytes.length} bytes)`);
+import { fileURLToPath } from 'node:url';
+import { fateManifest, readFateManifests, syncFateFixtures } from '../../testing/fate-fixtures.ts';
+
+const args = process.argv.slice(2);
+if (args.length > 1 || args.some(arg => !['--cache-key', '--verify'].includes(arg)))
+  throw new Error('Usage: node scripts/sync-fate-samples.mjs [--cache-key|--verify]');
+const documents = await readFateManifests();
+if (args[0] === '--cache-key') console.log(fateManifest(documents).key);
+else {
+  const result = await syncFateFixtures(fileURLToPath(new URL('../../../fixtures/fate/', import.meta.url)), documents,
+    {verifyOnly:args[0] === '--verify'});
+  console.log(`FATE ${result.key}: verified ${result.verified}; cached ${result.cached}; downloaded ${result.downloaded}`);
 }

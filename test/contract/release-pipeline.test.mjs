@@ -356,3 +356,24 @@ test('release rebuild sources include shared implementations and their independe
   const privateFiles=['.env','.run/data/library.sqlite','fixtures/video/private.mp4','artifacts/release.tar.gz','logs/report.json'];
   assert.deepEqual(selectReleaseSources([...required,...privateFiles,required[0]]),required);
 });
+
+test('every FATE consumer restores an exact manifest cache and verifies before saving or testing', async () => {
+  const jobs = workflowJobs(await readFile(new URL('../../.github/workflows/release-preview.yml',import.meta.url),'utf8'));
+  const consumers = Object.entries(jobs).filter(([,job]) => job.body.includes('uses: ./.github/actions/fate-fixtures'));
+  assert.deepEqual(consumers.map(([id])=>id).sort(), ['playback','uncovered-regressions','unit']);
+  for(const [id,{body}] of consumers) {
+    assert.equal((body.match(/uses: \.\/\.github\/actions\/fate-fixtures/g) ?? []).length,1,id);
+    assert.doesNotMatch(body,/node scripts\/sync-fate-samples\.mjs/,id);
+    assert.ok(body.indexOf('uses: ./.github/actions/fate-fixtures') < body.indexOf('run: node scripts/run-tests.mjs'),id);
+  }
+  const action = await readFile(new URL('../../.github/actions/fate-fixtures/action.yml',import.meta.url),'utf8');
+  assert.match(action,/node scripts\/sync-fate-samples\.mjs --cache-key/);
+  assert.match(action,/uses: actions\/cache\/restore@v4/);
+  assert.doesNotMatch(action,/restore-keys:|continue-on-error:|always\(\)/);
+  assert.equal((action.match(/key: \$\{\{ steps\.manifest\.outputs\.key \}\}/g) ?? []).length,2);
+  assert.equal((action.match(/path: fixtures\/fate/g) ?? []).length,2);
+  assert.match(action,/id: verify\n      shell: bash\n      run: node scripts\/sync-fate-samples\.mjs\n/,'cache hits must still be verified');
+  assert.match(action,/if: success\(\) && steps\.verify\.outcome == 'success' && steps\.restore\.outputs\.cache-hit != 'true'\n      uses: actions\/cache\/save@v4/);
+  assert.ok(action.indexOf('id: verify')>action.indexOf('uses: actions/cache/restore@v4'));
+  assert.ok(action.indexOf('uses: actions/cache/save@v4')>action.indexOf('id: verify'));
+});
