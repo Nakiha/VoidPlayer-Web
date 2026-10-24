@@ -44,6 +44,7 @@ export function installAnnotationPanel(
   edit: (id: string, ptsUs: number, slot: Slot) => void,
   modeChanged: (expanded: boolean) => void,
   attachQuality?: (id:string) => Promise<void>,
+  qualitySpace?:()=>string,
 ) {
   const dock = document.getElementById('subtracks-panel')!;
   const list = document.getElementById('selected-marks')!;
@@ -82,7 +83,7 @@ export function installAnnotationPanel(
     attach.onclick=e=>{e.stopPropagation();hidePreview();void attachQuality?.(mark.id);};actions.append(attach);
     if(mark.qualityEvidence?.length){
       const evidence=document.createElement('button');evidence.type='button';evidence.className='annotation-psnr-evidence';evidence.textContent=`PSNR (${mark.qualityEvidence.length})`;
-      evidence.onclick=e=>{e.stopPropagation();hidePreview();const snapshot=session.exportWorkspace(location.origin+'/');const original=snapshot.marks.find(m=>m.id===mark.id);if(original)showQualityEvidence(original,{mark:original,media:snapshot.media});};actions.append(evidence);
+      evidence.onclick=e=>{e.stopPropagation();hidePreview();const snapshot=session.exportWorkspace(location.origin+'/');const original=snapshot.marks.find(m=>m.id===mark.id);if(original)showQualityEvidence(original,{mark:original,media:snapshot.media},qualitySpace?.());};actions.append(evidence);
     }
     return actions;
   }

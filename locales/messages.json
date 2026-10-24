@@ -3469,6 +3469,30 @@
     "source": "历史证据：当前锚点或区域已不同",
     "params": {}
   },
+  "quality.openPair": {
+    "source": "在新窗口查看原帧对与 ROI",
+    "params": {}
+  },
+  "quality.pairCancel": {
+    "source": "取消并释放快照",
+    "params": {}
+  },
+  "quality.pairDisplay": {
+    "source": "仅查看原缓存绑定的两张独立快照，不重新评分。显示色彩由呈现链路转换；PSNR 来自源 YUV 码值，不是屏幕像素。",
+    "params": {}
+  },
+  "quality.pairLimits": {
+    "source": "支持无裁剪、方形像素、无旋转的 FLV 闭合关键帧。缓存、版本、解码器或几何不匹配时不展示。",
+    "params": {}
+  },
+  "quality.pairReady": {
+    "source": "两侧快照已按源、缓存、AU、实际 PTS 和几何核对；ROI 为只读覆盖层。",
+    "params": {}
+  },
+  "quality.pairTitle": {
+    "source": "原测量帧对与 ROI",
+    "params": {}
+  },
   "quality.preview": {
     "source": "预览结果",
     "params": {}

@@ -26,6 +26,9 @@ try{
   await waitUntil(()=>fetch(base+'/api/ready').then(r=>r.ok).catch(()=>false),'Native quality startup timed out');
  }
  await start();
+ const viewer=await fetch(base+'/quality.html');assert.equal(viewer.status,200);assert.match(viewer.headers.get('content-type'),/text\/html/);
+ const viewerHtml=await viewer.text(),viewerModule=/<script[^>]+type="module"[^>]+src="([^"]+)"/.exec(viewerHtml)?.[1];assert.ok(viewerModule,'compiled package includes the explicit snapshot viewer entry');
+ const viewerAsset=await fetch(new URL(viewerModule,base));assert.equal(viewerAsset.status,200);assert.match(viewerAsset.headers.get('content-type'),/(javascript|ecmascript)/);await viewerAsset.body.cancel();
  let entries;await waitUntil(async()=>{entries=(await fetch(base+'/api/library').then(r=>r.json())).entries;return samples.every(s=>entries.some(e=>e.name===`${s.codec}-${s.depth}.flv`&&e.state==='ready'));},'Native quality library did not settle');
  const cookie=`voidplayer-user=guest-${randomUUID()}`,headers={cookie,origin:base,'content-type':'application/json','x-voidplayer-action':'quality'},rows=[];
  for(const sample of samples){

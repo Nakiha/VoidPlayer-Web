@@ -98,9 +98,11 @@ function configurationSets(codec: 'h264' | 'hevc', bytes: Uint8Array): Uint8Arra
   return sets;
 }
 
-/** Single-use, host-neutral execution body. Always run inside an owned killable Worker. */
-export async function measureFlvFramePair(request: FramePairRequest, sources: [CachedPairSource, CachedPairSource],
-  loadDecoder: (budget: PairBudget) => Promise<PairDecoder>, signal: AbortSignal): Promise<FramePairResult> {
+export type InspectedFramePair = Pick<FramePairResult, 'decoder' | 'provenance' | 'work'> & { frames: [DecodedPairFrame, DecodedPairFrame] };
+/** The exact source/cache/tag/AU admission and decoder are shared by measurement
+ * and explicit inspection. Inspection never invokes the numerical metric. */
+async function withFlvFramePair<T>(request: FramePairRequest, sources: [CachedPairSource, CachedPairSource],
+  loadDecoder: (budget: PairBudget) => Promise<PairDecoder>, signal: AbortSignal, accept: (pair: InspectedFramePair) => T): Promise<T> {
   let decoder: PairDecoder | undefined;
   const started = performance.now(); let readBytes = 0;
   try {
@@ -189,12 +191,28 @@ export async function measureFlvFramePair(request: FramePairRequest, sources: [C
         packet: { offset: packet.offset, size: packet.size, sourceDtsUs: packet.dts }, validation: 'cached-au-source-tag-isolated-closed-picture-v1' });
     }
     check();
-    const metric = measurePsnr({ domain: 'source-yuv-code-values', reference: frames[0], distorted: frames[1], roi: request.roi,
-      budget: { maxSamples: request.budget?.maxSamples, maxInputBytes: request.budget?.maxInputBytes } });
+    const work:FramePairResult['work']={readBytes,packets:2,outputFrames:2,elapsedMs:performance.now()-started};
+    const value = accept({decoder:{...decoder!.version}, frames:frames as InspectedFramePair['frames'],
+      provenance:{reference:provenance[0],distorted:provenance[1]},
+      work});
+    work.elapsedMs=performance.now()-started;
     check();
-    return { schema: 'voidplayer-frame-pair-psnr', version: 1, pairing: 'caller-specified',
-      correspondence: 'caller-specified-no-content-or-time-alignment', decoder: { ...decoder!.version }, metric,
-      provenance: { reference: provenance[0], distorted: provenance[1] },
-      work: { readBytes, packets: 2, outputFrames: 2, elapsedMs: performance.now() - started } };
+    return value;
   } finally { try { decoder?.close(); } finally { for (const source of sources) source.close(); } }
+}
+
+/** Single-use source-plane measurement; owned killable Worker required. */
+export function measureFlvFramePair(request: FramePairRequest, sources: [CachedPairSource, CachedPairSource],
+  loadDecoder: (budget: PairBudget) => Promise<PairDecoder>, signal: AbortSignal): Promise<FramePairResult> {
+  return withFlvFramePair(request,sources,loadDecoder,signal,pair=>{
+    const metric=measurePsnr({domain:'source-yuv-code-values',reference:pair.frames[0],distorted:pair.frames[1],roi:request.roi,
+      budget:{maxSamples:request.budget?.maxSamples,maxInputBytes:request.budget?.maxInputBytes}});
+    return {schema:'voidplayer-frame-pair-psnr',version:1,pairing:'caller-specified',
+      correspondence:'caller-specified-no-content-or-time-alignment',decoder:pair.decoder,metric,provenance:pair.provenance,work:pair.work};
+  });
+}
+/** Explicit raw-frame inspection; same admission, no score calculation. */
+export function inspectFlvFramePair(request: FramePairRequest, sources: [CachedPairSource, CachedPairSource],
+  loadDecoder: (budget: PairBudget) => Promise<PairDecoder>, signal: AbortSignal): Promise<InspectedFramePair> {
+  return withFlvFramePair(request,sources,loadDecoder,signal,pair=>pair);
 }

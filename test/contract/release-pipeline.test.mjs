@@ -352,7 +352,7 @@ test('raw upstream MT sync renames its unsuffixed build manifest',async()=>{
 
 test('release rebuild sources include shared implementations and their independent type configuration', async () => {
   const {selectReleaseSources}=await import('../../scripts/tools/release/source-files.mjs');
-  const required=['shared/analysis/bitstream/runner.ts','shared/media/containers/flv-demux.ts','src/media/source.ts','server/app.ts','tsconfig.shared.json','tsconfig.json','package-lock.json'];
+  const required=['quality.html','shared/analysis/bitstream/runner.ts','shared/media/containers/flv-demux.ts','src/media/source.ts','server/app.ts','tsconfig.shared.json','tsconfig.json','package-lock.json'];
   const privateFiles=['.env','.run/data/library.sqlite','fixtures/video/private.mp4','artifacts/release.tar.gz','logs/report.json'];
   assert.deepEqual(selectReleaseSources([...required,...privateFiles,required[0]]),required);
 });

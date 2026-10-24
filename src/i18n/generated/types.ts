@@ -804,6 +804,12 @@ export interface Sources {
   "quality.historical": "历史副本，本服务未核验";
   "quality.jobId": "已完成任务 ID ";
   "quality.notApplies": "历史证据：当前锚点或区域已不同";
+  "quality.openPair": "在新窗口查看原帧对与 ROI";
+  "quality.pairCancel": "取消并释放快照";
+  "quality.pairDisplay": "仅查看原缓存绑定的两张独立快照，不重新评分。显示色彩由呈现链路转换；PSNR 来自源 YUV 码值，不是屏幕像素。";
+  "quality.pairLimits": "支持无裁剪、方形像素、无旋转的 FLV 闭合关键帧。缓存、版本、解码器或几何不匹配时不展示。";
+  "quality.pairReady": "两侧快照已按源、缓存、AU、实际 PTS 和几何核对；ROI 为只读覆盖层。";
+  "quality.pairTitle": "原测量帧对与 ROI";
   "quality.preview": "预览结果";
   "quality.privateUnavailable": "当前用户无法访问此已完成任务。";
   "quality.publish": "共享到标注";
@@ -1986,6 +1992,12 @@ export interface MessageParameters {
   "quality.historical": {  };
   "quality.jobId": {  };
   "quality.notApplies": {  };
+  "quality.openPair": {  };
+  "quality.pairCancel": {  };
+  "quality.pairDisplay": {  };
+  "quality.pairLimits": {  };
+  "quality.pairReady": {  };
+  "quality.pairTitle": {  };
   "quality.preview": {  };
   "quality.privateUnavailable": {  };
   "quality.publish": {  };
