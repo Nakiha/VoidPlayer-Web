@@ -1,6 +1,7 @@
 import type { ColorMode, ReferenceDecode } from '../color/decode-policy-types.ts';
 import { validateColorOutput } from '../color/color-output.ts';
 import type { ColorOutput } from '../color/color-output.ts';
+import { qualityEvidenceList, evidenceWorkspaceVersion } from './quality-evidence.ts';
 import { drawingsValue } from './annotation.ts';
 import { discussionValue } from './mark-discussion.ts';
 import { regionValue, slotValue, timeUs, SLOTS } from './model.ts';
@@ -37,7 +38,7 @@ export type ComparisonConditions = { colorMode:ColorMode; referenceDecode:Refere
   version: 1; presentation: 'voidplayer-sdr-v1'; outputColorSpace: 'srgb';
 } | { version: 2; presentation:'voidplayer-color-v2'; outputColorSpace:'srgb'|'display-p3'; colorOutput:ColorOutput });
 export type WorkspaceFile = {
-  schema: 'voidplayer-workspace'; version: 1; name?: string; generatedAt: string; serverUrl: string;
+  schema: 'voidplayer-workspace'; version: 1 | 2; name?: string; generatedAt: string; serverUrl: string;
   comparison?: ComparisonConditions;
   positionUs: number; tracks: { slot: Slot; mediaId: string; offsetUs: number; visible?: boolean }[];
   media: MediaInfo[]; marks: Mark[]; viewport: ViewportSnapshot; layout?: WorkspaceLayout;
@@ -74,11 +75,11 @@ function frame(value: unknown): FrameInfo {
   return { ptsUs: timeUs(f.ptsUs), sourcePtsUs: integer(f.sourcePtsUs), durationUs: timeUs(f.durationUs) };
 }
 /** Validate before any source is opened or the active session is changed. */
-export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile {
+export function parseWorkspace(value: unknown, baseUrl?: string, preserveEvidenceVerification = false): WorkspaceFile {
   let d = object(value);
   // Read the previous review export too; it did not contain a view or position.
-  if (d.schema === 'voidplayer-web-review' && d.version === 1) d = { ...d, schema: 'voidplayer-workspace', tracks: d.alignment, serverUrl: baseUrl, positionUs: 0, viewport: new Viewport().snapshot() };
-  if (d.schema !== 'voidplayer-workspace' || d.version !== 1) throw new Error('不支持的工作区文件或版本。');
+  if (d.schema === 'voidplayer-web-review' && [1,2].includes(d.version)) d = { ...d, schema: 'voidplayer-workspace', tracks: d.alignment, serverUrl: baseUrl, positionUs: 0, viewport: new Viewport().snapshot() };
+  if (d.schema !== 'voidplayer-workspace' || ![1,2].includes(d.version)) throw new Error('不支持的工作区文件或版本。');
   const serverUrl = workspaceUrl(d.serverUrl, baseUrl);
   const media: MediaInfo[] = array(d.media, 1000).map(value => {
     const m = object(value);
@@ -100,6 +101,10 @@ export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile 
       const c = object(value); if (!ids.has(c.mediaId)) throw new Error('标注对比片源不存在。');
       return { slot: slotValue(c.slot), mediaId: text(c.mediaId, 200), frame: frame(c.frame), ...(c.offsetUs === undefined ? {} : { offsetUs: integer(c.offsetUs) }) };
     }) };
+    if (m.qualityEvidence !== undefined) {
+      if (d.version !== 2) throw new Error('PSNR attachments require workspace version 2.');
+      mark.qualityEvidence = qualityEvidenceList(m.qualityEvidence, preserveEvidenceVerification);
+    }
     Object.assign(mark, discussionValue(m));
     if (m.offsetUs !== undefined) mark.offsetUs = integer(m.offsetUs);
     if (m.sessionPtsUs !== undefined) mark.sessionPtsUs = timeUs(m.sessionPtsUs);
@@ -166,7 +171,7 @@ export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile 
     if (!markIds.has(id) || !/^data:image\/jpeg;base64,[a-zA-Z0-9+/=]+$/.test(url)) throw new Error('工作区缩略图无效。');
     return { id, url, width: timeUs(t.width), height: timeUs(t.height) };
   });
-  return { schema: 'voidplayer-workspace', version: 1, ...(typeof d.name === 'string' ? { name: text(d.name, 200) } : {}), generatedAt: text(d.generatedAt, 100), serverUrl, positionUs: timeUs(d.positionUs), tracks, media, marks, ...(comparison ? { comparison } : {}), viewport: viewport.snapshot(), ...(layout ? { layout } : {}), thumbnails };
+  return { schema: 'voidplayer-workspace', version: evidenceWorkspaceVersion(marks), ...(typeof d.name === 'string' ? { name: text(d.name, 200) } : {}), generatedAt: text(d.generatedAt, 100), serverUrl, positionUs: timeUs(d.positionUs), tracks, media, marks, ...(comparison ? { comparison } : {}), viewport: viewport.snapshot(), ...(layout ? { layout } : {}), thumbnails };
 }
 export async function readWorkspaceFile(file: Blob, baseUrl: string): Promise<WorkspaceFile> {
   if (file.size > MAX_BYTES) throw new Error('工作区文件超过 32 MiB。');

@@ -64,7 +64,20 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
       if (match) {
         const [, space, id, preview] = match;
         if (!id && req.method === 'GET') { sendJson(res, 200, url.searchParams.has('list') ? store.list(space, url.searchParams.get('search') ?? '', url.searchParams.get('deleted') === '1', Number(url.searchParams.get('before') ?? Number.MAX_SAFE_INTEGER)) : { ...store.changes(space, Number(url.searchParams.get('after') ?? 0)), previewEpoch: store.previewEpoch }); return true; }
-        if (!id && req.method === 'POST') { sendJson(res, 200, store.mutate(space, await readAdminJson(req, ANNOTATION_BYTES), ctx.actor!, ctx.requestId)); return true; }
+        if (!id && req.method === 'POST') {
+          sendJson(res, 200, store.mutate(space, await readAdminJson(req, ANNOTATION_BYTES), ctx.actor!, ctx.requestId, {
+            // app's routing URL uses a synthetic localhost base. The write
+            // guard above has already checked Origin against Host and TLS.
+            origin:new URL(req.headers.origin!).origin,
+            resolve(ref) {
+              // Ownership first; do not reveal state/digests of another actor's job.
+              const job = library.qualityJobs.get(ref.jobId,ctx.actor!.id);
+              if (job.state !== 'completed' || !job.result.available || job.attempt?.id !== ref.attemptId || job.result.digest !== ref.digest)
+                throw new AdminError(409, 'Completed result reference is unavailable or changed.', 'evidence-unavailable');
+              return library.qualityJobs.result(ref.jobId,ctx.actor!.id);
+            },
+          })); return true;
+        }
         if (id === 'previews' && req.method === 'DELETE') { sendJson(res, 200, store.clearPreviews(space)); return true; }
         if (id && preview) {
           const revision = Number(url.searchParams.get('revision'));

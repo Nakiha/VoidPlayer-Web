@@ -1,4 +1,8 @@
 {
+  "activity.attachedPsnr": {
+    "source": "关联 PSNR",
+    "params": {}
+  },
   "activity.cancelTrack": {
     "source": "取消载入轨道 {slot}",
     "params": {
@@ -3415,6 +3419,106 @@
   },
   "progress.synchronize": {
     "source": "正在定位到当前播放位置",
+    "params": {}
+  },
+  "quality.actorChanged": {
+    "source": "用户已切换，请重新打开关联操作。",
+    "params": {}
+  },
+  "quality.applies": {
+    "source": "匹配此标注的锚点和区域",
+    "params": {}
+  },
+  "quality.attach": {
+    "source": "关联 PSNR",
+    "params": {}
+  },
+  "quality.attachTitle": {
+    "source": "关联已完成的 PSNR 结果",
+    "params": {}
+  },
+  "quality.close": {
+    "source": "关闭",
+    "params": {}
+  },
+  "quality.completedRequired": {
+    "source": "需要已完成的结果。",
+    "params": {}
+  },
+  "quality.enterJob": {
+    "source": "请输入已完成的任务 ID。",
+    "params": {}
+  },
+  "quality.evidenceTitle": {
+    "source": "PSNR 证据",
+    "params": {}
+  },
+  "quality.fullProvenance": {
+    "source": "完整不可变 provenance",
+    "params": {}
+  },
+  "quality.historical": {
+    "source": "历史副本，本服务未核验",
+    "params": {}
+  },
+  "quality.jobId": {
+    "source": "已完成任务 ID ",
+    "params": {}
+  },
+  "quality.notApplies": {
+    "source": "历史证据：当前锚点或区域已不同",
+    "params": {}
+  },
+  "quality.preview": {
+    "source": "预览结果",
+    "params": {}
+  },
+  "quality.privateUnavailable": {
+    "source": "当前用户无法访问此已完成任务。",
+    "params": {}
+  },
+  "quality.publish": {
+    "source": "共享到标注",
+    "params": {}
+  },
+  "quality.retry": {
+    "source": "{error} 重试将复用操作 {operation}。",
+    "params": {
+      "error": "string | number",
+      "operation": "string | number"
+    }
+  },
+  "quality.score": {
+    "source": "PSNR {score} dB · 越高越好 · {depth} 位源 YUV 码值 · ROI {roi}",
+    "params": {
+      "depth": "string | number",
+      "roi": "string | number",
+      "score": "string | number"
+    }
+  },
+  "quality.shareNotice": {
+    "source": "此操作会向所有可查看该标注的人共享两侧片源身份、测量 ROI 和不可变结果事实。",
+    "params": {}
+  },
+  "quality.side": {
+    "source": "标注对应的片源侧",
+    "params": {}
+  },
+  "quality.target": {
+    "source": "目标 {space}/{id} · 修订 {revision} · 源 PTS {pts} µs",
+    "params": {
+      "id": "string | number",
+      "pts": "string | number",
+      "revision": "string | number",
+      "space": "string | number"
+    }
+  },
+  "quality.unavailable": {
+    "source": "结果不可用。",
+    "params": {}
+  },
+  "quality.verified": {
+    "source": "关联时已由来源服务核验",
     "params": {}
   },
   "recovery.capacityReached": {

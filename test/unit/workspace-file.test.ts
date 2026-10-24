@@ -13,7 +13,7 @@ test('plain and gzip workspace files resolve recorded server URLs and preserve t
  assert.deepEqual(await readWorkspaceFile(new Blob([JSON.stringify(value)]),'http://another-host/'),value);
 });
 test('reject unsupported versions, unsafe URLs, duplicate slots, invalid refs and negative end times before load',()=>{
- const mutations: ((d: ReturnType<typeof document>) => unknown)[] = [d=>d.version=2,d=>d.media[0].source.url='file:///etc/passwd',d=>d.media[0].source.url='https://user:pass@example.com/v',d=>d.tracks.push({...d.tracks[0]}),d=>d.tracks[0].mediaId='absent',d=>d.tracks[0].offsetUs=-1000,d=>d.viewport.zoom=Infinity];
+ const mutations: ((d: ReturnType<typeof document>) => unknown)[] = [d=>d.version=3,d=>d.media[0].source.url='file:///etc/passwd',d=>d.media[0].source.url='https://user:pass@example.com/v',d=>d.tracks.push({...d.tracks[0]}),d=>d.tracks[0].mediaId='absent',d=>d.tracks[0].offsetUs=-1000,d=>d.viewport.zoom=Infinity];
  for(const mutate of mutations) {
   const value=document();mutate(value);assert.throws(()=>parseWorkspace(value));
  }

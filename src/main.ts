@@ -1,3 +1,4 @@
+import { attachQualityDialog } from './ui/quality-evidence.ts';
 import { mediaDiagnostic } from '../shared/media/io/media-errors.ts';
 import type { MediaDiagnostic } from '../shared/media/io/media-errors.ts';
 import { diagnosticMessage } from './ui/diagnostic-message.ts';
@@ -154,7 +155,7 @@ const identitySettings = installIdentitySettings(actor => session.setActor(actor
 const drawingEditor = installDrawingEditor(session, canvases);
 const markPreviewBackfill = installMarkPreviewBackfill(session, canvases, () => drawingEditor.active());
 const notify = (message: string) => { toasts.show(message); };
-const workbench = installWorkbench(session, act, openMarkDialog, notify);
+const workbench = installWorkbench(session, act, openMarkDialog, notify, id=>act(async()=>{const target=await annotationSync.qualityTarget(id);await attachQualityDialog(target,annotationSync.rememberQuality);},'ui.attach-psnr'));
 $('toggle-annotations').onclick = () => { if (drawingEditor.active()) $('mark-close').click(); else drawingEditor.open(workbench.selected()); };
 const removeTrackDrag = installTrackDrag(session);
 const sourceActions = installSourceActions(session, act, () => { void workbench.refreshLibrary(); }, notify);

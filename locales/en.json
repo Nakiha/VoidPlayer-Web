@@ -1,4 +1,8 @@
 {
+  "activity.attachedPsnr": {
+    "source": "关联 PSNR",
+    "translation": "Attach PSNR"
+  },
   "activity.cancelTrack": {
     "source": "取消载入轨道 {slot}",
     "translation": "Cancel loading track {slot}"
@@ -3195,6 +3199,94 @@
   "progress.synchronize": {
     "source": "正在定位到当前播放位置",
     "translation": "Seeking to the current position"
+  },
+  "quality.actorChanged": {
+    "source": "用户已切换，请重新打开关联操作。",
+    "translation": "Actor changed. Reopen the attachment action."
+  },
+  "quality.applies": {
+    "source": "匹配此标注的锚点和区域",
+    "translation": "matches this annotation anchor/region"
+  },
+  "quality.attach": {
+    "source": "关联 PSNR",
+    "translation": "Attach PSNR"
+  },
+  "quality.attachTitle": {
+    "source": "关联已完成的 PSNR 结果",
+    "translation": "Attach completed PSNR result"
+  },
+  "quality.close": {
+    "source": "关闭",
+    "translation": "Close"
+  },
+  "quality.completedRequired": {
+    "source": "需要已完成的结果。",
+    "translation": "A completed result is required."
+  },
+  "quality.enterJob": {
+    "source": "请输入已完成的任务 ID。",
+    "translation": "Enter a completed job ID."
+  },
+  "quality.evidenceTitle": {
+    "source": "PSNR 证据",
+    "translation": "PSNR evidence"
+  },
+  "quality.fullProvenance": {
+    "source": "完整不可变 provenance",
+    "translation": "Full immutable provenance"
+  },
+  "quality.historical": {
+    "source": "历史副本，本服务未核验",
+    "translation": "Historical copy — not verified by this service"
+  },
+  "quality.jobId": {
+    "source": "已完成任务 ID ",
+    "translation": "Completed job ID "
+  },
+  "quality.notApplies": {
+    "source": "历史证据：当前锚点或区域已不同",
+    "translation": "historical: current anchor/region differs"
+  },
+  "quality.preview": {
+    "source": "预览结果",
+    "translation": "Preview result"
+  },
+  "quality.privateUnavailable": {
+    "source": "当前用户无法访问此已完成任务。",
+    "translation": "This completed job is unavailable to the current actor."
+  },
+  "quality.publish": {
+    "source": "共享到标注",
+    "translation": "Share on annotation"
+  },
+  "quality.retry": {
+    "source": "{error} 重试将复用操作 {operation}。",
+    "translation": "{error} Retry uses operation {operation}."
+  },
+  "quality.score": {
+    "source": "PSNR {score} dB · 越高越好 · {depth} 位源 YUV 码值 · ROI {roi}",
+    "translation": "PSNR {score} dB · higher is better · {depth}-bit source YUV code values · ROI {roi}"
+  },
+  "quality.shareNotice": {
+    "source": "此操作会向所有可查看该标注的人共享两侧片源身份、测量 ROI 和不可变结果事实。",
+    "translation": "This explicitly shares both source identities, measured ROI and immutable result facts with everyone who can view this annotation."
+  },
+  "quality.side": {
+    "source": "标注对应的片源侧",
+    "translation": "Annotation source side"
+  },
+  "quality.target": {
+    "source": "目标 {space}/{id} · 修订 {revision} · 源 PTS {pts} µs",
+    "translation": "Target {space}/{id} · revision {revision} · source PTS {pts} µs"
+  },
+  "quality.unavailable": {
+    "source": "结果不可用。",
+    "translation": "Result is unavailable."
+  },
+  "quality.verified": {
+    "source": "关联时已由来源服务核验",
+    "translation": "Verified by the originating service at attachment"
   },
   "recovery.capacityReached": {
     "source": "本机恢复记录已达容量上限，请在设置 → 工作区中导出并删除旧记录。当前工作区可手动导出或保存到服务器。",

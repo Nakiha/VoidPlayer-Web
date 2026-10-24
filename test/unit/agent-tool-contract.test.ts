@@ -19,6 +19,8 @@ function toolsWithSpy() {
 test('tool execute validates published types and bounds before entering actions, without a host validator', () => {
   const { get, calls } = toolsWithSpy();
   const cases: [string, unknown[]][] = [
+    ['attach_annotation_psnr', [{}, {space:'default',id:'mark',revision:1,operationId:'op',evidence:{jobId:'job',attemptId:'attempt',digest:'0'.repeat(64),side:'automatic'}}]],
+    ['get_annotation_evidence', [{}, {space:'default',id:42}, {space:'default',id:'mark',extra:true}]],
     ['get_review_session', [null, [], 'object', { extra: true }]],
     ['query_analysis', [
       {}, { slot: 'A', startUs: 0 }, { slot: 'Z', startUs: 0, endUs: 1 },

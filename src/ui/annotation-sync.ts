@@ -219,6 +219,24 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
   void connect();
   state();
   return {
+    async qualityTarget(id: string) {
+      const captured=generation,space=scope,actorId=actor;
+      if(space==='local' || !available || editing())throw new Error('Save this annotation in a shared space before attaching a result.');
+      await sync();
+      const pending=await storage.drafts(space,actorId);
+      if(captured!==generation || pending.some(d=>d.id===id) || pendingQueue.size || saving)
+        throw new Error('Annotation scope changed or edits are still pending.');
+      const record=await client.read(space,id);
+      if(captured!==generation || record.deleted)throw new Error('Annotation changed or was deleted.');
+      return {space,id,revision:record.revision,actor:actorId,document:record.document};
+    },
+    async rememberQuality(record: AnnotationRecord) {
+      await storage.remember([record]);
+      // A late reply is cached in its original space only. Normal application
+      // protects local drafts and remaps only sources in the current session.
+      if(record.space===scope)await apply();
+      void sync();
+    },
     openSpace: switchSpace,
     scope: () => scope,
     async attachWorkspace(space: string, seededIds: string[] = []) {

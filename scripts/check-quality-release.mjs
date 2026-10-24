@@ -56,13 +56,21 @@ try{
   assert.equal(stored.jobId,job.id);assert.equal(stored.attemptId,job.attempt.id);assert.equal(stored.submitted.actorId,cookie.slice('voidplayer-user='.length));
   assert.deepEqual(stored.value.result.metric,value.result.metric);assert.deepEqual(stored.value.result.provenance,value.result.provenance);
   assert.deepEqual(stored.value.result.decoder,value.result.decoder);assert.deepEqual(stored.value.sources,value.sources);assert.deepEqual(stored.value.execution,value.execution);
+  const annotationHeaders={...headers,'x-voidplayer-action':'annotation'},annotationId=`evidence-${sample.codec}-${sample.depth}`;
+  const annotationDocument={media:[{id:'snapshot',name:entry.name,size:entry.size,lastModified:entry.lastModified,codec:sample.codec,decoder:'ffmpeg-wasm',width:32,height:32,durationUs:2000000,firstPtsUs:target(0).sourcePtsUs,source:{kind:'library',id:entry.id,url:`${base}/api/media/${entry.id}?v=${entry.version}`}}],mark:{id:annotationId,text:'Compiled PSNR observation',severity:3,origin:'agent',createdAt:new Date().toISOString(),slot:'H',mediaId:'snapshot',frame:{ptsUs:0,sourcePtsUs:target(0).sourcePtsUs,durationUs:1000000},comparison:[],region:null}};
+  const createAnnotation=await fetch(base+'/api/annotations/spaces/default',{method:'POST',headers:annotationHeaders,body:JSON.stringify({id:annotationId,operationId:'create-'+annotationId,revision:0,action:'put',document:annotationDocument})});assert.equal(createAnnotation.status,200,await createAnnotation.clone().text());
+  const attach={id:annotationId,operationId:'attach-'+annotationId,revision:1,action:'attach-quality-result',evidence:{jobId:job.id,attemptId:job.attempt.id,digest:job.result.digest,side:'reference'}};
+  const attachment=await fetch(base+'/api/annotations/spaces/default',{method:'POST',headers:annotationHeaders,body:JSON.stringify(attach)});const attached=await attachment.json();assert.equal(attachment.status,200,JSON.stringify(attached));
+  assert.equal(attached.document.mark.qualityEvidence[0].verification,'server-verified');assert.deepEqual(attached.document.mark.qualityEvidence[0].value,stored.value);
   rows.push({request,requestId:value.request.id,codec:sample.codec,depth:sample.depth,sse:aggregate,decoder:value.result.decoder,source:binding,execution:value.execution,
-    durable:{input,job,stored,key:jobHeaders['idempotency-key']}});
+    annotation:{attach,attached},durable:{input,job,stored,key:jobHeaders['idempotency-key']}});
  }
  const duplicate=spawnSync(path.join(directory,manifest.executable),['--data-dir',data],{cwd,env,encoding:'utf8',timeout:10000,maxBuffer:1024*1024});
  assert.equal(duplicate.error,undefined);assert.notEqual(duplicate.status,0);assert.match(duplicate.stdout+duplicate.stderr,/另一个实例/,'second compiled instance must not recover a live owner');
  await stopChild();stopChild=null;await start();
  for(const row of rows){
+  const historical=await fetch(`${base}/api/annotations/spaces/default/${row.annotation.attached.id}`).then(r=>r.json());assert.deepEqual(historical,row.annotation.attached);
+  const attachmentReplay=await fetch(base+'/api/annotations/spaces/default',{method:'POST',headers:{...headers,'x-voidplayer-action':'annotation'},body:JSON.stringify(row.annotation.attach)});assert.equal(attachmentReplay.status,200);assert.deepEqual(await attachmentReplay.json(),historical);
   const job=await fetch(`${base}/api/quality/jobs/${row.durable.job.id}`,{headers:{cookie}}).then(r=>r.json());assert.deepEqual(job,row.durable.job);
   const stored=await fetch(`${base}/api/quality/jobs/${job.id}/result`,{headers:{cookie}}).then(r=>r.json());assert.deepEqual(stored,row.durable.stored);
   const replay=await fetch(base+'/api/quality/jobs',{method:'POST',headers:{...headers,'x-voidplayer-action':'quality-job','idempotency-key':row.durable.key},body:JSON.stringify(row.durable.input)});
@@ -74,5 +82,5 @@ try{
  const capabilities=await fetch(base+'/api/agent',{headers:{cookie}}).then(r=>r.json());assert.equal(capabilities.capabilities.find(c=>c.id==='quality.jobs').implemented,true);assert.equal(capabilities.capabilities.find(c=>c.id==='quality.jobs').readiness,'per-source');assert.equal(capabilities.capabilities.find(c=>c.id==='quality.frame-pair').requiresBrowser,false);
  assert.deepEqual(capabilities.qualityJobs.metrics,['psnr']);assert.equal(capabilities.qualityJobs.scope,'single-explicit-frame-pair');assert.equal(capabilities.qualityJobs.submit,'/api/quality/jobs');assert.equal(capabilities.qualityJobs.automaticRetry,false);assert.equal(capabilities.qualityJobs.sharedWork,false);
  const report=path.resolve(process.env.VOIDPLAYER_TEST_ARTIFACTS??path.join(root,'.run/quality-release'));await mkdir(report,{recursive:true});await writeFile(path.join(report,'native-quality.json'),JSON.stringify({target:manifest.target,rows},null,2)+'\n');
- console.log(`PASS ${manifest.target}: compiled Bun quality Worker, real library/cache HTTP, 8/10-bit native SSE/provenance, durable jobs/idempotency/history restart, second-instance rejection, empty PATH`);
+ console.log(`PASS ${manifest.target}: compiled Bun quality Worker, real library/cache HTTP, 8/10-bit native SSE/provenance, durable jobs/annotation evidence/idempotency/history restart, second-instance rejection, empty PATH`);
 }finally{if(stopChild)await stopChild();await rm(temp,{recursive:true,force:true,maxRetries:10,retryDelay:100});}

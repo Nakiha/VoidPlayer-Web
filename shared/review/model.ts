@@ -54,6 +54,7 @@ export type MediaInfo = {
 };
 export type MarkReply = { id: string; text: string; createdAt: string; author: { id: string; name: string } };
 export type Mark = {
+  qualityEvidence?: import('./quality-evidence.ts').QualityEvidence[];
   resolved?: boolean;
   replies?: MarkReply[];
   author?: { id: string; name: string };

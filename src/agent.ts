@@ -1,4 +1,7 @@
 import { frameIndexTools } from './services/frame-index.ts';
+import { attachAnnotationQuality } from './review/quality-evidence-client.ts';
+import { AnnotationClient } from './review/annotation-client.ts';
+import type { QualityEvidenceRef } from '../shared/review/quality-evidence.ts';
 import { ANNOTATION_COORD_LIMIT } from '../shared/review/annotation.ts';
 import { SLOTS } from '../shared/review/model.ts';
 import { benchmarkPlayback } from './session/benchmark.ts';
@@ -28,6 +31,14 @@ export function reviewTools(session: ReviewSession, workspace?: WorkspaceActions
     };
   };
   return [
+    tool('attach_annotation_psnr','Explicitly share the immutable facts of your completed PSNR job on an existing shared annotation. Requires exact source version/source PTS/ROI and revision; never scores, creates annotations or changes playback. Reuse operationId after a lost response.',
+      {space:{type:'string'},id:{type:'string'},revision:{type:'integer',minimum:1},operationId:{type:'string'},evidence:{type:'object',properties:{jobId:{type:'string'},attemptId:{type:'string'},digest:{type:'string'},side:{enum:['reference','distorted']}},required:['jobId','attemptId','digest','side'],additionalProperties:false}},
+      ['space','id','revision','operationId','evidence'],false,p=>attachAnnotationQuality({space:p.space as string,id:p.id as string,revision:p.revision as number,operationId:p.operationId as string,evidence:p.evidence as QualityEvidenceRef},{kind:'agent'})),
+    tool('get_annotation_evidence','Read explicitly shared PSNR facts from an annotation. Historical imports are unverified; this does not grant access to the private original job or load a source.',
+      {space:{type:'string'},id:{type:'string'}},['space','id'],true,p=>{
+        if(![p.space,p.id].every(v=>typeof v==='string' && /^[a-zA-Z0-9_-]{1,200}$/.test(v)))throw new Error('Invalid annotation reference.');
+        return new AnnotationClient(AbortSignal.timeout(10000)).read(p.space as string,p.id as string);
+      }),
     ...frameIndexTools(),
     tool('request_bitstream_range','Explicitly analyze a bounded half-open session-time range (up to 1 second and 32 pictures) independently of playback. Completed chunks are cached incrementally.',{slot:{enum:SLOTS},startUs:{type:'integer'},endUs:{type:'integer'}},['slot','startUs','endUs'],false,p=>session.requestBitstreamRange(slotValue(p.slot),p.startUs as number,p.endUs as number)),
     tool('get_presented_frame','Read the actual successful presentation commit and verified source picture identity. No pixels or analysis IO.',{slot:{enum:SLOTS}},['slot'],true,p=>session.getPresentedFrame(slotValue(p.slot))),

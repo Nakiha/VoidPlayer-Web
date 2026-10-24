@@ -756,6 +756,8 @@ jobs:
       - name: Verify configuration and persistent index on Node
         id: native-node
         run: node scripts/run-tests.mjs ci-native-node
+        env:
+          NODE_OPTIONS: --test-reporter=tap
       - name: Verify persistent index on packaged runtime
         run: node scripts/run-tests.mjs ci-native-bun
       - run: node scripts/run-tests.mjs --prepare
