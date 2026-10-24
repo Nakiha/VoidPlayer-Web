@@ -132,6 +132,7 @@ export class AnalysisScheduler {
   private coreDir: string;
   private now: () => number;
   private leaseMs: number;
+  private unregisterQuality: () => void;
   constructor(
     library: MediaLibraryIndex,
     coreDir: string,
@@ -143,6 +144,7 @@ export class AnalysisScheduler {
     this.coreDir = coreDir;
     this.now = now;
     this.leaseMs = leaseMs;
+    this.unregisterQuality = library.qualityAdmission.register(() => !!(this.pendingSubmissions || this.running.size || [...this.work.values()].some(work => work.state === 'queued')));
     this.store = new AnalysisStore(directory, undefined, () => this.protectedFiles());
   }
   async buildIdentity() { const manifest=JSON.parse(await readFile(path.join(this.coreDir,'manifest.json'),'utf8'));return manifest.buildId ?? manifest.revision; }
@@ -152,6 +154,7 @@ export class AnalysisScheduler {
     target: AnalysisTarget | AnalysisRangeTarget | AnalysisStreamTarget,
     owner: string,
   ) {
+    try { this.library.qualityAdmission.ordinary(); } catch { return Promise.reject(new AnalysisFailure('resource-limit','Quality execution owns the compute admission')); }
     if (this.closed || this.pendingSubmissions >= BUDGET.requests)
       return Promise.reject(
         new AnalysisFailure("resource-limit", "Analysis request queue full"),
@@ -701,5 +704,6 @@ export class AnalysisScheduler {
     for (const id of this.consumers.keys()) this.release(id);
     await Promise.all([...this.running].map(work => work.done));
     await this.store.flush();
+    this.unregisterQuality();
   }
 }

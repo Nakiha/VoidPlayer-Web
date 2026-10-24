@@ -1,5 +1,7 @@
 import type {LibraryScanStatus} from '../shared/service/admin.ts';
 import { FrameIndexJobs } from './frame-index-jobs.ts';
+import { QualityAdmission } from './quality-admission.ts';
+import { LibraryPairRunner } from './analysis/quality/runner.ts';
 import { FrameIndexStore } from './frame-index-store.ts';
 import { MediaThumbnailStore } from './media-thumbnail-store.ts';
 import { createHash } from 'node:crypto';
@@ -16,7 +18,7 @@ export type { MediaRoot } from './library-store.ts';
 export const MEDIA_EXTENSIONS = ['.mp4', '.m4v', '.mov', '.mkv', '.webm', '.ts', '.m2ts', '.mpg', '.mpeg', '.avi', '.flv'];
 export interface LibraryEntry { id: string; name: string; root: string; rootIndex: number; size: number; lastModified: number; rootId?: string; version?: string; state?: string }
 export interface Library { roots: string[]; entries: LibraryEntry[]; truncated: boolean }
-interface IndexOptions { database?: string; ttlMs?: number; settleMs?: number; ioTimeoutMs?: number; watch?: boolean; debounceMs?: number; scan?: typeof scanLibrary; now?: () => number }
+interface IndexOptions { database?: string; coreDir?: string; ttlMs?: number; settleMs?: number; ioTimeoutMs?: number; watch?: boolean; debounceMs?: number; scan?: typeof scanLibrary; now?: () => number }
 export interface BrowseQuery { rootId?: string; directory?: string; search?: string; recursive?: boolean; limit?: number; offset?: number; revision?: number }
 export function fileVersion(stat: Stats) { return createHash('sha256').update(`${stat.size}:${Math.round(stat.mtimeMs)}:${Math.round(stat.ctimeMs)}:${stat.ino}`).digest('hex').slice(0, 24); }
 const parent = (name: string) => path.posix.dirname(name) === '.' ? '' : path.posix.dirname(name);
@@ -27,6 +29,10 @@ export class MediaLibraryIndex {
   readonly definitions: RootRecord[];
   private store: LibraryStore;
   readonly indexJobs: FrameIndexJobs;
+  readonly qualityAdmission = new QualityAdmission();
+  private pairRunner?: LibraryPairRunner;
+  private coreDirectory: string;
+  get quality() { return this.pairRunner ??= new LibraryPairRunner(this,this.coreDirectory); }
   readonly frameIndexes: FrameIndexStore;
   readonly thumbnails: MediaThumbnailStore;
   private pending: Promise<void> | null = null;
@@ -49,7 +55,8 @@ export class MediaLibraryIndex {
     this.options = options;
     this.definitions = normalizeRoots(roots); this.roots = this.definitions.map(r => r.path);
     this.store = new LibraryStore(options.database);
-    this.indexJobs = new FrameIndexJobs(this.store.file, process.env.VOIDPLAYER_WASM_CORE_DIR || path.resolve(process.cwd(), 'public/vendor/voidplayer-core'));
+    this.coreDirectory=path.resolve(options.coreDir ?? process.env.VOIDPLAYER_WASM_CORE_DIR ?? path.resolve(process.cwd(),'public/vendor/voidplayer-core'));
+    this.indexJobs = new FrameIndexJobs(this.store.file, this.coreDirectory, undefined, this.qualityAdmission);
     this.frameIndexes = new FrameIndexStore(this.store.db);
     this.thumbnails = new MediaThumbnailStore(this.store.db);
     try { this.store.configure(this.definitions); } catch (error) { this.store.close(); throw error; }
@@ -57,6 +64,7 @@ export class MediaLibraryIndex {
     if (this.initialized) this.refreshedAt = this.now();
   }
   get analysisDirectory() { return path.join(path.dirname(this.store.file), 'bitstream-analysis'); }
+  get indexDatabase() { return this.store.file; }
   get ready() { return this.initialized; }
   private now() { return (this.options.now ?? Date.now)(); }
   start() {
@@ -370,7 +378,7 @@ export class MediaLibraryIndex {
   async close() {
     if (this.closed) return;
     this.closed = true; this.stop();
-    await this.pending?.catch(() => {}); await this.indexJobs.close(); this.store.close();
+    await this.pairRunner?.close();await this.pending?.catch(() => {}); await this.indexJobs.close(); this.store.close();
   }
   /** Serialize configuration with scans. Persist first; a failed DB switch rolls
    * back the file before allowing scans again. Existing byte streams stay open. */

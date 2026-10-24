@@ -1,3 +1,5 @@
+import { checkedHeap } from '../../../shared/wasm/heap.ts';
+export { checkedHeap } from '../../../shared/wasm/heap.ts';
 import type {PacketDecodeIndex,PacketDecodePacket} from '../../../shared/media/indexing/packet-decode-index.ts';
 export type {PacketDecodeIndex,PacketDecodePacket} from '../../../shared/media/indexing/packet-decode-index.ts';
 import {isAnnexB} from '../../../shared/media/codecs/nal-framing.ts';
@@ -236,14 +238,6 @@ export async function wasmFlvDecoder(index: PacketConfiguration, glueURL: string
     },
     close() { call('vp_destroy', ['number'], [ctx], null); },
   };
-}
-
-/** Validate external core pointers before TypedArray silently clips or throws. */
-export function checkedHeap(heap: Uint8Array, ptr: number, size: number, operation: string): Uint8Array {
-  if (!Number.isSafeInteger(ptr) || ptr <= 0 || !Number.isSafeInteger(size) || size < 0 || ptr + size > heap.byteLength) {
-    throw new MediaOpenError('decode', `WASM ${operation}时内存范围无效（offset=${ptr}, bytes=${size}, heap=${heap.byteLength}），请重新载入片源。`);
-  }
-  return heap;
 }
 
 export function packetDecodeError(error: unknown, context: string): MediaOpenError {

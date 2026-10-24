@@ -2,7 +2,7 @@
 
 运行服务后，从同一 origin 打开 `/llms.txt` 查看短索引，`/agent.md` 查看工作流程，`/api/agent` 获取版本化 JSON 能力描述。按任务继续读取 `/agent/library.md`、`workspaces.md`、`annotations.md`、`quality.md`、`live-session.md` 或 `errors.md`。这些文件由 `server/agent-guide.ts` 内嵌，GET/HEAD 不依赖前端构建，也不会创建身份、扫描媒体或提交任务。
 
-`implemented` 表示代码支持，`enabled` 表示部署启用，`readiness` 表示当前条件。媒体内容逐源判断，浏览器视图需要活动会话；PSNR/SSIM/VMAF/CAMBI 任务、本机 MCP 桥接和远程 worker 仍未实现。`/api/health` 的原有字段保持兼容。
+`implemented` 表示代码支持，`enabled` 表示部署启用，`readiness` 表示当前条件。媒体内容逐源判断，浏览器视图需要活动会话；`quality.frame-pair` 提供受限的[一次性媒体库 PSNR 调用](source-library-psnr.md)，不需要浏览器；持久 PSNR/SSIM/VMAF/CAMBI 任务、本机 MCP 桥接和远程 worker 仍未实现，`quality.jobs` 保持 unavailable。`/api/health` 的原有字段保持兼容。
 
 ## 无页面写入
 

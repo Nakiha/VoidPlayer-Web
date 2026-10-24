@@ -33,7 +33,10 @@ parentPort!.on('message', async (request: {
     if(request.identity.kind==='flv'){
       if(store.epoch!==request.epoch)throw new AdminError(409,'索引缓存已被清理，请重新请求。');
       const result=await buildFlvIndexDocument(request.filePath,request.size,request.version,progress=>parentPort!.postMessage({type:'progress',data:progress}));
-      store.commit(request.id,request.version,prepareFrameIndex(result.document,request.size,request.identity,`${request.id}@${request.version}`,{scannedBytes:result.profile.scannedBytes}),request.epoch);
+      // Only this completed, version-checked server parser can mint provenance.
+      const producer = result.profile.scannedBytes===request.size && result.document.truncatedAt===undefined && !result.document.recoveredGaps
+        ? {kind:'server-flv-scan-v1' as const,sourceStat:result.profile.sourceStat} : undefined;
+      store.commit(request.id,request.version,prepareFrameIndex(result.document,request.size,request.identity,`${request.id}@${request.version}`,{scannedBytes:result.profile.scannedBytes}),request.epoch,producer);
       parentPort!.postMessage({value:{built:true,epoch:request.epoch,profile:result.profile}});
       return;
     }

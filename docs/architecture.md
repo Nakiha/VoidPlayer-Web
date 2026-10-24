@@ -4,13 +4,13 @@
 
 `shared/` 保存浏览器与服务端共用的媒体解析、索引、分析计算和数据契约，按领域分目录。`src/` 拥有浏览器资源与交互；`server/` 拥有文件系统、数据库和 HTTP 服务。两类宿主都可引用共享层，不能互相引用；类型引用也遵守同一规则。
 
-`npm run check:boundaries` 检查静态导入、类型引用、重新导出、字面量动态加载和 Worker URL，拒绝缺失入口及共享层的宿主依赖；浏览器测试脚本显式加载 `/src/` 或 `/shared/` 时，还检查文件和解构读取的运行时导出，覆盖混合模块拆分后的入口迁移。计算式模块加载仅允许五个已登记的 WASM/语言资源加载入口，共享层不允许计算式模块加载，包依赖仅准入可在两个宿主执行的 Mediabunny。`npm run check:shared` 在没有 DOM 类型的环境中编译共享层；边界负例和真实工程检查均进入 fast/source 与构建。
+`npm run check:boundaries` 检查静态导入、类型引用、重新导出、字面量动态加载和 Worker URL，拒绝缺失入口及共享层的宿主依赖；浏览器测试脚本显式加载 `/src/` 或 `/shared/` 时，还检查文件和解构读取的运行时导出，覆盖混合模块拆分后的入口迁移。计算式模块加载仅允许已登记的 WASM/语言资源加载入口，共享层不允许计算式模块加载，包依赖仅准入可在两个宿主执行的 Mediabunny。`npm run check:shared` 在没有 DOM 类型的环境中编译共享层；边界负例和真实工程检查均进入 fast/source 与构建。
 
 共享分析引擎通过 `AnalysisReader.indexCache` 使用可选的宿主缓存接口；浏览器 Worker 接入 IndexedDB，服务端使用自身已验证的索引。共享实现不创建浏览器存储、VideoFrame 或 Canvas。WebAssembly 的局部类型契约仅描述两个宿主共用的标准接口，不向工程安装 DOM 全局类型。构建指纹、前端来源摘要和发布源码包均包含 `shared/`。
 
 分析名称按数据来源统一：`metadata` 指包元数据统计与曲线查询，`bitstream` 指需要深度解析的 NALU/GOP、参考关系和宏块/QP。共享计算、浏览器适配、会话协调和服务端分别保留各自宿主目录；图表与源画面覆盖层都归 UI。`src/` 顶层仅保留应用入口、构建信息、全局类型和样式，边界检查拒绝新增未归属的顶层代码模块。
 
-`shared/analysis/quality/` 保存真实源像素域的无宿主数值核心，当前仅有 [有界 PSNR](source-plane-psnr.md)。它复用帧描述/布局校验，不创建或解码帧，不推断配对，不调用呈现器。边界检查只为共享层准入该领域，浏览器/服务端评分适配与 #121 持久任务尚未交付；`quality.jobs` 保持不可用。
+`shared/analysis/quality/` 保存 [源平面 PSNR](source-plane-psnr.md)、[内部帧对执行体](source-frame-pair-psnr.md)和共享的有界原始帧解码器；`shared/wasm/frame.ts` / `shared/media/ffmpeg-color.ts` 保存宿主中立的帧 ABI 和色彩枚举映射。浏览器 Blob 适配在 `src/analysis/quality/`；媒体库文件、可信缓存证据、Node/Bun Worker 与一次性 HTTP 调用在 `server/analysis/quality/`，见 [服务端闭环](source-library-psnr.md)。不依赖 Session 或呈现器，不自动配对；#121 持久任务未交付，`quality.jobs` 保持不可用。
 
 ## 会话与时间
 

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript-ast';
 
 const portable = file => file.replaceAll('\\', '/');
-const computedLoaders = new Set(['src/i18n.ts','src/media/decoding/core-loader.ts','src/analysis/bitstream/local-worker.ts','server/frame-index-builder.ts','server/analysis/bitstream/worker.ts']);
+const computedLoaders = new Set(['src/i18n.ts','src/media/decoding/core-loader.ts','src/analysis/bitstream/local-worker.ts','server/frame-index-builder.ts','server/analysis/bitstream/worker.ts','server/analysis/quality/task.ts']);
 const entrypoints = new Set(['bootstrap.ts','agent.ts','build-info.ts','env.d.ts','i18n.ts','main.ts','session.ts']);
 const codeFile = file => /\.(?:[cm]?js|[cm]?ts|tsx)$/.test(file);
 export function moduleEdges(code, file) {
@@ -57,7 +57,7 @@ export function checkModuleBoundaries(root) {
     if (name.startsWith('src/') && !name.slice(4).includes('/')) assert.ok(entrypoints.has(name.slice(4)), `${name}: unowned frontend root module`);
     assert.ok(!/^src\/(bitstream-analysis|analysis-overlay)\//.test(name), `${name}: obsolete analysis namespace`);
     for (const layer of ['shared','src','server']) if (name.startsWith(`${layer}/analysis/`)) {
-      const domains = layer === 'server' ? 'metadata|bitstream' : 'metadata|bitstream|quality';
+      const domains = 'metadata|bitstream|quality';
       assert.match(name, new RegExp(`^${layer}/analysis/(${domains})/`), `${name}: analysis must declare ${domains} responsibility`);
     }
   }

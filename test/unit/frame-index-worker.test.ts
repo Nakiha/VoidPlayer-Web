@@ -138,13 +138,16 @@ test('build Worker messageerror rejects joined demand and releases the queued in
     const rejected = active.promise.then(() => null, error => error as Error);
     const worker = [...(jobs as any).buildWorkers][0] as import('node:worker_threads').Worker;
     assert.ok(worker);
-    const exited = new Promise<void>(resolve => worker.once('exit', () => resolve()));
+    let physicallyExited=false;
+    const exited = new Promise<void>(resolve => worker.once('exit', () => {physicallyExited=true;resolve();}));
     const queued = jobs.startBuild({ ...request, id: queuedEntry.id, version: queuedEntry.version, size: queuedEntry.size, filePath: queuedPath });
     const queuedResult = queued.promise.then(value => ({ value, error: undefined }), error => ({ value: undefined, error: error as Error }));
     assert.equal((jobs as any).buildQueue.length, 1);
     worker.emit('messageerror', new Error('injected invalid build reply'));
-    assert.equal((jobs as any).buildWorkers.has(worker), false);
+    assert.equal((jobs as any).buildWorkers.has(worker), true, 'termination request does not release physical worker capacity');
     const error = await rejected; assert.ok(error instanceof Error); assert.match(error.message, /消息无法反序列化/);
+    assert.equal(physicallyExited,true,'joined demand rejects only after the failed Worker really exits');
+    assert.equal((jobs as any).buildWorkers.has(worker),false);
     const result = await queuedResult; assert.equal(result.error, undefined); assert.equal(result.value.built, true);
     await exited;
     await new Promise<void>(resolve => setImmediate(resolve));

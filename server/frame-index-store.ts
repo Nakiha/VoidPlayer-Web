@@ -13,6 +13,10 @@ import { FFMPEG_INDEX_BYTES, FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_RECORD_LIMI
 import { FLV_MEDIA_INDEX_IDENTITY, JS_TS_MEDIA_INDEX_IDENTITY, JS_MATROSKA_MEDIA_INDEX_IDENTITY } from '../shared/media/indexing/media-index-identity.ts';
 import type { MediaIndexIdentity, MediaIndexKind } from '../shared/media/indexing/media-index-identity.ts';
 import { validFfmpegRecovery } from '../shared/media/indexing/index-integrity.ts';
+import type { LibraryPairBinding, FlvProducerEvidence } from '../shared/analysis/quality/library-pair.ts';
+import { PAIR_LIMITS } from '../shared/analysis/quality/frame-pair.ts';
+import type { PairBudget } from '../shared/analysis/quality/frame-pair.ts';
+import type { FileStatWitness } from './file-stat.ts';
 import type { FfmpegIndexRecovery } from '../shared/media/indexing/index-integrity.ts';
 
 export type FrameIndexKind = MediaIndexKind;
@@ -28,6 +32,40 @@ export class FrameIndexStore {
   private db: IndexDatabase;
   constructor(db: IndexDatabase) { this.db = db; }
   get epoch(): number { return Number(this.db.prepare('SELECT epoch FROM frame_index_epoch WHERE id=1').get()!.epoch); }
+
+  /** Read evidence and optional bounded document under ONE SQLite snapshot.
+   * producer_json is written here only for the server parser; POSTed JSON
+   * never supplies this field, and an existing client cache cannot be blessed. */
+  qualitySource(id: string, version: string, withIndex = false, limits: PairBudget = PAIR_LIMITS): LibraryPairBinding & { index: FlvIndexDocument | null } {
+    this.db.exec('BEGIN');
+    try {
+      const identity = FLV_MEDIA_INDEX_IDENTITY, epoch = this.epoch;
+      const row = this.db.prepare('SELECT complete,frames,last_seq,bytes,scanned_bytes,packet_storage,producer_json FROM media_index_manifests WHERE media_id=? AND media_version=? AND '+identityWhere).get(id,version,...identityArgs(identity));
+      if (!row?.complete) throw new AdminError(409,'An existing complete FLV cache is required.','cache-miss');
+      if (Number(row.frames)>limits.maxIndexPackets || Number(row.bytes)>limits.maxIndexBytes)
+        throw new AdminError(413,'Cached index exceeds quality budget.','budget-exceeded');
+      const storage = packetStorage(String(row.packet_storage),identity,`${id}@${version}`,Number(row.frames),Number(row.last_seq));
+      let producer: FlvProducerEvidence | undefined;
+      try { producer = JSON.parse(String(row.producer_json)); } catch {}
+      if (!storage || !producer || producer.producer!=='server-flv-scan-v1' || producer.sourceVersion!==`${id}@${version}`
+        || producer.epoch!==epoch || producer.packetCommitId!==storage.commitId || producer.documentSha256!==storage.documentSha256
+        || producer.size!==Number(row.scanned_bytes) || !Number.isSafeInteger(producer.size) || producer.size<1
+        || !producer.sourceStat || producer.sourceStat.size!==String(producer.size)
+        || ['size','dev','ino','mtimeNs','ctimeNs'].some(key=>typeof producer!.sourceStat[key as keyof FileStatWitness]!=='string'||! /^-?\d{1,24}$/.test(producer!.sourceStat[key as keyof FileStatWitness])))
+        throw new AdminError(409,'Cache lacks matching server FLV producer evidence; explicitly clear and build it.','untrusted-cache');
+      const indexBuildId = createHash('sha256').update(JSON.stringify([identity,producer])).digest('hex');
+      let index: FlvIndexDocument | null = null;
+      if (withIndex) {
+        const text = this.storedDocument(id,version,identity);
+        if (!text || Buffer.byteLength(text)>limits.maxIndexBytes) throw new AdminError(413,'Invalid or oversized quality index.','budget-exceeded');
+        if (createHash('sha256').update(text).digest('hex')!==producer.documentSha256) throw new AdminError(409,'Quality cache document changed.','identity-mismatch');
+        index = JSON.parse(text) as FlvIndexDocument;
+        parseFlvIndex(index,producer.size);
+      }
+      this.db.exec('COMMIT');
+      return { binding:{mediaId:id,mediaVersion:version,size:producer.size,indexIdentity:{...identity},indexBuildId},producer,index };
+    } catch(error) { this.db.exec('ROLLBACK'); throw error; }
+  }
 
   private storedDocument(id: string, version: string, identity: MediaIndexIdentity): string | null {
     const row = this.db.prepare('SELECT complete,frames,last_seq,packet_storage FROM media_index_manifests WHERE media_id=? AND media_version=? AND ' + identityWhere).get(id, version, ...identityArgs(identity));
@@ -137,7 +175,7 @@ export class FrameIndexStore {
     return this.commit(id, version, prepareFrameIndex(value, size, identity, `${id}@${version}`), epoch);
   }
 
-  commit(id: string, version: string, prepared: PreparedFrameIndex, epoch: unknown) {
+  commit(id: string, version: string, prepared: PreparedFrameIndex, epoch: unknown, producer?: {kind:'server-flv-scan-v1';sourceStat:FileStatWitness}) {
     this.db.exec('BEGIN IMMEDIATE');
     try {
       if (epoch !== this.epoch) throw new AdminError(409, '索引缓存已被清理，请在下次载入时重新提交。');
@@ -202,6 +240,12 @@ export class FrameIndexStore {
       ).run(id, version, ...identityArgs(identity), seq, part.payload, Buffer.byteLength(part.payload), part.frames, now);
       if (sharded) this.db.prepare('UPDATE media_index_manifests SET packet_storage=? WHERE media_id=? AND media_version=? AND ' + identityWhere)
         .run(JSON.stringify(sharded.storage), id, version, ...identityArgs(identity));
+      if (producer?.kind === 'server-flv-scan-v1' && identity.kind==='flv' && sharded) {
+        const proof: FlvProducerEvidence = {producer:producer.kind,sourceStat:producer.sourceStat,sourceVersion:`${id}@${version}`,size:scannedBytes,epoch:Number(epoch),
+          packetCommitId:sharded.storage.commitId,documentSha256:sharded.storage.documentSha256};
+        this.db.prepare('UPDATE media_index_manifests SET producer_json=? WHERE media_id=? AND media_version=? AND '+identityWhere)
+          .run(JSON.stringify(proof),id,version,...identityArgs(identity));
+      }
       if ((identity.kind==='js-ts'||identity.kind==='js-matroska')) this.db.prepare('UPDATE media_index_manifests SET metadata_json=? WHERE media_id=? AND media_version=? AND '+identityWhere)
         .run(JSON.stringify({jsIndexSha256:createHash('sha256').update(text).digest('hex')}),id,version,...identityArgs(identity));
       if (prepared.semanticHeader) {

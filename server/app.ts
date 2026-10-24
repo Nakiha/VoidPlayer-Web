@@ -1,6 +1,7 @@
 import { StaticAssets } from './static-assets.ts';
 import { AnalysisScheduler } from './analysis/bitstream/scheduler.ts';
 import { handleAnalysisRoutes } from './analysis/bitstream/routes.ts';
+import { handleQualityRoutes } from './analysis/quality/routes.ts';
 import { randomUUID } from 'node:crypto';
 import { guestActor, browserUserId } from './identity.ts';
 import { createServer } from 'node:http';
@@ -45,7 +46,7 @@ export interface ServerOptions {
 
 export function createMediaServer(options: ServerOptions): Server {
   const roots = options.roots.map(r => path.resolve(r));
-  const library = options.library ?? new MediaLibraryIndex(roots);
+  const library = options.library ?? new MediaLibraryIndex(roots,{coreDir:process.env.VOIDPLAYER_WASM_CORE_DIR || (options.staticDir ? path.join(options.staticDir,'vendor/voidplayer-core') : undefined)});
   if (!options.library) library.start();
   const analysisCore = process.env.VOIDPLAYER_ANALYSIS_CORE_DIR || path.join(options.staticDir ?? path.join(process.cwd(), 'public'), 'vendor/voidplayer-analysis');
   const analysis = options.admin?.analysisFor(analysisCore) ?? new AnalysisScheduler(library, analysisCore, library.analysisDirectory);
@@ -88,6 +89,7 @@ export function createMediaServer(options: ServerOptions): Server {
       const url = new URL(req.url ?? '/', 'http://localhost');
       if (await handleConnectionRoutes(ctx, req, res, url)) return;
       if (await handleStateRoutes(ctx, req, res, url)) return;
+      if (await handleQualityRoutes(ctx,req,res,url)) return;
       if (await handleAnalysisRoutes(ctx,req,res,url,analysis)) return;
       if (await handleContentRoutes(ctx, req, res, url)) return;
       if (req.method !== 'GET' && req.method !== 'HEAD') {
