@@ -1,3 +1,4 @@
+import {pairPacketCount} from '../../../shared/analysis/quality/frame-pair.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
@@ -91,7 +92,7 @@ export class QualityJobStore {
         startedAt: Number(attempt.started_at), endedAt: attempt.ended_at === null ? null : Number(attempt.ended_at)} : null,
       result: {available: completed && !!row.result_sha, url: `/api/quality/jobs/${row.id}/result`, digest: row.result_sha ? String(row.result_sha) : null},
       progress: {scoredPairs: completed ? 1 : 0, targetPairs: 1, decodedFrames: completed ?
-        [input.request.reference,input.request.distorted].reduce((n,t)=>n+(t.decode?t.picture.au-t.decode.startAu+1:1),0) : null}};
+        [input.request.reference,input.request.distorted].reduce((n,t)=>n+pairPacketCount(t),0) : null}};
   }
   submit(request: ReturnType<typeof qualityJobRequest>, actor: Actor, requestId: string, key: string, now: number) {
     return this.transaction(() => {

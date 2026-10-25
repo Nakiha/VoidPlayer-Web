@@ -102,11 +102,11 @@ test('forward windows reject absent start, duplicate/wrong PTS, changed dependen
  const changed=Buffer.from(bytes);changed[left.source.index!.packets[1][0]-1]^=1;const source={...left.source,file:new Blob([changed])};await assert.rejects(client().measure(pairRequest(left.target,right.target),[source,right.source],baseFile,new AbortController().signal),/tag identity/);
 });
 
-test('real B-frame streams are not offered as forward candidates or approximated',{timeout:90000},async t=>{
+test('real B-frame streams require explicit GOP identities and still reject legacy forward requests',{timeout:90000},async t=>{
  const dir=await mkdtemp(join(tmpdir(),'vp-forward-b-'));t.after(()=>rm(dir,{recursive:true,force:true}));
  const {qualityFrameCandidates}=await import('../../shared/analysis/quality/selection.ts');
  for(const [codec,depth]of [['h264',8],['hevc',10]]as const){const f=await encodedForwardFixture(dir,codec,depth,{bframes:2}),p=await preparedPair(f.bytes);assert.ok(f.packets.some(p=>p.pts!==p.dts));
-  const candidates=qualityFrameCandidates({binding:p.source.binding,producer:{}as any},p.source.index!,{afterAu:0,limit:50});assert.ok(candidates.entries.every(e=>!e.decode));
+  const candidates=qualityFrameCandidates({binding:p.source.binding,producer:{}as any},p.source.index!,{afterAu:0,limit:50});assert.ok(candidates.entries.every(e=>e.decode?.mode==='packet-identity-gop-v1'));assert.equal(candidates.entries.length,f.packets.length);
   const target=await preparedPair(f.bytes,'d'.repeat(24),2);target.target.decode={mode:'forward-one-output-per-au-v1',startAu:0};await assert.rejects(client().measure(pairRequest(p.target,target.target),[p.source,target.source],baseFile,new AbortController().signal),/zero-CTS|reordering/);
  }
 });

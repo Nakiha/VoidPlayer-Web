@@ -143,3 +143,7 @@ cases; identity CI remains core-free. The compiled native acceptance includes th
 two forward fixtures on all three platform jobs with empty PATH and persistent
 history/annotation restart checks. Functional acceptance does not certify playback
 performance or resolve historical CI timeout causes.
+
+The separate [packet-identity closed-GOP mode](reordered-frame-quality.md) supports
+a bounded reordered/delayed subset using the fixed additive core ABI. This does
+not alter the legacy forward mode, its provenance or admission rules.

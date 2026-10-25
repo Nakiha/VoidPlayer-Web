@@ -32,7 +32,7 @@ export function qualityJobRequest(value: unknown) {
     indexBuildId: t.indexBuildId, picture: {sourceVersion: t.picture.sourceVersion, stream: t.picture.stream,
       configuration: t.picture.configuration, au: t.picture.au, picture: t.picture.picture,
       layer: t.picture.layer, field: t.picture.field}, sourcePtsUs: t.sourcePtsUs,
-    ...(t.decode?{decode:{mode:t.decode.mode,startAu:t.decode.startAu}}:{}),
+    ...(t.decode?{decode:t.decode.mode==='packet-identity-gop-v1'?{mode:t.decode.mode,startAu:t.decode.startAu,endAu:t.decode.endAu}:{mode:t.decode.mode,startAu:t.decode.startAu}}:{}),
   });
   const normalized: QualityJobInput = {schema: input.schema, version: 1,
     client: {id: input.client.id, kind: input.client.kind}, request: {

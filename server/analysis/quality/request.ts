@@ -10,7 +10,7 @@ export function libraryPairRequest(value:unknown):FramePairRequest {
   qualityKeys(value,['pairing','reference','distorted','roi','spatial','ssim','budget']);const request=value as FramePairRequest;
   for(const target of [request.reference,request.distorted]){
     qualityKeys(target,['mediaId','mediaVersion','size','indexIdentity','indexBuildId','picture','sourcePtsUs','decode']);
-    if(target.decode!==undefined)qualityKeys(target.decode,['mode','startAu']);
+    if(target.decode!==undefined)qualityKeys(target.decode,target.decode.mode==='packet-identity-gop-v1'?['mode','startAu','endAu']:['mode','startAu']);
     qualityKeys(target.picture,['sourceVersion','stream','configuration','au','picture','layer','field']);
     qualityKeys(target.indexIdentity,['kind','streamKey','schemaVersion','indexerBuild']);
   }

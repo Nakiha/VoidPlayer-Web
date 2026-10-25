@@ -1,6 +1,6 @@
 {
   "repository": "Nakiha/VoidPlayer-FFmpeg-Build",
-  "revision": "71d2ccbd2c5175dfcdffb48f8428695067227a7c",
+  "revision": "56eec749fde60488e41fe4d5467f77fb112f093c",
   "ffmpegRepository": "Nakiha/FFmpeg",
   "ffmpegRevision": "8998a1a670c81a04d144c36f9e2d3aa680c10720",
   "ffmpegRef": "n9.0.2-vpsimd-sad-testfix",
@@ -16,5 +16,6 @@
     "avi",
     "mpegps",
     "mpegvideo"
-  ]
+  ],
+  "packetIdentityAbi": 1
 }
