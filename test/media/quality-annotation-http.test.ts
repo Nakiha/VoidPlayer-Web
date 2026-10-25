@@ -30,7 +30,7 @@ for(const [codec,depth]of [['h264',8],['hevc',8],['hevc',10]]as const)test(`anno
  const cacheResponse=await fetch(`${base}/api/media/${entry.id}/frame-index?v=${entry.version}&build=1`);assert.equal(cacheResponse.status,200);const cache=await cacheResponse.json();
  const proof=await fetch(`${base}/api/media/${entry.id}/psnr-source?v=${entry.version}`,{headers:{cookie}}).then(r=>r.json());
  const target=(au:number):PairTarget=>({...proof.binding,sourcePtsUs:cache.index.packets[au][2],picture:{sourceVersion:`${entry.id}@${entry.version}`,stream:'video',configuration:0,au,picture:0,layer:0,field:'frame'}});
- const input={schema:'voidplayer-psnr-frame-job',version:1,client:{id:'private-client',kind:'agent'},request:{pairing:'caller-specified',reference:target(0),distorted:target(1),roi:{x:2,y:4,width:24,height:20}}};
+ const input={schema:'voidplayer-psnr-frame-job',version:1,client:{id:'private-client',kind:'agent'},request:{pairing:'caller-specified',reference:target(0),distorted:target(1),roi:{x:2,y:4,width:24,height:20},spatial:{blockWidth:10,blockHeight:8}}};
  const submitted=await fetch(base+'/api/quality/jobs',{method:'POST',headers:{...headers,'x-voidplayer-action':'quality-job','idempotency-key':'private-secret-key'},body:JSON.stringify(input)});assert.equal(submitted.status,202);const accepted=await submitted.json();let job:QualityJob=accepted.job;
  for(let n=0;n<300&&!['completed','failed','cancelled','interrupted'].includes(job.state);n++){await new Promise(r=>setTimeout(r,20));job=await fetch(`${base}/api/quality/jobs/${job.id}`,{headers:{cookie}}).then(r=>r.json());}assert.equal(job.state,'completed',JSON.stringify(job));
  const original=await fetch(base+job.result.url,{headers:{cookie}}).then(r=>r.json());
@@ -53,16 +53,41 @@ for(const [codec,depth]of [['h264',8],['hevc',8],['hevc',10]]as const)test(`anno
  let expectedSse=0;const sampleBytes=depth===8?1:2,frameBytes=1536*sampleBytes,raw=new DataView(fixture.native.buffer,fixture.native.byteOffset,fixture.native.byteLength);
  for(const [plane,offset]of [0,1024,1280].entries()){const scale=plane?2:1,width=plane?16:32;for(let y=4/scale;y<24/scale;y++)for(let x=2/scale;x<26/scale;x++){const at=(offset+y*width+x)*sampleBytes;const read=(n:number)=>sampleBytes===1?raw.getUint8(n):raw.getUint16(n,true);expectedSse+=(read(at)-read(frameBytes+at))**2;}}
  assert.equal(evidence.value.result.metric.aggregate.sse,expectedSse,'shared snapshot keeps exact independently summed native plane SSE');
+ assert.equal(evidence.value.result.metric.spatial!.blocks.length,9);assert.equal(evidence.value.result.metric.spatial!.blocks.reduce((n,b)=>n+b.aggregate.sse,0),expectedSse);
  assert.equal(evidence.verification,'server-verified');assert.equal(evidence.ref.digest,job.result.digest);assert.deepEqual(evidence.value,original.value);assert.equal(evidence.value.result.metric.bitDepth,depth);assert.ok(evidence.value.result.metric.aggregate.sse>0);assert.equal(evidenceApplies(record.document,evidence),true);
  assert.ok(!JSON.stringify(record).includes('private-secret-key'));assert.ok(!JSON.stringify(record).includes('private-client'));
  const shared=await fetch(base+'/api/annotations/spaces/default/mark',{headers:{cookie:other}}).then(r=>r.json());assert.deepEqual(shared,record);assert.equal((await fetch(base+job.result.url,{headers:{cookie:other}})).status,404);
  assert.deepEqual(await post(attach),record,'lost response replay has one attachment/event');
  const receipts=new AnnotationStore(join(config.dataDir,'annotations.sqlite'));try { assert.deepEqual(receipts.mutate('default',attach,actor,'after-result-unavailable'),record,'receipt precedes resolver availability and current revision'); } finally { receipts.close(); }
  const forged=structuredClone(record.document);forged.mark.qualityEvidence![0].value.result.metric.aggregate.sse++;
+ // A legacy-shaped value may pass the old scalar structural validator, but
+ // cannot strip the grid or replace the already committed immutable facts.
+ delete forged.mark.qualityEvidence![0].value.result.metric.spatial;
  assert.equal((await post({operationId:'forge',id:'mark',revision:2,action:'put',document:forged},409)as any).code,'evidence-immutable');
+ const stripped=structuredClone(record.document);delete stripped.mark.qualityEvidence![0].value.result.metric.spatial;
+ assert.equal((await post({operationId:'strip-grid',id:'mark',revision:2,action:'put',document:stripped},409)as any).code,'evidence-immutable');
+ const forgedGrid=structuredClone(record.document);forgedGrid.mark.qualityEvidence![0].value.result.metric.spatial!.blocks[0].roi.x+=2;
+ await post({operationId:'forge-grid',id:'mark',revision:2,action:'put',document:forgedGrid},400);
  const budgetDoc=structuredClone(document);budgetDoc.mark.id='budget';await post({...create,operationId:'create-budget',id:'budget',document:budgetDoc});
  for(let n=0;n<4;n++)await post({...attach,operationId:'budget-'+n,id:'budget',revision:n+1});
  assert.equal((await post({...attach,operationId:'budget-overflow',id:'budget',revision:5},413)as any).code,'evidence-limit');
+ if(codec==='h264'){
+  const larger={...input,request:{...input.request,spatial:{blockWidth:4,blockHeight:2}}};
+  const submission=await fetch(base+'/api/quality/jobs',{method:'POST',headers:{...headers,'x-voidplayer-action':'quality-job','idempotency-key':'grid-byte-budget'},body:JSON.stringify(larger)});assert.equal(submission.status,202);let gridJob=(await submission.json()).job;
+  for(let n=0;n<300&&!['completed','failed'].includes(gridJob.state);n++){await new Promise(r=>setTimeout(r,20));gridJob=await fetch(`${base}/api/quality/jobs/${gridJob.id}`,{headers:{cookie}}).then(r=>r.json());}assert.equal(gridJob.state,'completed');
+  const gridDoc=structuredClone(document);gridDoc.mark.id='grid-bytes';await post({...create,operationId:'grid-bytes-create',id:'grid-bytes',document:gridDoc});let revision=1,rejected=false;
+  for(let n=0;n<5;n++){const op={...attach,id:'grid-bytes',revision,operationId:'grid-bytes-'+n,evidence:{jobId:gridJob.id,attemptId:gridJob.attempt.id,digest:gridJob.result.digest,side:'reference'}};
+   const response=await fetch(base+'/api/annotations/spaces/default',{method:'POST',headers,body:JSON.stringify(op)}),value=await response.json();
+   if(response.status===413){assert.equal(value.code,'evidence-limit');assert.ok(n>0&&n<=4);rejected=true;break;}
+   assert.equal(response.status,200,JSON.stringify(value));assert.equal(value.document.mark.qualityEvidence.at(-1).value.result.metric.spatial.blocks.length,60);assert.ok(Buffer.byteLength(JSON.stringify(value.document.mark.qualityEvidence))<=128*1024);revision++;
+  }
+  assert.equal(rejected,true,'the existing 128 KiB/four-attachment budget still rejects overflow');
+  const saved=await fetch(base+'/api/annotations/spaces/default/grid-bytes').then(r=>r.json());assert.equal(saved.revision,revision,'budget rejection does not mutate the annotation');
+  const oversized=structuredClone(saved.document);Object.assign(oversized.mark.qualityEvidence[0].value,{untrustedPadding:'x'.repeat(128*1024)});
+  assert.ok(Buffer.byteLength(JSON.stringify(oversized.mark.qualityEvidence))>128*1024);
+  const rejectedImport=await post({id:'grid-bytes',revision,operationId:'oversized-grid-import',action:'put',document:oversized},400);assert.equal((rejectedImport as any).code,'invalid-annotation-document');
+  assert.deepEqual(await fetch(base+'/api/annotations/spaces/default/grid-bytes').then(r=>r.json()),saved,'oversized imported facts leave the committed grid unchanged');
+ }
  const raceDoc=structuredClone(document);raceDoc.mark.id='race';await post({...create,operationId:'create-race',id:'race',document:raceDoc});
  const races=await Promise.all(['one','two'].map(operationId=>fetch(base+'/api/annotations/spaces/default',{method:'POST',headers,body:JSON.stringify({...attach,id:'race',operationId})})));
  assert.deepEqual(races.map(r=>r.status).sort(),[200,409],'concurrent attachment intents never overwrite a committed revision');
@@ -77,6 +102,7 @@ for(const [codec,depth]of [['h264',8],['hevc',8],['hevc',10]]as const)test(`anno
  const edit=structuredClone(record.document);delete edit.mark.qualityEvidence;edit.mark.text='Ordinary text edit by old client';edit.mark.replies=[{id:'reply',text:'Reply',author:actor,createdAt:'old'}];edit.mark.region={left:0,top:0,width:.5,height:.5};
  record=await post({operationId:'edit',id:'mark',revision:2,action:'put',document:edit});assert.deepEqual(record.document.mark.qualityEvidence,[evidence]);assert.equal(evidenceApplies(record.document,evidence),false,'region edit retains immutable facts and changes applicability');
  const backup=annotationWorkspace([record.document],base);assert.equal(backup.version,2);assert.equal(backup.marks[0].qualityEvidence![0].verification,'historical');
+ assert.deepEqual(backup.marks[0].qualityEvidence![0].value.result.metric.spatial,evidence.value.result.metric.spatial);
  const imported=parseWorkspace({...backup,marks:[{...record.document.mark,mediaId:backup.media[0].id}]});assert.equal(imported.marks[0].qualityEvidence![0].verification,'historical');
  assert.deepEqual(await readWorkspaceFile(await compressWorkspace(backup),base),parseWorkspace(backup));
  assert.deepEqual(await readWorkspaceFile(new Blob([JSON.stringify(backup)]),base),parseWorkspace(backup));

@@ -7,8 +7,9 @@ import type { QualityEvidence } from '../../shared/review/quality-evidence.ts';
 import type { DecodedFrame } from '../media/source.ts';
 import type { AnnotationRecord } from '../../shared/review/annotation-record.ts';
 import type { InspectedFramePair } from '../../shared/analysis/quality/frame-pair.ts';
+import { psnrBlock } from '../../shared/analysis/quality/psnr-spatial.ts';
 
-export type PairViewState={state:'idle'|'loading'|'ready'|'failed'|'cancelled'|'closed';reference?:PairViewReference;evidence?:QualityEvidence;presented?:Record<PairViewSide,PairViewPresentation>;error?:string};
+export type PairViewState={state:'idle'|'loading'|'ready'|'failed'|'cancelled'|'closed';reference?:PairViewReference;evidence?:QualityEvidence;presented?:Record<PairViewSide,PairViewPresentation>;selectedBlock?:number;error?:string};
 type Dependencies={read(reference:PairViewReference,signal:AbortSignal):Promise<AnnotationRecord>;inspect(evidence:QualityEvidence,base:string,signal:AbortSignal):Promise<InspectedFramePair>};
 /** Two immutable decoded snapshots, no media catalog, playback clock, annotation
  * synchronizer or persistence. Every open supersedes the previous intent. */
@@ -81,6 +82,13 @@ export class QualityPairViewSession {
       verifyPairViewPresentation(evidence,side,token);presented[side]=token;
     }
     this.value={...this.value,presented};
+  }
+  selectBlock(index:number|null) {
+    if(this.value.state!=='ready'||!this.value.evidence||!this.value.presented)throw new Error('Original snapshots are not ready.');
+    if(index!==null)psnrBlock(this.value.evidence.value.result.metric,index);
+    // A block is an overlay on the already verified snapshots, never a seek or score request.
+    for(const side of PAIR_VIEW_SIDES)verifyPairViewPresentation(this.value.evidence,side,this.value.presented[side]);
+    this.value={...this.value,selectedBlock:index===null?undefined:index};this.emit();
   }
   cancel(){if(this.closed)return;this.sequence++;this.controller?.abort(new DOMException('View cancelled.','AbortError'));this.clear();this.value={state:'cancelled'};this.emit();}
   async close(){this.cancel();this.closed=true;this.value={state:'closed'};this.emit();await this.pending.catch(()=>{});this.listeners.clear();}

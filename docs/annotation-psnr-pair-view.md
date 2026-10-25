@@ -109,3 +109,5 @@ superseding/close ownership races. Existing real stalled-Worker cancellation tes
 cover the generic client's physical termination fence. Real media tests separately
 exercise exact-SAR rejection while normal source-plane scoring remains accepted. Existing numerical and real-plane
 regressions remain required. This advances #115; it does not complete the issue.
+
+Optional bounded source-pixel block measurement and immutable spatial evidence: [PSNR block evidence](psnr-spatial-evidence.md). Scalar requests and existing source/geometry admission remain unchanged.

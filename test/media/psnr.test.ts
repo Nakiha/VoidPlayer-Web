@@ -40,19 +40,22 @@ for (const depth of [8, 10] as const) test(`generated decoded ${depth}-bit YUV42
   }
   await writeFile(distortedFile, distorted);
   for (const roi of [{ x: 0, y: 0, width, height }, { x: 2, y: 4, width: 24, height: 16 }]) {
-    const actual = measurePsnr({ domain: 'source-yuv-code-values', reference: decodedFrame(reference, depth), distorted: decodedFrame(distorted, depth), roi });
+    const whole = measurePsnr({ domain: 'source-yuv-code-values', reference: decodedFrame(reference, depth), distorted: decodedFrame(distorted, depth), roi, spatial:{blockWidth:14,blockHeight:10} });
+    for(const actual of [whole,...whole.spatial!.blocks]) {
+    const roi=actual.roi;
     const input = (file: string) => ['-f', 'rawvideo', '-pixel_format', format, '-video_size', `${width}x${height}`, '-framerate', '1', '-i', file];
     const crop = `crop=${roi.width}:${roi.height}:${roi.x}:${roi.y}`;
     // execFileSync returns stdout; FFmpeg's machine-readable stats use stdout explicitly.
     const output = ffmpeg(['-v', 'error', ...input(referenceFile), ...input(distortedFile), '-filter_complex_threads', '1',
       '-filter_complex', `[0:v]${crop}[a];[1:v]${crop}[b];[a][b]psnr=stats_file=-:stats_version=2:output_max=1`, '-frames:v', '1', '-f', 'null', '-']);
     const stats = new Map([...output.matchAll(/([a-z_]+):([0-9.]+)/g)].map(m => [m[1], Number(m[2])]));
-    assert.equal(stats.get('max_avg'), actual.peak);
+    assert.equal(stats.get('max_avg'), whole.peak);
     for (const [key, value] of Object.entries({ y: actual.planes.y, u: actual.planes.u, v: actual.planes.v, avg: actual.aggregate })) {
       assert.equal(value.psnr.kind, 'finite');
       assert.ok(Math.abs(stats.get(`mse_${key}`)! - value.mse) <= 0.00501, `${depth}-bit ${key} MSE: ${output}`);
       assert.ok(Math.abs(stats.get(`psnr_${key}`)! - value.psnr.db!) <= 0.00501, `${depth}-bit ${key} PSNR: ${output}`);
     }
     t.diagnostic(JSON.stringify({ depth, roi, sse: actual.aggregate.sse, samples: actual.aggregate.samples, psnr: actual.aggregate.psnr, ffmpeg: Object.fromEntries(stats) }));
+    }
   }
 });

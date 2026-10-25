@@ -10,7 +10,7 @@ import type { HevcGeometry } from '../../media/codecs/hevc-geometry.ts';
 import { hevcGeometry, hevcFieldPictures } from '../../media/codecs/hevc-geometry.ts';
 import type { FrameDescription } from '../../media/frame-description.ts';
 import type { SourcePictureKey } from '../bitstream/contract.ts';
-import { measurePsnr } from './psnr.ts';
+import { measurePsnr, psnrGridPlan } from './psnr.ts';
 import type { PsnrFrame, PsnrRequest, PsnrResult } from './psnr.ts';
 
 export const PAIR_LIMITS = Object.freeze({ maxReadBytes: 16 * 1024 * 1024, maxPacketBytes: 8 * 1024 * 1024,
@@ -27,7 +27,7 @@ export class FramePairError extends Error {
 export type SourceBinding = { mediaId: string; mediaVersion: string; size: number; indexIdentity: MediaIndexIdentity; indexBuildId: string };
 export type PairTarget = SourceBinding & { picture: SourcePictureKey; sourcePtsUs: number };
 export type FramePairRequest = { pairing: 'caller-specified'; reference: PairTarget; distorted: PairTarget;
-  roi: PsnrRequest['roi']; budget?: Partial<PairBudget> & PsnrRequest['budget'] };
+  roi: PsnrRequest['roi']; spatial?: PsnrRequest['spatial']; budget?: Partial<PairBudget> & PsnrRequest['budget'] };
 export type PairBudget = { -readonly [K in keyof typeof PAIR_LIMITS]: number };
 /** The host must bind this cached document and reader to the same immutable source.
  * This boundary never constructs an index or consults a playback source/cursor. */
@@ -70,6 +70,7 @@ export function pairBudget(request: FramePairRequest): PairBudget {
       fail('invalid-request', 'Invalid FLV source/cache/picture identity');
   }
   if (budget.maxPackets < 2 || budget.maxOutputFrames < 2) fail('budget-exceeded', 'A pair requires two packets and two output frames');
+  if (request.spatial !== undefined) psnrGridPlan(request.roi, request.spatial);
   return budget;
 }
 function sameBinding(a: SourceBinding, b: SourceBinding) {
@@ -214,7 +215,7 @@ async function withFlvFramePair<T>(request: FramePairRequest, sources: [CachedPa
 export function measureFlvFramePair(request: FramePairRequest, sources: [CachedPairSource, CachedPairSource],
   loadDecoder: (budget: PairBudget) => Promise<PairDecoder>, signal: AbortSignal): Promise<FramePairResult> {
   return withFlvFramePair(request,sources,loadDecoder,signal,pair=>{
-    const metric=measurePsnr({domain:'source-yuv-code-values',reference:pair.frames[0],distorted:pair.frames[1],roi:request.roi,
+    const metric=measurePsnr({domain:'source-yuv-code-values',reference:pair.frames[0],distorted:pair.frames[1],roi:request.roi,spatial:request.spatial,
       budget:{maxSamples:request.budget?.maxSamples,maxInputBytes:request.budget?.maxInputBytes}});
     return {schema:'voidplayer-frame-pair-psnr',version:1,pairing:'caller-specified',
       correspondence:'caller-specified-no-content-or-time-alignment',decoder:pair.decoder,metric,provenance:pair.provenance,work:pair.work};

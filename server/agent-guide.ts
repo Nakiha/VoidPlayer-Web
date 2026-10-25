@@ -333,7 +333,7 @@ deployments advertise them disabled and reject submission.
    evidence. Missing, untrusted, stale or over-budget caches fail explicitly.
 4. POST /api/quality/psnr-pair with JSON, the identity cookie, same-origin Origin,
    and X-VoidPlayer-Action: quality. Body: {pairing:'caller-specified', reference,
-   distorted, roi:{x,y,width,height}, budget?}. Each side is its returned binding
+   distorted, roi:{x,y,width,height}, spatial?:{blockWidth,blockHeight}, budget?}. Each side is its returned binding
    plus picture:{sourceVersion:'id@version',stream:'video',configuration:0,au,
    picture:0,layer:0,field:'frame'} and integer-microsecond sourcePtsUs. Select AU
    and PTS explicitly from the existing source index; equal PTS never pairs sources.
@@ -344,6 +344,19 @@ ROI uses the unrotated visible source grid and must be chroma-aligned. The respo
 contains result (exact code-value SSE/MSE/PSNR and decoder build) plus complete
 source/cache/producer evidence. Media versions are stat-derived identities, not
 cryptographic content authentication. Sources stay inside registered library roots.
+
+Optional spatial uses even integer blockWidth/blockHeight in the same unrotated
+visible source grid. At most 64 disjoint row-major blocks cover the ROI exactly;
+edge blocks are clipped, never padded or omitted. Each block has original-source
+ROI and Y/U/V plus aggregate SSE, sample count, MSE and PSNR. The aggregate is
+still total SSE / total samples, never average dB. spatial.worst lists at most
+eight block indices ranked by descending per-sample MSE with row-major ties;
+these are numerical errors, not subjective defects or confidence. Unknown fields
+and excessive grids are rejected before durable admission. Omitting spatial keeps
+the original scalar result. Grids are included in idempotent request identity and
+in immutable result/annotation facts, survive restart/export/import, and can be
+selected read-only on the existing exact original-frame viewer. Historical copies
+stay historical; no new job read, score, seek or annotation write occurs on selection.
 
 One-shot source discovery and scoring each run in one owned, deadline-bound Worker.
 The same quality admission excludes concurrent index builds/uploads and bitstream work.
@@ -367,7 +380,7 @@ POST /api/quality/jobs with the identity cookie, same-origin Origin,
 Content-Type: application/json, X-VoidPlayer-Action: quality-job, and a bounded
 Idempotency-Key. JSON: {schema:'voidplayer-psnr-frame-job',version:1,
 client:{id:'review-agent',kind:'agent'},request:{pairing:'caller-specified',
-reference,distorted,roi:{x,y,width,height},budget?}}.
+reference,distorted,roi:{x,y,width,height},spatial?:{blockWidth,blockHeight},budget?}}.
 
 202 means the submission transaction committed. A lost response or disconnected
 observer does not cancel computation. Replay the same actor/client/key and

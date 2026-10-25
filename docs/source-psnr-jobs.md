@@ -76,3 +76,5 @@ Worker 退出不确定时保持 cancelling，记录 worker-stop-uncertain、拒�
 - Chromium/WebKit：在另一 GUI 源保持轨道/游标/布局/视图时实际完成一次性与持久评分；不代表评分面板已经交付。
 
 性能不足与旧 WebKit 故障的未知根因不因本切片通过而消失。
+
+Optional bounded source-pixel block measurement and immutable spatial evidence: [PSNR block evidence](psnr-spatial-evidence.md). Scalar requests and existing source/geometry admission remain unchanged.

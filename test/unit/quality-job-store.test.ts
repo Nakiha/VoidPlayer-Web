@@ -93,6 +93,14 @@ test('job admission rejects missing ROI, nested values and unknown fields before
   const input=jobInput();mutate(input);assert.throws(()=>qualityJobRequest(input));
  }
 });
+
+test('spatial parameters participate in canonical idempotency; old scalar receipts keep their fingerprints',async t=>{
+ const f=await fixture(t),input=jobInput(),plain=qualityJobRequest(input);input.request.spatial={blockWidth:16,blockHeight:8};const grid=qualityJobRequest(input);
+ const reordered=structuredClone(input);reordered.request.spatial={blockHeight:8,blockWidth:16};assert.equal(qualityJobRequest(reordered).fingerprint,grid.fingerprint);assert.notEqual(plain.fingerprint,grid.fingerprint);
+ const first=f.store.submit(grid,actor,'grid','grid',1000);assert.equal(f.store.submit(qualityJobRequest(reordered),actor,'replay','grid',1000).job.id,first.job.id);
+ input.request.spatial.blockWidth=8;assert.throws(()=>f.store.submit(qualityJobRequest(input),actor,'conflict','grid',1000),{code:'idempotency-conflict'});
+ delete input.request.spatial;assert.equal(qualityJobRequest(input).json,plain.json);assert.throws(()=>f.store.submit(plain,actor,'strip-grid','grid',1000),{code:'idempotency-conflict'});
+});
 test('history reservations reject overflow without evicting records or invalidating old receipts',async t=>{
  const f=await fixture(t),request=qualityJobRequest(jobInput());let first:string|undefined,count=0;
  for(let i=0;i<=QUALITY_JOB_LIMITS.historyRows;i++){

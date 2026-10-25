@@ -5,6 +5,7 @@ import { AdminError, adminErrorBody } from '../../admin-error.ts';
 import { adminWriteAllowed, readAdminJson } from '../../admin.ts';
 import { sendJson } from '../../http-utils.ts';
 import { FramePairError } from '../../../shared/analysis/quality/frame-pair.ts';
+import { PsnrError } from '../../../shared/analysis/quality/psnr.ts';
 import { QUALITY_JOB_LIMITS } from '../../../shared/analysis/quality/jobs.ts';
 import { qualityKeys } from './request.ts';
 
@@ -43,8 +44,9 @@ export async function handleQualityJobRoutes(ctx: RouteContext, req: IncomingMes
       }
     } finally { clearTimeout(timer); }
   } catch (error) {
-    if (!res.destroyed && !res.headersSent) sendJson(res, error instanceof AdminError ? error.status : error instanceof FramePairError ? 400 : 500,
-      error instanceof AdminError || error instanceof FramePairError ? {...adminErrorBody(error), code:error.code}
+    const known = error instanceof AdminError || error instanceof FramePairError || error instanceof PsnrError;
+    if (!res.destroyed && !res.headersSent) sendJson(res, error instanceof AdminError ? error.status : error instanceof PsnrError && error.code === 'budget-exceeded' ? 413 : known ? 400 : 500,
+      known ? {...adminErrorBody(error), code:error.code}
         : {error:'Quality job operation failed.',code:'quality-service-error'});
   }
   return true;

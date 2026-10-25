@@ -15,23 +15,34 @@ export class PsnrError extends Error {
 }
 export type PsnrFrame = { pixels: Uint8Array; description: FrameDescription };
 export type PsnrRoi = { x: number; y: number; width: number; height: number };
+export const PSNR_SPATIAL_LIMITS = Object.freeze({ maxBlocks: 64, worstBlocks: 8 });
+export type PsnrGridRequest = { blockWidth: number; blockHeight: number };
 export type PsnrRequest = {
   domain: 'source-yuv-code-values';
   reference: PsnrFrame;
   distorted: PsnrFrame;
   /** Mandatory, in the unrotated visible luma grid, with even x/y/width/height. */
   roi: PsnrRoi;
+  /** Optional disjoint grid, anchored at ROI, with clipped even edge blocks. */
+  spatial?: PsnrGridRequest;
   budget?: { maxSamples?: number; maxInputBytes?: number };
 };
 export type PsnrValue = { kind: 'finite'; db: number } | { kind: 'positive-infinity'; db: null };
 export type PsnrStatistics = { sse: number; samples: number; mse: number; psnr: PsnrValue };
 export type PsnrColor = { primaries: string; transfer: string; matrix: string; fullRange: boolean; chromaLocation: number };
+export type PsnrBlock = { index: number; roi: PsnrRoi;
+  planes: { y: PsnrStatistics; u: PsnrStatistics; v: PsnrStatistics }; aggregate: PsnrStatistics };
+export type PsnrSpatialResult = { schema: 'voidplayer-psnr-block-grid'; version: 1;
+  partition: 'roi-anchored-disjoint-even-grid'; ranking: 'aggregate-mse-desc-row-major-ties';
+  blockWidth: number; blockHeight: number; columns: number; rows: number;
+  blocks: PsnrBlock[]; worst: number[] };
 export type PsnrResult = {
   schema: 'voidplayer-source-plane-psnr'; version: 1; implementation: 'cpu-number-sse-v1';
   domain: 'source-yuv-code-values'; pairing: 'caller-supplied-unverified';
   geometry: 'unrotated-visible-pixel-grid'; roi: PsnrRoi;
   bitDepth: 8 | 10; peak: 255 | 1023; color: PsnrColor;
   planes: { y: PsnrStatistics; u: PsnrStatistics; v: PsnrStatistics }; aggregate: PsnrStatistics;
+  spatial?: PsnrSpatialResult;
   work: { samples: number; bytesRead: number; inputViewBytes: number; chargedInputBytes: number };
 };
 const primaries = new Set(['bt709', 'smpte170m', 'bt470bg', 'bt2020']);
@@ -80,6 +91,31 @@ function statistics(sse: number, samples: number, peak: number): PsnrStatistics 
     : { kind: 'finite', db: 10 * Math.log10(peak * peak / mse) } };
 }
 
+/** Same bounded plan for numeric, HTTP and GUI admission. No source access. */
+export function psnrGridPlan(roi: PsnrRoi, grid: PsnrGridRequest) {
+  if (!roi || ![roi.x, roi.y, roi.width, roi.height].every(Number.isSafeInteger)
+    || roi.x < 0 || roi.y < 0 || roi.width < 2 || roi.height < 2
+    || [roi.x, roi.y, roi.width, roi.height].some(n => n % 2)
+    || roi.x + roi.width > PSNR_LIMITS.maxDimension || roi.y + roi.height > PSNR_LIMITS.maxDimension)
+    fail('invalid-input', 'spatial.roi');
+  if (!grid || typeof grid !== 'object' || Array.isArray(grid)
+    || Object.keys(grid).sort().join(',') !== 'blockHeight,blockWidth'
+    || ![grid.blockWidth, grid.blockHeight].every(n => Number.isSafeInteger(n) && n >= 2 && n <= PSNR_LIMITS.maxDimension && n % 2 === 0))
+    fail('invalid-input', 'spatial');
+  const columns = Math.ceil(roi.width / grid.blockWidth), rows = Math.ceil(roi.height / grid.blockHeight);
+  if (columns * rows > PSNR_SPATIAL_LIMITS.maxBlocks) fail('budget-exceeded', 'spatial.blocks');
+  const blocks: PsnrRoi[] = Array.from({length: columns * rows}, (_, index) => {
+    const x = index % columns * grid.blockWidth, y = Math.floor(index / columns) * grid.blockHeight;
+    return {x: roi.x + x, y: roi.y + y, width: Math.min(grid.blockWidth, roi.width - x), height: Math.min(grid.blockHeight, roi.height - y)};
+  });
+  return {columns, rows, blocks};
+}
+
+export function rankPsnrBlocks(blocks: PsnrBlock[]): number[] {
+  return blocks.map(b => b.index).sort((a, b) => blocks[b].aggregate.mse - blocks[a].aggregate.mse || a - b)
+    .slice(0, PSNR_SPATIAL_LIMITS.worstBlocks);
+}
+
 /** Synchronous, bounded numeric kernel. Call from an independent executor, never a playback tick.
  * The caller owns stable source-plane buffers and is responsible for source/frame pairing.
  * No media access, alignment inference, range normalization, resampling or color conversion. */
@@ -101,6 +137,8 @@ export function measurePsnr(request: PsnrRequest): PsnrResult {
   if ([r.x, r.y, r.width, r.height].some(n => n % 2)) fail('unsupported-format', 'roi.chroma-alignment');
   const samples = r.width * r.height * 3 / 2;
   if (samples > maxSamples) fail('budget-exceeded', 'samples');
+  const plan = request.spatial === undefined ? undefined : psnrGridPlan(r, request.spatial);
+  const blockSse = plan?.blocks.map(() => [0, 0, 0]);
   const bitDepth = a.layout.bitDepth as 8 | 10, peak = bitDepth === 8 ? 255 : 1023;
   const bytes = bitDepth === 8 ? 1 : 2, values: PsnrStatistics[] = [];
   let totalSse = 0;
@@ -116,14 +154,28 @@ export function measurePsnr(request: PsnrRequest): PsnrResult {
         const av = request.reference.pixels[ai] + (bytes === 2 ? request.reference.pixels[ai + 1] * 256 : 0);
         const bv = request.distorted.pixels[bi] + (bytes === 2 ? request.distorted.pixels[bi + 1] * 256 : 0);
         if (av > peak || bv > peak) fail('invalid-input', av > peak ? 'reference.sample' : 'distorted.sample');
-        sse += (av - bv) ** 2;
+        const error = (av - bv) ** 2;
+        sse += error;
+        if (blockSse) blockSse[Math.floor(y * divisor / request.spatial!.blockHeight) * plan!.columns
+          + Math.floor(x * divisor / request.spatial!.blockWidth)][component] += error;
       }
     }
     totalSse += sse;
     values.push(statistics(sse, width * height, peak));
   }
+  let spatial: PsnrSpatialResult | undefined;
+  if (plan) {
+    const blocks = plan.blocks.map((roi, index) => {
+      const count = roi.width * roi.height, sse = blockSse![index];
+      return {index, roi, planes: {y: statistics(sse[0], count, peak), u: statistics(sse[1], count / 4, peak),
+        v: statistics(sse[2], count / 4, peak)}, aggregate: statistics(sse[0] + sse[1] + sse[2], count * 3 / 2, peak)};
+    });
+    spatial = {schema: 'voidplayer-psnr-block-grid', version: 1, partition: 'roi-anchored-disjoint-even-grid',
+      ranking: 'aggregate-mse-desc-row-major-ties', ...request.spatial!, columns: plan.columns, rows: plan.rows, blocks, worst: rankPsnrBlocks(blocks)};
+  }
   return { schema: 'voidplayer-source-plane-psnr', version: 1, implementation: 'cpu-number-sse-v1', domain: request.domain,
     pairing: 'caller-supplied-unverified', geometry: 'unrotated-visible-pixel-grid', roi: { x: r.x, y: r.y, width: r.width, height: r.height },
     bitDepth, peak, color: { ...a.color }, planes: { y: values[0], u: values[1], v: values[2] }, aggregate: statistics(totalSse, samples, peak),
+    ...(spatial ? {spatial} : {}),
     work: { samples, bytesRead: samples * bytes * 2, inputViewBytes: request.reference.pixels.byteLength + request.distorted.pixels.byteLength, chargedInputBytes } };
 }

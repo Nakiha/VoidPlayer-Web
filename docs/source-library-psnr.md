@@ -72,3 +72,5 @@ HTTP body 另有 10 秒上限；执行 deadline 从 body 校验和准入后开�
 共享帧读取的迁移还运行现有解码回归和播放 bench。原性能不足与旧 WebKit 错误的未知根因不因本切片通过而消失。
 
 Bun Node 兼容性边界的上游说明：[node:worker_threads](https://github.com/oven-sh/bun/blob/main/docs/runtime/nodejs-compat.mdx#nodeworker_threads)。原始 fd 问题还在本仓库 Bun 1.4.2 的实际强制取消回归中复现；该回归保留完整描述符断言。
+
+Optional bounded source-pixel block measurement and immutable spatial evidence: [PSNR block evidence](psnr-spatial-evidence.md). Scalar requests and existing source/geometry admission remain unchanged.
