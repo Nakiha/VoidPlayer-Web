@@ -15,7 +15,7 @@ function dialog(title: string) {
   const close=document.createElement('button');close.type='button';close.textContent=t(msg('quality.close', "关闭"));close.onclick=()=>root.close();
   root.append(heading,close);root.addEventListener('close',()=>root.remove(),{once:true});document.body.append(root);root.showModal();return root;
 }
-function facts(root:HTMLElement,value:ReturnType<typeof qualityEvidenceValue>) {
+export function qualityFacts(root:HTMLElement,value:ReturnType<typeof qualityEvidenceValue>) {
   const metric=value.result.metric,score=metric.aggregate.psnr;
   const summary=document.createElement('p');summary.className='quality-evidence-score';
   summary.textContent=t(msg('quality.score', 'PSNR {score} dB · 越高越好 · {depth} 位源 YUV 码值 · ROI {roi}'), {score:score.kind==='positive-infinity'?'∞':score.db.toFixed(4),depth:metric.bitDepth,roi:JSON.stringify(metric.roi)});
@@ -33,7 +33,7 @@ export function showQualityEvidence(mark: Mark, annotation: AnnotationDocument, 
     const section=document.createElement('section'),label=document.createElement('p');
     label.textContent=`${evidence.verification==='server-verified'?t(msg('quality.verified', "关联时已由来源服务核验")):t(msg('quality.historical', "历史副本，本服务未核验"))} · ${evidenceApplies(annotation,evidence)?t(msg('quality.applies', "匹配此标注的锚点和区域")):t(msg('quality.notApplies', "历史证据：当前锚点或区域已不同"))} · ${evidence.attachedBy.name} · ${evidence.attachedAt}`;
     const ref=document.createElement('pre');ref.textContent=JSON.stringify({serviceOrigin:evidence.serviceOrigin,...evidence.ref,completedAt:evidence.completedAt},null,2);
-    section.append(label);facts(section,evidence.value);section.append(ref);
+    section.append(label);qualityFacts(section,evidence.value);section.append(ref);
     if(space&&space!=='local'&&evidence.verification==='server-verified'&&evidence.serviceOrigin===location.origin){
       const link=document.createElement('a');link.className='quality-pair-open';link.href=qualityPairViewUrl({space,annotationId:mark.id,evidenceId:evidence.id},location.origin);link.target='_blank';link.rel='noopener';link.textContent=t(msg('quality.openPair','在新窗口查看原帧对与 ROI'));section.append(link);
     }
@@ -70,7 +70,7 @@ export async function attachQualityDialog(target:Target, remember:(record:Annota
       const value=qualityEvidenceValue((await raw.json()).value);
       if(!root.isConnected)return;
       command={space:target.space,id:target.id,revision:target.revision,operationId:randomUUID(),evidence:{jobId:job.id,attemptId:job.attempt.id,digest:job.result.digest,side:side.value as 'reference'|'distorted'}};
-      facts(body,value);publish.disabled=false;
+      qualityFacts(body,value);publish.disabled=false;
     } catch(error){status.textContent=(error as Error).message;}finally{busy=false;preview.disabled=false;input.disabled=false;side.disabled=false;}
   };
   publish.onclick=async()=>{

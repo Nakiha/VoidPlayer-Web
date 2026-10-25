@@ -15,6 +15,7 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 - `shared/analysis/quality/`：无宿主依赖的源平面度量核心。PSNR 的输入域、ROI、色彩前提和工作预算见 `docs/source-plane-psnr.md`；内部单帧桥及受信任的宿主输入边界见 `docs/source-frame-pair-psnr.md`；浏览器适配位于 `src/analysis/quality/`。数值核心和内部桥不代表评分任务服务可用。
 - `server/analysis/quality/`：媒体库到一次性 PSNR HTTP 调用的文件、缓存、Node/Bun Worker 适配，见 `docs/source-library-psnr.md`。可信 producer evidence 只能由服务端完成扫描后提交；评分不得重建索引。实例质量准入排斥索引构建/上传和码流工作，物理退出前不能释放许可。一次性请求与持久任务的连接/取消契约分开。
 - 持久单帧 PSNR 位于同目录 `job-{request,store,service,routes}.ts`，见 `docs/source-psnr-jobs.md`。提交幂等与终态/结果使用事务；运行由服务持有，观察断线不取消，取消须等待物理退出。独占锁后恢复 interrupted，无自动重试/共享/建索引；`quality.jobs` 仅声明显式单帧 PSNR，不代表 #121 全部完成。
+- 单帧 PSNR GUI 任务编排位于 `src/admin/quality.ts`、观察/幂等适配位于 `src/analysis/quality/job-observer.ts` 与 `src/services/quality-jobs.ts`，见 `docs/psnr-task-workflow.md`。只读取可信缓存候选，不借播放游标/CSS，不自动建索引；关闭观察不取消持久执行，身份/client/标注空间迟到回复必须围栏。
 - 已完成 PSNR 结果与现有共享标注的显式挂接见 `docs/annotation-psnr-evidence.md`，契约位于 `shared/review/quality-evidence.ts`。GUI/Agent 共用持久命令，普通编辑不得丢附件，导入/复制只保留历史事实并降权。带附件的工作区/评审文件为 v2；标注数据库为 v3，旧版本须拒绝。
 - 共享附件的显式只读原帧对/ROI 查看见 `docs/annotation-psnr-pair-view.md`。独立快照会话通过原缓存/AU 解码但不计算分数；历史附件、缓存变化和不支持的几何必须拒绝，不得借普通播放器自动建索引。
 - `scripts/dev.ts` 同进程启动 Vite 和媒体 API；`scripts/service.mjs` 管理 macOS 用户服务；`deploy/` 为便携运行与自动用户使用说明。

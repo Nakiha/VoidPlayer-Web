@@ -9,7 +9,7 @@ import { libraryPairRequest } from './request.ts';
 
 
 export async function handleQualityRoutes(ctx:RouteContext,req:IncomingMessage,res:ServerResponse,url:URL) {
-  const source=/^\/api\/media\/([a-f0-9]{24})\/psnr-source$/.exec(url.pathname);
+  const source=/^\/api\/media\/([a-f0-9]{24})\/(psnr-source|psnr-frames)$/.exec(url.pathname);
   if(!source&&url.pathname!=='/api/quality/psnr-pair')return false;
   const controller=new AbortController();
   const abort=()=>controller.abort(new AdminError(499,'One-shot quality request disconnected.','cancelled'));
@@ -18,8 +18,12 @@ export async function handleQualityRoutes(ctx:RouteContext,req:IncomingMessage,r
     if(!ctx.actor)throw new AdminError(401,'Select an intranet identity first.','identity-required');
     if(source){
       if(req.method!=='GET')throw new AdminError(405,'Method not allowed.');
-      if([...url.searchParams.keys()].some(key=>key!=='v'))throw new AdminError(400,'Unexpected quality source parameters.','invalid-request');
-      sendJson(res,200,await ctx.library.quality.source(source[1],url.searchParams.get('v')??'',controller.signal));return true;
+      if([...url.searchParams.keys()].some(key=>!(source[2]==='psnr-source'?['v']:['v','afterAu','limit','buildId']).includes(key)))throw new AdminError(400,'Unexpected quality source parameters.','invalid-request');
+      for(const key of ['afterAu','limit'])if(url.searchParams.has(key)&&!/^\d{1,9}$/.test(url.searchParams.get(key)!))throw new AdminError(400,'Invalid bounded frame query.','invalid-request');
+      const version=url.searchParams.get('v')??'';
+      const value=source[2]==='psnr-source'?await ctx.library.quality.source(source[1],version,controller.signal)
+        :await ctx.library.quality.frames(source[1],version,{afterAu:Number(url.searchParams.get('afterAu')??0),limit:Number(url.searchParams.get('limit')??50),...(url.searchParams.has('buildId')?{buildId:url.searchParams.get('buildId')!}:{})},controller.signal);
+      sendJson(res,200,value);return true;
     }
     if(req.method!=='POST')throw new AdminError(405,'Method not allowed.');
     if(url.search)throw new AdminError(400,'Unexpected quality query.','invalid-request');

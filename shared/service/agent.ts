@@ -45,6 +45,7 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
       result: '/api/quality/jobs/{jobId}/result', cancel: '/api/quality/jobs/{jobId}/cancel',
       writeAction: 'quality-job', idempotencyHeader: 'Idempotency-Key', observerDisconnectCancels: false,
       automaticRetry: false, sharedWork: false, buildsIndexes: false, limits: QUALITY_JOB_LIMITS,
+      frameCandidates:{endpoint:'/api/media/{id}/psnr-frames?v={version}&afterAu=0&limit=50',pagination:'absolute-au-with-original-buildId',eligibility:'container-key-candidate-execution-verifies-closed-au-and-pixels',buildsIndexes:false},
       source: { registeredLibraryOnly: true, indexKind: 'flv', enhancedFlv: true, producer: 'server-flv-scan-v1',
         codecs: ['h264', 'hevc'], bitDepths: [8, 10], chroma: 'yuv420', closedKeyAuOnly: true,
         explicitColorAndChromaLocation: true, explicitPairingAndSourcePts: true },

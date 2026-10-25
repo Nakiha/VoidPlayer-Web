@@ -320,7 +320,16 @@ deployments advertise them disabled and reject submission.
    /api/media/{id}/frame-index?v={version}&build=1. Quality never builds an index.
    A pre-existing client-uploaded cache cannot be blessed by a no-op build: clear
    it explicitly through ordinary cache management and then build it separately.
-3. GET /api/media/{id}/psnr-source?v={version} returns binding and server parser
+3. GET /api/media/{id}/psnr-frames?v={version}&afterAu=0&limit=50 reads
+   an existing trusted cache in the bounded source Worker. It returns source
+   binding/producer, exact visible SPS geometry, original-pair viewer geometry
+   support and explicit AU/source-PTS candidates. Paginate with nextAu and the
+   original source.binding.indexBuildId as buildId; rebuilds fail explicitly.
+   A container key flag is only a candidate: execution still verifies actual
+   closed AU, raw color, pixels and identities. This endpoint never decodes,
+   rebuilds, pairs sources or substitutes nearest PTS. Empty entries with nextAu
+   require another bounded page, not guessed eligibility.
+   GET /api/media/{id}/psnr-source?v={version} returns binding and server parser
    evidence. Missing, untrusted, stale or over-budget caches fail explicitly.
 4. POST /api/quality/psnr-pair with JSON, the identity cookie, same-origin Origin,
    and X-VoidPlayer-Action: quality. Body: {pairing:'caller-specified', reference,
