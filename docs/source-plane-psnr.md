@@ -46,3 +46,5 @@ ROI 必填，坐标相对未旋转的 visible luma 网格。`x/y/width/height` �
 `node --test test/media/psnr.test.ts` 使用 FFmpeg 从 testsrc2 生成带明确 BT.709/limited/left 标签的 8/10 位 FFV1，再真实解码为相同位深的 YUV420 平面，逐码值施加可复核扰动，对整帧及对齐 ROI 分别运行独立 FFmpeg `psnr` 滤镜。比较各平面及 aggregate 的 MSE、PSNR 和峰值；FFmpeg stats 输出保留两位小数，绝对容差 0.00501。另有解析已知算例按 1e-12 dB 验证，避免依赖参考输出精度。测试记录实际 FFmpeg 版本及数值，不提交像素/媒体文件。这只验证数值核心，不冒充应用媒体库帧配对、独立取帧或无 GUI 评分闭环。
 
 两组用例登记在 testing manifest 的 source/fast/contract 与 media/ci-node-media 中。当前播放性能历史失败继续保留，新增数值核心不调整播放路径、性能阈值或原始诊断结果。
+
+Optional bounded source-pixel block measurement and immutable spatial evidence: [PSNR block evidence](psnr-spatial-evidence.md). Scalar requests and existing source/geometry admission remain unchanged.

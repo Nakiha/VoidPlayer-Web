@@ -23,7 +23,10 @@ try {
  const depth=Number(process.argv[3]??8);
  const sample=JSON.parse(await readFile(path.join(root,'test/helpers/quality-http-samples.json'),'utf8')).samples.find(s=>s.codec===(depth===10?'hevc':'h264')&&s.depth===depth&&s.tagged);
  await writeFile(path.join(mediaDir,'B.flv'),Buffer.from(sample.flv,'base64'));
- execFileSync('ffmpeg',['-v','error','-f','lavfi','-i','testsrc2=size=160x90:rate=10','-t','30','-c:v','libx264','-preset','ultrafast','-bf','0','-g','10','-pix_fmt','yuv420p','-movflags','+faststart',path.join(mediaDir,'A.mp4')]);
+ // The multi-window flow may legitimately take >30 s under concurrent native
+ // decoding. Keep the isolation clip playing past the verification window;
+ // assertions, deadlines and absence-of-seek checks remain unchanged.
+ execFileSync('ffmpeg',['-v','error','-f','lavfi','-i','testsrc2=size=160x90:rate=10','-t','120','-c:v','libx264','-preset','ultrafast','-bf','0','-g','10','-pix_fmt','yuv420p','-movflags','+faststart',path.join(mediaDir,'A.mp4')]);
  await writeFile(path.join(temp,'voidplayer.config.json'),JSON.stringify({mediaRoots:[mediaDir],dataDir:'data',staticDir:path.join(root,'dist'),logsDir:null,indexWatch:false}));
  const config=await loadConfig([],'production',temp);config.port=0;service=await startService(config);await service.library.refresh();
  const entries=await waitForAnnotationMedia(service.library,['A.mp4','B.flv']);
@@ -33,7 +36,7 @@ try {
  const entry=entries[1],built=await fetch(`${base}/api/media/${entry.id}/frame-index?v=${entry.version}&build=1`).then(r=>r.json());
  const proof=await fetch(`${base}/api/media/${entry.id}/psnr-source?v=${entry.version}`,{headers:{cookie}}).then(r=>r.json());
  const target=au=>({...proof.binding,sourcePtsUs:built.index.packets[au][2],picture:{sourceVersion:`${entry.id}@${entry.version}`,stream:'video',configuration:0,au,picture:0,layer:0,field:'frame'}});
- const submit=await fetch(base+'/api/quality/jobs',{method:'POST',headers:{...headers,'x-voidplayer-action':'quality-job','idempotency-key':'browser-evidence'},body:JSON.stringify({schema:'voidplayer-psnr-frame-job',version:1,client:{id:'browser-acceptance',kind:'agent'},request:{pairing:'caller-specified',reference:target(0),distorted:target(1),roi:{x:2,y:4,width:24,height:20}}})});assert.equal(submit.status,202);let job=(await submit.json()).job;
+ const submit=await fetch(base+'/api/quality/jobs',{method:'POST',headers:{...headers,'x-voidplayer-action':'quality-job','idempotency-key':'browser-evidence'},body:JSON.stringify({schema:'voidplayer-psnr-frame-job',version:1,client:{id:'browser-acceptance',kind:'agent'},request:{pairing:'caller-specified',reference:target(0),distorted:target(1),roi:{x:2,y:4,width:24,height:20},spatial:{blockWidth:10,blockHeight:8}}})});assert.equal(submit.status,202);let job=(await submit.json()).job;
  for(let n=0;n<200&&!['completed','failed','interrupted','cancelled'].includes(job.state);n++){await new Promise(r=>setTimeout(r,25));job=await fetch(`${base}/api/quality/jobs/${job.id}`,{headers:{cookie}}).then(r=>r.json());}assert.equal(job.state,'completed',JSON.stringify(job));
  const source={id:'snapshot-B',name:'B.flv',size:entry.size,lastModified:entry.lastModified,codec:sample.codec,decoder:'ffmpeg-wasm',width:32,height:32,durationUs:2000000,firstPtsUs:target(0).sourcePtsUs,source:{kind:'library',id:entry.id,url:`${base}/api/media/${entry.id}?v=${entry.version}`}};
  const document={schema:'voidplayer-workspace',version:1,name:'PSNR evidence',generatedAt:new Date().toISOString(),serverUrl:base,positionUs:0,tracks:[{slot:'A',mediaId:source.id,offsetUs:0}],media:[source],marks:[],viewport:{},layout:{panels:{inspector:false,subtracks:true,sources:false},selected:'A',dockHeight:300,marksExpanded:true}};
@@ -116,7 +119,7 @@ try {
  observerContext.off('request',trackJobRequest);assert.deepEqual(jobRequests,[],'opening shared evidence never probes the private job');
  const inaccessible=await linked.evaluate(async id=>Promise.all(['','/result'].map(async suffix=>(await fetch(`/api/quality/jobs/${id}${suffix}`)).status)),job.id);assert.deepEqual(inaccessible,[404,404]);
  assert.deepEqual(await fetch(`${base}/api/annotations/spaces/${space}/mark-B`).then(r=>r.json()),sharedRecord,'both view entries leave the shared annotation unchanged');
- const afterLink=await observer.evaluate(()=>window.voidPlayer.getState());assert.equal(afterLink.playing,true);assert.ok(afterLink.positionUs>beforeLink.positionUs);assert.deepEqual(afterLink.tracks.map(track=>[track.slot,track.id,track.offsetUs]),beforeLink.tracks.map(track=>[track.slot,track.id,track.offsetUs]));assert.equal(afterLink.marks.length,0);
+ const afterLink=await observer.evaluate(()=>window.voidPlayer.getState());console.log(JSON.stringify({isolationPlayback:true,engine,playing:afterLink.playing,positionUs:afterLink.positionUs,durationUs:afterLink.tracks[0]?.durationUs}));assert.equal(afterLink.playing,true,JSON.stringify({positionUs:afterLink.positionUs,tracks:afterLink.tracks.map(track=>({durationUs:track.durationUs,frame:track.frame}))}));assert.ok(afterLink.positionUs>beforeLink.positionUs);assert.deepEqual(afterLink.tracks.map(track=>[track.slot,track.id,track.offsetUs]),beforeLink.tracks.map(track=>[track.slot,track.id,track.offsetUs]));assert.equal(afterLink.marks.length,0);
  const navigationLog=await observer.evaluate(({sessionId,lastSeq})=>window.voidPlayer.getLogs({sessionId,sinceSeq:lastSeq,limit:2000}),playbackLog);
  assert.equal(navigationLog.gap,false);assert.equal(navigationLog.hasMore,false);assert.deepEqual(navigationLog.events.filter(event=>['seek','restoreWorkspace'].includes(event.data?.action)),[],'explicit opens in another window never seek or restore the original session');
  await linked.close();failurePage=undefined;evidence=previousEvidence;
@@ -134,7 +137,9 @@ try {
  await page.waitForFunction(async space=>{const record=await fetch(`/api/annotations/spaces/${space}/mark-B`).then(r=>r.json());return record.revision===4&&record.document.mark.replies?.length===1&&record.document.mark.qualityEvidence?.length===2;},space);
  await page.waitForFunction(space=>window.__annotationStatus?.space===space&&window.__annotationStatus.state==='saved',space);
  const backup=await page.evaluate(()=>window.voidPlayer.exportWorkspace());assert.equal(backup.version,2);assert.equal(backup.marks[0].qualityEvidence.length,2);
+ assert.equal(backup.marks[0].qualityEvidence[0].value.result.metric.spatial.blocks.length,9);
  await page.evaluate(document=>window.voidPlayer.importWorkspace(document),backup);await page.waitForFunction(()=>window.voidPlayer.getState().marks[0]?.qualityEvidence?.[0]?.verification==='historical');
+ assert.deepEqual(await page.evaluate(()=>window.voidPlayer.getState().marks[0].qualityEvidence[0].value.result.metric.spatial),backup.marks[0].qualityEvidence[0].value.result.metric.spatial);
  assert.equal((await page.evaluate(()=>window.voidPlayer.exportReview())).version,2);
  await page.locator('[data-mark-id="mark-B"] .annotation-psnr-evidence').click();assert.match(await page.getByRole('dialog',{name:'PSNR evidence',exact:true}).textContent(),/Historical copy/);await page.getByRole('dialog',{name:'PSNR evidence',exact:true}).getByRole('button',{name:'Close',exact:true}).click();
 

@@ -36,7 +36,7 @@ try{
   const built=await fetch(`${base}/api/media/${entry.id}/frame-index?v=${entry.version}&build=1`);assert.equal(built.status,200);const cache=await built.json();assert.equal(cache.index.packets.length,2);
   const lookup=await fetch(`${base}/api/media/${entry.id}/psnr-source?v=${entry.version}`,{headers:{cookie}});const binding=await lookup.json();assert.equal(lookup.status,200,JSON.stringify(binding));
   const target=au=>({...binding.binding,sourcePtsUs:cache.index.packets[au][2],picture:{sourceVersion:`${entry.id}@${entry.version}`,stream:'video',configuration:0,au,picture:0,layer:0,field:'frame'}});
-  const request={pairing:'caller-specified',reference:target(0),distorted:target(1),roi:{x:2,y:4,width:24,height:20}};
+  const request={pairing:'caller-specified',reference:target(0),distorted:target(1),roi:{x:2,y:4,width:24,height:20},spatial:{blockWidth:10,blockHeight:8}};
   const response=await fetch(base+'/api/quality/psnr-pair',{method:'POST',headers,body:JSON.stringify(request)}),value=await response.json();assert.equal(response.status,200,JSON.stringify(value));
   assert.equal(value.execution.runtime,'bun');assert.equal(value.execution.host,'node-worker');assert.equal(value.execution.runtimeVersion,manifest.runtime.version);assert.equal(value.result.metric.bitDepth,sample.depth);
   assert.equal(value.result.decoder.buildId,manifest.decoder.source.revision);assert.deepEqual(value.sources.reference,binding);assert.deepEqual(value.sources.distorted,binding);
@@ -50,6 +50,12 @@ try{
    assert.equal(value.result.metric.planes[name].sse,sse);assert.equal(value.result.metric.planes[name].samples,samples);aggregate+=sse;
   }
   assert.equal(value.result.metric.aggregate.sse,aggregate);assert.ok(aggregate>0);assert.equal(value.request.actorId,cookie.slice('voidplayer-user='.length));assert.equal(value.request.id,response.headers.get('x-request-id'));
+  const grid=value.result.metric.spatial;assert.equal(grid.blocks.length,9);
+  for(const block of grid.blocks){const r=block.roi;let sum=0;for(const [i,name]of ['y','u','v'].entries()){const width=i?16:32,offset=[0,1024,1280][i],scale=i?2:1;let sse=0,samples=0;
+   for(let y=r.y/scale;y<(r.y+r.height)/scale;y++)for(let x=r.x/scale;x<(r.x+r.width)/scale;x++){const at=(offset+y*width+x)*bytes,a=bytes===1?raw[at]:raw.readUInt16LE(at),b=bytes===1?raw[frame+at]:raw.readUInt16LE(frame+at);sse+=(a-b)**2;samples++;}
+   assert.equal(block.planes[name].sse,sse);assert.equal(block.planes[name].samples,samples);sum+=sse;
+  }assert.equal(block.aggregate.sse,sum);}
+  assert.equal(grid.blocks.reduce((n,b)=>n+b.aggregate.sse,0),aggregate);assert.deepEqual(grid.worst,grid.blocks.map(b=>b.index).sort((a,b)=>grid.blocks[b].aggregate.mse-grid.blocks[a].aggregate.mse||a-b).slice(0,8));
   const input={schema:'voidplayer-psnr-frame-job',version:1,client:{id:'compiled-acceptance',kind:'agent'},request};
   const jobHeaders={...headers,'x-voidplayer-action':'quality-job','idempotency-key':`compiled-${sample.codec}-${sample.depth}`};
   const submitted=await fetch(base+'/api/quality/jobs',{method:'POST',headers:jobHeaders,body:JSON.stringify(input)}),accepted=await submitted.json();assert.equal(submitted.status,202,JSON.stringify(accepted));

@@ -15,6 +15,7 @@ import { qualityEvidenceValue } from '../../shared/review/quality-evidence.ts';
 import { qualityPairViewUrl } from '../../shared/review/quality-pair-view.ts';
 import { qualityFacts } from '../ui/quality-evidence.ts';
 import { randomUUID } from '../../shared/utils/uuid.ts';
+import { psnrGridPlan } from '../../shared/analysis/quality/psnr.ts';
 
 const sides=['reference','distorted'] as const;
 type Side=typeof sides[number];
@@ -31,6 +32,7 @@ export function qualityJobsShell(){
     <label>${th(msg('qualityWorkflow.client','本页客户端 ID'))}<input id="quality-client" maxlength="80" spellcheck="false"><button id="quality-client-apply" type="button">${th(msg('qualityWorkflow.useClient','使用此客户端'))}</button></label>
     <form id="quality-form" class="admin-panel"><div class="quality-sources">${sides.map(source).join('')}</div>
     <fieldset><legend>${th(msg('qualityWorkflow.roi','ROI：未旋转可见源像素网格，所有值须为偶数整数'))}</legend><div class="quality-roi">${['x','y','width','height'].map(key=>`<label>${key}<input name="${key}" type="number" step="2" min="${key==='width'||key==='height'?2:0}" required></label>`).join('')}</div><button type="button" id="quality-full-frame">${th(msg('qualityWorkflow.full','使用两侧完整可见帧'))}</button></fieldset>
+    <fieldset><legend>${th(msg('quality.spatialTitle','源像素分块 PSNR'))}</legend><label><input id="quality-grid-enabled" type="checkbox">${th(msg('quality.spatialEnable','同次测量生成分块与最差区域证据（最多 64 块）'))}</label><div class="quality-roi"><label>${th(msg('quality.spatialWidth','块宽（偶数源像素）'))}<input id="quality-grid-width" type="number" step="2" min="2" max="16384" value="16" required></label><label>${th(msg('quality.spatialHeight','块高（偶数源像素）'))}<input id="quality-grid-height" type="number" step="2" min="2" max="16384" value="16" required></label></div></fieldset>
     <p>${th(msg('qualityWorkflow.candidateNotice','候选页只读取已有可信缓存，不构建索引。容器关键帧标记不保证可测；执行时仍逐侧核验闭合 AU、颜色、版本和缓存身份。缓存缺失请先在缓存管理中显式构建。'))}</p>
     <button id="quality-submit" class="admin-primary" type="submit" disabled>${th(msg('qualityWorkflow.submit','发起持久测量'))}</button>
     <button id="quality-retry" type="button" hidden>${th(msg('qualityWorkflow.retry','使用原幂等键重试提交'))}</button>
@@ -63,6 +65,7 @@ export function installQualityJobs(signal:AbortSignal){
     $('retry').hidden=!pending;$('forget').hidden=!pending;$('retry').toggleAttribute('disabled',busy||!enabled);$('forget').toggleAttribute('disabled',busy);
     for(const input of $('form').querySelectorAll<HTMLInputElement|HTMLSelectElement>('input,select'))input.disabled=!enabled||pending||busy||input instanceof HTMLSelectElement&&!pickers.get(input.closest<HTMLElement>('[data-quality-source]')?.dataset.qualitySource as Side)?.page;
     for(const button of $('form').querySelectorAll<HTMLButtonElement>('button'))if(!['quality-submit','quality-retry','quality-forget'].includes(button.id))button.disabled=!enabled||pending||busy;
+    for(const id of ['grid-width','grid-height'])$<HTMLInputElement>(id).disabled=!enabled||pending||busy||!$<HTMLInputElement>('grid-enabled').checked;
     $('submit-status').textContent=pending?t(msg('qualityWorkflow.pending','提交结果尚未确认。请求已冻结；重试会复用原幂等键，不能据网络失败断言任务未创建。')):'';
   }
   function stateLabel(state:string){const labels:Record<string,string>={queued:t(msg('qualityWorkflow.queued','排队中')),preparing:t(msg('qualityWorkflow.preparing','检查来源')),running:t(msg('qualityWorkflow.running','执行中')),cancelling:t(msg('qualityWorkflow.cancelling','正在终止 Worker')),completed:t(msg('admin.measureDone','已完成')),failed:t(msg('admin.stateFailed','失败')),cancelled:t(msg('admin.stateCancelled','已停止')),interrupted:t(msg('admin.stateInterrupted','上次任务被中断'))};return labels[state]??state;}
@@ -159,11 +162,14 @@ export function installQualityJobs(signal:AbortSignal){
   }
   $('full-frame').onclick=()=>{const [a,b]=sides.map(side=>pickers.get(side)!.page?.geometry);if(!a||!b||a.width!==b.width||a.height!==b.height||a.width%2||a.height%2){setError('observer-status',t(msg('qualityWorkflow.geometryMismatch','两侧需要相同的偶数可见尺寸；请明确选择有效 ROI。')));return;}
     for(const [key,value]of Object.entries({x:0,y:0,width:a.width,height:a.height}))($('form').querySelector(`[name=${key}]`)as HTMLInputElement).value=String(value);};
+  $('grid-enabled').onchange=actions;
   $('form').onsubmit=event=>{event.preventDefault();if(!enabled||!observer||observation?.pending||observation?.busy)return;
     const targets=sides.map(side=>pickers.get(side)!);if(targets.some(p=>!p.target||!p.page))return;
     const roi=Object.fromEntries(['x','y','width','height'].map(key=>[key,Number(($('form').querySelector(`[name=${key}]`)as HTMLInputElement).value)]))as {x:number;y:number;width:number;height:number};
     if(!Object.values(roi).every(n=>Number.isSafeInteger(n)&&n%2===0)||roi.x<0||roi.y<0||roi.width<=0||roi.height<=0||targets.some(p=>roi.x+roi.width>p.page!.geometry.width||roi.y+roi.height>p.page!.geometry.height)){setError('observer-status',t(msg('qualityWorkflow.invalidRoi','ROI 必须是两侧可见源网格内的偶数整数区域。')));return;}
-    const input:QualityJobInput={schema:'voidplayer-psnr-frame-job',version:1,client:{id:observer.client,kind:'browser'},request:{pairing:'caller-specified',reference:targets[0].target!,distorted:targets[1].target!,roi}};
+    const spatial=$<HTMLInputElement>('grid-enabled').checked?{blockWidth:Number($<HTMLInputElement>('grid-width').value),blockHeight:Number($<HTMLInputElement>('grid-height').value)}:undefined;
+    try{if(spatial)psnrGridPlan(roi,spatial);}catch(error){setError('observer-status',error);return;}
+    const input:QualityJobInput={schema:'voidplayer-psnr-frame-job',version:1,client:{id:observer.client,kind:'browser'},request:{pairing:'caller-specified',reference:targets[0].target!,distorted:targets[1].target!,roi,...(spatial?{spatial}:{})}};
     void observer.submit(input).then(()=>observer?.poll());};
   $('retry').onclick=()=>void observer?.submit().then(()=>observer?.poll());$('forget').onclick=()=>observer?.forgetPending();$('refresh').onclick=()=>{const c=context();void (async()=>{if(await discover(c))await observer?.resync();})().catch(error=>{if(valid(c))setError('availability',error);});};$('cancel').onclick=()=>{if(observation?.detail)void observer?.cancel(observation.detail.id);};
   async function discover(c:ReturnType<typeof context>){

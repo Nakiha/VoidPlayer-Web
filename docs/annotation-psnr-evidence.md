@@ -141,3 +141,5 @@ This slice does not complete #115, and it does not change performance gates or
 claim a cause/fix for the earlier WebKit reload/sharing failures.
 
 Explicit original-frame pair/ROI viewing and its strict snapshot identity/geometry limits are described in [annotation-psnr-pair-view.md](annotation-psnr-pair-view.md).
+
+Optional bounded source-pixel block measurement and immutable spatial evidence: [PSNR block evidence](psnr-spatial-evidence.md). Scalar requests and existing source/geometry admission remain unchanged.

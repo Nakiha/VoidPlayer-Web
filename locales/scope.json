@@ -91,6 +91,7 @@
     "src/ui/progress-ring.ts",
     "src/ui/quality-evidence.ts",
     "src/ui/quality-pair-view.ts",
+    "src/ui/quality-spatial.ts",
     "src/ui/resize-gesture.ts",
     "src/ui/saved-workspaces.ts",
     "src/ui/seek-preview.ts",

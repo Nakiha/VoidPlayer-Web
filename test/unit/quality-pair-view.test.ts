@@ -10,8 +10,9 @@ import type {AnnotationRecord} from '../../shared/review/annotation-record.ts';
 import {rgbaDescription} from '../../shared/media/frame-description.ts';
 import {preparedPair,pairRequest,wrapFlv,pairAvcc,admissionIdr} from '../helpers/frame-pair-fixture.ts';
 const origin='http://localhost',reference={space:'shared',annotationId:'mark',evidenceId:'evidence'};
-async function fixture() {
+async function fixture(spatial=false) {
  const bytes=wrapFlv('h264',pairAvcc,[admissionIdr,admissionIdr]),a=await preparedPair(bytes),b=await preparedPair(bytes,'a'.repeat(24),1),request=pairRequest(a.target,b.target);
+ if(spatial)request.spatial={blockWidth:16,blockHeight:16};
  const description=rgbaDescription(32,32,{format:'YUV',stride:null,byteLength:1536,color:{primaries:'bt709',transfer:'bt709',matrix:'bt709',fullRange:false},yuv:{bitDepth:8,bitShift:0,subsampleX:1,subsampleY:1,semiplanar:false,chromaLocation:1,planes:[{offset:0,stride:32,width:32,height:32},{offset:1024,stride:16,width:16,height:16},{offset:1280,stride:16,width:16,height:16}]}});
  const decoder:PairDecoder={version:{backend:'ffmpeg-wasm',buildId:'c'.repeat(40),frameAbi:2,packetIdentity:'isolated-closed-au-v1'},async decode(_c,_d,_p,pts){return {pts,pixels:new Uint8Array(1536),description:structuredClone(description)};},close(){}};
  const result=await measureFlvFramePair(request,[a.open(),b.open()],async()=>decoder,new AbortController().signal);
@@ -48,4 +49,20 @@ test('cache digest inspection clearly refuses hosts without secure WebCrypto',as
  const f=await fixture(),{inspectLibraryEvidence}=await import('../../src/analysis/quality/inspection.ts'),descriptor=Object.getOwnPropertyDescriptor(globalThis,'crypto');
  try{Object.defineProperty(globalThis,'crypto',{value:undefined,configurable:true});await assert.rejects(inspectLibraryEvidence(f.evidence,origin,new AbortController().signal),/requires HTTPS or localhost/);}
  finally{if(descriptor)Object.defineProperty(globalThis,'crypto',descriptor);else Reflect.deleteProperty(globalThis,'crypto');}
+});
+
+test('block selection is a read-only view of the same bound snapshots and clears on new open/cancel',async()=>{
+ const f=await fixture(true);let paints=0,inspections=0,reads=0;
+ const session=new QualityPairViewSession((_s,frame)=>frame.presentedCommit=++paints,origin,{read:async()=>{reads++;return structuredClone(f.record);},inspect:async()=>{inspections++;return structuredClone(f.pair);}});
+ assert.throws(()=>session.selectBlock(0),/not ready/);await session.open(reference);const before=session.getState();
+ session.selectBlock(3);assert.equal(session.getState().selectedBlock,3);assert.deepEqual(session.getState().presented,before.presented);assert.equal(paints,2);assert.equal(inspections,1);assert.equal(reads,2);
+ for(const index of [-1,4,1.5,NaN])assert.throws(()=>session.selectBlock(index));assert.equal(session.getState().selectedBlock,3);
+ session.selectBlock(null);assert.equal(session.getState().selectedBlock,undefined);session.selectBlock(1);await session.open(reference);assert.equal(session.getState().selectedBlock,undefined);
+ session.selectBlock(2);session.cancel();assert.equal(session.getState().selectedBlock,undefined);assert.equal(session.resources.totalBytes,0);assert.throws(()=>session.selectBlock(0),/not ready/);await session.close();
+});
+
+test('forged spatial evidence never reaches inspection or presentation',async()=>{
+ const f=await fixture(true);f.record.document.mark.qualityEvidence![0].value.result.metric.spatial!.blocks[0].roi.x++;
+ let inspected=0;const session=new QualityPairViewSession(()=>assert.fail('forged block painted'),origin,{read:async()=>f.record,inspect:async()=>{inspected++;return f.pair;}});
+ await assert.rejects(session.open(reference),/spatial.evidence/);assert.equal(inspected,0);assert.equal(session.resources.totalBytes,0);await session.close();
 });

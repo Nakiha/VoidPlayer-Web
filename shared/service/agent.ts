@@ -1,5 +1,6 @@
 import { TECHNICAL_FILTER_PATH, TECHNICAL_FILTER_LIMITS, TECHNICAL_FILTER_SCHEMA } from '../media/indexing/technical-filter.ts';
 import { QUALITY_JOB_LIMITS } from '../analysis/quality/jobs.ts';
+import { PSNR_SPATIAL_LIMITS } from '../analysis/quality/psnr.ts';
 /** Discovery describes this deployment without starting work or creating users. */
 export function serviceCapabilities(storageEnabled: boolean, revealEnabled: boolean) {
   return { admin: storageEnabled, workspaces: storageEnabled, annotations: storageEnabled, reveal: revealEnabled };
@@ -45,6 +46,8 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
       result: '/api/quality/jobs/{jobId}/result', cancel: '/api/quality/jobs/{jobId}/cancel',
       writeAction: 'quality-job', idempotencyHeader: 'Idempotency-Key', observerDisconnectCancels: false,
       automaticRetry: false, sharedWork: false, buildsIndexes: false, limits: QUALITY_JOB_LIMITS,
+      spatial: {optional:true,requestField:'spatial',parameters:['blockWidth','blockHeight'],units:'even-visible-source-pixels',
+        partition:'roi-anchored-disjoint-even-grid',ranking:'aggregate-mse-desc-row-major-ties',resultSchema:'voidplayer-psnr-block-grid',resultVersion:1,limits:PSNR_SPATIAL_LIMITS},
       frameCandidates:{endpoint:'/api/media/{id}/psnr-frames?v={version}&afterAu=0&limit=50',pagination:'absolute-au-with-original-buildId',eligibility:'container-key-candidate-execution-verifies-closed-au-and-pixels',buildsIndexes:false},
       source: { registeredLibraryOnly: true, indexKind: 'flv', enhancedFlv: true, producer: 'server-flv-scan-v1',
         codecs: ['h264', 'hevc'], bitDepths: [8, 10], chroma: 'yuv420', closedKeyAuOnly: true,

@@ -1,5 +1,6 @@
 import type { LibraryPairResult } from '../analysis/quality/library-pair.ts';
 import { pairBudget } from '../analysis/quality/frame-pair.ts';
+import { validatePsnrSpatial } from '../analysis/quality/psnr-spatial.ts';
 import { validateDescription } from '../media/frame-description.ts';
 import { referenceVersion } from '../media/io/media-reference.ts';
 import { mediaIndexIdentityKey } from '../media/indexing/media-index-identity.ts';
@@ -67,6 +68,7 @@ export function qualityEvidenceValue(value: unknown): LibraryPairResult {
   }
   check(r.work?.packets === 2 && r.work.outputFrames === 2 && unsigned(r.work.readBytes) && Number.isFinite(r.work.elapsedMs) && r.work.elapsedMs >= 0
     && m.work && [m.work.samples,m.work.bytesRead,m.work.inputViewBytes,m.work.chargedInputBytes].every(unsigned));
+  validatePsnrSpatial(m);
   return structuredClone(v);
 }
 export function qualityEvidenceList(value: unknown, preserveVerification = false): QualityEvidence[] {

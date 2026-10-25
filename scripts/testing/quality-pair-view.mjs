@@ -42,13 +42,15 @@ export async function checkQualityPairView(linked,{space,annotationId,evidence,e
  for(const side of ['reference','distorted']) {
   const p=evidence.value.result.provenance[side],actual=state.presented[side];assert.equal(actual.sourceGeometry.sarNum,actual.sourceGeometry.sarDen);assert.deepEqual(actual.picture,p.picture);assert.equal(actual.sourceBinding.indexBuildId,p.indexBuildId);assert.deepEqual(actual.sourceBinding.indexIdentity,p.indexIdentity);
  }
+ if(evidence.value.result.metric.spatial){const index=evidence.value.result.metric.spatial.blocks.at(-1).index;await page.locator('#pair-block-selection').selectOption(String(index));assert.equal((await page.evaluate(()=>window.voidPlayerQualityPair.getState())).selectedBlock,index);}
  async function checkRoi() {
   const result=await page.evaluate(()=>['reference','distorted'].map(side=>{
    const stage=document.querySelector(`[data-side=${side}]`),svg=stage.querySelector('svg'),rect=svg.querySelector('rect'),state=window.voidPlayerQualityPair.getState(),d=state.evidence.value.result.provenance[side].decoded.description,roi=state.evidence.value.result.metric.roi;
    const scale=Math.min(stage.clientWidth/d.width,stage.clientHeight/d.height),x=(stage.clientWidth-d.width*scale)/2+roi.x*scale,y=(stage.clientHeight-d.height*scale)/2+roi.y*scale;
-   return {side,expected:{x,y,width:roi.width*scale,height:roi.height*scale},actual:Object.fromEntries(['x','y','width','height'].map(k=>[k,Number(rect.getAttribute(k))])),dpr:devicePixelRatio,surface:[...stage.querySelectorAll('canvas')].find(c=>c.classList.contains('frame-presentation'))?.width,cssWidth:stage.clientWidth};
+   const b=state.selectedBlock===undefined?undefined:state.evidence.value.result.metric.spatial.blocks[state.selectedBlock].roi,outline=stage.querySelector('.quality-selected-block');
+   return {side,expected:{x,y,width:roi.width*scale,height:roi.height*scale},actual:Object.fromEntries(['x','y','width','height'].map(k=>[k,Number(rect.getAttribute(k))])),block:b?{expected:{x:(stage.clientWidth-d.width*scale)/2+b.x*scale,y:(stage.clientHeight-d.height*scale)/2+b.y*scale,width:b.width*scale,height:b.height*scale},actual:Object.fromEntries(['x','y','width','height'].map(k=>[k,Number(outline.getAttribute(k))]))}:null,dpr:devicePixelRatio,surface:[...stage.querySelectorAll('canvas')].find(c=>c.classList.contains('frame-presentation'))?.width,cssWidth:stage.clientWidth};
   }));
-  for(const r of result){for(const k of ['x','y','width','height'])assert.ok(Math.abs(r.actual[k]-r.expected[k])<.001,`${r.side} ROI ${k}`);assert.equal(r.surface,Math.round(r.cssWidth*r.dpr));}
+  for(const r of result){for(const k of ['x','y','width','height']){assert.ok(Math.abs(r.actual[k]-r.expected[k])<.001,`${r.side} ROI ${k}`);if(r.block)assert.ok(Math.abs(r.block.actual[k]-r.block.expected[k])<.001,`${r.side} selected edge block ${k}`);}assert.equal(r.surface,Math.round(r.cssWidth*r.dpr));}
  }
  await checkRoi();await page.setViewportSize({width:600,height:900});await page.waitForFunction(()=>document.querySelector('.quality-pair-views').clientWidth<600);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await checkRoi();
  await page.screenshot({path:`${process.env.VOIDPLAYER_TEST_ARTIFACTS??'.run/quality-annotation'}/pair-view-${engine}.png`});
