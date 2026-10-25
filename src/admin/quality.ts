@@ -1,3 +1,4 @@
+import { ssimPlan, SSIM_VARIANT } from '../../shared/analysis/quality/ssim.ts';
 import { localizedText, type LocalizedValue } from '../ui/live-localization.ts';
 import { t, th, msg, onLanguageChange, formatDate } from '../i18n.ts';
 import { currentActor,identityHealth } from '../services/identity.ts';
@@ -32,6 +33,7 @@ export function qualityJobsShell(){
     <label>${th(msg('qualityWorkflow.client','本页客户端 ID'))}<input id="quality-client" maxlength="80" spellcheck="false"><button id="quality-client-apply" type="button">${th(msg('qualityWorkflow.useClient','使用此客户端'))}</button></label>
     <form id="quality-form" class="admin-panel"><div class="quality-sources">${sides.map(source).join('')}</div>
     <fieldset><legend>${th(msg('qualityWorkflow.roi','ROI：未旋转可见源像素网格，所有值须为偶数整数'))}</legend><div class="quality-roi">${['x','y','width','height'].map(key=>`<label>${key}<input name="${key}" type="number" step="2" min="${key==='width'||key==='height'?2:0}" required></label>`).join('')}</div><button type="button" id="quality-full-frame">${th(msg('qualityWorkflow.full','使用两侧完整可见帧'))}</button></fieldset>
+    <fieldset><legend>SSIM</legend><label><input id="quality-ssim-enabled" type="checkbox">${th(msg('quality.ssimEnable','同次测量另附 SSIM（FFmpeg 均匀 8×8，步长 4；不是高斯窗口 SSIM）'))}</label><p>${th(msg('quality.ssimMinimum','SSIM 的 ROI 和每个实际边缘块至少 16×16 源像素。仅计算有效窗口，各平面覆盖范围单独记录；不补边、不重采样。'))}</p></fieldset>
     <fieldset><legend>${th(msg('quality.spatialTitle','源像素分块 PSNR'))}</legend><label><input id="quality-grid-enabled" type="checkbox">${th(msg('quality.spatialEnable','同次测量生成分块与最差区域证据（最多 64 块）'))}</label><div class="quality-roi"><label>${th(msg('quality.spatialWidth','块宽（偶数源像素）'))}<input id="quality-grid-width" type="number" step="2" min="2" max="16384" value="16" required></label><label>${th(msg('quality.spatialHeight','块高（偶数源像素）'))}<input id="quality-grid-height" type="number" step="2" min="2" max="16384" value="16" required></label></div></fieldset>
     <p>${th(msg('qualityWorkflow.candidateNotice','候选页只读取已有可信缓存，不构建索引。容器关键帧标记不保证可测；执行时仍逐侧核验闭合 AU、颜色、版本和缓存身份。缓存缺失请先在缓存管理中显式构建。'))}</p>
     <button id="quality-submit" class="admin-primary" type="submit" disabled>${th(msg('qualityWorkflow.submit','发起持久测量'))}</button>
@@ -168,8 +170,9 @@ export function installQualityJobs(signal:AbortSignal){
     const roi=Object.fromEntries(['x','y','width','height'].map(key=>[key,Number(($('form').querySelector(`[name=${key}]`)as HTMLInputElement).value)]))as {x:number;y:number;width:number;height:number};
     if(!Object.values(roi).every(n=>Number.isSafeInteger(n)&&n%2===0)||roi.x<0||roi.y<0||roi.width<=0||roi.height<=0||targets.some(p=>roi.x+roi.width>p.page!.geometry.width||roi.y+roi.height>p.page!.geometry.height)){setError('observer-status',t(msg('qualityWorkflow.invalidRoi','ROI 必须是两侧可见源网格内的偶数整数区域。')));return;}
     const spatial=$<HTMLInputElement>('grid-enabled').checked?{blockWidth:Number($<HTMLInputElement>('grid-width').value),blockHeight:Number($<HTMLInputElement>('grid-height').value)}:undefined;
-    try{if(spatial)psnrGridPlan(roi,spatial);}catch(error){setError('observer-status',error);return;}
-    const input:QualityJobInput={schema:'voidplayer-psnr-frame-job',version:1,client:{id:observer.client,kind:'browser'},request:{pairing:'caller-specified',reference:targets[0].target!,distorted:targets[1].target!,roi,...(spatial?{spatial}:{})}};
+    const ssim=$<HTMLInputElement>('ssim-enabled').checked?{variant:SSIM_VARIANT}:undefined;
+    try{if(spatial)psnrGridPlan(roi,spatial);if(ssim)ssimPlan(roi,ssim,spatial);}catch(error){setError('observer-status',error);return;}
+    const input:QualityJobInput={schema:'voidplayer-psnr-frame-job',version:1,client:{id:observer.client,kind:'browser'},request:{pairing:'caller-specified',reference:targets[0].target!,distorted:targets[1].target!,roi,...(spatial?{spatial}:{}),...(ssim?{ssim}:{})}};
     void observer.submit(input).then(()=>observer?.poll());};
   $('retry').onclick=()=>void observer?.submit().then(()=>observer?.poll());$('forget').onclick=()=>observer?.forgetPending();$('refresh').onclick=()=>{const c=context();void (async()=>{if(await discover(c))await observer?.resync();})().catch(error=>{if(valid(c))setError('availability',error);});};$('cancel').onclick=()=>{if(observation?.detail)void observer?.cancel(observation.detail.id);};
   async function discover(c:ReturnType<typeof context>){

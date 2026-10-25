@@ -1,3 +1,4 @@
+import { SSIM_VARIANT, SSIM_LIMITS } from '../analysis/quality/ssim.ts';
 import { TECHNICAL_FILTER_PATH, TECHNICAL_FILTER_LIMITS, TECHNICAL_FILTER_SCHEMA } from '../media/indexing/technical-filter.ts';
 import { QUALITY_JOB_LIMITS } from '../analysis/quality/jobs.ts';
 import { PSNR_SPATIAL_LIMITS } from '../analysis/quality/psnr.ts';
@@ -41,7 +42,9 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
     links: { guide: '/agent.md', index: '/llms.txt', health: '/api/health', tasks: AGENT_TASKS },
     capabilities,
     technicalFilter: { schema: TECHNICAL_FILTER_SCHEMA, version: 1, endpoint: TECHNICAL_FILTER_PATH, limits: TECHNICAL_FILTER_LIMITS, pagination: 'none', scope: 'explicit-candidates-cached-streams' },
-    qualityJobs: { schema: 'voidplayer-psnr-frame-job', version: 1, metrics: ['psnr'], scope: 'single-explicit-frame-pair',
+    qualityJobs: { schema: 'voidplayer-psnr-frame-job', version: 1, metrics: ['psnr','ssim'], requiredMetrics:['psnr'],
+      ssim:{optional:true,requestField:'ssim',variant:SSIM_VARIANT,standalone:false,resultField:'result.ssim',limits:SSIM_LIMITS,
+        window:{size:8,step:4,weight:'uniform',border:'valid-truncate-to-4'},planes:'yuv420-native-code-values',weighting:'y4-u1-v1-plane-mean'}, scope: 'single-explicit-frame-pair',
       submit: '/api/quality/jobs', changes: '/api/quality/jobs', job: '/api/quality/jobs/{jobId}',
       result: '/api/quality/jobs/{jobId}/result', cancel: '/api/quality/jobs/{jobId}/cancel',
       writeAction: 'quality-job', idempotencyHeader: 'Idempotency-Key', observerDisconnectCancels: false,
@@ -57,7 +60,7 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
       actionHeader: 'X-VoidPlayer-Action', cookieRequired: true, completion: 'server-commit', guiAcknowledgementRequired: false },
     annotations: { version: 1, spaces: '/api/annotations/spaces',
       events: '/api/annotations/events/{space}?after={cursor}',
-      qualityEvidence: {action:'attach-quality-result',metric:'psnr',result:'completed-owned-job',target:'existing-primary-source-version-and-source-pts',roi:'original-visible-pixel-grid',immutable:true,maxCount:4,maxBytes:131072,importVerification:'historical',workspaceVersion:2},
+      qualityEvidence: {action:'attach-quality-result',metric:'psnr',optionalCompanion:'ssim',result:'completed-owned-job',target:'existing-primary-source-version-and-source-pts',roi:'original-visible-pixel-grid',immutable:true,maxCount:4,maxBytes:131072,importVerification:'historical',workspaceVersion:2},
       identity: ['space', 'id'], concurrency: 'expected-revision', idempotency: 'operationId',
       frameTimeUnit: 'integer-microseconds', target: 'document.media + mark.mediaId + mark.frame',
       slotMeaning: 'legacy-display-hint; no loaded track required' },

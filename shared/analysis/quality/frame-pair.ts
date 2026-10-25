@@ -1,3 +1,5 @@
+import { measureSsim, ssimPlan } from './ssim.ts';
+import type { SsimRequest, SsimResult } from './ssim.ts';
 import { parseFlvIndex } from '../../media/indexing/flv-index-cache.ts';
 import type { FlvIndexDocument } from '../../media/indexing/flv-index-cache.ts';
 import { FLV_MEDIA_INDEX_IDENTITY, mediaIndexIdentityKey } from '../../media/indexing/media-index-identity.ts';
@@ -27,7 +29,7 @@ export class FramePairError extends Error {
 export type SourceBinding = { mediaId: string; mediaVersion: string; size: number; indexIdentity: MediaIndexIdentity; indexBuildId: string };
 export type PairTarget = SourceBinding & { picture: SourcePictureKey; sourcePtsUs: number };
 export type FramePairRequest = { pairing: 'caller-specified'; reference: PairTarget; distorted: PairTarget;
-  roi: PsnrRequest['roi']; spatial?: PsnrRequest['spatial']; budget?: Partial<PairBudget> & PsnrRequest['budget'] };
+  roi: PsnrRequest['roi']; ssim?: SsimRequest; spatial?: PsnrRequest['spatial']; budget?: Partial<PairBudget> & PsnrRequest['budget'] };
 export type PairBudget = { -readonly [K in keyof typeof PAIR_LIMITS]: number };
 /** The host must bind this cached document and reader to the same immutable source.
  * This boundary never constructs an index or consults a playback source/cursor. */
@@ -46,7 +48,7 @@ export interface PairDecoder {
 }
 export type PairProvenance = PairTarget & { decoded: { sourcePtsUs: number; description: FrameDescription }; packet: { offset: number; size: number; sourceDtsUs: number }; validation: 'cached-au-source-tag-isolated-closed-picture-v1' };
 export type FramePairResult = { schema: 'voidplayer-frame-pair-psnr'; version: 1; pairing: 'caller-specified';
-  correspondence: 'caller-specified-no-content-or-time-alignment'; decoder: PairDecoder['version']; metric: PsnrResult;
+  correspondence: 'caller-specified-no-content-or-time-alignment'; decoder: PairDecoder['version']; metric: PsnrResult; ssim?: SsimResult;
   provenance: { reference: PairProvenance; distorted: PairProvenance }; work: { readBytes: number; packets: 2; outputFrames: 2; elapsedMs: number } };
 function fail(code: FramePairError['code'], message: string): never { throw new FramePairError(code, message); }
 export function pairBudget(request: FramePairRequest): PairBudget {
@@ -71,6 +73,7 @@ export function pairBudget(request: FramePairRequest): PairBudget {
   }
   if (budget.maxPackets < 2 || budget.maxOutputFrames < 2) fail('budget-exceeded', 'A pair requires two packets and two output frames');
   if (request.spatial !== undefined) psnrGridPlan(request.roi, request.spatial);
+  if (request.ssim !== undefined) ssimPlan(request.roi, request.ssim, request.spatial);
   return budget;
 }
 function sameBinding(a: SourceBinding, b: SourceBinding) {
@@ -217,8 +220,10 @@ export function measureFlvFramePair(request: FramePairRequest, sources: [CachedP
   return withFlvFramePair(request,sources,loadDecoder,signal,pair=>{
     const metric=measurePsnr({domain:'source-yuv-code-values',reference:pair.frames[0],distorted:pair.frames[1],roi:request.roi,spatial:request.spatial,
       budget:{maxSamples:request.budget?.maxSamples,maxInputBytes:request.budget?.maxInputBytes}});
+    const ssim=request.ssim===undefined?undefined:measureSsim({domain:'source-yuv-code-values',reference:pair.frames[0],distorted:pair.frames[1],roi:request.roi,spatial:request.spatial,
+      budget:{maxSamples:request.budget?.maxSamples,maxInputBytes:request.budget?.maxInputBytes}},request.ssim);
     return {schema:'voidplayer-frame-pair-psnr',version:1,pairing:'caller-specified',
-      correspondence:'caller-specified-no-content-or-time-alignment',decoder:pair.decoder,metric,provenance:pair.provenance,work:pair.work};
+      correspondence:'caller-specified-no-content-or-time-alignment',decoder:pair.decoder,metric,...(ssim?{ssim}:{}),provenance:pair.provenance,work:pair.work};
   });
 }
 /** Explicit raw-frame inspection; same admission, no score calculation. */

@@ -234,6 +234,47 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  ssim-browser:
+    name: Verify SSIM measurement and immutable evidence (${{ matrix.engine }})
+    needs: [decoder, analysis-core]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use primary Ubuntu package archive
+        run: bash scripts/testing/prepare-ci-apt.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-core
+          path: public/vendor/voidplayer-core
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-analysis-core
+          path: public/vendor/voidplayer-analysis
+      - run: npm ci
+      - name: Install reference and fixture tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - run: npx playwright install --with-deps ${{ matrix.engine }}
+      - name: Verify real SSIM GUI, Agent, durable evidence and original pair
+        run: node scripts/run-tests.mjs ci-ssim --engine ${{ matrix.engine }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ssim-browser-reports-${{ matrix.engine }}
+          path: .run/test-suites/ci-ssim/
+          if-no-files-found: error
+          retention-days: 30
+
   analysis-matrix:
     name: Verify analysis matrix (${{ matrix.engine }}, ${{ matrix.part }})
     needs: [decoder, analysis-core]
@@ -825,7 +866,7 @@ jobs:
 
   release-set:
     name: Verify complete platform release set
-    needs: [native-release, unit, playback, source-logic, analysis-browser, analysis-matrix, hevc-browser, uncovered-regressions]
+    needs: [native-release, unit, playback, source-logic, analysis-browser, analysis-matrix, ssim-browser, hevc-browser, uncovered-regressions]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

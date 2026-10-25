@@ -2,7 +2,7 @@
 
 This is the bounded #115 connection from a completed single-frame PSNR job to an
 existing shared annotation. It does not create marks, score a frame, build an
-index, load media, seek or require a paused GUI. It does not implement SSIM,
+index, load media, seek or require a paused GUI. Optional [SSIM](source-plane-ssim.md) facts share the same immutable attachment. It does not implement
 VMAF, sequences, heatmaps or full task management.
 
 ## Explicit sharing command
@@ -143,3 +143,5 @@ claim a cause/fix for the earlier WebKit reload/sharing failures.
 Explicit original-frame pair/ROI viewing and its strict snapshot identity/geometry limits are described in [annotation-psnr-pair-view.md](annotation-psnr-pair-view.md).
 
 Optional bounded source-pixel block measurement and immutable spatial evidence: [PSNR block evidence](psnr-spatial-evidence.md). Scalar requests and existing source/geometry admission remain unchanged.
+
+Optional SSIM companion semantics, coverage, limits and shared evidence: [SSIM](source-plane-ssim.md).

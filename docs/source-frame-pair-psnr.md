@@ -1,6 +1,6 @@
 # 内部可信单帧对 PSNR 桥 v1
 
-这是 #112 / #114 的一个可独立验收小切片。`FramePairClient.measure` 在一次性独立 Worker 中验证两侧已有缓存身份、读取单个闭合关键 AU、解码原始平面，然后调用 [PSNR 核心](source-plane-psnr.md)。该内部入口不依赖 Session、播放游标或 GUI；媒体库一次性和持久 HTTP 适配分别见 [服务端闭环](source-library-psnr.md) 与 [任务 v1](source-psnr-jobs.md)。内部帧对执行体本身不实现 durable jobs、帧序列、自动对齐、SSIM 或 VMAF，#114 未整体完成。
+这是 #112 / #114 的一个可独立验收小切片。`FramePairClient.measure` 在一次性独立 Worker 中验证两侧已有缓存身份、读取单个闭合关键 AU、解码原始平面，然后调用 [PSNR 核心](source-plane-psnr.md)。该内部入口不依赖 Session、播放游标或 GUI；媒体库一次性和持久 HTTP 适配分别见 [服务端闭环](source-library-psnr.md) 与 [任务 v1](source-psnr-jobs.md)。内部帧对执行体支持 [显式 SSIM 伴随度量](source-plane-ssim.md)，本身不实现 durable jobs、帧序列、自动对齐或 VMAF，#114 未整体完成。
 
 ## 受信任宿主边界
 
@@ -39,3 +39,5 @@ heap cap 在专用实例的 Emscripten JS `memory.grow` 路径上安装，并检
 - `node --test test/media/frame-pair.test.ts`：FFmpeg 现场生成 H.264 8 位及 HEVC 8/10 位，再以相同压缩 AU 构造 legacy/enhanced FLV；在真实 Node Worker 内运行生产浏览器 Worker 入口（仅适配消息与 file fetch），原始 WASM 平面的 ROI 每分量/aggregate 与独立原生 FFmpeg 解码码值的精确 SSE 一致。保留的真实播放帧像素不变，桥执行期间播放 decoder 的 reset/send/receive/drain 调用为零，之后 next 仍返回预期帧。在上述三种编码/位深与两种封装中，额外插入源配置里逐字节相同的 SPS/VPS 后仍须得到相同精确 SSE；只翻转其中一个字节必须明确拒绝。实际仅编码 matrix、缺少 primaries/transfer 标签的 AVC 通过真实取帧链路后必须返回 missing-color，不能补齐。另以真实不可合作 Worker 验证取消/超时等待退出后才能再次准入，及真实 WASM 的较小 heap 准入失败。
 
 单元用例登记在 source/fast/contract/unit；真实媒体用例登记在 media/ci-node-media/unit。`node scripts/testing/browser/media/frame-pair.mjs chromium` / `webkit` 还在真实浏览器中直接调用内部客户端，覆盖 8/10 位实际 Worker、相同图无穷 PSNR、非零误差与连续独立调用；它们登记在 browser / ci-analysis-ui / ci-analysis-browser，并不加载 Session 或 GUI。本轮没有 UI 接线或浏览器全产品质量流程。播放性能历史失败与 WebKit reload 内部错误的未知根因仍原样保留，本桥不能据此被称为“性能已达标”或“旧问题已修复”。
+
+Optional SSIM companion semantics, coverage, limits and shared evidence: [SSIM](source-plane-ssim.md).

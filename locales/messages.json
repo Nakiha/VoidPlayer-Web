@@ -3574,6 +3574,22 @@
     "source": "最差区域（分数越低、误差越大）",
     "params": {}
   },
+  "quality.ssimEnable": {
+    "source": "同次测量另附 SSIM（FFmpeg 均匀 8×8，步长 4；不是高斯窗口 SSIM）",
+    "params": {}
+  },
+  "quality.ssimFacts": {
+    "source": "越高越好，可为负数；Y/U/V 平面均值按 4:1:1 加权。有效窗口，无补边；各平面覆盖（源像素）与窗口数：",
+    "params": {}
+  },
+  "quality.ssimMinimum": {
+    "source": "SSIM 的 ROI 和每个实际边缘块至少 16×16 源像素。仅计算有效窗口，各平面覆盖范围单独记录；不补边、不重采样。",
+    "params": {}
+  },
+  "quality.ssimWorst": {
+    "source": "最低 SSIM 块（独立窗口，不可由块均值还原整幅分数）",
+    "params": {}
+  },
   "quality.target": {
     "source": "目标 {space}/{id} · 修订 {revision} · 源 PTS {pts} µs",
     "params": {

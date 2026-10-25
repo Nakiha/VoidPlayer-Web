@@ -38,7 +38,7 @@ const session=new QualityPairViewSession((side,frame)=>{
 function render() {
   const state=session.getState();root.dataset.state=state.state;views.style.visibility=state.state==='ready'?'visible':'hidden';
   status.textContent=state.state==='ready'?t(msg('quality.pairReady','两侧快照已按源、缓存、AU、实际 PTS 和几何核对；ROI 为只读覆盖层。')):state.error??state.state;
-  blocks.replaceChildren();if(state.state==='ready'&&state.evidence)qualitySpatial(blocks,state.evidence.value.result.metric,index=>session.selectBlock(index),state.selectedBlock);
+  blocks.replaceChildren();if(state.state==='ready'&&state.evidence)qualitySpatial(blocks,state.evidence.value.result.metric,index=>session.selectBlock(index),state.selectedBlock,state.evidence.value.result.ssim);
   const grid=state.state==='ready'?state.evidence?.value.result.metric.spatial:undefined;
   blockControl.hidden=!grid;blockSelect.replaceChildren();
   if(grid){blockSelect.append(new Option(t(msg('quality.spatialFullRoi','仅显示完整测量 ROI')),''));for(const block of grid.blocks){const score=block.aggregate.psnr;blockSelect.append(new Option(`#${block.index} · ROI ${JSON.stringify(block.roi)} · ${score.kind==='positive-infinity'?'∞':score.db.toFixed(4)} dB`,String(block.index)));}blockSelect.value=state.selectedBlock===undefined?'':String(state.selectedBlock);}

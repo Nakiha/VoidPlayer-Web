@@ -21,7 +21,7 @@ test('runtime discovery separates implementation, deployment and source/session 
   assert.equal(byId('annotations.write').enabled, false);
   assert.equal(byId('session.view').readiness, 'requires-live-session');
   assert.equal(byId('quality.jobs').implemented, true);assert.equal(byId('quality.jobs').readiness, 'needs-identity');
-  assert.equal(byId('quality.jobs').requiresBrowser, false);assert.deepEqual(manifest.qualityJobs.metrics, ['psnr']);
+  assert.equal(byId('quality.jobs').requiresBrowser, false);assert.deepEqual(manifest.qualityJobs.metrics, ['psnr','ssim']);
   assert.equal(manifest.qualityJobs.scope, 'single-explicit-frame-pair');assert.equal(manifest.qualityJobs.submit, '/api/quality/jobs');
   assert.equal(manifest.qualityJobs.observerDisconnectCancels, false);assert.equal(manifest.qualityJobs.automaticRetry, false);
   assert.equal(manifest.qualityJobs.buildsIndexes, false);assert.equal(manifest.qualityJobs.sharedWork, false);
@@ -104,7 +104,7 @@ test('ordinary HTTP discovers, attributes and commits annotations without fronte
     const ready = await (await fetch(base + '/api/agent', { headers: { cookie } })).json();
     assert.equal(ready.capabilities.find((c: { id: string }) => c.id === 'annotations.write').readiness, 'ready');
     assert.equal(ready.capabilities.find((c: { id: string }) => c.id === 'quality.jobs').readiness, 'per-source');
-    assert.deepEqual(ready.qualityJobs.metrics, ['psnr']);
+    assert.deepEqual(ready.qualityJobs.metrics, ['psnr','ssim']);
     const jobs = await fetch(base + ready.qualityJobs.changes, {headers:{cookie}});
     assert.equal(jobs.status, 200);assert.deepEqual((await jobs.json()).entries, [], 'discovery and annotation commands do not create scoring jobs');
     config.port = (service.server.address() as { port: number }).port;

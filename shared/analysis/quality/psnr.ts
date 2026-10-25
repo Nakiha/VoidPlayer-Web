@@ -116,10 +116,8 @@ export function rankPsnrBlocks(blocks: PsnrBlock[]): number[] {
     .slice(0, PSNR_SPATIAL_LIMITS.worstBlocks);
 }
 
-/** Synchronous, bounded numeric kernel. Call from an independent executor, never a playback tick.
- * The caller owns stable source-plane buffers and is responsible for source/frame pairing.
- * No media access, alignment inference, range normalization, resampling or color conversion. */
-export function measurePsnr(request: PsnrRequest): PsnrResult {
+/** Shared metadata/allocation admission; no sample traversal or source access. */
+export function validateSourcePlanePair(request: PsnrRequest) {
   if (!request || request.domain !== 'source-yuv-code-values') fail('unsupported-format', 'domain');
   const maxSamples = limit(request.budget?.maxSamples, PSNR_LIMITS.maxSamples, 'budget.maxSamples');
   const maxInputBytes = limit(request.budget?.maxInputBytes, PSNR_LIMITS.maxInputBytes, 'budget.maxInputBytes');
@@ -137,6 +135,12 @@ export function measurePsnr(request: PsnrRequest): PsnrResult {
   if ([r.x, r.y, r.width, r.height].some(n => n % 2)) fail('unsupported-format', 'roi.chroma-alignment');
   const samples = r.width * r.height * 3 / 2;
   if (samples > maxSamples) fail('budget-exceeded', 'samples');
+  return {a, b, r, samples, chargedInputBytes};
+}
+
+/** Synchronous bounded source-plane kernel; run off the playback path. Caller owns pairing and stable buffers. */
+export function measurePsnr(request: PsnrRequest): PsnrResult {
+  const {a, b, r, samples, chargedInputBytes} = validateSourcePlanePair(request);
   const plan = request.spatial === undefined ? undefined : psnrGridPlan(r, request.spatial);
   const blockSse = plan?.blocks.map(() => [0, 0, 0]);
   const bitDepth = a.layout.bitDepth as 8 | 10, peak = bitDepth === 8 ? 255 : 1023;
