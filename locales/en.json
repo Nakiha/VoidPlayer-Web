@@ -3393,6 +3393,10 @@
     "source": "已创建共享测量候选；未自动认定为缺陷。",
     "translation": "Shared measurement candidate created; no defect judgment was inferred."
   },
+  "qualityCandidate.notSent": {
+    "source": "本地校验未通过或草稿未能保存，未发送请求；请修改后提交：{error}",
+    "translation": "Local validation or draft storage failed; no request was sent. Edit and submit again: {error}"
+  },
   "qualityCandidate.notice": {
     "source": "候选只记录测量事实，尚未经人工缺陷判断。文本和严重度由你明确填写；创建后以共享标注查看原帧和 ROI。",
     "translation": "A candidate records measured facts and has not been assessed as a defect. Enter your own text and severity. Its shared annotation can open the original frames and ROI."
@@ -3400,6 +3404,14 @@
   "qualityCandidate.open": {
     "source": "在新窗口打开候选标注",
     "translation": "Open candidate annotation in a new window"
+  },
+  "qualityCandidate.pending": {
+    "source": "原提交结果未确认；表单已冻结，重试只使用已保存的同一操作。",
+    "translation": "The original submission is unconfirmed. The form is frozen; retry only the same saved operation."
+  },
+  "qualityCandidate.recovered": {
+    "source": "旧草稿未通过本地校验、未发送，已恢复为可编辑内容。修正后将创建新操作；有效的未知提交不会这样解锁。",
+    "translation": "This old draft failed local validation and was never sent. Its fields are editable again. Correcting it creates a new operation; valid unconfirmed submissions are not unlocked this way."
   },
   "qualityCandidate.severity": {
     "source": "严重度（调用者填写，1–5）",

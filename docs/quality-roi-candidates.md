@@ -14,7 +14,7 @@ ROI 为两侧相同的未旋转可见源网格。独立矩形拖选端点吸附�
 
 向 `/api/annotations/spaces/SPACE` 提交 `create-quality-candidate`，包含 revision0、新 id、稳定 operationId、client、`candidate:{text,severity}` 与 `evidence:{jobId,attemptId,digest,side}`。由自有可信完成结果派生媒体/源版本、实际与归一化 PTS、比较帧、ROI 和不可变证据；禁止 caller document/伪造分数。结果、来源变化后不偷偷重新测量。
 
-候选的 `qualityCandidate.assessment=not-subjectively-assessed` 记录创建时的测量事实，不能暗示人工缺陷判断或置信度；它是不可变的创建来源标记，不代替后续文字、回复或 resolved 状态。文字/严重度必须由调用者填写，永不根据分数自动推导。标注、附件、回执、事件同一事务；触发事件失败全部回滚。回执在私有结果读取之前，结果回收/服务重启后相同 actor/operationId/body 仍返回原提交；换 actor 或正文冲突不可复用。显式共享发布测量事实，不披露私有提交/client/幂等键，不扩大非 owner 读取 job 的权限。
+候选的 `qualityCandidate.assessment=not-subjectively-assessed` 记录创建时的测量事实，不能暗示人工缺陷判断或置信度；它是不可变的创建来源标记，不代替后续文字、回复或 resolved 状态。文字/严重度必须由调用者填写，永不根据分数自动推导。GUI 在保存/冻结前使用同一完整命令校验，空值、非数值及越界严重度不可发送或留下无效冻结回执。旧版被本地校验拒绝的可读草稿恢复编辑；合法的未知提交保持冻结并复用原操作重试，不能因网络失败解锁为新命令。标注、附件、回执、事件同一事务；触发事件失败全部回滚。回执在私有结果读取之前，结果回收/服务重启后相同 actor/operationId/body 仍返回原提交；换 actor 或正文冲突不可复用。显式共享发布测量事实，不披露私有提交/client/幂等键，不扩大非 owner 读取 job 的权限。
 
 普通文本、回复、区域编辑保留候选与附件；锚点不能移动。导入/复制保留历史事实但 verification 降为 historical。候选工作区/评审必须 v3，普通附件保持 v2，无附件 v1；v1 附件与 v2 候选明确拒绝，不静默丢字段。活动深链接保留原身份和 v3 包装；原帧查看器仍重新核验来源/缓存/解码器/几何，历史附件不能冒充服务确认。
 

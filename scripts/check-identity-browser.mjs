@@ -19,11 +19,12 @@ const record = (page, label, event, details = {}) => {
   if (events.length > 1000) events.shift();
 };
 function observe(page, label) {
-  page.on('pageerror', error => { errors.push(error.message); record(page, label, 'pageerror', { message: error.message, stack: error.stack }); });
-  page.on('request', request => { if (new URL(request.url()).pathname === '/api/users') record(page, label, 'users-request', { requestUrl: request.url(), method: request.method() }); });
-  page.on('response', response => { if (new URL(response.url()).pathname === '/api/users') record(page, label, 'users-response', { requestUrl: response.url(), status: response.status() }); });
-  page.on('requestfinished', request => { if (new URL(request.url()).pathname === '/api/users') record(page, label, 'users-finished', { requestUrl: request.url() }); });
-  page.on('requestfailed', request => { if (new URL(request.url()).pathname === '/api/users') record(page, label, 'users-failed', { requestUrl: request.url(), error: request.failure()?.errorText }); });
+  page.on('pageerror', error => { errors.push(error.message); record(page, label, 'pageerror', { message: error.message, stack: error.stack }); console.error('Identity browser page error:', JSON.stringify(events.slice(-20))); });
+  const watched = url => ['/api/users', '/api/library/browse'].includes(new URL(url).pathname);
+  page.on('request', request => { if (watched(request.url())) record(page, label, 'api-request', { requestUrl: request.url(), method: request.method(), frameUrl: request.frame().url(), origin: request.headers().origin ?? null }); });
+  page.on('response', response => { if (watched(response.url())) record(page, label, 'api-response', { requestUrl: response.url(), status: response.status(), allowOrigin: response.headers()['access-control-allow-origin'] ?? null }); });
+  page.on('requestfinished', request => { if (watched(request.url())) record(page, label, 'api-finished', { requestUrl: request.url() }); });
+  page.on('requestfailed', request => { if (watched(request.url())) record(page, label, 'api-failed', { requestUrl: request.url(), error: request.failure()?.errorText }); });
   page.on('framenavigated', frame => { if (frame === page.mainFrame()) record(page, label, 'navigation'); });
   page.on('close', () => record(page, label, 'close'));
 }
@@ -46,7 +47,7 @@ try {
   // Labels can update before the following user-list refresh finishes. Drain
   // normal requests before navigation/restart/close so WebKit does not report
   // a test-induced aborted fetch as a page error. The stalled-list case below
-  // deliberately does not use this wait and still requires prompt guest entry.
+  // deliberately does not wait before guest entry; it drains only afterwards.
   const settled = (...pages) => Promise.all(pages.map(p => p.waitForLoadState('networkidle')));
   const settings = async p => { await p.locator('#settings-open').click(); await p.locator('#settings-tab-identity').click(); await p.waitForFunction(() => !document.querySelector('#identity-name').disabled); await settled(p); if ((await p.locator('#identity-current').innerText()) !== '访客') { await p.locator('#identity-users').click(); await p.locator('#identity-users-menu [data-value=rename]').click(); } };
   if (insecure) await routeInsecureTestOrigin(page);
@@ -289,9 +290,25 @@ try {
   const listGate = new Promise(resolve => { releaseList = resolve; });
   await slow.route('**/api/users', async route => { await listGate; await route.abort().catch(() => {}); });
   await slow.goto(base);
+  // Guest entry starts an unrelated source-browser refresh. Hold its request
+  // to exercise closing only after real IO drains, without delaying the 2s
+  // welcome assertion or ignoring any page error from normal requests.
+  let releaseBrowse;
+  const browseGate = new Promise(resolve => { releaseBrowse = resolve; });
+  const browseEntered = slow.waitForRequest(request => new URL(request.url()).pathname === '/api/library/browse');
+  const browseReplies = [];
+  await slow.route('**/api/library/browse?*', route => {
+    const reply = (async () => { await browseGate; await route.continue(); })();
+    browseReplies.push(reply);return reply;
+  });
   await slow.locator('#identity-welcome [data-guest]').click();
   await slow.locator('#identity-welcome').waitFor({ state: 'hidden', timeout: 2000 });
-  releaseList(); await slowContext.close();
+  await browseEntered;
+  phase = 'stalled-list-drain';
+  releaseList(); releaseBrowse();
+  await Promise.all(browseReplies); await settled(slow);
+  record(slow, 'stalled-list', 'normal-requests-drained');
+  await slowContext.close();
   phase = 'final-settle';
   await settled(page, other, tab);
   assert.deepEqual(errors, []);

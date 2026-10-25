@@ -61,9 +61,45 @@ try{
  const result=await fetch(base+job.result.url,{headers}).then(r=>r.json());assert.equal(result.value.result.ssim.variant,'ffmpeg-uniform-8x8-step4-v1');assert.ok(result.value.annotationContext.reference);assert.equal(result.value.result.metric.spatial.blocks.length,1);
  let expected=0;const bytesPerSample=depth===8?1:2;for(let plane=0;plane<3;plane++){const width=plane?16:32,offset=[0,1024,1280][plane],scale=plane?2:1;for(let y=roi.y/scale;y<(roi.y+roi.height)/scale;y++)for(let x=roi.x/scale;x<(roi.x+roi.width)/scale;x++){const at=(offset+y*width+x)*bytesPerSample,a=depth===8?raw[at]:raw.readUInt16LE(at),b=depth===8?raw[frame+at]:raw.readUInt16LE(frame+at);expected+=(a-b)**2;}}assert.equal(result.value.result.metric.aggregate.sse,expected);const oracle=ssimOracle(raw.subarray(0,frame),raw.subarray(frame),depth,32,32,roi);assert.ok(Math.abs(result.value.result.ssim.aggregate.score-oracle.all)<=1e-12);
  phase='atomic-create-shared-candidate';await page.locator('[data-candidate-space]').selectOption(workspace.space);await page.locator('[data-candidate-text]').fill('Measured ROI candidate, requires human assessment');
+ const candidateKey=`voidplayer-quality-candidate:${actor.id}:${job.submitted.client.id}:${job.id}`;
+ const candidatePosts=[];page.on('request',request=>{if(request.method()==='POST'&&new URL(request.url()).pathname===`/api/annotations/spaces/${workspace.space}`)candidatePosts.push(JSON.parse(request.postData()));});
+ // Actual number-input validity blocks empty/non-numeric/range/fraction values;
+ // bypassing native form checks still exercises the complete shared validator.
+ const severity=page.locator('[data-candidate-severity]');
+ for(const value of ['', '0','-1','6','1.5']){
+  await severity.fill(value);await page.locator('[data-candidate-create]').click();
+  assert.equal(await page.locator('[data-candidate-text]').isEnabled(),true);assert.equal(await severity.isEnabled(),true);
+  assert.equal(await page.evaluate(key=>sessionStorage.getItem(key),candidateKey),null);assert.equal(candidatePosts.length,0);
+  await page.locator('[data-candidate-create]').evaluate(button=>button.form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+  await page.locator('[data-candidate-status]').filter({hasText:/no request was sent/i}).waitFor();
+  assert.equal(await page.evaluate(key=>sessionStorage.getItem(key),candidateKey),null);assert.equal(candidatePosts.length,0);assert.equal(await severity.isEnabled(),true);
+ }
+ await severity.fill('');await severity.pressSequentially('abc');assert.equal(await severity.inputValue(),'');await page.locator('[data-candidate-create]').click();assert.equal(candidatePosts.length,0);assert.equal(await severity.isEnabled(),true);await severity.fill('2');
  const mutations=[];let lostCandidate=false;await page.route(`**/api/annotations/spaces/${workspace.space}`,async route=>{if(route.request().method()!=='POST')return route.continue();const body=JSON.parse(route.request().postData());if(body.action!=='create-quality-candidate')return route.continue();const r=await route.fetch(),value=await r.json();mutations.push({body,value,status:r.status()});if(!lostCandidate){lostCandidate=true;await route.abort('failed');}else await route.fulfill({response:r});});
- await page.locator('[data-candidate-create]').click({clickCount:2});await page.locator('[data-candidate-status]').filter({hasText:/fetch|Failed|Load|Network/i}).waitFor();await page.locator('[data-candidate-create]').click();await page.locator('#quality-roi-dialog .quality-pair-open').waitFor();
+ await page.locator('[data-candidate-create]').click({clickCount:2});await page.locator('[data-candidate-status]').filter({hasText:/fetch|Failed|Load|Network/i}).waitFor();
+ const unknown=await page.evaluate(key=>JSON.parse(sessionStorage.getItem(key)),candidateKey);assert.equal(await severity.isDisabled(),true);
+ // A genuine lost HTTP response survives widget reconstruction. Recover in a
+ // real task-history tab, retain the immutable request, and replay its receipt.
+ const pendingPage=await context.newPage(),replayed=[];
+ await pendingPage.addInitScript(({key,command,client})=>{sessionStorage.setItem('voidplayer-quality-client',client);sessionStorage.setItem(key,JSON.stringify(command));},{key:candidateKey,command:unknown,client:job.submitted.client.id});
+ pendingPage.on('request',r=>{if(r.method()==='POST'&&new URL(r.url()).pathname===`/api/annotations/spaces/${workspace.space}`)replayed.push(JSON.parse(r.postData()));});
+ await pendingPage.goto(base+'/admin/#quality');await pendingPage.locator(`[data-job-id="${job.id}"]`).click();await pendingPage.locator('[data-candidate-status]').filter({hasText:/original submission is unconfirmed/i}).waitFor();
+ for(const selector of ['[data-candidate-text]','[data-candidate-severity]','[data-candidate-space]','[data-candidate-side]'])assert.equal(await pendingPage.locator(selector).isDisabled(),true);
+ assert.deepEqual(await pendingPage.evaluate(key=>JSON.parse(sessionStorage.getItem(key)),candidateKey),unknown);
+ await pendingPage.locator('[data-candidate-create]').click();await pendingPage.locator('#quality-job-result .quality-pair-open').waitFor();assert.equal(replayed.length,1);assert.deepEqual(replayed[0],mutations[0].body);await pendingPage.waitForLoadState('networkidle');await pendingPage.close();
+ await page.locator('[data-candidate-create]').click();await page.locator('#quality-roi-dialog .quality-pair-open').waitFor();
  assert.equal(mutations.length,2);assert.deepEqual(mutations[0],mutations[1]);const candidate=mutations[0].value;assert.equal(candidate.revision,1);assert.equal(candidate.document.mark.qualityCandidate.assessment,'not-subjectively-assessed');assert.equal(candidate.document.mark.qualityEvidence[0].verification,'server-verified');assert.deepEqual(candidate.document.mark.qualityEvidence[0].value,result.value);
+ // Restore a legacy invalid session draft in a separate real GUI tab. The
+ // editable recovery must not unlock a valid request with an unknown outcome.
+ phase='legacy-invalid-candidate-recovery';const recovery=await context.newPage();
+ const invalidDraft={space:workspace.space,id:crypto.randomUUID(),operationId:crypto.randomUUID(),evidence:{jobId:job.id,attemptId:job.attempt.id,digest:job.result.digest,side:'reference'},candidate:{text:'Legacy draft must remain editable',severity:0}};
+ await recovery.addInitScript(({key,draft,client})=>{sessionStorage.setItem('voidplayer-quality-client',client);sessionStorage.setItem(key,JSON.stringify(draft));},{key:candidateKey,draft:invalidDraft,client:job.submitted.client.id});
+ const recoveryPosts=[];recovery.on('request',r=>{if(r.method()==='POST'&&new URL(r.url()).pathname===`/api/annotations/spaces/${workspace.space}`)recoveryPosts.push(JSON.parse(r.postData()));});
+ await recovery.goto(base+'/admin/#quality');await recovery.locator(`[data-job-id="${job.id}"]`).click();await recovery.locator('[data-candidate-status]').filter({hasText:/restored.*edit|editable/i}).waitFor();
+ assert.equal(await recovery.locator('[data-candidate-text]').inputValue(),invalidDraft.candidate.text);assert.equal(await recovery.locator('[data-candidate-severity]').inputValue(),'0');assert.equal(await recovery.locator('[data-candidate-text]').isEnabled(),true);assert.equal(await recovery.locator('[data-candidate-space]').isEnabled(),true);assert.equal(recoveryPosts.length,0);
+ assert.deepEqual(await recovery.evaluate(key=>JSON.parse(sessionStorage.getItem(key)),candidateKey),invalidDraft);
+ await recovery.locator('[data-candidate-space]').selectOption(workspace.space);await recovery.locator('[data-candidate-severity]').fill('3');await recovery.locator('[data-candidate-text]').fill('Corrected legacy candidate');await recovery.locator('[data-candidate-create]').click();await recovery.locator('#quality-job-result .quality-pair-open').waitFor();
+ assert.equal(recoveryPosts.length,1);assert.notEqual(recoveryPosts[0].operationId,invalidDraft.operationId);assert.equal(recoveryPosts[0].candidate.severity,3);assert.equal(await recovery.evaluate(key=>sessionStorage.getItem(key),candidateKey),null);await recovery.waitForLoadState('networkidle');await recovery.close();
  await observer.waitForFunction(id=>window.voidPlayer.getState().marks.some(m=>m.id===id&&m.qualityCandidate?.assessment==='not-subjectively-assessed'),candidate.id);assert.equal(privateReads,0);assert.equal((await observer.evaluate(async id=>(await fetch(`/api/quality/jobs/${id}`)).status,job.id)),404);
  await page.screenshot({path:path.join(directory,'quality-roi-created.png')});
  phase='original-frame-viewer';const[snapshot]=await Promise.all([context.waitForEvent('page'),page.locator('#quality-roi-dialog .quality-pair-open').click()]);await snapshot.waitForFunction(()=>['ready','failed'].includes(window.voidPlayerQualityPair?.getState().state));assert.equal((await snapshot.evaluate(()=>window.voidPlayerQualityPair.getState())).state,'ready');assert.deepEqual(await snapshot.evaluate(()=>window.__roiRaw),[Array.from(raw.subarray(0,frame)),Array.from(raw.subarray(frame))]);await snapshot.close();
@@ -94,6 +130,6 @@ try{
  await page.locator('#quality-roi-verify').click();await entered;if(reason==='identity')await page.evaluate(()=>window.dispatchEvent(new StorageEvent('storage',{key:'voidplayer.identity',newValue:null})));else await page.evaluate(()=>window.voidPlayer.removeTrack('B'));release();await page.locator('#quality-roi-dialog').waitFor({state:'detached'});await page.unroute('**/psnr-source?*');
  }
  assert.equal(posts.length,beforeLatePosts,'late verification cannot create a job');assert.equal(service.library.qualityJobs.resources().activeAttempts,0);assert.deepEqual(errors,[]);await page.screenshot({path:path.join(directory,'quality-roi-candidate.png')});
- console.log(`PASS ROI ${engine}/${depth}: explicit AU raw snapshots equal native oracle, DPR2 drag exact ROI, real GUI PSNR+SSIM durable submission and lost-response replay, atomic candidate retry, peer sync/private job404, viewer raw bytes, original cursors unchanged and stale identity fenced`);
+ console.log(`PASS ROI ${engine}/${depth}: explicit AU raw snapshots equal native oracle, DPR2 drag exact ROI, real GUI PSNR+SSIM durable submission and lost-response replay, invalid candidate preflight/edit recovery, frozen unknown receipt replay, atomic candidate retry, peer sync/private job404, viewer raw bytes, original cursors unchanged and stale identity fenced`);
 }catch(error){if(page&&!page.isClosed())await saveBrowserFailure({page,directory,name:'quality-roi',context:{engine,depth,phase},error,evidence}).catch(()=>{});throw error;}
 finally{clearInterval(progress);for(const gate of gates){Atomics.store(gate,0,1);Atomics.notify(gate,0);}if(browser)await browser.close();if(service)await service.close();await rm(temp,{recursive:true,force:true});}
