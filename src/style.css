@@ -955,3 +955,21 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .quality-evidence-dialog pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; max-height:40vh; overflow:auto; user-select:text; }
 .annotation-row > .annotation-card-actions { flex-wrap:wrap; justify-content:flex-end; gap:2px; }
 .annotation-card-actions > button:not(.icon-button) { font-size:11px; min-height:24px; padding:2px 5px; }
+
+.quality-roi-dialog{width:min(1100px,94vw);max-height:90vh;overflow:auto;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:20px}
+.quality-roi-views,.quality-roi-pickers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.quality-roi-views[hidden]{display:none}
+.quality-roi-stage{position:relative;width:100%;background:#111;overflow:hidden}
+.quality-roi-stage canvas,.quality-roi-overlay{position:absolute;inset:0;width:100%;height:100%}
+.quality-roi-overlay{touch-action:none;cursor:crosshair;z-index:3}
+.quality-roi-overlay rect{stroke:#ffcc00;stroke-width:2;fill:#ffcc001a;pointer-events:none}
+.quality-roi-dialog label,.quality-candidate-form label{display:inline-flex;gap:8px;margin:8px;align-items:center}
+.quality-roi-dialog select{max-width:100%}
+.quality-roi-dialog button,.quality-candidate-form button{margin:6px}
+.quality-roi-views p{overflow-wrap:anywhere;font-size:12px}
+.quality-candidate-form input[data-candidate-text]{min-width:240px}
+.quality-pair-open{display:block;margin:8px 0}
+@media(max-width:650px){.quality-roi-views,.quality-roi-pickers{grid-template-columns:1fr}}
+
+.quality-candidate-badge{display:block;flex:none;font-size:10px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.quality-roi-dialog::backdrop{background:#0008}

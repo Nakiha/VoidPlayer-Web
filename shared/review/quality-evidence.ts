@@ -42,6 +42,14 @@ export function qualityEvidenceValue(value: unknown): LibraryPairResult {
     && m?.schema === 'voidplayer-source-plane-psnr' && m.version === 1 && m.implementation === 'cpu-number-sse-v1'
     && m.domain === 'source-yuv-code-values' && m.geometry === 'unrotated-visible-pixel-grid'
     && m.pairing === 'caller-supplied-unverified' && [8,10].includes(m.bitDepth) && m.peak === 2 ** m.bitDepth - 1);
+  if(v.annotationContext!==undefined){
+    check(v.annotationContext&&Object.keys(v.annotationContext).sort().join(',')==='distorted,reference');
+    for(const side of ['reference','distorted']as const){const a=v.annotationContext[side],p=r.provenance?.[side];
+      check(p&&a&&Object.keys(a).sort().join(',')==='basis,codec,firstPtsUs,frameDurationUs,indexedDurationUs,lastModified,name'&&a.basis==='complete-flv-index-derived-v1'&&['h264','hevc'].includes(a.codec)
+        &&string(a.name,2000)&&unsigned(a.lastModified)&&Number.isSafeInteger(a.firstPtsUs)&&Number.isSafeInteger(a.indexedDurationUs)&&a.indexedDurationUs>0
+        &&Number.isSafeInteger(a.frameDurationUs)&&a.frameDurationUs>0&&Number.isSafeInteger(p.sourcePtsUs-a.firstPtsUs)&&p.sourcePtsUs>=a.firstPtsUs&&p.sourcePtsUs-a.firstPtsUs<a.indexedDurationUs);
+    }
+  }
   pairBudget({pairing:'caller-specified', reference:r.provenance?.reference, distorted:r.provenance?.distorted, roi:m.roi});
   let packets=0;
   for (const side of ['reference','distorted'] as const) {
@@ -130,7 +138,7 @@ export function qualityEvidenceList(value: unknown, preserveVerification = false
 export function historicalMarks(marks: Mark[]): Mark[] {
   return marks.map(mark => ({...structuredClone(mark),...(mark.qualityEvidence ? {qualityEvidence:qualityEvidenceList(mark.qualityEvidence)} : {})}));
 }
-export function evidenceWorkspaceVersion(marks: Mark[]): 1 | 2 { return marks.some(m => m.qualityEvidence !== undefined) ? 2 : 1; }
+export function evidenceWorkspaceVersion(marks: Mark[]): 1 | 2 | 3 { return marks.some(m=>m.qualityCandidate!==undefined)?3:marks.some(m => m.qualityEvidence !== undefined) ? 2 : 1; }
 /** Exact existing anchor, original visible grid; neither normalized PTS nor drawings infer a pair. */
 export function evidenceApplies(document: AnnotationDocument, evidence: QualityEvidence): boolean {
   const media = document.media.find(m => m.id === document.mark.mediaId), source = media?.source;

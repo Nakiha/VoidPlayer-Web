@@ -5,9 +5,11 @@ export type FlvProducerEvidence = {
   sourceStat: {size:string;dev:string;ino:string;mtimeNs:string;ctimeNs:string};
 };
 export type LibraryPairBinding = { binding: SourceBinding; producer: FlvProducerEvidence };
+export type QualityAnnotationContext = {basis:'complete-flv-index-derived-v1';codec:'h264'|'hevc';name:string;lastModified:number;firstPtsUs:number;indexedDurationUs:number;frameDurationUs:number};
 export type LibraryPairResult = {
   schema: 'voidplayer-library-frame-pair-psnr'; version: 1;
   execution: { host: 'node-worker'; runtime: 'node' | 'bun'; runtimeVersion: string; sourceIdentity: 'stat-version-v1' };
+  annotationContext?:{reference:QualityAnnotationContext;distorted:QualityAnnotationContext};
   result: FramePairResult; sources: { reference: LibraryPairBinding; distorted: LibraryPairBinding };
 };
 export type LibraryPairResponse = LibraryPairResult & { request: {id:string;actorId:string} };

@@ -16,6 +16,9 @@ export class FramePairClient {
   inspect(evidence: QualityEvidence, base: string, signal: AbortSignal): Promise<InspectedFramePair> {
     return this.run<InspectedFramePair>({mode:'inspect',evidence,base},30000,signal);
   }
+  plan(request:FramePairRequest,bindings:[import('../../../shared/analysis/quality/library-pair.ts').LibraryPairBinding,import('../../../shared/analysis/quality/library-pair.ts').LibraryPairBinding],actor:string,base:string,signal:AbortSignal):Promise<InspectedFramePair>{
+    return this.run<InspectedFramePair>({mode:'plan',request,bindings,actor,base},pairBudget(request).maxElapsedMs,signal);
+  }
   private run<T>(data:unknown, maxElapsedMs:number, signal:AbortSignal):Promise<T> {
     signal.throwIfAborted();
     if (this.active) return Promise.reject(new FramePairError('busy', 'A pair is already running'));

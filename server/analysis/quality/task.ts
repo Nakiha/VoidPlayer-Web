@@ -64,6 +64,6 @@ export async function runQualityTask(data:QualityTask&{database:string;coreDir:s
     check();
     return {schema:'voidplayer-library-frame-pair-psnr',version:1,
       execution:{host:'node-worker',runtime:process.versions.bun?'bun':'node',runtimeVersion:process.versions.bun??process.versions.node,sourceIdentity:'stat-version-v1'},
-      result,sources:{reference:opened[0].proof,distorted:opened[1].proof}};
+      result,annotationContext:{reference:opened[0].annotationContext,distorted:opened[1].annotationContext},sources:{reference:opened[0].proof,distorted:opened[1].proof}};
   }finally{for(const {source} of opened)source.close();db.close();}
 }

@@ -1,3 +1,4 @@
+import {installQualityCandidate} from '../ui/quality-candidate.ts';
 import { ssimPlan, SSIM_VARIANT } from '../../shared/analysis/quality/ssim.ts';
 import { localizedText, type LocalizedValue } from '../ui/live-localization.ts';
 import { t, th, msg, onLanguageChange, formatDate } from '../i18n.ts';
@@ -107,7 +108,7 @@ export function installQualityJobs(signal:AbortSignal){
       $('job-reason').textContent=job.reason?`${job.reason.code}: ${job.reason.message}`:'';$('job-json').textContent=JSON.stringify(job,null,2);$('cancel').toggleAttribute('disabled',terminalQualityJob(job.state)||job.state==='cancelling');}
     const resultKey=value.result?`${value.result.jobId}/${value.result.attemptId}`:'';
     if(resultKey!==lastResult){lastResult=resultKey;resetAttachment();$('job-result').replaceChildren();
-      if(value.result){try{qualityFacts($('job-result'),qualityEvidenceValue(value.result.value));void loadSpaces();}catch(error){setError('observer-status',error);$('attachment').hidden=true;}}}
+      if(value.result){try{qualityFacts($('job-result'),qualityEvidenceValue(value.result.value));const candidate=document.createElement('section');$('job-result').append(candidate);installQualityCandidate(candidate,job!,lastActor,observer!.client,controller.signal);void loadSpaces();}catch(error){setError('observer-status',error);$('attachment').hidden=true;}}}
   }
   function resetAttachment(){attachmentGeneration++;command=null;selectedMark=null;markNext=null;$('mark-list').replaceChildren();$('attach').toggleAttribute('disabled',true);localizedText($('attach-target'),'');localizedText($('attach-status'),'');$('shared-links').replaceChildren();}
   async function loadSpaces(){const c=context(),generation=attachmentGeneration;

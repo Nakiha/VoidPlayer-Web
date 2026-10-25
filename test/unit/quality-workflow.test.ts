@@ -92,3 +92,16 @@ test('explicit history resync ignores an old page, restarts at zero and does not
  const o=new QualityJobObserver(io,'a','tab-1',()=>{},memory()),poll=o.poll();await o.resync();gate.resolve({schema:'voidplayer-quality-jobs',version:1,entries:[job('old',9)],head:9,cursor:9,more:false,resources:{queued:0,activeAttempts:0},limits:{}});await poll;
  assert.equal(o.snapshot().jobs.length,0);await o.poll();assert.deepEqual(o.snapshot().jobs.map(j=>j.id),['fresh']);assert.equal(sent,0);o.dispose();
 });
+
+test('independent ROI uses its own source grid, even snapping and strict bounds, never playback transforms',async()=>{
+ const {qualityRoi,draggedQualityRoi}=await import('../../shared/review/quality-roi.ts');
+ for(const scale of [0.25,1,3.5])for(const dpr of [1,2,3]){
+  const rect={left:123,top:57,width:32*scale*dpr,height:32*scale*dpr};
+  const point=(x:number,y:number)=>({x:(rect.left+x*rect.width-rect.left)/rect.width,y:(rect.top+y*rect.height-rect.top)/rect.height});
+  assert.deepEqual(draggedQualityRoi(32,32,point(2/32,4/32),point(26/32,24/32)),{x:2,y:4,width:24,height:20});
+  assert.deepEqual(draggedQualityRoi(32,32,point(26/32,24/32),point(2/32,4/32)),{x:2,y:4,width:24,height:20});
+ }
+ assert.deepEqual(draggedQualityRoi(32,32,{x:2.6/32,y:4.4/32},{x:25.6/32,y:24.3/32}),{x:2,y:4,width:24,height:20});
+ for(const roi of [{x:1,y:0,width:2,height:2},{x:0,y:0,width:33,height:2},{x:-2,y:0,width:2,height:2},{x:0,y:0,width:0,height:2},{x:0,y:0,width:Infinity,height:2}])assert.throws(()=>qualityRoi(32,32,roi));
+ assert.throws(()=>draggedQualityRoi(32,32,{x:-0.01,y:0},{x:1,y:1}));assert.throws(()=>draggedQualityRoi(32,32,{x:0,y:0},{x:0.01,y:0.01}));
+});

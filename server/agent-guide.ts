@@ -259,6 +259,38 @@ New content or another actor needs a new operationId. On a version conflict, rea
 reconcile and create a new operationId. Success means a committed server write;
 GUI visibility may lag and is never part of the success condition.
 
+## Atomically create a measurement candidate
+
+POST the same annotation-space endpoint with:
+{"operationId":"stable-candidate-operation","id":"new-candidate-id","revision":0,
+ "action":"create-quality-candidate","client":{"kind":"agent","id":"my-agent"},
+ "candidate":{"text":"Explicit observation, requires human assessment","severity":2},
+ "evidence":{"jobId":"JOB","attemptId":"ATTEMPT","digest":"64-lowercase-hex-sha256","side":"reference"}}
+Capture X-VoidPlayer-Actor along with the identity cookie. Mismatch returns409
+actor-changed BEFORE any mutation. Do not supply a document, pixels or score.
+An owned completed result must record annotationContext: complete-FLV-index-derived
+origin, duration and target frame duration. Older results without it return409
+annotation-context-unavailable, never guess clocks or silently rescore. The server
+derives source/version, actual source PTS, normalized frame clock, exact ROI and
+immutable evidence; caller explicitly supplies text/severity. qualityCandidate
+assessment is not-subjectively-assessed: no metric implies a human defect judgment.
+Annotation, evidence, receipt and operation event commit in one transaction. A
+lost-response retry uses identical actor, operationId and body; receipt lookup
+precedes result resolution, including after result reclamation or restart. Another
+actor gets404 for private jobs and cannot use a receipt belonging to the owner.
+This is an explicit sharing action, not permission to read other private job data.
+Ordinary edits/replies preserve candidate facts/evidence. Import/copy is historical;
+workspace/review v3 preserves candidates, v2 preserves plain evidence, v1 rejects
+evidence. An old reader must reject a newer wrapper, never silently drop facts.
+
+The player ROI entry uses loaded library MEDIA only. Its ordinary presented token
+is not a quality cache identity. Explicitly choose each cached AU, verify the
+version/namespace/build/producer and opaque output in an independent bounded
+Worker, then draw ROI on those freshly presented snapshots. No automatic full
+indexing, PTS guessing, player seek/pause or screenshot scoring. Closing observation
+does not cancel durable execution; use explicit job cancel. HTTP Agent needs no
+player or GUI and uses exactly this same annotation command.
+
 ## Follow operations
 
 Attach a completed PSNR result to an existing annotation with the same endpoint:
@@ -339,23 +371,19 @@ deployments advertise them disabled and reject submission.
    and PTS explicitly from the existing source index; equal PTS never pairs sources.
 
 Only complete, unrecovered, single-configuration FLV/Enhanced FLV, progressive
-H264/HEVC closed key pictures or explicit bounded forward windows, and fully tagged
-8/10-bit YUV420 are admitted. For a dependent candidate, preserve its returned
-decode:{mode:'forward-one-output-per-au-v1',startAu} in the selected target. The
-start is an earlier closed IDR candidate; execute every contiguous AU through the
-target, with at most 32 inputs per side / 64 per pair. Every packet must have
-unique strictly increasing PTS=DTS and exactly one immediate decoder output before
-the next input; flush must emit no extra output. Delayed/reordered pictures,
-changed parameter sets, ambiguous identities and unavailable starts are rejected.
-The guarantee is exact decoder output for the verified selected bitstream window,
-not certified reference-graph integrity. The packet ABI cannot report error
-concealment/decode_error_flags: a missing reference AU may still produce a scored
-frame with different pixels from the original undamaged stream. Every forward
-result persists dependency.guarantee with referenceIntegrity=not-certified and
-concealmentDetection=unavailable; GUI selection/results expose the same limit.
-No nearest-frame lookup or reference-graph inference occurs. Result provenance
-records every dependency AU/tag/clock and the same window is revalidated by the
-read-only original-frame viewer. Existing isolated-key requests remain unchanged.
+H264/HEVC and fully tagged 8/10-bit YUV420 are admitted. Preserve the returned
+candidate decode window. Preferred packet-identity-gop-v1 uses explicit startAu
+and endAu (inclusive, at most32 AU/side), a closed IDR start and packet identity
+ABI1. All outputs, including delayed/reordered and drain pictures, are attributed
+by opaque input token, never PTS matching. Zero CTS does not imply immediate output.
+The legacy forward-one-output-per-au-v1 mode remains compatible: strictly increasing
+PTS=DTS, one immediate output per AU, no delayed output. Ambiguous, duplicate,
+unknown, missing, field or multi-picture identity and changed parameter sets reject.
+Exact decoder output does not certify reference-graph integrity. The ABI validates
+output identity/error flags but cannot detect all concealment: a missing reference
+AU may still produce scored pixels. dependency.guarantee records
+referenceIntegrity=not-certified and concealmentDetection=unavailable. Both GUI
+and Agent expose the same limitation. No nearest-frame or cross-source alignment.
 ROI uses the unrotated visible source grid and must be chroma-aligned. The response
 contains result (exact code-value SSE/MSE/PSNR and decoder build) plus complete
 source/cache/producer evidence. Media versions are stat-derived identities, not

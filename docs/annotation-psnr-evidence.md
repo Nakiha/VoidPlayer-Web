@@ -81,7 +81,7 @@ data is exposed when another actor reads the shared record. Shared facts remain
 available after the original result/source/cache disappears. No automatic rerun,
 revalidation, retry, media opening or navigation occurs.
 
-The annotation database advances to schema 3, so older services refuse it rather
+The annotation database advances to schema 4, so older services refuse it rather
 than silently writing away new fields. Existing records/receipts remain intact.
 
 ## Files and copies

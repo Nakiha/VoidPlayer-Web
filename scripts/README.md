@@ -54,3 +54,5 @@ Vite 与独立程序共用 `release-version.mjs` 的版本规则。标签构建�
 - `check-quality-workflow-browser.mjs`：完整服务端 PSNR GUI 任务闭环（Chromium/WebKit × 8/10 位），实际 UI 提交、持久状态/取消/历史、显式已有标注证据和原帧对查看，要求真实 core；登记于完整 `ci-cache`。
 
 - `tools/fixtures/quality-forward.mjs`：生成固定 H.2648/HEVC10 无重排普通依赖帧 FLV 与独立 FFmpeg 原始平面对照、精确时钟和 SHA-256。完整依赖窗口、GUI/Agent/证据/原帧复核见 [工作流契约](../docs/forward-frame-quality.md)；`check-quality-workflow-browser.mjs chromium 8 forward`（另有 WebKit/10bit）登记为现有 core-backed `ci-ssim` 的必需用例，不替换旧 PSNR/SSIM 检查。
+
+- `check-quality-roi-browser.mjs`：播放器已载入媒体的显式 AU 独立快照与偶数源网格 ROI → 持久 PSNR/SSIM/grid → 原子共享测量候选 → 原帧查看，Chromium/WebKit × H2648/HEVC10；完整 `ci-cache` 必需且要求 core。不继承旧播放 token 的 PTS 关联、不完成索引，Agent 共用 `create-quality-candidate`；见 [契约与矩阵](../docs/quality-roi-candidates.md)。

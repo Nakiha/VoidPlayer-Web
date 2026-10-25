@@ -31,6 +31,7 @@ function markContent(mark: Mark, slot: Slot, actions?: HTMLElement, session?: Re
     const image = document.createElement('img'); image.src = preview.url; image.width = preview.width; image.height = preview.height; image.alt = t(msg("marks.previewImage", "标注画面")); image.loading = 'lazy'; image.onerror = () => { image.hidden=true; }; thumbnail.append(image);
   } else { thumbnail.textContent = mark.text || t(msg("marks.noPreview", "暂无预览")); }
   content.append(thumbnail);
+    if(mark.qualityCandidate){const badge=document.createElement('span');badge.className='quality-candidate-badge';badge.textContent=t(msg('qualityCandidate.badge','测量候选 · 创建时未作人工判断'));content.append(badge);}
   const footer = document.createElement('span'); footer.className = 'mark-footer';
   const note = document.createElement('span'); note.className = 'mark-note'; note.textContent = mark.text; note.title = mark.text;
   const author = document.createElement('span'); author.className = 'mark-author'; author.textContent = mark.author?.name || t(msg("marks.anonymous", "未署名"));

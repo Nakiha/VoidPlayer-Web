@@ -31,7 +31,7 @@ export function installAnnotationActivity(signal: AbortSignal) {
       }
       row.dataset.operationId = event.operationId;
       const title = row.querySelector('strong')!;
-      const action = t(event.action === 'delete' ? msg('activity.deleted', '删除标注') : event.action === 'attach-quality-result' ? msg('activity.attachedPsnr', '关联 PSNR') : event.action === 'restore' ? msg('activity.restored', '恢复标注') : msg('activity.saved', '保存标注'));
+      const action = t(event.action==='create-quality-candidate'?msg('qualityCandidate.activity','创建测量候选'):event.action === 'delete' ? msg('activity.deleted', '删除标注') : event.action === 'attach-quality-result' ? msg('activity.attachedPsnr', '关联 PSNR') : event.action === 'restore' ? msg('activity.restored', '恢复标注') : msg('activity.saved', '保存标注'));
       const client = event.client.kind === 'agent' ? 'Agent' : event.client.kind === 'gui' ? 'GUI' : 'HTTP';
       title.textContent = `${event.actor.name} · ${client} · ${action}`;
       const target = row.querySelectorAll('span')[0]; target.textContent = `${event.target.name} · ${formatTime(event.target.frame.ptsUs)} · r${event.revision}`;

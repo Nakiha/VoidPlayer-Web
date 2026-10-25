@@ -81,13 +81,16 @@ try{
   const attach={id:annotationId,operationId:'attach-'+annotationId,revision:1,action:'attach-quality-result',evidence:{jobId:job.id,attemptId:job.attempt.id,digest:job.result.digest,side:'reference'}};
   const attachment=await fetch(base+'/api/annotations/spaces/default',{method:'POST',headers:annotationHeaders,body:JSON.stringify(attach)});const attached=await attachment.json();assert.equal(attachment.status,200,JSON.stringify(attached));
   assert.equal(attached.document.mark.qualityEvidence[0].verification,'server-verified');assert.deepEqual(attached.document.mark.qualityEvidence[0].value,stored.value);
+  const candidateCommand={id:'candidate-'+annotationId,operationId:'candidate-'+annotationId,revision:0,action:'create-quality-candidate',candidate:{text:'Compiled measured candidate; unassessed',severity:2},evidence:attach.evidence};
+  const candidateResponse=await fetch(base+'/api/annotations/spaces/default',{method:'POST',headers:annotationHeaders,body:JSON.stringify(candidateCommand)}),candidate=await candidateResponse.json();assert.equal(candidateResponse.status,200,JSON.stringify(candidate));assert.equal(candidate.document.mark.qualityCandidate.assessment,'not-subjectively-assessed');assert.deepEqual(candidate.document.mark.qualityEvidence[0].value,stored.value);assert.equal(candidate.document.mark.qualityEvidence[0].verification,'server-verified');
   rows.push({request,requestId:value.request.id,codec:sample.codec,depth:sample.depth,sse:aggregate,decoder:value.result.decoder,source:binding,execution:value.execution,
-    annotation:{attach,attached},durable:{input,job,stored,key:jobHeaders['idempotency-key']}});
+    candidate:{command:candidateCommand,record:candidate},annotation:{attach,attached},durable:{input,job,stored,key:jobHeaders['idempotency-key']}});
  }
  const duplicate=spawnSync(path.join(directory,manifest.executable),['--data-dir',data],{cwd,env,encoding:'utf8',timeout:10000,maxBuffer:1024*1024});
  assert.equal(duplicate.error,undefined);assert.notEqual(duplicate.status,0);assert.match(duplicate.stdout+duplicate.stderr,/另一个实例/,'second compiled instance must not recover a live owner');
  await stopChild();stopChild=null;await start();
  for(const row of rows){
+  const candidateReplay=await fetch(base+'/api/annotations/spaces/default',{method:'POST',headers:{...headers,'x-voidplayer-action':'annotation'},body:JSON.stringify(row.candidate.command)});assert.equal(candidateReplay.status,200);assert.deepEqual(await candidateReplay.json(),row.candidate.record);
   const historical=await fetch(`${base}/api/annotations/spaces/default/${row.annotation.attached.id}`).then(r=>r.json());assert.deepEqual(historical,row.annotation.attached);
   const attachmentReplay=await fetch(base+'/api/annotations/spaces/default',{method:'POST',headers:{...headers,'x-voidplayer-action':'annotation'},body:JSON.stringify(row.annotation.attach)});assert.equal(attachmentReplay.status,200);assert.deepEqual(await attachmentReplay.json(),historical);
   const job=await fetch(`${base}/api/quality/jobs/${row.durable.job.id}`,{headers:{cookie}}).then(r=>r.json());assert.deepEqual(job,row.durable.job);

@@ -2,7 +2,7 @@
 
 运行服务后，从同一 origin 打开 `/llms.txt` 查看短索引，`/agent.md` 查看工作流程，`/api/agent` 获取版本化 JSON 能力描述。按任务继续读取 `/agent/library.md`、`workspaces.md`、`annotations.md`、`quality.md`、`live-session.md` 或 `errors.md`。这些文件由 `server/agent-guide.ts` 内嵌，GET/HEAD 不依赖前端构建，也不会创建身份、扫描媒体或提交任务。
 
-`implemented` 表示代码支持，`enabled` 表示部署启用，`readiness` 表示当前条件。媒体内容逐源判断，浏览器视图需要活动会话；`quality.frame-pair` 提供受限的[一次性媒体库 PSNR 调用](source-library-psnr.md)，不需要浏览器；`quality.jobs` 提供受限的[单帧 PSNR 持久任务](source-psnr-jobs.md)，qualityJobs 对象列出精确请求/端点/预算，仅支持 psnr + single-explicit-frame-pair。序列、SSIM/VMAF/CAMBI、本机 MCP 桥接和远程 worker 仍未实现；#114/#121 没有整体完成。`/api/health` 的原有字段保持兼容。
+`implemented` 表示代码支持，`enabled` 表示部署启用，`readiness` 表示当前条件。媒体内容逐源判断，浏览器视图需要活动会话；`quality.frame-pair` 提供受限的[一次性媒体库 PSNR 调用](source-library-psnr.md)，不需要浏览器；`quality.jobs` 提供受限的[单帧 PSNR 持久任务](source-psnr-jobs.md)，qualityJobs 对象列出精确请求/端点/预算，支持单个明确帧对的 PSNR、可选固定变种 SSIM 及至多 64 块源网格，已接持久任务 GUI、共享证据和独立原帧查看。闭合 GOP 的重排/延迟输出使用固定 packet identity ABI1 与 opaque token，不按 PTS 归属 AU。序列、VMAF/CAMBI、本机 MCP 桥接和远程 worker 仍未实现；#114/#121 没有整体完成。`/api/health` 的原有字段保持兼容。
 
 ## 无页面写入
 
@@ -31,3 +31,8 @@ HTTP 客户端先显式 POST `/api/identity` 并保存 cookie，再向 `/api/ann
 新增 Node 回归覆盖：无前端资源的 HTTP 操作、只读部署、Origin/身份检查、能力状态、重复请求、版本冲突、重启、事务回滚、v1 升级、事件分页及保留窗口。浏览器回归验证先由 HTTP 写入、之后打开 GUI 恢复，及播放 A 时收到 B 的操作仍保持轨道、播放与焦点。
 
 已完成单帧 PSNR 结果可通过同一标注命令入口的 `attach-quality-result` 显式共享到已有标注。精确任务/attempt/digest、媒体版本/实际源 PTS/ROI、幂等重放与导入降权规则见 [PSNR 标注证据](annotation-psnr-evidence.md)。任务私有读取权限不会因共享附件扩大。
+
+
+`create-quality-candidate` 在同一标注入口从自有完成结果原子创建测量候选、证据、回执和事件；`candidate.text/severity` 必须明确填写，不能附伪造 document。来源、实际源 PTS、索引起点、时长和 ROI 从结果的 `annotationContext` 派生；旧结果缺少此见证时明确拒绝。候选标记为 `not-subjectively-assessed`，不冒充人工缺陷判断。相同 actor/operationId/正文的回执优先于结果读取，结果回收后仍能重放；跨 actor 的捕获身份不匹配在写入前返回 `actor-changed`。候选导出为工作区/评审 v3，普通证据仍 v2，无证据仍 v1；导入/复制保留事实但服务核验降为 historical。
+
+播放器独立 ROI 入口从已载入媒体显式选择每侧 AU；不继承旧播放 token 的时间戳关联，不自动猜当前帧。独立 Worker 在已有可信缓存上获取原始帧并核验，ROI 吸附偶数源网格；原播放器不暂停、不 seek、不完成索引。后台持久执行不随对话框关闭取消。详见 [ROI 测量候选](quality-roi-candidates.md)。
