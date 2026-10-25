@@ -1666,6 +1666,12 @@ try {
     assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
     assert.equal(await page.locator('#source-activity-details').isVisible(), false);
     await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.bringToFront();
+    await page.waitForFunction(()=>document.visibilityState==='visible');
+    // This isolated document has just navigated. WebKit may defer its first
+    // paint past the fixed observation window; establish the collapsed frame
+    // before exercising the transition, without increasing that window.
+    await page.evaluate(async()=>{await document.fonts.ready;await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);document.querySelector('#source-activity-details').getBoundingClientRect();});
     const foldSamples = await page.evaluate(async () => {
       const details = document.querySelector('#source-activity-details'), foot = document.querySelector('#source-foot');
       const samples = [];
@@ -1674,13 +1680,14 @@ try {
         const frames = [], deadline = performance.now() + 350;
         while (performance.now() < deadline) {
           await new Promise(requestAnimationFrame);
-          frames.push({ height: details.getBoundingClientRect().height, foot: foot.getBoundingClientRect().height,
+          frames.push({ at:performance.now(),timeline:document.timeline.currentTime,height: details.getBoundingClientRect().height, foot: foot.getBoundingClientRect().height,
             reserve: parseFloat(document.querySelector('#sources-panel').style.getPropertyValue('--foot-h')) });
         }
         samples.push({ expanded, frames });
       }
       return samples;
     });
+    if(process.env.VOIDPLAYER_UI_TRACE)console.log('FOLD_DIAGNOSTIC',JSON.stringify(foldSamples));
     for (const { expanded, frames } of foldSamples) {
       const heights = frames.map(frame => frame.height), low = Math.min(...heights), high = Math.max(...heights);
       assert.ok(heights.some(height => height > low + 1 && height < high - 1), 'fold has intermediate heights');
