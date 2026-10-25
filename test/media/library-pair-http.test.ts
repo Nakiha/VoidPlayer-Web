@@ -66,10 +66,21 @@ for(const [codec,depth] of [['h264',8],['hevc',8],['hevc',10]] as const)test(`HT
   const built=await fetch(`${base}/api/media/${entry.id}/frame-index?v=${entry.version}&build=1`);assert.equal(built.status,200);const cached=await built.json();assert.equal(cached.index.packets.length,2);
   const bindingResponse=await fetch(`${base}/api/media/${entry.id}/psnr-source?v=${entry.version}`,{headers:{cookie}});assert.equal(bindingResponse.status,200);const binding=await bindingResponse.json() as LibraryPairBinding;bindings.push(binding);
   assert.equal(binding.producer.producer,'server-flv-scan-v1');assert.equal(binding.producer.epoch,cached.epoch);assert.match(binding.producer.packetCommitId,/^[a-f0-9-]{36}$/);assert.match(binding.producer.documentSha256,/^[a-f0-9]{64}$/);
+  const candidates=await fetch(`${base}/api/media/${entry.id}/psnr-frames?v=${entry.version}&limit=1`,{headers:{cookie}});
+  assert.equal(candidates.status,200,await candidates.clone().text());const page=await candidates.json();
+  assert.deepEqual(page.source,binding);assert.equal(page.entries[0].sourcePtsUs,cached.index.packets[0][2]);assert.equal(page.entries[0].picture.au,0);
+  assert.equal(page.nextAu,1);assert.equal(page.geometry.width,32);assert.equal(page.inspection.supported,true);assert.match(page.eligibility,/candidate-execution-verifies/);
+  const second=await fetch(`${base}/api/media/${entry.id}/psnr-frames?v=${entry.version}&afterAu=1&limit=1&buildId=${binding.binding.indexBuildId}`,{headers:{cookie}});
+  assert.equal(second.status,200);assert.equal((await second.json()).entries[0].picture.au,1);
+  for(const query of ['afterAu=1','limit=51','limit=','afterAu=1&buildId=rebuilt','build=1']){
+   const rejected=await fetch(`${base}/api/media/${entry.id}/psnr-frames?v=${entry.version}&${query}`,{headers:{cookie}});assert.ok(rejected.status>=400);assert.equal((await rejected.json()).entries,undefined);
+  }
   targets.push({...binding.binding,picture:{sourceVersion:`${entry.id}@${entry.version}`,stream:'video',configuration:0,au:i,picture:0,layer:0,field:'frame'},sourcePtsUs:cached.index.packets[i][2]});
  }
  const request=pairRequest(targets[0],targets[1]),headers={'content-type':'application/json',origin:base,'x-voidplayer-action':'quality',cookie};
  const post=async(body:unknown,extra:Record<string,string>={})=>fetch(base+'/api/quality/psnr-pair',{method:'POST',headers:{...headers,...extra},body:JSON.stringify(body)});
+ const mismatch=await post(request,{'x-voidplayer-actor':`guest-${randomUUID()}`});assert.equal(mismatch.status,409);assert.equal((await mismatch.json()).code,'actor-changed');
+ const mismatchedSource=await fetch(`${base}/api/media/${targets[0].mediaId}/psnr-frames?v=${targets[0].mediaVersion}`,{headers:{cookie,'x-voidplayer-actor':`guest-${randomUUID()}`}});assert.equal(mismatchedSource.status,409);assert.equal((await mismatchedSource.json()).code,'actor-changed');
  const response=await post(request);const actual=await response.json() as LibraryPairResponse;assert.equal(response.status,200,JSON.stringify(actual));
  assert.equal(actual.request.id,response.headers.get('x-request-id'));assert.equal(actual.request.actorId,cookie.slice('voidplayer-user='.length));
  const frameBytes=1536*(depth===8?1:2),expected=measurePsnr({domain:'source-yuv-code-values',reference:nativeFrame(Uint8Array.from(fixture.native.subarray(0,frameBytes)),depth),distorted:nativeFrame(Uint8Array.from(fixture.native.subarray(frameBytes)),depth),roi:request.roi});

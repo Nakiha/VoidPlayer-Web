@@ -152,6 +152,12 @@ test('identity browser checks match the lightweight job while real PSNR evidence
   }
 });
 
+test('the complete quality GUI workflow requires real core in both browsers and both depths, never identity CI',()=>{
+ const rows=selectCases({suite:'ci-cache',platform:'linux'}).selected.filter(row=>row.script==='scripts/check-quality-workflow-browser.mjs');
+ assert.deepEqual(rows.map(row=>[row.engines[0],Number(row.command.at(-1))]),[['chromium',8],['chromium',10],['webkit',8],['webkit',10]]);
+ for(const row of rows){assert.equal(row.required,true);assert.deepEqual(row.fixtures,['core']);assert.equal(row.suites.includes('ci-identity-browser'),false);}
+});
+
 test('identity source checks require no downloaded core, media or browser build', () => {
   for (const row of selectCases({ suite: 'ci-identity-unit' }).selected) {
     assert.deepEqual(row.fixtures, [], `${row.id}: identity unit job does not download fixtures`);

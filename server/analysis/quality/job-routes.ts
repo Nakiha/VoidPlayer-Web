@@ -1,3 +1,4 @@
+import { requireCapturedActor } from '../../identity.ts';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { RouteContext } from '../../routes/context.ts';
 import { AdminError, adminErrorBody } from '../../admin-error.ts';
@@ -12,6 +13,7 @@ export async function handleQualityJobRoutes(ctx: RouteContext, req: IncomingMes
   const item = /^\/api\/quality\/jobs\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})(?:\/(result|cancel))?$/.exec(url.pathname);
   if (!collection && !item) return false;
   try {
+    requireCapturedActor(req,ctx.actor);
     if (!ctx.actor) throw new AdminError(401, 'Select an intranet identity first.', 'identity-required');
     if (req.method !== 'GET' && !adminWriteAllowed(req, 'quality-job'))
       throw new AdminError(403, 'Use the same-origin quality-job action.', 'origin-required');

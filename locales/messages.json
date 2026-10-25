@@ -3545,6 +3545,210 @@
     "source": "关联时已由来源服务核验",
     "params": {}
   },
+  "qualityWorkflow.attach": {
+    "source": "将此结果显式共享到已有标注",
+    "params": {}
+  },
+  "qualityWorkflow.attached": {
+    "source": "已共享；以下链接使用标注中的不可变证据，查看器仍会重新核验来源、缓存和几何。",
+    "params": {}
+  },
+  "qualityWorkflow.available": {
+    "source": "持久单帧 PSNR 可用；支持性仍按每个来源和执行结果判定。",
+    "params": {}
+  },
+  "qualityWorkflow.budgets": {
+    "source": "服务端资源计数与预算",
+    "params": {}
+  },
+  "qualityWorkflow.cancel": {
+    "source": "取消任务",
+    "params": {}
+  },
+  "qualityWorkflow.cancelling": {
+    "source": "正在终止 Worker",
+    "params": {}
+  },
+  "qualityWorkflow.candidateNotice": {
+    "source": "候选页只读取已有可信缓存，不构建索引。容器关键帧标记不保证可测；执行时仍逐侧核验闭合 AU、颜色、版本和缓存身份。缓存缺失请先在缓存管理中显式构建。",
+    "params": {}
+  },
+  "qualityWorkflow.capacity": {
+    "source": "运行 {active}/{running}；排队 {queued}/{queueLimit}。容量由服务端统一管理。",
+    "params": {
+      "active": "string | number",
+      "queueLimit": "string | number",
+      "queued": "string | number",
+      "running": "string | number"
+    }
+  },
+  "qualityWorkflow.client": {
+    "source": "本页客户端 ID",
+    "params": {}
+  },
+  "qualityWorkflow.confirmIdentity": {
+    "source": "正在向服务确认当前用户…",
+    "params": {}
+  },
+  "qualityWorkflow.distorted": {
+    "source": "待测片源",
+    "params": {}
+  },
+  "qualityWorkflow.forget": {
+    "source": "结束此提交的重试，准备新请求",
+    "params": {}
+  },
+  "qualityWorkflow.frame": {
+    "source": "明确选择缓存 AU / 源 PTS",
+    "params": {}
+  },
+  "qualityWorkflow.full": {
+    "source": "使用两侧完整可见帧",
+    "params": {}
+  },
+  "qualityWorkflow.geometryMismatch": {
+    "source": "两侧需要相同的偶数可见尺寸；请明确选择有效 ROI。",
+    "params": {}
+  },
+  "qualityWorkflow.history": {
+    "source": "当前用户的服务端任务与历史",
+    "params": {}
+  },
+  "qualityWorkflow.identityRequired": {
+    "source": "请先选择服务身份。",
+    "params": {}
+  },
+  "qualityWorkflow.identityUnconfirmed": {
+    "source": "当前用户尚未由服务确认，请刷新页面重试。",
+    "params": {}
+  },
+  "qualityWorkflow.inspectable": {
+    "source": "几何在原帧查看器支持范围内；执行与查看时仍重新核验。",
+    "params": {}
+  },
+  "qualityWorkflow.invalidClient": {
+    "source": "客户端 ID 须为 1–80 个字母、数字、点、下划线、冒号或连字符。",
+    "params": {}
+  },
+  "qualityWorkflow.invalidRoi": {
+    "source": "ROI 必须是两侧可见源网格内的偶数整数区域。",
+    "params": {}
+  },
+  "qualityWorkflow.lifetime": {
+    "source": "任务由服务持有。关闭此页或切换分类只停止观察；仅“取消任务”会请求终止。网络故障不表示任务失败。",
+    "params": {}
+  },
+  "qualityWorkflow.measureForMark": {
+    "source": "测量并关联 PSNR",
+    "params": {}
+  },
+  "qualityWorkflow.moreFrames": {
+    "source": "下一页候选帧",
+    "params": {}
+  },
+  "qualityWorkflow.noMedia": {
+    "source": "没有匹配的媒体。",
+    "params": {}
+  },
+  "qualityWorkflow.noVersion": {
+    "source": "片源缺少版本，不能测量。",
+    "params": {}
+  },
+  "qualityWorkflow.notInspectable": {
+    "source": "此源可尝试测量，但原帧查看器拒绝此几何：{reason}",
+    "params": {
+      "reason": "string | number"
+    }
+  },
+  "qualityWorkflow.observeError": {
+    "source": "观察或请求暂不可用：{error}。任务终态以服务端事实为准。",
+    "params": {
+      "error": "string | number"
+    }
+  },
+  "qualityWorkflow.observing": {
+    "source": "正在观察当前用户的服务端事实；不需要播放器确认。",
+    "params": {}
+  },
+  "qualityWorkflow.pending": {
+    "source": "提交结果尚未确认。请求已冻结；重试会复用原幂等键，不能据网络失败断言任务未创建。",
+    "params": {}
+  },
+  "qualityWorkflow.preparing": {
+    "source": "检查来源",
+    "params": {}
+  },
+  "qualityWorkflow.progress": {
+    "source": "已评分 {pairs}/1 对；已解码帧 {frames}",
+    "params": {
+      "frames": "string | number",
+      "pairs": "string | number"
+    }
+  },
+  "qualityWorkflow.queued": {
+    "source": "排队中",
+    "params": {}
+  },
+  "qualityWorkflow.readingCache": {
+    "source": "读取已有可信缓存…",
+    "params": {}
+  },
+  "qualityWorkflow.reference": {
+    "source": "参考片源",
+    "params": {}
+  },
+  "qualityWorkflow.refresh": {
+    "source": "刷新任务",
+    "params": {}
+  },
+  "qualityWorkflow.requestFacts": {
+    "source": "请求、attempt 与服务端事实",
+    "params": {}
+  },
+  "qualityWorkflow.retry": {
+    "source": "使用原幂等键重试提交",
+    "params": {}
+  },
+  "qualityWorkflow.roi": {
+    "source": "ROI：未旋转可见源像素网格，所有值须为偶数整数",
+    "params": {}
+  },
+  "qualityWorkflow.running": {
+    "source": "执行中",
+    "params": {}
+  },
+  "qualityWorkflow.scope": {
+    "source": "显式配对两个媒体库闭合关键帧，以 8/10 位 YUV420 原始码值测量。不是截图评分，不自动按时间配对，也不支持普通依赖帧或序列。",
+    "params": {}
+  },
+  "qualityWorkflow.searchMedia": {
+    "source": "搜索媒体库",
+    "params": {}
+  },
+  "qualityWorkflow.sourceProof": {
+    "source": "来源、缓存身份与几何见证",
+    "params": {}
+  },
+  "qualityWorkflow.submit": {
+    "source": "发起持久测量",
+    "params": {}
+  },
+  "qualityWorkflow.title": {
+    "source": "单帧 PSNR 任务",
+    "params": {}
+  },
+  "qualityWorkflow.unavailable": {
+    "source": "此实例不提供持久画质任务（例如临时数据库）。不会回退到浏览器临时计算。",
+    "params": {}
+  },
+  "qualityWorkflow.unknown": {
+    "source": "未知",
+    "params": {}
+  },
+  "qualityWorkflow.useClient": {
+    "source": "使用此客户端",
+    "params": {}
+  },
   "recovery.capacityReached": {
     "source": "本机恢复记录已达容量上限，请在设置 → 工作区中导出并删除旧记录。当前工作区可手动导出或保存到服务器。",
     "params": {}

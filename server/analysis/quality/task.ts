@@ -8,12 +8,15 @@ import { instantiateCore } from '../../../shared/wasm/core.ts';
 import { createPairDecoder } from '../../../shared/analysis/quality/wasm-decoder.ts';
 import { measureFlvFramePair,pairBudget,FramePairError } from '../../../shared/analysis/quality/frame-pair.ts';
 import type { FramePairRequest } from '../../../shared/analysis/quality/frame-pair.ts';
+import { qualityFrameCandidates } from '../../../shared/analysis/quality/selection.ts';
+import type { QualityFramePage,QualityFrameQuery } from '../../../shared/analysis/quality/selection.ts';
+import { PAIR_LIMITS } from '../../../shared/analysis/quality/frame-pair.ts';
 import type { LibraryPairBinding,LibraryPairResult } from '../../../shared/analysis/quality/library-pair.ts';
-export type QualityTask={mode:'source';id:string;version:string}|{mode:'measure';request:FramePairRequest};
+export type QualityTask={mode:'source';id:string;version:string}|{mode:'frames';id:string;version:string;query:QualityFrameQuery}|{mode:'measure';request:FramePairRequest};
 export type QualityPhase='source'|'resolve'|'decode'|'publish';
 /** A narrow stage observer lets tests suspend the actual IO boundaries. It is
  * never read from the HTTP request or production workerData. */
-export async function runQualityTask(data:QualityTask&{database:string;coreDir:string;control:SharedArrayBuffer},signal:AbortSignal,before?:(phase:QualityPhase)=>Promise<void>):Promise<LibraryPairBinding|LibraryPairResult>{
+export async function runQualityTask(data:QualityTask&{database:string;coreDir:string;control:SharedArrayBuffer},signal:AbortSignal,before?:(phase:QualityPhase)=>Promise<void>):Promise<LibraryPairBinding|LibraryPairResult|QualityFramePage>{
   const control=new Int32Array(data.control);
   const check=()=>{signal.throwIfAborted();if(Atomics.load(control,0)!==0)throw new FramePairError('source-changed','Quality execution cancelled');};
   const phase=async(name:QualityPhase)=>{check();await before?.(name);check();};
@@ -34,10 +37,16 @@ export async function runQualityTask(data:QualityTask&{database:string;coreDir:s
   };
   try{
     await phase('source');
-    if(data.mode==='source'){
+    if(data.mode==='source'||data.mode==='frames'){
       await phase('resolve');const value=source(data.id,data.version);
+      let page:QualityFramePage|undefined;
+      if(data.mode==='frames'){
+        const snapshot=store.qualitySource(data.id,data.version,true,PAIR_LIMITS);
+        if(snapshot.binding.indexBuildId!==value.binding.indexBuildId)throw new FramePairError('source-changed','Quality cache changed during selection');
+        page=qualityFrameCandidates({binding:snapshot.binding,producer:snapshot.producer},snapshot.index!,data.query);
+      }
       await phase('publish');const current=source(data.id,data.version);
-      if(current.binding.indexBuildId!==value.binding.indexBuildId)throw new FramePairError('source-changed','Quality cache changed before publication');return value;
+      if(current.binding.indexBuildId!==value.binding.indexBuildId)throw new FramePairError('source-changed','Quality cache changed before publication');return page??value;
     }
     const {request}=data,budget=pairBudget(request),targets=[request.reference,request.distorted];
     for(const target of targets){const snapshot=source(target.mediaId,target.mediaVersion);

@@ -4,10 +4,12 @@ import { AdminError } from '../../admin-error.ts';
 import { PAIR_LIMITS, pairBudget } from '../../../shared/analysis/quality/frame-pair.ts';
 import type { FramePairRequest } from '../../../shared/analysis/quality/frame-pair.ts';
 import type { LibraryPairBinding, LibraryPairResult } from '../../../shared/analysis/quality/library-pair.ts';
+import { qualityFrameQuery } from '../../../shared/analysis/quality/selection.ts';
+import type { QualityFramePage,QualityFrameQuery } from '../../../shared/analysis/quality/selection.ts';
 import type { QualityTask } from './task.ts';
 declare const VOIDPLAYER_COMPILED: boolean;
 export type QualityWorkerData = QualityTask & {database:string;coreDir:string;control:SharedArrayBuffer};
-type WorkerValue = LibraryPairBinding | LibraryPairResult;
+type WorkerValue = LibraryPairBinding | LibraryPairResult | QualityFramePage;
 type Outcome<T> = {ok:true;value:T}|{ok:false;error:unknown};
 type QualityTimers={set(callback:()=>void,ms:number):ReturnType<typeof setTimeout>;clear(timer:ReturnType<typeof setTimeout>):void};
 export type QualityRunHooks = { admitted(): void; phase(phase: 'source' | 'resolve' | 'decode' | 'publish'): void };
@@ -30,6 +32,11 @@ export class LibraryPairRunner {
   source(id:string,version:string,signal=new AbortController().signal):Promise<LibraryPairBinding>{
     if(!/^[a-f0-9]{24}$/.test(id)||!/^[a-f0-9]{24}$/.test(version))return Promise.reject(new AdminError(400,'Invalid media identity.','invalid-request'));
     return this.run({mode:'source',id,version},PAIR_LIMITS.maxElapsedMs,signal);
+  }
+  frames(id:string,version:string,query:QualityFrameQuery,signal:AbortSignal):Promise<QualityFramePage>{
+    try{qualityFrameQuery(query);if(!/^[a-f0-9]{24}$/.test(id)||!/^[a-f0-9]{24}$/.test(version))throw new AdminError(400,'Invalid media identity.','invalid-request');}
+    catch(error){return Promise.reject(error);}
+    return this.run({mode:'frames',id,version,query},PAIR_LIMITS.maxElapsedMs,signal);
   }
   measure(request:FramePairRequest,signal:AbortSignal,hooks?:QualityRunHooks):Promise<LibraryPairResult>{
     let budget;try{budget=pairBudget(request);}catch(error){return Promise.reject(error);}
@@ -84,6 +91,7 @@ export class LibraryPairRunner {
         }
         const value=data?.value;
         const valid=task.mode==='source'?value&&'binding' in value&&value.binding.mediaId===task.id&&value.binding.mediaVersion===task.version
+          :task.mode==='frames'?value&&'schema'in value&&value.schema==='voidplayer-psnr-frame-candidates'&&value.source.binding.mediaId===task.id&&value.source.binding.mediaVersion===task.version
           :value&&'schema' in value&&value.schema==='voidplayer-library-frame-pair-psnr';
         if(data?.ok===true&&valid)void finish({ok:true,value:value as T});
         else void finish({ok:false,error:new AdminError(data?.error?.status??400,data?.error?.message??'Invalid quality Worker result.',data?.error?.code??'decoder-error')});

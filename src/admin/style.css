@@ -250,3 +250,17 @@
 .admin-log-tabs button { white-space:normal; overflow-wrap:anywhere; }
 .admin-log-tabs { width:fit-content; }
 .admin-button-group { flex-wrap:wrap; }
+
+/* Quality tasks observe the service; both selectors remain independent of playback. */
+.quality-sources,.quality-jobs-workspace{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+#pane-quality fieldset{min-width:0;border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0}
+#pane-quality label{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:.5rem 0}
+#pane-quality select{max-width:100%;min-width:10rem;padding:.5rem;background:var(--surface);color:inherit}
+#pane-quality [data-source-status],#pane-quality pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.8rem}
+.quality-roi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.5rem}.quality-roi input{width:100%;min-width:0}
+.quality-media-list{display:grid;max-height:12rem;overflow:auto;gap:.35rem}.quality-media-list button{text-align:left}
+.quality-job-row,.quality-mark-row{display:block;text-align:left;width:100%;overflow-wrap:anywhere;margin:.4rem 0}
+.quality-job-row[aria-pressed=true],.quality-mark-row[aria-pressed=true]{outline:2px solid var(--accent)}
+#quality-job-list{max-height:36rem;overflow:auto}#quality-job-detail,#quality-job-result{min-width:0}
+#quality-shared-links{display:flex;flex-direction:column;gap:.5rem}
+@media(max-width:760px){.quality-sources,.quality-jobs-workspace{grid-template-columns:1fr}.quality-roi{grid-template-columns:repeat(2,minmax(0,1fr))}}

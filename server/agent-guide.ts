@@ -320,7 +320,16 @@ deployments advertise them disabled and reject submission.
    /api/media/{id}/frame-index?v={version}&build=1. Quality never builds an index.
    A pre-existing client-uploaded cache cannot be blessed by a no-op build: clear
    it explicitly through ordinary cache management and then build it separately.
-3. GET /api/media/{id}/psnr-source?v={version} returns binding and server parser
+3. GET /api/media/{id}/psnr-frames?v={version}&afterAu=0&limit=50 reads
+   an existing trusted cache in the bounded source Worker. It returns source
+   binding/producer, exact visible SPS geometry, original-pair viewer geometry
+   support and explicit AU/source-PTS candidates. Paginate with nextAu and the
+   original source.binding.indexBuildId as buildId; rebuilds fail explicitly.
+   A container key flag is only a candidate: execution still verifies actual
+   closed AU, raw color, pixels and identities. This endpoint never decodes,
+   rebuilds, pairs sources or substitutes nearest PTS. Empty entries with nextAu
+   require another bounded page, not guessed eligibility.
+   GET /api/media/{id}/psnr-source?v={version} returns binding and server parser
    evidence. Missing, untrusted, stale or over-budget caches fail explicitly.
 4. POST /api/quality/psnr-pair with JSON, the identity cookie, same-origin Origin,
    and X-VoidPlayer-Action: quality. Body: {pairing:'caller-specified', reference,
@@ -347,6 +356,12 @@ One-shot responses are not stored. See docs/source-library-psnr.md for budgets,
 error codes, examples and exact trust boundaries.
 
 For a durable single-frame PSNR job, reuse the same explicit pair request:
+
+For quality requests, optional X-VoidPlayer-Actor captures the expected cookie
+identity. A mismatch returns 409 actor-changed before private reads, idempotency
+lookup, task admission or cancellation; the header never replaces the cookie.
+Restore the original actor and replay the same client/key/body. Cookie-only
+HTTP Agents remain supported.
 
 POST /api/quality/jobs with the identity cookie, same-origin Origin,
 Content-Type: application/json, X-VoidPlayer-Action: quality-job, and a bounded
