@@ -10,7 +10,7 @@ parentPort!.once('message',async data=>{
   const result=await measureFlvFramePair(data.request,[sources[0],sources[1]],budget=>createPairDecoder(async()=>{
    const file=resolve('public/vendor/voidplayer-core/voidplayer-core.js'),glue=await import(pathToFileURL(file).href),loaded=await instantiateCore(glue.default,new Uint8Array(await readFile(file.replace(/\.js$/,'.wasm'))),budget.maxHeapBytes);
    const native=loaded.core.ccall.bind(loaded.core);let sends=0;
-   loaded.core.ccall=(name:string,...args:unknown[])=>{const value=native(name,...args);if(name==='vp_packet_send'&&(args[2]as unknown[])[4]===0&&++sends===3){parentPort!.postMessage({decodeBoundary:3});Atomics.wait(new Int32Array(workerData.gate),0,0);}return value;};return loaded;
+   loaded.core.ccall=(name:string,...args:unknown[])=>{const value=native(name,...args);if(name===(workerData.identity?'vp_packet_send_identity':'vp_packet_send')&&(args[2]as unknown[])[4]===0&&++sends===3){parentPort!.postMessage({decodeBoundary:3});Atomics.wait(new Int32Array(workerData.gate),0,0);}return value;};return loaded;
   }),new AbortController().signal);parentPort!.postMessage({ok:true,result});
  }catch(error){parentPort!.postMessage({ok:false,error:String(error)});}
 });

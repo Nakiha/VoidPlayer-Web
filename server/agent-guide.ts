@@ -441,8 +441,21 @@ that history; an explicit new key creates a new computation. History/result
 budgets reject overflow, never silently evict an old receipt. See
 docs/source-psnr-jobs.md for the protocol and remaining boundaries.
 
-There is no frame sequence, automatic alignment, SSIM/VMAF/CAMBI, shared work,
-automatic index construction, retry/resume, distributed worker or scoring GUI.
+PSNR with explicit optional SSIM/grid and the scoring/task GUI are available.
+For a bounded closed GOP with reordering/delayed output, select the explicit
+candidate decode:{mode:'packet-identity-gop-v1',startAu,endAu} (inclusive end).
+The whole cached GOP, through the next verified closed IDR or source end, must
+fit 32 AUs per side. Every AU is sent; all outputs including final drain are
+charged. The core returns a single-use opaque input token, never a PTS lookup.
+Actual source clocks are cross-checks. The immutable outputIdentity records the
+full output order, tokens, original packet tuple/hash, phase and zero reported
+error flags. Unknown/duplicate/missing identity or reported decoder errors fail.
+Closed-start, progressive/single-picture, source/cache/color and exact viewer
+geometry checks remain. Reference integrity is not certified: absence of reported
+errors does not prove absence of concealment. See docs/reordered-frame-quality.md.
+
+There is no frame sequence, automatic alignment, VMAF/CAMBI, shared work,
+automatic index construction, retry/resume or distributed worker.
 These capabilities do not mean #114 or #121 is complete.
 
 Roadmap: #114 frame/ROI metrics, #121 durable jobs/concurrency, #115 annotation

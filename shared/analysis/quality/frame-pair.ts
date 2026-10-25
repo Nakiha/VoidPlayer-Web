@@ -25,6 +25,10 @@ export const FORWARD_PAIR_LIMITS = Object.freeze({ packetsPerSide: 32, maxPacket
 export const FORWARD_OUTPUT_GUARANTEE = Object.freeze({pixels:'exact-decoder-output-of-verified-input-window',
   referenceIntegrity:'not-certified',concealmentDetection:'unavailable'} as const);
 export type ForwardDecode = { mode: 'forward-one-output-per-au-v1'; startAu: number };
+export type GopDecode = {mode:'packet-identity-gop-v1';startAu:number;endAu:number};
+export type PacketOutputIdentity = {abi:1;generation:string;outputs:{au:number;token:string;sourcePtsUs:number;sourceDtsUs:number;packetBytes:number;payloadHash:string;decodeErrorFlags:0;phase:'immediate'|'drain'}[]};
+export const decodeEndAu=(target:PairTarget)=>target.decode?.mode==='packet-identity-gop-v1'?target.decode.endAu:target.picture.au;
+export const pairPacketCount=(target:PairTarget)=>target.decode?decodeEndAu(target)-target.decode.startAu+1:1;
 export type PairPacket = { au: number; offset: number; size: number; pts: number; dts: number; key: boolean };
 export type FramePairErrorCode = import('./psnr.ts').PsnrErrorCode | 'invalid-request' | 'cache-miss' | 'source-changed' | 'identity-mismatch' | 'unsupported-source' | 'decoder-error' | 'busy';
 export class FramePairError extends Error {
@@ -35,7 +39,7 @@ export class FramePairError extends Error {
   }
 }
 export type SourceBinding = { mediaId: string; mediaVersion: string; size: number; indexIdentity: MediaIndexIdentity; indexBuildId: string };
-export type PairTarget = SourceBinding & { picture: SourcePictureKey; sourcePtsUs: number; decode?: ForwardDecode };
+export type PairTarget = SourceBinding & { picture: SourcePictureKey; sourcePtsUs: number; decode?: ForwardDecode | GopDecode };
 export type FramePairRequest = { pairing: 'caller-specified'; reference: PairTarget; distorted: PairTarget;
   roi: PsnrRequest['roi']; ssim?: SsimRequest; spatial?: PsnrRequest['spatial']; budget?: Partial<PairBudget> & PsnrRequest['budget'] };
 export type PairBudget = { -readonly [K in keyof typeof PAIR_LIMITS]: number };
@@ -47,18 +51,19 @@ export interface CachedPairSource {
   read(offset: number, length: number): Promise<Uint8Array>;
   close(): void;
 }
-export type DecodedPairFrame = PsnrFrame & { pts: number };
+export type DecodedPairFrame = PsnrFrame & { pts: number; outputIdentity?:PacketOutputIdentity };
 export interface PairDecoder {
-  readonly version: { backend: 'ffmpeg-wasm'; buildId: string; frameAbi: 2; packetIdentity: 'isolated-closed-au-v1' | 'forward-one-output-per-au-v1' };
+  readonly version: { backend: 'ffmpeg-wasm'; buildId: string; frameAbi: 2; packetIdentity: 'isolated-closed-au-v1' | 'forward-one-output-per-au-v1' | 'packet-identity-gop-v1';packetIdentityAbi?:1 };
   decode(codec: 'h264' | 'hevc', configuration: Uint8Array, packet: Uint8Array, pts: number, dts: number,
     budget: PairBudget): Promise<DecodedPairFrame>;
   decodeForward?(codec: 'h264' | 'hevc', configuration: Uint8Array,
     packets: (PairPacket & {bytes: Uint8Array})[], budget: PairBudget): Promise<DecodedPairFrame>;
+  decodeGop?(codec:'h264'|'hevc',configuration:Uint8Array,packets:(PairPacket&{bytes:Uint8Array})[],targetAu:number,budget:PairBudget):Promise<DecodedPairFrame>;
   close(): void;
 }
 export type PairProvenance = PairTarget & { decoded: { sourcePtsUs: number; description: FrameDescription }; packet: { offset: number; size: number; sourceDtsUs: number };
-  dependency?: { packets: PairPacket[]; outputFrames: number; guarantee: typeof FORWARD_OUTPUT_GUARANTEE };
-  validation: 'cached-au-source-tag-isolated-closed-picture-v1' | 'cached-contiguous-forward-one-output-per-au-v1' };
+  dependency?: { packets: PairPacket[]; outputFrames: number; guarantee: typeof FORWARD_OUTPUT_GUARANTEE; boundary?:PairPacket|null; outputIdentity?:PacketOutputIdentity };
+  validation: 'cached-au-source-tag-isolated-closed-picture-v1' | 'cached-contiguous-forward-one-output-per-au-v1' | 'cached-closed-gop-packet-identity-v1' };
 export type FramePairResult = { schema: 'voidplayer-frame-pair-psnr'; version: 1; pairing: 'caller-specified';
   correspondence: 'caller-specified-no-content-or-time-alignment'; decoder: PairDecoder['version']; metric: PsnrResult; ssim?: SsimResult;
   provenance: { reference: PairProvenance; distorted: PairProvenance }; work: { readBytes: number; packets: number; outputFrames: number; elapsedMs: number } };
@@ -84,10 +89,15 @@ export function pairBudget(request: FramePairRequest): PairBudget {
       || p.configuration !== 0 || p.picture !== 0 || p.layer !== 0 || p.field !== 'frame'
       || !Number.isSafeInteger(p.au) || p.au < 0 || p.au >= budget.maxIndexPackets || !Number.isSafeInteger(target.sourcePtsUs))
       fail('invalid-request', 'Invalid FLV source/cache/picture identity');
-    if(target.decode !== undefined && (!target.decode || Object.keys(target.decode).some(key=>!['mode','startAu'].includes(key))
-      || target.decode.mode !== 'forward-one-output-per-au-v1' || !Number.isSafeInteger(target.decode.startAu)
-      || target.decode.startAu < 0 || target.decode.startAu >= p.au || p.au-target.decode.startAu+1 > FORWARD_PAIR_LIMITS.packetsPerSide))
-      fail('invalid-request','Forward decode requires an explicit earlier closed start and at most 32 AUs per side');
+    if(target.decode !== undefined){
+      const d=target.decode,gop=d?.mode==='packet-identity-gop-v1';
+      if(!d||Object.keys(d).some(key=>!(gop?['mode','startAu','endAu']:['mode','startAu']).includes(key))
+        ||!['forward-one-output-per-au-v1','packet-identity-gop-v1'].includes(d.mode)||!Number.isSafeInteger(d.startAu)
+        ||d.startAu<0||d.startAu>p.au||(!gop&&d.startAu===p.au)
+        ||!Number.isSafeInteger(decodeEndAu(target))||decodeEndAu(target)<p.au||decodeEndAu(target)>=budget.maxIndexPackets
+        ||pairPacketCount(target)>FORWARD_PAIR_LIMITS.packetsPerSide)
+        fail('invalid-request','Decode requires explicit closed start/target/end and at most 32 AUs per side');
+    }
   }
   if (budget.maxPackets < 2 || budget.maxOutputFrames < 2) fail('budget-exceeded', 'A pair requires two packets and two output frames');
   if (request.spatial !== undefined) psnrGridPlan(request.roi, request.spatial);
@@ -148,6 +158,27 @@ export function forwardPacketPlan(index:FlvIndex,target:PairTarget,counts?:Map<n
   if(packets.at(-1)!.pts!==target.sourcePtsUs)fail('identity-mismatch','Forward target PTS differs from its AU');
   return packets;
 }
+/** Full cached GOP, bounded by the next key candidate or final source end.
+ * The actual closing IDR bytes are checked separately before decoding. */
+export function gopPacketPlan(index:FlvIndex,target:PairTarget,counts?:Map<number,number>):PairPacket[]{
+  if(target.decode?.mode!=='packet-identity-gop-v1')fail('invalid-request','Explicit packet identity GOP required');
+  const {startAu,endAu}=target.decode;
+  if(!Number.isSafeInteger(startAu)||!Number.isSafeInteger(endAu)||startAu<0||startAu>target.picture.au||endAu<target.picture.au||endAu-startAu+1>32||endAu>=index.packets.length)
+    fail('invalid-request','Invalid bounded GOP window');
+  counts??=new Map();if(!counts.size)for(const p of index.packets)counts.set(p.pts,(counts.get(p.pts)??0)+1);
+  if(endAu+1<index.packets.length&&!index.packets[endAu+1].key)fail('unsupported-source','GOP end must precede the next closed IDR or source end');
+  const packets:PairPacket[]=[];
+  for(let au=startAu;au<=endAu;au++){
+    const p=index.packets[au],previous=packets.at(-1);
+    if(!p||(p.configuration??0)!==0||p.discontinuity||p.key!==(au===startAu)
+      ||!Number.isSafeInteger(p.pts)||!Number.isSafeInteger(p.dts)||counts.get(p.pts)!==1
+      ||p.pts<index.packets[startAu].pts||(previous&&p.dts<=previous.dts))
+      fail('unsupported-source','GOP needs unique known clocks, increasing DTS and one closed start without configuration or recovery changes');
+    packets.push({au,offset:p.offset,size:p.size,pts:p.pts,dts:p.dts,key:p.key});
+  }
+  if(index.packets[target.picture.au].pts!==target.sourcePtsUs)fail('identity-mismatch','GOP target source PTS changed');
+  return packets;
+}
 /** The exact source/cache/tag/AU admission and decoder are shared by measurement
  * and explicit inspection. Inspection never invokes the numerical metric. */
 async function withFlvFramePair<T>(request: FramePairRequest, sources: [CachedPairSource, CachedPairSource],
@@ -185,7 +216,8 @@ async function withFlvFramePair<T>(request: FramePairRequest, sources: [CachedPa
       if (!packet || (packet.configuration ?? 0) !== 0 || packet.pts !== target.sourcePtsUs || (!target.decode&&!packet.key)
         || index.packets.filter(p => p.pts === target.sourcePtsUs).length !== 1)
         fail('identity-mismatch', 'Missing, duplicate-PTS or mismatched closed-key AU');
-      const plan=target.decode?forwardPacketPlan(index,target):[{au:target.picture.au,offset:packet.offset,size:packet.size,pts:packet.pts,dts:packet.dts,key:packet.key}];
+      const gop=target.decode?.mode==='packet-identity-gop-v1';
+      const plan=target.decode?(gop?gopPacketPlan(index,target):forwardPacketPlan(index,target)):[{au:target.picture.au,offset:packet.offset,size:packet.size,pts:packet.pts,dts:packet.dts,key:packet.key}];
       if(packetsUsed+plan.length>budget.maxPackets||outputFrames+plan.length>budget.maxOutputFrames)
         fail('budget-exceeded','Decode window packet/output budget exceeded');
       if(plan.some(p=>p.size>budget.maxPacketBytes))fail('budget-exceeded','Packet byte budget exceeded');
@@ -207,7 +239,9 @@ async function withFlvFramePair<T>(request: FramePairRequest, sources: [CachedPa
         || ['offset', 'size', 'pts', 'dts', 'key'].some(k => first[k as keyof typeof first] !== actual[k as keyof typeof actual]))
         fail('identity-mismatch', 'Source prefix differs from cached configuration/packet');
       const sets=configurationSets(codec,index.description),inputs:(PairPacket&{bytes:Uint8Array})[]=[];
-      for(const packet of plan){
+      const boundary=gop&&decodeEndAu(target)+1<index.packets.length?{au:decodeEndAu(target)+1,...index.packets[decodeEndAu(target)+1]}:null;
+      if(boundary&&boundary.size>budget.maxPacketBytes)fail('budget-exceeded','Closing IDR packet exceeds byte budget');
+      for(const packet of [...plan,...(boundary?[boundary]:[])]){
         // Validate every dependency tag, original timestamp/key flag and footer.
         const before = await read(packet.offset - 19, 19), matches: number[] = [];
         for (const skip of [5, 8]) {
@@ -236,11 +270,11 @@ async function withFlvFramePair<T>(request: FramePairRequest, sources: [CachedPa
             : !target.decode&&(codec === 'h264' ? type >= 1 && type <= 5 && type !== 5 : type < 32 && type !== 19 && type !== 20))
             fail('unsupported-source', 'Closed AU changes parameter sets or contains dependent VCL');
         }
-        inputs.push({...packet,bytes});packetsUsed++;
+        if(packet!==boundary){inputs.push({...packet,bytes});packetsUsed++;}
       }
       decoder ??= await loadDecoder(budget); check();
-      if(target.decode&&!decoder.decodeForward)fail('decoder-error','Forward AU decoder is unavailable');
-      const frame = target.decode?await decoder.decodeForward!(codec,index.description,inputs,budget)
+      if(target.decode&&!(gop?decoder.decodeGop:decoder.decodeForward))fail('decoder-error','Required exact packet decoder ABI is unavailable');
+      const frame = target.decode?(gop?await decoder.decodeGop!(codec,index.description,inputs,target.picture.au,budget):await decoder.decodeForward!(codec,index.description,inputs,budget))
         :await decoder.decode(codec, index.description, inputs[0].bytes, packet.pts, packet.dts, budget); check();
       outputFrames+=plan.length;
       if (frame.pts !== target.sourcePtsUs) fail('identity-mismatch', 'Decoded source PTS differs from selected AU');
@@ -248,8 +282,8 @@ async function withFlvFramePair<T>(request: FramePairRequest, sources: [CachedPa
       frames.push(frame);
       provenance.push({ ...structuredClone(target), decoded: { sourcePtsUs: frame.pts, description: structuredClone(frame.description) },
         packet: { offset: packet.offset, size: packet.size, sourceDtsUs: packet.dts },
-        ...(target.decode?{dependency:{packets:plan,outputFrames:plan.length,guarantee:{...FORWARD_OUTPUT_GUARANTEE}}}:{}),
-        validation:target.decode?'cached-contiguous-forward-one-output-per-au-v1':'cached-au-source-tag-isolated-closed-picture-v1' });
+        ...(target.decode?{dependency:{packets:plan,outputFrames:plan.length,guarantee:{...FORWARD_OUTPUT_GUARANTEE},...(gop?{boundary:boundary?{au:boundary.au,offset:boundary.offset,size:boundary.size,pts:boundary.pts,dts:boundary.dts,key:boundary.key}:null,outputIdentity:frame.outputIdentity}:{})}}:{}),
+        validation:gop?'cached-closed-gop-packet-identity-v1':target.decode?'cached-contiguous-forward-one-output-per-au-v1':'cached-au-source-tag-isolated-closed-picture-v1' });
     }
     check();
     const work:FramePairResult['work']={readBytes,packets:packetsUsed,outputFrames,elapsedMs:performance.now()-started};

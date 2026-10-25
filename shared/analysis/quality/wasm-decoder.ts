@@ -1,3 +1,4 @@
+import {decodeIdentityGop} from './packet-identity-decoder.ts';
 import { WasmMemoryBudgetError } from '../../wasm/core.ts';
 import { readWasmFrame, requireFrameAbi } from '../../wasm/frame.ts';
 import { checkedHeap } from '../../wasm/heap.ts';
@@ -73,7 +74,7 @@ export async function createPairDecoder(load: () => Promise<{ core: any; heap: (
             throw new FramePairError('decoder-error','Cannot drain forward window');
           if(call('vp_packet_receive',['number','i64'],[ctx,-9223372036854775808n])!==0)
             throw new FramePairError('identity-mismatch','Forward window emitted a delayed or invalid extra picture');
-          version.packetIdentity='forward-one-output-per-au-v1';
+          if(version.packetIdentity!=='packet-identity-gop-v1')version.packetIdentity='forward-one-output-per-au-v1';
         }
         memory(budget);
         if(!selected)throw new FramePairError('identity-mismatch','Target AU emitted no picture');
@@ -84,6 +85,11 @@ export async function createPairDecoder(load: () => Promise<{ core: any; heap: (
   return {version,
     decode:(codec,configuration,bytes,pts,dts,budget)=>decodePackets(codec,configuration,[{au:0,offset:0,size:bytes.length,pts,dts,key:true,bytes}],budget,false),
     decodeForward:(codec,configuration,packets,budget)=>decodePackets(codec,configuration,packets,budget,true),
+    async decodeGop(codec,configuration,packets,targetAu,budget){
+      if(closed)throw new FramePairError('decoder-error','Pair decoder closed');
+      try{const value=decodeIdentityGop(core,heap,codec,configuration,packets,targetAu,budget);version.packetIdentity='packet-identity-gop-v1';version.packetIdentityAbi=1;return value;}
+      catch(error){if(error instanceof WasmMemoryBudgetError)throw new FramePairError('budget-exceeded',error.message);throw error;}
+    },
     close(){closed=true;},
   };
 }

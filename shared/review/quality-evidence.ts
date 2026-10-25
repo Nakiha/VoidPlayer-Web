@@ -1,6 +1,6 @@
 import { validateSsim } from '../analysis/quality/ssim-evidence.ts';
 import type { LibraryPairResult } from '../analysis/quality/library-pair.ts';
-import { pairBudget, FORWARD_PAIR_LIMITS, PAIR_LIMITS, FORWARD_OUTPUT_GUARANTEE } from '../analysis/quality/frame-pair.ts';
+import { pairBudget, pairPacketCount, decodeEndAu, FORWARD_PAIR_LIMITS, PAIR_LIMITS, FORWARD_OUTPUT_GUARANTEE } from '../analysis/quality/frame-pair.ts';
 import { validatePsnrSpatial } from '../analysis/quality/psnr-spatial.ts';
 import { validateDescription } from '../media/frame-description.ts';
 import { referenceVersion } from '../media/io/media-reference.ts';
@@ -37,7 +37,8 @@ export function qualityEvidenceValue(value: unknown): LibraryPairResult {
     && r?.schema === 'voidplayer-frame-pair-psnr' && r.version === 1 && r.pairing === 'caller-specified'
     && r.correspondence === 'caller-specified-no-content-or-time-alignment'
     && r.decoder?.backend === 'ffmpeg-wasm' && /^[a-f0-9]{40}$/.test(r.decoder.buildId)
-    && r.decoder.frameAbi === 2 && r.decoder.packetIdentity === (r.provenance?.reference?.decode||r.provenance?.distorted?.decode?'forward-one-output-per-au-v1':'isolated-closed-au-v1')
+    && r.decoder.frameAbi === 2 && r.decoder.packetIdentity === ([r.provenance?.reference,r.provenance?.distorted].some(p=>p?.decode?.mode==='packet-identity-gop-v1')?'packet-identity-gop-v1':r.provenance?.reference?.decode||r.provenance?.distorted?.decode?'forward-one-output-per-au-v1':'isolated-closed-au-v1')
+    && (r.decoder.packetIdentity==='packet-identity-gop-v1'?r.decoder.packetIdentityAbi===1:r.decoder.packetIdentityAbi===undefined)
     && m?.schema === 'voidplayer-source-plane-psnr' && m.version === 1 && m.implementation === 'cpu-number-sse-v1'
     && m.domain === 'source-yuv-code-values' && m.geometry === 'unrotated-visible-pixel-grid'
     && m.pairing === 'caller-supplied-unverified' && [8,10].includes(m.bitDepth) && m.peak === 2 ** m.bitDepth - 1);
@@ -45,10 +46,10 @@ export function qualityEvidenceValue(value: unknown): LibraryPairResult {
   let packets=0;
   for (const side of ['reference','distorted'] as const) {
     const p = r.provenance[side], d = p.decoded?.description, source = v.sources?.[side];
-    check(p.decoded?.sourcePtsUs === p.sourcePtsUs && p.validation === (p.decode?'cached-contiguous-forward-one-output-per-au-v1':'cached-au-source-tag-isolated-closed-picture-v1'));
+    check(p.decoded?.sourcePtsUs === p.sourcePtsUs && p.validation === (p.decode?.mode==='packet-identity-gop-v1'?'cached-closed-gop-packet-identity-v1':p.decode?'cached-contiguous-forward-one-output-per-au-v1':'cached-au-source-tag-isolated-closed-picture-v1'));
     check(unsigned(p.packet?.offset) && Number.isSafeInteger(p.packet.size) && p.packet.size > 0 && Number.isSafeInteger(p.packet.sourceDtsUs));
     if(p.decode){
-      const steps=p.dependency?.packets,count=p.picture.au-p.decode.startAu+1;
+      const steps=p.dependency?.packets,count=pairPacketCount(p),gop=p.decode.mode==='packet-identity-gop-v1';
       check(Array.isArray(steps)&&steps.length===count&&count<=FORWARD_PAIR_LIMITS.packetsPerSide&&p.dependency?.outputFrames===count);
       const guarantee=p.dependency?.guarantee;
       check(guarantee&&Object.keys(guarantee).length===Object.keys(FORWARD_OUTPUT_GUARANTEE).length
@@ -56,10 +57,30 @@ export function qualityEvidenceValue(value: unknown): LibraryPairResult {
       for(const [i,step]of steps.entries()){
         const previous=steps[i-1];
         check(step.au===p.decode.startAu+i&&step.key===(i===0)&&unsigned(step.offset)&&Number.isSafeInteger(step.size)&&step.size>0
-          &&step.size<=PAIR_LIMITS.maxPacketBytes&&step.offset+step.size<=p.size&&Number.isSafeInteger(step.pts)&&step.pts===step.dts
-          &&(!previous||(step.pts>previous.pts&&step.offset>=previous.offset+previous.size)));
+          &&step.size<=PAIR_LIMITS.maxPacketBytes&&step.offset+step.size<=p.size&&Number.isSafeInteger(step.pts)&&Number.isSafeInteger(step.dts)&&(gop?step.pts>=steps[0].pts:step.pts===step.dts)
+          &&(!previous||((gop?step.dts>previous.dts:step.pts>previous.pts)&&step.offset>=previous.offset+previous.size)));
       }
-      const last=steps.at(-1)!;check(last.pts===p.sourcePtsUs&&last.dts===p.packet.sourceDtsUs&&last.offset===p.packet.offset&&last.size===p.packet.size);
+      const selected=steps.find(step=>step.au===p.picture.au);check(selected&&selected.pts===p.sourcePtsUs&&selected.dts===p.packet.sourceDtsUs&&selected.offset===p.packet.offset&&selected.size===p.packet.size);
+      if(gop){
+        check(new Set(steps.map(p=>p.pts)).size===count);
+        const proof=p.dependency?.outputIdentity,boundary=p.dependency?.boundary,last=steps.at(-1)!;
+        check(proof?.abi===1&&Object.keys(proof).sort().join(',')==='abi,generation,outputs'
+          &&typeof proof.generation==='string'&&/^[1-9]\d{0,19}$/.test(proof.generation)&&BigInt(proof.generation)<=(1n<<64n)-1n
+          &&Array.isArray(proof.outputs)&&proof.outputs.length===count);
+        const seen=new Set<number>();let prior=-Infinity,draining=false;
+        for(const output of proof.outputs){
+          const packet=steps.find(p=>p.au===output.au);
+          check(Object.keys(output).sort().join(',')==='au,decodeErrorFlags,packetBytes,payloadHash,phase,sourceDtsUs,sourcePtsUs,token'
+            &&packet&&!seen.has(output.au)&&output.token===String(BigInt(output.au)+1n)&&output.sourcePtsUs===packet.pts
+            &&output.sourceDtsUs===packet.dts&&output.packetBytes===packet.size&&/^[a-f0-9]{16}$/.test(output.payloadHash)
+            &&output.decodeErrorFlags===0&&['immediate','drain'].includes(output.phase)&&output.sourcePtsUs>prior
+            &&(!draining||output.phase==='drain'));
+          seen.add(output.au);prior=output.sourcePtsUs;draining ||= output.phase==='drain';
+        }
+        check(boundary===null||(!!boundary&&boundary.au===decodeEndAu(p)+1&&boundary.key===true&&unsigned(boundary.offset)
+          &&boundary.offset>=last.offset+last.size&&Number.isSafeInteger(boundary.size)&&boundary.size>0&&boundary.size<=PAIR_LIMITS.maxPacketBytes
+          &&boundary.offset+boundary.size<=p.size&&Number.isSafeInteger(boundary.pts)&&Number.isSafeInteger(boundary.dts)));
+      }else check(p.dependency?.outputIdentity===undefined&&p.dependency?.boundary===undefined);
       packets+=count;
     }else{check(p.dependency===undefined);packets++;}
     validateDescription(d);
