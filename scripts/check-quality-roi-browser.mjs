@@ -44,10 +44,10 @@ try{
  phase='explicit-au-and-independent-snapshots';await openRoi();
  await page.locator('[data-roi-au="0"] option[value="0"]').waitFor({state:'attached'});await page.locator('[data-roi-au="1"] option[value="1"]').waitFor({state:'attached'});
  await page.locator('[data-roi-au="0"]').selectOption('0');await page.locator('[data-roi-au="1"]').selectOption('1');
- await page.locator('#quality-roi-verify').click();await page.locator('#quality-roi-form').waitFor({state:'visible'});
+ await page.addStyleTag({content:'.quality-roi-stage[data-roi-stage="0"]{height:283px;aspect-ratio:auto!important}'});await page.locator('#quality-roi-verify').click();await page.locator('#quality-roi-form').waitFor({state:'visible'});
  const raw=Buffer.from(sample.native,'base64'),frame=raw.length/2;assert.deepEqual(await page.evaluate(()=>window.__roiRaw),[Array.from(raw.subarray(0,frame)),Array.from(raw.subarray(frame))]);
  assert.ok((await page.locator('[data-roi-stage]').evaluateAll(nodes=>nodes.map(n=>Number(n.dataset.presentedCommit)))).every(n=>n>0));
- await page.locator('[data-roi-stage="0"]').scrollIntoViewIfNeeded();const box=await page.locator('[data-roi-stage="0"]').boundingBox();
+ await page.locator('[data-roi-stage="0"]').scrollIntoViewIfNeeded();const bounds=await page.locator('[data-roi-stage="0"]').boundingBox(),edge=Math.min(bounds.width,bounds.height),box={x:bounds.x+(bounds.width-edge)/2,y:bounds.y+(bounds.height-edge)/2,width:edge,height:edge};assert.ok(bounds.width>edge+20,'letterboxing is real, so stage bounds cannot stand in for source pixels');
  await page.mouse.move(box.x+box.width*2/32,box.y+box.height*4/32);await page.mouse.down();await page.mouse.move(box.x+box.width*26/32,box.y+box.height*24/32);await page.mouse.up();
  const roi={};for(const key of ['x','y','width','height'])roi[key]=Number(await page.locator(`#quality-roi-form [name=${key}]`).inputValue());assert.deepEqual(roi,{x:2,y:4,width:24,height:20});
  for(const svg of await page.locator('.quality-roi-overlay rect').evaluateAll(nodes=>nodes.map(n=>Object.fromEntries(['x','y','width','height'].map(k=>[k,Number(n.getAttribute(k))])))))assert.deepEqual(svg,roi);
