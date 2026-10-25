@@ -82,6 +82,7 @@ try{
   }
   assert.equal((await observer.evaluate(()=>window.voidPlayer.getState())).playing,true);assert.ok((await observer.evaluate(()=>window.voidPlayer.getState())).positionUs>playingBefore);
   phase='preflight-cache-loss';await page.locator('#quality-roi-open').click();for(const i of [0,1]){await page.locator(`[data-roi-au="${i}"] option[value="${i}"]`).waitFor({state:'attached'});await page.locator(`[data-roi-au="${i}"]`).selectOption(String(i));}
+  const zero=await page.addStyleTag({content:'.quality-roi-stage{width:0!important}'});await page.locator('#quality-roi-verify').click();await page.locator('#quality-roi-status').filter({hasText:'Snapshot view has no drawable geometry'}).waitFor();assert.equal(await page.locator('#quality-roi-form').isHidden(),true);await zero.evaluate(e=>e.remove());
   const noBuild=[];page.on('request',r=>{if(new URL(r.url()).searchParams.get('build')==='1')noBuild.push(r.url());});service.library.frameIndexes.remove();await page.locator('#quality-roi-verify').click();await page.locator('#quality-roi-status').filter({hasText:/^Original source\/cache is unavailable \(HTTP 409\)/}).waitFor();assert.equal(await page.locator('#quality-roi-form').isHidden(),true);assert.equal(await page.locator('#quality-roi-submit').isVisible(),false);assert.deepEqual(noBuild,[]);await page.locator('#quality-roi-dialog').evaluate(e=>e.close());
   for(const e of entries)assert.equal((await fetch(`${base}/api/media/${e.id}/frame-index?v=${e.version}&build=1`)).status,200);
  }
