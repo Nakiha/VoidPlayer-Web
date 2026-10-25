@@ -36,6 +36,7 @@ export function qualityJobsShell(){
     <fieldset><legend>SSIM</legend><label><input id="quality-ssim-enabled" type="checkbox">${th(msg('quality.ssimEnable','同次测量另附 SSIM（FFmpeg 均匀 8×8，步长 4；不是高斯窗口 SSIM）'))}</label><p>${th(msg('quality.ssimMinimum','SSIM 的 ROI 和每个实际边缘块至少 16×16 源像素。仅计算有效窗口，各平面覆盖范围单独记录；不补边、不重采样。'))}</p></fieldset>
     <fieldset><legend>${th(msg('quality.spatialTitle','源像素分块 PSNR'))}</legend><label><input id="quality-grid-enabled" type="checkbox">${th(msg('quality.spatialEnable','同次测量生成分块与最差区域证据（最多 64 块）'))}</label><div class="quality-roi"><label>${th(msg('quality.spatialWidth','块宽（偶数源像素）'))}<input id="quality-grid-width" type="number" step="2" min="2" max="16384" value="16" required></label><label>${th(msg('quality.spatialHeight','块高（偶数源像素）'))}<input id="quality-grid-height" type="number" step="2" min="2" max="16384" value="16" required></label></div></fieldset>
     <p>${th(msg('qualityWorkflow.candidateNotice','候选页只读取已有可信缓存，不构建索引。容器关键帧标记不保证可测；执行时仍逐侧核验闭合 AU、颜色、版本和缓存身份。缓存缺失请先在缓存管理中显式构建。'))}</p>
+    <p id="quality-form-status" role="alert"></p>
     <button id="quality-submit" class="admin-primary" type="submit" disabled>${th(msg('qualityWorkflow.submit','发起持久测量'))}</button>
     <button id="quality-retry" type="button" hidden>${th(msg('qualityWorkflow.retry','使用原幂等键重试提交'))}</button>
     <button id="quality-forget" type="button" hidden>${th(msg('qualityWorkflow.forget','结束此提交的重试，准备新请求'))}</button><p id="quality-submit-status" role="status"></p></form>
@@ -62,6 +63,10 @@ export function installQualityJobs(signal:AbortSignal){
   const valid=(c:ReturnType<typeof context>)=>active&&!signal.aborted&&!c.signal.aborted&&c.scope===scope&&currentActor()?.id===c.actor;
   const errorText=(error:unknown)=>error instanceof Error?error.message:String(error);
   const setError=(id:string,error:unknown)=>{localizedText($(id),errorText(error));};
+  // Local form validation belongs to the form, not the polled observer state.
+  const clearFormError=()=>localizedText($('form-status'),'');
+  $('form').addEventListener('input',clearFormError,{signal});
+  $('form').addEventListener('change',clearFormError,{signal});
   function actions(){const pending=!!observation?.pending,busy=!!observation?.busy;
     $('submit').toggleAttribute('disabled',!enabled||!lastActor||pending||busy||sides.some(side=>!pickers.get(side)?.target));
     $('retry').hidden=!pending;$('forget').hidden=!pending;$('retry').toggleAttribute('disabled',busy||!enabled);$('forget').toggleAttribute('disabled',busy);
@@ -162,16 +167,17 @@ export function installQualityJobs(signal:AbortSignal){
     q<HTMLInputElement>('[data-search]').onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();void search();}};
     q<HTMLSelectElement>('[data-frame]').onchange=()=>{const value=q<HTMLSelectElement>('[data-frame]').value;picker.target=value!==''?picker.page?.entries[Number(value)]??null:null;actions();};
   }
-  $('full-frame').onclick=()=>{const [a,b]=sides.map(side=>pickers.get(side)!.page?.geometry);if(!a||!b||a.width!==b.width||a.height!==b.height||a.width%2||a.height%2){setError('observer-status',t(msg('qualityWorkflow.geometryMismatch','两侧需要相同的偶数可见尺寸；请明确选择有效 ROI。')));return;}
+  $('full-frame').onclick=()=>{clearFormError();const [a,b]=sides.map(side=>pickers.get(side)!.page?.geometry);if(!a||!b||a.width!==b.width||a.height!==b.height||a.width%2||a.height%2){setError('form-status',t(msg('qualityWorkflow.geometryMismatch','两侧需要相同的偶数可见尺寸；请明确选择有效 ROI。')));return;}
     for(const [key,value]of Object.entries({x:0,y:0,width:a.width,height:a.height}))($('form').querySelector(`[name=${key}]`)as HTMLInputElement).value=String(value);};
   $('grid-enabled').onchange=actions;
   $('form').onsubmit=event=>{event.preventDefault();if(!enabled||!observer||observation?.pending||observation?.busy)return;
     const targets=sides.map(side=>pickers.get(side)!);if(targets.some(p=>!p.target||!p.page))return;
     const roi=Object.fromEntries(['x','y','width','height'].map(key=>[key,Number(($('form').querySelector(`[name=${key}]`)as HTMLInputElement).value)]))as {x:number;y:number;width:number;height:number};
-    if(!Object.values(roi).every(n=>Number.isSafeInteger(n)&&n%2===0)||roi.x<0||roi.y<0||roi.width<=0||roi.height<=0||targets.some(p=>roi.x+roi.width>p.page!.geometry.width||roi.y+roi.height>p.page!.geometry.height)){setError('observer-status',t(msg('qualityWorkflow.invalidRoi','ROI 必须是两侧可见源网格内的偶数整数区域。')));return;}
+    if(!Object.values(roi).every(n=>Number.isSafeInteger(n)&&n%2===0)||roi.x<0||roi.y<0||roi.width<=0||roi.height<=0||targets.some(p=>roi.x+roi.width>p.page!.geometry.width||roi.y+roi.height>p.page!.geometry.height)){setError('form-status',t(msg('qualityWorkflow.invalidRoi','ROI 必须是两侧可见源网格内的偶数整数区域。')));return;}
     const spatial=$<HTMLInputElement>('grid-enabled').checked?{blockWidth:Number($<HTMLInputElement>('grid-width').value),blockHeight:Number($<HTMLInputElement>('grid-height').value)}:undefined;
     const ssim=$<HTMLInputElement>('ssim-enabled').checked?{variant:SSIM_VARIANT}:undefined;
-    try{if(spatial)psnrGridPlan(roi,spatial);if(ssim)ssimPlan(roi,ssim,spatial);}catch(error){setError('observer-status',error);return;}
+    try{if(spatial)psnrGridPlan(roi,spatial);if(ssim)ssimPlan(roi,ssim,spatial);}catch(error){setError('form-status',error);return;}
+    clearFormError();
     const input:QualityJobInput={schema:'voidplayer-psnr-frame-job',version:1,client:{id:observer.client,kind:'browser'},request:{pairing:'caller-specified',reference:targets[0].target!,distorted:targets[1].target!,roi,...(spatial?{spatial}:{}),...(ssim?{ssim}:{})}};
     void observer.submit(input).then(()=>observer?.poll());};
   $('retry').onclick=()=>void observer?.submit().then(()=>observer?.poll());$('forget').onclick=()=>observer?.forgetPending();$('refresh').onclick=()=>{const c=context();void (async()=>{if(await discover(c))await observer?.resync();})().catch(error=>{if(valid(c))setError('availability',error);});};$('cancel').onclick=()=>{if(observation?.detail)void observer?.cancel(observation.detail.id);};
@@ -182,7 +188,7 @@ export function installQualityJobs(signal:AbortSignal){
   }
   async function start(){
     if(expectedActor!==undefined&&(currentActor()?.id??null)!==expectedActor)return;
-    observer?.dispose();observer=null;controller.abort();controller=new AbortController();scope++;lastActor=currentActor()?.id??'';enabled=false;lastResult='';observation=null;resetAttachment();
+    clearFormError();observer?.dispose();observer=null;controller.abort();controller=new AbortController();scope++;lastActor=currentActor()?.id??'';enabled=false;lastResult='';observation=null;resetAttachment();
     $('job-list').replaceChildren();$('job-detail').hidden=true;$('attachment').hidden=true;for(const id of ['job-json','job-title','job-input','job-result','job-state','job-reason'])$(id).replaceChildren();
     for(const [side,picker]of pickers){picker.sequence++;picker.target=null;picker.page=null;picker.entry=null;const root=document.querySelector<HTMLElement>(`[data-quality-source="${side}"]`)!;root.querySelector('[data-media-list]')!.replaceChildren();localizedText(root.querySelector<HTMLElement>('[data-source-status]')!,'');root.querySelector<HTMLElement>('[data-proof]')!.hidden=true;root.querySelector<HTMLSelectElement>('[data-frame]')!.replaceChildren(new Option('—',''));root.querySelector<HTMLElement>('[data-frame-more]')!.hidden=true;}
     $('owner').textContent=currentActor()?`${currentActor()!.name} · ${lastActor}`:'';
@@ -197,7 +203,7 @@ export function installQualityJobs(signal:AbortSignal){
     // The cookie may have changed before /health returns. Revoke publication
     // immediately; never send another captured-user request during confirmation.
     const check=++identityCheck;try{const hint=JSON.parse(event.newValue??'null');expectedActor=typeof hint?.id==='string'?hint.id:hint===null?null:undefined;}catch{expectedActor=undefined;}
-    scope++;observer?.dispose();observer=null;controller.abort();lastActor='';enabled=false;observation=null;lastResult='';resetAttachment();
+    clearFormError();scope++;observer?.dispose();observer=null;controller.abort();lastActor='';enabled=false;observation=null;lastResult='';resetAttachment();
     localizedText($('availability'),()=>t(msg('qualityWorkflow.confirmIdentity','正在向服务确认当前用户…')));$('owner').textContent='';$('job-list').replaceChildren();$('job-detail').hidden=true;$('attachment').hidden=true;for(const id of ['job-json','job-title','job-input','job-result','job-state','job-reason'])$(id).replaceChildren();
     for(const picker of pickers.values()){picker.sequence++;picker.page=null;picker.target=null;}actions();
     void (async()=>{
