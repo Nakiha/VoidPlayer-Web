@@ -973,3 +973,5 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 
 .quality-candidate-badge{display:block;flex:none;font-size:10px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .quality-roi-dialog::backdrop{background:#0008}
+
+.source-quality-tools{flex:none;padding:4px 8px}.source-quality-tools button{display:flex;align-items:center;gap:6px;max-width:100%}
