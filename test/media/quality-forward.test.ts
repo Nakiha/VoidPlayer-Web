@@ -50,7 +50,9 @@ for(const [codec,depth]of [['h264',8],['hevc',10]]as const){
   const missing=await fetch(`${base}/api/media/${entry.id}/psnr-frames?v=${entry.version}`,{headers});assert.notEqual(missing.status,200);
   assert.equal((await fetch(`${base}/api/media/${entry.id}/frame-index?v=${entry.version}&build=1`)).status,200);
   const page=await fetch(`${base}/api/media/${entry.id}/psnr-frames?v=${entry.version}`,{headers}).then(r=>r.json());assert.equal(page.entries.length,8);
-  const reference=page.entries.find((p:any)=>p.picture.au===2),distorted=page.entries.find((p:any)=>p.picture.au===5);assert.ok(reference.decode&&distorted.decode);assert.deepEqual(reference.decode,{mode:'forward-one-output-per-au-v1',startAu:0});
+  const reference=page.entries.find((p:any)=>p.picture.au===2),distorted=page.entries.find((p:any)=>p.picture.au===5);assert.ok(reference.decode&&distorted.decode);assert.deepEqual(reference.decode,{mode:'packet-identity-gop-v1',startAu:0,endAu:7});
+  // Explicit old-client requests retain their forward ABI and work accounting.
+  for(const target of [reference,distorted])target.decode={mode:'forward-one-output-per-au-v1',startAu:0};
   const input:QualityJobInput={schema:'voidplayer-psnr-frame-job',version:1,client:{id:'forward-http',kind:'agent'},request:{pairing:'caller-specified',reference,distorted,roi:{x:0,y:0,width:32,height:32},spatial:{blockWidth:16,blockHeight:16},ssim:{variant:SSIM_VARIANT}}};
   const submit=await fetch(base+'/api/quality/jobs',{method:'POST',headers:{...headers,'idempotency-key':'exact-window'},body:JSON.stringify(input)});assert.equal(submit.status,202);let job=(await submit.json()).job;
   for(let n=0;n<300&&!['completed','failed','cancelled'].includes(job.state);n++){await new Promise(r=>setTimeout(r,25));job=await fetch(`${base}/api/quality/jobs/${job.id}`,{headers}).then(r=>r.json());}assert.equal(job.state,'completed',JSON.stringify(job));assert.equal(job.progress.decodedFrames,9);
@@ -73,7 +75,7 @@ for(const [codec,depth]of [['h264',8],['hevc',10]]as const){
    for(const [name,au]of [['counter-original.flv',5],['counter-missing.flv',4]]as const){
     const entry=counterEntries.find((e:any)=>e.name===name);assert.ok(entry);
     assert.equal((await fetch(`${base}/api/media/${entry.id}/frame-index?v=${entry.version}&build=1`)).status,200);
-    const candidates=await fetch(`${base}/api/media/${entry.id}/psnr-frames?v=${entry.version}`,{headers}).then(r=>r.json()),target=candidates.entries.find((p:any)=>p.picture.au===au);assert.ok(target?.decode);assert.equal(target.sourcePtsUs,2500000);targets.push(target);
+    const candidates=await fetch(`${base}/api/media/${entry.id}/psnr-frames?v=${entry.version}`,{headers}).then(r=>r.json()),target=candidates.entries.find((p:any)=>p.picture.au===au);assert.ok(target?.decode);assert.equal(target.sourcePtsUs,2500000);target.decode={mode:'forward-one-output-per-au-v1',startAu:0};targets.push(target);
    }
    const counter=await fetch(base+'/api/quality/jobs',{method:'POST',headers:{...headers,'idempotency-key':'missing-reference-is-not-certified'},body:JSON.stringify({...input,request:{...input.request,reference:targets[0],distorted:targets[1]}})});assert.equal(counter.status,202);let job=(await counter.json()).job;
    for(let n=0;n<300&&!['completed','failed'].includes(job.state);n++){await new Promise(r=>setTimeout(r,25));job=await fetch(`${base}/api/quality/jobs/${job.id}`,{headers}).then(r=>r.json());}

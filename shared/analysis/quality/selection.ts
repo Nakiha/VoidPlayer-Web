@@ -47,8 +47,9 @@ export function qualityFrameCandidates(source:LibraryPairBinding,doc:FlvIndexDoc
       stream:'video',configuration:0,au,picture:0,layer:0,field:'frame'}};
     let startAu=au;for(;startAu>0&&!index.packets[startAu].key&&au-startAu+1<=32;startAu--){/* bounded cached scan */}
     let endAu=startAu;while(endAu+1<index.packets.length&&!index.packets[endAu+1].key&&endAu-startAu+1<=32)endAu++;
-    const reordered=endAu-startAu+1<=32&&index.packets.slice(startAu,endAu+1).some(packet=>packet.pts!==packet.dts);
-    if(reordered){
+    // Equal PTS/DTS says nothing about decoder buffering. Prefer explicit
+    // token attribution for every complete bounded GOP, even with zero CTS.
+    if(endAu-startAu+1<=32){
       target.decode={mode:'packet-identity-gop-v1',startAu,endAu};
       try{const plan=gopPacketPlan(index,target,counts);if(plan.some(p=>p.size>PAIR_LIMITS.maxPacketBytes)||plan.reduce((n,p)=>n+p.size+23,0)>PAIR_LIMITS.maxReadBytes)continue;}
       catch(error){if(error instanceof FramePairError&&['unsupported-source','invalid-request'].includes(error.code)){if(p.key)delete target.decode;else continue;}else throw error;}

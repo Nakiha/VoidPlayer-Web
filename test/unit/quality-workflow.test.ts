@@ -66,6 +66,11 @@ test('candidate selection returns exact identities/AU/nonzero source PTS; bounde
  assert.throws(()=>qualityFrameCandidates(proof,doc,{afterAu:1,limit:1,buildId:'rebuilt'}),/changed/);
  assert.throws(()=>qualityFrameQuery({afterAu:0,limit:51}),/bounded/);
 });
+test('zero CTS does not select an immediate-output decoder: bounded candidates carry explicit complete GOP',async()=>{
+ const {proof,doc}=await fixture();doc.packets[1][4]=0;
+ const page=qualityFrameCandidates(proof,doc,{afterAu:0,limit:50});assert.equal(page.entries.length,2);
+ for(const target of page.entries)assert.deepEqual(target.decode,{mode:'packet-identity-gop-v1',startAu:0,endAu:1});
+});
 test('duplicate/invalid clocks reject; nonzero CTS candidates require explicit GOP identity without implicit cache rebuild',async()=>{
  const {proof,doc}=await fixture();doc.packets[1][2]=doc.packets[0][2];assert.deepEqual(qualityFrameCandidates(proof,doc,{afterAu:0,limit:50}).entries,[]);
  doc.packets[1][2]++;doc.packets[1][4]=0;const reordered=qualityFrameCandidates(proof,doc,{afterAu:0,limit:50}).entries;assert.deepEqual(reordered.map(p=>p.picture.au),[0,1]);assert.deepEqual(reordered[1].decode,{mode:'packet-identity-gop-v1',startAu:0,endAu:1});assert.equal(reordered[1].sourcePtsUs,doc.packets[1][2]);

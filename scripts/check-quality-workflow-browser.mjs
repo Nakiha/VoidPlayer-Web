@@ -36,6 +36,8 @@ try{
  await mkdir(directory,{recursive:true});const media=path.join(temp,'media');await mkdir(media);
  const samples=JSON.parse(await readFile(path.join(root,'test/helpers/quality-http-samples.json'),'utf8')).samples;
  const activeSamples=gop?JSON.parse(await readFile(path.join(root,'test/helpers/quality-reordered-samples.json'),'utf8')).samples.filter(s=>s.frames===16):forward?JSON.parse(await readFile(path.join(root,'test/helpers/quality-forward-samples.json'),'utf8')).samples:samples;
+ const delayed=gop?JSON.parse(await readFile(path.join(root,'test/helpers/quality-reordered-samples.json'),'utf8')).delayedSamples.find(s=>s.depth===depth):null;
+ if(delayed)await writeFile(path.join(media,'DELAYED.flv'),Buffer.from(delayed.flv,'base64'));
  const sample=activeSamples.find(s=>s.codec===(depth===10?'hevc':'h264')&&s.depth===depth&&s.tagged),bytes=Buffer.from(sample.flv,'base64'),selectedAus=forward||gop?sample.selectedAus:[0,1];
  const sar=await encodedPair(temp,sample.codec,depth,true,{num:1000,den:1001});await writeFile(path.join(media,'SAR.flv'),sar.bytes);
  assert.equal(createHash('sha256').update(bytes).digest('hex'),sample.flvSha256);assert.equal(createHash('sha256').update(Buffer.from(sample.native,'base64')).digest('hex'),sample.nativeSha256);
@@ -44,12 +46,12 @@ try{
  execFileSync('ffmpeg',['-v','error','-f','lavfi','-i','testsrc2=size=160x90:rate=10','-t','120','-c:v','libx264','-threads','1','-preset','ultrafast','-bf','0','-g','10','-pix_fmt','yuv420p','-movflags','+faststart',path.join(media,'A.mp4')]);
  await writeFile(path.join(temp,'voidplayer.config.json'),JSON.stringify({mediaRoots:[media],dataDir:'data',staticDir:path.join(root,'dist'),logsDir:null,indexWatch:false}));
  const config=await loadConfig([],'production',temp);config.port=0;service=await startService(config);await service.library.refresh();
- const entries=await waitForAnnotationMedia(service.library,['A.mp4','B.flv','C.flv','UNCACHED.flv','MISSING-COLOR.flv','SAR.flv']),entry=name=>entries.find(e=>e.name===name);
+ const entries=await waitForAnnotationMedia(service.library,['A.mp4','B.flv','C.flv','UNCACHED.flv','MISSING-COLOR.flv','SAR.flv',...(gop?['DELAYED.flv']:[])]),entry=name=>entries.find(e=>e.name===name);
  const base=`http://127.0.0.1:${service.server.address().port}`;
  const identity=await fetch(base+'/api/identity',{method:'POST',headers:{origin:base,'content-type':'application/json','x-voidplayer-action':'identity'},body:JSON.stringify({name:'Quality workflow owner'})});assert.equal(identity.status,200);
  const cookie=identity.headers.get('set-cookie').split(';')[0],actor=(await identity.json()).actor,headers={cookie,origin:base,'content-type':'application/json','x-voidplayer-action':'quality-job'};
  const get=async url=>{const response=await fetch(base+url,{headers,signal:AbortSignal.timeout(10000)});assert.equal(response.status,200,await response.clone().text());return response.json();};
- for(const name of ['B.flv','C.flv','MISSING-COLOR.flv','SAR.flv']){const e=entry(name),r=await fetch(`${base}/api/media/${e.id}/frame-index?v=${e.version}&build=1`);assert.equal(r.status,200,await r.clone().text());}
+ for(const name of ['B.flv','C.flv','MISSING-COLOR.flv','SAR.flv',...(gop?['DELAYED.flv']:[])]){const e=entry(name),r=await fetch(`${base}/api/media/${e.id}/frame-index?v=${e.version}&build=1`);assert.equal(r.status,200,await r.clone().text());}
  // Direct fetch is setup/independent Agent observation only. The first actual
  // measurement submission below must originate in a real GUI click.
  const b=entry('B.flv'),source={id:'mark-media-B',name:b.name,size:b.size,lastModified:b.lastModified,codec:sample.codec,decoder:'ffmpeg-wasm',width:32,height:32,durationUs:2000000,firstPtsUs:2000000,source:{kind:'library',id:b.id,url:`${base}/api/media/${b.id}?v=${b.version}`}};
@@ -121,13 +123,12 @@ try{
  Atomics.store(heldGate,0,1);Atomics.notify(heldGate,0);heldGate=null;
  const completed=await until(()=>get(`/api/quality/jobs/${id}`),j=>['completed','failed'].includes(j.state),'GUI job completed');assert.equal(completed.state,'completed',JSON.stringify(completed));assert.equal(workers.size,0);
  const result=await get(`/api/quality/jobs/${id}/result`),expected=sse(sample,input.request.roi);assert.equal(result.value.result.metric.aggregate.sse,expected);assert.equal(result.value.result.metric.bitDepth,depth);assert.equal(result.attemptId,completed.attempt.id);
- if(forward){for(const side of ['reference','distorted'])assert.deepEqual(result.value.result.provenance[side].dependency.guarantee,{pixels:'exact-decoder-output-of-verified-input-window',referenceIntegrity:'not-certified',concealmentDetection:'unavailable'});assert.equal(completed.progress.decodedFrames,9);assert.equal(result.value.result.work.packets,9);assert.equal(result.value.result.decoder.packetIdentity,'forward-one-output-per-au-v1');for(const side of ['reference','distorted']){assert.deepEqual(input.request[side].decode,{mode:'forward-one-output-per-au-v1',startAu:0});assert.deepEqual(result.value.result.provenance[side].dependency.packets.map(p=>p.au),Array.from({length:input.request[side].picture.au+1},(_,i)=>i));}}
- if(gop){
-  assert.equal(completed.progress.decodedFrames,32);assert.equal(result.value.result.work.packets,32);assert.equal(result.value.result.work.outputFrames,32);
+ if(forward||gop){
+  const frames=sample.frames??8;assert.equal(completed.progress.decodedFrames,2*frames);assert.equal(result.value.result.work.packets,2*frames);assert.equal(result.value.result.work.outputFrames,2*frames);
   assert.equal(result.value.result.decoder.packetIdentity,'packet-identity-gop-v1');assert.equal(result.value.result.decoder.packetIdentityAbi,1);
   for(const side of ['reference','distorted']){
-   assert.deepEqual(input.request[side].decode,{mode:'packet-identity-gop-v1',startAu:0,endAu:15});
-   const dependency=result.value.result.provenance[side].dependency;assert.deepEqual(dependency.outputIdentity.outputs.map(o=>o.au),sample.displayAuOrder);assert.ok(dependency.outputIdentity.outputs.some(o=>o.phase==='drain'));
+   assert.deepEqual(input.request[side].decode,{mode:'packet-identity-gop-v1',startAu:0,endAu:frames-1});
+   const dependency=result.value.result.provenance[side].dependency;assert.deepEqual(dependency.outputIdentity.outputs.map(o=>o.au),sample.displayAuOrder??Array.from({length:frames},(_,i)=>i));if(gop)assert.ok(dependency.outputIdentity.outputs.some(o=>o.phase==='drain'));
    for(const output of dependency.outputIdentity.outputs){assert.equal(output.token,String(output.au+1));assert.equal(output.decodeErrorFlags,0);}
    assert.deepEqual(dependency.guarantee,{pixels:'exact-decoder-output-of-verified-input-window',referenceIntegrity:'not-certified',concealmentDetection:'unavailable'});
   }
@@ -182,6 +183,18 @@ try{
  const after=await player.evaluate(()=>window.voidPlayer.getState());assert.equal(after.playing,true);assert.ok(after.positionUs>beforeView.positionUs);assert.deepEqual(after.tracks.map(t=>[t.id,t.slot,t.offsetUs]),playback.state.tracks.map(t=>[t.id,t.slot,t.offsetUs]));assert.equal(after.marks.length,0);
  const log=await player.evaluate(({sessionId,lastSeq})=>window.voidPlayer.getLogs({sessionId,sinceSeq:lastSeq,limit:2000}),playback.log);assert.equal(log.gap,false);assert.equal(log.hasMore,false);assert.deepEqual(log.events.filter(e=>['seek','restoreWorkspace'].includes(e.data?.action)),[]);
  phase='same-source-independent-au';await choose();await select('distorted','B.flv',selectedAus[1]);const sameId=await submitGui();const same=await until(()=>get(`/api/quality/jobs/${sameId}`),j=>['completed','failed'].includes(j.state),'GUI same source independent AUs');assert.equal(same.state,'completed');const sameResult=await get(`/api/quality/jobs/${sameId}/result`);assert.equal(sameResult.value.result.metric.aggregate.sse,expected);assert.equal(sameResult.value.result.provenance.reference.mediaId,sameResult.value.result.provenance.distorted.mediaId);assert.notEqual(sameResult.value.result.provenance.reference.picture.au,sameResult.value.result.provenance.distorted.picture.au);
+ if(gop){
+  phase='zero-cts-delayed-gui-submit';await select('reference','DELAYED.flv',1);await select('distorted','DELAYED.flv',1);
+  const delayedId=await submitGui(),done=await until(()=>get(`/api/quality/jobs/${delayedId}`),j=>['completed','failed'].includes(j.state),'zero CTS delayed GUI job');assert.equal(done.state,'completed',JSON.stringify(done));assert.equal(done.progress.decodedFrames,4);
+  const fact=await get(`/api/quality/jobs/${delayedId}/result`);assert.equal(fact.value.result.metric.aggregate.sse,0);assert.equal(fact.value.result.work.outputFrames,4);
+  for(const side of ['reference','distorted']){const p=fact.value.result.provenance[side];assert.deepEqual(p.decode,{mode:'packet-identity-gop-v1',startAu:0,endAu:1});assert.equal(p.sourcePtsUs,2100000);assert.deepEqual(p.dependency.outputIdentity.outputs.map(o=>[o.au,o.phase]),[[0,'drain'],[1,'drain']]);assert.ok(p.dependency.packets.every(p=>p.pts===p.dts));}
+  const d=entry('DELAYED.flv'),doc=structuredClone(annotation);doc.mark.id='delayed-mark';doc.mark.mediaId='mark-media-delayed';doc.mark.frame={ptsUs:100000,sourcePtsUs:2100000,durationUs:100000};doc.media[0]={...source,id:'mark-media-delayed',name:d.name,size:d.size,lastModified:d.lastModified,source:{kind:'library',id:d.id,url:`${base}/api/media/${d.id}?v=${d.version}`}};
+  const created=await fetch(base+'/api/annotations/spaces/default',{method:'POST',headers:annotationHeaders,body:JSON.stringify({operationId:'existing-delayed',id:doc.mark.id,revision:0,action:'put',document:doc})});assert.equal(created.status,200,await created.clone().text());
+  await page.locator(`[data-job-id="${id}"]`).click();await page.locator(`[data-job-id="${delayedId}"]`).click();await page.locator('[data-mark-id="delayed-mark"]').click();await page.locator('#quality-attach').click();await page.locator('#quality-shared-links .quality-pair-open').waitFor();
+  const [snapshot]=await Promise.all([context.waitForEvent('page'),page.locator('#quality-shared-links .quality-pair-open').click()]);await snapshot.waitForFunction(()=>['ready','failed'].includes(window.voidPlayerQualityPair?.getState().state));assert.equal((await snapshot.evaluate(()=>window.voidPlayerQualityPair.getState())).state,'ready');
+  const raw=Buffer.from(delayed.native,'base64'),frame=raw.length/2;assert.deepEqual(await snapshot.evaluate(()=>window.__forwardRaw),[Array.from(raw.subarray(frame)),Array.from(raw.subarray(frame))],'zero-CTS delayed snapshot actual Worker pixels equal fixed native oracle');await snapshot.close();
+  assert.equal((await player.evaluate(()=>window.voidPlayer.getState())).playing,true);
+ }
  phase='client-and-actor-late-private-detail';
  async function holdPrivate(){let release,entered;const gate=new Promise(r=>release=r),start=new Promise(r=>entered=r),pattern=`**/api/quality/jobs/${id}`;
   await page.route(pattern,async route=>{const response=await route.fetch();entered();await gate;await route.fulfill({response}).catch(()=>{});});

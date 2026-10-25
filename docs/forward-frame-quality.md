@@ -18,10 +18,16 @@ is unique in the source**. The chosen target carries its exact decode start:
 {"decode":{"mode":"forward-one-output-per-au-v1","startAu":0}}
 ```
 
+The strict forward request remains available to explicit clients. Current cached
+candidates prefer the complete token-bound GOP mode described in
+[reordered-frame-quality.md](reordered-frame-quality.md), even with PTS=DTS:
+equal clocks alone do not prove that the decoder emits immediately.
+
 The field belongs to each reference/distorted target next to `picture` and
 `sourcePtsUs`. Preserve it from `/api/media/{id}/psnr-frames?v=...`; do not derive it
 from a playback token. For example, choose AU2/PTS2200000 and AU5/PTS2500000 in the
-committed fixtures; both explicitly start at AU0, but have different decode windows.
+committed fixtures; explicit forward requests both start at AU0, but have different
+decode windows (the preferred GOP candidates instead carry the complete end).
 The candidate selector reads only the existing trusted cache and reports absolute
 AU ordinals, exact source PTS, cache namespace/build and the bounded start. It does
 not decode, build an index, claim content correspondence or certify the key flag.

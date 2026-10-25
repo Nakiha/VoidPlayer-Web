@@ -34,6 +34,11 @@ known and strictly increase in decode order. Nonzero CTS and reordered PTS are
 allowed. Missing/duplicate clocks, incomplete/oversized windows, CRA/open starts,
 unknown/multiple/field pictures and changed parameter sets are refused. A cached
 candidate is not a decoder preflight: execution verifies the actual source.
+The selector prefers this explicit token-bound mode for every complete bounded
+GOP, including zero CTS. PTS=DTS cannot prove immediate output: valid H.264/HEVC
+streams may release all pictures only during drain. Old explicitly submitted
+isolated/forward requests retain their strict existing semantics; the service
+does not silently change their decoder mode after a failure.
 
 ## Identity, pixels and work
 
@@ -89,6 +94,11 @@ display support.
 
 Committed synthetic H.2648/HEVC10 fixtures carry fixed native FFmpeg raw planes;
 oracle AU attribution uses demux packet byte positions, not PTS matching.
+The explicit fixture importer also requires fixed-revision native ffmpeg/ffprobe
+arguments. Two-AU zero-CTS H.2648/HEVC10 fixtures are independently decoded and
+byte-position attributed; their actual WASM outputs must all occur in drain.
+Each existing GOP browser case additionally submits this delayed source through
+GUI, attaches its result and compares raw snapshot Worker pixels with the oracle.
 Node media tests compare every selected output including drain, metric/grid and
 immutable identity fields, exact32/64 budgets and actual native-send cancellation.
 The registered Chromium/WebKit ×8/10 real GUI cases exercise submission through
