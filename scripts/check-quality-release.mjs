@@ -15,8 +15,9 @@ try{
  const directory=path.join(temp,path.basename(archive,'.tar.gz')),manifest=JSON.parse(await readFile(path.join(directory,'release.json'),'utf8'));
  const media=path.join(temp,'media'),data=path.join(temp,'data'),cwd=path.join(temp,'unrelated'),empty=path.join(temp,'empty-path');
  for(const directory of [media,data,cwd,empty])await mkdir(directory);
- const samples=JSON.parse(await readFile(path.join(root,'test/helpers/quality-http-samples.json'),'utf8')).samples.filter(s=>s.tagged);
- for(const sample of samples){const bytes=Buffer.from(sample.flv,'base64');assert.equal(createHash('sha256').update(bytes).digest('hex'),sample.flvSha256);await writeFile(path.join(media,`${sample.codec}-${sample.depth}.flv`),bytes);}
+ const samples=[...JSON.parse(await readFile(path.join(root,'test/helpers/quality-http-samples.json'),'utf8')).samples.filter(s=>s.tagged),...JSON.parse(await readFile(path.join(root,'test/helpers/quality-forward-samples.json'),'utf8')).samples.map(s=>({...s,forward:true}))];
+ const sampleName=s=>`${s.codec}-${s.depth}${s.forward?'-forward':''}.flv`;
+ for(const sample of samples){const bytes=Buffer.from(sample.flv,'base64');assert.equal(createHash('sha256').update(bytes).digest('hex'),sample.flvSha256);await writeFile(path.join(media,sampleName(sample)),bytes);}
  const socket=createServer();await new Promise(resolve=>socket.listen(0,'127.0.0.1',resolve));const port=socket.address().port;await new Promise(resolve=>socket.close(resolve));const base=`http://127.0.0.1:${port}`;
  await writeFile(path.join(data,'voidplayer.config.json'),JSON.stringify({host:'127.0.0.1',port,mediaRoots:[{id:'quality-qa',name:'Quality QA',path:media}],indexWatch:false,logsDir:null}));
  const env={...process.env,PATH:empty};for(const key of Object.keys(env))if(key.startsWith('VOIDPLAYER_')||['BUN_OPTIONS','BUN_INSPECT'].includes(key))delete env[key];
@@ -30,17 +31,19 @@ try{
  const viewer=await fetch(base+'/quality.html');assert.equal(viewer.status,200);assert.match(viewer.headers.get('content-type'),/text\/html/);
  const viewerHtml=await viewer.text(),viewerModule=/<script[^>]+type="module"[^>]+src="([^"]+)"/.exec(viewerHtml)?.[1];assert.ok(viewerModule,'compiled package includes the explicit snapshot viewer entry');
  const viewerAsset=await fetch(new URL(viewerModule,base));assert.equal(viewerAsset.status,200);assert.match(viewerAsset.headers.get('content-type'),/(javascript|ecmascript)/);await viewerAsset.body.cancel();
- let entries;await waitUntil(async()=>{entries=(await fetch(base+'/api/library').then(r=>r.json())).entries;return samples.every(s=>entries.some(e=>e.name===`${s.codec}-${s.depth}.flv`&&e.state==='ready'));},'Native quality library did not settle');
+ let entries;await waitUntil(async()=>{entries=(await fetch(base+'/api/library').then(r=>r.json())).entries;return samples.every(s=>entries.some(e=>e.name===sampleName(s)&&e.state==='ready'));},'Native quality library did not settle');
  const cookie=`voidplayer-user=guest-${randomUUID()}`,headers={cookie,origin:base,'content-type':'application/json','x-voidplayer-action':'quality'},rows=[];
  for(const sample of samples){
-  const entry=entries.find(e=>e.name===`${sample.codec}-${sample.depth}.flv`);
-  const built=await fetch(`${base}/api/media/${entry.id}/frame-index?v=${entry.version}&build=1`);assert.equal(built.status,200);const cache=await built.json();assert.equal(cache.index.packets.length,2);
+  const entry=entries.find(e=>e.name===sampleName(sample));
+  const built=await fetch(`${base}/api/media/${entry.id}/frame-index?v=${entry.version}&build=1`);assert.equal(built.status,200);const cache=await built.json();assert.equal(cache.index.packets.length,sample.forward?8:2);
   const lookup=await fetch(`${base}/api/media/${entry.id}/psnr-source?v=${entry.version}`,{headers:{cookie}});const binding=await lookup.json();assert.equal(lookup.status,200,JSON.stringify(binding));
-  const target=au=>({...binding.binding,sourcePtsUs:cache.index.packets[au][2],picture:{sourceVersion:`${entry.id}@${entry.version}`,stream:'video',configuration:0,au,picture:0,layer:0,field:'frame'}});
-  const request={pairing:'caller-specified',reference:target(0),distorted:target(1),roi:{x:2,y:4,width:24,height:20},spatial:{blockWidth:10,blockHeight:8}};
+  const target=au=>({...binding.binding,sourcePtsUs:cache.index.packets[au][2],picture:{sourceVersion:`${entry.id}@${entry.version}`,stream:'video',configuration:0,au,picture:0,layer:0,field:'frame'},...(sample.forward?{decode:{mode:'forward-one-output-per-au-v1',startAu:0}}:{})});
+  const selectedAus=sample.forward?sample.selectedAus:[0,1];
+  const request={pairing:'caller-specified',reference:target(selectedAus[0]),distorted:target(selectedAus[1]),roi:{x:2,y:4,width:24,height:20},spatial:{blockWidth:10,blockHeight:8}};
   const response=await fetch(base+'/api/quality/psnr-pair',{method:'POST',headers,body:JSON.stringify(request)}),value=await response.json();assert.equal(response.status,200,JSON.stringify(value));
   assert.equal(value.execution.runtime,'bun');assert.equal(value.execution.host,'node-worker');assert.equal(value.execution.runtimeVersion,manifest.runtime.version);assert.equal(value.result.metric.bitDepth,sample.depth);
   assert.equal(value.result.decoder.buildId,manifest.decoder.source.revision);assert.deepEqual(value.sources.reference,binding);assert.deepEqual(value.sources.distorted,binding);
+  if(sample.forward){for(const side of ['reference','distorted'])assert.deepEqual(value.result.provenance[side].dependency.guarantee,{pixels:'exact-decoder-output-of-verified-input-window',referenceIntegrity:'not-certified',concealmentDetection:'unavailable'});assert.equal(value.result.work.packets,9);assert.equal(value.result.work.outputFrames,9);assert.equal(value.result.decoder.packetIdentity,'forward-one-output-per-au-v1');for(const side of ['reference','distorted'])assert.equal(value.result.provenance[side].dependency.outputFrames,request[side].picture.au+1);}
   const raw=Buffer.from(sample.native,'base64');assert.equal(createHash('sha256').update(raw).digest('hex'),sample.nativeSha256);
   const bytes=sample.depth===8?1:2,frame=1536*bytes;let aggregate=0;
   for(const [i,name] of ['y','u','v'].entries()){
@@ -58,10 +61,11 @@ try{
   }assert.equal(block.aggregate.sse,sum);}
   assert.equal(grid.blocks.reduce((n,b)=>n+b.aggregate.sse,0),aggregate);assert.deepEqual(grid.worst,grid.blocks.map(b=>b.index).sort((a,b)=>grid.blocks[b].aggregate.mse-grid.blocks[a].aggregate.mse||a-b).slice(0,8));
   const input={schema:'voidplayer-psnr-frame-job',version:1,client:{id:'compiled-acceptance',kind:'agent'},request:{...request,spatial:undefined,ssim:{variant:'ffmpeg-uniform-8x8-step4-v1'}}};
-  const jobHeaders={...headers,'x-voidplayer-action':'quality-job','idempotency-key':`compiled-${sample.codec}-${sample.depth}`};
+  const jobHeaders={...headers,'x-voidplayer-action':'quality-job','idempotency-key':`compiled-${sample.codec}-${sample.depth}${sample.forward?'-forward':''}`};
   const submitted=await fetch(base+'/api/quality/jobs',{method:'POST',headers:jobHeaders,body:JSON.stringify(input)}),accepted=await submitted.json();assert.equal(submitted.status,202,JSON.stringify(accepted));
   assert.equal(accepted.job.submitted.requestId,submitted.headers.get('x-request-id'));let job;
   await waitUntil(async()=>{job=await fetch(`${base}/api/quality/jobs/${accepted.job.id}`,{headers:{cookie}}).then(r=>r.json());if(['failed','cancelled','interrupted'].includes(job.state))throw Error(JSON.stringify(job));return job.state==='completed';},'Compiled durable job did not finish');
+  if(sample.forward)assert.equal(job.progress.decodedFrames,9);
   const stored=await fetch(`${base}/api/quality/jobs/${job.id}/result`,{headers:{cookie}}).then(r=>r.json());
   assert.equal(stored.jobId,job.id);assert.equal(stored.attemptId,job.attempt.id);assert.equal(stored.submitted.actorId,cookie.slice('voidplayer-user='.length));
   const {spatial:unused,...wholeMetric}=value.result.metric;assert.deepEqual(stored.value.result.metric,wholeMetric);
@@ -69,8 +73,8 @@ try{
   assert.ok(Math.abs(stored.value.result.ssim.aggregate.score-oracle.all)<=1e-12);
   for(const key of ['y','u','v'])assert.ok(Math.abs(stored.value.result.ssim.planes[key].score-oracle[key].score)<=1e-12);assert.deepEqual(stored.value.result.provenance,value.result.provenance);
   assert.deepEqual(stored.value.result.decoder,value.result.decoder);assert.deepEqual(stored.value.sources,value.sources);assert.deepEqual(stored.value.execution,value.execution);
-  const annotationHeaders={...headers,'x-voidplayer-action':'annotation'},annotationId=`evidence-${sample.codec}-${sample.depth}`;
-  const annotationDocument={media:[{id:'snapshot',name:entry.name,size:entry.size,lastModified:entry.lastModified,codec:sample.codec,decoder:'ffmpeg-wasm',width:32,height:32,durationUs:2000000,firstPtsUs:target(0).sourcePtsUs,source:{kind:'library',id:entry.id,url:`${base}/api/media/${entry.id}?v=${entry.version}`}}],mark:{id:annotationId,text:'Compiled PSNR observation',severity:3,origin:'agent',createdAt:new Date().toISOString(),slot:'H',mediaId:'snapshot',frame:{ptsUs:0,sourcePtsUs:target(0).sourcePtsUs,durationUs:1000000},comparison:[],region:null}};
+  const annotationHeaders={...headers,'x-voidplayer-action':'annotation'},annotationId=`evidence-${sample.codec}-${sample.depth}${sample.forward?'-forward':''}`;
+  const annotationDocument={media:[{id:'snapshot',name:entry.name,size:entry.size,lastModified:entry.lastModified,codec:sample.codec,decoder:'ffmpeg-wasm',width:32,height:32,durationUs:2000000,firstPtsUs:request.reference.sourcePtsUs,source:{kind:'library',id:entry.id,url:`${base}/api/media/${entry.id}?v=${entry.version}`}}],mark:{id:annotationId,text:'Compiled PSNR observation',severity:3,origin:'agent',createdAt:new Date().toISOString(),slot:'H',mediaId:'snapshot',frame:{ptsUs:0,sourcePtsUs:request.reference.sourcePtsUs,durationUs:1000000},comparison:[],region:null}};
   const createAnnotation=await fetch(base+'/api/annotations/spaces/default',{method:'POST',headers:annotationHeaders,body:JSON.stringify({id:annotationId,operationId:'create-'+annotationId,revision:0,action:'put',document:annotationDocument})});assert.equal(createAnnotation.status,200,await createAnnotation.clone().text());
   const attach={id:annotationId,operationId:'attach-'+annotationId,revision:1,action:'attach-quality-result',evidence:{jobId:job.id,attemptId:job.attempt.id,digest:job.result.digest,side:'reference'}};
   const attachment=await fetch(base+'/api/annotations/spaces/default',{method:'POST',headers:annotationHeaders,body:JSON.stringify(attach)});const attached=await attachment.json();assert.equal(attachment.status,200,JSON.stringify(attached));

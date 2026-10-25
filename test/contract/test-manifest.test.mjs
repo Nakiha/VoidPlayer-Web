@@ -396,7 +396,16 @@ test('explicit npm engine selection narrows HEVC and rejects unsupported range v
 });
 
 test('SSIM full GUI matrix is independently required with real core and cannot enter identity CI',()=>{
- const rows=selectCases({suite:'ci-ssim',platform:'linux'}).selected;
+ const all=selectCases({suite:'ci-ssim',platform:'linux'}).selected;
+ const rows=all.filter(r=>r.command[4]==='ssim');
  assert.deepEqual(rows.map(r=>[r.engines[0],Number(r.command[3]),r.command[4]]),[['chromium',8,'ssim'],['chromium',10,'ssim'],['webkit',8,'ssim'],['webkit',10,'ssim']]);
  for(const row of rows){assert.equal(row.required,true);assert.deepEqual(row.fixtures,['core']);assert.equal(row.build,true);assert.equal(row.suites.includes('ci-identity-browser'),false);}
+});
+
+
+test('forward ordinary-frame GUI matrix extends the full core-backed metric job without replacing SSIM or identity gates',()=>{
+ const rows=selectCases({suite:'ci-ssim',platform:'linux'}).selected.filter(r=>r.command[4]==='forward');
+ assert.deepEqual(rows.map(r=>[r.engines[0],Number(r.command[3])]),[['chromium',8],['chromium',10],['webkit',8],['webkit',10]]);
+ for(const row of rows){assert.equal(row.required,true);assert.deepEqual(row.fixtures,['core']);assert.equal(row.build,true);assert.equal(row.timeoutMs,300000);assert.equal(row.suites.includes('ci-identity-browser'),false);}
+ const media=selectCases({suite:'ci-node-media',platform:'linux'}).selected.find(r=>r.id==='node-quality-forward');assert.ok(media.required);assert.deepEqual(media.fixtures,['core']);assert.deepEqual(media.tools,['ffmpeg']);
 });

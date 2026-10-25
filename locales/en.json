@@ -3232,6 +3232,10 @@
     "source": "PSNR 证据",
     "translation": "PSNR evidence"
   },
+  "quality.forwardGuarantee": {
+    "source": "精确绑定的是所选码流窗口的实际解码输出，未认证引用图完整性。当前接口无法检测错误隐藏（concealment）；缺失参考帧仍可能返回分数。",
+    "translation": "The exact binding is to the selected bitstream window's actual decoder output; reference-graph integrity is not certified. The current interface cannot detect error concealment; missing reference frames may still yield a score."
+  },
   "quality.fullProvenance": {
     "source": "完整不可变 provenance",
     "translation": "Full immutable provenance"
@@ -3261,8 +3265,8 @@
     "translation": "View two independent snapshots bound to the original cache, without rescoring. Display colors are converted by the presentation pipeline; PSNR measures source YUV code values, not screen pixels."
   },
   "quality.pairLimits": {
-    "source": "支持无裁剪、方形像素、无旋转的 FLV 闭合关键帧。缓存、版本、解码器或几何不匹配时不展示。",
-    "translation": "Supports uncropped, square-pixel, unrotated FLV closed key pictures. Source version, cache, decoder or geometry mismatches prevent display."
+    "source": "支持无裁剪、方形像素、无旋转的 FLV 闭合关键帧和已核验的有界前向依赖帧。缓存、解码窗口、版本、解码器或几何不匹配时不展示。",
+    "translation": "Supports uncropped, square-pixel, unrotated FLV closed key pictures and verified bounded forward-dependent frames. Cache, decode window, source version, decoder or geometry mismatches prevent display."
   },
   "quality.pairReady": {
     "source": "两侧快照已按源、缓存、AU、实际 PTS 和几何核对；ROI 为只读覆盖层。",
@@ -3529,8 +3533,8 @@
     "translation": "Running"
   },
   "qualityWorkflow.scope": {
-    "source": "显式配对两个媒体库闭合关键帧，以 8/10 位 YUV420 原始码值测量。不是截图评分，不自动按时间配对，也不支持普通依赖帧或序列。",
-    "translation": "Explicitly pair two closed key pictures from the media library and measure 8/10-bit YUV420 source code values. This is not screenshot scoring, automatic time alignment, dependent-frame or sequence measurement."
+    "source": "显式配对媒体库中的闭合关键帧或有界前向依赖帧，以 8/10 位 YUV420 原始码值测量。依赖帧须从明确闭合起点逐 AU 解码，每侧最多 32 AU，且每个输入立即输出唯一帧。拒绝重排、延迟输出和序列，不自动按时间配对。",
+    "translation": "Explicitly pair closed key pictures or bounded forward-dependent frames from the media library, measuring 8/10-bit YUV420 source code values. Dependent frames decode from an explicit closed start through at most 32 AUs per side, with exactly one immediate output per input. Reordering, delayed output and sequences are unsupported; there is no automatic time alignment."
   },
   "qualityWorkflow.searchMedia": {
     "source": "搜索媒体库",

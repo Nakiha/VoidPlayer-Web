@@ -52,3 +52,5 @@ Vite 与独立程序共用 `release-version.mjs` 的版本规则。标签构建�
 完整 CI 的三个 FATE 消费 job 使用 `.github/actions/fate-fixtures`，按精确键恢复 `fixtures/fate`，每次恢复后（包括命中）仍完整校验，成功后立即保存，再开始产品回归。无宽泛恢复键，不改素材、测试或阈值。缓存只加速固定公开素材，不是信任来源；冷缓存/被驱逐/不完整时仍依赖官方源，官方不可达就失败。损坏的精确键不可覆盖，需显式处理远端坏缓存；不能靠下载替换隐藏问题。缓存保存与后续命中须看 Actions 实际日志确认，本地通过不证明远端已有种子或上游网络恢复。
 
 - `check-quality-workflow-browser.mjs`：完整服务端 PSNR GUI 任务闭环（Chromium/WebKit × 8/10 位），实际 UI 提交、持久状态/取消/历史、显式已有标注证据和原帧对查看，要求真实 core；登记于完整 `ci-cache`。
+
+- `tools/fixtures/quality-forward.mjs`：生成固定 H.2648/HEVC10 无重排普通依赖帧 FLV 与独立 FFmpeg 原始平面对照、精确时钟和 SHA-256。完整依赖窗口、GUI/Agent/证据/原帧复核见 [工作流契约](../docs/forward-frame-quality.md)；`check-quality-workflow-browser.mjs chromium 8 forward`（另有 WebKit/10bit）登记为现有 core-backed `ci-ssim` 的必需用例，不替换旧 PSNR/SSIM 检查。

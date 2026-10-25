@@ -1,7 +1,7 @@
 import { avcGeometry } from '../../media/codecs/avc-geometry.ts';
 import { hevcGeometry, hevcFieldPictures } from '../../media/codecs/hevc-geometry.ts';
 import { parseFlvIndex, type FlvIndexDocument } from '../../media/indexing/flv-index-cache.ts';
-import { FramePairError, PAIR_LIMITS, requireInspectionGeometry, type PairTarget } from './frame-pair.ts';
+import { FramePairError, PAIR_LIMITS, forwardPacketPlan, FORWARD_PAIR_LIMITS, requireInspectionGeometry, type PairTarget } from './frame-pair.ts';
 import type { LibraryPairBinding } from './library-pair.ts';
 
 export const QUALITY_SELECTION_LIMITS = Object.freeze({page:50, inspected:2048, bytes:65536});
@@ -10,7 +10,7 @@ export type QualityFramePage = {
   schema:'voidplayer-psnr-frame-candidates';version:1;source:LibraryPairBinding;
   codec:'h264'|'hevc';geometry:{width:number;height:number;codedWidth:number;codedHeight:number;sarNum:number;sarDen:number;sarSpecified:boolean};
   inspection:{supported:boolean;reason:string|null};
-  eligibility:'container-key-candidate-execution-verifies-closed-au-and-pixels';
+  eligibility:'cached-au-candidate-execution-verifies-closed-start-and-forward-pixels';
   entries:PairTarget[];nextAu:number|null;inspected:number;
 };
 export function qualityFrameQuery(query:QualityFrameQuery) {
@@ -42,13 +42,21 @@ export function qualityFrameCandidates(source:LibraryPairBinding,doc:FlvIndexDoc
   const entries:PairTarget[]=[];let au=query.afterAu,inspected=0;
   for(;au<index.packets.length&&inspected<QUALITY_SELECTION_LIMITS.inspected&&entries.length<query.limit;au++,inspected++){
     const p=index.packets[au];
-    if(!p.key||(p.configuration??0)!==0||counts.get(p.pts)!==1||p.size>PAIR_LIMITS.maxPacketBytes)continue;
-    entries.push({...structuredClone(source.binding),sourcePtsUs:p.pts,picture:{sourceVersion:`${source.binding.mediaId}@${source.binding.mediaVersion}`,
-      stream:'video',configuration:0,au,picture:0,layer:0,field:'frame'}});
+    if((p.configuration??0)!==0||counts.get(p.pts)!==1||p.size>PAIR_LIMITS.maxPacketBytes)continue;
+    const target:PairTarget={...structuredClone(source.binding),sourcePtsUs:p.pts,picture:{sourceVersion:`${source.binding.mediaId}@${source.binding.mediaVersion}`,
+      stream:'video',configuration:0,au,picture:0,layer:0,field:'frame'}};
+    if(!p.key){
+      let startAu=au-1;for(;startAu>=0&&au-startAu+1<=FORWARD_PAIR_LIMITS.packetsPerSide&&!index.packets[startAu].key;startAu--){/* bounded cached scan */}
+      if(startAu<0||au-startAu+1>FORWARD_PAIR_LIMITS.packetsPerSide)continue;
+      target.decode={mode:'forward-one-output-per-au-v1',startAu};
+      try{const plan=forwardPacketPlan(index,target,counts);if(plan.some(p=>p.size>PAIR_LIMITS.maxPacketBytes)||plan.reduce((n,p)=>n+p.size+23,0)>PAIR_LIMITS.maxReadBytes)continue;}
+      catch(error){if(error instanceof FramePairError&&error.code==='unsupported-source')continue;throw error;}
+    }
+    entries.push(target);
   }
   const page:QualityFramePage={schema:'voidplayer-psnr-frame-candidates',version:1,source:structuredClone(source),codec:index.codec,
     geometry:{width:g.width,height:g.height,codedWidth:g.codedWidth,codedHeight:g.codedHeight,sarNum:g.sarNum,sarDen:g.sarDen,sarSpecified:g.sarSpecified===true},inspection,
-    eligibility:'container-key-candidate-execution-verifies-closed-au-and-pixels',entries,nextAu:au<index.packets.length?au:null,inspected};
+    eligibility:'cached-au-candidate-execution-verifies-closed-start-and-forward-pixels',entries,nextAu:au<index.packets.length?au:null,inspected};
   if(JSON.stringify(page).length>QUALITY_SELECTION_LIMITS.bytes)throw new FramePairError('budget-exceeded','PSNR selection response budget exceeded');
   return page;
 }

@@ -800,6 +800,7 @@ export interface Sources {
   "quality.completedRequired": "需要已完成的结果。";
   "quality.enterJob": "请输入已完成的任务 ID。";
   "quality.evidenceTitle": "PSNR 证据";
+  "quality.forwardGuarantee": "精确绑定的是所选码流窗口的实际解码输出，未认证引用图完整性。当前接口无法检测错误隐藏（concealment）；缺失参考帧仍可能返回分数。";
   "quality.fullProvenance": "完整不可变 provenance";
   "quality.historical": "历史副本，本服务未核验";
   "quality.jobId": "已完成任务 ID ";
@@ -807,7 +808,7 @@ export interface Sources {
   "quality.openPair": "在新窗口查看原帧对与 ROI";
   "quality.pairCancel": "取消并释放快照";
   "quality.pairDisplay": "仅查看原缓存绑定的两张独立快照，不重新评分。显示色彩由呈现链路转换；PSNR 来自源 YUV 码值，不是屏幕像素。";
-  "quality.pairLimits": "支持无裁剪、方形像素、无旋转的 FLV 闭合关键帧。缓存、版本、解码器或几何不匹配时不展示。";
+  "quality.pairLimits": "支持无裁剪、方形像素、无旋转的 FLV 闭合关键帧和已核验的有界前向依赖帧。缓存、解码窗口、版本、解码器或几何不匹配时不展示。";
   "quality.pairReady": "两侧快照已按源、缓存、AU、实际 PTS 和几何核对；ROI 为只读覆盖层。";
   "quality.pairTitle": "原测量帧对与 ROI";
   "quality.preview": "预览结果";
@@ -874,7 +875,7 @@ export interface Sources {
   "qualityWorkflow.retry": "使用原幂等键重试提交";
   "qualityWorkflow.roi": "ROI：未旋转可见源像素网格，所有值须为偶数整数";
   "qualityWorkflow.running": "执行中";
-  "qualityWorkflow.scope": "显式配对两个媒体库闭合关键帧，以 8/10 位 YUV420 原始码值测量。不是截图评分，不自动按时间配对，也不支持普通依赖帧或序列。";
+  "qualityWorkflow.scope": "显式配对媒体库中的闭合关键帧或有界前向依赖帧，以 8/10 位 YUV420 原始码值测量。依赖帧须从明确闭合起点逐 AU 解码，每侧最多 32 AU，且每个输入立即输出唯一帧。拒绝重排、延迟输出和序列，不自动按时间配对。";
   "qualityWorkflow.searchMedia": "搜索媒体库";
   "qualityWorkflow.sourceProof": "来源、缓存身份与几何见证";
   "qualityWorkflow.submit": "发起持久测量";
@@ -2050,6 +2051,7 @@ export interface MessageParameters {
   "quality.completedRequired": {  };
   "quality.enterJob": {  };
   "quality.evidenceTitle": {  };
+  "quality.forwardGuarantee": {  };
   "quality.fullProvenance": {  };
   "quality.historical": {  };
   "quality.jobId": {  };
