@@ -75,7 +75,7 @@ export class QualityJobStore {
   get(id: string): QualityJob {
     const row = this.db.prepare(`SELECT ${columns} FROM quality_jobs WHERE id=?`).get(id);
     if (!row) throw new AdminError(404, 'Quality job not found.', 'job-not-found');
-    const input = JSON.parse(String(row.input_json));
+    const input = JSON.parse(String(row.input_json)) as QualityJob['input'];
     const attempt = row.attempt_id ? this.db.prepare('SELECT * FROM quality_attempts WHERE id=?').get(row.attempt_id) : null;
     const completed = row.state === 'completed';
     return {schema: 'voidplayer-quality-job', version: 1, id: String(row.id), revision: Number(row.revision), sequence: Number(row.sequence),
@@ -90,7 +90,8 @@ export class QualityJobStore {
       attempt: attempt ? {id: String(attempt.id), number: 1, state: attempt.state as QualityJobState, phase: attempt.phase as QualityJobPhase,
         startedAt: Number(attempt.started_at), endedAt: attempt.ended_at === null ? null : Number(attempt.ended_at)} : null,
       result: {available: completed && !!row.result_sha, url: `/api/quality/jobs/${row.id}/result`, digest: row.result_sha ? String(row.result_sha) : null},
-      progress: {scoredPairs: completed ? 1 : 0, targetPairs: 1, decodedFrames: completed ? 2 : null}};
+      progress: {scoredPairs: completed ? 1 : 0, targetPairs: 1, decodedFrames: completed ?
+        [input.request.reference,input.request.distorted].reduce((n,t)=>n+(t.decode?t.picture.au-t.decode.startAu+1:1),0) : null}};
   }
   submit(request: ReturnType<typeof qualityJobRequest>, actor: Actor, requestId: string, key: string, now: number) {
     return this.transaction(() => {

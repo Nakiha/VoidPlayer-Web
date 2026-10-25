@@ -12,7 +12,7 @@ const disposeLanguage=await initializeLanguage();
 const root=document.querySelector<HTMLElement>('#pair-view')!;
 const title=document.createElement('h1');title.textContent=t(msg('quality.pairTitle','原测量帧对与 ROI'));
 const note=document.createElement('p');note.textContent=t(msg('quality.pairDisplay','仅查看原缓存绑定的两张独立快照，不重新评分。显示色彩由呈现链路转换；PSNR 来自源 YUV 码值，不是屏幕像素。'));
-const limits=document.createElement('p');limits.textContent=t(msg('quality.pairLimits','支持无裁剪、方形像素、无旋转的 FLV 闭合关键帧。缓存、版本、解码器或几何不匹配时不展示。'));
+const limits=document.createElement('p');limits.textContent=t(msg('quality.pairLimits','支持无裁剪、方形像素、无旋转的 FLV 闭合关键帧和已核验的有界前向依赖帧。缓存、解码窗口、版本、解码器或几何不匹配时不展示。'));
 const cancel=document.createElement('button');cancel.textContent=t(msg('quality.pairCancel','取消并释放快照'));cancel.type='button';
 const status=document.createElement('p');status.role='status';status.id='pair-status';
 const blocks=document.createElement('div');blocks.id='pair-blocks';
@@ -57,7 +57,7 @@ function render() {
   }
 }
 session.subscribe(render);cancel.onclick=()=>session.cancel();blockSelect.onchange=()=>session.selectBlock(blockSelect.value===''?null:Number(blockSelect.value));
-const removeLanguage=onLanguageChange(()=>{title.textContent=t(msg('quality.pairTitle','原测量帧对与 ROI'));note.textContent=t(msg('quality.pairDisplay','仅查看原缓存绑定的两张独立快照，不重新评分。显示色彩由呈现链路转换；PSNR 来自源 YUV 码值，不是屏幕像素。'));limits.textContent=t(msg('quality.pairLimits','支持无裁剪、方形像素、无旋转的 FLV 闭合关键帧。缓存、版本、解码器或几何不匹配时不展示。'));cancel.textContent=t(msg('quality.pairCancel','取消并释放快照'));blockLabel.textContent=t(msg('quality.spatialPicker','在原帧上查看分块'));render();});
+const removeLanguage=onLanguageChange(()=>{title.textContent=t(msg('quality.pairTitle','原测量帧对与 ROI'));note.textContent=t(msg('quality.pairDisplay','仅查看原缓存绑定的两张独立快照，不重新评分。显示色彩由呈现链路转换；PSNR 来自源 YUV 码值，不是屏幕像素。'));limits.textContent=t(msg('quality.pairLimits','支持无裁剪、方形像素、无旋转的 FLV 闭合关键帧和已核验的有界前向依赖帧。缓存、解码窗口、版本、解码器或几何不匹配时不展示。'));cancel.textContent=t(msg('quality.pairCancel','取消并释放快照'));blockLabel.textContent=t(msg('quality.spatialPicker','在原帧上查看分块'));render();});
 const observer=new ResizeObserver(()=>{if(session.getState().state==='ready'){try{session.redraw();render();}catch(error){session.cancel();status.textContent=(error as Error).message;}}});
 for(const stage of Object.values(stages))observer.observe(stage);
 const api=Object.freeze({getState:()=>session.getState(),open:(reference:Parameters<typeof session.open>[0])=>session.open(reference),selectBlock:(index:number|null)=>session.selectBlock(index),cancel:()=>session.cancel(),close:()=>session.close(),resources:()=>session.resources.snapshot()});

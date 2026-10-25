@@ -78,9 +78,10 @@ measures again, changes a frame or moves a playback cursor.
 
 All existing library, producer, version, namespace/build, configuration/AU, actual
 PTS, source/color and Worker fences apply unchanged. Registered FLV/Enhanced FLV,
-closed progressive H264/HEVC pictures, fully tagged 8/10-bit YUV420 remain the
-supported set. Stat identity is not content authentication. No auto indexing,
-nearest PTS, dependency-frame/sequence expansion, uploads or distributed compute.
+closed progressive H264/HEVC pictures or explicitly bounded forward-dependent
+windows, with fully tagged 8/10-bit YUV420 remain the supported set. Forward
+window/identity/output limits are defined in [forward-frame quality](forward-frame-quality.md). Stat identity is not content authentication. No auto indexing,
+nearest PTS, reordered/delayed-output frames, sequence scoring, uploads or distributed compute.
 Measurement geometry and original-viewer geometry remain distinct; the viewer
 still rejects non-unit exact SAR, crop and unsupported rotation. Adding SSIM does
 not make an otherwise unsupported original-pair inspection valid.

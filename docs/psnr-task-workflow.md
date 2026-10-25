@@ -1,5 +1,7 @@
 # 单帧 PSNR：GUI 到持久任务和标注证据
 
+> 当前普通依赖帧扩展见 [有界前向帧完整工作流](forward-frame-quality.md)：每侧显式闭合起点至目标、最多 32 AU、严格前向 PTS=DTS 与逐输入唯一即时输出。下文的 isolated-key/两包描述保留为不带 `decode` 的兼容路径；重排、延迟输出和序列仍不支持。
+
 播放器工具栏的“单帧 PSNR 任务”、共享标注卡的“测量并关联 PSNR”，以及服务管理的同名分类，打开同一独立管理页面。它调用 [持久任务 HTTP](source-psnr-jobs.md)、既有 `attach-quality-result` 命令和[原帧对查看器](annotation-psnr-pair-view.md)，不启动浏览器评分引擎，不读取或改变播放器轨道、播放游标、CSS 选区或 presenter token。GUI 和 HTTP Agent 的请求、attempt、状态、预算和不可变结果来自同一个服务；页面不限制 Agent 的来源选择或更低的执行预算。
 
 ## 使用

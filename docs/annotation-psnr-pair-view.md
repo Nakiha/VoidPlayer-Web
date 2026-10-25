@@ -30,10 +30,10 @@ parameter, verifies the document digest, and reads only bounded version-pinned b
 ranges. Missing, cleared, rebuilt, untrusted or changed caches explicitly fail.
 It does not repair, scan, build or upload an index.
 
-The existing closed-AU validation and raw-plane decoder are shared with measurement
+Closed-AU and [explicit bounded forward-window](forward-frame-quality.md) validation and the raw-plane decoder are shared with measurement
 through `withFlvFramePair`. Inspection takes the raw-frame path and never calls
 `measurePsnr`. It verifies the source tag/configuration, unique source PTS, AU and
-packet-picture evidence, then decodes exactly two isolated closed pictures. The
+packet-picture evidence, then decodes the original isolated pictures or their complete explicit forward windows, retaining exactly two target snapshots. The
 actual decoder build, full frame description (including color and plane layout),
 packet and source provenance must equal the original measurement. Both source/cache
 proofs are read again before the Worker publishes. The main session rereads the
@@ -82,8 +82,9 @@ other hosts receive an explicit unsupported error before source probing.
 The view's 30-second cancellation/deadline signal covers annotation checks, source
 checks, cache transfer and decoding. The original pair budgets remain: 16 MiB exact
 media reads, 8 MiB per packet, 250,000 cached packets, 32 MiB per cached document,
-32 MiB per output frame, 256 MiB WASM heap, 4096×2304 coded pixels and exactly two
-outputs. Source proof responses are capped at 16 KiB; index envelopes at 32 MiB +
+32 MiB per output frame, 256 MiB WASM heap, 4096×2304 coded pixels and two retained target snapshots. Isolated inputs observe
+exactly two outputs; explicit forward windows charge at most32 per side /64 per
+pair, including all discarded intermediate outputs. Source proof responses are capped at 16 KiB; index envelopes at 32 MiB +
 1 KiB. Main-thread retained snapshots share a 64 MiB application-byte budget.
 These are per viewer, not a global browser/process memory claim.
 

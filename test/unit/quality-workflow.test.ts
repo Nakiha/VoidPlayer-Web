@@ -66,7 +66,7 @@ test('candidate selection returns exact identities/AU/nonzero source PTS; bounde
  assert.throws(()=>qualityFrameCandidates(proof,doc,{afterAu:1,limit:1,buildId:'rebuilt'}),/changed/);
  assert.throws(()=>qualityFrameQuery({afterAu:0,limit:51}),/bounded/);
 });
-test('duplicates/non-key/config changes never become candidate targets; no implicit cache rebuild',async()=>{
+test('duplicates, non-forward clocks and configuration changes never become candidates; no implicit cache rebuild',async()=>{
  const {proof,doc}=await fixture();doc.packets[1][2]=doc.packets[0][2];assert.deepEqual(qualityFrameCandidates(proof,doc,{afterAu:0,limit:50}).entries,[]);
  doc.packets[1][2]++;doc.packets[1][4]=0;assert.deepEqual(qualityFrameCandidates(proof,doc,{afterAu:0,limit:50}).entries.map(p=>p.picture.au),[0]);
  doc.configurations=[doc.description];assert.throws(()=>qualityFrameCandidates(proof,doc,{afterAu:0,limit:50}),/single-configuration/);

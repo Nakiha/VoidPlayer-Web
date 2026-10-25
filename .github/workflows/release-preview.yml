@@ -265,7 +265,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
       - run: npx playwright install --with-deps ${{ matrix.engine }}
-      - name: Verify real SSIM GUI, Agent, durable evidence and original pair
+      - name: Verify real SSIM and forward-frame GUI, Agent, evidence and original pair
         run: node scripts/run-tests.mjs ci-ssim --engine ${{ matrix.engine }}
       - uses: actions/upload-artifact@v4
         if: always()

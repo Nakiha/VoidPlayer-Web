@@ -28,7 +28,7 @@ export function qualityJobsShell(){
     <label>${th(msg('qualityWorkflow.frame','明确选择缓存 AU / 源 PTS'))}<select data-frame disabled><option value="">—</option></select></label>
     <button type="button" data-frame-more hidden>${th(msg('qualityWorkflow.moreFrames','下一页候选帧'))}</button></fieldset>`;
   return `<section id="pane-quality" hidden><header class="admin-heading"><div><h1>${th(msg('qualityWorkflow.title','单帧 PSNR 任务'))}</h1>
-    <p>${th(msg('qualityWorkflow.scope','显式配对两个媒体库闭合关键帧，以 8/10 位 YUV420 原始码值测量。不是截图评分，不自动按时间配对，也不支持普通依赖帧或序列。'))}</p></div></header>
+    <p>${th(msg('qualityWorkflow.scope','显式配对媒体库中的闭合关键帧或有界前向依赖帧，以 8/10 位 YUV420 原始码值测量。依赖帧须从明确闭合起点逐 AU 解码，每侧最多 32 AU，且每个输入立即输出唯一帧。拒绝重排、延迟输出和序列，不自动按时间配对。'))}</p></div></header>
     <p id="quality-owner"></p><p id="quality-availability" role="status"></p><p>${th(msg('qualityWorkflow.lifetime','任务由服务持有。关闭此页或切换分类只停止观察；仅“取消任务”会请求终止。网络故障不表示任务失败。'))}</p>
     <label>${th(msg('qualityWorkflow.client','本页客户端 ID'))}<input id="quality-client" maxlength="80" spellcheck="false"><button id="quality-client-apply" type="button">${th(msg('qualityWorkflow.useClient','使用此客户端'))}</button></label>
     <form id="quality-form" class="admin-panel"><div class="quality-sources">${sides.map(source).join('')}</div>
@@ -158,7 +158,7 @@ export function installQualityJobs(signal:AbortSignal){
       try{if(!entry.version)throw new Error(t(msg('qualityWorkflow.noVersion','片源缺少版本，不能测量。')));
         const page=await api.frames(c.actor,entry.id,entry.version,{afterAu:more?previous?.nextAu??0:0,limit:50,...(more&&previous?{buildId:previous.source.binding.indexBuildId}:{})},c.signal);
         if(!valid(c)||sequence!==picker.sequence)return;picker.page=page;
-        for(const [index,target]of page.entries.entries())q<HTMLSelectElement>('[data-frame]').add(new Option(`AU ${target.picture.au} · source PTS ${target.sourcePtsUs} µs`,String(index)));
+        for(const [index,target]of page.entries.entries())q<HTMLSelectElement>('[data-frame]').add(new Option(`AU ${target.picture.au} · source PTS ${target.sourcePtsUs} µs${target.decode?` · decode AU ${target.decode.startAu}→${target.picture.au}`:``}`,String(index)));
         q('[data-proof]').hidden=false;q('[data-source-proof]').textContent=JSON.stringify({source:page.source,geometry:page.geometry,eligibility:page.eligibility},null,2);
         info(()=>`${entry.name} · ${page.codec} · ${page.geometry.width}×${page.geometry.height}\n${page.inspection.supported?t(msg('qualityWorkflow.inspectable','几何在原帧查看器支持范围内；执行与查看时仍重新核验。')):t(msg('qualityWorkflow.notInspectable','此源可尝试测量，但原帧查看器拒绝此几何：{reason}'),{reason:page.inspection.reason??'—'})}`);
         q('[data-frame-more]').hidden=page.nextAu===null;actions();

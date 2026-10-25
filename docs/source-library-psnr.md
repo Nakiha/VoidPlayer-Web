@@ -1,5 +1,7 @@
 # 媒体库单帧 PSNR 一次性 HTTP 闭环
 
+> 当前普通依赖帧扩展见 [有界前向帧完整工作流](forward-frame-quality.md)：每侧显式闭合起点至目标、最多 32 AU、严格前向 PTS=DTS 与逐输入唯一即时输出。下文的 isolated-key/两包描述保留为不带 `decode` 的兼容路径；重排、延迟输出和序列仍不支持。
+
 这是 #112 / #114 的受限纵向切片：注册媒体 → 显式服务端索引构建 → 缓存身份发现 → 独立 Node/Bun Worker 原始解码 → PSNR 与完整 provenance。评分不依赖 Session、已加载轨道、播放游标或 GUI 确认。`quality.frame-pair` 是逐源判断的一次性调用；独立的持久单帧 PSNR 入口见 [任务 v1](source-psnr-jobs.md)，`compute.workers` 仍为 unavailable，#114 / #121 没有整体完成。
 
 本文的一次性接口不创建持久 job/attempt/result 或任务 ID，也不提供队列、恢复、结果缓存、自动重试、断线续作、帧序列、自动对齐、评分 GUI、VMAF、分布式或性能达标承诺。连接断开取消本次调用；独立 durable job 的观察断线不取消，两种契约分开。

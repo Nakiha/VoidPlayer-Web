@@ -1,6 +1,6 @@
 import { validateSsim } from '../analysis/quality/ssim-evidence.ts';
 import type { LibraryPairResult } from '../analysis/quality/library-pair.ts';
-import { pairBudget } from '../analysis/quality/frame-pair.ts';
+import { pairBudget, FORWARD_PAIR_LIMITS, PAIR_LIMITS } from '../analysis/quality/frame-pair.ts';
 import { validatePsnrSpatial } from '../analysis/quality/psnr-spatial.ts';
 import { validateDescription } from '../media/frame-description.ts';
 import { referenceVersion } from '../media/io/media-reference.ts';
@@ -37,15 +37,28 @@ export function qualityEvidenceValue(value: unknown): LibraryPairResult {
     && r?.schema === 'voidplayer-frame-pair-psnr' && r.version === 1 && r.pairing === 'caller-specified'
     && r.correspondence === 'caller-specified-no-content-or-time-alignment'
     && r.decoder?.backend === 'ffmpeg-wasm' && /^[a-f0-9]{40}$/.test(r.decoder.buildId)
-    && r.decoder.frameAbi === 2 && r.decoder.packetIdentity === 'isolated-closed-au-v1'
+    && r.decoder.frameAbi === 2 && r.decoder.packetIdentity === (r.provenance?.reference?.decode||r.provenance?.distorted?.decode?'forward-one-output-per-au-v1':'isolated-closed-au-v1')
     && m?.schema === 'voidplayer-source-plane-psnr' && m.version === 1 && m.implementation === 'cpu-number-sse-v1'
     && m.domain === 'source-yuv-code-values' && m.geometry === 'unrotated-visible-pixel-grid'
     && m.pairing === 'caller-supplied-unverified' && [8,10].includes(m.bitDepth) && m.peak === 2 ** m.bitDepth - 1);
   pairBudget({pairing:'caller-specified', reference:r.provenance?.reference, distorted:r.provenance?.distorted, roi:m.roi});
+  let packets=0;
   for (const side of ['reference','distorted'] as const) {
     const p = r.provenance[side], d = p.decoded?.description, source = v.sources?.[side];
-    check(p.decoded?.sourcePtsUs === p.sourcePtsUs && p.validation === 'cached-au-source-tag-isolated-closed-picture-v1');
+    check(p.decoded?.sourcePtsUs === p.sourcePtsUs && p.validation === (p.decode?'cached-contiguous-forward-one-output-per-au-v1':'cached-au-source-tag-isolated-closed-picture-v1'));
     check(unsigned(p.packet?.offset) && Number.isSafeInteger(p.packet.size) && p.packet.size > 0 && Number.isSafeInteger(p.packet.sourceDtsUs));
+    if(p.decode){
+      const steps=p.dependency?.packets,count=p.picture.au-p.decode.startAu+1;
+      check(Array.isArray(steps)&&steps.length===count&&count<=FORWARD_PAIR_LIMITS.packetsPerSide&&p.dependency?.outputFrames===count);
+      for(const [i,step]of steps.entries()){
+        const previous=steps[i-1];
+        check(step.au===p.decode.startAu+i&&step.key===(i===0)&&unsigned(step.offset)&&Number.isSafeInteger(step.size)&&step.size>0
+          &&step.size<=PAIR_LIMITS.maxPacketBytes&&step.offset+step.size<=p.size&&Number.isSafeInteger(step.pts)&&step.pts===step.dts
+          &&(!previous||(step.pts>previous.pts&&step.offset>=previous.offset+previous.size)));
+      }
+      const last=steps.at(-1)!;check(last.pts===p.sourcePtsUs&&last.dts===p.packet.sourceDtsUs&&last.offset===p.packet.offset&&last.size===p.packet.size);
+      packets+=count;
+    }else{check(p.dependency===undefined);packets++;}
     validateDescription(d);
     check(d.format === 'YUV' && d.yuv?.bitDepth === m.bitDepth && d.width <= 16384 && d.height <= 16384);
     const roi = m.roi;
@@ -67,7 +80,7 @@ export function qualityEvidenceValue(value: unknown): LibraryPairResult {
       && Number.isFinite(stat.mse) && stat.mse >= 0 && stat.psnr
       && (stat.psnr.kind === 'finite' ? Number.isFinite(stat.psnr.db) : stat.psnr.kind === 'positive-infinity' && stat.psnr.db === null));
   }
-  check(r.work?.packets === 2 && r.work.outputFrames === 2 && unsigned(r.work.readBytes) && Number.isFinite(r.work.elapsedMs) && r.work.elapsedMs >= 0
+  check(r.work?.packets === packets && r.work.outputFrames === packets && unsigned(r.work.readBytes) && r.work.readBytes<=PAIR_LIMITS.maxReadBytes && Number.isFinite(r.work.elapsedMs) && r.work.elapsedMs >= 0
     && m.work && [m.work.samples,m.work.bytesRead,m.work.inputViewBytes,m.work.chargedInputBytes].every(unsigned));
   validatePsnrSpatial(m);
   if(r.ssim!==undefined)validateSsim(r.ssim,m);

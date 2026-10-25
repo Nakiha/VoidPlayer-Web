@@ -24,7 +24,7 @@ export type QualityJob = {
   reason: QualityJobReason | null; input: QualityJobInput;
   attempt: { id: string; number: 1; startedAt: number; endedAt: number | null; state: QualityJobState; phase: QualityJobPhase } | null;
   result: { available: boolean; url: string; digest: string | null };
-  progress: { scoredPairs: 0 | 1; targetPairs: 1; decodedFrames: null | 2 };
+  progress: { scoredPairs: 0 | 1; targetPairs: 1; decodedFrames: null | number };
 };
 export type QualityJobResult = {
   schema: 'voidplayer-quality-job-result'; version: 1; jobId: string; attemptId: string;
