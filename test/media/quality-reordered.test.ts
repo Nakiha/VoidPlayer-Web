@@ -68,6 +68,14 @@ for(const sample of samples.filter((s:any)=>s.frames===16)){
   const page=await fetch(`${base}/api/media/${entry.id}/psnr-frames?v=${entry.version}`,{headers}).then(r=>r.json());assert.equal(page.entries.length,16);
   const request={pairing:'caller-specified',reference:page.entries.find((p:any)=>p.picture.au===2),distorted:page.entries.find((p:any)=>p.picture.au===5),roi:{x:0,y:0,width:32,height:32},spatial:{blockWidth:16,blockHeight:16},ssim:{variant:'ffmpeg-uniform-8x8-step4-v1'}};
   const input={schema:'voidplayer-psnr-frame-job',version:1,client:{id:'gop-http',kind:'agent'},request};const send=(value:unknown)=>fetch(base+'/api/quality/jobs',{method:'POST',headers:{...headers,'idempotency-key':'gop-once'},body:JSON.stringify(value)});
+  for(const [i,decode]of [null,[],{mode:'packet-identity-gop-v1',startAu:0},{mode:'packet-identity-gop-v1',startAu:0,endAu:15.5}].entries()){
+   const invalid=structuredClone(input);invalid.request.reference.decode=decode;
+   const rejected=await fetch(base+'/api/quality/jobs',{method:'POST',headers:{...headers,'idempotency-key':`invalid-decode-${i}`},body:JSON.stringify(invalid)});
+   assert.equal(rejected.status,400,await rejected.clone().text());assert.equal((await rejected.json()).code,'invalid-request');
+   const one=await fetch(base+'/api/quality/psnr-pair',{method:'POST',headers:{...headers,'x-voidplayer-action':'quality'},body:JSON.stringify(invalid.request)});
+   assert.equal(one.status,400,await one.clone().text());assert.equal((await one.json()).code,'invalid-request');
+  }
+  const untouched=await fetch(base+'/api/quality/jobs',{headers}).then(r=>r.json());assert.deepEqual(untouched.entries,[]);assert.equal(untouched.resources.activeAttempts,0);assert.equal(untouched.resources.queued,0);
   const response=await send(input);assert.equal(response.status,202);let job=(await response.json()).job;
   for(let n=0;n<300&&!['completed','failed','cancelled'].includes(job.state);n++){await new Promise(r=>setTimeout(r,25));job=await fetch(`${base}/api/quality/jobs/${job.id}`,{headers}).then(r=>r.json());}
   assert.equal(job.state,'completed',JSON.stringify(job));assert.equal(job.progress.decodedFrames,32);
