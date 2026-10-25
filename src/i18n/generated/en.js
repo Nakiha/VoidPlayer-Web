@@ -802,6 +802,7 @@ export default {
   "quality.completedRequired": () => "A completed result is required.",
   "quality.enterJob": () => "Enter a completed job ID.",
   "quality.evidenceTitle": () => "PSNR evidence",
+  "quality.forwardGuarantee": () => "The exact binding is to the selected bitstream window's actual decoder output; reference-graph integrity is not certified. The current interface cannot detect error concealment; missing reference frames may still yield a score.",
   "quality.fullProvenance": () => "Full immutable provenance",
   "quality.historical": () => "Historical copy — not verified by this service",
   "quality.jobId": () => "Completed job ID ",

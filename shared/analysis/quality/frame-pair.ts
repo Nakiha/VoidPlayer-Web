@@ -20,6 +20,10 @@ export const PAIR_LIMITS = Object.freeze({ maxReadBytes: 16 * 1024 * 1024, maxPa
   maxIndexPackets: 250000, maxIndexBytes: 32 * 1024 * 1024, maxFrameBytes: 32 * 1024 * 1024,
   maxHeapBytes: 256 * 1024 * 1024, maxPixels: 4096 * 2304, maxElapsedMs: 30000, maxPackets: 2, maxOutputFrames: 2 });
 export const FORWARD_PAIR_LIMITS = Object.freeze({ packetsPerSide: 32, maxPackets: 64, maxOutputFrames: 64 });
+/** Input/output association is not proof of reference-graph integrity. The
+ * pinned packet ABI does not report decoder concealment/decode_error_flags. */
+export const FORWARD_OUTPUT_GUARANTEE = Object.freeze({pixels:'exact-decoder-output-of-verified-input-window',
+  referenceIntegrity:'not-certified',concealmentDetection:'unavailable'} as const);
 export type ForwardDecode = { mode: 'forward-one-output-per-au-v1'; startAu: number };
 export type PairPacket = { au: number; offset: number; size: number; pts: number; dts: number; key: boolean };
 export type FramePairErrorCode = import('./psnr.ts').PsnrErrorCode | 'invalid-request' | 'cache-miss' | 'source-changed' | 'identity-mismatch' | 'unsupported-source' | 'decoder-error' | 'busy';
@@ -53,7 +57,7 @@ export interface PairDecoder {
   close(): void;
 }
 export type PairProvenance = PairTarget & { decoded: { sourcePtsUs: number; description: FrameDescription }; packet: { offset: number; size: number; sourceDtsUs: number };
-  dependency?: { packets: PairPacket[]; outputFrames: number };
+  dependency?: { packets: PairPacket[]; outputFrames: number; guarantee: typeof FORWARD_OUTPUT_GUARANTEE };
   validation: 'cached-au-source-tag-isolated-closed-picture-v1' | 'cached-contiguous-forward-one-output-per-au-v1' };
 export type FramePairResult = { schema: 'voidplayer-frame-pair-psnr'; version: 1; pairing: 'caller-specified';
   correspondence: 'caller-specified-no-content-or-time-alignment'; decoder: PairDecoder['version']; metric: PsnrResult; ssim?: SsimResult;
@@ -244,7 +248,7 @@ async function withFlvFramePair<T>(request: FramePairRequest, sources: [CachedPa
       frames.push(frame);
       provenance.push({ ...structuredClone(target), decoded: { sourcePtsUs: frame.pts, description: structuredClone(frame.description) },
         packet: { offset: packet.offset, size: packet.size, sourceDtsUs: packet.dts },
-        ...(target.decode?{dependency:{packets:plan,outputFrames:plan.length}}:{}),
+        ...(target.decode?{dependency:{packets:plan,outputFrames:plan.length,guarantee:{...FORWARD_OUTPUT_GUARANTEE}}}:{}),
         validation:target.decode?'cached-contiguous-forward-one-output-per-au-v1':'cached-au-source-tag-isolated-closed-picture-v1' });
     }
     check();

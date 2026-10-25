@@ -3232,6 +3232,10 @@
     "source": "PSNR 证据",
     "translation": "PSNR evidence"
   },
+  "quality.forwardGuarantee": {
+    "source": "精确绑定的是所选码流窗口的实际解码输出，未认证引用图完整性。当前接口无法检测错误隐藏（concealment）；缺失参考帧仍可能返回分数。",
+    "translation": "The exact binding is to the selected bitstream window's actual decoder output; reference-graph integrity is not certified. The current interface cannot detect error concealment; missing reference frames may still yield a score."
+  },
   "quality.fullProvenance": {
     "source": "完整不可变 provenance",
     "translation": "Full immutable provenance"

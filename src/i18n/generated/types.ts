@@ -800,6 +800,7 @@ export interface Sources {
   "quality.completedRequired": "需要已完成的结果。";
   "quality.enterJob": "请输入已完成的任务 ID。";
   "quality.evidenceTitle": "PSNR 证据";
+  "quality.forwardGuarantee": "精确绑定的是所选码流窗口的实际解码输出，未认证引用图完整性。当前接口无法检测错误隐藏（concealment）；缺失参考帧仍可能返回分数。";
   "quality.fullProvenance": "完整不可变 provenance";
   "quality.historical": "历史副本，本服务未核验";
   "quality.jobId": "已完成任务 ID ";
@@ -2050,6 +2051,7 @@ export interface MessageParameters {
   "quality.completedRequired": {  };
   "quality.enterJob": {  };
   "quality.evidenceTitle": {  };
+  "quality.forwardGuarantee": {  };
   "quality.fullProvenance": {  };
   "quality.historical": {  };
   "quality.jobId": {  };

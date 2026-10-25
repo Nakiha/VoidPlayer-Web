@@ -16,6 +16,7 @@ const limits=document.createElement('p');limits.textContent=t(msg('quality.pairL
 const cancel=document.createElement('button');cancel.textContent=t(msg('quality.pairCancel','取消并释放快照'));cancel.type='button';
 const status=document.createElement('p');status.role='status';status.id='pair-status';
 const blocks=document.createElement('div');blocks.id='pair-blocks';
+const forwardNotice=document.createElement('p');forwardNotice.className='quality-forward-guarantee';forwardNotice.hidden=true;
 const blockControl=document.createElement('label');blockControl.hidden=true;const blockLabel=document.createElement('span');blockLabel.textContent=t(msg('quality.spatialPicker','在原帧上查看分块'));
 const blockSelect=document.createElement('select');blockSelect.id='pair-block-selection';blockControl.append(blockLabel,blockSelect);
 const views=document.createElement('div');views.className='quality-pair-views';views.style.visibility='hidden';
@@ -29,7 +30,7 @@ for(const side of PAIR_VIEW_SIDES) {
   const caption=captions[side]=document.createElement('p');caption.className='quality-pair-caption';
   stage.append(canvas,svg);section.append(heading,stage,caption);views.append(section);
 }
-root.append(title,note,limits,cancel,status,blockControl,views,blocks);
+root.append(title,note,limits,forwardNotice,cancel,status,blockControl,views,blocks);
 const session=new QualityPairViewSession((side,frame)=>{
   const stage=stages[side],width=stage.clientWidth,height=stage.clientHeight,d=frame.description,scale=Math.min(width/d.width,height/d.height);
   const g=geometry[side]={width,height,imageWidth:d.width,imageHeight:d.height,zoom:scale,offsetX:0,offsetY:0,dpr:devicePixelRatio};
@@ -37,6 +38,8 @@ const session=new QualityPairViewSession((side,frame)=>{
 },location.href);
 function render() {
   const state=session.getState();root.dataset.state=state.state;views.style.visibility=state.state==='ready'?'visible':'hidden';
+  forwardNotice.hidden=state.state!=='ready'||!(state.evidence?.value.result.provenance.reference.decode||state.evidence?.value.result.provenance.distorted.decode);
+  forwardNotice.textContent=t(msg('quality.forwardGuarantee','精确绑定的是所选码流窗口的实际解码输出，未认证引用图完整性。当前接口无法检测错误隐藏（concealment）；缺失参考帧仍可能返回分数。'));
   status.textContent=state.state==='ready'?t(msg('quality.pairReady','两侧快照已按源、缓存、AU、实际 PTS 和几何核对；ROI 为只读覆盖层。')):state.error??state.state;
   blocks.replaceChildren();if(state.state==='ready'&&state.evidence)qualitySpatial(blocks,state.evidence.value.result.metric,index=>session.selectBlock(index),state.selectedBlock,state.evidence.value.result.ssim);
   const grid=state.state==='ready'?state.evidence?.value.result.metric.spatial:undefined;

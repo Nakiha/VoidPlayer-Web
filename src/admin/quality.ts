@@ -14,7 +14,7 @@ import { AnnotationClient } from '../review/annotation-client.ts';
 import { attachAnnotationQuality, type QualityAttachmentCommand } from '../review/quality-evidence-client.ts';
 import { qualityEvidenceValue } from '../../shared/review/quality-evidence.ts';
 import { qualityPairViewUrl } from '../../shared/review/quality-pair-view.ts';
-import { qualityFacts } from '../ui/quality-evidence.ts';
+import { qualityFacts, forwardOutputText } from '../ui/quality-evidence.ts';
 import { randomUUID } from '../../shared/utils/uuid.ts';
 import { psnrGridPlan } from '../../shared/analysis/quality/psnr.ts';
 
@@ -26,6 +26,7 @@ export function qualityJobsShell(){
     <div class="admin-actions"><input data-search type="search" aria-label="${th(msg('qualityWorkflow.searchMedia','搜索媒体库'))}"><button type="button" data-search-button>${th(msg('admin.search','搜索'))}</button><button type="button" data-more hidden>${th(msg('admin.nextPage','下一页'))}</button></div>
     <div data-media-list class="quality-media-list"></div><p data-source-status role="status"></p><details data-proof hidden><summary>${th(msg('qualityWorkflow.sourceProof','来源、缓存身份与几何见证'))}</summary><pre data-source-proof></pre></details>
     <label>${th(msg('qualityWorkflow.frame','明确选择缓存 AU / 源 PTS'))}<select data-frame disabled><option value="">—</option></select></label>
+    <p data-forward-guarantee class="quality-forward-guarantee" hidden></p>
     <button type="button" data-frame-more hidden>${th(msg('qualityWorkflow.moreFrames','下一页候选帧'))}</button></fieldset>`;
   return `<section id="pane-quality" hidden><header class="admin-heading"><div><h1>${th(msg('qualityWorkflow.title','单帧 PSNR 任务'))}</h1>
     <p>${th(msg('qualityWorkflow.scope','显式配对媒体库中的闭合关键帧或有界前向依赖帧，以 8/10 位 YUV420 原始码值测量。依赖帧须从明确闭合起点逐 AU 解码，每侧最多 32 AU，且每个输入立即输出唯一帧。拒绝重排、延迟输出和序列，不自动按时间配对。'))}</p></div></header>
@@ -68,6 +69,11 @@ export function installQualityJobs(signal:AbortSignal){
   $('form').addEventListener('input',clearFormError,{signal});
   $('form').addEventListener('change',clearFormError,{signal});
   function actions(){const pending=!!observation?.pending,busy=!!observation?.busy;
+    for(const side of sides){
+      const notice=document.querySelector<HTMLElement>(`[data-quality-source="${side}"] [data-forward-guarantee]`)!;
+      notice.hidden=!pickers.get(side)?.target?.decode;
+      localizedText(notice,forwardOutputText);
+    }
     $('submit').toggleAttribute('disabled',!enabled||!lastActor||pending||busy||sides.some(side=>!pickers.get(side)?.target));
     $('retry').hidden=!pending;$('forget').hidden=!pending;$('retry').toggleAttribute('disabled',busy||!enabled);$('forget').toggleAttribute('disabled',busy);
     for(const input of $('form').querySelectorAll<HTMLInputElement|HTMLSelectElement>('input,select'))input.disabled=!enabled||pending||busy||input instanceof HTMLSelectElement&&!pickers.get(input.closest<HTMLElement>('[data-quality-source]')?.dataset.qualitySource as Side)?.page;

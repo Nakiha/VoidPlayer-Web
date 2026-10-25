@@ -10,6 +10,9 @@ import { currentActor } from '../services/identity.ts';
 import { qualitySpatial } from './quality-spatial.ts';
 
 type Target = {space:string;id:string;revision:number;actor:string;document:AnnotationDocument};
+export function forwardOutputText(){
+  return t(msg('quality.forwardGuarantee','精确绑定的是所选码流窗口的实际解码输出，未认证引用图完整性。当前接口无法检测错误隐藏（concealment）；缺失参考帧仍可能返回分数。'));
+}
 function dialog(title: string) {
   const root=document.createElement('dialog');root.className='quality-evidence-dialog';root.setAttribute('aria-label',title);
   const heading=document.createElement('h2');heading.textContent=title;
@@ -26,6 +29,9 @@ export function qualityFacts(root:HTMLElement,value:ReturnType<typeof qualityEvi
   const details=document.createElement('details'),heading=document.createElement('summary'),data=document.createElement('pre');
   heading.textContent=t(msg('quality.fullProvenance','完整不可变 provenance'));data.className='quality-evidence-provenance';data.textContent=JSON.stringify(value,null,2);details.append(heading,data);
   root.append(summary,conditions,sources);
+  if(value.result.provenance.reference.decode||value.result.provenance.distorted.decode){
+    const notice=document.createElement('p');notice.className='quality-forward-guarantee';notice.textContent=forwardOutputText();root.append(notice);
+  }
   const ssim=value.result.ssim;
   qualitySpatial(root,metric,undefined,undefined,ssim);root.append(details);
 }

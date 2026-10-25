@@ -59,14 +59,38 @@ for(const [codec,depth]of [['h264',8],['hevc',10]]as const){
   for(let at=0;at<frameBytes;at+=depth===8?1:2){const d=BigInt(depth===8?native[at]-native[frameBytes+at]:native.readUInt16LE(at)-native.readUInt16LE(frameBytes+at));sse+=d*d;}
   assert.equal(stored.value.result.metric.aggregate.sse,Number(sse));assert.ok(sse>0n);assert.equal(stored.value.result.work.packets,9);
   const oracle=ssimOracle(native.subarray(0,frameBytes),native.subarray(frameBytes),depth,32,32,input.request.roi);assert.ok(Math.abs(stored.value.result.ssim.aggregate.score-oracle.all)<1e-12);
+  const discovery=await fetch(base+'/api/agent',{headers}).then(r=>r.json());
+  assert.deepEqual(discovery.qualityJobs.source.forward.guarantee,{pixels:'exact-decoder-output-of-verified-input-window',referenceIntegrity:'not-certified',concealmentDetection:'unavailable'});
+  for(const side of ['reference','distorted']as const)assert.deepEqual(stored.value.result.provenance[side].dependency.guarantee,discovery.qualityJobs.source.forward.guarantee);
+  let counterResult:any;
+  if(codec==='h264'){
+   // Fixed encoded bytes make the concealment counterexample independent of
+   // the host's encoder version. Delete a complete intermediate reference AU.
+   const intact=Buffer.from(sample.flv,'base64'),indexed=await preparedPair(intact),packet=indexed.source.index!.packets[1];
+   const damaged=Buffer.concat([intact.subarray(0,packet[0]-16),intact.subarray(packet[0]+packet[1]+4)]);
+   await writeFile(join(media,'counter-original.flv'),intact);await writeFile(join(media,'counter-missing.flv'),damaged);await service!.library.refresh();
+   const counterEntries=await waitForAnnotationMedia(service!.library,['counter-original.flv','counter-missing.flv']),targets=[];
+   for(const [name,au]of [['counter-original.flv',5],['counter-missing.flv',4]]as const){
+    const entry=counterEntries.find((e:any)=>e.name===name);assert.ok(entry);
+    assert.equal((await fetch(`${base}/api/media/${entry.id}/frame-index?v=${entry.version}&build=1`)).status,200);
+    const candidates=await fetch(`${base}/api/media/${entry.id}/psnr-frames?v=${entry.version}`,{headers}).then(r=>r.json()),target=candidates.entries.find((p:any)=>p.picture.au===au);assert.ok(target?.decode);assert.equal(target.sourcePtsUs,2500000);targets.push(target);
+   }
+   const counter=await fetch(base+'/api/quality/jobs',{method:'POST',headers:{...headers,'idempotency-key':'missing-reference-is-not-certified'},body:JSON.stringify({...input,request:{...input.request,reference:targets[0],distorted:targets[1]}})});assert.equal(counter.status,202);let job=(await counter.json()).job;
+   for(let n=0;n<300&&!['completed','failed'].includes(job.state);n++){await new Promise(r=>setTimeout(r,25));job=await fetch(`${base}/api/quality/jobs/${job.id}`,{headers}).then(r=>r.json());}
+   assert.equal(job.state,'completed',JSON.stringify(job));counterResult=await fetch(`${base}/api/quality/jobs/${job.id}/result`,{headers}).then(r=>r.json());qualityEvidenceValue(counterResult.value);
+   assert.ok(counterResult.value.result.metric.aggregate.sse>0,'a concealed output differs from the original undamaged stream');
+   assert.equal(counterResult.value.result.provenance.distorted.dependency.guarantee.referenceIntegrity,'not-certified');assert.equal(counterResult.value.result.provenance.distorted.dependency.guarantee.concealmentDetection,'unavailable');
+   t.diagnostic(JSON.stringify({counterexample:'missing-intermediate-reference-au',state:job.state,sse:counterResult.value.result.metric.aggregate.sse,guarantee:counterResult.value.result.provenance.distorted.dependency.guarantee}));
+  }
   const modified=structuredClone(input);modified.request.reference.decode!.startAu=1;
   const collision=await fetch(base+'/api/quality/jobs',{method:'POST',headers:{...headers,'idempotency-key':'exact-window'},body:JSON.stringify(modified)});assert.equal(collision.status,409);
-  for(const mutate of [(v:any)=>{v.result.provenance.reference.dependency.packets[1].au++;},(v:any)=>{v.result.provenance.reference.decode.startAu++;},(v:any)=>{v.result.work.outputFrames=2;},(v:any)=>{v.result.decoder.packetIdentity='isolated-closed-au-v1';}]){const bad=structuredClone(stored.value);mutate(bad);assert.throws(()=>qualityEvidenceValue(bad));}
+  for(const mutate of [(v:any)=>{v.result.provenance.reference.dependency.packets[1].au++;},(v:any)=>{v.result.provenance.reference.decode.startAu++;},(v:any)=>{v.result.work.outputFrames=2;},(v:any)=>{v.result.decoder.packetIdentity='isolated-closed-au-v1';},(v:any)=>{v.result.provenance.reference.dependency.guarantee.referenceIntegrity='certified';},(v:any)=>{delete v.result.provenance.reference.dependency.guarantee;}]){const bad=structuredClone(stored.value);mutate(bad);assert.throws(()=>qualityEvidenceValue(bad));}
   const ah={...headers,'x-voidplayer-action':'annotation'},document={media:[{id:'media',name:entry.name,size:entry.size,lastModified:entry.lastModified,codec,decoder:'ffmpeg-wasm',width:32,height:32,durationUs:800000,firstPtsUs:2000000,source:{kind:'library',id:entry.id,url:`${base}/api/media/${entry.id}?v=${entry.version}`}}],mark:{id:'forward-mark',text:'Existing ordinary-frame observation',severity:3,origin:'agent',createdAt:new Date().toISOString(),slot:'A',mediaId:'media',frame:{ptsUs:reference.sourcePtsUs-2000000,sourcePtsUs:reference.sourcePtsUs,durationUs:100000},comparison:[],region:null}};
   assert.equal((await fetch(base+'/api/annotations/spaces/default',{method:'POST',headers:ah,body:JSON.stringify({action:'put',id:'forward-mark',operationId:'create',revision:0,document})})).status,200);
   const attached=await fetch(base+'/api/annotations/spaces/default',{method:'POST',headers:ah,body:JSON.stringify({action:'attach-quality-result',id:'forward-mark',operationId:'attach',revision:1,evidence:{jobId:job.id,attemptId:job.attempt.id,digest:job.result.digest,side:'reference'}})});assert.equal(attached.status,200,await attached.clone().text());assert.deepEqual((await attached.json()).document.mark.qualityEvidence[0].value,stored.value);
   await service!.close();service=undefined;base=await start();headers.origin=base;
   assert.deepEqual(await fetch(`${base}/api/quality/jobs/${job.id}/result`,{headers}).then(r=>r.json()),stored);
+  if(counterResult)assert.deepEqual(await fetch(`${base}/api/quality/jobs/${counterResult.jobId}/result`,{headers}).then(r=>r.json()),counterResult);
   const replay=await fetch(base+'/api/quality/jobs',{method:'POST',headers:{...headers,'idempotency-key':'exact-window'},body:JSON.stringify(input)});assert.equal(replay.status,200);assert.equal((await replay.json()).replayed,true);
  });
 }

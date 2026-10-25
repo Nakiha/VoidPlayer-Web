@@ -55,6 +55,18 @@ existing packet ABI does not expose per-frame decode_error_flags: this is an
 identity and exact-input execution contract, not a new proof of reference-graph
 integrity or an assertion that the pinned decoder never performs concealment.
 
+This limit is exposed directly in API discovery and each immutable forward-side
+`dependency.guarantee`: `pixels=exact-decoder-output-of-verified-input-window`,
+`referenceIntegrity=not-certified`, `concealmentDetection=unavailable`. GUI frame
+selection, task/shared-evidence results and the original-frame viewer display
+the same distinction next to the relevant controls/facts. A complete trusted
+cache proves index coverage, not coded reference completeness: the fixed H.264
+counterexample deletes an intermediate reference AU, builds its actual trusted
+cache, and completes an HTTP job whose pixels differ from the undamaged stream.
+Its persisted guarantee still explicitly says not-certified/unavailable. Some
+missing-reference streams are rejected by decoding; absence of a rejection is
+never a certificate that no concealment occurred.
+
 Measurement still uses the visible native-code-value grid and explicit even ROI.
 The original-frame viewer additionally requires exact SPS square SAR, no crop and
 no rotation. These geometry gates and source color/chroma-location gates are

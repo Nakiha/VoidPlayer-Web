@@ -43,7 +43,7 @@ try{
   const response=await fetch(base+'/api/quality/psnr-pair',{method:'POST',headers,body:JSON.stringify(request)}),value=await response.json();assert.equal(response.status,200,JSON.stringify(value));
   assert.equal(value.execution.runtime,'bun');assert.equal(value.execution.host,'node-worker');assert.equal(value.execution.runtimeVersion,manifest.runtime.version);assert.equal(value.result.metric.bitDepth,sample.depth);
   assert.equal(value.result.decoder.buildId,manifest.decoder.source.revision);assert.deepEqual(value.sources.reference,binding);assert.deepEqual(value.sources.distorted,binding);
-  if(sample.forward){assert.equal(value.result.work.packets,9);assert.equal(value.result.work.outputFrames,9);assert.equal(value.result.decoder.packetIdentity,'forward-one-output-per-au-v1');for(const side of ['reference','distorted'])assert.equal(value.result.provenance[side].dependency.outputFrames,request[side].picture.au+1);}
+  if(sample.forward){for(const side of ['reference','distorted'])assert.deepEqual(value.result.provenance[side].dependency.guarantee,{pixels:'exact-decoder-output-of-verified-input-window',referenceIntegrity:'not-certified',concealmentDetection:'unavailable'});assert.equal(value.result.work.packets,9);assert.equal(value.result.work.outputFrames,9);assert.equal(value.result.decoder.packetIdentity,'forward-one-output-per-au-v1');for(const side of ['reference','distorted'])assert.equal(value.result.provenance[side].dependency.outputFrames,request[side].picture.au+1);}
   const raw=Buffer.from(sample.native,'base64');assert.equal(createHash('sha256').update(raw).digest('hex'),sample.nativeSha256);
   const bytes=sample.depth===8?1:2,frame=1536*bytes;let aggregate=0;
   for(const [i,name] of ['y','u','v'].entries()){

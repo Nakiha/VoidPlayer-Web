@@ -1,6 +1,6 @@
 import { validateSsim } from '../analysis/quality/ssim-evidence.ts';
 import type { LibraryPairResult } from '../analysis/quality/library-pair.ts';
-import { pairBudget, FORWARD_PAIR_LIMITS, PAIR_LIMITS } from '../analysis/quality/frame-pair.ts';
+import { pairBudget, FORWARD_PAIR_LIMITS, PAIR_LIMITS, FORWARD_OUTPUT_GUARANTEE } from '../analysis/quality/frame-pair.ts';
 import { validatePsnrSpatial } from '../analysis/quality/psnr-spatial.ts';
 import { validateDescription } from '../media/frame-description.ts';
 import { referenceVersion } from '../media/io/media-reference.ts';
@@ -50,6 +50,9 @@ export function qualityEvidenceValue(value: unknown): LibraryPairResult {
     if(p.decode){
       const steps=p.dependency?.packets,count=p.picture.au-p.decode.startAu+1;
       check(Array.isArray(steps)&&steps.length===count&&count<=FORWARD_PAIR_LIMITS.packetsPerSide&&p.dependency?.outputFrames===count);
+      const guarantee=p.dependency?.guarantee;
+      check(guarantee&&Object.keys(guarantee).length===Object.keys(FORWARD_OUTPUT_GUARANTEE).length
+        &&Object.entries(FORWARD_OUTPUT_GUARANTEE).every(([key,value])=>guarantee[key as keyof typeof guarantee]===value));
       for(const [i,step]of steps.entries()){
         const previous=steps[i-1];
         check(step.au===p.decode.startAu+i&&step.key===(i===0)&&unsigned(step.offset)&&Number.isSafeInteger(step.size)&&step.size>0

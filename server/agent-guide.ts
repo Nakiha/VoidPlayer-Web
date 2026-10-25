@@ -347,6 +347,12 @@ target, with at most 32 inputs per side / 64 per pair. Every packet must have
 unique strictly increasing PTS=DTS and exactly one immediate decoder output before
 the next input; flush must emit no extra output. Delayed/reordered pictures,
 changed parameter sets, ambiguous identities and unavailable starts are rejected.
+The guarantee is exact decoder output for the verified selected bitstream window,
+not certified reference-graph integrity. The packet ABI cannot report error
+concealment/decode_error_flags: a missing reference AU may still produce a scored
+frame with different pixels from the original undamaged stream. Every forward
+result persists dependency.guarantee with referenceIntegrity=not-certified and
+concealmentDetection=unavailable; GUI selection/results expose the same limit.
 No nearest-frame lookup or reference-graph inference occurs. Result provenance
 records every dependency AU/tag/clock and the same window is revalidated by the
 read-only original-frame viewer. Existing isolated-key requests remain unchanged.

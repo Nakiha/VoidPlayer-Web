@@ -802,6 +802,7 @@ export default {
   "quality.completedRequired": () => "［A~ c~o~m~p~l~e~t~e~d~ r~e~s~u~l~t~ i~s~ r~e~q~u~i~r~e~d~. ········］",
   "quality.enterJob": () => "［E~n~t~e~r~ a~ c~o~m~p~l~e~t~e~d~ j~o~b~ I~D~. ········］",
   "quality.evidenceTitle": () => "［P~S~N~R~ e~v~i~d~e~n~c~e~ ········］",
+  "quality.forwardGuarantee": () => "［T~h~e~ e~x~a~c~t~ b~i~n~d~i~n~g~ i~s~ t~o~ t~h~e~ s~e~l~e~c~t~e~d~ b~i~t~s~t~r~e~a~m~ w~i~n~d~o~w~'s~ a~c~t~u~a~l~ d~e~c~o~d~e~r~ o~u~t~p~u~t~; r~e~f~e~r~e~n~c~e~-g~r~a~p~h~ i~n~t~e~g~r~i~t~y~ i~s~ n~o~t~ c~e~r~t~i~f~i~e~d~. T~h~e~ c~u~r~r~e~n~t~ i~n~t~e~r~f~a~c~e~ c~a~n~n~o~t~ d~e~t~e~c~t~ e~r~r~o~r~ c~o~n~c~e~a~l~m~e~n~t~; m~i~s~s~i~n~g~ r~e~f~e~r~e~n~c~e~ f~r~a~m~e~s~ m~a~y~ s~t~i~l~l~ y~i~e~l~d~ a~ s~c~o~r~e~. ········］",
   "quality.fullProvenance": () => "［F~u~l~l~ i~m~m~u~t~a~b~l~e~ p~r~o~v~e~n~a~n~c~e~ ········］",
   "quality.historical": () => "［H~i~s~t~o~r~i~c~a~l~ c~o~p~y~ — n~o~t~ v~e~r~i~f~i~e~d~ b~y~ t~h~i~s~ s~e~r~v~i~c~e~ ········］",
   "quality.jobId": () => "［C~o~m~p~l~e~t~e~d~ j~o~b~ I~D~  ········］",
