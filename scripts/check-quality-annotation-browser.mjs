@@ -50,10 +50,22 @@ try {
  page=await owner.newPage();evidence=recordBrowserEvidence(page);const errors=[];page.on('pageerror',error=>errors.push(error.message));
  phase='owner-restore';await page.goto(`${base}/?workspace=${workspace.id}`);await chooseTestGuest(page);await page.waitForFunction(annotationWorkspacePlayable);await page.waitForFunction(()=>window.voidPlayer.getState().marks.some(m=>m.id==='mark-B'));
  const observerContext=await browser.newContext({locale:'en-US',viewport:{width:1280,height:900},deviceScaleFactor:2}),observer=await observerContext.newPage();
+ await observer.addInitScript(()=>{const native=window.requestAnimationFrame.bind(window);window.__qualityRafGate=false;window.requestAnimationFrame=callback=>window.__qualityRafGate?0:native(callback);});
  observerPage=observer;phase='observer-restore';await observer.goto(`${base}/?workspace=${workspace.id}`);await chooseTestGuest(observer);await observer.waitForFunction(annotationWorkspacePlayable);
  phase='observer-replace';const a=entries[0];await observer.evaluate(async url=>{const blob=await fetch(url).then(r=>r.blob());await window.voidPlayer.loadFile('A',new File([blob],'A.mp4'));},`${base}/api/media/${a.id}?v=${a.version}`);
  await observer.waitForFunction(()=>!window.voidPlayer.getState().busy&&window.voidPlayer.getState().tracks[0]?.frame&&window.voidPlayer.getState().marks.length===0);
- phase='observer-play';await observer.locator('#play').focus();await observer.evaluate(()=>window.voidPlayer.play());await observer.waitForFunction(()=>window.voidPlayer.getState().playing&&window.voidPlayer.getState().positionUs>200000);
+ // Poll a service/session fact independently of display rAF. The real player
+ // already advances with its presentation-tick fallback when rAF is starved.
+ // A controlled negative witness proves that the old default rAF waiter can
+ // miss the same true fact; the original predicate and 300s case limit remain.
+ phase='observer-play-poll-setup';await observer.locator('#play').focus();await observer.evaluate(()=>{window.__qualityRafGate=true;window.__qualityRafReads=0;window.__qualityTimerReads=0;});
+ // Both waiters are awaited below. Early rejection handlers only preserve
+ // the primary failure if setup fails before their eventual await.
+ const raf=observer.waitForFunction(()=>{window.__qualityRafReads++;const s=window.voidPlayer.getState();return s.playing&&s.positionUs>200000;},undefined,{timeout:750});void raf.catch(()=>{});
+ const timer=observer.waitForFunction(()=>{window.__qualityTimerReads++;const s=window.voidPlayer.getState();return s.playing&&s.positionUs>200000;},undefined,{polling:50});void timer.catch(()=>{});
+ await observer.waitForFunction(()=>window.__qualityRafReads>0&&window.__qualityTimerReads>0,undefined,{polling:50});
+ phase='observer-play-command';await observer.evaluate(()=>window.voidPlayer.play());phase='observer-play-advance';await timer;await assert.rejects(raf,/Timeout/);
+ const witness=await observer.evaluate(()=>({rafReads:window.__qualityRafReads,timerReads:window.__qualityTimerReads,playing:window.voidPlayer.getState().playing,positionUs:window.voidPlayer.getState().positionUs,frameUs:window.voidPlayer.getState().tracks[0].frame.ptsUs}));assert.equal(witness.rafReads,1);assert.ok(witness.timerReads>1);assert.equal(witness.playing,true);assert.ok(witness.positionUs>200000);assert.ok(witness.frameUs>0);console.log(JSON.stringify({observerRafStarvation:true,...witness}));await observer.evaluate(()=>window.__qualityRafGate=false);
  const beforeObserver=await observer.evaluate(()=>window.voidPlayer.getState());await observer.route('**/api/annotations/events/*',r=>r.abort());
 
  phase='gui-attach-while-other-window-plays';
