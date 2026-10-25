@@ -1,3 +1,4 @@
+import { requireCapturedActor } from '../../identity.ts';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { RouteContext } from '../../routes/context.ts';
 import { adminWriteAllowed, readAdminJson } from '../../admin.ts';
@@ -15,6 +16,7 @@ export async function handleQualityRoutes(ctx:RouteContext,req:IncomingMessage,r
   const abort=()=>controller.abort(new AdminError(499,'One-shot quality request disconnected.','cancelled'));
   res.once('close',abort);
   try {
+    requireCapturedActor(req,ctx.actor);
     if(!ctx.actor)throw new AdminError(401,'Select an intranet identity first.','identity-required');
     if(source){
       if(req.method!=='GET')throw new AdminError(405,'Method not allowed.');

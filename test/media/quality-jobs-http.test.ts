@@ -49,7 +49,12 @@ for(const [codec,depth]of [['h264',8],['hevc',8],['hevc',10]]as const)test(`dura
   targets.push({...proof.binding,sourcePtsUs:cache.index.packets[au][2],picture:{sourceVersion:`${entry.id}@${entry.version}`,stream:'video',configuration:0,au,picture:0,layer:0,field:'frame'}});
  }
  const input:QualityJobInput={schema:'voidplayer-psnr-frame-job',version:1,client:{id:'http-native-test',kind:'agent'},request:{pairing:'caller-specified',reference:targets[0],distorted:targets[1],roi:{x:2,y:4,width:24,height:20}}};
- const submit=()=>fetch(base+discovery.qualityJobs.submit,{method:'POST',headers:{...headers,origin:base,'idempotency-key':'native-job'},body:JSON.stringify(input)});
+ const actor=cookie.slice(16),otherCookie=`voidplayer-user=guest-${randomUUID()}`;
+ const stale=await fetch(base+discovery.qualityJobs.submit,{method:'POST',headers:{...headers,cookie:otherCookie,'x-voidplayer-actor':actor,'idempotency-key':'native-job'},body:JSON.stringify(input)});
+ assert.equal(stale.status,409);assert.equal((await stale.json()).code,'actor-changed');
+ for(const observedCookie of [cookie,otherCookie]){const history=await fetch(base+'/api/quality/jobs',{headers:{cookie:observedCookie}}).then(r=>r.json());assert.deepEqual(history.entries,[]);assert.equal(history.resources.activeAttempts,0);assert.equal(history.resources.queued,0);}
+ const staleRead=await fetch(base+'/api/quality/jobs',{headers:{cookie:otherCookie,'x-voidplayer-actor':actor}});assert.equal(staleRead.status,409);assert.equal((await staleRead.json()).code,'actor-changed');
+ const submit=()=>fetch(base+discovery.qualityJobs.submit,{method:'POST',headers:{...headers,origin:base,'x-voidplayer-actor':actor,'idempotency-key':'native-job'},body:JSON.stringify(input)});
  const response=await submit();assert.equal(response.status,202);const accepted=await response.json();assert.equal(accepted.replayed,false);const id=accepted.job.id;
  assert.equal(accepted.job.submitted.requestId,response.headers.get('x-request-id'));assert.equal(response.headers.get('location'),`/api/quality/jobs/${id}`);
  const job=await terminal(base,id,{cookie});assert.equal(job.state,'completed',JSON.stringify(job));assert.equal(job.attempt?.number,1);assert.equal(job.progress.scoredPairs,1);
@@ -59,6 +64,10 @@ for(const [codec,depth]of [['h264',8],['hevc',8],['hevc',10]]as const)test(`dura
  assert.equal(result.jobId,id);assert.equal(result.attemptId,job.attempt!.id);assert.equal(result.submitted.actorId,cookie.slice(16));
  const replay=await submit();assert.equal(replay.status,200);const replayed=await replay.json();assert.equal(replayed.replayed,true);assert.deepEqual(replayed.job,job);
  assert.notEqual(replay.headers.get('x-request-id'),replayed.job.submitted.requestId,'observing the receipt never replaces original attribution');
+ const staleRetry=await fetch(base+discovery.qualityJobs.submit,{method:'POST',headers:{...headers,cookie:otherCookie,'x-voidplayer-actor':actor,'idempotency-key':'native-job'},body:JSON.stringify(input)});assert.equal(staleRetry.status,409);assert.equal((await staleRetry.json()).code,'actor-changed');
+ const staleCancel=await fetch(`${base}/api/quality/jobs/${id}/cancel`,{method:'POST',headers:{...headers,cookie:otherCookie,'x-voidplayer-actor':actor},body:'{}'});assert.equal(staleCancel.status,409);assert.equal((await staleCancel.json()).code,'actor-changed');
+ const headerless=await fetch(base+discovery.qualityJobs.submit,{method:'POST',headers:{...headers,'idempotency-key':'native-job'},body:JSON.stringify(input)});assert.equal(headerless.status,200);assert.equal((await headerless.json()).job.id,id,'legacy cookie-only Agent replay remains valid');
+ assert.deepEqual((await fetch(base+'/api/quality/jobs',{headers:{cookie:otherCookie}}).then(r=>r.json())).entries,[],'a mismatched captured actor never creates work for the new cookie actor');
  const conflict=structuredClone(input);conflict.request.roi.width-=2;
  const collision=await fetch(base+'/api/quality/jobs',{method:'POST',headers:{...headers,'idempotency-key':'native-job'},body:JSON.stringify(conflict)});assert.equal(collision.status,409);assert.equal((await collision.json()).code,'idempotency-conflict');
  assert.equal((await fetch(`${base}/api/quality/jobs/${id}`,{headers:{cookie:`voidplayer-user=guest-${randomUUID()}`}})).status,404);

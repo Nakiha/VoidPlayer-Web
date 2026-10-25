@@ -53,13 +53,14 @@ try{
  const created=await fetch(`${base}/api/annotations/spaces/default`,{method:'POST',headers:annotationHeaders,body:JSON.stringify({operationId:'workflow-existing',id:annotation.mark.id,revision:0,action:'put',document:annotation})});assert.equal(created.status,200,await created.clone().text());
  // Gate only the actual Node Worker at its existing before-decode test seam.
  // All DB/file checks, decode, SSE, task persistence and termination stay real.
- const runner=service.library.quality,nativeFactory=runner.createWorker;
+ const runner=service.library.quality,nativeFactory=runner.createWorker,nativeMeasure=runner.measure.bind(runner);let measureCalls=0;runner.measure=(...args)=>{measureCalls++;return nativeMeasure(...args);};
  runner.createWorker=data=>{
   if(!heldGate||data.mode!=='measure')return nativeFactory(data);
   const worker=new Worker(new URL('../test/helpers/quality-workflow-worker.ts',import.meta.url),{workerData:{...data,gate:heldGate.buffer},resourceLimits:{maxOldGenerationSizeMb:256}});
   workers.add(worker);worker.once('exit',()=>workers.delete(worker));return worker;
  };
  browser=await ({chromium,webkit}[engine]).launch({headless:true});const context=await browser.newContext({locale:'en-US',viewport:{width:1400,height:1000},deviceScaleFactor:2});context.setDefaultTimeout(30000);
+ await context.addInitScript(()=>{window.__deferredIdentityNotices=[];window.addEventListener('storage',event=>{if(window.__deferIdentityNotice&&event.key==='voidplayer.identity'){window.__deferredIdentityNotices.push({key:event.key,oldValue:event.oldValue,newValue:event.newValue,url:event.url});event.stopImmediatePropagation();}},true);});
  await context.addCookies([{name:'voidplayer-user',value:cookie.split('=')[1],url:base}]);context.on('page',p=>p.on('pageerror',e=>errors.push(e.message)));
  const player=await context.newPage();await player.goto(base);await chooseTestGuest(player);await player.waitForFunction(()=>!!window.voidPlayer);
  const a=entry('A.mp4');await player.evaluate(async url=>{const blob=await fetch(url).then(r=>r.blob());await window.voidPlayer.loadFile('A',new File([blob],'A.mp4'));},`${base}/api/media/${a.id}?v=${a.version}`);
@@ -70,18 +71,40 @@ try{
  async function choose(){await select('reference','B.flv',0);await select('distorted','C.flv',1);for(const [name,value]of Object.entries({x:2,y:4,width:24,height:20}))await page.locator(`#quality-form [name=${name}]`).fill(String(value));}
  async function submitGui(){const previous=await page.locator('#quality-job-title').textContent();await page.locator('#quality-submit').click();await page.waitForFunction(previous=>document.querySelector('#quality-job-title').textContent&&document.querySelector('#quality-job-title').textContent!==previous,previous);return page.locator('#quality-job-title').textContent();}
  await choose();
- phase='gui-submit-lost-reply-double-click';heldGate=new Int32Array(new SharedArrayBuffer(8));gates.push(heldGate);const posts=[];let first=true;
- await page.route('**/api/quality/jobs',async route=>{if(route.request().method()!=='POST')return route.continue();posts.push({key:route.request().headers()['idempotency-key'],body:JSON.parse(route.request().postData())});
-  if(first){first=false;const reply=await route.fetch();assert.equal(reply.status(),202);await route.abort('failed');}else await route.continue();});
- await page.locator('#quality-submit').click({clickCount:2});await page.locator('#quality-retry').waitFor({state:'visible'});assert.equal(posts.length,1);
- await page.locator('#quality-retry').click();await page.waitForFunction(()=>document.querySelector('#quality-retry').hidden&&document.querySelector('#quality-job-title').textContent);
- assert.equal(posts.length,2);assert.deepEqual(posts[0],posts[1]);const input=posts[0].body,id=await page.locator('#quality-job-title').textContent();
+ phase='delayed-identity-notification-mutation-fence';
+ await page.evaluate(()=>window.__deferIdentityNotice=true);
+ // Change the shared real cookie in the other, background window. Only delay
+ // identity notifications; the GUI, HTTP service, DB and decoding stay real.
+ async function peerIdentity(input){return player.evaluate(async input=>{const response=await fetch('/api/identity',{method:'POST',headers:{'content-type':'application/json','x-voidplayer-action':'identity'},body:JSON.stringify(input)});if(!response.ok)throw new Error(await response.text());const value=await response.json(),health=await fetch('/api/health',{cache:'no-store'}).then(r=>r.json());if(health.actor?.id!==value.actor.id)throw new Error('Peer cookie did not adopt the selected actor');localStorage.setItem('voidplayer.identity',JSON.stringify(value.actor));return value.actor;},input);}
+ const racingActor=await peerIdentity({name:'Delayed identity peer',mode:'create'}),racingCookie=`voidplayer-user=${racingActor.id}`;
+ assert.notEqual(racingActor.id,actor.id);assert.match(await page.locator('#quality-owner').textContent(),new RegExp(actor.id));
+ const posts=[];let stage='wrong-cookie',lost=false;
+ heldGate=new Int32Array(new SharedArrayBuffer(8));gates.push(heldGate);
+ await page.route('**/api/quality/jobs',async route=>{if(route.request().method()!=='POST'||posts.length>=4)return route.continue();
+  const observed={key:route.request().headers()['idempotency-key'],actor:route.request().headers()['x-voidplayer-actor'],body:JSON.parse(route.request().postData()),done:false};posts.push(observed);
+  const reply=await route.fetch(),value=await reply.json();observed.status=reply.status();observed.value=value;
+  if(stage==='wrong-cookie'){assert.equal(reply.status(),409);assert.equal(value.code,'actor-changed');await route.fulfill({response:reply});}
+  else if(!lost){lost=true;assert.equal(reply.status(),202);await route.abort('failed');}
+  else {assert.equal(reply.status(),200);assert.equal(value.replayed,true);await route.fulfill({response:reply});}
+  observed.done=true;
+ });
+ await page.locator('#quality-submit').click({clickCount:2});await page.locator('#quality-retry').waitFor({state:'visible'});await until(async()=>posts[0]?.done,Boolean,'first actor conflict delivered');assert.equal(posts.length,1);assert.equal(measureCalls,0);
+ for(const ownerCookie of [cookie,racingCookie]){const response=await fetch(base+'/api/quality/jobs',{headers:{cookie:ownerCookie}});assert.equal(response.status,200);const history=await response.json();assert.deepEqual(history.entries,[]);assert.equal(history.resources.activeAttempts,0);assert.equal(history.resources.queued,0);}
+ await peerIdentity({id:actor.id});stage='right-cookie';await page.locator('#quality-retry').click();await until(async()=>posts[1]?.done,Boolean,'accepted response deliberately lost');assert.equal(posts[1].status,202);
+ await peerIdentity({id:racingActor.id});stage='wrong-cookie';await page.locator('#quality-retry').click();await until(async()=>posts[2]?.done,Boolean,'same-key replay under wrong cookie refused');assert.equal(posts[2].status,409);
+ await peerIdentity({id:actor.id});stage='right-cookie';await page.locator('#quality-retry').click();await page.waitForFunction(()=>document.querySelector('#quality-retry').hidden&&document.querySelector('#quality-job-title').textContent);
+ assert.equal(posts.length,4);for(const post of posts){assert.equal(post.key,posts[0].key);assert.equal(post.actor,actor.id);assert.deepEqual(post.body,posts[0].body);}assert.deepEqual(posts.map(p=>p.status),[409,202,409,200]);
+ const input=posts[0].body,id=await page.locator('#quality-job-title').textContent();assert.equal(posts[1].value.job.id,id);assert.equal(posts[3].value.job.id,id);
  assert.equal(input.client.kind,'browser');assert.equal(input.request.reference.mediaId,b.id);assert.equal(input.request.distorted.mediaId,entry('C.flv').id);assert.notEqual(input.request.reference.sourcePtsUs,input.request.distorted.sourcePtsUs);
- await until(()=>get(`/api/quality/jobs/${id}`),j=>j.phase==='decode','actual Worker decode gate');assert.equal(Atomics.load(heldGate,1),1);
+ await until(()=>get(`/api/quality/jobs/${id}`),j=>j.phase==='decode','actual Worker decode gate');assert.equal(Atomics.load(heldGate,1),1);assert.equal(measureCalls,1);
+ const ownerHistory=await get('/api/quality/jobs');assert.deepEqual(ownerHistory.entries.map(j=>j.id),[id]);assert.equal(ownerHistory.entries[0].submitted.actorId,actor.id);
+ assert.deepEqual((await fetch(base+'/api/quality/jobs',{headers:{cookie:racingCookie}}).then(r=>r.json())).entries,[],'delayed notification never starts work for the peer');
+ console.log(`PASS captured actor fence ${engine}/${depth}: delayed identity notices, real cookie switches, statuses 409/202-lost/409/200-replay, one owner job, one real measurement, zero peer jobs`);
  phase='agent-same-history-budget-and-observation';
  const agent=await fetch(base+'/api/quality/jobs',{method:'POST',headers:{...headers,'idempotency-key':'independent-http-agent'},body:JSON.stringify({...input,client:{kind:'agent',id:'independent-http-agent'}})});assert.equal(agent.status,202);const agentJob=(await agent.json()).job;
  await page.locator(`[data-job-id="${agentJob.id}"]`).waitFor();assert.match(await page.locator(`[data-job-id="${agentJob.id}"]`).textContent(),/agent\/independent-http-agent/);
  await page.locator('#quality-submit').click();await page.locator('#quality-retry').waitFor({state:'visible'});await page.waitForFunction(()=>/Actor quality admission is full/.test(document.querySelector('#quality-observer-status').textContent));await page.locator('#quality-forget').click();
+ phase='deliver-delayed-identity-notices';await page.evaluate(()=>{window.__deferIdentityNotice=false;for(const event of window.__deferredIdentityNotices)window.dispatchEvent(new StorageEvent('storage',event));window.__deferredIdentityNotices=[];});await page.waitForFunction(owner=>document.querySelector('#quality-owner').textContent.includes(owner),actor.id);
  phase='close-window-does-not-cancel';await page.close();page=await context.newPage();evidence=recordBrowserEvidence(page);await page.goto(base+'/admin/#quality');await page.locator(`[data-job-id="${id}"]`).waitFor();
  const still=await get(`/api/quality/jobs/${id}`);assert.equal(still.state,'running');assert.equal(still.cancelRequestedAt,null);assert.equal(workers.size,1);
  await page.locator(`[data-job-id="${agentJob.id}"]`).click();await page.locator('#quality-cancel').click();await until(()=>get(`/api/quality/jobs/${agentJob.id}`),j=>j.state==='cancelled','GUI queued cancellation');assert.equal(workers.size,1);
@@ -108,6 +131,7 @@ try{
  const attachmentPosts=[];let lostAttach=true;
  await page.route('**/api/annotations/spaces/default',async route=>{if(route.request().method()!=='POST')return route.continue();attachmentPosts.push(JSON.parse(route.request().postData()));if(lostAttach){lostAttach=false;const reply=await route.fetch();assert.equal(reply.status(),200);await route.abort('failed');}else await route.continue();});
  await page.locator('#quality-attach').click();await page.waitForFunction(()=>/retry/i.test(document.querySelector('#quality-attach-status').textContent));await page.locator('#quality-attach').click();await page.locator('#quality-shared-links .quality-pair-open').waitFor();assert.deepEqual(attachmentPosts[0],attachmentPosts[1]);
+ const mismatchedAttachment=await fetch(base+'/api/annotations/spaces/default',{method:'POST',headers:{...annotationHeaders,cookie:racingCookie,'x-voidplayer-actor':actor.id},body:JSON.stringify(attachmentPosts[0])});assert.equal(mismatchedAttachment.status,409);assert.equal((await mismatchedAttachment.json()).code,'actor-changed');
  const shared=await get('/api/annotations/spaces/default/workflow-mark');assert.equal(shared.revision,2);assert.equal(shared.document.mark.qualityEvidence.length,1);assert.equal(shared.document.mark.qualityEvidence[0].value.result.metric.aggregate.sse,expected);
  phase='explicit-original-viewer';const beforeView=await player.evaluate(()=>window.voidPlayer.getState());
  const viewerRequests=[];const track=r=>viewerRequests.push({url:r.url(),method:r.method()});const trackViewer=p=>{if(p!==page&&p!==player)p.on('request',track);};context.on('page',trackViewer);
@@ -124,15 +148,15 @@ try{
   await page.locator(`[data-job-id="${id}"]`).click();await start;return async()=>{await release();await page.unroute(pattern);};}
  let release=await holdPrivate();await page.locator('#quality-client').fill('second-client');await page.locator('#quality-client-apply').click();await release();await page.waitForFunction(()=>document.querySelector('#quality-job-detail').hidden);assert.equal(await page.locator('#quality-client').inputValue(),'second-client');
  const otherIdentity=await fetch(base+'/api/identity',{method:'POST',headers:{...headers,'x-voidplayer-action':'identity'},body:JSON.stringify({name:'Other quality reviewer',mode:'create'})});assert.equal(otherIdentity.status,200);const foreignActor=(await otherIdentity.json()).actor;
- release=await holdPrivate();await player.locator('#settings-open').click();await player.locator('#settings-tab-identity').click();await player.waitForFunction(()=>!document.querySelector('#identity-users').disabled);
- async function switchActor(actor){await player.locator('#identity-users').click();await player.locator(`#identity-users-menu [data-value="${actor.id}"]`).click();await player.locator('#identity-save').click();await player.waitForFunction(name=>document.querySelector('#identity-current').textContent===name,actor.name);await page.waitForFunction(name=>document.querySelector('#quality-owner').textContent.includes(name),actor.name);}
+ release=await holdPrivate();
+ async function switchActor(actor){await peerIdentity({id:actor.id});await page.waitForFunction(id=>document.querySelector('#quality-owner').textContent.includes(id),actor.id);}
  let releaseHealth,healthEntered;const healthGate=new Promise(r=>releaseHealth=r),healthStarted=new Promise(r=>healthEntered=r);let firstHealth=true;
  await page.route('**/api/health',async route=>{if(!firstHealth)return route.continue();firstHealth=false;const response=await route.fetch();healthEntered();await healthGate;await route.fulfill({response}).catch(()=>{});});
  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await healthStarted;
- await player.locator('#identity-users').click();await player.locator(`#identity-users-menu [data-value="${foreignActor.id}"]`).click();await player.locator('#identity-save').click();await player.waitForFunction(name=>document.querySelector('#identity-current').textContent===name,foreignActor.name);
+ await peerIdentity({id:foreignActor.id});
  releaseHealth();await page.waitForFunction(name=>document.querySelector('#quality-owner').textContent.includes(name),foreignActor.name);await page.unroute('**/api/health');await release();await page.waitForFunction(()=>document.querySelector('#quality-job-detail').hidden&&document.querySelectorAll('#quality-job-list [data-job-id]').length===0);
  assert.equal(await page.evaluate(async id=>(await fetch(`/api/quality/jobs/${id}`)).status,id),404);assert.equal(await page.evaluate(async()=> (await fetch('/api/annotations/spaces/default/workflow-mark')).status),200);
- await switchActor(actor);await player.locator('#settings-close').click();await page.locator(`[data-job-id="${id}"]`).waitFor();
+ await switchActor(actor);await page.locator(`[data-job-id="${id}"]`).waitFor();
  phase='actual-worker-cancel-exit';await choose();heldGate=new Int32Array(new SharedArrayBuffer(8));gates.push(heldGate);
  const cancelId=await submitGui();await until(()=>get(`/api/quality/jobs/${cancelId}`),j=>j.phase==='decode','cancellable actual Worker');assert.equal(workers.size,1);
  await page.locator('#quality-cancel').click();const cancelled=await until(()=>get(`/api/quality/jobs/${cancelId}`),j=>j.state==='cancelled','physical Worker termination');assert.equal(cancelled.result.available,false);assert.equal(workers.size,0);assert.equal(service.library.qualityJobs.resources().activeAttempts,0);service.library.qualityAdmission.ordinary();heldGate=null;

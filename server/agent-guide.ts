@@ -357,6 +357,12 @@ error codes, examples and exact trust boundaries.
 
 For a durable single-frame PSNR job, reuse the same explicit pair request:
 
+For quality requests, optional X-VoidPlayer-Actor captures the expected cookie
+identity. A mismatch returns 409 actor-changed before private reads, idempotency
+lookup, task admission or cancellation; the header never replaces the cookie.
+Restore the original actor and replay the same client/key/body. Cookie-only
+HTTP Agents remain supported.
+
 POST /api/quality/jobs with the identity cookie, same-origin Origin,
 Content-Type: application/json, X-VoidPlayer-Action: quality-job, and a bounded
 Idempotency-Key. JSON: {schema:'voidplayer-psnr-frame-job',version:1,

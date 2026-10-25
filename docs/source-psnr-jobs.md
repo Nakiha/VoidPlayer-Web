@@ -8,6 +8,8 @@
 
 使用现有内网身份 cookie，所有写操作要求同源 Origin、`Content-Type: application/json`、`X-VoidPlayer-Action: quality-job`。身份和 client 均是自述归属，不是认证或权限凭据；按 actor 过滤只用于归属分组，不是安全隔离。服务仍应置于部署已有的访问边界内。GET 不创建用户或任务。
 
+GUI 发送 `X-VoidPlayer-Actor` 表示请求捕获的用户；服务在查私有任务事实、幂等回执或受理/取消产生副作用前，核对它是否与该请求 cookie 的用户完全一致。失配返回 `409 actor-changed`，不接受任务、不消费该用户的幂等键，也不切换成 header 指定的身份。可选 header 缺省时仍允许正常 cookie-only HTTP Agent 调用；它是并发归属围栏，不是身份认证。恢复原用户后应重试原 client/幂等键/请求，不为身份冲突自动换新键。一次性质量调用和候选查询遵循同一可选 captured-actor 约束。
+
 仅配置了持久媒体库数据库的部署启用此能力。临时索引实例的 `quality.jobs.enabled=false/readiness=unavailable`，任务接口返回 503 quality-storage-unavailable，不把随实例销毁的数据声明为持久历史。
 
 先按一次性执行器文档注册来源、显式构建服务端可信缓存、发现两侧绑定并选定 AU/实际源 PTS。然后提交：

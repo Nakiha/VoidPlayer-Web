@@ -79,6 +79,8 @@ for(const [codec,depth] of [['h264',8],['hevc',8],['hevc',10]] as const)test(`HT
  }
  const request=pairRequest(targets[0],targets[1]),headers={'content-type':'application/json',origin:base,'x-voidplayer-action':'quality',cookie};
  const post=async(body:unknown,extra:Record<string,string>={})=>fetch(base+'/api/quality/psnr-pair',{method:'POST',headers:{...headers,...extra},body:JSON.stringify(body)});
+ const mismatch=await post(request,{'x-voidplayer-actor':`guest-${randomUUID()}`});assert.equal(mismatch.status,409);assert.equal((await mismatch.json()).code,'actor-changed');
+ const mismatchedSource=await fetch(`${base}/api/media/${targets[0].mediaId}/psnr-frames?v=${targets[0].mediaVersion}`,{headers:{cookie,'x-voidplayer-actor':`guest-${randomUUID()}`}});assert.equal(mismatchedSource.status,409);assert.equal((await mismatchedSource.json()).code,'actor-changed');
  const response=await post(request);const actual=await response.json() as LibraryPairResponse;assert.equal(response.status,200,JSON.stringify(actual));
  assert.equal(actual.request.id,response.headers.get('x-request-id'));assert.equal(actual.request.actorId,cookie.slice('voidplayer-user='.length));
  const frameBytes=1536*(depth===8?1:2),expected=measurePsnr({domain:'source-yuv-code-values',reference:nativeFrame(Uint8Array.from(fixture.native.subarray(0,frameBytes)),depth),distorted:nativeFrame(Uint8Array.from(fixture.native.subarray(frameBytes)),depth),roi:request.roi});
