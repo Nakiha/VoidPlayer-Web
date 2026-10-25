@@ -1,3 +1,4 @@
+import {ssimOracle} from '../test/helpers/ssim-oracle.mjs';
 // Actual compiled Bun Worker and local file source, with no decoder executable in PATH.
 import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,readFile,writeFile,rm} from 'node:fs/promises';
@@ -56,14 +57,17 @@ try{
    assert.equal(block.planes[name].sse,sse);assert.equal(block.planes[name].samples,samples);sum+=sse;
   }assert.equal(block.aggregate.sse,sum);}
   assert.equal(grid.blocks.reduce((n,b)=>n+b.aggregate.sse,0),aggregate);assert.deepEqual(grid.worst,grid.blocks.map(b=>b.index).sort((a,b)=>grid.blocks[b].aggregate.mse-grid.blocks[a].aggregate.mse||a-b).slice(0,8));
-  const input={schema:'voidplayer-psnr-frame-job',version:1,client:{id:'compiled-acceptance',kind:'agent'},request};
+  const input={schema:'voidplayer-psnr-frame-job',version:1,client:{id:'compiled-acceptance',kind:'agent'},request:{...request,spatial:undefined,ssim:{variant:'ffmpeg-uniform-8x8-step4-v1'}}};
   const jobHeaders={...headers,'x-voidplayer-action':'quality-job','idempotency-key':`compiled-${sample.codec}-${sample.depth}`};
   const submitted=await fetch(base+'/api/quality/jobs',{method:'POST',headers:jobHeaders,body:JSON.stringify(input)}),accepted=await submitted.json();assert.equal(submitted.status,202,JSON.stringify(accepted));
   assert.equal(accepted.job.submitted.requestId,submitted.headers.get('x-request-id'));let job;
   await waitUntil(async()=>{job=await fetch(`${base}/api/quality/jobs/${accepted.job.id}`,{headers:{cookie}}).then(r=>r.json());if(['failed','cancelled','interrupted'].includes(job.state))throw Error(JSON.stringify(job));return job.state==='completed';},'Compiled durable job did not finish');
   const stored=await fetch(`${base}/api/quality/jobs/${job.id}/result`,{headers:{cookie}}).then(r=>r.json());
   assert.equal(stored.jobId,job.id);assert.equal(stored.attemptId,job.attempt.id);assert.equal(stored.submitted.actorId,cookie.slice('voidplayer-user='.length));
-  assert.deepEqual(stored.value.result.metric,value.result.metric);assert.deepEqual(stored.value.result.provenance,value.result.provenance);
+  const {spatial:unused,...wholeMetric}=value.result.metric;assert.deepEqual(stored.value.result.metric,wholeMetric);
+  const oracle=ssimOracle(raw.subarray(0,frame),raw.subarray(frame),sample.depth,32,32,request.roi);
+  assert.ok(Math.abs(stored.value.result.ssim.aggregate.score-oracle.all)<=1e-12);
+  for(const key of ['y','u','v'])assert.ok(Math.abs(stored.value.result.ssim.planes[key].score-oracle[key].score)<=1e-12);assert.deepEqual(stored.value.result.provenance,value.result.provenance);
   assert.deepEqual(stored.value.result.decoder,value.result.decoder);assert.deepEqual(stored.value.sources,value.sources);assert.deepEqual(stored.value.execution,value.execution);
   const annotationHeaders={...headers,'x-voidplayer-action':'annotation'},annotationId=`evidence-${sample.codec}-${sample.depth}`;
   const annotationDocument={media:[{id:'snapshot',name:entry.name,size:entry.size,lastModified:entry.lastModified,codec:sample.codec,decoder:'ffmpeg-wasm',width:32,height:32,durationUs:2000000,firstPtsUs:target(0).sourcePtsUs,source:{kind:'library',id:entry.id,url:`${base}/api/media/${entry.id}?v=${entry.version}`}}],mark:{id:annotationId,text:'Compiled PSNR observation',severity:3,origin:'agent',createdAt:new Date().toISOString(),slot:'H',mediaId:'snapshot',frame:{ptsUs:0,sourcePtsUs:target(0).sourcePtsUs,durationUs:1000000},comparison:[],region:null}};
@@ -89,7 +93,7 @@ try{
  const rebound=await fetch(`${base}/api/media/${entry.id}/psnr-source?v=${entry.version}`,{headers:{cookie}});assert.equal(rebound.status,200);assert.deepEqual(await rebound.json(),first.source,'restart retains the actual server producer/cache binding');
  const rerun=await fetch(base+'/api/quality/psnr-pair',{method:'POST',headers,body:JSON.stringify(first.request)}),again=await rerun.json();assert.equal(rerun.status,200,JSON.stringify(again));assert.equal(again.result.metric.aggregate.sse,first.sse);assert.notEqual(again.request.id,first.requestId,'a fresh one-shot execution is not a cached task result');
  const capabilities=await fetch(base+'/api/agent',{headers:{cookie}}).then(r=>r.json());assert.equal(capabilities.capabilities.find(c=>c.id==='quality.jobs').implemented,true);assert.equal(capabilities.capabilities.find(c=>c.id==='quality.jobs').readiness,'per-source');assert.equal(capabilities.capabilities.find(c=>c.id==='quality.frame-pair').requiresBrowser,false);
- assert.deepEqual(capabilities.qualityJobs.metrics,['psnr']);assert.equal(capabilities.qualityJobs.scope,'single-explicit-frame-pair');assert.equal(capabilities.qualityJobs.submit,'/api/quality/jobs');assert.equal(capabilities.qualityJobs.automaticRetry,false);assert.equal(capabilities.qualityJobs.sharedWork,false);
+ assert.deepEqual(capabilities.qualityJobs.metrics,['psnr','ssim']);assert.equal(capabilities.qualityJobs.scope,'single-explicit-frame-pair');assert.equal(capabilities.qualityJobs.submit,'/api/quality/jobs');assert.equal(capabilities.qualityJobs.automaticRetry,false);assert.equal(capabilities.qualityJobs.sharedWork,false);
  const report=path.resolve(process.env.VOIDPLAYER_TEST_ARTIFACTS??path.join(root,'.run/quality-release'));await mkdir(report,{recursive:true});await writeFile(path.join(report,'native-quality.json'),JSON.stringify({target:manifest.target,rows},null,2)+'\n');
  console.log(`PASS ${manifest.target}: compiled Bun quality Worker, real library/cache HTTP, 8/10-bit native SSE/provenance, durable jobs/annotation evidence/idempotency/history restart, second-instance rejection, empty PATH`);
 }finally{if(stopChild)await stopChild();await rm(temp,{recursive:true,force:true,maxRetries:10,retryDelay:100});}

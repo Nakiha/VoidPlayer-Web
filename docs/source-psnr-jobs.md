@@ -2,7 +2,7 @@
 
 这是 #121 的最小纵向切片，复用 [媒体库单帧执行器](source-library-psnr.md)，没有扩大像素、编解码器或来源范围。`quality.jobs` 的发现声明限定为本文的单帧 PSNR v1；开启前已经完成真实 Linux/macOS/Windows 编译包验收。`/api/agent` 的 qualityJobs 给出支持范围、端点、请求 schema 和预算。
 
-仅支持一个显式 reference/distorted 帧对、PSNR、偶数对齐 ROI、已有可信 FLV 缓存。H264/HEVC、渐进闭合关键 AU、明确色彩/色度位置、8/10 位 YUV420 和所有来源/预算限制保持不变。来源版本和缓存 token 由调用者明确指定；不自动配对、探测、建索引、重试、共享计算或恢复续算。不包含 SSIM/VMAF/CAMBI、帧序列、分布式、调高并发；GUI 单帧任务编排见 [完整使用流程](psnr-task-workflow.md)。#114/#121 仍未整体完成。
+仅支持一个显式 reference/distorted 帧对、PSNR、偶数对齐 ROI、已有可信 FLV 缓存。H264/HEVC、渐进闭合关键 AU、明确色彩/色度位置、8/10 位 YUV420 和所有来源/预算限制保持不变。来源版本和缓存 token 由调用者明确指定；不自动配对、探测、建索引、重试、共享计算或恢复续算。SSIM 可通过显式选项伴随 PSNR，详见 [SSIM 语义与完整闭环](source-plane-ssim.md)。不包含 VMAF/CAMBI、帧序列、分布式、调高并发；GUI 单帧任务编排见 [完整使用流程](psnr-task-workflow.md)。#114/#121 仍未整体完成。
 
 ## HTTP
 
@@ -78,3 +78,5 @@ Worker 退出不确定时保持 cancelling，记录 worker-stop-uncertain、拒�
 性能不足与旧 WebKit 故障的未知根因不因本切片通过而消失。
 
 Optional bounded source-pixel block measurement and immutable spatial evidence: [PSNR block evidence](psnr-spatial-evidence.md). Scalar requests and existing source/geometry admission remain unchanged.
+
+Optional SSIM companion semantics, coverage, limits and shared evidence: [SSIM](source-plane-ssim.md).

@@ -111,3 +111,12 @@ test('history reservations reject overflow without evicting records or invalidat
  assert.equal(f.store.submit(request,actor,'replay','history-0',2000).job.id,first);
  assert.throws(()=>f.store.submit(request,actor,'overflow','new-after-full',2000),{code:'quality-history-full'});
 });
+
+test('SSIM selection is canonical immutable request identity; legacy PSNR hash stays byte-identical',async t=>{
+ const f=await fixture(t),input=jobInput();assert.equal(qualityJobRequest(input).fingerprint,'e52c739d7220263b57cceefff735ed30b344fec4dbff305d43b1d3cfe455607a');
+ input.request.roi={x:0,y:0,width:32,height:32};input.request.spatial={blockWidth:16,blockHeight:16};
+ const plain=qualityJobRequest(input);input.request.ssim={variant:'ffmpeg-uniform-8x8-step4-v1'};const ss=qualityJobRequest(input);assert.notEqual(plain.fingerprint,ss.fingerprint);
+ const job=f.store.submit(ss,actor,'ssim','ssim',1000).job;
+ assert.equal(f.store.submit(qualityJobRequest(structuredClone(input)),actor,'again','ssim',1001).job.id,job.id);
+ delete input.request.ssim;assert.equal(qualityJobRequest(input).json,plain.json);assert.throws(()=>f.store.submit(plain,actor,'strip','ssim',1001),{code:'idempotency-conflict'});
+});

@@ -38,6 +38,7 @@ export function qualityJobRequest(value: unknown) {
       pairing: 'caller-specified', reference: target(request.reference), distorted: target(request.distorted),
       roi: {x: roi.x, y: roi.y, width: roi.width, height: roi.height},
       ...(request.spatial === undefined ? {} : {spatial:{blockWidth:request.spatial.blockWidth,blockHeight:request.spatial.blockHeight}}),
+      ...(request.ssim === undefined ? {} : {ssim:{variant:request.ssim.variant}}),
       budget: {...pairBudget(request), maxSamples: request.budget?.maxSamples ?? PSNR_LIMITS.maxSamples,
         maxInputBytes: request.budget?.maxInputBytes ?? PSNR_LIMITS.maxInputBytes},
     }};

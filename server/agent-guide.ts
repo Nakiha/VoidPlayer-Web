@@ -333,7 +333,7 @@ deployments advertise them disabled and reject submission.
    evidence. Missing, untrusted, stale or over-budget caches fail explicitly.
 4. POST /api/quality/psnr-pair with JSON, the identity cookie, same-origin Origin,
    and X-VoidPlayer-Action: quality. Body: {pairing:'caller-specified', reference,
-   distorted, roi:{x,y,width,height}, spatial?:{blockWidth,blockHeight}, budget?}. Each side is its returned binding
+   distorted, roi:{x,y,width,height}, spatial?:{blockWidth,blockHeight}, ssim?:{variant:'ffmpeg-uniform-8x8-step4-v1'}, budget?}. Each side is its returned binding
    plus picture:{sourceVersion:'id@version',stream:'video',configuration:0,au,
    picture:0,layer:0,field:'frame'} and integer-microsecond sourcePtsUs. Select AU
    and PTS explicitly from the existing source index; equal PTS never pairs sources.
@@ -344,6 +344,20 @@ ROI uses the unrotated visible source grid and must be chroma-aligned. The respo
 contains result (exact code-value SSE/MSE/PSNR and decoder build) plus complete
 source/cache/producer evidence. Media versions are stat-derived identities, not
 cryptographic content authentication. Sources stay inside registered library roots.
+
+Optional ssim is an explicit companion to required PSNR, not a standalone job.
+Only variant 'ffmpeg-uniform-8x8-step4-v1' is supported: uniform 8x8 native-plane
+windows, stride 4, valid windows after truncation to complete 4-pixel strips;
+not Gaussian/Wang SSIM. ROI and every actual grid block must be at least 16x16.
+The result.ssim records Float64 implementation/version, bit depth/peak, exact
+constants, Y/U/V window counts and coverage in visible-source-luma coordinates.
+Aggregate is 4:1:1 plane means; negatives are retained. Grid windows restart per
+block; do not reconstruct whole-ROI SSIM by averaging blocks. See
+https://github.com/Nakiha/VoidPlayer-Web/blob/main/docs/source-plane-ssim.md.
+SSIM shares the exact verified frames, Worker deadline, immutable task/annotation
+result and original viewer; it never widens source/geometry eligibility. Omitting
+ssim preserves legacy requests. Same-key metric changes conflict. Limits are
+fixed, exposed in discovery; missing/unsupported variants explicitly fail.
 
 Optional spatial uses even integer blockWidth/blockHeight in the same unrotated
 visible source grid. At most 64 disjoint row-major blocks cover the ROI exactly;

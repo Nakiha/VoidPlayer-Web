@@ -47,7 +47,7 @@ test('release workflow gates verified artifacts and draft staging on every verif
   const workflow = await readFile(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
   const jobs = workflowJobs(workflow);
   assert.match(jobs['analysis-core'].body, /name: Verify analysis reference ABI including restored caches\n        run: node scripts\/prepare-analysis-core.mjs public\/vendor\/voidplayer-analysis/);
-  const required = ['native-release', 'unit', 'playback', 'source-logic', 'analysis-browser', 'analysis-matrix', 'hevc-browser', 'uncovered-regressions'];
+  const required = ['native-release', 'unit', 'playback', 'source-logic', 'analysis-browser', 'analysis-matrix', 'ssim-browser', 'hevc-browser', 'uncovered-regressions'];
   assert.deepEqual([...jobs['release-set'].needs].sort(), required.sort());
   assert.deepEqual(jobs.unit.needs, ['decoder', 'analysis-core']);
   assert.match(jobs.unit.body, /run: node scripts\/run-tests\.mjs ci-node-media\n        env:\n          VOIDPLAYER_FFMPEG_ORACLE:/);
@@ -376,4 +376,12 @@ test('every FATE consumer restores an exact manifest cache and verifies before s
   assert.match(action,/if: success\(\) && steps\.verify\.outcome == 'success' && steps\.restore\.outputs\.cache-hit != 'true'\n      uses: actions\/cache\/save@v4/);
   assert.ok(action.indexOf('id: verify')>action.indexOf('uses: actions/cache/restore@v4'));
   assert.ok(action.indexOf('uses: actions/cache/save@v4')>action.indexOf('id: verify'));
+});
+
+test('SSIM dual-browser real task/evidence checks gate release output without extending serial source UI budgets',async()=>{
+ const jobs=workflowJobs(await readFile(new URL('../../.github/workflows/release-preview.yml',import.meta.url),'utf8'));
+ const ssim=jobs['ssim-browser'];assert.deepEqual(ssim.needs,['decoder','analysis-core']);assert.match(ssim.body,/engine: \[chromium, webkit\]/);
+ assert.match(ssim.body,/run: node scripts\/run-tests\.mjs ci-ssim --engine \$\{\{ matrix.engine \}\}/);
+ assert.match(ssim.body,/if: always\(\)[\s\S]*ssim-browser-reports-/);assert.ok(jobs['release-set'].needs.includes('ssim-browser'));
+ assert.doesNotMatch(ssim.body,/continue-on-error:/);
 });

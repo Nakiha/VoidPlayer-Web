@@ -25,7 +25,9 @@ export function qualityFacts(root:HTMLElement,value:ReturnType<typeof qualityEvi
   for(const side of ['reference','distorted']as const){const source=value.result.provenance[side],label=document.createElement('dt'),identity=document.createElement('dd');label.textContent=side;identity.textContent=`${source.mediaId}@${source.mediaVersion} · source PTS ${source.sourcePtsUs} µs · AU ${source.picture.au}`;sources.append(label,identity);}
   const details=document.createElement('details'),heading=document.createElement('summary'),data=document.createElement('pre');
   heading.textContent=t(msg('quality.fullProvenance','完整不可变 provenance'));data.className='quality-evidence-provenance';data.textContent=JSON.stringify(value,null,2);details.append(heading,data);
-  root.append(summary,conditions,sources);qualitySpatial(root,metric);root.append(details);
+  root.append(summary,conditions,sources);
+  const ssim=value.result.ssim;
+  qualitySpatial(root,metric,undefined,undefined,ssim);root.append(details);
 }
 /** Facts already explicitly published with the annotation; never fetch a private job. */
 export function showQualityEvidence(mark: Mark, annotation: AnnotationDocument, space?:string) {

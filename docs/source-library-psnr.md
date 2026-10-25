@@ -2,7 +2,7 @@
 
 这是 #112 / #114 的受限纵向切片：注册媒体 → 显式服务端索引构建 → 缓存身份发现 → 独立 Node/Bun Worker 原始解码 → PSNR 与完整 provenance。评分不依赖 Session、已加载轨道、播放游标或 GUI 确认。`quality.frame-pair` 是逐源判断的一次性调用；独立的持久单帧 PSNR 入口见 [任务 v1](source-psnr-jobs.md)，`compute.workers` 仍为 unavailable，#114 / #121 没有整体完成。
 
-本文的一次性接口不创建持久 job/attempt/result 或任务 ID，也不提供队列、恢复、结果缓存、自动重试、断线续作、帧序列、自动对齐、评分 GUI、SSIM/VMAF、分布式或性能达标承诺。连接断开取消本次调用；独立 durable job 的观察断线不取消，两种契约分开。
+本文的一次性接口不创建持久 job/attempt/result 或任务 ID，也不提供队列、恢复、结果缓存、自动重试、断线续作、帧序列、自动对齐、评分 GUI、VMAF、分布式或性能达标承诺。连接断开取消本次调用；独立 durable job 的观察断线不取消，两种契约分开。
 
 ## 调用
 
@@ -74,3 +74,5 @@ HTTP body 另有 10 秒上限；执行 deadline 从 body 校验和准入后开�
 Bun Node 兼容性边界的上游说明：[node:worker_threads](https://github.com/oven-sh/bun/blob/main/docs/runtime/nodejs-compat.mdx#nodeworker_threads)。原始 fd 问题还在本仓库 Bun 1.4.2 的实际强制取消回归中复现；该回归保留完整描述符断言。
 
 Optional bounded source-pixel block measurement and immutable spatial evidence: [PSNR block evidence](psnr-spatial-evidence.md). Scalar requests and existing source/geometry admission remain unchanged.
+
+Optional SSIM companion semantics, coverage, limits and shared evidence: [SSIM](source-plane-ssim.md).

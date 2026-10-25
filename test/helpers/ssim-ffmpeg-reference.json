@@ -1,0 +1,226 @@
+{
+  "schema": "voidplayer-test-ssim-reference",
+  "version": 1,
+  "referenceVersion": "ffmpeg version 7.1.5-0+deb13u1 Copyright (c) 2000-2026 the FFmpeg developers\nbuilt with gcc 14 (Debian 14.2.0-19)\nconfiguration: --prefix=/usr --extra-version=0+deb13u1 --toolchain=hardened --libdir=/usr/lib/x86_64-linux-gnu --incdir=/usr/include/x86_64-linux-gnu --arch=amd64 --enable-gpl --disable-stripping --disable-libmfx --disable-omx --enable-gnutls --enable-libaom --enable-libass --enable-libbs2b --enable-libcdio --enable-libcodec2 --enable-libdav1d --enable-libflite --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libglslang --enable-libgme --enable-libgsm --enable-libharfbuzz --enable-libmp3lame --enable-libmysofa --enable-libopenjpeg --enable-libopenmpt --enable-libopus --enable-librubberband --enable-libshine --enable-libsnappy --enable-libsoxr --enable-libspeex --enable-libtheora --enable-libtwolame --enable-libvidstab --enable-libvorbis --enable-libvpx --enable-libwebp --enable-libx265 --enable-libxml2 --enable-libxvid --enable-libzimg --enable-openal --enable-opencl --enable-opengl --disable-sndio --enable-libvpl --enable-libdc1394 --enable-libdrm --enable-libiec61883 --enable-chromaprint --enable-frei0r --enable-ladspa --enable-libbluray --enable-libcaca --enable-libdvdnav --enable-libdvdread --enable-libjack --enable-libpulse --enable-librabbitmq --enable-librist --enable-libsrt --enable-libssh --enable-libsvtav1 --enable-libx264 --enable-libzmq --enable-libzvbi --enable-lv2 --enable-sdl2 --enable-libplacebo --enable-librav1e --enable-pocketsphinx --enable-librsvg --enable-libjxl --enable-shared\nlibavutil      59. 39.100 / 59. 39.100\nlibavcodec     61. 19.101 / 61. 19.101\nlibavformat    61.  7.103 / 61.  7.103\nlibavdevice    61.  3.100 / 61.  3.100\nlibavfilter    10.  5.100 / 10.  5.100\nlibswscale      8.  3.100 /  8.  3.100\nlibswresample   5.  3.100 /  5.  3.100\nlibpostproc    58.  3.100 / 58.  3.100\n",
+  "source": "https://github.com/FFmpeg/FFmpeg/blob/n7.1.5/libavfilter/vf_ssim.c",
+  "filter": "crop exact ROI, ssim=stats_file=-; filter_complex_threads=1; native planar YUV420 8/10-bit; one frame",
+  "tolerance": 0.00001,
+  "cases": [
+    {
+      "depth": 8,
+      "roi": {
+        "x": 0,
+        "y": 0,
+        "width": 32,
+        "height": 32
+      },
+      "referenceSha256": "b116bf5e3ad5fd7e96dc1b37a895854075c1974b6dfaf870264d8f3b01c3c502",
+      "distortedSha256": "f5051d7019d0c6c12744f5dec58329e4e0f136587764a2306920667e24f8364b",
+      "stats": {
+        "Y": 0.613402,
+        "U": 0.627704,
+        "V": 0.615746,
+        "All": 0.616176
+      },
+      "output": "n:1 Y:0.613402 U:0.627704 V:0.615746 All:0.616176 (4.158679)\n"
+    },
+    {
+      "depth": 8,
+      "roi": {
+        "x": 0,
+        "y": 0,
+        "width": 16,
+        "height": 16
+      },
+      "referenceSha256": "b116bf5e3ad5fd7e96dc1b37a895854075c1974b6dfaf870264d8f3b01c3c502",
+      "distortedSha256": "f5051d7019d0c6c12744f5dec58329e4e0f136587764a2306920667e24f8364b",
+      "stats": {
+        "Y": 0.611438,
+        "U": 0.534218,
+        "V": 0.543738,
+        "All": 0.587285
+      },
+      "output": "n:1 Y:0.611438 U:0.534218 V:0.543738 All:0.587285 (3.843493)\n"
+    },
+    {
+      "depth": 8,
+      "roi": {
+        "x": 16,
+        "y": 0,
+        "width": 16,
+        "height": 16
+      },
+      "referenceSha256": "b116bf5e3ad5fd7e96dc1b37a895854075c1974b6dfaf870264d8f3b01c3c502",
+      "distortedSha256": "f5051d7019d0c6c12744f5dec58329e4e0f136587764a2306920667e24f8364b",
+      "stats": {
+        "Y": 0.6355,
+        "U": 0.690533,
+        "V": 0.606169,
+        "All": 0.639783
+      },
+      "output": "n:1 Y:0.635500 U:0.690533 V:0.606169 All:0.639783 (4.434364)\n"
+    },
+    {
+      "depth": 8,
+      "roi": {
+        "x": 0,
+        "y": 16,
+        "width": 16,
+        "height": 16
+      },
+      "referenceSha256": "b116bf5e3ad5fd7e96dc1b37a895854075c1974b6dfaf870264d8f3b01c3c502",
+      "distortedSha256": "f5051d7019d0c6c12744f5dec58329e4e0f136587764a2306920667e24f8364b",
+      "stats": {
+        "Y": 0.619276,
+        "U": 0.524892,
+        "V": 0.530066,
+        "All": 0.588677
+      },
+      "output": "n:1 Y:0.619276 U:0.524892 V:0.530066 All:0.588677 (3.858171)\n"
+    },
+    {
+      "depth": 8,
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 16,
+        "height": 16
+      },
+      "referenceSha256": "b116bf5e3ad5fd7e96dc1b37a895854075c1974b6dfaf870264d8f3b01c3c502",
+      "distortedSha256": "f5051d7019d0c6c12744f5dec58329e4e0f136587764a2306920667e24f8364b",
+      "stats": {
+        "Y": 0.633865,
+        "U": 0.700343,
+        "V": 0.689696,
+        "All": 0.65425
+      },
+      "output": "n:1 Y:0.633865 U:0.700343 V:0.689696 All:0.654250 (4.612376)\n"
+    },
+    {
+      "depth": 8,
+      "roi": {
+        "x": 2,
+        "y": 4,
+        "width": 24,
+        "height": 20
+      },
+      "referenceSha256": "b116bf5e3ad5fd7e96dc1b37a895854075c1974b6dfaf870264d8f3b01c3c502",
+      "distortedSha256": "f5051d7019d0c6c12744f5dec58329e4e0f136587764a2306920667e24f8364b",
+      "stats": {
+        "Y": 0.61207,
+        "U": 0.674103,
+        "V": 0.64772,
+        "All": 0.62835
+      },
+      "output": "n:1 Y:0.612070 U:0.674103 V:0.647720 All:0.628350 (4.298663)\n"
+    },
+    {
+      "depth": 10,
+      "roi": {
+        "x": 0,
+        "y": 0,
+        "width": 32,
+        "height": 32
+      },
+      "referenceSha256": "798ba0b64907a46f030d68df2b69e27db69fa15e35edd7bf58ea9a942d8a9ece",
+      "distortedSha256": "03a321626f241bad5ab16222602d0538d3c965cb0d2b02d434b4f60c6f19983a",
+      "stats": {
+        "Y": 0.606932,
+        "U": 0.607316,
+        "V": 0.595306,
+        "All": 0.605058
+      },
+      "output": "n:1 Y:0.606932 U:0.607316 V:0.595306 All:0.605058 (4.034666)\n"
+    },
+    {
+      "depth": 10,
+      "roi": {
+        "x": 0,
+        "y": 0,
+        "width": 16,
+        "height": 16
+      },
+      "referenceSha256": "798ba0b64907a46f030d68df2b69e27db69fa15e35edd7bf58ea9a942d8a9ece",
+      "distortedSha256": "03a321626f241bad5ab16222602d0538d3c965cb0d2b02d434b4f60c6f19983a",
+      "stats": {
+        "Y": 0.605909,
+        "U": 0.623546,
+        "V": 0.59148,
+        "All": 0.606444
+      },
+      "output": "n:1 Y:0.605909 U:0.623546 V:0.591480 All:0.606444 (4.049930)\n"
+    },
+    {
+      "depth": 10,
+      "roi": {
+        "x": 16,
+        "y": 0,
+        "width": 16,
+        "height": 16
+      },
+      "referenceSha256": "798ba0b64907a46f030d68df2b69e27db69fa15e35edd7bf58ea9a942d8a9ece",
+      "distortedSha256": "03a321626f241bad5ab16222602d0538d3c965cb0d2b02d434b4f60c6f19983a",
+      "stats": {
+        "Y": 0.604813,
+        "U": 0.582281,
+        "V": 0.578984,
+        "All": 0.596753
+      },
+      "output": "n:1 Y:0.604813 U:0.582281 V:0.578984 All:0.596753 (3.944287)\n"
+    },
+    {
+      "depth": 10,
+      "roi": {
+        "x": 0,
+        "y": 16,
+        "width": 16,
+        "height": 16
+      },
+      "referenceSha256": "798ba0b64907a46f030d68df2b69e27db69fa15e35edd7bf58ea9a942d8a9ece",
+      "distortedSha256": "03a321626f241bad5ab16222602d0538d3c965cb0d2b02d434b4f60c6f19983a",
+      "stats": {
+        "Y": 0.600259,
+        "U": 0.620417,
+        "V": 0.56013,
+        "All": 0.596931
+      },
+      "output": "n:1 Y:0.600259 U:0.620417 V:0.560130 All:0.596931 (3.946203)\n"
+    },
+    {
+      "depth": 10,
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 16,
+        "height": 16
+      },
+      "referenceSha256": "798ba0b64907a46f030d68df2b69e27db69fa15e35edd7bf58ea9a942d8a9ece",
+      "distortedSha256": "03a321626f241bad5ab16222602d0538d3c965cb0d2b02d434b4f60c6f19983a",
+      "stats": {
+        "Y": 0.607047,
+        "U": 0.621252,
+        "V": 0.645798,
+        "All": 0.615873
+      },
+      "output": "n:1 Y:0.607047 U:0.621252 V:0.645798 All:0.615873 (4.155250)\n"
+    },
+    {
+      "depth": 10,
+      "roi": {
+        "x": 2,
+        "y": 4,
+        "width": 24,
+        "height": 20
+      },
+      "referenceSha256": "798ba0b64907a46f030d68df2b69e27db69fa15e35edd7bf58ea9a942d8a9ece",
+      "distortedSha256": "03a321626f241bad5ab16222602d0538d3c965cb0d2b02d434b4f60c6f19983a",
+      "stats": {
+        "Y": 0.608768,
+        "U": 0.63035,
+        "V": 0.575465,
+        "All": 0.606815
+      },
+      "output": "n:1 Y:0.608768 U:0.630350 V:0.575465 All:0.606815 (4.054030)\n"
+    }
+  ]
+}

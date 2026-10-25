@@ -7,7 +7,7 @@ export function qualityKeys(value:unknown,allowed:string[]) {
     throw new AdminError(400,'Unknown or invalid quality request fields.','invalid-request');
 }
 export function libraryPairRequest(value:unknown):FramePairRequest {
-  qualityKeys(value,['pairing','reference','distorted','roi','spatial','budget']);const request=value as FramePairRequest;
+  qualityKeys(value,['pairing','reference','distorted','roi','spatial','ssim','budget']);const request=value as FramePairRequest;
   for(const target of [request.reference,request.distorted]){
     qualityKeys(target,['mediaId','mediaVersion','size','indexIdentity','indexBuildId','picture','sourcePtsUs']);
     qualityKeys(target.picture,['sourceVersion','stream','configuration','au','picture','layer','field']);

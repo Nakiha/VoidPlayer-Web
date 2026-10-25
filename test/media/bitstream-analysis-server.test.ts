@@ -957,8 +957,22 @@ test('summary pages resume without duplicate writes; warm work has zero decode a
 
 test('large legacy chunks stop below 32 at the cumulative byte reservation and last consumer releases the worker',async()=>{
  const {PRODUCT_LIMIT}=await import('../../shared/analysis/bitstream/products.ts');const {BUDGET}=await import('../../shared/analysis/bitstream/contract.ts');const f=await fixture(resolve('fixtures/video'),'mhw_hevc_fullrange_bt709_3s.mp4'),scheduler=new AnalysisScheduler(f.library,coreDir,join(f.folder,'analysis'));
+ // A real disk commit can pause longer than the old 200ms quiet heuristic.
+ // Delay only the second page commit; decoding, serialized bytes and cache writes stay real.
+ const write=scheduler.store.putStreamPage.bind(scheduler.store);let writes=0;
+ scheduler.store.putStreamPage=async(...args)=>{if(++writes===2)await new Promise(r=>setTimeout(r,300));return write(...args);};
  try{const request=await scheduler.submit(f.entry.id,f.entry.version!,{mode:'stream',sourceVersion:`${f.entry.id}@${f.entry.version}`,firstPtsUs:0,durationUs:3000000,window:{startUs:500000,endUs:700000,axis:'pts'}},'slow');let stable=0,previous=-1,status;
-  for(let i=0;i<500;i++){status=await scheduler.streamStatus(request.requestId,'slow',0);assert.ok(status);assert.ok(['queued','running'].includes(status.state),JSON.stringify(status));stable=status.published===previous?stable+1:0;previous=status.published!;if(stable>=8&&status.published!>0)break;await new Promise(r=>setTimeout(r,25));}
+  for(let i=0;i<500;i++){
+   status=await scheduler.streamStatus(request.requestId,'slow',0);assert.ok(status);
+   assert.ok(['queued','running'].includes(status.state),JSON.stringify(status));
+   const bytes=status.chunks.reduce((n,ref)=>n+(ref.bytes??0),0);
+   assert.ok(bytes<=PRODUCT_LIMIT.inFlight,JSON.stringify({published:status.published,bytes}));
+   const reserved=bytes+BUDGET.resultBytes>PRODUCT_LIMIT.inFlight;
+   stable=reserved&&status.published===previous?stable+1:0;previous=status.published!;
+   if(stable>=8&&status.published!>0)break;
+   await new Promise(r=>setTimeout(r,25));
+  }
+  console.log(JSON.stringify({event:'large-chunk-byte-reservation',published:status?.published,bytes:status?.chunks.reduce((n,ref)=>n+(ref.bytes??0),0),inFlight:PRODUCT_LIMIT.inFlight,reservedNext:BUDGET.resultBytes}));
   assert.ok(status&&status.published!>0&&status.published!<32);assert.ok(status.chunks.reduce((n,ref)=>n+(ref.bytes??0),0)<=PRODUCT_LIMIT.inFlight && status.chunks.reduce((n,ref)=>n+(ref.bytes??0),0)+BUDGET.resultBytes>PRODUCT_LIMIT.inFlight);scheduler.release(request.requestId,'slow');await scheduler.close();assert.equal(scheduler.resources().running,0);
  }finally{await scheduler.close();await f.close();}
 });

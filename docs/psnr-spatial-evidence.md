@@ -89,8 +89,10 @@ compare HTTP Agent facts, attach explicitly and select blocks on the original
 viewer in Chromium/WebKit × H.2648/HEVC10, including exact partial-edge projection,
 unchanged frame commits, no private job request and unchanged original playback.
 
-This is bounded single-pair PSNR spatial evidence, not SSIM, a per-pixel heatmap,
+This is bounded single-pair PSNR spatial evidence, not a per-pixel heatmap,
 automatic defect annotation, normal dependent-frame/sequence scoring, arbitrary
 container support, automatic pairing/alignment or distributed execution. Those
 roadmap criteria remain open. Existing playback performance failures and historical
 CI failures with unknown roots are not resolved by this feature.
+
+Optional SSIM companion semantics, coverage, limits and shared evidence: [SSIM](source-plane-ssim.md).

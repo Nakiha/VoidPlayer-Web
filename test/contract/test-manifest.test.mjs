@@ -394,3 +394,9 @@ test('explicit npm engine selection narrows HEVC and rejects unsupported range v
  assert.throws(()=>selectCases({alias:'test:range:browser',engine:'chrome'}),/Unsupported/i);
  assert.throws(()=>selectCases({alias:'test:range:browser',caseArguments:['chrome']}),/Unsupported/i);
 });
+
+test('SSIM full GUI matrix is independently required with real core and cannot enter identity CI',()=>{
+ const rows=selectCases({suite:'ci-ssim',platform:'linux'}).selected;
+ assert.deepEqual(rows.map(r=>[r.engines[0],Number(r.command[3]),r.command[4]]),[['chromium',8,'ssim'],['chromium',10,'ssim'],['webkit',8,'ssim'],['webkit',10,'ssim']]);
+ for(const row of rows){assert.equal(row.required,true);assert.deepEqual(row.fixtures,['core']);assert.equal(row.build,true);assert.equal(row.suites.includes('ci-identity-browser'),false);}
+});

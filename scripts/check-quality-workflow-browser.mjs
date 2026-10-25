@@ -1,3 +1,6 @@
+import {ssimOracle} from '../test/helpers/ssim-oracle.mjs';
+import {annotationWorkspace} from '../shared/review/annotation-record.ts';
+import {parseWorkspace,compressWorkspace,readWorkspaceFile} from '../shared/review/workspace-file.ts';
 import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,readFile,writeFile,rm} from 'node:fs/promises';
 import {createHash,randomUUID} from 'node:crypto';
@@ -16,7 +19,8 @@ import {chooseTestGuest} from './test-identity.mjs';
 import {recordBrowserEvidence,saveBrowserFailure} from './browser-failure-evidence.mjs';
 
 const root=path.resolve(import.meta.dirname,'..'),engine=process.argv[2]??'chromium',depth=Number(process.argv[3]??8);
-const directory=process.env.VOIDPLAYER_TEST_ARTIFACTS??path.join(root,'.run/quality-workflow',`${engine}-${depth}`),temp=await mkdtemp(path.join(os.tmpdir(),'vp-quality-workflow-'));
+const includeSsim=process.argv[4]==='ssim',measureRoi=includeSsim?{x:0,y:0,width:32,height:32}:{x:2,y:4,width:24,height:20},measureGrid=includeSsim?{blockWidth:16,blockHeight:16}:{blockWidth:10,blockHeight:8};
+const directory=process.env.VOIDPLAYER_TEST_ARTIFACTS??path.join(root,'.run/quality-workflow',`${engine}-${depth}${includeSsim?'-ssim':''}`),temp=await mkdtemp(path.join(os.tmpdir(),'vp-quality-workflow-'));
 let service,browser,page,evidence,temporaryLibrary,temporaryServer,phase='setup',heldGate;
 const gates=[],workers=new Set(),errors=[];
 const progress=setInterval(()=>console.log(JSON.stringify({qualityWorkflow:true,engine,depth,phase,workers:workers.size})),10000).unref();
@@ -68,9 +72,14 @@ try{
  const playback=await player.evaluate(()=>({state:window.voidPlayer.getState(),log:window.voidPlayer.getLogs({limit:1})}));
  [page]=await Promise.all([context.waitForEvent('page'),player.locator('#quality-tasks-open').click()]);evidence=recordBrowserEvidence(page);await page.waitForURL('**/admin/#quality');await page.locator('#quality-availability').getByText('Durable single-frame PSNR is available',{exact:false}).waitFor();
  async function select(side,name,au){const field=page.locator(`[data-quality-source=${side}]`);await field.locator('[data-search]').fill(name);await field.locator('[data-search-button]').click();await field.locator(`[data-media-id="${entry(name).id}"]`).click();await field.locator('[data-frame] option').filter({hasText:`AU ${au} ·`}).waitFor({state:'attached'});await field.locator('[data-frame]').selectOption({label:`AU ${au} · source PTS ${au===0?2000000:3000000} µs`});}
- async function choose(){await select('reference','B.flv',0);await select('distorted','C.flv',1);for(const [name,value]of Object.entries({x:2,y:4,width:24,height:20}))await page.locator(`#quality-form [name=${name}]`).fill(String(value));await page.locator('#quality-grid-enabled').check();await page.locator('#quality-grid-width').fill('10');await page.locator('#quality-grid-height').fill('8');}
+ async function choose(){await select('reference','B.flv',0);await select('distorted','C.flv',1);for(const [name,value]of Object.entries(measureRoi))await page.locator(`#quality-form [name=${name}]`).fill(String(value));await page.locator('#quality-grid-enabled').check();await page.locator('#quality-grid-width').fill(String(measureGrid.blockWidth));await page.locator('#quality-grid-height').fill(String(measureGrid.blockHeight));await page.locator('#quality-ssim-enabled').setChecked(includeSsim);}
  async function submitGui(){const previous=await page.locator('#quality-job-title').textContent();await page.locator('#quality-submit').click();await page.waitForFunction(previous=>document.querySelector('#quality-job-title').textContent&&document.querySelector('#quality-job-title').textContent!==previous,previous);return page.locator('#quality-job-title').textContent();}
  await choose();
+ if(includeSsim){phase='local-validation-survives-real-history-poll';const before=await get('/api/quality/jobs');await page.locator('#quality-grid-width').fill('10');await page.locator('#quality-submit').click();await page.waitForFunction(()=>document.querySelector('#quality-form-status').textContent.includes('ssim.block-minimum-16'));
+  await page.evaluate(()=>{window.__invalidPlanPolled=false;const observer=new MutationObserver(()=>{observer.disconnect();window.__invalidPlanPolled=true;});observer.observe(document.querySelector('#quality-resources'),{childList:true,characterData:true,subtree:true});});
+  await page.waitForResponse(r=>new URL(r.url()).pathname==='/api/quality/jobs'&&r.request().method()==='GET');await page.waitForFunction(()=>window.__invalidPlanPolled===true);
+  assert.match(await page.locator('#quality-form-status').textContent(),/ssim.block-minimum-16/,'local validation survives an actual background render');assert.deepEqual((await get('/api/quality/jobs')).entries,before.entries);
+  await page.locator('#quality-grid-width').fill('16');assert.equal(await page.locator('#quality-form-status').textContent(),'','editing the invalid plan clears local validation');}
  phase='delayed-identity-notification-mutation-fence';
  await page.evaluate(()=>window.__deferIdentityNotice=true);
  // Change the shared real cookie in the other, background window. Only delay
@@ -111,17 +120,19 @@ try{
  Atomics.store(heldGate,0,1);Atomics.notify(heldGate,0);heldGate=null;
  const completed=await until(()=>get(`/api/quality/jobs/${id}`),j=>['completed','failed'].includes(j.state),'GUI job completed');assert.equal(completed.state,'completed',JSON.stringify(completed));assert.equal(workers.size,0);
  const result=await get(`/api/quality/jobs/${id}/result`),expected=sse(sample,input.request.roi);assert.equal(result.value.result.metric.aggregate.sse,expected);assert.equal(result.value.result.metric.bitDepth,depth);assert.equal(result.attemptId,completed.attempt.id);
- const grid=result.value.result.metric.spatial;assert.deepEqual(input.request.spatial,{blockWidth:10,blockHeight:8});assert.equal(grid.blocks.length,9);
+ const grid=result.value.result.metric.spatial;assert.deepEqual(input.request.spatial,measureGrid);assert.equal(grid.blocks.length,includeSsim?4:9);
+ if(includeSsim){assert.deepEqual(input.request.ssim,{variant:'ffmpeg-uniform-8x8-step4-v1'});const raw=Buffer.from(sample.native,'base64'),ss=result.value.result.ssim;assert.equal(ss.spatial.blocks.length,4);for(const score of [ss,...ss.spatial.blocks]){const oracle=ssimOracle(raw.subarray(0,raw.length/2),raw.subarray(raw.length/2),depth,32,32,score.roi);assert.ok(Math.abs(score.aggregate.score-oracle.all)<=1e-12);for(const key of ['y','u','v'])assert.ok(Math.abs(score.planes[key].score-oracle[key].score)<=1e-12);}}else assert.equal(result.value.result.ssim,undefined);
  for(const block of grid.blocks)assert.equal(block.aggregate.sse,sse(sample,block.roi),'each spatial score matches independent native-plane oracle');
  assert.deepEqual(grid.worst,grid.blocks.map(b=>b.index).sort((a,b)=>grid.blocks[b].aggregate.mse-grid.blocks[a].aggregate.mse||a-b).slice(0,8));
- assert.deepEqual(grid.blocks.at(-1).roi,{x:22,y:20,width:4,height:4});assert.equal(grid.blocks.reduce((n,b)=>n+b.aggregate.sse,0),expected);
+ assert.deepEqual(grid.blocks.at(-1).roi,includeSsim?{x:16,y:16,width:16,height:16}:{x:22,y:20,width:4,height:4});assert.equal(grid.blocks.reduce((n,b)=>n+b.aggregate.sse,0),expected);
  // Force one real history poll between pointerdown/up: polling must preserve
  // the exact button node and the user's selection, not retry a lost click.
  phase='poll-pointer-hover';await page.bringToFront();const completedRow=page.locator(`[data-job-id="${id}"]`);await completedRow.hover();phase='poll-pointer-down';await page.mouse.down();phase='poll-pointer-watch';
  await page.evaluate(()=>{window.__qualityRenderTick=false;const observer=new MutationObserver(()=>{observer.disconnect();window.__qualityRenderTick=true;});observer.observe(document.querySelector('#quality-resources'),{childList:true,characterData:true,subtree:true});});
  phase='poll-pointer-http';await page.waitForResponse(r=>new URL(r.url()).pathname==='/api/quality/jobs'&&r.request().method()==='GET');phase='poll-pointer-dom';await page.waitForFunction(()=>window.__qualityRenderTick===true);phase='poll-pointer-up';await page.mouse.up();phase='poll-pointer-result';
- await page.locator('#quality-job-result .quality-evidence-score').waitFor();assert.match(await page.locator('#quality-job-json').textContent(),new RegExp(completed.attempt.id));assert.deepEqual(JSON.parse(await page.locator('#quality-job-result pre').textContent()),result.value);
- assert.equal(await page.locator('#quality-job-result .quality-spatial-table tbody tr').count(),17);
+ await page.locator('#quality-job-result .quality-evidence-score').waitFor();assert.match(await page.locator('#quality-job-json').textContent(),new RegExp(completed.attempt.id));assert.deepEqual(JSON.parse(await page.locator('#quality-job-result .quality-evidence-provenance').textContent()),result.value);
+ assert.equal(await page.locator('#quality-job-result .quality-spatial-table tbody tr').count(),includeSsim?8:17);
+ if(includeSsim){await page.locator('#quality-job-result .quality-ssim-score').waitFor();assert.match(await page.locator('#quality-job-result .quality-ssim-coverage').textContent(),/windows/);}
  phase='attachment-space-late-read';
  const otherSpaceResponse=await fetch(base+'/api/annotations/spaces',{method:'POST',headers:annotationHeaders,body:JSON.stringify({name:'Other review space'})});assert.equal(otherSpaceResponse.status,201);const otherSpace=await otherSpaceResponse.json();
  // A fresh completed selection reloads spaces, then a held old-space list must
@@ -138,6 +149,7 @@ try{
  await page.locator('#quality-attach').click();await page.waitForFunction(()=>/retry/i.test(document.querySelector('#quality-attach-status').textContent));await page.locator('#quality-attach').click();await page.locator('#quality-shared-links .quality-pair-open').waitFor();assert.deepEqual(attachmentPosts[0],attachmentPosts[1]);
  const mismatchedAttachment=await fetch(base+'/api/annotations/spaces/default',{method:'POST',headers:{...annotationHeaders,cookie:racingCookie,'x-voidplayer-actor':actor.id},body:JSON.stringify(attachmentPosts[0])});assert.equal(mismatchedAttachment.status,409);assert.equal((await mismatchedAttachment.json()).code,'actor-changed');
  const shared=await get('/api/annotations/spaces/default/workflow-mark');assert.equal(shared.revision,2);assert.equal(shared.document.mark.qualityEvidence.length,1);assert.equal(shared.document.mark.qualityEvidence[0].value.result.metric.aggregate.sse,expected);
+ if(includeSsim){assert.deepEqual(shared.document.mark.qualityEvidence[0].value.result.ssim,result.value.result.ssim);const backup=annotationWorkspace([shared.document],base);assert.equal(backup.version,2);assert.deepEqual(backup.marks[0].qualityEvidence[0].value.result.ssim,result.value.result.ssim);assert.equal(backup.marks[0].qualityEvidence[0].verification,'historical');assert.deepEqual(await readWorkspaceFile(await compressWorkspace(backup),base),parseWorkspace(backup));assert.deepEqual(await readWorkspaceFile(new Blob([JSON.stringify(backup)]),base),parseWorkspace(backup));}
  phase='explicit-original-viewer';const beforeView=await player.evaluate(()=>window.voidPlayer.getState());
  const viewerRequests=[];const track=r=>viewerRequests.push({url:r.url(),method:r.method()});const trackViewer=p=>{if(p!==page&&p!==player)p.on('request',track);};context.on('page',trackViewer);
  [page.viewer]=await Promise.all([context.waitForEvent('page'),page.locator('#quality-shared-links .quality-pair-open').click()]);const viewer=page.viewer;
@@ -148,8 +160,8 @@ try{
  await viewer.locator('#pair-block-selection').selectOption(String(worst));const selected=await viewer.evaluate(()=>window.voidPlayerQualityPair.getState());assert.equal(selected.selectedBlock,worst);assert.deepEqual(selected.presented,viewed.presented,'block selection never repaints, seeks, decodes or changes frame tokens');
  assert.equal(await viewer.locator('.quality-selected-block').count(),2);
  for(const side of ['reference','distorted']){const rect=await viewer.locator(`.frame-stage[data-side=${side}]`).evaluate(stage=>{const r=stage.querySelector('.quality-selected-block'),scale=Math.min(stage.clientWidth/32,stage.clientHeight/32);return {x:Number(r.getAttribute('x')),y:Number(r.getAttribute('y')),width:Number(r.getAttribute('width')),height:Number(r.getAttribute('height')),scale,ox:(stage.clientWidth-32*scale)/2,oy:(stage.clientHeight-32*scale)/2};});const block=grid.blocks[worst].roi;for(const [key,want]of Object.entries({x:rect.ox+block.x*rect.scale,y:rect.oy+block.y*rect.scale,width:block.width*rect.scale,height:block.height*rect.scale}))assert.ok(Math.abs(rect[key]-want)<1e-8,`${side} ${key}: exact source-grid projection`);}
- await viewer.evaluate(()=>window.voidPlayerQualityPair.selectBlock(8));assert.equal((await viewer.evaluate(()=>window.voidPlayerQualityPair.getState())).selectedBlock,8,'Agent and GUI select through the same session');
- assert.equal(await viewer.evaluate(()=>{try{window.voidPlayerQualityPair.selectBlock(99);return false;}catch{return window.voidPlayerQualityPair.getState().selectedBlock===8;}}),true);
+ const lastIndex=grid.blocks.length-1;await viewer.evaluate(index=>window.voidPlayerQualityPair.selectBlock(index),lastIndex);assert.equal((await viewer.evaluate(()=>window.voidPlayerQualityPair.getState())).selectedBlock,lastIndex,'Agent and GUI select through the same session');
+ assert.equal(await viewer.evaluate(last=>{try{window.voidPlayerQualityPair.selectBlock(99);return false;}catch{return window.voidPlayerQualityPair.getState().selectedBlock===last;}},lastIndex),true);
  await viewer.screenshot({path:path.join(directory,'measured-pair-block-edge.png')});
  await viewer.locator('#pair-block-selection').selectOption('');assert.equal(await viewer.locator('.quality-pair-roi rect').count(),2);assert.equal((await viewer.evaluate(()=>window.voidPlayerQualityPair.getState())).selectedBlock,undefined);
  assert.deepEqual(Object.fromEntries(Object.entries((await viewer.evaluate(()=>window.voidPlayerQualityPair.getState())).presented).map(([side,p])=>[side,p.commit])),commits);
@@ -176,7 +188,7 @@ try{
  const cancelId=await submitGui();await until(()=>get(`/api/quality/jobs/${cancelId}`),j=>j.phase==='decode','cancellable actual Worker');assert.equal(workers.size,1);
  await page.locator('#quality-cancel').click();const cancelled=await until(()=>get(`/api/quality/jobs/${cancelId}`),j=>j.state==='cancelled','physical Worker termination');assert.equal(cancelled.result.available,false);assert.equal(workers.size,0);assert.equal(service.library.qualityJobs.resources().activeAttempts,0);service.library.qualityAdmission.ordinary();heldGate=null;
  phase='bad-roi-and-color';await page.locator('#quality-form [name=x]').fill('1');await page.locator('#quality-submit').click();assert.equal(await page.locator('#quality-form [name=x]').evaluate(e=>e.validity.stepMismatch),true);
- await select('reference','MISSING-COLOR.flv',0);await select('distorted','MISSING-COLOR.flv',1);for(const [name,value]of Object.entries({x:2,y:4,width:24,height:20}))await page.locator(`#quality-form [name=${name}]`).fill(String(value));
+ await select('reference','MISSING-COLOR.flv',0);await select('distorted','MISSING-COLOR.flv',1);for(const [name,value]of Object.entries(measureRoi))await page.locator(`#quality-form [name=${name}]`).fill(String(value));
  const colorId=await submitGui();const color=await until(()=>get(`/api/quality/jobs/${colorId}`),j=>['failed','completed'].includes(j.state),'explicit missing color rejection');assert.equal(color.state,'failed');assert.equal(color.result.available,false);assert.match(color.reason.message,/color|chroma/i);
  phase='measurement-viewer-geometry-distinction';await select('reference','SAR.flv',0);await select('distorted','SAR.flv',1);
  const sarProof=JSON.parse(await page.locator('[data-quality-source=reference] [data-source-proof]').textContent());assert.equal(sarProof.geometry.sarNum,1000);assert.equal(sarProof.geometry.sarDen,1001);assert.match(await page.locator('[data-quality-source=reference] [data-source-status]').textContent(),/viewer rejects this geometry/);
@@ -202,6 +214,6 @@ try{
  temporaryLibrary=new MediaLibraryIndex([],{database:':memory:',watch:false});temporaryServer=createMediaServer({roots:[],library:temporaryLibrary,staticDir:path.join(root,'dist'),onLog(){}});await new Promise(r=>temporaryServer.listen(0,'127.0.0.1',r));
  const temporaryBase=`http://127.0.0.1:${temporaryServer.address().port}`,temporaryContext=await browser.newContext({locale:'en-US'});await temporaryContext.addCookies([{name:'voidplayer-user',value:`guest-${randomUUID()}`,url:temporaryBase}]);const temporaryPage=await temporaryContext.newPage();await temporaryPage.goto(temporaryBase+'/admin/#quality');await temporaryPage.locator('#quality-availability').filter({hasText:'does not offer durable quality jobs'}).waitFor();assert.equal(await temporaryPage.locator('#quality-submit').isDisabled(),true);await temporaryContext.close();
  assert.deepEqual(errors,[]);await page.screenshot({path:path.join(directory,'quality-tasks.png')});
- console.log(`PASS ${engine} ${depth}-bit: real GUI submit → durable job/Agent same attempt/SSE ${expected} → explicit existing annotation → original pair/ROI; idempotency, window close, queue budget, actual Worker cancel exit, color/ROI/cache rejection and playback A isolation`);
+ console.log(`PASS ${engine} ${depth}-bit: real GUI ${includeSsim?'PSNR+SSIM':'PSNR'} submit → durable job/Agent same attempt/SSE ${expected} → explicit existing annotation → original pair/ROI; idempotency, window close, queue budget, actual Worker cancel exit, color/ROI/cache rejection and playback A isolation`);
 }catch(error){if(page&&!page.isClosed())await saveBrowserFailure({page,directory,name:'quality-workflow',context:{engine,depth,phase},error,evidence}).catch(()=>{});throw error;}
 finally{clearInterval(progress);for(const gate of gates){Atomics.store(gate,0,1);Atomics.notify(gate,0);}if(browser)await browser.close();if(service)await service.close();if(temporaryServer)await new Promise(r=>temporaryServer.close(r));if(temporaryLibrary)await temporaryLibrary.close();await rm(temp,{recursive:true,force:true});}

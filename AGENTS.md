@@ -13,6 +13,7 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 - `src/review/` 保存评审与工作区浏览器客户端；`src/services/` 保存媒体库、连接、身份和文件客户端；`src/logging/` 保存本地诊断；面板与交互位于 `src/ui/`，管理页面位于 `src/admin/`。
 - `server/`：Node 服务，`app.ts` 负责装配；路由在 `routes/`，深度分析服务在 `analysis/bitstream/`，配置与运行入口在 `config.ts` / `runtime.ts`。共享代码统一从 `shared/` 引入，禁止服务端与浏览器层互相引用（包括类型）。
 - `shared/analysis/quality/`：无宿主依赖的源平面度量核心。PSNR 的输入域、ROI、色彩前提和工作预算见 `docs/source-plane-psnr.md`；内部单帧桥及受信任的宿主输入边界见 `docs/source-frame-pair-psnr.md`；浏览器适配位于 `src/analysis/quality/`。数值核心和内部桥不代表评分任务服务可用。
+- 可选 SSIM 伴随 PSNR 的语义与预算见 `docs/source-plane-ssim.md`，数值/结构校验在 `shared/analysis/quality/ssim*.ts`。固定 FFmpeg 均匀 8×8、步长 4 变种，不得混称高斯 SSIM；有效窗口的各平面覆盖须保留。共用同次可信解码、持久任务/附件和原帧查看；不得扩大源/几何支持。
 - `server/analysis/quality/`：媒体库到一次性 PSNR HTTP 调用的文件、缓存、Node/Bun Worker 适配，见 `docs/source-library-psnr.md`。可信 producer evidence 只能由服务端完成扫描后提交；评分不得重建索引。实例质量准入排斥索引构建/上传和码流工作，物理退出前不能释放许可。一次性请求与持久任务的连接/取消契约分开。
 - 持久单帧 PSNR 位于同目录 `job-{request,store,service,routes}.ts`，见 `docs/source-psnr-jobs.md`。提交幂等与终态/结果使用事务；运行由服务持有，观察断线不取消，取消须等待物理退出。独占锁后恢复 interrupted，无自动重试/共享/建索引；`quality.jobs` 仅声明显式单帧 PSNR，不代表 #121 全部完成。
 - 单帧 PSNR GUI 任务编排位于 `src/admin/quality.ts`、观察/幂等适配位于 `src/analysis/quality/job-observer.ts` 与 `src/services/quality-jobs.ts`，见 `docs/psnr-task-workflow.md`。只读取可信缓存候选，不借播放游标/CSS，不自动建索引；关闭观察不取消持久执行，身份/client/标注空间迟到回复必须围栏。

@@ -72,7 +72,7 @@ and removes ROI, including after an old response arrives.
 
 Displayed RGB passes through the existing color presentation policy. It is not a
 new measurement or a claim that displayed RGB equals source YUV code values. No
-heatmap, SSIM/VMAF, sequence pairing or automatic correspondence is provided.
+heatmap, VMAF, sequence pairing or automatic correspondence is provided.
 
 ## Ownership, limits and verification
 
@@ -111,3 +111,5 @@ exercise exact-SAR rejection while normal source-plane scoring remains accepted.
 regressions remain required. This advances #115; it does not complete the issue.
 
 Optional bounded source-pixel block measurement and immutable spatial evidence: [PSNR block evidence](psnr-spatial-evidence.md). Scalar requests and existing source/geometry admission remain unchanged.
+
+Optional SSIM companion semantics, coverage, limits and shared evidence: [SSIM](source-plane-ssim.md).
