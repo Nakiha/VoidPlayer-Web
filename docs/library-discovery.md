@@ -32,7 +32,10 @@ timeBase 是原容器 tick 的秒比例，origin=null，relationToQualityAu=not-
 不得按相等 PTS 将它拼成质量 AU。可信评分身份继续通过既有 psnr-source/psnr-frames
 获取，包含源版本、namespace/build、stream/configuration/AU 及原时钟。
 
-每页最多返回 32 行、检查 64 行，响应至多 256 KiB。空页也可有 nextCursor。
+每页最多返回 32 行、处理 64 个候选加一个 lookahead，响应至多 256 KiB。
+按媒体 ID 主键索引 keyset seek，不执行每页 COUNT、OFFSET 或路径全排序。
+root/path/state 条件只在当前有界候选窗内判断；稀疏搜索可能连续空页且带 nextCursor。
+候选累计数与范围内已检查数分开；total 在穷尽前为 null，穷尽后才是范围内登记行总数。
 继续页必须重复相同筛选、scope、includeUnknown 和 limit，附 opaque cursor；
 服务 HMAC 验证游标并绑定数据库快照。来源、probe 或缓存变化/服务重启返回
 409 discovery-snapshot-changed，须从第一页重新开始。page 与 cumulative 计数分开；
@@ -44,14 +47,17 @@ filesystemCompleteness=not-established，目录扫描状态另查 /api/library/s
 
 | 容器 | 可观察范围 | 流清单 | 评分 |
 | --- | --- | --- | --- |
-| FLV / Enhanced FLV | 初始视频配置/尺寸/位深等 | 不完整，不证明音频或多轨缺席 | 仍须既有可信 FLV 质量准入 |
+| FLV / Enhanced FLV | 固定前缀初始音视频信息/尺寸/位深等 | 不完整，不证明音频或多轨缺席 | 仍须既有可信 FLV 质量准入 |
 | MP4 / QuickTime | 固定解析器元数据与初始配置 | 有界初始 trak，包括字幕/data/未知 | 未支持 |
 | Matroska / WebM | 固定解析器元数据与初始配置 | 有界初始 Tracks，包括字幕/data/未知 | 未支持 |
 | MPEG-TS | 有界初始节目/配置 | 不完整，不证明后续节目/配置 | 未支持 |
 
 streamInventoryComplete 仅表示初始容器声明已完整覆盖且与解析器公开轨道一致，
 不是完整包/帧/配置变化清单。头部子预算或解析器不一致使其 incomplete。
-probe 不调用外部 ffprobe、解码器或全包扫描；TS 可读初始配置包，全部 IO 计费。
+FLV 前缀严格限制在 64 KiB 内、至多处理 8 个 tag 头、配置至多 4096 字节，
+报告已处理头数/结束位置/停止原因。纯音频返回初始容器/AAC 配置信息，
+不认证所有音频包或实际解码输出；无视频或迟到视频保留未知，
+不为寻找视频走到 EOF。probe 不调用外部 ffprobe、解码器或全包扫描；TS 可读初始配置包，全部 IO 计费。
 固定 Mediabunny 1.55.7；独立 FFprobe 仅用于合成测试素材的事实对照。
 
 ## 显式服务持有任务
@@ -97,7 +103,13 @@ reference integrity 仍未认证，concealment detection unavailable；既有性
 ## 验证与剩余范围
 
 清单登记 Node/Bun HTTP/状态机/IO 与物理退出围栏，固定 FFprobe 对照合成
-FLV/MP4/MKV/TS 8/10 位、缺色及三轨素材，真实 Chromium/WebKit 选择/准备/丢响应
+FLV/MP4/MKV/TS 8/10 位、缺色、三轨和纯音频/无视频/迟到视频素材，真实 Chromium/WebKit 选择/准备/丢响应
 重放/关闭观察/actor 迟到/取消/缓存复用/原播放器隔离，以及编译包空 PATH 下真实
 probe Worker 和重启历史。最终候选的三平台与完整 PR CI 仍须实际通过。
+100,000 行稀疏检索实测每页最多 65 行候选读取；深页 EXPLAIN 仅主键 SEARCH，
+无表扫描/临时排序，穷尽后才给精确范围总数。
 本批不完成新容器可信评分、区间任务、全库自动 probe、全部 #120 或整个 roadmap。
+
+播放隔离回归的定时采样证明观察到真实帧推进且观测时仍在播放；不证明采样之间从未发生
+短暂停止/恢复。保留同源/generation、位置/帧 PTS 前进、结束时 playing 与页面无错误断言，
+不扩大为连续性认证，也不把通过称为旧 WebKit CI 根因已修复。

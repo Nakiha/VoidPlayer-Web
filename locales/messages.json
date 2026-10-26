@@ -2545,8 +2545,9 @@
     "params": {}
   },
   "discovery.coverage": {
-    "source": "登记行快照已检查 {inspected}/{total}：匹配 {match}，未知 {unknown}，不匹配 {notMatch}。总数仅在遍历全部页后成立，不证明磁盘文件已完整发现。",
+    "source": "已按 ID 顺序扫描 {candidates} 个候选；范围内已检查 {inspected}/{total}：匹配 {match}，未知 {unknown}，不匹配 {notMatch}。总数仅在穷尽后成立，不证明磁盘文件完整发现。",
     "params": {
+      "candidates": "string | number",
       "inspected": "string | number",
       "match": "string | number",
       "notMatch": "string | number",

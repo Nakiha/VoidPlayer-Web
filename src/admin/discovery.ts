@@ -50,7 +50,7 @@ export function installDiscovery(signal:AbortSignal){
       $('query-status').textContent='';const result=await api.browse(params,c.owner,c.signal);if(!valid(c)||ticket!==querySequence)return;page=result;
       $('next').hidden=!result.nextCursor;$('list').replaceChildren();for(const entry of result.entries){const button=document.createElement('button');button.type='button';button.dataset.sourceId=entry.source.id;
         button.textContent=`${entry.file.root} / ${entry.file.name} · ${entry.technical.state} · ${entry.decision?.state??'unknown'} · ${entry.decision?.reason??''}`;button.onclick=()=>void select(entry);$('list').append(button);}
-      const count=result.coverage.cumulative;$('coverage').textContent=t(msg('discovery.coverage','登记行快照已检查 {inspected}/{total}：匹配 {match}，未知 {unknown}，不匹配 {notMatch}。总数仅在遍历全部页后成立，不证明磁盘文件已完整发现。'),{...count,total:result.coverage.total});
+      const count=result.coverage.cumulative;$('coverage').textContent=t(msg('discovery.coverage','已按 ID 顺序扫描 {candidates} 个候选；范围内已检查 {inspected}/{total}：匹配 {match}，未知 {unknown}，不匹配 {notMatch}。总数仅在穷尽后成立，不证明磁盘文件完整发现。'),{...count,candidates:result.coverage.candidates.cumulative,total:result.coverage.total??'?'});
     }catch(e){if(valid(c)&&ticket===querySequence){$('query-status').textContent=error(e);$('next').hidden=true;}}
   }
   async function inspectJob(id:string){const c=context(),ticket=++selectedJobSequence;try{const value=await api.job(id,c.owner,c.signal);if(!valid(c)||ticket!==selectedJobSequence)return;

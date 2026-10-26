@@ -28,7 +28,7 @@ test('real HTTP discovers unknown without media IO, explicitly probes MP4/Matros
   assert.match(schema.fields.streamInventory,/subtitle\/data\/unknown/);assert.match(schema.fields.clock,/not-established/);
   const head=await fetch(f.base+'/api/library/discovery-schema',{method:'HEAD'});assert.equal(head.status,200);assert.equal(await head.text(),'');
   const guide=await fetch(f.base+'/agent/library.md').then(r=>r.text());for(const term of ['recordsReady=1','streamInventoryComplete','X-VoidPlayer-Actor','physical','initial container declarations'])assert.ok(guide.includes(term),term);
-  const initial=await fetch(f.base+'/api/library/discovery?codec=h264&limit=2').then(r=>r.json());assert.equal(initial.coverage.total,4);assert.equal(initial.coverage.cumulative.unknown,2);
+  const initial=await fetch(f.base+'/api/library/discovery?codec=h264&limit=2').then(r=>r.json());assert.equal(initial.coverage.total,null);assert.equal(initial.coverage.cumulative.unknown,2);
   const continued=await fetch(f.base+`/api/library/discovery?codec=h264&limit=2&cursor=${initial.nextCursor}`).then(r=>r.json());assert.equal(continued.coverage.exhausted,true);assert.equal(continued.coverage.cumulative.unknown,4);
   assert.equal(new Set([...initial.entries,...continued.entries].map((e:any)=>e.source.id)).size,4);
   assert.equal(Number(f.library.discovery.store.db.prepare('SELECT count(*) AS n FROM media_index_manifests').get()!.n),0);
@@ -57,6 +57,12 @@ test('real HTTP discovers unknown without media IO, explicitly probes MP4/Matros
     const replay=await f.post(changedBody,changedKey);assert.equal(replay.status,200);assert.equal((await replay.json()).job.id,id,'receipt remains replayable after actual source version change');
     assert.equal((await fetch(f.base+`/api/media/${flv.id}/discovery?v=${flv.version}`)).status,409);
   }finally{release();}
+  const audioSample=JSON.parse(await readFile(new URL('../helpers/library-discovery-samples.json',import.meta.url),'utf8')).audioSamples[0];
+  await writeFile(path.join(f.media,'audio-only.flv'),Buffer.from(audioSample.bytes,'base64'));await f.library.refresh();const audio=f.library.browse({recursive:true}).entries.find(e=>e.name==='audio-only.flv')!;
+  const acceptedAudio=await f.post({source:{id:audio.id,version:audio.version},operation:'probe',client:{id:'agent',name:'HTTP Agent'}});assert.equal(acceptedAudio.status,202);
+  const audioJob=await f.wait((await acceptedAudio.json()).job.id);assert.equal(audioJob.state,'completed');assert.equal(audioJob.result.streams[0].type,'audio');assert.equal(audioJob.result.streams[0].fields.codec.value,'mp3');assert.equal(audioJob.result.coverage.prefix.tagHeadersInspected,8);
+  const audioPage=await fetch(f.base+'/api/library/discovery?search=audio-only&codec=h264').then(r=>r.json());assert.equal(audioPage.entries[0].decision.state,'unknown');assert.equal(audioPage.coverage.totals.unknown,1);
+  assert.notEqual((await fetch(`${f.base}/api/media/${audio.id}/psnr-source?v=${audio.version}`,{headers:f.headers})).status,200);
 });
 test('durable preparations respect shared busy admission, per-actor/global queue budgets, cancellation and ephemeral discovery',async t=>{
  const f=await setup(t),entry=f.entries[0],body={source:{id:entry.id,version:entry.version},operation:'probe',client:{id:'agent',name:'HTTP Agent'}};

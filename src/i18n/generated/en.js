@@ -588,7 +588,7 @@ export default {
   "connection.winRich3": () => "Select “Place all certificates in the following store”, then browse to <strong>Trusted Root Certification Authorities</strong>.",
   "connection.winStep4": () => "Verify the source and fingerprint, then finish the import as prompted.",
   "discovery.check": () => "Check scoring source (read-only)",
-  "discovery.coverage": (d) => "Inspected " + d.inspected + "/" + d.total + " registered rows in this snapshot: " + d.match + " match, " + d.unknown + " unknown, " + d.notMatch + " mismatch. Totals require all pages and do not prove that all files on disk have been discovered.",
+  "discovery.coverage": (d) => "Scanned " + d.candidates + " ID-ordered candidates; inspected " + d.inspected + "/" + d.total + " in scope: " + d.match + " matching, " + d.unknown + " unknown, " + d.notMatch + " non-matching. Totals become exact only after exhaustion, and do not prove complete filesystem discovery.",
   "discovery.depth": () => "Bit depth (known evidence)",
   "discovery.distorted": () => "Open measurement with this distorted source",
   "discovery.duration": () => "Minimum duration (integer microseconds)",

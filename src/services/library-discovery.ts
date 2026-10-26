@@ -6,7 +6,7 @@ export type DiscoveryItem={source:DiscoverySource;file:{name:string;root:string;
   scoring:{state:string;reason:string;source:string;frames:string};links:{indexes:string};
   decision?:{state:DiscoveryDecision;reason:string|null;evidence:unknown[]}};
 export type DiscoveryPage={schema:string;version:1;snapshot:string;entries:DiscoveryItem[];nextCursor:string|null;
-  coverage:{total:number;page:{inspected:number;match:number;unknown:number;notMatch:number};cumulative:{inspected:number;match:number;unknown:number;notMatch:number};exhausted:boolean;totals:unknown}};
+  coverage:{total:number|null;candidates:{page:number;cumulative:number};page:{inspected:number;match:number;unknown:number;notMatch:number};cumulative:{inspected:number;match:number;unknown:number;notMatch:number};exhausted:boolean;totals:unknown}};
 export class LibraryDiscoveryClient {
   async request<T>(url:string,actor:string,signal:AbortSignal,method='GET',body?:unknown,key?:string):Promise<T>{
     const response=await fetch(url,{method,cache:'no-store',signal:AbortSignal.any([signal,AbortSignal.timeout(15000)]),headers:{...(actor?{'x-voidplayer-actor':actor}:{}),

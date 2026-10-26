@@ -59,8 +59,12 @@ conditions prefer a prepared probe, with bounded cache fallback when absent.
 Predicates are AND within one video evidence stream, not joined across streams,
 probe/cache views or cache namespaces. Derived parser defaults cannot satisfy
 exact conditions. Conflicting or truncated cached evidence remains unknown.
-Each bounded page inspects at most64 sources; nextCursor may accompany an empty
-page. Repeat the SAME query and limit with cursor=nextCursor. Coverage page and
+Each page seeks the existing media-ID primary-key index for at most64 candidate
+rows plus one lookahead. Root/path/state predicates apply only to this window;
+there is no whole-library COUNT, OFFSET walk or path sort. candidates counts all
+visited rows, while page/cumulative counts only in-scope eligible rows. total is
+null until exhausted=true. Sparse root/path searches may return empty pages with
+nextCursor; continue them to establish coverage. Repeat the SAME query and limit with cursor=nextCursor. Coverage page and
 cumulative counters are distinct; whole-scope match/unknown totals are available
 only after exhausted=true. Any library/probe/cache snapshot change returns409;
 restart from the first page. Availability is the recorded library state, not a
@@ -76,8 +80,10 @@ do not turn matching timestamps into a scoring identity. The existing info and
 index-query links remain the source of exact cache namespace/stream/build and
 bounded raw-clock packet records. Metadata readability does NOT admit scoring:
 MP4/QuickTime, Matroska/WebM and bounded TS probes do not extend the trusted FLV
-quality matrix. FLV probe observes only the initial video configuration, so it
-does not claim complete stream inventory or packet coverage. Bounded MP4/QuickTime
+quality matrix. FLV probe observes only a64KiB prefix and at most8 tag headers, with initial
+audio/video configurations up to4096 bytes. Pure audio is observable; absent or
+late video remains unknown instead of searching to EOF. It does not claim
+complete stream inventory or packet coverage. Bounded MP4/QuickTime
 trak and Matroska/WebM Tracks inventories include initial subtitle/data/unknown
 rows. streamInventoryComplete means only initial container declarations; it never
 certifies later configuration changes or all packets. Header budget or parser

@@ -588,7 +588,7 @@ export default {
   "connection.winRich3": () => "选择“将所有的证书都放入下列存储”，浏览并选中<strong>受信任的根证书颁发机构</strong>。",
   "connection.winStep4": () => "核对来源与指纹，按系统提示完成导入。",
   "discovery.check": () => "只读检查评分来源",
-  "discovery.coverage": (d) => "登记行快照已检查 " + d.inspected + "/" + d.total + "：匹配 " + d.match + "，未知 " + d.unknown + "，不匹配 " + d.notMatch + "。总数仅在遍历全部页后成立，不证明磁盘文件已完整发现。",
+  "discovery.coverage": (d) => "已按 ID 顺序扫描 " + d.candidates + " 个候选；范围内已检查 " + d.inspected + "/" + d.total + "：匹配 " + d.match + "，未知 " + d.unknown + "，不匹配 " + d.notMatch + "。总数仅在穷尽后成立，不证明磁盘文件完整发现。",
   "discovery.depth": () => "位深（已知证据）",
   "discovery.distorted": () => "作为待测源打开测量",
   "discovery.duration": () => "最小时长（整数微秒）",

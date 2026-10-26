@@ -63,43 +63,50 @@ export class DiscoveryCatalog {
     if(Buffer.byteLength(JSON.stringify(result))>LIMITS.responseBytes)throw new AdminError(413,'Discovery detail exceeds response budget.','discovery-response-budget');return result;
   }
   private cursor(value:unknown){const text=Buffer.from(JSON.stringify(value)).toString('base64url');return text+'.'+createHmac('sha256',this.secret).update(text).digest('hex');}
-  private readCursor(token:string):{snapshot:string;offset:number;counts:Counts}{
+  private readCursor(token:string):{snapshot:string;lastId:string;counts:Counts;scanned:number}{
     try{const [text,mac,...rest]=token.split('.');if(rest.length||!/^[a-f0-9]{64}$/.test(mac))throw Error();
       const actual=Buffer.from(mac,'hex'),expected=createHmac('sha256',this.secret).update(text).digest();if(!timingSafeEqual(actual,expected))throw Error();
-      const c=JSON.parse(Buffer.from(text,'base64url').toString());if(typeof c.snapshot!=='string'||!Number.isSafeInteger(c.offset)||c.offset<0
-        ||!c.counts||Object.keys(emptyCounts()).some(k=>!Number.isSafeInteger(c.counts[k])||c.counts[k]<0)||c.offset!==c.counts.inspected)throw Error();return c;
+      const c=JSON.parse(Buffer.from(text,'base64url').toString());if(typeof c.snapshot!=='string'||typeof c.lastId!=='string'||!/^[a-f0-9]{24}$/.test(c.lastId)
+        ||!Number.isSafeInteger(c.scanned)||c.scanned<1||!c.counts||Object.keys(emptyCounts()).some(k=>!Number.isSafeInteger(c.counts[k])||c.counts[k]<0)
+        ||c.counts.inspected>c.scanned||c.counts.inspected!==c.counts.match+c.counts.unknown+c.counts.notMatch)throw Error();return c;
     }catch{throw new AdminError(409,'Discovery cursor expired, changed or is invalid; restart.','discovery-snapshot-changed');}
   }
   browse(query:DiscoveryQuery,cancellation?:SharedArrayBuffer){
     const check=()=>{if(cancellation&&Atomics.load(new Int32Array(cancellation),0))throw new AdminError(499,'Discovery query cancelled.','discovery-query-cancelled');};check();
     const {cursor,...scope}=query,before=this.stamp(),snapshot=digest(JSON.stringify([scope,before]));
-    const previous=cursor?this.readCursor(cursor):{snapshot,offset:0,counts:emptyCounts()};if(previous.snapshot!==snapshot)this.changed();
-    const predicates=["r.active=1","m.state!='missing'"],values:(string|number)[]=[];
-    if(query.root){if(!this.db.prepare('SELECT id FROM roots WHERE id=? AND active=1').get(query.root))throw new AdminError(400,'Unknown library root.','invalid-discovery-query');predicates.push('m.root_id=?');values.push(query.root);}
-    if(query.search){predicates.push('instr(lower(m.path),lower(?))>0');values.push(query.search);}
-    const where=predicates.join(' AND '),counts={...previous.counts},page=emptyCounts();
+    const previous=cursor?this.readCursor(cursor):{snapshot,lastId:'',counts:emptyCounts(),scanned:0};if(previous.snapshot!==snapshot)this.changed();
+    if(query.root&&!this.db.prepare('SELECT id FROM roots WHERE id=? AND active=1').get(query.root))throw new AdminError(400,'Unknown library root.','invalid-discovery-query');
+    const counts={...previous.counts},page=emptyCounts();
     this.db.exec('BEGIN');
     try{
-      const total=Number(this.db.prepare(`SELECT count(*) AS n FROM media m JOIN roots r ON r.id=m.root_id WHERE ${where}`).get(...values)!.n);
-      const rows=this.db.prepare(`SELECT ${mediaColumns} FROM ${mediaFrom} WHERE ${where} ORDER BY m.path COLLATE NOCASE,m.path,m.root_id LIMIT ? OFFSET ?`)
-        .all(...values,LIMITS.inspectedPerPage,previous.offset) as unknown as MediaRow[];
-      const entries:unknown[]=[];
-      let cacheIdentitiesRead=0,cacheProjectionBytes=0;
-      for(const row of rows){check();const item=this.describe(row);
+      // Seek the existing TEXT primary-key index. Scope predicates are applied
+      // only AFTER this bounded candidate window, never an unbounded SQL filter,
+      // count, OFFSET walk or path sort. One lookahead establishes continuation.
+      const rows=this.db.prepare(`SELECT id,root_id,path,state FROM media INDEXED BY sqlite_autoindex_media_1 WHERE id>? ORDER BY id LIMIT ?`)
+        .all(previous.lastId,LIMITS.inspectedPerPage+1) as unknown as {id:string;root_id:string;path:string;state:string}[];
+      const rootLookup=this.db.prepare('SELECT active FROM roots WHERE id=?'),roots=new Map<string,boolean>();
+      const projection=this.db.prepare(`SELECT ${mediaColumns} FROM ${mediaFrom} WHERE m.id=?`),search=query.search.toLowerCase();
+      const entries:unknown[]=[];let consumed=0,lastId=previous.lastId,sourceRowsProjected=0,probeProjectionBytes=0,cacheIdentitiesRead=0,cacheProjectionBytes=0;
+      for(const candidate of rows.slice(0,LIMITS.inspectedPerPage)){check();
+        if(!roots.has(candidate.root_id))roots.set(candidate.root_id,rootLookup.get(candidate.root_id)?.active===1);
+        const inScope=roots.get(candidate.root_id)&&candidate.state!=='missing'&&(!query.root||candidate.root_id===query.root)&&(!search||candidate.path.toLowerCase().includes(search));
+        if(!inScope){consumed++;lastId=candidate.id;continue;}
+        const row=projection.get(candidate.id) as unknown as MediaRow;if(!row)throw Error('Discovery projection disappeared within snapshot');
+        sourceRowsProjected++;probeProjectionBytes+=Buffer.byteLength(row.probe_json??'');const item=this.describe(row);
         cacheIdentitiesRead+=item.technical.cacheProjection.identitiesRead;cacheProjectionBytes+=item.technical.cacheProjection.bytes;
         const useCache=!!query.filters.recordsReady||!item.technical.probe;
         const candidates=useCache?item.technical.streams.filter(s=>!!s.cachedIndex):item.technical.probe!.streams;
         const decision={...(row.state!=='ready'||row.root_state!=='ready'?{state:'unknown' as const,evidence:[],reason:row.state!=='ready'?'library-source-not-ready':'library-root-not-ready'}:evaluateDiscovery(candidates,!useCache&&item.technical.streamInventoryComplete,query.filters)),evidenceBasis:useCache?'cached-index-identities':'prepared-streams'};
         const include=decision.state==='match'||query.includeUnknown&&decision.state==='unknown';
         if(include){const value={...item,decision};if(Buffer.byteLength(JSON.stringify([...entries,value]))>LIMITS.responseBytes-16384){if(!entries.length)throw new AdminError(413,'One discovery result exceeds response budget.','discovery-response-budget');break;}entries.push(value);}
-        page.inspected++;counts.inspected++;const key=decision.state==='not-match'?'notMatch':decision.state;page[key]++;counts[key]++;
+        consumed++;lastId=candidate.id;page.inspected++;counts.inspected++;const key=decision.state==='not-match'?'notMatch':decision.state;page[key]++;counts[key]++;
         if(entries.length>=query.limit)break;
       }
-      const exhausted=counts.inspected>=total,nextCursor=exhausted?null:this.cursor({snapshot,offset:counts.inspected,counts});
+      const scanned=previous.scanned+consumed,exhausted=consumed===rows.length,nextCursor=exhausted?null:this.cursor({snapshot,lastId,scanned,counts});
       check();if(JSON.stringify(this.stamp())!==JSON.stringify(before))this.changed();
-      return {schema:DISCOVERY_SCHEMA,version:1,snapshot,query:scope,entries,nextCursor,coverage:{scope:'registered-library-rows',total,page,cumulative:counts,exhausted,
-        totals:exhausted?{match:counts.match,unknown:counts.unknown,notMatch:counts.notMatch}:null,liveFilesystemChecked:false,filesystemCompleteness:'not-established'},
-        work:{sourceRowsProjected:rows.length,probeProjectionBytes:rows.reduce((n,r)=>n+Buffer.byteLength(r.probe_json??''),0),cacheIdentitiesRead,cacheProjectionBytes},
+      return {schema:DISCOVERY_SCHEMA,version:1,snapshot,query:scope,entries,nextCursor,coverage:{scope:'registered-library-rows',total:exhausted?counts.inspected:null,page,cumulative:counts,exhausted,
+        candidates:{page:consumed,cumulative:scanned},order:'media-id-ascending',totals:exhausted?{match:counts.match,unknown:counts.unknown,notMatch:counts.notMatch}:null,liveFilesystemChecked:false,filesystemCompleteness:'not-established'},
+        work:{candidateRowsRead:rows.length,sourceRowsProjected,probeProjectionBytes,cacheIdentitiesRead,cacheProjectionBytes},
         limits:LIMITS,links:{describedBy:'/api/library/discovery-schema',prepare:'/api/library/preparations',scanStatus:'/api/library/scan',help:'/agent/library.md'}};
     }finally{this.db.exec('ROLLBACK');}
   }

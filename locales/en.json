@@ -2374,8 +2374,8 @@
     "translation": "Check scoring source (read-only)"
   },
   "discovery.coverage": {
-    "source": "登记行快照已检查 {inspected}/{total}：匹配 {match}，未知 {unknown}，不匹配 {notMatch}。总数仅在遍历全部页后成立，不证明磁盘文件已完整发现。",
-    "translation": "Inspected {inspected}/{total} registered rows in this snapshot: {match} match, {unknown} unknown, {notMatch} mismatch. Totals require all pages and do not prove that all files on disk have been discovered."
+    "source": "已按 ID 顺序扫描 {candidates} 个候选；范围内已检查 {inspected}/{total}：匹配 {match}，未知 {unknown}，不匹配 {notMatch}。总数仅在穷尽后成立，不证明磁盘文件完整发现。",
+    "translation": "Scanned {candidates} ID-ordered candidates; inspected {inspected}/{total} in scope: {match} matching, {unknown} unknown, {notMatch} non-matching. Totals become exact only after exhaustion, and do not prove complete filesystem discovery."
   },
   "discovery.depth": {
     "source": "位深（已知证据）",

@@ -1,7 +1,7 @@
 import { Input, CustomSource, EncodedPacketSink, MP4, QTFF, MATROSKA, WEBM, MPEG_TS } from 'mediabunny';
 import { isAnnexB,nalRanges } from './codecs/nal-framing.ts';
 import {inspectDeclaredTracks} from './containers/cached-track-metadata.ts';
-import { scanFlv } from './containers/flv-demux.ts';
+import {flvPrefixMetadata} from './containers/flv-prefix-metadata.ts';
 import { avcGeometry } from './codecs/avc-geometry.ts';
 import { hevcGeometry } from './codecs/hevc-geometry.ts';
 import { DISCOVERY_LIMITS as LIMITS } from './discovery.ts';
@@ -11,7 +11,7 @@ export const unknownProbeField = (reason: string, status: DiscoveryField['status
 const known = (value: string|number|boolean|null|undefined, source: DiscoveryField['source'] = 'container-index'): DiscoveryField =>
   value === undefined || value === null || typeof value === 'number' && !Number.isFinite(value) ? unknownProbeField('not-declared-by-parser') : {value,status:'known',source};
 const fieldNames = ['codec','profile','width','height','codedWidth','codedHeight','sar','rotation','bitDepth','pixelFormat',
-  'colorPrimaries','colorTransfer','colorMatrix','colorRange','durationUs','frameRate','frameRateMode','bitrate','decodedFrameCount'];
+  'colorPrimaries','colorTransfer','colorMatrix','colorRange','durationUs','frameRate','frameRateMode','bitrate','decodedFrameCount','sampleRate','channels'];
 export const emptyProbeFields = ():Record<string,DiscoveryField> => ({...Object.fromEntries(fieldNames.map(k=>[k,unknownProbeField('not-exposed-by-metadata-adapter')])),
   frameRate:unknownProbeField('packet-timestamps-not-enumerated'),frameRateMode:unknownProbeField('CFR-VFR-not-measured'),
   bitrate:unknownProbeField('payloads-not-enumerated'),decodedFrameCount:unknownProbeField('no-decoder-run')});
@@ -71,23 +71,26 @@ export async function probeMedia(source:DiscoverySource,size:number,read:(offset
   };
   const head=await peek(0,Math.min(16,size));
   let container:DiscoveryField,streams:DiscoveryStream[]=[],streamInventoryComplete=false;
-  let scope:MediaProbe['coverage']['scope']='metadata-only';
+  let scope:MediaProbe['coverage']['scope']='metadata-only',prefixCoverage:MediaProbe['coverage']['prefix'];
   let inventory:MediaProbe['inventory']={scope:'initial-container-declarations',reason:'startup-FLV-video-only',declaredTrackCount:null};
   if(head[0]===70&&head[1]===76&&head[2]===86){
-    container=known('flv');scope='initial-video-configuration';
-    const {index}=await scanFlv({size,read:peek},undefined,undefined,true);
-    check();const fields=emptyProbeFields(),description=index.description;
-    fields.codec=known(index.codec,'codec-configuration');
-    const geometry=index.codec==='h264'?avcGeometry(description,true):index.codec==='hevc'?hevcGeometry(description,true):null;
-    if(geometry){for(const key of ['width','height','codedWidth','codedHeight'] as const)fields[key]=known(geometry[key],'codec-configuration');
-      fields.sar=geometry.sarSpecified?known(`${geometry.sarNum}:${geometry.sarDen}`,'codec-configuration'):unknownProbeField('SPS-SAR-unspecified');}
-    Object.assign(fields,configurationPixelFields(index.codec,description));
-    if(index.codec==='hevc'&&description.length>=23&&description[0]===1)fields.profile=known(String(description[1]&31),'codec-configuration');
-    if(index.codec==='h264'&&description.length>=7&&description[0]===1)fields.profile=known(String(description[1]),'codec-configuration');
-    // FLV video:0 is the parser's single video stream, not an authenticated AU.
-    streams=[{id:'flv-video:0',type:'video',ordinal:0,fields,clock:{timeBase:{numerator:1,denominator:1000},domain:'flv-native-milliseconds',origin:null,relationToQualityAu:'not-established'}}];
-    // Header audio bits/configuration can be incomplete or enhanced multitrack.
-    // A startup scan cannot certify absence or enumerate the whole container.
+    container=known('flv');scope='bounded-container-prefix';
+    const prefix=await flvPrefixMetadata(size,peek);prefixCoverage=prefix.prefix;
+    const clock={timeBase:{numerator:1,denominator:1000},domain:'flv-native-milliseconds' as const,origin:null,relationToQualityAu:'not-established' as const};
+    if(prefix.video){const fields=emptyProbeFields(),{codec,description}=prefix.video;fields.codec=codec?known(codec,'codec-configuration'):unknownProbeField(prefix.video.reason??'unsupported-video-codec');
+      if(description&&codec){const geometry=codec==='h264'?avcGeometry(description,true):codec==='hevc'?hevcGeometry(description,true):null;
+        if(geometry){for(const key of ['width','height','codedWidth','codedHeight'] as const)fields[key]=known(geometry[key],'codec-configuration');fields.sar=geometry.sarSpecified?known(`${geometry.sarNum}:${geometry.sarDen}`,'codec-configuration'):unknownProbeField('SPS-SAR-unspecified');}
+        Object.assign(fields,configurationPixelFields(codec,description));
+        if(codec==='hevc'&&description.length>=23&&description[0]===1)fields.profile=known(String(description[1]&31),'codec-configuration');
+        if(codec==='h264'&&description.length>=7&&description[0]===1)fields.profile=known(String(description[1]),'codec-configuration');
+      }
+      streams.push({id:'flv-video:0',type:'video',ordinal:streams.length,fields,clock});
+    }
+    if(prefix.audio){const fields=emptyProbeFields(),audio=prefix.audio;fields.codec=audio.codec?known(audio.codec):unknownProbeField(audio.reason??'unsupported-audio-format');
+      fields.sampleRate=known(audio.metadata.sampleRate);fields.channels=known(audio.metadata.channels);fields.profile=audio.metadata.codec?known(audio.metadata.codec,'codec-configuration'):unknownProbeField(audio.reason??'audio-profile-not-observed');
+      streams.push({id:'flv-audio:0',type:'audio',ordinal:streams.length,fields,clock});
+    }
+    inventory={scope:'initial-container-declarations',reason:prefix.video?'bounded-FLV-prefix-inventory-incomplete':'video-not-observed-within-bounded-FLV-prefix',declaredTrackCount:null};
   }else{
     const input=new Input({source:new CustomSource({getSize:()=>size,read:(start,end)=>peek(start,end-start),maxCacheSize:LIMITS.probeBytes,prefetchProfile:'none'}),
       formats:[MP4,QTFF,MATROSKA,WEBM,MPEG_TS]});
@@ -136,5 +139,5 @@ export async function probeMedia(source:DiscoverySource,size:number,read:(offset
     }finally{input.dispose();}
   }
   check();return {schema:'voidplayer-media-probe',version:1,source,parser:'voidplayer-bounded-metadata-v1/mediabunny-1.55.7',container,streams,streamInventoryComplete,inventory,
-    coverage:{scope,fullPacketEnumeration:false,decodedPictures:false,bytesRead,readCalls}};
+    coverage:{scope,fullPacketEnumeration:false,decodedPictures:false,bytesRead,readCalls,...(prefixCoverage?{prefix:prefixCoverage}:{})}};
 }

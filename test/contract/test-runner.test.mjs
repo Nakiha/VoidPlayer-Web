@@ -423,12 +423,12 @@ test('explicit release archives execute without latest-release metadata, while d
  }
 }));
 
-test('independent playback observation requires committed frame advance and rejects pause, identity changes, errors and stalls',async()=>{
- const {waitForUninterruptedFrameAdvance}=await import('../../scripts/testing/playback-presentation.mjs');
+test('sampled playback observation requires committed frame advance and rejects pause, identity changes, errors and stalls',async()=>{
+ const {waitForPlayingFrameAdvance}=await import('../../scripts/testing/playback-presentation.mjs');
  const baseline={playing:true,busy:false,error:null,positionUs:100,tracks:[{id:'A',slot:'A',sourceGen:3,source:{id:'source'},frame:{ptsUs:100}}]};
  function fixture(){let state=structuredClone(baseline),tick,expire;const active=new Set();
   const clock={setInterval(fn,ms){assert.equal(ms,50);tick=fn;active.add(1);return 1;},clearInterval(id){active.delete(id);},setTimeout(fn,ms){assert.equal(ms,30000);expire=fn;active.add(2);return 2;},clearTimeout(id){active.delete(id);}};
-  return {state,active,tick:()=>tick(),expire:()=>expire(),run:()=>waitForUninterruptedFrameAdvance({api:{getState:()=>state},baseline,clock})};
+  return {state,active,tick:()=>tick(),expire:()=>expire(),run:()=>waitForPlayingFrameAdvance({api:{getState:()=>state},baseline,clock})};
  }
  const delayed=fixture();let done=false;const work=delayed.run().then(value=>{done=true;return value;});delayed.state.positionUs=200;
  for(let i=0;i<5;i++){delayed.tick();await Promise.resolve();assert.equal(done,false,'wall-clock movement is not a presented successor');}

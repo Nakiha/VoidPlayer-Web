@@ -23,7 +23,13 @@ try{const data=JSON.parse(await readFile(path.join(root,'test/helpers/quality-ht
    oracle:{format:oracle.format.format_name,streams:oracle.streams.map(s=>({codec:s.codec_name,type:s.codec_type,width:s.width,height:s.height,pixelFormat:s.pix_fmt,timeBase:s.time_base,duration:s.duration??null,
     colorTransfer:s.color_transfer??null,colorPrimaries:s.color_primaries??null,colorMatrix:s.color_space??null}))}});
  }
+ const audioSamples=[];
+ for(const [codec,encoder]of [['mp3','libmp3lame'],['aac','aac']]){
+  const output=path.join(dir,`${codec}-audio-only.flv`);execFileSync('ffmpeg',['-v','error','-f','lavfi','-i','sine=frequency=440:duration=0.5','-c:a',encoder,'-f','flv','-y',output]);
+  const bytes=await readFile(output),oracle=JSON.parse(execFileSync('ffprobe',['-v','error','-show_streams','-of','json',output],{encoding:'utf8'}));
+  audioSamples.push({name:path.basename(output),codec,sha256:createHash('sha256').update(bytes).digest('hex'),bytes:bytes.toString('base64'),oracle:oracle.streams.map(s=>({codec:s.codec_name,sampleRate:Number(s.sample_rate),channels:s.channels}))});
+ }
  await writeFile(path.join(root,'test/helpers/library-discovery-samples.json'),JSON.stringify({schema:'voidplayer-library-discovery-fixtures',version:1,
-  generator:execFileSync('ffmpeg',['-version'],{encoding:'utf8'}).split('\n')[0],recipe:'Remux existing public synthetic quality-http-samples without re-encoding or retagging; ffprobe stream metadata is the independent oracle.',samples},null,2)+'\n');
+  generator:execFileSync('ffmpeg',['-version'],{encoding:'utf8'}).split('\n')[0],recipe:'Remux existing public synthetic quality-http-samples without re-encoding or retagging video; audio-only cases are generated from public sine waves. ffprobe stream metadata is the independent oracle.',samples,audioSamples},null,2)+'\n');
  console.log(`Generated ${samples.length} bounded discovery fixtures`);
 }finally{await rm(dir,{recursive:true,force:true});}

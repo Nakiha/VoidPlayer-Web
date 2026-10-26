@@ -7,6 +7,7 @@ export const PREPARATION_PATH = '/api/library/preparations';
 export const DISCOVERY_LIMITS = Object.freeze({ pageSize: 32, inspectedPerPage: 64, responseBytes: 262144,
   cachedIdentitiesPerSource:4,cachedProjectionBytesPerIdentity:45056,
   probeBytes: 4 * 1024 * 1024, probeReadCalls: 512, probeStreams: 32, probeResultBytes: 32768,
+  flvPrefixBytes:65536,flvTagHeaders:8,flvConfigurationBytes:4096,
   elapsedMs: 30000, workerHeapMiB: 256, queued: 8, actorOutstanding: 4, historyRows: 1000,
   historyBytes: 64 * 1024 * 1024, queueWaitMs: 60000 });
 export type DiscoveryField = Omit<CachedField,'source'> & {source:CachedField['source']|'container-or-codec-metadata'};
@@ -23,8 +24,9 @@ export type DiscoveryStream = {
 export type MediaProbe = {
   schema: 'voidplayer-media-probe'; version: 1; source: DiscoverySource;
   parser: string; container: DiscoveryField; streams: DiscoveryStream[];
-  streamInventoryComplete: boolean; coverage: { scope: 'metadata-only' | 'initial-video-configuration';
-    fullPacketEnumeration: false; decodedPictures: false; bytesRead: number; readCalls: number };
+  streamInventoryComplete: boolean; coverage: { scope: 'metadata-only' | 'initial-video-configuration'|'bounded-container-prefix';
+    fullPacketEnumeration: false; decodedPictures: false; bytesRead: number; readCalls: number;
+    prefix?:{endOffset:number;tagHeadersInspected:number;stop:string} };
   inventory?:{scope:'initial-container-declarations';reason:string|null;declaredTrackCount:number|null};
 };
 export type DiscoveryFilters = { codec?: string; minWidth?: number; maxWidth?: number;
@@ -99,7 +101,7 @@ export const DISCOVERY_DICTIONARY = {
   query:{scope:['root: configured root ID','search: case-insensitive relative path substring'],
     conditions:['codec','minWidth','maxWidth','minHeight','maxHeight','bitDepth','colorTransfer','minDurationUs','maxDurationUs','recordsReady=1'],
     combination:'AND within one video evidence stream; OR across streams. Only known facts can satisfy or disprove a condition.',
-    paging:{limit:'1..32, default16',includeUnknown:'0|1, default1',cursor:'Repeat the identical scope, conditions, includeUnknown and limit with nextCursor. A page can be empty with a continuation.'}},
+    paging:{limit:'1..32, default16',includeUnknown:'0|1, default1',cursor:'Repeat the identical scope, conditions, includeUnknown and limit with nextCursor. Primary-key media-ID seek; at most64 candidate rows plus one lookahead. Scope/search predicates run only on this window. No synchronous whole-library COUNT, OFFSET walk or path sort; sparse searches can return empty continuation pages.'}},
   preparationRequest:{method:'POST',path:PREPARATION_PATH,
     body:{source:{id:'24 lowercase hexadecimal library ID',version:'24 lowercase hexadecimal stat version'},operation:['probe','quality-index'],client:{id:'1..80 ASCII letters/digits/._:-',name:'1..120 characters; trimmed'}},
     headers:['Origin: same origin','Content-Type: application/json','X-VoidPlayer-Action: library-preparation','X-VoidPlayer-Actor: captured selected actor','Idempotency-Key'],
@@ -114,16 +116,16 @@ export const DISCOVERY_DICTIONARY = {
     filtering:'Without recordsReady, prepared metadata is preferred; otherwise bounded cache identities are used. recordsReady=1 uses cache identities only. Never combine probe fields and cache fields or join fields across namespaces/streams. Conflicting/truncated cached evidence is unknown.',
     emptyConditions:'No technical conditions matches registered rows regardless of metadata readiness. Inspect technical.state separately; a match is never scoring admission.',
     clock:'timeBase is seconds per original container-track tick; origin=null and relationToQualityAu=not-established. Never seek a quality AU by matching PTS.',
-    coverage:'Metadata or initial configuration only; no packet enumeration or decoded-picture verification. Cached index overview/records are separate versioned endpoints.',
+    coverage:'Metadata or bounded initial prefix/configuration only; no full packet enumeration or decoded-picture verification. FLV prefix coverage reports tag headers inspected, stop reason and end offset; absent/late video remains unknown without searching to EOF. Cached index overview/records are separate versioned endpoints.',
     streamInventory:'streamInventoryComplete refers only to bounded initial container declarations: MP4/QuickTime trak and Matroska/WebM Tracks include subtitle/data/unknown rows. It never certifies later configuration changes, packets, or reference integrity. Header/inventory budget or parser disagreement leaves it incomplete; FLV and TS initial probes remain incomplete.',
     durationUs:'Container-declared duration/end metadata in integer microseconds, not decoded duration or CFR. Unknown remains null.',
     quality:'Probe success does not imply scoring support. Only existing psnr-source/psnr-frames admission can establish trusted FLV source/cache/AU identity.',
-    counts:'Page and cumulative source decisions in one snapshot. Whole-scope match/unknown totals are exact only when exhausted=true. Unknown is retained by default, never silently counted as not-match.',
+    counts:'candidates counts all ID-ordered rows visited; page/cumulative decisions count only active, non-missing rows inside root/path scope. total and whole-scope match/unknown totals are null until exhausted=true, then exact for registered rows. Unknown is retained by default, never silently counted as not-match.',
     cacheProjection:'Up to four identities plus one lookahead per projected source, each at most45056 text bytes. Metadata/header/storage projections only, never packet documents or record batches. Existing caches are reused without an implicit probe.',
     pixelFormat:'Nominal encoded chroma/bit-depth from bounded codec configuration, not the actual decoder pixel resource, byte order or a promise about every picture.',
     cursor:'Opaque server-authenticated continuation bound to scope/filter and library/probe/cache snapshot. Changes return 409; restart from the first page.',
     preparation:'Explicit service-owned one-attempt jobs; observation disconnect never cancels. Explicit cancel settles after physical Worker exit; no automatic retry or implicit indexing.'},
-  support:{probe:['FLV/Enhanced FLV initial video configuration','MP4/QuickTime metadata','Matroska/WebM metadata','MPEG-TS bounded metadata'],
+  support:{probe:['FLV/Enhanced FLV bounded initial audio/video prefix (64KiB, at most8 tag headers, configuration up to4096 bytes)','MP4/QuickTime metadata','Matroska/WebM metadata','MPEG-TS bounded metadata'],
     scoring:['Only existing trusted FLV/Enhanced FLV quality contracts; metadata readability never extends this matrix'],
     unsupported:['No external ffprobe process','No decode or full packet scans during probe','No inferred reference pairing, frame type, CFR, continuous coverage or content integrity']},
 };

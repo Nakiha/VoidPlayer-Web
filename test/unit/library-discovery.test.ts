@@ -42,7 +42,7 @@ test('whole-library discovery scans bounded pages, reports cumulative unknown an
   store.start(submitted.job.id,Date.now());store.finish(submitted.job.id,'completed',Date.now(),null,probe,{probe,witness:{} as any});
   assert.throws(()=>store.browse({...q,cursor:first.nextCursor!}),e=>(e as any).code==='discovery-snapshot-changed');
   assert.equal(store.detail(probe.source).technical.probe?.streams[0].fields.codec.value,'h264');
-  const fresh=store.browse(q);assert.equal((fresh.entries[0] as any).decision.state,'match');
+  const fresh=store.browse({...q,limit:32});assert.equal((fresh.entries.find((e:any)=>e.source.id===current.id) as any).decision.state,'match');
   // Receipt-first replay survives a stale source version and probe eviction.
   store.db.prepare('DELETE FROM discovery_probes').run();await writeFile(path.join(dir,current.name),'replacement');await library.refresh();
   assert.equal(store.submit({source:probe.source,operation:'probe',client:{id:'client',name:'Client'}},actor,'request2','key',Date.now()).replayed,true);
@@ -71,4 +71,19 @@ test('future discovery schema is rejected before creating current tables and clo
  const db=openIndexDatabase(file);try{db.exec('CREATE TABLE discovery_meta(id INTEGER PRIMARY KEY,version INTEGER,revision INTEGER);INSERT INTO discovery_meta VALUES(1,2,0)');}finally{db.close();}
  assert.throws(()=>new DiscoveryStore(file),e=>(e as any).code==='discovery-schema-unsupported');
  const read=openIndexDatabase(file);try{assert.equal(read.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name='discovery_jobs'").get()!.n,0);}finally{read.close();}
+});
+test('100000-row discovery uses bounded primary-key seeks even on deep sparse-search pages',async t=>{
+ const dir=await mkdtemp(path.join(tmpdir(),'vp-discovery-deep-')),library=new MediaLibraryIndex([dir],{database:path.join(dir,'library.sqlite'),watch:false});await library.refresh();
+ t.after(async()=>{await library.close();await rm(dir,{recursive:true,force:true});});const store=library.discovery.store,root=String(store.db.prepare('SELECT id FROM roots LIMIT 1').get()!.id);
+ const insert=store.db.prepare("INSERT INTO media(id,root_id,path,parent,size,modified,version,state,generation,observed_at) VALUES(?,?,?,'',1,1,?,'ready',1,1)");
+ store.transaction(()=>{for(let i=0;i<100000;i++)insert.run(i.toString(16).padStart(24,'0'),root,i===99999?'needle.flv':`plain-${i}.flv`,'b'.repeat(24));});
+ const plan=store.db.prepare('EXPLAIN QUERY PLAN SELECT id,root_id,path,state FROM media INDEXED BY sqlite_autoindex_media_1 WHERE id>? ORDER BY id LIMIT ?').all('000000000000000000015f90',65).map(r=>String(r.detail));
+ assert.ok(plan.some(s=>/SEARCH media USING INDEX sqlite_autoindex_media_1 \(id>\?\)/.test(s)),JSON.stringify(plan));assert.ok(plan.every(s=>!/(SCAN |TEMP B-TREE)/.test(s)),JSON.stringify(plan));
+ const query=parseDiscoveryQuery(new URLSearchParams('search=needle&codec=h264&limit=2'));let cursor,pages=0,scanned=0,result;
+ do{result=store.browse({...query,...(cursor?{cursor}:{})});pages++;assert.ok(result.work.candidateRowsRead<=65);assert.ok(result.coverage.candidates.page<=64);scanned+=result.coverage.candidates.page;
+  assert.ok(result.work.sourceRowsProjected<=1);if(!result.coverage.exhausted){assert.equal(result.coverage.total,null);assert.equal(result.coverage.totals,null);assert.equal(result.entries.length,0);}
+  cursor=result.nextCursor;
+ }while(cursor);
+ assert.equal(scanned,100000);assert.equal(result.coverage.total,1);assert.equal(result.coverage.cumulative.unknown,1);assert.equal(result.entries.length,1);assert.equal((result.entries[0] as any).file.name,'needle.flv');
+ console.log({registered:100000,pages,scanned,plan});
 });

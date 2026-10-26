@@ -156,15 +156,16 @@ export async function verifyPlaybackPresentation(page, options = {}, context = {
     (options.totalMs ?? 60000) + 5000, { ...context, phase: 'functional-presentation' });
 }
 
-/** Observe an already playing, independent page without issuing play/pause/seek.
+/** Observe a playing, independent page without issuing play/pause/seek.
  * A one-shot snapshot can precede its next committed picture while another page
- * is active. Clock movement alone never satisfies this functional assertion. */
-export function waitForUninterruptedFrameAdvance(options) {
+ * is active. Clock movement alone never satisfies this assertion. Timer samples establish
+ * playback at observation times, not absence of short pause/resume transitions. */
+export function waitForPlayingFrameAdvance(options) {
   const api=options.api??globalThis.window?.voidPlayer,baseline=options.baseline;
   const {setInterval:interval=setInterval,clearInterval:clear=clearInterval,setTimeout:timeout=setTimeout,clearTimeout:cancel=clearTimeout}=options.clock??{};
   const timeoutMs=options.timeoutMs??30000,pollMs=options.pollMs??50;
   if(!baseline?.playing||baseline.busy||baseline.error||baseline.tracks?.length!==1||!baseline.tracks[0].frame
-    ||!Number.isSafeInteger(timeoutMs)||timeoutMs<1||!Number.isSafeInteger(pollMs)||pollMs<1)throw Error('Invalid uninterrupted playback baseline or budget');
+    ||!Number.isSafeInteger(timeoutMs)||timeoutMs<1||!Number.isSafeInteger(pollMs)||pollMs<1)throw Error('Invalid playing-frame baseline or budget');
   return new Promise((resolve,reject)=>{
     let timer,watchdog,done=false,last;
     const stop=(error,value)=>{if(done)return;done=true;clear(timer);cancel(watchdog);if(error)reject(error);else resolve(value);};
