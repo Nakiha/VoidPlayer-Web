@@ -513,6 +513,7 @@ export default {
   "cambi.candidates": () => "［E~x~p~l~i~c~i~t~ s~h~a~r~e~d~ s~p~a~t~i~a~l~ c~a~n~d~i~d~a~t~e~s~ f~r~o~m~ r~e~a~l~ h~e~a~t~m~a~p~s~ ········］",
   "cambi.find": () => "［S~e~l~e~c~t~ o~n~e~ s~o~u~r~c~e~ f~r~o~m~ t~e~c~h~n~i~c~a~l~ d~i~s~c~o~v~e~r~y~ ········］",
   "cambi.frames": () => "［M~o~r~e~ p~e~r~-f~r~a~m~e~ f~a~c~t~s~ ········］",
+  "cambi.fullFacts": () => "［C~o~m~p~l~e~t~e~ i~m~m~u~t~a~b~l~e~ s~o~u~r~c~e~ a~n~d~ r~e~c~i~p~e~ e~v~i~d~e~n~c~e~ ········］",
   "cambi.history": () => "［R~e~f~r~e~s~h~ s~e~r~v~e~r~ h~i~s~t~o~r~y~ ········］",
   "cambi.new": () => "［N~e~w~ e~x~p~l~i~c~i~t~ r~e~q~u~e~s~t~ ········］",
   "cambi.open": () => "［C~A~M~B~I~ · o~p~e~n~ o~r~i~g~i~n~a~l~ h~e~a~t~m~a~p~, s~o~u~r~c~e~ s~n~a~p~s~h~o~t~ a~n~d~ a~c~t~u~a~l~ r~e~g~i~o~n~ ········］",

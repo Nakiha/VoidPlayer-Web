@@ -513,6 +513,7 @@ export default {
   "cambi.candidates": () => "Explicit shared spatial candidates from real heatmaps",
   "cambi.find": () => "Select one source from technical discovery",
   "cambi.frames": () => "More per-frame facts",
+  "cambi.fullFacts": () => "Complete immutable source and recipe evidence",
   "cambi.history": () => "Refresh server history",
   "cambi.new": () => "New explicit request",
   "cambi.open": () => "CAMBI · open original heatmap, source snapshot and actual region",

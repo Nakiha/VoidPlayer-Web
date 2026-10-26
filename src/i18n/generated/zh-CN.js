@@ -513,6 +513,7 @@ export default {
   "cambi.candidates": () => "从真实热图显式创建共享空间候选",
   "cambi.find": () => "从技术发现选择单源",
   "cambi.frames": () => "更多逐帧事实",
+  "cambi.fullFacts": () => "完整的不可变来源与 recipe 证据",
   "cambi.history": () => "刷新后台历史",
   "cambi.new": () => "新建显式请求",
   "cambi.open": () => "CAMBI · 查看原始热图、源快照与真实区域",

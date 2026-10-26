@@ -71,8 +71,8 @@ export class NativeVmafRunner{
   if(this.closed||this.stopUncertain)return Promise.reject(new VmafError('component-unavailable','Native executor is stopping or unavailable'));
   let release:()=>void;try{signal.throwIfAborted();release=this.library.qualityAdmission.acquire();}catch(error){return Promise.reject(error);}
   const controller=new AbortController(),combined=AbortSignal.any([signal,controller.signal]);
-  const timer=setTimeout(()=>controller.abort(new VmafError('budget-exceeded','Whole VMAF execution deadline exceeded')),input.budget.maxElapsedMs);
-  const entry={stop:()=>controller.abort(new VmafError('cancelled','Native VMAF executor stopping')),done:Promise.resolve() as Promise<unknown>};
+  const timer=setTimeout(()=>controller.abort(new VmafError('budget-exceeded','Whole native execution deadline exceeded')),input.budget.maxElapsedMs);
+  const entry={stop:()=>controller.abort(new VmafError('cancelled','Native executor stopping')),done:Promise.resolve() as Promise<unknown>};
   const done=Promise.resolve().then(async()=>{try{admitted();combined.throwIfAborted();return await work(combined);}finally{clearTimeout(timer);this.active.delete(entry);if(!this.stopUncertain)release();}});
   entry.done=done;this.active.add(entry);return done;
  }

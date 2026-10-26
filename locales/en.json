@@ -2068,6 +2068,10 @@
     "source": "更多逐帧事实",
     "translation": "More per-frame facts"
   },
+  "cambi.fullFacts": {
+    "source": "完整的不可变来源与 recipe 证据",
+    "translation": "Complete immutable source and recipe evidence"
+  },
   "cambi.history": {
     "source": "刷新后台历史",
     "translation": "Refresh server history"

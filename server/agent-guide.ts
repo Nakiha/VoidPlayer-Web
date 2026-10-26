@@ -713,6 +713,8 @@ Negative/VFR/ambiguous clocks, HDR and other containers remain unsupported. Samp
 holes are separate coverage facts; they are not whole-file coverage or tracked objects.
 GET /api/quality/cambi/jobs?after=ROW&limit=8, /jobs/{id}, /jobs/{id}/result,
 /jobs/{id}/frames?after=INDEX&limit=4 and /jobs/{id}/heatmap?index=N&scale=S give bounded facts.
+Before publication, an owner can inspect /jobs/{id}/picture?index=N and the read-only private
+viewer /quality.html?cambi=1&cambiJob=ID&index=N, including completed zero scores; no annotation is created.
 Frame pages distinguish provisional-uncommitted-attempt from immutable-completed. Native failure,
 incomplete, unsupported and zero are distinct. Higher means more banding, not a calibrated quality line.
 POST /jobs/{id}/cancel {} explicitly stops; observer close does not cancel. Physical Worker/process/IO
