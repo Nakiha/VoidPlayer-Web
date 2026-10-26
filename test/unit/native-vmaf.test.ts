@@ -19,3 +19,5 @@ test('optional native capability never claims installed platform by code presenc
  const enabled=agentManifest({...common,nativeVmaf:{enabled:true,reason:null}});assert.equal(enabled.capabilities.find(c=>c.id==='quality.vmaf')?.readiness,'per-source');assert.equal(enabled.qualityVmaf.buildsIndexes,false);assert.equal(enabled.qualityVmaf.observerDisconnectCancels,false);assert.equal(enabled.qualityVmaf.spatial,'no-VMAF-heatmap-or-localized-defect');assert.deepEqual(enabled.qualityJobs.metrics,['psnr','ssim']);
 });
 test('unconfigured component fails closed without PATH fallback',async()=>{await assert.rejects(verifyVmafComponent(undefined,'vmaf_v0_6_1'),{code:'component-unavailable'});});
+
+test('invalid durable native process witnesses never authorize a process signal',async()=>{if(process.platform!=='linux')return;const {stopOwnedNative}=await import('../../server/analysis/vmaf/runner.ts');for(const pid of [0,-1,1.5,NaN])await assert.rejects(stopOwnedNative({pid,startTicks:'1',bootId:'a'.repeat(36)}),{code:'stop-uncertain'});await assert.rejects(stopOwnedNative({pid:1,startTicks:'1',bootId:''}),{code:'stop-uncertain'});});

@@ -100,3 +100,5 @@ node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 可选暂停原生 FLV 入口与显式有界缓存准备见 `docs/paused-native-quality.md`。`native-picture-identity.ts` 只关联同 epoch 已受理单图输入与原生输出，`session.captureNativePresented` 只读取 presenter 成功提交的原始 VideoSample；不得借来源标签或旧 token/PTS 搜索冒用身份。`bindNativePresentedFrame` 精确连接当前可信 cache/AU/配置/包与几何。普通显式 AU 入口继续独立；WASM 与其他容器不继承此新能力。`psnr-index` 是显式30秒/64MiB来源/128MiB实际读/包和索引限额的独立操作，读取/评分永不隐式建索引；取消须先关闭真实文件和 Worker 才放容量，完成竞争可留下有效缓存，需重读。新测试登记现有完整CI，不改门禁分层。
 
 媒体库技术发现与显式准备见 `docs/library-discovery.md`；共享字段/过滤/请求规范在 `shared/media/discovery.ts`，生产无解码 probe 在 `shared/media/probe.ts`，服务适配在 `server/discovery/`。发现只读复用有界缓存或已有 probe，不隐式读取媒体、建索引或提升评分准入；parser-local stream/clock 不能冒用质量 AU/namespace/build。准备任务与评分共享实例执行准入，取消必须等待 IO/DB 关闭和 Worker 物理退出；观察断线不取消后台工作。
+
+原生连续序列 VMAF 见 `docs/native-vmaf.md`。固定官方 Netflix/vmaf v3.0.0 与 v0.6.1/NEG 模型，Linux x64 可信组件由宿主配置 manifest hash，不依赖 PATH 或接受 HTTP 程序路径。共享计划/准入在 `shared/analysis/quality/vmaf.ts`，独立 native 进程和持久服务在 `server/analysis/vmaf/`，GUI 为 `src/admin/quality-vmaf.ts`。只消费已提交 C 计划；连续呈现顺序与整帧 SDR 色彩/几何严格准入，不能把稀疏抽样拼成时序。PSNR/SSIM 与 native 状态独立，实际退出后才释放容量；序列附件不可伪装空间热图。

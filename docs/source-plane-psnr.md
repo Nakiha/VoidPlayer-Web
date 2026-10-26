@@ -1,6 +1,6 @@
 # 源平面 PSNR 数值核心 v1
 
-这是 #114 的独立数值小切片，服务于 #112 路线图。`shared/analysis/quality/psnr.ts` 的 `measurePsnr` 在调用者提供的原始 YUV 平面上计算 CPU PSNR。数值核心没有媒体读取、解码、帧对齐、GUI 调用或持久任务；该数值核心本身不提供 `quality.jobs`；持久任务和 GUI 已另行交付，见 [任务流程](psnr-task-workflow.md)。此结果不能证明来源/帧配对正确，也不代表 #114、#120 或 #121 已完成。[分块证据](psnr-spatial-evidence.md) 与 [可选 SSIM](source-plane-ssim.md) 已另行接通；VMAF 仍未交付。
+这是 #114 的独立数值小切片，服务于 #112 路线图。`shared/analysis/quality/psnr.ts` 的 `measurePsnr` 在调用者提供的原始 YUV 平面上计算 CPU PSNR。数值核心没有媒体读取、解码、帧对齐、GUI 调用或持久任务；该数值核心本身不提供 `quality.jobs`；持久任务和 GUI 已另行交付，见 [任务流程](psnr-task-workflow.md)。此结果不能证明来源/帧配对正确，也不代表 #114、#120 或 #121 已完成。[分块证据](psnr-spatial-evidence.md) 与 [可选 SSIM](source-plane-ssim.md) 已另行接通；VMAF 由另一个可选原生连续序列执行器提供，见 [native-vmaf.md](native-vmaf.md)，不属于此数值核心。
 
 后续内部单帧执行桥见 [单帧桥 v1](source-frame-pair-psnr.md)，其宿主身份边界独立于本数值核心，仍不提供持久任务或 GUI。
 

@@ -139,7 +139,7 @@ explicit cancellation and frozen-ID publication through the original atomic
 annotation command. `src/admin/quality-ranges.ts` only observes and opens explicit
 read-only original-frame viewers. No player/presenter state is required.
 See [bounded-quality-ranges.md](bounded-quality-ranges.md) for coverage, budget,
-crash/receipt recovery and unassessed-candidate semantics. VMAF/CAMBI remain
+crash/receipt recovery and unassessed-candidate semantics. CAMBI remains
 unimplemented; correctness does not certify performance or reference integrity.
 
 
@@ -155,3 +155,5 @@ positions before eligibility filtering. Stable execution intents bridge SQLite
 commits into the existing range service; restart does not replan or score.
 The admin form and HTTP routes share contracts and B's scorer, publication and
 original-frame viewer. See [reference-clock-plans.md](reference-clock-plans.md).
+
+Optional native VMAF consumes committed C plans through `server/analysis/vmaf/`, with a fixed official Linux x64 component, independent metric outcomes and shared admission held until physical Worker/process exit. See [native-vmaf.md](native-vmaf.md); no arbitrary ROI/HDR/sparse-sequence or content-certification support is implied.

@@ -11,7 +11,9 @@ const sleep=()=>new Promise<void>(r=>setTimeout(r,10));
 export function processStartTicks(pid:number){try{const stat=readFileSync(`/proc/${pid}/stat`,'utf8');const fields=stat.slice(stat.lastIndexOf(')')+2).split(' ');return fields[0]==='Z'?null:fields[19];}catch{return null;}}
 /** Recovery never starts another execution while a durably-owned old supervisor lives. */
 export async function stopOwnedNative(process:{pid:number;startTicks:string;bootId:string}){
- if(globalThis.process.platform!=='linux'||readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim()!==process.bootId)return;
+ if(globalThis.process.platform!=='linux')return;
+ if(!Number.isSafeInteger(process.pid)||process.pid<1||typeof process.startTicks!=='string'||!/^\d+$/.test(process.startTicks)||typeof process.bootId!=='string'||!/^[a-f0-9-]{36}$/.test(process.bootId))throw new VmafError('stop-uncertain','Durable native ownership witness is invalid');
+ if(readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim()!==process.bootId)return;
  if(processStartTicks(process.pid)!==process.startTicks)return;
  try{globalThis.process.kill(-process.pid,'SIGKILL');}catch(error){if((error as NodeJS.ErrnoException).code!=='ESRCH')throw error;}
  const until=Date.now()+2000;while(processStartTicks(process.pid)===process.startTicks){if(Date.now()>until)throw new VmafError('stop-uncertain','Previous native process did not exit');await sleep();}
@@ -100,13 +102,13 @@ export class NativeVmafRunner{
   onProcess(null);
   if(signal.aborted)throw signal.reason;if(reason!==undefined)throw reason;if(spawnFailure)throw new VmafError('component-unavailable','Native executable could not start');
   const text=/^VOIDPLAYER_VMAF_USAGE (\{.*\})$/m.exec(stdout)?.[1];if(text)usage=JSON.parse(text);
-  if(code!==0||!usage)throw new VmafError('native-execution-failed','Native VMAF crashed, exceeded an OS budget or returned an error');
+  if(code!==0||!usage||usage.exitCode!==0||usage.signal!==0)throw new VmafError('native-execution-failed',`Native VMAF did not complete (supervisor=${code}, child=${usage?.exitCode??'unknown'}, signal=${usage?.signal??'unknown'}, cpuMs=${usage?.cpuMs??'unknown'}, peakRssBytes=${usage?.peakRssBytes??'unknown'}); no native score committed`);
   if(statSync(path.join(directory,'result.json')).size>VMAF_LIMITS.resultBytes)throw new VmafError('budget-exceeded','Native result exceeds limit');
   const value=JSON.parse(readFileSync(path.join(directory,'result.json'),'utf8'));
-  if(value.version!==c.cliVersion||!Array.isArray(value.frames)||value.frames.length!==prepared.pairs.length||value.frames.some((f:any,i:number)=>f.frameNum!==i||!Number.isFinite(f.metrics?.vmaf)))throw new VmafError('native-result-invalid','Native frame count/order/score differs from the frozen sequence');
+  if(value.version!==c.cliVersion||!Array.isArray(value.frames)||value.frames.length!==prepared.pairs.length||value.frames.some((f:any,i:number)=>f.frameNum!==i||(!Number.isFinite(f.metrics?.vmaf)||f.metrics.vmaf<0||f.metrics.vmaf>100)))throw new VmafError('native-result-invalid','Native frame count/order/score differs from the frozen sequence');
   const pooled=value.pooled_metrics?.vmaf;if(!pooled||['min','max','mean','harmonic_mean'].some(k=>!Number.isFinite(pooled[k])))throw new VmafError('native-result-invalid','Missing official pooled scores');
   return {frames:value.frames.map((f:any)=>({index:f.frameNum,score:f.metrics.vmaf})),pooled,version:value.version,component:{manifestSha256:c.manifestSha256,binarySha256:c.binarySha256,modelSha256:c.modelSha256,supervisorSha256:c.supervisorSha256,sourceRevision:c.sourceRevision},
-   recipe:{model:input.model,threads:1,cpuMask:0,subsample:1,pooling:'official-mean-min-max-harmonic',preprocessing:'none',range:'limited',color:'bt709-sdr',pixelFormat:prepared.geometry.bitDepth===8?'yuv420p':'yuv420p10le',...prepared.geometry,boundary:'clip-reset-and-final-flush'},resources:{...usage,stdoutBytes,stderrBytes}};
+   recipe:{model:input.model,threads:1,cpuMask:0,subsample:1,pooling:'official-mean-min-max-harmonic',preprocessing:'none',range:'limited',color:'bt709-sdr',pixelFormat:prepared.geometry.bitDepth===8?'yuv420p':'yuv420p10le',...prepared.geometry,boundary:'clip-reset-and-final-flush',rawPacking:'visible-y-u-v-tight-little-endian-v1'},resources:{...usage,stdoutBytes,stderrBytes}};
  }
  close(){this.closed=true;for(const e of this.active)e.stop();return Promise.allSettled([...this.active].map(e=>e.done)).then(()=>{if(this.stopUncertain)throw new VmafError('stop-uncertain','Native executor exit is uncertain');});}
 }

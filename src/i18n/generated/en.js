@@ -977,7 +977,7 @@ export default {
   "qualityWorkflow.retry": () => "Retry submission with the original idempotency key",
   "qualityWorkflow.roi": () => "ROI: unrotated visible source pixel grid; all values must be even integers",
   "qualityWorkflow.running": () => "Running",
-  "qualityWorkflow.scope": () => "Explicitly pair library key pictures, forward-dependent pictures or reordered/delayed pictures in a closed GOP, measuring native 8/10-bit YUV420 code values. At most 32 AUs per side; the reordered path pins start, end and target AU and verifies every output and drain using decoder-returned packet identity, never PTS matching. Sequence scoring and automatic alignment remain unsupported.",
+  "qualityWorkflow.scope": () => "Explicitly pair cached library keyframes, forward dependent frames or reordered/delayed pictures within a closed GOP in 8/10-bit source YUV420 code values. Each side is bounded to 32 AUs; GOP mode pins start/end and target AU, verifies all output and drain with decoder-returned packet identity, and never guesses frame ownership by PTS. This form measures one pair; range and optional native continuous VMAF workflows appear below. None automatically aligns content.",
   "qualityWorkflow.searchMedia": () => "Search library",
   "qualityWorkflow.sourceProof": () => "Source, cache identity and geometry witness",
   "qualityWorkflow.submit": () => "Submit durable measurement",

@@ -977,7 +977,7 @@ export default {
   "qualityWorkflow.retry": () => "使用原幂等键重试提交",
   "qualityWorkflow.roi": () => "ROI：未旋转可见源像素网格，所有值须为偶数整数",
   "qualityWorkflow.running": () => "执行中",
-  "qualityWorkflow.scope": () => "显式配对媒体库中的关键帧、前向依赖帧或闭合 GOP 内重排/延迟帧，以 8/10 位 YUV420 原始码值测量。每侧最多 32 AU；重排路径明确起止与目标 AU，以解码器返回的包身份核验全部输出和 drain，不按 PTS 猜帧。序列评分和自动对齐仍不支持。",
+  "qualityWorkflow.scope": () => "显式配对媒体库中的关键帧、前向依赖帧或闭合 GOP 内重排/延迟帧，以 8/10 位 YUV420 原始码值测量。每侧最多 32 AU；重排路径明确起止与目标 AU，以解码器返回的包身份核验全部输出和 drain，不按 PTS 猜帧。此表单为单帧测量；下方另有区间及可选原生 VMAF 连续序列入口，均不自动对齐。",
   "qualityWorkflow.searchMedia": () => "搜索媒体库",
   "qualityWorkflow.sourceProof": () => "来源、缓存身份与几何见证",
   "qualityWorkflow.submit": () => "发起持久测量",

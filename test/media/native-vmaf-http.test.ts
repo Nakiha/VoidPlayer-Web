@@ -2,8 +2,8 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import {readFile,writeFile,copyFile} from 'node:fs/promises';import path from 'node:path';import {randomUUID} from 'node:crypto';
 import {nativeFixture,officialOracle,nativeComponent} from '../helpers/native-vmaf.mjs';
 import {qualityEvidenceValue,qualityEvidenceList} from '../../shared/review/quality-evidence.ts';
-for(const [depth,distorted,model]of [[8,false,'vmaf_v0_6_1'],[8,true,'vmaf_v0_6_1neg'],[10,true,'vmaf_v0_6_1']] as const)test(`real native VMAF HTTP ${depth} ${distorted?'distorted':'same'} ${model}`,{timeout:120000},async t=>{
- const f=await nativeFixture({depth,distorted});t.after(()=>f.close());const input={...f.input,model};
+for(const [depth,distorted,model,codec]of [[8,false,'vmaf_v0_6_1','h264'],[8,true,'vmaf_v0_6_1neg','h264'],[10,true,'vmaf_v0_6_1','hevc'],[8,true,'vmaf_v0_6_1','hevc'],[10,true,'vmaf_v0_6_1','h264']] as const)test(`real native VMAF HTTP ${codec}/${depth} ${distorted?'distorted':'same'} ${model}`,{timeout:120000},async t=>{
+ const f=await nativeFixture({depth,distorted,codec});t.after(()=>f.close());const input={...f.input,model};
  const pre=await f.json('/api/quality/vmaf/preflight',input);assert.equal(pre.nativeExecution,false);assert.equal(pre.rawColorVerification,'required-at-execution');
  const r=await f.request('/api/quality/vmaf/jobs',input,'one-job');assert.equal(r.status,202);const j=(await r.json()).job;
  assert.equal((await f.request('/api/quality/vmaf/jobs',input,'one-job',{'x-voidplayer-actor':'wrong'})).status,409);
@@ -28,7 +28,7 @@ for(const [depth,distorted,model]of [[8,false,'vmaf_v0_6_1'],[8,true,'vmaf_v0_6_
  assert.equal((await f.json('/api/quality/vmaf/jobs',input,'one-job')).job.id,j.id);
  assert.deepEqual((await f.json(`/api/quality/vmaf/jobs/${j.id}/candidates`,policy)).createdIds,p.createdIds);
  assert.equal((await f.request(`/api/quality/vmaf/jobs/${j.id}/candidates`,{...policy,severity:4})).status,409);
- console.log(JSON.stringify({depth,model,frames:result.vmaf.frames.length,rawBytes:result.raw.bytes,work:result.work,native:result.vmaf.resources,pooled:result.vmaf.pooled}));
+ console.log(JSON.stringify({codec,depth,model,frames:result.vmaf.frames.length,rawBytes:result.raw.bytes,work:result.work,native:result.vmaf.resources,executionWallMs:final.endedAt-final.startedAt,preparedFramesPerSecond:8000/(final.endedAt-final.startedAt),pooled:result.vmaf.pooled}));
 });
 test('uninstalled native component remains explicitly unavailable',{timeout:120000},async t=>{
  const f=await nativeFixture({component:false});t.after(()=>f.close());const c=await f.json('/api/quality/vmaf/capability');assert.equal(c.enabled,false);assert.equal((await f.request('/api/quality/vmaf/jobs',f.input)).status,503);

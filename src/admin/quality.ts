@@ -33,7 +33,7 @@ export function qualityJobsShell(){
     <p data-forward-guarantee class="quality-forward-guarantee" hidden></p>
     <button type="button" data-frame-more hidden>${th(msg('qualityWorkflow.moreFrames','下一页候选帧'))}</button></fieldset>`;
   return `<section id="pane-quality" hidden><header class="admin-heading"><div><h1>${th(msg('qualityWorkflow.title','单帧 PSNR 任务'))}</h1>
-    <p>${th(msg('qualityWorkflow.scope','显式配对媒体库中的关键帧、前向依赖帧或闭合 GOP 内重排/延迟帧，以 8/10 位 YUV420 原始码值测量。每侧最多 32 AU；重排路径明确起止与目标 AU，以解码器返回的包身份核验全部输出和 drain，不按 PTS 猜帧。序列评分和自动对齐仍不支持。'))}</p></div></header>
+    <p>${th(msg('qualityWorkflow.scope','显式配对媒体库中的关键帧、前向依赖帧或闭合 GOP 内重排/延迟帧，以 8/10 位 YUV420 原始码值测量。每侧最多 32 AU；重排路径明确起止与目标 AU，以解码器返回的包身份核验全部输出和 drain，不按 PTS 猜帧。此表单为单帧测量；下方另有区间及可选原生 VMAF 连续序列入口，均不自动对齐。'))}</p></div></header>
     <p id="quality-owner"></p><p id="quality-availability" role="status"></p><p>${th(msg('qualityWorkflow.lifetime','任务由服务持有。关闭此页或切换分类只停止观察；仅“取消任务”会请求终止。网络故障不表示任务失败。'))}</p>
     <label>${th(msg('qualityWorkflow.client','本页客户端 ID'))}<input id="quality-client" maxlength="80" spellcheck="false"><button id="quality-client-apply" type="button">${th(msg('qualityWorkflow.useClient','使用此客户端'))}</button></label>
     <form id="quality-form" class="admin-panel"><div class="quality-sources">${sides.map(source).join('')}</div>

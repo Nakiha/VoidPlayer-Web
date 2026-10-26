@@ -3934,8 +3934,8 @@
     "translation": "Running"
   },
   "qualityWorkflow.scope": {
-    "source": "显式配对媒体库中的关键帧、前向依赖帧或闭合 GOP 内重排/延迟帧，以 8/10 位 YUV420 原始码值测量。每侧最多 32 AU；重排路径明确起止与目标 AU，以解码器返回的包身份核验全部输出和 drain，不按 PTS 猜帧。序列评分和自动对齐仍不支持。",
-    "translation": "Explicitly pair library key pictures, forward-dependent pictures or reordered/delayed pictures in a closed GOP, measuring native 8/10-bit YUV420 code values. At most 32 AUs per side; the reordered path pins start, end and target AU and verifies every output and drain using decoder-returned packet identity, never PTS matching. Sequence scoring and automatic alignment remain unsupported.",
+    "source": "显式配对媒体库中的关键帧、前向依赖帧或闭合 GOP 内重排/延迟帧，以 8/10 位 YUV420 原始码值测量。每侧最多 32 AU；重排路径明确起止与目标 AU，以解码器返回的包身份核验全部输出和 drain，不按 PTS 猜帧。此表单为单帧测量；下方另有区间及可选原生 VMAF 连续序列入口，均不自动对齐。",
+    "translation": "Explicitly pair cached library keyframes, forward dependent frames or reordered/delayed pictures within a closed GOP in 8/10-bit source YUV420 code values. Each side is bounded to 32 AUs; GOP mode pins start/end and target AU, verifies all output and drain with decoder-returned packet identity, and never guesses frame ownership by PTS. This form measures one pair; range and optional native continuous VMAF workflows appear below. None automatically aligns content.",
     "needsReview": false
   },
   "qualityWorkflow.searchMedia": {
