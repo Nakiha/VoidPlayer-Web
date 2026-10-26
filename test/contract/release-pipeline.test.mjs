@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -47,7 +47,7 @@ test('release workflow gates verified artifacts and draft staging on every verif
   const workflow = await readFile(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
   const jobs = workflowJobs(workflow);
   assert.match(jobs['analysis-core'].body, /name: Verify analysis reference ABI including restored caches\n        run: node scripts\/prepare-analysis-core.mjs public\/vendor\/voidplayer-analysis/);
-  const required = ['native-release', 'unit', 'playback', 'source-logic', 'analysis-browser', 'analysis-matrix', 'ssim-browser', 'hevc-browser', 'uncovered-regressions'];
+  const required = ['native-release', 'unit', 'playback', 'cache-browser', 'source-logic', 'analysis-browser', 'analysis-matrix', 'ssim-browser', 'hevc-browser', 'uncovered-regressions'];
   assert.deepEqual([...jobs['release-set'].needs].sort(), required.sort());
   assert.deepEqual(jobs.unit.needs, ['decoder', 'analysis-core']);
   assert.match(jobs.unit.body, /run: node scripts\/run-tests\.mjs ci-node-media\n        env:\n          VOIDPLAYER_FFMPEG_ORACLE:/);
@@ -72,24 +72,71 @@ test('release workflow gates verified artifacts and draft staging on every verif
   assert.doesNotMatch(informational.body, /stage-release|check-release-set|verified-release-set/);
   assert.deepEqual([...dependencies('release-set')].sort(), Object.keys(jobs).filter(id => !['release-set', 'release-draft', 'paired-https'].includes(id)).sort(),
     'every new required verification job must be in the release dependency graph');
-  for (const id of ['release-set', ...dependencies('release-set')]) {
+  for (const id of dependencies('release-set')) {
     assert.doesNotMatch(jobs[id].body, /^    (?:if|continue-on-error):/m, `${id} must retain success-only job gating`);
   }
+  // Run the aggregate even for a skipped/cancelled/failed prerequisite, then
+  // fail explicitly before downloading or producing any verified artifacts.
+  assert.match(jobs['release-set'].body, /^    if: \$\{\{ always\(\) \}\}$/m);
+  assert.doesNotMatch(jobs['release-set'].body, /continue-on-error:/);
+  const gate = /      - name: Require every verification job to succeed\n([\s\S]*?)(?=      - )/.exec(jobs['release-set'].body)?.[1];
+  assert.ok(gate, 'required result guard exists');
+  assert.match(gate, /VERIFICATION_RESULTS: \$\{\{ toJSON\(needs\) \}\}/);
+  assert.doesNotMatch(gate, /if:|continue-on-error:/);
+  assert.ok(jobs['release-set'].body.indexOf(gate) < jobs['release-set'].body.indexOf('uses: actions/download-artifact@v4'));
+  const guard = /^          node --input-type=module <<'JS'\n([\s\S]*?)^          JS$/m.exec(gate)?.[1];
+  assert.ok(guard, 'result guard uses the checked inline Node script');
+  const verifyResults = results => spawnSync(process.execPath, ['--input-type=module', '-e', guard.replace(/^          /gm, '')], {
+    encoding: 'utf8', env: { ...process.env, VERIFICATION_RESULTS: JSON.stringify(results) },
+  });
+  assert.notEqual(verifyResults({}).status, 0, 'missing results cannot pass');
   assert.deepEqual(jobs['release-draft'].needs, ['release-set']);
   assert.match(jobs['release-draft'].body, /^    if: github\.ref_type == 'tag'$/m);
   assert.doesNotMatch(jobs['release-draft'].body, /continue-on-error:/);
   assert.match(jobs['release-set'].body, /name: verified-release-set/);
   assert.match(jobs['release-draft'].body, /name: verified-release-set/);
-  assert.doesNotMatch(jobs['release-set'].body, /if:.*(?:always\(|!cancelled\(|failure\()/);
   // Every required edge, including all cells of the analysis matrix job, must
   // block release output on failure, cancellation, pending or skipped states.
   for (const dependency of required) for (const outcome of ['failure', 'cancelled', 'pending', 'skipped', 'success']) {
     const outcomes = Object.fromEntries(required.map(id => [id, id === dependency ? outcome : 'success']));
-    const produceVerifiedSet = jobs['release-set'].needs.every(id => outcomes[id] === 'success');
+    const checked = verifyResults(Object.fromEntries(jobs['release-set'].needs.map(id => [id, { result: outcomes[id] }])));
+    const produceVerifiedSet = checked.status === 0;
     const stageDraft = jobs['release-draft'].needs.every(id => id === 'release-set' && produceVerifiedSet);
     assert.equal(produceVerifiedSet, outcome === 'success');
     assert.equal(stageDraft, outcome === 'success');
   }
+});
+
+test('cache suite runs once in its own required job with the same pinned preparation and evidence', async () => {
+  const workflow = await readFile(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
+  const jobs = workflowJobs(workflow), cache = jobs['cache-browser'];
+  const manifest = JSON.parse(await readFile(new URL('../../scripts/testing/manifest.json', import.meta.url), 'utf8'));
+  const cases = manifest.cases.filter(row => row.suites.includes('ci-cache'));
+  assert.equal(cases.length, 39);
+  assert.equal(new Set(cases.map(row => row.id)).size, 39);
+  assert.ok(cases.every(row => row.required && row.kind === 'regression'));
+  assert.deepEqual(cache.needs, ['decoder', 'analysis-core']);
+  assert.match(cache.body, /^    runs-on: ubuntu-24\.04$/m);
+  assert.match(cache.body, /^    timeout-minutes: 45$/m);
+  assert.match(jobs.playback.body, /^    timeout-minutes: 45$/m);
+  assert.doesNotMatch(cache.body, /continue-on-error:|strategy:|--case|--engine|--stop-on-failure/);
+  assert.equal((workflow.match(/run: node scripts\/run-tests\.mjs ci-cache --prepared\n/g) ?? []).length, 1);
+  assert.doesNotMatch(jobs.playback.body, /ci-cache|annotation-cache-screenshots/);
+  assert.deepEqual([...cache.body.matchAll(/^        run: node scripts\/run-tests\.mjs ([^\n]+)$/gm)].map(row => row[1]), ['--prepare', 'ci-cache --prepared']);
+  assert.match(cache.body, /env:\n          DEBUG: pw:browser\n        if: \$\{\{ !cancelled\(\) && steps\.browser-inputs\.outcome == 'success' \}\}\n        run: node scripts\/run-tests\.mjs ci-cache --prepared/);
+
+  const preparation = (body, end) => body.slice(body.indexOf('    steps:\n'), body.indexOf(`      - name: ${end}`));
+  assert.equal(preparation(cache.body, 'Generate approximately 100 MB 1080p playback inputs'), preparation(jobs.playback.body, 'Verify opportunistic audio'),
+    'same checkout, pinned core/QA/FATE/oracle, native tools, Playwright and verified build preparation');
+  const fixtures = body => /      - name: Generate approximately 100 MB 1080p playback inputs\n[\s\S]*?(?=      - )/.exec(body)?.[0];
+  assert.ok(fixtures(cache.body));
+  assert.equal(fixtures(cache.body), fixtures(jobs.playback.body), 'preserve every preceding generated input');
+  assert.match(cache.body, /if: always\(\)[\s\S]*name: annotation-cache-screenshots/);
+  for (const artifact of ['/tmp/voidplayer-annotation-*.png', '/tmp/voidplayer-caches-*.png', '.run/workspace-sharing-browser-*/', '.run/test-suites/ci-cache/', '.run/test-suites/preparation/', '.run/test-suites/build-receipt.json', '.run/playback-reports/']) {
+    assert.ok(cache.body.includes(`            ${artifact}\n`), `cache evidence retained: ${artifact}`);
+  }
+  assert.equal((workflow.match(/name: annotation-cache-screenshots\n/g) ?? []).length, 1);
+  assert.ok(jobs['release-set'].needs.includes('cache-browser'));
 });
 
 test('browser workflow collects independent outcomes and uploads failure evidence', async () => {
@@ -360,7 +407,7 @@ test('release rebuild sources include shared implementations and their independe
 test('every FATE consumer restores an exact manifest cache and verifies before saving or testing', async () => {
   const jobs = workflowJobs(await readFile(new URL('../../.github/workflows/release-preview.yml',import.meta.url),'utf8'));
   const consumers = Object.entries(jobs).filter(([,job]) => job.body.includes('uses: ./.github/actions/fate-fixtures'));
-  assert.deepEqual(consumers.map(([id])=>id).sort(), ['playback','uncovered-regressions','unit']);
+  assert.deepEqual(consumers.map(([id])=>id).sort(), ['cache-browser','playback','uncovered-regressions','unit']);
   for(const [id,{body}] of consumers) {
     assert.equal((body.match(/uses: \.\/\.github\/actions\/fate-fixtures/g) ?? []).length,1,id);
     assert.doesNotMatch(body,/node scripts\/sync-fate-samples\.mjs/,id);
