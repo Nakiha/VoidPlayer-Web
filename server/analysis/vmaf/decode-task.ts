@@ -19,8 +19,10 @@ export async function runVmafDecode(data:VmafDecodeData,progress:(frames:number,
  let indexBytes=0,indexPackets=0;
  const budgetFor=(request:Parameters<typeof pairBudget>[0])=>({...pairBudget(request),maxIndexBytes:Math.max(1,Math.min(pairBudget(request).maxIndexBytes,VMAF_LIMITS.maxIndexBytes-indexBytes)),maxIndexPackets:Math.max(1,Math.min(pairBudget(request).maxIndexPackets,VMAF_LIMITS.maxIndexPackets-indexPackets))});
  const openPair=(request:Parameters<typeof pairBudget>[0])=>{
-  const sources=[request.reference,request.distorted].map(target=>{check();const value=libraryPairSource(db,store,target,budgetFor(request),control);indexBytes+=Buffer.byteLength(JSON.stringify(value.source.index));indexPackets+=value.source.index!.packets.length;
-   if(indexBytes>VMAF_LIMITS.maxIndexBytes||indexPackets>VMAF_LIMITS.maxIndexPackets){value.source.close();throw new VmafError('budget-exceeded','Cumulative index read budget exceeded');}return value;});return sources as [typeof sources[number],typeof sources[number]];
+  const sources:ReturnType<typeof libraryPairSource>[]=[];
+  try{for(const target of [request.reference,request.distorted]){check();const value=libraryPairSource(db,store,target,budgetFor(request),control);sources.push(value);indexBytes+=Buffer.byteLength(JSON.stringify(value.source.index));indexPackets+=value.source.index!.packets.length;
+   if(indexBytes>VMAF_LIMITS.maxIndexBytes||indexPackets>VMAF_LIMITS.maxIndexPackets)throw new VmafError('budget-exceeded','Cumulative index read budget exceeded');}return sources as [typeof sources[number],typeof sources[number]];
+  }catch(error){for(const s of sources)s.source.close();throw error;}
  };
  try{
   const original=data.snapshot.value.rangePlan;if(!original)throw new VmafError('unsupported-vmaf-sequence','No executable frozen C plan');

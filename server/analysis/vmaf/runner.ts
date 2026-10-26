@@ -8,7 +8,7 @@ import type {VmafComponent} from './component.ts';
 declare const VOIDPLAYER_COMPILED:boolean;
 type Hooks={admitted():void;phase(name:string):void;progress(frames:number,total:number):void;prepared(value:VmafPrepared):void;process(value:{pid:number;startTicks:string;bootId:string}|null):void};
 const sleep=()=>new Promise<void>(r=>setTimeout(r,10));
-export function processStartTicks(pid:number){try{const stat=readFileSync(`/proc/${pid}/stat`,'utf8');return stat.slice(stat.lastIndexOf(')')+2).split(' ')[19];}catch{return null;}}
+export function processStartTicks(pid:number){try{const stat=readFileSync(`/proc/${pid}/stat`,'utf8');const fields=stat.slice(stat.lastIndexOf(')')+2).split(' ');return fields[0]==='Z'?null:fields[19];}catch{return null;}}
 /** Recovery never starts another execution while a durably-owned old supervisor lives. */
 export async function stopOwnedNative(process:{pid:number;startTicks:string;bootId:string}){
  if(globalThis.process.platform!=='linux'||readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim()!==process.bootId)return;
@@ -62,7 +62,7 @@ export class NativeVmafRunner{
     const prepared=await this.worker<VmafPrepared>('decode-worker.ts',{mode:'decode',database:this.library.indexDatabase,coreDir:this.coreDir,input,snapshot,directory},combined,hooks.progress);combined.throwIfAborted();hooks.prepared(prepared);
     hooks.phase('native');const native=await this.native(c,directory,input,prepared,combined,hooks.process);combined.throwIfAborted();
     hooks.phase('source-final');await this.worker('decode-worker.ts',{mode:'verify',database:this.library.indexDatabase,coreDir:this.coreDir,input,snapshot,directory},combined);combined.throwIfAborted();return {prepared,native};
-   }finally{if(temporary)try{rmSync(directory,{recursive:true,force:true});}catch(error){this.stopUncertain=true;throw new VmafError('stop-uncertain','Temporary raw sequence could not be reclaimed');}}
+   }finally{if(temporary&&!this.stopUncertain)try{rmSync(directory,{recursive:true,force:true});}catch(error){this.stopUncertain=true;throw new VmafError('stop-uncertain','Temporary raw sequence could not be reclaimed');}}
   });
  }
  private owned<T>(input:{budget:{maxElapsedMs:number}},signal:AbortSignal,admitted:()=>void,work:(s:AbortSignal)=>Promise<T>):Promise<T>{

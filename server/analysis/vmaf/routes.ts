@@ -7,11 +7,12 @@ export async function handleVmafRoutes(ctx:RouteContext,req:IncomingMessage,res:
   requireCapturedActor(req,ctx.actor);if(!ctx.actor)throw new AdminError(401,'Choose an identity first.','identity-required');
   const service=ctx.library.qualityVmaf,actor=ctx.actor;
   if(req.method!=='GET'&&!adminWriteAllowed(req,'quality-job'))throw new AdminError(403,'Use the same-origin quality-job action.','origin-required');
-  const item=/^\/api\/quality\/vmaf\/jobs\/(vmaf-[a-f0-9-]{36})(?:\/(result|frames|cancel|candidates))?$/.exec(url.pathname),collection=url.pathname==='/api/quality/vmaf/jobs',preflight=url.pathname==='/api/quality/vmaf/preflight';
-  const allowed=req.method==='GET'&&(collection||item?.[2]==='frames')?['after','limit']:[];
+  const item=/^\/api\/quality\/vmaf\/jobs\/(vmaf-[a-f0-9-]{36})(?:\/(result|frames|cancel|candidates|evidence))?$/.exec(url.pathname),collection=url.pathname==='/api/quality/vmaf/jobs',preflight=url.pathname==='/api/quality/vmaf/preflight';
+  const allowed=item?.[2]==='evidence'?['index','attemptId','digest','side']:req.method==='GET'&&(collection||item?.[2]==='frames')?['after','limit']:[];
   if([...url.searchParams.keys()].some(k=>!allowed.includes(k)||url.searchParams.getAll(k).length!==1))throw new AdminError(400,'Invalid VMAF query.','invalid-request');
   if(req.method==='GET'){
-   if(collection)sendJson(res,200,service.history(actor.id,Number(url.searchParams.get('after')??0),Number(url.searchParams.get('limit')??8)));
+   if(item?.[2]==='evidence'){const index=url.searchParams.get('index');if(!index||!/^\d{1,2}$/.test(index)||!['reference','distorted'].includes(url.searchParams.get('side')??''))throw new AdminError(400,'Invalid VMAF evidence reference.','invalid-request');sendJson(res,200,service.evidence({jobId:item[1]+'-f'+index,attemptId:url.searchParams.get('attemptId')??'',digest:url.searchParams.get('digest')??'',side:url.searchParams.get('side') as 'reference'|'distorted'},actor.id));}
+   else if(collection)sendJson(res,200,service.history(actor.id,Number(url.searchParams.get('after')??0),Number(url.searchParams.get('limit')??8)));
    else if(item?.[2]==='result')sendJson(res,200,service.summary(item[1],actor.id));
    else if(item?.[2]==='frames')sendJson(res,200,service.frames(item[1],actor.id,Number(url.searchParams.get('after')??0),Number(url.searchParams.get('limit')??4)));
    else if(item?.[2]==='candidates')sendJson(res,200,service.publication(item[1],actor.id));

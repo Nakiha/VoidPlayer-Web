@@ -47,9 +47,9 @@ export class NativeVmafService{
   const plan=this.plans.get(input.plan.id,actor);if(plan.state!=='completed'||plan.attemptId!==input.plan.attemptId||plan.resultDigest!==input.plan.digest)throw new AdminError(409,'Pin a completed correspondence attempt/digest.','vmaf-plan-changed');
   return {...input.plan,value:this.plans.result(plan.id,actor)};
  }
- private cachedCapability:unknown=null;
+ private cachedCapability:Awaited<ReturnType<NativeVmafRunner['capability']>>|null=null;
  get descriptor(){return this.cachedCapability;}
- async capability(){const value=await this.runner.capability();this.cachedCapability={...value,verifiedAt:now()};return this.cachedCapability;}
+ async capability(){const value=await this.runner.capability();this.cachedCapability=value;return this.cachedCapability;}
  async preflight(value:unknown,actor:string,signal:AbortSignal){this.available();const input=this.parse(value);return this.runner.preflight(input,this.snapshot(input,actor),signal);}
  submit(value:unknown,actor:Actor,requestId:string,key:unknown){
   this.available();const input=this.parse(value),k=qualityIdempotencyKey(key),fingerprint=digest(input);
@@ -74,7 +74,9 @@ export class NativeVmafService{
  private prepared(id:string){const row=this.db.prepare('SELECT prepared FROM quality_vmaf_jobs WHERE id=?').get(id);return row?.prepared?JSON.parse(String(row.prepared)) as VmafPrepared:null;}
  private validatePrepared(value:VmafPrepared,snapshot:VmafPlanSnapshot,input:VmafInput){
   if(!value||value.pairs.length<2||value.pairs.length>VMAF_LIMITS.frames||canonicalJson(value.sequence.pairs)!==canonicalJson([...snapshot.value.rangePlan!.input.pairs].sort((a,b)=>a.reference.sourcePtsUs-b.reference.sourcePtsUs))||value.sequence.cadenceUs!==input.cadenceUs)throw new VmafError('worker-result-invalid','Prepared sequence identity changed');
-  for(const pair of value.pairs)qualityEvidenceValue(pair);
+  if(value.pairs.length!==value.sequence.pairs.length||value.geometry.width<VMAF_LIMITS.minDimension||value.geometry.height<VMAF_LIMITS.minDimension||value.geometry.width>VMAF_LIMITS.width||value.geometry.height>VMAF_LIMITS.height||![8,10].includes(value.geometry.bitDepth)||value.raw.bytes!==value.geometry.width*value.geometry.height*3/2*(value.geometry.bitDepth===8?1:2)*value.pairs.length*2||[value.raw.referenceSha256,value.raw.distortedSha256].some(h=>!/^[a-f0-9]{64}$/.test(h)))throw new VmafError('worker-result-invalid','Prepared raw frame count/geometry differs');
+  for(const [index,pair]of value.pairs.entries()){qualityEvidenceValue(pair);const expected=value.sequence.pairs[index];if(canonicalJson(pair.result.metric.roi)!==canonicalJson(expected.roi)||pair.result.metric.bitDepth!==value.geometry.bitDepth||!!pair.result.ssim!==input.metrics.ssim)throw new VmafError('worker-result-invalid','Prepared metric recipe changed');for(const side of ['reference','distorted']as const){const p=pair.result.provenance[side],e=expected[side];for(const field of ['mediaId','mediaVersion','size','indexIdentity','indexBuildId','sourcePtsUs','picture','decode']as const)if(canonicalJson(p[field])!==canonicalJson(e[field]))throw new VmafError('worker-result-invalid','Prepared source/picture identity changed');}}
+  const budget=snapshot.value.rangePlan!.input.budget;if(value.work.readBytes>budget.maxReadBytes||value.work.packets>budget.maxPackets||value.work.outputFrames>budget.maxOutputFrames||value.work.inputBytes>budget.maxInputBytes)throw new VmafError('worker-result-invalid','Prepared work exceeds frozen total budget');
   if(value.raw.bytes>input.budget.maxRawBytes||Buffer.byteLength(JSON.stringify(value))>VMAF_LIMITS.resultBytes)throw new VmafError('budget-exceeded','Prepared sequence result budget exceeded');
  }
  private async execute(id:string,signal:AbortSignal){
@@ -128,7 +130,7 @@ export class NativeVmafService{
    publication={policy,selected:selected.map(index=>({index,id:randomUUID(),operationId:randomUUID(),ref:this.ref(id,actor.id,index,policy.side)})),createdIds:[]};this.db.prepare('INSERT INTO quality_vmaf_publications VALUES(?,?)').run(id,JSON.stringify(publication));
   }
   for(const item of publication.selected){
-   annotations.mutate(policy.space,{action:'create-quality-candidate',operationId:item.operationId,id:item.id,revision:0,client:j.input.client,evidence:item.ref,candidate:{text:policy.text,severity:policy.severity}},actor,requestId,{origin,resolve:ref=>this.evidence(ref,actor.id)});
+   annotations.mutate(policy.space,{action:'create-quality-candidate',operationId:item.operationId,id:item.id,revision:0,client:{kind:j.input.client.kind==='browser'?'gui':j.input.client.kind==='agent'?'agent':'http',id:'vmaf_'+j.id},evidence:item.ref,candidate:{text:policy.text,severity:policy.severity}},actor,requestId,{origin,resolve:ref=>this.evidence(ref,actor.id)});
    if(!publication.createdIds.includes(item.id)){publication.createdIds.push(item.id);this.db.prepare('UPDATE quality_vmaf_publications SET body=? WHERE job_id=?').run(JSON.stringify(publication),id);}
   }
   return publication;

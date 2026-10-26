@@ -664,7 +664,37 @@ unknown commit outcomes must reuse the same plan/digest. Restart interrupts unfi
 planning without automatic recomputation or scoring. Candidate publication remains the
 existing separate explicit range policy. See docs/reference-clock-plans.md.
 
-There is no automatic alignment, VMAF/CAMBI executor, shared computation,
+quality.vmaf is a separate optional native sequence executor, not a single-frame range aggregate.
+GET /api/quality/vmaf/capability reports the verified deployment and exact source/model/recipe bounds.
+Linux x64 only; install the pinned official component using scripts/native/prepare-vmaf.mjs and
+pin nativeVmaf {directory,manifestSha256} in the trusted service configuration. HTTP cannot choose
+an executable or model path. Missing/invalid components remain component-unavailable.
+POST /api/quality/vmaf/preflight accepts the exact job body below but does not decode, so actual
+raw color eligibility is still checked at execution. All mutations require quality-job, captured
+X-VoidPlayer-Actor and same-origin identity cookie; actor changes reject before any side effects.
+POST /api/quality/vmaf/jobs uses Idempotency-Key and a normalized body:
+{schema:"voidplayer-native-vmaf-job",version:1,client:{id:"agent",kind:"agent"},
+ plan:{id:COMMITTED_C_PLAN_ID,attemptId:COMMITTED_ATTEMPT,digest:COMMITTED_SHA256},
+ model:"vmaf_v0_6_1",cadenceUs:EXACT_INTEGER_CFR_MICROSECONDS,metrics:{psnr:true,ssim:false},
+ budget:{maxRawBytes:134217728,maxElapsedMs:120000,nativeCpuSeconds:30,nativeMemoryBytes:536870912}}
+The existing C plan must contain 2..32 all-sample, hole-free continuous presentation frames,
+full-frame limited BT.709 SDR square-pixel uncropped unrotated 8/10-bit YUV420. Explicit NEG
+model vmaf_v0_6_1neg is also available; v0.6.1 is a fixed baseline, not the latest model.
+No negative PTS, VFR, arbitrary ROI, conversion, HDR or other containers. Native frame scores
+and official pooling use one continuous clip with reset/start and final flush, not per-frame runs.
+GET /api/quality/vmaf/jobs?after=ROW&limit=8, /jobs/{id}, /jobs/{id}/result,
+/jobs/{id}/frames?after=INDEX&limit=4 and POST /jobs/{id}/cancel {} observe/control the same service.
+Closing an observer never cancels. PSNR/SSIM completed facts survive native failure; metric states
+are independent. Restart marks unfinished work interrupted, never retries automatically. Native
+CPU/address-space/file limits and physical process/Worker exit precede shared admission release.
+POST /jobs/{id}/candidates with {space,side,maxScore,limit,minFrameDistance,text,severity} explicitly
+freezes a top-N temporal score policy and publishes existing atomic measurement-candidate commands.
+Attached sequenceVmaf facts include full immutable model/component/recipe/plan/raw hashes and pool;
+full-frame temporal scores are not heatmaps/localized defect certification. Imported facts are
+historical. Reference integrity is not certified and concealment detection is unavailable.
+See docs/native-vmaf.md for installation, contract, notices and independent reference tests.
+
+There is no automatic alignment, CAMBI executor, shared computation,
 automatic index construction, retry/resume or distributed worker.
 These capabilities do not mean #114 or #121 is complete.
 

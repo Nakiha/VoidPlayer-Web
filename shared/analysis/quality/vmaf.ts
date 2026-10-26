@@ -1,6 +1,6 @@
 import type {CorrespondenceResult} from './correspondence.ts';
 import {canonicalJson} from './correspondence.ts';
-import type {FramePairRequest,PairProvenance} from './frame-pair.ts';
+import type {FramePairRequest} from './frame-pair.ts';
 import type {FlvIndex} from '../../media/containers/flv-demux.ts';
 import type {LibraryPairResult} from './library-pair.ts';
 
@@ -55,10 +55,11 @@ export function validateVmafAssociation(value:unknown,pair:LibraryPairResult):Vm
  const v=value as VmafAssociation;object(v,['schema','version','jobId','attemptId','resultDigest','plan','index','frames','score','pooled','component','recipe','raw','spatial']);
  if(v.schema!=='voidplayer-vmaf-sequence-association'||v.version!==1||!/^vmaf-[a-f0-9-]{36}$/.test(v.jobId)||!/^[a-f0-9-]{36}$/.test(v.attemptId)||!/^[a-f0-9]{64}$/.test(v.resultDigest)||v.spatial!=='full-frame-temporal-score-not-localized'||!Number.isInteger(v.frames)||v.frames<2||v.frames>VMAF_LIMITS.frames||!Number.isInteger(v.index)||v.index<0||v.index>=v.frames||!Number.isFinite(v.score))fail('Invalid sequence association identity');
  if(!v.plan||!/^[a-f0-9-]{36}$/.test(v.plan.id)||!/^[a-f0-9-]{36}$/.test(v.plan.attemptId)||!/^[a-f0-9]{64}$/.test(v.plan.digest))fail('Invalid correspondence reference');
- const c=v.component,recipe=v.recipe,m=VMAF_MODELS[recipe?.model];
+ object(v.plan,['id','attemptId','digest']);object(v.component,['manifestSha256','binarySha256','modelSha256','supervisorSha256','sourceRevision']);object(v.recipe,['model','threads','cpuMask','subsample','pooling','preprocessing','range','color','pixelFormat','width','height','bitDepth','boundary']);object(v.raw,['referenceSha256','distortedSha256','bytes']);
+ const c=v.component,recipe=v.recipe,m=recipe&&Object.hasOwn(VMAF_MODELS,recipe.model)?VMAF_MODELS[recipe.model]:undefined;
  if(!c||!m||c.sourceRevision!==VMAF_SOURCE_REVISION||c.modelSha256!==m.sha256||[c.manifestSha256,c.binarySha256,c.supervisorSha256].some(h=>!/^[a-f0-9]{64}$/.test(h))||recipe.threads!==1||recipe.cpuMask!==0||recipe.subsample!==1||recipe.pooling!=='official-mean-min-max-harmonic'||recipe.preprocessing!=='none'||recipe.boundary!=='clip-reset-and-final-flush'||recipe.range!=='limited'||recipe.color!=='bt709-sdr'||recipe.pixelFormat!==(recipe.bitDepth===8?'yuv420p':'yuv420p10le'))fail('Invalid fixed native recipe');
  if(Object.keys(v.pooled).sort().join(',')!=='harmonic_mean,max,mean,min'||Object.values(v.pooled).some(n=>!Number.isFinite(n))||v.pooled.min>v.pooled.max||v.score<v.pooled.min-0.000002||v.score>v.pooled.max+0.000002||v.pooled.mean<v.pooled.min-0.000002||v.pooled.mean>v.pooled.max+0.000002)fail('Invalid native pool');
- const metric=pair.result.metric;if(metric.roi.x!==0||metric.roi.y!==0||metric.roi.width!==recipe.width||metric.roi.height!==recipe.height||metric.bitDepth!==recipe.bitDepth)fail('VMAF evidence is full-frame only');
+ const metric=pair.result.metric;if(![8,10].includes(recipe.bitDepth)||![recipe.width,recipe.height].every(n=>Number.isSafeInteger(n)&&n>=VMAF_LIMITS.minDimension&&n%2===0)||recipe.width>VMAF_LIMITS.width||recipe.height>VMAF_LIMITS.height||metric.color.primaries!=='bt709'||metric.color.transfer!=='bt709'||metric.color.matrix!=='bt709'||metric.color.fullRange||metric.color.chromaLocation!==1||metric.roi.x!==0||metric.roi.y!==0||metric.roi.width!==recipe.width||metric.roi.height!==recipe.height||metric.bitDepth!==recipe.bitDepth)fail('VMAF evidence is full-frame only');
  for(const p of Object.values(pair.result.provenance)){const d=p.decoded.description;if(d.width!==recipe.width||d.height!==recipe.height||d.visibleRect.x||d.visibleRect.y||d.codedWidth!==d.width||d.codedHeight!==d.height||d.yuv?.bitDepth!==recipe.bitDepth)fail('VMAF evidence geometry differs');}
  if(!v.raw||[v.raw.referenceSha256,v.raw.distortedSha256].some(h=>!/^[a-f0-9]{64}$/.test(h))||!Number.isSafeInteger(v.raw.bytes)||v.raw.bytes!==recipe.width*recipe.height*3/2*(recipe.bitDepth===8?1:2)*v.frames*2||v.raw.bytes>VMAF_LIMITS.maxRawBytes)fail('Invalid raw sequence witness');
  return structuredClone(v);

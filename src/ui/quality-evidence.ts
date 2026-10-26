@@ -29,6 +29,8 @@ export function qualityFacts(root:HTMLElement,value:ReturnType<typeof qualityEvi
   const details=document.createElement('details'),heading=document.createElement('summary'),data=document.createElement('pre');
   heading.textContent=t(msg('quality.fullProvenance','完整不可变 provenance'));data.className='quality-evidence-provenance';data.textContent=JSON.stringify(value,null,2);details.append(heading,data);
   root.append(summary,conditions,sources);
+  if(value.sequenceVmaf){const v=value.sequenceVmaf,p=document.createElement('p');p.className='quality-vmaf-score';p.textContent=`VMAF ${v.score.toFixed(6)} · ${v.recipe.model} · frame ${v.index+1}/${v.frames} · mean ${v.pooled.mean.toFixed(6)} · full-frame temporal score; no localized defect or heatmap; clip reset and final flush`;root.append(p);}
+
   if(value.result.provenance.reference.decode||value.result.provenance.distorted.decode){
     const notice=document.createElement('p');notice.className='quality-forward-guarantee';notice.textContent=forwardOutputText();root.append(notice);
   }
