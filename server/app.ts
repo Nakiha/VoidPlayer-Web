@@ -3,6 +3,7 @@ import { AnalysisScheduler } from './analysis/bitstream/scheduler.ts';
 import { handleAnalysisRoutes } from './analysis/bitstream/routes.ts';
 import { handleQualityRoutes } from './analysis/quality/routes.ts';
 import { handleQualityJobRoutes } from './analysis/quality/job-routes.ts';
+import {handleCorrespondenceRoutes} from './analysis/quality/correspondence-routes.ts';
 import { handleQualityRangeRoutes } from './analysis/quality/range-routes.ts';
 import { randomUUID } from 'node:crypto';
 import { guestActor, browserUserId } from './identity.ts';
@@ -93,6 +94,7 @@ export function createMediaServer(options: ServerOptions): Server {
       if (await handleStateRoutes(ctx, req, res, url)) return;
       if (await handleQualityJobRoutes(ctx,req,res,url)) return;
       if (await handleQualityRangeRoutes(ctx,req,res,url)) return;
+  if(await handleCorrespondenceRoutes(ctx,req,res,url))return;
       if (await handleQualityRoutes(ctx,req,res,url)) return;
       if (await handleAnalysisRoutes(ctx,req,res,url,analysis)) return;
       if (await handleContentRoutes(ctx, req, res, url)) return;
