@@ -50,6 +50,14 @@ test('raw AU facts retain exact positive/negative joins, half-open holes and str
   request.sampling={mode:'stride',every:2,offset:0};const stride=buildCorrespondence(relation,request,sources,work);assert.deepEqual(stride.rows.map(r=>r.selected),[true,false,true]);assert.deepEqual(stride.rangePlan!.unmappedAus,[2]);assert.deepEqual(stride.rangePlan!.unsampledAus,[1]);
   const gap=structuredClone(relation);gap.input.clock.segments=gap.input.clock.segments.slice(0,1);const g=buildCorrespondence(gap,request,sources,work);assert.equal(g.rows[1].reason,'clock-unmapped');assert.equal(g.rows[1].reference!.ptsUs,gap.input.clock.segments[0].referenceEndUs-1+gap.input.clock.segments[0].offsetUs);
 });
+test('half-open end excludes its exact PTS and an adjacent segment owns that boundary',async()=>{
+  const f=await correspondenceFixture(),start=f.doc.packets[0][2],end=f.doc.packets[1][2];assert.ok(end>start);
+  const left={id:'left',referenceStartUs:start,referenceEndUs:end,offsetUs:0},right={id:'right',referenceStartUs:end,referenceEndUs:end+1,offsetUs:0};
+  const adjacent={...f.relation,input:referenceRelationInput({...f.relation.input,clock:{mode:'piecewise-exact-source-pts-offset',segments:[right,left]}})};
+  const joined=buildCorrespondence(adjacent,f.request,f.sources,work);assert.deepEqual(joined.rows.map(r=>r.segmentId),['left','right']);assert.deepEqual(joined.rows.map(r=>r.distorted?.au),[0,1]);assert.equal(joined.rows[1].reference!.ptsUs,left.referenceEndUs);
+  const onlyLeft={...f.relation,input:referenceRelationInput({...f.relation.input,clock:{mode:'piecewise-exact-source-pts-offset',segments:[left]}})},excluded=buildCorrespondence(onlyLeft,f.request,f.sources,work);
+  assert.equal(excluded.rows[0].status,'mapped');assert.equal(excluded.rows[1].reason,'clock-unmapped');assert.equal(excluded.rows[1].segmentId,null);assert.equal(excluded.rows[1].distorted,null);
+});
 test('no nearest matching, raw duplicate PTS ambiguity, unsupported geometry and budget blocks remain explainable',async()=>{
   const f=await correspondenceFixture();const missing=structuredClone(f.relation);missing.input.clock.segments[0].offsetUs++;
   assert.equal(buildCorrespondence(missing,f.request,f.sources,work).rows[0].reason,'target-pts-missing');

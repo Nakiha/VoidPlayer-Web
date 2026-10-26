@@ -893,6 +893,7 @@ export default {
   "qualityClock.direction": () => "Mapping direction: distorted source PTS = reference source PTS + offset. Reference segments are half-open [start, end) intervals in integer microseconds; intervals on either side must not overlap.",
   "qualityClock.execute": () => "Submit scoring from this frozen plan",
   "qualityClock.forgetFrozen": () => "End local retries and prepare a new request",
+  "qualityClock.newSamePlan": () => "New identical plan",
   "qualityClock.pendingConflict": () => "Retry the original frozen request, or explicitly end local retries before editing.",
   "qualityClock.pendingNotice": () => "Unconfirmed submissions retain their original request and retry key. Retry reuses that work. Ending local retries does not cancel service-owned work.",
   "qualityClock.pin": () => "Read and pin existing caches for this relation",

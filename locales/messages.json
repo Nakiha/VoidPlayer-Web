@@ -3846,6 +3846,10 @@
     "source": "结束本地重试，准备新请求",
     "params": {}
   },
+  "qualityClock.newSamePlan": {
+    "source": "新建相同计划",
+    "params": {}
+  },
   "qualityClock.pendingConflict": {
     "source": "先重试原冻结请求，或显式结束本地重试后再编辑。",
     "params": {}

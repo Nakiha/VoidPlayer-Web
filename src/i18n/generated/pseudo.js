@@ -893,6 +893,7 @@ export default {
   "qualityClock.direction": () => "［M~a~p~p~i~n~g~ d~i~r~e~c~t~i~o~n~: d~i~s~t~o~r~t~e~d~ s~o~u~r~c~e~ P~T~S~ = r~e~f~e~r~e~n~c~e~ s~o~u~r~c~e~ P~T~S~ + o~f~f~s~e~t~. R~e~f~e~r~e~n~c~e~ s~e~g~m~e~n~t~s~ a~r~e~ h~a~l~f~-o~p~e~n~ [s~t~a~r~t~, e~n~d~) i~n~t~e~r~v~a~l~s~ i~n~ i~n~t~e~g~e~r~ m~i~c~r~o~s~e~c~o~n~d~s~; i~n~t~e~r~v~a~l~s~ o~n~ e~i~t~h~e~r~ s~i~d~e~ m~u~s~t~ n~o~t~ o~v~e~r~l~a~p~. ········］",
   "qualityClock.execute": () => "［S~u~b~m~i~t~ s~c~o~r~i~n~g~ f~r~o~m~ t~h~i~s~ f~r~o~z~e~n~ p~l~a~n~ ········］",
   "qualityClock.forgetFrozen": () => "［E~n~d~ l~o~c~a~l~ r~e~t~r~i~e~s~ a~n~d~ p~r~e~p~a~r~e~ a~ n~e~w~ r~e~q~u~e~s~t~ ········］",
+  "qualityClock.newSamePlan": () => "［N~e~w~ i~d~e~n~t~i~c~a~l~ p~l~a~n~ ········］",
   "qualityClock.pendingConflict": () => "［R~e~t~r~y~ t~h~e~ o~r~i~g~i~n~a~l~ f~r~o~z~e~n~ r~e~q~u~e~s~t~, o~r~ e~x~p~l~i~c~i~t~l~y~ e~n~d~ l~o~c~a~l~ r~e~t~r~i~e~s~ b~e~f~o~r~e~ e~d~i~t~i~n~g~. ········］",
   "qualityClock.pendingNotice": () => "［U~n~c~o~n~f~i~r~m~e~d~ s~u~b~m~i~s~s~i~o~n~s~ r~e~t~a~i~n~ t~h~e~i~r~ o~r~i~g~i~n~a~l~ r~e~q~u~e~s~t~ a~n~d~ r~e~t~r~y~ k~e~y~. R~e~t~r~y~ r~e~u~s~e~s~ t~h~a~t~ w~o~r~k~. E~n~d~i~n~g~ l~o~c~a~l~ r~e~t~r~i~e~s~ d~o~e~s~ n~o~t~ c~a~n~c~e~l~ s~e~r~v~i~c~e~-o~w~n~e~d~ w~o~r~k~. ········］",
   "qualityClock.pin": () => "［R~e~a~d~ a~n~d~ p~i~n~ e~x~i~s~t~i~n~g~ c~a~c~h~e~s~ f~o~r~ t~h~i~s~ r~e~l~a~t~i~o~n~ ········］",

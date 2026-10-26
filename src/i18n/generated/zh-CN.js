@@ -893,6 +893,7 @@ export default {
   "qualityClock.direction": () => "映射方向：待测源 PTS = 参考源 PTS + offset。每段参考区间为 [start, end)，单位均为整数微秒；两侧区间均不得重叠。",
   "qualityClock.execute": () => "按此冻结计划提交评分",
   "qualityClock.forgetFrozen": () => "结束本地重试，准备新请求",
+  "qualityClock.newSamePlan": () => "新建相同计划",
   "qualityClock.pendingConflict": () => "先重试原冻结请求，或显式结束本地重试后再编辑。",
   "qualityClock.pendingNotice": () => "提交结果未确认时，保留原请求与重试键。重试不会新建另一项工作；结束本地重试不会取消服务端工作。",
   "qualityClock.pin": () => "读取并固定此关系的现有缓存",

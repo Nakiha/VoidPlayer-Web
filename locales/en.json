@@ -3597,6 +3597,10 @@
     "source": "结束本地重试，准备新请求",
     "translation": "End local retries and prepare a new request"
   },
+  "qualityClock.newSamePlan": {
+    "source": "新建相同计划",
+    "translation": "New identical plan"
+  },
   "qualityClock.pendingConflict": {
     "source": "先重试原冻结请求，或显式结束本地重试后再编辑。",
     "translation": "Retry the original frozen request, or explicitly end local retries before editing."

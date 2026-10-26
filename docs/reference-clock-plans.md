@@ -43,7 +43,7 @@ runner enforces a 256 MiB Worker heap and a physical stop before releasing the
 single compute slot. No coordinator acquires an outer permit. Planning queues
 behind preparations and quality work, with four unfinished records, two per actor
 and a five-minute admission wait. History allows at most 100 relations and 100
-plans under 64 MiB of logical reservations. Each plan reserves 1 MiB for request,+relation snapshot, a result capped at 512 KiB, and its eventual submission intent.
+plans under 64 MiB of logical reservations. Each plan reserves 1 MiB for request, relation snapshot, a result capped at 512 KiB, and its eventual submission intent.
 Full history rejects new records without deleting old receipts. Logical limits
 do not claim to measure SQLite/WAL or whole-process memory.
 
@@ -110,9 +110,13 @@ publishes a policy; closing observation has no execution effect. Async reads and
 writes capture actor/view generations before updating private display state.
 
 Library discovery/preparation supplies explicit media/version identities and
-existing cache readiness; it does not infer reference relationships. This layer
-does not duplicate the catalog, preparation lifecycle or scorer. Integration with
-the separate discovery package is coordinated after its merge.
+existing cache readiness; it does not infer reference relationships. The GUI source picker uses discovery cursors and explicit versioned source IDs;
+quality bindings still come from the existing quality source endpoint. Parser-local
+stream IDs and clocks never become quality identities. Discovery quality-index
+preparations, correspondence planning and range children share one instance
+admission slot; no parent holds a permit while calling a child. Shutdown stops
+correspondence and discovery coordinators before range, single-frame jobs and
+the shared runner. This layer does not duplicate preparation or scoring.
 
 `referenceIntegrity=not-certified` and `concealmentDetection=unavailable` remain.
 Functional success does not certify performance. No core/fork or CI-gate changes
@@ -123,3 +127,25 @@ Unconfirmed GUI creates retain the original body/key in actor-scoped session
 storage. Their forms stay frozen until the original submission is explicitly
 retried or local retries are ended. Reopening observation restores retry controls;
 ending local retries does not cancel committed service work.
+
+A confirmed terminal plan offers **New identical plan**. This explicit action
+submits its original normalized input with a fresh key and creates a new attempt;
+it does not alter the old plan or automatically score it. While a plan create has
+an unknown outcome, this action is disabled, including after selection changes,
+closing observation or reload. **Retry original submission** replays the frozen
+body and original key. The normal form also retains its original key for an
+unchanged request. HTTP management uses the shared UUID helper that works without
+a secure browser context.
+
+## Verification boundary
+
+The formal tests cover exact half-open end ownership with adjacent segments,
+raw duplicate PTS ambiguity, missing exact matches, source/cache changes, reordered
+H.264/HEVC AU windows, cumulative budgets, physical-stop cancellation and durable
+C-to-B/annotation receipt replay after crashes or private result reclamation.
+The positive/negative segment fixtures exercise offset signs. They do not
+establish end-to-end negative-source-PTS, negative-zero or VFR coverage; those
+input matrices have not been independently validated. Target clock-domain
+overlap rejection covers conflicting relations; the defensive target-AU-reuse
+branch is not separately triggered by these fixtures. Budget tests do not certify
+whole-process RSS, performance or every database failure mode.
