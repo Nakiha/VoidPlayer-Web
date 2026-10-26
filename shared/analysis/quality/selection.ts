@@ -3,6 +3,7 @@ import { hevcGeometry, hevcFieldPictures } from '../../media/codecs/hevc-geometr
 import { parseFlvIndex, type FlvIndexDocument } from '../../media/indexing/flv-index-cache.ts';
 import { FramePairError, PAIR_LIMITS, forwardPacketPlan, gopPacketPlan, FORWARD_PAIR_LIMITS, requireInspectionGeometry, type PairTarget } from './frame-pair.ts';
 import type { LibraryPairBinding } from './library-pair.ts';
+import {nativeConfigurationHex} from '../../media/codecs/native-picture-identity.ts';
 
 export const QUALITY_SELECTION_LIMITS = Object.freeze({page:50, inspected:2048, bytes:65536});
 export type QualityFrameQuery = {afterAu:number;limit:number;buildId?:string};
@@ -12,6 +13,8 @@ export type QualityFramePage = {
   inspection:{supported:boolean;reason:string|null};
   eligibility:'cached-au-candidate-execution-verifies-closed-start-and-output-identity';
   entries:PairTarget[];nextAu:number|null;inspected:number;
+  presentedInput?:{protocol:'webcodecs-associated-chunk-v1';configurationHex:string;
+    packets:{au:number;configuration:number;offset:number;size:number;pts:number;dts:number}[]};
 };
 export function qualityFrameQuery(query:QualityFrameQuery) {
   if(!Number.isSafeInteger(query.afterAu)||query.afterAu<0||query.afterAu>PAIR_LIMITS.maxIndexPackets
@@ -64,6 +67,9 @@ export function qualityFrameCandidates(source:LibraryPairBinding,doc:FlvIndexDoc
   const page:QualityFramePage={schema:'voidplayer-psnr-frame-candidates',version:1,source:structuredClone(source),codec:index.codec,
     geometry:{width:g.width,height:g.height,codedWidth:g.codedWidth,codedHeight:g.codedHeight,sarNum:g.sarNum,sarDen:g.sarDen,sarSpecified:g.sarSpecified===true},inspection,
     eligibility:'cached-au-candidate-execution-verifies-closed-start-and-output-identity',entries,nextAu:au<index.packets.length?au:null,inspected};
+  const configurationHex=nativeConfigurationHex(index.description);
+  if(configurationHex)page.presentedInput={protocol:'webcodecs-associated-chunk-v1',configurationHex,
+    packets:entries.map(target=>{const au=target.picture.au,p=index.packets[au];return {au,configuration:p.configuration??0,offset:p.offset,size:p.size,pts:p.pts,dts:p.dts};})};
   if(JSON.stringify(page).length>QUALITY_SELECTION_LIMITS.bytes)throw new FramePairError('budget-exceeded','PSNR selection response budget exceeded');
   return page;
 }

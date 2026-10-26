@@ -27,6 +27,7 @@ import { contextLog } from '../logging/log.ts';
 import { preferredVideoConfig } from './policy/decoder-policy.ts';
 
 export interface DecodedFrame extends FrameInfo {
+  readonly nativePresentedInput?: {instance:string;sourceVersion:string;input:import('../../shared/media/codecs/native-picture-identity.ts').NativePictureIdentity};
   presentedCommit?: number;
   readonly sourcePicture?: import('../../shared/analysis/bitstream/contract.ts').SourcePictureKey;
   /** Filled only by the presenter after a successful paint; never decoder tags. */
@@ -46,6 +47,8 @@ export interface DecodedFrame extends FrameInfo {
   close(): void;
 }
 export interface MediaSource {
+  readonly nativePresentedInstance?:string;
+  readonly nativePresentedTransport?:Readonly<{source:{kind:'library';id:string;url:string};sourceVersion:string}>;
   /** Retained reference only; no analysis instance or IO until explicit request. */
   bitstreamFile?: Blob;
   /** Read-only confirmed packet frontier; starts metadata indexing, never seeks. */
@@ -123,7 +126,7 @@ export { MediaOpenError } from '../../shared/media/io/media-errors.ts';
 export type { OpenStage } from '../../shared/media/io/media-errors.ts';
 /** File and URL differ only in byte access. Container adapters are selected
  * once, before the shared native/software/reference policy is applied. */
-async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftware?: () => Promise<MediaSource>, onProgress?: MediaOpenProgress, signal?: AbortSignal): Promise<MediaSource> {
+async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftware?: () => Promise<MediaSource>, onProgress?: MediaOpenProgress, signal?: AbortSignal, nativePresentedLibrary?:import('../../shared/media/io/library-reference-types.ts').LibraryIndexReference): Promise<MediaSource> {
   const pipelineStartedAt = performance.now();
   const container = await probeContainer(input, signal);
   const packetMp4 = container === 'isobmff';
@@ -155,7 +158,7 @@ async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftwa
     const native = async () => {
       nativeOpens++;
       return container === 'flv'
-        ? (async () => { const { openFlvMedia } = await import('./decoding/flv-media.ts'); return openFlvMedia(input, meta, { signal, onProgress, rawNative: reference }); })()
+        ? (async () => { const { openFlvMedia } = await import('./decoding/flv-media.ts'); return openFlvMedia(input, meta, { signal, onProgress, rawNative: reference, nativePresentedLibrary }); })()
         : packetJs ? tsAdmission.open(false) : packetMp4 ? openMp4Packet(false)
           : ffmpegPlan && !customSoftware ? openFfmpeg()
             : openWebCodecsInput(new Input({ source: 'file' in input ? new BlobSource(input.file) : new UrlSource(input.url), formats: ALL_FORMATS }), meta, signal, onProgress, input, reference);
@@ -193,7 +196,7 @@ export async function openMedia(file: File, openFallback: ((file: File) => Promi
   return openInput({ file }, file, openFallback ? () => openFallback(file) : undefined, onProgress, signal);
 }
 
-export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallback: ((url: string, meta: MediaMeta) => Promise<MediaSource>) | undefined = undefined, onProgress?: MediaOpenProgress, signal?: AbortSignal, library?:import('../../shared/media/io/library-reference-types.ts').LibraryIndexReference): Promise<MediaSource> {
+export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallback: ((url: string, meta: MediaMeta) => Promise<MediaSource>) | undefined = undefined, onProgress?: MediaOpenProgress, signal?: AbortSignal, library?:import('../../shared/media/io/library-reference-types.ts').LibraryIndexReference, nativePresentedLibrary?:import('../../shared/media/io/library-reference-types.ts').LibraryIndexReference): Promise<MediaSource> {
   loadAborted(signal);
   if (!meta.size) {
     const head = await fetch(url, { method: 'HEAD', signal });
@@ -201,7 +204,7 @@ export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallbac
     meta = { ...meta, size: Number(head.headers.get('content-length')) };
   }
   if (!Number.isSafeInteger(meta.size) || meta.size <= 0) throw new MediaOpenError('input', '媒体文件长度无效。');
-  return openInput({ url, size: meta.size, ...(library?{library}:{}) }, meta, openFallback ? () => openFallback(url, meta) : undefined, onProgress, signal);
+  return openInput({ url, size: meta.size, ...(library?{library}:{}) }, meta, openFallback ? () => openFallback(url, meta) : undefined, onProgress, signal, nativePresentedLibrary);
 }
 
 async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortSignal, onProgress?: MediaOpenProgress, access?:RandomAccessInput, rawNative=false): Promise<MediaSource> {

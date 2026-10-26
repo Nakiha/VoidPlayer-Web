@@ -1,5 +1,7 @@
 # 独立 ROI 测量与共享候选
 
+可选“测量暂停画面”支持严格受限的原生呈现身份绑定，见 [暂停原生帧 ROI](paused-native-quality.md)；下述“独立 ROI 测量”仍提供手工 AU 路径。
+
 播放器片源面板的“独立 ROI 测量”只借用已载入的同服务、锁定版本媒体引用。普通播放 `PresentedFrameToken` 的旧 AU 关联和缺失缓存 namespace/build 不足以证明质量身份，因此不预填所谓当前帧、不按相同 PTS 配对，也不隐式切换解码器、暂停、定位或完成索引。用户必须分别明确选择两侧缓存 AU；独立一次性 Worker 从可信缓存验证原始帧，严格检查源版本、namespace/build、producer document SHA、闭合解码窗口、opaque 输出身份、实际 PTS、色彩和精确 SPS 几何，再通过唯一 presenter 上屏。只显示新快照的身份，不宣称它就是旧播放画面。
 
 支持已存在可信完整、单配置、未恢复的 FLV/Enhanced FLV，H.264/HEVC 8/10 位 YUV420，闭合 IDR 起点，每侧至多32AU；普通依赖、闭合 GOP 重排与 drain 共用已有规则。没有精确身份、未知色彩、非方形/未知 SAR、裁剪、旋转、版本或缓存变化明确拒绝。未认证引用图完整性，concealment 检测不可用，不意味着缺引用都拒绝。暂无容器扩展、序列、VMAF 或分布式。

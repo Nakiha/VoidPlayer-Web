@@ -1,5 +1,6 @@
 import { evidenceWorkspaceVersion } from '../shared/review/quality-evidence.ts';
 import type { PresentedFrameToken } from '../shared/analysis/bitstream/contract.ts';
+import type {NativePresentedFrame} from '../shared/review/native-presented-frame.ts';
 import type { BitstreamAnalysisService, DeepAnalysisState } from './analysis/bitstream/service.ts';
 import { AnalysisFailure } from '../shared/analysis/bitstream/failure.ts';
 import { BitstreamSessionCoordinator, trackSourceVersion } from './session/bitstream-analysis.ts';
@@ -275,6 +276,7 @@ export class ReviewSession {
   private progressListeners = new Set<(positionUs: number, durationUs: number) => void>();
   private draw: (slot: Slot, frame: DecodedFrame) => void;
   private presentedFrames = new Map<Slot, PresentedFrameToken>();
+  private nativePresentedFrames = new Map<Slot,{input:NonNullable<DecodedFrame['nativePresentedInput']>;commit:number;geometry:PresentedFrameToken['geometry']}>();
   private frameListeners = new Set<(slot:Slot,token:PresentedFrameToken)=>void>();
   private bitstream = new BitstreamSessionCoordinator({
     track: slot => {
@@ -293,11 +295,16 @@ export class ReviewSession {
   }
   constructor(draw: (slot: Slot, frame: DecodedFrame) => void) {
     this.draw=(slot,frame)=>{
+      this.nativePresentedFrames.delete(slot);
+      const previousCommit=frame.presentedCommit;
       draw(slot,frame);
       if(frame.presentedCommit===undefined)return;
       const d=frame.description;
       const token:PresentedFrameToken={slot,generation:this.tracks.get(slot)?.sourceGen??this.nextSourceGen+1,commit:frame.presentedCommit,picture:frame.sourcePicture??null,...(!frame.sourcePicture?{identityReason:'unverified-playback-picture'}:{}),sourcePtsUs:frame.sourcePtsUs,normalizedMediaUs:frame.ptsUs,timeMapping:'source-microseconds-minus-first-pts',geometry:{codedWidth:d.codedWidth,codedHeight:d.codedHeight,visibleRect:{...d.visibleRect},displayWidth:d.displayWidth,displayHeight:d.displayHeight,rotation:frame.rotation??frame.sample?.rotation??0}};
       this.presentedFrames.set(slot,token);
+      if(frame.kind==='video-sample'&&frame.nativePresentedInput&&frame.nativePresentedInput.input.pts===frame.sourcePtsUs&&frame.presentedCommit!==previousCommit){
+        this.nativePresentedFrames.set(slot,{input:structuredClone(frame.nativePresentedInput),commit:frame.presentedCommit,geometry:structuredClone(token.geometry)});
+      }
       // Listener exceptions are analysis failures, never playback failures.
       for(const listener of this.frameListeners){try{listener(slot,structuredClone(token));}catch{}}
     };
@@ -320,6 +327,25 @@ export class ReviewSession {
     if(!track||track.failure||!track.frame||!token||track.frame.sourcePtsUs!==token.sourcePtsUs)return null;
     const version=trackSourceVersion(track.source);if(token.picture&&token.picture.sourceVersion!==version)return null;
     return structuredClone({...token,generation:track.sourceGen});
+  }
+  /** Read only a successfully painted, paused instance. Never adopt the legacy
+   * PTS-associated picture tag or retag an old record with a new source epoch. */
+  captureNativePresented(slot:Slot):NativePresentedFrame {
+    slotValue(slot);const track=this.tracks.get(slot),record=this.nativePresentedFrames.get(slot);
+    if(this.playing||this.busy)throw new Error('Pause the current player before capturing its presented frame.');
+    if(!track||track.failure||track.pendingRelink||!track.frame||track.source.info.decoder!=='webcodecs'||!record||!track.source.info.source
+      ||track.frame.sourcePtsUs!==record.input.input.pts
+      ||!track.source.nativePresentedTransport||record.input.instance!==track.source.nativePresentedInstance
+      ||record.input.sourceVersion!==track.source.nativePresentedTransport.sourceVersion
+      ||record.input.sourceVersion!==trackSourceVersion(track.source)
+      ||new URL(track.source.info.source.url,track.source.nativePresentedTransport.source.url).href!==track.source.nativePresentedTransport.source.url
+      ||track.source.info.source.id!==track.source.nativePresentedTransport.source.id)
+      throw new Error('No supported, current native presented-input identity is available.');
+    return structuredClone({schema:'voidplayer-native-presented-input',version:1,binding:'unbound',slot,instance:record.input.instance,
+      sourceGeneration:track.sourceGen,commit:record.commit,source:track.source.nativePresentedTransport.source,sourceVersion:record.input.sourceVersion,input:record.input.input,geometry:record.geometry});
+  }
+  isNativePresentedCurrent(capture:NativePresentedFrame):boolean {
+    try{return JSON.stringify(this.captureNativePresented(slotValue(capture.slot)))===JSON.stringify(capture);}catch{return false;}
   }
   getBitstreamAnalysisState(slot?: Slot): DeepAnalysisState {
     if (slot !== undefined) slotValue(slot);
@@ -1228,7 +1254,7 @@ export class ReviewSession {
       media: [...this.catalog.values()], marks: this.marks });
   }
   async dispose() {
-    this.cancelLoad(); this.pause();this.bitstream.dispose();this.frameListeners.clear();this.presentedFrames.clear();
+    this.cancelLoad(); this.pause();this.bitstream.dispose();this.frameListeners.clear();this.presentedFrames.clear();this.nativePresentedFrames.clear();
     this.releaseReaders('dispose');
     // pagehide cannot await the session queue. Terminate owned workers and
     // audio synchronously, while the departing document can still run cleanup.

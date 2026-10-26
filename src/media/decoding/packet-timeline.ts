@@ -88,14 +88,16 @@ export class PacketTimeline {
       // reference the previous GOP, so retain the explicit anchor boundary.
       if((this.index.codec==='hevc'||this.index.codec==='vvc'||this.index.codec==='mpeg2video'||this.index.packets[this.anchorIndex()].discontinuity)&&packet.pts<this.index.packets[this.anchorIndex()].pts){this.cursor++;continue;}
       const bytes=await this.read(packet);
+      let inputPicture: {au:number;configuration:number;singlePicture:boolean}|undefined;
       if (this.identifyPictures && this.pictures.size < 512) {
         const evidence=inspectPacketPicture(this.index.codec,this.index.configurations?.[this.configuration]??this.index.description,bytes);
         let lo=0,hi=this.index.order.length;
         while(lo<hi){const m=(lo+hi)>>>1;if(this.index.packets[this.index.order[m]].pts<packet.pts)lo=m+1;else hi=m;}const position=lo;
         const unique=position>=0 && (position===0||this.index.packets[this.index.order[position-1]].pts!==packet.pts) && (position+1===this.index.order.length||this.index.packets[this.index.order[position+1]].pts!==packet.pts);
+        inputPicture={au:packet.sequenceNumber??this.cursor,configuration:this.configuration,singlePicture:evidence.singlePicture&&unique};
         if(evidence.singlePicture&&unique&&packet.identityKnown!==false)this.pictures.set(packet.pts,{au:packet.sequenceNumber??this.cursor,configuration:this.configuration,stream:this.pictureStream});
       }
-      if (await this.decoder.send(bytes,packet) !== false) this.cursor++;
+      if (await this.decoder.send(bytes,packet,inputPicture) !== false) this.cursor++;
     }
   }
   private anchor=0;

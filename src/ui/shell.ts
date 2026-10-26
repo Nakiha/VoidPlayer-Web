@@ -111,7 +111,7 @@ export function shell() {
         <div id="source-list" class="source-list"></div>
         <div id="source-scrollbar" class="source-scrollbar" aria-hidden="true"><span id="source-scrollbar-thumb"></span></div>
         <div class="source-foot" id="source-foot">
-        <div class="source-quality-tools"><button id="quality-roi-open" type="button">${icon('rect')}<span>${th(msg('qualityRoi.open','独立 ROI 测量'))}</span></button></div>
+        <div class="source-quality-tools"><button id="quality-roi-presented-open" type="button">${icon('rect')}<span>${th(msg('qualityRoi.openPresented','测量暂停画面'))}</span></button><button id="quality-roi-open" type="button">${icon('rect')}<span>${th(msg('qualityRoi.open','独立 ROI 测量'))}</span></button></div>
         <section id="local-sources" class="local-sources" aria-label="${th(msg("shell.localFiles", "本地文件"))}" hidden><h3 class="source-section"><span id="local-sources-heading">${th(msg("shell.localFiles", "本地文件"))}</span><button id="local-add" class="icon-button" aria-label="${th(msg("shell.chooseLocalFiles", "选择本地文件"))}" data-tooltip="${th(msg("shell.addLocalFilesToTheListLocal", "选择本地文件加入列表（仅本机预览，不上传）"))}">${icon('filePlus')}</button></h3><div id="local-list"></div></section>
         <section id="source-activity" class="source-activity" aria-label="${th(msg("shell.sourceLoadingStatus", "片源载入状态"))}" data-state="idle">
           <div class="source-activity-heading"><div id="source-activity-tracks" role="tablist" aria-label="${th(msg('activity.presentedTracks', '上屏轨道'))}" hidden></div><button id="source-activity-toggle" class="icon-button" type="button" aria-expanded="false" aria-controls="source-activity-details" aria-label="${th(msg('activity.expandDetails', '展开上屏详情'))}">${icon('down')}</button></div>

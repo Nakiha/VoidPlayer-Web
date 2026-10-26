@@ -12,7 +12,11 @@ import { qualityFrameCandidates } from '../../../shared/analysis/quality/selecti
 import type { QualityFramePage,QualityFrameQuery } from '../../../shared/analysis/quality/selection.ts';
 import { PAIR_LIMITS } from '../../../shared/analysis/quality/frame-pair.ts';
 import type { LibraryPairBinding,LibraryPairResult } from '../../../shared/analysis/quality/library-pair.ts';
-export type QualityTask={mode:'source';id:string;version:string}|{mode:'frames';id:string;version:string;query:QualityFrameQuery}|{mode:'measure';request:FramePairRequest};
+import {QUALITY_SOURCE_BUILD_LIMITS} from '../../../shared/analysis/quality/source-build.ts';
+import {FLV_MEDIA_INDEX_IDENTITY} from '../../../shared/media/indexing/media-index-identity.ts';
+import {buildFlvIndexDocument} from '../../flv-index-builder.ts';
+import {prepareFrameIndex} from '../../frame-index-store.ts';
+export type QualityTask={mode:'source';id:string;version:string}|{mode:'build-source';id:string;version:string}|{mode:'frames';id:string;version:string;query:QualityFrameQuery}|{mode:'measure';request:FramePairRequest};
 export type QualityPhase='source'|'resolve'|'decode'|'publish';
 /** A narrow stage observer lets tests suspend the actual IO boundaries. It is
  * never read from the HTTP request or production workerData. */
@@ -20,7 +24,7 @@ export async function runQualityTask(data:QualityTask&{database:string;coreDir:s
   const control=new Int32Array(data.control);
   const check=()=>{signal.throwIfAborted();if(Atomics.load(control,0)!==0)throw new FramePairError('source-changed','Quality execution cancelled');};
   const phase=async(name:QualityPhase)=>{check();await before?.(name);check();};
-  const db=openIndexDatabase(data.database,{readOnly:true});db.exec('PRAGMA busy_timeout=1000;');
+  const db=openIndexDatabase(data.database,{readOnly:data.mode!=='build-source'});db.exec('PRAGMA busy_timeout=1000;');
   const store=new FrameIndexStore(db),opened:ReturnType<typeof libraryPairSource>[]=[];
   const source=(id:string,version:string)=>{
     check();
@@ -37,6 +41,27 @@ export async function runQualityTask(data:QualityTask&{database:string;coreDir:s
   };
   try{
     await phase('source');
+    if(data.mode==='build-source'){
+      await phase('resolve');
+      const media=db.prepare("SELECT size FROM media WHERE id=? AND version=? AND state='ready'").get(data.id,data.version);
+      if(!media)throw new FramePairError('source-changed','Library source changed');
+      const size=Number(media.size);
+      if(!Number.isSafeInteger(size)||size<1||size>QUALITY_SOURCE_BUILD_LIMITS.maxSourceBytes)throw new FramePairError('budget-exceeded','Explicit FLV build source size budget exceeded');
+      const filePath=resolvePairPath(db,data.id,data.version,size),epoch=store.epoch;
+      if(store.has(data.id,data.version,'flv',FLV_MEDIA_INDEX_IDENTITY))return source(data.id,data.version);
+      // The host must let FileHandle close before terminating this Worker.
+      // Cancellation revokes further reads and publication, not this IO fence.
+      Atomics.add(control,1,1);let result:Awaited<ReturnType<typeof buildFlvIndexDocument>>;
+      try{check();result=await buildFlvIndexDocument(filePath,size,data.version,undefined,QUALITY_SOURCE_BUILD_LIMITS,check,()=>phase('resolve'));check();}
+      catch(error){if(['ENOENT','ESTALE','ENOTDIR','EISDIR','EACCES'].includes((error as NodeJS.ErrnoException)?.code??''))throw new FramePairError('source-changed','Library source became unavailable during explicit build');throw error;}
+      finally{Atomics.sub(control,1,1);Atomics.notify(control,1);}
+      await phase('publish');
+      if(result.profile.scannedBytes!==size||result.document.truncatedAt!==undefined||result.document.recoveredGaps)
+        throw new FramePairError('unsupported-source','Explicit quality build requires a complete unrecovered FLV');
+      if(resolvePairPath(db,data.id,data.version,size,result.profile.sourceStat)!==filePath)throw new FramePairError('source-changed','Library source changed during explicit build');
+      check();store.commit(data.id,data.version,prepareFrameIndex(result.document,size,FLV_MEDIA_INDEX_IDENTITY,`${data.id}@${data.version}`,{scannedBytes:result.profile.scannedBytes}),epoch,{kind:'server-flv-scan-v1',sourceStat:result.profile.sourceStat});
+      return source(data.id,data.version);
+    }
     if(data.mode==='source'||data.mode==='frames'){
       await phase('resolve');const value=source(data.id,data.version);
       let page:QualityFramePage|undefined;

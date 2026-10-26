@@ -6,11 +6,11 @@ import { AdminError, adminErrorBody } from '../../admin-error.ts';
 import { sendJson } from '../../http-utils.ts';
 import { FramePairError } from '../../../shared/analysis/quality/frame-pair.ts';
 import { PsnrError } from '../../../shared/analysis/quality/psnr.ts';
-import { libraryPairRequest } from './request.ts';
+import { libraryPairRequest,qualityKeys } from './request.ts';
 
 
 export async function handleQualityRoutes(ctx:RouteContext,req:IncomingMessage,res:ServerResponse,url:URL) {
-  const source=/^\/api\/media\/([a-f0-9]{24})\/(psnr-source|psnr-frames)$/.exec(url.pathname);
+  const source=/^\/api\/media\/([a-f0-9]{24})\/(psnr-source|psnr-frames|psnr-index)$/.exec(url.pathname);
   if(!source&&url.pathname!=='/api/quality/psnr-pair')return false;
   const controller=new AbortController();
   const abort=()=>controller.abort(new AdminError(499,'One-shot quality request disconnected.','cancelled'));
@@ -18,6 +18,18 @@ export async function handleQualityRoutes(ctx:RouteContext,req:IncomingMessage,r
   try {
     requireCapturedActor(req,ctx.actor);
     if(!ctx.actor)throw new AdminError(401,'Select an intranet identity first.','identity-required');
+    if(source?.[2]==='psnr-index'){
+      if(req.method!=='POST')throw new AdminError(405,'Method not allowed.');
+      if(url.search)throw new AdminError(400,'Unexpected source-build query.','invalid-request');
+      if(!adminWriteAllowed(req,'quality-source-build'))throw new AdminError(403,'Use the same-origin explicit source-build action.');
+      const timer=setTimeout(()=>req.destroy(new Error('Source-build request body timeout')),10000);
+      try{
+        const body=await readAdminJson(req,1024);clearTimeout(timer);qualityKeys(body,['version']);
+        const value=await ctx.library.quality.buildSource(source[1],(body as {version:string}).version,controller.signal);
+        if(!res.destroyed)sendJson(res,200,value);
+      }finally{clearTimeout(timer);}
+      return true;
+    }
     if(source){
       if(req.method!=='GET')throw new AdminError(405,'Method not allowed.');
       if([...url.searchParams.keys()].some(key=>!(source[2]==='psnr-source'?['v']:['v','afterAu','limit','buildId']).includes(key)))throw new AdminError(400,'Unexpected quality source parameters.','invalid-request');

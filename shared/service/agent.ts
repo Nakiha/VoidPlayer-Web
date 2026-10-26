@@ -3,6 +3,7 @@ import { TECHNICAL_FILTER_PATH, TECHNICAL_FILTER_LIMITS, TECHNICAL_FILTER_SCHEMA
 import { QUALITY_JOB_LIMITS } from '../analysis/quality/jobs.ts';
 import { PSNR_SPATIAL_LIMITS } from '../analysis/quality/psnr.ts';
 import { FORWARD_OUTPUT_GUARANTEE } from '../analysis/quality/frame-pair.ts';
+import {QUALITY_SOURCE_BUILD_LIMITS} from '../analysis/quality/source-build.ts';
 /** Discovery describes this deployment without starting work or creating users. */
 export function serviceCapabilities(storageEnabled: boolean, revealEnabled: boolean) {
   return { admin: storageEnabled, workspaces: storageEnabled, annotations: storageEnabled, reveal: revealEnabled };
@@ -34,6 +35,8 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
     { id: 'annotations.events', implemented: true, enabled: c.annotations, readiness: c.annotations ? 'ready' : 'unavailable', requiresBrowser: false, guide: AGENT_TASKS.annotations },
     { id: 'quality.jobs', implemented: true, enabled: !!input.qualityJobsEnabled, readiness: !input.qualityJobsEnabled ? 'unavailable' : actor ? 'per-source' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.quality },
     { id: 'quality.frame-pair', implemented: true, enabled: true, readiness: actor ? 'per-source' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.quality },
+    { id: 'quality.source-build', implemented: true, enabled: true, readiness: actor ? 'per-source' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.quality },
+    { id: 'session.presented-quality-input', implemented: true, enabled: !!input.frontendAvailable, readiness: input.frontendAvailable ? 'requires-live-session' : 'unavailable', requiresBrowser: true, guide: AGENT_TASKS.liveSession },
     { id: 'session.view', implemented: true, enabled: !!input.frontendAvailable, readiness: input.frontendAvailable ? 'requires-live-session' : 'unavailable', requiresBrowser: true, guide: AGENT_TASKS.liveSession },
     { id: 'bridge.local-mcp', implemented: false, enabled: false, readiness: 'unavailable', requiresBrowser: true, guide: AGENT_TASKS.liveSession },
     { id: 'compute.workers', implemented: false, enabled: false, readiness: 'unavailable', requiresBrowser: false, guide: AGENT_TASKS.quality },
@@ -53,6 +56,13 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
       spatial: {optional:true,requestField:'spatial',parameters:['blockWidth','blockHeight'],units:'even-visible-source-pixels',
         partition:'roi-anchored-disjoint-even-grid',ranking:'aggregate-mse-desc-row-major-ties',resultSchema:'voidplayer-psnr-block-grid',resultVersion:1,limits:PSNR_SPATIAL_LIMITS},
       frameCandidates:{endpoint:'/api/media/{id}/psnr-frames?v={version}&afterAu=0&limit=50',pagination:'absolute-au-with-original-buildId',eligibility:'cached-au-candidate-execution-verifies-closed-start-and-output-identity',buildsIndexes:false},
+      sourceBuild:{endpoint:'/api/media/{id}/psnr-index',method:'POST',body:['version'],actionHeader:'quality-source-build',limits:QUALITY_SOURCE_BUILD_LIMITS,
+        ownership:'one-shot-owned-worker',disconnect:'requests-cancellation-physical-exit-before-admission-release',clearsExistingCaches:false,automatic:false},
+      presentedInput:{schema:'voidplayer-native-presented-input',version:1,protocol:'webcodecs-associated-chunk-v1',transport:'page-session-tool',tool:'capture_presented_quality_frame',
+        scope:'paused-successful-native-flv-presentation',binding:'unbound-until-readonly-exact-au-cache-join',nativePixelsScored:false,buildsIndexes:false,configurationWitness:'exact-hex-max-4096-bytes',
+        transportIdentity:'actual-same-service-version-locked-library-input-not-mutable-lineage',resource:'original-video-sample-only',
+        cacheJoin:['same-origin-url-id-version','namespace','build','exact-au','configuration-bytes','packet-offset-size-clocks','visible-source-geometry'],
+        unsupported:['wasm-playback','other-containers','ambiguous-clocks-or-picture-layout','source-crop-or-non-square-sar-or-rotation']},
       source: { registeredLibraryOnly: true, indexKind: 'flv', enhancedFlv: true, producer: 'server-flv-scan-v1',
         codecs: ['h264', 'hevc'], bitDepths: [8, 10], chroma: 'yuv420', closedKeyAuOnly: false, gop:{mode:'packet-identity-gop-v1',packetIdentityAbi:1,explicitStartEndAu:true,packetsPerSide:32,maxPackets:64,maxOutputFrames:64,reordering:true,delayedOutput:true,outputAssociation:'opaque-input-token-not-pts',singleThread:true,reportedDecodeErrors:'reject',guarantee:{...FORWARD_OUTPUT_GUARANTEE}}, forward:{mode:'forward-one-output-per-au-v1',explicitStartAu:true,packetsPerSide:32,maxPackets:64,maxOutputFrames:64,zeroCts:true,oneImmediateOutputPerAu:true,reordering:false,guarantee:{...FORWARD_OUTPUT_GUARANTEE}},
         explicitColorAndChromaLocation: true, explicitPairingAndSourcePts: true },

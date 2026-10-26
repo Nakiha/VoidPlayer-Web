@@ -102,6 +102,7 @@ const gpuReady=initializeGpuPresentation(Object.values(canvases)).catch(error =>
 });
 const session = new ReviewSession((slot, frame) => paintFrame(canvases[slot], frame));
 document.getElementById('quality-roi-open')!.onclick=()=>{try{openQualityRoi(session);}catch(error){notify(error instanceof Error?error.message:String(error));}};
+document.getElementById('quality-roi-presented-open')!.onclick=()=>{try{openQualityRoi(session,'presented');}catch(error){notify(error instanceof Error?error.message:String(error));}};
 session.setBitstreamAnalysisConcurrency(analysisConcurrency());
 window.addEventListener(ANALYSIS_CONCURRENCY_EVENT, event => session.setBitstreamAnalysisConcurrency((event as CustomEvent<number>).detail), { signal: uiEvents.signal });
 session.onColorModeChange=async()=>{const {refreshGpuColorMode}=await import('./presentation/webgpu-presenter.ts');await refreshGpuColorMode();};
@@ -598,6 +599,8 @@ const unregister = registerReviewTools(session, workspaceTransfer);
 const apiCall = <T>(name: string, data: unknown, action: () => T) => traceOperation('api', name, data, action);
 const api = {
   getState: () => session.getState(),
+  captureNativePresented: (slot:Slot) => session.captureNativePresented(slot),
+  isNativePresentedCurrent: (capture:Parameters<ReviewSession['isNativePresentedCurrent']>[0]) => session.isNativePresentedCurrent(capture),
   captureFrame: (slot: Slot) => {
     if (!SLOTS.includes(slot) || !session.getState().tracks.some(track => track.slot === slot)) throw new Error(tr(msg("player.noReadableFrameInThisTrack", "轨道没有可读取的画面。")));
     return captureFrame(canvases[slot]);
