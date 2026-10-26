@@ -9,8 +9,10 @@ import type {AnnotationStore} from '../../annotations.ts';
 import type {QualityJobService} from './job-service.ts';
 import {qualityJobRequest,qualityIdempotencyKey} from './job-request.ts';
 import {aggregateRange,planQualityRange,terminalRange,rangeCandidatePolicy,selectRangeCandidates,QUALITY_RANGE_LIMITS as LIMITS} from '../../../shared/analysis/quality/ranges.ts';
-import type {QualityRangeJob,QualityRangeInput,RangeCandidatePolicy} from '../../../shared/analysis/quality/ranges.ts';
+import type {QualityRangeJob,QualityRangeInput,RangeCandidatePolicy,RangeSample} from '../../../shared/analysis/quality/ranges.ts';
 import {terminalQualityJob} from '../../../shared/analysis/quality/jobs.ts';
+import type {PsnrStatistics} from '../../../shared/analysis/quality/psnr.ts';
+import {qualityEvidenceValue} from '../../../shared/review/quality-evidence.ts';
 import type {QualityEvidenceRef} from '../../../shared/review/quality-evidence.ts';
 
 const digest=(v:unknown)=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
@@ -45,11 +47,28 @@ export class QualityRangeService {
         CREATE TABLE IF NOT EXISTS quality_range_publications(range_id TEXT PRIMARY KEY,body TEXT NOT NULL);
         PRAGMA user_version=1;
       `);
-      for(const job of this.rows())if(!terminalRange(job.state)){
-        job.state='interrupted';job.endedAt=now();job.reason={code:'service-restarted',message:'Previous execution interrupted; no automatic retry or candidate creation.'};
-        for(const sample of job.samples)if(!['completed','failed','unsupported','cancelled','interrupted'].includes(sample.state)){sample.state='interrupted';sample.reason=job.reason;}
-        this.save(job);
-      }
+      // Child terminal commits precede the parent's next poll. Recover their
+      // already committed facts atomically, without resubmission or source IO.
+      db.exec('BEGIN IMMEDIATE');
+      try{
+        for(const job of this.rows())if(!terminalRange(job.state)){
+          job.state='interrupted';job.endedAt=now();job.reason={code:'service-restarted',message:'Previous execution interrupted; committed child scores retained without retry or candidate creation.'};
+          if(new Set(job.samples.map(s=>s.au)).size!==job.samples.length||new Set(job.samples.map(s=>s.jobId)).size!==job.samples.length)
+            throw new AdminError(500,'Stored range sample identities are invalid.','stored-range-result-invalid');
+          const results=[] as ReturnType<QualityJobService['result']>[];
+          for(const sample of job.samples){
+            const child=this.jobs.get(sample.jobId,job.actor.id);
+            if(child.state==='completed'){
+              const result=this.completedResult(job,sample);
+              sample.state='completed';sample.reason=null;sample.result={attemptId:result.attemptId,digest:child.result.digest!};results.push(result);
+            }else{
+              sample.state=terminalQualityJob(child.state)?this.sampleState(child):'interrupted';sample.reason=child.reason??job.reason;delete sample.result;
+            }
+          }
+          job.summary=aggregateRange(results);this.checkTotalWork(job,results);this.save(job);
+        }
+        db.exec('COMMIT');
+      }catch(error){db.exec('ROLLBACK');throw error;}
     }catch(e){db?.close();this.unlock();throw e;}
   }
   plan(value:unknown){
@@ -63,6 +82,52 @@ export class QualityRangeService {
   }
   private rows(){return this.db.prepare('SELECT body FROM quality_ranges ORDER BY rowid').all().map(r=>JSON.parse(String(r.body)) as QualityRangeJob);}
   private save(job:QualityRangeJob){job.revision++;this.db.prepare('UPDATE quality_ranges SET body=? WHERE id=?').run(JSON.stringify(job),job.id);}
+  private sampleState(child:ReturnType<QualityJobService['get']>){
+    return ['unsupported-source','unsupported-format','incompatible-input','missing-color'].includes(child.reason?.code??'')?'unsupported':child.state;
+  }
+  private completedResult(job:QualityRangeJob,sample:RangeSample){
+    const check=(condition:unknown)=>{if(!condition)throw new AdminError(500,'Stored range child result is invalid.','stored-range-result-invalid');};
+    const child=this.jobs.get(sample.jobId,job.actor.id),pair=job.plan.input.pairs.find(p=>p.reference.picture.au===sample.au);
+    check(pair&&job.plan.selectedAus.includes(sample.au)&&child.state==='completed'&&child.attempt?.state==='completed'
+      &&child.submitted.actorId===job.actor.id&&child.submitted.client.id===`range:${job.id}`
+      &&child.submitted.client.kind===job.plan.input.client.kind&&child.submitted.idempotencyKey===`sample:${sample.au}`&&child.submitted.requestId===job.requestId);
+    const actual=qualityJobRequest(child.input),expected=qualityJobRequest({schema:'voidplayer-psnr-frame-job',version:1,client:child.input.client,request:pair});
+    const budget=actual.input.request.budget!,elapsed=budget.maxElapsedMs!;
+    check(digest(actual.input.client)===digest(child.submitted.client)&&elapsed<=expected.input.request.budget!.maxElapsedMs!&&elapsed<=job.plan.input.budget.maxElapsedMs);
+    expected.input.request.budget!.maxElapsedMs=elapsed;
+    check(digest(expected.input)===digest(actual.input));
+    const result=this.jobs.result(child.id,job.actor.id),value=qualityEvidenceValue(result.value),r=value.result,m=r.metric,request=actual.input.request;
+    check(result.schema==='voidplayer-quality-job-result'&&result.version===1&&result.jobId===child.id&&result.attemptId===child.attempt!.id
+      &&result.completedAt===child.endedAt&&child.attempt!.endedAt===child.endedAt&&digest(result.submitted)===digest(child.submitted)
+      &&(!sample.result||sample.result.attemptId===result.attemptId&&sample.result.digest===child.result.digest));
+    const target=(p:typeof r.provenance.reference)=>Object.fromEntries(['mediaId','mediaVersion','size','indexIdentity','indexBuildId','picture','sourcePtsUs','decode'].filter(k=>p[k as keyof typeof p]!==undefined).map(k=>[k,p[k as keyof typeof p]]));
+    const proven=qualityJobRequest({...actual.input,request:{...request,reference:target(r.provenance.reference),distorted:target(r.provenance.distorted)}});
+    check(proven.fingerprint===actual.fingerprint&&digest(m.roi)===digest(request.roi)
+      &&(request.spatial?m.spatial?.blockWidth===request.spatial.blockWidth&&m.spatial.blockHeight===request.spatial.blockHeight:m.spatial===undefined)
+      &&(request.ssim?r.ssim?.variant===request.ssim.variant:r.ssim===undefined));
+    for(const side of ['reference','distorted'] as const){
+      const d=r.provenance[side].decoded.description;
+      check(d.yuv?.bitShift===0&&d.yuv.subsampleX===1&&d.yuv.subsampleY===1&&!d.yuv.semiplanar
+        &&m.color.chromaLocation===d.yuv.chromaLocation&&m.color.primaries===d.color.primaries&&m.color.transfer===d.color.transfer
+        &&m.color.matrix===d.color.matrix&&m.color.fullRange===d.color.fullRange);
+    }
+    const statistic=(s:PsnrStatistics,count:number)=>check(Number.isSafeInteger(s.sse)&&s.sse>=0&&s.sse<=count*m.peak**2&&s.samples===count&&s.mse===s.sse/count
+      &&(s.sse===0?s.psnr.kind==='positive-infinity'&&s.psnr.db===null:s.psnr.kind==='finite'&&Math.abs(s.psnr.db-10*Math.log10(m.peak**2/s.mse))<1e-10));
+    const count=m.roi.width*m.roi.height;
+    statistic(m.planes.y,count);statistic(m.planes.u,count/4);statistic(m.planes.v,count/4);statistic(m.aggregate,count*3/2);
+    check(m.aggregate.sse===m.planes.y.sse+m.planes.u.sse+m.planes.v.sse&&m.work.samples===count*3/2&&m.work.samples<=budget.maxSamples!
+      &&m.work.bytesRead===m.work.samples*(m.bitDepth===8?1:2)*2
+      &&m.work.inputViewBytes===r.provenance.reference.decoded.description.byteLength+r.provenance.distorted.decoded.description.byteLength
+      &&m.work.inputViewBytes<=m.work.chargedInputBytes&&m.work.chargedInputBytes<=budget.maxInputBytes!
+      &&r.work.readBytes<=budget.maxReadBytes!&&r.work.packets<=budget.maxPackets!&&r.work.outputFrames<=budget.maxOutputFrames!&&r.work.elapsedMs<=elapsed);
+    return result;
+  }
+  private checkTotalWork(job:QualityRangeJob,results:ReturnType<QualityJobService['result']>[]){
+    const work=aggregateRange(results).work,budget=job.plan.input.budget;
+    if(work.readBytes>budget.maxReadBytes||work.packets>budget.maxPackets||work.outputFrames>budget.maxOutputFrames||work.elapsedMs>budget.maxElapsedMs
+      ||results.reduce((n,r)=>n+r.value.result.metric.work.chargedInputBytes,0)>budget.maxInputBytes)
+      throw new AdminError(500,'Stored range work exceeds its total budget.','stored-range-result-invalid');
+  }
   get(id:string,actor:string){
     const row=this.db.prepare('SELECT body FROM quality_ranges WHERE id=? AND actor=?').get(id,actor);
     if(!row)throw new AdminError(404,'Range not found.','range-not-found');return JSON.parse(String(row.body)) as QualityRangeJob;
@@ -129,8 +194,8 @@ export class QualityRangeService {
         if(!this.jobs.resources().available){job=this.get(job.id,job.actor.id);job.state='cancelling';job.reason={code:'worker-stop-uncertain',message:'Child service unavailable or physical stop unconfirmed; parent admission retained.'};this.save(job);throw new Error(job.reason.message);}
       }
       job=this.get(job.id,job.actor.id);const sample=job.samples.find(s=>s.au===au)!;
-      sample.state=['unsupported-source','unsupported-format','incompatible-input','missing-color'].includes(child.reason?.code??'')?'unsupported':child.state;sample.reason=child.reason;
-      if(child.state==='completed'){const result=this.jobs.result(child.id,job.actor.id);sample.result={attemptId:result.attemptId,digest:child.result.digest!};results.push(result);job.summary=aggregateRange(results);}
+      sample.state=this.sampleState(child);sample.reason=child.reason;
+      if(child.state==='completed'){const result=this.completedResult(job,sample);sample.result={attemptId:result.attemptId,digest:child.result.digest!};results.push(result);this.checkTotalWork(job,results);job.summary=aggregateRange(results);}
       this.save(job);
     }
     job=this.get(job.id,job.actor.id);

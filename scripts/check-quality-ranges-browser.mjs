@@ -19,6 +19,7 @@ const directory=process.env.VOIDPLAYER_TEST_ARTIFACTS??path.join(root,'.run/qual
 let service,browser,page,evidence,phase='setup';const gate=new Int32Array(new SharedArrayBuffer(8)),workers=new Set();
 const pause=()=>new Promise(r=>setTimeout(r,25));
 async function until(read,check,label){for(let n=0;n<600;n++){const value=await read();if(check(value))return value;await pause();}assert.fail(label);}
+async function bounded(promise,label){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error(`Timed out: ${label} (${phase})`)),15000);})]);}finally{clearTimeout(timer);}}
 const progress=setInterval(()=>console.log(JSON.stringify({engine,depth,phase,liveWorkers:workers.size})),10000).unref();
 try{
  await mkdir(directory,{recursive:true});const media=path.join(temp,'media');await mkdir(media);
@@ -29,7 +30,7 @@ try{
  const config=await loadConfig([],'production',temp,{staticDir:path.join(root,'dist'),dataDir:path.join(temp,'data'),logsDir:null,allowEmptyRoots:true});config.mediaRoots=[media];config.indexWatch=false;config.port=0;
  service=await startService(config);await service.library.refresh();const entries=await waitForAnnotationMedia(service.library,['A.mp4','B.flv','C.flv']),entry=name=>entries.find(e=>e.name===name);
  const base=`http://127.0.0.1:${service.server.address().port}`;
- const identity=await fetch(base+'/api/identity',{method:'POST',headers:{origin:base,'content-type':'application/json','x-voidplayer-action':'identity'},body:JSON.stringify({name:'Range reviewer'})});assert.equal(identity.status,200);const cookie=identity.headers.get('set-cookie').split(';')[0];
+ const identity=await fetch(base+'/api/identity',{method:'POST',headers:{origin:base,'content-type':'application/json','x-voidplayer-action':'identity'},body:JSON.stringify({name:'Range reviewer'})});assert.equal(identity.status,200);const cookie=identity.headers.get('set-cookie').split(';')[0],actor=(await identity.json()).actor;
  const headers={cookie,origin:base,'content-type':'application/json','x-voidplayer-action':'quality-job'};
  const post=async(url,body,key='browser-range')=>{const r=await fetch(base+url,{method:'POST',headers:{...headers,'idempotency-key':key},body:JSON.stringify(body)});assert.ok(r.ok,await r.clone().text());return r.json();};
  const get=async url=>{const r=await fetch(base+url,{headers});assert.equal(r.status,200,await r.clone().text());return r.json();};
@@ -81,6 +82,43 @@ try{
  const policy={space:'default',side:'reference',metric:'psnr',maxDb:120,limit:1,minAuDistance:1,text:'Explicit range candidate',severity:3},publication=await post(`/api/quality/ranges/${id}/candidates`,policy);assert.equal(publication.createdIds.length,1);
  const annotation=await get(`/api/annotations/spaces/default/${publication.createdIds[0]}`);assert.equal(annotation.revision,1);assert.equal(annotation.document.mark.qualityEvidence.length,1);
  await page.locator(`[data-candidate-id="${publication.createdIds[0]}"]`).waitFor();await page.screenshot({path:path.join(directory,'ranges.png'),fullPage:true});
+ phase='late-result-view-fences';
+ await page.unroute(`**/api/quality/ranges/${id}/results?*`);
+ const other=await post('/api/quality/ranges',{...input,sampling:{mode:'stride',every:2,offset:0}},'unpublished-range'),otherId=other.job.id;
+ await until(()=>get(`/api/quality/ranges/${otherId}`),d=>d.job.state==='completed','unpublished comparison range did not finish');
+ await page.locator('#quality-range-refresh').click();await page.locator(`[data-range-id="${otherId}"]`).waitFor();
+ async function holdResults(target){
+  let enter,release,finish;const seen=new Promise(r=>enter=r),gate=new Promise(r=>release=r),finished=new Promise(r=>finish=r),pattern=`**/api/quality/ranges/${target}/results?*`;
+  const handler=async route=>{enter();await gate;try{await route.continue();}catch{/* Switching actor/closing observation aborts the actual request. */}finally{finish();}};
+  await page.route(pattern,handler);return {seen,finished,release,async dispose(){release();await page.unroute(pattern,handler);}};
+ }
+ // This assertion observes DOM facts, independent of background-tab rAF.
+ const frames=()=>page.waitForTimeout(100);
+ const assertUnpublished=async()=>{const state=await page.evaluate(()=>({title:document.querySelector('#quality-range-title').textContent,candidates:document.querySelector('#quality-range-candidates').textContent,visible:!document.querySelector('#quality-range-detail').hidden}));assert.equal(state.visible,true);assert.ok(state.title.includes(otherId));assert.ok(!state.candidates.includes(publication.createdIds[0]));assert.ok(!state.candidates.includes(policy.text));};
+ await page.locator(`[data-range-id="${otherId}"]`).click();await page.waitForFunction(id=>document.querySelector('#quality-range-title').textContent.includes(id),otherId);
+ phase='late-selection-results';const heldA=await holdResults(id),heldB=await holdResults(otherId);
+ try{
+  await page.locator(`[data-range-id="${id}"]`).click();await bounded(heldA.seen,'heldA seen');
+  await page.locator(`[data-range-id="${otherId}"]`).click();const responseA=page.waitForResponse(r=>new URL(r.url()).pathname===`/api/quality/ranges/${id}/results`);heldA.release();
+  await bounded(heldB.seen,'heldB seen');assert.equal((await bounded(responseA,'released A response headers')).status(),200);phase='late-selection-assert';await frames();await assertUnpublished();
+  heldB.release();await bounded(heldB.finished,'heldB finished');await page.waitForFunction(()=>document.querySelector('#quality-range-candidates').textContent==='');
+ }finally{await heldA.dispose();await heldB.dispose();}
+ phase='late-close-results';const closing=await holdResults(id);
+ try{
+  await page.locator(`[data-range-id="${id}"]`).click();await bounded(closing.seen,'closing seen');await page.locator('[data-pane="overview"]').click();
+  closing.release();await bounded(closing.finished,'closing finished');await frames();assert.equal(await page.locator('#quality-range-detail').evaluate(node=>node.hidden),true);assert.equal(await page.locator('#quality-range-candidates').textContent(),'');
+  await page.locator('[data-pane="quality"]').click();await page.locator(`[data-range-id="${otherId}"]`).click();await page.waitForFunction(id=>document.querySelector('#quality-range-title').textContent.includes(id),otherId);await assertUnpublished();
+ }finally{await closing.dispose();}
+ phase='late-identity-results';const identityGate=await holdResults(id);
+ async function peerIdentity(input){return player.evaluate(async input=>{const r=await fetch('/api/identity',{method:'POST',headers:{'content-type':'application/json','x-voidplayer-action':'identity'},body:JSON.stringify(input)});if(!r.ok)throw Error(await r.text());const value=await r.json(),health=await fetch('/api/health',{cache:'no-store'}).then(r=>r.json());if(health.actor?.id!==value.actor.id)throw Error('Peer cookie did not adopt actor');localStorage.setItem('voidplayer.identity',JSON.stringify(value.actor));return value.actor;},input);}
+ try{
+  await page.locator(`[data-range-id="${id}"]`).click();await bounded(identityGate.seen,'identityGate seen');const different=await peerIdentity({name:'Range race peer',mode:'create'});
+  await page.waitForResponse(r=>new URL(r.url()).pathname==='/api/quality/ranges'&&r.request().headers()['x-voidplayer-actor']===different.id&&r.status()===200);identityGate.release();await bounded(identityGate.finished,'identityGate finished');await frames();
+  assert.equal(await page.locator('#quality-range-detail').evaluate(node=>node.hidden),true);assert.equal(await page.locator('#quality-range-candidates').textContent(),'');assert.equal(await page.locator('[data-range-id]').count(),0);
+  await peerIdentity({id:actor.id});await page.waitForResponse(r=>new URL(r.url()).pathname==='/api/quality/ranges'&&r.request().headers()['x-voidplayer-actor']===actor.id&&r.status()===200);await page.locator(`[data-range-id="${otherId}"]`).click();await page.waitForFunction(id=>document.querySelector('#quality-range-title').textContent.includes(id),otherId);await assertUnpublished();
+ }finally{await identityGate.dispose();}
+ assert.equal(await get(`/api/quality/ranges/${otherId}/candidates`),null,'late replies never publish into another range');
+ await page.locator(`[data-range-id="${id}"]`).click();await page.locator(`[data-candidate-id="${publication.createdIds[0]}"]`).waitFor();
  phase='original-frame-review';const requests=[],observe=r=>{try{requests.push({owner:r.frame().page(),url:r.url(),method:r.method()});}catch{/* Worker requests have no frame. */}};context.on('request',observe);
  const [viewer]=await Promise.all([page.waitForEvent('popup'),page.locator(`[data-candidate-id="${publication.createdIds[0]}"]`).click()]);
  await viewer.waitForFunction(()=>['ready','failed'].includes(window.voidPlayerQualityPair?.getState().state));const state=await viewer.evaluate(()=>window.voidPlayerQualityPair.getState());assert.equal(state.state,'ready',JSON.stringify(state));
@@ -90,7 +128,7 @@ try{
  assert.deepEqual(viewerRequests.filter(r=>new URL(r.url).pathname.startsWith('/api/quality/')),[],'viewer does not read private results or rescore');
  assert.deepEqual(viewerRequests.filter(r=>new URL(r.url).searchParams.has('build')),[],'viewer never builds indexes');
  const after=await player.evaluate(()=>window.voidPlayer.getState());assert.equal(after.playing,true);assert.ok(after.positionUs>before.positionUs);assert.deepEqual(after.tracks.map(t=>t.id),before.tracks.map(t=>t.id));assert.equal(after.marks.length,before.marks.length);
- assert.deepEqual(errors,[]);await writeFile(path.join(directory,'evidence.json'),JSON.stringify({engine,depth,id,coverage:done.coverage,summary:done.job.summary,candidateId:publication.createdIds[0],nativeHashes:hashes,selectedBlock:3,player:{beforePosition:before.positionUs,afterPosition:after.positionUs,sameTracks:true},pageErrors:errors},null,2)+'\n');
- console.log(`PASS ${engine}/${depth}: service-owned range survives closed observer; AU coverage/native SSE, policy candidate, original-plane hashes/block3 and independent A playback`);
+ assert.deepEqual(errors,[]);await writeFile(path.join(directory,'evidence.json'),JSON.stringify({engine,depth,id,coverage:done.coverage,summary:done.job.summary,candidateId:publication.createdIds[0],nativeHashes:hashes,selectedBlock:3,viewFences:['selection','observation-close','actor-change'],player:{beforePosition:before.positionUs,afterPosition:after.positionUs,sameTracks:true},pageErrors:errors},null,2)+'\n');
+ console.log(`PASS ${engine}/${depth}: service-owned range survives closed observer; AU coverage/native SSE, policy candidate, original-plane hashes/block3 independent A playback and late selection/close/actor fences`);
 }catch(error){if(page&&!page.isClosed())await saveBrowserFailure({page,directory,name:'quality-ranges',context:{engine,depth,phase},error,evidence}).catch(()=>{});throw error;}
 finally{clearInterval(progress);Atomics.store(gate,0,1);Atomics.notify(gate,0);await browser?.close();await service?.close();await rm(temp,{recursive:true,force:true});}

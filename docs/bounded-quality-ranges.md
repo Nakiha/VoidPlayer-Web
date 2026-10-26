@@ -89,6 +89,16 @@ exclusive owner lock precedes startup recovery. Unfinished parents/children beco
 interrupted, preserving identities and any committed scores. There is no
 automatic resume, retry, publication or replacement attempt after restart.
 
+Child completion is committed before the parent's next observation. Startup
+therefore reconciles every persisted sample with its child before rebuilding the
+interrupted parent's summary: completed scores retain their original attempt and
+digest, remain paged results and leave no scored-position hole. Recovery validates
+actor/client/request attribution, the original explicit source/cache/ROI request,
+child and total budgets, result digest/provenance and numeric/SSIM consistency.
+It performs no source IO or decoding. Parent recovery is transactional; inconsistent
+stored facts reject startup and roll back parent changes rather than inventing
+coverage. A fully scored recovered parent still remains interrupted.
+
 ## Coverage, results and numeric aggregation
 
 `GET /api/quality/ranges?after=ROW&limit=10` pages current parent records by
@@ -143,6 +153,9 @@ candidates. Explicit links open the existing independent read-only original-fram
 pair/ROI viewer; selecting a score or opening a viewer does not move, replace or
 pause any player track. The viewer validates original source/cache/AU identity
 and geometry without scoring or constructing an index.
+Switching jobs, identity or observation invalidates in-flight result/publication
+responses; the old view is cleared immediately and every asynchronous continuation
+rechecks its captured view before changing the display.
 
 Existing source/geometry/color/container admission is unchanged. Pixel identity
 remains `referenceIntegrity=not-certified` and `concealmentDetection=unavailable`.
