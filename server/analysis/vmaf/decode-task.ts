@@ -21,7 +21,7 @@ export async function runVmafDecode(data:VmafDecodeData,progress:(frames:number,
  const budgetFor=(request:Parameters<typeof pairBudget>[0])=>({...pairBudget(request),maxIndexBytes:Math.max(1,Math.min(pairBudget(request).maxIndexBytes,VMAF_LIMITS.maxIndexBytes-indexBytes)),maxIndexPackets:Math.max(1,Math.min(pairBudget(request).maxIndexPackets,VMAF_LIMITS.maxIndexPackets-indexPackets))});
  const openPair=(request:Parameters<typeof pairBudget>[0])=>{
   const sources:ReturnType<typeof libraryPairSource>[]=[];
-  try{for(const target of [request.reference,request.distorted]){check();const value=libraryPairSource(db,store,target,budgetFor(request),control);sources.push(value);indexBytes+=Buffer.byteLength(JSON.stringify(value.source.index));indexPackets+=value.source.index!.packets.length;
+  try{for(const target of [request.reference,request.distorted]){check();if(target.indexIdentity.kind!=='flv')throw new VmafError('unsupported-vmaf-sequence','Native VMAF remains FLV-only');const value=libraryPairSource(db,store,target,budgetFor(request),control);sources.push(value);if(!value.source.index||value.source.index.schema!==3)throw new VmafError('unsupported-vmaf-sequence','Native VMAF requires the original FLV index');indexBytes+=Buffer.byteLength(JSON.stringify(value.source.index));indexPackets+=value.source.index!.packets.length;
    if(indexBytes>VMAF_LIMITS.maxIndexBytes||indexPackets>VMAF_LIMITS.maxIndexPackets)throw new VmafError('budget-exceeded','Cumulative index read budget exceeded');}return sources as [typeof sources[number],typeof sources[number]];
   }catch(error){for(const s of sources)s.source.close();throw error;}
  };

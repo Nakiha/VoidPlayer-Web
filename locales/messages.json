@@ -2580,7 +2580,7 @@
     "params": {}
   },
   "discovery.index": {
-    "source": "显式准备可信 FLV 索引",
+    "source": "显式准备可信 FLV / MP4 索引",
     "params": {}
   },
   "discovery.invalidDraft": {
@@ -2612,7 +2612,7 @@
     "params": {}
   },
   "discovery.metadataContainerOnly": {
-    "source": "此容器已提供技术信息；本批可信索引准备与评分仍限 FLV/Enhanced FLV。MP4、Matroska、TS 能读取或播放，不等于可评分。",
+    "source": "此容器已提供技术信息；可信索引准备与评分仍限严格 FLV/Enhanced FLV 和非分片 MP4 子集。Matroska、TS 等能读取或播放，不等于可评分。",
     "params": {}
   },
   "discovery.metadataOnly": {
@@ -2634,7 +2634,7 @@
     "params": {}
   },
   "discovery.prepareHelp": {
-    "source": "准备必须显式提交。probe 仅做有界技术读取（4MiB / 512次 / 32流 / 30秒）；可信 FLV 索引准备另受64MiB来源与128MiB读取预算。两者均由服务持有，关页不取消，明确取消后等待 Worker 真实退出；不自动重试。",
+    "source": "准备必须显式提交。probe 仅做有界技术读取（4MiB / 512次 / 32流 / 30秒）；可信 FLV / 非分片 MP4 索引准备另受64MiB来源与128MiB读取预算，MP4 还须通过单视频轨、精确时钟与闭合 IDR 校验。两者均由服务持有，关页不取消，明确取消后等待 Worker 真实退出；不自动重试。",
     "params": {}
   },
   "discovery.probe": {
