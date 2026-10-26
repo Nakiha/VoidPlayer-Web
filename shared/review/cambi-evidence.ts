@@ -31,3 +31,11 @@ export function cambiCandidateDocument(id:string,text:string,severity:number,e:C
  cambiEvidenceList([e],true);const {frame:f,geometry:g,heatmap:h}=e.value,p=f.provenance,c=f.context,r=e.ref.region,factor=h.mapping.factor;
  return {media:[{id:'cambi-source',name:c.name,size:p.size,lastModified:c.lastModified,codec:c.codec,decoder:'ffmpeg-wasm',width:g.width,height:g.height,firstPtsUs:c.firstPtsUs,durationUs:c.indexedDurationUs,source:{kind:'library',id:p.mediaId,url:`${e.serviceOrigin}/api/media/${p.mediaId}?v=${p.mediaVersion}`}}],mark:{id,slot:'H',mediaId:'cambi-source',frame:{ptsUs:p.sourcePtsUs-c.firstPtsUs,sourcePtsUs:p.sourcePtsUs,durationUs:c.frameDurationUs},comparison:[],region:{left:r.x*factor/g.width,top:r.y*factor/g.height,width:(Math.min(g.width,(r.x+r.width)*factor)-r.x*factor)/g.width,height:(Math.min(g.height,(r.y+r.height)*factor)-r.y*factor)/g.height},text,severity,origin,createdAt:now,author:actor,resolved:false,qualityCandidate:{schema:'voidplayer-quality-candidate',version:1,assessment:'not-subjectively-assessed'},cambiEvidence:[e]}};
 }
+
+/** Mark geometry may be edited; immutable evidence continues to describe its original region. */
+export function cambiEvidenceApplies(document:AnnotationDocument,e:CambiEvidence){
+ const media=document.media.find(m=>m.id===document.mark.mediaId),p=e.value.frame.target,r=e.ref.region,g=e.value.geometry,factor=e.value.heatmap.mapping.factor,region=document.mark.region;
+ if(!media?.source||media.size!==p.size||media.source.id!==p.mediaId||document.mark.frame.sourcePtsUs!==p.sourcePtsUs)return false;
+ const url=new URL(media.source.url);if(url.origin!==e.serviceOrigin||url.pathname!==`/api/media/${p.mediaId}`||url.searchParams.getAll('v').length!==1||url.searchParams.get('v')!==p.mediaVersion)return false;
+ return !region||(region.left===r.x*factor/g.width&&region.top===r.y*factor/g.height&&region.width===(Math.min(g.width,(r.x+r.width)*factor)-r.x*factor)/g.width&&region.height===(Math.min(g.height,(r.y+r.height)*factor)-r.y*factor)/g.height);
+}
