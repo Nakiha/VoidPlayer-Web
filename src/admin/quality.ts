@@ -18,6 +18,7 @@ import { qualityPairViewUrl } from '../../shared/review/quality-pair-view.ts';
 import { qualityFacts, forwardOutputText } from '../ui/quality-evidence.ts';
 import { randomUUID } from '../../shared/utils/uuid.ts';
 import { psnrGridPlan } from '../../shared/analysis/quality/psnr.ts';
+import {qualityRangesShell,installQualityRanges} from './quality-ranges.ts';
 
 const sides=['reference','distorted'] as const;
 type Side=typeof sides[number];
@@ -44,12 +45,14 @@ export function qualityJobsShell(){
     <button id="quality-forget" type="button" hidden>${th(msg('qualityWorkflow.forget','结束此提交的重试，准备新请求'))}</button><p id="quality-submit-status" role="status"></p></form>
     <div class="admin-panel"><div class="admin-section-heading"><h2>${th(msg('qualityWorkflow.history','当前用户的服务端任务与历史'))}</h2><button id="quality-refresh">${th(msg('qualityWorkflow.refresh','刷新任务'))}</button></div><p id="quality-observer-status" role="status"></p><p id="quality-resources"></p><details><summary>${th(msg('qualityWorkflow.budgets','服务端资源计数与预算'))}</summary><pre id="quality-resource-json"></pre></details>
     <div class="quality-jobs-workspace"><div id="quality-job-list"></div><div id="quality-job-detail" hidden><h3 id="quality-job-title"></h3><p id="quality-job-state"></p><p id="quality-job-reason"></p><p id="quality-job-input"></p><button id="quality-cancel">${th(msg('qualityWorkflow.cancel','取消任务'))}</button><details><summary>${th(msg('qualityWorkflow.requestFacts','请求、attempt 与服务端事实'))}</summary><pre id="quality-job-json"></pre></details><div id="quality-job-result"></div></div></div></div>
+    ${qualityRangesShell()}
     <section id="quality-attachment" class="admin-panel" hidden><h2>${th(msg('qualityWorkflow.attach','将此结果显式共享到已有标注'))}</h2><p>${th(msg('quality.shareNotice','此操作会向所有可查看该标注的人共享两侧片源身份、测量 ROI 和不可变结果事实。'))}</p>
     <div class="admin-actions"><label>${th(msg('admin.reviewSpace','评审空间'))}<select id="quality-space"></select></label><label>${th(msg('quality.side','标注对应的片源侧'))}<select id="quality-attach-side"><option value="reference">reference</option><option value="distorted">distorted</option></select></label></div>
     <div class="admin-actions"><input id="quality-mark-search" type="search" aria-label="${th(msg('admin.searchMarks','搜索标注'))}"><button id="quality-mark-refresh">${th(msg('admin.search','搜索'))}</button><button id="quality-mark-more" hidden>${th(msg('admin.nextPage','下一页'))}</button></div>
     <div id="quality-mark-list"></div><p id="quality-attach-target"></p><button id="quality-attach" disabled>${th(msg('quality.publish','共享到标注'))}</button><p id="quality-attach-status" role="status"></p><div id="quality-shared-links"></div></section></section>`;
 }
 export function installQualityJobs(signal:AbortSignal){
+  const ranges=installQualityRanges(signal);
   const $=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(`quality-${id}`)as T;
   const api=new QualityClient();let observer:QualityJobObserver|null=null,observation:QualityObservation|null=null;
   let active=false,enabled=false,scope=0,controller=new AbortController(),lastActor='',lastResult='',attachmentGeneration=0,attachmentBusy=false;
@@ -236,5 +239,5 @@ export function installQualityJobs(signal:AbortSignal){
   onLanguageChange(()=>{if(active&&observation&&currentActor()?.id===lastActor)render(observation);},signal);
   const timer=setInterval(()=>{if(active&&enabled&&!document.hidden&&currentActor()?.id===lastActor)void observer?.poll();},1000);
   signal.addEventListener('abort',()=>{clearInterval(timer);observer?.dispose();controller.abort();},{once:true});
-  return {activate(value:boolean){if(active===value)return;active=value;if(value)void start();else{scope++;observer?.dispose();observer=null;controller.abort();}}};
+  return {activate(value:boolean){ranges.activate(value);if(active===value)return;active=value;if(value)void start();else{scope++;observer?.dispose();observer=null;controller.abort();}}};
 }

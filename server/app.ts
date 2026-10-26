@@ -4,6 +4,7 @@ import { handleAnalysisRoutes } from './analysis/bitstream/routes.ts';
 import { handleQualityRoutes } from './analysis/quality/routes.ts';
 import { handleDiscoveryRoutes } from './discovery/routes.ts';
 import { handleQualityJobRoutes } from './analysis/quality/job-routes.ts';
+import { handleQualityRangeRoutes } from './analysis/quality/range-routes.ts';
 import { randomUUID } from 'node:crypto';
 import { guestActor, browserUserId } from './identity.ts';
 import { createServer } from 'node:http';
@@ -93,6 +94,7 @@ export function createMediaServer(options: ServerOptions): Server {
       if (await handleStateRoutes(ctx, req, res, url)) return;
       if (await handleDiscoveryRoutes(ctx,req,res,url)) return;
       if (await handleQualityJobRoutes(ctx,req,res,url)) return;
+      if (await handleQualityRangeRoutes(ctx,req,res,url)) return;
       if (await handleQualityRoutes(ctx,req,res,url)) return;
       if (await handleAnalysisRoutes(ctx,req,res,url,analysis)) return;
       if (await handleContentRoutes(ctx, req, res, url)) return;

@@ -3557,6 +3557,26 @@
     "source": "从完成结果创建共享测量候选",
     "translation": "Create a shared measurement candidate from this result"
   },
+  "qualityRange.candidates": {
+    "source": "按显式策略生成的测量候选",
+    "translation": "Measurement candidates selected by explicit policy"
+  },
+  "qualityRange.moreResults": {
+    "source": "下一页评分结果",
+    "translation": "Next page of scores"
+  },
+  "qualityRange.plan": {
+    "source": "对应、抽样、预算与执行计划",
+    "translation": "Correspondence, sampling, budgets, and execution plan"
+  },
+  "qualityRange.scope": {
+    "source": "查看后台显式 AU 对应计划、评分覆盖和测量候选。抽样结果仅代表已评分帧，不推断整段质量。打开详情与原帧窗口不会控制播放器。",
+    "translation": "Inspect explicit AU correspondence plans, scored coverage, and measurement candidates. Samples describe only scored frames. Opening details or original frame windows does not control playback."
+  },
+  "qualityRange.title": {
+    "source": "有界区间与抽样任务",
+    "translation": "Bounded ranges and sampling jobs"
+  },
   "qualityRoi.buildCancelRequested": {
     "source": "已请求取消缓存构建；服务将在文件和 Worker 实际关闭后释放容量。若构建已提交，请显式重新读取缓存。",
     "translation": "Cache cancellation requested. Service capacity is released after the file and Worker actually close. If the cache was already committed, explicitly read it again."

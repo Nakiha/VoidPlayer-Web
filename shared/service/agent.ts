@@ -1,6 +1,7 @@
 import { SSIM_VARIANT, SSIM_LIMITS } from '../analysis/quality/ssim.ts';
 import { TECHNICAL_FILTER_PATH, TECHNICAL_FILTER_LIMITS, TECHNICAL_FILTER_SCHEMA } from '../media/indexing/technical-filter.ts';
 import { QUALITY_JOB_LIMITS } from '../analysis/quality/jobs.ts';
+import {QUALITY_RANGE_LIMITS} from '../analysis/quality/ranges.ts';
 import { PSNR_SPATIAL_LIMITS } from '../analysis/quality/psnr.ts';
 import { FORWARD_OUTPUT_GUARANTEE } from '../analysis/quality/frame-pair.ts';
 import {QUALITY_SOURCE_BUILD_LIMITS} from '../analysis/quality/source-build.ts';
@@ -36,6 +37,7 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
     { id: 'workspaces.read', implemented: true, enabled: c.workspaces, readiness: c.workspaces ? 'ready' : 'unavailable', requiresBrowser: false, guide: AGENT_TASKS.workspaces },
     { id: 'annotations.write', implemented: true, enabled: c.annotations, readiness: !c.annotations ? 'unavailable' : actor ? 'ready' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.annotations },
     { id: 'annotations.events', implemented: true, enabled: c.annotations, readiness: c.annotations ? 'ready' : 'unavailable', requiresBrowser: false, guide: AGENT_TASKS.annotations },
+    { id:'quality.ranges',implemented:true,enabled:!!input.qualityJobsEnabled,readiness:!input.qualityJobsEnabled?'unavailable':actor?'per-source':'needs-identity',requiresBrowser:false,guide:AGENT_TASKS.quality },
     { id: 'quality.jobs', implemented: true, enabled: !!input.qualityJobsEnabled, readiness: !input.qualityJobsEnabled ? 'unavailable' : actor ? 'per-source' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.quality },
     { id: 'quality.frame-pair', implemented: true, enabled: true, readiness: actor ? 'per-source' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.quality },
     { id: 'quality.source-build', implemented: true, enabled: true, readiness: actor ? 'per-source' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.quality },
@@ -72,6 +74,13 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
         codecs: ['h264', 'hevc'], bitDepths: [8, 10], chroma: 'yuv420', closedKeyAuOnly: false, gop:{mode:'packet-identity-gop-v1',packetIdentityAbi:1,explicitStartEndAu:true,packetsPerSide:32,maxPackets:64,maxOutputFrames:64,reordering:true,delayedOutput:true,outputAssociation:'opaque-input-token-not-pts',singleThread:true,reportedDecodeErrors:'reject',guarantee:{...FORWARD_OUTPUT_GUARANTEE}}, forward:{mode:'forward-one-output-per-au-v1',explicitStartAu:true,packetsPerSide:32,maxPackets:64,maxOutputFrames:64,zeroCts:true,oneImmediateOutputPerAu:true,reordering:false,guarantee:{...FORWARD_OUTPUT_GUARANTEE}},
         explicitColorAndChromaLocation: true, explicitPairingAndSourcePts: true },
       resultSchema: 'voidplayer-quality-job-result', resultVersion: 1 },
+    qualityRanges:{
+      schema:'voidplayer-quality-range',version:1,plan:'/api/quality/ranges/plan',submit:'/api/quality/ranges',history:'/api/quality/ranges',
+      detail:'/api/quality/ranges/{id}',results:'/api/quality/ranges/{id}/results',cancel:'/api/quality/ranges/{id}/cancel',candidates:'/api/quality/ranges/{id}/candidates',
+      limits:QUALITY_RANGE_LIMITS,writeAction:'quality-job',idempotencyHeader:'Idempotency-Key',correspondence:['explicit-au-table','constant-source-pts-offset'],sampling:['all','stride'],
+      coverage:'inclusive-reference-decode-order-au-interval',buildsIndexes:false,observerDisconnectCancels:false,automaticRetry:false,assessment:'not-subjectively-assessed',
+      futureSequenceMetrics:{implemented:false,metrics:['vmaf','cambi'],requiredContract:['exact-pair-table','coverage-and-holes','fixed-executor-model-recipe','all-input-output-and-preroll-budgets','per-metric-progress','no-spatial-candidate-without-spatial-evidence']}
+    },
     writes: { identity: '/api/identity', identityIsAuthentication: false, originRequired: true,
       actionHeader: 'X-VoidPlayer-Action', cookieRequired: true, completion: 'server-commit', guiAcknowledgementRequired: false },
     annotations: { version: 1, spaces: '/api/annotations/spaces',

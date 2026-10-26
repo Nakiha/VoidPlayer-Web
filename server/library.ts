@@ -4,6 +4,7 @@ import { QualityAdmission } from './quality-admission.ts';
 import { LibraryPairRunner } from './analysis/quality/runner.ts';
 import { QualityJobService } from './analysis/quality/job-service.ts';
 import { LibraryDiscoveryService } from './discovery/service.ts';
+import { QualityRangeService } from './analysis/quality/range-service.ts';
 import { AdminError } from './admin-error.ts';
 import { FrameIndexStore } from './frame-index-store.ts';
 import { MediaThumbnailStore } from './media-thumbnail-store.ts';
@@ -37,6 +38,7 @@ export class MediaLibraryIndex {
   private jobService?: QualityJobService;
   private discoveryService?: LibraryDiscoveryService;
   get discovery() { if(this.closed)throw new AdminError(503,'Library discovery is closed.','discovery-unavailable');return this.discoveryService??=new LibraryDiscoveryService(this); }
+  private rangeService?: QualityRangeService;
   private closing?: Promise<void>;
   private coreDirectory: string;
   get quality() { return this.pairRunner ??= new LibraryPairRunner(this,this.coreDirectory); }
@@ -45,6 +47,10 @@ export class MediaLibraryIndex {
     if (this.closed) throw new AdminError(503,'Quality job service closed.','quality-service-unavailable');
     if (!this.durableQualityJobsEnabled) throw new AdminError(503,'Durable quality jobs require a persistent library database.','quality-storage-unavailable');
     return this.jobService ??= new QualityJobService(this.indexDatabase + '.quality.sqlite', this.quality);
+  }
+  get qualityRanges() {
+    const jobs=this.qualityJobs;
+    return this.rangeService??=new QualityRangeService(this.indexDatabase+'.quality-ranges.sqlite',jobs);
   }
   readonly frameIndexes: FrameIndexStore;
   readonly thumbnails: MediaThumbnailStore;
@@ -392,6 +398,7 @@ export class MediaLibraryIndex {
   private async closeOwned() {
     this.closed = true; this.stop();
     await this.discoveryService?.close();
+    await this.rangeService?.close();
     await this.jobService?.close();
     await this.pairRunner?.close();await this.pending?.catch(() => {}); await this.indexJobs.close(); this.store.close();
   }

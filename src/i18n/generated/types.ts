@@ -881,6 +881,11 @@ export interface Sources {
   "qualityCandidate.side": "主锚点侧";
   "qualityCandidate.text": "候选说明";
   "qualityCandidate.title": "从完成结果创建共享测量候选";
+  "qualityRange.candidates": "按显式策略生成的测量候选";
+  "qualityRange.moreResults": "下一页评分结果";
+  "qualityRange.plan": "对应、抽样、预算与执行计划";
+  "qualityRange.scope": "查看后台显式 AU 对应计划、评分覆盖和测量候选。抽样结果仅代表已评分帧，不推断整段质量。打开详情与原帧窗口不会控制播放器。";
+  "qualityRange.title": "有界区间与抽样任务";
   "qualityRoi.buildCancelRequested": "已请求取消缓存构建；服务将在文件和 Worker 实际关闭后释放容量。若构建已提交，请显式重新读取缓存。";
   "qualityRoi.buildSource": "显式构建可信缓存（最多64MiB来源、30秒执行）";
   "qualityRoi.building": "正在执行单独的有界缓存构建；不解码像素、不提交评分。取消后须关闭文件与 Worker 才释放服务容量，完成与取消竞争时请显式重新读取缓存。";
@@ -2202,6 +2207,11 @@ export interface MessageParameters {
   "qualityCandidate.side": {  };
   "qualityCandidate.text": {  };
   "qualityCandidate.title": {  };
+  "qualityRange.candidates": {  };
+  "qualityRange.moreResults": {  };
+  "qualityRange.plan": {  };
+  "qualityRange.scope": {  };
+  "qualityRange.title": {  };
   "qualityRoi.buildCancelRequested": {  };
   "qualityRoi.buildSource": {  };
   "qualityRoi.building": {  };
