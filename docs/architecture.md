@@ -157,3 +157,13 @@ The admin form and HTTP routes share contracts and B's scorer, publication and
 original-frame viewer. See [reference-clock-plans.md](reference-clock-plans.md).
 
 Optional native VMAF consumes committed C plans through `server/analysis/vmaf/`, with a fixed official Linux x64 component, independent metric outcomes and shared admission held until physical Worker/process exit. See [native-vmaf.md](native-vmaf.md); no arbitrary ROI/HDR/sparse-sequence or content-certification support is implied.
+
+Trusted MP4 scoring uses the strict, versioned sample-table authority described in
+[trusted-mp4-quality.md](trusted-mp4-quality.md). Explicit A preparation commits the
+source/stat/table/document witness in the existing cache transaction; read/scoring
+never creates indexes. A container adapter supplies real MP4 payloads and exact
+sample clocks to the existing opaque-token GOP, PSNR/SSIM/grid and C/B services.
+MP4 library evidence uses result v2 and an MP4-derived annotation clock basis;
+legacy FLV fingerprints and v1 evidence retain their fields. Read-only original
+frames do not use player state or private jobs. Native VMAF/CAMBI source admission
+remains FLV-only.

@@ -29,7 +29,7 @@ Reference integrity is not-certified and concealment detection is unavailable.
 Performance has not passed. Native VMAF and future CAMBI remain explicitly
 FLV-only; widening the PSNR source union must not widen those executors.
 
-## Implementation and review checkpoint
+## Implementation and verification
 
 The server parser commits MP4 documents and server producer evidence together in
 the existing index transaction. The `mp4/video:0/1/mp4-quality-tables-v1` namespace
@@ -43,7 +43,7 @@ clock basis. FLV-only results remain version 1 with unchanged fingerprint fields
 A single exact identity edit is supported when its media start is zero, rate is
 one and its movie duration equals the complete media duration as an exact rational.
 Time-remapping and empty edits remain unsupported. All tracks must reference this
-file; optional audio is not decoded or scored. Video chunks must have increasing
+file; optional audio is not decoded or scored. ISO MP4 brands and identity movie/track matrices are required. Video chunks must have increasing
 physical byte ranges. This first matrix requires explicit BT.709 nclx and SPS SAR.
 
 Reproducible formal entries:
@@ -71,8 +71,12 @@ Reproducible formal entries:
   acceptance now includes committed MP4/native fixtures for the same three codec
   combinations, with no decoder executable available to the packaged service.
 
-The source index, HTTP, lifecycle and six browser entries have passed locally.
-The compiled acceptance additions and full regression/build/PR checks remain in
-progress at this checkpoint. No PR or completion claim is implied by a WIP commit.
+The source index, HTTP, lifecycle and six browser entries pass locally, together
+with the legacy FLV discovery/correspondence browser regressions, 73 fast checks
+and the build/shared/boundary/manifest checks. Linux x64 compiled acceptance
+passes the three MP4 combinations and the existing FLV/receipt matrix. Windows
+x64 and macOS ARM64 compiled execution is delegated to the existing required PR
+matrix; local Linux results do not certify those platforms. PR CI and independent
+review remain required before merging.
 No negative-source-PTS or VFR E2E certification is claimed. Broader MP4/container/geometry support
 and performance remain unfinished.

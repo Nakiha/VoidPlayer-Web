@@ -79,8 +79,8 @@ duration. A parser-local stream clock has no established quality AU mapping;
 do not turn matching timestamps into a scoring identity. The existing info and
 index-query links remain the source of exact cache namespace/stream/build and
 bounded raw-clock packet records. Metadata readability does NOT admit scoring:
-MP4/QuickTime, Matroska/WebM and bounded TS probes do not extend the trusted FLV
-quality matrix. FLV probe observes only a64KiB prefix and at most8 tag headers, with initial
+MP4/QuickTime, Matroska/WebM and bounded TS probes never grant quality trust.
+Strict non-fragmented MP4 has a separate explicit quality preparation matrix. FLV probe observes only a64KiB prefix and at most8 tag headers, with initial
 audio/video configurations up to4096 bytes. Pure audio is observable; absent or
 late video remains unknown instead of searching to EOF. It does not claim
 complete stream inventory or packet coverage. Bounded MP4/QuickTime
@@ -114,7 +114,7 @@ probe reads at most4MiB/512 requests/32 streams/30 seconds in a256MiB owned Work
 it uses existing container/configuration parsers, no ffprobe executable or decoder.
 It can inspect bounded initial configuration bytes but never enumerates the whole
 packet table. Unsupported, malformed, oversized and late metadata fail explicitly.
-operation:quality-index separately uses the existing trusted FLV builder's64MiB
+operation:quality-index separately uses the trusted container builder's64MiB
 source/128MiB read/packet/index and30-second budgets. No other container gains a
 quality index. A commit racing cancellation can leave a valid cache; re-read it.
 There is no implicit build from discovery or scoring, no automatic full-library
@@ -427,7 +427,22 @@ deployments advertise them disabled and reject submission.
 
 1. Select an ordinary intranet identity (see /agent/annotations.md). Identity is
    not authentication. Use its cookie for the source lookup and execution.
-2. Explicitly prepare a missing FLV cache with POST
+Strict MP4 quality sources use kind:mp4, stream:video:0, schema:1,
+indexer:mp4-quality-tables-v1 and producer:server-mp4-scan-v1. They require a
+self-contained non-fragmented MP4 with exactly one avc1 H2648 or hvc1 HEVC8/10
+video description, explicit BT.709 SDR, progressive 420, square SPS SAR and no
+crop/rotation. Audio is ignored for scoring but cannot reference external data.
+Original track/sample ordinal, timescale, DTS/CTS/duration ticks and moov SHA256
+are preserved. Non-integer microseconds are unsupported: do not round, repair
+POC or choose a nearby frame. Only exact identity edits are admitted.
+Frame-index GET reads this namespace; POST/build=1 cannot prepare or upload it.
+Read-only original-pair inspection uses the same existing sealed cache without
+building, scoring, private-job access or player control. Library result version2
+and complete-mp4-index-derived-v1 annotation clocks identify MP4 or mixed pairs;
+FLV-only version1 receipts/fingerprints retain their original fields. VMAF and
+future CAMBI remain FLV-only. See /docs/trusted-mp4-quality.md in the source tree.
+
+2. Explicitly prepare a missing supported FLV or strict MP4 cache with POST
    /api/media/{id}/psnr-index, JSON {version}, the identity cookie, same-origin
    Origin, X-VoidPlayer-Actor and X-VoidPlayer-Action: quality-source-build.
    This separate owned Worker is capped at 64 MiB source, 128 MiB actual reads,
@@ -458,7 +473,7 @@ deployments advertise them disabled and reject submission.
    picture:0,layer:0,field:'frame'} and integer-microsecond sourcePtsUs. Select AU
    and PTS explicitly from the existing source index; equal PTS never pairs sources.
 
-Only complete, unrecovered, single-configuration FLV/Enhanced FLV, progressive
+The legacy matrix is complete, unrecovered, single-configuration FLV/Enhanced FLV, progressive
 H264/HEVC and fully tagged 8/10-bit YUV420 are admitted. Preserve the returned
 candidate decode window. Preferred packet-identity-gop-v1 uses explicit startAu
 and endAu (inclusive, at most32 AU/side), a closed IDR start and packet identity

@@ -44,7 +44,7 @@ export class FrameIndexStore {
       const identity = expectedIdentity??(this.has(id,version,'mp4',MP4_QUALITY_MEDIA_INDEX_IDENTITY)?MP4_QUALITY_MEDIA_INDEX_IDENTITY:FLV_MEDIA_INDEX_IDENTITY), epoch = this.epoch;
       if(!['flv','mp4'].includes(identity.kind))throw new AdminError(409,'Unsupported quality index identity.','untrusted-cache');
       const row = this.db.prepare('SELECT complete,frames,last_seq,bytes,scanned_bytes,packet_storage,producer_json,build_id FROM media_index_manifests WHERE media_id=? AND media_version=? AND '+identityWhere).get(id,version,...identityArgs(identity));
-      if (!row?.complete) throw new AdminError(409,'An existing complete FLV cache is required.','cache-miss');
+      if (!row?.complete) throw new AdminError(409,'An existing complete supported quality cache is required.','cache-miss');
       if (Number(row.frames)>limits.maxIndexPackets || Number(row.bytes)>limits.maxIndexBytes)
         throw new AdminError(413,'Cached index exceeds quality budget.','budget-exceeded');
       const storage = packetStorage(String(row.packet_storage),identity,`${id}@${version}`,Number(row.frames),Number(row.last_seq));
@@ -55,7 +55,7 @@ export class FrameIndexStore {
         || producer.size!==Number(row.scanned_bytes) || !Number.isSafeInteger(producer.size) || producer.size<1
         || !producer.sourceStat || producer.sourceStat.size!==String(producer.size)
         || ['size','dev','ino','mtimeNs','ctimeNs'].some(key=>typeof producer!.sourceStat[key as keyof FileStatWitness]!=='string'||! /^-?\d{1,24}$/.test(producer!.sourceStat[key as keyof FileStatWitness])))
-        throw new AdminError(409,'Cache lacks matching server FLV producer evidence; explicitly clear and build it.','untrusted-cache');
+        throw new AdminError(409,'Cache lacks matching server producer evidence; explicitly clear and prepare it.','untrusted-cache');
       if(producer.producer==='server-mp4-scan-v1'&&(!/^[a-f0-9]{64}$/.test(producer.documentSha256)||!Number.isSafeInteger(producer.trackId)||producer.trackId<1||!Number.isSafeInteger(producer.timescale)||producer.timescale<1||!/^[a-f0-9]{64}$/.test(producer.tableSha256)))throw new AdminError(409,'Invalid MP4 producer witness.','untrusted-cache');
       const indexBuildId = createHash('sha256').update(JSON.stringify([identity,producer])).digest('hex');
       let index: QualityIndexDocument | null = null;

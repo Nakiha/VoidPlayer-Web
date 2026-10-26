@@ -1,6 +1,6 @@
 import { avcGeometry } from '../../media/codecs/avc-geometry.ts';
 import { hevcGeometry, hevcFieldPictures } from '../../media/codecs/hevc-geometry.ts';
-import {qualitySourceIndex} from './source-index.ts';
+import {qualitySourceIndex,isMp4QualityDocument,qualityIndexPacketCount} from './source-index.ts';
 import type {QualityIndexDocument,QualityVideoIndex} from './source-index.ts';
 import { FramePairError, PAIR_LIMITS, forwardPacketPlan, gopPacketPlan, FORWARD_PAIR_LIMITS, requireInspectionGeometry, type PairTarget } from './frame-pair.ts';
 import type {FlvIndex} from '../../media/containers/flv-demux.ts';
@@ -54,12 +54,10 @@ export function qualityTargetForAu(source:LibraryPairBinding,index:QualityVideoI
 export function qualityFrameCandidates(source:LibraryPairBinding,doc:QualityIndexDocument,query:QualityFrameQuery):QualityFramePage {
   qualityFrameQuery(query);
   if(query.buildId&&query.buildId!==source.binding.indexBuildId)throw new FramePairError('identity-mismatch','Quality cache changed during frame selection');
-  if(!doc)throw new FramePairError('invalid-request','Invalid quality cache document');
+  if(!doc||(!isMp4QualityDocument(doc)&&!Array.isArray(doc.packets)))throw new FramePairError('invalid-request','Invalid quality cache document');
+  if(qualityIndexPacketCount(doc)>PAIR_LIMITS.maxIndexPackets||JSON.stringify(doc).length>PAIR_LIMITS.maxIndexBytes)throw new FramePairError('budget-exceeded','PSNR selection cache budget exceeded');
+  if(!isMp4QualityDocument(doc)&&(doc.configurations||doc.truncatedAt!==undefined||doc.recoveredGaps))throw new FramePairError('unsupported-source','PSNR selection requires a complete single-configuration unrecovered FLV cache');
   const index=qualitySourceIndex(doc,source.binding.size);
-  if(index.packets.length>PAIR_LIMITS.maxIndexPackets||JSON.stringify(doc).length>PAIR_LIMITS.maxIndexBytes)
-    throw new FramePairError('budget-exceeded','PSNR selection cache budget exceeded');
-  if(index.configurations||index.truncatedAt!==undefined||index.recoveredGaps)
-    throw new FramePairError('unsupported-source','PSNR selection requires a complete single-configuration unrecovered FLV cache');
   if(index.codec!=='h264'&&index.codec!=='hevc')throw new FramePairError('unsupported-source','PSNR selection supports H.264/HEVC only');
   const g=index.codec==='h264'?avcGeometry(index.description,true):hevcGeometry(index.description,true);
   if(!g||('interlaced'in g&&g.interlaced)||(index.codec==='hevc'&&hevcFieldPictures(index.description)))

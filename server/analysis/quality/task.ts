@@ -51,7 +51,7 @@ export async function runQualityTask(data:QualityTask&{database:string;coreDir:s
       const media=db.prepare("SELECT size FROM media WHERE id=? AND version=? AND state='ready'").get(data.id,data.version);
       if(!media)throw new FramePairError('source-changed','Library source changed');
       const size=Number(media.size);
-      if(!Number.isSafeInteger(size)||size<1||size>QUALITY_SOURCE_BUILD_LIMITS.maxSourceBytes)throw new FramePairError('budget-exceeded','Explicit FLV build source size budget exceeded');
+      if(!Number.isSafeInteger(size)||size<1||size>QUALITY_SOURCE_BUILD_LIMITS.maxSourceBytes)throw new FramePairError('budget-exceeded','Explicit quality source size budget exceeded');
       const filePath=resolvePairPath(db,data.id,data.version,size),epoch=store.epoch;
       // Probe and both parser paths share the same owned IO fence. No permit is
       // acquired here: the one-shot runner already owns the physical slot.
@@ -66,7 +66,7 @@ export async function runQualityTask(data:QualityTask&{database:string;coreDir:s
       finally{Atomics.sub(control,1,1);Atomics.notify(control,1);}
       await phase('publish');
       if(result.profile.scannedBytes!==size||result.document.schema!=="voidplayer-mp4-quality-index"&&(result.document.truncatedAt!==undefined||result.document.recoveredGaps))
-        throw new FramePairError('unsupported-source','Explicit quality build requires a complete unrecovered FLV');
+        throw new FramePairError('unsupported-source','Explicit quality build requires a complete unrecovered supported source');
       if(resolvePairPath(db,data.id,data.version,size,result.profile.sourceStat)!==filePath)throw new FramePairError('source-changed','Library source changed during explicit build');
       check();store.commit(data.id,data.version,prepareFrameIndex(result.document,size,kind==='mp4'?MP4_QUALITY_MEDIA_INDEX_IDENTITY:FLV_MEDIA_INDEX_IDENTITY,`${data.id}@${data.version}`,{scannedBytes:result.profile.scannedBytes}),epoch,{kind:kind==='mp4'?'server-mp4-scan-v1':'server-flv-scan-v1',sourceStat:result.profile.sourceStat});
       return source(data.id,data.version);
