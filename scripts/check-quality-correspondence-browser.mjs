@@ -72,7 +72,7 @@ try{
  await fillSegment(0,p0,p0+1,p1-p0);await page.locator('#quality-clock-add-segment').click();await fillSegment(1,p1,p1+1,p0-p1);
  let lostRelation=false;const relationKeys=[];await page.route('**/api/quality/reference-relations',async route=>{if(route.request().method()==='POST'){relationKeys.push(route.request().headers()['idempotency-key']);if(!lostRelation){lostRelation=true;await route.fetch();await route.abort('failed');return;}}await route.continue();});
  await page.locator('#quality-clock-save-relation').click();await page.waitForFunction(()=>document.querySelector('#quality-clock-status').textContent.length>0);
- assert.equal(await page.locator('#quality-clock-declaration').isDisabled(),true);await page.locator('#quality-clock-retry-relation').click();await page.waitForFunction(()=>document.querySelector('#quality-clock-relation').textContent.includes('Explicit browser reference relation'));
+ await page.reload();await page.locator('#quality-clock-retry-relation').waitFor({state:'visible'});assert.equal(await page.locator('#quality-clock-declaration').isDisabled(),true);await page.locator('#quality-clock-retry-relation').click();await page.waitForFunction(()=>document.querySelector('#quality-clock-relation').textContent.includes('Explicit browser reference relation'));
  assert.equal(lostRelation,true);assert.equal(relationKeys.length,2);assert.equal(relationKeys[0],relationKeys[1]);assert.equal((await get('/api/quality/reference-relations')).entries.length,1);
  await page.locator('#quality-clock-pin').click();await page.waitForFunction(()=>document.querySelector('#quality-clock-builds').textContent.includes('待测')||document.querySelector('#quality-clock-builds').textContent.includes('Distorted'));
  await page.locator('#quality-clock-ssim').check();await page.locator('#quality-clock-grid').check();
@@ -80,7 +80,7 @@ try{
  await page.route('**/api/quality/correspondence-plans',async route=>{if(route.request().method()==='POST'){request=route.request().postDataJSON();planKeys.push(route.request().headers()['idempotency-key']);if(!lostPlan){lostPlan=true;await route.fetch();await route.abort('failed');return;}}await route.continue();});
  await page.locator('#quality-clock-plan-submit').click();await until(()=>Atomics.load(gate,1),Boolean,'real planner never reached metadata barrier');
  await until(()=>get('/api/quality/correspondence-plans'),d=>d.entries.length===1,'plan submission was not durable');
- assert.equal(await page.locator('#quality-clock-end').isDisabled(),true);await page.locator('#quality-clock-retry-plan').click();await page.waitForFunction(()=>document.querySelector('#quality-clock-title').textContent.includes('running'));
+ await page.reload();await page.locator('#quality-clock-retry-plan').waitFor({state:'visible'});assert.equal(workers.size,1,'reload does not cancel durable planning');assert.equal(await page.locator('#quality-clock-end').isDisabled(),true);await page.locator('#quality-clock-retry-plan').click();await page.waitForFunction(()=>document.querySelector('#quality-clock-title').textContent.includes('running'));
  const planId=(await get('/api/quality/correspondence-plans')).entries[0].id;assert.equal(planKeys.length,2);assert.equal(planKeys[0],planKeys[1]);assert.equal(workers.size,1);await page.close();
  assert.equal((await get(`/api/quality/correspondence-plans/${planId}`)).plan.state,'running');assert.equal((await get('/api/quality/ranges')).entries.length,0,'planning never scores');
  Atomics.store(gate,0,1);Atomics.notify(gate,0);

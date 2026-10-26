@@ -104,7 +104,7 @@ export class CorrespondenceService{
   }
   detail(id:string,actor:string){
     const plan=this.get(id,actor),value=plan.resultDigest?this.result(id,actor):null;
-    return {plan,summary:value?{assessment:value.assessment,counts:Object.fromEntries(['mapped','unmapped','ambiguous','unsupported'].map(s=>[s,value.rows.filter(r=>r.status===s).length])),selected:value.rows.filter(r=>r.selected).length,work:value.work,sources:value.sources,executionBlock:value.executionBlock,reservation:value.rangePlan?.reservation??null,preRollAndDrain:value.rangePlan?.preRollAndDrain??null}:null,execution:this.receipt(id,actor)};
+    return {plan,summary:value?{assessment:value.assessment,counts:Object.fromEntries(['mapped','unmapped','ambiguous','unsupported'].map(s=>[s,value.rows.filter(r=>r.status===s).length])),selected:value.rows.filter(r=>r.selected).length,work:value.work,sources:value.sources,sourceIssues:value.sourceIssues,executionBlock:value.executionBlock,reservation:value.rangePlan?.reservation??null,preRollAndDrain:value.rangePlan?.preRollAndDrain??null}:null,execution:this.receipt(id,actor)};
   }
   rows(id:string,actor:string,after=0,limit:number=LIMITS.page){
     if(!Number.isSafeInteger(after)||after<0||!Number.isSafeInteger(limit)||limit<1||limit>LIMITS.page)throw new AdminError(400,'Invalid AU page.','invalid-cursor');

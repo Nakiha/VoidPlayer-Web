@@ -52,7 +52,8 @@ selected by `all` or the existing deterministic `stride` rule. Raw cache records
 are inspected before eligibility filtering. Each position retains its actual
 reference PTS/DTS, packet extent, configuration and key flag, selected status,
 chosen segment, signed offset, expected distorted PTS, exact match count and up
-to four ambiguous candidate AU IDs. Match count remains complete even when the
+to four ambiguous candidate AU IDs. Source-wide admission issues are also retained,
+even when a row already has a clock gap or ambiguity. Match count remains complete even when the
 candidate ID preview is capped. Reasons distinguish absent reference AU, clock
 gap, duplicate reference PTS, absent exact target PTS, duplicate target PTS,
 target AU reuse and unsupported source/decode window/ROI geometry. There is no
@@ -117,3 +118,8 @@ the separate discovery package is coordinated after its merge.
 Functional success does not certify performance. No core/fork or CI-gate changes
 are required; VMAF/CAMBI and rate/drift/nearest-time alignment are outside this
 contract.
+
+Unconfirmed GUI creates retain the original body/key in actor-scoped session
+storage. Their forms stay frozen until the original submission is explicitly
+retried or local retries are ended. Reopening observation restores retry controls;
+ending local retries does not cancel committed service work.
