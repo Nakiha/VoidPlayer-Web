@@ -1,0 +1,2 @@
+import {parentPort,workerData} from 'node:worker_threads';import {runCambiDecode} from './decode-task.ts';
+try{parentPort!.postMessage({ok:true,value:await runCambiDecode(workerData,(frames,total)=>parentPort!.postMessage({type:'progress',frames,total}))});}catch(error){parentPort!.postMessage({ok:false,error:{code:(error as {code?:string}).code??'execution-failed',message:(error as Error).message}});}parentPort!.on('message',()=>{});

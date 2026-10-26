@@ -182,7 +182,7 @@ export function gopPacketPlan(index:FlvIndex,target:PairTarget,counts?:Map<numbe
 /** The exact source/cache/tag/AU admission and decoder are shared by measurement
  * and explicit inspection. Inspection never invokes the numerical metric. */
 async function withFlvFramePair<T>(request: FramePairRequest, sources: [CachedPairSource, CachedPairSource],
-  loadDecoder: (budget: PairBudget) => Promise<PairDecoder>, signal: AbortSignal, accept: (pair: InspectedFramePair) => T, admitGeometry?: (geometry:HevcGeometry)=>void): Promise<T> {
+  loadDecoder: (budget: PairBudget) => Promise<PairDecoder>, signal: AbortSignal, accept: (pair: InspectedFramePair) => T, admitGeometry?: (geometry:HevcGeometry)=>void, roles=2): Promise<T> {
   let decoder: PairDecoder | undefined;
   const started = performance.now(); let readBytes = 0,packetsUsed=0,outputFrames=0;
   try {
@@ -196,7 +196,7 @@ async function withFlvFramePair<T>(request: FramePairRequest, sources: [CachedPa
     };
     check();
     const frames: DecodedPairFrame[] = [], provenance: PairProvenance[] = [], sourceGeometry:HevcGeometry[]=[];
-    for (let role = 0; role < 2; role++) {
+    for (let role = 0; role < roles; role++) {
       const source = sources[role], target = role ? request.distorted : request.reference;
       const doc = source.index;
       if (!doc) fail('cache-miss', 'An existing complete source-bound FLV cache is required');
@@ -312,4 +312,9 @@ export function measureFlvFramePair(request: FramePairRequest, sources: [CachedP
 export function inspectFlvFramePair(request: FramePairRequest, sources: [CachedPairSource, CachedPairSource],
   loadDecoder: (budget: PairBudget) => Promise<PairDecoder>, signal: AbortSignal): Promise<InspectedFramePair> {
   return withFlvFramePair(request,sources,loadDecoder,signal,pair=>pair,requireInspectionGeometry);
+}
+
+/** Single-source admission and decode. No reference relation or numerical metric. */
+export async function inspectFlvFrame(target:PairTarget,source:CachedPairSource,loadDecoder:(budget:PairBudget)=>Promise<PairDecoder>,signal:AbortSignal,budget?:Partial<PairBudget>){
+ return withFlvFramePair({pairing:'caller-specified',reference:target,distorted:target,roi:{x:0,y:0,width:2,height:2},budget},[source,source],loadDecoder,signal,p=>({frame:p.frames[0],provenance:p.provenance.reference,decoder:p.decoder,sourceGeometry:p.sourceGeometry.reference,work:p.work}),requireInspectionGeometry,1);
 }
