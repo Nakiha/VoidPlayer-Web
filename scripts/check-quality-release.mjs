@@ -18,6 +18,8 @@ try{
  const samples=[...JSON.parse(await readFile(path.join(root,'test/helpers/quality-http-samples.json'),'utf8')).samples.filter(s=>s.tagged),...JSON.parse(await readFile(path.join(root,'test/helpers/quality-forward-samples.json'),'utf8')).samples.map(s=>({...s,forward:true})),...JSON.parse(await readFile(path.join(root,'test/helpers/quality-reordered-samples.json'),'utf8')).samples.filter(s=>s.frames===16).map(s=>({...s,gop:true})),...JSON.parse(await readFile(path.join(root,'test/helpers/quality-reordered-samples.json'),'utf8')).delayedSamples.map(s=>({...s,gop:true}))];
  const sampleName=s=>`${s.codec}-${s.depth}${s.zeroCts?'-zero-cts':s.gop?'-gop':s.forward?'-forward':''}.flv`;
  for(const sample of samples){const bytes=Buffer.from(sample.flv,'base64');assert.equal(createHash('sha256').update(bytes).digest('hex'),sample.flvSha256);await writeFile(path.join(media,sampleName(sample)),bytes);}
+ const discoverySamples=JSON.parse(await readFile(path.join(root,'test/helpers/library-discovery-samples.json'),'utf8')).samples;
+ for(const sample of discoverySamples){const bytes=Buffer.from(sample.bytes,'base64');assert.equal(createHash('sha256').update(bytes).digest('hex'),sample.sha256);await writeFile(path.join(media,`discovery-${sample.name}`),bytes);}
  const socket=createServer();await new Promise(resolve=>socket.listen(0,'127.0.0.1',resolve));const port=socket.address().port;await new Promise(resolve=>socket.close(resolve));const base=`http://127.0.0.1:${port}`;
  await writeFile(path.join(data,'voidplayer.config.json'),JSON.stringify({host:'127.0.0.1',port,mediaRoots:[{id:'quality-qa',name:'Quality QA',path:media}],indexWatch:false,logsDir:null}));
  const env={...process.env,PATH:empty};for(const key of Object.keys(env))if(key.startsWith('VOIDPLAYER_')||['BUN_OPTIONS','BUN_INSPECT'].includes(key))delete env[key];
@@ -33,6 +35,18 @@ try{
  const viewerAsset=await fetch(new URL(viewerModule,base));assert.equal(viewerAsset.status,200);assert.match(viewerAsset.headers.get('content-type'),/(javascript|ecmascript)/);await viewerAsset.body.cancel();
  let entries;await waitUntil(async()=>{entries=(await fetch(base+'/api/library').then(r=>r.json())).entries;return samples.every(s=>entries.some(e=>e.name===sampleName(s)&&e.state==='ready'));},'Native quality library did not settle');
  const cookie=`voidplayer-user=guest-${randomUUID()}`,headers={cookie,origin:base,'content-type':'application/json','x-voidplayer-action':'quality'},rows=[];
+ const preparationProof=[];
+ for(const sample of discoverySamples){let entry;await waitUntil(async()=>{entry=(await fetch(base+'/api/library').then(r=>r.json())).entries.find(e=>e.name===`discovery-${sample.name}`);return entry?.state==='ready';},'Compiled discovery source did not settle');
+  const input={source:{id:entry.id,version:entry.version},operation:'probe',client:{id:'compiled-discovery',name:'Compiled HTTP Agent'}},key=`discovery-${sample.name}`;
+  const h={...headers,'x-voidplayer-action':'library-preparation','x-voidplayer-actor':cookie.slice('voidplayer-user='.length),'idempotency-key':key};
+  const response=await fetch(base+'/api/library/preparations',{method:'POST',headers:h,body:JSON.stringify(input)}),accepted=await response.json();assert.equal(response.status,202,JSON.stringify(accepted));let job;
+  await waitUntil(async()=>{job=await fetch(base+`/api/library/preparations/${accepted.job.id}`,{headers:{cookie}}).then(r=>r.json());if(['failed','cancelled','interrupted'].includes(job.state))throw Error(JSON.stringify(job));return job.state==='completed';},'Compiled metadata Worker did not finish');
+  const video=job.result.streams.find(s=>s.type==='video');assert.equal(video.fields.codec.value,sample.codec);assert.equal(video.fields.width.value,32);assert.equal(video.fields.height.value,32);assert.equal(video.fields.bitDepth.value,sample.depth);
+  assert.equal(video.clock.relationToQualityAu,'not-established');assert.equal(job.result.coverage.decodedPictures,false);assert.ok(job.result.coverage.bytesRead<=4*1024*1024);
+  const replay=await fetch(base+'/api/library/preparations',{method:'POST',headers:h,body:JSON.stringify(input)});assert.equal(replay.status,200);assert.equal((await replay.json()).job.id,job.id);
+  const detail=await fetch(base+`/api/media/${entry.id}/discovery?v=${entry.version}`).then(r=>r.json());assert.equal(detail.technical.state,'prepared');assert.equal(detail.scoring.state,'requires-quality-source-check');preparationProof.push({id:job.id,source:input.source});
+ }
+ console.log(`PASS compiled discovery: ${preparationProof.length} real metadata Workers, fixed versions, receipts and explicit non-scoring semantics`);
  for(const sample of samples){
   const entry=entries.find(e=>e.name===sampleName(sample));
   const prepared=await fetch(`${base}/api/media/${entry.id}/psnr-index`,{method:'POST',headers:{...headers,'x-voidplayer-action':'quality-source-build'},body:JSON.stringify({version:entry.version})});assert.equal(prepared.status,200,JSON.stringify(await prepared.json()));
@@ -103,6 +117,8 @@ try{
  const rebound=await fetch(`${base}/api/media/${entry.id}/psnr-source?v=${entry.version}`,{headers:{cookie}});assert.equal(rebound.status,200);assert.deepEqual(await rebound.json(),first.source,'restart retains the actual server producer/cache binding');
  const rerun=await fetch(base+'/api/quality/psnr-pair',{method:'POST',headers,body:JSON.stringify(first.request)}),again=await rerun.json();assert.equal(rerun.status,200,JSON.stringify(again));assert.equal(again.result.metric.aggregate.sse,first.sse);assert.notEqual(again.request.id,first.requestId,'a fresh one-shot execution is not a cached task result');
  const capabilities=await fetch(base+'/api/agent',{headers:{cookie}}).then(r=>r.json());assert.equal(capabilities.capabilities.find(c=>c.id==='quality.jobs').implemented,true);assert.equal(capabilities.capabilities.find(c=>c.id==='quality.jobs').readiness,'per-source');assert.equal(capabilities.capabilities.find(c=>c.id==='quality.frame-pair').requiresBrowser,false);
+ assert.equal(capabilities.capabilities.find(c=>c.id==='library.preparations').enabled,true);
+ for(const proof of preparationProof){const job=await fetch(base+`/api/library/preparations/${proof.id}`,{headers:{cookie}}).then(r=>r.json());assert.equal(job.state,'completed');const detail=await fetch(base+`/api/media/${proof.source.id}/discovery?v=${proof.source.version}`).then(r=>r.json());assert.equal(detail.technical.state,'prepared');}
  assert.deepEqual(capabilities.qualityJobs.metrics,['psnr','ssim']);assert.equal(capabilities.qualityJobs.scope,'single-explicit-frame-pair');assert.equal(capabilities.qualityJobs.submit,'/api/quality/jobs');assert.equal(capabilities.qualityJobs.automaticRetry,false);assert.equal(capabilities.qualityJobs.sharedWork,false);
  const report=path.resolve(process.env.VOIDPLAYER_TEST_ARTIFACTS??path.join(root,'.run/quality-release'));await mkdir(report,{recursive:true});await writeFile(path.join(report,'native-quality.json'),JSON.stringify({target:manifest.target,rows},null,2)+'\n');
  console.log(`PASS ${manifest.target}: compiled Bun quality Worker, real library/cache HTTP, 8/10-bit native SSE/provenance, durable jobs/annotation evidence/idempotency/history restart, second-instance rejection, empty PATH`);

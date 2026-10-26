@@ -46,6 +46,64 @@ Tasks: ${Object.entries(AGENT_TASKS).map(([key, url]) => `[${key}](${url})`).joi
 
 const library = `# Library and original media
 
+## Technical discovery and explicit preparation
+
+GET /api/library/discovery-schema describes the version-1 field dictionary,
+support matrix and budgets. GET /api/library/discovery?codec=h264&limit=16
+queries already prepared metadata across registered library rows. Unknown sources
+remain visible by default (includeUnknown=1), never silently counted as negatives.
+Filters also accept min/max Width/Height, bitDepth, colorTransfer and min/max
+DurationUs. Predicates are AND within one video stream, not joined across streams.
+Each bounded page inspects at most64 sources; nextCursor may accompany an empty
+page. Repeat the SAME query and limit with cursor=nextCursor. Coverage page and
+cumulative counters are distinct; whole-scope match/unknown totals are available
+only after exhausted=true. Any library/probe/cache snapshot change returns409;
+restart from the first page. Availability is the recorded library state, not a
+live filesystem check or proof of source content. Reads do not open media bytes,
+probe, build, migrate packet caches, decode, score, or control a player.
+
+GET /api/media/ID/discovery?v=VERSION separates file properties, prepared fields,
+parser-local stream identifiers, metadata coverage and scoring prerequisites.
+Known/unknown/not-probed/derived fields include provenance and missing reasons.
+Durations are container metadata in integer microseconds, never CFR or decoded
+duration. A parser-local stream clock has no established quality AU mapping;
+do not turn matching timestamps into a scoring identity. The existing info and
+index-query links remain the source of exact cache namespace/stream/build and
+bounded raw-clock packet records. Metadata readability does NOT admit scoring:
+MP4/QuickTime, Matroska/WebM and bounded TS probes do not extend the trusted FLV
+quality matrix. FLV probe observes only the initial video configuration, so it
+does not claim complete stream inventory or packet coverage.
+
+POST /api/library/preparations explicitly submits one service-owned operation:
+{"source":{"id":"ID","version":"VERSION"},"operation":"probe","client":{"id":"agent-1","name":"Selection Agent"}}
+Use same-origin Origin, Content-Type:application/json, X-VoidPlayer-Action:library-preparation,
+the selected identity cookie, X-VoidPlayer-Actor captured before the action and
+Idempotency-Key. An actor/cookie mismatch returns409 actor-changed before work.
+The persistent database is required; an ephemeral deployment returns503
+preparation-storage-unavailable. A replay checks its receipt before source/result
+availability and returns the same job; changing its input conflicts. Never choose
+a new key just because a response was lost. GET /api/library/preparations lists
+the current actor's history; GET /api/library/preparations/JOB returns the immutable
+terminal result or current state. POST /api/library/preparations/JOB/cancel with{}
+requests explicit cancellation with the same captured actor and action headers.
+Observation disconnect does not cancel. Queued/running/cancelling are not terminal;
+capacity is retained until the actual Worker exits. No automatic attempt retry.
+
+probe reads at most4MiB/512 requests/32 streams/30 seconds in a256MiB owned Worker;
+it uses existing container/configuration parsers, no ffprobe executable or decoder.
+It can inspect bounded initial configuration bytes but never enumerates the whole
+packet table. Unsupported, malformed, oversized and late metadata fail explicitly.
+operation:quality-index separately uses the existing trusted FLV builder's64MiB
+source/128MiB read/packet/index and30-second budgets. No other container gains a
+quality index. A commit racing cancellation can leave a valid cache; re-read it.
+There is no implicit build from discovery or scoring, no automatic full-library
+probe, and no percentage invented while execution progress is unknown.
+
+The management GUI's Technical discovery pane consumes these same commands,
+facts and stable pages; explicit readiness checking can open the ordinary quality
+selector with the exact source ID/version pinned. This does not pair sources,
+select an AU approximately, or move any existing player.
+
 GET /api/library/browse?recursive=1&limit=100&offset=0
 Optional query: search (case-insensitive path substring), root (root ID),
 directory (relative path), recursive=1, limit (1–200), offset and revision.
@@ -86,8 +144,8 @@ indexedDurationUs is a derived span with an estimated tail, not container durati
 FLV validated uploads cannot prove complete source coverage. Prefix and recovered
 gap indexes stay partial. FLV/TS build progress/failure is not persisted before
 commit: cache-miss does not prove that no build is running or that one succeeded.
-Existing compact frame-index routes remain compatible. No new probe/build task
-is provided here.
+Existing compact frame-index routes remain compatible. Cached info/index-query
+remain read-only; the separate explicit preparation jobs above perform new work.
 
 For a ready record adapter, add view=records&axis=pts&startTick=0&endTick=90000&limit=100&byteBudget=65536
 for a bounded half-open interval in ORIGINAL stream ticks. 90000 ticks are one

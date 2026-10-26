@@ -2369,6 +2369,134 @@
     "source": "核对来源与指纹，按系统提示完成导入。",
     "translation": "Verify the source and fingerprint, then finish the import as prompted."
   },
+  "discovery.check": {
+    "source": "只读检查评分来源",
+    "translation": "Check scoring source (read-only)"
+  },
+  "discovery.coverage": {
+    "source": "登记行快照已检查 {inspected}/{total}：匹配 {match}，未知 {unknown}，不匹配 {notMatch}。总数仅在遍历全部页后成立，不证明磁盘文件已完整发现。",
+    "translation": "Inspected {inspected}/{total} registered rows in this snapshot: {match} match, {unknown} unknown, {notMatch} mismatch. Totals require all pages and do not prove that all files on disk have been discovered."
+  },
+  "discovery.depth": {
+    "source": "位深（已知证据）",
+    "translation": "Bit depth (known evidence)"
+  },
+  "discovery.distorted": {
+    "source": "作为待测源打开测量",
+    "translation": "Open measurement with this distorted source"
+  },
+  "discovery.duration": {
+    "source": "最小时长（整数微秒）",
+    "translation": "Minimum duration (integer microseconds)"
+  },
+  "discovery.facts": {
+    "source": "完整技术事实、覆盖与缺失原因",
+    "translation": "Technical facts, coverage and missing reasons"
+  },
+  "discovery.forget": {
+    "source": "结束此重试（已受理任务仍可能继续）",
+    "translation": "End this retry (accepted work may continue)"
+  },
+  "discovery.height": {
+    "source": "最小高度（源像素）",
+    "translation": "Minimum height (source pixels)"
+  },
+  "discovery.index": {
+    "source": "显式准备可信 FLV 索引",
+    "translation": "Explicitly prepare trusted FLV index"
+  },
+  "discovery.invalidDraft": {
+    "source": "保存的本地请求无效，未自动重试，现可重新选择。",
+    "translation": "The saved local request is invalid and was not retried automatically. You can select again."
+  },
+  "discovery.jobLifetime": {
+    "source": "网络错误不是任务失败。关闭页面只停止观察；终态、attempt 与结果以同一后台记录为准。",
+    "translation": "A network error does not mean task failure. Closing the page only stops observation. State, attempt and results come from the same backend record."
+  },
+  "discovery.jobs": {
+    "source": "当前用户的显式准备历史",
+    "translation": "Current actor’s explicit preparation history"
+  },
+  "discovery.keepUnknown": {
+    "source": "保留未知结果，显示缺失原因",
+    "translation": "Keep unknown results and show missing reasons"
+  },
+  "discovery.maxDuration": {
+    "source": "最大时长（整数微秒）",
+    "translation": "Maximum duration (integer microseconds)"
+  },
+  "discovery.maxHeight": {
+    "source": "最大高度（源像素）",
+    "translation": "Maximum height (source pixels)"
+  },
+  "discovery.maxWidth": {
+    "source": "最大宽度（源像素）",
+    "translation": "Maximum width (source pixels)"
+  },
+  "discovery.metadataContainerOnly": {
+    "source": "此容器已提供技术信息；本批可信索引准备与评分仍限 FLV/Enhanced FLV。MP4、Matroska、TS 能读取或播放，不等于可评分。",
+    "translation": "This container provides technical metadata. Trusted index preparation and scoring remain limited to FLV/Enhanced FLV in this batch. Reading or playing MP4, Matroska or TS does not imply scoring support."
+  },
+  "discovery.metadataOnly": {
+    "source": "已读取技术证据；尚未据此核验评分来源。技术流/时钟不是评分 AU 身份。",
+    "translation": "Technical evidence is available. It does not verify scoring readiness. Technical stream IDs and clocks are not scoring AU identities."
+  },
+  "discovery.noStream": {
+    "source": "没有已准备的流证据；缺失字段不能填零。",
+    "translation": "No prepared stream evidence. Missing fields must not be replaced with zero."
+  },
+  "discovery.observeError": {
+    "source": "观察暂不可用：{error}。不表示后台任务失败。",
+    "translation": "Observation is temporarily unavailable: {error}. This does not mean backend task failure."
+  },
+  "discovery.pending": {
+    "source": "提交结果未知；内容已冻结。重试复用原 actor、client 与幂等键，不会另建任务。",
+    "translation": "Submission outcome is unknown; the request is frozen. Retry reuses its original actor, client and idempotency key without creating another task."
+  },
+  "discovery.prepareHelp": {
+    "source": "准备必须显式提交。probe 仅做有界技术读取（4MiB / 512次 / 32流 / 30秒）；可信 FLV 索引准备另受64MiB来源与128MiB读取预算。两者均由服务持有，关页不取消，明确取消后等待 Worker 真实退出；不自动重试。",
+    "translation": "Preparation requires an explicit submission. Probe reads bounded technical data (4 MiB / 512 reads / 32 streams / 30 seconds). Trusted FLV indexing separately limits sources to 64 MiB and reads to 128 MiB. The service owns both operations; closing this page does not cancel them. Explicit cancellation waits for physical Worker exit. No automatic retries."
+  },
+  "discovery.probe": {
+    "source": "显式读取技术信息",
+    "translation": "Explicitly read technical information"
+  },
+  "discovery.qualityChecked": {
+    "source": "此刻可信来源检查通过；测量选择和执行仍重新核验 AU、颜色、源版本与缓存身份。",
+    "translation": "Trusted source checks passed now. Selection and execution still revalidate AU, color, source version and cache identity."
+  },
+  "discovery.recordsReady": {
+    "source": "要求已有有界缓存记录适配器（不是可评分保证）",
+    "translation": "Require an existing bounded cached-record adapter (not a scoring guarantee)"
+  },
+  "discovery.reference": {
+    "source": "作为参考源打开测量",
+    "translation": "Open measurement with this reference source"
+  },
+  "discovery.retry": {
+    "source": "用原幂等键重试未知提交",
+    "translation": "Retry unknown submission with the original key"
+  },
+  "discovery.scope": {
+    "source": "按已缓存技术证据选片。未知不是不匹配；读取不探测、不构建索引，也不移动播放器。元数据可读不表示可评分，评分仍逐源核验可信缓存与精确 AU。",
+    "translation": "Select from cached technical evidence. Unknown does not mean a mismatch. Reading does not probe, build indexes or move a player. Readable metadata does not imply scoring support; scoring still verifies trusted caches and exact AUs."
+  },
+  "discovery.stream": {
+    "source": "明确选择技术流",
+    "translation": "Choose a technical stream explicitly"
+  },
+  "discovery.title": {
+    "source": "技术选片与显式准备",
+    "translation": "Technical selection and explicit preparation"
+  },
+  "discovery.transfer": {
+    "source": "源传递函数",
+    "translation": "Source transfer function"
+  },
+  "discovery.width": {
+    "source": "最小宽度（源像素）",
+    "translation": "Minimum width (source pixels)"
+  },
   "drawing.changed": {
     "source": "画面已变化，未将编辑写入其他帧。",
     "translation": "The frame changed. Edits were not written to a different frame."
