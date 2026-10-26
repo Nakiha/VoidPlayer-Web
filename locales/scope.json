@@ -9,7 +9,10 @@
     "src/admin/main.ts",
     "src/admin/measurement.ts",
     "src/admin/presentation.ts",
+    "src/admin/quality-cambi.ts",
+    "src/admin/quality-correspondence.ts",
     "src/admin/quality-ranges.ts",
+    "src/admin/quality-vmaf.ts",
     "src/admin/quality.ts",
     "src/admin/shell.ts",
     "src/admin/workspace-copy-name.ts",
@@ -51,6 +54,7 @@
     "src/ui/bitstream-reasons.ts",
     "src/ui/brand-cinema.ts",
     "src/ui/brand-effects.ts",
+    "src/ui/cambi-view.ts",
     "src/ui/chart-hover-style.ts",
     "src/ui/checkpoint-history.ts",
     "src/ui/choice-menu.ts",
@@ -96,6 +100,7 @@
     "src/ui/quality-pair-view.ts",
     "src/ui/quality-roi.ts",
     "src/ui/quality-spatial.ts",
+    "src/ui/quality-view-entry.ts",
     "src/ui/resize-gesture.ts",
     "src/ui/saved-workspaces.ts",
     "src/ui/seek-preview.ts",
@@ -130,9 +135,7 @@
     "src/ui/workspace-recovery.ts",
     "src/ui/workspace-sharing.ts",
     "src/ui/workspace-state.ts",
-    "src/ui/workspace-transfer.ts",
-    "src/admin/quality-correspondence.ts",
-    "src/admin/quality-vmaf.ts"
+    "src/ui/workspace-transfer.ts"
   ],
   "exceptions": [
     {

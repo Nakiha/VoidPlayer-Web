@@ -2,7 +2,7 @@ import {mkdirSync,rmSync,writeFileSync,readFileSync,readdirSync,lstatSync,openSy
 import {NativeVmafRunner} from '../vmaf/runner.ts';import type {VmafComponent} from '../vmaf/component.ts';
 import {CAMBI_LIMITS,CAMBI_RECIPE,CAMBI_CAPABILITY,CambiError,cambiOutputBudget} from '../../../shared/analysis/quality/cambi.ts';import type {CambiInput,CambiPrepared,CambiNative} from '../../../shared/analysis/quality/cambi.ts';
 import type {VmafComponentConfig} from '../../../shared/analysis/quality/vmaf.ts';import type {MediaLibraryIndex} from '../../library.ts';
-export type CambiHooks={admitted():void;phase(name:string):void;progress(n:number,total:number):void;prepared(p:CambiPrepared):void;process(p:{pid:number;startTicks:string;bootId:string}|null):void;frame(index:number,score:number,maps:{scale:number;bytes:Uint8Array;sha256:string}[]):void};
+export type CambiHooks={admitted():void;phase(name:string):void;progress(n:number,total:number):void;prepared(p:CambiPrepared):void;process(p:{pid:number;startTicks:string;bootId:string}|null):void;frame(index:number,score:number,maps:{scale:number;bytes:Uint8Array;sha256:string}[]):void|Promise<void>};
 export class NativeCambiRunner extends NativeVmafRunner{
  constructor(library:MediaLibraryIndex,coreDir:string,config:VmafComponentConfig|undefined){super(library,coreDir,config);}
  async cambiCapability(){
@@ -29,10 +29,11 @@ export class NativeCambiRunner extends NativeVmafRunner{
    hooks.phase('persist-evidence');for(const frame of prepared.frames){combined.throwIfAborted();const maps=[];for(const scale of prepared.output.scales){
     const bytes=Buffer.alloc(scale.bytes),fd=openSync(path.join(directory,'heat',scale.file),'r');try{let filled=0;while(filled<bytes.length){const n=readSync(fd,bytes,filled,bytes.length-filled,frame.index*scale.bytes+filled);if(!n)throw new CambiError('native-result-invalid','Truncated CAMBI heatmap');filled+=n;}}finally{closeSync(fd);}
     maps.push({scale:scale.scale,bytes,sha256:createHash('sha256').update(bytes).digest('hex')});
-   }hooks.frame(frame.index,native.frames[frame.index].score,maps);}
+   }await hooks.frame(frame.index,native.frames[frame.index].score,maps);}
    return {prepared,native};
   }finally{if(temporary&&!this.stopUncertain)try{rmSync(directory,{recursive:true,force:true});}catch{this.stopUncertain=true;throw new CambiError('stop-uncertain','CAMBI temporary evidence could not be reclaimed');}}
  });}
+ async inspectCambi(input:CambiInput,target:import('../../../shared/analysis/quality/frame-pair.ts').PairTarget,signal:AbortSignal){return this.owned(input,signal,()=>{},s=>this.worker<{frame:import('../../../shared/analysis/quality/psnr.ts').PsnrFrame;provenance:import('../../../shared/analysis/quality/frame-pair.ts').PairProvenance;decoder:import('../../../shared/analysis/quality/frame-pair.ts').PairDecoder['version'];work:unknown}>('../cambi/decode-worker.ts',{mode:'picture',database:this.library.indexDatabase,coreDir:this.coreDir,directory:'',input,target},s));}
  private async nativeCambi(c:VmafComponent,directory:string,input:CambiInput,prepared:CambiPrepared,signal:AbortSignal,onProcess:CambiHooks['process']):Promise<CambiNative>{
   mkdirSync(path.join(directory,'heat'),{mode:0o700});const count=prepared.frames.length,g=prepared.geometry,expected=g.width*g.height*3/2*(g.bitDepth===8?1:2)*count;
   if(lstatSync(path.join(directory,'source.yuv')).size!==expected)throw new CambiError('native-result-invalid','CAMBI raw frame length differs');

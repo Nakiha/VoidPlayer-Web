@@ -4,7 +4,7 @@ import {parseFlvIndex} from '../../../shared/media/indexing/flv-index-cache.ts';
 import {inspectFlvFrame,PAIR_LIMITS} from '../../../shared/analysis/quality/frame-pair.ts';import type {PairTarget} from '../../../shared/analysis/quality/frame-pair.ts';
 import {createPairDecoder} from '../../../shared/analysis/quality/wasm-decoder.ts';import {instantiateCore} from '../../../shared/wasm/core.ts';import {validateDescription} from '../../../shared/media/frame-description.ts';
 import {CAMBI_LIMITS,CambiError,cambiOutputBudget} from '../../../shared/analysis/quality/cambi.ts';import type {CambiInput,CambiPrepared} from '../../../shared/analysis/quality/cambi.ts';
-export async function runCambiDecode(data:{mode:'decode'|'verify';database:string;coreDir:string;directory:string;input:CambiInput;control:SharedArrayBuffer},progress:(frames:number,total:number)=>void){
+export async function runCambiDecode(data:{mode:'decode'|'verify'|'picture';target?:PairTarget;database:string;coreDir:string;directory:string;input:CambiInput;control:SharedArrayBuffer},progress:(frames:number,total:number)=>void){
  const started=performance.now(),control=new Int32Array(data.control),check=()=>{if(Atomics.load(control,0))throw new CambiError('cancelled','CAMBI decode cancelled');if(performance.now()-started>data.input.budget.maxElapsedMs)throw new CambiError('budget-exceeded','CAMBI decode deadline');};
  const db=openIndexDatabase(data.database,{readOnly:true}),store=new FrameIndexStore(db);let indexBytes=0,indexPackets=0;
  const open=(t:PairTarget)=>{check();const v=libraryPairSource(db,store,t,{...PAIR_LIMITS,maxIndexBytes:Math.min(PAIR_LIMITS.maxIndexBytes,CAMBI_LIMITS.maxIndexBytes-indexBytes),maxIndexPackets:PAIR_LIMITS.maxIndexPackets},control);indexBytes+=Buffer.byteLength(JSON.stringify(v.source.index));indexPackets+=v.source.index!.packets.length;if(indexBytes>CAMBI_LIMITS.maxIndexBytes||indexPackets>CAMBI_LIMITS.maxIndexPackets){v.source.close();throw new CambiError('budget-exceeded','Cumulative CAMBI index budget');}return v;};
@@ -15,12 +15,14 @@ export async function runCambiDecode(data:{mode:'decode'|'verify';database:strin
   const {startPtsUs,endPtsUs}=data.input.interval,rows=index.packets.flatMap((p,au)=>p.pts>=startPtsUs&&p.pts<endPtsUs?[{au,p}]:[]);
   if(!rows.length)throw new CambiError('no-results','No indexed pictures in the declared interval');
   if(rows.length>CAMBI_LIMITS.intervalAus)throw new CambiError('budget-exceeded','Interval exceeds 256 indexed AUs');
+  const span=rows.map(r=>r.p.pts).sort((a,b)=>a-b);if(span.some((p,i)=>!Number.isSafeInteger(p)||p<0||i>0&&p<=span[i-1]||i>1&&p-span[i-1]!==span[1]-span[0]))throw new CambiError('unsupported-source','Negative/VFR/ambiguous clocks in interval are unsupported');
   const counts=new Map<number,number>();for(const p of index.packets)counts.set(p.pts,(counts.get(p.pts)??0)+1);
   const targets:PairTarget[]=[],unsupported:CambiPrepared['coverage']['unsupported']=[];let unsampled=0;
   for(const [ordinal,{au,p}]of rows.entries()){
    if(ordinal%data.input.sampling.stride){unsampled++;continue;}
    const value=qualityTargetForAu(binding,index,au,counts);if(value.target)targets.push(value.target);else unsupported.push({au,sourcePtsUs:p.pts,reason:value.reason??'unsupported AU'});
   }
+  if(data.mode==='picture'){if(!data.target)throw Error('Missing picture target');targets.splice(0,targets.length,data.target);}
   if(!targets.length)throw new CambiError('unsupported-source','No selected AU has a supported exact identity window');
   if(targets.length>CAMBI_LIMITS.frames)throw new CambiError('budget-exceeded','Selected frames exceed32');
   const pts=targets.map(t=>t.sourcePtsUs).sort((a,b)=>a-b);if(pts.some((p,i)=>p<0||i>1&&p-pts[i-1]!==pts[1]-pts[0]))throw new CambiError('unsupported-source','Negative/VFR selected source clocks not admitted');
@@ -32,7 +34,8 @@ export async function runCambiDecode(data:{mode:'decode'|'verify';database:strin
     const picture=await inspectFlvFrame(target,source.source,()=>createPairDecoder(load),new AbortController().signal);check();
     const f=picture.frame,d=f.description;validateDescription(d,f.pixels.length);
     const c=d.sourceColor??d.color,l=d.yuv;
-    if(d.format!=='YUV'||!l||![8,10].includes(l.bitDepth)||[c.primaries,c.transfer,c.matrix].some(t=>t!=='bt709')||c.fullRange!==false||l.chromaLocation!==1||d.displayWidth!==d.width||d.displayHeight!==d.height)throw new CambiError('unsupported-source','CAMBI requires explicit limited BT709 SDR YUV420 8/10bit left chroma and square full-frame geometry');
+    if(d.format!=='YUV'||!l||l.semiplanar||l.subsampleX!==1||l.subsampleY!==1||l.bitShift!==0||d.colorFallback||![8,10].includes(l.bitDepth)||[c.primaries,c.transfer,c.matrix].some(t=>t!=='bt709')||c.fullRange!==false||l.chromaLocation!==1||d.displayWidth!==d.width||d.displayHeight!==d.height)throw new CambiError('unsupported-source',`CAMBI requires explicit limited BT709 SDR YUV420 8/10bit left chroma and square full-frame geometry: ${JSON.stringify({color:c,bitDepth:l?.bitDepth,chromaLocation:l?.chromaLocation,width:d.width,displayWidth:d.displayWidth,height:d.height,displayHeight:d.displayHeight,format:d.format})}`);
+    if(data.mode==='picture')return {frame:{description:d,pixels:f.pixels},provenance:picture.provenance,decoder:picture.decoder,work:picture.work};
     const geometry={width:d.width,height:d.height,bitDepth:l.bitDepth as 8|10};if(ordinal&&JSON.stringify(geometry)!==JSON.stringify(result.geometry))throw new CambiError('source-changed','CAMBI geometry changed');result.geometry=geometry;result.output=cambiOutputBudget(d.width,d.height,targets.length,data.input);
     result.work.readBytes+=picture.work.readBytes;result.work.packets+=picture.work.packets;result.work.outputFrames+=picture.work.outputFrames;
     if(result.work.readBytes>CAMBI_LIMITS.maxReadBytes||result.work.packets>CAMBI_LIMITS.maxPackets||result.work.outputFrames>CAMBI_LIMITS.maxPackets)throw new CambiError('budget-exceeded','CAMBI cumulative dependency work budget');

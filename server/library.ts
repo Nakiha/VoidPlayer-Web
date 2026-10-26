@@ -1,3 +1,5 @@
+import {NativeCambiService} from './analysis/cambi/service.ts';
+import {NativeCambiRunner} from './analysis/cambi/runner.ts';
 import {NativeVmafService} from './analysis/vmaf/service.ts';
 import {NativeVmafRunner} from './analysis/vmaf/runner.ts';
 import type {VmafComponentConfig} from '../shared/analysis/quality/vmaf.ts';
@@ -44,6 +46,9 @@ export class MediaLibraryIndex {
   get discovery() { if(this.closed)throw new AdminError(503,'Library discovery is closed.','discovery-unavailable');return this.discoveryService??=new LibraryDiscoveryService(this); }
   private rangeService?: QualityRangeService;
   private correspondenceService?:CorrespondenceService;
+  private cambiService?:NativeCambiService;
+  get nativeCambiDescriptor(){return this.cambiService?.descriptor??null;}
+  get qualityCambi(){if(this.closed||!this.durableQualityJobsEnabled)throw new AdminError(503,'CAMBI requires persistent library storage','quality-storage-unavailable');return this.cambiService??=new NativeCambiService(this.indexDatabase+'.quality-cambi.sqlite',new NativeCambiRunner(this,this.coreDirectory,this.options.nativeVmaf));}
   private vmafService?:NativeVmafService;
   get nativeVmafDescriptor(){return this.vmafService?.descriptor??null;}
   get qualityVmaf(){if(this.closed)throw new AdminError(503,'VMAF service closed.','vmaf-service-unavailable');if(!this.durableQualityJobsEnabled)throw new AdminError(503,'VMAF needs persistent library storage.','quality-storage-unavailable');return this.vmafService??=new NativeVmafService(this.indexDatabase+'.quality-vmaf.sqlite',new NativeVmafRunner(this,this.coreDirectory,this.options.nativeVmaf),this.qualityCorrespondence);}
@@ -407,6 +412,7 @@ export class MediaLibraryIndex {
   private async closeOwned() {
     this.closed = true; this.stop();
     await this.correspondenceService?.close();
+    await this.cambiService?.close();
     await this.vmafService?.close();
     await this.discoveryService?.close();
     await this.rangeService?.close();

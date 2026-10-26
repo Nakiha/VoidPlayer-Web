@@ -1,3 +1,4 @@
+import type {CambiRef,CambiEvidence} from '../shared/review/cambi-evidence.ts';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -21,7 +22,7 @@ export class AnnotationStore {
     if (file !== ':memory:') mkdirSync(path.dirname(file), { recursive: true });
     const db = this.db = openIndexDatabase(file);
     const version = Number(db.prepare('PRAGMA user_version').get()!.user_version);
-    if (version > 4) { db.close(); throw new Error('标注数据库来自更新的程序。'); }
+    if (version > 5) { db.close(); throw new Error('标注数据库来自更新的程序。'); }
     db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=1000;
       CREATE TABLE IF NOT EXISTS spaces(id TEXT PRIMARY KEY,name TEXT NOT NULL,created_at TEXT NOT NULL);
       INSERT OR IGNORE INTO spaces VALUES('default','共享评审',strftime('%Y-%m-%dT%H:%M:%fZ','now'));
@@ -37,7 +38,7 @@ export class AnnotationStore {
       CREATE INDEX IF NOT EXISTS annotation_events_space ON annotation_events(space,sequence);
       CREATE TABLE IF NOT EXISTS annotation_event_floor(id INTEGER PRIMARY KEY,sequence INTEGER NOT NULL);
       INSERT OR IGNORE INTO annotation_event_floor SELECT 1,sequence FROM annotation_clock WHERE id=1;
-      PRAGMA user_version=4;`);
+      PRAGMA user_version=5;`);
   }
   spaces() { return this.db.prepare('SELECT id,name FROM spaces ORDER BY created_at,id').all(); }
   createSpace(name: unknown) {
@@ -82,7 +83,7 @@ export class AnnotationStore {
     } catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
   mutate(space: string, value: unknown, actor: Actor, requestId?: string,
-    quality?: { origin: string; resolve(ref: QualityEvidenceRef): QualityJobResult }): AnnotationRecord {
+    quality?: { origin: string; resolve(ref: QualityEvidenceRef): QualityJobResult;resolveCambi?(ref:CambiRef):{completedAt:number;value:CambiEvidence['value']} }): AnnotationRecord {
     this.space(space);
     this.db.exec('BEGIN IMMEDIATE');
     try {
@@ -107,7 +108,13 @@ export class AnnotationStore {
           serviceOrigin:quality.origin,completedAt:result.completedAt,attachedAt:now,attachedBy:{id:actor.id,name:actor.name},
           verification:'server-verified',value:result.value};
       }
-      const document = applyAnnotationOperation(operation, current, actor, now, evidence);
+      let cambi:CambiEvidence|undefined;
+      if(operation.action==='create-cambi-candidate'){
+        if(current)throw new AnnotationCommandError(409,'annotation-revision-conflict','Candidate exists');
+        if(!quality?.resolveCambi)throw new AdminError(503,'CAMBI result unavailable','evidence-unavailable');
+        const result=quality.resolveCambi(operation.cambi!);cambi={schema:'voidplayer-annotation-cambi',version:1,id:operation.operationId,ref:operation.cambi!,serviceOrigin:quality.origin,completedAt:result.completedAt,attachedAt:now,attachedBy:{id:actor.id,name:actor.name},verification:'server-verified',value:result.value};
+      }
+      const document = applyAnnotationOperation(operation, current, actor, now, evidence,cambi);
       const json = JSON.stringify(document);
       if (Buffer.byteLength(json) > ANNOTATION_BYTES) throw new AdminError(413, '单条标注内容过大。', 'annotation-too-large');
       this.db.exec('UPDATE annotation_clock SET sequence=sequence+1 WHERE id=1');
