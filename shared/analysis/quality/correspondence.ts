@@ -1,5 +1,5 @@
-import {parseFlvIndex} from '../../media/indexing/flv-index-cache.ts';
-import type {FlvIndexDocument} from '../../media/indexing/flv-index-cache.ts';
+import {qualitySourceIndex} from './source-index.ts';
+import type {QualityIndexDocument} from './source-index.ts';
 import {qualityFrameCandidates,qualityTargetForAu} from './selection.ts';
 import {planQualityRange,QUALITY_RANGE_LIMITS} from './ranges.ts';
 import type {QualityRangeInput,QualityRangePlan} from './ranges.ts';
@@ -49,10 +49,10 @@ export function correspondenceInput(value:unknown):CorrespondenceInput{
 }
 
 /** Exact clock joins over raw cache records; no nearest-frame or content inference. */
-export function buildCorrespondence(relation:ReferenceRelation,request:CorrespondenceInput,sources:[LibraryPairBinding&{index:FlvIndexDocument},LibraryPairBinding&{index:FlvIndexDocument}],work:CorrespondenceResult['work']):CorrespondenceResult{
+export function buildCorrespondence(relation:ReferenceRelation,request:CorrespondenceInput,sources:[LibraryPairBinding&{index:QualityIndexDocument},LibraryPairBinding&{index:QualityIndexDocument}],work:CorrespondenceResult['work']):CorrespondenceResult{
   const admissions:(string|null)[]=[];
   const indexes=sources.map((s,i)=>{const expected=i?relation.input.distorted:relation.input.reference,build=i?request.distortedBuildId:request.referenceBuildId;if(s.binding.mediaId!==expected.mediaId||s.binding.mediaVersion!==expected.mediaVersion||s.binding.indexBuildId!==build)fail('Pinned correspondence source/cache changed');
-    const index=parseFlvIndex(s.index,s.binding.size);let issue:string|null=null;
+    const index=qualitySourceIndex(s.index,s.binding.size);let issue:string|null=null;
     try{const page=qualityFrameCandidates(s,s.index,{afterAu:0,limit:1}),roi=request.recipe.roi;if(!page.inspection.supported)issue=page.inspection.reason;if(roi.x+roi.width>page.geometry.width||roi.y+roi.height>page.geometry.height)issue='ROI exceeds admitted visible source geometry';}
     catch(e){if(['unsupported-source','budget-exceeded'].includes((e as {code?:string}).code??''))issue=(e as Error).message;else throw e;}
     admissions.push(issue);return index;});

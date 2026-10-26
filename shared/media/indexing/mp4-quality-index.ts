@@ -58,6 +58,30 @@ export function verifyMp4QualityPacket(doc:Pick<Mp4QualityDocument,'codec'|'desc
     if(doc.codec==='hevc'&&[16,17,18,21,22,23].includes(type))fail('MP4 open/unsupported HEVC random access is not admitted');
   }
 }
+/** Validate a persisted document without granting producer trust. The host owns
+ * its commit/digest seal; execution also re-reads the authoritative source tables. */
+export function parseMp4QualityDocument(value:unknown,size:number):Mp4QualityDocument{
+  const d=value as Mp4QualityDocument;
+  const fields=(v:unknown,names:string[])=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join(',')===[...names].sort().join(',');
+  if(!fields(d,['schema','version','size','trackId','timescale','durationTicks','sampleEntry','codec','description','width','height','color','moov','mdat','samples'])
+    ||d.schema!=='voidplayer-mp4-quality-index'||d.version!==1||d.size!==size||!safe(size)||size<8||size>MP4_QUALITY_LIMITS.sourceBytes
+    ||!safe(d.trackId)||d.trackId<1||!safe(d.timescale)||d.timescale<1||!safe(d.durationTicks)||d.durationTicks<1
+    ||!['avc1','hvc1'].includes(d.sampleEntry)||d.codec!==(d.sampleEntry==='avc1'?'h264':'hevc')
+    ||![d.width,d.height].every(n=>safe(n)&&n>0&&n<=16384)||!Array.isArray(d.description)||!d.description.length||d.description.length>1024*1024||d.description.some(n=>!Number.isInteger(n)||n<0||n>255)
+    ||!fields(d.color,['primaries','transfer','matrix','fullRange'])||d.color.primaries!==1||d.color.transfer!==1||d.color.matrix!==1||typeof d.color.fullRange!=='boolean'
+    ||!fields(d.moov,['offset','size','sha256'])||!safe(d.moov.offset)||d.moov.offset<0||!safe(d.moov.size)||d.moov.size<8||d.moov.size>MP4_QUALITY_LIMITS.metadataBytes||d.moov.offset+d.moov.size>size||!/^[a-f0-9]{64}$/.test(d.moov.sha256)
+    ||!Array.isArray(d.mdat)||!d.mdat.length||d.mdat.length>MP4_QUALITY_LIMITS.boxes||!Array.isArray(d.samples)||!d.samples.length||d.samples.length>MP4_QUALITY_LIMITS.samples)fail('Invalid persisted MP4 quality index');
+  let previousEnd=0;for(const m of d.mdat){if(!fields(m,['start','end'])||!safe(m.start)||!safe(m.end)||m.start<previousEnd||m.end<=m.start||m.end>size||m.start<d.moov.offset+d.moov.size&&m.end>d.moov.offset)fail('Invalid MP4 media extents');previousEnd=m.end;}
+  const pts=new Set<number>();let expectedDts=0;
+  for(const [ordinal,s]of d.samples.entries()){
+    if(!fields(s,['ordinal','description','offset','size','dtsTicks','ctsTicks','durationTicks','dtsUs','ptsUs','durationUs','key'])||s.ordinal!==ordinal||s.description!==1||!safe(s.offset)||!safe(s.size)||s.size<1||s.size>MP4_QUALITY_LIMITS.packetBytes||!d.mdat.some(m=>s.offset>=m.start&&s.offset+s.size<=m.end)
+      ||![s.dtsTicks,s.ctsTicks,s.durationTicks,s.dtsUs,s.ptsUs,s.durationUs].every(safe)||s.durationTicks<1||s.dtsTicks!==expectedDts||typeof s.key!=='boolean'
+      ||s.dtsUs!==mp4TicksToUs(s.dtsTicks,d.timescale)||s.ptsUs!==mp4TicksToUs(s.dtsTicks+s.ctsTicks,d.timescale)||s.durationUs!==mp4TicksToUs(s.durationTicks,d.timescale)||pts.has(s.ptsUs))fail('Invalid MP4 sample identity/clock');
+    expectedDts+=s.durationTicks;if(!safe(expectedDts))fail('MP4 sample clock overflow');pts.add(s.ptsUs);
+  }
+  const sorted=[...d.samples].sort((a,b)=>a.offset-b.offset);if(sorted.some((s,i)=>i>0&&s.offset<sorted[i-1].offset+sorted[i-1].size)||!d.samples[0].key||expectedDts!==d.durationTicks)fail('Incomplete MP4 sample table');
+  configurationSets(d.codec,new Uint8Array(d.description));return d;
+}
 /** Dedicated strict authority for quality. No playback recovery, edit/POC repair,
  * approximate clocks, media-bunny timing, decoder or implicit index publication. */
 export async function readMp4QualityIndex(reader:{size:number;read(offset:number,length:number):Promise<Uint8Array>},options:{digest(bytes:Uint8Array):Promise<string>;check?():void;validatePayloads?:boolean}):Promise<{document:Mp4QualityDocument;readBytes:number}>{

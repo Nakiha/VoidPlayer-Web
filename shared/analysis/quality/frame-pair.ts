@@ -1,8 +1,11 @@
 import { measureSsim, ssimPlan } from './ssim.ts';
 import type { SsimRequest, SsimResult } from './ssim.ts';
-import { parseFlvIndex } from '../../media/indexing/flv-index-cache.ts';
-import type { FlvIndexDocument } from '../../media/indexing/flv-index-cache.ts';
-import { FLV_MEDIA_INDEX_IDENTITY, mediaIndexIdentityKey } from '../../media/indexing/media-index-identity.ts';
+import type {FlvIndexDocument} from '../../media/indexing/flv-index-cache.ts';
+import {qualitySourceIndex,isMp4QualityDocument} from './source-index.ts';
+import type {QualityIndexDocument,QualityVideoIndex} from './source-index.ts';
+import {readMp4QualityIndex,verifyMp4QualityPacket} from '../../media/indexing/mp4-quality-index.ts';
+import type {Mp4QualitySample} from '../../media/indexing/mp4-quality-index.ts';
+import { FLV_MEDIA_INDEX_IDENTITY, MP4_QUALITY_MEDIA_INDEX_IDENTITY, mediaIndexIdentityKey } from '../../media/indexing/media-index-identity.ts';
 import type { MediaIndexIdentity } from '../../media/indexing/media-index-identity.ts';
 import { scanFlv } from '../../media/containers/flv-demux.ts';
 import type { FlvIndex } from '../../media/containers/flv-demux.ts';
@@ -45,9 +48,10 @@ export type FramePairRequest = { pairing: 'caller-specified'; reference: PairTar
 export type PairBudget = { -readonly [K in keyof typeof PAIR_LIMITS]: number };
 /** The host must bind this cached document and reader to the same immutable source.
  * This boundary never constructs an index or consults a playback source/cursor. */
-export interface CachedPairSource {
+export interface CachedPairSource<Document extends QualityIndexDocument=FlvIndexDocument> {
   binding(): SourceBinding;
-  index: FlvIndexDocument | null;
+  index: Document | null;
+  digest?(bytes:Uint8Array):Promise<string>;
   read(offset: number, length: number): Promise<Uint8Array>;
   close(): void;
 }
@@ -63,7 +67,8 @@ export interface PairDecoder {
 }
 export type PairProvenance = PairTarget & { decoded: { sourcePtsUs: number; description: FrameDescription }; packet: { offset: number; size: number; sourceDtsUs: number };
   dependency?: { packets: PairPacket[]; outputFrames: number; guarantee: typeof FORWARD_OUTPUT_GUARANTEE; boundary?:PairPacket|null; outputIdentity?:PacketOutputIdentity };
-  validation: 'cached-au-source-tag-isolated-closed-picture-v1' | 'cached-contiguous-forward-one-output-per-au-v1' | 'cached-closed-gop-packet-identity-v1' };
+  container?:{kind:'mp4';trackId:number;timescale:number;tableSha256:string;sample:Mp4QualitySample};
+  validation: 'cached-mp4-closed-gop-packet-identity-v1' | 'cached-au-source-tag-isolated-closed-picture-v1' | 'cached-contiguous-forward-one-output-per-au-v1' | 'cached-closed-gop-packet-identity-v1' };
 export type FramePairResult = { schema: 'voidplayer-frame-pair-psnr'; version: 1; pairing: 'caller-specified';
   correspondence: 'caller-specified-no-content-or-time-alignment'; decoder: PairDecoder['version']; metric: PsnrResult; ssim?: SsimResult;
   provenance: { reference: PairProvenance; distorted: PairProvenance }; work: { readBytes: number; packets: number; outputFrames: number; elapsedMs: number } };
@@ -84,11 +89,12 @@ export function pairBudget(request: FramePairRequest): PairBudget {
     const p = target?.picture;
     if (!target || !/^[a-f0-9]{24}$/.test(target.mediaId) || !/^[a-f0-9]{24}$/.test(target.mediaVersion)
       || !Number.isSafeInteger(target.size) || target.size < 1 || !/^[a-zA-Z0-9._-]{1,128}$/.test(target.indexBuildId)
-      || !target.indexIdentity || mediaIndexIdentityKey(target.indexIdentity) !== mediaIndexIdentityKey(FLV_MEDIA_INDEX_IDENTITY)
+      || !target.indexIdentity || ![FLV_MEDIA_INDEX_IDENTITY,MP4_QUALITY_MEDIA_INDEX_IDENTITY].some(id=>mediaIndexIdentityKey(target.indexIdentity)===mediaIndexIdentityKey(id))
       || !p || p.sourceVersion !== `${target.mediaId}@${target.mediaVersion}` || p.stream !== 'video'
       || p.configuration !== 0 || p.picture !== 0 || p.layer !== 0 || p.field !== 'frame'
       || !Number.isSafeInteger(p.au) || p.au < 0 || p.au >= budget.maxIndexPackets || !Number.isSafeInteger(target.sourcePtsUs))
       fail('invalid-request', 'Invalid FLV source/cache/picture identity');
+    if(target.indexIdentity.kind==='mp4'&&target.decode?.mode!=='packet-identity-gop-v1')fail('invalid-request','MP4 quality requires an explicit complete bounded GOP');
     if(target.decode !== undefined){
       const d=target.decode,gop=d?.mode==='packet-identity-gop-v1';
       if(!d||Object.keys(d).some(key=>!(gop?['mode','startAu','endAu']:['mode','startAu']).includes(key))
@@ -142,7 +148,7 @@ export function requireInspectionGeometry(g:HevcGeometry) {
 /** A contiguous decode-order prefix, not an inferred reference graph. Unique
  * zero-CTS clocks plus exactly one immediate decoder output per input establish
  * the target association. Reordering/delayed output is deliberately unsupported. */
-export function forwardPacketPlan(index:FlvIndex,target:PairTarget,counts?:Map<number,number>):PairPacket[] {
+export function forwardPacketPlan(index:QualityVideoIndex,target:PairTarget,counts?:Map<number,number>):PairPacket[] {
   const start=target.decode?.startAu,end=target.picture.au;
   if(start===undefined||start<0||start>=end||end-start+1>FORWARD_PAIR_LIMITS.packetsPerSide)
     fail('invalid-request','Invalid forward decode window');
@@ -160,7 +166,7 @@ export function forwardPacketPlan(index:FlvIndex,target:PairTarget,counts?:Map<n
 }
 /** Full cached GOP, bounded by the next key candidate or final source end.
  * The actual closing IDR bytes are checked separately before decoding. */
-export function gopPacketPlan(index:FlvIndex,target:PairTarget,counts?:Map<number,number>):PairPacket[]{
+export function gopPacketPlan(index:QualityVideoIndex,target:PairTarget,counts?:Map<number,number>):PairPacket[]{
   if(target.decode?.mode!=='packet-identity-gop-v1')fail('invalid-request','Explicit packet identity GOP required');
   const {startAu,endAu}=target.decode;
   if(!Number.isSafeInteger(startAu)||!Number.isSafeInteger(endAu)||startAu<0||startAu>target.picture.au||endAu<target.picture.au||endAu-startAu+1>32||endAu>=index.packets.length)
@@ -181,7 +187,7 @@ export function gopPacketPlan(index:FlvIndex,target:PairTarget,counts?:Map<numbe
 }
 /** The exact source/cache/tag/AU admission and decoder are shared by measurement
  * and explicit inspection. Inspection never invokes the numerical metric. */
-async function withFlvFramePair<T>(request: FramePairRequest, sources: [CachedPairSource, CachedPairSource],
+async function withFramePair<T>(request: FramePairRequest, sources: [CachedPairSource<QualityIndexDocument>, CachedPairSource<QualityIndexDocument>],
   loadDecoder: (budget: PairBudget) => Promise<PairDecoder>, signal: AbortSignal, accept: (pair: InspectedFramePair) => T, admitGeometry?: (geometry:HevcGeometry)=>void): Promise<T> {
   let decoder: PairDecoder | undefined;
   const started = performance.now(); let readBytes = 0,packetsUsed=0,outputFrames=0;
@@ -200,16 +206,18 @@ async function withFlvFramePair<T>(request: FramePairRequest, sources: [CachedPa
       const source = sources[role], target = role ? request.distorted : request.reference;
       const doc = source.index;
       if (!doc) fail('cache-miss', 'An existing complete source-bound FLV cache is required');
-      if (!Array.isArray(doc.packets) || doc.packets.length > budget.maxIndexPackets
+      if ((isMp4QualityDocument(doc)?doc.samples.length:doc.packets.length) > budget.maxIndexPackets
         || JSON.stringify(doc).length > budget.maxIndexBytes) fail('budget-exceeded', 'FLV cached index budget exceeded');
-      if (doc.configurations || doc.truncatedAt !== undefined || doc.recoveredGaps) fail('unsupported-source', 'v1 requires one configuration and a complete unrecovered source');
       let index;
-      try { index = parseFlvIndex(doc, target.size); } catch { fail('identity-mismatch', 'Invalid cached FLV document'); }
+      try { index = qualitySourceIndex(doc, target.size); } catch { fail('identity-mismatch', 'Invalid cached FLV document'); }
+      if(index.configurations||index.truncatedAt!==undefined||index.recoveredGaps)fail('unsupported-source','Quality requires one configuration and a complete unrecovered source');
+      if((index.container==='mp4')!==(target.indexIdentity.kind==='mp4'))fail('identity-mismatch','Container and cache identity differ');
       if (index.codec !== 'h264' && index.codec !== 'hevc') fail('unsupported-source', 'v1 supports H.264/HEVC only');
       const codec = index.codec;
-      const geometry = codec === 'h264' ? avcGeometry(index.description,!!admitGeometry) : hevcGeometry(index.description,!!admitGeometry);
+      const geometry = codec === 'h264' ? avcGeometry(index.description,!!admitGeometry||!!index.mp4) : hevcGeometry(index.description,!!admitGeometry||!!index.mp4);
       if (!geometry || ('interlaced' in geometry && geometry.interlaced) || (codec === 'hevc' && hevcFieldPictures(index.description)))
         fail('unsupported-source', 'Progressive SPS geometry is required');
+      if(index.mp4)requireInspectionGeometry(geometry);
       admitGeometry?.(geometry);sourceGeometry.push(structuredClone(geometry));
       if (geometry.codedWidth * geometry.codedHeight > budget.maxPixels) fail('budget-exceeded', 'SPS pixel budget exceeded');
       const packet = index.packets[target.picture.au];
@@ -231,6 +239,11 @@ async function withFlvFramePair<T>(request: FramePairRequest, sources: [CachedPa
         if (bytes.length !== length) fail('source-changed', 'Short source read');
         return bytes;
       };
+      if(index.mp4){
+        if(!source.digest)fail('identity-mismatch','MP4 source requires metadata digest verification');
+        const actual=await readMp4QualityIndex({size:target.size,read},{digest:source.digest!,validatePayloads:false,check});
+        if(JSON.stringify(actual.document)!==JSON.stringify(doc))fail('identity-mismatch','MP4 source tables/configuration differ from the trusted cache');
+      }else{
       // Verify source configuration and the cache's first packet without building an index.
       const prefix = (await scanFlv({ size: target.size, read }, undefined, undefined, true)).index;
       const first = index.packets[0], actual = prefix.packets[0];
@@ -238,10 +251,12 @@ async function withFlvFramePair<T>(request: FramePairRequest, sources: [CachedPa
         || prefix.description.some((v, i) => v !== index.description[i])
         || ['offset', 'size', 'pts', 'dts', 'key'].some(k => first[k as keyof typeof first] !== actual[k as keyof typeof actual]))
         fail('identity-mismatch', 'Source prefix differs from cached configuration/packet');
+      }
       const sets=configurationSets(codec,index.description),inputs:(PairPacket&{bytes:Uint8Array})[]=[];
       const boundary=gop&&decodeEndAu(target)+1<index.packets.length?{au:decodeEndAu(target)+1,...index.packets[decodeEndAu(target)+1]}:null;
       if(boundary&&boundary.size>budget.maxPacketBytes)fail('budget-exceeded','Closing IDR packet exceeds byte budget');
       for(const packet of [...plan,...(boundary?[boundary]:[])]){
+        if(!index.mp4){
         // Validate every dependency tag, original timestamp/key flag and footer.
         const before = await read(packet.offset - 19, 19), matches: number[] = [];
         for (const skip of [5, 8]) {
@@ -258,7 +273,9 @@ async function withFlvFramePair<T>(request: FramePairRequest, sources: [CachedPa
         }
         if (matches.length !== 1 || u32(await read(packet.offset + packet.size, 4), 0) !== 11 + matches[0] + packet.size)
           fail('identity-mismatch', 'Source tag identity differs from cached AU');
+        }
         const bytes = await read(packet.offset, packet.size);
+        if(index.mp4)try{verifyMp4QualityPacket(index.mp4,index.mp4.samples[packet.au],bytes);}catch(e){fail('unsupported-source',(e as Error).message);}
         const evidence = inspectPacketPicture(codec, index.description, bytes);
         if (!evidence.singlePicture || evidence.closedRandomAccess!==packet.key) fail('unsupported-source', 'AU is not a verified single picture with the declared closed/key status');
         // Repeated parameter sets must byte-match the admitted configuration.
@@ -276,6 +293,9 @@ async function withFlvFramePair<T>(request: FramePairRequest, sources: [CachedPa
       if(target.decode&&!(gop?decoder.decodeGop:decoder.decodeForward))fail('decoder-error','Required exact packet decoder ABI is unavailable');
       const frame = target.decode?(gop?await decoder.decodeGop!(codec,index.description,inputs,target.picture.au,budget):await decoder.decodeForward!(codec,index.description,inputs,budget))
         :await decoder.decode(codec, index.description, inputs[0].bytes, packet.pts, packet.dts, budget); check();
+      if(index.mp4){const d=frame.description,c=d.color,y=d.yuv;
+        if(!y||(codec==='h264'?y.bitDepth!==8:![8,10].includes(y.bitDepth))||y.subsampleX!==1||y.subsampleY!==1||c.primaries!=='bt709'||c.transfer!=='bt709'||c.matrix!=='bt709'||c.fullRange!==index.mp4.color.fullRange)fail('unsupported-source','MP4 decoder output must match the declared SDR 4:2:0 pixel domain');
+      }
       outputFrames+=plan.length;
       if (frame.pts !== target.sourcePtsUs) fail('identity-mismatch', 'Decoded source PTS differs from selected AU');
       if (frame.pixels.byteLength > budget.maxFrameBytes) fail('budget-exceeded', 'Decoded frame budget exceeded');
@@ -283,7 +303,8 @@ async function withFlvFramePair<T>(request: FramePairRequest, sources: [CachedPa
       provenance.push({ ...structuredClone(target), decoded: { sourcePtsUs: frame.pts, description: structuredClone(frame.description) },
         packet: { offset: packet.offset, size: packet.size, sourceDtsUs: packet.dts },
         ...(target.decode?{dependency:{packets:plan,outputFrames:plan.length,guarantee:{...FORWARD_OUTPUT_GUARANTEE},...(gop?{boundary:boundary?{au:boundary.au,offset:boundary.offset,size:boundary.size,pts:boundary.pts,dts:boundary.dts,key:boundary.key}:null,outputIdentity:frame.outputIdentity}:{})}}:{}),
-        validation:gop?'cached-closed-gop-packet-identity-v1':target.decode?'cached-contiguous-forward-one-output-per-au-v1':'cached-au-source-tag-isolated-closed-picture-v1' });
+        ...(index.mp4?{container:{kind:'mp4' as const,trackId:index.mp4.trackId,timescale:index.mp4.timescale,tableSha256:index.mp4.moov.sha256,sample:structuredClone(index.mp4.samples[target.picture.au])}}:{}),
+        validation:index.mp4?'cached-mp4-closed-gop-packet-identity-v1':gop?'cached-closed-gop-packet-identity-v1':target.decode?'cached-contiguous-forward-one-output-per-au-v1':'cached-au-source-tag-isolated-closed-picture-v1' });
     }
     check();
     const work:FramePairResult['work']={readBytes,packets:packetsUsed,outputFrames,elapsedMs:performance.now()-started};
@@ -297,9 +318,9 @@ async function withFlvFramePair<T>(request: FramePairRequest, sources: [CachedPa
 }
 
 /** Single-use source-plane measurement; owned killable Worker required. */
-export function measureFlvFramePair(request: FramePairRequest, sources: [CachedPairSource, CachedPairSource],
+export function measureFramePair(request: FramePairRequest, sources: [CachedPairSource<QualityIndexDocument>, CachedPairSource<QualityIndexDocument>],
   loadDecoder: (budget: PairBudget) => Promise<PairDecoder>, signal: AbortSignal): Promise<FramePairResult> {
-  return withFlvFramePair(request,sources,loadDecoder,signal,pair=>{
+  return withFramePair(request,sources,loadDecoder,signal,pair=>{
     const metric=measurePsnr({domain:'source-yuv-code-values',reference:pair.frames[0],distorted:pair.frames[1],roi:request.roi,spatial:request.spatial,
       budget:{maxSamples:request.budget?.maxSamples,maxInputBytes:request.budget?.maxInputBytes}});
     const ssim=request.ssim===undefined?undefined:measureSsim({domain:'source-yuv-code-values',reference:pair.frames[0],distorted:pair.frames[1],roi:request.roi,spatial:request.spatial,
@@ -309,7 +330,11 @@ export function measureFlvFramePair(request: FramePairRequest, sources: [CachedP
   });
 }
 /** Explicit raw-frame inspection; same admission, no score calculation. */
-export function inspectFlvFramePair(request: FramePairRequest, sources: [CachedPairSource, CachedPairSource],
+export function inspectFramePair(request: FramePairRequest, sources: [CachedPairSource<QualityIndexDocument>, CachedPairSource<QualityIndexDocument>],
   loadDecoder: (budget: PairBudget) => Promise<PairDecoder>, signal: AbortSignal): Promise<InspectedFramePair> {
-  return withFlvFramePair(request,sources,loadDecoder,signal,pair=>pair,requireInspectionGeometry);
+  return withFramePair(request,sources,loadDecoder,signal,pair=>pair,requireInspectionGeometry);
 }
+
+/** Compatibility wrappers retain the original FLV-only entry contract. */
+export function measureFlvFramePair(...args:Parameters<typeof measureFramePair>){if(args[0].reference.indexIdentity.kind!=='flv'||args[0].distorted.indexIdentity.kind!=='flv')return Promise.reject(new FramePairError('unsupported-source','FLV source required'));return measureFramePair(...args);}
+export function inspectFlvFramePair(...args:Parameters<typeof inspectFramePair>){if(args[0].reference.indexIdentity.kind!=='flv'||args[0].distorted.indexIdentity.kind!=='flv')return Promise.reject(new FramePairError('unsupported-source','FLV inspection source required'));return inspectFramePair(...args);}

@@ -31,10 +31,18 @@ FLV-only; widening the PSNR source union must not widen those executors.
 
 ## Implementation checkpoint
 
-The strict standalone sample-table reader and raw sample identity tests are
-implemented. Real H.2648, HEVC8 and HEVC10 fixtures compare every sample's clocks,
-size, offset and sync declaration to ffprobe, with malformed offsets, external
-references, false keys, truncation and exact-clock rejection cases. This is not
-yet a production admission path: service producer/cache integration, source
-adapter, evidence/viewer, GUI/HTTP vertical tests and compiled package acceptance
-are still in progress. No MP4 scoring capability is advertised at this checkpoint.
+The strict sample-table reader, exact-clock rejection and server-only producer
+commit are implemented, with a dedicated MP4 cache identity and document/table
+seals in the existing transaction. Generic packet adaptation preserves the old
+FLV entry wrappers; MP4 reads metadata and actual sample payloads, never FLV tags.
+Version 2 library results retain MP4 raw sample clock witnesses; version 1 FLV
+requests, results and receipts keep their old fields. Read-only inspection has
+been connected to the generic adapter. Native VMAF remains explicitly FLV-only.
+
+Real H.2648, HEVC8 and HEVC10 sample identity tests match ffprobe and reject
+malformed offsets, external references, false keys, truncation and inexact clocks.
+The first HTTP matrix passes explicit discovery/preparation, frozen C plan,
+B range, native-plane ROI SSE, independent FFmpeg SSIM and shared candidates.
+Existing FLV unit/range HTTP regressions pass. GUI/viewer acceptance, mixed
+MP4/FLV tests, full tamper/lifecycle matrices and compiled-package coverage are
+still in progress. This checkpoint is not a complete MP4 feature candidate.

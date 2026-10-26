@@ -1,3 +1,4 @@
+import {qualityIndexPacketCount} from '../../../shared/analysis/quality/source-index.ts';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -6,7 +7,7 @@ import { FrameIndexStore } from '../../frame-index-store.ts';
 import { libraryPairSource,resolvePairPath } from './file-source.ts';
 import { instantiateCore } from '../../../shared/wasm/core.ts';
 import { createPairDecoder } from '../../../shared/analysis/quality/wasm-decoder.ts';
-import { measureFlvFramePair,pairBudget,FramePairError } from '../../../shared/analysis/quality/frame-pair.ts';
+import { measureFramePair,pairBudget,FramePairError } from '../../../shared/analysis/quality/frame-pair.ts';
 import type { FramePairRequest } from '../../../shared/analysis/quality/frame-pair.ts';
 import { qualityFrameCandidates } from '../../../shared/analysis/quality/selection.ts';
 import type { QualityFramePage,QualityFrameQuery } from '../../../shared/analysis/quality/selection.ts';
@@ -15,7 +16,9 @@ import type { LibraryPairBinding,LibraryPairResult } from '../../../shared/analy
 import {buildCorrespondence} from '../../../shared/analysis/quality/correspondence.ts';
 import type {ReferenceRelation,CorrespondenceInput,CorrespondenceResult} from '../../../shared/analysis/quality/correspondence.ts';
 import {QUALITY_SOURCE_BUILD_LIMITS} from '../../../shared/analysis/quality/source-build.ts';
-import {FLV_MEDIA_INDEX_IDENTITY} from '../../../shared/media/indexing/media-index-identity.ts';
+import {FLV_MEDIA_INDEX_IDENTITY,MP4_QUALITY_MEDIA_INDEX_IDENTITY} from '../../../shared/media/indexing/media-index-identity.ts';
+import {buildMp4QualityDocument,qualitySourceContainer} from '../../mp4-quality-builder.ts';
+import type {QualityIndexDocument} from '../../../shared/analysis/quality/source-index.ts';
 import {buildFlvIndexDocument} from '../../flv-index-builder.ts';
 import {prepareFrameIndex} from '../../frame-index-store.ts';
 export type QualityTask={mode:'correspondence-plan';relation:ReferenceRelation;request:CorrespondenceInput}|{mode:'source';id:string;version:string}|{mode:'build-source';id:string;version:string}|{mode:'frames';id:string;version:string;query:QualityFrameQuery}|{mode:'measure';request:FramePairRequest};
@@ -50,18 +53,22 @@ export async function runQualityTask(data:QualityTask&{database:string;coreDir:s
       const size=Number(media.size);
       if(!Number.isSafeInteger(size)||size<1||size>QUALITY_SOURCE_BUILD_LIMITS.maxSourceBytes)throw new FramePairError('budget-exceeded','Explicit FLV build source size budget exceeded');
       const filePath=resolvePairPath(db,data.id,data.version,size),epoch=store.epoch;
-      if(store.has(data.id,data.version,'flv',FLV_MEDIA_INDEX_IDENTITY))return source(data.id,data.version);
-      // The host must let FileHandle close before terminating this Worker.
-      // Cancellation revokes further reads and publication, not this IO fence.
-      Atomics.add(control,1,1);let result:Awaited<ReturnType<typeof buildFlvIndexDocument>>;
-      try{check();result=await buildFlvIndexDocument(filePath,size,data.version,undefined,QUALITY_SOURCE_BUILD_LIMITS,check,()=>phase('resolve'));check();}
+      // Probe and both parser paths share the same owned IO fence. No permit is
+      // acquired here: the one-shot runner already owns the physical slot.
+      Atomics.add(control,1,1);let result:{document:QualityIndexDocument;profile:{sourceStat:import('../../file-stat.ts').FileStatWitness;scannedBytes:number;diskReadBytes:number}};let kind:'flv'|'mp4';
+      try{check();const detected=await qualitySourceContainer(filePath,check);kind=detected.kind;const identity=kind==='mp4'?MP4_QUALITY_MEDIA_INDEX_IDENTITY:FLV_MEDIA_INDEX_IDENTITY;
+        if(store.has(data.id,data.version,kind,identity))return source(data.id,data.version);
+        const limits={...QUALITY_SOURCE_BUILD_LIMITS,maxReadBytes:QUALITY_SOURCE_BUILD_LIMITS.maxReadBytes-detected.readBytes};
+        result=kind==='mp4'?await buildMp4QualityDocument(filePath,size,data.version,limits,check,()=>phase('resolve')):await buildFlvIndexDocument(filePath,size,data.version,undefined,limits,check,()=>phase('resolve'));
+        result.profile.diskReadBytes+=detected.readBytes;check();
+      }
       catch(error){if(['ENOENT','ESTALE','ENOTDIR','EISDIR','EACCES'].includes((error as NodeJS.ErrnoException)?.code??''))throw new FramePairError('source-changed','Library source became unavailable during explicit build');throw error;}
       finally{Atomics.sub(control,1,1);Atomics.notify(control,1);}
       await phase('publish');
-      if(result.profile.scannedBytes!==size||result.document.truncatedAt!==undefined||result.document.recoveredGaps)
+      if(result.profile.scannedBytes!==size||result.document.schema!=="voidplayer-mp4-quality-index"&&(result.document.truncatedAt!==undefined||result.document.recoveredGaps))
         throw new FramePairError('unsupported-source','Explicit quality build requires a complete unrecovered FLV');
       if(resolvePairPath(db,data.id,data.version,size,result.profile.sourceStat)!==filePath)throw new FramePairError('source-changed','Library source changed during explicit build');
-      check();store.commit(data.id,data.version,prepareFrameIndex(result.document,size,FLV_MEDIA_INDEX_IDENTITY,`${data.id}@${data.version}`,{scannedBytes:result.profile.scannedBytes}),epoch,{kind:'server-flv-scan-v1',sourceStat:result.profile.sourceStat});
+      check();store.commit(data.id,data.version,prepareFrameIndex(result.document,size,kind==='mp4'?MP4_QUALITY_MEDIA_INDEX_IDENTITY:FLV_MEDIA_INDEX_IDENTITY,`${data.id}@${data.version}`,{scannedBytes:result.profile.scannedBytes}),epoch,{kind:kind==='mp4'?'server-mp4-scan-v1':'server-flv-scan-v1',sourceStat:result.profile.sourceStat});
       return source(data.id,data.version);
     }
     if(data.mode==='source'||data.mode==='frames'){
@@ -83,7 +90,7 @@ export async function runQualityTask(data:QualityTask&{database:string;coreDir:s
         const prior=source(expected.mediaId,expected.mediaVersion),build=side?data.request.distortedBuildId:data.request.referenceBuildId;
         if(prior.binding.indexBuildId!==build)throw new FramePairError('identity-mismatch','Pinned correspondence cache changed');
         const snapshot=store.qualitySource(expected.mediaId,expected.mediaVersion,true,{...PAIR_LIMITS,maxIndexBytes:Math.min(PAIR_LIMITS.maxIndexBytes,limits.maxIndexBytes-indexBytes),maxIndexPackets:Math.min(PAIR_LIMITS.maxIndexPackets,limits.maxIndexPackets-indexPackets)});
-        indexBytes+=Buffer.byteLength(JSON.stringify(snapshot.index));indexPackets+=snapshot.index!.packets.length;
+        indexBytes+=Buffer.byteLength(JSON.stringify(snapshot.index));indexPackets+=qualityIndexPacketCount(snapshot.index!);
         if(indexBytes>limits.maxIndexBytes||indexPackets>limits.maxIndexPackets)throw new FramePairError('budget-exceeded','Total correspondence index read/packet budget exceeded');
         snapshots.push({...snapshot,index:snapshot.index!});check();
       }
@@ -97,7 +104,7 @@ export async function runQualityTask(data:QualityTask&{database:string;coreDir:s
       if(snapshot.binding.indexBuildId!==target.indexBuildId||snapshot.binding.size!==target.size)throw new FramePairError('identity-mismatch','Quality cache binding changed');}
     await phase('resolve');
     for(const target of targets)opened.push(libraryPairSource(db,store,target,budget,control));
-    const result=await measureFlvFramePair(request,[opened[0].source,opened[1].source],budget=>createPairDecoder(async()=>{
+    const result=await measureFramePair(request,[opened[0].source,opened[1].source],budget=>createPairDecoder(async()=>{
       await phase('decode');
       check();const binary=new Uint8Array(await readFile(path.join(data.coreDir,'voidplayer-core.wasm')));check();
       const glue=await import(pathToFileURL(path.join(data.coreDir,'voidplayer-core.js')).href);check();
@@ -106,7 +113,7 @@ export async function runQualityTask(data:QualityTask&{database:string;coreDir:s
     await phase('publish');
     for(const target of targets){const current=source(target.mediaId,target.mediaVersion);if(current.binding.indexBuildId!==target.indexBuildId)throw new FramePairError('source-changed','Quality cache changed before publication');}
     check();
-    return {schema:'voidplayer-library-frame-pair-psnr',version:1,
+    return {schema:'voidplayer-library-frame-pair-psnr',version:targets.some(t=>t.indexIdentity.kind==='mp4')?2:1,
       execution:{host:'node-worker',runtime:process.versions.bun?'bun':'node',runtimeVersion:process.versions.bun??process.versions.node,sourceIdentity:'stat-version-v1'},
       result,annotationContext:{reference:opened[0].annotationContext,distorted:opened[1].annotationContext},sources:{reference:opened[0].proof,distorted:opened[1].proof}};
   }finally{for(const {source} of opened)source.close();db.close();}

@@ -36,6 +36,7 @@ export function vmafInput(value:unknown):VmafInput{
 /** C supplies correspondence. This adds sequence eligibility, never alignment. */
 export function vmafSequence(snapshot:VmafPlanSnapshot,indexes:[FlvIndex,FlvIndex],expectedCadenceUs:number):VmafSequence{
  const r=snapshot.value,plan=r.rangePlan;
+ if([r.sources.reference,r.sources.distorted].some(s=>s.binding.indexIdentity.kind!=='flv'||s.producer.producer!=='server-flv-scan-v1'))fail('Native VMAF remains FLV-only');
  if(!plan||r.executionBlock||r.request.sampling.mode!=='all'||r.rows.length<2||r.rows.length>VMAF_LIMITS.frames||r.rows.some(row=>!row.selected||row.status!=='mapped')||r.sourceIssues.reference||r.sourceIssues.distorted)fail('VMAF needs 2..32 fully mapped all-sample frames without stride or holes');
  const pairs=structuredClone(plan!.input.pairs).sort((a,b)=>a.reference.sourcePtsUs-b.reference.sourcePtsUs);
  if(pairs.length!==r.rows.length)fail('Frozen pairs do not cover every selected AU');
