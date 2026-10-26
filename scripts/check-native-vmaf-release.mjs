@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';import {mkdtemp,mkdir,readFile,writeFile,rm} from 'node:fs/promises';import path from 'node:path';import {tmpdir} from 'node:os';import {execFileSync,spawn} from 'node:child_process';
 import {nativeFixture,officialOracle,until} from '../test/helpers/native-vmaf.mjs';
+import {createServer} from 'node:net';
 import {trackChildShutdown} from './testing/lifecycle.mjs';
 assert.equal(process.platform,'linux');assert.equal(process.arch,'x64');
 const root=path.resolve(import.meta.dirname,'..'),archive=path.resolve(process.argv[2]??JSON.parse(await readFile(path.join(root,'artifacts/latest-release.json'),'utf8')).archive),temp=await mkdtemp(path.join(tmpdir(),'vp-native-vmaf-release-'));
@@ -8,7 +9,7 @@ try{
  const results=[];
  for(const depth of [8,10]){let f;try{
   f=await nativeFixture({depth,distorted:true,start:async config=>{
-   await writeFile(path.join(config.dataDir,'voidplayer.config.json'),JSON.stringify({host:'127.0.0.1',port:0,mediaRoots:config.mediaRoots,indexWatch:false,logsDir:null,nativeVmaf:config.nativeVmaf}));
+   const socket=createServer();await new Promise(r=>socket.listen(0,'127.0.0.1',r));const reservedPort=socket.address().port;await new Promise(r=>socket.close(r));await mkdir(config.dataDir,{recursive:true});await writeFile(path.join(config.dataDir,'voidplayer.config.json'),JSON.stringify({host:'127.0.0.1',port:reservedPort,mediaRoots:config.mediaRoots,indexWatch:false,logsDir:null,nativeVmaf:config.nativeVmaf}));
    const env={...process.env,PATH:empty};for(const k of Object.keys(env))if(k.startsWith('VOIDPLAYER_')||['BUN_OPTIONS','BUN_INSPECT','NODE_OPTIONS'].includes(k))delete env[k];
    const child=spawn(path.join(directory,release.executable),['--data-dir',config.dataDir],{cwd:empty,env,stdio:['ignore','pipe','pipe']}),stop=trackChildShutdown(child);let output='';child.stdout.on('data',b=>output=(output+b).slice(-65536));child.stderr.on('data',b=>output=(output+b).slice(-65536));
    try{const port=await until(()=>{if(child.exitCode!==null)throw Error(output);return Number(/媒体服务: http:\/\/127\.0\.0\.1:(\d+)/.exec(output)?.[1])||null;},Boolean,'Compiled VMAF startup');return {server:{address:()=>({port})},close:stop};}catch(e){await stop();throw e;}

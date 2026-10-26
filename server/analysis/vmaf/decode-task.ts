@@ -13,8 +13,9 @@ import type {PsnrFrame} from '../../../shared/analysis/quality/psnr.ts';
 export type VmafDecodeData={mode:'preflight'|'decode'|'verify';database:string;coreDir:string;directory:string;input:VmafInput;snapshot:VmafPlanSnapshot;control:SharedArrayBuffer};
 
 export async function runVmafDecode(data:VmafDecodeData,progress:(frames:number,total:number)=>void){
+ let decodeDeadline=data.input.budget.maxElapsedMs;
  const started=performance.now(),control=new Int32Array(data.control),controller=new AbortController();
- const check=()=>{if(Atomics.load(control,0))throw new VmafError('cancelled','Sequence decode cancelled');if(performance.now()-started>data.input.budget.maxElapsedMs)throw new VmafError('budget-exceeded','Sequence decode deadline exceeded');};
+ const check=()=>{if(Atomics.load(control,0))throw new VmafError('cancelled','Sequence decode cancelled');if(performance.now()-started>decodeDeadline)throw new VmafError('budget-exceeded','Sequence decode deadline exceeded');};
  const db=openIndexDatabase(data.database,{readOnly:true}),store=new FrameIndexStore(db);
  let indexBytes=0,indexPackets=0;
  const budgetFor=(request:Parameters<typeof pairBudget>[0])=>({...pairBudget(request),maxIndexBytes:Math.max(1,Math.min(pairBudget(request).maxIndexBytes,VMAF_LIMITS.maxIndexBytes-indexBytes)),maxIndexPackets:Math.max(1,Math.min(pairBudget(request).maxIndexPackets,VMAF_LIMITS.maxIndexPackets-indexPackets))});
@@ -25,7 +26,7 @@ export async function runVmafDecode(data:VmafDecodeData,progress:(frames:number,
   }catch(error){for(const s of sources)s.source.close();throw error;}
  };
  try{
-  const original=data.snapshot.value.rangePlan;if(!original)throw new VmafError('unsupported-vmaf-sequence','No executable frozen C plan');
+  const original=data.snapshot.value.rangePlan;if(!original)throw new VmafError('unsupported-vmaf-sequence','No executable frozen C plan');decodeDeadline=Math.min(decodeDeadline,original.input.budget.maxElapsedMs);
   const initial=openPair(original.input.pairs[0]);
   let sequence;
   try{const indexes=initial.map(s=>parseFlvIndex(s.source.index!,s.source.binding().size)) as [ReturnType<typeof parseFlvIndex>,ReturnType<typeof parseFlvIndex>];
@@ -34,7 +35,7 @@ export async function runVmafDecode(data:VmafDecodeData,progress:(frames:number,
    if(geometry.some(g=>g.width<VMAF_LIMITS.minDimension||g.height<VMAF_LIMITS.minDimension||g.width>VMAF_LIMITS.width||g.height>VMAF_LIMITS.height)||geometry[0].width!==geometry[1].width||geometry[0].height!==geometry[1].height)throw new VmafError('unsupported-vmaf-sequence','Equal supported full-frame geometry required');
    for(const pair of sequence.pairs)if(pair.roi.x||pair.roi.y||pair.roi.width!==geometry[0].width||pair.roi.height!==geometry[0].height)throw new VmafError('unsupported-vmaf-sequence','Arbitrary ROI is unsupported; pin the entire visible frame in C');
   }finally{initial.forEach(s=>s.source.close());}
-  if(data.mode!=='decode')return {sequence,indexBytes,indexPackets};
+  if(data.mode!=='decode')return {sequence,indexBytes,indexPackets,elapsedMs:performance.now()-started};
   let loaded:Awaited<ReturnType<typeof instantiateCore>>|undefined;
   const load=async()=>{check();if(!loaded){const binary=readFileSync(path.join(data.coreDir,'voidplayer-core.wasm'));const glue=await import(pathToFileURL(path.join(data.coreDir,'voidplayer-core.js')).href);loaded=await instantiateCore(glue.default,new Uint8Array(binary),256*1024*1024);}check();return loaded;};
   const result:VmafPrepared={sequence,geometry:{width:0,height:0,bitDepth:8},pairs:[],raw:{referenceSha256:'',distortedSha256:'',bytes:0},work:{readBytes:0,packets:0,outputFrames:0,indexBytes:0,indexPackets:0,inputBytes:0,heapBytes:0,elapsedMs:0}};

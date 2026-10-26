@@ -5785,6 +5785,70 @@
     "source": "松开收起面板",
     "params": {}
   },
+  "vmaf.budgets": {
+    "source": "执行预算",
+    "params": {}
+  },
+  "vmaf.cancel": {
+    "source": "取消并终止本任务执行",
+    "params": {}
+  },
+  "vmaf.candidates": {
+    "source": "显式整帧测量候选",
+    "params": {}
+  },
+  "vmaf.frames": {
+    "source": "更多逐帧事实",
+    "params": {}
+  },
+  "vmaf.history": {
+    "source": "刷新服务端历史",
+    "params": {}
+  },
+  "vmaf.more": {
+    "source": "更多历史",
+    "params": {}
+  },
+  "vmaf.new": {
+    "source": "新建显式请求",
+    "params": {}
+  },
+  "vmaf.preflight": {
+    "source": "检查准入（不解码）",
+    "params": {}
+  },
+  "vmaf.publish": {
+    "source": "按显式策略发布候选",
+    "params": {}
+  },
+  "vmaf.recipe": {
+    "source": "冻结的对应关系与测量 recipe",
+    "params": {}
+  },
+  "vmaf.retry": {
+    "source": "重试冻结的提交",
+    "params": {}
+  },
+  "vmaf.scope": {
+    "source": "需要已安装的 Linux x64 组件及显式提交的时钟对应计划。仅限 2–32 个连续呈现帧；不支持跨帧抽样、缺口、负 PTS 或 VFR。限范围 BT.709 SDR、8/10 位 YUV420、方形像素，不裁剪、旋转或转换。v0.6.1 是固定基线，并非最新模型。分数属于整帧时间序列事实，不是热图或人工缺陷判断；未认证引用完整性，无法检测错误隐藏。",
+    "params": {}
+  },
+  "vmaf.share": {
+    "source": "此操作共享片源身份及不可变序列事实，不定位空间缺陷。关闭页面只停止观察，不会取消后台执行。",
+    "params": {}
+  },
+  "vmaf.submit": {
+    "source": "发起持久 PSNR + VMAF",
+    "params": {}
+  },
+  "vmaf.title": {
+    "source": "原生 VMAF · 连续整帧序列",
+    "params": {}
+  },
+  "vmaf.usePlan": {
+    "source": "VMAF：使用此已提交计划",
+    "params": {}
+  },
   "workbench.collapsePanel": {
     "source": "收起{panel}",
     "params": {

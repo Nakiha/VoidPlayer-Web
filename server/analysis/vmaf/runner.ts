@@ -61,7 +61,7 @@ export class NativeVmafRunner{
     mkdirSync(directory,{recursive:true,mode:0o700});temporary=true;hooks.phase('decode');
     const prepared=await this.worker<VmafPrepared>('decode-worker.ts',{mode:'decode',database:this.library.indexDatabase,coreDir:this.coreDir,input,snapshot,directory},combined,hooks.progress);combined.throwIfAborted();hooks.prepared(prepared);
     hooks.phase('native');const native=await this.native(c,directory,input,prepared,combined,hooks.process);combined.throwIfAborted();
-    hooks.phase('source-final');await this.worker('decode-worker.ts',{mode:'verify',database:this.library.indexDatabase,coreDir:this.coreDir,input,snapshot,directory},combined);combined.throwIfAborted();return {prepared,native};
+    hooks.phase('source-final');const verification=await this.worker<{indexBytes:number;indexPackets:number;elapsedMs:number}>('decode-worker.ts',{mode:'verify',database:this.library.indexDatabase,coreDir:this.coreDir,input,snapshot,directory},combined);combined.throwIfAborted();if(prepared.work.indexBytes+verification.indexBytes>VMAF_LIMITS.maxIndexBytes||prepared.work.indexPackets+verification.indexPackets>VMAF_LIMITS.maxIndexPackets)throw new VmafError('budget-exceeded','Final verification exceeds cumulative index budget');native.resources.finalVerification={indexBytes:verification.indexBytes,indexPackets:verification.indexPackets,elapsedMs:verification.elapsedMs};return {prepared,native};
    }finally{if(temporary&&!this.stopUncertain)try{rmSync(directory,{recursive:true,force:true});}catch(error){this.stopUncertain=true;throw new VmafError('stop-uncertain','Temporary raw sequence could not be reclaimed');}}
   });
  }

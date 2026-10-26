@@ -19,6 +19,14 @@ for(const [depth,distorted,model]of [[8,false,'vmaf_v0_6_1'],[8,true,'vmaf_v0_6_
  const p=await f.json(`/api/quality/vmaf/jobs/${j.id}/candidates`,policy);assert.equal(p.createdIds.length,1);const a=await f.json('/api/annotations/spaces/default/'+p.createdIds[0]),e=a.document.mark.qualityEvidence[0];assert.equal(e.verification,'server-verified');assert.equal(e.value.sequenceVmaf.spatial,'full-frame-temporal-score-not-localized');assert.equal(e.value.sequenceVmaf.score,oracle.result.frames[e.value.sequenceVmaf.index].metrics.vmaf);assert.doesNotThrow(()=>qualityEvidenceValue(e.value));
  const forged=structuredClone(e.value);forged.sequenceVmaf.recipe.preprocessing='resize';assert.throws(()=>qualityEvidenceValue(forged));
  assert.deepEqual((await f.json(`/api/quality/vmaf/jobs/${j.id}/candidates`,policy)).createdIds,p.createdIds);
+ const historical=qualityEvidenceList([e]);assert.equal(historical[0].verification,'historical');assert.deepEqual(historical[0].value.sequenceVmaf,e.value.sequenceVmaf);
+ const edited=structuredClone(a.document);edited.mark.text='Ordinary text edit retains attached temporal evidence';delete edited.mark.qualityEvidence;delete edited.mark.qualityCandidate;
+ const changed=await f.json('/api/annotations/spaces/default',{action:'put',operationId:randomUUID(),id:a.id,revision:a.revision,document:edited},'edit',{'x-voidplayer-action':'annotation'});assert.deepEqual(changed.document.mark.qualityEvidence[0].value.sequenceVmaf,e.value.sequenceVmaf);
+ const fake=structuredClone(changed.document);fake.mark.qualityEvidence[0].value.sequenceVmaf.component.binarySha256='f'.repeat(64);assert.equal((await f.request('/api/annotations/spaces/default',{action:'put',operationId:randomUUID(),id:a.id,revision:changed.revision,document:fake},'forge',{'x-voidplayer-action':'annotation'})).status,409);
+ // Simulated result reclamation must not make either frozen receipt execute again.
+ f.service.library.qualityVmaf.db.prepare('UPDATE quality_vmaf_jobs SET result=NULL WHERE id=?').run(j.id);
+ assert.equal((await f.json('/api/quality/vmaf/jobs',input,'one-job')).job.id,j.id);
+ assert.deepEqual((await f.json(`/api/quality/vmaf/jobs/${j.id}/candidates`,policy)).createdIds,p.createdIds);
  assert.equal((await f.request(`/api/quality/vmaf/jobs/${j.id}/candidates`,{...policy,severity:4})).status,409);
  console.log(JSON.stringify({depth,model,frames:result.vmaf.frames.length,rawBytes:result.raw.bytes,work:result.work,native:result.vmaf.resources,pooled:result.vmaf.pooled}));
 });

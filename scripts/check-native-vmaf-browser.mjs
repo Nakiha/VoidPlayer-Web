@@ -4,7 +4,7 @@ const engine=process.argv[2]??'chromium',depth=Number(process.argv[3]??8);assert
 const directory=path.resolve(process.env.VOIDPLAYER_TEST_ARTIFACTS??`.run/native-vmaf/browser-${engine}-${depth}`);await mkdir(directory,{recursive:true});
 let f,browser,context,page,phase='setup';const errors=[];try{
  f=await nativeFixture({depth,distorted:true,staticDir:'dist'});browser=await({chromium,webkit}[engine]).launch({headless:true,...(engine==='webkit'&&process.env.VOIDPLAYER_WEBKIT_EXECUTABLE?{executablePath:process.env.VOIDPLAYER_WEBKIT_EXECUTABLE}:{})});
- context=await browser.newContext({viewport:{width:1400,height:1000}});await context.addCookies([{name:'voidplayer-user',value:f.actor,url:f.base}]);context.on('page',p=>p.on('pageerror',e=>errors.push(e.message)));
+ context=await browser.newContext({locale:'en-US',viewport:{width:1400,height:1000}});await context.addCookies([{name:'voidplayer-user',value:f.actor,url:f.base}]);context.on('page',p=>p.on('pageerror',e=>errors.push(e.message)));
  // A second live page remains untouched by all analysis navigation/commands.
  const player=await context.newPage();await player.goto(f.base);await chooseTestGuest(player);await player.waitForFunction(()=>!!window.voidPlayer);const before=await player.evaluate(()=>window.voidPlayer.getState());
  page=await context.newPage();await page.goto(f.base+'/admin/#quality');await page.locator('#quality-vmaf').waitFor();phase='GUI-submit-lost-response';
