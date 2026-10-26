@@ -9,8 +9,8 @@
 #include <time.h>
 #include <unistd.h>
 static volatile sig_atomic_t stopping;
-static pid_t child=-1;
-static void stop(int sig){stopping=sig;if(child>0)kill(child,SIGKILL);}
+static volatile sig_atomic_t child=-1;
+static void stop(int sig){int saved_errno=errno;stopping=sig;if(child>0)kill(child,SIGKILL);errno=saved_errno;}
 static int limit(int kind,const char *text){char *end;errno=0;unsigned long long n=strtoull(text,&end,10);if(errno||!n||*end)return -1;struct rlimit l={(rlim_t)n,(rlim_t)n};return setrlimit(kind,&l);}
 int main(int argc,char **argv){
  if(argc<5)return 64;
