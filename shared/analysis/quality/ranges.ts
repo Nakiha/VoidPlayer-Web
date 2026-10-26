@@ -2,6 +2,7 @@ import { pairPacketCount, pairBudget } from './frame-pair.ts';
 import type { FramePairRequest, PairTarget } from './frame-pair.ts';
 import type { QualityJobInput, QualityJobReason, QualityJobResult } from './jobs.ts';
 import type { PsnrStatistics } from './psnr.ts';
+import {mediaIndexIdentityKey} from '../../media/indexing/media-index-identity.ts';
 
 export const QUALITY_RANGE_LIMITS = Object.freeze({
   universe:256, samples:64, requestBytes:128*1024,
@@ -63,7 +64,7 @@ function keys(value:unknown,allowed:string[]){
 }
 function binding(t:PairTarget){
   return JSON.stringify([
-    t.mediaId,t.mediaVersion,t.size,t.indexIdentity,t.indexBuildId,
+    t.mediaId,t.mediaVersion,t.size,mediaIndexIdentityKey(t.indexIdentity),t.indexBuildId,
     t.picture.sourceVersion,t.picture.stream,t.picture.configuration
   ]);
 }
@@ -78,7 +79,7 @@ export function planQualityRange(value:unknown):QualityRangePlan {
   keys(input.client,['id','kind']);
   keys(input.interval,['startAu','endAu']);
   if(input.schema!=='voidplayer-quality-range'||input.version!==1
-    ||!input.client||!/^[A-Za-z0-9._:-]{1,80}$/.test(input.client.id)
+    ||!input.client||typeof input.client.id!=='string'||!/^[A-Za-z0-9._:-]{1,80}$/.test(input.client.id)
     ||!['agent','browser','other'].includes(input.client.kind))
     fail('Invalid range identity');
 
@@ -181,8 +182,21 @@ export function planQualityRange(value:unknown):QualityRangePlan {
     ||work.inputBytes>input.budget.maxInputBytes)
     fail('All pair budgets, pre-roll and drain must fit the total range budget');
 
+  // Field order is part of the durable request fingerprint. Normalize the
+  // parent as well as its child requests before binding an idempotency key.
+  const normalized:QualityRangeInput={
+    schema:'voidplayer-quality-range',version:1,
+    client:{id:input.client.id,kind:input.client.kind},interval:{startAu,endAu},
+    correspondence:input.correspondence.mode==='explicit-au-table'
+      ?{mode:'explicit-au-table'}:{mode:'constant-source-pts-offset',offsetUs:input.correspondence.offsetUs},
+    sampling:input.sampling.mode==='all'?{mode:'all'}
+      :{mode:'stride',every:input.sampling.every,offset:input.sampling.offset},
+    pairs:input.pairs,
+    budget:{maxReadBytes:input.budget.maxReadBytes,maxPackets:input.budget.maxPackets,
+      maxOutputFrames:input.budget.maxOutputFrames,maxInputBytes:input.budget.maxInputBytes,maxElapsedMs:input.budget.maxElapsedMs}
+  };
   return {
-    schema:'voidplayer-quality-range-plan',version:1,input,
+    schema:'voidplayer-quality-range-plan',version:1,input:normalized,
     correspondence:'caller-declared-content-relation-exact-au-identities-verified-during-execution',
     coverageDomain:'inclusive-reference-decode-order-au-interval',
     selectedAus,unmappedAus,unsampledAus,targets:selectedAus.length,
@@ -276,7 +290,7 @@ export function rangeCandidatePolicy(value:unknown):RangeCandidatePolicy{
     'space','side','metric','maxDb','limit','minAuDistance','text','severity'
   ]);
   const p=value as RangeCandidatePolicy;
-  if(!/^[A-Za-z0-9_-]{1,200}$/.test(p.space)
+  if(typeof p.space!=='string'||!/^[A-Za-z0-9_-]{1,200}$/.test(p.space)
     ||!['reference','distorted'].includes(p.side)||p.metric!=='psnr'
     ||!Number.isFinite(p.maxDb)||p.maxDb<0||p.maxDb>120
     ||!Number.isInteger(p.limit)||p.limit<1||p.limit>8

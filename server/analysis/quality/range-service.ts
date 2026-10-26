@@ -15,6 +15,7 @@ import type {QualityEvidenceRef} from '../../../shared/review/quality-evidence.t
 
 const digest=(v:unknown)=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const pause=()=>new Promise<void>(resolve=>setTimeout(resolve,25));
+const serviceNow=()=>Math.floor(performance.timeOrigin+performance.now());
 type Publication={policy:RangeCandidatePolicy;origin:string;selected:{au:number;id:string;operationId:string;evidence:QualityEvidenceRef}[];createdIds:string[]};
 
 /** Parent never acquires admission; existing child runner owns physical stop. */
@@ -28,7 +29,7 @@ export class QualityRangeService {
   private jobs:QualityJobService;
   private now:()=>number;
 
-  constructor(file:string,jobs:QualityJobService,now=Date.now){
+  constructor(file:string,jobs:QualityJobService,now=serviceNow){
     this.jobs=jobs;this.now=now;mkdirSync(path.dirname(file),{recursive:true});this.unlock=lockDatabase(file);
     let db:ReturnType<typeof openIndexDatabase>|undefined;
     try{

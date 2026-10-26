@@ -34,13 +34,13 @@ export function installQualityRanges(signal:AbortSignal){
   const api=new QualityClient();
   let active=false,controller=new AbortController(),actor='',selected='';
   let after=0,next:number|null=null,revision=0,busy=false;
-  let browsingMore=false,listGeneration=0,publicationToken='';
+  let browsingMore=false,listGeneration=0,resultGeneration=0,publicationToken='';
   const valid=(owner:string,s:AbortSignal)=>active&&!s.aborted&&actor===owner&&currentActor()?.id===owner;
   const request=<T>(owner:string,url:string,s:AbortSignal,method='GET',body?:unknown)=>api.request<T>(owner,url,s,method,body);
   function reset(){
     controller.abort();controller=new AbortController();
     actor=currentActor()?.id??'';selected='';after=0;next=null;revision=0;
-    browsingMore=false;publicationToken='';listGeneration++;
+    browsingMore=false;publicationToken='';listGeneration++;resultGeneration++;
     $('list').replaceChildren();$('detail').hidden=true;$('more').hidden=true;$('status').textContent='';
   }
   async function list(more=false){
@@ -49,26 +49,34 @@ export function installQualityRanges(signal:AbortSignal){
     try{
       const page=await request<{entries:Omit<QualityRangeJob,'plan'>[];after:number;more:boolean}>(owner,`/api/quality/ranges?after=${more?after:0}&limit=10`,s);
       if(!valid(owner,s)||generation!==listGeneration)return;
-      if(!more)$('list').replaceChildren();after=page.after;$('more').hidden=!page.more;
-      for(const job of page.entries){
-        const button=document.createElement('button');button.type='button';button.dataset.rangeId=job.id;
-        button.textContent=`${job.id} · ${job.state} · ${job.summary.scoredPairs}`;
-        button.onclick=()=>{selected=job.id;revision=0;next=null;publicationToken='';$('detail').hidden=true;void detail();};
-        $('list').append(button);
+      after=page.after;$('more').hidden=!page.more;
+      const list=$('list'),rows=new Map([...list.querySelectorAll<HTMLButtonElement>('[data-range-id]')].map(row=>[row.dataset.rangeId!,row]));
+      for(const [index,job] of page.entries.entries()){
+        let button=rows.get(job.id);rows.delete(job.id);
+        if(!button){
+          button=document.createElement('button');button.type='button';button.dataset.rangeId=job.id;
+          button.onclick=()=>{if(!valid(owner,s))return;selected=job.id;revision=0;next=null;publicationToken='';$('detail').hidden=true;void detail();};
+        }
+        const text=`${job.id} · ${job.state} · ${job.summary.scoredPairs}`;
+        if(button.textContent!==text)button.textContent=text;
+        if(more){if(!button.isConnected)list.append(button);}
+        else if(list.children[index]!==button)list.insertBefore(button,list.children[index]??null);
       }
+      if(!more)for(const row of rows.values())row.remove();
     }catch(e){if(valid(owner,s))$('status').textContent=String(e);}
   }
   async function results(more=false){
-    const owner=actor,s=controller.signal,id=selected;
+    const owner=actor,s=controller.signal,id=selected,generation=++resultGeneration;
     try{
       const page=await request<{entries:{au:number;result:QualityJobResult}[];nextAu:number|null}>(owner,`/api/quality/ranges/${id}/results?after=${more?next??0:0}&limit=4`,s);
-      if(!valid(owner,s)||selected!==id)return;
+      if(!valid(owner,s)||selected!==id||generation!==resultGeneration)return false;
       if(!more)$('results').replaceChildren();next=page.nextAu;$('results-more').hidden=next===null;
       for(const entry of page.entries){
         const root=document.createElement('section'),title=document.createElement('h4');title.textContent=`AU ${entry.au}`;
         root.append(title);qualityFacts(root,entry.result.value);$('results').append(root);
       }
-    }catch(e){if(valid(owner,s)&&selected===id)$('status').textContent=String(e);}
+      $('status').textContent='';return true;
+    }catch(e){if(valid(owner,s)&&selected===id&&generation===resultGeneration)$('status').textContent=String(e);return false;}
   }
   async function detail(){
     if(!selected||busy)return;busy=true;const owner=actor,s=controller.signal,id=selected;
@@ -79,7 +87,7 @@ export function installQualityRanges(signal:AbortSignal){
       $('coverage').textContent=JSON.stringify({coverage:response.coverage,progress:response.progress},null,2);
       $('summary').textContent=JSON.stringify(job.summary,null,2);$('plan').textContent=JSON.stringify(job.plan,null,2);
       ($('cancel') as HTMLButtonElement).disabled=!['queued','running'].includes(job.state);
-      if(revision!==job.revision){revision=job.revision;await results();}
+      if(revision!==job.revision&&await results())revision=job.revision;
       const token=JSON.stringify(response.publication);if(token===publicationToken)return;
       publicationToken=token;$('candidates').replaceChildren();
       if(response.publication){

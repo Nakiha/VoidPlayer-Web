@@ -124,3 +124,20 @@ and does not exit focus mode.
 - `SessionResources` 默认 256 MiB 协调应用拥有的帧、待解码预留、读回和派生任务。所有队列共享预算；每轨保留必需后继帧的前进能力，超额显式计入 `overBudgetBytes`。减少预取/取消派生任务优先，不改变位深、精度或评审逐帧语义。诊断不声称覆盖解码器内部、WASM 堆或 GPU 总显存。
 - 本地 JPEG 缓存为独立数据库，32 MiB / 512 条 LRU，升级迁移旧记录并淘汰。Object URL 的闲置缓存为 8 MiB / 128 条；可见图片持有独立引用，离开视口或 DOM 后释放，旧 URL 替换后等最后引用释放再 revoke。本地键包含 stream + recipe。
 - 工作区在现有格式 v1 内添加可选 `comparison`，旧文件提示使用本机当前条件；未知呈现契约拒绝载入。本机检查点保存内容与比较条件、保持服务器显式保存。不可用片源保留为待关联轨道；重新关联经过同一个 session facade，保留媒体/标注 ID 和偏移。
+
+### Bounded quality ranges
+
+`shared/analysis/quality/ranges.ts` owns explicit AU correspondence planning,
+all/stride sampling, complete dependency-work reservations, pixel-domain SSE/count
+and window-weighted SSIM pooling, and explicit candidate selection policy.
+`server/analysis/quality/range-service.ts` persists the parent plan/history and
+coordinates existing durable single-frame child jobs without an outer admission
+permit. The child runner alone owns the shared physical execution slot. Parent
+shutdown precedes child-service shutdown; uncertain Worker exit retains ownership.
+`range-routes.ts` exposes actor-fenced planning/submission, paged history/results,
+explicit cancellation and frozen-ID publication through the original atomic
+annotation command. `src/admin/quality-ranges.ts` only observes and opens explicit
+read-only original-frame viewers. No player/presenter state is required.
+See [bounded-quality-ranges.md](bounded-quality-ranges.md) for coverage, budget,
+crash/receipt recovery and unassessed-candidate semantics. VMAF/CAMBI remain
+unimplemented; correctness does not certify performance or reference integrity.
