@@ -24,9 +24,9 @@ export async function validateServiceConfig(config: ServiceConfig, requireStatic
 export async function startService(config: ServiceConfig, requireStatic = true, build?: { version: string; revision: string }) {
   const { staticOk } = await validateServiceConfig(config, requireStatic, false);
   const tls = config.tls ? await prepareTls(config.tls, config.dataDir) : undefined;
-  const library = new MediaLibraryIndex(config.mediaRoots, { coreDir: process.env.VOIDPLAYER_WASM_CORE_DIR || path.join(config.staticDir,'vendor/voidplayer-core'), ttlMs: config.indexTtlMs, database: path.join(config.dataDir, 'library.sqlite'), settleMs: 1000, watch: config.indexWatch });
+  const library = new MediaLibraryIndex(config.mediaRoots, { nativeVmaf:config.nativeVmaf,coreDir: process.env.VOIDPLAYER_WASM_CORE_DIR || path.join(config.staticDir,'vendor/voidplayer-core'), ttlMs: config.indexTtlMs, database: path.join(config.dataDir, 'library.sqlite'), settleMs: 1000, watch: config.indexWatch });
   let admin: AdminController;
-  try { library.qualityJobs; library.qualityRanges; library.qualityCorrespondence; library.start(); admin = new AdminController(config, library, build); } catch (error) { await library.close(); throw error; }
+  try { library.qualityJobs; library.qualityRanges; library.qualityCorrespondence;await library.qualityVmaf.ready;await library.qualityVmaf.capability(); library.start(); admin = new AdminController(config, library, build); } catch (error) { await library.close(); throw error; }
   const connection = tls ? { ...tls, port: config.port } : undefined;
   const gateway = new ProtocolGateway(), listeners: ManagedServer[] = [];
   const shared = { library, admin, connection, traffic:createTrafficState(), roots: library.roots, staticDir: staticOk ? config.staticDir : undefined, logsDir: config.logsDir ?? undefined,

@@ -6,22 +6,24 @@ import {VMAF_LIMITS,VMAF_CAPABILITY,VmafError} from '../../../shared/analysis/qu
 import type {VmafComponentConfig,VmafInput,VmafModel,VmafPlanSnapshot,VmafPrepared,VmafNativeResult} from '../../../shared/analysis/quality/vmaf.ts';
 import type {VmafComponent} from './component.ts';
 declare const VOIDPLAYER_COMPILED:boolean;
-type Hooks={admitted():void;phase(name:string):void;progress(frames:number,total:number):void;prepared(value:VmafPrepared):void;process(value:{pid:number;startTicks:string}|null):void};
+type Hooks={admitted():void;phase(name:string):void;progress(frames:number,total:number):void;prepared(value:VmafPrepared):void;process(value:{pid:number;startTicks:string;bootId:string}|null):void};
 const sleep=()=>new Promise<void>(r=>setTimeout(r,10));
 export function processStartTicks(pid:number){try{const stat=readFileSync(`/proc/${pid}/stat`,'utf8');return stat.slice(stat.lastIndexOf(')')+2).split(' ')[19];}catch{return null;}}
 /** Recovery never starts another execution while a durably-owned old supervisor lives. */
-export async function stopOwnedNative(process:{pid:number;startTicks:string}){
+export async function stopOwnedNative(process:{pid:number;startTicks:string;bootId:string}){
+ if(globalThis.process.platform!=='linux'||readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim()!==process.bootId)return;
  if(processStartTicks(process.pid)!==process.startTicks)return;
  try{globalThis.process.kill(-process.pid,'SIGKILL');}catch(error){if((error as NodeJS.ErrnoException).code!=='ESRCH')throw error;}
  const until=Date.now()+2000;while(processStartTicks(process.pid)===process.startTicks){if(Date.now()>until)throw new VmafError('stop-uncertain','Previous native process did not exit');await sleep();}
 }
 export class NativeVmafRunner{
  private active=new Set<{stop():void;done:Promise<unknown>}>();private closed=false;stopUncertain=false;
- constructor(private library:MediaLibraryIndex,private coreDir:string,readonly config:VmafComponentConfig|undefined){}
+ private library:MediaLibraryIndex;private coreDir:string;readonly config:VmafComponentConfig|undefined;
+ constructor(library:MediaLibraryIndex,coreDir:string,config:VmafComponentConfig|undefined){this.library=library;this.coreDir=coreDir;this.config=config;}
  async capability(){
   const basic={...VMAF_CAPABILITY,configured:!!this.config,enabled:false,reason:'component-unavailable'};
   if(!this.config||process.platform!=='linux'||process.arch!=='x64')return basic;
-  try{const c=await this.component('vmaf_v0_6_1',new AbortController().signal);return {...basic,enabled:true,reason:null,component:{manifestSha256:c.manifestSha256,sourceRevision:c.sourceRevision,cliVersion:c.cliVersion}};}
+  try{const c=await this.owned({budget:{maxElapsedMs:30000}},new AbortController().signal,()=>{},s=>this.component('vmaf_v0_6_1',s));return {...basic,enabled:true,reason:null,component:{manifestSha256:c.manifestSha256,sourceRevision:c.sourceRevision,cliVersion:c.cliVersion}};}
   catch(error){return {...basic,reason:(error as {code?:string}).code??'component-unavailable'};}
  }
  private async component(model:VmafModel,signal:AbortSignal){
@@ -63,13 +65,13 @@ export class NativeVmafRunner{
    }finally{if(temporary)try{rmSync(directory,{recursive:true,force:true});}catch(error){this.stopUncertain=true;throw new VmafError('stop-uncertain','Temporary raw sequence could not be reclaimed');}}
   });
  }
- private owned<T>(input:VmafInput,signal:AbortSignal,admitted:()=>void,work:(s:AbortSignal)=>Promise<T>):Promise<T>{
+ private owned<T>(input:{budget:{maxElapsedMs:number}},signal:AbortSignal,admitted:()=>void,work:(s:AbortSignal)=>Promise<T>):Promise<T>{
   if(this.closed||this.stopUncertain)return Promise.reject(new VmafError('component-unavailable','Native executor is stopping or unavailable'));
   let release:()=>void;try{signal.throwIfAborted();release=this.library.qualityAdmission.acquire();}catch(error){return Promise.reject(error);}
   const controller=new AbortController(),combined=AbortSignal.any([signal,controller.signal]);
   const timer=setTimeout(()=>controller.abort(new VmafError('budget-exceeded','Whole VMAF execution deadline exceeded')),input.budget.maxElapsedMs);
   const entry={stop:()=>controller.abort(new VmafError('cancelled','Native VMAF executor stopping')),done:Promise.resolve() as Promise<unknown>};
-  const done=(async()=>{try{admitted();combined.throwIfAborted();return await work(combined);}finally{clearTimeout(timer);this.active.delete(entry);if(!this.stopUncertain)release();}})();
+  const done=Promise.resolve().then(async()=>{try{admitted();combined.throwIfAborted();return await work(combined);}finally{clearTimeout(timer);this.active.delete(entry);if(!this.stopUncertain)release();}});
   entry.done=done;this.active.add(entry);return done;
  }
  private async native(c:VmafComponent,directory:string,input:VmafInput,prepared:VmafPrepared,signal:AbortSignal,onProcess:Hooks['process']):Promise<VmafNativeResult>{
@@ -89,7 +91,7 @@ export class NativeVmafRunner{
   };
   child.stdout.on('data',chunk=>collect('stdout',chunk));child.stderr.on('data',chunk=>collect('stderr',chunk));
   let spawnFailure:unknown;
-  child.once('spawn',()=>{try{signal.throwIfAborted();const startTicks=processStartTicks(child.pid!);if(!startTicks)throw new VmafError('native-execution-failed','Cannot witness the native supervisor');onProcess({pid:child.pid!,startTicks});child.stdin.end('G');}catch(error){stop(error);child.stdin.end();}});
+  child.once('spawn',()=>{try{signal.throwIfAborted();const startTicks=processStartTicks(child.pid!);if(!startTicks)throw new VmafError('native-execution-failed','Cannot witness the native supervisor');onProcess({pid:child.pid!,startTicks,bootId:readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim()});child.stdin.end('G');}catch(error){stop(error);child.stdin.end();}});
   child.on('error',error=>{spawnFailure=error;});child.stdin.on('error',()=>{});
   const code=await new Promise<number|null>(resolve=>child.once('close',resolve));
   signal.removeEventListener('abort',abort);clearTimeout(killTimer);

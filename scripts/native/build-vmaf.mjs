@@ -1,5 +1,5 @@
 import {readFile,mkdir,writeFile,copyFile,chmod,realpath} from 'node:fs/promises';
-import path from 'node:path';import {createHash} from 'node:crypto';import {execFileSync} from 'node:child_process';
+import path from 'node:path';import {createHash} from 'node:crypto';import {execFileSync,spawnSync} from 'node:child_process';
 const root=path.resolve(import.meta.dirname,'../..'),lock=JSON.parse(await readFile(new URL('./vmaf.lock.json',import.meta.url),'utf8'));
 if(process.platform!=='linux'||process.arch!=='x64')throw Error('Native VMAF component currently builds only on Linux x64');
 const out=path.resolve(process.argv[2]??path.join(root,'.run/components/vmaf')),source=path.resolve(process.env.VMAF_SOURCE_DIR??path.join(root,'.run/vmaf-native/source')),build=path.join(out,'build');
@@ -18,6 +18,9 @@ for(const [id,model]of Object.entries(lock.models)){const bytes=await readFile(p
 for(const name of ['vmaf','vmaf-limit'])files[name]=digest(await readFile(path.join(out,name)));
 const notices=(await readFile(path.join(source,'LICENSE'),'utf8'))+'\n\nLIBSVM notice:\n'+(await readFile(path.join(source,'libvmaf/src/svm.h'),'utf8')).split('#ifndef')[0];
 await writeFile(path.join(out,'NOTICES.txt'),notices);files['NOTICES.txt']=digest(Buffer.from(notices));
-const manifest={schema:'voidplayer-native-vmaf-component',version:1,platform:lock.platform,source:{repository:lock.repository,revision,tag:lock.tag},build:{options:lock.options,cc:execFileSync(process.env.CC??'cc',['--version'],{encoding:'utf8'}).split('\n')[0],meson:execFileSync(process.env.VMAF_MESON??'meson',['--version'],{encoding:'utf8'}).trim()},cliVersion:execFileSync(path.join(out,'vmaf'),['--version'],{encoding:'utf8'}).trim(),files};
+const versionRun=spawnSync(path.join(out,'vmaf'),['--version'],{encoding:'utf8'});
+if(versionRun.status!==0||versionRun.signal)throw Error('Official VMAF version command failed');
+const cliVersion=(versionRun.stdout+versionRun.stderr).trim();if(cliVersion!=='17a67b2')throw Error('Unexpected fixed VMAF version');
+const manifest={schema:'voidplayer-native-vmaf-component',version:1,platform:lock.platform,source:{repository:lock.repository,revision,tag:lock.tag},build:{options:lock.options,cc:execFileSync(process.env.CC??'cc',['--version'],{encoding:'utf8'}).split('\n')[0],meson:execFileSync(process.env.VMAF_MESON??'meson',['--version'],{encoding:'utf8'}).trim()},cliVersion,files};
 const bytes=Buffer.from(JSON.stringify(manifest,null,2)+'\n');await writeFile(path.join(out,'manifest.json'),bytes);
 console.log(JSON.stringify({directory:await realpath(out),manifestSha256:digest(bytes),installation:'Copy this component directory and pin its manifestSha256 in the trusted service configuration. Never accept paths from HTTP.'},null,2));

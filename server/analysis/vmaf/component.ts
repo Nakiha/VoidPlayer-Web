@@ -24,5 +24,5 @@ export async function verifyVmafComponent(config:VmafComponentConfig|undefined,m
    if(['vmaf','vmaf-limit'].includes(name)&&!(s.mode&0o111))throw Error('Native component is not executable');
   }
   return {directory,manifestSha256:config.manifestSha256,binary:path.join(directory,'vmaf'),supervisor:path.join(directory,'vmaf-limit'),model:path.join(directory,VMAF_MODELS[model].file),binarySha256:m.files.vmaf,modelSha256:VMAF_MODELS[model].sha256,supervisorSha256:m.files['vmaf-limit'],cliVersion:m.cliVersion,sourceRevision:VMAF_SOURCE_REVISION};
- }catch(error){if(error instanceof VmafError)throw error;throw new VmafError('component-unavailable',`Native component verification failed: ${(error as Error).message}`);}
+ }catch(error){if(error instanceof VmafError)throw error;throw new VmafError('component-unavailable',`Native component verification failed: ${(error as NodeJS.ErrnoException).code??(error as Error).message}`);}
 }

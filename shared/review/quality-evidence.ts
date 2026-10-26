@@ -1,3 +1,4 @@
+import {validateVmafAssociation} from '../analysis/quality/vmaf.ts';
 import { validateSsim } from '../analysis/quality/ssim-evidence.ts';
 import type { LibraryPairResult } from '../analysis/quality/library-pair.ts';
 import { pairBudget, pairPacketCount, decodeEndAu, FORWARD_PAIR_LIMITS, PAIR_LIMITS, FORWARD_OUTPUT_GUARANTEE } from '../analysis/quality/frame-pair.ts';
@@ -114,6 +115,7 @@ export function qualityEvidenceValue(value: unknown): LibraryPairResult {
   }
   check(r.work?.packets === packets && r.work.outputFrames === packets && unsigned(r.work.readBytes) && r.work.readBytes<=PAIR_LIMITS.maxReadBytes && Number.isFinite(r.work.elapsedMs) && r.work.elapsedMs >= 0
     && m.work && [m.work.samples,m.work.bytesRead,m.work.inputViewBytes,m.work.chargedInputBytes].every(unsigned));
+  if(v.sequenceVmaf!==undefined)validateVmafAssociation(v.sequenceVmaf,v);
   validatePsnrSpatial(m);
   if(r.ssim!==undefined)validateSsim(r.ssim,m);
   return structuredClone(v);
