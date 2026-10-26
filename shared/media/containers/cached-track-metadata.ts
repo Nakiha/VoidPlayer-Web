@@ -293,3 +293,51 @@ export async function inspectCachedTracks(size: number, peek: AudioPeek): Promis
   } catch { /* Cache misses, budgets and malformed metadata are not absence. */ }
   return result;
 }
+
+export type DeclaredTrack = { id:number; type:'video'|'audio'|'subtitle'|'data'|'other';handler:string;
+  timeBase:{numerator:number;denominator:number}|null;codecIdentifier?:string };
+/** Reuse the bounded structural header readers for ALL initially declared
+ * tracks, including types a playback library does not expose. Never walks media
+ * packets/clusters or expands MP4 sample tables. IO/cancellation errors propagate. */
+export async function inspectDeclaredTracks(size:number,peek:AudioPeek,format:'mp4'|'matroska'):
+  Promise<{tracks:DeclaredTrack[];complete:boolean;reason:string|null}>{
+  const reader=new Budget(peek,size),tracks:DeclaredTrack[]=[];
+  const finish=()=>{if(tracks.length>32)throw Error('probe-stream-budget-exceeded');
+    if(new Set(tracks.map(t=>t.id)).size!==tracks.length)throw new Missing();return {tracks,complete:true,reason:null};};
+  try{
+    if(format==='mp4'){
+      for(let at=0,n=0;at+8<=size&&n<128;n++){
+        const h=await reader.read(at,8);let length=u32(h),header=8;if(length===1){length=Number(view(await reader.read(at+8,8)).getBigUint64(0));header=16;}if(!length)length=size-at;
+        if(!Number.isSafeInteger(length)||length<header||at+length>size)throw new Missing();
+        if(ascii(h,4,8)==='moov'){
+          const bytes=await reader.read(at+header,length-header),children=boxes(bytes).filter(b=>b.type==='trak');if(children.length>32)throw Error('probe-stream-budget-exceeded');
+          for(const track of children){const body=boxes(bytes,track.start,track.end),tkhd=body.find(b=>b.type==='tkhd'),mdia=body.find(b=>b.type==='mdia');if(!tkhd||!mdia||tkhd.end-tkhd.start<4)throw new Missing();
+            const version=bytes[tkhd.start],idOffset=version===0?12:version===1?20:-1;if(idOffset<0||tkhd.start+idOffset+4>tkhd.end)throw new Missing();const id=u32(bytes,tkhd.start+idOffset);if(id<1)throw new Missing();
+            const media=boxes(bytes,mdia.start,mdia.end),hdlr=media.find(b=>b.type==='hdlr');if(!hdlr||hdlr.end-hdlr.start<12)throw new Missing();const handler=ascii(bytes,hdlr.start+8,hdlr.start+12);
+            const type:DeclaredTrack['type']=handler==='vide'?'video':handler==='soun'?'audio':['text','subt','sbtl','clcp'].includes(handler)?'subtitle':['hint','meta','tmcd','mdir','mdta'].includes(handler)?'data':'other';
+            let timeBase:DeclaredTrack['timeBase']=null;const mdhd=media.find(b=>b.type==='mdhd');if(mdhd&&mdhd.end-mdhd.start>=4){const v=bytes[mdhd.start],offset=v===0?12:v===1?20:-1;if(offset>=0&&mdhd.start+offset+4<=mdhd.end){const denominator=u32(bytes,mdhd.start+offset);if(denominator>0)timeBase={numerator:1,denominator};}}
+            tracks.push({id,type,handler,timeBase});
+          }
+          return finish();
+        }
+        at+=length;
+      }
+    }else{
+      let at=0,limit=size;
+      for(let n=0;n<128&&at<limit&&at<1024*1024;n++){
+        const h=await reader.read(at,Math.min(12,limit-at)),id=vint(h,0,true),length=vint(h,id.length),start=at+id.length+length.length;
+        if(id.value===0x18538067){if(!length.unknown)limit=Math.min(limit,start+length.value);at=start;continue;}
+        if(length.unknown||!Number.isSafeInteger(length.value)||start+length.value>limit)throw new Missing();
+        if(id.value===0x1654ae6b){const entries=elements(await reader.read(start,length.value)).filter(e=>e.id===0xae);if(entries.length>32)throw Error('probe-stream-budget-exceeded');
+          for(const entry of entries){const fields=elements(entry.data),number=fields.find(f=>f.id===0xd7),kind=fields.find(f=>f.id===0x83);if(!number||!kind)throw new Missing();const id=uint(number.data),code=uint(kind.data);if(!Number.isSafeInteger(id)||id<1||!Number.isSafeInteger(code))throw new Missing();
+            const type:DeclaredTrack['type']=code===1?'video':code===2?'audio':code===17?'subtitle':[18,32,33].includes(code)?'data':'other';const codec=fields.find(f=>f.id===0x86);
+            tracks.push({id,type,handler:String(code),timeBase:null,...(codec&&codec.data.length<=128?{codecIdentifier:ascii(codec.data)}:{})});
+          }return finish();
+        }
+        if(id.value===0x1f43b675)break;
+        at=start+length.value;
+      }
+    }
+    return {tracks:[],complete:false,reason:'initial-track-header-not-found-within-bounds'};
+  }catch(error){if(!(error instanceof Missing))throw error;return {tracks:[],complete:false,reason:'initial-track-header-incomplete-unsupported-or-over-budget'};}
+}

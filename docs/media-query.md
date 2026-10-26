@@ -35,7 +35,7 @@
 
 所有条件必须由同一缓存身份与同一 stream 的证据满足，不能把一个身份的 codec 与另一个身份的尺寸拼成 match。每条 evidence 绑定完整 identity，给出 match/not-match/unknown、条件检查和 value/status/source/reason；旧 schema、缺失/不支持/partial/冲突均为 unknown，即便另一个条件已不匹配也不将不完整合取当已知反例。同 streamKey 的已知 codec/尺寸相互冲突时，相关证据保守降为 unknown。来源级有返回的匹配证据才为 match，否则始终 unknown：`streamInventoryComplete=false`，未观察到的流可能匹配，不能宣称整个源不含目标流。
 
-尺寸证据范围：FLV/TS 为 initial-codec-configuration，FFmpeg 为 cached-stream-metadata，不承诺每幅图像。recordsReady 只反映现有有界 overview 的记录适配器声明；不读取/重哈希包负载，不能证明每片均完好。离线候选保持 unknown，固定版本已改变或已不在允许根目录则 409。duration、位深、色彩、完整流 probe 留待后续，不关闭 #120。
+尺寸证据范围：FLV/TS 为 initial-codec-configuration，FFmpeg 为 cached-stream-metadata，不承诺每幅图像。recordsReady 只反映现有有界 overview 的记录适配器声明；不读取/重哈希包负载，不能证明每片均完好。离线候选保持 unknown，固定版本已改变或已不在允许根目录则 409。此旧候选接口仍不提供 duration、位深和色彩 probe；新增全库发现/显式准备见 [媒体技术发现](library-discovery.md)。新接口不改变此 v1 接口的范围，也不代表 #120 整体完成。
 
 v1 是一次性有界候选查询，**没有一致分页**。每候选最多检查 8 个身份并读 1 个 lookahead，按复合主键前缀读取，无 COUNT/全库扫描；两次投影用于读取与最终验证。每身份只物化至多 32 KiB metadata、8 KiB semantic header、4 KiB packet descriptor，单次请求两轮总投影 TEXT 上限 6,488,064 字节，身份字符串另有限长。记录 document/packets/batches 不读取；响应不超过 byteBudget。达到身份/响应限制时 `truncated=true`，被省略的匹配证据不能留下隐藏 match。libraryTotal/nextCursor 始终 null，cursor/offset 参数拒绝；不同候选批次是独立观察，不可累计为同一快照的全库数量。
 
@@ -107,3 +107,5 @@ curl -fsS --get "$BASE/api/media/$ID/index-query" \
 `timestampSource` 分开 flv-tag / pes / derived。缺 DTS 保留 null，不能使用 ffprobe 补推的值。
 FLV `normalizedPtsUs` 是减去首解码包 PTS 的原始值偏移，不展开 wrap；TS 归一化未知。
 断连通过共享取消标记中止数据库遍历；容量直到 Worker 真正结束才释放，超时也不能提前释放。
+
+全库技术发现使用独立的 `/api/library/discovery` 快照游标协议，保留未知与覆盖统计；旧 `/technical-query` 候选协议保持上述限制。新 probe、持久准备任务及 GUI/Agent 选片契约见 [媒体技术发现](library-discovery.md)。

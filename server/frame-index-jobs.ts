@@ -129,12 +129,12 @@ export class FrameIndexJobs {
     if (op === 'put') this.qualityAdmission.ordinary();
     const [data = {}, transfer = [], timeoutMs = 60000] = args;
     if (this.closed) throw new AdminError(503, '索引服务已关闭。');
-    if ((op === 'cached-indexes' || op === 'semantic-query' || op === 'technical-filter') && this.pending.size >= QUERY_CONCURRENCY_LIMIT) {
+    if ((op === 'cached-indexes' || op === 'semantic-query' || op === 'technical-filter' || op === 'discovery-browse' || op === 'discovery-detail') && this.pending.size >= QUERY_CONCURRENCY_LIMIT) {
       throw new AdminError(503, 'Cached media queries are busy; retry later.', 'media-query-busy');
     }
-    const isQuery = op === 'semantic-query' || op === 'cached-indexes' || op === 'technical-filter';
+    const isQuery = op === 'semantic-query' || op === 'cached-indexes' || op === 'technical-filter' || op === 'discovery-browse' || op === 'discovery-detail';
     const queryData = data as { cancellation?: SharedArrayBuffer };
-    if (op === 'semantic-query' || op === 'technical-filter') queryData.cancellation ??= new SharedArrayBuffer(4);
+    if (op === 'semantic-query' || op === 'technical-filter' || op === 'discovery-browse' || op === 'discovery-detail') queryData.cancellation ??= new SharedArrayBuffer(4);
     let timedOut = false;
     const worker = this.databaseWorker();
     const id = this.nextId++;

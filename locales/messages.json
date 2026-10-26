@@ -2540,6 +2540,143 @@
     "source": "核对来源与指纹，按系统提示完成导入。",
     "params": {}
   },
+  "discovery.check": {
+    "source": "只读检查评分来源",
+    "params": {}
+  },
+  "discovery.coverage": {
+    "source": "已按 ID 顺序扫描 {candidates} 个候选；范围内已检查 {inspected}/{total}：匹配 {match}，未知 {unknown}，不匹配 {notMatch}。总数仅在穷尽后成立，不证明磁盘文件完整发现。",
+    "params": {
+      "candidates": "string | number",
+      "inspected": "string | number",
+      "match": "string | number",
+      "notMatch": "string | number",
+      "total": "string | number",
+      "unknown": "string | number"
+    }
+  },
+  "discovery.depth": {
+    "source": "位深（已知证据）",
+    "params": {}
+  },
+  "discovery.distorted": {
+    "source": "作为待测源打开测量",
+    "params": {}
+  },
+  "discovery.duration": {
+    "source": "最小时长（整数微秒）",
+    "params": {}
+  },
+  "discovery.facts": {
+    "source": "完整技术事实、覆盖与缺失原因",
+    "params": {}
+  },
+  "discovery.forget": {
+    "source": "结束此重试（已受理任务仍可能继续）",
+    "params": {}
+  },
+  "discovery.height": {
+    "source": "最小高度（源像素）",
+    "params": {}
+  },
+  "discovery.index": {
+    "source": "显式准备可信 FLV 索引",
+    "params": {}
+  },
+  "discovery.invalidDraft": {
+    "source": "保存的本地请求无效，未自动重试，现可重新选择。",
+    "params": {}
+  },
+  "discovery.jobLifetime": {
+    "source": "网络错误不是任务失败。关闭页面只停止观察；终态、attempt 与结果以同一后台记录为准。",
+    "params": {}
+  },
+  "discovery.jobs": {
+    "source": "当前用户的显式准备历史",
+    "params": {}
+  },
+  "discovery.keepUnknown": {
+    "source": "保留未知结果，显示缺失原因",
+    "params": {}
+  },
+  "discovery.maxDuration": {
+    "source": "最大时长（整数微秒）",
+    "params": {}
+  },
+  "discovery.maxHeight": {
+    "source": "最大高度（源像素）",
+    "params": {}
+  },
+  "discovery.maxWidth": {
+    "source": "最大宽度（源像素）",
+    "params": {}
+  },
+  "discovery.metadataContainerOnly": {
+    "source": "此容器已提供技术信息；本批可信索引准备与评分仍限 FLV/Enhanced FLV。MP4、Matroska、TS 能读取或播放，不等于可评分。",
+    "params": {}
+  },
+  "discovery.metadataOnly": {
+    "source": "已读取技术证据；尚未据此核验评分来源。技术流/时钟不是评分 AU 身份。",
+    "params": {}
+  },
+  "discovery.noStream": {
+    "source": "没有已准备的流证据；缺失字段不能填零。",
+    "params": {}
+  },
+  "discovery.observeError": {
+    "source": "观察暂不可用：{error}。不表示后台任务失败。",
+    "params": {
+      "error": "string | number"
+    }
+  },
+  "discovery.pending": {
+    "source": "提交结果未知；内容已冻结。重试复用原 actor、client 与幂等键，不会另建任务。",
+    "params": {}
+  },
+  "discovery.prepareHelp": {
+    "source": "准备必须显式提交。probe 仅做有界技术读取（4MiB / 512次 / 32流 / 30秒）；可信 FLV 索引准备另受64MiB来源与128MiB读取预算。两者均由服务持有，关页不取消，明确取消后等待 Worker 真实退出；不自动重试。",
+    "params": {}
+  },
+  "discovery.probe": {
+    "source": "显式读取技术信息",
+    "params": {}
+  },
+  "discovery.qualityChecked": {
+    "source": "此刻可信来源检查通过；测量选择和执行仍重新核验 AU、颜色、源版本与缓存身份。",
+    "params": {}
+  },
+  "discovery.recordsReady": {
+    "source": "要求已有有界缓存记录适配器（不是可评分保证）",
+    "params": {}
+  },
+  "discovery.reference": {
+    "source": "作为参考源打开测量",
+    "params": {}
+  },
+  "discovery.retry": {
+    "source": "用原幂等键重试未知提交",
+    "params": {}
+  },
+  "discovery.scope": {
+    "source": "按已缓存技术证据选片。未知不是不匹配；读取不探测、不构建索引，也不移动播放器。元数据可读不表示可评分，评分仍逐源核验可信缓存与精确 AU。",
+    "params": {}
+  },
+  "discovery.stream": {
+    "source": "明确选择技术流",
+    "params": {}
+  },
+  "discovery.title": {
+    "source": "技术选片与显式准备",
+    "params": {}
+  },
+  "discovery.transfer": {
+    "source": "源传递函数",
+    "params": {}
+  },
+  "discovery.width": {
+    "source": "最小宽度（源像素）",
+    "params": {}
+  },
   "drawing.changed": {
     "source": "画面已变化，未将编辑写入其他帧。",
     "params": {}

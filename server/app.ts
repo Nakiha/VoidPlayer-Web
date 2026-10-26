@@ -2,6 +2,7 @@ import { StaticAssets } from './static-assets.ts';
 import { AnalysisScheduler } from './analysis/bitstream/scheduler.ts';
 import { handleAnalysisRoutes } from './analysis/bitstream/routes.ts';
 import { handleQualityRoutes } from './analysis/quality/routes.ts';
+import { handleDiscoveryRoutes } from './discovery/routes.ts';
 import { handleQualityJobRoutes } from './analysis/quality/job-routes.ts';
 import { handleQualityRangeRoutes } from './analysis/quality/range-routes.ts';
 import { randomUUID } from 'node:crypto';
@@ -91,6 +92,7 @@ export function createMediaServer(options: ServerOptions): Server {
       const url = new URL(req.url ?? '/', 'http://localhost');
       if (await handleConnectionRoutes(ctx, req, res, url)) return;
       if (await handleStateRoutes(ctx, req, res, url)) return;
+      if (await handleDiscoveryRoutes(ctx,req,res,url)) return;
       if (await handleQualityJobRoutes(ctx,req,res,url)) return;
       if (await handleQualityRangeRoutes(ctx,req,res,url)) return;
       if (await handleQualityRoutes(ctx,req,res,url)) return;

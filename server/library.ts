@@ -3,6 +3,7 @@ import { FrameIndexJobs } from './frame-index-jobs.ts';
 import { QualityAdmission } from './quality-admission.ts';
 import { LibraryPairRunner } from './analysis/quality/runner.ts';
 import { QualityJobService } from './analysis/quality/job-service.ts';
+import { LibraryDiscoveryService } from './discovery/service.ts';
 import { QualityRangeService } from './analysis/quality/range-service.ts';
 import { AdminError } from './admin-error.ts';
 import { FrameIndexStore } from './frame-index-store.ts';
@@ -35,6 +36,8 @@ export class MediaLibraryIndex {
   readonly qualityAdmission = new QualityAdmission();
   private pairRunner?: LibraryPairRunner;
   private jobService?: QualityJobService;
+  private discoveryService?: LibraryDiscoveryService;
+  get discovery() { if(this.closed)throw new AdminError(503,'Library discovery is closed.','discovery-unavailable');return this.discoveryService??=new LibraryDiscoveryService(this); }
   private rangeService?: QualityRangeService;
   private closing?: Promise<void>;
   private coreDirectory: string;
@@ -394,6 +397,7 @@ export class MediaLibraryIndex {
   close() { return this.closing ??= this.closeOwned(); }
   private async closeOwned() {
     this.closed = true; this.stop();
+    await this.discoveryService?.close();
     await this.rangeService?.close();
     await this.jobService?.close();
     await this.pairRunner?.close();await this.pending?.catch(() => {}); await this.indexJobs.close(); this.store.close();

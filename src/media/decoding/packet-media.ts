@@ -376,6 +376,9 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
         if(frame&&disposed)frame.close();
       },
       async *framesFollowing(pts){
+        // Establish the live frontier before strict next can see startup-prefix EOF.
+        // As in framesAfter, start the memoized build without awaiting the full scan.
+        if (info.indexState === 'building') void completeIndex().catch(() => {});
         while(!disposed){
           await ensureIndexed(pts);
           const frame=await extract(pts,true);if(!frame)return;

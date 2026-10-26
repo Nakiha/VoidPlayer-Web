@@ -56,6 +56,26 @@ export class MediaIndexQueryStore {
   private db: IndexDatabase;
   private filterScope = randomUUID();
   constructor(db: IndexDatabase) { this.db = db; }
+  /** Bounded legacy/cache reuse for library discovery. No packet document or
+   * migration is read. A cached stream inventory never proves source absence. */
+  discoveryEvidence(id:string,version:string,limit:number){
+    const rows=this.db.prepare(`SELECT ${filterColumns} FROM media_index_manifests WHERE media_id=? AND media_version=? ORDER BY media_index_manifests.kind,media_index_manifests.stream_key,media_index_manifests.schema_version,media_index_manifests.indexer_build LIMIT ?`)
+      .all(id,version,limit+1) as unknown as Row[];
+    const indexes=[];
+    for(const row of rows.slice(0,limit)){
+      try{
+        const identity=parseMediaIndexIdentity(row.kind,new URLSearchParams({stream:row.stream_key,schema:String(row.schema_version),indexer:row.indexer_build}));
+        const overview=describe(row,identity,`${id}@${version}`),m=metadata(row);
+        // Preserve each namespace independently; never merge peer fields.
+        const conflict=m&&['codec','width','height'].some(k=>overview.technical[k]?.status==='known'&&m[k]!==undefined&&m[k]!==overview.technical[k].value);
+        indexes.push({identity,buildId:row.build_id,overview,eligible:!conflict&&overview.state==='complete'&&overview.terminal&&overview.integrity==='complete'&&(identity.kind!=='ffmpeg'||m?.size===row.source_size),reason:conflict?'cached-identity-evidence-conflict':'cached-index-incomplete-or-unsupported'});
+      }catch{/* Invalid cache identity is unavailable, never a match. */}
+    }
+    for(const item of indexes){const peers=indexes.filter(other=>other.identity.streamKey===item.identity.streamKey);
+      const conflict=['codec','width','height'].some(key=>new Set(peers.filter(p=>p.overview.state==='complete'&&p.overview.technical[key]?.status==='known').map(p=>p.overview.technical[key].value)).size>1);
+      if(conflict||rows.length>limit){item.eligible=false;item.reason=conflict?'cached-stream-evidence-conflict':'cached-evidence-truncated';}}
+    return {indexes,truncated:rows.length>limit,identitiesRead:rows.length,readBytes:rows.reduce((n,row)=>n+Buffer.byteLength(row.metadata_json??'')+Buffer.byteLength(row.semantic_json??'')+Buffer.byteLength(row.packet_storage??''),0)};
+  }
   technicalFilter(query: TechnicalFilterQuery, expectedSnapshot?: string, cancellation?: SharedArrayBuffer) {
     const check = () => { if (cancellation && Atomics.load(new Int32Array(cancellation), 0)) throw new AdminError(499, 'Cached query cancelled.', 'media-query-cancelled'); };
     const changed = () => { throw new AdminError(409, 'Source or cached evidence changed; restart the bounded query.', 'technical-evidence-changed'); };
