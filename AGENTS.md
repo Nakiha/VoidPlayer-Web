@@ -92,3 +92,5 @@ node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 - `scripts/package-release.mjs` 生成独立程序、资源、来源清单与校验和；`npm run test:release` 校验解压产物，无需真实片源。分支上传预览 artifact；版本标签需匹配包版本和发布说明，经三平台汇总校验后生成 Release 草稿，不自动公开发布。`node --test test/release-pipeline.test.mjs` 验证版本、产物汇总和草稿重跑边界。
 
 播放器独立 ROI 与原子测量候选见 `docs/quality-roi-candidates.md`，入口 `src/ui/quality-roi.ts`。普通播放 token 不可充当质量缓存身份；工具从加载媒体显式选择 AU，由独立 Worker 核验并通过 presenter 呈现后选 ROI，不能按 PTS 猜帧或隐式建索引。GUI/Agent 共用 `create-quality-candidate`，结果派生锚点/ROI、显式文字/严重度、未人工判断状态；事务/回执优先/actor 围栏不得省略。
+
+可选暂停原生 FLV 入口与显式有界缓存准备见 `docs/paused-native-quality.md`。`native-picture-identity.ts` 只关联同 epoch 已受理单图输入与原生输出，`session.captureNativePresented` 只读取 presenter 成功提交的原始 VideoSample；不得借来源标签或旧 token/PTS 搜索冒用身份。`bindNativePresentedFrame` 精确连接当前可信 cache/AU/配置/包与几何。普通显式 AU 入口继续独立；WASM 与其他容器不继承此新能力。`psnr-index` 是显式30秒/64MiB来源/128MiB实际读/包和索引限额的独立操作，读取/评分永不隐式建索引；取消须先关闭真实文件和 Worker 才放容量，完成竞争可留下有效缓存，需重读。新测试登记现有完整CI，不改门禁分层。

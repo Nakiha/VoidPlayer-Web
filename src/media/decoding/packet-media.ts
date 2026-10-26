@@ -1,3 +1,4 @@
+import {nativeLibraryTransport} from '../../../shared/review/native-presented-frame.ts';
 import { JS_TS_MEDIA_INDEX_IDENTITY, JS_MATROSKA_MEDIA_INDEX_IDENTITY, FLV_MEDIA_INDEX_IDENTITY } from '../../../shared/media/indexing/media-index-identity.ts';
 import { coreAssetUrl } from './core-url.ts';
 import { referenceVersion } from '../../../shared/media/io/media-reference.ts';
@@ -26,7 +27,11 @@ import { resolveYuvColor } from '../../../shared/color/yuv-color.ts';
 import type { MediaInfo } from '../../../shared/review/model.ts';
 import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample } from '../../../shared/analysis/metadata/types.ts';
 
-export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matroska', input: PacketInput, meta: MediaMeta, deps: FallbackDeps & { forceWasm?: boolean; sourceVersion?: string; preparedTs?: {rpc:WorkerRpc<PacketCommands>; session:string; hasDts:boolean} } = {}): Promise<MediaSource> {
+export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matroska', input: PacketInput, meta: MediaMeta, deps: FallbackDeps & { forceWasm?: boolean; nativePresentedLibrary?:import('../../../shared/media/io/library-reference-types.ts').LibraryIndexReference; sourceVersion?: string; preparedTs?: {rpc:WorkerRpc<PacketCommands>; session:string; hasDts:boolean} } = {}): Promise<MediaSource> {
+  const nativeLibrary='url' in input?input.library??deps.nativePresentedLibrary:undefined;
+  const nativePresentedTransport=container==='flv'&&'url' in input&&nativeLibrary
+    ?nativeLibraryTransport(input.url,nativeLibrary,globalThis.location?.origin??''):undefined;
+  const nativePresentedInstance=nativePresentedTransport?randomUUID():undefined;
   loadAborted(deps.signal);
   if((container==='ts'||container==='matroska') && !deps.sourceVersion)throw new MediaOpenError('input','JS TS source namespace is required');
   let reservation = reserveFallbackThreads();
@@ -161,6 +166,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
       const description = info.color && !frame.description.sourceColor
         ? { ...frame.description, sourceColor: { ...info.color }, sourceColorOrigin: 'container' as const } : frame.description;
       const rawFrame = { description, rotation: frame.rotation, kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8',
+        ...(nativePresentedInstance&&frame.nativePicture?{nativePresentedInput:{instance:nativePresentedInstance,sourceVersion:nativePresentedTransport!.sourceVersion,input:frame.nativePicture}}:{}),
         ...(frame.packetPicture ? { sourcePicture: { ...frame.packetPicture, sourceVersion: info.source ? `${info.source.id}@${referenceVersion(info.source.url)}` : info.id, picture: 0 as const, layer: 0 as const, field: 'frame' as const } } : {}),
         width: frame.width, height: frame.height, ptsUs: frame.pts - info.firstPtsUs, sourcePtsUs: frame.pts,
         durationUs: frame.durationUs ?? durations[position], byteSize: frame.description.byteLength, sample, pixels,
@@ -258,6 +264,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     };
     let stopAudio = () => {};
     const source: MediaSource = {
+      ...(nativePresentedInstance?{nativePresentedInstance,nativePresentedTransport}:{}),
       info, ensureIndexed,
       ...((container==='ts'||container==='matroska')?{bitstreamIndexIdentity:container==='ts'?JS_TS_MEDIA_INDEX_IDENTITY:JS_MATROSKA_MEDIA_INDEX_IDENTITY}:{}),
       ...(container === 'flv' ? {

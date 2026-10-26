@@ -1,0 +1,478 @@
+{
+  "schema": "voidplayer-paused-native-local-acceptance",
+  "version": 1,
+  "date": "2026-10-26",
+  "baseline": "7c399ad05ad381c9df9e9713be98d5292ed9fd65",
+  "decoderPin": "56eec749fde60488e41fe4d5467f77fb112f093c",
+  "runtime": {
+    "node": "24.19.0",
+    "bun": "1.4.2",
+    "host": "Linux x64"
+  },
+  "sourceTests": {
+    "casesPassed": 145,
+    "casesExpected": 145
+  },
+  "contractTests": {
+    "casesPassed": 30,
+    "casesExpected": 30
+  },
+  "affectedLogic": {
+    "testsPassed": 85,
+    "testsExpected": 85
+  },
+  "sourceBuild": {
+    "node": {
+      "passed": 5
+    },
+    "bun": {
+      "passed": 5
+    }
+  },
+  "compiledPackage": {
+    "platform": "linux-x64",
+    "qualityRelease": "passed",
+    "emptyDecoderPath": true,
+    "otherPlatforms": "pending-exact-candidate-ci"
+  },
+  "gui": [
+    {
+      "label": "h264-8",
+      "state": "passed",
+      "profile": "High",
+      "roi": {
+        "x": 2,
+        "y": 4,
+        "width": 24,
+        "height": 20
+      },
+      "sse": 4953720,
+      "ssim": 0.5331986602733507,
+      "sharedCandidate": true,
+      "viewer": true,
+      "engine": "chromium"
+    },
+    {
+      "label": "hevc-8",
+      "state": "rejected-platform-native-unavailable",
+      "decoders": [
+        "ffmpeg-wasm",
+        "ffmpeg-wasm"
+      ],
+      "engine": "chromium"
+    },
+    {
+      "label": "hevc-10",
+      "state": "rejected-platform-native-unavailable",
+      "decoders": [
+        "ffmpeg-wasm",
+        "ffmpeg-wasm"
+      ],
+      "engine": "chromium"
+    },
+    {
+      "label": "h264-8",
+      "state": "passed",
+      "profile": "High",
+      "roi": {
+        "x": 2,
+        "y": 4,
+        "width": 24,
+        "height": 20
+      },
+      "sse": 4953720,
+      "ssim": 0.5331986602733507,
+      "sharedCandidate": true,
+      "viewer": true,
+      "engine": "webkit"
+    },
+    {
+      "label": "hevc-8",
+      "state": "passed",
+      "profile": "Main",
+      "roi": {
+        "x": 2,
+        "y": 4,
+        "width": 24,
+        "height": 20
+      },
+      "sse": 4942780,
+      "ssim": 0.5315102826742094,
+      "sharedCandidate": true,
+      "viewer": true,
+      "engine": "webkit"
+    },
+    {
+      "label": "hevc-10",
+      "state": "passed",
+      "profile": "Main 10",
+      "roi": {
+        "x": 2,
+        "y": 4,
+        "width": 24,
+        "height": 20
+      },
+      "sse": 79038815,
+      "ssim": 0.5317518938276514,
+      "sharedCandidate": true,
+      "viewer": true,
+      "engine": "webkit"
+    }
+  ],
+  "nativeProtocol": {
+    "chromium": [
+      {
+        "codec": "h264",
+        "depth": 8,
+        "variant": "original",
+        "state": "passed",
+        "outputs": 16,
+        "drain": 2
+      },
+      {
+        "codec": "h264",
+        "depth": 8,
+        "variant": "negative",
+        "state": "passed",
+        "outputs": 16,
+        "drain": 2
+      },
+      {
+        "codec": "h264",
+        "depth": 8,
+        "variant": "drain",
+        "state": "passed",
+        "outputs": 2,
+        "drain": 2
+      },
+      {
+        "codec": "h264",
+        "depth": 8,
+        "variant": "duplicate-clock",
+        "state": "passed",
+        "outputs": 2,
+        "drain": 2
+      },
+      {
+        "codec": "h264",
+        "depth": 8,
+        "variant": "multiple-pictures",
+        "state": "decoder-rejected"
+      },
+      {
+        "codec": "hevc",
+        "depth": 8,
+        "variant": "original",
+        "state": "platform-native-unavailable"
+      },
+      {
+        "codec": "hevc",
+        "depth": 8,
+        "variant": "negative",
+        "state": "platform-native-unavailable"
+      },
+      {
+        "codec": "hevc",
+        "depth": 8,
+        "variant": "drain",
+        "state": "platform-native-unavailable"
+      },
+      {
+        "codec": "hevc",
+        "depth": 8,
+        "variant": "duplicate-clock",
+        "state": "platform-native-unavailable"
+      },
+      {
+        "codec": "hevc",
+        "depth": 8,
+        "variant": "multiple-pictures",
+        "state": "platform-native-unavailable"
+      },
+      {
+        "codec": "hevc",
+        "depth": 10,
+        "variant": "original",
+        "state": "platform-native-unavailable"
+      },
+      {
+        "codec": "hevc",
+        "depth": 10,
+        "variant": "negative",
+        "state": "platform-native-unavailable"
+      },
+      {
+        "codec": "hevc",
+        "depth": 10,
+        "variant": "drain",
+        "state": "platform-native-unavailable"
+      },
+      {
+        "codec": "hevc",
+        "depth": 10,
+        "variant": "duplicate-clock",
+        "state": "platform-native-unavailable"
+      },
+      {
+        "codec": "hevc",
+        "depth": 10,
+        "variant": "multiple-pictures",
+        "state": "platform-native-unavailable"
+      },
+      {
+        "codec": "h264",
+        "variant": "actual-interlaced-sps",
+        "state": "identity-rejected"
+      }
+    ],
+    "webkit": [
+      {
+        "codec": "h264",
+        "depth": 8,
+        "variant": "original",
+        "state": "passed",
+        "outputs": 16,
+        "drain": 7
+      },
+      {
+        "codec": "h264",
+        "depth": 8,
+        "variant": "negative",
+        "state": "passed",
+        "outputs": 16,
+        "drain": 7
+      },
+      {
+        "codec": "h264",
+        "depth": 8,
+        "variant": "drain",
+        "state": "passed",
+        "outputs": 2,
+        "drain": 2
+      },
+      {
+        "codec": "h264",
+        "depth": 8,
+        "variant": "duplicate-clock",
+        "state": "passed",
+        "outputs": 2,
+        "drain": 2
+      },
+      {
+        "codec": "h264",
+        "depth": 8,
+        "variant": "multiple-pictures",
+        "state": "passed",
+        "outputs": 1,
+        "drain": 1
+      },
+      {
+        "codec": "hevc",
+        "depth": 8,
+        "variant": "original",
+        "state": "passed",
+        "outputs": 16,
+        "drain": 5
+      },
+      {
+        "codec": "hevc",
+        "depth": 8,
+        "variant": "negative",
+        "state": "passed",
+        "outputs": 16,
+        "drain": 4
+      },
+      {
+        "codec": "hevc",
+        "depth": 8,
+        "variant": "drain",
+        "state": "passed",
+        "outputs": 2,
+        "drain": 2
+      },
+      {
+        "codec": "hevc",
+        "depth": 8,
+        "variant": "duplicate-clock",
+        "state": "passed",
+        "outputs": 2,
+        "drain": 2
+      },
+      {
+        "codec": "hevc",
+        "depth": 8,
+        "variant": "multiple-pictures",
+        "state": "passed",
+        "outputs": 1,
+        "drain": 1
+      },
+      {
+        "codec": "hevc",
+        "depth": 10,
+        "variant": "original",
+        "state": "passed",
+        "outputs": 16,
+        "drain": 10
+      },
+      {
+        "codec": "hevc",
+        "depth": 10,
+        "variant": "negative",
+        "state": "passed",
+        "outputs": 16,
+        "drain": 10
+      },
+      {
+        "codec": "hevc",
+        "depth": 10,
+        "variant": "drain",
+        "state": "passed",
+        "outputs": 2,
+        "drain": 2
+      },
+      {
+        "codec": "hevc",
+        "depth": 10,
+        "variant": "duplicate-clock",
+        "state": "passed",
+        "outputs": 2,
+        "drain": 2
+      },
+      {
+        "codec": "hevc",
+        "depth": 10,
+        "variant": "multiple-pictures",
+        "state": "passed",
+        "outputs": 1,
+        "drain": 1
+      },
+      {
+        "codec": "h264",
+        "variant": "actual-interlaced-sps",
+        "state": "identity-rejected"
+      }
+    ]
+  },
+  "cost": {
+    "baseline": "7c399ad05ad381c9df9e9713be98d5292ed9fd65",
+    "sourceSha256": "d377e0924a77eb2f9f859d69fc709b3f0a3278d62b37c92acd88cbb8e5bed1ad",
+    "thresholds": {
+      "speedRatioMin": 0.9,
+      "cpuTicksRatioMax": 1.1
+    },
+    "engines": [
+      {
+        "engine": "chromium",
+        "speedRatio": 1.000203208322791,
+        "cpuRatio": 0.9969040247678018,
+        "passed": true,
+        "baselineAbsoluteFailures": [
+          [],
+          [],
+          [],
+          []
+        ],
+        "featureAbsoluteFailures": [
+          [],
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "engine": "webkit",
+        "speedRatio": 1.000016398768034,
+        "cpuRatio": 0.9784810126582278,
+        "passed": true,
+        "baselineAbsoluteFailures": [
+          [],
+          [],
+          [],
+          []
+        ],
+        "featureAbsoluteFailures": [
+          [],
+          [],
+          [],
+          []
+        ]
+      }
+    ]
+  },
+  "retainedLimitations": [
+    "Small synthetic same-decoder cost gate only; historical full performance remains failed",
+    "WebCodecs platform/profile availability, not hardware guarantee",
+    "WASM/converted resources/other containers cannot capture this protocol",
+    "Reference integrity not certified; concealment detection unavailable",
+    "No interval/container/VMAF/distributed expansion",
+    "Independent review and remote final-head full CI remain pending"
+  ],
+  "localIncidents": [
+    {
+      "check": "vite-routing",
+      "firstSourceSuite": "144/145, two assertions passed but process retained eight FSWatchers and exceeded original 120s",
+      "diagnosis": "Remaining watchers identified under the gitignored core LICENSES symlink; unchanged baseline exited normally",
+      "environmentRepair": "Materialized byte-identical 16-file local core tree after per-file SHA-256 equality; no tracked code, assertion or timeout changed",
+      "verification": "Unchanged routing 2/2 exited normally; complete source 145/145 passed"
+    },
+    {
+      "check": "initial WebKit fixture colorSpace",
+      "evidence": "Original synthetic encoder VUI was unspecified; unchanged main rejected the same sample",
+      "repair": "Explicit encoder VUI and SPS/FFprobe verification in synthetic generator; no production relabeling"
+    }
+  ],
+  "firstRemoteCandidate": {
+    "head": "8c8287b2f511f76fa7d3b0cb5feb724ac561fb88",
+    "fullRun": 40267722596,
+    "attempt": 1,
+    "conclusion": "failure",
+    "jobs": {
+      "success": 31,
+      "failure": 1,
+      "skipped": 2
+    },
+    "identityRun": 40267722593,
+    "identity": "success",
+    "sourceCases": "145/145",
+    "mediaCases": "49/49",
+    "compiledPackages": [
+      "linux-x64 passed",
+      "windows-x64 passed",
+      "darwin-arm64 passed"
+    ],
+    "newPresentedCases": [
+      "chromium passed 26552ms",
+      "webkit passed 46616ms"
+    ],
+    "failure": {
+      "job": 121393795120,
+      "case": "browser-quality-annotation-chromium",
+      "caseMs": 300036,
+      "stage": "observer-play-advance",
+      "cacheSuite": "18/19",
+      "facts": "Observer was actually playing with advancing presented PTS, then reached clip end; exact pending page waiter was not distinguished by old diagnostics. Isolated unchanged local rerun passed. No blind remote rerun."
+    },
+    "performance": {
+      "configurationValid": true,
+      "samples": 16,
+      "failedSamples": 16,
+      "passed": false
+    }
+  },
+  "observerHarnessAdjustment": {
+    "productionChanged": false,
+    "caseTimeoutMs": 300000,
+    "predicate": "playing && positionUs > 200000",
+    "presentedFrameMustAdvance": true,
+    "hostPollMs": 50,
+    "rafNegativeWindowMs": 750,
+    "negativeControl": "same predicate read once while rAF blocked, still unobserved while real state/frames advance",
+    "positiveControl": "resume the same probe and require it to observe true",
+    "local": [
+      "full Chromium annotation flow passed",
+      "full WebKit annotation flow passed",
+      "deliberately paused diagnostic variant rejected at a shortened 1000ms diagnostic-only deadline with positionUs=frameUs=0"
+    ],
+    "rootCauseClaim": "Exact old CI pending-waiter/cancellation mechanism remains unknown; this removes page-side polling/cancellation from the acceptance observation path."
+  }
+}

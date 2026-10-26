@@ -409,3 +409,13 @@ test('forward ordinary-frame GUI matrix extends the full core-backed metric job 
  for(const row of rows){assert.equal(row.required,true);assert.deepEqual(row.fixtures,['core']);assert.equal(row.build,true);assert.equal(row.timeoutMs,300000);assert.equal(row.suites.includes('ci-identity-browser'),false);}
  const media=selectCases({suite:'ci-node-media',platform:'linux'}).selected.find(r=>r.id==='node-quality-forward');assert.ok(media.required);assert.deepEqual(media.fixtures,['core']);assert.deepEqual(media.tools,['ffmpeg']);
 });
+
+
+test('paused native quality remains a full core-backed two-engine check, including explicit cache preparation',()=>{
+ const rows=selectCases({suite:'ci-cache',platform:'linux'}).selected.filter(r=>r.id.startsWith('browser-presented-quality-'));
+ assert.deepEqual(rows.map(r=>r.engines[0]),['chromium','webkit']);
+ for(const row of rows){assert.equal(row.required,true);assert.deepEqual(row.fixtures,['core']);assert.equal(row.build,true);assert.equal(row.timeoutMs,300000);assert.equal(row.suites.includes('ci-identity-browser'),false);}
+ assert.ok(selectCases({suite:'source',platform:'linux'}).selected.some(r=>r.id==='node-quality-source-build'));
+ assert.ok(selectCases({suite:'ci-native-bun',platform:'win32'}).selected.some(r=>r.id==='bun-quality-source-build'));
+ const release=readFileSync(new URL('../../scripts/check-quality-release.mjs',import.meta.url),'utf8');assert.match(release,/quality-source-build/);assert.ok(!release.includes('frame-index?v=${entry.version}&build=1'));
+});

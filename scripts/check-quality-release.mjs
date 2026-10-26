@@ -35,7 +35,8 @@ try{
  const cookie=`voidplayer-user=guest-${randomUUID()}`,headers={cookie,origin:base,'content-type':'application/json','x-voidplayer-action':'quality'},rows=[];
  for(const sample of samples){
   const entry=entries.find(e=>e.name===sampleName(sample));
-  const built=await fetch(`${base}/api/media/${entry.id}/frame-index?v=${entry.version}&build=1`);assert.equal(built.status,200);const cache=await built.json();assert.equal(cache.index.packets.length,sample.gop?sample.frames:sample.forward?8:2);
+  const prepared=await fetch(`${base}/api/media/${entry.id}/psnr-index`,{method:'POST',headers:{...headers,'x-voidplayer-action':'quality-source-build'},body:JSON.stringify({version:entry.version})});assert.equal(prepared.status,200,JSON.stringify(await prepared.json()));
+  const built=await fetch(`${base}/api/media/${entry.id}/frame-index?v=${entry.version}`);assert.equal(built.status,200);const cache=await built.json();assert.equal(cache.index.packets.length,sample.gop?sample.frames:sample.forward?8:2);
   const lookup=await fetch(`${base}/api/media/${entry.id}/psnr-source?v=${entry.version}`,{headers:{cookie}});const binding=await lookup.json();assert.equal(lookup.status,200,JSON.stringify(binding));
   const target=au=>({...binding.binding,sourcePtsUs:cache.index.packets[au][2],picture:{sourceVersion:`${entry.id}@${entry.version}`,stream:'video',configuration:0,au,picture:0,layer:0,field:'frame'},...(sample.gop?{decode:{mode:'packet-identity-gop-v1',startAu:0,endAu:sample.frames-1}}:sample.forward?{decode:{mode:'forward-one-output-per-au-v1',startAu:0}}:{})});
   const selectedAus=sample.forward||sample.gop?sample.selectedAus:[0,1];

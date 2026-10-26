@@ -36,3 +36,5 @@ HTTP 客户端先显式 POST `/api/identity` 并保存 cookie，再向 `/api/ann
 `create-quality-candidate` 在同一标注入口从自有完成结果原子创建测量候选、证据、回执和事件；`candidate.text/severity` 必须明确填写，不能附伪造 document。来源、实际源 PTS、索引起点、时长和 ROI 从结果的 `annotationContext` 派生；旧结果缺少此见证时明确拒绝。候选标记为 `not-subjectively-assessed`，不冒充人工缺陷判断。相同 actor/operationId/正文的回执优先于结果读取，结果回收后仍能重放；跨 actor 的捕获身份不匹配在写入前返回 `actor-changed`。候选导出为工作区/评审 v3，普通证据仍 v2，无证据仍 v1；导入/复制保留事实但服务核验降为 historical。
 
 播放器独立 ROI 入口从已载入媒体显式选择每侧 AU；不继承旧播放 token 的时间戳关联，不自动猜当前帧。独立 Worker 在已有可信缓存上获取原始帧并核验，ROI 吸附偶数源网格；原播放器不暂停、不 seek、不完成索引。后台持久执行不随对话框关闭取消。详见 [ROI 测量候选](quality-roi-candidates.md)。
+
+暂停原生画面另有可选页面工具 `capture_presented_quality_frame`，返回 `voidplayer-native-presented-input` 未绑定见证，不是评分请求。必须将实际同服务版本传输、精确 AU/配置字节/包范围与时钟、可信 cache namespace/build 和几何逐项绑定；不按 PTS 搜索或自动建索引。原生路径不支持时明确拒绝，HTTP Agent 的显式 AU 业务能力不受此 GUI 子集限制。缺缓存可单独显式 `POST /api/media/{id}/psnr-index`（`{version}`、actor cookie/header、同源 Origin、action `quality-source-build`）；读取、快照和评分不会调用它。预算、取消和原始像素边界见 [暂停原生帧 ROI](paused-native-quality.md)。

@@ -3669,8 +3669,32 @@
     "source": "从完成结果创建共享测量候选",
     "params": {}
   },
+  "qualityRoi.buildCancelRequested": {
+    "source": "已请求取消缓存构建；服务将在文件和 Worker 实际关闭后释放容量。若构建已提交，请显式重新读取缓存。",
+    "params": {}
+  },
+  "qualityRoi.buildSource": {
+    "source": "显式构建可信缓存（最多64MiB来源、30秒执行）",
+    "params": {}
+  },
+  "qualityRoi.building": {
+    "source": "正在执行单独的有界缓存构建；不解码像素、不提交评分。取消后须关闭文件与 Worker 才释放服务容量，完成与取消竞争时请显式重新读取缓存。",
+    "params": {}
+  },
+  "qualityRoi.cancelBuild": {
+    "source": "取消缓存构建",
+    "params": {}
+  },
   "qualityRoi.cancelSnapshot": {
     "source": "取消快照核验并释放 Worker",
+    "params": {}
+  },
+  "qualityRoi.captureChanged": {
+    "source": "查询期间暂停画面已变化，请重新捕获。",
+    "params": {}
+  },
+  "qualityRoi.captured": {
+    "source": "已锁定两侧所选暂停帧；请明确核验原始帧与 ROI。相同 PTS 不表示跨源对应关系。",
     "params": {}
   },
   "qualityRoi.history": {
@@ -3685,8 +3709,28 @@
     "source": "独立 ROI 测量",
     "params": {}
   },
+  "qualityRoi.openPresented": {
+    "source": "测量暂停画面",
+    "params": {}
+  },
+  "qualityRoi.preparationLifetime": {
+    "source": " 尚未完成的显式缓存构建与快照准备会在关闭时请求取消；已提交的持久评分任务继续运行。",
+    "params": {}
+  },
+  "qualityRoi.presentedSelection": {
+    "source": "分别选择已暂停的原生解码轨道，锁定真正上屏的帧。后台测量该 AU 的原始源平面，不测屏幕转换后的像素；之后播放变化不改写已锁定的选择。不会自动暂停、定位或建立索引。不支持的解码与几何会明确拒绝。",
+    "params": {}
+  },
+  "qualityRoi.presentedTitle": {
+    "source": "测量锁定的暂停画面",
+    "params": {}
+  },
   "qualityRoi.ready": {
     "source": "两侧独立快照已核验并上屏；仅此快照的明确 AU 与源网格用于 ROI，播放器保持独立。",
+    "params": {}
+  },
+  "qualityRoi.recapture": {
+    "source": "重新捕获暂停画面",
     "params": {}
   },
   "qualityRoi.refresh": {

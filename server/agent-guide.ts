@@ -348,8 +348,17 @@ deployments advertise them disabled and reject submission.
 
 1. Select an ordinary intranet identity (see /agent/annotations.md). Identity is
    not authentication. Use its cookie for the source lookup and execution.
-2. Explicitly build an existing FLV cache with GET
-   /api/media/{id}/frame-index?v={version}&build=1. Quality never builds an index.
+2. Explicitly prepare a missing FLV cache with POST
+   /api/media/{id}/psnr-index, JSON {version}, the identity cookie, same-origin
+   Origin, X-VoidPlayer-Actor and X-VoidPlayer-Action: quality-source-build.
+   This separate owned Worker is capped at 64 MiB source, 128 MiB actual reads,
+   30 seconds execution and 256 MiB heap; qualityJobs.sourceBuild lists all
+   packet/index limits. Cancel/disconnect revokes IO and waits for the actual
+   file close and physical Worker exit before admission is released. Slow IO
+   cleanup can extend response latency beyond the execution deadline. A commit
+   racing cancellation can leave a valid cache: explicitly reread it. Ready
+   caches are not rebuilt, and untrusted caches are never silently cleared.
+   Source reads, inspection and scoring NEVER construct an index.
    A pre-existing client-uploaded cache cannot be blessed by a no-op build: clear
    it explicitly through ordinary cache management and then build it separately.
 3. GET /api/media/{id}/psnr-frames?v={version}&afterAu=0&limit=50 reads
@@ -482,6 +491,26 @@ Closed-start, progressive/single-picture, source/cache/color and exact viewer
 geometry checks remain. Reference integrity is not certified: absence of reported
 errors does not prove absence of concealment. See docs/reordered-frame-quality.md.
 
+Optional live-page capture_presented_quality_frame reads the paused successful
+WebCodecs FLV presentation, without pixels, IO, pause, seek or scoring. Its
+voidplayer-native-presented-input record is UNBOUND, not a PairTarget. Only
+actual same-service version-locked library transport qualifies; local-file
+lineage does not. The accepted one-picture input clock is matched exactly in
+the same decoder epoch, then committed only after the presenter succeeds.
+Do not search a cache by PTS or attach a new generation to an old output.
+Read source/psnr-frames at input.au (limit 1 + original buildId), then use the
+shared bindNativePresentedFrame rule: exact namespace/build, configurationHex
+(max 4096 bytes), packet offset/size/clocks/AU and strict visible geometry.
+Original native VideoSample resources only; converted YUV/RGBA, WASM, other
+containers, ambiguous clocks/pictures, fields, stale epochs, crop, unknown or
+non-square SAR and rotation reject. Native codec/profile support varies by
+browser; it does not imply hardware decoding. The GUI explicitly locks both
+paused captures before independent original-plane ROI inspection and submission.
+Scores use the backend source decoder, never native screen-converted pixels.
+HTTP Agents can select explicit cached AUs without any browser. See
+docs/paused-native-quality.md. Reference integrity remains not-certified and
+concealmentDetection=unavailable.
+
 There is no frame sequence, automatic alignment, VMAF/CAMBI, shared work,
 automatic index construction, retry/resume or distributed worker.
 These capabilities do not mean #114 or #121 is complete.
@@ -493,6 +522,14 @@ future remote Worker media access is planned around LAN HTTP/Range.
 `;
 
 const liveSession = `# Live view commands
+
+Optional capture_presented_quality_frame returns the successful paused native
+FLV input as an UNBOUND voidplayer-native-presented-input record. It performs
+no IO, pixel readback, pause, seek, index construction or scoring. Join the
+actual library transport and exact AU/configuration/packet witness to a trusted
+current cache as described in /agent/quality.md before independent ROI work.
+Unsupported native profiles, WASM, converted resources and other containers
+reject; HTTP Agents retain the independent explicit-AU scoring path.
 
 The player's WebMCP tools and window.voidPlayer operate on an attached browser
 session. Use them for intentional view actions: seek, play, pause, presenting a

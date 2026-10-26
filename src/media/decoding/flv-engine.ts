@@ -118,7 +118,7 @@ export class FlvEngine {
         let phase = 'capability';
         try {
           onProgress?.('decode');
-          const native = await nativeFlvDecoder(this.index, undefined, event => this.nativeDiagnostics.push(event));
+          const native = await nativeFlvDecoder(this.index, undefined, event => this.nativeDiagnostics.push(event),true);
           phase = 'first-frame';
           if (native) { this.decoder = native; this.timeline=new PacketTimeline(this.index,native,p=>this.reader.read(p.offset,p.size),true,()=>this.indexComplete); onProgress?.('first-frame'); this.primed = await this.extract(0); }
         } catch (error) {
@@ -205,7 +205,7 @@ export class FlvEngine {
   /** Restore browser decoding over the same packet index after a color-mode switch. */
   async switchToNative(){
     if(this.decoder?.kind==='ffmpeg-wasm'){
-      const decoder=await nativeFlvDecoder(this.index);
+      const decoder=await nativeFlvDecoder(this.index,undefined,undefined,true);
       if(decoder){
         const target=this.primed?.pts??this.index.packets[(this.index.displayOrder??this.index.order)[0]].pts;
         const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size),true,()=>this.indexComplete);
