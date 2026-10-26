@@ -41,3 +41,7 @@ WASM 播放、其他容器、转换成 CPU YUV/RGBA 的资源不能直接捕获�
 最终本地汇总见 [结构化验收](validation/paused-native-quality/local-acceptance.json)：source145/145、contract30/30、受影响逻辑85/85、Node/Bun准备各5项以及Linux实际编译包通过。四个实际原生GUI正例通过，Chromium HEVC两档明确平台拒绝；双引擎共136个 original/负时钟/drain 正例输出用实际呈现图像码独立确认 AU，重复时钟、多图和真实interlaced SPS另列拒绝矩阵。最终小型成本速度比 Chromium1.00020/WebKit1.00002，CPU ticks比0.99690/0.97848；不是通用性能验收。
 
 可复跑成本实验：先为基线7c399ad单独构建，再准备声明的1280×720/120帧/H264 B2/GOP30合成源，运行 `node scripts/tools/perf/benchmark-native-presented.mjs BASELINE_DIST SOURCE_FLV REPORT_DIR`。源SHA和各次原始报告记录在报告目录，实验不写生产数据或改变全量性能阈值。首次source套件的Vite收尾失败也保留：两断言通过，但gitignored core符号链接许可目录残留8个watcher；逐文件SHA核对并物化同字节本地core后原测试正常退出，source全套通过。没有修改测试源码/等待上限，不能据此声称历史远端WebKit/observer失败已根治。远端最终head完整CI、Windows/macOS包和父任务独立复核尚待。
+
+首个远端候选8c8287b的source145/145、媒体49/49、三平台编译包及两个新暂停帧用例均通过；完整CI40267722596 attempt1仍失败：旧标注Chromium用例卡在observer-play-advance，被原300秒上限终止，缓存套件18/19。运行中普通日志先返回部分快照，job结束后才取得完整尾部；实际播放状态/呈现帧持续推进，但旧诊断不能区分numeric waiter与rAF负控收尾，根因不作确定归责。当前run新artifact12627439657的本地文件拉取遇CONNECT403后已停止，未换路；诊断不依赖该ZIP。
+
+同PR将旧标注测试改为宿主侧50ms读取同一`playing && positionUs > 200000`事实，仍要求真实呈现帧PTS推进、原300秒用例上限。rAF负控仍保留750ms：同谓词探针在暂停时读一次，阻止rAF期间未看到已经真实推进的事实；恢复后必须由同一探针读到true。负控不再依赖刻意饥饿页面中Playwright poller的取消收尾。新增分段诊断与计数，不重试、不吞错、不改产品调度。Chromium/WebKit完整标注流通过，保持暂停的有界诊断副本以实际playing=false、position/frame=0正确拒绝。此改动不宣称已证明或根治历史CI机制，最终新SHA仍需独立复核与完整CI。

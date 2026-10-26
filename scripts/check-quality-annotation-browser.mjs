@@ -15,7 +15,7 @@ const root=path.resolve(import.meta.dirname,'..'),temp=await mkdtemp(path.join(o
 const engine=process.argv[2]??'chromium',directory=process.env.VOIDPLAYER_TEST_ARTIFACTS??path.join(root,'.run/quality-annotation',engine);
 let service,browser,page,evidence,failurePage,pairViewer,observerPage,phase='setup';
 const progressTimer=setInterval(async()=>{
- const state=async target=>{if(!target||target.isClosed())return null;try{return await target.evaluate(()=>{const s=window.voidPlayer?.getState();return s?{busy:s.busy,error:s.error,playing:s.playing,positionUs:s.positionUs,tracks:s.tracks.map(t=>({id:t.id,frame:t.frame})),marks:s.marks.length}:null;});}catch(error){return {diagnosticError:error.message};}};
+ const state=async target=>{if(!target||target.isClosed())return null;try{return await target.evaluate(()=>{const s=window.voidPlayer?.getState();return s?{busy:s.busy,error:s.error,playing:s.playing,positionUs:s.positionUs,tracks:s.tracks.map(t=>({id:t.id,frame:t.frame})),marks:s.marks.length,rafReads:window.__qualityRafReads,timerReads:window.__qualityTimerReads,rafSawPlaying:window.__qualityRafSawPlaying}:null;});}catch(error){return {diagnosticError:error.message};}};
  console.log(JSON.stringify({qualityDiagnostic:true,phase,owner:await state(page),observer:await state(observerPage)}));
 },10000).unref();
 try {
@@ -44,7 +44,7 @@ try {
  const annotation={mark:{id:'mark-B',text:'Existing B observation',severity:3,origin:'agent',createdAt:new Date().toISOString(),slot:'H',mediaId:source.id,frame:{ptsUs:0,sourcePtsUs:target(0).sourcePtsUs,durationUs:1000000},comparison:[],region:null},media:[source]};
  const post=async op=>{const r=await fetch(`${base}/api/annotations/spaces/${space}`,{method:'POST',headers,body:JSON.stringify(op)});assert.equal(r.status,200,await r.clone().text());return r.json();};
  await post({operationId:'create-B',id:'mark-B',revision:0,action:'put',document:annotation});
- browser=await ({chromium,webkit}[engine]).launch({headless:true});const owner=await browser.newContext({locale:'en-US',viewport:{width:1280,height:900}});
+ browser=await ({chromium,webkit}[engine]).launch({headless:true,...(engine==='webkit'&&process.env.VOIDPLAYER_WEBKIT_EXECUTABLE?{executablePath:process.env.VOIDPLAYER_WEBKIT_EXECUTABLE}:{})});const owner=await browser.newContext({locale:'en-US',viewport:{width:1280,height:900}});
  await owner.addCookies([{name:'voidplayer-user',value:cookie.split('=')[1],url:base}]);
  await owner.addInitScript(()=>window.addEventListener('voidplayer-annotation-status',event=>{window.__annotationStatus=event.detail;}));
  page=await owner.newPage();evidence=recordBrowserEvidence(page);const errors=[];page.on('pageerror',error=>errors.push(error.message));
@@ -54,18 +54,27 @@ try {
  observerPage=observer;phase='observer-restore';await observer.goto(`${base}/?workspace=${workspace.id}`);await chooseTestGuest(observer);await observer.waitForFunction(annotationWorkspacePlayable);
  phase='observer-replace';const a=entries[0];await observer.evaluate(async url=>{const blob=await fetch(url).then(r=>r.blob());await window.voidPlayer.loadFile('A',new File([blob],'A.mp4'));},`${base}/api/media/${a.id}?v=${a.version}`);
  await observer.waitForFunction(()=>!window.voidPlayer.getState().busy&&window.voidPlayer.getState().tracks[0]?.frame&&window.voidPlayer.getState().marks.length===0);
- // Poll a service/session fact independently of display rAF. The real player
- // already advances with its presentation-tick fallback when rAF is starved.
- // A controlled negative witness proves that the old default rAF waiter can
- // miss the same true fact; the original predicate and 300s case limit remain.
- phase='observer-play-poll-setup';await observer.locator('#play').focus();await observer.evaluate(()=>{window.__qualityRafGate=true;window.__qualityRafReads=0;window.__qualityTimerReads=0;});
- // Both waiters are awaited below. Early rejection handlers only preserve
- // the primary failure if setup fails before their eventual await.
- const raf=observer.waitForFunction(()=>{window.__qualityRafReads++;const s=window.voidPlayer.getState();return s.playing&&s.positionUs>200000;},undefined,{timeout:750});void raf.catch(()=>{});
- const timer=observer.waitForFunction(()=>{window.__qualityTimerReads++;const s=window.voidPlayer.getState();return s.playing&&s.positionUs>200000;},undefined,{polling:50});void timer.catch(()=>{});
- await observer.waitForFunction(()=>window.__qualityRafReads>0&&window.__qualityTimerReads>0,undefined,{polling:50});
- phase='observer-play-command';await observer.evaluate(()=>window.voidPlayer.play());phase='observer-play-advance';await timer;await assert.rejects(raf,/Timeout/);
- const witness=await observer.evaluate(()=>({rafReads:window.__qualityRafReads,timerReads:window.__qualityTimerReads,playing:window.voidPlayer.getState().playing,positionUs:window.voidPlayer.getState().positionUs,frameUs:window.voidPlayer.getState().tracks[0].frame.ptsUs}));assert.equal(witness.rafReads,1);assert.ok(witness.timerReads>1);assert.equal(witness.playing,true);assert.ok(witness.positionUs>200000);assert.ok(witness.frameUs>0);console.log(JSON.stringify({observerRafStarvation:true,...witness}));await observer.evaluate(()=>window.__qualityRafGate=false);
+ // Observe a session fact from the host. Deliberately starving page rAF
+ // must not also make the test depend on a page poller's scheduling/timeout.
+ phase='observer-play-poll-setup';await observer.locator('#play').focus();
+ await observer.evaluate(()=>{
+  window.__qualityRafGate=true;window.__qualityRafReads=0;window.__qualityTimerReads=0;window.__qualityRafSawPlaying=false;
+  window.__qualityRafProbe=()=>{window.__qualityRafReads++;const s=window.voidPlayer.getState();if(s.playing&&s.positionUs>200000)window.__qualityRafSawPlaying=true;else requestAnimationFrame(window.__qualityRafProbe);};
+  window.__qualityRafProbe();
+ });
+ const observe=()=>observer.evaluate(()=>{window.__qualityTimerReads++;const s=window.voidPlayer.getState();return {playing:s.playing,positionUs:s.positionUs,frameUs:s.tracks[0]?.frame?.ptsUs,rafReads:window.__qualityRafReads,rafSawPlaying:window.__qualityRafSawPlaying,timerReads:window.__qualityTimerReads};});
+ const waitForFact=async(predicate,label)=>{const deadline=performance.now()+300000;for(;;){const state=await observe();if(predicate(state))return state;if(performance.now()>=deadline)throw new Error(`Timed out waiting for ${label}: ${JSON.stringify(state)}`);await new Promise(resolve=>setTimeout(resolve,50));}};
+ const paused=await observe();assert.equal(paused.playing,false);assert.equal(paused.rafReads,1);assert.equal(paused.rafSawPlaying,false);
+ phase='observer-play-command';await observer.evaluate(()=>window.voidPlayer.play());
+ phase='observer-play-host-advance';const advancing=await waitForFact(s=>s.playing&&s.positionUs>200000,'observer playing and positionUs > 200000');assert.ok(advancing.frameUs>0);
+ // Preserve the original 750ms negative window, but test the observable
+ // missed fact rather than awaiting cancellation of an intentionally starved
+ // Playwright poller. Then resume the SAME probe as a positive control.
+ phase='observer-raf-negative-window';await new Promise(resolve=>setTimeout(resolve,750));
+ const witness=await observe();assert.equal(witness.rafReads,1);assert.equal(witness.rafSawPlaying,false);assert.ok(witness.timerReads>1);assert.equal(witness.playing,true);assert.ok(witness.positionUs>200000);assert.ok(witness.frameUs>0);
+ phase='observer-raf-resume';await observer.evaluate(()=>{window.__qualityRafGate=false;requestAnimationFrame(window.__qualityRafProbe);});
+ const resumed=await waitForFact(s=>s.rafSawPlaying,'resumed rAF probe observing the same playing fact');assert.equal(resumed.playing,true);assert.ok(resumed.rafReads>1);
+ console.log(JSON.stringify({observerRafStarvation:true,negativeWindowMs:750,...witness,resumed}));
  const beforeObserver=await observer.evaluate(()=>window.voidPlayer.getState());await observer.route('**/api/annotations/events/*',r=>r.abort());
 
  phase='gui-attach-while-other-window-plays';

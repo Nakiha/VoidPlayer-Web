@@ -420,5 +420,59 @@
       "evidence": "Original synthetic encoder VUI was unspecified; unchanged main rejected the same sample",
       "repair": "Explicit encoder VUI and SPS/FFprobe verification in synthetic generator; no production relabeling"
     }
-  ]
+  ],
+  "firstRemoteCandidate": {
+    "head": "8c8287b2f511f76fa7d3b0cb5feb724ac561fb88",
+    "fullRun": 40267722596,
+    "attempt": 1,
+    "conclusion": "failure",
+    "jobs": {
+      "success": 31,
+      "failure": 1,
+      "skipped": 2
+    },
+    "identityRun": 40267722593,
+    "identity": "success",
+    "sourceCases": "145/145",
+    "mediaCases": "49/49",
+    "compiledPackages": [
+      "linux-x64 passed",
+      "windows-x64 passed",
+      "darwin-arm64 passed"
+    ],
+    "newPresentedCases": [
+      "chromium passed 26552ms",
+      "webkit passed 46616ms"
+    ],
+    "failure": {
+      "job": 121393795120,
+      "case": "browser-quality-annotation-chromium",
+      "caseMs": 300036,
+      "stage": "observer-play-advance",
+      "cacheSuite": "18/19",
+      "facts": "Observer was actually playing with advancing presented PTS, then reached clip end; exact pending page waiter was not distinguished by old diagnostics. Isolated unchanged local rerun passed. No blind remote rerun."
+    },
+    "performance": {
+      "configurationValid": true,
+      "samples": 16,
+      "failedSamples": 16,
+      "passed": false
+    }
+  },
+  "observerHarnessAdjustment": {
+    "productionChanged": false,
+    "caseTimeoutMs": 300000,
+    "predicate": "playing && positionUs > 200000",
+    "presentedFrameMustAdvance": true,
+    "hostPollMs": 50,
+    "rafNegativeWindowMs": 750,
+    "negativeControl": "same predicate read once while rAF blocked, still unobserved while real state/frames advance",
+    "positiveControl": "resume the same probe and require it to observe true",
+    "local": [
+      "full Chromium annotation flow passed",
+      "full WebKit annotation flow passed",
+      "deliberately paused diagnostic variant rejected at a shortened 1000ms diagnostic-only deadline with positionUs=frameUs=0"
+    ],
+    "rootCauseClaim": "Exact old CI pending-waiter/cancellation mechanism remains unknown; this removes page-side polling/cancellation from the acceptance observation path."
+  }
 }
