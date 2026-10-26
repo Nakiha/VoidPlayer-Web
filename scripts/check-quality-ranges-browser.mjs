@@ -82,6 +82,15 @@ try{
  const policy={space:'default',side:'reference',metric:'psnr',maxDb:120,limit:1,minAuDistance:1,text:'Explicit range candidate',severity:3},publication=await post(`/api/quality/ranges/${id}/candidates`,policy);assert.equal(publication.createdIds.length,1);
  const annotation=await get(`/api/annotations/spaces/default/${publication.createdIds[0]}`);assert.equal(annotation.revision,1);assert.equal(annotation.document.mark.qualityEvidence.length,1);
  await page.locator(`[data-candidate-id="${publication.createdIds[0]}"]`).waitFor();await page.screenshot({path:path.join(directory,'ranges.png'),fullPage:true});
+ phase='original-frame-review';const requests=[],observe=r=>{try{requests.push({owner:r.frame().page(),url:r.url(),method:r.method()});}catch{/* Worker requests have no frame. */}};context.on('request',observe);
+ const [viewer]=await Promise.all([page.waitForEvent('popup'),page.locator(`[data-candidate-id="${publication.createdIds[0]}"]`).click()]);
+ await viewer.bringToFront();await viewer.waitForFunction(()=>['ready','failed','cancelled','closed'].includes(window.voidPlayerQualityPair?.getState().state),null,{polling:50});const state=await viewer.evaluate(()=>window.voidPlayerQualityPair.getState());assert.equal(state.state,'ready',JSON.stringify(state));
+ const expected=[0,1].map(i=>createHash('sha256').update(native.subarray(i*frame,(i+1)*frame)).digest('hex')),hashes=await viewer.evaluate(()=>window.__rangePairHashes);assert.deepEqual(hashes,expected);
+ await viewer.locator('#pair-block-selection').selectOption('3');assert.equal((await viewer.evaluate(()=>window.voidPlayerQualityPair.getState())).selectedBlock,3);assert.equal(await viewer.locator('.quality-selected-block').count(),2);await viewer.screenshot({path:path.join(directory,'original-pair.png')});
+ context.off('request',observe);const viewerRequests=requests.filter(r=>r.owner===viewer);assert.deepEqual(viewerRequests.filter(r=>r.method!=='GET'&&new URL(r.url).pathname.startsWith('/api/')),[],'read-only viewer does not mutate');
+ assert.deepEqual(viewerRequests.filter(r=>new URL(r.url).pathname.startsWith('/api/quality/')),[],'viewer does not read private results or rescore');
+ assert.deepEqual(viewerRequests.filter(r=>new URL(r.url).searchParams.has('build')),[],'viewer never builds indexes');
+ await viewer.close();await page.bringToFront();
  phase='late-result-view-fences';
  await page.unroute(`**/api/quality/ranges/${id}/results?*`);
  const other=await post('/api/quality/ranges',{...input,sampling:{mode:'stride',every:2,offset:0}},'unpublished-range'),otherId=other.job.id;
@@ -119,14 +128,6 @@ try{
  }finally{await identityGate.dispose();}
  assert.equal(await get(`/api/quality/ranges/${otherId}/candidates`),null,'late replies never publish into another range');
  await page.locator(`[data-range-id="${id}"]`).click();await page.locator(`[data-candidate-id="${publication.createdIds[0]}"]`).waitFor();
- phase='original-frame-review';const requests=[],observe=r=>{try{requests.push({owner:r.frame().page(),url:r.url(),method:r.method()});}catch{/* Worker requests have no frame. */}};context.on('request',observe);
- const [viewer]=await Promise.all([page.waitForEvent('popup'),page.locator(`[data-candidate-id="${publication.createdIds[0]}"]`).click()]);
- await viewer.waitForFunction(()=>['ready','failed'].includes(window.voidPlayerQualityPair?.getState().state));const state=await viewer.evaluate(()=>window.voidPlayerQualityPair.getState());assert.equal(state.state,'ready',JSON.stringify(state));
- const expected=[0,1].map(i=>createHash('sha256').update(native.subarray(i*frame,(i+1)*frame)).digest('hex')),hashes=await viewer.evaluate(()=>window.__rangePairHashes);assert.deepEqual(hashes,expected);
- await viewer.locator('#pair-block-selection').selectOption('3');assert.equal((await viewer.evaluate(()=>window.voidPlayerQualityPair.getState())).selectedBlock,3);assert.equal(await viewer.locator('.quality-selected-block').count(),2);await viewer.screenshot({path:path.join(directory,'original-pair.png')});
- context.off('request',observe);const viewerRequests=requests.filter(r=>r.owner===viewer);assert.deepEqual(viewerRequests.filter(r=>r.method!=='GET'&&new URL(r.url).pathname.startsWith('/api/')),[],'read-only viewer does not mutate');
- assert.deepEqual(viewerRequests.filter(r=>new URL(r.url).pathname.startsWith('/api/quality/')),[],'viewer does not read private results or rescore');
- assert.deepEqual(viewerRequests.filter(r=>new URL(r.url).searchParams.has('build')),[],'viewer never builds indexes');
  const after=await player.evaluate(()=>window.voidPlayer.getState());assert.equal(after.playing,true);assert.ok(after.positionUs>before.positionUs);assert.deepEqual(after.tracks.map(t=>t.id),before.tracks.map(t=>t.id));assert.equal(after.marks.length,before.marks.length);
  assert.deepEqual(errors,[]);await writeFile(path.join(directory,'evidence.json'),JSON.stringify({engine,depth,id,coverage:done.coverage,summary:done.job.summary,candidateId:publication.createdIds[0],nativeHashes:hashes,selectedBlock:3,viewFences:['selection','observation-close','actor-change'],player:{beforePosition:before.positionUs,afterPosition:after.positionUs,sameTracks:true},pageErrors:errors},null,2)+'\n');
  console.log(`PASS ${engine}/${depth}: service-owned range survives closed observer; AU coverage/native SSE, policy candidate, original-plane hashes/block3 independent A playback and late selection/close/actor fences`);
