@@ -21,7 +21,7 @@ export class AnnotationStore {
     if (file !== ':memory:') mkdirSync(path.dirname(file), { recursive: true });
     const db = this.db = openIndexDatabase(file);
     const version = Number(db.prepare('PRAGMA user_version').get()!.user_version);
-    if (version > 3) { db.close(); throw new Error('标注数据库来自更新的程序。'); }
+    if (version > 4) { db.close(); throw new Error('标注数据库来自更新的程序。'); }
     db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=1000;
       CREATE TABLE IF NOT EXISTS spaces(id TEXT PRIMARY KEY,name TEXT NOT NULL,created_at TEXT NOT NULL);
       INSERT OR IGNORE INTO spaces VALUES('default','共享评审',strftime('%Y-%m-%dT%H:%M:%fZ','now'));
@@ -37,7 +37,7 @@ export class AnnotationStore {
       CREATE INDEX IF NOT EXISTS annotation_events_space ON annotation_events(space,sequence);
       CREATE TABLE IF NOT EXISTS annotation_event_floor(id INTEGER PRIMARY KEY,sequence INTEGER NOT NULL);
       INSERT OR IGNORE INTO annotation_event_floor SELECT 1,sequence FROM annotation_clock WHERE id=1;
-      PRAGMA user_version=3;`);
+      PRAGMA user_version=4;`);
   }
   spaces() { return this.db.prepare('SELECT id,name FROM spaces ORDER BY created_at,id').all(); }
   createSpace(name: unknown) {
@@ -96,10 +96,10 @@ export class AnnotationStore {
       }
       const current = this.read(space, operation.id), now = new Date().toISOString();
       let evidence: QualityEvidence | undefined;
-      if (operation.action === 'attach-quality-result') {
+      if (operation.action === 'attach-quality-result'||operation.action==='create-quality-candidate') {
         // Resolve after the receipt and revision check: a lost response can be
         // replayed after source/result cleanup without consulting the private job.
-        if (!current || current.deleted || current.revision !== operation.revision)
+        if (operation.action==='create-quality-candidate'?!!current:!current || current.deleted || current.revision !== operation.revision)
           throw new AnnotationCommandError(409, 'annotation-revision-conflict', 'Annotation changed or was deleted.');
         if (!quality) throw new AdminError(503, 'Quality evidence is unavailable.', 'evidence-unavailable');
         const result = quality.resolve(operation.evidence!);

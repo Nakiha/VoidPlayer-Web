@@ -4,6 +4,7 @@ import { fileVersion } from '../../library.ts';
 import { fileStatWitness,sameFileStat } from '../../file-stat.ts';
 import type { FileStatWitness } from '../../file-stat.ts';
 import type { IndexDatabase } from '../../sqlite.ts';
+import { parseFlvIndex } from '../../../shared/media/indexing/flv-index-cache.ts';
 import { FrameIndexStore } from '../../frame-index-store.ts';
 import { FramePairError } from '../../../shared/analysis/quality/frame-pair.ts';
 import type { PairTarget,CachedPairSource,PairBudget } from '../../../shared/analysis/quality/frame-pair.ts';
@@ -69,5 +70,10 @@ export function libraryPairSource(db:IndexDatabase,store:FrameIndexStore,target:
       }finally{Atomics.sub(control,1,1);Atomics.notify(control,1);}
       binding();return bytes;
     }};
-  binding();return {source,proof:{binding:snapshot.binding,producer:snapshot.producer}};
+  binding();
+  const index=parseFlvIndex(snapshot.index!,target.size),row=db.prepare('SELECT path,modified FROM media WHERE id=? AND version=?').get(target.mediaId,target.mediaVersion)!;
+  if(index.codec!=='h264'&&index.codec!=='hevc')throw new FramePairError('unsupported-source','Unsupported candidate codec');
+  const annotationContext={codec:index.codec,basis:'complete-flv-index-derived-v1' as const,name:path.basename(String(row.path)),lastModified:Number(row.modified),
+    firstPtsUs:index.firstPts,indexedDurationUs:index.duration,frameDurationUs:index.durations[index.order.indexOf(target.picture.au)]};
+  return {source,proof:{binding:snapshot.binding,producer:snapshot.producer},annotationContext};
 }

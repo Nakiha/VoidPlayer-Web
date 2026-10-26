@@ -145,3 +145,12 @@ test('temporary library deployment never advertises or accepts durable jobs', as
     assert.equal(response.status,503);assert.equal((await response.json()).code,'quality-storage-unavailable');
   } finally {await new Promise<void>(resolve=>server.close(()=>resolve()));await library.close();await rm(dir,{recursive:true,force:true});}
 });
+
+test('quality discovery and guides disclose candidate transaction, SSIM and opaque GOP identity consistently',async()=>{
+ const manifest=agentManifest({capabilities:serviceCapabilities(true,false),libraryReady:true,qualityJobsEnabled:true,actor:{id:'a',name:'A'}});
+ assert.equal(manifest.annotations.qualityCandidate.action,'create-quality-candidate');assert.equal(manifest.annotations.qualityCandidate.receiptBeforeResultLookup,true);assert.equal(manifest.annotations.qualityCandidate.workspaceVersion,3);assert.equal(manifest.annotations.qualityCandidate.playbackRequired,false);
+ assert.deepEqual(manifest.annotations.qualityCandidate.callerFields,['text','severity']);assert.deepEqual(manifest.annotations.qualityCandidate.transaction,['annotation','evidence','receipt','event']);
+ const guides=JSON.stringify(AGENT_DOCUMENTS);for(const phrase of ['create-quality-candidate','annotation-context-unavailable','not-subjectively-assessed','packet-identity-gop-v1','Zero CTS does not imply immediate output','concealmentDetection=unavailable'])assert.ok(guides.includes(phrase),phrase);
+ assert.ok(!guides.includes('Delayed/reordered pictures,'),'guide must not claim all delayed pictures reject');
+ const {readFile}=await import('node:fs/promises');const doc=await readFile(new URL('../../docs/agent-http.md',import.meta.url),'utf8');assert.ok(!doc.includes('SSIM/VMAF/CAMBI'));assert.match(doc,/create-quality-candidate/);assert.match(doc,/opaque token/);
+});

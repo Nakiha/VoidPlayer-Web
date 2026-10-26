@@ -311,6 +311,10 @@ export class ReviewSession {
     });
   }
   subscribePresentedFrames(listener:(slot:Slot,token:PresentedFrameToken)=>void){this.frameListeners.add(listener);return()=>this.frameListeners.delete(listener);}
+  /** Only library media intent, not the ordinary playback token's AU claim.
+   * Explicit analysis chooses an AU and paints independently verified snapshots. */
+  qualitySourceChoices(){return this.order.flatMap(slot=>{const track=this.tracks.get(slot),source=track?.source.info.source;
+    return track&&!track.failure&&!track.pendingRelink&&source?.kind==='library'?[{slot,generation:track.sourceGen,source:structuredClone(source),name:track.source.info.name}]:[];});}
   getPresentedFrame(slot:Slot):PresentedFrameToken|null{
     slotValue(slot);const track=this.tracks.get(slot),token=this.presentedFrames.get(slot);
     if(!track||track.failure||!track.frame||!token||track.frame.sourcePtsUs!==token.sourcePtsUs)return null;

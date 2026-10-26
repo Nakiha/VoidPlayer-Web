@@ -21,7 +21,7 @@ export function installAnnotationAdmin(signal: AbortSignal, notice: (message: Lo
  function select(record:AnnotationRecord|null){
   selected=record;for(const row of document.querySelectorAll<HTMLElement>('[data-annotation-id]'))row.setAttribute('aria-pressed',String(row.dataset.annotationId===record?.id));$('-detail').hidden=!record;$('-confirm').hidden=true;if(!record)return;
   const {mark,media}=record.document,source=media.find(media=>media.id===mark.mediaId)!;
-  localizedText($('-title'), () => `${source.name} · ${formatTime(mark.frame.ptsUs)}`);localizedText($('-text'), () => mark.text);
+  localizedText($('-title'), () => `${source.name} · ${formatTime(mark.frame.ptsUs)}`);localizedText($('-text'), () => mark.qualityCandidate?`${t(msg('qualityCandidate.badge','测量候选 · 创建时未作人工判断'))} · ${mark.text}`:mark.text);
   localizedText($('-author'), () => t(msg("admin.annotationMeta", "{author} · 版本 {revision} · {date}"), {author:mark.author?.name ?? t(msg('marks.anonymous', '未署名')),revision:record.revision,date:formatDate(record.updatedAt)}));
   const image=$<HTMLImageElement>('-image');image.hidden=false;$('-no-preview').hidden=true;image.onerror=()=>{image.hidden=true;$('-no-preview').hidden=false;};image.src=`/api/annotations/spaces/${space}/${record.id}/preview?revision=${record.revision}`;
   const link=$<HTMLAnchorElement>('-open');link.href=`/?annotation=${record.id}&space=${space}`;link.hidden=record.deleted || !source.source;

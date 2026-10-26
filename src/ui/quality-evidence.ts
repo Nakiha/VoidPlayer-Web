@@ -38,6 +38,7 @@ export function qualityFacts(root:HTMLElement,value:ReturnType<typeof qualityEvi
 /** Facts already explicitly published with the annotation; never fetch a private job. */
 export function showQualityEvidence(mark: Mark, annotation: AnnotationDocument, space?:string) {
   const root=dialog(t(msg('quality.evidenceTitle', "PSNR 证据")));
+  if(mark.qualityCandidate){const badge=document.createElement('p');badge.textContent=t(msg('qualityCandidate.badge','测量候选 · 创建时未作人工判断'));root.append(badge);}
   for(const evidence of mark.qualityEvidence ?? []) {
     const section=document.createElement('section'),label=document.createElement('p');
     label.textContent=`${evidence.verification==='server-verified'?t(msg('quality.verified', "关联时已由来源服务核验")):t(msg('quality.historical', "历史副本，本服务未核验"))} · ${evidenceApplies(annotation,evidence)?t(msg('quality.applies', "匹配此标注的锚点和区域")):t(msg('quality.notApplies', "历史证据：当前锚点或区域已不同"))} · ${evidence.attachedBy.name} · ${evidence.attachedAt}`;

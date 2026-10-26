@@ -66,3 +66,8 @@ test('forged spatial evidence never reaches inspection or presentation',async()=
  let inspected=0;const session=new QualityPairViewSession(()=>assert.fail('forged block painted'),origin,{read:async()=>f.record,inspect:async()=>{inspected++;return f.pair;}});
  await assert.rejects(session.open(reference),/spatial.evidence/);assert.equal(inspected,0);assert.equal(session.resources.totalBytes,0);await session.close();
 });
+
+test('older immutable results without recorded annotation clocks cannot invent candidate timing',async()=>{
+ const {applyAnnotationOperation}=await import('../../shared/review/annotation-command.ts');const f=await fixture();delete f.evidence.value.annotationContext;
+ assert.throws(()=>applyAnnotationOperation({id:'candidate-old',operationId:'candidate-old',revision:0,action:'create-quality-candidate',candidate:{text:'Explicit request',severity:2},evidence:f.evidence.ref},null,{id:'owner',name:'Owner'},new Date().toISOString(),f.evidence),error=>(error as any).code==='annotation-context-unavailable');
+});

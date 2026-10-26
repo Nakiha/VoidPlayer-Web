@@ -11,3 +11,15 @@ export function attachAnnotationQuality(input: QualityAttachmentCommand, client:
     action:'attach-quality-result',evidence:input.evidence,client});
   return new AnnotationClient(AbortSignal.timeout(10000)).mutate(input.space,operation,actor);
 }
+
+export type QualityCandidateCommand={space:string;id:string;operationId:string;evidence:QualityEvidenceRef;candidate:{text:string;severity:number}};
+/** Validate the complete command before persisting or locking a GUI draft.
+ * This is exactly the operation validation used by the HTTP mutation adapter. */
+export function qualityCandidateOperation(input:QualityCandidateCommand,client:AnnotationClientIdentity){
+  if(!input||typeof input.space!=='string'||!/^[a-zA-Z0-9_-]{1,200}$/.test(input.space))throw new Error('Invalid annotation space.');
+  return parseAnnotationOperation({id:input.id,operationId:input.operationId,revision:0,action:'create-quality-candidate',evidence:input.evidence,candidate:input.candidate,client});
+}
+export function createQualityCandidate(input:QualityCandidateCommand,client:AnnotationClientIdentity,actor?:string){
+  const operation=qualityCandidateOperation(input,client);
+  return new AnnotationClient(AbortSignal.timeout(10000)).mutate(input.space,operation,actor);
+}

@@ -1,3 +1,4 @@
+import {openQualityRoi} from './ui/quality-roi.ts';
 import { evidenceWorkspaceVersion } from '../shared/review/quality-evidence.ts';
 import { attachQualityDialog } from './ui/quality-evidence.ts';
 import { mediaDiagnostic } from '../shared/media/io/media-errors.ts';
@@ -100,6 +101,7 @@ const gpuReady=initializeGpuPresentation(Object.values(canvases)).catch(error =>
   log.warn('media', 'GPU 后台初始化失败，已保留现有呈现路径。', { error: error instanceof Error ? error.message : String(error) });
 });
 const session = new ReviewSession((slot, frame) => paintFrame(canvases[slot], frame));
+document.getElementById('quality-roi-open')!.onclick=()=>{try{openQualityRoi(session);}catch(error){notify(error instanceof Error?error.message:String(error));}};
 session.setBitstreamAnalysisConcurrency(analysisConcurrency());
 window.addEventListener(ANALYSIS_CONCURRENCY_EVENT, event => session.setBitstreamAnalysisConcurrency((event as CustomEvent<number>).detail), { signal: uiEvents.signal });
 session.onColorModeChange=async()=>{const {refreshGpuColorMode}=await import('./presentation/webgpu-presenter.ts');await refreshGpuColorMode();};

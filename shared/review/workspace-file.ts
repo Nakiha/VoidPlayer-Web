@@ -38,7 +38,7 @@ export type ComparisonConditions = { colorMode:ColorMode; referenceDecode:Refere
   version: 1; presentation: 'voidplayer-sdr-v1'; outputColorSpace: 'srgb';
 } | { version: 2; presentation:'voidplayer-color-v2'; outputColorSpace:'srgb'|'display-p3'; colorOutput:ColorOutput });
 export type WorkspaceFile = {
-  schema: 'voidplayer-workspace'; version: 1 | 2; name?: string; generatedAt: string; serverUrl: string;
+  schema: 'voidplayer-workspace'; version: 1 | 2 | 3; name?: string; generatedAt: string; serverUrl: string;
   comparison?: ComparisonConditions;
   positionUs: number; tracks: { slot: Slot; mediaId: string; offsetUs: number; visible?: boolean }[];
   media: MediaInfo[]; marks: Mark[]; viewport: ViewportSnapshot; layout?: WorkspaceLayout;
@@ -78,8 +78,8 @@ function frame(value: unknown): FrameInfo {
 export function parseWorkspace(value: unknown, baseUrl?: string, preserveEvidenceVerification = false): WorkspaceFile {
   let d = object(value);
   // Read the previous review export too; it did not contain a view or position.
-  if (d.schema === 'voidplayer-web-review' && [1,2].includes(d.version)) d = { ...d, schema: 'voidplayer-workspace', tracks: d.alignment, serverUrl: baseUrl, positionUs: 0, viewport: new Viewport().snapshot() };
-  if (d.schema !== 'voidplayer-workspace' || ![1,2].includes(d.version)) throw new Error('不支持的工作区文件或版本。');
+  if (d.schema === 'voidplayer-web-review' && [1,2,3].includes(d.version)) d = { ...d, schema: 'voidplayer-workspace', tracks: d.alignment, serverUrl: baseUrl, positionUs: 0, viewport: new Viewport().snapshot() };
+  if (d.schema !== 'voidplayer-workspace' || ![1,2,3].includes(d.version)) throw new Error('不支持的工作区文件或版本。');
   const serverUrl = workspaceUrl(d.serverUrl, baseUrl);
   const media: MediaInfo[] = array(d.media, 1000).map(value => {
     const m = object(value);
@@ -102,8 +102,13 @@ export function parseWorkspace(value: unknown, baseUrl?: string, preserveEvidenc
       return { slot: slotValue(c.slot), mediaId: text(c.mediaId, 200), frame: frame(c.frame), ...(c.offsetUs === undefined ? {} : { offsetUs: integer(c.offsetUs) }) };
     }) };
     if (m.qualityEvidence !== undefined) {
-      if (d.version !== 2) throw new Error('PSNR attachments require workspace version 2.');
+      if (d.version < 2) throw new Error('PSNR attachments require workspace version 2 or later.');
       mark.qualityEvidence = qualityEvidenceList(m.qualityEvidence, preserveEvidenceVerification);
+    }
+    if(m.qualityCandidate!==undefined){
+      const c=m.qualityCandidate;
+      if(d.version!==3||!c||Object.keys(c).sort().join(',')!=='assessment,schema,version'||c.schema!=='voidplayer-quality-candidate'||c.version!==1||c.assessment!=='not-subjectively-assessed'||!mark.qualityEvidence?.length)throw new Error('Measurement candidates require workspace version3 and immutable evidence.');
+      mark.qualityCandidate={schema:c.schema,version:1,assessment:c.assessment};
     }
     Object.assign(mark, discussionValue(m));
     if (m.offsetUs !== undefined) mark.offsetUs = integer(m.offsetUs);
@@ -111,6 +116,7 @@ export function parseWorkspace(value: unknown, baseUrl?: string, preserveEvidenc
     if (m.author) { const a = object(m.author); mark.author = { id: text(a.id, 200), name: text(a.name, 200) }; }
     return mark;
   });
+  if(d.version===3&&!marks.some(m=>m.qualityCandidate))throw new Error('候选工作区版本3需要测量候选；普通工作区保持原版本。');
   const markIds = new Set(marks.map(m => m.id));
   if (markIds.size !== marks.length || markIds.has('')) throw new Error('工作区标注 ID 重复或为空。');
   const viewport = new Viewport(); viewport.apply(object(d.viewport));

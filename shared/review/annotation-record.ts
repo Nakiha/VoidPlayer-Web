@@ -11,11 +11,11 @@ export type AnnotationDocument = { mark: Mark; media: MediaInfo[] };
 export type AnnotationRecord = { id: string; space: string; revision: number; sequence: number; deleted: boolean; updatedAt: string; updatedBy: string; document: AnnotationDocument };
 /** Client labels are attribution supplied by the caller, never authentication. */
 export type AnnotationClientIdentity = { kind: 'gui' | 'agent' | 'http'; id?: string };
-export type AnnotationOperation = { operationId: string; id: string; revision: number; action: 'put' | 'delete' | 'restore' | 'attach-quality-result'; evidence?: QualityEvidenceRef; document?: AnnotationDocument; client?: AnnotationClientIdentity };
+export type AnnotationOperation = { operationId: string; id: string; revision: number; action: 'put' | 'delete' | 'restore' | 'attach-quality-result' | 'create-quality-candidate'; candidate?:{text:string;severity:number}; evidence?: QualityEvidenceRef; document?: AnnotationDocument; client?: AnnotationClientIdentity };
 export type AnnotationPage = { entries: AnnotationRecord[]; cursor: number; previewEpoch?: number; more: boolean };
 export function parseAnnotationDocument(value: unknown): AnnotationDocument {
   const input = value as AnnotationDocument;
-  const document = parseWorkspace({ schema: 'voidplayer-workspace', version: 2, generatedAt: new Date().toISOString(), serverUrl: 'http://localhost/', positionUs: 0, tracks: [], media: input?.media, marks: [input?.mark], viewport: {} }, undefined, true);
+  const document = parseWorkspace({ schema: 'voidplayer-workspace', version: input?.mark?.qualityCandidate?3:2, generatedAt: new Date().toISOString(), serverUrl: 'http://localhost/', positionUs: 0, tracks: [], media: input?.media, marks: [input?.mark], viewport: {} }, undefined, true);
   return { mark: document.marks[0], media: document.media };
 }
 /** Only version-pinned library references can be shared across new playback sessions.
