@@ -227,7 +227,7 @@ try{
  // Chromium can discard DevTools response bodies after intercepted requests.
  // Verify the real GUI-consumed error, then the independent Agent HTTP fact;
  // neither check relies on Response.body()/finished() transport bookkeeping.
- await page.waitForFunction(()=>document.querySelector('[data-quality-source=reference] [data-source-status]').textContent==='An existing complete FLV cache is required.'&&document.querySelector('[data-quality-source=reference] [data-frame]').disabled);
+ await page.waitForFunction(()=>document.querySelector('[data-quality-source=reference] [data-source-status]').textContent==='An existing complete supported quality cache is required.'&&document.querySelector('[data-quality-source=reference] [data-frame]').disabled);
  const absentAgent=await fetch(`${base}/api/media/${e.id}/psnr-frames?v=${e.version}`,{headers,signal:AbortSignal.timeout(10000)});assert.equal(absentAgent.status,409);assert.equal((await absentAgent.json()).code,'cache-miss');
  assert.equal((await fetch(`${base}/api/media/${e.id}/frame-index?v=${e.version}`).then(r=>r.json())).index,null,'GUI never builds absent cache');
  for(const name of ['B.flv','C.flv']){const e=entry(name);assert.equal((await fetch(`${base}/api/media/${e.id}/frame-index?v=${e.version}&build=1`)).status,200);}
