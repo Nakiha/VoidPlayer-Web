@@ -24,7 +24,7 @@ const runner=new LibraryPairRunner(library,path.resolve('public/vendor/voidplaye
  console.log(JSON.stringify({event:'worker-start',id,live}));
  worker.once('exit',()=>{live--;console.log(JSON.stringify({event:'worker-exit',id,live}));});return worker;
 });
-Object.defineProperty(library,'quality',{value:runner});library.qualityJobs;library.qualityRanges;
+Object.defineProperty(library,'quality',{value:runner});library.qualityJobs;library.qualityRanges;library.qualityCorrespondence;
 await library.refresh();const server=createMediaServer({library,roots:library.roots,onLog(){}});
 await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
 console.log(JSON.stringify({event:'ready',port:(server.address()as {port:number}).port}));

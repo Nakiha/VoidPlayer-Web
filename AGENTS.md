@@ -31,6 +31,8 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 
 ## 硬约束
 
+- 显式参考关系与整数微秒时钟计划见 `docs/reference-clock-plans.md`；共享契约/原始 AU 解释在 `shared/analysis/quality/correspondence.ts`，持久适配在 `server/analysis/quality/correspondence-*.ts`。关系声明不认证内容；分段半开 offset 仅精确唯一 PTS 匹配，不 nearest、不补洞。规划只读固定可信 cache build，独立预算、队列/历史、单槽 Worker 物理退出；显式稳定回执提交原 range，无外层持锁、无重启重算或自动候选。GUI/HTTP 共用规则，迟到响应须按 actor/view 围栏。
+
 - 有界区间/抽样任务见 `docs/bounded-quality-ranges.md`；共享计划/聚合/策略在 `shared/analysis/quality/ranges.ts`，服务在 `server/analysis/quality/range-*.ts`。显式 AU 表与 all/stride 不自动对齐；coverage 区分未映射、未采样、不支持及未评分缺口。父协调器调用持久子任务且不得外层获取共享许可；实际 Worker 退出才释放容量。PSNR 汇总 SSE/count，SSIM 按平面窗口加权。候选须显式阈值/top-N/间距/文字/严重度，先冻结 IDs 再重放原子命令，不是人工判断。GUI 只被动查看，原帧链接走已有只读 viewer。
 
 - 色彩链路契约见 `docs/color-pipeline.md`；修改色彩处理必须同步该文档，区分源标签与实际输出资源，禁止按片源堆叠 HDR/SDR 修正。

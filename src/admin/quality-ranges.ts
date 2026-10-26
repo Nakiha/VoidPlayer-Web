@@ -106,6 +106,12 @@ export function installQualityRanges(signal:AbortSignal){
       }
     }catch(e){if(valid(owner,s)&&selected===id&&view===viewGeneration){publicationToken='';$('status').textContent=String(e);}}finally{if(token===detailGeneration)busy=false;}
   }
+  window.addEventListener('voidplayer-quality-range-select',event=>{
+    const request=(event as CustomEvent<{id:string;actor:string}>).detail;
+    if(!active||request?.actor!==actor||currentActor()?.id!==actor||!/^[a-f0-9-]{36}$/.test(request.id))return;
+    selected=request.id;revision=0;next=null;publicationToken='';viewGeneration++;detailGeneration++;resultGeneration++;busy=false;
+    $('detail').hidden=true;$('results').replaceChildren();$('candidates').replaceChildren();void detail();
+  },{signal});
   $('refresh').onclick=()=>{void list();void detail();};$('more').onclick=()=>void list(true);$('results-more').onclick=()=>void results(true);
   $('cancel').onclick=()=>{
     const owner=actor,s=controller.signal,id=selected,view=viewGeneration;

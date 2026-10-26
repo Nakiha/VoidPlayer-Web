@@ -6,7 +6,7 @@ parentPort!.on('message',data=>{if(data?.type==='cancel')controller.abort(new Er
 try{
  const value=await runQualityTask(workerData,controller.signal,async phase=>{
   parentPort!.postMessage({type:'phase',phase});
-  if(workerData.mode==='measure'&&phase==='decode'&&workerData.gate){
+  if(((workerData.mode==='measure'&&phase==='decode')||(workerData.mode==='correspondence-plan'&&phase==='resolve'))&&workerData.gate){
    const gate=new Int32Array(workerData.gate);Atomics.store(gate,1,1);Atomics.notify(gate,1);
    while(Atomics.load(gate,0)===0)Atomics.wait(gate,0,0);
   }

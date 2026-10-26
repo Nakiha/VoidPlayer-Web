@@ -129,7 +129,8 @@
     "src/ui/workspace-recovery.ts",
     "src/ui/workspace-sharing.ts",
     "src/ui/workspace-state.ts",
-    "src/ui/workspace-transfer.ts"
+    "src/ui/workspace-transfer.ts",
+    "src/admin/quality-correspondence.ts"
   ],
   "exceptions": [
     {

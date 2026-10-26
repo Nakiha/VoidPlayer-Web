@@ -15,7 +15,7 @@ import type {QualityRangeInput} from '../../../shared/analysis/quality/ranges.ts
 
 const hash=(v:unknown)=>createHash('sha256').update(canonicalJson(v)).digest('hex');
 const now=()=>Math.floor(performance.timeOrigin+performance.now());
-type Intent={actor:Actor;requestId:string;key:string;input:QualityRangeInput;digest:string;rangeId:string|null};
+type Intent={actor:Actor;requestId:string;key:string;input:QualityRangeInput;inputDigest:string;digest:string;rangeId:string|null};
 /** Durable metadata planning and frozen submission receipts. Only the runner
  * owns admission; submission calls the existing range service after it exits. */
 export class CorrespondenceService{
@@ -25,8 +25,12 @@ export class CorrespondenceService{
   private timer?:ReturnType<typeof setTimeout>;
   private closed=false;
   private fatal:unknown;
+  private failed=false;
   private closing?:Promise<void>;
-  constructor(file:string,private runner:LibraryPairRunner,private ranges:QualityRangeService){
+  private runner:LibraryPairRunner;
+  private ranges:QualityRangeService;
+  constructor(file:string,runner:LibraryPairRunner,ranges:QualityRangeService){
+    this.runner=runner;this.ranges=ranges;
     mkdirSync(path.dirname(file),{recursive:true});this.unlock=lockDatabase(file);let db:ReturnType<typeof openIndexDatabase>|undefined;
     try{
       this.db=db=openIndexDatabase(file);db.exec('PRAGMA busy_timeout=0;');
@@ -44,7 +48,7 @@ export class CorrespondenceService{
       }catch(e){db.exec('ROLLBACK');throw e;}
     }catch(e){db?.close();this.unlock();throw e;}
   }
-  private available(){if(this.closed||this.fatal||this.runner.stopUncertain)throw new AdminError(503,'Reference plan service unavailable.','correspondence-unavailable');}
+  private available(){if(this.closed||this.failed||this.runner.stopUncertain)throw new AdminError(503,'Reference plan service unavailable.','correspondence-unavailable');}
   private parse<T>(fn:()=>T):T{try{return fn();}catch(e){if(e instanceof AdminError)throw e;throw new AdminError(400,(e as Error).message,'invalid-correspondence');}}
   private plans(){return this.db.prepare('SELECT body FROM quality_correspondence_plans ORDER BY rowid').all().map(r=>JSON.parse(String(r.body)) as CorrespondencePlan);}
   private save(p:CorrespondencePlan){p.revision++;this.db.prepare('UPDATE quality_correspondence_plans SET body=? WHERE id=?').run(JSON.stringify(p),p.id);}
@@ -112,20 +116,22 @@ export class CorrespondenceService{
     this.available();const plan=this.get(id,actor.id);this.parse(()=>correspondenceKeys(value,['digest']));const digest=(value as {digest?:string}).digest;
     if(typeof digest!=='string'||digest!==plan.resultDigest)throw new AdminError(409,'Pin the exact frozen plan digest.','plan-digest-conflict');
     const row=this.db.prepare('SELECT body FROM quality_plan_executions WHERE plan_id=?').get(id);let intent:Intent;
-    if(row){intent=JSON.parse(String(row.body));if(intent.digest!==digest||intent.actor.id!==actor.id)throw new AdminError(500,'Execution receipt binding changed.','stored-plan-invalid');if(intent.rangeId)return {job:this.ranges.get(intent.rangeId,actor.id),replayed:true};}
+    if(row){intent=JSON.parse(String(row.body));if(intent.digest!==digest||intent.actor.id!==actor.id||intent.key!=='execute'||intent.input.client.id!==`clock-plan:${id}`||intent.input.client.kind!==plan.input.client.kind||hash(intent.input)!==intent.inputDigest)throw new AdminError(500,'Execution receipt binding changed.','stored-plan-invalid');if(intent.rangeId){const job=this.ranges.get(intent.rangeId,actor.id);if(job.key!==intent.key||job.requestId!==intent.requestId||hash(job.plan.input)!==hash(this.ranges.plan(intent.input).input))throw new AdminError(500,'Execution receipt points to another range.','stored-plan-invalid');return {job,replayed:true};}}
     else{
       if(plan.state!=='completed')throw new AdminError(409,'Plan is not executable.','plan-blocked');const input=structuredClone(this.rangeInput(id,actor.id));input.client={id:`clock-plan:${id}`,kind:plan.input.client.kind};
-      intent={actor:{id:actor.id,name:actor.name},requestId,key:'execute',input,digest,rangeId:null};
+      intent={actor:{id:actor.id,name:actor.name},requestId,key:'execute',input,inputDigest:hash(input),digest,rangeId:null};
       this.db.prepare('INSERT INTO quality_plan_executions VALUES(?,?)').run(id,JSON.stringify(intent));
     }
+    const expected=structuredClone(this.rangeInput(id,actor.id));expected.client={id:`clock-plan:${id}`,kind:plan.input.client.kind};
+    if(hash(expected)!==intent.inputDigest)throw new AdminError(500,'Frozen execution intent differs from its plan.','stored-plan-invalid');
     // No metadata Worker or outer permit is held. The durable B key is the
     // recovery point if its commit succeeds but this receipt update is lost.
     const accepted=this.ranges.submit(intent.input,intent.actor,intent.requestId,intent.key);intent.rangeId=accepted.job.id;
     this.db.prepare('UPDATE quality_plan_executions SET body=? WHERE plan_id=?').run(JSON.stringify(intent),id);return accepted;
   }
   cancel(id:string,actor:string){this.available();const plan=this.get(id,actor);if(!terminalCorrespondence(plan.state)){if(plan.state==='queued'){plan.state='cancelled';plan.endedAt=now();}else plan.state='cancelling';this.save(plan);if(this.active?.id===id)this.active.controller.abort(new AdminError(499,'Planning explicitly cancelled.','cancelled'));}return this.get(id,actor);}
-  private wake(){if(this.timer||this.closed||this.fatal||!this.plans().some(p=>p.state==='queued'))return;this.timer=setTimeout(()=>{this.timer=undefined;this.pump();this.wake();},250);this.timer.unref();}
-  private pump(){if(this.active||this.closed||this.fatal)return;const plan=this.plans().find(p=>p.state==='queued');if(!plan)return;const active={id:plan.id,controller:new AbortController(),done:Promise.resolve()};this.active=active;active.done=this.run(plan,active.controller).catch(e=>{this.fatal=e;console.error('Correspondence planner stopped; ownership retained',e);}).finally(()=>{this.active=undefined;this.wake();});}
+  private wake(){if(this.timer||this.closed||this.failed||!this.plans().some(p=>p.state==='queued'))return;this.timer=setTimeout(()=>{this.timer=undefined;this.pump();this.wake();},250);this.timer.unref();}
+  private pump(){if(this.active||this.closed||this.failed)return;const plan=this.plans().find(p=>p.state==='queued');if(!plan)return;const active={id:plan.id,controller:new AbortController(),done:Promise.resolve()};this.active=active;active.done=this.run(plan,active.controller).catch(e=>{this.failed=true;this.fatal=e;console.error('Correspondence planner stopped; ownership retained',e);}).finally(()=>{this.active=undefined;this.wake();});}
   private async run(initial:CorrespondencePlan,controller:AbortController){
     let plan=initial;
     if(now()-plan.createdAt>=300000){plan.state='failed';plan.endedAt=now();plan.reason={code:'queue-expired',message:'Planning queue wait exceeded five minutes; no Worker started.'};this.save(plan);return;}
@@ -134,7 +140,7 @@ export class CorrespondenceService{
       const value=await this.runner.planCorrespondence(plan.relation,plan.input,controller.signal,{admitted:()=>{admitted=true;plan.state='running';plan.attemptId=randomUUID();plan.startedAt=now();this.save(plan);},phase:()=>{}});
       plan=this.get(plan.id,plan.actor.id);
       if(this.closed||plan.state==='cancelling')throw new AdminError(499,'Planning stopped after physical Worker exit.','cancelled');
-      if(value.rangePlan)try{value.rangePlan=this.ranges.plan(value.rangePlan.input);}catch(e){value.rangePlan=null;value.executionBlock={code:'range-plan-blocked',message:(e as Error).message.slice(0,300)};}
+      if(value.rangePlan)try{value.rangePlan=this.ranges.plan(value.rangePlan.input);}catch(e){value.rangePlan=null;value.executionBlock={code:'range-plan-blocked',message:e instanceof Error?e.message.slice(0,300):'Planning failed; no automatic retry.'};}
       this.validate(plan,value);if(Buffer.byteLength(JSON.stringify(value))>LIMITS.resultBytes)throw new AdminError(413,'Frozen plan exceeds result byte budget.','budget-exceeded');
       plan.state=value.rangePlan?'completed':'blocked';plan.reason=value.executionBlock;plan.endedAt=now();plan.resultDigest=hash(value);plan.revision++;
       this.db.prepare('UPDATE quality_correspondence_plans SET body=?,result=? WHERE id=?').run(JSON.stringify(plan),JSON.stringify(value),plan.id);
@@ -142,8 +148,8 @@ export class CorrespondenceService{
       plan=this.get(plan.id,plan.actor.id);
       if(this.runner.stopUncertain){plan.state='cancelling';plan.reason={code:'worker-stop-uncertain',message:'Physical planner exit unconfirmed; compute and database ownership retained.'};this.save(plan);throw e;}
       if(!admitted&&e instanceof AdminError&&e.code==='quality-busy')return;
-      plan.state=this.closed?'interrupted':plan.state==='cancelling'||plan.state==='cancelled'?'cancelled':'failed';plan.endedAt=now();plan.reason={code:this.closed?'service-shutdown':(e as {code?:string}).code??'planning-failed',message:(e as Error).message.slice(0,300)};this.save(plan);
+      plan.state=this.closed?'interrupted':plan.state==='cancelling'||plan.state==='cancelled'?'cancelled':'failed';plan.endedAt=now();plan.reason={code:this.closed?'service-shutdown':(e as {code?:string}).code??'planning-failed',message:e instanceof Error?e.message.slice(0,300):'Planning failed; no automatic retry.'};this.save(plan);
     }
   }
-  close(){return this.closing??=(async()=>{this.closed=true;clearTimeout(this.timer);this.active?.controller.abort(new AdminError(499,'Planner stopping.','service-shutdown'));await this.active?.done;if(this.fatal)throw this.fatal;for(const plan of this.plans())if(!terminalCorrespondence(plan.state)){plan.state='interrupted';plan.endedAt=now();plan.reason={code:'service-shutdown',message:'Planning stopped; no automatic retry.'};this.save(plan);}this.db.close();this.unlock();})();}
+  close(){return this.closing??=(async()=>{this.closed=true;clearTimeout(this.timer);this.active?.controller.abort(new AdminError(499,'Planner stopping.','service-shutdown'));await this.active?.done;if(this.failed)throw this.fatal;for(const plan of this.plans())if(!terminalCorrespondence(plan.state)){plan.state='interrupted';plan.endedAt=now();plan.reason={code:'service-shutdown',message:'Planning stopped; no automatic retry.'};this.save(plan);}this.db.close();this.unlock();})();}
 }

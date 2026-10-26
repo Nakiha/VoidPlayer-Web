@@ -563,6 +563,28 @@ The admin range view is passive; explicit original-frame/ROI viewer links do not
 control playback, score or build indexes. No geometry/container expansion follows.
 See docs/bounded-quality-ranges.md for the full protocol.
 
+quality.correspondence adds immutable actor-owned reference declarations:
+POST /api/quality/reference-relations with schema voidplayer-quality-reference-relation,
+version 1, client, explicit reference/distorted {mediaId,mediaVersion,stream:"video",configuration:0},
+declaration and clock {mode:"piecewise-exact-source-pts-offset",segments:[{id,referenceStartUs,referenceEndUs,offsetUs}]}.
+Distorted PTS = reference PTS + offset in integer microseconds. Segments are half-open,
+nonoverlapping in both domains. This is a caller declaration, never content certification.
+POST /api/quality/correspondence-plans pins relation {id,revision:1}, both cache build IDs,
+reference AU interval, all/stride sampling, recipe {roi,spatial?,ssim?,budget}, total range
+budget and separate planningBudget {maxIndexBytes,maxIndexPackets,maxElapsedMs}.
+Both creates use quality-job and Idempotency-Key. Planning runs in a service-owned,
+physically stopped Worker; observing or closing a browser does not cancel it.
+GET /plans/{id} under that prefix returns frozen identities, attempt, counts, work,
+budget reservation and submission receipt. GET /plans/{id}/rows?after=AU&limit=32
+uses an inclusive cursor over raw AU facts, including unsampled and unsupported rows.
+Ambiguity, absent exact PTS, clock gaps and decode-window limits are explicit; no nearest
+frame is substituted. GET /plans/{id}/range-input exposes the bounded frozen B request.
+POST /plans/{id}/execute with {digest:plan.resultDigest} explicitly submits the original
+range using a durable stable key. Its receipt precedes private plan lookup on replay;
+unknown commit outcomes must reuse the same plan/digest. Restart interrupts unfinished
+planning without automatic recomputation or scoring. Candidate publication remains the
+existing separate explicit range policy. See docs/reference-clock-plans.md.
+
 There is no automatic alignment, VMAF/CAMBI executor, shared computation,
 automatic index construction, retry/resume or distributed worker.
 These capabilities do not mean #114 or #121 is complete.
