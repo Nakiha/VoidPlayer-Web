@@ -1,5 +1,5 @@
-import {parseFlvIndex} from '../../media/indexing/flv-index-cache.ts';
-import type {FlvIndexDocument} from '../../media/indexing/flv-index-cache.ts';
+import {qualitySourceIndex} from './source-index.ts';
+import type {QualityIndexDocument} from './source-index.ts';
 import {qualityFrameCandidates,qualityTargetForAu} from './selection.ts';
 import {planQualityRange,QUALITY_RANGE_LIMITS} from './ranges.ts';
 import type {QualityRangeInput,QualityRangePlan} from './ranges.ts';
@@ -12,7 +12,7 @@ export type ClockSegment={id:string;referenceStartUs:number;referenceEndUs:numbe
 export type ReferenceRelationInput={schema:'voidplayer-quality-reference-relation';version:1;client:QualityRangeInput['client'];reference:RelationSource;distorted:RelationSource;declaration:string;clock:{mode:'piecewise-exact-source-pts-offset';segments:ClockSegment[]}};
 export type ReferenceRelation={id:string;actor:{id:string;name:string};requestId:string;key:string;revision:1;createdAt:number;input:ReferenceRelationInput;assessment:'caller-declared-not-content-certified'};
 export type CorrespondenceInput={schema:'voidplayer-quality-correspondence-plan';version:1;client:QualityRangeInput['client'];relation:{id:string;revision:1};referenceBuildId:string;distortedBuildId:string;interval:QualityRangeInput['interval'];sampling:QualityRangeInput['sampling'];recipe:Pick<FramePairRequest,'roi'|'spatial'|'ssim'|'budget'>;budget:QualityRangeInput['budget'];planningBudget:{maxIndexBytes:number;maxIndexPackets:number;maxElapsedMs:number}};
-export type AuFact={au:number;ptsUs:number;dtsUs:number;offset:number;bytes:number;key:boolean;configuration:number};
+export type AuFact={clock?:{basis:'mp4-sample-ticks-v1';trackId:number;timescale:number;sampleOrdinal:number;description:1;dtsTicks:number;ctsTicks:number;durationTicks:number};au:number;ptsUs:number;dtsUs:number;offset:number;bytes:number;key:boolean;configuration:number};
 export type CorrespondenceReason='reference-au-missing'|'clock-unmapped'|'reference-pts-ambiguous'|'target-pts-missing'|'target-pts-ambiguous'|'target-au-conflict'|'unsupported-reference'|'unsupported-distorted';
 export type CorrespondenceRow={au:number;selected:boolean;reference:AuFact|null;segmentId:string|null;offsetUs:number|null;expectedDistortedPtsUs:number|null;distorted:AuFact|null;status:'mapped'|'unmapped'|'ambiguous'|'unsupported';reason:CorrespondenceReason|null;detail:string|null;matches:number;candidateAus:number[]};
 export type CorrespondenceResult={schema:'voidplayer-quality-correspondence-result';version:1;relation:ReferenceRelation;request:CorrespondenceInput;sources:{reference:LibraryPairBinding;distorted:LibraryPairBinding};sourceIssues:{reference:string|null;distorted:string|null};rows:CorrespondenceRow[];rangePlan:QualityRangePlan|null;executionBlock:{code:string;message:string}|null;work:{indexBytes:number;indexPackets:number;sourceReadBytes:0;decodedFrames:0;elapsedMs:number};assessment:'exact-clock-match-not-content-certified'};
@@ -49,15 +49,15 @@ export function correspondenceInput(value:unknown):CorrespondenceInput{
 }
 
 /** Exact clock joins over raw cache records; no nearest-frame or content inference. */
-export function buildCorrespondence(relation:ReferenceRelation,request:CorrespondenceInput,sources:[LibraryPairBinding&{index:FlvIndexDocument},LibraryPairBinding&{index:FlvIndexDocument}],work:CorrespondenceResult['work']):CorrespondenceResult{
+export function buildCorrespondence(relation:ReferenceRelation,request:CorrespondenceInput,sources:[LibraryPairBinding&{index:QualityIndexDocument},LibraryPairBinding&{index:QualityIndexDocument}],work:CorrespondenceResult['work']):CorrespondenceResult{
   const admissions:(string|null)[]=[];
   const indexes=sources.map((s,i)=>{const expected=i?relation.input.distorted:relation.input.reference,build=i?request.distortedBuildId:request.referenceBuildId;if(s.binding.mediaId!==expected.mediaId||s.binding.mediaVersion!==expected.mediaVersion||s.binding.indexBuildId!==build)fail('Pinned correspondence source/cache changed');
-    const index=parseFlvIndex(s.index,s.binding.size);let issue:string|null=null;
+    const index=qualitySourceIndex(s.index,s.binding.size);let issue:string|null=null;
     try{const page=qualityFrameCandidates(s,s.index,{afterAu:0,limit:1}),roi=request.recipe.roi;if(!page.inspection.supported)issue=page.inspection.reason;if(roi.x+roi.width>page.geometry.width||roi.y+roi.height>page.geometry.height)issue='ROI exceeds admitted visible source geometry';}
     catch(e){if(['unsupported-source','budget-exceeded'].includes((e as {code?:string}).code??''))issue=(e as Error).message;else throw e;}
     admissions.push(issue);return index;});
   const counts=indexes.map(index=>{const m=new Map<number,number[]>();index.packets.forEach((p,au)=>{const list=m.get(p.pts);if(list)list.push(au);else m.set(p.pts,[au]);});return m;});
-  const fact=(side:number,au:number):AuFact|null=>{const p=indexes[side].packets[au];return p?{au,ptsUs:p.pts,dtsUs:p.dts,offset:p.offset,bytes:p.size,key:p.key,configuration:p.configuration??0}:null;};
+  const fact=(side:number,au:number):AuFact|null=>{const index=indexes[side],p=index.packets[au],mp4=index.mp4,sample=mp4?.samples[au];return p?{au,ptsUs:p.pts,dtsUs:p.dts,offset:p.offset,bytes:p.size,key:p.key,configuration:p.configuration??0,...(mp4&&sample?{clock:{basis:'mp4-sample-ticks-v1' as const,trackId:mp4.trackId,timescale:mp4.timescale,sampleOrdinal:sample.ordinal,description:sample.description,dtsTicks:sample.dtsTicks,ctsTicks:sample.ctsTicks,durationTicks:sample.durationTicks}}:{})}:null;};
   const numberCounts=counts.map(m=>new Map([...m].map(([pts,aus])=>[pts,aus.length])));
   const rows:CorrespondenceRow[]=[],pairs:FramePairRequest[]=[];
   for(let au=request.interval.startAu;au<=request.interval.endAu;au++){

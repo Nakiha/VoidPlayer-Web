@@ -1,5 +1,6 @@
-import { inspectFlvFramePair, FramePairError, PAIR_LIMITS } from '../../../shared/analysis/quality/frame-pair.ts';
+import { inspectFramePair, FramePairError, PAIR_LIMITS } from '../../../shared/analysis/quality/frame-pair.ts';
 import type { CachedPairSource, FramePairRequest } from '../../../shared/analysis/quality/frame-pair.ts';
+import type {QualityIndexDocument} from '../../../shared/analysis/quality/source-index.ts';
 import type { LibraryPairBinding } from '../../../shared/analysis/quality/library-pair.ts';
 import type { QualityEvidence } from '../../../shared/review/quality-evidence.ts';
 import { PAIR_VIEW_SIDES, pairViewEvidence, qualityFactKey, verifyInspectedPair } from '../../../shared/review/quality-pair-view.ts';
@@ -29,7 +30,7 @@ export async function inspectLibraryEvidence(input:QualityEvidence,base:string,s
 export async function inspectLibrarySelection(request:FramePairRequest,bindings:[LibraryPairBinding,LibraryPairBinding],base:string,signal:AbortSignal,actor?:string){
   if(!globalThis.crypto?.subtle)throw new FramePairError('unsupported-source','Source inspection requires HTTPS or localhost');
   const origin=new URL(base).origin,expected={sources:{reference:bindings[0],distorted:bindings[1]}};
-  const sources:CachedPairSource[]=[];
+  const sources:CachedPairSource<QualityIndexDocument>[]=[];
   const sourceUrl=(side:typeof PAIR_VIEW_SIDES[number])=>new URL(`/api/media/${expected.sources[side].binding.mediaId}`,origin);
   const proof=async(side:typeof PAIR_VIEW_SIDES[number])=>{
     const url=sourceUrl(side);url.pathname+='/psnr-source';url.searchParams.set('v',expected.sources[side].binding.mediaVersion);
@@ -48,9 +49,9 @@ export async function inspectLibrarySelection(request:FramePairRequest,bindings:
       const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(document.index)))),b=>b.toString(16).padStart(2,'0')).join('');
       if(digest!==current.producer.documentSha256)throw new FramePairError('identity-mismatch','Cached index differs from the original producer document');
       const reader=new RangeReader({url:url.href,size:current.binding.size});
-      sources.push({binding:()=>structuredClone(current.binding),index:document.index,read:(offset,length)=>reader.readMetadata(offset,length),close:()=>reader.close()});
+      sources.push({digest:async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new Uint8Array(bytes))),b=>b.toString(16).padStart(2,'0')).join(''),binding:()=>structuredClone(current.binding),index:document.index,read:(offset,length)=>reader.readMetadata(offset,length),close:()=>reader.close()});
     }
-    const pair=await inspectFlvFramePair(request,[sources[0],sources[1]],budget=>openPairDecoder(coreAssetUrl('vendor/voidplayer-core/voidplayer-core.js',base),undefined,budget.maxHeapBytes),signal);
+    const pair=await inspectFramePair(request,[sources[0],sources[1]],budget=>openPairDecoder(coreAssetUrl('vendor/voidplayer-core/voidplayer-core.js',base),undefined,budget.maxHeapBytes),signal);
     for(const side of PAIR_VIEW_SIDES)await proof(side);
     signal.throwIfAborted();return pair;
   } finally {for(const source of sources)source.close();}

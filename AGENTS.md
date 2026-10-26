@@ -104,3 +104,5 @@ node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 原生连续序列 VMAF 见 `docs/native-vmaf.md`。固定官方 Netflix/vmaf v3.0.0 与 v0.6.1/NEG 模型，Linux x64 可信组件由宿主配置 manifest hash，不依赖 PATH 或接受 HTTP 程序路径。共享计划/准入在 `shared/analysis/quality/vmaf.ts`，独立 native 进程和持久服务在 `server/analysis/vmaf/`，GUI 为 `src/admin/quality-vmaf.ts`。只消费已提交 C 计划；连续呈现顺序与整帧 SDR 色彩/几何严格准入，不能把稀疏抽样拼成时序。PSNR/SSIM 与 native 状态独立，实际退出后才释放容量；序列附件不可伪装空间热图。
 
 原生单源 CAMBI 见 `docs/native-cambi.md`：共享契约/预算在 `shared/analysis/quality/cambi.ts`，持久服务在 `server/analysis/cambi/`，复用已固定 native 组件、真实 Worker/supervisor 与实例共享准入，不要求 C 参考计划或虚构 PSNR pair。五尺度原始 gray16le 证据逐帧按需读，区域只表示热图统计/源坐标格点映射，不是小裁剪重算或目标跟踪。共享单源候选命令/附件在 `shared/review/cambi-evidence.ts` 与既有标注事务，版本3导出和DB5兼容围栏必须保留；导入降历史。GUI在 `src/admin/quality-cambi.ts` 与 `src/ui/cambi-view.ts`，原始源快照必须重新核源/cache/AU/rawSHA并经presenter，不能干预原播放器或查非owner私有job。
+
+可信非分片 MP4 评分链路见 `docs/trusted-mp4-quality.md`。严格表读取在 `shared/media/indexing/mp4-quality-index.ts`，显式准备沿用 A 的任务、事务 cache 与共享物理退出准入。MP4 namespace/producer/result v2 与旧 FLV v1 并存；源适配读取真实 sample payload，不伪造/计费 FLV tag。时钟 ticks 必须精确表示整数微秒，不能 round/修 POC/nearest。只读 viewer 使用已有可信 cache；VMAF/CAMBI 继续 FLV-only。

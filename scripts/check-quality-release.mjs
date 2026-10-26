@@ -16,6 +16,9 @@ try{
  const media=path.join(temp,'media'),data=path.join(temp,'data'),cwd=path.join(temp,'unrelated'),empty=path.join(temp,'empty-path');
  for(const directory of [media,data,cwd,empty])await mkdir(directory);
  const samples=[...JSON.parse(await readFile(path.join(root,'test/helpers/quality-http-samples.json'),'utf8')).samples.filter(s=>s.tagged),...JSON.parse(await readFile(path.join(root,'test/helpers/quality-forward-samples.json'),'utf8')).samples.map(s=>({...s,forward:true})),...JSON.parse(await readFile(path.join(root,'test/helpers/quality-reordered-samples.json'),'utf8')).samples.filter(s=>s.frames===16).map(s=>({...s,gop:true})),...JSON.parse(await readFile(path.join(root,'test/helpers/quality-reordered-samples.json'),'utf8')).delayedSamples.map(s=>({...s,gop:true}))];
+ const mp4Samples=JSON.parse(await readFile(path.join(root,'test/helpers/quality-mp4-samples.json'),'utf8')).samples;
+ for(const sample of mp4Samples){const bytes=Buffer.from(sample.mp4,'base64');assert.equal(createHash('sha256').update(bytes).digest('hex'),sample.mp4Sha256);await writeFile(path.join(media,`trusted-${sample.codec}-${sample.depth}.mp4`),bytes);}
+ const mp4Rows=[];
  const sampleName=s=>`${s.codec}-${s.depth}${s.zeroCts?'-zero-cts':s.gop?'-gop':s.forward?'-forward':''}.flv`;
  for(const sample of samples){const bytes=Buffer.from(sample.flv,'base64');assert.equal(createHash('sha256').update(bytes).digest('hex'),sample.flvSha256);await writeFile(path.join(media,sampleName(sample)),bytes);}
  const discoveryFixtures=JSON.parse(await readFile(path.join(root,'test/helpers/library-discovery-samples.json'),'utf8')),discoverySamples=[...discoveryFixtures.samples,...discoveryFixtures.audioSamples];
@@ -101,9 +104,34 @@ try{
   rows.push({request,requestId:value.request.id,codec:sample.codec,depth:sample.depth,sse:aggregate,decoder:value.result.decoder,source:binding,execution:value.execution,
     candidate:{command:candidateCommand,record:candidate},annotation:{attach,attached},durable:{input,job,stored,key:jobHeaders['idempotency-key']}});
  }
+ for(const sample of mp4Samples){
+  let entry;await waitUntil(async()=>{entry=(await fetch(base+'/api/library').then(r=>r.json())).entries.find(e=>e.name===`trusted-${sample.codec}-${sample.depth}.mp4`);return entry?.state==='ready';},'Compiled MP4 library source not ready');
+  const prepInput={source:{id:entry.id,version:entry.version},operation:'quality-index',client:{id:'compiled-mp4',name:'Compiled MP4 acceptance'}},prepHeaders={...headers,'x-voidplayer-action':'library-preparation','idempotency-key':`mp4-prep-${sample.codec}-${sample.depth}`};
+  const missing=await fetch(`${base}/api/media/${entry.id}/psnr-source?v=${entry.version}`,{headers:{cookie}});assert.equal(missing.status,409);
+  const response=await fetch(base+'/api/library/preparations',{method:'POST',headers:prepHeaders,body:JSON.stringify(prepInput)}),accepted=await response.json();assert.equal(response.status,202,JSON.stringify(accepted));let prepared;
+  await waitUntil(async()=>{prepared=await fetch(base+'/api/library/preparations/'+accepted.job.id,{headers:{cookie}}).then(r=>r.json());if(['failed','cancelled','interrupted'].includes(prepared.state))throw Error(JSON.stringify(prepared));return prepared.state==='completed';},'Compiled MP4 quality preparation did not finish');
+  const proof=prepared.result;assert.equal(proof.binding.indexIdentity.kind,'mp4');assert.equal(proof.producer.producer,'server-mp4-scan-v1');
+  const page=await fetch(`${base}/api/media/${entry.id}/psnr-frames?v=${entry.version}&limit=8`,{headers:{cookie}}).then(r=>r.json());assert.equal(page.entries.length,8);assert.equal(page.presentedInput,undefined);
+  const request={pairing:'caller-specified',reference:page.entries[0],distorted:page.entries[1],roi:{x:0,y:0,width:32,height:32},spatial:{blockWidth:16,blockHeight:16},ssim:{variant:'ffmpeg-uniform-8x8-step4-v1'}};
+  const input={schema:'voidplayer-psnr-frame-job',version:1,client:{id:'compiled-mp4',kind:'agent'},request},jobHeaders={...headers,'x-voidplayer-action':'quality-job','idempotency-key':`mp4-score-${sample.codec}-${sample.depth}`};
+  const submit=await fetch(base+'/api/quality/jobs',{method:'POST',headers:jobHeaders,body:JSON.stringify(input)}),submitted=await submit.json();assert.equal(submit.status,202,JSON.stringify(submitted));let job;
+  await waitUntil(async()=>{job=await fetch(base+'/api/quality/jobs/'+submitted.job.id,{headers:{cookie}}).then(r=>r.json());if(['failed','cancelled','interrupted'].includes(job.state))throw Error(JSON.stringify(job));return job.state==='completed';},'Compiled MP4 score did not finish');
+  const stored=await fetch(`${base}/api/quality/jobs/${job.id}/result`,{headers:{cookie}}).then(r=>r.json()),v=stored.value;assert.equal(v.version,2);assert.equal(v.execution.runtime,'bun');assert.equal(v.execution.runtimeVersion,manifest.runtime.version);assert.equal(v.result.decoder.buildId,manifest.decoder.source.revision);assert.equal(v.result.work.packets,16);assert.equal(v.result.work.outputFrames,16);assert.ok(v.result.provenance.reference.dependency.outputIdentity.outputs.some(o=>o.phase==='drain'));assert.equal(v.annotationContext.reference.basis,'complete-mp4-index-derived-v1');
+  const raw=Buffer.from(sample.native,'base64');assert.equal(createHash('sha256').update(raw).digest('hex'),sample.nativeSha256);const unit=sample.depth===8?1:2,frame=6144*unit,a=sample.displayAuOrder.indexOf(0)*frame,b=sample.displayAuOrder.indexOf(1)*frame;
+  for(const [i,name]of ['y','u','v'].entries()){const width=i?32:64,offset=[0,4096,5120][i],n=i?16:32;let sse=0;for(let y=0;y<n;y++)for(let x=0;x<n;x++){const at=(offset+y*width+x)*unit,va=unit===1?raw[a+at]:raw.readUInt16LE(a+at),vb=unit===1?raw[b+at]:raw.readUInt16LE(b+at);sse+=(va-vb)**2;}assert.equal(v.result.metric.planes[name].sse,sse);assert.equal(v.result.metric.planes[name].samples,n*n);}
+  const oracle=ssimOracle(raw.subarray(a,a+frame),raw.subarray(b,b+frame),sample.depth,64,64,request.roi);assert.ok(Math.abs(v.result.ssim.aggregate.score-oracle.all)<1e-12);assert.equal(v.result.metric.spatial.blocks.length,4);
+  const candidateCommand={id:`compiled-mp4-${sample.codec}-${sample.depth}`,operationId:`compiled-mp4-candidate-${sample.codec}-${sample.depth}`,revision:0,action:'create-quality-candidate',candidate:{text:'Compiled MP4 measurement candidate, unassessed',severity:2},evidence:{jobId:job.id,attemptId:job.attempt.id,digest:job.result.digest,side:'reference'}};
+  const publish=await fetch(base+'/api/annotations/spaces/default',{method:'POST',headers:{...headers,'x-voidplayer-action':'annotation'},body:JSON.stringify(candidateCommand)}),candidate=await publish.json();assert.equal(publish.status,200,JSON.stringify(candidate));assert.equal(candidate.document.mark.qualityEvidence[0].value.version,2);assert.equal(candidate.document.mark.qualityCandidate.assessment,'not-subjectively-assessed');
+  mp4Rows.push({input,key:jobHeaders['idempotency-key'],job,stored,candidateCommand,candidate});
+ }
+ console.log('PASS compiled MP4: avc1 H2648/hvc1 HEVC8/10 explicit durable preparation, reordered/drain native SSE/SSIM/grid and shared candidates');
  const duplicate=spawnSync(path.join(directory,manifest.executable),['--data-dir',data],{cwd,env,encoding:'utf8',timeout:10000,maxBuffer:1024*1024});
  assert.equal(duplicate.error,undefined);assert.notEqual(duplicate.status,0);assert.match(duplicate.stdout+duplicate.stderr,/另一个实例/,'second compiled instance must not recover a live owner');
  await stopChild();stopChild=null;await start();
+ for(const row of mp4Rows){
+  const replay=await fetch(base+'/api/quality/jobs',{method:'POST',headers:{...headers,'x-voidplayer-action':'quality-job','idempotency-key':row.key},body:JSON.stringify(row.input)});assert.equal(replay.status,200);assert.deepEqual((await replay.json()).job,row.job);
+  const candidate=await fetch(base+'/api/annotations/spaces/default',{method:'POST',headers:{...headers,'x-voidplayer-action':'annotation'},body:JSON.stringify(row.candidateCommand)});assert.equal(candidate.status,200);assert.deepEqual(await candidate.json(),row.candidate);
+ }
  for(const row of rows){
   const candidateReplay=await fetch(base+'/api/annotations/spaces/default',{method:'POST',headers:{...headers,'x-voidplayer-action':'annotation'},body:JSON.stringify(row.candidate.command)});assert.equal(candidateReplay.status,200);assert.deepEqual(await candidateReplay.json(),row.candidate.record);
   const historical=await fetch(`${base}/api/annotations/spaces/default/${row.annotation.attached.id}`).then(r=>r.json());assert.deepEqual(historical,row.annotation.attached);

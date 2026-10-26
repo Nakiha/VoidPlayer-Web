@@ -2490,8 +2490,8 @@
     "translation": "Minimum height (source pixels)"
   },
   "discovery.index": {
-    "source": "显式准备可信 FLV 索引",
-    "translation": "Explicitly prepare trusted FLV index"
+    "source": "显式准备可信 FLV / MP4 索引",
+    "translation": "Explicitly prepare a trusted FLV / MP4 index"
   },
   "discovery.invalidDraft": {
     "source": "保存的本地请求无效，未自动重试，现可重新选择。",
@@ -2522,8 +2522,8 @@
     "translation": "Maximum width (source pixels)"
   },
   "discovery.metadataContainerOnly": {
-    "source": "此容器已提供技术信息；本批可信索引准备与评分仍限 FLV/Enhanced FLV。MP4、Matroska、TS 能读取或播放，不等于可评分。",
-    "translation": "This container provides technical metadata. Trusted index preparation and scoring remain limited to FLV/Enhanced FLV in this batch. Reading or playing MP4, Matroska or TS does not imply scoring support."
+    "source": "此容器已提供技术信息；可信索引准备与评分仍限严格 FLV/Enhanced FLV 和非分片 MP4 子集。Matroska、TS 等能读取或播放，不等于可评分。",
+    "translation": "This container provides technical metadata. Trusted index preparation and scoring are limited to strict FLV/Enhanced FLV and non-fragmented MP4 subsets. Being readable or playable does not make Matroska, TS or other containers scoreable."
   },
   "discovery.metadataOnly": {
     "source": "已读取技术证据；尚未据此核验评分来源。技术流/时钟不是评分 AU 身份。",
@@ -2542,8 +2542,8 @@
     "translation": "Submission outcome is unknown; the request is frozen. Retry reuses its original actor, client and idempotency key without creating another task."
   },
   "discovery.prepareHelp": {
-    "source": "准备必须显式提交。probe 仅做有界技术读取（4MiB / 512次 / 32流 / 30秒）；可信 FLV 索引准备另受64MiB来源与128MiB读取预算。两者均由服务持有，关页不取消，明确取消后等待 Worker 真实退出；不自动重试。",
-    "translation": "Preparation requires an explicit submission. Probe reads bounded technical data (4 MiB / 512 reads / 32 streams / 30 seconds). Trusted FLV indexing separately limits sources to 64 MiB and reads to 128 MiB. The service owns both operations; closing this page does not cancel them. Explicit cancellation waits for physical Worker exit. No automatic retries."
+    "source": "准备必须显式提交。probe 仅做有界技术读取（4MiB / 512次 / 32流 / 30秒）；可信 FLV / 非分片 MP4 索引准备另受64MiB来源与128MiB读取预算，MP4 还须通过单视频轨、精确时钟与闭合 IDR 校验。两者均由服务持有，关页不取消，明确取消后等待 Worker 真实退出；不自动重试。",
+    "translation": "Preparation must be explicit. Probe reads bounded metadata (4 MiB / 512 reads / 32 streams / 30 seconds). Trusted FLV / non-fragmented MP4 index preparation has separate 64 MiB source and 128 MiB read budgets; MP4 also requires one video track, exact clocks and closed IDRs. The service owns both jobs; closing the page does not cancel them. Explicit cancellation waits for the Worker to exit. There is no automatic retry."
   },
   "discovery.probe": {
     "source": "显式读取技术信息",

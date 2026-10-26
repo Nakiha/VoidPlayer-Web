@@ -13,6 +13,7 @@ export function cambiInput(value:unknown):CambiInput{
  cambiObject(value,['schema','version','client','source','interval','sampling','budget']);const v=structuredClone(value) as CambiInput;
  cambiObject(v.client,['id','kind']);cambiObject(v.source,['mediaId','mediaVersion','size','indexIdentity','indexBuildId']);cambiObject(v.interval,['startPtsUs','endPtsUs']);cambiObject(v.sampling,['stride']);cambiObject(v.budget,['maxRawBytes','maxHeatBytes','maxTemporaryBytes','maxElapsedMs','nativeCpuSeconds','nativeMemoryBytes']);
  cambiCheck(v.schema==='voidplayer-cambi-job'&&v.version===1&&typeof v.client.id==='string'&&/^[A-Za-z0-9._:-]{1,80}$/.test(v.client.id)&&['browser','agent','other'].includes(v.client.kind),'Invalid CAMBI envelope');
+ cambiCheck(v.source.indexIdentity?.kind==='flv','Native CAMBI requires trusted FLV; MP4 is unsupported');
  const target={...v.source,sourcePtsUs:0,picture:{sourceVersion:`${v.source.mediaId}@${v.source.mediaVersion}`,stream:'video',configuration:0,au:0,picture:0,layer:0,field:'frame'}} as PairTarget;
  pairBudget({pairing:'caller-specified',reference:target,distorted:target,roi:{x:0,y:0,width:2,height:2}});
  cambiCheck(Number.isSafeInteger(v.interval.startPtsUs)&&v.interval.startPtsUs>=0&&Number.isSafeInteger(v.interval.endPtsUs)&&v.interval.endPtsUs>v.interval.startPtsUs,'Use a nonnegative half-open source PTS interval');

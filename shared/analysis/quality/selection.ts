@@ -1,6 +1,7 @@
 import { avcGeometry } from '../../media/codecs/avc-geometry.ts';
 import { hevcGeometry, hevcFieldPictures } from '../../media/codecs/hevc-geometry.ts';
-import { parseFlvIndex, type FlvIndexDocument } from '../../media/indexing/flv-index-cache.ts';
+import {qualitySourceIndex,isMp4QualityDocument,qualityIndexPacketCount} from './source-index.ts';
+import type {QualityIndexDocument,QualityVideoIndex} from './source-index.ts';
 import { FramePairError, PAIR_LIMITS, forwardPacketPlan, gopPacketPlan, FORWARD_PAIR_LIMITS, requireInspectionGeometry, type PairTarget } from './frame-pair.ts';
 import type {FlvIndex} from '../../media/containers/flv-demux.ts';
 import type { LibraryPairBinding } from './library-pair.ts';
@@ -25,7 +26,7 @@ export function qualityFrameQuery(query:QualityFrameQuery) {
   return query;
 }
 /** Reuse cached-window admission without dropping the caller's raw AU fact. */
-export function qualityTargetForAu(source:LibraryPairBinding,index:FlvIndex,au:number,counts:Map<number,number>):{target:PairTarget|null;reason:string|null}{
+export function qualityTargetForAu(source:LibraryPairBinding,index:QualityVideoIndex,au:number,counts:Map<number,number>):{target:PairTarget|null;reason:string|null}{
   const p=index.packets[au];
   if(!p||(p.configuration??0)!==0||counts.get(p.pts)!==1||p.size>PAIR_LIMITS.maxPacketBytes)return {target:null,reason:'AU configuration, unique PTS or packet budget unsupported'};
     const target:PairTarget={...structuredClone(source.binding),sourcePtsUs:p.pts,picture:{sourceVersion:`${source.binding.mediaId}@${source.binding.mediaVersion}`,
@@ -36,12 +37,13 @@ export function qualityTargetForAu(source:LibraryPairBinding,index:FlvIndex,au:n
     // token attribution for every complete bounded GOP, even with zero CTS.
     if(endAu-startAu+1<=32){
       target.decode={mode:'packet-identity-gop-v1',startAu,endAu};
-      try{const plan=gopPacketPlan(index,target,counts);if(plan.some(p=>p.size>PAIR_LIMITS.maxPacketBytes)||plan.reduce((n,p)=>n+p.size+23,0)>PAIR_LIMITS.maxReadBytes)return {target:null,reason:'Dependency packet/read budget or unsupported decode window'};}
-      catch(error){if(error instanceof FramePairError&&['unsupported-source','invalid-request'].includes(error.code)){if(p.key)delete target.decode;else return {target:null,reason:'Dependency packet/read budget or unsupported decode window'};}else throw error;}
-    }else if(!p.key){
+      try{const plan=gopPacketPlan(index,target,counts);if(plan.some(p=>p.size>PAIR_LIMITS.maxPacketBytes)||plan.reduce((n,p)=>n+p.size+(index.mp4?0:23),0)>PAIR_LIMITS.maxReadBytes)return {target:null,reason:'Dependency packet/read budget or unsupported decode window'};}
+      catch(error){if(error instanceof FramePairError&&['unsupported-source','invalid-request'].includes(error.code)){if(p.key&&!index.mp4)delete target.decode;else return {target:null,reason:'Dependency packet/read budget or unsupported decode window'};}else throw error;}
+    }else if(index.mp4)return {target:null,reason:'MP4 complete GOP exceeds 32 AUs'};
+    else if(!p.key){
       if(startAu<0||au-startAu+1>FORWARD_PAIR_LIMITS.packetsPerSide)return {target:null,reason:'Dependency packet/read budget or unsupported decode window'};
       target.decode={mode:'forward-one-output-per-au-v1',startAu};
-      try{const plan=forwardPacketPlan(index,target,counts);if(plan.some(p=>p.size>PAIR_LIMITS.maxPacketBytes)||plan.reduce((n,p)=>n+p.size+23,0)>PAIR_LIMITS.maxReadBytes)return {target:null,reason:'Dependency packet/read budget or unsupported decode window'};}
+      try{const plan=forwardPacketPlan(index,target,counts);if(plan.some(p=>p.size>PAIR_LIMITS.maxPacketBytes)||plan.reduce((n,p)=>n+p.size+(index.mp4?0:23),0)>PAIR_LIMITS.maxReadBytes)return {target:null,reason:'Dependency packet/read budget or unsupported decode window'};}
       catch(error){if(error instanceof FramePairError&&error.code==='unsupported-source')return {target:null,reason:'Dependency packet/read budget or unsupported decode window'};throw error;}
     }
   return {target,reason:null};
@@ -49,15 +51,13 @@ export function qualityTargetForAu(source:LibraryPairBinding,index:FlvIndex,au:n
 
 /** Cached facts, not a decoder/preflight. Never infer correspondence, closed
  * random access, color completeness or decoded-picture identity from a key flag. */
-export function qualityFrameCandidates(source:LibraryPairBinding,doc:FlvIndexDocument,query:QualityFrameQuery):QualityFramePage {
+export function qualityFrameCandidates(source:LibraryPairBinding,doc:QualityIndexDocument,query:QualityFrameQuery):QualityFramePage {
   qualityFrameQuery(query);
   if(query.buildId&&query.buildId!==source.binding.indexBuildId)throw new FramePairError('identity-mismatch','Quality cache changed during frame selection');
-  if(!doc||!Array.isArray(doc.packets))throw new FramePairError('invalid-request','Invalid quality cache document');
-  if(doc.packets.length>PAIR_LIMITS.maxIndexPackets||JSON.stringify(doc).length>PAIR_LIMITS.maxIndexBytes)
-    throw new FramePairError('budget-exceeded','PSNR selection cache budget exceeded');
-  if(doc.configurations||doc.truncatedAt!==undefined||doc.recoveredGaps)
-    throw new FramePairError('unsupported-source','PSNR selection requires a complete single-configuration unrecovered FLV cache');
-  const index=parseFlvIndex(doc,source.binding.size);
+  if(!doc||(!isMp4QualityDocument(doc)&&!Array.isArray(doc.packets)))throw new FramePairError('invalid-request','Invalid quality cache document');
+  if(qualityIndexPacketCount(doc)>PAIR_LIMITS.maxIndexPackets||JSON.stringify(doc).length>PAIR_LIMITS.maxIndexBytes)throw new FramePairError('budget-exceeded','PSNR selection cache budget exceeded');
+  if(!isMp4QualityDocument(doc)&&(doc.configurations||doc.truncatedAt!==undefined||doc.recoveredGaps))throw new FramePairError('unsupported-source','PSNR selection requires a complete single-configuration unrecovered FLV cache');
+  const index=qualitySourceIndex(doc,source.binding.size);
   if(index.codec!=='h264'&&index.codec!=='hevc')throw new FramePairError('unsupported-source','PSNR selection supports H.264/HEVC only');
   const g=index.codec==='h264'?avcGeometry(index.description,true):hevcGeometry(index.description,true);
   if(!g||('interlaced'in g&&g.interlaced)||(index.codec==='hevc'&&hevcFieldPictures(index.description)))
@@ -77,7 +77,7 @@ export function qualityFrameCandidates(source:LibraryPairBinding,doc:FlvIndexDoc
     geometry:{width:g.width,height:g.height,codedWidth:g.codedWidth,codedHeight:g.codedHeight,sarNum:g.sarNum,sarDen:g.sarDen,sarSpecified:g.sarSpecified===true},inspection,
     eligibility:'cached-au-candidate-execution-verifies-closed-start-and-output-identity',entries,nextAu:au<index.packets.length?au:null,inspected};
   const configurationHex=nativeConfigurationHex(index.description);
-  if(configurationHex)page.presentedInput={protocol:'webcodecs-associated-chunk-v1',configurationHex,
+  if(configurationHex&&!index.mp4)page.presentedInput={protocol:'webcodecs-associated-chunk-v1',configurationHex,
     packets:entries.map(target=>{const au=target.picture.au,p=index.packets[au];return {au,configuration:p.configuration??0,offset:p.offset,size:p.size,pts:p.pts,dts:p.dts};})};
   if(JSON.stringify(page).length>QUALITY_SELECTION_LIMITS.bytes)throw new FramePairError('budget-exceeded','PSNR selection response budget exceeded');
   return page;

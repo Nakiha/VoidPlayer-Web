@@ -36,6 +36,7 @@ export function vmafInput(value:unknown):VmafInput{
 /** C supplies correspondence. This adds sequence eligibility, never alignment. */
 export function vmafSequence(snapshot:VmafPlanSnapshot,indexes:[FlvIndex,FlvIndex],expectedCadenceUs:number):VmafSequence{
  const r=snapshot.value,plan=r.rangePlan;
+ if(!r.sources||[r.sources.reference,r.sources.distorted].some(s=>s.binding.indexIdentity.kind!=='flv'||s.producer.producer!=='server-flv-scan-v1'))fail('Native VMAF remains FLV-only');
  if(!plan||r.executionBlock||r.request.sampling.mode!=='all'||r.rows.length<2||r.rows.length>VMAF_LIMITS.frames||r.rows.some(row=>!row.selected||row.status!=='mapped')||r.sourceIssues.reference||r.sourceIssues.distorted)fail('VMAF needs 2..32 fully mapped all-sample frames without stride or holes');
  const pairs=structuredClone(plan!.input.pairs).sort((a,b)=>a.reference.sourcePtsUs-b.reference.sourcePtsUs);
  if(pairs.length!==r.rows.length)fail('Frozen pairs do not cover every selected AU');
@@ -53,6 +54,7 @@ export function vmafSequence(snapshot:VmafPlanSnapshot,indexes:[FlvIndex,FlvInde
 }
 export type VmafAssociation={schema:'voidplayer-vmaf-sequence-association';version:1;jobId:string;attemptId:string;resultDigest:string;plan:{id:string;attemptId:string;digest:string};sequence:{cadenceUs:number;referenceIntegrity:'not-certified';concealmentDetection:'unavailable';pairs:{reference:{au:number;sourcePtsUs:number;decode?:FramePairRequest['reference']['decode']};distorted:{au:number;sourcePtsUs:number;decode?:FramePairRequest['distorted']['decode']}}[]};index:number;frames:number;score:number;pooled:VmafPool;component:VmafNativeResult['component'];recipe:VmafNativeResult['recipe'];raw:VmafPrepared['raw'];spatial:'full-frame-temporal-score-not-localized'};
 export function validateVmafAssociation(value:unknown,pair:LibraryPairResult):VmafAssociation{
+ if(Object.values(pair.sources).some(s=>s.binding.indexIdentity.kind!=='flv'||s.producer.producer!=='server-flv-scan-v1'))fail('Native VMAF remains FLV-only');
  const v=value as VmafAssociation;object(v,['schema','version','jobId','attemptId','resultDigest','plan','sequence','index','frames','score','pooled','component','recipe','raw','spatial']);
  if(v.schema!=='voidplayer-vmaf-sequence-association'||v.version!==1||!/^vmaf-[a-f0-9-]{36}$/.test(v.jobId)||!/^[a-f0-9-]{36}$/.test(v.attemptId)||!/^[a-f0-9]{64}$/.test(v.resultDigest)||v.spatial!=='full-frame-temporal-score-not-localized'||!Number.isInteger(v.frames)||v.frames<2||v.frames>VMAF_LIMITS.frames||!Number.isInteger(v.index)||v.index<0||v.index>=v.frames||(!Number.isFinite(v.score)||v.score<0||v.score>100))fail('Invalid sequence association identity');
  if(!v.plan||!/^[a-f0-9-]{36}$/.test(v.plan.id)||!/^[a-f0-9-]{36}$/.test(v.plan.attemptId)||!/^[a-f0-9]{64}$/.test(v.plan.digest))fail('Invalid correspondence reference');

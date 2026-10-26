@@ -1,4 +1,5 @@
 import {cambiEvidenceList} from './cambi-evidence.ts';
+import {mp4TicksToUs} from '../media/indexing/mp4-quality-index.ts';
 import {validateVmafAssociation} from '../analysis/quality/vmaf.ts';
 import { validateSsim } from '../analysis/quality/ssim-evidence.ts';
 import type { LibraryPairResult } from '../analysis/quality/library-pair.ts';
@@ -33,7 +34,7 @@ export function qualityEvidenceRef(value: unknown): QualityEvidenceRef {
 /** Structural validation is not authenticity verification. Historical facts are untrusted. */
 export function qualityEvidenceValue(value: unknown): LibraryPairResult {
   const v = value as LibraryPairResult, r = v?.result, m = r?.metric;
-  check(v?.schema === 'voidplayer-library-frame-pair-psnr' && v.version === 1
+  check(v?.schema === 'voidplayer-library-frame-pair-psnr' && v.version === ([r?.provenance?.reference,r?.provenance?.distorted].some(p=>p?.indexIdentity?.kind==='mp4')?2:1)
     && v.execution?.host === 'node-worker' && ['node','bun'].includes(v.execution.runtime)
     && string(v.execution.runtimeVersion) && v.execution.sourceIdentity === 'stat-version-v1'
     && r?.schema === 'voidplayer-frame-pair-psnr' && r.version === 1 && r.pairing === 'caller-specified'
@@ -47,7 +48,7 @@ export function qualityEvidenceValue(value: unknown): LibraryPairResult {
   if(v.annotationContext!==undefined){
     check(v.annotationContext&&Object.keys(v.annotationContext).sort().join(',')==='distorted,reference');
     for(const side of ['reference','distorted']as const){const a=v.annotationContext[side],p=r.provenance?.[side];
-      check(p&&a&&Object.keys(a).sort().join(',')==='basis,codec,firstPtsUs,frameDurationUs,indexedDurationUs,lastModified,name'&&a.basis==='complete-flv-index-derived-v1'&&['h264','hevc'].includes(a.codec)
+      check(p&&a&&Object.keys(a).sort().join(',')==='basis,codec,firstPtsUs,frameDurationUs,indexedDurationUs,lastModified,name'&&a.basis===(p.indexIdentity.kind==='mp4'?'complete-mp4-index-derived-v1':'complete-flv-index-derived-v1')&&['h264','hevc'].includes(a.codec)
         &&string(a.name,2000)&&unsigned(a.lastModified)&&Number.isSafeInteger(a.firstPtsUs)&&Number.isSafeInteger(a.indexedDurationUs)&&a.indexedDurationUs>0
         &&Number.isSafeInteger(a.frameDurationUs)&&a.frameDurationUs>0&&Number.isSafeInteger(p.sourcePtsUs-a.firstPtsUs)&&p.sourcePtsUs>=a.firstPtsUs&&p.sourcePtsUs-a.firstPtsUs<a.indexedDurationUs);
     }
@@ -56,7 +57,7 @@ export function qualityEvidenceValue(value: unknown): LibraryPairResult {
   let packets=0;
   for (const side of ['reference','distorted'] as const) {
     const p = r.provenance[side], d = p.decoded?.description, source = v.sources?.[side];
-    check(p.decoded?.sourcePtsUs === p.sourcePtsUs && p.validation === (p.decode?.mode==='packet-identity-gop-v1'?'cached-closed-gop-packet-identity-v1':p.decode?'cached-contiguous-forward-one-output-per-au-v1':'cached-au-source-tag-isolated-closed-picture-v1'));
+    check(p.decoded?.sourcePtsUs === p.sourcePtsUs && p.validation === (p.indexIdentity.kind==='mp4'?'cached-mp4-closed-gop-packet-identity-v1':p.decode?.mode==='packet-identity-gop-v1'?'cached-closed-gop-packet-identity-v1':p.decode?'cached-contiguous-forward-one-output-per-au-v1':'cached-au-source-tag-isolated-closed-picture-v1'));
     check(unsigned(p.packet?.offset) && Number.isSafeInteger(p.packet.size) && p.packet.size > 0 && Number.isSafeInteger(p.packet.sourceDtsUs));
     if(p.decode){
       const steps=p.dependency?.packets,count=pairPacketCount(p),gop=p.decode.mode==='packet-identity-gop-v1';
@@ -93,6 +94,16 @@ export function qualityEvidenceValue(value: unknown): LibraryPairResult {
       }else check(p.dependency?.outputIdentity===undefined&&p.dependency?.boundary===undefined);
       packets+=count;
     }else{check(p.dependency===undefined);packets++;}
+    if(p.indexIdentity.kind==='mp4'){
+      const c=p.container,s=c?.sample,proof=source?.producer;
+      check(v.version===2&&p.decode?.mode==='packet-identity-gop-v1'&&c?.kind==='mp4'&&Object.keys(c).sort().join(',')==='kind,sample,tableSha256,timescale,trackId'
+        &&Number.isSafeInteger(c.trackId)&&c.trackId>0&&Number.isSafeInteger(c.timescale)&&c.timescale>0&&/^[a-f0-9]{64}$/.test(c.tableSha256)
+        &&s&&Object.keys(s).sort().join(',')==='ctsTicks,description,dtsTicks,dtsUs,durationTicks,durationUs,key,offset,ordinal,ptsUs,size'
+        &&s.ordinal===p.picture.au&&s.description===1&&s.offset===p.packet.offset&&s.size===p.packet.size&&s.ptsUs===p.sourcePtsUs&&s.dtsUs===p.packet.sourceDtsUs
+        &&[s.dtsTicks,s.ctsTicks,s.durationTicks].every(Number.isSafeInteger)&&s.durationTicks>0&&s.dtsTicks>=0&&typeof s.key==='boolean'&&s.key===p.dependency!.packets.find(x=>x.au===p.picture.au)!.key
+        &&mp4TicksToUs(s.dtsTicks,c.timescale)===s.dtsUs&&mp4TicksToUs(s.dtsTicks+s.ctsTicks,c.timescale)===s.ptsUs&&mp4TicksToUs(s.durationTicks,c.timescale)===s.durationUs
+        &&proof?.producer==='server-mp4-scan-v1'&&proof.trackId===c.trackId&&proof.timescale===c.timescale&&proof.tableSha256===c.tableSha256);
+    }else check(p.container===undefined);
     validateDescription(d);
     check(d.format === 'YUV' && d.yuv?.bitDepth === m.bitDepth && d.width <= 16384 && d.height <= 16384);
     const roi = m.roi;
@@ -101,7 +112,7 @@ export function qualityEvidenceValue(value: unknown): LibraryPairResult {
     check(source?.binding?.mediaId === p.mediaId && source.binding.mediaVersion === p.mediaVersion
       && source.binding.indexBuildId === p.indexBuildId && source.binding.size === p.size
       && mediaIndexIdentityKey(source.binding.indexIdentity) === mediaIndexIdentityKey(p.indexIdentity)
-      && source.producer?.producer === 'server-flv-scan-v1' && source.producer.sourceVersion === `${p.mediaId}@${p.mediaVersion}`
+      && source.producer?.producer === (p.indexIdentity.kind==='mp4'?'server-mp4-scan-v1':'server-flv-scan-v1') && source.producer.sourceVersion === `${p.mediaId}@${p.mediaVersion}`
       && source.producer.size === p.size && unsigned(source.producer.epoch) && string(source.producer.packetCommitId,128)
       && /^[a-f0-9]{64}$/.test(source.producer.documentSha256)
       && ['size','dev','ino','mtimeNs','ctimeNs'].every(k=>typeof source.producer.sourceStat?.[k as 'size']==='string'
