@@ -1,3 +1,4 @@
+import {handleVmafRoutes} from './analysis/vmaf/routes.ts';
 import { StaticAssets } from './static-assets.ts';
 import { AnalysisScheduler } from './analysis/bitstream/scheduler.ts';
 import { handleAnalysisRoutes } from './analysis/bitstream/routes.ts';
@@ -94,6 +95,7 @@ export function createMediaServer(options: ServerOptions): Server {
       if (await handleConnectionRoutes(ctx, req, res, url)) return;
       if (await handleStateRoutes(ctx, req, res, url)) return;
       if (await handleDiscoveryRoutes(ctx,req,res,url)) return;
+      if(await handleVmafRoutes(ctx,req,res,url))return;
       if (await handleQualityJobRoutes(ctx,req,res,url)) return;
       if (await handleQualityRangeRoutes(ctx,req,res,url)) return;
   if(await handleCorrespondenceRoutes(ctx,req,res,url))return;

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import type { MediaRoot } from './library-store.ts';
 import { parseTls } from './tls.ts';
+import type {VmafComponentConfig} from '../shared/analysis/quality/vmaf.ts';
 import type { TlsConfig } from './tls.ts';
 
 export interface ServiceConfig {
@@ -11,6 +12,7 @@ export interface ServiceConfig {
   staticDir: string; logsDir: string | null; allowLocalReveal: boolean; indexTtlMs: number; indexWatch: boolean; analysisConcurrency: number;
   /** Legacy configuration, retained for compatibility; all users are trusted. */
   adminUsers: string[];
+  nativeVmaf?:VmafComponentConfig;
   tls?: TlsConfig | null;
   httpPort?: number | null;
   origin?: { file: string; revision: string; rootsFromCli: boolean };
@@ -45,9 +47,10 @@ export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd
   catch (error) { if (configFile || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
   const defaults: ServiceConfig = { dataDir: paths.dataDir ?? path.resolve(cwd, '.run/data'), mediaRoots: mode === 'dev' ? [path.resolve(cwd, 'fixtures/video')] : [], host: '127.0.0.1', port: 5180, devPort: 5178, staticDir: paths.staticDir ?? path.resolve(cwd, 'dist'), logsDir: paths.logsDir ?? path.resolve(cwd, 'logs'), allowLocalReveal: false, indexTtlMs: 30000, indexWatch: true, analysisConcurrency: DEFAULT_ANALYSIS_CONCURRENCY, adminUsers: [] };
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('服务配置必须是 JSON 对象。');
-  for (const key of Object.keys(data)) if (!Object.hasOwn(defaults, key) && !['tls', 'httpPort'].includes(key)) throw new Error(`未知配置项: ${key}`);
+  for (const key of Object.keys(data)) if (!Object.hasOwn(defaults, key) && !['tls', 'httpPort','nativeVmaf'].includes(key)) throw new Error(`未知配置项: ${key}`);
   if (process.env.VOIDPLAYER_ADMIN_USERS !== undefined) overrides.adminUsers = process.env.VOIDPLAYER_ADMIN_USERS.split(',').map(id => id.trim()).filter(Boolean);
   const config = { ...defaults, ...data, ...overrides } as ServiceConfig;
+  if(config.nativeVmaf!==undefined){const c=config.nativeVmaf;if(!c||typeof c!=='object'||Object.keys(c).sort().join(',')!=='directory,manifestSha256'||typeof c.directory!=='string'||!c.directory||!/^[a-f0-9]{64}$/.test(c.manifestSha256))throw Error('nativeVmaf requires trusted directory and manifestSha256');config.nativeVmaf={directory:path.resolve(path.dirname(file),c.directory),manifestSha256:c.manifestSha256};}
   config.tls = parseTls(config.tls, path.dirname(file));
   if (config.httpPort !== undefined && config.httpPort !== null && (!Number.isInteger(config.httpPort) || config.httpPort < 1 || config.httpPort > 65535 || config.httpPort === config.port)) throw new Error('httpPort 必须是与 HTTPS 端口不同的 1–65535 端口，或 null。');
   if (folders.length) config.mediaRoots = folders;

@@ -1,0 +1,15 @@
+{
+  "schema": "voidplayer-native-vmaf-source",
+  "version": 1,
+  "repository": "https://github.com/Netflix/vmaf.git",
+  "revision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+  "tag": "v3.0.0",
+  "platform": "linux-x64",
+  "meson": "1.7.2",
+  "ninja": "1.11.1.4",
+  "options": ["--buildtype=release", "--default-library=static", "-Db_ndebug=true", "-Denable_tests=false", "-Denable_docs=false", "-Denable_asm=false", "-Denable_avx512=false", "-Dbuilt_in_models=false", "-Denable_float=false", "-Denable_cuda=false", "-Denable_nvtx=false"],
+  "models": {
+    "vmaf_v0.6.1": {"file": "vmaf_v0.6.1.json", "sha256": "5950d61fa1f861bd45d8149d80539ed9f3376cfc2495b8f0fa8e9f57cb131ee3"},
+    "vmaf_v0.6.1neg": {"file": "vmaf_v0.6.1neg.json", "sha256": "1fcda193aaa2a3136471b7516b3c5dc344546c05fcde2d58609f8c60a2387392"}
+  }
+}

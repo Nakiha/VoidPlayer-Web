@@ -159,7 +159,7 @@ rechecks its captured view before changing the display.
 
 Existing source/geometry/color/container admission is unchanged. Pixel identity
 remains `referenceIntegrity=not-certified` and `concealmentDetection=unavailable`.
-Correctness checks do not certify performance. VMAF/CAMBI have no executor here;
+Correctness checks do not certify performance. This B range executor does not compute VMAF/CAMBI; the separate optional [native VMAF executor](native-vmaf.md) consumes continuous committed C plans;
 their future sequence contract must specify exact pairs, coverage/holes, fixed
 model/recipe, complete input/output/pre-roll budgets and per-metric progress, with
 no spatial candidate without actual spatial evidence.

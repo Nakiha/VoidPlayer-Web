@@ -1,3 +1,4 @@
+import {qualityVmafShell,installQualityVmaf} from './quality-vmaf.ts';
 import {installQualityCandidate} from '../ui/quality-candidate.ts';
 import { ssimPlan, SSIM_VARIANT } from '../../shared/analysis/quality/ssim.ts';
 import { localizedText, type LocalizedValue } from '../ui/live-localization.ts';
@@ -32,7 +33,7 @@ export function qualityJobsShell(){
     <p data-forward-guarantee class="quality-forward-guarantee" hidden></p>
     <button type="button" data-frame-more hidden>${th(msg('qualityWorkflow.moreFrames','下一页候选帧'))}</button></fieldset>`;
   return `<section id="pane-quality" hidden><header class="admin-heading"><div><h1>${th(msg('qualityWorkflow.title','单帧 PSNR 任务'))}</h1>
-    <p>${th(msg('qualityWorkflow.scope','显式配对媒体库中的关键帧、前向依赖帧或闭合 GOP 内重排/延迟帧，以 8/10 位 YUV420 原始码值测量。每侧最多 32 AU；重排路径明确起止与目标 AU，以解码器返回的包身份核验全部输出和 drain，不按 PTS 猜帧。序列评分和自动对齐仍不支持。'))}</p></div></header>
+    <p>${th(msg('qualityWorkflow.scope','显式配对媒体库中的关键帧、前向依赖帧或闭合 GOP 内重排/延迟帧，以 8/10 位 YUV420 原始码值测量。每侧最多 32 AU；重排路径明确起止与目标 AU，以解码器返回的包身份核验全部输出和 drain，不按 PTS 猜帧。此表单为单帧测量；下方另有区间及可选原生 VMAF 连续序列入口，均不自动对齐。'))}</p></div></header>
     <p id="quality-owner"></p><p id="quality-availability" role="status"></p><p>${th(msg('qualityWorkflow.lifetime','任务由服务持有。关闭此页或切换分类只停止观察；仅“取消任务”会请求终止。网络故障不表示任务失败。'))}</p>
     <label>${th(msg('qualityWorkflow.client','本页客户端 ID'))}<input id="quality-client" maxlength="80" spellcheck="false"><button id="quality-client-apply" type="button">${th(msg('qualityWorkflow.useClient','使用此客户端'))}</button></label>
     <form id="quality-form" class="admin-panel"><div class="quality-sources">${sides.map(source).join('')}</div>
@@ -47,6 +48,7 @@ export function qualityJobsShell(){
     <div class="admin-panel"><div class="admin-section-heading"><h2>${th(msg('qualityWorkflow.history','当前用户的服务端任务与历史'))}</h2><button id="quality-refresh">${th(msg('qualityWorkflow.refresh','刷新任务'))}</button></div><p id="quality-observer-status" role="status"></p><p id="quality-resources"></p><details><summary>${th(msg('qualityWorkflow.budgets','服务端资源计数与预算'))}</summary><pre id="quality-resource-json"></pre></details>
     <div class="quality-jobs-workspace"><div id="quality-job-list"></div><div id="quality-job-detail" hidden><h3 id="quality-job-title"></h3><p id="quality-job-state"></p><p id="quality-job-reason"></p><p id="quality-job-input"></p><button id="quality-cancel">${th(msg('qualityWorkflow.cancel','取消任务'))}</button><details><summary>${th(msg('qualityWorkflow.requestFacts','请求、attempt 与服务端事实'))}</summary><pre id="quality-job-json"></pre></details><div id="quality-job-result"></div></div></div></div>
     ${qualityCorrespondenceShell()}
+    ${qualityVmafShell()}
     ${qualityRangesShell()}
     <section id="quality-attachment" class="admin-panel" hidden><h2>${th(msg('qualityWorkflow.attach','将此结果显式共享到已有标注'))}</h2><p>${th(msg('quality.shareNotice','此操作会向所有可查看该标注的人共享两侧片源身份、测量 ROI 和不可变结果事实。'))}</p>
     <div class="admin-actions"><label>${th(msg('admin.reviewSpace','评审空间'))}<select id="quality-space"></select></label><label>${th(msg('quality.side','标注对应的片源侧'))}<select id="quality-attach-side"><option value="reference">reference</option><option value="distorted">distorted</option></select></label></div>
@@ -54,7 +56,7 @@ export function qualityJobsShell(){
     <div id="quality-mark-list"></div><p id="quality-attach-target"></p><button id="quality-attach" disabled>${th(msg('quality.publish','共享到标注'))}</button><p id="quality-attach-status" role="status"></p><div id="quality-shared-links"></div></section></section>`;
 }
 export function installQualityJobs(signal:AbortSignal){
-  const ranges=installQualityRanges(signal),correspondence=installQualityCorrespondence(signal);
+  const ranges=installQualityRanges(signal),correspondence=installQualityCorrespondence(signal),vmaf=installQualityVmaf(signal);
   const $=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(`quality-${id}`)as T;
   const api=new QualityClient();let observer:QualityJobObserver|null=null,observation:QualityObservation|null=null;
   let active=false,enabled=false,scope=0,controller=new AbortController(),lastActor='',lastResult='',attachmentGeneration=0,attachmentBusy=false;
@@ -241,5 +243,5 @@ export function installQualityJobs(signal:AbortSignal){
   onLanguageChange(()=>{if(active&&observation&&currentActor()?.id===lastActor)render(observation);},signal);
   const timer=setInterval(()=>{if(active&&enabled&&!document.hidden&&currentActor()?.id===lastActor)void observer?.poll();},1000);
   signal.addEventListener('abort',()=>{clearInterval(timer);observer?.dispose();controller.abort();},{once:true});
-  return {activate(value:boolean){ranges.activate(value);correspondence.activate(value);if(active===value)return;active=value;if(value)void start();else{scope++;observer?.dispose();observer=null;controller.abort();}}};
+  return {activate(value:boolean){ranges.activate(value);correspondence.activate(value);vmaf.activate(value);if(active===value)return;active=value;if(value)void start();else{scope++;observer?.dispose();observer=null;controller.abort();}}};
 }

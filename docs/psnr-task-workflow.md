@@ -41,7 +41,7 @@
 
 `check-quality-workflow-browser.mjs` 的 Chromium/WebKit × H2648/HEVC10 矩阵登记在完整 `ci-cache`，要求真实 core，不能放入无 core 的 identity 套件。由 UI 点击首次提交，独立 HTTP Agent 核对同一 job/attempt/结果和原平面 SSE；测试既有标注显式挂接、丢响应命令重放、原帧对/ROI、播放 A 同时测 B/C 隔离。取消/关窗用测试专用 Worker 阶段闸门暂停**真实服务任务**，没有替换 DB、解码或计分逻辑；取消终态必须在实际线程退出后才能出现。模拟迟到 HTTP 回复只用于观察作用域测试，不冒充真实计算验收。
 
-可显式选择 [SSIM 伴随度量](source-plane-ssim.md)，结果和附件共用后台事实。仍不支持普通依赖帧、序列、自动配对/标注、VMAF、热图、自动重试或分布式任务。#112/#114/#115/#121 的更广验收仍未全部完成，性能既有负结果也未因此改变。
+可显式选择 [SSIM 伴随度量](source-plane-ssim.md)，结果和附件共用后台事实。单帧路径已另支持显式前向依赖帧和闭合 GOP 身份核验；有界区间及可选原生连续序列 VMAF 是独立入口，见 [区间任务](bounded-quality-ranges.md) 与 [VMAF](native-vmaf.md)。不自动配对、作人工判断、自动重试或提供分布式任务。#112/#114/#115/#121 的更广验收仍未全部完成，性能既有负结果也未因此改变。
 
 Optional bounded source-pixel block measurement and immutable spatial evidence: [PSNR block evidence](psnr-spatial-evidence.md). Scalar requests and existing source/geometry admission remain unchanged.
 

@@ -1,3 +1,4 @@
+import {VMAF_CAPABILITY} from '../analysis/quality/vmaf.ts';
 import {CORRESPONDENCE_LIMITS} from '../analysis/quality/correspondence.ts';
 import { SSIM_VARIANT, SSIM_LIMITS } from '../analysis/quality/ssim.ts';
 import { TECHNICAL_FILTER_PATH, TECHNICAL_FILTER_LIMITS, TECHNICAL_FILTER_SCHEMA } from '../media/indexing/technical-filter.ts';
@@ -25,7 +26,7 @@ export const AGENT_TASKS = {
   quality: '/agent/quality.md', liveSession: '/agent/live-session.md', errors: '/agent/errors.md',
 } as const;
 
-export function agentManifest(input: { capabilities: ServiceCapabilities; libraryReady: boolean; frontendAvailable?: boolean; qualityJobsEnabled?: boolean; actor: { id: string; name: string } | null }) {
+export function agentManifest(input: { capabilities: ServiceCapabilities; libraryReady: boolean; frontendAvailable?: boolean; qualityJobsEnabled?: boolean; nativeVmaf?: {enabled:boolean;reason:unknown}|null; actor: { id: string; name: string } | null }) {
   const { capabilities: c, libraryReady, actor } = input;
   const capabilities: AgentCapability[] = [
     { id: 'library.browse', implemented: true, enabled: true, readiness: libraryReady ? 'ready' : 'index-warming', requiresBrowser: false, guide: AGENT_TASKS.library },
@@ -38,6 +39,7 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
     { id: 'workspaces.read', implemented: true, enabled: c.workspaces, readiness: c.workspaces ? 'ready' : 'unavailable', requiresBrowser: false, guide: AGENT_TASKS.workspaces },
     { id: 'annotations.write', implemented: true, enabled: c.annotations, readiness: !c.annotations ? 'unavailable' : actor ? 'ready' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.annotations },
     { id: 'annotations.events', implemented: true, enabled: c.annotations, readiness: c.annotations ? 'ready' : 'unavailable', requiresBrowser: false, guide: AGENT_TASKS.annotations },
+    {id:'quality.vmaf',implemented:true,enabled:!!input.nativeVmaf?.enabled,readiness:!input.nativeVmaf?.enabled?'unavailable':actor?'per-source':'needs-identity',requiresBrowser:false,guide:AGENT_TASKS.quality},
     {id:'quality.correspondence',implemented:true,enabled:!!input.qualityJobsEnabled,readiness:!input.qualityJobsEnabled?'unavailable':actor?'per-source':'needs-identity',requiresBrowser:false,guide:AGENT_TASKS.quality},
     { id:'quality.ranges',implemented:true,enabled:!!input.qualityJobsEnabled,readiness:!input.qualityJobsEnabled?'unavailable':actor?'per-source':'needs-identity',requiresBrowser:false,guide:AGENT_TASKS.quality },
     { id: 'quality.jobs', implemented: true, enabled: !!input.qualityJobsEnabled, readiness: !input.qualityJobsEnabled ? 'unavailable' : actor ? 'per-source' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.quality },
@@ -76,13 +78,14 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
         codecs: ['h264', 'hevc'], bitDepths: [8, 10], chroma: 'yuv420', closedKeyAuOnly: false, gop:{mode:'packet-identity-gop-v1',packetIdentityAbi:1,explicitStartEndAu:true,packetsPerSide:32,maxPackets:64,maxOutputFrames:64,reordering:true,delayedOutput:true,outputAssociation:'opaque-input-token-not-pts',singleThread:true,reportedDecodeErrors:'reject',guarantee:{...FORWARD_OUTPUT_GUARANTEE}}, forward:{mode:'forward-one-output-per-au-v1',explicitStartAu:true,packetsPerSide:32,maxPackets:64,maxOutputFrames:64,zeroCts:true,oneImmediateOutputPerAu:true,reordering:false,guarantee:{...FORWARD_OUTPUT_GUARANTEE}},
         explicitColorAndChromaLocation: true, explicitPairingAndSourcePts: true },
       resultSchema: 'voidplayer-quality-job-result', resultVersion: 1 },
+    qualityVmaf:{...VMAF_CAPABILITY,deployment:input.nativeVmaf??{enabled:false,reason:'component-unavailable'},capability:'/api/quality/vmaf/capability',preflight:'/api/quality/vmaf/preflight',submit:'/api/quality/vmaf/jobs',history:'/api/quality/vmaf/jobs',detail:'/api/quality/vmaf/jobs/{id}',result:'/api/quality/vmaf/jobs/{id}/result',frames:'/api/quality/vmaf/jobs/{id}/frames',cancel:'/api/quality/vmaf/jobs/{id}/cancel',candidates:'/api/quality/vmaf/jobs/{id}/candidates',writeAction:'quality-job',capturedActorHeader:'X-VoidPlayer-Actor',idempotencyHeader:'Idempotency-Key',observerDisconnectCancels:false,automaticRetry:false,buildsIndexes:false},
     qualityCorrespondence:{schema:'voidplayer-quality-correspondence-plan',version:1,relations:'/api/quality/reference-relations',plans:'/api/quality/correspondence-plans',detail:'/api/quality/correspondence-plans/{id}',rows:'/api/quality/correspondence-plans/{id}/rows',rangeInput:'/api/quality/correspondence-plans/{id}/range-input',execute:'/api/quality/correspondence-plans/{id}/execute',cancel:'/api/quality/correspondence-plans/{id}/cancel',limits:CORRESPONDENCE_LIMITS,writeAction:'quality-job',idempotencyHeader:'Idempotency-Key',clock:'distorted-source-pts-us=reference-source-pts-us+offset-us',segments:'half-open-nonoverlapping-both-domains',assessment:'caller-declared-not-content-certified',matching:'exact-unique-pts-only',rawAuFacts:true,buildsIndexes:false,automaticRetry:false,automaticPublication:false,executeBody:['digest'],execution:'existing-durable-range-stable-client-key-receipt-first'},
     qualityRanges:{
       schema:'voidplayer-quality-range',version:1,plan:'/api/quality/ranges/plan',submit:'/api/quality/ranges',history:'/api/quality/ranges',
       detail:'/api/quality/ranges/{id}',results:'/api/quality/ranges/{id}/results',cancel:'/api/quality/ranges/{id}/cancel',candidates:'/api/quality/ranges/{id}/candidates',
       limits:QUALITY_RANGE_LIMITS,writeAction:'quality-job',idempotencyHeader:'Idempotency-Key',correspondence:['explicit-au-table','constant-source-pts-offset'],sampling:['all','stride'],
       coverage:'inclusive-reference-decode-order-au-interval',buildsIndexes:false,observerDisconnectCancels:false,automaticRetry:false,assessment:'not-subjectively-assessed',
-      futureSequenceMetrics:{implemented:false,metrics:['vmaf','cambi'],requiredContract:['exact-pair-table','coverage-and-holes','fixed-executor-model-recipe','all-input-output-and-preroll-budgets','per-metric-progress','no-spatial-candidate-without-spatial-evidence']}
+      futureSequenceMetrics:{implemented:false,metrics:['cambi'],requiredContract:['exact-pair-table','coverage-and-holes','fixed-executor-model-recipe','all-input-output-and-preroll-budgets','per-metric-progress','no-spatial-candidate-without-spatial-evidence']}
     },
     writes: { identity: '/api/identity', identityIsAuthentication: false, originRequired: true,
       actionHeader: 'X-VoidPlayer-Action', cookieRequired: true, completion: 'server-commit', guiAcknowledgementRequired: false },
