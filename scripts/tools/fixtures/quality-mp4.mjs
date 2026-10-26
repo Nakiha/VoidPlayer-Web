@@ -1,0 +1,6 @@
+// Explicit synthetic fixture generation. Tests never regenerate expected bytes.
+import {mkdtemp,writeFile,rm} from 'node:fs/promises';import {tmpdir} from 'node:os';import {join} from 'node:path';import {createHash} from 'node:crypto';import {execFileSync} from 'node:child_process';
+import {mp4QualityFixture} from '../../../test/helpers/mp4-quality-fixture.ts';
+const dir=await mkdtemp(join(tmpdir(),'vp-compiled-mp4-')),samples=[],sha=b=>createHash('sha256').update(b).digest('hex');
+try{for(const [codec,depth]of [['h264',8],['hevc',8],['hevc',10]]){const f=await mp4QualityFixture(dir,codec,depth);samples.push({codec,depth,width:64,height:64,frames:8,selectedAus:[0,1],displayAuOrder:f.packets.map((p,i)=>({pts:p.pts,i})).sort((a,b)=>a.pts-b.pts).map(p=>p.i),packets:f.packets,mp4:f.bytes.toString('base64'),mp4Sha256:sha(f.bytes),native:f.native.toString('base64'),nativeSha256:sha(f.native)});}
+await writeFile(new URL('../../../test/helpers/quality-mp4-samples.json',import.meta.url),JSON.stringify({schema:'voidplayer-mp4-quality-native-fixtures',version:1,generator:'node scripts/tools/fixtures/quality-mp4.mjs',ffmpeg:execFileSync('ffmpeg',['-version'],{encoding:'utf8'}).split('\n')[0],ffprobe:execFileSync('ffprobe',['-version'],{encoding:'utf8'}).split('\n')[0],samples},null,2)+'\n');}finally{await rm(dir,{recursive:true,force:true});}

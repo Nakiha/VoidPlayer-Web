@@ -17,14 +17,14 @@ const runner=new LibraryPairRunner(library,path.resolve('public/vendor/voidplaye
  if(mode==='normal')worker=new Worker(new URL('../../server/analysis/quality/worker.ts',import.meta.url),{workerData:data});
  else{
   const state=new Int32Array(new SharedArrayBuffer(20));
-  worker=new Worker(new URL('./quality-phase-worker.ts',import.meta.url),{workerData:{...data,hangPhase:'resolve',phaseState:state.buffer}});
+  worker=new Worker(new URL('./quality-phase-worker.ts',import.meta.url),{workerData:{...data,hangPhase:'resolve',hangOccurrence:mode==='mp4-build'?2:1,phaseState:state.buffer}});
   states.push({id,state,announced:false,worker});
   if(mode==='stop-fails')worker.terminate=async()=>{throw null;};
  }
  console.log(JSON.stringify({event:'worker-start',id,live}));
  worker.once('exit',()=>{live--;console.log(JSON.stringify({event:'worker-exit',id,live}));});return worker;
 });
-Object.defineProperty(library,'quality',{value:runner});library.qualityJobs;library.qualityRanges;library.qualityCorrespondence;
+Object.defineProperty(library,'quality',{value:runner});library.qualityJobs;library.qualityRanges;library.qualityCorrespondence;library.discovery;
 await library.refresh();const server=createMediaServer({library,roots:library.roots,onLog(){}});
 await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
 console.log(JSON.stringify({event:'ready',port:(server.address()as {port:number}).port}));

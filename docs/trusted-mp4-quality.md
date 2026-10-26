@@ -29,20 +29,50 @@ Reference integrity is not-certified and concealment detection is unavailable.
 Performance has not passed. Native VMAF and future CAMBI remain explicitly
 FLV-only; widening the PSNR source union must not widen those executors.
 
-## Implementation checkpoint
+## Implementation and review checkpoint
 
-The strict sample-table reader, exact-clock rejection and server-only producer
-commit are implemented, with a dedicated MP4 cache identity and document/table
-seals in the existing transaction. Generic packet adaptation preserves the old
-FLV entry wrappers; MP4 reads metadata and actual sample payloads, never FLV tags.
-Version 2 library results retain MP4 raw sample clock witnesses; version 1 FLV
-requests, results and receipts keep their old fields. Read-only inspection has
-been connected to the generic adapter. Native VMAF remains explicitly FLV-only.
+The server parser commits MP4 documents and server producer evidence together in
+the existing index transaction. The `mp4/video:0/1/mp4-quality-tables-v1` namespace
+is read-only over frame-index HTTP: neither upload nor `build=1` can grant trust.
+Explicit A preparation owns all IO and the existing physical execution permit.
+C facts retain track/timescale/sample ordinal and raw DTS/CTS/duration ticks;
+B consumes the resulting explicit pair table with its existing budgets/receipts.
+Version 2 library results carry MP4 sample witnesses and the MP4-derived annotation
+clock basis. FLV-only results remain version 1 with unchanged fingerprint fields.
 
-Real H.2648, HEVC8 and HEVC10 sample identity tests match ffprobe and reject
-malformed offsets, external references, false keys, truncation and inexact clocks.
-The first HTTP matrix passes explicit discovery/preparation, frozen C plan,
-B range, native-plane ROI SSE, independent FFmpeg SSIM and shared candidates.
-Existing FLV unit/range HTTP regressions pass. GUI/viewer acceptance, mixed
-MP4/FLV tests, full tamper/lifecycle matrices and compiled-package coverage are
-still in progress. This checkpoint is not a complete MP4 feature candidate.
+A single exact identity edit is supported when its media start is zero, rate is
+one and its movie duration equals the complete media duration as an exact rational.
+Time-remapping and empty edits remain unsupported. All tracks must reference this
+file; optional audio is not decoded or scored. Video chunks must have increasing
+physical byte ranges. This first matrix requires explicit BT.709 nclx and SPS SAR.
+
+Reproducible formal entries:
+
+- `node --test test/media/quality-mp4-index.test.ts`: ffprobe raw table comparison
+  for H2648/HEVC8/HEVC10; fragmentation, multi-video, encryption, configuration
+  mapping, fake sync declarations, invalid offsets, duplicate PTS, fractional
+  microseconds, truncation, identity/remapping edits and external audio references.
+- `node --test test/media/quality-mp4-http.test.ts`: explicit A preparation → C
+  mapping → B range → shared candidate; MP4/MP4 and both MP4/FLV directions;
+  native-plane ROI and each grid cell SSE, independent FFmpeg uniform SSIM;
+  exact metadata/payload byte charges, packet/output/read limits; server-only
+  cache/producer seals, same-size replacement, actor fencing, import downgrade,
+  committed-annotation lost response and receipt replay after restart/private
+  result reclamation. Native VMAF attachments remain FLV-only.
+- `node --test test/media/quality-mp4-lifecycle.test.ts`: actual descriptor close
+  before delayed physical Worker termination releases admission; cancel/deadline/
+  service close; read/index/packet budgets; dropped HTTP response, SIGKILL and
+  interrupted receipt replay without automatic rebuild.
+- `node scripts/check-mp4-quality-browser.mjs {chromium|webkit} {h264|hevc} {8|10}`:
+  h264/8 and hevc/8,10 on both engines, explicit discovery/preparation, GUI ROI,
+  C/B task, shared candidate, read-only original native planes/grid, independent
+  playback of A. Outputs are local evidence JSON and screenshots.
+- `node scripts/check-quality-release.mjs <package.tar.gz>`: the existing compiled
+  acceptance now includes committed MP4/native fixtures for the same three codec
+  combinations, with no decoder executable available to the packaged service.
+
+The source index, HTTP, lifecycle and six browser entries have passed locally.
+The compiled acceptance additions and full regression/build/PR checks remain in
+progress at this checkpoint. No PR or completion claim is implied by a WIP commit.
+No negative-source-PTS or VFR E2E certification is claimed. Broader MP4/container/geometry support
+and performance remain unfinished.

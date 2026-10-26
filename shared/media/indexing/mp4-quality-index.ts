@@ -38,8 +38,8 @@ function boxes(bytes:Uint8Array,start:number,end:number):Box[]{
 function one(list:Box[],type:string):Box{const matches=list.filter(b=>b.type===type);if(matches.length!==1)fail(`MP4 requires exactly one ${type}`);return matches[0];}
 function payload(bytes:Uint8Array,box:Box,min=0){const b=bytes.subarray(box.data,box.end);if(b.length<min)fail(`Truncated MP4 ${box.type}`);return b;}
 function full(bytes:Uint8Array,box:Box,versions=[0],min=8){const b=payload(bytes,box,min);if(!versions.includes(b[0])||b[1]||b[2]||b[3])fail(`Unsupported MP4 ${box.type} version/flags`);return b;}
-function rows(bytes:Uint8Array,box:Box,stride:number){const b=full(bytes,box,[0,1]);const count=u32(b,4);if(count>MP4_QUALITY_LIMITS.samples)budget('MP4 table entries exceed budget');if(b.length!==8+count*stride)fail(`Invalid MP4 ${box.type} table length`);return {b,count};}
-function runs(bytes:Uint8Array,box:Box,count:number,signed=false){const {b,count:n}=rows(bytes,box,8);const result:number[]=[];for(let i=0;i<n;i++){const length=u32(b,8+i*8),value=signed&&b[0]===1?view(b).getInt32(12+i*8):u32(b,12+i*8);if(!length||result.length+length>count)fail(`Invalid MP4 ${box.type} run`);for(let k=0;k<length;k++)result.push(value);}if(result.length!==count)fail(`Incomplete MP4 ${box.type}`);return result;}
+function rows(bytes:Uint8Array,box:Box,stride:number,versions=[0]){const b=full(bytes,box,versions);const count=u32(b,4);if(count>MP4_QUALITY_LIMITS.samples)budget('MP4 table entries exceed budget');if(b.length!==8+count*stride)fail(`Invalid MP4 ${box.type} table length`);return {b,count};}
+function runs(bytes:Uint8Array,box:Box,count:number,signed=false){const {b,count:n}=rows(bytes,box,8,signed?[0,1]:[0]);const result:number[]=[];for(let i=0;i<n;i++){const length=u32(b,8+i*8),value=signed&&b[0]===1?view(b).getInt32(12+i*8):u32(b,12+i*8);if(!length||result.length+length>count)fail(`Invalid MP4 ${box.type} run`);for(let k=0;k<length;k++)result.push(value);}if(result.length!==count)fail(`Incomplete MP4 ${box.type}`);return result;}
 function configurationSets(codec:'h264'|'hevc',bytes:Uint8Array){
   const result:Uint8Array[]=[];let at=codec==='h264'?6:23;
   const add=()=>{if(at+2>bytes.length)fail('Truncated configuration');const n=bytes[at]*256+bytes[at+1];at+=2;if(!n||at+n>bytes.length)fail('Invalid configuration NAL');result.push(bytes.subarray(at,at+n));at+=n;};
@@ -57,6 +57,35 @@ export function verifyMp4QualityPacket(doc:Pick<Mp4QualityDocument,'codec'|'desc
     if(parameter&&!sets.some(s=>s.length===nal.length&&s.every((v,i)=>v===nal[i])))fail('MP4 sample changes codec configuration');
     if(doc.codec==='hevc'&&[16,17,18,21,22,23].includes(type))fail('MP4 open/unsupported HEVC random access is not admitted');
   }
+}
+/** Every track must refer to this file, including unscored audio. */
+function selfContainedTrack(bytes:Uint8Array,media:Box[],video=true){
+  const minf=one(media,'minf'),info=boxes(bytes,minf.data,minf.end),dinf=one(info,'dinf'),dref=one(boxes(bytes,dinf.data,dinf.end),'dref'),refs=full(bytes,dref);
+  const references=boxes(bytes,dref.data+8,dref.end);
+  if(u32(refs,4)!==1||references.length!==1||references[0].type!=='url ')fail('MP4 external data references are unsupported');
+  const url=payload(bytes,references[0],4);
+  if(url.length!==4||url[0]||url[1]||url[2]||url[3]!==1)fail('MP4 samples must be self-contained');
+  const stbl=one(info,'stbl'),tables=boxes(bytes,stbl.data,stbl.end);
+  if(tables.some(b=>['senc','saiz','saio',...(video?['sgpd','sbgp']:[])].includes(b.type)))fail('MP4 encrypted/grouped samples are unsupported');
+  const stsd=one(tables,'stsd'),sd=full(bytes,stsd),entries=boxes(bytes,stsd.data+8,stsd.end);
+  if(u32(sd,4)!==entries.length||entries.some(e=>['encv','enca','enct','encs'].includes(e.type)))fail('MP4 protected sample descriptions are unsupported');
+  return {tables,stsd,sd,entries};
+}
+/** Only a single identity edit is supported. Compare rational durations directly,
+ * preserving the original sample clock and introducing no rounded movie offset. */
+function identityEdit(bytes:Uint8Array,track:Box[],media:Box[],movieTimescale:number){
+  const edits=track.filter(b=>b.type==='edts');if(!edits.length)return;
+  if(edits.length!==1)fail('Duplicate MP4 edit list');
+  const editBoxes=boxes(bytes,edits[0].data,edits[0].end),elst=one(editBoxes,'elst'),b=full(bytes,elst,[0,1]);
+  const stride=b[0]===1?20:12;if(editBoxes.length!==1||u32(b,4)!==1||b.length!==8+stride)fail('MP4 edit remapping is unsupported');
+  const segment=b[0]===1?view(b).getBigUint64(8):BigInt(u32(b,8)),mediaTime=b[0]===1?view(b).getBigInt64(16):BigInt(view(b).getInt32(12)),rateAt=b[0]===1?24:16;
+  const mdhd=full(bytes,one(media,'mdhd'),[0,1],24),clockAt=mdhd[0]===1?20:12;
+  if(mdhd.length<clockAt+(mdhd[0]===1?12:8))fail('Truncated MP4 edit clock');
+  const timescale=u32(mdhd,clockAt),duration=mdhd[0]===1?view(mdhd).getBigUint64(clockAt+4):BigInt(u32(mdhd,clockAt+4));
+  const tkhd=payload(bytes,one(track,'tkhd'),84),durationAt=tkhd[0]===1?28:20;
+  if(tkhd[0]!==0&&tkhd[0]!==1||tkhd.length<durationAt+(tkhd[0]===1?8:4))fail('Invalid MP4 edit track header');
+  const trackDuration=tkhd[0]===1?view(tkhd).getBigUint64(durationAt):BigInt(u32(tkhd,durationAt));
+  if(!timescale||!movieTimescale||mediaTime!==0n||segment<=0n||segment!==trackDuration||segment*BigInt(timescale)!==duration*BigInt(movieTimescale)||view(b).getInt16(rateAt)!==1||view(b).getInt16(rateAt+2)!==0)fail('MP4 edit remapping is unsupported');
 }
 /** Validate a persisted document without granting producer trust. The host owns
  * its commit/digest seal; execution also re-reads the authoritative source tables. */
@@ -79,7 +108,7 @@ export function parseMp4QualityDocument(value:unknown,size:number):Mp4QualityDoc
       ||s.dtsUs!==mp4TicksToUs(s.dtsTicks,d.timescale)||s.ptsUs!==mp4TicksToUs(s.dtsTicks+s.ctsTicks,d.timescale)||s.durationUs!==mp4TicksToUs(s.durationTicks,d.timescale)||pts.has(s.ptsUs))fail('Invalid MP4 sample identity/clock');
     expectedDts+=s.durationTicks;if(!safe(expectedDts))fail('MP4 sample clock overflow');pts.add(s.ptsUs);
   }
-  const sorted=[...d.samples].sort((a,b)=>a.offset-b.offset);if(sorted.some((s,i)=>i>0&&s.offset<sorted[i-1].offset+sorted[i-1].size)||!d.samples[0].key||expectedDts!==d.durationTicks)fail('Incomplete MP4 sample table');
+  const sorted=[...d.samples].sort((a,b)=>a.offset-b.offset);if(sorted.some((s,i)=>i>0&&s.offset<sorted[i-1].offset+sorted[i-1].size)||d.samples.some((s,i)=>i>0&&s.offset<d.samples[i-1].offset+d.samples[i-1].size)||!d.samples[0].key||expectedDts!==d.durationTicks)fail('Incomplete MP4 sample table');
   configurationSets(d.codec,new Uint8Array(d.description));return d;
 }
 /** Dedicated strict authority for quality. No playback recovery, edit/POC repair,
@@ -92,17 +121,13 @@ export async function readMp4QualityIndex(reader:{size:number;read(offset:number
   one(root,'ftyp');if(root.some(b=>['moof','styp','sidx','mfra'].includes(b.type)))fail('Fragmented MP4 is unsupported for quality');const moov=one(root,'moov'),mdat=root.filter(b=>b.type==='mdat').map(b=>({start:b.data,end:b.end}));if(!mdat.length)fail('MP4 has no media data');if(moov.end-moov.start>limit.metadataBytes)budget('MP4 metadata exceeds budget');
   const bytes=await read(moov.start,moov.end-moov.start),children=boxes(bytes,moov.data-moov.start,bytes.length);if(children.some(b=>b.type==='mvex'))fail('Fragmented MP4 defaults are unsupported');
   const tracks=children.filter(b=>b.type==='trak').map(trak=>{const track=boxes(bytes,trak.data,trak.end),mdia=one(track,'mdia'),media=boxes(bytes,mdia.data,mdia.end),handler=payload(bytes,one(media,'hdlr'),12);return {track,media,kind:text(handler,8)};});
+  const mvhd=full(bytes,one(children,'mvhd'),[0,1],24),movieClockAt=mvhd[0]===1?20:12;if(mvhd.length<movieClockAt+4)fail('Truncated MP4 movie clock');const movieTimescale=u32(mvhd,movieClockAt);if(!movieTimescale)fail('Invalid MP4 movie clock');
+  for(const t of tracks){selfContainedTrack(bytes,t.media,t.kind==='vide');identityEdit(bytes,t.track,t.media,movieTimescale);}
   const videos=tracks.filter(t=>t.kind==='vide');if(videos.length!==1)fail('Quality requires one explicit MP4 video track');const {track,media}=videos[0];
   const tkhd=payload(bytes,one(track,'tkhd'),84),v=tkhd[0];if(v!==0&&v!==1)fail('Unsupported MP4 track header');const idAt=v===1?20:12,matrixAt=v===1?52:40,widthAt=v===1?88:76;if(tkhd.length<widthAt+8)fail('Truncated MP4 track geometry');const trackId=u32(tkhd,idAt);if(!trackId)fail('Invalid MP4 track ID');
   const identity=[65536,0,0,0,65536,0,0,0,1073741824];if(identity.some((n,i)=>u32(tkhd,matrixAt+i*4)!==n))fail('MP4 rotation/transform is unsupported');
   const mdhd=full(bytes,one(media,'mdhd'),[0,1],24),clockAt=mdhd[0]===1?20:12;if(mdhd.length<clockAt+(mdhd[0]===1?12:8))fail('Truncated MP4 clock');const timescale=u32(mdhd,clockAt),durationTicks=mdhd[0]===1?Number(view(mdhd).getBigUint64(clockAt+4)):u32(mdhd,clockAt+4);if(!timescale||!safe(durationTicks)||durationTicks<1)fail('Invalid MP4 media clock');
-  // This first matrix has no edit-list time remapping. Even an apparent no-op
-  // edit must be declared unsupported until its movie/media-duration witness exists.
-  if(track.some(b=>b.type==='edts'))fail('MP4 edit lists are unsupported for this quality matrix');
-  const minf=one(media,'minf'),info=boxes(bytes,minf.data,minf.end),dinf=one(info,'dinf'),dref=one(boxes(bytes,dinf.data,dinf.end),'dref'),refs=full(bytes,dref);
-  const references=boxes(bytes,dref.data+8,dref.end);if(u32(refs,4)!==1||references.length!==1||references[0].type!=='url ')fail('MP4 external data references are unsupported');const url=payload(bytes,references[0],4);if(url.length!==4||url[0]||url[1]||url[2]||url[3]!==1)fail('MP4 samples must be self-contained');
-  const stbl=one(info,'stbl'),tables=boxes(bytes,stbl.data,stbl.end);if(tables.some(b=>['senc','saiz','saio','sgpd','sbgp'].includes(b.type)))fail('MP4 encrypted/grouped samples are unsupported');
-  const stsd=one(tables,'stsd'),sd=full(bytes,stsd),entries=boxes(bytes,stsd.data+8,stsd.end);if(u32(sd,4)!==1||entries.length!==1)fail('MP4 requires a single sample description');const entry=entries[0];if(entry.type!=='avc1'&&entry.type!=='hvc1')fail('MP4 quality requires avc1/hvc1');const visual=payload(bytes,entry,78),vv=view(visual),width=vv.getUint16(24),height=vv.getUint16(26);if(vv.getUint16(6)!==1||!width||!height||u32(tkhd,widthAt)!==width*65536||u32(tkhd,widthAt+4)!==height*65536)fail('MP4 display/sample dimensions or data reference differ');
+  const {tables,stsd,sd,entries}=selfContainedTrack(bytes,media);if(u32(sd,4)!==1||entries.length!==1)fail('MP4 requires a single sample description');const entry=entries[0];if(entry.type!=='avc1'&&entry.type!=='hvc1')fail('MP4 quality requires avc1/hvc1');const visual=payload(bytes,entry,78),vv=view(visual),width=vv.getUint16(24),height=vv.getUint16(26);if(vv.getUint16(6)!==1||!width||!height||u32(tkhd,widthAt)!==width*65536||u32(tkhd,widthAt+4)!==height*65536)fail('MP4 display/sample dimensions or data reference differ');
   const extensions=boxes(bytes,entry.data+78,entry.end);if(extensions.some(b=>['sinf','clap'].includes(b.type)))fail('MP4 encryption/clean aperture is unsupported');const pasps=extensions.filter(b=>b.type==='pasp');if(pasps.length>1)fail('Duplicate MP4 pixel aspect ratio');if(pasps.length){const p=payload(bytes,pasps[0],8);if(p.length!==8||!u32(p,0)||u32(p,0)!==u32(p,4))fail('MP4 requires exact square sample aspect ratio');}
   const colr=payload(bytes,one(extensions,'colr'),11);if(colr.length!==11||text(colr,0)!=='nclx'||view(colr).getUint16(4)!==1||view(colr).getUint16(6)!==1||view(colr).getUint16(8)!==1||(colr[10]&127))fail('MP4 quality requires explicit BT.709 SDR nclx color: '+[...colr].join(','));
   const codec=entry.type==='avc1'?'h264':'hevc',config=payload(bytes,one(extensions,codec==='h264'?'avcC':'hvcC'),1);if(config.length>1024*1024)budget('MP4 configuration exceeds budget');configurationSets(codec,config);
@@ -111,7 +136,7 @@ export async function readMp4QualityIndex(reader:{size:number;read(offset:number
   const deltas=runs(bytes,one(tables,'stts'),count);if(deltas.some(n=>!n))fail('MP4 decode durations must be positive');const ctts=tables.filter(b=>b.type==='ctts');if(ctts.length>1)fail('Duplicate MP4 composition table');const cts=ctts.length?runs(bytes,ctts[0],count,true):Array<number>(count).fill(0);
   const offsetBoxes=tables.filter(b=>b.type==='stco'||b.type==='co64');if(offsetBoxes.length!==1)fail('MP4 requires one chunk-offset table');const offsetBox=offsetBoxes[0],stride=offsetBox.type==='co64'?8:4,{b:chunks,count:chunkCount}=rows(bytes,offsetBox,stride);if(!chunkCount)fail('Empty MP4 chunk table');const {b:sc,count:runCount}=rows(bytes,one(tables,'stsc'),12);if(!runCount)fail('Empty MP4 sample-to-chunk table');
   const offsets:number[]=[];for(let run=0;run<runCount;run++){const first=u32(sc,8+run*12),per=u32(sc,12+run*12),description=u32(sc,16+run*12),next=run+1<runCount?u32(sc,20+run*12):chunkCount+1;if((run===0&&first!==1)||next<=first||next>chunkCount+1||!per||description!==1)fail('MP4 sample/configuration chunk mapping is invalid');for(let chunk=first;chunk<next;chunk++){let at=stride===8?Number(view(chunks).getBigUint64(8+(chunk-1)*stride)):u32(chunks,8+(chunk-1)*stride);for(let k=0;k<per;k++){const size=sizes[offsets.length];if(!size||!safe(at)||!safe(at+size)||!mdat.some(m=>at>=m.start&&at+size<=m.end))fail('MP4 sample outside complete mdat');offsets.push(at);at+=size;}}}if(offsets.length!==count)fail('MP4 sample table counts differ');
-  const extents=offsets.map((at,i)=>({start:at,end:at+sizes[i]})).sort((a,b)=>a.start-b.start);if(extents.some((e,i)=>i>0&&e.start<extents[i-1].end))fail('MP4 video sample byte ranges overlap');
+  const extents=offsets.map((at,i)=>({start:at,end:at+sizes[i]})).sort((a,b)=>a.start-b.start);if(extents.some((e,i)=>i>0&&e.start<extents[i-1].end))fail('MP4 video sample byte ranges overlap');if(offsets.some((at,i)=>i>0&&at<offsets[i-1]+sizes[i-1]))fail('MP4 non-monotonic sample byte order is unsupported');
   const syncBoxes=tables.filter(b=>b.type==='stss');if(syncBoxes.length>1)fail('Duplicate MP4 sync table');let keys:Set<number>|undefined;if(syncBoxes.length){const {b,count:n}=rows(bytes,syncBoxes[0],4);keys=new Set();let previous=0;for(let i=0;i<n;i++){const ordinal=u32(b,8+i*4);if(ordinal<=previous||ordinal>count)fail('Invalid MP4 sync ordinal');keys.add(ordinal-1);previous=ordinal;}}
   let dts=0;const uniquePts=new Set<number>();const samples:Mp4QualitySample[]=sizes.map((size,ordinal)=>{const ticks=dts;dts+=deltas[ordinal];if(!safe(dts)||!safe(ticks+cts[ordinal]))fail('MP4 clock overflow');const dtsUs=mp4TicksToUs(ticks,timescale),ptsUs=mp4TicksToUs(ticks+cts[ordinal],timescale),durationUs=mp4TicksToUs(deltas[ordinal],timescale);if(uniquePts.has(ptsUs))fail('MP4 presentation clock is ambiguous');uniquePts.add(ptsUs);return {ordinal,description:1,offset:offsets[ordinal],size,dtsTicks:ticks,ctsTicks:cts[ordinal],durationTicks:deltas[ordinal],dtsUs,ptsUs,durationUs,key:keys?keys.has(ordinal):true};});if(dts!==durationTicks)fail('MP4 media duration differs from complete sample table');if(!samples[0].key)fail('MP4 source must begin at a verified closed IDR candidate');
   const sha256=await options.digest(bytes);if(!/^[a-f0-9]{64}$/.test(sha256))fail('Invalid MP4 metadata digest');

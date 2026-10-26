@@ -20,7 +20,7 @@ export async function handleFrameIndexRoute(library: RouteContext['library'], re
     let indexStreamTimer: ReturnType<typeof setTimeout> | undefined;
     try {
       const kindParam = url.searchParams.get('kind') ?? 'flv';
-      if (kindParam !== 'flv' && kindParam !== 'ffmpeg' && kindParam !== 'js-ts' && kindParam!=='js-matroska') throw new AdminError(400, '未知帧索引类型。');
+      if (kindParam !== 'flv' && kindParam !== 'ffmpeg' && kindParam !== 'js-ts' && kindParam!=='js-matroska' && kindParam!=='mp4') throw new AdminError(400, '未知帧索引类型。');
       const kind = kindParam as MediaIndexKind;
       let identity: MediaIndexIdentity;
       try {
@@ -29,6 +29,7 @@ export async function handleFrameIndexRoute(library: RouteContext['library'], re
           : parseMediaIndexIdentity(kind, url.searchParams);
       } catch (error) { throw new AdminError(400, (error as Error).message); }
       if (!['GET', 'POST'].includes(req.method ?? '')) throw new AdminError(405, '不支持的帧索引操作。');
+      if(kind==='mp4'&&(req.method!=='GET'||url.searchParams.has('build')||requestsMediaIndexStream(req)))throw new AdminError(405,'MP4 quality indexes are read-only here; use explicit library preparation.','explicit-preparation-required');
       if (req.method === 'POST' && (kind === 'js-ts'||kind==='js-matroska')) throw new AdminError(405,'JS TS 索引只能由服务端完整扫描构建。');
       if (req.method === 'POST' && !adminWriteAllowed(req, 'frame-index')) throw new AdminError(403, '请从同源播放器提交帧索引。');
       const version = url.searchParams.get('v'), entry = library.metadata(indexMatch[1]);
