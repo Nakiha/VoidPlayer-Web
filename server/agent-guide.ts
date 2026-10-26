@@ -511,7 +511,59 @@ HTTP Agents can select explicit cached AUs without any browser. See
 docs/paused-native-quality.md. Reference integrity remains not-certified and
 concealmentDetection=unavailable.
 
-There is no frame sequence, automatic alignment, VMAF/CAMBI, shared work,
+## Explicit bounded ranges and sampling
+
+quality.ranges is a separate durable coordinator. POST /api/quality/ranges/plan
+normalizes a voidplayer-quality-range v1 body without source IO or preparation;
+POST /api/quality/ranges accepts it with the quality-job action and Idempotency-Key.
+The body has client, an inclusive reference decode-order AU interval, explicit
+pairs of existing single-frame requests, correspondence, sampling and a total
+budget. correspondence is explicit-au-table or constant-source-pts-offset with
+integer offsetUs checked against every listed pair. This is a caller-declared
+content relationship, not content authentication or automatic time alignment.
+Use sampling:{mode:'all'} or {mode:'stride',every,offset}; stride uses
+(au-startAu)%every===offset. Missing mappings remain holes. Each side keeps fixed
+source version, stream, configuration and cache build, with one-to-one AU mapping.
+
+At most 256 interval positions and 64 selected positions. Sum per-pair read and
+numeric-input reservations under the total limits: 64 MiB source reads, 512 MiB
+numeric input views, 4096 packets/outputs and 120 s execution. Every dependency
+input and output, repeated pre-roll, post-target and drain is charged. Each child
+retains its existing 32-AU/side, 30 s, heap/frame/result bounds; index document
+loads are separately exposed in the plan. Lower pair budgets to fit the parent.
+The parent never acquires an outer shared permit; only the child runner owns the
+common physical compute slot. Source preparation remains a separate explicit task.
+
+GET /api/quality/ranges?after=ROW&limit=10 pages current history snapshots, not
+change events. GET /{id} gives plan, progress with active child/attempt, coverage
+and publication. GET /{id}/results?after=AU&limit=4 returns complete immutable
+results with an inclusive AU cursor and nextAu. POST /{id}/cancel takes {}.
+Observing or disconnecting never cancels. Uncertain Worker exit keeps cancelling,
+no endedAt and occupied admission. Unfinished parents/children become interrupted
+on exclusive-owner startup; same keys replay history without retry or resume.
+The independent parent history is at most 100 rows / 16 MiB logical reservations;
+at most four unfinished parents and two per actor. Five-minute queue expiry is
+checked when a parent starts. Completed scored work does not invent failed-work
+counts or represent whole-process RSS.
+
+Coverage separates scored, unmapped, unsampled, unsupported and selected holes.
+Completed sampling does not mean coverage.complete. PSNR pools SSE/count before
+dB, separately for identical pixel domains; it never averages dB. SSIM pools each
+plane by valid window counts then Y4:U1:V1, using the existing uniform 8x8 stride4
+variant, not Gaussian SSIM. No temporal extrapolation is made.
+
+POST /{id}/candidates explicitly supplies space, side, metric:'psnr', maxDb,
+limit (1..8), minAuDistance, text and severity (1..5). Select finite PSNR <= maxDb,
+ascending score then reference AU, greedily enforcing AU spacing. Freeze selection
+and IDs before original atomic annotation candidate commands. Repeat the exact
+policy after an unknown commit outcome: receipt lookup precedes result lookup,
+even if private results were reclaimed. Another policy conflicts. These are
+not-subjectively-assessed measurement candidates, never automatic human judgments.
+The admin range view is passive; explicit original-frame/ROI viewer links do not
+control playback, score or build indexes. No geometry/container expansion follows.
+See docs/bounded-quality-ranges.md for the full protocol.
+
+There is no automatic alignment, VMAF/CAMBI executor, shared computation,
 automatic index construction, retry/resume or distributed worker.
 These capabilities do not mean #114 or #121 is complete.
 
