@@ -10,9 +10,10 @@ test('official source/model lock, self-description and documented recipe identif
 });
 test('real native tests are mandatory in existing full suites, remain outside lightweight identity and include compiled installation',async()=>{
  const manifest=JSON.parse(await read('scripts/testing/manifest.json')),byId=id=>manifest.cases.find(c=>c.id===id);
- for(const id of ['node-native-vmaf-http','node-native-vmaf-lifecycle']){const c=byId(id);assert.equal(c.required,true);assert.ok(c.suites.includes('ci-native-node'));assert.ok(c.fixtures.includes('core'));assert.deepEqual(c.platforms,['linux']);}
+ for(const id of ['node-native-vmaf-http','node-native-vmaf-lifecycle']){const c=byId(id);assert.equal(c.required,true);assert.ok(c.suites.includes('ci-native-node'));assert.ok(c.fixtures.includes('core'));assert.deepEqual(c.platforms,['linux']);assert.ok(!c.tools.includes('ffmpeg'),'native job consumes committed independent raw oracles without runtime FFmpeg');}
  for(const id of ['bun-native-vmaf-http','bun-native-vmaf-lifecycle'])assert.ok(byId(id).suites.includes('ci-native-bun'));
  for(const engine of ['chromium','webkit'])for(const depth of [8,10]){const c=byId(`browser-native-vmaf-${depth}-${engine}`);assert.equal(c.required,true);assert.equal(c.build,true);assert.ok(c.suites.includes('ci-cache'));assert.ok(c.fixtures.includes('core'));assert.ok(!c.suites.some(s=>s.startsWith('ci-identity')));}
  const packaged=await read('scripts/package-release.mjs');for(const worker of ['component-worker.ts','decode-worker.ts'])assert.ok(packaged.includes('server/analysis/vmaf/'+worker));
+ const fixed=JSON.parse(await read('test/helpers/native-vmaf-samples.json'));assert.equal(fixed.samples.length,5);assert.match(fixed.rawOracle,/ffmpeg decode/);assert.ok(!/execFileSync\('ffmpeg'/.test(await read('test/helpers/native-vmaf.mjs')));
  assert.match(await read('scripts/check-quality-release.mjs'),/check-native-vmaf-release\.mjs/);assert.match(await read('scripts/check-native-vmaf-release.mjs'),/PATH:empty/);assert.match(await read('scripts/check-native-vmaf-release.mjs'),/officialOracle/);
 });

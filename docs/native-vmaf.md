@@ -221,7 +221,7 @@ changed. The explicit test prerequisite `scripts/native/run-vmaf-tests.mjs` buil
 the fixed public component only when absent, verifies existing components and
 fails on corruption. It is test installation, not runtime fallback.
 
-- FFmpeg independently decodes generated B-frame FLV clips into raw YUV. Every
+- The explicit generation tool `scripts/native/make-vmaf-samples.mjs` uses FFmpeg to independently decode this package’s synthetic B-frame FLV clips into raw YUV. Encoded inputs, compressed raw planes, exact hashes and generator/FFmpeg recipe are committed in `test/helpers/native-vmaf-samples.json`; native and compiled test jobs need no runtime FFmpeg. Every
   raw hash, official frame score and official pool matches a direct fixed CLI
   invocation with the same full clip/model/recipe. H.264 and HEVC at both 8 and 10 bits, same, distorted, NEG,
   nonzero source clocks and temporal flush are represented.
@@ -237,7 +237,7 @@ fails on corruption. It is test installation, not runtime fallback.
   viewer work without private job access. Actor-delayed responses are fenced;
   a separate live player retains its tracks and advances while observed playing.
 - Installed compiled Bun uses real bundled Workers and the native component under
-  an empty PATH; the independent Node harness alone invokes FFmpeg as an oracle.
+  an empty PATH; the independent Node harness uses the committed FFmpeg raw oracle and invokes the fixed official VMAF CLI directly.
 
 A local **128×96, 8-frame** compiled sample measured native CPU 17.393/20.314 ms,
 native wall 20.588/22.533 ms and peak native RSS 3,477,504/3,801,088 bytes for 8/10
