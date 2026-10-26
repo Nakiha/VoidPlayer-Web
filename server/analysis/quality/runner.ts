@@ -6,11 +6,12 @@ import type { FramePairRequest } from '../../../shared/analysis/quality/frame-pa
 import type { LibraryPairBinding, LibraryPairResult } from '../../../shared/analysis/quality/library-pair.ts';
 import { qualityFrameQuery } from '../../../shared/analysis/quality/selection.ts';
 import type { QualityFramePage,QualityFrameQuery } from '../../../shared/analysis/quality/selection.ts';
+import type {ReferenceRelation,CorrespondenceInput,CorrespondenceResult} from '../../../shared/analysis/quality/correspondence.ts';
 import type { QualityTask } from './task.ts';
 import {QUALITY_SOURCE_BUILD_LIMITS} from '../../../shared/analysis/quality/source-build.ts';
 declare const VOIDPLAYER_COMPILED: boolean;
 export type QualityWorkerData = QualityTask & {database:string;coreDir:string;control:SharedArrayBuffer};
-type WorkerValue = LibraryPairBinding | LibraryPairResult | QualityFramePage;
+type WorkerValue = LibraryPairBinding | LibraryPairResult | QualityFramePage | CorrespondenceResult;
 type Outcome<T> = {ok:true;value:T}|{ok:false;error:unknown};
 type QualityTimers={set(callback:()=>void,ms:number):ReturnType<typeof setTimeout>;clear(timer:ReturnType<typeof setTimeout>):void};
 export type QualityRunHooks = { admitted(): void; phase(phase: 'source' | 'resolve' | 'decode' | 'publish'): void };
@@ -46,6 +47,9 @@ export class LibraryPairRunner {
   measure(request:FramePairRequest,signal:AbortSignal,hooks?:QualityRunHooks):Promise<LibraryPairResult>{
     let budget;try{budget=pairBudget(request);}catch(error){return Promise.reject(error);}
     return this.run({mode:'measure',request},budget.maxElapsedMs,signal,hooks);
+  }
+  planCorrespondence(relation:ReferenceRelation,request:CorrespondenceInput,signal:AbortSignal,hooks:QualityRunHooks):Promise<CorrespondenceResult>{
+    return this.run({mode:'correspondence-plan',relation,request},request.planningBudget.maxElapsedMs,signal,hooks);
   }
   private run<T extends WorkerValue>(task:QualityTask,elapsedMs:number,signal:AbortSignal,hooks?:QualityRunHooks):Promise<T>{
     if(this.closed)return Promise.reject(new AdminError(503,'Quality service closed.','busy'));
@@ -97,6 +101,7 @@ export class LibraryPairRunner {
         const value=data?.value;
         const valid=task.mode==='source'||task.mode==='build-source'?value&&'binding' in value&&value.binding.mediaId===task.id&&value.binding.mediaVersion===task.version
           :task.mode==='frames'?value&&'schema'in value&&value.schema==='voidplayer-psnr-frame-candidates'&&value.source.binding.mediaId===task.id&&value.source.binding.mediaVersion===task.version
+          :task.mode==='correspondence-plan'?value&&'schema'in value&&value.schema==='voidplayer-quality-correspondence-result'&&value.relation.id===task.relation.id
           :value&&'schema' in value&&value.schema==='voidplayer-library-frame-pair-psnr';
         if(data?.ok===true&&valid)void finish({ok:true,value:value as T});
         else void finish({ok:false,error:new AdminError(data?.error?.status??400,data?.error?.message??'Invalid quality Worker result.',data?.error?.code??'decoder-error')});

@@ -2,6 +2,7 @@ import { avcGeometry } from '../../media/codecs/avc-geometry.ts';
 import { hevcGeometry, hevcFieldPictures } from '../../media/codecs/hevc-geometry.ts';
 import { parseFlvIndex, type FlvIndexDocument } from '../../media/indexing/flv-index-cache.ts';
 import { FramePairError, PAIR_LIMITS, forwardPacketPlan, gopPacketPlan, FORWARD_PAIR_LIMITS, requireInspectionGeometry, type PairTarget } from './frame-pair.ts';
+import type {FlvIndex} from '../../media/containers/flv-demux.ts';
 import type { LibraryPairBinding } from './library-pair.ts';
 import {nativeConfigurationHex} from '../../media/codecs/native-picture-identity.ts';
 
@@ -23,6 +24,29 @@ export function qualityFrameQuery(query:QualityFrameQuery) {
     throw new FramePairError('invalid-request','Invalid bounded PSNR frame query; pagination requires its original build ID');
   return query;
 }
+/** Reuse cached-window admission without dropping the caller's raw AU fact. */
+export function qualityTargetForAu(source:LibraryPairBinding,index:FlvIndex,au:number,counts:Map<number,number>):{target:PairTarget|null;reason:string|null}{
+  const p=index.packets[au];
+  if(!p||(p.configuration??0)!==0||counts.get(p.pts)!==1||p.size>PAIR_LIMITS.maxPacketBytes)return {target:null,reason:'AU configuration, unique PTS or packet budget unsupported'};
+    const target:PairTarget={...structuredClone(source.binding),sourcePtsUs:p.pts,picture:{sourceVersion:`${source.binding.mediaId}@${source.binding.mediaVersion}`,
+      stream:'video',configuration:0,au,picture:0,layer:0,field:'frame'}};
+    let startAu=au;for(;startAu>0&&!index.packets[startAu].key&&au-startAu+1<=32;startAu--){/* bounded cached scan */}
+    let endAu=startAu;while(endAu+1<index.packets.length&&!index.packets[endAu+1].key&&endAu-startAu+1<=32)endAu++;
+    // Equal PTS/DTS says nothing about decoder buffering. Prefer explicit
+    // token attribution for every complete bounded GOP, even with zero CTS.
+    if(endAu-startAu+1<=32){
+      target.decode={mode:'packet-identity-gop-v1',startAu,endAu};
+      try{const plan=gopPacketPlan(index,target,counts);if(plan.some(p=>p.size>PAIR_LIMITS.maxPacketBytes)||plan.reduce((n,p)=>n+p.size+23,0)>PAIR_LIMITS.maxReadBytes)return {target:null,reason:'Dependency packet/read budget or unsupported decode window'};}
+      catch(error){if(error instanceof FramePairError&&['unsupported-source','invalid-request'].includes(error.code)){if(p.key)delete target.decode;else return {target:null,reason:'Dependency packet/read budget or unsupported decode window'};}else throw error;}
+    }else if(!p.key){
+      if(startAu<0||au-startAu+1>FORWARD_PAIR_LIMITS.packetsPerSide)return {target:null,reason:'Dependency packet/read budget or unsupported decode window'};
+      target.decode={mode:'forward-one-output-per-au-v1',startAu};
+      try{const plan=forwardPacketPlan(index,target,counts);if(plan.some(p=>p.size>PAIR_LIMITS.maxPacketBytes)||plan.reduce((n,p)=>n+p.size+23,0)>PAIR_LIMITS.maxReadBytes)return {target:null,reason:'Dependency packet/read budget or unsupported decode window'};}
+      catch(error){if(error instanceof FramePairError&&error.code==='unsupported-source')return {target:null,reason:'Dependency packet/read budget or unsupported decode window'};throw error;}
+    }
+  return {target,reason:null};
+}
+
 /** Cached facts, not a decoder/preflight. Never infer correspondence, closed
  * random access, color completeness or decoded-picture identity from a key flag. */
 export function qualityFrameCandidates(source:LibraryPairBinding,doc:FlvIndexDocument,query:QualityFrameQuery):QualityFramePage {
@@ -46,22 +70,7 @@ export function qualityFrameCandidates(source:LibraryPairBinding,doc:FlvIndexDoc
   for(;au<index.packets.length&&inspected<QUALITY_SELECTION_LIMITS.inspected&&entries.length<query.limit;au++,inspected++){
     const p=index.packets[au];
     if((p.configuration??0)!==0||counts.get(p.pts)!==1||p.size>PAIR_LIMITS.maxPacketBytes)continue;
-    const target:PairTarget={...structuredClone(source.binding),sourcePtsUs:p.pts,picture:{sourceVersion:`${source.binding.mediaId}@${source.binding.mediaVersion}`,
-      stream:'video',configuration:0,au,picture:0,layer:0,field:'frame'}};
-    let startAu=au;for(;startAu>0&&!index.packets[startAu].key&&au-startAu+1<=32;startAu--){/* bounded cached scan */}
-    let endAu=startAu;while(endAu+1<index.packets.length&&!index.packets[endAu+1].key&&endAu-startAu+1<=32)endAu++;
-    // Equal PTS/DTS says nothing about decoder buffering. Prefer explicit
-    // token attribution for every complete bounded GOP, even with zero CTS.
-    if(endAu-startAu+1<=32){
-      target.decode={mode:'packet-identity-gop-v1',startAu,endAu};
-      try{const plan=gopPacketPlan(index,target,counts);if(plan.some(p=>p.size>PAIR_LIMITS.maxPacketBytes)||plan.reduce((n,p)=>n+p.size+23,0)>PAIR_LIMITS.maxReadBytes)continue;}
-      catch(error){if(error instanceof FramePairError&&['unsupported-source','invalid-request'].includes(error.code)){if(p.key)delete target.decode;else continue;}else throw error;}
-    }else if(!p.key){
-      if(startAu<0||au-startAu+1>FORWARD_PAIR_LIMITS.packetsPerSide)continue;
-      target.decode={mode:'forward-one-output-per-au-v1',startAu};
-      try{const plan=forwardPacketPlan(index,target,counts);if(plan.some(p=>p.size>PAIR_LIMITS.maxPacketBytes)||plan.reduce((n,p)=>n+p.size+23,0)>PAIR_LIMITS.maxReadBytes)continue;}
-      catch(error){if(error instanceof FramePairError&&error.code==='unsupported-source')continue;throw error;}
-    }
+    const {target}=qualityTargetForAu(source,index,au,counts);if(!target)continue;
     entries.push(target);
   }
   const page:QualityFramePage={schema:'voidplayer-psnr-frame-candidates',version:1,source:structuredClone(source),codec:index.codec,

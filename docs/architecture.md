@@ -141,3 +141,17 @@ read-only original-frame viewers. No player/presenter state is required.
 See [bounded-quality-ranges.md](bounded-quality-ranges.md) for coverage, budget,
 crash/receipt recovery and unassessed-candidate semantics. VMAF/CAMBI remain
 unimplemented; correctness does not certify performance or reference integrity.
+
+
+### Explicit reference clocks and AU planning
+
+`shared/analysis/quality/correspondence.ts` owns immutable caller declarations,
+exact half-open integer-offset segments and raw-AU explanations. Existing decode
+window admission is shared through `qualityTargetForAu`. A dedicated persisted
+`CorrespondenceService` queues metadata-only tasks on the existing killable
+`LibraryPairRunner`, with separate planning budgets and no outer admission.
+Plans pin source versions/cache builds and retain unknown/ambiguous/unsupported
+positions before eligibility filtering. Stable execution intents bridge SQLite
+commits into the existing range service; restart does not replan or score.
+The admin form and HTTP routes share contracts and B's scorer, publication and
+original-frame viewer. See [reference-clock-plans.md](reference-clock-plans.md).

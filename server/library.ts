@@ -5,6 +5,7 @@ import { LibraryPairRunner } from './analysis/quality/runner.ts';
 import { QualityJobService } from './analysis/quality/job-service.ts';
 import { LibraryDiscoveryService } from './discovery/service.ts';
 import { QualityRangeService } from './analysis/quality/range-service.ts';
+import {CorrespondenceService} from './analysis/quality/correspondence-service.ts';
 import { AdminError } from './admin-error.ts';
 import { FrameIndexStore } from './frame-index-store.ts';
 import { MediaThumbnailStore } from './media-thumbnail-store.ts';
@@ -39,6 +40,7 @@ export class MediaLibraryIndex {
   private discoveryService?: LibraryDiscoveryService;
   get discovery() { if(this.closed)throw new AdminError(503,'Library discovery is closed.','discovery-unavailable');return this.discoveryService??=new LibraryDiscoveryService(this); }
   private rangeService?: QualityRangeService;
+  private correspondenceService?:CorrespondenceService;
   private closing?: Promise<void>;
   private coreDirectory: string;
   get quality() { return this.pairRunner ??= new LibraryPairRunner(this,this.coreDirectory); }
@@ -52,6 +54,7 @@ export class MediaLibraryIndex {
     const jobs=this.qualityJobs;
     return this.rangeService??=new QualityRangeService(this.indexDatabase+'.quality-ranges.sqlite',jobs);
   }
+  get qualityCorrespondence(){const ranges=this.qualityRanges;return this.correspondenceService??=new CorrespondenceService(this.indexDatabase+'.quality-correspondence.sqlite',this.quality,ranges);}
   readonly frameIndexes: FrameIndexStore;
   readonly thumbnails: MediaThumbnailStore;
   private pending: Promise<void> | null = null;
@@ -397,6 +400,7 @@ export class MediaLibraryIndex {
   close() { return this.closing ??= this.closeOwned(); }
   private async closeOwned() {
     this.closed = true; this.stop();
+    await this.correspondenceService?.close();
     await this.discoveryService?.close();
     await this.rangeService?.close();
     await this.jobService?.close();

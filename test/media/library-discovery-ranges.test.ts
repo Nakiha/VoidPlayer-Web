@@ -19,7 +19,7 @@ async function until(predicate:()=>boolean|Promise<boolean>,label:string){
 }
 const sample=JSON.parse(await readFile(new URL('../helpers/quality-http-samples.json',import.meta.url),'utf8')).samples.find((s:any)=>s.codec==='h264'&&s.depth===8&&s.tagged);
 
-test('discovery and ranges retain one physical-exit admission and independent durable HTTP histories across restart',{timeout:60000},async t=>{
+test('discovery, ranges and correspondence retain one physical-exit admission and independent durable HTTP histories across restart',{timeout:60000},async t=>{
   const dir=await mkdtemp(join(tmpdir(),'vp-discovery-ranges-')),media=join(dir,'media');
   let service:Awaited<ReturnType<typeof startService>>|undefined,probe:DiscoveryProbeRunner|undefined;
   let allowStop=()=>{};let probeWork:Promise<unknown>|undefined;
@@ -42,6 +42,10 @@ test('discovery and ranges retain one physical-exit admission and independent du
     pairs:[0,1].map(au=>({pairing:'caller-specified',reference:target(au),distorted:target(au),roi:{x:0,y:0,width:32,height:32},budget:{maxReadBytes:1024*1024,maxInputBytes:1024*1024}})),
     budget:{maxReadBytes:2*1024*1024,maxInputBytes:2*1024*1024,maxPackets:4,maxOutputFrames:4,maxElapsedMs:30000}};
   const preparation={source,operation:'probe',client:{id:'discovery-range-integration',name:'Integration Agent'}};
+  const relationSource={mediaId:source.id,mediaVersion:source.version,stream:'video',configuration:0};
+  const relationResponse=await post('/api/quality/reference-relations',{schema:'voidplayer-quality-reference-relation',version:1,client:{id:'discovery-clock-integration',kind:'agent'},reference:relationSource,distorted:relationSource,declaration:'Explicit same-source integration control',clock:{mode:'piecewise-exact-source-pts-offset',segments:[{id:'exact',referenceStartUs:cache.index.packets[0][2],referenceEndUs:cache.index.packets[1][2]+1,offsetUs:0}]}},'quality-job','clock-relation');
+  assert.equal(relationResponse.status,201,await relationResponse.clone().text());const relation=(await relationResponse.json()).relation;
+  const clockInput={schema:'voidplayer-quality-correspondence-plan',version:1,client:{id:'discovery-clock-integration',kind:'agent'},relation:{id:relation.id,revision:1},referenceBuildId:binding.indexBuildId,distortedBuildId:binding.indexBuildId,interval:{startAu:0,endAu:1},sampling:{mode:'all'},recipe:{roi:{x:0,y:0,width:32,height:32},budget:{maxReadBytes:65536,maxInputBytes:65536}},budget:{maxReadBytes:131072,maxPackets:4,maxOutputFrames:4,maxInputBytes:131072,maxElapsedMs:10000},planningBudget:{maxIndexBytes:65536,maxIndexPackets:16,maxElapsedMs:10000}};
   const plan=await post('/api/quality/ranges/plan',range,'quality-job','plan');assert.equal(plan.status,200,await plan.clone().text());
   const agent=await get('/api/agent').then(r=>r.json());assert.ok(agent.libraryDiscovery);assert.ok(agent.qualityRanges);
   assert.equal((await get('/api/library/discovery')).status,200);assert.equal((await get('/api/quality/ranges')).status,200);
@@ -62,6 +66,9 @@ test('discovery and ranges retain one physical-exit admission and independent du
   const acceptedPrep=await post('/api/library/preparations',preparation,'library-preparation','prepare'),acceptedRange=await post('/api/quality/ranges',range,'quality-job','range');
   assert.equal(acceptedPrep.status,202);assert.equal(acceptedRange.status,202);
   const prep=(await acceptedPrep.json()).job,r=(await acceptedRange.json()).job;
+  const acceptedClock=await post('/api/quality/correspondence-plans',clockInput,'quality-job','clock-plan');assert.equal(acceptedClock.status,202,await acceptedClock.clone().text());const clock=(await acceptedClock.json()).plan;
+  const clockState=()=>library.qualityCorrespondence.get(clock.id,actor);
+  assert.equal(clockState().attemptId,null);assert.equal(clockState().state,'queued');
   await until(()=>library.qualityRanges.get(r.id,actor).samples.length===1,'range did not enqueue its child');
   const child=()=>library.qualityJobs.get(library.qualityRanges.get(r.id,actor).samples[0].jobId,actor);
   assert.equal(library.discovery.store.get(prep.id).state,'queued');assert.equal(library.discovery.store.get(prep.id).attemptId,null);
@@ -70,18 +77,20 @@ test('discovery and ranges retain one physical-exit admission and independent du
   assert.equal(exited,false);assert.throws(()=>library.qualityAdmission.acquire(),{code:'quality-busy'});
   assert.equal((await get(`/api/library/preparations/${prep.id}`).then(r=>r.json())).attemptId,null);
   assert.equal(child().attempt,null,'range cannot bypass preparation stop through a private permit');
+  assert.equal(clockState().attemptId,null,'correspondence cannot bypass the same physical-stop permit');
   allowStop();await probeWork;assert.equal(outcome,'integration cancellation');assert.equal(exited,true);
   await until(async()=>{
     const p=await get(`/api/library/preparations/${prep.id}`).then(r=>r.json()),v=await get(`/api/quality/ranges/${r.id}`).then(r=>r.json());
     assert.ok(!['failed','interrupted'].includes(p.state),JSON.stringify(p));assert.ok(!['failed','partial','interrupted'].includes(v.job.state),JSON.stringify(v));
-    return p.state==='completed'&&v.job.state==='completed';
-  },'queued preparation and actual range decoding did not complete after physical exit');
+    return p.state==='completed'&&v.job.state==='completed'&&clockState().state==='completed';
+  },'queued preparation, correspondence and actual range decoding did not complete after physical exit');
   const completedPrep=await get(`/api/library/preparations/${prep.id}`).then(r=>r.json()),completedRange=await get(`/api/quality/ranges/${r.id}`).then(r=>r.json());
   assert.ok(completedPrep.result.streams.some((s:any)=>s.fields.codec.value==='h264'));
+  const completedClock=await get(`/api/quality/correspondence-plans/${clock.id}`).then(r=>r.json());assert.equal(completedClock.summary.work.decodedFrames,0);assert.equal(completedClock.summary.counts.mapped,2);
   assert.deepEqual(completedRange.coverage.scored,[0,1]);assert.equal(completedRange.job.summary.groups[0].metric.sse,0);
   assert.equal(library.qualityJobs.resources().queued,0);const release=library.qualityAdmission.acquire();release();
   const other=`guest-${randomUUID()}`;
-  for(const url of [`/api/library/preparations/${prep.id}`,`/api/quality/ranges/${r.id}`]){
+  for(const url of [`/api/library/preparations/${prep.id}`,`/api/quality/ranges/${r.id}`,`/api/quality/correspondence-plans/${clock.id}`]){
     assert.equal((await get(url,{cookie:`voidplayer-user=${other}`,'x-voidplayer-actor':other})).status,404);
     assert.equal((await get(url,{'x-voidplayer-actor':other})).status,409);
   }
@@ -92,6 +101,8 @@ test('discovery and ranges retain one physical-exit admission and independent du
   assert.equal(version(),beforeSchema);
   assert.deepEqual(await get(`/api/library/preparations/${prep.id}`).then(r=>r.json()),completedPrep);
   assert.deepEqual((await get(`/api/quality/ranges/${r.id}`).then(r=>r.json())).job,completedRange.job);
+  assert.deepEqual((await get(`/api/quality/correspondence-plans/${clock.id}`).then(r=>r.json())).plan,completedClock.plan);
+  const replayClock=await post('/api/quality/correspondence-plans',clockInput,'quality-job','clock-plan');assert.equal(replayClock.status,200);assert.equal((await replayClock.json()).plan.id,clock.id);
   const replayPrep=await post('/api/library/preparations',preparation,'library-preparation','prepare'),replayRange=await post('/api/quality/ranges',range,'quality-job','range');
   assert.equal(replayPrep.status,200);assert.equal(replayRange.status,200);
   assert.equal((await replayPrep.json()).job.id,prep.id);assert.equal((await replayRange.json()).job.id,r.id);

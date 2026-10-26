@@ -3806,6 +3806,106 @@
     "source": "从完成结果创建共享测量候选",
     "params": {}
   },
+  "qualityClock.addSegment": {
+    "source": "添加时钟段",
+    "params": {}
+  },
+  "qualityClock.budgets": {
+    "source": "规划和评分预算（超额会明确拒绝）",
+    "params": {}
+  },
+  "qualityClock.candidateText": {
+    "source": "候选说明",
+    "params": {}
+  },
+  "qualityClock.chooseRelation": {
+    "source": "先选择一条关系声明。",
+    "params": {}
+  },
+  "qualityClock.chooseSources": {
+    "source": "请显式选择双方媒体版本。",
+    "params": {}
+  },
+  "qualityClock.createPlan": {
+    "source": "生成并持久保存 AU 解释计划",
+    "params": {}
+  },
+  "qualityClock.declaration": {
+    "source": "参考关系声明说明（不等于内容认证）",
+    "params": {}
+  },
+  "qualityClock.direction": {
+    "source": "映射方向：待测源 PTS = 参考源 PTS + offset。每段参考区间为 [start, end)，单位均为整数微秒；两侧区间均不得重叠。",
+    "params": {}
+  },
+  "qualityClock.execute": {
+    "source": "按此冻结计划提交评分",
+    "params": {}
+  },
+  "qualityClock.forgetFrozen": {
+    "source": "结束本地重试，准备新请求",
+    "params": {}
+  },
+  "qualityClock.newSamePlan": {
+    "source": "新建相同计划",
+    "params": {}
+  },
+  "qualityClock.pendingConflict": {
+    "source": "先重试原冻结请求，或显式结束本地重试后再编辑。",
+    "params": {}
+  },
+  "qualityClock.pendingNotice": {
+    "source": "提交结果未确认时，保留原请求与重试键。重试不会新建另一项工作；结束本地重试不会取消服务端工作。",
+    "params": {}
+  },
+  "qualityClock.pin": {
+    "source": "读取并固定此关系的现有缓存",
+    "params": {}
+  },
+  "qualityClock.pinRequired": {
+    "source": "先读取并固定双方现有缓存。",
+    "params": {}
+  },
+  "qualityClock.planTitle": {
+    "source": "固定缓存、抽样与执行预算",
+    "params": {}
+  },
+  "qualityClock.publish": {
+    "source": "按此显式策略生成候选",
+    "params": {}
+  },
+  "qualityClock.removeSegment": {
+    "source": "移除此段",
+    "params": {}
+  },
+  "qualityClock.retryFrozen": {
+    "source": "重试原冻结提交",
+    "params": {}
+  },
+  "qualityClock.sampling": {
+    "source": "抽样计划",
+    "params": {}
+  },
+  "qualityClock.saveRelation": {
+    "source": "保存不可变关系声明",
+    "params": {}
+  },
+  "qualityClock.scope": {
+    "source": "关系由调用者声明，不认证同内容。时钟仅做精确整数微秒匹配；缺洞、歧义与不支持会保留。只读取已有可信 FLV 缓存，评分与候选均须显式提交。",
+    "params": {}
+  },
+  "qualityClock.showRange": {
+    "source": "查看区间评分、候选与原帧",
+    "params": {}
+  },
+  "qualityClock.storageRequired": {
+    "source": "无法持久保存重试键，请允许此页使用会话存储后再提交。",
+    "params": {}
+  },
+  "qualityClock.title": {
+    "source": "显式参考关系与 AU 对应计划",
+    "params": {}
+  },
   "qualityRange.candidates": {
     "source": "按显式策略生成的测量候选",
     "params": {}

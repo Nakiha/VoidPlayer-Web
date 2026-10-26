@@ -3557,6 +3557,106 @@
     "source": "从完成结果创建共享测量候选",
     "translation": "Create a shared measurement candidate from this result"
   },
+  "qualityClock.addSegment": {
+    "source": "添加时钟段",
+    "translation": "Add clock segment"
+  },
+  "qualityClock.budgets": {
+    "source": "规划和评分预算（超额会明确拒绝）",
+    "translation": "Planning and scoring budgets (excess is explicitly rejected)"
+  },
+  "qualityClock.candidateText": {
+    "source": "候选说明",
+    "translation": "Candidate description"
+  },
+  "qualityClock.chooseRelation": {
+    "source": "先选择一条关系声明。",
+    "translation": "Select a reference relation first."
+  },
+  "qualityClock.chooseSources": {
+    "source": "请显式选择双方媒体版本。",
+    "translation": "Explicitly select both media versions."
+  },
+  "qualityClock.createPlan": {
+    "source": "生成并持久保存 AU 解释计划",
+    "translation": "Generate and persist an AU explanation plan"
+  },
+  "qualityClock.declaration": {
+    "source": "参考关系声明说明（不等于内容认证）",
+    "translation": "Reference relation declaration (not content certification)"
+  },
+  "qualityClock.direction": {
+    "source": "映射方向：待测源 PTS = 参考源 PTS + offset。每段参考区间为 [start, end)，单位均为整数微秒；两侧区间均不得重叠。",
+    "translation": "Mapping direction: distorted source PTS = reference source PTS + offset. Reference segments are half-open [start, end) intervals in integer microseconds; intervals on either side must not overlap."
+  },
+  "qualityClock.execute": {
+    "source": "按此冻结计划提交评分",
+    "translation": "Submit scoring from this frozen plan"
+  },
+  "qualityClock.forgetFrozen": {
+    "source": "结束本地重试，准备新请求",
+    "translation": "End local retries and prepare a new request"
+  },
+  "qualityClock.newSamePlan": {
+    "source": "新建相同计划",
+    "translation": "New identical plan"
+  },
+  "qualityClock.pendingConflict": {
+    "source": "先重试原冻结请求，或显式结束本地重试后再编辑。",
+    "translation": "Retry the original frozen request, or explicitly end local retries before editing."
+  },
+  "qualityClock.pendingNotice": {
+    "source": "提交结果未确认时，保留原请求与重试键。重试不会新建另一项工作；结束本地重试不会取消服务端工作。",
+    "translation": "Unconfirmed submissions retain their original request and retry key. Retry reuses that work. Ending local retries does not cancel service-owned work."
+  },
+  "qualityClock.pin": {
+    "source": "读取并固定此关系的现有缓存",
+    "translation": "Read and pin existing caches for this relation"
+  },
+  "qualityClock.pinRequired": {
+    "source": "先读取并固定双方现有缓存。",
+    "translation": "Read and pin both existing caches first."
+  },
+  "qualityClock.planTitle": {
+    "source": "固定缓存、抽样与执行预算",
+    "translation": "Pinned caches, sampling and execution budgets"
+  },
+  "qualityClock.publish": {
+    "source": "按此显式策略生成候选",
+    "translation": "Create candidates using this explicit policy"
+  },
+  "qualityClock.removeSegment": {
+    "source": "移除此段",
+    "translation": "Remove segment"
+  },
+  "qualityClock.retryFrozen": {
+    "source": "重试原冻结提交",
+    "translation": "Retry the original frozen submission"
+  },
+  "qualityClock.sampling": {
+    "source": "抽样计划",
+    "translation": "Sampling plan"
+  },
+  "qualityClock.saveRelation": {
+    "source": "保存不可变关系声明",
+    "translation": "Save immutable relation declaration"
+  },
+  "qualityClock.scope": {
+    "source": "关系由调用者声明，不认证同内容。时钟仅做精确整数微秒匹配；缺洞、歧义与不支持会保留。只读取已有可信 FLV 缓存，评分与候选均须显式提交。",
+    "translation": "The caller declares the relation; it does not certify equivalent content. Clocks match exact integer microseconds. Holes, ambiguity and unsupported inputs remain explicit. Only existing trusted FLV caches are read; scoring and candidates require explicit submission."
+  },
+  "qualityClock.showRange": {
+    "source": "查看区间评分、候选与原帧",
+    "translation": "View range scores, candidates and original frames"
+  },
+  "qualityClock.storageRequired": {
+    "source": "无法持久保存重试键，请允许此页使用会话存储后再提交。",
+    "translation": "Retry keys cannot be persisted. Allow session storage before submitting."
+  },
+  "qualityClock.title": {
+    "source": "显式参考关系与 AU 对应计划",
+    "translation": "Explicit reference relations and AU correspondence plans"
+  },
   "qualityRange.candidates": {
     "source": "按显式策略生成的测量候选",
     "translation": "Measurement candidates selected by explicit policy"
