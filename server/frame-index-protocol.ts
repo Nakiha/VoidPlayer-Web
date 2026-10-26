@@ -13,6 +13,8 @@ export type FrameIndexBatch = { seq: number; payload: string; bytes: number; fra
 type Target = { id: string; version: string; identity: MediaIndexIdentity };
 type Command<Request, Response> = { request: Request; response: Response };
 export interface FrameIndexCommands {
+  'discovery-browse': Command<{query:import('../shared/media/discovery.ts').DiscoveryQuery;cancellation?:SharedArrayBuffer},ReturnType<import('./discovery/catalog.ts').DiscoveryCatalog['browse']>>;
+  'discovery-detail': Command<{source:import('../shared/media/discovery.ts').DiscoverySource;cancellation?:SharedArrayBuffer},ReturnType<import('./discovery/catalog.ts').DiscoveryCatalog['detail']>>;
   'technical-filter': Command<{ query: import('../shared/media/indexing/technical-filter.ts').TechnicalFilterQuery; expectedSnapshot?: string; cancellation?: SharedArrayBuffer }, ReturnType<import('./media-index-query.ts').MediaIndexQueryStore['technicalFilter']>>;
   epoch: Command<Record<string, never>, number>;
   'cached-indexes': Command<{ id: string; version: string; offset: number }, ReturnType<import('./media-index-query.ts').MediaIndexQueryStore['inventory']>>;

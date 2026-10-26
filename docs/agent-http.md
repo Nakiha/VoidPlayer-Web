@@ -26,7 +26,7 @@ HTTP 客户端先显式 POST `/api/identity` 并保存 cookie，再向 `/api/ann
 
 ## 范围与验证
 
-本阶段交付 #113 的 HTTP 入口与 #119 的首条持久业务链路：标注写入、可追踪事件、GUI 被动观察。工作区业务的统一命令迁移、持久评分任务、任务取消/进度/并发上限、结果证据和计算节点仍按 [roadmap #112](https://github.com/Nakiha/VoidPlayer-Web/issues/112) 推进。
+本阶段交付 #113 的 HTTP 入口与 #119 的首条持久业务链路：标注写入、可追踪事件、GUI 被动观察。已交付的持久单帧评分、取消/历史、结果证据、测量候选和 GUI 编排见下列专门文档；其受限范围不代表序列和计算节点完成。剩余能力仍按 [roadmap #112](https://github.com/Nakiha/VoidPlayer-Web/issues/112) 推进。
 
 新增 Node 回归覆盖：无前端资源的 HTTP 操作、只读部署、Origin/身份检查、能力状态、重复请求、版本冲突、重启、事务回滚、v1 升级、事件分页及保留窗口。浏览器回归验证先由 HTTP 写入、之后打开 GUI 恢复，及播放 A 时收到 B 的操作仍保持轨道、播放与焦点。
 
@@ -38,3 +38,5 @@ HTTP 客户端先显式 POST `/api/identity` 并保存 cookie，再向 `/api/ann
 播放器独立 ROI 入口从已载入媒体显式选择每侧 AU；不继承旧播放 token 的时间戳关联，不自动猜当前帧。独立 Worker 在已有可信缓存上获取原始帧并核验，ROI 吸附偶数源网格；原播放器不暂停、不 seek、不完成索引。后台持久执行不随对话框关闭取消。详见 [ROI 测量候选](quality-roi-candidates.md)。
 
 暂停原生画面另有可选页面工具 `capture_presented_quality_frame`，返回 `voidplayer-native-presented-input` 未绑定见证，不是评分请求。必须将实际同服务版本传输、精确 AU/配置字节/包范围与时钟、可信 cache namespace/build 和几何逐项绑定；不按 PTS 搜索或自动建索引。原生路径不支持时明确拒绝，HTTP Agent 的显式 AU 业务能力不受此 GUI 子集限制。缺缓存可单独显式 `POST /api/media/{id}/psnr-index`（`{version}`、actor cookie/header、同源 Origin、action `quality-source-build`）；读取、快照和评分不会调用它。预算、取消和原始像素边界见 [暂停原生帧 ROI](paused-native-quality.md)。
+
+媒体库已注册来源的技术选片、未知覆盖、一致分页和显式有预算 probe/可信 FLV 索引准备，使用 [媒体技术发现](library-discovery.md) 的同一 GUI/HTTP 命令。`/api/library/discovery-schema` 给出字段、请求、状态机、预算和支持矩阵；MP4/MKV/TS 元数据可读不等于可评分。

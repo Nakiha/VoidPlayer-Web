@@ -62,6 +62,7 @@ export function installQualityJobs(signal:AbortSignal){
   const initial=new URLSearchParams(location.search),initialSpace=initial.get('qualitySpace')??'default',initialMark=initial.get('qualityAnnotation');
   let seededMark=false,identityCheck=0;let expectedActor:string|null|undefined;
   const pickers=new Map<Side,{page:QualityFramePage|null;entry:LibraryEntry|null;target:PairTarget|null;sequence:number;offset:number|null;revision?:number}>();
+  const seedSource=new Map<Side,(entry:LibraryEntry)=>Promise<void>>();
   for(const side of sides)pickers.set(side,{page:null,entry:null,target:null,sequence:0,offset:null});
   const clientInput=$<HTMLInputElement>('client');
   try{clientInput.value=sessionStorage.getItem('voidplayer-quality-client')??randomUUID();if(!/^[a-zA-Z0-9._:-]{1,80}$/.test(clientInput.value))clientInput.value=randomUUID();sessionStorage.setItem('voidplayer-quality-client',clientInput.value);}catch{clientInput.value=randomUUID();}
@@ -176,6 +177,7 @@ export function installQualityJobs(signal:AbortSignal){
         q('[data-frame-more]').hidden=page.nextAu===null;actions();
       }catch(error){if(valid(c)&&sequence===picker.sequence){info(errorText(error));actions();}}}
     q('[data-search-button]').onclick=()=>void search();q('[data-more]').onclick=()=>void search(true);q('[data-frame-more]').onclick=()=>{if(picker.entry)void frames(picker.entry,true);};
+    seedSource.set(side,entry=>frames(entry));
     q<HTMLInputElement>('[data-search]').onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();void search();}};
     q<HTMLSelectElement>('[data-frame]').onchange=()=>{const value=q<HTMLSelectElement>('[data-frame]').value;picker.target=value!==''?picker.page?.entries[Number(value)]??null:null;actions();};
   }
@@ -206,7 +208,13 @@ export function installQualityJobs(signal:AbortSignal){
     $('owner').textContent=currentActor()?`${currentActor()!.name} · ${lastActor}`:'';
     actions();if(!active||!lastActor){localizedText($('availability'),()=>t(msg('qualityWorkflow.identityRequired','请先选择服务身份。')));return;}
     const c=context();
-    try{observer=new QualityJobObserver(api,lastActor,appliedClient,value=>{if(valid(c))render(value);},sessionStorage);if(await discover(c))await observer?.poll();
+    try{observer=new QualityJobObserver(api,lastActor,appliedClient,value=>{if(valid(c))render(value);},sessionStorage);if(await discover(c)){await observer?.poll();
+      for(const side of sides){const pin=initial.get(side==='reference'?'qualityReference':'qualityDistorted');if(!pin)continue;
+        const match=/^([a-f0-9]{24})@([a-f0-9]{24})$/.exec(pin);if(!match)throw Error('Invalid version-pinned discovery selection');
+        const entry=await api.request<LibraryEntry>(c.actor,`/api/media/${match[1]}/metadata`,c.signal);if(!valid(c))return;
+        if(entry.id!==match[1]||entry.version!==match[2])throw Error('Discovery source version changed; select it again');await seedSource.get(side)!(entry);
+      }
+    }
     }catch(error){if(valid(c))setError('availability',error);}}
   $('client-apply').onclick=()=>{if(!/^[a-zA-Z0-9._:-]{1,80}$/.test(clientInput.value)){setError('observer-status',t(msg('qualityWorkflow.invalidClient','客户端 ID 须为 1–80 个字母、数字、点、下划线、冒号或连字符。')));return;}try{sessionStorage.setItem('voidplayer-quality-client',clientInput.value);appliedClient=clientInput.value;}catch(error){setError('observer-status',error);return;}void start();};
   window.addEventListener('voidplayer-identity-change',()=>{if(active&&(expectedActor===undefined||(currentActor()?.id??null)===expectedActor)){expectedActor=undefined;void start();}},{signal});

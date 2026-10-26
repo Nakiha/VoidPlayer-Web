@@ -155,3 +155,27 @@ export async function verifyPlaybackPresentation(page, options = {}, context = {
   return withinBrowserPhase(() => page.evaluate(waitForPlaybackPresentation, options),
     (options.totalMs ?? 60000) + 5000, { ...context, phase: 'functional-presentation' });
 }
+
+/** Observe a playing, independent page without issuing play/pause/seek.
+ * A one-shot snapshot can precede its next committed picture while another page
+ * is active. Clock movement alone never satisfies this assertion. Timer samples establish
+ * playback at observation times, not absence of short pause/resume transitions. */
+export function waitForPlayingFrameAdvance(options) {
+  const api=options.api??globalThis.window?.voidPlayer,baseline=options.baseline;
+  const {setInterval:interval=setInterval,clearInterval:clear=clearInterval,setTimeout:timeout=setTimeout,clearTimeout:cancel=clearTimeout}=options.clock??{};
+  const timeoutMs=options.timeoutMs??30000,pollMs=options.pollMs??50;
+  if(!baseline?.playing||baseline.busy||baseline.error||baseline.tracks?.length!==1||!baseline.tracks[0].frame
+    ||!Number.isSafeInteger(timeoutMs)||timeoutMs<1||!Number.isSafeInteger(pollMs)||pollMs<1)throw Error('Invalid playing-frame baseline or budget');
+  return new Promise((resolve,reject)=>{
+    let timer,watchdog,done=false,last;
+    const stop=(error,value)=>{if(done)return;done=true;clear(timer);cancel(watchdog);if(error)reject(error);else resolve(value);};
+    const inspect=()=>{try{
+      const state=last=api.getState(),before=baseline.tracks[0],track=state.tracks?.[0];
+      if(!state.playing||state.busy||state.error||state.tracks.length!==1||!track||track.failure||!track.frame
+        ||track.id!==before.id||track.slot!==before.slot||track.sourceGen!==before.sourceGen||JSON.stringify(track.source)!==JSON.stringify(before.source))throw Error('Independent playback interrupted or source changed');
+      if(state.positionUs<baseline.positionUs||track.frame?.ptsUs<before.frame.ptsUs)throw Error('Independent playback regressed');
+      if(state.positionUs>baseline.positionUs&&track.frame?.ptsUs>before.frame.ptsUs)stop(null,state);
+    }catch(error){stop(error);}};
+    timer=interval(inspect,pollMs);watchdog=timeout(()=>stop(Error(`Independent playback made no committed frame advance: ${JSON.stringify(last)}`)),timeoutMs);inspect();
+  });
+}

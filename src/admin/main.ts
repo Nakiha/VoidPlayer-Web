@@ -1,4 +1,5 @@
 import { installQualityJobs } from './quality.ts';
+import { installDiscovery } from './discovery.ts';
 import { installAnalysisSettings } from './analysis.ts';
 import { requestError, rootReason } from './diagnostics.ts';
 import { apiError } from '../services/api-error.ts';
@@ -177,9 +178,10 @@ const caches = installCaches(life.signal, notice);
 const annotationAdmin = installAnnotationAdmin(life.signal, notice);
 const savedWorkspaces = installWorkspaceAdmin(life.signal, notice);
 const qualityJobs = installQualityJobs(life.signal);
+const discovery = installDiscovery(life.signal);
 const measurements = installMeasurements(life.signal, notice);
 for (const [id] of PANES()) document.querySelector<HTMLButtonElement>(`[data-pane=${id}]`)!.onclick = () => {
-  history.replaceState(null, '', `#${id}`); pane = id; qualityJobs.activate(id === 'quality'); measurements.activate(id === 'measurements'); notice(() => ''); for (const [item] of PANES()) { $(`pane-${item}`).hidden = id !== item; document.querySelector(`[data-pane=${item}]`)!.setAttribute('aria-current', id === item ? 'page' : 'false'); }
+  history.replaceState(null, '', `#${id}`); pane = id; qualityJobs.activate(id === 'quality'); discovery.activate(id === 'discovery'); measurements.activate(id === 'measurements'); notice(() => ''); for (const [item] of PANES()) { $(`pane-${item}`).hidden = id !== item; document.querySelector(`[data-pane=${item}]`)!.setAttribute('aria-current', id === item ? 'page' : 'false'); }
   if (id === 'overview') void analysisSettings.load();
   if (id === 'library') void act(async () => { if (!rootConfig || !rootDirty) await loadRoots(); await loadScan(); });
   if (id === 'caches') caches.activate();

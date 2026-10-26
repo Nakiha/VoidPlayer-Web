@@ -422,3 +422,19 @@ test('explicit release archives execute without latest-release metadata, while d
   assert.equal(missing.passed,false);assert.equal(missing.results[0].phase,'prepare');assert.match(missing.results[0].error,/latest-release|release-package/);
  }
 }));
+
+test('sampled playback observation requires committed frame advance and rejects pause, identity changes, errors and stalls',async()=>{
+ const {waitForPlayingFrameAdvance}=await import('../../scripts/testing/playback-presentation.mjs');
+ const baseline={playing:true,busy:false,error:null,positionUs:100,tracks:[{id:'A',slot:'A',sourceGen:3,source:{id:'source'},frame:{ptsUs:100}}]};
+ function fixture(){let state=structuredClone(baseline),tick,expire;const active=new Set();
+  const clock={setInterval(fn,ms){assert.equal(ms,50);tick=fn;active.add(1);return 1;},clearInterval(id){active.delete(id);},setTimeout(fn,ms){assert.equal(ms,30000);expire=fn;active.add(2);return 2;},clearTimeout(id){active.delete(id);}};
+  return {state,active,tick:()=>tick(),expire:()=>expire(),run:()=>waitForPlayingFrameAdvance({api:{getState:()=>state},baseline,clock})};
+ }
+ const delayed=fixture();let done=false;const work=delayed.run().then(value=>{done=true;return value;});delayed.state.positionUs=200;
+ for(let i=0;i<5;i++){delayed.tick();await Promise.resolve();assert.equal(done,false,'wall-clock movement is not a presented successor');}
+ delayed.state.tracks[0].frame.ptsUs=200;delayed.tick();assert.equal((await work).playing,true);assert.equal(delayed.active.size,0);
+ for(const mutate of [s=>s.playing=false,s=>s.tracks[0].sourceGen++,s=>s.tracks[0].source.id='other',s=>s.error='decoder failed',s=>s.positionUs=99]){
+  const failed=fixture(),pending=failed.run();mutate(failed.state);failed.tick();await assert.rejects(pending,/interrupted|regressed/);assert.equal(failed.active.size,0);
+ }
+ const stalled=fixture(),pending=stalled.run();stalled.state.positionUs=200;stalled.tick();stalled.expire();await assert.rejects(pending,/no committed frame advance/);assert.equal(stalled.active.size,0);
+});

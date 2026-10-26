@@ -40,9 +40,9 @@ export class LibraryPairRunner {
     catch(error){return Promise.reject(error);}
     return this.run({mode:'frames',id,version,query},PAIR_LIMITS.maxElapsedMs,signal);
   }
-  buildSource(id:string,version:string,signal:AbortSignal):Promise<LibraryPairBinding>{
+  buildSource(id:string,version:string,signal:AbortSignal,hooks?:QualityRunHooks):Promise<LibraryPairBinding>{
     if(!/^[a-f0-9]{24}$/.test(id)||!/^[a-f0-9]{24}$/.test(version))return Promise.reject(new AdminError(400,'Invalid media identity.','invalid-request'));
-    return this.run({mode:'build-source',id,version},QUALITY_SOURCE_BUILD_LIMITS.maxElapsedMs,signal);
+    return this.run({mode:'build-source',id,version},QUALITY_SOURCE_BUILD_LIMITS.maxElapsedMs,signal,hooks);
   }
   measure(request:FramePairRequest,signal:AbortSignal,hooks?:QualityRunHooks):Promise<LibraryPairResult>{
     let budget;try{budget=pairBudget(request);}catch(error){return Promise.reject(error);}

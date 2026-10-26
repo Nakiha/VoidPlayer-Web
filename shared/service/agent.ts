@@ -6,6 +6,7 @@ import {QUALITY_RANGE_LIMITS} from '../analysis/quality/ranges.ts';
 import { PSNR_SPATIAL_LIMITS } from '../analysis/quality/psnr.ts';
 import { FORWARD_OUTPUT_GUARANTEE } from '../analysis/quality/frame-pair.ts';
 import {QUALITY_SOURCE_BUILD_LIMITS} from '../analysis/quality/source-build.ts';
+import {DISCOVERY_DICTIONARY} from '../media/discovery.ts';
 /** Discovery describes this deployment without starting work or creating users. */
 export function serviceCapabilities(storageEnabled: boolean, revealEnabled: boolean) {
   return { admin: storageEnabled, workspaces: storageEnabled, annotations: storageEnabled, reveal: revealEnabled };
@@ -28,6 +29,8 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
   const { capabilities: c, libraryReady, actor } = input;
   const capabilities: AgentCapability[] = [
     { id: 'library.browse', implemented: true, enabled: true, readiness: libraryReady ? 'ready' : 'index-warming', requiresBrowser: false, guide: AGENT_TASKS.library },
+    { id: 'library.discovery', implemented: true, enabled: true, readiness: libraryReady ? 'per-source' : 'index-warming', requiresBrowser: false, guide: AGENT_TASKS.library },
+    { id: 'library.preparations', implemented: true, enabled: !!input.qualityJobsEnabled, readiness: !input.qualityJobsEnabled ? 'unavailable' : actor ? 'per-source' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.library },
     { id: 'media.cached-info', implemented: true, enabled: true, readiness: 'per-source', requiresBrowser: false, guide: AGENT_TASKS.library },
     { id: 'media.cached-index-query', implemented: true, enabled: true, readiness: 'per-source', requiresBrowser: false, guide: AGENT_TASKS.library },
     { id: 'media.technical-filter', implemented: true, enabled: true, readiness: 'per-source', requiresBrowser: false, guide: AGENT_TASKS.library },
@@ -50,6 +53,8 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
     links: { guide: '/agent.md', index: '/llms.txt', health: '/api/health', tasks: AGENT_TASKS },
     capabilities,
     technicalFilter: { schema: TECHNICAL_FILTER_SCHEMA, version: 1, endpoint: TECHNICAL_FILTER_PATH, limits: TECHNICAL_FILTER_LIMITS, pagination: 'none', scope: 'explicit-candidates-cached-streams' },
+    libraryDiscovery: {...DISCOVERY_DICTIONARY,detail:'/api/media/{id}/discovery?v={version}',writeAction:'library-preparation',idempotencyHeader:'Idempotency-Key',
+      capturedActorHeader:'X-VoidPlayer-Actor',observerDisconnectCancels:false,automaticRetry:false,qualityAdmission:'existing-psnr-source-and-psnr-frames-only'},
     qualityJobs: { schema: 'voidplayer-psnr-frame-job', version: 1, metrics: ['psnr','ssim'], requiredMetrics:['psnr'],
       ssim:{optional:true,requestField:'ssim',variant:SSIM_VARIANT,standalone:false,resultField:'result.ssim',limits:SSIM_LIMITS,
         window:{size:8,step:4,weight:'uniform',border:'valid-truncate-to-4'},planes:'yuv420-native-code-values',weighting:'y4-u1-v1-plane-mean'}, scope: 'single-explicit-frame-pair',

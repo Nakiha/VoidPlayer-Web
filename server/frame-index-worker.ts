@@ -1,6 +1,7 @@
 import { parentPort, workerData } from 'node:worker_threads';
 import { openIndexDatabase } from './sqlite.ts';
 import { MediaIndexQueryStore } from './media-index-query.ts';
+import { DiscoveryCatalog } from './discovery/catalog.ts';
 import { FrameIndexStore } from './frame-index-store.ts';
 import { AdminError } from './admin-error.ts';
 import { frameIndexReply } from './frame-index-protocol.ts';
@@ -10,11 +11,19 @@ const db = openIndexDatabase(workerData.database);
 db.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000;');
 const store = new FrameIndexStore(db);
 const queries = new MediaIndexQueryStore(db);
+const discovery = new DiscoveryCatalog(db);
 
 parentPort!.on('message', (request: FrameIndexRequest) => {
   try {
     const send = parentPort!.postMessage.bind(parentPort!);
     switch (request.op) {
+      case 'discovery-browse':
+        send(frameIndexReply(request,discovery.browse(request.query,request.cancellation)));
+        break;
+      case 'discovery-detail':
+        if(request.cancellation&&Atomics.load(new Int32Array(request.cancellation),0))throw new AdminError(499,'Discovery query cancelled.','discovery-query-cancelled');
+        send(frameIndexReply(request,discovery.detail(request.source)));
+        break;
       case 'technical-filter':
         send(frameIndexReply(request, queries.technicalFilter(request.query, request.expectedSnapshot, request.cancellation)));
         break;

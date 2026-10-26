@@ -5,6 +5,7 @@
     "src/admin/annotations.ts",
     "src/admin/caches.ts",
     "src/admin/diagnostics.ts",
+    "src/admin/discovery.ts",
     "src/admin/main.ts",
     "src/admin/measurement.ts",
     "src/admin/presentation.ts",
