@@ -4,6 +4,7 @@ import type {FramePairRequest} from './frame-pair.ts';
 import type {FlvIndex} from '../../media/containers/flv-demux.ts';
 import type {LibraryPairResult} from './library-pair.ts';
 
+export const VMAF_SUPERVISOR_SOURCE_SHA256='df6ab9f43548839f3743d773958468f0e5f6416268006843eb68deab43eff48f';
 export const VMAF_SOURCE_REVISION='17a67b238ce0539bdeafdc95961abac64fa16ea8';
 export const VMAF_MODELS=Object.freeze({vmaf_v0_6_1:{file:'vmaf_v0.6.1.json',sha256:'5950d61fa1f861bd45d8149d80539ed9f3376cfc2495b8f0fa8e9f57cb131ee3'},vmaf_v0_6_1neg:{file:'vmaf_v0.6.1neg.json',sha256:'1fcda193aaa2a3136471b7516b3c5dc344546c05fcde2d58609f8c60a2387392'}});
 export const VMAF_LIMITS=Object.freeze({frames:32,width:1920,height:1080,minDimension:64,maxRawBytes:128*1024*1024,maxIndexBytes:64*1024*1024,maxIndexPackets:1000000,maxElapsedMs:120000,nativeCpuSeconds:60,nativeMemoryBytes:512*1024*1024,stdoutBytes:64*1024,resultBytes:4*1024*1024,queued:4,actorOutstanding:2,queueWaitMs:60000,historyRows:16,reservedBytes:64*1024*1024,page:4});

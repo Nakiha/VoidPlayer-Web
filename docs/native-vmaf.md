@@ -62,7 +62,7 @@ and libgcc; it does not invoke compiler/Python/ffmpeg tools.
 Copy only `manifest.json`, `vmaf`, `vmaf-limit`, both JSON models and `NOTICES.txt`
 to a private administrator-controlled installation directory. Retain the official
 [BSD-2-Clause-Patent license](https://github.com/Netflix/vmaf/blob/17a67b238ce0539bdeafdc95961abac64fa16ea8/LICENSE)
-and LIBSVM notice; the build creates `NOTICES.txt` from the fixed source. Configure
+and LIBSVM notice, plus the Web repository LGPL-2.1-or-later license/source notice for the separate resource supervisor. Its own repository revision and exact C source hash are also recorded and checked. The build creates `NOTICES.txt` from the fixed source. Configure
 `voidplayer.config.json`, then restart:
 
 ```json

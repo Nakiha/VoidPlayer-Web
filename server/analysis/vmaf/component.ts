@@ -1,6 +1,6 @@
 import {readFile,stat,realpath} from 'node:fs/promises';
 import path from 'node:path';import {createHash} from 'node:crypto';
-import {VMAF_MODELS,VMAF_SOURCE_REVISION,VmafError} from '../../../shared/analysis/quality/vmaf.ts';
+import {VMAF_MODELS,VMAF_SOURCE_REVISION,VMAF_SUPERVISOR_SOURCE_SHA256,VmafError} from '../../../shared/analysis/quality/vmaf.ts';
 import type {VmafComponentConfig,VmafModel} from '../../../shared/analysis/quality/vmaf.ts';
 const hash=(v:Uint8Array)=>createHash('sha256').update(v).digest('hex');
 export type VmafComponent={directory:string;manifestSha256:string;binary:string;supervisor:string;model:string;binarySha256:string;modelSha256:string;supervisorSha256:string;cliVersion:string;sourceRevision:string};
@@ -14,6 +14,7 @@ export async function verifyVmafComponent(config:VmafComponentConfig|undefined,m
   const bytes=await readFile(file);if(hash(bytes)!==config.manifestSha256)throw Error('Component manifest hash differs from service configuration');
   const m=JSON.parse(bytes.toString());
   if(m.schema!=='voidplayer-native-vmaf-component'||m.version!==1||m.platform!=='linux-x64'||m.source?.revision!==VMAF_SOURCE_REVISION||m.source?.repository!=='https://github.com/Netflix/vmaf.git'||m.cliVersion!=='17a67b2')throw Error('Unsupported component provenance/version');
+  const own=m.build?.supervisor;if(!own||own.repository!=='https://github.com/Nakiha/VoidPlayer-Web.git'||own.file!=='scripts/native/vmaf-limit.c'||own.sourceSha256!==VMAF_SUPERVISOR_SOURCE_SHA256||own.license!=='LGPL-2.1-or-later'||own.revision!==null&&!/^[a-f0-9]{40}$/.test(own.revision))throw Error('Native supervisor provenance missing or unsupported');
   const expected=['--buildtype=release','--default-library=static','-Db_ndebug=true','-Denable_tests=false','-Denable_docs=false','-Denable_asm=false','-Denable_avx512=false','-Dbuilt_in_models=false','-Denable_float=false','-Denable_cuda=false','-Denable_nvtx=false'];
   if(JSON.stringify(m.build?.options)!==JSON.stringify(expected))throw Error('Native build recipe changed');
   for(const name of ['vmaf','vmaf-limit','NOTICES.txt',...Object.values(VMAF_MODELS).map(v=>v.file)]){
