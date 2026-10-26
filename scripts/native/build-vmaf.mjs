@@ -8,7 +8,8 @@ await mkdir(out,{recursive:true});
 try{execFileSync('git',['-C',source,'rev-parse','HEAD']);}catch{await mkdir(path.dirname(source),{recursive:true});run('git',['clone','--filter=blob:none','--no-checkout',lock.repository,source]);}
 run('git',['-C',source,'checkout','--detach',lock.revision]);
 const revision=execFileSync('git',['-C',source,'rev-parse','HEAD'],{encoding:'utf8'}).trim();if(revision!==lock.revision||execFileSync('git',['-C',source,'status','--porcelain'],{encoding:'utf8'}).trim())throw Error('VMAF source must match the clean pinned revision');
-run(process.env.VMAF_MESON??'meson',['setup',build,path.join(source,'libvmaf'),...lock.options]);
+let configured=false;try{await readFile(path.join(build,'meson-private/coredata.dat'));configured=true;}catch{}
+run(process.env.VMAF_MESON??'meson',['setup',...(configured?['--reconfigure']:[]),build,path.join(source,'libvmaf'),...lock.options]);
 run(process.env.VMAF_NINJA??'ninja',['-C',build,'-j2']);
 await copyFile(path.join(build,'tools/vmaf'),path.join(out,'vmaf'));await chmod(path.join(out,'vmaf'),0o755);
 run(process.env.CC??'cc',['-O2','-Wall','-Wextra','-Werror',path.join(root,'scripts/native/vmaf-limit.c'),'-o',path.join(out,'vmaf-limit')]);

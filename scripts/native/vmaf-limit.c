@@ -17,8 +17,12 @@ int main(int argc,char **argv){
  pid_t parent=getppid();if(prctl(PR_SET_PDEATHSIG,SIGTERM)||getppid()!=parent)return 70;
  struct sigaction action={0};action.sa_handler=stop;sigemptyset(&action.sa_mask);sigaction(SIGTERM,&action,NULL);sigaction(SIGINT,&action,NULL);
  struct timespec start,end;clock_gettime(CLOCK_MONOTONIC,&start);
- child=fork();if(child<0)return 71;
- if(child==0){pid_t supervisor=getppid();if(prctl(PR_SET_PDEATHSIG,SIGKILL)||getppid()!=supervisor)_exit(70);
+ /* No native child starts before the service durably owns this supervisor. */
+ char gate=0;ssize_t count;
+ do{count=read(STDIN_FILENO,&gate,1);}while(count<0&&errno==EINTR&&!stopping);
+ if(stopping||count!=1||gate!='G')return 70;
+ pid_t supervisor=getpid();child=fork();if(child<0)return 71;
+ if(child==0){if(prctl(PR_SET_PDEATHSIG,SIGKILL)||getppid()!=supervisor)_exit(70);
   if(limit(RLIMIT_CPU,argv[1])||limit(RLIMIT_AS,argv[2])||limit(RLIMIT_FSIZE,argv[3]))_exit(72);
   struct rlimit core={0,0};if(setrlimit(RLIMIT_CORE,&core))_exit(72);
   execv(argv[4],argv+4);_exit(73);
