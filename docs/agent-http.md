@@ -2,7 +2,7 @@
 
 运行服务后，从同一 origin 打开 `/llms.txt` 查看短索引，`/agent.md` 查看工作流程，`/api/agent` 获取版本化 JSON 能力描述。按任务继续读取 `/agent/library.md`、`workspaces.md`、`annotations.md`、`quality.md`、`live-session.md` 或 `errors.md`。这些文件由 `server/agent-guide.ts` 内嵌，GET/HEAD 不依赖前端构建，也不会创建身份、扫描媒体或提交任务。
 
-`implemented` 表示代码支持，`enabled` 表示部署启用，`readiness` 表示当前条件。媒体内容逐源判断，浏览器视图需要活动会话；`quality.frame-pair` 提供受限的[一次性媒体库 PSNR 调用](source-library-psnr.md)，不需要浏览器；`quality.jobs` 提供受限的[单帧 PSNR 持久任务](source-psnr-jobs.md)，qualityJobs 对象列出精确请求/端点/预算，支持单个明确帧对的 PSNR、可选固定变种 SSIM 及至多 64 块源网格，已接持久任务 GUI、共享证据和独立原帧查看。闭合 GOP 的重排/延迟输出使用固定 packet identity ABI1 与 opaque token，不按 PTS 归属 AU。`quality.vmaf` 另提供可选 Linux x64 原生组件的受限连续序列 VMAF；固定官方源码、模型、recipe、原始平面、逐帧与池化结果见 [native-vmaf.md](native-vmaf.md)。它不把稀疏 range 拼成连续视频，也不表示任意 ROI／容器支持。CAMBI、本机 MCP 桥接和远程 worker 仍未实现；#114/#121 没有整体完成。`/api/health` 的原有字段保持兼容。
+`implemented` 表示代码支持，`enabled` 表示部署启用，`readiness` 表示当前条件。媒体内容逐源判断，浏览器视图需要活动会话；`quality.frame-pair` 提供受限的[一次性媒体库 PSNR 调用](source-library-psnr.md)，不需要浏览器；`quality.jobs` 提供受限的[单帧 PSNR 持久任务](source-psnr-jobs.md)，qualityJobs 对象列出精确请求/端点/预算，支持单个明确帧对的 PSNR、可选固定变种 SSIM 及至多 64 块源网格，已接持久任务 GUI、共享证据和独立原帧查看。闭合 GOP 的重排/延迟输出使用固定 packet identity ABI1 与 opaque token，不按 PTS 归属 AU。`quality.vmaf` 另提供可选 Linux x64 原生组件的受限连续序列 VMAF；固定官方源码、模型、recipe、原始平面、逐帧与池化结果见 [native-vmaf.md](native-vmaf.md)。它不把稀疏 range 拼成连续视频，也不表示任意 ROI／容器支持。`quality.cambi` 已提供 [Linux x64 单源无参考区间筛查](native-cambi.md)，包括真实五尺度热图与显式共享候选，不要求参考关系；本机 MCP 桥接和远程 worker 仍未实现；#114/#121 没有整体完成。`/api/health` 的原有字段保持兼容。
 
 ## 无页面写入
 
@@ -40,3 +40,12 @@ HTTP 客户端先显式 POST `/api/identity` 并保存 cookie，再向 `/api/ann
 暂停原生画面另有可选页面工具 `capture_presented_quality_frame`，返回 `voidplayer-native-presented-input` 未绑定见证，不是评分请求。必须将实际同服务版本传输、精确 AU/配置字节/包范围与时钟、可信 cache namespace/build 和几何逐项绑定；不按 PTS 搜索或自动建索引。原生路径不支持时明确拒绝，HTTP Agent 的显式 AU 业务能力不受此 GUI 子集限制。缺缓存可单独显式 `POST /api/media/{id}/psnr-index`（`{version}`、actor cookie/header、同源 Origin、action `quality-source-build`）；读取、快照和评分不会调用它。预算、取消和原始像素边界见 [暂停原生帧 ROI](paused-native-quality.md)。
 
 媒体库已注册来源的技术选片、未知覆盖、一致分页和显式有预算 probe/可信 FLV 索引准备，使用 [媒体技术发现](library-discovery.md) 的同一 GUI/HTTP 命令。`/api/library/discovery-schema` 给出字段、请求、状态机、预算和支持矩阵；MP4/MKV/TS 元数据可读不等于可评分。
+
+
+## CAMBI single-source no-reference screening
+
+Use `GET /api/quality/cambi/capability`, then select a versioned source in `/api/library/discovery` and read `/api/media/{id}/psnr-source?v=VERSION`. Copy its full binding into `POST /api/quality/cambi/jobs` (same-origin quality-job, captured actor, original Idempotency-Key). No reference/C plan/model is required. The exact body, budgets and no-GUI HTTP example are in [native-cambi.md](native-cambi.md). Unsupported cache/source/geometry/color is explicit; do not auto-build an index.
+
+Observe `/jobs/{id}`, `/result`, bounded `/frames?after=N&limit=4` and on-demand `/heatmap?index=N&scale=S`. A provisional frame is not a completed immutable result. Read coverage/unsampled/unsupported separately; no temporal tracking. Higher CAMBI means more banding and is uncalibrated, not pass/fail. Cancel explicitly; closing observation does not cancel. Restart interrupts without automatic recomputation.
+
+Explicit `/candidates` policy `{space,minScore,limit,scale,cellThreshold,text,severity}` derives actual heatmap-cell bounds. Shared `create-cambi-candidate` commands, receipts, edits, imports and independent raw/heatmap viewing use the same single-source facts. Regional heatmap statistics are not cropped rescoring. Linux x64 trusted installed fixed v3.0.0 component only; no prediction model/full_ref, HDR, extra containers or GPU. Reference integrity remains not-certified and concealment unavailable; existing performance16/16 failure is unchanged.

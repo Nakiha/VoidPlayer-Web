@@ -44,7 +44,7 @@ export async function runCambiDecode(data:{mode:'decode'|'verify'|'picture';targ
      check();const width=(pi?d.width/2:d.width)*(l.bitDepth===8?1:2),line=f.pixels.subarray(plane.offset+y*plane.stride,plane.offset+y*plane.stride+width);
      if(result.rawBytes+line.length>data.input.budget.maxRawBytes)throw new CambiError('budget-exceeded','CAMBI raw bytes budget');let n=0;while(n<line.length){const wrote=writeSync(fd,line,n,line.length-n);if(!wrote)throw new CambiError('source-io-failed','CAMBI short write');n+=wrote;}hash.update(line);result.rawBytes+=line.length;
     }}finally{if(fd!==undefined)closeSync(fd);Atomics.sub(control,1,1);Atomics.notify(control,1);}
-    result.frames.push({index:ordinal,target,provenance:picture.provenance,decoder:picture.decoder,context:source.annotationContext,proof:source.proof,rawSha256:hash.digest('hex'),score:null,heatmaps:[]});result.work.heapBytes=Math.max(result.work.heapBytes,core!.heap().byteLength);progress(ordinal+1,targets.length);
+    result.frames.push({index:ordinal,target,provenance:picture.provenance,sourceGeometry:picture.sourceGeometry,decoder:picture.decoder,context:source.annotationContext,proof:source.proof,rawSha256:hash.digest('hex'),score:null,heatmaps:[]});result.work.heapBytes=Math.max(result.work.heapBytes,core!.heap().byteLength);progress(ordinal+1,targets.length);
    }finally{source.source.close();}
   }
   const final=open(targets.at(-1)!);final.source.close();check();result.work.indexBytes=indexBytes;result.work.indexPackets=indexPackets;result.work.elapsedMs=Math.ceil(performance.now()-started);return result;

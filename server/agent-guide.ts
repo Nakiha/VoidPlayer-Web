@@ -694,7 +694,41 @@ full-frame temporal scores are not heatmaps/localized defect certification. Impo
 historical. Reference integrity is not certified and concealment detection is unavailable.
 See docs/native-vmaf.md for installation, contract, notices and independent reference tests.
 
-There is no automatic alignment, CAMBI executor, shared computation,
+quality.cambi is the single-source no-reference banding executor, independent of C reference relationships.
+GET /api/quality/cambi/capability executes the fixed official v3.0.0 feature plus five heatmap self-test.
+Reuse the trusted Linux x64 nativeVmaf component configuration; unavailable or missing-feature states
+are explicit. HTTP cannot supply a model/executable/output path. CAMBI loads no prediction model,
+full_ref=false, eotf=bt1886, window_size=63, topk=0.6, tvi_threshold=0.019, max_log_contrast=2,
+original encoding geometry/depth, internal10bit, one thread and no temporal tracking.
+Choose a source using /api/library/discovery and copy GET /api/media/{id}/psnr-source?v=VERSION
+binding. Missing cache requires a separate explicit preparation; submitting never builds an index.
+POST /api/quality/cambi/jobs with quality-job, captured actor/cookie and retained Idempotency-Key:
+{schema:"voidplayer-cambi-job",version:1,client:{id:"nr-agent",kind:"agent"},source:EXACT_BINDING,
+ interval:{startPtsUs:0,endPtsUs:1000000},sampling:{stride:1},
+ budget:{maxRawBytes:67108864,maxHeatBytes:33554432,maxTemporaryBytes:268435456,
+ maxElapsedMs:120000,nativeCpuSeconds:60,nativeMemoryBytes:536870912}}
+No reference, plan or VMAF model. First scope is1..32 selected pictures/256 interval AUs,
+trusted complete FLV H264/HEVC8/10bit limited BT709 SDR, square uncropped frames with long edge320.
+Negative/VFR/ambiguous clocks, HDR and other containers remain unsupported. Sampling and unsupported
+holes are separate coverage facts; they are not whole-file coverage or tracked objects.
+GET /api/quality/cambi/jobs?after=ROW&limit=8, /jobs/{id}, /jobs/{id}/result,
+/jobs/{id}/frames?after=INDEX&limit=4 and /jobs/{id}/heatmap?index=N&scale=S give bounded facts.
+Frame pages distinguish provisional-uncommitted-attempt from immutable-completed. Native failure,
+incomplete, unsupported and zero are distinct. Higher means more banding, not a calibrated quality line.
+POST /jobs/{id}/cancel {} explicitly stops; observer close does not cancel. Physical Worker/process/IO
+exit precedes shared admission release. All five output files and JSON/raw disk budgets are charged.
+Restart interrupts and never automatically recomputes. Immutable completed results may explicitly
+publish /jobs/{id}/candidates {space,minScore,limit,scale,cellThreshold,text,severity}.
+The uncalibrated caller policy bounds real nonzero heatmap cells, not a fake score-only box.
+The atomic shared annotation command is create-cambi-candidate with cambi:{jobId,attemptId,digest,
+index,scale,region:{x,y,width,height}} plus candidate:{text,severity}. It consults durable receipts
+before private result resolution. Attachments are single-source, not invented reference pairs;
+regional heatmap statistics are not cropped CAMBI recomputation. New windows consume shared facts
+and exact raw snapshots without querying another actor's private job or disturbing playback.
+Imports are historical; reference integrity is not certified and concealment detection is unavailable.
+See docs/native-cambi.md for installation, sample licenses, bounds and false-positive/negative observations.
+
+There is no automatic alignment, shared computation,
 automatic index construction, retry/resume or distributed worker.
 These capabilities do not mean #114 or #121 is complete.
 

@@ -18,7 +18,7 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 - `server/analysis/quality/`：媒体库到一次性 PSNR HTTP 调用的文件、缓存、Node/Bun Worker 适配，见 `docs/source-library-psnr.md`。可信 producer evidence 只能由服务端完成扫描后提交；评分不得重建索引。实例质量准入排斥索引构建/上传和码流工作，物理退出前不能释放许可。一次性请求与持久任务的连接/取消契约分开。
 - 持久单帧 PSNR 位于同目录 `job-{request,store,service,routes}.ts`，见 `docs/source-psnr-jobs.md`。提交幂等与终态/结果使用事务；运行由服务持有，观察断线不取消，取消须等待物理退出。独占锁后恢复 interrupted，无自动重试/共享/建索引；`quality.jobs` 仅声明显式单帧 PSNR，不代表 #121 全部完成。
 - 单帧 PSNR GUI 任务编排位于 `src/admin/quality.ts`、观察/幂等适配位于 `src/analysis/quality/job-observer.ts` 与 `src/services/quality-jobs.ts`，见 `docs/psnr-task-workflow.md`。只读取可信缓存候选，不借播放游标/CSS，不自动建索引；关闭观察不取消持久执行，身份/client/标注空间迟到回复必须围栏。
-- 已完成 PSNR 结果与现有共享标注的显式挂接见 `docs/annotation-psnr-evidence.md`，契约位于 `shared/review/quality-evidence.ts`。GUI/Agent 共用持久命令，普通编辑不得丢附件，导入/复制只保留历史事实并降权。普通证据工作区/评审为 v2，测量候选为 v3，无附件保持 v1；标注数据库为 v4，旧版本须拒绝。
+- 已完成 PSNR 结果与现有共享标注的显式挂接见 `docs/annotation-psnr-evidence.md`，契约位于 `shared/review/quality-evidence.ts`。GUI/Agent 共用持久命令，普通编辑不得丢附件，导入/复制只保留历史事实并降权。普通证据工作区/评审为 v2，测量候选为 v3，无附件保持 v1；标注数据库为 v5，旧版本须拒绝。
 - 共享附件的显式只读原帧对/ROI 查看见 `docs/annotation-psnr-pair-view.md`。独立快照会话通过原缓存/AU 解码但不计算分数；历史附件、缓存变化和不支持的几何必须拒绝，不得借普通播放器自动建索引。
 - `scripts/dev.ts` 同进程启动 Vite 和媒体 API；`scripts/service.mjs` 管理 macOS 用户服务；`deploy/` 为便携运行与自动用户使用说明。
 - `test/{unit,contract,media}/`：node:test，无浏览器依赖；`helpers/` 为可复用模块，顶层旧文件为兼容入口。WASM 用例在 Node worker_threads 里跑真实 core。
@@ -102,3 +102,5 @@ node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 媒体库技术发现与显式准备见 `docs/library-discovery.md`；共享字段/过滤/请求规范在 `shared/media/discovery.ts`，生产无解码 probe 在 `shared/media/probe.ts`，服务适配在 `server/discovery/`。发现只读复用有界缓存或已有 probe，不隐式读取媒体、建索引或提升评分准入；parser-local stream/clock 不能冒用质量 AU/namespace/build。准备任务与评分共享实例执行准入，取消必须等待 IO/DB 关闭和 Worker 物理退出；观察断线不取消后台工作。
 
 原生连续序列 VMAF 见 `docs/native-vmaf.md`。固定官方 Netflix/vmaf v3.0.0 与 v0.6.1/NEG 模型，Linux x64 可信组件由宿主配置 manifest hash，不依赖 PATH 或接受 HTTP 程序路径。共享计划/准入在 `shared/analysis/quality/vmaf.ts`，独立 native 进程和持久服务在 `server/analysis/vmaf/`，GUI 为 `src/admin/quality-vmaf.ts`。只消费已提交 C 计划；连续呈现顺序与整帧 SDR 色彩/几何严格准入，不能把稀疏抽样拼成时序。PSNR/SSIM 与 native 状态独立，实际退出后才释放容量；序列附件不可伪装空间热图。
+
+原生单源 CAMBI 见 `docs/native-cambi.md`：共享契约/预算在 `shared/analysis/quality/cambi.ts`，持久服务在 `server/analysis/cambi/`，复用已固定 native 组件、真实 Worker/supervisor 与实例共享准入，不要求 C 参考计划或虚构 PSNR pair。五尺度原始 gray16le 证据逐帧按需读，区域只表示热图统计/源坐标格点映射，不是小裁剪重算或目标跟踪。共享单源候选命令/附件在 `shared/review/cambi-evidence.ts` 与既有标注事务，版本3导出和DB5兼容围栏必须保留；导入降历史。GUI在 `src/admin/quality-cambi.ts` 与 `src/ui/cambi-view.ts`，原始源快照必须重新核源/cache/AU/rawSHA并经presenter，不能干预原播放器或查非owner私有job。

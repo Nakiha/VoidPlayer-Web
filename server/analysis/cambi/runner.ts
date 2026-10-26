@@ -14,7 +14,7 @@ export class NativeCambiRunner extends NativeVmafRunner{
     await this.nativeCambi(c,directory,input,{geometry:{width:320,height:64,bitDepth:8},frames:[{index:0}],output} as CambiPrepared,signal,()=>{});
     return {...basic,enabled:true,reason:null,component:{manifestSha256:c.manifestSha256,sourceRevision:c.sourceRevision,cliVersion:c.cliVersion},selfTest:'executed-CAMBI-and-five-heatmaps'};
    }finally{if(!this.stopUncertain)rmSync(directory,{recursive:true,force:true});}
-  });}catch(error){return {...basic,reason:(error as {code?:string}).code??'component-unavailable'};}
+  });}catch(error){const code=(error as {code?:string}).code??'execution-failed';return {...basic,reason:['quality-busy','component-unavailable'].includes(code)?code:'cambi-feature-unavailable',selfTestFailure:code};}
  }
  directory(id:string){if(!/^[a-zA-Z0-9-]{1,100}$/.test(id))throw new CambiError('invalid-request','Invalid temporary job ID');return path.join(this.library.indexDatabase+'.cambi-tmp',id);}
  async runCambi(id:string,input:CambiInput,signal:AbortSignal,hooks:CambiHooks){return this.owned(input,signal,hooks.admitted,async combined=>{
@@ -37,7 +37,7 @@ export class NativeCambiRunner extends NativeVmafRunner{
  private async nativeCambi(c:VmafComponent,directory:string,input:CambiInput,prepared:CambiPrepared,signal:AbortSignal,onProcess:CambiHooks['process']):Promise<CambiNative>{
   mkdirSync(path.join(directory,'heat'),{mode:0o700});const count=prepared.frames.length,g=prepared.geometry,expected=g.width*g.height*3/2*(g.bitDepth===8?1:2)*count;
   if(lstatSync(path.join(directory,'source.yuv')).size!==expected)throw new CambiError('native-result-invalid','CAMBI raw frame length differs');
-  const args=[String(input.budget.nativeCpuSeconds),String(input.budget.nativeMemoryBytes),String(prepared.output.fileCap),c.binary,'--reference','source.yuv','--distorted','source.yuv','--width',String(g.width),'--height',String(g.height),'--pixel_format','420','--bitdepth',String(g.bitDepth),'--no_prediction','--feature','cambi=window_size=63:topk=0.6:tvi_threshold=0.019:max_log_contrast=2:heatmaps_path=heat','--threads','1','--cpumask','0','--json','--output','result.json','--quiet'];
+  const args=[String(input.budget.nativeCpuSeconds),String(input.budget.nativeMemoryBytes),String(prepared.output.fileCap),c.binary,'--reference','source.yuv','--distorted','source.yuv','--width',String(g.width),'--height',String(g.height),'--pixel_format','420','--bitdepth',String(g.bitDepth),'--no_prediction','--feature','cambi=window_size=63:topk=0.6:tvi_threshold=0.019:max_log_contrast=2:eotf=bt1886:full_ref=false:heatmaps_path=heat','--threads','1','--cpumask','0','--json','--output','result.json','--quiet'];
   const resources=await this.executeNative(c,directory,args,signal,onProcess);signal.throwIfAborted();
   const names=readdirSync(path.join(directory,'heat')).sort(),expectedNames=prepared.output.scales.map(s=>s.file).sort();
   if(JSON.stringify(names)!==JSON.stringify(expectedNames))throw new CambiError('native-result-invalid','Expected exactly five official CAMBI scale files');
