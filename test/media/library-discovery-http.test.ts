@@ -22,7 +22,13 @@ async function setup(t:any,persistent=true){const dir=await mkdtemp(path.join(tm
   return {dir,media,library,server,base,headers,post,wait,entries:library.browse({recursive:true}).entries};
 }
 test('real HTTP discovers unknown without media IO, explicitly probes MP4/Matroska/TS/FLV, and never admits metadata as scoring',async t=>{
-  const f=await setup(t);const initial=await fetch(f.base+'/api/library/discovery?codec=h264&limit=2').then(r=>r.json());assert.equal(initial.coverage.total,4);assert.equal(initial.coverage.cumulative.unknown,2);
+  const f=await setup(t);
+  const schema=await fetch(f.base+'/api/library/discovery-schema').then(r=>r.json()),agent=await fetch(f.base+'/api/agent').then(r=>r.json());
+  for(const key of Object.keys(schema))assert.deepEqual(agent.libraryDiscovery[key],schema[key],key);assert.equal(schema.preparationRequest.responses.accepted,202);assert.equal(schema.limits.probeBytes,4*1024*1024);
+  assert.match(schema.fields.streamInventory,/subtitle\/data\/unknown/);assert.match(schema.fields.clock,/not-established/);
+  const head=await fetch(f.base+'/api/library/discovery-schema',{method:'HEAD'});assert.equal(head.status,200);assert.equal(await head.text(),'');
+  const guide=await fetch(f.base+'/agent/library.md').then(r=>r.text());for(const term of ['recordsReady=1','streamInventoryComplete','X-VoidPlayer-Actor','physical','initial container declarations'])assert.ok(guide.includes(term),term);
+  const initial=await fetch(f.base+'/api/library/discovery?codec=h264&limit=2').then(r=>r.json());assert.equal(initial.coverage.total,4);assert.equal(initial.coverage.cumulative.unknown,2);
   const continued=await fetch(f.base+`/api/library/discovery?codec=h264&limit=2&cursor=${initial.nextCursor}`).then(r=>r.json());assert.equal(continued.coverage.exhausted,true);assert.equal(continued.coverage.cumulative.unknown,4);
   assert.equal(new Set([...initial.entries,...continued.entries].map((e:any)=>e.source.id)).size,4);
   assert.equal(Number(f.library.discovery.store.db.prepare('SELECT count(*) AS n FROM media_index_manifests').get()!.n),0);
@@ -44,6 +50,13 @@ test('real HTTP discovers unknown without media IO, explicitly probes MP4/Matros
   const done=await f.wait((await built.json()).job.id);assert.equal(done.state,'completed',JSON.stringify(done));
   assert.equal((await fetch(`${f.base}/api/media/${flv.id}/psnr-source?v=${flv.version}`,{headers:f.headers})).status,200);
   assert.equal((await fetch(f.base+`/api/library/discovery?codec=h264&limit=2&cursor=${initial.nextCursor}`)).status,409,'cache/probe change invalidates real HTTP continuation');
+  const release=f.library.qualityAdmission.acquire(),changedKey=randomUUID(),changedBody={source:{id:flv.id,version:flv.version},operation:'probe',client:{id:'agent',name:'HTTP Agent'}};
+  try{const accepted=await f.post(changedBody,changedKey);assert.equal(accepted.status,202);const id=(await accepted.json()).job.id;
+    await writeFile(path.join(f.media,'reference.flv'),Buffer.concat([Buffer.from(sample.flv,'base64'),Buffer.from([0])]));await f.library.refresh();release();
+    const failed=await f.wait(id);assert.equal(failed.state,'failed');assert.equal(failed.reason.code,'source-changed');assert.equal(failed.result,null);
+    const replay=await f.post(changedBody,changedKey);assert.equal(replay.status,200);assert.equal((await replay.json()).job.id,id,'receipt remains replayable after actual source version change');
+    assert.equal((await fetch(f.base+`/api/media/${flv.id}/discovery?v=${flv.version}`)).status,409);
+  }finally{release();}
 });
 test('durable preparations respect shared busy admission, per-actor/global queue budgets, cancellation and ephemeral discovery',async t=>{
  const f=await setup(t),entry=f.entries[0],body={source:{id:entry.id,version:entry.version},operation:'probe',client:{id:'agent',name:'HTTP Agent'}};

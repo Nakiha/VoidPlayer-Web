@@ -6,6 +6,15 @@ async function setup(t:any){const dir=await mkdtemp(path.join(tmpdir(),'vp-probe
  const library=new MediaLibraryIndex([dir],{database:path.join(dir,'library.sqlite'),watch:false});await library.refresh();const entry=library.browse({recursive:true}).entries[0];
  const cleanup:(()=>Promise<unknown>|void)[]=[];t.after(async()=>{for(const close of cleanup)await close();await library.close();await rm(dir,{recursive:true,force:true});});return{dir,library,cleanup,source:{id:entry.id,version:entry.version!}};}
 const stage=async(state:Int32Array)=>{const until=Date.now()+10000;while(!Atomics.load(state,0)){if(Date.now()>until)throw Error('Real probe file stage not reached');await new Promise(r=>setTimeout(r,5));}};
+test('source replacement during actual open and final publication IO never publishes a stale probe',async t=>{
+ for(const phase of ['opened','publish'] as const){const f=await setup(t),state=new Int32Array(new SharedArrayBuffer(8));let worker!:Worker,exited=false;
+  const runner=new DiscoveryProbeRunner(f.library.indexDatabase,f.library.qualityAdmission,data=>{worker=new Worker(new URL('../helpers/discovery-phase-worker.ts',import.meta.url),{workerData:{...data,phaseState:state.buffer,hangPhase:phase}});worker.once('exit',()=>exited=true);return worker;});f.cleanup.push(()=>runner.close());
+  const work=runner.run(f.source,new AbortController().signal,()=>{}),handled=work.then(()=>({ok:true,error:null as any}),error=>({ok:false,error}));
+  await stage(state);await writeFile(path.join(f.dir,'source.flv'),Buffer.concat([Buffer.from(sample.flv,'base64'),Buffer.from([0])]));worker.postMessage({type:'resume'});
+  const result=await handled;assert.equal(result.ok,false);assert.equal(result.error.code,'source-changed');assert.equal(exited,true);
+  const release=f.library.qualityAdmission.acquire();release();
+ }
+});
 test('real probe cancellation/deadline/close explicitly close files before termination and retain admission until physical exit',async t=>{
  for(const phase of ['opened','publish'] as const)for(const mode of ['abort','deadline','close'] as const){const f=await setup(t),state=new Int32Array(new SharedArrayBuffer(8));
   let exited=false,allowStop!:()=>void,deadline!:()=>void,stopRequested=false;const stopGate=new Promise<void>(r=>allowStop=r);

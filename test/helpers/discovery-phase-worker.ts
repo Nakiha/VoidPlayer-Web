@@ -7,5 +7,5 @@ try{const value=await runProbeTask(workerData,async(phase,fd)=>{
   if(phase==='parse')for(;;){ /* Deliberate CPU-bound parser-stage fault. No open file or database. */ }
   await new Promise<void>(resolve=>parentPort!.once('message',()=>resolve()));
 });parentPort!.postMessage({ok:true,value});}
-catch{parentPort!.postMessage({ok:false,code:'cancelled'});}
+catch(error){parentPort!.postMessage({ok:false,code:error instanceof Error?error.message:'probe-failed'});}
 finally{parentPort!.on('message',()=>{});}

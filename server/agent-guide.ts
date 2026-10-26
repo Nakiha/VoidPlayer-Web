@@ -50,10 +50,15 @@ const library = `# Library and original media
 
 GET /api/library/discovery-schema describes the version-1 field dictionary,
 support matrix and budgets. GET /api/library/discovery?codec=h264&limit=16
-queries already prepared metadata across registered library rows. Unknown sources
+queries prepared metadata or existing bounded cache evidence across registered library rows. Unknown sources
 remain visible by default (includeUnknown=1), never silently counted as negatives.
 Filters also accept min/max Width/Height, bitDepth, colorTransfer and min/max
-DurationUs. Predicates are AND within one video stream, not joined across streams.
+DurationUs and recordsReady=1. Without technical conditions, registered rows match
+regardless of preparation. recordsReady=1 uses only exact cache identities; other
+conditions prefer a prepared probe, with bounded cache fallback when absent.
+Predicates are AND within one video evidence stream, not joined across streams,
+probe/cache views or cache namespaces. Derived parser defaults cannot satisfy
+exact conditions. Conflicting or truncated cached evidence remains unknown.
 Each bounded page inspects at most64 sources; nextCursor may accompany an empty
 page. Repeat the SAME query and limit with cursor=nextCursor. Coverage page and
 cumulative counters are distinct; whole-scope match/unknown totals are available
@@ -72,7 +77,11 @@ index-query links remain the source of exact cache namespace/stream/build and
 bounded raw-clock packet records. Metadata readability does NOT admit scoring:
 MP4/QuickTime, Matroska/WebM and bounded TS probes do not extend the trusted FLV
 quality matrix. FLV probe observes only the initial video configuration, so it
-does not claim complete stream inventory or packet coverage.
+does not claim complete stream inventory or packet coverage. Bounded MP4/QuickTime
+trak and Matroska/WebM Tracks inventories include initial subtitle/data/unknown
+rows. streamInventoryComplete means only initial container declarations; it never
+certifies later configuration changes or all packets. Header budget or parser
+disagreement leaves the inventory incomplete; TS remains initial and incomplete.
 
 POST /api/library/preparations explicitly submits one service-owned operation:
 {"source":{"id":"ID","version":"VERSION"},"operation":"probe","client":{"id":"agent-1","name":"Selection Agent"}}
@@ -87,7 +96,13 @@ the current actor's history; GET /api/library/preparations/JOB returns the immut
 terminal result or current state. POST /api/library/preparations/JOB/cancel with{}
 requests explicit cancellation with the same captured actor and action headers.
 Observation disconnect does not cancel. Queued/running/cancelling are not terminal;
-capacity is retained until the actual Worker exits. No automatic attempt retry.
+capacity is retained until active IO/DB handles close and the physical Worker exits.
+Cancellation/deadline settlement can extend through IO drain; it never frees a
+permit early. No automatic attempt retry. Queued jobs expire after60 seconds;
+preparation queue budgets are8 globally/4 per actor, not a combined bound on all
+other subsystem queues. Actual execution shares the existing exclusive quality
+admission with scoring/index/bitstream work. History is bounded to1000 rows/64MiB;
+GET collection limit=1..32 and before=next is newest-first continuation.
 
 probe reads at most4MiB/512 requests/32 streams/30 seconds in a256MiB owned Worker;
 it uses existing container/configuration parsers, no ffprobe executable or decoder.
