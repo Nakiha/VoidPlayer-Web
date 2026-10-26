@@ -3705,6 +3705,18 @@
     "source": "按此冻结计划提交评分",
     "params": {}
   },
+  "qualityClock.forgetFrozen": {
+    "source": "结束本地重试，准备新请求",
+    "params": {}
+  },
+  "qualityClock.pendingConflict": {
+    "source": "先重试原冻结请求，或显式结束本地重试后再编辑。",
+    "params": {}
+  },
+  "qualityClock.pendingNotice": {
+    "source": "提交结果未确认时，保留原请求与重试键。重试不会新建另一项工作；结束本地重试不会取消服务端工作。",
+    "params": {}
+  },
   "qualityClock.pin": {
     "source": "读取并固定此关系的现有缓存",
     "params": {}
@@ -3723,6 +3735,10 @@
   },
   "qualityClock.removeSegment": {
     "source": "移除此段",
+    "params": {}
+  },
+  "qualityClock.retryFrozen": {
+    "source": "重试原冻结提交",
     "params": {}
   },
   "qualityClock.sampling": {

@@ -3465,6 +3465,18 @@
     "source": "按此冻结计划提交评分",
     "translation": "Submit scoring from this frozen plan"
   },
+  "qualityClock.forgetFrozen": {
+    "source": "结束本地重试，准备新请求",
+    "translation": "End local retries and prepare a new request"
+  },
+  "qualityClock.pendingConflict": {
+    "source": "先重试原冻结请求，或显式结束本地重试后再编辑。",
+    "translation": "Retry the original frozen request, or explicitly end local retries before editing."
+  },
+  "qualityClock.pendingNotice": {
+    "source": "提交结果未确认时，保留原请求与重试键。重试不会新建另一项工作；结束本地重试不会取消服务端工作。",
+    "translation": "Unconfirmed submissions retain their original request and retry key. Retry reuses that work. Ending local retries does not cancel service-owned work."
+  },
   "qualityClock.pin": {
     "source": "读取并固定此关系的现有缓存",
     "translation": "Read and pin existing caches for this relation"
@@ -3484,6 +3496,10 @@
   "qualityClock.removeSegment": {
     "source": "移除此段",
     "translation": "Remove segment"
+  },
+  "qualityClock.retryFrozen": {
+    "source": "重试原冻结提交",
+    "translation": "Retry the original frozen submission"
   },
   "qualityClock.sampling": {
     "source": "抽样计划",

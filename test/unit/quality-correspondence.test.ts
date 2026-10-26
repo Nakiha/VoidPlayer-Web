@@ -12,9 +12,27 @@ import {LibraryPairRunner} from '../../server/analysis/quality/runner.ts';
 import {QualityAdmission} from '../../server/quality-admission.ts';
 import type {MediaLibraryIndex} from '../../server/library.ts';
 import type {QualityRangeService} from '../../server/analysis/quality/range-service.ts';
+import {CORRESPONDENCE_LIMITS} from '../../shared/analysis/quality/correspondence.ts';
+import {openIndexDatabase} from '../../server/sqlite.ts';
+import {randomUUID} from 'node:crypto';
 
 const work={indexBytes:100,indexPackets:4,sourceReadBytes:0 as const,decodedFrames:0 as const,elapsedMs:1};
 const until=async(fn:()=>boolean)=>{for(let n=0;n<500;n++){if(fn())return;await new Promise(r=>setTimeout(r,5));}assert.fail('Planner transition timeout');};
+test('independent actor/queue and row/byte reservations reject new plans while retaining original receipts',async t=>{
+  const directory=await mkdtemp(join(tmpdir(),'vp-clock-caps-')),file=join(directory,'plans.sqlite'),gate=new QualityAdmission(),held=gate.acquire();
+  const runner=new LibraryPairRunner({qualityAdmission:gate,indexDatabase:'/unused'} as MediaLibraryIndex,'/unused',()=>{assert.fail('Queued/cancelled planning must start no Worker');});
+  let service=new CorrespondenceService(file,runner,{} as QualityRangeService);t.after(async()=>{held();await service.close();await runner.close();await rm(directory,{recursive:true,force:true});});
+  const f=await correspondenceFixture(),owner={id:'owner',name:'Owner'},owned=new Map<string,string>();
+  const submit=(actor=owner,key='first')=>{let id=owned.get(actor.id);if(!id){id=service.createRelation(f.relation.input,actor,'relation','relation').relation.id;owned.set(actor.id,id);}return service.submit({...f.request,relation:{id,revision:1}},actor,'original',key).plan;};
+  const first=submit();submit(owner,'second');assert.throws(()=>submit(owner,'over-actor'),{code:'correspondence-queue-full'});const other={id:'other',name:'Other'},third={id:'third',name:'Third'};submit(other);submit(third);assert.throws(()=>submit({id:'fourth',name:'Fourth'}),{code:'correspondence-queue-full'});
+  assert.throws(()=>service.submit({...f.request,relation:{id:owned.get(owner.id),revision:1}},other,'foreign','foreign'),{code:'relation-not-found'});
+  for(const actor of [owner,other,third])for(const plan of service.history(actor.id).entries)service.cancel(plan.id,actor.id);await service.close();
+  const db=openIndexDatabase(file),row=db.prepare('SELECT * FROM quality_correspondence_plans WHERE id=?').get(first.id)!;
+  try{for(let i=4;i<100;i++){const id=randomUUID(),body=JSON.parse(String(row.body));body.id=id;body.key=`history-${i}`;db.prepare('INSERT INTO quality_correspondence_plans VALUES(?,?,?,?,?,?,?,?)').run(id,row.actor,row.client,body.key,row.fingerprint,JSON.stringify(body),null,row.reserved);}}finally{db.close();}
+  service=new CorrespondenceService(file,runner,{} as QualityRangeService);assert.equal(submit().id,first.id);assert.throws(()=>submit(owner,'row-full'),{code:'correspondence-history-full'});await service.close();
+  const bytes=openIndexDatabase(file);try{bytes.prepare('DELETE FROM quality_correspondence_plans WHERE id!=?').run(first.id);bytes.prepare('UPDATE quality_correspondence_plans SET reserved=? WHERE id=?').run(CORRESPONDENCE_LIMITS.reservedBytes,first.id);}finally{bytes.close();}
+  service=new CorrespondenceService(file,runner,{} as QualityRangeService);assert.equal(submit().id,first.id);assert.throws(()=>submit(owner,'bytes-full'),{code:'correspondence-history-full'});
+});
 test('explicit immutable clock contract: direction, half-open segments, stable order, overlap and exact integer guards',async()=>{
   const {relation}=await correspondenceFixture(),input=relation.input,parsed=referenceRelationInput({...input,clock:{...input.clock,segments:[...input.clock.segments].reverse()}});
   assert.equal(canonicalJson(parsed),canonicalJson(input));assert.equal(parsed.declaration,input.declaration);
