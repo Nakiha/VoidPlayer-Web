@@ -8,6 +8,21 @@ export class HttpQualityError extends Error {
 }
 const pending=new Set(['queued','running','preparing','cancelling']);
 const stop=(code,message,details)=>{throw new HttpQualityError(code,message,details);};
+const record=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
+const nonempty=v=>typeof v==='string'&&v.length>0;
+// Check the acknowledgement envelope used by this example, not domain input
+// admission. A 2xx with missing ownership/result handles is not proof of failure.
+function completeAcknowledgement(id,value,body,params,response){
+ if(!record(value))return false;
+ if(id==='identity.select')return record(value.actor)&&nonempty(value.actor.id)&&nonempty(response.headers.get('set-cookie'));
+ if(id==='relation.create')return typeof value.replayed==='boolean'&&record(value.relation)&&nonempty(value.relation.id)&&value.relation.revision===1;
+ if(id==='plan.create')return typeof value.replayed==='boolean'&&record(value.plan)&&nonempty(value.plan.id)&&nonempty(value.plan.state);
+ if(['library.prepare','single.submit','plan.execute','vmaf.submit'].includes(id))return typeof value.replayed==='boolean'&&record(value.job)&&nonempty(value.job.id)&&nonempty(value.job.state);
+ if(['range.candidates','vmaf.candidates'].includes(id))return record(value.policy)&&value.policy.space===body.space&&Array.isArray(value.selected)&&Array.isArray(value.createdIds)&&value.createdIds.every(nonempty);
+ if(id==='evidence.candidate')return value.id===body.id&&value.space===params.space&&Number.isSafeInteger(value.revision)&&value.revision>0&&record(value.document);
+ if(id==='vmaf.preflight')return value.nativeExecution===false;
+ return false;
+}
 
 /** Explicit source/relation/recipe/budget/policy configuration is never inferred.
  * allow defaults to {}. cookie is an in-memory embedding option, never a CLI file field.
@@ -21,18 +36,23 @@ export async function runHttpQuality(serverURL,input={},options={}){
  let cookie=options.cookie??'',actor=options.actor??null,requests=0;
  const deadline=Date.now()+(options.maxElapsedMs??180000),maxRequests=options.maxRequests??1200;
  const url=path=>{const u=new URL(path,base);if(u.origin!==base.origin)stop('foreign-link','Refusing a link outside the selected service.');return u;};
- async function request(path,{method='GET',body,action,key,privateRead=false,text=false}={}){
+ async function request(path,{method='GET',body,action,key,privateRead=false,text=false,onSend}={}){
   if(++requests>maxRequests||Date.now()>=deadline)stop('observation-budget','Client observation budget reached. Durable work was not cancelled.');
   const headers={accept:text?'text/plain, text/markdown':'application/json'};
   if(cookie)headers.cookie=cookie;
   if(actor&&privateRead)headers['x-voidplayer-actor']=actor;
   if(method==='POST')Object.assign(headers,{origin:base.origin,'content-type':'application/json','x-voidplayer-action':action,...(actor?{'x-voidplayer-actor':actor}:{}),...(key?{'idempotency-key':key}:{})});
-  const response=await fetchImpl(url(path),{method,headers,redirect:'error',signal:AbortSignal.timeout(Math.max(1,Math.min(30000,deadline-Date.now()))),...(body===undefined?{}:{body})});
+  const target=url(path),init={method,headers,redirect:'error',signal:AbortSignal.timeout(Math.max(1,Math.min(30000,deadline-Date.now()))),...(body===undefined?{}:{body})};
+  onSend?.();
+  const response=await fetchImpl(target,init);
   // Bound public data retained by this small client, including chunked bodies.
-  const reader=response.body?.getReader(),chunks=[];let size=0;
-  try{if(reader)for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>4*1024*1024)stop('response-budget','Response exceeded the client byte limit.');chunks.push(value);}}
-  finally{await reader?.cancel();}
-  const bytes=Buffer.concat(chunks),value=text?bytes.toString('utf8'):bytes.length?JSON.parse(bytes.toString('utf8')):null;
+  let value;
+  try{
+   const reader=response.body?.getReader(),chunks=[];let size=0;
+   try{if(reader)for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>4*1024*1024)stop('response-budget','Response exceeded the client byte limit.');chunks.push(value);}}
+   finally{await reader?.cancel();}
+   const bytes=Buffer.concat(chunks);value=text?bytes.toString('utf8'):bytes.length?JSON.parse(bytes.toString('utf8')):null;
+  }catch(error){stop(error?.code??'invalid-response-body','The HTTP response body could not be read completely.',{status:response.status,phase:'response-body'});}
   if(!response.ok)stop(value?.code??'http-error',value?.error??`HTTP ${response.status}`,{status:response.status,response:value,path});
   return {value,response};
  }
@@ -50,20 +70,24 @@ export async function runHttpQuality(serverURL,input={},options={}){
   if(!allow[permission])stop('authorization-required',`Explicit --allow-${permission} is required.`,{next:[op.links.guide,`/api/agent/operations/${id}`]});
   if(op.identity.cookieRequired&&!actor)stop('identity-required','Explicit identity selection is required.');
   if(op.write?.keyHeader&&(!input.key||!/^[A-Za-z0-9._:-]{1,90}$/.test(input.key)))stop('missing-key','Supply a stable operation key (1..90 ASCII letters/digits/._:-). Keep it and the original input for uncertain-response replay.');
-  const frozen=JSON.stringify(body),key=op.write?.keyHeader?`${input.key}:${suffix??id}`:undefined,path=pathFor(op,params);
+  const frozen=JSON.stringify(body),key=op.write?.keyHeader?`${input.key}:${suffix??id}`:undefined,path=pathFor(op,params),submittedActor=actor;
   const replayable=op.write?.idempotency!=='none';
+  const originalRequest=()=>({operation:id,origin:base.origin,path,actor:submittedActor,key:key??null,body:JSON.parse(frozen),replay:op.write.idempotency,next:op.links.guide});
+  const unknown=error=>stop('unknown-post-outcome','The POST outcome is unknown. Resolve only this frozen operation with the original actor and body/key (or digest/policy/operationId). Never choose a new key or actor. Non-idempotent identity creation needs manual resolution.',{...originalRequest(),responseIssue:{code:error?.code??'transport-error',status:error?.details?.status??null,phase:error?.details?.phase??'transport'}});
   for(let attempt=0;;attempt++){
-   await checkActor();
+   try{await checkActor();}catch(error){if(error?.code==='actor-changed'){error.details.originalRequest=originalRequest();throw error;}if(attempt>0)unknown(error);throw error;}
+   let sent=false;
    try{
-    const result=await request(path,{method:'POST',body:frozen,action:op.write.action,key});
-    if(id==='identity.select'){cookie=result.response.headers.get('set-cookie')?.split(';')[0]??'';actor=result.value.actor?.id;if(!cookie||!actor)stop('identity-response','Identity response did not supply an actor and cookie.');}
+    const result=await request(path,{method:'POST',body:frozen,action:op.write.action,key,onSend:()=>{sent=true;}});
+    if(!completeAcknowledgement(id,result.value,body,params,result.response))stop('invalid-write-acknowledgement','The successful response omitted the operation acknowledgement.',{status:result.response.status,phase:'acknowledgement'});
+    if(id==='identity.select'){cookie=result.response.headers.get('set-cookie').split(';')[0];actor=result.value.actor.id;}
     return result.value;
    }catch(error){
     // One explicitly authorized replay, with byte-identical body/key and original actor.
     // HTTP validation/ownership failures are definite; never retry those or change the key.
-    const uncertain=!(error instanceof HttpQualityError)||error.details.status>=500;
-    if(!uncertain)throw error;
-    if(!replayable||!allow.retryUnknown||attempt>0)stop('unknown-post-outcome','The POST outcome is unknown. Preserve this original operation; never choose a new key or actor.',{operation:id,origin:base.origin,path,actor,key:key??null,body:JSON.parse(frozen),replay:op.write.idempotency,next:op.links.guide});
+    const status=error?.details?.status,knownRejection=status>=400&&status<500;
+    if(knownRejection||!sent&&attempt===0){if(attempt>0&&error instanceof HttpQualityError)error.details.originalRequest=originalRequest();throw error;}
+    if(!replayable||!allow.retryUnknown||attempt>0)unknown(error);
    }
   }
  }

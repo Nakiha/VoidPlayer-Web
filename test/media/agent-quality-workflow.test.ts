@@ -91,3 +91,47 @@ test('HTTP example restarts only read cursors, fences uncertain writes by actor,
  let posts=0;const unknownFetch=async(url:any,opts:any)=>{const response=await fetch(url,opts);if(opts.method==='POST'&&new URL(url).pathname==='/api/quality/reference-relations'){posts++;await response.arrayBuffer();throw new TypeError('Committed relation acknowledgement lost');}return response;};
  const frozenInput={...input,key:'unknown-'+randomUUID()};await assert.rejects(()=>runHttpQuality(f.base,frozenInput,{actor:f.actor,cookie:f.cookie,allow:{plan:true},fetchImpl:unknownFetch}), (e:any)=>{assert.equal(e.code,'unknown-post-outcome');assert.equal(e.details.key,frozenInput.key+':relation.create');assert.equal(e.details.body.schema,'voidplayer-quality-reference-relation');assert.equal(e.details.actor,f.actor);assert.ok(!JSON.stringify(e.details).includes(f.cookie));return true;});assert.equal(posts,1);
 });
+
+test('incomplete 2xx acknowledgements retain the exact committed operation; known 4xx and actor changes do not replay',{timeout:120000},async t=>{
+ const f=await nativeFixture({component:false,distorted:true});t.after(()=>f.close());
+ const variants:Record<string,()=>Response>={
+  empty201:()=>new Response(null,{status:201}),
+  null201:()=>new Response('null',{status:201}),
+  missingStructure:()=>new Response('{"relation":{},"replayed":false}',{status:201}),
+  nonJson:()=>new Response('<html>unreadable acknowledgement</html>',{status:201}),
+  truncated:()=>new Response('{"relation":',{status:201}),
+  readFailure:()=>new Response(new ReadableStream({start(controller){controller.enqueue(new TextEncoder().encode('{"relation":'));queueMicrotask(()=>controller.error(new TypeError('Controlled response stream failure')));}}),{status:201}),
+  overBudget:()=>new Response(' '.repeat(4*1024*1024+1),{status:201}),
+ };
+ for(const [name,corrupt]of Object.entries(variants)){
+  const input=inputFor(f),sent:any[]=[];let committed='';
+  const fetchImpl=async(url:any,opts:any)=>{const response=await fetch(url,opts);if(opts.method==='POST'&&new URL(url).pathname==='/api/quality/reference-relations'){assert.ok(response.ok);committed=(await response.json()).relation.id;sent.push({body:opts.body,key:opts.headers['idempotency-key'],actor:opts.headers['x-voidplayer-actor']});return corrupt();}return response;};
+  await assert.rejects(()=>runHttpQuality(f.base,input,{allow:{plan:true},actor:f.actor,cookie:f.cookie,fetchImpl}), (error:any)=>{
+   assert.equal(error.code,'unknown-post-outcome',name);assert.equal(error.details.operation,'relation.create');assert.equal(error.details.actor,f.actor);assert.equal(error.details.key,sent[0].key);assert.equal(JSON.stringify(error.details.body),sent[0].body);assert.equal(error.details.replay,'idempotency-key');assert.ok(!JSON.stringify(error.details).includes(f.cookie));return true;
+  });assert.equal(sent.length,1,name);assert.equal((await f.json('/api/quality/reference-relations/'+committed)).id,committed);
+  // Resolve the original receipt with the same actor/body/key, using real HTTP.
+  let replayBody='';const replayFetch=async(url:any,opts:any)=>{if(opts.method==='POST'&&new URL(url).pathname==='/api/quality/reference-relations')replayBody=opts.body;return fetch(url,opts);};
+  const replay=await runHttpQuality(f.base,input,{allow:{plan:true},actor:f.actor,cookie:f.cookie,fetchImpl:replayFetch,pollMs:10});assert.equal(replay.plan.plan.relation.id,committed);assert.equal(replayBody,sent[0].body,name);
+ }
+ const identityInput=inputFor(f);identityInput.identity.name='Incomplete identity acknowledgement';let identities=0,lostCookie='';
+ const identityFetch=async(url:any,opts:any)=>{const response=await fetch(url,opts);if(opts.method==='POST'&&new URL(url).pathname==='/api/identity'){identities++;assert.equal(response.status,200);lostCookie=response.headers.get('set-cookie')!;await response.arrayBuffer();return new Response('{"actor":{}}',{status:200,headers:{'set-cookie':lostCookie}});}return response;};
+ await assert.rejects(()=>runHttpQuality(f.base,identityInput,{allow:{identity:true,plan:true,retryUnknown:true},fetchImpl:identityFetch}),(error:any)=>{assert.equal(error.code,'unknown-post-outcome');assert.equal(error.details.actor,null);assert.equal(error.details.key,null);assert.equal(error.details.replay,'none');assert.deepEqual(error.details.body,identityInput.identity);assert.ok(!JSON.stringify(error.details).includes(lostCookie));return true;});assert.equal(identities,1,'identity without a complete acknowledgement is never automatically recreated');assert.equal((await (await fetch(f.base+'/api/users')).json()).users.filter((u:any)=>u.name===identityInput.identity.name).length,1);
+ for(const malformedError of [false,true]){
+  const input=inputFor(f);input.clock.segments[0].referenceEndUs=0;let posts=0;
+  const fetchImpl=async(url:any,opts:any)=>{const response=await fetch(url,opts);if(opts.method==='POST'&&new URL(url).pathname==='/api/quality/reference-relations'){posts++;assert.equal(response.status,400);if(malformedError){await response.arrayBuffer();return new Response('bad error body',{status:400});}}return response;};
+  await assert.rejects(()=>runHttpQuality(f.base,input,{allow:{plan:true,retryUnknown:true},actor:f.actor,cookie:f.cookie,fetchImpl}),(error:any)=>{assert.equal(error.details.status,400);assert.notEqual(error.code,'unknown-post-outcome');return true;});assert.equal(posts,1,'known 4xx never enters automatic replay');
+ }
+ let switched=false,posts=0,original:any;const input=inputFor(f),other='guest-'+randomUUID();
+ const switchFetch=async(url:any,opts:any)=>{const response=await fetch(url,{...opts,headers:{...opts.headers,...(switched?{cookie:'voidplayer-user='+other}:{})}});if(opts.method==='POST'&&new URL(url).pathname==='/api/quality/reference-relations'){assert.ok(response.ok);posts++;original={body:opts.body,key:opts.headers['idempotency-key']};await response.arrayBuffer();switched=true;return variants.empty201();}return response;};
+ await assert.rejects(()=>runHttpQuality(f.base,input,{allow:{plan:true,retryUnknown:true},actor:f.actor,cookie:f.cookie,fetchImpl:switchFetch}),(error:any)=>{assert.equal(error.code,'actor-changed');assert.equal(error.details.originalRequest.actor,f.actor);assert.equal(error.details.originalRequest.key,original.key);assert.equal(JSON.stringify(error.details.originalRequest.body),original.body);assert.ok(!JSON.stringify(error.details).includes(f.cookie));return true;});assert.equal(posts,1,'bad 2xx receipt cannot carry a replay to the new actor');
+});
+
+test('malformed task/candidate acknowledgements safely replay one real job and one atomic candidate',{timeout:120000},async t=>{
+ const f=await nativeFixture({component:false,distorted:true});t.after(()=>f.close());let cases=0;
+ for(const [target,body]of [['job',''],['job',' '.repeat(4*1024*1024+1)],['candidate','{}'],['candidate','{"id":']]as const){
+  const input=inputFor(f),sent:any[]=[];let originalId='';
+  const fetchImpl=async(url:any,opts:any)=>{const path=new URL(url).pathname,response=await fetch(url,opts);if(opts.method==='POST'&&path===(target==='job'?'/api/quality/jobs':'/api/annotations/spaces/default')){assert.ok(response.ok);sent.push({body:opts.body,key:opts.headers['idempotency-key'],actor:opts.headers['x-voidplayer-actor']});if(sent.length===1){const accepted=await response.json();originalId=target==='job'?accepted.job.id:accepted.id;return new Response(body,{status:response.status});}}return response;};
+  const report=await runHttpQuality(f.base,input,{allow,actor:f.actor,cookie:f.cookie,fetchImpl,pollMs:10});assert.equal(sent.length,2);assert.deepEqual(sent[0],sent[1],'replay is the original body/key/actor');assert.equal(originalId,target==='job'?report.job.id:report.annotations[0].id);assert.equal(report.annotations[0].revision,1);assert.equal(report.events.filter((e:any)=>e.id===input.candidate.id).length,1);
+  const jobs=await f.json('/api/quality/jobs');assert.equal(new Set(jobs.entries.map((j:any)=>j.id)).size,++cases,'each acknowledged workflow created exactly one job');
+ }
+});

@@ -36,6 +36,8 @@ node examples/http-quality.mjs http://127.0.0.1:9000 input.json \
 
 未授权自动重放或一次重放仍未知时，示例输出 `unknown-post-outcome` 及原 operation/path/actor/key/body，不含 cookie。用这些冻结事实和原身份解析回执；不要在 cache/source 已变时重建不同请求去碰原 key。无回执的身份创建须人工解析用户列表，不自动重建身份。
 
+POST 发送后，空/结构缺失的 2xx、截断/非 JSON、读体失败（包括原 4MiB 响应上限）都不能视为提交失败，必须保留冻结请求。错误附加响应阶段/状态；已知 4xx 拒绝（即使错误体损坏）不自动重放。跨 actor 拒绝仍保留原请求，但绝不转交新 actor。成功回执只检查后续追溯必需的 envelope，不另造领域输入 validator。
+
 已确认取消/失败/interrupted 后的新尝试须明确授权。actor 变化停止；source/cache 变化要求显式重选和修订计划。discovery cursor 失效只同查询重取第一页一次，不触发变更；事件 resetRequired 读取 snapshotUrl，不重放 mutation。
 
 输出包含结果、共享候选及事件事实，原帧复核使用既有独立 viewer。GUI 不参与提交确认或移动其他播放轨。关系不认证内容，候选不是人工缺陷；reference integrity 未认证、concealment unavailable、负 PTS/VFR E2E 与独立 stat witness 的证据边界不扩大，性能负结果保留。
