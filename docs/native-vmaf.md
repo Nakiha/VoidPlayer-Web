@@ -77,18 +77,27 @@ It never promotes unverified model bytes merely because a filename matches.
 
 ## Exact eligibility and raw planes
 
-A C plan pins source ID/version, FLV cache namespace/build, stream/configuration,
+A C plan pins source ID/version, container cache namespace/build, stream/configuration,
 AU/window and actual source PTS. Both caches must already have trusted server
 producer evidence. This endpoint never builds an index or tries approximate PTS,
 filenames or durations to authenticate corresponding content.
 
 First scope:
 
-- Trusted FLV/Enhanced FLV, H.264/HEVC, existing packet-identity WASM decoding.
+- Trusted FLV/Enhanced FLV H.264/HEVC, or the [strict non-fragmented MP4
+  matrix](trusted-mp4-quality.md): avc1 H.2648 and hvc1 HEVC8/10. MP4/MP4 and
+  both MP4/FLV directions use the same packet-identity WASM decoder.
 - 2–32 selected pictures on each side, all-sample/no holes. Ordered by the frozen
   reference source PTS; distorted order must agree. Both clocks must have the
   caller's exact positive integer `cadenceUs`, no duplicates, negative PTS or VFR.
   Every indexed picture in each selected presentation interval must be included.
+  MP4 sample durations must also equal this cadence. Track/sample ordinal,
+  description, original DTS/CTS/duration ticks and timebase, offset/size and
+  table SHA256 remain explicit; inexact microseconds reject without rounding or
+  POC clock repair. Actual source tables/NAL boundaries use the strict MP4
+  adapter, never synthetic FLV tags. Fragmented/protected/external-reference
+  inputs, track/configuration changes, remapping edits, recovery and CRA/open
+  GOP remain unsupported.
 - Every individual decoded dependency window still has the existing closed
   start/32-AU, opaque-token/all-output/drain and single-picture/field rules.
   These checks do **not** certify reference-graph completeness. Concealment
@@ -106,6 +115,24 @@ is not a promise that decode/output color checks or the native model will pass.
 Execution rechecks each frame, verifies all bindings after raw preparation, then
 checks source/cache bindings again after native completion before committing a
 VMAF score. Source/version identity is a stat witness, not content authentication.
+
+MP4 on either side uses library result v2, native result v2 and sequence
+association v2. Every MP4 presentation point carries the fixed track/timebase,
+table digest and full original sample witness; the selected point must exactly
+match the accompanying source-plane provenance. Mixed pairs retain FLV clocks
+on the FLV side. All-FLV input normalization, result/association v1 and existing
+idempotent receipts keep their original fields. Shared evidence and the original
+viewer validate the same versions; viewing does not read another actor's private
+job, build an index or score pixels again. Historical imports cannot grant trust.
+
+The existing executor owns admission throughout index loading, all repeated
+closed-window inputs/outputs/drain, raw temporary files, native execution and
+final source/cache verification. Index reads include the final verification;
+source byte accounting is the sum of actual container reads, including MP4
+metadata and payloads without invented FLV overhead. The runner/supervisor,
+official component and two fixed v0 models are unchanged. Future CAMBI does not
+inherit MP4 admission. Negative-source-PTS/VFR E2E and reference integrity are
+not certified; this is not a performance acceptance.
 
 ## HTTP and GUI
 

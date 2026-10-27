@@ -103,4 +103,4 @@ node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 
 原生连续序列 VMAF 见 `docs/native-vmaf.md`。固定官方 Netflix/vmaf v3.0.0 与 v0.6.1/NEG 模型，Linux x64 可信组件由宿主配置 manifest hash，不依赖 PATH 或接受 HTTP 程序路径。共享计划/准入在 `shared/analysis/quality/vmaf.ts`，独立 native 进程和持久服务在 `server/analysis/vmaf/`，GUI 为 `src/admin/quality-vmaf.ts`。只消费已提交 C 计划；连续呈现顺序与整帧 SDR 色彩/几何严格准入，不能把稀疏抽样拼成时序。PSNR/SSIM 与 native 状态独立，实际退出后才释放容量；序列附件不可伪装空间热图。
 
-可信非分片 MP4 评分链路见 `docs/trusted-mp4-quality.md`。严格表读取在 `shared/media/indexing/mp4-quality-index.ts`，显式准备沿用 A 的任务、事务 cache 与共享物理退出准入。MP4 namespace/producer/result v2 与旧 FLV v1 并存；源适配读取真实 sample payload，不伪造/计费 FLV tag。时钟 ticks 必须精确表示整数微秒，不能 round/修 POC/nearest。只读 viewer 使用已有可信 cache；VMAF/后续 CAMBI 继续 FLV-only。
+可信非分片 MP4 评分链路见 `docs/trusted-mp4-quality.md`。严格表读取在 `shared/media/indexing/mp4-quality-index.ts`，显式准备沿用 A 的任务、事务 cache 与共享物理退出准入。MP4 namespace/producer/result v2 与旧 FLV v1 并存；源适配读取真实 sample payload，不伪造/计费 FLV tag。时钟 ticks 必须精确表示整数微秒，不能 round/修 POC/nearest。只读 viewer 使用已有可信 cache；VMAF 可复用严格 MP4/FLV 适配，但仍限连续等间距整帧 limited BT.709 SDR，MP4/混合结果及序列关联使用 v2，逐点保留 track/sample/ticks/table 见证。FLV v1 指纹/回执不变，native runner/supervisor 不扩大；未来 CAMBI 不继承 MP4 准入。

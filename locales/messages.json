@@ -3891,7 +3891,7 @@
     "params": {}
   },
   "qualityClock.scope": {
-    "source": "关系由调用者声明，不认证同内容。时钟仅做精确整数微秒匹配；缺洞、歧义与不支持会保留。只读取已有可信 FLV 缓存，评分与候选均须显式提交。",
+    "source": "关系由调用者声明，不认证同内容。时钟仅做精确整数微秒匹配；缺洞、歧义与不支持会保留。只读取已有可信 FLV 或严格 MP4 缓存，评分与候选均须显式提交。",
     "params": {}
   },
   "qualityClock.showRange": {
@@ -5835,6 +5835,10 @@
   },
   "vmaf.share": {
     "source": "此操作共享片源身份及不可变序列事实，不定位空间缺陷。关闭页面只停止观察，不会取消后台执行。",
+    "params": {}
+  },
+  "vmaf.sources": {
+    "source": "支持已有可信 FLV/Enhanced FLV、严格非分片 MP4 及两者的双向混合。MP4 限 avc1 H.264 8 位或 hvc1 HEVC 8/10 位，原始时钟必须精确表示整数微秒。",
     "params": {}
   },
   "vmaf.submit": {

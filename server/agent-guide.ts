@@ -439,8 +439,9 @@ Frame-index GET reads this namespace; POST/build=1 cannot prepare or upload it.
 Read-only original-pair inspection uses the same existing sealed cache without
 building, scoring, private-job access or player control. Library result version2
 and complete-mp4-index-derived-v1 annotation clocks identify MP4 or mixed pairs;
-FLV-only version1 receipts/fingerprints retain their original fields. VMAF and
-future CAMBI remain FLV-only. See /docs/trusted-mp4-quality.md in the source tree.
+FLV-only version1 receipts/fingerprints retain their original fields. Native VMAF
+has separate strict MP4/mixed sequence admission below; future CAMBI remains
+FLV-only. See /docs/trusted-mp4-quality.md in the source tree.
 
 2. Explicitly prepare a missing supported FLV or strict MP4 cache with POST
    /api/media/{id}/psnr-index, JSON {version}, the identity cookie, same-origin
@@ -693,9 +694,14 @@ POST /api/quality/vmaf/jobs uses Idempotency-Key and a normalized body:
  model:"vmaf_v0_6_1",cadenceUs:EXACT_INTEGER_CFR_MICROSECONDS,metrics:{psnr:true,ssim:false},
  budget:{maxRawBytes:134217728,maxElapsedMs:120000,nativeCpuSeconds:30,nativeMemoryBytes:536870912}}
 The existing C plan must contain 2..32 all-sample, hole-free continuous presentation frames,
-full-frame limited BT.709 SDR square-pixel uncropped unrotated 8/10-bit YUV420. Explicit NEG
+full-frame limited BT.709 SDR square-pixel uncropped unrotated 8/10-bit YUV420.
+Sources may be trusted FLV/Enhanced FLV or strict non-fragmented MP4
+(avc1 H2648/hvc1 HEVC8/10), including both mixed directions. MP4 duration ticks
+and source DTS/CTS must exactly represent the declared integer microsecond cadence.
+Track/sample/description/offset/size and table witnesses stay pinned. Explicit NEG
 model vmaf_v0_6_1neg is also available; v0.6.1 is a fixed baseline, not the latest model.
-No negative PTS, VFR, arbitrary ROI, conversion, HDR or other containers. Native frame scores
+No negative PTS, VFR, arbitrary ROI, conversion, HDR, other containers, MP4 edits,
+fragmentation/encryption/external references or open GOP/CRA. Native frame scores
 and official pooling use one continuous clip with reset/start and final flush, not per-frame runs.
 GET /api/quality/vmaf/jobs?after=ROW&limit=8, /jobs/{id}, /jobs/{id}/result,
 /jobs/{id}/frames?after=INDEX&limit=4 and POST /jobs/{id}/cancel {} observe/control the same service.
@@ -705,6 +711,10 @@ CPU/address-space/file limits and physical process/Worker exit precede shared ad
 POST /jobs/{id}/candidates with {space,side,maxScore,limit,minFrameDistance,text,severity} explicitly
 freezes a top-N temporal score policy and publishes existing atomic measurement-candidate commands.
 Attached sequenceVmaf facts include full immutable model/component/recipe/plan/raw hashes and pool;
+MP4 on either side uses library/native result and sequence association version2,
+with original sample/ticks/timebase/table witnesses for every MP4 point. All-FLV
+version1 records and idempotent receipts retain their original fields. Unknown
+server failures return 500 so clients retain and replay the frozen request/key;
 full-frame temporal scores are not heatmaps/localized defect certification. Imported facts are
 historical. Reference integrity is not certified and concealment detection is unavailable.
 See docs/native-vmaf.md for installation, contract, notices and independent reference tests.

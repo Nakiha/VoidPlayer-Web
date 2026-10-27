@@ -6,7 +6,7 @@ import {waitForAnnotationMedia} from '../../scripts/testing/agent-annotations-re
 export const sha=b=>createHash('sha256').update(b).digest('hex');
 export const until=async(read,predicate,label='Native VMAF did not finish')=>{for(let n=0;n<1200;n++){const r=await read();if(predicate(r))return r;await new Promise(r=>setTimeout(r,10));}assert.fail(label);};
 export async function nativeComponent(){const directory=path.resolve(process.env.VOIDPLAYER_VMAF_COMPONENT??'.run/components/vmaf');return {directory,manifestSha256:sha(await readFile(path.join(directory,'manifest.json')))};}
-export async function nativeFixture({depth=8,distorted=false,staticDir='public',start=startService,component=true,frames=8,tagged=true,codec=depth===10?'hevc':'h264',containers=['flv','flv']}={}){
+export async function nativeFixture({depth=8,distorted=false,staticDir='public',start=startService,component=true,frames=8,tagged=true,codec=depth===10?'hevc':'h264',containers=['flv','flv'],prepare=true}={}){
  const directory=await mkdtemp(path.join(tmpdir(),'vp-native-vmaf-')),media=path.join(directory,'media');await mkdir(media);let service;
  try{
   const sample=JSON.parse(await readFile(new URL('./native-vmaf-samples.json',import.meta.url),'utf8')).samples.find(s=>s.codec===codec&&s.depth===depth&&s.tagged===tagged);assert.ok(sample,'Committed native fixture missing');assert.equal(frames,sample.frames);assert.equal(containers.length,2);assert.ok(containers.every(c=>['flv','mp4'].includes(c)));const oracles={},names=['reference','distorted'].map((name,i)=>name+'.'+containers[i]);const mp4=containers.includes('mp4')?JSON.parse(await readFile(new URL('./native-vmaf-mp4-samples.json',import.meta.url),'utf8')).samples.find(s=>s.codec===codec&&s.depth===depth):null;
@@ -16,6 +16,8 @@ export async function nativeFixture({depth=8,distorted=false,staticDir='public',
   let entries;if(service.library)entries=await waitForAnnotationMedia(service.library,names);else entries=await until(async()=>{const list=(await fetch(base+'/api/library').then(r=>r.json())).entries;return names.map(name=>list.find(e=>e.name===name));},e=>e.every(v=>v?.state==='ready'),'Compiled library not ready');
   const request=async(url,body,key='vmaf-test',extra={})=>fetch(base+url,{method:body===undefined?'GET':'POST',headers:{...headers,'idempotency-key':key,...extra},...(body===undefined?{}:{body:JSON.stringify(body)})});
   const json=async(url,body,key,extra)=>{const r=await request(url,body,key,extra);assert.ok(r.ok,`${r.status}: ${await r.clone().text()}`);return r.json();};
+  const fixture={directory,media,config,service,entries,base,actor,cookie,headers,request,json,oracles,containers,wait:id=>until(()=>json('/api/quality/vmaf/jobs/'+id),j=>!['queued','preparing','running','cancelling'].includes(j.state)),async stop(){const prior=service;service=undefined;await prior?.close();},async close(){await service?.close();await rm(directory,{recursive:true,force:true});}};
+  if(!prepare)return fixture;
   const bindings=[];
   for(const e of entries){
    if(containers.includes('mp4')){
@@ -29,7 +31,7 @@ export async function nativeFixture({depth=8,distorted=false,staticDir='public',
   const planInput={schema:'voidplayer-quality-correspondence-plan',version:1,client,relation:{id:relation.id,revision:1},referenceBuildId:bindings[0].indexBuildId,distortedBuildId:bindings[1].indexBuildId,interval:{startAu:0,endAu:frames-1},sampling:{mode:'all'},recipe:{roi:{x:0,y:0,width:128,height:96},budget:{maxReadBytes:1048576,maxInputBytes:1048576}},budget:{maxReadBytes:32*1048576,maxInputBytes:32*1048576,maxPackets:4096,maxOutputFrames:4096,maxElapsedMs:120000},planningBudget:{maxIndexBytes:1048576,maxIndexPackets:4096,maxElapsedMs:30000}};
   const plan=(await json('/api/quality/correspondence-plans',planInput,'plan')).plan,done=await until(()=>json('/api/quality/correspondence-plans/'+plan.id),r=>!['queued','running'].includes(r.plan.state),'C plan');assert.equal(done.plan.state,'completed',JSON.stringify(done));
   const input={schema:'voidplayer-native-vmaf-job',version:1,client,plan:{id:plan.id,attemptId:done.plan.attemptId,digest:done.plan.resultDigest},model:'vmaf_v0_6_1',cadenceUs:250000,metrics:{psnr:true,ssim:true},budget:{maxRawBytes:8*1048576,maxElapsedMs:120000,nativeCpuSeconds:30,nativeMemoryBytes:512*1048576}};
-  return {directory,media,config,service,entries,bindings,base,actor,cookie,headers,input,planInput,request,json,oracles,containers,wait:id=>until(()=>json('/api/quality/vmaf/jobs/'+id),j=>!['queued','preparing','running','cancelling'].includes(j.state)),async stop(){const prior=service;service=undefined;await prior?.close();},async close(){await service?.close();await rm(directory,{recursive:true,force:true});}};
+  return {...fixture,bindings,input,planInput};
  }catch(e){await service?.close();await rm(directory,{recursive:true,force:true});throw e;}
 }
 export async function officialOracle(f,depth,model='vmaf_v0_6_1'){

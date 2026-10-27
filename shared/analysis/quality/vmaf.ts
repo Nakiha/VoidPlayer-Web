@@ -3,7 +3,7 @@ import {canonicalJson} from './correspondence.ts';
 import type {FramePairRequest,PairProvenance} from './frame-pair.ts';
 import type {QualityVideoIndex} from './source-index.ts';
 import type {LibraryPairBinding,LibraryPairResult} from './library-pair.ts';
-import {mp4TicksToUs} from '../../media/indexing/mp4-quality-index.ts';
+import {mp4TicksToUs,parseMp4QualityDocument} from '../../media/indexing/mp4-quality-index.ts';
 
 export const VMAF_SUPERVISOR_SOURCE_SHA256='df6ab9f43548839f3743d773958468f0e5f6416268006843eb68deab43eff48f';
 export const VMAF_SOURCE_REVISION='17a67b238ce0539bdeafdc95961abac64fa16ea8';
@@ -56,9 +56,11 @@ export function vmafSequence(snapshot:VmafPlanSnapshot,indexes:[QualityVideoInde
  for(const side of ['reference','distorted'] as const){
   const i=side==='reference'?0:1,ordered=pairs.map(p=>p[side].sourcePtsUs),selected=new Set(pairs.map(p=>p[side].picture.au));
   const source=r.sources![side],index=indexes[i],mp4=index.mp4;
+  if(pairs.some(p=>(['mediaId','mediaVersion','size','indexBuildId','indexIdentity']as const).some(k=>canonicalJson(p[side][k])!==canonicalJson(source.binding[k]))))fail('Frozen sequence source/cache binding changed');
   if(source.binding.indexIdentity.kind==='mp4'){
    const producer=source.producer;
    if(!mp4||index.container!=='mp4'||producer.producer!=='server-mp4-scan-v1'||producer.trackId!==mp4.trackId||producer.timescale!==mp4.timescale||producer.tableSha256!==mp4.moov.sha256)fail('MP4 track, timebase or table differs from the frozen producer');
+   parseMp4QualityDocument(mp4,source.binding.size);
    for(const pair of pairs){const p=pair[side],sample=mp4!.samples[p.picture.au];if(p.decode?.mode!=='packet-identity-gop-v1'||!sample||sample.ordinal!==p.picture.au||sample.ptsUs!==p.sourcePtsUs||sample.durationUs!==expectedCadenceUs)fail('MP4 sequence needs exact closed-window sample clocks and constant durations');}
   }else if(index.container==='mp4'||mp4)fail('Container differs from the frozen source');
   if(ordered.some((pts,n)=>!Number.isSafeInteger(pts)||pts<0||n>0&&pts<=ordered[n-1]))fail('Known unique nonnegative presentation clocks required; VFR/negative PTS not admitted');
