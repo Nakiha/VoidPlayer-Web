@@ -2,7 +2,7 @@
 
 运行服务后，从同一 origin 打开 `/llms.txt` 查看短索引，`/agent.md` 查看工作流程，`/api/agent` 获取版本化 JSON 能力描述。按任务继续读取 `/agent/library.md`、`workspaces.md`、`annotations.md`、`quality.md`、`live-session.md` 或 `errors.md`。这些文件由 `server/agent-guide.ts` 内嵌，GET/HEAD 不依赖前端构建，也不会创建身份、扫描媒体或提交任务。
 
-`implemented` 表示代码支持，`enabled` 表示部署启用，`readiness` 表示当前条件。媒体内容逐源判断，浏览器视图需要活动会话；`quality.frame-pair` 提供受限的[一次性媒体库 PSNR 调用](source-library-psnr.md)，不需要浏览器；`quality.jobs` 提供受限的[单帧 PSNR 持久任务](source-psnr-jobs.md)，qualityJobs 对象列出精确请求/端点/预算，支持单个明确帧对的 PSNR、可选固定变种 SSIM 及至多 64 块源网格，已接持久任务 GUI、共享证据和独立原帧查看。闭合 GOP 的重排/延迟输出使用固定 packet identity ABI1 与 opaque token，不按 PTS 归属 AU。`quality.vmaf` 另提供可选 Linux x64 原生组件的受限连续序列 VMAF；固定官方源码、模型、recipe、原始平面、逐帧与池化结果见 [native-vmaf.md](native-vmaf.md)。它不把稀疏 range 拼成连续视频，也不表示任意 ROI／容器支持。CAMBI、本机 MCP 桥接和远程 worker 仍未实现；#114/#121 没有整体完成。`/api/health` 的原有字段保持兼容。
+`implemented` 表示代码支持，`enabled` 表示部署启用，`readiness` 表示当前条件。媒体内容逐源判断，浏览器视图需要活动会话；`quality.frame-pair` 提供受限的[一次性媒体库 PSNR 调用](source-library-psnr.md)，不需要浏览器；`quality.jobs` 提供受限的[单帧 PSNR 持久任务](source-psnr-jobs.md)，qualityJobs 对象列出精确请求/端点/预算，支持单个明确帧对的 PSNR、可选固定变种 SSIM 及至多 64 块源网格，已接持久任务 GUI、共享证据和独立原帧查看。闭合 GOP 的重排/延迟输出使用固定 packet identity ABI1 与 opaque token，不按 PTS 归属 AU。`quality.vmaf` 另提供可选 Linux x64 原生组件的受限连续序列 VMAF；固定官方源码、模型、recipe、原始平面、逐帧与池化结果见 [native-vmaf.md](native-vmaf.md)。它不把稀疏 range 拼成连续视频，也不表示任意 ROI／容器支持。CAMBI 和远程 worker 仍未实现；[临时本机 stdio MCP 页面桥](local-mcp-page-bridge.md) 已提供源码 Node 入口，只能连接自己托管且由用户明确授权的页面，普通 HTTP 部署不自动启用，也不提供网络 MCP 端点；#114/#121 没有整体完成。`/api/health` 的原有字段保持兼容。
 
 ## 无页面写入
 

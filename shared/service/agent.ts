@@ -9,6 +9,7 @@ import { FORWARD_OUTPUT_GUARANTEE } from '../analysis/quality/frame-pair.ts';
 import {QUALITY_SOURCE_BUILD_LIMITS} from '../analysis/quality/source-build.ts';
 import {DISCOVERY_DICTIONARY} from '../media/discovery.ts';
 import {AGENT_TASK_CATALOG,AGENT_OPERATION_PATH,AGENT_OPERATIONS_VERSION} from './agent-operations.ts';
+import {PAGE_TOOLS,PAGE_BRIDGE_LIMITS,PAGE_MCP_VERSIONS,MCP_PAGE_TOOLS} from './page-bridge.ts';
 /** Discovery describes this deployment without starting work or creating users. */
 export function serviceCapabilities(storageEnabled: boolean, revealEnabled: boolean) {
   return { admin: storageEnabled, workspaces: storageEnabled, annotations: storageEnabled, reveal: revealEnabled };
@@ -27,7 +28,7 @@ export const AGENT_TASKS = {
   quality: '/agent/quality.md', liveSession: '/agent/live-session.md', errors: '/agent/errors.md',
 } as const;
 
-export function agentManifest(input: { capabilities: ServiceCapabilities; libraryReady: boolean; frontendAvailable?: boolean; qualityJobsEnabled?: boolean; nativeVmaf?: {enabled:boolean;reason:unknown}|null; actor: { id: string; name: string } | null }) {
+export function agentManifest(input: { capabilities: ServiceCapabilities; libraryReady: boolean; frontendAvailable?: boolean; localPageBridge?:boolean;qualityJobsEnabled?: boolean; nativeVmaf?: {enabled:boolean;reason:unknown}|null; actor: { id: string; name: string } | null }) {
   const { capabilities: c, libraryReady, actor } = input;
   const capabilities: AgentCapability[] = [
     {id:'identity.select',implemented:true,enabled:c.admin,readiness:c.admin?'ready':'unavailable',requiresBrowser:false,guide:AGENT_TASKS.workspaces},
@@ -49,7 +50,7 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
     { id: 'quality.source-build', implemented: true, enabled: true, readiness: actor ? 'per-source' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.quality },
     { id: 'session.presented-quality-input', implemented: true, enabled: !!input.frontendAvailable, readiness: input.frontendAvailable ? 'requires-live-session' : 'unavailable', requiresBrowser: true, guide: AGENT_TASKS.liveSession },
     { id: 'session.view', implemented: true, enabled: !!input.frontendAvailable, readiness: input.frontendAvailable ? 'requires-live-session' : 'unavailable', requiresBrowser: true, guide: AGENT_TASKS.liveSession },
-    { id: 'bridge.local-mcp', implemented: false, enabled: false, readiness: 'unavailable', requiresBrowser: true, guide: AGENT_TASKS.liveSession },
+    { id: 'bridge.local-mcp', implemented: true, enabled: !!input.localPageBridge&&!!input.frontendAvailable, readiness: input.localPageBridge&&input.frontendAvailable?'requires-live-session':'unavailable', requiresBrowser: true, guide: AGENT_TASKS.liveSession },
     { id: 'compute.workers', implemented: false, enabled: false, readiness: 'unavailable', requiresBrowser: false, guide: AGENT_TASKS.quality },
   ];
   return {
@@ -57,6 +58,7 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
     links: { guide: '/agent.md', index: '/llms.txt', health: '/api/health', tasks: AGENT_TASKS,
       taskCatalog:AGENT_TASK_CATALOG,operation:AGENT_OPERATION_PATH+'{id}' },
     operationDiscovery:{schema:'voidplayer-agent-tasks',version:AGENT_OPERATIONS_VERSION,readOnly:true,requiresFrontend:false},
+    localMcp:{transport:'stdio',networkMcpEndpoint:false,distribution:'source-checkout-node-24-built-frontend',launch:'node scripts/mcp-page-bridge.ts',versions:PAGE_MCP_VERSIONS,ownedPageOnly:true,persistentAuthorization:false,automaticReconnect:false,clientIdentity:'self-declared-not-authenticated',tools:MCP_PAGE_TOOLS.map(tool=>({...tool,scope:Object.hasOwn(PAGE_TOOLS,tool.name)?PAGE_TOOLS[tool.name as keyof typeof PAGE_TOOLS].scope:'read'})),limits:PAGE_BRIDGE_LIMITS,discovery:'Use MCP tools/list for epoch/operationId envelopes and receipt/status tools.',guide:AGENT_TASKS.liveSession},
     capabilities,
     technicalFilter: { schema: TECHNICAL_FILTER_SCHEMA, version: 1, endpoint: TECHNICAL_FILTER_PATH, limits: TECHNICAL_FILTER_LIMITS, pagination: 'none', scope: 'explicit-candidates-cached-streams' },
     libraryDiscovery: {...DISCOVERY_DICTIONARY,detail:'/api/media/{id}/discovery?v={version}',writeAction:'library-preparation',idempotencyHeader:'Idempotency-Key',

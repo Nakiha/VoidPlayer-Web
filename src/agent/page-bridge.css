@@ -1,0 +1,7 @@
+.page-bridge-dialog { width:min(640px,calc(100vw - 40px)); max-height:85vh; overflow:auto; padding:24px; color:var(--text); background:var(--surface-panel); border:1px solid currentColor; border-radius:var(--radius-panel); }
+.page-bridge-dialog::backdrop { background:rgb(0 0 0 / .4); }
+.page-bridge-dialog h2 { margin:0 0 16px; }
+.page-bridge-dialog p { line-height:1.6; }
+.page-bridge-dialog pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+.page-bridge-dialog label { display:block; margin:12px 0; line-height:1.5; }
+.page-bridge-dialog div { display:flex; flex-wrap:wrap; gap:12px; margin-top:20px; }

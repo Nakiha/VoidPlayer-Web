@@ -32,7 +32,9 @@ test('runtime discovery separates implementation, deployment and source/session 
   assert.equal(manifest.qualityJobs.spatial.optional,true);assert.equal(manifest.qualityJobs.spatial.limits.maxBlocks,64);assert.equal(manifest.qualityJobs.spatial.ranking,'aggregate-mse-desc-row-major-ties');
   const temporary = agentManifest({capabilities:serviceCapabilities(false,false),libraryReady:true,actor:{id:'actor',name:'A'}}).capabilities.find(c=>c.id==='quality.jobs')!;
   assert.equal(temporary.implemented,true);assert.equal(temporary.enabled,false);assert.equal(temporary.readiness,'unavailable');
-  for (const id of ['compute.workers', 'bridge.local-mcp']) assert.equal(byId(id).implemented, false);
+  assert.equal(byId('compute.workers').implemented,false);
+  assert.equal(byId('bridge.local-mcp').implemented,true);
+  assert.equal(byId('bridge.local-mcp').enabled,false,'only the explicit stdio-owned host enables the optional bridge');
 });
 
 test('ordinary HTTP discovers, attributes and commits annotations without frontend assets or a browser', async () => {

@@ -1,5 +1,9 @@
 # 架构与行为边界
 
+可选临时 stdio 页面桥的宿主、授权与恢复边界见
+[local-mcp-page-bridge.md](local-mcp-page-bridge.md)。桥只转发共享白名单到
+已有页面 Agent/session facade；独立 HTTP 后台业务不依赖这个通道。
+
 ## 模块与宿主边界
 
 `shared/` 保存浏览器与服务端共用的媒体解析、索引、分析计算和数据契约，按领域分目录。`src/` 拥有浏览器资源与交互；`server/` 拥有文件系统、数据库和 HTTP 服务。两类宿主都可引用共享层，不能互相引用；类型引用也遵守同一规则。
@@ -67,7 +71,7 @@ UI 和 Agent 都通过 `session.updateMark` 修改对象，保留 ID 与帧锚�
 
 ## Agent 与服务
 
-HTTP Agent 从 `/llms.txt`、`/agent.md` 和 `/api/agent` 逐层发现任务与运行时能力，入口文档内嵌于服务端，不依赖 `dist/`。`shared/service/agent.ts` 提供健康接口与发现接口共用的能力定义；尚未实现的评分任务、MCP 桥接和计算节点不会被声明为可用。详见 [HTTP Agent 与操作同步](agent-http.md)。
+HTTP Agent 从 `/llms.txt`、`/agent.md` 和 `/api/agent` 逐层发现任务与运行时能力，入口文档内嵌于服务端，不依赖 `dist/`。`shared/service/agent.ts` 提供健康接口与发现接口共用的能力定义；尚未实现的指标/计算节点不会被声明为可用；可选 stdio MCP 桥只在其自托管页面宿主上启用，普通 HTTP 服务不因代码存在而声明连接就绪。详见 [HTTP Agent 与操作同步](agent-http.md)。
 
 逐任务/操作 JSON 从 `/api/agent/tasks` 开始；`shared/service/agent-operations.ts` 与嵌入式操作 Markdown 共用描述和真实领域常量，真实 validator/router 继续负责准入。普通 HTTP 示例默认只读，对准备、规划、计算和候选分别显式授权；源/时钟/身份/幂等恢复边界见 [冷启动评分](agent-quality-workflow.md)，没有新的服务调度器或浏览器依赖。
 
