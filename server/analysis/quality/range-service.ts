@@ -1,3 +1,7 @@
+import {ReexecutionLedger} from './reexecution-ledger.ts';
+import type {ReexecutionCreation} from './reexecution-ledger.ts';
+import type {QualityExecutionContract,ReexecutionRequest} from '../../../shared/analysis/quality/reexecution.ts';
+import {sameExecutionContract} from '../../../shared/analysis/quality/reexecution.ts';
 import {createHash,randomUUID} from 'node:crypto';
 import {mkdirSync} from 'node:fs';
 import path from 'node:path';
@@ -24,6 +28,7 @@ type Publication={policy:RangeCandidatePolicy;origin:string;selected:{au:number;
 export class QualityRangeService {
   private db:ReturnType<typeof openIndexDatabase>;
   private unlock:()=>void;
+  readonly reexecutions:ReexecutionLedger;
   private active?:Promise<void>;
   private closed=false;
   private fatal:unknown;
@@ -36,17 +41,16 @@ export class QualityRangeService {
     let db:ReturnType<typeof openIndexDatabase>|undefined;
     try{
       this.db=db=openIndexDatabase(file);db.exec('PRAGMA busy_timeout=0;');
-      if(Number(db.prepare('PRAGMA user_version').get()!.user_version)>1)throw Error('Quality ranges require a newer application');
+      if(Number(db.prepare('PRAGMA user_version').get()!.user_version)>2)throw Error('Quality ranges require a newer application');
       db.exec(`
-        PRAGMA journal_mode=WAL;
+        PRAGMA journal_mode=WAL;BEGIN IMMEDIATE;
         CREATE TABLE IF NOT EXISTS quality_ranges(
           id TEXT PRIMARY KEY,actor TEXT NOT NULL,client TEXT NOT NULL,
           key TEXT NOT NULL,fingerprint TEXT NOT NULL,body TEXT NOT NULL,
           reserved INTEGER NOT NULL,UNIQUE(actor,client,key)
         );
         CREATE TABLE IF NOT EXISTS quality_range_publications(range_id TEXT PRIMARY KEY,body TEXT NOT NULL);
-        PRAGMA user_version=1;
-      `);
+      `);this.reexecutions=new ReexecutionLedger(db);db.exec('PRAGMA user_version=2;COMMIT;');
       // Child terminal commits precede the parent's next poll. Recover their
       // already committed facts atomically, without resubmission or source IO.
       db.exec('BEGIN IMMEDIATE');
@@ -152,20 +156,28 @@ export class QualityRangeService {
       active:child&&!terminalQualityJob(child.state)?{au:sample!.au,jobId:child.id,attemptId:child.attempt?.id??null,state:child.state,phase:child.phase,reason:child.reason,readBytes:null,decodedFrames:null}:null,
       completedMeasurementWork:job.summary.work,remainingSelectedPositions:job.plan.targets-job.summary.scoredPairs};
   }
-  submit(value:unknown,actor:Actor,requestId:string,key:unknown){
+  submit(value:unknown,actor:Actor,requestId:string,key:unknown,reexecution?:ReexecutionCreation){
     if(this.closed||this.fatal)throw new AdminError(503,'Range service unavailable.','range-service-unavailable');
     const plan=this.plan(value),k=qualityIdempotencyKey(key),fingerprint=digest(plan.input);
+    this.db.exec('BEGIN IMMEDIATE');let accepted:{job:QualityRangeJob;replayed:boolean};try{accepted=(()=>{
+    if(reexecution){const prior=this.reexecutions.replay(reexecution.parentId,actor.id,reexecution.key,reexecution.request);if(prior)return {job:this.get(prior.jobId,actor.id),replayed:true};const parent=this.get(reexecution.parentId,actor.id);if(parent.revision!==reexecution.parentRevision||!['failed','partial','interrupted','cancelled'].includes(parent.state)||parent.endedAt===null||this.progress(parent).active)throw new AdminError(409,'Original range has not physically stopped.','reexecution-blocked');}
     const prior=this.db.prepare('SELECT id,fingerprint FROM quality_ranges WHERE actor=? AND client=? AND key=?').get(actor.id,plan.input.client.id,k);
     if(prior){if(prior.fingerprint!==fingerprint)throw new AdminError(409,'Range key already binds another plan.','idempotency-conflict');return {job:this.get(String(prior.id),actor.id),replayed:true};}
-    const rows=this.rows(),reserve=Buffer.byteLength(JSON.stringify(plan))+64*1024;
+    const rows=this.rows(),reserve=Buffer.byteLength(JSON.stringify(plan))+80*1024;
     if(rows.length>=LIMITS.historyRows||Number(this.db.prepare('SELECT coalesce(sum(reserved),0) AS n FROM quality_ranges').get()!.n)+reserve>LIMITS.reservedBytes)
       throw new AdminError(429,'Range history full.','range-history-full');
     if(rows.filter(j=>!terminalRange(j.state)).length>=LIMITS.queued||rows.filter(j=>j.actor.id===actor.id&&!terminalRange(j.state)).length>=LIMITS.actorOutstanding)
       throw new AdminError(429,'Range queue admission full.','range-queue-full');
-    const job:QualityRangeJob={id:randomUUID(),actor:{id:actor.id,name:actor.name},requestId,key:k,plan,state:'queued',createdAt:this.now(),startedAt:null,endedAt:null,reason:null,samples:[],summary:aggregateRange([]),cancelRequestedAt:null,revision:1};
+    const job:QualityRangeJob={...(reexecution?{executionContract:reexecution.contract,retryOf:reexecution.lineage}:{}),id:randomUUID(),actor:{id:actor.id,name:actor.name},requestId,key:k,plan,state:'queued',createdAt:this.now(),startedAt:null,endedAt:null,reason:null,samples:[],summary:aggregateRange([]),cancelRequestedAt:null,revision:1};
     this.db.prepare('INSERT INTO quality_ranges VALUES(?,?,?,?,?,?,?)').run(job.id,actor.id,plan.input.client.id,k,fingerprint,JSON.stringify(job),reserve);
-    this.pump();return {job:this.get(job.id,actor.id),replayed:false};
+    if(reexecution)this.reexecutions.insert({actorId:actor.id,parentId:reexecution.parentId,jobId:job.id,key:reexecution.key,request:reexecution.request,lineage:reexecution.lineage});
+    return {job:this.get(job.id,actor.id),replayed:false};
+    })();this.db.exec('COMMIT');}catch(error){this.db.exec('ROLLBACK');throw error;}
+    if(!accepted.replayed)this.pump();return {...accepted,job:this.get(accepted.job.id,actor.id)};
   }
+  executionContract(id:string,actor:string){const job=this.get(id,actor);if(job.executionContract)return job.executionContract;const contracts=job.samples.map(s=>this.jobs.get(s.jobId,actor).executionContract).filter((v):v is QualityExecutionContract=>!!v);if(contracts.some(v=>!sameExecutionContract(v,contracts[0])))throw new AdminError(409,'Range child execution conditions differ; use a new intent.','execution-contract-conflict');return contracts[0];}
+  reexecutionReceipt(id:string,actor:string,key?:string,request?:ReexecutionRequest){this.get(id,actor);return key&&request?this.reexecutions.replay(id,actor,key,request):this.reexecutions.get(id,actor);}
+  reexecute(creation:ReexecutionCreation,actor:Actor,requestId:string){if(!this.jobs.resources().available||this.jobs.resources().admissionBlocked)throw new AdminError(503,'Physical execution stop is unconfirmed.','reexecution-blocked');const original=this.get(creation.parentId,actor.id);return this.submit(original.plan.input,actor,requestId,'reexecution:'+randomUUID(),creation);}
   cancel(id:string,actor:string){
     const job=this.get(id,actor);
     if(!terminalRange(job.state)){job.cancelRequestedAt=this.now();job.state=job.state==='queued'?'cancelled':'cancelling';if(job.state==='cancelled')job.endedAt=this.now();this.save(job);}
@@ -184,7 +196,7 @@ export class QualityRangeService {
       const pair=job.plan.input.pairs.find(p=>p.reference.picture.au===au);if(!pair)continue;
       const request=structuredClone(pair);request.budget={...request.budget,maxElapsedMs:Math.max(1,Math.min(request.budget?.maxElapsedMs??30000,deadline-this.now()))};
       let child;
-      try{child=this.jobs.submit({schema:'voidplayer-psnr-frame-job',version:1,client:{kind:job.plan.input.client.kind,id:`range:${job.id}`},request},job.actor,job.requestId,`sample:${au}`).job;}
+      try{child=this.jobs.submit({schema:'voidplayer-psnr-frame-job',version:1,client:{kind:job.plan.input.client.kind,id:`range:${job.id}`},request},job.actor,job.requestId,`sample:${au}`,undefined,job.executionContract).job;}
       catch(e){const err=e as {code?:string;message?:string};job.reason={code:err.code??'submission-failed',message:err.message??'Child admission failed'};this.save(job);break;}
       job.samples.push({au,jobId:child.id,state:child.state,reason:null});this.save(job);
       while(!terminalQualityJob(child.state)){

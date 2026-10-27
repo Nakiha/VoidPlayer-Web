@@ -1,3 +1,4 @@
+import type {ReexecutionMetadata} from './reexecution.ts';
 import { pairPacketCount, pairBudget } from './frame-pair.ts';
 import type { FramePairRequest, PairTarget } from './frame-pair.ts';
 import type { QualityJobInput, QualityJobReason, QualityJobResult } from './jobs.ts';
@@ -48,7 +49,7 @@ export type RangeSample = {
   au:number;jobId:string;state:string;reason:QualityJobReason|null;
   result?:{attemptId:string;digest:string};
 };
-export type QualityRangeJob = {
+export type QualityRangeJob = ReexecutionMetadata & {
   id:string;actor:{id:string;name:string};requestId:string;key:string;
   plan:QualityRangePlan;state:RangeState;
   createdAt:number;startedAt:number|null;endedAt:number|null;

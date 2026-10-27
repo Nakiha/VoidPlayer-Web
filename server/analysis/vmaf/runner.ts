@@ -1,3 +1,5 @@
+import type {QualityExecutionContract} from '../../../shared/analysis/quality/reexecution.ts';
+import {canonicalJson} from '../../../shared/analysis/quality/correspondence.ts';
 import {Worker} from 'node:worker_threads';import {spawn} from 'node:child_process';
 import {mkdirSync,copyFileSync,readFileSync,statSync,rmSync} from 'node:fs';
 import path from 'node:path';import {randomUUID} from 'node:crypto';
@@ -6,7 +8,7 @@ import {VMAF_LIMITS,VMAF_CAPABILITY,VmafError} from '../../../shared/analysis/qu
 import type {VmafComponentConfig,VmafInput,VmafModel,VmafPlanSnapshot,VmafPrepared,VmafNativeResult} from '../../../shared/analysis/quality/vmaf.ts';
 import type {VmafComponent} from './component.ts';
 declare const VOIDPLAYER_COMPILED:boolean;
-type Hooks={admitted():void;phase(name:string):void;progress(frames:number,total:number):void;prepared(value:VmafPrepared):void;process(value:{pid:number;startTicks:string;bootId:string}|null):void};
+type Hooks={expectedExecutionContract?:QualityExecutionContract;contract?(value:QualityExecutionContract):void;admitted():void;phase(name:string):void;progress(frames:number,total:number):void;prepared(value:VmafPrepared):void;process(value:{pid:number;startTicks:string;bootId:string}|null):void};
 const sleep=()=>new Promise<void>(r=>setTimeout(r,10));
 export function processStartTicks(pid:number){try{const stat=readFileSync(`/proc/${pid}/stat`,'utf8');const fields=stat.slice(stat.lastIndexOf(')')+2).split(' ');return fields[0]==='Z'?null:fields[19];}catch{return null;}}
 /** Recovery never starts another execution while a durably-owned old supervisor lives. */
@@ -32,7 +34,7 @@ export class NativeVmafRunner{
   signal.throwIfAborted();if(!this.config)throw new VmafError('component-unavailable','No native VMAF component configured');
   return this.worker<VmafComponent>('component-worker.ts',{config:this.config,model},signal);
  }
- private worker<T>(entry:string,data:object,signal:AbortSignal,progress?:(n:number,total:number)=>void):Promise<T>{
+ private worker<T>(entry:string,data:object,signal:AbortSignal,progress?:(n:number,total:number)=>void,onContract?:(value:QualityExecutionContract)=>void):Promise<T>{
   const control=new Int32Array(new SharedArrayBuffer(8));
   const url=new URL(typeof VOIDPLAYER_COMPILED!=='undefined'&&VOIDPLAYER_COMPILED?`./analysis/vmaf/${entry}`:`./${entry}`,import.meta.url);
   const worker=new Worker(url,{workerData:{...data,control:control.buffer},resourceLimits:{maxOldGenerationSizeMb:256},trackUnmanagedFds:true});
@@ -47,13 +49,15 @@ export class NativeVmafRunner{
     finally{worker.removeAllListeners();}
    };
    const abort=()=>void finish(false,signal.reason);
-   worker.on('message',message=>{if(finishing)return;if(message.type==='progress'){try{progress?.(message.frames,message.total);}catch(error){void finish(false,error);}return;}void finish(message.ok===true,message.ok?message.value:new VmafError(message.error?.code??'execution-failed',message.error?.message??'VMAF Worker failed'));});
+   worker.on('message',message=>{if(finishing)return;if(message.type==='execution-contract'){try{onContract?.(message.contract);}catch(error){void finish(false,error);}return;}if(message.type==='progress'){try{progress?.(message.frames,message.total);}catch(error){void finish(false,error);}return;}void finish(message.ok===true,message.ok?message.value:new VmafError(message.error?.code??'execution-failed',message.error?.message??'VMAF Worker failed'));});
    worker.once('error',error=>void finish(false,error));worker.once('messageerror',()=>void finish(false,new VmafError('execution-failed','Invalid Worker reply')));worker.once('exit',()=>{exited=true;Atomics.notify(control,1);if(!finishing)void finish(false,new VmafError('execution-failed','VMAF Worker exited without a result'));});
    signal.addEventListener('abort',abort,{once:true});if(signal.aborted)abort();
   });
  }
+ private nativeContract(c:VmafComponent,model:VmafModel):NonNullable<QualityExecutionContract['native']>{return {manifestSha256:c.manifestSha256,binarySha256:c.binarySha256,modelSha256:c.modelSha256,supervisorSha256:c.supervisorSha256,sourceRevision:c.sourceRevision,model,recipe:'official-vmaf-one-thread-no-preprocessing-v1'};}
+ async reexecutionPreflight(input:VmafInput,snapshot:VmafPlanSnapshot,expected:QualityExecutionContract,signal:AbortSignal){return this.owned({budget:{maxElapsedMs:Math.min(input.budget.maxElapsedMs,30000)}},signal,()=>{},async combined=>{const c=await this.component(input.model,combined);return this.worker<{contract:QualityExecutionContract;indexBytes:number;indexPackets:number}>('decode-worker.ts',{mode:'preflight',database:this.library.indexDatabase,coreDir:this.coreDir,input,snapshot,directory:'',nativeContract:this.nativeContract(c,input.model),expectedExecutionContract:expected},combined);});}
  async preflight(input:VmafInput,snapshot:VmafPlanSnapshot,signal:AbortSignal){
-  return this.owned(input,signal,()=>{},async combined=>{const c=await this.component(input.model,combined);combined.throwIfAborted();const value=await this.worker('decode-worker.ts',{mode:'preflight',database:this.library.indexDatabase,coreDir:this.coreDir,input,snapshot,directory:''},combined);return {eligibility:value,component:{manifestSha256:c.manifestSha256,modelSha256:c.modelSha256},rawColorVerification:'required-at-execution',nativeExecution:false};});
+  return this.owned(input,signal,()=>{},async combined=>{const c=await this.component(input.model,combined);combined.throwIfAborted();const value=await this.worker('decode-worker.ts',{mode:'preflight',database:this.library.indexDatabase,coreDir:this.coreDir,input,snapshot,directory:'',nativeContract:this.nativeContract(c,input.model)},combined);return {eligibility:value,component:{manifestSha256:c.manifestSha256,modelSha256:c.modelSha256},rawColorVerification:'required-at-execution',nativeExecution:false};});
  }
  async run(input:VmafInput,snapshot:VmafPlanSnapshot,signal:AbortSignal,hooks:Hooks){
   return this.owned(input,signal,hooks.admitted,async combined=>{
@@ -61,9 +65,11 @@ export class NativeVmafRunner{
    try{
     hooks.phase('component');const c=await this.component(input.model,combined);combined.throwIfAborted();
     mkdirSync(directory,{recursive:true,mode:0o700});temporary=true;hooks.phase('decode');
-    const prepared=await this.worker<VmafPrepared>('decode-worker.ts',{mode:'decode',database:this.library.indexDatabase,coreDir:this.coreDir,input,snapshot,directory},combined,hooks.progress);combined.throwIfAborted();hooks.prepared(prepared);
+    const prepared=await this.worker<VmafPrepared>('decode-worker.ts',{mode:'decode',database:this.library.indexDatabase,coreDir:this.coreDir,input,snapshot,directory,nativeContract:this.nativeContract(c,input.model),expectedExecutionContract:hooks.expectedExecutionContract},combined,hooks.progress,hooks.contract);combined.throwIfAborted();hooks.prepared(prepared);
+    if(hooks.expectedExecutionContract){const current=await this.component(input.model,combined);if(canonicalJson(this.nativeContract(current,input.model))!==canonicalJson(hooks.expectedExecutionContract.native))throw new VmafError('component-unavailable','Frozen native component changed; use a new intent');}
     hooks.phase('native');const native=await this.native(c,directory,input,prepared,combined,hooks.process);combined.throwIfAborted();
-    hooks.phase('source-final');const verification=await this.worker<{indexBytes:number;indexPackets:number;elapsedMs:number}>('decode-worker.ts',{mode:'verify',database:this.library.indexDatabase,coreDir:this.coreDir,input,snapshot,directory},combined);combined.throwIfAborted();if(prepared.work.indexBytes+verification.indexBytes>VMAF_LIMITS.maxIndexBytes||prepared.work.indexPackets+verification.indexPackets>VMAF_LIMITS.maxIndexPackets)throw new VmafError('budget-exceeded','Final verification exceeds cumulative index budget');native.resources.finalVerification={indexBytes:verification.indexBytes,indexPackets:verification.indexPackets,elapsedMs:verification.elapsedMs};return {prepared,native};
+    if(hooks.expectedExecutionContract){const current=await this.component(input.model,combined);if(canonicalJson(this.nativeContract(current,input.model))!==canonicalJson(hooks.expectedExecutionContract.native))throw new VmafError('component-unavailable','Frozen native component changed before commit');}
+    hooks.phase('source-final');const verification=await this.worker<{indexBytes:number;indexPackets:number;elapsedMs:number}>('decode-worker.ts',{mode:'verify',database:this.library.indexDatabase,coreDir:this.coreDir,input,snapshot,directory,nativeContract:this.nativeContract(c,input.model),expectedExecutionContract:hooks.expectedExecutionContract},combined);combined.throwIfAborted();if(prepared.work.indexBytes+verification.indexBytes>VMAF_LIMITS.maxIndexBytes||prepared.work.indexPackets+verification.indexPackets>VMAF_LIMITS.maxIndexPackets)throw new VmafError('budget-exceeded','Final verification exceeds cumulative index budget');native.resources.finalVerification={indexBytes:verification.indexBytes,indexPackets:verification.indexPackets,elapsedMs:verification.elapsedMs};return {prepared,native};
    }finally{if(temporary&&!this.stopUncertain)try{rmSync(directory,{recursive:true,force:true});}catch(error){this.stopUncertain=true;throw new VmafError('stop-uncertain','Temporary raw sequence could not be reclaimed');}}
   });
  }

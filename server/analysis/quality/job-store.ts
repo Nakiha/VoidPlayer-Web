@@ -1,3 +1,7 @@
+import {ReexecutionLedger} from './reexecution-ledger.ts';
+import type {ReexecutionCreation} from './reexecution-ledger.ts';
+import type {QualityExecutionContract,ReexecutionMetadata,ReexecutionRequest} from '../../../shared/analysis/quality/reexecution.ts';
+import {sameExecutionContract} from '../../../shared/analysis/quality/reexecution.ts';
 import {pairPacketCount} from '../../../shared/analysis/quality/frame-pair.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
@@ -12,7 +16,7 @@ import type { QualityJob, QualityJobPage, QualityJobPhase, QualityJobReason, Qua
 import type { qualityJobRequest } from './job-request.ts';
 
 const columns = `id,revision,sequence,state,phase,actor_id,actor_name,client_id,request_id,idempotency_key,
-  created_at,queue_until,started_at,ended_at,cancel_at,cancel_by,cancel_request_id,reason_json,input_json,attempt_id,result_sha`;
+  created_at,queue_until,started_at,ended_at,cancel_at,cancel_by,cancel_request_id,reason_json,input_json,attempt_id,result_sha,execution_json`;
 const pending = "('queued','preparing','running','cancelling')";
 const reason = (code: string, message: string): QualityJobReason => ({code, message});
 
@@ -21,6 +25,7 @@ const reason = (code: string, message: string): QualityJobReason => ({code, mess
 export class QualityJobStore {
   private db: ReturnType<typeof openIndexDatabase>;
   private unlock: () => void;
+  readonly reexecutions:ReexecutionLedger;
   constructor(file: string, now = Date.now()) {
     mkdirSync(path.dirname(file), {recursive: true});
     this.unlock = lockDatabase(file);
@@ -28,7 +33,7 @@ export class QualityJobStore {
     try {
       this.db = db = openIndexDatabase(file);
       db.exec('PRAGMA busy_timeout=0; PRAGMA foreign_keys=ON;');
-      if (Number(db.prepare('PRAGMA user_version').get()!.user_version) > 1)
+      if (Number(db.prepare('PRAGMA user_version').get()!.user_version) > 2)
         throw new Error('Quality history requires a newer application.');
       db.exec(`PRAGMA journal_mode=WAL; PRAGMA journal_size_limit=1048576; PRAGMA wal_autocheckpoint=100;
         BEGIN IMMEDIATE;
@@ -40,12 +45,14 @@ export class QualityJobStore {
           actor_id TEXT NOT NULL,actor_name TEXT NOT NULL,client_id TEXT NOT NULL,request_id TEXT NOT NULL,idempotency_key TEXT NOT NULL,
           fingerprint TEXT NOT NULL,input_json TEXT NOT NULL,reserved_bytes INTEGER NOT NULL,
           created_at INTEGER NOT NULL,queue_until INTEGER NOT NULL,started_at INTEGER,ended_at INTEGER,
-          cancel_at INTEGER,cancel_by TEXT,cancel_request_id TEXT,reason_json TEXT,attempt_id TEXT,result_json TEXT,result_sha TEXT,
+          cancel_at INTEGER,cancel_by TEXT,cancel_request_id TEXT,reason_json TEXT,attempt_id TEXT,result_json TEXT,result_sha TEXT,execution_json TEXT NOT NULL DEFAULT '{}',
           UNIQUE(actor_id,client_id,idempotency_key));
         CREATE INDEX IF NOT EXISTS quality_job_changes ON quality_jobs(sequence);
         CREATE TABLE IF NOT EXISTS quality_attempts(id TEXT PRIMARY KEY,job_id TEXT UNIQUE NOT NULL REFERENCES quality_jobs(id),
           state TEXT NOT NULL,phase TEXT NOT NULL,started_at INTEGER NOT NULL,ended_at INTEGER);
-        PRAGMA user_version=1; COMMIT;`);
+        `);
+      if(!db.prepare('PRAGMA table_info(quality_jobs)').all().some(c=>c.name==='execution_json'))db.exec("ALTER TABLE quality_jobs ADD COLUMN execution_json TEXT NOT NULL DEFAULT '{}'");
+      this.reexecutions=new ReexecutionLedger(db);db.exec('PRAGMA user_version=2; COMMIT;');
       this.recover(now);
     } catch (error) { try { db?.close(); } finally { this.unlock(); } throw error; }
   }
@@ -79,7 +86,7 @@ export class QualityJobStore {
     const input = JSON.parse(String(row.input_json)) as QualityJob['input'];
     const attempt = row.attempt_id ? this.db.prepare('SELECT * FROM quality_attempts WHERE id=?').get(row.attempt_id) : null;
     const completed = row.state === 'completed';
-    return {schema: 'voidplayer-quality-job', version: 1, id: String(row.id), revision: Number(row.revision), sequence: Number(row.sequence),
+    return {...JSON.parse(String(row.execution_json)) as ReexecutionMetadata,schema: 'voidplayer-quality-job', version: 1, id: String(row.id), revision: Number(row.revision), sequence: Number(row.sequence),
       state: row.state as QualityJobState, phase: row.phase as QualityJobPhase,
       submitted: {actorId: String(row.actor_id), actorName: String(row.actor_name), client: input.client,
         requestId: String(row.request_id), idempotencyKey: String(row.idempotency_key)},
@@ -94,8 +101,9 @@ export class QualityJobStore {
       progress: {scoredPairs: completed ? 1 : 0, targetPairs: 1, decodedFrames: completed ?
         [input.request.reference,input.request.distorted].reduce((n,t)=>n+pairPacketCount(t),0) : null}};
   }
-  submit(request: ReturnType<typeof qualityJobRequest>, actor: Actor, requestId: string, key: string, now: number) {
+  submit(request: ReturnType<typeof qualityJobRequest>, actor: Actor, requestId: string, key: string, now: number,reexecution?:ReexecutionCreation,expectedExecutionContract?:QualityExecutionContract) {
     return this.transaction(() => {
+      if(reexecution){const prior=this.reexecutions.replay(reexecution.parentId,actor.id,reexecution.key,reexecution.request);if(prior)return {job:this.get(prior.jobId),replayed:true};const parent=this.get(reexecution.parentId);if(parent.submitted.actorId!==actor.id||parent.revision!==reexecution.parentRevision||!['failed','interrupted','cancelled'].includes(parent.state)||parent.endedAt===null||parent.attempt&&parent.attempt.endedAt===null)throw new AdminError(409,'Original execution is not terminal and physically stopped.','reexecution-blocked');}
       const prior = this.db.prepare('SELECT id,fingerprint FROM quality_jobs WHERE actor_id=? AND client_id=? AND idempotency_key=?')
         .get(actor.id, request.input.client.id, key);
       if (prior) {
@@ -103,7 +111,7 @@ export class QualityJobStore {
         return {job: this.get(String(prior.id)), replayed: true};
       }
       const history = this.db.prepare('SELECT count(*) AS count,coalesce(sum(reserved_bytes),0) AS bytes FROM quality_jobs').get()!;
-      const charge = Buffer.byteLength(request.json) + LIMITS.resultBytes;
+      const charge = Buffer.byteLength(request.json) + LIMITS.resultBytes+16*1024;
       if (Number(history.count) >= LIMITS.historyRows || Number(history.bytes) + charge > LIMITS.reservedBytes)
         throw new AdminError(429, 'Quality history budget is full; existing history is retained.', 'quality-history-full');
       if (Number(this.db.prepare("SELECT count(*) AS count FROM quality_jobs WHERE state='queued'").get()!.count) >= LIMITS.queued)
@@ -112,11 +120,16 @@ export class QualityJobStore {
         throw new AdminError(429, 'Actor quality admission is full.', 'quality-actor-limit');
       const id = randomUUID();
       this.db.prepare(`INSERT INTO quality_jobs(id,sequence,state,phase,actor_id,actor_name,client_id,request_id,idempotency_key,
-        fingerprint,input_json,reserved_bytes,created_at,queue_until) VALUES(?,?,'queued','queued',?,?,?,?,?,?,?,?,?,?)`)
+        fingerprint,input_json,reserved_bytes,created_at,queue_until,execution_json) VALUES(?,?,'queued','queued',?,?,?,?,?,?,?,?,?,?,?)`)
         .run(id, this.tick(), actor.id, actor.name.slice(0, 120), request.input.client.id, requestId, key,
-          request.fingerprint, request.json, charge, now, now + LIMITS.queueWaitMs);
+          request.fingerprint, request.json, charge, now, now + LIMITS.queueWaitMs,JSON.stringify(reexecution?{executionContract:reexecution.contract,retryOf:reexecution.lineage}:expectedExecutionContract?{executionContract:expectedExecutionContract}:{}));
+      if(reexecution)this.reexecutions.insert({actorId:actor.id,parentId:reexecution.parentId,jobId:id,key:reexecution.key,request:reexecution.request,lineage:reexecution.lineage});
       return {job: this.get(id), replayed: false};
     });
+  }
+  recordExecutionContract(id:string,attempt:string,contract:QualityExecutionContract){
+    if(Buffer.byteLength(JSON.stringify(contract))>16*1024||contract.schema!=='voidplayer-quality-execution-contract'||contract.version!==1)throw new AdminError(500,'Execution contract exceeds its bounded format.','execution-contract-invalid');
+    this.transaction(()=>{const job=this.get(id);if(terminalQualityJob(job.state)||job.attempt?.id!==attempt)throw new AdminError(409,'Execution contract cannot change after its attempt.','execution-contract-conflict');if(job.executionContract&&!sameExecutionContract(job.executionContract,contract))throw new AdminError(409,'Frozen execution conditions changed.','execution-contract-conflict');if(!job.executionContract)this.patch(id,{execution_json:JSON.stringify({executionContract:contract,...(job.retryOf?{retryOf:job.retryOf}:{})})});});
   }
   queued() {
     const row = this.db.prepare("SELECT id FROM quality_jobs WHERE state='queued' ORDER BY ordinal LIMIT 1").get();
