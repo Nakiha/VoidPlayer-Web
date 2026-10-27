@@ -108,3 +108,5 @@ node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 普通 HTTP Agent 渐进任务/操作发现见 `docs/agent-quality-workflow.md`。`shared/service/agent-operations.ts` 复用领域常量，JSON 与嵌入式 Markdown 共用描述，不增加第二套 validator；元数据可读不等于质量准入。`examples/http-quality.mjs` 只能使用公开 HTTP，默认只读，各类写入分别显式授权，不保存凭据；未知 POST 仅原 actor/body/key 或原 plan digest/policy 回放，不能换 key 猜重试，不静默配对或发布。
 
 临时本机 stdio MCP 页面桥见 `docs/local-mcp-page-bridge.md`。`scripts/mcp-page-bridge.ts` 只托管自己的 loopback 页面；页面显式用户点击授予 read/view/annotate 范围，随机 document/grant capability 仅存当前进程/页面内存，不能把声明名、Origin 或 epoch 当认证。只复用共享白名单 schema 与现有 Agent/session facade，不全工具透传、不接受任意脚本/媒体路径、不上传 File/日志，不自动连接或跟随标签。失去授权即废弃排队命令，已派发操作可能完成且回执未知，不能假回滚或自动换 key 重放。迟到消息按 document/epoch/correlation 围栏；关闭 stdin 后真实关闭自有 host/资源，不影响独立 HTTP 后台任务。现代与 legacy MCP 生命周期须分别按官方规范验证，stdout 只能写协议帧。
+
+显式评分重新执行见 `docs/explicit-quality-reexecution.md`。原提交重放与新计算必须分开；single/range/native VMAF 仅已物理停止的 failed/interrupted/cancelled/partial 可只读核验冻结条件并明确确认全量成本，原子创建一个带 retryOf 的新任务。每 job 仍只有原 attempt，旧结果/候选不变、不复用分数或自动发布。条件/执行器见证缺失须 blocked/new intent，不重建索引/C 计划或自动换模型。三数据库 v2 的新 job 与回执同事务；未知提交只原 actor/body/key 回放，重启不自动重算。

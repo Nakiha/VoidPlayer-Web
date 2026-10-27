@@ -14,7 +14,7 @@ import {ApiError} from '../../src/services/api-error.ts';
 import type {ReexecutionPlan} from '../../shared/analysis/quality/reexecution.ts';
 
 const actor={id:'reexecution-owner',name:'Owner'},hash='a'.repeat(64);
-const contract:QualityExecutionContract={schema:'voidplayer-quality-execution-contract',version:1,environment:{schema:'voidplayer-quality-execution-environment',version:1,runtime:'node',runtimeVersion:process.versions.node,recipe:'source-yuv-psnr-ssim-packet-identity-v1',assets:[{file:'voidplayer-core.wasm',sha256:hash,bytes:123}]},sources:[]};
+const contract:QualityExecutionContract={schema:'voidplayer-quality-execution-contract',version:1,environment:{schema:'voidplayer-quality-execution-environment',version:1,runtime:'node',runtimeVersion:process.versions.node,recipe:'source-yuv-psnr-ssim-packet-identity-v1',producerBuild:{kind:'source-content',sha256:hash,bytes:123},assets:[{file:'voidplayer-core.wasm',sha256:hash,bytes:123}]},sources:[]};
 const request:ReexecutionRequest={schema:'voidplayer-quality-reexecution',version:1,reason:'Explicitly recompute after the stopped failure',planDigest:hash,confirm:{scope:'entire-frozen-input-from-start',selectedPairs:1,reusesPreviousScores:false,budget:{maxElapsedMs:30000},reservation:{}}};
 test('explicit full-scope confirmation and bounded lineage keep attempt and execution generation separate',()=>{
   assert.deepEqual(reexecutionRequest(request),request);assert.equal(reexecutionReason(' reason '),'reason');
@@ -72,4 +72,11 @@ test('new job and exact reexecution receipt commit atomically; replay/restart ne
   store.close();store=new QualityJobStore(file,3000);assert.equal(store.get(accepted.job.id).state,'interrupted');assert.equal(store.get(accepted.job.id).attempt,null);assert.equal(store.queued(),null);
   const replay=store.submit(input,actor,'after-restart','unused-after-restart',3001,creation);assert.equal(replay.replayed,true);assert.equal(replay.job.id,accepted.job.id);assert.equal(store.changes(actor.id).entries.length,2);assert.equal(JSON.stringify(store.get(original.id)),before);
   assert.equal(store.reexecutions.get(original.id,'another-actor'),null);
+});
+
+test('producer build pins public implementation bytes, excludes data/config and enforces its independent byte budget',async t=>{
+  const {mkdir,writeFile,truncate}=await import('node:fs/promises'),{hashQualityProducer}=await import('../../server/analysis/quality/producer-build.ts');
+  const directory=await mkdtemp(path.join(tmpdir(),'vp-quality-producer-'));t.after(()=>rm(directory,{recursive:true,force:true}));await mkdir(path.join(directory,'server'));await mkdir(path.join(directory,'shared'));const file=path.join(directory,'server','recipe.ts');await writeFile(file,'export const recipe = 1;');await writeFile(path.join(directory,'shared','pixel.ts'),'export const pixel = 1;');const first=hashQualityProducer(directory);
+  await writeFile(path.join(directory,'server','private-config.json'),'dummy configuration excluded from implementation digest');assert.deepEqual(hashQualityProducer(directory),first);
+  await writeFile(file,'export const recipe = 2;');assert.notEqual(hashQualityProducer(directory).sha256,first.sha256);await truncate(file,8*1024*1024+1);assert.throws(()=>hashQualityProducer(directory),/byte budget/);
 });

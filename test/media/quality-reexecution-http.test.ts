@@ -4,6 +4,8 @@ import {Worker} from 'node:worker_threads';
 import {randomUUID} from 'node:crypto';
 import {readFile,writeFile} from 'node:fs/promises';
 import path from 'node:path';
+// @ts-ignore ordinary public-HTTP-only example
+import {runHttpQuality} from '../../examples/http-quality.mjs';
 // @ts-ignore shared fixed-public-media/native fixture
 import {nativeFixture,until} from '../helpers/native-vmaf.mjs';
 import {SSIM_VARIANT} from '../../shared/analysis/quality/ssim.ts';
@@ -24,7 +26,7 @@ for(const kind of ['single','range','vmaf'] as const)test(`real ${kind}: stopped
     nativeRunner.run=(input:any,snapshot:any,signal:any,hooks:any)=>run(input,snapshot,signal,{...hooks,process:(p:any)=>{hooks.process(p);if(p&&!nativeKilled){nativeKilled=true;process.kill(p.pid,'SIGKILL');}}});
   }
   const collection=kind==='single'?'/api/quality/jobs':kind==='range'?'/api/quality/ranges':'/api/quality/vmaf/jobs';
-  const first=(await f.json(collection,input,'initial-execution')).job,url=collection+'/'+first.id;
+  const first=(kind==='range'?await f.json('/api/quality/correspondence-plans/'+f.input.plan.id+'/execute',{digest:f.input.plan.digest}):await f.json(collection,input,'initial-execution')).job,url=collection+'/'+first.id;
   const read=async(id=first.id)=>{const v=await f.json(collection+'/'+id);return kind==='range'?v.job:v;};
   if(kind!=='vmaf'){
     await until(()=>gate&&Atomics.load(gate,0),Boolean,'Actual decode gate did not start');
@@ -46,8 +48,15 @@ for(const kind of ['single','range','vmaf'] as const)test(`real ${kind}: stopped
   const wrong=structuredClone(request);wrong.confirm.selectedPairs++;assert.equal((await f.request(url+'/reexecutions',wrong,'changed-cost')).status,409);
   const other='guest-'+randomUUID();assert.equal((await f.request(url+'/reexecution-plan',{reason},'cross-actor',{cookie:'voidplayer-user='+other,'x-voidplayer-actor':other})).status,404);
   assert.equal((await f.request(url+'/reexecution-plan',{reason},'changed-actor',{cookie:'voidplayer-user='+other})).status,409);
-  const response=await f.request(url+'/reexecutions',request,'frozen-reexecution-key');assert.equal(response.status,202,await response.clone().text());const accepted=await response.json();assert.notEqual(accepted.job.id,first.id);assert.equal(accepted.job.retryOf.retryOf,first.id);assert.equal(accepted.job.retryOf.generation,2);assert.equal(accepted.job.retryOf.rootJobId,first.id);
-  const replay=await f.json(url+'/reexecutions',request,'frozen-reexecution-key');assert.equal(replay.replayed,true);assert.equal(replay.job.id,accepted.job.id);
+  if(kind==='single'){
+    const dry=await runHttpQuality(f.base,{mode:kind,reexecution:{jobId:first.id,reason}},{cookie:f.cookie,actor:f.actor});assert.equal(dry.reexecutionPlan.digest,plan.digest);assert.equal((await f.json(url+'/reexecutions')).successor,null);
+    let lost=false;const sent:any[]=[];const client=await runHttpQuality(f.base,{mode:kind,key:'frozen-example',reexecution:{jobId:first.id,reason,actor:f.actor,request}},{cookie:f.cookie,actor:f.actor,allow:{reexecute:true,retryUnknown:true},fetchImpl:async(target:any,init:any)=>{const r=await fetch(target,init);if(String(target).endsWith('/reexecutions')&&init.method==='POST'){sent.push({body:init.body,key:init.headers['idempotency-key'],actor:init.headers['x-voidplayer-actor']});if(!lost){lost=true;await r.json();return new Response('',{status:202});}}return r;}});
+    assert.equal(client.job.state,'completed');assert.equal(sent.length,2);assert.deepEqual(sent[0],sent[1]);assert.equal(client.job.retryOf.retryOf,first.id);assert.equal(client.reexecutionReceipt.key,'frozen-example:single.reexecute');
+    // The rest of the common assertions replay the exact already accepted example request.
+    const receipt=await f.json(url+'/reexecutions',request,'frozen-example:single.reexecute');assert.equal(receipt.job.id,client.job.id);
+  }
+  const response=await f.request(url+'/reexecutions',request,kind==='single'?'frozen-example:single.reexecute':'frozen-reexecution-key');assert.equal(response.status,kind==='single'?200:202,await response.clone().text());const accepted=await response.json();assert.notEqual(accepted.job.id,first.id);assert.equal(accepted.job.retryOf.retryOf,first.id);assert.equal(accepted.job.retryOf.generation,2);assert.equal(accepted.job.retryOf.rootJobId,first.id);
+  const replay=await f.json(url+'/reexecutions',request,kind==='single'?'frozen-example:single.reexecute':'frozen-reexecution-key');assert.equal(replay.replayed,true);assert.equal(replay.job.id,accepted.job.id);
   assert.equal((await f.request(url+'/reexecutions',request,'second-window-key')).status,409,'another window cannot fork the original with a fresh key');
   const done=await until(()=>read(accepted.job.id),(j:any)=>!['queued','preparing','running','cancelling'].includes(j.state),'New full execution');assert.equal(done.state,'completed',JSON.stringify(done));
   if(kind==='single'){assert.equal(done.attempt.number,1);const result=await f.json(collection+'/'+done.id+'/result');assert.ok(result.value.result.ssim);assert.equal(result.value.result.metric.spatial.blocks.length,4);}
@@ -69,6 +78,64 @@ for(const kind of ['single','range','vmaf'] as const)test(`real ${kind}: stopped
   }
   // Receipt-first replay is independent of now-invalid source eligibility.
   const file=path.join(f.media,'reference.'+f.containers[0]),bytes=await readFile(file);await writeFile(file,Buffer.concat([bytes,Buffer.from([0])]));
-  assert.equal((await f.json(url+'/reexecutions',request,'frozen-reexecution-key')).job.id,done.id);
+  assert.equal((await f.json(url+'/reexecutions',request,kind==='single'?'frozen-example:single.reexecute':'frozen-reexecution-key')).job.id,done.id);
   assert.equal((await f.json(collection+'/'+done.id+'/reexecution-plan',{reason})).eligible,false,'completed successors cannot be recomputed');
+});
+
+// Each crash executes inside a separate real service process. No response is
+// fabricated and the helper kills synchronously at the transaction boundary.
+for(const kind of ['single','range','vmaf'] as const)test(`${kind}: SIGKILL before/after receipt commit, restart and exact-key replay create at most one successor`,{timeout:180000},async t=>{
+  const {spawn}=await import('node:child_process'),{once}=await import('node:events');
+  const f=await nativeFixture({distorted:true,containers:['mp4','flv']});t.after(()=>f.close());
+  const lib=f.service.library,runner=lib.quality as any,create=runner.createWorker;let gate:Int32Array|undefined;
+  runner.createWorker=(data:any)=>{if(data.mode==='measure'&&!gate){gate=new Int32Array(new SharedArrayBuffer(20));return new Worker(new URL('../helpers/quality-phase-worker.ts',import.meta.url),{workerData:{...data,hangPhase:'decode',phaseState:gate.buffer}});}return create(data);};
+  if(kind==='vmaf'){const r=(lib.qualityVmaf as any).runner,run=r.run.bind(r);r.run=(...args:any[])=>run(args[0],args[1],args[2],{...args[3],process:(p:any)=>{args[3].process(p);if(p)process.kill(p.pid,'SIGKILL');}});}
+  const range=lib.qualityCorrespondence.result(f.input.plan.id,f.actor).rangePlan!.input;
+  const collection=kind==='single'?'/api/quality/jobs':kind==='range'?'/api/quality/ranges':'/api/quality/vmaf/jobs';
+  const body=kind==='single'?{schema:'voidplayer-psnr-frame-job',version:1,client:{id:'crash-original',kind:'agent'},request:range.pairs[0]}:kind==='range'?range:f.input;
+  const original=(await f.json(collection,body,'crash-original')).job,url=collection+'/'+original.id;
+  const get=async()=>{const r=await f.json(url);return kind==='range'?r.job:r;};
+  if(kind!=='vmaf'){await until(()=>gate&&Atomics.load(gate,0),Boolean,'Original actual decode gate');await f.json(url+'/cancel',{});}
+  await until(get,(j:any)=>['failed','cancelled','partial'].includes(j.state),'Original physical exit');const frozenOriginal=JSON.stringify(await get());
+  const plan=await f.json(url+'/reexecution-plan',{reason:'Explicit crash-boundary full recomputation'});assert.equal(plan.eligible,true,JSON.stringify(plan));
+  const request={schema:'voidplayer-quality-reexecution',version:1,reason:plan.reason,planDigest:plan.digest,confirm:plan.cost},settings=path.join(f.directory,'service.json'),marker=path.join(f.directory,'receipt.json');await writeFile(settings,JSON.stringify(f.config));await f.stop();
+  let child:any,output='',base='';
+  const stop=async()=>{if(!child)return;if(child.exitCode===null&&child.signalCode===null){const done=once(child,'close');child.kill('SIGTERM');await done;}child=undefined;};t.after(stop);
+  const start=async(mode:string)=>{output='';child=spawn(process.execPath,[path.resolve('test/helpers/quality-reexecution-server.mjs'),settings,mode,marker],{cwd:process.cwd(),stdio:['ignore','pipe','pipe']});child.stdout.on('data',(b:Buffer)=>output=(output+b).slice(-65536));child.stderr.on('data',(b:Buffer)=>output=(output+b).slice(-65536));const port=await until(()=>{assert.equal(child.exitCode,null,output);return Number(/"event":"ready","port":(\d+)/.exec(output)?.[1]);},Boolean,'Restart service ready');base='http://127.0.0.1:'+port;};
+  const req=(suffix='',value?:unknown,key='frozen-process-key')=>fetch(base+url+suffix,{method:value===undefined?'GET':'POST',headers:{...f.headers,origin:base,'idempotency-key':key},...(value===undefined?{}:{body:JSON.stringify(value)})});
+  await start('before-commit');let closed=once(child,'close');await assert.rejects(req('/reexecutions',request));await closed;assert.equal(child.signalCode,'SIGKILL');const uncommitted=JSON.parse(await readFile(marker,'utf8'));await stop();
+  await start('normal');assert.equal((await(await req('/reexecutions')).json()).successor,null,'uncommitted successor and receipt rolled back together');assert.equal((await fetch(base+collection+'/'+uncommitted.jobId,{headers:f.headers})).status,404);assert.equal(JSON.stringify(kind==='range'?(await(await req()).json()).job:await(await req()).json()),frozenOriginal);assert.doesNotMatch(output,/measure-start/,'startup never recomputes');await stop();
+  await start('after-commit');closed=once(child,'close');await assert.rejects(req('/reexecutions',request));await closed;assert.equal(child.signalCode,'SIGKILL');const committed=JSON.parse(await readFile(marker,'utf8'));await stop();
+  await start('normal');const chain=await(await req('/reexecutions')).json();assert.equal(chain.successor.id,committed.jobId);assert.equal(chain.successor.state,'interrupted');assert.doesNotMatch(output,/measure-start/,'restart observes the committed successor without automatic execution');
+  const replay=await req('/reexecutions',request);assert.equal(replay.status,200,await replay.clone().text());const receipt=await replay.json();assert.equal(receipt.replayed,true);assert.equal(receipt.job.id,committed.jobId);assert.deepEqual(receipt.receipt,committed);
+  assert.equal((await req('/reexecutions',request,'another-window')).status,409);assert.equal(JSON.stringify(kind==='range'?(await(await req()).json()).job:await(await req()).json()),frozenOriginal);assert.doesNotMatch(output,/measure-start/);
+});
+
+for(const kind of ['single','range','vmaf'] as const)test(`${kind}: changed cache/plan/executor/model/source, legacy witness and unconfirmed physical stop refuse new computation`,{timeout:180000},async t=>{
+  const {cp,mkdir,truncate}=await import('node:fs/promises'),{openIndexDatabase}=await import('../../server/sqlite.ts');
+  const f=await nativeFixture({distorted:true,containers:['mp4','flv']});t.after(()=>f.close());const lib=f.service.library,runner=lib.quality as any,create=runner.createWorker;let gate:Int32Array|undefined,measures=0;
+  runner.createWorker=(data:any)=>{if(data.mode==='measure'){measures++;if(!gate){gate=new Int32Array(new SharedArrayBuffer(20));return new Worker(new URL('../helpers/quality-phase-worker.ts',import.meta.url),{workerData:{...data,hangPhase:'decode',phaseState:gate.buffer}});}}return create(data);};
+  if(kind==='vmaf'){const r=(lib.qualityVmaf as any).runner,run=r.run.bind(r);r.run=(...args:any[])=>run(args[0],args[1],args[2],{...args[3],process:(p:any)=>{args[3].process(p);if(p)process.kill(p.pid,'SIGKILL');}});}
+  const collection=kind==='single'?'/api/quality/jobs':kind==='range'?'/api/quality/ranges':'/api/quality/vmaf/jobs',range=lib.qualityCorrespondence.result(f.input.plan.id,f.actor).rangePlan!.input;
+  const accepted=kind==='range'?await f.json('/api/quality/correspondence-plans/'+f.input.plan.id+'/execute',{digest:f.input.plan.digest}):await f.json(collection,kind==='single'?{schema:'voidplayer-psnr-frame-job',version:1,client:{id:'frozen-negatives',kind:'agent'},request:range.pairs[0]}:f.input,'negative-original');const url=collection+'/'+accepted.job.id;
+  const read=async()=>{const r=await f.json(url);return kind==='range'?r.job:r;};if(kind!=='vmaf'){await until(()=>gate&&Atomics.load(gate,0),Boolean);await f.json(url+'/cancel',{});}await until(read,(j:any)=>['failed','cancelled','partial'].includes(j.state));
+  const original=JSON.stringify(await read()),reason='Verify exact original conditions',good=await f.json(url+'/reexecution-plan',{reason});assert.equal(good.eligible,true,JSON.stringify(good));const count=measures;
+  const blocked=async()=>{const r=await f.request(url+'/reexecution-plan',{reason}),v=await r.json();assert.ok(r.status===409||r.status===200&&!v.eligible,JSON.stringify(v));assert.equal((await f.json(url+'/reexecutions')).successor,null);assert.equal(measures,count,'blocked metadata validation does not score');};
+  const db=openIndexDatabase(lib.indexDatabase),saved=db.prepare('SELECT producer_json FROM media_index_manifests WHERE media_id=?').get(f.entries[0].id)!.producer_json;
+  try{db.prepare('UPDATE media_index_manifests SET producer_json=? WHERE media_id=?').run('{}',f.entries[0].id);await blocked();}finally{db.prepare('UPDATE media_index_manifests SET producer_json=? WHERE media_id=?').run(saved,f.entries[0].id);db.close();}
+  if(kind!=='single'){
+    const c=(lib.qualityCorrespondence as any).db,row=c.prepare('SELECT body FROM quality_correspondence_plans WHERE id=?').get(f.input.plan.id),body=JSON.parse(String(row.body));body.resultDigest='f'.repeat(64);try{c.prepare('UPDATE quality_correspondence_plans SET body=? WHERE id=?').run(JSON.stringify(body),f.input.plan.id);await blocked();}finally{c.prepare('UPDATE quality_correspondence_plans SET body=? WHERE id=?').run(row.body,f.input.plan.id);}
+  }
+  if(kind==='vmaf'){
+    const r=(lib.qualityVmaf as any).runner,config=r.config,copy=path.join(f.directory,'changed-model');await cp(config.directory,copy,{recursive:true,dereference:true,filter:(p:string)=>!p.includes('/build')});const model=path.join(copy,'vmaf_v0.6.1.json');await writeFile(model,Buffer.concat([await readFile(model),Buffer.from([0])]));try{r.config={...config,directory:copy};await blocked();}finally{r.config=config;}
+  }else{
+    const core=runner.coreDir,copy=path.join(f.directory,'changed-core');await mkdir(copy);for(const name of ['voidplayer-core.js','voidplayer-core.wasm','capabilities.json','provenance.json'])await cp(path.join(core,name),path.join(copy,name));try{runner.coreDir=copy;const js=path.join(copy,'voidplayer-core.js');await writeFile(js,Buffer.concat([await readFile(js),Buffer.from('\n')]));await blocked();await truncate(js,33*1024*1024);await blocked();}finally{runner.coreDir=core;}
+    try{runner.stopFailed=true;const p=await f.json(url+'/reexecution-plan',{reason});assert.ok(p.blocks.some((b:any)=>b.code==='physical-stop-unconfirmed'&&b.next==='wait-and-replan'));}finally{runner.stopFailed=false;}
+  }
+  if(kind==='single'){
+    const store=(lib.qualityJobs as any).store,raw=store.db.prepare('SELECT execution_json FROM quality_jobs WHERE id=?').get(accepted.job.id).execution_json;try{store.db.prepare('UPDATE quality_jobs SET execution_json=? WHERE id=?').run('{}',accepted.job.id);const p=await f.json(url+'/reexecution-plan',{reason});assert.ok(p.blocks.some((b:any)=>b.code==='execution-contract-unavailable'));}finally{store.db.prepare('UPDATE quality_jobs SET execution_json=? WHERE id=?').run(raw,accepted.job.id);}
+  }
+  const restored=await f.json(url+'/reexecution-plan',{reason});assert.equal(restored.digest,good.digest,JSON.stringify(restored));
+  const source=path.join(f.media,'reference.mp4'),bytes=await readFile(source);bytes[bytes.length-1]^=1;await writeFile(source,bytes);await blocked();const request={schema:'voidplayer-quality-reexecution',version:1,reason,planDigest:good.digest,confirm:good.cost};assert.equal((await f.request(url+'/reexecutions',request,'blocked-after-preview')).status,409);
+  assert.equal(JSON.stringify(await read()),original,'negative plans never rewrite original facts');
 });

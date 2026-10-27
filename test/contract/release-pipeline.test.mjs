@@ -115,7 +115,8 @@ test('cache suite runs once in its own required job with the same pinned prepara
   assert.equal(cases.length, 48);
   assert.equal(new Set(cases.map(row => row.id)).size, 48);
   assert.deepEqual(cases.find(row=>row.id==='browser-mcp-page-bridge-chromium')?.command,['node','scripts/check-mcp-page-bridge-browser.mjs']);
-  assert.equal(cases.filter(row=>row.id!=='browser-mcp-page-bridge-chromium').length,45,'retain the existing cache matrix alongside the required MCP case');
+  assert.equal(cases.filter(row=>!row.id.startsWith('browser-quality-reexecution-')).length,46,'retain every existing cache case');
+  for(const engine of ['chromium','webkit'])assert.deepEqual(cases.find(row=>row.id===`browser-quality-reexecution-${engine}`)?.command,['node','scripts/native/run-vmaf-tests.mjs','node','scripts/check-quality-reexecution-browser.mjs',engine]);
   assert.ok(cases.every(row => row.required && row.kind === 'regression'));
   assert.deepEqual(cache.needs, ['decoder', 'analysis-core']);
   assert.match(cache.body, /^    runs-on: ubuntu-24\.04$/m);

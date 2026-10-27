@@ -177,3 +177,5 @@ v2 temporal associations while retaining FLV v1 receipts. Its Linux x64 componen
 models and physical-exit runner remain unchanged. The existing sequence cadence,
 full-frame/SDR and raw/index/decode budgets still apply. Future CAMBI admission
 does not inherit MP4 support.
+
+显式评分重新执行见 `docs/explicit-quality-reexecution.md`。原提交重放与新计算必须分开；single/range/native VMAF 仅已物理停止的 failed/interrupted/cancelled/partial 可只读核验冻结条件并明确确认全量成本，原子创建一个带 retryOf 的新任务。每 job 仍只有原 attempt，旧结果/候选不变、不复用分数或自动发布。条件/执行器见证缺失须 blocked/new intent，不重建索引/C 计划或自动换模型。三数据库 v2 的新 job 与回执同事务；未知提交只原 actor/body/key 回放，重启不自动重算。

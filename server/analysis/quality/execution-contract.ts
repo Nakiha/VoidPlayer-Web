@@ -1,3 +1,4 @@
+import {qualityProducerBuild} from './producer-build.ts';
 import {createHash} from 'node:crypto';
 import {openSync,closeSync,fstatSync,readSync} from 'node:fs';
 import path from 'node:path';
@@ -23,7 +24,7 @@ export function executionEnvironment(coreDir:string,control:Int32Array,check:()=
       total+=stat.size;return {file,sha256:hash.digest('hex'),bytes:stat.size};
     }finally{if(fd!==undefined)closeSync(fd);Atomics.sub(control,1,1);Atomics.notify(control,1);}
   });
-  return {schema:'voidplayer-quality-execution-environment',version:1,runtime:process.versions.bun?'bun':'node',runtimeVersion:process.versions.bun??process.versions.node,recipe:'source-yuv-psnr-ssim-packet-identity-v1',assets};
+  return {schema:'voidplayer-quality-execution-environment',version:1,runtime:process.versions.bun?'bun':'node',runtimeVersion:process.versions.bun??process.versions.node,recipe:'source-yuv-psnr-ssim-packet-identity-v1',producerBuild:qualityProducerBuild(control,check),assets};
 }
 export function executionSources(db:IndexDatabase,targets:PairTarget[],budget:PairBudget,control:Int32Array){
   const store=new FrameIndexStore(db),seen=new Map<string,{proof:ReturnType<typeof libraryPairSource>['proof'];index:ReturnType<typeof qualitySourceIndex>}>();let indexBytes=0,indexPackets=0;

@@ -1,12 +1,12 @@
 import type {LibraryPairBinding} from './library-pair.ts';
 import {canonicalJson} from './correspondence.ts';
 
-export const REEXECUTION_LIMITS=Object.freeze({requestBytes:8192,planBytes:64*1024,reason:500,chain:32,page:8,maxElapsedMs:30000,maxReadBytes:64*1024*1024,maxIndexBytes:64*1024*1024,maxIndexPackets:1000000});
+export const REEXECUTION_LIMITS=Object.freeze({requestBytes:8192,planBytes:64*1024,reason:500,chain:32,page:8,maxElapsedMs:30000,maxReadBytes:64*1024*1024,maxProducerBytes:8*1024*1024,maxIndexBytes:64*1024*1024,maxIndexPackets:1000000});
 export type ReexecutionKind='single'|'range'|'vmaf';
 /** Each job still owns at most one attempt. Generation counts new jobs, not
  * restarts of an attempt. No old result or annotation is replaced. */
 export type ReexecutionLineage={schema:'voidplayer-quality-reexecution-lineage';version:1;retryOf:string;rootJobId:string;generation:number;reason:string;planDigest:string;requestedAt:number};
-export type ExecutionEnvironment={schema:'voidplayer-quality-execution-environment';version:1;runtime:'node'|'bun';runtimeVersion:string;recipe:'source-yuv-psnr-ssim-packet-identity-v1';assets:{file:string;sha256:string;bytes:number}[]};
+export type ExecutionEnvironment={schema:'voidplayer-quality-execution-environment';version:1;runtime:'node'|'bun';runtimeVersion:string;recipe:'source-yuv-psnr-ssim-packet-identity-v1';producerBuild:{kind:'source-content'|'compiled-content';sha256:string;bytes:number};assets:{file:string;sha256:string;bytes:number}[]};
 export type QualityExecutionContract={schema:'voidplayer-quality-execution-contract';version:1;environment:ExecutionEnvironment;sources:LibraryPairBinding[];native?:{manifestSha256:string;binarySha256:string;modelSha256:string;supervisorSha256:string;sourceRevision:string;model:string;recipe:'official-vmaf-one-thread-no-preprocessing-v1'}};
 export type ReexecutionMetadata={executionContract?:QualityExecutionContract;retryOf?:ReexecutionLineage};
 export type ReexecutionPreflight={schema:'voidplayer-quality-reexecution-preflight';version:1;contract:QualityExecutionContract;indexBytes:number;indexPackets:number;assetBytes:number};
