@@ -165,5 +165,9 @@ never creates indexes. A container adapter supplies real MP4 payloads and exact
 sample clocks to the existing opaque-token GOP, PSNR/SSIM/grid and C/B services.
 MP4 library evidence uses result v2 and an MP4-derived annotation clock basis;
 legacy FLV fingerprints and v1 evidence retain their fields. Read-only original
-frames do not use player state or private jobs. Native VMAF/CAMBI source admission
-remains FLV-only.
+frames do not use player state or private jobs. Native VMAF reuses this strict
+adapter for MP4/MP4 and mixed FLV sequences, preserving raw sample clocks and
+v2 temporal associations while retaining FLV v1 receipts. Its Linux x64 component,
+models and physical-exit runner remain unchanged. The existing sequence cadence,
+full-frame/SDR and raw/index/decode budgets still apply. Future CAMBI admission
+does not inherit MP4 support.

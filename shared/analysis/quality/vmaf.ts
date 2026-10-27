@@ -1,8 +1,9 @@
 import type {CorrespondenceResult} from './correspondence.ts';
 import {canonicalJson} from './correspondence.ts';
-import type {FramePairRequest} from './frame-pair.ts';
-import type {FlvIndex} from '../../media/containers/flv-demux.ts';
-import type {LibraryPairResult} from './library-pair.ts';
+import type {FramePairRequest,PairProvenance} from './frame-pair.ts';
+import type {QualityVideoIndex} from './source-index.ts';
+import type {LibraryPairBinding,LibraryPairResult} from './library-pair.ts';
+import {mp4TicksToUs,parseMp4QualityDocument} from '../../media/indexing/mp4-quality-index.ts';
 
 export const VMAF_SUPERVISOR_SOURCE_SHA256='df6ab9f43548839f3743d773958468f0e5f6416268006843eb68deab43eff48f';
 export const VMAF_SOURCE_REVISION='17a67b238ce0539bdeafdc95961abac64fa16ea8';
@@ -17,7 +18,7 @@ export type VmafPool={min:number;max:number;mean:number;harmonic_mean:number};
 export type VmafNativeResult={frames:{index:number;score:number}[];pooled:VmafPool;version:string;component:{manifestSha256:string;binarySha256:string;modelSha256:string;supervisorSha256:string;sourceRevision:string};recipe:{model:VmafModel;threads:1;cpuMask:0;subsample:1;pooling:'official-mean-min-max-harmonic';preprocessing:'none';range:'limited';color:'bt709-sdr';pixelFormat:'yuv420p'|'yuv420p10le';width:number;height:number;bitDepth:8|10;boundary:'clip-reset-and-final-flush';rawPacking:'visible-y-u-v-tight-little-endian-v1'};resources:{exitCode:number;signal:number;cpuMs:number;wallMs:number;peakRssBytes:number;stdoutBytes:number;stderrBytes:number;finalVerification?:{indexBytes:number;indexPackets:number;elapsedMs:number}}};
 export type VmafPrepared={sequence:VmafSequence;geometry:{width:number;height:number;bitDepth:8|10};pairs:LibraryPairResult[];raw:{referenceSha256:string;distortedSha256:string;bytes:number};work:{readBytes:number;packets:number;outputFrames:number;indexBytes:number;indexPackets:number;inputBytes:number;heapBytes:number;elapsedMs:number}};
 export type VmafMetricState={state:'waiting'|'running'|'completed'|'failed'|'cancelled'|'interrupted'|'not-requested';reason:{code:string;message:string}|null};
-export type VmafResult={schema:'voidplayer-native-vmaf-result';version:1;plan:{id:string;attemptId:string;digest:string};prepared:VmafPrepared;vmaf:VmafNativeResult|null;metrics:{psnr:VmafMetricState;ssim:VmafMetricState;vmaf:VmafMetricState}};
+export type VmafResult={schema:'voidplayer-native-vmaf-result';version:1|2;plan:{id:string;attemptId:string;digest:string};prepared:VmafPrepared;vmaf:VmafNativeResult|null;metrics:{psnr:VmafMetricState;ssim:VmafMetricState;vmaf:VmafMetricState}};
 export type VmafJob={schema:'voidplayer-native-vmaf-job-state';version:1;id:string;actor:{id:string;name:string};key:string;requestId:string;input:VmafInput;revision:number;createdAt:number;queueUntil:number;startedAt:number|null;endedAt:number|null;attemptId:string|null;state:'queued'|'preparing'|'running'|'cancelling'|'completed'|'partial'|'failed'|'cancelled'|'interrupted';phase:string;reason:{code:string;message:string}|null;progress:{preparedFrames:number;targetFrames:number};metrics:VmafResult['metrics'];resultDigest:string|null;process:{pid:number;startTicks:string;bootId:string}|null};
 export const terminalVmaf=(s:VmafJob['state'])=>!['queued','preparing','running','cancelling'].includes(s);
 export class VmafError extends Error{readonly code:string;constructor(code:string,message:string){super(message);this.code=code;}}
@@ -33,16 +34,35 @@ export function vmafInput(value:unknown):VmafInput{
  for(const key of Object.keys(maxima) as (keyof typeof maxima)[])if(!Number.isSafeInteger(v.budget[key])||v.budget[key]<1||v.budget[key]>maxima[key])throw new VmafError('invalid-vmaf-request',`Invalid ${key} budget`);
  return v;
 }
+/** FLV v1 remains byte-compatible; MP4 on either side requires v2 evidence. */
+export function vmafSourceVersion(sources:{reference:LibraryPairBinding;distorted:LibraryPairBinding}):1|2{
+ let version:1|2=1;
+ for(const source of [sources?.reference,sources?.distorted]){
+  const kind=source?.binding?.indexIdentity?.kind,producer=source?.producer?.producer;
+  if(kind==='flv'&&producer==='server-flv-scan-v1')continue;
+  if(kind==='mp4'&&producer==='server-mp4-scan-v1'){version=2;continue;}
+  fail('VMAF requires an existing trusted FLV or strict MP4 source and matching server producer');
+ }
+ return version;
+}
 /** C supplies correspondence. This adds sequence eligibility, never alignment. */
-export function vmafSequence(snapshot:VmafPlanSnapshot,indexes:[FlvIndex,FlvIndex],expectedCadenceUs:number):VmafSequence{
+export function vmafSequence(snapshot:VmafPlanSnapshot,indexes:[QualityVideoIndex,QualityVideoIndex],expectedCadenceUs:number):VmafSequence{
  const r=snapshot.value,plan=r.rangePlan;
- if(!r.sources||[r.sources.reference,r.sources.distorted].some(s=>s.binding.indexIdentity.kind!=='flv'||s.producer.producer!=='server-flv-scan-v1'))fail('Native VMAF remains FLV-only');
+ vmafSourceVersion(r.sources!);
  if(!plan||r.executionBlock||r.request.sampling.mode!=='all'||r.rows.length<2||r.rows.length>VMAF_LIMITS.frames||r.rows.some(row=>!row.selected||row.status!=='mapped')||r.sourceIssues.reference||r.sourceIssues.distorted)fail('VMAF needs 2..32 fully mapped all-sample frames without stride or holes');
  const pairs=structuredClone(plan!.input.pairs).sort((a,b)=>a.reference.sourcePtsUs-b.reference.sourcePtsUs);
  if(pairs.length!==r.rows.length)fail('Frozen pairs do not cover every selected AU');
  let cadence=0;
  for(const side of ['reference','distorted'] as const){
   const i=side==='reference'?0:1,ordered=pairs.map(p=>p[side].sourcePtsUs),selected=new Set(pairs.map(p=>p[side].picture.au));
+  const source=r.sources![side],index=indexes[i],mp4=index.mp4;
+  if(pairs.some(p=>(['mediaId','mediaVersion','size','indexBuildId','indexIdentity']as const).some(k=>canonicalJson(p[side][k])!==canonicalJson(source.binding[k]))))fail('Frozen sequence source/cache binding changed');
+  if(source.binding.indexIdentity.kind==='mp4'){
+   const producer=source.producer;
+   if(!mp4||index.container!=='mp4'||producer.producer!=='server-mp4-scan-v1'||producer.trackId!==mp4.trackId||producer.timescale!==mp4.timescale||producer.tableSha256!==mp4.moov.sha256)fail('MP4 track, timebase or table differs from the frozen producer');
+   parseMp4QualityDocument(mp4,source.binding.size);
+   for(const pair of pairs){const p=pair[side],sample=mp4!.samples[p.picture.au];if(p.decode?.mode!=='packet-identity-gop-v1'||!sample||sample.ordinal!==p.picture.au||sample.ptsUs!==p.sourcePtsUs||sample.durationUs!==expectedCadenceUs)fail('MP4 sequence needs exact closed-window sample clocks and constant durations');}
+  }else if(index.container==='mp4'||mp4)fail('Container differs from the frozen source');
   if(ordered.some((pts,n)=>!Number.isSafeInteger(pts)||pts<0||n>0&&pts<=ordered[n-1]))fail('Known unique nonnegative presentation clocks required; VFR/negative PTS not admitted');
   const delta=ordered[1]-ordered[0];if(delta!==expectedCadenceUs||delta<1||ordered.some((pts,n)=>n>0&&pts-ordered[n-1]!==delta)||cadence&&delta!==cadence)fail('One verified constant presentation cadence on both sides required');cadence=delta;
   const inSpan=indexes[i].packets.flatMap((p,au)=>p.pts>=ordered[0]&&p.pts<=ordered.at(-1)!?[{p,au}]:[]);
@@ -52,22 +72,41 @@ export function vmafSequence(snapshot:VmafPlanSnapshot,indexes:[FlvIndex,FlvInde
  for(let n=1;n<pairs.length;n++)if(pairs[n].distorted.sourcePtsUs<=pairs[n-1].distorted.sourcePtsUs)fail('Mapping changes presentation order');
  return {pairs,cadenceUs:cadence,presentationOrder:'strict-source-pts',boundary:'clip-reset-and-final-flush',mapping:'frozen-caller-declared-clock-plan',referenceIntegrity:'not-certified',concealmentDetection:'unavailable'};
 }
-export type VmafAssociation={schema:'voidplayer-vmaf-sequence-association';version:1;jobId:string;attemptId:string;resultDigest:string;plan:{id:string;attemptId:string;digest:string};sequence:{cadenceUs:number;referenceIntegrity:'not-certified';concealmentDetection:'unavailable';pairs:{reference:{au:number;sourcePtsUs:number;decode?:FramePairRequest['reference']['decode']};distorted:{au:number;sourcePtsUs:number;decode?:FramePairRequest['distorted']['decode']}}[]};index:number;frames:number;score:number;pooled:VmafPool;component:VmafNativeResult['component'];recipe:VmafNativeResult['recipe'];raw:VmafPrepared['raw'];spatial:'full-frame-temporal-score-not-localized'};
+export type VmafSequenceFrame={au:number;sourcePtsUs:number;decode?:FramePairRequest['reference']['decode'];container?:PairProvenance['container']};
+export function vmafSequenceFrame(p:PairProvenance):VmafSequenceFrame{return {au:p.picture.au,sourcePtsUs:p.sourcePtsUs,decode:p.decode,...(p.container?{container:structuredClone(p.container)}:{})};}
+export type VmafAssociation={schema:'voidplayer-vmaf-sequence-association';version:1|2;jobId:string;attemptId:string;resultDigest:string;plan:{id:string;attemptId:string;digest:string};sequence:{cadenceUs:number;referenceIntegrity:'not-certified';concealmentDetection:'unavailable';pairs:{reference:VmafSequenceFrame;distorted:VmafSequenceFrame}[]};index:number;frames:number;score:number;pooled:VmafPool;component:VmafNativeResult['component'];recipe:VmafNativeResult['recipe'];raw:VmafPrepared['raw'];spatial:'full-frame-temporal-score-not-localized'};
 export function validateVmafAssociation(value:unknown,pair:LibraryPairResult):VmafAssociation{
- if(Object.values(pair.sources).some(s=>s.binding.indexIdentity.kind!=='flv'||s.producer.producer!=='server-flv-scan-v1'))fail('Native VMAF remains FLV-only');
+ const version=vmafSourceVersion(pair.sources);
  const v=value as VmafAssociation;object(v,['schema','version','jobId','attemptId','resultDigest','plan','sequence','index','frames','score','pooled','component','recipe','raw','spatial']);
- if(v.schema!=='voidplayer-vmaf-sequence-association'||v.version!==1||!/^vmaf-[a-f0-9-]{36}$/.test(v.jobId)||!/^[a-f0-9-]{36}$/.test(v.attemptId)||!/^[a-f0-9]{64}$/.test(v.resultDigest)||v.spatial!=='full-frame-temporal-score-not-localized'||!Number.isInteger(v.frames)||v.frames<2||v.frames>VMAF_LIMITS.frames||!Number.isInteger(v.index)||v.index<0||v.index>=v.frames||(!Number.isFinite(v.score)||v.score<0||v.score>100))fail('Invalid sequence association identity');
+ if(v.schema!=='voidplayer-vmaf-sequence-association'||v.version!==version||pair.version!==version||!/^vmaf-[a-f0-9-]{36}$/.test(v.jobId)||!/^[a-f0-9-]{36}$/.test(v.attemptId)||!/^[a-f0-9]{64}$/.test(v.resultDigest)||v.spatial!=='full-frame-temporal-score-not-localized'||!Number.isInteger(v.frames)||v.frames<2||v.frames>VMAF_LIMITS.frames||!Number.isInteger(v.index)||v.index<0||v.index>=v.frames||(!Number.isFinite(v.score)||v.score<0||v.score>100))fail('Invalid sequence association identity');
  if(!v.plan||!/^[a-f0-9-]{36}$/.test(v.plan.id)||!/^[a-f0-9-]{36}$/.test(v.plan.attemptId)||!/^[a-f0-9]{64}$/.test(v.plan.digest))fail('Invalid correspondence reference');
  object(v.plan,['id','attemptId','digest']);object(v.component,['manifestSha256','binarySha256','modelSha256','supervisorSha256','sourceRevision']);object(v.recipe,['model','threads','cpuMask','subsample','pooling','preprocessing','range','color','pixelFormat','width','height','bitDepth','boundary','rawPacking']);object(v.raw,['referenceSha256','distortedSha256','bytes']);
  const c=v.component,recipe=v.recipe,m=recipe&&Object.hasOwn(VMAF_MODELS,recipe.model)?VMAF_MODELS[recipe.model]:undefined;
  if(!c||!m||c.sourceRevision!==VMAF_SOURCE_REVISION||c.modelSha256!==m.sha256||[c.manifestSha256,c.binarySha256,c.supervisorSha256].some(h=>!/^[a-f0-9]{64}$/.test(h))||recipe.threads!==1||recipe.cpuMask!==0||recipe.subsample!==1||recipe.pooling!=='official-mean-min-max-harmonic'||recipe.preprocessing!=='none'||recipe.boundary!=='clip-reset-and-final-flush'||recipe.rawPacking!=='visible-y-u-v-tight-little-endian-v1'||recipe.range!=='limited'||recipe.color!=='bt709-sdr'||recipe.pixelFormat!==(recipe.bitDepth===8?'yuv420p':'yuv420p10le'))fail('Invalid fixed native recipe');
  if(Object.keys(v.pooled).sort().join(',')!=='harmonic_mean,max,mean,min'||Object.values(v.pooled).some(n=>!Number.isFinite(n)||n<0||n>100)||v.pooled.min>v.pooled.max||v.score<v.pooled.min-0.000002||v.score>v.pooled.max+0.000002||v.pooled.mean<v.pooled.min-0.000002||v.pooled.mean>v.pooled.max+0.000002)fail('Invalid native pool');
  object(v.sequence,['cadenceUs','referenceIntegrity','concealmentDetection','pairs']);if(!Number.isSafeInteger(v.sequence.cadenceUs)||v.sequence.cadenceUs<1||v.sequence.referenceIntegrity!=='not-certified'||v.sequence.concealmentDetection!=='unavailable'||!Array.isArray(v.sequence.pairs)||v.sequence.pairs.length!==v.frames)fail('Invalid temporal sequence witness');
- for(const side of ['reference','distorted']as const){const seen=new Set<number>();for(const [i,item]of v.sequence.pairs.entries()){object(item,['reference','distorted']);object(item[side],['au','sourcePtsUs','decode']);const p=item[side];if(!Number.isSafeInteger(p.au)||p.au<0||seen.has(p.au)||!Number.isSafeInteger(p.sourcePtsUs)||p.sourcePtsUs<0||i>0&&p.sourcePtsUs-v.sequence.pairs[i-1][side].sourcePtsUs!==v.sequence.cadenceUs)fail('Invalid continuous temporal picture identities');seen.add(p.au);}const p=v.sequence.pairs[v.index][side],actual=pair.result.provenance[side];if(p.au!==actual.picture.au||p.sourcePtsUs!==actual.sourcePtsUs||canonicalJson(p.decode)!==canonicalJson(actual.decode))fail('Selected frame differs from the temporal sequence');}
+ for(const side of ['reference','distorted']as const){
+  const seen=new Set<number>(),source=pair.sources[side],mp4=source.binding.indexIdentity.kind==='mp4';
+  for(const [i,item]of v.sequence.pairs.entries()){
+   object(item,['reference','distorted']);object(item[side],mp4?['au','sourcePtsUs','decode','container']:['au','sourcePtsUs','decode']);const p=item[side];
+   if(!Number.isSafeInteger(p.au)||p.au<0||seen.has(p.au)||!Number.isSafeInteger(p.sourcePtsUs)||p.sourcePtsUs<0||i>0&&p.sourcePtsUs-v.sequence.pairs[i-1][side].sourcePtsUs!==v.sequence.cadenceUs)fail('Invalid continuous temporal picture identities');seen.add(p.au);
+   if(mp4){
+    const c=p.container,s=c?.sample,producer=source.producer;
+    object(c,['kind','trackId','timescale','tableSha256','sample']);object(s,['ordinal','description','offset','size','dtsTicks','ctsTicks','durationTicks','dtsUs','ptsUs','durationUs','key']);
+    if(!c||!s||producer.producer!=='server-mp4-scan-v1'||c.kind!=='mp4'||c.trackId!==producer.trackId||c.timescale!==producer.timescale||c.tableSha256!==producer.tableSha256||p.decode?.mode!=='packet-identity-gop-v1'
+     ||!Number.isSafeInteger(p.decode.startAu)||!Number.isSafeInteger(p.decode.endAu)||p.decode.startAu<0||p.decode.startAu>p.au||p.decode.endAu<p.au||p.decode.endAu-p.decode.startAu>=32
+     ||s.ordinal!==p.au||s.description!==1||s.ptsUs!==p.sourcePtsUs||s.durationUs!==v.sequence.cadenceUs||![s.offset,s.size,s.dtsTicks,s.ctsTicks,s.durationTicks,s.dtsUs,s.ptsUs,s.durationUs].every(Number.isSafeInteger)
+     ||s.offset<0||s.size<1||s.offset+s.size>source.binding.size||s.dtsTicks<0||s.durationTicks<1||typeof s.key!=='boolean'
+     ||mp4TicksToUs(s.dtsTicks,c.timescale)!==s.dtsUs||mp4TicksToUs(s.dtsTicks+s.ctsTicks,c.timescale)!==s.ptsUs||mp4TicksToUs(s.durationTicks,c.timescale)!==s.durationUs)fail('Invalid MP4 temporal sample/table witness');
+   }
+  }
+  const p=v.sequence.pairs[v.index][side],actual=pair.result.provenance[side];
+  if(p.au!==actual.picture.au||p.sourcePtsUs!==actual.sourcePtsUs||canonicalJson(p.decode)!==canonicalJson(actual.decode)||canonicalJson(p.container)!==canonicalJson(actual.container))fail('Selected frame differs from the temporal sequence');
+ }
  const metric=pair.result.metric;if(![8,10].includes(recipe.bitDepth)||![recipe.width,recipe.height].every(n=>Number.isSafeInteger(n)&&n>=VMAF_LIMITS.minDimension&&n%2===0)||recipe.width>VMAF_LIMITS.width||recipe.height>VMAF_LIMITS.height||metric.color.primaries!=='bt709'||metric.color.transfer!=='bt709'||metric.color.matrix!=='bt709'||metric.color.fullRange||metric.color.chromaLocation!==1||metric.roi.x!==0||metric.roi.y!==0||metric.roi.width!==recipe.width||metric.roi.height!==recipe.height||metric.bitDepth!==recipe.bitDepth)fail('VMAF evidence is full-frame only');
  for(const p of Object.values(pair.result.provenance)){const d=p.decoded.description;if(d.width!==recipe.width||d.height!==recipe.height||d.visibleRect.x||d.visibleRect.y||d.codedWidth!==d.width||d.codedHeight!==d.height||d.yuv?.bitDepth!==recipe.bitDepth)fail('VMAF evidence geometry differs');}
  if(!v.raw||[v.raw.referenceSha256,v.raw.distortedSha256].some(h=>!/^[a-f0-9]{64}$/.test(h))||!Number.isSafeInteger(v.raw.bytes)||v.raw.bytes!==recipe.width*recipe.height*3/2*(recipe.bitDepth===8?1:2)*v.frames*2||v.raw.bytes>VMAF_LIMITS.maxRawBytes)fail('Invalid raw sequence witness');
  return structuredClone(v);
 }
-export const VMAF_CAPABILITY={schema:'voidplayer-native-vmaf-capability',version:1,platforms:['linux-x64'],sourceMatrix:[{codec:'h264',bitDepths:[8,10]},{codec:'hevc',bitDepths:[8,10]}],models:VMAF_MODELS,scoreDirection:'higher-is-better',scoreRange:{min:0,max:100,basis:'fixed-model-default-clip'},sourceRevision:VMAF_SOURCE_REVISION,limits:VMAF_LIMITS,requires:'committed-C-plan; all samples; no holes; verified continuous presentation CFR; complete trusted FLV',input:'full-frame limited BT.709 SDR planar YUV420 8/10bit; no conversion',metrics:{required:['psnr','vmaf'],optional:['ssim']},temporalBoundary:'clip-reset-and-final-flush',spatial:'no-VMAF-heatmap-or-localized-defect',contentCertification:false,negativePts:false,vfr:false} as const;
+export const VMAF_CAPABILITY={schema:'voidplayer-native-vmaf-capability',version:1,platforms:['linux-x64'],sourceMatrix:[{codec:'h264',bitDepths:[8,10]},{codec:'hevc',bitDepths:[8,10]}],models:VMAF_MODELS,scoreDirection:'higher-is-better',scoreRange:{min:0,max:100,basis:'fixed-model-default-clip'},sourceRevision:VMAF_SOURCE_REVISION,limits:VMAF_LIMITS,containers:{flv:{codecs:['h264','hevc'],bitDepths:[8,10]},mp4:{sampleEntries:['avc1','hvc1'],matrix:['h264-8','hevc-8','hevc-10'],fragmented:false}},resultVersions:[1,2],associationVersions:[1,2],requires:'committed-C-plan; all samples; no holes; exact continuous presentation cadence; complete trusted FLV or strict non-fragmented MP4',input:'full-frame limited BT.709 SDR planar YUV420 8/10bit; no conversion',metrics:{required:['psnr','vmaf'],optional:['ssim']},temporalBoundary:'clip-reset-and-final-flush',spatial:'no-VMAF-heatmap-or-localized-defect',contentCertification:false,negativePts:false,vfr:false} as const;
 export {canonicalJson};

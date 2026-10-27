@@ -26,8 +26,10 @@ attachments retain their original meaning.
 
 Reference relationships remain caller declarations, not content certification.
 Reference integrity is not-certified and concealment detection is unavailable.
-Performance has not passed. Native VMAF and future CAMBI remain explicitly
-FLV-only; widening the PSNR source union must not widen those executors.
+Performance has not passed. Native VMAF has a separate [strict MP4/mixed sequence
+contract](native-vmaf.md), with continuous exact cadence, full-frame limited
+BT.709 SDR and v2 sample/table associations. Future CAMBI remains FLV-only;
+widening a source union does not confer admission to another metric.
 
 ## Implementation and verification
 
@@ -58,7 +60,8 @@ Reproducible formal entries:
   exact metadata/payload byte charges, packet/output/read limits; server-only
   cache/producer seals, same-size replacement, actor fencing, import downgrade,
   committed-annotation lost response and receipt replay after restart/private
-  result reclamation. Native VMAF attachments remain FLV-only.
+  result reclamation. Native VMAF v2 attachments additionally preserve the full
+  temporal MP4 sample/table witnesses under the separate sequence contract.
 - `node --test test/media/quality-mp4-lifecycle.test.ts`: actual descriptor close
   before delayed physical Worker termination releases admission; cancel/deadline/
   service close; read/index/packet budgets; dropped HTTP response, SIGKILL and

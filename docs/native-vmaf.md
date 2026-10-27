@@ -77,18 +77,27 @@ It never promotes unverified model bytes merely because a filename matches.
 
 ## Exact eligibility and raw planes
 
-A C plan pins source ID/version, FLV cache namespace/build, stream/configuration,
+A C plan pins source ID/version, container cache namespace/build, stream/configuration,
 AU/window and actual source PTS. Both caches must already have trusted server
 producer evidence. This endpoint never builds an index or tries approximate PTS,
 filenames or durations to authenticate corresponding content.
 
 First scope:
 
-- Trusted FLV/Enhanced FLV, H.264/HEVC, existing packet-identity WASM decoding.
+- Trusted FLV/Enhanced FLV H.264/HEVC, or the [strict non-fragmented MP4
+  matrix](trusted-mp4-quality.md): avc1 H.2648 and hvc1 HEVC8/10. MP4/MP4 and
+  both MP4/FLV directions use the same packet-identity WASM decoder.
 - 2–32 selected pictures on each side, all-sample/no holes. Ordered by the frozen
   reference source PTS; distorted order must agree. Both clocks must have the
   caller's exact positive integer `cadenceUs`, no duplicates, negative PTS or VFR.
   Every indexed picture in each selected presentation interval must be included.
+  MP4 sample durations must also equal this cadence. Track/sample ordinal,
+  description, original DTS/CTS/duration ticks and timebase, offset/size and
+  table SHA256 remain explicit; inexact microseconds reject without rounding or
+  POC clock repair. Actual source tables/NAL boundaries use the strict MP4
+  adapter, never synthetic FLV tags. Fragmented/protected/external-reference
+  inputs, track/configuration changes, remapping edits, recovery and CRA/open
+  GOP remain unsupported.
 - Every individual decoded dependency window still has the existing closed
   start/32-AU, opaque-token/all-output/drain and single-picture/field rules.
   These checks do **not** certify reference-graph completeness. Concealment
@@ -106,6 +115,24 @@ is not a promise that decode/output color checks or the native model will pass.
 Execution rechecks each frame, verifies all bindings after raw preparation, then
 checks source/cache bindings again after native completion before committing a
 VMAF score. Source/version identity is a stat witness, not content authentication.
+
+MP4 on either side uses library result v2, native result v2 and sequence
+association v2. Every MP4 presentation point carries the fixed track/timebase,
+table digest and full original sample witness; the selected point must exactly
+match the accompanying source-plane provenance. Mixed pairs retain FLV clocks
+on the FLV side. All-FLV input normalization, result/association v1 and existing
+idempotent receipts keep their original fields. Shared evidence and the original
+viewer validate the same versions; viewing does not read another actor's private
+job, build an index or score pixels again. Historical imports cannot grant trust.
+
+The existing executor owns admission throughout index loading, all repeated
+closed-window inputs/outputs/drain, raw temporary files, native execution and
+final source/cache verification. Index reads include the final verification;
+source byte accounting is the sum of actual container reads, including MP4
+metadata and payloads without invented FLV overhead. The runner/supervisor,
+official component and two fixed v0 models are unchanged. Future CAMBI does not
+inherit MP4 admission. Negative-source-PTS/VFR E2E and reference integrity are
+not certified; this is not a performance acceptance.
 
 ## HTTP and GUI
 
@@ -239,6 +266,23 @@ fails on corruption. It is test installation, not runtime fallback.
 - Installed compiled Bun uses real bundled Workers and the native component under
   an empty PATH; the independent Node harness uses the committed FFmpeg raw oracle and invokes the fixed official VMAF CLI directly.
 
+MP4 regression entry points (run from the repository root):
+
+| Entry | Evidence |
+| --- | --- |
+| `node --test test/unit/native-vmaf.test.ts test/media/quality-mp4-index.test.ts` | Exact integer tick conversion, strict table/edit/configuration constraints, duplicate/missing/noncontinuous clocks, frozen source/build substitutions. Clock mutations are algorithm tests, not negative-PTS/VFR end-to-end certification. |
+| `node scripts/native/run-vmaf-tests.mjs node --test test/media/native-vmaf-http.test.ts test/media/native-vmaf-lifecycle.test.ts` | Three MP4 codec/depth rows × MP4/MP4 and both mixed directions; official NEG frame/pool and original raw hashes, independent companion SSE, v1/v2 evidence, budgets, actual process exit, final source/cache/table rejection, restart and receipt-first unknown-commit replay after private result reclamation. The same files run under pinned Bun. |
+| `node scripts/native/run-vmaf-tests.mjs node scripts/check-mp4-vmaf-browser.mjs chromium h264 8` | Real GUI discovery, probe/index preparation, C plan, VMAF/PSNR/SSIM/grid, lost-response reload replay, closed observer, shared candidates and another actor's original-frame hashes/block selection; independent playback and delayed-actor isolation. Repeat for `hevc 8`, `hevc 10` and `webkit`: six registered cases, each covering all three container combinations. |
+| `node scripts/native/run-vmaf-tests.mjs node scripts/check-native-vmaf-release.mjs /absolute/package.tar.gz` | Empty PATH/unrelated cwd compiled Linux x64: nine MP4/mixed cases plus two legacy FLV cases, fixed official CLI oracle, installed native component and shared v1/v2 candidates. |
+
+`scripts/native/make-vmaf-mp4-samples.mjs` explicitly generates the committed
+MP4 fixtures from the existing fixed synthetic FLV clips. Generation compares
+every compressed AU and exact DTS/PTS, then independently decodes MP4 with
+FFmpeg and compares all raw bytes. Runtime tests consume these fixed fixtures;
+equal remuxed bytes/scores do not certify a user-declared content relation.
+Real same-size source replacement tests also change the file-version witness;
+they do not independently isolate a restored stat witness from table validation.
+
 A local **128×96, 8-frame** compiled sample measured native CPU 17.393/20.314 ms,
 native wall 20.588/22.533 ms and peak native RSS 3,477,504/3,801,088 bytes for 8/10
 bit respectively. Raw bytes are 294,912/589,824; full preparation/output work, total execution wall time and small-clip frames/second are
@@ -246,5 +290,5 @@ reported separately by the registered HTTP and compiled harnesses. These small-c
 not a throughput or real-time acceptance claim. Existing informational performance
 16/16 failures remain negative; #112/#114/#121/#122 are not declared wholly done.
 No VFR/negative-PTS certification, reference-integrity certification or concealment
-detection, new container quality support, HDR, arbitrary ROI VMAF, GPU, CAMBI or
+detection, containers beyond this strict MP4/FLV matrix, HDR, arbitrary ROI VMAF, GPU, CAMBI or
 distributed computation is included.

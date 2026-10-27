@@ -1,9 +1,13 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {readFile,writeFile,copyFile} from 'node:fs/promises';import path from 'node:path';import {randomUUID} from 'node:crypto';
-import {nativeFixture,officialOracle,nativeComponent} from '../helpers/native-vmaf.mjs';
+import {nativeFixture,officialOracle,nativeComponent,until} from '../helpers/native-vmaf.mjs';
 import {qualityEvidenceValue,qualityEvidenceList} from '../../shared/review/quality-evidence.ts';
-for(const [depth,distorted,model,codec]of [[8,false,'vmaf_v0_6_1','h264'],[8,true,'vmaf_v0_6_1neg','h264'],[10,true,'vmaf_v0_6_1','hevc'],[8,true,'vmaf_v0_6_1','hevc'],[10,true,'vmaf_v0_6_1','h264']] as const)test(`real native VMAF HTTP ${codec}/${depth} ${distorted?'distorted':'same'} ${model}`,{timeout:120000},async t=>{
- const f=await nativeFixture({depth,distorted,codec});t.after(()=>f.close());const input={...f.input,model};
+import {AnnotationStore} from '../../server/annotations.ts';
+import {startService} from '../../server/runtime.ts';
+const existing=[[8,false,'vmaf_v0_6_1','h264'],[8,true,'vmaf_v0_6_1neg','h264'],[10,true,'vmaf_v0_6_1','hevc'],[8,true,'vmaf_v0_6_1','hevc'],[10,true,'vmaf_v0_6_1','h264']] as const;
+const mixed=([['h264',8],['hevc',8],['hevc',10]] as const).flatMap(([codec,depth])=>([['mp4','mp4'],['mp4','flv'],['flv','mp4']] as const).map(containers=>({depth,distorted:true,model:'vmaf_v0_6_1neg' as const,codec,containers})));
+for(const {depth,distorted,model,codec,containers}of [...existing.map(([depth,distorted,model,codec])=>({depth,distorted,model,codec,containers:undefined})),...mixed])test(`real native VMAF HTTP ${codec}/${depth} ${(containers??['flv','flv']).join('→')} ${distorted?'distorted':'same'} ${model}`,{timeout:120000},async t=>{
+ const f=await nativeFixture({depth,distorted,codec,containers});t.after(()=>f.close());const input={...f.input,model};
  const pre=await f.json('/api/quality/vmaf/preflight',input);assert.equal(pre.nativeExecution,false);assert.equal(pre.rawColorVerification,'required-at-execution');
  const r=await f.request('/api/quality/vmaf/jobs',input,'one-job');assert.equal(r.status,202);const j=(await r.json()).job;
  assert.equal((await f.request('/api/quality/vmaf/jobs',input,'one-job',{'x-voidplayer-actor':'wrong'})).status,409);
@@ -15,8 +19,18 @@ for(const [depth,distorted,model,codec]of [[8,false,'vmaf_v0_6_1','h264'],[8,tru
  const replay=await f.json('/api/quality/vmaf/jobs',input,'one-job');assert.equal(replay.job.id,j.id);assert.equal(replay.replayed,true);assert.equal(replay.job.attemptId,final.attemptId);
  assert.equal((await f.request('/api/quality/vmaf/jobs',{...input,cadenceUs:1},'one-job')).status,409);
  const page=await f.json(`/api/quality/vmaf/jobs/${j.id}/frames?limit=4`);assert.equal(page.entries.length,4);assert.equal(page.next,4);
+ const tail=await f.json(`/api/quality/vmaf/jobs/${j.id}/frames?after=4&limit=4`);assert.equal(tail.next,null);
+ for(const {index,pair}of [...page.entries,...tail.entries]){
+  const unit=depth===10?2:1,frameBytes=128*96*3/2*unit;let offset=index*frameBytes,total=0;
+  for(const [plane,count]of [['y',128*96],['u',64*48],['v',64*48]]as const){let sse=0;for(let n=0;n<count;n++){const at=offset+n*unit,a=unit===1?f.oracles.reference[at]:f.oracles.reference.readUInt16LE(at),b=unit===1?f.oracles.distorted[at]:f.oracles.distorted.readUInt16LE(at);sse+=(a-b)**2;}assert.equal(pair.result.metric.planes[plane].sse,sse);assert.equal(pair.result.metric.planes[plane].samples,count);offset+=count*unit;total+=sse;}
+  assert.equal(pair.result.metric.aggregate.sse,total);assert.equal(pair.result.ssim.variant,'ffmpeg-uniform-8x8-step4-v1');
+ }
  const policy={space:'default',side:'reference',maxScore:100,limit:1,minFrameDistance:1,text:'Explicit temporal full-frame measurement candidate, not a defect judgment',severity:3};
  const p=await f.json(`/api/quality/vmaf/jobs/${j.id}/candidates`,policy);assert.equal(p.createdIds.length,1);const a=await f.json('/api/annotations/spaces/default/'+p.createdIds[0]),e=a.document.mark.qualityEvidence[0];assert.equal(e.verification,'server-verified');assert.equal(e.value.sequenceVmaf.spatial,'full-frame-temporal-score-not-localized');assert.equal(e.value.sequenceVmaf.score,oracle.result.frames[e.value.sequenceVmaf.index].metrics.vmaf);assert.doesNotThrow(()=>qualityEvidenceValue(e.value));
+ const expectedVersion=containers?.includes('mp4')?2:1;assert.equal(f.service.library.qualityVmaf.result(j.id,f.actor).version,expectedVersion);assert.equal(e.value.version,expectedVersion);assert.equal(e.value.sequenceVmaf.version,expectedVersion);
+ for(const side of ['reference','distorted'] as const){const mp4=e.value.sources[side].binding.indexIdentity.kind==='mp4';for(const frame of e.value.sequenceVmaf.sequence.pairs){assert.equal(!!frame[side].container,mp4);if(mp4){assert.equal(frame[side].container.sample.ordinal,frame[side].au);assert.equal(frame[side].container.sample.ptsUs,frame[side].sourcePtsUs);}else assert.deepEqual(Object.keys(frame[side]).sort(),['au','decode','sourcePtsUs'],'FLV temporal evidence retains its v1 fields');}}
+ if(expectedVersion===2){const old=structuredClone(e.value);old.sequenceVmaf.version=1;assert.throws(()=>qualityEvidenceValue(old));const bad=structuredClone(e.value),side=bad.sources.reference.binding.indexIdentity.kind==='mp4'?'reference':'distorted';bad.sequenceVmaf.sequence.pairs.at(-1)[side].container.sample.ctsTicks++;assert.throws(()=>qualityEvidenceValue(bad));}
+
  const forged=structuredClone(e.value);forged.sequenceVmaf.recipe.preprocessing='resize';assert.throws(()=>qualityEvidenceValue(forged));
  assert.deepEqual((await f.json(`/api/quality/vmaf/jobs/${j.id}/candidates`,policy)).createdIds,p.createdIds);
  const historical=qualityEvidenceList([e]);assert.equal(historical[0].verification,'historical');assert.deepEqual(historical[0].value.sequenceVmaf,e.value.sequenceVmaf);
@@ -32,6 +46,36 @@ for(const [depth,distorted,model,codec]of [[8,false,'vmaf_v0_6_1','h264'],[8,tru
 });
 test('uninstalled native component remains explicitly unavailable',{timeout:120000},async t=>{
  const f=await nativeFixture({component:false});t.after(()=>f.close());const c=await f.json('/api/quality/vmaf/capability');assert.equal(c.enabled,false);assert.equal((await f.request('/api/quality/vmaf/jobs',f.input)).status,503);
+});
+
+test('MP4 decode/input/index budgets reject before reporting a fabricated native score',{timeout:120000},async t=>{
+ const f=await nativeFixture({containers:['mp4','mp4']});t.after(()=>f.close());
+ for(const budget of ['maxReadBytes','maxInputBytes'] as const){
+  const request=structuredClone(f.planInput);request.recipe.budget[budget]=512;
+  const p=(await f.json('/api/quality/correspondence-plans',request,'small-'+budget)).plan,ready=await until(()=>f.json('/api/quality/correspondence-plans/'+p.id),(r:any)=>r.plan.state==='completed','Budget plan');
+  const input={...f.input,plan:{id:p.id,attemptId:ready.plan.attemptId,digest:ready.plan.resultDigest}},j=(await f.json('/api/quality/vmaf/jobs',input,'small-'+budget)).job,done=await f.wait(j.id);
+  assert.equal(done.state,'failed',JSON.stringify(done));assert.equal(done.reason.code,'budget-exceeded');assert.equal(done.resultDigest,null);assert.equal((await f.request(`/api/quality/vmaf/jobs/${j.id}/result`)).status,409);const release=f.service.library.qualityAdmission.acquire();release();
+ }
+ const {openIndexDatabase}=await import('../../server/sqlite.ts');const db=openIndexDatabase(f.service.library.indexDatabase);
+ try{const original=Number(db.prepare('SELECT bytes FROM media_index_manifests WHERE media_id=?').get(f.entries[0].id)!.bytes);db.prepare('UPDATE media_index_manifests SET bytes=? WHERE media_id=?').run(67108865,f.entries[0].id);
+  const response=await f.request('/api/quality/vmaf/preflight',f.input);assert.equal(response.status,400);assert.equal((await response.json()).code,'budget-exceeded');db.prepare('UPDATE media_index_manifests SET bytes=? WHERE media_id=?').run(original,f.entries[0].id);
+ }finally{db.close();}
+});
+
+test('MP4 unknown annotation commit, restart and reclaimed result replay the frozen receipt without new execution',{timeout:120000},async t=>{
+ const f=await nativeFixture({containers:['flv','mp4']});let restarted:Awaited<ReturnType<typeof startService>>|undefined;t.after(async()=>{await restarted?.close();await f.close();});
+ const j=(await f.json('/api/quality/vmaf/jobs',f.input,'unknown-mp4')).job,done=await f.wait(j.id);assert.equal(done.state,'completed');assert.equal(await f.json(`/api/quality/vmaf/jobs/${j.id}/candidates`),null);
+ const policy={space:'default',side:'distorted',maxScore:100,limit:1,minFrameDistance:1,text:'Explicit MP4 temporal candidate with uncertain transaction response',severity:2};
+ const original=AnnotationStore.prototype.mutate;let injected=false;
+ AnnotationStore.prototype.mutate=function(...args:Parameters<typeof original>){const result=original.apply(this,args);if(!injected&&(args[1] as {action?:string})?.action==='create-quality-candidate'&&args[2].id===f.actor){injected=true;throw Error('Injected after the real annotation transaction committed');}return result;};
+ try{const response=await f.request(`/api/quality/vmaf/jobs/${j.id}/candidates`,policy),body=await response.json();assert.equal(injected,true,JSON.stringify(body));assert.equal(response.status,500,JSON.stringify(body));}finally{AnnotationStore.prototype.mutate=original;}
+ assert.equal(injected,true);const frozen=await f.json(`/api/quality/vmaf/jobs/${j.id}/candidates`);assert.equal(frozen.selected.length,1);assert.deepEqual(frozen.createdIds,[]);
+ const id=frozen.selected[0].id,record=await f.json('/api/annotations/spaces/default/'+id);assert.equal(record.revision,1);assert.equal(record.document.mark.qualityEvidence[0].value.sequenceVmaf.version,2);
+ f.service.library.qualityVmaf.db.prepare('UPDATE quality_vmaf_jobs SET result=NULL WHERE id=?').run(j.id);const port=Number(new URL(f.base).port);await f.stop();f.config.port=port;restarted=await startService(f.config,false);
+ let executions=0;const runner=(restarted.library.qualityVmaf as any).runner,run=runner.run.bind(runner);runner.run=(...args:any[])=>{executions++;return run(...args);};
+ assert.equal((await f.request(`/api/quality/vmaf/jobs/${j.id}/result`)).status,409);assert.equal((await f.json('/api/quality/vmaf/jobs',f.input,'unknown-mp4')).job.attemptId,done.attemptId);
+ assert.deepEqual((await f.json(`/api/quality/vmaf/jobs/${j.id}/candidates`,policy)).createdIds,[id]);assert.equal((await f.json('/api/annotations/spaces/default/'+id)).revision,1);assert.equal(executions,0);
+ assert.equal((await f.request(`/api/quality/vmaf/jobs/${j.id}/candidates`,{...policy,severity:3})).status,409);
 });
 
 test('raw budgets, cadence, changed source and stride refuse without a fabricated sequence result',{timeout:120000},async t=>{

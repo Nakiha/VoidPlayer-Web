@@ -16,6 +16,7 @@ import {randomUUID} from '../../shared/utils/uuid.ts';
 export function qualityVmafShell(){
  const number=(id:string,value:number,min=1)=>`<label>${id}<input id="vmaf-${id}" type="number" step="1" min="${min}" value="${value}" required></label>`;
  return `<section id="quality-vmaf" class="admin-panel"><h2>${th(msg('vmaf.title',"原生 VMAF · 连续整帧序列"))}</h2>
+ <p>${th(msg('vmaf.sources','支持已有可信 FLV/Enhanced FLV、严格非分片 MP4 及两者的双向混合。MP4 限 avc1 H.264 8 位或 hvc1 HEVC 8/10 位，原始时钟必须精确表示整数微秒。'))}</p>
  <p>${th(msg('vmaf.scope',"需要已安装的 Linux x64 组件及显式提交的时钟对应计划。仅限 2–32 个连续呈现帧；不支持跨帧抽样、缺口、负 PTS 或 VFR。限范围 BT.709 SDR、8/10 位 YUV420、方形像素，不裁剪、旋转或转换。v0.6.1 是固定基线，并非最新模型。分数属于整帧时间序列事实，不是热图或人工缺陷判断；未认证引用完整性，无法检测错误隐藏。"))}</p>
  <pre id="vmaf-capability"></pre><form id="vmaf-form"><fieldset id="vmaf-inputs"><legend>${th(msg('vmaf.recipe',"冻结的对应关系与测量 recipe"))}</legend>
  <label>client<input id="vmaf-client" maxlength="80" required></label><label>plan ID<input id="vmaf-plan" required></label><label>attempt ID<input id="vmaf-attempt" required></label><label>plan SHA256<input id="vmaf-digest" required></label>

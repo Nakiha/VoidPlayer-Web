@@ -17,3 +17,16 @@ test('real native tests are mandatory in existing full suites, remain outside li
  const fixed=JSON.parse(await read('test/helpers/native-vmaf-samples.json'));assert.equal(fixed.samples.length,5);assert.match(fixed.rawOracle,/ffmpeg decode/);assert.ok(!/execFileSync\('ffmpeg'/.test(await read('test/helpers/native-vmaf.mjs')));
  assert.match(await read('scripts/check-quality-release.mjs'),/check-native-vmaf-release\.mjs/);assert.match(await read('scripts/check-native-vmaf-release.mjs'),/PATH:empty/);assert.match(await read('scripts/check-native-vmaf-release.mjs'),/officialOracle/);
 });
+
+test('MP4 native matrix is explicitly advertised and adds every required browser cell without changing the official executor',async()=>{
+ assert.deepEqual(VMAF_CAPABILITY.containers.mp4,{sampleEntries:['avc1','hvc1'],matrix:['h264-8','hevc-8','hevc-10'],fragmented:false});
+ assert.deepEqual(VMAF_CAPABILITY.associationVersions,[1,2]);assert.deepEqual(VMAF_CAPABILITY.resultVersions,[1,2]);
+ const manifest=JSON.parse(await read('scripts/testing/manifest.json'));
+ for(const engine of ['chromium','webkit'])for(const [codec,depth]of [['h264',8],['hevc',8],['hevc',10]]){
+  const row=manifest.cases.find(c=>c.id===`browser-mp4-vmaf-${codec}-${depth}-${engine}`);assert.ok(row?.required);assert.equal(row.build,true);assert.deepEqual(row.platforms,['linux']);assert.ok(row.suites.includes('ci-cache'));assert.ok(!row.suites.some(s=>s.startsWith('ci-identity')));
+  assert.deepEqual(row.command,['node','scripts/native/run-vmaf-tests.mjs','node','scripts/check-mp4-vmaf-browser.mjs',engine,codec,String(depth)]);assert.equal(row.timeoutMs,300000);
+ }
+ const fixed=JSON.parse(await read('test/helpers/native-vmaf-mp4-samples.json'));assert.deepEqual(fixed.samples.map(s=>[s.codec,s.depth]),[['h264',8],['hevc',8],['hevc',10]]);assert.match(fixed.recipe.verification,/no content certification/);
+ for(const row of fixed.samples)for(const side of ['reference','distorted'])assert.match(row[side].rawSha256,/^[a-f0-9]{64}$/);
+ assert.match(await read('scripts/check-native-vmaf-release.mjs'),/containers,distorted:true/);assert.match(await read('scripts/check-mp4-vmaf-browser.mjs'),/GUI-discovery-preparation/);
+});
