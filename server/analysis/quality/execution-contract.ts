@@ -36,7 +36,7 @@ export function executionSources(db:IndexDatabase,targets:PairTarget[],budget:Pa
     // The trusted document digest/producer commit is checked by FrameIndexStore.
     // Verify every frozen target clock/configuration against that same document.
     const index=cached.index,packet=index.packets[t.picture.au];
-    if(cached.proof.binding.indexBuildId!==t.indexBuildId||!packet||packet.pts!==t.sourcePtsUs||t.picture.configuration!==(packet.configuration??0)||t.picture.sourceVersion!==t.mediaVersion||t.picture.picture!==0||t.picture.layer!==0||t.picture.field!=='frame')throw new FramePairError('identity-mismatch','Frozen AU/configuration/clock is unavailable');
+    if(cached.proof.binding.indexBuildId!==t.indexBuildId||!packet||packet.pts!==t.sourcePtsUs||t.picture.configuration!==(packet.configuration??0)||t.picture.sourceVersion!==cached.proof.producer.sourceVersion||t.picture.picture!==0||t.picture.layer!==0||t.picture.field!=='frame')throw new FramePairError('identity-mismatch','Frozen AU/configuration/clock is unavailable');
   }
   return {sources:canonicalExecutionSources([...seen.values()].map(v=>v.proof)),indexBytes,indexPackets};
 }

@@ -1,7 +1,7 @@
 import type {LibraryPairBinding} from './library-pair.ts';
 import {canonicalJson} from './correspondence.ts';
 
-export const REEXECUTION_LIMITS=Object.freeze({requestBytes:8192,reason:500,chain:32,page:8,maxElapsedMs:30000,maxReadBytes:64*1024*1024,maxIndexBytes:64*1024*1024,maxIndexPackets:1000000});
+export const REEXECUTION_LIMITS=Object.freeze({requestBytes:8192,planBytes:64*1024,reason:500,chain:32,page:8,maxElapsedMs:30000,maxReadBytes:64*1024*1024,maxIndexBytes:64*1024*1024,maxIndexPackets:1000000});
 export type ReexecutionKind='single'|'range'|'vmaf';
 /** Each job still owns at most one attempt. Generation counts new jobs, not
  * restarts of an attempt. No old result or annotation is replaced. */
@@ -12,7 +12,7 @@ export type ReexecutionMetadata={executionContract?:QualityExecutionContract;ret
 export type ReexecutionPreflight={schema:'voidplayer-quality-reexecution-preflight';version:1;contract:QualityExecutionContract;indexBytes:number;indexPackets:number;assetBytes:number};
 export function canonicalExecutionSources(sources:LibraryPairBinding[]){return [...new Map(sources.map(s=>[canonicalJson(s),s])).entries()].sort(([a],[b])=>a.localeCompare(b)).map(([,s])=>s);}
 export type ReexecutionCost={scope:'entire-frozen-input-from-start';selectedPairs:number;reusesPreviousScores:false;budget:Record<string,number>;reservation:Record<string,unknown>};
-export type ReexecutionPlan={schema:'voidplayer-quality-reexecution-plan';version:1;kind:ReexecutionKind;jobId:string;state:string;revision:number;reason:string;eligible:boolean;blocks:{code:string;message:string;next:'wait-and-replan'|'new-intent'|'observe-original'}[];digest:string|null;cost:ReexecutionCost;previous:{reason:unknown;result:unknown};lineage:ReexecutionLineage|null;contract:QualityExecutionContract|null;inputDigest:string;next:{plan:string;execute:string;chain:string}};
+export type ReexecutionPlan={schema:'voidplayer-quality-reexecution-plan';version:1;kind:ReexecutionKind;jobId:string;state:string;revision:number;reason:string;eligible:boolean;blocks:{code:string;message:string;next:'wait-and-replan'|'new-intent'|'observe-original'}[];digest:string|null;cost:ReexecutionCost;previous:{reason:unknown;result:unknown};lineage:Omit<ReexecutionLineage,'requestedAt'>|null;correspondence?:{id:string;attemptId:string;digest:string}|null;contract:QualityExecutionContract|null;inputDigest:string;next:{plan:string;execute:string;chain:string}};
 export type ReexecutionRequest={schema:'voidplayer-quality-reexecution';version:1;reason:string;planDigest:string;confirm:ReexecutionCost};
 export function reexecutionReason(value:unknown){
   if(typeof value!=='string'||!value.trim()||value.length>REEXECUTION_LIMITS.reason)throw Error('Provide an explicit bounded reason for new computation');
@@ -27,6 +27,7 @@ export function reexecutionRequest(value:unknown):ReexecutionRequest{
 export const sameExecutionContract=(a:QualityExecutionContract,b:QualityExecutionContract)=>canonicalJson(a)===canonicalJson(b);
 export function reexecutionPath(kind:ReexecutionKind,id:string){return kind==='single'?`/api/quality/jobs/${id}`:kind==='range'?`/api/quality/ranges/${id}`:`/api/quality/vmaf/jobs/${id}`;}
 export function nextReexecutionLineage(id:string,old:ReexecutionLineage|undefined,reason:string,planDigest:string,requestedAt:number):ReexecutionLineage{
+  if(old&&(!Number.isSafeInteger(old.generation)||old.generation<2||old.generation>REEXECUTION_LIMITS.chain||!old.rootJobId))throw Error('Stored execution lineage is invalid');
   const generation=(old?.generation??1)+1;
   if(generation>REEXECUTION_LIMITS.chain)throw Error('Explicit execution chain budget is full; use a new intent');
   return {schema:'voidplayer-quality-reexecution-lineage',version:1,retryOf:id,rootJobId:old?.rootJobId??id,generation,reason,planDigest,requestedAt};

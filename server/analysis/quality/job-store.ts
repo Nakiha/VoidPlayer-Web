@@ -103,7 +103,7 @@ export class QualityJobStore {
   }
   submit(request: ReturnType<typeof qualityJobRequest>, actor: Actor, requestId: string, key: string, now: number,reexecution?:ReexecutionCreation,expectedExecutionContract?:QualityExecutionContract) {
     return this.transaction(() => {
-      if(reexecution){const prior=this.reexecutions.replay(reexecution.parentId,actor.id,reexecution.key,reexecution.request);if(prior)return {job:this.get(prior.jobId),replayed:true};const parent=this.get(reexecution.parentId);if(parent.submitted.actorId!==actor.id||parent.revision!==reexecution.parentRevision||!['failed','interrupted','cancelled'].includes(parent.state)||parent.endedAt===null||parent.attempt&&parent.attempt.endedAt===null)throw new AdminError(409,'Original execution is not terminal and physically stopped.','reexecution-blocked');}
+      if(reexecution){const prior=this.reexecutions.replay(reexecution.parentId,actor.id,reexecution.key,reexecution.request);if(prior){const job=this.get(prior.jobId);if(job.submitted.actorId!==actor.id)throw new AdminError(500,'Stored successor actor changed.','stored-reexecution-invalid');return {job:this.reexecutions.verify(prior,job),replayed:true};}const parent=this.get(reexecution.parentId);if(parent.submitted.actorId!==actor.id||parent.revision!==reexecution.parentRevision||!['failed','interrupted','cancelled'].includes(parent.state)||parent.endedAt===null||parent.attempt&&parent.attempt.endedAt===null)throw new AdminError(409,'Original execution is not terminal and physically stopped.','reexecution-blocked');}
       const prior = this.db.prepare('SELECT id,fingerprint FROM quality_jobs WHERE actor_id=? AND client_id=? AND idempotency_key=?')
         .get(actor.id, request.input.client.id, key);
       if (prior) {
@@ -127,6 +127,7 @@ export class QualityJobStore {
       return {job: this.get(id), replayed: false};
     });
   }
+  frozenInput(id:string){const row=this.db.prepare('SELECT input_json,fingerprint FROM quality_jobs WHERE id=?').get(id);if(!row||createHash('sha256').update(String(row.input_json)).digest('hex')!==row.fingerprint)throw new AdminError(409,'Frozen input changed; use a new intent.','stored-input-invalid');return this.get(id).input;}
   recordExecutionContract(id:string,attempt:string,contract:QualityExecutionContract){
     if(Buffer.byteLength(JSON.stringify(contract))>16*1024||contract.schema!=='voidplayer-quality-execution-contract'||contract.version!==1)throw new AdminError(500,'Execution contract exceeds its bounded format.','execution-contract-invalid');
     this.transaction(()=>{const job=this.get(id);if(terminalQualityJob(job.state)||job.attempt?.id!==attempt)throw new AdminError(409,'Execution contract cannot change after its attempt.','execution-contract-conflict');if(job.executionContract&&!sameExecutionContract(job.executionContract,contract))throw new AdminError(409,'Frozen execution conditions changed.','execution-contract-conflict');if(!job.executionContract)this.patch(id,{execution_json:JSON.stringify({executionContract:contract,...(job.retryOf?{retryOf:job.retryOf}:{})})});});

@@ -1,3 +1,4 @@
+import {QualityReexecutionService} from './analysis/quality/reexecution-service.ts';
 import {NativeVmafService} from './analysis/vmaf/service.ts';
 import {NativeVmafRunner} from './analysis/vmaf/runner.ts';
 import type {VmafComponentConfig} from '../shared/analysis/quality/vmaf.ts';
@@ -42,6 +43,8 @@ export class MediaLibraryIndex {
   private jobService?: QualityJobService;
   private discoveryService?: LibraryDiscoveryService;
   get discovery() { if(this.closed)throw new AdminError(503,'Library discovery is closed.','discovery-unavailable');return this.discoveryService??=new LibraryDiscoveryService(this); }
+  private reexecutionService?:QualityReexecutionService;
+  get qualityReexecutions(){if(this.closed)throw new AdminError(503,'Quality reexecution is closed.','reexecution-unavailable');this.qualityJobs;return this.reexecutionService??=new QualityReexecutionService(this);}
   private rangeService?: QualityRangeService;
   private correspondenceService?:CorrespondenceService;
   private vmafService?:NativeVmafService;
@@ -406,6 +409,7 @@ export class MediaLibraryIndex {
   close() { return this.closing ??= this.closeOwned(); }
   private async closeOwned() {
     this.closed = true; this.stop();
+    await this.reexecutionService?.close();
     await this.correspondenceService?.close();
     await this.vmafService?.close();
     await this.discoveryService?.close();

@@ -160,7 +160,7 @@ export class QualityRangeService {
     if(this.closed||this.fatal)throw new AdminError(503,'Range service unavailable.','range-service-unavailable');
     const plan=this.plan(value),k=qualityIdempotencyKey(key),fingerprint=digest(plan.input);
     this.db.exec('BEGIN IMMEDIATE');let accepted:{job:QualityRangeJob;replayed:boolean};try{accepted=(()=>{
-    if(reexecution){const prior=this.reexecutions.replay(reexecution.parentId,actor.id,reexecution.key,reexecution.request);if(prior)return {job:this.get(prior.jobId,actor.id),replayed:true};const parent=this.get(reexecution.parentId,actor.id);if(parent.revision!==reexecution.parentRevision||!['failed','partial','interrupted','cancelled'].includes(parent.state)||parent.endedAt===null||this.progress(parent).active)throw new AdminError(409,'Original range has not physically stopped.','reexecution-blocked');}
+    if(reexecution){const prior=this.reexecutions.replay(reexecution.parentId,actor.id,reexecution.key,reexecution.request);if(prior)return {job:this.reexecutions.verify(prior,this.get(prior.jobId,actor.id)),replayed:true};const parent=this.get(reexecution.parentId,actor.id);if(parent.revision!==reexecution.parentRevision||!['failed','partial','interrupted','cancelled'].includes(parent.state)||parent.endedAt===null||this.progress(parent).active)throw new AdminError(409,'Original range has not physically stopped.','reexecution-blocked');}
     const prior=this.db.prepare('SELECT id,fingerprint FROM quality_ranges WHERE actor=? AND client=? AND key=?').get(actor.id,plan.input.client.id,k);
     if(prior){if(prior.fingerprint!==fingerprint)throw new AdminError(409,'Range key already binds another plan.','idempotency-conflict');return {job:this.get(String(prior.id),actor.id),replayed:true};}
     const rows=this.rows(),reserve=Buffer.byteLength(JSON.stringify(plan))+80*1024;
@@ -175,8 +175,9 @@ export class QualityRangeService {
     })();this.db.exec('COMMIT');}catch(error){this.db.exec('ROLLBACK');throw error;}
     if(!accepted.replayed)this.pump();return {...accepted,job:this.get(accepted.job.id,actor.id)};
   }
+  reexecutionInput(id:string,actor:string){const job=this.get(id,actor),row=this.db.prepare('SELECT fingerprint FROM quality_ranges WHERE id=?').get(id);if(digest(job.plan.input)!==row?.fingerprint)throw new AdminError(409,'Frozen range input changed; use a new intent.','stored-input-invalid');return job.plan.input;}
   executionContract(id:string,actor:string){const job=this.get(id,actor);if(job.executionContract)return job.executionContract;const contracts=job.samples.map(s=>this.jobs.get(s.jobId,actor).executionContract).filter((v):v is QualityExecutionContract=>!!v);if(contracts.some(v=>!sameExecutionContract(v,contracts[0])))throw new AdminError(409,'Range child execution conditions differ; use a new intent.','execution-contract-conflict');return contracts[0];}
-  reexecutionReceipt(id:string,actor:string,key?:string,request?:ReexecutionRequest){this.get(id,actor);return key&&request?this.reexecutions.replay(id,actor,key,request):this.reexecutions.get(id,actor);}
+  reexecutionReceipt(id:string,actor:string,key?:string,request?:ReexecutionRequest){this.get(id,actor);const receipt=key&&request?this.reexecutions.replay(id,actor,key,request):this.reexecutions.get(id,actor);if(receipt)this.reexecutions.verify(receipt,this.get(receipt.jobId,actor));return receipt;}
   reexecute(creation:ReexecutionCreation,actor:Actor,requestId:string){if(!this.jobs.resources().available||this.jobs.resources().admissionBlocked)throw new AdminError(503,'Physical execution stop is unconfirmed.','reexecution-blocked');const original=this.get(creation.parentId,actor.id);return this.submit(original.plan.input,actor,requestId,'reexecution:'+randomUUID(),creation);}
   cancel(id:string,actor:string){
     const job=this.get(id,actor);

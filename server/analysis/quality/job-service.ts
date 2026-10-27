@@ -42,7 +42,8 @@ export class QualityJobService {
     if (actor !== undefined && job.submitted.actorId !== actor) throw new AdminError(404, 'Quality job not found.', 'job-not-found');
     return job;
   }
-  reexecutionReceipt(id:string,actor:string,key?:string,request?:import('../../../shared/analysis/quality/reexecution.ts').ReexecutionRequest){this.get(id,actor);return key&&request?this.store.reexecutions.replay(id,actor,key,request):this.store.reexecutions.get(id,actor);}
+  reexecutionInput(id:string,actor:string){this.get(id,actor);return this.store.frozenInput(id);}
+  reexecutionReceipt(id:string,actor:string,key?:string,request?:import('../../../shared/analysis/quality/reexecution.ts').ReexecutionRequest){this.get(id,actor);const receipt=key&&request?this.store.reexecutions.replay(id,actor,key,request):this.store.reexecutions.get(id,actor);if(receipt)this.store.reexecutions.verify(receipt,this.get(receipt.jobId,actor));return receipt;}
   reexecute(creation:ReexecutionCreation,actor:Actor,requestId:string){this.available();const original=this.get(creation.parentId,actor.id);return this.submit(original.input,actor,requestId,'reexecution:'+randomUUID(),creation);}
   result(id: string, actor?: string) { this.get(id, actor); return this.store.result(id); }
   changes(actor: string | null, after?: number, limit?: number) { return this.store.changes(actor, after, limit); }
