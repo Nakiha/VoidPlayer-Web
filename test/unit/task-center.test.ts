@@ -42,9 +42,9 @@ test('exhaustive cross-store projections find old matching jobs beyond all legac
  const expected=TASK_KINDS.map(kind=>f.insert(kind,'actor-A',{createdAt:20}));
  for(const kind of TASK_KINDS)f.insert(kind,'actor-B');
  const page=f.center.query('actor-A',query(`mediaId=${f.source.mediaId}&mediaVersion=${f.source.mediaVersion}`));
- assert.equal(page.total,5);assert.deepEqual(new Set(page.entries.map(x=>x.id)),new Set(expected.map(x=>x.id)));assert.deepEqual(new Set(page.entries.map(x=>x.kind)),new Set(TASK_KINDS));
+ assert.equal(page.total,6);assert.deepEqual(new Set(page.entries.map(x=>x.id)),new Set(expected.map(x=>x.id)));assert.deepEqual(new Set(page.entries.map(x=>x.kind)),new Set(TASK_KINDS));
  assert.equal(f.center.query('actor-A',query(`mediaId=${f.source.mediaId}&mediaVersion=${f.other.mediaVersion}`)).total,0,'version cannot match the opposite side');
- assert.equal(f.center.query('actor-A',query('createdFrom=20&createdTo=21')).total,5);
+ assert.equal(f.center.query('actor-A',query('createdFrom=20&createdTo=21')).total,6);
  assert.equal(f.center.query('actor-A',query('createdFrom=0&createdTo=20')).total,0,'exclusive end');
  const single=f.center.query('actor-A',query('kind=single&metric=ssim')).entries[0];assert.equal(single.phase,'decode');assert.equal(single.result.available,true);assert.ok(!JSON.stringify(page).includes('not-JSON-result'),'no result parsing or result blob copying');
  assert.ok(!JSON.stringify(page).includes('actor-B'));
@@ -52,11 +52,11 @@ test('exhaustive cross-store projections find old matching jobs beyond all legac
 
 test('frozen pagination survives new tasks/state mutations and immutable tie order; refresh sees new facts',t=>{
  const f=fixture();t.after(f.close);for(const k of TASK_KINDS)f.insert(k,'actor-A',{state:'running'});
- const first=f.center.query('actor-A',query('limit=2'));assert.equal(first.total,5);assert.ok(first.nextCursor);
+ const first=f.center.query('actor-A',query('limit=2'));assert.equal(first.total,6);assert.ok(first.nextCursor);
  f.db.exec("UPDATE quality_jobs SET state='failed'");f.insert('single','actor-A',{createdAt:999});
  const second=f.center.query('actor-A',query(`limit=2&cursor=${first.nextCursor}`));const third=f.center.query('actor-A',query(`limit=2&cursor=${second.nextCursor}`));
- const rows=[...first.entries,...second.entries,...third.entries];assert.equal(new Set(rows.map(r=>r.id)).size,5);assert.ok(rows.every(r=>r.state==='running'));assert.equal(third.nextCursor,null);assert.equal(second.capturedAt,first.capturedAt);
- assert.deepEqual(rows.map(r=>r.kind),[...TASK_KINDS].sort());const fresh=f.center.query('actor-A',query());assert.equal(fresh.total,6);assert.ok(fresh.entries.some(r=>r.state==='failed'));
+ const rows=[...first.entries,...second.entries,...third.entries];assert.equal(new Set(rows.map(r=>r.id)).size,6);assert.ok(rows.every(r=>r.state==='running'));assert.equal(third.nextCursor,null);assert.equal(second.capturedAt,first.capturedAt);
+ assert.deepEqual(rows.map(r=>r.kind),[...TASK_KINDS].sort());const fresh=f.center.query('actor-A',query());assert.equal(fresh.total,7);assert.ok(fresh.entries.some(r=>r.state==='failed'));
 });
 
 test('cursor is scoped, signed, bounded, expiring, restart-invalid and recoverable without deleting jobs',t=>{

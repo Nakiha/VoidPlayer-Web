@@ -1,3 +1,4 @@
+import {mp4TicksToUs} from '../../media/indexing/mp4-quality-index.ts';
 import {canonicalJson,VMAF_LIMITS,vmafSequence,vmafSequenceFrame,vmafSourceVersion} from './vmaf.ts';
 import type {VmafPrepared,VmafPlanSnapshot,VmafMetricState,VmafSequence,VmafSequenceFrame} from './vmaf.ts';
 import type {LibraryPairResult} from './library-pair.ts';
@@ -60,10 +61,21 @@ export function validateXpsnrAssociation(value:unknown,pair:LibraryPairResult):X
  object(r,['id','threads','cpuFlags','inputOrder','pooling','preprocessing','range','color','pixelFormat','width','height','bitDepth','cadenceUs','frameRate','boundary','rawPacking']);object(r.frameRate,['numerator','denominator']);
  if(r.id!==XPSNR_RECIPE||r.threads!==1||r.cpuFlags!==0||r.inputOrder!=='reference-distorted'||r.pooling!=='official-square-mean-root-with-low-distortion-log-fallback'||r.preprocessing!=='none'||r.range!=='limited'||r.color!=='bt709-sdr'||r.boundary!=='clip-reset-and-final-flush'||r.rawPacking!=='visible-y-u-v-tight-little-endian-v1'||r.pixelFormat!==(r.bitDepth===8?'yuv420p':'yuv420p10le')||![8,10].includes(r.bitDepth)||!Number.isSafeInteger(r.cadenceUs)||r.cadenceUs<1||r.cadenceUs>1000000||r.frameRate.numerator!==1000000||r.frameRate.denominator!==r.cadenceUs)fail('Invalid reference-first temporal recipe');
  object(v.sequence,['cadenceUs','referenceIntegrity','concealmentDetection','pairs']);if(v.sequence.cadenceUs!==r.cadenceUs||v.sequence.referenceIntegrity!=='not-certified'||v.sequence.concealmentDetection!=='unavailable'||v.sequence.pairs.length!==v.frames)fail('Invalid continuous sequence');
- for(const side of ['reference','distorted']as const){const seen=new Set<number>();for(const [i,item]of v.sequence.pairs.entries()){object(item,['reference','distorted']);const p=item[side];object(p,['au','sourcePtsUs','decode','container']);if(!Number.isSafeInteger(p.au)||p.au<0||seen.has(p.au)||!Number.isSafeInteger(p.sourcePtsUs)||p.sourcePtsUs<0||i>0&&p.sourcePtsUs-v.sequence.pairs[i-1][side].sourcePtsUs!==r.cadenceUs)fail('Invalid sequence clocks');seen.add(p.au);}
+ for(const side of ['reference','distorted']as const){const seen=new Set<number>();for(const [i,item]of v.sequence.pairs.entries()){object(item,['reference','distorted']);const p=item[side];object(p,['au','sourcePtsUs','decode','container']);if(!Number.isSafeInteger(p.au)||p.au<0||seen.has(p.au)||!Number.isSafeInteger(p.sourcePtsUs)||p.sourcePtsUs<0||i>0&&p.sourcePtsUs-v.sequence.pairs[i-1][side].sourcePtsUs!==r.cadenceUs)fail('Invalid sequence clocks');seen.add(p.au);
+   const source=pair.sources[side],mp4=source.binding.indexIdentity.kind==='mp4';
+   if(mp4){const c=p.container,a=c?.sample,producer=source.producer;
+    object(c,['kind','trackId','timescale','tableSha256','sample']);object(a,['ordinal','description','offset','size','dtsTicks','ctsTicks','durationTicks','dtsUs','ptsUs','durationUs','key']);
+    if(!c||!a||producer.producer!=='server-mp4-scan-v1'||c.kind!=='mp4'||c.trackId!==producer.trackId||c.timescale!==producer.timescale||c.tableSha256!==producer.tableSha256||p.decode?.mode!=='packet-identity-gop-v1'
+     ||!Number.isSafeInteger(p.decode.startAu)||!Number.isSafeInteger(p.decode.endAu)||p.decode.startAu<0||p.decode.startAu>p.au||p.decode.endAu<p.au||p.decode.endAu-p.decode.startAu>=32
+     ||a.ordinal!==p.au||a.description!==1||a.ptsUs!==p.sourcePtsUs||a.durationUs!==r.cadenceUs||![a.offset,a.size,a.dtsTicks,a.ctsTicks,a.durationTicks,a.dtsUs,a.ptsUs,a.durationUs].every(Number.isSafeInteger)
+     ||a.offset<0||a.size<1||a.offset+a.size>source.binding.size||a.dtsTicks<0||a.durationTicks<1||typeof a.key!=='boolean'
+     ||mp4TicksToUs(a.dtsTicks,c.timescale)!==a.dtsUs||mp4TicksToUs(a.dtsTicks+a.ctsTicks,c.timescale)!==a.ptsUs||mp4TicksToUs(a.durationTicks,c.timescale)!==a.durationUs)fail('Invalid MP4 temporal sample/table witness');
+   }else if(p.container!==undefined)fail('Unexpected FLV container witness');
+  }
   const p=v.sequence.pairs[v.index][side],actual=pair.result.provenance[side];if(canonicalJson(p)!==canonicalJson(xpsnrSequenceFrame(actual)))fail('Selected original frame differs');
  }
  const m=pair.result.metric;if(![r.width,r.height].every(n=>Number.isSafeInteger(n)&&n>=64&&n%2===0)||r.width>1920||r.height>1080||m.roi.x||m.roi.y||m.roi.width!==r.width||m.roi.height!==r.height||m.bitDepth!==r.bitDepth||m.color.primaries!=='bt709'||m.color.transfer!=='bt709'||m.color.matrix!=='bt709'||m.color.fullRange||m.color.chromaLocation!==1)fail('XPSNR full-frame pixel domain differs');
+ for(const p of Object.values(pair.result.provenance)){const d=p.decoded.description;if(d.width!==r.width||d.height!==r.height||d.visibleRect.x||d.visibleRect.y||d.codedWidth!==d.width||d.codedHeight!==d.height||d.yuv?.bitDepth!==r.bitDepth)fail('XPSNR geometry differs');}
  object(v.raw,['referenceSha256','distortedSha256','bytes']);if(!hex(v.raw.referenceSha256)||!hex(v.raw.distortedSha256)||v.raw.bytes!==r.width*r.height*3/2*(r.bitDepth===8?1:2)*v.frames*2||v.raw.bytes>XPSNR_LIMITS.maxRawBytes)fail('Invalid raw sequence witness');
  return structuredClone(v);
 }
