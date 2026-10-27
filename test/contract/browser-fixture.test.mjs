@@ -4,6 +4,7 @@ import { EventEmitter } from 'node:events';
 import { mkdtemp, readFile, rm, access } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import {preparationReceiptObserver} from '../../scripts/testing/preparation-receipt.mjs';
 import { withBrowserFixture } from '../../scripts/testing/browser-fixture.mjs';
 
 async function scenario(body) {
@@ -158,4 +159,17 @@ test('legacy direct CLI interrupt handlers cancel the fixture and are removed af
     await assert.rejects(access(getTemp()));
     assert.deepEqual(new Set(process.listeners(name)), previous);
   });
+});
+
+
+test('routed preparation receipt failure is handled even before the caller awaits it',async()=>{
+ const observer=preparationReceiptObserver(),pending=observer.arm(),capture=observer.claim(),error=Error('Body unavailable before click completion'),unhandled=[];const onUnhandled=reason=>unhandled.push(reason);process.on('unhandledRejection',onUnhandled);
+ try{capture.fail(error);await new Promise(resolve=>setImmediate(resolve));const outcome=await pending.result;assert.equal(outcome.ok,false);assert.equal(outcome.error,error);assert.deepEqual(unhandled,[]);}finally{pending.close();process.removeListener('unhandledRejection',onUnhandled);}
+});
+test('routed preparation observations cannot overlap or consume a late receipt from an old observation',async()=>{
+ const observer=preparationReceiptObserver(),old=observer.arm(),late=observer.claim();assert.equal(observer.claim(),null);assert.throws(()=>observer.arm(),/already active/);old.close();assert.equal((await old.result).ok,false);
+ const current=observer.arm(),capture=observer.claim();assert.equal(late.complete({key:'old'}),false);const receipt={status:202,key:'original-key',actor:'original-actor',body:{source:'original'},value:{job:{id:'new-job'}}};capture.complete(receipt);assert.deepEqual(await current.result,{ok:true,receipt});current.close();
+});
+test('missing routed preparation receipt has a bounded handled outcome',async()=>{
+ const observer=preparationReceiptObserver(2),pending=observer.arm();try{const outcome=await pending.result;assert.equal(outcome.ok,false);assert.match(outcome.error.message,/timed out/);assert.equal(observer.claim(),null);}finally{pending.close();}
 });
