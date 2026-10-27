@@ -5,6 +5,7 @@ import {currentActor} from '../services/identity.ts';
 import {t,th,msg} from '../i18n.ts';
 import type {ReviewSession} from '../session.ts';
 import type {reviewTools} from '../agent.ts';
+import './page-bridge.css';
 
 /** Installed only in HTML minted by this stdio process. No probing ordinary
  * deployments, persistent credential, automatic reconnect or tool passthrough. */
@@ -29,22 +30,24 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
   document.querySelector('.topbar-utility-actions')?.append(button);document.body.append(dialog);
   const $=<T extends HTMLElement=HTMLElement>(id:string)=>dialog.querySelector<T>('#page-bridge-'+id)!;
   let grant:{token:string;epoch:string;scopes:PageScope[];binding:string}|undefined;
-  let generation=0,inFlight=0,connecting=false,stopped=false,descriptor:unknown;
+  let generation=0,inFlight=0,connecting=false,stopped=false,descriptor:unknown,reviewedRevision:number|undefined,reviewedReady=false;
   let controller=new AbortController();
   const binding=()=>JSON.stringify([location.search,currentActor()?.id??null,session.getState().tracks.map(x=>[x.slot,x.id,x.sourceGen])]);
   const workspace=()=>`${pageId} · ${session.getState().tracks.map(x=>`${x.slot}: ${x.name}`).join(' / ')||t(msg('pageBridge.empty','空工作区'))}`.slice(0,300);
   const note=(s:string)=>{$('status').textContent=s;};
   const render=()=>{
     $('client').textContent=JSON.stringify(descriptor??{},null,2);$('workspace').textContent=workspace();
-    $('connect').toggleAttribute('disabled',!!grant||inFlight>0||connecting||stopped);
+    $('connect').toggleAttribute('disabled',!!grant||inFlight>0||connecting||stopped||!reviewedReady);
     $('revoke').toggleAttribute('disabled',!grant);
     for(const id of ['view','annotate'])$(id).toggleAttribute('disabled',!!grant||connecting);
     button.dataset.connected=String(!!grant);button.textContent=grant?'MCP ●':'MCP';
   };
   async function post(route:string,body:unknown,token:string,abort?:AbortSignal,keepalive=false){
     const response=await fetch(BRIDGE_PATH+'/'+route,{method:'POST',headers:{'content-type':'application/json','x-voidplayer-bridge':'1',authorization:'Bearer '+token},body:JSON.stringify(body),cache:'no-store',signal:abort,keepalive});
-    const bytes=await response.text();if(new TextEncoder().encode(bytes).byteLength>L.requestBytes)throw Error('channel-response-budget');
-    const value=JSON.parse(bytes);if(!response.ok)throw Error(value.code??'channel-disconnected');return value;
+    const reader=response.body!.getReader(),chunks:Uint8Array[]=[];let size=0;
+    try{for(;;){const {value,done}=await reader.read();if(done)break;size+=value.byteLength;if(size>L.stdioBytes){await reader.cancel();throw Error('channel-response-budget');}chunks.push(value);}}finally{reader.releaseLock();}
+    const bytes=new Uint8Array(size);let offset=0;for(const part of chunks){bytes.set(part,offset);offset+=part.byteLength;}
+    const value=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));if(!response.ok)throw Error(value.code??'channel-disconnected');return value;
   }
   function revoke(message:string,retire=false){
     const old=grant;++generation;grant=undefined;controller.abort();controller=new AbortController();
@@ -57,17 +60,21 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
     const d=PAGE_TOOLS[command.name];
     if(!d||!Object.hasOwn(PAGE_TOOLS,command.name)||!g.scopes.includes(d.scope)||command.epoch!==g.epoch){revoke(t(msg('pageBridge.invalid','收到不符合授权范围的命令，连接已撤销。')));return;}
     const tool=tools.find(t=>t.name===command.name);if(!tool){revoke('unknown-tool');return;}
-    inFlight++;render();
+    inFlight++;render();let executing=true;
+    const physicallyFinished=()=>{if(executing){executing=false;inFlight--;render();}};
     try{
       validateToolInput(d.inputSchema,command.input);
       let result:unknown;
-      try{result=await tool.execute(command.input);}
+      try{result=await tool.execute(command.input)??{completed:true};}
       catch{result={isError:true,code:'page-operation-failed',correlation:command.correlation,operationId:command.operationId??null};}
+      // The facade has settled. Waiting for the delivery ACK is not an active
+      // domain operation: the server may already dispatch the next command.
+      physicallyFinished();
       if(epoch!==generation||grant!==g||g.binding!==binding())return;
       if(new TextEncoder().encode(JSON.stringify(result)??'').byteLength>L.resultBytes){revoke(t(msg('pageBridge.large','结果超过通道预算，写入结果可能未知；请保留原 correlation，勿自动重试。')));return;}
       await post('reply',{epoch:g.epoch,correlation:command.correlation,result},g.token,controller.signal);
     }catch{if(epoch===generation)revoke(t(msg('pageBridge.lost','通道已断开；已派发写入的结果可能未知，不会自动重放。')));}
-    finally{inFlight--;render();}
+    finally{physicallyFinished();}
   }
   async function poll(g:NonNullable<typeof grant>,epoch:number){
     try{while(epoch===generation&&grant===g&&!signal.aborted){
@@ -78,7 +85,7 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
     }}catch{if(epoch===generation)revoke(t(msg('pageBridge.lost','通道已断开；已派发写入的结果可能未知，不会自动重放。')));}
   }
   async function refresh(){
-    try{const r=await fetch(BRIDGE_PATH+'/descriptor',{cache:'no-store',signal:AbortSignal.timeout(3000)});if(!r.ok)throw Error('host-unavailable');const d=await r.json();descriptor=d.clientClaim??t(msg('pageBridge.noClient','MCP 客户端尚未初始化。'));render();return d;}
+    try{const r=await fetch(BRIDGE_PATH+'/descriptor',{cache:'no-store',signal:AbortSignal.timeout(3000)});if(!r.ok)throw Error('host-unavailable');const d=await r.json();reviewedRevision=d.clientRevision;reviewedReady=d.ready;descriptor=d.clientClaim??t(msg('pageBridge.noClient','MCP 客户端尚未初始化。'));render();return d;}
     catch{descriptor=t(msg('pageBridge.unavailable','本机桥进程不可用；普通 HTTP 后台任务不受页面连接影响。'));render();return null;}
   }
   button.onclick=()=>{void refresh();render();dialog.showModal();};
@@ -89,17 +96,18 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
     connecting=true;render();
     const current=++generation,original=binding();
     try{
-      const d=await refresh();if(!d?.ready)throw Error('client-not-ready');
+      if(!reviewedReady)throw Error('client-not-ready');
       const scopes:PageScope[]=['read'];if($<HTMLInputElement>('view').checked)scopes.push('view');if($<HTMLInputElement>('annotate').checked)scopes.push('annotate');
-      const accepted=await post('connect',{context:pageId,workspace:workspace(),scopes},documentToken,AbortSignal.timeout(4000));
+      const accepted=await post('connect',{context:pageId,workspace:workspace(),scopes,clientRevision:reviewedRevision},documentToken,AbortSignal.timeout(4000));
       if(current!==generation||original!==binding()||signal.aborted){void post('revoke',{epoch:accepted.epoch},accepted.token).catch(()=>{});return;}
       grant={token:accepted.token,epoch:accepted.epoch,scopes,binding:original};
       note(t(msg('pageBridge.connected','已连接此页面；关闭面板仍保留授权，可随时重新打开并撤销。')));void poll(grant,current);
-    }catch{if(current===generation)note(t(msg('pageBridge.connectFailed','未能确认连接。请检查客户端及目标页面；不会自动重连或跟随其他标签。')));}
+    }catch{if(current===generation){await refresh();note(t(msg('pageBridge.connectFailed','未能确认连接。请检查客户端及目标页面；不会自动重连或跟随其他标签。')));}}
     finally{connecting=false;render();}
   };
   const unsubscribe=session.subscribe(()=>{if(grant&&grant.binding!==binding())revoke(t(msg('pageBridge.changed','身份或工作区来源已改变，请重新明确授权。')));});
   window.addEventListener('voidplayer-identity-change',()=>{if(grant)revoke(t(msg('pageBridge.changed','身份或工作区来源已改变，请重新明确授权。')));},{signal});
+  for(const name of ['popstate','hashchange'])window.addEventListener(name,()=>{if(grant&&grant.binding!==binding())revoke(t(msg('pageBridge.changed','身份或工作区来源已改变，请重新明确授权。')));},{signal});
   window.addEventListener('pagehide',()=>{stopped=true;revoke('',true);},{signal});
   signal.addEventListener('abort',()=>{stopped=true;revoke('',true);unsubscribe();button.remove();dialog.remove();},{once:true});
 }

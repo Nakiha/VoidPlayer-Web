@@ -1,5 +1,9 @@
 # 架构与行为边界
 
+可选临时 stdio 页面桥的宿主、授权与恢复边界见
+[local-mcp-page-bridge.md](local-mcp-page-bridge.md)。桥只转发共享白名单到
+已有页面 Agent/session facade；独立 HTTP 后台业务不依赖这个通道。
+
 ## 模块与宿主边界
 
 `shared/` 保存浏览器与服务端共用的媒体解析、索引、分析计算和数据契约，按领域分目录。`src/` 拥有浏览器资源与交互；`server/` 拥有文件系统、数据库和 HTTP 服务。两类宿主都可引用共享层，不能互相引用；类型引用也遵守同一规则。

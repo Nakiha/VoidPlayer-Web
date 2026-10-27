@@ -744,7 +744,40 @@ reject; HTTP Agents retain the independent explicit-AU scoring path.
 The player's WebMCP tools and window.voidPlayer operate on an attached browser
 session. Use them for intentional view actions: seek, play, pause, presenting a
 frame or selecting browser-local files. Their schemas live in the running page.
-There is no server HTTP MCP endpoint or local MCP bridge yet (#117).
+An optional temporary stdio bridge is available from a Node 24+ source checkout
+with the built frontend: run node scripts/mcp-page-bridge.ts as the MCP client's
+child process. Open only the localhost page printed on stderr, choose Files in
+that page, click MCP, review the self-declared client (not authenticated), target
+workspace and read/view/annotation scopes, and explicitly connect. It cannot
+attach to arbitrary existing tabs. Ordinary service pages do not expose a
+network MCP endpoint or enable the bridge automatically. No persistent token,
+account, extension, startup service or MCP application configuration is installed.
+
+MCP tools/list describes seven bounded operations: get_bridge_status,
+get_bridge_receipt and the five allowed page operations get_review_session,
+get_review_marks, pause_review, seek_review and add_review_mark. Pass the exact
+granted epoch to each page call, and a stable operationId to every mutation.
+Schemas reuse the page Agent validator; File paths, scripts, logs, source loads,
+uploads and background job tools are not forwarded. Result/message/queue and
+15-second command budgets are explicit in /api/agent localMcp.limits.
+
+The current 2026-07-28 per-request MCP metadata/server-discover lifecycle and
+legacy 2025-11-25 initialize then notifications/initialized are supported.
+stdout contains only newline JSON-RPC; diagnostics go to stderr. Close stdin
+for shutdown. Missing/disconnected page is host-unavailable with a reconnect
+instruction; reconnection always requires a fresh user confirmation. Revoke,
+reload, close, source/workspace/actor change or lost page channel invalidates the
+epoch. A started write can still complete: retain the original operationId and
+correlation, inspect get_bridge_receipt, never infer rollback or automatically
+replay an unknown outcome (including under a new key). Confirmed same-key calls
+return the receipt without executing again. Receipts last only this process.
+Closing the grant does not cancel independent durable HTTP scoring jobs.
+
+Only the launcher-owned localhost host uses transient document/grant bearer
+capabilities. Origin, Host, username and epoch are not credentials. Same-origin
+code and the local OS account remain trusted; this is not isolation from hostile
+local processes. Runtime protocol and page tests are in
+docs/local-mcp-page-bridge.md; platform certification is reported separately.
 
 Use ordinary HTTP for library retrieval, persisted annotation writes and events.
 A page need not be open. Background work must not invoke a view command merely

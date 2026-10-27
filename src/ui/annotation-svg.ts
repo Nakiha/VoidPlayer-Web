@@ -38,7 +38,7 @@ export function renderAnnotations(svg: SVGSVGElement, drawings: Drawing[], aspec
   if (!views.has(svg)) svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
   svg.replaceChildren();
   for (const d of drawings) {
-    if (d.id === editingId) continue;
+    if (editingId !== undefined && d.id === editingId) continue;
     const start = d.points[0], end = d.points.at(-1)!;
     const x = start.x * width, y = start.y * height;
     let node: SVGElement;

@@ -1,8 +1,10 @@
 # Temporary stdio page bridge
 
-Work in progress: implementation checkpoint, not yet an accepted browser or
-macOS delivery. No persistent authorization or MCP application configuration
-is installed. Ordinary HTTP scoring remains a separate service capability.
+This optional source-checkout bridge is disabled on ordinary deployments. No
+persistent authorization or MCP application configuration is installed. Ordinary
+HTTP scoring remains a separate service capability. The bridge-owned host has
+empty media roots and temporary storage; it does not advertise durable scoring
+jobs and never registers a selected File as a backend source.
 
 From this source checkout with Node 24+ and the built frontend:
 
@@ -54,5 +56,92 @@ operation may finish, but reconnect is disabled until it settles. Late replies
 are fenced by document, grant epoch and command correlation. Backend HTTP jobs
 do not depend on this page channel, and revoking it never cancels such jobs.
 
-Targeted protocol, security/lifecycle and real-browser tests, operation discovery,
-and macOS Chrome/Node validation are still pending at this checkpoint.
+## Executable checks and support evidence
+
+The independent client in `scripts/testing/mcp-client.mjs` launches the real CLI
+and speaks only stdin/stdout JSON-RPC. It never imports bridge execution code.
+The browser test only selects actual Files, clicks consent/revoke UI and observes
+DOM/network. All Agent reads, pauses, seeks and annotations go through MCP.
+Controlled real browser response gates cover late replies and an ACK delayed
+after domain completion; waiting for delivery must not be mistaken for active
+business work. The original optional drawing-ID contract is retained; id-less
+ROI drawings must remain visible rather than be mistaken for the editing ID.
+
+```sh
+node --test test/unit/mcp-page-bridge.test.mjs \
+  test/unit/agent-http.test.ts test/unit/agent-tool-contract.test.ts
+node --test test/media/quality-jobs-http.test.ts
+npm run build
+node scripts/check-mcp-page-bridge-browser.mjs
+```
+
+For a Mac with Node 24+, installed Google Chrome and the existing Playwright
+project dependency (no persistent app configuration or extension):
+
+```sh
+npm run build
+MCP_BROWSER_CHANNEL=chrome node scripts/check-mcp-page-bridge-browser.mjs
+```
+
+The actual Chrome process is launched on that Mac; the real independent Node
+client still owns MCP stdin/stdout. Reports and screenshots are local test
+artifacts in `.run/mcp-page-bridge/`, never runtime uploads. Keep failed reports
+separate from the final candidate's successful evidence.
+
+| Host | Evidence |
+| --- | --- |
+| Linux / Node 24.19 / Chromium 153.0.8010.12 | Development real-MCP/browser closure verified; 36 checks including two Files/tabs, read-only denials, visible ROI, exact seek, confirmed receipt deduplication, lost writes, cancellation, delayed ACK/old command, source replacement, reload, close and EOF. |
+| macOS / installed Chrome + Node | Required local verification pending; not certified by the Linux result. |
+| Other browsers/platforms and native packaged MCP entry | Not certified by this source-checkout delivery. |
+
+Node protocol tests cover both protocol eras, real EOF/oversized shutdown, exact
+Host/Origin plus document credential, untrusted client declarations, fixed schemas,
+bounded queue, cancellation without a later response and real 15-second dispatched
+deadline. Existing no-frontend HTTP H.2648/HEVC8/HEVC10 jobs verify scoring remains
+independent. Broader performance and prior negative results are unchanged.
+
+## Calls and recovery
+
+First perform the supported MCP lifecycle, then tools/list and get_bridge_status.
+The page must explicitly grant a scope before any of the following calls. For
+example, send a tools/call with name seek_review and arguments:
+
+```json
+{"epoch":"EXACT_EPOCH_FROM_STATUS","operationId":"explicit-seek-1","input":{"ptsUs":500000}}
+```
+
+For get_review_marks, input accepts limit 1..4 and an exclusive afterId; a removed
+cursor requires reading again without it. No timestamps, file names or similar
+frames are guessed or aligned. The only write targets are this page's existing
+facade operations; annotation creation requires an already paused drawn frame.
+
+- host-unavailable / stale epoch: reopen the owned page, review and explicitly
+  reconnect. No automatic reconnect or attachment to another window.
+- scope-denied: the call did not run. Change scopes only through user revocation
+  and explicit consent; a client label is never permission.
+- outcome-unknown: retain the exact operationId/epoch/correlation and inspect
+  get_bridge_receipt plus the original page. Do not automatically replay or pick
+  a new operationId. Cancellation/revocation does not roll back a started action.
+- not-executed: a queued action was never dispatched. Its old receipt remains
+  terminal; any new attempt needs an explicit decision, never an automatic loop.
+- operation-conflict: the key already binds different input/epoch. Do not use a
+  new key to bypass an unknown old action. Confirmed exact calls return the old
+  result without running again.
+- queue-full / receipt-budget-full: at most 8 pending calls and 64 write receipts.
+  Receipts are not evicted to permit duplicate execution. A new process needs
+  fresh consent; absence of a receipt after restart does not prove no old effect.
+- origin-host-denied: use the exact printed loopback URL in the address bar.
+  Do not disable browser/Origin protections, add a proxy or change certificate trust.
+- document-credential-required / document-budget: reload for a fresh document;
+  inactive document credentials expire after five minutes (8 documents maximum).
+  A restored back/forward document is retired and needs a reload, not silent reuse.
+
+The page poll is bounded to 1 second, its lease to 4 seconds and command lifetime
+to 15 seconds. Messages are at most 64 KiB inbound, results 48 KiB, stdout frames
+128 KiB; outbound buffering is bounded. Legacy request IDs cannot be reused in
+one session and their bounded history permits 4096 requests before an explicit
+restart. Large read results fail explicitly rather than truncate or upload media.
+Closing the panel keeps the grant visible on the MCP indicator; Revoke is the
+explicit disconnect. An executing facade operation settles before reconnect is
+allowed; waiting for its delivery ACK is fenced separately from physical work.
+

@@ -2,7 +2,7 @@ import {SLOTS} from '../review/model.ts';
 import {ANNOTATION_COORD_LIMIT} from '../review/annotation.ts';
 import type {ToolInputSchema} from './tool-input.ts';
 
-export const PAGE_BRIDGE_LIMITS=Object.freeze({requestBytes:64*1024,resultBytes:48*1024,stdioBytes:128*1024,queued:8,receipts:64,timeoutMs:15000,pollMs:1000,leaseMs:4000});
+export const PAGE_BRIDGE_LIMITS=Object.freeze({requestBytes:64*1024,resultBytes:48*1024,stdioBytes:128*1024,queued:8,receipts:64,legacyRequestIds:4096,timeoutMs:15000,pollMs:1000,leaseMs:4000});
 export type PageScope='read'|'view'|'annotate';
 const schema=(properties:Record<string,ToolInputSchema>={},required:string[]=[]):ToolInputSchema=>({type:'object',properties,required,additionalProperties:false});
 const drawing:ToolInputSchema={type:'object',properties:{tool:{enum:['pen','ellipse','rect','line','text']},points:{type:'array',minItems:1,maxItems:4000,items:{type:'object',properties:{x:{type:'number',minimum:-ANNOTATION_COORD_LIMIT,maximum:ANNOTATION_COORD_LIMIT},y:{type:'number',minimum:-ANNOTATION_COORD_LIMIT,maximum:ANNOTATION_COORD_LIMIT}},required:['x','y'],additionalProperties:false}},text:{type:'string',maxLength:2000},id:{type:'string',maxLength:100},color:{type:'string',pattern:'^#[0-9a-fA-F]{6}$'},strokeWidth:{type:'number',exclusiveMinimum:0,maximum:64},width:{type:'number',exclusiveMinimum:0,maximum:.1},fontSize:{type:'number',exclusiveMinimum:0,maximum:1}},required:['tool','points'],additionalProperties:false};
@@ -20,3 +20,11 @@ export type PageToolName=keyof typeof PAGE_TOOLS;
 export const bridgeCallSchema=(name:PageToolName)=>schema({epoch:{type:'string',minLength:1,maxLength:80},operationId:{type:'string',pattern:'^[A-Za-z0-9._:-]{1,80}$'},input:PAGE_TOOLS[name].inputSchema},PAGE_TOOLS[name].scope==='read'?['epoch','input']:['epoch','operationId','input']);
 export type PageCommand={correlation:string;epoch:string;name:PageToolName;input:unknown;operationId?:string};
 export const BRIDGE_PATH='/api/page-bridge';
+export const PAGE_MCP_VERSIONS=['2026-07-28','2025-11-25'] as const;
+
+const empty={type:'object' as const,properties:{},additionalProperties:false as const};
+export const MCP_PAGE_TOOLS=[
+  {name:'get_bridge_status',description:'Read temporary page availability, explicitly granted scopes and exact epoch. No page File or annotation data before consent.',inputSchema:empty,annotations:{readOnlyHint:true}},
+  {name:'get_bridge_receipt',description:'Read a bounded process-lifetime write receipt by original operationId. Unknown never means rolled back; do not replay or use a new key automatically.',inputSchema:{...empty,properties:{operationId:{type:'string' as const,minLength:1,maxLength:80}},required:['operationId']},annotations:{readOnlyHint:true}},
+  ...Object.entries(PAGE_TOOLS).map(([name,d])=>({name,description:d.description+' Requires an explicit page epoch; writes require a stable operationId. The bridge never retries an uncertain write.',inputSchema:bridgeCallSchema(name as PageToolName),annotations:{readOnlyHint:d.scope==='read',destructiveHint:d.scope!=='read',idempotentHint:false,openWorldHint:false}}))
+];
