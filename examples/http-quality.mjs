@@ -28,6 +28,7 @@ function completeAcknowledgement(id,value,body,params,response){
  if(id==='identity.select')return record(value.actor)&&selectedIdentityCookie(response,value.actor.id)!==null;
  if(id==='relation.create')return typeof value.replayed==='boolean'&&record(value.relation)&&nonempty(value.relation.id)&&value.relation.revision===1;
  if(id==='plan.create')return typeof value.replayed==='boolean'&&record(value.plan)&&nonempty(value.plan.id)&&nonempty(value.plan.state);
+ if(id.endsWith('.reexecute'))return typeof value.replayed==='boolean'&&record(value.job)&&nonempty(value.job.id)&&record(value.receipt)&&value.receipt.parentId===params.id&&value.receipt.jobId===value.job.id&&value.receipt.request.planDigest===body.planDigest&&JSON.stringify(value.receipt.request)===JSON.stringify(body)&&record(value.job.retryOf)&&value.job.retryOf.retryOf===params.id;
  if(['library.prepare','single.submit','plan.execute','vmaf.submit'].includes(id))return typeof value.replayed==='boolean'&&record(value.job)&&nonempty(value.job.id)&&nonempty(value.job.state);
  if(['range.candidates','vmaf.candidates'].includes(id))return record(value.policy)&&value.policy.space===body.space&&Array.isArray(value.selected)&&Array.isArray(value.createdIds)&&value.createdIds.every(nonempty);
  if(id==='evidence.candidate')return value.id===body.id&&value.space===params.space&&Number.isSafeInteger(value.revision)&&value.revision>0&&record(value.document);
@@ -121,6 +122,37 @@ export async function runHttpQuality(serverURL,input={},options={}){
  const tasks=['identity','library','quality.correspondence',`quality.${mode}`,'evidence'];
  for(const id of tasks){const t=catalog.entries.find(t=>t.id===id);if(!t)stop('missing-task',`Task ${id} unavailable.`);await request(t.links.guide,{text:true});const detail=await get(t.links.describe);if(detail.schema!=='voidplayer-agent-task'||detail.version!==1)stop('task-version','Unsupported task description.');for(const op of detail.operations)operations.set(op.id,op);}
  const report={schema:'voidplayer-http-quality-example',version:1,mode,writesAuthorized:Object.keys(allow).filter(k=>allow[k]),capabilities:manifest.capabilities.filter(c=>['library.discovery','library.preparations','quality.'+mode,'quality.jobs'].includes(c.id)),discovery:[],next:[]};
+ // Reexecution selects an existing owned job; it never rediscovers, prepares,
+ // repairs a plan or silently changes the original source/recipe/model.
+ if(input.reexecution){
+  const intent=input.reexecution,id=intent.jobId;
+  if(typeof id!=='string'||typeof intent.reason!=='string')stop('explicit-reexecution-required','Supply the original jobId and explicit reason.');
+  if(!actor){if(!input.identity)stop('identity-required','Select the original actor explicitly; never recreate an identity after uncertainty.');await write('identity.select',input.identity,'identity');}
+  report.actor={id:actor};report.original=await read(`${mode}.get`,{id});report.chain=await read(`${mode}.reexecutions`,{id});
+  // A plan POST is explicitly described as read-only. It is the only POST this
+  // default path performs and cannot create any durable work.
+  const op=await describe(`${mode}.reexecution-plan`);await checkActor();
+  if(!intent.request){report.reexecutionPlan=(await request(pathFor(op,{id}),{method:'POST',body:JSON.stringify({reason:intent.reason}),action:op.write.action})).value;}
+  if(!allow.reexecute){report.next=[op.links.guide,'Explicitly confirm the plan digest and full cost, then allow-reexecute. After an unknown POST retain its frozen request, actor and key; never use a replacement key.'];return report;}
+  if(intent.actor!==actor)stop('actor-changed','Explicit reexecution.actor must equal the original selected actor; pending operations cannot move between actors.');
+  const body=intent.request??{schema:'voidplayer-quality-reexecution',version:1,reason:intent.reason,planDigest:intent.confirmPlanDigest,confirm:intent.confirmCost};
+  if(body.reason!==intent.reason||!nonempty(body.planDigest)||!record(body.confirm))stop('explicit-cost-confirmation-required','Supply confirmPlanDigest and exact confirmCost from the read-only plan, or the frozen original request after an unknown result.');
+  if(report.reexecutionPlan&&(!report.reexecutionPlan.eligible||body.planDigest!==report.reexecutionPlan.digest||JSON.stringify(body.confirm)!==JSON.stringify(report.reexecutionPlan.cost)))stop('reexecution-blocked','The original conditions or explicit cost confirmation do not match; no computation was submitted.',{plan:report.reexecutionPlan});
+  const accepted=await write(`${mode}.reexecute`,body,'reexecute',{id});report.reexecutionReceipt=accepted.receipt;
+  const job=await observe(`${mode}.get`,{id:accepted.job.id},mode==='range'?v=>v.job:v=>v);report.job=job;
+  const completed=mode==='range'?job.job:job;
+  if(mode==='range'){report.results=[];for(let after=0,n=0;n<16;n++){const page=await read('range.results',{id:completed.id},{after,limit:4});report.results.push(...page.entries);if(page.nextAu===null)break;after=page.nextAu;}}
+  else report.result=await read(`${mode}.result`,{id:completed.id});
+  // Publication is always a separate, explicitly authorized policy/operation.
+  if(allow.candidate){
+   if(!input.candidate)stop('explicit-policy-required','Supply a complete explicit policy for the new result.');
+   let publication;
+   if(mode==='single'){const p=input.candidate;if(!p.id||!p.operationId||!p.space)stop('explicit-policy-required','Single candidate needs id, operationId and space.');const record=await write('evidence.candidate',{action:'create-quality-candidate',operationId:p.operationId,id:p.id,revision:0,client:{id:'http-quality-reexecution',kind:'agent'},candidate:{text:p.text,severity:p.severity},evidence:{jobId:completed.id,attemptId:completed.attempt.id,digest:completed.result.digest,side:p.side}},'candidate',{space:p.space});publication={createdIds:[record.id],policy:{space:p.space}};}
+   else publication=await write(`${mode}.candidates`,input.candidate,'candidate',{id:completed.id});
+   report.publication=publication;report.annotations=[];for(const id of publication.createdIds)report.annotations.push(await read('evidence.record',{space:publication.policy.space,id}));report.events=await read('evidence.events',{space:publication.policy.space},{after:0});
+  }
+  report.chain=await read(`${mode}.reexecutions`,{id});report.requests=requests;return report;
+ }
  // Bounded read-only discovery; caller chooses IDs/versions, never filenames or nearest PTS.
  const query=new URLSearchParams(input.query??{includeUnknown:'1',limit:'16'});query.delete('cursor');const firstQuery=query.toString();let cursor=null,restarts=0;
  for(let n=0;n<64;n++){
@@ -190,9 +222,9 @@ export async function runHttpQuality(serverURL,input={},options={}){
 }
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
- const [server,...args]=process.argv.slice(2),known={identity:'--allow-identity',prepare:'--allow-prepare',plan:'--allow-plan',compute:'--allow-compute',candidate:'--allow-candidate',retryUnknown:'--allow-retry-unknown'},files=args.filter(a=>!a.startsWith('--')),flags=args.filter(a=>a.startsWith('--'));
+ const [server,...args]=process.argv.slice(2),known={identity:'--allow-identity',prepare:'--allow-prepare',plan:'--allow-plan',compute:'--allow-compute',candidate:'--allow-candidate',reexecute:'--allow-reexecute',retryUnknown:'--allow-retry-unknown'},files=args.filter(a=>!a.startsWith('--')),flags=args.filter(a=>a.startsWith('--'));
  try{
-  if(!server||files.length>1||flags.some(f=>!Object.values(known).includes(f)))throw Error('Usage: node examples/http-quality.mjs SERVER_ORIGIN [input.json] [--allow-identity] [--allow-prepare] [--allow-plan] [--allow-compute] [--allow-candidate] [--allow-retry-unknown]');
+  if(!server||files.length>1||flags.some(f=>!Object.values(known).includes(f)))throw Error('Usage: node examples/http-quality.mjs SERVER_ORIGIN [input.json] [--allow-identity] [--allow-prepare] [--allow-plan] [--allow-compute] [--allow-candidate] [--allow-reexecute] [--allow-retry-unknown]');
   const input=files[0]?JSON.parse(await readFile(files[0],'utf8')):{},allow=Object.fromEntries(Object.entries(known).map(([key,flag])=>[key,flags.includes(flag)]));
   console.log(JSON.stringify(await runHttpQuality(server,input,{allow}),null,2));
  }catch(e){console.error(JSON.stringify({code:e.code??'client-error',error:e.message,details:e.details??null}));process.exitCode=1;}

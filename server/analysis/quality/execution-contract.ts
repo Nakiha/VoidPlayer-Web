@@ -18,9 +18,9 @@ export function executionEnvironment(coreDir:string,control:Int32Array,check:()=
     check();Atomics.add(control,1,1);let fd:number|undefined;
     try{fd=openSync(path.join(coreDir,file),'r');const stat=fstatSync(fd);
       if(!stat.isFile()||stat.size<1||stat.size>32*1024*1024||total+stat.size>REEXECUTION_LIMITS.maxReadBytes)throw new FramePairError('budget-exceeded','Execution asset witness exceeds its metadata budget');
-      const bytes=Buffer.alloc(stat.size);let offset=0;while(offset<bytes.length){check();const n=readSync(fd,bytes,offset,bytes.length-offset,offset);if(!n)throw new FramePairError('source-changed','Execution asset changed during witness read');offset+=n;}
+      const bytes=Buffer.alloc(Math.min(stat.size,64*1024)),hash=createHash('sha256');let offset=0;while(offset<stat.size){check();const n=readSync(fd,bytes,0,Math.min(bytes.length,stat.size-offset),offset);if(!n)throw new FramePairError('source-changed','Execution asset changed during witness read');hash.update(bytes.subarray(0,n));offset+=n;}
       const after=fstatSync(fd);if(after.size!==stat.size||after.mtimeMs!==stat.mtimeMs||after.ctimeMs!==stat.ctimeMs)throw new FramePairError('source-changed','Execution asset changed during witness read');
-      total+=bytes.length;return {file,sha256:createHash('sha256').update(bytes).digest('hex'),bytes:bytes.length};
+      total+=stat.size;return {file,sha256:hash.digest('hex'),bytes:stat.size};
     }finally{if(fd!==undefined)closeSync(fd);Atomics.sub(control,1,1);Atomics.notify(control,1);}
   });
   return {schema:'voidplayer-quality-execution-environment',version:1,runtime:process.versions.bun?'bun':'node',runtimeVersion:process.versions.bun??process.versions.node,recipe:'source-yuv-psnr-ssim-packet-identity-v1',assets};

@@ -1,3 +1,4 @@
+import {installQualityReexecution} from './quality-reexecution.ts';
 import {qualityVmafShell,installQualityVmaf} from './quality-vmaf.ts';
 import {installQualityCandidate} from '../ui/quality-candidate.ts';
 import { ssimPlan, SSIM_VARIANT } from '../../shared/analysis/quality/ssim.ts';
@@ -43,7 +44,7 @@ export function qualityJobsShell(){
     <p>${th(msg('qualityWorkflow.candidateNotice','候选页只读取已有可信缓存，不构建索引。容器关键帧标记不保证可测；执行时仍逐侧核验闭合 AU、颜色、版本和缓存身份。缓存缺失请先在缓存管理中显式构建。'))}</p>
     <p id="quality-form-status" role="alert"></p>
     <button id="quality-submit" class="admin-primary" type="submit" disabled>${th(msg('qualityWorkflow.submit','发起持久测量'))}</button>
-    <button id="quality-retry" type="button" hidden>${th(msg('qualityWorkflow.retry','使用原幂等键重试提交'))}</button>
+    <button id="quality-retry" type="button" hidden>${th(msg('reexecution.replaySubmission','重放原提交（不重新计算）'))}</button>
     <button id="quality-forget" type="button" hidden>${th(msg('qualityWorkflow.forget','结束此提交的重试，准备新请求'))}</button><p id="quality-submit-status" role="status"></p></form>
     <div class="admin-panel"><div class="admin-section-heading"><h2>${th(msg('qualityWorkflow.history','当前用户的服务端任务与历史'))}</h2><button id="quality-refresh">${th(msg('qualityWorkflow.refresh','刷新任务'))}</button></div><p id="quality-observer-status" role="status"></p><p id="quality-resources"></p><details><summary>${th(msg('qualityWorkflow.budgets','服务端资源计数与预算'))}</summary><pre id="quality-resource-json"></pre></details>
     <div class="quality-jobs-workspace"><div id="quality-job-list"></div><div id="quality-job-detail" hidden><h3 id="quality-job-title"></h3><p id="quality-job-state"></p><p id="quality-job-reason"></p><p id="quality-job-input"></p><button id="quality-cancel">${th(msg('qualityWorkflow.cancel','取消任务'))}</button><details><summary>${th(msg('qualityWorkflow.requestFacts','请求、attempt 与服务端事实'))}</summary><pre id="quality-job-json"></pre></details><div id="quality-job-result"></div></div></div></div>
@@ -61,6 +62,8 @@ export function installQualityJobs(signal:AbortSignal){
   const api=new QualityClient();let observer:QualityJobObserver|null=null,observation:QualityObservation|null=null;
   let active=false,enabled=false,scope=0,controller=new AbortController(),lastActor='',lastResult='',attachmentGeneration=0,attachmentBusy=false;
   let command:QualityAttachmentCommand|null=null,markNext:number|null=null,selectedMark:AnnotationRecord|null=null;
+  const reexecutionRoot=document.createElement('section');reexecutionRoot.id='quality-reexecution';$('job-detail').append(reexecutionRoot);
+  const reexecution=installQualityReexecution(reexecutionRoot,'single',signal,id=>{void observer?.select(id);});
   const initial=new URLSearchParams(location.search),initialSpace=initial.get('qualitySpace')??'default',initialMark=initial.get('qualityAnnotation');
   let seededMark=false,identityCheck=0;let expectedActor:string|null|undefined;
   const pickers=new Map<Side,{page:QualityFramePage|null;entry:LibraryEntry|null;target:PairTarget|null;sequence:number;offset:number|null;revision?:number}>();
@@ -110,7 +113,7 @@ export function installQualityJobs(signal:AbortSignal){
       if(list.children[index]!==button)list.insertBefore(button,list.children[index]??null);
     }
     for(const row of rows.values())row.remove();
-    const job=value.detail;$('job-detail').hidden=!job;$('attachment').hidden=!value.result;
+    const job=value.detail;if(job)reexecution.show(job.id);else reexecution.clear();$('job-detail').hidden=!job;$('attachment').hidden=!value.result;
     if(job){$('job-title').textContent=job.id;$('job-state').textContent=`${stateLabel(job.state)} · ${job.phase} · ${t(msg('qualityWorkflow.progress','已评分 {pairs}/1 对；已解码帧 {frames}'),{pairs:job.progress.scoredPairs,frames:job.progress.decodedFrames??t(msg('qualityWorkflow.unknown','未知'))})}`;
       $('job-input').textContent=sides.map(side=>`${sideLabel(side)}: ${job.input.request[side].mediaId}@${job.input.request[side].mediaVersion} · AU ${job.input.request[side].picture.au} · source PTS ${job.input.request[side].sourcePtsUs} µs`).join(' / ')+` · ROI ${JSON.stringify(job.input.request.roi)}`;
       $('job-reason').textContent=job.reason?`${job.reason.code}: ${job.reason.message}`:'';$('job-json').textContent=JSON.stringify(job,null,2);$('cancel').toggleAttribute('disabled',terminalQualityJob(job.state)||job.state==='cancelling');}
@@ -204,7 +207,7 @@ export function installQualityJobs(signal:AbortSignal){
   }
   async function start(){
     if(expectedActor!==undefined&&(currentActor()?.id??null)!==expectedActor)return;
-    clearFormError();observer?.dispose();observer=null;controller.abort();controller=new AbortController();scope++;lastActor=currentActor()?.id??'';enabled=false;lastResult='';observation=null;resetAttachment();
+    reexecution.clear();clearFormError();observer?.dispose();observer=null;controller.abort();controller=new AbortController();scope++;lastActor=currentActor()?.id??'';enabled=false;lastResult='';observation=null;resetAttachment();
     $('job-list').replaceChildren();$('job-detail').hidden=true;$('attachment').hidden=true;for(const id of ['job-json','job-title','job-input','job-result','job-state','job-reason'])$(id).replaceChildren();
     for(const [side,picker]of pickers){picker.sequence++;picker.target=null;picker.page=null;picker.entry=null;const root=document.querySelector<HTMLElement>(`[data-quality-source="${side}"]`)!;root.querySelector('[data-media-list]')!.replaceChildren();localizedText(root.querySelector<HTMLElement>('[data-source-status]')!,'');root.querySelector<HTMLElement>('[data-proof]')!.hidden=true;root.querySelector<HTMLSelectElement>('[data-frame]')!.replaceChildren(new Option('—',''));root.querySelector<HTMLElement>('[data-frame-more]')!.hidden=true;}
     $('owner').textContent=currentActor()?`${currentActor()!.name} · ${lastActor}`:'';
@@ -243,5 +246,5 @@ export function installQualityJobs(signal:AbortSignal){
   onLanguageChange(()=>{if(active&&observation&&currentActor()?.id===lastActor)render(observation);},signal);
   const timer=setInterval(()=>{if(active&&enabled&&!document.hidden&&currentActor()?.id===lastActor)void observer?.poll();},1000);
   signal.addEventListener('abort',()=>{clearInterval(timer);observer?.dispose();controller.abort();},{once:true});
-  return {activate(value:boolean){ranges.activate(value);correspondence.activate(value);vmaf.activate(value);if(active===value)return;active=value;if(value)void start();else{scope++;observer?.dispose();observer=null;controller.abort();}}};
+  return {activate(value:boolean){ranges.activate(value);correspondence.activate(value);vmaf.activate(value);if(active===value)return;active=value;if(value)void start();else{reexecution.clear();scope++;observer?.dispose();observer=null;controller.abort();}}};
 }

@@ -4375,6 +4375,74 @@
       "tracks": "number"
     }
   },
+  "reexecution.accepted": {
+    "source": "已取得原子受理回执。新计算由服务端持有；关闭观察不会取消它。",
+    "params": {}
+  },
+  "reexecution.blocked": {
+    "source": "原条件不能保持或任务尚未停止；不会创建新计算。",
+    "params": {}
+  },
+  "reexecution.clearRejected": {
+    "source": "结束服务端已明确拒绝的本地请求",
+    "params": {}
+  },
+  "reexecution.confirm": {
+    "source": "我确认按以上完整范围和预算重新计算",
+    "params": {}
+  },
+  "reexecution.execute": {
+    "source": "创建关联的新计算任务",
+    "params": {}
+  },
+  "reexecution.pendingOther": {
+    "source": "先查看此用户尚未确认的原重算请求",
+    "params": {}
+  },
+  "reexecution.preview": {
+    "source": "检查原条件并预览完整成本",
+    "params": {}
+  },
+  "reexecution.previous": {
+    "source": "查看上一次执行",
+    "params": {}
+  },
+  "reexecution.ready": {
+    "source": "条件核验通过。请确认完整范围与成本，再明确发起新计算。",
+    "params": {}
+  },
+  "reexecution.reason": {
+    "source": "重新计算原因",
+    "params": {}
+  },
+  "reexecution.rejected": {
+    "source": "服务端已明确拒绝此请求。可结束本地请求，或读取原任务链。",
+    "params": {}
+  },
+  "reexecution.replay": {
+    "source": "用冻结的原请求和原键获取重算回执",
+    "params": {}
+  },
+  "reexecution.replaySubmission": {
+    "source": "重放原提交（不重新计算）",
+    "params": {}
+  },
+  "reexecution.scope": {
+    "source": "重新计算创建关联的新任务，从头处理全部冻结输入，不复用旧分数。原任务、partial 证据与候选保留；不会自动发布新候选。重放原提交只查询原回执，不会重新计算。",
+    "params": {}
+  },
+  "reexecution.successor": {
+    "source": "查看已受理的新执行",
+    "params": {}
+  },
+  "reexecution.title": {
+    "source": "显式重新计算与追溯",
+    "params": {}
+  },
+  "reexecution.unknown": {
+    "source": "提交结果尚未确认。仅允许冻结的原 actor、原请求与原键回放；不要创建新键。",
+    "params": {}
+  },
   "resize.releaseToCollapse": {
     "source": "松开收起面板",
     "params": {}
@@ -5899,10 +5967,6 @@
   },
   "vmaf.recipe": {
     "source": "冻结的对应关系与测量 recipe",
-    "params": {}
-  },
-  "vmaf.retry": {
-    "source": "重试冻结的提交",
     "params": {}
   },
   "vmaf.scope": {

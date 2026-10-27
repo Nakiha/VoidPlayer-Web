@@ -4106,6 +4106,74 @@
     "source": "{tracks, plural, other {# 轨道}} · {marks, plural, other {# 标注}} · {time}",
     "translation": "{tracks, plural, one {# track} other {# tracks}} · {marks, plural, one {# mark} other {# marks}} · {time}"
   },
+  "reexecution.accepted": {
+    "source": "已取得原子受理回执。新计算由服务端持有；关闭观察不会取消它。",
+    "translation": "Atomic acceptance receipt received. The service owns the new computation; closing observation does not cancel it."
+  },
+  "reexecution.blocked": {
+    "source": "原条件不能保持或任务尚未停止；不会创建新计算。",
+    "translation": "Original conditions cannot be preserved or the job has not stopped. No new computation will be created."
+  },
+  "reexecution.clearRejected": {
+    "source": "结束服务端已明确拒绝的本地请求",
+    "translation": "End the local request explicitly rejected by the server"
+  },
+  "reexecution.confirm": {
+    "source": "我确认按以上完整范围和预算重新计算",
+    "translation": "I confirm recomputation of the full scope within the budgets above"
+  },
+  "reexecution.execute": {
+    "source": "创建关联的新计算任务",
+    "translation": "Create a linked computation job"
+  },
+  "reexecution.pendingOther": {
+    "source": "先查看此用户尚未确认的原重算请求",
+    "translation": "Inspect this user’s unconfirmed recomputation request first"
+  },
+  "reexecution.preview": {
+    "source": "检查原条件并预览完整成本",
+    "translation": "Check original conditions and preview the full cost"
+  },
+  "reexecution.previous": {
+    "source": "查看上一次执行",
+    "translation": "View the previous execution"
+  },
+  "reexecution.ready": {
+    "source": "条件核验通过。请确认完整范围与成本，再明确发起新计算。",
+    "translation": "Conditions verified. Confirm the full scope and cost before explicitly starting new computation."
+  },
+  "reexecution.reason": {
+    "source": "重新计算原因",
+    "translation": "Reason for recomputation"
+  },
+  "reexecution.rejected": {
+    "source": "服务端已明确拒绝此请求。可结束本地请求，或读取原任务链。",
+    "translation": "The server explicitly rejected this request. You can end the local request or inspect the original execution chain."
+  },
+  "reexecution.replay": {
+    "source": "用冻结的原请求和原键获取重算回执",
+    "translation": "Retrieve the receipt using the frozen original request and key"
+  },
+  "reexecution.replaySubmission": {
+    "source": "重放原提交（不重新计算）",
+    "translation": "Replay the original submission (no recomputation)"
+  },
+  "reexecution.scope": {
+    "source": "重新计算创建关联的新任务，从头处理全部冻结输入，不复用旧分数。原任务、partial 证据与候选保留；不会自动发布新候选。重放原提交只查询原回执，不会重新计算。",
+    "translation": "Recomputation creates a linked job and processes all frozen inputs from the start, without reusing old scores. Original jobs, partial evidence and candidates are retained. New candidates are never published automatically. Replaying a submission retrieves its original receipt without recomputation."
+  },
+  "reexecution.successor": {
+    "source": "查看已受理的新执行",
+    "translation": "View the accepted new execution"
+  },
+  "reexecution.title": {
+    "source": "显式重新计算与追溯",
+    "translation": "Explicit recomputation and history"
+  },
+  "reexecution.unknown": {
+    "source": "提交结果尚未确认。仅允许冻结的原 actor、原请求与原键回放；不要创建新键。",
+    "translation": "Submission outcome is unconfirmed. Replay only the frozen original actor, request and key; do not create a new key."
+  },
   "resize.releaseToCollapse": {
     "source": "松开收起面板",
     "translation": "Release to collapse panel"
@@ -5507,10 +5575,6 @@
   "vmaf.recipe": {
     "source": "冻结的对应关系与测量 recipe",
     "translation": "Frozen correspondence and recipe"
-  },
-  "vmaf.retry": {
-    "source": "重试冻结的提交",
-    "translation": "Retry frozen submission"
   },
   "vmaf.scope": {
     "source": "需要已安装的 Linux x64 组件及显式提交的时钟对应计划。仅限 2–32 个连续呈现帧；不支持跨帧抽样、缺口、负 PTS 或 VFR。限范围 BT.709 SDR、8/10 位 YUV420、方形像素，不裁剪、旋转或转换。v0.6.1 是固定基线，并非最新模型。分数属于整帧时间序列事实，不是热图或人工缺陷判断；未认证引用完整性，无法检测错误隐藏。",

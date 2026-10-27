@@ -1,3 +1,4 @@
+import {installQualityReexecution} from './quality-reexecution.ts';
 import {t,th,msg} from '../i18n.ts';
 import {currentActor} from '../services/identity.ts';
 import {QualityClient} from '../services/quality-jobs.ts';
@@ -37,8 +38,10 @@ export function installQualityRanges(signal:AbortSignal){
   let browsingMore=false,listGeneration=0,resultGeneration=0,viewGeneration=0,detailGeneration=0,publicationToken='';
   const valid=(owner:string,s:AbortSignal)=>active&&!s.aborted&&actor===owner&&currentActor()?.id===owner;
   const request=<T>(owner:string,url:string,s:AbortSignal,method='GET',body?:unknown)=>api.request<T>(owner,url,s,method,body);
+  const reexecutionRoot=document.createElement('section');reexecutionRoot.id='quality-range-reexecution';$('detail').append(reexecutionRoot);
+  const reexecution=installQualityReexecution(reexecutionRoot,'range',signal,id=>window.dispatchEvent(new CustomEvent('voidplayer-quality-range-select',{detail:{id,actor:currentActor()?.id}})));
   function reset(){
-    controller.abort();controller=new AbortController();
+    reexecution.clear();controller.abort();controller=new AbortController();
     actor=currentActor()?.id??'';selected='';after=0;next=null;revision=0;
     browsingMore=false;publicationToken='';listGeneration++;resultGeneration++;viewGeneration++;detailGeneration++;busy=false;
     $('list').replaceChildren();$('detail').hidden=true;$('more').hidden=true;$('status').textContent='';
@@ -56,7 +59,7 @@ export function installQualityRanges(signal:AbortSignal){
         let button=rows.get(job.id);rows.delete(job.id);
         if(!button){
           button=document.createElement('button');button.type='button';button.dataset.rangeId=job.id;
-          button.onclick=()=>{if(!valid(owner,s))return;selected=job.id;revision=0;next=null;publicationToken='';viewGeneration++;detailGeneration++;resultGeneration++;busy=false;$('detail').hidden=true;$('results').replaceChildren();$('candidates').replaceChildren();$('status').textContent='';void detail();};
+          button.onclick=()=>{if(!valid(owner,s))return;reexecution.clear();selected=job.id;revision=0;next=null;publicationToken='';viewGeneration++;detailGeneration++;resultGeneration++;busy=false;$('detail').hidden=true;$('results').replaceChildren();$('candidates').replaceChildren();$('status').textContent='';void detail();};
         }
         const text=`${job.id} · ${job.state} · ${job.summary.scoredPairs}`;
         if(button.textContent!==text)button.textContent=text;
@@ -84,7 +87,7 @@ export function installQualityRanges(signal:AbortSignal){
     try{
       const response=await request<{job:QualityRangeJob;coverage:unknown;progress:unknown;publication:{policy:{space:string};createdIds:string[]}|null}>(owner,`/api/quality/ranges/${id}`,s);
       if(!valid(owner,s)||selected!==id||view!==viewGeneration)return;
-      const job=response.job;$('detail').hidden=false;$('title').textContent=`${id} · ${job.state} · ${job.summary.scoredPairs}/${job.plan.targets}`;
+      const job=response.job;reexecution.show(job.id);$('detail').hidden=false;$('title').textContent=`${id} · ${job.state} · ${job.summary.scoredPairs}/${job.plan.targets}`;
       $('coverage').textContent=JSON.stringify({coverage:response.coverage,progress:response.progress},null,2);
       $('summary').textContent=JSON.stringify(job.summary,null,2);$('plan').textContent=JSON.stringify(job.plan,null,2);
       ($('cancel') as HTMLButtonElement).disabled=!['queued','running'].includes(job.state);
@@ -109,7 +112,7 @@ export function installQualityRanges(signal:AbortSignal){
   window.addEventListener('voidplayer-quality-range-select',event=>{
     const request=(event as CustomEvent<{id:string;actor:string}>).detail;
     if(!active||request?.actor!==actor||currentActor()?.id!==actor||!/^[a-f0-9-]{36}$/.test(request.id))return;
-    selected=request.id;revision=0;next=null;publicationToken='';viewGeneration++;detailGeneration++;resultGeneration++;busy=false;
+    reexecution.clear();selected=request.id;revision=0;next=null;publicationToken='';viewGeneration++;detailGeneration++;resultGeneration++;busy=false;
     $('detail').hidden=true;$('results').replaceChildren();$('candidates').replaceChildren();void detail();
   },{signal});
   $('refresh').onclick=()=>{void list();void detail();};$('more').onclick=()=>void list(true);$('results-more').onclick=()=>void results(true);

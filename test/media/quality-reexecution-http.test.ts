@@ -9,7 +9,7 @@ import {nativeFixture,until} from '../helpers/native-vmaf.mjs';
 import {SSIM_VARIANT} from '../../shared/analysis/quality/ssim.ts';
 
 for(const kind of ['single','range','vmaf'] as const)test(`real ${kind}: stopped failure → explicit full reexecution → new result and candidate, immutable original`,{timeout:180000},async t=>{
-  const f=await nativeFixture({distorted:true,containers:kind==='single'?['flv','mp4']:kind==='range'?['mp4','flv']:['mp4','mp4']});t.after(()=>f.close());
+  const f=await nativeFixture({depth:kind==='range'?10:8,distorted:true,containers:kind==='single'?['flv','mp4']:kind==='range'?['mp4','flv']:['mp4','mp4']});t.after(()=>f.close());
   const library=f.service.library,runner=library.quality as any,create=runner.createWorker;let measureCount=0,gateAt=kind==='single'?1:2,gate:Int32Array|undefined;
   runner.createWorker=(data:any)=>{
     if(data.mode==='measure'&&++measureCount===gateAt){gate=new Int32Array(new SharedArrayBuffer(20));return new Worker(new URL('../helpers/quality-phase-worker.ts',import.meta.url),{workerData:{...data,hangPhase:'decode',phaseState:gate.buffer}});}

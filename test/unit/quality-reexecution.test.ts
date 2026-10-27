@@ -9,6 +9,9 @@ import {ReexecutionLedger} from '../../server/analysis/quality/reexecution-ledge
 import {nextReexecutionLineage,reexecutionRequest,reexecutionReason} from '../../shared/analysis/quality/reexecution.ts';
 import type {QualityExecutionContract,ReexecutionRequest} from '../../shared/analysis/quality/reexecution.ts';
 import {jobInput} from '../helpers/quality-job-fixture.ts';
+import {QualityReexecutionClient} from '../../src/services/quality-reexecution.ts';
+import {ApiError} from '../../src/services/api-error.ts';
+import type {ReexecutionPlan} from '../../shared/analysis/quality/reexecution.ts';
 
 const actor={id:'reexecution-owner',name:'Owner'},hash='a'.repeat(64);
 const contract:QualityExecutionContract={schema:'voidplayer-quality-execution-contract',version:1,environment:{schema:'voidplayer-quality-execution-environment',version:1,runtime:'node',runtimeVersion:process.versions.node,recipe:'source-yuv-psnr-ssim-packet-identity-v1',assets:[{file:'voidplayer-core.wasm',sha256:hash,bytes:123}]},sources:[]};
@@ -19,6 +22,38 @@ test('explicit full-scope confirmation and bounded lineage keep attempt and exec
   const first=nextReexecutionLineage('original',undefined,request.reason,hash,100);assert.equal(first.generation,2);assert.equal(first.rootJobId,'original');
   const second=nextReexecutionLineage('second',first,'Another explicit decision',hash,200);assert.equal(second.generation,3);assert.equal(second.retryOf,'second');assert.equal(second.rootJobId,'original');
   assert.throws(()=>nextReexecutionLineage('last',{...second,generation:32},'stop',hash,300));
+});
+class MemoryStorage{
+  values=new Map<string,string>();fail=false;
+  get length(){return this.values.size;}key(index:number){return [...this.values.keys()][index]??null;}
+  getItem(key:string){return this.values.get(key)??null;}removeItem(key:string){this.values.delete(key);}
+  setItem(key:string,value:string){if(this.fail)throw Error('Storage unavailable');this.values.set(key,value);}
+}
+const parentId='00000000-0000-4000-8000-000000000001',newId='00000000-0000-4000-8000-000000000002';
+const clientPlan={schema:'voidplayer-quality-reexecution-plan',version:1,kind:'single',jobId:parentId,state:'failed',revision:2,reason:request.reason,eligible:true,blocks:[],digest:hash,cost:request.confirm,previous:{reason:null,result:null},lineage:null,contract:null,inputDigest:hash,next:{plan:'',execute:'',chain:''}} as ReexecutionPlan;
+test('GUI empty or malformed success keeps the exact actor/body/key; same-key receipt replay clears it only after ownership validation',async()=>{
+  for(const bad of [null,{}, {job:{id:newId,state:'queued'},replayed:false}]){
+    const storage=new MemoryStorage(),calls:any[]=[];let valid=false,pending:any;
+    const api={async request<T>(...args:any[]){calls.push(args);if(!valid)return bad as T;const lineage=nextReexecutionLineage(parentId,undefined,pending.body.reason,pending.body.planDigest,2000);return {job:{id:newId,state:'queued',retryOf:lineage},replayed:true,receipt:{actorId:actor.id,parentId,jobId:newId,key:pending.key,request:pending.body,lineage}} as T;}};
+    const client=new QualityReexecutionClient(storage,'http://localhost:8123',api,()=> 'frozen-browser-key');pending=client.freeze(actor.id,'single',parentId,clientPlan);
+    await assert.rejects(client.send(pending,actor.id,new AbortController().signal),/acknowledgement/);assert.equal(client.pending(actor.id,'single')!.key,pending.key);assert.throws(()=>client.clearRejected(actor.id,'single'),/unknown/);
+    await assert.rejects(client.send(pending,'another-actor',new AbortController().signal),/Actor changed/);assert.equal(calls.length,1);
+    valid=true;const accepted=await client.send(pending,actor.id,new AbortController().signal);assert.equal(accepted.job.id,newId);assert.equal(client.pending(actor.id,'single'),null);assert.equal(calls.length,2);assert.equal(JSON.stringify(calls[0][4]),JSON.stringify(calls[1][4]));assert.equal(calls[0][5],calls[1][5]);assert.equal(calls[0][0],actor.id);
+  }
+});
+test('GUI transport/body-budget failures stay unknown; only a definite parsed 4xx can end the local request',async()=>{
+  const storage=new MemoryStorage();let known=false;
+  const api={async request<T>():Promise<T>{if(known)throw new ApiError(409,'Frozen conditions changed','reexecution-blocked');throw Error('Response byte budget or truncated body');}};
+  const client=new QualityReexecutionClient(storage,'http://localhost:8123',api,()=> 'frozen-browser-key'),p=client.freeze(actor.id,'single',parentId,clientPlan);
+  await assert.rejects(client.send(p,actor.id,new AbortController().signal));assert.equal(client.pending(actor.id,'single')?.rejected,undefined);assert.throws(()=>client.clearRejected(actor.id,'single'));
+  known=true;await assert.rejects(client.send(p,actor.id,new AbortController().signal),{status:409});assert.equal(client.pending(actor.id,'single')!.rejected!.status,409);client.clearRejected(actor.id,'single');assert.equal(client.pending(actor.id,'single'),null);
+});
+test('GUI persistence failure or unresolved capacity never sends/evicts, and origins do not inherit another server request',()=>{
+  const storage=new MemoryStorage();storage.fail=true;let calls=0;const api={async request<T>():Promise<T>{calls++;throw Error('Must not send');}};
+  const client=new QualityReexecutionClient(storage,'http://localhost:8123',api,()=> 'frozen-browser-key');assert.throws(()=>client.freeze(actor.id,'single',parentId,clientPlan),/Storage/);assert.equal(calls,0);
+  storage.fail=false;const p=client.freeze(actor.id,'single',parentId,clientPlan);assert.equal(new QualityReexecutionClient(storage,'http://localhost:8124',api).pending(actor.id,'single'),null);
+  assert.throws(()=>client.freeze(actor.id,'single',newId,{...clientPlan,jobId:newId}),/existing unknown/);assert.equal(client.pending(actor.id,'single')!.bodyJson,p.bodyJson);
+  for(let n=0;n<15;n++)storage.setItem('voidplayer-quality-reexecution:other-'+n,'unknown');assert.throws(()=>client.freeze('other','range',parentId,{...clientPlan,kind:'range'}),/history is full/);assert.equal(storage.length,16);
 });
 test('new job and exact reexecution receipt commit atomically; replay/restart never fork or rewrite the original',async t=>{
   const directory=await mkdtemp(path.join(tmpdir(),'vp-reexecution-ledger-')),file=path.join(directory,'jobs.sqlite');let store=new QualityJobStore(file,1000);t.after(async()=>{store.close();await rm(directory,{recursive:true,force:true});});

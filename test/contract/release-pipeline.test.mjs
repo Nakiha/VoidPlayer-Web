@@ -112,8 +112,8 @@ test('cache suite runs once in its own required job with the same pinned prepara
   const jobs = workflowJobs(workflow), cache = jobs['cache-browser'];
   const manifest = JSON.parse(await readFile(new URL('../../scripts/testing/manifest.json', import.meta.url), 'utf8'));
   const cases = manifest.cases.filter(row => row.suites.includes('ci-cache'));
-  assert.equal(cases.length, 46);
-  assert.equal(new Set(cases.map(row => row.id)).size, 46);
+  assert.equal(cases.length, 48);
+  assert.equal(new Set(cases.map(row => row.id)).size, 48);
   assert.deepEqual(cases.find(row=>row.id==='browser-mcp-page-bridge-chromium')?.command,['node','scripts/check-mcp-page-bridge-browser.mjs']);
   assert.equal(cases.filter(row=>row.id!=='browser-mcp-page-bridge-chromium').length,45,'retain the existing cache matrix alongside the required MCP case');
   assert.ok(cases.every(row => row.required && row.kind === 'regression'));
