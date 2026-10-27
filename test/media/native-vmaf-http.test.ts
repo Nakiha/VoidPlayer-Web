@@ -2,8 +2,10 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import {readFile,writeFile,copyFile} from 'node:fs/promises';import path from 'node:path';import {randomUUID} from 'node:crypto';
 import {nativeFixture,officialOracle,nativeComponent} from '../helpers/native-vmaf.mjs';
 import {qualityEvidenceValue,qualityEvidenceList} from '../../shared/review/quality-evidence.ts';
-for(const [depth,distorted,model,codec]of [[8,false,'vmaf_v0_6_1','h264'],[8,true,'vmaf_v0_6_1neg','h264'],[10,true,'vmaf_v0_6_1','hevc'],[8,true,'vmaf_v0_6_1','hevc'],[10,true,'vmaf_v0_6_1','h264']] as const)test(`real native VMAF HTTP ${codec}/${depth} ${distorted?'distorted':'same'} ${model}`,{timeout:120000},async t=>{
- const f=await nativeFixture({depth,distorted,codec});t.after(()=>f.close());const input={...f.input,model};
+const existing=[[8,false,'vmaf_v0_6_1','h264'],[8,true,'vmaf_v0_6_1neg','h264'],[10,true,'vmaf_v0_6_1','hevc'],[8,true,'vmaf_v0_6_1','hevc'],[10,true,'vmaf_v0_6_1','h264']] as const;
+const mixed=([['h264',8],['hevc',8],['hevc',10]] as const).flatMap(([codec,depth])=>([['mp4','mp4'],['mp4','flv'],['flv','mp4']] as const).map(containers=>({depth,distorted:true,model:'vmaf_v0_6_1neg' as const,codec,containers})));
+for(const {depth,distorted,model,codec,containers}of [...existing.map(([depth,distorted,model,codec])=>({depth,distorted,model,codec,containers:undefined})),...mixed])test(`real native VMAF HTTP ${codec}/${depth} ${(containers??['flv','flv']).join('→')} ${distorted?'distorted':'same'} ${model}`,{timeout:120000},async t=>{
+ const f=await nativeFixture({depth,distorted,codec,containers});t.after(()=>f.close());const input={...f.input,model};
  const pre=await f.json('/api/quality/vmaf/preflight',input);assert.equal(pre.nativeExecution,false);assert.equal(pre.rawColorVerification,'required-at-execution');
  const r=await f.request('/api/quality/vmaf/jobs',input,'one-job');assert.equal(r.status,202);const j=(await r.json()).job;
  assert.equal((await f.request('/api/quality/vmaf/jobs',input,'one-job',{'x-voidplayer-actor':'wrong'})).status,409);
@@ -17,6 +19,10 @@ for(const [depth,distorted,model,codec]of [[8,false,'vmaf_v0_6_1','h264'],[8,tru
  const page=await f.json(`/api/quality/vmaf/jobs/${j.id}/frames?limit=4`);assert.equal(page.entries.length,4);assert.equal(page.next,4);
  const policy={space:'default',side:'reference',maxScore:100,limit:1,minFrameDistance:1,text:'Explicit temporal full-frame measurement candidate, not a defect judgment',severity:3};
  const p=await f.json(`/api/quality/vmaf/jobs/${j.id}/candidates`,policy);assert.equal(p.createdIds.length,1);const a=await f.json('/api/annotations/spaces/default/'+p.createdIds[0]),e=a.document.mark.qualityEvidence[0];assert.equal(e.verification,'server-verified');assert.equal(e.value.sequenceVmaf.spatial,'full-frame-temporal-score-not-localized');assert.equal(e.value.sequenceVmaf.score,oracle.result.frames[e.value.sequenceVmaf.index].metrics.vmaf);assert.doesNotThrow(()=>qualityEvidenceValue(e.value));
+ const expectedVersion=containers?.includes('mp4')?2:1;assert.equal(e.value.version,expectedVersion);assert.equal(e.value.sequenceVmaf.version,expectedVersion);
+ for(const side of ['reference','distorted'] as const){const mp4=e.value.sources[side].binding.indexIdentity.kind==='mp4';for(const frame of e.value.sequenceVmaf.sequence.pairs){assert.equal(!!frame[side].container,mp4);if(mp4){assert.equal(frame[side].container.sample.ordinal,frame[side].au);assert.equal(frame[side].container.sample.ptsUs,frame[side].sourcePtsUs);}}}
+ if(expectedVersion===2){const old=structuredClone(e.value);old.sequenceVmaf.version=1;assert.throws(()=>qualityEvidenceValue(old));const bad=structuredClone(e.value),side=bad.sources.reference.binding.indexIdentity.kind==='mp4'?'reference':'distorted';bad.sequenceVmaf.sequence.pairs.at(-1)[side].container.sample.ctsTicks++;assert.throws(()=>qualityEvidenceValue(bad));}
+
  const forged=structuredClone(e.value);forged.sequenceVmaf.recipe.preprocessing='resize';assert.throws(()=>qualityEvidenceValue(forged));
  assert.deepEqual((await f.json(`/api/quality/vmaf/jobs/${j.id}/candidates`,policy)).createdIds,p.createdIds);
  const historical=qualityEvidenceList([e]);assert.equal(historical[0].verification,'historical');assert.deepEqual(historical[0].value.sequenceVmaf,e.value.sequenceVmaf);

@@ -12,7 +12,7 @@ test('sequence order is presentation order, rejects holes/stride/duplicates/nega
  let f=make();const s=vmafSequence(f.snapshot as any,f.indexes as any,250000);assert.deepEqual(s.pairs.map(p=>p.reference.picture.au),[0,2,1,3]);assert.equal(s.referenceIntegrity,'not-certified');assert.equal(s.concealmentDetection,'unavailable');
  for(const alter of [(f:any)=>f.snapshot.value.rows[1].status='unmapped',(f:any)=>f.snapshot.value.request.sampling.mode='stride',(f:any)=>f.indexes[0].packets.push({pts:250000}),(f:any)=>f.snapshot.value.rangePlan.input.pairs[0].reference.sourcePtsUs=-1,(f:any)=>f.snapshot.value.rangePlan.input.pairs[1].reference.sourcePtsUs=260000,(f:any)=>f.snapshot.value.rangePlan.input.pairs[0].distorted.sourcePtsUs=1]){f=make();alter(f);assert.throws(()=>vmafSequence(f.snapshot as any,f.indexes as any,250000));}
  f=make();assert.throws(()=>vmafSequence(f.snapshot as any,f.indexes as any,100000));
- for(const side of ['reference','distorted']as const){f=make();f.snapshot.value.sources[side].binding.indexIdentity.kind='mp4';assert.throws(()=>vmafSequence(f.snapshot as any,f.indexes as any,250000),/FLV-only/);}
+ for(const side of ['reference','distorted']as const){f=make();f.snapshot.value.sources[side].binding.indexIdentity.kind='mp4';assert.throws(()=>vmafSequence(f.snapshot as any,f.indexes as any,250000),/matching server producer/);}
 });
 test('optional native capability never claims installed platform by code presence; existing single-frame capabilities stay separate',()=>{
  const common={capabilities:serviceCapabilities(true,false),libraryReady:true,qualityJobsEnabled:true,actor:{id:'owner',name:'Owner'}};

@@ -2,9 +2,9 @@ import {readFileSync,openSync,writeSync,closeSync} from 'node:fs';
 import path from 'node:path';import {pathToFileURL} from 'node:url';import {createHash} from 'node:crypto';
 import {openIndexDatabase} from '../../sqlite.ts';import {FrameIndexStore} from '../../frame-index-store.ts';
 import {libraryPairSource} from '../quality/file-source.ts';
-import {parseFlvIndex} from '../../../shared/media/indexing/flv-index-cache.ts';
+import {qualitySourceIndex,qualityIndexPacketCount} from '../../../shared/analysis/quality/source-index.ts';
 import {avcGeometry} from '../../../shared/media/codecs/avc-geometry.ts';import {hevcGeometry} from '../../../shared/media/codecs/hevc-geometry.ts';
-import {inspectFlvFramePair,pairBudget,requireInspectionGeometry} from '../../../shared/analysis/quality/frame-pair.ts';
+import {inspectFramePair,pairBudget,requireInspectionGeometry} from '../../../shared/analysis/quality/frame-pair.ts';
 import {createPairDecoder} from '../../../shared/analysis/quality/wasm-decoder.ts';import {instantiateCore} from '../../../shared/wasm/core.ts';
 import {measurePsnr} from '../../../shared/analysis/quality/psnr.ts';import {measureSsim,SSIM_VARIANT} from '../../../shared/analysis/quality/ssim.ts';
 import {vmafSequence,VMAF_LIMITS,VmafError} from '../../../shared/analysis/quality/vmaf.ts';
@@ -21,7 +21,7 @@ export async function runVmafDecode(data:VmafDecodeData,progress:(frames:number,
  const budgetFor=(request:Parameters<typeof pairBudget>[0])=>({...pairBudget(request),maxIndexBytes:Math.max(1,Math.min(pairBudget(request).maxIndexBytes,VMAF_LIMITS.maxIndexBytes-indexBytes)),maxIndexPackets:Math.max(1,Math.min(pairBudget(request).maxIndexPackets,VMAF_LIMITS.maxIndexPackets-indexPackets))});
  const openPair=(request:Parameters<typeof pairBudget>[0])=>{
   const sources:ReturnType<typeof libraryPairSource>[]=[];
-  try{for(const target of [request.reference,request.distorted]){check();if(target.indexIdentity.kind!=='flv')throw new VmafError('unsupported-vmaf-sequence','Native VMAF remains FLV-only');const value=libraryPairSource(db,store,target,budgetFor(request),control);sources.push(value);if(!value.source.index||value.source.index.schema!==3)throw new VmafError('unsupported-vmaf-sequence','Native VMAF requires the original FLV index');indexBytes+=Buffer.byteLength(JSON.stringify(value.source.index));indexPackets+=value.source.index!.packets.length;
+  try{for(const target of [request.reference,request.distorted]){check();const value=libraryPairSource(db,store,target,budgetFor(request),control);sources.push(value);if(!value.source.index)throw new VmafError('unsupported-vmaf-sequence','Native VMAF requires an existing complete trusted source index');indexBytes+=Buffer.byteLength(JSON.stringify(value.source.index));indexPackets+=qualityIndexPacketCount(value.source.index);
    if(indexBytes>VMAF_LIMITS.maxIndexBytes||indexPackets>VMAF_LIMITS.maxIndexPackets)throw new VmafError('budget-exceeded','Cumulative index read budget exceeded');}return sources as [typeof sources[number],typeof sources[number]];
   }catch(error){for(const s of sources)s.source.close();throw error;}
  };
@@ -29,9 +29,9 @@ export async function runVmafDecode(data:VmafDecodeData,progress:(frames:number,
   const original=data.snapshot.value.rangePlan;if(!original)throw new VmafError('unsupported-vmaf-sequence','No executable frozen C plan');decodeDeadline=Math.min(decodeDeadline,original.input.budget.maxElapsedMs);
   const initial=openPair(original.input.pairs[0]);
   let sequence;
-  try{const indexes=initial.map(s=>parseFlvIndex(s.source.index!,s.source.binding().size)) as [ReturnType<typeof parseFlvIndex>,ReturnType<typeof parseFlvIndex>];
+  try{const indexes=initial.map(s=>qualitySourceIndex(s.source.index!,s.source.binding().size)) as [ReturnType<typeof qualitySourceIndex>,ReturnType<typeof qualitySourceIndex>];
    sequence=vmafSequence(data.snapshot,indexes,data.input.cadenceUs);
-   const geometry=indexes.map(index=>{const g=index.codec==='h264'?avcGeometry(index.description,true):index.codec==='hevc'?hevcGeometry(index.description,true):null;if(!g)throw new VmafError('unsupported-vmaf-sequence','Unsupported FLV codec');requireInspectionGeometry(g);return g;});
+   const geometry=indexes.map(index=>{const g=index.codec==='h264'?avcGeometry(index.description,true):index.codec==='hevc'?hevcGeometry(index.description,true):null;if(!g)throw new VmafError('unsupported-vmaf-sequence','Unsupported quality source codec');requireInspectionGeometry(g);return g;});
    if(geometry.some(g=>g.width<VMAF_LIMITS.minDimension||g.height<VMAF_LIMITS.minDimension||g.width>VMAF_LIMITS.width||g.height>VMAF_LIMITS.height)||geometry[0].width!==geometry[1].width||geometry[0].height!==geometry[1].height)throw new VmafError('unsupported-vmaf-sequence','Equal supported full-frame geometry required');
    for(const pair of sequence.pairs)if(pair.roi.x||pair.roi.y||pair.roi.width!==geometry[0].width||pair.roi.height!==geometry[0].height)throw new VmafError('unsupported-vmaf-sequence','Arbitrary ROI is unsupported; pin the entire visible frame in C');
   }finally{initial.forEach(s=>s.source.close());}
@@ -55,7 +55,7 @@ export async function runVmafDecode(data:VmafDecodeData,progress:(frames:number,
   for(const [ordinal,request]of sequence.pairs.entries()){
    check();const opened=openPair(request);
    try{
-    const pair=await inspectFlvFramePair(request,[opened[0].source,opened[1].source],()=>createPairDecoder(load),controller.signal);check();
+    const pair=await inspectFramePair(request,[opened[0].source,opened[1].source],()=>createPairDecoder(load),controller.signal);check();
     const [reference,distorted]=pair.frames;
     const metric=measurePsnr({domain:'source-yuv-code-values',reference,distorted,roi:request.roi,spatial:request.spatial,budget:{maxInputBytes:request.budget?.maxInputBytes,maxSamples:request.budget?.maxSamples}});
     const ssim=data.input.metrics.ssim?measureSsim({domain:'source-yuv-code-values',reference,distorted,roi:request.roi,spatial:request.spatial},{variant:SSIM_VARIANT}):undefined;
@@ -66,7 +66,7 @@ export async function runVmafDecode(data:VmafDecodeData,progress:(frames:number,
     const total=original.input.budget;
     if(result.work.readBytes>total.maxReadBytes||result.work.packets>total.maxPackets||result.work.outputFrames>total.maxOutputFrames||result.work.inputBytes>total.maxInputBytes)throw new VmafError('budget-exceeded','Cumulative sequence pre/post-roll/drain/input budget exceeded');
     writeFrame(0,reference);writeFrame(1,distorted);
-    result.pairs.push({schema:'voidplayer-library-frame-pair-psnr',version:1,execution:{host:'node-worker',runtime:process.versions.bun?'bun':'node',runtimeVersion:process.versions.bun??process.versions.node,sourceIdentity:'stat-version-v1'},
+    result.pairs.push({schema:'voidplayer-library-frame-pair-psnr',version:opened.some(s=>s.proof.binding.indexIdentity.kind==='mp4')?2:1,execution:{host:'node-worker',runtime:process.versions.bun?'bun':'node',runtimeVersion:process.versions.bun??process.versions.node,sourceIdentity:'stat-version-v1'},
      result:{schema:'voidplayer-frame-pair-psnr',version:1,pairing:'caller-specified',correspondence:'caller-specified-no-content-or-time-alignment',decoder:pair.decoder,metric,...(ssim?{ssim}:{}),provenance:pair.provenance,work:pair.work},annotationContext:{reference:opened[0].annotationContext,distorted:opened[1].annotationContext},sources:{reference:opened[0].proof,distorted:opened[1].proof}});
     result.work.heapBytes=Math.max(result.work.heapBytes,loaded!.heap().byteLength);progress(ordinal+1,sequence.pairs.length);
    }finally{opened.forEach(s=>s.source.close());}
