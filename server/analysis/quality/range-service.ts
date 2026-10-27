@@ -25,6 +25,15 @@ type Publication={policy:RangeCandidatePolicy;origin:string;selected:{au:number;
 export class QualityRangeService {
   taskSummaries(actor:string){return taskSummaries(this.db,'range',actor);}
   taskEdges(actor:string){return taskEdges(this.db,'range',actor);}
+  taskChild(id:string,childId:string,actor:string){
+    const parent=this.get(id,actor),sample=parent.samples.find(s=>s.jobId===childId);if(!sample)return false;
+    const child=this.jobs.get(childId,actor),pair=parent.plan.input.pairs.find(p=>p.reference.picture.au===sample.au);
+    if(!pair||child.input.client.id!==`range:${id}`||child.submitted.idempotencyKey!==`sample:${sample.au}`||child.submitted.requestId!==parent.requestId)return false;
+    const request=structuredClone(pair),elapsed=child.input.request.budget?.maxElapsedMs;
+    if(!elapsed||elapsed>Math.min(pair.budget?.maxElapsedMs??30000,parent.plan.input.budget.maxElapsedMs))return false;
+    request.budget={...request.budget,maxElapsedMs:elapsed};
+    return qualityJobRequest({schema:'voidplayer-psnr-frame-job',version:1,client:child.input.client,request}).fingerprint===qualityJobRequest(child.input).fingerprint;
+  }
 
   private db:ReturnType<typeof openIndexDatabase>;
   private unlock:()=>void;

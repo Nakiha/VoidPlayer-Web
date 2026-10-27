@@ -24,7 +24,7 @@ export function taskSummaries(db:IndexDatabase,kind:TaskKind,actor:string):TaskS
   const columnar=kind==='single'||kind==='preparation';
   const times=columnar?'revision,state,created_at,started_at,ended_at,reason_json,request_id,client_id':`${j('revision')} AS revision,${j('state')} AS state,${j('createdAt')} AS created_at,${j('startedAt')} AS started_at,${j('endedAt')} AS ended_at,${j('reason')} AS reason_json,${j('requestId')} AS request_id,${j(kind==='range'?'plan.input.client.id':'input.client.id')} AS client_id`;
   const phase=kind==='single'?'phase':kind==='vmaf'?j('phase'):'NULL';
-  const result=kind==='single'?'result_sha IS NOT NULL AND result_json IS NOT NULL':kind==='preparation'?'result_json IS NOT NULL':kind==='range'?`${j('summary.scoredPairs')}>0`:`result IS NOT NULL AND ${j(kind==='vmaf'?'resultDigest':'resultDigest')} IS NOT NULL`;
+  const result=kind==='single'?'result_sha IS NOT NULL AND result_json IS NOT NULL':kind==='preparation'?'result_json IS NOT NULL':kind==='range'?`${j('summary.scoredPairs')}>0`:`result IS NOT NULL AND ${j('resultDigest')} IS NOT NULL`;
   const metric=kind==='preparation'?`${j('operation',body)} AS operation,0 AS ssim`:
     kind==='single'?`NULL AS operation,json_type(input_json,'$.request.ssim')='object' AS ssim`:
     kind==='range'?`NULL AS operation,EXISTS(SELECT 1 FROM json_each(body,'$.plan.input.pairs') p WHERE json_type(p.value,'$.ssim')='object') AS ssim`:

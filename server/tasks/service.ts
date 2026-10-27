@@ -58,10 +58,23 @@ export class TaskCenterService{
     if(!task)throw new AdminError(404,'Task not found for this actor.','task-not-found');
     const related:TaskDetail['related']=[];
     for(const e of edges){
+      if(!(e.from===kind&&e.id===id||e.to===kind&&e.target===id))continue;
+      // Listing projects only metadata. Detail verifies the original frozen
+      // receipt/input association before presenting an actionable link.
+      if(e.from==='correspondence'&&this.library.qualityCorrespondence.taskRange(e.id,actor)!==e.target)continue;
+      if(e.from==='range'&&!this.library.qualityRanges.taskChild(e.id,e.target,actor))continue;
+      if(e.from==='vmaf'){
+        const pin=this.library.qualityVmaf.get(e.id,actor).input.plan,plan=this.library.qualityCorrespondence.get(e.target,actor);
+        if(pin.id!==plan.id||pin.attemptId!==plan.attemptId||pin.digest!==plan.resultDigest)continue;
+      }
       if(e.from===kind&&e.id===id)related.push({kind:e.to,id:e.target,relation:e.relation,href:taskPath(e.to,e.target)});
       if(e.to===kind&&e.target===id)related.push({kind:e.from,id:e.id,relation:`parent-${e.relation}`,href:taskPath(e.from,e.id)});
     }
     const links=[...task.links];
+    if(kind==='correspondence'){
+      const plan=this.library.qualityCorrespondence.get(id,actor),relation=this.library.qualityCorrespondence.relation(plan.relation.id,actor);
+      if(JSON.stringify(relation)===JSON.stringify(plan.relation))links.push({rel:'reference-relation',href:`/api/quality/reference-relations/${encodeURIComponent(relation.id)}`});
+    }
     if(kind==='range'||kind==='vmaf')links.push({rel:'candidate-receipt',href:task.links[0].href+'/candidates'});
     if(taskPending(task.state))links.push({rel:'cancel',href:taskPath(kind,id)+'/cancel'});
     return {schema:'voidplayer-task-detail',version:1,task,related,links};

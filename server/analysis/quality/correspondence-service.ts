@@ -22,6 +22,13 @@ type Intent={actor:Actor;requestId:string;key:string;input:QualityRangeInput;inp
 export class CorrespondenceService{
   taskSummaries(actor:string){return taskSummaries(this.db,'correspondence',actor);}
   taskEdges(actor:string){return taskEdges(this.db,'correspondence',actor);}
+  taskRange(id:string,actor:string){
+    const plan=this.get(id,actor),row=this.db.prepare('SELECT body FROM quality_plan_executions WHERE plan_id=?').get(id);
+    if(!row)return null;const intent=JSON.parse(String(row.body)) as Intent;if(!intent.rangeId)return null;
+    const job=this.ranges.get(intent.rangeId,actor);
+    if(intent.actor.id!==actor||intent.digest!==plan.resultDigest||intent.key!=='execute'||intent.input.client.id!==`clock-plan:${id}`||intent.input.client.kind!==plan.input.client.kind||hash(intent.input)!==intent.inputDigest||job.key!==intent.key||job.requestId!==intent.requestId||hash(job.plan.input)!==hash(this.ranges.plan(intent.input).input))throw new AdminError(500,'Stored plan execution association changed.','stored-plan-invalid');
+    return intent.rangeId;
+  }
 
   private db:ReturnType<typeof openIndexDatabase>;
   private unlock:()=>void;

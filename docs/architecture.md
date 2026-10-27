@@ -177,3 +177,17 @@ v2 temporal associations while retaining FLV v1 receipts. Its Linux x64 componen
 models and physical-exit runner remain unchanged. The existing sequence cadence,
 full-frame/SDR and raw/index/decode budgets still apply. Future CAMBI admission
 does not inherit MP4 support.
+
+## Actor task center
+
+`server/tasks/` composes preparation, correspondence, single, range and native
+VMAF histories through bounded metadata projections in the original stores.
+`shared/service/tasks.ts` owns query/filter/summary types; the admin pane and
+HTTP routes use the same protocol. First pages scan every actor-owned row within
+the existing hard history caps, then freeze the filtered metadata read set.
+Signed actor-scoped cursors refer to a short-lived bounded memory snapshot;
+expiry/restart/eviction requires a new query, never a hidden partial scan.
+Detail verifies recorded original associations; results remain in their owning
+services. Cancellation delegates without owning compute admission. No scheduler,
+new algorithm, retry policy, persistent snapshot database or global admin is
+introduced. See [contract and reproduction](unified-task-center.md).

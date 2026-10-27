@@ -2,6 +2,16 @@ import {AGENT_OPERATIONS,AGENT_WORKFLOWS,agentOperation} from '../shared/service
 
 /** Embedded, also in standalone packages without frontend assets. */
 export const QUALITY_AGENT_DOCUMENTS:Record<string,string>={
+ '/agent/quality/tasks.md':`# Manage existing actor-owned tasks
+
+Use [tasks.query](/api/agent/operations/tasks.query), then [tasks.get](/api/agent/operations/tasks.get). GET /api/tasks reads all bounded preparation, correspondence, single, range and VMAF history for the current self-declared actor. This identity is attribution, not strong authentication. No media/index/pixel read or implicit preparation occurs. Filter by exact media ID/version on the same side, kind/metric/raw state, and inclusive createdFrom/exclusive createdTo epoch milliseconds.
+
+Pages freeze membership and summary facts for60 seconds. Keep filters with nextCursor; refresh without cursor for changes.409 task-cursor-expired after restart, expiry, eviction, changed filters or actor means restart without cursor. Preserve an explicitly selected kind/ID separately. Detail always reads current facts and original verified relationships; unknown phase/progress stays unknown. Stored availability is not fresh source verification. Follow original result/candidate/viewer links. Range scored counts remain distinct from retained child results.
+
+Explicit cancel is POST /api/tasks/{kind}/{id}/cancel with {}, same Origin and captured actor. Use library-preparation action for preparation, quality-job otherwise. It delegates to the owning service. Cancelling retains admission until confirmed physical exit. If the receipt is lost, read the same task; repeating cancel does not create computation or roll back completed results. Closing GUI or HTTP observation never cancels a durable job.
+
+This package has no reexecution, automatic retry/publication, new scheduler or global administration. Use the original explicit submission flows for new intent.
+`,
  '/agent/quality.md':`# Choose a quality task
 
 Start with [runtime capabilities](/api/agent) and the bounded
@@ -9,6 +19,7 @@ Start with [runtime capabilities](/api/agent) and the bounded
 descriptions. Their versioned JSON gives method/path, domain limits, host,
 side effects, identity/Origin, replay, cursor and next-operation links.
 
+- [Task center](/agent/quality/tasks.md): filter and observe existing tasks across stores, or explicitly cancel.
 - [Single pair](/agent/quality/single.md): one explicit frame/ROI, PSNR with optional SSIM/grid.
 - [Bounded range](/agent/quality/range.md): all listed or deterministic stride, explicit coverage and holes.
 - [Native VMAF](/agent/quality/vmaf.md): continuous full-frame sequence plus PSNR/optional SSIM; optional installed Linux component.

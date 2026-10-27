@@ -33,5 +33,53 @@ cancelling does not claim physical exit or roll back results. Observation
 requests never cancel durable work. No result, candidate or old receipt is
 rewritten. Broad #121 resource management and performance remain incomplete.
 
-Implementation checkpoint: backend/query work in progress; GUI, real workflows
-and compiled verification are not yet complete.
+The admin Task center pane uses the same protocol. It stores only actor-scoped
+filters and an explicitly selected kind/ID locally, never a cursor or credential.
+Time controls use local time and send exact epoch milliseconds. A refresh or
+reopen makes a fresh snapshot, retains the target and never seeks or loads a
+player source. Expired pages restart the original query. Actor/view/target
+fences apply after each await, including publication and annotation reads;
+switching actor clears old private DOM. Only an explicit cancel button writes.
+Candidate receipt links use original range/VMAF publication records, and viewer
+links require the annotation evidence ref to match the frozen selected ref.
+Single-pair annotations retain their original sharing workflow; this package
+adds no global reverse annotation search.
+
+Detail follows only same-actor relationships. Native plan pins require matching
+attempt/digest, range child links verify the frozen original child input/client/
+key/request association, and correspondence-to-range links verify the original
+frozen execution receipt and normalized range input. Listing never loads these
+full frozen requests; detail performs bounded verification of the selected links.
+Retired child results do not erase a range's scored count. Stored availability
+is not certification of source contents, current index, pixels or metric scores.
+
+## Reproduce
+
+- `node --test test/unit/task-center.test.ts`: strict query rules, old matching
+  records beyond legacy first pages, all five SQL projections, immutable pages,
+  same-side version filters, half-open time, signed/scoped/expired/evicted cursors,
+  same-actor pins, result retirement and hard-history overflow.
+- `node --test test/media/task-center-http.test.ts`: real mixed MP4/FLV prepare,
+  C plan, single/range, snapshot/actor/restart/candidate receipts and real Worker
+  cancel with its physical terminate held. No frontend is needed.
+- `node scripts/native/run-vmaf-tests.mjs node --test test/media/task-center-vmaf.test.ts`:
+  actual fixed native mixed sequence, all five histories and existing candidate
+  evidence; not a new algorithm comparison or performance benchmark.
+- After the normal build, run `node scripts/native/run-vmaf-tests.mjs node scripts/check-task-center-browser.mjs chromium`
+  and the same command with `webkit`. Real HTTP jobs continue while admin is
+  closed; explicit GUI cancel, filters/reload, snapshot recovery, late responses,
+  actor isolation, independent original-frame viewer and other playback are checked.
+- Bun equivalents and the two browsers are registered in the existing manifest.
+  Existing compiled release checks also exercise task history/links under empty
+  PATH; Linux additionally checks native plan/result associations.
+
+The API reads a bounded complete metadata history, not an event stream or durable
+snapshot service. This does not add automatic retry, selective resume, batch
+submission/publication, configurable concurrency, new algorithms/components or
+strong authentication. It does not depend on unmerged reexecution or CAMBI work.
+Reference integrity remains not-certified; concealment detection is unavailable.
+Negative-PTS/VFR/stat-witness and historical performance limits remain unchanged.
+
+Current checkpoint: Node6 unit +3 real HTTP, Bun9 and both browsers18 each have
+passed during development. The final cursor-recovery/UI cleanup additions and
+compiled checks still require their final verification; these are not CI results.
