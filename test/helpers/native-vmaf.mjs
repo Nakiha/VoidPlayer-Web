@@ -19,9 +19,9 @@ export async function nativeFixture({depth=8,distorted=false,staticDir='public',
   const fixture={directory,media,config,service,entries,base,actor,cookie,headers,request,json,oracles,containers,wait:id=>until(()=>json('/api/quality/vmaf/jobs/'+id),j=>!['queued','preparing','running','cancelling'].includes(j.state)),async stop(){const prior=service;service=undefined;await prior?.close();},async close(){await service?.close();await rm(directory,{recursive:true,force:true});}};
   if(!prepare)return fixture;
   const bindings=[];
+  if(containers.includes('mp4'))for(const e of entries)assert.equal((await request(`/api/media/${e.id}/psnr-source?v=${e.version}`)).status,409);
   for(const e of entries){
    if(containers.includes('mp4')){
-    assert.equal((await request(`/api/media/${e.id}/psnr-source?v=${e.version}`)).status,409);
     const discovery=await json(`/api/library/discovery?search=${encodeURIComponent(e.name)}&includeUnknown=1&limit=32`);assert.ok(discovery.entries.some(x=>x.source.id===e.id&&x.source.version===e.version));
     const accepted=await json('/api/library/preparations',{source:{id:e.id,version:e.version},operation:'quality-index',client:{id:'native-vmaf-mp4',name:'Native MP4 VMAF test'}},'prepare-'+e.id,{'x-voidplayer-action':'library-preparation'});
     const done=await until(()=>json('/api/library/preparations/'+accepted.job.id),j=>!['queued','running','cancelling'].includes(j.state),'Explicit quality preparation');assert.equal(done.state,'completed',JSON.stringify(done));bindings.push(done.result.binding);

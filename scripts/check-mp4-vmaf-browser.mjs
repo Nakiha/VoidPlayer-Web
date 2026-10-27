@@ -22,6 +22,7 @@ async function runCase(containers){
  const beat=setInterval(()=>console.log(JSON.stringify({engine,codec,depth,containers,phase})),10000).unref();
  try{
   f=await nativeFixture({depth,codec,distorted:true,containers,prepare:false,staticDir:'dist'});
+  for(const e of f.entries){const response=await f.request(`/api/media/${e.id}/psnr-source?v=${e.version}`);assert.equal(response.status,409,'ordinary discovery has not granted scoring trust: '+await response.text());}
   const runner=f.service.library.qualityVmaf.runner,run=runner.run.bind(runner);
   runner.run=(input,snapshot,signal,hooks)=>run(input,snapshot,signal,{...hooks,process:p=>{hooks.process(p);if(p){nativePid=p.pid;process.kill(p.pid,'SIGSTOP');}}});
   browser=await({chromium,webkit}[engine]).launch({headless:true,...(engine==='webkit'&&process.env.VOIDPLAYER_WEBKIT_EXECUTABLE?{executablePath:process.env.VOIDPLAYER_WEBKIT_EXECUTABLE}:{})});
@@ -33,7 +34,6 @@ async function runCase(containers){
   await player.waitForFunction(()=>!window.voidPlayer.getState().busy&&!!window.voidPlayer.getState().tracks[0]?.frame);await player.evaluate(()=>window.voidPlayer.play());await player.waitForFunction(()=>window.voidPlayer.getState().playing&&window.voidPlayer.getState().positionUs>200000);const before=await player.evaluate(()=>window.voidPlayer.getState());
   phase='GUI-discovery-preparation';page=await context.newPage();evidence=recordBrowserEvidence(page);await page.goto(f.base+'/admin/#discovery');
   for(const [i,e]of f.entries.entries()){
-   assert.equal((await f.request(`/api/media/${e.id}/psnr-source?v=${e.version}`)).status,409,'ordinary discovery has not granted scoring trust');
    await page.locator('#discovery-search').fill(e.name);await page.locator('#discovery-search-button').click();await page.locator(`[data-source-id="${e.id}"]`).click();await page.waitForFunction(id=>document.querySelector('#discovery-source').textContent.startsWith(id),e.id);
    for(const button of ['probe','index']){
     const [r]=await Promise.all([page.waitForResponse(r=>new URL(r.url()).pathname==='/api/library/preparations'&&r.request().method()==='POST'),page.locator('#discovery-'+button).click()]);assert.equal(r.status(),202);
