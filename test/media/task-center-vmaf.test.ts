@@ -16,7 +16,7 @@ test('five-store task center preserves real mixed MP4/FLV native VMAF result, pl
  const publication=await f.json(`/api/quality/vmaf/jobs/${job.id}/candidates`,{space:'default',side:'reference',maxScore:100,limit:1,minFrameDistance:1,text:'Explicit task center sequence candidate',severity:2});assert.equal(publication.createdIds.length,1);
  const receipt=await f.json(task.links.find((l:any)=>l.rel==='candidate-receipt').href);assert.deepEqual(receipt,publication);
  const record=await f.json(`/api/annotations/spaces/default/${publication.createdIds[0]}`);assert.equal(record.document.mark.qualityEvidence[0].value.sequenceVmaf.jobId,job.id);
- const held=f.service.library.qualityAdmission.acquire();let queued;
- try{queued=(await f.json('/api/quality/vmaf/jobs',f.input,'queued-cancel')).job;await f.json(`/api/tasks/vmaf/${queued.id}/cancel`,{});const cancelled=await until(()=>f.json(`/api/tasks/vmaf/${queued.id}`),(d:any)=>d.task.state==='cancelled');assert.equal(cancelled.task.result.available,false);assert.throws(()=>f.service.library.qualityAdmission.acquire(),(e:any)=>e.code==='quality-busy');}finally{held();}
+ const held=f.service.library.qualityAdmission.acquire();
+ try{const queued=(await f.json('/api/quality/vmaf/jobs',f.input,'queued-cancel')).job;await f.json(`/api/tasks/vmaf/${queued.id}/cancel`,{});const cancelled=await until(()=>f.json(`/api/tasks/vmaf/${queued.id}`),(d:any)=>d.task.state==='cancelled');assert.equal(cancelled.task.result.available,false);assert.throws(()=>f.service.library.qualityAdmission.acquire(),(e:any)=>e.code==='quality-busy');}finally{held();}
  await f.json(`/api/tasks/vmaf/${job.id}/cancel`,{});assert.deepEqual(await f.json(`/api/quality/vmaf/jobs/${job.id}/result`),result);assert.deepEqual(await f.json(task.links.find((l:any)=>l.rel==='candidate-receipt').href),receipt);
 });

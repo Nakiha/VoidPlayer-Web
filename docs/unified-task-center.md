@@ -106,3 +106,13 @@ Negative-PTS/VFR/stat-witness and historical performance limits remain unchanged
 
 Normal independent review and final PR checks remain required. No new playback
 performance measurements were made, and historical negative results remain.
+
+The first PR check attempt stopped before the media/browser/compiled matrices:
+the new queued-native test's cross-callback variable required an explicit scope
+under the strict whole-project TypeScript checks, and the cache contract still
+expected46 cases after the two new browsers were added. The variable is now a
+block-local const. The contract still requires all prior46 cases, both exact new
+IDs/commands, unique48, unchanged preparation, budgets and fail-closed aggregation.
+TypeScript, the two Worker negative-compilation contracts, release/manifest
+contracts (75 tests combined), and the real native HTTP case passed after this
+test-only correction. No product, workflow, timeout or gate was changed.
