@@ -3,7 +3,7 @@ import { AGENT_TASKS } from '../shared/service/agent.ts';
 import {agentRecovery} from '../shared/service/agent-recovery.ts';
 
 export function agentRecoveryFields(code:string,operation?:string){
-  return {recovery:agentRecovery(code),links:{help:AGENT_TASKS.errors,tasks:'/api/agent/tasks',...(operation?{operation:'/api/agent/operations/'+operation}:{})}};
+  return {recovery:agentRecovery(code,operation),links:{help:AGENT_TASKS.errors,tasks:'/api/agent/tasks',...(operation?{operation:'/api/agent/operations/'+operation}:{})}};
 }
 
 /** Additive fields keep existing UI errors compatible while HTTP clients recover. */
