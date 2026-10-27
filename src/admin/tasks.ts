@@ -40,7 +40,7 @@ export function installTasks(signal:AbortSignal){
   function restore(){
     form.reset();(form.elements.namedItem('limit')as HTMLSelectElement).value='20';selected=null;
     try{const raw=localStorage.getItem(preferenceKey());if(raw&&raw.length<=4096){const p=JSON.parse(raw),params=new URLSearchParams(p.filter);taskQuery(params);for(const key of fields){let value=params.get(key)??'';if(value&&(key==='createdFrom'||key==='createdTo')){const date=new Date(Number(value));value=new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,19);}(form.elements.namedItem(key)as HTMLInputElement).value=value;}
-      if(p.selected&&TASK_KINDS.includes(p.selected.kind)&&/^(vmaf-)?[a-f0-9-]{36}$/.test(p.selected.id))selected=p.selected;}}
+      if(p.selected&&TASK_KINDS.includes(p.selected.kind)&&/^((?:vmaf|xpsnr)-)?[a-f0-9-]{36}$/.test(p.selected.id))selected=p.selected;}}
     catch{}
   }
   function reset(){

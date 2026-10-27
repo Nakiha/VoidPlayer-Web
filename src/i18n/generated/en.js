@@ -1403,5 +1403,22 @@ export default {
   "workspace.columns": () => "Name / user · Updated ↓",
   "workspace.conflict": () => "This workspace has changed. Reopen it to continue.",
   "workspace.copyNamed": (d) => "Copy workspace link: " + d.name,
-  "workspace.saving": () => "The workspace is being saved. Try sharing again shortly."
+  "workspace.saving": () => "The workspace is being saved. Try sharing again shortly.",
+  "xpsnr.budgets": () => "Execution budgets",
+  "xpsnr.cancel": () => "Cancel and stop owned execution",
+  "xpsnr.candidates": () => "Explicit full-frame measurement candidates",
+  "xpsnr.frames": () => "More frame facts",
+  "xpsnr.history": () => "Refresh service history",
+  "xpsnr.more": () => "More history",
+  "xpsnr.new": () => "New explicit request",
+  "xpsnr.preflight": () => "Check eligibility (no decode)",
+  "xpsnr.publish": () => "Publish explicit candidate policy",
+  "xpsnr.recipe": () => "Frozen correspondence and recipe",
+  "xpsnr.retry": () => "Retry frozen submission",
+  "xpsnr.scope": () => "Requires an explicitly installed Linux x64 component and committed clock plan. Only 2–32 continuous presentation frames, limited BT.709 SDR YUV420 8/10-bit; no stride, holes, negative PTS, VFR, crop, rotation or conversion. Fixed FFmpeg implementation, reference input first, temporal weighting and official per-plane pooling. Perceptual superiority is not established. Full-frame temporal facts are not heatmaps or human defect judgments. Reference integrity is not certified and concealment detection is unavailable.",
+  "xpsnr.share": () => "This shares source identities and immutable sequence facts. It does not localize a spatial defect. Closing this page stops observation, never background execution.",
+  "xpsnr.sources": () => "Supports existing trusted FLV/Enhanced FLV, strict non-fragmented MP4, and both mixed directions. MP4 is limited to avc1 H.264 8-bit or hvc1 HEVC 8/10-bit, with original clocks exactly representable in integer microseconds.",
+  "xpsnr.submit": () => "Submit durable PSNR + XPSNR",
+  "xpsnr.title": () => "Native XPSNR · continuous full-frame sequence",
+  "xpsnr.usePlan": () => "XPSNR: use this committed plan"
 }

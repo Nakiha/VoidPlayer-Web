@@ -40,7 +40,7 @@ export async function handleConnectionRoutes(ctx: RouteContext, req: IncomingMes
     }
     if(url.search){sendJson(res,400,agentErrorBody(new AdminError(400,'Discovery documents accept no query.','invalid-request'),ctx.requestId));return true;}
     const json = discovery;
-    const manifest=()=>agentManifest({ capabilities: serviceCapabilities(!!options.admin, !!options.allowLocalReveal && localRequest(req)), libraryReady: ctx.library.ready, frontendAvailable: !!options.staticDir, localPageBridge:!!options.pageBridge,qualityJobsEnabled: ctx.library.durableQualityJobsEnabled, nativeVmaf:ctx.library.nativeVmafDescriptor, actor: ctx.actor });
+    const manifest=()=>agentManifest({ capabilities: serviceCapabilities(!!options.admin, !!options.allowLocalReveal && localRequest(req)), libraryReady: ctx.library.ready, frontendAvailable: !!options.staticDir, localPageBridge:!!options.pageBridge,qualityJobsEnabled: ctx.library.durableQualityJobsEnabled, nativeVmaf:ctx.library.nativeVmafDescriptor,nativeXpsnr:ctx.library.nativeXpsnrDescriptor, actor: ctx.actor });
     const value=operation!==null?agentOperation(operation,manifest().capabilities):task!==null?agentTask(task):url.pathname===AGENT_TASK_CATALOG?agentTaskCatalog():json?manifest():null;
     if(json&&!value){sendJson(res,404,agentErrorBody(new AdminError(404,'Task or operation not found.','agent-operation-not-found'),ctx.requestId));return true;}
     const body = json ? JSON.stringify(value) : document!;

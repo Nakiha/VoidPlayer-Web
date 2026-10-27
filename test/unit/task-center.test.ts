@@ -10,22 +10,22 @@ import type {MediaLibraryIndex} from '../../server/library.ts';
 
 function fixture(){
  const db=openIndexDatabase(':memory:');
- for(const table of ['discovery_jobs','quality_jobs','quality_ranges','quality_correspondence_plans','quality_vmaf_jobs'])db.exec(`CREATE TABLE ${table}(id TEXT PRIMARY KEY,actor TEXT,actor_id TEXT,revision INTEGER,state TEXT,phase TEXT,created_at INTEGER,started_at INTEGER,ended_at INTEGER,reason_json TEXT,request_id TEXT,client_id TEXT,input_json TEXT,body TEXT,result TEXT,result_json TEXT,result_sha TEXT,snapshot TEXT,attempt_id TEXT)`);
+ for(const table of ['discovery_jobs','quality_jobs','quality_ranges','quality_correspondence_plans','quality_vmaf_jobs','quality_xpsnr_jobs'])db.exec(`CREATE TABLE ${table}(id TEXT PRIMARY KEY,actor TEXT,actor_id TEXT,revision INTEGER,state TEXT,phase TEXT,created_at INTEGER,started_at INTEGER,ended_at INTEGER,reason_json TEXT,request_id TEXT,client_id TEXT,input_json TEXT,body TEXT,result TEXT,result_json TEXT,result_sha TEXT,snapshot TEXT,attempt_id TEXT)`);
  db.exec('CREATE TABLE quality_plan_executions(plan_id TEXT,body TEXT)');
  const source={mediaId:'a'.repeat(24),mediaVersion:'b'.repeat(24)},other={mediaId:'c'.repeat(24),mediaVersion:'d'.repeat(24)};
  const insert=(kind:TaskKind,actor='actor-A',options:any={})=>{
-  const id=options.id??(kind==='vmaf'?'vmaf-':'')+randomUUID(),state=options.state??'completed',createdAt=options.createdAt??100,attempt=options.attemptId??randomUUID(),digest=options.digest??'e'.repeat(64);
+  const id=options.id??(kind==='vmaf'||kind==='xpsnr'?kind+'-':'')+randomUUID(),state=options.state??'completed',createdAt=options.createdAt??100,attempt=options.attemptId??randomUUID(),digest=options.digest??'e'.repeat(64);
   const reference={...source,...options.source},distorted={...other,...options.distorted},pair={reference,distorted,ssim:{variant:'ffmpeg-uniform-8x8-step4-v1'}};
   const input={client:{id:'test-client'},request:pair,source:{id:reference.mediaId,version:reference.mediaVersion},operation:'quality-index'};
   const body={id,actor:{id:actor},revision:1,state,phase:'native',createdAt,startedAt:createdAt,endedAt:state==='completed'?createdAt+10:null,requestId:'request',input:{...input,metrics:{ssim:true},plan:options.plan??{}},reason:options.reason??null,attemptId:attempt,resultDigest:digest,progress:{preparedFrames:8,targetFrames:8},metrics:{psnr:{state:'completed'},ssim:{state:'completed'},vmaf:{state}},relation:{input:{reference,distorted}},plan:{input:{client:input.client,pairs:[pair]},targets:1},summary:{scoredPairs:1},samples:options.samples??[]};
-  const table={preparation:'discovery_jobs',single:'quality_jobs',range:'quality_ranges',correspondence:'quality_correspondence_plans',vmaf:'quality_vmaf_jobs'}[kind];
+  const table={preparation:'discovery_jobs',single:'quality_jobs',range:'quality_ranges',correspondence:'quality_correspondence_plans',vmaf:'quality_vmaf_jobs',xpsnr:'quality_xpsnr_jobs'}[kind];
   db.prepare(`INSERT INTO ${table} VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(id,actor,actor,1,state,'decode',createdAt,createdAt,state==='completed'?createdAt+10:null,JSON.stringify(options.reason??null),'request','test-client',JSON.stringify(input),JSON.stringify(body),options.result??'not-JSON-result-that-must-not-be-parsed',options.result??'not-JSON-result-that-must-not-be-parsed',digest,JSON.stringify({value:{sources:{reference:{binding:reference},distorted:{binding:distorted}}}}),attempt);
   return {id,attemptId:attempt,digest};
  };
  const owner=(kind:TaskKind)=>({taskSummaries:(actor:string)=>taskSummaries(db,kind,actor),taskEdges:(actor:string)=>taskEdges(db,kind as 'range'|'correspondence'|'vmaf',actor),cancel:()=>{throw Error('Cancellation callback not installed');}});
- const services={preparation:owner('preparation'),correspondence:owner('correspondence'),single:owner('single'),range:owner('range'),vmaf:owner('vmaf')};
+ const services={preparation:owner('preparation'),correspondence:owner('correspondence'),single:owner('single'),range:owner('range'),vmaf:owner('vmaf'),xpsnr:owner('xpsnr')};
  Object.assign(services.range,{taskChild:()=>true});Object.assign(services.correspondence,{taskRange:(id:string)=>JSON.parse(String(db.prepare('SELECT body FROM quality_plan_executions WHERE plan_id=?').get(id)?.body??'null'))?.rangeId??null,get:(id:string)=>JSON.parse(String(db.prepare('SELECT body FROM quality_correspondence_plans WHERE id=?').get(id)!.body))});Object.assign(services.vmaf,{get:(id:string)=>JSON.parse(String(db.prepare('SELECT body FROM quality_vmaf_jobs WHERE id=?').get(id)!.body))});
- const library={durableQualityJobsEnabled:true,discovery:{store:services.preparation,cancel:services.preparation.cancel},qualityCorrespondence:services.correspondence,qualityJobs:services.single,qualityRanges:services.range,qualityVmaf:services.vmaf} as unknown as MediaLibraryIndex;
+ const library={durableQualityJobsEnabled:true,discovery:{store:services.preparation,cancel:services.preparation.cancel},qualityCorrespondence:services.correspondence,qualityJobs:services.single,qualityRanges:services.range,qualityVmaf:services.vmaf,qualityXpsnr:services.xpsnr} as unknown as MediaLibraryIndex;
  let clock=1000;const center=new TaskCenterService(library,()=>clock);
  return {db,insert,center,library,source,other,clock:(value:number)=>{clock=value;},close:()=>{center.close();db.close();}};
 }

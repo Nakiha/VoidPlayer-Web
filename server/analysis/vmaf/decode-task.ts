@@ -10,7 +10,7 @@ import {measurePsnr} from '../../../shared/analysis/quality/psnr.ts';import {mea
 import {vmafSequence,VMAF_LIMITS,VmafError} from '../../../shared/analysis/quality/vmaf.ts';
 import type {VmafInput,VmafPlanSnapshot,VmafPrepared} from '../../../shared/analysis/quality/vmaf.ts';
 import type {PsnrFrame} from '../../../shared/analysis/quality/psnr.ts';
-export type VmafDecodeData={mode:'preflight'|'decode'|'verify';database:string;coreDir:string;directory:string;input:VmafInput;snapshot:VmafPlanSnapshot;control:SharedArrayBuffer};
+export type VmafDecodeData={mode:'preflight'|'decode'|'verify';database:string;coreDir:string;directory:string;input:Pick<VmafInput,'cadenceUs'|'metrics'|'budget'>;snapshot:VmafPlanSnapshot;control:SharedArrayBuffer};
 
 export async function runVmafDecode(data:VmafDecodeData,progress:(frames:number,total:number)=>void){
  let decodeDeadline=data.input.budget.maxElapsedMs;
