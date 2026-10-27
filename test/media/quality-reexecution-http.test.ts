@@ -86,7 +86,7 @@ for(const kind of ['single','range','vmaf'] as const)test(`real ${kind}: stopped
 // fabricated and the helper kills synchronously at the transaction boundary.
 for(const kind of ['single','range','vmaf'] as const)test(`${kind}: SIGKILL before/after receipt commit, restart and exact-key replay create at most one successor`,{timeout:180000},async t=>{
   const {spawn}=await import('node:child_process'),{once}=await import('node:events');
-  const f=await nativeFixture({distorted:true,containers:['mp4','flv']});t.after(()=>f.close());
+  const f=await nativeFixture({distorted:true,containers:['mp4','flv']});let closeProcess=async()=>{};t.after(async()=>{await closeProcess();await f.close();});
   const lib=f.service.library,runner=lib.quality as any,create=runner.createWorker;let gate:Int32Array|undefined;
   runner.createWorker=(data:any)=>{if(data.mode==='measure'&&!gate){gate=new Int32Array(new SharedArrayBuffer(20));return new Worker(new URL('../helpers/quality-phase-worker.ts',import.meta.url),{workerData:{...data,hangPhase:'decode',phaseState:gate.buffer}});}return create(data);};
   if(kind==='vmaf'){const r=(lib.qualityVmaf as any).runner,run=r.run.bind(r);r.run=(...args:any[])=>run(args[0],args[1],args[2],{...args[3],process:(p:any)=>{args[3].process(p);if(p)process.kill(p.pid,'SIGKILL');}});}
@@ -100,7 +100,7 @@ for(const kind of ['single','range','vmaf'] as const)test(`${kind}: SIGKILL befo
   const plan=await f.json(url+'/reexecution-plan',{reason:'Explicit crash-boundary full recomputation'});assert.equal(plan.eligible,true,JSON.stringify(plan));
   const request={schema:'voidplayer-quality-reexecution',version:1,reason:plan.reason,planDigest:plan.digest,confirm:plan.cost},settings=path.join(f.directory,'service.json'),marker=path.join(f.directory,'receipt.json');await writeFile(settings,JSON.stringify(f.config));await f.stop();
   let child:any,output='',base='';
-  const stop=async()=>{if(!child)return;if(child.exitCode===null&&child.signalCode===null){const done=once(child,'close');child.kill('SIGTERM');await done;}child=undefined;};t.after(stop);
+  const stop=async()=>{if(!child)return;if(child.exitCode===null&&child.signalCode===null){const done=once(child,'close');child.kill('SIGTERM');await done;}child=undefined;};closeProcess=stop;
   const start=async(mode:string)=>{output='';child=spawn(process.execPath,[path.resolve('test/helpers/quality-reexecution-server.mjs'),settings,mode,marker],{cwd:process.cwd(),stdio:['ignore','pipe','pipe']});child.stdout.on('data',(b:Buffer)=>output=(output+b).slice(-65536));child.stderr.on('data',(b:Buffer)=>output=(output+b).slice(-65536));const port=await until(()=>{assert.equal(child.exitCode,null,output);return Number(/"event":"ready","port":(\d+)/.exec(output)?.[1]);},Boolean,'Restart service ready');base='http://127.0.0.1:'+port;};
   const req=(suffix='',value?:unknown,key='frozen-process-key')=>fetch(base+url+suffix,{method:value===undefined?'GET':'POST',headers:{...f.headers,origin:base,'idempotency-key':key},...(value===undefined?{}:{body:JSON.stringify(value)})});
   await start('before-commit');let closed=once(child,'close');await assert.rejects(req('/reexecutions',request));await closed;assert.equal(child.signalCode,'SIGKILL');const uncommitted=JSON.parse(await readFile(marker,'utf8'));await stop();
