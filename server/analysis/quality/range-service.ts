@@ -1,3 +1,4 @@
+import {taskSummaries,taskEdges} from '../../tasks/summary.ts';
 import {createHash,randomUUID} from 'node:crypto';
 import {mkdirSync} from 'node:fs';
 import path from 'node:path';
@@ -22,6 +23,9 @@ type Publication={policy:RangeCandidatePolicy;origin:string;selected:{au:number;
 
 /** Parent never acquires admission; existing child runner owns physical stop. */
 export class QualityRangeService {
+  taskSummaries(actor:string){return taskSummaries(this.db,'range',actor);}
+  taskEdges(actor:string){return taskEdges(this.db,'range',actor);}
+
   private db:ReturnType<typeof openIndexDatabase>;
   private unlock:()=>void;
   private active?:Promise<void>;

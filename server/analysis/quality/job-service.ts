@@ -25,6 +25,7 @@ export class QualityJobService {
   constructor(file: string, runner: LibraryPairRunner, now = serviceNow) {
     this.now = now; this.runner = runner; this.store = new QualityJobStore(file, now());
   }
+  taskSummaries(actor:string){return this.store.taskSummaries(actor);}
   private available() {
     if (this.closed || this.failed) throw new AdminError(503, 'Quality job service is unavailable.', 'quality-service-unavailable');
   }

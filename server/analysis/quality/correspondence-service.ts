@@ -1,3 +1,4 @@
+import {taskSummaries,taskEdges} from '../../tasks/summary.ts';
 import {createHash,randomUUID} from 'node:crypto';
 import {mkdirSync} from 'node:fs';
 import path from 'node:path';
@@ -19,6 +20,9 @@ type Intent={actor:Actor;requestId:string;key:string;input:QualityRangeInput;inp
 /** Durable metadata planning and frozen submission receipts. Only the runner
  * owns admission; submission calls the existing range service after it exits. */
 export class CorrespondenceService{
+  taskSummaries(actor:string){return taskSummaries(this.db,'correspondence',actor);}
+  taskEdges(actor:string){return taskEdges(this.db,'correspondence',actor);}
+
   private db:ReturnType<typeof openIndexDatabase>;
   private unlock:()=>void;
   private active?:{id:string;controller:AbortController;done:Promise<void>};
