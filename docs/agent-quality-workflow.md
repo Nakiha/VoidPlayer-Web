@@ -2,6 +2,8 @@
 
 入口仍是 `/llms.txt` → `/api/agent`。新增 `/api/agent/tasks`、`/api/agent/tasks/{id}`、`/api/agent/operations/{id}`，分别为版本 1 的有界任务目录、任务摘要、逐操作契约。JSON/Markdown 全部嵌入服务，独立程序无 `dist` 也能 GET/HEAD；不会创建用户、准备媒体、规划或评分。旧 `/agent/quality.md` 保留为短选择首页，长文在 `/agent/quality/reference.md`。
 
+standalone 缺网页时可提供 HTTP API/指南，manifest 的 frontend 能力关闭；评分仍需固定 decoder 资源。显式 `--init`/`--check` 继续校验完整网页部署；Node 生产网页入口的缺构建报错不变。
+
 逐操作描述 method/path、请求约束与共享 domain limits、执行宿主、副作用、cookie/actor/Origin/action、幂等方式、游标、错误恢复、结果及下一步链接。Markdown 操作页由同一注册表生成；真实路由/validator 仍负责准入，文档不增加第二套 validator。发现字典已修正严格 MP4 的支持；MP4 native VMAF 是固定组件和连续整帧计划的条件能力，不表示 CAMBI 就绪。
 
 元数据 stream ID、质量 cache stream/configuration、AU/sample ordinal、raw ticks/timebase 和呈现序号严格区分。probe 成功不表示评分就绪；不按名称/时长/相近 PTS 认证内容或填洞。缺缓存返回 `cache-miss` 和显式 preparation 下一步，读取不隐式建索引。错误附加恢复和操作链接，既有 HTTP 状态/code 不变。
@@ -31,6 +33,8 @@ node examples/http-quality.mjs http://127.0.0.1:9000 input.json \
 ## 不确定响应
 
 保留原始输入和稳定 `key`。`--allow-retry-unknown` 只允许一次未知响应的原字节 body/原 key 重放，之前再次检查原 actor。C execute 重放原 digest，候选重放原 policy/operationId。明确验证错误不重试，身份创建不自动重试；绝不能换 key 逃避未知结果。
+
+未授权自动重放或一次重放仍未知时，示例输出 `unknown-post-outcome` 及原 operation/path/actor/key/body，不含 cookie。用这些冻结事实和原身份解析回执；不要在 cache/source 已变时重建不同请求去碰原 key。无回执的身份创建须人工解析用户列表，不自动重建身份。
 
 已确认取消/失败/interrupted 后的新尝试须明确授权。actor 变化停止；source/cache 变化要求显式重选和修订计划。discovery cursor 失效只同查询重取第一页一次，不触发变更；事件 resetRequired 读取 snapshotUrl，不重放 mutation。
 

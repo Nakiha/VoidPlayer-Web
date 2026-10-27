@@ -39,6 +39,8 @@ async function main() {
   --healthcheck               检查运行中的服务是否就绪
   --version                   显示版本
 直接运行即可启动，首次自动创建 data/voidplayer.config.json。
+没有网页资源时仍提供 HTTP API 与 /llms.txt；评分仍需固定解码器资源。
+--check 继续检查完整网页部署。
 默认数据目录: ${defaultDataDirectory()}`);
     return;
   }
@@ -100,11 +102,13 @@ async function main() {
   }
   // A bare launch creates its own portable config; explicit config files are never replaced.
   if (config.origin?.file === configFile && config.origin.revision === configRevision('')) {
-    await validateServiceConfig(config);
+    await validateServiceConfig(config, false);
     await initialize();
   }
   console.log(`VoidPlayer ${version} (${revision})\n数据目录: ${dataDir}`);
-  const service = await startService(config, true, { version, revision });
+  // The HTTP service and embedded agent guides are useful without frontend
+  // assets. Explicit --init/--check retain full deployment validation above.
+  const service = await startService(config, false, { version, revision });
   let closing = false;
   const close = async () => { if (closing) return; closing = true; await service.close(); };
   process.on('SIGINT', close); process.on('SIGTERM', close);

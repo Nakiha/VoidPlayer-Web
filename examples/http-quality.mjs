@@ -62,7 +62,8 @@ export async function runHttpQuality(serverURL,input={},options={}){
     // One explicitly authorized replay, with byte-identical body/key and original actor.
     // HTTP validation/ownership failures are definite; never retry those or change the key.
     const uncertain=!(error instanceof HttpQualityError)||error.details.status>=500;
-    if(!uncertain||!replayable||!allow.retryUnknown||attempt>0)throw error;
+    if(!uncertain)throw error;
+    if(!replayable||!allow.retryUnknown||attempt>0)stop('unknown-post-outcome','The POST outcome is unknown. Preserve this original operation; never choose a new key or actor.',{operation:id,origin:base.origin,path,actor,key:key??null,body:JSON.parse(frozen),replay:op.write.idempotency,next:op.links.guide});
    }
   }
  }
