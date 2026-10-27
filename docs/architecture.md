@@ -71,7 +71,7 @@ UI 和 Agent 都通过 `session.updateMark` 修改对象，保留 ID 与帧锚�
 
 ## Agent 与服务
 
-HTTP Agent 从 `/llms.txt`、`/agent.md` 和 `/api/agent` 逐层发现任务与运行时能力，入口文档内嵌于服务端，不依赖 `dist/`。`shared/service/agent.ts` 提供健康接口与发现接口共用的能力定义；尚未实现的评分任务、MCP 桥接和计算节点不会被声明为可用。详见 [HTTP Agent 与操作同步](agent-http.md)。
+HTTP Agent 从 `/llms.txt`、`/agent.md` 和 `/api/agent` 逐层发现任务与运行时能力，入口文档内嵌于服务端，不依赖 `dist/`。`shared/service/agent.ts` 提供健康接口与发现接口共用的能力定义；尚未实现的指标/计算节点不会被声明为可用；可选 stdio MCP 桥只在其自托管页面宿主上启用，普通 HTTP 服务不因代码存在而声明连接就绪。详见 [HTTP Agent 与操作同步](agent-http.md)。
 
 逐任务/操作 JSON 从 `/api/agent/tasks` 开始；`shared/service/agent-operations.ts` 与嵌入式操作 Markdown 共用描述和真实领域常量，真实 validator/router 继续负责准入。普通 HTTP 示例默认只读，对准备、规划、计算和候选分别显式授权；源/时钟/身份/幂等恢复边界见 [冷启动评分](agent-quality-workflow.md)，没有新的服务调度器或浏览器依赖。
 

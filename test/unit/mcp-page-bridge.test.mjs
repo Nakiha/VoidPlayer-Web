@@ -10,10 +10,12 @@ async function fixture(run,modern=false){const dir=await mkdtemp(path.join(os.tm
 
 test('real stdio legacy handshake, fixed whitelist and no-page recovery; EOF closes host',async()=>fixture(async c=>{
   assert.ok((await c.rpc('tools/list')).error);
+  assert.deepEqual((await c.rpc('ping',{_meta:{}})).result,{});
   assert.equal((await c.initialize()).result.protocolVersion,'2025-11-25');
   const tools=(await c.rpc('tools/list')).result.tools;
   assert.deepEqual(tools.map(t=>t.name),['get_bridge_status','get_bridge_receipt','get_review_session','get_review_marks','pause_review','seek_review','add_review_mark']);
   assert.equal((await c.call('get_bridge_status')).connected,false);
+  assert.ok((await c.rpc('tools/call',{name:'get_bridge_status',arguments:null})).error,'explicit null is not an object-shaped tool input');
   const manifest=await(await fetch(c.base+'/api/agent')).json();
   assert.equal(manifest.capabilities.find(v=>v.id==='bridge.local-mcp').enabled,true);
   assert.equal(manifest.capabilities.find(v=>v.id==='quality.jobs').enabled,false,'the page host does not own durable scoring jobs');

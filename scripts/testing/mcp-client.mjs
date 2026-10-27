@@ -19,7 +19,7 @@ export async function startMcpClient({staticDir,modern=false}={}){
   function request(method,params={},meta=true){
     const id=++seq;
     if(modern&&meta)params={...params,_meta:{'io.modelcontextprotocol/protocolVersion':'2026-07-28','io.modelcontextprotocol/clientCapabilities':{},'io.modelcontextprotocol/clientInfo':{name:'VoidPlayer independent stdio client',version:'1.0.0'},...params._meta}};
-    const promise=new Promise((resolve,reject)=>{const timer=setTimeout(()=>{pending.delete(id);reject(Error('Client deadline '+method));},22000);pending.set(id,{resolve,reject,timer});});
+    const promise=new Promise((resolve,reject)=>{const timer=setTimeout(()=>{pending.delete(id);notify('notifications/cancelled',{requestId:id});reject(Error('Client deadline '+method));},22000);pending.set(id,{resolve,reject,timer});});
     child.stdin.write(JSON.stringify({jsonrpc:'2.0',id,method,params})+'\n');return {id,promise};
   }
   const rpc=(method,params,meta)=>request(method,params,meta).promise;

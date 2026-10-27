@@ -47,7 +47,7 @@ export function runPageStdio(channel:PageChannel,close:()=>Promise<void>){
         result(id,{protocolVersion:legacy,capabilities:{tools:{}},serverInfo,instructions:'Open the localhost page printed on stderr. Only a trusted user click in that exact page can grant temporary scopes. Query get_bridge_status and pass its explicit epoch; retain write operationId. Never replay unknown writes.'},false);return;
       }
       const meta=params._meta;
-      if(value.method==='ping'&&!object(meta)){result(id,{},false);return;}
+      if(value.method==='ping'&&!(object(meta)&&Object.hasOwn(meta,'io.modelcontextprotocol/protocolVersion'))){result(id,{},false);return;}
       if(object(meta)&&Object.hasOwn(meta,'io.modelcontextprotocol/protocolVersion')){
         if(meta['io.modelcontextprotocol/protocolVersion']!==modern){error(id,-32022,'Unsupported protocol version',{supported:versions,requested:meta['io.modelcontextprotocol/protocolVersion']});return;}
         if(!object(meta['io.modelcontextprotocol/clientCapabilities']))throw Error('Missing required clientCapabilities');
@@ -62,8 +62,9 @@ export function runPageStdio(channel:PageChannel,close:()=>Promise<void>){
       }
       if(value.method!=='tools/call'){error(id,-32601,'Method not found');return;}
       const tool=MCP_PAGE_TOOLS.find(t=>t.name===params.name);if(!tool){error(id,-32602,'Unknown tool');return;}
-      validateToolInput(tool.inputSchema,params.arguments??{});
-      const args=(params.arguments??{}) as Record<string,unknown>;
+      const input=params.arguments===undefined?{}:params.arguments;
+      validateToolInput(tool.inputSchema,input);
+      const args=input as Record<string,unknown>;
       const output=tool.name==='get_bridge_status'?channel.status():tool.name==='get_bridge_receipt'?channel.receipt(args.operationId):await channel.call(tool.name,args,v=>state.correlation=v);
       if(!state.cancelled)result(id,{content:[{type:'text',text:JSON.stringify(output)}],isError:object(output)&&output.isError===true},isModern);
     }catch{if(!state.cancelled)error(id,-32602,'Invalid request or tool arguments');}

@@ -29,14 +29,14 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
     <button id="page-bridge-close" type="button">${th(msg('pageBridge.close','关闭面板'))}</button></div>`;
   document.querySelector('.topbar-utility-actions')?.append(button);document.body.append(dialog);
   const $=<T extends HTMLElement=HTMLElement>(id:string)=>dialog.querySelector<T>('#page-bridge-'+id)!;
-  let grant:{token:string;epoch:string;scopes:PageScope[];binding:string}|undefined;
-  let generation=0,inFlight=0,connecting=false,stopped=false,descriptor:unknown,reviewedRevision:number|undefined,reviewedReady=false;
+  let grant:{token:string;epoch:string;scopes:PageScope[];binding:string;clientClaim:unknown}|undefined;
+  let generation=0,refreshSequence=0,inFlight=0,connecting=false,stopped=false,descriptor:unknown,reviewedRevision:number|undefined,reviewedReady=false;
   let controller=new AbortController();
   const binding=()=>JSON.stringify([location.search,currentActor()?.id??null,session.getState().tracks.map(x=>[x.slot,x.id,x.sourceGen])]);
   const workspace=()=>`${pageId} · ${session.getState().tracks.map(x=>`${x.slot}: ${x.name}`).join(' / ')||t(msg('pageBridge.empty','空工作区'))}`.slice(0,300);
   const note=(s:string)=>{$('status').textContent=s;};
   const render=()=>{
-    $('client').textContent=JSON.stringify(descriptor??{},null,2);$('workspace').textContent=workspace();
+    $('client').textContent=JSON.stringify(grant?.clientClaim??descriptor??{},null,2);$('workspace').textContent=workspace();
     $('connect').toggleAttribute('disabled',!!grant||inFlight>0||connecting||stopped||!reviewedReady);
     $('revoke').toggleAttribute('disabled',!grant);
     for(const id of ['view','annotate'])$(id).toggleAttribute('disabled',!!grant||connecting);
@@ -85,8 +85,9 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
     }}catch{if(epoch===generation)revoke(t(msg('pageBridge.lost','通道已断开；已派发写入的结果可能未知，不会自动重放。')));}
   }
   async function refresh(){
-    try{const r=await fetch(BRIDGE_PATH+'/descriptor',{cache:'no-store',signal:AbortSignal.timeout(3000)});if(!r.ok)throw Error('host-unavailable');const d=await r.json();reviewedRevision=d.clientRevision;reviewedReady=d.ready;descriptor=d.clientClaim??t(msg('pageBridge.noClient','MCP 客户端尚未初始化。'));render();return d;}
-    catch{descriptor=t(msg('pageBridge.unavailable','本机桥进程不可用；普通 HTTP 后台任务不受页面连接影响。'));render();return null;}
+    const seq=++refreshSequence,owner=generation;
+    try{const r=await fetch(BRIDGE_PATH+'/descriptor',{cache:'no-store',signal:AbortSignal.timeout(3000)});if(!r.ok)throw Error('host-unavailable');const d=await r.json();if(seq!==refreshSequence||owner!==generation||signal.aborted)return null;reviewedRevision=d.clientRevision;reviewedReady=d.ready;descriptor=d.clientClaim??t(msg('pageBridge.noClient','MCP 客户端尚未初始化。'));render();return d;}
+    catch{if(seq===refreshSequence&&owner===generation&&!signal.aborted){reviewedReady=false;descriptor=t(msg('pageBridge.unavailable','本机桥进程不可用；普通 HTTP 后台任务不受页面连接影响。'));render();}return null;}
   }
   button.onclick=()=>{void refresh();render();dialog.showModal();};
   $('close').onclick=()=>dialog.close();
@@ -94,13 +95,13 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
   $('connect').onclick=async event=>{
     if(!event.isTrusted||!navigator.userActivation.isActive||grant||inFlight||connecting||stopped)return;
     connecting=true;render();
-    const current=++generation,original=binding();
+    const current=++generation,original=binding(),clientClaim=descriptor;
     try{
       if(!reviewedReady)throw Error('client-not-ready');
       const scopes:PageScope[]=['read'];if($<HTMLInputElement>('view').checked)scopes.push('view');if($<HTMLInputElement>('annotate').checked)scopes.push('annotate');
       const accepted=await post('connect',{context:pageId,workspace:workspace(),scopes,clientRevision:reviewedRevision},documentToken,AbortSignal.timeout(4000));
       if(current!==generation||original!==binding()||signal.aborted){void post('revoke',{epoch:accepted.epoch},accepted.token).catch(()=>{});return;}
-      grant={token:accepted.token,epoch:accepted.epoch,scopes,binding:original};
+      grant={token:accepted.token,epoch:accepted.epoch,scopes,binding:original,clientClaim};
       note(t(msg('pageBridge.connected','已连接此页面；关闭面板仍保留授权，可随时重新打开并撤销。')));void poll(grant,current);
     }catch{if(current===generation){await refresh();note(t(msg('pageBridge.connectFailed','未能确认连接。请检查客户端及目标页面；不会自动重连或跟随其他标签。')));}}
     finally{connecting=false;render();}

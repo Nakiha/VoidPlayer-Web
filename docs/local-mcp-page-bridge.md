@@ -90,7 +90,7 @@ separate from the final candidate's successful evidence.
 
 | Host | Evidence |
 | --- | --- |
-| Linux / Node 24.19 / Chromium 153.0.8010.12 | Development real-MCP/browser closure verified; 36 checks including two Files/tabs, read-only denials, visible ROI, exact seek, confirmed receipt deduplication, lost writes, cancellation, delayed ACK/old command, source replacement, reload, close and EOF. |
+| Linux / Node 24.19 / Chromium 153.0.8010.12 | Development real-MCP/browser closure verified; 38 checks including two Files/tabs, read-only denials, visible ROI, exact seek, confirmed receipt deduplication, lost writes, cancellation, delayed ACK/old command, source replacement, reload, close and live-grant EOF. |
 | macOS / installed Chrome + Node | Required local verification pending; not certified by the Linux result. |
 | Other browsers/platforms and native packaged MCP entry | Not certified by this source-checkout delivery. |
 
@@ -111,8 +111,8 @@ example, send a tools/call with name seek_review and arguments:
 ```
 
 For get_review_marks, input accepts limit 1..4 and an exclusive afterId; a removed
-cursor requires reading again without it. No timestamps, file names or similar
-frames are guessed or aligned. The only write targets are this page's existing
+cursor requires reading again without it. This host observation does not establish trusted scoring identities or scoring
+readiness. No timestamps, file names or similar frames are guessed or aligned. The only write targets are this page's existing
 facade operations; annotation creation requires an already paused drawn frame.
 
 - host-unavailable / stale epoch: reopen the owned page, review and explicitly
@@ -144,4 +144,3 @@ restart. Large read results fail explicitly rather than truncate or upload media
 Closing the panel keeps the grant visible on the MCP indicator; Revoke is the
 explicit disconnect. An executing facade operation settles before reconnect is
 allowed; waiting for its delivery ACK is fenced separately from physical work.
-

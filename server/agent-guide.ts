@@ -761,7 +761,7 @@ Schemas reuse the page Agent validator; File paths, scripts, logs, source loads,
 uploads and background job tools are not forwarded. Result/message/queue and
 15-second command budgets are explicit in /api/agent localMcp.limits.
 
-The current 2026-07-28 per-request MCP metadata/server-discover lifecycle and
+The current 2026-07-28 per-request MCP metadata and server/discover lifecycle and
 legacy 2025-11-25 initialize then notifications/initialized are supported.
 stdout contains only newline JSON-RPC; diagnostics go to stderr. Close stdin
 for shutdown. Missing/disconnected page is host-unavailable with a reconnect

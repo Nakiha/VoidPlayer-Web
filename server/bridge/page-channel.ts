@@ -35,7 +35,7 @@ export class PageChannel {
     this.sweep=setInterval(()=>{if(this.grant&&Date.now()-this.grant.seen>L.leaseMs)this.revoke('page-lease-expired');for(const [key,seen] of this.documents)if(Date.now()-seen>300000&&this.grant?.owner!==key)this.documents.delete(key);},500);this.sweep.unref();
   }
   status(){const g=this.grant;return {schema:'voidplayer-page-bridge',version:1,connected:!!g,clientClaim:this.client,clientIdentity:'self-declared-not-authenticated',...(g?{epoch:g.epoch,workspace:g.workspace,scopes:g.scopes}:{}),limits:L,next:g?'Use this exact epoch. Never replay unknown writes.':'Open the owned page and explicitly connect; no page is followed automatically.'};}
-  receipt(operationId:unknown){const f=this.facts.get(text(operationId,80));return f?{operationId:f.operationId,epoch:f.epoch,outcome:f.outcome,correlation:f.correlation,automaticReplay:false}:{operationId,outcome:'not-recorded',automaticReplay:false};}
+  receipt(operationId:unknown){const f=this.facts.get(text(operationId,80));return f?{operationId:f.operationId,epoch:f.epoch,outcome:f.outcome,correlation:f.correlation,automaticReplay:false}:{operationId,outcome:'not-recorded',automaticReplay:false,next:'Receipt absence is not proof of no effect. Inspect the original page; never automatically replay.'};}
   private credential(req:IncomingMessage){const value=req.headers.authorization??'',g=this.grant;if(!g||!/^Bearer [a-f0-9]{64}$/.test(value)||!timingSafeEqual(Buffer.from(value.slice(7),'hex'),Buffer.from(g.token,'hex')))throw Error('authorization-revoked');return g;}
   private finish(p:Pending,result:unknown,outcome:string){
     if(!this.pending.delete(p.command.correlation))return;

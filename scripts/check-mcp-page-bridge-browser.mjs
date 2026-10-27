@@ -139,7 +139,10 @@ try{
   check('no script evaluation or full-tool forwarding',!(await client.rpc('tools/call',{name:'get_review_logs',arguments:{}})).result);
   check('no page exceptions',pageErrors.length===0);assert.deepEqual(client.errors,[]);
   await pageA.screenshot({path:path.join(dir,'disconnected.png')});
+  await pageA.locator('#page-bridge-open').click();await pageA.locator('#page-bridge-connect').click();
+  await eventually(async()=>(await client.call('get_bridge_status')).connected);check('EOF starts with a live explicit grant');
   check('stdio EOF shutdown',(await client.close()).code===0);
+  await pageA.locator('#page-bridge-open[data-connected="false"]').waitFor({state:'visible'});check('EOF invalidates the live page grant');
   await writeFile(path.join(dir,'evidence.json'),JSON.stringify({passed:true,browser:browser.version(),channel:process.env.MCP_BROWSER_CHANNEL??'chromium',checks,network,pageErrors},null,2));
   console.log(JSON.stringify({passed:true,browser:browser.version(),checks:checks.length,phase}));
 }catch(error){await writeFile(path.join(dir,'failure.json'),JSON.stringify({phase,error:String(error),stack:error.stack,checks,network,pageErrors,channelResponses},null,2));throw error;}
