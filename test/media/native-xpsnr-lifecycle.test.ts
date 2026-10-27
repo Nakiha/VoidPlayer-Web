@@ -87,4 +87,3 @@ for(const replacement of ['source-table','cache-table','cache-build']as const)te
 test('native OS memory budget is enforced without erasing completed PSNR',{timeout:120000},async t=>{
  const f=await xpsnrFixture();t.after(()=>f.close());const input={...f.input,budget:{...f.input.budget,nativeMemoryBytes:1024*1024}},j=(await f.json('/api/quality/xpsnr/jobs',input,'memory-limit')).job,done=await f.wait(j.id);assert.equal(done.state,'partial');assert.equal(done.metrics.psnr.state,'completed');assert.equal(done.metrics.xpsnr.state,'failed');assert.equal(done.reason.code,'native-execution-failed');assert.equal(done.process,null);
 });
-

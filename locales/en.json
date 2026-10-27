@@ -5656,6 +5656,10 @@
     "source": "显式整帧测量候选",
     "translation": "Explicit full-frame measurement candidates"
   },
+  "xpsnr.compare": {
+    "source": "比较选中版本（须同一冻结参考片段及 recipe）",
+    "translation": "Compare selected variants (same frozen reference clip and recipe required)"
+  },
   "xpsnr.frames": {
     "source": "更多逐帧事实",
     "translation": "More frame facts"

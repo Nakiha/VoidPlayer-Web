@@ -47,6 +47,8 @@ The quality GUI can take a committed C plan, explicitly submit/freeze/replay, pa
 
 Candidates require explicit space/side/maxScore0..200 (finite minimum per-plane **frame** XPSNR threshold), topN≤8, minimum frame spacing, text and severity. Infinity does not create threshold candidates. These selected full-frame temporal observations are not localized defects or human judgments. Selection and operation IDs freeze before annotation transactions; partial/unknown commits replay original IDs/policy, receipt-first even after result reclamation. Shared evidence carries immutable recipe/component/plan/raw/stats and all sequence clocks plus selected original frame facts. Ordinary edits preserve evidence; import/copy downgrades verification to historical. The independent read-only original pair viewer uses verified caches and never reads someone else's private job, scores frames or controls playback. Existing FLV v1 and MP4 v2 evidence/fingerprints remain unchanged when no XPSNR association is present.
 
+The public-only `examples/http-quality.mjs` accepts `mode:"xpsnr"` and an explicit `xpsnr` recipe/budget object. Its default remains read-only; identity/prepare/plan/compute/candidate permissions are separate. It consumes only the public operation descriptions and HTTP responses; no service imports or browser are used.
+
 Unknown POST receipt: retain the exact actor/client/body/key, read original history/receipt and replay that same submission. Never silently use a new key or automatically publish. Process restart interrupts unfinished work and retains already committed companion facts, with no retry/resume.
 
 ## Reproducible regression entry points

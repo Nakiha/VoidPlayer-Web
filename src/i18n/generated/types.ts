@@ -1405,6 +1405,7 @@ export interface Sources {
   "xpsnr.budgets": "执行预算";
   "xpsnr.cancel": "取消并终止本任务执行";
   "xpsnr.candidates": "显式整帧测量候选";
+  "xpsnr.compare": "比较选中版本（须同一冻结参考片段及 recipe）";
   "xpsnr.frames": "更多逐帧事实";
   "xpsnr.history": "刷新服务端历史";
   "xpsnr.more": "更多历史";
@@ -2826,6 +2827,7 @@ export interface MessageParameters {
   "xpsnr.budgets": {  };
   "xpsnr.cancel": {  };
   "xpsnr.candidates": {  };
+  "xpsnr.compare": {  };
   "xpsnr.frames": {  };
   "xpsnr.history": {  };
   "xpsnr.more": {  };

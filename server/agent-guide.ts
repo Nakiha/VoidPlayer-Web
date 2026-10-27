@@ -826,4 +826,3 @@ export const AGENT_DOCUMENTS: Readonly<Record<string, string>> = {
   '/agent/quality/reference.md':quality,
   ...QUALITY_AGENT_DOCUMENTS,
 };
-

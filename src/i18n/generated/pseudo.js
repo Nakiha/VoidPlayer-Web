@@ -1407,6 +1407,7 @@ export default {
   "xpsnr.budgets": () => "［E~x~e~c~u~t~i~o~n~ b~u~d~g~e~t~s~ ········］",
   "xpsnr.cancel": () => "［C~a~n~c~e~l~ a~n~d~ s~t~o~p~ o~w~n~e~d~ e~x~e~c~u~t~i~o~n~ ········］",
   "xpsnr.candidates": () => "［E~x~p~l~i~c~i~t~ f~u~l~l~-f~r~a~m~e~ m~e~a~s~u~r~e~m~e~n~t~ c~a~n~d~i~d~a~t~e~s~ ········］",
+  "xpsnr.compare": () => "［C~o~m~p~a~r~e~ s~e~l~e~c~t~e~d~ v~a~r~i~a~n~t~s~ (s~a~m~e~ f~r~o~z~e~n~ r~e~f~e~r~e~n~c~e~ c~l~i~p~ a~n~d~ r~e~c~i~p~e~ r~e~q~u~i~r~e~d~) ········］",
   "xpsnr.frames": () => "［M~o~r~e~ f~r~a~m~e~ f~a~c~t~s~ ········］",
   "xpsnr.history": () => "［R~e~f~r~e~s~h~ s~e~r~v~i~c~e~ h~i~s~t~o~r~y~ ········］",
   "xpsnr.more": () => "［M~o~r~e~ h~i~s~t~o~r~y~ ········］",

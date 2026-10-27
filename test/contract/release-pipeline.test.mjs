@@ -112,13 +112,15 @@ test('cache suite runs once in its own required job with the same pinned prepara
   const jobs = workflowJobs(workflow), cache = jobs['cache-browser'];
   const manifest = JSON.parse(await readFile(new URL('../../scripts/testing/manifest.json', import.meta.url), 'utf8'));
   const cases = manifest.cases.filter(row => row.suites.includes('ci-cache'));
-  assert.equal(cases.length, 48);
-  assert.equal(new Set(cases.map(row => row.id)).size, 48);
+  assert.equal(cases.length, 52);
+  assert.equal(new Set(cases.map(row => row.id)).size, 52);
   const taskIds=['browser-task-center-chromium','browser-task-center-webkit'];
   const taskCases=cases.filter(row=>taskIds.includes(row.id));
   assert.deepEqual(taskCases.map(row=>row.id).sort(),taskIds);
   for(const engine of ['chromium','webkit'])assert.deepEqual(taskCases.find(row=>row.id===`browser-task-center-${engine}`).command,['node','scripts/native/run-vmaf-tests.mjs','node','scripts/check-task-center-browser.mjs',engine]);
-  const prior=cases.filter(row=>!taskIds.includes(row.id));
+  const xpsnrIds=['browser-native-xpsnr-8-chromium','browser-native-xpsnr-10-chromium','browser-native-xpsnr-8-webkit','browser-native-xpsnr-10-webkit'];
+  assert.deepEqual(cases.filter(row=>xpsnrIds.includes(row.id)).map(row=>row.id).sort(),[...xpsnrIds].sort());
+  const prior=cases.filter(row=>!taskIds.includes(row.id)&&!xpsnrIds.includes(row.id));
   assert.equal(prior.length,46,'retain all prior required cache cases alongside both task-center browsers');
   assert.deepEqual(prior.find(row=>row.id==='browser-mcp-page-bridge-chromium')?.command,['node','scripts/check-mcp-page-bridge-browser.mjs']);
   assert.equal(prior.filter(row=>row.id!=='browser-mcp-page-bridge-chromium').length,45,'retain the existing cache matrix alongside the required MCP case');

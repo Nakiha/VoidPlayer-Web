@@ -6062,6 +6062,10 @@
     "source": "显式整帧测量候选",
     "params": {}
   },
+  "xpsnr.compare": {
+    "source": "比较选中版本（须同一冻结参考片段及 recipe）",
+    "params": {}
+  },
   "xpsnr.frames": {
     "source": "更多逐帧事实",
     "params": {}

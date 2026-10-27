@@ -1407,6 +1407,7 @@ export default {
   "xpsnr.budgets": () => "Execution budgets",
   "xpsnr.cancel": () => "Cancel and stop owned execution",
   "xpsnr.candidates": () => "Explicit full-frame measurement candidates",
+  "xpsnr.compare": () => "Compare selected variants (same frozen reference clip and recipe required)",
   "xpsnr.frames": () => "More frame facts",
   "xpsnr.history": () => "Refresh service history",
   "xpsnr.more": () => "More history",
