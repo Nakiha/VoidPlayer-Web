@@ -1,0 +1,17 @@
+{
+  "mode":"single",
+  "key":"replace-with-stable-operation-key",
+  "identity":{"id":"replace-with-existing-user-id"},
+  "client":{"id":"http-review","name":"Explicit HTTP review"},
+  "reference":{"id":"000000000000000000000000","version":"000000000000000000000000"},
+  "distorted":{"id":"000000000000000000000000","version":"000000000000000000000000"},
+  "declaration":"Replace with explicit caller relationship; not a content certificate",
+  "clock":{"mode":"piecewise-exact-source-pts-offset","segments":[{"id":"declared","referenceStartUs":0,"referenceEndUs":1000000,"offsetUs":0}]},
+  "plan":{
+    "interval":{"startAu":0,"endAu":0},"sampling":{"mode":"all"},
+    "recipe":{"roi":{"x":0,"y":0,"width":32,"height":32},"ssim":{"variant":"ffmpeg-uniform-8x8-step4-v1"},"spatial":{"blockWidth":16,"blockHeight":16},"budget":{"maxReadBytes":1048576,"maxInputBytes":1048576}},
+    "budget":{"maxReadBytes":33554432,"maxPackets":4096,"maxOutputFrames":4096,"maxInputBytes":33554432,"maxElapsedMs":120000},
+    "planningBudget":{"maxIndexBytes":1048576,"maxIndexPackets":4096,"maxElapsedMs":30000}
+  },
+  "candidate":{"space":"default","side":"reference","id":"replace-explicit-annotation-id","operationId":"replace-explicit-operation-id","text":"Explicit measurement candidate; not a defect judgment","severity":3}
+}

@@ -13,10 +13,11 @@ const stop=(code,message,details)=>{throw new HttpQualityError(code,message,deta
  * allow defaults to {}. cookie is an in-memory embedding option, never a CLI file field.
  * fetchImpl/onObservation permit testing ordinary transport loss and stopping observation. */
 export async function runHttpQuality(serverURL,input={},options={}){
+ input=structuredClone(input);
  const base=new URL(serverURL);
  if(!['http:','https:'].includes(base.protocol)||base.username||base.password||base.pathname!=='/'||base.search||base.hash)stop('invalid-server','Use a plain service origin without credentials, path, query or fragment.');
  if('cookie'in input)stop('credential-input','Cookies must not be stored in the input file. Select an identity explicitly.');
- const allow=options.allow??{},fetchImpl=options.fetchImpl??fetch,operations=new Map();
+ const allow={...options.allow},fetchImpl=options.fetchImpl??fetch,operations=new Map();
  let cookie=options.cookie??'',actor=options.actor??null,requests=0;
  const deadline=Date.now()+(options.maxElapsedMs??180000),maxRequests=options.maxRequests??1200;
  const url=path=>{const u=new URL(path,base);if(u.origin!==base.origin)stop('foreign-link','Refusing a link outside the selected service.');return u;};
@@ -83,7 +84,7 @@ export async function runHttpQuality(serverURL,input={},options={}){
  const mode=input.mode??'single';if(!['single','range','vmaf'].includes(mode))stop('invalid-mode','Choose single, range or vmaf explicitly.');
  const tasks=['identity','library','quality.correspondence',`quality.${mode}`,'evidence'];
  for(const id of tasks){const t=catalog.entries.find(t=>t.id===id);if(!t)stop('missing-task',`Task ${id} unavailable.`);await request(t.links.guide,{text:true});const detail=await get(t.links.describe);if(detail.schema!=='voidplayer-agent-task'||detail.version!==1)stop('task-version','Unsupported task description.');for(const op of detail.operations)operations.set(op.id,op);}
- const report={schema:'voidplayer-http-quality-example',version:1,mode,writesAuthorized:Object.keys(allow).filter(k=>allow[k]),discovery:[],next:[]};
+ const report={schema:'voidplayer-http-quality-example',version:1,mode,writesAuthorized:Object.keys(allow).filter(k=>allow[k]),capabilities:manifest.capabilities.filter(c=>['library.discovery','library.preparations','quality.'+mode,'quality.jobs'].includes(c.id)),discovery:[],next:[]};
  // Bounded read-only discovery; caller chooses IDs/versions, never filenames or nearest PTS.
  const query=new URLSearchParams(input.query??{includeUnknown:'1',limit:'16'});query.delete('cursor');const firstQuery=query.toString();let cursor=null,restarts=0;
  for(let n=0;n<64;n++){
@@ -99,6 +100,7 @@ export async function runHttpQuality(serverURL,input={},options={}){
  }
  if(!Object.values(allow).some(Boolean)){report.next=['/agent/quality/sources.md','Explicit identity, prepare, plan and compute permissions are separate. No writes were performed.'];return report;}
  if(!actor){if(!input.identity)stop('identity-required','Supply an explicit existing identity ID or an explicitly authorized identity creation.');await write('identity.select',input.identity,'identity');}
+ report.actor={id:actor};
  if(mode==='vmaf'){const cap=await read('vmaf.capability');report.nativeCapability=cap;if(!cap.enabled){report.next=['/agent/quality/vmaf.md','Native VMAF unavailable; no preparation, plan, scoring or metric substitution was performed.'];return report;}}
  const sources=[];
  for(const [side,source]of [['reference',input.reference],['distorted',input.distorted]]){
@@ -145,16 +147,17 @@ export async function runHttpQuality(serverURL,input={},options={}){
  }
  if(publication){
   report.publication=publication;const space=publication.policy.space;report.annotations=[];for(const id of publication.createdIds)report.annotations.push(await read('evidence.record',{space,id}));
+  report.viewerLinks=report.annotations.flatMap(record=>(record.document.mark.qualityEvidence??[]).map(e=>{const u=url(manifest.annotations.originalPairViewer.path);u.search=new URLSearchParams({space:record.space,annotationId:record.id,evidenceId:e.id}).toString();return {url:u.href,requiresFrontend:true,requiresBrowser:true,readOnly:true};}));
   report.events=[];for(let after=0,n=0;n<64;n++){const page=await read('evidence.events',{space},{after});if(page.resetRequired){report.snapshot=await get(page.snapshotUrl);report.eventReset=true;break;}report.events.push(...page.events);if(!page.more)break;after=page.cursor;}
  }else report.next=['/agent/quality/candidates.md','Publication requires explicit candidate permission and policy.'];
  report.requests=requests;return report;
 }
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
- const [server,file,...flags]=process.argv.slice(2),known=['identity','prepare','plan','compute','candidate','retryUnknown'];
+ const [server,...args]=process.argv.slice(2),known={identity:'--allow-identity',prepare:'--allow-prepare',plan:'--allow-plan',compute:'--allow-compute',candidate:'--allow-candidate',retryUnknown:'--allow-retry-unknown'},files=args.filter(a=>!a.startsWith('--')),flags=args.filter(a=>a.startsWith('--'));
  try{
-  if(!server||flags.some(f=>!known.some(k=>f===`--allow-${k}`)))throw Error('Usage: node examples/http-quality.mjs SERVER_ORIGIN [input.json] [--allow-identity] [--allow-prepare] [--allow-plan] [--allow-compute] [--allow-candidate] [--allow-retryUnknown]');
-  const input=file&&!file.startsWith('--')?JSON.parse(await readFile(file,'utf8')):{},allow=Object.fromEntries(known.map(k=>[k,[file,...flags].includes(`--allow-${k}`)]));
+  if(!server||files.length>1||flags.some(f=>!Object.values(known).includes(f)))throw Error('Usage: node examples/http-quality.mjs SERVER_ORIGIN [input.json] [--allow-identity] [--allow-prepare] [--allow-plan] [--allow-compute] [--allow-candidate] [--allow-retry-unknown]');
+  const input=files[0]?JSON.parse(await readFile(files[0],'utf8')):{},allow=Object.fromEntries(Object.entries(known).map(([key,flag])=>[key,flags.includes(flag)]));
   console.log(JSON.stringify(await runHttpQuality(server,input,{allow}),null,2));
  }catch(e){console.error(JSON.stringify({code:e.code??'client-error',error:e.message,details:e.details??null}));process.exitCode=1;}
 }

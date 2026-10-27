@@ -5,6 +5,7 @@ import {AdminError,adminErrorBody} from '../../admin-error.ts';
 import {adminWriteAllowed,readAdminJson} from '../../admin.ts';
 import {sendJson} from '../../http-utils.ts';
 import {CORRESPONDENCE_LIMITS} from '../../../shared/analysis/quality/correspondence.ts';
+import {agentRecoveryFields} from '../../agent-errors.ts';
 
 export async function handleCorrespondenceRoutes(ctx:RouteContext,req:IncomingMessage,res:ServerResponse,url:URL){
   if(!/^\/api\/quality\/(reference-relations|correspondence-plans)(?:\/|$)/.test(url.pathname))return false;
@@ -34,6 +35,6 @@ export async function handleCorrespondenceRoutes(ctx:RouteContext,req:IncomingMe
       else if(operation==='execute'){const accepted=service.execute(id,actor,body,ctx.requestId);res.setHeader('location',`/api/quality/ranges/${accepted.job.id}`);sendJson(res,accepted.replayed?200:202,accepted);}
       else {if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).length)throw new AdminError(400,'Cancellation expects an empty object.','invalid-request');sendJson(res,200,service.cancel(id,actor.id));}
     }finally{clearTimeout(timer);}
-  }catch(e){if(!res.headersSent&&!res.destroyed)sendJson(res,e instanceof AdminError?e.status:500,{...adminErrorBody(e),code:(e as {code?:string})?.code??'correspondence-failed'});}
+  }catch(e){if(!res.headersSent&&!res.destroyed)sendJson(res,e instanceof AdminError?e.status:500,{...adminErrorBody(e),code:(e as {code?:string})?.code??'correspondence-failed',...agentRecoveryFields((e as {code?:string})?.code??'correspondence-failed','plan.create')});}
   return true;
 }

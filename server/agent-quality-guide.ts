@@ -127,7 +127,7 @@ full-frame limited BT.709 SDR YUV420 8/10bit, same geometry, all samples mapped.
 No ROI, stride, holes, conversion, negative PTS, VFR or automatic alignment.
 
 POST preflight with schema voidplayer-native-vmaf-job, version1, client,
-plan:{id,attemptId,digest}, model, cadenceUs, metrics:{ssim:boolean}, and budget.
+plan:{id,attemptId,digest}, model, cadenceUs, metrics:{psnr:true,ssim:boolean}, and budget.
 It validates the committed C plan and installed components but does not score.
 Its IO may cancel on disconnect. POST jobs with the SAME input and a frozen key
 explicitly authorizes persistent computation. Observe job then result and frames.

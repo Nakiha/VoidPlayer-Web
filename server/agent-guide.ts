@@ -420,7 +420,7 @@ focus or tracks. Local-only review has no server activity stream.
 const quality = `# Source-frame PSNR and durable single-frame jobs v1
 
 /api/agent describes quality.frame-pair and quality.jobs. Both support only
-explicit single-frame PSNR from registered library sources with trusted caches.
+explicit single-frame PSNR with optional SSIM/grid from registered library sources with trusted caches.
 The qualityJobs object gives the request schema, endpoints, source constraints
 and fixed budgets. compute.workers remains unavailable. Neither operation needs
 a browser, playback cursor, session or GUI acknowledgement.

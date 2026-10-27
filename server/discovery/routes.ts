@@ -4,6 +4,7 @@ import { AdminError } from '../admin-error.ts';
 import { adminWriteAllowed, readAdminJson } from '../admin.ts';
 import { requireCapturedActor } from '../identity.ts';
 import { sendJson } from '../http-utils.ts';
+import {agentRecoveryFields} from '../agent-errors.ts';
 import { DISCOVERY_DICTIONARY, DISCOVERY_PATH, PREPARATION_PATH, parseDiscoveryQuery } from '../../shared/media/discovery.ts';
 
 export async function handleDiscoveryRoutes(ctx:RouteContext,req:IncomingMessage,res:ServerResponse,url:URL){
@@ -37,6 +38,6 @@ export async function handleDiscoveryRoutes(ctx:RouteContext,req:IncomingMessage
       if(collection){const value=ctx.library.discovery.submit(body,ctx.actor,ctx.requestId,req.headers['idempotency-key']);res.setHeader('location',`${PREPARATION_PATH}/${value.job.id}`);reply(value.replayed?200:202,value);}
       else{if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).length)throw new AdminError(400,'Cancel body must be empty.','invalid-preparation-request');reply(200,ctx.library.discovery.cancel(job![1],ctx.actor.id));}
     }finally{clearTimeout(timer);}
-  }catch(error){if(!res.destroyed&&!res.headersSent){const known=error instanceof AdminError;reply(known?error.status:500,{error:known?error.message:'Library discovery failed.',code:known?error.code:'discovery-failed',links:{describedBy:'/api/library/discovery-schema'}});}}
+  }catch(error){if(!res.destroyed&&!res.headersSent){const known=error instanceof AdminError,code=known?error.code:'discovery-failed',fields=agentRecoveryFields(code,collection?'library.prepare':job?'library.preparation':'library.describe');reply(known?error.status:500,{error:known?error.message:'Library discovery failed.',code,...fields,links:{...fields.links,describedBy:'/api/library/discovery-schema'}});}}
   return true;
 }

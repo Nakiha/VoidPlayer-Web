@@ -69,6 +69,8 @@ UI 和 Agent 都通过 `session.updateMark` 修改对象，保留 ID 与帧锚�
 
 HTTP Agent 从 `/llms.txt`、`/agent.md` 和 `/api/agent` 逐层发现任务与运行时能力，入口文档内嵌于服务端，不依赖 `dist/`。`shared/service/agent.ts` 提供健康接口与发现接口共用的能力定义；尚未实现的评分任务、MCP 桥接和计算节点不会被声明为可用。详见 [HTTP Agent 与操作同步](agent-http.md)。
 
+逐任务/操作 JSON 从 `/api/agent/tasks` 开始；`shared/service/agent-operations.ts` 与嵌入式操作 Markdown 共用描述和真实领域常量，真实 validator/router 继续负责准入。普通 HTTP 示例默认只读，对准备、规划、计算和候选分别显式授权；源/时钟/身份/幂等恢复边界见 [冷启动评分](agent-quality-workflow.md)，没有新的服务调度器或浏览器依赖。
+
 持久标注的校验、不可变锚点、版本冲突和作者/回复规则在 `shared/review/annotation-command.ts`。`server/annotations.ts` 在 SQLite 事务中写入对象、幂等回执和操作事件。GUI 通过游标读取变化；工作区设置显示其他媒体的操作，但不自动载入、暂停或定位。事件历史有界，断线后可续读，过期或超前游标通过快照重建确认状态，保留本机草稿。当前事件流只覆盖标注，不代表未来评分任务的通用进度系统。
 
 `src/agent.ts` 定义工具清单、参数校验和执行入口；`src/main.ts` 暴露 `window.voidPlayer`。工具包括会话与轨道操作、定位与步进、播放与基准、标注编辑与导出、媒体库及日志读取。以实际导出的工具 schema 为准，不在文档复制一份易过时的签名。工具入口用 `tool-input.ts` 校验这份 schema 声明的字段类型、枚举与边界；宿主未做预校验时也执行，状态和领域约束仍由同一 session facade 负责。`query_analysis` 的滑窗支持任意正整数微秒，与 UI/session 一致；面板下拉项只是常用预设，不是接口允许值全集。

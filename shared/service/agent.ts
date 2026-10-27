@@ -30,6 +30,7 @@ export const AGENT_TASKS = {
 export function agentManifest(input: { capabilities: ServiceCapabilities; libraryReady: boolean; frontendAvailable?: boolean; qualityJobsEnabled?: boolean; nativeVmaf?: {enabled:boolean;reason:unknown}|null; actor: { id: string; name: string } | null }) {
   const { capabilities: c, libraryReady, actor } = input;
   const capabilities: AgentCapability[] = [
+    {id:'identity.select',implemented:true,enabled:c.admin,readiness:c.admin?'ready':'unavailable',requiresBrowser:false,guide:AGENT_TASKS.workspaces},
     { id: 'library.browse', implemented: true, enabled: true, readiness: libraryReady ? 'ready' : 'index-warming', requiresBrowser: false, guide: AGENT_TASKS.library },
     { id: 'library.discovery', implemented: true, enabled: true, readiness: libraryReady ? 'per-source' : 'index-warming', requiresBrowser: false, guide: AGENT_TASKS.library },
     { id: 'library.preparations', implemented: true, enabled: !!input.qualityJobsEnabled, readiness: !input.qualityJobsEnabled ? 'unavailable' : actor ? 'per-source' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.library },
@@ -95,6 +96,7 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
       actionHeader: 'X-VoidPlayer-Action', cookieRequired: true, completion: 'server-commit', guiAcknowledgementRequired: false },
     annotations: { version: 1, spaces: '/api/annotations/spaces',
       events: '/api/annotations/events/{space}?after={cursor}',
+      originalPairViewer:{path:'/quality.html',query:['space','annotationId','evidenceId'],requiresBrowser:true,requiresFrontend:true,readOnly:true,buildsIndexes:false,controlsPlayback:false,privateJobRead:false},
       qualityEvidence: {action:'attach-quality-result',metric:'psnr',optionalCompanion:'ssim',result:'completed-owned-job',target:'existing-primary-source-version-and-source-pts',roi:'original-visible-pixel-grid',immutable:true,maxCount:4,maxBytes:131072,importVerification:'historical',workspaceVersion:2},
       qualityCandidate:{action:'create-quality-candidate',revision:0,result:'completed-owned-job-with-recorded-annotation-context',callerFields:['text','severity'],derived:['source-version','actual-source-pts','index-origin','frame-duration','roi','immutable-evidence'],assessment:'not-subjectively-assessed',assessmentMeaning:'at-creation-no-subjective-defect-judgment',resultContext:{field:'annotationContext',basis:'complete-flv-index-derived-v1',additionalBases:['complete-mp4-index-derived-v1'],timeUnit:'integer-microseconds',duration:'index-derived-including-estimated-last-frame',legacyMissing:'409 annotation-context-unavailable'},transaction:['annotation','evidence','receipt','event'],receiptBeforeResultLookup:true,workspaceVersion:3,importVerification:'historical',playbackRequired:false},
       identity: ['space', 'id'], concurrency: 'expected-revision', idempotency: 'operationId',
