@@ -57,6 +57,7 @@ import { ReviewSession } from './session.ts';
 import { formatTime } from '../shared/review/model.ts';
 import type { Slot } from '../shared/review/model.ts';
 import { registerReviewTools, reviewTools } from './agent.ts';
+import {installPageBridge} from './agent/page-bridge.ts';
 import { bindFileDrop } from './ui/file-drop.ts';
 import { handleKey, saveFileHandle } from './services/file-handles.ts';
 import type { FsFileHandle } from './services/file-handles.ts';
@@ -638,6 +639,7 @@ const api = {
   subscribeState: (listener: () => void) => session.subscribe(listener),
 };
 Object.defineProperty(window, 'voidPlayer', { value: Object.freeze(api), configurable: true });
+installPageBridge(session,api.tools,uiEvents.signal);
 const annotationLink = new URL(location.href).searchParams;
 if (annotationLink.has('annotation')) void act(async () => {
   const space=annotationLink.get('space') ?? 'default', id=annotationLink.get('annotation')!;

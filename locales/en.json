@@ -3074,6 +3074,82 @@
     "source": "VoidPlayer · 视频对比",
     "translation": "VoidPlayer · Video comparison"
   },
+  "pageBridge.annotate": {
+    "source": "允许在已暂停的当前帧创建可见标注",
+    "translation": "Allow visible annotations on the current paused frame"
+  },
+  "pageBridge.changed": {
+    "source": "身份或工作区来源已改变，请重新明确授权。",
+    "translation": "Identity or workspace sources changed. Explicitly authorize again."
+  },
+  "pageBridge.claim": {
+    "source": "客户端名称为自行声明，并非认证身份。仅授权此页面及当前工作区，不跟随其他标签。",
+    "translation": "The client name is self-declared, not an authenticated identity. Authorize only this page and workspace; other tabs are never followed."
+  },
+  "pageBridge.close": {
+    "source": "关闭面板",
+    "translation": "Close panel"
+  },
+  "pageBridge.connect": {
+    "source": "明确连接此页面",
+    "translation": "Explicitly connect this page"
+  },
+  "pageBridge.connectFailed": {
+    "source": "未能确认连接。请检查客户端及目标页面；不会自动重连或跟随其他标签。",
+    "translation": "Connection could not be confirmed. Check the client and target page; no automatic reconnect or tab following occurs."
+  },
+  "pageBridge.connected": {
+    "source": "已连接此页面；关闭面板仍保留授权，可随时重新打开并撤销。",
+    "translation": "This page is connected. Closing this panel keeps the grant; reopen it to revoke at any time."
+  },
+  "pageBridge.empty": {
+    "source": "空工作区",
+    "translation": "Empty workspace"
+  },
+  "pageBridge.invalid": {
+    "source": "收到不符合授权范围的命令，连接已撤销。",
+    "translation": "A command exceeded the granted scope. Connection revoked."
+  },
+  "pageBridge.large": {
+    "source": "结果超过通道预算，写入结果可能未知；请保留原 correlation，勿自动重试。",
+    "translation": "The result exceeded the channel budget. A write may have an unknown outcome; retain its original correlation and never retry automatically."
+  },
+  "pageBridge.lifetime": {
+    "source": "授权仅存于当前进程和页面内存。撤销、重载、关页或断线即失效；已经开始的操作可能完成，取消不表示回滚，未知写入不得自动重试。",
+    "translation": "Authorization exists only in process and page memory. Revoke, reload, close or disconnect invalidates it. Started operations may still complete; cancellation is not rollback. Never automatically retry unknown writes."
+  },
+  "pageBridge.lost": {
+    "source": "通道已断开；已派发写入的结果可能未知，不会自动重放。",
+    "translation": "Channel disconnected. Dispatched writes may have unknown outcomes and are never automatically replayed."
+  },
+  "pageBridge.noClient": {
+    "source": "MCP 客户端尚未初始化。",
+    "translation": "The MCP client has not initialized."
+  },
+  "pageBridge.read": {
+    "source": "读取此页面会话、已有标注与 ROI（不含媒体或日志字节）",
+    "translation": "Read this page session, existing annotations and ROIs (no media or log bytes)"
+  },
+  "pageBridge.revoke": {
+    "source": "撤销连接",
+    "translation": "Revoke connection"
+  },
+  "pageBridge.revoked": {
+    "source": "已撤销；已开始的操作可能仍会完成。重新连接必须再次确认。",
+    "translation": "Revoked. Started operations may still complete. Reconnection requires explicit consent again."
+  },
+  "pageBridge.title": {
+    "source": "临时本机 MCP 连接",
+    "translation": "Temporary local MCP connection"
+  },
+  "pageBridge.unavailable": {
+    "source": "本机桥进程不可用；普通 HTTP 后台任务不受页面连接影响。",
+    "translation": "Local bridge process unavailable. Ordinary HTTP background jobs do not depend on this page connection."
+  },
+  "pageBridge.view": {
+    "source": "允许暂停和精确定位此页面",
+    "translation": "Allow pause and exact seeking in this page"
+  },
   "player.aBFrameStartDifferenceMs": {
     "source": "A / B 帧起点差 {p0} ms",
     "translation": "A / B frame start difference {p0} ms"

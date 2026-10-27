@@ -25,6 +25,7 @@ import { handleConnectionRoutes } from './routes/connection.ts';
 import { handleStateRoutes } from './routes/state.ts';
 import { handleContentRoutes } from './routes/content.ts';
 import type { RouteContext } from './routes/context.ts';
+import type {PageChannel} from './bridge/page-channel.ts';
 
 // Narrow read-only HTTP API for the web player:
 //   GET /api/library        -> media list under the whitelisted folders
@@ -34,6 +35,8 @@ import type { RouteContext } from './routes/context.ts';
 export function createTrafficState() { return { sockets:new Set<import('node:net').Socket>(),activeRequests:0,completedRequests:0,abortedRequests:0,recentRequests:[] as Record<string,unknown>[] }; }
 
 export interface ServerOptions {
+  /** Installed only by the explicit temporary stdio page launcher. */
+  pageBridge?:PageChannel;
   traffic?: ReturnType<typeof createTrafficState>;
   roots: string[];
   tls?: HttpsOptions;
@@ -63,6 +66,7 @@ export function createMediaServer(options: ServerOptions): Server {
   const {sockets,recentRequests}=traffic;
 
   const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
+    if(options.pageBridge&&await options.pageBridge.handle(req,res))return;
     if(options.clientAddress)setClientAddress(req,options.clientAddress(req));
     const started = performance.now();
     const requestId = randomUUID();
