@@ -7,7 +7,9 @@ It uses the current self-declared service actor, not strong authentication.
 `GET /api/tasks` accepts one each of mediaId, mediaVersion (requires mediaId),
 kind, metric, raw state, createdFrom (inclusive epoch milliseconds), createdTo
 (exclusive), limit (1..50) and cursor. Source filtering matches ID and version
-on the same side. The query reads all actor-owned metadata within each original
+on the same side. Metric filters identify requested scoring metrics or named
+preparation/planning operations; they do not assert that a metric completed.
+Per-metric outcomes remain independent. The query reads all actor-owned metadata within each original
 store's hard history cap, not the first page of each legacy API. SQL projects
 metadata without loading full inputs, results, index documents or pixels into JS.
 
@@ -80,6 +82,27 @@ strong authentication. It does not depend on unmerged reexecution or CAMBI work.
 Reference integrity remains not-certified; concealment detection is unavailable.
 Negative-PTS/VFR/stat-witness and historical performance limits remain unchanged.
 
-Current checkpoint: Node6 unit +3 real HTTP, Bun9 and both browsers18 each have
-passed during development. The final cursor-recovery/UI cleanup additions and
-compiled checks still require their final verification; these are not CI results.
+## Verified candidate evidence
+
+- Node: six unit plus three real HTTP tests passed. Bun: the same nine passed.
+  The HTTP cases exercise all five original cancel delegates, wrong action/Origin/
+  actor rejection, original results and candidate receipts, and real Worker exit.
+- Chromium and WebKit:21 named checks each passed, including deliberately
+  ignored abort in two scoped late-response controls, expired snapshot recovery,
+  combined filters, actor DOM cleanup, original-frame viewing and continuing A.
+- Fast suite75/75, operation/query contracts12/12, build/shared/boundaries and
+  manifest490 checks passed. These are author development results, not PR CI.
+- Linux x64 empty-PATH compiled checks passed: real discovery/preparation,
+  H2648/HEVC8/10 MP4 PSNR/SSIM/grid, and11 official native FLV/MP4/mixed VMAF
+  paths. New task-query/result/plan association assertions ran against the
+  compiled executable. Windows/macOS compiled task assertions are registered
+  in the existing release checks but have not been executed locally.
+- An intermediate WebKit author run reached all feature assertions but recorded
+  a page access-control error while the test globally bypassed abort for task
+  detail fetches. The test now scopes this bypass to the two explicit negative
+  controls and drains their real response bodies before ending each control;
+  both browsers21/21 passed with the zero-page-error assertion unchanged.
+  This does not establish a cause for any older browser/CI failure.
+
+Normal independent review and final PR checks remain required. No new playback
+performance measurements were made, and historical negative results remain.

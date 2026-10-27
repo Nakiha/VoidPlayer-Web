@@ -49,6 +49,14 @@ test('unified cancel retains the real Worker permit until physical exit; observe
  runner.createWorker=(data:any)=>{worker=new Worker(new URL('../helpers/quality-workflow-worker.ts',import.meta.url),{workerData:{...data,gate:gate.buffer}});worker.once('exit',()=>exits++);const stop=worker.terminate.bind(worker);physicalStop=stop;worker.terminate=()=>{terminateCalled=true;return new Promise<number>((resolve,reject)=>{release=()=>{void stop().then(resolve,reject);};});};return worker;};
  const input=await f.json(`/api/quality/correspondence-plans/${f.input.plan.id}/range-input`),job=(await f.json('/api/quality/jobs',{schema:'voidplayer-psnr-frame-job',version:1,client:{id:'task-cancel',kind:'agent'},request:input.pairs[0]},'cancel')).job;
  await until(()=>Atomics.load(gate,1),Boolean,'real decode gate');
+ // The same held real permit keeps other original services queued. Cancel
+ // through the unified route without transferring or releasing that permit.
+ const prepared=(await f.json('/api/library/preparations',{source:{id:f.entries[0].id,version:f.entries[0].version},operation:'quality-index',client:{id:'task-cancel-preparation',name:'Explicit cancellation'}},'queued-prep',{'x-voidplayer-action':'library-preparation'})).job;
+ assert.equal((await f.request(`/api/tasks/preparation/${prepared.id}/cancel`,{})).status,403,'original preparation action still required');
+ await f.json(`/api/tasks/preparation/${prepared.id}/cancel`,{},undefined,{'x-voidplayer-action':'library-preparation'});await until(()=>f.json(`/api/library/preparations/${prepared.id}`),(j:any)=>j.state==='cancelled');
+ const planned=(await f.json('/api/quality/correspondence-plans',f.planInput,'queued-plan')).plan;await f.json(`/api/tasks/correspondence/${planned.id}/cancel`,{});await until(()=>f.json(`/api/quality/correspondence-plans/${planned.id}`),(d:any)=>d.plan.state==='cancelled');
+ const ranged=(await f.json('/api/quality/ranges',input,'queued-range')).job;await f.json(`/api/tasks/range/${ranged.id}/cancel`,{});await until(()=>f.json(`/api/quality/ranges/${ranged.id}`),(d:any)=>d.job.state==='cancelled');
+ assert.equal(exits,0);assert.throws(()=>f.service.library.qualityAdmission.acquire(),(e:any)=>e.code==='quality-busy','cancelling other tasks cannot release the active single permit');
  const controller=new AbortController();const observed=fetch(f.base+`/api/tasks/single/${job.id}`,{headers:f.headers,signal:controller.signal});controller.abort();await observed.catch(()=>{});
  assert.equal((await f.json(`/api/tasks/single/${job.id}`)).task.state,'running');
  const cancelled=await f.json(`/api/tasks/single/${job.id}/cancel`,{});assert.equal(cancelled.task.state,'cancelling');assert.equal(cancelled.task.endedAt,null);

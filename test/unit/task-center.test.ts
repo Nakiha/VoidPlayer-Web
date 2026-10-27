@@ -68,6 +68,7 @@ test('cursor is scoped, signed, bounded, expiring, restart-invalid and recoverab
  assert.equal(f.center.query('actor-A',query()).total,4);
  const old=f.center.query('actor-A',query('limit=1'));f.center.query('actor-A',query('limit=1'));f.center.query('actor-A',query('limit=1'));
  assert.throws(()=>f.center.query('actor-A',query(`cursor=${old.nextCursor}`)),(e:any)=>e.code==='task-cursor-expired');
+ const global=f.center.query('actor-A',query('limit=1'));for(let n=0;n<TASK_LIMITS.snapshots;n++)f.center.query('bounded-actor-'+n,query());assert.throws(()=>f.center.query('actor-A',query(`cursor=${global.nextCursor}`)),(e:any)=>e.code==='task-cursor-expired');
 });
 
 test('detail traces only same-actor pinned relationships and distinguishes retained range results',t=>{
@@ -85,5 +86,6 @@ test('detail traces only same-actor pinned relationships and distinguishes retai
 });
 
 test('hard history excess fails closed, never returns a silently incomplete first window',t=>{
+ const temporary=new TaskCenterService({durableQualityJobsEnabled:false}as MediaLibraryIndex);assert.throws(()=>temporary.query('actor-A',query()),(e:any)=>e.code==='task-storage-unavailable');temporary.close();
  const f=fixture();t.after(f.close);for(let n=0;n<=TASK_HISTORY_ROWS.vmaf;n++)f.insert('vmaf');assert.throws(()=>f.center.query('actor-A',query()),(e:any)=>e.code==='task-history-budget');
 });
