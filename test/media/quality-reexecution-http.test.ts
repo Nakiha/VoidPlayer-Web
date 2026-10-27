@@ -2,13 +2,30 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Worker} from 'node:worker_threads';
 import {randomUUID} from 'node:crypto';
-import {readFile,writeFile} from 'node:fs/promises';
+import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import path from 'node:path';
 // @ts-ignore ordinary public-HTTP-only example
 import {runHttpQuality} from '../../examples/http-quality.mjs';
 // @ts-ignore shared fixed-public-media/native fixture
 import {nativeFixture,until} from '../helpers/native-vmaf.mjs';
 import {SSIM_VARIANT} from '../../shared/analysis/quality/ssim.ts';
+
+async function measuredWitnesses(library:any,kind:'single'|'range'|'vmaf',plan:any,requests:any[],nativeInput:any,snapshot:any,directory:string){
+  const run=async(data:any)=>{
+    const state=new Int32Array(new SharedArrayBuffer(12)),release=library.qualityAdmission.acquire();
+    const worker=new Worker(new URL('../helpers/quality-witness-worker.ts',import.meta.url),{workerData:{...data,database:library.indexDatabase,coreDir:(library.quality as any).coreDir,control:new SharedArrayBuffer(8),witnessState:state.buffer},trackUnmanagedFds:true,resourceLimits:{maxOldGenerationSizeMb:256}});
+    try{await new Promise<void>((resolve,reject)=>{let reply:any;worker.on('message',v=>reply=v);worker.once('error',reject);worker.once('exit',code=>code===0&&reply?.ok?resolve():reject(Error(JSON.stringify(reply??{code}))));});return Array.from(state);}finally{await worker.terminate();release();}
+  };
+  const native={domain:'vmaf',input:nativeInput,snapshot,directory,nativeContract:plan.contract.native,expectedExecutionContract:plan.contract};
+  const preflight=await run(kind==='vmaf'?{...native,mode:'preflight'}:{domain:'single',mode:'reexecution-preflight',requests,expected:plan.contract});
+  assert.equal(preflight[0],1,'read-only metadata validation is one separate witness pass');
+  const values:number[][]=[];
+  if(kind==='vmaf'){await mkdir(directory);values.push(await run({...native,mode:'decode'}));values.push(await run({...native,mode:'verify'}));assert.equal(values[0][0],2);assert.equal(values[1][0],1,'final verify Worker reads the witness too');}
+  else for(const request of requests)values.push(await run({domain:'single',mode:'measure',request,expectedExecutionContract:plan.contract}));
+  const actual=values.reduce((a,v)=>a.map((n,i)=>n+v[i]),[0,0,0]),witness=plan.cost.reservation.executionWitness,coreBytes=plan.contract.environment.assets.reduce((n:number,a:any)=>n+a.bytes,0),producerBytes=plan.contract.environment.producerBuild.bytes;
+  console.log(JSON.stringify({witnessCost:{kind,preflightPasses:preflight[0],executionPasses:actual[0],coreAssetBytes:actual[1],producerBytes:actual[2],confirmedPasses:witness.passes}}));
+  assert.equal(actual[0],kind==='vmaf'?3:2*requests.length);assert.equal(witness.passes,actual[0]);assert.equal(witness.stages.reduce((n:number,s:any)=>n+s.passes,0),actual[0]);assert.equal(actual[1],actual[0]*coreBytes,'actual core asset witness bytes match every confirmed pass');assert.equal(actual[2],actual[0]*producerBytes,'actual producer witness bytes match every confirmed pass');assert.ok(actual[1]<=witness.passes*witness.maxCoreAssetBytesPerPass);assert.ok(actual[2]<=witness.passes*witness.maxProducerBytesPerPass);
+}
 
 for(const kind of ['single','range','vmaf'] as const)test(`real ${kind}: stopped failure → explicit full reexecution → new result and candidate, immutable original`,{timeout:180000},async t=>{
   const f=await nativeFixture({depth:kind==='range'?10:8,distorted:true,containers:kind==='single'?['flv','mp4']:kind==='range'?['mp4','flv']:['mp4','mp4']});t.after(()=>f.close());
@@ -44,14 +61,21 @@ for(const kind of ['single','range','vmaf'] as const)test(`real ${kind}: stopped
   const oldJson=JSON.stringify(await read()),count=measureCount;
   const reason='Explicitly recompute all frozen input after a stopped failure';
   const plan=await f.json(url+'/reexecution-plan',{reason});assert.equal(plan.eligible,true,JSON.stringify(plan));assert.equal(plan.cost.reusesPreviousScores,false);assert.equal(plan.cost.scope,'entire-frozen-input-from-start');assert.equal(measureCount,count,'Planning never invokes scoring');assert.equal((await f.json(url+'/reexecutions')).successor,null);
-  const request={schema:'voidplayer-quality-reexecution',version:1,reason,planDigest:plan.digest,confirm:plan.cost};
+  const request={schema:'voidplayer-quality-reexecution',version:1,reason:kind==='single'?' \t'+reason+'\n ':reason,planDigest:plan.digest,confirm:plan.cost};
   const wrong=structuredClone(request);wrong.confirm.selectedPairs++;assert.equal((await f.request(url+'/reexecutions',wrong,'changed-cost')).status,409);
   const other='guest-'+randomUUID();assert.equal((await f.request(url+'/reexecution-plan',{reason},'cross-actor',{cookie:'voidplayer-user='+other,'x-voidplayer-actor':other})).status,404);
   assert.equal((await f.request(url+'/reexecution-plan',{reason},'changed-actor',{cookie:'voidplayer-user='+other})).status,409);
   if(kind==='single'){
     const dry=await runHttpQuality(f.base,{mode:kind,reexecution:{jobId:first.id,reason}},{cookie:f.cookie,actor:f.actor});assert.equal(dry.reexecutionPlan.digest,plan.digest);assert.equal((await f.json(url+'/reexecutions')).successor,null);
-    let lost=false;const sent:any[]=[];const client=await runHttpQuality(f.base,{mode:kind,key:'frozen-example',reexecution:{jobId:first.id,reason,actor:f.actor,request}},{cookie:f.cookie,actor:f.actor,allow:{reexecute:true,retryUnknown:true},fetchImpl:async(target:any,init:any)=>{const r=await fetch(target,init);if(String(target).endsWith('/reexecutions')&&init.method==='POST'){sent.push({body:init.body,key:init.headers['idempotency-key'],actor:init.headers['x-voidplayer-actor']});if(!lost){lost=true;await r.json();return new Response('',{status:202});}}return r;}});
-    assert.equal(client.job.state,'completed');assert.equal(sent.length,2);assert.deepEqual(sent[0],sent[1]);assert.equal(client.job.retryOf.retryOf,first.id);assert.equal(client.reexecutionReceipt.key,'frozen-example:single.reexecute');
+    let lost=false;const sent:any[]=[],statuses:number[]=[];const client=await runHttpQuality(f.base,{mode:kind,key:'frozen-example',reexecution:{jobId:first.id,reason:request.reason,actor:f.actor,request}},{cookie:f.cookie,actor:f.actor,allow:{reexecute:true,retryUnknown:true},fetchImpl:async(target:any,init:any)=>{const r=await fetch(target,init);if(String(target).endsWith('/reexecutions')&&init.method==='POST'){sent.push({body:init.body,key:init.headers['idempotency-key'],actor:init.headers['x-voidplayer-actor']});statuses.push(r.status);if(!lost){lost=true;await r.json();return new Response('',{status:202});}}return r;}});
+    assert.equal(client.job.state,'completed');assert.equal(sent.length,2);assert.deepEqual(sent[0],sent[1]);assert.equal(client.job.retryOf.retryOf,first.id);assert.equal(client.reexecutionReceipt.key,'frozen-example:single.reexecute');assert.deepEqual(statuses,[202,200]);assert.equal(JSON.parse(sent[0].body).reason,request.reason);assert.equal(client.reexecutionReceipt.request.reason,reason);
+    for(const field of ['actor','key','cost','digest','lineage']){await assert.rejects(runHttpQuality(f.base,{mode:kind,key:'frozen-example',reexecution:{jobId:first.id,reason:request.reason,actor:f.actor,request}},{cookie:f.cookie,actor:f.actor,allow:{reexecute:true},fetchImpl:async(target:any,init:any)=>{const r=await fetch(target,init);if(String(target).endsWith('/reexecutions')&&init.method==='POST'){const v=await r.json();if(field==='actor')v.receipt.actorId='wrong';if(field==='key')v.receipt.key='wrong';if(field==='cost')v.receipt.request.confirm.selectedPairs++;if(field==='digest')v.receipt.request.planDigest='f'.repeat(64);if(field==='lineage')v.receipt.lineage.generation++;return new Response(JSON.stringify(v),{status:r.status,headers:{'content-type':'application/json'}});}return r;}}),(error:any)=>{assert.equal(error.code,'unknown-post-outcome');assert.deepEqual(error.details.body,request);assert.equal(error.details.key,'frozen-example:single.reexecute');assert.equal(error.details.actor,f.actor);return true;});assert.equal((await f.json(url+'/reexecutions')).successor.id,client.job.id,'bad receipt never creates a second job');}
+    // Independently consume an intact real 202 with a whitespace reason. This
+    // is a new explicit initial intent, not a replacement key for uncertainty.
+    gateAt=measureCount+1;gate=undefined;
+    const plainOriginal=(await f.json(collection,input,'intact-202-original')).job,plainUrl=collection+'/'+plainOriginal.id;await until(()=>gate&&Atomics.load(gate,0),Boolean);await f.json(plainUrl+'/cancel',{});await until(()=>read(plainOriginal.id),(j:any)=>j.state==='cancelled');gateAt=Infinity;
+    const rawReason=' \tIntact successful acknowledgement\n ',plainPlan=await f.json(plainUrl+'/reexecution-plan',{reason:rawReason}),plainRequest={schema:'voidplayer-quality-reexecution',version:1,reason:rawReason,planDigest:plainPlan.digest,confirm:plainPlan.cost};let intactStatus=0;
+    const intact=await runHttpQuality(f.base,{mode:kind,key:'intact-202',reexecution:{jobId:plainOriginal.id,reason:rawReason,actor:f.actor,request:plainRequest}},{cookie:f.cookie,actor:f.actor,allow:{reexecute:true},fetchImpl:async(target:any,init:any)=>{const r=await fetch(target,init);if(String(target).endsWith('/reexecutions')&&init.method==='POST')intactStatus=r.status;return r;}});assert.equal(intactStatus,202);assert.equal(intact.job.state,'completed');assert.equal(intact.reexecutionReceipt.request.reason,rawReason.trim());assert.equal((await f.json(plainUrl+'/reexecutions',plainRequest,'intact-202:single.reexecute')).job.id,intact.job.id);
     // The rest of the common assertions replay the exact already accepted example request.
     const receipt=await f.json(url+'/reexecutions',request,'frozen-example:single.reexecute');assert.equal(receipt.job.id,client.job.id);
   }
@@ -62,6 +86,7 @@ for(const kind of ['single','range','vmaf'] as const)test(`real ${kind}: stopped
   if(kind==='single'){assert.equal(done.attempt.number,1);const result=await f.json(collection+'/'+done.id+'/result');assert.ok(result.value.result.ssim);assert.equal(result.value.result.metric.spatial.blocks.length,4);}
   if(kind==='range'){assert.equal(done.summary.scoredPairs,8);assert.equal(measureCount-count,8,'old completed scores are recomputed too');}
   if(kind==='vmaf'){const result=await f.json(collection+'/'+done.id+'/result');assert.ok(result.vmaf);assert.equal(result.vmaf.frames.length,8);assert.equal(result.metrics.ssim.state,'completed');}
+  await measuredWitnesses(library,kind,plan,kind==='single'?[input.request]:frozen.input.pairs,f.input,{...f.input.plan,value:library.qualityCorrespondence.result(f.input.plan.id,f.actor)},path.join(f.directory,'actual-witness-reads'));
   assert.equal(JSON.stringify(await read()),oldJson,'Original terminal job/attempt/reason stays byte-identical');
   if(oldResult)assert.deepEqual(await f.json(url+(kind==='vmaf'?'/result':'/results')),oldResult);
   if(oldCandidate)assert.deepEqual(await f.json('/api/annotations/spaces/default/'+oldCandidate.id),oldCandidate);

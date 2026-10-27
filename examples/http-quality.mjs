@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 /** Ordinary HTTP only: no application imports, browser, service queue or stored credentials. */
+import {isDeepStrictEqual} from 'node:util';
 import {readFile} from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
 
@@ -23,12 +24,17 @@ function selectedIdentityCookie(response,actorId){
 }
 // Check the acknowledgement envelope used by this example, not domain input
 // admission. A 2xx with missing ownership/result handles is not proof of failure.
-function completeAcknowledgement(id,value,body,params,response){
+function completeAcknowledgement(id,value,body,params,response,expected){
  if(!record(value))return false;
  if(id==='identity.select')return record(value.actor)&&selectedIdentityCookie(response,value.actor.id)!==null;
  if(id==='relation.create')return typeof value.replayed==='boolean'&&record(value.relation)&&nonempty(value.relation.id)&&value.relation.revision===1;
  if(id==='plan.create')return typeof value.replayed==='boolean'&&record(value.plan)&&nonempty(value.plan.id)&&nonempty(value.plan.state);
- if(id.endsWith('.reexecute'))return typeof value.replayed==='boolean'&&record(value.job)&&nonempty(value.job.id)&&record(value.receipt)&&value.receipt.parentId===params.id&&value.receipt.jobId===value.job.id&&value.receipt.request.planDigest===body.planDigest&&JSON.stringify(value.receipt.request)===JSON.stringify(body)&&record(value.job.retryOf)&&value.job.retryOf.retryOf===params.id;
+ if(id.endsWith('.reexecute')){
+  // The published server contract trims reason. Compare normalized receipt
+  // semantics, while retaining the byte-identical original body for replay.
+  const normalized={...body,reason:typeof body.reason==='string'?body.reason.trim():body.reason};
+  return typeof value.replayed==='boolean'&&record(value.job)&&nonempty(value.job.id)&&value.job.id!==params.id&&nonempty(value.job.state)&&record(value.receipt)&&value.receipt.actorId===expected.actor&&value.receipt.key===expected.key&&value.receipt.parentId===params.id&&value.receipt.jobId===value.job.id&&isDeepStrictEqual(value.receipt.request,normalized)&&record(value.job.retryOf)&&value.job.retryOf.retryOf===params.id&&value.job.retryOf.planDigest===body.planDigest&&value.job.retryOf.reason===normalized.reason&&isDeepStrictEqual(value.receipt.lineage,value.job.retryOf);
+ }
  if(['library.prepare','single.submit','plan.execute','vmaf.submit'].includes(id))return typeof value.replayed==='boolean'&&record(value.job)&&nonempty(value.job.id)&&nonempty(value.job.state);
  if(['range.candidates','vmaf.candidates'].includes(id))return record(value.policy)&&value.policy.space===body.space&&Array.isArray(value.selected)&&Array.isArray(value.createdIds)&&value.createdIds.every(nonempty);
  if(id==='evidence.candidate')return value.id===body.id&&value.space===params.space&&Number.isSafeInteger(value.revision)&&value.revision>0&&record(value.document);
@@ -91,7 +97,7 @@ export async function runHttpQuality(serverURL,input={},options={}){
    let sent=false;
    try{
     const result=await request(path,{method:'POST',body:frozen,action:op.write.action,key,onSend:()=>{sent=true;}});
-    if(!completeAcknowledgement(id,result.value,body,params,result.response))stop('invalid-write-acknowledgement','The successful response omitted the operation acknowledgement.',{status:result.response.status,phase:'acknowledgement'});
+    if(!completeAcknowledgement(id,result.value,body,params,result.response,{actor:submittedActor,key}))stop('invalid-write-acknowledgement','The successful response omitted the operation acknowledgement.',{status:result.response.status,phase:'acknowledgement'});
     if(id==='identity.select'){cookie=selectedIdentityCookie(result.response,result.value.actor.id);actor=result.value.actor.id;}
     return result.value;
    }catch(error){

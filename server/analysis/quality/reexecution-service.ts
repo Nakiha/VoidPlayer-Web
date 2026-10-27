@@ -4,7 +4,7 @@ import {AdminError} from '../../admin-error.ts';
 import {pairBudget} from '../../../shared/analysis/quality/frame-pair.ts';
 import type {FramePairRequest} from '../../../shared/analysis/quality/frame-pair.ts';
 import {canonicalJson} from '../../../shared/analysis/quality/correspondence.ts';
-import {nextReexecutionLineage,reexecutionPath,reexecutionReason,reexecutionRequest,REEXECUTION_LIMITS} from '../../../shared/analysis/quality/reexecution.ts';
+import {executionWitnessReservation,nextReexecutionLineage,reexecutionPath,reexecutionReason,reexecutionRequest,REEXECUTION_LIMITS} from '../../../shared/analysis/quality/reexecution.ts';
 import type {ReexecutionKind,ReexecutionPlan,ReexecutionCost,QualityExecutionContract} from '../../../shared/analysis/quality/reexecution.ts';
 import {executionDigest} from './reexecution-ledger.ts';
 import {qualityIdempotencyKey} from './job-request.ts';
@@ -21,7 +21,7 @@ export class QualityReexecutionService{
   private service(kind:ReexecutionKind){return kind==='single'?this.library.qualityJobs:kind==='range'?this.library.qualityRanges:this.library.qualityVmaf;}
   private job(kind:ReexecutionKind,id:string,actor:string){const service=this.service(kind),job=service.get(id,actor);if(job.retryOf){const receipt=service.reexecutionReceipt(job.retryOf.retryOf,actor);if(!receipt||receipt.jobId!==id||executionDigest(receipt.lineage)!==executionDigest(job.retryOf))throw new AdminError(409,'Stored execution lineage changed.','stored-reexecution-invalid');}return job;}
   private describe(kind:ReexecutionKind,id:string,actor:string):Description{
-    const base=(budget:Record<string,number>,pairs:number,reservation:Record<string,unknown>):ReexecutionCost=>({scope:'entire-frozen-input-from-start',selectedPairs:pairs,reusesPreviousScores:false,budget,reservation:{...reservation,executionWitness:{passes:kind==='vmaf'?2:2*pairs,maxCoreAssetBytesPerPass:REEXECUTION_LIMITS.maxReadBytes,maxProducerBytesPerPass:REEXECUTION_LIMITS.maxProducerBytes},witness:{maxCoreAssetBytes:REEXECUTION_LIMITS.maxReadBytes,maxProducerBytes:REEXECUTION_LIMITS.maxProducerBytes,maxIndexBytes:REEXECUTION_LIMITS.maxIndexBytes,maxIndexPackets:REEXECUTION_LIMITS.maxIndexPackets,maxElapsedMs:REEXECUTION_LIMITS.maxElapsedMs},newAttemptPerJob:1}});
+    const base=(budget:Record<string,number>,pairs:number,reservation:Record<string,unknown>):ReexecutionCost=>({scope:'entire-frozen-input-from-start',selectedPairs:pairs,reusesPreviousScores:false,budget,reservation:{...reservation,executionWitness:executionWitnessReservation(kind,pairs),witness:{maxCoreAssetBytes:REEXECUTION_LIMITS.maxReadBytes,maxProducerBytes:REEXECUTION_LIMITS.maxProducerBytes,maxIndexBytes:REEXECUTION_LIMITS.maxIndexBytes,maxIndexPackets:REEXECUTION_LIMITS.maxIndexPackets,maxElapsedMs:REEXECUTION_LIMITS.maxElapsedMs},newAttemptPerJob:1}});
     if(kind==='single'){
       const j=this.library.qualityJobs.get(id,actor),input=this.library.qualityJobs.reexecutionInput(id,actor);
       return {job:j,input,requests:[input.request],contract:j.executionContract,cost:base({...pairBudget(input.request),maxInputBytes:input.request.budget!.maxInputBytes!,maxSamples:input.request.budget!.maxSamples!},1,{}),previous:{reason:j.reason,result:j.result},correspondence:null};

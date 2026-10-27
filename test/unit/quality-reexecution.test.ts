@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {QualityJobStore} from '../../server/analysis/quality/job-store.ts';
 import {qualityJobRequest} from '../../server/analysis/quality/job-request.ts';
 import {ReexecutionLedger} from '../../server/analysis/quality/reexecution-ledger.ts';
-import {nextReexecutionLineage,reexecutionRequest,reexecutionReason} from '../../shared/analysis/quality/reexecution.ts';
+import {executionWitnessReservation,nextReexecutionLineage,reexecutionRequest,reexecutionReason} from '../../shared/analysis/quality/reexecution.ts';
 import type {QualityExecutionContract,ReexecutionRequest} from '../../shared/analysis/quality/reexecution.ts';
 import {jobInput} from '../helpers/quality-job-fixture.ts';
 import {QualityReexecutionClient} from '../../src/services/quality-reexecution.ts';
@@ -17,6 +17,7 @@ const actor={id:'reexecution-owner',name:'Owner'},hash='a'.repeat(64);
 const contract:QualityExecutionContract={schema:'voidplayer-quality-execution-contract',version:1,environment:{schema:'voidplayer-quality-execution-environment',version:1,runtime:'node',runtimeVersion:process.versions.node,recipe:'source-yuv-psnr-ssim-packet-identity-v1',producerBuild:{kind:'source-content',sha256:hash,bytes:123},assets:[{file:'voidplayer-core.wasm',sha256:hash,bytes:123}]},sources:[]};
 const request:ReexecutionRequest={schema:'voidplayer-quality-reexecution',version:1,reason:'Explicitly recompute after the stopped failure',planDigest:hash,confirm:{scope:'entire-frozen-input-from-start',selectedPairs:1,reusesPreviousScores:false,budget:{maxElapsedMs:30000},reservation:{}}};
 test('explicit full-scope confirmation and bounded lineage keep attempt and execution generation separate',()=>{
+  assert.equal(executionWitnessReservation('single',1).passes,2);assert.equal(executionWitnessReservation('range',8).passes,16);assert.equal(executionWitnessReservation('vmaf',8).passes,3);
   assert.deepEqual(reexecutionRequest(request),request);assert.equal(reexecutionReason(' reason '),'reason');
   for(const v of [{...request,reason:''},{...request,unknown:true},{...request,planDigest:'short'},{...request,confirm:{...request.confirm,reusesPreviousScores:true}},{...request,confirm:{...request.confirm,scope:'resume-holes'}}])assert.throws(()=>reexecutionRequest(v));
   const first=nextReexecutionLineage('original',undefined,request.reason,hash,100);assert.equal(first.generation,2);assert.equal(first.rootJobId,'original');

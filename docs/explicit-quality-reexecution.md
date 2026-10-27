@@ -71,7 +71,12 @@ bounded at 64 MiB/1,000,000 packets; core assets at 64 MiB, producer source at
 at most 64 KiB and the request 8 KiB. The displayed reservation distinguishes
 metadata validation and each execution witness pass from original source reads,
 all dependency inputs/outputs, numeric input, raw disk, native memory/CPU and
-elapsed budgets. No existing execution/queue/heap/frame limits are increased.
+elapsed budgets. Single execution reads the witness twice (source contract and before core load);
+a range repeats those two passes for every selected pair. VMAF reads it three
+times: decode source contract, before core load and the final verify Worker.
+Read-only reexecution preflight is a separate single witness pass. Stage counts
+and per-pass limits are part of the exact confirmed cost. No existing
+execution/queue/heap/frame limits are increased.
 
 Single/range/VMAF databases migrate to version 2. Old rows and request/result
 fingerprints stay unchanged; older applications refuse this newer database.

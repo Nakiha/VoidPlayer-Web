@@ -3,6 +3,8 @@ import {canonicalJson} from './correspondence.ts';
 
 export const REEXECUTION_LIMITS=Object.freeze({requestBytes:8192,planBytes:64*1024,reason:500,chain:32,page:8,maxElapsedMs:30000,maxReadBytes:64*1024*1024,maxProducerBytes:8*1024*1024,maxIndexBytes:64*1024*1024,maxIndexPackets:1000000});
 export type ReexecutionKind='single'|'range'|'vmaf';
+export function executionWitnessReservation(kind:ReexecutionKind,pairs:number){const count=kind==='range'?pairs:1,stages=[{stage:'source-contract',passes:count},{stage:'before-core-load',passes:count},...(kind==='vmaf'?[{stage:'source-final',passes:1}]:[])];return {passes:stages.reduce((n,s)=>n+s.passes,0),stages,maxCoreAssetBytesPerPass:REEXECUTION_LIMITS.maxReadBytes,maxProducerBytesPerPass:REEXECUTION_LIMITS.maxProducerBytes};}
+
 /** Each job still owns at most one attempt. Generation counts new jobs, not
  * restarts of an attempt. No old result or annotation is replaced. */
 export type ReexecutionLineage={schema:'voidplayer-quality-reexecution-lineage';version:1;retryOf:string;rootJobId:string;generation:number;reason:string;planDigest:string;requestedAt:number};
