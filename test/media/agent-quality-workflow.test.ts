@@ -5,6 +5,8 @@ import {readFile,writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
+import {startService} from '../../server/runtime.ts';
+import {httpFetch} from '../http-request.ts';
 import {nativeFixture,officialOracle,until} from '../helpers/native-vmaf.mjs';
 // @ts-ignore shared fixture readiness, outside the ordinary HTTP example
 import {waitForAnnotationMedia} from '../../scripts/testing/agent-annotations-ready.mjs';
@@ -113,9 +115,11 @@ test('incomplete 2xx acknowledgements retain the exact committed operation; know
   let replayBody='';const replayFetch=async(url:any,opts:any)=>{if(opts.method==='POST'&&new URL(url).pathname==='/api/quality/reference-relations')replayBody=opts.body;return fetch(url,opts);};
   const replay=await runHttpQuality(f.base,input,{allow:{plan:true},actor:f.actor,cookie:f.cookie,fetchImpl:replayFetch,pollMs:10});assert.equal(replay.plan.plan.relation.id,committed);assert.equal(replayBody,sent[0].body,name);
  }
- const identityInput=inputFor(f);identityInput.identity.name='Incomplete identity acknowledgement';let identities=0,lostCookie='';
- const identityFetch=async(url:any,opts:any)=>{const response=await fetch(url,opts);if(opts.method==='POST'&&new URL(url).pathname==='/api/identity'){identities++;assert.equal(response.status,200);lostCookie=response.headers.get('set-cookie')!;await response.arrayBuffer();return new Response('{"actor":{}}',{status:200,headers:{'set-cookie':lostCookie}});}return response;};
- await assert.rejects(()=>runHttpQuality(f.base,identityInput,{allow:{identity:true,plan:true,retryUnknown:true},fetchImpl:identityFetch}),(error:any)=>{assert.equal(error.code,'unknown-post-outcome');assert.equal(error.details.actor,null);assert.equal(error.details.key,null);assert.equal(error.details.replay,'none');assert.deepEqual(error.details.body,identityInput.identity);assert.ok(!JSON.stringify(error.details).includes(lostCookie));return true;});assert.equal(identities,1,'identity without a complete acknowledgement is never automatically recreated');assert.equal((await (await fetch(f.base+'/api/users')).json()).users.filter((u:any)=>u.name===identityInput.identity.name).length,1);
+ for(const kind of ['missingActor','wrongName','emptyValue','wrongActor']){
+  const identityInput=inputFor(f);identityInput.identity.name='Incomplete identity '+kind;let identities=0,lostCookie='';
+  const identityFetch=async(url:any,opts:any)=>{const response=await fetch(url,opts);if(opts.method==='POST'&&new URL(url).pathname==='/api/identity'){identities++;assert.equal(response.status,200);lostCookie=response.headers.get('set-cookie')!;const body=await response.json(),header=kind==='wrongName'?'wrong=garbage; Path=/; HttpOnly':kind==='emptyValue'?'voidplayer-user=; Path=/; HttpOnly':kind==='wrongActor'?'voidplayer-user=guest-'+randomUUID()+'; Path=/; HttpOnly':lostCookie;return new Response(JSON.stringify(kind==='missingActor'?{actor:{}}:body),{status:200,headers:{'set-cookie':header}});}return response;};
+  await assert.rejects(()=>runHttpQuality(f.base,identityInput,{allow:{identity:true,plan:true,retryUnknown:true},fetchImpl:identityFetch}),(error:any)=>{assert.equal(error.code,'unknown-post-outcome',kind);assert.equal(error.details.actor,null);assert.equal(error.details.key,null);assert.equal(error.details.replay,'none');assert.deepEqual(error.details.body,identityInput.identity);assert.ok(!JSON.stringify(error.details).includes(lostCookie.split(';')[0]));return true;});assert.equal(identities,1,'invalid identity receipt is never automatically recreated');assert.equal((await (await fetch(f.base+'/api/users')).json()).users.filter((u:any)=>u.name===identityInput.identity.name).length,1);
+ }
  for(const malformedError of [false,true]){
   const input=inputFor(f);input.clock.segments[0].referenceEndUs=0;let posts=0;
   const fetchImpl=async(url:any,opts:any)=>{const response=await fetch(url,opts);if(opts.method==='POST'&&new URL(url).pathname==='/api/quality/reference-relations'){posts++;assert.equal(response.status,400);if(malformedError){await response.arrayBuffer();return new Response('bad error body',{status:400});}}return response;};
@@ -133,5 +137,24 @@ test('malformed task/candidate acknowledgements safely replay one real job and o
   const fetchImpl=async(url:any,opts:any)=>{const path=new URL(url).pathname,response=await fetch(url,opts);if(opts.method==='POST'&&path===(target==='job'?'/api/quality/jobs':'/api/annotations/spaces/default')){assert.ok(response.ok);sent.push({body:opts.body,key:opts.headers['idempotency-key'],actor:opts.headers['x-voidplayer-actor']});if(sent.length===1){const accepted=await response.json();originalId=target==='job'?accepted.job.id:accepted.id;return new Response(body,{status:response.status});}}return response;};
   const report=await runHttpQuality(f.base,input,{allow,actor:f.actor,cookie:f.cookie,fetchImpl,pollMs:10});assert.equal(sent.length,2);assert.deepEqual(sent[0],sent[1],'replay is the original body/key/actor');assert.equal(originalId,target==='job'?report.job.id:report.annotations[0].id);assert.equal(report.annotations[0].revision,1);assert.equal(report.events.filter((e:any)=>e.id===input.candidate.id).length,1);
   const jobs=await f.json('/api/quality/jobs');assert.equal(new Set(jobs.entries.map((j:any)=>j.id)).size,++cases,'each acknowledged workflow created exactly one job');
+ }
+});
+
+test('normal HTTP/HTTPS identity cookies with attributes bind the selected actor',{timeout:120000},async t=>{
+ const f=await nativeFixture({component:false,start:async(config:any)=>{config.tls={hosts:['127.0.0.1']};config.httpPort=null;return startService(config,false);}});t.after(()=>f.close());
+ for(const secure of [false,true]){
+  const input=inputFor(f),base=secure?f.base.replace('http:','https:'):f.base;input.identity.name=secure?'HTTPS attributed client':'HTTP attributed client';let chosen='',setCookie='';
+  const fetchImpl=async(url:any,opts:any)=>{
+   const response=secure?await httpFetch(String(url),{...opts,ca:f.service.tls.ca}):await fetch(url,opts);
+   if(new URL(url).pathname==='/api/identity'&&opts.method==='POST'){
+    const body=await response.json();chosen=body.actor.id;setCookie=response.headers.get('set-cookie')!;assert.equal(setCookie.includes('; Secure'),secure);
+    // Additional fields and an Expires comma must not hide the actual identity.
+    const headers=new Headers(response.headers);headers.delete('set-cookie');headers.append('set-cookie','other=unrelated; Expires=Wed, 21 Oct 2037 07:28:00 GMT; Path=/');headers.append('set-cookie',setCookie);
+    return new Response(JSON.stringify(body),{status:response.status,headers});
+   }
+   if(opts.method==='POST'){assert.equal(opts.headers.cookie,'voidplayer-user='+encodeURIComponent(chosen));assert.equal(opts.headers.origin,base);}
+   return response;
+  };
+  const report=await runHttpQuality(base,input,{allow:{identity:true,plan:true},fetchImpl,pollMs:10});assert.equal(report.actor.id,chosen);assert.equal(report.plan.plan.actor.id,chosen);assert.equal(report.plan.plan.state,'completed');assert.ok(!JSON.stringify(report).includes(setCookie));
  }
 });

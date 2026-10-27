@@ -10,11 +10,22 @@ const pending=new Set(['queued','running','preparing','cancelling']);
 const stop=(code,message,details)=>{throw new HttpQualityError(code,message,details);};
 const record=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
 const nonempty=v=>typeof v==='string'&&v.length>0;
+function selectedIdentityCookie(response,actorId){
+ if(!nonempty(actorId))return null;
+ const headers=response.headers,values=typeof headers.getSetCookie==='function'?headers.getSetCookie():[headers.get('set-cookie')].filter(nonempty);
+ // Keep Expires commas intact if a transport combines Set-Cookie fields.
+ const matches=values.flatMap(v=>v.split(/,(?=\s*[^;,\s=]+\s*=)/)).map(v=>v.split(';',1)[0].trim()).filter(v=>/^voidplayer-user\s*=/.test(v));
+ if(matches.length!==1)return null;
+ let value=matches[0].slice(matches[0].indexOf('=')+1).trim();
+ if(value.startsWith('"')&&value.endsWith('"'))value=value.slice(1,-1);
+ try{if(!value||decodeURIComponent(value)!==actorId)return null;}catch{return null;}
+ return 'voidplayer-user='+encodeURIComponent(actorId);
+}
 // Check the acknowledgement envelope used by this example, not domain input
 // admission. A 2xx with missing ownership/result handles is not proof of failure.
 function completeAcknowledgement(id,value,body,params,response){
  if(!record(value))return false;
- if(id==='identity.select')return record(value.actor)&&nonempty(value.actor.id)&&nonempty(response.headers.get('set-cookie'));
+ if(id==='identity.select')return record(value.actor)&&selectedIdentityCookie(response,value.actor.id)!==null;
  if(id==='relation.create')return typeof value.replayed==='boolean'&&record(value.relation)&&nonempty(value.relation.id)&&value.relation.revision===1;
  if(id==='plan.create')return typeof value.replayed==='boolean'&&record(value.plan)&&nonempty(value.plan.id)&&nonempty(value.plan.state);
  if(['library.prepare','single.submit','plan.execute','vmaf.submit'].includes(id))return typeof value.replayed==='boolean'&&record(value.job)&&nonempty(value.job.id)&&nonempty(value.job.state);
@@ -80,7 +91,7 @@ export async function runHttpQuality(serverURL,input={},options={}){
    try{
     const result=await request(path,{method:'POST',body:frozen,action:op.write.action,key,onSend:()=>{sent=true;}});
     if(!completeAcknowledgement(id,result.value,body,params,result.response))stop('invalid-write-acknowledgement','The successful response omitted the operation acknowledgement.',{status:result.response.status,phase:'acknowledgement'});
-    if(id==='identity.select'){cookie=result.response.headers.get('set-cookie').split(';')[0];actor=result.value.actor.id;}
+    if(id==='identity.select'){cookie=selectedIdentityCookie(result.response,result.value.actor.id);actor=result.value.actor.id;}
     return result.value;
    }catch(error){
     // One explicitly authorized replay, with byte-identical body/key and original actor.

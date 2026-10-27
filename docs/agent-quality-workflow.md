@@ -38,6 +38,8 @@ node examples/http-quality.mjs http://127.0.0.1:9000 input.json \
 
 POST 发送后，空/结构缺失的 2xx、截断/非 JSON、读体失败（包括原 4MiB 响应上限）都不能视为提交失败，必须保留冻结请求。错误附加响应阶段/状态；已知 4xx 拒绝（即使错误体损坏）不自动重放。跨 actor 拒绝仍保留原请求，但绝不转交新 actor。成功回执只检查后续追溯必需的 envelope，不另造领域输入 validator。
 
+身份成功还须收到唯一 `voidplayer-user` cookie，解码后的非空值与返回 actor 一致；正常 Path/Expires/HttpOnly/SameSite/Secure 属性不混入后续 Cookie 请求。错名、空值、错 actor 或重复歧义都保留为未知身份结果，不保存或打印 cookie，也不盲目重建账号。
+
 已确认取消/失败/interrupted 后的新尝试须明确授权。actor 变化停止；source/cache 变化要求显式重选和修订计划。discovery cursor 失效只同查询重取第一页一次，不触发变更；事件 resetRequired 读取 snapshotUrl，不重放 mutation。
 
 输出包含结果、共享候选及事件事实，原帧复核使用既有独立 viewer。GUI 不参与提交确认或移动其他播放轨。关系不认证内容，候选不是人工缺陷；reference integrity 未认证、concealment unavailable、负 PTS/VFR E2E 与独立 stat witness 的证据边界不扩大，性能负结果保留。
