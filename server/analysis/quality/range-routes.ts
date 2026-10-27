@@ -5,6 +5,7 @@ import {AdminError,adminErrorBody} from '../../admin-error.ts';
 import {adminWriteAllowed,readAdminJson} from '../../admin.ts';
 import {sendJson} from '../../http-utils.ts';
 import {QUALITY_RANGE_LIMITS} from '../../../shared/analysis/quality/ranges.ts';
+import {agentRecoveryFields} from '../../agent-errors.ts';
 
 export async function handleQualityRangeRoutes(ctx:RouteContext,req:IncomingMessage,res:ServerResponse,url:URL){
   if(!url.pathname.startsWith('/api/quality/ranges'))return false;
@@ -46,7 +47,7 @@ export async function handleQualityRangeRoutes(ctx:RouteContext,req:IncomingMess
       }
     }finally{clearTimeout(timer);}
   }catch(e){
-    if(!res.headersSent&&!res.destroyed)sendJson(res,e instanceof AdminError?e.status:500,{...adminErrorBody(e),code:(e as {code?:string})?.code??'range-operation-failed'});
+    if(!res.headersSent&&!res.destroyed)sendJson(res,e instanceof AdminError?e.status:500,{...adminErrorBody(e),code:(e as {code?:string})?.code??'range-operation-failed',...agentRecoveryFields((e as {code?:string})?.code??'range-operation-failed','range.submit')});
   }
   return true;
 }

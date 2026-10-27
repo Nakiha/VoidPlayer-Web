@@ -8,6 +8,7 @@ import { FramePairError } from '../../../shared/analysis/quality/frame-pair.ts';
 import { PsnrError } from '../../../shared/analysis/quality/psnr.ts';
 import { QUALITY_JOB_LIMITS } from '../../../shared/analysis/quality/jobs.ts';
 import { qualityKeys } from './request.ts';
+import {agentRecoveryFields} from '../../agent-errors.ts';
 
 export async function handleQualityJobRoutes(ctx: RouteContext, req: IncomingMessage, res: ServerResponse, url: URL) {
   const collection = url.pathname === '/api/quality/jobs';
@@ -46,7 +47,7 @@ export async function handleQualityJobRoutes(ctx: RouteContext, req: IncomingMes
   } catch (error) {
     const known = error instanceof AdminError || error instanceof FramePairError || error instanceof PsnrError;
     if (!res.destroyed && !res.headersSent) sendJson(res, error instanceof AdminError ? error.status : error instanceof PsnrError && error.code === 'budget-exceeded' ? 413 : known ? 400 : 500,
-      known ? {...adminErrorBody(error), code:error.code}
+      known ? {...adminErrorBody(error), code:error.code,...agentRecoveryFields(error.code,'single.submit')}
         : {error:'Quality job operation failed.',code:'quality-service-error'});
   }
   return true;

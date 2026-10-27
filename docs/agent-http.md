@@ -40,3 +40,6 @@ HTTP 客户端先显式 POST `/api/identity` 并保存 cookie，再向 `/api/ann
 暂停原生画面另有可选页面工具 `capture_presented_quality_frame`，返回 `voidplayer-native-presented-input` 未绑定见证，不是评分请求。必须将实际同服务版本传输、精确 AU/配置字节/包范围与时钟、可信 cache namespace/build 和几何逐项绑定；不按 PTS 搜索或自动建索引。原生路径不支持时明确拒绝，HTTP Agent 的显式 AU 业务能力不受此 GUI 子集限制。缺缓存可单独显式 `POST /api/media/{id}/psnr-index`（`{version}`、actor cookie/header、同源 Origin、action `quality-source-build`）；读取、快照和评分不会调用它。预算、取消和原始像素边界见 [暂停原生帧 ROI](paused-native-quality.md)。
 
 媒体库已注册来源的技术选片、未知覆盖、一致分页和显式有预算 probe/可信 FLV 索引准备，使用 [媒体技术发现](library-discovery.md) 的同一 GUI/HTTP 命令。`/api/library/discovery-schema` 给出字段、请求、状态机、预算和支持矩阵；MP4/MKV/TS 元数据可读不等于可评分。
+
+
+逐任务/逐操作的版本化发现、冷启动评分分层指南和可运行普通 HTTP 示例见 [冷启动评分](agent-quality-workflow.md)。入口兼容，质量首页分别选择 single/range/VMAF；元数据、质量缓存及 native 组件就绪不混称。示例默认只读，各类写入须显式授权，未知响应只重放原 actor/body/key。

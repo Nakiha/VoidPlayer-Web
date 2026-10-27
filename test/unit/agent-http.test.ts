@@ -11,6 +11,10 @@ import { MediaLibraryIndex } from '../../server/library.ts';
 import type { AnnotationOperation } from '../../shared/review/annotation-record.ts';
 import { AGENT_DOCUMENTS } from '../../server/agent-guide.ts';
 import { agentManifest, serviceCapabilities } from '../../shared/service/agent.ts';
+import {AGENT_OPERATIONS,AGENT_WORKFLOWS,agentOperation,agentTask} from '../../shared/service/agent-operations.ts';
+import {DISCOVERY_DICTIONARY} from '../../shared/media/discovery.ts';
+import {VMAF_CAPABILITY} from '../../shared/analysis/quality/vmaf.ts';
+import {QUALITY_RANGE_LIMITS} from '../../shared/analysis/quality/ranges.ts';
 
 test('runtime discovery separates implementation, deployment and source/session readiness', () => {
   const manifest = agentManifest({ capabilities: serviceCapabilities(false, false), libraryReady: false, frontendAvailable: true, qualityJobsEnabled: true, actor: null });
@@ -57,6 +61,20 @@ test('ordinary HTTP discovers, attributes and commits annotations without fronte
     assert.ok(Buffer.byteLength(AGENT_DOCUMENTS['/llms.txt']) < 2000);
     const discovery = await fetch(base + '/api/agent'), manifest = await discovery.json();
     assert.equal(manifest.schema, 'voidplayer-agent'); assert.equal(manifest.actor, null);
+    const tasks=await (await fetch(base+manifest.links.taskCatalog)).json();
+    assert.equal(tasks.schema,'voidplayer-agent-tasks');assert.equal(tasks.version,1);assert.equal(tasks.entries.length,AGENT_WORKFLOWS.length);
+    for(const task of tasks.entries){
+      const detail=await (await fetch(base+task.links.describe)).json();assert.equal(detail.id,task.id);assert.equal(detail.version,1);
+      for(const operation of detail.operations){
+        const response=await fetch(base+operation.links.describe),contract=await response.json();assert.equal(contract.id,operation.id);assert.equal(contract.method,operation.method);assert.equal(contract.path,operation.path);assert.equal(contract.execution.requiresBrowser,false);
+        assert.match(response.headers.get('content-type')!,/^application\/json/);assert.equal(response.headers.get('cache-control'),'no-store');assert.equal(response.headers.get('set-cookie'),null);
+        const head=await fetch(base+operation.links.describe,{method:'HEAD'});assert.equal(head.status,200);assert.equal(await head.text(),'');assert.equal(head.headers.get('content-length'),response.headers.get('content-length'));
+        assert.equal((await fetch(base+operation.links.describe,{method:'POST'})).status,405);assert.equal((await fetch(base+operation.links.describe+'?unknown=1')).status,400);
+        assert.ok(AGENT_DOCUMENTS[operation.links.guide]);for(const next of contract.links.next)assert.equal((await fetch(base+next)).status,200);
+      }
+    }
+    assert.equal((await fetch(base+'/api/agent/operations/unknown')).status,404);
+    assert.equal((await fetch(base+'/api/agent/tasks/unknown')).status,404);
     assert.equal(discovery.headers.get('cache-control'), 'no-store');
     assert.equal(manifest.capabilities.find((c: { id: string }) => c.id === 'annotations.write').readiness, 'needs-identity');
     assert.deepEqual((await (await fetch(base + '/api/users')).json()).users, []);
@@ -112,6 +130,18 @@ test('ordinary HTTP discovers, attributes and commits annotations without fronte
     assert.deepEqual(await (await submit(operation)).json(), record);
     assert.equal((await (await fetch(base + '/api/annotations/events/default?after=0')).json()).events.length, 1);
   } finally { await service.close(); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('progressive descriptions reuse authoritative limits and distinguish conditional VMAF from metadata and CAMBI',()=>{
+  assert.equal(new Set(AGENT_OPERATIONS.map(o=>o.id)).size,AGENT_OPERATIONS.length);
+  for(const op of AGENT_OPERATIONS){assert.ok(agentTask(op.task));for(const id of op.next)assert.ok(AGENT_OPERATIONS.some(o=>o.id===id));}
+  assert.equal(agentOperation('range.submit',[])!.request.limits,QUALITY_RANGE_LIMITS);
+  assert.equal(agentOperation('library.discover',[])!.request.limits,DISCOVERY_DICTIONARY.query);
+  const m=agentManifest({capabilities:serviceCapabilities(true,false),libraryReady:true,qualityJobsEnabled:true,nativeVmaf:{enabled:false,reason:'component-unavailable'},actor:null});
+  const native=m.qualityJobs.source.additionalContainers.mp4.nativeSequenceMetrics;
+  assert.deepEqual(native.vmaf.containers,VMAF_CAPABILITY.containers);assert.equal(native.cambi.implemented,false);assert.equal(m.qualityVmaf.deployment.enabled,false);
+  assert.match(DISCOVERY_DICTIONARY.fields.quality,/Metadata stream IDs/);
+  assert.ok(AGENT_DOCUMENTS['/agent/quality.md'].length<2500);assert.ok(AGENT_DOCUMENTS['/agent/quality/reference.md'].length>10000);
 });
 
 test('read-only deployment advertises unavailable writes and still serves embedded task documents', async () => {

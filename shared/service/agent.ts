@@ -8,6 +8,7 @@ import { PSNR_SPATIAL_LIMITS } from '../analysis/quality/psnr.ts';
 import { FORWARD_OUTPUT_GUARANTEE } from '../analysis/quality/frame-pair.ts';
 import {QUALITY_SOURCE_BUILD_LIMITS} from '../analysis/quality/source-build.ts';
 import {DISCOVERY_DICTIONARY} from '../media/discovery.ts';
+import {AGENT_TASK_CATALOG,AGENT_OPERATION_PATH,AGENT_OPERATIONS_VERSION} from './agent-operations.ts';
 /** Discovery describes this deployment without starting work or creating users. */
 export function serviceCapabilities(storageEnabled: boolean, revealEnabled: boolean) {
   return { admin: storageEnabled, workspaces: storageEnabled, annotations: storageEnabled, reveal: revealEnabled };
@@ -29,6 +30,7 @@ export const AGENT_TASKS = {
 export function agentManifest(input: { capabilities: ServiceCapabilities; libraryReady: boolean; frontendAvailable?: boolean; qualityJobsEnabled?: boolean; nativeVmaf?: {enabled:boolean;reason:unknown}|null; actor: { id: string; name: string } | null }) {
   const { capabilities: c, libraryReady, actor } = input;
   const capabilities: AgentCapability[] = [
+    {id:'identity.select',implemented:true,enabled:c.admin,readiness:c.admin?'ready':'unavailable',requiresBrowser:false,guide:AGENT_TASKS.workspaces},
     { id: 'library.browse', implemented: true, enabled: true, readiness: libraryReady ? 'ready' : 'index-warming', requiresBrowser: false, guide: AGENT_TASKS.library },
     { id: 'library.discovery', implemented: true, enabled: true, readiness: libraryReady ? 'per-source' : 'index-warming', requiresBrowser: false, guide: AGENT_TASKS.library },
     { id: 'library.preparations', implemented: true, enabled: !!input.qualityJobsEnabled, readiness: !input.qualityJobsEnabled ? 'unavailable' : actor ? 'per-source' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.library },
@@ -52,7 +54,9 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
   ];
   return {
     schema: 'voidplayer-agent', version: 1, service: 'voidplayer-media', actor,
-    links: { guide: '/agent.md', index: '/llms.txt', health: '/api/health', tasks: AGENT_TASKS },
+    links: { guide: '/agent.md', index: '/llms.txt', health: '/api/health', tasks: AGENT_TASKS,
+      taskCatalog:AGENT_TASK_CATALOG,operation:AGENT_OPERATION_PATH+'{id}' },
+    operationDiscovery:{schema:'voidplayer-agent-tasks',version:AGENT_OPERATIONS_VERSION,readOnly:true,requiresFrontend:false},
     capabilities,
     technicalFilter: { schema: TECHNICAL_FILTER_SCHEMA, version: 1, endpoint: TECHNICAL_FILTER_PATH, limits: TECHNICAL_FILTER_LIMITS, pagination: 'none', scope: 'explicit-candidates-cached-streams' },
     libraryDiscovery: {...DISCOVERY_DICTIONARY,detail:'/api/media/{id}/discovery?v={version}',writeAction:'library-preparation',idempotencyHeader:'Idempotency-Key',
@@ -75,7 +79,7 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
         cacheJoin:['same-origin-url-id-version','namespace','build','exact-au','configuration-bytes','packet-offset-size-clocks','visible-source-geometry'],
         unsupported:['wasm-playback','other-containers','ambiguous-clocks-or-picture-layout','source-crop-or-non-square-sar-or-rotation']},
       source: { registeredLibraryOnly: true, indexKind: 'flv', enhancedFlv: true, producer: 'server-flv-scan-v1',
-        additionalContainers:{mp4:{indexKind:'mp4',schemaVersion:1,indexerBuild:'mp4-quality-tables-v1',producer:'server-mp4-scan-v1',resultVersion:2,sampleEntries:['avc1','hvc1'],h264BitDepths:[8],hevcBitDepths:[8,10],matrix:'nonfragmented-self-contained-single-video-track-single-description-progressive-420-bt709-sdr-square-no-crop-no-rotation',clock:'original-ticks-with-exact-integer-microseconds-only',decode:'complete-verified-closed-IDR-GOP-max32-AU',nativeSequenceMetrics:false}},
+        additionalContainers:{mp4:{indexKind:'mp4',schemaVersion:1,indexerBuild:'mp4-quality-tables-v1',producer:'server-mp4-scan-v1',resultVersion:2,sampleEntries:['avc1','hvc1'],h264BitDepths:[8],hevcBitDepths:[8,10],matrix:'nonfragmented-self-contained-single-video-track-single-description-progressive-420-bt709-sdr-square-no-crop-no-rotation',clock:'original-ticks-with-exact-integer-microseconds-only',decode:'complete-verified-closed-IDR-GOP-max32-AU',nativeSequenceMetrics:{vmaf:{implemented:true,containers:VMAF_CAPABILITY.containers,capability:'/api/quality/vmaf/capability',requires:'installed-component-and-exact-continuous-plan-preflight'},cambi:{implemented:false}}}},
         codecs: ['h264', 'hevc'], bitDepths: [8, 10], chroma: 'yuv420', closedKeyAuOnly: false, gop:{mode:'packet-identity-gop-v1',packetIdentityAbi:1,explicitStartEndAu:true,packetsPerSide:32,maxPackets:64,maxOutputFrames:64,reordering:true,delayedOutput:true,outputAssociation:'opaque-input-token-not-pts',singleThread:true,reportedDecodeErrors:'reject',guarantee:{...FORWARD_OUTPUT_GUARANTEE}}, forward:{mode:'forward-one-output-per-au-v1',explicitStartAu:true,packetsPerSide:32,maxPackets:64,maxOutputFrames:64,zeroCts:true,oneImmediateOutputPerAu:true,reordering:false,guarantee:{...FORWARD_OUTPUT_GUARANTEE}},
         explicitColorAndChromaLocation: true, explicitPairingAndSourcePts: true },
       resultSchema: 'voidplayer-quality-job-result', resultVersion: 1 },
@@ -92,6 +96,7 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
       actionHeader: 'X-VoidPlayer-Action', cookieRequired: true, completion: 'server-commit', guiAcknowledgementRequired: false },
     annotations: { version: 1, spaces: '/api/annotations/spaces',
       events: '/api/annotations/events/{space}?after={cursor}',
+      originalPairViewer:{path:'/quality.html',query:['space','annotationId','evidenceId'],requiresBrowser:true,requiresFrontend:true,readOnly:true,buildsIndexes:false,controlsPlayback:false,privateJobRead:false},
       qualityEvidence: {action:'attach-quality-result',metric:'psnr',optionalCompanion:'ssim',result:'completed-owned-job',target:'existing-primary-source-version-and-source-pts',roi:'original-visible-pixel-grid',immutable:true,maxCount:4,maxBytes:131072,importVerification:'historical',workspaceVersion:2},
       qualityCandidate:{action:'create-quality-candidate',revision:0,result:'completed-owned-job-with-recorded-annotation-context',callerFields:['text','severity'],derived:['source-version','actual-source-pts','index-origin','frame-duration','roi','immutable-evidence'],assessment:'not-subjectively-assessed',assessmentMeaning:'at-creation-no-subjective-defect-judgment',resultContext:{field:'annotationContext',basis:'complete-flv-index-derived-v1',additionalBases:['complete-mp4-index-derived-v1'],timeUnit:'integer-microseconds',duration:'index-derived-including-estimated-last-frame',legacyMissing:'409 annotation-context-unavailable'},transaction:['annotation','evidence','receipt','event'],receiptBeforeResultLookup:true,workspaceVersion:3,importVerification:'historical',playbackRequired:false},
       identity: ['space', 'id'], concurrency: 'expected-revision', idempotency: 'operationId',
