@@ -1,4 +1,5 @@
 import { AGENT_TASKS } from '../shared/service/agent.ts';
+import {QUALITY_AGENT_DOCUMENTS} from './agent-quality-guide.ts';
 
 /** Embedded so standalone deployments also serve the guides without dist/. */
 export const AGENT_GUIDE = `# VoidPlayer Web
@@ -11,6 +12,7 @@ serve the APIs. The remote player requires HTTPS for browser decoding.
 
 - [Start here](/agent.md): workflow and deployment boundaries.
 - [Runtime capabilities](/api/agent): implemented, enabled and ready are separate.
+- [Task catalog](/api/agent/tasks): fetch one task, then one operation at a time.
 - [Find media, inspect cached metadata and query indexes](${AGENT_TASKS.library})
 - [Identity and editable workspaces](${AGENT_TASKS.workspaces})
 - [Write annotations and follow operations](${AGENT_TASKS.annotations})
@@ -783,4 +785,6 @@ export const AGENT_DOCUMENTS: Readonly<Record<string, string>> = {
   [AGENT_TASKS.library]: library, [AGENT_TASKS.workspaces]: workspaces,
   [AGENT_TASKS.annotations]: annotations, [AGENT_TASKS.quality]: quality,
   [AGENT_TASKS.liveSession]: liveSession, [AGENT_TASKS.errors]: errors,
+  '/agent/quality/reference.md':quality,
+  ...QUALITY_AGENT_DOCUMENTS,
 };

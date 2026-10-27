@@ -1,0 +1,217 @@
+import {AGENT_OPERATIONS,AGENT_WORKFLOWS,agentOperation} from '../shared/service/agent-operations.ts';
+
+/** Embedded, also in standalone packages without frontend assets. */
+export const QUALITY_AGENT_DOCUMENTS:Record<string,string>={
+ '/agent/quality.md':`# Choose a quality task
+
+Start with [runtime capabilities](/api/agent) and the bounded
+[task catalog](/api/agent/tasks). Then fetch only the selected task's operation
+descriptions. Their versioned JSON gives method/path, domain limits, host,
+side effects, identity/Origin, replay, cursor and next-operation links.
+
+- [Single pair](/agent/quality/single.md): one explicit frame/ROI, PSNR with optional SSIM/grid.
+- [Bounded range](/agent/quality/range.md): all listed or deterministic stride, explicit coverage and holes.
+- [Native VMAF](/agent/quality/vmaf.md): continuous full-frame sequence plus PSNR/optional SSIM; optional installed Linux component.
+
+All three start with [sources and explicit preparation](/agent/quality/sources.md)
+and an [explicit reference relation and clock plan](/agent/quality/correspondence.md).
+Finish with [explicit candidates and shared evidence](/agent/quality/candidates.md).
+For uncertain responses read [recovery](/agent/quality/recovery.md).
+The [complete compatibility reference](/agent/quality/reference.md) retains the
+low-level pair and live-session contracts; no browser is needed for these tasks.
+
+The runnable repository example is examples/http-quality.mjs. Its default is
+read-only: it prints required next operations without creating users, preparing,
+planning, scoring or publishing. Each kind of write requires an explicit flag.
+There is no automatic alignment, subjective judgment or candidate publication.
+`,
+ '/agent/quality/sources.md':`# Discover facts before admitting quality
+
+1. GET /api/library/discovery-schema, then GET /api/library/discovery?includeUnknown=1&limit=16.
+   Follow nextCursor with the identical filters/limit. Snapshot changes require
+   restarting the first page. Unknown is neither supported nor a negative match.
+2. Explicitly select reference and distorted source ID/version. GET each
+   /api/media/{id}/discovery?v={version}. File names/duration/nearby clocks do not certify related content.
+3. Metadata stream IDs are parser-local facts. Cache stream video/configuration0
+   belongs to the current single-video quality contract. An AU is decode order;
+   MP4 sample ordinal, raw DTS/CTS/duration ticks and timebase are preserved.
+   None of these is a player cursor or a presentation-order frame number.
+4. Select an intranet identity only with permission. POST /api/library/preparations
+   with {source:{id,version},operation:"probe",client:{id,name}} for metadata,
+   or operation:"quality-index" for a trusted scoring cache. Origin must exactly
+   match the service and X-VoidPlayer-Action is library-preparation. Freeze a
+   separate Idempotency-Key for each source/operation; observe Location privately.
+5. GET /api/media/{id}/psnr-source?v={version} validates existing source/cache
+   admission; it never prepares. A cache-miss (409) means selection is disabled
+   until explicit preparation. GET psnr-frames pages pin buildId and version.
+   Candidate AU eligibility still needs execution-time NAL/output validation.
+
+Trusted FLV/Enhanced FLV and strict self-contained non-fragmented MP4 are
+supported. MP4: avc1 H2648 or hvc1 HEVC8/10, one video track/description,
+progressive 420 BT.709 SDR, square SAR, no crop/rotate, exact integer-us clocks.
+fMP4, encryption, external datarefs, config changes, nontrivial edits, open GOP
+CRA and ambiguous/nonintegral clocks are unsupported. Never round or repair.
+Metadata readability is not scoring readiness. Probe is not index admission.
+Native VMAF has additional sequence/component constraints. CAMBI is unavailable.
+
+[Operations](/api/agent/tasks/library) · [Next: relation and plan](/agent/quality/correspondence.md)
+`,
+ '/agent/quality/correspondence.md':`# Declare, explain and freeze correspondence
+
+POST /api/quality/reference-relations with schema voidplayer-quality-reference-relation,
+version1, client:{id,kind:"agent"}, explicit reference/distorted
+{mediaId,mediaVersion,stream:"video",configuration:0}, a declaration and
+clock:{mode:"piecewise-exact-source-pts-offset",segments:[{id,referenceStartUs,referenceEndUs,offsetUs}]}.
+Segments are half-open [start,end), nonoverlapping in both clock domains.
+distorted PTS = reference PTS + offset. This is a caller declaration, not content certification.
+
+POST /api/quality/correspondence-plans pins relation:{id,revision}, both cache
+build IDs, inclusive reference decode-order interval, all/stride sampling,
+recipe:{roi,budget,ssim?,spatial?}, total budget and planningBudget. Use the
+published domain limits in [plan.create](/agent/operations/plan.create.md).
+Recipe and total budgets include dependency preroll, all outputs and drain;
+planningBudget bounds index bytes/packets/time. No decoder runs during planning.
+
+Observe the durable plan, then page rows: exact raw AU facts distinguish mapped,
+unmapped, ambiguous, unsupported and unsampled. No nearest frame fills holes.
+A completed planning job may be blocked for execution. Check summary.executionBlock.
+The frozen range-input contains explicit one-to-one pairs. POST execute with
+{digest:plan.resultDigest} binds one stable range receipt across databases.
+Repeat that exact digest after unknown submission; do not invent another key.
+
+[Operations](/api/agent/tasks/quality.correspondence) · [Range](/agent/quality/range.md) · [VMAF](/agent/quality/vmaf.md)
+`,
+ '/agent/quality/single.md':`# Score one explicit frame pair
+
+After [preparation](/agent/quality/sources.md) and a one-position
+[C plan](/agent/quality/correspondence.md), GET its range-input. Require exactly
+one pair; do not select a nearby AU. POST /api/quality/jobs with
+{schema:"voidplayer-psnr-frame-job",version:1,client:{id,kind:"agent"},request:pair}.
+The pair includes exact source/cache/AU/clocks, ROI and budget. Optional SSIM
+uses the published uniform 8x8 step4 valid-window variant; optional spatial
+grid reports native source-pixel blocks. PSNR uses SSE/count, not averaged dB.
+
+The write needs same-origin quality-job action, cookie/captured actor and a
+frozen Idempotency-Key. Observe the durable job; completion has attempt.id and
+result.digest. GET /result returns immutable measured facts. A failed result
+does not mean a subjective defect and does not authorize another attempt.
+
+[Operations](/api/agent/tasks/quality.single) · [Explicit candidate](/agent/quality/candidates.md)
+`,
+ '/agent/quality/range.md':`# Execute a bounded range
+
+Use [C plan execute](/agent/quality/correspondence.md) for its stable receipt.
+Alternatively POST /api/quality/ranges/plan purely validates an explicit pair
+table, interval, sampling and budget; it performs no IO. Direct durable submit
+uses /api/quality/ranges and a frozen Idempotency-Key.
+
+Observe detail, then /results?after=0&limit=4 using nextAu. AU cursors are inclusive.
+Coverage keeps unmapped/unsampled/unsupported/failed holes separate. Completed
+selected samples never imply full temporal coverage. The total budget includes
+repeated dependency input, every output and drain. PSNR pools SSE/count by
+identical pixel domain; SSIM pools valid windows per plane before Y4:U1:V1.
+Parent coordination does not hold a second execution permit around children.
+Cancel explicitly; capacity remains held until physical exit. Disconnecting
+observation never cancels durable work. Restart interrupts rather than reruns.
+
+[Operations](/api/agent/tasks/quality.range) · [Explicit candidates](/agent/quality/candidates.md)
+`,
+ '/agent/quality/vmaf.md':`# Continuous native VMAF
+
+Read /api/quality/vmaf/capability. Missing optional components or unsupported
+platforms mean unavailable, never CAMBI-ready or permission to substitute a metric.
+Sources can be trusted FLV, strict MP4 or mixed in either direction. The fixed
+Linux x64 component and two published v0 models are the only supported executor.
+Require 2..32 continuous presentation frames, one exact integer-us cadence,
+full-frame limited BT.709 SDR YUV420 8/10bit, same geometry, all samples mapped.
+No ROI, stride, holes, conversion, negative PTS, VFR or automatic alignment.
+
+POST preflight with schema voidplayer-native-vmaf-job, version1, client,
+plan:{id,attemptId,digest}, model, cadenceUs, metrics:{ssim:boolean}, and budget.
+It validates the committed C plan and installed components but does not score.
+Its IO may cancel on disconnect. POST jobs with the SAME input and a frozen key
+explicitly authorizes persistent computation. Observe job then result and frames.
+Frames cursor next is presentation order, not AU; summary contains official
+per-frame and pooled scores plus companion PSNR/optional SSIM and raw work.
+Budgets include index reads, complete dependency decode/drain, raw disk and
+final source revalidation. No browser or GUI acknowledgement participates.
+
+[Operations](/api/agent/tasks/quality.vmaf) · [Explicit candidates](/agent/quality/candidates.md)
+`,
+ '/agent/quality/candidates.md':`# Publish only an explicit measurement candidate
+
+Read the immutable score before deciding to publish. Supply space, side, text,
+severity and an explicit threshold/topN/spacing policy for range or VMAF.
+POST the job's candidates operation freezes selection, IDs and operation receipts.
+After an unknown or partially committed response repeat exactly that policy.
+Receipt lookup precedes private result lookup, including after result reclamation.
+For a single pair use create-quality-candidate with caller-chosen operationId,
+annotation ID, revision0, candidate:{text,severity}, client and immutable
+evidence:{jobId,attemptId,digest,side}. Never reuse an ID with changed contents.
+
+GET the shared annotation and /api/annotations/events/{space}?after=0. Follow
+cursor while more; resetRequired means fetch snapshotUrl, not replay mutations.
+The committed annotation, evidence, receipt and event are authoritative; GUI
+consumption is independent. Existing admin/viewer can read the same facts and
+original source planes/ROI without scoring, implicit indexing, private-job access
+as another actor or seeking/pausing someone else's playback.
+
+Candidates are not-subjectively-assessed at creation. Explicit relations do not
+certify content. referenceIntegrity=not-certified; concealmentDetection=unavailable.
+Product functional tests do not erase known performance failures. Negative PTS,
+VFR E2E and isolated stat-witness certification remain outside current evidence.
+
+[Operations](/api/agent/tasks/evidence) · [Recovery](/agent/quality/recovery.md)
+`,
+ '/agent/quality/recovery.md':`# Preserve operation identity across uncertainty
+
+Freeze original actor, client, serialized body, source/build pins and key before
+POST. A dropped response is unknown, not failure. Replay only the same operation
+identity: Idempotency-Key for durable submit, plan digest for C execute, original
+policy for candidates, operationId for annotations. Never switch to a new key
+to make an uncertain request succeed. Non-idempotent identity creation needs
+manual resolution; do not blindly repeat it. An explicit new attempt after a
+confirmed terminal failure/cancellation/interruption is a separate user decision.
+
+Capture actor from /api/agent and send X-VoidPlayer-Actor with its cookie. Stop
+on actor-changed; do not attach an old pending write to a new actor. Source/cache
+changes require explicit reselection and a revised plan, never rounding/nearest
+matching. An expired read cursor restarts the same query/snapshot, not mutations.
+Observation disconnect does not cancel durable jobs. Stop observing if desired;
+only explicit cancel asks for physical shutdown. Restart does not recompute.
+
+Unavailable persistence/components are deployment prerequisites, not transient
+permission to poll endlessly or substitute metrics. Read the operation's recovery
+and next links, and [error reference](/agent/errors.md). The ordinary HTTP example
+has bounded requests, pages and observation and never persists credentials.
+`,
+};
+
+for(const op of AGENT_OPERATIONS){
+ const task=AGENT_WORKFLOWS.find(t=>t.id===op.task)!;
+ // Static prose has no deployment availability assertion. JSON describes runtime.
+ const contract=agentOperation(op.id,[])!;
+ QUALITY_AGENT_DOCUMENTS[`/agent/operations/${op.id}.md`]=`# ${op.id} — operation v1
+
+${op.method} ${op.path}
+
+${op.request.description}
+
+Result: ${op.output}
+
+Host: service. Browser required: false. Side effect: ${op.effect}.
+${op.identity?'Retain the identity cookie; capture and send X-VoidPlayer-Actor as an expectation fence. It is not authentication.':'No identity cookie is required for this read or identity selection.'}
+${contract.write?`Write: exact service Origin, application/json, X-VoidPlayer-Action: ${contract.write.action}. Replay contract: ${op.replay}.`:''}
+${op.cursor??'No cursor for this operation.'}
+
+${contract.recovery.unknownPost}
+${contract.recovery.actorChanged} ${contract.recovery.sourceChanged}
+${contract.recovery.observerDisconnect}
+
+${op.request.limits?'Published domain limits/contract:\n\n```json\n'+JSON.stringify(op.request.limits,null,2)+'\n```':''}
+
+[Runtime operation description](/api/agent/operations/${op.id}) · [Task guide](${task.guide}) · [Recovery](/agent/quality/recovery.md)
+
+Next: ${op.next.map(id=>`[${id}](/agent/operations/${id}.md)`).join(' · ')}
+`;
+}
