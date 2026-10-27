@@ -5098,6 +5098,74 @@
     "source": "请先结束标注并等待本机草稿保存完成。",
     "translation": "Finish annotating and wait for local drafts to save."
   },
+  "tasks.cancel": {
+    "source": "显式取消此任务",
+    "translation": "Explicitly cancel this task"
+  },
+  "tasks.cancelUnknown": {
+    "source": "取消回执尚未确认：{error}。请读取原任务；重复取消不会创建新计算。",
+    "translation": "Cancellation receipt is unconfirmed: {error}. Read the original task; repeated cancellation creates no new computation."
+  },
+  "tasks.cancelled": {
+    "source": "已向原任务服务提交取消；以服务端状态及实际退出为准。",
+    "translation": "Cancellation sent to the original service; server state and physical exit remain authoritative."
+  },
+  "tasks.expired": {
+    "source": "旧分页快照已失效，已按原筛选重新读取；选中目标保留。",
+    "translation": "The old page snapshot expired. Reloaded with the same filters; selected target retained."
+  },
+  "tasks.from": {
+    "source": "创建时间自（含，本地时间）",
+    "translation": "Created from (inclusive, local time)"
+  },
+  "tasks.kind": {
+    "source": "任务类型",
+    "translation": "Task type"
+  },
+  "tasks.media": {
+    "source": "媒体 ID",
+    "translation": "Media ID"
+  },
+  "tasks.metric": {
+    "source": "操作或指标",
+    "translation": "Operation or metric"
+  },
+  "tasks.pageSize": {
+    "source": "每页条数",
+    "translation": "Rows per page"
+  },
+  "tasks.refresh": {
+    "source": "查询 / 刷新快照",
+    "translation": "Query / refresh snapshot"
+  },
+  "tasks.reset": {
+    "source": "清除筛选",
+    "translation": "Clear filters"
+  },
+  "tasks.scope": {
+    "source": "当前自述身份的准备、对应计划、单帧、区间和 VMAF 历史。刷新读取新快照；翻页保留当时事实。关闭观察不取消后台工作，也不移动播放头。",
+    "translation": "Preparation, correspondence, single-pair, range and VMAF history for the current self-declared identity. Refresh captures new facts; pages retain the snapshot. Closing observation does not cancel background work or move playback."
+  },
+  "tasks.snapshot": {
+    "source": "快照 {captured}；{count} 项。新状态需刷新；快照到期后重新查询。",
+    "translation": "Snapshot {captured}; {count} tasks. Refresh for new state; query again after expiry."
+  },
+  "tasks.state": {
+    "source": "原始状态",
+    "translation": "Raw state"
+  },
+  "tasks.title": {
+    "source": "任务中心",
+    "translation": "Task center"
+  },
+  "tasks.to": {
+    "source": "创建时间至（不含，本地时间）",
+    "translation": "Created before (exclusive, local time)"
+  },
+  "tasks.version": {
+    "source": "媒体版本",
+    "translation": "Media version"
+  },
   "theme.baseColor": {
     "source": "基调色",
     "translation": "Base color"

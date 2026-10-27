@@ -5446,6 +5446,79 @@
     "source": "请先结束标注并等待本机草稿保存完成。",
     "params": {}
   },
+  "tasks.cancel": {
+    "source": "显式取消此任务",
+    "params": {}
+  },
+  "tasks.cancelUnknown": {
+    "source": "取消回执尚未确认：{error}。请读取原任务；重复取消不会创建新计算。",
+    "params": {
+      "error": "string | number"
+    }
+  },
+  "tasks.cancelled": {
+    "source": "已向原任务服务提交取消；以服务端状态及实际退出为准。",
+    "params": {}
+  },
+  "tasks.expired": {
+    "source": "旧分页快照已失效，已按原筛选重新读取；选中目标保留。",
+    "params": {}
+  },
+  "tasks.from": {
+    "source": "创建时间自（含，本地时间）",
+    "params": {}
+  },
+  "tasks.kind": {
+    "source": "任务类型",
+    "params": {}
+  },
+  "tasks.media": {
+    "source": "媒体 ID",
+    "params": {}
+  },
+  "tasks.metric": {
+    "source": "操作或指标",
+    "params": {}
+  },
+  "tasks.pageSize": {
+    "source": "每页条数",
+    "params": {}
+  },
+  "tasks.refresh": {
+    "source": "查询 / 刷新快照",
+    "params": {}
+  },
+  "tasks.reset": {
+    "source": "清除筛选",
+    "params": {}
+  },
+  "tasks.scope": {
+    "source": "当前自述身份的准备、对应计划、单帧、区间和 VMAF 历史。刷新读取新快照；翻页保留当时事实。关闭观察不取消后台工作，也不移动播放头。",
+    "params": {}
+  },
+  "tasks.snapshot": {
+    "source": "快照 {captured}；{count} 项。新状态需刷新；快照到期后重新查询。",
+    "params": {
+      "captured": "string | number",
+      "count": "string | number"
+    }
+  },
+  "tasks.state": {
+    "source": "原始状态",
+    "params": {}
+  },
+  "tasks.title": {
+    "source": "任务中心",
+    "params": {}
+  },
+  "tasks.to": {
+    "source": "创建时间至（不含，本地时间）",
+    "params": {}
+  },
+  "tasks.version": {
+    "source": "媒体版本",
+    "params": {}
+  },
   "theme.baseColor": {
     "source": "基调色",
     "params": {}

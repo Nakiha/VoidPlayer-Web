@@ -30,7 +30,7 @@ let executable;
 async function verifyAgentEntry(base,transport=fetch){
   const entry=await transport(base+'/llms.txt');assert.equal(entry.status,200);assert.match(await entry.text(),/\/api\/agent\/tasks/);
   const manifest=await (await transport(base+'/api/agent')).json(),catalog=await (await transport(base+manifest.links.taskCatalog)).json();assert.equal(catalog.schema,'voidplayer-agent-tasks');assert.equal(catalog.version,1);
-  for(const id of ['library.prepare','plan.execute','single.submit','vmaf.submit','evidence.events']){
+  for(const id of ['library.prepare','plan.execute','single.submit','vmaf.submit','evidence.events','tasks.query','tasks.get']){
     const route='/api/agent/operations/'+id,response=await transport(base+route),text=await response.text();assert.equal(response.status,200);const op=JSON.parse(text);assert.equal(op.id,id);assert.equal(op.execution.requiresBrowser,false);
     const head=await transport(base+route,{method:'HEAD'});assert.equal(head.status,200);assert.equal(await head.text(),'');assert.equal(Number(head.headers.get('content-length')),Buffer.byteLength(text));
     assert.equal((await transport(base+op.links.guide)).status,200);

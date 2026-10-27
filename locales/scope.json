@@ -14,6 +14,7 @@
     "src/admin/quality-vmaf.ts",
     "src/admin/quality.ts",
     "src/admin/shell.ts",
+    "src/admin/tasks.ts",
     "src/admin/workspace-copy-name.ts",
     "src/admin/workspaces.ts",
     "src/agent/page-bridge.ts",

@@ -1,3 +1,4 @@
+import {TASK_LIMITS,TASK_KINDS} from './tasks.ts';
 import {VMAF_CAPABILITY} from '../analysis/quality/vmaf.ts';
 import {CORRESPONDENCE_LIMITS} from '../analysis/quality/correspondence.ts';
 import { SSIM_VARIANT, SSIM_LIMITS } from '../analysis/quality/ssim.ts';
@@ -31,6 +32,7 @@ export const AGENT_TASKS = {
 export function agentManifest(input: { capabilities: ServiceCapabilities; libraryReady: boolean; frontendAvailable?: boolean; localPageBridge?:boolean;qualityJobsEnabled?: boolean; nativeVmaf?: {enabled:boolean;reason:unknown}|null; actor: { id: string; name: string } | null }) {
   const { capabilities: c, libraryReady, actor } = input;
   const capabilities: AgentCapability[] = [
+    {id:'tasks.read',implemented:true,enabled:!!input.qualityJobsEnabled,readiness:!input.qualityJobsEnabled?'unavailable':actor?'ready':'needs-identity',requiresBrowser:false,guide:'/agent/quality/tasks.md'},
     {id:'identity.select',implemented:true,enabled:c.admin,readiness:c.admin?'ready':'unavailable',requiresBrowser:false,guide:AGENT_TASKS.workspaces},
     { id: 'library.browse', implemented: true, enabled: true, readiness: libraryReady ? 'ready' : 'index-warming', requiresBrowser: false, guide: AGENT_TASKS.library },
     { id: 'library.discovery', implemented: true, enabled: true, readiness: libraryReady ? 'per-source' : 'index-warming', requiresBrowser: false, guide: AGENT_TASKS.library },
@@ -61,6 +63,7 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
     localMcp:{transport:'stdio',networkMcpEndpoint:false,distribution:'source-checkout-node-24-built-frontend',launch:'node scripts/mcp-page-bridge.ts',versions:PAGE_MCP_VERSIONS,ownedPageOnly:true,persistentAuthorization:false,automaticReconnect:false,clientIdentity:'self-declared-not-authenticated',tools:MCP_PAGE_TOOLS.map(tool=>({...tool,scope:Object.hasOwn(PAGE_TOOLS,tool.name)?PAGE_TOOLS[tool.name as keyof typeof PAGE_TOOLS].scope:'read'})),limits:PAGE_BRIDGE_LIMITS,discovery:'Use MCP tools/list for epoch/operationId envelopes and receipt/status tools.',guide:AGENT_TASKS.liveSession},
     capabilities,
     technicalFilter: { schema: TECHNICAL_FILTER_SCHEMA, version: 1, endpoint: TECHNICAL_FILTER_PATH, limits: TECHNICAL_FILTER_LIMITS, pagination: 'none', scope: 'explicit-candidates-cached-streams' },
+    taskCenter:{schema:'voidplayer-task-page',version:1,query:'/api/tasks',detail:'/api/tasks/{kind}/{id}',cancel:'/api/tasks/{kind}/{id}/cancel',kinds:TASK_KINDS,limits:TASK_LIMITS,actor:'self-declared-current-actor-only-not-authentication',pagination:'ephemeral-frozen-snapshot;409-task-cursor-expired-restart-without-cursor',observerDisconnectCancels:false},
     libraryDiscovery: {...DISCOVERY_DICTIONARY,detail:'/api/media/{id}/discovery?v={version}',writeAction:'library-preparation',idempotencyHeader:'Idempotency-Key',
       capturedActorHeader:'X-VoidPlayer-Actor',observerDisconnectCancels:false,automaticRetry:false,qualityAdmission:'existing-psnr-source-and-psnr-frames-only'},
     qualityJobs: { schema: 'voidplayer-psnr-frame-job', version: 1, metrics: ['psnr','ssim'], requiredMetrics:['psnr'],

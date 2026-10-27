@@ -1,3 +1,4 @@
+import {taskSummaries,taskEdges} from '../../tasks/summary.ts';
 import {createHash,randomUUID} from 'node:crypto';import {mkdirSync,rmSync} from 'node:fs';import path from 'node:path';
 import {openIndexDatabase} from '../../sqlite.ts';import {lockDatabase} from '../../library-store.ts';import {AdminError} from '../../admin-error.ts';
 import type {Actor} from '../../identity.ts';import type {CorrespondenceService} from '../quality/correspondence-service.ts';
@@ -15,6 +16,9 @@ type Publication={policy:CandidatePolicy;selected:{index:number;id:string;operat
 type CandidatePolicy={space:string;side:'reference'|'distorted';maxScore:number;limit:number;minFrameDistance:number;text:string;severity:number};
 /** Separate metric outcomes, one service-owned attempt, no automatic retry/work sharing. */
 export class NativeVmafService{
+  taskSummaries(actor:string){return taskSummaries(this.db,'vmaf',actor);}
+  taskEdges(actor:string){return taskEdges(this.db,'vmaf',actor);}
+
  private db:ReturnType<typeof openIndexDatabase>;private unlock:()=>void;readonly ready:Promise<void>;
  private recovered=false;private closed=false;private fatal:unknown;private active?:{id:string;controller:AbortController;done:Promise<void>};private timer?:ReturnType<typeof setTimeout>;private closing?:Promise<void>;
  private file:string;private runner:NativeVmafRunner;private plans:CorrespondenceService;

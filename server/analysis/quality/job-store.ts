@@ -1,3 +1,4 @@
+import {taskSummaries} from '../../tasks/summary.ts';
 import {pairPacketCount} from '../../../shared/analysis/quality/frame-pair.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
@@ -19,6 +20,8 @@ const reason = (code: string, message: string): QualityJobReason => ({code, mess
 /** One owner, bounded records, one attempt per submission. The separate SQLite
  * lock is crash-released; recovery cannot run against a live owning service. */
 export class QualityJobStore {
+  taskSummaries(actor:string){return taskSummaries(this.db,'single',actor);}
+
   private db: ReturnType<typeof openIndexDatabase>;
   private unlock: () => void;
   constructor(file: string, now = Date.now()) {
