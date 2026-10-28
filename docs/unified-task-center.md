@@ -129,7 +129,4 @@ old scores/candidates occurs. Preparation and C plans are not reexecuted here.
 
 CAMBI is projected from its original bounded `cambi_jobs` store using only scalar metadata: one `source` role, metric `cambi`, exact phase/prepared/scored/target facts and committed result availability. Provisional stored scores remain unavailable as immutable results. It has no fabricated reference/C-plan edge. Explicit task-center cancellation delegates to the original CAMBI service; candidate receipt links require the entire frozen ref (including frame, scale and region) to match a server-verified same-origin annotation attachment before opening its independent five-scale viewer. No heatmap bytes are loaded by task queries.
 
-CAMBI currently has no frozen explicit-reexecution contract: task-center details
-show this limitation and expose no recomputation command. Its original source,
-results and candidates remain available through the existing CAMBI links.
-The four declared recomputation kinds are not expanded to CAMBI.
+CAMBI delegates to the same explicit confirmation/receipt panel, limited to physically stopped failed/interrupted/cancelled tasks with a persisted single-source contract. Source/cache/producer/core, AU selection/order and native component/recipe must match. Missing historical witness requires new intent; no partial status or automatic preparation/publication is added.

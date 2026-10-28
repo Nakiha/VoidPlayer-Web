@@ -129,7 +129,7 @@ key. Candidate permission/policy remains independent.
   platforms and native VMAF/XPSNR on Linux x64 only. Platform execution is reported
   from actual PR results, not inferred from registration.
 
-This adds no source/container/model/platform support, CAMBI implementation,
+This adds no source/container/model/platform support,
 preparation/C-plan rebuilding, distributed retry, selective resume or shared
 cross-request computation. Existing negative performance results, negative-PTS/
 VFR E2E limits, `referenceIntegrity=not-certified` and
@@ -153,8 +153,20 @@ without an execution witness require a new explicit intent. Missing components,
 changed assets/source/cache/C plan, or uncertain physical exit block recomputation.
 Existing result/annotation schemas and legacy submission fingerprints are unchanged.
 
-The integration HTTP suite covers all four kinds, including real SIGKILL before
+The integration HTTP suite covers the original four paired kinds, including real SIGKILL before
 and after receipt commit, exact same-key replay and task-center links. Each native
 successor reads the core/producer witness three times; preflight is a separate
 single pass. The GUI suite includes XPSNR recomputation from task-center details,
 reopening its filter/target, and the original metric view's chain.
+
+## Single-source CAMBI extension
+
+CAMBI supports the same endpoints under `/api/quality/cambi/jobs/{id}` for **failed/interrupted/cancelled** tasks only; its state machine has no partial state. The source domain remains trusted FLV/Enhanced FLV or the existing strict MP4 subset, Linux x64 fixed component and existing raw/heatmap/CPU/memory/time budgets. It needs no reference or C plan.
+
+Before raw decode, an owned Worker freezes one exact source/cache/producer proof, bounded core/producer implementation hashes, source geometry, selected AU/configuration/PTS/dependency windows in actual native order, unsampled/unsupported coverage digest and the full fixed CAMBI recipe/component. This contract lives in the job body independently of disposable incomplete results/heatmaps. A cancelled queued job or historical job without it cannot be upgraded. The CAMBI database migrates to v2 atomically with the shared ledger; old bodies/fingerprints remain unchanged, older applications refuse the newer database. Each new job reserves another bounded32KiB for witness/receipt metadata.
+
+Preflight independently re-derives that exact selection and pins current assets under the original shared admission. It uses one separate witness pass and does no decode or native scoring. A confirmed execution reads core/producer assets twice in decode and once in final verification; measured bytes/pass counts are recorded. Source index reads across decode and final verification share the original64MiB/1,000,000-packet cumulative budget; raw source reads/dependency packets and aggregate five-scale disk/native budgets stay separate. Cost reports `selectedPairs:0`, selectedPictures, exact AU/PTS order and selection digest, all original budgets and conservative raw/output reservation. No invented pair, reference/model or score reuse is introduced.
+
+The original service transaction creates the fresh job, frozen expected contract, lineage and unique-successor receipt together. After physical stop, the original actor/body/key replays the receipt before any source/component revalidation, even following drift or result reclamation. Different window keys cannot fork. Closing the GUI/observer never cancels the accepted task; cancelling/running work or uncertain physical exit cannot be reexecuted. Old tasks/annotations/evidence/candidates stay immutable, and new candidates need the existing explicit publication policy. GUI metric and task-center panels consume the same commands and identity fences.
+
+Required targeted tests include `test/media/cambi-reexecution-http.test.ts` on Node/Bun, real owner/transaction SIGKILL recovery, Chromium/WebKit `scripts/check-cambi-reexecution-browser.mjs`, and installed empty-PATH compiled checks in the existing CAMBI release driver. These test exact official frame/pool and five-scale bytes, raw source viewing, drift/legacy rejection, unknown responses, unique successors and real physical release; no private footage or subjective calibration is claimed.

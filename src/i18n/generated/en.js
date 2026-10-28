@@ -1055,7 +1055,7 @@ export default {
   "reexecution.rejected": () => "The server explicitly rejected this request. You can end the local request or inspect the original execution chain.",
   "reexecution.replay": () => "Retrieve the receipt using the frozen original request and key",
   "reexecution.replaySubmission": () => "Replay the original submission (no recomputation)",
-  "reexecution.scope": () => "Recomputation creates a linked job and processes all frozen inputs from the start, without reusing old scores. Original jobs, partial evidence and candidates are retained. New candidates are never published automatically. Replaying a submission retrieves its original receipt without recomputation.",
+  "reexecution.scope": () => "Recomputation creates a linked job and processes all frozen inputs from the start, without reusing old scores. Original jobs, existing evidence and candidates are retained. New candidates are never published automatically. Replaying a submission retrieves its original receipt without recomputation.",
   "reexecution.successor": () => "View the accepted new execution",
   "reexecution.title": () => "Explicit recomputation and history",
   "reexecution.unknown": () => "Submission outcome is unconfirmed. Replay only the frozen original actor, request and key; do not create a new key.",
