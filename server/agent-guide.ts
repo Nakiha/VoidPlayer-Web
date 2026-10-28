@@ -762,6 +762,7 @@ before private result resolution. Attachments are single-source, not invented re
 regional heatmap statistics are not cropped CAMBI recomputation. New windows consume shared facts
 and exact raw snapshots without querying another actor's private job or disturbing playback.
 Imports are historical; reference integrity is not certified and concealment detection is unavailable.
+Stopped failed/interrupted/cancelled CAMBI with a complete single-source execution contract uses the same explicit reexecution-plan → full cost confirmation → reexecutions protocol. Frozen AU selection/order, source/cache/producer/core and fixed native component/recipe are rechecked; absent legacy witness or drift requires new intent. There is no CAMBI partial state, C plan, automatic computation/publication or replacement of old evidence.
 See docs/native-cambi.md for installation, sample licenses, bounds and false-positive/negative observations.
 
 There is no automatic alignment, shared computation,

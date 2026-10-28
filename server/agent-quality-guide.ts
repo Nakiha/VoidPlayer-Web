@@ -10,7 +10,7 @@ Pages freeze membership and summary facts for60 seconds. Keep filters with nextC
 
 Explicit cancel is POST /api/tasks/{kind}/{id}/cancel with {}, same Origin and captured actor. Use library-preparation action for preparation, quality-job otherwise. It delegates to the owning service. Cancelling retains admission until confirmed physical exit. If the receipt is lost, read the same task; repeating cancel does not create computation or roll back completed results. Closing GUI or HTTP observation never cancels a durable job.
 
-For a physically stopped failed/interrupted/cancelled/partial single, range, VMAF or XPSNR task, follow its reexecution-plan link and the [explicit full recomputation contract](/agent/quality/recovery.md). Task detail exposes verified predecessor/successor links. Reexecution requires a separate reason, exact cost confirmation and frozen actor/body/key; it never starts automatically. No partial resume, automatic publication, new scheduler or global administration. Changed conditions need new intent.
+For a physically stopped failed/interrupted/cancelled/partial single, range, VMAF, XPSNR or stopped failed/interrupted/cancelled CAMBI task, follow its reexecution-plan link and the [explicit full recomputation contract](/agent/quality/recovery.md). Task detail exposes verified predecessor/successor links. Reexecution requires a separate reason, exact cost confirmation and frozen actor/body/key; it never starts automatically. No partial resume, automatic publication, new scheduler or global administration. Changed conditions need new intent.
 `,
  '/agent/quality.md':`# Choose a quality task
 
@@ -141,6 +141,8 @@ Observe [tasks.query](/api/agent/operations/tasks.query) with kind=cambi or metr
 
 Completed /result gives official pool, recipe, CPU/RSS/temp/work, coverage and worst frames. /frames?after=INDEX&limit=4 pages exact source/AU/PTS/raw and scale hashes. MP4 frames are in increasing source-PTS order after explicit decode-AU stride selection; v2 retains track/sample/ticks/table evidence, not a nearest-PTS lookup. Provisional scores cannot publish. /heatmap?index=INDEX&scale=0..4 returns original gray16le maps; /picture?index=INDEX revalidates exact source/cache/AU/raw planes, no rescore or playback control. Score direction is higher=more banding, not a calibrated product line. Internal processing is10-bit; source depth and no-prediction/full_ref=false remain recorded.
 
+Stopped failed/interrupted/cancelled tasks with a complete persisted single-source execution witness can explicitly POST /jobs/{id}/reexecution-plan {reason}, confirm the exact full cost, then POST /jobs/{id}/reexecutions with the retained actor/body/key. GET /reexecutions links predecessor and the unique new successor. Frozen source/cache/producer/core, exact AU selection/order and fixed native recipe/component must match. Legacy witness absence or changed conditions requires new intent, never automatic index preparation. Three execution witness passes (source contract, before core load, final verify) plus a separate read-only preflight are charged; old results, heatmaps and candidates are not replaced. No partial status, resume, VMAF reference/model, or automatic publication is introduced.
+
 Explicit POST /candidates policy {space,minScore,limit,scale,cellThreshold,text,severity} freezes actual nonzero heatmap-cell bounds and atomic create-cambi-candidate receipts. Regional statistics are not cropped CAMBI. Replay original policy before looking up reclaimed result. Shared attachments can be inspected without private-job access; imported/copied evidence becomes historical. See docs/native-cambi.md for runnable no-GUI HTTP, licenses and limitations. No HDR/negative-PTS/VFR certification, reference-integrity certification or concealment detection.
 `,
  '/agent/quality/xpsnr.md':`# Native XPSNR: compare explicitly related variants
@@ -216,7 +218,7 @@ to make an uncertain request succeed. Non-idempotent identity creation needs
 manual resolution; do not blindly repeat it. An explicit new computation after a
 confirmed failed/interrupted/cancelled/partial job is a separate user decision.
 
-For single, range, VMAF or XPSNR, POST the original job's /reexecution-plan with {reason}.
+For single, range, VMAF, XPSNR or CAMBI (no partial state), POST the original job's /reexecution-plan with {reason}.
 This only verifies the frozen source/cache/C plan/core/native component/model or filter/recipe and returns
 old partial facts, blocks and full-from-start cost. Missing historical witnesses
 or changed conditions require a new explicit intent; nothing is rebuilt.

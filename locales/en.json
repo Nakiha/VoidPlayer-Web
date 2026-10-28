@@ -4247,7 +4247,7 @@
     "translation": "Replay the original submission (no recomputation)"
   },
   "reexecution.scope": {
-    "source": "重新计算创建关联的新任务，从头处理全部冻结输入，不复用旧分数。原任务、partial 证据与候选保留；不会自动发布新候选。重放原提交只查询原回执，不会重新计算。",
+    "source": "重新计算创建关联的新任务，从头处理全部冻结输入，不复用旧分数。原任务、已有证据与候选保留；不会自动发布新候选。重放原提交只查询原回执，不会重新计算。",
     "translation": "Recomputation creates a linked job and processes all frozen inputs from the start, without reusing old scores. Original jobs, partial evidence and candidates are retained. New candidates are never published automatically. Replaying a submission retrieves its original receipt without recomputation."
   },
   "reexecution.successor": {

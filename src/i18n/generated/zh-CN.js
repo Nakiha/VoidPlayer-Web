@@ -1055,7 +1055,7 @@ export default {
   "reexecution.rejected": () => "服务端已明确拒绝此请求。可结束本地请求，或读取原任务链。",
   "reexecution.replay": () => "用冻结的原请求和原键获取重算回执",
   "reexecution.replaySubmission": () => "重放原提交（不重新计算）",
-  "reexecution.scope": () => "重新计算创建关联的新任务，从头处理全部冻结输入，不复用旧分数。原任务、partial 证据与候选保留；不会自动发布新候选。重放原提交只查询原回执，不会重新计算。",
+  "reexecution.scope": () => "重新计算创建关联的新任务，从头处理全部冻结输入，不复用旧分数。原任务、已有证据与候选保留；不会自动发布新候选。重放原提交只查询原回执，不会重新计算。",
   "reexecution.successor": () => "查看已受理的新执行",
   "reexecution.title": () => "显式重新计算与追溯",
   "reexecution.unknown": () => "提交结果尚未确认。仅允许冻结的原 actor、原请求与原键回放；不要创建新键。",
