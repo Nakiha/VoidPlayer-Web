@@ -960,6 +960,9 @@ jobs:
           lfs: true
       - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
       - run: node scripts/run-tests.mjs --case release-analysis
+      - name: Prepare pinned Linux native quality components
+        if: matrix.platform == 'linux-x64'
+        run: node scripts/native/run-vmaf-tests.mjs node scripts/native/run-xpsnr-tests.mjs node --version
       - run: node scripts/run-tests.mjs --case release-quality
       - name: Install network playback browser
         if: runner.os == 'Linux' || runner.os == 'Windows'

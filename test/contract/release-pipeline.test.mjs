@@ -142,6 +142,10 @@ test('Linux native suites retain exact platform ownership outside the compiled p
   }
   assert.match(linux.body, /ci-native-node\n        env:\n          NODE_OPTIONS: --test-reporter=tap/);
   for (const suite of ['--case release-analysis', '--case release-quality', 'ci-native-http --prepared', 'ci-native-https --prepared']) assert.ok(packaged.body.includes(`run: node scripts/run-tests.mjs ${suite}\n`));
+  const nativeSetup = "      - name: Prepare pinned Linux native quality components\n        if: matrix.platform == 'linux-x64'\n        run: node scripts/native/run-vmaf-tests.mjs node scripts/native/run-xpsnr-tests.mjs node --version\n";
+  assert.equal(packaged.body.split(nativeSetup).length - 1, 1);
+  assert.ok(packaged.body.indexOf(nativeSetup) < packaged.body.indexOf('run: node scripts/run-tests.mjs --case release-quality\n'));
+  assert.equal(manifest.cases.find(row => row.id === 'release-quality').timeoutMs, 120000, 'native build prerequisites must not consume or enlarge the compiled acceptance budget');
 });
 
 test('cache suite runs once in its own required job with the same pinned preparation and evidence', async () => {
