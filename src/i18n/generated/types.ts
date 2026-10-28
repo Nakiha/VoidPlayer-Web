@@ -519,7 +519,7 @@ export interface Sources {
   "cambi.prepare": "缺少可信缓存时，显式前往技术准备；此处不会自动探测或建索引。";
   "cambi.publish": "显式共享候选与证据";
   "cambi.retry": "用冻结请求与原键重试";
-  "cambi.scope": "Linux x64 可选固定组件；可信 FLV/Enhanced FLV、8/10 位限范围 BT.709 SDR，整帧、方形像素、不裁剪，长边至少320。分数越高表示检测到更多色带，不是产品合格线；内部按10位处理。允许明确抽样，未采样帧不冒充覆盖。没有跨帧目标跟踪，未认证引用完整性，无法检测错误隐藏。";
+  "cambi.scope": "Linux x64 可选固定组件；可信 FLV/Enhanced FLV 8/10 位，或严格 MP4 avc1 H2648 / hvc1 HEVC8/10；限范围 BT.709 SDR，整帧、方形像素、不裁剪，长边至少320。分数越高表示检测到更多色带，不是产品合格线；内部按10位处理。允许明确抽样，未采样帧不冒充覆盖。没有跨帧目标跟踪，未认证引用完整性，无法检测错误隐藏。";
   "cambi.submit": "发起持久单源 CAMBI";
   "cambi.title": "CAMBI · 单源色带筛查";
   "cambi.viewer1": "CAMBI · 原始多尺度色带证据";

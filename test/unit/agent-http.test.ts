@@ -141,7 +141,7 @@ test('progressive descriptions reuse authoritative limits and distinguish condit
   assert.equal(agentOperation('library.discover',[])!.request.limits,DISCOVERY_DICTIONARY.query);
   const m=agentManifest({capabilities:serviceCapabilities(true,false),libraryReady:true,qualityJobsEnabled:true,nativeVmaf:{enabled:false,reason:'component-unavailable'},actor:null});
   const native=m.qualityJobs.source.additionalContainers.mp4.nativeSequenceMetrics;
-  assert.deepEqual(native.vmaf.containers,VMAF_CAPABILITY.containers);assert.equal(native.cambi.implemented,false);assert.equal(m.qualityVmaf.deployment.enabled,false);
+  assert.deepEqual(native.vmaf.containers,VMAF_CAPABILITY.containers);assert.equal(native.cambi.implemented,true);assert.equal(m.qualityVmaf.deployment.enabled,false);
   assert.match(DISCOVERY_DICTIONARY.fields.quality,/Metadata stream IDs/);
   assert.ok(AGENT_DOCUMENTS['/agent/quality.md'].length<2500);assert.ok(AGENT_DOCUMENTS['/agent/quality/reference.md'].length>10000);
 });
@@ -193,5 +193,5 @@ test('CAMBI progressive operations retain single-source admission and unavailabl
  const m=agentManifest({capabilities:serviceCapabilities(true,false),libraryReady:true,qualityJobsEnabled:true,actor:{id:'owner',name:'Owner'},nativeCambi:{enabled:true,reason:null}});
  assert.deepEqual(m.qualityReexecution.kinds,['single','range','vmaf','xpsnr']);assert.deepEqual(m.qualityCambi.reexecution,{implemented:false,reason:'no-frozen-reexecution-contract'});assert.equal(agentOperation('cambi.reexecute',m.capabilities),null);
  const task=agentTask('quality.cambi')!;assert.equal(task.operations.length,10);const submit=agentOperation('cambi.submit',m.capabilities)!;assert.equal(submit.availability.enabled,true);assert.equal(submit.request.schema,'voidplayer-cambi-job');assert.equal(submit.execution.requiresBrowser,false);assert.equal(submit.write!.action,'quality-job');assert.ok(!submit.next.includes('plan.create'));
- assert.match(AGENT_DOCUMENTS['/agent/quality/cambi.md'],/no reference relation|reference relationship/i);assert.match(AGENT_DOCUMENTS['/agent/quality/cambi.md'],/FLV-only/);assert.match(AGENT_DOCUMENTS['/agent/quality.md'],/CAMBI uses one source and no C plan/);
+ assert.match(AGENT_DOCUMENTS['/agent/quality/cambi.md'],/no reference relation|reference relationship/i);assert.match(AGENT_DOCUMENTS['/agent/quality/cambi.md'],/strict.*MP4/);assert.match(AGENT_DOCUMENTS['/agent/quality.md'],/CAMBI uses one source and no C plan/);
 });

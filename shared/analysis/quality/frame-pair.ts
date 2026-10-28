@@ -336,10 +336,12 @@ export function inspectFramePair(request: FramePairRequest, sources: [CachedPair
 }
 
 /** Single-source admission and decode. No reference relation or numerical metric. */
-export async function inspectFlvFrame(target:PairTarget,source:CachedPairSource<QualityIndexDocument>,loadDecoder:(budget:PairBudget)=>Promise<PairDecoder>,signal:AbortSignal,budget?:Partial<PairBudget>){
- if(target.indexIdentity.kind!=='flv')throw new FramePairError('unsupported-source','FLV single-source inspection required');
+export async function inspectSourceFrame(target:PairTarget,source:CachedPairSource<QualityIndexDocument>,loadDecoder:(budget:PairBudget)=>Promise<PairDecoder>,signal:AbortSignal,budget?:Partial<PairBudget>){
  return withFramePair({pairing:'caller-specified',reference:target,distorted:target,roi:{x:0,y:0,width:2,height:2},budget},[source,source],loadDecoder,signal,p=>({frame:p.frames[0],provenance:p.provenance.reference,decoder:p.decoder,sourceGeometry:p.sourceGeometry.reference,work:p.work}),requireInspectionGeometry,1);
 }
+
+/** Existing FLV entry retains its original rejection boundary. */
+export function inspectFlvFrame(...args:Parameters<typeof inspectSourceFrame>){if(args[0].indexIdentity.kind!=='flv')return Promise.reject(new FramePairError('unsupported-source','FLV single-source inspection required'));return inspectSourceFrame(...args);}
 
 /** Compatibility wrappers retain the original FLV-only entry contract. */
 export function measureFlvFramePair(...args:Parameters<typeof measureFramePair>){if(args[0].reference.indexIdentity.kind!=='flv'||args[0].distorted.indexIdentity.kind!=='flv')return Promise.reject(new FramePairError('unsupported-source','FLV source required'));return measureFramePair(...args);}

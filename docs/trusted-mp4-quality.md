@@ -28,8 +28,7 @@ Reference relationships remain caller declarations, not content certification.
 Reference integrity is not-certified and concealment detection is unavailable.
 Performance has not passed. Native VMAF has a separate [strict MP4/mixed sequence
 contract](native-vmaf.md), with continuous exact cadence, full-frame limited
-BT.709 SDR and v2 sample/table associations. Future CAMBI remains FLV-only;
-widening a source union does not confer admission to another metric.
+BT.709 SDR and v2 sample/table associations. [CAMBI](native-cambi.md) has separate strict single-source MP4 admission for the same codec/depth subset, positive constant presentation cadence and full-frame SDR; result/attachment v2 preserves sample/table/producer identity and five actual heatmap scales. Widening a source union never confers admission to another metric.
 
 ## Implementation and verification
 

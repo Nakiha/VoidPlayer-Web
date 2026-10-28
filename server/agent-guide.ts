@@ -442,8 +442,7 @@ Read-only original-pair inspection uses the same existing sealed cache without
 building, scoring, private-job access or player control. Library result version2
 and complete-mp4-index-derived-v1 annotation clocks identify MP4 or mixed pairs;
 FLV-only version1 receipts/fingerprints retain their original fields. Native VMAF
-has separate strict MP4/mixed sequence admission below; CAMBI remains
-FLV-only. See /docs/trusted-mp4-quality.md in the source tree.
+has separate strict MP4/mixed sequence admission below; CAMBI separately validates the strict MP4 single-source subset and v2 evidence. See /docs/trusted-mp4-quality.md in the source tree.
 
 2. Explicitly prepare a missing supported FLV or strict MP4 cache with POST
    /api/media/{id}/psnr-index, JSON {version}, the identity cookie, same-origin
@@ -740,7 +739,10 @@ POST /api/quality/cambi/jobs with quality-job, captured actor/cookie and retaine
  budget:{maxRawBytes:67108864,maxHeatBytes:33554432,maxTemporaryBytes:268435456,
  maxElapsedMs:120000,nativeCpuSeconds:60,nativeMemoryBytes:536870912}}
 No reference, plan or VMAF model. First scope is1..32 selected pictures/256 interval AUs,
-trusted complete FLV H264/HEVC8/10bit limited BT709 SDR, square uncropped frames with long edge320.
+trusted complete FLV H264/HEVC8/10bit or strict MP4 avc1 H2648/hvc1 HEVC8/10bit, limited BT709 SDR,
+square uncropped frames with long edge320. MP4 requires committed producer/sample tables and positive
+constant exact clocks; v2 result/attachment preserves track/ticks/table/dependency identity, FLV staysv1.
+MP4 decode-AU sampling precedes source-PTS native order; native frame index is not source AU ordinal.
 Negative/VFR/ambiguous clocks, HDR and other containers remain unsupported. Sampling and unsupported
 holes are separate coverage facts; they are not whole-file coverage or tracked objects.
 GET /api/quality/cambi/jobs?after=ROW&limit=8, /jobs/{id}, /jobs/{id}/result,
