@@ -6049,5 +6049,77 @@
   "workspace.saving": {
     "source": "工作区正在保存，请稍后再分享。",
     "params": {}
+  },
+  "xpsnr.budgets": {
+    "source": "执行预算",
+    "params": {}
+  },
+  "xpsnr.cancel": {
+    "source": "取消并终止本任务执行",
+    "params": {}
+  },
+  "xpsnr.candidates": {
+    "source": "显式整帧测量候选",
+    "params": {}
+  },
+  "xpsnr.compare": {
+    "source": "比较选中版本（须同一冻结参考片段及 recipe）",
+    "params": {}
+  },
+  "xpsnr.frames": {
+    "source": "更多逐帧事实",
+    "params": {}
+  },
+  "xpsnr.history": {
+    "source": "刷新服务端历史",
+    "params": {}
+  },
+  "xpsnr.more": {
+    "source": "更多历史",
+    "params": {}
+  },
+  "xpsnr.new": {
+    "source": "新建显式请求",
+    "params": {}
+  },
+  "xpsnr.preflight": {
+    "source": "检查准入（不解码）",
+    "params": {}
+  },
+  "xpsnr.publish": {
+    "source": "按显式策略发布候选",
+    "params": {}
+  },
+  "xpsnr.recipe": {
+    "source": "冻结的对应关系与测量 recipe",
+    "params": {}
+  },
+  "xpsnr.retry": {
+    "source": "重试冻结的提交",
+    "params": {}
+  },
+  "xpsnr.scope": {
+    "source": "需要已安装的 Linux x64 组件及显式提交的时钟对应计划。仅限 2–32 个连续呈现帧；不支持跨帧抽样、缺口、负 PTS 或 VFR。限范围 BT.709 SDR、8/10 位 YUV420、方形像素，不裁剪、旋转或转换。固定 FFmpeg 实现，参考输入在前，保留时域权重和官方逐平面序列池化。未证明感知优于其他指标。分数属于整帧时间序列事实，不是热图或人工缺陷判断；未认证引用完整性，无法检测错误隐藏。",
+    "params": {}
+  },
+  "xpsnr.share": {
+    "source": "此操作共享片源身份及不可变序列事实，不定位空间缺陷。关闭页面只停止观察，不会取消后台执行。",
+    "params": {}
+  },
+  "xpsnr.sources": {
+    "source": "支持已有可信 FLV/Enhanced FLV、严格非分片 MP4 及两者的双向混合。MP4 限 avc1 H.264 8 位或 hvc1 HEVC 8/10 位，原始时钟必须精确表示整数微秒。",
+    "params": {}
+  },
+  "xpsnr.submit": {
+    "source": "发起持久 PSNR + XPSNR",
+    "params": {}
+  },
+  "xpsnr.title": {
+    "source": "原生 XPSNR · 连续整帧序列",
+    "params": {}
+  },
+  "xpsnr.usePlan": {
+    "source": "XPSNR：使用此已提交计划",
+    "params": {}
   }
 }

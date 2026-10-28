@@ -70,6 +70,7 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
             // guard above has already checked Origin against Host and TLS.
             origin:new URL(req.headers.origin!).origin,
             resolve(ref) {
+              if(ref.jobId.startsWith('xpsnr-'))return library.qualityXpsnr.evidence(ref,ctx.actor!.id);
               if(ref.jobId.startsWith('vmaf-'))return library.qualityVmaf.evidence(ref,ctx.actor!.id);
               // Ownership first; do not reveal state/digests of another actor's job.
               const job = library.qualityJobs.get(ref.jobId,ctx.actor!.id);

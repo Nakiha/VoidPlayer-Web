@@ -28,10 +28,10 @@ function completeAcknowledgement(id,value,body,params,response){
  if(id==='identity.select')return record(value.actor)&&selectedIdentityCookie(response,value.actor.id)!==null;
  if(id==='relation.create')return typeof value.replayed==='boolean'&&record(value.relation)&&nonempty(value.relation.id)&&value.relation.revision===1;
  if(id==='plan.create')return typeof value.replayed==='boolean'&&record(value.plan)&&nonempty(value.plan.id)&&nonempty(value.plan.state);
- if(['library.prepare','single.submit','plan.execute','vmaf.submit'].includes(id))return typeof value.replayed==='boolean'&&record(value.job)&&nonempty(value.job.id)&&nonempty(value.job.state);
- if(['range.candidates','vmaf.candidates'].includes(id))return record(value.policy)&&value.policy.space===body.space&&Array.isArray(value.selected)&&Array.isArray(value.createdIds)&&value.createdIds.every(nonempty);
+ if(['library.prepare','single.submit','plan.execute','vmaf.submit','xpsnr.submit'].includes(id))return typeof value.replayed==='boolean'&&record(value.job)&&nonempty(value.job.id)&&nonempty(value.job.state);
+ if(['range.candidates','vmaf.candidates','xpsnr.candidates'].includes(id))return record(value.policy)&&value.policy.space===body.space&&Array.isArray(value.selected)&&Array.isArray(value.createdIds)&&value.createdIds.every(nonempty);
  if(id==='evidence.candidate')return value.id===body.id&&value.space===params.space&&Number.isSafeInteger(value.revision)&&value.revision>0&&record(value.document);
- if(id==='vmaf.preflight')return value.nativeExecution===false;
+ if(id==='vmaf.preflight'||id==='xpsnr.preflight')return value.nativeExecution===false;
  return false;
 }
 
@@ -117,7 +117,7 @@ export async function runHttpQuality(serverURL,input={},options={}){
  const manifest=await get(manifestPath);if(manifest.schema!=='voidplayer-agent'||manifest.version!==1)stop('manifest-version','Unsupported agent manifest.');
  if(actor&&manifest.actor?.id!==actor)stop('actor-changed','Initial cookie actor does not match the captured actor.');
  const catalog=await get(manifest.links.taskCatalog);if(catalog.schema!=='voidplayer-agent-tasks'||catalog.version!==1)stop('catalog-version','Unsupported task catalog.');
- const mode=input.mode??'single';if(!['single','range','vmaf'].includes(mode))stop('invalid-mode','Choose single, range or vmaf explicitly.');
+ const mode=input.mode??'single';if(!['single','range','vmaf','xpsnr'].includes(mode))stop('invalid-mode','Choose single, range, vmaf or xpsnr explicitly.');
  const tasks=['identity','library','quality.correspondence',`quality.${mode}`,'evidence'];
  for(const id of tasks){const t=catalog.entries.find(t=>t.id===id);if(!t)stop('missing-task',`Task ${id} unavailable.`);await request(t.links.guide,{text:true});const detail=await get(t.links.describe);if(detail.schema!=='voidplayer-agent-task'||detail.version!==1)stop('task-version','Unsupported task description.');for(const op of detail.operations)operations.set(op.id,op);}
  const report={schema:'voidplayer-http-quality-example',version:1,mode,writesAuthorized:Object.keys(allow).filter(k=>allow[k]),capabilities:manifest.capabilities.filter(c=>['library.discovery','library.preparations','quality.'+mode,'quality.jobs'].includes(c.id)),discovery:[],next:[]};
@@ -137,7 +137,7 @@ export async function runHttpQuality(serverURL,input={},options={}){
  if(!Object.values(allow).some(Boolean)){report.next=['/agent/quality/sources.md','Explicit identity, prepare, plan and compute permissions are separate. No writes were performed.'];return report;}
  if(!actor){if(!input.identity)stop('identity-required','Supply an explicit existing identity ID or an explicitly authorized identity creation.');await write('identity.select',input.identity,'identity');}
  report.actor={id:actor};
- if(mode==='vmaf'){const cap=await read('vmaf.capability');report.nativeCapability=cap;if(!cap.enabled){report.next=['/agent/quality/vmaf.md','Native VMAF unavailable; no preparation, plan, scoring or metric substitution was performed.'];return report;}}
+ if(mode==='vmaf'||mode==='xpsnr'){const cap=await read(mode+'.capability');report.nativeCapability=cap;if(!cap.enabled){report.next=['/agent/quality/'+mode+'.md','Requested native metric unavailable; no preparation, plan, scoring or metric substitution was performed.'];return report;}}
  const sources=[];
  for(const [side,source]of [['reference',input.reference],['distorted',input.distorted]]){
   let proof;
@@ -160,7 +160,7 @@ export async function runHttpQuality(serverURL,input={},options={}){
  // Explain the frozen AU facts independently of whether computation is authorized.
  report.rows=[];for(let after=0,n=0;n<16;n++){const page=await read('plan.rows',{id:accepted.plan.id},{after,limit:32});report.rows.push(...page.entries);if(page.nextAu===null)break;after=page.nextAu;}
  if(detail.summary?.executionBlock)stop('plan-blocked','The explicit plan is not executable; no holes were filled.',{summary:detail.summary});
- if(!allow.compute){report.next=[mode==='single'?'/api/agent/operations/single.submit':mode==='range'?'/api/agent/operations/plan.execute':'/api/agent/operations/vmaf.preflight'];return report;}
+ if(!allow.compute){report.next=[mode==='single'?'/api/agent/operations/single.submit':mode==='range'?'/api/agent/operations/plan.execute':'/api/agent/operations/'+mode+'.preflight'];return report;}
  let job,publication;
  if(mode==='single'){
   const frozen=await read('plan.range-input',{id:accepted.plan.id});if(frozen.pairs.length!==1)stop('single-pair-required','Single mode requires exactly one selected mapped pair.');
@@ -175,11 +175,11 @@ export async function runHttpQuality(serverURL,input={},options={}){
   for(let after=0,n=0;n<16;n++){const page=await read('range.results',{id:job.id},{after,limit:4});report.results.push(...page.entries);if(page.nextAu===null)break;after=page.nextAu;}
   if(allow.candidate){if(!input.candidate)stop('explicit-policy-required','Supply an explicit complete candidate policy.');publication=await write('range.candidates',input.candidate,'candidate',{id:job.id});}
  }else{
-  if(!input.vmaf)stop('explicit-native-required','Supply model, exact cadenceUs, metrics and native/raw/time budget.');
-  const body={...input.vmaf,schema:'voidplayer-native-vmaf-job',version:1,client,plan:{id:detail.plan.id,attemptId:detail.plan.attemptId,digest:detail.plan.resultDigest}};
-  await write('vmaf.preflight',body,'compute');job=(await write('vmaf.submit',body,'compute')).job;report.job=await observe('vmaf.get',{id:job.id});report.result=await read('vmaf.result',{id:job.id});report.frames=[];
-  for(let after=0,n=0;n<8;n++){const page=await read('vmaf.frames',{id:job.id},{after,limit:4});report.frames.push(...page.entries);if(page.next===null)break;after=page.next;}
-  if(allow.candidate){if(!input.candidate)stop('explicit-policy-required','Supply a complete explicit VMAF policy.');publication=await write('vmaf.candidates',input.candidate,'candidate',{id:job.id});}
+  if(!input[mode])stop('explicit-native-required','Supply fixed model or reference-first recipe, exact cadenceUs, metrics and native/raw/time budget.');
+  const body={...input[mode],schema:`voidplayer-native-${mode}-job`,version:1,client,plan:{id:detail.plan.id,attemptId:detail.plan.attemptId,digest:detail.plan.resultDigest}};
+  await write(mode+'.preflight',body,'compute');job=(await write(mode+'.submit',body,'compute')).job;report.job=await observe(mode+'.get',{id:job.id});report.result=await read(mode+'.result',{id:job.id});report.frames=[];
+  for(let after=0,n=0;n<8;n++){const page=await read(mode+'.frames',{id:job.id},{after,limit:4});report.frames.push(...page.entries);if(page.next===null)break;after=page.next;}
+  if(allow.candidate){if(!input.candidate)stop('explicit-policy-required','Supply a complete explicit native metric policy.');publication=await write(mode+'.candidates',input.candidate,'candidate',{id:job.id});}
  }
  if(publication){
   report.publication=publication;const space=publication.policy.space;report.annotations=[];for(const id of publication.createdIds)report.annotations.push(await read('evidence.record',{space,id}));

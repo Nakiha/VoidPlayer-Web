@@ -12,7 +12,7 @@ export async function handleTaskRoutes(ctx:RouteContext,req:IncomingMessage,res:
   const reply=(status:number,value:unknown)=>sendJson(res,status,req.method==='HEAD'?undefined:value);
   try{
     requireCapturedActor(req,ctx.actor);if(!ctx.actor)throw new AdminError(401,'Select a service identity.','identity-required');
-    const match=/^\/api\/tasks\/([a-z]+)\/(vmaf-[a-f0-9-]{36}|[a-f0-9-]{36})(?:\/(cancel))?$/.exec(url.pathname);
+    const match=/^\/api\/tasks\/([a-z]+)\/((?:vmaf|xpsnr)-[a-f0-9-]{36}|[a-f0-9-]{36})(?:\/(cancel))?$/.exec(url.pathname);
     const collection=url.pathname==='/api/tasks';
     if(!collection&&(!match||!TASK_KINDS.includes(match[1] as TaskKind)))throw new AdminError(404,'Task route not found.','task-not-found');
     const kind=match?.[1] as TaskKind,id=match?.[2]??'';

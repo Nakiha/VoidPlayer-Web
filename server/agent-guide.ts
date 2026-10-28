@@ -682,6 +682,11 @@ unknown commit outcomes must reuse the same plan/digest. Restart interrupts unfi
 planning without automatic recomputation or scoring. Candidate publication remains the
 existing separate explicit range policy. See docs/reference-clock-plans.md.
 
+quality.xpsnr is a separate optional native reference-first continuous sequence executor.
+Read /agent/quality/xpsnr.md and /api/agent/tasks/quality.xpsnr for the exact recipe,
+budgets, official per-plane pooling, explicit variant comparison and recovery operations.
+No installed trusted component means unavailable; no metric substitution or perceptual claim.
+
 quality.vmaf is a separate optional native sequence executor, not a single-frame range aggregate.
 GET /api/quality/vmaf/capability reports the verified deployment and exact source/model/recipe bounds.
 Linux x64 only; install the pinned official component using scripts/native/prepare-vmaf.mjs and

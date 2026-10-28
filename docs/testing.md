@@ -2,6 +2,8 @@
 
 套件与稳定 case ID 以 `scripts/testing/manifest.json` 为准，统一入口为 `scripts/run-tests.mjs`。`package.json` 保留原有单项命令。不要把某次历史测试数量或构建成功当作当前兼容性结论。
 
+画质浏览器门禁的逐项用途、失败证据与 PR 诊断边界见 [browser-quality-gates.md](browser-quality-gates.md)。PR 的 `ci-cache-pr` 保留53项必需检查；唯一的 WebKit 多页面暂停帧长流程另列非阻塞诊断，其全部断言和失败报告保留，main/tag 的 `ci-cache` 仍要求该完整流程。原生 decode/paint/AU/drain 矩阵独立必跑，不把诊断失败、取消或跳过称作产品通过。
+
 码流分析的 `ci-analysis-browser` 保留完整本地套件。CI 将 MP4、legacy FLV、enhanced FLV 三个矩阵分片分别放在 Chromium/WebKit 的独立并行 job 中，使用 `ci-analysis-matrix-{mp4,flv-legacy,flv-enhanced}`；每个 job 只跑一个矩阵 case，合计保留每种引擎全部 36 格。流式图表、增量索引、几何、布局由 `analysis-browser` job 的 `ci-analysis-ui` 必跑，使用逐例生成的小素材，不下载 QA 样片。普通只读分析面板两引擎用例归入已有样片环境的 `uncovered` job。三个真实分析 Node 用例由 `unit` job 的 `ci-node-media` 必跑，不在每种浏览器重复执行。`release-set` 同时依赖 `analysis-browser` 与整个 `analysis-matrix`，任一分片失败、取消或跳过都不能产出验证通过的发布集。
 
 各矩阵、流式图表与增量索引 case 仍拥有独立服务、浏览器、临时目录和 600 秒整例 watchdog。原有逐操作超时、整片 ready/EOF/帧数、取消、身份与性能断言保持不变；没有延长 job 超时或降低性能门槛。直接调用 `node scripts/testing/browser/media/bitstream-analysis.mjs <engine>` 会依次运行 matrix、diagrams、index 三组；每组独占服务、浏览器、临时素材及报告，一组失败仍完成其他独立组，最终非零退出。

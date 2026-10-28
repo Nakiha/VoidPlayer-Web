@@ -12,6 +12,7 @@ export type QualityAnnotationContext = {basis:'complete-flv-index-derived-v1'|'c
 export type LibraryPairResult = {
   schema: 'voidplayer-library-frame-pair-psnr'; version: 1|2;
   sequenceVmaf?:VmafAssociation;
+  sequenceXpsnr?:import('./xpsnr.ts').XpsnrAssociation;
   execution: { host: 'node-worker'; runtime: 'node' | 'bun'; runtimeVersion: string; sourceIdentity: 'stat-version-v1' };
   annotationContext?:{reference:QualityAnnotationContext;distorted:QualityAnnotationContext};
   result: FramePairResult; sources: { reference: LibraryPairBinding; distorted: LibraryPairBinding };

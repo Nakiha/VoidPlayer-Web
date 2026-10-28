@@ -4,7 +4,7 @@ import {AGENT_OPERATIONS,AGENT_WORKFLOWS,agentOperation} from '../shared/service
 export const QUALITY_AGENT_DOCUMENTS:Record<string,string>={
  '/agent/quality/tasks.md':`# Manage existing actor-owned tasks
 
-Use [tasks.query](/api/agent/operations/tasks.query), then [tasks.get](/api/agent/operations/tasks.get). GET /api/tasks reads all bounded preparation, correspondence, single, range and VMAF history for the current self-declared actor. This identity is attribution, not strong authentication. No media/index/pixel read or implicit preparation occurs. Filter by exact media ID/version on the same side, kind/metric/raw state, and inclusive createdFrom/exclusive createdTo epoch milliseconds.
+Use [tasks.query](/api/agent/operations/tasks.query), then [tasks.get](/api/agent/operations/tasks.get). GET /api/tasks reads all bounded preparation, correspondence, single, range, VMAF and XPSNR history for the current self-declared actor. This identity is attribution, not strong authentication. No media/index/pixel read or implicit preparation occurs. Filter by exact media ID/version on the same side, kind/metric/raw state, and inclusive createdFrom/exclusive createdTo epoch milliseconds.
 
 Pages freeze membership and summary facts for60 seconds. Keep filters with nextCursor; refresh without cursor for changes.409 task-cursor-expired after restart, expiry, eviction, changed filters or actor means restart without cursor. Preserve an explicitly selected kind/ID separately. Detail always reads current facts and original verified relationships; unknown phase/progress stays unknown. Stored availability is not fresh source verification. Follow original result/candidate/viewer links. Range scored counts remain distinct from retained child results.
 
@@ -22,9 +22,10 @@ side effects, identity/Origin, replay, cursor and next-operation links.
 - [Task center](/agent/quality/tasks.md): filter and observe existing tasks across stores, or explicitly cancel.
 - [Single pair](/agent/quality/single.md): one explicit frame/ROI, PSNR with optional SSIM/grid.
 - [Bounded range](/agent/quality/range.md): all listed or deterministic stride, explicit coverage and holes.
+- [Native XPSNR](/agent/quality/xpsnr.md): reference-first temporal sequence with official per-plane pooling and PSNR/optional SSIM.
 - [Native VMAF](/agent/quality/vmaf.md): continuous full-frame sequence plus PSNR/optional SSIM; optional installed Linux component.
 
-All three start with [sources and explicit preparation](/agent/quality/sources.md)
+All quality tasks start with [sources and explicit preparation](/agent/quality/sources.md)
 and an [explicit reference relation and clock plan](/agent/quality/correspondence.md).
 Finish with [explicit candidates and shared evidence](/agent/quality/candidates.md).
 For uncertain responses read [recovery](/agent/quality/recovery.md).
@@ -126,6 +127,22 @@ Cancel explicitly; capacity remains held until physical exit. Disconnecting
 observation never cancels durable work. Restart interrupts rather than reruns.
 
 [Operations](/api/agent/tasks/quality.range) · [Explicit candidates](/agent/quality/candidates.md)
+`,
+ '/agent/quality/xpsnr.md':`# Native XPSNR: compare explicitly related variants
+
+First read [capability](/api/quality/xpsnr/capability). Missing trusted optional Linux x64 component means unavailable, never PSNR substitution. The fixed LGPL FFmpeg source and full build recipe/source archive are supplied by scripts/native/build-xpsnr.mjs; a trusted host explicitly pins nativeXpsnr {directory,manifestSha256}. HTTP never accepts executable paths.
+
+Use existing discovery and explicit quality-index preparation, then declare reference/distorted relation and freeze the C plan. Only2..32 fully mapped continuous presentation frames with exact constant integer-microsecond cadence, same full-frame limited BT.709 SDR420 geometry and8/10-bit depth. No stride/holes/ROI/crop/rotate/conversion, negative PTS or VFR; strict FLV/EnhancedFLV and nonfragmented MP4 plus either mixed direction. Reference declaration is not content certification. Closed dependency windows and all drain output are charged.
+
+POST /api/quality/xpsnr/preflight, then explicit POST /api/quality/xpsnr/jobs with same-Origin quality-job action, captured actor and a frozen Idempotency-Key. Body: {schema:"voidplayer-native-xpsnr-job",version:1,client:{id,kind},plan:{id,attemptId,digest},recipe:"ffmpeg-xpsnr-reference-first-temporal-v1",cadenceUs:EXACT_CADENCE,metrics:{psnr:true,ssim:false},budget:{maxRawBytes:134217728,maxElapsedMs:120000,nativeCpuSeconds:30,nativeMemoryBytes:536870912}}. Preflight does not decode; execution verifies color/output identity. Closing observation does not cancel.
+
+Read the durable job and /result, /frames?after=0&limit=4. XPSNR gets REFERENCE as first input. It retains temporal state across consecutive frames and resets at this selected clip boundary. Per-plane frame dB and the official filter's sequence Y/U/V pool plus minimum are emitted at4 decimal places. The pool is square-mean-root weighted distortion with the official low-distortion fallback; do not average rounded frame dB or extrapolate beyond the clip. Positive infinity is an explicit {kind:"positive-infinity",db:null}. PSNR/optional SSIM companions remain independent on native failure.
+
+To compare multiple variants, declare each relationship explicitly against the same reference clip. GET /api/quality/xpsnr/compare?ids=ID1,ID2 accepts2..4 completed own jobs only when reference source/version/cache/selected clocks/raw SHA and implementation/recipe match. Caller order is retained. Different targets or parameters are refused, never silently aligned. No perceptual superiority is established by these objective numbers.
+
+Candidates require explicit side/space/maxScore (finite minimum per-plane frame dB threshold)/limit/minFrameDistance/text/severity. Full-frame temporal scores do not localize spatial defects. Frozen IDs/operation receipts are replayed before private result lookup, including after reclamation. Unknown POST outcomes require the exact original actor/client/body/key or policy, never a new key. Restart interrupts owned work without recomputation. Native/Worker physical exit and raw cleanup precede shared admission release.
+
+[Operations](/api/agent/tasks/quality.xpsnr) · [Task center](/agent/quality/tasks.md) · [Shared evidence](/agent/quality/candidates.md)
 `,
  '/agent/quality/vmaf.md':`# Continuous native VMAF
 

@@ -191,3 +191,5 @@ Detail verifies recorded original associations; results remain in their owning
 services. Cancellation delegates without owning compute admission. No scheduler,
 new algorithm, retry policy, persistent snapshot database or global admin is
 introduced. See [contract and reproduction](unified-task-center.md).
+
+Optional XPSNR follows the existing trusted native sequence boundary (`docs/native-xpsnr.md`). It reuses source eligibility, C plans, raw decode and physical process supervision, with a separately pinned minimal LGPL FFmpeg component and durable bounded metric history. Reference-first temporal state and the filter's official per-plane pooling are immutable recipe facts. No VMAF model, substitute metric, implicit index preparation or general scheduler is introduced. The actor-scoped task center includes the new XPSNR store and verified C/evidence links.

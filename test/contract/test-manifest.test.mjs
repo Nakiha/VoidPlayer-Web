@@ -411,10 +411,21 @@ test('forward ordinary-frame GUI matrix extends the full core-backed metric job 
 });
 
 
-test('paused native quality remains a full core-backed two-engine check, including explicit cache preparation',()=>{
+test('paused native quality keeps explicit preparation and independent mandatory native identity checks',()=>{
  const rows=selectCases({suite:'ci-cache',platform:'linux'}).selected.filter(r=>r.id.startsWith('browser-presented-quality-'));
  assert.deepEqual(rows.map(r=>r.engines[0]),['chromium','webkit']);
  for(const row of rows){assert.equal(row.required,true);assert.deepEqual(row.fixtures,['core']);assert.equal(row.build,true);assert.equal(row.timeoutMs,300000);assert.equal(row.suites.includes('ci-identity-browser'),false);}
+ const pr=selectCases({suite:'ci-cache-pr',platform:'linux'}).selected;
+ assert.ok(pr.some(row=>row.id==='browser-presented-quality-chromium'));
+ assert.ok(!pr.some(row=>row.id==='browser-presented-quality-webkit'));
+ for(const engine of ['chromium','webkit']){
+  const row=pr.find(row=>row.id===`browser-native-presented-protocol-${engine}`);
+  assert.ok(row.required);assert.equal(row.build,true);assert.equal(row.timeoutMs,300000);
+ }
+ const long=readFileSync(new URL('../../scripts/check-presented-quality-browser.mjs',import.meta.url),'utf8');
+ assert.doesNotMatch(long,/checkNativePresentedProtocol/,'the protocol is no longer hidden behind a multi-page GPU scenario');
+ const protocol=readFileSync(new URL('../../scripts/check-native-presented-protocol.mjs',import.meta.url),'utf8');
+ assert.match(protocol,/await checkNativePresentedProtocol\(browser,fixtures,engine\)/);
  assert.ok(selectCases({suite:'source',platform:'linux'}).selected.some(r=>r.id==='node-quality-source-build'));
  assert.ok(selectCases({suite:'ci-native-bun',platform:'win32'}).selected.some(r=>r.id==='bun-quality-source-build'));
  const release=readFileSync(new URL('../../scripts/check-quality-release.mjs',import.meta.url),'utf8');assert.match(release,/quality-source-build/);assert.ok(!release.includes('frame-index?v=${entry.version}&build=1'));
