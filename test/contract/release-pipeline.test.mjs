@@ -47,7 +47,7 @@ test('release workflow gates verified artifacts and draft staging on every verif
   const workflow = await readFile(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
   const jobs = workflowJobs(workflow);
   assert.match(jobs['analysis-core'].body, /name: Verify analysis reference ABI including restored caches\n        run: node scripts\/prepare-analysis-core.mjs public\/vendor\/voidplayer-analysis/);
-  const required = ['native-release', 'unit', 'playback', 'cache-browser', 'source-logic', 'analysis-browser', 'analysis-matrix', 'ssim-browser', 'hevc-browser', 'uncovered-regressions'];
+  const required = ['native-release', 'linux-native', 'unit', 'playback', 'cache-browser', 'source-logic', 'analysis-browser', 'analysis-matrix', 'ssim-browser', 'hevc-browser', 'uncovered-regressions'];
   assert.deepEqual([...jobs['release-set'].needs].sort(), required.sort());
   assert.deepEqual(jobs.unit.needs, ['decoder', 'analysis-core']);
   assert.match(jobs.unit.body, /run: node scripts\/run-tests\.mjs ci-node-media\n        env:\n          VOIDPLAYER_FFMPEG_ORACLE:/);
@@ -105,6 +105,43 @@ test('release workflow gates verified artifacts and draft staging on every verif
     assert.equal(produceVerifiedSet, outcome === 'success');
     assert.equal(stageDraft, outcome === 'success');
   }
+});
+
+test('Linux native suites retain exact platform ownership outside the compiled package job', async () => {
+  const workflow = await readFile(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
+  const jobs = workflowJobs(workflow), linux = jobs['linux-native'], packaged = jobs['native-release'];
+  const manifest = JSON.parse(await readFile(new URL('../../scripts/testing/manifest.json', import.meta.url), 'utf8'));
+  assert.deepEqual(linux.needs, ['decoder', 'analysis-core']);
+  assert.match(linux.body, /^    runs-on: ubuntu-24\.04$/m);
+  assert.match(linux.body, /^    timeout-minutes: 20$/m);
+  assert.match(packaged.body, /^    timeout-minutes: 20$/m);
+  assert.match(linux.body, /fail-fast: false\n      matrix:\n        runtime: \[node, bun\]/);
+  assert.deepEqual([...packaged.body.matchAll(/platform: ([\w-]+)/g)].map(match => match[1]).sort(), ['darwin-arm64', 'linux-x64', 'windows-x64']);
+  for (const body of [linux.body, packaged.body]) {
+    assert.match(body, /uses: actions\/checkout@v4/);
+    assert.match(body, /node-version: '24\.15\.0'/);
+    assert.match(body, /bun-version-file: \.bun-version/);
+    assert.match(body, /name: release-core\n          path: public\/vendor\/voidplayer-core/);
+    assert.match(body, /name: release-analysis-core\n          path: public\/vendor\/voidplayer-analysis/);
+    assert.match(body, /run: npm ci\n/);
+    assert.match(body, /run: node scripts\/run-tests\.mjs --case release-core\n/);
+    assert.doesNotMatch(body, /continue-on-error:/);
+  }
+  assert.match(linux.body, /if: always\(\)[\s\S]*name: linux-native-reports-\$\{\{ matrix\.runtime \}\}[\s\S]*path: \.run\/test-suites\//);
+  const expectedCounts = { node: 22, bun: 35 };
+  for (const runtime of ['node', 'bun']) {
+    const suite = `ci-native-${runtime}`, command = `run: node scripts/run-tests.mjs ${suite}\n`;
+    assert.equal(linux.body.split(command).length - 1, 1);
+    assert.equal(packaged.body.split(command).length - 1, 1);
+    assert.ok(linux.body.includes(`if: matrix.runtime == '${runtime}'\n        ${command}`));
+    assert.ok(packaged.body.includes(`if: runner.os != 'Linux'\n        ${command}`));
+    const cases = manifest.cases.filter(row => row.suites.includes(suite) && row.platforms.includes('linux'));
+    assert.equal(cases.length, expectedCounts[runtime]);
+    assert.equal(new Set(cases.map(row => row.id)).size, cases.length);
+    assert.ok(cases.every(row => row.required));
+  }
+  assert.match(linux.body, /ci-native-node\n        env:\n          NODE_OPTIONS: --test-reporter=tap/);
+  for (const suite of ['--case release-analysis', '--case release-quality', 'ci-native-http --prepared', 'ci-native-https --prepared']) assert.ok(packaged.body.includes(`run: node scripts/run-tests.mjs ${suite}\n`));
 });
 
 test('cache suite runs once in its own required job with the same pinned preparation and evidence', async () => {

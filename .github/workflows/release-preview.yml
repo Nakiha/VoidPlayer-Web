@@ -853,6 +853,54 @@ jobs:
             .run/analysis-lifecycle/
           if-no-files-found: error
 
+  linux-native:
+    name: Verify Linux native suites (${{ matrix.runtime }})
+    needs: [decoder, analysis-core]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [node, bun]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use primary Ubuntu package archive
+        run: bash scripts/testing/prepare-ci-apt.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-core
+          path: public/vendor/voidplayer-core
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-analysis-core
+          path: public/vendor/voidplayer-analysis
+      - run: npm ci
+      - run: node scripts/run-tests.mjs --case release-core
+      - name: Verify Linux Node configuration, storage and scoring contracts
+        if: matrix.runtime == 'node'
+        run: node scripts/run-tests.mjs ci-native-node
+        env:
+          NODE_OPTIONS: --test-reporter=tap
+      - name: Verify Linux Bun configuration, storage and scoring contracts
+        if: matrix.runtime == 'bun'
+        run: node scripts/run-tests.mjs ci-native-bun
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-native-reports-${{ matrix.runtime }}
+          path: .run/test-suites/
+          if-no-files-found: ignore
+
   native-release:
     name: Standalone ${{ matrix.platform }}
     needs: [decoder, analysis-core]
@@ -892,10 +940,12 @@ jobs:
       - run: node scripts/run-tests.mjs --case release-core
       - name: Verify configuration and persistent index on Node
         id: native-node
+        if: runner.os != 'Linux'
         run: node scripts/run-tests.mjs ci-native-node
         env:
           NODE_OPTIONS: --test-reporter=tap
       - name: Verify persistent index on packaged runtime
+        if: runner.os != 'Linux'
         run: node scripts/run-tests.mjs ci-native-bun
       - run: node scripts/run-tests.mjs --prepare
       - run: node scripts/package-release.mjs --target bun-${{ matrix.platform }}
@@ -959,7 +1009,7 @@ jobs:
 
   release-set:
     name: Verify complete platform release set
-    needs: [native-release, unit, playback, cache-browser, source-logic, analysis-browser, analysis-matrix, ssim-browser, hevc-browser, uncovered-regressions]
+    needs: [native-release, linux-native, unit, playback, cache-browser, source-logic, analysis-browser, analysis-matrix, ssim-browser, hevc-browser, uncovered-regressions]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
