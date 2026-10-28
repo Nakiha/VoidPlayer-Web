@@ -4,7 +4,7 @@
 
 standalone 缺网页时可提供 HTTP API/指南，manifest 的 frontend 能力关闭；评分仍需固定 decoder 资源。显式 `--init`/`--check` 继续校验完整网页部署；Node 生产网页入口的缺构建报错不变。
 
-逐操作描述 method/path、请求约束与共享 domain limits、执行宿主、副作用、cookie/actor/Origin/action、幂等方式、游标、错误恢复、结果及下一步链接。Markdown 操作页由同一注册表生成；真实路由/validator 仍负责准入，文档不增加第二套 validator。发现字典已修正严格 MP4 的支持；MP4 native VMAF 是固定组件和连续整帧计划的条件能力，不表示 CAMBI 就绪。
+逐操作描述 method/path、请求约束与共享 domain limits、执行宿主、副作用、cookie/actor/Origin/action、幂等方式、游标、错误恢复、结果及下一步链接。Markdown 操作页由同一注册表生成；真实路由/validator 仍负责准入，文档不增加第二套 validator。发现字典已修正严格 MP4 的支持；MP4 native VMAF 是固定组件和连续整帧计划的条件能力；CAMBI 另行校验严格单源 MP4 与五尺度 v2 证据，不从 VMAF 或元数据成功继承准入。
 
 元数据 stream ID、质量 cache stream/configuration、AU/sample ordinal、raw ticks/timebase 和呈现序号严格区分。probe 成功不表示评分就绪；不按名称/时长/相近 PTS 认证内容或填洞。缺缓存返回 `cache-miss` 和显式 preparation 下一步，读取不隐式建索引。错误附加恢复和操作链接，既有 HTTP 状态/code 不变。
 
@@ -54,7 +54,7 @@ node scripts/native/run-vmaf-tests.mjs node --test test/media/agent-quality-work
 后者从冷缓存和 llms.txt 开始，用真实 FLV single、MP4→FLV range、FLV→MP4 native VMAF 完成闭环。native 仅 Linux x64，沿用固定组件核验；包含无组件、缺缓存、unknown、source/actor 变化、真实提交后丢响应、cursor 失效及观察停止。逐帧/池化 VMAF 对照现有官方 oracle。其他 codec、compiled 三平台和 GUI/viewer 继续由现有正式回归覆盖，不声称此例认证全部矩阵。
 
 CAMBI 的独立无参考工作流从 `/api/agent/tasks/quality.cambi`、
-`/agent/quality/cambi.md` 开始：只需一份明确的可信 FLV 绑定与有界区间/抽样，
+`/agent/quality/cambi.md` 开始：只需一份明确的可信 FLV 或严格 MP4 绑定与有界区间/抽样（MP4 avc1 H2648 / hvc1 HEVC8/10，精确恒定时钟，v2 sample/table/producer 见证），
 不要求参考关系或 C 计划，不继承 VMAF/XPSNR 的 MP4 准入。任务中心的
 `kind=cambi` / `metric=cambi` 使用原存储的单源身份、阶段、覆盖与结果可用性，
 显式取消仍委托原服务。逐帧五尺度热图、固定 recipe、区域统计和候选回执

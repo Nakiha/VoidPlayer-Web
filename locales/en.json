@@ -2101,8 +2101,8 @@
     "translation": "Retry the frozen body with its original key"
   },
   "cambi.scope": {
-    "source": "Linux x64 可选固定组件；可信 FLV/Enhanced FLV、8/10 位限范围 BT.709 SDR，整帧、方形像素、不裁剪，长边至少320。分数越高表示检测到更多色带，不是产品合格线；内部按10位处理。允许明确抽样，未采样帧不冒充覆盖。没有跨帧目标跟踪，未认证引用完整性，无法检测错误隐藏。",
-    "translation": "Optional fixed Linux x64 component; trusted FLV/Enhanced FLV, original 8/10-bit limited BT.709 SDR, full uncropped square-pixel frames with a long edge of at least320. Higher scores indicate more detected banding, not a product pass/fail threshold; internal processing uses10 bits. Explicit sampling leaves unsampled coverage visible. No object tracking, reference-integrity certification or concealment detection."
+    "source": "Linux x64 可选固定组件；可信 FLV/Enhanced FLV 8/10 位，或严格 MP4 avc1 H2648 / hvc1 HEVC8/10；限范围 BT.709 SDR，整帧、方形像素、不裁剪，长边至少320。分数越高表示检测到更多色带，不是产品合格线；内部按10位处理。允许明确抽样，未采样帧不冒充覆盖。没有跨帧目标跟踪，未认证引用完整性，无法检测错误隐藏。",
+    "translation": "Optional fixed Linux x64 component; trusted FLV/Enhanced FLV 8/10-bit or strict MP4 avc1 H2648 / hvc1 HEVC8/10; limited BT.709 SDR, full uncropped square-pixel frames with a long edge of at least320. Higher scores indicate more detected banding, not a product pass/fail threshold; internal processing uses10 bits. Explicit sampling leaves unsampled coverage visible. No object tracking, reference-integrity certification or concealment detection."
   },
   "cambi.submit": {
     "source": "发起持久单源 CAMBI",
