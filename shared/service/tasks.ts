@@ -1,14 +1,15 @@
+import {CAMBI_LIMITS} from '../analysis/quality/cambi.ts';
 import {DISCOVERY_LIMITS} from '../media/discovery.ts';
 import {QUALITY_JOB_LIMITS} from '../analysis/quality/jobs.ts';
 import {QUALITY_RANGE_LIMITS} from '../analysis/quality/ranges.ts';
 import {CORRESPONDENCE_LIMITS} from '../analysis/quality/correspondence.ts';
 import {VMAF_LIMITS} from '../analysis/quality/vmaf.ts';
 
-export const TASK_KINDS=['preparation','correspondence','single','range','vmaf','xpsnr'] as const;
+export const TASK_KINDS=['preparation','correspondence','single','range','vmaf','xpsnr','cambi'] as const;
 export type TaskKind=typeof TASK_KINDS[number];
-export const TASK_METRICS=['probe','quality-index','correspondence','psnr','ssim','vmaf','xpsnr'] as const;
+export const TASK_METRICS=['probe','quality-index','correspondence','psnr','ssim','vmaf','xpsnr','cambi'] as const;
 export const TASK_STATES=['queued','preparing','running','cancelling','completed','blocked','partial','failed','cancelled','interrupted'] as const;
-export const TASK_HISTORY_ROWS={preparation:DISCOVERY_LIMITS.historyRows,correspondence:CORRESPONDENCE_LIMITS.historyRows,single:QUALITY_JOB_LIMITS.historyRows,range:QUALITY_RANGE_LIMITS.historyRows,vmaf:VMAF_LIMITS.historyRows,xpsnr:VMAF_LIMITS.historyRows} as const;
+export const TASK_HISTORY_ROWS={preparation:DISCOVERY_LIMITS.historyRows,correspondence:CORRESPONDENCE_LIMITS.historyRows,single:QUALITY_JOB_LIMITS.historyRows,range:QUALITY_RANGE_LIMITS.historyRows,vmaf:VMAF_LIMITS.historyRows,xpsnr:VMAF_LIMITS.historyRows,cambi:CAMBI_LIMITS.historyRows} as const;
 export const TASK_LIMITS=Object.freeze({page:50,snapshots:8,actorSnapshots:2,snapshotMs:60000,snapshotBytes:8*1024*1024,rows:Object.values(TASK_HISTORY_ROWS).reduce((a,b)=>a+b,0)});
 export type TaskFilter={mediaId?:string;mediaVersion?:string;kind?:TaskKind;metric?:typeof TASK_METRICS[number];state?:typeof TASK_STATES[number];createdFrom?:number;createdTo?:number};
 export type TaskQuery={filter:TaskFilter;limit:number;cursor?:string};

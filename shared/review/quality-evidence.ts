@@ -1,3 +1,4 @@
+import {cambiEvidenceList} from './cambi-evidence.ts';
 import {mp4TicksToUs} from '../media/indexing/mp4-quality-index.ts';
 import {validateXpsnrAssociation} from '../analysis/quality/xpsnr.ts';
 import {validateVmafAssociation} from '../analysis/quality/vmaf.ts';
@@ -151,7 +152,7 @@ export function qualityEvidenceList(value: unknown, preserveVerification = false
   return result;
 }
 export function historicalMarks(marks: Mark[]): Mark[] {
-  return marks.map(mark => ({...structuredClone(mark),...(mark.qualityEvidence ? {qualityEvidence:qualityEvidenceList(mark.qualityEvidence)} : {})}));
+  return marks.map(mark => ({...structuredClone(mark),...(mark.cambiEvidence?{cambiEvidence:cambiEvidenceList(mark.cambiEvidence)}:{}),...(mark.qualityEvidence ? {qualityEvidence:qualityEvidenceList(mark.qualityEvidence)} : {})}));
 }
 export function evidenceWorkspaceVersion(marks: Mark[]): 1 | 2 | 3 { return marks.some(m=>m.qualityCandidate!==undefined)?3:marks.some(m => m.qualityEvidence !== undefined) ? 2 : 1; }
 /** Exact existing anchor, original visible grid; neither normalized PTS nor drawings infer a pair. */

@@ -1,3 +1,4 @@
+import {canonicalJson} from '../../shared/analysis/quality/cambi.ts';
 import {t,th,msg,formatDate} from '../i18n.ts';
 import {currentActor,identityHealth} from '../services/identity.ts';
 import {QualityClient} from '../services/quality-jobs.ts';
@@ -9,7 +10,7 @@ import {qualityPairViewUrl} from '../../shared/review/quality-pair-view.ts';
 export function tasksShell(){
   const select=(key:string,values:readonly string[],label:string)=>`<label>${label}<select name="${key}"><option value="">—</option>${values.map(v=>`<option>${v}</option>`).join('')}</select></label>`;
   return `<section id="pane-tasks" hidden><header class="admin-heading"><h1>${th(msg('tasks.title','任务中心'))}</h1></header>
-  <p>${th(msg('tasks.scope','当前自述身份的准备、对应计划、单帧、区间和 VMAF 历史。刷新读取新快照；翻页保留当时事实。关闭观察不取消后台工作，也不移动播放头。'))}</p>
+  <p>${th(msg('tasks.scope','当前自述身份的准备、对应计划、单帧、区间、VMAF、XPSNR 和单源 CAMBI 历史。刷新读取新快照；翻页保留当时事实。关闭观察不取消后台工作，也不移动播放头。'))}</p>
   <form id="tasks-filters" class="admin-panel"><div class="admin-actions">
   <label>${th(msg('tasks.media','媒体 ID'))}<input name="mediaId" maxlength="24" spellcheck="false"></label>
   <label>${th(msg('tasks.version','媒体版本'))}<input name="mediaVersion" maxlength="24" spellcheck="false"></label>
@@ -40,16 +41,16 @@ export function installTasks(signal:AbortSignal){
   function restore(){
     form.reset();(form.elements.namedItem('limit')as HTMLSelectElement).value='20';selected=null;
     try{const raw=localStorage.getItem(preferenceKey());if(raw&&raw.length<=4096){const p=JSON.parse(raw),params=new URLSearchParams(p.filter);taskQuery(params);for(const key of fields){let value=params.get(key)??'';if(value&&(key==='createdFrom'||key==='createdTo')){const date=new Date(Number(value));value=new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,19);}(form.elements.namedItem(key)as HTMLInputElement).value=value;}
-      if(p.selected&&TASK_KINDS.includes(p.selected.kind)&&/^((?:vmaf|xpsnr)-)?[a-f0-9-]{36}$/.test(p.selected.id))selected=p.selected;}}
+      if(p.selected&&TASK_KINDS.includes(p.selected.kind)&&/^((?:vmaf|xpsnr|cambi)-)?[a-f0-9-]{36}$/.test(p.selected.id))selected=p.selected;}}
     catch{}
   }
   function reset(){
     life.abort();detailLife.abort();life=new AbortController();detailLife=new AbortController();epoch++;listGeneration++;detailGeneration++;detailBusy=false;
-    actor=currentActor()?.id??'';next=null;detail=null;$('list').replaceChildren();$('detail').hidden=true;$('more').hidden=true;$('status').textContent='';$('snapshot').textContent='';$('cancel-status').textContent='';$('cancel').toggleAttribute('disabled',false);for(const id of ['title','facts','related','links','candidates'])$(id).replaceChildren();restore();
+    actor=currentActor()?.id??'';next=null;detail=null;$('list').replaceChildren();$('detail').hidden=true;$('more').hidden=true;$('status').textContent='';$('snapshot').textContent='';$('cancel-status').textContent='';$('cancel').toggleAttribute('disabled',false);for(const id of ['title','facts','related','links','candidates'])$(id).replaceChildren();delete $('candidates').dataset.state;restore();
   }
   const context=()=>({owner:actor,epoch,signal:AbortSignal.any([signal,life.signal])});
   const valid=(c:ReturnType<typeof context>)=>active&&!c.signal.aborted&&c.epoch===epoch&&c.owner===actor&&currentActor()?.id===actor;
-  function choose(kind:TaskKind,id:string){detailLife.abort();detailLife=new AbortController();detailGeneration++;detailBusy=false;selected={kind,id};detail=null;$('detail').hidden=true;for(const part of ['title','facts','related','links','candidates'])$(part).replaceChildren();$('cancel-status').textContent='';$('cancel').toggleAttribute('disabled',false);save();void loadDetail();}
+  function choose(kind:TaskKind,id:string){detailLife.abort();detailLife=new AbortController();detailGeneration++;detailBusy=false;selected={kind,id};detail=null;$('detail').hidden=true;for(const part of ['title','facts','related','links','candidates'])$(part).replaceChildren();delete $('candidates').dataset.state;$('cancel-status').textContent='';$('cancel').toggleAttribute('disabled',false);save();void loadDetail();}
   function row(task:TaskSummary){const button=document.createElement('button');button.type='button';button.dataset.taskId=task.id;button.dataset.taskKind=task.kind;
     button.textContent=`${task.kind} · ${task.state}${task.phase?` / ${task.phase}`:''} · ${task.metrics.join(', ')} · ${formatDate(task.createdAt)} · ${task.id}`;button.onclick=()=>choose(task.kind,task.id);return button;}
   async function list(more=false){
@@ -74,15 +75,18 @@ export function installTasks(signal:AbortSignal){
       $('cancel').hidden=!value.links.some(l=>l.rel==='cancel');$('related').replaceChildren();$('links').replaceChildren();$('candidates').replaceChildren();
       for(const related of value.related){const b=document.createElement('button');b.type='button';b.textContent=`${related.relation} · ${related.kind} · ${related.id}`;b.dataset.relatedId=related.id;b.onclick=()=>choose(related.kind,related.id);$('related').append(b);}
       for(const l of value.links)if(l.rel!=='cancel')link(l.href,l.rel,$('links'));
-      const receipt=value.links.find(l=>l.rel==='candidate-receipt');if(!receipt)return;
-      const publication=await api.request<{policy:{space:string};createdIds:string[];selected:{id:string;evidence?:unknown;ref?:unknown}[]}|null>(c.owner,receipt.href,s);if(!current()||!publication)return;
+      $('candidates').dataset.state='loading';const receipt=value.links.find(l=>l.rel==='candidate-receipt');if(!receipt){$('candidates').dataset.state='ready';return;}
+      const publication=await api.request<{policy:{space:string};createdIds:string[];selected:{id:string;evidence?:unknown;ref?:unknown}[]}|null>(c.owner,receipt.href,s);if(!current())return;if(!publication){$('candidates').dataset.state='ready';return;}
       for(const id of publication.createdIds){
         const record=await api.request<AnnotationRecord>(c.owner,`/api/annotations/spaces/${encodeURIComponent(publication.policy.space)}/${encodeURIComponent(id)}`,s);if(!current())return;
         const frozen=publication.selected.find(item=>item.id===id);if(!frozen)continue;
+        for(const evidence of record.document.mark.cambiEvidence??[]){if(value.task.kind!=='cambi'||!frozen.ref||evidence.verification!=='server-verified'||evidence.serviceOrigin!==location.origin||canonicalJson(evidence.ref)!==canonicalJson(frozen.ref))continue;
+          const query=new URLSearchParams({cambi:'1',space:record.space,annotationId:record.id,evidenceId:evidence.id});link('/quality.html?'+query,`${id} · ${t(msg('cambi.open','CAMBI · 查看原始热图、源快照与真实区域'))}`,$('candidates'));}
         for(const evidence of record.document.mark.qualityEvidence??[]){const expected=(frozen.evidence??frozen.ref)as typeof evidence.ref|undefined;if(!expected||(['jobId','attemptId','digest','side']as const).some(k=>evidence.ref[k]!==expected[k]))continue;
           link(qualityPairViewUrl({space:record.space,annotationId:record.id,evidenceId:evidence.id},location.origin),`${id} · ${t(msg('quality.openPair','在新窗口查看原帧对与 ROI'))}`,$('candidates'));}
       }
-    }catch(e){if(current())$('status').textContent=String(e);}
+      $('candidates').dataset.state='ready';
+    }catch(e){if(current()){$('candidates').dataset.state='failed';$('status').textContent=String(e);}}
     finally{if(generation===detailGeneration)detailBusy=false;}
   }
   form.onsubmit=e=>{e.preventDefault();save();void list();void loadDetail();};

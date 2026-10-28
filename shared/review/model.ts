@@ -55,6 +55,7 @@ export type MediaInfo = {
 export type MarkReply = { id: string; text: string; createdAt: string; author: { id: string; name: string } };
 export type Mark = {
   qualityCandidate?: {schema:'voidplayer-quality-candidate';version:1;assessment:'not-subjectively-assessed'};
+  cambiEvidence?: import('./cambi-evidence.ts').CambiEvidence[];
   qualityEvidence?: import('./quality-evidence.ts').QualityEvidence[];
   resolved?: boolean;
   replies?: MarkReply[];

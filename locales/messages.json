@@ -2228,6 +2228,94 @@
     "source": "每一帧，都值得看见。",
     "params": {}
   },
+  "cambi.cancel": {
+    "source": "取消此后台任务并释放执行资源",
+    "params": {}
+  },
+  "cambi.candidates": {
+    "source": "从真实热图显式创建共享空间候选",
+    "params": {}
+  },
+  "cambi.find": {
+    "source": "从技术发现选择单源",
+    "params": {}
+  },
+  "cambi.frames": {
+    "source": "更多逐帧事实",
+    "params": {}
+  },
+  "cambi.fullFacts": {
+    "source": "完整的不可变来源与 recipe 证据",
+    "params": {}
+  },
+  "cambi.history": {
+    "source": "刷新后台历史",
+    "params": {}
+  },
+  "cambi.new": {
+    "source": "新建显式请求",
+    "params": {}
+  },
+  "cambi.open": {
+    "source": "CAMBI · 查看原始热图、源快照与真实区域",
+    "params": {}
+  },
+  "cambi.policyNote": {
+    "source": "阈值由调用者指定，未校准。区域来自所选尺度中达到 cellThreshold 的真实热图单元包围框；保留帧、尺度、统计与坐标映射，不是裁剪重算或人工缺陷判断。关闭页面不会取消后台执行。",
+    "params": {}
+  },
+  "cambi.prepare": {
+    "source": "缺少可信缓存时，显式前往技术准备；此处不会自动探测或建索引。",
+    "params": {}
+  },
+  "cambi.publish": {
+    "source": "显式共享候选与证据",
+    "params": {}
+  },
+  "cambi.retry": {
+    "source": "用冻结请求与原键重试",
+    "params": {}
+  },
+  "cambi.scope": {
+    "source": "Linux x64 可选固定组件；可信 FLV/Enhanced FLV、8/10 位限范围 BT.709 SDR，整帧、方形像素、不裁剪，长边至少320。分数越高表示检测到更多色带，不是产品合格线；内部按10位处理。允许明确抽样，未采样帧不冒充覆盖。没有跨帧目标跟踪，未认证引用完整性，无法检测错误隐藏。",
+    "params": {}
+  },
+  "cambi.submit": {
+    "source": "发起持久单源 CAMBI",
+    "params": {}
+  },
+  "cambi.title": {
+    "source": "CAMBI · 单源色带筛查",
+    "params": {}
+  },
+  "cambi.viewer1": {
+    "source": "CAMBI · 原始多尺度色带证据",
+    "params": {}
+  },
+  "cambi.viewer2": {
+    "source": "固定官方 gray16le 热图，分数高=更多 banding 线索，不是合格线。尺度格点按2^scale映射到源坐标；局部窗口有邻域影响，不等于物体边界、跟踪或裁剪重算。显示转换不改变评分原始8/10位平面。未认证引用完整性，concealment unavailable。",
+    "params": {}
+  },
+  "cambi.viewer3": {
+    "source": "取消此查看（后台任务不受影响）",
+    "params": {}
+  },
+  "cambi.viewer4": {
+    "source": "经源/cache/AU/原始字节核验的独立快照",
+    "params": {}
+  },
+  "cambi.viewer5": {
+    "source": "官方原始热图（0–65535固定线性显示）",
+    "params": {}
+  },
+  "cambi.viewer6": {
+    "source": "核对共享不可变附件、原始热图与独立源快照…",
+    "params": {}
+  },
+  "cambi.viewer7": {
+    "source": "源身份、cache build、AU、真实 PTS、原始平面 SHA256 与官方热图布局已核对；未重新评分。",
+    "params": {}
+  },
   "colorFlow.approximateBrowserColors": {
     "source": "近似浏览器颜色",
     "params": {}
@@ -5493,7 +5581,7 @@
     "params": {}
   },
   "tasks.scope": {
-    "source": "当前自述身份的准备、对应计划、单帧、区间和 VMAF 历史。刷新读取新快照；翻页保留当时事实。关闭观察不取消后台工作，也不移动播放头。",
+    "source": "当前自述身份的准备、对应计划、单帧、区间、VMAF、XPSNR 和单源 CAMBI 历史。刷新读取新快照；翻页保留当时事实。关闭观察不取消后台工作，也不移动播放头。",
     "params": {}
   },
   "tasks.snapshot": {

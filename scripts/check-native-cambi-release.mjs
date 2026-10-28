@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';import {mkdtemp,mkdir,readFile,writeFile,rm} from 'node:fs/promises';import path from 'node:path';import {tmpdir} from 'node:os';import {execFileSync,spawn} from 'node:child_process';
+import {until} from '../test/helpers/native-vmaf.mjs';import {cambiFixture,cambiOracle,sha} from '../test/helpers/native-cambi.mjs';
+import {createServer} from 'node:net';
+import {trackChildShutdown} from './testing/lifecycle.mjs';
+assert.equal(process.platform,'linux');assert.equal(process.arch,'x64');
+const root=path.resolve(import.meta.dirname,'..'),archive=path.resolve(process.argv[2]??JSON.parse(await readFile(path.join(root,'artifacts/latest-release.json'),'utf8')).archive),temp=await mkdtemp(path.join(tmpdir(),'vp-native-cambi-release-'));
+try{
+ execFileSync('tar',['-xzf',archive,'-C',temp]);const directory=path.join(temp,path.basename(archive,'.tar.gz')),release=JSON.parse(await readFile(path.join(directory,'release.json'),'utf8')),empty=path.join(temp,'empty');await mkdir(empty);
+ const results=[];
+ for(const depth of [8,10]){let f;try{
+  f=await cambiFixture({depth,start:async config=>{
+   const socket=createServer();await new Promise(r=>socket.listen(0,'127.0.0.1',r));const reservedPort=socket.address().port;await new Promise(r=>socket.close(r));await mkdir(config.dataDir,{recursive:true});await writeFile(path.join(config.dataDir,'voidplayer.config.json'),JSON.stringify({host:'127.0.0.1',port:reservedPort,mediaRoots:config.mediaRoots,indexWatch:false,logsDir:null,nativeVmaf:config.nativeVmaf}));
+   const env={...process.env,PATH:empty};for(const k of Object.keys(env))if(k.startsWith('VOIDPLAYER_')||['BUN_OPTIONS','BUN_INSPECT','NODE_OPTIONS'].includes(k))delete env[k];
+   const child=spawn(path.join(directory,release.executable),['--data-dir',config.dataDir],{cwd:empty,env,stdio:['ignore','pipe','pipe']}),stop=trackChildShutdown(child);let output='';child.stdout.on('data',b=>output=(output+b).slice(-65536));child.stderr.on('data',b=>output=(output+b).slice(-65536));
+   try{const port=await until(()=>{if(child.exitCode!==null)throw Error(output);return Number(/媒体服务: http:\/\/127\.0\.0\.1:(\d+)/.exec(output)?.[1])||null;},Boolean,'Compiled CAMBI startup');return {server:{address:()=>({port})},close:stop};}catch(e){await stop();throw e;}
+  }});
+  const capability=await f.json('/api/quality/cambi/capability');assert.equal(capability.enabled,true,JSON.stringify(capability));assert.equal(capability.selfTest,'executed-CAMBI-and-five-heatmaps');assert.equal((await f.json('/api/agent')).capabilities.find(c=>c.id==='quality.cambi').enabled,true);
+  const created=await f.json('/api/quality/cambi/jobs',f.input,'compiled-native'),j=await f.wait(created.job.id);assert.equal(j.state,'completed',JSON.stringify(j));const result=await f.json(`/api/quality/cambi/jobs/${j.id}/result`),page=await f.json(`/api/quality/cambi/jobs/${j.id}/frames`),oracle=await cambiOracle(f,depth);assert.deepEqual(page.entries.map(f=>({index:f.index,score:f.score})),oracle.result.frames.map(f=>({index:f.frameNum,score:f.metrics.cambi})));assert.deepEqual(result.pooled,oracle.result.pooled_metrics.cambi);
+  const frameBytes=f.sample.width*f.sample.height*3/2*(depth===8?1:2);for(const frame of page.entries){assert.equal(frame.rawSha256,sha(f.raw.subarray(frame.index*frameBytes,(frame.index+1)*frameBytes)));for(const scale of result.output.scales){const bytes=Buffer.from(await (await f.request(`/api/quality/cambi/jobs/${j.id}/heatmap?index=${frame.index}&scale=${scale.scale}`)).arrayBuffer());assert.deepEqual(bytes,(await readFile(path.join(oracle.directory,'heat',scale.file))).subarray(frame.index*scale.bytes,(frame.index+1)*scale.bytes));}}
+  const inspected=await f.json(`/api/quality/cambi/jobs/${j.id}/picture?index=3`);assert.equal(inspected.rawSha256,page.entries[3].rawSha256);assert.equal(inspected.source.sourcePtsUs,750000);
+  const p=await f.json(`/api/quality/cambi/jobs/${j.id}/candidates`,{space:'default',minScore:0,limit:1,scale:1,cellThreshold:1,text:'Compiled native single-source heatmap candidate',severity:2});assert.equal(p.createdIds.length,1);const a=await f.json('/api/annotations/spaces/default/'+p.createdIds[0]);assert.equal(a.document.mark.cambiEvidence[0].value.geometry.bitDepth,depth);assert.equal(a.document.mark.qualityEvidence,undefined);results.push({depth,frames:page.entries.length,component:result.component,work:result.work,executionWallMs:j.endedAt-j.startedAt,framesPerSecond:4000/(j.endedAt-j.startedAt),resources:result.resources,output:result.output,pooled:result.pooled});
+
+ }finally{await f?.close();}}
+ const report=path.resolve(process.env.VOIDPLAYER_TEST_ARTIFACTS??'.run/native-cambi/compiled');await mkdir(report,{recursive:true});await writeFile(path.join(report,'native-cambi.json'),JSON.stringify({target:release.target,emptyPath:true,results},null,2));console.log(JSON.stringify({nativeCambiBaseline:results}));console.log('PASS compiled Linux x64 Bun + installed fixed native component CAMBI, 8/10-bit official frame and five-scale byte oracle, single-source candidates, empty PATH');
+}finally{await rm(temp,{recursive:true,force:true});}

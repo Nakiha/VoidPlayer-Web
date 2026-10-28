@@ -1,7 +1,7 @@
 # Unified actor task center
 
 The task center is a read model of preparation, correspondence, single-pair,
-range and native VMAF records. It does not schedule work or add reexecution.
+range, native VMAF/XPSNR and single-source CAMBI records. It does not schedule work or add reexecution.
 It uses the current self-declared service actor, not strong authentication.
 
 `GET /api/tasks` accepts one each of mediaId, mediaVersion (requires mediaId),
@@ -42,7 +42,7 @@ reopen makes a fresh snapshot, retains the target and never seeks or loads a
 player source. Expired pages restart the original query. Actor/view/target
 fences apply after each await, including publication and annotation reads;
 switching actor clears old private DOM. Only an explicit cancel button writes.
-Candidate receipt links use original range/VMAF publication records, and viewer
+Candidate receipt links use original range/VMAF/XPSNR/CAMBI publication records, and viewer
 links require the annotation evidence ref to match the frozen selected ref.
 Single-pair annotations retain their original sharing workflow; this package
 adds no global reverse annotation search.
@@ -58,7 +58,7 @@ is not certification of source contents, current index, pixels or metric scores.
 ## Reproduce
 
 - `node --test test/unit/task-center.test.ts`: strict query rules, old matching
-  records beyond legacy first pages, all five SQL projections, immutable pages,
+  records beyond legacy first pages, all seven SQL projections, immutable pages,
   same-side version filters, half-open time, signed/scoped/expired/evicted cursors,
   same-actor pins, result retirement and hard-history overflow.
 - `node --test test/media/task-center-http.test.ts`: real mixed MP4/FLV prepare,
@@ -116,3 +116,5 @@ IDs/commands, unique48, unchanged preparation, budgets and fail-closed aggregati
 TypeScript, the two Worker negative-compilation contracts, release/manifest
 contracts (75 tests combined), and the real native HTTP case passed after this
 test-only correction. No product, workflow, timeout or gate was changed.
+
+CAMBI is projected from its original bounded `cambi_jobs` store using only scalar metadata: one `source` role, metric `cambi`, exact phase/prepared/scored/target facts and committed result availability. Provisional stored scores remain unavailable as immutable results. It has no fabricated reference/C-plan edge. Explicit task-center cancellation delegates to the original CAMBI service; candidate receipt links require the entire frozen ref (including frame, scale and region) to match a server-verified same-origin annotation attachment before opening its independent five-scale viewer. No heatmap bytes are loaded by task queries.

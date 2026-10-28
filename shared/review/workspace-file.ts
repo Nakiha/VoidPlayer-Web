@@ -1,3 +1,4 @@
+import {cambiEvidenceList} from './cambi-evidence.ts';
 import type { ColorMode, ReferenceDecode } from '../color/decode-policy-types.ts';
 import { validateColorOutput } from '../color/color-output.ts';
 import type { ColorOutput } from '../color/color-output.ts';
@@ -105,9 +106,10 @@ export function parseWorkspace(value: unknown, baseUrl?: string, preserveEvidenc
       if (d.version < 2) throw new Error('PSNR attachments require workspace version 2 or later.');
       mark.qualityEvidence = qualityEvidenceList(m.qualityEvidence, preserveEvidenceVerification);
     }
+    if(m.cambiEvidence!==undefined){if(d.version!==3||!m.qualityCandidate)throw new Error('CAMBI attachments require candidate workspace version3');mark.cambiEvidence=cambiEvidenceList(m.cambiEvidence,preserveEvidenceVerification);}
     if(m.qualityCandidate!==undefined){
       const c=m.qualityCandidate;
-      if(d.version!==3||!c||Object.keys(c).sort().join(',')!=='assessment,schema,version'||c.schema!=='voidplayer-quality-candidate'||c.version!==1||c.assessment!=='not-subjectively-assessed'||!mark.qualityEvidence?.length)throw new Error('Measurement candidates require workspace version3 and immutable evidence.');
+      if(d.version!==3||!c||Object.keys(c).sort().join(',')!=='assessment,schema,version'||c.schema!=='voidplayer-quality-candidate'||c.version!==1||c.assessment!=='not-subjectively-assessed'||!(mark.qualityEvidence?.length||mark.cambiEvidence?.length))throw new Error('Measurement candidates require workspace version3 and immutable evidence.');
       mark.qualityCandidate={schema:c.schema,version:1,assessment:c.assessment};
     }
     Object.assign(mark, discussionValue(m));

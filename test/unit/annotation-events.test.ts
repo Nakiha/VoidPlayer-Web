@@ -113,8 +113,8 @@ test('v1 databases keep receipts and records while announcing the unavailable ev
   } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('candidate-capable database v4 keeps v3 records/receipts and rejects future schemas',()=>{
+test('candidate/CAMBI-capable database v5 keeps old records/receipts and rejects future schemas',()=>{
  const dir=mkdtempSync(path.join(os.tmpdir(),'vp-candidate-schema-')),file=path.join(dir,'annotations.sqlite');let store:AnnotationStore|undefined=new AnnotationStore(file);
- try{const op=command(),record=store.mutate('default',op,actor);store.close();store=undefined;let db=openIndexDatabase(file);db.exec('PRAGMA user_version=3');db.close();store=new AnnotationStore(file);assert.deepEqual(store.read('default',record.id),record);assert.deepEqual(store.mutate('default',op,actor),record);store.close();store=undefined;db=openIndexDatabase(file);assert.equal(db.prepare('PRAGMA user_version').get()!.user_version,4);db.exec('PRAGMA user_version=5');db.close();assert.throws(()=>new AnnotationStore(file),/更新的程序/);
+ try{const op=command(),record=store.mutate('default',op,actor);store.close();store=undefined;let db=openIndexDatabase(file);db.exec('PRAGMA user_version=3');db.close();store=new AnnotationStore(file);assert.deepEqual(store.read('default',record.id),record);assert.deepEqual(store.mutate('default',op,actor),record);store.close();store=undefined;db=openIndexDatabase(file);assert.equal(db.prepare('PRAGMA user_version').get()!.user_version,5);db.exec('PRAGMA user_version=6');db.close();assert.throws(()=>new AnnotationStore(file),/更新的程序/);
  }finally{store?.close();rmSync(dir,{recursive:true,force:true});}
 });

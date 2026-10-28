@@ -1,3 +1,4 @@
+import {qualityCambiShell,installQualityCambi} from './quality-cambi.ts';
 import {qualityXpsnrShell,installQualityXpsnr} from './quality-xpsnr.ts';
 import {qualityVmafShell,installQualityVmaf} from './quality-vmaf.ts';
 import {installQualityCandidate} from '../ui/quality-candidate.ts';
@@ -49,6 +50,7 @@ export function qualityJobsShell(){
     <div class="admin-panel"><div class="admin-section-heading"><h2>${th(msg('qualityWorkflow.history','当前用户的服务端任务与历史'))}</h2><button id="quality-refresh">${th(msg('qualityWorkflow.refresh','刷新任务'))}</button></div><p id="quality-observer-status" role="status"></p><p id="quality-resources"></p><details><summary>${th(msg('qualityWorkflow.budgets','服务端资源计数与预算'))}</summary><pre id="quality-resource-json"></pre></details>
     <div class="quality-jobs-workspace"><div id="quality-job-list"></div><div id="quality-job-detail" hidden><h3 id="quality-job-title"></h3><p id="quality-job-state"></p><p id="quality-job-reason"></p><p id="quality-job-input"></p><button id="quality-cancel">${th(msg('qualityWorkflow.cancel','取消任务'))}</button><details><summary>${th(msg('qualityWorkflow.requestFacts','请求、attempt 与服务端事实'))}</summary><pre id="quality-job-json"></pre></details><div id="quality-job-result"></div></div></div></div>
     ${qualityCorrespondenceShell()}
+    ${qualityCambiShell()}
     ${qualityVmafShell()}
     ${qualityXpsnrShell()}
     ${qualityRangesShell()}
@@ -58,7 +60,7 @@ export function qualityJobsShell(){
     <div id="quality-mark-list"></div><p id="quality-attach-target"></p><button id="quality-attach" disabled>${th(msg('quality.publish','共享到标注'))}</button><p id="quality-attach-status" role="status"></p><div id="quality-shared-links"></div></section></section>`;
 }
 export function installQualityJobs(signal:AbortSignal){
-  const ranges=installQualityRanges(signal),correspondence=installQualityCorrespondence(signal),vmaf=installQualityVmaf(signal),xpsnr=installQualityXpsnr(signal);
+  const cambi=installQualityCambi(signal),ranges=installQualityRanges(signal),correspondence=installQualityCorrespondence(signal),vmaf=installQualityVmaf(signal),xpsnr=installQualityXpsnr(signal);
   const $=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(`quality-${id}`)as T;
   const api=new QualityClient();let observer:QualityJobObserver|null=null,observation:QualityObservation|null=null;
   let active=false,enabled=false,scope=0,controller=new AbortController(),lastActor='',lastResult='',attachmentGeneration=0,attachmentBusy=false;
@@ -245,5 +247,5 @@ export function installQualityJobs(signal:AbortSignal){
   onLanguageChange(()=>{if(active&&observation&&currentActor()?.id===lastActor)render(observation);},signal);
   const timer=setInterval(()=>{if(active&&enabled&&!document.hidden&&currentActor()?.id===lastActor)void observer?.poll();},1000);
   signal.addEventListener('abort',()=>{clearInterval(timer);observer?.dispose();controller.abort();},{once:true});
-  return {activate(value:boolean){ranges.activate(value);correspondence.activate(value);vmaf.activate(value);xpsnr.activate(value);if(active===value)return;active=value;if(value)void start();else{scope++;observer?.dispose();observer=null;controller.abort();}}};
+  return {activate(value:boolean){cambi.activate(value);ranges.activate(value);correspondence.activate(value);vmaf.activate(value);xpsnr.activate(value);if(active===value)return;active=value;if(value)void start();else{scope++;observer?.dispose();observer=null;controller.abort();}}};
 }

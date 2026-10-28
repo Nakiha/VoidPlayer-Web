@@ -112,20 +112,20 @@ test('cache suite runs once in its own required job with the same pinned prepara
   const jobs = workflowJobs(workflow), cache = jobs['cache-browser'];
   const manifest = JSON.parse(await readFile(new URL('../../scripts/testing/manifest.json', import.meta.url), 'utf8'));
   const cases = manifest.cases.filter(row => row.suites.includes('ci-cache'));
-  assert.equal(cases.length, 54);
-  assert.equal(new Set(cases.map(row => row.id)).size, 54);
+  assert.equal(cases.length, 58);
+  assert.equal(new Set(cases.map(row => row.id )).size, 58);
   const expected=['browser-mcp-page-bridge-chromium','browser-sharing-webkit'];
   for(const engine of ['chromium','webkit']){
     for(const name of ['annotation-persistence','cache','library-discovery','native-presented-protocol','presented-quality','quality-annotation','quality-pair-view-10','task-center'])expected.push(`browser-${name}-${engine}`);
-    for(const name of ['native-vmaf','native-xpsnr','quality-correspondence','quality-ranges','quality-roi','quality-workflow'])for(const depth of [8,10])expected.push(`browser-${name}-${depth}-${engine}`);
+    for(const name of ['native-vmaf','native-xpsnr','native-cambi','quality-correspondence','quality-ranges','quality-roi','quality-workflow'])for(const depth of [8,10])expected.push(`browser-${name}-${depth}-${engine}`);
     for(const name of ['mp4-quality','mp4-vmaf'])for(const format of ['h264-8','hevc-8','hevc-10'])expected.push(`browser-${name}-${format}-${engine}`);
   }
-  assert.deepEqual(cases.map(row=>row.id).sort(),expected.sort(),'exact prior52 plus the two extracted native checks; no silent removal/substitution');
+  assert.deepEqual(cases.map(row=>row.id).sort(),expected.sort(),'exact prior54 plus four CAMBI checks; no silent removal/substitution');
   const protocolIds=['browser-native-presented-protocol-chromium','browser-native-presented-protocol-webkit'];
   const priorCases=cases.filter(row=>!protocolIds.includes(row.id));
-  assert.equal(priorCases.length,52,'every prior cache case still runs with unchanged mandatory status on main/tag');
+  assert.equal(priorCases.length,56,'every prior cache case still runs with unchanged mandatory status on main/tag');
   const prCases=manifest.cases.filter(row=>row.suites.includes('ci-cache-pr'));
-  assert.equal(prCases.length,53);
+  assert.equal(prCases.length,57);
   assert.deepEqual(cases.filter(row=>!prCases.includes(row)).map(row=>row.id),['browser-presented-quality-webkit']);
   for(const engine of ['chromium','webkit']){
     const row=prCases.find(row=>row.id===`browser-native-presented-protocol-${engine}`);
@@ -139,9 +139,9 @@ test('cache suite runs once in its own required job with the same pinned prepara
   const xpsnrIds=['browser-native-xpsnr-8-chromium','browser-native-xpsnr-10-chromium','browser-native-xpsnr-8-webkit','browser-native-xpsnr-10-webkit'];
   assert.deepEqual(cases.filter(row=>xpsnrIds.includes(row.id)).map(row=>row.id).sort(),[...xpsnrIds].sort());
   const prior=priorCases.filter(row=>!taskIds.includes(row.id)&&!xpsnrIds.includes(row.id));
-  assert.equal(prior.length,46,'retain all prior required cache cases alongside both task-center browsers');
+  assert.equal(prior.length,50,'retain all prior required cache cases alongside task-center, XPSNR and CAMBI browsers');
   assert.deepEqual(prior.find(row=>row.id==='browser-mcp-page-bridge-chromium')?.command,['node','scripts/check-mcp-page-bridge-browser.mjs']);
-  assert.equal(prior.filter(row=>row.id!=='browser-mcp-page-bridge-chromium').length,45,'retain the existing cache matrix alongside the required MCP case');
+  assert.equal(prior.filter(row=>row.id!=='browser-mcp-page-bridge-chromium').length,49,'retain the existing cache matrix alongside the required MCP case');
   assert.ok(cases.every(row => row.required && row.kind === 'regression'));
   assert.deepEqual(cache.needs, ['decoder', 'analysis-core']);
   assert.match(cache.body, /^    runs-on: ubuntu-24\.04$/m);

@@ -187,3 +187,10 @@ test('quality discovery and guides disclose candidate transaction, SSIM and opaq
  assert.ok(!guides.includes('Delayed/reordered pictures,'),'guide must not claim all delayed pictures reject');
  const {readFile}=await import('node:fs/promises');const doc=await readFile(new URL('../../docs/agent-http.md',import.meta.url),'utf8');assert.ok(!doc.includes('SSIM/VMAF/CAMBI'));assert.match(doc,/create-quality-candidate/);assert.match(doc,/opaque token/);
 });
+
+
+test('CAMBI progressive operations retain single-source admission and unavailable recovery without metric substitution',()=>{
+ const m=agentManifest({capabilities:serviceCapabilities(true,false),libraryReady:true,qualityJobsEnabled:true,actor:{id:'owner',name:'Owner'},nativeCambi:{enabled:true,reason:null}});
+ const task=agentTask('quality.cambi')!;assert.equal(task.operations.length,10);const submit=agentOperation('cambi.submit',m.capabilities)!;assert.equal(submit.availability.enabled,true);assert.equal(submit.request.schema,'voidplayer-cambi-job');assert.equal(submit.execution.requiresBrowser,false);assert.equal(submit.write!.action,'quality-job');assert.ok(!submit.next.includes('plan.create'));
+ assert.match(AGENT_DOCUMENTS['/agent/quality/cambi.md'],/no reference relation|reference relationship/i);assert.match(AGENT_DOCUMENTS['/agent/quality/cambi.md'],/FLV-only/);assert.match(AGENT_DOCUMENTS['/agent/quality.md'],/CAMBI uses one source and no C plan/);
+});
