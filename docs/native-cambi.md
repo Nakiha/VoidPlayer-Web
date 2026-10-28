@@ -4,6 +4,8 @@ This work uses the optional Linux x64 component installed for [native VMAF](nati
 
 CAMBI is a no-reference, uncalibrated banding indication: higher means more detected banding, zero is a completed numeric result, and neither is a product quality pass/fail. Each frame is independent, so deterministic stride sampling is allowed and unsampled pictures remain explicit. No temporal tracking or reference integrity certification is claimed; decoder concealment detection is unavailable.
 
+Here `referenceIntegrity=not-certified` concerns completeness of the bitstream reference-picture graph; it does not waive evidence-reference checks or certify subjective content. Source/version/cache/producer/sample-table identity, job/attempt/digest, exact frame/scale/region and original raw/heatmap hashes remain mandatory. Changed or incomplete evidence references refuse inspection/publication rather than inheriting verification.
+
 ## Verified component boundary
 
 The installed scalar v3.0.0 binary was executed on a synthetic 640×360 8-bit YUV420 input. It produced one CAMBI score and five upstream heatmaps with exact dimensions 640×360, 320×180, 160×90, 80×45 and 40×23. Each file contains row-major native uint16, little endian on the only supported x64 platform; successive frame planes are concatenated. Upstream rounds each downscaled dimension upward and writes at `frame * width * height * 2`. Its values are scaled internal c-values, not independent cropped-region CAMBI scores.
