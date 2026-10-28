@@ -59,7 +59,21 @@ try{
     }else{
       await root.locator('[data-execute]').click();const chain=await until(()=>f.json(url+'/reexecutions'),v=>!!v.successor,'GUI durable successor');successors[kind]=chain.successor.id;await until(()=>read(kind,chain.successor.id),j=>!['queued','preparing','running','cancelling'].includes(j.state),'GUI execution');
     }
-    if(kind==='xpsnr'){await page.locator('#tasks-title').filter({hasText:successors[kind]}).waitFor();await page.locator(`[data-related-id="${id}"]`).click();check('task center traces the original computation',(await page.locator('#tasks-title').textContent()).includes(id));await page.reload();await page.locator('#tasks-title').filter({hasText:id}).waitFor();check('task center reopens the same target and filter',await page.locator('#tasks-filters [name=kind]').inputValue()==='xpsnr');await page.locator('[data-pane=quality]').click();await page.locator(`[data-xpsnr-job="${successors[kind]}"]`).click();await page.locator('#xpsnr-reexecution [data-chain]').filter({hasText:id}).waitFor();}
+    if(kind==='xpsnr'){
+      await page.locator('#tasks-title').filter({hasText:successors[kind]}).waitFor();
+      const originalSeen=defer(),releaseOriginal=defer(),originalPath=`**/api/tasks/xpsnr/${id}`;
+      const originalResponse=async route=>{try{const response=await route.fetch(),value=await response.json();originalSeen.resolve({ok:true,status:response.status(),actor:route.request().headers()['x-voidplayer-actor'],value});await releaseOriginal.promise;await route.fulfill({response,json:value});}catch(error){originalSeen.resolve({ok:false,error});await route.abort('failed').catch(()=>{});}};
+      await page.route(originalPath,originalResponse);
+      await page.locator(`[data-related-id="${id}"]`).click();
+      const original=await bounded(originalSeen.promise,'original task detail');if(!original.ok)throw original.error;
+      assert.equal(original.status,200);assert.equal(original.actor,f.actor);assert.equal(original.value.task.kind,'xpsnr');assert.equal(original.value.task.id,id);
+      check('loading the original clears stale successor details',await page.locator('#tasks-detail').isHidden());
+      releaseOriginal.resolve();
+      await page.locator('#tasks-detail:not([hidden]) #tasks-title').filter({hasText:id}).waitFor();
+      check('task center traces the original computation',(await page.locator('#tasks-title').textContent()).includes(id));
+      await page.unroute(originalPath,originalResponse);
+      await page.reload();await page.locator('#tasks-title').filter({hasText:id}).waitFor();check('task center reopens the same target and filter',await page.locator('#tasks-filters [name=kind]').inputValue()==='xpsnr');await page.locator('[data-pane=quality]').click();await page.locator(`[data-xpsnr-job="${successors[kind]}"]`).click();await page.locator('#xpsnr-reexecution [data-chain]').filter({hasText:id}).waitFor();
+    }
     const done=await read(kind,successors[kind]);check(kind+' finishes a new computation',done.state==='completed'&&done.retryOf.retryOf===id&&done.retryOf.generation===2);check(kind+' retains original terminal facts',JSON.stringify(await read(kind,id))===snapshots[kind]);
     if(kind!=='single'){
       check(kind+' does not auto-publish',await f.json(paths[kind]+'/'+done.id+'/candidates')===null);
