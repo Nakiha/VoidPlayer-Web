@@ -18,7 +18,7 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 - `server/analysis/quality/`：媒体库到一次性 PSNR HTTP 调用的文件、缓存、Node/Bun Worker 适配，见 `docs/source-library-psnr.md`。可信 producer evidence 只能由服务端完成扫描后提交；评分不得重建索引。实例质量准入排斥索引构建/上传和码流工作，物理退出前不能释放许可。一次性请求与持久任务的连接/取消契约分开。
 - 持久单帧 PSNR 位于同目录 `job-{request,store,service,routes}.ts`，见 `docs/source-psnr-jobs.md`。提交幂等与终态/结果使用事务；运行由服务持有，观察断线不取消，取消须等待物理退出。独占锁后恢复 interrupted，无自动重试/共享/建索引；`quality.jobs` 仅声明显式单帧 PSNR，不代表 #121 全部完成。
 - 单帧 PSNR GUI 任务编排位于 `src/admin/quality.ts`、观察/幂等适配位于 `src/analysis/quality/job-observer.ts` 与 `src/services/quality-jobs.ts`，见 `docs/psnr-task-workflow.md`。只读取可信缓存候选，不借播放游标/CSS，不自动建索引；关闭观察不取消持久执行，身份/client/标注空间迟到回复必须围栏。
-- 已完成 PSNR 结果与现有共享标注的显式挂接见 `docs/annotation-psnr-evidence.md`，契约位于 `shared/review/quality-evidence.ts`。GUI/Agent 共用持久命令，普通编辑不得丢附件，导入/复制只保留历史事实并降权。普通证据工作区/评审为 v2，测量候选为 v3，无附件保持 v1；标注数据库为 v4，旧版本须拒绝。
+- 已完成 PSNR 结果与现有共享标注的显式挂接见 `docs/annotation-psnr-evidence.md`，契约位于 `shared/review/quality-evidence.ts`。GUI/Agent 共用持久命令，普通编辑不得丢附件，导入/复制只保留历史事实并降权。普通证据工作区/评审为 v2，测量候选为 v3，无附件保持 v1；标注数据库为 v5，旧版本须拒绝。
 - 共享附件的显式只读原帧对/ROI 查看见 `docs/annotation-psnr-pair-view.md`。独立快照会话通过原缓存/AU 解码但不计算分数；历史附件、缓存变化和不支持的几何必须拒绝，不得借普通播放器自动建索引。
 - `scripts/dev.ts` 同进程启动 Vite 和媒体 API；`scripts/service.mjs` 管理 macOS 用户服务；`deploy/` 为便携运行与自动用户使用说明。
 - `test/{unit,contract,media}/`：node:test，无浏览器依赖；`helpers/` 为可复用模块，顶层旧文件为兼容入口。WASM 用例在 Node worker_threads 里跑真实 core。
@@ -103,13 +103,15 @@ node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 
 原生连续序列 VMAF 见 `docs/native-vmaf.md`。固定官方 Netflix/vmaf v3.0.0 与 v0.6.1/NEG 模型，Linux x64 可信组件由宿主配置 manifest hash，不依赖 PATH 或接受 HTTP 程序路径。共享计划/准入在 `shared/analysis/quality/vmaf.ts`，独立 native 进程和持久服务在 `server/analysis/vmaf/`，GUI 为 `src/admin/quality-vmaf.ts`。只消费已提交 C 计划；连续呈现顺序与整帧 SDR 色彩/几何严格准入，不能把稀疏抽样拼成时序。PSNR/SSIM 与 native 状态独立，实际退出后才释放容量；序列附件不可伪装空间热图。
 
-可信非分片 MP4 评分链路见 `docs/trusted-mp4-quality.md`。严格表读取在 `shared/media/indexing/mp4-quality-index.ts`，显式准备沿用 A 的任务、事务 cache 与共享物理退出准入。MP4 namespace/producer/result v2 与旧 FLV v1 并存；源适配读取真实 sample payload，不伪造/计费 FLV tag。时钟 ticks 必须精确表示整数微秒，不能 round/修 POC/nearest。只读 viewer 使用已有可信 cache；VMAF 可复用严格 MP4/FLV 适配，但仍限连续等间距整帧 limited BT.709 SDR，MP4/混合结果及序列关联使用 v2，逐点保留 track/sample/ticks/table 见证。FLV v1 指纹/回执不变，native runner/supervisor 不扩大；未来 CAMBI 不继承 MP4 准入。
+原生单源 CAMBI 见 `docs/native-cambi.md`：共享契约/预算在 `shared/analysis/quality/cambi.ts`，持久服务在 `server/analysis/cambi/`，复用已固定 native 组件、真实 Worker/supervisor 与实例共享准入，不要求 C 参考计划或虚构 PSNR pair。五尺度原始 gray16le 证据逐帧按需读，区域只表示热图统计/源坐标格点映射，不是小裁剪重算或目标跟踪。共享单源候选命令/附件在 `shared/review/cambi-evidence.ts` 与既有标注事务，版本3导出和DB5兼容围栏必须保留；导入降历史。GUI在 `src/admin/quality-cambi.ts` 与 `src/ui/cambi-view.ts`，原始源快照必须重新核源/cache/AU/rawSHA并经presenter，不能干预原播放器或查非owner私有job。
+
+可信非分片 MP4 评分链路见 `docs/trusted-mp4-quality.md`。严格表读取在 `shared/media/indexing/mp4-quality-index.ts`，显式准备沿用 A 的任务、事务 cache 与共享物理退出准入。MP4 namespace/producer/result v2 与旧 FLV v1 并存；源适配读取真实 sample payload，不伪造/计费 FLV tag。时钟 ticks 必须精确表示整数微秒，不能 round/修 POC/nearest。只读 viewer 使用已有可信 cache；VMAF 可复用严格 MP4/FLV 适配，但仍限连续等间距整帧 limited BT.709 SDR，MP4/混合结果及序列关联使用 v2，逐点保留 track/sample/ticks/table 见证。FLV v1 指纹/回执不变，native runner/supervisor 不扩大；CAMBI 不继承 MP4 准入。
 
 普通 HTTP Agent 渐进任务/操作发现见 `docs/agent-quality-workflow.md`。`shared/service/agent-operations.ts` 复用领域常量，JSON 与嵌入式 Markdown 共用描述，不增加第二套 validator；元数据可读不等于质量准入。`examples/http-quality.mjs` 只能使用公开 HTTP，默认只读，各类写入分别显式授权，不保存凭据；未知 POST 仅原 actor/body/key 或原 plan digest/policy 回放，不能换 key 猜重试，不静默配对或发布。
 
 临时本机 stdio MCP 页面桥见 `docs/local-mcp-page-bridge.md`。`scripts/mcp-page-bridge.ts` 只托管自己的 loopback 页面；页面显式用户点击授予 read/view/annotate 范围，随机 document/grant capability 仅存当前进程/页面内存，不能把声明名、Origin 或 epoch 当认证。只复用共享白名单 schema 与现有 Agent/session facade，不全工具透传、不接受任意脚本/媒体路径、不上传 File/日志，不自动连接或跟随标签。失去授权即废弃排队命令，已派发操作可能完成且回执未知，不能假回滚或自动换 key 重放。迟到消息按 document/epoch/correlation 围栏；关闭 stdin 后真实关闭自有 host/资源，不影响独立 HTTP 后台任务。现代与 legacy MCP 生命周期须分别按官方规范验证，stdout 只能写协议帧。
 
-统一任务中心见 `docs/unified-task-center.md`。`shared/service/tasks.ts` 是 GUI/HTTP 共用严格筛选契约；`server/tasks/` 仅从原五个受限存储投影当前 actor 的全部有界摘要，不允许各取首页后伪全量筛选。短期冻结快照分页须明确失效重取，不将状态变化混入原快照；真实阶段/未知进度和结果回收分别保留。详情关联须核对原 actor/receipt/input/attempt/digest，取消只委托原服务并保留物理退出准入。不得借任务中心自动评分、重试、发布、建索引或移动播放头；actor 是自述归属，不是认证。
+统一任务中心见 `docs/unified-task-center.md`。`shared/service/tasks.ts` 是 GUI/HTTP 共用严格筛选契约；`server/tasks/` 仅从原七个受限存储投影当前 actor 的全部有界摘要，不允许各取首页后伪全量筛选。短期冻结快照分页须明确失效重取，不将状态变化混入原快照；真实阶段/未知进度和结果回收分别保留。详情关联须核对原 actor/receipt/input/attempt/digest，取消只委托原服务并保留物理退出准入。不得借任务中心自动评分、重试、发布、建索引或移动播放头；actor 是自述归属，不是认证。
 
 可选原生 XPSNR 见 `docs/native-xpsnr.md`，共享契约在 `shared/analysis/quality/xpsnr.ts`，服务/GUI 在 `server/analysis/xpsnr/` 与 `src/admin/quality-xpsnr.ts`。固定 FFmpeg 源码/最小 LGPL 组件、参考输入在前、连续短序列时域状态与官方逐平面池化/Infinity 必须保留，不能平均逐帧 dB、稀疏拼帧、冒用 VMAF pool 或缺组件替代算法。复用可信 C/source/原生解码及物理退出监督，独立有界持久历史进入同一任务中心。版本比较只接纳完全相同冻结参考片段、raw SHA 与 recipe/component；不认证内容、不宣称感知优越。候选是显式整帧时间测量，附件/回执/原帧复核保持兼容，不能伪空间热图。
 显式评分重新执行见 `docs/explicit-quality-reexecution.md`。原提交重放与新计算必须分开；single/range/native VMAF/XPSNR 仅已物理停止的 failed/interrupted/cancelled/partial 可只读核验冻结条件并明确确认全量成本，原子创建一个带 retryOf 的新任务。每 job 仍只有原 attempt，旧结果/候选不变、不复用分数或自动发布。条件/执行器见证缺失须 blocked/new intent，不重建索引/C 计划或自动换模型。四种评分数据库 v2 的新 job 与回执同事务；未知提交只原 actor/body/key 回放，重启不自动重算。

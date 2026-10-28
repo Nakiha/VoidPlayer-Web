@@ -69,6 +69,7 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
             // app's routing URL uses a synthetic localhost base. The write
             // guard above has already checked Origin against Host and TLS.
             origin:new URL(req.headers.origin!).origin,
+            resolveCambi:ref=>library.qualityCambi.evidence(ref,ctx.actor!.id),
             resolve(ref) {
               if(ref.jobId.startsWith('xpsnr-'))return library.qualityXpsnr.evidence(ref,ctx.actor!.id);
               if(ref.jobId.startsWith('vmaf-'))return library.qualityVmaf.evidence(ref,ctx.actor!.id);

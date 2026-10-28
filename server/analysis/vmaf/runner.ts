@@ -22,7 +22,7 @@ export async function stopOwnedNative(process:{pid:number;startTicks:string;boot
 }
 export class NativeVmafRunner{
  private active=new Set<{stop():void;done:Promise<unknown>}>();private closed=false;stopUncertain=false;
- private library:MediaLibraryIndex;private coreDir:string;readonly config:VmafComponentConfig|undefined;
+ protected library:MediaLibraryIndex;protected coreDir:string;readonly config:VmafComponentConfig|undefined;
  constructor(library:MediaLibraryIndex,coreDir:string,config:VmafComponentConfig|undefined){this.library=library;this.coreDir=coreDir;this.config=config;}
  async capability(){
   const basic={...VMAF_CAPABILITY,configured:!!this.config,enabled:false,reason:'component-unavailable'};
@@ -30,11 +30,11 @@ export class NativeVmafRunner{
   try{const c=await this.owned({budget:{maxElapsedMs:30000}},new AbortController().signal,()=>{},s=>this.component('vmaf_v0_6_1',s));return {...basic,enabled:true,reason:null,component:{manifestSha256:c.manifestSha256,sourceRevision:c.sourceRevision,cliVersion:c.cliVersion}};}
   catch(error){return {...basic,reason:(error as {code?:string}).code??'component-unavailable'};}
  }
- private async component(model:VmafModel,signal:AbortSignal){
+ protected async component(model:VmafModel,signal:AbortSignal){
   signal.throwIfAborted();if(!this.config)throw new VmafError('component-unavailable','No native VMAF component configured');
   return this.worker<VmafComponent>('component-worker.ts',{config:this.config,model},signal);
  }
- private worker<T>(entry:string,data:object,signal:AbortSignal,progress?:(n:number,total:number)=>void,onContract?:(value:QualityExecutionContract)=>void):Promise<T>{
+ protected worker<T>(entry:string,data:object,signal:AbortSignal,progress?:(n:number,total:number)=>void,onContract?:(value:QualityExecutionContract)=>void):Promise<T>{
   const control=new Int32Array(new SharedArrayBuffer(8));
   const url=new URL(typeof VOIDPLAYER_COMPILED!=='undefined'&&VOIDPLAYER_COMPILED?`./analysis/vmaf/${entry}`:`./${entry}`,import.meta.url);
   const worker=new Worker(url,{workerData:{...data,control:control.buffer},resourceLimits:{maxOldGenerationSizeMb:256},trackUnmanagedFds:true});
@@ -73,12 +73,12 @@ export class NativeVmafRunner{
    }finally{if(temporary&&!this.stopUncertain)try{rmSync(directory,{recursive:true,force:true});}catch(error){this.stopUncertain=true;throw new VmafError('stop-uncertain','Temporary raw sequence could not be reclaimed');}}
   });
  }
- private owned<T>(input:{budget:{maxElapsedMs:number}},signal:AbortSignal,admitted:()=>void,work:(s:AbortSignal)=>Promise<T>):Promise<T>{
+ protected owned<T>(input:{budget:{maxElapsedMs:number}},signal:AbortSignal,admitted:()=>void,work:(s:AbortSignal)=>Promise<T>):Promise<T>{
   if(this.closed||this.stopUncertain)return Promise.reject(new VmafError('component-unavailable','Native executor is stopping or unavailable'));
   let release:()=>void;try{signal.throwIfAborted();release=this.library.qualityAdmission.acquire();}catch(error){return Promise.reject(error);}
   const controller=new AbortController(),combined=AbortSignal.any([signal,controller.signal]);
-  const timer=setTimeout(()=>controller.abort(new VmafError('budget-exceeded','Whole VMAF execution deadline exceeded')),input.budget.maxElapsedMs);
-  const entry={stop:()=>controller.abort(new VmafError('cancelled','Native VMAF executor stopping')),done:Promise.resolve() as Promise<unknown>};
+  const timer=setTimeout(()=>controller.abort(new VmafError('budget-exceeded','Whole native execution deadline exceeded')),input.budget.maxElapsedMs);
+  const entry={stop:()=>controller.abort(new VmafError('cancelled','Native executor stopping')),done:Promise.resolve() as Promise<unknown>};
   const done=Promise.resolve().then(async()=>{try{admitted();combined.throwIfAborted();return await work(combined);}finally{clearTimeout(timer);this.active.delete(entry);if(!this.stopUncertain)release();}});
   entry.done=done;this.active.add(entry);return done;
  }
@@ -88,6 +88,15 @@ export class NativeVmafRunner{
   for(const name of ['reference.yuv','distorted.yuv'])if(statSync(path.join(directory,name)).size!==expected)throw new VmafError('source-io-failed','Raw sequence length differs from the frozen frame count');
   const args=[String(input.budget.nativeCpuSeconds),String(input.budget.nativeMemoryBytes),String(VMAF_LIMITS.resultBytes),c.binary,
    '--reference','reference.yuv','--distorted','distorted.yuv','--width',String(prepared.geometry.width),'--height',String(prepared.geometry.height),'--pixel_format','420','--bitdepth',String(prepared.geometry.bitDepth),'--model','path=model.json:name=vmaf','--threads','1','--cpumask','0','--json','--output','result.json','--quiet'];
+  const {usage,stdoutBytes,stderrBytes}=await this.executeNative(c,directory,args,signal,onProcess);
+  if(statSync(path.join(directory,'result.json')).size>VMAF_LIMITS.resultBytes)throw new VmafError('budget-exceeded','Native result exceeds limit');
+  const value=JSON.parse(readFileSync(path.join(directory,'result.json'),'utf8'));
+  if(value.version!==c.cliVersion||!Array.isArray(value.frames)||value.frames.length!==prepared.pairs.length||value.frames.some((f:any,i:number)=>f.frameNum!==i||(!Number.isFinite(f.metrics?.vmaf)||f.metrics.vmaf<0||f.metrics.vmaf>100)))throw new VmafError('native-result-invalid','Native frame count/order/score differs from the frozen sequence');
+  const pooled=value.pooled_metrics?.vmaf;if(!pooled||['min','max','mean','harmonic_mean'].some(k=>!Number.isFinite(pooled[k])))throw new VmafError('native-result-invalid','Missing official pooled scores');
+  return {frames:value.frames.map((f:any)=>({index:f.frameNum,score:f.metrics.vmaf})),pooled,version:value.version,component:{manifestSha256:c.manifestSha256,binarySha256:c.binarySha256,modelSha256:c.modelSha256,supervisorSha256:c.supervisorSha256,sourceRevision:c.sourceRevision},
+   recipe:{model:input.model,threads:1,cpuMask:0,subsample:1,pooling:'official-mean-min-max-harmonic',preprocessing:'none',range:'limited',color:'bt709-sdr',pixelFormat:prepared.geometry.bitDepth===8?'yuv420p':'yuv420p10le',...prepared.geometry,boundary:'clip-reset-and-final-flush',rawPacking:'visible-y-u-v-tight-little-endian-v1'},resources:{...usage,stdoutBytes,stderrBytes}};
+ }
+ protected async executeNative(c:VmafComponent,directory:string,args:string[],signal:AbortSignal,onProcess:Hooks['process']){
   const child=spawn(c.supervisor,args,{cwd:directory,detached:true,stdio:['pipe','pipe','pipe'],env:{LANG:'C',LC_ALL:'C'}});
   let stdout='',stderr='',stdoutBytes=0,stderrBytes=0,reason:unknown,nativePid:number|undefined,usage:VmafNativeResult['resources']|undefined,killTimer:ReturnType<typeof setTimeout>|undefined;
   const stop=(why:unknown)=>{if(reason===undefined)reason=why;if(!child.pid)return;child.kill('SIGTERM');killTimer??=setTimeout(()=>{try{process.kill(-child.pid!,'SIGKILL');}catch{}},1000);};
@@ -109,12 +118,8 @@ export class NativeVmafRunner{
   if(signal.aborted)throw signal.reason;if(reason!==undefined)throw reason;if(spawnFailure)throw new VmafError('component-unavailable','Native executable could not start');
   const text=/^VOIDPLAYER_VMAF_USAGE (\{.*\})$/m.exec(stdout)?.[1];if(text)usage=JSON.parse(text);
   if(code!==0||!usage||usage.exitCode!==0||usage.signal!==0)throw new VmafError('native-execution-failed',`Native VMAF did not complete (supervisor=${code}, child=${usage?.exitCode??'unknown'}, signal=${usage?.signal??'unknown'}, cpuMs=${usage?.cpuMs??'unknown'}, peakRssBytes=${usage?.peakRssBytes??'unknown'}); no native score committed`);
-  if(statSync(path.join(directory,'result.json')).size>VMAF_LIMITS.resultBytes)throw new VmafError('budget-exceeded','Native result exceeds limit');
-  const value=JSON.parse(readFileSync(path.join(directory,'result.json'),'utf8'));
-  if(value.version!==c.cliVersion||!Array.isArray(value.frames)||value.frames.length!==prepared.pairs.length||value.frames.some((f:any,i:number)=>f.frameNum!==i||(!Number.isFinite(f.metrics?.vmaf)||f.metrics.vmaf<0||f.metrics.vmaf>100)))throw new VmafError('native-result-invalid','Native frame count/order/score differs from the frozen sequence');
-  const pooled=value.pooled_metrics?.vmaf;if(!pooled||['min','max','mean','harmonic_mean'].some(k=>!Number.isFinite(pooled[k])))throw new VmafError('native-result-invalid','Missing official pooled scores');
-  return {frames:value.frames.map((f:any)=>({index:f.frameNum,score:f.metrics.vmaf})),pooled,version:value.version,component:{manifestSha256:c.manifestSha256,binarySha256:c.binarySha256,modelSha256:c.modelSha256,supervisorSha256:c.supervisorSha256,sourceRevision:c.sourceRevision},
-   recipe:{model:input.model,threads:1,cpuMask:0,subsample:1,pooling:'official-mean-min-max-harmonic',preprocessing:'none',range:'limited',color:'bt709-sdr',pixelFormat:prepared.geometry.bitDepth===8?'yuv420p':'yuv420p10le',...prepared.geometry,boundary:'clip-reset-and-final-flush',rawPacking:'visible-y-u-v-tight-little-endian-v1'},resources:{...usage,stdoutBytes,stderrBytes}};
+  return {usage,stdoutBytes,stderrBytes};
  }
+
  close(){this.closed=true;for(const e of this.active)e.stop();return Promise.allSettled([...this.active].map(e=>e.done)).then(()=>{if(this.stopUncertain)throw new VmafError('stop-uncertain','Native executor exit is uncertain');});}
 }

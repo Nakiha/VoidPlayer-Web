@@ -83,8 +83,8 @@ export function installAnnotationPanel(
     const attach=document.createElement('button');attach.type='button';attach.className='annotation-attach-psnr';attach.textContent=t(msg('quality.attach', '关联 PSNR'));
     attach.onclick=e=>{e.stopPropagation();hidePreview();void attachQuality?.(mark.id);};actions.append(attach);
     const space=qualitySpace?.();if(space&&space!=='local'){const measure=document.createElement('a');measure.className='annotation-measure-psnr';measure.href=`/admin/?qualitySpace=${encodeURIComponent(space)}&qualityAnnotation=${encodeURIComponent(mark.id)}#quality`;measure.target='_blank';measure.rel='noopener';measure.textContent=t(msg('qualityWorkflow.measureForMark','测量并关联 PSNR'));measure.onclick=e=>e.stopPropagation();actions.append(measure);}
-    if(mark.qualityEvidence?.length){
-      const evidence=document.createElement('button');evidence.type='button';evidence.className='annotation-psnr-evidence';evidence.textContent=`PSNR (${mark.qualityEvidence.length})`;
+    if(mark.qualityEvidence?.length||mark.cambiEvidence?.length){
+      const evidence=document.createElement('button');evidence.type='button';evidence.className='annotation-psnr-evidence';evidence.textContent=`${mark.cambiEvidence?.length?'CAMBI':'PSNR'} (${(mark.qualityEvidence?.length??0)+(mark.cambiEvidence?.length??0)})`;
       evidence.onclick=e=>{e.stopPropagation();hidePreview();const snapshot=session.exportWorkspace(location.origin+'/');const original=snapshot.marks.find(m=>m.id===mark.id);if(original)showQualityEvidence(original,{mark:original,media:snapshot.media},qualitySpace?.());};actions.append(evidence);
     }
     return actions;

@@ -52,3 +52,10 @@ node scripts/native/run-vmaf-tests.mjs node --test test/media/agent-quality-work
 ```
 
 后者从冷缓存和 llms.txt 开始，用真实 FLV single、MP4→FLV range、FLV→MP4 native VMAF 完成闭环。native 仅 Linux x64，沿用固定组件核验；包含无组件、缺缓存、unknown、source/actor 变化、真实提交后丢响应、cursor 失效及观察停止。逐帧/池化 VMAF 对照现有官方 oracle。其他 codec、compiled 三平台和 GUI/viewer 继续由现有正式回归覆盖，不声称此例认证全部矩阵。
+
+CAMBI 的独立无参考工作流从 `/api/agent/tasks/quality.cambi`、
+`/agent/quality/cambi.md` 开始：只需一份明确的可信 FLV 绑定与有界区间/抽样，
+不要求参考关系或 C 计划，不继承 VMAF/XPSNR 的 MP4 准入。任务中心的
+`kind=cambi` / `metric=cambi` 使用原存储的单源身份、阶段、覆盖与结果可用性，
+显式取消仍委托原服务。逐帧五尺度热图、固定 recipe、区域统计和候选回执
+由 CAMBI 原端点按需读取；组件缺失保持 CAMBI unavailable，不静默替代指标。

@@ -4,7 +4,7 @@ import {AGENT_OPERATIONS,AGENT_WORKFLOWS,agentOperation} from '../shared/service
 export const QUALITY_AGENT_DOCUMENTS:Record<string,string>={
  '/agent/quality/tasks.md':`# Manage existing actor-owned tasks
 
-Use [tasks.query](/api/agent/operations/tasks.query), then [tasks.get](/api/agent/operations/tasks.get). GET /api/tasks reads all bounded preparation, correspondence, single, range, VMAF and XPSNR history for the current self-declared actor. This identity is attribution, not strong authentication. No media/index/pixel read or implicit preparation occurs. Filter by exact media ID/version on the same side, kind/metric/raw state, and inclusive createdFrom/exclusive createdTo epoch milliseconds.
+Use [tasks.query](/api/agent/operations/tasks.query), then [tasks.get](/api/agent/operations/tasks.get). GET /api/tasks reads all bounded preparation, correspondence, single, range, VMAF, XPSNR and single-source CAMBI history for the current self-declared actor. This identity is attribution, not strong authentication. No media/index/pixel read or implicit preparation occurs. Filter by exact media ID/version on the same side, kind/metric/raw state, and inclusive createdFrom/exclusive createdTo epoch milliseconds.
 
 Pages freeze membership and summary facts for60 seconds. Keep filters with nextCursor; refresh without cursor for changes.409 task-cursor-expired after restart, expiry, eviction, changed filters or actor means restart without cursor. Preserve an explicitly selected kind/ID separately. Detail always reads current facts and original verified relationships; unknown phase/progress stays unknown. Stored availability is not fresh source verification. Follow original result/candidate/viewer links. Range scored counts remain distinct from retained child results.
 
@@ -23,10 +23,11 @@ side effects, identity/Origin, replay, cursor and next-operation links.
 - [Single pair](/agent/quality/single.md): one explicit frame/ROI, PSNR with optional SSIM/grid.
 - [Bounded range](/agent/quality/range.md): all listed or deterministic stride, explicit coverage and holes.
 - [Native XPSNR](/agent/quality/xpsnr.md): reference-first temporal sequence with official per-plane pooling and PSNR/optional SSIM.
+- [Single-source CAMBI](/agent/quality/cambi.md): no-reference banding screening, true five-scale evidence and explicit candidates.
 - [Native VMAF](/agent/quality/vmaf.md): continuous full-frame sequence plus PSNR/optional SSIM; optional installed Linux component.
 
 All quality tasks start with [sources and explicit preparation](/agent/quality/sources.md)
-and an [explicit reference relation and clock plan](/agent/quality/correspondence.md).
+; paired metrics also require an [explicit reference relation and clock plan](/agent/quality/correspondence.md). CAMBI uses one source and no C plan.
 Finish with [explicit candidates and shared evidence](/agent/quality/candidates.md).
 For uncertain responses read [recovery](/agent/quality/recovery.md).
 The [complete compatibility reference](/agent/quality/reference.md) retains the
@@ -64,7 +65,7 @@ progressive 420 BT.709 SDR, square SAR, no crop/rotate, exact integer-us clocks.
 fMP4, encryption, external datarefs, config changes, nontrivial edits, open GOP
 CRA and ambiguous/nonintegral clocks are unsupported. Never round or repair.
 Metadata readability is not scoring readiness. Probe is not index admission.
-Native VMAF has additional sequence/component constraints. CAMBI is unavailable.
+Native VMAF/XPSNR have additional sequence/component constraints. CAMBI remains trusted FLV-only and must pass its own component/source checks; MP4 support for paired metrics is not CAMBI admission.
 
 [Operations](/api/agent/tasks/library) · [Next: relation and plan](/agent/quality/correspondence.md)
 `,
@@ -127,6 +128,20 @@ Cancel explicitly; capacity remains held until physical exit. Disconnecting
 observation never cancels durable work. Restart interrupts rather than reruns.
 
 [Operations](/api/agent/tasks/quality.range) · [Explicit candidates](/agent/quality/candidates.md)
+`,
+ '/agent/quality/cambi.md':`# Single-source no-reference CAMBI
+
+Read [cambi.capability](/api/agent/operations/cambi.capability), then explicitly choose one versioned source through [discovery](/agent/quality/sources.md). A reference relationship, C plan, VMAF prediction model and browser are not required. Reuse the installed fixed Linux x64 Netflix/vmaf v3.0.0 component; HTTP accepts no program/model paths. Unavailable never means zero and never substitutes PSNR or VMAF.
+
+GET /api/media/{id}/psnr-source?v=VERSION yields a current trusted binding. Missing cache requires explicitly authorized preparation, never automatic build. CAMBI remains FLV-only: trusted FLV/Enhanced FLV H264/HEVC8/10 limited BT.709 SDR YUV420, square/no crop/no rotation and long edge>=320. MP4 is unsupported even where VMAF/XPSNR support it.
+
+POST /api/quality/cambi/jobs with schema voidplayer-cambi-job/version1, client:{id,kind}, source:the complete binding, interval:{startPtsUs,endPtsUs} half-open, sampling:{stride:positiveInteger}, budget:{maxRawBytes,maxHeatBytes,maxTemporaryBytes,maxElapsedMs,nativeCpuSeconds,nativeMemoryBytes}. Use [cambi.submit](/api/agent/operations/cambi.submit) for authoritative limits and retain original actor/body/Idempotency-Key after unknown outcomes. At most256 interval AUs and32 selected pictures. Explicit stride leaves unsampled coverage; no temporal tracking or whole-file claim.
+
+Observe [tasks.query](/api/agent/operations/tasks.query) with kind=cambi or metric=cambi, or the original job. Closing observation does not cancel. Explicit cancel delegates to physical process/Worker/IO shutdown before capacity release; restart records interrupted, never retries. The task center reads metadata only, not heatmap payloads.
+
+Completed /result gives official pool, recipe, CPU/RSS/temp/work, coverage and worst frames. /frames?after=INDEX&limit=4 pages exact source/AU/PTS/raw and scale hashes. Provisional scores cannot publish. /heatmap?index=INDEX&scale=0..4 returns original gray16le maps; /picture?index=INDEX revalidates exact source/cache/AU/raw planes, no rescore or playback control. Score direction is higher=more banding, not a calibrated product line. Internal processing is10-bit; source depth and no-prediction/full_ref=false remain recorded.
+
+Explicit POST /candidates policy {space,minScore,limit,scale,cellThreshold,text,severity} freezes actual nonzero heatmap-cell bounds and atomic create-cambi-candidate receipts. Regional statistics are not cropped CAMBI. Replay original policy before looking up reclaimed result. Shared attachments can be inspected without private-job access; imported/copied evidence becomes historical. See docs/native-cambi.md for runnable no-GUI HTTP, licenses and limitations. No HDR/negative-PTS/VFR certification, reference-integrity certification or concealment detection.
 `,
  '/agent/quality/xpsnr.md':`# Native XPSNR: compare explicitly related variants
 

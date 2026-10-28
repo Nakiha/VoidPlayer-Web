@@ -23,7 +23,7 @@ export class TaskCenterService{
     // All owning services commit state on this process event loop. There is no
     // await between these bounded projections. No new compute admission.
     const l=this.library;
-    const rows=[...l.discovery.store.taskSummaries(actor),...l.qualityCorrespondence.taskSummaries(actor),...l.qualityJobs.taskSummaries(actor),...l.qualityRanges.taskSummaries(actor),...l.qualityVmaf.taskSummaries(actor),...l.qualityXpsnr.taskSummaries(actor)];
+    const rows=[...l.discovery.store.taskSummaries(actor),...l.qualityCorrespondence.taskSummaries(actor),...l.qualityJobs.taskSummaries(actor),...l.qualityRanges.taskSummaries(actor),...l.qualityVmaf.taskSummaries(actor),...l.qualityXpsnr.taskSummaries(actor),...l.qualityCambi.taskSummaries(actor)];
     const index=new Map(rows.map(r=>[key(r.kind,r.id),r]));
     const edges=[...l.qualityRanges.taskEdges(actor),...l.qualityCorrespondence.taskEdges(actor),...l.qualityVmaf.taskEdges(actor),...l.qualityXpsnr.taskEdges(actor)].filter(e=>{
       const from=index.get(key(e.from,e.id)),to=index.get(key(e.to,e.target));
@@ -81,7 +81,7 @@ export class TaskCenterService{
       const plan=this.library.qualityCorrespondence.get(id,actor),relation=this.library.qualityCorrespondence.relation(plan.relation.id,actor);
       if(JSON.stringify(relation)===JSON.stringify(plan.relation))links.push({rel:'reference-relation',href:`/api/quality/reference-relations/${encodeURIComponent(relation.id)}`});
     }
-    if(kind==='range'||kind==='vmaf'||kind==='xpsnr')links.push({rel:'candidate-receipt',href:task.links[0].href+'/candidates'});
+    if(kind==='range'||kind==='vmaf'||kind==='xpsnr'||kind==='cambi')links.push({rel:'candidate-receipt',href:task.links[0].href+'/candidates'});
     if(reexecutionKind(kind)){links.push({rel:'reexecution-chain',href:task.links[0].href+'/reexecutions'});if(['failed','interrupted','cancelled','partial'].includes(task.state))links.push({rel:'reexecution-plan',href:task.links[0].href+'/reexecution-plan'});}
     if(taskPending(task.state))links.push({rel:'cancel',href:taskPath(kind,id)+'/cancel'});
     return {schema:'voidplayer-task-detail',version:1,task,related,links};
@@ -90,7 +90,7 @@ export class TaskCenterService{
     // Resolve actor ownership before delegating. Original services remain the
     // authority for idempotent cancellation and confirmed physical exit.
     this.detail(kind,id,actor);const l=this.library;
-    switch(kind){case 'preparation':l.discovery.cancel(id,actor);break;case 'correspondence':l.qualityCorrespondence.cancel(id,actor);break;case 'single':l.qualityJobs.cancel(id,actor,requestId);break;case 'range':l.qualityRanges.cancel(id,actor);break;case 'vmaf':l.qualityVmaf.cancel(id,actor);break;case 'xpsnr':l.qualityXpsnr.cancel(id,actor);break;}
+    switch(kind){case 'preparation':l.discovery.cancel(id,actor);break;case 'correspondence':l.qualityCorrespondence.cancel(id,actor);break;case 'single':l.qualityJobs.cancel(id,actor,requestId);break;case 'range':l.qualityRanges.cancel(id,actor);break;case 'vmaf':l.qualityVmaf.cancel(id,actor);break;case 'xpsnr':l.qualityXpsnr.cancel(id,actor);break;case 'cambi':l.qualityCambi.cancel(id,actor);break;}
     return this.detail(kind,id,actor);
   }
   close(){this.snapshots.clear();}

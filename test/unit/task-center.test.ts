@@ -10,24 +10,24 @@ import type {MediaLibraryIndex} from '../../server/library.ts';
 
 function fixture(){
  const db=openIndexDatabase(':memory:');
- for(const table of ['discovery_jobs','quality_jobs','quality_ranges','quality_correspondence_plans','quality_vmaf_jobs','quality_xpsnr_jobs'])db.exec(`CREATE TABLE ${table}(id TEXT PRIMARY KEY,actor TEXT,actor_id TEXT,revision INTEGER,state TEXT,phase TEXT,created_at INTEGER,started_at INTEGER,ended_at INTEGER,reason_json TEXT,request_id TEXT,client_id TEXT,input_json TEXT,body TEXT,result TEXT,result_json TEXT,result_sha TEXT,snapshot TEXT,attempt_id TEXT)`);
+ for(const table of ['discovery_jobs','quality_jobs','quality_ranges','quality_correspondence_plans','quality_vmaf_jobs','quality_xpsnr_jobs','cambi_jobs'])db.exec(`CREATE TABLE ${table}(id TEXT PRIMARY KEY,actor TEXT,actor_id TEXT,revision INTEGER,state TEXT,phase TEXT,created_at INTEGER,started_at INTEGER,ended_at INTEGER,reason_json TEXT,request_id TEXT,client_id TEXT,input_json TEXT,body TEXT,result TEXT,result_json TEXT,result_sha TEXT,snapshot TEXT,attempt_id TEXT)`);
  db.exec('CREATE TABLE quality_plan_executions(plan_id TEXT,body TEXT)');
  const source={mediaId:'a'.repeat(24),mediaVersion:'b'.repeat(24)},other={mediaId:'c'.repeat(24),mediaVersion:'d'.repeat(24)};
  const insert=(kind:TaskKind,actor='actor-A',options:any={})=>{
-  const id=options.id??(kind==='vmaf'||kind==='xpsnr'?kind+'-':'')+randomUUID(),state=options.state??'completed',createdAt=options.createdAt??100,attempt=options.attemptId??randomUUID(),digest=options.digest??'e'.repeat(64);
+  const id=options.id??(kind==='vmaf'||kind==='xpsnr'||kind==='cambi'?kind+'-':'')+randomUUID(),state=options.state??'completed',createdAt=options.createdAt??100,attempt=options.attemptId??randomUUID(),digest=options.digest??'e'.repeat(64);
   const reference={...source,...options.source},distorted={...other,...options.distorted},pair={reference,distorted,ssim:{variant:'ffmpeg-uniform-8x8-step4-v1'}};
   const input={client:{id:'test-client'},request:pair,source:{id:reference.mediaId,version:reference.mediaVersion},operation:'quality-index'};
-  const body={id,actor:{id:actor},revision:1,state,phase:'native',createdAt,startedAt:createdAt,endedAt:state==='completed'?createdAt+10:null,requestId:'request',input:{...input,metrics:{ssim:true},plan:options.plan??{}},reason:options.reason??null,attemptId:attempt,resultDigest:digest,progress:{preparedFrames:8,targetFrames:8},metrics:{psnr:{state:'completed'},ssim:{state:'completed'},vmaf:{state}},relation:{input:{reference,distorted}},plan:{input:{client:input.client,pairs:[pair]},targets:1},summary:{scoredPairs:1},samples:options.samples??[]};
-  const table={preparation:'discovery_jobs',single:'quality_jobs',range:'quality_ranges',correspondence:'quality_correspondence_plans',vmaf:'quality_vmaf_jobs',xpsnr:'quality_xpsnr_jobs'}[kind];
+  const body={id,actor:{id:actor},revision:1,state,phase:'native',createdAt,startedAt:createdAt,endedAt:state==='completed'?createdAt+10:null,requestId:'request',input:{...input,...(kind==='cambi'?{source:reference}:{}),metrics:{ssim:true},plan:options.plan??{}},reason:options.reason??null,attemptId:attempt,resultDigest:digest,progress:{preparedFrames:8,targetFrames:8},metrics:{psnr:{state:'completed'},ssim:{state:'completed'},vmaf:{state}},relation:{input:{reference,distorted}},plan:{input:{client:input.client,pairs:[pair]},targets:1},summary:{scoredPairs:1},samples:options.samples??[]};
+  const table={preparation:'discovery_jobs',single:'quality_jobs',range:'quality_ranges',correspondence:'quality_correspondence_plans',vmaf:'quality_vmaf_jobs',xpsnr:'quality_xpsnr_jobs',cambi:'cambi_jobs'}[kind];
   db.prepare(`INSERT INTO ${table} VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(id,actor,actor,1,state,'decode',createdAt,createdAt,state==='completed'?createdAt+10:null,JSON.stringify(options.reason??null),'request','test-client',JSON.stringify(input),JSON.stringify(body),options.result??'not-JSON-result-that-must-not-be-parsed',options.result??'not-JSON-result-that-must-not-be-parsed',digest,JSON.stringify({value:{sources:{reference:{binding:reference},distorted:{binding:distorted}}}}),attempt);
   return {id,attemptId:attempt,digest};
  };
  const owner=(kind:TaskKind)=>({taskSummaries:(actor:string)=>taskSummaries(db,kind,actor),taskEdges:(actor:string)=>taskEdges(db,kind as 'range'|'correspondence'|'vmaf',actor),cancel:()=>{throw Error('Cancellation callback not installed');}});
- const services={preparation:owner('preparation'),correspondence:owner('correspondence'),single:owner('single'),range:owner('range'),vmaf:owner('vmaf'),xpsnr:owner('xpsnr')};
+ const services={preparation:owner('preparation'),correspondence:owner('correspondence'),single:owner('single'),range:owner('range'),vmaf:owner('vmaf'),xpsnr:owner('xpsnr'),cambi:owner('cambi')};
  Object.assign(services.range,{taskChild:()=>true});Object.assign(services.correspondence,{taskRange:(id:string)=>JSON.parse(String(db.prepare('SELECT body FROM quality_plan_executions WHERE plan_id=?').get(id)?.body??'null'))?.rangeId??null,get:(id:string)=>JSON.parse(String(db.prepare('SELECT body FROM quality_correspondence_plans WHERE id=?').get(id)!.body))});Object.assign(services.vmaf,{get:(id:string)=>JSON.parse(String(db.prepare('SELECT body FROM quality_vmaf_jobs WHERE id=?').get(id)!.body))});
  const retries=new Map<string,{parentId:string;jobId:string}[]>();
  const qualityReexecutions={links:(kind:string,actor:string)=>retries.get(kind+'/'+actor)??[],chain:(kind:string,id:string,actor:string)=>({successor:retries.get(kind+'/'+actor)?.find(r=>r.parentId===id)?{id:retries.get(kind+'/'+actor)!.find(r=>r.parentId===id)!.jobId}:null})};
- const library={qualityReexecutions,durableQualityJobsEnabled:true,discovery:{store:services.preparation,cancel:services.preparation.cancel},qualityCorrespondence:services.correspondence,qualityJobs:services.single,qualityRanges:services.range,qualityVmaf:services.vmaf,qualityXpsnr:services.xpsnr} as unknown as MediaLibraryIndex;
+ const library={qualityReexecutions,durableQualityJobsEnabled:true,discovery:{store:services.preparation,cancel:services.preparation.cancel},qualityCorrespondence:services.correspondence,qualityJobs:services.single,qualityRanges:services.range,qualityVmaf:services.vmaf,qualityXpsnr:services.xpsnr,qualityCambi:services.cambi} as unknown as MediaLibraryIndex;
  let clock=1000;const center=new TaskCenterService(library,()=>clock);
  return {db,insert,center,library,retries,source,other,clock:(value:number)=>{clock=value;},close:()=>{center.close();db.close();}};
 }
@@ -44,9 +44,9 @@ test('exhaustive cross-store projections find old matching jobs beyond all legac
  const expected=TASK_KINDS.map(kind=>f.insert(kind,'actor-A',{createdAt:20}));
  for(const kind of TASK_KINDS)f.insert(kind,'actor-B');
  const page=f.center.query('actor-A',query(`mediaId=${f.source.mediaId}&mediaVersion=${f.source.mediaVersion}`));
- assert.equal(page.total,6);assert.deepEqual(new Set(page.entries.map(x=>x.id)),new Set(expected.map(x=>x.id)));assert.deepEqual(new Set(page.entries.map(x=>x.kind)),new Set(TASK_KINDS));
+ assert.equal(page.total,TASK_KINDS.length);assert.deepEqual(new Set(page.entries.map(x=>x.id)),new Set(expected.map(x=>x.id)));assert.deepEqual(new Set(page.entries.map(x=>x.kind)),new Set(TASK_KINDS));
  assert.equal(f.center.query('actor-A',query(`mediaId=${f.source.mediaId}&mediaVersion=${f.other.mediaVersion}`)).total,0,'version cannot match the opposite side');
- assert.equal(f.center.query('actor-A',query('createdFrom=20&createdTo=21')).total,6);
+ assert.equal(f.center.query('actor-A',query('createdFrom=20&createdTo=21')).total,TASK_KINDS.length);
  assert.equal(f.center.query('actor-A',query('createdFrom=0&createdTo=20')).total,0,'exclusive end');
  const single=f.center.query('actor-A',query('kind=single&metric=ssim')).entries[0];assert.equal(single.phase,'decode');assert.equal(single.result.available,true);assert.ok(!JSON.stringify(page).includes('not-JSON-result'),'no result parsing or result blob copying');
  assert.ok(!JSON.stringify(page).includes('actor-B'));
@@ -54,11 +54,11 @@ test('exhaustive cross-store projections find old matching jobs beyond all legac
 
 test('frozen pagination survives new tasks/state mutations and immutable tie order; refresh sees new facts',t=>{
  const f=fixture();t.after(f.close);for(const k of TASK_KINDS)f.insert(k,'actor-A',{state:'running'});
- const first=f.center.query('actor-A',query('limit=2'));assert.equal(first.total,6);assert.ok(first.nextCursor);
+ const first=f.center.query('actor-A',query('limit=2'));assert.equal(first.total,TASK_KINDS.length);assert.ok(first.nextCursor);
  f.db.exec("UPDATE quality_jobs SET state='failed'");f.insert('single','actor-A',{createdAt:999});
  const second=f.center.query('actor-A',query(`limit=2&cursor=${first.nextCursor}`));const third=f.center.query('actor-A',query(`limit=2&cursor=${second.nextCursor}`));
- const rows=[...first.entries,...second.entries,...third.entries];assert.equal(new Set(rows.map(r=>r.id)).size,6);assert.ok(rows.every(r=>r.state==='running'));assert.equal(third.nextCursor,null);assert.equal(second.capturedAt,first.capturedAt);
- assert.deepEqual(rows.map(r=>r.kind),[...TASK_KINDS].sort());const fresh=f.center.query('actor-A',query());assert.equal(fresh.total,7);assert.ok(fresh.entries.some(r=>r.state==='failed'));
+ const fourth=f.center.query('actor-A',query(`limit=2&cursor=${third.nextCursor}`));const rows=[...first.entries,...second.entries,...third.entries,...fourth.entries];assert.equal(new Set(rows.map(r=>r.id)).size,TASK_KINDS.length);assert.ok(rows.every(r=>r.state==='running'));assert.equal(fourth.nextCursor,null);assert.equal(second.capturedAt,first.capturedAt);
+ assert.deepEqual(rows.map(r=>r.kind),[...TASK_KINDS].sort());const fresh=f.center.query('actor-A',query());assert.equal(fresh.total,TASK_KINDS.length+1);assert.ok(fresh.entries.some(r=>r.state==='failed'));
 });
 
 test('cursor is scoped, signed, bounded, expiring, restart-invalid and recoverable without deleting jobs',t=>{

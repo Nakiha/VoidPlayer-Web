@@ -2052,6 +2052,94 @@
     "source": "每一帧，都值得看见。",
     "translation": "Every frame deserves to be seen."
   },
+  "cambi.cancel": {
+    "source": "取消此后台任务并释放执行资源",
+    "translation": "Cancel this background job and release its resources"
+  },
+  "cambi.candidates": {
+    "source": "从真实热图显式创建共享空间候选",
+    "translation": "Explicit shared spatial candidates from real heatmaps"
+  },
+  "cambi.find": {
+    "source": "从技术发现选择单源",
+    "translation": "Select one source from technical discovery"
+  },
+  "cambi.frames": {
+    "source": "更多逐帧事实",
+    "translation": "More per-frame facts"
+  },
+  "cambi.fullFacts": {
+    "source": "完整的不可变来源与 recipe 证据",
+    "translation": "Complete immutable source and recipe evidence"
+  },
+  "cambi.history": {
+    "source": "刷新后台历史",
+    "translation": "Refresh server history"
+  },
+  "cambi.new": {
+    "source": "新建显式请求",
+    "translation": "New explicit request"
+  },
+  "cambi.open": {
+    "source": "CAMBI · 查看原始热图、源快照与真实区域",
+    "translation": "CAMBI · open original heatmap, source snapshot and actual region"
+  },
+  "cambi.policyNote": {
+    "source": "阈值由调用者指定，未校准。区域来自所选尺度中达到 cellThreshold 的真实热图单元包围框；保留帧、尺度、统计与坐标映射，不是裁剪重算或人工缺陷判断。关闭页面不会取消后台执行。",
+    "translation": "Caller-declared thresholds are uncalibrated. Regions bound actual cells at or above cellThreshold in the selected scale. Preserve the frame, scale, statistics and coordinate mapping; this is neither cropped rescoring nor a human defect assessment. Closing this page does not cancel background execution."
+  },
+  "cambi.prepare": {
+    "source": "缺少可信缓存时，显式前往技术准备；此处不会自动探测或建索引。",
+    "translation": "Missing a trusted cache? Open explicit technical preparation; this panel never probes or builds an index automatically."
+  },
+  "cambi.publish": {
+    "source": "显式共享候选与证据",
+    "translation": "Explicitly share candidates and evidence"
+  },
+  "cambi.retry": {
+    "source": "用冻结请求与原键重试",
+    "translation": "Retry the frozen body with its original key"
+  },
+  "cambi.scope": {
+    "source": "Linux x64 可选固定组件；可信 FLV/Enhanced FLV、8/10 位限范围 BT.709 SDR，整帧、方形像素、不裁剪，长边至少320。分数越高表示检测到更多色带，不是产品合格线；内部按10位处理。允许明确抽样，未采样帧不冒充覆盖。没有跨帧目标跟踪，未认证引用完整性，无法检测错误隐藏。",
+    "translation": "Optional fixed Linux x64 component; trusted FLV/Enhanced FLV, original 8/10-bit limited BT.709 SDR, full uncropped square-pixel frames with a long edge of at least320. Higher scores indicate more detected banding, not a product pass/fail threshold; internal processing uses10 bits. Explicit sampling leaves unsampled coverage visible. No object tracking, reference-integrity certification or concealment detection."
+  },
+  "cambi.submit": {
+    "source": "发起持久单源 CAMBI",
+    "translation": "Start durable single-source CAMBI"
+  },
+  "cambi.title": {
+    "source": "CAMBI · 单源色带筛查",
+    "translation": "CAMBI · single-source banding screening"
+  },
+  "cambi.viewer1": {
+    "source": "CAMBI · 原始多尺度色带证据",
+    "translation": "CAMBI · original multiscale banding evidence"
+  },
+  "cambi.viewer2": {
+    "source": "固定官方 gray16le 热图，分数高=更多 banding 线索，不是合格线。尺度格点按2^scale映射到源坐标；局部窗口有邻域影响，不等于物体边界、跟踪或裁剪重算。显示转换不改变评分原始8/10位平面。未认证引用完整性，concealment unavailable。",
+    "translation": "Fixed official gray16le heatmaps: higher scores indicate more banding, not pass/fail. Scale lattice points map to source coordinates by2^scale; local windows include neighboring context, so cells are neither object boundaries, tracking nor cropped rescoring. Display conversion does not change original8/10-bit scored planes. Reference integrity is not certified; concealment detection is unavailable."
+  },
+  "cambi.viewer3": {
+    "source": "取消此查看（后台任务不受影响）",
+    "translation": "Cancel this view (background jobs keep running)"
+  },
+  "cambi.viewer4": {
+    "source": "经源/cache/AU/原始字节核验的独立快照",
+    "translation": "Independent source/cache/AU/raw-byte verified snapshot"
+  },
+  "cambi.viewer5": {
+    "source": "官方原始热图（0–65535固定线性显示）",
+    "translation": "Official heatmap (fixed0–65535 linear display)"
+  },
+  "cambi.viewer6": {
+    "source": "核对共享不可变附件、原始热图与独立源快照…",
+    "translation": "Checking shared immutable evidence, original heatmap and independent source snapshot…"
+  },
+  "cambi.viewer7": {
+    "source": "源身份、cache build、AU、真实 PTS、原始平面 SHA256 与官方热图布局已核对；未重新评分。",
+    "translation": "Source identity, cache build, AU, actual PTS, raw plane SHA256 and official heatmap layout verified; no rescoring."
+  },
   "colorFlow.approximateBrowserColors": {
     "source": "近似浏览器颜色",
     "translation": "Approximate browser colors"
@@ -5202,6 +5290,10 @@
     "source": "每页条数",
     "translation": "Rows per page"
   },
+  "tasks.reexecutionUnavailable": {
+    "source": "此任务类型尚不支持显式重新执行；不会替换指标或自动重算。",
+    "translation": "This task type does not yet support explicit recomputation. No metric substitution or automatic execution occurs."
+  },
   "tasks.refresh": {
     "source": "查询 / 刷新快照",
     "translation": "Query / refresh snapshot"
@@ -5211,8 +5303,8 @@
     "translation": "Clear filters"
   },
   "tasks.scope": {
-    "source": "当前自述身份的准备、对应计划、单帧、区间、VMAF 和 XPSNR 历史。刷新读取新快照；翻页保留当时事实。关闭观察不取消后台工作，也不移动播放头。",
-    "translation": "Preparation, correspondence, single-pair, range, VMAF and XPSNR history for the current self-declared identity. Refresh captures new facts; pages retain the snapshot. Closing observation does not cancel background work or move playback."
+    "source": "当前自述身份的准备、对应计划、单帧、区间、VMAF、XPSNR 和单源 CAMBI 历史。刷新读取新快照；翻页保留当时事实。关闭观察不取消后台工作，也不移动播放头。",
+    "translation": "Preparation, correspondence, single-pair, range, VMAF, XPSNR and single-source CAMBI history for the current self-declared identity. Refresh captures new facts; pages retain the snapshot. Closing observation does not cancel background work or move playback."
   },
   "tasks.snapshot": {
     "source": "快照 {captured}；{count} 项。新状态需刷新；快照到期后重新查询。",
