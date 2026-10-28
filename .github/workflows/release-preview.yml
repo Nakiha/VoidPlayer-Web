@@ -683,8 +683,29 @@ jobs:
       - name: Verify annotation persistence and unified cache management
         env:
           DEBUG: pw:browser
-        if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
+        if: ${{ github.event_name != 'pull_request' && !cancelled() && steps.browser-inputs.outcome == 'success' }}
         run: node scripts/run-tests.mjs ci-cache --prepared
+      - name: Verify required PR quality and cache behavior
+        env:
+          DEBUG: pw:browser
+        if: ${{ github.event_name == 'pull_request' && !cancelled() && steps.browser-inputs.outcome == 'success' }}
+        run: node scripts/run-tests.mjs ci-cache-pr --prepared
+      - name: Diagnostic only - WebKit multi-page paused native presentation
+        id: webkit-paused-diagnostic
+        continue-on-error: true
+        env:
+          DEBUG: pw:browser
+        if: ${{ github.event_name == 'pull_request' && !cancelled() && steps.browser-inputs.outcome == 'success' }}
+        run: node scripts/run-tests.mjs --case browser-presented-quality-webkit --prepared --directory .run/test-suites/quality-browser-diagnostics
+      - name: Record non-blocking WebKit diagnostic outcome
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        env:
+          DIAGNOSTIC_OUTCOME: ${{ steps.webkit-paused-diagnostic.outcome }}
+        run: |
+          node --input-type=module -e '
+          import {appendFileSync} from "node:fs";
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, `WebKit multi-page paused-native diagnostic: **${process.env.DIAGNOSTIC_OUTCOME || "not run"}** (non-blocking on PRs). This is not full WebKit paused-frame certification. See quality-browser-diagnostics/results.json.\n`);
+          '
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -694,6 +715,8 @@ jobs:
             /tmp/voidplayer-caches-*.png
             .run/workspace-sharing-browser-*/
             .run/test-suites/ci-cache/
+            .run/test-suites/ci-cache-pr/
+            .run/test-suites/quality-browser-diagnostics/
             .run/test-suites/preparation/
             .run/test-suites/build-receipt.json
             .run/playback-reports/
