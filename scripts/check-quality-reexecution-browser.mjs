@@ -8,6 +8,7 @@ import {nativeFixture,until} from '../test/helpers/native-vmaf.mjs';
 import {xpsnrComponent} from '../test/helpers/native-xpsnr.mjs';
 import {startService} from '../server/runtime.ts';
 import {chooseTestGuest} from './test-identity.mjs';
+import {installAdminObservationLifecycle,drainAdminObservations} from './testing/admin-observation-lifecycle.mjs';
 import {waitForAnnotationMedia} from './testing/agent-annotations-ready.mjs';
 
 const engine=process.argv[2]??'chromium';assert.ok(['chromium','webkit'].includes(engine));
@@ -35,7 +36,7 @@ try{
     assert.equal(done.state,(kind==='vmaf'||kind==='xpsnr')?'partial':'cancelled');originals[kind]=done;snapshots[kind]=JSON.stringify(done);
   }
   await copyFile(path.resolve('.run/playback-media/http-1080p-a.mp4'),path.join(f.media,'A.mp4'));await library.refresh();const [a]=await waitForAnnotationMedia(library,['A.mp4']);
-  browser=await({chromium,webkit}[engine]).launch({headless:true});context=await browser.newContext({locale:'en-US',viewport:{width:1400,height:1000}});await context.addCookies([{name:'voidplayer-user',value:f.actor,url:f.base}]);context.on('page',p=>p.on('pageerror',e=>errors.push(e.message)));
+  browser=await({chromium,webkit}[engine]).launch({headless:true});context=await browser.newContext({locale:'en-US',viewport:{width:1400,height:1000}});await context.addInitScript(installAdminObservationLifecycle);await context.addCookies([{name:'voidplayer-user',value:f.actor,url:f.base}]);context.on('page',p=>p.on('pageerror',e=>{errors.push(e.message);console.error(JSON.stringify({qualityReexecutionPageError:true,engine,phase,page:new URL(p.url()).pathname,message:e.message}));}));
   player=await context.newPage();await player.goto(f.base);await chooseTestGuest(player);await player.waitForFunction(()=>!!window.voidPlayer);
   await player.evaluate(async url=>{const blob=await fetch(url).then(r=>r.blob());await window.voidPlayer.loadFile('A',new File([blob],'A.mp4'));},`${f.base}/api/media/${a.id}?v=${a.version}`);await player.waitForFunction(()=>!window.voidPlayer.getState().busy&&window.voidPlayer.getState().tracks[0]?.frame);await player.evaluate(()=>window.voidPlayer.play());await player.waitForFunction(()=>window.voidPlayer.getState().positionUs>200000);const before=await player.evaluate(()=>window.voidPlayer.getState());
   page=await context.newPage();await page.goto(f.base+'/admin/#quality');
@@ -50,11 +51,11 @@ try{
       gateAt=measureCount+1;state=undefined;
       let lost=false;await page.route('**'+url+'/reexecutions',async route=>{if(route.request().method()==='POST'){posts.push({key:route.request().headers()['idempotency-key'],actor:route.request().headers()['x-voidplayer-actor'],body:route.request().postData()});if(!lost){lost=true;const response=await route.fetch();await response.json();await route.abort('failed');return;}}await route.continue();});
       await root.locator('[data-execute]').click();await root.locator('[data-replay]').waitFor({state:'visible'});await until(()=>state&&Atomics.load(state,0),Boolean,'New full range reached actual decode gate');
-      const chain=await f.json(url+'/reexecutions');successors[kind]=chain.successor.id;await page.reload();check('reload does not cancel accepted computation',(await read(kind,chain.successor.id)).state==='running');
+      const chain=await f.json(url+'/reexecutions');successors[kind]=chain.successor.id;await drainAdminObservations(page);await page.reload();check('reload does not cancel accepted computation',(await read(kind,chain.successor.id)).state==='running');
       gatedWorker.postMessage({type:'resume'});gateAt=Infinity;await until(()=>read(kind,chain.successor.id),j=>j.state==='completed','Background full range completion');
       await select(kind,id);await root.locator('[data-replay]').click();await page.waitForFunction(id=>document.querySelector('#quality-range-title')?.textContent.includes(id),chain.successor.id);
       check('unknown response replays exact original actor/body/key',posts.length===2&&posts[0].key===posts[1].key&&posts[0].actor===posts[1].actor&&posts[0].body===posts[1].body);
-      const peer=await context.newPage();await peer.goto(f.base+'/admin/#quality');await peer.locator(`[data-range-id="${id}"]`).click();await peer.locator(roots.range+' [data-reason]').fill('Another window must observe the existing successor');await peer.locator(roots.range+' [data-plan]').click();await peer.locator(roots.range+' [data-blocks]').filter({hasText:'successor-exists'}).waitFor();check('second window cannot fork',await peer.locator(roots.range+' [data-execute]').isDisabled());await peer.close();
+      const peer=await context.newPage();await peer.goto(f.base+'/admin/#quality');await peer.locator(`[data-range-id="${id}"]`).click();await peer.locator(roots.range+' [data-reason]').fill('Another window must observe the existing successor');await peer.locator(roots.range+' [data-plan]').click();await peer.locator(roots.range+' [data-blocks]').filter({hasText:'successor-exists'}).waitFor();check('second window cannot fork',await peer.locator(roots.range+' [data-execute]').isDisabled());await drainAdminObservations(peer);await peer.close();
       await page.unrouteAll({behavior:'wait'});
     }else{
       await root.locator('[data-execute]').click();const chain=await until(()=>f.json(url+'/reexecutions'),v=>!!v.successor,'GUI durable successor');successors[kind]=chain.successor.id;await until(()=>read(kind,chain.successor.id),j=>!['queued','preparing','running','cancelling'].includes(j.state),'GUI execution');
@@ -72,7 +73,7 @@ try{
       await page.locator('#tasks-detail:not([hidden]) #tasks-title').filter({hasText:id}).waitFor();
       check('task center traces the original computation',(await page.locator('#tasks-title').textContent()).includes(id));
       await page.unroute(originalPath,originalResponse);
-      await page.reload();await page.locator('#tasks-title').filter({hasText:id}).waitFor();check('task center reopens the same target and filter',await page.locator('#tasks-filters [name=kind]').inputValue()==='xpsnr');await page.locator('[data-pane=quality]').click();await page.locator(`[data-xpsnr-job="${successors[kind]}"]`).click();await page.locator('#xpsnr-reexecution [data-chain]').filter({hasText:id}).waitFor();
+      await drainAdminObservations(page);await page.reload();await page.locator('#tasks-title').filter({hasText:id}).waitFor();check('task center reopens the same target and filter',await page.locator('#tasks-filters [name=kind]').inputValue()==='xpsnr');await page.locator('[data-pane=quality]').click();await page.locator(`[data-xpsnr-job="${successors[kind]}"]`).click();await page.locator('#xpsnr-reexecution [data-chain]').filter({hasText:id}).waitFor();
     }
     const done=await read(kind,successors[kind]);check(kind+' finishes a new computation',done.state==='completed'&&done.retryOf.retryOf===id&&done.retryOf.generation===2);check(kind+' retains original terminal facts',JSON.stringify(await read(kind,id))===snapshots[kind]);
     if(kind!=='single'){
@@ -92,6 +93,18 @@ try{
   await page.route('**'+paths.single+'/'+originals.single.id+'/reexecution-plan',async route=>{if(!heldOnce){heldOnce=true;const response=await route.fetch(),json=await response.json();actorSeen.resolve();await actorRelease.promise;await route.fulfill({response,json}).catch(()=>{});}else await route.continue();});
   await page.locator(roots.single+' [data-reason]').fill('DELAYED_OLD_ACTOR');await page.locator(roots.single+' [data-plan]').click();await bounded(actorSeen.promise,'old actor response');
   await player.evaluate(async()=>{const r=await fetch('/api/identity',{method:'POST',headers:{'content-type':'application/json','x-voidplayer-action':'identity'},body:JSON.stringify({name:'Reexecution peer',mode:'create'})});const v=await r.json();localStorage.setItem('voidplayer.identity',JSON.stringify(v.actor));});await page.waitForFunction(()=>document.querySelector('#quality-job-detail').hidden);actorRelease.resolve();await page.unrouteAll({behavior:'wait'});check('late old actor cannot restore private plan',await page.locator(roots.single).isHidden()&&!(await page.locator(roots.single).textContent()).includes('DELAYED_OLD_ACTOR'));
-  check('no browser page errors',errors.length===0);await page.screenshot({path:path.join(directory,'reexecution-fences.png'),fullPage:true});await writeFile(path.join(directory,'evidence.json'),JSON.stringify({passed:true,engine,checks,successors,posts,otherPlayerUnchanged:true,errors},null,2));console.log(JSON.stringify({passed:true,engine,checks:checks.length}));
-}catch(error){await writeFile(path.join(directory,'failure.json'),JSON.stringify({phase,error:String(error),errors,checks},null,2));await page?.screenshot({path:path.join(directory,'failure.png'),fullPage:true}).catch(()=>{});throw error;}
+  await drainAdminObservations(page);assert.deepEqual(errors,[],'no browser page errors');checks.push('no browser page errors');
+  // A separate real failure proves draining does not hide WebKit CORS errors.
+  // The main flow's strict collector above is never cleared or filtered.
+  if(engine==='webkit'){
+    phase='cors-negative-control';const control=await browser.newContext(),failures=[];await control.addInitScript(installAdminObservationLifecycle);const probe=await control.newPage();probe.on('pageerror',error=>failures.push(error.message));
+    try{
+      await probe.goto(f.base+'/admin/#overview');await probe.locator('[data-pane=overview]').waitFor();await drainAdminObservations(probe);assert.deepEqual(failures,[]);
+      const crossOrigin=f.base.replace('127.0.0.1','localhost')+'/api/health?reexecution-cors-negative-control=1',real=await fetch(crossOrigin);assert.equal(real.status,200);assert.equal(real.headers.get('access-control-allow-origin'),null);await real.arrayBuffer();
+      const observed=probe.waitForEvent('pageerror',{predicate:error=>error.message.includes('localhost')&&error.message.includes('access control checks'),timeout:15000}).then(error=>({ok:true,error:error.message}),error=>({ok:false,error}));
+      const result=await probe.evaluate(async url=>{try{await fetch(url);return {rejected:false};}catch(error){return {rejected:true,name:error.name};}},crossOrigin);assert.equal(result.rejected,true);assert.equal(result.name,'TypeError');const rejected=await observed;if(!rejected.ok)throw rejected.error;assert.ok(failures.includes(rejected.error));assert.throws(()=>assert.deepEqual(failures,[]));checks.push('real CORS errors remain visible after observation drain');console.log(JSON.stringify({qualityReexecutionCorsControl:true,rejected:true,pageErrors:failures,strictCollectorRejects:true}));
+    }finally{await control.close();}
+  }
+  await drainAdminObservations(page);assert.deepEqual(errors,[],'no late browser page errors');await page.screenshot({path:path.join(directory,'reexecution-fences.png'),fullPage:true});await writeFile(path.join(directory,'evidence.json'),JSON.stringify({passed:true,engine,checks,successors,posts,otherPlayerUnchanged:true,errors},null,2));console.log(JSON.stringify({passed:true,engine,checks:checks.length}));
+}catch(error){console.error(JSON.stringify({qualityReexecutionFailure:true,engine,phase,error:String(error),stack:error.stack,pageErrors:errors,checks},null,2));await writeFile(path.join(directory,'failure.json'),JSON.stringify({phase,error:String(error),stack:error.stack,errors,checks},null,2));await page?.screenshot({path:path.join(directory,'failure.png'),fullPage:true}).catch(()=>{});throw error;}
 finally{for(const gate of held)gate.resolve();await context?.close();await browser?.close();await f?.close();}
