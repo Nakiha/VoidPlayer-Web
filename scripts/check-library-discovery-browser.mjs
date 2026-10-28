@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';import {mkdtemp,mkdir,readFile,writeFile,rm} from 'node:fs/promises';import {tmpdir} from 'node:os';import path from 'node:path';import {createHash,randomUUID} from 'node:crypto';import {chromium,webkit} from 'playwright';
 import {loadConfig} from '../server/config.ts';import {startService} from '../server/runtime.ts';import {wrapFlv} from '../test/helpers/frame-pair-fixture.ts';import {scanFlv} from '../shared/media/containers/flv-demux.ts';import {cleanupResources} from './testing/lifecycle.mjs';import {recordBrowserEvidence,saveBrowserFailure} from './browser-failure-evidence.mjs';
 import {preparationReceiptObserver} from './testing/preparation-receipt.mjs';
-import {installAdminObservationLifecycle} from './testing/admin-observation-lifecycle.mjs';
+import {installAdminObservationLifecycle,drainAdminObservations} from './testing/admin-observation-lifecycle.mjs';
 import {waitForAnnotationMedia} from './testing/agent-annotations-ready.mjs';
 import {waitForPlayingFrameAdvance} from './testing/playback-presentation.mjs';
 import {withinBrowserPhase} from './browser-failure-evidence.mjs';
@@ -35,8 +35,8 @@ try{
   res.end=function(...args){
    try{
     const value=JSON.parse(String(args[0])),cookieId=req.headers.cookie?.split(';').map(v=>v.trim()).find(v=>v.startsWith('voidplayer-user='))?.slice(16);
-    const receipt={key:req.headers['idempotency-key'],actor:req.headers['x-voidplayer-actor'],cookieActor:cookieId?decodeURIComponent(cookieId):null,status:res.statusCode,value};posts.push(receipt);
-    if(lose){lose=false;assert.equal(receipt.status,202,'lost-ack fault must follow an accepted real transaction');res.write(String(args[0]).slice(0,1),()=>res.destroy());}
+    const receipt={lost:lose&&res.statusCode===202,key:req.headers['idempotency-key'],actor:req.headers['x-voidplayer-actor'],cookieActor:cookieId?decodeURIComponent(cookieId):null,status:res.statusCode,value};posts.push(receipt);
+    lose=false;if(receipt.lost)res.write(String(args[0]).slice(0,1),()=>res.destroy());
     else end.apply(res,args);
     delivery?.complete(receipt);return res;
    }catch(error){errors.push('Preparation server receipt capture failed: '+String(error));delivery?.fail(error);res.destroy();return res;}
@@ -51,20 +51,20 @@ try{
    await action();const outcome=await observation.result;if(!outcome.ok)throw outcome.error;
    const browser=await sent;if(!browser.ok)throw browser.error;const request=browser.request,receipt=outcome.receipt,headers=request.headers();
    receipt.wireBody=request.postData();receipt.body=JSON.parse(receipt.wireBody);assert.equal(headers['idempotency-key'],receipt.key);assert.equal(headers['x-voidplayer-actor'],receipt.actor);if(receipt.value.job){assert.equal(receipt.value.job.submitted.actorId,receipt.actor);assert.equal(receipt.value.job.submitted.idempotencyKey,receipt.key);assert.deepEqual(receipt.value.job.input,receipt.body);}
-   console.log(JSON.stringify({preparationReceipt:true,phase,status:receipt.status,code:receipt.value.code??null,cookieMatchesActor:receipt.cookieActor===receipt.actor,bodySha:createHash('sha256').update(request.postData()).digest('hex')}));
+   console.log(JSON.stringify({preparationReceipt:true,phase,status:receipt.status,lost:receipt.lost,code:receipt.value.code??null,cookieMatchesActor:receipt.cookieActor===receipt.actor,bodySha:createHash('sha256').update(request.postData()).digest('hex')}));
    return receipt;
   }finally{observation.close();}
  }
- phase='gui-probe-lost-response';const lost=await capturePreparationPost(()=>page.locator('#discovery-probe').click({clickCount:2}));assert.equal(lost.status,202);assert.equal(lost.cookieActor,actor.id);
+ phase='gui-probe-lost-response';const lost=await capturePreparationPost(()=>page.locator('#discovery-probe').click({clickCount:2}));assert.equal(lost.status,202,JSON.stringify({code:lost.value.code,cookieMatchesActor:lost.cookieActor===lost.actor}));assert.equal(lost.lost,true);assert.equal(lost.cookieActor,actor.id);
  await page.locator('#discovery-retry').waitFor();await page.waitForFunction(()=>!document.querySelector('#discovery-retry').disabled);assert.equal(service.library.discovery.store.list(actor.id).jobs.length,1,'lost reply retains the already committed job');
- const replay=await capturePreparationPost(()=>page.locator('#discovery-retry').click());assert.equal(replay.status,200,JSON.stringify({code:replay.value.code,cookieMatchesActor:replay.cookieActor===replay.actor}));assert.equal(replay.cookieActor,actor.id);
+ const replay=await capturePreparationPost(()=>page.locator('#discovery-retry').click());assert.equal(replay.status,200,JSON.stringify({code:replay.value.code,cookieMatchesActor:replay.cookieActor===replay.actor}));assert.equal(replay.lost,false);assert.equal(replay.cookieActor,actor.id);
  assert.equal(posts.length,2);assert.equal(lost.key,replay.key);assert.equal(lost.actor,replay.actor);assert.deepEqual(lost.body,replay.body);assert.equal(lost.wireBody,replay.wireBody);assert.equal(replay.value.job.id,lost.value.job.id);assert.equal(replay.value.replayed,true);
  await page.waitForFunction(()=>document.querySelector('#discovery-job').textContent.includes('"state": "completed"'));assert.equal(service.library.discovery.store.list(actor.id).jobs.length,1);
  phase='same-key-changed-body-rejected';const changed=structuredClone(lost.body);changed.client.name+=' changed';
  const conflict=await capturePreparationPost(()=>page.evaluate(async ({input,key,actor})=>{const response=await fetch('/api/library/preparations',{method:'POST',headers:{'content-type':'application/json','x-voidplayer-action':'library-preparation','x-voidplayer-actor':actor,'idempotency-key':key},body:JSON.stringify(input)});await response.json();},{input:changed,key:lost.key,actor:actor.id}));
  assert.equal(conflict.status,409);assert.equal(conflict.value.code,'idempotency-conflict');assert.equal(conflict.cookieActor,actor.id);assert.equal(conflict.key,lost.key);assert.deepEqual(conflict.body,changed);assert.equal(service.library.discovery.store.list(actor.id).jobs.length,1);
  await page.waitForFunction(()=>document.querySelector('#discovery-fields').textContent.includes('h264'));assert.equal((await fetch(`${base}/api/media/${flv.id}/psnr-source?v=${flv.version}`,{headers})).status,409,'probe does not build quality cache');
- phase='close-observer-before-index';releaseAdmission=service.library.qualityAdmission.acquire();await page.locator('#discovery-index').click();await page.waitForFunction(()=>document.querySelector('#discovery-job').textContent.includes('"state": "queued"'));const queued=posts.at(-1).value.job;assert.equal(queued.input.operation,'quality-index');await page.close();page=undefined;releaseAdmission();releaseAdmission=undefined;
+ phase='close-observer-before-index';await drainAdminObservations(page);releaseAdmission=service.library.qualityAdmission.acquire();await page.locator('#discovery-index').click();await page.waitForFunction(()=>document.querySelector('#discovery-job').textContent.includes('"state": "queued"'));const queued=posts.at(-1).value.job;assert.equal(queued.input.operation,'quality-index');await page.close();page=undefined;releaseAdmission();releaseAdmission=undefined;
  let completed;const until=Date.now()+15000;for(;;){completed=await fetch(`${base}/api/library/preparations/${queued.id}`,{headers}).then(r=>r.json());if(completed.state==='completed')break;if(['failed','cancelled','interrupted'].includes(completed.state))throw Error(JSON.stringify(completed));if(Date.now()>until)throw Error('Service-owned preparation did not finish after observer close');await new Promise(r=>setTimeout(r,20));}
  await open();page.on('pageerror',e=>errors.push(e.message));await page.locator(`#discovery-jobs [data-job-id="${queued.id}"]`).click();await page.waitForFunction(()=>document.querySelector('#discovery-job').textContent.includes('"state": "completed"'));
  phase='reuse-cached-index-evidence';const beforeCacheRead=service.library.discovery.store.list(actor.id).jobs.length;service.library.discovery.store.db.prepare('DELETE FROM discovery_probes WHERE media_id=?').run(flv.id);
@@ -85,7 +85,7 @@ try{
  assert.equal(rejected.actor,actor.id);assert.equal(rejected.key,missing.key);assert.deepEqual(rejected.body,missing.body);assert.equal(rejected.wireBody,missing.wireBody);await context.addCookies([{name:'voidplayer-user',value:actor.id,url:base}]);releaseHealth();releaseHealth=undefined;await page.unroute('**/api/health');
  const retried=await capturePreparationPost(()=>page.locator('#discovery-retry').click());assert.equal(retried.status,202);assert.equal(retried.cookieActor,actor.id);assert.equal(retried.actor,actor.id);assert.equal(retried.key,rejected.key);assert.deepEqual(retried.body,rejected.body);assert.equal(retried.wireBody,rejected.wireBody);const recovered=retried.value.job;
  await page.waitForFunction(id=>{const job=JSON.parse(document.querySelector('#discovery-job').textContent||'null');return job?.id===id&&job.state==='completed';},recovered.id);
- phase='queued-explicit-cancel';releaseAdmission=service.library.qualityAdmission.acquire();await page.locator('#discovery-probe').click();await page.waitForFunction(()=>document.querySelector('#discovery-job').textContent.includes('"state": "queued"'));await page.locator('#discovery-cancel').click();await page.waitForFunction(()=>document.querySelector('#discovery-job').textContent.includes('"state": "cancelled"'));releaseAdmission();releaseAdmission=undefined;
+ phase='queued-explicit-cancel';await drainAdminObservations(page);releaseAdmission=service.library.qualityAdmission.acquire();await page.locator('#discovery-probe').click();await page.waitForFunction(()=>document.querySelector('#discovery-job').textContent.includes('"state": "queued"'));await page.locator('#discovery-cancel').click();await page.waitForFunction(()=>document.querySelector('#discovery-job').textContent.includes('"state": "cancelled"'));releaseAdmission();releaseAdmission=undefined;
  phase='late-source-response';let arrived;const reached=new Promise(r=>arrived=r),gate=new Promise(r=>releaseLate=r);let held=false;const matcher=`**/api/media/${flv.id}/discovery?*`;
  await page.route(matcher,async route=>{if(held)return route.continue();held=true;const response=await route.fetch(),value=await response.json();assert.equal(response.status(),200);assert.deepEqual(value.source,{id:flv.id,version:flv.version});arrived();await gate;await route.fulfill({response,json:value});});
  await choose(flv);await withinBrowserPhase(()=>reached,30000,{page,directory,evidence,phase:'late-source-request'});
