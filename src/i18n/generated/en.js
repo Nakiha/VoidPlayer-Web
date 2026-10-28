@@ -521,7 +521,7 @@ export default {
   "cambi.prepare": () => "Missing a trusted cache? Open explicit technical preparation; this panel never probes or builds an index automatically.",
   "cambi.publish": () => "Explicitly share candidates and evidence",
   "cambi.retry": () => "Retry the frozen body with its original key",
-  "cambi.scope": () => "Optional fixed Linux x64 component; trusted FLV/Enhanced FLV, original 8/10-bit limited BT.709 SDR, full uncropped square-pixel frames with a long edge of at least320. Higher scores indicate more detected banding, not a product pass/fail threshold; internal processing uses10 bits. Explicit sampling leaves unsampled coverage visible. No object tracking, reference-integrity certification or concealment detection.",
+  "cambi.scope": () => "Optional fixed Linux x64 component; trusted FLV/Enhanced FLV 8/10-bit or strict MP4 avc1 H2648 / hvc1 HEVC8/10; limited BT.709 SDR, full uncropped square-pixel frames with a long edge of at least320. Higher scores indicate more detected banding, not a product pass/fail threshold; internal processing uses10 bits. Explicit sampling leaves unsampled coverage visible. No object tracking, reference-integrity certification or concealment detection.",
   "cambi.submit": () => "Start durable single-source CAMBI",
   "cambi.title": () => "CAMBI · single-source banding screening",
   "cambi.viewer1": () => "CAMBI · original multiscale banding evidence",

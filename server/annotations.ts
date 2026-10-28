@@ -112,7 +112,7 @@ export class AnnotationStore {
       if(operation.action==='create-cambi-candidate'){
         if(current)throw new AnnotationCommandError(409,'annotation-revision-conflict','Candidate exists');
         if(!quality?.resolveCambi)throw new AdminError(503,'CAMBI result unavailable','evidence-unavailable');
-        const result=quality.resolveCambi(operation.cambi!);cambi={schema:'voidplayer-annotation-cambi',version:1,id:operation.operationId,ref:operation.cambi!,serviceOrigin:quality.origin,completedAt:result.completedAt,attachedAt:now,attachedBy:{id:actor.id,name:actor.name},verification:'server-verified',value:result.value};
+        const result=quality.resolveCambi(operation.cambi!);cambi={schema:'voidplayer-annotation-cambi',version:result.value.frame.target.indexIdentity.kind==='mp4'?2:1,id:operation.operationId,ref:operation.cambi!,serviceOrigin:quality.origin,completedAt:result.completedAt,attachedAt:now,attachedBy:{id:actor.id,name:actor.name},verification:'server-verified',value:result.value};
       }
       const document = applyAnnotationOperation(operation, current, actor, now, evidence,cambi);
       const json = JSON.stringify(document);

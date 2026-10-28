@@ -35,7 +35,8 @@ async function verifyAgentEntry(base,transport=fetch){
     const head=await transport(base+route,{method:'HEAD'});assert.equal(head.status,200);assert.equal(await head.text(),'');assert.equal(Number(head.headers.get('content-length')),Buffer.byteLength(text));
     assert.equal((await transport(base+op.links.guide)).status,200);
   }
-  const mp4=manifest.qualityJobs.source.additionalContainers.mp4;assert.equal(mp4.nativeSequenceMetrics.cambi.implemented,false);assert.equal(mp4.nativeSequenceMetrics.vmaf.implemented,true);
+  const mp4=manifest.qualityJobs.source.additionalContainers.mp4;assert.equal(mp4.nativeSequenceMetrics.cambi.implemented,true);assert.equal(mp4.nativeSequenceMetrics.vmaf.implemented,true);
+  assert.deepEqual(mp4.nativeSequenceMetrics.cambi.containers.mp4.matrix,['h264-8','hevc-8','hevc-10']);assert.deepEqual(manifest.qualityCambi.resultVersions,[1,2]);assert.equal(manifest.qualityCambi.deployment.enabled,false); // Code support never implies an installed native component.
 }
 const run = (args, overrides = {}) => execFileSync(executable, args, { cwd, env: { ...env, ...overrides }, encoding: 'utf8', timeout: 10000, stdio: ['ignore', 'pipe', 'pipe'] });
 async function renameReleased(source, destination) {
