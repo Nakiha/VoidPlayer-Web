@@ -4,16 +4,16 @@ import {requireCapturedActor} from '../../identity.ts';
 import {AdminError,adminErrorBody} from '../../admin-error.ts';
 import {adminWriteAllowed,readAdminJson} from '../../admin.ts';
 import {sendJson} from '../../http-utils.ts';
-import {REEXECUTION_LIMITS} from '../../../shared/analysis/quality/reexecution.ts';
+import {REEXECUTION_LIMITS,reexecutionId} from '../../../shared/analysis/quality/reexecution.ts';
 import type {ReexecutionKind} from '../../../shared/analysis/quality/reexecution.ts';
 
 export async function handleQualityReexecutionRoutes(ctx:RouteContext,req:IncomingMessage,res:ServerResponse,url:URL){
-  const match=/^\/api\/quality\/(jobs|ranges|vmaf\/jobs)\/((?:vmaf-)?[a-f0-9-]{36})\/(reexecution-plan|reexecutions)$/.exec(url.pathname);
+  const match=/^\/api\/quality\/(jobs|ranges|(?:vmaf|xpsnr)\/jobs)\/((?:(?:vmaf|xpsnr)-)?[a-f0-9-]{36})\/(reexecution-plan|reexecutions)$/.exec(url.pathname);
   if(!match)return false;
-  const kind:ReexecutionKind=match[1]==='jobs'?'single':match[1]==='ranges'?'range':'vmaf',id=match[2];
+  const kind:ReexecutionKind=match[1]==='jobs'?'single':match[1]==='ranges'?'range':match[1]==='xpsnr/jobs'?'xpsnr':'vmaf',id=match[2];
   try{
     requireCapturedActor(req,ctx.actor);if(!ctx.actor)throw new AdminError(401,'Select an identity first.','identity-required');
-    if((kind==='vmaf')!==id.startsWith('vmaf-'))throw new AdminError(404,'Quality job not found.','job-not-found');
+    if(!reexecutionId(kind,id))throw new AdminError(404,'Quality job not found.','job-not-found');
     if(url.search)throw new AdminError(400,'Reexecution uses no implicit cursor or request parameters.','invalid-request');
     const service=ctx.library.qualityReexecutions;
     if(req.method==='GET'&&match[3]==='reexecutions'){sendJson(res,200,service.chain(kind,id,ctx.actor.id));return true;}
@@ -30,7 +30,7 @@ export async function handleQualityReexecutionRoutes(ctx:RouteContext,req:Incomi
         if(!res.destroyed)sendJson(res,200,plan);
       }else{
         const accepted=await service.execute(kind,id,ctx.actor,ctx.requestId,req.headers['idempotency-key'],body,controller.signal);
-        res.setHeader('location',accepted.receipt?`/api/quality/${kind==='single'?'jobs':kind==='range'?'ranges':'vmaf/jobs'}/${accepted.receipt.jobId}`:url.pathname);
+        res.setHeader('location',accepted.receipt?`/api/quality/${kind==='single'?'jobs':kind==='range'?'ranges':kind+'/jobs'}/${accepted.receipt.jobId}`:url.pathname);
         if(!res.destroyed)sendJson(res,accepted.replayed?200:202,accepted);
       }
     }finally{clearTimeout(timer);res.removeListener('close',disconnect);}

@@ -18,7 +18,8 @@ export class QualityReexecutionService{
   private stopping=new AbortController();
   private active=new Set<Promise<unknown>>();
   constructor(library:MediaLibraryIndex){this.library=library;}
-  private service(kind:ReexecutionKind){return kind==='single'?this.library.qualityJobs:kind==='range'?this.library.qualityRanges:this.library.qualityVmaf;}
+  private service(kind:ReexecutionKind){return kind==='single'?this.library.qualityJobs:kind==='range'?this.library.qualityRanges:kind==='xpsnr'?this.library.qualityXpsnr:this.library.qualityVmaf;}
+  links(kind:ReexecutionKind,actor:string){return this.service(kind).reexecutionLinks(actor);}
   private job(kind:ReexecutionKind,id:string,actor:string){const service=this.service(kind),job=service.get(id,actor);if(job.retryOf){const receipt=service.reexecutionReceipt(job.retryOf.retryOf,actor);if(!receipt||receipt.jobId!==id||executionDigest(receipt.lineage)!==executionDigest(job.retryOf))throw new AdminError(409,'Stored execution lineage changed.','stored-reexecution-invalid');}return job;}
   private describe(kind:ReexecutionKind,id:string,actor:string):Description{
     const base=(budget:Record<string,number>,pairs:number,reservation:Record<string,unknown>):ReexecutionCost=>({scope:'entire-frozen-input-from-start',selectedPairs:pairs,reusesPreviousScores:false,budget,reservation:{...reservation,executionWitness:executionWitnessReservation(kind,pairs),witness:{maxCoreAssetBytes:REEXECUTION_LIMITS.maxReadBytes,maxProducerBytes:REEXECUTION_LIMITS.maxProducerBytes,maxIndexBytes:REEXECUTION_LIMITS.maxIndexBytes,maxIndexPackets:REEXECUTION_LIMITS.maxIndexPackets,maxElapsedMs:REEXECUTION_LIMITS.maxElapsedMs},newAttemptPerJob:1}});
@@ -30,8 +31,8 @@ export class QualityReexecutionService{
       const service=this.library.qualityRanges,j=service.get(id,actor),input=service.reexecutionInput(id,actor),requests=input.pairs.filter(p=>j.plan.selectedAus.includes(p.reference.picture.au));
       return {job:j,input,requests,contract:service.executionContract(id,actor),cost:base({...input.budget},requests.length,{...j.plan.reservation,interval:input.interval,selectedPositions:j.plan.selectedAus.length,unmappedPositions:j.plan.unmappedAus.length,unsampledPositions:j.plan.unsampledAus.length}),previous:{reason:j.reason,result:{summary:{scoredPairs:j.summary.scoredPairs,work:j.summary.work,pixelDomains:j.summary.groups.length},coverage:service.coverage(j),results:`${reexecutionPath(kind,id)}/results`}},correspondence:this.library.qualityCorrespondence.executionContext(j.retryOf?.rootJobId??id,actor)};
     }
-    const service=this.library.qualityVmaf,j=service.get(id,actor),snapshot=service.frozenSnapshot(id,actor),range=snapshot.value.rangePlan;
-    if(!range)throw new AdminError(409,'Original VMAF plan has no frozen input.','plan-changed');
+    const service=kind==='xpsnr'?this.library.qualityXpsnr:this.library.qualityVmaf,j=service.get(id,actor),snapshot=service.frozenSnapshot(id,actor),range=snapshot.value.rangePlan;
+    if(!range)throw new AdminError(409,'Original native sequence plan has no frozen input.','plan-changed');
     return {job:j,input:j.input,requests:range.input.pairs,contract:j.executionContract,cost:base({...range.input.budget,...j.input.budget},range.input.pairs.length,{...range.reservation,nativeAssetVerificationPasses:3}),previous:{reason:j.reason,result:{digest:j.resultDigest,metrics:j.metrics,progress:j.progress,result:`${reexecutionPath(kind,id)}/result`}},correspondence:j.input.plan};
   }
   private own<T>(work:(signal:AbortSignal)=>Promise<T>,external:AbortSignal){
@@ -49,7 +50,7 @@ export class QualityReexecutionService{
     if(prior)block('successor-exists','This original already has a durable successor. Observe the chain; do not change keys to create another.','observe-original');
     if(plan.blocks.length)return plan;
     try{
-      if(kind==='vmaf')await this.library.qualityVmaf.reexecutionPreflight(id,actor,d.contract!,combined);
+      if(kind==='vmaf'||kind==='xpsnr')await (kind==='xpsnr'?this.library.qualityXpsnr:this.library.qualityVmaf).reexecutionPreflight(id,actor,d.contract!,combined);
       else {const resources=this.library.qualityJobs.resources();if(!resources.available||resources.admissionBlocked)throw new AdminError(503,'Physical executor exit is unconfirmed.','physical-stop-unconfirmed');await this.library.quality.reexecutionPreflight(d.requests,d.contract!,combined);}
       combined.throwIfAborted();
       // Re-read all frozen records after the owned IO probe, before offering a
@@ -58,7 +59,7 @@ export class QualityReexecutionService{
       if(current.job.revision!==d.job.revision||executionDigest(current.input)!==plan.inputDigest||canonicalJson(current.correspondence)!==canonicalJson(d.correspondence))throw new AdminError(409,'Frozen original or correspondence changed.','plan-changed');
       const digest=executionDigest({schema:plan.schema,version:1,kind,id,revision:plan.revision,reason,inputDigest:plan.inputDigest,cost:plan.cost,contract:plan.contract,correspondence:plan.correspondence});
       const {requestedAt,...lineage}=nextReexecutionLineage(id,d.job.retryOf,reason,digest,0);void requestedAt;plan.lineage=lineage;plan.digest=digest;plan.eligible=true;
-    }catch(error){combined.throwIfAborted();const e=error as {code?:string;message?:string};const code=e.code??'reexecution-validation-failed';block(code,(e.message??'Frozen execution conditions could not be verified.').slice(0,400),['quality-busy','busy','physical-stop-unconfirmed','vmaf-service-unavailable'].includes(code)?'wait-and-replan':'new-intent');}
+    }catch(error){combined.throwIfAborted();const e=error as {code?:string;message?:string};const code=e.code??'reexecution-validation-failed';block(code,(e.message??'Frozen execution conditions could not be verified.').slice(0,400),['quality-busy','busy','physical-stop-unconfirmed','vmaf-service-unavailable','xpsnr-service-unavailable'].includes(code)?'wait-and-replan':'new-intent');}
     return plan;
   },signal);}
   async execute(kind:ReexecutionKind,id:string,actor:Actor,requestId:string,keyValue:unknown,value:unknown,signal:AbortSignal){

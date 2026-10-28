@@ -5211,8 +5211,8 @@
     "translation": "Clear filters"
   },
   "tasks.scope": {
-    "source": "当前自述身份的准备、对应计划、单帧、区间和 VMAF 历史。刷新读取新快照；翻页保留当时事实。关闭观察不取消后台工作，也不移动播放头。",
-    "translation": "Preparation, correspondence, single-pair, range and VMAF history for the current self-declared identity. Refresh captures new facts; pages retain the snapshot. Closing observation does not cancel background work or move playback."
+    "source": "当前自述身份的准备、对应计划、单帧、区间、VMAF 和 XPSNR 历史。刷新读取新快照；翻页保留当时事实。关闭观察不取消后台工作，也不移动播放头。",
+    "translation": "Preparation, correspondence, single-pair, range, VMAF and XPSNR history for the current self-declared identity. Refresh captures new facts; pages retain the snapshot. Closing observation does not cancel background work or move playback."
   },
   "tasks.snapshot": {
     "source": "快照 {captured}；{count} 项。新状态需刷新；快照到期后重新查询。",
@@ -5751,10 +5751,6 @@
   "xpsnr.recipe": {
     "source": "冻结的对应关系与测量 recipe",
     "translation": "Frozen correspondence and recipe"
-  },
-  "xpsnr.retry": {
-    "source": "重试冻结的提交",
-    "translation": "Retry frozen submission"
   },
   "xpsnr.scope": {
     "source": "需要已安装的 Linux x64 组件及显式提交的时钟对应计划。仅限 2–32 个连续呈现帧；不支持跨帧抽样、缺口、负 PTS 或 VFR。限范围 BT.709 SDR、8/10 位 YUV420、方形像素，不裁剪、旋转或转换。固定 FFmpeg 实现，参考输入在前，保留时域权重和官方逐平面序列池化。未证明感知优于其他指标。分数属于整帧时间序列事实，不是热图或人工缺陷判断；未认证引用完整性，无法检测错误隐藏。",

@@ -1,3 +1,7 @@
+import {ReexecutionLedger} from '../quality/reexecution-ledger.ts';
+import type {ReexecutionCreation} from '../quality/reexecution-ledger.ts';
+import type {QualityExecutionContract,ReexecutionRequest} from '../../../shared/analysis/quality/reexecution.ts';
+import {sameExecutionContract} from '../../../shared/analysis/quality/reexecution.ts';
 import {taskSummaries,taskEdges} from '../../tasks/summary.ts';
 import {createHash,randomUUID} from 'node:crypto';import {mkdirSync,rmSync} from 'node:fs';import path from 'node:path';
 import {openIndexDatabase} from '../../sqlite.ts';import {lockDatabase} from '../../library-store.ts';import {AdminError} from '../../admin-error.ts';
@@ -16,6 +20,8 @@ type Publication={policy:CandidatePolicy;selected:{index:number;id:string;operat
 type CandidatePolicy={space:string;side:'reference'|'distorted';maxScore:number;limit:number;minFrameDistance:number;text:string;severity:number};
 /** Separate metric outcomes, one service-owned attempt, no automatic retry/work sharing. */
 export class NativeXpsnrService{
+ readonly reexecutions:ReexecutionLedger;
+  reexecutionLinks(actor:string){return this.reexecutions.links(actor,XPSNR_LIMITS.historyRows);}
   taskSummaries(actor:string){return taskSummaries(this.db,'xpsnr',actor);}
   taskEdges(actor:string){return taskEdges(this.db,'xpsnr',actor);}
 
@@ -25,8 +31,8 @@ export class NativeXpsnrService{
  constructor(file:string,runner:NativeXpsnrRunner,plans:CorrespondenceService){
   this.file=file;this.runner=runner;this.plans=plans;mkdirSync(path.dirname(file),{recursive:true});this.unlock=lockDatabase(file);
   let db:ReturnType<typeof openIndexDatabase>|undefined;
-  try{this.db=db=openIndexDatabase(file);db.exec('PRAGMA busy_timeout=0;');if(Number(db.prepare('PRAGMA user_version').get()!.user_version)>1)throw new AdminError(409,'XPSNR history requires a newer application.','future-xpsnr-schema');
-   db.exec(`PRAGMA journal_mode=WAL;CREATE TABLE IF NOT EXISTS quality_xpsnr_jobs(id TEXT PRIMARY KEY,actor TEXT NOT NULL,client TEXT NOT NULL,key TEXT NOT NULL,fingerprint TEXT NOT NULL,body TEXT NOT NULL,snapshot TEXT NOT NULL,prepared TEXT,result TEXT,reserved INTEGER NOT NULL,UNIQUE(actor,client,key));CREATE TABLE IF NOT EXISTS quality_xpsnr_publications(job_id TEXT PRIMARY KEY,body TEXT NOT NULL);PRAGMA user_version=1;`);
+  try{this.db=db=openIndexDatabase(file);db.exec('PRAGMA busy_timeout=0;');if(Number(db.prepare('PRAGMA user_version').get()!.user_version)>2)throw new AdminError(409,'XPSNR history requires a newer application.','future-xpsnr-schema');
+   db.exec(`PRAGMA journal_mode=WAL;BEGIN IMMEDIATE;CREATE TABLE IF NOT EXISTS quality_xpsnr_jobs(id TEXT PRIMARY KEY,actor TEXT NOT NULL,client TEXT NOT NULL,key TEXT NOT NULL,fingerprint TEXT NOT NULL,body TEXT NOT NULL,snapshot TEXT NOT NULL,prepared TEXT,result TEXT,reserved INTEGER NOT NULL,UNIQUE(actor,client,key));CREATE TABLE IF NOT EXISTS quality_xpsnr_publications(job_id TEXT PRIMARY KEY,body TEXT NOT NULL);`);this.reexecutions=new ReexecutionLedger(db);db.exec('PRAGMA user_version=2;COMMIT;');
   }catch(error){db?.close();this.unlock();throw error;}
   this.ready=this.recover();void this.ready.catch(error=>{this.fatal=error;});
  }
@@ -55,8 +61,10 @@ export class NativeXpsnrService{
  get descriptor(){return this.cachedCapability?{...this.cachedCapability,checkedAt:this.capabilityCheckedAt}:null;}
  async capability(){const value=await this.runner.capability();if(value.reason==='quality-busy'&&this.cachedCapability)return {...this.descriptor!,verification:'deferred-admission-busy'};this.cachedCapability=value;this.capabilityCheckedAt=now();return {...this.descriptor!,verification:'checked'};}
  async preflight(value:unknown,actor:string,signal:AbortSignal){this.available();const input=this.parse(value);return this.runner.preflight(input,this.snapshot(input,actor),signal);}
- submit(value:unknown,actor:Actor,requestId:string,key:unknown){
+ submit(value:unknown,actor:Actor,requestId:string,key:unknown,reexecution?:ReexecutionCreation){
   this.available();const input=this.parse(value),k=qualityIdempotencyKey(key),fingerprint=digest(input);
+  this.db.exec('BEGIN IMMEDIATE');let accepted:{job:XpsnrJob;replayed:boolean};try{accepted=(()=>{
+  if(reexecution){const prior=this.reexecutions.replay(reexecution.parentId,actor.id,reexecution.key,reexecution.request);if(prior)return {job:this.reexecutions.verify(prior,this.get(prior.jobId,actor.id)),replayed:true};const parent=this.get(reexecution.parentId,actor.id);if(parent.revision!==reexecution.parentRevision||!['failed','partial','interrupted','cancelled'].includes(parent.state)||parent.endedAt===null||parent.process)throw new AdminError(409,'Original native execution has not physically stopped.','reexecution-blocked');}
   const prior=this.db.prepare('SELECT id,fingerprint FROM quality_xpsnr_jobs WHERE actor=? AND client=? AND key=?').get(actor.id,input.client.id,k);
   if(prior){if(prior.fingerprint!==fingerprint)throw new AdminError(409,'XPSNR key binds a different recipe.','idempotency-conflict');return {job:this.get(String(prior.id),actor.id),replayed:true};}
   if(process.platform!=='linux'||process.arch!=='x64'||!this.runner.config)throw new AdminError(503,'Install a trusted Linux x64 XPSNR component first.','component-unavailable');
@@ -64,9 +72,14 @@ export class NativeXpsnrService{
   if(live.length>=XPSNR_LIMITS.queued||live.filter(j=>j.actor.id===actor.id).length>=XPSNR_LIMITS.actorOutstanding)throw new AdminError(429,'XPSNR bounded queue is full.','xpsnr-queue-full');
   const reserved=8*1024*1024,used=Number(this.db.prepare('SELECT coalesce(sum(reserved),0) AS n FROM quality_xpsnr_jobs').get()!.n);
   if(all.length>=XPSNR_LIMITS.historyRows||used+reserved>XPSNR_LIMITS.reservedBytes)throw new AdminError(429,'XPSNR history budget is full; old receipts retained.','xpsnr-history-full');
-  const createdAt=now(),job:XpsnrJob={schema:'voidplayer-native-xpsnr-job-state',version:1,id:'xpsnr-'+randomUUID(),actor:{id:actor.id,name:actor.name},key:k,requestId,input,revision:1,createdAt,queueUntil:createdAt+XPSNR_LIMITS.queueWaitMs,startedAt:null,endedAt:null,attemptId:null,state:'queued',phase:'queued',reason:null,progress:{preparedFrames:0,targetFrames:snapshot.value.rangePlan?.input.pairs.length??0},metrics:{psnr:waiting(),ssim:input.metrics.ssim?waiting():{state:'not-requested',reason:null},xpsnr:waiting()},resultDigest:null,process:null};
-  this.db.prepare('INSERT INTO quality_xpsnr_jobs VALUES(?,?,?,?,?,?,?,NULL,NULL,?)').run(job.id,actor.id,input.client.id,k,fingerprint,JSON.stringify(job),JSON.stringify(snapshot),reserved);this.pump();return {job:this.get(job.id,actor.id),replayed:false};
+  const createdAt=now(),job:XpsnrJob={...(reexecution?{executionContract:reexecution.contract,retryOf:reexecution.lineage}:{}),schema:'voidplayer-native-xpsnr-job-state',version:1,id:'xpsnr-'+randomUUID(),actor:{id:actor.id,name:actor.name},key:k,requestId,input,revision:1,createdAt,queueUntil:createdAt+XPSNR_LIMITS.queueWaitMs,startedAt:null,endedAt:null,attemptId:null,state:'queued',phase:'queued',reason:null,progress:{preparedFrames:0,targetFrames:snapshot.value.rangePlan?.input.pairs.length??0},metrics:{psnr:waiting(),ssim:input.metrics.ssim?waiting():{state:'not-requested',reason:null},xpsnr:waiting()},resultDigest:null,process:null};
+  this.db.prepare('INSERT INTO quality_xpsnr_jobs VALUES(?,?,?,?,?,?,?,NULL,NULL,?)').run(job.id,actor.id,input.client.id,k,fingerprint,JSON.stringify(job),JSON.stringify(snapshot),reserved);if(reexecution)this.reexecutions.insert({actorId:actor.id,parentId:reexecution.parentId,jobId:job.id,key:reexecution.key,request:reexecution.request,lineage:reexecution.lineage});return {job:this.get(job.id,actor.id),replayed:false};
+  })();this.db.exec('COMMIT');}catch(error){this.db.exec('ROLLBACK');throw error;}if(!accepted.replayed)this.pump();return {...accepted,job:this.get(accepted.job.id,actor.id)};
  }
+ reexecutionReceipt(id:string,actor:string,key?:string,request?:ReexecutionRequest){this.get(id,actor);const receipt=key&&request?this.reexecutions.replay(id,actor,key,request):this.reexecutions.get(id,actor);if(receipt)this.reexecutions.verify(receipt,this.get(receipt.jobId,actor));return receipt;}
+ frozenSnapshot(id:string,actor:string){const job=this.get(id,actor),snapshot=JSON.parse(String(this.db.prepare('SELECT snapshot FROM quality_xpsnr_jobs WHERE id=?').get(id)!.snapshot)) as XpsnrPlanSnapshot;if(snapshot.id!==job.input.plan.id||snapshot.attemptId!==job.input.plan.attemptId||snapshot.digest!==job.input.plan.digest||digest(snapshot.value)!==snapshot.digest)throw new AdminError(409,'Frozen XPSNR C plan snapshot changed.','stored-input-invalid');return snapshot;}
+ async reexecutionPreflight(id:string,actor:string,expected:QualityExecutionContract,signal:AbortSignal){await this.ready;this.available();const job=this.get(id,actor);const stored=this.frozenSnapshot(id,actor);const current=this.snapshot(job.input,actor);if(canonicalJson(stored)!==canonicalJson(current))throw new AdminError(409,'Frozen C plan changed; use a new intent.','xpsnr-plan-changed');return this.runner.reexecutionPreflight(job.input,stored,expected,signal);}
+ reexecute(creation:ReexecutionCreation,actor:Actor,requestId:string){this.available();const original=this.get(creation.parentId,actor.id);return this.submit(original.input,actor,requestId,'reexecution:'+randomUUID(),creation);}
  private wake(){if(this.timer||this.closed||this.fatal||!this.all().some(j=>j.state==='queued'))return;this.timer=setTimeout(()=>{this.timer=undefined;this.pump();},250);this.timer.unref();}
  private pump(){
   if(this.active||this.closed||this.fatal||!this.recovered)return;
@@ -87,6 +100,8 @@ export class NativeXpsnrService{
   let j=this.get(id,this.all().find(x=>x.id===id)!.actor.id);const snapshot=JSON.parse(String(this.db.prepare('SELECT snapshot FROM quality_xpsnr_jobs WHERE id=?').get(id)!.snapshot)) as XpsnrPlanSnapshot;
   try{
    const value=await this.runner.run(j.input,snapshot,signal,{
+    expectedExecutionContract:j.executionContract,
+    contract:contract=>{j=this.get(id,j.actor.id);if(Buffer.byteLength(JSON.stringify(contract))>16*1024||j.executionContract&&!sameExecutionContract(j.executionContract,contract))throw new AdminError(409,'Frozen native execution contract changed.','execution-contract-conflict');if(!j.executionContract){j.executionContract=contract;this.save(j);}},
     admitted:()=>{j=this.get(id,j.actor.id);if(j.state!=='queued'||j.queueUntil<=now())throw new XpsnrError('queue-expired','XPSNR queue changed before admission');j.state='preparing';j.phase='component';j.startedAt=now();j.attemptId=randomUUID();j.metrics.psnr.state='running';if(j.input.metrics.ssim)j.metrics.ssim.state='running';this.save(j);},
     phase:phase=>{j=this.get(id,j.actor.id);j.phase=phase;if(phase==='native'){j.state='running';j.metrics.xpsnr.state='running';}this.save(j);},
     progress:(frames,total)=>{j=this.get(id,j.actor.id);j.progress={preparedFrames:frames,targetFrames:total};this.save(j);},

@@ -1,3 +1,5 @@
+import {installQualityReexecution} from './quality-reexecution.ts';
+import {REEXECUTION_KINDS,reexecutionKind} from '../../shared/analysis/quality/reexecution.ts';
 import {t,th,msg,formatDate} from '../i18n.ts';
 import {currentActor,identityHealth} from '../services/identity.ts';
 import {QualityClient} from '../services/quality-jobs.ts';
@@ -9,7 +11,7 @@ import {qualityPairViewUrl} from '../../shared/review/quality-pair-view.ts';
 export function tasksShell(){
   const select=(key:string,values:readonly string[],label:string)=>`<label>${label}<select name="${key}"><option value="">—</option>${values.map(v=>`<option>${v}</option>`).join('')}</select></label>`;
   return `<section id="pane-tasks" hidden><header class="admin-heading"><h1>${th(msg('tasks.title','任务中心'))}</h1></header>
-  <p>${th(msg('tasks.scope','当前自述身份的准备、对应计划、单帧、区间和 VMAF 历史。刷新读取新快照；翻页保留当时事实。关闭观察不取消后台工作，也不移动播放头。'))}</p>
+  <p>${th(msg('tasks.scope','当前自述身份的准备、对应计划、单帧、区间、VMAF 和 XPSNR 历史。刷新读取新快照；翻页保留当时事实。关闭观察不取消后台工作，也不移动播放头。'))}</p>
   <form id="tasks-filters" class="admin-panel"><div class="admin-actions">
   <label>${th(msg('tasks.media','媒体 ID'))}<input name="mediaId" maxlength="24" spellcheck="false"></label>
   <label>${th(msg('tasks.version','媒体版本'))}<input name="mediaVersion" maxlength="24" spellcheck="false"></label>
@@ -22,7 +24,7 @@ export function tasksShell(){
   <button id="tasks-more" type="button" hidden>${th(msg('admin.nextPage','下一页'))}</button>
   <section id="tasks-detail" class="admin-panel" hidden><h2 id="tasks-title"></h2><pre id="tasks-facts"></pre>
   <button id="tasks-cancel" type="button" hidden>${th(msg('tasks.cancel','显式取消此任务'))}</button>
-  <p id="tasks-cancel-status" role="status"></p><div id="tasks-related"></div><div id="tasks-links"></div><div id="tasks-candidates"></div></section></section>`;
+  <p id="tasks-cancel-status" role="status"></p><div id="tasks-related"></div><div id="tasks-links"></div><div id="tasks-candidates"></div><section id="tasks-reexecution"></section></section></section>`;
 }
 
 /** Actor and selected-target fences apply after every await. Only filters and
@@ -30,6 +32,8 @@ export function tasksShell(){
 export function installTasks(signal:AbortSignal){
   const $=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(`tasks-${id}`)as T;
   const form=$<HTMLFormElement>('filters'),api=new QualityClient();
+  const reexecutions=new Map(REEXECUTION_KINDS.map(kind=>{const root=document.createElement('section');$('reexecution').append(root);return [kind,installQualityReexecution(root,kind,signal,id=>choose(kind,id))] as const;}));
+  const clearReexecution=()=>{for(const view of reexecutions.values())view.clear();};
   let active=false,actor='',epoch=0,listGeneration=0,detailGeneration=0,next:string|null=null;
   let selected:{kind:TaskKind;id:string}|null=null,detail:TaskDetail|null=null;
   let life=new AbortController(),detailLife=new AbortController(),detailBusy=false;
@@ -44,12 +48,13 @@ export function installTasks(signal:AbortSignal){
     catch{}
   }
   function reset(){
+    clearReexecution();
     life.abort();detailLife.abort();life=new AbortController();detailLife=new AbortController();epoch++;listGeneration++;detailGeneration++;detailBusy=false;
     actor=currentActor()?.id??'';next=null;detail=null;$('list').replaceChildren();$('detail').hidden=true;$('more').hidden=true;$('status').textContent='';$('snapshot').textContent='';$('cancel-status').textContent='';$('cancel').toggleAttribute('disabled',false);for(const id of ['title','facts','related','links','candidates'])$(id).replaceChildren();restore();
   }
   const context=()=>({owner:actor,epoch,signal:AbortSignal.any([signal,life.signal])});
   const valid=(c:ReturnType<typeof context>)=>active&&!c.signal.aborted&&c.epoch===epoch&&c.owner===actor&&currentActor()?.id===actor;
-  function choose(kind:TaskKind,id:string){detailLife.abort();detailLife=new AbortController();detailGeneration++;detailBusy=false;selected={kind,id};detail=null;$('detail').hidden=true;for(const part of ['title','facts','related','links','candidates'])$(part).replaceChildren();$('cancel-status').textContent='';$('cancel').toggleAttribute('disabled',false);save();void loadDetail();}
+  function choose(kind:TaskKind,id:string){clearReexecution();detailLife.abort();detailLife=new AbortController();detailGeneration++;detailBusy=false;selected={kind,id};detail=null;$('detail').hidden=true;for(const part of ['title','facts','related','links','candidates'])$(part).replaceChildren();$('cancel-status').textContent='';$('cancel').toggleAttribute('disabled',false);save();void loadDetail();}
   function row(task:TaskSummary){const button=document.createElement('button');button.type='button';button.dataset.taskId=task.id;button.dataset.taskKind=task.kind;
     button.textContent=`${task.kind} · ${task.state}${task.phase?` / ${task.phase}`:''} · ${task.metrics.join(', ')} · ${formatDate(task.createdAt)} · ${task.id}`;button.onclick=()=>choose(task.kind,task.id);return button;}
   async function list(more=false){
@@ -70,10 +75,11 @@ export function installTasks(signal:AbortSignal){
     const c=context(),target={...selected},generation=++detailGeneration,s=AbortSignal.any([c.signal,detailLife.signal]);
     const current=()=>valid(c)&&!s.aborted&&generation===detailGeneration&&selected?.kind===target.kind&&selected?.id===target.id;
     try{const value=await api.request<TaskDetail>(c.owner,taskPath(target.kind,target.id),s);if(!current())return;detail=value;
+      if(reexecutionKind(target.kind))reexecutions.get(target.kind)!.show(target.id);
       $('detail').hidden=false;$('title').textContent=`${value.task.kind} · ${value.task.state} · ${value.task.id}`;$('facts').textContent=JSON.stringify(value.task,null,2);
       $('cancel').hidden=!value.links.some(l=>l.rel==='cancel');$('related').replaceChildren();$('links').replaceChildren();$('candidates').replaceChildren();
       for(const related of value.related){const b=document.createElement('button');b.type='button';b.textContent=`${related.relation} · ${related.kind} · ${related.id}`;b.dataset.relatedId=related.id;b.onclick=()=>choose(related.kind,related.id);$('related').append(b);}
-      for(const l of value.links)if(l.rel!=='cancel')link(l.href,l.rel,$('links'));
+      for(const l of value.links)if(!['cancel','reexecution-plan'].includes(l.rel))link(l.href,l.rel,$('links'));
       const receipt=value.links.find(l=>l.rel==='candidate-receipt');if(!receipt)return;
       const publication=await api.request<{policy:{space:string};createdIds:string[];selected:{id:string;evidence?:unknown;ref?:unknown}[]}|null>(c.owner,receipt.href,s);if(!current()||!publication)return;
       for(const id of publication.createdIds){

@@ -10,7 +10,7 @@ Pages freeze membership and summary facts for60 seconds. Keep filters with nextC
 
 Explicit cancel is POST /api/tasks/{kind}/{id}/cancel with {}, same Origin and captured actor. Use library-preparation action for preparation, quality-job otherwise. It delegates to the owning service. Cancelling retains admission until confirmed physical exit. If the receipt is lost, read the same task; repeating cancel does not create computation or roll back completed results. Closing GUI or HTTP observation never cancels a durable job.
 
-This package has no reexecution, automatic retry/publication, new scheduler or global administration. Use the original explicit submission flows for new intent.
+For a physically stopped failed/interrupted/cancelled/partial single, range, VMAF or XPSNR task, follow its reexecution-plan link and the [explicit full recomputation contract](/agent/quality/recovery.md). Task detail exposes verified predecessor/successor links. Reexecution requires a separate reason, exact cost confirmation and frozen actor/body/key; it never starts automatically. No partial resume, automatic publication, new scheduler or global administration. Changed conditions need new intent.
 `,
  '/agent/quality.md':`# Choose a quality task
 
@@ -201,8 +201,8 @@ to make an uncertain request succeed. Non-idempotent identity creation needs
 manual resolution; do not blindly repeat it. An explicit new computation after a
 confirmed failed/interrupted/cancelled/partial job is a separate user decision.
 
-For single, range or VMAF, POST the original job's /reexecution-plan with {reason}.
-This only verifies the frozen source/cache/C plan/core/model/recipe and returns
+For single, range, VMAF or XPSNR, POST the original job's /reexecution-plan with {reason}.
+This only verifies the frozen source/cache/C plan/core/native component/model or filter/recipe and returns
 old partial facts, blocks and full-from-start cost. Missing historical witnesses
 or changed conditions require a new explicit intent; nothing is rebuilt.
 Confirm the exact plan.cost, reason and planDigest in a version1

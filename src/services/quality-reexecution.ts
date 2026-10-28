@@ -2,7 +2,7 @@ import {QualityClient} from './quality-jobs.ts';
 import {ApiError} from './api-error.ts';
 import {randomUUID} from '../../shared/utils/uuid.ts';
 import {canonicalJson} from '../../shared/analysis/quality/correspondence.ts';
-import {reexecutionPath,reexecutionRequest,REEXECUTION_LIMITS} from '../../shared/analysis/quality/reexecution.ts';
+import {reexecutionPath,reexecutionRequest,reexecutionId,REEXECUTION_LIMITS} from '../../shared/analysis/quality/reexecution.ts';
 import type {ReexecutionKind,ReexecutionPlan,ReexecutionRequest} from '../../shared/analysis/quality/reexecution.ts';
 
 export type FrozenReexecution={schema:'voidplayer-pending-reexecution';version:1;origin:string;actor:string;kind:ReexecutionKind;jobId:string;key:string;body:ReexecutionRequest;bodyJson:string;createdAt:number;rejected?:{status:number;code?:string}};
@@ -18,7 +18,7 @@ export class QualityReexecutionClient{
     const raw=this.storage.getItem(this.key(actor,kind));if(!raw)return null;
     if(new TextEncoder().encode(raw).byteLength>REEXECUTION_LIMITS.requestBytes+4096)throw Error('Stored reexecution exceeds its client budget');
     const p=JSON.parse(raw) as FrozenReexecution;
-    if(p.schema!=='voidplayer-pending-reexecution'||p.version!==1||p.origin!==this.origin||p.actor!==actor||p.kind!==kind||typeof p.jobId!=='string'||!(kind==='vmaf'?/^vmaf-[a-f0-9-]{36}$/:/^[a-f0-9-]{36}$/).test(p.jobId)||typeof p.key!=='string'||!/^[A-Za-z0-9._:-]{1,128}$/.test(p.key)||JSON.stringify(p.body)!==p.bodyJson)throw Error('Stored reexecution identity changed');
+    if(p.schema!=='voidplayer-pending-reexecution'||p.version!==1||p.origin!==this.origin||p.actor!==actor||p.kind!==kind||typeof p.jobId!=='string'||!reexecutionId(kind,p.jobId)||typeof p.key!=='string'||!/^[A-Za-z0-9._:-]{1,128}$/.test(p.key)||JSON.stringify(p.body)!==p.bodyJson)throw Error('Stored reexecution identity changed');
     reexecutionRequest(p.body);return p;
   }
   freeze(actor:string,kind:ReexecutionKind,id:string,plan:ReexecutionPlan){
@@ -36,7 +36,7 @@ export class QualityReexecutionClient{
     let value:ReexecutionAcknowledgement;
     try{
       value=await this.api.request<ReexecutionAcknowledgement>(p.actor,reexecutionPath(p.kind,p.jobId)+'/reexecutions',signal,'POST',p.body,p.key,'quality-job',35000);
-      if(!value||typeof value.replayed!=='boolean'||!value.job?.id||value.job.id===p.jobId||!value.job.state||value.job.retryOf?.retryOf!==p.jobId||value.job.retryOf.planDigest!==p.body.planDigest||value.receipt?.actorId!==p.actor||value.receipt.parentId!==p.jobId||value.receipt.jobId!==value.job.id||value.receipt.key!==p.key||canonicalJson(value.receipt.request)!==canonicalJson(p.body)||canonicalJson(value.receipt.lineage)!==canonicalJson(value.job.retryOf))throw Error('Incomplete successful reexecution acknowledgement; outcome remains unknown');
+      if(!value||typeof value.replayed!=='boolean'||!value.job?.id||value.job.id===p.jobId||!value.job.state||value.job.retryOf?.retryOf!==p.jobId||value.job.retryOf.planDigest!==p.body.planDigest||value.receipt?.actorId!==p.actor||value.receipt.parentId!==p.jobId||value.receipt.jobId!==value.job.id||value.receipt.key!==p.key||canonicalJson(value.receipt.request)!==canonicalJson(reexecutionRequest(p.body))||canonicalJson(value.receipt.lineage)!==canonicalJson(value.job.retryOf))throw Error('Incomplete successful reexecution acknowledgement; outcome remains unknown');
     }catch(error){
       if(error instanceof ApiError&&error.status>=400&&error.status<500){const still=this.pending(p.actor,p.kind);if(still?.key===p.key)this.storage.setItem(this.key(p.actor,p.kind),JSON.stringify({...still,rejected:{status:error.status,code:error.code}}));}
       throw error;

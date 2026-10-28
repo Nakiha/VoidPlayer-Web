@@ -5,7 +5,7 @@ import {QualityReexecutionClient} from '../services/quality-reexecution.ts';
 import {reexecutionPath} from '../../shared/analysis/quality/reexecution.ts';
 import type {ReexecutionKind,ReexecutionPlan} from '../../shared/analysis/quality/reexecution.ts';
 
-/** Three views consume the same plan/confirmation/receipt protocol. This panel
+/** All metric views and the task center consume the same plan/confirmation/receipt protocol. This panel
  * owns observation only. It never cancels a job when hidden or disposed. */
 export function installQualityReexecution(root:HTMLElement,kind:ReexecutionKind,signal:AbortSignal,navigate:(id:string)=>void){
   root.dataset.reexecution=kind;

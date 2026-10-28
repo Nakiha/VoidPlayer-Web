@@ -5561,7 +5561,7 @@
     "params": {}
   },
   "tasks.scope": {
-    "source": "当前自述身份的准备、对应计划、单帧、区间和 VMAF 历史。刷新读取新快照；翻页保留当时事实。关闭观察不取消后台工作，也不移动播放头。",
+    "source": "当前自述身份的准备、对应计划、单帧、区间、VMAF 和 XPSNR 历史。刷新读取新快照；翻页保留当时事实。关闭观察不取消后台工作，也不移动播放头。",
     "params": {}
   },
   "tasks.snapshot": {
@@ -6156,10 +6156,6 @@
   },
   "xpsnr.recipe": {
     "source": "冻结的对应关系与测量 recipe",
-    "params": {}
-  },
-  "xpsnr.retry": {
-    "source": "重试冻结的提交",
     "params": {}
   },
   "xpsnr.scope": {

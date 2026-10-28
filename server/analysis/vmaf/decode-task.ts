@@ -13,7 +13,7 @@ import {measurePsnr} from '../../../shared/analysis/quality/psnr.ts';import {mea
 import {vmafSequence,VMAF_LIMITS,VmafError} from '../../../shared/analysis/quality/vmaf.ts';
 import type {VmafInput,VmafPlanSnapshot,VmafPrepared} from '../../../shared/analysis/quality/vmaf.ts';
 import type {PsnrFrame} from '../../../shared/analysis/quality/psnr.ts';
-export type VmafDecodeData={mode:'preflight'|'decode'|'verify';database:string;coreDir:string;directory:string;input:Pick<VmafInput,'cadenceUs'|'metrics'|'budget'>;snapshot:VmafPlanSnapshot;control:SharedArrayBuffer;nativeContract?:QualityExecutionContract['native'];expectedExecutionContract?:QualityExecutionContract};
+export type VmafDecodeData={mode:'preflight'|'decode'|'verify';database:string;coreDir:string;directory:string;input:Pick<VmafInput,'cadenceUs'|'metrics'|'budget'>;snapshot:VmafPlanSnapshot;control:SharedArrayBuffer;nativeContract?:QualityExecutionContract['native'];nativeXpsnrContract?:QualityExecutionContract['nativeXpsnr'];expectedExecutionContract?:QualityExecutionContract};
 
 export async function runVmafDecode(data:VmafDecodeData,progress:(frames:number,total:number)=>void,onContract?:(value:QualityExecutionContract)=>void,onWitness?:(value:ExecutionEnvironment)=>void){
  let decodeDeadline=data.input.budget.maxElapsedMs;
@@ -38,7 +38,7 @@ export async function runVmafDecode(data:VmafDecodeData,progress:(frames:number,
    const geometry=indexes.map(index=>{const g=index.codec==='h264'?avcGeometry(index.description,true):index.codec==='hevc'?hevcGeometry(index.description,true):null;if(!g)throw new VmafError('unsupported-vmaf-sequence','Unsupported quality source codec');requireInspectionGeometry(g);return g;});
    if(geometry.some(g=>g.width<VMAF_LIMITS.minDimension||g.height<VMAF_LIMITS.minDimension||g.width>VMAF_LIMITS.width||g.height>VMAF_LIMITS.height)||geometry[0].width!==geometry[1].width||geometry[0].height!==geometry[1].height)throw new VmafError('unsupported-vmaf-sequence','Equal supported full-frame geometry required');
    for(const pair of sequence.pairs)if(pair.roi.x||pair.roi.y||pair.roi.width!==geometry[0].width||pair.roi.height!==geometry[0].height)throw new VmafError('unsupported-vmaf-sequence','Arbitrary ROI is unsupported; pin the entire visible frame in C');
-   contract={schema:'voidplayer-quality-execution-contract',version:1,environment:readEnvironment(),sources:canonicalExecutionSources(initial.map(s=>s.proof)),...(data.nativeContract?{native:data.nativeContract}:{})};requireExecutionContract(data.expectedExecutionContract,contract);if(data.mode==='decode')onContract?.(contract);
+   contract={schema:'voidplayer-quality-execution-contract',version:1,environment:readEnvironment(),sources:canonicalExecutionSources(initial.map(s=>s.proof)),...(data.nativeContract?{native:data.nativeContract}:{}),...(data.nativeXpsnrContract?{nativeXpsnr:data.nativeXpsnrContract}:{})};requireExecutionContract(data.expectedExecutionContract,contract);if(data.mode==='decode')onContract?.(contract);
   }finally{initial.forEach(s=>s.source.close());}
   if(data.mode!=='decode')return {sequence,indexBytes,indexPackets,elapsedMs:performance.now()-started,contract};
   let loaded:Awaited<ReturnType<typeof instantiateCore>>|undefined;

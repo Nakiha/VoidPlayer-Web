@@ -5,6 +5,8 @@ import {Worker} from 'node:worker_threads';
 import {randomUUID} from 'node:crypto';
 import {chromium,webkit} from 'playwright';
 import {nativeFixture,until} from '../test/helpers/native-vmaf.mjs';
+import {xpsnrComponent} from '../test/helpers/native-xpsnr.mjs';
+import {startService} from '../server/runtime.ts';
 import {chooseTestGuest} from './test-identity.mjs';
 import {waitForAnnotationMedia} from './testing/agent-annotations-ready.mjs';
 
@@ -15,32 +17,31 @@ const check=(name,value)=>{assert.ok(value,name);checks.push(name);};
 const defer=()=>{let resolve;const promise=new Promise(r=>resolve=r);const d={promise,resolve};held.push(d);return d;};
 const bounded=async(promise,label)=>{let timer;try{return await Promise.race([promise,new Promise((_,reject)=>timer=setTimeout(()=>reject(Error('Bounded gate: '+label+' '+phase)),15000))]);}finally{clearTimeout(timer);}};
 try{
-  f=await nativeFixture({distorted:true,containers:['mp4','flv'],staticDir:'dist'});
+  f=await nativeFixture({distorted:true,containers:['mp4','flv'],staticDir:'dist',start:async config=>{config.nativeXpsnr=await xpsnrComponent();return startService(config,false);}});
   const library=f.service.library,runner=library.quality,create=runner.createWorker;let measureCount=0,gateAt=Infinity,state;
   runner.createWorker=data=>{if(data.mode==='measure'&&++measureCount===gateAt){state=new Int32Array(new SharedArrayBuffer(20));gatedWorker=new Worker(new URL('../test/helpers/quality-phase-worker.ts',import.meta.url),{workerData:{...data,hangPhase:'decode',phaseState:state.buffer}});return gatedWorker;}return create(data);};
   const frozen=library.qualityCorrespondence.result(f.input.plan.id,f.actor).rangePlan.input;
   const pair={...frozen.pairs[0],ssim:{variant:'ffmpeg-uniform-8x8-step4-v1'},spatial:{blockWidth:64,blockHeight:48}};
-  const inputs={single:{schema:'voidplayer-psnr-frame-job',version:1,client:{id:'gui-reexecution',kind:'agent'},request:pair},range:{...frozen,client:{id:'gui-reexecution',kind:'agent'},pairs:frozen.pairs.map(p=>({...p,ssim:{variant:'ffmpeg-uniform-8x8-step4-v1'},spatial:{blockWidth:64,blockHeight:48}}))},vmaf:f.input};
-  const paths={single:'/api/quality/jobs',range:'/api/quality/ranges',vmaf:'/api/quality/vmaf/jobs'},originals={},snapshots={};
+  const inputs={single:{schema:'voidplayer-psnr-frame-job',version:1,client:{id:'gui-reexecution',kind:'agent'},request:pair},range:{...frozen,client:{id:'gui-reexecution',kind:'agent'},pairs:frozen.pairs.map(p=>({...p,ssim:{variant:'ffmpeg-uniform-8x8-step4-v1'},spatial:{blockWidth:64,blockHeight:48}}))},vmaf:f.input,xpsnr:(({model,...input})=>({...input,schema:'voidplayer-native-xpsnr-job',recipe:'ffmpeg-xpsnr-reference-first-temporal-v1'}))(f.input)};
+  const paths={single:'/api/quality/jobs',range:'/api/quality/ranges',vmaf:'/api/quality/vmaf/jobs',xpsnr:'/api/quality/xpsnr/jobs'},originals={},snapshots={};
   const read=async(kind,id)=>{const r=await f.json(paths[kind]+'/'+id);return kind==='range'?r.job:r;};
-  let crashNative=true;const nativeRunner=library.qualityVmaf.runner,nativeRun=nativeRunner.run.bind(nativeRunner);
-  nativeRunner.run=(input,snapshot,signal,hooks)=>nativeRun(input,snapshot,signal,{...hooks,process:p=>{hooks.process(p);if(p&&crashNative){crashNative=false;process.kill(p.pid,'SIGKILL');}}});
-  for(const kind of ['single','range','vmaf']){
+  for(const service of [library.qualityVmaf,library.qualityXpsnr]){let crashNative=true;const nativeRunner=service.runner,nativeRun=nativeRunner.run.bind(nativeRunner);nativeRunner.run=(input,snapshot,signal,hooks)=>nativeRun(input,snapshot,signal,{...hooks,process:p=>{hooks.process(p);if(p&&crashNative){crashNative=false;process.kill(p.pid,'SIGKILL');}}});}
+  for(const kind of ['single','range','vmaf','xpsnr']){
     phase='prepare-original-'+kind;
-    if(kind!=='vmaf'){gateAt=measureCount+(kind==='range'?2:1);state=undefined;}
+    if((kind==='single'||kind==='range')){gateAt=measureCount+(kind==='range'?2:1);state=undefined;}
     const job=(await f.json(paths[kind],inputs[kind],'original-'+kind)).job;
-    if(kind!=='vmaf'){await until(()=>state&&Atomics.load(state,0),Boolean,'Actual original decode gate');await f.json(paths[kind]+'/'+job.id+'/cancel',{});gateAt=Infinity;}
+    if((kind==='single'||kind==='range')){await until(()=>state&&Atomics.load(state,0),Boolean,'Actual original decode gate');await f.json(paths[kind]+'/'+job.id+'/cancel',{});gateAt=Infinity;}
     const done=await until(()=>read(kind,job.id),j=>!['queued','preparing','running','cancelling'].includes(j.state),'Original terminal');
-    assert.equal(done.state,kind==='vmaf'?'partial':'cancelled');originals[kind]=done;snapshots[kind]=JSON.stringify(done);
+    assert.equal(done.state,(kind==='vmaf'||kind==='xpsnr')?'partial':'cancelled');originals[kind]=done;snapshots[kind]=JSON.stringify(done);
   }
   await copyFile(path.resolve('.run/playback-media/http-1080p-a.mp4'),path.join(f.media,'A.mp4'));await library.refresh();const [a]=await waitForAnnotationMedia(library,['A.mp4']);
   browser=await({chromium,webkit}[engine]).launch({headless:true});context=await browser.newContext({locale:'en-US',viewport:{width:1400,height:1000}});await context.addCookies([{name:'voidplayer-user',value:f.actor,url:f.base}]);context.on('page',p=>p.on('pageerror',e=>errors.push(e.message)));
   player=await context.newPage();await player.goto(f.base);await chooseTestGuest(player);await player.waitForFunction(()=>!!window.voidPlayer);
   await player.evaluate(async url=>{const blob=await fetch(url).then(r=>r.blob());await window.voidPlayer.loadFile('A',new File([blob],'A.mp4'));},`${f.base}/api/media/${a.id}?v=${a.version}`);await player.waitForFunction(()=>!window.voidPlayer.getState().busy&&window.voidPlayer.getState().tracks[0]?.frame);await player.evaluate(()=>window.voidPlayer.play());await player.waitForFunction(()=>window.voidPlayer.getState().positionUs>200000);const before=await player.evaluate(()=>window.voidPlayer.getState());
   page=await context.newPage();await page.goto(f.base+'/admin/#quality');
-  const roots={single:'#quality-reexecution',range:'#quality-range-reexecution',vmaf:'#vmaf-reexecution'},selectors={single:'data-job-id',range:'data-range-id',vmaf:'data-vmaf-job'},successors={};
-  const select=async(kind,id)=>{await page.locator(`[${selectors[kind]}="${id}"]`).click();await page.locator(roots[kind]).waitFor({state:'visible'});};
-  for(const kind of ['single','range','vmaf']){
+  const roots={single:'#quality-reexecution',range:'#quality-range-reexecution',vmaf:'#vmaf-reexecution',xpsnr:'#tasks-reexecution [data-reexecution="xpsnr"]'},selectors={single:'data-job-id',range:'data-range-id',vmaf:'data-vmaf-job',xpsnr:'data-xpsnr-job'},successors={};
+  const select=async(kind,id)=>{if(kind==='xpsnr'){await page.locator('[data-pane=tasks]').click();await page.locator('#tasks-filters [name=kind]').selectOption('xpsnr');await page.locator('#tasks-filters button[type=submit]').click();await page.locator(`[data-task-id="${id}"]`).click();await page.locator(roots[kind]).waitFor({state:'visible'});return;}await page.locator(`[${selectors[kind]}="${id}"]`).click();await page.locator(roots[kind]).waitFor({state:'visible'});};
+  for(const kind of ['single','range','vmaf','xpsnr']){
     phase='GUI-plan-'+kind;const id=originals[kind].id,url=paths[kind]+'/'+id;await select(kind,id);const root=page.locator(roots[kind]);
     await root.locator('[data-reason]').fill('Explicit GUI full recomputation '+kind);await root.locator('[data-plan]').click();await root.locator('[data-status]').filter({hasText:'Conditions verified'}).waitFor();
     check(kind+' requires explicit cost confirmation',await root.locator('[data-execute]').isDisabled());check(kind+' describes full scope without old-score reuse',(await root.locator('[data-cost]').textContent()).includes('entire-frozen-input-from-start'));
@@ -58,13 +59,14 @@ try{
     }else{
       await root.locator('[data-execute]').click();const chain=await until(()=>f.json(url+'/reexecutions'),v=>!!v.successor,'GUI durable successor');successors[kind]=chain.successor.id;await until(()=>read(kind,chain.successor.id),j=>!['queued','preparing','running','cancelling'].includes(j.state),'GUI execution');
     }
+    if(kind==='xpsnr'){await page.locator('#tasks-title').filter({hasText:successors[kind]}).waitFor();await page.locator(`[data-related-id="${id}"]`).click();check('task center traces the original computation',(await page.locator('#tasks-title').textContent()).includes(id));await page.reload();await page.locator('#tasks-title').filter({hasText:id}).waitFor();check('task center reopens the same target and filter',await page.locator('#tasks-filters [name=kind]').inputValue()==='xpsnr');await page.locator('[data-pane=quality]').click();await page.locator(`[data-xpsnr-job="${successors[kind]}"]`).click();await page.locator('#xpsnr-reexecution [data-chain]').filter({hasText:id}).waitFor();}
     const done=await read(kind,successors[kind]);check(kind+' finishes a new computation',done.state==='completed'&&done.retryOf.retryOf===id&&done.retryOf.generation===2);check(kind+' retains original terminal facts',JSON.stringify(await read(kind,id))===snapshots[kind]);
     if(kind!=='single'){
       check(kind+' does not auto-publish',await f.json(paths[kind]+'/'+done.id+'/candidates')===null);
       const policy=kind==='range'?{space:'default',side:'reference',metric:'psnr',maxDb:120,limit:1,minAuDistance:1,text:'GUI reviewed new range',severity:2}:{space:'default',side:'reference',maxScore:100,limit:1,minFrameDistance:1,text:'GUI reviewed new VMAF',severity:2};
       const publication=await f.json(paths[kind]+'/'+done.id+'/candidates',policy);check(kind+' candidate is explicit',publication.createdIds.length===1);
-      if(kind==='vmaf'){
-        await page.locator(`[data-vmaf-candidate="${publication.createdIds[0]}"]`).waitFor();const href=await page.locator(`[data-vmaf-candidate="${publication.createdIds[0]}"]`).getAttribute('href'),other=await browser.newContext(),viewer=await other.newPage(),privateReads=[];await other.addCookies([{name:'voidplayer-user',value:'guest-'+randomUUID(),url:f.base}]);viewer.on('request',r=>{if(/\/api\/quality\/(jobs|ranges|vmaf\/jobs)/.test(r.url()))privateReads.push(r.url());});await viewer.goto(href);await viewer.locator('#pair-view[data-state="ready"]').waitFor({timeout:30000});check('independent original viewer uses shared evidence without private jobs',privateReads.length===0);await viewer.screenshot({path:path.join(directory,'reexecuted-original-frame.png')});await other.close();
+      if(kind==='vmaf'||kind==='xpsnr'){
+        await page.locator(`[data-${kind}-candidate="${publication.createdIds[0]}"]`).waitFor();const href=await page.locator(`[data-${kind}-candidate="${publication.createdIds[0]}"]`).getAttribute('href'),other=await browser.newContext(),viewer=await other.newPage(),privateReads=[];await other.addCookies([{name:'voidplayer-user',value:'guest-'+randomUUID(),url:f.base}]);viewer.on('request',r=>{if(/\/api\/quality\/(jobs|ranges|vmaf\/jobs|xpsnr\/jobs)/.test(r.url()))privateReads.push(r.url());});await viewer.goto(href);await viewer.locator('#pair-view[data-state="ready"]').waitFor({timeout:30000});check('independent original viewer uses shared evidence without private jobs',privateReads.length===0);await viewer.screenshot({path:path.join(directory,'reexecuted-original-frame.png')});await other.close();
       }
     }
   }

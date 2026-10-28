@@ -20,6 +20,7 @@ type Publication={policy:CandidatePolicy;selected:{index:number;id:string;operat
 type CandidatePolicy={space:string;side:'reference'|'distorted';maxScore:number;limit:number;minFrameDistance:number;text:string;severity:number};
 /** Separate metric outcomes, one service-owned attempt, no automatic retry/work sharing. */
 export class NativeVmafService{
+  reexecutionLinks(actor:string){return this.reexecutions.links(actor,VMAF_LIMITS.historyRows);}
   taskSummaries(actor:string){return taskSummaries(this.db,'vmaf',actor);}
   taskEdges(actor:string){return taskEdges(this.db,'vmaf',actor);}
 

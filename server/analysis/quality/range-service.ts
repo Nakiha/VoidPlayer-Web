@@ -27,6 +27,7 @@ type Publication={policy:RangeCandidatePolicy;origin:string;selected:{au:number;
 
 /** Parent never acquires admission; existing child runner owns physical stop. */
 export class QualityRangeService {
+  reexecutionLinks(actor:string){return this.reexecutions.links(actor,LIMITS.historyRows);}
   taskSummaries(actor:string){return taskSummaries(this.db,'range',actor);}
   taskEdges(actor:string){return taskEdges(this.db,'range',actor);}
   taskChild(id:string,childId:string,actor:string){

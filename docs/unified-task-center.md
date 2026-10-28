@@ -116,3 +116,11 @@ IDs/commands, unique48, unchanged preparation, budgets and fail-closed aggregati
 TypeScript, the two Worker negative-compilation contracts, release/manifest
 contracts (75 tests combined), and the real native HTTP case passed after this
 test-only correction. No product, workflow, timeout or gate was changed.
+
+
+Explicit recomputation of stopped failed/interrupted/cancelled/partial scoring
+jobs is described in [the shared reexecution contract](explicit-quality-reexecution.md).
+Task-center details use the same confirmation/receipt panel as metric views and
+show verified original/successor links. This is a new complete computation with
+explicit cost confirmation; no automatic retry, partial resume or replacement of
+old scores/candidates occurs. Preparation and C plans are not reexecuted here.

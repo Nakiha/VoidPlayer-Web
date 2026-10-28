@@ -1,3 +1,5 @@
+import type {QualityExecutionContract} from '../../../shared/analysis/quality/reexecution.ts';
+import {canonicalJson} from '../../../shared/analysis/quality/correspondence.ts';
 import {Worker} from 'node:worker_threads';import {spawn} from 'node:child_process';
 import {mkdirSync,copyFileSync,readFileSync,statSync,rmSync} from 'node:fs';
 import path from 'node:path';import {randomUUID,createHash} from 'node:crypto';
@@ -6,7 +8,7 @@ import {XPSNR_LIMITS,XPSNR_CAPABILITY,XpsnrError,parseXpsnrStatistics,XPSNR_RECI
 import type {XpsnrComponentConfig,XpsnrInput,XpsnrPlanSnapshot,XpsnrPrepared,XpsnrNativeResult} from '../../../shared/analysis/quality/xpsnr.ts';
 import type {XpsnrComponent} from './component.ts';
 declare const VOIDPLAYER_COMPILED:boolean;
-type Hooks={admitted():void;phase(name:string):void;progress(frames:number,total:number):void;prepared(value:XpsnrPrepared):void;process(value:{pid:number;startTicks:string;bootId:string}|null):void};
+type Hooks={expectedExecutionContract?:QualityExecutionContract;contract?(value:QualityExecutionContract):void;admitted():void;phase(name:string):void;progress(frames:number,total:number):void;prepared(value:XpsnrPrepared):void;process(value:{pid:number;startTicks:string;bootId:string}|null):void};
 const sleep=()=>new Promise<void>(r=>setTimeout(r,10));
 import {processStartTicks,stopOwnedNative} from '../vmaf/runner.ts';
 export {stopOwnedNative};
@@ -24,7 +26,7 @@ export class NativeXpsnrRunner{
   signal.throwIfAborted();if(!this.config)throw new XpsnrError('component-unavailable','No native XPSNR component configured');
   return this.worker<XpsnrComponent>('component-worker.ts',{config:this.config},signal);
  }
- private worker<T>(entry:string,data:object,signal:AbortSignal,progress?:(n:number,total:number)=>void):Promise<T>{
+ private worker<T>(entry:string,data:object,signal:AbortSignal,progress?:(n:number,total:number)=>void,onContract?:(value:QualityExecutionContract)=>void):Promise<T>{
   const control=new Int32Array(new SharedArrayBuffer(8));
   const url=new URL(typeof VOIDPLAYER_COMPILED!=='undefined'&&VOIDPLAYER_COMPILED?`./analysis/xpsnr/${entry}`:`./${entry}`,import.meta.url);
   const worker=new Worker(url,{workerData:{...data,control:control.buffer},resourceLimits:{maxOldGenerationSizeMb:256},trackUnmanagedFds:true});
@@ -39,11 +41,13 @@ export class NativeXpsnrRunner{
     finally{worker.removeAllListeners();}
    };
    const abort=()=>void finish(false,signal.reason);
-   worker.on('message',message=>{if(finishing)return;if(message.type==='progress'){try{progress?.(message.frames,message.total);}catch(error){void finish(false,error);}return;}void finish(message.ok===true,message.ok?message.value:new XpsnrError(message.error?.code??'execution-failed',message.error?.message??'XPSNR Worker failed'));});
+   worker.on('message',message=>{if(finishing)return;if(message.type==='execution-contract'){try{onContract?.(message.contract);}catch(error){void finish(false,error);}return;}if(message.type==='progress'){try{progress?.(message.frames,message.total);}catch(error){void finish(false,error);}return;}void finish(message.ok===true,message.ok?message.value:new XpsnrError(message.error?.code??'execution-failed',message.error?.message??'XPSNR Worker failed'));});
    worker.once('error',error=>void finish(false,error));worker.once('messageerror',()=>void finish(false,new XpsnrError('execution-failed','Invalid Worker reply')));worker.once('exit',()=>{exited=true;Atomics.notify(control,1);if(!finishing)void finish(false,new XpsnrError('execution-failed','XPSNR Worker exited without a result'));});
    signal.addEventListener('abort',abort,{once:true});if(signal.aborted)abort();
   });
  }
+ private nativeContract(c:XpsnrComponent):NonNullable<QualityExecutionContract['nativeXpsnr']>{return {manifestSha256:c.manifestSha256,binarySha256:c.binarySha256,filterSha256:c.filterSha256,supervisorSha256:c.supervisorSha256,sourceRevision:c.sourceRevision,recipe:XPSNR_RECIPE};}
+ async reexecutionPreflight(input:XpsnrInput,snapshot:XpsnrPlanSnapshot,expected:QualityExecutionContract,signal:AbortSignal){return this.owned({budget:{maxElapsedMs:Math.min(input.budget.maxElapsedMs,30000)}},signal,()=>{},async combined=>{const c=await this.component(combined);return this.worker('decode-worker.ts',{mode:'preflight',database:this.library.indexDatabase,coreDir:this.coreDir,input,snapshot,directory:'',nativeXpsnrContract:this.nativeContract(c),expectedExecutionContract:expected},combined);});}
  async preflight(input:XpsnrInput,snapshot:XpsnrPlanSnapshot,signal:AbortSignal){
   return this.owned(input,signal,()=>{},async combined=>{const c=await this.component(combined);combined.throwIfAborted();const value=await this.worker('decode-worker.ts',{mode:'preflight',database:this.library.indexDatabase,coreDir:this.coreDir,input,snapshot,directory:''},combined);return {eligibility:value,component:{manifestSha256:c.manifestSha256,filterSha256:c.filterSha256},rawColorVerification:'required-at-execution',nativeExecution:false};});
  }
@@ -53,9 +57,11 @@ export class NativeXpsnrRunner{
    try{
     hooks.phase('component');const c=await this.component(combined);combined.throwIfAborted();
     mkdirSync(directory,{recursive:true,mode:0o700});temporary=true;hooks.phase('decode');
-    const prepared=await this.worker<XpsnrPrepared>('decode-worker.ts',{mode:'decode',database:this.library.indexDatabase,coreDir:this.coreDir,input,snapshot,directory},combined,hooks.progress);combined.throwIfAborted();hooks.prepared(prepared);
+    const prepared=await this.worker<XpsnrPrepared>('decode-worker.ts',{mode:'decode',database:this.library.indexDatabase,coreDir:this.coreDir,input,snapshot,directory,nativeXpsnrContract:this.nativeContract(c),expectedExecutionContract:hooks.expectedExecutionContract},combined,hooks.progress,hooks.contract);combined.throwIfAborted();hooks.prepared(prepared);
+    if(hooks.expectedExecutionContract){const current=await this.component(combined);if(canonicalJson(this.nativeContract(current))!==canonicalJson(hooks.expectedExecutionContract.nativeXpsnr))throw new XpsnrError('component-unavailable','Frozen XPSNR component changed; use a new intent');}
     hooks.phase('native');const native=await this.native(c,directory,input,prepared,combined,hooks.process);combined.throwIfAborted();
-    hooks.phase('source-final');const verification=await this.worker<{indexBytes:number;indexPackets:number;elapsedMs:number}>('decode-worker.ts',{mode:'verify',database:this.library.indexDatabase,coreDir:this.coreDir,input,snapshot,directory},combined);combined.throwIfAborted();if(prepared.work.indexBytes+verification.indexBytes>XPSNR_LIMITS.maxIndexBytes||prepared.work.indexPackets+verification.indexPackets>XPSNR_LIMITS.maxIndexPackets)throw new XpsnrError('budget-exceeded','Final verification exceeds cumulative index budget');native.resources.finalVerification={indexBytes:verification.indexBytes,indexPackets:verification.indexPackets,elapsedMs:verification.elapsedMs};return {prepared,native};
+    if(hooks.expectedExecutionContract){const current=await this.component(combined);if(canonicalJson(this.nativeContract(current))!==canonicalJson(hooks.expectedExecutionContract.nativeXpsnr))throw new XpsnrError('component-unavailable','Frozen XPSNR component changed; use a new intent');}
+    hooks.phase('source-final');const verification=await this.worker<{indexBytes:number;indexPackets:number;elapsedMs:number}>('decode-worker.ts',{mode:'verify',database:this.library.indexDatabase,coreDir:this.coreDir,input,snapshot,directory,nativeXpsnrContract:this.nativeContract(c),expectedExecutionContract:hooks.expectedExecutionContract},combined);combined.throwIfAborted();if(prepared.work.indexBytes+verification.indexBytes>XPSNR_LIMITS.maxIndexBytes||prepared.work.indexPackets+verification.indexPackets>XPSNR_LIMITS.maxIndexPackets)throw new XpsnrError('budget-exceeded','Final verification exceeds cumulative index budget');native.resources.finalVerification={indexBytes:verification.indexBytes,indexPackets:verification.indexPackets,elapsedMs:verification.elapsedMs};return {prepared,native};
    }finally{if(temporary&&!this.stopUncertain)try{rmSync(directory,{recursive:true,force:true});}catch(error){this.stopUncertain=true;throw new XpsnrError('stop-uncertain','Temporary raw sequence could not be reclaimed');}}
   });
  }

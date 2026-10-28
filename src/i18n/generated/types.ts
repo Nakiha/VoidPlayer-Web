@@ -1294,7 +1294,7 @@ export interface Sources {
   "tasks.pageSize": "每页条数";
   "tasks.refresh": "查询 / 刷新快照";
   "tasks.reset": "清除筛选";
-  "tasks.scope": "当前自述身份的准备、对应计划、单帧、区间和 VMAF 历史。刷新读取新快照；翻页保留当时事实。关闭观察不取消后台工作，也不移动播放头。";
+  "tasks.scope": "当前自述身份的准备、对应计划、单帧、区间、VMAF 和 XPSNR 历史。刷新读取新快照；翻页保留当时事实。关闭观察不取消后台工作，也不移动播放头。";
   "tasks.snapshot": "快照 {captured}；{count} 项。新状态需刷新；快照到期后重新查询。";
   "tasks.state": "原始状态";
   "tasks.title": "任务中心";
@@ -1429,7 +1429,6 @@ export interface Sources {
   "xpsnr.preflight": "检查准入（不解码）";
   "xpsnr.publish": "按显式策略发布候选";
   "xpsnr.recipe": "冻结的对应关系与测量 recipe";
-  "xpsnr.retry": "重试冻结的提交";
   "xpsnr.scope": "需要已安装的 Linux x64 组件及显式提交的时钟对应计划。仅限 2–32 个连续呈现帧；不支持跨帧抽样、缺口、负 PTS 或 VFR。限范围 BT.709 SDR、8/10 位 YUV420、方形像素，不裁剪、旋转或转换。固定 FFmpeg 实现，参考输入在前，保留时域权重和官方逐平面序列池化。未证明感知优于其他指标。分数属于整帧时间序列事实，不是热图或人工缺陷判断；未认证引用完整性，无法检测错误隐藏。";
   "xpsnr.share": "此操作共享片源身份及不可变序列事实，不定位空间缺陷。关闭页面只停止观察，不会取消后台执行。";
   "xpsnr.sources": "支持已有可信 FLV/Enhanced FLV、严格非分片 MP4 及两者的双向混合。MP4 限 avc1 H.264 8 位或 hvc1 HEVC 8/10 位，原始时钟必须精确表示整数微秒。";
@@ -2867,7 +2866,6 @@ export interface MessageParameters {
   "xpsnr.preflight": {  };
   "xpsnr.publish": {  };
   "xpsnr.recipe": {  };
-  "xpsnr.retry": {  };
   "xpsnr.scope": {  };
   "xpsnr.share": {  };
   "xpsnr.sources": {  };

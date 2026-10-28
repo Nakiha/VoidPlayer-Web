@@ -25,9 +25,11 @@ function fixture(){
  const owner=(kind:TaskKind)=>({taskSummaries:(actor:string)=>taskSummaries(db,kind,actor),taskEdges:(actor:string)=>taskEdges(db,kind as 'range'|'correspondence'|'vmaf',actor),cancel:()=>{throw Error('Cancellation callback not installed');}});
  const services={preparation:owner('preparation'),correspondence:owner('correspondence'),single:owner('single'),range:owner('range'),vmaf:owner('vmaf'),xpsnr:owner('xpsnr')};
  Object.assign(services.range,{taskChild:()=>true});Object.assign(services.correspondence,{taskRange:(id:string)=>JSON.parse(String(db.prepare('SELECT body FROM quality_plan_executions WHERE plan_id=?').get(id)?.body??'null'))?.rangeId??null,get:(id:string)=>JSON.parse(String(db.prepare('SELECT body FROM quality_correspondence_plans WHERE id=?').get(id)!.body))});Object.assign(services.vmaf,{get:(id:string)=>JSON.parse(String(db.prepare('SELECT body FROM quality_vmaf_jobs WHERE id=?').get(id)!.body))});
- const library={durableQualityJobsEnabled:true,discovery:{store:services.preparation,cancel:services.preparation.cancel},qualityCorrespondence:services.correspondence,qualityJobs:services.single,qualityRanges:services.range,qualityVmaf:services.vmaf,qualityXpsnr:services.xpsnr} as unknown as MediaLibraryIndex;
+ const retries=new Map<string,{parentId:string;jobId:string}[]>();
+ const qualityReexecutions={links:(kind:string,actor:string)=>retries.get(kind+'/'+actor)??[],chain:(kind:string,id:string,actor:string)=>({successor:retries.get(kind+'/'+actor)?.find(r=>r.parentId===id)?{id:retries.get(kind+'/'+actor)!.find(r=>r.parentId===id)!.jobId}:null})};
+ const library={qualityReexecutions,durableQualityJobsEnabled:true,discovery:{store:services.preparation,cancel:services.preparation.cancel},qualityCorrespondence:services.correspondence,qualityJobs:services.single,qualityRanges:services.range,qualityVmaf:services.vmaf,qualityXpsnr:services.xpsnr} as unknown as MediaLibraryIndex;
  let clock=1000;const center=new TaskCenterService(library,()=>clock);
- return {db,insert,center,library,source,other,clock:(value:number)=>{clock=value;},close:()=>{center.close();db.close();}};
+ return {db,insert,center,library,retries,source,other,clock:(value:number)=>{clock=value;},close:()=>{center.close();db.close();}};
 }
 const query=(s='')=>taskQuery(new URLSearchParams(s));
 
@@ -88,4 +90,19 @@ test('detail traces only same-actor pinned relationships and distinguishes retai
 test('hard history excess fails closed, never returns a silently incomplete first window',t=>{
  const temporary=new TaskCenterService({durableQualityJobsEnabled:false}as MediaLibraryIndex);assert.throws(()=>temporary.query('actor-A',query()),(e:any)=>e.code==='task-storage-unavailable');temporary.close();
  const f=fixture();t.after(f.close);for(let n=0;n<=TASK_HISTORY_ROWS.vmaf;n++)f.insert('vmaf');assert.throws(()=>f.center.query('actor-A',query()),(e:any)=>e.code==='task-history-budget');
+});
+
+
+test('reexecution edges are bidirectional, actor-scoped and never count a successor as a retained range sample',t=>{
+ const f=fixture();t.after(f.close);
+ for(const kind of ['single','range','vmaf','xpsnr'] as const){
+  const original=f.insert(kind,'actor-A',{state:'failed',samples:[]}),next=f.insert(kind),foreign=f.insert(kind,'actor-B');
+  f.retries.set(kind+'/actor-A',[{parentId:original.id,jobId:next.id},{parentId:original.id,jobId:foreign.id}]);
+  const parent=f.center.detail(kind,original.id,'actor-A'),child=f.center.detail(kind,next.id,'actor-A');
+  assert.deepEqual(parent.related.filter(r=>r.relation==='reexecution').map(r=>r.id),[next.id]);
+  assert.deepEqual(child.related.filter(r=>r.relation==='parent-reexecution').map(r=>r.id),[original.id]);
+  assert.ok(parent.links.some(l=>l.rel==='reexecution-plan'));assert.ok(parent.links.some(l=>l.rel==='reexecution-chain'));
+  if(kind==='range')assert.equal(parent.task.result.retained,0,'successor is a new computation, not an old scored child');
+  assert.throws(()=>f.center.detail(kind,original.id,'actor-B'),{status:404});
+ }
 });

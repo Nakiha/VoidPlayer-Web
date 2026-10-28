@@ -24,6 +24,7 @@ const reason = (code: string, message: string): QualityJobReason => ({code, mess
 /** One owner, bounded records, one attempt per submission. The separate SQLite
  * lock is crash-released; recovery cannot run against a live owning service. */
 export class QualityJobStore {
+  reexecutionLinks(actor:string){return this.reexecutions.links(actor,LIMITS.historyRows);}
   taskSummaries(actor:string){return taskSummaries(this.db,'single',actor);}
 
   private db: ReturnType<typeof openIndexDatabase>;
