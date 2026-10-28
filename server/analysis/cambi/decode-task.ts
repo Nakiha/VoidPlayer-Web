@@ -1,21 +1,22 @@
 import {readFileSync,openSync,writeSync,closeSync} from 'node:fs';import path from 'node:path';import {pathToFileURL} from 'node:url';import {createHash} from 'node:crypto';
 import {openIndexDatabase} from '../../sqlite.ts';import {FrameIndexStore} from '../../frame-index-store.ts';import {libraryPairSource} from '../quality/file-source.ts';
-import {parseFlvIndex} from '../../../shared/media/indexing/flv-index-cache.ts';import {qualityTargetForAu} from '../../../shared/analysis/quality/selection.ts';
-import {inspectFlvFrame,PAIR_LIMITS} from '../../../shared/analysis/quality/frame-pair.ts';import type {PairTarget} from '../../../shared/analysis/quality/frame-pair.ts';
+import {qualitySourceIndex,qualityIndexPacketCount} from '../../../shared/analysis/quality/source-index.ts';import {qualityTargetForAu} from '../../../shared/analysis/quality/selection.ts';
+import {inspectSourceFrame,PAIR_LIMITS} from '../../../shared/analysis/quality/frame-pair.ts';import type {PairTarget} from '../../../shared/analysis/quality/frame-pair.ts';
 import {createPairDecoder} from '../../../shared/analysis/quality/wasm-decoder.ts';import {instantiateCore} from '../../../shared/wasm/core.ts';import {validateDescription} from '../../../shared/media/frame-description.ts';
 import {CAMBI_LIMITS,CambiError,cambiOutputBudget} from '../../../shared/analysis/quality/cambi.ts';import type {CambiInput,CambiPrepared} from '../../../shared/analysis/quality/cambi.ts';
 export async function runCambiDecode(data:{mode:'decode'|'verify'|'picture';target?:PairTarget;database:string;coreDir:string;directory:string;input:CambiInput;control:SharedArrayBuffer},progress:(frames:number,total:number)=>void){
  const started=performance.now(),control=new Int32Array(data.control),check=()=>{if(Atomics.load(control,0))throw new CambiError('cancelled','CAMBI decode cancelled');if(performance.now()-started>data.input.budget.maxElapsedMs)throw new CambiError('budget-exceeded','CAMBI decode deadline');};
  const db=openIndexDatabase(data.database,{readOnly:true}),store=new FrameIndexStore(db);let indexBytes=0,indexPackets=0;
- const open=(t:PairTarget)=>{check();if(t.indexIdentity.kind!=='flv')throw new CambiError('unsupported-source','Native CAMBI remains FLV-only');const v=libraryPairSource(db,store,t,{...PAIR_LIMITS,maxIndexBytes:Math.min(PAIR_LIMITS.maxIndexBytes,CAMBI_LIMITS.maxIndexBytes-indexBytes),maxIndexPackets:PAIR_LIMITS.maxIndexPackets},control);if(!v.source.index||v.source.index.schema!==3){v.source.close();throw new CambiError('unsupported-source','Native CAMBI requires the original FLV index');}indexBytes+=Buffer.byteLength(JSON.stringify(v.source.index));indexPackets+=v.source.index!.packets.length;if(indexBytes>CAMBI_LIMITS.maxIndexBytes||indexPackets>CAMBI_LIMITS.maxIndexPackets){v.source.close();throw new CambiError('budget-exceeded','Cumulative CAMBI index budget');}return v;};
+ const open=(t:PairTarget)=>{check();const v=libraryPairSource(db,store,t,{...PAIR_LIMITS,maxIndexBytes:Math.min(PAIR_LIMITS.maxIndexBytes,CAMBI_LIMITS.maxIndexBytes-indexBytes),maxIndexPackets:PAIR_LIMITS.maxIndexPackets},control);if(!v.source.index){v.source.close();throw new CambiError('unsupported-source','Native CAMBI requires an existing trusted quality index');}indexBytes+=Buffer.byteLength(JSON.stringify(v.source.index));indexPackets+=qualityIndexPacketCount(v.source.index);if(indexBytes>CAMBI_LIMITS.maxIndexBytes||indexPackets>CAMBI_LIMITS.maxIndexPackets){v.source.close();throw new CambiError('budget-exceeded','Cumulative CAMBI index budget');}return v;};
  const dummy={...data.input.source,sourcePtsUs:0,picture:{sourceVersion:`${data.input.source.mediaId}@${data.input.source.mediaVersion}`,stream:'video',configuration:0,au:0,picture:0,layer:0,field:'frame'}} as PairTarget;
  try{
-  const first=open(dummy);let index,binding;try{index=parseFlvIndex(first.source.index!,data.input.source.size);binding=first.proof;}finally{first.source.close();}
+  const first=open(dummy);let index,binding;try{index=qualitySourceIndex(first.source.index!,data.input.source.size);binding=first.proof;}finally{first.source.close();}
   if(data.mode==='verify')return {indexBytes,indexPackets};
   const {startPtsUs,endPtsUs}=data.input.interval,rows=index.packets.flatMap((p,au)=>p.pts>=startPtsUs&&p.pts<endPtsUs?[{au,p}]:[]);
   if(!rows.length)throw new CambiError('no-results','No indexed pictures in the declared interval');
   if(rows.length>CAMBI_LIMITS.intervalAus)throw new CambiError('budget-exceeded','Interval exceeds 256 indexed AUs');
   const span=rows.map(r=>r.p.pts).sort((a,b)=>a-b);if(span.some((p,i)=>!Number.isSafeInteger(p)||p<0||i>0&&p<=span[i-1]||i>1&&p-span[i-1]!==span[1]-span[0]))throw new CambiError('unsupported-source','Negative/VFR/ambiguous clocks in interval are unsupported');
+  if(index.mp4){const cadence=span.length>1?span[1]-span[0]:index.mp4.samples[rows[0].au].durationUs;if(rows.some(r=>index.mp4!.samples[r.au].durationUs!==cadence))throw new CambiError('unsupported-source','MP4 measured interval requires exact constant presentation cadence and durations');}
   const counts=new Map<number,number>();for(const p of index.packets)counts.set(p.pts,(counts.get(p.pts)??0)+1);
   const targets:PairTarget[]=[],unsupported:CambiPrepared['coverage']['unsupported']=[];let unsampled=0;
   for(const [ordinal,{au,p}]of rows.entries()){
@@ -31,7 +32,7 @@ export async function runCambiDecode(data:{mode:'decode'|'verify'|'picture';targ
   const load=async()=>{check();if(!core){const glue=await import(pathToFileURL(path.join(data.coreDir,'voidplayer-core.js')).href);core=await instantiateCore(glue.default,new Uint8Array(readFileSync(path.join(data.coreDir,'voidplayer-core.wasm'))),256*1024*1024);}return core;};
   for(const [ordinal,target]of targets.entries()){
    check();const source=open(target);try{
-    const picture=await inspectFlvFrame(target,source.source,()=>createPairDecoder(load),new AbortController().signal);check();
+    const picture=await inspectSourceFrame(target,source.source,()=>createPairDecoder(load),new AbortController().signal);check();
     const f=picture.frame,d=f.description;validateDescription(d,f.pixels.length);
     const c=d.sourceColor??d.color,l=d.yuv;
     if(d.format!=='YUV'||!l||l.semiplanar||l.subsampleX!==1||l.subsampleY!==1||l.bitShift!==0||d.colorFallback||![8,10].includes(l.bitDepth)||[c.primaries,c.transfer,c.matrix].some(t=>t!=='bt709')||c.fullRange!==false||l.chromaLocation!==1||d.displayWidth!==d.width||d.displayHeight!==d.height)throw new CambiError('unsupported-source',`CAMBI requires explicit limited BT709 SDR YUV420 8/10bit left chroma and square full-frame geometry: ${JSON.stringify({color:c,bitDepth:l?.bitDepth,chromaLocation:l?.chromaLocation,width:d.width,displayWidth:d.displayWidth,height:d.height,displayHeight:d.displayHeight,format:d.format})}`);
