@@ -4,6 +4,7 @@ import {TaskCenterService} from './tasks/service.ts';
 import {NativeXpsnrService} from './analysis/xpsnr/service.ts';
 import {NativeXpsnrRunner} from './analysis/xpsnr/runner.ts';
 import type {XpsnrComponentConfig} from '../shared/analysis/quality/xpsnr.ts';
+import {QualityReexecutionService} from './analysis/quality/reexecution-service.ts';
 import {NativeVmafService} from './analysis/vmaf/service.ts';
 import {NativeVmafRunner} from './analysis/vmaf/runner.ts';
 import type {VmafComponentConfig} from '../shared/analysis/quality/vmaf.ts';
@@ -50,6 +51,8 @@ export class MediaLibraryIndex {
   get discovery() { if(this.closed)throw new AdminError(503,'Library discovery is closed.','discovery-unavailable');return this.discoveryService??=new LibraryDiscoveryService(this); }
   private taskService?:TaskCenterService;
   get tasks(){if(this.closed)throw new AdminError(503,'Task center closed.','task-center-unavailable');return this.taskService??=new TaskCenterService(this);}
+  private reexecutionService?:QualityReexecutionService;
+  get qualityReexecutions(){if(this.closed)throw new AdminError(503,'Quality reexecution is closed.','reexecution-unavailable');this.qualityJobs;return this.reexecutionService??=new QualityReexecutionService(this);}
   private rangeService?: QualityRangeService;
   private correspondenceService?:CorrespondenceService;
   private cambiService?:NativeCambiService;
@@ -421,6 +424,7 @@ export class MediaLibraryIndex {
   private async closeOwned() {
     this.closed = true; this.stop();
     this.taskService?.close();
+    await this.reexecutionService?.close();
     await this.correspondenceService?.close();
     await this.cambiService?.close();
     await this.xpsnrService?.close();

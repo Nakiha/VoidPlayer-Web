@@ -1,3 +1,4 @@
+import {REEXECUTION_KINDS,reexecutionKind} from '../../shared/analysis/quality/reexecution.ts';
 import {createHmac,randomBytes} from 'node:crypto';
 import {AdminError} from '../admin-error.ts';
 import type {MediaLibraryIndex} from '../library.ts';
@@ -28,8 +29,9 @@ export class TaskCenterService{
       const from=index.get(key(e.from,e.id)),to=index.get(key(e.to,e.target));
       return !!from&&!!to&&(!e.attemptId||e.attemptId===to.attemptId&&e.digest===to.resultDigest);
     });
+    for(const kind of REEXECUTION_KINDS)for(const link of l.qualityReexecutions.links(kind,actor)){if(index.has(key(kind,link.parentId))&&index.has(key(kind,link.jobId)))edges.push({from:kind,id:link.parentId,to:kind,target:link.jobId,relation:'reexecution'});}
     for(const r of rows)if(r.kind==='range'){
-      const retained=edges.filter(e=>e.from==='range'&&e.id===r.id&&index.get(key(e.to,e.target))?.result.available).length;
+      const retained=edges.filter(e=>e.from==='range'&&e.id===r.id&&e.relation==='child-sample'&&index.get(key(e.to,e.target))?.result.available).length;
       r.result={...r.result,available:retained>0,retained};if(!retained)r.links=r.links.filter(x=>x.rel!=='result');
     }
     if(rows.length>TASK_LIMITS.rows)throw new AdminError(503,'Task read set exceeds its history budget.','task-history-budget');
@@ -61,11 +63,15 @@ export class TaskCenterService{
       if(!(e.from===kind&&e.id===id||e.to===kind&&e.target===id))continue;
       // Listing projects only metadata. Detail verifies the original frozen
       // receipt/input association before presenting an actionable link.
+      if(e.relation==='reexecution'){
+        if(e.from!==e.to||!reexecutionKind(e.from)||this.library.qualityReexecutions.chain(e.from,e.id,actor).successor?.id!==e.target)continue;
+      }else {
       if(e.from==='correspondence'&&this.library.qualityCorrespondence.taskRange(e.id,actor)!==e.target)continue;
       if(e.from==='range'&&!this.library.qualityRanges.taskChild(e.id,e.target,actor))continue;
       if(e.from==='vmaf'||e.from==='xpsnr'){
         const pin=(e.from==='vmaf'?this.library.qualityVmaf:this.library.qualityXpsnr).get(e.id,actor).input.plan,plan=this.library.qualityCorrespondence.get(e.target,actor);
         if(pin.id!==plan.id||pin.attemptId!==plan.attemptId||pin.digest!==plan.resultDigest)continue;
+      }
       }
       if(e.from===kind&&e.id===id)related.push({kind:e.to,id:e.target,relation:e.relation,href:taskPath(e.to,e.target)});
       if(e.to===kind&&e.target===id)related.push({kind:e.from,id:e.id,relation:`parent-${e.relation}`,href:taskPath(e.from,e.id)});
@@ -76,6 +82,7 @@ export class TaskCenterService{
       if(JSON.stringify(relation)===JSON.stringify(plan.relation))links.push({rel:'reference-relation',href:`/api/quality/reference-relations/${encodeURIComponent(relation.id)}`});
     }
     if(kind==='range'||kind==='vmaf'||kind==='xpsnr'||kind==='cambi')links.push({rel:'candidate-receipt',href:task.links[0].href+'/candidates'});
+    if(reexecutionKind(kind)){links.push({rel:'reexecution-chain',href:task.links[0].href+'/reexecutions'});if(['failed','interrupted','cancelled','partial'].includes(task.state))links.push({rel:'reexecution-plan',href:task.links[0].href+'/reexecution-plan'});}
     if(taskPending(task.state))links.push({rel:'cancel',href:taskPath(kind,id)+'/cancel'});
     return {schema:'voidplayer-task-detail',version:1,task,related,links};
   }

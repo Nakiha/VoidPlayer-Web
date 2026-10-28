@@ -1,3 +1,5 @@
+import {installQualityReexecution} from './quality-reexecution.ts';
+import {REEXECUTION_KINDS,reexecutionKind} from '../../shared/analysis/quality/reexecution.ts';
 import {canonicalJson} from '../../shared/analysis/quality/cambi.ts';
 import {t,th,msg,formatDate} from '../i18n.ts';
 import {currentActor,identityHealth} from '../services/identity.ts';
@@ -23,7 +25,7 @@ export function tasksShell(){
   <button id="tasks-more" type="button" hidden>${th(msg('admin.nextPage','下一页'))}</button>
   <section id="tasks-detail" class="admin-panel" hidden><h2 id="tasks-title"></h2><pre id="tasks-facts"></pre>
   <button id="tasks-cancel" type="button" hidden>${th(msg('tasks.cancel','显式取消此任务'))}</button>
-  <p id="tasks-cancel-status" role="status"></p><div id="tasks-related"></div><div id="tasks-links"></div><div id="tasks-candidates"></div></section></section>`;
+  <p id="tasks-cancel-status" role="status"></p><div id="tasks-related"></div><div id="tasks-links"></div><div id="tasks-candidates"></div><p id="tasks-reexecution-unavailable" hidden>${th(msg('tasks.reexecutionUnavailable','此任务类型尚不支持显式重新执行；不会替换指标或自动重算。'))}</p><section id="tasks-reexecution"></section></section></section>`;
 }
 
 /** Actor and selected-target fences apply after every await. Only filters and
@@ -31,6 +33,8 @@ export function tasksShell(){
 export function installTasks(signal:AbortSignal){
   const $=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(`tasks-${id}`)as T;
   const form=$<HTMLFormElement>('filters'),api=new QualityClient();
+  const reexecutions=new Map(REEXECUTION_KINDS.map(kind=>{const root=document.createElement('section');$('reexecution').append(root);return [kind,installQualityReexecution(root,kind,signal,id=>choose(kind,id))] as const;}));
+  const clearReexecution=()=>{$('reexecution-unavailable').hidden=true;for(const view of reexecutions.values())view.clear();};
   let active=false,actor='',epoch=0,listGeneration=0,detailGeneration=0,next:string|null=null;
   let selected:{kind:TaskKind;id:string}|null=null,detail:TaskDetail|null=null;
   let life=new AbortController(),detailLife=new AbortController(),detailBusy=false;
@@ -45,12 +49,13 @@ export function installTasks(signal:AbortSignal){
     catch{}
   }
   function reset(){
+    clearReexecution();
     life.abort();detailLife.abort();life=new AbortController();detailLife=new AbortController();epoch++;listGeneration++;detailGeneration++;detailBusy=false;
     actor=currentActor()?.id??'';next=null;detail=null;$('list').replaceChildren();$('detail').hidden=true;$('more').hidden=true;$('status').textContent='';$('snapshot').textContent='';$('cancel-status').textContent='';$('cancel').toggleAttribute('disabled',false);for(const id of ['title','facts','related','links','candidates'])$(id).replaceChildren();delete $('candidates').dataset.state;restore();
   }
   const context=()=>({owner:actor,epoch,signal:AbortSignal.any([signal,life.signal])});
   const valid=(c:ReturnType<typeof context>)=>active&&!c.signal.aborted&&c.epoch===epoch&&c.owner===actor&&currentActor()?.id===actor;
-  function choose(kind:TaskKind,id:string){detailLife.abort();detailLife=new AbortController();detailGeneration++;detailBusy=false;selected={kind,id};detail=null;$('detail').hidden=true;for(const part of ['title','facts','related','links','candidates'])$(part).replaceChildren();delete $('candidates').dataset.state;$('cancel-status').textContent='';$('cancel').toggleAttribute('disabled',false);save();void loadDetail();}
+  function choose(kind:TaskKind,id:string){clearReexecution();detailLife.abort();detailLife=new AbortController();detailGeneration++;detailBusy=false;selected={kind,id};detail=null;$('detail').hidden=true;for(const part of ['title','facts','related','links','candidates'])$(part).replaceChildren();delete $('candidates').dataset.state;$('cancel-status').textContent='';$('cancel').toggleAttribute('disabled',false);save();void loadDetail();}
   function row(task:TaskSummary){const button=document.createElement('button');button.type='button';button.dataset.taskId=task.id;button.dataset.taskKind=task.kind;
     button.textContent=`${task.kind} · ${task.state}${task.phase?` / ${task.phase}`:''} · ${task.metrics.join(', ')} · ${formatDate(task.createdAt)} · ${task.id}`;button.onclick=()=>choose(task.kind,task.id);return button;}
   async function list(more=false){
@@ -71,10 +76,11 @@ export function installTasks(signal:AbortSignal){
     const c=context(),target={...selected},generation=++detailGeneration,s=AbortSignal.any([c.signal,detailLife.signal]);
     const current=()=>valid(c)&&!s.aborted&&generation===detailGeneration&&selected?.kind===target.kind&&selected?.id===target.id;
     try{const value=await api.request<TaskDetail>(c.owner,taskPath(target.kind,target.id),s);if(!current())return;detail=value;
+      if(reexecutionKind(target.kind))reexecutions.get(target.kind)!.show(target.id);$('reexecution-unavailable').hidden=target.kind!=='cambi';
       $('detail').hidden=false;$('title').textContent=`${value.task.kind} · ${value.task.state} · ${value.task.id}`;$('facts').textContent=JSON.stringify(value.task,null,2);
       $('cancel').hidden=!value.links.some(l=>l.rel==='cancel');$('related').replaceChildren();$('links').replaceChildren();$('candidates').replaceChildren();
       for(const related of value.related){const b=document.createElement('button');b.type='button';b.textContent=`${related.relation} · ${related.kind} · ${related.id}`;b.dataset.relatedId=related.id;b.onclick=()=>choose(related.kind,related.id);$('related').append(b);}
-      for(const l of value.links)if(l.rel!=='cancel')link(l.href,l.rel,$('links'));
+      for(const l of value.links)if(!['cancel','reexecution-plan'].includes(l.rel))link(l.href,l.rel,$('links'));
       $('candidates').dataset.state='loading';const receipt=value.links.find(l=>l.rel==='candidate-receipt');if(!receipt){$('candidates').dataset.state='ready';return;}
       const publication=await api.request<{policy:{space:string};createdIds:string[];selected:{id:string;evidence?:unknown;ref?:unknown}[]}|null>(c.owner,receipt.href,s);if(!current())return;if(!publication){$('candidates').dataset.state='ready';return;}
       for(const id of publication.createdIds){

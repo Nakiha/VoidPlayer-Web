@@ -1,3 +1,6 @@
+import type {QualityExecutionContract,ExecutionEnvironment} from '../../../shared/analysis/quality/reexecution.ts';
+import {canonicalExecutionSources} from '../../../shared/analysis/quality/reexecution.ts';
+import {executionEnvironment,requireExecutionContract} from '../quality/execution-contract.ts';
 import {readFileSync,openSync,writeSync,closeSync} from 'node:fs';
 import path from 'node:path';import {pathToFileURL} from 'node:url';import {createHash} from 'node:crypto';
 import {openIndexDatabase} from '../../sqlite.ts';import {FrameIndexStore} from '../../frame-index-store.ts';
@@ -10,12 +13,13 @@ import {measurePsnr} from '../../../shared/analysis/quality/psnr.ts';import {mea
 import {vmafSequence,VMAF_LIMITS,VmafError} from '../../../shared/analysis/quality/vmaf.ts';
 import type {VmafInput,VmafPlanSnapshot,VmafPrepared} from '../../../shared/analysis/quality/vmaf.ts';
 import type {PsnrFrame} from '../../../shared/analysis/quality/psnr.ts';
-export type VmafDecodeData={mode:'preflight'|'decode'|'verify';database:string;coreDir:string;directory:string;input:Pick<VmafInput,'cadenceUs'|'metrics'|'budget'>;snapshot:VmafPlanSnapshot;control:SharedArrayBuffer};
+export type VmafDecodeData={mode:'preflight'|'decode'|'verify';database:string;coreDir:string;directory:string;input:Pick<VmafInput,'cadenceUs'|'metrics'|'budget'>;snapshot:VmafPlanSnapshot;control:SharedArrayBuffer;nativeContract?:QualityExecutionContract['native'];nativeXpsnrContract?:QualityExecutionContract['nativeXpsnr'];expectedExecutionContract?:QualityExecutionContract};
 
-export async function runVmafDecode(data:VmafDecodeData,progress:(frames:number,total:number)=>void){
+export async function runVmafDecode(data:VmafDecodeData,progress:(frames:number,total:number)=>void,onContract?:(value:QualityExecutionContract)=>void,onWitness?:(value:ExecutionEnvironment)=>void){
  let decodeDeadline=data.input.budget.maxElapsedMs;
  const started=performance.now(),control=new Int32Array(data.control),controller=new AbortController();
  const check=()=>{if(Atomics.load(control,0))throw new VmafError('cancelled','Sequence decode cancelled');if(performance.now()-started>decodeDeadline)throw new VmafError('budget-exceeded','Sequence decode deadline exceeded');};
+ const readEnvironment=()=>{const value=executionEnvironment(data.coreDir,control,check);onWitness?.(value);return value;};
  const db=openIndexDatabase(data.database,{readOnly:true}),store=new FrameIndexStore(db);
  let indexBytes=0,indexPackets=0;
  const budgetFor=(request:Parameters<typeof pairBudget>[0])=>({...pairBudget(request),maxIndexBytes:Math.max(1,Math.min(pairBudget(request).maxIndexBytes,VMAF_LIMITS.maxIndexBytes-indexBytes)),maxIndexPackets:Math.max(1,Math.min(pairBudget(request).maxIndexPackets,VMAF_LIMITS.maxIndexPackets-indexPackets))});
@@ -28,16 +32,17 @@ export async function runVmafDecode(data:VmafDecodeData,progress:(frames:number,
  try{
   const original=data.snapshot.value.rangePlan;if(!original)throw new VmafError('unsupported-vmaf-sequence','No executable frozen C plan');decodeDeadline=Math.min(decodeDeadline,original.input.budget.maxElapsedMs);
   const initial=openPair(original.input.pairs[0]);
-  let sequence;
+  let sequence;let contract:QualityExecutionContract;
   try{const indexes=initial.map(s=>qualitySourceIndex(s.source.index!,s.source.binding().size)) as [ReturnType<typeof qualitySourceIndex>,ReturnType<typeof qualitySourceIndex>];
    sequence=vmafSequence(data.snapshot,indexes,data.input.cadenceUs);
    const geometry=indexes.map(index=>{const g=index.codec==='h264'?avcGeometry(index.description,true):index.codec==='hevc'?hevcGeometry(index.description,true):null;if(!g)throw new VmafError('unsupported-vmaf-sequence','Unsupported quality source codec');requireInspectionGeometry(g);return g;});
    if(geometry.some(g=>g.width<VMAF_LIMITS.minDimension||g.height<VMAF_LIMITS.minDimension||g.width>VMAF_LIMITS.width||g.height>VMAF_LIMITS.height)||geometry[0].width!==geometry[1].width||geometry[0].height!==geometry[1].height)throw new VmafError('unsupported-vmaf-sequence','Equal supported full-frame geometry required');
    for(const pair of sequence.pairs)if(pair.roi.x||pair.roi.y||pair.roi.width!==geometry[0].width||pair.roi.height!==geometry[0].height)throw new VmafError('unsupported-vmaf-sequence','Arbitrary ROI is unsupported; pin the entire visible frame in C');
+   contract={schema:'voidplayer-quality-execution-contract',version:1,environment:readEnvironment(),sources:canonicalExecutionSources(initial.map(s=>s.proof)),...(data.nativeContract?{native:data.nativeContract}:{}),...(data.nativeXpsnrContract?{nativeXpsnr:data.nativeXpsnrContract}:{})};requireExecutionContract(data.expectedExecutionContract,contract);if(data.mode==='decode')onContract?.(contract);
   }finally{initial.forEach(s=>s.source.close());}
-  if(data.mode!=='decode')return {sequence,indexBytes,indexPackets,elapsedMs:performance.now()-started};
+  if(data.mode!=='decode')return {sequence,indexBytes,indexPackets,elapsedMs:performance.now()-started,contract};
   let loaded:Awaited<ReturnType<typeof instantiateCore>>|undefined;
-  const load=async()=>{check();if(!loaded){const binary=readFileSync(path.join(data.coreDir,'voidplayer-core.wasm'));const glue=await import(pathToFileURL(path.join(data.coreDir,'voidplayer-core.js')).href);loaded=await instantiateCore(glue.default,new Uint8Array(binary),256*1024*1024);}check();return loaded;};
+  const load=async()=>{check();if(!loaded){requireExecutionContract(contract,{...contract,environment:readEnvironment()});const binary=readFileSync(path.join(data.coreDir,'voidplayer-core.wasm'));const glue=await import(pathToFileURL(path.join(data.coreDir,'voidplayer-core.js')).href);loaded=await instantiateCore(glue.default,new Uint8Array(binary),256*1024*1024);}check();return loaded;};
   const result:VmafPrepared={sequence,geometry:{width:0,height:0,bitDepth:8},pairs:[],raw:{referenceSha256:'',distortedSha256:'',bytes:0},work:{readBytes:0,packets:0,outputFrames:0,indexBytes:0,indexPackets:0,inputBytes:0,heapBytes:0,elapsedMs:0}};
   const hashes=[createHash('sha256'),createHash('sha256')];
   const writeFrame=(role:0|1,frame:PsnrFrame)=>{

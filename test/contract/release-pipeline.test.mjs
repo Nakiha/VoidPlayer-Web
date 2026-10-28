@@ -47,7 +47,7 @@ test('release workflow gates verified artifacts and draft staging on every verif
   const workflow = await readFile(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
   const jobs = workflowJobs(workflow);
   assert.match(jobs['analysis-core'].body, /name: Verify analysis reference ABI including restored caches\n        run: node scripts\/prepare-analysis-core.mjs public\/vendor\/voidplayer-analysis/);
-  const required = ['native-release', 'unit', 'playback', 'cache-browser', 'source-logic', 'analysis-browser', 'analysis-matrix', 'ssim-browser', 'hevc-browser', 'uncovered-regressions'];
+  const required = ['native-release', 'linux-native', 'unit', 'playback', 'cache-browser', 'source-logic', 'analysis-browser', 'analysis-matrix', 'ssim-browser', 'hevc-browser', 'uncovered-regressions'];
   assert.deepEqual([...jobs['release-set'].needs].sort(), required.sort());
   assert.deepEqual(jobs.unit.needs, ['decoder', 'analysis-core']);
   assert.match(jobs.unit.body, /run: node scripts\/run-tests\.mjs ci-node-media\n        env:\n          VOIDPLAYER_FFMPEG_ORACLE:/);
@@ -107,26 +107,69 @@ test('release workflow gates verified artifacts and draft staging on every verif
   }
 });
 
+test('Linux native suites retain exact platform ownership outside the compiled package job', async () => {
+  const workflow = await readFile(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
+  const jobs = workflowJobs(workflow), linux = jobs['linux-native'], packaged = jobs['native-release'];
+  const manifest = JSON.parse(await readFile(new URL('../../scripts/testing/manifest.json', import.meta.url), 'utf8'));
+  assert.deepEqual(linux.needs, ['decoder', 'analysis-core']);
+  assert.match(linux.body, /^    runs-on: ubuntu-24\.04$/m);
+  assert.match(linux.body, /^    timeout-minutes: 20$/m);
+  assert.match(packaged.body, /^    timeout-minutes: 20$/m);
+  assert.match(linux.body, /fail-fast: false\n      matrix:\n        runtime: \[node, bun\]/);
+  assert.deepEqual([...packaged.body.matchAll(/platform: ([\w-]+)/g)].map(match => match[1]).sort(), ['darwin-arm64', 'linux-x64', 'windows-x64']);
+  for (const body of [linux.body, packaged.body]) {
+    assert.match(body, /uses: actions\/checkout@v4/);
+    assert.match(body, /node-version: '24\.15\.0'/);
+    assert.match(body, /bun-version-file: \.bun-version/);
+    assert.match(body, /name: release-core\n          path: public\/vendor\/voidplayer-core/);
+    assert.match(body, /name: release-analysis-core\n          path: public\/vendor\/voidplayer-analysis/);
+    assert.match(body, /run: npm ci\n/);
+    assert.match(body, /run: node scripts\/run-tests\.mjs --case release-core\n/);
+    assert.doesNotMatch(body, /continue-on-error:/);
+  }
+  assert.match(linux.body, /if: always\(\)[\s\S]*name: linux-native-reports-\$\{\{ matrix\.runtime \}\}[\s\S]*path: \.run\/test-suites\//);
+  const expectedCounts = { node: 23, bun: 36 };
+  for (const runtime of ['node', 'bun']) {
+    const suite = `ci-native-${runtime}`, command = `run: node scripts/run-tests.mjs ${suite}\n`;
+    assert.equal(linux.body.split(command).length - 1, 1);
+    assert.equal(packaged.body.split(command).length - 1, 1);
+    assert.ok(linux.body.includes(`if: matrix.runtime == '${runtime}'\n        ${command}`));
+    assert.ok(packaged.body.includes(`if: runner.os != 'Linux'\n        ${command}`));
+    const cases = manifest.cases.filter(row => row.suites.includes(suite) && row.platforms.includes('linux'));
+    assert.equal(cases.length, expectedCounts[runtime]);
+    assert.equal(new Set(cases.map(row => row.id)).size, cases.length);
+    assert.ok(cases.every(row => row.required));
+  }
+  assert.match(linux.body, /ci-native-node\n        env:\n          NODE_OPTIONS: --test-reporter=tap/);
+  for (const suite of ['--case release-analysis', '--case release-quality', 'ci-native-http --prepared', 'ci-native-https --prepared']) assert.ok(packaged.body.includes(`run: node scripts/run-tests.mjs ${suite}\n`));
+  const nativeSetup = "      - name: Prepare pinned Linux native quality components\n        if: matrix.platform == 'linux-x64'\n        run: node scripts/native/run-vmaf-tests.mjs node scripts/native/run-xpsnr-tests.mjs node --version\n";
+  assert.equal(packaged.body.split(nativeSetup).length - 1, 1);
+  assert.ok(packaged.body.indexOf(nativeSetup) < packaged.body.indexOf('run: node scripts/run-tests.mjs --case release-quality\n'));
+  assert.equal(manifest.cases.find(row => row.id === 'release-quality').timeoutMs, 120000, 'native build prerequisites must not consume or enlarge the compiled acceptance budget');
+});
+
 test('cache suite runs once in its own required job with the same pinned preparation and evidence', async () => {
   const workflow = await readFile(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
   const jobs = workflowJobs(workflow), cache = jobs['cache-browser'];
   const manifest = JSON.parse(await readFile(new URL('../../scripts/testing/manifest.json', import.meta.url), 'utf8'));
   const cases = manifest.cases.filter(row => row.suites.includes('ci-cache'));
-  assert.equal(cases.length, 64);
-  assert.equal(new Set(cases.map(row => row.id  )).size, 64);
-  const expected=['browser-mcp-page-bridge-chromium','browser-sharing-webkit'];
+  assert.equal(cases.length, 66);
+  assert.equal(new Set(cases.map(row => row.id)).size, 66);
+  const expected=['browser-mcp-page-bridge-chromium','browser-sharing-webkit','browser-quality-reexecution-chromium','browser-quality-reexecution-webkit'];
+
   for(const engine of ['chromium','webkit']){
     for(const name of ['annotation-persistence','cache','library-discovery','native-presented-protocol','presented-quality','quality-annotation','quality-pair-view-10','task-center'])expected.push(`browser-${name}-${engine}`);
     for(const name of ['native-vmaf','native-xpsnr','native-cambi','quality-correspondence','quality-ranges','quality-roi','quality-workflow'])for(const depth of [8,10])expected.push(`browser-${name}-${depth}-${engine}`);
     for(const format of ['h264-8','hevc-8','hevc-10'])expected.push(`browser-native-cambi-mp4-${format}-${engine}`);
     for(const name of ['mp4-quality','mp4-vmaf'])for(const format of ['h264-8','hevc-8','hevc-10'])expected.push(`browser-${name}-${format}-${engine}`);
   }
-  assert.deepEqual(cases.map(row=>row.id).sort(),expected.sort(),'exact prior58 plus six strict MP4 CAMBI checks; no silent removal/substitution');
+  assert.deepEqual(cases.map(row=>row.id).sort(),expected.sort(),'exact prior58 plus six strict MP4 CAMBI and two recomputation checks; no silent removal/substitution');
   const protocolIds=['browser-native-presented-protocol-chromium','browser-native-presented-protocol-webkit'];
-  const priorCases=cases.filter(row=>!protocolIds.includes(row.id));
+  const priorCases=cases.filter(row=>!protocolIds.includes(row.id)&&!row.id.startsWith('browser-quality-reexecution-'));
   assert.equal(priorCases.length,62,'every prior cache case still runs with unchanged mandatory status on main/tag');
   const prCases=manifest.cases.filter(row=>row.suites.includes('ci-cache-pr'));
-  assert.equal(prCases.length,63);
+  assert.equal(prCases.length,65);
+
   assert.deepEqual(cases.filter(row=>!prCases.includes(row)).map(row=>row.id),['browser-presented-quality-webkit']);
   for(const engine of ['chromium','webkit']){
     const row=prCases.find(row=>row.id===`browser-native-presented-protocol-${engine}`);

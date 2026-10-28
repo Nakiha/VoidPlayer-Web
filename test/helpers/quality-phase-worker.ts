@@ -15,7 +15,7 @@ try{
     Atomics.store(state,0,1);Atomics.notify(state,0);
     await new Promise<void>(resolve=>resume=resolve);
     Atomics.store(state,4,1);Atomics.notify(state,4);
-  });
+  },contract=>parentPort!.postMessage({type:'execution-contract',contract}));
   controller.signal.throwIfAborted();Atomics.store(state,3,1);parentPort!.postMessage({ok:true,value});
 }catch(error){const e=error as Error&{code?:string;status?:number};parentPort!.postMessage({ok:false,error:{message:e.message,code:e.code,status:e.status??400}});}
 finally{parentPort!.close();}

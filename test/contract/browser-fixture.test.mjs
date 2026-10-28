@@ -4,6 +4,8 @@ import { EventEmitter } from 'node:events';
 import { mkdtemp, readFile, rm, access } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import {preparationReceiptObserver} from '../../scripts/testing/preparation-receipt.mjs';
+import {installAdminObservationLifecycle} from '../../scripts/testing/admin-observation-lifecycle.mjs';
 import { withBrowserFixture } from '../../scripts/testing/browser-fixture.mjs';
 
 async function scenario(body) {
@@ -158,4 +160,39 @@ test('legacy direct CLI interrupt handlers cancel the fixture and are removed af
     await assert.rejects(access(getTemp()));
     assert.deepEqual(new Set(process.listeners(name)), previous);
   });
+});
+
+
+test('routed preparation receipt failure is handled even before the caller awaits it',async()=>{
+ const observer=preparationReceiptObserver(),pending=observer.arm(),capture=observer.claim(),error=Error('Body unavailable before click completion'),unhandled=[];const onUnhandled=reason=>unhandled.push(reason);process.on('unhandledRejection',onUnhandled);
+ try{capture.fail(error);await new Promise(resolve=>setImmediate(resolve));const outcome=await pending.result;assert.equal(outcome.ok,false);assert.equal(outcome.error,error);assert.deepEqual(unhandled,[]);}finally{pending.close();process.removeListener('unhandledRejection',onUnhandled);}
+});
+test('routed preparation observations cannot overlap or consume a late receipt from an old observation',async()=>{
+ const observer=preparationReceiptObserver(),old=observer.arm(),late=observer.claim();assert.equal(observer.claim(),null);assert.throws(()=>observer.arm(),/already active/);old.close();assert.equal((await old.result).ok,false);
+ const current=observer.arm(),capture=observer.claim();assert.equal(late.complete({key:'old'}),false);const receipt={status:202,key:'original-key',actor:'original-actor',body:{source:'original'},value:{job:{id:'new-job'}}};capture.complete(receipt);assert.deepEqual(await current.result,{ok:true,receipt});current.close();
+});
+test('missing routed preparation receipt has a bounded handled outcome',async()=>{
+ const observer=preparationReceiptObserver(2),pending=observer.arm();try{const outcome=await pending.result;assert.equal(outcome.ok,false);assert.match(outcome.error.message,/timed out/);assert.equal(observer.claim(),null);}finally{pending.close();}
+});
+
+test('admin teardown waits through the original streamed body and only stops its own intervals',async()=>{
+ let release;const bytes=new TextEncoder().encode('{"real":true}'),stream=new ReadableStream({start(controller){controller.enqueue(bytes);release=()=>controller.close();}}),response=new Response(stream),cleared=[];
+ const host={location:new URL('http://127.0.0.1/admin/'),fetch:async()=>response,setInterval:()=>42,clearInterval:id=>cleared.push(id)};
+ installAdminObservationLifecycle(host);assert.equal(host.setInterval(()=>{},1000),42);
+ const value=await host.fetch('/api/admin/status');assert.equal(value,response);assert.equal(host.__vpAdminObservation.pending().length,1);
+ const reader=value.body.getReader();const first=await reader.read();assert.equal(first.value,bytes);assert.equal(host.__vpAdminObservation.pending().length,1);
+ host.__vpAdminObservation.stop();assert.deepEqual(cleared,[42]);assert.equal(host.__vpAdminObservation.pending().length,1);
+ release();assert.equal((await reader.read()).done,true);assert.deepEqual(host.__vpAdminObservation.pending(),[]);
+});
+test('admin observation does not suppress real HTTP, JSON, stream or fetch errors',async()=>{
+ let next;const host={location:new URL('http://127.0.0.1/admin/'),fetch:()=>next(),setInterval,clearInterval};installAdminObservationLifecycle(host);
+ next=async()=>new Response('{"error":"real-service-error"}',{status:503});const failed=await host.fetch('/api/admin/status');assert.equal(failed.status,503);assert.deepEqual(await failed.json(),{error:'real-service-error'});
+ next=async()=>new Response('invalid JSON');await assert.rejects((await host.fetch('/api/admin/status')).json(),SyntaxError);
+ const broken=Error('real body failure');next=async()=>new Response(new ReadableStream({start(c){c.error(broken);}}));await assert.rejects((await host.fetch('/api/admin/status')).body.getReader().read(),e=>e===broken);
+ const cors=TypeError('real CORS failure');next=async()=>{throw cors;};await assert.rejects(host.fetch('/api/admin/status'),e=>e===cors);assert.deepEqual(host.__vpAdminObservation.pending(),[]);
+});
+test('observation teardown leaves player pages and non-observation operations unchanged',async()=>{
+ const fetch=async()=>{throw Error('visible transport failure');},player={location:new URL('http://127.0.0.1/'),fetch};installAdminObservationLifecycle(player);assert.equal(player.fetch,fetch);assert.equal(player.__vpAdminObservation,undefined);
+ const host={location:new URL('http://127.0.0.1/admin/'),fetch,setInterval,clearInterval};installAdminObservationLifecycle(host);
+ await assert.rejects(host.fetch('/api/quality/jobs',{method:'POST'}),/visible transport failure/);await assert.rejects(host.fetch('http://localhost/api/admin/status'),/visible transport failure/);assert.deepEqual(host.__vpAdminObservation.pending(),[]);
 });

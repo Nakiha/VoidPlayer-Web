@@ -10,7 +10,7 @@ Pages freeze membership and summary facts for60 seconds. Keep filters with nextC
 
 Explicit cancel is POST /api/tasks/{kind}/{id}/cancel with {}, same Origin and captured actor. Use library-preparation action for preparation, quality-job otherwise. It delegates to the owning service. Cancelling retains admission until confirmed physical exit. If the receipt is lost, read the same task; repeating cancel does not create computation or roll back completed results. Closing GUI or HTTP observation never cancels a durable job.
 
-This package has no reexecution, automatic retry/publication, new scheduler or global administration. Use the original explicit submission flows for new intent.
+For a physically stopped failed/interrupted/cancelled/partial single, range, VMAF or XPSNR task, follow its reexecution-plan link and the [explicit full recomputation contract](/agent/quality/recovery.md). Task detail exposes verified predecessor/successor links. Reexecution requires a separate reason, exact cost confirmation and frozen actor/body/key; it never starts automatically. No partial resume, automatic publication, new scheduler or global administration. Changed conditions need new intent.
 `,
  '/agent/quality.md':`# Choose a quality task
 
@@ -213,8 +213,27 @@ POST. A dropped response is unknown, not failure. Replay only the same operation
 identity: Idempotency-Key for durable submit, plan digest for C execute, original
 policy for candidates, operationId for annotations. Never switch to a new key
 to make an uncertain request succeed. Non-idempotent identity creation needs
-manual resolution; do not blindly repeat it. An explicit new attempt after a
-confirmed terminal failure/cancellation/interruption is a separate user decision.
+manual resolution; do not blindly repeat it. An explicit new computation after a
+confirmed failed/interrupted/cancelled/partial job is a separate user decision.
+
+For single, range, VMAF or XPSNR, POST the original job's /reexecution-plan with {reason}.
+This only verifies the frozen source/cache/C plan/core/native component/model or filter/recipe and returns
+old partial facts, blocks and full-from-start cost. Missing historical witnesses
+or changed conditions require a new explicit intent; nothing is rebuilt.
+Confirm the exact plan.cost, reason and planDigest in a version1
+voidplayer-quality-reexecution POST to the original job's /reexecutions, with a
+new stable Idempotency-Key for this distinct, explicitly authorized operation.
+Freeze it before sending. A lost acknowledgement replays only that exact body,
+actor and key, never a new key. GET /reexecutions follows the durable chain.
+One successor and its receipt commit atomically; two windows cannot fork it.
+Each job has its own attempt.number=1; retryOf.generation starts at 2. To explicitly
+recompute a failed successor, name that successor, not the first ancestor.
+Every selected pair/dependency/native sequence is recomputed from the beginning;
+old results and candidates are immutable, and new results are never published
+automatically. Running/cancelling or unconfirmed physical exit refuses new work.
+The example accepts reexecution:{jobId,reason}; default is read-only planning.
+--allow-reexecute additionally requires an explicit confirmPlanDigest and exact
+confirmCost from that plan; --allow-candidate remains a separate permission.
 
 Capture actor from /api/agent and send X-VoidPlayer-Actor with its cookie. Stop
 on actor-changed; do not attach an old pending write to a new actor. Source/cache
