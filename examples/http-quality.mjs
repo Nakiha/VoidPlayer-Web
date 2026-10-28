@@ -126,9 +126,10 @@ export async function runHttpQuality(serverURL,input={},options={}){
  const manifest=await get(manifestPath);if(manifest.schema!=='voidplayer-agent'||manifest.version!==1)stop('manifest-version','Unsupported agent manifest.');
  if(actor&&manifest.actor?.id!==actor)stop('actor-changed','Initial cookie actor does not match the captured actor.');
  const catalog=await get(manifest.links.taskCatalog);if(catalog.schema!=='voidplayer-agent-tasks'||catalog.version!==1)stop('catalog-version','Unsupported task catalog.');
- const mode=input.mode??'single';if(!['single','range','vmaf','xpsnr'].includes(mode))stop('invalid-mode','Choose single, range, vmaf or xpsnr explicitly.');
+ const mode=input.mode??'single';if(!['single','range','vmaf','xpsnr','cambi'].includes(mode))stop('invalid-mode','Choose single, range, vmaf, xpsnr or single-source CAMBI reexecution explicitly.');
  const tasks=['identity','library','quality.correspondence',`quality.${mode}`,'evidence'];
  for(const id of tasks){const t=catalog.entries.find(t=>t.id===id);if(!t)stop('missing-task',`Task ${id} unavailable.`);await request(t.links.guide,{text:true});const detail=await get(t.links.describe);if(detail.schema!=='voidplayer-agent-task'||detail.version!==1)stop('task-version','Unsupported task description.');for(const op of detail.operations)operations.set(op.id,op);}
+ if(mode==='cambi'&&!input.reexecution)stop('explicit-cambi-reexecution-required','This example mode requires an existing CAMBI job; use /agent/quality/cambi.md for new single-source submission.');
  const report={schema:'voidplayer-http-quality-example',version:1,mode,writesAuthorized:Object.keys(allow).filter(k=>allow[k]),capabilities:manifest.capabilities.filter(c=>['library.discovery','library.preparations','quality.'+mode,'quality.jobs'].includes(c.id)),discovery:[],next:[]};
  // Reexecution selects an existing owned job; it never rediscovers, prepares,
  // repairs a plan or silently changes the original source/recipe/model.

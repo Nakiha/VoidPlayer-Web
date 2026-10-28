@@ -76,7 +76,7 @@ export function installTasks(signal:AbortSignal){
     const c=context(),target={...selected},generation=++detailGeneration,s=AbortSignal.any([c.signal,detailLife.signal]);
     const current=()=>valid(c)&&!s.aborted&&generation===detailGeneration&&selected?.kind===target.kind&&selected?.id===target.id;
     try{const value=await api.request<TaskDetail>(c.owner,taskPath(target.kind,target.id),s);if(!current())return;detail=value;
-      if(reexecutionKind(target.kind))reexecutions.get(target.kind)!.show(target.id);$('reexecution-unavailable').hidden=target.kind!=='cambi';
+      if(reexecutionKind(target.kind))reexecutions.get(target.kind)!.show(target.id);$('reexecution-unavailable').hidden=true;
       $('detail').hidden=false;$('title').textContent=`${value.task.kind} · ${value.task.state} · ${value.task.id}`;$('facts').textContent=JSON.stringify(value.task,null,2);
       $('cancel').hidden=!value.links.some(l=>l.rel==='cancel');$('related').replaceChildren();$('links').replaceChildren();$('candidates').replaceChildren();
       for(const related of value.related){const b=document.createElement('button');b.type='button';b.textContent=`${related.relation} · ${related.kind} · ${related.id}`;b.dataset.relatedId=related.id;b.onclick=()=>choose(related.kind,related.id);$('related').append(b);}

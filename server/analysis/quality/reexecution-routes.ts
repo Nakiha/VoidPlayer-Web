@@ -8,9 +8,9 @@ import {REEXECUTION_LIMITS,reexecutionId} from '../../../shared/analysis/quality
 import type {ReexecutionKind} from '../../../shared/analysis/quality/reexecution.ts';
 
 export async function handleQualityReexecutionRoutes(ctx:RouteContext,req:IncomingMessage,res:ServerResponse,url:URL){
-  const match=/^\/api\/quality\/(jobs|ranges|(?:vmaf|xpsnr)\/jobs)\/((?:(?:vmaf|xpsnr)-)?[a-f0-9-]{36})\/(reexecution-plan|reexecutions)$/.exec(url.pathname);
+  const match=/^\/api\/quality\/(jobs|ranges|(?:vmaf|xpsnr|cambi)\/jobs)\/((?:(?:vmaf|xpsnr|cambi)-)?[a-f0-9-]{36})\/(reexecution-plan|reexecutions)$/.exec(url.pathname);
   if(!match)return false;
-  const kind:ReexecutionKind=match[1]==='jobs'?'single':match[1]==='ranges'?'range':match[1]==='xpsnr/jobs'?'xpsnr':'vmaf',id=match[2];
+  const kind:ReexecutionKind=match[1]==='jobs'?'single':match[1]==='ranges'?'range':match[1]==='xpsnr/jobs'?'xpsnr':match[1]==='cambi/jobs'?'cambi':'vmaf',id=match[2];
   try{
     requireCapturedActor(req,ctx.actor);if(!ctx.actor)throw new AdminError(401,'Select an identity first.','identity-required');
     if(!reexecutionId(kind,id))throw new AdminError(404,'Quality job not found.','job-not-found');

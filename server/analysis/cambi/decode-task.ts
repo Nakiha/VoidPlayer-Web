@@ -1,17 +1,19 @@
+import type {QualityExecutionContract,ExecutionEnvironment} from '../../../shared/analysis/quality/reexecution.ts';
+import {executionEnvironment,requireExecutionContract} from '../quality/execution-contract.ts';
+import {avcGeometry} from '../../../shared/media/codecs/avc-geometry.ts';import {hevcGeometry} from '../../../shared/media/codecs/hevc-geometry.ts';
 import {readFileSync,openSync,writeSync,closeSync} from 'node:fs';import path from 'node:path';import {pathToFileURL} from 'node:url';import {createHash} from 'node:crypto';
 import {openIndexDatabase} from '../../sqlite.ts';import {FrameIndexStore} from '../../frame-index-store.ts';import {libraryPairSource} from '../quality/file-source.ts';
 import {qualitySourceIndex,qualityIndexPacketCount} from '../../../shared/analysis/quality/source-index.ts';import {qualityTargetForAu} from '../../../shared/analysis/quality/selection.ts';
-import {inspectSourceFrame,PAIR_LIMITS} from '../../../shared/analysis/quality/frame-pair.ts';import type {PairTarget} from '../../../shared/analysis/quality/frame-pair.ts';
+import {inspectSourceFrame,PAIR_LIMITS,requireInspectionGeometry} from '../../../shared/analysis/quality/frame-pair.ts';import type {PairTarget} from '../../../shared/analysis/quality/frame-pair.ts';
 import {createPairDecoder} from '../../../shared/analysis/quality/wasm-decoder.ts';import {instantiateCore} from '../../../shared/wasm/core.ts';import {validateDescription} from '../../../shared/media/frame-description.ts';
-import {CAMBI_LIMITS,CambiError,cambiOutputBudget,cambiIntervalClocks} from '../../../shared/analysis/quality/cambi.ts';import type {CambiInput,CambiPrepared} from '../../../shared/analysis/quality/cambi.ts';
-export async function runCambiDecode(data:{mode:'decode'|'verify'|'picture';target?:PairTarget;database:string;coreDir:string;directory:string;input:CambiInput;control:SharedArrayBuffer},progress:(frames:number,total:number)=>void){
+import {CAMBI_LIMITS,CAMBI_RECIPE,CambiError,cambiOutputBudget,cambiIntervalClocks} from '../../../shared/analysis/quality/cambi.ts';import type {CambiInput,CambiPrepared} from '../../../shared/analysis/quality/cambi.ts';
+export async function runCambiDecode(data:{mode:'preflight'|'decode'|'verify'|'picture';target?:PairTarget;database:string;coreDir:string;directory:string;input:CambiInput;control:SharedArrayBuffer;nativeCambiContract?:Omit<NonNullable<QualityExecutionContract['nativeCambi']>,'selection'>;expectedExecutionContract?:QualityExecutionContract},progress:(frames:number,total:number)=>void,onContract?:(c:QualityExecutionContract)=>void,onWitness?:(e:ExecutionEnvironment)=>void){
  const started=performance.now(),control=new Int32Array(data.control),check=()=>{if(Atomics.load(control,0))throw new CambiError('cancelled','CAMBI decode cancelled');if(performance.now()-started>data.input.budget.maxElapsedMs)throw new CambiError('budget-exceeded','CAMBI decode deadline');};
  const db=openIndexDatabase(data.database,{readOnly:true}),store=new FrameIndexStore(db);let indexBytes=0,indexPackets=0;
- const open=(t:PairTarget)=>{check();const v=libraryPairSource(db,store,t,{...PAIR_LIMITS,maxIndexBytes:Math.min(PAIR_LIMITS.maxIndexBytes,CAMBI_LIMITS.maxIndexBytes-indexBytes),maxIndexPackets:PAIR_LIMITS.maxIndexPackets},control);if(!v.source.index){v.source.close();throw new CambiError('unsupported-source','Native CAMBI requires an existing trusted quality index');}indexBytes+=Buffer.byteLength(JSON.stringify(v.source.index));indexPackets+=qualityIndexPacketCount(v.source.index);if(indexBytes>CAMBI_LIMITS.maxIndexBytes||indexPackets>CAMBI_LIMITS.maxIndexPackets){v.source.close();throw new CambiError('budget-exceeded','Cumulative CAMBI index budget');}return v;};
+ const open=(t:PairTarget)=>{check();const v=libraryPairSource(db,store,t,{...PAIR_LIMITS,maxIndexBytes:Math.min(PAIR_LIMITS.maxIndexBytes,CAMBI_LIMITS.maxIndexBytes-indexBytes),maxIndexPackets:Math.min(PAIR_LIMITS.maxIndexPackets,CAMBI_LIMITS.maxIndexPackets-indexPackets)},control);if(!v.source.index){v.source.close();throw new CambiError('unsupported-source','Native CAMBI requires an existing trusted quality index');}indexBytes+=Buffer.byteLength(JSON.stringify(v.source.index));indexPackets+=qualityIndexPacketCount(v.source.index);if(indexBytes>CAMBI_LIMITS.maxIndexBytes||indexPackets>CAMBI_LIMITS.maxIndexPackets){v.source.close();throw new CambiError('budget-exceeded','Cumulative CAMBI index budget');}return v;};
  const dummy={...data.input.source,sourcePtsUs:0,picture:{sourceVersion:`${data.input.source.mediaId}@${data.input.source.mediaVersion}`,stream:'video',configuration:0,au:0,picture:0,layer:0,field:'frame'}} as PairTarget;
  try{
   const first=open(dummy);let index,binding;try{index=qualitySourceIndex(first.source.index!,data.input.source.size);binding=first.proof;}finally{first.source.close();}
-  if(data.mode==='verify')return {indexBytes,indexPackets};
   const {startPtsUs,endPtsUs}=data.input.interval,rows=index.packets.flatMap((p,au)=>p.pts>=startPtsUs&&p.pts<endPtsUs?[{au,p}]:[]);
   if(!rows.length)throw new CambiError('no-results','No indexed pictures in the declared interval');
   if(rows.length>CAMBI_LIMITS.intervalAus)throw new CambiError('budget-exceeded','Interval exceeds 256 indexed AUs');
@@ -27,9 +29,19 @@ export async function runCambiDecode(data:{mode:'decode'|'verify'|'picture';targ
   if(!targets.length)throw new CambiError('unsupported-source','No selected AU has a supported exact identity window');
   if(targets.length>CAMBI_LIMITS.frames)throw new CambiError('budget-exceeded','Selected frames exceed32');
   const pts=targets.map(t=>t.sourcePtsUs).sort((a,b)=>a-b);if(pts.some((p,i)=>p<0||i>1&&p-pts[i-1]!==pts[1]-pts[0]))throw new CambiError('unsupported-source','Negative/VFR selected source clocks not admitted');
+  let contract:QualityExecutionContract|undefined;
+  const witness={passes:0,assetBytes:0,producerBytes:0};
+  const readEnvironment=()=>{const e=executionEnvironment(data.coreDir,control,check);witness.passes++;witness.assetBytes+=e.assets.reduce((n,a)=>n+a.bytes,0);witness.producerBytes+=e.producerBuild.bytes;onWitness?.(e);return e;};
+  if(data.mode!=='picture'){
+   const geometry=index.codec==='h264'?avcGeometry(index.description,true):hevcGeometry(index.description,true);if(!geometry)throw new CambiError('unsupported-source','Explicit source geometry is required');requireInspectionGeometry(geometry);cambiOutputBudget(geometry.width,geometry.height,targets.length,data.input);
+   if(!data.nativeCambiContract)throw new CambiError('execution-contract-unavailable','CAMBI native execution witness is missing');
+   contract={schema:'voidplayer-quality-execution-contract',version:1,environment:readEnvironment(),sources:[binding],nativeCambi:{...data.nativeCambiContract,selection:{pictures:targets.map(t=>({au:t.picture.au,configuration:t.picture.configuration,sourcePtsUs:t.sourcePtsUs,...(t.decode?{decode:t.decode}:{})})),geometry:{width:geometry.width,height:geometry.height},frameOrder:index.mp4?'source-pts-after-decode-au-selection':'decode-au-selection',intervalAus:rows.length,unsampled,unsupported:unsupported.length,unsupportedSha256:createHash('sha256').update(JSON.stringify(unsupported)).digest('hex')}}};
+   requireExecutionContract(data.expectedExecutionContract,contract);if(data.mode==='decode')onContract?.(contract);
+   if(data.mode!=='decode')return {indexBytes,indexPackets,contract,witness};
+  }
   const result:CambiPrepared={...(index.mp4?{frameOrder:'source-pts-after-decode-au-selection' as const}:{}),frames:[],geometry:{width:0,height:0,bitDepth:8},coverage:{scope:'bounded-source-pts-interval',interval:data.input.interval,sampling:data.input.sampling,intervalAus:rows.length,selected:targets.length,unsampled,unsupported,scored:0,unscored:targets.length,tracking:'none'},output:null!,rawBytes:0,work:{readBytes:0,packets:0,outputFrames:0,indexBytes:0,indexPackets:0,heapBytes:0,elapsedMs:0}};
   let core:Awaited<ReturnType<typeof instantiateCore>>|undefined;
-  const load=async()=>{check();if(!core){const glue=await import(pathToFileURL(path.join(data.coreDir,'voidplayer-core.js')).href);core=await instantiateCore(glue.default,new Uint8Array(readFileSync(path.join(data.coreDir,'voidplayer-core.wasm'))),256*1024*1024);}return core;};
+  const load=async()=>{check();if(!core){if(contract)requireExecutionContract(contract,{...contract,environment:readEnvironment()});const glue=await import(pathToFileURL(path.join(data.coreDir,'voidplayer-core.js')).href);core=await instantiateCore(glue.default,new Uint8Array(readFileSync(path.join(data.coreDir,'voidplayer-core.wasm'))),256*1024*1024);}return core;};
   for(const [ordinal,target]of targets.entries()){
    check();const source=open(target);try{
     const picture=await inspectSourceFrame(target,source.source,()=>createPairDecoder(load),new AbortController().signal);check();
@@ -48,6 +60,6 @@ export async function runCambiDecode(data:{mode:'decode'|'verify'|'picture';targ
     result.frames.push({index:ordinal,target,provenance:picture.provenance,sourceGeometry:picture.sourceGeometry,decoder:picture.decoder,context:source.annotationContext,proof:source.proof,rawSha256:hash.digest('hex'),score:null,heatmaps:[]});result.work.heapBytes=Math.max(result.work.heapBytes,core!.heap().byteLength);progress(ordinal+1,targets.length);
    }finally{source.source.close();}
   }
-  const final=open(targets.at(-1)!);final.source.close();check();result.work.indexBytes=indexBytes;result.work.indexPackets=indexPackets;result.work.elapsedMs=Math.ceil(performance.now()-started);return result;
+  const final=open(targets.at(-1)!);final.source.close();check();result.work.indexBytes=indexBytes;result.work.indexPackets=indexPackets;result.work.elapsedMs=Math.ceil(performance.now()-started);result.work.executionWitness=witness;return result;
  }finally{db.close();}
 }

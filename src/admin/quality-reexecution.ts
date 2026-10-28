@@ -10,7 +10,7 @@ import type {ReexecutionKind,ReexecutionPlan} from '../../shared/analysis/qualit
 export function installQualityReexecution(root:HTMLElement,kind:ReexecutionKind,signal:AbortSignal,navigate:(id:string)=>void){
   root.dataset.reexecution=kind;
   root.innerHTML=`<h4>${th(msg('reexecution.title','显式重新计算与追溯'))}</h4>
-  <p>${th(msg('reexecution.scope','重新计算创建关联的新任务，从头处理全部冻结输入，不复用旧分数。原任务、partial 证据与候选保留；不会自动发布新候选。重放原提交只查询原回执，不会重新计算。'))}</p>
+  <p>${th(msg('reexecution.scope','重新计算创建关联的新任务，从头处理全部冻结输入，不复用旧分数。原任务、已有证据与候选保留；不会自动发布新候选。重放原提交只查询原回执，不会重新计算。'))}</p>
   <div data-chain></div><label>${th(msg('reexecution.reason','重新计算原因'))}<textarea data-reason maxlength="500"></textarea></label>
   <button type="button" data-plan>${th(msg('reexecution.preview','检查原条件并预览完整成本'))}</button>
   <pre data-cost></pre><pre data-previous></pre><p data-blocks></p>
