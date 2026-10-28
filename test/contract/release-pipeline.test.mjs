@@ -112,9 +112,9 @@ test('cache suite runs once in its own required job with the same pinned prepara
   const jobs = workflowJobs(workflow), cache = jobs['cache-browser'];
   const manifest = JSON.parse(await readFile(new URL('../../scripts/testing/manifest.json', import.meta.url), 'utf8'));
   const cases = manifest.cases.filter(row => row.suites.includes('ci-cache'));
-  assert.equal(cases.length, 54);
-  assert.equal(new Set(cases.map(row => row.id)).size, 54);
-  const expected=['browser-mcp-page-bridge-chromium','browser-sharing-webkit'];
+  assert.equal(cases.length, 56);
+  assert.equal(new Set(cases.map(row => row.id)).size, 56);
+  const expected=['browser-mcp-page-bridge-chromium','browser-sharing-webkit','browser-quality-reexecution-chromium','browser-quality-reexecution-webkit'];
   for(const engine of ['chromium','webkit']){
     for(const name of ['annotation-persistence','cache','library-discovery','native-presented-protocol','presented-quality','quality-annotation','quality-pair-view-10','task-center'])expected.push(`browser-${name}-${engine}`);
     for(const name of ['native-vmaf','native-xpsnr','quality-correspondence','quality-ranges','quality-roi','quality-workflow'])for(const depth of [8,10])expected.push(`browser-${name}-${depth}-${engine}`);
@@ -122,10 +122,10 @@ test('cache suite runs once in its own required job with the same pinned prepara
   }
   assert.deepEqual(cases.map(row=>row.id).sort(),expected.sort(),'exact prior52 plus the two extracted native checks; no silent removal/substitution');
   const protocolIds=['browser-native-presented-protocol-chromium','browser-native-presented-protocol-webkit'];
-  const priorCases=cases.filter(row=>!protocolIds.includes(row.id));
+  const priorCases=cases.filter(row=>!protocolIds.includes(row.id)&&!row.id.startsWith('browser-quality-reexecution-'));
   assert.equal(priorCases.length,52,'every prior cache case still runs with unchanged mandatory status on main/tag');
   const prCases=manifest.cases.filter(row=>row.suites.includes('ci-cache-pr'));
-  assert.equal(prCases.length,53);
+  assert.equal(prCases.length,55);
   assert.deepEqual(cases.filter(row=>!prCases.includes(row)).map(row=>row.id),['browser-presented-quality-webkit']);
   for(const engine of ['chromium','webkit']){
     const row=prCases.find(row=>row.id===`browser-native-presented-protocol-${engine}`);

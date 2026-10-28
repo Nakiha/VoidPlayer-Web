@@ -1,5 +1,6 @@
 import {handleTaskRoutes} from './tasks/routes.ts';
 import {handleXpsnrRoutes} from './analysis/xpsnr/routes.ts';
+import {handleQualityReexecutionRoutes} from './analysis/quality/reexecution-routes.ts';
 import {handleVmafRoutes} from './analysis/vmaf/routes.ts';
 import { StaticAssets } from './static-assets.ts';
 import { AnalysisScheduler } from './analysis/bitstream/scheduler.ts';
@@ -103,6 +104,7 @@ export function createMediaServer(options: ServerOptions): Server {
       if (await handleStateRoutes(ctx, req, res, url)) return;
       if (await handleTaskRoutes(ctx,req,res,url)) return;
       if (await handleDiscoveryRoutes(ctx,req,res,url)) return;
+      if (await handleQualityReexecutionRoutes(ctx,req,res,url)) return;
       if(await handleVmafRoutes(ctx,req,res,url))return;
       if(await handleXpsnrRoutes(ctx,req,res,url))return;
       if (await handleQualityJobRoutes(ctx,req,res,url)) return;

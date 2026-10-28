@@ -7,7 +7,7 @@ import { AdminError } from '../../admin-error.ts';
 const controller=new AbortController();
 parentPort!.on('message',data=>{if(data?.type==='cancel')controller.abort(new AdminError(499,'Quality request cancelled.','cancelled'));});
 try{
-  const value=await runQualityTask(workerData,controller.signal,async phase=>{parentPort!.postMessage({type:'phase',phase});});controller.signal.throwIfAborted();parentPort!.postMessage({ok:true,value});
+  const value=await runQualityTask(workerData,controller.signal,async phase=>{parentPort!.postMessage({type:'phase',phase});},contract=>parentPort!.postMessage({type:'execution-contract',contract}));controller.signal.throwIfAborted();parentPort!.postMessage({ok:true,value});
 }catch(error){
   const e=error as Error&{code?:string;status?:number},known=error instanceof Mp4QualityError||error instanceof FramePairError||error instanceof PsnrError||error instanceof AdminError;
   if(!known)console.error('Quality Worker failed',error);

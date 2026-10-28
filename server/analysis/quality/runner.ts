@@ -1,3 +1,4 @@
+import type {QualityExecutionContract,ReexecutionPreflight} from '../../../shared/analysis/quality/reexecution.ts';
 import { Worker } from 'node:worker_threads';
 import type { MediaLibraryIndex } from '../../library.ts';
 import { AdminError } from '../../admin-error.ts';
@@ -10,11 +11,11 @@ import type {ReferenceRelation,CorrespondenceInput,CorrespondenceResult} from '.
 import type { QualityTask } from './task.ts';
 import {QUALITY_SOURCE_BUILD_LIMITS} from '../../../shared/analysis/quality/source-build.ts';
 declare const VOIDPLAYER_COMPILED: boolean;
-export type QualityWorkerData = QualityTask & {database:string;coreDir:string;control:SharedArrayBuffer};
-type WorkerValue = LibraryPairBinding | LibraryPairResult | QualityFramePage | CorrespondenceResult;
+export type QualityWorkerData = QualityTask & {database:string;coreDir:string;control:SharedArrayBuffer;expectedExecutionContract?:QualityExecutionContract};
+type WorkerValue = ReexecutionPreflight | LibraryPairBinding | LibraryPairResult | QualityFramePage | CorrespondenceResult;
 type Outcome<T> = {ok:true;value:T}|{ok:false;error:unknown};
 type QualityTimers={set(callback:()=>void,ms:number):ReturnType<typeof setTimeout>;clear(timer:ReturnType<typeof setTimeout>):void};
-export type QualityRunHooks = { admitted(): void; phase(phase: 'source' | 'resolve' | 'decode' | 'publish'): void };
+export type QualityRunHooks = { expectedExecutionContract?:QualityExecutionContract;contract?(value:QualityExecutionContract):void;admitted(): void; phase(phase: 'source' | 'resolve' | 'decode' | 'publish'): void };
 
 /** All source/resolve/final checks belong to this same killable Worker.
  * The main thread never awaits an unowned filesystem or database preflight. */
@@ -51,6 +52,7 @@ export class LibraryPairRunner {
   planCorrespondence(relation:ReferenceRelation,request:CorrespondenceInput,signal:AbortSignal,hooks:QualityRunHooks):Promise<CorrespondenceResult>{
     return this.run({mode:'correspondence-plan',relation,request},request.planningBudget.maxElapsedMs,signal,hooks);
   }
+  reexecutionPreflight(requests:FramePairRequest[],expected:QualityExecutionContract,signal:AbortSignal):Promise<ReexecutionPreflight>{return this.run({mode:'reexecution-preflight',requests,expected},30000,signal);}
   private run<T extends WorkerValue>(task:QualityTask,elapsedMs:number,signal:AbortSignal,hooks?:QualityRunHooks):Promise<T>{
     if(this.closed)return Promise.reject(new AdminError(503,'Quality service closed.','busy'));
     let release:()=>void;
@@ -65,7 +67,7 @@ export class LibraryPairRunner {
     let stopped=true;
     const response=new Promise<T>((resolve,reject)=>{
       let worker:Worker;
-      try{worker=this.createWorker({...task,database:this.library.indexDatabase,coreDir:this.coreDir,control:control.buffer as SharedArrayBuffer});stopped=false;}
+      try{worker=this.createWorker({...task,database:this.library.indexDatabase,coreDir:this.coreDir,control:control.buffer as SharedArrayBuffer,...(hooks?.expectedExecutionContract?{expectedExecutionContract:hooks.expectedExecutionContract}:{})});stopped=false;}
       catch(error){reject(error);return;}
       let finishing=false,exited=false;
       const finish=async(outcome:Outcome<T>)=>{
@@ -92,6 +94,7 @@ export class LibraryPairRunner {
       const exit=()=>{exited=true;Atomics.notify(control,1);error(new Error('Quality Worker exited without a result'));};
       const message=(data:{type?:string;phase?:string;ok:boolean;value?:WorkerValue;error?:{message:string;code:string;status?:number}})=>{
         if(finishing)return;
+        if(data?.type==='execution-contract'){try{hooks?.contract?.((data as unknown as {contract:QualityExecutionContract}).contract);}catch(error){void finish({ok:false,error});}return;}
         if(data?.type==='phase'){
           if(['source','resolve','decode','publish'].includes(data.phase??'')){
             try{hooks?.phase(data.phase as Parameters<QualityRunHooks['phase']>[0]);}catch(error){void finish({ok:false,error});}
@@ -99,7 +102,8 @@ export class LibraryPairRunner {
           return;
         }
         const value=data?.value;
-        const valid=task.mode==='source'||task.mode==='build-source'?value&&'binding' in value&&value.binding.mediaId===task.id&&value.binding.mediaVersion===task.version
+        const valid=task.mode==='reexecution-preflight'?value&&'schema'in value&&value.schema==='voidplayer-quality-reexecution-preflight'
+          :task.mode==='source'||task.mode==='build-source'?value&&'binding' in value&&value.binding.mediaId===task.id&&value.binding.mediaVersion===task.version
           :task.mode==='frames'?value&&'schema'in value&&value.schema==='voidplayer-psnr-frame-candidates'&&value.source.binding.mediaId===task.id&&value.source.binding.mediaVersion===task.version
           :task.mode==='correspondence-plan'?value&&'schema'in value&&value.schema==='voidplayer-quality-correspondence-result'&&value.relation.id===task.relation.id
           :value&&'schema' in value&&value.schema==='voidplayer-library-frame-pair-psnr';

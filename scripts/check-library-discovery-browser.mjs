@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';import {mkdtemp,mkdir,readFile,writeFile,rm} from 'node:fs/promises';import {tmpdir} from 'node:os';import path from 'node:path';import {createHash,randomUUID} from 'node:crypto';import {chromium,webkit} from 'playwright';
 import {loadConfig} from '../server/config.ts';import {startService} from '../server/runtime.ts';import {wrapFlv} from '../test/helpers/frame-pair-fixture.ts';import {scanFlv} from '../shared/media/containers/flv-demux.ts';import {cleanupResources} from './testing/lifecycle.mjs';import {recordBrowserEvidence,saveBrowserFailure} from './browser-failure-evidence.mjs';
+import {preparationReceiptObserver} from './testing/preparation-receipt.mjs';
 import {waitForAnnotationMedia} from './testing/agent-annotations-ready.mjs';
 import {waitForPlayingFrameAdvance} from './testing/playback-presentation.mjs';
 import {withinBrowserPhase} from './browser-failure-evidence.mjs';
@@ -23,7 +24,23 @@ try{
  await open();const errors=[],posts=[];page.on('pageerror',e=>errors.push(e.message));
  const choose=async entry=>{await page.locator('#discovery-search').fill(entry.name);await page.locator('#discovery-search-button').click();await page.locator(`#discovery-list [data-source-id="${entry.id}"]`).click();await page.waitForFunction(pin=>document.querySelector('#discovery-source').textContent===pin,`${entry.id}@${entry.version}`);};
  phase='readonly-search';await choose(flv);assert.match(await page.locator('#discovery-readiness').textContent(),/not-probed/);assert.equal(service.library.discovery.store.list(actor.id).jobs.length,0);
- let lose=true;await page.route('**/api/library/preparations',async route=>{if(route.request().method()!=='POST')return route.continue();const response=await route.fetch(),value=await response.json();posts.push({body:JSON.parse(route.request().postData()),key:route.request().headers()['idempotency-key'],status:response.status(),value});if(lose){lose=false;await route.abort('failed');}else await route.fulfill({response});});
+ const receipts=preparationReceiptObserver();
+ async function capturePreparationPost(action){
+  const observation=receipts.arm();
+  // Only status/request metadata comes from the browser Response. Both promise
+  // branches are installed before the click; response-body IO stays in route.fetch.
+  const browserReceipt=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname==='/api/library/preparations').then(response=>({ok:true,status:response.status(),headers:response.request().headers()}),error=>({ok:false,error}));
+  try{await action();const outcome=await observation.result;if(!outcome.ok)throw outcome.error;const delivered=await browserReceipt;if(!delivered.ok)throw delivered.error;assert.equal(delivered.status,outcome.receipt.status);assert.equal(delivered.headers['idempotency-key'],outcome.receipt.key);assert.equal(delivered.headers['x-voidplayer-actor'],outcome.receipt.actor);return outcome.receipt;}finally{observation.close();}
+ }
+ let lose=true;await context.route('**/api/library/preparations',async route=>{
+  if(route.request().method()!=='POST')return route.continue();const delivery=receipts.claim();
+  try{
+   // APIResponse belongs to route.fetch(), independent of Chromium's evictable
+   // Network.getResponseBody handle. Read once and fulfil the same real JSON.
+   const response=await route.fetch(),value=await response.json(),headers=route.request().headers(),receipt={body:JSON.parse(route.request().postData()),key:headers['idempotency-key'],actor:headers['x-voidplayer-actor'],status:response.status(),value};posts.push(receipt);
+   if(lose){lose=false;await route.abort('failed');}else await route.fulfill({response,json:value});delivery?.complete(receipt);
+  }catch(error){errors.push('Preparation response capture failed: '+String(error));delivery?.fail(error);await route.abort('failed').catch(()=>{});}
+ });
  phase='gui-probe-lost-response';await page.locator('#discovery-probe').click({clickCount:2});await page.locator('#discovery-retry').waitFor();await page.waitForFunction(()=>!document.querySelector('#discovery-retry').disabled);await page.locator('#discovery-retry').click();
  await page.waitForFunction(()=>document.querySelector('#discovery-job').textContent.includes('"state": "completed"'));assert.equal(posts.length,2);assert.deepEqual(posts.map(p=>p.status),[202,200]);assert.equal(posts[0].key,posts[1].key);assert.deepEqual(posts[0].body,posts[1].body);assert.equal(posts[1].value.replayed,true);
  await page.waitForFunction(()=>document.querySelector('#discovery-fields').textContent.includes('h264'));assert.equal((await fetch(`${base}/api/media/${flv.id}/psnr-source?v=${flv.version}`,{headers})).status,409,'probe does not build quality cache');
@@ -42,9 +59,9 @@ try{
  phase='real-cookie-actor-mismatch';assert.ok((await page.locator('#discovery-owner').textContent()).includes(actor.id));
  const healthGate=new Promise(resolve=>releaseHealth=resolve);await page.route('**/api/health',async route=>{await healthGate;await route.abort('aborted');});
  const other=await fetch(base+'/api/identity',{method:'POST',headers:{origin:base,'content-type':'application/json','x-voidplayer-action':'identity'},body:JSON.stringify({name:'Other discovery actor'})});assert.equal(other.status,200);const otherActor=(await other.json()).actor;await context.addCookies([{name:'voidplayer-user',value:otherActor.id,url:base}]);
- const response=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname==='/api/library/preparations');await page.locator('#discovery-probe').click();const rejected=await response;assert.equal(rejected.status(),409);assert.equal((await rejected.json()).code,'actor-changed');assert.equal(service.library.discovery.store.list(otherActor.id).jobs.length,0);
- assert.equal(rejected.request().headers()['x-voidplayer-actor'],actor.id);await context.addCookies([{name:'voidplayer-user',value:actor.id,url:base}]);releaseHealth();releaseHealth=undefined;await page.unroute('**/api/health');
- const retryResponse=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname==='/api/library/preparations');await page.locator('#discovery-retry').click();const retried=await retryResponse;assert.equal(retried.status(),202);const recovered=(await retried.json()).job;
+ const rejected=await capturePreparationPost(()=>page.locator('#discovery-probe').click());assert.equal(rejected.status,409);assert.equal(rejected.value.code,'actor-changed');assert.equal(service.library.discovery.store.list(otherActor.id).jobs.length,0);
+ assert.equal(rejected.actor,actor.id);await context.addCookies([{name:'voidplayer-user',value:actor.id,url:base}]);releaseHealth();releaseHealth=undefined;await page.unroute('**/api/health');
+ const retried=await capturePreparationPost(()=>page.locator('#discovery-retry').click());assert.equal(retried.status,202);assert.equal(retried.actor,actor.id);assert.equal(retried.key,rejected.key);assert.deepEqual(retried.body,rejected.body);const recovered=retried.value.job;
  await page.waitForFunction(id=>{const job=JSON.parse(document.querySelector('#discovery-job').textContent||'null');return job?.id===id&&job.state==='completed';},recovered.id);
  phase='queued-explicit-cancel';releaseAdmission=service.library.qualityAdmission.acquire();await page.locator('#discovery-probe').click();await page.waitForFunction(()=>document.querySelector('#discovery-job').textContent.includes('"state": "queued"'));await page.locator('#discovery-cancel').click();await page.waitForFunction(()=>document.querySelector('#discovery-job').textContent.includes('"state": "cancelled"'));releaseAdmission();releaseAdmission=undefined;
  phase='late-source-response';let arrived;const reached=new Promise(r=>arrived=r),gate=new Promise(r=>releaseLate=r);let held=false;const matcher=`**/api/media/${flv.id}/discovery?*`;

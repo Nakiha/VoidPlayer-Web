@@ -1,3 +1,4 @@
+import type {ReexecutionMetadata} from './reexecution.ts';
 import type { FramePairRequest } from './frame-pair.ts';
 import type { LibraryPairResult } from './library-pair.ts';
 
@@ -15,7 +16,7 @@ export type QualityJobInput = {
   request: FramePairRequest;
 };
 export type QualityJobReason = { code: string; message: string };
-export type QualityJob = {
+export type QualityJob = ReexecutionMetadata & {
   schema: 'voidplayer-quality-job'; version: 1; id: string; revision: number; sequence: number;
   state: QualityJobState; phase: QualityJobPhase;
   submitted: { actorId: string; actorName: string; client: QualityJobInput['client']; requestId: string; idempotencyKey: string };

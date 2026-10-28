@@ -1,3 +1,6 @@
+import type {QualityExecutionContract,ReexecutionPreflight,ExecutionEnvironment} from '../../../shared/analysis/quality/reexecution.ts';
+import {canonicalExecutionSources} from '../../../shared/analysis/quality/reexecution.ts';
+import {executionEnvironment,executionSources,requireExecutionContract} from './execution-contract.ts';
 import {qualityIndexPacketCount} from '../../../shared/analysis/quality/source-index.ts';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -21,13 +24,14 @@ import {buildMp4QualityDocument,qualitySourceContainer} from '../../mp4-quality-
 import type {QualityIndexDocument} from '../../../shared/analysis/quality/source-index.ts';
 import {buildFlvIndexDocument} from '../../flv-index-builder.ts';
 import {prepareFrameIndex} from '../../frame-index-store.ts';
-export type QualityTask={mode:'correspondence-plan';relation:ReferenceRelation;request:CorrespondenceInput}|{mode:'source';id:string;version:string}|{mode:'build-source';id:string;version:string}|{mode:'frames';id:string;version:string;query:QualityFrameQuery}|{mode:'measure';request:FramePairRequest};
+export type QualityTask={mode:'reexecution-preflight';requests:FramePairRequest[];expected:QualityExecutionContract}|{mode:'correspondence-plan';relation:ReferenceRelation;request:CorrespondenceInput}|{mode:'source';id:string;version:string}|{mode:'build-source';id:string;version:string}|{mode:'frames';id:string;version:string;query:QualityFrameQuery}|{mode:'measure';request:FramePairRequest};
 export type QualityPhase='source'|'resolve'|'decode'|'publish';
 /** A narrow stage observer lets tests suspend the actual IO boundaries. It is
  * never read from the HTTP request or production workerData. */
-export async function runQualityTask(data:QualityTask&{database:string;coreDir:string;control:SharedArrayBuffer},signal:AbortSignal,before?:(phase:QualityPhase)=>Promise<void>):Promise<LibraryPairBinding|LibraryPairResult|QualityFramePage|CorrespondenceResult>{
+export async function runQualityTask(data:QualityTask&{database:string;coreDir:string;control:SharedArrayBuffer;expectedExecutionContract?:QualityExecutionContract},signal:AbortSignal,before?:(phase:QualityPhase)=>Promise<void>,onContract?:(contract:QualityExecutionContract)=>void,onWitness?:(value:ExecutionEnvironment)=>void):Promise<LibraryPairBinding|LibraryPairResult|QualityFramePage|CorrespondenceResult|ReexecutionPreflight>{
   const control=new Int32Array(data.control);
   const check=()=>{signal.throwIfAborted();if(Atomics.load(control,0)!==0)throw new FramePairError('source-changed','Quality execution cancelled');};
+ const readEnvironment=()=>{const value=executionEnvironment(data.coreDir,control,check);onWitness?.(value);return value;};
   const phase=async(name:QualityPhase)=>{check();await before?.(name);check();};
   const db=openIndexDatabase(data.database,{readOnly:data.mode!=='build-source'});db.exec('PRAGMA busy_timeout=1000;');
   const store=new FrameIndexStore(db),opened:ReturnType<typeof libraryPairSource>[]=[];
@@ -46,6 +50,12 @@ export async function runQualityTask(data:QualityTask&{database:string;coreDir:s
   };
   try{
     await phase('source');
+    if(data.mode==='reexecution-preflight'){
+      if(!Array.isArray(data.requests)||!data.requests.length||data.requests.length>64)throw new FramePairError('invalid-request','Bounded frozen requests required');
+      const environment=readEnvironment(),work=executionSources(db,data.requests.flatMap(p=>[p.reference,p.distorted]),pairBudget(data.requests[0]),control);
+      const contract:QualityExecutionContract={schema:'voidplayer-quality-execution-contract',version:1,environment,sources:work.sources};requireExecutionContract(data.expected,contract);
+      return {schema:'voidplayer-quality-reexecution-preflight',version:1,contract,indexBytes:work.indexBytes,indexPackets:work.indexPackets,assetBytes:environment.assets.reduce((n,a)=>n+a.bytes,0)};
+    }
     if(data.mode==='build-source'){
       await phase('resolve');
       const media=db.prepare("SELECT size FROM media WHERE id=? AND version=? AND state='ready'").get(data.id,data.version);
@@ -104,8 +114,11 @@ export async function runQualityTask(data:QualityTask&{database:string;coreDir:s
       if(snapshot.binding.indexBuildId!==target.indexBuildId||snapshot.binding.size!==target.size)throw new FramePairError('identity-mismatch','Quality cache binding changed');}
     await phase('resolve');
     for(const target of targets)opened.push(libraryPairSource(db,store,target,budget,control));
+    const environment=readEnvironment();
+    const contract:QualityExecutionContract={schema:'voidplayer-quality-execution-contract',version:1,environment,sources:canonicalExecutionSources(opened.map(s=>s.proof))};requireExecutionContract(data.expectedExecutionContract,contract);onContract?.(contract);
     const result=await measureFramePair(request,[opened[0].source,opened[1].source],budget=>createPairDecoder(async()=>{
       await phase('decode');
+      requireExecutionContract(contract,{...contract,environment:readEnvironment()});
       check();const binary=new Uint8Array(await readFile(path.join(data.coreDir,'voidplayer-core.wasm')));check();
       const glue=await import(pathToFileURL(path.join(data.coreDir,'voidplayer-core.js')).href);check();
       const loaded=await instantiateCore(glue.default,binary,budget.maxHeapBytes);check();return loaded;

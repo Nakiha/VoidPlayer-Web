@@ -11,6 +11,7 @@
     "src/admin/presentation.ts",
     "src/admin/quality-correspondence.ts",
     "src/admin/quality-ranges.ts",
+    "src/admin/quality-reexecution.ts",
     "src/admin/quality-vmaf.ts",
     "src/admin/quality-xpsnr.ts",
     "src/admin/quality.ts",

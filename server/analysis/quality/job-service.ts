@@ -1,3 +1,6 @@
+import type {QualityExecutionContract} from '../../../shared/analysis/quality/reexecution.ts';
+import {randomUUID} from 'node:crypto';
+import type {ReexecutionCreation} from './reexecution-ledger.ts';
 import { AdminError } from '../../admin-error.ts';
 import type { Actor } from '../../identity.ts';
 import type { LibraryPairRunner } from './runner.ts';
@@ -29,9 +32,9 @@ export class QualityJobService {
   private available() {
     if (this.closed || this.failed) throw new AdminError(503, 'Quality job service is unavailable.', 'quality-service-unavailable');
   }
-  submit(value: unknown, actor: Actor, requestId: string, key: unknown) {
+  submit(value: unknown, actor: Actor, requestId: string, key: unknown,reexecution?:ReexecutionCreation,expectedExecutionContract?:QualityExecutionContract) {
     this.available();
-    const accepted = this.store.submit(qualityJobRequest(value), actor, requestId, qualityIdempotencyKey(key), this.now());
+    const accepted = this.store.submit(qualityJobRequest(value), actor, requestId, qualityIdempotencyKey(key), this.now(),reexecution,expectedExecutionContract);
     if (!accepted.replayed) {this.pump();this.wake();}
     return {...accepted, job: this.store.get(accepted.job.id)};
   }
@@ -40,6 +43,9 @@ export class QualityJobService {
     if (actor !== undefined && job.submitted.actorId !== actor) throw new AdminError(404, 'Quality job not found.', 'job-not-found');
     return job;
   }
+  reexecutionInput(id:string,actor:string){this.get(id,actor);return this.store.frozenInput(id);}
+  reexecutionReceipt(id:string,actor:string,key?:string,request?:import('../../../shared/analysis/quality/reexecution.ts').ReexecutionRequest){this.get(id,actor);const receipt=key&&request?this.store.reexecutions.replay(id,actor,key,request):this.store.reexecutions.get(id,actor);if(receipt)this.store.reexecutions.verify(receipt,this.get(receipt.jobId,actor));return receipt;}
+  reexecute(creation:ReexecutionCreation,actor:Actor,requestId:string){this.available();const original=this.get(creation.parentId,actor.id);return this.submit(original.input,actor,requestId,'reexecution:'+randomUUID(),creation);}
   result(id: string, actor?: string) { this.get(id, actor); return this.store.result(id); }
   changes(actor: string | null, after?: number, limit?: number) { return this.store.changes(actor, after, limit); }
   cancel(id: string, actor: string, requestId: string) {
@@ -77,6 +83,8 @@ export class QualityJobService {
     const job = this.store.get(id);let attempt: string | null = null;
     try {
       const value = await this.runner.measure(job.input.request, controller.signal, {
+        expectedExecutionContract:job.executionContract,
+        contract:value=>{if(!attempt)throw Error('Execution contract before admission');this.store.recordExecutionContract(id,attempt,value);},
         admitted: () => { attempt = this.store.start(id, this.now()); },
         phase: phase => { if (attempt) this.store.phase(id, attempt, phase); },
       });

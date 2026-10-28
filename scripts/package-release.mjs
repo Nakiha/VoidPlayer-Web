@@ -1,3 +1,4 @@
+import {hashQualityProducer} from '../server/analysis/quality/producer-build.ts';
 import {selectReleaseSources} from './tools/release/source-files.mjs';
 import { verifyStaticAssets } from './static-assets.mjs';
 import { cp, mkdir, readFile, writeFile, readdir, stat, rm } from 'node:fs/promises';
@@ -22,6 +23,7 @@ for (const name of required) if (!(await stat(path.join(root, 'dist', name)).cat
 await verifyStaticAssets(path.join(root, 'dist'));
 const identity = await readReleaseIdentity(root);
 const { revision, dirty, version, tag } = identity;
+const qualityProducer=hashQualityProducer(root);
 verifyFrontendIdentity(JSON.parse(await readFile(path.join(root, 'dist/build-info.json'), 'utf8')), identity);
 // Check the bytes actually being packaged, before compiling or creating output.
 for (const [name, schema, files, lockFile] of [
@@ -35,7 +37,7 @@ const out = path.join(root, 'artifacts', name);
 await mkdir(path.dirname(out), { recursive: true });
 await mkdir(out); // Never silently mix a previous package with a new build.
 const executable = target.includes('windows') ? 'voidplayer.exe' : 'voidplayer';
-execFileSync(bun, ['build', '--root', 'server', 'server/standalone.ts', 'server/frame-index-worker.ts', 'server/frame-index-build-worker.ts', 'server/analysis/bitstream/worker.ts', 'server/analysis/quality/worker.ts', 'server/discovery/probe-worker.ts', 'server/analysis/vmaf/decode-worker.ts', 'server/analysis/vmaf/component-worker.ts', 'server/analysis/xpsnr/decode-worker.ts', 'server/analysis/xpsnr/component-worker.ts', '--compile', `--target=${target}`, '--minify', '--sourcemap', '--no-compile-autoload-dotenv', '--no-compile-autoload-bunfig', '--define', 'VOIDPLAYER_COMPILED=true', '--define', `VOIDPLAYER_VERSION=${JSON.stringify(version)}`, '--define', `VOIDPLAYER_REVISION=${JSON.stringify(revision + (dirty ? '-dirty' : ''))}`, '--outfile', path.join(out, executable)], { cwd: root, stdio: 'inherit' });
+execFileSync(bun, ['build', '--root', 'server', 'server/standalone.ts', 'server/frame-index-worker.ts', 'server/frame-index-build-worker.ts', 'server/analysis/bitstream/worker.ts', 'server/analysis/quality/worker.ts', 'server/discovery/probe-worker.ts', 'server/analysis/vmaf/decode-worker.ts', 'server/analysis/vmaf/component-worker.ts', 'server/analysis/xpsnr/decode-worker.ts', 'server/analysis/xpsnr/component-worker.ts', '--compile', `--target=${target}`, '--minify', '--sourcemap', '--no-compile-autoload-dotenv', '--no-compile-autoload-bunfig', '--define', 'VOIDPLAYER_COMPILED=true', '--define', `VOIDPLAYER_QUALITY_PRODUCER_SHA256=${JSON.stringify(qualityProducer.sha256)}`, '--define', `VOIDPLAYER_QUALITY_PRODUCER_BYTES=${qualityProducer.bytes}`, '--define', `VOIDPLAYER_VERSION=${JSON.stringify(version)}`, '--define', `VOIDPLAYER_REVISION=${JSON.stringify(revision + (dirty ? '-dirty' : ''))}`, '--outfile', path.join(out, executable)], { cwd: root, stdio: 'inherit' });
 await cp(path.join(root, 'dist'), path.join(out, 'dist'), { recursive: true });
 await cp(path.join(root, 'LICENSE'), path.join(out, 'LICENSE'));
 await writeFile(path.join(out, 'README.md'), (await readFile(path.join(root, 'deploy/standalone.md'), 'utf8')).replace('(operations.md)', '(deploy/operations.md)').replace('(admin.md)', '(deploy/admin.md)'));

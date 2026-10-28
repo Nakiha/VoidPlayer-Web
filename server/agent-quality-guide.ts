@@ -198,8 +198,27 @@ POST. A dropped response is unknown, not failure. Replay only the same operation
 identity: Idempotency-Key for durable submit, plan digest for C execute, original
 policy for candidates, operationId for annotations. Never switch to a new key
 to make an uncertain request succeed. Non-idempotent identity creation needs
-manual resolution; do not blindly repeat it. An explicit new attempt after a
-confirmed terminal failure/cancellation/interruption is a separate user decision.
+manual resolution; do not blindly repeat it. An explicit new computation after a
+confirmed failed/interrupted/cancelled/partial job is a separate user decision.
+
+For single, range or VMAF, POST the original job's /reexecution-plan with {reason}.
+This only verifies the frozen source/cache/C plan/core/model/recipe and returns
+old partial facts, blocks and full-from-start cost. Missing historical witnesses
+or changed conditions require a new explicit intent; nothing is rebuilt.
+Confirm the exact plan.cost, reason and planDigest in a version1
+voidplayer-quality-reexecution POST to the original job's /reexecutions, with a
+new stable Idempotency-Key for this distinct, explicitly authorized operation.
+Freeze it before sending. A lost acknowledgement replays only that exact body,
+actor and key, never a new key. GET /reexecutions follows the durable chain.
+One successor and its receipt commit atomically; two windows cannot fork it.
+Each job has its own attempt.number=1; retryOf.generation starts at 2. To explicitly
+recompute a failed successor, name that successor, not the first ancestor.
+Every selected pair/dependency/native sequence is recomputed from the beginning;
+old results and candidates are immutable, and new results are never published
+automatically. Running/cancelling or unconfirmed physical exit refuses new work.
+The example accepts reexecution:{jobId,reason}; default is read-only planning.
+--allow-reexecute additionally requires an explicit confirmPlanDigest and exact
+confirmCost from that plan; --allow-candidate remains a separate permission.
 
 Capture actor from /api/agent and send X-VoidPlayer-Actor with its cookie. Stop
 on actor-changed; do not attach an old pending write to a new actor. Source/cache
