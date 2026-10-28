@@ -11,6 +11,10 @@ import { MediaLibraryIndex } from '../../server/library.ts';
 import type { AnnotationOperation } from '../../shared/review/annotation-record.ts';
 import { AGENT_DOCUMENTS } from '../../server/agent-guide.ts';
 import { agentManifest, serviceCapabilities } from '../../shared/service/agent.ts';
+import {AGENT_OPERATIONS,AGENT_WORKFLOWS,agentOperation,agentTask} from '../../shared/service/agent-operations.ts';
+import {DISCOVERY_DICTIONARY} from '../../shared/media/discovery.ts';
+import {VMAF_CAPABILITY} from '../../shared/analysis/quality/vmaf.ts';
+import {QUALITY_RANGE_LIMITS} from '../../shared/analysis/quality/ranges.ts';
 
 test('runtime discovery separates implementation, deployment and source/session readiness', () => {
   const manifest = agentManifest({ capabilities: serviceCapabilities(false, false), libraryReady: false, frontendAvailable: true, qualityJobsEnabled: true, actor: null });
@@ -28,7 +32,9 @@ test('runtime discovery separates implementation, deployment and source/session 
   assert.equal(manifest.qualityJobs.spatial.optional,true);assert.equal(manifest.qualityJobs.spatial.limits.maxBlocks,64);assert.equal(manifest.qualityJobs.spatial.ranking,'aggregate-mse-desc-row-major-ties');
   const temporary = agentManifest({capabilities:serviceCapabilities(false,false),libraryReady:true,actor:{id:'actor',name:'A'}}).capabilities.find(c=>c.id==='quality.jobs')!;
   assert.equal(temporary.implemented,true);assert.equal(temporary.enabled,false);assert.equal(temporary.readiness,'unavailable');
-  for (const id of ['compute.workers', 'bridge.local-mcp']) assert.equal(byId(id).implemented, false);
+  assert.equal(byId('compute.workers').implemented,false);
+  assert.equal(byId('bridge.local-mcp').implemented,true);
+  assert.equal(byId('bridge.local-mcp').enabled,false,'only the explicit stdio-owned host enables the optional bridge');
 });
 
 test('ordinary HTTP discovers, attributes and commits annotations without frontend assets or a browser', async () => {
@@ -57,6 +63,20 @@ test('ordinary HTTP discovers, attributes and commits annotations without fronte
     assert.ok(Buffer.byteLength(AGENT_DOCUMENTS['/llms.txt']) < 2000);
     const discovery = await fetch(base + '/api/agent'), manifest = await discovery.json();
     assert.equal(manifest.schema, 'voidplayer-agent'); assert.equal(manifest.actor, null);
+    const tasks=await (await fetch(base+manifest.links.taskCatalog)).json();
+    assert.equal(tasks.schema,'voidplayer-agent-tasks');assert.equal(tasks.version,1);assert.equal(tasks.entries.length,AGENT_WORKFLOWS.length);
+    for(const task of tasks.entries){
+      const detail=await (await fetch(base+task.links.describe)).json();assert.equal(detail.id,task.id);assert.equal(detail.version,1);
+      for(const operation of detail.operations){
+        const response=await fetch(base+operation.links.describe),contract=await response.json();assert.equal(contract.id,operation.id);assert.equal(contract.method,operation.method);assert.equal(contract.path,operation.path);assert.equal(contract.execution.requiresBrowser,false);
+        assert.match(response.headers.get('content-type')!,/^application\/json/);assert.equal(response.headers.get('cache-control'),'no-store');assert.equal(response.headers.get('set-cookie'),null);
+        const head=await fetch(base+operation.links.describe,{method:'HEAD'});assert.equal(head.status,200);assert.equal(await head.text(),'');assert.equal(head.headers.get('content-length'),response.headers.get('content-length'));
+        assert.equal((await fetch(base+operation.links.describe,{method:'POST'})).status,405);assert.equal((await fetch(base+operation.links.describe+'?unknown=1')).status,400);
+        assert.ok(AGENT_DOCUMENTS[operation.links.guide]);for(const next of contract.links.next)assert.equal((await fetch(base+next)).status,200);
+      }
+    }
+    assert.equal((await fetch(base+'/api/agent/operations/unknown')).status,404);
+    assert.equal((await fetch(base+'/api/agent/tasks/unknown')).status,404);
     assert.equal(discovery.headers.get('cache-control'), 'no-store');
     assert.equal(manifest.capabilities.find((c: { id: string }) => c.id === 'annotations.write').readiness, 'needs-identity');
     assert.deepEqual((await (await fetch(base + '/api/users')).json()).users, []);
@@ -114,6 +134,18 @@ test('ordinary HTTP discovers, attributes and commits annotations without fronte
   } finally { await service.close(); await rm(dir, { recursive: true, force: true }); }
 });
 
+test('progressive descriptions reuse authoritative limits and distinguish conditional VMAF from metadata and CAMBI',()=>{
+  assert.equal(new Set(AGENT_OPERATIONS.map(o=>o.id)).size,AGENT_OPERATIONS.length);
+  for(const op of AGENT_OPERATIONS){assert.ok(agentTask(op.task));for(const id of op.next)assert.ok(AGENT_OPERATIONS.some(o=>o.id===id));}
+  assert.equal(agentOperation('range.submit',[])!.request.limits,QUALITY_RANGE_LIMITS);
+  assert.equal(agentOperation('library.discover',[])!.request.limits,DISCOVERY_DICTIONARY.query);
+  const m=agentManifest({capabilities:serviceCapabilities(true,false),libraryReady:true,qualityJobsEnabled:true,nativeVmaf:{enabled:false,reason:'component-unavailable'},actor:null});
+  const native=m.qualityJobs.source.additionalContainers.mp4.nativeSequenceMetrics;
+  assert.deepEqual(native.vmaf.containers,VMAF_CAPABILITY.containers);assert.equal(native.cambi.implemented,false);assert.equal(m.qualityVmaf.deployment.enabled,false);
+  assert.match(DISCOVERY_DICTIONARY.fields.quality,/Metadata stream IDs/);
+  assert.ok(AGENT_DOCUMENTS['/agent/quality.md'].length<2500);assert.ok(AGENT_DOCUMENTS['/agent/quality/reference.md'].length>10000);
+});
+
 test('read-only deployment advertises unavailable writes and still serves embedded task documents', async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'vp-agent-readonly-'));
   const library = new MediaLibraryIndex([dir], { database: path.join(dir, 'index.sqlite'), watch: false });
@@ -154,4 +186,11 @@ test('quality discovery and guides disclose candidate transaction, SSIM and opaq
  const guides=JSON.stringify(AGENT_DOCUMENTS);for(const phrase of ['create-quality-candidate','annotation-context-unavailable','not-subjectively-assessed','packet-identity-gop-v1','Zero CTS does not imply immediate output','concealmentDetection=unavailable','capture_presented_quality_frame','quality-source-build','configurationHex','UNBOUND'])assert.ok(guides.includes(phrase),phrase);
  assert.ok(!guides.includes('Delayed/reordered pictures,'),'guide must not claim all delayed pictures reject');
  const {readFile}=await import('node:fs/promises');const doc=await readFile(new URL('../../docs/agent-http.md',import.meta.url),'utf8');assert.ok(!doc.includes('SSIM/VMAF/CAMBI'));assert.match(doc,/create-quality-candidate/);assert.match(doc,/opaque token/);
+});
+
+
+test('CAMBI progressive operations retain single-source admission and unavailable recovery without metric substitution',()=>{
+ const m=agentManifest({capabilities:serviceCapabilities(true,false),libraryReady:true,qualityJobsEnabled:true,actor:{id:'owner',name:'Owner'},nativeCambi:{enabled:true,reason:null}});
+ const task=agentTask('quality.cambi')!;assert.equal(task.operations.length,10);const submit=agentOperation('cambi.submit',m.capabilities)!;assert.equal(submit.availability.enabled,true);assert.equal(submit.request.schema,'voidplayer-cambi-job');assert.equal(submit.execution.requiresBrowser,false);assert.equal(submit.write!.action,'quality-job');assert.ok(!submit.next.includes('plan.create'));
+ assert.match(AGENT_DOCUMENTS['/agent/quality/cambi.md'],/no reference relation|reference relationship/i);assert.match(AGENT_DOCUMENTS['/agent/quality/cambi.md'],/FLV-only/);assert.match(AGENT_DOCUMENTS['/agent/quality.md'],/CAMBI uses one source and no C plan/);
 });

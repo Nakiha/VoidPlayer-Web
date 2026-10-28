@@ -1,4 +1,5 @@
 import {qualityCambiShell,installQualityCambi} from './quality-cambi.ts';
+import {qualityXpsnrShell,installQualityXpsnr} from './quality-xpsnr.ts';
 import {qualityVmafShell,installQualityVmaf} from './quality-vmaf.ts';
 import {installQualityCandidate} from '../ui/quality-candidate.ts';
 import { ssimPlan, SSIM_VARIANT } from '../../shared/analysis/quality/ssim.ts';
@@ -51,6 +52,7 @@ export function qualityJobsShell(){
     ${qualityCorrespondenceShell()}
     ${qualityCambiShell()}
     ${qualityVmafShell()}
+    ${qualityXpsnrShell()}
     ${qualityRangesShell()}
     <section id="quality-attachment" class="admin-panel" hidden><h2>${th(msg('qualityWorkflow.attach','将此结果显式共享到已有标注'))}</h2><p>${th(msg('quality.shareNotice','此操作会向所有可查看该标注的人共享两侧片源身份、测量 ROI 和不可变结果事实。'))}</p>
     <div class="admin-actions"><label>${th(msg('admin.reviewSpace','评审空间'))}<select id="quality-space"></select></label><label>${th(msg('quality.side','标注对应的片源侧'))}<select id="quality-attach-side"><option value="reference">reference</option><option value="distorted">distorted</option></select></label></div>
@@ -58,7 +60,7 @@ export function qualityJobsShell(){
     <div id="quality-mark-list"></div><p id="quality-attach-target"></p><button id="quality-attach" disabled>${th(msg('quality.publish','共享到标注'))}</button><p id="quality-attach-status" role="status"></p><div id="quality-shared-links"></div></section></section>`;
 }
 export function installQualityJobs(signal:AbortSignal){
-  const cambi=installQualityCambi(signal),ranges=installQualityRanges(signal),correspondence=installQualityCorrespondence(signal),vmaf=installQualityVmaf(signal);
+  const cambi=installQualityCambi(signal),ranges=installQualityRanges(signal),correspondence=installQualityCorrespondence(signal),vmaf=installQualityVmaf(signal),xpsnr=installQualityXpsnr(signal);
   const $=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(`quality-${id}`)as T;
   const api=new QualityClient();let observer:QualityJobObserver|null=null,observation:QualityObservation|null=null;
   let active=false,enabled=false,scope=0,controller=new AbortController(),lastActor='',lastResult='',attachmentGeneration=0,attachmentBusy=false;
@@ -245,5 +247,5 @@ export function installQualityJobs(signal:AbortSignal){
   onLanguageChange(()=>{if(active&&observation&&currentActor()?.id===lastActor)render(observation);},signal);
   const timer=setInterval(()=>{if(active&&enabled&&!document.hidden&&currentActor()?.id===lastActor)void observer?.poll();},1000);
   signal.addEventListener('abort',()=>{clearInterval(timer);observer?.dispose();controller.abort();},{once:true});
-  return {activate(value:boolean){cambi.activate(value);ranges.activate(value);correspondence.activate(value);vmaf.activate(value);if(active===value)return;active=value;if(value)void start();else{scope++;observer?.dispose();observer=null;controller.abort();}}};
+  return {activate(value:boolean){cambi.activate(value);ranges.activate(value);correspondence.activate(value);vmaf.activate(value);xpsnr.activate(value);if(active===value)return;active=value;if(value)void start();else{scope++;observer?.dispose();observer=null;controller.abort();}}};
 }

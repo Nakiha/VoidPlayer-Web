@@ -1,4 +1,6 @@
 import type {IncomingMessage,ServerResponse} from 'node:http';import type {RouteContext} from '../../routes/context.ts';
+import {VmafError} from '../../../shared/analysis/quality/vmaf.ts';
+import {agentRecoveryFields} from '../../agent-errors.ts';
 import {requireCapturedActor} from '../../identity.ts';import {AdminError,adminErrorBody} from '../../admin-error.ts';import {adminWriteAllowed,readAdminJson} from '../../admin.ts';import {sendJson} from '../../http-utils.ts';
 export async function handleVmafRoutes(ctx:RouteContext,req:IncomingMessage,res:ServerResponse,url:URL){
  if(!url.pathname.startsWith('/api/quality/vmaf'))return false;
@@ -27,6 +29,6 @@ export async function handleVmafRoutes(ctx:RouteContext,req:IncomingMessage,res:
    else if(item![2]==='cancel'){if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).length)throw new AdminError(400,'Cancellation needs an empty object.','invalid-request');sendJson(res,200,service.cancel(item![1],actor.id));}
    else{if(!ctx.options.admin)throw new AdminError(503,'Annotation storage unavailable.','storage-unavailable');sendJson(res,200,service.publish(item![1],actor,body,new URL(req.headers.origin!).origin,ctx.options.admin.annotations,ctx.requestId));}
   }finally{clearTimeout(timer);}
- }catch(error){if(!res.headersSent&&!res.destroyed)sendJson(res,error instanceof AdminError?error.status:(error as {code?:string}).code==='component-unavailable'?503:400,{...adminErrorBody(error),code:(error as {code?:string}).code??'vmaf-operation-failed'});}
+ }catch(error){if(!res.headersSent&&!res.destroyed)sendJson(res,error instanceof AdminError?error.status:error instanceof VmafError?(error.code==='component-unavailable'?503:400):500,{...adminErrorBody(error),code:(error as {code?:string}).code??'vmaf-operation-failed',...agentRecoveryFields((error as {code?:string})?.code??'vmaf-operation-failed','vmaf.submit')});}
  return true;
 }

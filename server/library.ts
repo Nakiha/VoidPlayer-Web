@@ -1,5 +1,9 @@
 import {NativeCambiService} from './analysis/cambi/service.ts';
 import {NativeCambiRunner} from './analysis/cambi/runner.ts';
+import {TaskCenterService} from './tasks/service.ts';
+import {NativeXpsnrService} from './analysis/xpsnr/service.ts';
+import {NativeXpsnrRunner} from './analysis/xpsnr/runner.ts';
+import type {XpsnrComponentConfig} from '../shared/analysis/quality/xpsnr.ts';
 import {NativeVmafService} from './analysis/vmaf/service.ts';
 import {NativeVmafRunner} from './analysis/vmaf/runner.ts';
 import type {VmafComponentConfig} from '../shared/analysis/quality/vmaf.ts';
@@ -28,7 +32,7 @@ export type { MediaRoot } from './library-store.ts';
 export const MEDIA_EXTENSIONS = ['.mp4', '.m4v', '.mov', '.mkv', '.webm', '.ts', '.m2ts', '.mpg', '.mpeg', '.avi', '.flv'];
 export interface LibraryEntry { id: string; name: string; root: string; rootIndex: number; size: number; lastModified: number; rootId?: string; version?: string; state?: string }
 export interface Library { roots: string[]; entries: LibraryEntry[]; truncated: boolean }
-interface IndexOptions { nativeVmaf?:VmafComponentConfig; database?: string; coreDir?: string; ttlMs?: number; settleMs?: number; ioTimeoutMs?: number; watch?: boolean; debounceMs?: number; scan?: typeof scanLibrary; now?: () => number }
+interface IndexOptions { nativeVmaf?:VmafComponentConfig; nativeXpsnr?:XpsnrComponentConfig; database?: string; coreDir?: string; ttlMs?: number; settleMs?: number; ioTimeoutMs?: number; watch?: boolean; debounceMs?: number; scan?: typeof scanLibrary; now?: () => number }
 export interface BrowseQuery { rootId?: string; directory?: string; search?: string; recursive?: boolean; limit?: number; offset?: number; revision?: number }
 export function fileVersion(stat: Stats) { return createHash('sha256').update(`${stat.size}:${Math.round(stat.mtimeMs)}:${Math.round(stat.ctimeMs)}:${stat.ino}`).digest('hex').slice(0, 24); }
 const parent = (name: string) => path.posix.dirname(name) === '.' ? '' : path.posix.dirname(name);
@@ -44,6 +48,8 @@ export class MediaLibraryIndex {
   private jobService?: QualityJobService;
   private discoveryService?: LibraryDiscoveryService;
   get discovery() { if(this.closed)throw new AdminError(503,'Library discovery is closed.','discovery-unavailable');return this.discoveryService??=new LibraryDiscoveryService(this); }
+  private taskService?:TaskCenterService;
+  get tasks(){if(this.closed)throw new AdminError(503,'Task center closed.','task-center-unavailable');return this.taskService??=new TaskCenterService(this);}
   private rangeService?: QualityRangeService;
   private correspondenceService?:CorrespondenceService;
   private cambiService?:NativeCambiService;
@@ -52,6 +58,9 @@ export class MediaLibraryIndex {
   private vmafService?:NativeVmafService;
   get nativeVmafDescriptor(){return this.vmafService?.descriptor??null;}
   get qualityVmaf(){if(this.closed)throw new AdminError(503,'VMAF service closed.','vmaf-service-unavailable');if(!this.durableQualityJobsEnabled)throw new AdminError(503,'VMAF needs persistent library storage.','quality-storage-unavailable');return this.vmafService??=new NativeVmafService(this.indexDatabase+'.quality-vmaf.sqlite',new NativeVmafRunner(this,this.coreDirectory,this.options.nativeVmaf),this.qualityCorrespondence);}
+  private xpsnrService?:NativeXpsnrService;
+  get nativeXpsnrDescriptor(){return this.xpsnrService?.descriptor??null;}
+  get qualityXpsnr(){if(this.closed)throw new AdminError(503,'XPSNR service closed.','xpsnr-service-unavailable');if(!this.durableQualityJobsEnabled)throw new AdminError(503,'XPSNR needs persistent library storage.','quality-storage-unavailable');return this.xpsnrService??=new NativeXpsnrService(this.indexDatabase+'.quality-xpsnr.sqlite',new NativeXpsnrRunner(this,this.coreDirectory,this.options.nativeXpsnr),this.qualityCorrespondence);}
   private closing?: Promise<void>;
   private coreDirectory: string;
   get quality() { return this.pairRunner ??= new LibraryPairRunner(this,this.coreDirectory); }
@@ -411,8 +420,10 @@ export class MediaLibraryIndex {
   close() { return this.closing ??= this.closeOwned(); }
   private async closeOwned() {
     this.closed = true; this.stop();
+    this.taskService?.close();
     await this.correspondenceService?.close();
     await this.cambiService?.close();
+    await this.xpsnrService?.close();
     await this.vmafService?.close();
     await this.discoveryService?.close();
     await this.rangeService?.close();

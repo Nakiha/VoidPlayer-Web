@@ -1,3 +1,4 @@
+import {agentRecoveryFields} from '../../agent-errors.ts';
 import type {IncomingMessage,ServerResponse} from 'node:http';import type {RouteContext} from '../../routes/context.ts';import {requireCapturedActor} from '../../identity.ts';import {AdminError,adminErrorBody} from '../../admin-error.ts';import {adminWriteAllowed,readAdminJson} from '../../admin.ts';import {sendJson} from '../../http-utils.ts';
 export async function handleCambiRoutes(ctx:RouteContext,req:IncomingMessage,res:ServerResponse,url:URL){
  if(!url.pathname.startsWith('/api/quality/cambi'))return false;
@@ -23,5 +24,5 @@ export async function handleCambiRoutes(ctx:RouteContext,req:IncomingMessage,res
    else if(item![2]==='cancel'){if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).length)throw new AdminError(400,'Empty cancel body required','invalid-request');sendJson(res,200,service.cancel(item![1],actor.id));}
    else{if(!ctx.options.admin)throw new AdminError(503,'Annotations unavailable','storage-unavailable');sendJson(res,200,service.publish(item![1],actor,body,new URL(req.headers.origin!).origin,ctx.options.admin.annotations,ctx.requestId));}
   }finally{clearTimeout(timer);}
- }catch(error){if(!res.headersSent&&!res.destroyed)sendJson(res,error instanceof AdminError?error.status:400,{...adminErrorBody(error),code:(error as {code?:string}).code??'cambi-operation-failed'});}return true;
+ }catch(error){if(!res.headersSent&&!res.destroyed)sendJson(res,error instanceof AdminError?error.status:400,{...adminErrorBody(error),code:(error as {code?:string}).code??'cambi-operation-failed',...agentRecoveryFields((error as {code?:string}).code??'cambi-operation-failed','cambi.submit')});}return true;
 }

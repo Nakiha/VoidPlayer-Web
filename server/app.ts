@@ -1,4 +1,6 @@
 import {handleCambiRoutes} from './analysis/cambi/routes.ts';
+import {handleTaskRoutes} from './tasks/routes.ts';
+import {handleXpsnrRoutes} from './analysis/xpsnr/routes.ts';
 import {handleVmafRoutes} from './analysis/vmaf/routes.ts';
 import { StaticAssets } from './static-assets.ts';
 import { AnalysisScheduler } from './analysis/bitstream/scheduler.ts';
@@ -26,6 +28,7 @@ import { handleConnectionRoutes } from './routes/connection.ts';
 import { handleStateRoutes } from './routes/state.ts';
 import { handleContentRoutes } from './routes/content.ts';
 import type { RouteContext } from './routes/context.ts';
+import type {PageChannel} from './bridge/page-channel.ts';
 
 // Narrow read-only HTTP API for the web player:
 //   GET /api/library        -> media list under the whitelisted folders
@@ -35,6 +38,8 @@ import type { RouteContext } from './routes/context.ts';
 export function createTrafficState() { return { sockets:new Set<import('node:net').Socket>(),activeRequests:0,completedRequests:0,abortedRequests:0,recentRequests:[] as Record<string,unknown>[] }; }
 
 export interface ServerOptions {
+  /** Installed only by the explicit temporary stdio page launcher. */
+  pageBridge?:PageChannel;
   traffic?: ReturnType<typeof createTrafficState>;
   roots: string[];
   tls?: HttpsOptions;
@@ -64,11 +69,13 @@ export function createMediaServer(options: ServerOptions): Server {
   const {sockets,recentRequests}=traffic;
 
   const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
+    if(options.pageBridge)try{if(await options.pageBridge.handle(req,res))return;}
+    catch{if(!res.headersSent&&!res.destroyed)sendJson(res,503,{code:'bridge-host-unavailable'});else res.end();return;}
     if(options.clientAddress)setClientAddress(req,options.clientAddress(req));
     const started = performance.now();
     const requestId = randomUUID();
     res.setHeader('x-request-id', requestId);
-    res.setHeader('link', '</llms.txt>; rel="describedby"; type="text/plain", </agent.md>; rel="alternate"; type="text/markdown", </api/agent>; rel="service-desc"; type="application/json"');
+    res.setHeader('link', '</llms.txt>; rel="describedby"; type="text/plain", </agent.md>; rel="alternate"; type="text/markdown", </api/agent>; rel="service-desc"; type="application/json", </api/agent/tasks>; rel="item"; type="application/json"');
     let hostname = '';
     try { hostname = new URL(`http://${req.headers.host || 'localhost'}`).hostname; } catch {}
     if (encryptedRequest(req) || hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '[::1]' || /^127\./.test(hostname)) {
@@ -95,9 +102,11 @@ export function createMediaServer(options: ServerOptions): Server {
       const url = new URL(req.url ?? '/', 'http://localhost');
       if (await handleConnectionRoutes(ctx, req, res, url)) return;
       if (await handleStateRoutes(ctx, req, res, url)) return;
+      if (await handleTaskRoutes(ctx,req,res,url)) return;
       if (await handleDiscoveryRoutes(ctx,req,res,url)) return;
       if(await handleCambiRoutes(ctx,req,res,url))return;
       if(await handleVmafRoutes(ctx,req,res,url))return;
+      if(await handleXpsnrRoutes(ctx,req,res,url))return;
       if (await handleQualityJobRoutes(ctx,req,res,url)) return;
       if (await handleQualityRangeRoutes(ctx,req,res,url)) return;
   if(await handleCorrespondenceRoutes(ctx,req,res,url))return;

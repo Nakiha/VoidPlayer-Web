@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/Nakiha/FFmpeg.git",
+  "revision": "8998a1a670c81a04d144c36f9e2d3aa680c10720",
+  "filterSha256": "4b59b32eb4a501ac74f6d767a916ef1a29833e1895b150cfa96b8e4ffb91f3d7",
+  "platform": "linux-x64",
+  "license": "LGPL-2.1-or-later",
+  "options": ["--disable-autodetect", "--disable-everything", "--disable-doc", "--disable-debug", "--disable-network", "--disable-gpl", "--disable-version3", "--disable-nonfree", "--disable-x86asm", "--disable-asm", "--disable-shared", "--enable-static", "--disable-ffplay", "--disable-ffprobe", "--enable-ffmpeg", "--enable-protocol=file,pipe", "--enable-demuxer=rawvideo", "--enable-decoder=rawvideo", "--enable-filter=xpsnr", "--enable-muxer=null", "--enable-encoder=wrapped_avframe"]
+}

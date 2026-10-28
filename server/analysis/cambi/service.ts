@@ -1,3 +1,4 @@
+import {taskSummaries} from '../../tasks/summary.ts';
 import {mkdirSync,rmSync} from 'node:fs';import path from 'node:path';import {randomUUID,createHash} from 'node:crypto';
 import {openIndexDatabase} from '../../sqlite.ts';import {lockDatabase} from '../../library-store.ts';import {AdminError} from '../../admin-error.ts';import type {Actor} from '../../identity.ts';import type {AnnotationStore} from '../../annotations.ts';
 import {qualityIdempotencyKey} from '../quality/job-request.ts';import {stopOwnedNative} from '../vmaf/runner.ts';import {NativeCambiRunner} from './runner.ts';
@@ -9,6 +10,7 @@ export class NativeCambiService{
  constructor(file:string,runner:NativeCambiRunner){this.runner=runner;mkdirSync(path.dirname(file),{recursive:true});this.unlock=lockDatabase(file);let db:ReturnType<typeof openIndexDatabase>|undefined;
  try{this.db=db=openIndexDatabase(file);db.exec('PRAGMA busy_timeout=0;');if(Number(db.prepare('PRAGMA user_version').get()!.user_version)>1)throw Error('Future CAMBI database');db.exec(`PRAGMA journal_mode=WAL;CREATE TABLE IF NOT EXISTS cambi_jobs(id TEXT PRIMARY KEY,actor TEXT,client TEXT,key TEXT,fingerprint TEXT,body TEXT,result TEXT,reserved INTEGER,UNIQUE(actor,client,key));CREATE TABLE IF NOT EXISTS cambi_heat(job TEXT,frame INTEGER,scale INTEGER,sha TEXT,data BLOB,PRIMARY KEY(job,frame,scale));CREATE TABLE IF NOT EXISTS cambi_publications(job TEXT PRIMARY KEY,body TEXT);PRAGMA user_version=1;`);}catch(error){db?.close();this.unlock();throw error;}
  this.ready=this.recover();void this.ready.catch(e=>{this.fatal=e;});}
+ taskSummaries(actor:string){return taskSummaries(this.db,'cambi',actor);}
  private all(){return this.db.prepare('SELECT body FROM cambi_jobs ORDER BY rowid').all().map(r=>JSON.parse(String(r.body)) as CambiJob);}
  private async recover(){for(const j of this.all())if(!terminalCambi(j.state)){if(j.process)await stopOwnedNative(j.process);j.state='interrupted';j.phase='done';j.endedAt=now();j.process=null;j.reason={code:'service-restarted',message:'Interrupted; no automatic recomputation'};this.db.prepare('DELETE FROM cambi_heat WHERE job=?').run(j.id);this.db.prepare('UPDATE cambi_jobs SET result=NULL WHERE id=?').run(j.id);this.save(j);rmSync(this.runner.directory(j.id),{recursive:true,force:true});}this.recovered=true;}
  private available(){if(this.closed||this.fatal||!this.recovered||this.runner.stopUncertain)throw new AdminError(503,'CAMBI service recovering or unavailable','cambi-service-unavailable');}

@@ -27,6 +27,16 @@ for (const key of ['VOIDPLAYER_CONFIG', 'VOIDPLAYER_DATA_DIR', 'VOIDPLAYER_ADMIN
 const cwd = path.join(temp, 'unrelated cwd'), data = path.join(temp, 'persistent data'), media = path.join(temp, 'nested media');
 const freePort = async () => { const socket = createServer(); await new Promise(r => socket.listen(0, '127.0.0.1', r)); const port = socket.address().port; await new Promise(r => socket.close(r)); return port; };
 let executable;
+async function verifyAgentEntry(base,transport=fetch){
+  const entry=await transport(base+'/llms.txt');assert.equal(entry.status,200);assert.match(await entry.text(),/\/api\/agent\/tasks/);
+  const manifest=await (await transport(base+'/api/agent')).json(),catalog=await (await transport(base+manifest.links.taskCatalog)).json();assert.equal(catalog.schema,'voidplayer-agent-tasks');assert.equal(catalog.version,1);
+  for(const id of ['library.prepare','plan.execute','single.submit','vmaf.submit','evidence.events','tasks.query','tasks.get']){
+    const route='/api/agent/operations/'+id,response=await transport(base+route),text=await response.text();assert.equal(response.status,200);const op=JSON.parse(text);assert.equal(op.id,id);assert.equal(op.execution.requiresBrowser,false);
+    const head=await transport(base+route,{method:'HEAD'});assert.equal(head.status,200);assert.equal(await head.text(),'');assert.equal(Number(head.headers.get('content-length')),Buffer.byteLength(text));
+    assert.equal((await transport(base+op.links.guide)).status,200);
+  }
+  const mp4=manifest.qualityJobs.source.additionalContainers.mp4;assert.equal(mp4.nativeSequenceMetrics.cambi.implemented,false);assert.equal(mp4.nativeSequenceMetrics.vmaf.implemented,true);
+}
 const run = (args, overrides = {}) => execFileSync(executable, args, { cwd, env: { ...env, ...overrides }, encoding: 'utf8', timeout: 10000, stdio: ['ignore', 'pipe', 'pipe'] });
 async function renameReleased(source, destination) {
   // Windows can keep a just-exited image mapped briefly. Retry only sharing /
@@ -93,6 +103,7 @@ try {
   const health = await fetch(portableBase + '/api/health');
   assert.equal((await health.json()).actor, null); assert.equal(health.headers.get('set-cookie'), null);
   assert.deepEqual((await (await fetch(portableBase + '/api/users')).json()).users, []);
+  await verifyAgentEntry(portableBase);
   const portableIdentityResponse = await fetch(portableBase + '/api/identity', { method: 'POST', headers: { origin: portableBase, 'content-type': 'application/json', 'x-voidplayer-action': 'identity' }, body: JSON.stringify({ guest: true }) });
   assert.equal(portableIdentityResponse.status, 200);
   assert.deepEqual((await (await fetch(portableBase + '/api/users')).json()).users, []);
@@ -105,6 +116,12 @@ try {
   assert.equal(savedAnalysis.status, 200);
   assert.equal((await (await fetch(portableBase + '/api/admin/status')).json()).analysis.concurrency, 8);
   await stop();
+  // Embedded progressive guides and JSON need no frontend, even in the compiled
+  // executable with an empty PATH and unrelated cwd. Restore assets before the
+  // existing full release acceptance; this does not alter its coverage.
+  const hiddenDist=path.join(folder,'dist-offline');await renameReleased(path.join(folder,'dist'),hiddenDist);
+  try{portableBase=await start(portablePort,{},[],null);assert.equal((await fetch(portableBase)).status,404);await verifyAgentEntry(portableBase);}
+  finally{await stop();await renameReleased(hiddenDist,path.join(folder,'dist'));}
   assert.deepEqual(await readdir(cwd), cwdBefore, 'bare startup must not write into the invoking directory');
   const relocated = path.join(temp, 'portable moved');
   await renameReleased(folder, relocated); folder = relocated; executable = path.join(folder, manifest.executable);
@@ -120,6 +137,8 @@ try {
   assert.equal((await fetch(guideBase)).status, 200);
   assert.equal(await (await fetch(guideBase + '/api/connection/certificate')).text(), ca);
   assert.equal((await fetch(guideBase + '/api/library')).status, 200);
+  await verifyAgentEntry(guideBase);await verifyAgentEntry(`http://127.0.0.1:${securePort}`);
+  await verifyAgentEntry(secureBase,(url,options={})=>httpFetch(url,{...options,ca,servername:'voidplayer.test',headers:{...options.headers,host:`voidplayer.test:${securePort}`}}));
   assert.equal((await fetch(`http://127.0.0.1:${securePort}/llms.txt`)).status, 200);
   assert.equal((await fetch(`http://127.0.0.1:${securePort}/admin`)).status, 200);
   const secureResponse = await httpFetch(secureBase + '/api/health', { ca, servername: 'voidplayer.test', headers: { host: `voidplayer.test:${securePort}`, cookie: portableCookie } });

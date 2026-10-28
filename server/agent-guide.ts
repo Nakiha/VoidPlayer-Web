@@ -1,4 +1,5 @@
 import { AGENT_TASKS } from '../shared/service/agent.ts';
+import {QUALITY_AGENT_DOCUMENTS} from './agent-quality-guide.ts';
 
 /** Embedded so standalone deployments also serve the guides without dist/. */
 export const AGENT_GUIDE = `# VoidPlayer Web
@@ -11,6 +12,7 @@ serve the APIs. The remote player requires HTTPS for browser decoding.
 
 - [Start here](/agent.md): workflow and deployment boundaries.
 - [Runtime capabilities](/api/agent): implemented, enabled and ready are separate.
+- [Task catalog](/api/agent/tasks): fetch one task, then one operation at a time.
 - [Find media, inspect cached metadata and query indexes](${AGENT_TASKS.library})
 - [Identity and editable workspaces](${AGENT_TASKS.workspaces})
 - [Write annotations and follow operations](${AGENT_TASKS.annotations})
@@ -418,7 +420,7 @@ focus or tracks. Local-only review has no server activity stream.
 const quality = `# Source-frame PSNR and durable single-frame jobs v1
 
 /api/agent describes quality.frame-pair and quality.jobs. Both support only
-explicit single-frame PSNR from registered library sources with trusted caches.
+explicit single-frame PSNR with optional SSIM/grid from registered library sources with trusted caches.
 The qualityJobs object gives the request schema, endpoints, source constraints
 and fixed budgets. compute.workers remains unavailable. Neither operation needs
 a browser, playback cursor, session or GUI acknowledgement.
@@ -439,8 +441,9 @@ Frame-index GET reads this namespace; POST/build=1 cannot prepare or upload it.
 Read-only original-pair inspection uses the same existing sealed cache without
 building, scoring, private-job access or player control. Library result version2
 and complete-mp4-index-derived-v1 annotation clocks identify MP4 or mixed pairs;
-FLV-only version1 receipts/fingerprints retain their original fields. VMAF and
-CAMBI remain FLV-only. See /docs/trusted-mp4-quality.md in the source tree.
+FLV-only version1 receipts/fingerprints retain their original fields. Native VMAF
+has separate strict MP4/mixed sequence admission below; CAMBI remains
+FLV-only. See /docs/trusted-mp4-quality.md in the source tree.
 
 2. Explicitly prepare a missing supported FLV or strict MP4 cache with POST
    /api/media/{id}/psnr-index, JSON {version}, the identity cookie, same-origin
@@ -679,6 +682,11 @@ unknown commit outcomes must reuse the same plan/digest. Restart interrupts unfi
 planning without automatic recomputation or scoring. Candidate publication remains the
 existing separate explicit range policy. See docs/reference-clock-plans.md.
 
+quality.xpsnr is a separate optional native reference-first continuous sequence executor.
+Read /agent/quality/xpsnr.md and /api/agent/tasks/quality.xpsnr for the exact recipe,
+budgets, official per-plane pooling, explicit variant comparison and recovery operations.
+No installed trusted component means unavailable; no metric substitution or perceptual claim.
+
 quality.vmaf is a separate optional native sequence executor, not a single-frame range aggregate.
 GET /api/quality/vmaf/capability reports the verified deployment and exact source/model/recipe bounds.
 Linux x64 only; install the pinned official component using scripts/native/prepare-vmaf.mjs and
@@ -693,9 +701,14 @@ POST /api/quality/vmaf/jobs uses Idempotency-Key and a normalized body:
  model:"vmaf_v0_6_1",cadenceUs:EXACT_INTEGER_CFR_MICROSECONDS,metrics:{psnr:true,ssim:false},
  budget:{maxRawBytes:134217728,maxElapsedMs:120000,nativeCpuSeconds:30,nativeMemoryBytes:536870912}}
 The existing C plan must contain 2..32 all-sample, hole-free continuous presentation frames,
-full-frame limited BT.709 SDR square-pixel uncropped unrotated 8/10-bit YUV420. Explicit NEG
+full-frame limited BT.709 SDR square-pixel uncropped unrotated 8/10-bit YUV420.
+Sources may be trusted FLV/Enhanced FLV or strict non-fragmented MP4
+(avc1 H2648/hvc1 HEVC8/10), including both mixed directions. MP4 duration ticks
+and source DTS/CTS must exactly represent the declared integer microsecond cadence.
+Track/sample/description/offset/size and table witnesses stay pinned. Explicit NEG
 model vmaf_v0_6_1neg is also available; v0.6.1 is a fixed baseline, not the latest model.
-No negative PTS, VFR, arbitrary ROI, conversion, HDR or other containers. Native frame scores
+No negative PTS, VFR, arbitrary ROI, conversion, HDR, other containers, MP4 edits,
+fragmentation/encryption/external references or open GOP/CRA. Native frame scores
 and official pooling use one continuous clip with reset/start and final flush, not per-frame runs.
 GET /api/quality/vmaf/jobs?after=ROW&limit=8, /jobs/{id}, /jobs/{id}/result,
 /jobs/{id}/frames?after=INDEX&limit=4 and POST /jobs/{id}/cancel {} observe/control the same service.
@@ -705,6 +718,10 @@ CPU/address-space/file limits and physical process/Worker exit precede shared ad
 POST /jobs/{id}/candidates with {space,side,maxScore,limit,minFrameDistance,text,severity} explicitly
 freezes a top-N temporal score policy and publishes existing atomic measurement-candidate commands.
 Attached sequenceVmaf facts include full immutable model/component/recipe/plan/raw hashes and pool;
+MP4 on either side uses library/native result and sequence association version2,
+with original sample/ticks/timebase/table witnesses for every MP4 point. All-FLV
+version1 records and idempotent receipts retain their original fields. Unknown
+server failures return 500 so clients retain and replay the frozen request/key;
 full-frame temporal scores are not heatmaps/localized defect certification. Imported facts are
 historical. Reference integrity is not certified and concealment detection is unavailable.
 See docs/native-vmaf.md for installation, contract, notices and independent reference tests.
@@ -768,7 +785,40 @@ reject; HTTP Agents retain the independent explicit-AU scoring path.
 The player's WebMCP tools and window.voidPlayer operate on an attached browser
 session. Use them for intentional view actions: seek, play, pause, presenting a
 frame or selecting browser-local files. Their schemas live in the running page.
-There is no server HTTP MCP endpoint or local MCP bridge yet (#117).
+An optional temporary stdio bridge is available from a Node 24+ source checkout
+with the built frontend: run node scripts/mcp-page-bridge.ts as the MCP client's
+child process. Open only the localhost page printed on stderr, choose Files in
+that page, click MCP, review the self-declared client (not authenticated), target
+workspace and read/view/annotation scopes, and explicitly connect. It cannot
+attach to arbitrary existing tabs. Ordinary service pages do not expose a
+network MCP endpoint or enable the bridge automatically. No persistent token,
+account, extension, startup service or MCP application configuration is installed.
+
+MCP tools/list describes seven bounded operations: get_bridge_status,
+get_bridge_receipt and the five allowed page operations get_review_session,
+get_review_marks, pause_review, seek_review and add_review_mark. Pass the exact
+granted epoch to each page call, and a stable operationId to every mutation.
+Schemas reuse the page Agent validator; File paths, scripts, logs, source loads,
+uploads and background job tools are not forwarded. Result/message/queue and
+15-second command budgets are explicit in /api/agent localMcp.limits.
+
+The current 2026-07-28 per-request MCP metadata and server/discover lifecycle and
+legacy 2025-11-25 initialize then notifications/initialized are supported.
+stdout contains only newline JSON-RPC; diagnostics go to stderr. Close stdin
+for shutdown. Missing/disconnected page is host-unavailable with a reconnect
+instruction; reconnection always requires a fresh user confirmation. Revoke,
+reload, close, source/workspace/actor change or lost page channel invalidates the
+epoch. A started write can still complete: retain the original operationId and
+correlation, inspect get_bridge_receipt, never infer rollback or automatically
+replay an unknown outcome (including under a new key). Confirmed same-key calls
+return the receipt without executing again. Receipts last only this process.
+Closing the grant does not cancel independent durable HTTP scoring jobs.
+
+Only the launcher-owned localhost host uses transient document/grant bearer
+capabilities. Origin, Host, username and epoch are not credentials. Same-origin
+code and the local OS account remain trusted; this is not isolation from hostile
+local processes. Runtime protocol and page tests are in
+docs/local-mcp-page-bridge.md; platform certification is reported separately.
 
 Use ordinary HTTP for library retrieval, persisted annotation writes and events.
 A page need not be open. Background work must not invoke a view command merely
@@ -809,4 +859,6 @@ export const AGENT_DOCUMENTS: Readonly<Record<string, string>> = {
   [AGENT_TASKS.library]: library, [AGENT_TASKS.workspaces]: workspaces,
   [AGENT_TASKS.annotations]: annotations, [AGENT_TASKS.quality]: quality,
   [AGENT_TASKS.liveSession]: liveSession, [AGENT_TASKS.errors]: errors,
+  '/agent/quality/reference.md':quality,
+  ...QUALITY_AGENT_DOCUMENTS,
 };

@@ -1,10 +1,11 @@
+import {taskSummaries,taskEdges} from '../../tasks/summary.ts';
 import {createHash,randomUUID} from 'node:crypto';import {mkdirSync,rmSync} from 'node:fs';import path from 'node:path';
 import {openIndexDatabase} from '../../sqlite.ts';import {lockDatabase} from '../../library-store.ts';import {AdminError} from '../../admin-error.ts';
 import type {Actor} from '../../identity.ts';import type {CorrespondenceService} from '../quality/correspondence-service.ts';
 import {qualityIdempotencyKey} from '../quality/job-request.ts';import {qualityEvidenceValue} from '../../../shared/review/quality-evidence.ts';
 import type {QualityEvidenceRef} from '../../../shared/review/quality-evidence.ts';import type {QualityJobResult} from '../../../shared/analysis/quality/jobs.ts';
 import type {AnnotationStore} from '../../annotations.ts';
-import {vmafInput,canonicalJson,VMAF_LIMITS,terminalVmaf,VmafError} from '../../../shared/analysis/quality/vmaf.ts';
+import {vmafInput,canonicalJson,vmafSequenceFrame,VMAF_LIMITS,terminalVmaf,VmafError} from '../../../shared/analysis/quality/vmaf.ts';
 import type {VmafInput,VmafJob,VmafResult,VmafPlanSnapshot,VmafPrepared,VmafAssociation} from '../../../shared/analysis/quality/vmaf.ts';
 import {NativeVmafRunner,stopOwnedNative} from './runner.ts';
 const digest=(v:unknown)=>createHash('sha256').update(canonicalJson(v)).digest('hex');
@@ -15,6 +16,9 @@ type Publication={policy:CandidatePolicy;selected:{index:number;id:string;operat
 type CandidatePolicy={space:string;side:'reference'|'distorted';maxScore:number;limit:number;minFrameDistance:number;text:string;severity:number};
 /** Separate metric outcomes, one service-owned attempt, no automatic retry/work sharing. */
 export class NativeVmafService{
+  taskSummaries(actor:string){return taskSummaries(this.db,'vmaf',actor);}
+  taskEdges(actor:string){return taskEdges(this.db,'vmaf',actor);}
+
  private db:ReturnType<typeof openIndexDatabase>;private unlock:()=>void;readonly ready:Promise<void>;
  private recovered=false;private closed=false;private fatal:unknown;private active?:{id:string;controller:AbortController;done:Promise<void>};private timer?:ReturnType<typeof setTimeout>;private closing?:Promise<void>;
  private file:string;private runner:NativeVmafRunner;private plans:CorrespondenceService;
@@ -100,7 +104,7 @@ export class NativeVmafService{
  }
  private finish(job:VmafJob,native:VmafResult['vmaf']){
   const prepared=this.prepared(job.id);let result:VmafResult|null=null;
-  if(prepared){result={schema:'voidplayer-native-vmaf-result',version:1,plan:{...job.input.plan},prepared,vmaf:native,metrics:structuredClone(job.metrics)};if(Buffer.byteLength(JSON.stringify(result))>VMAF_LIMITS.resultBytes)throw new VmafError('budget-exceeded','VMAF result history limit exceeded');job.resultDigest=digest(result);}
+  if(prepared){result={schema:'voidplayer-native-vmaf-result',version:prepared.pairs[0].version,plan:{...job.input.plan},prepared,vmaf:native,metrics:structuredClone(job.metrics)};if(Buffer.byteLength(JSON.stringify(result))>VMAF_LIMITS.resultBytes)throw new VmafError('budget-exceeded','VMAF result history limit exceeded');job.resultDigest=digest(result);}
   this.db.exec('BEGIN IMMEDIATE');try{this.db.prepare('UPDATE quality_vmaf_jobs SET result=?,prepared=NULL WHERE id=?').run(result?JSON.stringify(result):null,job.id);this.save(job);this.db.exec('COMMIT');}catch(error){this.db.exec('ROLLBACK');throw error;}
  }
  cancel(id:string,actor:string){this.available();const j=this.get(id,actor);if(terminalVmaf(j.state))return j;
@@ -115,7 +119,7 @@ export class NativeVmafService{
   const match=/^(vmaf-[a-f0-9-]{36})-f(\d{1,2})$/.exec(ref.jobId);if(!match)throw new AdminError(400,'Invalid VMAF companion reference.','invalid-evidence-reference');
   const j=this.get(match[1],actor);if(!terminalVmaf(j.state)||j.attemptId!==ref.attemptId||j.resultDigest!==ref.digest)throw new AdminError(409,'VMAF companion reference changed.','evidence-unavailable');
   const r=this.result(j.id,actor),index=Number(match[2]),value=structuredClone(r.prepared.pairs[index]);if(!value)throw new AdminError(404,'VMAF frame not found.','vmaf-frame-not-found');
-  if(r.vmaf){const association:VmafAssociation={schema:'voidplayer-vmaf-sequence-association',version:1,jobId:j.id,attemptId:j.attemptId,resultDigest:j.resultDigest!,plan:r.plan,sequence:{cadenceUs:r.prepared.sequence.cadenceUs,referenceIntegrity:'not-certified',concealmentDetection:'unavailable',pairs:r.prepared.sequence.pairs.map(p=>({reference:{au:p.reference.picture.au,sourcePtsUs:p.reference.sourcePtsUs,decode:p.reference.decode},distorted:{au:p.distorted.picture.au,sourcePtsUs:p.distorted.sourcePtsUs,decode:p.distorted.decode}}))},index,frames:r.prepared.pairs.length,score:r.vmaf.frames[index].score,pooled:r.vmaf.pooled,component:r.vmaf.component,recipe:r.vmaf.recipe,raw:r.prepared.raw,spatial:'full-frame-temporal-score-not-localized'};(value as typeof value&{sequenceVmaf:VmafAssociation}).sequenceVmaf=association;}
+  if(r.vmaf){const association:VmafAssociation={schema:'voidplayer-vmaf-sequence-association',version:value.version,jobId:j.id,attemptId:j.attemptId,resultDigest:j.resultDigest!,plan:r.plan,sequence:{cadenceUs:r.prepared.sequence.cadenceUs,referenceIntegrity:'not-certified',concealmentDetection:'unavailable',pairs:r.prepared.pairs.map(p=>({reference:vmafSequenceFrame(p.result.provenance.reference),distorted:vmafSequenceFrame(p.result.provenance.distorted)}))},index,frames:r.prepared.pairs.length,score:r.vmaf.frames[index].score,pooled:r.vmaf.pooled,component:r.vmaf.component,recipe:r.vmaf.recipe,raw:r.prepared.raw,spatial:'full-frame-temporal-score-not-localized'};(value as typeof value&{sequenceVmaf:VmafAssociation}).sequenceVmaf=association;}
   return {schema:'voidplayer-quality-job-result',version:1,jobId:ref.jobId,attemptId:ref.attemptId,completedAt:j.endedAt!,submitted:{actorId:j.actor.id,actorName:j.actor.name,client:j.input.client,requestId:j.requestId,idempotencyKey:j.key},value};
  }
  private policy(value:unknown):CandidatePolicy{

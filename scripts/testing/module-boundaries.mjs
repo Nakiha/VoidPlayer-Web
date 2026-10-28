@@ -57,7 +57,7 @@ export function checkModuleBoundaries(root) {
     if (name.startsWith('src/') && !name.slice(4).includes('/')) assert.ok(entrypoints.has(name.slice(4)), `${name}: unowned frontend root module`);
     assert.ok(!/^src\/(bitstream-analysis|analysis-overlay)\//.test(name), `${name}: obsolete analysis namespace`);
     for (const layer of ['shared','src','server']) if (name.startsWith(`${layer}/analysis/`)) {
-      const domains = 'metadata|bitstream|quality|vmaf|cambi';
+      const domains = 'metadata|bitstream|quality|vmaf|xpsnr|cambi';
       assert.match(name, new RegExp(`^${layer}/analysis/(${domains})/`), `${name}: analysis must declare ${domains} responsibility`);
     }
   }

@@ -7,6 +7,7 @@ import { sendJson } from '../../http-utils.ts';
 import { FramePairError } from '../../../shared/analysis/quality/frame-pair.ts';
 import { PsnrError } from '../../../shared/analysis/quality/psnr.ts';
 import { libraryPairRequest,qualityKeys } from './request.ts';
+import {agentRecoveryFields} from '../../agent-errors.ts';
 
 
 export async function handleQualityRoutes(ctx:RouteContext,req:IncomingMessage,res:ServerResponse,url:URL) {
@@ -52,7 +53,7 @@ export async function handleQualityRoutes(ctx:RouteContext,req:IncomingMessage,r
     if(!res.destroyed&&!res.headersSent){
       const known=error instanceof AdminError||error instanceof FramePairError||error instanceof PsnrError;
       const e=error as Error&{code?:string};sendJson(res,error instanceof AdminError?error.status:e?.code==='budget-exceeded'?413:known?400:500,
-        known?{...adminErrorBody(error),...(e.code?{code:e.code}:{})}:{error:'Quality execution failed.',code:'decoder-error'});
+        known?{...adminErrorBody(error),...(e.code?{code:e.code}:{}),...agentRecoveryFields(e.code??'quality-operation-failed',source?.[2]==='psnr-source'?'quality.source':source?.[2]==='psnr-frames'?'quality.frames':undefined)}:{error:'Quality execution failed.',code:'decoder-error'});
     }
   } finally {res.off('close',abort);}
   return true;

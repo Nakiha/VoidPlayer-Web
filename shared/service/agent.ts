@@ -1,4 +1,6 @@
 import {CAMBI_CAPABILITY} from '../analysis/quality/cambi.ts';
+import {TASK_LIMITS,TASK_KINDS} from './tasks.ts';
+import {XPSNR_CAPABILITY} from '../analysis/quality/xpsnr.ts';
 import {VMAF_CAPABILITY} from '../analysis/quality/vmaf.ts';
 import {CORRESPONDENCE_LIMITS} from '../analysis/quality/correspondence.ts';
 import { SSIM_VARIANT, SSIM_LIMITS } from '../analysis/quality/ssim.ts';
@@ -9,6 +11,8 @@ import { PSNR_SPATIAL_LIMITS } from '../analysis/quality/psnr.ts';
 import { FORWARD_OUTPUT_GUARANTEE } from '../analysis/quality/frame-pair.ts';
 import {QUALITY_SOURCE_BUILD_LIMITS} from '../analysis/quality/source-build.ts';
 import {DISCOVERY_DICTIONARY} from '../media/discovery.ts';
+import {AGENT_TASK_CATALOG,AGENT_OPERATION_PATH,AGENT_OPERATIONS_VERSION} from './agent-operations.ts';
+import {PAGE_TOOLS,PAGE_BRIDGE_LIMITS,PAGE_MCP_VERSIONS,MCP_PAGE_TOOLS} from './page-bridge.ts';
 /** Discovery describes this deployment without starting work or creating users. */
 export function serviceCapabilities(storageEnabled: boolean, revealEnabled: boolean) {
   return { admin: storageEnabled, workspaces: storageEnabled, annotations: storageEnabled, reveal: revealEnabled };
@@ -27,9 +31,11 @@ export const AGENT_TASKS = {
   quality: '/agent/quality.md', liveSession: '/agent/live-session.md', errors: '/agent/errors.md',
 } as const;
 
-export function agentManifest(input: { capabilities: ServiceCapabilities; libraryReady: boolean; frontendAvailable?: boolean; qualityJobsEnabled?: boolean; nativeVmaf?: {enabled:boolean;reason:unknown}|null; nativeCambi?:{enabled:boolean;reason:unknown}|null; actor: { id: string; name: string } | null }) {
+export function agentManifest(input: { capabilities: ServiceCapabilities; libraryReady: boolean; frontendAvailable?: boolean; localPageBridge?:boolean;qualityJobsEnabled?: boolean; nativeVmaf?: {enabled:boolean;reason:unknown}|null; nativeXpsnr?: {enabled:boolean;reason:unknown}|null; nativeCambi?:{enabled:boolean;reason:unknown}|null; actor: { id: string; name: string } | null }) {
   const { capabilities: c, libraryReady, actor } = input;
   const capabilities: AgentCapability[] = [
+    {id:'tasks.read',implemented:true,enabled:!!input.qualityJobsEnabled,readiness:!input.qualityJobsEnabled?'unavailable':actor?'ready':'needs-identity',requiresBrowser:false,guide:'/agent/quality/tasks.md'},
+    {id:'identity.select',implemented:true,enabled:c.admin,readiness:c.admin?'ready':'unavailable',requiresBrowser:false,guide:AGENT_TASKS.workspaces},
     { id: 'library.browse', implemented: true, enabled: true, readiness: libraryReady ? 'ready' : 'index-warming', requiresBrowser: false, guide: AGENT_TASKS.library },
     { id: 'library.discovery', implemented: true, enabled: true, readiness: libraryReady ? 'per-source' : 'index-warming', requiresBrowser: false, guide: AGENT_TASKS.library },
     { id: 'library.preparations', implemented: true, enabled: !!input.qualityJobsEnabled, readiness: !input.qualityJobsEnabled ? 'unavailable' : actor ? 'per-source' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.library },
@@ -42,6 +48,7 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
     { id: 'annotations.events', implemented: true, enabled: c.annotations, readiness: c.annotations ? 'ready' : 'unavailable', requiresBrowser: false, guide: AGENT_TASKS.annotations },
     {id:'quality.cambi',implemented:true,enabled:!!input.nativeCambi?.enabled,readiness:!input.nativeCambi?.enabled?'unavailable':actor?'per-source':'needs-identity',requiresBrowser:false,guide:AGENT_TASKS.quality},
     {id:'quality.vmaf',implemented:true,enabled:!!input.nativeVmaf?.enabled,readiness:!input.nativeVmaf?.enabled?'unavailable':actor?'per-source':'needs-identity',requiresBrowser:false,guide:AGENT_TASKS.quality},
+    {id:'quality.xpsnr',implemented:true,enabled:!!input.nativeXpsnr?.enabled,readiness:!input.nativeXpsnr?.enabled?'unavailable':actor?'per-source':'needs-identity',requiresBrowser:false,guide:AGENT_TASKS.quality},
     {id:'quality.correspondence',implemented:true,enabled:!!input.qualityJobsEnabled,readiness:!input.qualityJobsEnabled?'unavailable':actor?'per-source':'needs-identity',requiresBrowser:false,guide:AGENT_TASKS.quality},
     { id:'quality.ranges',implemented:true,enabled:!!input.qualityJobsEnabled,readiness:!input.qualityJobsEnabled?'unavailable':actor?'per-source':'needs-identity',requiresBrowser:false,guide:AGENT_TASKS.quality },
     { id: 'quality.jobs', implemented: true, enabled: !!input.qualityJobsEnabled, readiness: !input.qualityJobsEnabled ? 'unavailable' : actor ? 'per-source' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.quality },
@@ -49,14 +56,18 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
     { id: 'quality.source-build', implemented: true, enabled: true, readiness: actor ? 'per-source' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.quality },
     { id: 'session.presented-quality-input', implemented: true, enabled: !!input.frontendAvailable, readiness: input.frontendAvailable ? 'requires-live-session' : 'unavailable', requiresBrowser: true, guide: AGENT_TASKS.liveSession },
     { id: 'session.view', implemented: true, enabled: !!input.frontendAvailable, readiness: input.frontendAvailable ? 'requires-live-session' : 'unavailable', requiresBrowser: true, guide: AGENT_TASKS.liveSession },
-    { id: 'bridge.local-mcp', implemented: false, enabled: false, readiness: 'unavailable', requiresBrowser: true, guide: AGENT_TASKS.liveSession },
+    { id: 'bridge.local-mcp', implemented: true, enabled: !!input.localPageBridge&&!!input.frontendAvailable, readiness: input.localPageBridge&&input.frontendAvailable?'requires-live-session':'unavailable', requiresBrowser: true, guide: AGENT_TASKS.liveSession },
     { id: 'compute.workers', implemented: false, enabled: false, readiness: 'unavailable', requiresBrowser: false, guide: AGENT_TASKS.quality },
   ];
   return {
     schema: 'voidplayer-agent', version: 1, service: 'voidplayer-media', actor,
-    links: { guide: '/agent.md', index: '/llms.txt', health: '/api/health', tasks: AGENT_TASKS },
+    links: { guide: '/agent.md', index: '/llms.txt', health: '/api/health', tasks: AGENT_TASKS,
+      taskCatalog:AGENT_TASK_CATALOG,operation:AGENT_OPERATION_PATH+'{id}' },
+    operationDiscovery:{schema:'voidplayer-agent-tasks',version:AGENT_OPERATIONS_VERSION,readOnly:true,requiresFrontend:false},
+    localMcp:{transport:'stdio',networkMcpEndpoint:false,distribution:'source-checkout-node-24-built-frontend',launch:'node scripts/mcp-page-bridge.ts',versions:PAGE_MCP_VERSIONS,ownedPageOnly:true,persistentAuthorization:false,automaticReconnect:false,clientIdentity:'self-declared-not-authenticated',tools:MCP_PAGE_TOOLS.map(tool=>({...tool,scope:Object.hasOwn(PAGE_TOOLS,tool.name)?PAGE_TOOLS[tool.name as keyof typeof PAGE_TOOLS].scope:'read'})),limits:PAGE_BRIDGE_LIMITS,discovery:'Use MCP tools/list for epoch/operationId envelopes and receipt/status tools.',guide:AGENT_TASKS.liveSession},
     capabilities,
     technicalFilter: { schema: TECHNICAL_FILTER_SCHEMA, version: 1, endpoint: TECHNICAL_FILTER_PATH, limits: TECHNICAL_FILTER_LIMITS, pagination: 'none', scope: 'explicit-candidates-cached-streams' },
+    taskCenter:{schema:'voidplayer-task-page',version:1,query:'/api/tasks',detail:'/api/tasks/{kind}/{id}',cancel:'/api/tasks/{kind}/{id}/cancel',kinds:TASK_KINDS,limits:TASK_LIMITS,actor:'self-declared-current-actor-only-not-authentication',pagination:'ephemeral-frozen-snapshot;409-task-cursor-expired-restart-without-cursor',observerDisconnectCancels:false},
     libraryDiscovery: {...DISCOVERY_DICTIONARY,detail:'/api/media/{id}/discovery?v={version}',writeAction:'library-preparation',idempotencyHeader:'Idempotency-Key',
       capturedActorHeader:'X-VoidPlayer-Actor',observerDisconnectCancels:false,automaticRetry:false,qualityAdmission:'existing-psnr-source-and-psnr-frames-only'},
     qualityJobs: { schema: 'voidplayer-psnr-frame-job', version: 1, metrics: ['psnr','ssim'], requiredMetrics:['psnr'],
@@ -77,12 +88,13 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
         cacheJoin:['same-origin-url-id-version','namespace','build','exact-au','configuration-bytes','packet-offset-size-clocks','visible-source-geometry'],
         unsupported:['wasm-playback','other-containers','ambiguous-clocks-or-picture-layout','source-crop-or-non-square-sar-or-rotation']},
       source: { registeredLibraryOnly: true, indexKind: 'flv', enhancedFlv: true, producer: 'server-flv-scan-v1',
-        additionalContainers:{mp4:{indexKind:'mp4',schemaVersion:1,indexerBuild:'mp4-quality-tables-v1',producer:'server-mp4-scan-v1',resultVersion:2,sampleEntries:['avc1','hvc1'],h264BitDepths:[8],hevcBitDepths:[8,10],matrix:'nonfragmented-self-contained-single-video-track-single-description-progressive-420-bt709-sdr-square-no-crop-no-rotation',clock:'original-ticks-with-exact-integer-microseconds-only',decode:'complete-verified-closed-IDR-GOP-max32-AU',nativeSequenceMetrics:false}},
+        additionalContainers:{mp4:{indexKind:'mp4',schemaVersion:1,indexerBuild:'mp4-quality-tables-v1',producer:'server-mp4-scan-v1',resultVersion:2,sampleEntries:['avc1','hvc1'],h264BitDepths:[8],hevcBitDepths:[8,10],matrix:'nonfragmented-self-contained-single-video-track-single-description-progressive-420-bt709-sdr-square-no-crop-no-rotation',clock:'original-ticks-with-exact-integer-microseconds-only',decode:'complete-verified-closed-IDR-GOP-max32-AU',nativeSequenceMetrics:{vmaf:{implemented:true,containers:VMAF_CAPABILITY.containers,capability:'/api/quality/vmaf/capability',requires:'installed-component-and-exact-continuous-plan-preflight'},xpsnr:{implemented:true,capability:'/api/quality/xpsnr/capability',requires:'installed-component-and-exact-continuous-plan-preflight'},cambi:{implemented:false}}}},
         codecs: ['h264', 'hevc'], bitDepths: [8, 10], chroma: 'yuv420', closedKeyAuOnly: false, gop:{mode:'packet-identity-gop-v1',packetIdentityAbi:1,explicitStartEndAu:true,packetsPerSide:32,maxPackets:64,maxOutputFrames:64,reordering:true,delayedOutput:true,outputAssociation:'opaque-input-token-not-pts',singleThread:true,reportedDecodeErrors:'reject',guarantee:{...FORWARD_OUTPUT_GUARANTEE}}, forward:{mode:'forward-one-output-per-au-v1',explicitStartAu:true,packetsPerSide:32,maxPackets:64,maxOutputFrames:64,zeroCts:true,oneImmediateOutputPerAu:true,reordering:false,guarantee:{...FORWARD_OUTPUT_GUARANTEE}},
         explicitColorAndChromaLocation: true, explicitPairingAndSourcePts: true },
       resultSchema: 'voidplayer-quality-job-result', resultVersion: 1 },
     qualityCambi:{...CAMBI_CAPABILITY,deployment:input.nativeCambi??{enabled:false,reason:'component-unavailable'},capability:'/api/quality/cambi/capability',submit:'/api/quality/cambi/jobs',history:'/api/quality/cambi/jobs',detail:'/api/quality/cambi/jobs/{id}',result:'/api/quality/cambi/jobs/{id}/result',frames:'/api/quality/cambi/jobs/{id}/frames',heatmap:'/api/quality/cambi/jobs/{id}/heatmap?index=N&scale=S',picture:'/api/quality/cambi/jobs/{id}/picture?index=N',privateViewer:'/quality.html?cambi=1&cambiJob={id}&index=N',cancel:'/api/quality/cambi/jobs/{id}/cancel',candidates:'/api/quality/cambi/jobs/{id}/candidates',writeAction:'quality-job',capturedActorHeader:'X-VoidPlayer-Actor',idempotencyHeader:'Idempotency-Key',observerDisconnectCancels:false,automaticRetry:false,buildsIndexes:false},
     qualityVmaf:{...VMAF_CAPABILITY,deployment:input.nativeVmaf??{enabled:false,reason:'component-unavailable'},capability:'/api/quality/vmaf/capability',preflight:'/api/quality/vmaf/preflight',submit:'/api/quality/vmaf/jobs',history:'/api/quality/vmaf/jobs',detail:'/api/quality/vmaf/jobs/{id}',result:'/api/quality/vmaf/jobs/{id}/result',frames:'/api/quality/vmaf/jobs/{id}/frames',cancel:'/api/quality/vmaf/jobs/{id}/cancel',candidates:'/api/quality/vmaf/jobs/{id}/candidates',writeAction:'quality-job',capturedActorHeader:'X-VoidPlayer-Actor',idempotencyHeader:'Idempotency-Key',observerDisconnectCancels:false,automaticRetry:false,buildsIndexes:false},
+    qualityXpsnr:{...XPSNR_CAPABILITY,deployment:input.nativeXpsnr??{enabled:false,reason:'component-unavailable'},capability:'/api/quality/xpsnr/capability',preflight:'/api/quality/xpsnr/preflight',submit:'/api/quality/xpsnr/jobs',history:'/api/quality/xpsnr/jobs',detail:'/api/quality/xpsnr/jobs/{id}',result:'/api/quality/xpsnr/jobs/{id}/result',frames:'/api/quality/xpsnr/jobs/{id}/frames',cancel:'/api/quality/xpsnr/jobs/{id}/cancel',candidates:'/api/quality/xpsnr/jobs/{id}/candidates',writeAction:'quality-job',capturedActorHeader:'X-VoidPlayer-Actor',idempotencyHeader:'Idempotency-Key',observerDisconnectCancels:false,automaticRetry:false,buildsIndexes:false},
     qualityCorrespondence:{schema:'voidplayer-quality-correspondence-plan',version:1,relations:'/api/quality/reference-relations',plans:'/api/quality/correspondence-plans',detail:'/api/quality/correspondence-plans/{id}',rows:'/api/quality/correspondence-plans/{id}/rows',rangeInput:'/api/quality/correspondence-plans/{id}/range-input',execute:'/api/quality/correspondence-plans/{id}/execute',cancel:'/api/quality/correspondence-plans/{id}/cancel',limits:CORRESPONDENCE_LIMITS,writeAction:'quality-job',idempotencyHeader:'Idempotency-Key',clock:'distorted-source-pts-us=reference-source-pts-us+offset-us',segments:'half-open-nonoverlapping-both-domains',assessment:'caller-declared-not-content-certified',matching:'exact-unique-pts-only',rawAuFacts:true,buildsIndexes:false,automaticRetry:false,automaticPublication:false,executeBody:['digest'],execution:'existing-durable-range-stable-client-key-receipt-first'},
     qualityRanges:{
       schema:'voidplayer-quality-range',version:1,plan:'/api/quality/ranges/plan',submit:'/api/quality/ranges',history:'/api/quality/ranges',
@@ -95,6 +107,7 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
       actionHeader: 'X-VoidPlayer-Action', cookieRequired: true, completion: 'server-commit', guiAcknowledgementRequired: false },
     annotations: { version: 1, spaces: '/api/annotations/spaces',
       events: '/api/annotations/events/{space}?after={cursor}',
+      originalPairViewer:{path:'/quality.html',query:['space','annotationId','evidenceId'],requiresBrowser:true,requiresFrontend:true,readOnly:true,buildsIndexes:false,controlsPlayback:false,privateJobRead:false},
       qualityEvidence: {action:'attach-quality-result',metric:'psnr',optionalCompanion:'ssim',result:'completed-owned-job',target:'existing-primary-source-version-and-source-pts',roi:'original-visible-pixel-grid',immutable:true,maxCount:4,maxBytes:131072,importVerification:'historical',workspaceVersion:2},
       cambiCandidate:{action:'create-cambi-candidate',reference:'cambi:{jobId,attemptId,digest,index,scale,region}',revision:0,result:'completed-owned-single-source-CAMBI',callerFields:['text','severity'],derived:['source-version','actual-source-pts','cache-namespace-build','real-heatmap-region','immutable-evidence'],assessment:'not-subjectively-assessed',receiptBeforeResultLookup:true,workspaceVersion:3,importVerification:'historical',playbackRequired:false},
       qualityCandidate:{action:'create-quality-candidate',revision:0,result:'completed-owned-job-with-recorded-annotation-context',callerFields:['text','severity'],derived:['source-version','actual-source-pts','index-origin','frame-duration','roi','immutable-evidence'],assessment:'not-subjectively-assessed',assessmentMeaning:'at-creation-no-subjective-defect-judgment',resultContext:{field:'annotationContext',basis:'complete-flv-index-derived-v1',additionalBases:['complete-mp4-index-derived-v1'],timeUnit:'integer-microseconds',duration:'index-derived-including-estimated-last-frame',legacyMissing:'409 annotation-context-unavailable'},transaction:['annotation','evidence','receipt','event'],receiptBeforeResultLookup:true,workspaceVersion:3,importVerification:'historical',playbackRequired:false},

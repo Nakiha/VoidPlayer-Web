@@ -112,18 +112,57 @@ test('cache suite runs once in its own required job with the same pinned prepara
   const jobs = workflowJobs(workflow), cache = jobs['cache-browser'];
   const manifest = JSON.parse(await readFile(new URL('../../scripts/testing/manifest.json', import.meta.url), 'utf8'));
   const cases = manifest.cases.filter(row => row.suites.includes('ci-cache'));
-  assert.equal(cases.length, 43);
-  assert.equal(new Set(cases.map(row => row.id)).size, 43);
+  assert.equal(cases.length, 58);
+  assert.equal(new Set(cases.map(row => row.id )).size, 58);
+  const expected=['browser-mcp-page-bridge-chromium','browser-sharing-webkit'];
+  for(const engine of ['chromium','webkit']){
+    for(const name of ['annotation-persistence','cache','library-discovery','native-presented-protocol','presented-quality','quality-annotation','quality-pair-view-10','task-center'])expected.push(`browser-${name}-${engine}`);
+    for(const name of ['native-vmaf','native-xpsnr','native-cambi','quality-correspondence','quality-ranges','quality-roi','quality-workflow'])for(const depth of [8,10])expected.push(`browser-${name}-${depth}-${engine}`);
+    for(const name of ['mp4-quality','mp4-vmaf'])for(const format of ['h264-8','hevc-8','hevc-10'])expected.push(`browser-${name}-${format}-${engine}`);
+  }
+  assert.deepEqual(cases.map(row=>row.id).sort(),expected.sort(),'exact prior54 plus four CAMBI checks; no silent removal/substitution');
+  const protocolIds=['browser-native-presented-protocol-chromium','browser-native-presented-protocol-webkit'];
+  const priorCases=cases.filter(row=>!protocolIds.includes(row.id));
+  assert.equal(priorCases.length,56,'every prior cache case still runs with unchanged mandatory status on main/tag');
+  const prCases=manifest.cases.filter(row=>row.suites.includes('ci-cache-pr'));
+  assert.equal(prCases.length,57);
+  assert.deepEqual(cases.filter(row=>!prCases.includes(row)).map(row=>row.id),['browser-presented-quality-webkit']);
+  for(const engine of ['chromium','webkit']){
+    const row=prCases.find(row=>row.id===`browser-native-presented-protocol-${engine}`);
+    assert.deepEqual(row.command,['node','scripts/check-native-presented-protocol.mjs',engine]);
+    assert.equal(row.required,true);assert.deepEqual(row.fixtures,['core']);assert.equal(row.timeoutMs,300000);
+  }
+  const taskIds=['browser-task-center-chromium','browser-task-center-webkit'];
+  const taskCases=cases.filter(row=>taskIds.includes(row.id));
+  assert.deepEqual(taskCases.map(row=>row.id).sort(),taskIds);
+  for(const engine of ['chromium','webkit'])assert.deepEqual(taskCases.find(row=>row.id===`browser-task-center-${engine}`).command,['node','scripts/native/run-vmaf-tests.mjs','node','scripts/check-task-center-browser.mjs',engine]);
+  const xpsnrIds=['browser-native-xpsnr-8-chromium','browser-native-xpsnr-10-chromium','browser-native-xpsnr-8-webkit','browser-native-xpsnr-10-webkit'];
+  assert.deepEqual(cases.filter(row=>xpsnrIds.includes(row.id)).map(row=>row.id).sort(),[...xpsnrIds].sort());
+  const prior=priorCases.filter(row=>!taskIds.includes(row.id)&&!xpsnrIds.includes(row.id));
+  assert.equal(prior.length,50,'retain all prior required cache cases alongside task-center, XPSNR and CAMBI browsers');
+  assert.deepEqual(prior.find(row=>row.id==='browser-mcp-page-bridge-chromium')?.command,['node','scripts/check-mcp-page-bridge-browser.mjs']);
+  assert.equal(prior.filter(row=>row.id!=='browser-mcp-page-bridge-chromium').length,49,'retain the existing cache matrix alongside the required MCP case');
   assert.ok(cases.every(row => row.required && row.kind === 'regression'));
   assert.deepEqual(cache.needs, ['decoder', 'analysis-core']);
   assert.match(cache.body, /^    runs-on: ubuntu-24\.04$/m);
   assert.match(cache.body, /^    timeout-minutes: 45$/m);
   assert.match(jobs.playback.body, /^    timeout-minutes: 45$/m);
-  assert.doesNotMatch(cache.body, /continue-on-error:|strategy:|--case|--engine|--stop-on-failure/);
+  assert.doesNotMatch(cache.body, /strategy:|--engine|--stop-on-failure/);
+  assert.equal((cache.body.match(/continue-on-error: true/g)??[]).length,1);
+  const diagnostic=/      - name: Diagnostic only - WebKit multi-page paused native presentation\n([\s\S]*?)(?=      - )/.exec(cache.body)?.[1];
+  assert.ok(diagnostic);assert.match(diagnostic,/id: webkit-paused-diagnostic\n        continue-on-error: true/);
+  assert.match(diagnostic,/if: \$\{\{ github.event_name == 'pull_request' && !cancelled\(\) && steps.browser-inputs.outcome == 'success' \}\}/);
+  assert.match(diagnostic,/run: node scripts\/run-tests\.mjs --case browser-presented-quality-webkit --prepared --directory \.run\/test-suites\/quality-browser-diagnostics/);
+  assert.doesNotMatch(cache.body.replace(diagnostic,''),/continue-on-error:/,'no required suite or other case becomes informational');
+  assert.match(cache.body,/name: Record non-blocking WebKit diagnostic outcome\n        if: \$\{\{ always\(\) && github.event_name == 'pull_request' \}\}/);
+  assert.match(cache.body,/DIAGNOSTIC_OUTCOME: \$\{\{ steps.webkit-paused-diagnostic.outcome \}\}/,'report the actual outcome, not the continue-on-error conclusion');
   assert.equal((workflow.match(/run: node scripts\/run-tests\.mjs ci-cache --prepared\n/g) ?? []).length, 1);
   assert.doesNotMatch(jobs.playback.body, /ci-cache|annotation-cache-screenshots/);
-  assert.deepEqual([...cache.body.matchAll(/^        run: node scripts\/run-tests\.mjs ([^\n]+)$/gm)].map(row => row[1]), ['--prepare', 'ci-cache --prepared']);
-  assert.match(cache.body, /env:\n          DEBUG: pw:browser\n        if: \$\{\{ !cancelled\(\) && steps\.browser-inputs\.outcome == 'success' \}\}\n        run: node scripts\/run-tests\.mjs ci-cache --prepared/);
+  assert.deepEqual([...cache.body.matchAll(/^        run: node scripts\/run-tests\.mjs ([^\n]+)$/gm)].map(row => row[1]), ['--prepare', 'ci-cache --prepared', 'ci-cache-pr --prepared', '--case browser-presented-quality-webkit --prepared --directory .run/test-suites/quality-browser-diagnostics']);
+  for(const [event,suite]of [['!=','ci-cache'],['==','ci-cache-pr']]){
+    const condition="if: ${{ github.event_name "+event+" 'pull_request' && !cancelled() && steps.browser-inputs.outcome == 'success' }}";
+    assert.ok(cache.body.includes(condition+'\n        run: node scripts/run-tests.mjs '+suite+' --prepared'));
+  }
 
   const preparation = (body, end) => body.slice(body.indexOf('    steps:\n'), body.indexOf(`      - name: ${end}`));
   assert.equal(preparation(cache.body, 'Generate approximately 100 MB 1080p playback inputs'), preparation(jobs.playback.body, 'Verify opportunistic audio'),
@@ -132,7 +171,7 @@ test('cache suite runs once in its own required job with the same pinned prepara
   assert.ok(fixtures(cache.body));
   assert.equal(fixtures(cache.body), fixtures(jobs.playback.body), 'preserve every preceding generated input');
   assert.match(cache.body, /if: always\(\)[\s\S]*name: annotation-cache-screenshots/);
-  for (const artifact of ['/tmp/voidplayer-annotation-*.png', '/tmp/voidplayer-caches-*.png', '.run/workspace-sharing-browser-*/', '.run/test-suites/ci-cache/', '.run/test-suites/preparation/', '.run/test-suites/build-receipt.json', '.run/playback-reports/']) {
+  for (const artifact of ['/tmp/voidplayer-annotation-*.png', '/tmp/voidplayer-caches-*.png', '.run/workspace-sharing-browser-*/', '.run/test-suites/ci-cache/', '.run/test-suites/ci-cache-pr/', '.run/test-suites/quality-browser-diagnostics/', '.run/test-suites/preparation/', '.run/test-suites/build-receipt.json', '.run/playback-reports/']) {
     assert.ok(cache.body.includes(`            ${artifact}\n`), `cache evidence retained: ${artifact}`);
   }
   assert.equal((workflow.match(/name: annotation-cache-screenshots\n/g) ?? []).length, 1);
@@ -399,7 +438,7 @@ test('raw upstream MT sync renames its unsuffixed build manifest',async()=>{
 
 test('release rebuild sources include shared implementations and their independent type configuration', async () => {
   const {selectReleaseSources}=await import('../../scripts/tools/release/source-files.mjs');
-  const required=['quality.html','shared/analysis/bitstream/runner.ts','shared/media/containers/flv-demux.ts','src/media/source.ts','server/app.ts','tsconfig.shared.json','tsconfig.json','package-lock.json'];
+  const required=['quality.html','shared/analysis/bitstream/runner.ts','shared/media/containers/flv-demux.ts','src/media/source.ts','server/app.ts','tsconfig.shared.json','tsconfig.json','package-lock.json','examples/http-quality.mjs'];
   const privateFiles=['.env','.run/data/library.sqlite','fixtures/video/private.mp4','artifacts/release.tar.gz','logs/report.json'];
   assert.deepEqual(selectReleaseSources([...required,...privateFiles,required[0]]),required);
 });
