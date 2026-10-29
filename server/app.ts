@@ -1,3 +1,4 @@
+import {ExistingPageRequests} from './bridge/existing-pages.ts';
 import {handleCambiRoutes} from './analysis/cambi/routes.ts';
 import {handleTaskRoutes} from './tasks/routes.ts';
 import {handleXpsnrRoutes} from './analysis/xpsnr/routes.ts';
@@ -69,7 +70,9 @@ export function createMediaServer(options: ServerOptions): Server {
   const traffic=options.traffic ?? createTrafficState();
   const {sockets,recentRequests}=traffic;
 
+  const existingPages=options.pageBridge?undefined:new ExistingPageRequests();
   const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
+    if(existingPages&&await existingPages.handle(req,res))return;
     if(options.pageBridge)try{if(await options.pageBridge.handle(req,res))return;}
     catch{if(!res.headersSent&&!res.destroyed)sendJson(res,503,{code:'bridge-host-unavailable'});else res.end();return;}
     if(options.clientAddress)setClientAddress(req,options.clientAddress(req));
@@ -137,6 +140,7 @@ export function createMediaServer(options: ServerOptions): Server {
     }
   };
   const server = options.tls ? createSecureServer(options.tls, handleRequest) : createServer(handleRequest);
+  server.on('close',()=>existingPages?.close());
   if (!options.admin) server.on('close',()=>{void analysis.close();});
   server.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
   if (!options.library) server.on('close', () => { void library.close(); });

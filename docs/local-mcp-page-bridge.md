@@ -1,6 +1,6 @@
 # Temporary stdio page bridge
 
-This optional source-checkout bridge is disabled on ordinary deployments. No
+This optional source-checkout bridge grants no permissions by default. Ordinary loopback deployments now expose a bounded, memory-only pairing entry. No
 persistent authorization or MCP application configuration is installed. Ordinary
 HTTP scoring remains a separate service capability. The bridge-owned host has
 empty media roots and temporary storage; it does not advertise durable scoring
@@ -55,6 +55,37 @@ The page closes its grant on context/actor/source changes; an old in-progress
 operation may finish, but reconnect is disabled until it settles. Late replies
 are fenced by document, grant epoch and command correlation. Backend HTTP jobs
 do not depend on this page channel, and revoking it never cancels such jobs.
+
+## An already-open normal loopback page
+
+For a normal VoidPlayer service and page that are already running, launch the
+independent stdio command with its exact origin (no path/query/credentials):
+
+```sh
+node scripts/mcp-page-bridge.ts --existing-origin http://127.0.0.1:5180
+```
+
+This mode never starts, stops, navigates or reloads the user's service/page. It
+prints one-time pairing instructions to the client's private stderr display;
+never copy these instructions into shared logs. In the intended existing page,
+open MCP, enter the one-time information and click Review pairing. Check the
+exact page/workspace, the self-declared client and expiry. Read, view and
+annotation permissions start unchecked and are independent opt-ins. Only the
+explicit Connect click grants selected scopes. No file is reselected or uploaded.
+A different tab cannot reuse the consumed pairing information.
+
+Pairing lasts 90 seconds and is consumed once. Up to four pending/live requests
+exist per server. The CLI holds a separate random 256-bit capability in memory;
+the page has its own document and grant capabilities. No capability goes in a
+URL, browser storage or persistent MCP configuration. Permission expires after
+15 minutes at most; the CLI renews only its five-second liveness lease, never the
+authorization deadline. EOF/disconnection closes this bridge alone. Same-origin
+code and the local OS account remain trusted, as with the owned host mode.
+Unknown writes retain the original receipt; do not retry automatically.
+
+Implementation checkpoint: existing-page GUI and negative-case verification is
+pending. This paragraph must be replaced with final candidate evidence before
+claiming the feature complete.
 
 ## Executable checks and support evidence
 

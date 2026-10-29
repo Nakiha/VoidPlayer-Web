@@ -1,3 +1,4 @@
+import {ExistingPageClient} from '../server/bridge/existing-client.ts';
 import {stat,readFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -9,6 +10,12 @@ import {runPageStdio} from '../server/bridge/stdio.ts';
 // Keep the ordinary application's diagnostics off the protocol stream.
 console.log=console.info=console.debug=(...args:unknown[])=>console.error(...args);
 const args=process.argv.slice(2);
+if(args[0]==='--existing-origin'){
+  if(args.length!==2)throw Error('Usage: --existing-origin <exact loopback origin>');
+  const {channel,pairingCode,expiresAt}=await ExistingPageClient.create(args[1]);
+  process.stderr.write(`VoidPlayer existing page: ${new URL(args[1]).origin}/\nOne-time pairing (enter only in the intended already-open page MCP panel): ${pairingCode}\nExpires: ${new Date(expiresAt).toISOString()}\nClient name is self-declared. The page must explicitly confirm permissions.\n`);
+  runPageStdio(channel,async()=>{channel.close();});
+}else{
 if(args.length&&!(args.length===2&&args[0]==='--static-dir'))throw Error('Usage: node scripts/mcp-page-bridge.ts [--static-dir <built frontend>]');
 const staticDir=path.resolve(args[1]??fileURLToPath(new URL('../dist',import.meta.url)));
 if(!(await stat(path.join(staticDir,'index.html')).catch(()=>null))?.isFile())throw Error('Build the frontend first: npm run build');
@@ -28,3 +35,5 @@ try{
   process.stderr.write(`VoidPlayer temporary page: ${channel.origin}/\n`);
   runPageStdio(channel,close);
 }catch(error){await close();throw error;}
+
+}

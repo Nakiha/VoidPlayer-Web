@@ -1,6 +1,12 @@
 import {PAGE_BRIDGE_LIMITS as L,PAGE_MCP_VERSIONS,MCP_PAGE_TOOLS} from '../../shared/service/page-bridge.ts';
 import {validateToolInput} from '../../shared/service/tool-input.ts';
-import type {PageChannel} from './page-channel.ts';
+export interface StdioPageChannel {
+  client:{name:string;version:string}|null;clientRevision:number;ready:boolean;
+  status():unknown;receipt(id:unknown):unknown;
+  call(name:unknown,args:unknown,onCorrelation:(v:string)=>void):Promise<unknown>;
+  revoke(reason:string):void;cancel(correlation:string):void;close():void;
+  sync?():Promise<void>;
+}
 
 const [modern,legacy]=PAGE_MCP_VERSIONS,versions=PAGE_MCP_VERSIONS;
 const serverInfo={name:'voidplayer-page-bridge',version:'1.0.0'};
@@ -9,7 +15,7 @@ const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&
 
 /** Newline UTF-8 JSON-RPC only. No SDK/service installation and no network MCP.
  * Supports the current per-request era and the explicit legacy handshake. */
-export function runPageStdio(channel:PageChannel,close:()=>Promise<void>){
+export function runPageStdio(channel:StdioPageChannel,close:()=>Promise<void>){
   let initialized=false,legacyStarted=false,closed=false,buffer=Buffer.alloc(0);
   const requests=new Map<string,{cancelled:boolean;correlation?:string}>();
   const legacyIds=new Set<string>();
@@ -44,6 +50,7 @@ export function runPageStdio(channel:PageChannel,close:()=>Promise<void>){
       if(value.method==='initialize'){
         if(legacyStarted||typeof params.protocolVersion!=='string'||!object(params.capabilities))throw Error('Invalid initialize');
         const claim=declaration(params.clientInfo);legacyStarted=true;channel.revoke('legacy-initialization');channel.client=claim;channel.clientRevision++;channel.ready=false;
+        await channel.sync?.();
         result(id,{protocolVersion:legacy,capabilities:{tools:{}},serverInfo,instructions:'Open the localhost page printed on stderr. Only a trusted user click in that exact page can grant temporary scopes. Query get_bridge_status and pass its explicit epoch; retain write operationId. Never replay unknown writes.'},false);return;
       }
       const meta=params._meta;
@@ -54,6 +61,7 @@ export function runPageStdio(channel:PageChannel,close:()=>Promise<void>){
         isModern=true;
         acceptClaim(meta['io.modelcontextprotocol/clientInfo']===undefined?{name:'Unspecified MCP client',version:''}:declaration(meta['io.modelcontextprotocol/clientInfo']));
       }else if(!initialized){error(id,-32602,'Use initialize/initialized for 2025-11-25, or required per-request metadata for 2026-07-28');return;}
+      await channel.sync?.();
       if(value.method==='server/discover'&&isModern){result(id,{supportedVersions:versions,capabilities:{tools:{}},instructions:'Only the explicitly connected owned page is available; grant handles are ordinary epoch arguments, never authentication.',ttlMs:0,cacheScope:'public'},true);return;}
       if(value.method==='ping'&&!isModern){result(id,{},false);return;}
       if(value.method==='tools/list'){
@@ -65,7 +73,7 @@ export function runPageStdio(channel:PageChannel,close:()=>Promise<void>){
       const input=params.arguments===undefined?{}:params.arguments;
       validateToolInput(tool.inputSchema,input);
       const args=input as Record<string,unknown>;
-      const output=tool.name==='get_bridge_status'?channel.status():tool.name==='get_bridge_receipt'?channel.receipt(args.operationId):await channel.call(tool.name,args,v=>state.correlation=v);
+      const output=tool.name==='get_bridge_status'?await channel.status():tool.name==='get_bridge_receipt'?await channel.receipt(args.operationId):await channel.call(tool.name,args,v=>state.correlation=v);
       if(!state.cancelled)result(id,{content:[{type:'text',text:JSON.stringify(output)}],isError:object(output)&&output.isError===true},isModern);
     }catch{if(!state.cancelled)error(id,-32602,'Invalid request or tool arguments');}
     finally{requests.delete(key);}
