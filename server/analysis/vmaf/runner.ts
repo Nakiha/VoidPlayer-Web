@@ -35,22 +35,23 @@ export class NativeVmafRunner{
   signal.throwIfAborted();if(!this.config)throw new VmafError('component-unavailable','No native VMAF component configured');
   return this.worker<VmafComponent>('component-worker.ts',{config:this.config,model},signal);
  }
+ protected createWorker(url:URL,data:object){return new Worker(url,{workerData:data,resourceLimits:{maxOldGenerationSizeMb:256},trackUnmanagedFds:true});}
  protected worker<T>(entry:string,data:object,signal:AbortSignal,progress?:(n:number,total:number)=>void,onContract?:(value:QualityExecutionContract)=>void,onEvent?:(message:Record<string,any>)=>Promise<void>):Promise<T>{
   const control=new Int32Array(new SharedArrayBuffer(8));
   const url=new URL(typeof VOIDPLAYER_COMPILED!=='undefined'&&VOIDPLAYER_COMPILED?`./analysis/vmaf/${entry}`:`./${entry}`,import.meta.url);
-  const worker=new Worker(url,{workerData:{...data,control:control.buffer},resourceLimits:{maxOldGenerationSizeMb:256},trackUnmanagedFds:true});
+  const worker=this.createWorker(url,{...data,control:control.buffer});
   return new Promise<T>((resolve,reject)=>{
-   let finishing=false,exited=false;
+   let finishing=false,exited=false,eventWork:Promise<void>|undefined;
    const finish=async(ok:boolean,value:unknown)=>{
     if(finishing)return;finishing=true;signal.removeEventListener('abort',abort);Atomics.store(control,0,1);
     try{
      for(;;){const n=Atomics.load(control,1);if(!n)break;if(exited)throw new VmafError('stop-uncertain','Decode Worker exited with open source IO');const w=(Atomics as typeof Atomics&{waitAsync(a:Int32Array,i:number,n:number):{value:Promise<string>|string}}).waitAsync(control,1,n);await w.value;}
-     await worker.terminate();if(signal.aborted)reject(signal.reason);else if(ok)resolve(value as T);else reject(value);
+     await worker.terminate();await eventWork?.catch(()=>{});if(signal.aborted)reject(signal.reason);else if(ok)resolve(value as T);else reject(value);
     }catch(error){this.stopUncertain=true;reject(error);}
     finally{worker.removeAllListeners();}
    };
    const abort=()=>void finish(false,signal.reason);
-   worker.on('message',message=>{if(finishing)return;if(message.type==='scoring-frame'){void Promise.resolve().then(()=>{if(!onEvent)throw new Error('Unexpected scoring event');return onEvent(message);}).then(()=>{if(!finishing)worker.postMessage({type:'scoring-ack',index:message.index});},error=>void finish(false,error));return;}if(message.type==='execution-contract'){try{onContract?.(message.contract);}catch(error){void finish(false,error);}return;}if(message.type==='progress'){try{progress?.(message.frames,message.total);}catch(error){void finish(false,error);}return;}void finish(message.ok===true,message.ok?message.value:new VmafError(message.error?.code??'execution-failed',message.error?.message??'VMAF Worker failed'));});
+   worker.on('message',message=>{if(finishing)return;if(message.type==='scoring-frame'){eventWork=Promise.resolve().then(()=>{if(!onEvent)throw new Error('Unexpected scoring event');return onEvent(message);});void eventWork.then(()=>{if(!finishing)worker.postMessage({type:'scoring-ack',index:message.index});},error=>void finish(false,error));return;}if(message.type==='execution-contract'){try{onContract?.(message.contract);}catch(error){void finish(false,error);}return;}if(message.type==='progress'){try{progress?.(message.frames,message.total);}catch(error){void finish(false,error);}return;}void finish(message.ok===true,message.ok?message.value:new VmafError(message.error?.code??'execution-failed',message.error?.message??'VMAF Worker failed'));});
    worker.once('error',error=>void finish(false,error));worker.once('messageerror',()=>void finish(false,new VmafError('execution-failed','Invalid Worker reply')));worker.once('exit',()=>{exited=true;Atomics.notify(control,1);if(!finishing)void finish(false,new VmafError('execution-failed','VMAF Worker exited without a result'));});
    signal.addEventListener('abort',abort,{once:true});if(signal.aborted)abort();
   });

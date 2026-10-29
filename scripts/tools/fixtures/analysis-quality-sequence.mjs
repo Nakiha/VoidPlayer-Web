@@ -1,6 +1,6 @@
 // Regenerate only with explicit host oracle paths. Product scoring never starts these tools.
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, rmSync, mkdirSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
@@ -159,6 +159,11 @@ try {
       frames: result.frames.map((f) => f.metrics.vmaf),
       pooled: result.pooled_metrics.vmaf,
     };
+    const heatDirectory=path.join(directory,'heat');mkdirSync(heatDirectory,{recursive:true});
+    execFileSync(vmaf,['--reference','distorted.yuv','--distorted','distorted.yuv','--width',String(width),'--height',String(height),'--pixel_format','420','--bitdepth',String(depth),'--threads','1','--cpumask','0','--no_prediction','--feature','cambi=window_size=63:topk=0.6:tvi_threshold=0.019:max_log_contrast=2:eotf=bt1886:full_ref=false:heatmaps_path=heat','--json','--output','cambi.json','--quiet'],{cwd:directory,stdio:'pipe'});
+    const cambi=JSON.parse(readFileSync(path.join(directory,'cambi.json')));
+    sample.cambi={frames:cambi.frames.map(f=>f.metrics.cambi),pooled:cambi.pooled_metrics.cambi,heatmaps:readdirSync(heatDirectory).sort().map(file=>{const scale=Number(/scale_(\d+)_/.exec(file)[1]),data=readFileSync(path.join(heatDirectory,file)),bytes=data.length/frames;if(!Number.isSafeInteger(bytes))throw Error('Official heatmap length');return {scale,bytes,frames:Array.from({length:frames},(_,i)=>hash(data.subarray(i*bytes,(i+1)*bytes)))};})};
+    rmSync(heatDirectory,{recursive:true});
     samples.push(sample);
   }
   writeFileSync(

@@ -1,3 +1,5 @@
+import {createHash} from 'node:crypto';
+import {cambiEvidenceList} from '../../shared/review/cambi-evidence.ts';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -363,4 +365,42 @@ test('one-frame NTSC offset joins exact source ticks; rounded microseconds canno
   assert.equal(range.job.state,'partial',JSON.stringify(range));assert.equal(range.job.summary.scoredPairs,7);
   for(const sample of range.job.samples){const result=await f.json(`/api/quality/jobs/${sample.jobId}/result`),row=mapped.find((r:any)=>r.au===sample.au);assert.equal(result.value.result.provenance.reference.picture.au,row.reference.au);assert.equal(result.value.result.provenance.distorted.picture.au,row.distorted.au);}
   const pinned=await f.request(`/api/tasks/single/${range.job.samples[0].jobId}/release-result`,{});assert.equal(pinned.status,409);assert.equal((await pinned.json()).code,'result-pinned-by-range');
+});
+
+for(const [codec,depth]of [['h264',8],['hevc',8],['hevc',10]] as const)test(`CAMBI 192-frame ${codec}/${depth} streams complete GOPs with official scores and five-scale bytes`,{timeout:120000},async t=>{
+  const f=await cambiFixture({component:false,codec,depth,sequence:true});t.after(()=>f.close());
+  const {job}=await f.json('/api/quality/cambi/jobs',f.input,'long-cambi'),done=await f.wait(job.id);
+  assert.equal(done.state,'completed',JSON.stringify(done.reason));
+  const selection=done.executionContract.analysis.selection;assert.equal(selection.selectedPictures,192);assert.match(selection.picturesSha256,/^[a-f0-9]{64}$/);assert.equal(selection.dependencyInputs,192);
+  const summary=await f.json(`/api/quality/cambi/jobs/${job.id}/result`),expected=f.sample.cambi;
+  assert.equal(summary.coverage.scored,192);assert.equal(summary.work.packets,192);assert.equal(summary.work.outputFrames,192);assert.equal(summary.work.indexPackets,192*4,'four bounded index passes, independent of frame count');
+  assert.ok(summary.resources.heapBytes<=512*1024*1024);assert.ok(summary.work.heapBytes<=256*1024*1024);
+  for(const key of ['mean','min','max','harmonic_mean'])assert.ok(Math.abs(summary.pooled[key]-expected.pooled[key])<=0.000001);
+  let after=0,all:any[]=[];
+  do{const page=await f.json(`/api/quality/cambi/jobs/${job.id}/frames?after=${after}&limit=4`);assert.equal(page.state,'immutable-completed');all.push(...page.entries);after=page.next;}while(after!==null);
+  assert.equal(all.length,192);
+  for(const frame of all){assert.equal(frame.rawSha256,f.sample.rawFrames[frame.index]);assert.ok(Math.abs(frame.score-expected.frames[frame.index])<=0.000001);assert.equal(frame.provenance.dependency.outputIdentity.outputs.length,64);for(const map of frame.heatmaps)assert.equal(map.sha256,expected.heatmaps[map.scale].frames[frame.index]);}
+  for(const index of [0,63,64,127,191])for(let scale=0;scale<5;scale++){const response=await f.request(`/api/quality/cambi/jobs/${job.id}/heatmap?index=${index}&scale=${scale}`);assert.equal(response.status,200);const bytes=new Uint8Array(await response.arrayBuffer());assert.equal(bytes.byteLength,expected.heatmaps[scale].bytes);assert.equal(createHash('sha256').update(bytes).digest('hex'),expected.heatmaps[scale].frames[index]);}
+  const last=await f.json(`/api/quality/cambi/jobs/${job.id}/picture?index=191`);assert.equal(last.rawSha256,f.sample.rawFrames[191]);
+  const publication=await f.json(`/api/quality/cambi/jobs/${job.id}/candidates`,{space:'default',scale:0,minScore:0,cellThreshold:1,limit:1,text:'Continuous source banding evidence',severity:2});assert.equal(publication.createdIds.length,1);
+  const annotation=await f.json(`/api/annotations/spaces/default/${publication.createdIds[0]}`);cambiEvidenceList(annotation.document.mark.cambiEvidence,true);
+  assert.equal((await f.request(`/api/tasks/cambi/${job.id}/release-result`,{})).status,409);
+});
+
+test('CAMBI backpressure exposes no provisional GOP evidence and cancellation retains capacity until Worker and sink stop', {timeout:120000}, async t=>{
+  const f=await cambiFixture({component:false,sequence:true});let resume=()=>{};t.after(async()=>{resume();await f.close();});
+  const service=f.service.library.qualityCambi,runner=service.runner,run=runner.runCambi.bind(runner),factory=runner.createWorker.bind(runner);
+  let seen=0,exited=false;runner.createWorker=(url:any,data:any)=>{const worker=factory(url,data);if(data.metric==='cambi')worker.once('exit',()=>exited=true);return worker;};
+  const gate=new Promise<void>(r=>resume=r);runner.runCambi=(id:any,input:any,signal:any,hooks:any)=>run(id,input,signal,{...hooks,streamFrame:async(...args:any[])=>{await hooks.streamFrame(...args);seen++;await gate;}});
+  const {job}=await f.json('/api/quality/cambi/jobs',f.input,'cancel-stream');
+  for(let i=0;i<600&&!seen;i++)await new Promise(r=>setTimeout(r,10));assert.equal(seen,1);
+  assert.equal((await f.request(`/api/quality/cambi/jobs/${job.id}/frames`)).status,409);assert.equal((await f.request(`/api/quality/cambi/jobs/${job.id}/heatmap?index=0&scale=0`)).status,409);
+  const cancelling=await f.json(`/api/quality/cambi/jobs/${job.id}/cancel`,{});assert.equal(cancelling.state,'cancelling');
+  for(let i=0;i<600&&!exited;i++)await new Promise(r=>setTimeout(r,10));assert.equal(exited,true);assert.throws(()=>f.service.library.qualityAdmission.acquire(),{code:'quality-busy'});
+  assert.equal((await f.json(`/api/quality/cambi/jobs/${job.id}`)).state,'cancelling');resume();
+  const stopped=await f.wait(job.id);assert.equal(stopped.state,'cancelled');assert.equal(stopped.resultDigest,null);assert.equal(seen,1);assert.equal(service.db.prepare('SELECT count(*) n FROM cambi_heat WHERE job=?').get(job.id).n,0);
+  const release=f.service.library.qualityAdmission.acquire();release();runner.runCambi=run;
+  const plan=await f.json(`/api/quality/cambi/jobs/${job.id}/reexecution-plan`,{reason:'Explicit complete rescore after cancelled streaming'});assert.equal(plan.eligible,true,JSON.stringify(plan.blocks));assert.equal(plan.cost.selectedPictures,192);assert.equal(plan.cost.reservation.dependencyInputs,192);assert.ok(Buffer.byteLength(JSON.stringify(plan.cost))<8192);
+  const request={schema:'voidplayer-quality-reexecution',version:1,reason:plan.reason,planDigest:plan.digest,confirm:plan.cost};
+  const successor=await f.json(`/api/quality/cambi/jobs/${job.id}/reexecutions`,request,'repeat-stream');assert.notEqual(successor.job.id,job.id);assert.equal((await f.wait(successor.job.id)).state,'completed');assert.equal((await f.json(`/api/quality/cambi/jobs/${job.id}/reexecutions`,request,'repeat-stream')).job.id,successor.job.id);assert.equal((await f.json(`/api/quality/cambi/jobs/${job.id}`)).state,'cancelled');
 });

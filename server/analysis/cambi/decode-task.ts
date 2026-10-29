@@ -7,7 +7,7 @@ import {avcGeometry} from '../../../shared/media/codecs/avc-geometry.ts';import 
 import {readFileSync,openSync,writeSync,closeSync} from 'node:fs';import path from 'node:path';import {pathToFileURL} from 'node:url';import {createHash} from 'node:crypto';
 import {openIndexDatabase} from '../../sqlite.ts';import {FrameIndexStore} from '../../frame-index-store.ts';import {libraryPairSource} from '../quality/file-source.ts';
 import {qualitySourceIndex,qualityIndexPacketCount} from '../../../shared/analysis/quality/source-index.ts';import {qualityTargetForAu} from '../../../shared/analysis/quality/selection.ts';
-import {inspectSourceFrame,PAIR_LIMITS,requireInspectionGeometry} from '../../../shared/analysis/quality/frame-pair.ts';import type {PairTarget} from '../../../shared/analysis/quality/frame-pair.ts';
+import {inspectSourceFrame,inspectSourceSequence,PAIR_LIMITS,requireInspectionGeometry} from '../../../shared/analysis/quality/frame-pair.ts';import type {PairTarget} from '../../../shared/analysis/quality/frame-pair.ts';
 import {createPairDecoder} from '../../../shared/analysis/quality/wasm-decoder.ts';import {instantiateCore} from '../../../shared/wasm/core.ts';import {validateDescription} from '../../../shared/media/frame-description.ts';
 import {CAMBI_LIMITS,CAMBI_RECIPE,CambiError,cambiOutputBudget,cambiIntervalClocks} from '../../../shared/analysis/quality/cambi.ts';import type {CambiInput,CambiPrepared} from '../../../shared/analysis/quality/cambi.ts';
 export async function runCambiDecode(data:{mode:'preflight'|'decode'|'verify'|'picture';target?:PairTarget;database:string;coreDir:string;directory:string;input:CambiInput;control:SharedArrayBuffer;remainingIndex?:{maxIndexBytes:number;maxIndexPackets:number};analysisContract?:QualityExecutionContract['analysis'];nativeCambiContract?:Omit<NonNullable<QualityExecutionContract['nativeCambi']>,'selection'>;expectedExecutionContract?:QualityExecutionContract},progress:(frames:number,total:number)=>void,onContract?:(c:QualityExecutionContract)=>void,onWitness?:(e:ExecutionEnvironment)=>void,onFrame?:(frame:PsnrFrame,prepared:CambiPrepared,index:number,total:number)=>Promise<void>){
@@ -19,7 +19,7 @@ export async function runCambiDecode(data:{mode:'preflight'|'decode'|'verify'|'p
   const first=open(dummy);let index,binding;try{index=qualitySourceIndex(first.source.index!,data.input.source.size);binding=first.proof;}finally{first.source.close();}
   const {startPtsUs,endPtsUs}=data.input.interval,rows=index.packets.flatMap((p,au)=>p.pts>=startPtsUs&&p.pts<endPtsUs?[{au,p}]:[]);
   if(!rows.length)throw new CambiError('no-results','No indexed pictures in the declared interval');
-  if(rows.length>CAMBI_LIMITS.intervalAus)throw new CambiError('budget-exceeded','Interval exceeds 256 indexed AUs');
+  if(rows.length>CAMBI_LIMITS.intervalAus)throw new CambiError('budget-exceeded',`Interval exceeds ${CAMBI_LIMITS.intervalAus} indexed AUs`);
   if(index.mp4){
    const ordered=[...rows].sort((a,b)=>a.p.pts-b.p.pts),duration=index.mp4.samples[ordered[0].au].durationTicks;
    if(ordered.some((r,i)=>index.mp4!.samples[r.au].durationTicks!==duration||i>0&&!clockDeltaEquals(qualitySourceClock(index,r.au),qualitySourceClock(index,ordered[i-1].au),{ticks:duration,timescale:index.mp4!.timescale})))throw new CambiError('unsupported-source','MP4 interval requires exact continuous sample ticks');
@@ -33,7 +33,7 @@ export async function runCambiDecode(data:{mode:'preflight'|'decode'|'verify'|'p
   if(index.mp4)targets.sort((a,b)=>a.sourcePtsUs-b.sourcePtsUs);
   if(data.mode==='picture'){if(!data.target)throw Error('Missing picture target');targets.splice(0,targets.length,data.target);}
   if(!targets.length)throw new CambiError('unsupported-source','No selected AU has a supported exact identity window');
-  if(targets.length>CAMBI_LIMITS.frames)throw new CambiError('budget-exceeded','Selected frames exceed32');
+  if(targets.length>CAMBI_LIMITS.frames)throw new CambiError('budget-exceeded',`Selected frames exceed ${CAMBI_LIMITS.frames}`);
   const pts=targets.map(t=>t.sourcePtsUs).sort((a,b)=>a-b);if(pts.some((p,i)=>p<0||!index.mp4&&i>1&&p-pts[i-1]!==pts[1]-pts[0]))throw new CambiError('unsupported-source','Negative/VFR selected source clocks not admitted');
   let contract:QualityExecutionContract|undefined;
   const witness={passes:0,assetBytes:0,producerBytes:0};
@@ -42,16 +42,21 @@ export async function runCambiDecode(data:{mode:'preflight'|'decode'|'verify'|'p
    const geometry=index.codec==='h264'?avcGeometry(index.description,true):hevcGeometry(index.description,true);if(!geometry)throw new CambiError('unsupported-source','Explicit source geometry is required');requireInspectionGeometry(geometry);cambiOutputBudget(geometry.width,geometry.height,targets.length,data.input);
    if(!data.nativeCambiContract&&!data.analysisContract)throw new CambiError('execution-contract-unavailable','CAMBI native execution witness is missing');
    const selection:NonNullable<QualityExecutionContract['nativeCambi']>['selection']={pictures:targets.map(t=>({au:t.picture.au,configuration:t.picture.configuration,sourcePtsUs:t.sourcePtsUs,...(t.decode?{decode:t.decode}:{})})),geometry:{width:geometry.width,height:geometry.height},frameOrder:index.mp4?'source-pts-after-decode-au-selection':'decode-au-selection',intervalAus:rows.length,unsampled,unsupported:unsupported.length,unsupportedSha256:createHash('sha256').update(JSON.stringify(unsupported)).digest('hex')};
-   contract={schema:'voidplayer-quality-execution-contract',version:1,environment:readEnvironment(),sources:[binding],...(data.analysisContract?{analysis:{...data.analysisContract,selection}}:{nativeCambi:{...data.nativeCambiContract!,selection}})};
+   const {pictures,...selectionHeader}=selection;const compact=data.analysisContract&&pictures.length>32?{...selectionHeader,schema:'voidplayer-cambi-selection' as const,version:1 as const,selectedPictures:pictures.length,picturesSha256:createHash('sha256').update(JSON.stringify(pictures)).digest('hex'),firstPicture:pictures[0],lastPicture:pictures.at(-1)!,dependencyInputs:[...new Map(pictures.map(p=>[p.decode?`${p.decode.startAu}:${p.decode.mode==='packet-identity-gop-v1'?p.decode.endAu:p.au}`:`${p.au}`,p.decode?(p.decode.mode==='packet-identity-gop-v1'?p.decode.endAu:p.au)-p.decode.startAu+1:1])).values()].reduce((a,b)=>a+b,0)}:selection;
+   contract={schema:'voidplayer-quality-execution-contract',version:1,environment:readEnvironment(),sources:[binding],...(data.analysisContract?{analysis:{...data.analysisContract,selection:compact}}:{nativeCambi:{...data.nativeCambiContract!,selection}})};
    requireExecutionContract(data.expectedExecutionContract,contract);if(data.mode==='decode')onContract?.(contract);
    if(data.mode!=='decode')return {indexBytes,indexPackets,contract,witness};
   }
   const result:CambiPrepared={...(index.mp4?{frameOrder:'source-pts-after-decode-au-selection' as const}:{}),frames:[],geometry:{width:0,height:0,bitDepth:8},coverage:{scope:'bounded-source-pts-interval',interval:data.input.interval,sampling:data.input.sampling,intervalAus:rows.length,selected:targets.length,unsampled,unsupported,scored:0,unscored:targets.length,tracking:'none'},output:null!,rawBytes:0,work:{readBytes:0,packets:0,outputFrames:0,indexBytes:0,indexPackets:0,heapBytes:0,elapsedMs:0}};
   let core:Awaited<ReturnType<typeof instantiateCore>>|undefined;
   const load=async()=>{check();if(!core){if(contract)requireExecutionContract(contract,{...contract,environment:readEnvironment()});const glue=await import(pathToFileURL(path.join(data.coreDir,'voidplayer-core.js')).href);core=await instantiateCore(glue.default,new Uint8Array(readFileSync(path.join(data.coreDir,'voidplayer-core.wasm'))),256*1024*1024);}return core;};
-  for(const [ordinal,target]of targets.entries()){
-   check();const source=open(target);try{
-    const picture=await inspectSourceFrame(target,source.source,()=>createPairDecoder(load),new AbortController().signal);check();
+  async function* pictures(){
+   if(data.mode!=='picture'&&targets.every(t=>t.decode?.mode==='packet-identity-gop-v1')){
+    const source=open(targets[0]);try{let ordinal=0;for await(const picture of inspectSourceSequence(targets,source.source,()=>createPairDecoder(load),new AbortController().signal))yield {ordinal,target:targets[ordinal++],picture,source};}finally{source.source.close();}
+   }else for(const [ordinal,target]of targets.entries()){const source=open(target);try{yield {ordinal,target,source,picture:await inspectSourceFrame(target,source.source,()=>createPairDecoder(load),new AbortController().signal)};}finally{source.source.close();}}
+  }
+  for await(const {ordinal,target,picture,source}of pictures()){
+    check();
     const f=picture.frame,d=f.description;validateDescription(d,f.pixels.length);
     const c=d.sourceColor??d.color,l=d.yuv;
     if(d.format!=='YUV'||!l||l.semiplanar||l.subsampleX!==1||l.subsampleY!==1||l.bitShift!==0||d.colorFallback||![8,10].includes(l.bitDepth)||[c.primaries,c.transfer,c.matrix].some(t=>t!=='bt709')||c.fullRange!==false||l.chromaLocation!==1||d.displayWidth!==d.width||d.displayHeight!==d.height)throw new CambiError('unsupported-source',`CAMBI requires explicit limited BT709 SDR YUV420 8/10bit left chroma and square full-frame geometry: ${JSON.stringify({color:c,bitDepth:l?.bitDepth,chromaLocation:l?.chromaLocation,width:d.width,displayWidth:d.displayWidth,height:d.height,displayHeight:d.displayHeight,format:d.format})}`);
@@ -64,8 +69,7 @@ export async function runCambiDecode(data:{mode:'preflight'|'decode'|'verify'|'p
      check();const width=(pi?d.width/2:d.width)*(l.bitDepth===8?1:2),line=f.pixels.subarray(plane.offset+y*plane.stride,plane.offset+y*plane.stride+width);
      if(result.rawBytes+line.length>data.input.budget.maxRawBytes)throw new CambiError('budget-exceeded','CAMBI raw bytes budget');let n=0;while(fd!==undefined&&n<line.length){const wrote=writeSync(fd,line,n,line.length-n);if(!wrote)throw new CambiError('source-io-failed','CAMBI short write');n+=wrote;}hash.update(line);result.rawBytes+=line.length;
     }}finally{if(fd!==undefined)closeSync(fd);Atomics.sub(control,1,1);Atomics.notify(control,1);}
-    result.frames.push({index:ordinal,target,provenance:picture.provenance,sourceGeometry:picture.sourceGeometry,decoder:picture.decoder,context:source.annotationContext,proof:source.proof,rawSha256:hash.digest('hex'),score:null,heatmaps:[]});result.work.heapBytes=Math.max(result.work.heapBytes,core!.heap().byteLength);await onFrame?.(f,result,ordinal,targets.length);progress(ordinal+1,targets.length);
-   }finally{source.source.close();}
+    result.frames.push({index:ordinal,target,provenance:picture.provenance,sourceGeometry:picture.sourceGeometry,decoder:picture.decoder,context:source.annotationContext,proof:source.proof,rawSha256:hash.digest('hex'),score:null,heatmaps:[]});result.work.heapBytes=Math.max(result.work.heapBytes,core!.heap().byteLength);progress(ordinal+1,targets.length);await onFrame?.(f,result,ordinal,targets.length);
   }
   const final=open(targets.at(-1)!);final.source.close();check();result.work.indexBytes=indexBytes;result.work.indexPackets=indexPackets;result.work.elapsedMs=Math.ceil(performance.now()-started);result.work.executionWitness=witness;return result;
  }finally{db.close();}

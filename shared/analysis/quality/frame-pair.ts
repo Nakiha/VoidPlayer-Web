@@ -212,6 +212,18 @@ export type PairProvenance = PairTarget & {
     | "cached-contiguous-forward-one-output-per-au-v1"
     | "cached-closed-gop-packet-identity-v1";
 };
+/** A streamed witness may grow only until drain. Scores cannot commit until
+ * every admitted packet has exactly one validated output. */
+export function requirePacketOutputWitness(p:PairProvenance,complete=true){
+  if(p.decode?.mode!=='packet-identity-gop-v1')return;
+  const dep=p.dependency,identity=dep?.outputIdentity,packets=dep?.packets;
+  if(!dep||!identity||identity.abi!==1||typeof identity.generation!=='string'||!identity.generation||!packets
+    ||packets.length!==pairPacketCount(p)||dep.outputFrames!==packets.length||identity.outputs.length>packets.length
+    ||complete&&identity.outputs.length!==packets.length||new Set(identity.outputs.map(o=>o.au)).size!==identity.outputs.length
+    ||!identity.outputs.some(o=>o.au===p.picture.au))throw new FramePairError('identity-mismatch','Incomplete or duplicate packet output witness');
+  const byAu=new Map(packets.map(step=>[step.au,step]));
+  for(const o of identity.outputs){const packet=byAu.get(o.au);if(!packet||o.token!==String(BigInt(o.au)+1n)||o.sourcePtsUs!==packet.pts||o.sourceDtsUs!==packet.dts||o.packetBytes!==packet.size||o.decodeErrorFlags!==0||!/^([a-f0-9]{16})$/.test(o.payloadHash)||!['immediate','drain'].includes(o.phase))throw new FramePairError('identity-mismatch','Packet output identity changed');}
+}
 export type FramePairResult = {
   schema: "voidplayer-frame-pair-psnr";
   version: 1;
@@ -1109,7 +1121,7 @@ export function inspectFlvFramePair(
  * one copied output; advancing is driven by the consumer, never a frame queue.
  * A full GOP witness is provisional until its drain has completed. Consumers
  * must finish this iterator before committing scores or publishing evidence. */
-export async function* inspectFrameSequence(
+async function* inspectSequence(
   requests: readonly FramePairRequest[],
   sources: [
     CachedPairSource<QualityIndexDocument>,
@@ -1117,6 +1129,7 @@ export async function* inspectFrameSequence(
   ],
   loadDecoder: (budget: PairBudget) => Promise<PairDecoder>,
   signal: AbortSignal,
+  sides: 1 | 2,
 ): AsyncGenerator<InspectedFramePair, void> {
   let decoder: PairDecoder | undefined;
   type Stream = {
@@ -1135,7 +1148,7 @@ export async function* inspectFrameSequence(
     previousOutputs = 0;
   const check = () => {
     signal.throwIfAborted();
-    for (let side = 0; side < 2; side++)
+    for (let side = 0; side < sides; side++)
       if (
         !sameBinding(
           sources[side].binding(),
@@ -1165,7 +1178,7 @@ export async function* inspectFrameSequence(
           fail("budget-exceeded", "Sequence frame deadline exceeded");
       };
       timed();
-      for (let side = 0; side < 2; side++) {
+      for (let side = 0; side < sides; side++) {
         const target = side ? request.distorted : request.reference,
           source = sources[side];
         if (
@@ -1294,9 +1307,9 @@ export async function* inspectFrameSequence(
       previousOutputs = outputs;
       yield {
         decoder: { ...decoder!.version },
-        frames: frames as InspectedFramePair["frames"],
-        provenance: { reference: provenance[0], distorted: provenance[1] },
-        sourceGeometry: { reference: geometry[0], distorted: geometry[1] },
+        frames: [frames[0], frames[1] ?? frames[0]],
+        provenance: { reference: provenance[0], distorted: provenance[1] ?? provenance[0] },
+        sourceGeometry: { reference: geometry[0], distorted: geometry[1] ?? geometry[0] },
         work,
       };
     }
@@ -1307,7 +1320,14 @@ export async function* inspectFrameSequence(
       for (const stream of streams) stream?.iterator.return();
       decoder?.close();
     } finally {
-      for (const source of sources) source.close();
+      for (const source of new Set(sources)) source.close();
     }
   }
+}
+
+/** Pair and single-source metrics share the same identity/drain machinery. */
+export function inspectFrameSequence(requests:readonly FramePairRequest[],sources:[CachedPairSource<QualityIndexDocument>,CachedPairSource<QualityIndexDocument>],loadDecoder:(budget:PairBudget)=>Promise<PairDecoder>,signal:AbortSignal){return inspectSequence(requests,sources,loadDecoder,signal,2);}
+export async function* inspectSourceSequence(targets:readonly PairTarget[],source:CachedPairSource<QualityIndexDocument>,loadDecoder:(budget:PairBudget)=>Promise<PairDecoder>,signal:AbortSignal,budget?:Partial<PairBudget>){
+  const requests=targets.map(target=>({pairing:'caller-specified' as const,reference:target,distorted:target,roi:{x:0,y:0,width:2,height:2},budget}));
+  for await(const pair of inspectSequence(requests,[source,source],loadDecoder,signal,1))yield {frame:pair.frames[0],provenance:pair.provenance.reference,decoder:pair.decoder,sourceGeometry:pair.sourceGeometry.reference,work:pair.work};
 }

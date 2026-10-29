@@ -115,6 +115,7 @@ export class WasmCambiRunner extends NativeCambiRunner {
       signal,
       hooks.admitted,
       async (combined) => {
+        let executedContract:QualityExecutionContract|undefined;
         const contract = this.contract(),
           data = this.data(input, contract);
         hooks.phase("decode-and-score");
@@ -131,7 +132,7 @@ export class WasmCambiRunner extends NativeCambiRunner {
           },
           combined,
           hooks.progress,
-          hooks.contract,
+          contract=>{executedContract=contract;hooks.contract?.(contract);},
           async (message) => {
             if (!hooks.streamFrame)
               throw new CambiError(
@@ -168,7 +169,7 @@ export class WasmCambiRunner extends NativeCambiRunner {
           {
             ...data,
             mode: "verify",
-            expectedExecutionContract: hooks.expectedExecutionContract,
+            expectedExecutionContract: executedContract,
             remainingIndex: {
               maxIndexBytes:
                 CAMBI_LIMITS.maxIndexBytes - value.prepared.work.indexBytes,
@@ -179,6 +180,7 @@ export class WasmCambiRunner extends NativeCambiRunner {
           combined,
         );
         combined.throwIfAborted();
+        value.prepared.work.indexBytes+=verification.indexBytes;value.prepared.work.indexPackets+=verification.indexPackets;
         if (value.prepared.work.executionWitness) {
           const w = value.prepared.work.executionWitness;
           w.passes += verification.witness.passes;

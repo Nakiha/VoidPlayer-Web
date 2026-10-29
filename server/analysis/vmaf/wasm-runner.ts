@@ -157,6 +157,7 @@ export class WasmVmafRunner extends NativeVmafRunner {
       signal,
       hooks.admitted,
       async (combined) => {
+        let executedContract:QualityExecutionContract|undefined;
         const contract = this.contract(input),
           data = this.data(input, snapshot, contract);
         hooks.phase("decode-and-score");
@@ -172,7 +173,7 @@ export class WasmVmafRunner extends NativeVmafRunner {
           },
           combined,
           hooks.progress,
-          hooks.contract,
+          contract=>{executedContract=contract;hooks.contract?.(contract);},
         );
         combined.throwIfAborted();
         hooks.prepared(value.prepared);
@@ -191,7 +192,7 @@ export class WasmVmafRunner extends NativeVmafRunner {
           {
             ...data,
             mode: "verify",
-            expectedExecutionContract: hooks.expectedExecutionContract,
+            expectedExecutionContract: executedContract,
           },
           combined,
         );
@@ -206,6 +207,7 @@ export class WasmVmafRunner extends NativeVmafRunner {
             "budget-exceeded",
             "Final index verification exceeds budget",
           );
+        value.prepared.work.indexBytes+=verification.indexBytes;value.prepared.work.indexPackets+=verification.indexPackets;
         value.native.resources.finalVerification = verification;
         return value;
       },
