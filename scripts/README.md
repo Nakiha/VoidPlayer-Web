@@ -56,3 +56,5 @@ Vite 与独立程序共用 `release-version.mjs` 的版本规则。标签构建�
 - `tools/fixtures/quality-forward.mjs`：生成固定 H.2648/HEVC10 无重排普通依赖帧 FLV 与独立 FFmpeg 原始平面对照、精确时钟和 SHA-256。完整依赖窗口、GUI/Agent/证据/原帧复核见 [工作流契约](../docs/forward-frame-quality.md)；`check-quality-workflow-browser.mjs chromium 8 forward`（另有 WebKit/10bit）登记为现有 core-backed `ci-ssim` 的必需用例，不替换旧 PSNR/SSIM 检查。
 
 - `check-quality-roi-browser.mjs`：播放器已载入媒体的显式 AU 独立快照与偶数源网格 ROI → 持久 PSNR/SSIM/grid → 原子共享测量候选 → 原帧查看，Chromium/WebKit × H2648/HEVC10；完整 `ci-cache` 必需且要求 core。不继承旧播放 token 的 PTS 关联、不完成索引，Agent 共用 `create-quality-candidate`；见 [契约与矩阵](../docs/quality-roi-candidates.md)。
+
+Existing local page MCP: `node scripts/mcp-page-bridge.ts --existing-origin http://127.0.0.1:5180`; explicitly pair/consent in the already-open page. See `docs/local-mcp-page-bridge.md`. `check-existing-page-bridge-browser.mjs` verifies the real independent stdio client against ordinary pages with existing Files/ROI; no protocol simulation substitutes for this GUI check.

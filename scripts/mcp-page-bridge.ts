@@ -13,7 +13,7 @@ const args=process.argv.slice(2);
 if(args[0]==='--existing-origin'){
   if(args.length!==2)throw Error('Usage: --existing-origin <exact loopback origin>');
   const {channel,pairingCode,expiresAt}=await ExistingPageClient.create(args[1]);
-  process.stderr.write(`VoidPlayer existing page: ${new URL(args[1]).origin}/\nOne-time pairing (enter only in the intended already-open page MCP panel): ${pairingCode}\nExpires: ${new Date(expiresAt).toISOString()}\nClient name is self-declared. The page must explicitly confirm permissions.\n`);
+  process.stderr.write(`VoidPlayer existing page: ${new URL(args[1]).origin}/\nPublic one-time matching code (not an authorization credential; enter in the intended already-open page MCP panel): ${pairingCode}\nExpires: ${new Date(expiresAt).toISOString()}\nClient name is self-declared. The page must explicitly confirm permissions.\n`);
   runPageStdio(channel,async()=>{channel.close();});
 }else{
 if(args.length&&!(args.length===2&&args[0]==='--static-dir'))throw Error('Usage: node scripts/mcp-page-bridge.ts [--static-dir <built frontend>]');

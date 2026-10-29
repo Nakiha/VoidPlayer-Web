@@ -66,8 +66,12 @@ node scripts/mcp-page-bridge.ts --existing-origin http://127.0.0.1:5180
 ```
 
 This mode never starts, stops, navigates or reloads the user's service/page. It
-prints one-time pairing instructions to the client's private stderr display;
-never copy these instructions into shared logs. In the intended existing page,
+prints a public one-time matching selector to the client's stderr. This is not
+a bearer credential and cannot obtain a document capability or session data.
+The page obtains its independent random document credential directly over the
+strict same-origin channel, only when the user clicks Review pairing; pairing
+consumes the selector and document registration together without returning any
+credential. CLI, document and grant secrets never appear in stderr or stdout. In the intended existing page,
 open MCP, enter the one-time information and click Review pairing. Check the
 exact page/workspace, the self-declared client and expiry. Read, view and
 annotation permissions start unchecked and are independent opt-ins. Only the
@@ -83,9 +87,24 @@ authorization deadline. EOF/disconnection closes this bridge alone. Same-origin
 code and the local OS account remain trusted, as with the owned host mode.
 Unknown writes retain the original receipt; do not retry automatically.
 
-Implementation checkpoint: existing-page GUI and negative-case verification is
-pending. This paragraph must be replaced with final candidate evidence before
-claiming the feature complete.
+The unpaired document pool is limited to eight registrations with a 90-second
+TTL and exact origin binding. Framed pages expose no authorization UI. The
+service checks the original peer address through its protocol gateway, not the
+internal loopback socket. View-only status hides source names; view and annotate
+without read return only minimal completion/created-ID receipts, never the
+facade's full session state. Pair another client clears the old pairing and
+permissions while retaining the existing File and tracks.
+
+The dedicated check uses an ordinary persistent service and two pages loaded
+with public generated test Files before the independent stdio client starts. A
+GUI-drawn existing ROI is read through the client before pause/seek/new visible
+mark creation. It also exercises framed-page rejection, wrong/consumed matching
+selectors, separate read/view/annotate grants, unknown writes, actual identity
+switch, source replacement, reload, close, EOF and pairing a new client to the
+same still-loaded page. The backend HTTP tests additionally submit real H.2648,
+HEVC8 and HEVC10 scoring jobs before CLI EOF and verify successful terminal
+results afterwards. Protocol tests cover maximum expiry, dead-client lease,
+strict Host/Origin, mapped remote peer and independent document capability.
 
 ## Executable checks and support evidence
 
@@ -99,11 +118,13 @@ business work. The original optional drawing-ID contract is retained; id-less
 ROI drawings must remain visible rather than be mistaken for the editing ID.
 
 ```sh
-node --test test/unit/mcp-page-bridge.test.mjs \
+node --test test/unit/existing-page-bridge.test.ts \
+  test/unit/mcp-page-bridge.test.mjs \
   test/unit/agent-http.test.ts test/unit/agent-tool-contract.test.ts
 node --test test/media/quality-jobs-http.test.ts
 npm run build
 node scripts/check-mcp-page-bridge-browser.mjs
+node scripts/check-existing-page-bridge-browser.mjs
 ```
 
 For a Mac with Node 24+, installed Google Chrome and the existing Playwright
@@ -112,6 +133,7 @@ project dependency (no persistent app configuration or extension):
 ```sh
 npm run build
 MCP_BROWSER_CHANNEL=chrome node scripts/check-mcp-page-bridge-browser.mjs
+node scripts/check-existing-page-bridge-browser.mjs
 ```
 
 The actual Chrome process is launched on that Mac; the real independent Node
@@ -122,6 +144,7 @@ separate from the final candidate's successful evidence.
 | Host | Evidence |
 | --- | --- |
 | Linux / Node 24.19 / Chromium 153.0.8010.12 | Development real-MCP/browser closure verified; 38 checks including two Files/tabs, read-only denials, visible ROI, exact seek, confirmed receipt deduplication, lost writes, cancellation, delayed ACK/old command, source replacement, reload, close and live-grant EOF. |
+| Linux / Node 24.19 / system Chromium 154.0.8037.57 | Existing normal-page real-stdio closure: 46 checks passed; see `.run/existing-page-bridge/evidence.json` and `existing-page-roi.png`. The owned-host 38-check browser regression also passes on this browser. |
 | macOS / installed Chrome + Node | Required local verification pending; not certified by the Linux result. |
 | Other browsers/platforms and native packaged MCP entry | Not certified by this source-checkout delivery. |
 
@@ -146,8 +169,9 @@ cursor requires reading again without it. This host observation does not establi
 readiness. No timestamps, file names or similar frames are guessed or aligned. The only write targets are this page's existing
 facade operations; annotation creation requires an already paused drawn frame.
 
-- host-unavailable / stale epoch: reopen the owned page, review and explicitly
-  reconnect. No automatic reconnect or attachment to another window.
+- host-unavailable / stale epoch: use the intended page MCP panel, review and
+  explicitly reconnect. For a new CLI process choose Pair another client and
+  enter its new matching selector; no page reload or File reselection is needed. No automatic reconnect or attachment to another window.
 - scope-denied: the call did not run. Change scopes only through user revocation
   and explicit consent; a client label is never permission.
 - outcome-unknown: retain the exact operationId/epoch/correlation and inspect
@@ -167,7 +191,7 @@ facade operations; annotation creation requires an already paused drawn frame.
   inactive document credentials expire after five minutes (8 documents maximum).
   A restored back/forward document is retired and needs a reload, not silent reuse.
 
-The page poll is bounded to 1 second, its lease to 4 seconds and command lifetime
+The ordinary-page client lease is five seconds and its authorization deadline is never extended by heartbeat. The page poll is bounded to 1 second, its lease to 4 seconds and command lifetime
 to 15 seconds. Messages are at most 64 KiB inbound, results 48 KiB, stdout frames
 128 KiB; outbound buffering is bounded. Legacy request IDs cannot be reused in
 one session and their bounded history permits 4096 requests before an explicit

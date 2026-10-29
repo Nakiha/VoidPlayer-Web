@@ -1,5 +1,6 @@
 import {randomBytes,timingSafeEqual} from 'node:crypto';
 import type {IncomingMessage,ServerResponse} from 'node:http';
+import {localRequest} from '../reveal.ts';
 import {PageChannel} from './page-channel.ts';
 import {BRIDGE_PATH,PAGE_BRIDGE_LIMITS as L} from '../../shared/service/page-bridge.ts';
 
@@ -12,17 +13,18 @@ const json=(res:ServerResponse,status:number,value:unknown)=>{res.writeHead(stat
  * pairing capability and later a trusted page click, never an actor or Origin. */
 export class ExistingPageRequests{
   private entries=new Map<string,Entry>();
-  private timer=setInterval(()=>{for(const e of this.entries.values())if(Date.now()>=e.expires||Date.now()-e.seen>=EXISTING_LIMITS.leaseMs)this.remove(e);},500);
+  private documents=new Map<string,{origin:string;expires:number}>();
+  private timer=setInterval(()=>{for(const [token,d]of this.documents)if(Date.now()>=d.expires)this.documents.delete(token);for(const e of this.entries.values())if(Date.now()>=e.expires||Date.now()-e.seen>=EXISTING_LIMITS.leaseMs)this.remove(e);},500);
   constructor(){this.timer.unref();}
   private remove(e:Entry){e.channel.close();this.entries.delete(e.id);e.code=null;}
-  close(){clearInterval(this.timer);for(const e of this.entries.values())this.remove(e);}
+  close(){clearInterval(this.timer);this.documents.clear();for(const e of this.entries.values())this.remove(e);}
   async handle(req:IncomingMessage,res:ServerResponse){
     const pathname=(req.url??'').split('?')[0];if(!pathname.startsWith(BRIDGE_PATH))return false;
     try{
       const socket=req.socket as typeof req.socket&{encrypted?:boolean};
       const origin=`${socket.encrypted?'https':'http'}://${req.headers.host}`;
-      const target=new URL(origin),remote=req.socket.remoteAddress;
-      if(!['127.0.0.1','localhost','[::1]'].includes(target.hostname)||!['127.0.0.1','::1','::ffff:127.0.0.1'].includes(remote??'')||req.url?.includes('?')||req.headers.origin&&req.headers.origin!==origin||req.headers['sec-fetch-site']&&req.headers['sec-fetch-site']!=='same-origin')throw Error('origin-host-denied');
+      const target=new URL(origin);
+      if(!['127.0.0.1','localhost','[::1]'].includes(target.hostname)||!localRequest(req)||req.url?.includes('?')||req.headers.origin&&req.headers.origin!==origin||req.headers['sec-fetch-site']&&req.headers['sec-fetch-site']!=='same-origin')throw Error('origin-host-denied');
       const browser=req.headers['sec-fetch-site']==='same-origin'&&(!req.headers.origin||req.headers.origin===origin);
       if(!pathname.startsWith(EXISTING_PATH+'/')){
         if(!browser)throw Error('origin-host-denied');
@@ -44,14 +46,22 @@ export class ExistingPageRequests{
         const e:Entry={id:randomBytes(16).toString('hex'),secret:randomBytes(32).toString('hex'),code:randomBytes(16).toString('hex'),channel,expires:Date.now()+EXISTING_LIMITS.pairMs,seen:Date.now(),revision:-1};
         this.entries.set(e.id,e);json(res,200,{id:e.id,secret:e.secret,pairingCode:e.code,expiresAt:e.expires,limits:EXISTING_LIMITS});return true;
       }
+      if(route==='document'){
+        if(!browser||req.headers.origin!==origin||req.headers['x-voidplayer-bridge']!=='1'||Object.keys(body).length)throw Error('origin-host-denied');
+        if(this.documents.size>=8)throw Error('document-budget');
+        const token=randomBytes(32).toString('hex');this.documents.set(token,{origin,expires:Date.now()+EXISTING_LIMITS.pairMs});
+        json(res,200,{documentToken:token});return true;
+      }
       if(route==='pair'){
         if(!browser||req.headers.origin!==origin||req.headers['x-voidplayer-bridge']!=='1'||Object.keys(body).some(k=>k!=='code')||typeof body.code!=='string')throw Error('origin-host-denied');
+        const token=(req.headers.authorization??'').replace(/^Bearer /,'');const document=this.documents.get(token);
+        if(!document||document.origin!==origin||Date.now()>=document.expires)throw Error('document-credential-required');
         const e=[...this.entries.values()].find(e=>e.code&&equal(body.code,e.code));
         if(!e||e.channel.origin!==origin||Date.now()>=e.expires||!e.channel.ready)throw Error('pairing-unavailable');
-        e.code=null;e.document=e.channel.mintDocument();
+        this.documents.delete(token);e.code=null;e.document=e.channel.mintDocument(token);
         // A paired document gets a bounded window for explicit consent/use.
         e.expires=Date.now()+EXISTING_LIMITS.grantMs;
-        json(res,200,{id:e.id,documentToken:e.document,expiresAt:e.expires});return true;
+        json(res,200,{id:e.id,expiresAt:e.expires});return true;
       }
       if(browser||req.headers.origin||req.headers['sec-fetch-site'])throw Error('origin-host-denied');
       const e=this.entries.get(String(req.headers['x-voidplayer-bridge-request']??''));

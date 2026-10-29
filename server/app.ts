@@ -72,10 +72,10 @@ export function createMediaServer(options: ServerOptions): Server {
 
   const existingPages=options.pageBridge?undefined:new ExistingPageRequests();
   const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
+    if(options.clientAddress)setClientAddress(req,options.clientAddress(req));
     if(existingPages&&await existingPages.handle(req,res))return;
     if(options.pageBridge)try{if(await options.pageBridge.handle(req,res))return;}
     catch{if(!res.headersSent&&!res.destroyed)sendJson(res,503,{code:'bridge-host-unavailable'});else res.end();return;}
-    if(options.clientAddress)setClientAddress(req,options.clientAddress(req));
     const started = performance.now();
     const requestId = randomUUID();
     res.setHeader('x-request-id', requestId);

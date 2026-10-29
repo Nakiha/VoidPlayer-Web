@@ -23,6 +23,12 @@ try{
   context.on('page',p=>{p.on('pageerror',e=>errors.push(e.message));p.on('request',r=>requests.push({method:r.method(),path:new URL(r.url()).pathname}));});
   const a=await context.newPage(),b=await context.newPage();
   for(const [page,file]of [[a,fileA],[b,fileB]]){await page.goto(origin);if(page===a){await page.locator('#identity-welcome').waitFor({state:'visible'});await page.locator('#identity-welcome button[type=submit]').click();await page.locator('#identity-welcome').waitFor({state:'hidden'});}await page.locator('#app:not([data-initializing])').waitFor();await page.locator('#file-A').setInputFiles(file);await page.locator('#image-A').waitFor({state:'visible'});await page.waitForFunction(()=>document.querySelector('#pts-A')?.textContent!=='—');}
+  await a.evaluate(()=>{if(document.activeElement instanceof HTMLElement)document.activeElement.blur();});await a.keyboard.press('n');await a.locator('[data-drawing-tool=rect]').click();
+  const stage=await a.locator('#drawing-A').boundingBox();await a.mouse.move(stage.x+stage.width*.2,stage.y+stage.height*.2);await a.mouse.down();await a.mouse.move(stage.x+stage.width*.4,stage.y+stage.height*.4,{steps:5});await a.mouse.up();await a.locator('#mark-close').click();await a.locator('#annotations-A rect.annotation-object').waitFor({state:'visible'});
+  check('existing ROI drawn through GUI before CLI exists');
+  await a.evaluate(origin=>{const frame=document.createElement('iframe');frame.id='bridge-framing-test';frame.src=origin;document.body.append(frame);},origin);
+  await a.frameLocator('#bridge-framing-test').locator('#app:not([data-initializing])').waitFor();
+  check('embedded ordinary page has no bridge authorization UI',await a.frameLocator('#bridge-framing-test').locator('#page-bridge-open').count()===0);await a.locator('#bridge-framing-test').evaluate(e=>e.remove());
   const beforeA=await a.locator('#name-A').textContent(),beforeB=await b.locator('#name-A').textContent();
   check('two ordinary pages loaded File before independent CLI exists');
   check('ordinary HTML has no launcher bootstrap',!(await (await fetch(origin)).text()).includes('name="voidplayer-page-bridge"'));
@@ -43,6 +49,7 @@ try{
   const call=(name,input={},operationId)=>client.call(name,{epoch,input,...(operationId?{operationId}:{})});
   check('accurate A selected',status.workspace.includes(beforeA));
   check('original File read via real stdio',(await call('get_review_session')).tracks[0].name===beforeA);
+  const existingMarks=await call('get_review_marks');check('readonly real stdio reads original GUI ROI',existingMarks.entries.length===1&&existingMarks.entries[0].drawings[0].tool==='rect');
   check('readonly cannot seek',(await call('seek_review',{ptsUs:500000},'denied')).code==='scope-denied');
   check('readonly cannot annotate',(await call('add_review_mark',{slot:'A',text:'no'},'denied-mark')).code==='scope-denied');
   await a.locator('#page-bridge-revoke').click();await eventually(async()=>!(await client.call('get_bridge_status')).connected);
@@ -52,13 +59,18 @@ try{
   check('view-only pause and seek do not leak session or marks');check('view-only status does not leak source names',!(await client.call('get_bridge_status')).workspace.includes(beforeA));
   check('view-only read remains denied',(await call('get_review_session')).code==='scope-denied');
   await a.locator('#page-bridge-revoke').click();await eventually(async()=>!(await client.call('get_bridge_status')).connected);
+  phase='annotate-only';status=await connect(a,['annotate']);epoch=status.epoch;
+  const annotateOnly=await call('add_review_mark',{slot:'A',text:'Annotation-only consent'},'annotate-only');
+  check('annotation-only returns only created ID and completion',typeof annotateOnly.id==='string'&&Object.keys(annotateOnly).sort().join(',')==='completed,id');
+  check('annotation-only cannot read prior ROI',(await call('get_review_marks')).code==='scope-denied');
+  await a.locator('#page-bridge-revoke').click();await eventually(async()=>!(await client.call('get_bridge_status')).connected);
   phase='view-annotate';status=await connect(a,['read','view','annotate']);epoch=status.epoch;await a.locator('#page-bridge-close').click();
   check('pause real independent stdio',(await call('pause_review',{},'pause')).completed);
   await call('seek_review',{ptsUs:500000},'seek');const state=await call('get_review_session');
   check('exact seek preserves loaded track',state.positionUs===500000&&state.tracks[0].name===beforeA);
   const input={slot:'A',text:'Existing page Agent ROI',severity:3,drawings:[{tool:'rect',points:[{x:.2,y:.2},{x:.6,y:.6}]}]};
   const mark=await call('add_review_mark',input,'roi');check('visible mark created',typeof mark.id==='string');
-  await a.locator('#annotations-A rect.annotation-object').waitFor({state:'visible'});
+  await a.locator('#annotations-A rect.annotation-object').first().waitFor({state:'visible'});
   check('ROI read through same real client',(await call('get_review_marks')).entries.some(e=>e.id===mark.id));
   assert.deepEqual(await call('add_review_mark',input,'roi'),mark);check('stable receipt deduplicates write');
   check('other page File unchanged',await b.locator('#name-A').textContent()===beforeB);

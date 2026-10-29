@@ -10,6 +10,7 @@ import './page-bridge.css';
 /** Installed only in HTML minted by this stdio process. No probing ordinary
  * deployments, persistent credential, automatic reconnect or tool passthrough. */
 export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof reviewTools>,signal:AbortSignal){
+  if(window.top!==window)return;
   const meta=document.querySelector<HTMLMetaElement>('meta[name="voidplayer-page-bridge"]');
   const existing=!meta;
   if(existing&&!['localhost','127.0.0.1','[::1]'].includes(location.hostname))return;
@@ -98,9 +99,10 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
     if(!event.isTrusted||!navigator.userActivation.isActive||grant||connecting||inFlight||stopped||requestId)return;
     connecting=true;render();const code=$<HTMLInputElement>('code').value;$<HTMLInputElement>('code').value='';
     try{
-      const paired=await post('existing/pair',{code},'');
+      const document=await post('existing/document',{},'');
+      const paired=await post('existing/pair',{code},document.documentToken);
       if(signal.aborted||stopped)return;
-      documentToken=paired.documentToken;requestId=paired.id;expiresAt=paired.expiresAt;
+      documentToken=document.documentToken;requestId=paired.id;expiresAt=paired.expiresAt;
       $('pair').toggleAttribute('disabled',true);$('code').toggleAttribute('disabled',true);
       await refresh();note(t(msg('pageBridge.pairReviewTarget','请核对此页面：{page}。配对信息已单次消费。临时授权最晚于 {expiry} 到期。'),{page:`${location.origin}${location.pathname} · ${pageId}`,expiry:new Date(expiresAt).toLocaleTimeString()}));
     }catch{note(t(msg('pageBridge.pairUnavailable','配对不可用：信息不符、已到期、已消费或客户端尚未就绪。请发起新请求，页面数据尚未分享。')));}
