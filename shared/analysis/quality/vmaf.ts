@@ -616,6 +616,17 @@ export function validateVmafAssociation(
     v.pooled.mean > v.pooled.max + 0.000002
   )
     fail("Invalid native pool");
+  validateTemporalSequenceWitness(v, pair);
+  return structuredClone(v);
+}
+/** Shared frame identity, exact clock and crop evidence for temporal scorers. */
+export function validateTemporalSequenceWitness(
+  v: Pick<VmafAssociation, 'sequence'|'index'|'frames'|'raw'|'spatial'> & {
+    component: ScoringComponent;
+    recipe: Pick<VmafNativeResult['recipe'], 'width'|'height'|'bitDepth'|'roi'>;
+  }, pair: LibraryPairResult,
+) {
+  const c=v.component, recipe=v.recipe;
   object(v.sequence, [
     "indices",
     "pairsSha256",
@@ -796,7 +807,7 @@ export function validateVmafAssociation(
     metric.roi.height !== recipe.height ||
     metric.bitDepth !== recipe.bitDepth
   )
-    fail("VMAF evidence pixel domain differs");
+    fail("Temporal evidence pixel domain differs");
   if (recipe.roi) {
     object(recipe.roi, ["x", "y", "width", "height"]);
     if (
@@ -822,7 +833,7 @@ export function validateVmafAssociation(
         ? "cropped-region-temporal-score-not-localized"
         : "full-frame-temporal-score-not-localized")
   )
-    fail("VMAF spatial claim differs from the evaluated region");
+    fail("Temporal spatial claim differs from the evaluated region");
   for (const p of Object.values(pair.result.provenance)) {
     const d = p.decoded.description;
     if (
@@ -834,7 +845,7 @@ export function validateVmafAssociation(
       d.codedHeight !== d.height ||
       d.yuv?.bitDepth !== recipe.bitDepth
     )
-      fail("VMAF evidence geometry differs");
+      fail("Temporal evidence geometry differs");
   }
   if (
     !v.raw ||
@@ -850,7 +861,6 @@ export function validateVmafAssociation(
     v.raw.bytes > VMAF_LIMITS.maxRawBytes
   )
     fail("Invalid raw sequence witness");
-  return structuredClone(v);
 }
 export const VMAF_CAPABILITY = {
   schema: "voidplayer-native-vmaf-capability",

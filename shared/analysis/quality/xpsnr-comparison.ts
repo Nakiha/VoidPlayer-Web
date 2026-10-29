@@ -1,3 +1,5 @@
+import {clockDeltaEquals,clockKey} from '../../media/indexing/rational-clock.ts';
+import type {RationalClock} from '../../media/indexing/rational-clock.ts';
 import {canonicalJson,validateXpsnrDb,xpsnrMinimum,xpsnrSequenceFrame,XPSNR_LIMITS} from './xpsnr.ts';
 import type {XpsnrDb,XpsnrJob,XpsnrNativeResult,XpsnrResult} from './xpsnr.ts';
 import type {LibraryPairResult} from './library-pair.ts';
@@ -15,7 +17,7 @@ export type ComparisonSort='caller'|'minimum'|'y'|'u'|'v';
 export const COMPARISON_SORTS=['caller','minimum','y','u','v'] as const;
 export type ComparisonView={version:1;comparisonKey:string;items:Pick<XpsnrComparison['items'][number],'id'|'attemptId'|'resultDigest'>[];after:number;sort:ComparisonSort};
 export type ComparisonSummary={job:XpsnrJob;comparisonKey:string|null;plan:XpsnrResult['plan'];
-  sequence:{clockPairs:{referenceAu:number;distortedAu:number;referencePtsUs:number;distortedPtsUs:number;offsetUs:number}[]};
+  sequence:{clockPairs:{referenceAu:number;distortedAu:number;referencePtsUs:number;distortedPtsUs:number;offsetUs:number;referenceClock?:RationalClock;distortedClock?:RationalClock}[]};
   companionPairs:number;metrics:XpsnrResult['metrics'];xpsnr:XpsnrNativeResult|null};
 export type ComparisonFramePage={entries:{index:number;score:XpsnrDb|null;pair:LibraryPairResult;ref:QualityEvidenceRef}[];next:number|null};
 const fail=(message:string):never=>{throw new Error(message);};
@@ -27,7 +29,7 @@ const same=(a:unknown,b:unknown)=>canonicalJson(a)===canonicalJson(b);
 export function comparisonView(value:unknown):ComparisonView {
   const v=value as ComparisonView;
   if(!v||v.version!==1||!hex(v.comparisonKey)||!Array.isArray(v.items)||v.items.length<2||v.items.length>4
-    ||new Set(v.items.map(i=>i.id)).size!==v.items.length||!Number.isInteger(v.after)||v.after<0||v.after>=32
+    ||new Set(v.items.map(i=>i.id)).size!==v.items.length||!Number.isInteger(v.after)||v.after<0||v.after>=XPSNR_LIMITS.frames
     ||v.after%XPSNR_LIMITS.page!==0||!COMPARISON_SORTS.includes(v.sort))return fail('Invalid frozen comparison view');
   for(const i of v.items)if(!i||!id(i.id)||!hex(i.resultDigest)||typeof i.attemptId!=='string'||!/^[a-f0-9-]{36}$/.test(i.attemptId))fail('Invalid comparison result identity');
   return {version:1,comparisonKey:v.comparisonKey,items:v.items.map(i=>({id:i.id,attemptId:i.attemptId,resultDigest:i.resultDigest})),after:v.after,sort:v.sort};
@@ -41,7 +43,7 @@ export function verifyComparison(c:XpsnrComparison,expected:ComparisonView){
   if(!same(actual,comparisonView(expected)))fail('Frozen comparison changed; declare a new selection explicitly');
 }
 /** Pure location; opening it still requires the current actor's owned HTTP reads. */
-export function comparisonLocation(view:ComparisonView){return '/admin/?xpsnrComparison='+encodeURIComponent(JSON.stringify(comparisonView(view)))+'#quality';}
+export function comparisonLocation(view:ComparisonView){return '/admin/?qualityView=xpsnr&xpsnrComparison='+encodeURIComponent(JSON.stringify(comparisonView(view)))+'#quality';}
 export function comparisonFromUrl(url:URL):ComparisonView|null {
   const raw=url.searchParams.get('xpsnrComparison');if(raw===null)return null;
   if(raw.length>4096)fail('Comparison location exceeds budget');return comparisonView(JSON.parse(raw));
@@ -62,7 +64,7 @@ export function verifyComparisonSummaries(c:XpsnrComparison,summaries:Comparison
     const item=c.items[ordinal],n=s.xpsnr??fail('Completed XPSNR unavailable'),clocks=s.sequence.clockPairs;
     if(!n||s.job.actor.id!==actor||s.job.state!=='completed'||s.job.id!==item.id||s.job.attemptId!==item.attemptId
       ||s.job.resultDigest!==item.resultDigest||s.comparisonKey!==c.comparisonKey||!same(n.recipe,c.recipe)
-      ||!same(n.pooled,item.pooled)||n.statistics.sha256!==item.statisticsSha256||n.frames.length<2||n.frames.length>32
+      ||!same(n.pooled,item.pooled)||n.statistics.sha256!==item.statisticsSha256||n.frames.length<2||n.frames.length>XPSNR_LIMITS.frames
       ||s.companionPairs!==n.frames.length||clocks.length!==n.frames.length||!same(s.plan,s.job.input.plan))fail('Comparison result identity, domain or coverage changed');
     if(!same(n.pooled.minimum,xpsnrMinimum(n.pooled.planes)))fail('Official pooled plane minimum differs');
     for(const plane of Object.values(n.pooled.planes))validateXpsnrDb(plane);
@@ -70,10 +72,10 @@ export function verifyComparisonSummaries(c:XpsnrComparison,summaries:Comparison
     for(const [i,f]of n.frames.entries()){
       const clock=clocks[i];for(const plane of Object.values(f.planes))validateXpsnrDb(plane);
       if(f.index!==i||!same(f.minimum,xpsnrMinimum(f.planes))||!Number.isSafeInteger(clock.referenceAu)||clock.referenceAu<0
-        ||seen.has(clock.referenceAu)||!Number.isSafeInteger(clock.referencePtsUs)||i>0&&clock.referencePtsUs-clocks[i-1].referencePtsUs!==c.recipe.cadenceUs)fail('Missing or reordered reference presentation frame');
+        ||seen.has(clock.referenceAu)||!Number.isSafeInteger(clock.referencePtsUs)||i>0&&!clockDeltaEquals(clock.referenceClock??{ticks:clock.referencePtsUs,timescale:1000000},clocks[i-1].referenceClock??{ticks:clocks[i-1].referencePtsUs,timescale:1000000},c.recipe.cadence??{ticks:c.recipe.cadenceUs,timescale:1000000}))fail('Missing or reordered reference presentation frame');
       seen.add(clock.referenceAu);
     }
-    const domain=clocks.map(p=>({au:p.referenceAu,pts:p.referencePtsUs}));
+    const domain=clocks.map(p=>({au:p.referenceAu,pts:p.referencePtsUs,...(p.referenceClock?{clock:p.referenceClock}:{})}));
     if(ordinal&& !same(reference,domain))fail('Reference presentation clocks differ');reference=domain;
   }
 }
@@ -92,6 +94,7 @@ export function verifyComparisonPages(c:XpsnrComparison,summaries:ComparisonSumm
         ||p.distorted.picture.au!==clock.distortedAu||p.distorted.sourcePtsUs!==clock.distortedPtsUs
         ||!same(e.score,s.xpsnr!.frames[index].minimum)
         ||version>0&&!same(xpsnrSequenceFrame(p.reference),xpsnrSequenceFrame(pages[0].entries[offset].pair.result.provenance.reference)))fail('Frame witness differs from frozen reference presentation order');
+      for(const side of ['reference','distorted'] as const){const witness=p[side],actual=witness.container?{ticks:witness.container.sample.dtsTicks+witness.container.sample.ctsTicks,timescale:witness.container.timescale}:{ticks:witness.sourcePtsUs,timescale:1000000};const reported=clock[side==='reference'?'referenceClock':'distortedClock'];if(reported&&clockKey(reported)!==clockKey(actual))fail('Exact comparison source clock differs');}
       const ssim=e.pair.result.ssim;
       if(s.job.input.metrics.ssim!==!!ssim)fail('Requested SSIM companion is unavailable');
       if(ssim)validateSsim(ssim,e.pair.result.metric);

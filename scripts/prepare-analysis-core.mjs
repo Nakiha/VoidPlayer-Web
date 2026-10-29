@@ -1,4 +1,5 @@
 import { validateQualityCore } from '../shared/analysis/quality/analysis-core.ts';
+import { validateXpsnrCore } from '../shared/analysis/quality/analysis-xpsnr.ts';
 import {verifyCoreCapabilities} from './core-capabilities.mjs';
 import { pathToFileURL } from 'node:url';
 import { validateAnalysisCore } from '../shared/analysis/bitstream/core-abi.ts';
@@ -36,7 +37,11 @@ const create = (await import(pathToFileURL(path.join(source, 'voidplayer-analysi
 const core=await create({wasmBinary:await readFile(path.join(source,'voidplayer-analysis.wasm'))});
 validateAnalysisCore(core);
 validateQualityCore(core);
+validateXpsnrCore(core);
 assert.equal(manifest.quality.revision,lock.vmafRevision);
+assert.equal(manifest.quality.xpsnr.abi,lock.xpsnrAbi);
+assert.equal(manifest.quality.xpsnr.revision,lock.xpsnrRevision);
+assert.equal(manifest.quality.xpsnr.filterSha256,lock.xpsnrFilterSha256);
 assert.equal(manifest.quality.avfilter,false);
 await verifyCoreCapabilities(source,lock,'analysis','',core);
 assert.equal(typeof core._vpa_feed_known,'function','Known timestamp feed ABI');

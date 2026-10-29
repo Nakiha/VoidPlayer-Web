@@ -36,7 +36,8 @@ export function installQualityNavigation(signal: AbortSignal) {
   for (const button of root.querySelectorAll<HTMLButtonElement>('[data-quality-section]')) {
     button.addEventListener('click', () => select(button.dataset.qualitySection as QualityView), { signal });
   }
-  const initial = new URL(location.href).searchParams.get('qualityView');
+  const params = new URL(location.href).searchParams;
+  const initial = params.get('qualityView') ?? (params.has('xpsnrComparison') ? 'xpsnr' : null);
   select(views.includes(initial as QualityView) ? initial as QualityView : 'single', false);
   // Register before the metric controllers so their existing scroll/focus happens
   // after the selected panel becomes visible. The controller still checks actor

@@ -979,7 +979,7 @@ export class NativeVmafService {
     };
   }
   evidence(ref: QualityEvidenceRef, actor: string): QualityJobResult {
-    const match = /^(vmaf-[a-f0-9-]{36})-f(\d{1,2})$/.exec(ref.jobId);
+    const match = /^(vmaf-[a-f0-9-]{36})-f(\d{1,4})$/.exec(ref.jobId);
     if (!match)
       throw new AdminError(
         400,

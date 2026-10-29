@@ -158,8 +158,8 @@ export class AnalysisScorer {
         if (!this.reference || !this.distorted)
           throw new Error("Scoring input allocation failed");
       }
-      this.pack(reference, roi, this.reference);
-      this.pack(distorted, roi, this.distorted);
+      packAnalysisPixels(this.core, reference, roi, this.reference);
+      packAnalysisPixels(this.core, distorted, roi, this.distorted);
       this.check(
         this.core._vpa_quality_feed(
           this.reference,
@@ -172,23 +172,6 @@ export class AnalysisScorer {
     } catch (error) {
       this.close();
       throw error;
-    }
-  }
-  private pack(frame: PsnrFrame, roi: PsnrRoi, pointer: number) {
-    const { description: d, pixels } = frame,
-      layout = d.yuv!;
-    const bytes = layout.bitDepth === 8 ? 1 : 2;
-    for (let plane = 0; plane < 3; plane++) {
-      const divisor = plane ? 2 : 1,
-        width = (roi.width / divisor) * bytes;
-      const x = ((d.visibleRect.x + roi.x) / divisor) * bytes,
-        top = (d.visibleRect.y + roi.y) / divisor;
-      const p = layout.planes[plane];
-      for (let y = 0; y < roi.height / divisor; y++) {
-        const offset = p.offset + (top + y) * p.stride + x;
-        this.core.HEAPU8.set(pixels.subarray(offset, offset + width), pointer);
-        pointer += width;
-      }
     }
   }
   heatmaps(index: number) {
@@ -291,5 +274,28 @@ export class AnalysisScorer {
     if (this.reference) this.core._free(this.reference);
     if (this.distorted) this.core._free(this.distorted);
     if (this.opened) this.core._vpa_quality_close();
+  }
+}
+
+export function packAnalysisPixels(
+  core: Pick<QualityCore, "HEAPU8">,
+  frame: PsnrFrame,
+  roi: PsnrRoi,
+  pointer: number,
+) {
+  const { description: d, pixels } = frame,
+    layout = d.yuv!;
+  const bytes = layout.bitDepth === 8 ? 1 : 2;
+  for (let plane = 0; plane < 3; plane++) {
+    const divisor = plane ? 2 : 1,
+      width = (roi.width / divisor) * bytes;
+    const x = ((d.visibleRect.x + roi.x) / divisor) * bytes,
+      top = (d.visibleRect.y + roi.y) / divisor;
+    const p = layout.planes[plane];
+    for (let y = 0; y < roi.height / divisor; y++) {
+      const offset = p.offset + (top + y) * p.stride + x;
+      core.HEAPU8.set(pixels.subarray(offset, offset + width), pointer);
+      pointer += width;
+    }
   }
 }

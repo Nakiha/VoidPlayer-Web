@@ -177,7 +177,7 @@ test('cache suite runs once in its own required job with the same pinned prepara
   for(const engine of ['chromium','webkit']){
     const row=prCases.find(row=>row.id===`browser-xpsnr-comparison-${engine}`);
     assert.deepEqual(row.command,['node','scripts/native/run-xpsnr-tests.mjs','node','scripts/check-xpsnr-comparison-browser.mjs',engine]);
-    assert.equal(row.required,true);assert.deepEqual(row.fixtures,['core']);assert.equal(row.timeoutMs,300000);
+    assert.equal(row.required,true);assert.deepEqual(row.fixtures,['core','analysis-core']);assert.equal(row.timeoutMs,300000);
   }
 
   assert.deepEqual(cases.filter(row=>!prCases.includes(row)).map(row=>row.id),['browser-presented-quality-webkit']);

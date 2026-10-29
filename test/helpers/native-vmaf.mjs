@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';import path from 'node:path';import {createHash,r
 import {loadConfig} from '../../server/config.ts';import {startService} from '../../server/runtime.ts';
 import {waitForAnnotationMedia} from '../../scripts/testing/agent-annotations-ready.mjs';
 export const sha=b=>createHash('sha256').update(b).digest('hex');
-export const until=async(read,predicate,label='Native VMAF did not finish')=>{for(let n=0;n<1200;n++){const r=await read();if(predicate(r))return r;await new Promise(r=>setTimeout(r,10));}assert.fail(label);};
+export const until=async(read,predicate,label='Native VMAF did not finish')=>{for(const deadline=performance.now()+60000;performance.now()<deadline;){const r=await read();if(predicate(r))return r;await new Promise(r=>setTimeout(r,10));}assert.fail(label);};
 export async function nativeComponent(){const directory=path.resolve(process.env.VOIDPLAYER_VMAF_COMPONENT??'.run/components/vmaf');return {directory,manifestSha256:sha(await readFile(path.join(directory,'manifest.json')))};}
 export async function nativeFixture({depth=8,distorted=false,staticDir='public',start=startService,component=false,frames=8,tagged=true,codec=depth===10?'hevc':'h264',containers=['flv','flv'],prepare=true,frameRate,roi,sequence=false}={}){
  const directory=await mkdtemp(path.join(tmpdir(),'vp-native-vmaf-')),media=path.join(directory,'media');await mkdir(media);let service;

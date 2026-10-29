@@ -210,7 +210,7 @@ export class WasmVmafRunner extends NativeVmafRunner {
             "Final index verification exceeds budget",
           );
         value.prepared.work.indexBytes+=verification.indexBytes;value.prepared.work.indexPackets+=verification.indexPackets;
-        value.native.resources.finalVerification = verification;
+        value.native.resources.finalVerification = {indexBytes:verification.indexBytes,indexPackets:verification.indexPackets,elapsedMs:verification.elapsedMs};
         return value;
       },
     );

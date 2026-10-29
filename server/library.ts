@@ -4,7 +4,7 @@ import {NativeCambiService} from './analysis/cambi/service.ts';
 import {NativeCambiRunner} from './analysis/cambi/runner.ts';
 import {TaskCenterService} from './tasks/service.ts';
 import {NativeXpsnrService} from './analysis/xpsnr/service.ts';
-import {NativeXpsnrRunner} from './analysis/xpsnr/runner.ts';
+import {WasmXpsnrRunner} from './analysis/xpsnr/wasm-runner.ts';
 import type {XpsnrComponentConfig} from '../shared/analysis/quality/xpsnr.ts';
 import {QualityReexecutionService} from './analysis/quality/reexecution-service.ts';
 import {NativeVmafService} from './analysis/vmaf/service.ts';
@@ -65,7 +65,7 @@ export class MediaLibraryIndex {
   get qualityVmaf(){if(this.closed)throw new AdminError(503,'VMAF service closed.','vmaf-service-unavailable');if(!this.durableQualityJobsEnabled)throw new AdminError(503,'VMAF needs persistent library storage.','quality-storage-unavailable');return this.vmafService??=new NativeVmafService(this.indexDatabase+'.quality-vmaf.sqlite',new WasmVmafRunner(this,this.coreDirectory,this.options.analysisCoreDir??path.join(path.dirname(this.coreDirectory),'voidplayer-analysis')),this.qualityCorrespondence);}
   private xpsnrService?:NativeXpsnrService;
   get nativeXpsnrDescriptor(){return this.xpsnrService?.descriptor??null;}
-  get qualityXpsnr(){if(this.closed)throw new AdminError(503,'XPSNR service closed.','xpsnr-service-unavailable');if(!this.durableQualityJobsEnabled)throw new AdminError(503,'XPSNR needs persistent library storage.','quality-storage-unavailable');return this.xpsnrService??=new NativeXpsnrService(this.indexDatabase+'.quality-xpsnr.sqlite',new NativeXpsnrRunner(this,this.coreDirectory,this.options.nativeXpsnr),this.qualityCorrespondence);}
+  get qualityXpsnr(){if(this.closed)throw new AdminError(503,'XPSNR service closed.','xpsnr-service-unavailable');if(!this.durableQualityJobsEnabled)throw new AdminError(503,'XPSNR needs persistent library storage.','quality-storage-unavailable');return this.xpsnrService??=new NativeXpsnrService(this.indexDatabase+'.quality-xpsnr.sqlite',new WasmXpsnrRunner(this,this.coreDirectory,this.options.analysisCoreDir??path.join(path.dirname(this.coreDirectory),'voidplayer-analysis')),this.qualityCorrespondence);}
   private closing?: Promise<void>;
   private coreDirectory: string;
   get quality() { return this.pairRunner ??= new LibraryPairRunner(this,this.coreDirectory); }

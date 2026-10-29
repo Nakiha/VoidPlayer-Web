@@ -18,7 +18,7 @@ async function measuredWitnesses(library:any,kind:'single'|'range'|'vmaf'|'xpsnr
     const worker=new Worker(new URL('../helpers/quality-witness-worker.ts',import.meta.url),{workerData:{...data,database:library.indexDatabase,coreDir:(library.quality as any).coreDir,control:new SharedArrayBuffer(8),witnessState:state.buffer},trackUnmanagedFds:true,resourceLimits:{maxOldGenerationSizeMb:256}});
     try{await new Promise<void>((resolve,reject)=>{let reply:any;worker.on('message',v=>reply=v);worker.once('error',reject);worker.once('exit',code=>code===0&&reply?.ok?resolve():reject(Error(JSON.stringify(reply??{code}))));});return Array.from(state);}finally{await worker.terminate();release();}
   };
-  const native={domain:'vmaf',input:nativeInput,snapshot,directory,...(kind==='xpsnr'?{nativeXpsnrContract:plan.contract.nativeXpsnr}:{analysisContract:plan.contract.analysis}),expectedExecutionContract:plan.contract};
+  const native={domain:'vmaf',input:nativeInput,snapshot,directory,analysisContract:plan.contract.analysis,expectedExecutionContract:plan.contract};
   const preflight=await run((kind==='vmaf'||kind==='xpsnr')?{...native,mode:'preflight'}:{domain:'single',mode:'reexecution-preflight',requests,expected:plan.contract});
   assert.equal(preflight[0],1,'read-only metadata validation is one separate witness pass');
   const values:number[][]=[];
@@ -42,7 +42,7 @@ for(const kind of ['single','range','vmaf','xpsnr'] as const)test(`real ${kind}:
   let nativeKilled=false;
   if((kind==='vmaf'||kind==='xpsnr')){
     const nativeRunner=((kind==='xpsnr'?library.qualityXpsnr:library.qualityVmaf) as any).runner,run=nativeRunner.run.bind(nativeRunner);
-    nativeRunner.run=(input:any,snapshot:any,signal:any,hooks:any)=>run(input,snapshot,signal,{...hooks,...(kind==='vmaf'?{prepared:(p:any)=>{hooks.prepared(p);if(!nativeKilled){nativeKilled=true;throw Error('Injected failure after real companion preparation');}}}:{}),process:(p:any)=>{hooks.process(p);if(p&&!nativeKilled){nativeKilled=true;process.kill(p.pid,'SIGKILL');}}});
+    nativeRunner.run=(input:any,snapshot:any,signal:any,hooks:any)=>run(input,snapshot,signal,{...hooks,...({prepared:(p:any)=>{hooks.prepared(p);if(!nativeKilled){nativeKilled=true;throw Error('Injected failure after real companion preparation');}}}),process:(p:any)=>{hooks.process(p);if(p&&!nativeKilled){nativeKilled=true;process.kill(p.pid,'SIGKILL');}}});
   }
   const collection=kind==='single'?'/api/quality/jobs':kind==='range'?'/api/quality/ranges':'/api/quality/'+kind+'/jobs';
   const first=(kind==='range'?await f.json('/api/quality/correspondence-plans/'+f.input.plan.id+'/execute',{digest:f.input.plan.digest}):await f.json(collection,input,'initial-execution')).job,url=collection+'/'+first.id;
@@ -54,7 +54,7 @@ for(const kind of ['single','range','vmaf','xpsnr'] as const)test(`real ${kind}:
     await f.json(url+'/cancel',{});await until(()=>read(),(j:any)=>['cancelled','interrupted','failed','partial'].includes(j.state),'Physical cancellation');gateAt=Infinity;
   }
   const original=await until(()=>read(),(j:any)=>['cancelled','interrupted','failed','partial'].includes(j.state),'Original failure');
-  assert.ok(original.endedAt);if((kind==='vmaf'||kind==='xpsnr')){assert.equal(nativeKilled,true);assert.equal(original.state,'partial');assert.equal(original.metrics.psnr.state,'completed');assert.ok(kind==='xpsnr'?original.executionContract?.nativeXpsnr:original.executionContract?.analysis);}
+  assert.ok(original.endedAt);if((kind==='vmaf'||kind==='xpsnr')){assert.equal(nativeKilled,true);assert.equal(original.state,'partial');assert.equal(original.metrics.psnr.state,'completed');assert.ok(original.executionContract?.analysis);}
   if(kind==='range')assert.equal(original.summary.scoredPairs,1);
   const oldResult=(kind==='vmaf'||kind==='xpsnr')?await f.json(url+'/result'):kind==='range'?await f.json(url+'/results'):null;
   let oldCandidate:any;
@@ -123,7 +123,7 @@ for(const kind of ['single','range','vmaf','xpsnr'] as const)test(`${kind}: SIGK
   const f=await (kind==='xpsnr'?xpsnrFixture:nativeFixture)({distorted:true,containers:['mp4','flv']});let closeProcess=async()=>{};t.after(async()=>{await closeProcess();await f.close();});
   const lib=f.service.library,runner=lib.quality as any,create=runner.createWorker;let gate:Int32Array|undefined;
   runner.createWorker=(data:any)=>{if(data.mode==='measure'&&!gate){gate=new Int32Array(new SharedArrayBuffer(20));return new Worker(new URL('../helpers/quality-phase-worker.ts',import.meta.url),{workerData:{...data,hangPhase:'decode',phaseState:gate.buffer}});}return create(data);};
-  if((kind==='vmaf'||kind==='xpsnr')){const r=((kind==='xpsnr'?lib.qualityXpsnr:lib.qualityVmaf) as any).runner,run=r.run.bind(r);r.run=(...args:any[])=>run(args[0],args[1],args[2],{...args[3],...(kind==='vmaf'?{prepared:(p:any)=>{args[3].prepared(p);throw Error('Injected failure after real companion preparation');}}:{}),process:(p:any)=>{args[3].process(p);if(p)process.kill(p.pid,'SIGKILL');}});}
+  if((kind==='vmaf'||kind==='xpsnr')){const r=((kind==='xpsnr'?lib.qualityXpsnr:lib.qualityVmaf) as any).runner,run=r.run.bind(r);r.run=(...args:any[])=>run(args[0],args[1],args[2],{...args[3],...({prepared:(p:any)=>{args[3].prepared(p);throw Error('Injected failure after real companion preparation');}}),process:(p:any)=>{args[3].process(p);if(p)process.kill(p.pid,'SIGKILL');}});}
   const range=lib.qualityCorrespondence.result(f.input.plan.id,f.actor).rangePlan!.input;
   const collection=kind==='single'?'/api/quality/jobs':kind==='range'?'/api/quality/ranges':'/api/quality/'+kind+'/jobs';
   const body=kind==='single'?{schema:'voidplayer-psnr-frame-job',version:1,client:{id:'crash-original',kind:'agent'},request:range.pairs[0]}:kind==='range'?range:f.input;
@@ -149,7 +149,7 @@ for(const kind of ['single','range','vmaf','xpsnr'] as const)test(`${kind}: chan
   const {cp,mkdir,truncate}=await import('node:fs/promises'),{openIndexDatabase}=await import('../../server/sqlite.ts');
   const f=await (kind==='xpsnr'?xpsnrFixture:nativeFixture)({distorted:true,containers:['mp4','flv']});t.after(()=>f.close());const lib=f.service.library,runner=lib.quality as any,create=runner.createWorker;let gate:Int32Array|undefined,measures=0;
   runner.createWorker=(data:any)=>{if(data.mode==='measure'){measures++;if(!gate){gate=new Int32Array(new SharedArrayBuffer(20));return new Worker(new URL('../helpers/quality-phase-worker.ts',import.meta.url),{workerData:{...data,hangPhase:'decode',phaseState:gate.buffer}});}}return create(data);};
-  if((kind==='vmaf'||kind==='xpsnr')){const r=((kind==='xpsnr'?lib.qualityXpsnr:lib.qualityVmaf) as any).runner,run=r.run.bind(r);r.run=(...args:any[])=>run(args[0],args[1],args[2],{...args[3],...(kind==='vmaf'?{prepared:(p:any)=>{args[3].prepared(p);throw Error('Injected failure after real companion preparation');}}:{}),process:(p:any)=>{args[3].process(p);if(p)process.kill(p.pid,'SIGKILL');}});}
+  if((kind==='vmaf'||kind==='xpsnr')){const r=((kind==='xpsnr'?lib.qualityXpsnr:lib.qualityVmaf) as any).runner,run=r.run.bind(r);r.run=(...args:any[])=>run(args[0],args[1],args[2],{...args[3],...({prepared:(p:any)=>{args[3].prepared(p);throw Error('Injected failure after real companion preparation');}}),process:(p:any)=>{args[3].process(p);if(p)process.kill(p.pid,'SIGKILL');}});}
   const collection=kind==='single'?'/api/quality/jobs':kind==='range'?'/api/quality/ranges':'/api/quality/'+kind+'/jobs',range=lib.qualityCorrespondence.result(f.input.plan.id,f.actor).rangePlan!.input;
   const accepted=kind==='range'?await f.json('/api/quality/correspondence-plans/'+f.input.plan.id+'/execute',{digest:f.input.plan.digest}):await f.json(collection,kind==='single'?{schema:'voidplayer-psnr-frame-job',version:1,client:{id:'frozen-negatives',kind:'agent'},request:range.pairs[0]}:f.input,'negative-original');const url=collection+'/'+accepted.job.id;
   const read=async()=>{const r=await f.json(url);return kind==='range'?r.job:r;};if(kind==='single'||kind==='range'){await until(()=>gate&&Atomics.load(gate,0),Boolean);await f.json(url+'/cancel',{});}await until(read,(j:any)=>['failed','cancelled','partial'].includes(j.state));
@@ -161,10 +161,9 @@ for(const kind of ['single','range','vmaf','xpsnr'] as const)test(`${kind}: chan
     const c=(lib.qualityCorrespondence as any).db,row=c.prepare('SELECT body FROM quality_correspondence_plans WHERE id=?').get(f.input.plan.id),body=JSON.parse(String(row.body));body.resultDigest='f'.repeat(64);try{c.prepare('UPDATE quality_correspondence_plans SET body=? WHERE id=?').run(JSON.stringify(body),f.input.plan.id);await blocked();}finally{c.prepare('UPDATE quality_correspondence_plans SET body=? WHERE id=?').run(row.body,f.input.plan.id);}
   }
   if((kind==='vmaf'||kind==='xpsnr')){
-    if(kind==='vmaf'){const r=(lib.qualityVmaf as any).runner,prior=r.analysisDir,copy=path.join(f.directory,'changed-analysis');await cp(prior,copy,{recursive:true});r.analysisDir=copy;try{await truncate(path.join(copy,'voidplayer-analysis.wasm'),8);await blocked();}finally{r.analysisDir=prior;}}else{
-    const r=((kind==='xpsnr'?lib.qualityXpsnr:lib.qualityVmaf) as any).runner,config=r.config,copy=path.join(f.directory,'changed-model');await cp(config.directory,copy,{recursive:true,dereference:true,filter:(p:string)=>!p.includes('/build')});const model=path.join(copy,kind==='xpsnr'?'ffmpeg-xpsnr':'vmaf_v0.6.1.json');await writeFile(model,Buffer.concat([await readFile(model),Buffer.from([0])]));try{r.config={...config,directory:copy};await blocked();}finally{r.config=config;}
-      if(kind==='xpsnr'){try{r.stopUncertain=true;const p=await f.json(url+'/reexecution-plan',{reason});assert.ok(p.blocks.some((b:any)=>b.code==='xpsnr-service-unavailable'&&b.next==='wait-and-replan'));}finally{r.stopUncertain=false;}}
-    }
+    const r=((kind==='xpsnr'?lib.qualityXpsnr:lib.qualityVmaf) as any).runner,prior=r.analysisDir,copy=path.join(f.directory,'changed-analysis');await cp(prior,copy,{recursive:true});r.analysisDir=copy;try{await truncate(path.join(copy,'voidplayer-analysis.wasm'),8);await blocked();}finally{r.analysisDir=prior;}
+    if(kind==='xpsnr'){try{r.stopUncertain=true;const p=await f.json(url+'/reexecution-plan',{reason});assert.ok(p.blocks.some((b:any)=>b.code==='xpsnr-service-unavailable'&&b.next==='wait-and-replan'));}finally{r.stopUncertain=false;}}
+
   }else{
     const core=runner.coreDir,copy=path.join(f.directory,'changed-core');await mkdir(copy);for(const name of ['voidplayer-core.js','voidplayer-core.wasm','capabilities.json','provenance.json'])await cp(path.join(core,name),path.join(copy,name));try{runner.coreDir=copy;const js=path.join(copy,'voidplayer-core.js');await writeFile(js,Buffer.concat([await readFile(js),Buffer.from('\n')]));await blocked();await truncate(js,33*1024*1024);await blocked();}finally{runner.coreDir=core;}
     try{runner.stopFailed=true;const p=await f.json(url+'/reexecution-plan',{reason});assert.ok(p.blocks.some((b:any)=>b.code==='physical-stop-unconfirmed'&&b.next==='wait-and-replan'));}finally{runner.stopFailed=false;}

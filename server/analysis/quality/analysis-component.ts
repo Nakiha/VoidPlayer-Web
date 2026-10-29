@@ -3,6 +3,11 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { validateQualityCore } from "../../../shared/analysis/quality/analysis-core.ts";
+import { validateXpsnrCore } from "../../../shared/analysis/quality/analysis-xpsnr.ts";
+import {
+  XPSNR_SOURCE_REVISION,
+  XPSNR_FILTER_SHA256,
+} from "../../../shared/analysis/quality/xpsnr.ts";
 import type { AnalysisScoringComponent } from "../../../shared/analysis/quality/scoring-component.ts";
 import {
   VMAF_MODELS,
@@ -13,7 +18,10 @@ import {
 const sha = (value: Uint8Array) =>
   createHash("sha256").update(value).digest("hex");
 /** Host-selected analysis artifact only. HTTP never supplies paths or binaries. */
-export function analysisComponent(directory: string) {
+export function analysisComponent(
+  directory: string,
+  metric: "vmaf" | "xpsnr" = "vmaf",
+) {
   try {
     const files = [
       "manifest.json",
@@ -32,6 +40,10 @@ export function analysisComponent(directory: string) {
       manifest.quality.avfilter !== false ||
       manifest.quality.cambiWindowSize !== 63 ||
       manifest.quality.heatmapAbi !== 1 ||
+      (metric === "xpsnr" &&
+        (manifest.quality.xpsnr?.abi !== 1 ||
+          manifest.quality.xpsnr.revision !== XPSNR_SOURCE_REVISION ||
+          manifest.quality.xpsnr.filterSha256 !== XPSNR_FILTER_SHA256)) ||
       manifest.threading !== "single" ||
       manifest.libraries.includes("avfilter") ||
       provenance.source.revision !== manifest.revision ||
@@ -53,13 +65,17 @@ export function analysisComponent(directory: string) {
       binarySha256: sha(data["voidplayer-analysis.wasm"]),
       glueSha256: sha(data["voidplayer-analysis.js"]),
       provenanceSha256: sha(data["provenance.json"]),
-      sourceRevision: VMAF_SOURCE_REVISION,
+      sourceRevision:
+        metric === "xpsnr" ? XPSNR_SOURCE_REVISION : VMAF_SOURCE_REVISION,
       coreRevision: manifest.revision,
     };
     return {
       component,
       bytes: data["voidplayer-analysis.wasm"],
-      version: manifest.quality.version as string,
+      version:
+        metric === "xpsnr"
+          ? `xpsnr-pixel-${XPSNR_SOURCE_REVISION}`
+          : (manifest.quality.version as string),
     };
   } catch (error) {
     throw new VmafError(
@@ -72,7 +88,9 @@ export async function loadAnalysisScoring(
   directory: string,
   expected?: AnalysisScoringComponent,
 ) {
-  const artifact = analysisComponent(directory);
+  const metric =
+    expected?.sourceRevision === XPSNR_SOURCE_REVISION ? "xpsnr" : "vmaf";
+  const artifact = analysisComponent(directory, metric);
   if (
     expected &&
     JSON.stringify(expected) !== JSON.stringify(artifact.component)
@@ -88,5 +106,6 @@ export async function loadAnalysisScoring(
   ).default;
   const core = await create({ wasmBinary: artifact.bytes });
   validateQualityCore(core);
+  if (metric === "xpsnr") validateXpsnrCore(core);
   return { ...artifact, core };
 }

@@ -225,3 +225,56 @@ analysis-core，仍包含旧 XPSNR 的混合套件暂留原平台范围。
   CAMBI末次产物变更负向用例在Node和Bun各自通过。
 
 XPSNR旧原生路径和最终发布矩阵尚未收完，本阶段不关闭roadmap。
+
+## Stage 8 — XPSNR joins the existing analysis artifact
+
+The analysis source pin is now `19e755f65003750873f88587369f3a1f340e14c1`.
+Its scalar pixel-only XPSNR adapter follows FFmpeg revision
+`8998a1a670c81a04d144c36f9e2d3aa680c10720` and records the upstream filter and
+adapter hashes. No avfilter, frame synchronization, demuxing, PTS rewrite,
+native executable, or third WASM artifact is used for product scoring.
+The host supplies ordered reference/distorted planes and the exact frame rate;
+one clip context retains temporal history through final pooling.
+
+XPSNR now uses the same source identity, complete-GOP streaming, fixed even ROI,
+rational cadence, physical Worker exit and final source/artifact verification
+as VMAF. The selected interval can contain up to 1024 frames. Frame and pooled
+scores retain full precision with explicit positive infinity; the old rounded
+CLI format remains readable as historical evidence. Equivalent rational frame
+rates normalize to one recipe. Comparison pages verify original clocks, and
+long-clip evidence retains digest-bound first/selected/last witnesses. Fixed a
+shared API defect that had restricted VMAF evidence retrieval to two-digit frame
+indices. Final verification accounting stores only costs, not another copy of
+the sequence.
+
+Independent upstream validation: 20 raw clips cover 8/10-bit, 24/29.97/60 fps,
+identical/near/noisy signals and 1080p/4K; four 4096-frame runs verify bounded
+heap. Web fixtures contain 68 separately generated official CLI clips, including
+192-frame reordered GOPs and cropped regions. Four-decimal CLI output is
+compared with an explicit 0.000051 dB tolerance; expected values never come from
+the product WASM. The fixture generator is an explicit maintainer tool.
+
+Validation during integration: Node HTTP/reexecution 35/35; real Worker
+lifecycle regression across VMAF/CAMBI/XPSNR 56/56; Bun XPSNR HTTP/lifecycle and
+all-metric reexecution 57/57; XPSNR unit/contract 16/16. WebKit 10-bit submission,
+response-loss replay, candidate evidence, isolated viewer and actor fencing
+passed. A macOS ARM64 standalone preview passed 11 XPSNR container/codec cases
+with empty PATH and an unrelated working directory. Final clean packaging and
+cross-platform CI remain subsequent release gates. Historical Linux-native
+fixture generators and evidence are retained until the engineering cleanup
+stage; they are no longer installed by the test wrappers or production service.
+
+Stage 8 final follow-up: WebKit multi-version comparison passed 41 assertions,
+including candidate-viewer return, exact pinned pages, identity fencing and
+explicit owner restoration. Return links now select the XPSNR panel, with a
+fallback for older addressed comparison URLs. The test restores HttpOnly
+identity only after draining prior responses, avoiding an old response replacing
+the requested test identity. The cold HTTP Agent workflow now runs VMAF and
+XPSNR on every platform without native fixtures or skips: Node 9/9 passed.
+The full contract run was 42/43 because the release matrix still expected only
+the playback fixture for comparison; that assertion now requires both artifacts
+and its 20-test file passes. A final XPSNR HTTP run was 22/23 when formatting
+changed the producer source hash between scoring and final verification; the
+expected identity refusal was reproduced as a partial result, and the affected
+case passed with stable files. No changed-source result was published.
+Upstream PR 14 CI passed both analysis and playback/packet-ABI jobs at 19e755f.

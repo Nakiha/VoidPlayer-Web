@@ -1,3 +1,4 @@
+import { normalizeClock } from "../../../shared/media/indexing/rational-clock.ts";
 import { createHash } from "node:crypto";
 import { parentPort, workerData } from "node:worker_threads";
 import { AnalysisScorer } from "../../../shared/analysis/quality/analysis-core.ts";
@@ -15,6 +16,21 @@ import type {
 } from "../../../shared/analysis/quality/cambi.ts";
 import { runVmafDecode } from "../vmaf/decode-task.ts";
 
+import {
+  AnalysisXpsnrScorer,
+  validateXpsnrCore,
+} from "../../../shared/analysis/quality/analysis-xpsnr.ts";
+import {
+  XPSNR_RECIPE,
+  XPSNR_FILTER_SHA256,
+  xpsnrMinimum,
+  canonicalJson,
+} from "../../../shared/analysis/quality/xpsnr.ts";
+import type {
+  XpsnrNativeResult,
+  XpsnrDb,
+} from "../../../shared/analysis/quality/xpsnr.ts";
+let xpsnr: AnalysisXpsnrScorer | undefined;
 let scorer: AnalysisScorer | undefined;
 try {
   const started = performance.now();
@@ -56,12 +72,10 @@ try {
           index,
         );
         memory();
-        const maps = scorer
-          .heatmaps(index)
-          .map((map) => ({
-            ...map,
-            sha256: createHash("sha256").update(map.bytes).digest("hex"),
-          }));
+        const maps = scorer.heatmaps(index).map((map) => ({
+          ...map,
+          sha256: createHash("sha256").update(map.bytes).digest("hex"),
+        }));
         const { frames: facts, ...header } = prepared;
         // One frame in flight. Persistence acknowledges before the next decode,
         // so neither Worker messages nor heatmap storage grows without backpressure.
@@ -99,6 +113,83 @@ try {
         heapBytes: scorer.heapBytes,
       },
       outputBytes: prepared.output.heatBytes,
+    };
+    parentPort!.postMessage({ ok: true, value: { prepared, native } });
+  } else if (workerData.metric === "xpsnr") {
+    validateXpsnrCore(loaded.core);
+    const core = loaded.core;
+    const cadence = normalizeClock(
+      workerData.input.cadence ?? {
+        ticks: workerData.input.cadenceUs,
+        timescale: 1000000,
+      },
+    );
+    const rate = { numerator: cadence.timescale, denominator: cadence.ticks };
+    const prepared = (await runVmafDecode(
+      workerData,
+      (frames, total) =>
+        parentPort!.postMessage({ type: "progress", frames, total }),
+      (contract) =>
+        parentPort!.postMessage({ type: "execution-contract", contract }),
+      undefined,
+      (reference, distorted, index, total, roi) => {
+        xpsnr ??= new AnalysisXpsnrScorer(core, { frames: total, rate });
+        xpsnr.feed(reference, distorted, roi, index);
+        memory();
+      },
+    )) as VmafPrepared;
+    if (!xpsnr) throw Error("Empty XPSNR sequence");
+    const scores = xpsnr.finish();
+    const db = (value: number): XpsnrDb =>
+      value === Infinity
+        ? { kind: "positive-infinity", db: null }
+        : { kind: "finite", db: value };
+    const planes = ([y, u, v]: [number, number, number]) => ({
+      y: db(y),
+      u: db(u),
+      v: db(v),
+    });
+    const frames = scores.frames.map((f) => {
+      const p = planes(f.planes);
+      return { index: f.index, planes: p, minimum: xpsnrMinimum(p) };
+    });
+    const pool = planes(scores.pooled),
+      pooled = { planes: pool, minimum: xpsnrMinimum(pool) };
+    const text = canonicalJson({ frames, pooled });
+    const native: XpsnrNativeResult = {
+      frames,
+      pooled,
+      statistics: {
+        format: "analysis-xpsnr-full-precision-json-v1",
+        text,
+        sha256: createHash("sha256").update(text).digest("hex"),
+      },
+      version: loaded.version,
+      component: { ...loaded.component, filterSha256: XPSNR_FILTER_SHA256 },
+      recipe: {
+        id: XPSNR_RECIPE,
+        threads: 1,
+        cpuFlags: 0,
+        inputOrder: "reference-distorted",
+        pooling: "official-square-mean-root-with-low-distortion-log-fallback",
+        preprocessing: "none",
+        range: "limited",
+        color: "bt709-sdr",
+        roi: prepared.sequence.pairs[0].roi,
+        pixelFormat:
+          prepared.geometry.bitDepth === 8 ? "yuv420p" : "yuv420p10le",
+        ...prepared.geometry,
+        cadenceUs: prepared.sequence.cadenceUs,
+        cadence,
+        frameRate: rate,
+        boundary: "clip-reset-and-final-flush",
+        rawPacking: "visible-y-u-v-tight-little-endian-v1",
+      },
+      resources: {
+        executor: "analysis-wasm",
+        wallMs: Math.ceil(performance.now() - started),
+        heapBytes: xpsnr.heapBytes,
+      },
     };
     parentPort!.postMessage({ ok: true, value: { prepared, native } });
   } else {
@@ -164,5 +255,6 @@ try {
   });
 } finally {
   scorer?.close();
+  xpsnr?.close();
 }
 parentPort!.on("message", () => {});

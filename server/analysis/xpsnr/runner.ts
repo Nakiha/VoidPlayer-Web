@@ -84,7 +84,7 @@ export class NativeXpsnrRunner{
    '-hide_banner','-nostdin','-loglevel','info','-cpuflags','0','-filter_complex_threads','1','-threads','1',...raw,'-i','reference.yuv','-threads','1',...raw,'-i','distorted.yuv',
    '-filter_complex','[0:v][1:v]xpsnr=stats_file=result.txt:shortest=1:repeatlast=0[out]','-map','[out]','-threads','1','-f','null','-'];
   const child=spawn(c.supervisor,args,{cwd:directory,detached:true,stdio:['pipe','pipe','pipe'],env:{LANG:'C',LC_ALL:'C'}});
-  let stdout='',stderr='',stdoutBytes=0,stderrBytes=0,reason:unknown,nativePid:number|undefined,usage:XpsnrNativeResult['resources']|undefined,killTimer:ReturnType<typeof setTimeout>|undefined;
+  let stdout='',stderr='',stdoutBytes=0,stderrBytes=0,reason:unknown,nativePid:number|undefined,usage:Extract<XpsnrNativeResult['resources'],{exitCode:number}>|undefined,killTimer:ReturnType<typeof setTimeout>|undefined;
   const stop=(why:unknown)=>{if(reason===undefined)reason=why;if(!child.pid)return;child.kill('SIGTERM');killTimer??=setTimeout(()=>{try{process.kill(-child.pid!,'SIGKILL');}catch{}},1000);};
   const abort=()=>stop(signal.reason);signal.addEventListener('abort',abort,{once:true});if(signal.aborted)abort();
   const collect=(kind:'stdout'|'stderr',chunk:Buffer)=>{
