@@ -1,3 +1,4 @@
+import {openIndexDatabase} from '../../server/sqlite.ts';
 import {createHash} from 'node:crypto';
 import {cambiEvidenceList} from '../../shared/review/cambi-evidence.ts';
 import test from "node:test";
@@ -223,6 +224,12 @@ test(
       ids.push(job.id);
       assert.equal((await f.wait(job.id)).state, "completed");
     }
+    const storage=openIndexDatabase(f.service.library.indexDatabase+'.quality-vmaf.sqlite');
+    t.after(()=>storage.close());
+    const retained=(id:string)=>storage.prepare('SELECT reserved,body,snapshot,result FROM quality_vmaf_jobs WHERE id=?').get(id)!;
+    const last=retained(ids.at(-1)!);
+    assert.equal(Number(last.reserved),1024+Buffer.byteLength(String(last.body))+Buffer.byteLength(String(last.snapshot))+Buffer.byteLength(String(last.result)),'last terminal job settles without requiring another submission');
+    const beforeRelease=Number(retained(ids[0]).reserved);
     const tasks = await f.json("/api/tasks?kind=vmaf&limit=50");
     assert.equal(tasks.total, 20);
     assert.ok(tasks.entries.some((e: any) => e.id === ids[0]));
@@ -231,6 +238,9 @@ test(
       {},
     );
     assert.equal(released.receiptRetained, true);
+    const kept=retained(ids[0]);
+    assert.equal(Number(kept.reserved),1024+Buffer.byteLength(String(kept.body))+Buffer.byteLength(String(kept.snapshot)));
+    assert.ok(Number(kept.reserved)>0&&Number(kept.reserved)<beforeRelease);
     assert.equal(
       (await f.json("/api/quality/vmaf/jobs", f.input, "batch-0")).job.id,
       ids[0],

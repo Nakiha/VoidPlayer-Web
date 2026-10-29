@@ -13,7 +13,9 @@ export interface ServiceConfig {
   staticDir: string; logsDir: string | null; allowLocalReveal: boolean; indexTtlMs: number; indexWatch: boolean; analysisConcurrency: number;
   /** Legacy configuration, retained for compatibility; all users are trusted. */
   adminUsers: string[];
+  /** Deprecated: accepted for old config files, ignored by analysis WASM scoring. */
   nativeVmaf?:VmafComponentConfig;
+  /** Deprecated: accepted for old config files, ignored by analysis WASM scoring. */
   nativeXpsnr?:XpsnrComponentConfig;
   tls?: TlsConfig | null;
   httpPort?: number | null;

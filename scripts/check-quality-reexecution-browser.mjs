@@ -5,7 +5,6 @@ import {Worker} from 'node:worker_threads';
 import {randomUUID} from 'node:crypto';
 import {chromium,webkit} from 'playwright';
 import {nativeFixture,until} from '../test/helpers/native-vmaf.mjs';
-import {xpsnrComponent} from '../test/helpers/native-xpsnr.mjs';
 import {startService} from '../server/runtime.ts';
 import {chooseTestGuest} from './test-identity.mjs';
 import {installAdminObservationLifecycle,drainAdminObservations} from './testing/admin-observation-lifecycle.mjs';
@@ -18,7 +17,7 @@ const check=(name,value)=>{assert.ok(value,name);checks.push(name);};
 const defer=()=>{let resolve;const promise=new Promise(r=>resolve=r);const d={promise,resolve};held.push(d);return d;};
 const bounded=async(promise,label)=>{let timer;try{return await Promise.race([promise,new Promise((_,reject)=>timer=setTimeout(()=>reject(Error('Bounded gate: '+label+' '+phase)),15000))]);}finally{clearTimeout(timer);}};
 try{
-  f=await nativeFixture({distorted:true,containers:['mp4','flv'],staticDir:'dist',start:async config=>{config.nativeXpsnr=await xpsnrComponent();return startService(config,false);}});
+  f=await nativeFixture({distorted:true,containers:['mp4','flv'],staticDir:'dist'});
   const library=f.service.library,runner=library.quality,create=runner.createWorker;let measureCount=0,gateAt=Infinity,state;
   runner.createWorker=data=>{if(data.mode==='measure'&&++measureCount===gateAt){state=new Int32Array(new SharedArrayBuffer(20));gatedWorker=new Worker(new URL('../test/helpers/quality-phase-worker.ts',import.meta.url),{workerData:{...data,hangPhase:'decode',phaseState:state.buffer}});return gatedWorker;}return create(data);};
   const frozen=library.qualityCorrespondence.result(f.input.plan.id,f.actor).rangePlan.input;
@@ -26,7 +25,7 @@ try{
   const inputs={single:{schema:'voidplayer-psnr-frame-job',version:1,client:{id:'gui-reexecution',kind:'agent'},request:pair},range:{...frozen,client:{id:'gui-reexecution',kind:'agent'},pairs:frozen.pairs.map(p=>({...p,ssim:{variant:'ffmpeg-uniform-8x8-step4-v1'},spatial:{blockWidth:64,blockHeight:48}}))},vmaf:f.input,xpsnr:(({model,...input})=>({...input,schema:'voidplayer-native-xpsnr-job',recipe:'ffmpeg-xpsnr-reference-first-temporal-v1'}))(f.input)};
   const paths={single:'/api/quality/jobs',range:'/api/quality/ranges',vmaf:'/api/quality/vmaf/jobs',xpsnr:'/api/quality/xpsnr/jobs'},originals={},snapshots={};
   const read=async(kind,id)=>{const r=await f.json(paths[kind]+'/'+id);return kind==='range'?r.job:r;};
-  for(const service of [library.qualityVmaf,library.qualityXpsnr]){let crashNative=true;const nativeRunner=service.runner,nativeRun=nativeRunner.run.bind(nativeRunner);nativeRunner.run=(input,snapshot,signal,hooks)=>nativeRun(input,snapshot,signal,{...hooks,process:p=>{hooks.process(p);if(p&&crashNative){crashNative=false;process.kill(p.pid,'SIGKILL');}}});}
+  for(const service of [library.qualityVmaf,library.qualityXpsnr]){let crashNative=true;const nativeRunner=service.runner,nativeRun=nativeRunner.run.bind(nativeRunner);nativeRunner.run=(input,snapshot,signal,hooks)=>nativeRun(input,snapshot,signal,{...hooks,prepared:p=>{hooks.prepared(p);if(crashNative){crashNative=false;throw Error('Injected failure after real companion preparation');}}});}
   for(const kind of ['single','range','vmaf','xpsnr']){
     phase='prepare-original-'+kind;
     if((kind==='single'||kind==='range')){gateAt=measureCount+(kind==='range'?2:1);state=undefined;}

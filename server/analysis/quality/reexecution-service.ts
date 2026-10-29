@@ -20,7 +20,6 @@ export class QualityReexecutionService{
   private active=new Set<Promise<unknown>>();
   constructor(library:MediaLibraryIndex){this.library=library;}
   private service(kind:ReexecutionKind){return kind==='single'?this.library.qualityJobs:kind==='range'?this.library.qualityRanges:kind==='xpsnr'?this.library.qualityXpsnr:kind==='cambi'?this.library.qualityCambi:this.library.qualityVmaf;}
-  links(kind:ReexecutionKind,actor:string){return this.service(kind).reexecutionLinks(actor);}
   private job(kind:ReexecutionKind,id:string,actor:string){const service=this.service(kind),job=service.get(id,actor);if(job.retryOf){const receipt=service.reexecutionReceipt(job.retryOf.retryOf,actor);if(!receipt||receipt.jobId!==id||executionDigest(receipt.lineage)!==executionDigest(job.retryOf))throw new AdminError(409,'Stored execution lineage changed.','stored-reexecution-invalid');}return job;}
   private describe(kind:ReexecutionKind,id:string,actor:string):Description{
     const base=(budget:Record<string,number>,pairs:number,reservation:Record<string,unknown>):ReexecutionCost=>({scope:'entire-frozen-input-from-start',selectedPairs:pairs,reusesPreviousScores:false,budget,reservation:{...reservation,executionWitness:executionWitnessReservation(kind,pairs),witness:{maxCoreAssetBytes:REEXECUTION_LIMITS.maxReadBytes,maxProducerBytes:REEXECUTION_LIMITS.maxProducerBytes,maxIndexBytes:REEXECUTION_LIMITS.maxIndexBytes,maxIndexPackets:REEXECUTION_LIMITS.maxIndexPackets,maxElapsedMs:REEXECUTION_LIMITS.maxElapsedMs},newAttemptPerJob:1}});

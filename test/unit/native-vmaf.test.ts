@@ -1,6 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
 import {vmafInput,vmafSequence,VMAF_LIMITS,VMAF_CAPABILITY} from '../../shared/analysis/quality/vmaf.ts';
-import {verifyVmafComponent} from '../../server/analysis/vmaf/component.ts';
 import {agentManifest,serviceCapabilities} from '../../shared/service/agent.ts';
 const input=()=>({schema:'voidplayer-native-vmaf-job',version:1,client:{id:'test',kind:'agent'},plan:{id:randomUUID(),attemptId:randomUUID(),digest:'a'.repeat(64)},model:'vmaf_v0_6_1',cadenceUs:250000,metrics:{psnr:true,ssim:false},budget:{maxRawBytes:1048576,maxElapsedMs:30000,nativeCpuSeconds:1,nativeMemoryBytes:536870912}});
 test('native recipe normalizes exact trusted references; arbitrary executable/model paths and budget escape reject',()=>{
@@ -19,9 +18,8 @@ test('optional native capability never claims installed platform by code presenc
  const missing=agentManifest(common);assert.equal(missing.capabilities.find(c=>c.id==='quality.vmaf')?.enabled,false);assert.deepEqual(missing.qualityVmaf.models,VMAF_CAPABILITY.models);
  const enabled=agentManifest({...common,nativeVmaf:{enabled:true,reason:null}});assert.equal(enabled.capabilities.find(c=>c.id==='quality.vmaf')?.readiness,'per-source');assert.equal(enabled.qualityVmaf.buildsIndexes,false);assert.equal(enabled.qualityVmaf.observerDisconnectCancels,false);assert.equal(enabled.qualityVmaf.spatial,'no-VMAF-heatmap-or-localized-defect');assert.deepEqual(enabled.qualityJobs.metrics,['psnr','ssim']);
 });
-test('unconfigured component fails closed without PATH fallback',async()=>{await assert.rejects(verifyVmafComponent(undefined,'vmaf_v0_6_1'),{code:'component-unavailable'});});
 
-test('invalid durable native process witnesses never authorize a process signal',async()=>{if(process.platform!=='linux')return;const {stopOwnedNative}=await import('../../server/analysis/vmaf/runner.ts');for(const pid of [0,-1,1.5,NaN])await assert.rejects(stopOwnedNative({pid,startTicks:'1',bootId:'a'.repeat(36)}),{code:'stop-uncertain'});await assert.rejects(stopOwnedNative({pid:1,startTicks:'1',bootId:''}),{code:'stop-uncertain'});});
+test('invalid durable native process witnesses never authorize a process signal',async()=>{if(process.platform!=='linux')return;const {stopOwnedNative}=await import('../../server/analysis/quality/legacy-process.ts');for(const pid of [0,-1,1.5,NaN])await assert.rejects(stopOwnedNative({pid,startTicks:'1',bootId:'a'.repeat(36)}),{code:'stop-uncertain'});await assert.rejects(stopOwnedNative({pid:1,startTicks:'1',bootId:''}),{code:'stop-uncertain'});});
 
 test('strict MP4 presentation eligibility retains raw clocks/table/producer and refuses substituted or inexact facts',async()=>{
  const {readFile}=await import('node:fs/promises'),{createHash}=await import('node:crypto');

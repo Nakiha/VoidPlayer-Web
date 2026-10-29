@@ -1,115 +1,68 @@
-# Native single-source CAMBI screening (#116)
+# Single-source CAMBI screening
 
-> 默认执行器已迁移至现有分析 WASM core。当前架构和阶段验收见 [analysis-wasm-scoring.md](analysis-wasm-scoring.md)；本文中的 Linux 原生组件、临时 YUV 和 supervisor 描述保留为历史执行器契约，不代表新任务路径。
+CAMBI uses the existing analysis WASM core and pinned Netflix/vmaf v3.0.0 revision
+`17a67b238ce0539bdeafdc95961abac64fa16ea8`. It is no-reference banding screening:
+no C plan, reference relation or VMAF prediction model. Higher means more banding,
+not a calibrated product pass/fail. See [architecture](analysis-wasm-scoring.md)
+and [verification stages](quality-convergence.md). This historical URL is retained.
 
-This work uses the optional Linux x64 component installed for [native VMAF](native-vmaf.md), pinned to Netflix/vmaf v3.0.0, revision `17a67b238ce0539bdeafdc95961abac64fa16ea8`. The CAMBI command executes `--no_prediction --feature cambi`; no VMAF model is loaded and full-reference mode is disabled. The public request identifies one source; the CLI receives that same raw file in both API slots because the upstream feature API requires two paths.
+## Recipe and coverage
 
-CAMBI is a no-reference, uncalibrated banding indication: higher means more detected banding, zero is a completed numeric result, and neither is a product quality pass/fail. Each frame is independent, so deterministic stride sampling is allowed and unsampled pictures remain explicit. No temporal tracking or reference integrity certification is claimed; decoder concealment detection is unavailable.
+Fixed eotf=bt1886, window63, topk0.6, tvi_threshold0.019, max_log_contrast2,
+full_ref=false, internal10bit, source geometry/depth, single-thread scalar algorithm.
+Five official gray16le heatmaps are returned in memory with unchanged scale math.
+They contain upstream scaled c-values, not cropped-region CAMBI recomputation.
 
-Here `referenceIntegrity=not-certified` concerns completeness of the bitstream reference-picture graph; it does not waive evidence-reference checks or certify subjective content. Source/version/cache/producer/sample-table identity, job/attempt/digest, exact frame/scale/region and original raw/heatmap hashes remain mandatory. Changed or incomplete evidence references refuse inspection/publication rather than inheriting verification.
+Trusted complete FLV/Enhanced FLV H264/HEVC8/10 and strict self-contained
+nonfragmented MP4 avc1 H2648/hvc1 HEVC8/10; original limited BT.709 SDR YUV420,
+square unrotated uncropped geometry, even dimensions>=64, long edge>=320,
+maximum1920x1080. Select a half-open source-PTS interval and explicit AU stride:
+at most4096 interval AUs/1024 selected pictures. MP4 samples are then fed in exact
+rational presentation order. Negative/VFR/HDR and ambiguous clocks are refused.
+Unsampled and unsupported pictures are explicit coverage, never zero scores.
+There is no temporal object tracking or whole-file claim for sparse sampling.
 
-## Verified component boundary
+## HTTP and GUI
 
-The installed scalar v3.0.0 binary was executed on a synthetic 640×360 8-bit YUV420 input. It produced one CAMBI score and five upstream heatmaps with exact dimensions 640×360, 320×180, 160×90, 80×45 and 40×23. Each file contains row-major native uint16, little endian on the only supported x64 platform; successive frame planes are concatenated. Upstream rounds each downscaled dimension upward and writes at `frame * width * height * 2`. Its values are scaled internal c-values, not independent cropped-region CAMBI scores.
+Read `/api/quality/cambi/capability`: artifact hashes are verified there; the pixel
+ABI is checked at execution. Missing artifacts mean unavailable, never zero.
+Discover a source and obtain the full `/api/media/{id}/psnr-source?v=VERSION`
+binding. Missing indexes require separate explicit preparation; submission does
+not build one. POST `/api/quality/cambi/jobs` with schema voidplayer-cambi-job,
+version1, client, source binding, interval, sampling and explicit budgets.
+Retain actor/body/Idempotency-Key after any uncertain outcome.
 
-Source audit and actual execution found that both dimensions below 320 are unsupported; the CLI with threads may exit zero with no frames. Admission therefore requires a long edge ≥320, and zero exit is never sufficient: exact scores, file set and all five lengths must match. Capability checks run a real one-frame feature/heatmap self-test under the shared admission slot.
+Complete GOPs<=512AU are streamed once. Each frame's five scales persist before
+acknowledging the next frame, bounding memory without temporary raw clips. Raw
+budget counts cumulative pixels; heat budgets count all five scales. Legacy
+nativeMemoryBytes/nativeCpuSeconds fields bound analysis heap/conservative wall
+time. No invented native CPU/RSS. Limits must hold together with time/index/output
+budgets; their maxima are not a guaranteed workload.
 
-The supported sources are trusted complete FLV/Enhanced FLV H.264/HEVC 8/10-bit, and the strict MP4 subset below: avc1 H.264 8-bit or hvc1 HEVC 8/10-bit. All require original planar YUV420 limited BT.709 SDR and exact square uncropped/unrotated geometry. No HDR, other containers/sample entries, conversion, GPU, browser WASM CAMBI, or distributed execution.
+Read `/jobs/{id}`, `/result`, `/frames?after=0&limit=4`, `/heatmap?index=N&scale=S`
+and `/picture?index=N`. Only committed completed results are inspectable/publishable.
+Original source/cache/AU/raw identity is revalidated for pictures; this never
+rescores or seeks the player. Explicit cancel waits for Worker plus pending sink
+IO before freeing capacity. Restart interrupts and removes uncommitted heatmaps.
 
-## Budget model
+Publish only an explicit `/jobs/{id}/candidates` policy
+`{space,minScore,limit,scale,cellThreshold,text,severity}`. Actual nonzero heatmap
+cell bounds become immutable source regions, not arbitrary score-only boxes.
+Policy/IDs/operation receipts freeze before annotation writes and replay before
+private result lookup. Imported evidence is historical. Unpinned private results
+can be released; receipts and storage cost remain. Stopped failed/interrupted/
+cancelled jobs can explicitly validate full reexecution; no partial resume,
+automatic publication or changed-source retry.
 
-All five scale byte counts are computed before native execution, multiplied by the selected frame count and checked against the aggregate heatmap budget. Raw sequence bytes are bounded separately. The fixed audited binary writes exactly five known heatmap files and one result file: temporary reservation charges **six per-file caps plus raw bytes**, so `RLIMIT_FSIZE` is not represented as a total directory quota. Exact file set, regular-file status and final lengths are checked after physical exit. This is a trusted-component bound, not a sandbox for arbitrary executables. Paths and feature options never come from HTTP. Scores and image bytes remain separate; frame/scale heatmap reads are on demand.
+## Evidence and compatibility
 
-Implementation is a full candidate; formal PR checks and independent review are still required before merge.
+Independent official scores and every heatmap scale hash are checked on actual
+HTTP/Worker/Node/Bun/browser/standalone paths, including192-frame rational-rate
+clips. See stage logs for current platform status rather than inferring it from
+small fixtures. Natural official fixtures retain their BSD-2-Clause-Patent
+notice in test/helpers/native-cambi-official-NOTICE.txt; algorithm licensing and
+source are shipped by the upstream analysis build.
 
-## Single-source HTTP and Agent workflow
-
-`GET /api/quality/cambi/capability` reports `enabled`, `component-unavailable`, or `cambi-feature-unavailable`; a successful response includes an actual `executed-CAMBI-and-five-heatmaps` self-test. Other platforms remain unavailable. Use the existing component installer and trusted `nativeVmaf: {directory, manifestSha256}` service configuration. There is no HTTP executable, model, output-directory or arbitrary feature-option input. No model is loaded for CAMBI prediction.
-
-1. Use `/api/library/discovery?limit=16` and its exact `nextCursor` to choose a versioned source. Coverage/unknown reasons remain those of discovery. Metadata readability alone is not CAMBI scoring support; MP4 must pass its own strict committed sample-table and raw-frame checks. MKV/TS remain unsupported.
-2. Read `/api/media/{id}/psnr-source?v={version}`. Copy its complete `binding` into `source`. A missing/stale cache is an explicit refusal. Prepare a trusted FLV or strict MP4 cache only through the existing **explicit**, budgeted `/api/library/preparations` command (the FLV-only `/psnr-index` compatibility route is also available); reading/submitting CAMBI never builds one.
-3. Select a half-open interval in **actual source PTS microseconds**, plus deterministic decode-order interval-AU stride. MP4 selects by that explicit AU stride first, then writes native pictures in exact source-PTS order; it never searches by approximate PTS or infers a reference. At most256 indexed AUs in the interval and32 selected supported pictures. Negative or nonuniform presentation clocks in this first matrix are rejected; no VFR certification. Closed dependency windows remain≤32 AU. Unsupported sampled pictures and unsampled AUs are counted separately, never silently called coverage.
-4. Submit once, retain the exact body/client/key for an unknown HTTP outcome. Choose an actor first; the captured actor header must equal the cookie actor **before** any mutation. HTTP/GUI/Agent use the same command and durable job.
-
-```http
-POST /api/quality/cambi/jobs
-Cookie: voidplayer-user=SELECTED_ACTOR
-X-VoidPlayer-Actor: SELECTED_ACTOR
-Origin: http://YOUR_SERVICE
-X-VoidPlayer-Action: quality-job
-Idempotency-Key: RETAIN_THIS_EXPLICIT_KEY
-Content-Type: application/json
-
-{"schema":"voidplayer-cambi-job","version":1,
- "client":{"id":"my-nr-agent","kind":"agent"},
- "source":{"mediaId":"PINNED_ID","mediaVersion":"PINNED_VERSION","size":PINNED_SIZE,
-   "indexIdentity":EXACT_INDEX_IDENTITY,"indexBuildId":"PINNED_BUILD"},
- "interval":{"startPtsUs":0,"endPtsUs":1000000},"sampling":{"stride":1},
- "budget":{"maxRawBytes":67108864,"maxHeatBytes":33554432,"maxTemporaryBytes":268435456,
-   "maxElapsedMs":120000,"nativeCpuSeconds":60,"nativeMemoryBytes":536870912}}
-```
-
-The single-source body has **no reference, correspondence plan or VMAF model**. Raw decode is independent of loaded browser tracks. The native CLI receives the identical packed raw file in its two upstream API slots, `--no_prediction`, `full_ref=false`, EOTF BT.1886, no resizing, one thread, CPU mask0, subsampling1. `enc_bitdepth` and source/encoding resolution overrides remain upstream defaults0, derived from the actual frame. Requested window63 is adjusted by upstream integer `floor(floor(63*(width+height)/375)/16)`; all other fixed feature parameters are in the immutable recipe. Source bit depth and exact full-resolution geometry remain separate from the internal10-bit processing domain.
-
-Read `/api/quality/cambi/jobs?after=ROW&limit=8`, `/jobs/{id}`, `/jobs/{id}/result`, and `/jobs/{id}/frames?after=INDEX&limit=4`. Result summaries contain coverage, worst≤8 frames, source/recipe/component identity, output reservations and measured native CPU/RSS/wall/bytes. They never embed whole heatmap images. `/jobs/{id}/heatmap?index=N&scale=S` returns one original plane with SHA256. Frame pages distinguish `provisional-uncommitted-attempt` during evidence persistence after successful native execution/source-final verification from `immutable-completed`. Only complete immutable results can create candidates. Progress is real prepared/scored frame counts, not invented percentages. Failed, cancelled, unavailable, incomplete, no-results and completed zero scores remain different states.
-
-`POST /jobs/{id}/cancel {}` explicitly stops a durable job; observer disconnect/window close only stops observation. Shared admission covers component check, owned WASM Worker, native supervisor, final source check, durable heatmap copy and raw cleanup. No outer coordinator holds a second slot. CPU/address-space/single-file/stdout/whole-time limits remain enforced; all dependency input/output/drain/index reads are counted. Exactly five scale files plus one JSON result are accepted, with exact lengths and regular-file checks. No output glob/path comes from HTTP. A conservative six-file reservation bounds the fixed trusted producer; this is not an arbitrary-program filesystem security sandbox. Queues4/actor2, a60s queue deadline, eight retained job receipts, and256MiB **logical** durable reservations bound this instance. SQLite pages/WAL add storage overhead beyond logical content; this is not a filesystem quota.
-
-Cancellation/timeout/shutdown waits for real Worker IO closure and native process exit before releasing admission. Uncertain stop poisons the executor and retains capacity/files. Restart validates durable PID/start/boot ownership, stops the matching process and records `interrupted`; it never retries computation. Successful request replays consult the durable actor/client/key receipt before source/result lookup. There is no automatic sharing of computations.
-
-## Actual multiscale evidence and candidates
-
-Explicit `POST /jobs/{id}/candidates`:
-
-```json
-{"space":"default","minScore":0,"limit":1,"scale":1,"cellThreshold":1,
- "text":"Inspect this uncalibrated banding candidate","severity":3}
-```
-
-`minScore` is an uncalibrated whole-frame score filter (higher first, index tie-break), and `cellThreshold` is an explicit1..65535 heatmap-code threshold. A nonzero map-cell bounding region is derived from the **actual** selected scale. No score-only spatial box is invented. Disconnected cells may share a bounding rectangle; this does not claim one object or contiguous defect. The evidence preserves region sample count/mean/max, source frame/AU/PTS/namespace/build/proof, raw-plane hash, every scale hash, mapping factor/ceil edges and full fixed recipe. Cell coordinates denote a decimated source lattice and local analysis windows include neighboring context; the rectangle is an evidence region, not a certified defect boundary. This is `official-heatmap-cell-statistics-not-cropped-CAMBI`, never a small-crop rescore.
-
-The policy, selected result references and new annotation/operation IDs freeze before publication. Each shared candidate is the ordinary transactional `create-cambi-candidate` annotation command (same receipt, record and activity event transaction), with explicit text/severity and `not-subjectively-assessed`. The standalone annotation HTTP command accepts `cambi: {jobId,attemptId,digest,index,scale,region}` and resolves ownership after receipt lookup. Replays still work after result reclamation; policy changes conflict. Empty selection is an explicit empty publication, not fabricated spatial evidence.
-
-CAMBI attachments are **single-source**, separate from PSNR pair evidence. FLV retains result/attachment version1; MP4 uses version2 with its exact sample-table/producer/track/tick witness. The job request envelope stays version1. Normal edits/replies preserve them and cannot forge/remove immutable facts. Workspace/review version3 is required and old v1/v2 rejects instead of dropping the attachment. Annotation DB version5 prevents older programs rewriting these records. Imported/copied facts retain historical data and lose service verification.
-
-Before sharing, each completed task frame has an owner-only viewer at `/quality.html?cambi=1&cambiJob=...&index=N`; even a completed zero score is inspectable. It reads the same private job/frame facts and bounded `/jobs/{id}/picture?index=N` source snapshot, without creating any annotation. The shared new-window viewer opens `/quality.html?cambi=1&space=...&annotationId=...&evidenceId=...`. It reads the shared annotation and `/api/quality/cambi/shared/{space}/{annotationId}/{evidenceId}?scale=S`, never another actor's private job. All five official scales are available on demand. It obtains one separately decoded raw source snapshot, verifies its source/cache/AU/configuration/decoder/layout/raw hash against the attachment and routes it through the normal presenter. Generation numbers are ephemeral; all packet content/identity facts remain checked. There is no rescoring or playback seek. Source/cache changes, historical/foreign/deleted/removed evidence or late replies hide the view. Heatmap display is a declared fixed0..65535 linear color mapping; it is not a subjective severity scale.
-
-## Samples, observed limitations and performance
-
-Formal fixtures are original synthetic banded/smooth gradients, flat, high-frequency texture and grain, plus the licensed official processed natural image `KristenAndSara_1280x720_8bit_processed.yuv` from Netflix/vmaf_resource revision `5e7b853baf97cea275ce8175d80c6f3c817169d4`. The official file SHA256 is `41a2c05e4c5ba39b3ea01b6c8afde05b79f129f7da3ea1a4c6639013929c5bf8`; retain `test/helpers/native-cambi-official-NOTICE.txt` (BSD-2-Clause-Patent). That single original frame is explicitly repeated four times; its10-bit derivative left-shifts8-bit codes and does **not** restore source precision. Fixture regeneration uses FFmpeg only offline; native Node/Bun/compiled tests consume fixed FLV/MP4 plus independently decoded raw byte oracles without PATH tools. No private/user footage is included.
-
-Initial four-frame local observations (one run each, not calibrated benchmarks): banded640×352 scored≈19.31 in8bit/10bit;8-bit nominally smooth quantized gradient≈11.80 while10-bit smooth was0; flat/texture/grain were0. Grain masking a known banded signal is a false-negative warning. The processed natural image1280×720 scored≈0.21 (8bit) /1.09 (derived10bit); source depth semantics/preprocessing need not give equal CAMBI scores. These examples neither validate general natural-footage false-positive rates nor provide a product threshold.
-
-For640×352×4, native CPU≈15–39ms and RSS≈7–9.5MiB, heatmaps2,400,640bytes, raw1,351,680/2,703,360bytes, conservative temporary reservation15,286,272bytes; complete service preparation≈0.6–0.9s. The1280×720 natural example native CPU≈74–97ms/RSS≈20–29MiB, heatmaps9,820,800bytes, raw5,529,600/11,059,200bytes, temporary reservation55,296,000bytes; whole preparation≈0.86–1.06s. These bounded examples are not throughput/real-time acceptance. Existing performance gate **16/16 failed samples** remains unchanged.
-
-| Original proxy | Migration decision |
-| --- | --- |
-| banding | Official pinned CAMBI with source-depth/recipe/heatmap evidence; uncalibrated candidate signal |
-| blockiness | Experimental; no general migration/subjective calibration evidence |
-| blur | Experimental; no production migration |
-| noise | Experimental; grain may mask banding and must not be treated as universal degradation |
-| flicker | Experimental; CAMBI is per-frame and does not track temporal defects |
-
-Validation includes fixed official frame scores/pools and byte-for-byte five-scale layouts, original raw-plane hashes, source/capability/aggregate-budget/shape failures, actor/key/receipt/historical fences, real process cancel/deadline/crash/restart and shared admission. Real GUI submission and evidence viewing are exercised in Chromium/WebKit8/10, with another player's actual source PTS advancing. The installed compiled Bun test runs with an empty PATH. Final exact-commit PR CI and independent review remain the merge gate; this document does not claim they have completed for an unmerged candidate.
-
-The compiled multi-entry build explicitly pins Bun's output root to `server`. A local full-entry probe reproduced the unpinned build embedding Worker files under `/$bunfs/root/server/`, while existing compiled URLs address `/$bunfs/root/analysis/...`; explicit `--root server` restored those actual Worker entries without changing runtime paths or assertions. All compiled native tests must run after this build-root fix; a successful source/Bun interpretation is insufficient.
-
-Submission retries retain their actor/client/key/body after a prior unknown outcome, even if a later stale-actor request receives409 before acceptance. Only a definitive first-attempt rejection may unlock an unsent draft; unknown previous execution is never erased by the later conflict. The real GUI regression delays identity notification, changes the shared cookie, observes actual actor-changed409, restores the original owner and replays exactly one original job.
-
-## MP4 integration boundary
-
-CAMBI uses the existing [strict MP4 producer](trusted-mp4-quality.md), not file extensions or generic metadata readiness. The accepted subset is self-contained, nonfragmented, one video track and one supported description: avc1 H.264 8-bit or hvc1 HEVC 8/10-bit, exact integer-microsecond clocks, positive constant sample durations/cadence in the bounded interval, and the same SDR/geometry limits above. No edit list, arbitrary VFR, negative/duplicate clocks, unknown/unsupported dependency identity, crop, rotation, HDR or implicit color conversion is admitted. A valid MP4 metadata probe, a v2 PSNR result, or VMAF readiness cannot substitute for these CAMBI checks.
-
-Explicit `quality-index` preparation commits the real MP4 tables and server producer evidence together. Decoding reopens that exact version/build, reads actual sample payloads under the existing IO budget and uses the same bounded packet-identity GOP witness as strict MP4 PSNR. Single-source inspection is independent of the paired scoring path. Each selected picture keeps sample ordinal, byte offset/size, dts/cts/pts/duration ticks, track/timebase/table hash, complete dependency/output identity and the producer commit. Reordering/drain is charged and tied to input tokens. CAMBI's frame index is the native input order (source PTS after decode-AU selection); it is distinct from the source sample/AU ordinal. Even though CAMBI is frame independent, this subset does not certify arbitrary VFR or reference completeness.
-
-Result and attachment v2 persist these witnesses without altering legacy FLV v1 fingerprints or receipts. Version mismatches, table/track/tick/proof changes, and changed source/cache reject rather than downgrading to FLV or another metric. Owner frames, five-scale maps, shared candidate regions, historical imports, task-center details and independently decoded source snapshots use the same single-source facts. Viewer geometry restrictions remain unchanged. No C reference plan is required or invented.
-
-The public synthetic MP4 fixtures are generated offline by `scripts/native/make-cambi-mp4-samples.mjs`, with fixed container/raw/table hashes in `test/helpers/native-cambi-mp4-samples.json`: H.2648, HEVC8/10, and varying-picture HEVC10 with real reordering, nonzero source PTS and drain output. Tests compare every raw picture and all five upstream heatmap byte planes as well as official scores/pools. Required GUI cases cover Chromium/WebKit × the three codec/depth combinations; HEVC10 uses the reordered fixture. The installed compiled Linux x64 test covers the same MP4 matrix plus legacy FLV8/10, with an empty PATH. Source changes, producer/evidence mutations, component absence, actual native cancellation/deadline and physical admission release have dedicated regressions. Numeric clock rejection tests do not claim VFR media certification. Existing whole-repository performance results remain informational and are not changed by these functional tests.
-
-## Current task center and Agent integration
-
-CAMBI history participates in `GET /api/tasks?kind=cambi&metric=cambi`, exact media/version filtering and frozen cross-store pages. Detail preserves the single source role, original attempt/digest and true progress without reading raw frames/heatmaps. `/api/tasks/cambi/{id}/cancel` delegates to the same original service and physical-exit fence. Explicit candidate receipts link only matching immutable CAMBI refs to the existing source/heatmap viewer; observation never publishes or moves playback. `/api/agent/tasks/quality.cambi` and `/api/agent/operations/cambi.submit` describe the single-source workflow and authoritative limits; `/agent/quality/cambi.md` requires no reference relation or C plan. Missing-component recovery retains CAMBI and never silently substitutes a paired metric.
-
-## Explicit recomputation and provenance
-
-Physically stopped failed/interrupted/cancelled jobs with a saved single-source execution contract can preview `/jobs/{id}/reexecution-plan`, explicitly confirm its full-from-start cost, and create one linked new task through `/jobs/{id}/reexecutions`. Original-key submission replay still resolves the old task; explicit recomputation has its own original actor/body/key receipt. The same metric GUI and task center expose the protocol. Missing historical witness, changed cache/producer/core/AU order/recipe/component, active process or uncertain shutdown refuses same-condition recomputation and requires waiting or a new explicit intent as reported. No partial state, reference relation, automatic preparation, score reuse or automatic publication is added. Old evidence/candidates stay unchanged. See [the shared contract](explicit-quality-reexecution.md#single-source-cambi-extension) for three execution witness passes, the independent bounded preflight, cumulative budgets, lineage and crash-boundary tests.
+Old nativeVmaf settings are ignored for new runs. Legacy process recovery and
+original binary provenance remain readable. No reference-integrity certification,
+concealment detection, HDR/VFR certification or regional CAMBI rescoring is claimed.

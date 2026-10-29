@@ -6,20 +6,43 @@ const table = {
   xpsnr: "quality_xpsnr_jobs",
   cambi: "cambi_jobs",
 } as const;
-/** Submission reserves worst-case output while a task can still write. Once
- * physically stopped, charge retained output bytes instead. Idempotency receipts,
- * frozen inputs and annotation operations have a separate lifetime. */
+/** Logical retained UTF-8/BLOB bytes, including immutable inputs and receipts.
+ * SQLite page/WAL overhead is outside this application payload budget. */
+export function reserveScoringBytes(
+  outputBytes: number,
+  input: unknown,
+  snapshot?: unknown,
+) {
+  return (
+    outputBytes +
+    Buffer.byteLength(JSON.stringify(input)) +
+    (snapshot === undefined ? 0 : Buffer.byteLength(JSON.stringify(snapshot))) +
+    128 * 1024
+  );
+}
 export function settleScoringReservations(
   db: IndexDatabase,
   kind: ScoringStore,
+  id?: string,
 ) {
-  const name = table[kind];
+  const name = table[kind],
+    publication =
+      kind === "cambi" ? "cambi_publications" : `quality_${kind}_publications`,
+    publicationKey = kind === "cambi" ? "job" : "job_id";
+  const snapshot =
+    kind === "cambi"
+      ? ""
+      : "+coalesce(length(CAST(snapshot AS BLOB)),0)+coalesce(length(CAST(prepared AS BLOB)),0)";
   const heat =
     kind === "cambi"
-      ? "+ coalesce((SELECT sum(length(data)) FROM cambi_heat WHERE job=cambi_jobs.id),0)"
+      ? "+coalesce((SELECT sum(length(data)) FROM cambi_heat WHERE job=cambi_jobs.id),0)"
       : "";
-  db.exec(`UPDATE ${name} SET reserved=coalesce(length(CAST(result AS BLOB)),0) ${heat}
-    WHERE json_extract(body,'$.state') NOT IN ('queued','preparing','running','cancelling')`);
+  db.prepare(
+    `UPDATE ${name} SET reserved=1024+length(CAST(body AS BLOB))+coalesce(length(CAST(result AS BLOB)),0) ${snapshot} ${heat}
+  +coalesce((SELECT length(CAST(body AS BLOB)) FROM ${publication} WHERE ${publicationKey}=${name}.id),0)
+  +coalesce((SELECT length(CAST(body AS BLOB)) FROM quality_reexecutions WHERE job_id=${name}.id),0)
+  WHERE json_extract(body,'$.state') NOT IN ('queued','preparing','running','cancelling')${id ? " AND id=?" : ""}`,
+  ).run(...(id ? [id] : []));
 }
 export function releaseScoringResult(
   db: IndexDatabase,
@@ -31,7 +54,8 @@ export function releaseScoringResult(
   try {
     if (kind === "cambi")
       db.prepare("DELETE FROM cambi_heat WHERE job=?").run(id);
-    db.prepare(`UPDATE ${name} SET result=NULL,reserved=0 WHERE id=?`).run(id);
+    db.prepare(`UPDATE ${name} SET result=NULL WHERE id=?`).run(id);
+    settleScoringReservations(db, kind, id);
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");

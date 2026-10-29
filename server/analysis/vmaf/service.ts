@@ -1,5 +1,5 @@
 import {
-  settleScoringReservations,
+  reserveScoringBytes,settleScoringReservations,
   releaseScoringResult,
 } from "../quality/result-retention.ts";
 import { taskSummaries, taskEdges } from "../../tasks/summary.ts";
@@ -39,7 +39,8 @@ import type {
   VmafPrepared,
   VmafAssociation,
 } from "../../../shared/analysis/quality/vmaf.ts";
-import { NativeVmafRunner, stopOwnedNative } from "./runner.ts";
+import type { WasmVmafRunner } from "./wasm-runner.ts";
+import {stopOwnedNative} from "../quality/legacy-process.ts";
 const digest = (v: unknown) =>
   createHash("sha256").update(canonicalJson(v)).digest("hex");
 const now = () => Math.floor(performance.timeOrigin + performance.now());
@@ -75,9 +76,7 @@ type CandidatePolicy = {
 };
 /** Separate metric outcomes, one service-owned attempt, no automatic retry/work sharing. */
 export class NativeVmafService {
-  reexecutionLinks(actor: string) {
-    return this.reexecutions.links(actor, VMAF_LIMITS.historyRows);
-  }
+
   taskSummaries(
     actor: string,
     id?: string,
@@ -104,11 +103,11 @@ export class NativeVmafService {
   private timer?: ReturnType<typeof setTimeout>;
   private closing?: Promise<void>;
   private file: string;
-  private runner: NativeVmafRunner;
+  private runner: WasmVmafRunner;
   private plans: CorrespondenceService;
   constructor(
     file: string,
-    runner: NativeVmafRunner,
+    runner: WasmVmafRunner,
     plans: CorrespondenceService,
   ) {
     this.file = file;
@@ -195,6 +194,7 @@ export class NativeVmafService {
     this.db
       .prepare("UPDATE quality_vmaf_jobs SET body=? WHERE id=?")
       .run(JSON.stringify(job), job.id);
+    if (terminalVmaf(job.state)) settleScoringReservations(this.db, "vmaf", job.id);
   }
   get(id: string, actor: string) {
     const row = this.db
@@ -261,7 +261,7 @@ export class NativeVmafService {
     return { ...input.plan, value: this.plans.result(plan.id, actor) };
   }
   private cachedCapability: Awaited<
-    ReturnType<NativeVmafRunner["capability"]>
+    ReturnType<WasmVmafRunner["capability"]>
   > | null = null;
   private capabilityCheckedAt = 0;
   get descriptor() {
@@ -356,7 +356,7 @@ export class NativeVmafService {
             "vmaf-queue-full",
           );
         settleScoringReservations(this.db, "vmaf");
-        const reserved = VMAF_LIMITS.resultBytes * 2,
+        const reserved = reserveScoringBytes(VMAF_LIMITS.resultBytes,input,snapshot),
           used = Number(
             this.db
               .prepare(
@@ -1170,6 +1170,7 @@ export class NativeVmafService {
       this.db
         .prepare("INSERT INTO quality_vmaf_publications VALUES(?,?)")
         .run(id, JSON.stringify(publication));
+      settleScoringReservations(this.db, "vmaf", id);
     }
     for (const item of publication.selected) {
       annotations.mutate(
@@ -1200,6 +1201,7 @@ export class NativeVmafService {
         this.db
           .prepare("UPDATE quality_vmaf_publications SET body=? WHERE job_id=?")
           .run(JSON.stringify(publication), id);
+        settleScoringReservations(this.db, "vmaf", id);
       }
     }
     return publication;

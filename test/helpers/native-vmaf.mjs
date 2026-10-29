@@ -6,7 +6,6 @@ import {loadConfig} from '../../server/config.ts';import {startService} from '..
 import {waitForAnnotationMedia} from '../../scripts/testing/agent-annotations-ready.mjs';
 export const sha=b=>createHash('sha256').update(b).digest('hex');
 export const until=async(read,predicate,label='Native VMAF did not finish')=>{for(const deadline=performance.now()+60000;performance.now()<deadline;){const r=await read();if(predicate(r))return r;await new Promise(r=>setTimeout(r,10));}assert.fail(label);};
-export async function nativeComponent(){const directory=path.resolve(process.env.VOIDPLAYER_VMAF_COMPONENT??'.run/components/vmaf');return {directory,manifestSha256:sha(await readFile(path.join(directory,'manifest.json')))};}
 export async function nativeFixture({depth=8,distorted=false,staticDir='public',start=startService,component=false,frames=8,tagged=true,codec=depth===10?'hevc':'h264',containers=['flv','flv'],prepare=true,frameRate,roi,sequence=false}={}){
  const directory=await mkdtemp(path.join(tmpdir(),'vp-native-vmaf-')),media=path.join(directory,'media');await mkdir(media);let service;
  try{
@@ -20,7 +19,7 @@ export async function nativeFixture({depth=8,distorted=false,staticDir='public',
    if(containers[ordinal]==='mp4'){const item=mp4[distorted?name:'reference'],encoded=Buffer.from(item.mp4,'base64');assert.equal(sha(encoded),item.mp4Sha256);await writeFile(path.join(media,names[ordinal]),frameRate&&!sequence?retimeQualityMp4(encoded,frameRate):encoded);}
    else {const bytes=Buffer.from(item.flv,'base64');assert.equal(sha(bytes),item.flvSha256);await writeFile(path.join(media,names[ordinal]),bytes);}
   }
-  const config=await loadConfig([],'production',directory,{staticDir:path.resolve(staticDir),dataDir:path.join(directory,'data'),allowEmptyRoots:true});Object.assign(config,{logsDir:null,mediaRoots:[media],indexWatch:false,port:0,...(component?{nativeVmaf:await nativeComponent()}: {})});
+  const config=await loadConfig([],'production',directory,{staticDir:path.resolve(staticDir),dataDir:path.join(directory,'data'),allowEmptyRoots:true});Object.assign(config,{logsDir:null,mediaRoots:[media],indexWatch:false,port:0});
   service=await start(config,false);await service.library?.refresh();const base=`http://127.0.0.1:${service.server.address().port}`,actor='guest-'+randomUUID(),cookie='voidplayer-user='+actor,headers={cookie,origin:base,'content-type':'application/json','x-voidplayer-action':'quality-job','x-voidplayer-actor':actor};
   let entries;if(service.library)entries=await waitForAnnotationMedia(service.library,names);else entries=await until(async()=>{const list=(await fetch(base+'/api/library').then(r=>r.json())).entries;return names.map(name=>list.find(e=>e.name===name));},e=>e.every(v=>v?.state==='ready'),'Compiled library not ready');
   const request=async(url,body,key='vmaf-test',extra={})=>fetch(base+url,{method:body===undefined?'GET':'POST',headers:{...headers,'idempotency-key':key,...extra},...(body===undefined?{}:{body:JSON.stringify(body)})});

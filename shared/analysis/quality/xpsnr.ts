@@ -477,7 +477,7 @@ export function validateXpsnrAssociation(
 export const XPSNR_CAPABILITY = {
   schema: "voidplayer-native-xpsnr-capability",
   version: 1,
-  platforms: ["linux-x64"],
+  platforms: ["wasm32"],
   limits: XPSNR_LIMITS,
   recipe: XPSNR_RECIPE,
   sourceRevision: XPSNR_SOURCE_REVISION,

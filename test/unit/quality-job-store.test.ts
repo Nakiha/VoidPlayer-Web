@@ -135,3 +135,30 @@ test('SSIM selection is canonical immutable request identity; legacy PSNR hash s
  assert.equal(f.store.submit(qualityJobRequest(structuredClone(input)),actor,'again','ssim',1001).job.id,job.id);
  delete input.request.ssim;assert.equal(qualityJobRequest(input).json,plain.json);assert.throws(()=>f.store.submit(plain,actor,'strip','ssim',1001),{code:'idempotency-conflict'});
 });
+
+test('scoring storage counts UTF-8 inputs, frozen plans, lineage, publications and heat; release retains receipt costs',async t=>{
+ const {reserveScoringBytes,settleScoringReservations,releaseScoringResult}=await import('../../server/analysis/quality/result-retention.ts');
+ const dir=await mkdtemp(join(tmpdir(),'vp-scoring-retention-')),db=openIndexDatabase(join(dir,'jobs.sqlite'));
+ t.after(async()=>{db.close();await rm(dir,{recursive:true,force:true});});
+ db.exec('CREATE TABLE quality_reexecutions(job_id TEXT,body TEXT); CREATE TABLE cambi_heat(job TEXT,data BLOB);');
+ const body=JSON.stringify({state:'completed',input:{name:'测试片源'}}),snapshot=JSON.stringify({frozen:'时间轴'.repeat(30)}),prepared=JSON.stringify({identity:'帧'}),result=JSON.stringify({score:42}),publication=JSON.stringify({text:'评审'}),receipt=JSON.stringify({reason:'重新执行'});
+ const bytes=(s:string)=>Buffer.byteLength(s);
+ assert.equal(reserveScoringBytes(4096,JSON.parse(body),JSON.parse(snapshot)),4096+bytes(body)+bytes(snapshot)+128*1024);
+ for(const kind of ['vmaf','xpsnr','cambi'] as const){
+  const table=kind==='cambi'?'cambi_jobs':`quality_${kind}_jobs`,pub=kind==='cambi'?'cambi_publications':`quality_${kind}_publications`,key=kind==='cambi'?'job':'job_id';
+  db.exec(`CREATE TABLE ${table}(id TEXT,body TEXT,result TEXT,reserved INTEGER${kind==='cambi'?'':',snapshot TEXT,prepared TEXT'});CREATE TABLE ${pub}(${key} TEXT,body TEXT);`);
+  db.prepare(`INSERT INTO ${table} VALUES(?,?,?,?${kind==='cambi'?'':',?,?'})`).run(kind,body,result,999999,...(kind==='cambi'?[]:[snapshot,prepared]));
+  db.prepare(`INSERT INTO ${table}(id,body,reserved) VALUES(?,?,?)`).run('pending',JSON.stringify({state:'running'}),888888);
+  db.prepare(`INSERT INTO ${pub} VALUES(?,?)`).run(kind,publication);db.prepare('INSERT INTO quality_reexecutions VALUES(?,?)').run(kind,receipt);
+  if(kind==='cambi')db.prepare('INSERT INTO cambi_heat VALUES(?,?)').run(kind,new Uint8Array(4096));
+  const retained=1024+bytes(body)+bytes(publication)+bytes(receipt)+(kind==='cambi'?0:bytes(snapshot)+bytes(prepared));
+  const row=()=>db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(kind)!;
+  settleScoringReservations(db,kind);
+  assert.equal(Number(row().reserved),retained+bytes(result)+(kind==='cambi'?4096:0));
+  assert.equal(Number(db.prepare(`SELECT reserved FROM ${table} WHERE id='pending'`).get()!.reserved),888888);
+  releaseScoringResult(db,kind,kind);assert.equal(row().result,null);assert.equal(Number(row().reserved),retained);
+  assert.equal(row().body,body);if(kind!=='cambi')assert.equal(row().snapshot,snapshot);
+  releaseScoringResult(db,kind,kind);assert.equal(Number(row().reserved),retained,'repeat release remains idempotent');
+ }
+ assert.equal(Number(db.prepare('SELECT count(*) n FROM cambi_heat').get()!.n),0);
+});

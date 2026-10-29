@@ -278,3 +278,25 @@ changed the producer source hash between scoring and final verification; the
 expected identity refusal was reproduced as a partial result, and the affected
 case passed with stable files. No changed-source result was published.
 Upstream PR 14 CI passed both analysis and playback/packet-ABI jobs at 19e755f.
+
+## 阶段九：删除停用执行器与真实持久容量
+
+生产入口及独立包删除原生 VMAF/XPSNR 组件加载 Worker、CLI/supervisor 启动器和
+临时原始片段执行路径；三个评分服务直接使用共用 ScoringWorkerOwner。
+仅保留旧进程身份核验/回收和旧证据解析。旧配置字段接受但运行时忽略。
+Agent 的能力、操作目录、渐进指南及三个旧文档 URL 统一指向当前分析 WASM，
+消除 Linux 专用/32帧/不支持ROI等过期准入描述。
+
+评分存储的终态结算改为实际 UTF-8 输入/冻结计划/任务正文/重执行及发布回执/
+结果/热图，加每条1024字节标量余量；逻辑载荷预算不等同 SQLite页/WAL占用。
+终态立即结算，释放结果后仍保留并计入回执，发布部分成功的记录也计费。
+删除已无调用者、会枚举全历史重试链的 links 方法；任务中心继续按指定任务有界查询。
+
+本地验证：构建、模块边界、共享层编译通过；契约43/43；快速81/82，唯一失败
+为 Agent 测试仍期待 Linux native host，更新此过期断言后该文件及CAMBI契约11/11。
+真实评分HTTP89/89（包含三指标、ROI/有理帧率/长片段及重执行）；三指标物理
+Worker生命周期56/56。存储与契约定向22/22；额外HTTP20次连续提交验证最后一个
+任务无需下次提交即结算、结果释放保留实际回执占用，通过。
+真实WebKit重执行流程35项通过，使用分析Worker的实际配套结果持久化后失败，
+旧原生SIGKILL假设移除；真正Worker故障/取消/退出仍由生命周期测试覆盖。
+Bun生命周期及最终新独立包验收继续执行，不能由上述Node结果推断。

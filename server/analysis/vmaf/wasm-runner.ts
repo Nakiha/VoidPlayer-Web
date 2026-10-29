@@ -13,26 +13,26 @@ import type {
   VmafPrepared,
   VmafNativeResult,
 } from "../../../shared/analysis/quality/vmaf.ts";
-import { NativeVmafRunner } from "./runner.ts";
+import { ScoringWorkerOwner } from "../quality/scoring-worker-owner.ts";
 import type { VmafHooks } from "./runner.ts";
 import { analysisComponent } from "../quality/analysis-component.ts";
 
 /** Uses the existing job lifecycle and physical Worker-exit supervision. The
  * decoding Worker feeds pixels directly into the existing analysis artifact. */
-export class WasmVmafRunner extends NativeVmafRunner {
+export class WasmVmafRunner extends ScoringWorkerOwner {
   readonly analysisDir: string;
   constructor(
     library: MediaLibraryIndex,
     coreDir: string,
     analysisDir: string,
   ) {
-    super(library, coreDir, undefined);
+    super(library, coreDir);
     this.analysisDir = analysisDir;
   }
-  override assertAvailable() {
+  assertAvailable() {
     analysisComponent(this.analysisDir);
   }
-  override async capability() {
+  async capability() {
     const basic = {
       ...VMAF_CAPABILITY,
       platforms: ["wasm32"],
@@ -84,7 +84,7 @@ export class WasmVmafRunner extends NativeVmafRunner {
       analysisContract: contract,
     };
   }
-  override async reexecutionPreflight(
+  async reexecutionPreflight(
     input: VmafInput,
     snapshot: VmafPlanSnapshot,
     expected: QualityExecutionContract,
@@ -110,7 +110,7 @@ export class WasmVmafRunner extends NativeVmafRunner {
         ),
     );
   }
-  override async preflight(
+  async preflight(
     input: VmafInput,
     snapshot: VmafPlanSnapshot,
     signal: AbortSignal,
@@ -139,7 +139,7 @@ export class WasmVmafRunner extends NativeVmafRunner {
       },
     );
   }
-  override async run(
+  async run(
     input: VmafInput,
     snapshot: VmafPlanSnapshot,
     signal: AbortSignal,
@@ -157,7 +157,7 @@ export class WasmVmafRunner extends NativeVmafRunner {
       signal,
       hooks.admitted,
       async (combined) => {
-        let executedContract:QualityExecutionContract|undefined;
+        let executedContract: QualityExecutionContract | undefined;
         const contract = this.contract(input),
           data = this.data(input, snapshot, contract);
         hooks.phase("decode-and-score");
@@ -173,7 +173,10 @@ export class WasmVmafRunner extends NativeVmafRunner {
           },
           combined,
           hooks.progress,
-          contract=>{executedContract=contract;hooks.contract?.(contract);},
+          (contract) => {
+            executedContract = contract;
+            hooks.contract?.(contract);
+          },
         );
         combined.throwIfAborted();
         hooks.prepared(value.prepared);
@@ -198,7 +201,10 @@ export class WasmVmafRunner extends NativeVmafRunner {
         );
         combined.throwIfAborted();
         if (canonicalJson(contract) !== canonicalJson(this.contract(input)))
-          throw new VmafError("component-unavailable", "Analysis component changed during final verification");
+          throw new VmafError(
+            "component-unavailable",
+            "Analysis component changed during final verification",
+          );
         if (
           value.prepared.work.indexBytes + verification.indexBytes >
             VMAF_LIMITS.maxIndexBytes ||
@@ -209,8 +215,13 @@ export class WasmVmafRunner extends NativeVmafRunner {
             "budget-exceeded",
             "Final index verification exceeds budget",
           );
-        value.prepared.work.indexBytes+=verification.indexBytes;value.prepared.work.indexPackets+=verification.indexPackets;
-        value.native.resources.finalVerification = {indexBytes:verification.indexBytes,indexPackets:verification.indexPackets,elapsedMs:verification.elapsedMs};
+        value.prepared.work.indexBytes += verification.indexBytes;
+        value.prepared.work.indexPackets += verification.indexPackets;
+        value.native.resources.finalVerification = {
+          indexBytes: verification.indexBytes,
+          indexPackets: verification.indexPackets,
+          elapsedMs: verification.elapsedMs,
+        };
         return value;
       },
     );

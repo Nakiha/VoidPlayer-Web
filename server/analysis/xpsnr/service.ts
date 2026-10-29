@@ -1,4 +1,4 @@
-import {settleScoringReservations,releaseScoringResult} from '../quality/result-retention.ts';
+import {reserveScoringBytes,settleScoringReservations,releaseScoringResult} from '../quality/result-retention.ts';
 import {comparisonLocation,pinComparison} from '../../../shared/analysis/quality/xpsnr-comparison.ts';
 import type {XpsnrComparison} from '../../../shared/analysis/quality/xpsnr-comparison.ts';
 import {ReexecutionLedger} from '../quality/reexecution-ledger.ts';
@@ -14,7 +14,7 @@ import type {QualityEvidenceRef} from '../../../shared/review/quality-evidence.t
 import type {AnnotationStore} from '../../annotations.ts';
 import {xpsnrInput,canonicalJson,xpsnrSequenceFrame,XPSNR_LIMITS,terminalXpsnr,XpsnrError} from '../../../shared/analysis/quality/xpsnr.ts';
 import type {XpsnrInput,XpsnrJob,XpsnrResult,XpsnrPlanSnapshot,XpsnrPrepared,XpsnrAssociation} from '../../../shared/analysis/quality/xpsnr.ts';
-import {stopOwnedNative} from './runner.ts';
+import {stopOwnedNative} from '../quality/legacy-process.ts';
 import type {WasmXpsnrRunner} from './wasm-runner.ts';
 import {clockKey} from '../../../shared/media/indexing/rational-clock.ts';
 const digest=(v:unknown)=>createHash('sha256').update(canonicalJson(v)).digest('hex');
@@ -26,7 +26,6 @@ type CandidatePolicy={space:string;side:'reference'|'distorted';maxScore:number;
 /** Separate metric outcomes, one service-owned attempt, no automatic retry/work sharing. */
 export class NativeXpsnrService{
  readonly reexecutions:ReexecutionLedger;
-  reexecutionLinks(actor:string){return this.reexecutions.links(actor,XPSNR_LIMITS.historyRows);}
   taskSummaries(actor:string,id?:string,filter?:import('../../../shared/service/tasks.ts').TaskFilter){return taskSummaries(this.db,'xpsnr',actor,id,filter);}
   taskEdges(actor:string,id?:string){return taskEdges(this.db,'xpsnr',actor,id);}
 
@@ -54,7 +53,7 @@ export class NativeXpsnrService{
  }
  private available(){if(this.closed||this.fatal||!this.recovered||this.runner.stopUncertain)throw new AdminError(503,'XPSNR service unavailable or recovering.','xpsnr-service-unavailable');}
  private all(){return this.db.prepare(`SELECT body FROM quality_xpsnr_jobs WHERE json_extract(body,'$.state') IN ('queued','preparing','running','cancelling') ORDER BY rowid`).all().map(r=>JSON.parse(String(r.body)) as XpsnrJob);}
- private save(job:XpsnrJob){job.revision++;this.db.prepare('UPDATE quality_xpsnr_jobs SET body=? WHERE id=?').run(JSON.stringify(job),job.id);}
+ private save(job:XpsnrJob){job.revision++;this.db.prepare('UPDATE quality_xpsnr_jobs SET body=? WHERE id=?').run(JSON.stringify(job),job.id);if(terminalXpsnr(job.state))settleScoringReservations(this.db,'xpsnr',job.id);}
  get(id:string,actor:string){const row=this.db.prepare('SELECT body,fingerprint FROM quality_xpsnr_jobs WHERE id=? AND actor=?').get(id,actor);if(!row)throw new AdminError(404,'XPSNR job not found.','xpsnr-not-found');const job=JSON.parse(String(row.body)) as XpsnrJob;if(digest(job.input)!==row.fingerprint)throw new AdminError(500,'Stored XPSNR request changed.','stored-xpsnr-invalid');return job;}
  history(actor:string,after=0,limit=8){if(!Number.isSafeInteger(after)||after<0||!Number.isInteger(limit)||limit<1||limit>16)throw new AdminError(400,'Invalid XPSNR cursor.','invalid-cursor');const rows=this.db.prepare('SELECT rowid,body FROM quality_xpsnr_jobs WHERE actor=? AND rowid>? ORDER BY rowid LIMIT ?').all(actor,after,limit+1);return {entries:rows.slice(0,limit).map(r=>JSON.parse(String(r.body))),after:rows.length?Number(rows[Math.min(limit,rows.length)-1].rowid):after,more:rows.length>limit};}
  private parse(value:unknown){try{return xpsnrInput(value);}catch(error){throw new AdminError(400,(error as Error).message,'invalid-xpsnr-request');}}
@@ -76,7 +75,7 @@ export class NativeXpsnrService{
   const snapshot=this.snapshot(input,actor.id),all=this.all(),live=all.filter(j=>!terminalXpsnr(j.state));
   if(live.length>=XPSNR_LIMITS.queued||live.filter(j=>j.actor.id===actor.id).length>=XPSNR_LIMITS.actorOutstanding)throw new AdminError(429,'XPSNR bounded queue is full.','xpsnr-queue-full');
   settleScoringReservations(this.db,'xpsnr');
-  const reserved=XPSNR_LIMITS.resultBytes,used=Number(this.db.prepare('SELECT coalesce(sum(reserved),0) AS n FROM quality_xpsnr_jobs').get()!.n);
+  const reserved=reserveScoringBytes(XPSNR_LIMITS.resultBytes,input,snapshot),used=Number(this.db.prepare('SELECT coalesce(sum(reserved),0) AS n FROM quality_xpsnr_jobs').get()!.n);
   if(used+reserved>XPSNR_LIMITS.reservedBytes)throw new AdminError(429,'XPSNR history budget is full; old receipts retained.','xpsnr-history-full');
   const createdAt=now(),job:XpsnrJob={...(reexecution?{executionContract:reexecution.contract,retryOf:reexecution.lineage}:{}),schema:'voidplayer-native-xpsnr-job-state',version:1,id:'xpsnr-'+randomUUID(),actor:{id:actor.id,name:actor.name},key:k,requestId,input,revision:1,createdAt,queueUntil:createdAt+XPSNR_LIMITS.queueWaitMs,startedAt:null,endedAt:null,attemptId:null,state:'queued',phase:'queued',reason:null,progress:{preparedFrames:0,targetFrames:snapshot.value.rangePlan?.input.pairs.length??0},metrics:{psnr:waiting(),ssim:input.metrics.ssim?waiting():{state:'not-requested',reason:null},xpsnr:waiting()},resultDigest:null,process:null};
   this.db.prepare('INSERT INTO quality_xpsnr_jobs VALUES(?,?,?,?,?,?,?,NULL,NULL,?)').run(job.id,actor.id,input.client.id,k,fingerprint,JSON.stringify(job),JSON.stringify(snapshot),reserved);if(reexecution)this.reexecutions.insert({actorId:actor.id,parentId:reexecution.parentId,jobId:job.id,key:reexecution.key,request:reexecution.request,lineage:reexecution.lineage});return {job:this.get(job.id,actor.id),replayed:false};
@@ -160,11 +159,11 @@ export class NativeXpsnrService{
   if(publication&&canonicalJson(publication.policy)!==canonicalJson(policy))throw new AdminError(409,'Candidate policy is already frozen.','candidate-policy-conflict');
   if(!publication){const r=this.result(id,actor.id);if(!r.xpsnr||j.state!=='completed')throw new AdminError(409,'Completed XPSNR result required.','xpsnr-result-unavailable');const selected:number[]=[];
    for(const f of [...r.xpsnr.frames].filter(f=>f.minimum.kind==='finite').sort((a,b)=>a.minimum.db!-b.minimum.db!||a.index-b.index))if(f.minimum.db!<=policy.maxScore&&selected.every(i=>Math.abs(i-f.index)>=policy.minFrameDistance)){selected.push(f.index);if(selected.length===policy.limit)break;}
-   publication={policy,selected:selected.map(index=>({index,id:randomUUID(),operationId:randomUUID(),ref:this.ref(id,actor.id,index,policy.side)})),createdIds:[]};this.db.prepare('INSERT INTO quality_xpsnr_publications VALUES(?,?)').run(id,JSON.stringify(publication));
+   publication={policy,selected:selected.map(index=>({index,id:randomUUID(),operationId:randomUUID(),ref:this.ref(id,actor.id,index,policy.side)})),createdIds:[]};this.db.prepare('INSERT INTO quality_xpsnr_publications VALUES(?,?)').run(id,JSON.stringify(publication));settleScoringReservations(this.db,'xpsnr',id);
   }
   for(const item of publication.selected){
    annotations.mutate(policy.space,{action:'create-quality-candidate',operationId:item.operationId,id:item.id,revision:0,client:{kind:j.input.client.kind==='browser'?'gui':j.input.client.kind==='agent'?'agent':'http',id:'xpsnr_'+j.id},evidence:item.ref,candidate:{text:policy.text,severity:policy.severity}},actor,requestId,{origin,resolve:ref=>this.evidence(ref,actor.id)});
-   if(!publication.createdIds.includes(item.id)){publication.createdIds.push(item.id);this.db.prepare('UPDATE quality_xpsnr_publications SET body=? WHERE job_id=?').run(JSON.stringify(publication),id);}
+   if(!publication.createdIds.includes(item.id)){publication.createdIds.push(item.id);this.db.prepare('UPDATE quality_xpsnr_publications SET body=? WHERE job_id=?').run(JSON.stringify(publication),id);settleScoringReservations(this.db,'xpsnr',id);}
   }
   return publication;
  }

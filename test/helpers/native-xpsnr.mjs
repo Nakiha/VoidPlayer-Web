@@ -1,9 +1,8 @@
 import path from 'node:path';import {readFile,mkdir,writeFile} from 'node:fs/promises';import {execFileSync} from 'node:child_process';
 import {startService} from '../../server/runtime.ts';import {nativeFixture,sha,until} from './native-vmaf.mjs';
 export {sha,until};
-export async function xpsnrComponent(){const directory=path.resolve(process.env.VOIDPLAYER_XPSNR_COMPONENT??'.run/components/xpsnr');return {directory,manifestSha256:sha(await readFile(path.join(directory,'manifest.json')))};}
 export async function xpsnrFixture(options={}){
- const f=await nativeFixture({...options,component:false,start:async(config,...args)=>{if(options.component===true)config.nativeXpsnr=await xpsnrComponent();return (options.start??startService)(config,...args);}});
+ const f=await nativeFixture({...options,component:false,start:async(config,...args)=>{return (options.start??startService)(config,...args);}});
  const input=f.input?{schema:'voidplayer-native-xpsnr-job',version:1,client:f.input.client,plan:f.input.plan,recipe:'ffmpeg-xpsnr-reference-first-temporal-v1',cadenceUs:f.input.cadenceUs,...(f.input.cadence?{cadence:f.input.cadence}:{}),metrics:f.input.metrics,budget:f.input.budget}:undefined;
  return {...f,input,wait:id=>until(()=>f.json('/api/quality/xpsnr/jobs/'+id),j=>!['queued','preparing','running','cancelling'].includes(j.state),'XPSNR completion')};
 }

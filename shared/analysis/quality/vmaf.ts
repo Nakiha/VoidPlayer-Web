@@ -865,7 +865,7 @@ export function validateTemporalSequenceWitness(
 export const VMAF_CAPABILITY = {
   schema: "voidplayer-native-vmaf-capability",
   version: 1,
-  platforms: ["linux-x64"],
+  platforms: ["wasm32"],
   sourceMatrix: [
     { codec: "h264", bitDepths: [8, 10] },
     { codec: "hevc", bitDepths: [8, 10] },

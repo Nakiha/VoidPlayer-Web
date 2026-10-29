@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { MediaLibraryIndex } from "../../library.ts";
 import type { QualityExecutionContract } from "../../../shared/analysis/quality/reexecution.ts";
 import {
@@ -11,26 +12,68 @@ import type {
   CambiPrepared,
   CambiNative,
 } from "../../../shared/analysis/quality/cambi.ts";
-import { NativeCambiRunner } from "./runner.ts";
+import { ScoringWorkerOwner } from "../quality/scoring-worker-owner.ts";
 import type { CambiHooks } from "./runner.ts";
 import { analysisComponent } from "../quality/analysis-component.ts";
 import { AdminError } from "../../admin-error.ts";
 
-export class WasmCambiRunner extends NativeCambiRunner {
+export class WasmCambiRunner extends ScoringWorkerOwner {
   readonly analysisDir: string;
   constructor(
     library: MediaLibraryIndex,
     coreDir: string,
     analysisDir: string,
   ) {
-    super(library, coreDir, undefined);
+    super(library, coreDir);
     this.analysisDir = analysisDir;
   }
-  override assertAvailable() {
-    try { analysisComponent(this.analysisDir); }
-    catch (error) { throw new AdminError(503, (error as Error).message, "component-unavailable"); }
+  /** Reclaim only legacy interrupted scratch data; new runs never write raw clips. */
+  directory(id: string) {
+    if (!/^cambi-[a-f0-9-]{36}$/.test(id))
+      throw new CambiError("invalid-request", "Invalid historical job ID");
+    return path.join(this.library.indexDatabase + ".cambi-tmp", id);
   }
-  override async cambiCapability() {
+  async inspectCambi(
+    input: CambiInput,
+    target: import("../../../shared/analysis/quality/frame-pair.ts").PairTarget,
+    signal: AbortSignal,
+  ) {
+    return this.owned(
+      input,
+      signal,
+      () => {},
+      (s) =>
+        this.worker<{
+          frame: import("../../../shared/analysis/quality/psnr.ts").PsnrFrame;
+          provenance: import("../../../shared/analysis/quality/frame-pair.ts").PairProvenance;
+          decoder: import("../../../shared/analysis/quality/frame-pair.ts").PairDecoder["version"];
+          work: unknown;
+        }>(
+          "../cambi/decode-worker.ts",
+          {
+            mode: "picture",
+            database: this.library.indexDatabase,
+            coreDir: this.coreDir,
+            directory: "",
+            input,
+            target,
+          },
+          s,
+        ),
+    );
+  }
+  assertAvailable() {
+    try {
+      analysisComponent(this.analysisDir);
+    } catch (error) {
+      throw new AdminError(
+        503,
+        (error as Error).message,
+        "component-unavailable",
+      );
+    }
+  }
+  async cambiCapability() {
     const basic = {
       ...CAMBI_CAPABILITY,
       platforms: ["wasm32"],
@@ -78,7 +121,7 @@ export class WasmCambiRunner extends NativeCambiRunner {
       analysisContract: contract,
     };
   }
-  override async cambiReexecutionPreflight(
+  async cambiReexecutionPreflight(
     input: CambiInput,
     expected: QualityExecutionContract,
     signal: AbortSignal,
@@ -99,7 +142,7 @@ export class WasmCambiRunner extends NativeCambiRunner {
         ),
     );
   }
-  override async runCambi(
+  async runCambi(
     _id: string,
     input: CambiInput,
     signal: AbortSignal,
@@ -117,7 +160,7 @@ export class WasmCambiRunner extends NativeCambiRunner {
       signal,
       hooks.admitted,
       async (combined) => {
-        let executedContract:QualityExecutionContract|undefined;
+        let executedContract: QualityExecutionContract | undefined;
         const contract = this.contract(),
           data = this.data(input, contract);
         hooks.phase("decode-and-score");
@@ -134,7 +177,10 @@ export class WasmCambiRunner extends NativeCambiRunner {
           },
           combined,
           hooks.progress,
-          contract=>{executedContract=contract;hooks.contract?.(contract);},
+          (contract) => {
+            executedContract = contract;
+            hooks.contract?.(contract);
+          },
           async (message) => {
             if (!hooks.streamFrame)
               throw new CambiError(
@@ -183,8 +229,12 @@ export class WasmCambiRunner extends NativeCambiRunner {
         );
         combined.throwIfAborted();
         if (canonicalJson(contract) !== canonicalJson(this.contract()))
-          throw new CambiError("component-unavailable", "Analysis component changed during final verification");
-        value.prepared.work.indexBytes+=verification.indexBytes;value.prepared.work.indexPackets+=verification.indexPackets;
+          throw new CambiError(
+            "component-unavailable",
+            "Analysis component changed during final verification",
+          );
+        value.prepared.work.indexBytes += verification.indexBytes;
+        value.prepared.work.indexPackets += verification.indexPackets;
         if (value.prepared.work.executionWitness) {
           const w = value.prepared.work.executionWitness;
           w.passes += verification.witness.passes;
