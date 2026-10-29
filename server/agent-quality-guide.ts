@@ -61,11 +61,11 @@ There is no automatic alignment, subjective judgment or candidate publication.
 
 Trusted FLV/Enhanced FLV and strict self-contained non-fragmented MP4 are
 supported. MP4: avc1 H2648 or hvc1 HEVC8/10, one video track/description,
-progressive 420 BT.709 SDR, square SAR, no crop/rotate, exact integer-us clocks.
+progressive 420 BT.709 SDR, square SAR, no crop/rotate, exact rational source clocks from original ticks/timebase; microseconds are projections.
 fMP4, encryption, external datarefs, config changes, nontrivial edits, open GOP
-CRA and ambiguous/nonintegral clocks are unsupported. Never round or repair.
+CRA and ambiguous source clocks are unsupported. Fractional microseconds are supported through exact rational ticks; never match rounded projections or repair POC.
 Metadata readability is not scoring readiness. Probe is not index admission.
-Native VMAF/XPSNR have additional sequence/component constraints. CAMBI accepts the same strict MP4 quality namespace but separately validates the single source, component and measured interval; metadata or paired-metric success alone is not CAMBI admission.
+VMAF/XPSNR use the existing analysis WASM core with additional continuous-sequence, ROI and budget constraints. CAMBI uses the same analysis WASM and strict MP4 quality namespace but separately validates the single source and measured interval; metadata or paired-metric success alone is not CAMBI admission.
 
 [Operations](/api/agent/tasks/library) · [Next: relation and plan](/agent/quality/correspondence.md)
 `,
@@ -222,7 +222,7 @@ manual resolution; do not blindly repeat it. An explicit new computation after a
 confirmed failed/interrupted/cancelled/partial job is a separate user decision.
 
 For single, range, VMAF, XPSNR or CAMBI (no partial state), POST the original job's /reexecution-plan with {reason}.
-This only verifies the frozen source/cache/C plan/core/native component/model or filter/recipe and returns
+This only verifies the frozen source/cache/C plan/analysis core/model and pixel recipe and returns
 old partial facts, blocks and full-from-start cost. Missing historical witnesses
 or changed conditions require a new explicit intent; nothing is rebuilt.
 Confirm the exact plan.cost, reason and planDigest in a version1
@@ -233,7 +233,7 @@ actor and key, never a new key. GET /reexecutions follows the durable chain.
 One successor and its receipt commit atomically; two windows cannot fork it.
 Each job has its own attempt.number=1; retryOf.generation starts at 2. To explicitly
 recompute a failed successor, name that successor, not the first ancestor.
-Every selected pair/dependency/native sequence is recomputed from the beginning;
+Every selected pair/dependency/temporal sequence is recomputed from the beginning;
 old results and candidates are immutable, and new results are never published
 automatically. Running/cancelling or unconfirmed physical exit refuses new work.
 The example accepts reexecution:{jobId,reason}; default is read-only planning.

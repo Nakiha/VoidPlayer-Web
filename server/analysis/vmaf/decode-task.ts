@@ -126,7 +126,7 @@ export async function runVmafDecode(
         if (!value.source.index)
           throw new VmafError(
             "unsupported-vmaf-sequence",
-            "Native VMAF requires an existing complete trusted source index",
+            "VMAF requires an existing complete trusted source index",
           );
         indexBytes += Buffer.byteLength(JSON.stringify(value.source.index));
         indexPackets += qualityIndexPacketCount(value.source.index);

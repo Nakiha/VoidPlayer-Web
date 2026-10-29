@@ -109,7 +109,7 @@ export async function runCambiDecode(
       v.source.close();
       throw new CambiError(
         "unsupported-source",
-        "Native CAMBI requires an existing trusted quality index",
+        "CAMBI requires an existing trusted quality index",
       );
     }
     indexBytes += Buffer.byteLength(JSON.stringify(v.source.index));

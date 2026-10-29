@@ -435,3 +435,18 @@ b85c9a2 的 Windows Node 套件23/24通过；XPSNR HTTP文件前22个子用例
 本机两组Node/Bun各23/23、完整contract43/43和构建通过。最终Windows
 结果继续以当前PR提交的CI为准，历史超时不是通过记录。
 [原始失败日志](https://github.com/Nakiha/VoidPlayer-Web/actions/runs/40966392542/job/123772157072)。
+
+
+## 阶段十七：清除渐进发现入口的过期准入说明
+
+最终逐入口核对发现，专门评分指南已更新，但媒体发现字典、源准备指南和
+任务目录仍宣称Linux原生组件/整数微秒时钟，恢复提示也仍写Native XPSNR。
+新增契约在旧内容上确定性失败（explicitly installed Linux x64 component）。
+当前入口统一说明既有分析WASM、原始ticks/timebase有理比较、微秒投影、
+指标各自的ROI/区间准入；对应计划的机器可读说明也不再暗示按舍入微秒匹配。
+缺组件恢复仍保留原指标及对应capability链接，历史schema/结果字段不重命名。
+可信MP4文档移除与顶部更新相矛盾的旧时钟要求，并明确标记初始验收历史。
+
+Agent HTTP8/8、实际无浏览器工作流9/9、快速82/82、XPSNR基础HTTP Node/Bun
+各17/17、构建、共享类型及模块边界通过。改动是公开能力/恢复说明与错误文案，
+不改变评分算法、帧选择或历史记录；最终完整CI继续验证当前提交。

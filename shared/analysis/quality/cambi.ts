@@ -137,7 +137,7 @@ export function cambiInput(value: unknown): CambiInput {
   );
   cambiCheck(
     ["flv", "mp4"].includes(v.source.indexIdentity?.kind),
-    "Native CAMBI requires a trusted FLV or strict MP4 quality namespace",
+    "CAMBI requires a trusted FLV or strict MP4 quality namespace",
   );
   // Shape-only binding validation; the actual complete GOP is derived from the sealed cache before decoding.
   const target = {

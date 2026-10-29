@@ -435,13 +435,14 @@ self-contained non-fragmented MP4 with exactly one avc1 H2648 or hvc1 HEVC8/10
 video description, explicit BT.709 SDR, progressive 420, square SPS SAR and no
 crop/rotation. Audio is ignored for scoring but cannot reference external data.
 Original track/sample ordinal, timescale, DTS/CTS/duration ticks and moov SHA256
-are preserved. Non-integer microseconds are unsupported: do not round, repair
-POC or choose a nearby frame. Only exact identity edits are admitted.
+are preserved and compared as exact rational source times. Integer microseconds
+are transport/display projections; never use them to choose a nearby frame or
+repair POC. Only exact identity edits are admitted.
 Frame-index GET reads this namespace; POST/build=1 cannot prepare or upload it.
 Read-only original-pair inspection uses the same existing sealed cache without
 building, scoring, private-job access or player control. Library result version2
 and complete-mp4-index-derived-v1 annotation clocks identify MP4 or mixed pairs;
-FLV-only version1 receipts/fingerprints retain their original fields. Native VMAF
+FLV-only version1 receipts/fingerprints retain their original fields. Analysis-WASM VMAF
 has separate strict MP4/mixed sequence admission below; CAMBI separately validates the strict MP4 single-source subset and v2 evidence. See /docs/trusted-mp4-quality.md in the source tree.
 
 2. Explicitly prepare a missing supported FLV or strict MP4 cache with POST
