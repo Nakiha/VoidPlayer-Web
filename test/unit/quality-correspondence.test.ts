@@ -78,3 +78,18 @@ for(const stop of ['cancel','deadline'] as const)test(`planner ${stop} retains t
   assert.equal(service.submit(input,actor,'replay','plan').plan.requestId,'original');assert.throws(()=>service.get(active.id,'other'),{code:'plan-not-found'});assert.throws(()=>service.createRelation({...f.relation.input,declaration:'different'},actor,'other','relation'),{code:'idempotency-conflict'});
   await service.close();service=new CorrespondenceService(file,runner,ranges);assert.equal(service.get(active.id,actor.id).attemptId,active.attemptId);assert.equal(service.get(active.id,actor.id).state,stop==='cancel'?'cancelled':'failed');assert.equal(workers.length,1);
 });
+
+test('exact fractional-frame offsets preserve canonical identity, reject inconsistent projections and detect sub-microsecond overlap',async()=>{
+  const f=await correspondenceFixture(),input=f.relation.input;
+  const segment={id:'ntsc',referenceStartUs:0,referenceEndUs:100000,offsetUs:33367,offset:{ticks:1001,timescale:30000}};
+  const parse=(segments:typeof segment[])=>referenceRelationInput({...input,clock:{mode:'piecewise-exact-source-pts-offset',segments}});
+  const value=parse([segment]);assert.deepEqual(value.clock.segments[0].offset,segment.offset);
+  assert.equal(canonicalJson(parse([{...segment,offset:{ticks:2002,timescale:60000}}])),canonicalJson(value));
+  assert.throws(()=>parse([{...segment,offsetUs:33366}]),/projection/);
+  for(const offset of [{ticks:NaN,timescale:30000},{ticks:1,timescale:0},{ticks:1,timescale:1.5},{ticks:1,timescale:1,extra:1}])assert.throws(()=>parse([{...segment,offset}]));
+  // Rounded offsets are both zero, but the translated half-open intervals overlap.
+  assert.throws(()=>parse([{id:'a',referenceStartUs:0,referenceEndUs:1,offsetUs:0,offset:{ticks:1,timescale:3000000}},
+    {id:'b',referenceStartUs:1,referenceEndUs:2,offsetUs:0,offset:{ticks:0,timescale:1}}]),/Overlapping distorted/);
+  assert.equal(parse([{id:'a',referenceStartUs:0,referenceEndUs:1,offsetUs:0,offset:{ticks:1,timescale:3000000}},
+    {id:'b',referenceStartUs:1,referenceEndUs:2,offsetUs:0,offset:{ticks:1,timescale:3000000}}]).clock.segments.length,2);
+});

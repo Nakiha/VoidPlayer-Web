@@ -34,6 +34,17 @@ export function compareClocks(a: RationalClock, b: RationalClock) {
     delta = n * e - m * d;
   return delta < 0n ? -1 : delta > 0n ? 1 : 0;
 }
+/** Compare translated interval endpoints without rounding either sum. */
+export function compareClockSums(a: RationalClock, offsetA: RationalClock, b: RationalClock, offsetB: RationalClock) {
+  const [an, ad] = clockFraction(a), [ao, ax] = clockFraction(offsetA);
+  const [bn, bd] = clockFraction(b), [bo, bx] = clockFraction(offsetB);
+  const delta = (an * ax + ao * ad) * bd * bx - (bn * bx + bo * bd) * ad * ax;
+  return delta < 0n ? -1 : delta > 0n ? 1 : 0;
+}
+export function normalizeClock(value: RationalClock): RationalClock {
+  const key = clockKey(value).split('/');
+  return {ticks: Number(key[0]), timescale: Number(key[1])};
+}
 export function clockDeltaEquals(
   a: RationalClock,
   b: RationalClock,
@@ -42,9 +53,9 @@ export function clockDeltaEquals(
   return clockKey(a) === clockKey(b, delta);
 }
 /** Round nearest, ties away from zero; exact ticks remain in source evidence. */
-export function clockToUs(value: RationalClock) {
-  const [n, d] = clockFraction(value),
-    scaled = n * 1_000_000n;
+export function clockToUs(value: RationalClock, offset?: RationalClock) {
+  const [vn, vd] = clockFraction(value), [on, od] = offset ? clockFraction(offset) : [0n, 1n];
+  const n = vn * od + on * vd, d = vd * od, scaled = n * 1_000_000n;
   const magnitude = scaled < 0n ? -scaled : scaled;
   const result =
     Number((magnitude * 2n + d) / (d * 2n)) * (scaled < 0n ? -1 : 1);

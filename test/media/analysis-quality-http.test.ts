@@ -340,3 +340,27 @@ for (const [codec, depth] of [
       );
     },
   );
+
+test('one-frame NTSC offset joins exact source ticks; rounded microseconds cannot match and actual range scores use those pairs', {timeout:120000}, async t=>{
+  const f=await nativeFixture({component:false,distorted:true,containers:['mp4','mp4'],frameRate:{ticks:1001,timescale:30000}});
+  t.after(()=>f.close());
+  const original=await f.json(`/api/quality/correspondence-plans/${f.input.plan.id}`);
+  const build=async(exact:boolean)=>{
+    const relation=(await f.json('/api/quality/reference-relations',{...original.plan.relation.input,clock:{mode:'piecewise-exact-source-pts-offset',segments:[{id:'one-frame',referenceStartUs:0,referenceEndUs:10000000,offsetUs:33367,...(exact?{offset:{ticks:1001,timescale:30000}}:{})}]}},exact?'exact-shift':'rounded-shift')).relation;
+    const accepted=await f.json('/api/quality/correspondence-plans',{...f.planInput,relation:{id:relation.id,revision:1}},exact?'exact-plan':'rounded-plan');
+    let result;
+    for(let i=0;i<600;i++){result=await f.json(`/api/quality/correspondence-plans/${accepted.plan.id}`);if(!['queued','running'].includes(result.plan.state))break;await new Promise(r=>setTimeout(r,10));}
+    assert.equal(result.plan.state,exact?'completed':'blocked',JSON.stringify(result));
+    return {plan:result.plan,rows:(await f.json(`/api/quality/correspondence-plans/${accepted.plan.id}/rows`)).entries};
+  };
+  const exact=await build(true),mapped=exact.rows.filter((r:any)=>r.status==='mapped');assert.equal(mapped.length,7);
+  const time=(fact:any)=>({ticks:fact.clock.dtsTicks+fact.clock.ctsTicks,timescale:fact.clock.timescale});
+  for(const row of mapped){assert.ok(clockDeltaEquals(time(row.distorted),time(row.reference),{ticks:1001,timescale:30000}));assert.equal(row.expectedDistortedPtsUs,row.distorted.ptsUs);}
+  const rounded=await build(false);assert.equal(rounded.rows.filter((r:any)=>r.status==='mapped').length,0);assert.ok(rounded.rows.every((r:any)=>r.reason==='target-pts-missing'));
+  const {job}=await f.json(`/api/quality/correspondence-plans/${exact.plan.id}/execute`,{digest:exact.plan.resultDigest});
+  let range;
+  for(let i=0;i<1200;i++){range=await f.json(`/api/quality/ranges/${job.id}`);if(!['queued','running','cancelling'].includes(range.job.state))break;await new Promise(r=>setTimeout(r,10));}
+  assert.equal(range.job.state,'partial',JSON.stringify(range));assert.equal(range.job.summary.scoredPairs,7);
+  for(const sample of range.job.samples){const result=await f.json(`/api/quality/jobs/${sample.jobId}/result`),row=mapped.find((r:any)=>r.au===sample.au);assert.equal(result.value.result.provenance.reference.picture.au,row.reference.au);assert.equal(result.value.result.provenance.distorted.picture.au,row.distorted.au);}
+  const pinned=await f.request(`/api/tasks/single/${range.job.samples[0].jobId}/release-result`,{});assert.equal(pinned.status,409);assert.equal((await pinned.json()).code,'result-pinned-by-range');
+});

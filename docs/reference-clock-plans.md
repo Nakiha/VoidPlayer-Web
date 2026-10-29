@@ -12,12 +12,20 @@ same-origin JSON and `Idempotency-Key`:
 {"schema":"voidplayer-quality-reference-relation","version":1,"client":{"id":"comparison-agent","kind":"agent"},"reference":{"mediaId":"replace-with-24-hex-id","mediaVersion":"replace-with-24-hex-version","stream":"video","configuration":0},"distorted":{"mediaId":"replace-with-24-hex-id","mediaVersion":"replace-with-24-hex-version","stream":"video","configuration":0},"declaration":"Caller supplied comparison relationship","clock":{"mode":"piecewise-exact-source-pts-offset","segments":[{"id":"cut-1","referenceStartUs":0,"referenceEndUs":1000000,"offsetUs":20000}]}}
 ```
 
-All clocks are safe integer microseconds. The exact direction is
-`distortedPtsUs = referencePtsUs + offsetUs`. Segments are half-open `[start,end)`;
-there are at most 32, with unique IDs and no overlap in either clock domain.
-Overlaps name the conflicting segment IDs; endpoints and transformed endpoints
-must remain exact safe integers. Gaps are allowed. A revised declaration is a
-new immutable relation, so an existing plan can never silently change meaning.
+Source times use exact container ticks. The direction is distorted time = reference
+time + offset. The existing integer `offsetUs` form is exact in microseconds. An
+optional `offset: {ticks, timescale}` instead specifies exact seconds; `offsetUs`
+must equal its nearest-microsecond projection (ties away from zero). One frame at
+30000/1001 fps is `offset:{ticks:1001,timescale:30000}, offsetUs:33367`. The UI accepts
+an integer frame count and frame-rate numerator/denominator. Equivalent fractions
+normalize to the same request identity; old integer-only identities are unchanged.
+
+Reference segment boundaries remain safe integer microseconds, half-open
+`[start,end)`. Up to 32 segments have unique IDs and may not overlap in either
+domain. Translated boundaries and source joins use exact rational arithmetic;
+rounding cannot conceal an overlap or create a match. Gaps are retained. A changed
+declaration creates a new immutable relation. Exact offsets and expected rational
+clocks are preserved in correspondence rows alongside the display projection.
 
 ## Persistent bounded planning
 
@@ -30,7 +38,7 @@ header, with this contract (replace identities/builds with actual returned facts
 
 The service persists the complete request and relation snapshot before starting
 work, returning 202. It only reads existing server-produced, complete unrecovered
-FLV/EnhancedFLV caches for H.264/HEVC, preserving current geometry admission.
+FLV/EnhancedFLV or strict MP4 caches for H.264/HEVC, preserving current geometry admission.
 Missing, untrusted or changed caches fail explicitly; planning never scans media,
 builds an index, loads a decoder or scores pixels. Source/cache stat and build
 checks surround publication. A key replays the original plan and attempt rather
@@ -42,12 +50,13 @@ again. Index bytes describe loaded document bytes, not process RSS. The shared
 runner enforces a 256 MiB Worker heap and a physical stop before releasing the
 single compute slot. No coordinator acquires an outer permit. Planning queues
 behind preparations and quality work, with four unfinished records, two per actor
-and a five-minute admission wait. History allows at most 100 relations and 100
-plans under 64 MiB of logical reservations. Each plan reserves 1 MiB for request, relation snapshot, a result capped at 512 KiB, and its eventual submission intent.
+and a five-minute admission wait. History shares a 256 MiB logical byte budget;
+there is no lifetime row-count quota. A live plan reserves 8 MiB; terminal plans
+settle to retained input/result bytes and receipt allowance. Results cap at 8 MiB.
 Full history rejects new records without deleting old receipts. Logical limits
 do not claim to measure SQLite/WAL or whole-process memory.
 
-The reference universe is 1..256 **decode-order AU positions**, with at most 64
+The reference universe is 1..4096 **decode-order AU positions**, with at most 1024
 selected by `all` or the existing deterministic `stride` rule. Raw cache records
 are inspected before eligibility filtering. Each position retains its actual
 reference PTS/DTS, packet extent, configuration and key flag, selected status,

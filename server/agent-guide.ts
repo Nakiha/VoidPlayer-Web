@@ -662,8 +662,8 @@ See docs/bounded-quality-ranges.md for the full protocol.
 quality.correspondence adds immutable actor-owned reference declarations:
 POST /api/quality/reference-relations with schema voidplayer-quality-reference-relation,
 version 1, client, explicit reference/distorted {mediaId,mediaVersion,stream:"video",configuration:0},
-declaration and clock {mode:"piecewise-exact-source-pts-offset",segments:[{id,referenceStartUs,referenceEndUs,offsetUs}]}.
-Distorted PTS = reference PTS + offset in integer microseconds. Segments are half-open,
+declaration and clock {mode:"piecewise-exact-source-pts-offset",segments:[{id,referenceStartUs,referenceEndUs,offsetUs,offset?:{ticks,timescale}}]}.
+Distorted source time = reference source time + exact offset. Without offset, offsetUs is exact. With offset, offsetUs must equal its nearest-microsecond projection; 1 frame at 30000/1001 fps is offset:{ticks:1001,timescale:30000}, offsetUs:33367. Matching uses source ticks, never the projection. Segments are half-open,
 nonoverlapping in both domains. This is a caller declaration, never content certification.
 POST /api/quality/correspondence-plans pins relation {id,revision:1}, both cache build IDs,
 reference AU interval, all/stride sampling, recipe {roi,spatial?,ssim?,budget}, total range

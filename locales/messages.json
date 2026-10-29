@@ -4030,7 +4030,7 @@
     "params": {}
   },
   "qualityClock.direction": {
-    "source": "映射方向：待测源 PTS = 参考源 PTS + offset。每段参考区间为 [start, end)，单位均为整数微秒；两侧区间均不得重叠。",
+    "source": "映射方向：待测源时间 = 参考源时间 + 偏移。参考区间为 [开始, 结束)，单位为微秒。偏移可用微秒或指定帧率下的整帧数；两侧区间均不得重叠。",
     "params": {}
   },
   "qualityClock.execute": {
@@ -4041,8 +4041,24 @@
     "source": "结束本地重试，准备新请求",
     "params": {}
   },
+  "qualityClock.frameOffsetHelp": {
+    "source": "按精确帧率换算；例如 1 帧、30000/1001 fps。",
+    "params": {}
+  },
+  "qualityClock.frames": {
+    "source": "帧",
+    "params": {}
+  },
+  "qualityClock.microseconds": {
+    "source": "微秒",
+    "params": {}
+  },
   "qualityClock.newSamePlan": {
     "source": "新建相同计划",
+    "params": {}
+  },
+  "qualityClock.offsetUnit": {
+    "source": "偏移单位",
     "params": {}
   },
   "qualityClock.pendingConflict": {
@@ -4069,6 +4085,14 @@
     "source": "按此显式策略生成候选",
     "params": {}
   },
+  "qualityClock.rateDenominator": {
+    "source": "帧率分母",
+    "params": {}
+  },
+  "qualityClock.rateNumerator": {
+    "source": "帧率分子",
+    "params": {}
+  },
   "qualityClock.removeSegment": {
     "source": "移除此段",
     "params": {}
@@ -4087,6 +4111,18 @@
   },
   "qualityClock.scope": {
     "source": "关系由调用者声明，不认证同内容。时钟按原始 ticks 与时基精确匹配；缺洞、歧义与不支持会保留。只读取已有可信 FLV 或严格 MP4 缓存，评分与候选均须显式提交。",
+    "params": {}
+  },
+  "qualityClock.segmentEnd": {
+    "source": "参考结束 (µs)",
+    "params": {}
+  },
+  "qualityClock.segmentOffset": {
+    "source": "偏移",
+    "params": {}
+  },
+  "qualityClock.segmentStart": {
+    "source": "参考开始 (µs)",
     "params": {}
   },
   "qualityClock.showRange": {

@@ -29,6 +29,13 @@ export function retimeQualityMp4(input, {ticks, timescale}) {
       assert.equal(bytes[at], 0);
       bytes.writeUInt32BE(timescale, at + 12); bytes.writeUInt32BE(count * ticks, at + 16);
     }
+    if (type === 'mvhd') {
+      assert.equal(bytes[at], 0);
+      bytes.writeUInt32BE(timescale, at + 12); bytes.writeUInt32BE(count * ticks, at + 16);
+    }
+    if (type === 'tkhd') {
+      assert.equal(bytes[at], 0); bytes.writeUInt32BE(count * ticks, at + 20);
+    }
     if (type === 'ctts') {
       for (let i = 0; i < bytes.readUInt32BE(at + 4); i++) {
         const offset = at + 12 + i * 8, value = bytes[at] === 1 ? bytes.readInt32BE(offset) : bytes.readUInt32BE(offset);

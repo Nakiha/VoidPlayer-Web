@@ -74,9 +74,9 @@ Native VMAF/XPSNR have additional sequence/component constraints. CAMBI accepts 
 POST /api/quality/reference-relations with schema voidplayer-quality-reference-relation,
 version1, client:{id,kind:"agent"}, explicit reference/distorted
 {mediaId,mediaVersion,stream:"video",configuration:0}, a declaration and
-clock:{mode:"piecewise-exact-source-pts-offset",segments:[{id,referenceStartUs,referenceEndUs,offsetUs}]}.
+clock:{mode:"piecewise-exact-source-pts-offset",segments:[{id,referenceStartUs,referenceEndUs,offsetUs,offset?:{ticks,timescale}}]}.
 Segments are half-open [start,end), nonoverlapping in both clock domains.
-distorted PTS = reference PTS + offset. This is a caller declaration, not content certification.
+Distorted source time = reference source time + offset. Optional offset:{ticks,timescale} is exact; offsetUs must equal its nearest-microsecond projection. A frame at 30000/1001 fps uses ticks:1001,timescale:30000 and offsetUs:33367. Matching never uses that rounded projection. This is a caller declaration, not content certification.
 
 POST /api/quality/correspondence-plans pins relation:{id,revision}, both cache
 build IDs, inclusive reference decode-order interval, all/stride sampling,
