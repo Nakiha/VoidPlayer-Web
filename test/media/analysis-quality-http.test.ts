@@ -110,6 +110,9 @@ for (const depth of [8, 10])
     async (t) => {
       const f = await cambiFixture({ component: false, depth });
       t.after(() => f.close());
+      // The retired file executor reserved >192 MiB even for these four frames.
+      // The bundled scorer only stores maps + the bounded result, below 40 MiB.
+      f.input.budget.maxTemporaryBytes = 40 * 1024 * 1024;
       const { job } = await f.json(
         "/api/quality/cambi/jobs",
         f.input,
