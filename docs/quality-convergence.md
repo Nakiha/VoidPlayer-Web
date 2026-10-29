@@ -419,3 +419,19 @@ VMAF 浏览器测试还匹配旧提示 `neither spatial heatmaps`。实际任务
 为这个明确列举测试报告的artifact启用include-hidden-files，并由契约锁定；
 不扩展到整个工作区。原始失败日志保存于
 `.run/quality-convergence/cache-failure-69.log`，旧artifact截图保留于同目录ZIP。
+
+
+## 阶段十六：给完整 XPSNR 序列验收独立执行边界
+
+b85c9a2 的 Windows Node 套件23/24通过；XPSNR HTTP文件前22个子用例
+通过，最后一个HEVC10连续192帧已完成两次评分，在比较尾页读取时撞到整个
+文件180秒总限时。此前增加的六个有理时钟/ROI/长序列用例与17个基础HTTP
+用例共用旧总限时，成为随机器波动出现的边界失败。
+
+将六个序列用例原样迁移到独立媒体测试文件，并同时登记Node/Bun和三平台
+清单；基础17项和序列6项全部保留，评分、证据、比较与末帧断言不删减。
+两组仍各受180秒文件限时，子用例及20分钟job限时不扩大。运行时清单因此
+变为Node25项/Bun39项，发布契约锁定两组都必须执行。
+本机两组Node/Bun各23/23、完整contract43/43和构建通过。最终Windows
+结果继续以当前PR提交的CI为准，历史超时不是通过记录。
+[原始失败日志](https://github.com/Nakiha/VoidPlayer-Web/actions/runs/40966392542/job/123772157072)。
