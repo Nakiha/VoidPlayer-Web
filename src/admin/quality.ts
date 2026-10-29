@@ -1,3 +1,4 @@
+import {qualityViewVisible} from './quality-navigation.ts';
 import { qualityNavigationShell, installQualityNavigation } from './quality-navigation.ts';
 import {qualityCambiShell,installQualityCambi} from './quality-cambi.ts';
 import {qualityXpsnrShell,installQualityXpsnr} from './quality-xpsnr.ts';
@@ -250,7 +251,7 @@ export function installQualityJobs(signal:AbortSignal){
   },{signal});
   window.addEventListener('focus',()=>{if(active)void identityHealth().catch(error=>setError('availability',error));},{signal});
   onLanguageChange(()=>{if(active&&observation&&currentActor()?.id===lastActor)render(observation);},signal);
-  const timer=setInterval(()=>{if(active&&enabled&&!document.hidden&&currentActor()?.id===lastActor)void observer?.poll();},1000);
+  const timer=setInterval(()=>{if(active&&enabled&&qualityViewVisible('single')&&currentActor()?.id===lastActor)void observer?.poll();},1000);
   signal.addEventListener('abort',()=>{clearInterval(timer);observer?.dispose();controller.abort();},{once:true});
   return {activate(value:boolean){cambi.activate(value);ranges.activate(value);correspondence.activate(value);vmaf.activate(value);xpsnr.activate(value);if(active===value)return;active=value;if(value)void start();else{reexecution.clear();scope++;observer?.dispose();observer=null;controller.abort();}}};
 }

@@ -62,6 +62,9 @@ await withBrowserFixture({caseName:'i18n',engine,pageOptions:{viewport:{width:12
  // This specifically verifies MutationObserver refresh without another hover
  // or focus event, so stale translations cannot pass by reopening the popup.
  await page.mouse.move(700,400);await page.keyboard.press('Tab');await tooltip.focus();
+ // A scroll delivered in the same focus turn must not cancel the zero-delay
+ // keyboard tooltip before it has become visible (CI exposed this ordering).
+ await tooltip.evaluate(e=>{e.blur();e.focus({preventScroll:true});e.closest('#track-properties').dispatchEvent(new Event('scroll'));});
  await tooltipPopup.waitFor({state:'visible'});
  await tooltip.evaluate(e=>{window.__tooltipAnchor=e;window.__tooltipPopup=document.querySelector('#control-tooltip');});
  for(const scenario of ['original','queued-scroll']){

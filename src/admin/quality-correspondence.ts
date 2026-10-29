@@ -1,3 +1,4 @@
+import {qualityViewVisible} from './quality-navigation.ts';
 import {clockToUs} from '../../shared/media/indexing/rational-clock.ts';
 import {th,t,msg} from '../i18n.ts';
 import {currentActor} from '../services/identity.ts';
@@ -85,6 +86,6 @@ export function installQualityCorrespondence(signal:AbortSignal){
   for(const kind of ['relation','plan'] as const){$(`retry-${kind}`).onclick=()=>{const c=context();try{const saved=pending(c.actor,kind);if(saved&&!saved.confirmed)void submitFrozen(kind,JSON.parse(saved.body),saved.key,c).catch(e=>{if(valid(c)&&c.view===viewGeneration)message(e);});}catch(e){message(e);}};$(`forget-${kind}`).onclick=()=>{try{sessionStorage.removeItem(pendingKey(actor,kind));submissions[kind]++;renderPending();$('status').textContent='';}catch(e){message(e);}};}
   $('refresh').onclick=()=>void(async()=>{await lists('relations');await lists('history');await detail();})();$('relations-more').onclick=()=>void lists('relations',true);$('history-more').onclick=()=>void lists('history',true);$('rows-more').onclick=()=>void rows(true);
   window.addEventListener('voidplayer-identity-change',()=>{reset();if(active)void lists('relations').then(()=>lists('history'));},{signal});window.addEventListener('storage',e=>{if(e.key==='voidplayer.identity'){reset();actor='';}},{signal});
-  const timer=setInterval(()=>{if(active&&!document.hidden&&selected)void detail();},1000);signal.addEventListener('abort',()=>{clearInterval(timer);controller.abort();},{once:true});segment();
+  const timer=setInterval(()=>{if(active&&qualityViewVisible('correspondence')&&selected)void detail();},1000);signal.addEventListener('abort',()=>{clearInterval(timer);controller.abort();},{once:true});segment();
   return {activate(value:boolean){if(value===active)return;active=value;reset();if(active)void lists('relations').then(()=>lists('history'));}};
 }

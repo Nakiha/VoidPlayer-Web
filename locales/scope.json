@@ -11,6 +11,7 @@
     "src/admin/presentation.ts",
     "src/admin/quality-cambi.ts",
     "src/admin/quality-correspondence.ts",
+    "src/admin/quality-fields.ts",
     "src/admin/quality-navigation.ts",
     "src/admin/quality-ranges.ts",
     "src/admin/quality-reexecution.ts",

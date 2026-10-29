@@ -1,7 +1,13 @@
 import { msg, th } from '../i18n.ts';
 
 const views = ['single', 'correspondence', 'vmaf', 'cambi', 'ranges', 'xpsnr'] as const;
-type QualityView = (typeof views)[number];
+export type QualityView = (typeof views)[number];
+
+/** Observation follows the visible form; frozen requests remain mounted. */
+export function qualityViewVisible(view: QualityView) {
+  const pane = document.getElementById(`quality-view-${view}`);
+  return !document.hidden && !!pane && !pane.closest('[hidden]');
+}
 
 export function qualityNavigationShell() {
   const labels = [
@@ -35,6 +41,9 @@ export function installQualityNavigation(signal: AbortSignal) {
   };
   for (const button of root.querySelectorAll<HTMLButtonElement>('[data-quality-section]')) {
     button.addEventListener('click', () => select(button.dataset.qualitySection as QualityView), { signal });
+  }
+  for (const button of root.querySelectorAll<HTMLButtonElement>('[data-quality-open]')) {
+    button.addEventListener('click', () => select(button.dataset.qualityOpen as QualityView), { signal });
   }
   const params = new URL(location.href).searchParams;
   const initial = params.get('qualityView') ?? (params.has('xpsnrComparison') ? 'xpsnr' : null);
