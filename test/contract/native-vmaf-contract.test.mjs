@@ -10,7 +10,7 @@ test('official source/model lock, self-description and documented recipe identif
 });
 test('real native tests are mandatory in existing full suites, remain outside lightweight identity and include compiled installation',async()=>{
  const manifest=JSON.parse(await read('scripts/testing/manifest.json')),byId=id=>manifest.cases.find(c=>c.id===id);
- for(const id of ['node-native-vmaf-http','node-native-vmaf-lifecycle']){const c=byId(id);assert.equal(c.required,true);assert.ok(c.suites.includes('ci-native-node'));assert.ok(c.fixtures.includes('core'));assert.deepEqual(c.platforms,['linux']);assert.ok(!c.tools.includes('ffmpeg'),'native job consumes committed independent raw oracles without runtime FFmpeg');}
+ for(const id of ['node-native-vmaf-http','node-native-vmaf-lifecycle']){const c=byId(id);assert.equal(c.required,true);assert.ok(c.suites.includes('ci-native-node'));assert.ok(c.fixtures.includes('core'));assert.deepEqual(c.platforms,['linux','darwin','win32']);assert.ok(c.fixtures.includes('analysis-core'));assert.ok(!c.tools.includes('ffmpeg'),'native job consumes committed independent raw oracles without runtime FFmpeg');}
  for(const id of ['bun-native-vmaf-http','bun-native-vmaf-lifecycle'])assert.ok(byId(id).suites.includes('ci-native-bun'));
  for(const engine of ['chromium','webkit'])for(const depth of [8,10]){const c=byId(`browser-native-vmaf-${depth}-${engine}`);assert.equal(c.required,true);assert.equal(c.build,true);assert.ok(c.suites.includes('ci-cache'));assert.ok(c.fixtures.includes('core'));assert.ok(!c.suites.some(s=>s.startsWith('ci-identity')));}
  const packaged=await read('scripts/package-release.mjs');for(const worker of ['component-worker.ts','decode-worker.ts'])assert.ok(packaged.includes('server/analysis/vmaf/'+worker));
@@ -23,7 +23,7 @@ test('MP4 native matrix is explicitly advertised and adds every required browser
  assert.deepEqual(VMAF_CAPABILITY.associationVersions,[1,2]);assert.deepEqual(VMAF_CAPABILITY.resultVersions,[1,2]);
  const manifest=JSON.parse(await read('scripts/testing/manifest.json'));
  for(const engine of ['chromium','webkit'])for(const [codec,depth]of [['h264',8],['hevc',8],['hevc',10]]){
-  const row=manifest.cases.find(c=>c.id===`browser-mp4-vmaf-${codec}-${depth}-${engine}`);assert.ok(row?.required);assert.equal(row.build,true);assert.deepEqual(row.platforms,['linux']);assert.ok(row.suites.includes('ci-cache'));assert.ok(!row.suites.some(s=>s.startsWith('ci-identity')));
+  const row=manifest.cases.find(c=>c.id===`browser-mp4-vmaf-${codec}-${depth}-${engine}`);assert.ok(row?.required);assert.equal(row.build,true);assert.deepEqual(row.platforms,['linux','darwin','win32']);assert.ok(row.fixtures.includes('analysis-core'));assert.ok(row.suites.includes('ci-cache'));assert.ok(!row.suites.some(s=>s.startsWith('ci-identity')));
   assert.deepEqual(row.command,['node','scripts/native/run-vmaf-tests.mjs','node','scripts/check-mp4-vmaf-browser.mjs',engine,codec,String(depth)]);assert.equal(row.timeoutMs,300000);
  }
  const fixed=JSON.parse(await read('test/helpers/native-vmaf-mp4-samples.json'));assert.deepEqual(fixed.samples.map(s=>[s.codec,s.depth]),[['h264',8],['hevc',8],['hevc',10]]);assert.match(fixed.recipe.verification,/no content certification/);

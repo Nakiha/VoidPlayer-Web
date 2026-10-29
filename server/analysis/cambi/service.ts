@@ -26,7 +26,7 @@ export class NativeCambiService{
  get(id:string,actor:string){const r=this.db.prepare('SELECT body,fingerprint FROM cambi_jobs WHERE id=? AND actor=?').get(id,actor);if(!r)throw new AdminError(404,'CAMBI job not found','cambi-not-found');const j=JSON.parse(String(r.body)) as CambiJob;if(digest(j.input)!==r.fingerprint)throw new AdminError(500,'Stored CAMBI request changed','stored-cambi-invalid');return j;}
  private descriptorValue:Awaited<ReturnType<NativeCambiRunner['cambiCapability']>>|null=null;
  get descriptor(){return this.descriptorValue;}
- async capability(){const d=await this.runner.cambiCapability();if(d.reason==='quality-busy'&&this.descriptorValue)return {...this.descriptorValue,verification:'deferred-admission-busy'};this.descriptorValue=d;return {...d,verification:'executed-component-selftest'};}
+ async capability(){const d=await this.runner.cambiCapability();if(d.reason==='quality-busy'&&this.descriptorValue)return {...this.descriptorValue,verification:'deferred-admission-busy'};this.descriptorValue=d;return {...d,verification:'artifact-hashes-verified'};}
  history(actor:string,after=0,limit=8){this.cursor(after,limit,8);const rows=this.db.prepare('SELECT rowid,body FROM cambi_jobs WHERE actor=? AND rowid>? ORDER BY rowid LIMIT ?').all(actor,after,limit+1);return {entries:rows.slice(0,limit).map(r=>JSON.parse(String(r.body))),after:rows.length?Number(rows[Math.min(rows.length,limit)-1].rowid):after,more:rows.length>limit};}
  submit(value:unknown,actor:Actor,requestId:string,key:unknown,reexecution?:ReexecutionCreation){this.available();const input=cambiInput(value),k=qualityIdempotencyKey(key),fp=digest(input);this.db.exec('BEGIN IMMEDIATE');let accepted:{job:CambiJob;replayed:boolean};try{accepted=(()=>{
  if(reexecution){const prior=this.reexecutions.replay(reexecution.parentId,actor.id,reexecution.key,reexecution.request);if(prior)return {job:this.reexecutions.verify(prior,this.get(prior.jobId,actor.id)),replayed:true};const parent=this.get(reexecution.parentId,actor.id);if(parent.revision!==reexecution.parentRevision||!['failed','interrupted','cancelled'].includes(parent.state)||parent.endedAt===null||parent.process)throw new AdminError(409,'Original CAMBI execution has not physically stopped.','reexecution-blocked');}
@@ -49,7 +49,7 @@ export class NativeCambiService{
  expectedExecutionContract:j.executionContract,
  contract:contract=>{j=this.get(j.id,j.actor.id);if(Buffer.byteLength(JSON.stringify(contract))>16*1024||j.executionContract&&!sameExecutionContract(j.executionContract,contract))throw new AdminError(409,'Frozen CAMBI execution contract changed','execution-contract-conflict');if(!j.executionContract){j.executionContract=contract;this.save(j);}},
  admitted:()=>{j=this.get(j.id,j.actor.id);if(j.state!=='queued'||j.queueUntil<=now())throw new CambiError('queue-expired','CAMBI admission changed');j.state='preparing';j.startedAt=now();j.attemptId=randomUUID();this.save(j);},
- phase:p=>{j=this.get(j.id,j.actor.id);j.phase=p;if(p==='native')j.state='running';this.save(j);},
+ phase:p=>{j=this.get(j.id,j.actor.id);j.phase=p;if((p==='native'||p==='decode-and-score')&&j.state!=='cancelling')j.state='running';this.save(j);},
  progress:(n,total)=>{j=this.get(j.id,j.actor.id);j.progress={preparedFrames:n,targetFrames:total};this.save(j);},
  prepared:p=>{this.validatePrepared(p,j.input);if(prepared){
   if(prepared.frames.length!==p.frames.length)throw Error('Streamed CAMBI frame count changed');

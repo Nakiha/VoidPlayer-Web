@@ -35,6 +35,7 @@ for (const [metric, fixture] of [["vmaf", "native-vmaf-samples.json"], ["cambi",
     for (const model of metric === "vmaf"
       ? ["vmaf_v0.6.1", "vmaf_v0.6.1neg"]
       : [null])
+      for (const same of metric === "vmaf" ? [false, true] : [false])
       for (const roi of metric === "vmaf"
         ? [null, { x: 16, y: 16, width: 96, height: 64 }]
         : [null]) {
@@ -48,7 +49,7 @@ for (const [metric, fixture] of [["vmaf", "native-vmaf-samples.json"], ["cambi",
             ),
             dist = gunzipSync(
               Buffer.from(
-                (metric === "cambi" ? s : s.distorted).rawGzip,
+                (metric === "cambi" ? s : same ? s.reference : s.distorted).rawGzip,
                 "base64",
               ),
             );
@@ -126,6 +127,7 @@ for (const [metric, fixture] of [["vmaf", "native-vmaf-samples.json"], ["cambi",
           cases.push({
             metric,
             sampleIndex,
+            ...(same ? { same: true } : {}),
             ...(fixture.includes("mp4") ? { fixture } : {}),
             model,
             ...(roi ? { roi } : {}),

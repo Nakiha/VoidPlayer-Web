@@ -64,6 +64,62 @@
     {
       "metric": "vmaf",
       "sampleIndex": 0,
+      "same": true,
+      "model": "vmaf_v0.6.1",
+      "referenceSha256": "91be8a2d258e1e654aa09b9f99df2166be78cdc8896908b3a1fd4429972358a0",
+      "distortedSha256": "91be8a2d258e1e654aa09b9f99df2166be78cdc8896908b3a1fd4429972358a0",
+      "frames": [
+        97.428619,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.428619,
+        "max": 100,
+        "mean": 99.678577,
+        "harmonic_mean": 99.671254
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 0,
+      "same": true,
+      "model": "vmaf_v0.6.1",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "f21dd8601e7aeeb1984c78194279a736714d16ad5d07c5db6c42aa51ab736559",
+      "distortedSha256": "f21dd8601e7aeeb1984c78194279a736714d16ad5d07c5db6c42aa51ab736559",
+      "frames": [
+        97.428569,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.428569,
+        "max": 100,
+        "mean": 99.678571,
+        "harmonic_mean": 99.671247
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 0,
       "model": "vmaf_v0.6.1neg",
       "referenceSha256": "91be8a2d258e1e654aa09b9f99df2166be78cdc8896908b3a1fd4429972358a0",
       "distortedSha256": "ff9c197ff530c7387567b865c37e5740d3a89ddc9339bf94e3accbcc7014c53e",
@@ -112,6 +168,62 @@
         "max": 69.387454,
         "mean": 65.017825,
         "harmonic_mean": 64.583418
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 0,
+      "same": true,
+      "model": "vmaf_v0.6.1neg",
+      "referenceSha256": "91be8a2d258e1e654aa09b9f99df2166be78cdc8896908b3a1fd4429972358a0",
+      "distortedSha256": "91be8a2d258e1e654aa09b9f99df2166be78cdc8896908b3a1fd4429972358a0",
+      "frames": [
+        97.42499,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.42499,
+        "max": 100,
+        "mean": 99.678124,
+        "harmonic_mean": 99.670779
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 0,
+      "same": true,
+      "model": "vmaf_v0.6.1neg",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "f21dd8601e7aeeb1984c78194279a736714d16ad5d07c5db6c42aa51ab736559",
+      "distortedSha256": "f21dd8601e7aeeb1984c78194279a736714d16ad5d07c5db6c42aa51ab736559",
+      "frames": [
+        97.424835,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.424835,
+        "max": 100,
+        "mean": 99.678104,
+        "harmonic_mean": 99.670759
       },
       "heatmaps": []
     },
@@ -172,6 +284,62 @@
     {
       "metric": "vmaf",
       "sampleIndex": 1,
+      "same": true,
+      "model": "vmaf_v0.6.1",
+      "referenceSha256": "eae77f24b56b8f12bf5613228ee2406e74cf42c8409dba5ae42bb90579e5fb6c",
+      "distortedSha256": "eae77f24b56b8f12bf5613228ee2406e74cf42c8409dba5ae42bb90579e5fb6c",
+      "frames": [
+        97.428611,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.428611,
+        "max": 100,
+        "mean": 99.678576,
+        "harmonic_mean": 99.671253
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 1,
+      "same": true,
+      "model": "vmaf_v0.6.1",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "8c6005f67222fa122608eed7f8ec9747e721dd3b2e64fe7b425f11d01d9f9357",
+      "distortedSha256": "8c6005f67222fa122608eed7f8ec9747e721dd3b2e64fe7b425f11d01d9f9357",
+      "frames": [
+        97.428599,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.428599,
+        "max": 100,
+        "mean": 99.678575,
+        "harmonic_mean": 99.671251
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 1,
       "model": "vmaf_v0.6.1neg",
       "referenceSha256": "eae77f24b56b8f12bf5613228ee2406e74cf42c8409dba5ae42bb90579e5fb6c",
       "distortedSha256": "410a540aa86979b7e00a5cbe506663f8ba261316ccee37bc43c86362de811e42",
@@ -220,6 +388,62 @@
         "max": 70.611894,
         "mean": 66.272739,
         "harmonic_mean": 65.883039
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 1,
+      "same": true,
+      "model": "vmaf_v0.6.1neg",
+      "referenceSha256": "eae77f24b56b8f12bf5613228ee2406e74cf42c8409dba5ae42bb90579e5fb6c",
+      "distortedSha256": "eae77f24b56b8f12bf5613228ee2406e74cf42c8409dba5ae42bb90579e5fb6c",
+      "frames": [
+        97.425357,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.425357,
+        "max": 100,
+        "mean": 99.67817,
+        "harmonic_mean": 99.670827
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 1,
+      "same": true,
+      "model": "vmaf_v0.6.1neg",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "8c6005f67222fa122608eed7f8ec9747e721dd3b2e64fe7b425f11d01d9f9357",
+      "distortedSha256": "8c6005f67222fa122608eed7f8ec9747e721dd3b2e64fe7b425f11d01d9f9357",
+      "frames": [
+        97.425178,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.425178,
+        "max": 100,
+        "mean": 99.678147,
+        "harmonic_mean": 99.670804
       },
       "heatmaps": []
     },
@@ -280,6 +504,62 @@
     {
       "metric": "vmaf",
       "sampleIndex": 2,
+      "same": true,
+      "model": "vmaf_v0.6.1",
+      "referenceSha256": "6f23ca19ecf1a2d1413f9554a872f02e13d27d72b0d8d432f432cb9a5562ea04",
+      "distortedSha256": "6f23ca19ecf1a2d1413f9554a872f02e13d27d72b0d8d432f432cb9a5562ea04",
+      "frames": [
+        97.428594,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.428594,
+        "max": 100,
+        "mean": 99.678574,
+        "harmonic_mean": 99.671251
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 2,
+      "same": true,
+      "model": "vmaf_v0.6.1",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "1ccce7f7969f6aa65222fe3ce5a79580991078a462afb848d8692a999a0995c0",
+      "distortedSha256": "1ccce7f7969f6aa65222fe3ce5a79580991078a462afb848d8692a999a0995c0",
+      "frames": [
+        97.428584,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.428584,
+        "max": 100,
+        "mean": 99.678573,
+        "harmonic_mean": 99.671249
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 2,
       "model": "vmaf_v0.6.1neg",
       "referenceSha256": "6f23ca19ecf1a2d1413f9554a872f02e13d27d72b0d8d432f432cb9a5562ea04",
       "distortedSha256": "26565bf15a34fc6e8b69e4987d8d2fea6ca827b9ac5b0dfaeeead58e513c3de1",
@@ -328,6 +608,62 @@
         "max": 69.30896,
         "mean": 64.092968,
         "harmonic_mean": 63.67139
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 2,
+      "same": true,
+      "model": "vmaf_v0.6.1neg",
+      "referenceSha256": "6f23ca19ecf1a2d1413f9554a872f02e13d27d72b0d8d432f432cb9a5562ea04",
+      "distortedSha256": "6f23ca19ecf1a2d1413f9554a872f02e13d27d72b0d8d432f432cb9a5562ea04",
+      "frames": [
+        97.425751,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.425751,
+        "max": 100,
+        "mean": 99.678219,
+        "harmonic_mean": 99.670879
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 2,
+      "same": true,
+      "model": "vmaf_v0.6.1neg",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "1ccce7f7969f6aa65222fe3ce5a79580991078a462afb848d8692a999a0995c0",
+      "distortedSha256": "1ccce7f7969f6aa65222fe3ce5a79580991078a462afb848d8692a999a0995c0",
+      "frames": [
+        97.42485,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.42485,
+        "max": 100,
+        "mean": 99.678106,
+        "harmonic_mean": 99.670761
       },
       "heatmaps": []
     },
@@ -388,6 +724,62 @@
     {
       "metric": "vmaf",
       "sampleIndex": 3,
+      "same": true,
+      "model": "vmaf_v0.6.1",
+      "referenceSha256": "bb10ac14a4e2725d707c307b2a8b69c16f454a804b012903dc1bf76f7155f66c",
+      "distortedSha256": "bb10ac14a4e2725d707c307b2a8b69c16f454a804b012903dc1bf76f7155f66c",
+      "frames": [
+        97.428597,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.428597,
+        "max": 100,
+        "mean": 99.678575,
+        "harmonic_mean": 99.671251
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 3,
+      "same": true,
+      "model": "vmaf_v0.6.1",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "acb4fa6485cef76cdeabeb07550d5e53d06dd419f8c335670c75a9d9ebaad7a6",
+      "distortedSha256": "acb4fa6485cef76cdeabeb07550d5e53d06dd419f8c335670c75a9d9ebaad7a6",
+      "frames": [
+        97.428594,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.428594,
+        "max": 100,
+        "mean": 99.678574,
+        "harmonic_mean": 99.671251
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 3,
       "model": "vmaf_v0.6.1neg",
       "referenceSha256": "bb10ac14a4e2725d707c307b2a8b69c16f454a804b012903dc1bf76f7155f66c",
       "distortedSha256": "3dc860f68acbd96d9f73ac9d07fd728446496b64c7c80ac291ae8a2d848b2954",
@@ -436,6 +828,62 @@
         "max": 69.609662,
         "mean": 65.562509,
         "harmonic_mean": 65.176433
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 3,
+      "same": true,
+      "model": "vmaf_v0.6.1neg",
+      "referenceSha256": "bb10ac14a4e2725d707c307b2a8b69c16f454a804b012903dc1bf76f7155f66c",
+      "distortedSha256": "bb10ac14a4e2725d707c307b2a8b69c16f454a804b012903dc1bf76f7155f66c",
+      "frames": [
+        97.425566,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.425566,
+        "max": 100,
+        "mean": 99.678196,
+        "harmonic_mean": 99.670855
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 3,
+      "same": true,
+      "model": "vmaf_v0.6.1neg",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "acb4fa6485cef76cdeabeb07550d5e53d06dd419f8c335670c75a9d9ebaad7a6",
+      "distortedSha256": "acb4fa6485cef76cdeabeb07550d5e53d06dd419f8c335670c75a9d9ebaad7a6",
+      "frames": [
+        97.424707,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.424707,
+        "max": 100,
+        "mean": 99.678088,
+        "harmonic_mean": 99.670742
       },
       "heatmaps": []
     },
@@ -496,6 +944,62 @@
     {
       "metric": "vmaf",
       "sampleIndex": 4,
+      "same": true,
+      "model": "vmaf_v0.6.1",
+      "referenceSha256": "fb3f6b93fdfcdbc4b4240beb36013e18d7835b5aea934d9d280bc1a7d77385d6",
+      "distortedSha256": "fb3f6b93fdfcdbc4b4240beb36013e18d7835b5aea934d9d280bc1a7d77385d6",
+      "frames": [
+        97.428641,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.428641,
+        "max": 100,
+        "mean": 99.67858,
+        "harmonic_mean": 99.671257
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 4,
+      "same": true,
+      "model": "vmaf_v0.6.1",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "d153e99506825ff1e4adb31dd6108178ecc9cf31f9f37e91cd5036067633c8dd",
+      "distortedSha256": "d153e99506825ff1e4adb31dd6108178ecc9cf31f9f37e91cd5036067633c8dd",
+      "frames": [
+        97.428638,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.428638,
+        "max": 100,
+        "mean": 99.67858,
+        "harmonic_mean": 99.671256
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 4,
       "model": "vmaf_v0.6.1neg",
       "referenceSha256": "fb3f6b93fdfcdbc4b4240beb36013e18d7835b5aea934d9d280bc1a7d77385d6",
       "distortedSha256": "75139b99e6bbbe49a665e8cead08c99c63a829eb0024e4bcc0f6d6870f5f424e",
@@ -544,6 +1048,62 @@
         "max": 63.059003,
         "mean": 58.389327,
         "harmonic_mean": 58.01671
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 4,
+      "same": true,
+      "model": "vmaf_v0.6.1neg",
+      "referenceSha256": "fb3f6b93fdfcdbc4b4240beb36013e18d7835b5aea934d9d280bc1a7d77385d6",
+      "distortedSha256": "fb3f6b93fdfcdbc4b4240beb36013e18d7835b5aea934d9d280bc1a7d77385d6",
+      "frames": [
+        97.424826,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.424826,
+        "max": 100,
+        "mean": 99.678103,
+        "harmonic_mean": 99.670758
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 4,
+      "same": true,
+      "model": "vmaf_v0.6.1neg",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "d153e99506825ff1e4adb31dd6108178ecc9cf31f9f37e91cd5036067633c8dd",
+      "distortedSha256": "d153e99506825ff1e4adb31dd6108178ecc9cf31f9f37e91cd5036067633c8dd",
+      "frames": [
+        97.42487,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.42487,
+        "max": 100,
+        "mean": 99.678109,
+        "harmonic_mean": 99.670764
       },
       "heatmaps": []
     },

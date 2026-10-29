@@ -47,7 +47,7 @@ for (const timescale of [24, 30, 60, 24000, 30000]) {
       assert.equal("supervisorSha256" in result.vmaf.component, false);
       const expected = oracle.cases.find(
         (c: any) =>
-          c.metric === "vmaf" &&
+          c.metric === "vmaf" && !c.same &&
           c.model === "vmaf_v0.6.1" &&
           samples[c.sampleIndex].codec === "h264" &&
           samples[c.sampleIndex].depth === 8 &&
@@ -161,7 +161,7 @@ for (const depth of [8, 10])
       const result = await f.json(`/api/quality/vmaf/jobs/${job.id}/result`);
       const expected = oracle.cases.find(
         (c: any) =>
-          c.metric === "vmaf" &&
+          c.metric === "vmaf" && !c.same &&
           c.model === "vmaf_v0.6.1" &&
           c.roi &&
           samples[c.sampleIndex].depth === depth &&

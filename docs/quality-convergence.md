@@ -192,3 +192,36 @@ CAMBI 区间复用连续解码器，每个 GOP 解码一次；逐帧热图写入
 本机证据：`.run/quality-convergence/cambi-stream-bench.json`、
 `.run/quality-convergence/cambi-stream-bench-repeat.json`。
 遗留原生测试迁移与 XPSNR 旧执行路径仍未完成，不能据此关闭整轮收敛。
+
+## 阶段七：把工程验收迁到真实分析 Worker
+
+VMAF/CAMBI 原有 HTTP、生命周期和浏览器用例不再等待原生 supervisor。
+故障注入改为持有真实 Worker 消息、终止真实 Worker、破坏实际热图及产物、
+杀掉真实宿主服务。准备好的 PSNR/SSIM 在最终核验失败或宿主中断后保留，
+没有准备完成的分数不伪装成部分成功。重启不自动重算，回执事务崩溃测试
+仍验证“提交前无后继、提交后只恢复同一后继”。
+
+迁移时修复两个实现问题：最后一次来源核验期间分析产物发生变化，必须
+再次核对并拒绝提交；CAMBI 缺产物返回503，实际评分阶段正确显示运行中。
+能力说明只声称产物 hash 已校验，像素 ABI 在执行时验证，不再冒称已运行
+原生自检。旧测试命令保留兼容入口，取消自动安装原生 VMAF 组件。
+
+官方 CLI 只用于显式生成独立对照，常规测试按输入原始像素 SHA 查找固定
+结果；新增同源 VMAF 对照。容差保持官方对照清单原有值：VMAF 1e-5、CAMBI
+1e-6；热图下载后的长度和逐帧 hash 必须完全一致。测试没有用产品 WASM
+重新计算自己的期望值。纯 VMAF/CAMBI 用例注册到三种宿主平台并要求既有
+analysis-core，仍包含旧 XPSNR 的混合套件暂留原平台范围。
+
+- Node 生命周期34/34，Bun六组实际HTTP/生命周期/重执行85/85通过；
+  新增CAMBI末次产物变更用例另行验证。
+- Node官方core/HTTP首轮90/95，失败均为旧缺产物配置或错误沿用CAMBI容差
+  到VMAF；按固定官方容差修正后5/5复测通过。完整core59项均通过。
+- 相关任务中心、Agent HTTP、单帧/区间/VMAF重执行17项通过；一个原有
+  平台专属用例跳过。XPSNR混合用例尚待迁移，不计入本阶段通过数。
+- contract43/43、build通过；CAMBI重执行WebKit与Chromium实际界面均通过，
+  包含双窗口、未知回执恢复、候选原帧/五层热图与独立播放。
+- WebKit HEVC10 的 MP4→MP4、MP4→FLV、FLV→MP4 三组实际VMAF流程通过。
+  首次运行被同时重建dist打断，第三组旧资源404；固定产物后完整重跑3/3。
+  CAMBI末次产物变更负向用例在Node和Bun各自通过。
+
+XPSNR旧原生路径和最终发布矩阵尚未收完，本阶段不关闭roadmap。

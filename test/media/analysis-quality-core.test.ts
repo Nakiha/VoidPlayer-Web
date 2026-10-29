@@ -70,7 +70,7 @@ function frame(raw: Uint8Array, width: number, height: number, depth: 8 | 10) {
   };
 }
 for (const expected of oracle.cases)
-  test(`analysis core official ${expected.metric} ${expected.fixture ?? "raw"} ${expected.sampleIndex} ${expected.model ?? ""} ${expected.roi ? "ROI" : "full"}`, () => {
+  test(`analysis core official ${expected.metric} ${expected.fixture ?? "raw"} ${expected.sampleIndex} ${expected.model ?? ""} ${expected.same ? "identical" : "distorted"} ${expected.roi ? "ROI" : "full"}`, () => {
     const s = (expected.fixture ? JSON.parse(readFileSync(`test/helpers/${expected.fixture}`, "utf8")).samples : fixtures[expected.metric])[expected.sampleIndex],
       { width, height, depth } = s;
     const reference = gunzipSync(
@@ -81,7 +81,7 @@ for (const expected of oracle.cases)
     );
     const distorted = gunzipSync(
       Buffer.from(
-        (expected.metric === "cambi" ? s : s.distorted).rawGzip,
+        (expected.metric === "cambi" ? s : expected.same ? s.reference : s.distorted).rawGzip,
         "base64",
       ),
     );
@@ -91,7 +91,7 @@ for (const expected of oracle.cases)
     );
     assert.equal(
       hash(distorted),
-      (expected.metric === "cambi" ? s : s.distorted).rawSha256,
+      (expected.metric === "cambi" ? s : expected.same ? s.reference : s.distorted).rawSha256,
     );
     const scorer = new AnalysisScorer(core, {
       metrics: [expected.metric],

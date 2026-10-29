@@ -14,6 +14,7 @@ import type {
 import { NativeCambiRunner } from "./runner.ts";
 import type { CambiHooks } from "./runner.ts";
 import { analysisComponent } from "../quality/analysis-component.ts";
+import { AdminError } from "../../admin-error.ts";
 
 export class WasmCambiRunner extends NativeCambiRunner {
   readonly analysisDir: string;
@@ -26,7 +27,8 @@ export class WasmCambiRunner extends NativeCambiRunner {
     this.analysisDir = analysisDir;
   }
   override assertAvailable() {
-    analysisComponent(this.analysisDir);
+    try { analysisComponent(this.analysisDir); }
+    catch (error) { throw new AdminError(503, (error as Error).message, "component-unavailable"); }
   }
   override async cambiCapability() {
     const basic = {
@@ -180,6 +182,8 @@ export class WasmCambiRunner extends NativeCambiRunner {
           combined,
         );
         combined.throwIfAborted();
+        if (canonicalJson(contract) !== canonicalJson(this.contract()))
+          throw new CambiError("component-unavailable", "Analysis component changed during final verification");
         value.prepared.work.indexBytes+=verification.indexBytes;value.prepared.work.indexPackets+=verification.indexPackets;
         if (value.prepared.work.executionWitness) {
           const w = value.prepared.work.executionWitness;

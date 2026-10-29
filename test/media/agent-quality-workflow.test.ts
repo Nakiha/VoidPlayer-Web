@@ -55,12 +55,13 @@ for(const [mode,containers]of [['single',['flv','flv']],['range',['mp4','flv']],
  console.log(JSON.stringify({mode,containers,jobId,candidate:report.publication.createdIds[0],requests:report.requests,unknownResponseReplays:lost,noFrontend:true}));
 });
 
-test('HTTP prerequisites: unknown metadata, cache miss, missing native, changed source and actor stop safely',{timeout:120000},async t=>{
+test('HTTP prerequisites: unknown metadata, cache miss, missing analysis artifact, changed source and actor stop safely',{timeout:120000},async t=>{
  const f=await nativeFixture({prepare:false,component:false,staticDir:'public'});t.after(()=>f.close());const input=inputFor(f),seen:string[]=[];
  const fetchImpl=async(url:any,options:any)=>{seen.push(`${options?.method??'GET'} ${new URL(url).pathname}`);return fetch(url,options);};
  const unknown=await runHttpQuality(f.base,{query:{codec:'h264',includeUnknown:'1',limit:'1'}},{fetchImpl});assert.equal(unknown.discovery.length,2);assert.ok(unknown.discovery.some((e:any)=>e.decision.state==='unknown'));
  const cli=await promisify(execFile)(process.execPath,['examples/http-quality.mjs',f.base],{timeout:30000,maxBuffer:1048576});const cliReport=JSON.parse(cli.stdout);assert.equal(cliReport.discovery.length,2);assert.deepEqual(cliReport.writesAuthorized,[]);
  const missing=await runHttpQuality(f.base,input,{allow:{identity:true},fetchImpl});assert.equal(missing.reason,'cache-miss');assert.ok(missing.next[0].endsWith('library.prepare'));assert.ok(!seen.includes('POST /api/library/preparations'));
+ (f.service.library.qualityVmaf as any).runner.analysisDir=join(f.directory,'missing-analysis');
  const unavailable=await runHttpQuality(f.base,{...input,mode:'vmaf',identity:{id:missing.actor.id}},{allow,fetchImpl});assert.equal(unavailable.nativeCapability.enabled,false);assert.ok(!seen.includes('POST /api/quality/vmaf/jobs'));assert.ok(!seen.includes('POST /api/quality/correspondence-plans'));
  await assert.rejects(()=>runHttpQuality(f.base,input,{cookie:'voidplayer-user='+f.actor,actor:'guest-'+randomUUID(),allow}),{code:'actor-changed'});
  const original=await readFile(join(f.media,f.entries[0].name));await writeFile(join(f.media,f.entries[0].name),Buffer.concat([original,Buffer.from([0])]));await f.service.library.refresh();

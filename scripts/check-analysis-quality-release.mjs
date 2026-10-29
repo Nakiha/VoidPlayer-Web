@@ -55,7 +55,7 @@ try {
       const done = await f.wait(job.id);
       assert.equal(done.state, 'completed', JSON.stringify(done));
       const result = await f.json(`/api/quality/vmaf/jobs/${job.id}/result`);
-      const expected = oracle.cases.find(c => c.metric === 'vmaf' && !c.roi && c.model === 'vmaf_v0.6.1' && samples[c.sampleIndex].depth === depth && samples[c.sampleIndex].tagged && samples[c.sampleIndex].codec === codec);
+      const expected = oracle.cases.find(c => c.metric === 'vmaf' && !c.same && !c.roi && c.model === 'vmaf_v0.6.1' && samples[c.sampleIndex].depth === depth && samples[c.sampleIndex].tagged && samples[c.sampleIndex].codec === codec);
       assert.equal(result.vmaf.component.executor, 'analysis-wasm');
       assert.equal(result.vmaf.resources.executor, 'analysis-wasm');
       result.vmaf.frames.forEach((frame, i) => assert.ok(Math.abs(frame.score - expected.frames[i]) <= oracle.vmafTolerance));

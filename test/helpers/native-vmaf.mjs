@@ -7,7 +7,7 @@ import {waitForAnnotationMedia} from '../../scripts/testing/agent-annotations-re
 export const sha=b=>createHash('sha256').update(b).digest('hex');
 export const until=async(read,predicate,label='Native VMAF did not finish')=>{for(let n=0;n<1200;n++){const r=await read();if(predicate(r))return r;await new Promise(r=>setTimeout(r,10));}assert.fail(label);};
 export async function nativeComponent(){const directory=path.resolve(process.env.VOIDPLAYER_VMAF_COMPONENT??'.run/components/vmaf');return {directory,manifestSha256:sha(await readFile(path.join(directory,'manifest.json')))};}
-export async function nativeFixture({depth=8,distorted=false,staticDir='public',start=startService,component=true,frames=8,tagged=true,codec=depth===10?'hevc':'h264',containers=['flv','flv'],prepare=true,frameRate,roi,sequence=false}={}){
+export async function nativeFixture({depth=8,distorted=false,staticDir='public',start=startService,component=false,frames=8,tagged=true,codec=depth===10?'hevc':'h264',containers=['flv','flv'],prepare=true,frameRate,roi,sequence=false}={}){
  const directory=await mkdtemp(path.join(tmpdir(),'vp-native-vmaf-')),media=path.join(directory,'media');await mkdir(media);let service;
  try{
   const sample=JSON.parse(await readFile(new URL(sequence?'./analysis-quality-sequence.json':'./native-vmaf-samples.json',import.meta.url),'utf8')).samples.find(s=>s.codec===codec&&s.depth===depth&&s.tagged===tagged);assert.ok(sample,'Committed fixture missing');
@@ -44,8 +44,8 @@ export async function nativeFixture({depth=8,distorted=false,staticDir='public',
  }catch(e){await service?.close();await rm(directory,{recursive:true,force:true});throw e;}
 }
 export async function officialOracle(f,depth,model='vmaf_v0_6_1'){
- const {directory}=await nativeComponent(),out=path.join(f.directory,'official');await mkdir(out,{recursive:true});
- const hashes=[];for(const name of ['reference','distorted']){const raw=path.join(out,name+'.yuv');await writeFile(raw,f.oracles[name]);hashes.push(sha(f.oracles[name]));}
- await copyFile(path.join(directory,model==='vmaf_v0_6_1'?'vmaf_v0.6.1.json':'vmaf_v0.6.1neg.json'),path.join(out,'model.json'));
- execFileSync(path.join(directory,'vmaf'),['--reference','reference.yuv','--distorted','distorted.yuv','--width','128','--height','96','--pixel_format','420','--bitdepth',String(depth),'--model','path=model.json:name=vmaf','--threads','1','--cpumask','0','--json','--output','result.json','--quiet'],{cwd:out});return {hashes,result:JSON.parse(await readFile(path.join(out,'result.json'),'utf8'))};
+ const {officialQualityCase}=await import('./official-quality-oracle.mjs');
+ const hashes=['reference','distorted'].map(name=>sha(f.oracles[name]));
+ const c=await officialQualityCase('vmaf',...hashes,model==='vmaf_v0_6_1'?'vmaf_v0.6.1':'vmaf_v0.6.1neg');
+ return {hashes,result:{frames:c.frames.map((score,frameNum)=>({frameNum,metrics:{vmaf:score}})),pooled_metrics:{vmaf:c.pooled}}};
 }

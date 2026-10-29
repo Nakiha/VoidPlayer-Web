@@ -197,6 +197,8 @@ export class WasmVmafRunner extends NativeVmafRunner {
           combined,
         );
         combined.throwIfAborted();
+        if (canonicalJson(contract) !== canonicalJson(this.contract(input)))
+          throw new VmafError("component-unavailable", "Analysis component changed during final verification");
         if (
           value.prepared.work.indexBytes + verification.indexBytes >
             VMAF_LIMITS.maxIndexBytes ||
