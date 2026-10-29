@@ -1,4 +1,4 @@
-import {BRIDGE_PATH,PAGE_BRIDGE_LIMITS as L,PAGE_TOOLS} from '../../shared/service/page-bridge.ts';
+import {BRIDGE_PATH,PAGE_BRIDGE_LIMITS as L,PAGE_TOOLS,pageBridgeResult} from '../../shared/service/page-bridge.ts';
 import type {PageCommand,PageScope} from '../../shared/service/page-bridge.ts';
 import {validateToolInput} from './tool-input.ts';
 import {currentActor} from '../services/identity.ts';
@@ -19,7 +19,7 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
   const dialog=document.createElement('dialog');dialog.id='page-bridge-dialog';dialog.className='page-bridge-dialog';
   dialog.innerHTML=`<h2>${th(msg('pageBridge.title','临时本机 MCP 连接'))}</h2>
     <p>${th(msg('pageBridge.claim','客户端名称为自行声明，并非认证身份。仅授权此页面及当前工作区，不跟随其他标签。'))}</p>
-    ${existing?'<label>One-time pairing <input id="page-bridge-code" type="password" autocomplete="off" maxlength="32"></label><button id="page-bridge-pair" type="button">Review pairing</button>':''}
+    ${existing?`<label>${th(msg('pageBridge.pairCode','一次性配对信息'))} <input id="page-bridge-code" type="password" autocomplete="off" maxlength="32"></label><button id="page-bridge-pair" type="button">${th(msg('pageBridge.pairReview','核对配对'))}</button><button id="page-bridge-reset" type="button">${th(msg('pageBridge.pairReset','配对其他客户端'))}</button>`:''}
     <pre id="page-bridge-client"></pre><p id="page-bridge-workspace"></p>
     <label><input id="page-bridge-read" type="checkbox" ${existing?'':'checked disabled'}> ${th(msg('pageBridge.read','读取此页面会话、已有标注与 ROI（不含媒体或日志字节）'))}</label>
     <label><input id="page-bridge-view" type="checkbox"> ${th(msg('pageBridge.view','允许暂停和精确定位此页面'))}</label>
@@ -72,6 +72,7 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
       // The facade has settled. Waiting for the delivery ACK is not an active
       // domain operation: the server may already dispatch the next command.
       physicallyFinished();
+      result=pageBridgeResult(command.name,result,g.scopes);
       if(epoch!==generation||grant!==g||g.binding!==binding())return;
       if(new TextEncoder().encode(JSON.stringify(result)??'').byteLength>L.resultBytes){revoke(t(msg('pageBridge.large','结果超过通道预算，写入结果可能未知；请保留原 correlation，勿自动重试。')));return;}
       await post('reply',{epoch:g.epoch,correlation:command.correlation,result},g.token,controller.signal);
@@ -101,9 +102,17 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
       if(signal.aborted||stopped)return;
       documentToken=paired.documentToken;requestId=paired.id;expiresAt=paired.expiresAt;
       $('pair').toggleAttribute('disabled',true);$('code').toggleAttribute('disabled',true);
-      await refresh();note(`Review exact page ${location.origin}${location.pathname} · ${pageId}. Pairing consumed. Temporary authorization expires ${new Date(expiresAt).toLocaleTimeString()}.`);
-    }catch{note('Pairing unavailable: incorrect, expired, consumed, or client not ready. Start a new request; no page data was shared.');}
+      await refresh();note(t(msg('pageBridge.pairReviewTarget','请核对此页面：{page}。配对信息已单次消费。临时授权最晚于 {expiry} 到期。'),{page:`${location.origin}${location.pathname} · ${pageId}`,expiry:new Date(expiresAt).toLocaleTimeString()}));
+    }catch{note(t(msg('pageBridge.pairUnavailable','配对不可用：信息不符、已到期、已消费或客户端尚未就绪。请发起新请求，页面数据尚未分享。')));}
     finally{connecting=false;render();}
+  };
+  if(existing)$('reset').onclick=event=>{
+    if(!event.isTrusted||!navigator.userActivation.isActive||inFlight||connecting||signal.aborted)return;
+    revoke(t(msg('pageBridge.pairCleared','已清除配对。请输入新的一次性信息，并重新选择权限。')),true);
+    ++refreshSequence;requestId='';documentToken='';expiresAt=0;reviewedReady=false;descriptor=undefined;stopped=false;
+    $('pair').toggleAttribute('disabled',false);$('code').toggleAttribute('disabled',false);
+    for(const id of ['read','view','annotate'])$<HTMLInputElement>(id).checked=false;
+    render();
   };
   button.onclick=()=>{void refresh();render();dialog.showModal();};
   $('close').onclick=()=>dialog.close();
@@ -122,7 +131,7 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
     }catch{if(current===generation){await refresh();note(t(msg('pageBridge.connectFailed','未能确认连接。请检查客户端及目标页面；不会自动重连或跟随其他标签。')));}}
     finally{connecting=false;render();}
   };
-  const expiry=setInterval(()=>{if(existing&&expiresAt&&Date.now()>=expiresAt){stopped=true;revoke('Temporary authorization expired.',true);}},500);
+  const expiry=setInterval(()=>{if(existing&&expiresAt&&Date.now()>=expiresAt){expiresAt=0;stopped=true;revoke(t(msg('pageBridge.pairExpired','临时授权已到期。')),true);}},500);
   const unsubscribe=session.subscribe(()=>{if(grant&&grant.binding!==binding())revoke(t(msg('pageBridge.changed','身份或工作区来源已改变，请重新明确授权。')));});
   window.addEventListener('voidplayer-identity-change',()=>{if(grant)revoke(t(msg('pageBridge.changed','身份或工作区来源已改变，请重新明确授权。')));},{signal});
   for(const name of ['popstate','hashchange'])window.addEventListener(name,()=>{if(grant&&grant.binding!==binding())revoke(t(msg('pageBridge.changed','身份或工作区来源已改变，请重新明确授权。')));},{signal});

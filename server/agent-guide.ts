@@ -793,7 +793,16 @@ with the built frontend: run node scripts/mcp-page-bridge.ts as the MCP client's
 child process. Open only the localhost page printed on stderr, choose Files in
 that page, click MCP, review the self-declared client (not authenticated), target
 workspace and read/view/annotation scopes, and explicitly connect. It cannot
-attach to arbitrary existing tabs. Ordinary service pages do not expose a
+attach to arbitrary existing tabs. For an already-open normal loopback VoidPlayer
+page use node scripts/mcp-page-bridge.ts --existing-origin http://127.0.0.1:5180
+with the user's exact service origin. Enter the short-lived one-time pairing
+information only in that intended page's MCP panel, review its exact workspace
+and self-declared client, then individually select read/view/annotation and
+explicitly connect. No File is reselected or uploaded. Pairing is single-use
+(90 seconds), grants expire in 15 minutes and stdin EOF disconnects only the
+bridge, preserving the original page/server and background tasks. No remote
+origin, redirects, persistent authorization or automatic tab attachment exists.
+Ordinary service pages do not expose a
 network MCP endpoint or enable the bridge automatically. No persistent token,
 account, extension, startup service or MCP application configuration is installed.
 

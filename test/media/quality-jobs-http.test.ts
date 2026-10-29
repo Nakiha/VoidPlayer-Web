@@ -1,3 +1,5 @@
+// @ts-ignore independent stdio test client
+import {startMcpClient} from '../../scripts/testing/mcp-client.mjs';
 // @ts-ignore test fixture readiness, no source mutation
 import {waitForAnnotationMedia} from '../../scripts/testing/agent-annotations-ready.mjs';
 import {loadConfig} from '../../server/config.ts';
@@ -76,9 +78,11 @@ for(const [codec,depth]of [['h264',8],['hevc',8],['hevc',10]]as const)test(`dura
  for(const observedCookie of [cookie,otherCookie]){const history=await fetch(base+'/api/quality/jobs',{headers:{cookie:observedCookie}}).then(r=>r.json());assert.deepEqual(history.entries,[]);assert.equal(history.resources.activeAttempts,0);assert.equal(history.resources.queued,0);}
  const staleRead=await fetch(base+'/api/quality/jobs',{headers:{cookie:otherCookie,'x-voidplayer-actor':actor}});assert.equal(staleRead.status,409);assert.equal((await staleRead.json()).code,'actor-changed');
  const submit=()=>fetch(base+discovery.qualityJobs.submit,{method:'POST',headers:{...headers,origin:base,'x-voidplayer-actor':actor,'idempotency-key':'native-job'},body:JSON.stringify(input)});
+ const bridge=await startMcpClient({existingOrigin:base});await bridge.initialize();
  const response=await submit();assert.equal(response.status,202);const accepted=await response.json();assert.equal(accepted.replayed,false);const id=accepted.job.id;
  assert.deepEqual(accepted.job.input.request.spatial,input.request.spatial);
  assert.equal(accepted.job.submitted.requestId,response.headers.get('x-request-id'));assert.equal(response.headers.get('location'),`/api/quality/jobs/${id}`);
+ assert.equal((await bridge.close()).code,0,'existing-page stdio EOF does not shut down the original scoring service');
  const job=await terminal(base,id,{cookie});assert.equal(job.state,'completed',JSON.stringify(job));assert.equal(job.attempt?.number,1);assert.equal(job.progress.scoredPairs,1);
  const storedResponse=await fetch(`${base}/api/quality/jobs/${id}/result`,{headers:{cookie}});assert.equal(storedResponse.status,200);const result=await storedResponse.json()as QualityJobResult;
  assertNativeJob(result,fixture.native,depth);assert.deepEqual(result.value.sources,{reference:proofs[0],distorted:proofs[1]});

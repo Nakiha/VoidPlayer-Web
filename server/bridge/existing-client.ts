@@ -9,7 +9,8 @@ export class ExistingPageClient implements StdioPageChannel{
   private heartbeat?:ReturnType<typeof setInterval>;
   private calls=new Map<string,AbortController>();
   private chain=Promise.resolve();
-  private constructor(private origin:string,private id:string,private secret:string){}
+  private origin:string;private id:string;private secret:string;
+  private constructor(origin:string,id:string,secret:string){this.origin=origin;this.id=id;this.secret=secret;}
   static async create(value:string){
     const url=new URL(value);
     if(!['http:','https:'].includes(url.protocol)||!['localhost','127.0.0.1','[::1]'].includes(url.hostname)||url.username||url.password||url.pathname!=='/'||url.search||url.hash)throw Error('Specify an exact loopback service origin, without credentials, path, query or fragment');
@@ -31,7 +32,7 @@ export class ExistingPageClient implements StdioPageChannel{
   receipt(operationId:unknown){return this.post('receipt',{operationId});}
   call(name:unknown,args:unknown,onCorrelation:(v:string)=>void){
     const callId=randomUUID(),controller=new AbortController();this.calls.set(callId,controller);onCorrelation(callId);
-    return this.post('call',{callId,name,args},AbortSignal.any([controller.signal,AbortSignal.timeout(18000)])).catch(()=>({isError:true,code:'outcome-unknown',automaticReplay:false,reason:'service-connection-lost'})).finally(()=>this.calls.delete(callId));
+    return this.post('call',{callId,name,args},AbortSignal.any([controller.signal,AbortSignal.timeout(18000)])).catch(()=>({isError:true,code:'outcome-unknown',automaticReplay:false,reason:'service-connection-lost',...(args&&typeof args==='object'?{epoch:(args as Record<string,unknown>).epoch,operationId:(args as Record<string,unknown>).operationId}:{})})).finally(()=>this.calls.delete(callId));
   }
   cancel(correlation:string){this.calls.get(correlation)?.abort();}
   revoke(_reason:string){this.chain=this.chain.then(()=>this.post('revoke')).then(()=>{});}

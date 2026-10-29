@@ -12,7 +12,7 @@ const json=(res:ServerResponse,status:number,value:unknown)=>{res.writeHead(stat
  * pairing capability and later a trusted page click, never an actor or Origin. */
 export class ExistingPageRequests{
   private entries=new Map<string,Entry>();
-  private timer=setInterval(()=>{for(const e of this.entries.values())if(Date.now()>e.expires||Date.now()-e.seen>EXISTING_LIMITS.leaseMs)this.remove(e);},500);
+  private timer=setInterval(()=>{for(const e of this.entries.values())if(Date.now()>=e.expires||Date.now()-e.seen>=EXISTING_LIMITS.leaseMs)this.remove(e);},500);
   constructor(){this.timer.unref();}
   private remove(e:Entry){e.channel.close();this.entries.delete(e.id);e.code=null;}
   close(){clearInterval(this.timer);for(const e of this.entries.values())this.remove(e);}
@@ -23,7 +23,7 @@ export class ExistingPageRequests{
       const origin=`${socket.encrypted?'https':'http'}://${req.headers.host}`;
       const target=new URL(origin),remote=req.socket.remoteAddress;
       if(!['127.0.0.1','localhost','[::1]'].includes(target.hostname)||!['127.0.0.1','::1','::ffff:127.0.0.1'].includes(remote??'')||req.url?.includes('?')||req.headers.origin&&req.headers.origin!==origin||req.headers['sec-fetch-site']&&req.headers['sec-fetch-site']!=='same-origin')throw Error('origin-host-denied');
-      const browser=req.headers.origin===origin&&req.headers['sec-fetch-site']==='same-origin';
+      const browser=req.headers['sec-fetch-site']==='same-origin'&&(!req.headers.origin||req.headers.origin===origin);
       if(!pathname.startsWith(EXISTING_PATH+'/')){
         if(!browser)throw Error('origin-host-denied');
         const entry=this.entries.get(String(req.headers['x-voidplayer-bridge-request']??''));
@@ -45,9 +45,9 @@ export class ExistingPageRequests{
         this.entries.set(e.id,e);json(res,200,{id:e.id,secret:e.secret,pairingCode:e.code,expiresAt:e.expires,limits:EXISTING_LIMITS});return true;
       }
       if(route==='pair'){
-        if(!browser||req.headers['x-voidplayer-bridge']!=='1'||Object.keys(body).some(k=>k!=='code')||typeof body.code!=='string')throw Error('origin-host-denied');
+        if(!browser||req.headers.origin!==origin||req.headers['x-voidplayer-bridge']!=='1'||Object.keys(body).some(k=>k!=='code')||typeof body.code!=='string')throw Error('origin-host-denied');
         const e=[...this.entries.values()].find(e=>e.code&&equal(body.code,e.code));
-        if(!e||Date.now()>e.expires||!e.channel.ready)throw Error('pairing-unavailable');
+        if(!e||e.channel.origin!==origin||Date.now()>=e.expires||!e.channel.ready)throw Error('pairing-unavailable');
         e.code=null;e.document=e.channel.mintDocument();
         // A paired document gets a bounded window for explicit consent/use.
         e.expires=Date.now()+EXISTING_LIMITS.grantMs;
@@ -55,12 +55,14 @@ export class ExistingPageRequests{
       }
       if(browser||req.headers.origin||req.headers['sec-fetch-site'])throw Error('origin-host-denied');
       const e=this.entries.get(String(req.headers['x-voidplayer-bridge-request']??''));
-      if(!e||Date.now()>e.expires||!equal(req.headers.authorization,'Bearer '+e.secret))throw Error('authorization-revoked');
+      if(!e||e.channel.origin!==origin||Date.now()>=e.expires||!equal(req.headers.authorization,'Bearer '+e.secret))throw Error('authorization-revoked');
       e.seen=Date.now();
       if(route==='close'){this.remove(e);json(res,200,{closed:true});return true;}
       if(route==='sync'){
         if(!Number.isSafeInteger(body.revision)||typeof body.ready!=='boolean'||body.client!==null&&(!body.client||typeof body.client.name!=='string'||body.client.name.length>100||typeof body.client.version!=='string'||body.client.version.length>80))throw Error('invalid-request');
+        if(body.revision===e.revision&&JSON.stringify(body.client)!==JSON.stringify(e.channel.client))throw Error('client-declaration-changed');
         if(body.revision<e.revision)throw Error('stale-client-revision');
+        if(!body.ready)e.channel.revoke('client-not-ready');
         if(body.revision!==e.revision){e.channel.revoke('client-declaration-changed');e.revision=body.revision;}
         e.channel.client=body.client;e.channel.clientRevision=body.revision;e.channel.ready=body.ready;json(res,200,{synced:true});return true;
       }
