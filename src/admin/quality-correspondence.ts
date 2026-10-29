@@ -15,7 +15,7 @@ const sides=['reference','distorted'] as const;
 const label=(side:typeof sides[number])=>side==='reference'?t(msg('qualityWorkflow.reference','参考片源')):t(msg('qualityWorkflow.distorted','待测片源'));
 const number=(id:string,text:string,value:number,min?:number)=>`<label>${text}<input id="quality-clock-${id}" type="number" step="1" value="${value}" ${min===undefined?'':`min="${min}"`} required></label>`;
 export function qualityCorrespondenceShell(){return `<section id="quality-clock" class="admin-panel">
-  <h2>${th(msg('qualityClock.title','显式参考关系与 AU 对应计划'))}</h2><p>${th(msg('qualityClock.scope','关系由调用者声明，不认证同内容。时钟仅做精确整数微秒匹配；缺洞、歧义与不支持会保留。只读取已有可信 FLV 或严格 MP4 缓存，评分与候选均须显式提交。'))}</p>
+  <h2>${th(msg('qualityClock.title','显式参考关系与 AU 对应计划'))}</h2><p>${th(msg('qualityClock.scope','关系由调用者声明，不认证同内容。时钟按原始 ticks 与时基精确匹配；缺洞、歧义与不支持会保留。只读取已有可信 FLV 或严格 MP4 缓存，评分与候选均须显式提交。'))}</p>
   <form id="quality-clock-relation-form"><div class="quality-sources">${sides.map(side=>`<fieldset data-clock-source="${side}"><legend>${label(side)}</legend><input type="search" data-clock-search aria-label="${th(msg('qualityWorkflow.searchMedia','搜索媒体库'))}"><button type="button" data-clock-search-button>${th(msg('admin.search','搜索'))}</button><button type="button" data-clock-more hidden>${th(msg('admin.nextPage','下一页'))}</button><div data-clock-media></div><p data-clock-source-status role="status"></p></fieldset>`).join('')}</div>
   <label>${th(msg('qualityClock.declaration','参考关系声明说明（不等于内容认证）'))}<textarea id="quality-clock-declaration" maxlength="2000" required></textarea></label>
   <p>${th(msg('qualityClock.direction','映射方向：待测源 PTS = 参考源 PTS + offset。每段参考区间为 [start, end)，单位均为整数微秒；两侧区间均不得重叠。'))}</p>

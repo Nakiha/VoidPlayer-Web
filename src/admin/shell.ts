@@ -8,7 +8,7 @@ import { cacheShell } from './caches.ts';
 import { workspaceAdminShell } from './workspaces.ts';
 import { measurementShell } from './measurement.ts';
 import { icon } from '../ui/icons.ts';
-export const PANES = () => [['overview', t(msg("admin.overviewTitle", "概览")), 'diagnostics'], ['library', t(msg("admin.libraryTitle", "媒体库")), 'open'], ['discovery', t(msg('discovery.title','技术选片与显式准备')), 'film'], ['caches', t(msg("admin.cacheTitle", "缓存")), 'film'], ['workspaces', t(msg("admin.wsTitle", "工作区")), 'film'], ['annotations', t(msg("admin.marksTab", "标注")), 'note'], ['tasks',t(msg('tasks.title','任务中心')),'diagnostics'], ['quality', t(msg('qualityWorkflow.title','单帧 PSNR 任务')), 'diagnostics'], ['logs', t(msg("admin.logsTitle", "日志")), 'note'], ['measurements', t(msg("admin.measureTitle", "测速")), 'diagnostics']] as const;
+export const PANES = () => [['overview', t(msg("admin.overviewTitle", "概览")), 'diagnostics'], ['library', t(msg("admin.libraryTitle", "媒体库")), 'open'], ['discovery', t(msg('discovery.title','技术选片与显式准备')), 'film'], ['caches', t(msg("admin.cacheTitle", "缓存")), 'film'], ['workspaces', t(msg("admin.wsTitle", "工作区")), 'film'], ['annotations', t(msg("admin.marksTab", "标注")), 'note'], ['tasks',t(msg('tasks.title','任务中心')),'diagnostics'], ['quality', t(msg('qualityWorkflow.title','画质评分')), 'diagnostics'], ['logs', t(msg("admin.logsTitle", "日志")), 'note'], ['measurements', t(msg("admin.measureTitle", "测速")), 'diagnostics']] as const;
 export function adminShell() {
   return `<div class="admin-layout">
     <nav class="admin-navigation" aria-label="${th(msg("admin.navCategory", "管理分类"))}"><a class="admin-brand" href="/">${icon('film')}<span>VoidPlayer</span></a><span class="admin-nav-caption">${th(msg("admin.navCaption", "服务管理"))}</span>

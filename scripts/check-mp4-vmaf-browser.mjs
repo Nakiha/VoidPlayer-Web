@@ -41,7 +41,7 @@ async function runCase(containers){
    }
    const proof=await page.evaluate(()=>JSON.parse(document.querySelector('#discovery-job').textContent).result);assert.equal(proof.binding.indexIdentity.kind,containers[i]);assert.equal(proof.producer.producer,containers[i]==='mp4'?'server-mp4-scan-v1':'server-flv-scan-v1');
   }
-  phase='GUI-C-plan';await page.locator('[data-pane="quality"]').click();
+  phase='GUI-C-plan';await page.locator('[data-pane="quality"]').click();await page.locator('[data-quality-section=correspondence]').click();
   for(const [i,side]of ['reference','distorted'].entries()){const field=page.locator(`[data-clock-source="${side}"]`);await field.locator('[data-clock-search]').fill(f.entries[i].name);await field.locator('[data-clock-search-button]').click();await field.locator(`[data-clock-media="${f.entries[i].id}"]`).click();}
   const declaration='Explicit MP4/native VMAF relation; not content certification';await page.locator('#quality-clock-declaration').fill(declaration);
   for(const [key,value]of Object.entries({start:0,end:10000000,offset:0}))await page.locator(`[data-clock-segment] [data-segment-field="${key}"]`).fill(String(value));
@@ -50,7 +50,7 @@ async function runCase(containers){
   await page.locator('#quality-clock-plan-form details > summary').click();
   for(const [key,value]of Object.entries({start:0,end:7,x:0,y:0,width:128,height:96,'pair-read':1048576,'pair-input':1048576,'total-read':33554432,'total-input':33554432}))await page.locator('#quality-clock-'+key).fill(String(value));
   await page.locator('#quality-clock-ssim').check();await page.locator('#quality-clock-grid').check();await page.locator('#quality-clock-plan-submit').click();await page.waitForFunction(()=>document.querySelector('#quality-clock-title').textContent.includes('completed'));
-  await page.locator('#quality-clock-vmaf').click();assert.match(await page.locator('#vmaf-plan').inputValue(),/^[a-f0-9-]{36}$/);await page.locator('#vmaf-cadenceUs').fill('250000');await page.locator('#vmaf-ssim').check();
+  await page.locator('#quality-clock-vmaf').click();assert.match(await page.locator('#vmaf-plan').inputValue(),/^[a-f0-9-]{36}$/);await page.locator('#vmaf-frame-rate').fill('4/1');await page.locator('#vmaf-ssim').check();
   assert.equal((await f.json('/api/quality/ranges')).entries.length,0,'C plan does not secretly start another scorer');
   phase='GUI-unknown-submit';let lost=false;const posts=[];
   await context.route('**/api/quality/vmaf/jobs',async route=>{if(route.request().method()==='POST'){posts.push({key:route.request().headers()['idempotency-key'],body:route.request().postData()});if(!lost){lost=true;const response=await route.fetch();assert.equal(response.status(),202);await route.abort('failed');return;}}await route.continue();});
@@ -61,7 +61,7 @@ async function runCase(containers){
   phase='close-observer-while-native-held';await page.close();assert.equal((await f.json('/api/quality/vmaf/jobs/'+id)).state,'running');process.kill(nativePid,'SIGCONT');nativePid=0;
   const job=await f.wait(id);assert.equal(job.state,'completed',JSON.stringify(job));assert.equal(job.metrics.psnr.state,'completed');assert.equal(job.metrics.ssim.state,'completed');
   const summary=await f.json(`/api/quality/vmaf/jobs/${id}/result`),oracle=await officialOracle(f,depth);assert.deepEqual(summary.vmaf.frames,oracle.result.frames.map(v=>({index:v.frameNum,score:v.metrics.vmaf})));assert.deepEqual(summary.vmaf.pooled,oracle.result.pooled_metrics.vmaf);assert.equal(summary.raw.referenceSha256,oracle.hashes[0]);assert.equal(summary.raw.distortedSha256,oracle.hashes[1]);
-  phase='reopen-history-and-publish';page=await context.newPage();evidence=recordBrowserEvidence(page);await page.goto(f.base+'/admin/#quality');await page.locator(`[data-vmaf-job="${id}"]`).click();await page.waitForFunction(()=>document.querySelector('#vmaf-title').textContent.includes('completed'));await page.locator('[data-vmaf-frame="0"]').waitFor();
+  phase='reopen-history-and-publish';page=await context.newPage();evidence=recordBrowserEvidence(page);await page.goto(f.base+'/admin/?qualityView=vmaf#quality');await page.locator(`[data-vmaf-job="${id}"]`).click();await page.waitForFunction(()=>document.querySelector('#vmaf-title').textContent.includes('completed'));await page.locator('[data-vmaf-frame="0"]').waitFor();
   await page.locator('#vmaf-maxScore').fill('100');await page.locator('#vmaf-limit').fill('1');await page.locator('#vmaf-text').fill('Explicit full-frame temporal native MP4 measurement');await page.locator('#vmaf-publish').click();await page.locator('[data-vmaf-candidate]').waitFor();
   const publication=await f.json(`/api/quality/vmaf/jobs/${id}/candidates`),record=await f.json('/api/annotations/spaces/default/'+publication.createdIds[0]),value=record.document.mark.qualityEvidence[0].value;assert.equal(value.version,2);assert.equal(value.sequenceVmaf.version,2);assert.equal(record.document.mark.qualityCandidate.assessment,'not-subjectively-assessed');
   phase='cross-actor-original-viewer';const other=await browser.newContext();await other.addCookies([{name:'voidplayer-user',value:'guest-'+randomUUID(),url:f.base}]);

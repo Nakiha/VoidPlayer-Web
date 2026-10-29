@@ -1,3 +1,4 @@
+import { qualityNavigationShell, installQualityNavigation } from './quality-navigation.ts';
 import {qualityCambiShell,installQualityCambi} from './quality-cambi.ts';
 import {qualityXpsnrShell,installQualityXpsnr} from './quality-xpsnr.ts';
 import {installQualityReexecution} from './quality-reexecution.ts';
@@ -35,10 +36,10 @@ export function qualityJobsShell(){
     <label>${th(msg('qualityWorkflow.frame','明确选择缓存 AU / 源 PTS'))}<select data-frame disabled><option value="">—</option></select></label>
     <p data-forward-guarantee class="quality-forward-guarantee" hidden></p>
     <button type="button" data-frame-more hidden>${th(msg('qualityWorkflow.moreFrames','下一页候选帧'))}</button></fieldset>`;
-  return `<section id="pane-quality" hidden><header class="admin-heading"><div><h1>${th(msg('qualityWorkflow.title','单帧 PSNR 任务'))}</h1>
-    <p>${th(msg('qualityWorkflow.scope','显式配对媒体库中的关键帧、前向依赖帧或闭合 GOP 内重排/延迟帧，以 8/10 位 YUV420 原始码值测量。每侧最多 32 AU；重排路径明确起止与目标 AU，以解码器返回的包身份核验全部输出和 drain，不按 PTS 猜帧。此表单为单帧测量；下方另有区间及可选原生 VMAF 连续序列入口，均不自动对齐。'))}</p></div></header>
-    <p id="quality-owner"></p><p id="quality-availability" role="status"></p><p>${th(msg('qualityWorkflow.lifetime','任务由服务持有。关闭此页或切换分类只停止观察；仅“取消任务”会请求终止。网络故障不表示任务失败。'))}</p>
-    <label>${th(msg('qualityWorkflow.client','本页客户端 ID'))}<input id="quality-client" maxlength="80" spellcheck="false"><button id="quality-client-apply" type="button">${th(msg('qualityWorkflow.useClient','使用此客户端'))}</button></label>
+  return `<section id="pane-quality" hidden><header class="admin-heading"><div><h1>${th(msg('qualityWorkflow.title','画质评分'))}</h1>
+    <p>${th(msg('qualityWorkflow.scope','比较原始视频帧，测量整帧、指定区域或连续片段。双源评分需先明确参考关系；色带筛查只需一个片源。'))}</p></div></header>
+    ${qualityNavigationShell()}<div id="quality-view-single" data-quality-view="single"><p id="quality-owner"></p><p id="quality-availability" role="status"></p><p>${th(msg('qualityWorkflow.lifetime','任务由服务持有。关闭此页或切换分类只停止观察；仅“取消任务”会请求终止。网络故障不表示任务失败。'))}</p>
+    <details class="quality-advanced"><summary>${th(msg('qualityWorkspace.clientSettings','客户端与请求设置'))}</summary><label>${th(msg('qualityWorkflow.client','本页客户端 ID'))}<input id="quality-client" maxlength="80" spellcheck="false"><button id="quality-client-apply" type="button">${th(msg('qualityWorkflow.useClient','使用此客户端'))}</button></label></details>
     <form id="quality-form" class="admin-panel"><div class="quality-sources">${sides.map(source).join('')}</div>
     <fieldset><legend>${th(msg('qualityWorkflow.roi','ROI：未旋转可见源像素网格，所有值须为偶数整数'))}</legend><div class="quality-roi">${['x','y','width','height'].map(key=>`<label>${key}<input name="${key}" type="number" step="2" min="${key==='width'||key==='height'?2:0}" required></label>`).join('')}</div><button type="button" id="quality-full-frame">${th(msg('qualityWorkflow.full','使用两侧完整可见帧'))}</button></fieldset>
     <fieldset><legend>SSIM</legend><label><input id="quality-ssim-enabled" type="checkbox">${th(msg('quality.ssimEnable','同次测量另附 SSIM（FFmpeg 均匀 8×8，步长 4；不是高斯窗口 SSIM）'))}</label><p>${th(msg('quality.ssimMinimum','SSIM 的 ROI 和每个实际边缘块至少 16×16 源像素。仅计算有效窗口，各平面覆盖范围单独记录；不补边、不重采样。'))}</p></fieldset>
@@ -50,17 +51,18 @@ export function qualityJobsShell(){
     <button id="quality-forget" type="button" hidden>${th(msg('qualityWorkflow.forget','结束此提交的重试，准备新请求'))}</button><p id="quality-submit-status" role="status"></p></form>
     <div class="admin-panel"><div class="admin-section-heading"><h2>${th(msg('qualityWorkflow.history','当前用户的服务端任务与历史'))}</h2><button id="quality-refresh">${th(msg('qualityWorkflow.refresh','刷新任务'))}</button></div><p id="quality-observer-status" role="status"></p><p id="quality-resources"></p><details><summary>${th(msg('qualityWorkflow.budgets','服务端资源计数与预算'))}</summary><pre id="quality-resource-json"></pre></details>
     <div class="quality-jobs-workspace"><div id="quality-job-list"></div><div id="quality-job-detail" hidden><h3 id="quality-job-title"></h3><p id="quality-job-state"></p><p id="quality-job-reason"></p><p id="quality-job-input"></p><button id="quality-cancel">${th(msg('qualityWorkflow.cancel','取消任务'))}</button><details><summary>${th(msg('qualityWorkflow.requestFacts','请求、attempt 与服务端事实'))}</summary><pre id="quality-job-json"></pre></details><div id="quality-job-result"></div></div></div></div>
-    ${qualityCorrespondenceShell()}
-    ${qualityCambiShell()}
-    ${qualityVmafShell()}
-    ${qualityXpsnrShell()}
-    ${qualityRangesShell()}
     <section id="quality-attachment" class="admin-panel" hidden><h2>${th(msg('qualityWorkflow.attach','将此结果显式共享到已有标注'))}</h2><p>${th(msg('quality.shareNotice','此操作会向所有可查看该标注的人共享两侧片源身份、测量 ROI 和不可变结果事实。'))}</p>
     <div class="admin-actions"><label>${th(msg('admin.reviewSpace','评审空间'))}<select id="quality-space"></select></label><label>${th(msg('quality.side','标注对应的片源侧'))}<select id="quality-attach-side"><option value="reference">reference</option><option value="distorted">distorted</option></select></label></div>
     <div class="admin-actions"><input id="quality-mark-search" type="search" aria-label="${th(msg('admin.searchMarks','搜索标注'))}"><button id="quality-mark-refresh">${th(msg('admin.search','搜索'))}</button><button id="quality-mark-more" hidden>${th(msg('admin.nextPage','下一页'))}</button></div>
-    <div id="quality-mark-list"></div><p id="quality-attach-target"></p><button id="quality-attach" disabled>${th(msg('quality.publish','共享到标注'))}</button><p id="quality-attach-status" role="status"></p><div id="quality-shared-links"></div></section></section>`;
+    <div id="quality-mark-list"></div><p id="quality-attach-target"></p><button id="quality-attach" disabled>${th(msg('quality.publish','共享到标注'))}</button><p id="quality-attach-status" role="status"></p><div id="quality-shared-links"></div></section></div>
+    <div id="quality-view-correspondence" data-quality-view="correspondence" hidden>${qualityCorrespondenceShell()}</div>
+    <div id="quality-view-vmaf" data-quality-view="vmaf" hidden>${qualityVmafShell()}</div>
+    <div id="quality-view-cambi" data-quality-view="cambi" hidden>${qualityCambiShell()}</div>
+    <div id="quality-view-ranges" data-quality-view="ranges" hidden>${qualityRangesShell()}</div>
+    <div id="quality-view-xpsnr" data-quality-view="xpsnr" hidden>${qualityXpsnrShell()}</div></section>`;
 }
 export function installQualityJobs(signal:AbortSignal){
+  installQualityNavigation(signal);
   const cambi=installQualityCambi(signal),ranges=installQualityRanges(signal),correspondence=installQualityCorrespondence(signal),vmaf=installQualityVmaf(signal),xpsnr=installQualityXpsnr(signal);
   const $=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(`quality-${id}`)as T;
   const api=new QualityClient();let observer:QualityJobObserver|null=null,observation:QualityObservation|null=null;

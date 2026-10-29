@@ -4086,7 +4086,7 @@
     "params": {}
   },
   "qualityClock.scope": {
-    "source": "关系由调用者声明，不认证同内容。时钟仅做精确整数微秒匹配；缺洞、歧义与不支持会保留。只读取已有可信 FLV 或严格 MP4 缓存，评分与候选均须显式提交。",
+    "source": "关系由调用者声明，不认证同内容。时钟按原始 ticks 与时基精确匹配；缺洞、歧义与不支持会保留。只读取已有可信 FLV 或严格 MP4 缓存，评分与候选均须显式提交。",
     "params": {}
   },
   "qualityClock.showRange": {
@@ -4390,7 +4390,7 @@
     "params": {}
   },
   "qualityWorkflow.scope": {
-    "source": "显式配对媒体库中的关键帧、前向依赖帧或闭合 GOP 内重排/延迟帧，以 8/10 位 YUV420 原始码值测量。每侧最多 32 AU；重排路径明确起止与目标 AU，以解码器返回的包身份核验全部输出和 drain，不按 PTS 猜帧。此表单为单帧测量；下方另有区间及可选原生 VMAF 连续序列入口，均不自动对齐。",
+    "source": "比较原始视频帧，测量整帧、指定区域或连续片段。双源评分需先明确参考关系；色带筛查只需一个片源。",
     "params": {}
   },
   "qualityWorkflow.searchMedia": {
@@ -4406,7 +4406,7 @@
     "params": {}
   },
   "qualityWorkflow.title": {
-    "source": "单帧 PSNR 任务",
+    "source": "画质评分",
     "params": {}
   },
   "qualityWorkflow.unavailable": {
@@ -4419,6 +4419,66 @@
   },
   "qualityWorkflow.useClient": {
     "source": "使用此客户端",
+    "params": {}
+  },
+  "qualityWorkspace.capability": {
+    "source": "执行器与支持范围",
+    "params": {}
+  },
+  "qualityWorkspace.clientSettings": {
+    "source": "客户端与请求设置",
+    "params": {}
+  },
+  "qualityWorkspace.correspondence": {
+    "source": "参考关系",
+    "params": {}
+  },
+  "qualityWorkspace.harmonic": {
+    "source": "调和平均",
+    "params": {}
+  },
+  "qualityWorkspace.maximum": {
+    "source": "最高分",
+    "params": {}
+  },
+  "qualityWorkspace.minimum": {
+    "source": "最低分",
+    "params": {}
+  },
+  "qualityWorkspace.navigation": {
+    "source": "评分流程",
+    "params": {}
+  },
+  "qualityWorkspace.pendingFacts": {
+    "source": "待确认请求",
+    "params": {}
+  },
+  "qualityWorkspace.publicationFacts": {
+    "source": "候选发布记录",
+    "params": {}
+  },
+  "qualityWorkspace.ranges": {
+    "source": "区间任务",
+    "params": {}
+  },
+  "qualityWorkspace.requestFacts": {
+    "source": "请求与执行详情",
+    "params": {}
+  },
+  "qualityWorkspace.resultFacts": {
+    "source": "完整结果数据",
+    "params": {}
+  },
+  "qualityWorkspace.single": {
+    "source": "单帧与区域",
+    "params": {}
+  },
+  "qualityWorkspace.unscored": {
+    "source": "此指标没有可用分数，请查看执行详情。",
+    "params": {}
+  },
+  "qualityWorkspace.xpsnr": {
+    "source": "XPSNR",
     "params": {}
   },
   "recovery.capacityReached": {
@@ -6186,7 +6246,7 @@
     "params": {}
   },
   "vmaf.sources": {
-    "source": "支持已有可信 FLV/Enhanced FLV、严格非分片 MP4 及两者的双向混合。MP4 限 avc1 H.264 8 位或 hvc1 HEVC 8/10 位，原始时钟必须精确表示整数微秒。",
+    "source": "支持已有可信 FLV/Enhanced FLV 和严格非分片 MP4，可混合比较。MP4 支持 avc1 H.264 8 位、hvc1 HEVC 8/10 位，使用原始有理数时钟精确对齐。",
     "params": {}
   },
   "vmaf.submit": {
@@ -6434,7 +6494,7 @@
     "params": {}
   },
   "xpsnr.sources": {
-    "source": "支持已有可信 FLV/Enhanced FLV、严格非分片 MP4 及两者的双向混合。MP4 限 avc1 H.264 8 位或 hvc1 HEVC 8/10 位，原始时钟必须精确表示整数微秒。",
+    "source": "支持已有可信 FLV/Enhanced FLV 和严格非分片 MP4，可混合比较。MP4 支持 avc1 H.264 8 位、hvc1 HEVC 8/10 位，使用原始有理数时钟精确对齐。",
     "params": {}
   },
   "xpsnr.submit": {
