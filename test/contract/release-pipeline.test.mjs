@@ -153,9 +153,9 @@ test('cache suite runs once in its own required job with the same pinned prepara
   const jobs = workflowJobs(workflow), cache = jobs['cache-browser'];
   const manifest = JSON.parse(await readFile(new URL('../../scripts/testing/manifest.json', import.meta.url), 'utf8'));
   const cases = manifest.cases.filter(row => row.suites.includes('ci-cache'));
-  assert.equal(cases.length, 70);
-  assert.equal(new Set(cases.map(row => row.id)).size, 70);
-  const expected=['browser-mcp-page-bridge-chromium','browser-sharing-webkit','browser-quality-reexecution-chromium','browser-quality-reexecution-webkit','browser-cambi-reexecution-chromium','browser-cambi-reexecution-webkit'];
+  assert.equal(cases.length, 71);
+  assert.equal(new Set(cases.map(row => row.id)).size, 71);
+  const expected=['browser-existing-page-bridge-chromium','browser-mcp-page-bridge-chromium','browser-sharing-webkit','browser-quality-reexecution-chromium','browser-quality-reexecution-webkit','browser-cambi-reexecution-chromium','browser-cambi-reexecution-webkit'];
 
   for(const engine of ['chromium','webkit']){
     expected.push(`browser-xpsnr-comparison-${engine}`);
@@ -164,13 +164,16 @@ test('cache suite runs once in its own required job with the same pinned prepara
     for(const format of ['h264-8','hevc-8','hevc-10'])expected.push(`browser-native-cambi-mp4-${format}-${engine}`);
     for(const name of ['mp4-quality','mp4-vmaf'])for(const format of ['h264-8','hevc-8','hevc-10'])expected.push(`browser-${name}-${format}-${engine}`);
   }
-  assert.deepEqual(cases.map(row=>row.id).sort(),expected.sort(),'exact prior68 plus two XPSNR comparison checks; no silent removal/substitution');
+  assert.deepEqual(cases.map(row=>row.id).sort(),expected.sort(),'exact prior70 plus the existing-page MCP check; no silent removal/substitution');
   const protocolIds=['browser-native-presented-protocol-chromium','browser-native-presented-protocol-webkit'];
   const comparisonIds=['browser-xpsnr-comparison-chromium','browser-xpsnr-comparison-webkit'];
-  const priorCases=cases.filter(row=>!protocolIds.includes(row.id)&&!comparisonIds.includes(row.id)&&!row.id.startsWith('browser-quality-reexecution-')&&!row.id.startsWith('browser-cambi-reexecution-'));
+  const priorCases=cases.filter(row=>row.id!=='browser-existing-page-bridge-chromium'&&!protocolIds.includes(row.id)&&!comparisonIds.includes(row.id)&&!row.id.startsWith('browser-quality-reexecution-')&&!row.id.startsWith('browser-cambi-reexecution-'));
   assert.equal(priorCases.length,62,'every prior cache case still runs with unchanged mandatory status on main/tag');
   const prCases=manifest.cases.filter(row=>row.suites.includes('ci-cache-pr'));
-  assert.equal(prCases.length,69);
+  assert.equal(prCases.length,70);
+  const existingPage=prCases.find(row=>row.id==='browser-existing-page-bridge-chromium');
+  assert.deepEqual(existingPage.command,['node','scripts/check-existing-page-bridge-browser.mjs']);
+  assert.equal(existingPage.required,true);assert.deepEqual(existingPage.fixtures,['core']);assert.equal(existingPage.timeoutMs,180000);
   for(const engine of ['chromium','webkit']){
     const row=prCases.find(row=>row.id===`browser-xpsnr-comparison-${engine}`);
     assert.deepEqual(row.command,['node','scripts/native/run-xpsnr-tests.mjs','node','scripts/check-xpsnr-comparison-browser.mjs',engine]);

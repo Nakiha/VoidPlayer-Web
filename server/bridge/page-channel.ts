@@ -1,6 +1,6 @@
 import {randomBytes,randomUUID,timingSafeEqual,createHash} from 'node:crypto';
 import type {IncomingMessage,ServerResponse} from 'node:http';
-import {BRIDGE_PATH,PAGE_TOOLS,PAGE_BRIDGE_LIMITS as L,bridgeCallSchema} from '../../shared/service/page-bridge.ts';
+import {BRIDGE_PATH,PAGE_TOOLS,PAGE_BRIDGE_LIMITS as L,bridgeCallSchema,pageBridgeResult} from '../../shared/service/page-bridge.ts';
 import type {PageCommand,PageScope,PageToolName} from '../../shared/service/page-bridge.ts';
 import {validateToolInput} from '../../shared/service/tool-input.ts';
 import {ISOLATION_HEADERS} from '../http-utils.ts';
@@ -30,11 +30,14 @@ export class PageChannel {
   private poll?:{res:ServerResponse;timer:ReturnType<typeof setTimeout>};
   private sweep:ReturnType<typeof setInterval>;
   private html:string;
-  constructor(html:string){
+  private optionalRead:boolean;
+  constructor(html:string,optionalRead=false){
+    this.optionalRead=optionalRead;
     this.html=html;
     this.sweep=setInterval(()=>{if(this.grant&&Date.now()-this.grant.seen>L.leaseMs)this.revoke('page-lease-expired');for(const [key,seen] of this.documents)if(Date.now()-seen>300000&&this.grant?.owner!==key)this.documents.delete(key);},500);this.sweep.unref();
   }
-  status(){const g=this.grant;return {schema:'voidplayer-page-bridge',version:1,connected:!!g,clientClaim:this.client,clientIdentity:'self-declared-not-authenticated',...(g?{epoch:g.epoch,workspace:g.workspace,scopes:g.scopes}:{}),limits:L,next:g?'Use this exact epoch. Never replay unknown writes.':'Open the owned page and explicitly connect; no page is followed automatically.'};}
+  mintDocument(token=randomBytes(32).toString('hex')){this.documents.set(token,Date.now());return token;}
+  status(){const g=this.grant;return {schema:'voidplayer-page-bridge',version:1,connected:!!g,clientClaim:this.client,clientIdentity:'self-declared-not-authenticated',...(g?{epoch:g.epoch,workspace:g.scopes.includes('read')?g.workspace:g.context,scopes:g.scopes}:{}),limits:L,next:g?'Use this exact epoch. Never replay unknown writes.':'Open the intended page and explicitly connect; no page is followed automatically.'};}
   receipt(operationId:unknown){const f=this.facts.get(text(operationId,80));return f?{operationId:f.operationId,epoch:f.epoch,outcome:f.outcome,correlation:f.correlation,automaticReplay:false}:{operationId,outcome:'not-recorded',automaticReplay:false,next:'Receipt absence is not proof of no effect. Inspect the original page; never automatically replay.'};}
   private credential(req:IncomingMessage){const value=req.headers.authorization??'',g=this.grant;if(!g||!/^Bearer [a-f0-9]{64}$/.test(value)||!timingSafeEqual(Buffer.from(value.slice(7),'hex'),Buffer.from(g.token,'hex')))throw Error('authorization-revoked');return g;}
   private finish(p:Pending,result:unknown,outcome:string){
@@ -106,7 +109,7 @@ export class PageChannel {
         if(!this.ready||!this.client)throw Error('client-not-ready');
         if(body.clientRevision!==this.clientRevision)throw Error('client-declaration-changed');
         if(this.grant)throw Error('page-already-connected');
-        if(!Array.isArray(body.scopes)||body.scopes.length>3||!body.scopes.includes('read')||new Set(body.scopes).size!==body.scopes.length||body.scopes.some(s=>!['read','view','annotate'].includes(s)))throw Error('invalid-scopes');
+        if(!Array.isArray(body.scopes)||body.scopes.length>3||!body.scopes.length||!this.optionalRead&&!body.scopes.includes('read')||new Set(body.scopes).size!==body.scopes.length||body.scopes.some(s=>!['read','view','annotate'].includes(s)))throw Error('invalid-scopes');
         this.documents.set(owner,Date.now());this.grant={token:randomBytes(32).toString('hex'),owner,epoch:randomUUID(),context:text(body.context,200),workspace:text(body.workspace,300),scopes:body.scopes as PageScope[],seen:Date.now()};
         json(res,200,{token:this.grant.token,epoch:this.grant.epoch});return true;
       }
@@ -122,7 +125,7 @@ export class PageChannel {
         if(!p||p.command.epoch!==g.epoch||!p.dispatched)throw Error('stale-correlation');
         g.seen=Date.now();
         if(Buffer.byteLength(JSON.stringify(body.result)??'')>L.resultBytes){this.finish(p,problem('outcome-unknown',{correlation:p.command.correlation,operationId:p.command.operationId??null,reason:'result-budget',automaticReplay:false}),'unknown');}
-        else this.finish(p,body.result,'completed');
+        else this.finish(p,pageBridgeResult(p.command.name,body.result,g.scopes),'completed');
         json(res,200,{accepted:true});return true;
       }
       if(url.pathname===BRIDGE_PATH+'/poll'){

@@ -3214,6 +3214,34 @@
     "source": "MCP 客户端尚未初始化。",
     "translation": "The MCP client has not initialized."
   },
+  "pageBridge.pairCleared": {
+    "source": "已清除配对。请输入新的一次性信息，并重新选择权限。",
+    "translation": "Pairing cleared. Enter fresh one-time information and select permissions again."
+  },
+  "pageBridge.pairCode": {
+    "source": "一次性配对信息",
+    "translation": "One-time pairing information"
+  },
+  "pageBridge.pairExpired": {
+    "source": "临时授权已到期。",
+    "translation": "Temporary authorization expired."
+  },
+  "pageBridge.pairReset": {
+    "source": "配对其他客户端",
+    "translation": "Pair another client"
+  },
+  "pageBridge.pairReview": {
+    "source": "核对配对",
+    "translation": "Review pairing"
+  },
+  "pageBridge.pairReviewTarget": {
+    "source": "请核对此页面：{page}。配对信息已单次消费。临时授权最晚于 {expiry} 到期。",
+    "translation": "Review exact page: {page}. Pairing consumed once. Temporary authorization expires by {expiry}."
+  },
+  "pageBridge.pairUnavailable": {
+    "source": "配对不可用：信息不符、已到期、已消费或客户端尚未就绪。请发起新请求，页面数据尚未分享。",
+    "translation": "Pairing unavailable: incorrect, expired, consumed, or client not ready. Start a new request; no page data was shared."
+  },
   "pageBridge.read": {
     "source": "读取此页面会话、已有标注与 ROI（不含媒体或日志字节）",
     "translation": "Read this page session, existing annotations and ROIs (no media or log bytes)"

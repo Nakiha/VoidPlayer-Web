@@ -665,6 +665,15 @@ try {
       if (width >= 600) assert.ok(samples[0].scrollWidth <= samples[0].clientWidth + 1, `${width}px loaded toolbar overflows: ${JSON.stringify(samples[0])}`);
     }
     await page.setViewportSize({ width: 625, height: 780 }); await settle(page);
+    // The normal page now has an additional MCP utility control. Preserve the
+    // original available label budget for this specific priority assertion;
+    // the fixed-width overflow/stability matrix above remains unchanged.
+    const bridgeBudget = await page.locator('#page-bridge-open').evaluate(button =>
+      Math.ceil(button.getBoundingClientRect().width + (Number.parseFloat(getComputedStyle(button.parentElement).columnGap) || 0)));
+    await page.setViewportSize({ width: 625 + bridgeBudget, height: 780 }); await settle(page);
+    const bridgeBounds = await page.locator('#page-bridge-open').boundingBox();
+    assert.ok(bridgeBounds && bridgeBounds.x >= 0 && bridgeBounds.x + bridgeBounds.width <= 625 + bridgeBudget,
+      'the added MCP control remains visible and reachable');
     assert.equal(await page.locator('#brand-about').isVisible(), false);
     assert.equal(await page.locator('#open > span').isVisible(), false, 'right-side labels shrink before left-side view labels');
     assert.equal(await page.locator('#channel-select > span').isVisible(), true);

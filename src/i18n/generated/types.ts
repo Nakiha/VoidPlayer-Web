@@ -796,6 +796,13 @@ export interface Sources {
   "pageBridge.lifetime": "授权仅存于当前进程和页面内存。撤销、重载、关页或断线即失效；已经开始的操作可能完成，取消不表示回滚，未知写入不得自动重试。";
   "pageBridge.lost": "通道已断开；已派发写入的结果可能未知，不会自动重放。";
   "pageBridge.noClient": "MCP 客户端尚未初始化。";
+  "pageBridge.pairCleared": "已清除配对。请输入新的一次性信息，并重新选择权限。";
+  "pageBridge.pairCode": "一次性配对信息";
+  "pageBridge.pairExpired": "临时授权已到期。";
+  "pageBridge.pairReset": "配对其他客户端";
+  "pageBridge.pairReview": "核对配对";
+  "pageBridge.pairReviewTarget": "请核对此页面：{page}。配对信息已单次消费。临时授权最晚于 {expiry} 到期。";
+  "pageBridge.pairUnavailable": "配对不可用：信息不符、已到期、已消费或客户端尚未就绪。请发起新请求，页面数据尚未分享。";
   "pageBridge.read": "读取此页面会话、已有标注与 ROI（不含媒体或日志字节）";
   "pageBridge.revoke": "撤销连接";
   "pageBridge.revoked": "已撤销；已开始的操作可能仍会完成。重新连接必须再次确认。";
@@ -2286,6 +2293,13 @@ export interface MessageParameters {
   "pageBridge.lifetime": {  };
   "pageBridge.lost": {  };
   "pageBridge.noClient": {  };
+  "pageBridge.pairCleared": {  };
+  "pageBridge.pairCode": {  };
+  "pageBridge.pairExpired": {  };
+  "pageBridge.pairReset": {  };
+  "pageBridge.pairReview": {  };
+  "pageBridge.pairReviewTarget": { "expiry": string | number; "page": string | number };
+  "pageBridge.pairUnavailable": {  };
   "pageBridge.read": {  };
   "pageBridge.revoke": {  };
   "pageBridge.revoked": {  };

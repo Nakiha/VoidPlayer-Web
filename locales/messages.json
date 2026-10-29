@@ -3427,6 +3427,37 @@
     "source": "MCP 客户端尚未初始化。",
     "params": {}
   },
+  "pageBridge.pairCleared": {
+    "source": "已清除配对。请输入新的一次性信息，并重新选择权限。",
+    "params": {}
+  },
+  "pageBridge.pairCode": {
+    "source": "一次性配对信息",
+    "params": {}
+  },
+  "pageBridge.pairExpired": {
+    "source": "临时授权已到期。",
+    "params": {}
+  },
+  "pageBridge.pairReset": {
+    "source": "配对其他客户端",
+    "params": {}
+  },
+  "pageBridge.pairReview": {
+    "source": "核对配对",
+    "params": {}
+  },
+  "pageBridge.pairReviewTarget": {
+    "source": "请核对此页面：{page}。配对信息已单次消费。临时授权最晚于 {expiry} 到期。",
+    "params": {
+      "expiry": "string | number",
+      "page": "string | number"
+    }
+  },
+  "pageBridge.pairUnavailable": {
+    "source": "配对不可用：信息不符、已到期、已消费或客户端尚未就绪。请发起新请求，页面数据尚未分享。",
+    "params": {}
+  },
   "pageBridge.read": {
     "source": "读取此页面会话、已有标注与 ROI（不含媒体或日志字节）",
     "params": {}

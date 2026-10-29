@@ -23,7 +23,7 @@ try{
   client=await startMcpClient();await client.initialize();
   const list=await client.rpc('tools/list');check('real MCP initialize, initialized and tools/list',list.result.tools.length===7);
   check('no page reports host unavailable',(await client.call('seek_review',{epoch:'absent',operationId:'no-page',input:{ptsUs:0}})).code==='host-unavailable');
-  browser=await chromium.launch({headless:true,...(process.env.MCP_BROWSER_CHANNEL?{channel:process.env.MCP_BROWSER_CHANNEL}:{})});
+  browser=await chromium.launch({headless:true,...(process.env.MCP_BROWSER_EXECUTABLE?{executablePath:process.env.MCP_BROWSER_EXECUTABLE}:{}),...(process.env.MCP_BROWSER_CHANNEL?{channel:process.env.MCP_BROWSER_CHANNEL}:{})});
   const context=await browser.newContext({viewport:{width:1280,height:900},locale:'en-US'});
   context.setDefaultTimeout(10000);
   context.on('page',page=>{page.on('pageerror',e=>pageErrors.push(e.message));page.on('request',request=>{const body=request.postDataBuffer();network.push({method:request.method(),path:new URL(request.url()).pathname,bodyBytes:body?.byteLength??0,containsMediaBytes:!!body&&mediaNeedles.some(needle=>body.includes(needle))});});});

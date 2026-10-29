@@ -109,7 +109,7 @@ node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 
 普通 HTTP Agent 渐进任务/操作发现见 `docs/agent-quality-workflow.md`。`shared/service/agent-operations.ts` 复用领域常量，JSON 与嵌入式 Markdown 共用描述，不增加第二套 validator；元数据可读不等于质量准入。`examples/http-quality.mjs` 只能使用公开 HTTP，默认只读，各类写入分别显式授权，不保存凭据；未知 POST 仅原 actor/body/key 或原 plan digest/policy 回放，不能换 key 猜重试，不静默配对或发布。
 
-临时本机 stdio MCP 页面桥见 `docs/local-mcp-page-bridge.md`。`scripts/mcp-page-bridge.ts` 只托管自己的 loopback 页面；页面显式用户点击授予 read/view/annotate 范围，随机 document/grant capability 仅存当前进程/页面内存，不能把声明名、Origin 或 epoch 当认证。只复用共享白名单 schema 与现有 Agent/session facade，不全工具透传、不接受任意脚本/媒体路径、不上传 File/日志，不自动连接或跟随标签。失去授权即废弃排队命令，已派发操作可能完成且回执未知，不能假回滚或自动换 key 重放。迟到消息按 document/epoch/correlation 围栏；关闭 stdin 后真实关闭自有 host/资源，不影响独立 HTTP 后台任务。现代与 legacy MCP 生命周期须分别按官方规范验证，stdout 只能写协议帧。
+临时本机 stdio MCP 页面桥见 `docs/local-mcp-page-bridge.md`。`scripts/mcp-page-bridge.ts` 默认托管自己的 loopback 页面；显式 `--existing-origin` 复用已打开普通本机同源页面，使用独立 CLI/文档/授权内存凭据、无授权能力的公开单次匹配码、有界待授权池和固定最长到期。普通页面仅顶层文档可安装授权 UI；仅 view/annotate 不能透出完整会话回执，源名需 read。protocol gateway 后必须使用真实映射 peer 检查本机，不能信内部 loopback socket。页面显式用户点击授予 read/view/annotate 范围，随机 document/grant capability 仅存当前进程/页面内存，不能把声明名、Origin 或 epoch 当认证。只复用共享白名单 schema 与现有 Agent/session facade，不全工具透传、不接受任意脚本/媒体路径、不上传 File/日志，不自动连接或跟随标签。失去授权即废弃排队命令，已派发操作可能完成且回执未知，不能假回滚或自动换 key 重放。迟到消息按 document/epoch/correlation 围栏；关闭 stdin 后真实关闭自有 host/资源，不影响独立 HTTP 后台任务。现代与 legacy MCP 生命周期须分别按官方规范验证，stdout 只能写协议帧。
 
 统一任务中心见 `docs/unified-task-center.md`。`shared/service/tasks.ts` 是 GUI/HTTP 共用严格筛选契约；`server/tasks/` 仅从原七个受限存储投影当前 actor 的全部有界摘要，不允许各取首页后伪全量筛选。短期冻结快照分页须明确失效重取，不将状态变化混入原快照；真实阶段/未知进度和结果回收分别保留。详情关联须核对原 actor/receipt/input/attempt/digest，取消只委托原服务并保留物理退出准入。不得借任务中心自动评分、重试、发布、建索引或移动播放头；actor 是自述归属，不是认证。
 

@@ -28,3 +28,13 @@ export const MCP_PAGE_TOOLS=[
   {name:'get_bridge_receipt',description:'Read a bounded process-lifetime write receipt by original operationId. Unknown never means rolled back; do not replay or use a new key automatically.',inputSchema:{...empty,properties:{operationId:{type:'string' as const,minLength:1,maxLength:80}},required:['operationId']},annotations:{readOnlyHint:true}},
   ...Object.entries(PAGE_TOOLS).map(([name,d])=>({name,description:d.description+' Requires an explicit page epoch; writes require a stable operationId. The bridge never retries an uncertain write.',inputSchema:bridgeCallSchema(name as PageToolName),annotations:{readOnlyHint:d.scope==='read',destructiveHint:d.scope!=='read',idempotentHint:false,openWorldHint:false}}))
 ];
+
+/** Independently granted view/annotation may acknowledge the requested action,
+ * but cannot return the session facade's full state without read permission. */
+export function pageBridgeResult(name:PageToolName,result:unknown,scopes:readonly PageScope[]):unknown{
+  if(scopes.includes('read'))return result;
+  const value=result&&typeof result==='object'?result as Record<string,unknown>:{};
+  if(value.isError===true)return {isError:true,code:'page-operation-failed'};
+  if(name==='add_review_mark'&&typeof value.id==='string'&&value.id.length<=200)return {completed:true,id:value.id};
+  return {completed:true};
+}
