@@ -77,7 +77,12 @@ try{
  const audioFacts=JSON.parse(await page.locator('#discovery-json').textContent()).technical.probe;assert.equal(audioFacts.streams[0].type,'audio');assert.equal(audioFacts.streams.some(s=>s.type==='video'),false);assert.equal(audioFacts.coverage.prefix.tagHeadersInspected,8);assert.equal(audioFacts.streamInventoryComplete,false);
  await page.locator('#discovery-check').click();await page.waitForFunction(()=>document.querySelector('#discovery-readiness').textContent.includes('cache'));assert.equal(await page.locator('#discovery-quality-links').isHidden(),true);
  phase='real-cookie-actor-mismatch';assert.ok((await page.locator('#discovery-owner').textContent()).includes(actor.id));
- const healthGate=new Promise(resolve=>releaseHealth=resolve);await page.route('**/api/health',async route=>{await healthGate;await route.abort('aborted');});
+ // Freeze identity refresh in every tab sharing the deliberately changed
+ // cookie, including the independently playing page's 10s health observer.
+ // The original preparation POST must still carry the real changed cookie.
+ await player.waitForLoadState('networkidle');
+ let sawPeerHealth;const peerHealth=new Promise(resolve=>sawPeerHealth=resolve);
+ const healthGate=new Promise(resolve=>releaseHealth=resolve);await context.route('**/api/health',async route=>{if(route.request().frame().page()===player)sawPeerHealth();await healthGate;await route.abort('aborted');});
  const other=await fetch(base+'/api/identity',{method:'POST',headers:{origin:base,'content-type':'application/json','x-voidplayer-action':'identity'},body:JSON.stringify({name:'Other discovery actor'})});assert.equal(other.status,200);const otherActor=(await other.json()).actor;
  // The scenario is a captured owner command whose cookie changes before real
  // transport, not a click which identity/UI refresh may legitimately reject.
@@ -89,9 +94,18 @@ try{
   const receipt=await capturePreparationPost(async()=>{await page.locator(button).click();await page.waitForFunction(()=>window.__discoveryPostGate.captured!==null,null,{polling:25});captured=await page.evaluate(()=>window.__discoveryPostGate.captured);assert.equal(captured.actor,actor.id);assert.ok(captured.key);assert.equal(posts.length,postsBefore,'no preparation POST is dispatched before the original fetch gate is released');assert.equal(service.library.discovery.store.list(actor.id).jobs.length,countBeforeMissing,'held original fetch has not reached the server');await context.clearCookies({name:'voidplayer-user'});if(cookieActor)await context.addCookies([{name:'voidplayer-user',value:cookieActor,url:base}]);await page.evaluate(()=>window.__discoveryPostGate.release());});assert.equal(receipt.actor,captured.actor);assert.equal(receipt.key,captured.key);assert.equal(receipt.wireBody,captured.body);return receipt;
  };
  const countBeforeMissing=service.library.discovery.store.list(actor.id).jobs.length,missing=await capturedCookiePost('#discovery-probe',null);assert.equal(missing.status,409);assert.equal(missing.value.code,'actor-changed');assert.equal(missing.cookieActor,null);assert.equal(missing.actor,actor.id);assert.equal(service.library.discovery.store.list(actor.id).jobs.length,countBeforeMissing);
+ // Force a real peer health request inside the missing-cookie window. Without
+ // the context gate it observes actor=null, sends a storage event and correctly
+ // hides the discovery view; that is a different identity-refresh scenario.
+ await player.evaluate(()=>window.dispatchEvent(new Event('online')));
+ await withinBrowserPhase(()=>peerHealth,30000,{page,directory,evidence,phase:'peer-health-during-frozen-submit'});
+ await page.waitForFunction(()=>{const retry=document.querySelector('#discovery-retry');return !retry.hidden&&!retry.disabled;},null,{polling:25});
+ const frozen=await page.evaluate(actor=>{const client=sessionStorage.getItem('voidplayer-library-discovery-client');return {identity:JSON.parse(localStorage.getItem('voidplayer.identity')),pending:JSON.parse(sessionStorage.getItem(`voidplayer-library-preparation:${actor}:${client}`))};},actor.id);
+ assert.equal(frozen.identity.id,actor.id);assert.equal(frozen.pending.actor,actor.id);assert.equal(frozen.pending.key,missing.key);assert.deepEqual(frozen.pending.input,missing.body);
+ console.log(JSON.stringify({peerHealthHeld:true,originalActorRetained:true,pendingKeyRetained:true,retryVisible:true}));
  const rejected=await capturedCookiePost('#discovery-retry',otherActor.id);assert.equal(rejected.status,409);assert.equal(rejected.value.code,'actor-changed');assert.equal(rejected.cookieActor,otherActor.id);assert.equal(service.library.discovery.store.list(otherActor.id).jobs.length,0);
  assert.equal(rejected.actor,actor.id);assert.equal(rejected.key,missing.key);assert.deepEqual(rejected.body,missing.body);assert.equal(rejected.wireBody,missing.wireBody);
- const retried=await capturedCookiePost('#discovery-retry',actor.id);releaseHealth();releaseHealth=undefined;await page.unroute('**/api/health');assert.equal(retried.status,202);assert.equal(retried.cookieActor,actor.id);assert.equal(retried.actor,actor.id);assert.equal(retried.key,rejected.key);assert.deepEqual(retried.body,rejected.body);assert.equal(retried.wireBody,rejected.wireBody);const recovered=retried.value.job;await page.evaluate(()=>window.__discoveryPostGate.restore());
+ const retried=await capturedCookiePost('#discovery-retry',actor.id);releaseHealth();releaseHealth=undefined;await context.unrouteAll({behavior:'wait'});assert.equal(retried.status,202);assert.equal(retried.cookieActor,actor.id);assert.equal(retried.actor,actor.id);assert.equal(retried.key,rejected.key);assert.deepEqual(retried.body,rejected.body);assert.equal(retried.wireBody,rejected.wireBody);const recovered=retried.value.job;await page.evaluate(()=>window.__discoveryPostGate.restore());
  await page.waitForFunction(id=>{const job=JSON.parse(document.querySelector('#discovery-job').textContent||'null');return job?.id===id&&job.state==='completed';},recovered.id);
  phase='queued-explicit-cancel';await drainAdminObservations(page);releaseAdmission=service.library.qualityAdmission.acquire();await page.locator('#discovery-probe').click();await page.waitForFunction(()=>document.querySelector('#discovery-job').textContent.includes('"state": "queued"'));await page.locator('#discovery-cancel').click();await page.waitForFunction(()=>document.querySelector('#discovery-job').textContent.includes('"state": "cancelled"'));releaseAdmission();releaseAdmission=undefined;
  phase='late-source-response';let arrived;const reached=new Promise(r=>arrived=r),gate=new Promise(r=>releaseLate=r);let held=false;const matcher=`**/api/media/${flv.id}/discovery?*`;
