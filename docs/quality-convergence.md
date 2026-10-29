@@ -404,3 +404,18 @@ Linux原生组件“安装”空步骤，以及被完整TAP日志替代的测量
 0.458–0.472×且两边都有stall；本机12/12不能替代此结果，不声称根因已修。
 [原始CI报告](https://github.com/Nakiha/VoidPlayer-Web/actions/runs/40958151136/job/123744275115)
 保留于PR，下载副本在 `.run/quality-convergence/final-paired-performance.zip`。
+
+## 阶段十五：同步 VMAF 界面断言与 CI 取证完整性
+
+69dcf5b 的三平台独立包、六个运行时组合、完整 HEVC 时间轴及其余功能检查
+通过；标注/缓存综合套件66/70，四个失败来自 Chromium/WebKit × 8/10-bit
+VMAF 浏览器测试还匹配旧提示 `neither spatial heatmaps`。实际任务已完成，
+当前界面明确说整帧/区域分数不是热图或人工缺陷判断。测试同步同一语义，
+不删除解释性提示断言；四组重新跑完提交、冻结重放、候选、独立原帧与播放
+隔离，均通过。发布流水线契约20/20通过，产品评分和UI实现未变。
+
+失败取证同时发现混合绝对/tmp截图和工作区路径的artifact只有截图，没有
+列出的.run报告目录。按 [upload-artifact v4 的隐藏文件规则](https://github.com/actions/upload-artifact/blob/v4/README.md#uploading-hidden-files)
+为这个明确列举测试报告的artifact启用include-hidden-files，并由契约锁定；
+不扩展到整个工作区。原始失败日志保存于
+`.run/quality-convergence/cache-failure-69.log`，旧artifact截图保留于同目录ZIP。

@@ -711,6 +711,7 @@ jobs:
         if: always()
         with:
           name: annotation-cache-screenshots
+          include-hidden-files: true
           path: |
             /tmp/voidplayer-annotation-*.png
             /tmp/voidplayer-caches-*.png

@@ -223,7 +223,7 @@ test('cache suite runs once in its own required job with the same pinned prepara
   const fixtures = body => /      - name: Generate approximately 100 MB 1080p playback inputs\n[\s\S]*?(?=      - )/.exec(body)?.[0];
   assert.ok(fixtures(cache.body));
   assert.equal(fixtures(cache.body), fixtures(jobs.playback.body), 'preserve every preceding generated input');
-  assert.match(cache.body, /if: always\(\)[\s\S]*name: annotation-cache-screenshots/);
+  assert.match(cache.body, /if: always\(\)[\s\S]*name: annotation-cache-screenshots\n          include-hidden-files: true/);
   for (const artifact of ['/tmp/voidplayer-annotation-*.png', '/tmp/voidplayer-caches-*.png', '.run/workspace-sharing-browser-*/', '.run/test-suites/ci-cache/', '.run/test-suites/ci-cache-pr/', '.run/test-suites/quality-browser-diagnostics/', '.run/test-suites/preparation/', '.run/test-suites/build-receipt.json', '.run/playback-reports/']) {
     assert.ok(cache.body.includes(`            ${artifact}\n`), `cache evidence retained: ${artifact}`);
   }
