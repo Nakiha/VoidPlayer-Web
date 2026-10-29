@@ -25,7 +25,7 @@ export function tasksShell(){
   <button id="tasks-more" type="button" hidden>${th(msg('admin.nextPage','下一页'))}</button>
   <section id="tasks-detail" class="admin-panel" hidden><h2 id="tasks-title"></h2><pre id="tasks-facts"></pre>
   <button id="tasks-cancel" type="button" hidden>${th(msg('tasks.cancel','显式取消此任务'))}</button>
-  <p id="tasks-cancel-status" role="status"></p><div id="tasks-related"></div><div id="tasks-links"></div><div id="tasks-candidates"></div><p id="tasks-reexecution-unavailable" hidden>${th(msg('tasks.reexecutionUnavailable','此任务类型尚不支持显式重新执行；不会替换指标或自动重算。'))}</p><section id="tasks-reexecution"></section></section></section>`;
+  <button id="tasks-release" type="button" hidden>${th(msg('tasks.release','释放未共享的评分结果'))}</button><p>${th(msg('tasks.releaseScope','释放后保留任务与提交回执；已用于共享评审的结果不会被删除。'))}</p><p id="tasks-cancel-status" role="status"></p><div id="tasks-related"></div><div id="tasks-links"></div><div id="tasks-candidates"></div><p id="tasks-reexecution-unavailable" hidden>${th(msg('tasks.reexecutionUnavailable','此任务类型尚不支持显式重新执行；不会替换指标或自动重算。'))}</p><section id="tasks-reexecution"></section></section></section>`;
 }
 
 /** Actor and selected-target fences apply after every await. Only filters and
@@ -78,9 +78,9 @@ export function installTasks(signal:AbortSignal){
     try{const value=await api.request<TaskDetail>(c.owner,taskPath(target.kind,target.id),s);if(!current())return;detail=value;
       if(reexecutionKind(target.kind))reexecutions.get(target.kind)!.show(target.id);$('reexecution-unavailable').hidden=true;
       $('detail').hidden=false;$('title').textContent=`${value.task.kind} · ${value.task.state} · ${value.task.id}`;$('facts').textContent=JSON.stringify(value.task,null,2);
-      $('cancel').hidden=!value.links.some(l=>l.rel==='cancel');$('related').replaceChildren();$('links').replaceChildren();$('candidates').replaceChildren();
+      $('cancel').hidden=!value.links.some(l=>l.rel==='cancel');$('release').hidden=!value.links.some(l=>l.rel==='release-result');$('related').replaceChildren();$('links').replaceChildren();$('candidates').replaceChildren();
       for(const related of value.related){const b=document.createElement('button');b.type='button';b.textContent=`${related.relation} · ${related.kind} · ${related.id}`;b.dataset.relatedId=related.id;b.onclick=()=>choose(related.kind,related.id);$('related').append(b);}
-      for(const l of value.links)if(!['cancel','reexecution-plan'].includes(l.rel))link(l.href,l.rel,$('links'));
+      for(const l of value.links)if(!['cancel','release-result','reexecution-plan'].includes(l.rel))link(l.href,l.rel,$('links'));
       $('candidates').dataset.state='loading';const receipt=value.links.find(l=>l.rel==='candidate-receipt');if(!receipt){$('candidates').dataset.state='ready';return;}
       const publication=await api.request<{policy:{space:string};createdIds:string[];selected:{id:string;evidence?:unknown;ref?:unknown}[]}|null>(c.owner,receipt.href,s);if(!current())return;if(!publication){$('candidates').dataset.state='ready';return;}
       for(const id of publication.createdIds){
@@ -106,6 +106,15 @@ export function installTasks(signal:AbortSignal){
       .then(()=>{if(valid(c)&&!s.aborted&&selected?.kind===target.kind&&selected?.id===target.id){$('cancel-status').textContent=t(msg('tasks.cancelled','已向原任务服务提交取消；以服务端状态及实际退出为准。'));void loadDetail();}})
       .catch(e=>{if(valid(c)&&!s.aborted)$('cancel-status').textContent=t(msg('tasks.cancelUnknown','取消回执尚未确认：{error}。请读取原任务；重复取消不会创建新计算。'),{error:String(e)});})
       .finally(()=>{if(valid(c)&&!s.aborted)$('cancel').toggleAttribute('disabled',false);});
+  };
+  $('release').onclick=()=>{
+    const action=detail?.links.find(l=>l.rel==='release-result');if(!action||!selected)return;
+    const c=context(),target={...selected},s=AbortSignal.any([c.signal,detailLife.signal]);
+    $('release').toggleAttribute('disabled',true);
+    void api.request(c.owner,action.href,s,'POST',{},undefined,'quality-job')
+      .then(()=>{if(valid(c)&&!s.aborted&&selected?.id===target.id){$('cancel-status').textContent=t(msg('tasks.released','私有结果已释放，原任务回执保留。'));void loadDetail();}})
+      .catch(e=>{if(valid(c)&&!s.aborted)$('cancel-status').textContent=String(e);})
+      .finally(()=>{if(valid(c)&&!s.aborted)$('release').toggleAttribute('disabled',false);});
   };
   const changed=()=>{reset();if(active){void list();void loadDetail();}};
   window.addEventListener('voidplayer-identity-change',changed,{signal});

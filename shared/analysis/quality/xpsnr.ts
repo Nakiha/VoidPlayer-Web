@@ -9,7 +9,7 @@ export {canonicalJson};
 export const XPSNR_SOURCE_REVISION='8998a1a670c81a04d144c36f9e2d3aa680c10720';
 export const XPSNR_FILTER_SHA256='4b59b32eb4a501ac74f6d767a916ef1a29833e1895b150cfa96b8e4ffb91f3d7';
 export const XPSNR_SUPERVISOR_SOURCE_SHA256='df6ab9f43548839f3743d773958468f0e5f6416268006843eb68deab43eff48f';
-export const XPSNR_LIMITS=Object.freeze({...VMAF_LIMITS});
+export const XPSNR_LIMITS=Object.freeze({...VMAF_LIMITS,frames:32,width:1920,height:1080,maxRawBytes:128*1024*1024,maxElapsedMs:120000,resultBytes:4*1024*1024,reservedBytes:64*1024*1024});
 export const XPSNR_RECIPE='ffmpeg-xpsnr-reference-first-temporal-v1';
 export type XpsnrDb=PsnrStatistics['psnr'];
 export type XpsnrPlanes={y:XpsnrDb;u:XpsnrDb;v:XpsnrDb};

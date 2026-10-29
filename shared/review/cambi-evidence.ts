@@ -1,3 +1,4 @@
+import {validateScoringComponent} from '../analysis/quality/scoring-component.ts';
 import {mp4TicksToUs} from '../media/indexing/mp4-quality-index.ts';
 import {pairBudget,requireInspectionGeometry,FORWARD_OUTPUT_GUARANTEE,pairPacketCount,decodeEndAu} from '../analysis/quality/frame-pair.ts';
 import {validateDescription} from '../media/frame-description.ts';
@@ -26,7 +27,8 @@ export function cambiEvidenceList(value:unknown,preserve=false):CambiEvidence[]{
  cambiCheck(p.picture.field==='frame'&&p.picture.picture===0&&p.picture.layer===0&&p.sourcePtsUs===p.decoded.sourcePtsUs&&d.width===v.geometry.width&&d.height===v.geometry.height&&d.yuv?.bitDepth===v.geometry.bitDepth&&f.proof.binding.mediaId===p.mediaId&&f.proof.binding.mediaVersion===p.mediaVersion&&f.proof.binding.indexBuildId===p.indexBuildId&&f.context.basis===(mp4?'complete-mp4-index-derived-v1':'complete-flv-index-derived-v1'),'CAMBI source identity differs');
  cambiCheck(m.scale===ref.scale&&m.width===scale.width&&m.height===scale.height&&m.bytes===scale.bytes&&canonicalJson(m.mapping)===canonicalJson(scale.mapping)&&/^[a-f0-9]{64}$/.test(m.sha256)&&f.heatmaps.find(h=>h.scale===ref.scale)?.sha256===m.sha256,'CAMBI heatmap identity differs');
  const r=ref.region;cambiCheck(r.x+r.width<=m.width&&r.y+r.height<=m.height&&v.region.samples===r.width*r.height&&v.region.mean>=0&&v.region.mean<=65535&&Number.isFinite(v.region.mean)&&Number.isInteger(v.region.max)&&v.region.max>=v.region.mean&&v.region.max<=65535&&v.region.mean>0&&v.region.meaning==='official-heatmap-cell-statistics-not-cropped-CAMBI','CAMBI spatial candidate requires actual nonzero evidence');
- cambiCheck(v.component.sourceRevision===CAMBI_RECIPE.sourceRevision&&['manifestSha256','binarySha256','supervisorSha256'].every(k=>/^[a-f0-9]{64}$/.test(v.component[k as 'binarySha256']))&&v.coverage.tracking==='none'&&v.coverage.scored<=CAMBI_LIMITS.frames,'CAMBI component or coverage changed');
+ validateScoringComponent(v.component);
+ cambiCheck(v.component.sourceRevision===CAMBI_RECIPE.sourceRevision&&v.coverage.tracking==='none'&&v.coverage.scored<=CAMBI_LIMITS.frames,'CAMBI component or coverage changed');
  return {...structuredClone(e),verification:preserve?e.verification:'historical'};
  });
 }

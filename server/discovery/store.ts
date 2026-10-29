@@ -14,7 +14,7 @@ const digest=(s:string)=>createHash('sha256').update(s).digest('hex');
  * commit atomically. The library owner's existing OS lock excludes other live
  * instances. No new global schema user_version or cache mutation is introduced. */
 export class DiscoveryStore extends DiscoveryCatalog {
-  taskSummaries(actor:string){return taskSummaries(this.db,'preparation',actor);}
+  taskSummaries(actor:string,id?:string,filter?:import('../../shared/service/tasks.ts').TaskFilter){return taskSummaries(this.db,'preparation',actor,id,filter);}
 
   constructor(file:string,now=Date.now()){
     super(openIndexDatabase(file));

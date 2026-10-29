@@ -31,15 +31,15 @@ export function qualityTargetForAu(source:LibraryPairBinding,index:QualityVideoI
   if(!p||(p.configuration??0)!==0||counts.get(p.pts)!==1||p.size>PAIR_LIMITS.maxPacketBytes)return {target:null,reason:'AU configuration, unique PTS or packet budget unsupported'};
     const target:PairTarget={...structuredClone(source.binding),sourcePtsUs:p.pts,picture:{sourceVersion:`${source.binding.mediaId}@${source.binding.mediaVersion}`,
       stream:'video',configuration:0,au,picture:0,layer:0,field:'frame'}};
-    let startAu=au;for(;startAu>0&&!index.packets[startAu].key&&au-startAu+1<=32;startAu--){/* bounded cached scan */}
-    let endAu=startAu;while(endAu+1<index.packets.length&&!index.packets[endAu+1].key&&endAu-startAu+1<=32)endAu++;
+    let startAu=au;for(;startAu>0&&!index.packets[startAu].key&&au-startAu+1<=FORWARD_PAIR_LIMITS.packetsPerSide;startAu--){/* bounded cached scan */}
+    let endAu=startAu;while(endAu+1<index.packets.length&&!index.packets[endAu+1].key&&endAu-startAu+1<=FORWARD_PAIR_LIMITS.packetsPerSide)endAu++;
     // Equal PTS/DTS says nothing about decoder buffering. Prefer explicit
     // token attribution for every complete bounded GOP, even with zero CTS.
-    if(endAu-startAu+1<=32){
+    if(endAu-startAu+1<=FORWARD_PAIR_LIMITS.packetsPerSide){
       target.decode={mode:'packet-identity-gop-v1',startAu,endAu};
       try{const plan=gopPacketPlan(index,target,counts);if(plan.some(p=>p.size>PAIR_LIMITS.maxPacketBytes)||plan.reduce((n,p)=>n+p.size+(index.mp4?0:23),0)>PAIR_LIMITS.maxReadBytes)return {target:null,reason:'Dependency packet/read budget or unsupported decode window'};}
       catch(error){if(error instanceof FramePairError&&['unsupported-source','invalid-request'].includes(error.code)){if(p.key&&!index.mp4)delete target.decode;else return {target:null,reason:'Dependency packet/read budget or unsupported decode window'};}else throw error;}
-    }else if(index.mp4)return {target:null,reason:'MP4 complete GOP exceeds 32 AUs'};
+    }else if(index.mp4)return {target:null,reason:'MP4 complete GOP exceeds the packet identity window budget'};
     else if(!p.key){
       if(startAu<0||au-startAu+1>FORWARD_PAIR_LIMITS.packetsPerSide)return {target:null,reason:'Dependency packet/read budget or unsupported decode window'};
       target.decode={mode:'forward-one-output-per-au-v1',startAu};

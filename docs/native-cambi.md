@@ -1,5 +1,7 @@
 # Native single-source CAMBI screening (#116)
 
+> 默认执行器已迁移至现有分析 WASM core。当前架构和阶段验收见 [analysis-wasm-scoring.md](analysis-wasm-scoring.md)；本文中的 Linux 原生组件、临时 YUV 和 supervisor 描述保留为历史执行器契约，不代表新任务路径。
+
 This work uses the optional Linux x64 component installed for [native VMAF](native-vmaf.md), pinned to Netflix/vmaf v3.0.0, revision `17a67b238ce0539bdeafdc95961abac64fa16ea8`. The CAMBI command executes `--no_prediction --feature cambi`; no VMAF model is loaded and full-reference mode is disabled. The public request identifies one source; the CLI receives that same raw file in both API slots because the upstream feature API requires two paths.
 
 CAMBI is a no-reference, uncalibrated banding indication: higher means more detected banding, zero is a completed numeric result, and neither is a product quality pass/fail. Each frame is independent, so deterministic stride sampling is allowed and unsampled pictures remain explicit. No temporal tracking or reference integrity certification is claimed; decoder concealment detection is unavailable.

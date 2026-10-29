@@ -65,7 +65,7 @@ test('no nearest matching, raw duplicate PTS ambiguity, unsupported geometry and
   const referenceDuplicate=structuredClone(f.sources);referenceDuplicate[0].index.packets[1][2]=referenceDuplicate[0].index.packets[0][2];assert.equal(buildCorrespondence(f.relation,f.request,referenceDuplicate,work).rows[0].reason,'reference-pts-ambiguous');
   const roi=structuredClone(f.request);roi.recipe.roi.width=64;const unsupported=buildCorrespondence(f.relation,roi,f.sources,work);assert.equal(unsupported.rows[0].status,'unsupported');assert.match(unsupported.rows[0].detail!,/ROI/);assert.match(unsupported.sourceIssues.reference!,/ROI/);assert.equal(unsupported.rangePlan,null);
   const low=structuredClone(f.request);low.budget.maxPackets=3;const blocked=buildCorrespondence(f.relation,low,f.sources,work);assert.equal(blocked.rows[0].status,'mapped');assert.equal(blocked.rangePlan,null);assert.match(blocked.executionBlock!.message,/budget/);
-  assert.throws(()=>correspondenceInput({...f.request,sampling:{mode:'stride',every:2,offset:2}}));assert.throws(()=>correspondenceInput({...f.request,interval:{startAu:0,endAu:256}}));
+  assert.throws(()=>correspondenceInput({...f.request,sampling:{mode:'stride',every:2,offset:2}}));assert.throws(()=>correspondenceInput({...f.request,interval:{startAu:0,endAu:4096}}));
 });
 for(const stop of ['cancel','deadline'] as const)test(`planner ${stop} retains the shared slot until physical exit and restart never replans`,async t=>{
   const directory=await mkdtemp(join(tmpdir(),'vp-clock-unit-')),file=join(directory,'plans.sqlite'),gate=new QualityAdmission();let expire=()=>{};const workers:{events:EventEmitter;stopping:boolean;release():void}[]=[];

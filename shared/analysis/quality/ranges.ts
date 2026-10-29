@@ -6,12 +6,12 @@ import type { PsnrStatistics } from './psnr.ts';
 import {mediaIndexIdentityKey} from '../../media/indexing/media-index-identity.ts';
 
 export const QUALITY_RANGE_LIMITS = Object.freeze({
-  universe:256, samples:64, requestBytes:128*1024,
+  universe:4096, samples:1024, requestBytes:4*1024*1024,
   historyRows:100, reservedBytes:16*1024*1024, queued:4,
   actorOutstanding:2, page:4,
-  maxReadBytes:64*1024*1024, maxPackets:4096,
-  maxOutputFrames:4096, maxInputBytes:512*1024*1024,
-  maxElapsedMs:120000
+  maxReadBytes:32*1024*1024*1024, maxPackets:1048576,
+  maxOutputFrames:1048576, maxInputBytes:128*1024*1024*1024,
+  maxElapsedMs:600000
 });
 
 export type QualityRangeInput = {
@@ -123,7 +123,7 @@ export function planQualityRange(value:unknown):QualityRangePlan {
       fail(`Invalid range budget.${k}`);
 
   if(!Array.isArray(input.pairs)||!input.pairs.length
-    ||input.pairs.length>256)
+    ||input.pairs.length>QUALITY_RANGE_LIMITS.universe)
     fail('Provide an explicit bounded pair table');
 
   const mapped=new Map<number,FramePairRequest>();
@@ -167,7 +167,7 @@ export function planQualityRange(value:unknown):QualityRangePlan {
   const pairs=input.pairs.filter(p=>
     selectedAus.includes(p.reference.picture.au));
   if(!pairs.length||selectedAus.length>QUALITY_RANGE_LIMITS.samples)
-    fail('Plan needs 1..64 selected positions and at least one mapped target');
+    fail('Plan needs 1..1024 selected positions and at least one mapped target');
 
   const work=pairs.reduce((w,p)=>{
     const b=pairBudget(p);

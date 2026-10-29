@@ -1,5 +1,7 @@
 # Trusted non-fragmented MP4 quality sources
 
+> 时钟更新：保留原始 sample ticks/timebase，跨源对应与连续节奏按有理数比较；微秒仅是传输/显示投影。24/30/60 与 24000/1001、30000/1001 fps 已通过实际 HTTP 评分和候选验收，不再要求每个 tick 整除为整数微秒。
+
 This work extends the existing explicit discovery/preparation, source-plane
 PSNR/SSIM/grid, correspondence/range, shared evidence and read-only original-pair
 workflow. The first matrix is self-contained non-fragmented MP4, one video track,

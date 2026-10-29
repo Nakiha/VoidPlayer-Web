@@ -20,8 +20,8 @@ type Intent={actor:Actor;requestId:string;key:string;input:QualityRangeInput;inp
 /** Durable metadata planning and frozen submission receipts. Only the runner
  * owns admission; submission calls the existing range service after it exits. */
 export class CorrespondenceService{
-  taskSummaries(actor:string){return taskSummaries(this.db,'correspondence',actor);}
-  taskEdges(actor:string){return taskEdges(this.db,'correspondence',actor);}
+  taskSummaries(actor:string,id?:string,filter?:import('../../../shared/service/tasks.ts').TaskFilter){return taskSummaries(this.db,'correspondence',actor,id,filter);}
+  taskEdges(actor:string,id?:string){return taskEdges(this.db,'correspondence',actor,id);}
   taskRange(id:string,actor:string){
     const plan=this.get(id,actor),row=this.db.prepare('SELECT body FROM quality_plan_executions WHERE plan_id=?').get(id);
     if(!row)return null;const intent=JSON.parse(String(row.body)) as Intent;if(!intent.rangeId)return null;

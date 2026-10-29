@@ -5,7 +5,7 @@ import {openIndexDatabase} from '../../server/sqlite.ts';
 import {taskSummaries,taskEdges} from '../../server/tasks/summary.ts';
 import {TaskCenterService} from '../../server/tasks/service.ts';
 import {taskQuery,TASK_KINDS,TASK_HISTORY_ROWS,TASK_LIMITS} from '../../shared/service/tasks.ts';
-import type {TaskKind} from '../../shared/service/tasks.ts';
+import type {TaskKind,TaskFilter} from '../../shared/service/tasks.ts';
 import type {MediaLibraryIndex} from '../../server/library.ts';
 
 function fixture(){
@@ -22,11 +22,11 @@ function fixture(){
   db.prepare(`INSERT INTO ${table} VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(id,actor,actor,1,state,'decode',createdAt,createdAt,state==='completed'?createdAt+10:null,JSON.stringify(options.reason??null),'request','test-client',JSON.stringify(input),JSON.stringify(body),options.result??'not-JSON-result-that-must-not-be-parsed',options.result??'not-JSON-result-that-must-not-be-parsed',digest,JSON.stringify({value:{sources:{reference:{binding:reference},distorted:{binding:distorted}}}}),attempt);
   return {id,attemptId:attempt,digest};
  };
- const owner=(kind:TaskKind)=>({taskSummaries:(actor:string)=>taskSummaries(db,kind,actor),taskEdges:(actor:string)=>taskEdges(db,kind as 'range'|'correspondence'|'vmaf',actor),cancel:()=>{throw Error('Cancellation callback not installed');}});
+ const owner=(kind:TaskKind)=>({taskSummaries:(actor:string,id?:string,filter?:TaskFilter)=>taskSummaries(db,kind,actor,id,filter),taskEdges:(actor:string,id?:string)=>taskEdges(db,kind as 'range'|'correspondence'|'vmaf',actor,id),cancel:()=>{throw Error('Cancellation callback not installed');}});
  const services={preparation:owner('preparation'),correspondence:owner('correspondence'),single:owner('single'),range:owner('range'),vmaf:owner('vmaf'),xpsnr:owner('xpsnr'),cambi:owner('cambi')};
  Object.assign(services.range,{taskChild:()=>true});Object.assign(services.correspondence,{taskRange:(id:string)=>JSON.parse(String(db.prepare('SELECT body FROM quality_plan_executions WHERE plan_id=?').get(id)?.body??'null'))?.rangeId??null,get:(id:string)=>JSON.parse(String(db.prepare('SELECT body FROM quality_correspondence_plans WHERE id=?').get(id)!.body))});Object.assign(services.vmaf,{get:(id:string)=>JSON.parse(String(db.prepare('SELECT body FROM quality_vmaf_jobs WHERE id=?').get(id)!.body))});
  const retries=new Map<string,{parentId:string;jobId:string}[]>();
- const qualityReexecutions={links:(kind:string,actor:string)=>retries.get(kind+'/'+actor)??[],chain:(kind:string,id:string,actor:string)=>({successor:retries.get(kind+'/'+actor)?.find(r=>r.parentId===id)?{id:retries.get(kind+'/'+actor)!.find(r=>r.parentId===id)!.jobId}:null})};
+ const qualityReexecutions={links:(kind:string,actor:string)=>retries.get(kind+'/'+actor)??[],chain:(kind:string,id:string,actor:string)=>({retryOf:retries.get(kind+'/'+actor)?.find(r=>r.jobId===id)?{retryOf:retries.get(kind+'/'+actor)!.find(r=>r.jobId===id)!.parentId}:null,successor:retries.get(kind+'/'+actor)?.find(r=>r.parentId===id)?{id:retries.get(kind+'/'+actor)!.find(r=>r.parentId===id)!.jobId}:null})};
  const library={qualityReexecutions,durableQualityJobsEnabled:true,discovery:{store:services.preparation,cancel:services.preparation.cancel},qualityCorrespondence:services.correspondence,qualityJobs:services.single,qualityRanges:services.range,qualityVmaf:services.vmaf,qualityXpsnr:services.xpsnr,qualityCambi:services.cambi} as unknown as MediaLibraryIndex;
  let clock=1000;const center=new TaskCenterService(library,()=>clock);
  return {db,insert,center,library,retries,source,other,clock:(value:number)=>{clock=value;},close:()=>{center.close();db.close();}};
@@ -89,7 +89,8 @@ test('detail traces only same-actor pinned relationships and distinguishes retai
 
 test('hard history excess fails closed, never returns a silently incomplete first window',t=>{
  const temporary=new TaskCenterService({durableQualityJobsEnabled:false}as MediaLibraryIndex);assert.throws(()=>temporary.query('actor-A',query()),(e:any)=>e.code==='task-storage-unavailable');temporary.close();
- const f=fixture();t.after(f.close);for(let n=0;n<=TASK_HISTORY_ROWS.vmaf;n++)f.insert('vmaf');assert.throws(()=>f.center.query('actor-A',query()),(e:any)=>e.code==='task-history-budget');
+ const f=fixture();t.after(f.close);for(let n=0;n<=TASK_LIMITS.rows;n++)f.insert('vmaf','actor-A',{createdAt:n+100});assert.throws(()=>f.center.query('actor-A',query()),(e:any)=>e.code==='task-snapshot-budget');
+ assert.equal(f.center.query('actor-A',query('createdFrom=100&createdTo=101')).total,1,'SQL filters reach oldest history beyond the snapshot budget');
 });
 
 

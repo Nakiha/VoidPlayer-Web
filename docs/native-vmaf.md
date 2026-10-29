@@ -1,5 +1,7 @@
 # Native VMAF continuous sequence workflow (#122)
 
+> 默认执行器已迁移至现有分析 WASM core。当前架构和阶段验收见 [analysis-wasm-scoring.md](analysis-wasm-scoring.md)；本文中的 Linux 原生组件、临时 YUV 和 supervisor 描述保留为历史执行器契约，不代表新任务路径。
+
 The optional `quality.vmaf` executor consumes a committed, actor-owned [clock
 correspondence plan](reference-clock-plans.md). GUI and HTTP agents share the
 same durable commands, independent of playback. It is separate from the existing

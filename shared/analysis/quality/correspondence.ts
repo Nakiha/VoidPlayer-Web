@@ -1,4 +1,5 @@
-import {qualitySourceIndex} from './source-index.ts';
+import {clockKey,compareClocks} from '../../media/indexing/rational-clock.ts';
+import {qualitySourceIndex,qualitySourceClock} from './source-index.ts';
 import type {QualityIndexDocument} from './source-index.ts';
 import {qualityFrameCandidates,qualityTargetForAu} from './selection.ts';
 import {planQualityRange,QUALITY_RANGE_LIMITS} from './ranges.ts';
@@ -6,7 +7,7 @@ import type {QualityRangeInput,QualityRangePlan} from './ranges.ts';
 import type {FramePairRequest} from './frame-pair.ts';
 import type {LibraryPairBinding} from './library-pair.ts';
 
-export const CORRESPONDENCE_LIMITS=Object.freeze({segments:32,requestBytes:128*1024,resultBytes:512*1024,page:32,historyRows:100,reservedBytes:64*1024*1024,planReservation:1024*1024,queued:4,actorOutstanding:2,maxIndexBytes:64*1024*1024,maxIndexPackets:500000,maxElapsedMs:30000});
+export const CORRESPONDENCE_LIMITS=Object.freeze({segments:32,requestBytes:128*1024,resultBytes:8*1024*1024,page:32,historyRows:100,reservedBytes:256*1024*1024,planReservation:8*1024*1024,queued:4,actorOutstanding:2,maxIndexBytes:64*1024*1024,maxIndexPackets:500000,maxElapsedMs:30000});
 export type RelationSource={mediaId:string;mediaVersion:string;stream:'video';configuration:0};
 export type ClockSegment={id:string;referenceStartUs:number;referenceEndUs:number;offsetUs:number};
 export type ReferenceRelationInput={schema:'voidplayer-quality-reference-relation';version:1;client:QualityRangeInput['client'];reference:RelationSource;distorted:RelationSource;declaration:string;clock:{mode:'piecewise-exact-source-pts-offset';segments:ClockSegment[]}};
@@ -38,9 +39,9 @@ export function correspondenceInput(value:unknown):CorrespondenceInput{
   if(v.schema!=='voidplayer-quality-correspondence-plan'||v.version!==1)fail('Invalid correspondence plan schema');
   correspondenceKeys(v.relation,['id','revision']);if(typeof v.relation.id!=='string'||!/^[a-f0-9-]{36}$/.test(v.relation.id)||v.relation.revision!==1)fail('Pin an immutable reference relation revision');
   for(const id of [v.referenceBuildId,v.distortedBuildId])if(typeof id!=='string'||!/^[a-zA-Z0-9._-]{1,128}$/.test(id))fail('Pin both cache builds');
-  correspondenceKeys(v.interval,['startAu','endAu']);const {startAu,endAu}=v.interval;if(!integer(startAu)||!integer(endAu)||startAu<0||endAu<startAu||endAu-startAu+1>QUALITY_RANGE_LIMITS.universe)fail('Plan needs 1..256 reference decode-order AU positions');
+  correspondenceKeys(v.interval,['startAu','endAu']);const {startAu,endAu}=v.interval;if(!integer(startAu)||!integer(endAu)||startAu<0||endAu<startAu||endAu-startAu+1>QUALITY_RANGE_LIMITS.universe)fail('Plan needs 1..4096 reference decode-order AU positions');
   correspondenceKeys(v.sampling,v.sampling?.mode==='stride'?['mode','every','offset']:['mode']);if(v.sampling.mode!=='all'&&(v.sampling.mode!=='stride'||!integer(v.sampling.every)||v.sampling.every<2||v.sampling.every>256||!integer(v.sampling.offset)||v.sampling.offset<0||v.sampling.offset>=v.sampling.every))fail('Invalid deterministic sampling');
-  const selected=Array.from({length:endAu-startAu+1},(_,i)=>i).filter(i=>v.sampling.mode==='all'||i%v.sampling.every===v.sampling.offset).length;if(!selected||selected>64)fail('Plan needs 1..64 selected positions');
+  const selected=Array.from({length:endAu-startAu+1},(_,i)=>i).filter(i=>v.sampling.mode==='all'||i%v.sampling.every===v.sampling.offset).length;if(!selected||selected>QUALITY_RANGE_LIMITS.samples)fail('Plan needs 1..1024 selected positions');
   correspondenceKeys(v.recipe,['roi','spatial','ssim','budget']);correspondenceKeys(v.recipe.roi,['x','y','width','height']);const r=v.recipe.roi;if(![r.x,r.y,r.width,r.height].every(n=>integer(n)&&n>=0&&n%2===0)||r.width<2||r.height<2||r.x+r.width>16384||r.y+r.height>16384)fail('Invalid chroma-aligned ROI');
   if(v.recipe.spatial!==undefined)correspondenceKeys(v.recipe.spatial,['blockWidth','blockHeight']);if(v.recipe.ssim!==undefined)correspondenceKeys(v.recipe.ssim,['variant']);
   correspondenceKeys(v.budget,Object.keys(QUALITY_RANGE_LIMITS).filter(k=>k.startsWith('max')));for(const k of ['maxReadBytes','maxPackets','maxOutputFrames','maxInputBytes','maxElapsedMs'] as const)if(!integer(v.budget[k])||v.budget[k]<1||v.budget[k]>QUALITY_RANGE_LIMITS[k])fail(`Invalid range budget.${k}`);
@@ -58,15 +59,17 @@ export function buildCorrespondence(relation:ReferenceRelation,request:Correspon
     admissions.push(issue);return index;});
   const counts=indexes.map(index=>{const m=new Map<number,number[]>();index.packets.forEach((p,au)=>{const list=m.get(p.pts);if(list)list.push(au);else m.set(p.pts,[au]);});return m;});
   const fact=(side:number,au:number):AuFact|null=>{const index=indexes[side],p=index.packets[au],mp4=index.mp4,sample=mp4?.samples[au];return p?{au,ptsUs:p.pts,dtsUs:p.dts,offset:p.offset,bytes:p.size,key:p.key,configuration:p.configuration??0,...(mp4&&sample?{clock:{basis:'mp4-sample-ticks-v1' as const,trackId:mp4.trackId,timescale:mp4.timescale,sampleOrdinal:sample.ordinal,description:sample.description,dtsTicks:sample.dtsTicks,ctsTicks:sample.ctsTicks,durationTicks:sample.durationTicks}}:{})}:null;};
+  const exactCounts=indexes.map(index=>{const m=new Map<string,number[]>();index.packets.forEach((_,au)=>{const key=clockKey(qualitySourceClock(index,au));const list=m.get(key)??[];list.push(au);m.set(key,list);});return m;});
   const numberCounts=counts.map(m=>new Map([...m].map(([pts,aus])=>[pts,aus.length])));
   const rows:CorrespondenceRow[]=[],pairs:FramePairRequest[]=[];
   for(let au=request.interval.startAu;au<=request.interval.endAu;au++){
     const reference=fact(0,au),row:CorrespondenceRow={au,selected:request.sampling.mode==='all'||(au-request.interval.startAu)%request.sampling.every===request.sampling.offset,reference,segmentId:null,offsetUs:null,expectedDistortedPtsUs:null,distorted:null,status:'unmapped',reason:null,detail:null,matches:0,candidateAus:[]};rows.push(row);
     if(!reference){row.reason='reference-au-missing';continue;}
-    const segment=relation.input.clock.segments.find(s=>reference.ptsUs>=s.referenceStartUs&&reference.ptsUs<s.referenceEndUs);
+    const time=qualitySourceClock(indexes[0],au);
+    const segment=relation.input.clock.segments.find(s=>compareClocks(time,{ticks:s.referenceStartUs,timescale:1000000})>=0&&compareClocks(time,{ticks:s.referenceEndUs,timescale:1000000})<0);
     if(!segment){row.reason='clock-unmapped';continue;}row.segmentId=segment.id;row.offsetUs=segment.offsetUs;row.expectedDistortedPtsUs=reference.ptsUs+segment.offsetUs;
-    if(counts[0].get(reference.ptsUs)!.length!==1){row.status='ambiguous';row.reason='reference-pts-ambiguous';continue;}
-    const matches=counts[1].get(row.expectedDistortedPtsUs)??[];row.matches=matches.length;row.candidateAus=matches.slice(0,4);
+    if(exactCounts[0].get(clockKey(time))!.length!==1){row.status='ambiguous';row.reason='reference-pts-ambiguous';continue;}
+    const matches=exactCounts[1].get(clockKey(time,{ticks:segment.offsetUs,timescale:1000000}))??[];row.matches=matches.length;row.candidateAus=matches.slice(0,4);
     if(!matches.length){row.reason='target-pts-missing';continue;}if(matches.length>1){row.status='ambiguous';row.reason='target-pts-ambiguous';continue;}
     const other=matches[0];row.distorted=fact(1,other);
     if(admissions[0]||admissions[1]){row.status='unsupported';row.reason=admissions[0]?'unsupported-reference':'unsupported-distorted';row.detail=admissions[0]??admissions[1];continue;}

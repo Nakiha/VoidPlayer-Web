@@ -6,7 +6,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export const playbackFiles = ['voidplayer-core.js', 'voidplayer-core.wasm', 'voidplayer-core-mt.js', 'voidplayer-core-mt.wasm', 'LICENSES/COPYING.LGPLv2.1', 'LICENSES/dav1d-COPYING', 'capabilities.json', 'capabilities-mt.json', 'voidplayer-ffmpeg-manifest.json', 'voidplayer-ffmpeg-manifest-mt.json'];
-export const analysisFiles = ['voidplayer-analysis.js', 'voidplayer-analysis.wasm', 'manifest.json', 'LICENSE', 'capabilities.json'];
+export const analysisFiles = ['voidplayer-analysis.js', 'voidplayer-analysis.wasm', 'manifest.json', 'LICENSE', 'LICENSE.libvmaf', 'LICENSE.libsvm', 'capabilities.json'];
 export async function verifyCoreArtifact(directory, lock, schema, required) {
   const provenance = JSON.parse(await readFile(path.join(directory, 'provenance.json'), 'utf8'));
   assert.equal(provenance.schema, schema, 'Core provenance schema');
@@ -21,7 +21,7 @@ export async function verifyCoreArtifact(directory, lock, schema, required) {
   }
   if (schema === 'voidplayer-analysis-build') {
     const manifest = JSON.parse(await readFile(path.join(directory, 'manifest.json'), 'utf8'));
-    for (const key of ['repository', 'revision', 'ffmpegRepository', 'ffmpegRevision', 'abi', 'semanticVersion', 'referenceAbi', 'demuxAbi'])
+    for (const key of ['repository', 'revision', 'ffmpegRepository', 'ffmpegRevision', 'abi', 'semanticVersion', 'referenceAbi', 'demuxAbi', 'qualityAbi'])
       assert.equal(manifest[key], lock[key], `Analysis manifest ${key} differs from release lock`);
     assert.ok(!manifest.dirty, 'Unpublished analysis manifest');
     assert.equal(provenance.buildId, manifest.buildId ?? manifest.revision, 'Analysis build ID differs');

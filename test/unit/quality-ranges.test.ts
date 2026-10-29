@@ -33,7 +33,7 @@ test('inclusive AU planning distinguishes unmapped endpoints and deterministic s
   const v=input(),all=planQualityRange(v);assert.deepEqual(all.selectedAus,[0,1,2]);assert.deepEqual(all.unmappedAus,[2]);assert.deepEqual(all.unsampledAus,[]);
   v.sampling={mode:'stride',every:2,offset:0};const stride=planQualityRange(v);assert.deepEqual(stride.selectedAus,[0,2]);assert.deepEqual(stride.unsampledAus,[1]);assert.deepEqual(stride.unmappedAus,[2]);
   assert.equal(stride.preRollAndDrain.packets,2);assert.equal(stride.reservation.readBytes,1024);assert.equal(v.pairs[0].budget?.maxPackets,undefined,'pure plan leaves caller input intact');
-  const tooMany=input([0]);tooMany.interval.endAu=64;assert.throws(()=>planQualityRange(tooMany),/64 selected/);
+  const tooMany=input([0]);tooMany.interval.endAu=1024;assert.throws(()=>planQualityRange(tooMany),/1024 selected/);
 });
 
 test('independent parent actor/queue, row/byte history caps and future schema preserve old receipts',async t=>{

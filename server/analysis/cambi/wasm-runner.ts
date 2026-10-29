@@ -1,0 +1,192 @@
+import type { MediaLibraryIndex } from "../../library.ts";
+import type { QualityExecutionContract } from "../../../shared/analysis/quality/reexecution.ts";
+import {
+  CAMBI_CAPABILITY,
+  CAMBI_LIMITS,
+  CambiError,
+  canonicalJson,
+} from "../../../shared/analysis/quality/cambi.ts";
+import type {
+  CambiInput,
+  CambiPrepared,
+  CambiNative,
+} from "../../../shared/analysis/quality/cambi.ts";
+import { NativeCambiRunner } from "./runner.ts";
+import type { CambiHooks } from "./runner.ts";
+import { analysisComponent } from "../quality/analysis-component.ts";
+
+export class WasmCambiRunner extends NativeCambiRunner {
+  readonly analysisDir: string;
+  constructor(
+    library: MediaLibraryIndex,
+    coreDir: string,
+    analysisDir: string,
+  ) {
+    super(library, coreDir, undefined);
+    this.analysisDir = analysisDir;
+  }
+  override assertAvailable() {
+    analysisComponent(this.analysisDir);
+  }
+  override async cambiCapability() {
+    const basic = {
+      ...CAMBI_CAPABILITY,
+      platforms: ["wasm32"],
+      configured: true,
+      enabled: false,
+      reason: "component-unavailable",
+    };
+    try {
+      const { component: c, version } = analysisComponent(this.analysisDir);
+      return {
+        ...basic,
+        enabled: true,
+        reason: null,
+        component: {
+          manifestSha256: c.manifestSha256,
+          sourceRevision: c.sourceRevision,
+          cliVersion: version,
+          executor: c.executor,
+        },
+        selfTest: "artifact-hashes-verified; pixel-ABI-checked-at-execution",
+      };
+    } catch (error) {
+      return {
+        ...basic,
+        reason: (error as { code?: string }).code ?? "component-unavailable",
+      };
+    }
+  }
+  private contract(): NonNullable<QualityExecutionContract["analysis"]> {
+    return {
+      component: analysisComponent(this.analysisDir).component,
+      recipe: "libvmaf-cambi-63-memory-heatmaps-v1",
+    };
+  }
+  private data(
+    input: CambiInput,
+    contract: QualityExecutionContract["analysis"],
+  ) {
+    return {
+      database: this.library.indexDatabase,
+      coreDir: this.coreDir,
+      analysisDir: this.analysisDir,
+      directory: "",
+      input,
+      analysisContract: contract,
+    };
+  }
+  override async cambiReexecutionPreflight(
+    input: CambiInput,
+    expected: QualityExecutionContract,
+    signal: AbortSignal,
+  ) {
+    return this.owned(
+      { budget: { maxElapsedMs: Math.min(input.budget.maxElapsedMs, 30000) } },
+      signal,
+      () => {},
+      (combined) =>
+        this.worker(
+          "../cambi/decode-worker.ts",
+          {
+            ...this.data(input, this.contract()),
+            mode: "preflight",
+            expectedExecutionContract: expected,
+          },
+          combined,
+        ),
+    );
+  }
+  override async runCambi(
+    _id: string,
+    input: CambiInput,
+    signal: AbortSignal,
+    hooks: CambiHooks,
+  ) {
+    return this.owned(
+      {
+        budget: {
+          maxElapsedMs: Math.min(
+            input.budget.maxElapsedMs,
+            input.budget.nativeCpuSeconds * 1000,
+          ),
+        },
+      },
+      signal,
+      hooks.admitted,
+      async (combined) => {
+        const contract = this.contract(),
+          data = this.data(input, contract);
+        hooks.phase("decode-and-score");
+        const value = await this.worker<{
+          prepared: CambiPrepared;
+          native: CambiNative;
+        }>(
+          "../quality/scoring-worker.ts",
+          {
+            ...data,
+            mode: "decode",
+            metric: "cambi",
+            expectedExecutionContract: hooks.expectedExecutionContract,
+          },
+          combined,
+          hooks.progress,
+          hooks.contract,
+          async (message) => {
+            if (!hooks.streamFrame)
+              throw new CambiError(
+                "execution-failed",
+                "Streaming evidence consumer missing",
+              );
+            combined.throwIfAborted();
+            await hooks.streamFrame(
+              message.frame,
+              message.header,
+              message.score,
+              message.maps,
+            );
+          },
+        );
+        combined.throwIfAborted();
+        hooks.prepared(value.prepared);
+        hooks.phase("source-final");
+        if (canonicalJson(contract) !== canonicalJson(this.contract()))
+          throw new CambiError(
+            "component-unavailable",
+            "Analysis component changed during scoring",
+          );
+        const verification = await this.worker<{
+          indexBytes: number;
+          indexPackets: number;
+          witness: {
+            passes: number;
+            assetBytes: number;
+            producerBytes: number;
+          };
+        }>(
+          "../cambi/decode-worker.ts",
+          {
+            ...data,
+            mode: "verify",
+            expectedExecutionContract: hooks.expectedExecutionContract,
+            remainingIndex: {
+              maxIndexBytes:
+                CAMBI_LIMITS.maxIndexBytes - value.prepared.work.indexBytes,
+              maxIndexPackets:
+                CAMBI_LIMITS.maxIndexPackets - value.prepared.work.indexPackets,
+            },
+          },
+          combined,
+        );
+        combined.throwIfAborted();
+        if (value.prepared.work.executionWitness) {
+          const w = value.prepared.work.executionWitness;
+          w.passes += verification.witness.passes;
+          w.assetBytes += verification.witness.assetBytes;
+          w.producerBytes += verification.witness.producerBytes;
+        }
+        return value;
+      },
+    );
+  }
+}

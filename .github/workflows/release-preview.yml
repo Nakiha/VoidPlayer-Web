@@ -70,6 +70,7 @@ jobs:
         run: |
           mkdir -p .run/analysis-source/.build
           printf '{"type":"commonjs"}\n' > .run/analysis-source/.build/package.json
+          python -m pip install meson==1.9.1 ninja==1.13.0
           bash .run/analysis-source/scripts/build-analysis.sh
           node scripts/prepare-analysis-core.mjs .run/analysis-source/dist/voidplayer-analysis
       - name: Verify analysis reference ABI including restored caches

@@ -1,3 +1,4 @@
+import type {RationalClock} from '../../media/indexing/rational-clock.ts';
 import {parseFlvIndex} from '../../media/indexing/flv-index-cache.ts';
 import type {FlvIndexDocument} from '../../media/indexing/flv-index-cache.ts';
 import {parseMp4QualityDocument} from '../../media/indexing/mp4-quality-index.ts';
@@ -15,4 +16,11 @@ export function qualitySourceIndex(d:QualityIndexDocument,size:number):QualityVi
   const doc=parseMp4QualityDocument(d,size),packets=doc.samples.map(s=>({offset:s.offset,size:s.size,pts:s.ptsUs,dts:s.dtsUs,key:s.key,configuration:0})),order=packets.map((_,i)=>i).sort((a,b)=>packets[a].pts-packets[b].pts),firstPts=packets[order[0]].pts;
   const end=doc.samples.reduce((n,s)=>Math.max(n,s.ptsUs+s.durationUs),firstPts);
   return {container:'mp4',mp4:doc,codec:doc.codec,description:new Uint8Array(doc.description),packets,order,firstPts,duration:end-firstPts,durations:order.map(i=>doc.samples[i].durationUs)};
+}
+
+export function qualitySourceClock(index:QualityVideoIndex,au:number):RationalClock {
+  const sample=index.mp4?.samples[au];
+  if(sample)return {ticks:sample.dtsTicks+sample.ctsTicks,timescale:index.mp4!.timescale};
+  const packet=index.packets[au];if(!packet)throw Error('Missing source AU clock');
+  return {ticks:packet.pts,timescale:1000000};
 }

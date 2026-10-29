@@ -2277,7 +2277,7 @@
     "params": {}
   },
   "cambi.scope": {
-    "source": "Linux x64 可选固定组件；可信 FLV/Enhanced FLV 8/10 位，或严格 MP4 avc1 H2648 / hvc1 HEVC8/10；限范围 BT.709 SDR，整帧、方形像素、不裁剪，长边至少320。分数越高表示检测到更多色带，不是产品合格线；内部按10位处理。允许明确抽样，未采样帧不冒充覆盖。没有跨帧目标跟踪，未认证引用完整性，无法检测错误隐藏。",
+    "source": "使用分析 WASM core；可信 FLV/Enhanced FLV 8/10 位，或严格 MP4 avc1 H2648 / hvc1 HEVC8/10；限范围 BT.709 SDR，整帧、方形像素、不裁剪，长边至少320。分数越高表示检测到更多色带，不是产品合格线；内部按10位处理。允许明确抽样，未采样帧不冒充覆盖。没有跨帧目标跟踪，未认证引用完整性，无法检测错误隐藏。",
     "params": {}
   },
   "cambi.submit": {
@@ -5679,6 +5679,18 @@
     "source": "查询 / 刷新快照",
     "params": {}
   },
+  "tasks.release": {
+    "source": "释放未共享的评分结果",
+    "params": {}
+  },
+  "tasks.releaseScope": {
+    "source": "释放后保留任务与提交回执；已用于共享评审的结果不会被删除。",
+    "params": {}
+  },
+  "tasks.released": {
+    "source": "私有结果已释放，原任务回执保留。",
+    "params": {}
+  },
   "tasks.reset": {
     "source": "清除筛选",
     "params": {}
@@ -6134,7 +6146,7 @@
     "params": {}
   },
   "vmaf.candidates": {
-    "source": "显式整帧测量候选",
+    "source": "显式片段测量候选",
     "params": {}
   },
   "vmaf.frames": {
@@ -6166,7 +6178,7 @@
     "params": {}
   },
   "vmaf.scope": {
-    "source": "需要已安装的 Linux x64 组件及显式提交的时钟对应计划。仅限 2–32 个连续呈现帧；不支持跨帧抽样、缺口、负 PTS 或 VFR。限范围 BT.709 SDR、8/10 位 YUV420、方形像素，不裁剪、旋转或转换。v0.6.1 是固定基线，并非最新模型。分数属于整帧时间序列事实，不是热图或人工缺陷判断；未认证引用完整性，无法检测错误隐藏。",
+    "source": "使用分析 WASM core 和已提交的时钟对应计划。支持 2–1024 个连续呈现帧，可按计划中的固定 ROI 重算；不支持抽样拼接、缺口、负 PTS 或 VFR。输入为限范围 BT.709 SDR、8/10 位 YUV420、方形像素，无缩放或色彩转换。v0.6.1 是固定基线；整帧或 ROI 的时域分数不是空间热图，也不是人工缺陷判断。",
     "params": {}
   },
   "vmaf.share": {
@@ -6182,7 +6194,7 @@
     "params": {}
   },
   "vmaf.title": {
-    "source": "原生 VMAF · 连续整帧序列",
+    "source": "VMAF · 连续片段评分",
     "params": {}
   },
   "vmaf.usePlan": {

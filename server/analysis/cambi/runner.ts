@@ -2,13 +2,13 @@ import type {QualityExecutionContract} from '../../../shared/analysis/quality/re
 import {canonicalJson} from '../../../shared/analysis/quality/cambi.ts';
 import {mkdirSync,rmSync,writeFileSync,readFileSync,readdirSync,lstatSync,openSync,readSync,closeSync} from 'node:fs';import path from 'node:path';import {randomUUID,createHash} from 'node:crypto';
 import {NativeVmafRunner} from '../vmaf/runner.ts';import type {VmafComponent} from '../vmaf/component.ts';
-import {CAMBI_LIMITS,CAMBI_RECIPE,CAMBI_CAPABILITY,CambiError,cambiOutputBudget} from '../../../shared/analysis/quality/cambi.ts';import type {CambiInput,CambiPrepared,CambiNative} from '../../../shared/analysis/quality/cambi.ts';
+import {CAMBI_LIMITS,CAMBI_RECIPE,CAMBI_CAPABILITY,CambiError,cambiOutputBudget} from '../../../shared/analysis/quality/cambi.ts';import type {CambiInput,CambiPrepared,CambiNative,CambiFrame} from '../../../shared/analysis/quality/cambi.ts';
 import type {VmafComponentConfig} from '../../../shared/analysis/quality/vmaf.ts';import type {MediaLibraryIndex} from '../../library.ts';
-export type CambiHooks={expectedExecutionContract?:QualityExecutionContract;contract?(c:QualityExecutionContract):void;admitted():void;phase(name:string):void;progress(n:number,total:number):void;prepared(p:CambiPrepared):void;process(p:{pid:number;startTicks:string;bootId:string}|null):void;frame(index:number,score:number,maps:{scale:number;bytes:Uint8Array;sha256:string}[]):void|Promise<void>};
+export type CambiHooks={expectedExecutionContract?:QualityExecutionContract;contract?(c:QualityExecutionContract):void;admitted():void;phase(name:string):void;progress(n:number,total:number):void;prepared(p:CambiPrepared):void;process(p:{pid:number;startTicks:string;bootId:string}|null):void;streamFrame?(frame:CambiFrame,header:Omit<CambiPrepared,'frames'>,score:number,maps:{scale:number;bytes:Uint8Array;sha256:string}[]):Promise<void>;frame(index:number,score:number,maps:{scale:number;bytes:Uint8Array;sha256:string}[]):void|Promise<void>};
 export class NativeCambiRunner extends NativeVmafRunner{
  constructor(library:MediaLibraryIndex,coreDir:string,config:VmafComponentConfig|undefined){super(library,coreDir,config);}
  async cambiCapability(){
-  const basic={...CAMBI_CAPABILITY,configured:!!this.config,enabled:false,reason:'component-unavailable'};
+  const basic={...CAMBI_CAPABILITY,platforms:[...CAMBI_CAPABILITY.platforms] as string[],configured:!!this.config,enabled:false,reason:'component-unavailable'};
   if(!this.config||process.platform!=='linux'||process.arch!=='x64')return basic;
   try{return await this.owned({budget:{maxElapsedMs:30000}},new AbortController().signal,()=>{},async signal=>{
    const c=await this.component('vmaf_v0_6_1',signal),directory=this.directory('selftest-'+randomUUID());mkdirSync(directory,{recursive:true,mode:0o700});

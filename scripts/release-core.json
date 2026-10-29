@@ -1,6 +1,6 @@
 {
   "repository": "Nakiha/VoidPlayer-FFmpeg-Build",
-  "revision": "56eec749fde60488e41fe4d5467f77fb112f093c",
+  "revision": "aaa166d615d24d794f0da1badacc8dd8c2d3e194",
   "ffmpegRepository": "Nakiha/FFmpeg",
   "ffmpegRevision": "8998a1a670c81a04d144c36f9e2d3aa680c10720",
   "ffmpegRef": "n9.0.2-vpsimd-sad-testfix",
@@ -17,5 +17,6 @@
     "mpegps",
     "mpegvideo"
   ],
-  "packetIdentityAbi": 1
+  "packetIdentityAbi": 1,
+  "packetIdentityCapacity": 512
 }
