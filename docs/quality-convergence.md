@@ -382,3 +382,25 @@ CAMBI真实生命周期/重执行20/20、定向契约及构建通过。
   状态。检查运行中的状态不写入静态完成声明，最终结果随PR检查和交付说明提供。
 - #112和11个子项保留完整原要求与历史记录；本轮不关闭HDR/VFR、自动对齐、
   主观校准、其他NR模型和分布式等后续范围。
+
+
+## 阶段十四：Windows 崩溃恢复与三平台验收调度
+
+精确提交2e4be84的Windows日志出现4个同根失败：测试假设自杀SIGKILL必返回
+POSIX signalCode，而Windows返回非零exitCode和null signalCode。真实进程
+仍被强制结束。共享断言按平台核验非零退出或SIGKILL；事务前后marker、回滚、
+重启后interrupted、原键重放及唯一后继的真实数据库断言均保留，CAMBI也补齐
+同样退出核验。不把普通成功退出作为故障、不跳过Windows用例。
+Node/Bun真实进程重执行各20/20、本地构建和发布流水线契约20/20通过。
+
+同次Windows Node阶段实际耗时约14分钟，原先它与38项Bun套件及包内验收
+共用20分钟总限时。扩展原Linux独立运行时job为三平台×Node/Bun矩阵，包内
+验收单独执行；每个平台仍运行Node24项/Bun38项，单项及job限时不扩大。
+六个运行时组合与三个包都必须成功，release-set才可汇总。删去已经无效的
+Linux原生组件“安装”空步骤，以及被完整TAP日志替代的测量单例诊断重跑。
+
+2e4be84的云端配对播放报告配置有效但16/16未达阈值：baseline/feature各8次。
+单轨速度分别0.702–0.741× / 0.737–0.752×，双轨0.460–0.475× /
+0.458–0.472×且两边都有stall；本机12/12不能替代此结果，不声称根因已修。
+[原始CI报告](https://github.com/Nakiha/VoidPlayer-Web/actions/runs/40958151136/job/123744275115)
+保留于PR，下载副本在 `.run/quality-convergence/final-paired-performance.zip`。
