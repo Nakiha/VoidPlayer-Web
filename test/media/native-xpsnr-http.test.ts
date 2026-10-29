@@ -4,7 +4,31 @@ import test from 'node:test';import assert from 'node:assert/strict';import {ran
 import {xpsnrFixture,xpsnrOracle,sha,until} from '../helpers/native-xpsnr.mjs';
 import {qualityEvidenceValue,qualityEvidenceList} from '../../shared/review/quality-evidence.ts';
 import {parseXpsnrStatistics} from '../../shared/analysis/quality/xpsnr.ts';import {AnnotationStore} from '../../server/annotations.ts';import {startService} from '../../server/runtime.ts';
+import {comparisonFixture} from '../helpers/xpsnr-comparison.mjs';
+import {readXpsnrComparison} from '../../src/services/xpsnr-comparison.ts';
+import {comparisonFromUrl,pinComparison} from '../../shared/analysis/quality/xpsnr-comparison.ts';
+import {openIndexDatabase} from '../../server/sqlite.ts';
 const matrix=([['h264',8],['hevc',8],['hevc',10]]as const).flatMap(([codec,depth])=>([['flv','flv'],['mp4','mp4'],['mp4','flv'],['flv','mp4']]as const).map(containers=>({codec,depth,containers})));
+test('four real versions: read-only comparison pages, frozen recovery, actor and reclaimed-result refusal',{timeout:120000},async t=>{
+ const f=await comparisonFixture();t.after(()=>f.close());const ids=f.jobs.map((j:any)=>j.id),calls:string[]=[];
+ const client:any={async request(actor:string,url:string){assert.equal(actor,f.actor);calls.push(url);return f.json(url);}};
+ const two=await readXpsnrComparison(client,f.actor,ids.slice(0,2),new AbortController().signal);assert.equal(two.comparison.items.length,2);
+ const four=await readXpsnrComparison(client,f.actor,ids,new AbortController().signal),view=pinComparison(four.comparison,4,'minimum');
+ const truncatedClient:any={async request(actor:string,url:string){const value=await client.request(actor,url);if(url.includes('/compare?')){assert.equal(value.items.length,3);return {...value,items:value.items.slice(0,2)};}assert.fail('Omitted version must reject before dependent reads');}};
+ await assert.rejects(readXpsnrComparison(truncatedClient,f.actor,ids.slice(0,3),new AbortController().signal),/Comparison selection changed/);
+ const invalidSsimClient:any={async request(actor:string,url:string){const value=await client.request(actor,url);if(url.includes(ids[0]+'/frames?')){assert.equal(typeof value.entries[0].pair.result.ssim.aggregate.score,'number');value.entries[0].pair.result.ssim.aggregate.score=null;}return value;}};
+ await assert.rejects(readXpsnrComparison(invalidSsimClient,f.actor,ids,new AbortController().signal),/SSIM evidence is invalid/);
+ assert.equal(four.comparison.items.length,4);assert.equal(new Set(four.comparison.items.map(i=>i.distorted.binding.mediaId)).size,4);
+ assert.equal(four.comparison.items[1].pooled.minimum.kind,'positive-infinity');assert.ok(new Set(four.comparison.items.map(i=>i.raw.distortedSha256)).size>=3);
+ const page=await readXpsnrComparison(client,f.actor,ids,new AbortController().signal,view);assert.deepEqual(page.pages[0].entries.map(e=>e.index),[4,5,6,7]);assert.equal(page.pages[0].next,null);
+ const response=await f.json('/api/quality/xpsnr/compare?ids='+ids.join(','));assert.deepEqual(comparisonFromUrl(new URL(response.gui,f.base)),pinComparison(four.comparison));
+ assert.equal((await f.json('/api/quality/xpsnr/jobs')).entries.length,4);assert.ok(calls.every(url=>url.startsWith('/api/quality/xpsnr/')));
+ assert.equal((await f.request('/api/quality/xpsnr/compare?ids='+ids.join(','),undefined,undefined,{cookie:'voidplayer-user=guest-'+randomUUID(),'x-voidplayer-actor':f.actor})).status,409);
+ const stale=structuredClone(view);stale.items[0].resultDigest='f'.repeat(64);await assert.rejects(readXpsnrComparison(client,f.actor,ids,new AbortController().signal,stale),/changed/);
+ const db=openIndexDatabase(f.service.library.indexDatabase+'.quality-xpsnr.sqlite');try{db.prepare('UPDATE quality_xpsnr_jobs SET result=NULL WHERE id=?').run(ids[0]);}finally{db.close();}
+ const gone=await f.request('/api/quality/xpsnr/compare?ids='+ids.join(','));assert.equal(gone.status,409);assert.equal((await gone.json()).code,'xpsnr-result-unavailable');
+ await assert.rejects(readXpsnrComparison(client,f.actor,ids,new AbortController().signal,view),/409/);
+});
 for(const {codec,depth,containers}of matrix)test(`official XPSNR ${codec}/${depth} ${containers.join('→')} continuous reordered/drain HTTP`,{timeout:120000},async t=>{
  const f=await xpsnrFixture({codec,depth,containers,distorted:true});t.after(()=>f.close());assert.equal((await f.json('/api/quality/xpsnr/capability')).enabled,true);const pre=await f.json('/api/quality/xpsnr/preflight',f.input);assert.equal(pre.nativeExecution,false);
  const a=await f.request('/api/quality/xpsnr/jobs',f.input,'one');assert.equal(a.status,202);const j=(await a.json()).job,done=await f.wait(j.id);assert.equal(done.state,'completed',JSON.stringify(done));assert.equal(done.metrics.xpsnr.state,'completed');assert.equal(done.process,null);

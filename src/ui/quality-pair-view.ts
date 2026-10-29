@@ -7,6 +7,7 @@ import type { PairViewSide } from '../../shared/review/quality-pair-view.ts';
 import { t,msg,initializeLanguage,onLanguageChange } from '../i18n.ts';
 import './quality-pair-view.css';
 import { qualitySpatial } from './quality-spatial.ts';
+import {comparisonFromUrl,comparisonLocation} from '../../shared/analysis/quality/xpsnr-comparison.ts';
 
 const disposeLanguage=await initializeLanguage();
 const root=document.querySelector<HTMLElement>('#pair-view')!;
@@ -31,6 +32,9 @@ for(const side of PAIR_VIEW_SIDES) {
   stage.append(canvas,svg);section.append(heading,stage,caption);views.append(section);
 }
 root.append(title,note,limits,forwardNotice,cancel,status,blockControl,views,blocks);
+// A bounded same-origin return location carries result identities only. It never
+// changes this viewer's evidence selection or authorizes a private result read.
+try{const view=comparisonFromUrl(new URL(location.href));if(view){const back=document.createElement('a');back.id='pair-comparison-return';back.href=comparisonLocation(view);back.textContent=t(msg('xcompare.back','返回固定版本比较（重新核验）'));root.prepend(back);}}catch{}
 const session=new QualityPairViewSession((side,frame)=>{
   const stage=stages[side],width=stage.clientWidth,height=stage.clientHeight,d=frame.description,scale=Math.min(width/d.width,height/d.height);
   const g=geometry[side]={width,height,imageWidth:d.width,imageHeight:d.height,zoom:scale,offsetX:0,offsetY:0,dpr:devicePixelRatio};
