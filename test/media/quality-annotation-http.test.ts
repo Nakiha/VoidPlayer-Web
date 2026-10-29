@@ -11,7 +11,7 @@ import {startService} from '../../server/runtime.ts';
 import {encodedPair} from '../helpers/library-pair-fixture.ts';
 import {compressWorkspace,readWorkspaceFile,parseWorkspace} from '../../shared/review/workspace-file.ts';
 import {annotationWorkspace} from '../../shared/review/annotation-record.ts';
-import {evidenceApplies} from '../../shared/review/quality-evidence.ts';
+import {evidenceApplies,QUALITY_EVIDENCE_LIMITS} from '../../shared/review/quality-evidence.ts';
 import type {QualityJob} from '../../shared/analysis/quality/jobs.ts';
 import type {AnnotationDocument,AnnotationOperation,AnnotationRecord} from '../../shared/review/annotation-record.ts';
 import type {PairTarget} from '../../shared/analysis/quality/frame-pair.ts';
@@ -98,12 +98,12 @@ for(const [codec,depth]of [['h264',8],['hevc',8],['hevc',10]]as const)test(`anno
   for(let n=0;n<5;n++){const op={...attach,id:'grid-bytes',revision,operationId:'grid-bytes-'+n,evidence:{jobId:gridJob.id,attemptId:gridJob.attempt.id,digest:gridJob.result.digest,side:'reference'}};
    const response=await fetch(base+'/api/annotations/spaces/default',{method:'POST',headers,body:JSON.stringify(op)}),value=await response.json();
    if(response.status===413){assert.equal(value.code,'evidence-limit');assert.ok(n>0&&n<=4);rejected=true;break;}
-   assert.equal(response.status,200,JSON.stringify(value));assert.equal(value.document.mark.qualityEvidence.at(-1).value.result.metric.spatial.blocks.length,60);assert.ok(Buffer.byteLength(JSON.stringify(value.document.mark.qualityEvidence))<=128*1024);revision++;
+   assert.equal(response.status,200,JSON.stringify(value));assert.equal(value.document.mark.qualityEvidence.at(-1).value.result.metric.spatial.blocks.length,60);assert.ok(Buffer.byteLength(JSON.stringify(value.document.mark.qualityEvidence))<=QUALITY_EVIDENCE_LIMITS.bytes);revision++;
   }
-  assert.equal(rejected,true,'the existing 128 KiB/four-attachment budget still rejects overflow');
+  assert.equal(rejected,true,'the shared byte/count budget still rejects overflow');
   const saved=await fetch(base+'/api/annotations/spaces/default/grid-bytes').then(r=>r.json());assert.equal(saved.revision,revision,'budget rejection does not mutate the annotation');
-  const oversized=structuredClone(saved.document);Object.assign(oversized.mark.qualityEvidence[0].value,{untrustedPadding:'x'.repeat(128*1024)});
-  assert.ok(Buffer.byteLength(JSON.stringify(oversized.mark.qualityEvidence))>128*1024);
+  const oversized=structuredClone(saved.document);Object.assign(oversized.mark.qualityEvidence[0].value,{untrustedPadding:'x'.repeat(QUALITY_EVIDENCE_LIMITS.bytes)});
+  assert.ok(Buffer.byteLength(JSON.stringify(oversized.mark.qualityEvidence))>QUALITY_EVIDENCE_LIMITS.bytes);
   const rejectedImport=await post({id:'grid-bytes',revision,operationId:'oversized-grid-import',action:'put',document:oversized},400);assert.equal((rejectedImport as any).code,'invalid-annotation-document');
   assert.deepEqual(await fetch(base+'/api/annotations/spaces/default/grid-bytes').then(r=>r.json()),saved,'oversized imported facts leave the committed grid unchanged');
  }

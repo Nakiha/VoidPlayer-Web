@@ -27,9 +27,9 @@ if (
   throw Error("Oracle must use clean pinned official source");
 const hash = (b) => createHash("sha256").update(b).digest("hex");
 const cases = [];
-for (const metric of ["vmaf", "cambi"]) {
+for (const [metric, fixture] of [["vmaf", "native-vmaf-samples.json"], ["cambi", "native-cambi-samples.json"], ["cambi", "native-cambi-mp4-samples.json"]]) {
   const { samples } = JSON.parse(
-    readFileSync(`test/helpers/native-${metric}-samples.json`),
+    readFileSync(`test/helpers/${fixture}`),
   );
   for (const [sampleIndex, s] of samples.entries())
     for (const model of metric === "vmaf"
@@ -126,6 +126,7 @@ for (const metric of ["vmaf", "cambi"]) {
           cases.push({
             metric,
             sampleIndex,
+            ...(fixture.includes("mp4") ? { fixture } : {}),
             model,
             ...(roi ? { roi } : {}),
             referenceSha256: hash(reference),

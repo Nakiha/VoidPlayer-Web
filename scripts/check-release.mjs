@@ -27,7 +27,7 @@ for (const key of ['VOIDPLAYER_CONFIG', 'VOIDPLAYER_DATA_DIR', 'VOIDPLAYER_ADMIN
 const cwd = path.join(temp, 'unrelated cwd'), data = path.join(temp, 'persistent data'), media = path.join(temp, 'nested media');
 const freePort = async () => { const socket = createServer(); await new Promise(r => socket.listen(0, '127.0.0.1', r)); const port = socket.address().port; await new Promise(r => socket.close(r)); return port; };
 let executable;
-async function verifyAgentEntry(base,transport=fetch){
+async function verifyAgentEntry(base,transport=fetch,analysisAvailable=true){
   const entry=await transport(base+'/llms.txt');assert.equal(entry.status,200);assert.match(await entry.text(),/\/api\/agent\/tasks/);
   const manifest=await (await transport(base+'/api/agent')).json(),catalog=await (await transport(base+manifest.links.taskCatalog)).json();assert.equal(catalog.schema,'voidplayer-agent-tasks');assert.equal(catalog.version,1);
   for(const id of ['library.prepare','plan.execute','single.submit','vmaf.submit','evidence.events','tasks.query','tasks.get']){
@@ -36,7 +36,13 @@ async function verifyAgentEntry(base,transport=fetch){
     assert.equal((await transport(base+op.links.guide)).status,200);
   }
   const mp4=manifest.qualityJobs.source.additionalContainers.mp4;assert.equal(mp4.nativeSequenceMetrics.cambi.implemented,true);assert.equal(mp4.nativeSequenceMetrics.vmaf.implemented,true);
-  assert.deepEqual(mp4.nativeSequenceMetrics.cambi.containers.mp4.matrix,['h264-8','hevc-8','hevc-10']);assert.deepEqual(manifest.qualityCambi.resultVersions,[1,2]);assert.equal(manifest.qualityCambi.deployment.enabled,false); // Code support never implies an installed native component.
+  assert.deepEqual(mp4.nativeSequenceMetrics.cambi.containers.mp4.matrix,['h264-8','hevc-8','hevc-10']);assert.deepEqual(manifest.qualityCambi.resultVersions,[1,2]);assert.equal(manifest.qualityCambi.deployment.enabled,analysisAvailable);
+  if(analysisAvailable)assert.equal(manifest.qualityCambi.deployment.component.executor,'analysis-wasm');
+  for (const metric of ['vmaf','cambi']) {
+    const capability=await (await transport(base+`/api/quality/${metric}/capability`)).json();
+    assert.equal(capability.enabled,analysisAvailable,JSON.stringify(capability));
+    if(analysisAvailable)assert.equal(capability.component.executor,'analysis-wasm');
+  }
 }
 const run = (args, overrides = {}) => execFileSync(executable, args, { cwd, env: { ...env, ...overrides }, encoding: 'utf8', timeout: 10000, stdio: ['ignore', 'pipe', 'pipe'] });
 async function renameReleased(source, destination) {
@@ -121,7 +127,7 @@ try {
   // executable with an empty PATH and unrelated cwd. Restore assets before the
   // existing full release acceptance; this does not alter its coverage.
   const hiddenDist=path.join(folder,'dist-offline');await renameReleased(path.join(folder,'dist'),hiddenDist);
-  try{portableBase=await start(portablePort,{},[],null);assert.equal((await fetch(portableBase)).status,404);await verifyAgentEntry(portableBase);}
+  try{portableBase=await start(portablePort,{},[],null);assert.equal((await fetch(portableBase)).status,404);await verifyAgentEntry(portableBase,fetch,false);}
   finally{await stop();await renameReleased(hiddenDist,path.join(folder,'dist'));}
   assert.deepEqual(await readdir(cwd), cwdBefore, 'bare startup must not write into the invoking directory');
   const relocated = path.join(temp, 'portable moved');

@@ -70,8 +70,8 @@ function frame(raw: Uint8Array, width: number, height: number, depth: 8 | 10) {
   };
 }
 for (const expected of oracle.cases)
-  test(`analysis core official ${expected.metric} ${expected.sampleIndex} ${expected.model ?? ""} ${expected.roi ? "ROI" : "full"}`, () => {
-    const s = fixtures[expected.metric][expected.sampleIndex],
+  test(`analysis core official ${expected.metric} ${expected.fixture ?? "raw"} ${expected.sampleIndex} ${expected.model ?? ""} ${expected.roi ? "ROI" : "full"}`, () => {
+    const s = (expected.fixture ? JSON.parse(readFileSync(`test/helpers/${expected.fixture}`, "utf8")).samples : fixtures[expected.metric])[expected.sampleIndex],
       { width, height, depth } = s;
     const reference = gunzipSync(
       Buffer.from(

@@ -1470,6 +1470,274 @@
           ]
         }
       ]
+    },
+    {
+      "metric": "cambi",
+      "sampleIndex": 0,
+      "fixture": "native-cambi-mp4-samples.json",
+      "model": null,
+      "referenceSha256": "c93a08234d14d0f00e6dfedfcefcc5953a92cf44ced05c7ffbbf29e2f18a8e87",
+      "distortedSha256": "c93a08234d14d0f00e6dfedfcefcc5953a92cf44ced05c7ffbbf29e2f18a8e87",
+      "frames": [
+        19.31059,
+        19.31059,
+        19.31059,
+        19.31059
+      ],
+      "pooled": {
+        "min": 19.31059,
+        "max": 19.31059,
+        "mean": 19.31059,
+        "harmonic_mean": 19.31059
+      },
+      "heatmaps": [
+        {
+          "file": "cambi_heatmap_scale_0_640x352_16b.gray",
+          "frames": [
+            "677c12ef50a86b85a4be1b5e725ed5bde4f4b555013faa91add67c213ebe84bb",
+            "677c12ef50a86b85a4be1b5e725ed5bde4f4b555013faa91add67c213ebe84bb",
+            "677c12ef50a86b85a4be1b5e725ed5bde4f4b555013faa91add67c213ebe84bb",
+            "677c12ef50a86b85a4be1b5e725ed5bde4f4b555013faa91add67c213ebe84bb"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_1_320x176_16b.gray",
+          "frames": [
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_2_160x88_16b.gray",
+          "frames": [
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_3_80x44_16b.gray",
+          "frames": [
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_4_40x22_16b.gray",
+          "frames": [
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26"
+          ]
+        }
+      ]
+    },
+    {
+      "metric": "cambi",
+      "sampleIndex": 1,
+      "fixture": "native-cambi-mp4-samples.json",
+      "model": null,
+      "referenceSha256": "c93a08234d14d0f00e6dfedfcefcc5953a92cf44ced05c7ffbbf29e2f18a8e87",
+      "distortedSha256": "c93a08234d14d0f00e6dfedfcefcc5953a92cf44ced05c7ffbbf29e2f18a8e87",
+      "frames": [
+        19.31059,
+        19.31059,
+        19.31059,
+        19.31059
+      ],
+      "pooled": {
+        "min": 19.31059,
+        "max": 19.31059,
+        "mean": 19.31059,
+        "harmonic_mean": 19.31059
+      },
+      "heatmaps": [
+        {
+          "file": "cambi_heatmap_scale_0_640x352_16b.gray",
+          "frames": [
+            "677c12ef50a86b85a4be1b5e725ed5bde4f4b555013faa91add67c213ebe84bb",
+            "677c12ef50a86b85a4be1b5e725ed5bde4f4b555013faa91add67c213ebe84bb",
+            "677c12ef50a86b85a4be1b5e725ed5bde4f4b555013faa91add67c213ebe84bb",
+            "677c12ef50a86b85a4be1b5e725ed5bde4f4b555013faa91add67c213ebe84bb"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_1_320x176_16b.gray",
+          "frames": [
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_2_160x88_16b.gray",
+          "frames": [
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_3_80x44_16b.gray",
+          "frames": [
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_4_40x22_16b.gray",
+          "frames": [
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26"
+          ]
+        }
+      ]
+    },
+    {
+      "metric": "cambi",
+      "sampleIndex": 2,
+      "fixture": "native-cambi-mp4-samples.json",
+      "model": null,
+      "referenceSha256": "d98ba08a41f1a77e0f4a6c5da13e339770d0f3e57e31509fd94d6d17904c664b",
+      "distortedSha256": "d98ba08a41f1a77e0f4a6c5da13e339770d0f3e57e31509fd94d6d17904c664b",
+      "frames": [
+        19.317805,
+        19.317805,
+        19.317805,
+        19.317805
+      ],
+      "pooled": {
+        "min": 19.317805,
+        "max": 19.317805,
+        "mean": 19.317805,
+        "harmonic_mean": 19.317805
+      },
+      "heatmaps": [
+        {
+          "file": "cambi_heatmap_scale_0_640x352_16b.gray",
+          "frames": [
+            "e1e05de55e24480be28e843b2caf607b0a6c3c41cbe6e359b890368c7b706191",
+            "e1e05de55e24480be28e843b2caf607b0a6c3c41cbe6e359b890368c7b706191",
+            "e1e05de55e24480be28e843b2caf607b0a6c3c41cbe6e359b890368c7b706191",
+            "e1e05de55e24480be28e843b2caf607b0a6c3c41cbe6e359b890368c7b706191"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_1_320x176_16b.gray",
+          "frames": [
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_2_160x88_16b.gray",
+          "frames": [
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_3_80x44_16b.gray",
+          "frames": [
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_4_40x22_16b.gray",
+          "frames": [
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26"
+          ]
+        }
+      ]
+    },
+    {
+      "metric": "cambi",
+      "sampleIndex": 3,
+      "fixture": "native-cambi-mp4-samples.json",
+      "model": null,
+      "referenceSha256": "0681876b26c2198129f09d14fe16255c6da975ec9b212b40270ad6eaec88196d",
+      "distortedSha256": "0681876b26c2198129f09d14fe16255c6da975ec9b212b40270ad6eaec88196d",
+      "frames": [
+        19.317805,
+        19.317805,
+        19.317805,
+        19.317805
+      ],
+      "pooled": {
+        "min": 19.317805,
+        "max": 19.317805,
+        "mean": 19.317805,
+        "harmonic_mean": 19.317805
+      },
+      "heatmaps": [
+        {
+          "file": "cambi_heatmap_scale_0_640x352_16b.gray",
+          "frames": [
+            "e1e05de55e24480be28e843b2caf607b0a6c3c41cbe6e359b890368c7b706191",
+            "e1e05de55e24480be28e843b2caf607b0a6c3c41cbe6e359b890368c7b706191",
+            "e1e05de55e24480be28e843b2caf607b0a6c3c41cbe6e359b890368c7b706191",
+            "e1e05de55e24480be28e843b2caf607b0a6c3c41cbe6e359b890368c7b706191"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_1_320x176_16b.gray",
+          "frames": [
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_2_160x88_16b.gray",
+          "frames": [
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_3_80x44_16b.gray",
+          "frames": [
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_4_40x22_16b.gray",
+          "frames": [
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26"
+          ]
+        }
+      ]
     }
   ]
 }
