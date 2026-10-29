@@ -320,7 +320,7 @@ export class TaskCenterService {
         });
     }
     if (
-      ["vmaf", "cambi", "xpsnr"].includes(kind) &&
+      ["single", "vmaf", "cambi", "xpsnr"].includes(kind) &&
       !taskPending(task.state) &&
       task.result.available
     )

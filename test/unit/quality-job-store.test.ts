@@ -101,15 +101,30 @@ test('spatial parameters participate in canonical idempotency; old scalar receip
  input.request.spatial.blockWidth=8;assert.throws(()=>f.store.submit(qualityJobRequest(input),actor,'conflict','grid',1000),{code:'idempotency-conflict'});
  delete input.request.spatial;assert.equal(qualityJobRequest(input).json,plain.json);assert.throws(()=>f.store.submit(plain,actor,'strip-grid','grid',1000),{code:'idempotency-conflict'});
 });
-test('history reservations reject overflow without evicting records or invalidating old receipts',async t=>{
- const f=await fixture(t),request=qualityJobRequest(jobInput());let first:string|undefined,count=0;
+test('completed reservations settle to actual payloads beyond old lifetime caps; release preserves receipts and digests',async t=>{
+ const f=await fixture(t),request=qualityJobRequest(jobInput());let first='';
  for(let i=0;i<=QUALITY_JOB_LIMITS.historyRows;i++){
-  try{const job=f.store.submit(request,actor,'request',`history-${i}`,1000).job;first??=job.id;count++;f.store.cancel(job.id,actor.id,'cancel',1001);}
-  catch(error){assert.equal((error as {code:string}).code,'quality-history-full');break;}
+  const job=f.store.submit(request,actor,'request',`history-${i}`,1000).job;first||=job.id;f.store.cancel(job.id,actor.id,'cancel',1001);
  }
- assert.ok(count>0&&count<=QUALITY_JOB_LIMITS.historyRows);assert.equal(f.store.get(first!).state,'cancelled');
  assert.equal(f.store.submit(request,actor,'replay','history-0',2000).job.id,first);
+ let completed='',count=0;
+ for(let i=0;i<2000;i++){
+  let job;
+  try{job=f.store.submit(request,actor,'request',`payload-${i}`,2000).job;}
+  catch(error){assert.equal((error as {code:string}).code,'quality-history-full');break;}
+  const attempt=f.store.start(job.id,2001);f.store.finish(job.id,attempt,'completed',null,2002,Object.assign({},value,{padding:'测'.repeat(30000)}));
+  completed||=job.id;count++;
+ }
+ assert.ok(count>500&&count<2000);const before=f.store.get(completed);
  assert.throws(()=>f.store.submit(request,actor,'overflow','new-after-full',2000),{code:'quality-history-full'});
+ const released=f.store.releaseResult(completed);assert.equal(released.result.available,false);assert.equal(released.result.digest,before.result.digest);
+ assert.equal(released.state,'completed');assert.deepEqual(released.input,before.input);assert.deepEqual(released.attempt,before.attempt);
+ assert.throws(()=>f.store.result(completed),{code:'result-unavailable'});
+ assert.equal(f.store.submit(request,actor,'replay','payload-0',3000).job.id,completed);
+ const next=f.store.submit(request,actor,'new','after-release',3000).job;assert.equal(next.state,'queued');
+ assert.throws(()=>f.store.releaseResult(next.id),{code:'result-release-blocked'});
+ f.reopen();assert.equal(f.store.get(completed).result.available,false);assert.equal(f.store.get(completed).result.digest,before.result.digest);
+ assert.equal(f.store.submit(request,actor,'restart-replay','history-0',4000).job.id,first);
 });
 
 test('SSIM selection is canonical immutable request identity; legacy PSNR hash stays byte-identical',async t=>{

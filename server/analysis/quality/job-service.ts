@@ -48,6 +48,12 @@ export class QualityJobService {
   reexecutionReceipt(id:string,actor:string,key?:string,request?:import('../../../shared/analysis/quality/reexecution.ts').ReexecutionRequest){this.get(id,actor);const receipt=key&&request?this.store.reexecutions.replay(id,actor,key,request):this.store.reexecutions.get(id,actor);if(receipt)this.store.reexecutions.verify(receipt,this.get(receipt.jobId,actor));return receipt;}
   reexecute(creation:ReexecutionCreation,actor:Actor,requestId:string){this.available();const original=this.get(creation.parentId,actor.id);return this.submit(original.input,actor,requestId,'reexecution:'+randomUUID(),creation);}
   result(id: string, actor?: string) { this.get(id, actor); return this.store.result(id); }
+  releaseResult(id: string, actor: string) {
+    this.available();this.get(id, actor);
+    if (this.active?.id === id || this.runner.stopUncertain)
+      throw new AdminError(409, 'Physical execution stop is unconfirmed.', 'result-release-blocked');
+    this.store.releaseResult(id);return {jobId:id,released:true,receiptRetained:true};
+  }
   changes(actor: string | null, after?: number, limit?: number) { return this.store.changes(actor, after, limit); }
   cancel(id: string, actor: string, requestId: string) {
     this.available();this.get(id, actor);

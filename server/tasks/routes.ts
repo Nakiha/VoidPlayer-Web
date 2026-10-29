@@ -27,10 +27,10 @@ export async function handleTaskRoutes(ctx:RouteContext,req:IncomingMessage,res:
     if(!adminWriteAllowed(req,action))throw new AdminError(403,'Use the same-origin task cancellation action.','origin-required');
     const timer=setTimeout(()=>req.destroy(new Error('Task cancel body timeout')),10000);
     try{const body=await readAdminJson(req,256);if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).length)throw new AdminError(400,'Cancel requires an empty object.','invalid-task-cancel');if(match[3]==='release-result'){
-      if(!['vmaf','cambi','xpsnr'].includes(kind))throw new AdminError(400,'This task has no releasable scoring payload.','unsupported-result-release');
+      if(!['single','vmaf','cambi','xpsnr'].includes(kind))throw new AdminError(400,'This task has no releasable scoring payload.','unsupported-result-release');
       if(!ctx.options.admin)throw new AdminError(503,'Evidence storage must be available before releasing results.','storage-unavailable');
-      const service=kind==='vmaf'?ctx.library.qualityVmaf:kind==='cambi'?ctx.library.qualityCambi:ctx.library.qualityXpsnr;
-      service.get(id,ctx.actor.id);if(ctx.options.admin.annotations.referencesQualityResult(id))throw new AdminError(409,'Shared or historical evidence still references this result; it is retained.','result-pinned-by-evidence');reply(200,service.releaseResult(id,ctx.actor.id));
+      const service=kind==='single'?ctx.library.qualityJobs:kind==='vmaf'?ctx.library.qualityVmaf:kind==='cambi'?ctx.library.qualityCambi:ctx.library.qualityXpsnr;
+      service.get(id,ctx.actor.id);if(kind==='single'&&ctx.library.qualityRanges.referencesResult(id))throw new AdminError(409,'A range still references this result; it is retained.','result-pinned-by-range');if(ctx.options.admin.annotations.referencesQualityResult(id))throw new AdminError(409,'Shared or historical evidence still references this result; it is retained.','result-pinned-by-evidence');reply(200,service.releaseResult(id,ctx.actor.id));
     }else reply(200,ctx.library.tasks.cancel(kind,id,ctx.actor.id,ctx.requestId));}finally{clearTimeout(timer);}
   }catch(e){if(!res.headersSent&&!res.destroyed)reply(e instanceof AdminError?e.status:500,{error:e instanceof AdminError?e.message:'Task center request failed.',code:e instanceof AdminError?e.code:'task-center-failed',recovery:(e as {code?:string})?.code==='task-cursor-expired'?'Restart GET /api/tasks without cursor, retaining the same filters and selected target.':null,links:{collection:'/api/tasks',guide:'/agent/quality/tasks.md'}});}
   return true;

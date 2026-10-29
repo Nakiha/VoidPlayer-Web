@@ -43,6 +43,10 @@ test('whole-library discovery scans bounded pages, reports cumulative unknown an
   assert.throws(()=>store.browse({...q,cursor:first.nextCursor!}),e=>(e as any).code==='discovery-snapshot-changed');
   assert.equal(store.detail(probe.source).technical.probe?.streams[0].fields.codec.value,'h264');
   const fresh=store.browse({...q,limit:32});assert.equal((fresh.entries.find((e:any)=>e.source.id===current.id) as any).decision.state,'match');
+  // Failed/cancelled preparations retain actual receipts, not a lifetime result reservation.
+  for(let i=0;i<1001;i++){const j=store.submit({source:probe.source,operation:'probe',client:{id:'batch',name:'Batch'}},actor,'request',`batch-${i}`,1000).job;store.cancel(j.id,actor.id,1001);}
+  assert.equal(store.submit({source:probe.source,operation:'probe',client:{id:'batch',name:'Batch'}},actor,'replay','batch-0',2000).replayed,true);
+  assert.ok(Number(store.db.prepare('SELECT sum(reserved_bytes) n FROM discovery_jobs').get()!.n)<2*1024*1024);
   // Receipt-first replay survives a stale source version and probe eviction.
   store.db.prepare('DELETE FROM discovery_probes').run();await writeFile(path.join(dir,current.name),'replacement');await library.refresh();
   assert.equal(store.submit({source:probe.source,operation:'probe',client:{id:'client',name:'Client'}},actor,'request2','key',Date.now()).replayed,true);

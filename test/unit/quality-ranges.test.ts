@@ -36,7 +36,7 @@ test('inclusive AU planning distinguishes unmapped endpoints and deterministic s
   const tooMany=input([0]);tooMany.interval.endAu=1024;assert.throws(()=>planQualityRange(tooMany),/1024 selected/);
 });
 
-test('independent parent actor/queue, row/byte history caps and future schema preserve old receipts',async t=>{
+test('independent parent actor/queue, settled history bytes and future schema preserve old receipts',async t=>{
   const dir=await mkdtemp(join(tmpdir(),'vp-range-limits-')),file=join(dir,'ranges.sqlite'),children=new Map<string,any>();
   const jobs={submit(){const job={id:randomUUID(),state:'queued',reason:null};children.set(job.id,job);return {job};},get(id:string){return children.get(id);},cancel(id:string){children.get(id).state='cancelled';},resources(){return {available:true};}} as unknown as QualityJobService;
   let ranges:QualityRangeService|undefined=new QualityRangeService(file,jobs);t.after(async()=>{await ranges?.close();await rm(dir,{recursive:true,force:true});});
@@ -51,9 +51,9 @@ test('independent parent actor/queue, row/byte history caps and future schema pr
     for(let i=4;i<100;i++){const id=randomUUID(),body=JSON.parse(String(row.body));body.id=id;body.key=`history-${i}`;db.prepare('INSERT INTO quality_ranges VALUES(?,?,?,?,?,?,?)').run(id,row.actor,row.client,body.key,row.fingerprint,JSON.stringify(body),row.reserved);}
   }finally{db.close();}
   ranges=new QualityRangeService(file,jobs);assert.equal(ranges.submit(v,owner,'old-receipt','first').replayed,true);
-  assert.throws(()=>ranges!.submit(v,owner,'new','row-full'),{code:'range-history-full'});await ranges.close();ranges=undefined;
-  const bytes=openIndexDatabase(file);try{bytes.prepare('DELETE FROM quality_ranges WHERE id!=?').run(first.id);bytes.prepare('UPDATE quality_ranges SET reserved=? WHERE id=?').run(QUALITY_RANGE_LIMITS.reservedBytes,first.id);}finally{bytes.close();}
-  ranges=new QualityRangeService(file,jobs);assert.throws(()=>ranges!.submit(v,owner,'new','bytes-full'),{code:'range-history-full'});assert.equal(ranges.submit(v,owner,'old','first').replayed,true);await ranges.close();ranges=undefined;
+  const beyond=ranges.submit(v,owner,'new','past-old-row-cap').job;assert.ok(beyond.id);await ranges.close();ranges=undefined;
+  const bytes=openIndexDatabase(file);try{bytes.prepare('DELETE FROM quality_ranges WHERE id!=?').run(first.id);}finally{bytes.close();}
+  ranges=new QualityRangeService(file,jobs);const quota=openIndexDatabase(file);quota.prepare('UPDATE quality_ranges SET reserved=? WHERE id=?').run(QUALITY_RANGE_LIMITS.reservedBytes,first.id);quota.close();assert.throws(()=>ranges!.submit(v,owner,'new','bytes-full'),{code:'range-history-full'});assert.equal(ranges.submit(v,owner,'old','first').replayed,true);await ranges.close();ranges=undefined;
   const future=openIndexDatabase(file);future.exec('PRAGMA user_version=99');future.close();assert.throws(()=>new QualityRangeService(file,jobs),/newer application/);
   const inspect=openIndexDatabase(file);try{assert.equal(Number(inspect.prepare('SELECT count(*) AS n FROM quality_ranges').get()!.n),1);}finally{inspect.close();}
 });
@@ -103,5 +103,5 @@ test('durable parent holds no nested permit; cancellation waits for child termin
   await until(()=>workers[0].stopping);assert.equal(ranges.get(first.id,actor.id).state,'cancelling');assert.equal(ranges.get(first.id,actor.id).endedAt,null);assert.throws(()=>gate.acquire(),{code:'quality-busy'});
   workers[0].release();await until(()=>ranges.get(first.id,actor.id).state==='cancelled');const release=gate.acquire();release();
   await ranges.close();ranges=new QualityRangeService(file,jobs);assert.equal(ranges.submit(v,actor,'restart','key').job.state,'cancelled');assert.equal(workers.length,1);
-  assert.equal(QUALITY_RANGE_LIMITS.historyRows,100);
+  assert.equal(ranges.referencesResult(child.jobId),true);assert.equal(ranges.referencesResult(randomUUID()),false);
 });
