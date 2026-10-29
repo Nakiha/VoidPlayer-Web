@@ -12,17 +12,17 @@ import {nativeFixture,until} from '../helpers/native-vmaf.mjs';
 import {xpsnrFixture} from '../helpers/native-xpsnr.mjs';
 import {SSIM_VARIANT} from '../../shared/analysis/quality/ssim.ts';
 
-async function measuredWitnesses(library:any,kind:'single'|'range'|'vmaf'|'xpsnr',plan:any,requests:any[],nativeInput:any,snapshot:any,directory:string){
+async function measuredWitnesses(library:any,kind:'single'|'range'|'vmaf'|'xpsnr',plan:any,requests:any[],nativeInput:any,snapshot:any){
   const run=async(data:any)=>{
     const state=new Int32Array(new SharedArrayBuffer(12)),release=library.qualityAdmission.acquire();
     const worker=new Worker(new URL('../helpers/quality-witness-worker.ts',import.meta.url),{workerData:{...data,database:library.indexDatabase,coreDir:(library.quality as any).coreDir,control:new SharedArrayBuffer(8),witnessState:state.buffer},trackUnmanagedFds:true,resourceLimits:{maxOldGenerationSizeMb:256}});
     try{await new Promise<void>((resolve,reject)=>{let reply:any;worker.on('message',v=>reply=v);worker.once('error',reject);worker.once('exit',code=>code===0&&reply?.ok?resolve():reject(Error(JSON.stringify(reply??{code}))));});return Array.from(state);}finally{await worker.terminate();release();}
   };
-  const native={domain:'vmaf',input:nativeInput,snapshot,directory,analysisContract:plan.contract.analysis,expectedExecutionContract:plan.contract};
+  const native={domain:'vmaf',input:nativeInput,snapshot,analysisContract:plan.contract.analysis,expectedExecutionContract:plan.contract};
   const preflight=await run((kind==='vmaf'||kind==='xpsnr')?{...native,mode:'preflight'}:{domain:'single',mode:'reexecution-preflight',requests,expected:plan.contract});
   assert.equal(preflight[0],1,'read-only metadata validation is one separate witness pass');
   const values:number[][]=[];
-  if((kind==='vmaf'||kind==='xpsnr')){await mkdir(directory);values.push(await run({...native,mode:'decode'}));values.push(await run({...native,mode:'verify'}));assert.equal(values[0][0],2);assert.equal(values[1][0],1,'final verify Worker reads the witness too');}
+  if((kind==='vmaf'||kind==='xpsnr')){values.push(await run({...native,mode:'decode'}));values.push(await run({...native,mode:'verify'}));assert.equal(values[0][0],2);assert.equal(values[1][0],1,'final verify Worker reads the witness too');}
   else for(const request of requests)values.push(await run({domain:'single',mode:'measure',request,expectedExecutionContract:plan.contract}));
   const actual=values.reduce((a,v)=>a.map((n,i)=>n+v[i]),[0,0,0]),witness=plan.cost.reservation.executionWitness,coreBytes=plan.contract.environment.assets.reduce((n:number,a:any)=>n+a.bytes,0),producerBytes=plan.contract.environment.producerBuild.bytes;
   console.log(JSON.stringify({witnessCost:{kind,preflightPasses:preflight[0],executionPasses:actual[0],coreAssetBytes:actual[1],producerBytes:actual[2],confirmedPasses:witness.passes}}));
@@ -88,7 +88,7 @@ for(const kind of ['single','range','vmaf','xpsnr'] as const)test(`real ${kind}:
   if(kind==='single'){assert.equal(done.attempt.number,1);const result=await f.json(collection+'/'+done.id+'/result');assert.ok(result.value.result.ssim);assert.equal(result.value.result.metric.spatial.blocks.length,4);}
   if(kind==='range'){assert.equal(done.summary.scoredPairs,8);assert.equal(measureCount-count,8,'old completed scores are recomputed too');}
   if((kind==='vmaf'||kind==='xpsnr')){const result=await f.json(collection+'/'+done.id+'/result');assert.ok(result[kind]);assert.equal(result[kind].frames.length,8);assert.equal(result.metrics.ssim.state,'completed');}
-  await measuredWitnesses(library,kind,plan,kind==='single'?[input.request]:frozen.input.pairs,f.input,{...f.input.plan,value:library.qualityCorrespondence.result(f.input.plan.id,f.actor)},path.join(f.directory,'actual-witness-reads'));
+  await measuredWitnesses(library,kind,plan,kind==='single'?[input.request]:frozen.input.pairs,f.input,{...f.input.plan,value:library.qualityCorrespondence.result(f.input.plan.id,f.actor)});
   assert.equal(JSON.stringify(await read()),oldJson,'Original terminal job/attempt/reason stays byte-identical');
   if(oldResult)assert.deepEqual(await f.json(url+((kind==='vmaf'||kind==='xpsnr')?'/result':'/results')),oldResult);
   if(oldCandidate)assert.deepEqual(await f.json('/api/annotations/spaces/default/'+oldCandidate.id),oldCandidate);

@@ -54,7 +54,6 @@ export class WasmCambiRunner extends ScoringWorkerOwner {
             mode: "picture",
             database: this.library.indexDatabase,
             coreDir: this.coreDir,
-            directory: "",
             input,
             target,
           },
@@ -116,7 +115,6 @@ export class WasmCambiRunner extends ScoringWorkerOwner {
       database: this.library.indexDatabase,
       coreDir: this.coreDir,
       analysisDir: this.analysisDir,
-      directory: "",
       input,
       analysisContract: contract,
     };

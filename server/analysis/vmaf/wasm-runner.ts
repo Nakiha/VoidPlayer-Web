@@ -78,7 +78,6 @@ export class WasmVmafRunner extends ScoringWorkerOwner {
       database: this.library.indexDatabase,
       coreDir: this.coreDir,
       analysisDir: this.analysisDir,
-      directory: "",
       input,
       snapshot,
       analysisContract: contract,

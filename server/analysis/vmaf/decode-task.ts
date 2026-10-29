@@ -7,7 +7,7 @@ import {
   executionEnvironment,
   requireExecutionContract,
 } from "../quality/execution-contract.ts";
-import { readFileSync, openSync, writeSync, closeSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
@@ -51,13 +51,10 @@ export type VmafDecodeData = {
   mode: "preflight" | "decode" | "verify";
   database: string;
   coreDir: string;
-  directory: string;
   input: Pick<VmafInput, "cadenceUs" | "cadence" | "metrics" | "budget">;
   snapshot: VmafPlanSnapshot;
   control: SharedArrayBuffer;
   analysisContract?: QualityExecutionContract["analysis"];
-  nativeContract?: QualityExecutionContract["native"];
-  nativeXpsnrContract?: QualityExecutionContract["nativeXpsnr"];
   expectedExecutionContract?: QualityExecutionContract;
 };
 
@@ -224,28 +221,18 @@ export async function runVmafDecode(
             "unsupported-vmaf-sequence",
             "One fixed even source ROI of at least 64x64 is required throughout the clip",
           );
-        if (
-          !data.analysisContract &&
-          (roi.x ||
-            roi.y ||
-            roi.width !== geometry[0].width ||
-            roi.height !== geometry[0].height)
-        )
-          throw new VmafError(
-            "unsupported-vmaf-sequence",
-            "Legacy native recipes require the full frame",
-          );
       }
+      if (!data.analysisContract)
+        throw new VmafError(
+          "execution-contract-unavailable",
+          "Analysis execution witness is missing",
+        );
       contract = {
         schema: "voidplayer-quality-execution-contract",
         version: 1,
         environment: readEnvironment(),
         sources: canonicalExecutionSources(initial.map((s) => s.proof)),
-        ...(data.analysisContract ? { analysis: data.analysisContract } : {}),
-        ...(data.nativeContract ? { native: data.nativeContract } : {}),
-        ...(data.nativeXpsnrContract
-          ? { nativeXpsnr: data.nativeXpsnrContract }
-          : {}),
+        analysis: data.analysisContract,
       };
       requireExecutionContract(data.expectedExecutionContract, contract);
       if (data.mode === "decode") onContract?.(contract);
@@ -300,7 +287,7 @@ export async function runVmafDecode(
       },
     };
     const hashes = [createHash("sha256"), createHash("sha256")];
-    const writeFrame = (role: 0 | 1, frame: PsnrFrame, roi: PsnrRoi) => {
+    const hashFrame = (role: 0 | 1, frame: PsnrFrame, roi: PsnrRoi) => {
       const d = frame.description,
         layout = d.yuv!;
       const amount =
@@ -308,49 +295,23 @@ export async function runVmafDecode(
       if (result.raw.bytes + amount > data.input.budget.maxRawBytes)
         throw new VmafError(
           "budget-exceeded",
-          "Raw temporary disk budget exceeded",
+          "Cumulative input pixel budget exceeded",
         );
       check();
-      Atomics.add(control, 1, 1);
-      let fd: number | undefined;
-      try {
-        check();
-        if (!onFrame)
-          fd = openSync(
-            path.join(data.directory, role ? "distorted.yuv" : "reference.yuv"),
-            "a",
-            0o600,
-          );
-        for (const [planeIndex, plane] of layout.planes.entries())
-          for (let y = 0; y < (planeIndex ? roi.height / 2 : roi.height); y++) {
-            check();
-            const divisor = planeIndex ? 2 : 1,
-              bytes = layout.bitDepth === 8 ? 1 : 2,
-              width = (roi.width / divisor) * bytes,
-              offset =
-                plane.offset +
-                ((d.visibleRect.y + roi.y) / divisor + y) * plane.stride +
-                ((d.visibleRect.x + roi.x) / divisor) * bytes,
-              line = frame.pixels.subarray(offset, offset + width);
-            let n = 0;
-            while (fd !== undefined && n < line.length) {
-              check();
-              const written = writeSync(fd, line, n, line.length - n);
-              if (!written)
-                throw new VmafError(
-                  "source-io-failed",
-                  "Raw sequence short write",
-                );
-              n += written;
-            }
-            hashes[role].update(line);
-            result.raw.bytes += line.length;
-          }
-      } finally {
-        if (fd !== undefined) closeSync(fd);
-        Atomics.sub(control, 1, 1);
-        Atomics.notify(control, 1);
-      }
+      for (const [planeIndex, plane] of layout.planes.entries())
+        for (let y = 0; y < (planeIndex ? roi.height / 2 : roi.height); y++) {
+          check();
+          const divisor = planeIndex ? 2 : 1,
+            bytes = layout.bitDepth === 8 ? 1 : 2,
+            width = (roi.width / divisor) * bytes,
+            offset =
+              plane.offset +
+              ((d.visibleRect.y + roi.y) / divisor + y) * plane.stride +
+              ((d.visibleRect.x + roi.x) / divisor) * bytes,
+            line = frame.pixels.subarray(offset, offset + width);
+          hashes[role].update(line);
+          result.raw.bytes += line.length;
+        }
     };
     async function* decoded() {
       if (
@@ -464,8 +425,8 @@ export async function runVmafDecode(
           "budget-exceeded",
           "Cumulative sequence pre/post-roll/drain/input budget exceeded",
         );
-      writeFrame(0, reference, request.roi);
-      writeFrame(1, distorted, request.roi);
+      hashFrame(0, reference, request.roi);
+      hashFrame(1, distorted, request.roi);
       onFrame?.(
         reference,
         distorted,
