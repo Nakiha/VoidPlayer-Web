@@ -2,6 +2,7 @@ import {canonicalJson,validateXpsnrDb,xpsnrMinimum,xpsnrSequenceFrame,XPSNR_LIMI
 import type {XpsnrDb,XpsnrJob,XpsnrNativeResult,XpsnrResult} from './xpsnr.ts';
 import type {LibraryPairResult} from './library-pair.ts';
 import type {QualityEvidenceRef} from '../../review/quality-evidence.ts';
+import {validateSsim} from './ssim-evidence.ts';
 
 export type XpsnrComparison = {
   schema:'voidplayer-xpsnr-comparison';version:1;comparisonKey:string;
@@ -93,6 +94,7 @@ export function verifyComparisonPages(c:XpsnrComparison,summaries:ComparisonSumm
         ||version>0&&!same(xpsnrSequenceFrame(p.reference),xpsnrSequenceFrame(pages[0].entries[offset].pair.result.provenance.reference)))fail('Frame witness differs from frozen reference presentation order');
       const ssim=e.pair.result.ssim;
       if(s.job.input.metrics.ssim!==!!ssim)fail('Requested SSIM companion is unavailable');
+      if(ssim)validateSsim(ssim,e.pair.result.metric);
       validateXpsnrDb(e.pair.result.metric.aggregate.psnr);
     }
   }

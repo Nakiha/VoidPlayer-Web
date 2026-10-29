@@ -8,7 +8,7 @@ export async function readXpsnrComparison(api:Pick<QualityClient,'request'>,acto
   const comparison=await api.request<XpsnrComparison>(actor,'/api/quality/xpsnr/compare?ids='+encodeURIComponent(ids.join(',')),signal);
   const view=expected??pinComparison(comparison);
   verifyComparison(comparison,view);
-  if(comparison.items.some((item,index)=>item.id!==ids[index]))throw Error('Comparison selection changed');
+  if(comparison.items.length!==ids.length||comparison.items.some((item,index)=>item.id!==ids[index]))throw Error('Comparison selection changed');
   const summaries=await Promise.all(comparison.items.map(item=>api.request<ComparisonSummary>(actor,`/api/quality/xpsnr/jobs/${item.id}/result`,signal)));
   verifyComparisonSummaries(comparison,summaries,actor);
   const pages=await Promise.all(comparison.items.map(item=>api.request<ComparisonFramePage>(actor,`/api/quality/xpsnr/jobs/${item.id}/frames?after=${view.after}&limit=4`,signal)));

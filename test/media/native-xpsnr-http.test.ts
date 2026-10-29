@@ -14,6 +14,10 @@ test('four real versions: read-only comparison pages, frozen recovery, actor and
  const client:any={async request(actor:string,url:string){assert.equal(actor,f.actor);calls.push(url);return f.json(url);}};
  const two=await readXpsnrComparison(client,f.actor,ids.slice(0,2),new AbortController().signal);assert.equal(two.comparison.items.length,2);
  const four=await readXpsnrComparison(client,f.actor,ids,new AbortController().signal),view=pinComparison(four.comparison,4,'minimum');
+ const truncatedClient:any={async request(actor:string,url:string){const value=await client.request(actor,url);if(url.includes('/compare?')){assert.equal(value.items.length,3);return {...value,items:value.items.slice(0,2)};}assert.fail('Omitted version must reject before dependent reads');}};
+ await assert.rejects(readXpsnrComparison(truncatedClient,f.actor,ids.slice(0,3),new AbortController().signal),/Comparison selection changed/);
+ const invalidSsimClient:any={async request(actor:string,url:string){const value=await client.request(actor,url);if(url.includes(ids[0]+'/frames?')){assert.equal(typeof value.entries[0].pair.result.ssim.aggregate.score,'number');value.entries[0].pair.result.ssim.aggregate.score=null;}return value;}};
+ await assert.rejects(readXpsnrComparison(invalidSsimClient,f.actor,ids,new AbortController().signal),/SSIM evidence is invalid/);
  assert.equal(four.comparison.items.length,4);assert.equal(new Set(four.comparison.items.map(i=>i.distorted.binding.mediaId)).size,4);
  assert.equal(four.comparison.items[1].pooled.minimum.kind,'positive-infinity');assert.ok(new Set(four.comparison.items.map(i=>i.raw.distortedSha256)).size>=3);
  const page=await readXpsnrComparison(client,f.actor,ids,new AbortController().signal,view);assert.deepEqual(page.pages[0].entries.map(e=>e.index),[4,5,6,7]);assert.equal(page.pages[0].next,null);
