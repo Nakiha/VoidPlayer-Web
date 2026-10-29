@@ -128,7 +128,7 @@ test('Linux native suites retain exact platform ownership outside the compiled p
     assert.doesNotMatch(body, /continue-on-error:/);
   }
   assert.match(linux.body, /if: always\(\)[\s\S]*name: linux-native-reports-\$\{\{ matrix\.runtime \}\}[\s\S]*path: \.run\/test-suites\//);
-  const expectedCounts = { node: 24, bun: 37 };
+  const expectedCounts = { node: 24, bun: 38 };
   for (const runtime of ['node', 'bun']) {
     const suite = `ci-native-${runtime}`, command = `run: node scripts/run-tests.mjs ${suite}\n`;
     assert.equal(linux.body.split(command).length - 1, 1);
@@ -153,22 +153,29 @@ test('cache suite runs once in its own required job with the same pinned prepara
   const jobs = workflowJobs(workflow), cache = jobs['cache-browser'];
   const manifest = JSON.parse(await readFile(new URL('../../scripts/testing/manifest.json', import.meta.url), 'utf8'));
   const cases = manifest.cases.filter(row => row.suites.includes('ci-cache'));
-  assert.equal(cases.length, 68);
-  assert.equal(new Set(cases.map(row => row.id)).size, 68);
+  assert.equal(cases.length, 70);
+  assert.equal(new Set(cases.map(row => row.id)).size, 70);
   const expected=['browser-mcp-page-bridge-chromium','browser-sharing-webkit','browser-quality-reexecution-chromium','browser-quality-reexecution-webkit','browser-cambi-reexecution-chromium','browser-cambi-reexecution-webkit'];
 
   for(const engine of ['chromium','webkit']){
+    expected.push(`browser-xpsnr-comparison-${engine}`);
     for(const name of ['annotation-persistence','cache','library-discovery','native-presented-protocol','presented-quality','quality-annotation','quality-pair-view-10','task-center'])expected.push(`browser-${name}-${engine}`);
     for(const name of ['native-vmaf','native-xpsnr','native-cambi','quality-correspondence','quality-ranges','quality-roi','quality-workflow'])for(const depth of [8,10])expected.push(`browser-${name}-${depth}-${engine}`);
     for(const format of ['h264-8','hevc-8','hevc-10'])expected.push(`browser-native-cambi-mp4-${format}-${engine}`);
     for(const name of ['mp4-quality','mp4-vmaf'])for(const format of ['h264-8','hevc-8','hevc-10'])expected.push(`browser-${name}-${format}-${engine}`);
   }
-  assert.deepEqual(cases.map(row=>row.id).sort(),expected.sort(),'exact prior58 plus six strict MP4 CAMBI and four recomputation checks; no silent removal/substitution');
+  assert.deepEqual(cases.map(row=>row.id).sort(),expected.sort(),'exact prior68 plus two XPSNR comparison checks; no silent removal/substitution');
   const protocolIds=['browser-native-presented-protocol-chromium','browser-native-presented-protocol-webkit'];
-  const priorCases=cases.filter(row=>!protocolIds.includes(row.id)&&!row.id.startsWith('browser-quality-reexecution-')&&!row.id.startsWith('browser-cambi-reexecution-'));
+  const comparisonIds=['browser-xpsnr-comparison-chromium','browser-xpsnr-comparison-webkit'];
+  const priorCases=cases.filter(row=>!protocolIds.includes(row.id)&&!comparisonIds.includes(row.id)&&!row.id.startsWith('browser-quality-reexecution-')&&!row.id.startsWith('browser-cambi-reexecution-'));
   assert.equal(priorCases.length,62,'every prior cache case still runs with unchanged mandatory status on main/tag');
   const prCases=manifest.cases.filter(row=>row.suites.includes('ci-cache-pr'));
-  assert.equal(prCases.length,67);
+  assert.equal(prCases.length,69);
+  for(const engine of ['chromium','webkit']){
+    const row=prCases.find(row=>row.id===`browser-xpsnr-comparison-${engine}`);
+    assert.deepEqual(row.command,['node','scripts/native/run-xpsnr-tests.mjs','node','scripts/check-xpsnr-comparison-browser.mjs',engine]);
+    assert.equal(row.required,true);assert.deepEqual(row.fixtures,['core']);assert.equal(row.timeoutMs,300000);
+  }
 
   assert.deepEqual(cases.filter(row=>!prCases.includes(row)).map(row=>row.id),['browser-presented-quality-webkit']);
   for(const engine of ['chromium','webkit']){

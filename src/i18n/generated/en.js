@@ -1453,6 +1453,7 @@ export default {
   "xcompare.evidenceScope": () => "Reads existing publication receipts only. Original frames open in an independent window with a link back to this comparison. Missing candidates are never created automatically.",
   "xcompare.evidenceUnavailable": (d) => "Candidate evidence unavailable: " + d.error,
   "xcompare.frames": () => "Common reference presentation order · frame facts",
+  "xcompare.identity": () => "Pinned result identity",
   "xcompare.job": (d) => "Inspect original job " + d.id,
   "xcompare.json": () => "Raw comparison JSON and pinned identities",
   "xcompare.loading": () => "Checking original jobs, attempts, digests, reference domain and frame coverage…",

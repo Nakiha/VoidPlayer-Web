@@ -1453,6 +1453,7 @@ export default {
   "xcompare.evidenceScope": () => "［R~e~a~d~s~ e~x~i~s~t~i~n~g~ p~u~b~l~i~c~a~t~i~o~n~ r~e~c~e~i~p~t~s~ o~n~l~y~. O~r~i~g~i~n~a~l~ f~r~a~m~e~s~ o~p~e~n~ i~n~ a~n~ i~n~d~e~p~e~n~d~e~n~t~ w~i~n~d~o~w~ w~i~t~h~ a~ l~i~n~k~ b~a~c~k~ t~o~ t~h~i~s~ c~o~m~p~a~r~i~s~o~n~. M~i~s~s~i~n~g~ c~a~n~d~i~d~a~t~e~s~ a~r~e~ n~e~v~e~r~ c~r~e~a~t~e~d~ a~u~t~o~m~a~t~i~c~a~l~l~y~. ········］",
   "xcompare.evidenceUnavailable": (d) => "［C~a~n~d~i~d~a~t~e~ e~v~i~d~e~n~c~e~ u~n~a~v~a~i~l~a~b~l~e~: " + d.error + " ········］",
   "xcompare.frames": () => "［C~o~m~m~o~n~ r~e~f~e~r~e~n~c~e~ p~r~e~s~e~n~t~a~t~i~o~n~ o~r~d~e~r~ · f~r~a~m~e~ f~a~c~t~s~ ········］",
+  "xcompare.identity": () => "［P~i~n~n~e~d~ r~e~s~u~l~t~ i~d~e~n~t~i~t~y~ ········］",
   "xcompare.job": (d) => "［I~n~s~p~e~c~t~ o~r~i~g~i~n~a~l~ j~o~b~ " + d.id + " ········］",
   "xcompare.json": () => "［R~a~w~ c~o~m~p~a~r~i~s~o~n~ J~S~O~N~ a~n~d~ p~i~n~n~e~d~ i~d~e~n~t~i~t~i~e~s~ ········］",
   "xcompare.loading": () => "［C~h~e~c~k~i~n~g~ o~r~i~g~i~n~a~l~ j~o~b~s~, a~t~t~e~m~p~t~s~, d~i~g~e~s~t~s~, r~e~f~e~r~e~n~c~e~ d~o~m~a~i~n~ a~n~d~ f~r~a~m~e~ c~o~v~e~r~a~g~e~… ········］",

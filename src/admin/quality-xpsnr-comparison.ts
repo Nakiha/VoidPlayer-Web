@@ -28,12 +28,13 @@ export function xpsnrComparisonShell(){return `<section id="xpsnr-comparison-pan
 export function installXpsnrComparison(signal:AbortSignal,openJob:(id:string)=>void){
   const $=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById('xpsnr-comparison-'+id)as T;
   const api=new QualityClient(),ids=new Set<string>();
-  let actor='',active=false,generation=0,life=new AbortController(),pinned:ComparisonView|null=null,loaded:LoadedXpsnrComparison|null=null;
+  let actor='',previousOwner='',active=false,generation=0,life=new AbortController(),pinned:ComparisonView|null=null,loaded:LoadedXpsnrComparison|null=null;
   const storageKey=()=>`voidplayer.xpsnr-comparison.v1.${actor}`;
   const current=(owner:string,token:number,s:AbortSignal)=>active&&!signal.aborted&&!s.aborted&&actor===owner&&currentActor()?.id===owner&&generation===token;
   function clearFacts(){loaded=null;$('content').hidden=true;for(const part of ['pool','frames','evidence','domain','page'])$(part).replaceChildren();document.getElementById('xpsnr-comparison')!.textContent='';}
   function invalidate(){life.abort();life=new AbortController();generation++;clearFacts();}
-  function save(){if(!actor)return;try{if(pinned)localStorage.setItem(storageKey(),JSON.stringify(pinned));else localStorage.removeItem(storageKey());}catch{}}
+  function locationView(view:ComparisonView|null){const url=new URL(location.href);if(view)url.searchParams.set('xpsnrComparison',JSON.stringify(view));else url.searchParams.delete('xpsnrComparison');history.replaceState(null,'',url);}
+  function save(){if(!actor)return;locationView(pinned);try{if(pinned)localStorage.setItem(storageKey(),JSON.stringify(pinned));else localStorage.removeItem(storageKey());}catch{}}
   function selection(){
     $('selection').replaceChildren();
     for(const id of ids){const row=document.createElement('div');row.textContent=id+' ';const remove=document.createElement('button');remove.type='button';remove.textContent='×';remove.setAttribute('aria-label',t(msg('xcompare.remove','移除版本 {id}'),{id}));remove.onclick=()=>toggle(id,false);row.append(remove);$('selection').append(row);}
@@ -49,15 +50,16 @@ export function installXpsnrComparison(signal:AbortSignal,openJob:(id:string)=>v
     $('content').hidden=false;document.getElementById('xpsnr-comparison-panel')!.dataset.state='ready';
     $('domain').textContent=`${c.recipe.width} × ${c.recipe.height} · ${c.recipe.pixelFormat} · ${c.recipe.range} BT.709 SDR · ${c.recipe.cadenceUs} µs · reference ${c.reference.binding.mediaId} / ${c.reference.binding.mediaVersion} · ${c.comparisonKey}`;
     $('pool').replaceChildren();const body=table($('pool'),[t(msg('xcompare.version','版本 / 不可变结果')),'Y (dB)','U (dB)','V (dB)','minimum (dB)']);
-    for(const item of ordered){const row=body.insertRow();row.dataset.comparisonVersion=item.id;const label=cell(row,`${item.distorted.binding.mediaId} / ${item.distorted.binding.mediaVersion}\n${item.id}\n${item.attemptId}\nSHA256 ${item.resultDigest}`);jobButton(label,item.id);for(const p of ['y','u','v']as const)cell(row,comparisonDb(item.pooled.planes[p]));cell(row,comparisonDb(item.pooled.minimum));}
+    for(const item of ordered){const row=body.insertRow();row.dataset.comparisonVersion=item.id;const label=cell(row,item.label??item.distorted.binding.mediaId),details=document.createElement('details'),summary=document.createElement('summary'),facts=document.createElement('pre');summary.textContent=t(msg('xcompare.identity','固定结果身份'));facts.textContent=`source ${item.distorted.binding.mediaId} / ${item.distorted.binding.mediaVersion}\njob ${item.id}\nattempt ${item.attemptId}\nSHA256 ${item.resultDigest}`;details.append(summary,facts);label.append(details);jobButton(label,item.id);for(const p of ['y','u','v']as const)cell(row,comparisonDb(item.pooled.planes[p]));cell(row,comparisonDb(item.pooled.minimum));}
     const after=pinned.after,total=summaries[0].companionPairs,end=after+pages[0].entries.length;
     $('page').textContent=`${after}–${end-1} / ${total}`;$<HTMLButtonElement>('prev').disabled=after===0;$<HTMLButtonElement>('next').disabled=pages[0].next===null;
     $<HTMLSelectElement>('sort').value=pinned.sort;$('frames').replaceChildren();
     const rows=table($('frames'),[t(msg('xcompare.referenceFrame','参考呈现序号 / AU / PTS (µs)')),t(msg('xcompare.version','版本 / 不可变结果')),t(msg('xcompare.distortedClock','失真 AU / PTS (µs)')),'XPSNR Y / U / V / minimum (dB)','PSNR (dB)','SSIM']);
     for(let offset=0;offset<pages[0].entries.length;offset++)for(const item of ordered){const v=c.items.findIndex(x=>x.id===item.id),e=pages[v].entries[offset],index=e.index,p=e.pair.result.provenance,n=summaries[v].xpsnr!.frames[index];const row=rows.insertRow();row.dataset.comparisonFrame=String(index);row.dataset.versionId=item.id;
-      cell(row,`${index} · AU ${p.reference.picture.au} · ${p.reference.sourcePtsUs}`);cell(row,item.id);cell(row,`AU ${p.distorted.picture.au} · ${p.distorted.sourcePtsUs}`);cell(row,[n.planes.y,n.planes.u,n.planes.v,n.minimum].map(comparisonDb).join(' / '));cell(row,comparisonDb(e.pair.result.metric.aggregate.psnr));cell(row,summaries[v].job.input.metrics.ssim?String(e.pair.result.ssim!.aggregate.score):t(msg('xcompare.notRequested','未请求')));
+      cell(row,`${index} · AU ${p.reference.picture.au} · ${p.reference.sourcePtsUs}`);cell(row,item.label??item.id);cell(row,`AU ${p.distorted.picture.au} · ${p.distorted.sourcePtsUs}`);cell(row,[n.planes.y,n.planes.u,n.planes.v,n.minimum].map(comparisonDb).join(' / '));cell(row,comparisonDb(e.pair.result.metric.aggregate.psnr));cell(row,summaries[v].job.input.metrics.ssim?String(e.pair.result.ssim!.aggregate.score):t(msg('xcompare.notRequested','未请求')));
     }
     document.getElementById('xpsnr-comparison')!.textContent=JSON.stringify({comparison:c,view:pinned},null,2);
+    for(const link of $('evidence').querySelectorAll<HTMLAnchorElement>('a[data-comparison-candidate]')){const url=new URL(link.href);url.searchParams.set('xpsnrComparison',JSON.stringify(pinned));link.href=url.href;}
   }
   async function evidence(owner:string,token:number,s:AbortSignal,value:LoadedXpsnrComparison){
     const root=$('evidence');
@@ -92,8 +94,8 @@ export function installXpsnrComparison(signal:AbortSignal,openJob:(id:string)=>v
   for(const [part,step]of [['prev',-4],['next',4]]as const)$(part).onclick=()=>{if(pinned)void load({...pinned,after:pinned.after+step});};
   signal.addEventListener('abort',()=>life.abort(),{once:true});
   return {has:(id:string)=>ids.has(id),toggle,
-    activate(value:boolean,owner:string){active=value;actor=owner;invalidate();pinned=null;ids.clear();selection();$('status').textContent='';if(!value||!owner)return;
-      try{const locationView=comparisonFromUrl(new URL(location.href)),raw=localStorage.getItem(storageKey());pinned=locationView??(raw&&raw.length<=4096?comparisonView(JSON.parse(raw)):null);if(pinned){for(const i of pinned.items)ids.add(i.id);selection();void load(pinned);}}
+    activate(value:boolean,owner:string){if(previousOwner&&owner!==previousOwner)locationView(null);if(owner)previousOwner=owner;active=value;actor=owner;invalidate();pinned=null;ids.clear();selection();$('status').textContent='';if(!value||!owner)return;
+      try{const addressed=comparisonFromUrl(new URL(location.href)),raw=localStorage.getItem(storageKey());pinned=addressed??(raw&&raw.length<=4096?comparisonView(JSON.parse(raw)):null);if(pinned){for(const i of pinned.items)ids.add(i.id);selection();void load(pinned);}}
       catch(e){$('status').textContent=t(msg('xcompare.restoreInvalid','已保存的比较身份无效：{error}'),{error:String(e)});}
     }};
 }

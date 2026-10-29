@@ -117,3 +117,5 @@ node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 显式评分重新执行见 `docs/explicit-quality-reexecution.md`。原提交重放与新计算必须分开；single/range/native VMAF/XPSNR 仅已物理停止的 failed/interrupted/cancelled/partial 可只读核验冻结条件并明确确认全量成本，原子创建一个带 retryOf 的新任务。每 job 仍只有原 attempt，旧结果/候选不变、不复用分数或自动发布。条件/执行器见证缺失须 blocked/new intent，不重建索引/C 计划或自动换模型。四种评分数据库 v2 的新 job 与回执同事务；未知提交只原 actor/body/key 回放，重启不自动重算。
 
 CAMBI 显式重算复用 `reexecution.ts` / 原服务同库 `ReexecutionLedger`，见 `docs/explicit-quality-reexecution.md` 的单源扩展。仅物理停止 failed/interrupted/cancelled 且有完整冻结单源执行见证允许预检/确认全部费用/创建唯一后继，不新增 partial，不借 C/reference/model。见证先于原始解码保存，失败/取消/重启清理未完成分数热图不清理见证；源/cache/producer/core、实际 AU 选择排序、固定组件/recipe 漂移或旧无见证任务需新意图。原 actor/body/key 回执优先，事务前后崩溃不得产生无回执后继，取消实际退出前不得放准入；三遍执行 witness 与独立预检、累计索引/源读取/五尺度预算分别计量。GUI/CAMBI/任务中心/HTTPAgent 共用确认和追溯，不修改旧任务/附件/候选，不自动发布或准备索引。
+
+XPSNR 版本比较 GUI 见 `docs/xpsnr-comparison.md`。复用既有 compare/result/frames/candidates，只读 2–4 完成任务；按共同参考呈现位置和精确见证分页，不按 AU 排序或近似 PTS 拼接。恢复固定 job/attempt/digest/domain，缺失或变化拒绝且清空旧分数；不得追最新结果、隐式评分/重算/发布或移动播放。官方 Y/U/V/minimum 与 Infinity 保留，排序不等于主观优劣。

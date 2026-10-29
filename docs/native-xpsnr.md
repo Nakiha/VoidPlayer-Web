@@ -63,3 +63,5 @@ node scripts/check-native-xpsnr-release.mjs /absolute/compiled-package.tar.gz
 ```
 
 The real HTTP matrix consumes committed synthetic H2648/HEVC8/10 FLV and strict MP4 remux fixtures with independently decoded YUV. A direct fixed official CLI consumes those oracle YUV files, independent of the pipeline's raw extraction; full emitted text/per-plane/official pool must equal. Matrix includes FLV↔FLV, MP4↔MP4 and both mixed directions, exact PSNR SSE/SSIM companions, frame pagination, shared evidence/historical downgrade, actor/idempotency, comparison and unknown publication recovery. Lifecycle tests retain real CPU/address-space/file limits and physical process supervision, cancellation, native failure, preparation vs native deadline, SIGKILL/restart, final source/cache/table change and queue/permit controls. Phase-controlled native deadline proves exit ownership at that boundary; it does not certify that every end-to-end5s workload reaches native execution. No stopped VFR experiment or private material is used.
+
+For the read-only pooled/frame comparison, pinned recovery and original-frame return workflow, see [XPSNR version comparison](xpsnr-comparison.md).

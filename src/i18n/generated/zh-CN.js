@@ -1453,6 +1453,7 @@ export default {
   "xcompare.evidenceScope": () => "只读取已有发布回执。打开原帧复核会使用独立窗口，并保留返回此比较的链接；没有候选时不会自动创建。",
   "xcompare.evidenceUnavailable": (d) => "候选证据不可用：" + d.error,
   "xcompare.frames": () => "共同参考呈现顺序 · 逐帧事实",
+  "xcompare.identity": () => "固定结果身份",
   "xcompare.job": (d) => "查看原任务 " + d.id,
   "xcompare.json": () => "原始比较 JSON 与固定身份",
   "xcompare.loading": () => "正在核对原任务、attempt、digest、参考域和逐帧覆盖…",

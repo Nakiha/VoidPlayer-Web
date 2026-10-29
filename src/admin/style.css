@@ -263,6 +263,7 @@
 .xpsnr-table-scroll{overflow:auto;max-width:100%}.xpsnr-comparison table{width:100%;border-collapse:collapse;font-size:.85rem;font-variant-numeric:tabular-nums}
 .xpsnr-comparison th,.xpsnr-comparison td{text-align:left;vertical-align:top;padding:.75rem;border-bottom:1px solid var(--border);white-space:pre-line;overflow-wrap:anywhere;min-width:7rem}
 .xpsnr-comparison th{background:var(--surface-table)}.xpsnr-comparison td:first-child{min-width:11rem}.xpsnr-comparison td button{display:block;margin-top:.5rem}
+.xpsnr-history-entry{display:flex;align-items:center;gap:.75rem;margin-block:.5rem}.admin-content .xpsnr-history-entry input[type=checkbox]{width:18px;height:18px;flex:none;padding:0}
 .quality-job-row,.quality-mark-row{display:block;text-align:left;width:100%;overflow-wrap:anywhere;margin:.4rem 0}
 .quality-job-row[aria-pressed=true],.quality-mark-row[aria-pressed=true]{outline:2px solid var(--accent)}
 #quality-job-list{max-height:36rem;overflow:auto}#quality-job-detail,#quality-job-result{min-width:0}

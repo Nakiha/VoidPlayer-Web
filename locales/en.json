@@ -5840,6 +5840,10 @@
     "source": "共同参考呈现顺序 · 逐帧事实",
     "translation": "Common reference presentation order · frame facts"
   },
+  "xcompare.identity": {
+    "source": "固定结果身份",
+    "translation": "Pinned result identity"
+  },
   "xcompare.job": {
     "source": "查看原任务 {id}",
     "translation": "Inspect original job {id}"

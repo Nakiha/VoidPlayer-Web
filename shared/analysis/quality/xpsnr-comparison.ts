@@ -7,7 +7,7 @@ export type XpsnrComparison = {
   schema:'voidplayer-xpsnr-comparison';version:1;comparisonKey:string;
   referenceIntegrity:'not-certified';perceptualSuperiority:'not-established';ranking:string;
   reference:LibraryPairResult['sources']['reference'];recipe:XpsnrNativeResult['recipe'];
-  items:{id:string;attemptId:string;resultDigest:string;distorted:LibraryPairResult['sources']['distorted'];
+  items:{id:string;attemptId:string;resultDigest:string;label?:string;distorted:LibraryPairResult['sources']['distorted'];
     raw:XpsnrResult['prepared']['raw'];pooled:XpsnrNativeResult['pooled'];statisticsSha256:string;result:string}[];
 };
 export type ComparisonSort='caller'|'minimum'|'y'|'u'|'v';
