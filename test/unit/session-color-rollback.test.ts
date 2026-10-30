@@ -493,3 +493,19 @@ test('new load also waits for a failed restore presentation rollback before open
   await turn();assert.equal(opened,false);gate.resolve();await rejected;await load;assert.equal(opened,true);assert.equal(getColorMode(),'browser');
  });
 });
+
+for(const command of ['decode','output','same-restore-mode'] as const)test(`explicit ${command} intent during restoration uses committed defaults and supersedes temporary conditions`,async()=>{
+ await sessionTest(async session=>{
+  await session.load('A',async()=>fixture('retained').source);
+  const before=session.getState(),document=session.exportWorkspace('http://localhost/');document.comparison!.colorMode='reference';document.comparison!.referenceDecode={decoder:'software',depth:4};
+  const entered=deferred<void>(),gate=deferred<void>();
+  session.onColorModeChange=async()=>{if(getColorMode()==='reference'){entered.resolve();await gate.promise;}};
+  const restoring=session.restoreWorkspace(document,async()=>fixture('workspace').source),cancelled=assert.rejects(restoring,{name:'AbortError'});
+  await entered.promise;
+  const changed=command==='decode'?session.setReferenceDecode({decoder:'software',depth:8}):command==='output'?session.setColorOutput({...before.colorOutput,hdrWhiteNits:250}):session.setColorMode('reference');
+  gate.resolve();await cancelled;await changed;
+  const after=session.getState();assert.equal(after.colorMode,command==='same-restore-mode'?'reference':'browser');
+  assert.deepEqual(after.referenceDecode,command==='decode'?{decoder:'software',depth:8}:before.referenceDecode);
+  assert.equal(after.colorOutput.hdrWhiteNits,command==='output'?250:before.colorOutput.hdrWhiteNits);assert.equal(after.tracks[0].name,'retained');
+ });
+});

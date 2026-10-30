@@ -8,6 +8,9 @@ type Configuration = DecodeConfiguration & {readonly colorOutput: ColorOutput};
  * observation immediately, but cannot capture conditions before rollback ends. */
 export class SessionConfiguration {
   private active?: Promise<void>;
+  private previous?:Configuration;
+  get pending(){return !!this.active;}
+  defaults(){return this.previous??this.snapshot();}
   snapshot(): Configuration {
     return Object.freeze({...captureDecodeConfiguration(), colorOutput: getColorOutput()});
   }
@@ -21,8 +24,9 @@ export class SessionConfiguration {
     if(this.active)throw Error('Session configuration transactions must be serialized');
     let release!: () => void;
     const active = new Promise<void>(resolve => release = resolve);
-    this.active = active;
-    try { return await work(this.snapshot()); }
-    finally { if(this.active === active)this.active = undefined;release(); }
+    const previous=this.snapshot();
+    this.active = active;this.previous=previous;
+    try { return await work(previous); }
+    finally { if(this.active === active){this.active = undefined;this.previous=undefined;}release(); }
   }
 }

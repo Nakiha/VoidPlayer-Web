@@ -97,12 +97,12 @@ export class ReviewSession {
   private configuration=new SessionConfiguration();
   private changingColor=false;
   onColorModeChange?:()=>Promise<void>;
-  async setReferenceDecode(options:ReferenceDecode){return this.setColorMode(getColorMode()??'reference',options);}
-  async setColorOutput(options:ColorOutput){return this.setColorMode(getColorMode()??'browser',getReferenceDecode(),options);}
-  async refreshColorOutput(){return this.setColorMode(getColorMode()??'browser',getReferenceDecode(),getColorOutput(),true);}
-  async setColorMode(mode:ColorMode,decode:ReferenceDecode=getReferenceDecode(),output:ColorOutput=getColorOutput(),force=false){
+  async setReferenceDecode(options:ReferenceDecode){const base=this.configuration.defaults();return this.setColorMode(base.colorMode??'reference',options,base.colorOutput);}
+  async setColorOutput(options:ColorOutput){const base=this.configuration.defaults();return this.setColorMode(base.colorMode??'browser',base.referenceDecode,options);}
+  async refreshColorOutput(){const base=this.configuration.defaults();return this.setColorMode(base.colorMode??'browser',base.referenceDecode,base.colorOutput,true);}
+  async setColorMode(mode:ColorMode,decode:ReferenceDecode=this.configuration.defaults().referenceDecode,output:ColorOutput=this.configuration.defaults().colorOutput,force=false){
     validateColorTransition(mode, decode, output, this.changingColor);
-    if (!force && isSameColorConfiguration(mode, decode, output)) return this.getState();
+    if (!force && !this.configuration.pending && isSameColorConfiguration(mode, decode, output)) return this.getState();
     ++this.analysisIntentSeq;
     this.changingColor=true;
     try{await this.run('color-mode',{mode},(current, signal)=>this.configuration.run(async previousConfiguration=>{
