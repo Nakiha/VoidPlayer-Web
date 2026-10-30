@@ -18,7 +18,7 @@ import {randomUUID} from 'node:crypto';
 
 const work={indexBytes:100,indexPackets:4,sourceReadBytes:0 as const,decodedFrames:0 as const,elapsedMs:1};
 const until=async(fn:()=>boolean)=>{for(let n=0;n<500;n++){if(fn())return;await new Promise(r=>setTimeout(r,5));}assert.fail('Planner transition timeout');};
-test('independent actor/queue and row/byte reservations reject new plans while retaining original receipts',async t=>{
+test('independent actor/queue and settled byte reservations reject new plans while retaining original receipts',async t=>{
   const directory=await mkdtemp(join(tmpdir(),'vp-clock-caps-')),file=join(directory,'plans.sqlite'),gate=new QualityAdmission(),held=gate.acquire();
   const runner=new LibraryPairRunner({qualityAdmission:gate,indexDatabase:'/unused'} as MediaLibraryIndex,'/unused',()=>{assert.fail('Queued/cancelled planning must start no Worker');});
   let service=new CorrespondenceService(file,runner,{} as QualityRangeService);t.after(async()=>{held();await service.close();await runner.close();await rm(directory,{recursive:true,force:true});});
@@ -29,9 +29,9 @@ test('independent actor/queue and row/byte reservations reject new plans while r
   for(const actor of [owner,other,third])for(const plan of service.history(actor.id).entries)service.cancel(plan.id,actor.id);await service.close();
   const db=openIndexDatabase(file),row=db.prepare('SELECT * FROM quality_correspondence_plans WHERE id=?').get(first.id)!;
   try{for(let i=4;i<100;i++){const id=randomUUID(),body=JSON.parse(String(row.body));body.id=id;body.key=`history-${i}`;db.prepare('INSERT INTO quality_correspondence_plans VALUES(?,?,?,?,?,?,?,?)').run(id,row.actor,row.client,body.key,row.fingerprint,JSON.stringify(body),null,row.reserved);}}finally{db.close();}
-  service=new CorrespondenceService(file,runner,{} as QualityRangeService);assert.equal(submit().id,first.id);assert.throws(()=>submit(owner,'row-full'),{code:'correspondence-history-full'});await service.close();
-  const bytes=openIndexDatabase(file);try{bytes.prepare('DELETE FROM quality_correspondence_plans WHERE id!=?').run(first.id);bytes.prepare('UPDATE quality_correspondence_plans SET reserved=? WHERE id=?').run(CORRESPONDENCE_LIMITS.reservedBytes,first.id);}finally{bytes.close();}
-  service=new CorrespondenceService(file,runner,{} as QualityRangeService);assert.equal(submit().id,first.id);assert.throws(()=>submit(owner,'bytes-full'),{code:'correspondence-history-full'});
+  service=new CorrespondenceService(file,runner,{} as QualityRangeService);assert.equal(submit().id,first.id);assert.ok(submit(owner,'past-old-row-cap').id);await service.close();
+  const bytes=openIndexDatabase(file);try{bytes.prepare('DELETE FROM quality_correspondence_plans WHERE id!=?').run(first.id);}finally{bytes.close();}
+  service=new CorrespondenceService(file,runner,{} as QualityRangeService);const quota=openIndexDatabase(file);quota.prepare('UPDATE quality_correspondence_plans SET reserved=? WHERE id=?').run(CORRESPONDENCE_LIMITS.reservedBytes,first.id);quota.close();assert.equal(submit().id,first.id);assert.throws(()=>submit(owner,'bytes-full'),{code:'correspondence-history-full'});
 });
 test('explicit immutable clock contract: direction, half-open segments, stable order, overlap and exact integer guards',async()=>{
   const {relation}=await correspondenceFixture(),input=relation.input,parsed=referenceRelationInput({...input,clock:{...input.clock,segments:[...input.clock.segments].reverse()}});
@@ -65,7 +65,7 @@ test('no nearest matching, raw duplicate PTS ambiguity, unsupported geometry and
   const referenceDuplicate=structuredClone(f.sources);referenceDuplicate[0].index.packets[1][2]=referenceDuplicate[0].index.packets[0][2];assert.equal(buildCorrespondence(f.relation,f.request,referenceDuplicate,work).rows[0].reason,'reference-pts-ambiguous');
   const roi=structuredClone(f.request);roi.recipe.roi.width=64;const unsupported=buildCorrespondence(f.relation,roi,f.sources,work);assert.equal(unsupported.rows[0].status,'unsupported');assert.match(unsupported.rows[0].detail!,/ROI/);assert.match(unsupported.sourceIssues.reference!,/ROI/);assert.equal(unsupported.rangePlan,null);
   const low=structuredClone(f.request);low.budget.maxPackets=3;const blocked=buildCorrespondence(f.relation,low,f.sources,work);assert.equal(blocked.rows[0].status,'mapped');assert.equal(blocked.rangePlan,null);assert.match(blocked.executionBlock!.message,/budget/);
-  assert.throws(()=>correspondenceInput({...f.request,sampling:{mode:'stride',every:2,offset:2}}));assert.throws(()=>correspondenceInput({...f.request,interval:{startAu:0,endAu:256}}));
+  assert.throws(()=>correspondenceInput({...f.request,sampling:{mode:'stride',every:2,offset:2}}));assert.throws(()=>correspondenceInput({...f.request,interval:{startAu:0,endAu:4096}}));
 });
 for(const stop of ['cancel','deadline'] as const)test(`planner ${stop} retains the shared slot until physical exit and restart never replans`,async t=>{
   const directory=await mkdtemp(join(tmpdir(),'vp-clock-unit-')),file=join(directory,'plans.sqlite'),gate=new QualityAdmission();let expire=()=>{};const workers:{events:EventEmitter;stopping:boolean;release():void}[]=[];
@@ -77,4 +77,19 @@ for(const stop of ['cancel','deadline'] as const)test(`planner ${stop} retains t
   const active=service.get(accepted.id,actor.id);assert.ok(active.attemptId);if(stop==='cancel')service.cancel(active.id,actor.id);else expire();await until(()=>workers[0].stopping);assert.equal(service.get(active.id,actor.id).endedAt,null);assert.throws(()=>gate.acquire(),{code:'quality-busy'});workers[0].release();await until(()=>service.get(active.id,actor.id).state===(stop==='cancel'?'cancelled':'failed'));if(stop==='deadline')assert.equal(service.get(active.id,actor.id).reason!.code,'budget-exceeded');const permit=gate.acquire();permit();
   assert.equal(service.submit(input,actor,'replay','plan').plan.requestId,'original');assert.throws(()=>service.get(active.id,'other'),{code:'plan-not-found'});assert.throws(()=>service.createRelation({...f.relation.input,declaration:'different'},actor,'other','relation'),{code:'idempotency-conflict'});
   await service.close();service=new CorrespondenceService(file,runner,ranges);assert.equal(service.get(active.id,actor.id).attemptId,active.attemptId);assert.equal(service.get(active.id,actor.id).state,stop==='cancel'?'cancelled':'failed');assert.equal(workers.length,1);
+});
+
+test('exact fractional-frame offsets preserve canonical identity, reject inconsistent projections and detect sub-microsecond overlap',async()=>{
+  const f=await correspondenceFixture(),input=f.relation.input;
+  const segment={id:'ntsc',referenceStartUs:0,referenceEndUs:100000,offsetUs:33367,offset:{ticks:1001,timescale:30000}};
+  const parse=(segments:typeof segment[])=>referenceRelationInput({...input,clock:{mode:'piecewise-exact-source-pts-offset',segments}});
+  const value=parse([segment]);assert.deepEqual(value.clock.segments[0].offset,segment.offset);
+  assert.equal(canonicalJson(parse([{...segment,offset:{ticks:2002,timescale:60000}}])),canonicalJson(value));
+  assert.throws(()=>parse([{...segment,offsetUs:33366}]),/projection/);
+  for(const offset of [{ticks:NaN,timescale:30000},{ticks:1,timescale:0},{ticks:1,timescale:1.5},{ticks:1,timescale:1,extra:1}])assert.throws(()=>parse([{...segment,offset}]));
+  // Rounded offsets are both zero, but the translated half-open intervals overlap.
+  assert.throws(()=>parse([{id:'a',referenceStartUs:0,referenceEndUs:1,offsetUs:0,offset:{ticks:1,timescale:3000000}},
+    {id:'b',referenceStartUs:1,referenceEndUs:2,offsetUs:0,offset:{ticks:0,timescale:1}}]),/Overlapping distorted/);
+  assert.equal(parse([{id:'a',referenceStartUs:0,referenceEndUs:1,offsetUs:0,offset:{ticks:1,timescale:3000000}},
+    {id:'b',referenceStartUs:1,referenceEndUs:2,offsetUs:0,offset:{ticks:1,timescale:3000000}}]).clock.segments.length,2);
 });

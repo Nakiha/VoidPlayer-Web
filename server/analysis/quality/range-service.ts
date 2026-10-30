@@ -27,9 +27,8 @@ type Publication={policy:RangeCandidatePolicy;origin:string;selected:{au:number;
 
 /** Parent never acquires admission; existing child runner owns physical stop. */
 export class QualityRangeService {
-  reexecutionLinks(actor:string){return this.reexecutions.links(actor,LIMITS.historyRows);}
-  taskSummaries(actor:string){return taskSummaries(this.db,'range',actor);}
-  taskEdges(actor:string){return taskEdges(this.db,'range',actor);}
+  taskSummaries(actor:string,id?:string,filter?:import('../../../shared/service/tasks.ts').TaskFilter){return taskSummaries(this.db,'range',actor,id,filter);}
+  taskEdges(actor:string,id?:string){return taskEdges(this.db,'range',actor,id);}
   taskChild(id:string,childId:string,actor:string){
     const parent=this.get(id,actor),sample=parent.samples.find(s=>s.jobId===childId);if(!sample)return false;
     const child=this.jobs.get(childId,actor),pair=parent.plan.input.pairs.find(p=>p.reference.picture.au===sample.au);
@@ -85,6 +84,7 @@ export class QualityRangeService {
           }
           job.summary=aggregateRange(results);this.checkTotalWork(job,results);this.save(job);
         }
+        db.exec("UPDATE quality_ranges SET reserved=length(CAST(body AS BLOB))+1024 WHERE json_extract(body,'$.state') NOT IN ('queued','running','cancelling')");
         db.exec('COMMIT');
       }catch(error){db.exec('ROLLBACK');throw error;}
     }catch(e){db?.close();this.unlock();throw e;}
@@ -98,8 +98,9 @@ export class QualityRangeService {
       return plan;
     }catch(e){if(e instanceof AdminError)throw e;throw new AdminError(400,(e as Error).message,'invalid-range-plan');}
   }
-  private rows(){return this.db.prepare('SELECT body FROM quality_ranges ORDER BY rowid').all().map(r=>JSON.parse(String(r.body)) as QualityRangeJob);}
-  private save(job:QualityRangeJob){job.revision++;this.db.prepare('UPDATE quality_ranges SET body=? WHERE id=?').run(JSON.stringify(job),job.id);}
+  private rows(){return this.db.prepare("SELECT body FROM quality_ranges WHERE json_extract(body,'$.state') IN ('queued','running','cancelling') ORDER BY rowid").all().map(r=>JSON.parse(String(r.body)) as QualityRangeJob);}
+  private save(job:QualityRangeJob){job.revision++;const body=JSON.stringify(job);this.db.prepare('UPDATE quality_ranges SET body=?,reserved=CASE WHEN ? THEN ? ELSE reserved END WHERE id=?').run(body,terminalRange(job.state)?1:0,Buffer.byteLength(body)+1024,job.id);}
+  referencesResult(id:string){return !!this.db.prepare("SELECT 1 FROM quality_ranges,json_each(body,'$.samples') s WHERE json_extract(s.value,'$.jobId')=? LIMIT 1").get(id);}
   private sampleState(child:ReturnType<QualityJobService['get']>){
     return ['unsupported-source','unsupported-format','incompatible-input','missing-color'].includes(child.reason?.code??'')?'unsupported':child.state;
   }
@@ -177,8 +178,8 @@ export class QualityRangeService {
     if(reexecution){const prior=this.reexecutions.replay(reexecution.parentId,actor.id,reexecution.key,reexecution.request);if(prior)return {job:this.reexecutions.verify(prior,this.get(prior.jobId,actor.id)),replayed:true};const parent=this.get(reexecution.parentId,actor.id);if(parent.revision!==reexecution.parentRevision||!['failed','partial','interrupted','cancelled'].includes(parent.state)||parent.endedAt===null||this.progress(parent).active)throw new AdminError(409,'Original range has not physically stopped.','reexecution-blocked');}
     const prior=this.db.prepare('SELECT id,fingerprint FROM quality_ranges WHERE actor=? AND client=? AND key=?').get(actor.id,plan.input.client.id,k);
     if(prior){if(prior.fingerprint!==fingerprint)throw new AdminError(409,'Range key already binds another plan.','idempotency-conflict');return {job:this.get(String(prior.id),actor.id),replayed:true};}
-    const rows=this.rows(),reserve=Buffer.byteLength(JSON.stringify(plan))+80*1024;
-    if(rows.length>=LIMITS.historyRows||Number(this.db.prepare('SELECT coalesce(sum(reserved),0) AS n FROM quality_ranges').get()!.n)+reserve>LIMITS.reservedBytes)
+    const rows=this.rows(),reserve=Buffer.byteLength(JSON.stringify(plan))+plan.targets*1024+32*1024;
+    if(Number(this.db.prepare('SELECT coalesce(sum(reserved),0) AS n FROM quality_ranges').get()!.n)+reserve>LIMITS.reservedBytes)
       throw new AdminError(429,'Range history full.','range-history-full');
     if(rows.filter(j=>!terminalRange(j.state)).length>=LIMITS.queued||rows.filter(j=>j.actor.id===actor.id&&!terminalRange(j.state)).length>=LIMITS.actorOutstanding)
       throw new AdminError(429,'Range queue admission full.','range-queue-full');

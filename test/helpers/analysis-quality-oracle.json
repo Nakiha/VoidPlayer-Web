@@ -1,0 +1,2303 @@
+{
+  "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+  "platform": "darwin-arm64",
+  "assembly": false,
+  "binarySha256": "95650601d7ce789adbb55cdc1159618c49e3f07719eedf0d62422f8343144130",
+  "vmafTolerance": 0.00001,
+  "cambiTolerance": 0.000001,
+  "heatmapComparison": "exact-gray16le-sha256",
+  "cases": [
+    {
+      "metric": "vmaf",
+      "sampleIndex": 0,
+      "model": "vmaf_v0.6.1",
+      "referenceSha256": "91be8a2d258e1e654aa09b9f99df2166be78cdc8896908b3a1fd4429972358a0",
+      "distortedSha256": "ff9c197ff530c7387567b865c37e5740d3a89ddc9339bf94e3accbcc7014c53e",
+      "frames": [
+        55.92242,
+        66.159064,
+        70.282226,
+        69.94914,
+        70.97137,
+        71.27326,
+        71.267834,
+        72.270504
+      ],
+      "pooled": {
+        "min": 55.92242,
+        "max": 72.270504,
+        "mean": 68.511977,
+        "harmonic_mean": 68.08618
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 0,
+      "model": "vmaf_v0.6.1",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "f21dd8601e7aeeb1984c78194279a736714d16ad5d07c5db6c42aa51ab736559",
+      "distortedSha256": "0b52822370d628347011442fb13ca407425466e762522857580879127483ff68",
+      "frames": [
+        52.72175,
+        66.109043,
+        69.457423,
+        68.232549,
+        68.660405,
+        64.891313,
+        64.527676,
+        65.947912
+      ],
+      "pooled": {
+        "min": 52.72175,
+        "max": 69.457423,
+        "mean": 65.068509,
+        "harmonic_mean": 64.637161
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 0,
+      "same": true,
+      "model": "vmaf_v0.6.1",
+      "referenceSha256": "91be8a2d258e1e654aa09b9f99df2166be78cdc8896908b3a1fd4429972358a0",
+      "distortedSha256": "91be8a2d258e1e654aa09b9f99df2166be78cdc8896908b3a1fd4429972358a0",
+      "frames": [
+        97.428619,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.428619,
+        "max": 100,
+        "mean": 99.678577,
+        "harmonic_mean": 99.671254
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 0,
+      "same": true,
+      "model": "vmaf_v0.6.1",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "f21dd8601e7aeeb1984c78194279a736714d16ad5d07c5db6c42aa51ab736559",
+      "distortedSha256": "f21dd8601e7aeeb1984c78194279a736714d16ad5d07c5db6c42aa51ab736559",
+      "frames": [
+        97.428569,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.428569,
+        "max": 100,
+        "mean": 99.678571,
+        "harmonic_mean": 99.671247
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 0,
+      "model": "vmaf_v0.6.1neg",
+      "referenceSha256": "91be8a2d258e1e654aa09b9f99df2166be78cdc8896908b3a1fd4429972358a0",
+      "distortedSha256": "ff9c197ff530c7387567b865c37e5740d3a89ddc9339bf94e3accbcc7014c53e",
+      "frames": [
+        55.867746,
+        66.107206,
+        70.258161,
+        69.905627,
+        70.921843,
+        71.249655,
+        71.224556,
+        72.245102
+      ],
+      "pooled": {
+        "min": 55.867746,
+        "max": 72.245102,
+        "mean": 68.472487,
+        "harmonic_mean": 68.045099
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 0,
+      "model": "vmaf_v0.6.1neg",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "f21dd8601e7aeeb1984c78194279a736714d16ad5d07c5db6c42aa51ab736559",
+      "distortedSha256": "0b52822370d628347011442fb13ca407425466e762522857580879127483ff68",
+      "frames": [
+        52.628322,
+        66.05959,
+        69.387454,
+        68.196301,
+        68.612931,
+        64.83965,
+        64.495875,
+        65.922475
+      ],
+      "pooled": {
+        "min": 52.628322,
+        "max": 69.387454,
+        "mean": 65.017825,
+        "harmonic_mean": 64.583418
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 0,
+      "same": true,
+      "model": "vmaf_v0.6.1neg",
+      "referenceSha256": "91be8a2d258e1e654aa09b9f99df2166be78cdc8896908b3a1fd4429972358a0",
+      "distortedSha256": "91be8a2d258e1e654aa09b9f99df2166be78cdc8896908b3a1fd4429972358a0",
+      "frames": [
+        97.42499,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.42499,
+        "max": 100,
+        "mean": 99.678124,
+        "harmonic_mean": 99.670779
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 0,
+      "same": true,
+      "model": "vmaf_v0.6.1neg",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "f21dd8601e7aeeb1984c78194279a736714d16ad5d07c5db6c42aa51ab736559",
+      "distortedSha256": "f21dd8601e7aeeb1984c78194279a736714d16ad5d07c5db6c42aa51ab736559",
+      "frames": [
+        97.424835,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.424835,
+        "max": 100,
+        "mean": 99.678104,
+        "harmonic_mean": 99.670759
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 1,
+      "model": "vmaf_v0.6.1",
+      "referenceSha256": "eae77f24b56b8f12bf5613228ee2406e74cf42c8409dba5ae42bb90579e5fb6c",
+      "distortedSha256": "410a540aa86979b7e00a5cbe506663f8ba261316ccee37bc43c86362de811e42",
+      "frames": [
+        57.478525,
+        67.664665,
+        71.437431,
+        72.237985,
+        71.561431,
+        72.795327,
+        72.300532,
+        73.273903
+      ],
+      "pooled": {
+        "min": 57.478525,
+        "max": 73.273903,
+        "mean": 69.843725,
+        "harmonic_mean": 69.446395
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 1,
+      "model": "vmaf_v0.6.1",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "8c6005f67222fa122608eed7f8ec9747e721dd3b2e64fe7b425f11d01d9f9357",
+      "distortedSha256": "ad0ed1876e70169b4e3d794093c0b38f6295caffe98be7e408b57b271e5bc860",
+      "frames": [
+        54.624172,
+        67.428044,
+        70.639633,
+        70.612142,
+        69.068988,
+        66.535045,
+        64.905359,
+        66.602539
+      ],
+      "pooled": {
+        "min": 54.624172,
+        "max": 70.639633,
+        "mean": 66.30199,
+        "harmonic_mean": 65.9126
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 1,
+      "same": true,
+      "model": "vmaf_v0.6.1",
+      "referenceSha256": "eae77f24b56b8f12bf5613228ee2406e74cf42c8409dba5ae42bb90579e5fb6c",
+      "distortedSha256": "eae77f24b56b8f12bf5613228ee2406e74cf42c8409dba5ae42bb90579e5fb6c",
+      "frames": [
+        97.428611,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.428611,
+        "max": 100,
+        "mean": 99.678576,
+        "harmonic_mean": 99.671253
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 1,
+      "same": true,
+      "model": "vmaf_v0.6.1",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "8c6005f67222fa122608eed7f8ec9747e721dd3b2e64fe7b425f11d01d9f9357",
+      "distortedSha256": "8c6005f67222fa122608eed7f8ec9747e721dd3b2e64fe7b425f11d01d9f9357",
+      "frames": [
+        97.428599,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.428599,
+        "max": 100,
+        "mean": 99.678575,
+        "harmonic_mean": 99.671251
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 1,
+      "model": "vmaf_v0.6.1neg",
+      "referenceSha256": "eae77f24b56b8f12bf5613228ee2406e74cf42c8409dba5ae42bb90579e5fb6c",
+      "distortedSha256": "410a540aa86979b7e00a5cbe506663f8ba261316ccee37bc43c86362de811e42",
+      "frames": [
+        57.460399,
+        67.642371,
+        71.419612,
+        72.149474,
+        71.546736,
+        72.768987,
+        72.284863,
+        73.242329
+      ],
+      "pooled": {
+        "min": 57.460399,
+        "max": 73.242329,
+        "mean": 69.814346,
+        "harmonic_mean": 69.417733
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 1,
+      "model": "vmaf_v0.6.1neg",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "8c6005f67222fa122608eed7f8ec9747e721dd3b2e64fe7b425f11d01d9f9357",
+      "distortedSha256": "ad0ed1876e70169b4e3d794093c0b38f6295caffe98be7e408b57b271e5bc860",
+      "frames": [
+        54.592117,
+        67.393635,
+        70.611894,
+        70.580192,
+        69.049012,
+        66.495509,
+        64.891428,
+        66.568121
+      ],
+      "pooled": {
+        "min": 54.592117,
+        "max": 70.611894,
+        "mean": 66.272739,
+        "harmonic_mean": 65.883039
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 1,
+      "same": true,
+      "model": "vmaf_v0.6.1neg",
+      "referenceSha256": "eae77f24b56b8f12bf5613228ee2406e74cf42c8409dba5ae42bb90579e5fb6c",
+      "distortedSha256": "eae77f24b56b8f12bf5613228ee2406e74cf42c8409dba5ae42bb90579e5fb6c",
+      "frames": [
+        97.425357,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.425357,
+        "max": 100,
+        "mean": 99.67817,
+        "harmonic_mean": 99.670827
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 1,
+      "same": true,
+      "model": "vmaf_v0.6.1neg",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "8c6005f67222fa122608eed7f8ec9747e721dd3b2e64fe7b425f11d01d9f9357",
+      "distortedSha256": "8c6005f67222fa122608eed7f8ec9747e721dd3b2e64fe7b425f11d01d9f9357",
+      "frames": [
+        97.425178,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.425178,
+        "max": 100,
+        "mean": 99.678147,
+        "harmonic_mean": 99.670804
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 2,
+      "model": "vmaf_v0.6.1",
+      "referenceSha256": "6f23ca19ecf1a2d1413f9554a872f02e13d27d72b0d8d432f432cb9a5562ea04",
+      "distortedSha256": "26565bf15a34fc6e8b69e4987d8d2fea6ca827b9ac5b0dfaeeead58e513c3de1",
+      "frames": [
+        55.823377,
+        65.297275,
+        69.824318,
+        70.153661,
+        70.862757,
+        70.153063,
+        70.909996,
+        72.093089
+      ],
+      "pooled": {
+        "min": 55.823377,
+        "max": 72.093089,
+        "mean": 68.139692,
+        "harmonic_mean": 67.721095
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 2,
+      "model": "vmaf_v0.6.1",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "1ccce7f7969f6aa65222fe3ce5a79580991078a462afb848d8692a999a0995c0",
+      "distortedSha256": "1325c58fc4fa8b6ca1a8a73f043d99981c91ab318a78cff31179583e45931b2b",
+      "frames": [
+        52.288748,
+        63.377285,
+        66.686243,
+        67.390019,
+        69.375367,
+        63.672088,
+        63.800604,
+        66.756907
+      ],
+      "pooled": {
+        "min": 52.288748,
+        "max": 69.375367,
+        "mean": 64.168408,
+        "harmonic_mean": 63.746962
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 2,
+      "same": true,
+      "model": "vmaf_v0.6.1",
+      "referenceSha256": "6f23ca19ecf1a2d1413f9554a872f02e13d27d72b0d8d432f432cb9a5562ea04",
+      "distortedSha256": "6f23ca19ecf1a2d1413f9554a872f02e13d27d72b0d8d432f432cb9a5562ea04",
+      "frames": [
+        97.428594,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.428594,
+        "max": 100,
+        "mean": 99.678574,
+        "harmonic_mean": 99.671251
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 2,
+      "same": true,
+      "model": "vmaf_v0.6.1",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "1ccce7f7969f6aa65222fe3ce5a79580991078a462afb848d8692a999a0995c0",
+      "distortedSha256": "1ccce7f7969f6aa65222fe3ce5a79580991078a462afb848d8692a999a0995c0",
+      "frames": [
+        97.428584,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.428584,
+        "max": 100,
+        "mean": 99.678573,
+        "harmonic_mean": 99.671249
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 2,
+      "model": "vmaf_v0.6.1neg",
+      "referenceSha256": "6f23ca19ecf1a2d1413f9554a872f02e13d27d72b0d8d432f432cb9a5562ea04",
+      "distortedSha256": "26565bf15a34fc6e8b69e4987d8d2fea6ca827b9ac5b0dfaeeead58e513c3de1",
+      "frames": [
+        55.793028,
+        65.246689,
+        69.770245,
+        70.124223,
+        70.843206,
+        70.100465,
+        70.879601,
+        72.067804
+      ],
+      "pooled": {
+        "min": 55.793028,
+        "max": 72.067804,
+        "mean": 68.103158,
+        "harmonic_mean": 67.684322
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 2,
+      "model": "vmaf_v0.6.1neg",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "1ccce7f7969f6aa65222fe3ce5a79580991078a462afb848d8692a999a0995c0",
+      "distortedSha256": "1325c58fc4fa8b6ca1a8a73f043d99981c91ab318a78cff31179583e45931b2b",
+      "frames": [
+        52.233913,
+        63.23047,
+        66.608565,
+        67.347238,
+        69.30896,
+        63.579469,
+        63.744426,
+        66.690706
+      ],
+      "pooled": {
+        "min": 52.233913,
+        "max": 69.30896,
+        "mean": 64.092968,
+        "harmonic_mean": 63.67139
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 2,
+      "same": true,
+      "model": "vmaf_v0.6.1neg",
+      "referenceSha256": "6f23ca19ecf1a2d1413f9554a872f02e13d27d72b0d8d432f432cb9a5562ea04",
+      "distortedSha256": "6f23ca19ecf1a2d1413f9554a872f02e13d27d72b0d8d432f432cb9a5562ea04",
+      "frames": [
+        97.425751,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.425751,
+        "max": 100,
+        "mean": 99.678219,
+        "harmonic_mean": 99.670879
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 2,
+      "same": true,
+      "model": "vmaf_v0.6.1neg",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "1ccce7f7969f6aa65222fe3ce5a79580991078a462afb848d8692a999a0995c0",
+      "distortedSha256": "1ccce7f7969f6aa65222fe3ce5a79580991078a462afb848d8692a999a0995c0",
+      "frames": [
+        97.42485,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.42485,
+        "max": 100,
+        "mean": 99.678106,
+        "harmonic_mean": 99.670761
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 3,
+      "model": "vmaf_v0.6.1",
+      "referenceSha256": "bb10ac14a4e2725d707c307b2a8b69c16f454a804b012903dc1bf76f7155f66c",
+      "distortedSha256": "3dc860f68acbd96d9f73ac9d07fd728446496b64c7c80ac291ae8a2d848b2954",
+      "frames": [
+        56.525685,
+        67.279321,
+        70.591651,
+        71.211151,
+        72.166741,
+        72.09392,
+        71.579426,
+        73.990214
+      ],
+      "pooled": {
+        "min": 56.525685,
+        "max": 73.990214,
+        "mean": 69.429764,
+        "harmonic_mean": 68.98686
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 3,
+      "model": "vmaf_v0.6.1",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "acb4fa6485cef76cdeabeb07550d5e53d06dd419f8c335670c75a9d9ebaad7a6",
+      "distortedSha256": "21f9c9fcb9d802a6ec9ad9b674878ac226db3f9bfd29257aab8678ec0d4d0a7b",
+      "frames": [
+        53.886069,
+        65.188698,
+        68.715829,
+        69.6943,
+        69.18572,
+        65.747974,
+        65.360231,
+        67.158276
+      ],
+      "pooled": {
+        "min": 53.886069,
+        "max": 69.6943,
+        "mean": 65.617137,
+        "harmonic_mean": 65.231813
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 3,
+      "same": true,
+      "model": "vmaf_v0.6.1",
+      "referenceSha256": "bb10ac14a4e2725d707c307b2a8b69c16f454a804b012903dc1bf76f7155f66c",
+      "distortedSha256": "bb10ac14a4e2725d707c307b2a8b69c16f454a804b012903dc1bf76f7155f66c",
+      "frames": [
+        97.428597,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.428597,
+        "max": 100,
+        "mean": 99.678575,
+        "harmonic_mean": 99.671251
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 3,
+      "same": true,
+      "model": "vmaf_v0.6.1",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "acb4fa6485cef76cdeabeb07550d5e53d06dd419f8c335670c75a9d9ebaad7a6",
+      "distortedSha256": "acb4fa6485cef76cdeabeb07550d5e53d06dd419f8c335670c75a9d9ebaad7a6",
+      "frames": [
+        97.428594,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.428594,
+        "max": 100,
+        "mean": 99.678574,
+        "harmonic_mean": 99.671251
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 3,
+      "model": "vmaf_v0.6.1neg",
+      "referenceSha256": "bb10ac14a4e2725d707c307b2a8b69c16f454a804b012903dc1bf76f7155f66c",
+      "distortedSha256": "3dc860f68acbd96d9f73ac9d07fd728446496b64c7c80ac291ae8a2d848b2954",
+      "frames": [
+        56.485461,
+        67.257599,
+        70.557577,
+        71.180316,
+        72.130066,
+        72.047864,
+        71.556343,
+        73.927707
+      ],
+      "pooled": {
+        "min": 56.485461,
+        "max": 73.927707,
+        "mean": 69.392867,
+        "harmonic_mean": 68.949911
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 3,
+      "model": "vmaf_v0.6.1neg",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "acb4fa6485cef76cdeabeb07550d5e53d06dd419f8c335670c75a9d9ebaad7a6",
+      "distortedSha256": "21f9c9fcb9d802a6ec9ad9b674878ac226db3f9bfd29257aab8678ec0d4d0a7b",
+      "frames": [
+        53.822718,
+        65.139152,
+        68.66181,
+        69.609662,
+        69.158263,
+        65.688052,
+        65.321119,
+        67.099295
+      ],
+      "pooled": {
+        "min": 53.822718,
+        "max": 69.609662,
+        "mean": 65.562509,
+        "harmonic_mean": 65.176433
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 3,
+      "same": true,
+      "model": "vmaf_v0.6.1neg",
+      "referenceSha256": "bb10ac14a4e2725d707c307b2a8b69c16f454a804b012903dc1bf76f7155f66c",
+      "distortedSha256": "bb10ac14a4e2725d707c307b2a8b69c16f454a804b012903dc1bf76f7155f66c",
+      "frames": [
+        97.425566,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.425566,
+        "max": 100,
+        "mean": 99.678196,
+        "harmonic_mean": 99.670855
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 3,
+      "same": true,
+      "model": "vmaf_v0.6.1neg",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "acb4fa6485cef76cdeabeb07550d5e53d06dd419f8c335670c75a9d9ebaad7a6",
+      "distortedSha256": "acb4fa6485cef76cdeabeb07550d5e53d06dd419f8c335670c75a9d9ebaad7a6",
+      "frames": [
+        97.424707,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.424707,
+        "max": 100,
+        "mean": 99.678088,
+        "harmonic_mean": 99.670742
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 4,
+      "model": "vmaf_v0.6.1",
+      "referenceSha256": "fb3f6b93fdfcdbc4b4240beb36013e18d7835b5aea934d9d280bc1a7d77385d6",
+      "distortedSha256": "75139b99e6bbbe49a665e8cead08c99c63a829eb0024e4bcc0f6d6870f5f424e",
+      "frames": [
+        48.275125,
+        57.117551,
+        59.961168,
+        59.837595,
+        60.161176,
+        60.937674,
+        60.086061,
+        62.431334
+      ],
+      "pooled": {
+        "min": 48.275125,
+        "max": 62.431334,
+        "mean": 58.600961,
+        "harmonic_mean": 58.271227
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 4,
+      "model": "vmaf_v0.6.1",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "d153e99506825ff1e4adb31dd6108178ecc9cf31f9f37e91cd5036067633c8dd",
+      "distortedSha256": "1bdbcc64c3e87fab37e1bb945451a6d5da91c35cf23d07ba534a4283c0a81507",
+      "frames": [
+        47.93693,
+        59.539001,
+        63.06962,
+        61.90609,
+        59.731393,
+        57.520441,
+        56.64008,
+        60.908441
+      ],
+      "pooled": {
+        "min": 47.93693,
+        "max": 63.06962,
+        "mean": 58.4065,
+        "harmonic_mean": 58.034754
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 4,
+      "same": true,
+      "model": "vmaf_v0.6.1",
+      "referenceSha256": "fb3f6b93fdfcdbc4b4240beb36013e18d7835b5aea934d9d280bc1a7d77385d6",
+      "distortedSha256": "fb3f6b93fdfcdbc4b4240beb36013e18d7835b5aea934d9d280bc1a7d77385d6",
+      "frames": [
+        97.428641,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.428641,
+        "max": 100,
+        "mean": 99.67858,
+        "harmonic_mean": 99.671257
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 4,
+      "same": true,
+      "model": "vmaf_v0.6.1",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "d153e99506825ff1e4adb31dd6108178ecc9cf31f9f37e91cd5036067633c8dd",
+      "distortedSha256": "d153e99506825ff1e4adb31dd6108178ecc9cf31f9f37e91cd5036067633c8dd",
+      "frames": [
+        97.428638,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.428638,
+        "max": 100,
+        "mean": 99.67858,
+        "harmonic_mean": 99.671256
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 4,
+      "model": "vmaf_v0.6.1neg",
+      "referenceSha256": "fb3f6b93fdfcdbc4b4240beb36013e18d7835b5aea934d9d280bc1a7d77385d6",
+      "distortedSha256": "75139b99e6bbbe49a665e8cead08c99c63a829eb0024e4bcc0f6d6870f5f424e",
+      "frames": [
+        48.252378,
+        57.101486,
+        59.95204,
+        59.823229,
+        60.147397,
+        60.91819,
+        60.067079,
+        62.416612
+      ],
+      "pooled": {
+        "min": 48.252378,
+        "max": 62.416612,
+        "mean": 58.584801,
+        "harmonic_mean": 58.254552
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 4,
+      "model": "vmaf_v0.6.1neg",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "d153e99506825ff1e4adb31dd6108178ecc9cf31f9f37e91cd5036067633c8dd",
+      "distortedSha256": "1bdbcc64c3e87fab37e1bb945451a6d5da91c35cf23d07ba534a4283c0a81507",
+      "frames": [
+        47.906133,
+        59.520798,
+        63.059003,
+        61.881975,
+        59.714515,
+        57.511118,
+        56.628873,
+        60.892198
+      ],
+      "pooled": {
+        "min": 47.906133,
+        "max": 63.059003,
+        "mean": 58.389327,
+        "harmonic_mean": 58.01671
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 4,
+      "same": true,
+      "model": "vmaf_v0.6.1neg",
+      "referenceSha256": "fb3f6b93fdfcdbc4b4240beb36013e18d7835b5aea934d9d280bc1a7d77385d6",
+      "distortedSha256": "fb3f6b93fdfcdbc4b4240beb36013e18d7835b5aea934d9d280bc1a7d77385d6",
+      "frames": [
+        97.424826,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.424826,
+        "max": 100,
+        "mean": 99.678103,
+        "harmonic_mean": 99.670758
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "vmaf",
+      "sampleIndex": 4,
+      "same": true,
+      "model": "vmaf_v0.6.1neg",
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "d153e99506825ff1e4adb31dd6108178ecc9cf31f9f37e91cd5036067633c8dd",
+      "distortedSha256": "d153e99506825ff1e4adb31dd6108178ecc9cf31f9f37e91cd5036067633c8dd",
+      "frames": [
+        97.42487,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "pooled": {
+        "min": 97.42487,
+        "max": 100,
+        "mean": 99.678109,
+        "harmonic_mean": 99.670764
+      },
+      "heatmaps": []
+    },
+    {
+      "metric": "cambi",
+      "sampleIndex": 0,
+      "model": null,
+      "referenceSha256": "c93a08234d14d0f00e6dfedfcefcc5953a92cf44ced05c7ffbbf29e2f18a8e87",
+      "distortedSha256": "c93a08234d14d0f00e6dfedfcefcc5953a92cf44ced05c7ffbbf29e2f18a8e87",
+      "frames": [
+        19.31059,
+        19.31059,
+        19.31059,
+        19.31059
+      ],
+      "pooled": {
+        "min": 19.31059,
+        "max": 19.31059,
+        "mean": 19.31059,
+        "harmonic_mean": 19.31059
+      },
+      "heatmaps": [
+        {
+          "file": "cambi_heatmap_scale_0_640x352_16b.gray",
+          "frames": [
+            "677c12ef50a86b85a4be1b5e725ed5bde4f4b555013faa91add67c213ebe84bb",
+            "677c12ef50a86b85a4be1b5e725ed5bde4f4b555013faa91add67c213ebe84bb",
+            "677c12ef50a86b85a4be1b5e725ed5bde4f4b555013faa91add67c213ebe84bb",
+            "677c12ef50a86b85a4be1b5e725ed5bde4f4b555013faa91add67c213ebe84bb"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_1_320x176_16b.gray",
+          "frames": [
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_2_160x88_16b.gray",
+          "frames": [
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_3_80x44_16b.gray",
+          "frames": [
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_4_40x22_16b.gray",
+          "frames": [
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26"
+          ]
+        }
+      ]
+    },
+    {
+      "metric": "cambi",
+      "sampleIndex": 1,
+      "model": null,
+      "referenceSha256": "b043abcc3e4d458f8fea9b16aabef047b79d82fa344a8829ee83d0b8c76ca7ae",
+      "distortedSha256": "b043abcc3e4d458f8fea9b16aabef047b79d82fa344a8829ee83d0b8c76ca7ae",
+      "frames": [
+        11.802179,
+        11.802179,
+        11.802179,
+        11.802179
+      ],
+      "pooled": {
+        "min": 11.802179,
+        "max": 11.802179,
+        "mean": 11.802179,
+        "harmonic_mean": 11.802179
+      },
+      "heatmaps": [
+        {
+          "file": "cambi_heatmap_scale_0_640x352_16b.gray",
+          "frames": [
+            "4bc2e1dc37ac54fb7f72fa1f5d848a2b7698bed76fa1feec190b49154b11cf54",
+            "4bc2e1dc37ac54fb7f72fa1f5d848a2b7698bed76fa1feec190b49154b11cf54",
+            "4bc2e1dc37ac54fb7f72fa1f5d848a2b7698bed76fa1feec190b49154b11cf54",
+            "4bc2e1dc37ac54fb7f72fa1f5d848a2b7698bed76fa1feec190b49154b11cf54"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_1_320x176_16b.gray",
+          "frames": [
+            "b7d8f9645e62d69243bb2d11560d13479af2d6e22da6cc5198185c16b4a8df12",
+            "b7d8f9645e62d69243bb2d11560d13479af2d6e22da6cc5198185c16b4a8df12",
+            "b7d8f9645e62d69243bb2d11560d13479af2d6e22da6cc5198185c16b4a8df12",
+            "b7d8f9645e62d69243bb2d11560d13479af2d6e22da6cc5198185c16b4a8df12"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_2_160x88_16b.gray",
+          "frames": [
+            "0380a9ab13d5950173130a7b16452e95d35f1b7ce62919b7f22555492a8903e6",
+            "0380a9ab13d5950173130a7b16452e95d35f1b7ce62919b7f22555492a8903e6",
+            "0380a9ab13d5950173130a7b16452e95d35f1b7ce62919b7f22555492a8903e6",
+            "0380a9ab13d5950173130a7b16452e95d35f1b7ce62919b7f22555492a8903e6"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_3_80x44_16b.gray",
+          "frames": [
+            "a83b18b817e23af57e43c9c0ccd160aa0c01269081df929eaa889be78f1296d0",
+            "a83b18b817e23af57e43c9c0ccd160aa0c01269081df929eaa889be78f1296d0",
+            "a83b18b817e23af57e43c9c0ccd160aa0c01269081df929eaa889be78f1296d0",
+            "a83b18b817e23af57e43c9c0ccd160aa0c01269081df929eaa889be78f1296d0"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_4_40x22_16b.gray",
+          "frames": [
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350"
+          ]
+        }
+      ]
+    },
+    {
+      "metric": "cambi",
+      "sampleIndex": 2,
+      "model": null,
+      "referenceSha256": "e143c425efbc7c936a51acb9a0136650905b7c2850b2a1907c6dc004b5ad1062",
+      "distortedSha256": "e143c425efbc7c936a51acb9a0136650905b7c2850b2a1907c6dc004b5ad1062",
+      "frames": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "heatmaps": [
+        {
+          "file": "cambi_heatmap_scale_0_640x352_16b.gray",
+          "frames": [
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_1_320x176_16b.gray",
+          "frames": [
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_2_160x88_16b.gray",
+          "frames": [
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_3_80x44_16b.gray",
+          "frames": [
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_4_40x22_16b.gray",
+          "frames": [
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350"
+          ]
+        }
+      ]
+    },
+    {
+      "metric": "cambi",
+      "sampleIndex": 3,
+      "model": null,
+      "referenceSha256": "605c9355fe26283b7873334fb3d961dfaf93ff7bb55bf8840399c9d2cf082c2b",
+      "distortedSha256": "605c9355fe26283b7873334fb3d961dfaf93ff7bb55bf8840399c9d2cf082c2b",
+      "frames": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "heatmaps": [
+        {
+          "file": "cambi_heatmap_scale_0_640x352_16b.gray",
+          "frames": [
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_1_320x176_16b.gray",
+          "frames": [
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_2_160x88_16b.gray",
+          "frames": [
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_3_80x44_16b.gray",
+          "frames": [
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_4_40x22_16b.gray",
+          "frames": [
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350"
+          ]
+        }
+      ]
+    },
+    {
+      "metric": "cambi",
+      "sampleIndex": 4,
+      "model": null,
+      "referenceSha256": "d2ed4a386ad5568e5aea250201aeddf629f017347bb59168838a1adbb0aede40",
+      "distortedSha256": "d2ed4a386ad5568e5aea250201aeddf629f017347bb59168838a1adbb0aede40",
+      "frames": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "heatmaps": [
+        {
+          "file": "cambi_heatmap_scale_0_640x352_16b.gray",
+          "frames": [
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_1_320x176_16b.gray",
+          "frames": [
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_2_160x88_16b.gray",
+          "frames": [
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_3_80x44_16b.gray",
+          "frames": [
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_4_40x22_16b.gray",
+          "frames": [
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350"
+          ]
+        }
+      ]
+    },
+    {
+      "metric": "cambi",
+      "sampleIndex": 5,
+      "model": null,
+      "referenceSha256": "e8476064ca6c39e93c3e0825e42322ff6e5231348abb1f06b00de9d83cde2b6f",
+      "distortedSha256": "e8476064ca6c39e93c3e0825e42322ff6e5231348abb1f06b00de9d83cde2b6f",
+      "frames": [
+        0.210759,
+        0.210759,
+        0.210759,
+        0.210759
+      ],
+      "pooled": {
+        "min": 0.210759,
+        "max": 0.210759,
+        "mean": 0.210759,
+        "harmonic_mean": 0.210759
+      },
+      "heatmaps": [
+        {
+          "file": "cambi_heatmap_scale_0_1280x720_16b.gray",
+          "frames": [
+            "494fa8d3618361cf4e5e7eb63594baf9e38621f997b5f6341b4e30436a3faf63",
+            "494fa8d3618361cf4e5e7eb63594baf9e38621f997b5f6341b4e30436a3faf63",
+            "494fa8d3618361cf4e5e7eb63594baf9e38621f997b5f6341b4e30436a3faf63",
+            "494fa8d3618361cf4e5e7eb63594baf9e38621f997b5f6341b4e30436a3faf63"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_1_640x360_16b.gray",
+          "frames": [
+            "36e7aaa1be7920f692dcef83c648955c2e8f263ab8850a6d440fc2c460d266e3",
+            "36e7aaa1be7920f692dcef83c648955c2e8f263ab8850a6d440fc2c460d266e3",
+            "36e7aaa1be7920f692dcef83c648955c2e8f263ab8850a6d440fc2c460d266e3",
+            "36e7aaa1be7920f692dcef83c648955c2e8f263ab8850a6d440fc2c460d266e3"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_2_320x180_16b.gray",
+          "frames": [
+            "08c1a741dab7aa269825d2d49c7ff42fb84c025b815a23d1373e3d7f9fba6952",
+            "08c1a741dab7aa269825d2d49c7ff42fb84c025b815a23d1373e3d7f9fba6952",
+            "08c1a741dab7aa269825d2d49c7ff42fb84c025b815a23d1373e3d7f9fba6952",
+            "08c1a741dab7aa269825d2d49c7ff42fb84c025b815a23d1373e3d7f9fba6952"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_3_160x90_16b.gray",
+          "frames": [
+            "e5b4a7c30d57c596d4ba3f22c6a045c0d39f1cf0bd56f10cfa7c95656f5ce4bd",
+            "e5b4a7c30d57c596d4ba3f22c6a045c0d39f1cf0bd56f10cfa7c95656f5ce4bd",
+            "e5b4a7c30d57c596d4ba3f22c6a045c0d39f1cf0bd56f10cfa7c95656f5ce4bd",
+            "e5b4a7c30d57c596d4ba3f22c6a045c0d39f1cf0bd56f10cfa7c95656f5ce4bd"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_4_80x45_16b.gray",
+          "frames": [
+            "79edab8e3d086def973ef7ebff33a7dabd0ab70f629233edcf597760026fd5af",
+            "79edab8e3d086def973ef7ebff33a7dabd0ab70f629233edcf597760026fd5af",
+            "79edab8e3d086def973ef7ebff33a7dabd0ab70f629233edcf597760026fd5af",
+            "79edab8e3d086def973ef7ebff33a7dabd0ab70f629233edcf597760026fd5af"
+          ]
+        }
+      ]
+    },
+    {
+      "metric": "cambi",
+      "sampleIndex": 6,
+      "model": null,
+      "referenceSha256": "605c1f974719a5355902742c1d2992ac09474aa8f5189c186a90a74388ab8b20",
+      "distortedSha256": "605c1f974719a5355902742c1d2992ac09474aa8f5189c186a90a74388ab8b20",
+      "frames": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "heatmaps": [
+        {
+          "file": "cambi_heatmap_scale_0_640x352_16b.gray",
+          "frames": [
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_1_320x176_16b.gray",
+          "frames": [
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_2_160x88_16b.gray",
+          "frames": [
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_3_80x44_16b.gray",
+          "frames": [
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_4_40x22_16b.gray",
+          "frames": [
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350"
+          ]
+        }
+      ]
+    },
+    {
+      "metric": "cambi",
+      "sampleIndex": 7,
+      "model": null,
+      "referenceSha256": "d98ba08a41f1a77e0f4a6c5da13e339770d0f3e57e31509fd94d6d17904c664b",
+      "distortedSha256": "d98ba08a41f1a77e0f4a6c5da13e339770d0f3e57e31509fd94d6d17904c664b",
+      "frames": [
+        19.317805,
+        19.317805,
+        19.317805,
+        19.317805
+      ],
+      "pooled": {
+        "min": 19.317805,
+        "max": 19.317805,
+        "mean": 19.317805,
+        "harmonic_mean": 19.317805
+      },
+      "heatmaps": [
+        {
+          "file": "cambi_heatmap_scale_0_640x352_16b.gray",
+          "frames": [
+            "e1e05de55e24480be28e843b2caf607b0a6c3c41cbe6e359b890368c7b706191",
+            "e1e05de55e24480be28e843b2caf607b0a6c3c41cbe6e359b890368c7b706191",
+            "e1e05de55e24480be28e843b2caf607b0a6c3c41cbe6e359b890368c7b706191",
+            "e1e05de55e24480be28e843b2caf607b0a6c3c41cbe6e359b890368c7b706191"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_1_320x176_16b.gray",
+          "frames": [
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_2_160x88_16b.gray",
+          "frames": [
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_3_80x44_16b.gray",
+          "frames": [
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_4_40x22_16b.gray",
+          "frames": [
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26"
+          ]
+        }
+      ]
+    },
+    {
+      "metric": "cambi",
+      "sampleIndex": 8,
+      "model": null,
+      "referenceSha256": "7929d6af8e7af5ffebe4204225c61cbac92a040e9f9db0f6f3181e9cbe50aaf8",
+      "distortedSha256": "7929d6af8e7af5ffebe4204225c61cbac92a040e9f9db0f6f3181e9cbe50aaf8",
+      "frames": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "heatmaps": [
+        {
+          "file": "cambi_heatmap_scale_0_640x352_16b.gray",
+          "frames": [
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_1_320x176_16b.gray",
+          "frames": [
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_2_160x88_16b.gray",
+          "frames": [
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_3_80x44_16b.gray",
+          "frames": [
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_4_40x22_16b.gray",
+          "frames": [
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350"
+          ]
+        }
+      ]
+    },
+    {
+      "metric": "cambi",
+      "sampleIndex": 9,
+      "model": null,
+      "referenceSha256": "ca43b57eb85476af04f66b8b2196d1f0adaff00c61626f880980a79db1c8db72",
+      "distortedSha256": "ca43b57eb85476af04f66b8b2196d1f0adaff00c61626f880980a79db1c8db72",
+      "frames": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "heatmaps": [
+        {
+          "file": "cambi_heatmap_scale_0_640x352_16b.gray",
+          "frames": [
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_1_320x176_16b.gray",
+          "frames": [
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_2_160x88_16b.gray",
+          "frames": [
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_3_80x44_16b.gray",
+          "frames": [
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_4_40x22_16b.gray",
+          "frames": [
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350"
+          ]
+        }
+      ]
+    },
+    {
+      "metric": "cambi",
+      "sampleIndex": 10,
+      "model": null,
+      "referenceSha256": "5c5c82868faf15bf52969e747ad5d0aa5c8a476369b23141232b1de5e962c8a5",
+      "distortedSha256": "5c5c82868faf15bf52969e747ad5d0aa5c8a476369b23141232b1de5e962c8a5",
+      "frames": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "heatmaps": [
+        {
+          "file": "cambi_heatmap_scale_0_640x352_16b.gray",
+          "frames": [
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_1_320x176_16b.gray",
+          "frames": [
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_2_160x88_16b.gray",
+          "frames": [
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_3_80x44_16b.gray",
+          "frames": [
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_4_40x22_16b.gray",
+          "frames": [
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350"
+          ]
+        }
+      ]
+    },
+    {
+      "metric": "cambi",
+      "sampleIndex": 11,
+      "model": null,
+      "referenceSha256": "7949e54e5b25e0a20a6989800e2a7614002cedc1359880a8cb642d84d3ff87e0",
+      "distortedSha256": "7949e54e5b25e0a20a6989800e2a7614002cedc1359880a8cb642d84d3ff87e0",
+      "frames": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "heatmaps": [
+        {
+          "file": "cambi_heatmap_scale_0_640x352_16b.gray",
+          "frames": [
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_1_320x176_16b.gray",
+          "frames": [
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_2_160x88_16b.gray",
+          "frames": [
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_3_80x44_16b.gray",
+          "frames": [
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_4_40x22_16b.gray",
+          "frames": [
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350"
+          ]
+        }
+      ]
+    },
+    {
+      "metric": "cambi",
+      "sampleIndex": 12,
+      "model": null,
+      "referenceSha256": "0d1b6dc1d0bd490eee9c0c40761fd45b58bac64041b25fad5d7487238e223f27",
+      "distortedSha256": "0d1b6dc1d0bd490eee9c0c40761fd45b58bac64041b25fad5d7487238e223f27",
+      "frames": [
+        1.093501,
+        1.093501,
+        1.093501,
+        1.093501
+      ],
+      "pooled": {
+        "min": 1.093501,
+        "max": 1.093501,
+        "mean": 1.093501,
+        "harmonic_mean": 1.093501
+      },
+      "heatmaps": [
+        {
+          "file": "cambi_heatmap_scale_0_1280x720_16b.gray",
+          "frames": [
+            "ffea075e6a62910ce5c5f8846e390d3abcc07461871490c9d5d70bd971b96b5f",
+            "ffea075e6a62910ce5c5f8846e390d3abcc07461871490c9d5d70bd971b96b5f",
+            "ffea075e6a62910ce5c5f8846e390d3abcc07461871490c9d5d70bd971b96b5f",
+            "ffea075e6a62910ce5c5f8846e390d3abcc07461871490c9d5d70bd971b96b5f"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_1_640x360_16b.gray",
+          "frames": [
+            "9d54230f062f4e3c47420b5b45204193c8e5cbb39477ed0864d468a56f9ac900",
+            "9d54230f062f4e3c47420b5b45204193c8e5cbb39477ed0864d468a56f9ac900",
+            "9d54230f062f4e3c47420b5b45204193c8e5cbb39477ed0864d468a56f9ac900",
+            "9d54230f062f4e3c47420b5b45204193c8e5cbb39477ed0864d468a56f9ac900"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_2_320x180_16b.gray",
+          "frames": [
+            "2a87db23f7ffac8d10433705b428f1d4d4294d477680992aa1ea8e03ead8af3c",
+            "2a87db23f7ffac8d10433705b428f1d4d4294d477680992aa1ea8e03ead8af3c",
+            "2a87db23f7ffac8d10433705b428f1d4d4294d477680992aa1ea8e03ead8af3c",
+            "2a87db23f7ffac8d10433705b428f1d4d4294d477680992aa1ea8e03ead8af3c"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_3_160x90_16b.gray",
+          "frames": [
+            "8197a3618ddae65b077c4f57a56a7dd6a85c2d6dfd6a190ce9ce10bfc61a9ce3",
+            "8197a3618ddae65b077c4f57a56a7dd6a85c2d6dfd6a190ce9ce10bfc61a9ce3",
+            "8197a3618ddae65b077c4f57a56a7dd6a85c2d6dfd6a190ce9ce10bfc61a9ce3",
+            "8197a3618ddae65b077c4f57a56a7dd6a85c2d6dfd6a190ce9ce10bfc61a9ce3"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_4_80x45_16b.gray",
+          "frames": [
+            "0bf0c032a8249185b3da21bc7b83dfd45b4037288edd9097e051e5060c46fa35",
+            "0bf0c032a8249185b3da21bc7b83dfd45b4037288edd9097e051e5060c46fa35",
+            "0bf0c032a8249185b3da21bc7b83dfd45b4037288edd9097e051e5060c46fa35",
+            "0bf0c032a8249185b3da21bc7b83dfd45b4037288edd9097e051e5060c46fa35"
+          ]
+        }
+      ]
+    },
+    {
+      "metric": "cambi",
+      "sampleIndex": 13,
+      "model": null,
+      "referenceSha256": "5c5c82868faf15bf52969e747ad5d0aa5c8a476369b23141232b1de5e962c8a5",
+      "distortedSha256": "5c5c82868faf15bf52969e747ad5d0aa5c8a476369b23141232b1de5e962c8a5",
+      "frames": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "heatmaps": [
+        {
+          "file": "cambi_heatmap_scale_0_640x352_16b.gray",
+          "frames": [
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6",
+            "dd54e0b07c2c54b4b6baa9110939083644156041bb0fc4bac1e58ecf6b4440c6"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_1_320x176_16b.gray",
+          "frames": [
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98",
+            "e161989acf60cb5167aa14459203af5f2cbf2f70562dfc36643d4e038614ee98"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_2_160x88_16b.gray",
+          "frames": [
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c",
+            "13789f635319f79895d1c3e35b754d414ef09921ae32a88c701528e3ae1b351c"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_3_80x44_16b.gray",
+          "frames": [
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4",
+            "078f9ff2e1bfaff952fbadd609f00f868c73f782f0e6d98778037074a54136d4"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_4_40x22_16b.gray",
+          "frames": [
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350",
+            "52e28210c0be3be4e312d3ec209b5c49fc69abdd4c4aed923f1ce29ad25b0350"
+          ]
+        }
+      ]
+    },
+    {
+      "metric": "cambi",
+      "sampleIndex": 0,
+      "fixture": "native-cambi-mp4-samples.json",
+      "model": null,
+      "referenceSha256": "c93a08234d14d0f00e6dfedfcefcc5953a92cf44ced05c7ffbbf29e2f18a8e87",
+      "distortedSha256": "c93a08234d14d0f00e6dfedfcefcc5953a92cf44ced05c7ffbbf29e2f18a8e87",
+      "frames": [
+        19.31059,
+        19.31059,
+        19.31059,
+        19.31059
+      ],
+      "pooled": {
+        "min": 19.31059,
+        "max": 19.31059,
+        "mean": 19.31059,
+        "harmonic_mean": 19.31059
+      },
+      "heatmaps": [
+        {
+          "file": "cambi_heatmap_scale_0_640x352_16b.gray",
+          "frames": [
+            "677c12ef50a86b85a4be1b5e725ed5bde4f4b555013faa91add67c213ebe84bb",
+            "677c12ef50a86b85a4be1b5e725ed5bde4f4b555013faa91add67c213ebe84bb",
+            "677c12ef50a86b85a4be1b5e725ed5bde4f4b555013faa91add67c213ebe84bb",
+            "677c12ef50a86b85a4be1b5e725ed5bde4f4b555013faa91add67c213ebe84bb"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_1_320x176_16b.gray",
+          "frames": [
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_2_160x88_16b.gray",
+          "frames": [
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_3_80x44_16b.gray",
+          "frames": [
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_4_40x22_16b.gray",
+          "frames": [
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26"
+          ]
+        }
+      ]
+    },
+    {
+      "metric": "cambi",
+      "sampleIndex": 1,
+      "fixture": "native-cambi-mp4-samples.json",
+      "model": null,
+      "referenceSha256": "c93a08234d14d0f00e6dfedfcefcc5953a92cf44ced05c7ffbbf29e2f18a8e87",
+      "distortedSha256": "c93a08234d14d0f00e6dfedfcefcc5953a92cf44ced05c7ffbbf29e2f18a8e87",
+      "frames": [
+        19.31059,
+        19.31059,
+        19.31059,
+        19.31059
+      ],
+      "pooled": {
+        "min": 19.31059,
+        "max": 19.31059,
+        "mean": 19.31059,
+        "harmonic_mean": 19.31059
+      },
+      "heatmaps": [
+        {
+          "file": "cambi_heatmap_scale_0_640x352_16b.gray",
+          "frames": [
+            "677c12ef50a86b85a4be1b5e725ed5bde4f4b555013faa91add67c213ebe84bb",
+            "677c12ef50a86b85a4be1b5e725ed5bde4f4b555013faa91add67c213ebe84bb",
+            "677c12ef50a86b85a4be1b5e725ed5bde4f4b555013faa91add67c213ebe84bb",
+            "677c12ef50a86b85a4be1b5e725ed5bde4f4b555013faa91add67c213ebe84bb"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_1_320x176_16b.gray",
+          "frames": [
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_2_160x88_16b.gray",
+          "frames": [
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_3_80x44_16b.gray",
+          "frames": [
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_4_40x22_16b.gray",
+          "frames": [
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26"
+          ]
+        }
+      ]
+    },
+    {
+      "metric": "cambi",
+      "sampleIndex": 2,
+      "fixture": "native-cambi-mp4-samples.json",
+      "model": null,
+      "referenceSha256": "d98ba08a41f1a77e0f4a6c5da13e339770d0f3e57e31509fd94d6d17904c664b",
+      "distortedSha256": "d98ba08a41f1a77e0f4a6c5da13e339770d0f3e57e31509fd94d6d17904c664b",
+      "frames": [
+        19.317805,
+        19.317805,
+        19.317805,
+        19.317805
+      ],
+      "pooled": {
+        "min": 19.317805,
+        "max": 19.317805,
+        "mean": 19.317805,
+        "harmonic_mean": 19.317805
+      },
+      "heatmaps": [
+        {
+          "file": "cambi_heatmap_scale_0_640x352_16b.gray",
+          "frames": [
+            "e1e05de55e24480be28e843b2caf607b0a6c3c41cbe6e359b890368c7b706191",
+            "e1e05de55e24480be28e843b2caf607b0a6c3c41cbe6e359b890368c7b706191",
+            "e1e05de55e24480be28e843b2caf607b0a6c3c41cbe6e359b890368c7b706191",
+            "e1e05de55e24480be28e843b2caf607b0a6c3c41cbe6e359b890368c7b706191"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_1_320x176_16b.gray",
+          "frames": [
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_2_160x88_16b.gray",
+          "frames": [
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_3_80x44_16b.gray",
+          "frames": [
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_4_40x22_16b.gray",
+          "frames": [
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26"
+          ]
+        }
+      ]
+    },
+    {
+      "metric": "cambi",
+      "sampleIndex": 3,
+      "fixture": "native-cambi-mp4-samples.json",
+      "model": null,
+      "referenceSha256": "0681876b26c2198129f09d14fe16255c6da975ec9b212b40270ad6eaec88196d",
+      "distortedSha256": "0681876b26c2198129f09d14fe16255c6da975ec9b212b40270ad6eaec88196d",
+      "frames": [
+        19.317805,
+        19.317805,
+        19.317805,
+        19.317805
+      ],
+      "pooled": {
+        "min": 19.317805,
+        "max": 19.317805,
+        "mean": 19.317805,
+        "harmonic_mean": 19.317805
+      },
+      "heatmaps": [
+        {
+          "file": "cambi_heatmap_scale_0_640x352_16b.gray",
+          "frames": [
+            "e1e05de55e24480be28e843b2caf607b0a6c3c41cbe6e359b890368c7b706191",
+            "e1e05de55e24480be28e843b2caf607b0a6c3c41cbe6e359b890368c7b706191",
+            "e1e05de55e24480be28e843b2caf607b0a6c3c41cbe6e359b890368c7b706191",
+            "e1e05de55e24480be28e843b2caf607b0a6c3c41cbe6e359b890368c7b706191"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_1_320x176_16b.gray",
+          "frames": [
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a",
+            "3a46aafae44207734f2fc244c54d25bf84682af5c032101043bbcd6e194a234a"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_2_160x88_16b.gray",
+          "frames": [
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456",
+            "93137c9e0d0224fafdeb964af3e4833ce091173e4c05897df3c089394ea85456"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_3_80x44_16b.gray",
+          "frames": [
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848",
+            "0e51bc6b205fe27670910ce1ff87811e0b32a7a9f08e3b8335434a61cf0a8848"
+          ]
+        },
+        {
+          "file": "cambi_heatmap_scale_4_40x22_16b.gray",
+          "frames": [
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26",
+            "3f8e03c113167a9a04605e1c310234ed5b33cdbad2ab6f2a5712785e76a10a26"
+          ]
+        }
+      ]
+    }
+  ]
+}

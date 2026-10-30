@@ -1,5 +1,7 @@
 # Trusted non-fragmented MP4 quality sources
 
+> 时钟更新：保留原始 sample ticks/timebase，跨源对应与连续节奏按有理数比较；微秒仅是传输/显示投影。24/30/60 与 24000/1001、30000/1001 fps 已通过实际 HTTP 评分和候选验收，不再要求每个 tick 整除为整数微秒。
+
 This work extends the existing explicit discovery/preparation, source-plane
 PSNR/SSIM/grid, correspondence/range, shared evidence and read-only original-pair
 workflow. The first matrix is self-contained non-fragmented MP4, one video track,
@@ -9,9 +11,9 @@ No new scheduler, decoder core demuxer or numeric metric is introduced.
 
 The quality index has its own versioned schema. Decode-order sample ordinal,
 track ID, sample description, original DTS/CTS/duration ticks and timescale,
-physical offset/size and raw moov digest remain explicit. Every API microsecond
-clock must be exactly representable: division with a remainder is unsupported,
-never rounded or repaired from POC. Sync tables nominate candidates; actual NAL
+physical offset/size and raw moov digest remain explicit. Original ticks/timebase are the exact identity used for matching and cadence.
+Microsecond fields are transport/display projections; fractional microseconds
+are supported without matching rounded values or repairing POC. Sync tables nominate candidates; actual NAL
 validation establishes the supported closed IDR boundary. Complete bounded GOP
 inputs and drain outputs use the existing opaque packet-token decoder protocol.
 
@@ -26,9 +28,9 @@ attachments retain their original meaning.
 
 Reference relationships remain caller declarations, not content certification.
 Reference integrity is not-certified and concealment detection is unavailable.
-Performance has not passed. Native VMAF has a separate [strict MP4/mixed sequence
-contract](native-vmaf.md), with continuous exact cadence, full-frame limited
-BT.709 SDR and v2 sample/table associations. [CAMBI](native-cambi.md) has separate strict single-source MP4 admission for the same codec/depth subset, positive constant presentation cadence and full-frame SDR; result/attachment v2 preserves sample/table/producer identity and five actual heatmap scales. Widening a source union never confers admission to another metric.
+Cloud playback performance has not passed. VMAF/XPSNR run in the existing
+[analysis WASM core](analysis-wasm-scoring.md), with continuous exact rational
+cadence, full-frame or fixed even ROI, limited BT.709 SDR and v2 sample/table associations. [CAMBI](native-cambi.md) has separate strict single-source MP4 admission for the same codec/depth subset, positive constant presentation cadence and full-frame SDR; result/attachment v2 preserves sample/table/producer identity and five actual heatmap scales. Widening a source union never confers admission to another metric.
 
 ## Implementation and verification
 
@@ -59,7 +61,7 @@ Reproducible formal entries:
   exact metadata/payload byte charges, packet/output/read limits; server-only
   cache/producer seals, same-size replacement, actor fencing, import downgrade,
   committed-annotation lost response and receipt replay after restart/private
-  result reclamation. Native VMAF v2 attachments additionally preserve the full
+  result reclamation. VMAF v2 attachments additionally preserve the full
   temporal MP4 sample/table witnesses under the separate sequence contract.
 - `node --test test/media/quality-mp4-lifecycle.test.ts`: actual descriptor close
   before delayed physical Worker termination releases admission; cancel/deadline/
@@ -73,7 +75,9 @@ Reproducible formal entries:
   acceptance now includes committed MP4/native fixtures for the same three codec
   combinations, with no decoder executable available to the packaged service.
 
-The source index, HTTP, lifecycle and six browser entries pass locally, together
+## Initial MP4 acceptance record
+
+The initial source index, HTTP, lifecycle and six browser entries passed locally, together
 with the legacy FLV discovery/correspondence browser regressions, 73 fast checks
 and the build/shared/boundary/manifest checks. Linux x64 compiled acceptance
 passes the three MP4 combinations and the existing FLV/receipt matrix. Windows
@@ -82,3 +86,5 @@ matrix; local Linux results do not certify those platforms. PR CI and independen
 review remain required before merging.
 No negative-source-PTS or VFR E2E certification is claimed. Broader MP4/container/geometry support
 and performance remain unfinished.
+
+Current scoring architecture, cross-platform acceptance and retained limitations are tracked in [quality convergence](quality-convergence.md) and the current PR checks. The initial record above is not the final convergence verdict.

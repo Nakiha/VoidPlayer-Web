@@ -1,0 +1,1261 @@
+{
+  "sourceRevision": "8998a1a670c81a04d144c36f9e2d3aa680c10720",
+  "filterSha256": "4b59b32eb4a501ac74f6d767a916ef1a29833e1895b150cfa96b8e4ffb91f3d7",
+  "binarySha256": "cd62a0819add8a660fd07b41d01fb21d9dada7ea7ca704e56e24dc7a149949a2",
+  "tolerance": 0.000051,
+  "cases": [
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 250000,
+        "timescale": 1000000
+      },
+      "roi": null,
+      "referenceSha256": "91be8a2d258e1e654aa09b9f99df2166be78cdc8896908b3a1fd4429972358a0",
+      "distortedSha256": "91be8a2d258e1e654aa09b9f99df2166be78cdc8896908b3a1fd4429972358a0",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 250000,
+        "timescale": 1000000
+      },
+      "roi": null,
+      "referenceSha256": "91be8a2d258e1e654aa09b9f99df2166be78cdc8896908b3a1fd4429972358a0",
+      "distortedSha256": "ff9c197ff530c7387567b865c37e5740d3a89ddc9339bf94e3accbcc7014c53e",
+      "text": "n:    1  XPSNR y: 21.7140  XPSNR u: 32.0370  XPSNR v: 36.0085\nn:    2  XPSNR y: 12.7174  XPSNR u: 21.9933  XPSNR v: 23.0337\nn:    3  XPSNR y: 12.8151  XPSNR u: 23.0290  XPSNR v: 24.2608\nn:    4  XPSNR y: 12.2971  XPSNR u: 22.4919  XPSNR v: 24.3943\nn:    5  XPSNR y: 11.7491  XPSNR u: 22.6650  XPSNR v: 24.5287\nn:    6  XPSNR y: 11.5647  XPSNR u: 22.5999  XPSNR v: 25.0164\nn:    7  XPSNR y: 11.4522  XPSNR u: 22.1799  XPSNR v: 24.7292\nn:    8  XPSNR y: 11.4043  XPSNR u: 22.2283  XPSNR v: 24.2905\n\nXPSNR average, 8 frames  y: 12.7465  u: 23.2071  v: 25.1453  (minimum: 12.7465)\n",
+      "sha256": "f2b88f258a2c5f9a8dcb6935fd52d45e97b097b156e59fb43e8c32b2c48b4eb5"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 250000,
+        "timescale": 1000000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "f21dd8601e7aeeb1984c78194279a736714d16ad5d07c5db6c42aa51ab736559",
+      "distortedSha256": "f21dd8601e7aeeb1984c78194279a736714d16ad5d07c5db6c42aa51ab736559",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 250000,
+        "timescale": 1000000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "f21dd8601e7aeeb1984c78194279a736714d16ad5d07c5db6c42aa51ab736559",
+      "distortedSha256": "0b52822370d628347011442fb13ca407425466e762522857580879127483ff68",
+      "text": "n:    1  XPSNR y: 19.8090  XPSNR u: 30.4005  XPSNR v: 37.4079\nn:    2  XPSNR y: 11.0589  XPSNR u: 21.5562  XPSNR v: 28.7916\nn:    3  XPSNR y: 10.4469  XPSNR u: 23.8668  XPSNR v: 28.6804\nn:    4  XPSNR y: 9.8209  XPSNR u: 22.3909  XPSNR v: 27.1906\nn:    5  XPSNR y: 9.3112  XPSNR u: 21.1340  XPSNR v: 27.5002\nn:    6  XPSNR y: 8.6433  XPSNR u: 19.8621  XPSNR v: 26.7271\nn:    7  XPSNR y: 8.5159  XPSNR u: 19.2321  XPSNR v: 26.4015\nn:    8  XPSNR y: 8.7659  XPSNR u: 20.3210  XPSNR v: 25.8296\n\nXPSNR average, 8 frames  y: 10.2537  u: 21.8199  v: 28.0253  (minimum: 10.2537)\n",
+      "sha256": "bcc1beba59d32d9c168448a80690909c8ee7fa4aee1b8cc30951a184c8de218c"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": null,
+      "referenceSha256": "91be8a2d258e1e654aa09b9f99df2166be78cdc8896908b3a1fd4429972358a0",
+      "distortedSha256": "91be8a2d258e1e654aa09b9f99df2166be78cdc8896908b3a1fd4429972358a0",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": null,
+      "referenceSha256": "91be8a2d258e1e654aa09b9f99df2166be78cdc8896908b3a1fd4429972358a0",
+      "distortedSha256": "ff9c197ff530c7387567b865c37e5740d3a89ddc9339bf94e3accbcc7014c53e",
+      "text": "n:    1  XPSNR y: 21.7140  XPSNR u: 32.0370  XPSNR v: 36.0085\nn:    2  XPSNR y: 12.7174  XPSNR u: 21.9933  XPSNR v: 23.0337\nn:    3  XPSNR y: 12.8151  XPSNR u: 23.0290  XPSNR v: 24.2608\nn:    4  XPSNR y: 12.2971  XPSNR u: 22.4919  XPSNR v: 24.3943\nn:    5  XPSNR y: 11.7491  XPSNR u: 22.6650  XPSNR v: 24.5287\nn:    6  XPSNR y: 11.5647  XPSNR u: 22.5999  XPSNR v: 25.0164\nn:    7  XPSNR y: 11.4522  XPSNR u: 22.1799  XPSNR v: 24.7292\nn:    8  XPSNR y: 11.4043  XPSNR u: 22.2283  XPSNR v: 24.2905\n\nXPSNR average, 8 frames  y: 12.7465  u: 23.2071  v: 25.1453  (minimum: 12.7465)\n",
+      "sha256": "f2b88f258a2c5f9a8dcb6935fd52d45e97b097b156e59fb43e8c32b2c48b4eb5"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "f21dd8601e7aeeb1984c78194279a736714d16ad5d07c5db6c42aa51ab736559",
+      "distortedSha256": "f21dd8601e7aeeb1984c78194279a736714d16ad5d07c5db6c42aa51ab736559",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "f21dd8601e7aeeb1984c78194279a736714d16ad5d07c5db6c42aa51ab736559",
+      "distortedSha256": "0b52822370d628347011442fb13ca407425466e762522857580879127483ff68",
+      "text": "n:    1  XPSNR y: 19.8090  XPSNR u: 30.4005  XPSNR v: 37.4079\nn:    2  XPSNR y: 11.0589  XPSNR u: 21.5562  XPSNR v: 28.7916\nn:    3  XPSNR y: 10.4469  XPSNR u: 23.8668  XPSNR v: 28.6804\nn:    4  XPSNR y: 9.8209  XPSNR u: 22.3909  XPSNR v: 27.1906\nn:    5  XPSNR y: 9.3112  XPSNR u: 21.1340  XPSNR v: 27.5002\nn:    6  XPSNR y: 8.6433  XPSNR u: 19.8621  XPSNR v: 26.7271\nn:    7  XPSNR y: 8.5159  XPSNR u: 19.2321  XPSNR v: 26.4015\nn:    8  XPSNR y: 8.7659  XPSNR u: 20.3210  XPSNR v: 25.8296\n\nXPSNR average, 8 frames  y: 10.2537  u: 21.8199  v: 28.0253  (minimum: 10.2537)\n",
+      "sha256": "bcc1beba59d32d9c168448a80690909c8ee7fa4aee1b8cc30951a184c8de218c"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 1,
+        "timescale": 60
+      },
+      "roi": null,
+      "referenceSha256": "91be8a2d258e1e654aa09b9f99df2166be78cdc8896908b3a1fd4429972358a0",
+      "distortedSha256": "91be8a2d258e1e654aa09b9f99df2166be78cdc8896908b3a1fd4429972358a0",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 1,
+        "timescale": 60
+      },
+      "roi": null,
+      "referenceSha256": "91be8a2d258e1e654aa09b9f99df2166be78cdc8896908b3a1fd4429972358a0",
+      "distortedSha256": "ff9c197ff530c7387567b865c37e5740d3a89ddc9339bf94e3accbcc7014c53e",
+      "text": "n:    1  XPSNR y: 21.7140  XPSNR u: 32.0370  XPSNR v: 36.0085\nn:    2  XPSNR y: 21.7144  XPSNR u: 32.5171  XPSNR v: 35.4086\nn:    3  XPSNR y: 13.8473  XPSNR u: 23.2551  XPSNR v: 24.4752\nn:    4  XPSNR y: 13.2588  XPSNR u: 23.7902  XPSNR v: 24.9763\nn:    5  XPSNR y: 12.7518  XPSNR u: 24.0428  XPSNR v: 25.6214\nn:    6  XPSNR y: 12.1551  XPSNR u: 23.6596  XPSNR v: 25.4622\nn:    7  XPSNR y: 11.8073  XPSNR u: 22.8598  XPSNR v: 26.2501\nn:    8  XPSNR y: 11.7259  XPSNR u: 23.0500  XPSNR v: 25.7493\n\nXPSNR average, 8 frames  y: 14.1012  u: 24.9437  v: 27.0602  (minimum: 14.1012)\n",
+      "sha256": "4926e11c06be861bef57350735d61d50bd52c5aafbfa37d548fee6e846653b2e"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1,
+        "timescale": 60
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "f21dd8601e7aeeb1984c78194279a736714d16ad5d07c5db6c42aa51ab736559",
+      "distortedSha256": "f21dd8601e7aeeb1984c78194279a736714d16ad5d07c5db6c42aa51ab736559",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1,
+        "timescale": 60
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "f21dd8601e7aeeb1984c78194279a736714d16ad5d07c5db6c42aa51ab736559",
+      "distortedSha256": "0b52822370d628347011442fb13ca407425466e762522857580879127483ff68",
+      "text": "n:    1  XPSNR y: 19.8090  XPSNR u: 30.4005  XPSNR v: 37.4079\nn:    2  XPSNR y: 20.0219  XPSNR u: 31.2592  XPSNR v: 35.7345\nn:    3  XPSNR y: 12.1831  XPSNR u: 24.5361  XPSNR v: 29.7580\nn:    4  XPSNR y: 10.9732  XPSNR u: 26.3533  XPSNR v: 29.9847\nn:    5  XPSNR y: 9.8800  XPSNR u: 23.5527  XPSNR v: 28.7385\nn:    6  XPSNR y: 9.2151  XPSNR u: 20.9987  XPSNR v: 27.3264\nn:    7  XPSNR y: 8.7377  XPSNR u: 19.8592  XPSNR v: 27.0155\nn:    8  XPSNR y: 8.7904  XPSNR u: 20.4180  XPSNR v: 26.1970\n\nXPSNR average, 8 frames  y: 11.5082  u: 23.7836  v: 29.5256  (minimum: 11.5082)\n",
+      "sha256": "0d08071e1ead9949f68f08b0982195ace31675d00a2d3b643204db89e10160f3"
+    },
+    {
+      "codec": "h264",
+      "depth": 10,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 250000,
+        "timescale": 1000000
+      },
+      "roi": null,
+      "referenceSha256": "eae77f24b56b8f12bf5613228ee2406e74cf42c8409dba5ae42bb90579e5fb6c",
+      "distortedSha256": "eae77f24b56b8f12bf5613228ee2406e74cf42c8409dba5ae42bb90579e5fb6c",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "h264",
+      "depth": 10,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 250000,
+        "timescale": 1000000
+      },
+      "roi": null,
+      "referenceSha256": "eae77f24b56b8f12bf5613228ee2406e74cf42c8409dba5ae42bb90579e5fb6c",
+      "distortedSha256": "410a540aa86979b7e00a5cbe506663f8ba261316ccee37bc43c86362de811e42",
+      "text": "n:    1  XPSNR y: 21.7546  XPSNR u: 32.6396  XPSNR v: 36.8597\nn:    2  XPSNR y: 12.5555  XPSNR u: 22.5097  XPSNR v: 24.5045\nn:    3  XPSNR y: 12.6424  XPSNR u: 23.5305  XPSNR v: 25.1347\nn:    4  XPSNR y: 12.0554  XPSNR u: 22.6043  XPSNR v: 24.7454\nn:    5  XPSNR y: 11.6599  XPSNR u: 23.2714  XPSNR v: 26.2200\nn:    6  XPSNR y: 11.5330  XPSNR u: 23.2906  XPSNR v: 26.0489\nn:    7  XPSNR y: 11.3870  XPSNR u: 22.7865  XPSNR v: 25.8056\nn:    8  XPSNR y: 11.3244  XPSNR u: 22.6441  XPSNR v: 25.8563\n\nXPSNR average, 8 frames  y: 12.6363  u: 23.7029  v: 26.2835  (minimum: 12.6363)\n",
+      "sha256": "bf405c507595c8fb6762a6c0e29b148be3816ccc3effb4268554237f1f739149"
+    },
+    {
+      "codec": "h264",
+      "depth": 10,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 250000,
+        "timescale": 1000000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "8c6005f67222fa122608eed7f8ec9747e721dd3b2e64fe7b425f11d01d9f9357",
+      "distortedSha256": "8c6005f67222fa122608eed7f8ec9747e721dd3b2e64fe7b425f11d01d9f9357",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "h264",
+      "depth": 10,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 250000,
+        "timescale": 1000000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "8c6005f67222fa122608eed7f8ec9747e721dd3b2e64fe7b425f11d01d9f9357",
+      "distortedSha256": "ad0ed1876e70169b4e3d794093c0b38f6295caffe98be7e408b57b271e5bc860",
+      "text": "n:    1  XPSNR y: 19.8910  XPSNR u: 30.7761  XPSNR v: 37.6060\nn:    2  XPSNR y: 10.8639  XPSNR u: 21.6928  XPSNR v: 30.0698\nn:    3  XPSNR y: 10.1902  XPSNR u: 24.1942  XPSNR v: 27.9565\nn:    4  XPSNR y: 9.5241  XPSNR u: 22.0043  XPSNR v: 25.6751\nn:    5  XPSNR y: 9.2892  XPSNR u: 21.8718  XPSNR v: 29.3412\nn:    6  XPSNR y: 8.7793  XPSNR u: 20.2865  XPSNR v: 27.7543\nn:    7  XPSNR y: 8.5870  XPSNR u: 19.8543  XPSNR v: 28.0604\nn:    8  XPSNR y: 8.8092  XPSNR u: 20.5539  XPSNR v: 27.2541\n\nXPSNR average, 8 frames  y: 10.1977  u: 22.1416  v: 28.6782  (minimum: 10.1977)\n",
+      "sha256": "c78c7a6fc03b57b1c77a7143a9b100326bb1b7a4476cd607279eaf54a96c5ad9"
+    },
+    {
+      "codec": "h264",
+      "depth": 10,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": null,
+      "referenceSha256": "eae77f24b56b8f12bf5613228ee2406e74cf42c8409dba5ae42bb90579e5fb6c",
+      "distortedSha256": "eae77f24b56b8f12bf5613228ee2406e74cf42c8409dba5ae42bb90579e5fb6c",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "h264",
+      "depth": 10,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": null,
+      "referenceSha256": "eae77f24b56b8f12bf5613228ee2406e74cf42c8409dba5ae42bb90579e5fb6c",
+      "distortedSha256": "410a540aa86979b7e00a5cbe506663f8ba261316ccee37bc43c86362de811e42",
+      "text": "n:    1  XPSNR y: 21.7546  XPSNR u: 32.6396  XPSNR v: 36.8597\nn:    2  XPSNR y: 12.5555  XPSNR u: 22.5097  XPSNR v: 24.5045\nn:    3  XPSNR y: 12.6424  XPSNR u: 23.5305  XPSNR v: 25.1347\nn:    4  XPSNR y: 12.0554  XPSNR u: 22.6043  XPSNR v: 24.7454\nn:    5  XPSNR y: 11.6599  XPSNR u: 23.2714  XPSNR v: 26.2200\nn:    6  XPSNR y: 11.5330  XPSNR u: 23.2906  XPSNR v: 26.0489\nn:    7  XPSNR y: 11.3870  XPSNR u: 22.7865  XPSNR v: 25.8056\nn:    8  XPSNR y: 11.3244  XPSNR u: 22.6441  XPSNR v: 25.8563\n\nXPSNR average, 8 frames  y: 12.6363  u: 23.7029  v: 26.2835  (minimum: 12.6363)\n",
+      "sha256": "bf405c507595c8fb6762a6c0e29b148be3816ccc3effb4268554237f1f739149"
+    },
+    {
+      "codec": "h264",
+      "depth": 10,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "8c6005f67222fa122608eed7f8ec9747e721dd3b2e64fe7b425f11d01d9f9357",
+      "distortedSha256": "8c6005f67222fa122608eed7f8ec9747e721dd3b2e64fe7b425f11d01d9f9357",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "h264",
+      "depth": 10,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "8c6005f67222fa122608eed7f8ec9747e721dd3b2e64fe7b425f11d01d9f9357",
+      "distortedSha256": "ad0ed1876e70169b4e3d794093c0b38f6295caffe98be7e408b57b271e5bc860",
+      "text": "n:    1  XPSNR y: 19.8910  XPSNR u: 30.7761  XPSNR v: 37.6060\nn:    2  XPSNR y: 10.8639  XPSNR u: 21.6928  XPSNR v: 30.0698\nn:    3  XPSNR y: 10.1902  XPSNR u: 24.1942  XPSNR v: 27.9565\nn:    4  XPSNR y: 9.5241  XPSNR u: 22.0043  XPSNR v: 25.6751\nn:    5  XPSNR y: 9.2892  XPSNR u: 21.8718  XPSNR v: 29.3412\nn:    6  XPSNR y: 8.7793  XPSNR u: 20.2865  XPSNR v: 27.7543\nn:    7  XPSNR y: 8.5870  XPSNR u: 19.8543  XPSNR v: 28.0604\nn:    8  XPSNR y: 8.8092  XPSNR u: 20.5539  XPSNR v: 27.2541\n\nXPSNR average, 8 frames  y: 10.1977  u: 22.1416  v: 28.6782  (minimum: 10.1977)\n",
+      "sha256": "c78c7a6fc03b57b1c77a7143a9b100326bb1b7a4476cd607279eaf54a96c5ad9"
+    },
+    {
+      "codec": "h264",
+      "depth": 10,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 1,
+        "timescale": 60
+      },
+      "roi": null,
+      "referenceSha256": "eae77f24b56b8f12bf5613228ee2406e74cf42c8409dba5ae42bb90579e5fb6c",
+      "distortedSha256": "eae77f24b56b8f12bf5613228ee2406e74cf42c8409dba5ae42bb90579e5fb6c",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "h264",
+      "depth": 10,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 1,
+        "timescale": 60
+      },
+      "roi": null,
+      "referenceSha256": "eae77f24b56b8f12bf5613228ee2406e74cf42c8409dba5ae42bb90579e5fb6c",
+      "distortedSha256": "410a540aa86979b7e00a5cbe506663f8ba261316ccee37bc43c86362de811e42",
+      "text": "n:    1  XPSNR y: 21.7546  XPSNR u: 32.6396  XPSNR v: 36.8597\nn:    2  XPSNR y: 21.6384  XPSNR u: 33.1497  XPSNR v: 36.3343\nn:    3  XPSNR y: 13.8216  XPSNR u: 23.7319  XPSNR v: 25.5094\nn:    4  XPSNR y: 13.0311  XPSNR u: 24.0227  XPSNR v: 25.4381\nn:    5  XPSNR y: 12.6035  XPSNR u: 24.6084  XPSNR v: 27.1813\nn:    6  XPSNR y: 12.0701  XPSNR u: 24.4775  XPSNR v: 26.6942\nn:    7  XPSNR y: 11.7317  XPSNR u: 23.5400  XPSNR v: 27.1493\nn:    8  XPSNR y: 11.6726  XPSNR u: 23.4084  XPSNR v: 27.1735\n\nXPSNR average, 8 frames  y: 14.0084  u: 25.4744  v: 28.1284  (minimum: 14.0084)\n",
+      "sha256": "36535cc6333c29b16679c76949adbd2f73e3bd38043d5414cf1ad08985bfc8b5"
+    },
+    {
+      "codec": "h264",
+      "depth": 10,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1,
+        "timescale": 60
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "8c6005f67222fa122608eed7f8ec9747e721dd3b2e64fe7b425f11d01d9f9357",
+      "distortedSha256": "8c6005f67222fa122608eed7f8ec9747e721dd3b2e64fe7b425f11d01d9f9357",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "h264",
+      "depth": 10,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1,
+        "timescale": 60
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "8c6005f67222fa122608eed7f8ec9747e721dd3b2e64fe7b425f11d01d9f9357",
+      "distortedSha256": "ad0ed1876e70169b4e3d794093c0b38f6295caffe98be7e408b57b271e5bc860",
+      "text": "n:    1  XPSNR y: 19.8910  XPSNR u: 30.7761  XPSNR v: 37.6060\nn:    2  XPSNR y: 19.8906  XPSNR u: 31.7124  XPSNR v: 36.5569\nn:    3  XPSNR y: 12.2407  XPSNR u: 24.7800  XPSNR v: 30.0314\nn:    4  XPSNR y: 10.5965  XPSNR u: 25.6922  XPSNR v: 27.9126\nn:    5  XPSNR y: 9.8135  XPSNR u: 24.4208  XPSNR v: 29.7638\nn:    6  XPSNR y: 9.2250  XPSNR u: 21.6043  XPSNR v: 28.3334\nn:    7  XPSNR y: 8.8096  XPSNR u: 20.5272  XPSNR v: 28.4768\nn:    8  XPSNR y: 8.8423  XPSNR u: 20.6494  XPSNR v: 27.8417\n\nXPSNR average, 8 frames  y: 11.4742  u: 24.1760  v: 30.1450  (minimum: 11.4742)\n",
+      "sha256": "cf058ab6d9a1e43b83623a392af005c619d1765cd5619bf4fae5d743293afaa8"
+    },
+    {
+      "codec": "hevc",
+      "depth": 8,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 250000,
+        "timescale": 1000000
+      },
+      "roi": null,
+      "referenceSha256": "6f23ca19ecf1a2d1413f9554a872f02e13d27d72b0d8d432f432cb9a5562ea04",
+      "distortedSha256": "6f23ca19ecf1a2d1413f9554a872f02e13d27d72b0d8d432f432cb9a5562ea04",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "hevc",
+      "depth": 8,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 250000,
+        "timescale": 1000000
+      },
+      "roi": null,
+      "referenceSha256": "6f23ca19ecf1a2d1413f9554a872f02e13d27d72b0d8d432f432cb9a5562ea04",
+      "distortedSha256": "26565bf15a34fc6e8b69e4987d8d2fea6ca827b9ac5b0dfaeeead58e513c3de1",
+      "text": "n:    1  XPSNR y: 21.7227  XPSNR u: 32.0485  XPSNR v: 35.7206\nn:    2  XPSNR y: 13.3058  XPSNR u: 22.2969  XPSNR v: 22.9601\nn:    3  XPSNR y: 13.3192  XPSNR u: 23.4347  XPSNR v: 24.5468\nn:    4  XPSNR y: 12.9540  XPSNR u: 22.5316  XPSNR v: 24.3336\nn:    5  XPSNR y: 12.0666  XPSNR u: 23.2028  XPSNR v: 24.2395\nn:    6  XPSNR y: 11.7527  XPSNR u: 22.5637  XPSNR v: 24.2839\nn:    7  XPSNR y: 11.7354  XPSNR u: 23.1393  XPSNR v: 25.0689\nn:    8  XPSNR y: 11.5715  XPSNR u: 22.8601  XPSNR v: 24.9119\n\nXPSNR average, 8 frames  y: 13.1045  u: 23.5925  v: 25.1436  (minimum: 13.1045)\n",
+      "sha256": "842cc4f49a504ffa20009a0e5946c507f2c7780d1876bb567af4843bc45466bd"
+    },
+    {
+      "codec": "hevc",
+      "depth": 8,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 250000,
+        "timescale": 1000000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "1ccce7f7969f6aa65222fe3ce5a79580991078a462afb848d8692a999a0995c0",
+      "distortedSha256": "1ccce7f7969f6aa65222fe3ce5a79580991078a462afb848d8692a999a0995c0",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "hevc",
+      "depth": 8,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 250000,
+        "timescale": 1000000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "1ccce7f7969f6aa65222fe3ce5a79580991078a462afb848d8692a999a0995c0",
+      "distortedSha256": "1325c58fc4fa8b6ca1a8a73f043d99981c91ab318a78cff31179583e45931b2b",
+      "text": "n:    1  XPSNR y: 19.7749  XPSNR u: 30.3627  XPSNR v: 36.9840\nn:    2  XPSNR y: 11.6556  XPSNR u: 21.4162  XPSNR v: 27.2069\nn:    3  XPSNR y: 10.7921  XPSNR u: 24.1109  XPSNR v: 28.4188\nn:    4  XPSNR y: 10.2791  XPSNR u: 21.8197  XPSNR v: 26.4677\nn:    5  XPSNR y: 9.4894  XPSNR u: 21.3258  XPSNR v: 26.7049\nn:    6  XPSNR y: 8.8280  XPSNR u: 19.4872  XPSNR v: 25.6813\nn:    7  XPSNR y: 8.7099  XPSNR u: 20.1889  XPSNR v: 26.3879\nn:    8  XPSNR y: 8.8710  XPSNR u: 20.8129  XPSNR v: 26.6272\n\nXPSNR average, 8 frames  y: 10.5188  u: 21.9447  v: 27.5361  (minimum: 10.5188)\n",
+      "sha256": "3a1418f459767eabe808432e14c59ea16ff15acc4e8c7c92e30a7d3d8f2783b3"
+    },
+    {
+      "codec": "hevc",
+      "depth": 8,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": null,
+      "referenceSha256": "6f23ca19ecf1a2d1413f9554a872f02e13d27d72b0d8d432f432cb9a5562ea04",
+      "distortedSha256": "6f23ca19ecf1a2d1413f9554a872f02e13d27d72b0d8d432f432cb9a5562ea04",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "hevc",
+      "depth": 8,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": null,
+      "referenceSha256": "6f23ca19ecf1a2d1413f9554a872f02e13d27d72b0d8d432f432cb9a5562ea04",
+      "distortedSha256": "26565bf15a34fc6e8b69e4987d8d2fea6ca827b9ac5b0dfaeeead58e513c3de1",
+      "text": "n:    1  XPSNR y: 21.7227  XPSNR u: 32.0485  XPSNR v: 35.7206\nn:    2  XPSNR y: 13.3058  XPSNR u: 22.2969  XPSNR v: 22.9601\nn:    3  XPSNR y: 13.3192  XPSNR u: 23.4347  XPSNR v: 24.5468\nn:    4  XPSNR y: 12.9540  XPSNR u: 22.5316  XPSNR v: 24.3336\nn:    5  XPSNR y: 12.0666  XPSNR u: 23.2028  XPSNR v: 24.2395\nn:    6  XPSNR y: 11.7527  XPSNR u: 22.5637  XPSNR v: 24.2839\nn:    7  XPSNR y: 11.7354  XPSNR u: 23.1393  XPSNR v: 25.0689\nn:    8  XPSNR y: 11.5715  XPSNR u: 22.8601  XPSNR v: 24.9119\n\nXPSNR average, 8 frames  y: 13.1045  u: 23.5925  v: 25.1436  (minimum: 13.1045)\n",
+      "sha256": "842cc4f49a504ffa20009a0e5946c507f2c7780d1876bb567af4843bc45466bd"
+    },
+    {
+      "codec": "hevc",
+      "depth": 8,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "1ccce7f7969f6aa65222fe3ce5a79580991078a462afb848d8692a999a0995c0",
+      "distortedSha256": "1ccce7f7969f6aa65222fe3ce5a79580991078a462afb848d8692a999a0995c0",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "hevc",
+      "depth": 8,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "1ccce7f7969f6aa65222fe3ce5a79580991078a462afb848d8692a999a0995c0",
+      "distortedSha256": "1325c58fc4fa8b6ca1a8a73f043d99981c91ab318a78cff31179583e45931b2b",
+      "text": "n:    1  XPSNR y: 19.7749  XPSNR u: 30.3627  XPSNR v: 36.9840\nn:    2  XPSNR y: 11.6556  XPSNR u: 21.4162  XPSNR v: 27.2069\nn:    3  XPSNR y: 10.7921  XPSNR u: 24.1109  XPSNR v: 28.4188\nn:    4  XPSNR y: 10.2791  XPSNR u: 21.8197  XPSNR v: 26.4677\nn:    5  XPSNR y: 9.4894  XPSNR u: 21.3258  XPSNR v: 26.7049\nn:    6  XPSNR y: 8.8280  XPSNR u: 19.4872  XPSNR v: 25.6813\nn:    7  XPSNR y: 8.7099  XPSNR u: 20.1889  XPSNR v: 26.3879\nn:    8  XPSNR y: 8.8710  XPSNR u: 20.8129  XPSNR v: 26.6272\n\nXPSNR average, 8 frames  y: 10.5188  u: 21.9447  v: 27.5361  (minimum: 10.5188)\n",
+      "sha256": "3a1418f459767eabe808432e14c59ea16ff15acc4e8c7c92e30a7d3d8f2783b3"
+    },
+    {
+      "codec": "hevc",
+      "depth": 8,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 1,
+        "timescale": 60
+      },
+      "roi": null,
+      "referenceSha256": "6f23ca19ecf1a2d1413f9554a872f02e13d27d72b0d8d432f432cb9a5562ea04",
+      "distortedSha256": "6f23ca19ecf1a2d1413f9554a872f02e13d27d72b0d8d432f432cb9a5562ea04",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "hevc",
+      "depth": 8,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 1,
+        "timescale": 60
+      },
+      "roi": null,
+      "referenceSha256": "6f23ca19ecf1a2d1413f9554a872f02e13d27d72b0d8d432f432cb9a5562ea04",
+      "distortedSha256": "26565bf15a34fc6e8b69e4987d8d2fea6ca827b9ac5b0dfaeeead58e513c3de1",
+      "text": "n:    1  XPSNR y: 21.7227  XPSNR u: 32.0485  XPSNR v: 35.7206\nn:    2  XPSNR y: 21.8408  XPSNR u: 31.9533  XPSNR v: 34.2295\nn:    3  XPSNR y: 14.4941  XPSNR u: 23.6735  XPSNR v: 24.8693\nn:    4  XPSNR y: 13.9747  XPSNR u: 24.1670  XPSNR v: 24.9997\nn:    5  XPSNR y: 13.0765  XPSNR u: 24.7906  XPSNR v: 25.2260\nn:    6  XPSNR y: 12.5316  XPSNR u: 24.0691  XPSNR v: 25.0506\nn:    7  XPSNR y: 12.0370  XPSNR u: 23.7137  XPSNR v: 26.2975\nn:    8  XPSNR y: 11.9220  XPSNR u: 23.7147  XPSNR v: 26.3385\n\nXPSNR average, 8 frames  y: 14.4634  u: 25.4278  v: 27.0217  (minimum: 14.4634)\n",
+      "sha256": "c0c63877be37a7d2cb3fcb3f7746e6aa0c7d7e5c43f4cad296e6b6b25cd8cc22"
+    },
+    {
+      "codec": "hevc",
+      "depth": 8,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1,
+        "timescale": 60
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "1ccce7f7969f6aa65222fe3ce5a79580991078a462afb848d8692a999a0995c0",
+      "distortedSha256": "1ccce7f7969f6aa65222fe3ce5a79580991078a462afb848d8692a999a0995c0",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "hevc",
+      "depth": 8,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1,
+        "timescale": 60
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "1ccce7f7969f6aa65222fe3ce5a79580991078a462afb848d8692a999a0995c0",
+      "distortedSha256": "1325c58fc4fa8b6ca1a8a73f043d99981c91ab318a78cff31179583e45931b2b",
+      "text": "n:    1  XPSNR y: 19.7749  XPSNR u: 30.3627  XPSNR v: 36.9840\nn:    2  XPSNR y: 20.0522  XPSNR u: 30.2780  XPSNR v: 34.0032\nn:    3  XPSNR y: 12.7142  XPSNR u: 24.6905  XPSNR v: 30.0279\nn:    4  XPSNR y: 11.5454  XPSNR u: 25.9630  XPSNR v: 29.1832\nn:    5  XPSNR y: 10.0990  XPSNR u: 23.9118  XPSNR v: 27.6107\nn:    6  XPSNR y: 9.4201  XPSNR u: 21.1382  XPSNR v: 26.3049\nn:    7  XPSNR y: 8.9267  XPSNR u: 20.5439  XPSNR v: 26.8107\nn:    8  XPSNR y: 8.9201  XPSNR u: 20.9642  XPSNR v: 27.0170\n\nXPSNR average, 8 frames  y: 11.7647  u: 24.0056  v: 29.0995  (minimum: 11.7647)\n",
+      "sha256": "ff0723d87b6359c4d65e2e335e20903a00dab5b32cdc0ec26bfa2121214ea934"
+    },
+    {
+      "codec": "hevc",
+      "depth": 10,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 250000,
+        "timescale": 1000000
+      },
+      "roi": null,
+      "referenceSha256": "bb10ac14a4e2725d707c307b2a8b69c16f454a804b012903dc1bf76f7155f66c",
+      "distortedSha256": "bb10ac14a4e2725d707c307b2a8b69c16f454a804b012903dc1bf76f7155f66c",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "hevc",
+      "depth": 10,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 250000,
+        "timescale": 1000000
+      },
+      "roi": null,
+      "referenceSha256": "bb10ac14a4e2725d707c307b2a8b69c16f454a804b012903dc1bf76f7155f66c",
+      "distortedSha256": "3dc860f68acbd96d9f73ac9d07fd728446496b64c7c80ac291ae8a2d848b2954",
+      "text": "n:    1  XPSNR y: 21.8084  XPSNR u: 32.5770  XPSNR v: 36.1110\nn:    2  XPSNR y: 12.8500  XPSNR u: 22.1507  XPSNR v: 23.4337\nn:    3  XPSNR y: 13.4799  XPSNR u: 23.5487  XPSNR v: 24.7400\nn:    4  XPSNR y: 12.8370  XPSNR u: 23.1107  XPSNR v: 24.7739\nn:    5  XPSNR y: 12.3631  XPSNR u: 23.2320  XPSNR v: 25.4015\nn:    6  XPSNR y: 12.0038  XPSNR u: 23.1294  XPSNR v: 25.7311\nn:    7  XPSNR y: 11.7835  XPSNR u: 22.9652  XPSNR v: 26.3612\nn:    8  XPSNR y: 11.7928  XPSNR u: 23.0298  XPSNR v: 26.3478\n\nXPSNR average, 8 frames  y: 13.1728  u: 23.7712  v: 26.0147  (minimum: 13.1728)\n",
+      "sha256": "9f714209c586421c1c7296ebecadb258312ba397dd9644b0c14b196aff91a694"
+    },
+    {
+      "codec": "hevc",
+      "depth": 10,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 250000,
+        "timescale": 1000000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "acb4fa6485cef76cdeabeb07550d5e53d06dd419f8c335670c75a9d9ebaad7a6",
+      "distortedSha256": "acb4fa6485cef76cdeabeb07550d5e53d06dd419f8c335670c75a9d9ebaad7a6",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "hevc",
+      "depth": 10,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 250000,
+        "timescale": 1000000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "acb4fa6485cef76cdeabeb07550d5e53d06dd419f8c335670c75a9d9ebaad7a6",
+      "distortedSha256": "21f9c9fcb9d802a6ec9ad9b674878ac226db3f9bfd29257aab8678ec0d4d0a7b",
+      "text": "n:    1  XPSNR y: 19.9861  XPSNR u: 30.9381  XPSNR v: 37.2569\nn:    2  XPSNR y: 11.3874  XPSNR u: 21.2636  XPSNR v: 27.1218\nn:    3  XPSNR y: 11.4280  XPSNR u: 24.3837  XPSNR v: 28.0047\nn:    4  XPSNR y: 10.3818  XPSNR u: 23.3615  XPSNR v: 26.6434\nn:    5  XPSNR y: 9.9646  XPSNR u: 21.4527  XPSNR v: 27.1076\nn:    6  XPSNR y: 9.3387  XPSNR u: 20.0788  XPSNR v: 26.6462\nn:    7  XPSNR y: 8.9548  XPSNR u: 19.8049  XPSNR v: 27.0211\nn:    8  XPSNR y: 9.2666  XPSNR u: 20.5919  XPSNR v: 26.9282\n\nXPSNR average, 8 frames  y: 10.8267  u: 22.1790  v: 27.8420  (minimum: 10.8267)\n",
+      "sha256": "cd272548ba4d62f1a02e0d2b940e6b0b682b98532c398aaddc2ebfd3d903dbe3"
+    },
+    {
+      "codec": "hevc",
+      "depth": 10,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": null,
+      "referenceSha256": "bb10ac14a4e2725d707c307b2a8b69c16f454a804b012903dc1bf76f7155f66c",
+      "distortedSha256": "bb10ac14a4e2725d707c307b2a8b69c16f454a804b012903dc1bf76f7155f66c",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "hevc",
+      "depth": 10,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": null,
+      "referenceSha256": "bb10ac14a4e2725d707c307b2a8b69c16f454a804b012903dc1bf76f7155f66c",
+      "distortedSha256": "3dc860f68acbd96d9f73ac9d07fd728446496b64c7c80ac291ae8a2d848b2954",
+      "text": "n:    1  XPSNR y: 21.8084  XPSNR u: 32.5770  XPSNR v: 36.1110\nn:    2  XPSNR y: 12.8500  XPSNR u: 22.1507  XPSNR v: 23.4337\nn:    3  XPSNR y: 13.4799  XPSNR u: 23.5487  XPSNR v: 24.7400\nn:    4  XPSNR y: 12.8370  XPSNR u: 23.1107  XPSNR v: 24.7739\nn:    5  XPSNR y: 12.3631  XPSNR u: 23.2320  XPSNR v: 25.4015\nn:    6  XPSNR y: 12.0038  XPSNR u: 23.1294  XPSNR v: 25.7311\nn:    7  XPSNR y: 11.7835  XPSNR u: 22.9652  XPSNR v: 26.3612\nn:    8  XPSNR y: 11.7928  XPSNR u: 23.0298  XPSNR v: 26.3478\n\nXPSNR average, 8 frames  y: 13.1728  u: 23.7712  v: 26.0147  (minimum: 13.1728)\n",
+      "sha256": "9f714209c586421c1c7296ebecadb258312ba397dd9644b0c14b196aff91a694"
+    },
+    {
+      "codec": "hevc",
+      "depth": 10,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "acb4fa6485cef76cdeabeb07550d5e53d06dd419f8c335670c75a9d9ebaad7a6",
+      "distortedSha256": "acb4fa6485cef76cdeabeb07550d5e53d06dd419f8c335670c75a9d9ebaad7a6",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "hevc",
+      "depth": 10,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "acb4fa6485cef76cdeabeb07550d5e53d06dd419f8c335670c75a9d9ebaad7a6",
+      "distortedSha256": "21f9c9fcb9d802a6ec9ad9b674878ac226db3f9bfd29257aab8678ec0d4d0a7b",
+      "text": "n:    1  XPSNR y: 19.9861  XPSNR u: 30.9381  XPSNR v: 37.2569\nn:    2  XPSNR y: 11.3874  XPSNR u: 21.2636  XPSNR v: 27.1218\nn:    3  XPSNR y: 11.4280  XPSNR u: 24.3837  XPSNR v: 28.0047\nn:    4  XPSNR y: 10.3818  XPSNR u: 23.3615  XPSNR v: 26.6434\nn:    5  XPSNR y: 9.9646  XPSNR u: 21.4527  XPSNR v: 27.1076\nn:    6  XPSNR y: 9.3387  XPSNR u: 20.0788  XPSNR v: 26.6462\nn:    7  XPSNR y: 8.9548  XPSNR u: 19.8049  XPSNR v: 27.0211\nn:    8  XPSNR y: 9.2666  XPSNR u: 20.5919  XPSNR v: 26.9282\n\nXPSNR average, 8 frames  y: 10.8267  u: 22.1790  v: 27.8420  (minimum: 10.8267)\n",
+      "sha256": "cd272548ba4d62f1a02e0d2b940e6b0b682b98532c398aaddc2ebfd3d903dbe3"
+    },
+    {
+      "codec": "hevc",
+      "depth": 10,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 1,
+        "timescale": 60
+      },
+      "roi": null,
+      "referenceSha256": "bb10ac14a4e2725d707c307b2a8b69c16f454a804b012903dc1bf76f7155f66c",
+      "distortedSha256": "bb10ac14a4e2725d707c307b2a8b69c16f454a804b012903dc1bf76f7155f66c",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "hevc",
+      "depth": 10,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 1,
+        "timescale": 60
+      },
+      "roi": null,
+      "referenceSha256": "bb10ac14a4e2725d707c307b2a8b69c16f454a804b012903dc1bf76f7155f66c",
+      "distortedSha256": "3dc860f68acbd96d9f73ac9d07fd728446496b64c7c80ac291ae8a2d848b2954",
+      "text": "n:    1  XPSNR y: 21.8084  XPSNR u: 32.5770  XPSNR v: 36.1110\nn:    2  XPSNR y: 21.8285  XPSNR u: 32.2925  XPSNR v: 34.1346\nn:    3  XPSNR y: 14.1895  XPSNR u: 23.7747  XPSNR v: 25.0216\nn:    4  XPSNR y: 13.8357  XPSNR u: 24.3365  XPSNR v: 25.3035\nn:    5  XPSNR y: 13.5159  XPSNR u: 24.8044  XPSNR v: 26.3218\nn:    6  XPSNR y: 12.9314  XPSNR u: 24.4423  XPSNR v: 26.3287\nn:    7  XPSNR y: 12.2404  XPSNR u: 23.7127  XPSNR v: 27.5748\nn:    8  XPSNR y: 12.2075  XPSNR u: 23.8645  XPSNR v: 28.0261\n\nXPSNR average, 8 frames  y: 14.6157  u: 25.5963  v: 27.8578  (minimum: 14.6157)\n",
+      "sha256": "8d7b675a7a03dd04af4cd0dbb6282730b12223e778cf093dbd8ae4e21b814dd4"
+    },
+    {
+      "codec": "hevc",
+      "depth": 10,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1,
+        "timescale": 60
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "acb4fa6485cef76cdeabeb07550d5e53d06dd419f8c335670c75a9d9ebaad7a6",
+      "distortedSha256": "acb4fa6485cef76cdeabeb07550d5e53d06dd419f8c335670c75a9d9ebaad7a6",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "hevc",
+      "depth": 10,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1,
+        "timescale": 60
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "acb4fa6485cef76cdeabeb07550d5e53d06dd419f8c335670c75a9d9ebaad7a6",
+      "distortedSha256": "21f9c9fcb9d802a6ec9ad9b674878ac226db3f9bfd29257aab8678ec0d4d0a7b",
+      "text": "n:    1  XPSNR y: 19.9861  XPSNR u: 30.9381  XPSNR v: 37.2569\nn:    2  XPSNR y: 20.0406  XPSNR u: 30.6839  XPSNR v: 33.2677\nn:    3  XPSNR y: 12.6368  XPSNR u: 25.0219  XPSNR v: 29.6481\nn:    4  XPSNR y: 11.8060  XPSNR u: 27.5394  XPSNR v: 28.8171\nn:    5  XPSNR y: 10.7181  XPSNR u: 24.1729  XPSNR v: 27.9404\nn:    6  XPSNR y: 10.1620  XPSNR u: 21.5490  XPSNR v: 27.3856\nn:    7  XPSNR y: 9.3143  XPSNR u: 20.4421  XPSNR v: 27.6035\nn:    8  XPSNR y: 9.3693  XPSNR u: 20.8337  XPSNR v: 27.3246\n\nXPSNR average, 8 frames  y: 12.1559  u: 24.3096  v: 29.3672  (minimum: 12.1559)\n",
+      "sha256": "2b32b48a20e2a92c4c966ce3d2c76a5f7e3daba94c15db78cca5f28d26e63180"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 250000,
+        "timescale": 1000000
+      },
+      "roi": null,
+      "referenceSha256": "fb3f6b93fdfcdbc4b4240beb36013e18d7835b5aea934d9d280bc1a7d77385d6",
+      "distortedSha256": "fb3f6b93fdfcdbc4b4240beb36013e18d7835b5aea934d9d280bc1a7d77385d6",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 250000,
+        "timescale": 1000000
+      },
+      "roi": null,
+      "referenceSha256": "fb3f6b93fdfcdbc4b4240beb36013e18d7835b5aea934d9d280bc1a7d77385d6",
+      "distortedSha256": "75139b99e6bbbe49a665e8cead08c99c63a829eb0024e4bcc0f6d6870f5f424e",
+      "text": "n:    1  XPSNR y: 21.5929  XPSNR u: 46.4671  XPSNR v: 45.8084\nn:    2  XPSNR y: 11.6580  XPSNR u: 37.6828  XPSNR v: 37.4561\nn:    3  XPSNR y: 11.9125  XPSNR u: 34.1624  XPSNR v: 34.6341\nn:    4  XPSNR y: 11.2881  XPSNR u: 34.1736  XPSNR v: 32.9043\nn:    5  XPSNR y: 11.0525  XPSNR u: 37.2445  XPSNR v: 36.9013\nn:    6  XPSNR y: 10.9586  XPSNR u: 34.6389  XPSNR v: 34.1293\nn:    7  XPSNR y: 10.7462  XPSNR u: 32.2686  XPSNR v: 32.5758\nn:    8  XPSNR y: 10.7640  XPSNR u: 32.5784  XPSNR v: 32.1053\n\nXPSNR average, 8 frames  y: 11.9805  u: 35.3227  v: 35.0174  (minimum: 11.9805)\n",
+      "sha256": "60e2e93bf24558c6784298dfe0bbc2faba6410cfb221aa7ebbd1bea8a1173c84"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 250000,
+        "timescale": 1000000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "d153e99506825ff1e4adb31dd6108178ecc9cf31f9f37e91cd5036067633c8dd",
+      "distortedSha256": "d153e99506825ff1e4adb31dd6108178ecc9cf31f9f37e91cd5036067633c8dd",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 250000,
+        "timescale": 1000000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "d153e99506825ff1e4adb31dd6108178ecc9cf31f9f37e91cd5036067633c8dd",
+      "distortedSha256": "1bdbcc64c3e87fab37e1bb945451a6d5da91c35cf23d07ba534a4283c0a81507",
+      "text": "n:    1  XPSNR y: 19.7182  XPSNR u: 43.3804  XPSNR v: 42.6869\nn:    2  XPSNR y: 10.7893  XPSNR u: 35.2698  XPSNR v: 34.8944\nn:    3  XPSNR y: 10.1389  XPSNR u: 33.3231  XPSNR v: 32.0975\nn:    4  XPSNR y: 9.2354  XPSNR u: 31.5534  XPSNR v: 31.0472\nn:    5  XPSNR y: 9.0117  XPSNR u: 35.0003  XPSNR v: 35.4332\nn:    6  XPSNR y: 8.3156  XPSNR u: 33.2624  XPSNR v: 33.0194\nn:    7  XPSNR y: 8.1064  XPSNR u: 31.8471  XPSNR v: 33.3655\nn:    8  XPSNR y: 8.5154  XPSNR u: 32.1022  XPSNR v: 32.0062\n\nXPSNR average, 8 frames  y: 9.9131  u: 33.8757  v: 33.7633  (minimum: 9.9131)\n",
+      "sha256": "da5f3ea5962d0d22e50a404c317b326cd7a83ec5880761dccbd84867bca258ee"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": null,
+      "referenceSha256": "fb3f6b93fdfcdbc4b4240beb36013e18d7835b5aea934d9d280bc1a7d77385d6",
+      "distortedSha256": "fb3f6b93fdfcdbc4b4240beb36013e18d7835b5aea934d9d280bc1a7d77385d6",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": null,
+      "referenceSha256": "fb3f6b93fdfcdbc4b4240beb36013e18d7835b5aea934d9d280bc1a7d77385d6",
+      "distortedSha256": "75139b99e6bbbe49a665e8cead08c99c63a829eb0024e4bcc0f6d6870f5f424e",
+      "text": "n:    1  XPSNR y: 21.5929  XPSNR u: 46.4671  XPSNR v: 45.8084\nn:    2  XPSNR y: 11.6580  XPSNR u: 37.6828  XPSNR v: 37.4561\nn:    3  XPSNR y: 11.9125  XPSNR u: 34.1624  XPSNR v: 34.6341\nn:    4  XPSNR y: 11.2881  XPSNR u: 34.1736  XPSNR v: 32.9043\nn:    5  XPSNR y: 11.0525  XPSNR u: 37.2445  XPSNR v: 36.9013\nn:    6  XPSNR y: 10.9586  XPSNR u: 34.6389  XPSNR v: 34.1293\nn:    7  XPSNR y: 10.7462  XPSNR u: 32.2686  XPSNR v: 32.5758\nn:    8  XPSNR y: 10.7640  XPSNR u: 32.5784  XPSNR v: 32.1053\n\nXPSNR average, 8 frames  y: 11.9805  u: 35.3227  v: 35.0174  (minimum: 11.9805)\n",
+      "sha256": "60e2e93bf24558c6784298dfe0bbc2faba6410cfb221aa7ebbd1bea8a1173c84"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "d153e99506825ff1e4adb31dd6108178ecc9cf31f9f37e91cd5036067633c8dd",
+      "distortedSha256": "d153e99506825ff1e4adb31dd6108178ecc9cf31f9f37e91cd5036067633c8dd",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "d153e99506825ff1e4adb31dd6108178ecc9cf31f9f37e91cd5036067633c8dd",
+      "distortedSha256": "1bdbcc64c3e87fab37e1bb945451a6d5da91c35cf23d07ba534a4283c0a81507",
+      "text": "n:    1  XPSNR y: 19.7182  XPSNR u: 43.3804  XPSNR v: 42.6869\nn:    2  XPSNR y: 10.7893  XPSNR u: 35.2698  XPSNR v: 34.8944\nn:    3  XPSNR y: 10.1389  XPSNR u: 33.3231  XPSNR v: 32.0975\nn:    4  XPSNR y: 9.2354  XPSNR u: 31.5534  XPSNR v: 31.0472\nn:    5  XPSNR y: 9.0117  XPSNR u: 35.0003  XPSNR v: 35.4332\nn:    6  XPSNR y: 8.3156  XPSNR u: 33.2624  XPSNR v: 33.0194\nn:    7  XPSNR y: 8.1064  XPSNR u: 31.8471  XPSNR v: 33.3655\nn:    8  XPSNR y: 8.5154  XPSNR u: 32.1022  XPSNR v: 32.0062\n\nXPSNR average, 8 frames  y: 9.9131  u: 33.8757  v: 33.7633  (minimum: 9.9131)\n",
+      "sha256": "da5f3ea5962d0d22e50a404c317b326cd7a83ec5880761dccbd84867bca258ee"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 1,
+        "timescale": 60
+      },
+      "roi": null,
+      "referenceSha256": "fb3f6b93fdfcdbc4b4240beb36013e18d7835b5aea934d9d280bc1a7d77385d6",
+      "distortedSha256": "fb3f6b93fdfcdbc4b4240beb36013e18d7835b5aea934d9d280bc1a7d77385d6",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 1,
+        "timescale": 60
+      },
+      "roi": null,
+      "referenceSha256": "fb3f6b93fdfcdbc4b4240beb36013e18d7835b5aea934d9d280bc1a7d77385d6",
+      "distortedSha256": "75139b99e6bbbe49a665e8cead08c99c63a829eb0024e4bcc0f6d6870f5f424e",
+      "text": "n:    1  XPSNR y: 21.5929  XPSNR u: 46.4671  XPSNR v: 45.8084\nn:    2  XPSNR y: 21.5228  XPSNR u: 43.0250  XPSNR v: 43.3483\nn:    3  XPSNR y: 12.8287  XPSNR u: 34.8799  XPSNR v: 35.4615\nn:    4  XPSNR y: 12.2862  XPSNR u: 36.4505  XPSNR v: 34.4197\nn:    5  XPSNR y: 12.1652  XPSNR u: 38.2201  XPSNR v: 38.3307\nn:    6  XPSNR y: 11.5804  XPSNR u: 36.3078  XPSNR v: 35.6379\nn:    7  XPSNR y: 11.2530  XPSNR u: 33.7378  XPSNR v: 34.2681\nn:    8  XPSNR y: 11.2538  XPSNR u: 33.1837  XPSNR v: 32.4505\n\nXPSNR average, 8 frames  y: 13.4728  u: 36.8523  v: 36.5045  (minimum: 13.4728)\n",
+      "sha256": "4b0858fe4753811923d664ff885f3623901a702b481d048eb343add631d4998c"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1,
+        "timescale": 60
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "d153e99506825ff1e4adb31dd6108178ecc9cf31f9f37e91cd5036067633c8dd",
+      "distortedSha256": "d153e99506825ff1e4adb31dd6108178ecc9cf31f9f37e91cd5036067633c8dd",
+      "text": "n:    1  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    2  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    3  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    4  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    5  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    6  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    7  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\nn:    8  XPSNR y: inf  XPSNR u: inf  XPSNR v: inf\n\nXPSNR average, 8 frames  y: inf  u: inf  v: inf  (minimum: inf)\n",
+      "sha256": "ef3c04d8a78fff626b1f7b141efd5ab10376695e6464165108d89d49c074e54b"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1,
+        "timescale": 60
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "d153e99506825ff1e4adb31dd6108178ecc9cf31f9f37e91cd5036067633c8dd",
+      "distortedSha256": "1bdbcc64c3e87fab37e1bb945451a6d5da91c35cf23d07ba534a4283c0a81507",
+      "text": "n:    1  XPSNR y: 19.7182  XPSNR u: 43.3804  XPSNR v: 42.6869\nn:    2  XPSNR y: 19.7004  XPSNR u: 40.6771  XPSNR v: 40.3347\nn:    3  XPSNR y: 11.9488  XPSNR u: 34.7887  XPSNR v: 33.3355\nn:    4  XPSNR y: 10.5660  XPSNR u: 34.5868  XPSNR v: 33.6629\nn:    5  XPSNR y: 9.7171  XPSNR u: 36.0877  XPSNR v: 37.0007\nn:    6  XPSNR y: 8.9033  XPSNR u: 34.2682  XPSNR v: 33.8745\nn:    7  XPSNR y: 8.4019  XPSNR u: 32.9591  XPSNR v: 34.3686\nn:    8  XPSNR y: 8.5528  XPSNR u: 32.7232  XPSNR v: 32.4200\n\nXPSNR average, 8 frames  y: 11.2335  u: 35.5498  v: 35.3486  (minimum: 11.2335)\n",
+      "sha256": "30e47879272d1628fd0ad7c78309a11f7d3eabb747481dbb1da12f883df2afba"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 250000,
+        "timescale": 1000000
+      },
+      "roi": null,
+      "referenceSha256": "91be8a2d258e1e654aa09b9f99df2166be78cdc8896908b3a1fd4429972358a0",
+      "distortedSha256": "d9a94653b8b5f71d38aa12daa562162251ddfa8aada369138bd1fa85a5079008",
+      "text": "n:    1  XPSNR y: 35.8261  XPSNR u: 35.6582  XPSNR v: 31.5265\nn:    2  XPSNR y: 23.3563  XPSNR u: 23.9196  XPSNR v: 17.3094\nn:    3  XPSNR y: 23.7208  XPSNR u: 24.5916  XPSNR v: 18.0405\nn:    4  XPSNR y: 23.7629  XPSNR u: 24.4231  XPSNR v: 18.1083\nn:    5  XPSNR y: 23.9112  XPSNR u: 24.4551  XPSNR v: 18.0869\nn:    6  XPSNR y: 24.3499  XPSNR u: 24.5696  XPSNR v: 18.7328\nn:    7  XPSNR y: 24.6094  XPSNR u: 24.2797  XPSNR v: 18.8376\nn:    8  XPSNR y: 24.4769  XPSNR u: 24.3837  XPSNR v: 18.6202\n\nXPSNR average, 8 frames  y: 24.8633  u: 25.1999  v: 19.1292  (minimum: 19.1292)\n",
+      "sha256": "3ecb6b67e10cfaa3a24c1cc24d942c6f55f73fa68bbf05b1a9f1badbabb50108"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 8,
+      "width": 128,
+      "height": 96,
+      "rate": {
+        "ticks": 250000,
+        "timescale": 1000000
+      },
+      "roi": null,
+      "referenceSha256": "91be8a2d258e1e654aa09b9f99df2166be78cdc8896908b3a1fd4429972358a0",
+      "distortedSha256": "b052cc7490ec79075b1e2dc77af7aea77481bfc6b140d257dd6bfaf237e98075",
+      "text": "n:    1  XPSNR y: 32.9860  XPSNR u: 32.7031  XPSNR v: 29.9875\nn:    2  XPSNR y: 22.7531  XPSNR u: 22.9191  XPSNR v: 16.9754\nn:    3  XPSNR y: 22.4361  XPSNR u: 22.8644  XPSNR v: 17.5813\nn:    4  XPSNR y: 22.3584  XPSNR u: 22.4069  XPSNR v: 17.7180\nn:    5  XPSNR y: 22.9950  XPSNR u: 21.7237  XPSNR v: 17.4787\nn:    6  XPSNR y: 23.0342  XPSNR u: 20.9302  XPSNR v: 17.7728\nn:    7  XPSNR y: 23.1737  XPSNR u: 20.9100  XPSNR v: 17.5645\nn:    8  XPSNR y: 23.4455  XPSNR u: 21.2589  XPSNR v: 18.0150\n\nXPSNR average, 8 frames  y: 23.6582  u: 22.6340  v: 18.4487  (minimum: 18.4487)\n",
+      "sha256": "4efeb45743dfc6364c7887ede41f4bd8e26b840bfe92234de547188303613ddf"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 192,
+      "width": 320,
+      "height": 192,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": null,
+      "referenceSha256": "e8c53ebcef429e0d4b749bf32a9c0971ba65e35641b23726fdfcc71f21e7629e",
+      "distortedSha256": "15cb9f4da1857a283d9b6329bda851bf80d286afdaf9bc02023d953e0a55ecc3",
+      "text": "n:    1  XPSNR y: 42.7063  XPSNR u: 34.9033  XPSNR v: 34.9135\nn:    2  XPSNR y: 36.8881  XPSNR u: 23.4131  XPSNR v: 23.3552\nn:    3  XPSNR y: 36.9723  XPSNR u: 23.4927  XPSNR v: 23.5029\nn:    4  XPSNR y: 35.2708  XPSNR u: 22.8123  XPSNR v: 22.8262\nn:    5  XPSNR y: 35.2984  XPSNR u: 23.4895  XPSNR v: 23.4248\nn:    6  XPSNR y: 36.1950  XPSNR u: 23.6355  XPSNR v: 23.6091\nn:    7  XPSNR y: 36.5888  XPSNR u: 23.3516  XPSNR v: 23.3850\nn:    8  XPSNR y: 35.6792  XPSNR u: 23.2156  XPSNR v: 23.1847\nn:    9  XPSNR y: 36.1847  XPSNR u: 23.3365  XPSNR v: 23.3415\nn:   10  XPSNR y: 37.1364  XPSNR u: 23.2888  XPSNR v: 23.1927\nn:   11  XPSNR y: 37.0068  XPSNR u: 23.5763  XPSNR v: 23.5456\nn:   12  XPSNR y: 36.0014  XPSNR u: 23.5594  XPSNR v: 23.5377\nn:   13  XPSNR y: 37.1594  XPSNR u: 23.2812  XPSNR v: 23.2687\nn:   14  XPSNR y: 36.7718  XPSNR u: 23.3429  XPSNR v: 23.3137\nn:   15  XPSNR y: 36.6236  XPSNR u: 23.2741  XPSNR v: 23.2300\nn:   16  XPSNR y: 36.2718  XPSNR u: 23.4340  XPSNR v: 23.4342\nn:   17  XPSNR y: 36.3739  XPSNR u: 23.5184  XPSNR v: 23.5033\nn:   18  XPSNR y: 36.2106  XPSNR u: 23.2809  XPSNR v: 23.2703\nn:   19  XPSNR y: 37.1683  XPSNR u: 23.5842  XPSNR v: 23.5467\nn:   20  XPSNR y: 36.2467  XPSNR u: 23.3154  XPSNR v: 23.2648\nn:   21  XPSNR y: 36.7424  XPSNR u: 23.4955  XPSNR v: 23.4983\nn:   22  XPSNR y: 36.6951  XPSNR u: 23.6914  XPSNR v: 23.6636\nn:   23  XPSNR y: 36.8469  XPSNR u: 23.4415  XPSNR v: 23.4335\nn:   24  XPSNR y: 36.4762  XPSNR u: 23.4798  XPSNR v: 23.3894\nn:   25  XPSNR y: 36.3021  XPSNR u: 23.3838  XPSNR v: 23.3201\nn:   26  XPSNR y: 36.6491  XPSNR u: 23.5103  XPSNR v: 23.5500\nn:   27  XPSNR y: 36.1639  XPSNR u: 23.6135  XPSNR v: 23.5753\nn:   28  XPSNR y: 36.4890  XPSNR u: 23.6433  XPSNR v: 23.6385\nn:   29  XPSNR y: 36.0438  XPSNR u: 23.5586  XPSNR v: 23.5243\nn:   30  XPSNR y: 36.3848  XPSNR u: 23.5218  XPSNR v: 23.4511\nn:   31  XPSNR y: 35.9437  XPSNR u: 23.6051  XPSNR v: 23.6359\nn:   32  XPSNR y: 36.6651  XPSNR u: 23.7211  XPSNR v: 23.7138\nn:   33  XPSNR y: 36.5383  XPSNR u: 23.5827  XPSNR v: 23.6202\nn:   34  XPSNR y: 37.2090  XPSNR u: 23.5913  XPSNR v: 23.6914\nn:   35  XPSNR y: 36.5299  XPSNR u: 23.5570  XPSNR v: 23.5414\nn:   36  XPSNR y: 36.9518  XPSNR u: 23.7409  XPSNR v: 23.7109\nn:   37  XPSNR y: 36.3616  XPSNR u: 23.5589  XPSNR v: 23.5267\nn:   38  XPSNR y: 36.6126  XPSNR u: 23.6419  XPSNR v: 23.6341\nn:   39  XPSNR y: 36.7668  XPSNR u: 23.8237  XPSNR v: 23.8228\nn:   40  XPSNR y: 37.0629  XPSNR u: 23.5369  XPSNR v: 23.5286\nn:   41  XPSNR y: 36.3131  XPSNR u: 23.6612  XPSNR v: 23.6714\nn:   42  XPSNR y: 36.9154  XPSNR u: 23.7744  XPSNR v: 23.8433\nn:   43  XPSNR y: 36.4937  XPSNR u: 23.8042  XPSNR v: 23.8046\nn:   44  XPSNR y: 37.1679  XPSNR u: 23.7750  XPSNR v: 23.8380\nn:   45  XPSNR y: 36.3063  XPSNR u: 23.6634  XPSNR v: 23.6623\nn:   46  XPSNR y: 37.3716  XPSNR u: 23.8082  XPSNR v: 23.7661\nn:   47  XPSNR y: 36.6174  XPSNR u: 23.9201  XPSNR v: 23.8639\nn:   48  XPSNR y: 37.6950  XPSNR u: 23.9383  XPSNR v: 23.9536\nn:   49  XPSNR y: 37.0673  XPSNR u: 23.8336  XPSNR v: 23.8854\nn:   50  XPSNR y: 36.9692  XPSNR u: 23.7141  XPSNR v: 23.7669\nn:   51  XPSNR y: 36.5641  XPSNR u: 23.8687  XPSNR v: 23.9075\nn:   52  XPSNR y: 36.7610  XPSNR u: 23.7776  XPSNR v: 23.7753\nn:   53  XPSNR y: 37.4534  XPSNR u: 23.8507  XPSNR v: 23.9344\nn:   54  XPSNR y: 36.1091  XPSNR u: 23.8026  XPSNR v: 23.8215\nn:   55  XPSNR y: 37.2559  XPSNR u: 23.8521  XPSNR v: 23.9029\nn:   56  XPSNR y: 37.0157  XPSNR u: 23.7620  XPSNR v: 23.8001\nn:   57  XPSNR y: 37.8606  XPSNR u: 23.8139  XPSNR v: 23.8311\nn:   58  XPSNR y: 36.8024  XPSNR u: 23.9860  XPSNR v: 23.9560\nn:   59  XPSNR y: 37.5630  XPSNR u: 23.9654  XPSNR v: 24.0419\nn:   60  XPSNR y: 37.0000  XPSNR u: 23.9148  XPSNR v: 23.9749\nn:   61  XPSNR y: 37.7100  XPSNR u: 23.9372  XPSNR v: 23.9994\nn:   62  XPSNR y: 36.8608  XPSNR u: 23.9163  XPSNR v: 23.9472\nn:   63  XPSNR y: 37.3123  XPSNR u: 23.9595  XPSNR v: 23.9695\nn:   64  XPSNR y: 35.8626  XPSNR u: 24.0413  XPSNR v: 24.0794\nn:   65  XPSNR y: 35.3807  XPSNR u: 24.3780  XPSNR v: 24.3745\nn:   66  XPSNR y: 35.7954  XPSNR u: 22.8826  XPSNR v: 22.9308\nn:   67  XPSNR y: 35.5411  XPSNR u: 23.2016  XPSNR v: 23.3156\nn:   68  XPSNR y: 35.9942  XPSNR u: 23.1099  XPSNR v: 23.1298\nn:   69  XPSNR y: 35.2177  XPSNR u: 22.6151  XPSNR v: 22.6815\nn:   70  XPSNR y: 35.9907  XPSNR u: 23.7183  XPSNR v: 23.7300\nn:   71  XPSNR y: 35.4267  XPSNR u: 22.7467  XPSNR v: 22.7617\nn:   72  XPSNR y: 36.2359  XPSNR u: 23.1904  XPSNR v: 23.2659\nn:   73  XPSNR y: 35.6312  XPSNR u: 22.8041  XPSNR v: 22.8923\nn:   74  XPSNR y: 36.6295  XPSNR u: 23.0646  XPSNR v: 23.1241\nn:   75  XPSNR y: 35.7170  XPSNR u: 23.7348  XPSNR v: 23.7167\nn:   76  XPSNR y: 36.5929  XPSNR u: 23.3091  XPSNR v: 23.3252\nn:   77  XPSNR y: 36.0241  XPSNR u: 23.3776  XPSNR v: 23.4204\nn:   78  XPSNR y: 36.9229  XPSNR u: 23.1491  XPSNR v: 23.1570\nn:   79  XPSNR y: 36.0541  XPSNR u: 23.3825  XPSNR v: 23.4027\nn:   80  XPSNR y: 36.8040  XPSNR u: 23.6956  XPSNR v: 23.6014\nn:   81  XPSNR y: 36.1667  XPSNR u: 23.7116  XPSNR v: 23.6381\nn:   82  XPSNR y: 37.2393  XPSNR u: 23.5122  XPSNR v: 23.4950\nn:   83  XPSNR y: 36.0708  XPSNR u: 23.6100  XPSNR v: 23.5919\nn:   84  XPSNR y: 37.2713  XPSNR u: 23.4375  XPSNR v: 23.4556\nn:   85  XPSNR y: 36.4626  XPSNR u: 23.6268  XPSNR v: 23.6177\nn:   86  XPSNR y: 37.7331  XPSNR u: 23.8200  XPSNR v: 23.8305\nn:   87  XPSNR y: 36.4312  XPSNR u: 23.7444  XPSNR v: 23.7623\nn:   88  XPSNR y: 38.1256  XPSNR u: 23.5028  XPSNR v: 23.5318\nn:   89  XPSNR y: 37.0813  XPSNR u: 23.5801  XPSNR v: 23.6119\nn:   90  XPSNR y: 37.3665  XPSNR u: 23.5104  XPSNR v: 23.5017\nn:   91  XPSNR y: 36.3609  XPSNR u: 23.9752  XPSNR v: 23.9448\nn:   92  XPSNR y: 37.9420  XPSNR u: 23.6739  XPSNR v: 23.6797\nn:   93  XPSNR y: 37.8957  XPSNR u: 23.6328  XPSNR v: 23.6365\nn:   94  XPSNR y: 38.0824  XPSNR u: 23.6221  XPSNR v: 23.6272\nn:   95  XPSNR y: 37.5642  XPSNR u: 23.7360  XPSNR v: 23.7354\nn:   96  XPSNR y: 37.7778  XPSNR u: 23.6052  XPSNR v: 23.6136\nn:   97  XPSNR y: 37.0379  XPSNR u: 23.5802  XPSNR v: 23.6330\nn:   98  XPSNR y: 37.7846  XPSNR u: 23.5393  XPSNR v: 23.5113\nn:   99  XPSNR y: 37.7032  XPSNR u: 23.7767  XPSNR v: 23.7975\nn:  100  XPSNR y: 38.1723  XPSNR u: 23.5823  XPSNR v: 23.5686\nn:  101  XPSNR y: 37.4715  XPSNR u: 23.7080  XPSNR v: 23.7125\nn:  102  XPSNR y: 37.9117  XPSNR u: 23.5842  XPSNR v: 23.6178\nn:  103  XPSNR y: 37.2140  XPSNR u: 23.8291  XPSNR v: 23.7994\nn:  104  XPSNR y: 37.3569  XPSNR u: 23.7715  XPSNR v: 23.8064\nn:  105  XPSNR y: 37.5386  XPSNR u: 23.8166  XPSNR v: 23.7782\nn:  106  XPSNR y: 37.7338  XPSNR u: 23.7611  XPSNR v: 23.7675\nn:  107  XPSNR y: 37.0315  XPSNR u: 23.7218  XPSNR v: 23.7052\nn:  108  XPSNR y: 37.9172  XPSNR u: 23.8281  XPSNR v: 23.8654\nn:  109  XPSNR y: 36.0401  XPSNR u: 23.9257  XPSNR v: 23.9113\nn:  110  XPSNR y: 37.6454  XPSNR u: 23.7706  XPSNR v: 23.7599\nn:  111  XPSNR y: 37.8259  XPSNR u: 23.8331  XPSNR v: 23.7835\nn:  112  XPSNR y: 37.8933  XPSNR u: 23.7553  XPSNR v: 23.7311\nn:  113  XPSNR y: 36.7937  XPSNR u: 24.1407  XPSNR v: 24.0968\nn:  114  XPSNR y: 37.3689  XPSNR u: 23.8056  XPSNR v: 23.7628\nn:  115  XPSNR y: 37.2249  XPSNR u: 23.7218  XPSNR v: 23.7038\nn:  116  XPSNR y: 37.0615  XPSNR u: 23.7738  XPSNR v: 23.7660\nn:  117  XPSNR y: 37.4106  XPSNR u: 24.0161  XPSNR v: 23.9680\nn:  118  XPSNR y: 38.1638  XPSNR u: 23.8444  XPSNR v: 23.8093\nn:  119  XPSNR y: 36.7926  XPSNR u: 23.7088  XPSNR v: 23.6448\nn:  120  XPSNR y: 37.7463  XPSNR u: 23.7436  XPSNR v: 23.7264\nn:  121  XPSNR y: 37.6845  XPSNR u: 23.9692  XPSNR v: 23.8960\nn:  122  XPSNR y: 38.3316  XPSNR u: 23.6382  XPSNR v: 23.6759\nn:  123  XPSNR y: 37.7673  XPSNR u: 23.8186  XPSNR v: 23.8436\nn:  124  XPSNR y: 37.8293  XPSNR u: 23.7139  XPSNR v: 23.7532\nn:  125  XPSNR y: 37.6877  XPSNR u: 23.8462  XPSNR v: 23.8699\nn:  126  XPSNR y: 37.7316  XPSNR u: 23.7089  XPSNR v: 23.7093\nn:  127  XPSNR y: 38.0047  XPSNR u: 23.7346  XPSNR v: 23.7310\nn:  128  XPSNR y: 37.0847  XPSNR u: 23.8728  XPSNR v: 23.8800\nn:  129  XPSNR y: 35.5240  XPSNR u: 24.2169  XPSNR v: 24.2374\nn:  130  XPSNR y: 36.3398  XPSNR u: 23.2706  XPSNR v: 23.2722\nn:  131  XPSNR y: 36.8111  XPSNR u: 23.3411  XPSNR v: 23.2854\nn:  132  XPSNR y: 35.3467  XPSNR u: 23.0329  XPSNR v: 23.0477\nn:  133  XPSNR y: 36.9355  XPSNR u: 23.4094  XPSNR v: 23.4048\nn:  134  XPSNR y: 36.1055  XPSNR u: 23.5678  XPSNR v: 23.6074\nn:  135  XPSNR y: 36.0439  XPSNR u: 23.2667  XPSNR v: 23.2719\nn:  136  XPSNR y: 35.7469  XPSNR u: 23.0935  XPSNR v: 23.0814\nn:  137  XPSNR y: 37.0006  XPSNR u: 23.3018  XPSNR v: 23.3018\nn:  138  XPSNR y: 36.5479  XPSNR u: 23.1022  XPSNR v: 23.0839\nn:  139  XPSNR y: 37.5385  XPSNR u: 23.4862  XPSNR v: 23.4686\nn:  140  XPSNR y: 36.2696  XPSNR u: 23.5821  XPSNR v: 23.5634\nn:  141  XPSNR y: 36.9129  XPSNR u: 23.1718  XPSNR v: 23.1166\nn:  142  XPSNR y: 36.5550  XPSNR u: 23.2619  XPSNR v: 23.2617\nn:  143  XPSNR y: 36.7333  XPSNR u: 23.2113  XPSNR v: 23.2251\nn:  144  XPSNR y: 36.4029  XPSNR u: 23.3492  XPSNR v: 23.3822\nn:  145  XPSNR y: 37.3883  XPSNR u: 23.5670  XPSNR v: 23.5416\nn:  146  XPSNR y: 36.9036  XPSNR u: 23.3217  XPSNR v: 23.2615\nn:  147  XPSNR y: 36.9290  XPSNR u: 23.4751  XPSNR v: 23.4759\nn:  148  XPSNR y: 36.2504  XPSNR u: 23.2618  XPSNR v: 23.2524\nn:  149  XPSNR y: 37.6300  XPSNR u: 23.4290  XPSNR v: 23.4538\nn:  150  XPSNR y: 37.4134  XPSNR u: 23.6643  XPSNR v: 23.5816\nn:  151  XPSNR y: 37.4214  XPSNR u: 23.3126  XPSNR v: 23.2483\nn:  152  XPSNR y: 37.5862  XPSNR u: 23.4696  XPSNR v: 23.5381\nn:  153  XPSNR y: 37.9065  XPSNR u: 23.3321  XPSNR v: 23.3440\nn:  154  XPSNR y: 37.1641  XPSNR u: 23.5207  XPSNR v: 23.4500\nn:  155  XPSNR y: 37.3923  XPSNR u: 23.5697  XPSNR v: 23.5015\nn:  156  XPSNR y: 37.5734  XPSNR u: 23.4761  XPSNR v: 23.4234\nn:  157  XPSNR y: 37.5985  XPSNR u: 23.3784  XPSNR v: 23.4093\nn:  158  XPSNR y: 37.5038  XPSNR u: 23.4043  XPSNR v: 23.3454\nn:  159  XPSNR y: 37.6985  XPSNR u: 23.5957  XPSNR v: 23.6481\nn:  160  XPSNR y: 37.4798  XPSNR u: 23.7656  XPSNR v: 23.7362\nn:  161  XPSNR y: 37.7528  XPSNR u: 23.6849  XPSNR v: 23.6697\nn:  162  XPSNR y: 37.5068  XPSNR u: 23.5427  XPSNR v: 23.5249\nn:  163  XPSNR y: 38.1840  XPSNR u: 23.5599  XPSNR v: 23.6016\nn:  164  XPSNR y: 37.6126  XPSNR u: 23.6823  XPSNR v: 23.6234\nn:  165  XPSNR y: 38.3378  XPSNR u: 23.7266  XPSNR v: 23.7096\nn:  166  XPSNR y: 37.8888  XPSNR u: 23.7013  XPSNR v: 23.6794\nn:  167  XPSNR y: 37.3789  XPSNR u: 23.4837  XPSNR v: 23.5178\nn:  168  XPSNR y: 37.6095  XPSNR u: 23.8381  XPSNR v: 23.8052\nn:  169  XPSNR y: 37.9426  XPSNR u: 23.5490  XPSNR v: 23.5126\nn:  170  XPSNR y: 37.8216  XPSNR u: 23.6083  XPSNR v: 23.6091\nn:  171  XPSNR y: 37.7889  XPSNR u: 23.6557  XPSNR v: 23.6619\nn:  172  XPSNR y: 37.6503  XPSNR u: 23.7937  XPSNR v: 23.7925\nn:  173  XPSNR y: 38.0651  XPSNR u: 23.5546  XPSNR v: 23.5311\nn:  174  XPSNR y: 37.9575  XPSNR u: 23.6102  XPSNR v: 23.6235\nn:  175  XPSNR y: 38.2917  XPSNR u: 23.7828  XPSNR v: 23.7762\nn:  176  XPSNR y: 38.1618  XPSNR u: 23.7611  XPSNR v: 23.6863\nn:  177  XPSNR y: 38.5662  XPSNR u: 23.6601  XPSNR v: 23.6307\nn:  178  XPSNR y: 38.3139  XPSNR u: 23.6817  XPSNR v: 23.7079\nn:  179  XPSNR y: 37.9559  XPSNR u: 23.5940  XPSNR v: 23.6079\nn:  180  XPSNR y: 38.1266  XPSNR u: 23.7252  XPSNR v: 23.7906\nn:  181  XPSNR y: 37.9892  XPSNR u: 23.8736  XPSNR v: 23.8115\nn:  182  XPSNR y: 37.4513  XPSNR u: 23.9090  XPSNR v: 23.9164\nn:  183  XPSNR y: 38.5899  XPSNR u: 23.9039  XPSNR v: 23.8722\nn:  184  XPSNR y: 38.3823  XPSNR u: 23.6641  XPSNR v: 23.6384\nn:  185  XPSNR y: 38.8003  XPSNR u: 23.7903  XPSNR v: 23.7349\nn:  186  XPSNR y: 37.7126  XPSNR u: 24.0102  XPSNR v: 24.0401\nn:  187  XPSNR y: 38.5204  XPSNR u: 23.8312  XPSNR v: 23.7705\nn:  188  XPSNR y: 38.2397  XPSNR u: 23.9181  XPSNR v: 23.8540\nn:  189  XPSNR y: 38.5406  XPSNR u: 23.9691  XPSNR v: 23.9020\nn:  190  XPSNR y: 37.9529  XPSNR u: 24.0356  XPSNR v: 24.0688\nn:  191  XPSNR y: 38.4035  XPSNR u: 23.7580  XPSNR v: 23.7673\nn:  192  XPSNR y: 37.4788  XPSNR u: 24.2023  XPSNR v: 24.2217\n\nXPSNR average, 192 frames  y: 37.0564  u: 23.6361  v: 23.6328  (minimum: 23.6328)\n",
+      "sha256": "4f16ba27d866dd6f9205898a4a4e4fee8a50f0920d076f20adca8a53ec0b5b18"
+    },
+    {
+      "codec": "h264",
+      "depth": 8,
+      "frames": 192,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "0fb0970b627eba5c1d9a17810d8e46fa7c73831694fd718a1e6e8bce4134c31f",
+      "distortedSha256": "2889b58fa62b782705a13317adb3b6b6b40b49253137a9eee9798c975560278a",
+      "text": "n:    1  XPSNR y: 40.5553  XPSNR u: 32.1298  XPSNR v: 32.0980\nn:    2  XPSNR y: 33.5597  XPSNR u: 20.8542  XPSNR v: 20.6622\nn:    3  XPSNR y: 34.1812  XPSNR u: 20.4502  XPSNR v: 20.1580\nn:    4  XPSNR y: 32.1789  XPSNR u: 19.7517  XPSNR v: 19.4326\nn:    5  XPSNR y: 33.8700  XPSNR u: 20.4375  XPSNR v: 20.0207\nn:    6  XPSNR y: 32.9326  XPSNR u: 20.1437  XPSNR v: 19.9269\nn:    7  XPSNR y: 34.1596  XPSNR u: 20.3499  XPSNR v: 20.2061\nn:    8  XPSNR y: 32.0560  XPSNR u: 19.6769  XPSNR v: 19.6211\nn:    9  XPSNR y: 31.3506  XPSNR u: 20.0641  XPSNR v: 20.3021\nn:   10  XPSNR y: 33.5169  XPSNR u: 20.1205  XPSNR v: 19.9237\nn:   11  XPSNR y: 33.5412  XPSNR u: 20.4104  XPSNR v: 20.1528\nn:   12  XPSNR y: 33.6527  XPSNR u: 20.5938  XPSNR v: 20.7054\nn:   13  XPSNR y: 34.0755  XPSNR u: 20.1902  XPSNR v: 20.0648\nn:   14  XPSNR y: 33.6775  XPSNR u: 20.1971  XPSNR v: 20.1334\nn:   15  XPSNR y: 33.0247  XPSNR u: 20.2561  XPSNR v: 20.2496\nn:   16  XPSNR y: 33.8154  XPSNR u: 20.1569  XPSNR v: 20.2952\nn:   17  XPSNR y: 33.4661  XPSNR u: 20.5257  XPSNR v: 20.7012\nn:   18  XPSNR y: 33.9465  XPSNR u: 20.1322  XPSNR v: 20.0188\nn:   19  XPSNR y: 34.5335  XPSNR u: 20.2299  XPSNR v: 20.0430\nn:   20  XPSNR y: 34.4099  XPSNR u: 20.0848  XPSNR v: 19.7388\nn:   21  XPSNR y: 34.5436  XPSNR u: 20.3082  XPSNR v: 19.9899\nn:   22  XPSNR y: 34.2865  XPSNR u: 20.4028  XPSNR v: 20.3744\nn:   23  XPSNR y: 33.8347  XPSNR u: 20.2689  XPSNR v: 20.1586\nn:   24  XPSNR y: 34.4937  XPSNR u: 20.1263  XPSNR v: 19.9736\nn:   25  XPSNR y: 34.0970  XPSNR u: 19.6886  XPSNR v: 19.9391\nn:   26  XPSNR y: 34.4601  XPSNR u: 19.8459  XPSNR v: 20.0909\nn:   27  XPSNR y: 33.7366  XPSNR u: 20.1607  XPSNR v: 20.3942\nn:   28  XPSNR y: 33.9585  XPSNR u: 20.3504  XPSNR v: 20.7059\nn:   29  XPSNR y: 34.4508  XPSNR u: 20.2772  XPSNR v: 20.1301\nn:   30  XPSNR y: 34.5887  XPSNR u: 19.9225  XPSNR v: 19.7310\nn:   31  XPSNR y: 34.1617  XPSNR u: 20.0987  XPSNR v: 19.9511\nn:   32  XPSNR y: 33.9960  XPSNR u: 20.0419  XPSNR v: 20.0534\nn:   33  XPSNR y: 34.0741  XPSNR u: 20.1568  XPSNR v: 20.3329\nn:   34  XPSNR y: 34.7089  XPSNR u: 20.0248  XPSNR v: 20.3076\nn:   35  XPSNR y: 33.6961  XPSNR u: 20.2212  XPSNR v: 20.3727\nn:   36  XPSNR y: 34.9801  XPSNR u: 20.1224  XPSNR v: 20.3023\nn:   37  XPSNR y: 33.6843  XPSNR u: 20.0515  XPSNR v: 20.1043\nn:   38  XPSNR y: 34.7809  XPSNR u: 20.4366  XPSNR v: 20.5261\nn:   39  XPSNR y: 33.3060  XPSNR u: 20.5598  XPSNR v: 20.2460\nn:   40  XPSNR y: 34.0469  XPSNR u: 19.6623  XPSNR v: 19.6664\nn:   41  XPSNR y: 33.5651  XPSNR u: 20.0678  XPSNR v: 19.9663\nn:   42  XPSNR y: 34.7205  XPSNR u: 19.8849  XPSNR v: 19.9665\nn:   43  XPSNR y: 33.7533  XPSNR u: 20.1272  XPSNR v: 20.3750\nn:   44  XPSNR y: 34.8011  XPSNR u: 20.1994  XPSNR v: 20.0996\nn:   45  XPSNR y: 33.6601  XPSNR u: 19.6708  XPSNR v: 19.7444\nn:   46  XPSNR y: 34.7614  XPSNR u: 19.8108  XPSNR v: 19.7569\nn:   47  XPSNR y: 33.9297  XPSNR u: 20.0789  XPSNR v: 19.9397\nn:   48  XPSNR y: 35.4661  XPSNR u: 20.0262  XPSNR v: 20.0684\nn:   49  XPSNR y: 34.2474  XPSNR u: 20.2086  XPSNR v: 20.1719\nn:   50  XPSNR y: 34.9407  XPSNR u: 19.8053  XPSNR v: 19.9197\nn:   51  XPSNR y: 33.8474  XPSNR u: 19.9934  XPSNR v: 20.0679\nn:   52  XPSNR y: 34.3932  XPSNR u: 19.8836  XPSNR v: 19.8878\nn:   53  XPSNR y: 34.8245  XPSNR u: 20.0996  XPSNR v: 20.3056\nn:   54  XPSNR y: 33.2180  XPSNR u: 19.7956  XPSNR v: 19.8934\nn:   55  XPSNR y: 34.0428  XPSNR u: 20.1381  XPSNR v: 20.3326\nn:   56  XPSNR y: 34.2405  XPSNR u: 19.7026  XPSNR v: 19.9196\nn:   57  XPSNR y: 35.4516  XPSNR u: 20.1447  XPSNR v: 20.1926\nn:   58  XPSNR y: 33.9710  XPSNR u: 20.0857  XPSNR v: 20.1654\nn:   59  XPSNR y: 34.0798  XPSNR u: 20.3878  XPSNR v: 20.4649\nn:   60  XPSNR y: 34.6462  XPSNR u: 20.3628  XPSNR v: 20.3640\nn:   61  XPSNR y: 35.5228  XPSNR u: 19.9867  XPSNR v: 20.1945\nn:   62  XPSNR y: 33.9973  XPSNR u: 20.0773  XPSNR v: 20.2242\nn:   63  XPSNR y: 35.3341  XPSNR u: 20.2348  XPSNR v: 20.3855\nn:   64  XPSNR y: 34.2029  XPSNR u: 19.9406  XPSNR v: 20.2793\nn:   65  XPSNR y: 33.1195  XPSNR u: 21.5301  XPSNR v: 21.4134\nn:   66  XPSNR y: 32.8905  XPSNR u: 19.4289  XPSNR v: 19.5289\nn:   67  XPSNR y: 33.4459  XPSNR u: 20.0490  XPSNR v: 19.9634\nn:   68  XPSNR y: 33.0407  XPSNR u: 19.7609  XPSNR v: 19.7380\nn:   69  XPSNR y: 33.3202  XPSNR u: 19.0901  XPSNR v: 19.3761\nn:   70  XPSNR y: 33.5223  XPSNR u: 20.4809  XPSNR v: 20.4869\nn:   71  XPSNR y: 33.4227  XPSNR u: 18.8772  XPSNR v: 19.4333\nn:   72  XPSNR y: 33.5861  XPSNR u: 19.8392  XPSNR v: 19.8824\nn:   73  XPSNR y: 33.6100  XPSNR u: 19.2057  XPSNR v: 19.5253\nn:   74  XPSNR y: 34.3042  XPSNR u: 19.2278  XPSNR v: 19.5557\nn:   75  XPSNR y: 33.5137  XPSNR u: 20.7123  XPSNR v: 20.5938\nn:   76  XPSNR y: 34.8427  XPSNR u: 19.6045  XPSNR v: 19.7801\nn:   77  XPSNR y: 33.6039  XPSNR u: 20.1409  XPSNR v: 19.9891\nn:   78  XPSNR y: 35.0613  XPSNR u: 19.9576  XPSNR v: 19.6420\nn:   79  XPSNR y: 33.1323  XPSNR u: 20.2125  XPSNR v: 19.9983\nn:   80  XPSNR y: 34.5603  XPSNR u: 20.4328  XPSNR v: 20.4768\nn:   81  XPSNR y: 33.1014  XPSNR u: 20.4876  XPSNR v: 20.6058\nn:   82  XPSNR y: 34.5054  XPSNR u: 20.1067  XPSNR v: 20.1990\nn:   83  XPSNR y: 32.4544  XPSNR u: 20.0822  XPSNR v: 20.2689\nn:   84  XPSNR y: 34.2514  XPSNR u: 20.1975  XPSNR v: 20.2071\nn:   85  XPSNR y: 33.3300  XPSNR u: 20.2955  XPSNR v: 20.3035\nn:   86  XPSNR y: 33.5801  XPSNR u: 20.5154  XPSNR v: 20.4237\nn:   87  XPSNR y: 32.9410  XPSNR u: 20.2955  XPSNR v: 20.4413\nn:   88  XPSNR y: 34.9350  XPSNR u: 20.4652  XPSNR v: 20.3260\nn:   89  XPSNR y: 33.9602  XPSNR u: 20.2866  XPSNR v: 20.2928\nn:   90  XPSNR y: 33.2351  XPSNR u: 20.0401  XPSNR v: 20.0499\nn:   91  XPSNR y: 33.1537  XPSNR u: 20.4096  XPSNR v: 20.4380\nn:   92  XPSNR y: 34.7867  XPSNR u: 20.3209  XPSNR v: 20.1726\nn:   93  XPSNR y: 34.1786  XPSNR u: 20.3781  XPSNR v: 20.1069\nn:   94  XPSNR y: 34.2981  XPSNR u: 20.2012  XPSNR v: 20.0729\nn:   95  XPSNR y: 34.7778  XPSNR u: 20.3284  XPSNR v: 20.0167\nn:   96  XPSNR y: 35.1463  XPSNR u: 20.3829  XPSNR v: 20.2496\nn:   97  XPSNR y: 34.8865  XPSNR u: 20.2731  XPSNR v: 20.3495\nn:   98  XPSNR y: 35.3429  XPSNR u: 20.0323  XPSNR v: 20.1470\nn:   99  XPSNR y: 34.9551  XPSNR u: 20.1135  XPSNR v: 20.3596\nn:  100  XPSNR y: 35.0224  XPSNR u: 20.1605  XPSNR v: 20.2523\nn:  101  XPSNR y: 35.2717  XPSNR u: 20.0809  XPSNR v: 20.1477\nn:  102  XPSNR y: 34.8405  XPSNR u: 20.0256  XPSNR v: 19.9307\nn:  103  XPSNR y: 35.0508  XPSNR u: 20.3830  XPSNR v: 20.2697\nn:  104  XPSNR y: 34.9236  XPSNR u: 20.3343  XPSNR v: 20.2762\nn:  105  XPSNR y: 34.5506  XPSNR u: 20.4475  XPSNR v: 20.3128\nn:  106  XPSNR y: 35.2947  XPSNR u: 20.3905  XPSNR v: 20.2234\nn:  107  XPSNR y: 35.6133  XPSNR u: 20.3823  XPSNR v: 20.2153\nn:  108  XPSNR y: 36.0620  XPSNR u: 20.5738  XPSNR v: 20.5975\nn:  109  XPSNR y: 35.0289  XPSNR u: 20.7552  XPSNR v: 20.8553\nn:  110  XPSNR y: 36.0159  XPSNR u: 20.3151  XPSNR v: 20.4789\nn:  111  XPSNR y: 36.0893  XPSNR u: 20.2344  XPSNR v: 20.2826\nn:  112  XPSNR y: 36.0652  XPSNR u: 20.4459  XPSNR v: 20.2882\nn:  113  XPSNR y: 35.5462  XPSNR u: 21.1747  XPSNR v: 20.9750\nn:  114  XPSNR y: 35.5632  XPSNR u: 20.5029  XPSNR v: 20.2149\nn:  115  XPSNR y: 35.8344  XPSNR u: 20.3325  XPSNR v: 20.1329\nn:  116  XPSNR y: 36.0814  XPSNR u: 20.2385  XPSNR v: 20.3724\nn:  117  XPSNR y: 36.1466  XPSNR u: 20.4632  XPSNR v: 20.5940\nn:  118  XPSNR y: 36.7942  XPSNR u: 20.2743  XPSNR v: 20.4782\nn:  119  XPSNR y: 36.5885  XPSNR u: 20.2540  XPSNR v: 20.3352\nn:  120  XPSNR y: 37.0015  XPSNR u: 20.3612  XPSNR v: 20.2755\nn:  121  XPSNR y: 36.1276  XPSNR u: 20.6618  XPSNR v: 20.4395\nn:  122  XPSNR y: 36.4857  XPSNR u: 20.3189  XPSNR v: 20.2616\nn:  123  XPSNR y: 36.3677  XPSNR u: 20.4385  XPSNR v: 20.2776\nn:  124  XPSNR y: 36.8232  XPSNR u: 20.3998  XPSNR v: 20.3590\nn:  125  XPSNR y: 36.3536  XPSNR u: 20.4960  XPSNR v: 20.4696\nn:  126  XPSNR y: 36.3172  XPSNR u: 20.3034  XPSNR v: 20.4992\nn:  127  XPSNR y: 36.4929  XPSNR u: 20.3111  XPSNR v: 20.2610\nn:  128  XPSNR y: 36.1265  XPSNR u: 20.4049  XPSNR v: 20.5505\nn:  129  XPSNR y: 32.7461  XPSNR u: 21.2926  XPSNR v: 21.1947\nn:  130  XPSNR y: 34.1598  XPSNR u: 20.8212  XPSNR v: 20.6601\nn:  131  XPSNR y: 34.1188  XPSNR u: 20.3265  XPSNR v: 20.3131\nn:  132  XPSNR y: 32.5455  XPSNR u: 19.7606  XPSNR v: 19.8899\nn:  133  XPSNR y: 34.7676  XPSNR u: 20.0815  XPSNR v: 20.1605\nn:  134  XPSNR y: 34.1992  XPSNR u: 20.0778  XPSNR v: 20.0791\nn:  135  XPSNR y: 34.4424  XPSNR u: 20.3957  XPSNR v: 20.3157\nn:  136  XPSNR y: 34.3238  XPSNR u: 19.5732  XPSNR v: 19.7218\nn:  137  XPSNR y: 35.7410  XPSNR u: 19.8604  XPSNR v: 20.1765\nn:  138  XPSNR y: 34.1518  XPSNR u: 20.0611  XPSNR v: 20.1715\nn:  139  XPSNR y: 35.3621  XPSNR u: 20.6799  XPSNR v: 20.7089\nn:  140  XPSNR y: 34.4253  XPSNR u: 20.7852  XPSNR v: 20.5983\nn:  141  XPSNR y: 33.8455  XPSNR u: 19.8794  XPSNR v: 19.9072\nn:  142  XPSNR y: 34.2010  XPSNR u: 19.8804  XPSNR v: 19.9007\nn:  143  XPSNR y: 33.9864  XPSNR u: 20.1968  XPSNR v: 20.1971\nn:  144  XPSNR y: 34.7191  XPSNR u: 19.8491  XPSNR v: 20.0010\nn:  145  XPSNR y: 34.2461  XPSNR u: 20.6788  XPSNR v: 20.8318\nn:  146  XPSNR y: 34.5413  XPSNR u: 19.6884  XPSNR v: 19.8176\nn:  147  XPSNR y: 33.8246  XPSNR u: 19.7520  XPSNR v: 19.8912\nn:  148  XPSNR y: 34.6748  XPSNR u: 19.9097  XPSNR v: 19.9714\nn:  149  XPSNR y: 34.0389  XPSNR u: 19.9156  XPSNR v: 19.8542\nn:  150  XPSNR y: 34.6598  XPSNR u: 20.7248  XPSNR v: 20.5321\nn:  151  XPSNR y: 34.0752  XPSNR u: 19.9342  XPSNR v: 19.5244\nn:  152  XPSNR y: 34.5099  XPSNR u: 20.0165  XPSNR v: 19.9399\nn:  153  XPSNR y: 34.8760  XPSNR u: 20.0168  XPSNR v: 19.7185\nn:  154  XPSNR y: 34.5471  XPSNR u: 19.9935  XPSNR v: 19.8914\nn:  155  XPSNR y: 34.2059  XPSNR u: 20.4102  XPSNR v: 20.5763\nn:  156  XPSNR y: 34.6608  XPSNR u: 19.9887  XPSNR v: 19.8605\nn:  157  XPSNR y: 33.4193  XPSNR u: 19.9835  XPSNR v: 20.0343\nn:  158  XPSNR y: 34.5902  XPSNR u: 19.8254  XPSNR v: 19.7167\nn:  159  XPSNR y: 34.9195  XPSNR u: 20.1356  XPSNR v: 20.2814\nn:  160  XPSNR y: 34.5464  XPSNR u: 20.5699  XPSNR v: 20.4884\nn:  161  XPSNR y: 35.0004  XPSNR u: 20.7538  XPSNR v: 20.6991\nn:  162  XPSNR y: 34.2605  XPSNR u: 20.1166  XPSNR v: 20.2036\nn:  163  XPSNR y: 34.9761  XPSNR u: 19.9647  XPSNR v: 20.0701\nn:  164  XPSNR y: 34.4862  XPSNR u: 20.1083  XPSNR v: 19.9191\nn:  165  XPSNR y: 33.8763  XPSNR u: 20.1695  XPSNR v: 20.3049\nn:  166  XPSNR y: 35.3341  XPSNR u: 20.3400  XPSNR v: 20.2993\nn:  167  XPSNR y: 35.3172  XPSNR u: 20.2055  XPSNR v: 20.2234\nn:  168  XPSNR y: 34.8091  XPSNR u: 20.2441  XPSNR v: 20.0474\nn:  169  XPSNR y: 35.0934  XPSNR u: 20.1042  XPSNR v: 19.9701\nn:  170  XPSNR y: 35.3015  XPSNR u: 20.3695  XPSNR v: 20.2294\nn:  171  XPSNR y: 35.5212  XPSNR u: 20.2823  XPSNR v: 20.2006\nn:  172  XPSNR y: 36.3055  XPSNR u: 20.3826  XPSNR v: 20.5072\nn:  173  XPSNR y: 36.2974  XPSNR u: 19.9741  XPSNR v: 19.9171\nn:  174  XPSNR y: 36.2439  XPSNR u: 19.9550  XPSNR v: 20.1594\nn:  175  XPSNR y: 36.3838  XPSNR u: 20.2874  XPSNR v: 20.2373\nn:  176  XPSNR y: 36.7151  XPSNR u: 20.2762  XPSNR v: 19.9753\nn:  177  XPSNR y: 36.7337  XPSNR u: 20.3860  XPSNR v: 20.3761\nn:  178  XPSNR y: 36.6548  XPSNR u: 20.2480  XPSNR v: 20.0229\nn:  179  XPSNR y: 36.7460  XPSNR u: 20.0998  XPSNR v: 19.9299\nn:  180  XPSNR y: 36.8339  XPSNR u: 20.1752  XPSNR v: 19.9617\nn:  181  XPSNR y: 36.6220  XPSNR u: 20.4509  XPSNR v: 20.2726\nn:  182  XPSNR y: 35.7449  XPSNR u: 20.4780  XPSNR v: 20.4762\nn:  183  XPSNR y: 36.3242  XPSNR u: 20.3511  XPSNR v: 20.5153\nn:  184  XPSNR y: 36.8185  XPSNR u: 20.2301  XPSNR v: 20.2736\nn:  185  XPSNR y: 37.2162  XPSNR u: 20.4498  XPSNR v: 20.4271\nn:  186  XPSNR y: 36.1953  XPSNR u: 20.5391  XPSNR v: 20.4687\nn:  187  XPSNR y: 37.3873  XPSNR u: 20.6780  XPSNR v: 20.4005\nn:  188  XPSNR y: 36.4898  XPSNR u: 20.6816  XPSNR v: 20.3870\nn:  189  XPSNR y: 37.4742  XPSNR u: 20.6991  XPSNR v: 20.5173\nn:  190  XPSNR y: 36.0663  XPSNR u: 20.4923  XPSNR v: 20.5851\nn:  191  XPSNR y: 36.7048  XPSNR u: 20.4465  XPSNR v: 20.6080\nn:  192  XPSNR y: 36.0494  XPSNR u: 20.7106  XPSNR v: 20.9173\n\nXPSNR average, 192 frames  y: 34.6209  u: 20.2313  v: 20.2242  (minimum: 20.2242)\n",
+      "sha256": "441b0b6490599795e8d46eb8a49915bc6d6f51dba46754e91c3bad358bdbc022"
+    },
+    {
+      "codec": "hevc",
+      "depth": 8,
+      "frames": 192,
+      "width": 320,
+      "height": 192,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": null,
+      "referenceSha256": "9308667f629a2e09eaa30fff34d218eb39a469acdcd42ce2536a262929fe8558",
+      "distortedSha256": "cc828521bd68517ffceaed08434b3069bc84d8b0f6e1c9f8a98599dfc8f5ee26",
+      "text": "n:    1  XPSNR y: 44.2241  XPSNR u: 38.0201  XPSNR v: 37.9399\nn:    2  XPSNR y: 35.8846  XPSNR u: 26.9693  XPSNR v: 26.8316\nn:    3  XPSNR y: 35.0360  XPSNR u: 25.3432  XPSNR v: 25.2766\nn:    4  XPSNR y: 36.5932  XPSNR u: 26.3366  XPSNR v: 26.5292\nn:    5  XPSNR y: 35.0314  XPSNR u: 26.6010  XPSNR v: 26.4811\nn:    6  XPSNR y: 36.1451  XPSNR u: 27.4007  XPSNR v: 27.2547\nn:    7  XPSNR y: 35.7193  XPSNR u: 26.2331  XPSNR v: 26.2765\nn:    8  XPSNR y: 35.8777  XPSNR u: 26.1605  XPSNR v: 26.1173\nn:    9  XPSNR y: 35.1864  XPSNR u: 26.3159  XPSNR v: 26.2535\nn:   10  XPSNR y: 36.5567  XPSNR u: 27.0256  XPSNR v: 27.1327\nn:   11  XPSNR y: 34.9119  XPSNR u: 25.0554  XPSNR v: 25.2844\nn:   12  XPSNR y: 36.0844  XPSNR u: 25.1559  XPSNR v: 25.1601\nn:   13  XPSNR y: 36.0172  XPSNR u: 26.6080  XPSNR v: 26.4511\nn:   14  XPSNR y: 37.2791  XPSNR u: 26.5359  XPSNR v: 26.8252\nn:   15  XPSNR y: 36.1661  XPSNR u: 26.8418  XPSNR v: 26.9638\nn:   16  XPSNR y: 37.0897  XPSNR u: 26.1881  XPSNR v: 26.5016\nn:   17  XPSNR y: 35.9528  XPSNR u: 26.6619  XPSNR v: 26.5219\nn:   18  XPSNR y: 36.6867  XPSNR u: 26.2021  XPSNR v: 26.3585\nn:   19  XPSNR y: 35.9548  XPSNR u: 26.7315  XPSNR v: 26.8287\nn:   20  XPSNR y: 36.7363  XPSNR u: 25.8279  XPSNR v: 25.9099\nn:   21  XPSNR y: 36.3040  XPSNR u: 26.3391  XPSNR v: 26.3992\nn:   22  XPSNR y: 36.8584  XPSNR u: 26.0671  XPSNR v: 26.0992\nn:   23  XPSNR y: 36.4802  XPSNR u: 26.7568  XPSNR v: 26.7288\nn:   24  XPSNR y: 37.1100  XPSNR u: 26.3114  XPSNR v: 26.3865\nn:   25  XPSNR y: 36.5573  XPSNR u: 26.1883  XPSNR v: 26.3695\nn:   26  XPSNR y: 37.0191  XPSNR u: 26.9575  XPSNR v: 26.9976\nn:   27  XPSNR y: 35.0882  XPSNR u: 24.8683  XPSNR v: 24.9116\nn:   28  XPSNR y: 36.7202  XPSNR u: 26.3528  XPSNR v: 26.3432\nn:   29  XPSNR y: 36.7828  XPSNR u: 26.5612  XPSNR v: 26.3408\nn:   30  XPSNR y: 37.1535  XPSNR u: 26.7663  XPSNR v: 26.8257\nn:   31  XPSNR y: 35.3169  XPSNR u: 25.1627  XPSNR v: 25.0090\nn:   32  XPSNR y: 37.1714  XPSNR u: 26.0940  XPSNR v: 26.1914\nn:   33  XPSNR y: 36.2545  XPSNR u: 26.6208  XPSNR v: 26.5538\nn:   34  XPSNR y: 36.0653  XPSNR u: 26.4451  XPSNR v: 26.4311\nn:   35  XPSNR y: 35.5257  XPSNR u: 25.3642  XPSNR v: 25.3083\nn:   36  XPSNR y: 35.7983  XPSNR u: 25.2788  XPSNR v: 25.3131\nn:   37  XPSNR y: 36.5481  XPSNR u: 26.5006  XPSNR v: 26.2417\nn:   38  XPSNR y: 37.3794  XPSNR u: 27.0083  XPSNR v: 27.1148\nn:   39  XPSNR y: 35.4546  XPSNR u: 25.2309  XPSNR v: 25.2257\nn:   40  XPSNR y: 36.5021  XPSNR u: 25.4284  XPSNR v: 25.4002\nn:   41  XPSNR y: 36.0491  XPSNR u: 26.5372  XPSNR v: 26.5017\nn:   42  XPSNR y: 36.5409  XPSNR u: 25.4551  XPSNR v: 25.6438\nn:   43  XPSNR y: 37.0725  XPSNR u: 25.6390  XPSNR v: 25.5586\nn:   44  XPSNR y: 37.2528  XPSNR u: 25.2972  XPSNR v: 25.3722\nn:   45  XPSNR y: 36.4348  XPSNR u: 26.4201  XPSNR v: 26.6659\nn:   46  XPSNR y: 37.3459  XPSNR u: 26.8588  XPSNR v: 26.9465\nn:   47  XPSNR y: 37.0128  XPSNR u: 25.2069  XPSNR v: 25.2633\nn:   48  XPSNR y: 37.0364  XPSNR u: 26.2540  XPSNR v: 26.2987\nn:   49  XPSNR y: 36.5064  XPSNR u: 24.9628  XPSNR v: 24.9753\nn:   50  XPSNR y: 36.6471  XPSNR u: 25.5370  XPSNR v: 25.5154\nn:   51  XPSNR y: 36.0977  XPSNR u: 24.6126  XPSNR v: 24.6212\nn:   52  XPSNR y: 37.1226  XPSNR u: 26.3576  XPSNR v: 26.2494\nn:   53  XPSNR y: 35.9869  XPSNR u: 26.2164  XPSNR v: 26.2134\nn:   54  XPSNR y: 37.1885  XPSNR u: 26.9081  XPSNR v: 26.8672\nn:   55  XPSNR y: 37.1306  XPSNR u: 25.4613  XPSNR v: 25.2956\nn:   56  XPSNR y: 37.7344  XPSNR u: 26.2047  XPSNR v: 26.1921\nn:   57  XPSNR y: 36.3111  XPSNR u: 24.9897  XPSNR v: 24.8054\nn:   58  XPSNR y: 34.0988  XPSNR u: 25.2895  XPSNR v: 25.3729\nn:   59  XPSNR y: 37.6219  XPSNR u: 24.9454  XPSNR v: 24.9530\nn:   60  XPSNR y: 37.4755  XPSNR u: 25.8498  XPSNR v: 25.9760\nn:   61  XPSNR y: 37.0400  XPSNR u: 26.3142  XPSNR v: 26.2628\nn:   62  XPSNR y: 37.0405  XPSNR u: 26.7084  XPSNR v: 26.5698\nn:   63  XPSNR y: 37.1259  XPSNR u: 24.5796  XPSNR v: 24.5822\nn:   64  XPSNR y: 37.2208  XPSNR u: 26.3502  XPSNR v: 26.5486\nn:   65  XPSNR y: 35.6824  XPSNR u: 27.9930  XPSNR v: 28.0869\nn:   66  XPSNR y: 36.8213  XPSNR u: 27.2517  XPSNR v: 27.0127\nn:   67  XPSNR y: 35.2224  XPSNR u: 25.1597  XPSNR v: 25.1343\nn:   68  XPSNR y: 35.7514  XPSNR u: 25.0276  XPSNR v: 25.2419\nn:   69  XPSNR y: 35.0852  XPSNR u: 25.6814  XPSNR v: 25.7870\nn:   70  XPSNR y: 35.8482  XPSNR u: 26.7030  XPSNR v: 26.2404\nn:   71  XPSNR y: 36.9356  XPSNR u: 27.4657  XPSNR v: 27.4146\nn:   72  XPSNR y: 37.4892  XPSNR u: 26.6588  XPSNR v: 26.7032\nn:   73  XPSNR y: 36.0063  XPSNR u: 26.0098  XPSNR v: 26.1196\nn:   74  XPSNR y: 36.7010  XPSNR u: 27.1608  XPSNR v: 26.9830\nn:   75  XPSNR y: 36.6518  XPSNR u: 26.0618  XPSNR v: 26.1129\nn:   76  XPSNR y: 36.2575  XPSNR u: 26.9556  XPSNR v: 27.0356\nn:   77  XPSNR y: 36.2005  XPSNR u: 25.3696  XPSNR v: 25.3554\nn:   78  XPSNR y: 34.9592  XPSNR u: 25.7238  XPSNR v: 25.7042\nn:   79  XPSNR y: 36.6102  XPSNR u: 26.6749  XPSNR v: 26.6598\nn:   80  XPSNR y: 34.9831  XPSNR u: 26.5075  XPSNR v: 26.3925\nn:   81  XPSNR y: 36.7007  XPSNR u: 25.8941  XPSNR v: 25.9203\nn:   82  XPSNR y: 32.7899  XPSNR u: 26.4036  XPSNR v: 26.2191\nn:   83  XPSNR y: 37.1665  XPSNR u: 25.4548  XPSNR v: 25.2745\nn:   84  XPSNR y: 33.1972  XPSNR u: 25.8475  XPSNR v: 25.8015\nn:   85  XPSNR y: 37.1559  XPSNR u: 25.5226  XPSNR v: 25.5735\nn:   86  XPSNR y: 31.9300  XPSNR u: 25.1476  XPSNR v: 25.1115\nn:   87  XPSNR y: 36.9052  XPSNR u: 24.9056  XPSNR v: 24.8564\nn:   88  XPSNR y: 34.7462  XPSNR u: 24.9098  XPSNR v: 24.8667\nn:   89  XPSNR y: 36.3687  XPSNR u: 25.5623  XPSNR v: 25.5738\nn:   90  XPSNR y: 37.3344  XPSNR u: 25.5123  XPSNR v: 25.5060\nn:   91  XPSNR y: 37.4811  XPSNR u: 27.1005  XPSNR v: 27.1556\nn:   92  XPSNR y: 37.7056  XPSNR u: 26.2163  XPSNR v: 26.1164\nn:   93  XPSNR y: 36.9510  XPSNR u: 26.6456  XPSNR v: 26.7664\nn:   94  XPSNR y: 37.0321  XPSNR u: 25.8362  XPSNR v: 25.9914\nn:   95  XPSNR y: 36.4554  XPSNR u: 25.2951  XPSNR v: 25.2039\nn:   96  XPSNR y: 37.3503  XPSNR u: 26.5596  XPSNR v: 26.5599\nn:   97  XPSNR y: 36.6753  XPSNR u: 25.1859  XPSNR v: 25.2297\nn:   98  XPSNR y: 36.8761  XPSNR u: 25.4832  XPSNR v: 25.4111\nn:   99  XPSNR y: 36.7770  XPSNR u: 24.8429  XPSNR v: 24.7939\nn:  100  XPSNR y: 34.9550  XPSNR u: 25.4208  XPSNR v: 25.5371\nn:  101  XPSNR y: 37.2832  XPSNR u: 26.0889  XPSNR v: 26.1194\nn:  102  XPSNR y: 37.9437  XPSNR u: 26.3673  XPSNR v: 26.6086\nn:  103  XPSNR y: 37.4011  XPSNR u: 27.0072  XPSNR v: 27.1927\nn:  104  XPSNR y: 37.3985  XPSNR u: 25.9185  XPSNR v: 25.9324\nn:  105  XPSNR y: 35.5259  XPSNR u: 25.0383  XPSNR v: 24.8110\nn:  106  XPSNR y: 35.9998  XPSNR u: 26.6469  XPSNR v: 26.7656\nn:  107  XPSNR y: 37.2103  XPSNR u: 25.2217  XPSNR v: 25.2718\nn:  108  XPSNR y: 35.6739  XPSNR u: 25.7127  XPSNR v: 25.9841\nn:  109  XPSNR y: 36.9694  XPSNR u: 26.0013  XPSNR v: 26.2566\nn:  110  XPSNR y: 36.3087  XPSNR u: 25.3612  XPSNR v: 25.4700\nn:  111  XPSNR y: 37.1999  XPSNR u: 26.6075  XPSNR v: 26.5011\nn:  112  XPSNR y: 36.7040  XPSNR u: 26.6168  XPSNR v: 26.5821\nn:  113  XPSNR y: 35.8611  XPSNR u: 26.4741  XPSNR v: 26.5515\nn:  114  XPSNR y: 34.6802  XPSNR u: 25.1570  XPSNR v: 25.2780\nn:  115  XPSNR y: 36.3465  XPSNR u: 25.7815  XPSNR v: 25.9364\nn:  116  XPSNR y: 36.5509  XPSNR u: 25.3606  XPSNR v: 25.3020\nn:  117  XPSNR y: 36.2793  XPSNR u: 25.8099  XPSNR v: 25.7942\nn:  118  XPSNR y: 37.7823  XPSNR u: 27.0831  XPSNR v: 27.0921\nn:  119  XPSNR y: 37.4243  XPSNR u: 25.4843  XPSNR v: 25.5067\nn:  120  XPSNR y: 36.2553  XPSNR u: 26.0017  XPSNR v: 26.1595\nn:  121  XPSNR y: 36.1721  XPSNR u: 26.1730  XPSNR v: 26.2617\nn:  122  XPSNR y: 36.1233  XPSNR u: 25.1241  XPSNR v: 25.1988\nn:  123  XPSNR y: 35.3169  XPSNR u: 24.9216  XPSNR v: 24.8880\nn:  124  XPSNR y: 36.1871  XPSNR u: 24.7310  XPSNR v: 24.8888\nn:  125  XPSNR y: 37.4836  XPSNR u: 25.2327  XPSNR v: 25.3601\nn:  126  XPSNR y: 37.4382  XPSNR u: 26.7368  XPSNR v: 27.0424\nn:  127  XPSNR y: 37.8190  XPSNR u: 25.4655  XPSNR v: 25.5400\nn:  128  XPSNR y: 36.9507  XPSNR u: 26.1054  XPSNR v: 26.2462\nn:  129  XPSNR y: 35.8604  XPSNR u: 27.7701  XPSNR v: 27.9267\nn:  130  XPSNR y: 35.4717  XPSNR u: 27.1084  XPSNR v: 27.1122\nn:  131  XPSNR y: 34.3819  XPSNR u: 25.1923  XPSNR v: 25.1998\nn:  132  XPSNR y: 36.0943  XPSNR u: 26.7382  XPSNR v: 26.6583\nn:  133  XPSNR y: 34.7788  XPSNR u: 26.8780  XPSNR v: 26.9353\nn:  134  XPSNR y: 36.5422  XPSNR u: 27.5811  XPSNR v: 27.6123\nn:  135  XPSNR y: 34.9994  XPSNR u: 25.4241  XPSNR v: 25.3454\nn:  136  XPSNR y: 36.4547  XPSNR u: 26.3602  XPSNR v: 26.0676\nn:  137  XPSNR y: 35.7263  XPSNR u: 26.4802  XPSNR v: 26.5319\nn:  138  XPSNR y: 36.9710  XPSNR u: 27.1194  XPSNR v: 27.1517\nn:  139  XPSNR y: 36.0312  XPSNR u: 26.7244  XPSNR v: 26.5099\nn:  140  XPSNR y: 36.8453  XPSNR u: 26.3107  XPSNR v: 26.1684\nn:  141  XPSNR y: 35.6946  XPSNR u: 26.2161  XPSNR v: 26.2236\nn:  142  XPSNR y: 36.0840  XPSNR u: 26.2830  XPSNR v: 26.3350\nn:  143  XPSNR y: 35.5802  XPSNR u: 26.6839  XPSNR v: 26.5786\nn:  144  XPSNR y: 36.3201  XPSNR u: 25.8906  XPSNR v: 25.9735\nn:  145  XPSNR y: 36.7711  XPSNR u: 26.8575  XPSNR v: 26.9893\nn:  146  XPSNR y: 36.0618  XPSNR u: 25.7327  XPSNR v: 25.7081\nn:  147  XPSNR y: 37.1667  XPSNR u: 26.8878  XPSNR v: 26.8237\nn:  148  XPSNR y: 35.7763  XPSNR u: 25.0467  XPSNR v: 25.0270\nn:  149  XPSNR y: 36.9602  XPSNR u: 26.7440  XPSNR v: 27.0080\nn:  150  XPSNR y: 36.2250  XPSNR u: 26.4423  XPSNR v: 26.4415\nn:  151  XPSNR y: 36.5619  XPSNR u: 26.6890  XPSNR v: 26.7904\nn:  152  XPSNR y: 35.0118  XPSNR u: 25.2787  XPSNR v: 25.2483\nn:  153  XPSNR y: 36.1553  XPSNR u: 26.2185  XPSNR v: 26.0535\nn:  154  XPSNR y: 36.2242  XPSNR u: 26.5597  XPSNR v: 26.6501\nn:  155  XPSNR y: 36.1157  XPSNR u: 26.8673  XPSNR v: 27.0557\nn:  156  XPSNR y: 34.5022  XPSNR u: 25.0978  XPSNR v: 25.0608\nn:  157  XPSNR y: 36.0840  XPSNR u: 26.1178  XPSNR v: 25.9761\nn:  158  XPSNR y: 36.2790  XPSNR u: 26.3874  XPSNR v: 26.2992\nn:  159  XPSNR y: 36.5643  XPSNR u: 26.7504  XPSNR v: 27.0266\nn:  160  XPSNR y: 35.5878  XPSNR u: 25.3532  XPSNR v: 25.2626\nn:  161  XPSNR y: 35.6473  XPSNR u: 24.7815  XPSNR v: 24.7581\nn:  162  XPSNR y: 36.5652  XPSNR u: 26.1338  XPSNR v: 26.1268\nn:  163  XPSNR y: 36.7670  XPSNR u: 27.0044  XPSNR v: 26.8616\nn:  164  XPSNR y: 35.2161  XPSNR u: 25.0473  XPSNR v: 25.0616\nn:  165  XPSNR y: 36.4190  XPSNR u: 25.6545  XPSNR v: 25.5440\nn:  166  XPSNR y: 36.0492  XPSNR u: 26.3505  XPSNR v: 26.4863\nn:  167  XPSNR y: 36.1280  XPSNR u: 26.6461  XPSNR v: 26.7723\nn:  168  XPSNR y: 35.0409  XPSNR u: 25.1935  XPSNR v: 25.1070\nn:  169  XPSNR y: 35.9123  XPSNR u: 25.6095  XPSNR v: 25.5402\nn:  170  XPSNR y: 36.2981  XPSNR u: 26.4140  XPSNR v: 26.2999\nn:  171  XPSNR y: 36.2787  XPSNR u: 26.9257  XPSNR v: 26.8565\nn:  172  XPSNR y: 35.0789  XPSNR u: 25.1488  XPSNR v: 25.2224\nn:  173  XPSNR y: 36.1100  XPSNR u: 26.4148  XPSNR v: 26.3383\nn:  174  XPSNR y: 36.1253  XPSNR u: 26.1615  XPSNR v: 26.0863\nn:  175  XPSNR y: 36.6595  XPSNR u: 26.0641  XPSNR v: 26.1157\nn:  176  XPSNR y: 36.9866  XPSNR u: 26.7653  XPSNR v: 26.7557\nn:  177  XPSNR y: 37.1515  XPSNR u: 26.1957  XPSNR v: 26.1172\nn:  178  XPSNR y: 36.6614  XPSNR u: 26.2563  XPSNR v: 26.1646\nn:  179  XPSNR y: 35.5762  XPSNR u: 26.9156  XPSNR v: 26.7282\nn:  180  XPSNR y: 33.9737  XPSNR u: 25.3298  XPSNR v: 25.2865\nn:  181  XPSNR y: 35.7785  XPSNR u: 26.2063  XPSNR v: 26.1720\nn:  182  XPSNR y: 37.0340  XPSNR u: 26.4031  XPSNR v: 26.2008\nn:  183  XPSNR y: 37.4044  XPSNR u: 26.8796  XPSNR v: 26.6598\nn:  184  XPSNR y: 36.4903  XPSNR u: 26.4341  XPSNR v: 26.5134\nn:  185  XPSNR y: 36.6128  XPSNR u: 26.3661  XPSNR v: 26.3372\nn:  186  XPSNR y: 36.8127  XPSNR u: 26.0801  XPSNR v: 25.9971\nn:  187  XPSNR y: 35.3284  XPSNR u: 25.4448  XPSNR v: 25.3727\nn:  188  XPSNR y: 36.6718  XPSNR u: 26.2719  XPSNR v: 26.4066\nn:  189  XPSNR y: 35.9506  XPSNR u: 25.7485  XPSNR v: 26.0201\nn:  190  XPSNR y: 35.2188  XPSNR u: 24.9859  XPSNR v: 25.0635\nn:  191  XPSNR y: 36.5821  XPSNR u: 25.9302  XPSNR v: 25.7684\nn:  192  XPSNR y: 36.2665  XPSNR u: 25.3167  XPSNR v: 25.2311\n\nXPSNR average, 192 frames  y: 36.2640  u: 26.0714  v: 26.0780  (minimum: 26.0714)\n",
+      "sha256": "12694ab558225c9fa97f8974a2222203a2678b050000dfb4064472507972bc4c"
+    },
+    {
+      "codec": "hevc",
+      "depth": 8,
+      "frames": 192,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "8cbe7271f1ca468b93bb7279f89eca5ffd346c9063956cebd0c518888856e79a",
+      "distortedSha256": "e72df29b11b6f6d9d228c767513e2eb045be3c73a5663110b22d6c6bb5b556b5",
+      "text": "n:    1  XPSNR y: 41.7052  XPSNR u: 35.2526  XPSNR v: 35.3556\nn:    2  XPSNR y: 32.5425  XPSNR u: 22.8450  XPSNR v: 22.5610\nn:    3  XPSNR y: 32.7755  XPSNR u: 22.0576  XPSNR v: 21.3926\nn:    4  XPSNR y: 33.2267  XPSNR u: 23.0230  XPSNR v: 22.8892\nn:    5  XPSNR y: 32.8071  XPSNR u: 23.3855  XPSNR v: 23.0809\nn:    6  XPSNR y: 33.8317  XPSNR u: 23.5252  XPSNR v: 23.9938\nn:    7  XPSNR y: 32.6038  XPSNR u: 21.8195  XPSNR v: 22.0523\nn:    8  XPSNR y: 33.0078  XPSNR u: 22.5663  XPSNR v: 22.3762\nn:    9  XPSNR y: 32.7314  XPSNR u: 23.4164  XPSNR v: 23.1465\nn:   10  XPSNR y: 33.9324  XPSNR u: 22.9852  XPSNR v: 22.8411\nn:   11  XPSNR y: 32.7383  XPSNR u: 21.6850  XPSNR v: 21.8676\nn:   12  XPSNR y: 33.8138  XPSNR u: 21.6506  XPSNR v: 21.5348\nn:   13  XPSNR y: 32.6648  XPSNR u: 23.0426  XPSNR v: 22.9332\nn:   14  XPSNR y: 34.1763  XPSNR u: 23.8653  XPSNR v: 23.8835\nn:   15  XPSNR y: 32.6503  XPSNR u: 23.1179  XPSNR v: 22.5974\nn:   16  XPSNR y: 33.5253  XPSNR u: 22.6014  XPSNR v: 23.1599\nn:   17  XPSNR y: 32.7067  XPSNR u: 23.1342  XPSNR v: 23.0224\nn:   18  XPSNR y: 33.4035  XPSNR u: 22.7630  XPSNR v: 22.7856\nn:   19  XPSNR y: 32.9681  XPSNR u: 23.1789  XPSNR v: 23.4075\nn:   20  XPSNR y: 33.8864  XPSNR u: 22.3972  XPSNR v: 22.4006\nn:   21  XPSNR y: 32.8848  XPSNR u: 23.0408  XPSNR v: 22.9436\nn:   22  XPSNR y: 32.9646  XPSNR u: 21.9679  XPSNR v: 21.7263\nn:   23  XPSNR y: 33.4706  XPSNR u: 23.1246  XPSNR v: 23.2789\nn:   24  XPSNR y: 34.5402  XPSNR u: 23.9332  XPSNR v: 23.7374\nn:   25  XPSNR y: 33.0992  XPSNR u: 22.9138  XPSNR v: 22.9338\nn:   26  XPSNR y: 33.9685  XPSNR u: 23.7726  XPSNR v: 23.7762\nn:   27  XPSNR y: 33.4111  XPSNR u: 21.4986  XPSNR v: 21.7927\nn:   28  XPSNR y: 33.2883  XPSNR u: 22.9620  XPSNR v: 23.2714\nn:   29  XPSNR y: 33.4262  XPSNR u: 22.9209  XPSNR v: 23.0211\nn:   30  XPSNR y: 33.9035  XPSNR u: 23.7644  XPSNR v: 23.6268\nn:   31  XPSNR y: 33.3133  XPSNR u: 21.9200  XPSNR v: 21.0659\nn:   32  XPSNR y: 33.6754  XPSNR u: 22.8293  XPSNR v: 23.0215\nn:   33  XPSNR y: 33.1713  XPSNR u: 23.8243  XPSNR v: 23.4781\nn:   34  XPSNR y: 33.7542  XPSNR u: 22.6479  XPSNR v: 23.2001\nn:   35  XPSNR y: 33.3522  XPSNR u: 22.1908  XPSNR v: 22.0876\nn:   36  XPSNR y: 33.8148  XPSNR u: 21.6586  XPSNR v: 22.1312\nn:   37  XPSNR y: 33.3948  XPSNR u: 23.2866  XPSNR v: 22.8708\nn:   38  XPSNR y: 34.5827  XPSNR u: 23.6546  XPSNR v: 23.9871\nn:   39  XPSNR y: 33.9263  XPSNR u: 21.6386  XPSNR v: 21.9309\nn:   40  XPSNR y: 33.8021  XPSNR u: 22.2912  XPSNR v: 22.0609\nn:   41  XPSNR y: 33.7951  XPSNR u: 23.4298  XPSNR v: 23.4027\nn:   42  XPSNR y: 33.8930  XPSNR u: 22.0210  XPSNR v: 22.1774\nn:   43  XPSNR y: 33.8362  XPSNR u: 22.2773  XPSNR v: 22.7507\nn:   44  XPSNR y: 34.6120  XPSNR u: 21.3775  XPSNR v: 21.9228\nn:   45  XPSNR y: 33.7914  XPSNR u: 23.4823  XPSNR v: 23.7419\nn:   46  XPSNR y: 34.9717  XPSNR u: 24.0222  XPSNR v: 23.8816\nn:   47  XPSNR y: 33.9788  XPSNR u: 22.2210  XPSNR v: 21.9554\nn:   48  XPSNR y: 34.1134  XPSNR u: 23.0131  XPSNR v: 22.9082\nn:   49  XPSNR y: 34.1454  XPSNR u: 21.2882  XPSNR v: 21.7781\nn:   50  XPSNR y: 33.8862  XPSNR u: 21.8531  XPSNR v: 22.0177\nn:   51  XPSNR y: 34.0614  XPSNR u: 21.3863  XPSNR v: 21.3943\nn:   52  XPSNR y: 34.1745  XPSNR u: 23.6091  XPSNR v: 23.5870\nn:   53  XPSNR y: 34.2937  XPSNR u: 23.0875  XPSNR v: 23.3200\nn:   54  XPSNR y: 34.4627  XPSNR u: 23.4050  XPSNR v: 23.4453\nn:   55  XPSNR y: 34.6789  XPSNR u: 21.8494  XPSNR v: 22.5017\nn:   56  XPSNR y: 35.1031  XPSNR u: 22.9181  XPSNR v: 22.7467\nn:   57  XPSNR y: 34.9141  XPSNR u: 21.5788  XPSNR v: 21.5584\nn:   58  XPSNR y: 29.0409  XPSNR u: 22.0080  XPSNR v: 21.9849\nn:   59  XPSNR y: 35.0827  XPSNR u: 22.1504  XPSNR v: 22.0945\nn:   60  XPSNR y: 35.1768  XPSNR u: 22.4252  XPSNR v: 22.8434\nn:   61  XPSNR y: 35.2880  XPSNR u: 23.2921  XPSNR v: 23.0899\nn:   62  XPSNR y: 36.0723  XPSNR u: 23.6362  XPSNR v: 23.7396\nn:   63  XPSNR y: 35.6259  XPSNR u: 21.1114  XPSNR v: 21.3404\nn:   64  XPSNR y: 35.9851  XPSNR u: 22.8581  XPSNR v: 23.3993\nn:   65  XPSNR y: 32.6092  XPSNR u: 24.3635  XPSNR v: 24.8729\nn:   66  XPSNR y: 34.8934  XPSNR u: 24.1815  XPSNR v: 24.4360\nn:   67  XPSNR y: 33.9132  XPSNR u: 22.1729  XPSNR v: 21.8158\nn:   68  XPSNR y: 33.9134  XPSNR u: 21.8007  XPSNR v: 21.7953\nn:   69  XPSNR y: 33.0773  XPSNR u: 22.3818  XPSNR v: 22.2907\nn:   70  XPSNR y: 33.5538  XPSNR u: 23.1192  XPSNR v: 22.5364\nn:   71  XPSNR y: 33.7286  XPSNR u: 24.2515  XPSNR v: 24.3315\nn:   72  XPSNR y: 35.7536  XPSNR u: 23.5339  XPSNR v: 23.3026\nn:   73  XPSNR y: 33.5241  XPSNR u: 22.1213  XPSNR v: 22.0775\nn:   74  XPSNR y: 34.8974  XPSNR u: 23.9108  XPSNR v: 23.7928\nn:   75  XPSNR y: 33.7587  XPSNR u: 22.4334  XPSNR v: 22.7283\nn:   76  XPSNR y: 33.7373  XPSNR u: 23.9587  XPSNR v: 23.8960\nn:   77  XPSNR y: 33.4715  XPSNR u: 21.6631  XPSNR v: 21.2852\nn:   78  XPSNR y: 29.4310  XPSNR u: 22.1939  XPSNR v: 21.9808\nn:   79  XPSNR y: 34.0092  XPSNR u: 22.3890  XPSNR v: 22.3679\nn:   80  XPSNR y: 29.2751  XPSNR u: 22.4156  XPSNR v: 22.0694\nn:   81  XPSNR y: 33.5787  XPSNR u: 21.6993  XPSNR v: 21.9385\nn:   82  XPSNR y: 28.8112  XPSNR u: 22.7014  XPSNR v: 22.7405\nn:   83  XPSNR y: 33.8135  XPSNR u: 22.0732  XPSNR v: 22.2851\nn:   84  XPSNR y: 28.9302  XPSNR u: 22.1193  XPSNR v: 22.0400\nn:   85  XPSNR y: 33.0655  XPSNR u: 21.5828  XPSNR v: 21.6665\nn:   86  XPSNR y: 28.3100  XPSNR u: 22.0458  XPSNR v: 21.9042\nn:   87  XPSNR y: 33.5179  XPSNR u: 21.6673  XPSNR v: 21.4420\nn:   88  XPSNR y: 30.4705  XPSNR u: 21.6070  XPSNR v: 21.5687\nn:   89  XPSNR y: 33.3943  XPSNR u: 21.5123  XPSNR v: 21.6002\nn:   90  XPSNR y: 33.7868  XPSNR u: 21.7130  XPSNR v: 21.6602\nn:   91  XPSNR y: 33.8904  XPSNR u: 23.6992  XPSNR v: 23.9341\nn:   92  XPSNR y: 34.1558  XPSNR u: 23.4921  XPSNR v: 23.2387\nn:   93  XPSNR y: 33.6566  XPSNR u: 23.9274  XPSNR v: 24.0393\nn:   94  XPSNR y: 34.1220  XPSNR u: 22.5090  XPSNR v: 22.6899\nn:   95  XPSNR y: 33.9283  XPSNR u: 22.4292  XPSNR v: 22.0692\nn:   96  XPSNR y: 33.9611  XPSNR u: 23.5498  XPSNR v: 23.0583\nn:   97  XPSNR y: 33.9282  XPSNR u: 22.1898  XPSNR v: 21.9610\nn:   98  XPSNR y: 34.1710  XPSNR u: 22.0784  XPSNR v: 22.5171\nn:   99  XPSNR y: 34.2039  XPSNR u: 21.2904  XPSNR v: 21.4125\nn:  100  XPSNR y: 32.5036  XPSNR u: 21.8256  XPSNR v: 22.0936\nn:  101  XPSNR y: 34.2139  XPSNR u: 22.1625  XPSNR v: 22.5741\nn:  102  XPSNR y: 34.6393  XPSNR u: 22.7115  XPSNR v: 22.7472\nn:  103  XPSNR y: 34.5316  XPSNR u: 24.1496  XPSNR v: 24.2262\nn:  104  XPSNR y: 34.9802  XPSNR u: 23.6928  XPSNR v: 23.4005\nn:  105  XPSNR y: 34.7055  XPSNR u: 21.8815  XPSNR v: 21.5118\nn:  106  XPSNR y: 31.6327  XPSNR u: 23.5725  XPSNR v: 22.9782\nn:  107  XPSNR y: 34.8662  XPSNR u: 22.3448  XPSNR v: 22.5226\nn:  108  XPSNR y: 31.2902  XPSNR u: 22.2393  XPSNR v: 22.5216\nn:  109  XPSNR y: 34.8820  XPSNR u: 22.1173  XPSNR v: 22.5927\nn:  110  XPSNR y: 35.3954  XPSNR u: 22.5418  XPSNR v: 22.3569\nn:  111  XPSNR y: 35.1520  XPSNR u: 23.6517  XPSNR v: 23.3467\nn:  112  XPSNR y: 35.5542  XPSNR u: 23.4963  XPSNR v: 23.6797\nn:  113  XPSNR y: 35.8341  XPSNR u: 23.2872  XPSNR v: 23.8106\nn:  114  XPSNR y: 35.6732  XPSNR u: 21.6519  XPSNR v: 22.1083\nn:  115  XPSNR y: 36.3110  XPSNR u: 22.7060  XPSNR v: 22.6959\nn:  116  XPSNR y: 36.3839  XPSNR u: 21.8218  XPSNR v: 21.9530\nn:  117  XPSNR y: 36.0946  XPSNR u: 22.9534  XPSNR v: 22.3524\nn:  118  XPSNR y: 36.1899  XPSNR u: 23.8015  XPSNR v: 24.0682\nn:  119  XPSNR y: 36.9414  XPSNR u: 22.3025  XPSNR v: 22.5956\nn:  120  XPSNR y: 36.6820  XPSNR u: 22.0221  XPSNR v: 22.2787\nn:  121  XPSNR y: 35.2400  XPSNR u: 22.7857  XPSNR v: 22.6704\nn:  122  XPSNR y: 36.6911  XPSNR u: 21.8252  XPSNR v: 21.6561\nn:  123  XPSNR y: 34.6650  XPSNR u: 21.6495  XPSNR v: 21.1462\nn:  124  XPSNR y: 36.8658  XPSNR u: 21.4053  XPSNR v: 21.3219\nn:  125  XPSNR y: 36.7509  XPSNR u: 21.7734  XPSNR v: 21.6626\nn:  126  XPSNR y: 36.8028  XPSNR u: 23.4523  XPSNR v: 23.5858\nn:  127  XPSNR y: 36.9758  XPSNR u: 22.7496  XPSNR v: 22.8041\nn:  128  XPSNR y: 37.0366  XPSNR u: 22.1134  XPSNR v: 22.4944\nn:  129  XPSNR y: 32.4412  XPSNR u: 24.2753  XPSNR v: 24.3802\nn:  130  XPSNR y: 33.5065  XPSNR u: 23.5062  XPSNR v: 23.3527\nn:  131  XPSNR y: 32.8459  XPSNR u: 21.9766  XPSNR v: 21.8033\nn:  132  XPSNR y: 31.1796  XPSNR u: 22.9106  XPSNR v: 23.3140\nn:  133  XPSNR y: 32.9699  XPSNR u: 23.3328  XPSNR v: 23.6371\nn:  134  XPSNR y: 33.9327  XPSNR u: 23.8553  XPSNR v: 23.7743\nn:  135  XPSNR y: 33.0435  XPSNR u: 21.7518  XPSNR v: 21.8813\nn:  136  XPSNR y: 33.5428  XPSNR u: 22.8607  XPSNR v: 23.0938\nn:  137  XPSNR y: 33.0180  XPSNR u: 23.5606  XPSNR v: 23.1809\nn:  138  XPSNR y: 34.3360  XPSNR u: 23.7148  XPSNR v: 23.3910\nn:  139  XPSNR y: 33.0629  XPSNR u: 22.2547  XPSNR v: 22.2596\nn:  140  XPSNR y: 33.9097  XPSNR u: 21.9897  XPSNR v: 22.0823\nn:  141  XPSNR y: 32.9755  XPSNR u: 22.8632  XPSNR v: 23.4325\nn:  142  XPSNR y: 33.7244  XPSNR u: 23.6932  XPSNR v: 23.7046\nn:  143  XPSNR y: 33.1076  XPSNR u: 23.5294  XPSNR v: 23.0309\nn:  144  XPSNR y: 34.5908  XPSNR u: 23.0977  XPSNR v: 23.2441\nn:  145  XPSNR y: 33.5217  XPSNR u: 23.4959  XPSNR v: 23.5054\nn:  146  XPSNR y: 33.0665  XPSNR u: 21.8296  XPSNR v: 21.7234\nn:  147  XPSNR y: 33.8814  XPSNR u: 23.1065  XPSNR v: 23.3634\nn:  148  XPSNR y: 33.3714  XPSNR u: 21.9234  XPSNR v: 21.6039\nn:  149  XPSNR y: 34.1785  XPSNR u: 23.7514  XPSNR v: 23.6682\nn:  150  XPSNR y: 33.3518  XPSNR u: 23.5042  XPSNR v: 22.8224\nn:  151  XPSNR y: 34.3729  XPSNR u: 23.7894  XPSNR v: 23.3770\nn:  152  XPSNR y: 33.6050  XPSNR u: 22.0008  XPSNR v: 21.6717\nn:  153  XPSNR y: 33.6339  XPSNR u: 23.0427  XPSNR v: 22.9510\nn:  154  XPSNR y: 33.6443  XPSNR u: 23.1577  XPSNR v: 23.3654\nn:  155  XPSNR y: 34.4209  XPSNR u: 23.8555  XPSNR v: 24.0976\nn:  156  XPSNR y: 33.7603  XPSNR u: 21.7371  XPSNR v: 22.1085\nn:  157  XPSNR y: 34.2169  XPSNR u: 22.8967  XPSNR v: 22.9938\nn:  158  XPSNR y: 33.6689  XPSNR u: 23.2181  XPSNR v: 22.8975\nn:  159  XPSNR y: 34.7604  XPSNR u: 23.2501  XPSNR v: 23.5981\nn:  160  XPSNR y: 34.0919  XPSNR u: 21.7803  XPSNR v: 21.6881\nn:  161  XPSNR y: 35.1893  XPSNR u: 21.8458  XPSNR v: 21.6625\nn:  162  XPSNR y: 34.1739  XPSNR u: 22.9208  XPSNR v: 22.7734\nn:  163  XPSNR y: 35.0682  XPSNR u: 23.5714  XPSNR v: 23.4336\nn:  164  XPSNR y: 34.8266  XPSNR u: 21.8870  XPSNR v: 21.8685\nn:  165  XPSNR y: 35.4523  XPSNR u: 21.6060  XPSNR v: 21.6726\nn:  166  XPSNR y: 34.7856  XPSNR u: 22.8811  XPSNR v: 23.2498\nn:  167  XPSNR y: 35.9244  XPSNR u: 22.4210  XPSNR v: 23.1829\nn:  168  XPSNR y: 35.4308  XPSNR u: 21.7512  XPSNR v: 21.4569\nn:  169  XPSNR y: 35.6982  XPSNR u: 22.6611  XPSNR v: 21.9915\nn:  170  XPSNR y: 35.1809  XPSNR u: 22.6062  XPSNR v: 22.6309\nn:  171  XPSNR y: 35.7671  XPSNR u: 23.2640  XPSNR v: 22.9799\nn:  172  XPSNR y: 35.4559  XPSNR u: 21.1988  XPSNR v: 21.9976\nn:  173  XPSNR y: 35.3883  XPSNR u: 23.0535  XPSNR v: 23.2496\nn:  174  XPSNR y: 35.3230  XPSNR u: 23.0027  XPSNR v: 23.0795\nn:  175  XPSNR y: 35.8948  XPSNR u: 22.5277  XPSNR v: 22.2443\nn:  176  XPSNR y: 35.8618  XPSNR u: 22.6481  XPSNR v: 22.8154\nn:  177  XPSNR y: 35.6549  XPSNR u: 22.7143  XPSNR v: 22.7231\nn:  178  XPSNR y: 35.5437  XPSNR u: 23.3057  XPSNR v: 22.9322\nn:  179  XPSNR y: 35.7260  XPSNR u: 23.5728  XPSNR v: 23.1251\nn:  180  XPSNR y: 35.6501  XPSNR u: 21.5368  XPSNR v: 21.3566\nn:  181  XPSNR y: 35.3966  XPSNR u: 22.9470  XPSNR v: 23.3642\nn:  182  XPSNR y: 35.6123  XPSNR u: 22.7872  XPSNR v: 22.8730\nn:  183  XPSNR y: 36.0198  XPSNR u: 23.4311  XPSNR v: 23.0566\nn:  184  XPSNR y: 35.7657  XPSNR u: 22.9652  XPSNR v: 23.0781\nn:  185  XPSNR y: 35.7293  XPSNR u: 22.8616  XPSNR v: 22.4413\nn:  186  XPSNR y: 35.9905  XPSNR u: 22.6226  XPSNR v: 22.4732\nn:  187  XPSNR y: 35.3833  XPSNR u: 22.1285  XPSNR v: 22.1892\nn:  188  XPSNR y: 35.5584  XPSNR u: 23.1559  XPSNR v: 22.9384\nn:  189  XPSNR y: 35.2238  XPSNR u: 22.0007  XPSNR v: 22.1178\nn:  190  XPSNR y: 35.1916  XPSNR u: 21.8273  XPSNR v: 21.3980\nn:  191  XPSNR y: 35.5172  XPSNR u: 21.5331  XPSNR v: 21.6389\nn:  192  XPSNR y: 35.2392  XPSNR u: 21.5063  XPSNR v: 21.4824\n\nXPSNR average, 192 frames  y: 34.0128  u: 22.6739  v: 22.6733  (minimum: 22.6733)\n",
+      "sha256": "f501843afb36aa47cdc167b7208ffde3a615ccda17ce01097453cde21cc5a771"
+    },
+    {
+      "codec": "hevc",
+      "depth": 10,
+      "frames": 192,
+      "width": 320,
+      "height": 192,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": null,
+      "referenceSha256": "4e8e898f611a2fd845b3912e483771fe6602b9945d5db830be743da94d617949",
+      "distortedSha256": "1d1fafad5de8f0528e7fa2fb9324e298f1ae61a937cfda06341a4a4e24d0ff73",
+      "text": "n:    1  XPSNR y: 44.3509  XPSNR u: 37.9357  XPSNR v: 37.8255\nn:    2  XPSNR y: 36.9116  XPSNR u: 27.2130  XPSNR v: 27.2271\nn:    3  XPSNR y: 36.5706  XPSNR u: 26.7706  XPSNR v: 26.6280\nn:    4  XPSNR y: 35.5630  XPSNR u: 26.1548  XPSNR v: 26.0868\nn:    5  XPSNR y: 37.1452  XPSNR u: 26.9947  XPSNR v: 26.9614\nn:    6  XPSNR y: 35.7883  XPSNR u: 25.4025  XPSNR v: 25.2686\nn:    7  XPSNR y: 36.1963  XPSNR u: 26.7049  XPSNR v: 26.5681\nn:    8  XPSNR y: 35.9958  XPSNR u: 26.3096  XPSNR v: 26.2118\nn:    9  XPSNR y: 37.9479  XPSNR u: 26.2420  XPSNR v: 26.5020\nn:   10  XPSNR y: 35.9422  XPSNR u: 24.8723  XPSNR v: 24.9487\nn:   11  XPSNR y: 37.4311  XPSNR u: 26.3848  XPSNR v: 26.2704\nn:   12  XPSNR y: 36.0590  XPSNR u: 26.4297  XPSNR v: 26.1929\nn:   13  XPSNR y: 37.0287  XPSNR u: 27.2517  XPSNR v: 27.2060\nn:   14  XPSNR y: 35.6790  XPSNR u: 25.0018  XPSNR v: 24.8680\nn:   15  XPSNR y: 37.0273  XPSNR u: 26.4962  XPSNR v: 26.5794\nn:   16  XPSNR y: 36.5107  XPSNR u: 26.0286  XPSNR v: 26.0977\nn:   17  XPSNR y: 37.9282  XPSNR u: 27.0571  XPSNR v: 27.0960\nn:   18  XPSNR y: 36.4916  XPSNR u: 26.3610  XPSNR v: 26.2069\nn:   19  XPSNR y: 37.2816  XPSNR u: 26.3283  XPSNR v: 26.3034\nn:   20  XPSNR y: 36.9140  XPSNR u: 26.3060  XPSNR v: 26.1859\nn:   21  XPSNR y: 37.6474  XPSNR u: 26.7554  XPSNR v: 26.6537\nn:   22  XPSNR y: 37.2960  XPSNR u: 26.5915  XPSNR v: 26.8483\nn:   23  XPSNR y: 37.4885  XPSNR u: 26.3232  XPSNR v: 26.3882\nn:   24  XPSNR y: 37.1033  XPSNR u: 26.4766  XPSNR v: 26.1660\nn:   25  XPSNR y: 37.5967  XPSNR u: 27.1152  XPSNR v: 26.9282\nn:   26  XPSNR y: 35.1932  XPSNR u: 25.0139  XPSNR v: 24.9900\nn:   27  XPSNR y: 37.5134  XPSNR u: 26.1214  XPSNR v: 26.2468\nn:   28  XPSNR y: 37.1439  XPSNR u: 26.0979  XPSNR v: 26.1537\nn:   29  XPSNR y: 37.6804  XPSNR u: 26.8389  XPSNR v: 26.8559\nn:   30  XPSNR y: 36.0495  XPSNR u: 24.8272  XPSNR v: 24.6414\nn:   31  XPSNR y: 38.4088  XPSNR u: 26.4570  XPSNR v: 26.3206\nn:   32  XPSNR y: 37.1267  XPSNR u: 26.4159  XPSNR v: 26.3246\nn:   33  XPSNR y: 38.3404  XPSNR u: 26.6193  XPSNR v: 26.6786\nn:   34  XPSNR y: 37.2418  XPSNR u: 25.7943  XPSNR v: 25.8049\nn:   35  XPSNR y: 37.6699  XPSNR u: 25.1695  XPSNR v: 25.1970\nn:   36  XPSNR y: 36.9292  XPSNR u: 26.5717  XPSNR v: 26.3044\nn:   37  XPSNR y: 37.8686  XPSNR u: 26.1573  XPSNR v: 26.2458\nn:   38  XPSNR y: 37.4413  XPSNR u: 27.0415  XPSNR v: 27.0168\nn:   39  XPSNR y: 37.8765  XPSNR u: 25.5766  XPSNR v: 25.6004\nn:   40  XPSNR y: 37.2758  XPSNR u: 26.4267  XPSNR v: 26.3609\nn:   41  XPSNR y: 37.6606  XPSNR u: 26.1102  XPSNR v: 26.3034\nn:   42  XPSNR y: 37.6571  XPSNR u: 25.7196  XPSNR v: 25.6736\nn:   43  XPSNR y: 37.6537  XPSNR u: 26.7542  XPSNR v: 26.7743\nn:   44  XPSNR y: 37.1788  XPSNR u: 24.7845  XPSNR v: 24.8154\nn:   45  XPSNR y: 38.4646  XPSNR u: 26.7386  XPSNR v: 26.7893\nn:   46  XPSNR y: 37.8174  XPSNR u: 26.4756  XPSNR v: 26.3710\nn:   47  XPSNR y: 37.5004  XPSNR u: 26.4661  XPSNR v: 26.4152\nn:   48  XPSNR y: 37.7496  XPSNR u: 26.2402  XPSNR v: 26.2716\nn:   49  XPSNR y: 38.6119  XPSNR u: 26.9377  XPSNR v: 27.1383\nn:   50  XPSNR y: 38.6255  XPSNR u: 25.5240  XPSNR v: 25.4320\nn:   51  XPSNR y: 38.0875  XPSNR u: 25.7572  XPSNR v: 25.8305\nn:   52  XPSNR y: 37.9005  XPSNR u: 24.8912  XPSNR v: 24.7660\nn:   53  XPSNR y: 37.9685  XPSNR u: 26.9501  XPSNR v: 26.9176\nn:   54  XPSNR y: 38.0206  XPSNR u: 26.3707  XPSNR v: 26.3184\nn:   55  XPSNR y: 37.8392  XPSNR u: 25.8087  XPSNR v: 25.8533\nn:   56  XPSNR y: 37.9067  XPSNR u: 26.2676  XPSNR v: 26.2333\nn:   57  XPSNR y: 38.7252  XPSNR u: 25.4120  XPSNR v: 25.4418\nn:   58  XPSNR y: 38.0099  XPSNR u: 25.0807  XPSNR v: 24.9744\nn:   59  XPSNR y: 38.7109  XPSNR u: 26.6172  XPSNR v: 26.6162\nn:   60  XPSNR y: 37.2189  XPSNR u: 25.1490  XPSNR v: 25.1170\nn:   61  XPSNR y: 34.7247  XPSNR u: 26.1820  XPSNR v: 26.2688\nn:   62  XPSNR y: 38.1484  XPSNR u: 26.1487  XPSNR v: 26.0024\nn:   63  XPSNR y: 38.2527  XPSNR u: 25.8677  XPSNR v: 26.0860\nn:   64  XPSNR y: 37.1582  XPSNR u: 26.2154  XPSNR v: 26.1569\nn:   65  XPSNR y: 36.3803  XPSNR u: 27.6854  XPSNR v: 27.7240\nn:   66  XPSNR y: 35.7431  XPSNR u: 26.9602  XPSNR v: 26.7616\nn:   67  XPSNR y: 34.7148  XPSNR u: 24.9440  XPSNR v: 25.0197\nn:   68  XPSNR y: 36.9561  XPSNR u: 26.7979  XPSNR v: 26.9443\nn:   69  XPSNR y: 34.3274  XPSNR u: 25.5357  XPSNR v: 25.6126\nn:   70  XPSNR y: 37.7399  XPSNR u: 27.4975  XPSNR v: 27.7023\nn:   71  XPSNR y: 35.7890  XPSNR u: 25.5649  XPSNR v: 25.6972\nn:   72  XPSNR y: 37.3474  XPSNR u: 26.1635  XPSNR v: 26.0089\nn:   73  XPSNR y: 36.4335  XPSNR u: 24.8847  XPSNR v: 25.0520\nn:   74  XPSNR y: 33.7994  XPSNR u: 24.9250  XPSNR v: 25.0551\nn:   75  XPSNR y: 36.8266  XPSNR u: 25.1978  XPSNR v: 25.2957\nn:   76  XPSNR y: 37.5735  XPSNR u: 26.8506  XPSNR v: 26.8192\nn:   77  XPSNR y: 36.6354  XPSNR u: 26.8289  XPSNR v: 26.9958\nn:   78  XPSNR y: 37.9484  XPSNR u: 27.1360  XPSNR v: 27.2234\nn:   79  XPSNR y: 36.3663  XPSNR u: 25.0164  XPSNR v: 25.2788\nn:   80  XPSNR y: 37.1545  XPSNR u: 26.4161  XPSNR v: 26.5855\nn:   81  XPSNR y: 36.0062  XPSNR u: 25.6074  XPSNR v: 25.7259\nn:   82  XPSNR y: 38.3751  XPSNR u: 27.5148  XPSNR v: 27.4978\nn:   83  XPSNR y: 36.7639  XPSNR u: 25.3883  XPSNR v: 25.5535\nn:   84  XPSNR y: 36.2445  XPSNR u: 25.1538  XPSNR v: 25.4787\nn:   85  XPSNR y: 36.6698  XPSNR u: 26.3279  XPSNR v: 26.4315\nn:   86  XPSNR y: 37.0675  XPSNR u: 26.9157  XPSNR v: 26.9492\nn:   87  XPSNR y: 36.9798  XPSNR u: 24.9277  XPSNR v: 24.9553\nn:   88  XPSNR y: 34.8260  XPSNR u: 25.0930  XPSNR v: 25.1711\nn:   89  XPSNR y: 36.3463  XPSNR u: 25.2026  XPSNR v: 25.2200\nn:   90  XPSNR y: 36.7276  XPSNR u: 26.4676  XPSNR v: 26.5748\nn:   91  XPSNR y: 37.8695  XPSNR u: 26.9998  XPSNR v: 27.0651\nn:   92  XPSNR y: 38.4380  XPSNR u: 26.0126  XPSNR v: 25.8608\nn:   93  XPSNR y: 37.5669  XPSNR u: 26.4611  XPSNR v: 26.4600\nn:   94  XPSNR y: 38.5027  XPSNR u: 26.1595  XPSNR v: 26.1728\nn:   95  XPSNR y: 37.6500  XPSNR u: 25.2656  XPSNR v: 25.1612\nn:   96  XPSNR y: 38.4463  XPSNR u: 26.6651  XPSNR v: 26.6436\nn:   97  XPSNR y: 37.2891  XPSNR u: 25.3810  XPSNR v: 25.5080\nn:   98  XPSNR y: 39.1816  XPSNR u: 26.7343  XPSNR v: 26.8511\nn:   99  XPSNR y: 38.6936  XPSNR u: 26.4881  XPSNR v: 26.4528\nn:  100  XPSNR y: 35.9833  XPSNR u: 24.6203  XPSNR v: 24.7040\nn:  101  XPSNR y: 37.6134  XPSNR u: 26.4948  XPSNR v: 26.5146\nn:  102  XPSNR y: 38.9035  XPSNR u: 25.9810  XPSNR v: 26.1486\nn:  103  XPSNR y: 38.6150  XPSNR u: 25.1601  XPSNR v: 25.1509\nn:  104  XPSNR y: 38.5692  XPSNR u: 26.4594  XPSNR v: 26.5308\nn:  105  XPSNR y: 38.4673  XPSNR u: 24.8686  XPSNR v: 25.0057\nn:  106  XPSNR y: 38.5667  XPSNR u: 25.1697  XPSNR v: 25.2189\nn:  107  XPSNR y: 39.1887  XPSNR u: 25.1615  XPSNR v: 25.2221\nn:  108  XPSNR y: 37.5972  XPSNR u: 25.2174  XPSNR v: 25.2611\nn:  109  XPSNR y: 38.7893  XPSNR u: 27.1566  XPSNR v: 27.1738\nn:  110  XPSNR y: 38.4110  XPSNR u: 25.6683  XPSNR v: 25.7547\nn:  111  XPSNR y: 31.8701  XPSNR u: 25.1067  XPSNR v: 25.0766\nn:  112  XPSNR y: 38.0261  XPSNR u: 24.8682  XPSNR v: 24.9867\nn:  113  XPSNR y: 38.4235  XPSNR u: 25.4901  XPSNR v: 25.4114\nn:  114  XPSNR y: 39.3400  XPSNR u: 27.1626  XPSNR v: 27.2830\nn:  115  XPSNR y: 38.4632  XPSNR u: 26.3364  XPSNR v: 26.3467\nn:  116  XPSNR y: 38.9005  XPSNR u: 26.2947  XPSNR v: 26.3448\nn:  117  XPSNR y: 39.9975  XPSNR u: 26.2392  XPSNR v: 26.1707\nn:  118  XPSNR y: 39.5736  XPSNR u: 27.1200  XPSNR v: 27.1027\nn:  119  XPSNR y: 39.8833  XPSNR u: 26.5404  XPSNR v: 26.4972\nn:  120  XPSNR y: 38.6976  XPSNR u: 25.1504  XPSNR v: 25.1210\nn:  121  XPSNR y: 36.8185  XPSNR u: 26.0503  XPSNR v: 25.9135\nn:  122  XPSNR y: 39.0044  XPSNR u: 25.3862  XPSNR v: 25.3898\nn:  123  XPSNR y: 38.5249  XPSNR u: 24.7432  XPSNR v: 24.8017\nn:  124  XPSNR y: 38.7047  XPSNR u: 25.6912  XPSNR v: 25.7134\nn:  125  XPSNR y: 35.5780  XPSNR u: 25.0247  XPSNR v: 25.0884\nn:  126  XPSNR y: 38.2352  XPSNR u: 24.5894  XPSNR v: 24.5526\nn:  127  XPSNR y: 39.2733  XPSNR u: 25.5520  XPSNR v: 25.7340\nn:  128  XPSNR y: 39.1991  XPSNR u: 26.8472  XPSNR v: 26.7292\nn:  129  XPSNR y: 36.2401  XPSNR u: 27.4041  XPSNR v: 27.5449\nn:  130  XPSNR y: 37.2356  XPSNR u: 27.3703  XPSNR v: 27.3315\nn:  131  XPSNR y: 34.4450  XPSNR u: 24.8813  XPSNR v: 24.8121\nn:  132  XPSNR y: 36.3881  XPSNR u: 26.4757  XPSNR v: 26.1695\nn:  133  XPSNR y: 34.9558  XPSNR u: 26.2028  XPSNR v: 26.1778\nn:  134  XPSNR y: 37.1931  XPSNR u: 27.5284  XPSNR v: 27.1702\nn:  135  XPSNR y: 35.9801  XPSNR u: 26.3174  XPSNR v: 26.0869\nn:  136  XPSNR y: 36.6176  XPSNR u: 25.6008  XPSNR v: 25.3804\nn:  137  XPSNR y: 35.6860  XPSNR u: 26.2181  XPSNR v: 26.0394\nn:  138  XPSNR y: 37.1895  XPSNR u: 27.1272  XPSNR v: 27.0961\nn:  139  XPSNR y: 35.4225  XPSNR u: 25.2004  XPSNR v: 25.1529\nn:  140  XPSNR y: 35.2914  XPSNR u: 25.8535  XPSNR v: 25.8000\nn:  141  XPSNR y: 36.6085  XPSNR u: 25.9842  XPSNR v: 26.0108\nn:  142  XPSNR y: 37.6910  XPSNR u: 27.3530  XPSNR v: 27.0328\nn:  143  XPSNR y: 36.2774  XPSNR u: 24.8904  XPSNR v: 24.9503\nn:  144  XPSNR y: 37.4392  XPSNR u: 26.5376  XPSNR v: 26.4153\nn:  145  XPSNR y: 37.0972  XPSNR u: 26.3681  XPSNR v: 26.4437\nn:  146  XPSNR y: 36.8038  XPSNR u: 25.7838  XPSNR v: 25.8259\nn:  147  XPSNR y: 37.8077  XPSNR u: 25.3539  XPSNR v: 25.5161\nn:  148  XPSNR y: 37.3516  XPSNR u: 26.0944  XPSNR v: 26.1195\nn:  149  XPSNR y: 38.6584  XPSNR u: 26.9133  XPSNR v: 26.9479\nn:  150  XPSNR y: 37.9948  XPSNR u: 26.8439  XPSNR v: 26.9988\nn:  151  XPSNR y: 37.3126  XPSNR u: 26.6545  XPSNR v: 26.6703\nn:  152  XPSNR y: 37.4032  XPSNR u: 25.1953  XPSNR v: 25.2685\nn:  153  XPSNR y: 38.9165  XPSNR u: 26.9059  XPSNR v: 26.9368\nn:  154  XPSNR y: 38.2974  XPSNR u: 26.9018  XPSNR v: 27.1301\nn:  155  XPSNR y: 38.5789  XPSNR u: 26.1829  XPSNR v: 26.0388\nn:  156  XPSNR y: 37.8853  XPSNR u: 26.4103  XPSNR v: 26.3750\nn:  157  XPSNR y: 38.9510  XPSNR u: 27.0255  XPSNR v: 26.9500\nn:  158  XPSNR y: 37.7784  XPSNR u: 26.2276  XPSNR v: 26.4644\nn:  159  XPSNR y: 38.9032  XPSNR u: 26.1635  XPSNR v: 26.2052\nn:  160  XPSNR y: 38.1086  XPSNR u: 26.3342  XPSNR v: 26.4125\nn:  161  XPSNR y: 36.9267  XPSNR u: 26.7506  XPSNR v: 26.6962\nn:  162  XPSNR y: 36.5100  XPSNR u: 24.9890  XPSNR v: 24.9507\nn:  163  XPSNR y: 38.3900  XPSNR u: 25.0012  XPSNR v: 25.0736\nn:  164  XPSNR y: 38.1769  XPSNR u: 26.0842  XPSNR v: 26.0246\nn:  165  XPSNR y: 37.5573  XPSNR u: 25.1109  XPSNR v: 25.2712\nn:  166  XPSNR y: 36.9334  XPSNR u: 24.7909  XPSNR v: 24.7242\nn:  167  XPSNR y: 38.1973  XPSNR u: 25.2456  XPSNR v: 25.3571\nn:  168  XPSNR y: 38.7584  XPSNR u: 26.2765  XPSNR v: 26.2654\nn:  169  XPSNR y: 39.4411  XPSNR u: 26.9775  XPSNR v: 27.0298\nn:  170  XPSNR y: 37.9505  XPSNR u: 24.7824  XPSNR v: 24.7429\nn:  171  XPSNR y: 38.9292  XPSNR u: 26.2137  XPSNR v: 26.2986\nn:  172  XPSNR y: 38.1113  XPSNR u: 26.0586  XPSNR v: 26.0529\nn:  173  XPSNR y: 39.2630  XPSNR u: 26.0077  XPSNR v: 26.0498\nn:  174  XPSNR y: 39.8338  XPSNR u: 26.7020  XPSNR v: 26.8101\nn:  175  XPSNR y: 40.5265  XPSNR u: 25.4908  XPSNR v: 25.5706\nn:  176  XPSNR y: 40.0234  XPSNR u: 26.2171  XPSNR v: 26.2914\nn:  177  XPSNR y: 39.6827  XPSNR u: 26.4847  XPSNR v: 26.5627\nn:  178  XPSNR y: 37.0603  XPSNR u: 24.8896  XPSNR v: 25.0025\nn:  179  XPSNR y: 39.1002  XPSNR u: 25.9013  XPSNR v: 26.2399\nn:  180  XPSNR y: 40.1682  XPSNR u: 26.0735  XPSNR v: 26.1355\nn:  181  XPSNR y: 39.5651  XPSNR u: 26.8782  XPSNR v: 26.8881\nn:  182  XPSNR y: 36.7236  XPSNR u: 25.0991  XPSNR v: 25.0471\nn:  183  XPSNR y: 39.4365  XPSNR u: 25.7470  XPSNR v: 25.8595\nn:  184  XPSNR y: 39.8442  XPSNR u: 25.5322  XPSNR v: 25.7803\nn:  185  XPSNR y: 38.8515  XPSNR u: 26.6242  XPSNR v: 26.7034\nn:  186  XPSNR y: 36.4590  XPSNR u: 25.1037  XPSNR v: 25.1055\nn:  187  XPSNR y: 37.9751  XPSNR u: 25.9027  XPSNR v: 25.7657\nn:  188  XPSNR y: 39.8961  XPSNR u: 26.1174  XPSNR v: 26.2506\nn:  189  XPSNR y: 39.9225  XPSNR u: 26.6720  XPSNR v: 26.7415\nn:  190  XPSNR y: 37.4895  XPSNR u: 25.4185  XPSNR v: 25.4332\nn:  191  XPSNR y: 39.7479  XPSNR u: 26.3116  XPSNR v: 26.3932\nn:  192  XPSNR y: 39.8260  XPSNR u: 26.2772  XPSNR v: 26.2373\n\nXPSNR average, 192 frames  y: 37.4969  u: 26.0671  v: 26.0806  (minimum: 26.0671)\n",
+      "sha256": "094bfe31e6a35a171b4db9dac56113a6f0c10b678192bac178f1554eee352658"
+    },
+    {
+      "codec": "hevc",
+      "depth": 10,
+      "frames": 192,
+      "width": 96,
+      "height": 64,
+      "rate": {
+        "ticks": 1001,
+        "timescale": 30000
+      },
+      "roi": {
+        "x": 16,
+        "y": 16,
+        "width": 96,
+        "height": 64
+      },
+      "referenceSha256": "93af21bad5e3263a0e3ca6672ac324e2ebe4923bd9340fc0a298a56a7a729eca",
+      "distortedSha256": "f7efe3491005cd0e60b6617ed5672a5bda185738f347ee42e23e9fe4d2cda041",
+      "text": "n:    1  XPSNR y: 42.1869  XPSNR u: 35.1499  XPSNR v: 35.0733\nn:    2  XPSNR y: 33.6448  XPSNR u: 22.7910  XPSNR v: 22.7724\nn:    3  XPSNR y: 33.9323  XPSNR u: 23.2211  XPSNR v: 22.3391\nn:    4  XPSNR y: 33.2690  XPSNR u: 22.9100  XPSNR v: 23.2186\nn:    5  XPSNR y: 35.0033  XPSNR u: 23.1599  XPSNR v: 22.9928\nn:    6  XPSNR y: 33.5498  XPSNR u: 22.4929  XPSNR v: 22.3405\nn:    7  XPSNR y: 34.0500  XPSNR u: 22.6409  XPSNR v: 22.5853\nn:    8  XPSNR y: 33.7846  XPSNR u: 22.7094  XPSNR v: 22.5035\nn:    9  XPSNR y: 35.0589  XPSNR u: 22.0942  XPSNR v: 22.8423\nn:   10  XPSNR y: 33.8586  XPSNR u: 21.7572  XPSNR v: 21.6218\nn:   11  XPSNR y: 34.2793  XPSNR u: 23.1534  XPSNR v: 22.9509\nn:   12  XPSNR y: 34.0895  XPSNR u: 22.8183  XPSNR v: 23.0990\nn:   13  XPSNR y: 35.6314  XPSNR u: 24.3367  XPSNR v: 23.2362\nn:   14  XPSNR y: 34.4654  XPSNR u: 21.6168  XPSNR v: 21.3841\nn:   15  XPSNR y: 34.8265  XPSNR u: 22.9049  XPSNR v: 23.0863\nn:   16  XPSNR y: 35.0329  XPSNR u: 22.7582  XPSNR v: 23.3174\nn:   17  XPSNR y: 36.3569  XPSNR u: 23.2475  XPSNR v: 23.4602\nn:   18  XPSNR y: 34.8816  XPSNR u: 21.7294  XPSNR v: 21.6463\nn:   19  XPSNR y: 35.1977  XPSNR u: 23.1285  XPSNR v: 23.0579\nn:   20  XPSNR y: 34.7112  XPSNR u: 23.0939  XPSNR v: 23.1968\nn:   21  XPSNR y: 35.9468  XPSNR u: 22.9949  XPSNR v: 22.8691\nn:   22  XPSNR y: 34.6858  XPSNR u: 22.6846  XPSNR v: 22.7975\nn:   23  XPSNR y: 35.5803  XPSNR u: 22.9372  XPSNR v: 22.3700\nn:   24  XPSNR y: 34.7615  XPSNR u: 23.1287  XPSNR v: 22.6493\nn:   25  XPSNR y: 35.0104  XPSNR u: 23.8768  XPSNR v: 23.7871\nn:   26  XPSNR y: 34.9510  XPSNR u: 21.5052  XPSNR v: 21.1998\nn:   27  XPSNR y: 35.1211  XPSNR u: 23.1308  XPSNR v: 23.2752\nn:   28  XPSNR y: 34.5972  XPSNR u: 22.6275  XPSNR v: 22.3622\nn:   29  XPSNR y: 35.2115  XPSNR u: 22.6743  XPSNR v: 22.6129\nn:   30  XPSNR y: 34.7242  XPSNR u: 21.0888  XPSNR v: 21.1145\nn:   31  XPSNR y: 35.8381  XPSNR u: 23.0351  XPSNR v: 22.5082\nn:   32  XPSNR y: 34.8937  XPSNR u: 23.1738  XPSNR v: 23.0140\nn:   33  XPSNR y: 35.2425  XPSNR u: 23.4432  XPSNR v: 23.1657\nn:   34  XPSNR y: 34.7614  XPSNR u: 21.7705  XPSNR v: 21.9881\nn:   35  XPSNR y: 35.9931  XPSNR u: 21.0761  XPSNR v: 21.4297\nn:   36  XPSNR y: 34.7879  XPSNR u: 23.2178  XPSNR v: 23.1338\nn:   37  XPSNR y: 36.3736  XPSNR u: 23.7056  XPSNR v: 23.7403\nn:   38  XPSNR y: 35.4634  XPSNR u: 23.6579  XPSNR v: 23.5813\nn:   39  XPSNR y: 35.7204  XPSNR u: 21.5838  XPSNR v: 21.7083\nn:   40  XPSNR y: 35.3248  XPSNR u: 23.7114  XPSNR v: 23.0371\nn:   41  XPSNR y: 37.0823  XPSNR u: 23.0492  XPSNR v: 23.4045\nn:   42  XPSNR y: 35.7633  XPSNR u: 21.9882  XPSNR v: 22.3733\nn:   43  XPSNR y: 36.0270  XPSNR u: 23.7004  XPSNR v: 23.3695\nn:   44  XPSNR y: 35.3603  XPSNR u: 20.5884  XPSNR v: 21.4446\nn:   45  XPSNR y: 36.0631  XPSNR u: 23.9009  XPSNR v: 23.8675\nn:   46  XPSNR y: 36.1151  XPSNR u: 21.9412  XPSNR v: 21.5347\nn:   47  XPSNR y: 36.3767  XPSNR u: 23.4048  XPSNR v: 23.1472\nn:   48  XPSNR y: 35.8742  XPSNR u: 22.7304  XPSNR v: 22.8845\nn:   49  XPSNR y: 36.4375  XPSNR u: 23.7632  XPSNR v: 23.9810\nn:   50  XPSNR y: 36.6505  XPSNR u: 21.8577  XPSNR v: 21.4679\nn:   51  XPSNR y: 37.2363  XPSNR u: 22.1568  XPSNR v: 22.2746\nn:   52  XPSNR y: 36.8211  XPSNR u: 21.3321  XPSNR v: 21.1029\nn:   53  XPSNR y: 37.9739  XPSNR u: 23.5114  XPSNR v: 23.7437\nn:   54  XPSNR y: 37.3410  XPSNR u: 21.7726  XPSNR v: 22.0138\nn:   55  XPSNR y: 37.6347  XPSNR u: 21.3623  XPSNR v: 21.1689\nn:   56  XPSNR y: 37.1829  XPSNR u: 23.3497  XPSNR v: 23.1526\nn:   57  XPSNR y: 37.8705  XPSNR u: 22.1041  XPSNR v: 22.0484\nn:   58  XPSNR y: 38.0965  XPSNR u: 21.9216  XPSNR v: 21.7190\nn:   59  XPSNR y: 38.1814  XPSNR u: 23.0912  XPSNR v: 23.1879\nn:   60  XPSNR y: 37.5798  XPSNR u: 21.3130  XPSNR v: 21.2992\nn:   61  XPSNR y: 30.8741  XPSNR u: 22.1278  XPSNR v: 22.1582\nn:   62  XPSNR y: 38.2807  XPSNR u: 21.7460  XPSNR v: 21.6071\nn:   63  XPSNR y: 38.5198  XPSNR u: 21.7292  XPSNR v: 21.9655\nn:   64  XPSNR y: 38.0917  XPSNR u: 23.0267  XPSNR v: 23.0364\nn:   65  XPSNR y: 33.2921  XPSNR u: 24.4422  XPSNR v: 24.6735\nn:   66  XPSNR y: 34.2671  XPSNR u: 23.7984  XPSNR v: 24.1277\nn:   67  XPSNR y: 34.2618  XPSNR u: 21.8666  XPSNR v: 21.8783\nn:   68  XPSNR y: 35.0477  XPSNR u: 22.8314  XPSNR v: 23.1259\nn:   69  XPSNR y: 32.8610  XPSNR u: 22.2854  XPSNR v: 21.9852\nn:   70  XPSNR y: 34.8615  XPSNR u: 24.2395  XPSNR v: 24.0951\nn:   71  XPSNR y: 33.0441  XPSNR u: 22.7369  XPSNR v: 22.8358\nn:   72  XPSNR y: 34.4600  XPSNR u: 22.2971  XPSNR v: 22.2671\nn:   73  XPSNR y: 34.4299  XPSNR u: 21.2280  XPSNR v: 21.5195\nn:   74  XPSNR y: 30.9188  XPSNR u: 21.5706  XPSNR v: 22.1978\nn:   75  XPSNR y: 34.6256  XPSNR u: 22.0239  XPSNR v: 22.0373\nn:   76  XPSNR y: 34.7339  XPSNR u: 24.1402  XPSNR v: 23.9854\nn:   77  XPSNR y: 34.2575  XPSNR u: 24.3609  XPSNR v: 23.8361\nn:   78  XPSNR y: 35.7163  XPSNR u: 23.9924  XPSNR v: 24.2603\nn:   79  XPSNR y: 34.3668  XPSNR u: 21.9735  XPSNR v: 22.3203\nn:   80  XPSNR y: 34.4526  XPSNR u: 23.3712  XPSNR v: 23.6454\nn:   81  XPSNR y: 34.0717  XPSNR u: 22.2507  XPSNR v: 22.3147\nn:   82  XPSNR y: 35.1174  XPSNR u: 24.8806  XPSNR v: 24.7745\nn:   83  XPSNR y: 34.1646  XPSNR u: 21.8091  XPSNR v: 21.9251\nn:   84  XPSNR y: 32.7466  XPSNR u: 21.8496  XPSNR v: 22.0905\nn:   85  XPSNR y: 33.6716  XPSNR u: 22.7198  XPSNR v: 22.7908\nn:   86  XPSNR y: 32.0091  XPSNR u: 23.3043  XPSNR v: 23.3818\nn:   87  XPSNR y: 33.7534  XPSNR u: 21.9457  XPSNR v: 21.8483\nn:   88  XPSNR y: 32.0073  XPSNR u: 22.0185  XPSNR v: 21.6242\nn:   89  XPSNR y: 33.4865  XPSNR u: 21.9249  XPSNR v: 21.8149\nn:   90  XPSNR y: 32.2710  XPSNR u: 23.1624  XPSNR v: 23.0002\nn:   91  XPSNR y: 34.2486  XPSNR u: 22.7549  XPSNR v: 23.3205\nn:   92  XPSNR y: 34.7174  XPSNR u: 23.7792  XPSNR v: 23.3561\nn:   93  XPSNR y: 34.0163  XPSNR u: 23.8523  XPSNR v: 23.8687\nn:   94  XPSNR y: 34.6617  XPSNR u: 23.0377  XPSNR v: 23.1229\nn:   95  XPSNR y: 34.3601  XPSNR u: 22.3483  XPSNR v: 22.0571\nn:   96  XPSNR y: 34.4992  XPSNR u: 23.4510  XPSNR v: 23.2184\nn:   97  XPSNR y: 33.9523  XPSNR u: 22.0173  XPSNR v: 21.8928\nn:   98  XPSNR y: 34.4595  XPSNR u: 23.2556  XPSNR v: 23.2689\nn:   99  XPSNR y: 34.4978  XPSNR u: 21.9953  XPSNR v: 22.0031\nn:  100  XPSNR y: 33.0400  XPSNR u: 21.2693  XPSNR v: 21.6950\nn:  101  XPSNR y: 34.4162  XPSNR u: 22.2429  XPSNR v: 22.8008\nn:  102  XPSNR y: 34.7278  XPSNR u: 21.6258  XPSNR v: 22.0356\nn:  103  XPSNR y: 34.9153  XPSNR u: 22.1552  XPSNR v: 22.5052\nn:  104  XPSNR y: 34.7671  XPSNR u: 23.5054  XPSNR v: 23.4285\nn:  105  XPSNR y: 35.4446  XPSNR u: 22.1348  XPSNR v: 22.3182\nn:  106  XPSNR y: 34.7199  XPSNR u: 22.4012  XPSNR v: 22.3518\nn:  107  XPSNR y: 35.4812  XPSNR u: 22.0973  XPSNR v: 21.7837\nn:  108  XPSNR y: 35.1279  XPSNR u: 21.8930  XPSNR v: 21.5613\nn:  109  XPSNR y: 36.1166  XPSNR u: 24.2403  XPSNR v: 24.9798\nn:  110  XPSNR y: 35.1308  XPSNR u: 22.4034  XPSNR v: 22.4045\nn:  111  XPSNR y: 29.8763  XPSNR u: 21.7265  XPSNR v: 21.5592\nn:  112  XPSNR y: 35.6213  XPSNR u: 21.0559  XPSNR v: 21.1671\nn:  113  XPSNR y: 35.6889  XPSNR u: 21.5306  XPSNR v: 21.3518\nn:  114  XPSNR y: 35.8064  XPSNR u: 24.1162  XPSNR v: 24.0668\nn:  115  XPSNR y: 36.5108  XPSNR u: 23.1698  XPSNR v: 23.2386\nn:  116  XPSNR y: 36.0024  XPSNR u: 21.7115  XPSNR v: 21.7073\nn:  117  XPSNR y: 36.8871  XPSNR u: 23.0990  XPSNR v: 23.1192\nn:  118  XPSNR y: 36.3851  XPSNR u: 23.6774  XPSNR v: 23.9608\nn:  119  XPSNR y: 36.9082  XPSNR u: 23.4840  XPSNR v: 23.5410\nn:  120  XPSNR y: 36.4944  XPSNR u: 21.6626  XPSNR v: 21.5691\nn:  121  XPSNR y: 32.5954  XPSNR u: 22.5434  XPSNR v: 22.8934\nn:  122  XPSNR y: 36.6973  XPSNR u: 21.7599  XPSNR v: 22.3371\nn:  123  XPSNR y: 36.9623  XPSNR u: 21.0005  XPSNR v: 21.0078\nn:  124  XPSNR y: 37.1252  XPSNR u: 21.8209  XPSNR v: 21.5800\nn:  125  XPSNR y: 31.5211  XPSNR u: 21.7225  XPSNR v: 21.7615\nn:  126  XPSNR y: 36.9144  XPSNR u: 21.1515  XPSNR v: 21.3737\nn:  127  XPSNR y: 37.3333  XPSNR u: 21.6263  XPSNR v: 22.1011\nn:  128  XPSNR y: 36.9999  XPSNR u: 23.7305  XPSNR v: 24.1284\nn:  129  XPSNR y: 32.9934  XPSNR u: 24.0393  XPSNR v: 24.0882\nn:  130  XPSNR y: 33.9295  XPSNR u: 23.8691  XPSNR v: 23.9583\nn:  131  XPSNR y: 32.9424  XPSNR u: 21.7261  XPSNR v: 21.9986\nn:  132  XPSNR y: 31.0973  XPSNR u: 23.3003  XPSNR v: 23.4149\nn:  133  XPSNR y: 32.7161  XPSNR u: 22.6283  XPSNR v: 23.0381\nn:  134  XPSNR y: 33.6770  XPSNR u: 23.9799  XPSNR v: 23.7613\nn:  135  XPSNR y: 32.8424  XPSNR u: 22.2423  XPSNR v: 21.9132\nn:  136  XPSNR y: 34.8195  XPSNR u: 21.9712  XPSNR v: 21.6381\nn:  137  XPSNR y: 32.7931  XPSNR u: 23.5336  XPSNR v: 22.7348\nn:  138  XPSNR y: 34.2115  XPSNR u: 23.7969  XPSNR v: 23.3255\nn:  139  XPSNR y: 32.8400  XPSNR u: 21.3891  XPSNR v: 21.6617\nn:  140  XPSNR y: 32.6741  XPSNR u: 22.0382  XPSNR v: 21.8423\nn:  141  XPSNR y: 32.7036  XPSNR u: 22.5395  XPSNR v: 23.1797\nn:  142  XPSNR y: 34.5359  XPSNR u: 23.9373  XPSNR v: 24.0340\nn:  143  XPSNR y: 32.9863  XPSNR u: 21.6278  XPSNR v: 21.5886\nn:  144  XPSNR y: 32.7528  XPSNR u: 22.7527  XPSNR v: 23.0998\nn:  145  XPSNR y: 32.9204  XPSNR u: 22.6219  XPSNR v: 23.0815\nn:  146  XPSNR y: 35.2917  XPSNR u: 21.9544  XPSNR v: 22.2680\nn:  147  XPSNR y: 34.2784  XPSNR u: 21.6548  XPSNR v: 22.4583\nn:  148  XPSNR y: 32.5702  XPSNR u: 22.7160  XPSNR v: 22.9178\nn:  149  XPSNR y: 34.4286  XPSNR u: 22.9972  XPSNR v: 24.0275\nn:  150  XPSNR y: 34.2358  XPSNR u: 22.8517  XPSNR v: 23.0164\nn:  151  XPSNR y: 35.7834  XPSNR u: 23.1326  XPSNR v: 23.3221\nn:  152  XPSNR y: 34.3075  XPSNR u: 21.5789  XPSNR v: 21.6127\nn:  153  XPSNR y: 34.4045  XPSNR u: 23.1843  XPSNR v: 23.2001\nn:  154  XPSNR y: 34.4761  XPSNR u: 22.9879  XPSNR v: 23.5149\nn:  155  XPSNR y: 35.4722  XPSNR u: 22.9559  XPSNR v: 22.8649\nn:  156  XPSNR y: 34.7041  XPSNR u: 23.3717  XPSNR v: 22.9339\nn:  157  XPSNR y: 36.5089  XPSNR u: 23.4359  XPSNR v: 23.4579\nn:  158  XPSNR y: 35.3297  XPSNR u: 21.5531  XPSNR v: 21.8200\nn:  159  XPSNR y: 36.1630  XPSNR u: 22.4024  XPSNR v: 22.5530\nn:  160  XPSNR y: 35.3321  XPSNR u: 22.4975  XPSNR v: 22.9039\nn:  161  XPSNR y: 36.7656  XPSNR u: 22.9265  XPSNR v: 23.1217\nn:  162  XPSNR y: 35.8317  XPSNR u: 21.3559  XPSNR v: 21.0407\nn:  163  XPSNR y: 36.6673  XPSNR u: 21.2956  XPSNR v: 21.6941\nn:  164  XPSNR y: 36.3064  XPSNR u: 22.6933  XPSNR v: 22.7178\nn:  165  XPSNR y: 36.3526  XPSNR u: 21.6075  XPSNR v: 21.6720\nn:  166  XPSNR y: 36.5092  XPSNR u: 21.1492  XPSNR v: 21.3360\nn:  167  XPSNR y: 37.7259  XPSNR u: 21.7715  XPSNR v: 21.5903\nn:  168  XPSNR y: 37.1452  XPSNR u: 23.1067  XPSNR v: 22.8117\nn:  169  XPSNR y: 38.4450  XPSNR u: 23.7528  XPSNR v: 24.0619\nn:  170  XPSNR y: 37.4422  XPSNR u: 21.4510  XPSNR v: 21.8373\nn:  171  XPSNR y: 37.7340  XPSNR u: 22.9248  XPSNR v: 22.7679\nn:  172  XPSNR y: 37.5569  XPSNR u: 22.8076  XPSNR v: 22.8878\nn:  173  XPSNR y: 39.0748  XPSNR u: 23.2444  XPSNR v: 23.2598\nn:  174  XPSNR y: 38.0175  XPSNR u: 23.0834  XPSNR v: 22.9908\nn:  175  XPSNR y: 38.0791  XPSNR u: 22.1955  XPSNR v: 22.0896\nn:  176  XPSNR y: 38.2412  XPSNR u: 22.9282  XPSNR v: 22.5288\nn:  177  XPSNR y: 39.4909  XPSNR u: 23.2564  XPSNR v: 23.5784\nn:  178  XPSNR y: 38.6118  XPSNR u: 21.2738  XPSNR v: 21.2888\nn:  179  XPSNR y: 38.8886  XPSNR u: 22.7553  XPSNR v: 22.9273\nn:  180  XPSNR y: 38.8932  XPSNR u: 22.6977  XPSNR v: 22.5457\nn:  181  XPSNR y: 39.9644  XPSNR u: 23.6300  XPSNR v: 23.7841\nn:  182  XPSNR y: 38.6233  XPSNR u: 21.0110  XPSNR v: 20.9385\nn:  183  XPSNR y: 38.8072  XPSNR u: 21.9852  XPSNR v: 22.7908\nn:  184  XPSNR y: 37.7080  XPSNR u: 22.6182  XPSNR v: 22.5751\nn:  185  XPSNR y: 38.3567  XPSNR u: 22.5132  XPSNR v: 23.1382\nn:  186  XPSNR y: 37.2965  XPSNR u: 20.9617  XPSNR v: 21.2334\nn:  187  XPSNR y: 38.2774  XPSNR u: 21.3808  XPSNR v: 21.0861\nn:  188  XPSNR y: 37.3669  XPSNR u: 22.0172  XPSNR v: 22.2116\nn:  189  XPSNR y: 38.1733  XPSNR u: 22.5220  XPSNR v: 22.6978\nn:  190  XPSNR y: 38.0877  XPSNR u: 21.3427  XPSNR v: 21.6341\nn:  191  XPSNR y: 39.4394  XPSNR u: 22.4660  XPSNR v: 22.6060\nn:  192  XPSNR y: 39.0960  XPSNR u: 22.8339  XPSNR v: 22.3221\n\nXPSNR average, 192 frames  y: 35.2120  u: 22.5660  v: 22.6073  (minimum: 22.5660)\n",
+      "sha256": "21223b55adb327f2d5c25cf0c09166c78e0da8f38f141717ad629a42c4541717"
+    }
+  ]
+}

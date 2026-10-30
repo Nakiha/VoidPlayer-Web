@@ -2277,7 +2277,7 @@
     "params": {}
   },
   "cambi.scope": {
-    "source": "Linux x64 可选固定组件；可信 FLV/Enhanced FLV 8/10 位，或严格 MP4 avc1 H2648 / hvc1 HEVC8/10；限范围 BT.709 SDR，整帧、方形像素、不裁剪，长边至少320。分数越高表示检测到更多色带，不是产品合格线；内部按10位处理。允许明确抽样，未采样帧不冒充覆盖。没有跨帧目标跟踪，未认证引用完整性，无法检测错误隐藏。",
+    "source": "使用分析 WASM core；可信 FLV/Enhanced FLV 8/10 位，或严格 MP4 avc1 H2648 / hvc1 HEVC8/10；限范围 BT.709 SDR，整帧、方形像素、不裁剪，长边至少320。分数越高表示检测到更多色带，不是产品合格线；内部按10位处理。允许明确抽样，未采样帧不冒充覆盖。没有跨帧目标跟踪，未认证引用完整性，无法检测错误隐藏。",
     "params": {}
   },
   "cambi.submit": {
@@ -4030,7 +4030,7 @@
     "params": {}
   },
   "qualityClock.direction": {
-    "source": "映射方向：待测源 PTS = 参考源 PTS + offset。每段参考区间为 [start, end)，单位均为整数微秒；两侧区间均不得重叠。",
+    "source": "映射方向：待测源时间 = 参考源时间 + 偏移。参考区间为 [开始, 结束)，单位为微秒。偏移可用微秒或指定帧率下的整帧数；两侧区间均不得重叠。",
     "params": {}
   },
   "qualityClock.execute": {
@@ -4041,8 +4041,24 @@
     "source": "结束本地重试，准备新请求",
     "params": {}
   },
+  "qualityClock.frameOffsetHelp": {
+    "source": "按精确帧率换算；例如 1 帧、30000/1001 fps。",
+    "params": {}
+  },
+  "qualityClock.frames": {
+    "source": "帧",
+    "params": {}
+  },
+  "qualityClock.microseconds": {
+    "source": "微秒",
+    "params": {}
+  },
   "qualityClock.newSamePlan": {
     "source": "新建相同计划",
+    "params": {}
+  },
+  "qualityClock.offsetUnit": {
+    "source": "偏移单位",
     "params": {}
   },
   "qualityClock.pendingConflict": {
@@ -4069,6 +4085,14 @@
     "source": "按此显式策略生成候选",
     "params": {}
   },
+  "qualityClock.rateDenominator": {
+    "source": "帧率分母",
+    "params": {}
+  },
+  "qualityClock.rateNumerator": {
+    "source": "帧率分子",
+    "params": {}
+  },
   "qualityClock.removeSegment": {
     "source": "移除此段",
     "params": {}
@@ -4086,7 +4110,19 @@
     "params": {}
   },
   "qualityClock.scope": {
-    "source": "关系由调用者声明，不认证同内容。时钟仅做精确整数微秒匹配；缺洞、歧义与不支持会保留。只读取已有可信 FLV 或严格 MP4 缓存，评分与候选均须显式提交。",
+    "source": "关系由调用者声明，不认证同内容。时钟按原始 ticks 与时基精确匹配；缺洞、歧义与不支持会保留。只读取已有可信 FLV 或严格 MP4 缓存，评分与候选均须显式提交。",
+    "params": {}
+  },
+  "qualityClock.segmentEnd": {
+    "source": "参考结束 (µs)",
+    "params": {}
+  },
+  "qualityClock.segmentOffset": {
+    "source": "偏移",
+    "params": {}
+  },
+  "qualityClock.segmentStart": {
+    "source": "参考开始 (µs)",
     "params": {}
   },
   "qualityClock.showRange": {
@@ -4099,6 +4135,82 @@
   },
   "qualityClock.title": {
     "source": "显式参考关系与 AU 对应计划",
+    "params": {}
+  },
+  "qualityFields.attempt": {
+    "source": "计划执行编号",
+    "params": {}
+  },
+  "qualityFields.digest": {
+    "source": "计划摘要（SHA256）",
+    "params": {}
+  },
+  "qualityFields.distorted": {
+    "source": "待评片源",
+    "params": {}
+  },
+  "qualityFields.elapsed": {
+    "source": "总运行时限（毫秒）",
+    "params": {}
+  },
+  "qualityFields.frameRate": {
+    "source": "帧率（如 30000/1001）",
+    "params": {}
+  },
+  "qualityFields.limit": {
+    "source": "最多候选数",
+    "params": {}
+  },
+  "qualityFields.memory": {
+    "source": "分析内存上限（字节）",
+    "params": {}
+  },
+  "qualityFields.model": {
+    "source": "评分模型",
+    "params": {}
+  },
+  "qualityFields.plan": {
+    "source": "对应计划",
+    "params": {}
+  },
+  "qualityFields.raw": {
+    "source": "累计输入像素预算（字节）",
+    "params": {}
+  },
+  "qualityFields.reference": {
+    "source": "参考片源",
+    "params": {}
+  },
+  "qualityFields.scoringTime": {
+    "source": "评分时限（秒）",
+    "params": {}
+  },
+  "qualityFields.severity": {
+    "source": "严重程度（1–5）",
+    "params": {}
+  },
+  "qualityFields.side": {
+    "source": "候选所在片源",
+    "params": {}
+  },
+  "qualityFields.space": {
+    "source": "评审空间",
+    "params": {}
+  },
+  "qualityFields.spacing": {
+    "source": "候选最小间隔（帧）",
+    "params": {}
+  },
+  "qualityFields.ssim": {
+    "source": "同时计算 SSIM",
+    "params": {}
+  },
+  "qualityFields.text": {
+    "source": "候选说明",
+    "params": {}
+  },
+  "qualityFields.threshold": {
+    "source": "候选分数上限",
     "params": {}
   },
   "qualityRange.candidates": {
@@ -4390,7 +4502,7 @@
     "params": {}
   },
   "qualityWorkflow.scope": {
-    "source": "显式配对媒体库中的关键帧、前向依赖帧或闭合 GOP 内重排/延迟帧，以 8/10 位 YUV420 原始码值测量。每侧最多 32 AU；重排路径明确起止与目标 AU，以解码器返回的包身份核验全部输出和 drain，不按 PTS 猜帧。此表单为单帧测量；下方另有区间及可选原生 VMAF 连续序列入口，均不自动对齐。",
+    "source": "比较原始视频帧，测量整帧、指定区域或连续片段。双源评分需先明确参考关系；色带筛查只需一个片源。",
     "params": {}
   },
   "qualityWorkflow.searchMedia": {
@@ -4406,7 +4518,7 @@
     "params": {}
   },
   "qualityWorkflow.title": {
-    "source": "单帧 PSNR 任务",
+    "source": "画质评分",
     "params": {}
   },
   "qualityWorkflow.unavailable": {
@@ -4419,6 +4531,74 @@
   },
   "qualityWorkflow.useClient": {
     "source": "使用此客户端",
+    "params": {}
+  },
+  "qualityWorkspace.capability": {
+    "source": "执行器与支持范围",
+    "params": {}
+  },
+  "qualityWorkspace.choosePlan": {
+    "source": "选择参考关系与对应计划",
+    "params": {}
+  },
+  "qualityWorkspace.clientSettings": {
+    "source": "客户端与请求设置",
+    "params": {}
+  },
+  "qualityWorkspace.correspondence": {
+    "source": "参考关系",
+    "params": {}
+  },
+  "qualityWorkspace.harmonic": {
+    "source": "调和平均",
+    "params": {}
+  },
+  "qualityWorkspace.maximum": {
+    "source": "最高分",
+    "params": {}
+  },
+  "qualityWorkspace.minimum": {
+    "source": "最低分",
+    "params": {}
+  },
+  "qualityWorkspace.navigation": {
+    "source": "评分流程",
+    "params": {}
+  },
+  "qualityWorkspace.pendingFacts": {
+    "source": "待确认请求",
+    "params": {}
+  },
+  "qualityWorkspace.planHelp": {
+    "source": "先在“参考关系”中选择已完成的计划，再将它带入评分。下方保留计划凭据，便于核对或接续已有任务。",
+    "params": {}
+  },
+  "qualityWorkspace.publicationFacts": {
+    "source": "候选发布记录",
+    "params": {}
+  },
+  "qualityWorkspace.ranges": {
+    "source": "区间任务",
+    "params": {}
+  },
+  "qualityWorkspace.requestFacts": {
+    "source": "请求与执行详情",
+    "params": {}
+  },
+  "qualityWorkspace.resultFacts": {
+    "source": "完整结果数据",
+    "params": {}
+  },
+  "qualityWorkspace.single": {
+    "source": "单帧与区域",
+    "params": {}
+  },
+  "qualityWorkspace.unscored": {
+    "source": "此指标没有可用分数，请查看执行详情。",
+    "params": {}
+  },
+  "qualityWorkspace.xpsnr": {
+    "source": "XPSNR",
     "params": {}
   },
   "recovery.capacityReached": {
@@ -5679,6 +5859,18 @@
     "source": "查询 / 刷新快照",
     "params": {}
   },
+  "tasks.release": {
+    "source": "释放未共享的评分结果",
+    "params": {}
+  },
+  "tasks.releaseScope": {
+    "source": "释放后保留任务与提交回执；已用于共享评审的结果不会被删除。",
+    "params": {}
+  },
+  "tasks.released": {
+    "source": "私有结果已释放，原任务回执保留。",
+    "params": {}
+  },
   "tasks.reset": {
     "source": "清除筛选",
     "params": {}
@@ -6134,7 +6326,7 @@
     "params": {}
   },
   "vmaf.candidates": {
-    "source": "显式整帧测量候选",
+    "source": "片段测量候选",
     "params": {}
   },
   "vmaf.frames": {
@@ -6162,11 +6354,11 @@
     "params": {}
   },
   "vmaf.recipe": {
-    "source": "冻结的对应关系与测量 recipe",
+    "source": "片段与评分设置",
     "params": {}
   },
   "vmaf.scope": {
-    "source": "需要已安装的 Linux x64 组件及显式提交的时钟对应计划。仅限 2–32 个连续呈现帧；不支持跨帧抽样、缺口、负 PTS 或 VFR。限范围 BT.709 SDR、8/10 位 YUV420、方形像素，不裁剪、旋转或转换。v0.6.1 是固定基线，并非最新模型。分数属于整帧时间序列事实，不是热图或人工缺陷判断；未认证引用完整性，无法检测错误隐藏。",
+    "source": "支持 2–1024 个连续呈现帧，可按计划中的固定区域重算。v0.6.1 是固定基线，NEG 可用于编码比较；整帧或区域分数不是热图或人工缺陷判断。具体格式、色彩和预算限制见支持范围。",
     "params": {}
   },
   "vmaf.share": {
@@ -6174,15 +6366,15 @@
     "params": {}
   },
   "vmaf.sources": {
-    "source": "支持已有可信 FLV/Enhanced FLV、严格非分片 MP4 及两者的双向混合。MP4 限 avc1 H.264 8 位或 hvc1 HEVC 8/10 位，原始时钟必须精确表示整数微秒。",
+    "source": "支持已有可信 FLV/Enhanced FLV 和严格非分片 MP4，可混合比较。MP4 支持 avc1 H.264 8 位、hvc1 HEVC 8/10 位，使用原始有理数时钟精确对齐。",
     "params": {}
   },
   "vmaf.submit": {
-    "source": "发起持久 PSNR + VMAF",
+    "source": "开始 PSNR + VMAF 评分",
     "params": {}
   },
   "vmaf.title": {
-    "source": "原生 VMAF · 连续整帧序列",
+    "source": "VMAF · 连续片段评分",
     "params": {}
   },
   "vmaf.usePlan": {
@@ -6378,7 +6570,7 @@
     "params": {}
   },
   "xpsnr.candidates": {
-    "source": "显式整帧测量候选",
+    "source": "片段测量候选",
     "params": {}
   },
   "xpsnr.compare": {
@@ -6410,11 +6602,11 @@
     "params": {}
   },
   "xpsnr.recipe": {
-    "source": "冻结的对应关系与测量 recipe",
+    "source": "片段与评分设置",
     "params": {}
   },
   "xpsnr.scope": {
-    "source": "需要已安装的 Linux x64 组件及显式提交的时钟对应计划。仅限 2–32 个连续呈现帧；不支持跨帧抽样、缺口、负 PTS 或 VFR。限范围 BT.709 SDR、8/10 位 YUV420、方形像素，不裁剪、旋转或转换。固定 FFmpeg 实现，参考输入在前，保留时域权重和官方逐平面序列池化。未证明感知优于其他指标。分数属于整帧时间序列事实，不是热图或人工缺陷判断；未认证引用完整性，无法检测错误隐藏。",
+    "source": "支持 2–1024 个连续呈现帧，可按计划中的固定区域重算。参考输入在前，保留时域权重和官方逐平面池化；整帧或区域分数不是热图或人工缺陷判断。具体格式、色彩和预算限制见支持范围。",
     "params": {}
   },
   "xpsnr.share": {
@@ -6422,15 +6614,15 @@
     "params": {}
   },
   "xpsnr.sources": {
-    "source": "支持已有可信 FLV/Enhanced FLV、严格非分片 MP4 及两者的双向混合。MP4 限 avc1 H.264 8 位或 hvc1 HEVC 8/10 位，原始时钟必须精确表示整数微秒。",
+    "source": "支持已有可信 FLV/Enhanced FLV 和严格非分片 MP4，可混合比较。MP4 支持 avc1 H.264 8 位、hvc1 HEVC 8/10 位，使用原始有理数时钟精确对齐。",
     "params": {}
   },
   "xpsnr.submit": {
-    "source": "发起持久 PSNR + XPSNR",
+    "source": "开始 PSNR + XPSNR 评分",
     "params": {}
   },
   "xpsnr.title": {
-    "source": "原生 XPSNR · 连续整帧序列",
+    "source": "XPSNR · 连续片段评分",
     "params": {}
   },
   "xpsnr.usePlan": {

@@ -5,7 +5,6 @@ import {Worker} from 'node:worker_threads';
 import {randomUUID} from 'node:crypto';
 import {chromium,webkit} from 'playwright';
 import {nativeFixture,until} from '../test/helpers/native-vmaf.mjs';
-import {xpsnrComponent} from '../test/helpers/native-xpsnr.mjs';
 import {startService} from '../server/runtime.ts';
 import {chooseTestGuest} from './test-identity.mjs';
 import {installAdminObservationLifecycle,drainAdminObservations} from './testing/admin-observation-lifecycle.mjs';
@@ -18,7 +17,7 @@ const check=(name,value)=>{assert.ok(value,name);checks.push(name);};
 const defer=()=>{let resolve;const promise=new Promise(r=>resolve=r);const d={promise,resolve};held.push(d);return d;};
 const bounded=async(promise,label)=>{let timer;try{return await Promise.race([promise,new Promise((_,reject)=>timer=setTimeout(()=>reject(Error('Bounded gate: '+label+' '+phase)),15000))]);}finally{clearTimeout(timer);}};
 try{
-  f=await nativeFixture({distorted:true,containers:['mp4','flv'],staticDir:'dist',start:async config=>{config.nativeXpsnr=await xpsnrComponent();return startService(config,false);}});
+  f=await nativeFixture({distorted:true,containers:['mp4','flv'],staticDir:'dist'});
   const library=f.service.library,runner=library.quality,create=runner.createWorker;let measureCount=0,gateAt=Infinity,state;
   runner.createWorker=data=>{if(data.mode==='measure'&&++measureCount===gateAt){state=new Int32Array(new SharedArrayBuffer(20));gatedWorker=new Worker(new URL('../test/helpers/quality-phase-worker.ts',import.meta.url),{workerData:{...data,hangPhase:'decode',phaseState:state.buffer}});return gatedWorker;}return create(data);};
   const frozen=library.qualityCorrespondence.result(f.input.plan.id,f.actor).rangePlan.input;
@@ -26,7 +25,7 @@ try{
   const inputs={single:{schema:'voidplayer-psnr-frame-job',version:1,client:{id:'gui-reexecution',kind:'agent'},request:pair},range:{...frozen,client:{id:'gui-reexecution',kind:'agent'},pairs:frozen.pairs.map(p=>({...p,ssim:{variant:'ffmpeg-uniform-8x8-step4-v1'},spatial:{blockWidth:64,blockHeight:48}}))},vmaf:f.input,xpsnr:(({model,...input})=>({...input,schema:'voidplayer-native-xpsnr-job',recipe:'ffmpeg-xpsnr-reference-first-temporal-v1'}))(f.input)};
   const paths={single:'/api/quality/jobs',range:'/api/quality/ranges',vmaf:'/api/quality/vmaf/jobs',xpsnr:'/api/quality/xpsnr/jobs'},originals={},snapshots={};
   const read=async(kind,id)=>{const r=await f.json(paths[kind]+'/'+id);return kind==='range'?r.job:r;};
-  for(const service of [library.qualityVmaf,library.qualityXpsnr]){let crashNative=true;const nativeRunner=service.runner,nativeRun=nativeRunner.run.bind(nativeRunner);nativeRunner.run=(input,snapshot,signal,hooks)=>nativeRun(input,snapshot,signal,{...hooks,process:p=>{hooks.process(p);if(p&&crashNative){crashNative=false;process.kill(p.pid,'SIGKILL');}}});}
+  for(const service of [library.qualityVmaf,library.qualityXpsnr]){let crashNative=true;const nativeRunner=service.runner,nativeRun=nativeRunner.run.bind(nativeRunner);nativeRunner.run=(input,snapshot,signal,hooks)=>nativeRun(input,snapshot,signal,{...hooks,prepared:p=>{hooks.prepared(p);if(crashNative){crashNative=false;throw Error('Injected failure after real companion preparation');}}});}
   for(const kind of ['single','range','vmaf','xpsnr']){
     phase='prepare-original-'+kind;
     if((kind==='single'||kind==='range')){gateAt=measureCount+(kind==='range'?2:1);state=undefined;}
@@ -41,7 +40,7 @@ try{
   await player.evaluate(async url=>{const blob=await fetch(url).then(r=>r.blob());await window.voidPlayer.loadFile('A',new File([blob],'A.mp4'));},`${f.base}/api/media/${a.id}?v=${a.version}`);await player.waitForFunction(()=>!window.voidPlayer.getState().busy&&window.voidPlayer.getState().tracks[0]?.frame);await player.evaluate(()=>window.voidPlayer.play());await player.waitForFunction(()=>window.voidPlayer.getState().positionUs>200000);const before=await player.evaluate(()=>window.voidPlayer.getState());
   page=await context.newPage();await page.goto(f.base+'/admin/#quality');
   const roots={single:'#quality-reexecution',range:'#quality-range-reexecution',vmaf:'#vmaf-reexecution',xpsnr:'#tasks-reexecution [data-reexecution="xpsnr"]'},selectors={single:'data-job-id',range:'data-range-id',vmaf:'data-vmaf-job',xpsnr:'data-xpsnr-job'},successors={};
-  const select=async(kind,id)=>{if(kind==='xpsnr'){await page.locator('[data-pane=tasks]').click();await page.locator('#tasks-filters [name=kind]').selectOption('xpsnr');await page.locator('#tasks-filters button[type=submit]').click();await page.locator(`[data-task-id="${id}"]`).click();await page.locator(roots[kind]).waitFor({state:'visible'});return;}await page.locator(`[${selectors[kind]}="${id}"]`).click();await page.locator(roots[kind]).waitFor({state:'visible'});};
+  const select=async(kind,id)=>{if(kind==='xpsnr'){await page.locator('[data-pane=tasks]').click();await page.locator('#tasks-filters [name=kind]').selectOption('xpsnr');await page.locator('#tasks-filters button[type=submit]').click();await page.locator(`[data-task-id="${id}"]`).click();await page.locator(roots[kind]).waitFor({state:'visible'});return;}await page.locator(`[data-quality-section=${kind==='range'?'ranges':kind}]`).click();await page.locator(`[${selectors[kind]}="${id}"]`).click();await page.locator(roots[kind]).waitFor({state:'visible'});};
   for(const kind of ['single','range','vmaf','xpsnr']){
     phase='GUI-plan-'+kind;const id=originals[kind].id,url=paths[kind]+'/'+id;await select(kind,id);const root=page.locator(roots[kind]);
     await root.locator('[data-reason]').fill('Explicit GUI full recomputation '+kind);await root.locator('[data-plan]').click();await root.locator('[data-status]').filter({hasText:'Conditions verified'}).waitFor();
@@ -55,7 +54,7 @@ try{
       gatedWorker.postMessage({type:'resume'});gateAt=Infinity;await until(()=>read(kind,chain.successor.id),j=>j.state==='completed','Background full range completion');
       await select(kind,id);await root.locator('[data-replay]').click();await page.waitForFunction(id=>document.querySelector('#quality-range-title')?.textContent.includes(id),chain.successor.id);
       check('unknown response replays exact original actor/body/key',posts.length===2&&posts[0].key===posts[1].key&&posts[0].actor===posts[1].actor&&posts[0].body===posts[1].body);
-      const peer=await context.newPage();await peer.goto(f.base+'/admin/#quality');await peer.locator(`[data-range-id="${id}"]`).click();await peer.locator(roots.range+' [data-reason]').fill('Another window must observe the existing successor');await peer.locator(roots.range+' [data-plan]').click();await peer.locator(roots.range+' [data-blocks]').filter({hasText:'successor-exists'}).waitFor();check('second window cannot fork',await peer.locator(roots.range+' [data-execute]').isDisabled());await drainAdminObservations(peer);await peer.close();
+      const peer=await context.newPage();await peer.goto(f.base+'/admin/?qualityView=ranges#quality');await peer.locator(`[data-range-id="${id}"]`).click();await peer.locator(roots.range+' [data-reason]').fill('Another window must observe the existing successor');await peer.locator(roots.range+' [data-plan]').click();await peer.locator(roots.range+' [data-blocks]').filter({hasText:'successor-exists'}).waitFor();check('second window cannot fork',await peer.locator(roots.range+' [data-execute]').isDisabled());await drainAdminObservations(peer);await peer.close();
       await page.unrouteAll({behavior:'wait'});
     }else{
       await root.locator('[data-execute]').click();const chain=await until(()=>f.json(url+'/reexecutions'),v=>!!v.successor,'GUI durable successor');successors[kind]=chain.successor.id;await until(()=>read(kind,chain.successor.id),j=>!['queued','preparing','running','cancelling'].includes(j.state),'GUI execution');
@@ -73,7 +72,7 @@ try{
       await page.locator('#tasks-detail:not([hidden]) #tasks-title').filter({hasText:id}).waitFor();
       check('task center traces the original computation',(await page.locator('#tasks-title').textContent()).includes(id));
       await page.unroute(originalPath,originalResponse);
-      await drainAdminObservations(page);await page.reload();await page.locator('#tasks-title').filter({hasText:id}).waitFor();check('task center reopens the same target and filter',await page.locator('#tasks-filters [name=kind]').inputValue()==='xpsnr');await page.locator('[data-pane=quality]').click();await page.locator(`[data-xpsnr-job="${successors[kind]}"]`).click();await page.locator('#xpsnr-reexecution [data-chain]').filter({hasText:id}).waitFor();
+      await drainAdminObservations(page);await page.reload();await page.locator('#tasks-title').filter({hasText:id}).waitFor();check('task center reopens the same target and filter',await page.locator('#tasks-filters [name=kind]').inputValue()==='xpsnr');await page.locator('[data-pane=quality]').click();await page.locator('[data-quality-section=xpsnr]').click();await page.locator(`[data-xpsnr-job="${successors[kind]}"]`).click();await page.locator('#xpsnr-reexecution [data-chain]').filter({hasText:id}).waitFor();
     }
     const done=await read(kind,successors[kind]);check(kind+' finishes a new computation',done.state==='completed'&&done.retryOf.retryOf===id&&done.retryOf.generation===2);check(kind+' retains original terminal facts',JSON.stringify(await read(kind,id))===snapshots[kind]);
     if(kind!=='single'){

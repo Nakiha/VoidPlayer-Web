@@ -1,13 +1,11 @@
+import {WasmCambiRunner} from './analysis/cambi/wasm-runner.ts';
+import {WasmVmafRunner} from './analysis/vmaf/wasm-runner.ts';
 import {NativeCambiService} from './analysis/cambi/service.ts';
-import {NativeCambiRunner} from './analysis/cambi/runner.ts';
 import {TaskCenterService} from './tasks/service.ts';
 import {NativeXpsnrService} from './analysis/xpsnr/service.ts';
-import {NativeXpsnrRunner} from './analysis/xpsnr/runner.ts';
-import type {XpsnrComponentConfig} from '../shared/analysis/quality/xpsnr.ts';
+import {WasmXpsnrRunner} from './analysis/xpsnr/wasm-runner.ts';
 import {QualityReexecutionService} from './analysis/quality/reexecution-service.ts';
 import {NativeVmafService} from './analysis/vmaf/service.ts';
-import {NativeVmafRunner} from './analysis/vmaf/runner.ts';
-import type {VmafComponentConfig} from '../shared/analysis/quality/vmaf.ts';
 import type {LibraryScanStatus} from '../shared/service/admin.ts';
 import { FrameIndexJobs } from './frame-index-jobs.ts';
 import { QualityAdmission } from './quality-admission.ts';
@@ -33,7 +31,7 @@ export type { MediaRoot } from './library-store.ts';
 export const MEDIA_EXTENSIONS = ['.mp4', '.m4v', '.mov', '.mkv', '.webm', '.ts', '.m2ts', '.mpg', '.mpeg', '.avi', '.flv'];
 export interface LibraryEntry { id: string; name: string; root: string; rootIndex: number; size: number; lastModified: number; rootId?: string; version?: string; state?: string }
 export interface Library { roots: string[]; entries: LibraryEntry[]; truncated: boolean }
-interface IndexOptions { nativeVmaf?:VmafComponentConfig; nativeXpsnr?:XpsnrComponentConfig; database?: string; coreDir?: string; ttlMs?: number; settleMs?: number; ioTimeoutMs?: number; watch?: boolean; debounceMs?: number; scan?: typeof scanLibrary; now?: () => number }
+interface IndexOptions { analysisCoreDir?:string; database?: string; coreDir?: string; ttlMs?: number; settleMs?: number; ioTimeoutMs?: number; watch?: boolean; debounceMs?: number; scan?: typeof scanLibrary; now?: () => number }
 export interface BrowseQuery { rootId?: string; directory?: string; search?: string; recursive?: boolean; limit?: number; offset?: number; revision?: number }
 export function fileVersion(stat: Stats) { return createHash('sha256').update(`${stat.size}:${Math.round(stat.mtimeMs)}:${Math.round(stat.ctimeMs)}:${stat.ino}`).digest('hex').slice(0, 24); }
 const parent = (name: string) => path.posix.dirname(name) === '.' ? '' : path.posix.dirname(name);
@@ -57,13 +55,13 @@ export class MediaLibraryIndex {
   private correspondenceService?:CorrespondenceService;
   private cambiService?:NativeCambiService;
   get nativeCambiDescriptor(){return this.cambiService?.descriptor??null;}
-  get qualityCambi(){if(this.closed||!this.durableQualityJobsEnabled)throw new AdminError(503,'CAMBI requires persistent library storage','quality-storage-unavailable');return this.cambiService??=new NativeCambiService(this.indexDatabase+'.quality-cambi.sqlite',new NativeCambiRunner(this,this.coreDirectory,this.options.nativeVmaf));}
+  get qualityCambi(){if(this.closed||!this.durableQualityJobsEnabled)throw new AdminError(503,'CAMBI requires persistent library storage','quality-storage-unavailable');return this.cambiService??=new NativeCambiService(this.indexDatabase+'.quality-cambi.sqlite',new WasmCambiRunner(this,this.coreDirectory,this.options.analysisCoreDir??path.join(path.dirname(this.coreDirectory),'voidplayer-analysis')));}
   private vmafService?:NativeVmafService;
   get nativeVmafDescriptor(){return this.vmafService?.descriptor??null;}
-  get qualityVmaf(){if(this.closed)throw new AdminError(503,'VMAF service closed.','vmaf-service-unavailable');if(!this.durableQualityJobsEnabled)throw new AdminError(503,'VMAF needs persistent library storage.','quality-storage-unavailable');return this.vmafService??=new NativeVmafService(this.indexDatabase+'.quality-vmaf.sqlite',new NativeVmafRunner(this,this.coreDirectory,this.options.nativeVmaf),this.qualityCorrespondence);}
+  get qualityVmaf(){if(this.closed)throw new AdminError(503,'VMAF service closed.','vmaf-service-unavailable');if(!this.durableQualityJobsEnabled)throw new AdminError(503,'VMAF needs persistent library storage.','quality-storage-unavailable');return this.vmafService??=new NativeVmafService(this.indexDatabase+'.quality-vmaf.sqlite',new WasmVmafRunner(this,this.coreDirectory,this.options.analysisCoreDir??path.join(path.dirname(this.coreDirectory),'voidplayer-analysis')),this.qualityCorrespondence);}
   private xpsnrService?:NativeXpsnrService;
   get nativeXpsnrDescriptor(){return this.xpsnrService?.descriptor??null;}
-  get qualityXpsnr(){if(this.closed)throw new AdminError(503,'XPSNR service closed.','xpsnr-service-unavailable');if(!this.durableQualityJobsEnabled)throw new AdminError(503,'XPSNR needs persistent library storage.','quality-storage-unavailable');return this.xpsnrService??=new NativeXpsnrService(this.indexDatabase+'.quality-xpsnr.sqlite',new NativeXpsnrRunner(this,this.coreDirectory,this.options.nativeXpsnr),this.qualityCorrespondence);}
+  get qualityXpsnr(){if(this.closed)throw new AdminError(503,'XPSNR service closed.','xpsnr-service-unavailable');if(!this.durableQualityJobsEnabled)throw new AdminError(503,'XPSNR needs persistent library storage.','quality-storage-unavailable');return this.xpsnrService??=new NativeXpsnrService(this.indexDatabase+'.quality-xpsnr.sqlite',new WasmXpsnrRunner(this,this.coreDirectory,this.options.analysisCoreDir??path.join(path.dirname(this.coreDirectory),'voidplayer-analysis')),this.qualityCorrespondence);}
   private closing?: Promise<void>;
   private coreDirectory: string;
   get quality() { return this.pairRunner ??= new LibraryPairRunner(this,this.coreDirectory); }

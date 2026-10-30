@@ -8,7 +8,10 @@ import {spawn,spawnSync,execFileSync} from 'node:child_process';
 import {randomUUID,createHash} from 'node:crypto';
 import {createServer} from 'node:net';
 import {trackChildShutdown} from './testing/lifecycle.mjs';
-const root=path.resolve(import.meta.dirname,'..'),archive=path.resolve(process.argv[2]??JSON.parse(await readFile(path.join(root,'artifacts/latest-release.json'),'utf8')).archive);
+const root=path.resolve(import.meta.dirname,'..');
+const args=process.argv.slice(2),baseOnly=args.includes('--base-only'),archiveArgs=args.filter(arg=>arg!=='--base-only');
+assert.ok(archiveArgs.length<=1,'Pass one archive and optional --base-only');
+const archive=path.resolve(archiveArgs[0]??JSON.parse(await readFile(path.join(root,'artifacts/latest-release.json'),'utf8')).archive);
 const temp=await mkdtemp(path.join(tmpdir(),'vp-quality-release-'));let stopChild,output='';
 try{
  const tar=process.platform==='win32'?path.join(process.env.SystemRoot,'System32','tar.exe'):'tar';execFileSync(tar,['-xzf',archive,'-C',temp]);
@@ -154,7 +157,13 @@ try{
  for(const proof of preparationProof){const job=await fetch(base+`/api/library/preparations/${proof.id}`,{headers:{cookie}}).then(r=>r.json());assert.equal(job.state,'completed');const detail=await fetch(base+`/api/media/${proof.source.id}/discovery?v=${proof.source.version}`).then(r=>r.json());assert.equal(detail.technical.state,'prepared');}
  assert.deepEqual(capabilities.qualityJobs.metrics,['psnr','ssim']);assert.equal(capabilities.qualityJobs.scope,'single-explicit-frame-pair');assert.equal(capabilities.qualityJobs.submit,'/api/quality/jobs');assert.equal(capabilities.qualityJobs.automaticRetry,false);assert.equal(capabilities.qualityJobs.sharedWork,false);
  const report=path.resolve(process.env.VOIDPLAYER_TEST_ARTIFACTS??path.join(root,'.run/quality-release'));await mkdir(report,{recursive:true});await writeFile(path.join(report,'native-quality.json'),JSON.stringify({target:manifest.target,rows},null,2)+'\n');
- if(process.platform==='linux'&&process.arch==='x64'){execFileSync(process.execPath,[path.join(root,'scripts/native/run-vmaf-tests.mjs'),'node',path.join(root,'scripts/check-native-cambi-release.mjs'),archive],{cwd:root,stdio:'inherit'});execFileSync(process.execPath,[path.join(root,'scripts/native/run-xpsnr-tests.mjs'),'node',path.join(root,'scripts/check-native-xpsnr-release.mjs'),archive],{cwd:root,stdio:'inherit'});execFileSync(process.execPath,[path.join(root,'scripts/native/run-vmaf-tests.mjs'),'node',path.join(root,'scripts/check-native-vmaf-release.mjs'),archive],{cwd:root,stdio:'inherit'});}else{assert.equal(capabilities.capabilities.find(c=>c.id==='quality.vmaf').enabled,false);assert.equal(capabilities.capabilities.find(c=>c.id==='quality.cambi').enabled,false);}
- if(process.platform==='linux'&&process.arch==='x64')execFileSync(process.execPath,[path.join(root,'scripts/native/run-vmaf-tests.mjs'),'node',path.join(root,'scripts/native/run-xpsnr-tests.mjs'),'node',path.join(root,'scripts/check-quality-reexecution-release.mjs'),archive],{cwd:root,stdio:'inherit'});else execFileSync(process.execPath,[path.join(root,'scripts/check-quality-reexecution-release.mjs'),archive],{cwd:root,stdio:'inherit'});
+ // Direct invocation keeps the complete legacy acceptance. The registered CI
+ // cases run these independent matrices with their own declared deadlines.
+ if(!baseOnly){
+  await stopChild();stopChild=null;
+  execFileSync(process.execPath,[path.join(root,'scripts/check-analysis-quality-release.mjs'),archive],{cwd:root,stdio:'inherit'});
+  execFileSync(process.execPath,[path.join(root,'scripts/check-native-xpsnr-release.mjs'),archive],{cwd:root,stdio:'inherit'});
+  execFileSync(process.execPath,[path.join(root,'scripts/check-quality-reexecution-release.mjs'),archive],{cwd:root,stdio:'inherit'});
+ }
  console.log(`PASS ${manifest.target}: compiled Bun quality Worker, real library/cache HTTP, 8/10-bit native SSE/provenance, durable jobs/annotation evidence/idempotency/history restart, second-instance rejection, empty PATH`);
 }finally{if(stopChild)await stopChild();await rm(temp,{recursive:true,force:true,maxRetries:10,retryDelay:100});}

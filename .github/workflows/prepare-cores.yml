@@ -1,0 +1,147 @@
+name: Prepare pinned WASM cores
+
+on:
+  workflow_call:
+    outputs:
+      ffmpegRepository:
+        value: ${{ jobs.decoder.outputs.ffmpegRepository }}
+      ffmpegRevision:
+        value: ${{ jobs.decoder.outputs.ffmpegRevision }}
+
+permissions:
+  contents: read
+
+jobs:
+  analysis-core:
+    name: Build pinned independent analysis WASM
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+      - name: Read analysis lock
+        id: analysis-lock
+        run: |
+          node --input-type=module -e '
+          import {readFileSync,appendFileSync} from "node:fs";
+          const lock=JSON.parse(readFileSync("scripts/release-analysis.json","utf8"));
+          for(const [key,value]of Object.entries(lock))appendFileSync(process.env.GITHUB_OUTPUT,`${key}=${value}\n`);
+          '
+      - uses: actions/cache@v4
+        id: analysis-cache
+        with:
+          path: public/vendor/voidplayer-analysis
+          key: release-analysis-v1-${{ hashFiles('scripts/release-analysis.json', 'scripts/prepare-analysis-core.mjs', 'scripts/core-capabilities.mjs', 'scripts/core-artifacts.mjs') }}
+      - uses: actions/checkout@v4
+        if: steps.analysis-cache.outputs.cache-hit != 'true'
+        with:
+          repository: ${{ steps.analysis-lock.outputs.repository }}
+          ref: ${{ steps.analysis-lock.outputs.revision }}
+          path: .run/analysis-source
+      - uses: mymindstorm/setup-emsdk@v14
+        if: steps.analysis-cache.outputs.cache-hit != 'true'
+        with:
+          version: ${{ steps.analysis-lock.outputs.emscripten }}
+          actions-cache-folder: .run/emsdk-analysis-cache
+      - name: Build independent analysis core
+        if: steps.analysis-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .run/analysis-source/.build
+          printf '{"type":"commonjs"}\n' > .run/analysis-source/.build/package.json
+          python -m pip install meson==1.9.1 ninja==1.13.0
+          bash .run/analysis-source/scripts/build-analysis.sh
+          node scripts/prepare-analysis-core.mjs .run/analysis-source/dist/voidplayer-analysis
+      - name: Verify analysis reference ABI including restored caches
+        run: node scripts/prepare-analysis-core.mjs public/vendor/voidplayer-analysis
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-analysis-core
+          path: public/vendor/voidplayer-analysis/
+          if-no-files-found: error
+          retention-days: 14
+
+  decoder:
+    name: Build pinned WASM decoder
+    outputs:
+      ffmpegRepository: ${{ steps.core.outputs.ffmpegRepository }}
+      ffmpegRevision: ${{ steps.core.outputs.ffmpegRevision }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+      - name: Read decoder lock
+        id: core
+        run: |
+          node --input-type=module -e '
+          import { readFileSync, appendFileSync } from "node:fs";
+          const lock = JSON.parse(readFileSync("scripts/release-core.json", "utf8"));
+          for (const [key, value] of Object.entries(lock)) appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
+          '
+      - name: Restore exact decoder build
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: public/vendor/voidplayer-core
+          key: release-core-v1-${{ runner.os }}-${{ hashFiles('scripts/release-core.json', 'scripts/prepare-release-core.mjs', 'scripts/core-capabilities.mjs', 'scripts/core-artifacts.mjs') }}
+      - name: Checkout decoder build source
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.core.outputs.repository }}
+          ref: ${{ steps.core.outputs.revision }}
+          path: .run/core-source
+      - name: Checkout FFmpeg source
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.core.outputs.ffmpegRepository }}
+          ref: ${{ steps.core.outputs.ffmpegRevision }}
+          path: .run/core-source/.build/sources/ffmpeg-wasm
+      - name: Checkout dav1d source
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.core.outputs.dav1dRepository }}
+          ref: ${{ steps.core.outputs.dav1dRevision }}
+          path: .run/core-source/.build/sources/dav1d-wasm
+      - name: Setup Emscripten
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{ steps.core.outputs.emscripten }}
+          actions-cache-folder: .run/emsdk-cache
+      - uses: actions/setup-python@v5
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          python-version: '3.12'
+      - name: Install decoder build tools
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          MESON_VERSION: ${{ steps.core.outputs.meson }}
+          NINJA_VERSION: ${{ steps.core.outputs.ninja }}
+        run: python -m pip install "meson==$MESON_VERSION" "ninja==$NINJA_VERSION"
+      - name: Build both decoder variants using upstream build script
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          FFMPEG_REF: ${{ steps.core.outputs.ffmpegRef }}
+        run: |
+          # Meson emits CommonJS probes with an .exe extension; do not inherit
+          # the web application's package.json type=module in the build tree.
+          printf '%s\n' '{"type":"commonjs"}' > .run/core-source/.build/package.json
+          bash .run/core-source/scripts/build-wasm.sh --ffmpeg-ref "$FFMPEG_REF" --skip-package
+          bash .run/core-source/scripts/build-wasm.sh --ffmpeg-ref "$FFMPEG_REF" --skip-package --mt
+          node scripts/prepare-release-core.mjs .run/core-source
+      - name: Verify decoder provenance and required interfaces
+        run: node scripts/run-tests.mjs --case release-core
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-core
+          path: public/vendor/voidplayer-core/
+          if-no-files-found: error
+          retention-days: 14
+

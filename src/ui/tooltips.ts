@@ -106,8 +106,9 @@ export function installTooltips() {
   }, options);
   document.addEventListener('scroll', event => {
     // Focus scrolling and translated layout can dispatch scroll after focusin.
-    // Keep keyboard help anchored while its value is still in the scrollport.
-    if (anchor && document.activeElement === anchor && !popup.hidden && event.target instanceof Node) {
+    // The focus timer may not have fired yet. Keep keyboard help anchored
+    // while its value is still in the scrollport, including that pending turn.
+    if (anchor && document.activeElement === anchor && event.target instanceof Node) {
       if (!event.target.contains(anchor)) return;
       const rect = anchor.getBoundingClientRect();
       const port = event.target instanceof Element ? event.target.getBoundingClientRect() : { top: 0, left: 0, bottom: innerHeight, right: innerWidth };

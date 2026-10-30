@@ -15,7 +15,7 @@ export async function handleXpsnrRoutes(ctx:RouteContext,req:IncomingMessage,res
   if([...url.searchParams.keys()].some(k=>!allowed.includes(k)||url.searchParams.getAll(k).length!==1))throw new AdminError(400,'Invalid XPSNR query.','invalid-request');
   if(req.method==='GET'){
    if(compare){sendJson(res,200,service.compare((url.searchParams.get('ids')??'').split(','),actor.id));}
-   else if(item?.[2]==='evidence'){const index=url.searchParams.get('index');if(!index||!/^\d{1,2}$/.test(index)||!['reference','distorted'].includes(url.searchParams.get('side')??''))throw new AdminError(400,'Invalid XPSNR evidence reference.','invalid-request');sendJson(res,200,service.evidence({jobId:item[1]+'-f'+index,attemptId:url.searchParams.get('attemptId')??'',digest:url.searchParams.get('digest')??'',side:url.searchParams.get('side') as 'reference'|'distorted'},actor.id));}
+   else if(item?.[2]==='evidence'){const index=url.searchParams.get('index');if(!index||!/^\d{1,4}$/.test(index)||!['reference','distorted'].includes(url.searchParams.get('side')??''))throw new AdminError(400,'Invalid XPSNR evidence reference.','invalid-request');sendJson(res,200,service.evidence({jobId:item[1]+'-f'+index,attemptId:url.searchParams.get('attemptId')??'',digest:url.searchParams.get('digest')??'',side:url.searchParams.get('side') as 'reference'|'distorted'},actor.id));}
    else if(collection)sendJson(res,200,service.history(actor.id,Number(url.searchParams.get('after')??0),Number(url.searchParams.get('limit')??8)));
    else if(item?.[2]==='result')sendJson(res,200,service.summary(item[1],actor.id));
    else if(item?.[2]==='frames')sendJson(res,200,service.frames(item[1],actor.id,Number(url.searchParams.get('after')??0),Number(url.searchParams.get('limit')??4)));

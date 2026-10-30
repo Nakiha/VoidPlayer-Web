@@ -113,11 +113,11 @@ test('real B-frame streams require explicit GOP identities and still reject lega
  }
 });
 
-test('forward window admits the exact 32-AU-per-side / 64-output boundary and rejects the next AU',{timeout:30000},async t=>{
+test('forward window admits the exact 512-AU-per-side / 1024-output boundary and rejects the next AU',{timeout:30000},async t=>{
  const dir=await mkdtemp(join(tmpdir(),'vp-forward-limit-'));t.after(()=>rm(dir,{recursive:true,force:true}));
- const f=await encodedForwardFixture(dir,'h264',8,{frames:34,keyint:60}),p=await preparedPair(f.bytes,'a'.repeat(24),31);p.target.decode={mode:'forward-one-output-per-au-v1',startAu:0};
- const request=pairRequest(p.target),result=await client().measure(request,[p.source,p.source],baseFile,new AbortController().signal);assert.equal(result.work.packets,64);assert.equal(result.work.outputFrames,64);assert.equal(result.metric.aggregate.sse,0);
- const over=await preparedPair(f.bytes,'d'.repeat(24),32);over.target.decode={mode:'forward-one-output-per-au-v1',startAu:0};assert.throws(()=>client().measure(pairRequest(p.target,over.target),[p.source,over.source],baseFile,new AbortController().signal),/32 AUs/);
+ const f=await encodedForwardFixture(dir,'h264',8,{frames:514,keyint:600}),p=await preparedPair(f.bytes,'a'.repeat(24),511);p.target.decode={mode:'forward-one-output-per-au-v1',startAu:0};
+ const request=pairRequest(p.target),result=await client().measure(request,[p.source,p.source],baseFile,new AbortController().signal);assert.equal(result.work.packets,1024);assert.equal(result.work.outputFrames,1024);assert.equal(result.metric.aggregate.sse,0);
+ const over=await preparedPair(f.bytes,'d'.repeat(24),512);over.target.decode={mode:'forward-one-output-per-au-v1',startAu:0};assert.throws(()=>client().measure(pairRequest(p.target,over.target),[p.source,over.source],baseFile,new AbortController().signal),/512 AUs/);
 });
 
 test('cancel during actual forward native decoding waits for physical exit before readmission',{timeout:15000},async()=>{

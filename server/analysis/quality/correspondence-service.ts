@@ -20,8 +20,8 @@ type Intent={actor:Actor;requestId:string;key:string;input:QualityRangeInput;inp
 /** Durable metadata planning and frozen submission receipts. Only the runner
  * owns admission; submission calls the existing range service after it exits. */
 export class CorrespondenceService{
-  taskSummaries(actor:string){return taskSummaries(this.db,'correspondence',actor);}
-  taskEdges(actor:string){return taskEdges(this.db,'correspondence',actor);}
+  taskSummaries(actor:string,id?:string,filter?:import('../../../shared/service/tasks.ts').TaskFilter){return taskSummaries(this.db,'correspondence',actor,id,filter);}
+  taskEdges(actor:string,id?:string){return taskEdges(this.db,'correspondence',actor,id);}
   taskRange(id:string,actor:string){
     const plan=this.get(id,actor),row=this.db.prepare('SELECT body FROM quality_plan_executions WHERE plan_id=?').get(id);
     if(!row)return null;const intent=JSON.parse(String(row.body)) as Intent;if(!intent.rangeId)return null;
@@ -55,24 +55,26 @@ export class CorrespondenceService{
         for(const plan of this.plans())if(!terminalCorrespondence(plan.state)){
           plan.state='interrupted';plan.endedAt=now();plan.reason={code:'service-restarted',message:'Planning interrupted; no automatic replan, scoring or publication.'};this.save(plan);
         }
+        this.settle();db.exec('UPDATE quality_relations SET reserved=length(CAST(body AS BLOB))+1024');
         db.exec('COMMIT');
       }catch(e){db.exec('ROLLBACK');throw e;}
     }catch(e){db?.close();this.unlock();throw e;}
   }
   private available(){if(this.closed||this.failed||this.runner.stopUncertain)throw new AdminError(503,'Reference plan service unavailable.','correspondence-unavailable');}
   private parse<T>(fn:()=>T):T{try{return fn();}catch(e){if(e instanceof AdminError)throw e;throw new AdminError(400,(e as Error).message,'invalid-correspondence');}}
-  private plans(){return this.db.prepare('SELECT body FROM quality_correspondence_plans ORDER BY rowid').all().map(r=>JSON.parse(String(r.body)) as CorrespondencePlan);}
-  private save(p:CorrespondencePlan){p.revision++;this.db.prepare('UPDATE quality_correspondence_plans SET body=? WHERE id=?').run(JSON.stringify(p),p.id);}
-  private capacity(table:'quality_relations'|'quality_correspondence_plans',reserved:number){
-    const count=Number(this.db.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n),bytes=Number(this.db.prepare('SELECT (SELECT coalesce(sum(reserved),0) FROM quality_relations)+(SELECT coalesce(sum(reserved),0) FROM quality_correspondence_plans) AS n').get()!.n);
-    if(count>=LIMITS.historyRows||bytes+reserved>LIMITS.reservedBytes)throw new AdminError(429,'Reference relation/plan history budget full; existing receipts retained.','correspondence-history-full');
+  private plans(){return this.db.prepare("SELECT body FROM quality_correspondence_plans WHERE json_extract(body,'$.state') IN ('queued','running','cancelling') ORDER BY rowid").all().map(r=>JSON.parse(String(r.body)) as CorrespondencePlan);}
+  private save(p:CorrespondencePlan){p.revision++;this.db.prepare('UPDATE quality_correspondence_plans SET body=? WHERE id=?').run(JSON.stringify(p),p.id);if(terminalCorrespondence(p.state))this.settle(p.id);}
+  private settle(id?:string){this.db.prepare("UPDATE quality_correspondence_plans SET reserved=length(CAST(body AS BLOB))+coalesce(length(CAST(result AS BLOB)),0)+1024 WHERE json_extract(body,'$.state') NOT IN ('queued','running','cancelling')"+(id?' AND id=?':'')).run(...(id?[id]:[]));}
+  private capacity(reserved:number){
+    const bytes=Number(this.db.prepare('SELECT (SELECT coalesce(sum(reserved),0) FROM quality_relations)+(SELECT coalesce(sum(reserved),0) FROM quality_correspondence_plans) AS n').get()!.n);
+    if(bytes+reserved>LIMITS.reservedBytes)throw new AdminError(429,'Reference relation/plan history budget full; existing receipts retained.','correspondence-history-full');
   }
   createRelation(value:unknown,actor:Actor,requestId:string,key:unknown){
     this.available();const input=this.parse(()=>referenceRelationInput(value)),k=qualityIdempotencyKey(key),fingerprint=hash(input);
     const prior=this.db.prepare('SELECT id,fingerprint FROM quality_relations WHERE actor=? AND client=? AND key=?').get(actor.id,input.client.id,k);
     if(prior){if(prior.fingerprint!==fingerprint)throw new AdminError(409,'Relation key binds another declaration.','idempotency-conflict');return {relation:this.relation(String(prior.id),actor.id),replayed:true};}
     const relation:ReferenceRelation={id:randomUUID(),actor:{id:actor.id,name:actor.name},requestId,key:k,revision:1,createdAt:now(),input,assessment:'caller-declared-not-content-certified'};
-    const reserved=Buffer.byteLength(JSON.stringify(relation))+4096;this.capacity('quality_relations',reserved);
+    const reserved=Buffer.byteLength(JSON.stringify(relation))+4096;this.capacity(reserved);
     this.db.prepare('INSERT INTO quality_relations VALUES(?,?,?,?,?,?,?)').run(relation.id,actor.id,input.client.id,k,fingerprint,JSON.stringify(relation),reserved);
     return {relation,replayed:false};
   }
@@ -99,7 +101,7 @@ export class CorrespondenceService{
     const relation=this.relation(input.relation.id,actor.id);if(input.relation.revision!==relation.revision)throw new AdminError(409,'Reference relation revision changed.','relation-conflict');
     const unfinished=this.plans().filter(p=>!terminalCorrespondence(p.state));if(unfinished.length>=LIMITS.queued||unfinished.filter(p=>p.actor.id===actor.id).length>=LIMITS.actorOutstanding)throw new AdminError(429,'Correspondence planning queue full.','correspondence-queue-full');
     const plan:CorrespondencePlan={id:randomUUID(),actor:{id:actor.id,name:actor.name},requestId,key:k,relation,input,createdAt:now(),startedAt:null,endedAt:null,attemptId:null,state:'queued',reason:null,resultDigest:null,revision:1};
-    const reserved=LIMITS.planReservation;this.capacity('quality_correspondence_plans',reserved);
+    const reserved=LIMITS.planReservation;this.capacity(reserved);
     this.db.prepare('INSERT INTO quality_correspondence_plans VALUES(?,?,?,?,?,?,?,?)').run(plan.id,actor.id,input.client.id,k,fingerprint,JSON.stringify(plan),null,reserved);this.pump();this.wake();return {plan:this.get(plan.id,actor.id),replayed:false};
   }
   get(id:string,actor:string){const row=this.db.prepare('SELECT body FROM quality_correspondence_plans WHERE id=? AND actor=?').get(id,actor);if(!row)throw new AdminError(404,'Correspondence plan not found.','plan-not-found');return JSON.parse(String(row.body)) as CorrespondencePlan;}
@@ -155,7 +157,7 @@ export class CorrespondenceService{
       if(value.rangePlan)try{value.rangePlan=this.ranges.plan(value.rangePlan.input);}catch(e){value.rangePlan=null;value.executionBlock={code:'range-plan-blocked',message:e instanceof Error?e.message.slice(0,300):'Planning failed; no automatic retry.'};}
       this.validate(plan,value);if(Buffer.byteLength(JSON.stringify(value))>LIMITS.resultBytes)throw new AdminError(413,'Frozen plan exceeds result byte budget.','budget-exceeded');
       plan.state=value.rangePlan?'completed':'blocked';plan.reason=value.executionBlock;plan.endedAt=now();plan.resultDigest=hash(value);plan.revision++;
-      this.db.prepare('UPDATE quality_correspondence_plans SET body=?,result=? WHERE id=?').run(JSON.stringify(plan),JSON.stringify(value),plan.id);
+      this.db.prepare('UPDATE quality_correspondence_plans SET body=?,result=? WHERE id=?').run(JSON.stringify(plan),JSON.stringify(value),plan.id);this.settle(plan.id);
     }catch(e){
       plan=this.get(plan.id,plan.actor.id);
       if(this.runner.stopUncertain){plan.state='cancelling';plan.reason={code:'worker-stop-uncertain',message:'Physical planner exit unconfirmed; compute and database ownership retained.'};this.save(plan);throw e;}

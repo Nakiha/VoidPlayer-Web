@@ -40,6 +40,15 @@ export class AnnotationStore {
       INSERT OR IGNORE INTO annotation_event_floor SELECT 1,sequence FROM annotation_clock WHERE id=1;
       PRAGMA user_version=5;`);
   }
+  /** Keep current and replayable shared evidence intact when private results
+   * are released. IDs are validated by the caller and the bound LIKE parameter
+   * is deliberately conservative: historical references also pin the result. */
+  referencesQualityResult(id:string){
+    const pattern='%'+id+'%';
+    return !!this.db.prepare('SELECT 1 FROM annotations WHERE document LIKE ? LIMIT 1').get(pattern)
+      ||!!this.db.prepare('SELECT 1 FROM annotation_operations WHERE result LIKE ? LIMIT 1').get(pattern)
+      ||!!this.db.prepare('SELECT 1 FROM annotation_events WHERE event LIKE ? LIMIT 1').get(pattern);
+  }
   spaces() { return this.db.prepare('SELECT id,name FROM spaces ORDER BY created_at,id').all(); }
   createSpace(name: unknown) {
     if (typeof name !== 'string' || !name.trim() || name.length > 120) throw new AdminError(400, '请填写评审空间名称。');

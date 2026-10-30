@@ -101,15 +101,30 @@ test('spatial parameters participate in canonical idempotency; old scalar receip
  input.request.spatial.blockWidth=8;assert.throws(()=>f.store.submit(qualityJobRequest(input),actor,'conflict','grid',1000),{code:'idempotency-conflict'});
  delete input.request.spatial;assert.equal(qualityJobRequest(input).json,plain.json);assert.throws(()=>f.store.submit(plain,actor,'strip-grid','grid',1000),{code:'idempotency-conflict'});
 });
-test('history reservations reject overflow without evicting records or invalidating old receipts',async t=>{
- const f=await fixture(t),request=qualityJobRequest(jobInput());let first:string|undefined,count=0;
+test('completed reservations settle to actual payloads beyond old lifetime caps; release preserves receipts and digests',async t=>{
+ const f=await fixture(t),request=qualityJobRequest(jobInput());let first='';
  for(let i=0;i<=QUALITY_JOB_LIMITS.historyRows;i++){
-  try{const job=f.store.submit(request,actor,'request',`history-${i}`,1000).job;first??=job.id;count++;f.store.cancel(job.id,actor.id,'cancel',1001);}
-  catch(error){assert.equal((error as {code:string}).code,'quality-history-full');break;}
+  const job=f.store.submit(request,actor,'request',`history-${i}`,1000).job;first||=job.id;f.store.cancel(job.id,actor.id,'cancel',1001);
  }
- assert.ok(count>0&&count<=QUALITY_JOB_LIMITS.historyRows);assert.equal(f.store.get(first!).state,'cancelled');
  assert.equal(f.store.submit(request,actor,'replay','history-0',2000).job.id,first);
+ let completed='',count=0;
+ for(let i=0;i<2000;i++){
+  let job;
+  try{job=f.store.submit(request,actor,'request',`payload-${i}`,2000).job;}
+  catch(error){assert.equal((error as {code:string}).code,'quality-history-full');break;}
+  const attempt=f.store.start(job.id,2001);f.store.finish(job.id,attempt,'completed',null,2002,Object.assign({},value,{padding:'测'.repeat(30000)}));
+  completed||=job.id;count++;
+ }
+ assert.ok(count>500&&count<2000);const before=f.store.get(completed);
  assert.throws(()=>f.store.submit(request,actor,'overflow','new-after-full',2000),{code:'quality-history-full'});
+ const released=f.store.releaseResult(completed);assert.equal(released.result.available,false);assert.equal(released.result.digest,before.result.digest);
+ assert.equal(released.state,'completed');assert.deepEqual(released.input,before.input);assert.deepEqual(released.attempt,before.attempt);
+ assert.throws(()=>f.store.result(completed),{code:'result-unavailable'});
+ assert.equal(f.store.submit(request,actor,'replay','payload-0',3000).job.id,completed);
+ const next=f.store.submit(request,actor,'new','after-release',3000).job;assert.equal(next.state,'queued');
+ assert.throws(()=>f.store.releaseResult(next.id),{code:'result-release-blocked'});
+ f.reopen();assert.equal(f.store.get(completed).result.available,false);assert.equal(f.store.get(completed).result.digest,before.result.digest);
+ assert.equal(f.store.submit(request,actor,'restart-replay','history-0',4000).job.id,first);
 });
 
 test('SSIM selection is canonical immutable request identity; legacy PSNR hash stays byte-identical',async t=>{
@@ -119,4 +134,31 @@ test('SSIM selection is canonical immutable request identity; legacy PSNR hash s
  const job=f.store.submit(ss,actor,'ssim','ssim',1000).job;
  assert.equal(f.store.submit(qualityJobRequest(structuredClone(input)),actor,'again','ssim',1001).job.id,job.id);
  delete input.request.ssim;assert.equal(qualityJobRequest(input).json,plain.json);assert.throws(()=>f.store.submit(plain,actor,'strip','ssim',1001),{code:'idempotency-conflict'});
+});
+
+test('scoring storage counts UTF-8 inputs, frozen plans, lineage, publications and heat; release retains receipt costs',async t=>{
+ const {reserveScoringBytes,settleScoringReservations,releaseScoringResult}=await import('../../server/analysis/quality/result-retention.ts');
+ const dir=await mkdtemp(join(tmpdir(),'vp-scoring-retention-')),db=openIndexDatabase(join(dir,'jobs.sqlite'));
+ t.after(async()=>{db.close();await rm(dir,{recursive:true,force:true});});
+ db.exec('CREATE TABLE quality_reexecutions(job_id TEXT,body TEXT); CREATE TABLE cambi_heat(job TEXT,data BLOB);');
+ const body=JSON.stringify({state:'completed',input:{name:'测试片源'}}),snapshot=JSON.stringify({frozen:'时间轴'.repeat(30)}),prepared=JSON.stringify({identity:'帧'}),result=JSON.stringify({score:42}),publication=JSON.stringify({text:'评审'}),receipt=JSON.stringify({reason:'重新执行'});
+ const bytes=(s:string)=>Buffer.byteLength(s);
+ assert.equal(reserveScoringBytes(4096,JSON.parse(body),JSON.parse(snapshot)),4096+bytes(body)+bytes(snapshot)+128*1024);
+ for(const kind of ['vmaf','xpsnr','cambi'] as const){
+  const table=kind==='cambi'?'cambi_jobs':`quality_${kind}_jobs`,pub=kind==='cambi'?'cambi_publications':`quality_${kind}_publications`,key=kind==='cambi'?'job':'job_id';
+  db.exec(`CREATE TABLE ${table}(id TEXT,body TEXT,result TEXT,reserved INTEGER${kind==='cambi'?'':',snapshot TEXT,prepared TEXT'});CREATE TABLE ${pub}(${key} TEXT,body TEXT);`);
+  db.prepare(`INSERT INTO ${table} VALUES(?,?,?,?${kind==='cambi'?'':',?,?'})`).run(kind,body,result,999999,...(kind==='cambi'?[]:[snapshot,prepared]));
+  db.prepare(`INSERT INTO ${table}(id,body,reserved) VALUES(?,?,?)`).run('pending',JSON.stringify({state:'running'}),888888);
+  db.prepare(`INSERT INTO ${pub} VALUES(?,?)`).run(kind,publication);db.prepare('INSERT INTO quality_reexecutions VALUES(?,?)').run(kind,receipt);
+  if(kind==='cambi')db.prepare('INSERT INTO cambi_heat VALUES(?,?)').run(kind,new Uint8Array(4096));
+  const retained=1024+bytes(body)+bytes(publication)+bytes(receipt)+(kind==='cambi'?0:bytes(snapshot)+bytes(prepared));
+  const row=()=>db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(kind)!;
+  settleScoringReservations(db,kind);
+  assert.equal(Number(row().reserved),retained+bytes(result)+(kind==='cambi'?4096:0));
+  assert.equal(Number(db.prepare(`SELECT reserved FROM ${table} WHERE id='pending'`).get()!.reserved),888888);
+  releaseScoringResult(db,kind,kind);assert.equal(row().result,null);assert.equal(Number(row().reserved),retained);
+  assert.equal(row().body,body);if(kind!=='cambi')assert.equal(row().snapshot,snapshot);
+  releaseScoringResult(db,kind,kind);assert.equal(Number(row().reserved),retained,'repeat release remains idempotent');
+ }
+ assert.equal(Number(db.prepare('SELECT count(*) n FROM cambi_heat').get()!.n),0);
 });

@@ -1,0 +1,48 @@
+name: Prepare media fixtures and native oracle
+description: Pinned QA samples, generated media, verified FATE cache and exact native oracle.
+inputs:
+  ffmpeg-repository:
+    required: true
+    description: Locked native oracle repository
+  ffmpeg-revision:
+    required: true
+    description: Locked native oracle revision
+runs:
+  using: composite
+  steps:
+    - name: Checkout pinned codec QA samples
+      uses: actions/checkout@v4
+      with:
+        repository: Nakiha/VoidPlayer
+        ref: 881eb5ccd706c33aa1ff35ab3a67ac3a226ccfba
+        path: .run/qa-samples
+        sparse-checkout: resources/video
+        lfs: true
+    - shell: bash
+      run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
+    - name: Prepare media fixtures
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg libnss3-tools libdav1d-dev
+        npm run fixtures:flv
+        npm run fixtures:hlg
+    - name: Prepare verified pinned FATE fixtures
+      uses: ./.github/actions/fate-fixtures
+    - name: Restore pinned native raw-plane oracle
+      id: oracle-cache
+      uses: actions/cache@v4
+      with:
+        path: .run/native-oracle
+        key: native-oracle-v1-${{ runner.os }}-${{ hashFiles('scripts/release-core.json', 'scripts/build-native-oracle.sh') }}
+    - name: Checkout pinned native oracle source
+      if: steps.oracle-cache.outputs.cache-hit != 'true'
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ inputs.ffmpeg-repository }}
+        ref: ${{ inputs.ffmpeg-revision }}
+        path: .run/oracle-source
+    - name: Build native reference decoder including VVC
+      if: steps.oracle-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: bash scripts/build-native-oracle.sh .run/oracle-source .run/native-oracle

@@ -12,7 +12,7 @@ import { mediaIndexIdentityKey } from '../media/indexing/media-index-identity.ts
 import type { AnnotationDocument } from './annotation-record.ts';
 import type { Mark } from './model.ts';
 
-export const QUALITY_EVIDENCE_LIMITS = Object.freeze({ count: 4, bytes: 128 * 1024 });
+export const QUALITY_EVIDENCE_LIMITS = Object.freeze({ count: 4, bytes: 384 * 1024 });
 export type QualityEvidenceRef = { jobId: string; attemptId: string; digest: string; side: 'reference' | 'distorted' };
 /** Explicitly shared facts, without the job's private submission/client/idempotency data.
  * A file can retain facts but cannot confer verification by the receiving service. */
@@ -126,7 +126,7 @@ export function qualityEvidenceValue(value: unknown): LibraryPairResult {
       && Number.isFinite(stat.mse) && stat.mse >= 0 && stat.psnr
       && (stat.psnr.kind === 'finite' ? Number.isFinite(stat.psnr.db) : stat.psnr.kind === 'positive-infinity' && stat.psnr.db === null));
   }
-  check(r.work?.packets === packets && r.work.outputFrames === packets && unsigned(r.work.readBytes) && r.work.readBytes<=PAIR_LIMITS.maxReadBytes && Number.isFinite(r.work.elapsedMs) && r.work.elapsedMs >= 0
+  check((r.work?.accounting==='incremental-shared-gop-v1'?r.decoder.packetIdentity==='packet-identity-gop-v1'&&unsigned(r.work.packets)&&r.work.packets<=packets&&r.work.outputFrames===r.work.packets:r.work?.accounting===undefined&&r.work?.packets===packets&&r.work.outputFrames===packets) && unsigned(r.work.readBytes) && r.work.readBytes<=PAIR_LIMITS.maxReadBytes && Number.isFinite(r.work.elapsedMs) && r.work.elapsedMs >= 0
     && m.work && [m.work.samples,m.work.bytesRead,m.work.inputViewBytes,m.work.chargedInputBytes].every(unsigned));
   if(v.sequenceXpsnr!==undefined)validateXpsnrAssociation(v.sequenceXpsnr,v);
   if(v.sequenceVmaf!==undefined)validateVmafAssociation(v.sequenceVmaf,v);

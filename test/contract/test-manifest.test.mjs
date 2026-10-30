@@ -96,7 +96,7 @@ test('local and CI select the same applicable matrix; filters cannot fake engine
 });
 test('CI uses the catalog for required suites and keeps platform/input matrices and informational gates', () => {
   const workflow = readFileSync(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
-  for (const suite of ['source','ci-node-media','ci-analysis-ui','ci-playback','ci-cache','ci-flv','flv-startup','ci-fate','ci-https','ci-perf','uncovered','ci-native-node','ci-native-bun','ci-native-http','ci-native-https','ci-native-console']) {
+  for (const suite of ['source','ci-node-media','ci-analysis-ui','ci-playback','ci-cache','ci-flv','flv-startup','ci-fate','ci-https','uncovered','ci-native-node','ci-native-bun','ci-native-http','ci-native-https','ci-native-console']) {
     assert.match(workflow, new RegExp(`scripts/run-tests\\.mjs ${suite}(?: |\\n)`));
     assert.ok(selectCases({ suite, platform: suite === 'ci-native-console' ? 'win32' : 'linux' }).selected.length);
   }
@@ -104,7 +104,8 @@ test('CI uses the catalog for required suites and keeps platform/input matrices 
   assert.match(workflow, /engine: \[chromium, webkit\][\s\S]*input: \[local, remote\]/);
   for (const platform of ['linux-x64','windows-x64','darwin-arm64']) assert.ok(workflow.includes(platform));
   assert.equal(testManifest.cases.find(row => row.id === 'https-playback-benchmark').required, false);
-  assert.equal(testManifest.cases.find(row => row.id === 'perf-https-pair').required, true, 'paired failures must remain failures in the suite report');
+  assert.deepEqual(testManifest.cases.find(row => row.id === 'perf-https-pair').suites, [], 'legacy paired benchmark is never scheduled');
+  assert.ok(!testManifest.suites.some(suite => suite.startsWith('ci-perf')));
   assert.equal(testManifest.cases.find(row => row.id === 'https-playback-functional').required, true);
 });
 
@@ -136,7 +137,7 @@ test('compatibility entries point to registered domain implementations without c
 });
 
 test('identity browser checks match the lightweight job while real PSNR evidence remains required with its core', () => {
-  // identity.yml installs only Chromium and intentionally downloads no decoder.
+  // The legacy identity-only selector needs no decoder; daily CI folds it into the core browser profile.
   for (const row of selectCases({suite:'ci-identity-browser',platform:'linux'}).selected) {
     assert.deepEqual(row.engines,['chromium'],`${row.id}: identity job installs Chromium only`);
     assert.deepEqual(row.fixtures,[],`${row.id}: identity job has no downloaded decoder/media`);
@@ -229,7 +230,7 @@ test('FLV analysis prerequisites are locally generated for unit and browser cons
 });
 
 test('every required browser cell is selected by an actual CI suite or expanded engine/input matrix', () => {
-  const workflows = ['release-preview.yml', 'identity.yml'].map(file => readFileSync(new URL('../../.github/workflows/' + file, import.meta.url), 'utf8'));
+  const workflows = ['release-preview.yml', 'checks.yml'].map(file => readFileSync(new URL('../../.github/workflows/' + file, import.meta.url), 'utf8'));
   assert.equal(validateCiBrowserCoverage(workflows), true);
   const missing = clone(); missing.cases.find(row => row.id === 'browser-library-webkit').suites = ['browser'];
   assert.throws(() => validateCiBrowserCoverage(workflows, missing), /browser-library-webkit/);

@@ -20,7 +20,7 @@ for(const [codec,depth]of [['h264',8],['hevc',8],['hevc',10]] as const)test(`str
   const truncated=bytes.slice(0,-1);await assert.rejects(parse(truncated),/Truncated|outside/);
   const badOffset=bytes.slice();new DataView(badOffset.buffer).setUint32(boxData(badOffset,'stco')+8,0);await assert.rejects(parse(badOffset),/outside complete mdat/);
   const external=bytes.slice();external[boxData(external,'url ')+3]=0;await assert.rejects(parse(external),/self-contained/);
-  const fractional=bytes.slice();new DataView(fractional.buffer).setUint32(boxData(fractional,'mdhd')+12,90001);await assert.rejects(parse(fractional),/exactly representable/);
+  const fractional=bytes.slice();new DataView(fractional.buffer).setUint32(boxData(fractional,'mdhd')+12,90001);const retimed=(await parse(fractional)).document;assert.equal(retimed.timescale,90001);assert.deepEqual(retimed.samples.map(s=>[s.dtsTicks,s.ctsTicks,s.durationTicks]),d.samples.map(s=>[s.dtsTicks,s.ctsTicks,s.durationTicks]));assert.equal(retimed.samples[1].ptsUs,Math.round((d.samples[1].dtsTicks+d.samples[1].ctsTicks)*1000000/90001));
   const appendFragment=Buffer.concat([bytes,Buffer.from([0,0,0,8,109,111,111,102])]);await assert.rejects(parse(appendFragment),/Fragmented MP4/);
   const movieRotate=bytes.slice();new DataView(movieRotate.buffer).setUint32(boxData(movieRotate,'mvhd')+36,0);await assert.rejects(parse(movieRotate),/movie rotation/);
   const quicktime=bytes.slice();quicktime.set(Buffer.from('qt  '),boxData(quicktime,'ftyp'));await assert.rejects(parse(quicktime),/ISO MP4 file type/);
@@ -32,7 +32,7 @@ for(const [codec,depth]of [['h264',8],['hevc',8],['hevc',10]] as const)test(`str
   const trakStart=boxData(bytes,'trak')-8,trakSize=new DataView(bytes.buffer).getUint32(trakStart),track=bytes.slice(trakStart,trakStart+trakSize),moovEnd=d.moov.offset+d.moov.size,multiple=Buffer.concat([bytes.subarray(0,moovEnd),track,bytes.subarray(moovEnd)]);multiple.writeUInt32BE(d.moov.size+track.length,d.moov.offset);await assert.rejects(parse(multiple),/one explicit MP4 video track|track IDs must be unique/);
   const fakeKey=bytes.slice(),first=d.samples[0];let at=first.offset;const width=codec==='h264'?(d.description[4]&3)+1:(d.description[21]&3)+1;while(at<first.offset+first.size){let n=0;for(let i=0;i<width;i++)n=n*256+fakeKey[at++];const type=codec==='h264'?fakeKey[at]&31:fakeKey[at]>>1&63;if(codec==='h264'?type===5:type===19||type===20){fakeKey[at]=codec==='h264'?(fakeKey[at]&224)|1:(fakeKey[at]&129)|(1<<1);break;}at+=n;}await assert.rejects(parse(fakeKey),/verified single-picture closed IDR/);
 });
-test('MP4 clocks require exact safe integer microseconds without rounding',()=>{assert.equal(mp4TicksToUs(3,75),40000);assert.throws(()=>mp4TicksToUs(1,3),/exactly representable/);assert.throws(()=>mp4TicksToUs(Number.MAX_SAFE_INTEGER,1),/exact integer range/);});
+test('MP4 transport projects rational clocks without replacing source ticks',()=>{assert.equal(mp4TicksToUs(3,75),40000);assert.equal(mp4TicksToUs(1,3),333333);assert.equal(mp4TicksToUs(2,3),666667);assert.equal(mp4TicksToUs(-2,3),-666667);assert.throws(()=>mp4TicksToUs(Number.MAX_SAFE_INTEGER,1),/overflowing MP4 clock/);});
 
 test('MP4 identity edit and unscored audio are self-contained; time remapping and external audio are rejected',{timeout:60000},async t=>{
  const dir=await mkdtemp(join(tmpdir(),'vp-mp4-edits-'));t.after(()=>rm(dir,{recursive:true,force:true}));const file=join(dir,'identity.mp4');

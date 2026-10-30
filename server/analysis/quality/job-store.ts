@@ -17,15 +17,14 @@ import type { QualityJob, QualityJobPage, QualityJobPhase, QualityJobReason, Qua
 import type { qualityJobRequest } from './job-request.ts';
 
 const columns = `id,revision,sequence,state,phase,actor_id,actor_name,client_id,request_id,idempotency_key,
-  created_at,queue_until,started_at,ended_at,cancel_at,cancel_by,cancel_request_id,reason_json,input_json,attempt_id,result_sha,execution_json`;
+  created_at,queue_until,started_at,ended_at,cancel_at,cancel_by,cancel_request_id,reason_json,input_json,attempt_id,result_sha,result_json IS NOT NULL AS has_result,execution_json`;
 const pending = "('queued','preparing','running','cancelling')";
 const reason = (code: string, message: string): QualityJobReason => ({code, message});
 
 /** One owner, bounded records, one attempt per submission. The separate SQLite
  * lock is crash-released; recovery cannot run against a live owning service. */
 export class QualityJobStore {
-  reexecutionLinks(actor:string){return this.reexecutions.links(actor,LIMITS.historyRows);}
-  taskSummaries(actor:string){return taskSummaries(this.db,'single',actor);}
+  taskSummaries(actor:string,id?:string,filter?:import('../../../shared/service/tasks.ts').TaskFilter){return taskSummaries(this.db,'single',actor,id,filter);}
 
   private db: ReturnType<typeof openIndexDatabase>;
   private unlock: () => void;
@@ -58,6 +57,7 @@ export class QualityJobStore {
       if(!db.prepare('PRAGMA table_info(quality_jobs)').all().some(c=>c.name==='execution_json'))db.exec("ALTER TABLE quality_jobs ADD COLUMN execution_json TEXT NOT NULL DEFAULT '{}'");
       this.reexecutions=new ReexecutionLedger(db);db.exec('PRAGMA user_version=2; COMMIT;');
       this.recover(now);
+      this.settle();
     } catch (error) { try { db?.close(); } finally { this.unlock(); } throw error; }
   }
   private transaction<T>(action: () => T): T {
@@ -73,6 +73,14 @@ export class QualityJobStore {
     const entries = Object.entries(fields);
     this.db.prepare(`UPDATE quality_jobs SET ${entries.map(([key]) => `${key}=?`).join(',')},revision=revision+1,sequence=? WHERE id=?`)
       .run(...entries.map(([, value]) => value), this.tick(), id);
+    if (typeof fields.state === 'string' && terminalQualityJob(fields.state as QualityJobState)) this.settle(id);
+  }
+  /** Keep receipts and frozen inputs; completed work no longer reserves its
+   * worst-case output. The allowance covers scalar columns and attempt receipts. */
+  private settle(id?: string) {
+    this.db.prepare(`UPDATE quality_jobs SET reserved_bytes=1024+length(CAST(input_json AS BLOB))
+      +length(CAST(execution_json AS BLOB))+coalesce(length(CAST(result_json AS BLOB)),0)
+      WHERE state NOT IN ${pending}${id ? ' AND id=?' : ''}`).run(...(id ? [id] : []));
   }
   private recover(now: number) {
     this.transaction(() => {
@@ -101,7 +109,7 @@ export class QualityJobStore {
       reason: row.reason_json ? JSON.parse(String(row.reason_json)) : null, input,
       attempt: attempt ? {id: String(attempt.id), number: 1, state: attempt.state as QualityJobState, phase: attempt.phase as QualityJobPhase,
         startedAt: Number(attempt.started_at), endedAt: attempt.ended_at === null ? null : Number(attempt.ended_at)} : null,
-      result: {available: completed && !!row.result_sha, url: `/api/quality/jobs/${row.id}/result`, digest: row.result_sha ? String(row.result_sha) : null},
+      result: {available: completed && !!row.result_sha && !!row.has_result, url: `/api/quality/jobs/${row.id}/result`, digest: row.result_sha ? String(row.result_sha) : null},
       progress: {scoredPairs: completed ? 1 : 0, targetPairs: 1, decodedFrames: completed ?
         [input.request.reference,input.request.distorted].reduce((n,t)=>n+pairPacketCount(t),0) : null}};
   }
@@ -114,9 +122,9 @@ export class QualityJobStore {
         if (prior.fingerprint !== request.fingerprint) throw new AdminError(409, 'Idempotency-Key already binds another request.', 'idempotency-conflict');
         return {job: this.get(String(prior.id)), replayed: true};
       }
-      const history = this.db.prepare('SELECT count(*) AS count,coalesce(sum(reserved_bytes),0) AS bytes FROM quality_jobs').get()!;
+      const history = this.db.prepare('SELECT coalesce(sum(reserved_bytes),0) AS bytes FROM quality_jobs').get()!;
       const charge = Buffer.byteLength(request.json) + LIMITS.resultBytes+16*1024;
-      if (Number(history.count) >= LIMITS.historyRows || Number(history.bytes) + charge > LIMITS.reservedBytes)
+      if (Number(history.bytes) + charge > LIMITS.reservedBytes)
         throw new AdminError(429, 'Quality history budget is full; existing history is retained.', 'quality-history-full');
       if (Number(this.db.prepare("SELECT count(*) AS count FROM quality_jobs WHERE state='queued'").get()!.count) >= LIMITS.queued)
         throw new AdminError(429, 'Quality queue is full.', 'quality-queue-full');
@@ -220,6 +228,18 @@ export class QualityJobStore {
     if (Buffer.byteLength(raw) > LIMITS.resultBytes || createHash('sha256').update(raw).digest('hex') !== job.result.digest)
       throw new AdminError(500, 'Quality history result failed integrity checks.', 'stored-result-invalid');
     return JSON.parse(raw);
+  }
+  releaseResult(id: string) {
+    return this.transaction(() => {
+      const job = this.get(id);
+      if (!terminalQualityJob(job.state) || job.attempt && job.attempt.endedAt === null)
+        throw new AdminError(409, 'Wait for physical execution to stop.', 'result-release-blocked');
+      if (job.result.available) {
+        this.patch(id, {result_json: null});
+        this.settle(id);
+      }
+      return this.get(id);
+    });
   }
   changes(actor: string | null, after = 0, limit: number = LIMITS.pageSize): QualityJobPage {
     if (!Number.isSafeInteger(after) || after < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > LIMITS.pageSize)

@@ -1,3 +1,6 @@
+// CI verifies correctness on shared runners; benchmarks require an owned environment.
+export const playbackBenchmarksEnabled = process.env.GITHUB_ACTIONS !== 'true' && process.env.VOIDPLAYER_FUNCTIONAL_ONLY !== '1';
+
 /** Functional presentation proof. Self-contained for Playwright serialization;
  * its separate watchdog never changes a benchmark's sampling window/result. */
 export function waitForPlaybackPresentation(options = {}) {

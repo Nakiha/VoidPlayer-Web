@@ -63,7 +63,7 @@ try{
  const a=entry('A.mp4');await player.evaluate(async url=>{const blob=await fetch(url).then(r=>r.blob());await window.voidPlayer.loadFile('A',new File([blob],'A.mp4'));},`${base}/api/media/${a.id}?v=${a.version}`);
  await player.waitForFunction(()=>!window.voidPlayer.getState().busy&&window.voidPlayer.getState().tracks[0]?.frame);await player.evaluate(()=>window.voidPlayer.play());await player.waitForFunction(()=>window.voidPlayer.getState().playing&&window.voidPlayer.getState().positionUs>200000);
  const before=await player.evaluate(()=>window.voidPlayer.getState());
- page=await context.newPage();evidence=recordBrowserEvidence(page);await page.goto(base+'/admin/#quality');await page.locator('#quality-ranges').waitFor();
+ page=await context.newPage();evidence=recordBrowserEvidence(page);await page.goto(base+'/admin/?qualityView=ranges#quality');await page.locator('#quality-ranges').waitFor();
  const [reference,distorted]=factories,input={schema:'voidplayer-quality-range',version:1,client:{id:'browser-range-agent',kind:'agent'},interval:{startAu:0,endAu:1},correspondence:{mode:'explicit-au-table'},sampling:{mode:'all'},
   pairs:[0,1].map(au=>({pairing:'caller-specified',reference:reference(au),distorted:distorted(1-au),roi:{x:0,y:0,width:32,height:32},spatial:{blockWidth:16,blockHeight:16},ssim:{variant:SSIM_VARIANT},budget:{maxReadBytes:1024*1024,maxInputBytes:1024*1024}})),
   budget:{maxReadBytes:2*1024*1024,maxInputBytes:2*1024*1024,maxPackets:4,maxOutputFrames:4,maxElapsedMs:30000}};
@@ -74,7 +74,7 @@ try{
  Atomics.store(gate,0,1);Atomics.notify(gate,0);
  const done=await until(()=>get(`/api/quality/ranges/${id}`),d=>!['queued','running','cancelling'].includes(d.job.state),'background range never finished');assert.equal(done.job.state,'completed',JSON.stringify(done));assert.equal(done.coverage.complete,true);assert.equal(done.job.summary.scoredPairs,2);assert.equal(workers.size,0);
  const unit=depth===8?1:2,frame=1536*unit;let sse=0;for(let i=0;i<1536;i++){const at=i*unit,aa=unit===1?native[at]:native.readUInt16LE(at),bb=unit===1?native[frame+at]:native.readUInt16LE(frame+at);sse+=(aa-bb)**2;}assert.equal(done.job.summary.groups[0].metric.sse,sse*2);
- phase='passive-reopen';page=await context.newPage();evidence=recordBrowserEvidence(page);await page.goto(base+'/admin/#quality');const row=page.locator(`[data-range-id="${id}"]`);await row.waitFor();await row.focus();
+ phase='passive-reopen';page=await context.newPage();evidence=recordBrowserEvidence(page);await page.goto(base+'/admin/?qualityView=ranges#quality');const row=page.locator(`[data-range-id="${id}"]`);await row.waitFor();await row.focus();
  await page.waitForResponse(r=>new URL(r.url()).pathname==='/api/quality/ranges');await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(resolve)));
  assert.equal(await row.evaluate(node=>document.activeElement===node),true,'passive list polling preserves focused row');
  let lostResult=false;await page.route(`**/api/quality/ranges/${id}/results?*`,async route=>{if(!lostResult){lostResult=true;await route.abort('failed');}else await route.continue();});

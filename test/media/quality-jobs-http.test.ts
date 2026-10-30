@@ -148,5 +148,15 @@ for(const [codec,depth]of [['h264',8],['hevc',8],['hevc',10]]as const)test(`dura
  const next=await fetch(base+'/api/quality/jobs',{method:'POST',headers:{...headers,origin:base,'idempotency-key':'changed-source'},body:JSON.stringify(input)});assert.equal(next.status,202);
  const failed=await terminal(base,(await next.json()).job.id,{cookie});assert.equal(failed.state,'failed');assert.equal(failed.reason?.code,'source-changed');assert.equal(failed.result.available,false);
  assert.deepEqual(await fetch(`${base}/api/quality/jobs/${id}/result`,{headers:{cookie}}).then(r=>r.json()),result,'source mutation cannot rewrite historical results');
+ const release=(jobId:string,identity=cookie)=>fetch(`${base}/api/tasks/single/${jobId}/release-result`,{method:'POST',headers:{...headers,origin:base,cookie:identity},body:'{}'});
+ assert.equal((await release(id,otherCookie)).status,404);
+ assert.equal((await release(ssId)).status,409,'shared annotation history retains its result');
+ const removed=await release(id);assert.equal(removed.status,200);assert.equal((await removed.json()).receiptRetained,true);
+ assert.equal((await fetch(`${base}/api/quality/jobs/${id}/result`,{headers:{cookie}})).status,409);
+ const receipt=(await (await submit()).json()).job;assert.equal(receipt.id,id);assert.equal(receipt.result.available,false);assert.equal(receipt.result.digest,job.result.digest);assert.deepEqual(receipt.attempt,job.attempt);
+ assert.equal((await fetch(`${base}/api/tasks/single/${id}`,{headers:{cookie}}).then(r=>r.json())).task.result.available,false);
+ assert.equal((await release(id)).status,200,'release is idempotent');
+ await stop();base=await start();assert.equal((await terminal(base,id,{cookie})).result.available,false);
+ assert.deepEqual(await fetch(`${base}/api/quality/jobs/${ssId}/result`,{headers:{cookie}}).then(r=>r.json()),ssResult);
  t.diagnostic(JSON.stringify({codec,depth,sse:result.value.result.metric.aggregate.sse,attempt:job.attempt!.id,host:result.value.execution}));
 });

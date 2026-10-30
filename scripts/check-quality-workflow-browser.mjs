@@ -199,7 +199,7 @@ try{
  async function holdPrivate(){let release,entered;const gate=new Promise(r=>release=r),start=new Promise(r=>entered=r),pattern=`**/api/quality/jobs/${id}`;
   await page.route(pattern,async route=>{const response=await route.fetch();entered();await gate;await route.fulfill({response}).catch(()=>{});});
   await page.locator(`[data-job-id="${id}"]`).click();await start;return async()=>{await release();await page.unroute(pattern);};}
- let release=await holdPrivate();await page.locator('#quality-client').fill('second-client');await page.locator('#quality-client-apply').click();await release();await page.waitForFunction(()=>document.querySelector('#quality-job-detail').hidden);assert.equal(await page.locator('#quality-client').inputValue(),'second-client');
+ let release=await holdPrivate();await page.locator('.quality-advanced').filter({has:page.locator('#quality-client')}).locator('summary').click();await page.locator('#quality-client').fill('second-client');await page.locator('#quality-client-apply').click();await release();await page.waitForFunction(()=>document.querySelector('#quality-job-detail').hidden);assert.equal(await page.locator('#quality-client').inputValue(),'second-client');
  const otherIdentity=await fetch(base+'/api/identity',{method:'POST',headers:{...headers,'x-voidplayer-action':'identity'},body:JSON.stringify({name:'Other quality reviewer',mode:'create'})});assert.equal(otherIdentity.status,200);const foreignActor=(await otherIdentity.json()).actor;
  release=await holdPrivate();
  async function switchActor(actor){await peerIdentity({id:actor.id});await page.waitForFunction(id=>document.querySelector('#quality-owner').textContent.includes(id),actor.id);}

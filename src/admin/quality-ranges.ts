@@ -1,3 +1,4 @@
+import {qualityViewVisible} from './quality-navigation.ts';
 import {installQualityReexecution} from './quality-reexecution.ts';
 import {t,th,msg} from '../i18n.ts';
 import {currentActor} from '../services/identity.ts';
@@ -122,7 +123,7 @@ export function installQualityRanges(signal:AbortSignal){
   };
   window.addEventListener('voidplayer-identity-change',()=>{reset();if(active)void list();},{signal});
   window.addEventListener('storage',e=>{if(e.key==='voidplayer.identity'){reset();actor='';}},{signal});
-  const timer=setInterval(()=>{if(active&&!document.hidden){if(selected)void detail();else if(!browsingMore)void list();}},1000);
+  const timer=setInterval(()=>{if(active&&qualityViewVisible('ranges')){if(selected)void detail();else if(!browsingMore)void list();}},1000);
   signal.addEventListener('abort',()=>{clearInterval(timer);controller.abort();},{once:true});
   return {activate(value:boolean){if(active===value)return;active=value;reset();if(active)void list();}};
 }

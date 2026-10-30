@@ -1,3 +1,4 @@
+import {clockToUs} from './rational-clock.ts';
 import {configurationPixelFields} from '../codecs/configuration-pixel-fields.ts';
 import {inspectPacketPicture} from '../codecs/packet-picture.ts';
 import {nalRanges} from '../codecs/nal-framing.ts';
@@ -18,12 +19,9 @@ const view=(b:Uint8Array)=>new DataView(b.buffer,b.byteOffset,b.byteLength);
 const u32=(b:Uint8Array,at:number)=>view(b).getUint32(at);
 const text=(b:Uint8Array,at:number)=>String.fromCharCode(...b.subarray(at,at+4));
 type Box={type:string;start:number;data:number;end:number};
-/** Exact integer conversion; this authority never rounds or repairs clocks. */
+/** Decoder/display projection only. Sample ticks/timebase remain authoritative. */
 export function mp4TicksToUs(ticks:number,timescale:number):number{
-  if(!safe(ticks)||!safe(timescale)||timescale<1)fail('Invalid MP4 clock');
-  const n=BigInt(ticks)*1000000n,d=BigInt(timescale);
-  if(n%d!==0n)fail('MP4 clock is not exactly representable in integer microseconds');
-  const result=Number(n/d);if(!safe(result))fail('MP4 clock exceeds exact integer range');return result;
+  try{return clockToUs({ticks,timescale});}catch{return fail('Invalid or overflowing MP4 clock');}
 }
 function boxes(bytes:Uint8Array,start:number,end:number):Box[]{
   const result:Box[]=[];

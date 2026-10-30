@@ -1,10 +1,10 @@
+import { playbackBenchmarksEnabled, verifyPlaybackPresentation } from './testing/playback-presentation.mjs';
 // Production-bundle FLV regression, no screenshots or persistent services.
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { webkit, chromium } from 'playwright';
 import { createMediaServer } from '../server/app.ts';
-import { blockingFlvBenchmarkFailures } from './testing/flv-benchmark-policy.mjs';
 // The native-decode policy (prefer WebCodecs when the platform accepts the
 // config) can only be observed where the platform accepts it. When the
 // browser's own probe refuses the AVC config, the WASM fallback is correct:
@@ -45,7 +45,7 @@ try {
       await page.goto(base);
       await page.waitForFunction(() => !!window.voidPlayer);
       const reference = JSON.parse(await readFile(path.join(root, 'fixtures/flv', name + '.json'), 'utf8'));
-      const result = await page.evaluate(async ({ name, reference }) => {
+      const result = await page.evaluate(async ({ name, reference, playbackBenchmarksEnabled }) => {
         const call = async (name, params = {}) => { try { return await window.voidPlayer.tools.find(t => t.name === name).execute(params); } catch (e) { throw new Error(name + ' ' + JSON.stringify(params) + ': ' + e.message); } };
         const listing = await call('list_library');
         const item = listing.entries.find(e => e.name === name + '.flv');
@@ -65,13 +65,14 @@ try {
         states.push(await call('get_review_session'));
         // Leave a margin above the 1000 ms minimum: the last rendered frame
         // can precede the polling deadline by one refresh interval.
-        const benchmark = await call('benchmark_review', { durationMs: 2400 });
+        const benchmark = playbackBenchmarksEnabled ? await call('benchmark_review', { durationMs: 2400 }) : undefined;
         const probeLogs = await call('get_review_logs', { level: 'info', limit: 500 });
         const probeDecisions = probeLogs.events
           .filter(e => e.cat === 'media' && e.msg === '原生解码路径探测')
           .flatMap(e => e.data?.decisions ?? []);
         return { states, benchmark, referenceDecoder, probeDecisions, renderer:document.getElementById('canvas-A').dataset.colorExecutor };
-      }, { name, reference });
+      }, { name, reference, playbackBenchmarksEnabled });
+      if (!playbackBenchmarksEnabled) result.functionalPresentation = await verifyPlaybackPresentation(page);
       await writeFile(path.join(reports, `${name}.json`), JSON.stringify({ browserName, name, ...result }, null, 2) + '\n');
       assert.deepEqual(errors, []);
       assert.ok(mediaRequests.length > 0);
@@ -92,10 +93,7 @@ try {
       assert.equal(result.states[2].tracks[0].frame.sourcePtsUs, reference.times[0]);
       assert.equal(result.states[3].tracks[0].frame.sourcePtsUs, reference.times.at(-1));
       assert.equal(result.states[4].tracks[0].frame.sourcePtsUs, reference.times[1]);
-      const blocking = blockingFlvBenchmarkFailures(result.benchmark, { virtualRunner: process.env.GITHUB_ACTIONS === 'true' && process.env.VOIDPLAYER_FLV_VIRTUAL_PERF === 'report', engine: browserName, renderer: result.renderer });
-      assert.equal(result.benchmark.passed, result.benchmark.failures.length === 0);
-      assert.deepEqual(blocking, [], JSON.stringify({error: result.benchmark.error, failures: result.benchmark.failures, measurements: result.benchmark.measurements, tracks: result.benchmark.tracks.map(t => ({decoder:t.decoder,coreVariant:t.coreVariant,hardwareAcceleration:t.hardwareAcceleration,width:t.width,height:t.height})), probeDecisions:result.probeDecisions}));
-      if (!result.benchmark.passed) console.warn(`PERFORMANCE NOT PASSED ${browserName} ${name}: ${result.benchmark.failures.join(', ')}; speed ${result.benchmark.measurements?.speed}; virtual headless-runner timing is informational; full result: ${path.join(reports, `${name}.json`)}`);
+      if (result.benchmark) assert.equal(result.benchmark.passed, true, JSON.stringify(result.benchmark));
       if (name === 'standard-h264') {
         await page.locator('#file-A').setInputFiles({ name: 'renamed.bin', mimeType: 'application/octet-stream', buffer: await readFile(path.join(root, 'fixtures/flv', name + '.flv')) });
         await page.waitForFunction(() => { const t = window.voidPlayer.tools.find(t => t.name === 'get_review_session'); return Promise.resolve(t.execute({})).then(s => !s.busy && s.tracks[0]?.name === 'renamed.bin' && s.tracks[0]?.frame?.ptsUs === 0); });

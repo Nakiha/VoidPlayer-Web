@@ -1,4 +1,4 @@
-import {decodeIdentityGop} from './packet-identity-decoder.ts';
+import {decodeIdentityGop,decodeIdentityGopFrames} from './packet-identity-decoder.ts';
 import { WasmMemoryBudgetError } from '../../wasm/core.ts';
 import { readWasmFrame, requireFrameAbi } from '../../wasm/frame.ts';
 import { checkedHeap } from '../../wasm/heap.ts';
@@ -85,6 +85,11 @@ export async function createPairDecoder(load: () => Promise<{ core: any; heap: (
   return {version,
     decode:(codec,configuration,bytes,pts,dts,budget)=>decodePackets(codec,configuration,[{au:0,offset:0,size:bytes.length,pts,dts,key:true,bytes}],budget,false),
     decodeForward:(codec,configuration,packets,budget)=>decodePackets(codec,configuration,packets,budget,true),
+    gopFrames(codec,configuration,packets,budget){
+      if(closed)throw new FramePairError('decoder-error','Pair decoder closed');
+      version.packetIdentity='packet-identity-gop-v1';version.packetIdentityAbi=1;
+      return decodeIdentityGopFrames(core,heap,codec,configuration,packets,budget);
+    },
     async decodeGop(codec,configuration,packets,targetAu,budget){
       if(closed)throw new FramePairError('decoder-error','Pair decoder closed');
       try{const value=decodeIdentityGop(core,heap,codec,configuration,packets,targetAu,budget);version.packetIdentity='packet-identity-gop-v1';version.packetIdentityAbi=1;return value;}

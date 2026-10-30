@@ -8,28 +8,6 @@ import { fileURLToPath } from 'node:url';
 import { releaseVersion, readReleaseIdentity, readBuildIdentity, verifyFrontendIdentity, readReleaseNotes } from '../../scripts/release-version.mjs';
 import { verifyReleaseSet, sha256, releasePlatforms } from '../../scripts/check-release-set.mjs';
 import { stageRelease, verifyDraftReleaseSet } from '../../scripts/stage-release.mjs';
-import { blockingFlvBenchmarkFailures } from '../../scripts/testing/flv-benchmark-policy.mjs';
-
-test('virtual FLV timing reports retain negative verdicts and never waive functional failures', () => {
-  const benchmark = { passed: false, tracks: [{ decoder: 'ffmpeg-wasm' }], environment: { hardwareUseVerified: false, userAgent: 'Mozilla/5.0 (X11; Linux x86_64) HeadlessChrome/153.0' }, failures: ['below-realtime', 'A:presentation-stall'] };
-  const context = { virtualRunner: true, engine: 'chromium', renderer: 'webgl-yuv' };
-  assert.deepEqual(blockingFlvBenchmarkFailures(benchmark, context), []);
-  assert.equal(benchmark.passed, false);
-  assert.deepEqual(benchmark.failures, ['below-realtime', 'A:presentation-stall']);
-  for (const patch of [{ virtualRunner: false }, { engine: 'webkit' }, { renderer: 'cpu-yuv' }, { renderer: 'unknown' }]) {
-    assert.deepEqual(blockingFlvBenchmarkFailures(benchmark, { ...context, ...patch }), benchmark.failures);
-  }
-  for (const failure of ['insufficient-sample', 'no-frames', 'A:no-frames', 'frame-lag', 'track-skew', 'pause-latency', 'stale-frame-after-pause', 'playback-error', 'interrupted', 'premature-end', 'media-changed', 'page-not-visible', 'unknown']) {
-    assert.deepEqual(blockingFlvBenchmarkFailures({ ...benchmark, failures: [...benchmark.failures, failure] }, context), [failure]);
-  }
-  assert.deepEqual(blockingFlvBenchmarkFailures({ ...benchmark, tracks: [{ decoder: 'webcodecs' }] }, { ...context, renderer: 'browser-managed' }), []);
-  for (const environment of [{}, { ...benchmark.environment, hardwareUseVerified: true }, { ...benchmark.environment, userAgent: 'Chrome/153.0' }, { ...benchmark.environment, userAgent: 'HeadlessChrome/153.0 Macintosh' }]) {
-    assert.deepEqual(blockingFlvBenchmarkFailures({ ...benchmark, environment }, context), benchmark.failures);
-  }
-  assert.deepEqual(blockingFlvBenchmarkFailures({ ...benchmark, tracks: [{ decoder: 'unknown' }] }, context), benchmark.failures);
-  assert.deepEqual(blockingFlvBenchmarkFailures({ ...benchmark, tracks: [] }, context), benchmark.failures);
-});
-
 // These structural contracts run in the identity job before npm ci. Keep them
 // dependency-free and fail closed if the workflow's job/needs syntax changes.
 function workflowJobs(source) {
@@ -43,13 +21,63 @@ function workflowJobs(source) {
     }));
 }
 
+test('daily verification is bounded and full release verification is explicit', async () => {
+  const read = name => readFile(new URL(`../../.github/workflows/${name}.yml`, import.meta.url), 'utf8');
+  const daily = await read('checks'), release = await read('release-preview'), cores = await read('prepare-cores');
+  const jobs = workflowJobs(daily), coreJobs = workflowJobs(cores);
+  assert.deepEqual(Object.keys(jobs).sort(), ['browser', 'cores', 'required', 'source-logic', 'unit']);
+  assert.deepEqual(Object.keys(coreJobs).sort(), ['analysis-core', 'decoder']);
+  assert.match(daily, /on:\n  pull_request:\n  push:\n    branches: \[main\]/);
+  const fullTriggers = release.slice(release.indexOf('\non:\n'), release.indexOf('\npermissions:'));
+  assert.match(fullTriggers, /tags: \['v\*'\]/);
+  assert.match(fullTriggers, /workflow_dispatch:/);
+  assert.doesNotMatch(fullTriggers, /pull_request|branches:|paths-ignore/);
+  assert.doesNotMatch(daily, /ci-perf|benchmark-only|package-release|ci-native-|continue-on-error:/);
+  assert.match(jobs.cores.body, /uses: \.\/\.github\/workflows\/prepare-cores\.yml/);
+  assert.match(cores, /workflow_call:/);
+  assert.match(coreJobs.decoder.body, /run-tests\.mjs --case release-core/);
+  assert.match(jobs['source-logic'].body, /run-tests\.mjs source/);
+  assert.match(jobs.unit.body, /run-tests\.mjs ci-node-media\n/);
+  assert.match(jobs.unit.body, /uses: \.\/\.github\/actions\/media-fixtures/);
+  assert.match(jobs.browser.body, /engine: \[chromium, webkit\]/);
+  assert.match(jobs.browser.body, /run-tests\.mjs ci-pr-browser --engine \$\{\{ matrix.engine \}\}/);
+  assert.match(jobs.browser.body, /include-hidden-files: true/);
+  assert.doesNotMatch(jobs.browser.body, /sync-samples|qa-samples|native-oracle/);
+  assert.deepEqual(jobs.required.needs, ['source-logic', 'cores', 'unit', 'browser']);
+  assert.match(jobs.required.body, /if: \$\{\{ always\(\) \}\}/);
+  const guard = /^          node --input-type=module <<'JS'\n([\s\S]*?)^          JS$/m.exec(jobs.required.body)?.[1];
+  assert.ok(guard);
+  const run = results => spawnSync(process.execPath, ['--input-type=module', '-e', guard.replace(/^          /gm, '')], {
+    encoding: 'utf8', env: { ...process.env, RESULTS: JSON.stringify(results) },
+  }).status;
+  assert.notEqual(run({}), 0);
+  for (const dependency of jobs.required.needs) for (const result of ['success', 'failure', 'cancelled', 'skipped', 'pending']) {
+    const outcomes = Object.fromEntries(jobs.required.needs.map(id => [id, { result: id === dependency ? result : 'success' }]));
+    assert.equal(run(outcomes) === 0, result === 'success', `${dependency}: ${result}`);
+  }
+  const manifest = JSON.parse(await readFile(new URL('../../scripts/testing/manifest.json', import.meta.url), 'utf8'));
+  const profile = manifest.cases.filter(row => row.suites.includes('ci-pr-browser'));
+  assert.equal(profile.length, 33, 'daily profile growth requires an explicit coverage/budget review');
+  assert.ok(profile.every(row => row.required && row.fixtures.every(value => ['core', 'analysis-core'].includes(value))));
+  for (const engine of ['chromium', 'webkit']) for (const family of ['contracts', 'native-presented-protocol', 'quality-workflow-8', 'native-vmaf-8', 'native-cambi-8', 'native-xpsnr-8', 'ssim-workflow-8', 'cambi-reexecution', 'identity'])
+    assert.ok(profile.some(row => row.id === `browser-${family}-${engine}`), `${family}/${engine}`);
+  for (const row of manifest.cases.filter(row => row.suites.includes('ci-analysis-ui') || row.suites.includes('ci-identity-browser') || row.suites.includes('ci-identity-http')))
+    assert.ok(profile.includes(row), `${row.id}: daily UI/identity coverage`);
+  const fullJobs = workflowJobs(release);
+  assert.doesNotMatch(fullJobs['analysis-matrix'].body, /--case node-/);
+  for (const id of ['node-bitstream-analysis-ts', 'node-js-container-matrix', 'node-js-container-server-cache'])
+    assert.ok(manifest.cases.find(row => row.id === id)?.suites.includes('ci-node-media'));
+});
+
 test('release workflow gates verified artifacts and draft staging on every verification job', async () => {
   const workflow = await readFile(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
   const jobs = workflowJobs(workflow);
-  assert.match(jobs['analysis-core'].body, /name: Verify analysis reference ABI including restored caches\n        run: node scripts\/prepare-analysis-core.mjs public\/vendor\/voidplayer-analysis/);
-  const required = ['native-release', 'linux-native', 'unit', 'playback', 'cache-browser', 'source-logic', 'analysis-browser', 'analysis-matrix', 'ssim-browser', 'hevc-browser', 'uncovered-regressions'];
+  const cores = workflowJobs(await readFile(new URL('../../.github/workflows/prepare-cores.yml', import.meta.url), 'utf8'));
+  assert.match(jobs.cores.body, /uses: \.\/\.github\/workflows\/prepare-cores\.yml/);
+  assert.match(cores['analysis-core'].body, /name: Verify analysis reference ABI including restored caches\n        run: node scripts\/prepare-analysis-core.mjs public\/vendor\/voidplayer-analysis/);
+  const required = ['native-release', 'native-runtime', 'unit', 'playback', 'cache-browser', 'source-logic', 'analysis-browser', 'analysis-matrix', 'ssim-browser', 'hevc-browser', 'uncovered-regressions'];
   assert.deepEqual([...jobs['release-set'].needs].sort(), required.sort());
-  assert.deepEqual(jobs.unit.needs, ['decoder', 'analysis-core']);
+  assert.deepEqual(jobs.unit.needs, ['cores']);
   assert.match(jobs.unit.body, /run: node scripts\/run-tests\.mjs ci-node-media\n        env:\n          VOIDPLAYER_FFMPEG_ORACLE:/);
   assert.equal((workflow.match(/run: node scripts\/run-tests\.mjs ci-node-media(?:\n|$)/g) ?? []).length, 1, 'media Node partition runs exactly once with no case filter');
   assert.doesNotMatch(jobs.playback.body, /run-tests\.mjs unit/);
@@ -59,18 +87,10 @@ test('release workflow gates verified artifacts and draft staging on every verif
     assert.ok(jobs[need], `unknown dependency ${need}`);
     return [need, ...dependencies(need)];
   }));
-  // This one PR-only measurement is informational. Every other verification
-  // job remains required, including any newly added job not explicitly audited.
-  const informational = jobs['paired-https'];
-  assert.ok(informational, 'paired performance job exists');
-  assert.deepEqual(informational.needs, ['decoder', 'analysis-core']);
-  assert.match(informational.body, /^    if: github.event_name == 'pull_request'$/m);
-  assert.match(informational.body, /id: paired-performance\n        continue-on-error: true/);
-  assert.match(informational.body, /cp scripts\/check-http-playback.mjs scripts\/bench-playback.mjs scripts\/test-certificate-trust.mjs/);
-  assert.match(informational.body, /run: node scripts\/run-tests\.mjs ci-perf-pair --prepared/);
-  assert.match(informational.body, /if: always\(\)[\s\S]*name: paired-https-performance-reports/);
-  assert.doesNotMatch(informational.body, /stage-release|check-release-set|verified-release-set/);
-  assert.deepEqual([...dependencies('release-set')].sort(), Object.keys(jobs).filter(id => !['release-set', 'release-draft', 'paired-https'].includes(id)).sort(),
+  assert.equal(jobs['paired-https'], undefined, 'cloud benchmark comparison is removed');
+  assert.doesNotMatch(workflow, /ci-perf|bench-playback|benchmark-only|VIRTUAL_PERF|performance-reports/);
+  assert.match(jobs.playback.body, /run-tests\.mjs ci-https --prepared/);
+  assert.deepEqual([...dependencies('release-set')].sort(), Object.keys(jobs).filter(id => !['release-set', 'release-draft'].includes(id)).sort(),
     'every new required verification job must be in the release dependency graph');
   for (const id of dependencies('release-set')) {
     assert.doesNotMatch(jobs[id].body, /^    (?:if|continue-on-error):/m, `${id} must retain success-only job gating`);
@@ -107,17 +127,17 @@ test('release workflow gates verified artifacts and draft staging on every verif
   }
 });
 
-test('Linux native suites retain exact platform ownership outside the compiled package job', async () => {
+test('all platform/runtime suites run independently of the compiled package jobs', async () => {
   const workflow = await readFile(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
-  const jobs = workflowJobs(workflow), linux = jobs['linux-native'], packaged = jobs['native-release'];
+  const jobs = workflowJobs(workflow), runtimeJob = jobs['native-runtime'], packaged = jobs['native-release'];
   const manifest = JSON.parse(await readFile(new URL('../../scripts/testing/manifest.json', import.meta.url), 'utf8'));
-  assert.deepEqual(linux.needs, ['decoder', 'analysis-core']);
-  assert.match(linux.body, /^    runs-on: ubuntu-24\.04$/m);
-  assert.match(linux.body, /^    timeout-minutes: 20$/m);
+  assert.deepEqual(runtimeJob.needs, ['cores']);
+  assert.match(runtimeJob.body, /^    runs-on: \$\{\{ matrix\.os \}\}$/m);
+  assert.match(runtimeJob.body, /^    timeout-minutes: 20$/m);
   assert.match(packaged.body, /^    timeout-minutes: 20$/m);
-  assert.match(linux.body, /fail-fast: false\n      matrix:\n        runtime: \[node, bun\]/);
+  assert.match(runtimeJob.body, /fail-fast: false\n      matrix:\n        runtime: \[node, bun\]\n        os: \[ubuntu-24\.04, windows-2022, macos-14\]/);
   assert.deepEqual([...packaged.body.matchAll(/platform: ([\w-]+)/g)].map(match => match[1]).sort(), ['darwin-arm64', 'linux-x64', 'windows-x64']);
-  for (const body of [linux.body, packaged.body]) {
+  for (const body of [runtimeJob.body, packaged.body]) {
     assert.match(body, /uses: actions\/checkout@v4/);
     assert.match(body, /node-version: '24\.15\.0'/);
     assert.match(body, /bun-version-file: \.bun-version/);
@@ -127,25 +147,39 @@ test('Linux native suites retain exact platform ownership outside the compiled p
     assert.match(body, /run: node scripts\/run-tests\.mjs --case release-core\n/);
     assert.doesNotMatch(body, /continue-on-error:/);
   }
-  assert.match(linux.body, /if: always\(\)[\s\S]*name: linux-native-reports-\$\{\{ matrix\.runtime \}\}[\s\S]*path: \.run\/test-suites\//);
-  const expectedCounts = { node: 24, bun: 38 };
+  assert.match(runtimeJob.body, /if: always\(\)[\s\S]*name: native-runtime-reports-\$\{\{ matrix\.os \}\}-\$\{\{ matrix\.runtime \}\}[\s\S]*path: \.run\/test-suites\//);
+  const expectedCounts = { node: 25, bun: 39 };
   for (const runtime of ['node', 'bun']) {
     const suite = `ci-native-${runtime}`, command = `run: node scripts/run-tests.mjs ${suite}\n`;
-    assert.equal(linux.body.split(command).length - 1, 1);
-    assert.equal(packaged.body.split(command).length - 1, 1);
-    assert.ok(linux.body.includes(`if: matrix.runtime == '${runtime}'\n        ${command}`));
-    assert.ok(packaged.body.includes(`if: runner.os != 'Linux'\n        ${command}`));
-    const cases = manifest.cases.filter(row => row.suites.includes(suite) && row.platforms.includes('linux'));
-    assert.equal(cases.length, expectedCounts[runtime]);
-    assert.equal(new Set(cases.map(row => row.id)).size, cases.length);
-    assert.ok(cases.every(row => row.required));
+    assert.equal(runtimeJob.body.split(command).length - 1, 1);
+    assert.equal(packaged.body.split(command).length - 1, 0);
+    assert.ok(runtimeJob.body.includes(`if: matrix.runtime == '${runtime}'\n        ${command}`));
+    for (const platform of ['linux', 'darwin', 'win32']) {
+      const cases = manifest.cases.filter(row => row.suites.includes(suite) && row.platforms.includes(platform));
+      assert.equal(cases.length, expectedCounts[runtime], `${runtime}/${platform} keeps every case`);
+      assert.equal(new Set(cases.map(row => row.id)).size, cases.length);
+      assert.ok(cases.every(row => row.required));
+      for (const id of [`${runtime}-native-xpsnr-http`, `${runtime}-analysis-xpsnr-sequence-http`]) {
+        const xpsnr = cases.find(row => row.id === id);
+        assert.ok(xpsnr, `${runtime}/${platform} keeps both XPSNR groups`);
+        assert.equal(xpsnr.timeoutMs, 180000);
+      }
+    }
   }
-  assert.match(linux.body, /ci-native-node\n        env:\n          NODE_OPTIONS: --test-reporter=tap/);
+  assert.match(runtimeJob.body, /ci-native-node\n        env:\n          NODE_OPTIONS: --test-reporter=tap/);
   for (const suite of ['--case release-analysis', '--case release-quality', 'ci-native-http --prepared', 'ci-native-https --prepared']) assert.ok(packaged.body.includes(`run: node scripts/run-tests.mjs ${suite}\n`));
-  const nativeSetup = "      - name: Prepare pinned Linux native quality components\n        if: matrix.platform == 'linux-x64'\n        run: node scripts/native/run-vmaf-tests.mjs node scripts/native/run-xpsnr-tests.mjs node --version\n";
-  assert.equal(packaged.body.split(nativeSetup).length - 1, 1);
-  assert.ok(packaged.body.indexOf(nativeSetup) < packaged.body.indexOf('run: node scripts/run-tests.mjs --case release-quality\n'));
-  assert.equal(manifest.cases.find(row => row.id === 'release-quality').timeoutMs, 120000, 'native build prerequisites must not consume or enlarge the compiled acceptance budget');
+  assert.doesNotMatch(packaged.body, /Prepare pinned Linux native quality components/);
+  assert.equal(manifest.cases.find(row => row.id === 'release-quality').timeoutMs, 120000, 'runtime suites must not consume or enlarge the compiled acceptance budget');
+  for (const [id, deadline] of [['release-quality',120000],['release-analysis-quality',180000],['release-native-xpsnr',180000],['release-quality-reexecution',120000]]) {
+    const row=manifest.cases.find(entry=>entry.id===id);
+    assert.equal(row.required,true);
+    assert.ok(row.suites.includes('release'));
+    assert.equal(row.timeoutMs,deadline);
+    assert.deepEqual(row.platforms,['linux','darwin','win32']);
+    assert.equal(packaged.body.split(`run: node scripts/run-tests.mjs --case ${id}\n`).length-1,1);
+  }
+  assert.ok(manifest.cases.find(row=>row.id==='release-quality').command.includes('--base-only'));
+
 });
 
 test('cache suite runs once in its own required job with the same pinned preparation and evidence', async () => {
@@ -177,7 +211,7 @@ test('cache suite runs once in its own required job with the same pinned prepara
   for(const engine of ['chromium','webkit']){
     const row=prCases.find(row=>row.id===`browser-xpsnr-comparison-${engine}`);
     assert.deepEqual(row.command,['node','scripts/native/run-xpsnr-tests.mjs','node','scripts/check-xpsnr-comparison-browser.mjs',engine]);
-    assert.equal(row.required,true);assert.deepEqual(row.fixtures,['core']);assert.equal(row.timeoutMs,300000);
+    assert.equal(row.required,true);assert.deepEqual(row.fixtures,['core','analysis-core']);assert.equal(row.timeoutMs,300000);
   }
 
   assert.deepEqual(cases.filter(row=>!prCases.includes(row)).map(row=>row.id),['browser-presented-quality-webkit']);
@@ -197,35 +231,25 @@ test('cache suite runs once in its own required job with the same pinned prepara
   assert.deepEqual(prior.find(row=>row.id==='browser-mcp-page-bridge-chromium')?.command,['node','scripts/check-mcp-page-bridge-browser.mjs']);
   assert.equal(prior.filter(row=>row.id!=='browser-mcp-page-bridge-chromium').length,55,'retain the existing cache matrix alongside the required MCP case');
   assert.ok(cases.every(row => row.required && row.kind === 'regression'));
-  assert.deepEqual(cache.needs, ['decoder', 'analysis-core']);
+  assert.deepEqual(cache.needs, ['cores']);
   assert.match(cache.body, /^    runs-on: ubuntu-24\.04$/m);
   assert.match(cache.body, /^    timeout-minutes: 45$/m);
   assert.match(jobs.playback.body, /^    timeout-minutes: 45$/m);
   assert.doesNotMatch(cache.body, /strategy:|--engine|--stop-on-failure/);
-  assert.equal((cache.body.match(/continue-on-error: true/g)??[]).length,1);
-  const diagnostic=/      - name: Diagnostic only - WebKit multi-page paused native presentation\n([\s\S]*?)(?=      - )/.exec(cache.body)?.[1];
-  assert.ok(diagnostic);assert.match(diagnostic,/id: webkit-paused-diagnostic\n        continue-on-error: true/);
-  assert.match(diagnostic,/if: \$\{\{ github.event_name == 'pull_request' && !cancelled\(\) && steps.browser-inputs.outcome == 'success' \}\}/);
-  assert.match(diagnostic,/run: node scripts\/run-tests\.mjs --case browser-presented-quality-webkit --prepared --directory \.run\/test-suites\/quality-browser-diagnostics/);
-  assert.doesNotMatch(cache.body.replace(diagnostic,''),/continue-on-error:/,'no required suite or other case becomes informational');
-  assert.match(cache.body,/name: Record non-blocking WebKit diagnostic outcome\n        if: \$\{\{ always\(\) && github.event_name == 'pull_request' \}\}/);
-  assert.match(cache.body,/DIAGNOSTIC_OUTCOME: \$\{\{ steps.webkit-paused-diagnostic.outcome \}\}/,'report the actual outcome, not the continue-on-error conclusion');
+  assert.doesNotMatch(cache.body, /continue-on-error:|ci-cache-pr --prepared|quality-browser-diagnostics/);
   assert.equal((workflow.match(/run: node scripts\/run-tests\.mjs ci-cache --prepared\n/g) ?? []).length, 1);
   assert.doesNotMatch(jobs.playback.body, /ci-cache|annotation-cache-screenshots/);
-  assert.deepEqual([...cache.body.matchAll(/^        run: node scripts\/run-tests\.mjs ([^\n]+)$/gm)].map(row => row[1]), ['--prepare', 'ci-cache --prepared', 'ci-cache-pr --prepared', '--case browser-presented-quality-webkit --prepared --directory .run/test-suites/quality-browser-diagnostics']);
-  for(const [event,suite]of [['!=','ci-cache'],['==','ci-cache-pr']]){
-    const condition="if: ${{ github.event_name "+event+" 'pull_request' && !cancelled() && steps.browser-inputs.outcome == 'success' }}";
-    assert.ok(cache.body.includes(condition+'\n        run: node scripts/run-tests.mjs '+suite+' --prepared'));
-  }
+  assert.deepEqual([...cache.body.matchAll(/^        run: node scripts\/run-tests\.mjs ([^\n]+)$/gm)].map(row => row[1]), ['--prepare', 'ci-cache --prepared']);
+  assert.match(cache.body, /if: \$\{\{ !cancelled\(\) && steps.browser-inputs.outcome == 'success' \}\}\n        run: node scripts\/run-tests\.mjs ci-cache --prepared/);
 
   const preparation = (body, end) => body.slice(body.indexOf('    steps:\n'), body.indexOf(`      - name: ${end}`));
-  assert.equal(preparation(cache.body, 'Generate approximately 100 MB 1080p playback inputs'), preparation(jobs.playback.body, 'Verify opportunistic audio'),
+  assert.equal(preparation(cache.body, 'Generate approximately 100 MB 1080p playback inputs'), preparation(jobs.playback.body, 'Verify identity and Agent annotation flows'),
     'same checkout, pinned core/QA/FATE/oracle, native tools, Playwright and verified build preparation');
   const fixtures = body => /      - name: Generate approximately 100 MB 1080p playback inputs\n[\s\S]*?(?=      - )/.exec(body)?.[0];
   assert.ok(fixtures(cache.body));
   assert.equal(fixtures(cache.body), fixtures(jobs.playback.body), 'preserve every preceding generated input');
-  assert.match(cache.body, /if: always\(\)[\s\S]*name: annotation-cache-screenshots/);
-  for (const artifact of ['/tmp/voidplayer-annotation-*.png', '/tmp/voidplayer-caches-*.png', '.run/workspace-sharing-browser-*/', '.run/test-suites/ci-cache/', '.run/test-suites/ci-cache-pr/', '.run/test-suites/quality-browser-diagnostics/', '.run/test-suites/preparation/', '.run/test-suites/build-receipt.json', '.run/playback-reports/']) {
+  assert.match(cache.body, /if: always\(\)[\s\S]*name: annotation-cache-screenshots\n          include-hidden-files: true/);
+  for (const artifact of ['/tmp/voidplayer-annotation-*.png', '/tmp/voidplayer-caches-*.png', '.run/workspace-sharing-browser-*/', '.run/test-suites/ci-cache/', '.run/test-suites/preparation/', '.run/test-suites/build-receipt.json', '.run/playback-reports/']) {
     assert.ok(cache.body.includes(`            ${artifact}\n`), `cache evidence retained: ${artifact}`);
   }
   assert.equal((workflow.match(/name: annotation-cache-screenshots\n/g) ?? []).length, 1);
@@ -245,7 +269,7 @@ test('browser workflow collects independent outcomes and uploads failure evidenc
 test('analysis matrix runs as independent required jobs with distinct evidence', async () => {
   const jobs = workflowJobs(await readFile(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8'));
   const matrix = jobs['analysis-matrix'];
-  assert.deepEqual(matrix.needs, ['decoder', 'analysis-core']);
+  assert.deepEqual(matrix.needs, ['cores']);
   assert.match(matrix.body, /timeout-minutes: 30/);
   assert.match(matrix.body, /fail-fast: false/);
   assert.match(matrix.body, /engine: \[chromium, webkit\]\n        part: \[mp4, flv-legacy, flv-enhanced, fmp4, ts, js-containers\]/);
@@ -500,12 +524,16 @@ test('release rebuild sources include shared implementations and their independe
 test('every FATE consumer restores an exact manifest cache and verifies before saving or testing', async () => {
   const jobs = workflowJobs(await readFile(new URL('../../.github/workflows/release-preview.yml',import.meta.url),'utf8'));
   const consumers = Object.entries(jobs).filter(([,job]) => job.body.includes('uses: ./.github/actions/fate-fixtures'));
-  assert.deepEqual(consumers.map(([id])=>id).sort(), ['cache-browser','playback','uncovered-regressions','unit']);
+  assert.deepEqual(consumers.map(([id])=>id).sort(), ['uncovered-regressions']);
   for(const [id,{body}] of consumers) {
     assert.equal((body.match(/uses: \.\/\.github\/actions\/fate-fixtures/g) ?? []).length,1,id);
     assert.doesNotMatch(body,/node scripts\/sync-fate-samples\.mjs/,id);
     assert.ok(body.indexOf('uses: ./.github/actions/fate-fixtures') < body.indexOf('run: node scripts/run-tests.mjs'),id);
   }
+  const preparation = await readFile(new URL('../../.github/actions/media-fixtures/action.yml', import.meta.url), 'utf8');
+  assert.equal((preparation.match(/uses: \.\/\.github\/actions\/fate-fixtures/g) ?? []).length, 1);
+  assert.match(preparation, /ref: 881eb5ccd706c33aa1ff35ab3a67ac3a226ccfba/);
+  for (const id of ['unit', 'cache-browser', 'playback']) assert.match(jobs[id].body, /uses: \.\/\.github\/actions\/media-fixtures/);
   const action = await readFile(new URL('../../.github/actions/fate-fixtures/action.yml',import.meta.url),'utf8');
   assert.match(action,/node scripts\/sync-fate-samples\.mjs --cache-key/);
   assert.match(action,/uses: actions\/cache\/restore@v4/);
@@ -520,7 +548,7 @@ test('every FATE consumer restores an exact manifest cache and verifies before s
 
 test('SSIM dual-browser real task/evidence checks gate release output without extending serial source UI budgets',async()=>{
  const jobs=workflowJobs(await readFile(new URL('../../.github/workflows/release-preview.yml',import.meta.url),'utf8'));
- const ssim=jobs['ssim-browser'];assert.deepEqual(ssim.needs,['decoder','analysis-core']);assert.match(ssim.body,/engine: \[chromium, webkit\]/);
+ const ssim=jobs['ssim-browser'];assert.deepEqual(ssim.needs,['cores']);assert.match(ssim.body,/engine: \[chromium, webkit\]/);
  assert.match(ssim.body,/run: node scripts\/run-tests\.mjs ci-ssim --engine \$\{\{ matrix.engine \}\}/);
  assert.match(ssim.body,/if: always\(\)[\s\S]*ssim-browser-reports-/);assert.ok(jobs['release-set'].needs.includes('ssim-browser'));
  assert.doesNotMatch(ssim.body,/continue-on-error:/);

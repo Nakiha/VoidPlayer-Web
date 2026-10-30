@@ -21,6 +21,7 @@ export async function verifyCoreCapabilities(directory,lock,product,suffix='',co
  if(product==='analysis')assert.deepEqual(capability.containerEntries,[]);
  if(lock.packetIdentityAbi!==undefined){assert.equal(lock.packetIdentityAbi,1);assert.equal(capability.packetIdentityAbi,lock.packetIdentityAbi);}
  if(core){
+  if(lock.packetIdentityCapacity!==undefined)assert.equal(core._vp_packet_identity_capacity(),lock.packetIdentityCapacity);
   if(lock.packetIdentityAbi===1){assert.equal(core._vp_packet_identity_abi(),1);for(const name of ['_vp_packet_open_identity','_vp_packet_send_identity','_vp_packet_identity_info'])assert.equal(typeof core[name],'function');}
   const string=pointer=>{assert.ok(Number.isInteger(pointer)&&pointer>0&&pointer<core.HEAPU8.length);const end=core.HEAPU8.indexOf(0,pointer);assert.ok(end>=pointer&&end-pointer<=1024);return new TextDecoder().decode(core.HEAPU8.subarray(pointer,end));};
   assert.equal(core._vp_capability_abi(),1);assert.equal(string(core._vp_build_id()),lock.revision);

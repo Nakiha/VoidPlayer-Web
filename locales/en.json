@@ -2101,8 +2101,8 @@
     "translation": "Retry the frozen body with its original key"
   },
   "cambi.scope": {
-    "source": "Linux x64 可选固定组件；可信 FLV/Enhanced FLV 8/10 位，或严格 MP4 avc1 H2648 / hvc1 HEVC8/10；限范围 BT.709 SDR，整帧、方形像素、不裁剪，长边至少320。分数越高表示检测到更多色带，不是产品合格线；内部按10位处理。允许明确抽样，未采样帧不冒充覆盖。没有跨帧目标跟踪，未认证引用完整性，无法检测错误隐藏。",
-    "translation": "Optional fixed Linux x64 component; trusted FLV/Enhanced FLV 8/10-bit or strict MP4 avc1 H2648 / hvc1 HEVC8/10; limited BT.709 SDR, full uncropped square-pixel frames with a long edge of at least320. Higher scores indicate more detected banding, not a product pass/fail threshold; internal processing uses10 bits. Explicit sampling leaves unsampled coverage visible. No object tracking, reference-integrity certification or concealment detection."
+    "source": "使用分析 WASM core；可信 FLV/Enhanced FLV 8/10 位，或严格 MP4 avc1 H2648 / hvc1 HEVC8/10；限范围 BT.709 SDR，整帧、方形像素、不裁剪，长边至少320。分数越高表示检测到更多色带，不是产品合格线；内部按10位处理。允许明确抽样，未采样帧不冒充覆盖。没有跨帧目标跟踪，未认证引用完整性，无法检测错误隐藏。",
+    "translation": "Uses the analysis WASM core; trusted FLV/Enhanced FLV 8/10-bit or strict MP4 avc1 H2648 / hvc1 HEVC8/10; limited BT.709 SDR, full uncropped square-pixel frames with a long edge of at least320. Higher scores indicate more detected banding, not a product pass/fail threshold; internal processing uses10 bits. Explicit sampling leaves unsampled coverage visible. No object tracking, reference-integrity certification or concealment detection."
   },
   "cambi.submit": {
     "source": "发起持久单源 CAMBI",
@@ -3778,8 +3778,8 @@
     "translation": "Reference relation declaration (not content certification)"
   },
   "qualityClock.direction": {
-    "source": "映射方向：待测源 PTS = 参考源 PTS + offset。每段参考区间为 [start, end)，单位均为整数微秒；两侧区间均不得重叠。",
-    "translation": "Mapping direction: distorted source PTS = reference source PTS + offset. Reference segments are half-open [start, end) intervals in integer microseconds; intervals on either side must not overlap."
+    "source": "映射方向：待测源时间 = 参考源时间 + 偏移。参考区间为 [开始, 结束)，单位为微秒。偏移可用微秒或指定帧率下的整帧数；两侧区间均不得重叠。",
+    "translation": "Mapping: distorted source time = reference source time + offset. Reference intervals are [start, end) in microseconds. Offsets can use microseconds or whole frames at an exact frame rate. Neither side may overlap."
   },
   "qualityClock.execute": {
     "source": "按此冻结计划提交评分",
@@ -3789,9 +3789,25 @@
     "source": "结束本地重试，准备新请求",
     "translation": "End local retries and prepare a new request"
   },
+  "qualityClock.frameOffsetHelp": {
+    "source": "按精确帧率换算；例如 1 帧、30000/1001 fps。",
+    "translation": "Uses the exact frame rate; for example, 1 frame at 30000/1001 fps."
+  },
+  "qualityClock.frames": {
+    "source": "帧",
+    "translation": "Frames"
+  },
+  "qualityClock.microseconds": {
+    "source": "微秒",
+    "translation": "Microseconds"
+  },
   "qualityClock.newSamePlan": {
     "source": "新建相同计划",
     "translation": "New identical plan"
+  },
+  "qualityClock.offsetUnit": {
+    "source": "偏移单位",
+    "translation": "Offset unit"
   },
   "qualityClock.pendingConflict": {
     "source": "先重试原冻结请求，或显式结束本地重试后再编辑。",
@@ -3817,6 +3833,14 @@
     "source": "按此显式策略生成候选",
     "translation": "Create candidates using this explicit policy"
   },
+  "qualityClock.rateDenominator": {
+    "source": "帧率分母",
+    "translation": "Frame rate denominator"
+  },
+  "qualityClock.rateNumerator": {
+    "source": "帧率分子",
+    "translation": "Frame rate numerator"
+  },
   "qualityClock.removeSegment": {
     "source": "移除此段",
     "translation": "Remove segment"
@@ -3834,8 +3858,20 @@
     "translation": "Save immutable relation declaration"
   },
   "qualityClock.scope": {
-    "source": "关系由调用者声明，不认证同内容。时钟仅做精确整数微秒匹配；缺洞、歧义与不支持会保留。只读取已有可信 FLV 或严格 MP4 缓存，评分与候选均须显式提交。",
-    "translation": "The caller declares the relationship; it does not certify matching content. Clocks match only exact integer microseconds; holes, ambiguity and unsupported inputs remain visible. Reads only existing trusted FLV or strict MP4 caches. Scoring and candidates require explicit submission."
+    "source": "关系由调用者声明，不认证同内容。时钟按原始 ticks 与时基精确匹配；缺洞、歧义与不支持会保留。只读取已有可信 FLV 或严格 MP4 缓存，评分与候选均须显式提交。",
+    "translation": "The caller declares the relationship; it does not certify matching content. Clocks match exact original ticks and timebases; holes, ambiguity and unsupported inputs remain visible. Reads only existing trusted FLV or strict MP4 caches. Scoring and candidates require explicit submission."
+  },
+  "qualityClock.segmentEnd": {
+    "source": "参考结束 (µs)",
+    "translation": "Reference end (µs)"
+  },
+  "qualityClock.segmentOffset": {
+    "source": "偏移",
+    "translation": "Offset"
+  },
+  "qualityClock.segmentStart": {
+    "source": "参考开始 (µs)",
+    "translation": "Reference start (µs)"
   },
   "qualityClock.showRange": {
     "source": "查看区间评分、候选与原帧",
@@ -3848,6 +3884,82 @@
   "qualityClock.title": {
     "source": "显式参考关系与 AU 对应计划",
     "translation": "Explicit reference relations and AU correspondence plans"
+  },
+  "qualityFields.attempt": {
+    "source": "计划执行编号",
+    "translation": "Plan attempt"
+  },
+  "qualityFields.digest": {
+    "source": "计划摘要（SHA256）",
+    "translation": "Plan digest (SHA256)"
+  },
+  "qualityFields.distorted": {
+    "source": "待评片源",
+    "translation": "Distorted"
+  },
+  "qualityFields.elapsed": {
+    "source": "总运行时限（毫秒）",
+    "translation": "Total execution limit (ms)"
+  },
+  "qualityFields.frameRate": {
+    "source": "帧率（如 30000/1001）",
+    "translation": "Frame rate (e.g. 30000/1001)"
+  },
+  "qualityFields.limit": {
+    "source": "最多候选数",
+    "translation": "Maximum candidates"
+  },
+  "qualityFields.memory": {
+    "source": "分析内存上限（字节）",
+    "translation": "Analysis memory limit (bytes)"
+  },
+  "qualityFields.model": {
+    "source": "评分模型",
+    "translation": "Scoring model"
+  },
+  "qualityFields.plan": {
+    "source": "对应计划",
+    "translation": "Correspondence plan"
+  },
+  "qualityFields.raw": {
+    "source": "累计输入像素预算（字节）",
+    "translation": "Cumulative input pixel budget (bytes)"
+  },
+  "qualityFields.reference": {
+    "source": "参考片源",
+    "translation": "Reference"
+  },
+  "qualityFields.scoringTime": {
+    "source": "评分时限（秒）",
+    "translation": "Scoring time limit (seconds)"
+  },
+  "qualityFields.severity": {
+    "source": "严重程度（1–5）",
+    "translation": "Severity (1–5)"
+  },
+  "qualityFields.side": {
+    "source": "候选所在片源",
+    "translation": "Candidate source"
+  },
+  "qualityFields.space": {
+    "source": "评审空间",
+    "translation": "Review space"
+  },
+  "qualityFields.spacing": {
+    "source": "候选最小间隔（帧）",
+    "translation": "Minimum spacing (frames)"
+  },
+  "qualityFields.ssim": {
+    "source": "同时计算 SSIM",
+    "translation": "Also measure SSIM"
+  },
+  "qualityFields.text": {
+    "source": "候选说明",
+    "translation": "Candidate description"
+  },
+  "qualityFields.threshold": {
+    "source": "候选分数上限",
+    "translation": "Maximum candidate score"
   },
   "qualityRange.candidates": {
     "source": "按显式策略生成的测量候选",
@@ -4126,9 +4238,8 @@
     "translation": "Running"
   },
   "qualityWorkflow.scope": {
-    "source": "显式配对媒体库中的关键帧、前向依赖帧或闭合 GOP 内重排/延迟帧，以 8/10 位 YUV420 原始码值测量。每侧最多 32 AU；重排路径明确起止与目标 AU，以解码器返回的包身份核验全部输出和 drain，不按 PTS 猜帧。此表单为单帧测量；下方另有区间及可选原生 VMAF 连续序列入口，均不自动对齐。",
-    "translation": "Explicitly pair cached library keyframes, forward dependent frames or reordered/delayed pictures within a closed GOP in 8/10-bit source YUV420 code values. Each side is bounded to 32 AUs; GOP mode pins start/end and target AU, verifies all output and drain with decoder-returned packet identity, and never guesses frame ownership by PTS. This form measures one pair; range and optional native continuous VMAF workflows appear below. None automatically aligns content.",
-    "needsReview": false
+    "source": "比较原始视频帧，测量整帧、指定区域或连续片段。双源评分需先明确参考关系；色带筛查只需一个片源。",
+    "translation": "Compare original video frames across a full frame, a selected region or a continuous clip. Paired scoring requires an explicit reference relationship; banding screening uses one source."
   },
   "qualityWorkflow.searchMedia": {
     "source": "搜索媒体库",
@@ -4143,8 +4254,8 @@
     "translation": "Submit durable measurement"
   },
   "qualityWorkflow.title": {
-    "source": "单帧 PSNR 任务",
-    "translation": "Single-frame PSNR tasks"
+    "source": "画质评分",
+    "translation": "Quality scoring"
   },
   "qualityWorkflow.unavailable": {
     "source": "此实例不提供持久画质任务（例如临时数据库）。不会回退到浏览器临时计算。",
@@ -4157,6 +4268,74 @@
   "qualityWorkflow.useClient": {
     "source": "使用此客户端",
     "translation": "Use this client"
+  },
+  "qualityWorkspace.capability": {
+    "source": "执行器与支持范围",
+    "translation": "Executor and supported inputs"
+  },
+  "qualityWorkspace.choosePlan": {
+    "source": "选择参考关系与对应计划",
+    "translation": "Choose a reference relation and plan"
+  },
+  "qualityWorkspace.clientSettings": {
+    "source": "客户端与请求设置",
+    "translation": "Client and request settings"
+  },
+  "qualityWorkspace.correspondence": {
+    "source": "参考关系",
+    "translation": "Reference relationship"
+  },
+  "qualityWorkspace.harmonic": {
+    "source": "调和平均",
+    "translation": "Harmonic mean"
+  },
+  "qualityWorkspace.maximum": {
+    "source": "最高分",
+    "translation": "Maximum"
+  },
+  "qualityWorkspace.minimum": {
+    "source": "最低分",
+    "translation": "Minimum"
+  },
+  "qualityWorkspace.navigation": {
+    "source": "评分流程",
+    "translation": "Scoring workflow"
+  },
+  "qualityWorkspace.pendingFacts": {
+    "source": "待确认请求",
+    "translation": "Pending request"
+  },
+  "qualityWorkspace.planHelp": {
+    "source": "先在“参考关系”中选择已完成的计划，再将它带入评分。下方保留计划凭据，便于核对或接续已有任务。",
+    "translation": "Choose a completed plan in Reference relation, then use it for scoring. The plan credentials below let you verify or continue an existing task."
+  },
+  "qualityWorkspace.publicationFacts": {
+    "source": "候选发布记录",
+    "translation": "Candidate publication record"
+  },
+  "qualityWorkspace.ranges": {
+    "source": "区间任务",
+    "translation": "Range tasks"
+  },
+  "qualityWorkspace.requestFacts": {
+    "source": "请求与执行详情",
+    "translation": "Request and execution details"
+  },
+  "qualityWorkspace.resultFacts": {
+    "source": "完整结果数据",
+    "translation": "Complete result data"
+  },
+  "qualityWorkspace.single": {
+    "source": "单帧与区域",
+    "translation": "Frame and region"
+  },
+  "qualityWorkspace.unscored": {
+    "source": "此指标没有可用分数，请查看执行详情。",
+    "translation": "No score is available for this metric. See execution details."
+  },
+  "qualityWorkspace.xpsnr": {
+    "source": "XPSNR",
+    "translation": "XPSNR"
   },
   "recovery.capacityReached": {
     "source": "本机恢复记录已达容量上限，请在设置 → 工作区中导出并删除旧记录。当前工作区可手动导出或保存到服务器。",
@@ -5326,6 +5505,18 @@
     "source": "查询 / 刷新快照",
     "translation": "Query / refresh snapshot"
   },
+  "tasks.release": {
+    "source": "释放未共享的评分结果",
+    "translation": "Release unshared scoring result"
+  },
+  "tasks.releaseScope": {
+    "source": "释放后保留任务与提交回执；已用于共享评审的结果不会被删除。",
+    "translation": "Task and submission receipts remain after release. Results used in shared reviews are retained."
+  },
+  "tasks.released": {
+    "source": "私有结果已释放，原任务回执保留。",
+    "translation": "Private result released; original task receipt retained."
+  },
   "tasks.reset": {
     "source": "清除筛选",
     "translation": "Clear filters"
@@ -5733,8 +5924,8 @@
     "translation": "Cancel and stop owned execution"
   },
   "vmaf.candidates": {
-    "source": "显式整帧测量候选",
-    "translation": "Explicit full-frame measurement candidates"
+    "source": "片段测量候选",
+    "translation": "Clip measurement candidates"
   },
   "vmaf.frames": {
     "source": "更多逐帧事实",
@@ -5761,28 +5952,28 @@
     "translation": "Publish explicit candidate policy"
   },
   "vmaf.recipe": {
-    "source": "冻结的对应关系与测量 recipe",
-    "translation": "Frozen correspondence and recipe"
+    "source": "片段与评分设置",
+    "translation": "Clip and scoring settings"
   },
   "vmaf.scope": {
-    "source": "需要已安装的 Linux x64 组件及显式提交的时钟对应计划。仅限 2–32 个连续呈现帧；不支持跨帧抽样、缺口、负 PTS 或 VFR。限范围 BT.709 SDR、8/10 位 YUV420、方形像素，不裁剪、旋转或转换。v0.6.1 是固定基线，并非最新模型。分数属于整帧时间序列事实，不是热图或人工缺陷判断；未认证引用完整性，无法检测错误隐藏。",
-    "translation": "Linux x64 installed component required. Explicit committed clock plan; 2–32 continuous presentation frames; no stride, holes, negative PTS or VFR. Limited BT.709 SDR YUV420 8/10 bit, square pixels, no crop/rotation/conversion. v0.6.1 is a fixed baseline, not the latest model. Scores are temporal full-frame facts, not heatmaps or human defect judgments. Reference integrity is not certified; concealment detection is unavailable."
+    "source": "支持 2–1024 个连续呈现帧，可按计划中的固定区域重算。v0.6.1 是固定基线，NEG 可用于编码比较；整帧或区域分数不是热图或人工缺陷判断。具体格式、色彩和预算限制见支持范围。",
+    "translation": "Supports 2–1024 continuous presentation frames, including a fixed region from the plan. v0.6.1 is a fixed baseline; NEG is available for encoding comparisons. Full-frame or regional scores are not heatmaps or human defect judgments. See supported scope for format, color and budget limits."
   },
   "vmaf.share": {
     "source": "此操作共享片源身份及不可变序列事实，不定位空间缺陷。关闭页面只停止观察，不会取消后台执行。",
     "translation": "This shares source identities and immutable sequence facts. It does not localize a spatial defect. Closing this page stops observation, never background execution."
   },
   "vmaf.sources": {
-    "source": "支持已有可信 FLV/Enhanced FLV、严格非分片 MP4 及两者的双向混合。MP4 限 avc1 H.264 8 位或 hvc1 HEVC 8/10 位，原始时钟必须精确表示整数微秒。",
-    "translation": "Supports existing trusted FLV/Enhanced FLV, strict non-fragmented MP4, and both mixed directions. MP4 is limited to avc1 H.264 8-bit or hvc1 HEVC 8/10-bit, with original clocks exactly representable in integer microseconds."
+    "source": "支持已有可信 FLV/Enhanced FLV 和严格非分片 MP4，可混合比较。MP4 支持 avc1 H.264 8 位、hvc1 HEVC 8/10 位，使用原始有理数时钟精确对齐。",
+    "translation": "Supports existing trusted FLV/Enhanced FLV and strict non-fragmented MP4, including mixed comparisons. MP4 supports avc1 H.264 8-bit and hvc1 HEVC 8/10-bit, aligned using exact original rational clocks."
   },
   "vmaf.submit": {
-    "source": "发起持久 PSNR + VMAF",
-    "translation": "Submit durable PSNR + VMAF"
+    "source": "开始 PSNR + VMAF 评分",
+    "translation": "Start PSNR + VMAF scoring"
   },
   "vmaf.title": {
-    "source": "原生 VMAF · 连续整帧序列",
-    "translation": "Native VMAF · continuous full-frame sequence"
+    "source": "VMAF · 连续片段评分",
+    "translation": "VMAF · continuous clip scoring"
   },
   "vmaf.usePlan": {
     "source": "VMAF：使用此已提交计划",
@@ -5957,8 +6148,8 @@
     "translation": "Cancel and stop owned execution"
   },
   "xpsnr.candidates": {
-    "source": "显式整帧测量候选",
-    "translation": "Explicit full-frame measurement candidates"
+    "source": "片段测量候选",
+    "translation": "Clip measurement candidates"
   },
   "xpsnr.compare": {
     "source": "比较选中版本（须同一冻结参考片段及 recipe）",
@@ -5989,28 +6180,28 @@
     "translation": "Publish explicit candidate policy"
   },
   "xpsnr.recipe": {
-    "source": "冻结的对应关系与测量 recipe",
-    "translation": "Frozen correspondence and recipe"
+    "source": "片段与评分设置",
+    "translation": "Clip and scoring settings"
   },
   "xpsnr.scope": {
-    "source": "需要已安装的 Linux x64 组件及显式提交的时钟对应计划。仅限 2–32 个连续呈现帧；不支持跨帧抽样、缺口、负 PTS 或 VFR。限范围 BT.709 SDR、8/10 位 YUV420、方形像素，不裁剪、旋转或转换。固定 FFmpeg 实现，参考输入在前，保留时域权重和官方逐平面序列池化。未证明感知优于其他指标。分数属于整帧时间序列事实，不是热图或人工缺陷判断；未认证引用完整性，无法检测错误隐藏。",
-    "translation": "Requires an explicitly installed Linux x64 component and committed clock plan. Only 2–32 continuous presentation frames, limited BT.709 SDR YUV420 8/10-bit; no stride, holes, negative PTS, VFR, crop, rotation or conversion. Fixed FFmpeg implementation, reference input first, temporal weighting and official per-plane pooling. Perceptual superiority is not established. Full-frame temporal facts are not heatmaps or human defect judgments. Reference integrity is not certified and concealment detection is unavailable."
+    "source": "支持 2–1024 个连续呈现帧，可按计划中的固定区域重算。参考输入在前，保留时域权重和官方逐平面池化；整帧或区域分数不是热图或人工缺陷判断。具体格式、色彩和预算限制见支持范围。",
+    "translation": "Supports 2–1024 continuous presentation frames, including a fixed region from the plan. Reference input is first, with temporal weighting and official per-plane pooling. Full-frame or regional scores are not heatmaps or human defect judgments. See supported scope for format, color and budget limits."
   },
   "xpsnr.share": {
     "source": "此操作共享片源身份及不可变序列事实，不定位空间缺陷。关闭页面只停止观察，不会取消后台执行。",
     "translation": "This shares source identities and immutable sequence facts. It does not localize a spatial defect. Closing this page stops observation, never background execution."
   },
   "xpsnr.sources": {
-    "source": "支持已有可信 FLV/Enhanced FLV、严格非分片 MP4 及两者的双向混合。MP4 限 avc1 H.264 8 位或 hvc1 HEVC 8/10 位，原始时钟必须精确表示整数微秒。",
-    "translation": "Supports existing trusted FLV/Enhanced FLV, strict non-fragmented MP4, and both mixed directions. MP4 is limited to avc1 H.264 8-bit or hvc1 HEVC 8/10-bit, with original clocks exactly representable in integer microseconds."
+    "source": "支持已有可信 FLV/Enhanced FLV 和严格非分片 MP4，可混合比较。MP4 支持 avc1 H.264 8 位、hvc1 HEVC 8/10 位，使用原始有理数时钟精确对齐。",
+    "translation": "Supports existing trusted FLV/Enhanced FLV and strict non-fragmented MP4, including mixed comparisons. MP4 supports avc1 H.264 8-bit and hvc1 HEVC 8/10-bit, aligned using exact original rational clocks."
   },
   "xpsnr.submit": {
-    "source": "发起持久 PSNR + XPSNR",
-    "translation": "Submit durable PSNR + XPSNR"
+    "source": "开始 PSNR + XPSNR 评分",
+    "translation": "Start PSNR + XPSNR scoring"
   },
   "xpsnr.title": {
-    "source": "原生 XPSNR · 连续整帧序列",
-    "translation": "Native XPSNR · continuous full-frame sequence"
+    "source": "XPSNR · 连续片段评分",
+    "translation": "XPSNR · continuous clip scoring"
   },
   "xpsnr.usePlan": {
     "source": "XPSNR：使用此已提交计划",

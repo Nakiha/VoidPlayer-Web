@@ -14,7 +14,7 @@ const digest=(s:string)=>createHash('sha256').update(s).digest('hex');
  * commit atomically. The library owner's existing OS lock excludes other live
  * instances. No new global schema user_version or cache mutation is introduced. */
 export class DiscoveryStore extends DiscoveryCatalog {
-  taskSummaries(actor:string){return taskSummaries(this.db,'preparation',actor);}
+  taskSummaries(actor:string,id?:string,filter?:import('../../shared/service/tasks.ts').TaskFilter){return taskSummaries(this.db,'preparation',actor,id,filter);}
 
   constructor(file:string,now=Date.now()){
     super(openIndexDatabase(file));
@@ -33,9 +33,11 @@ export class DiscoveryStore extends DiscoveryCatalog {
         UNIQUE(actor_id,client_id,idempotency_key));`);
     this.transaction(()=>this.db.prepare(`UPDATE discovery_jobs SET state='interrupted',revision=revision+1,ended_at=?,reason_json=? WHERE state IN ${pending}`)
       .run(now,JSON.stringify({code:'service-restarted',message:'Previous preparation did not commit a terminal state; no automatic retry.'})));
+    this.settle();
     }catch(error){this.db.close();throw error;}
   }
   transaction<T>(action:()=>T):T{this.db.exec('BEGIN IMMEDIATE');try{const value=action();this.db.exec('COMMIT');return value;}catch(error){this.db.exec('ROLLBACK');throw error;}}
+  private settle(id?:string){this.db.prepare(`UPDATE discovery_jobs SET reserved_bytes=1024+length(CAST(input_json AS BLOB))+coalesce(length(CAST(result_json AS BLOB)),0) WHERE state NOT IN ${pending}${id?' AND id=?':''}`).run(...(id?[id]:[]));}
   private sourcePin(source:DiscoverySource){const row=this.db.prepare('SELECT m.version,m.state FROM media m JOIN roots r ON r.id=m.root_id WHERE m.id=? AND r.active=1').get(source.id);
     if(!row||row.state==='missing')throw new AdminError(404,'Media is not in the active library.','media-not-found');
     if(row.version!==source.version)throw new AdminError(409,'Media version changed; browse again.','media-version-changed');return row;}
@@ -57,12 +59,12 @@ export class DiscoveryStore extends DiscoveryCatalog {
       const prior=this.db.prepare('SELECT id,fingerprint FROM discovery_jobs WHERE actor_id=? AND client_id=? AND idempotency_key=?').get(actor.id,input.client.id,key);
       if(prior){if(prior.fingerprint!==fingerprint)throw new AdminError(409,'Idempotency-Key binds another preparation.','idempotency-conflict');return {job:this.get(String(prior.id)),replayed:true};}
       this.sourcePin(input.source);
-      const all=this.db.prepare('SELECT count(*) AS n,coalesce(sum(reserved_bytes),0) AS bytes FROM discovery_jobs').get()!;
-      if(Number(all.n)>=LIMITS.historyRows||Number(all.bytes)+LIMITS.probeResultBytes+Buffer.byteLength(json)>LIMITS.historyBytes)throw new AdminError(429,'Preparation history is full; receipts retained.','preparation-history-full');
+      const all=this.db.prepare('SELECT coalesce(sum(reserved_bytes),0) AS bytes FROM discovery_jobs').get()!;
+      if(Number(all.bytes)+LIMITS.probeResultBytes+Buffer.byteLength(json)+1024>LIMITS.historyBytes)throw new AdminError(429,'Preparation history is full; receipts retained.','preparation-history-full');
       if(Number(this.db.prepare("SELECT count(*) AS n FROM discovery_jobs WHERE state='queued'").get()!.n)>=LIMITS.queued)throw new AdminError(429,'Preparation queue is full.','preparation-queue-full');
       if(Number(this.db.prepare(`SELECT count(*) AS n FROM discovery_jobs WHERE actor_id=? AND state IN ${pending}`).get(actor.id)!.n)>=LIMITS.actorOutstanding)throw new AdminError(429,'Actor preparation budget is full.','preparation-actor-limit');
       const id=randomUUID();this.db.prepare(`INSERT INTO discovery_jobs(id,state,actor_id,client_id,idempotency_key,fingerprint,input_json,request_id,created_at,queue_until,reserved_bytes) VALUES(?,'queued',?,?,?,?,?,?,?,?,?)`)
-        .run(id,actor.id,input.client.id,key,fingerprint,json,requestId,now,now+LIMITS.queueWaitMs,LIMITS.probeResultBytes+Buffer.byteLength(json));return {job:this.get(id),replayed:false};
+        .run(id,actor.id,input.client.id,key,fingerprint,json,requestId,now,now+LIMITS.queueWaitMs,LIMITS.probeResultBytes+Buffer.byteLength(json)+1024);return {job:this.get(id),replayed:false};
     });
   }
   queued(){const row=this.db.prepare("SELECT id FROM discovery_jobs WHERE state='queued' ORDER BY ordinal LIMIT 1").get();return row?this.get(String(row.id)):null;}
@@ -71,7 +73,7 @@ export class DiscoveryStore extends DiscoveryCatalog {
     this.db.prepare("UPDATE discovery_jobs SET state='running',revision=revision+1,started_at=?,attempt_id=? WHERE id=?").run(now,attempt,id);return attempt;});}
   cancel(id:string,actor:string,now:number){return this.transaction(()=>{const job=this.get(id,actor);if(!['queued','running','cancelling'].includes(job.state))return job;
     this.db.prepare('UPDATE discovery_jobs SET state=?,revision=revision+1,ended_at=?,reason_json=? WHERE id=?').run(job.state==='queued'?'cancelled':'cancelling',job.state==='queued'?now:null,
-      JSON.stringify({code:'cancel-requested',message:'Explicit cancellation; running capacity remains owned until physical exit.'}),id);return this.get(id,actor);});}
+      JSON.stringify({code:'cancel-requested',message:'Explicit cancellation; running capacity remains owned until physical exit.'}),id);this.settle(id);return this.get(id,actor);});}
   finish(id:string,state:'completed'|'failed'|'interrupted',now:number,reason:{code:string;message:string}|null,value?:unknown,probe?:ProbeValue){
     this.transaction(()=>{const job=this.get(id);if(!['queued','running','cancelling'].includes(job.state))return;
       const final=job.state==='cancelling'?'cancelled':state;
@@ -88,11 +90,11 @@ export class DiscoveryStore extends DiscoveryCatalog {
       const result=final==='completed'?JSON.stringify(value??null):null;
       if(result&&Buffer.byteLength(result)>LIMITS.probeResultBytes)throw new AdminError(413,'Preparation result exceeds budget.','probe-budget-exceeded');
       this.db.prepare('UPDATE discovery_jobs SET state=?,revision=revision+1,ended_at=?,reason_json=?,result_json=? WHERE id=?')
-        .run(final,now,final==='cancelled'?JSON.stringify({code:'cancelled',message:'Execution physically stopped; a racing index commit may remain valid.'}):reason?JSON.stringify(reason):null,result,id);
+        .run(final,now,final==='cancelled'?JSON.stringify({code:'cancelled',message:'Execution physically stopped; a racing index commit may remain valid.'}):reason?JSON.stringify(reason):null,result,id);this.settle(id);
     });
   }
   expire(now:number){this.db.prepare("UPDATE discovery_jobs SET state='failed',revision=revision+1,ended_at=?,reason_json=? WHERE state='queued' AND queue_until<=?")
-    .run(now,JSON.stringify({code:'queue-expired',message:'Preparation did not start within its waiting budget.'}),now);}
+    .run(now,JSON.stringify({code:'queue-expired',message:'Preparation did not start within its waiting budget.'}),now);this.settle();}
   unfinished(){return this.db.prepare(`SELECT id FROM discovery_jobs WHERE state IN ${pending}`).all().map(r=>this.get(String(r.id)));}
   close(){this.db.close();}
 }

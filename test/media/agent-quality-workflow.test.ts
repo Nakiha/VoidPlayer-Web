@@ -1,3 +1,4 @@
+import {assertOfficial,assertVmafOfficial} from '../helpers/official-quality-oracle.mjs';
 import {xpsnrFixture,xpsnrOracle} from '../helpers/native-xpsnr.mjs';
 import {parseXpsnrStatistics} from '../../shared/analysis/quality/xpsnr.ts';
 import test from 'node:test';
@@ -27,8 +28,8 @@ function inputFor(f:any,mode='single'){
   candidate:mode==='single'?{space:'default',side:'reference',id:randomUUID(),operationId:randomUUID(),text:'Explicit HTTP measurement candidate',severity:3}:mode==='range'?{space:'default',side:'reference',metric:'psnr',maxDb:120,limit:1,minAuDistance:1,text:'Explicit HTTP range candidate',severity:3}:{space:'default',side:'reference',maxScore:100,limit:1,minFrameDistance:1,text:'Explicit HTTP VMAF candidate',severity:3}};
 }
 
-for(const [mode,containers]of [['single',['flv','flv']],['range',['mp4','flv']],['vmaf',['flv','mp4']],['xpsnr',['mp4','flv']]]as const)test(`cold HTTP from llms.txt, no frontend: ${mode} ${containers.join('→')}`,{timeout:120000,skip:(mode==='vmaf'||mode==='xpsnr')&&(process.platform!=='linux'||process.arch!=='x64')},async t=>{
- const f=await (mode==='xpsnr'?xpsnrFixture:nativeFixture)({prepare:false,distorted:true,containers,component:mode==='vmaf'||mode==='xpsnr',staticDir:'public'});t.after(()=>f.close());
+for(const [mode,containers]of [['single',['flv','flv']],['range',['mp4','flv']],['vmaf',['flv','mp4']],['xpsnr',['mp4','flv']]]as const)test(`cold HTTP from llms.txt, no frontend: ${mode} ${containers.join('→')}`,{timeout:120000},async t=>{
+ const f=await (mode==='xpsnr'?xpsnrFixture:nativeFixture)({prepare:false,distorted:true,containers,component:false,staticDir:'public'});t.after(()=>f.close());
  const input=inputFor(f,mode),trace:{method:string;path:string;key:string|null;body:string|undefined}[]=[],lost={prepare:false,compute:false,candidate:false};
  const fetchImpl=async(url:any,options:any)=>{
   const path=new URL(url).pathname,method=options?.method??'GET';trace.push({method,path,key:options?.headers?.['idempotency-key']??null,body:options?.body});
@@ -46,8 +47,8 @@ for(const [mode,containers]of [['single',['flv','flv']],['range',['mp4','flv']],
  for(const path of new Set(trace.filter(r=>r.method==='POST').map(r=>r.path))){const rows=trace.filter(r=>r.method==='POST'&&r.path===path);if(rows.length===2&&path!=='/api/library/preparations'){assert.equal(rows[0].body,rows[1].body);assert.equal(rows[0].key,rows[1].key);}}
  if(mode==='single'){assert.ok(report.result.value.result.metric.aggregate.sse>0);assert.equal(report.result.value.result.metric.spatial.blocks.length,4);}
  if(mode==='range'){assert.equal(report.job.coverage.complete,true);assert.equal(report.results.length,3);assert.equal(report.job.job.summary.scoredPairs,3);}
- if(mode==='xpsnr'){const oracle=parseXpsnrStatistics(await xpsnrOracle(f,8),8);assert.deepEqual(report.result.xpsnr.frames,oracle.frames);assert.deepEqual(report.result.xpsnr.pooled,oracle.pooled);assert.equal(report.frames.length,8);}
- if(mode==='vmaf'){const oracle=await officialOracle(f,8);assert.deepEqual(report.result.vmaf.frames,oracle.result.frames.map((v:any)=>({index:v.frameNum,score:v.metrics.vmaf})));assert.deepEqual(report.result.vmaf.pooled,oracle.result.pooled_metrics.vmaf);assert.equal(report.frames.length,8);}
+ if(mode==='xpsnr'){const oracle=parseXpsnrStatistics(await xpsnrOracle(f,8),8);assertOfficial(report.result.xpsnr.frames,oracle.frames,0.000051);assertOfficial(report.result.xpsnr.pooled,oracle.pooled,0.000051);assert.equal(report.frames.length,8);}
+ if(mode==='vmaf'){const oracle=await officialOracle(f,8);assertVmafOfficial(report.result.vmaf.frames,oracle.result.frames.map((v:any)=>({index:v.frameNum,score:v.metrics.vmaf})));assertVmafOfficial(report.result.vmaf.pooled,oracle.result.pooled_metrics.vmaf);assert.equal(report.frames.length,8);}
  // The same attributed actor and stable original input replay all receipts, without
  // preparing, planning or computing again; changed identity creation is not repeated.
  const replayInput={...input,identity:{id:report.actor.id}},replay=await runHttpQuality(f.base,replayInput,{allow,pollMs:10});assert.equal(replay.job.job?.id??replay.job.id,report.job.job?.id??report.job.id);assert.deepEqual(replay.publication.createdIds,report.publication.createdIds);assert.equal(replay.annotations[0].revision,1);
@@ -55,12 +56,13 @@ for(const [mode,containers]of [['single',['flv','flv']],['range',['mp4','flv']],
  console.log(JSON.stringify({mode,containers,jobId,candidate:report.publication.createdIds[0],requests:report.requests,unknownResponseReplays:lost,noFrontend:true}));
 });
 
-test('HTTP prerequisites: unknown metadata, cache miss, missing native, changed source and actor stop safely',{timeout:120000},async t=>{
+test('HTTP prerequisites: unknown metadata, cache miss, missing analysis artifact, changed source and actor stop safely',{timeout:120000},async t=>{
  const f=await nativeFixture({prepare:false,component:false,staticDir:'public'});t.after(()=>f.close());const input=inputFor(f),seen:string[]=[];
  const fetchImpl=async(url:any,options:any)=>{seen.push(`${options?.method??'GET'} ${new URL(url).pathname}`);return fetch(url,options);};
  const unknown=await runHttpQuality(f.base,{query:{codec:'h264',includeUnknown:'1',limit:'1'}},{fetchImpl});assert.equal(unknown.discovery.length,2);assert.ok(unknown.discovery.some((e:any)=>e.decision.state==='unknown'));
  const cli=await promisify(execFile)(process.execPath,['examples/http-quality.mjs',f.base],{timeout:30000,maxBuffer:1048576});const cliReport=JSON.parse(cli.stdout);assert.equal(cliReport.discovery.length,2);assert.deepEqual(cliReport.writesAuthorized,[]);
  const missing=await runHttpQuality(f.base,input,{allow:{identity:true},fetchImpl});assert.equal(missing.reason,'cache-miss');assert.ok(missing.next[0].endsWith('library.prepare'));assert.ok(!seen.includes('POST /api/library/preparations'));
+ (f.service.library.qualityVmaf as any).runner.analysisDir=join(f.directory,'missing-analysis');
  const unavailable=await runHttpQuality(f.base,{...input,mode:'vmaf',identity:{id:missing.actor.id}},{allow,fetchImpl});assert.equal(unavailable.nativeCapability.enabled,false);assert.ok(!seen.includes('POST /api/quality/vmaf/jobs'));assert.ok(!seen.includes('POST /api/quality/correspondence-plans'));
  await assert.rejects(()=>runHttpQuality(f.base,input,{cookie:'voidplayer-user='+f.actor,actor:'guest-'+randomUUID(),allow}),{code:'actor-changed'});
  const original=await readFile(join(f.media,f.entries[0].name));await writeFile(join(f.media,f.entries[0].name),Buffer.concat([original,Buffer.from([0])]));await f.service.library.refresh();

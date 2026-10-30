@@ -435,13 +435,14 @@ self-contained non-fragmented MP4 with exactly one avc1 H2648 or hvc1 HEVC8/10
 video description, explicit BT.709 SDR, progressive 420, square SPS SAR and no
 crop/rotation. Audio is ignored for scoring but cannot reference external data.
 Original track/sample ordinal, timescale, DTS/CTS/duration ticks and moov SHA256
-are preserved. Non-integer microseconds are unsupported: do not round, repair
-POC or choose a nearby frame. Only exact identity edits are admitted.
+are preserved and compared as exact rational source times. Integer microseconds
+are transport/display projections; never use them to choose a nearby frame or
+repair POC. Only exact identity edits are admitted.
 Frame-index GET reads this namespace; POST/build=1 cannot prepare or upload it.
 Read-only original-pair inspection uses the same existing sealed cache without
 building, scoring, private-job access or player control. Library result version2
 and complete-mp4-index-derived-v1 annotation clocks identify MP4 or mixed pairs;
-FLV-only version1 receipts/fingerprints retain their original fields. Native VMAF
+FLV-only version1 receipts/fingerprints retain their original fields. Analysis-WASM VMAF
 has separate strict MP4/mixed sequence admission below; CAMBI separately validates the strict MP4 single-source subset and v2 evidence. See /docs/trusted-mp4-quality.md in the source tree.
 
 2. Explicitly prepare a missing supported FLV or strict MP4 cache with POST
@@ -478,7 +479,7 @@ has separate strict MP4/mixed sequence admission below; CAMBI separately validat
 The legacy matrix is complete, unrecovered, single-configuration FLV/Enhanced FLV, progressive
 H264/HEVC and fully tagged 8/10-bit YUV420 are admitted. Preserve the returned
 candidate decode window. Preferred packet-identity-gop-v1 uses explicit startAu
-and endAu (inclusive, at most32 AU/side), a closed IDR start and packet identity
+and endAu (inclusive, at most512 AU/side), a closed IDR start and packet identity
 ABI1. All outputs, including delayed/reordered and drain pictures, are attributed
 by opaque input token, never PTS matching. Zero CTS does not imply immediate output.
 The legacy forward-one-output-per-au-v1 mode remains compatible: strictly increasing
@@ -578,7 +579,7 @@ PSNR with explicit optional SSIM/grid and the scoring/task GUI are available.
 For a bounded closed GOP with reordering/delayed output, select the explicit
 candidate decode:{mode:'packet-identity-gop-v1',startAu,endAu} (inclusive end).
 The whole cached GOP, through the next verified closed IDR or source end, must
-fit 32 AUs per side. Every AU is sent; all outputs including final drain are
+fit 512 AUs per side. Every AU is sent; all outputs including final drain are
 charged. The core returns a single-use opaque input token, never a PTS lookup.
 Actual source clocks are cross-checks. The immutable outputIdentity records the
 full output order, tokens, original packet tuple/hash, phase and zero reported
@@ -625,7 +626,7 @@ At most 256 interval positions and 64 selected positions. Sum per-pair read and
 numeric-input reservations under the total limits: 64 MiB source reads, 512 MiB
 numeric input views, 4096 packets/outputs and 120 s execution. Every dependency
 input and output, repeated pre-roll, post-target and drain is charged. Each child
-retains its existing 32-AU/side, 30 s, heap/frame/result bounds; index document
+retains its existing 512-AU/side, 30 s, heap/frame/result bounds; index document
 loads are separately exposed in the plan. Lower pair budgets to fit the parent.
 The parent never acquires an outer shared permit; only the child runner owns the
 common physical compute slot. Source preparation remains a separate explicit task.
@@ -662,8 +663,8 @@ See docs/bounded-quality-ranges.md for the full protocol.
 quality.correspondence adds immutable actor-owned reference declarations:
 POST /api/quality/reference-relations with schema voidplayer-quality-reference-relation,
 version 1, client, explicit reference/distorted {mediaId,mediaVersion,stream:"video",configuration:0},
-declaration and clock {mode:"piecewise-exact-source-pts-offset",segments:[{id,referenceStartUs,referenceEndUs,offsetUs}]}.
-Distorted PTS = reference PTS + offset in integer microseconds. Segments are half-open,
+declaration and clock {mode:"piecewise-exact-source-pts-offset",segments:[{id,referenceStartUs,referenceEndUs,offsetUs,offset?:{ticks,timescale}}]}.
+Distorted source time = reference source time + exact offset. Without offset, offsetUs is exact. With offset, offsetUs must equal its nearest-microsecond projection; 1 frame at 30000/1001 fps is offset:{ticks:1001,timescale:30000}, offsetUs:33367. Matching uses source ticks, never the projection. Segments are half-open,
 nonoverlapping in both domains. This is a caller declaration, never content certification.
 POST /api/quality/correspondence-plans pins relation {id,revision:1}, both cache build IDs,
 reference AU interval, all/stride sampling, recipe {roi,spatial?,ssim?,budget}, total range
@@ -681,89 +682,48 @@ unknown commit outcomes must reuse the same plan/digest. Restart interrupts unfi
 planning without automatic recomputation or scoring. Candidate publication remains the
 existing separate explicit range policy. See docs/reference-clock-plans.md.
 
-quality.xpsnr is a separate optional native reference-first continuous sequence executor.
-Read /agent/quality/xpsnr.md and /api/agent/tasks/quality.xpsnr for the exact recipe,
-budgets, official per-plane pooling, explicit variant comparison and recovery operations.
-No installed trusted component means unavailable; no metric substitution or perceptual claim.
+VMAF, XPSNR and CAMBI run in the existing bundled analysis WASM core, with
+independent playback-core decode Workers. No avfilter, external CLI or third core.
+Read /agent/quality/vmaf.md, /agent/quality/xpsnr.md or /agent/quality/cambi.md,
+and the corresponding /api/agent/tasks/quality.{metric} operation catalog.
+GET /api/quality/{metric}/capability validates pinned analysis artifacts; missing
+artifacts remain unavailable and never substitute another metric. No HTTP program paths.
 
-quality.vmaf is a separate optional native sequence executor, not a single-frame range aggregate.
-GET /api/quality/vmaf/capability reports the verified deployment and exact source/model/recipe bounds.
-Linux x64 only; install the pinned official component using scripts/native/prepare-vmaf.mjs and
-pin nativeVmaf {directory,manifestSha256} in the trusted service configuration. HTTP cannot choose
-an executable or model path. Missing/invalid components remain component-unavailable.
-POST /api/quality/vmaf/preflight accepts the exact job body below but does not decode, so actual
-raw color eligibility is still checked at execution. All mutations require quality-job, captured
-X-VoidPlayer-Actor and same-origin identity cookie; actor changes reject before any side effects.
-POST /api/quality/vmaf/jobs uses Idempotency-Key and a normalized body:
-{schema:"voidplayer-native-vmaf-job",version:1,client:{id:"agent",kind:"agent"},
- plan:{id:COMMITTED_C_PLAN_ID,attemptId:COMMITTED_ATTEMPT,digest:COMMITTED_SHA256},
- model:"vmaf_v0_6_1",cadenceUs:EXACT_INTEGER_CFR_MICROSECONDS,metrics:{psnr:true,ssim:false},
- budget:{maxRawBytes:134217728,maxElapsedMs:120000,nativeCpuSeconds:30,nativeMemoryBytes:536870912}}
-The existing C plan must contain 2..32 all-sample, hole-free continuous presentation frames,
-full-frame limited BT.709 SDR square-pixel uncropped unrotated 8/10-bit YUV420.
-Sources may be trusted FLV/Enhanced FLV or strict non-fragmented MP4
-(avc1 H2648/hvc1 HEVC8/10), including both mixed directions. MP4 duration ticks
-and source DTS/CTS must exactly represent the declared integer microsecond cadence.
-Track/sample/description/offset/size and table witnesses stay pinned. Explicit NEG
-model vmaf_v0_6_1neg is also available; v0.6.1 is a fixed baseline, not the latest model.
-No negative PTS, VFR, arbitrary ROI, conversion, HDR, other containers, MP4 edits,
-fragmentation/encryption/external references or open GOP/CRA. Native frame scores
-and official pooling use one continuous clip with reset/start and final flush, not per-frame runs.
-GET /api/quality/vmaf/jobs?after=ROW&limit=8, /jobs/{id}, /jobs/{id}/result,
-/jobs/{id}/frames?after=INDEX&limit=4 and POST /jobs/{id}/cancel {} observe/control the same service.
-Closing an observer never cancels. PSNR/SSIM completed facts survive native failure; metric states
-are independent. Restart marks unfinished work interrupted, never retries automatically. Native
-CPU/address-space/file limits and physical process/Worker exit precede shared admission release.
-POST /jobs/{id}/candidates with {space,side,maxScore,limit,minFrameDistance,text,severity} explicitly
-freezes a top-N temporal score policy and publishes existing atomic measurement-candidate commands.
-Attached sequenceVmaf facts include full immutable model/component/recipe/plan/raw hashes and pool;
-MP4 on either side uses library/native result and sequence association version2,
-with original sample/ticks/timebase/table witnesses for every MP4 point. All-FLV
-version1 records and idempotent receipts retain their original fields. Unknown
-server failures return 500 so clients retain and replay the frozen request/key;
-full-frame temporal scores are not heatmaps/localized defect certification. Imported facts are
-historical. Reference integrity is not certified and concealment detection is unavailable.
-See docs/native-vmaf.md for installation, contract, notices and independent reference tests.
+VMAF/XPSNR use explicit committed correspondence plans, 2..1024 continuous
+presentation frames, exact rational cadence and full-frame or fixed even ROI>=64x64.
+Original packet identity and ticks bind the chosen frames; no nearest-PTS matching,
+resampling, filter timestamps or implicit alignment. One scorer context per clip,
+final flush and official pooling. PSNR/SSIM companions use the same source pixels.
+POST /api/quality/vmaf/jobs or /api/quality/xpsnr/jobs retains existing versioned
+schemas, actor/client/body/Idempotency-Key receipts, explicit preflight and budgets.
+Request cadence {ticks,timescale} preserves rational frame periods; cadenceUs is
+its projection only. The fixed v0.6.1/NEG models are a baseline, not the latest model.
 
-quality.cambi is the single-source no-reference banding executor, independent of C reference relationships.
-GET /api/quality/cambi/capability executes the fixed official v3.0.0 feature plus five heatmap self-test.
-Reuse the trusted Linux x64 nativeVmaf component configuration; unavailable or missing-feature states
-are explicit. HTTP cannot supply a model/executable/output path. CAMBI loads no prediction model,
-full_ref=false, eotf=bt1886, window_size=63, topk=0.6, tvi_threshold=0.019, max_log_contrast=2,
-original encoding geometry/depth, internal10bit, one thread and no temporal tracking.
-Choose a source using /api/library/discovery and copy GET /api/media/{id}/psnr-source?v=VERSION
-binding. Missing cache requires a separate explicit preparation; submitting never builds an index.
-POST /api/quality/cambi/jobs with quality-job, captured actor/cookie and retained Idempotency-Key:
-{schema:"voidplayer-cambi-job",version:1,client:{id:"nr-agent",kind:"agent"},source:EXACT_BINDING,
- interval:{startPtsUs:0,endPtsUs:1000000},sampling:{stride:1},
- budget:{maxRawBytes:67108864,maxHeatBytes:33554432,maxTemporaryBytes:268435456,
- maxElapsedMs:120000,nativeCpuSeconds:60,nativeMemoryBytes:536870912}}
-No reference, plan or VMAF model. First scope is1..32 selected pictures/256 interval AUs,
-trusted complete FLV H264/HEVC8/10bit or strict MP4 avc1 H2648/hvc1 HEVC8/10bit, limited BT709 SDR,
-square uncropped frames with long edge320. MP4 requires committed producer/sample tables and positive
-constant exact clocks; v2 result/attachment preserves track/ticks/table/dependency identity, FLV staysv1.
-MP4 decode-AU sampling precedes source-PTS native order; native frame index is not source AU ordinal.
-Negative/VFR/ambiguous clocks, HDR and other containers remain unsupported. Sampling and unsupported
-holes are separate coverage facts; they are not whole-file coverage or tracked objects.
-GET /api/quality/cambi/jobs?after=ROW&limit=8, /jobs/{id}, /jobs/{id}/result,
-/jobs/{id}/frames?after=INDEX&limit=4 and /jobs/{id}/heatmap?index=N&scale=S give bounded facts.
-Before publication, an owner can inspect /jobs/{id}/picture?index=N and the read-only private
-viewer /quality.html?cambi=1&cambiJob=ID&index=N, including completed zero scores; no annotation is created.
-Frame pages distinguish provisional-uncommitted-attempt from immutable-completed. Native failure,
-incomplete, unsupported and zero are distinct. Higher means more banding, not a calibrated quality line.
-POST /jobs/{id}/cancel {} explicitly stops; observer close does not cancel. Physical Worker/process/IO
-exit precedes shared admission release. All five output files and JSON/raw disk budgets are charged.
-Restart interrupts and never automatically recomputes. Immutable completed results may explicitly
-publish /jobs/{id}/candidates {space,minScore,limit,scale,cellThreshold,text,severity}.
-The uncalibrated caller policy bounds real nonzero heatmap cells, not a fake score-only box.
-The atomic shared annotation command is create-cambi-candidate with cambi:{jobId,attemptId,digest,
-index,scale,region:{x,y,width,height}} plus candidate:{text,severity}. It consults durable receipts
-before private result resolution. Attachments are single-source, not invented reference pairs;
-regional heatmap statistics are not cropped CAMBI recomputation. New windows consume shared facts
-and exact raw snapshots without querying another actor's private job or disturbing playback.
-Imports are historical; reference integrity is not certified and concealment detection is unavailable.
-Stopped failed/interrupted/cancelled CAMBI with a complete single-source execution contract uses the same explicit reexecution-plan → full cost confirmation → reexecutions protocol. Frozen AU selection/order, source/cache/producer/core and fixed native component/recipe are rechecked; absent legacy witness or drift requires new intent. There is no CAMBI partial state, C plan, automatic computation/publication or replacement of old evidence.
-See docs/native-cambi.md for installation, sample licenses, bounds and false-positive/negative observations.
+CAMBI is single-source no-reference, requires no C plan or VMAF prediction model.
+POST /api/quality/cambi/jobs accepts a trusted source binding, half-open interval,
+explicit stride and budgets: at most4096 interval AUs and1024 selected pictures.
+Five official gray16le heatmap scales stream with consumer backpressure; no raw
+clip files. Completed results expose exact source/scale hashes and source-grid
+mapping. Higher means more banding, not a calibrated pass/fail. Publication needs
+explicit {space,minScore,limit,scale,cellThreshold,text,severity}; actual nonzero
+heatmap cells determine the candidate region. This is not cropped CAMBI rescoring.
+
+All three use verified complete FLV/EnhancedFLV or strict nonfragmented MP4,
+limited BT.709 SDR YUV420 8/10-bit and closed dependency windows<=512AU.
+Current matrices do not certify HDR, VFR, negative PTS or reference integrity.
+Legacy budget nativeMemoryBytes bounds analysis linear memory; nativeCpuSeconds
+bounds conservative wall time together with maxElapsedMs. Results report actual
+analysis heap and wall time, never invented native CPU/RSS.
+Explicit cancel waits for physical Worker/IO completion before capacity release.
+Restart interrupts rather than recomputes. Completed companions may survive a
+VMAF/XPSNR failure; CAMBI never publishes provisional heatmaps. Unknown writes
+replay the original actor/body/key. Explicit candidates freeze IDs and receipts
+before annotation mutation. Shared evidence inspection never controls playback.
+Stopped jobs may explicitly validate and confirm full reexecution; changed
+source/cache/core/producer/recipe requires new intent. Historical native evidence
+keeps its original identity. Native installer settings are deprecated and ignored.
+See docs/analysis-wasm-scoring.md and docs/quality-convergence.md for current
+architecture, independent reference tests and stage-specific acceptance evidence.
 
 There is no automatic alignment, shared computation,
 automatic index construction, retry/resume or distributed worker.

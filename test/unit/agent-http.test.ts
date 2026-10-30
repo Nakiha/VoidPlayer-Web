@@ -191,7 +191,27 @@ test('quality discovery and guides disclose candidate transaction, SSIM and opaq
 
 test('CAMBI progressive operations retain single-source admission and unavailable recovery without metric substitution',()=>{
  const m=agentManifest({capabilities:serviceCapabilities(true,false),libraryReady:true,qualityJobsEnabled:true,actor:{id:'owner',name:'Owner'},nativeCambi:{enabled:true,reason:null}});
- assert.deepEqual(m.qualityReexecution.kinds,['single','range','vmaf','xpsnr','cambi']);assert.equal(m.qualityCambi.reexecution.implemented,true);assert.deepEqual(m.qualityCambi.reexecution.eligibleStates,['failed','interrupted','cancelled']);assert.equal(agentOperation('cambi.reexecute',m.capabilities)!.execution.host,'service-with-optional-linux-x64-native-component');
+ assert.deepEqual(m.qualityReexecution.kinds,['single','range','vmaf','xpsnr','cambi']);assert.equal(m.qualityCambi.reexecution.implemented,true);assert.deepEqual(m.qualityCambi.reexecution.eligibleStates,['failed','interrupted','cancelled']);assert.equal(agentOperation('cambi.reexecute',m.capabilities)!.execution.host,'service-with-analysis-wasm');
  const task=agentTask('quality.cambi')!;assert.equal(task.operations.length,13);const submit=agentOperation('cambi.submit',m.capabilities)!;assert.equal(submit.availability.enabled,true);assert.equal(submit.request.schema,'voidplayer-cambi-job');assert.equal(submit.execution.requiresBrowser,false);assert.equal(submit.write!.action,'quality-job');assert.ok(!submit.next.includes('plan.create'));
  assert.match(AGENT_DOCUMENTS['/agent/quality/cambi.md'],/no reference relation|reference relationship/i);assert.match(AGENT_DOCUMENTS['/agent/quality/cambi.md'],/strict.*MP4/);assert.match(AGENT_DOCUMENTS['/agent/quality.md'],/CAMBI uses one source and no C plan/);
+});
+
+
+test('every scoring discovery entry describes analysis WASM and exact rational source clocks', async () => {
+  const publicFacts = JSON.stringify({guides:AGENT_DOCUMENTS, discovery:DISCOVERY_DICTIONARY, workflows:AGENT_WORKFLOWS});
+  for (const stale of ['explicitly installed Linux x64 component', 'Non-integer microseconds are unsupported', 'exact integer-us clocks', 'ambiguous/nonintegral clocks', 'CAMBI is not implemented here', 'Continuous native VMAF', 'Continuous native XPSNR']) {
+    assert.ok(!publicFacts.includes(stale), `retired admission must not be advertised: ${stale}`);
+  }
+  assert.match(DISCOVERY_DICTIONARY.support.scoring.join(' '), /analysis WASM/);
+  assert.match(DISCOVERY_DICTIONARY.support.scoring.join(' '), /original ticks\/timebase/);
+  for (const metric of ['vmaf','xpsnr']) assert.match(agentTask('quality.'+metric)!.title, /analysis WASM/);
+  const manifest=agentManifest({capabilities:serviceCapabilities(true,false),libraryReady:true,qualityJobsEnabled:true,actor:null});
+  assert.equal(manifest.qualityCorrespondence.matching,'exact-unique-rational-source-time-only');
+  const {agentRecovery}=await import('../../shared/service/agent-recovery.ts');
+  for (const metric of ['vmaf','xpsnr','cambi']) {
+    const recovery=agentRecovery('component-unavailable',metric+'.submit');
+    assert.match(recovery.action,/analysis WASM/);
+    assert.ok(recovery.operations.includes('/api/agent/operations/'+metric+'.capability'));
+    assert.match(recovery.action,/Keep the requested metric unchanged/);
+  }
 });
