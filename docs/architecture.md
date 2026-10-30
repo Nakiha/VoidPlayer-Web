@@ -138,21 +138,21 @@ all/stride sampling, complete dependency-work reservations, pixel-domain SSE/cou
 and window-weighted SSIM pooling, and explicit candidate selection policy.
 `server/analysis/quality/range-service.ts` persists the parent plan/history and
 coordinates existing durable single-frame child jobs without an outer admission
-permit. The child runner alone owns the shared physical execution slot. Parent
-shutdown precedes child-service shutdown; uncertain Worker exit retains ownership.
+permit. The child runner alone owns the shared physical execution slot. Parent and child services request shutdown before shared storage is released;
+uncertain Worker exit retains the affected ownership.
 `range-routes.ts` exposes actor-fenced planning/submission, paged history/results,
 explicit cancellation and frozen-ID publication through the original atomic
 annotation command. `src/admin/quality-ranges.ts` only observes and opens explicit
 read-only original-frame viewers. No player/presenter state is required.
 See [bounded-quality-ranges.md](bounded-quality-ranges.md) for coverage, budget,
-crash/receipt recovery and unassessed-candidate semantics. CAMBI remains
-unimplemented; correctness does not certify performance or reference integrity.
+crash/receipt recovery and unassessed-candidate semantics. CAMBI uses its own single-source domain; correctness does not certify performance
+or reference integrity.
 
 
 ### Explicit reference clocks and AU planning
 
 `shared/analysis/quality/correspondence.ts` owns immutable caller declarations,
-exact half-open integer-offset segments and raw-AU explanations. Existing decode
+exact rational source clocks, half-open offset segments and raw-AU explanations. Existing decode
 window admission is shared through `qualityTargetForAu`. A dedicated persisted
 `CorrespondenceService` queues metadata-only tasks on the existing killable
 `LibraryPairRunner`, with separate planning budgets and no outer admission.
@@ -162,29 +162,38 @@ commits into the existing range service; restart does not replan or score.
 The admin form and HTTP routes share contracts and B's scorer, publication and
 original-frame viewer. See [reference-clock-plans.md](reference-clock-plans.md).
 
-Optional native VMAF consumes committed C plans through `server/analysis/vmaf/`, with a fixed official Linux x64 component, independent metric outcomes and shared admission held until physical Worker/process exit. See [native-vmaf.md](native-vmaf.md); no arbitrary ROI/HDR/sparse-sequence or content-certification support is implied.
+### Scoring execution and source authority
 
-Trusted MP4 scoring uses the strict, versioned sample-table authority described in
-[trusted-mp4-quality.md](trusted-mp4-quality.md). Explicit A preparation commits the
-source/stat/table/document witness in the existing cache transaction; read/scoring
-never creates indexes. A container adapter supplies real MP4 payloads and exact
-sample clocks to the existing opaque-token GOP, PSNR/SSIM/grid and C/B services.
-MP4 library evidence uses result v2 and an MP4-derived annotation clock basis;
-legacy FLV fingerprints and v1 evidence retain their fields. Read-only original
-frames do not use player state or private jobs. Native VMAF reuses this strict
-adapter for MP4/MP4 and mixed FLV sequences, preserving raw sample clocks and
-v2 temporal associations while retaining FLV v1 receipts. Its Linux x64 component,
-models and physical-exit runner remain unchanged. The existing sequence cadence,
-full-frame/SDR and raw/index/decode budgets still apply. Future CAMBI admission
-does not inherit MP4 support.
+[Analysis WASM scoring](analysis-wasm-scoring.md) is the current authority for
+execution boundaries and supported inputs. Playback and analysis are the only
+product cores. Independent playback-core Workers decode selected source pixels;
+VMAF/CAMBI/XPSNR run pixel APIs in the existing analysis core. The host owns exact
+rational clocks, AU tokens, ROI and final drain. No avfilter/framesync, production
+scoring CLI, third core or raw-clip temporary files are involved.
+
+Trusted MP4 scoring uses the versioned sample-table authority described in
+[trusted-mp4-quality.md](trusted-mp4-quality.md). Explicit preparation commits
+source/stat/table/producer witnesses. Reads and scoring never create indexes.
+MP4 result/attachment v2 and FLV v1 identities remain distinct; original-frame
+viewers revalidate their frozen inputs independently of the active player.
+Each metric applies its own source, geometry, color, continuity and work budget.
+CAMBI's supported single-source inputs do not inherit admission from VMAF.
+
+The domain services remain in `server/analysis/{vmaf,xpsnr,cambi}/`; request and
+numerical contracts are linked from the scoring authority. Historical `native-*`
+filenames, `Native*` classes and wire names preserve existing identities. Old
+native results and interrupted-process recovery retain their original provenance;
+they are not current deployment instructions. CLI oracle tools are maintainer
+fixtures, never product runtime dependencies.
 
 ## Actor task center
 
-`server/tasks/` composes preparation, correspondence, single, range and native
-VMAF histories through bounded metadata projections in the original stores.
+`server/tasks/` composes preparation, correspondence, single, range,
+VMAF, XPSNR and CAMBI histories through bounded metadata projections in the original stores.
 `shared/service/tasks.ts` owns query/filter/summary types; the admin pane and
-HTTP routes use the same protocol. First pages scan every actor-owned row within
-the existing hard history caps, then freeze the filtered metadata read set.
+HTTP routes use the same protocol. First pages filter in the original SQL stores before checking snapshot row/byte
+budgets, then freeze the complete matching metadata read set. Retained history
+is not a lifetime task-count quota; oversized queries require narrower filters.
 Signed actor-scoped cursors refer to a short-lived bounded memory snapshot;
 expiry/restart/eviction requires a new query, never a hidden partial scan.
 Detail verifies recorded original associations; results remain in their owning
@@ -192,5 +201,8 @@ services. Cancellation delegates without owning compute admission. No scheduler,
 new algorithm, retry policy, persistent snapshot database or global admin is
 introduced. See [contract and reproduction](unified-task-center.md).
 
-Optional XPSNR follows the existing trusted native sequence boundary (`docs/native-xpsnr.md`). It reuses source eligibility, C plans, raw decode and physical process supervision, with a separately pinned minimal LGPL FFmpeg component and durable bounded metric history. Reference-first temporal state and the filter's official per-plane pooling are immutable recipe facts. No VMAF model, substitute metric, implicit index preparation or general scheduler is introduced. The actor-scoped task center includes the new XPSNR store and verified C/evidence links.
-显式评分重新执行见 `docs/explicit-quality-reexecution.md`。原提交重放与新计算必须分开；single/range/native VMAF/XPSNR 仅已物理停止的 failed/interrupted/cancelled/partial 可只读核验冻结条件并明确确认全量成本，原子创建一个带 retryOf 的新任务。每 job 仍只有原 attempt，旧结果/候选不变、不复用分数或自动发布。条件/执行器见证缺失须 blocked/new intent，不重建索引/C 计划或自动换模型。四种评分数据库 v2 的新 job 与回执同事务；未知提交只原 actor/body/key 回放，重启不自动重算。
+XPSNR uses reference-first temporal state and the official per-plane pooling in
+the same analysis WASM artifact. Version comparison requires identical frozen
+reference/domain/recipe witnesses, not merely matching names or durations. See
+[numerical and comparison contract](native-xpsnr.md).
+显式评分重新执行见 `docs/explicit-quality-reexecution.md`。原提交重放与新计算必须分开；single/range/VMAF/XPSNR 仅已物理停止的 failed/interrupted/cancelled/partial 可只读核验冻结条件并明确确认全量成本，原子创建一个带 retryOf 的新任务。每 job 仍只有原 attempt，旧结果/候选不变、不复用分数或自动发布。条件/执行器见证缺失须 blocked/new intent，不重建索引/C 计划或自动换模型。四种评分数据库 v2 的新 job 与回执同事务；未知提交只原 actor/body/key 回放，重启不自动重算。

@@ -51,7 +51,7 @@ node --test test/unit/agent-http.test.ts
 node scripts/native/run-vmaf-tests.mjs node --test test/media/agent-quality-workflow.test.ts
 ```
 
-后者从冷缓存和 llms.txt 开始，用真实 FLV single、MP4→FLV range、FLV→MP4 native VMAF 完成闭环。native 仅 Linux x64，沿用固定组件核验；包含无组件、缺缓存、unknown、source/actor 变化、真实提交后丢响应、cursor 失效及观察停止。逐帧/池化 VMAF 对照现有官方 oracle。其他 codec、compiled 三平台和 GUI/viewer 继续由现有正式回归覆盖，不声称此例认证全部矩阵。
+后者从冷缓存和 llms.txt 开始，用真实 FLV single、MP4→FLV range、FLV→MP4 VMAF 完成闭环。评分使用固定分析 WASM，执行边界与支持域见 [统一说明](analysis-wasm-scoring.md)；包含无组件、缺缓存、unknown、source/actor 变化、真实提交后丢响应、cursor 失效及观察停止。逐帧/池化 VMAF 对照现有官方 oracle。其他 codec、compiled 三平台和 GUI/viewer 继续由现有正式回归覆盖，不声称此例认证全部矩阵。
 
 CAMBI 的独立无参考工作流从 `/api/agent/tasks/quality.cambi`、
 `/agent/quality/cambi.md` 开始：只需一份明确的可信 FLV 或严格 MP4 绑定与有界区间/抽样（MP4 avc1 H2648 / hvc1 HEVC8/10，精确恒定时钟，v2 sample/table/producer 见证），

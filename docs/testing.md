@@ -6,7 +6,7 @@
 
 | 触发 | 必跑内容 | 边界 |
 | --- | --- | --- |
-| PR、main 推送 | `source` 162 项 + `ci-node-media` 60 项，构成完整 222 项 Node 用例；`ci-pr-browser` 33 项覆盖 Chromium/WebKit 核心流程 | 7 个执行 job：源码、两个 core、媒体 Node、两个浏览器、最终汇总；不打三平台包，不运行性能测试 |
+| PR、main 推送 | `source` 与 `ci-node-media` 构成完整 Node 用例并集（当前数量由清单枚举）；`ci-pr-browser` 覆盖 Chromium/WebKit 核心流程 | 7 个执行 job：源码、两个 core、媒体 Node、两个浏览器、最终汇总；不打三平台包，不运行性能测试 |
 | 显式运行 Full verification、版本标签 | 全浏览器矩阵、完整缓存/评分流程、HEVC 全帧验证、三平台 × Node/Bun、三平台原生包与发布集校验 | 全部成功才能产出 verified release set；只有版本标签生成未公开的 Release 草稿 |
 
 日常浏览器选择在统一 manifest 的 `ci-pr-browser` 声明：真实原生帧协议、PSNR/SSIM/VMAF/CAMBI/XPSNR 到候选/原帧证据、任务重执行、身份/Agent 标注与连接引导，以及完整分析 UI。数值域的 8/10-bit、ROI、区间、多 GOP 和生命周期由完整媒体 Node 分区覆盖；GUI 的完整深度/容器组合仍在显式全量验证中。日常检查通过不等于完整兼容性认证。
