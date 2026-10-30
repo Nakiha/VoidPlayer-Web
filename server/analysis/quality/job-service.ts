@@ -18,7 +18,8 @@ const serviceNow = () => Math.floor(performance.timeOrigin + performance.now());
 export class QualityJobService {
   private store: QualityJobStore;
   private runner: LibraryPairRunner;
-  private active?: {id: string; controller: AbortController; done: Promise<void>};
+  private active = new Map<string,{id: string; controller: AbortController; done: Promise<void>}>();
+  private unqueue?:()=>void;
   private closed = false;
   private fatal: unknown;
   private failed = false;
@@ -27,6 +28,7 @@ export class QualityJobService {
   private now: () => number;
   constructor(file: string, runner: LibraryPairRunner, now = serviceNow) {
     this.now = now; this.runner = runner; this.store = new QualityJobStore(file, now());
+    this.unqueue=runner.admission?.registerQueue(()=>this.store.queueCounts());
   }
   taskSummaries(actor:string,id?:string,filter?:import('../../../shared/service/tasks.ts').TaskFilter){return this.store.taskSummaries(actor,id,filter);}
   taskRetainedResults(actor:string,ids:readonly string[]){return this.store.taskRetainedResults(actor,ids);}
@@ -35,7 +37,7 @@ export class QualityJobService {
   }
   submit(value: unknown, actor: Actor, requestId: string, key: unknown,reexecution?:ReexecutionCreation,expectedExecutionContract?:QualityExecutionContract) {
     this.available();
-    const accepted = this.store.submit(qualityJobRequest(value), actor, requestId, qualityIdempotencyKey(key), this.now(),reexecution,expectedExecutionContract);
+    const accepted = this.store.submit(qualityJobRequest(value), actor, requestId, qualityIdempotencyKey(key), this.now(),reexecution,expectedExecutionContract,()=>this.runner.admission?.assertQueue(actor.id));
     if (!accepted.replayed) {this.pump();this.wake();}
     return {...accepted, job: this.store.get(accepted.job.id)};
   }
@@ -50,7 +52,7 @@ export class QualityJobService {
   result(id: string, actor?: string) { this.get(id, actor); return this.store.result(id); }
   releaseResult(id: string, actor: string) {
     this.available();this.get(id, actor);
-    if (this.active?.id === id || this.runner.stopUncertain)
+    if (this.active.has(id) || this.runner.stopUncertain)
       throw new AdminError(409, 'Physical execution stop is unconfirmed.', 'result-release-blocked');
     this.store.releaseResult(id);return {jobId:id,released:true,receiptRetained:true};
   }
@@ -58,8 +60,8 @@ export class QualityJobService {
   cancel(id: string, actor: string, requestId: string) {
     this.available();this.get(id, actor);
     const job = this.store.cancel(id, actor, requestId, this.now());
-    if (job.state === 'cancelling' && this.active?.id === id)
-      this.active.controller.abort(new AdminError(499, 'Quality job explicitly cancelled.', 'cancelled'));
+    if (job.state === 'cancelling')
+      this.active.get(id)?.controller.abort(new AdminError(499, 'Quality job explicitly cancelled.', 'cancelled'));
     return job;
   }
   private poison(error: unknown) {
@@ -76,14 +78,17 @@ export class QualityJobService {
     } catch (error) { this.poison(error); }
   }
   private pump() {
-    if (this.closed || this.failed || this.active) return;
+    if (this.closed || this.failed) return;
     try {
-      this.store.expire(this.now());const job = this.store.queued();if (!job) return;
-      const active = {id: job.id, controller: new AbortController(), done: Promise.resolve()};this.active = active;
+      this.store.expire(this.now());
+      while(this.active.size<(this.runner.admission?.capacity('psnr')??1)){
+      const job = this.store.queued();if (!job||this.active.has(job.id)) break;
+      const active = {id: job.id, controller: new AbortController(), done: Promise.resolve()};this.active.set(job.id,active);
       active.done = this.execute(job.id, active.controller).catch(error => this.poison(error)).finally(() => {
-        if (this.active === active) this.active = undefined;
+        this.active.delete(job.id);
         this.wake();
       });
+      }
     } catch (error) { this.poison(error); }
   }
   private async execute(id: string, controller: AbortController) {
@@ -102,7 +107,7 @@ export class QualityJobService {
         this.store.stopUncertain(id);throw error;
       }
       if (!attempt && error instanceof AdminError && error.code === 'quality-busy') {
-        this.store.blocked(id);return;
+        this.store.blocked(id,error.message);return;
       }
       const known = error instanceof AdminError || error instanceof FramePairError || error instanceof PsnrError;
       const why: QualityJobReason = known ? {code:error.code,message:error.message.slice(0, 300)}
@@ -117,14 +122,14 @@ export class QualityJobService {
   close() { return this.closing ??= this.stop(); }
   private async stop() {
     this.closed = true;clearTimeout(this.timer);this.timer = undefined;
-    this.active?.controller.abort(new AdminError(499, 'Quality service stopping.', 'service-shutdown'));
-    await this.active?.done;
+    for(const a of this.active.values())a.controller.abort(new AdminError(499, 'Quality service stopping.', 'service-shutdown'));
+    await Promise.all([...this.active.values()].map(a=>a.done));
     if (this.failed) throw this.fatal; // Keep database ownership when stop is uncertain.
     // Queued jobs are not silently resumed on the next startup.
     for (const job of this.store.unfinished()) {
       if (!terminalQualityJob(job.state)) this.store.finish(job.id, job.attempt?.id ?? null, 'interrupted',
         {code:'service-shutdown',message:'Service stopped before execution; no automatic retry.'}, this.now());
     }
-    this.store.close();
+    this.unqueue?.();this.store.close();
   }
 }

@@ -7,7 +7,7 @@ import type { AdminController } from '../admin.ts';
 import { ANNOTATION_BYTES } from '../annotations.ts';
 import { WORKSPACE_BYTES } from '../workspaces.ts';
 import { sendJson } from '../http-utils.ts';
-import { browserUserId, guestActor, identityCookie } from '../identity.ts';
+import { browserUserId, guestActor, identityCookie, requireCapturedActor } from '../identity.ts';
 import { encryptedRequest } from '../tls.ts';
 import { localRequest } from '../reveal.ts';
 import type { RouteContext } from './context.ts';
@@ -198,6 +198,10 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
       if (url.pathname === '/api/admin/analysis') {
         if (req.method === 'GET') { sendJson(res, 200, await admin.analysisSettings()); return true; }
         if (req.method === 'PUT') { sendJson(res, 200, await admin.saveAnalysisSettings(await readAdminJson(req))); return true; }
+      }
+      if (url.pathname === '/api/admin/quality-resources') {
+        if(req.method==='GET'){sendJson(res,200,await admin.qualitySettings());return true;}
+        if(req.method==='PUT'){requireCapturedActor(req,ctx.actor);sendJson(res,200,await admin.saveQualitySettings(await readAdminJson(req),identity,ctx.requestId));return true;}
       }
       if (url.pathname === '/api/admin/roots') {
         if (req.method === 'GET') { sendJson(res, 200, await admin.roots()); return true; }

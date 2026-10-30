@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {DEFAULT_QUALITY_RESOURCES} from '../../shared/service/quality-resources.ts';
 import assert from 'node:assert/strict';
 import {mkdtemp,cp,readFile,writeFile,rm} from 'node:fs/promises';
 import path from 'node:path';
@@ -62,6 +63,22 @@ test(`whole-execution deadline includes analysis preparation ${containers.join('
  await until(()=>entered,Boolean);assert.throws(()=>f.service.library.qualityAdmission.acquire(),{code:'quality-busy'});
  const final=await f.wait(created.job.id);assert.equal(final.state,'failed');assert.equal(final.reason.code,'budget-exceeded');assert.equal(final.process,null);assert.equal(final.resultDigest,null);
  const release=f.service.library.qualityAdmission.acquire();release();
+});
+
+test('actual VMAF Workers honor dynamic algorithm concurrency and drain after a lower global limit',{timeout:120000},async t=>{
+ const f=await nativeFixture();t.after(()=>f.close());const admission=f.service.library.qualityAdmission;
+ const limits={...structuredClone(DEFAULT_QUALITY_RESOURCES),concurrency:2,memoryBytes:4*1024**3,perExecutor:{...DEFAULT_QUALITY_RESOURCES.perExecutor,vmaf:2}};
+ admission.configure(limits);const runner=(f.service.library.qualityVmaf as any).runner,gate=holdScoringWorker(runner,'execution-contract');t.after(()=>gate.release());
+ const a=(await f.json('/api/quality/vmaf/jobs',f.input,'parallel-a')).job,b=(await f.json('/api/quality/vmaf/jobs',f.input,'parallel-b')).job;
+ await until(()=>gate.workers.length>=2&&gate.held,Boolean);
+ assert.equal(admission.resources().executors.vmaf.running,2);assert.ok(gate.workers.every((w:any)=>w.threadId!==-1));
+ admission.configure({...limits,concurrency:1});assert.equal(admission.resources().running,2);
+ await f.json('/api/quality/vmaf/jobs/'+a.id+'/cancel',{});assert.equal((await f.wait(a.id)).state,'cancelled');
+ const c=(await f.json('/api/quality/vmaf/jobs',f.input,'after-lower')).job;
+ await new Promise(r=>setTimeout(r,300));assert.equal((await f.json('/api/quality/vmaf/jobs/'+c.id)).attemptId,null);
+ assert.equal(admission.resources().running,1);assert.throws(()=>admission.acquire(),{code:'quality-busy'});
+ gate.release();assert.equal((await f.wait(b.id)).state,'completed');assert.equal((await f.wait(c.id)).state,'completed');
+ assert.equal(admission.resources().running,0);assert.ok(gate.workers.every((w:any)=>w.threadId===-1));
 });
 
 test('shared admission queues without nested locks, bounded actor queue and explicit queued cancellation',{timeout:120000},async t=>{

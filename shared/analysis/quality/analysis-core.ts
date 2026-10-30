@@ -216,8 +216,9 @@ export class AnalysisScorer {
     if (!Number.isFinite(score)) throw new Error("Non-finite score");
     return score;
   }
-  finish() {
-    if (this.closed || this.count !== this.options.frames)
+  finish(options: {allowPartialCambi?:boolean} = {}) {
+    const independentPrefix=options.allowPartialCambi===true&&this.metrics.length===1&&this.metrics[0]==='cambi'&&this.count>0&&this.count<this.options.frames;
+    if (this.closed || (this.count !== this.options.frames&&!independentPrefix))
       throw new Error("Incomplete scoring sequence");
     if (!this.finished) {
       this.check(this.core._vpa_quality_flush());

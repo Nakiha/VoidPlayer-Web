@@ -2,6 +2,7 @@ import type { QualityExecutionContract } from "../../../shared/analysis/quality/
 import { Worker } from "node:worker_threads";
 import type { MediaLibraryIndex } from "../../library.ts";
 import { AdminError } from "../../admin-error.ts";
+import type {QualityExecutor} from '../../../shared/service/quality-resources.ts';
 declare const VOIDPLAYER_COMPILED: boolean;
 class ScoringWorkerError extends AdminError {
   constructor(code: string, message: string) {
@@ -20,10 +21,13 @@ export class ScoringWorkerOwner {
   stopUncertain = false;
   protected library: MediaLibraryIndex;
   protected coreDir: string;
-  constructor(library: MediaLibraryIndex, coreDir: string) {
+  private executor: QualityExecutor;
+  constructor(library: MediaLibraryIndex, coreDir: string, executor: QualityExecutor = 'inspection') {
     this.library = library;
     this.coreDir = coreDir;
+    this.executor = executor;
   }
+  get admission() { return this.library.qualityAdmission; }
   protected createWorker(url: URL, data: object) {
     return new Worker(url, {
       workerData: data,
@@ -37,7 +41,7 @@ export class ScoringWorkerOwner {
     signal: AbortSignal,
     progress?: (n: number, total: number) => void,
     onContract?: (value: QualityExecutionContract) => void,
-    onEvent?: (message: Record<string, any>) => Promise<void>,
+    onEvent?: (message: Record<string, any>) => Promise<void|{stopRequested?:boolean}>,
   ): Promise<T> {
     const control = new Int32Array(new SharedArrayBuffer(8));
     const url = new URL(
@@ -50,7 +54,7 @@ export class ScoringWorkerOwner {
     return new Promise<T>((resolve, reject) => {
       let finishing = false,
         exited = false,
-        eventWork: Promise<void> | undefined;
+        eventWork: Promise<void|{stopRequested?:boolean}> | undefined;
       const finish = async (ok: boolean, value: unknown) => {
         if (finishing) return;
         finishing = true;
@@ -97,11 +101,12 @@ export class ScoringWorkerOwner {
             return onEvent(message);
           });
           void eventWork.then(
-            () => {
+            (outcome) => {
               if (!finishing)
                 worker.postMessage({
                   type: "scoring-ack",
                   index: message.index,
+                  stopRequested: outcome?.stopRequested===true,
                 });
             },
             (error) => void finish(false, error),
@@ -175,7 +180,9 @@ export class ScoringWorkerOwner {
     let release: () => void;
     try {
       signal.throwIfAborted();
-      release = this.library.qualityAdmission.acquire();
+      // One scalar Worker runs decoder and scorer on the same thread. Reserve
+      // its JS heap, decoder heaps, retained planes/indexes and analysis memory.
+      release = this.admission.acquire({executor:this.executor, memoryBytes:1280*1024**2, readBytes:2*1024**3, threads:1});
     } catch (error) {
       return Promise.reject(error);
     }

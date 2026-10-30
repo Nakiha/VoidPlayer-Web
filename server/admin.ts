@@ -21,6 +21,8 @@ import { Measurements } from './measurement.ts';
 import { CacheManager } from './caches.ts';
 import { AnnotationStore } from './annotations.ts';
 import { WorkspaceStore } from './workspaces.ts';
+import {qualityResourceLimits} from '../shared/service/quality-resources.ts';
+import type {QualityResourceSettings,QualityResourceChange} from '../shared/service/quality-resources.ts';
 export function adminWriteAllowed(req: IncomingMessage, action = 'admin') {
   if (req.headers['x-voidplayer-action'] !== action) return false;
   try {
@@ -69,7 +71,7 @@ export class AdminController {
   private cpuAt = performance.now();
   private cpuPercent = 0;
   constructor(config: ServiceConfig, library: MediaLibraryIndex, build = { version: 'development', revision: 'source' }) { this.config = config; this.library = library; this.build = build; this.measurements = new Measurements(library); this.workspaces = new WorkspaceStore(path.join(config.dataDir, 'workspaces.sqlite'));
-    try { this.annotations = new AnnotationStore(path.join(config.dataDir, 'annotations.sqlite')); }
+    try { if(config.qualityResources)library.qualityAdmission.configure(config.qualityResources);this.annotations = new AnnotationStore(path.join(config.dataDir, 'annotations.sqlite')); }
     catch (error) {
       try { this.workspaces.close(); }
       catch (cleanup) { throw new AggregateError([error, cleanup], 'Admin initialization failed', { cause: error }); }
@@ -132,6 +134,35 @@ export class AdminController {
     if (this.mutation) throw new AdminError(409, '另一项配置修改正在保存，请稍后重试。');
     const operation = this.updateAnalysisSettings(document).finally(() => { this.mutation = null; });
     this.mutation = operation; return operation;
+  }
+  async qualitySettings(): Promise<QualityResourceSettings> {
+    const origin=this.config.origin;
+    const changed=!!origin&&configRevision(await configText(origin.file))!==origin.revision;
+    const writeAccess=!!origin&&await fs.access(path.dirname(origin.file),constants.W_OK).then(()=>true,()=>false);
+    return {...this.library.qualityAdmission.resources(),revision:origin?.revision??null,writable:!!origin&&!changed&&writeAccess,
+      reasonCode:changed?'external-change':!origin?'no-source':!writeAccess?'not-writable':null,history:structuredClone(this.config.qualityResourceHistory??[])};
+  }
+  saveQualitySettings(document: unknown, actor: {id:string;name:string}, requestId: string) {
+    if(this.closing)throw new AdminError(503,'服务正在关闭。');
+    if(this.mutation)throw new AdminError(409,'另一项配置修改正在保存，请稍后重试。');
+    const operation=this.updateQualitySettings(document,actor,requestId).finally(()=>{this.mutation=null;});
+    this.mutation=operation;return operation;
+  }
+  private async updateQualitySettings(document: unknown,actor:{id:string;name:string},requestId:string) {
+    const input=document as {revision?:unknown;limits?:unknown}|null;
+    if(!input||Object.keys(input).sort().join(',')!=='limits,revision'||typeof input.revision!=='string')throw new AdminError(400,'请提供配置版本和评分资源限制。','invalid-request');
+    let limits;try{limits=qualityResourceLimits(input.limits);}catch(error){throw new AdminError(400,(error as Error).message,'invalid-resource-limits');}
+    const origin=this.config.origin;
+    if(!origin||input.revision!==origin.revision)throw new AdminError(409,'配置已更新或无法写回，请重新载入。','config-conflict');
+    const before=await configText(origin.file);
+    if(configRevision(before)!==origin.revision)throw new AdminError(409,'配置文件已被外部修改。','config-conflict');
+    const change:QualityResourceChange={at:Date.now(),actor:{id:actor.id,name:actor.name},requestId,previousRevision:origin.revision,before:this.library.qualityAdmission.resources().limits,after:limits};
+    const history=[...(this.config.qualityResourceHistory??[]),change].slice(-32);
+    const after=JSON.stringify({...before?JSON.parse(before):{},qualityResources:limits,qualityResourceHistory:history},null,2)+'\n';
+    await atomicWrite(origin.file,after);
+    this.config.qualityResources=limits;this.config.qualityResourceHistory=history;origin.revision=configRevision(after);
+    this.library.qualityAdmission.configure(limits);
+    return this.qualitySettings();
   }
   private async updateAnalysisSettings(document: unknown) {
     const input = document as { revision?: unknown; concurrency?: unknown } | null;

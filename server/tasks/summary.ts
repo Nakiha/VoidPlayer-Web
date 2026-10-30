@@ -234,7 +234,7 @@ export function taskSummaries(
         : "NULL";
   const result =
     kind === "cambi"
-      ? `${j("state")}='completed' AND result IS NOT NULL AND ${j("resultDigest")} IS NOT NULL`
+      ? `${j("state")} IN ('completed','partial') AND result IS NOT NULL AND ${j("resultDigest")} IS NOT NULL`
       : kind === "single"
         ? "result_sha IS NOT NULL AND result_json IS NOT NULL"
         : kind === "preparation"

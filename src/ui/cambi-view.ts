@@ -3,7 +3,7 @@ import {AnnotationClient} from '../review/annotation-client.ts';
 import {identityHealth,currentActor} from '../services/identity.ts';
 import {cambiEvidenceList} from '../../shared/review/cambi-evidence.ts';
 import type {CambiEvidence} from '../../shared/review/cambi-evidence.ts';
-import {cambiScales} from '../../shared/analysis/quality/cambi.ts';
+import {cambiScales,CAMBI_LIMITS} from '../../shared/analysis/quality/cambi.ts';
 import type {CambiFrame,CambiJob,CambiPrepared,CambiNative} from '../../shared/analysis/quality/cambi.ts';
 import {paintFrame,setPresentationGeometry,disposePresentation} from '../presentation/presenter.ts';
 import type {DecodedFrame} from '../media/source.ts';
@@ -26,7 +26,7 @@ const original=document.createElement('canvas');original.id='cambi-original';con
 for(const [name,canvas]of [[t(msg('cambi.viewer4','经源/cache/AU/原始字节核验的独立快照')),original],[t(msg('cambi.viewer5','官方原始热图（0–65535固定线性显示）')),heat]] as const){const section=document.createElement('section'),label=document.createElement('h2'),stage=document.createElement('div');label.textContent=name;stage.className='frame-stage';stage.append(canvas);section.append(label,stage);views.append(section);stages.push(stage);}
 const caption=document.createElement('p');caption.id='cambi-view-caption';root.append(title,note,cancel,status,pick,views,caption,expanded);views.style.visibility='hidden';
 const outline=document.createElementNS('http://www.w3.org/2000/svg','svg');outline.classList.add('quality-pair-roi');outline.setAttribute('aria-label','CAMBI evidence region in source grid');stages[0].append(outline);
-type Fact={frame:CambiFrame;geometry:CambiPrepared['geometry'];coverage:CambiPrepared['coverage'];shared?:CambiEvidence;native?:Pick<CambiNative,'recipe'|'component'>;identity:string};
+type Fact={provisional?:boolean;frame:CambiFrame;geometry:CambiPrepared['geometry'];coverage:CambiPrepared['coverage'];shared?:CambiEvidence;native?:Pick<CambiNative,'recipe'|'component'>;identity:string};
 let controller=new AbortController(),heatController=new AbortController(),epoch=0,heatSeq=0,frame:DecodedFrame|null=null,fact:Fact|null=null,owner='';
 const sharedBase=`/api/quality/cambi/shared/${encodeURIComponent(space)}/${encodeURIComponent(id)}/${encodeURIComponent(eid)}`;
 const privateBase='/api/quality/cambi/jobs/'+encodeURIComponent(jobId);
@@ -36,11 +36,14 @@ async function bounded(url:string,signal:AbortSignal,max:number){const r=await f
 const json=async<T>(url:string,signal:AbortSignal,max=2*1024*1024):Promise<T>=>JSON.parse(new TextDecoder().decode(await bounded(url,signal,max)));
 async function read(signal:AbortSignal):Promise<Fact>{
  if(jobId){
-  if(!/^cambi-[a-f0-9-]{36}$/.test(jobId)||!query.has('index')||!Number.isInteger(index)||index<0||index>=32)throw Error('Invalid owned CAMBI reference');
-  const job=await json<CambiJob>(privateBase,signal);if(job.state!=='completed'||!job.resultDigest||job.actor.id!==owner)throw Error('A completed owned CAMBI result is required');
+  if(!/^cambi-[a-f0-9-]{36}$/.test(jobId)||!query.has('index')||!Number.isInteger(index)||index<0||index>=CAMBI_LIMITS.frames)throw Error('Invalid owned CAMBI reference');
+  const job=await json<CambiJob>(privateBase,signal);if(job.actor.id!==owner)throw Error('The captured CAMBI owner identity is required');
+  const provisional=!job.resultDigest;
+  if(provisional&&!query.has('preview'))throw Error('Explicit provisional preview is required');
+  if(!provisional&&!['completed','partial'].includes(job.state))throw Error('A validated CAMBI result is required');
   const summary=await json<{geometry:CambiPrepared['geometry'];coverage:CambiPrepared['coverage'];recipe:CambiNative['recipe'];component:CambiNative['component']}>(privateBase+'/result',signal);
   const page=await json<{entries:CambiFrame[]}>(privateBase+`/frames?after=${index}&limit=1`,signal),f=page.entries[0];if(!f||f.index!==index)throw Error('Selected CAMBI frame missing');
-  return {frame:f,geometry:summary.geometry,coverage:summary.coverage,native:{recipe:summary.recipe,component:summary.component},identity:JSON.stringify([job.id,job.attemptId,job.resultDigest])};
+  return {frame:f,geometry:summary.geometry,coverage:summary.coverage,native:{recipe:summary.recipe,component:summary.component},provisional,identity:JSON.stringify([job.id,job.attemptId,job.resultDigest,f.rawSha256,f.heatmaps])};
  }
  if(![space,id,eid].every(v=>/^[A-Za-z0-9_-]{1,200}$/.test(v)))throw Error('Invalid shared CAMBI reference');
  const record=await new AnnotationClient(signal).read(space,id);if(record.deleted)throw Error('Annotation deleted');const e=record.document.mark.cambiEvidence?.find(e=>e.id===eid);if(!e)throw Error('CAMBI attachment removed');
@@ -58,7 +61,7 @@ async function loadHeat(){
  if(bytes.length!==scale.bytes||await hash(bytes)!==f.frame.heatmaps[s].sha256)throw Error('Official CAMBI heatmap bytes differ');if(seq!==epoch||signal.aborted||ticket!==heatSeq)return;
  heat.width=scale.width;heat.height=scale.height;const ctx=heat.getContext('2d')!,image=ctx.createImageData(scale.width,scale.height),dv=new DataView(bytes.buffer);
  for(let i=0;i<bytes.length/2;i++){const v=dv.getUint16(i*2,true)/257;image.data[i*4]=v;image.data[i*4+1]=v/4;image.data[i*4+2]=0;image.data[i*4+3]=255;}ctx.putImageData(image,0,0);heat.dataset.sha256=f.frame.heatmaps[s].sha256;heat.dataset.scale=String(s);
- caption.textContent=`CAMBI ${f.frame.score} · AU ${f.frame.target.picture.au} · source PTS ${f.frame.target.sourcePtsUs}µs · ${scale.width}×${scale.height} · source lattice (${scale.mapping.factor}x,${scale.mapping.factor}y), ceil edges · coverage ${f.coverage.scored}/${f.coverage.intervalAus}, unsampled ${f.coverage.unsampled}, unsupported ${f.coverage.unsupported.length} · no crop rescore`;
+ caption.textContent=`CAMBI ${f.frame.score} · AU ${f.frame.target.picture.au} · source PTS ${f.frame.target.sourcePtsUs}µs · ${scale.width}×${scale.height} · source lattice (${scale.mapping.factor}x,${scale.mapping.factor}y), ceil edges · coverage ${f.coverage.scored}/${f.coverage.intervalAus}, selected ${f.coverage.selected}, unscored ${f.coverage.unscored}, unsampled ${f.coverage.unsampled}, unsupported ${f.coverage.unsupported.length} · no crop rescore`;
  if(f.shared&&s===f.shared.ref.scale){const r=f.shared.ref.region;ctx.strokeStyle='#00b7ff';ctx.lineWidth=1;ctx.strokeRect(r.x+.5,r.y+.5,r.width-1,r.height-1);}
 }
 async function open(){
@@ -67,6 +70,15 @@ async function open(){
  try{
   if(jobId){owner=(await identityHealth()).actor?.id??'';current();if(!owner)throw Error('Choose the result owner identity first');}
   const f=await read(signal);current();fact=f;pick.value=String(f.shared?.ref.scale??0);
+  if(f.provisional){
+   title.textContent=t(msg('cambi.provisionalTitle','CAMBI · 暂存评分与热图'));
+   expandLabel.textContent=t(msg('cambi.provisionalFacts','暂存计算信息（未核验，不是不可变证据）'));
+   stages[0].parentElement!.hidden=true;await loadHeat();current();const fresh=await read(signal);current();
+   if(fresh.identity!==f.identity||JSON.stringify(fresh.frame)!==JSON.stringify(f.frame))throw Error('Provisional CAMBI attempt changed');
+   facts.textContent=JSON.stringify(f,null,2);views.style.visibility='visible';pick.disabled=false;root.dataset.state='provisional';
+   status.textContent=t(msg('cambi.provisionalView','暂存预览：GOP 排空及来源最终核验尚未完成。这里只显示已算分数和热图，不提供经核验源快照，也不能发布证据。'));return;
+  }
+  stages[0].parentElement!.hidden=false;
   const raw=await json<{pixelsBase64:string;description:FrameDescription;rawSha256:string}>(jobId?`${privateBase}/picture?index=${index}`:sharedBase+'/picture',signal,16*1024*1024);current();
   const decoded=Uint8Array.from(atob(raw.pixelsBase64),c=>c.charCodeAt(0)),d=raw.description;
   if(raw.rawSha256!==f.frame.rawSha256||JSON.stringify(d)!==JSON.stringify(f.frame.provenance.decoded.description))throw Error('Snapshot description differs');

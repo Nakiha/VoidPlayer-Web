@@ -16,10 +16,11 @@ export class LibraryDiscoveryService {
   private failed=false;
   private closing?:Promise<void>;
   private library:MediaLibraryIndex;
-  constructor(library:MediaLibraryIndex,probe=new DiscoveryProbeRunner(library.indexDatabase,library.qualityAdmission)){this.library=library;this.store=new DiscoveryStore(library.indexDatabase);this.probe=probe;}
+  private unqueue:()=>void;
+  constructor(library:MediaLibraryIndex,probe=new DiscoveryProbeRunner(library.indexDatabase,library.qualityAdmission)){this.library=library;this.store=new DiscoveryStore(library.indexDatabase);this.probe=probe;this.unqueue=library.qualityAdmission.registerQueue(()=>this.store.queueCounts());}
   private available(){if(this.closed||this.failed)throw new AdminError(503,'Library preparation service is unavailable.','preparation-unavailable');
     if(!this.library.durableQualityJobsEnabled)throw new AdminError(503,'Preparation jobs require a persistent library database.','preparation-storage-unavailable');}
-  submit(value:unknown,actor:Actor,requestId:string,key:unknown){this.available();const result=this.store.submit(value,actor,requestId,key,Date.now());
+  submit(value:unknown,actor:Actor,requestId:string,key:unknown){this.available();const result=this.store.submit(value,actor,requestId,key,Date.now(),()=>this.library.qualityAdmission.assertQueue(actor.id));
     if(!result.replayed){this.pump();this.wake();}return {...result,job:this.store.get(result.job.id,actor.id)};}
   cancel(id:string,actor:string){this.available();const job=this.store.cancel(id,actor,Date.now());if(job.state==='cancelling'&&this.active?.id===id)this.active.controller.abort(new AdminError(499,'Preparation explicitly cancelled.','cancelled'));return job;}
   private wake(){if(this.timer||this.closed||this.failed||!this.store.queued())return;
@@ -47,5 +48,5 @@ export class LibraryDiscoveryService {
   private async stop(){this.closed=true;clearTimeout(this.timer);this.active?.controller.abort(new AdminError(499,'Library preparation service stopping.','service-shutdown'));
     await this.active?.done;await this.probe.close();if(this.failed)throw this.fatal;
     for(const job of this.store.unfinished())this.store.finish(job.id,'interrupted',Date.now(),{code:'service-shutdown',message:'Service stopped; no automatic retry.'});
-    this.store.close();}
+    this.unqueue();this.store.close();}
 }

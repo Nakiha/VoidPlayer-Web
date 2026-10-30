@@ -65,6 +65,7 @@ export async function runCambiDecode(
     index: number,
     total: number,
   ) => Promise<void>,
+  stopAfterWindow?:()=>boolean,
 ) {
   const started = performance.now(),
     control = new Int32Array(data.control),
@@ -382,6 +383,8 @@ export async function runCambiDecode(
             source.source,
             () => createPairDecoder(load),
             new AbortController().signal,
+            undefined,
+            stopAfterWindow,
           ))
             yield { ordinal, target: targets[ordinal++], picture, source };
         } finally {
@@ -389,6 +392,7 @@ export async function runCambiDecode(
         }
       } else
         for (const [ordinal, target] of targets.entries()) {
+          if(ordinal>0&&stopAfterWindow?.())break;
           const source = open(target);
           try {
             yield {
@@ -511,6 +515,8 @@ export async function runCambiDecode(
     result.work.indexPackets = indexPackets;
     result.work.elapsedMs = Math.ceil(performance.now() - started);
     result.work.executionWitness = witness;
+    result.coverage.scored=result.frames.length;
+    result.coverage.unscored=result.coverage.selected-result.frames.length;
     return result;
   } finally {
     db.close();

@@ -1,0 +1,134 @@
+{
+  "revision": "542ef11e588d88e85d4d9b7a1625cf89fbc655f5",
+  "dirty": false,
+  "host": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M5",
+    "logicalCpus": 10,
+    "memoryBytes": 34359738368,
+    "node": "v24.15.0"
+  },
+  "localPlayback": [
+    {
+      "scenario": "hevc-4k-solo",
+      "repeat": 1,
+      "passed": true,
+      "failures": [],
+      "headless": true,
+      "speed": 0.9955736866233912,
+      "maxFrameLagUs": 17160,
+      "maxFrameSkewUs": 0
+    },
+    {
+      "scenario": "hevc-4k-solo",
+      "repeat": 2,
+      "passed": true,
+      "failures": [],
+      "headless": true,
+      "speed": 0.9963879616453658,
+      "maxFrameLagUs": 24224,
+      "maxFrameSkewUs": 0
+    },
+    {
+      "scenario": "hevc-4k-solo",
+      "repeat": 3,
+      "passed": true,
+      "failures": [],
+      "headless": true,
+      "speed": 0.9941667440718672,
+      "maxFrameLagUs": 17160,
+      "maxFrameSkewUs": 0
+    },
+    {
+      "scenario": "vvc-wasm-solo",
+      "repeat": 1,
+      "passed": true,
+      "failures": [],
+      "headless": true,
+      "speed": 0.999465251331874,
+      "maxFrameLagUs": 16600,
+      "maxFrameSkewUs": 0
+    },
+    {
+      "scenario": "vvc-wasm-solo",
+      "repeat": 2,
+      "passed": true,
+      "failures": [],
+      "headless": true,
+      "speed": 0.9997530279028577,
+      "maxFrameLagUs": 16640,
+      "maxFrameSkewUs": 0
+    },
+    {
+      "scenario": "vvc-wasm-solo",
+      "repeat": 3,
+      "passed": true,
+      "failures": [],
+      "headless": true,
+      "speed": 0.9999449832198819,
+      "maxFrameLagUs": 16267,
+      "maxFrameSkewUs": 0
+    },
+    {
+      "scenario": "vvc+hevc-4k",
+      "repeat": 1,
+      "passed": true,
+      "failures": [],
+      "headless": true,
+      "speed": 0.9996900557899578,
+      "maxFrameLagUs": 17551,
+      "maxFrameSkewUs": 16580
+    },
+    {
+      "scenario": "vvc+hevc-4k",
+      "repeat": 2,
+      "passed": true,
+      "failures": [],
+      "headless": true,
+      "speed": 0.9999351069113636,
+      "maxFrameLagUs": 16489,
+      "maxFrameSkewUs": 14833
+    },
+    {
+      "scenario": "vvc+hevc-4k",
+      "repeat": 3,
+      "passed": true,
+      "failures": [],
+      "headless": true,
+      "speed": 0.9994689577110827,
+      "maxFrameLagUs": 18777,
+      "maxFrameSkewUs": 18383
+    },
+    {
+      "scenario": "mpeg2ts+h264",
+      "repeat": 1,
+      "passed": true,
+      "failures": [],
+      "headless": true,
+      "speed": 0.9999625598107025,
+      "maxFrameLagUs": 14733,
+      "maxFrameSkewUs": 33
+    },
+    {
+      "scenario": "mpeg2ts+h264",
+      "repeat": 2,
+      "passed": true,
+      "failures": [],
+      "headless": true,
+      "speed": 0.9999525416447068,
+      "maxFrameLagUs": 9129,
+      "maxFrameSkewUs": 33
+    },
+    {
+      "scenario": "mpeg2ts+h264",
+      "repeat": 3,
+      "passed": true,
+      "failures": [],
+      "headless": true,
+      "speed": 0.9996725900377395,
+      "maxFrameLagUs": 16647,
+      "maxFrameSkewUs": 33
+    }
+  ]
+}

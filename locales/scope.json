@@ -15,6 +15,7 @@
     "src/admin/quality-navigation.ts",
     "src/admin/quality-ranges.ts",
     "src/admin/quality-reexecution.ts",
+    "src/admin/quality-resources.ts",
     "src/admin/quality-summary.ts",
     "src/admin/quality-temporal.ts",
     "src/admin/quality-vmaf.ts",

@@ -400,14 +400,16 @@ for(const [codec,depth]of [['h264',8],['hevc',8],['hevc',10]] as const)test(`CAM
   assert.equal((await f.request(`/api/tasks/cambi/${job.id}/release-result`,{})).status,409);
 });
 
-test('CAMBI backpressure exposes no provisional GOP evidence and cancellation retains capacity until Worker and sink stop', {timeout:120000}, async t=>{
+test('CAMBI backpressure labels provisional GOP previews and cancellation retains capacity until Worker and sink stop', {timeout:120000}, async t=>{
   const f=await cambiFixture({component:false,sequence:true});let resume=()=>{};t.after(async()=>{resume();await f.close();});
   const service=f.service.library.qualityCambi,runner=service.runner,run=runner.runCambi.bind(runner),factory=runner.createWorker.bind(runner);
   let seen=0,exited=false;runner.createWorker=(url:any,data:any)=>{const worker=factory(url,data);if(data.metric==='cambi')worker.once('exit',()=>exited=true);return worker;};
   const gate=new Promise<void>(r=>resume=r);runner.runCambi=(id:any,input:any,signal:any,hooks:any)=>run(id,input,signal,{...hooks,streamFrame:async(...args:any[])=>{await hooks.streamFrame(...args);seen++;await gate;}});
   const {job}=await f.json('/api/quality/cambi/jobs',f.input,'cancel-stream');
   for(let i=0;i<600&&!seen;i++)await new Promise(r=>setTimeout(r,10));assert.equal(seen,1);
-  assert.equal((await f.request(`/api/quality/cambi/jobs/${job.id}/frames`)).status,409);assert.equal((await f.request(`/api/quality/cambi/jobs/${job.id}/heatmap?index=0&scale=0`)).status,409);
+  const preview=await f.json(`/api/quality/cambi/jobs/${job.id}/frames`);assert.equal(preview.state,'provisional-uncommitted-attempt');assert.equal(preview.publishable,false);assert.equal(preview.entries.length,1);
+  const heat=await f.request(`/api/quality/cambi/jobs/${job.id}/heatmap?index=0&scale=0`);assert.equal(heat.status,200);assert.equal(heat.headers.get('x-voidplayer-evidence-state'),'provisional-uncommitted-attempt');
+  assert.equal((await f.request(`/api/quality/cambi/jobs/${job.id}/picture?index=0`)).status,409);
   const cancelling=await f.json(`/api/quality/cambi/jobs/${job.id}/cancel`,{});assert.equal(cancelling.state,'cancelling');
   for(let i=0;i<600&&!exited;i++)await new Promise(r=>setTimeout(r,10));assert.equal(exited,true);assert.throws(()=>f.service.library.qualityAdmission.acquire(),{code:'quality-busy'});
   assert.equal((await f.json(`/api/quality/cambi/jobs/${job.id}`)).state,'cancelling');resume();

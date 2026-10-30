@@ -2,6 +2,7 @@ import {tasksShell} from './tasks.ts';
 import { qualityJobsShell } from './quality.ts';
 import { discoveryShell } from './discovery.ts';
 import { analysisSettingsShell } from './analysis.ts';
+import {qualityResourceShell} from './quality-resources.ts';
 import { t, th, msg } from '../i18n.ts';
 import { annotationAdminShell } from './annotations.ts';
 import { cacheShell } from './caches.ts';
@@ -22,6 +23,7 @@ export function adminShell() {
         <p class="admin-caption">${th(msg("admin.cpuCaption", "CPU 以一个逻辑核为 100%。连接数包含浏览器保持的空闲连接。"))}</p>
         <h2>${th(msg("admin.indexTitle", "媒体索引"))}</h2><dl class="admin-properties"><div><dt>${th(msg("admin.rootDirs", "根目录"))}</dt><dd id="root-summary">—</dd></div><div><dt>${th(msg("admin.scanJobs", "扫描任务"))}</dt><dd id="scan-summary">—</dd></div><div><dt>${th(msg("admin.watchDirs", "目录监听"))}</dt><dd id="watch-summary">—</dd></div></dl>
         ${analysisSettingsShell()}
+        ${qualityResourceShell()}
       </section>
       ${cacheShell()}
       ${workspaceAdminShell()}

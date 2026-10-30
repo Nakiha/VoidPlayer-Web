@@ -8,6 +8,7 @@ import { createServer } from 'node:net';
 import { nativeFixture, until, sha } from '../test/helpers/native-vmaf.mjs';
 import { cambiFixture } from '../test/helpers/native-cambi.mjs';
 import { trackChildShutdown } from './testing/lifecycle.mjs';
+import {DEFAULT_QUALITY_RESOURCES} from '../shared/service/quality-resources.ts';
 
 const archive = path.resolve(process.argv[2] ?? JSON.parse(await readFile('artifacts/latest-release.json', 'utf8')).archive);
 const temp = await mkdtemp(path.join(tmpdir(), 'vp-analysis-release-'));
@@ -26,7 +27,10 @@ try {
     const port = socket.address().port;
     await new Promise(resolve => socket.close(resolve));
     await mkdir(config.dataDir, { recursive: true });
-    await writeFile(path.join(config.dataDir, 'voidplayer.config.json'), JSON.stringify({
+    const configFile=path.join(config.dataDir,'voidplayer.config.json');
+    const previous=await readFile(configFile,'utf8').then(JSON.parse,error=>{if(error.code!=='ENOENT')throw error;return {};});
+    await writeFile(configFile, JSON.stringify({
+      ...previous,
       host: '127.0.0.1', port, mediaRoots: config.mediaRoots, indexWatch: false, logsDir: null,
     }));
     const env = { ...process.env };
@@ -89,6 +93,30 @@ try {
       results.push({ metric: 'cambi', depth, codec, container, variant, frames: page.entries.length, pooled: result.pooled });
     } finally { await c.close(); }
   }
+  const partial=await cambiFixture({codec:'hevc',depth:8,sequence:true,start});
+  try{
+    const resourceUrl=partial.base+'/api/admin/quality-resources';
+    const settings=await(await fetch(resourceUrl)).json();
+    const limits={...structuredClone(DEFAULT_QUALITY_RESOURCES),concurrency:2,memoryBytes:4*1024**3,perExecutor:{...DEFAULT_QUALITY_RESOURCES.perExecutor,cambi:2}};
+    const saved=await fetch(resourceUrl,{method:'PUT',headers:{...partial.headers,'x-voidplayer-action':'admin'},body:JSON.stringify({revision:settings.revision,limits})});
+    assert.equal(saved.status,200);const savedSettings=await saved.json();assert.equal(savedSettings.history[0].actor.id,partial.actor);
+    const job=(await partial.json('/api/quality/cambi/jobs',partial.input,'compiled-partial')).job,url='/api/quality/cambi/jobs/'+job.id;
+    await until(()=>partial.json(url),j=>j.startedAt!==null,'Compiled partial admission');
+    await partial.json(url+'/stop-and-keep',{});const done=await partial.wait(job.id);
+    assert.equal(done.state,'partial',JSON.stringify(done));
+    const summary=await partial.json(url+'/result');assert.equal(summary.coverage.scored,64);assert.equal(summary.coverage.unscored,128);assert.equal(summary.coverage.selected,192);
+    assert.equal((await partial.request(url+'/picture?index=0')).status,200);
+    const pub=await partial.json(url+'/candidates',{space:'default',minScore:0,limit:1,scale:0,cellThreshold:1,text:'Packaged verified partial CAMBI',severity:2});assert.equal(pub.createdIds.length,1);
+    await partial.stop();const restored=await start(partial.config);
+    try{
+      const base=`http://127.0.0.1:${restored.server.address().port}`,get=async p=>(await fetch(base+p,{headers:{cookie:partial.headers.cookie,'x-voidplayer-actor':partial.actor}})).json();
+      const previous=await get(url);assert.equal(previous.state,'partial');assert.equal(previous.resultDigest,done.resultDigest);
+      assert.equal((await get(url+'/result')).coverage.unscored,128);
+      const resources=await get('/api/admin/quality-resources');assert.equal(resources.limits.concurrency,2);assert.equal(resources.history[0].actor.id,partial.actor);
+      const mark=await get('/api/annotations/spaces/default/'+pub.createdIds[0]);assert.equal(mark.document.mark.cambiEvidence[0].value.coverage.unscored,128);
+    }finally{await restored.close();}
+    results.push({metric:'cambi-partial',codec:'hevc',depth:8,frames:64,selected:192,unscored:128,restartPreserved:true,resourcesPersisted:true,sharedCandidate:true});
+  }finally{await partial.close();}
   const report = path.resolve(process.env.VOIDPLAYER_TEST_ARTIFACTS ?? '.run/analysis-quality-release');
   await mkdir(report, { recursive: true });
   await writeFile(path.join(report, 'analysis-quality.json'), JSON.stringify({ target: release.target, emptyPath: true, results }, null, 2));

@@ -60,4 +60,4 @@ CAMBI 的独立无参考工作流从 `/api/agent/tasks/quality.cambi`、
 显式取消仍委托原服务。逐帧五尺度热图、固定 recipe、区域统计和候选回执
 由 CAMBI 原端点按需读取；组件缺失保持 CAMBI unavailable，不静默替代指标。
 
-CAMBI 的显式重算沿用相同操作发现、费用确认和唯一后继回执，仅针对已有完整冻结单源见证并物理停止的 failed/interrupted/cancelled 任务，不新增 partial。缺旧见证、源/cache/producer/core、实际 AU 选择排序、固定组件/recipe 漂移必须新建意图；不准备索引、不创建参考关系、不自动发布候选。GUI 指标页与任务中心同源追溯，原 actor/body/key 回执先于来源和结果查询；普通 HTTP 示例的 `mode:cambi` 支持既有任务的只读预览与显式 `--allow-reexecute`，新 CAMBI 提交仍按其独立单源指南操作。
+CAMBI 的显式重算沿用相同操作发现、费用确认和唯一后继回执，仅针对已有完整冻结单源见证并物理停止的 failed/interrupted/cancelled/partial 任务。partial 仅由显式 stop-and-keep 在当前闭合 GOP 排空及最终核验后产生，保留覆盖缺口；完整重算仍重新处理全部输入。缺旧见证、源/cache/producer/core、实际 AU 选择排序、固定组件/recipe 漂移必须新建意图；不准备索引、不创建参考关系、不自动发布候选。GUI 指标页与任务中心同源追溯，原 actor/body/key 回执先于来源和结果查询；普通 HTTP 示例的 `mode:cambi` 支持既有任务的只读预览与显式 `--allow-reexecute`，新 CAMBI 提交仍按其独立单源指南操作。

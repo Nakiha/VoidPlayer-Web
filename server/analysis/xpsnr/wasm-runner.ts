@@ -27,7 +27,7 @@ export class WasmXpsnrRunner extends ScoringWorkerOwner {
     coreDir: string,
     analysisDir: string,
   ) {
-    super(library, coreDir);
+    super(library, coreDir, 'xpsnr');
     this.analysisDir = analysisDir;
   }
   assertAvailable() {

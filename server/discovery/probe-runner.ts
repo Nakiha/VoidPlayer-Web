@@ -26,7 +26,7 @@ export class DiscoveryProbeRunner {
   }
   run(source:DiscoverySource,signal:AbortSignal,admitted:()=>void):Promise<ProbeValue>{
     if(this.closed||this.stopUncertain)return Promise.reject(new AdminError(503,'Metadata probe is unavailable.','preparation-unavailable'));
-    let release:()=>void;try{signal.throwIfAborted();release=this.admission.acquire();}catch(error){return Promise.reject(error);}
+    let release:()=>void;try{signal.throwIfAborted();release=this.admission.acquire({executor:'preparation',memoryBytes:256*1024**2,readBytes:4*1024**2,threads:1});}catch(error){return Promise.reject(error);}
     try{admitted();signal.throwIfAborted();}catch(error){release();return Promise.reject(error);}
     const controller=new AbortController(),combined=AbortSignal.any([signal,controller.signal]);
     const control=new Int32Array(new SharedArrayBuffer(8));

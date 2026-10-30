@@ -35,6 +35,20 @@ const oracle = JSON.parse(
   readFileSync("test/helpers/analysis-quality-oracle.json", "utf8"),
 );
 const hash = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
+for(const depth of [8,10] as const)test(`CAMBI independently pooled prefix ${depth}-bit retains the official score and maps`,()=>{
+ const sampleIndex=fixtures.cambi.findIndex((s:any)=>s.depth===depth&&s.pattern==='banded'),s=fixtures.cambi[sampleIndex];
+ const expected=oracle.cases.find((c:any)=>c.metric==='cambi'&&!c.fixture&&c.sampleIndex===sampleIndex);
+ assert.ok(expected);assert.ok(expected.frames.every((n:number)=>n===expected.frames[0]),'static fixture has identical official frame scores');
+ const raw=gunzipSync(Buffer.from(s.rawGzip,'base64')),bytes=s.width*s.height*3/2*(depth===8?1:2);
+ const scorer=new AnalysisScorer(core,{metrics:['cambi'],frames:s.frames});
+ try{
+  const f=frame(raw.subarray(0,bytes),s.width,s.height,depth);scorer.feed(f,f,{x:0,y:0,width:s.width,height:s.height},0);
+  assert.throws(()=>scorer.finish(),/Incomplete/);
+  const prefix=scorer.finish({allowPartialCambi:true}).cambi!;assert.equal(prefix.frames.length,1);
+  for(const key of ['min','max','mean','harmonic_mean'] as const)assert.ok(Math.abs(prefix.pooled[key]-expected.pooled[key])<=oracle.cambiTolerance);
+  for(const map of scorer.heatmaps(0))assert.equal(hash(map.bytes),expected.heatmaps[map.scale].frames[0]);
+ }finally{scorer.close();}
+});
 function frame(raw: Uint8Array, width: number, height: number, depth: 8 | 10) {
   let offset = 0;
   const planes = Array.from({ length: 3 }, (_, i) => {
