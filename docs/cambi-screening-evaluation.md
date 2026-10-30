@@ -99,3 +99,8 @@ MPEG-2 TS+H.264；[精简结果](validation/cambi-screening/playback-macos-arm64
 
 本批没有重新运行 Windows/Linux 独立包三平台发布矩阵。日常 PR 检查以精确
 提交的远端结果为准；以上本机资源/播放观察均不转成云端性能门禁。
+
+首轮 PR CI 的源码、两套 core、三个媒体分片和 Chromium 均通过；WebKit
+15/16，CAMBI 用例在功能断言后截取逐帧详情整页时超过 Linux WebKit 的
+32767 像素图像上限。截图改为定位 partial 标题的固定视口，错误截图也有界；
+所有逐帧、源证据、覆盖及候选断言保留。后续检查以 PR 当前提交结果为准。

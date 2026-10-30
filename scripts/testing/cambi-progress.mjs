@@ -203,9 +203,12 @@ export async function checkCambiProgress(browser, engine) {
       128,
     );
     await page.setViewportSize({ width: 390, height: 820 });
+    // Paginated raw witnesses can exceed Linux WebKit's 32767px image limit.
+    // Capture the partial status in a bounded viewport; keep all frame assertions.
+    await page.locator("#cambi-title").scrollIntoViewIfNeeded();
     await page.screenshot({
       path: path.join(dir, "partial.png"),
-      fullPage: true,
+      fullPage: false,
     });
     assert.deepEqual(errors, []);
     return {
@@ -238,7 +241,7 @@ export async function checkCambiProgress(browser, engine) {
       ),
     );
     await page
-      ?.screenshot({ path: path.join(dir, "failure.png"), fullPage: true })
+      ?.screenshot({ path: path.join(dir, "failure.png"), fullPage: false })
       .catch(() => {});
     throw error;
   } finally {
