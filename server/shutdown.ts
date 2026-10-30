@@ -4,7 +4,7 @@ export type ShutdownStep = readonly [name: string, close: () => unknown];
  * retains its own unresolved resources; callers close shared dependencies only
  * after this group succeeds. Rejections are observed immediately and together. */
 export async function closeResources(message: string, steps: readonly ShutdownStep[]): Promise<void> {
-  const outcomes = await Promise.allSettled(steps.map(([, close]) => Promise.resolve().then(close)));
+  const outcomes = await Promise.allSettled(steps.map(async ([, close]) => close()));
   const errors = outcomes.flatMap((outcome, index) => outcome.status === 'rejected'
     ? [new Error(`${steps[index][0]} failed to close`, { cause: outcome.reason })] : []);
   if (errors.length) throw new AggregateError(errors, message);

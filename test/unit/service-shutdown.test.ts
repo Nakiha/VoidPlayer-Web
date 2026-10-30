@@ -22,7 +22,8 @@ function library(failed='') {
 test('independent closes start before a slow owner settles and aggregate original failures',async()=>{
   let release!:()=>void;const gate=new Promise<void>(r=>release=r),calls:string[]=[],one=Error('one'),two=Error('two');
   const close=closeResources('failed',[['slow',()=>{calls.push('slow');return gate;}],['sync',()=>{calls.push('sync');throw one;}],['async',async()=>{calls.push('async');throw two;}]]);
-  await new Promise(r=>setImmediate(r));assert.deepEqual(calls,['slow','sync','async']);release();
+  assert.deepEqual(calls,['slow','sync','async'],'signal owners begin cleanup before another signal listener can force exit');
+  await new Promise(r=>setImmediate(r));release();
   await assert.rejects(close,(error:AggregateError)=>{assert.equal(error.errors.length,2);assert.equal(error.errors[0].cause,one);assert.equal(error.errors[1].cause,two);return true;});
 });
 test('every library shutdown failure still stops independent owners and retains shared storage',async t=>{
