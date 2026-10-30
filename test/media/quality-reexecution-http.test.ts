@@ -1,3 +1,4 @@
+import {replaceRunnerAnalysisDirectory} from '../helpers/analysis-component-fixture.ts';
 import {assertForcedProcessExit} from '../helpers/forced-process-exit.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -162,7 +163,7 @@ for(const kind of ['single','range','vmaf','xpsnr'] as const)test(`${kind}: chan
     const c=(lib.qualityCorrespondence as any).db,row=c.prepare('SELECT body FROM quality_correspondence_plans WHERE id=?').get(f.input.plan.id),body=JSON.parse(String(row.body));body.resultDigest='f'.repeat(64);try{c.prepare('UPDATE quality_correspondence_plans SET body=? WHERE id=?').run(JSON.stringify(body),f.input.plan.id);await blocked();}finally{c.prepare('UPDATE quality_correspondence_plans SET body=? WHERE id=?').run(row.body,f.input.plan.id);}
   }
   if((kind==='vmaf'||kind==='xpsnr')){
-    const r=((kind==='xpsnr'?lib.qualityXpsnr:lib.qualityVmaf) as any).runner,prior=r.analysisDir,copy=path.join(f.directory,'changed-analysis');await cp(prior,copy,{recursive:true});r.analysisDir=copy;try{await truncate(path.join(copy,'voidplayer-analysis.wasm'),8);await blocked();}finally{r.analysisDir=prior;}
+    const r=((kind==='xpsnr'?lib.qualityXpsnr:lib.qualityVmaf) as any).runner,prior=r.analysisDir,copy=path.join(f.directory,'changed-analysis');await cp(prior,copy,{recursive:true});const restore=await replaceRunnerAnalysisDirectory(r,copy);try{await truncate(path.join(copy,'voidplayer-analysis.wasm'),8);await blocked();}finally{await restore();}
     if(kind==='xpsnr'){try{r.stopUncertain=true;const p=await f.json(url+'/reexecution-plan',{reason});assert.ok(p.blocks.some((b:any)=>b.code==='xpsnr-service-unavailable'&&b.next==='wait-and-replan'));}finally{r.stopUncertain=false;}}
 
   }else{

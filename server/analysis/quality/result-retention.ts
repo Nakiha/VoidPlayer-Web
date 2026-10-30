@@ -54,7 +54,7 @@ export function releaseScoringResult(
   try {
     if (kind === "cambi")
       db.prepare("DELETE FROM cambi_heat WHERE job=?").run(id);
-    db.prepare(`UPDATE ${name} SET result=NULL WHERE id=?`).run(id);
+    db.prepare(`UPDATE ${name} SET result=NULL,body=json_set(body,'$.revision',json_extract(body,'$.revision')+1) WHERE id=? AND result IS NOT NULL`).run(id);
     settleScoringReservations(db, kind, id);
     db.exec("COMMIT");
   } catch (error) {

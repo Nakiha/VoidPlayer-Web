@@ -10,7 +10,7 @@ import type {LibraryPairRunner} from './runner.ts';
 import type {QualityRangeService} from './range-service.ts';
 import {qualityJobRequest,qualityIdempotencyKey} from './job-request.ts';
 import {FLV_MEDIA_INDEX_IDENTITY} from '../../../shared/media/indexing/media-index-identity.ts';
-import {referenceRelationInput,correspondenceInput,correspondenceKeys,canonicalJson,terminalCorrespondence,CORRESPONDENCE_LIMITS as LIMITS} from '../../../shared/analysis/quality/correspondence.ts';
+import {referenceRelationInput,correspondenceInput,normalizeCorrespondenceInput,correspondenceKeys,canonicalJson,terminalCorrespondence,CORRESPONDENCE_LIMITS as LIMITS} from '../../../shared/analysis/quality/correspondence.ts';
 import type {ReferenceRelation,CorrespondencePlan,CorrespondenceResult,CorrespondenceInput} from '../../../shared/analysis/quality/correspondence.ts';
 import type {QualityRangeInput} from '../../../shared/analysis/quality/ranges.ts';
 
@@ -93,7 +93,7 @@ export class CorrespondenceService{
       const input=correspondenceInput(value),binding={mediaId:'a'.repeat(24),mediaVersion:'b'.repeat(24),size:1,indexIdentity:FLV_MEDIA_INDEX_IDENTITY,indexBuildId:'recipe-validation',picture:{sourceVersion:`${'a'.repeat(24)}@${'b'.repeat(24)}`,stream:'video' as const,configuration:0,au:0,picture:0,layer:0,field:'frame' as const},sourcePtsUs:0,decode:{mode:'packet-identity-gop-v1' as const,startAu:0,endAu:31}};
       const request=qualityJobRequest({schema:'voidplayer-psnr-frame-job',version:1,client:input.client,request:{pairing:'caller-specified',reference:binding,distorted:binding,...input.recipe}}).input.request;
       input.recipe={roi:request.roi,...(request.spatial?{spatial:request.spatial}:{}),...(request.ssim?{ssim:request.ssim}:{}),budget:request.budget};
-      if(Buffer.byteLength(JSON.stringify(input))>LIMITS.requestBytes)throw Error('Plan request exceeds byte budget');return JSON.parse(canonicalJson(input));
+      if(Buffer.byteLength(JSON.stringify(input))>LIMITS.requestBytes)throw Error('Plan request exceeds byte budget');return normalizeCorrespondenceInput(input);
     });
   }
   submit(value:unknown,actor:Actor,requestId:string,key:unknown){

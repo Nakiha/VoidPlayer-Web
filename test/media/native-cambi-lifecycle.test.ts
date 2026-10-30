@@ -1,3 +1,4 @@
+import {replaceRunnerAnalysisDirectory} from '../helpers/analysis-component-fixture.ts';
 import test from 'node:test';import assert from 'node:assert/strict';
 import {requirePacketOutputWitness} from '../../shared/analysis/quality/frame-pair.ts';
 import {startService} from '../../server/runtime.ts';
@@ -124,7 +125,7 @@ test('CAMBI SIGKILL owner recovery: interrupted, owned Workers stopped, no retry
 
 test('CAMBI final verification rejects a changed analysis artifact and discards all maps',{timeout:120000},async t=>{
  const f=await cambiFixture();t.after(()=>f.close());const service=f.service.library.qualityCambi as any,runner=service.runner;
- const directory=path.join(f.directory,'analysis');await cp(runner.analysisDir,directory,{recursive:true});runner.analysisDir=directory;
+ const directory=path.join(f.directory,'analysis');await cp(runner.analysisDir,directory,{recursive:true});await replaceRunnerAnalysisDirectory(runner,directory);
  const worker=runner.worker.bind(runner);runner.worker=async(entry:string,data:any,...args:any[])=>{if(data.mode==='verify'){const file=path.join(directory,'voidplayer-analysis.js');await writeFile(file,Buffer.concat([await readFile(file),Buffer.from('\n// changed')]));}return worker(entry,data,...args);};
  const done=await f.wait((await f.json('/api/quality/cambi/jobs',f.input,'changed-artifact')).job.id);
  assert.equal(done.state,'failed');assert.equal(done.reason.code,'component-unavailable');assert.equal(done.resultDigest,null);

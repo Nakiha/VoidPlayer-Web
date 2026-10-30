@@ -2704,7 +2704,7 @@
     "params": {}
   },
   "discovery.invalidDraft": {
-    "source": "保存的本地请求无效，未自动重试，现可重新选择。",
+    "source": "保存的本地请求无效；保留原内容。请显式结束本地重试后再创建请求。",
     "params": {}
   },
   "discovery.jobLifetime": {
@@ -4682,6 +4682,10 @@
   },
   "qualityWorkspace.resultFacts": {
     "source": "完整结果数据",
+    "params": {}
+  },
+  "qualityWorkspace.resultReleased": {
+    "source": "评分结果已回收；原始摘要与回执保留。",
     "params": {}
   },
   "qualityWorkspace.single": {

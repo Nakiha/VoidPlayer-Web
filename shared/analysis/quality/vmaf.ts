@@ -204,6 +204,8 @@ export type VmafJob = ReexecutionMetadata & {
   reason: { code: string; message: string } | null;
   progress: { preparedFrames: number; targetFrames: number };
   metrics: VmafResult["metrics"];
+  /** Mutable observation fact; the immutable digest survives explicit release. */
+  resultRetained?: boolean;
   resultDigest: string | null;
   process: { pid: number; startTicks: string; bootId: string } | null;
 };

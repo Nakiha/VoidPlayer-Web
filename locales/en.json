@@ -2526,8 +2526,8 @@
     "translation": "Explicitly prepare a trusted FLV / MP4 index"
   },
   "discovery.invalidDraft": {
-    "source": "保存的本地请求无效，未自动重试，现可重新选择。",
-    "translation": "The saved local request is invalid and was not retried automatically. You can select again."
+    "source": "保存的本地请求无效；保留原内容。请显式结束本地重试后再创建请求。",
+    "translation": "The saved local request is invalid and has been retained. Explicitly end this local retry before creating another request."
   },
   "discovery.jobLifetime": {
     "source": "网络错误不是任务失败。关闭页面只停止观察；终态、attempt 与结果以同一后台记录为准。",
@@ -4408,6 +4408,10 @@
   "qualityWorkspace.resultFacts": {
     "source": "完整结果数据",
     "translation": "Complete result data"
+  },
+  "qualityWorkspace.resultReleased": {
+    "source": "评分结果已回收；原始摘要与回执保留。",
+    "translation": "Scoring results have been released; the original digest and receipt are retained."
   },
   "qualityWorkspace.single": {
     "source": "单帧与区域",

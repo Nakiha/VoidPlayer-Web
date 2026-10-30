@@ -94,6 +94,7 @@ export function installXpsnrComparison(signal:AbortSignal,openJob:(id:string)=>v
   for(const [part,step]of [['prev',-4],['next',4]]as const)$(part).onclick=()=>{if(pinned)void load({...pinned,after:pinned.after+step});};
   signal.addEventListener('abort',()=>life.abort(),{once:true});
   return {has:(id:string)=>ids.has(id),toggle,
+    unavailable(id:string){if(!ids.has(id))return;invalidate();document.getElementById('xpsnr-comparison-panel')!.dataset.state='unavailable';$('status').textContent=t(msg('qualityWorkspace.resultReleased','评分结果已回收；原始摘要与回执保留。'));},
     activate(value:boolean,owner:string){if(previousOwner&&owner!==previousOwner)locationView(null);if(owner)previousOwner=owner;active=value;actor=owner;invalidate();pinned=null;ids.clear();selection();$('status').textContent='';if(!value||!owner)return;
       try{const addressed=comparisonFromUrl(new URL(location.href)),raw=localStorage.getItem(storageKey());pinned=addressed??(raw&&raw.length<=4096?comparisonView(JSON.parse(raw)):null);if(pinned){for(const i of pinned.items)ids.add(i.id);selection();void load(pinned);}}
       catch(e){$('status').textContent=t(msg('xcompare.restoreInvalid','已保存的比较身份无效：{error}'),{error:String(e)});}

@@ -32,6 +32,16 @@ export function analysisComponent(
     const data = Object.fromEntries(
       files.map((file) => [file, readFileSync(path.join(directory, file))]),
     );
+    return describeAnalysisComponent(data,Object.fromEntries(files.map(file=>[file,sha(data[file])])),metric);
+  } catch (error) {
+    throw new VmafError(
+      "component-unavailable",
+      `Analysis scoring core unavailable: ${(error as Error).message}`,
+    );
+  }
+}
+/** Validation shared by owned asynchronous host verification and execution Workers. */
+export function describeAnalysisComponent(data:Record<string,Buffer>,hashes:Record<string,string>,metric:'vmaf'|'xpsnr'){
     const manifest = JSON.parse(data["manifest.json"].toString());
     const provenance = JSON.parse(data["provenance.json"].toString());
     if (
@@ -50,9 +60,8 @@ export function analysisComponent(
       Object.entries(VMAF_MODELS).some(
         ([key, value]) => manifest.quality.models[key] !== value.sha256,
       ) ||
-      files
-        .slice(0, 3)
-        .some((file) => provenance.files[file] !== sha(data[file])) ||
+      ["manifest.json","voidplayer-analysis.js","voidplayer-analysis.wasm"]
+        .some((file) => provenance.files[file] !== hashes[file]) ||
       ((manifest.dirty || provenance.dirty) &&
         process.env.ANALYSIS_ALLOW_LOCAL_BUILD !== "1")
     ) {
@@ -61,10 +70,10 @@ export function analysisComponent(
     const component: AnalysisScoringComponent = {
       executor: "analysis-wasm",
       abi: 1,
-      manifestSha256: sha(data["manifest.json"]),
-      binarySha256: sha(data["voidplayer-analysis.wasm"]),
-      glueSha256: sha(data["voidplayer-analysis.js"]),
-      provenanceSha256: sha(data["provenance.json"]),
+      manifestSha256: hashes["manifest.json"],
+      binarySha256: hashes["voidplayer-analysis.wasm"],
+      glueSha256: hashes["voidplayer-analysis.js"],
+      provenanceSha256: hashes["provenance.json"],
       sourceRevision:
         metric === "xpsnr" ? XPSNR_SOURCE_REVISION : VMAF_SOURCE_REVISION,
       coreRevision: manifest.revision,
@@ -77,13 +86,7 @@ export function analysisComponent(
           ? `xpsnr-pixel-${XPSNR_SOURCE_REVISION}`
           : (manifest.quality.version as string),
     };
-  } catch (error) {
-    throw new VmafError(
-      "component-unavailable",
-      `Analysis scoring core unavailable: ${(error as Error).message}`,
-    );
-  }
-}
+ }
 export async function loadAnalysisScoring(
   directory: string,
   expected?: AnalysisScoringComponent,

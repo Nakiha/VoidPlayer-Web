@@ -368,12 +368,14 @@ export function installQualityCambi(signal: AbortSignal) {
         $("title").textContent = id + " · " + j.state;
         $("state").textContent = JSON.stringify(j, null, 2);
         input("cancel").disabled = terminalCambi(j.state);
-        input("publish").disabled = !j.resultDigest;
+        input("publish").disabled = !j.resultDigest || j.resultRetained === false;
         input("stop-keep").disabled =
           terminalCambi(j.state) ||
           !!j.stopRequested ||
           j.state === "cancelling";
-        $("validation").textContent = j.resultDigest
+        $("validation").textContent = j.resultRetained === false && j.resultDigest
+          ? t(msg('qualityWorkspace.resultReleased','评分结果已回收；原始摘要与回执保留。'))
+          : j.resultDigest
           ? j.state === "partial"
             ? t(
                 msg(
@@ -408,13 +410,14 @@ export function installQualityCambi(signal: AbortSignal) {
           await frames();
           if (valid(c)) revision = j.revision;
         }
-        if (terminalCambi(j.state) && !j.resultDigest) {
+        if (terminalCambi(j.state) && (!j.resultDigest || j.resultRetained === false)) {
           resetFrames();
           $("frames").replaceChildren();
           $("summary").replaceChildren();
+          if(j.resultRetained===false&&j.resultDigest)$("summary").textContent=t(msg('qualityWorkspace.resultReleased','评分结果已回收；原始摘要与回执保留。'));
           revision = j.revision;
         }
-        if (j.resultDigest && revision !== j.revision) {
+        if (j.resultDigest && j.resultRetained !== false && revision !== j.revision) {
           const summary = await api.request<QualityScoreSummary>(
             c.actor,
             `/api/quality/cambi/jobs/${id}/result`,

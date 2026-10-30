@@ -153,6 +153,8 @@ export type XpsnrJob = ReexecutionMetadata & {
   reason: { code: string; message: string } | null;
   progress: { preparedFrames: number; targetFrames: number };
   metrics: XpsnrResult["metrics"];
+  /** Mutable observation fact; the immutable digest survives explicit release. */
+  resultRetained?: boolean;
   resultDigest: string | null;
   process: { pid: number; startTicks: string; bootId: string } | null;
 };

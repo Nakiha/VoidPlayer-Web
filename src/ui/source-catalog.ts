@@ -70,6 +70,11 @@ export class SourceCatalog {
     this.history = limitHistory([...history.values()]);
   }
   addFile(file: File) { this.local.set(sourceKey(file), file); this.remember(file); }
+  restoreFile(previousKey:string,file:File){
+    const next=sourceKey(file);
+    if(next!==previousKey){this.local.delete(previousKey);this.history=this.history.filter(h=>h.key!==previousKey);}
+    this.addFile(file);
+  }
   remember(entry: { name: string; size: number; lastModified: number; version?: string }, libraryId?: string, version = entry.version, rootId?: string) {
     const key = sourceKey(entry, libraryId, version);
     const openedAt = Date.now();

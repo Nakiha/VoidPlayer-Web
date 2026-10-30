@@ -202,3 +202,21 @@ test('a supplied media library drains attached HTTP readers in either close orde
   }finally{release();if(server.listening)await new Promise<void>(r=>server.close(()=>r()));await library.close();mock.mock.restore();await rm(dir,{recursive:true,force:true});}
  });
 });
+
+test('shutdown during component initialization creates no late owners and retains storage until readiness drains',async t=>{
+ const {AnalysisComponentOwner}=await import('../../server/analysis/quality/component-owner.ts');
+ const dir=await mkdtemp(path.join(tmpdir(),'vp-component-start-stop-')),database=path.join(dir,'library.sqlite');
+ const library=new MediaLibraryIndex([],{database,watch:false});let release!:()=>void;
+ const gate=new Promise<void>(r=>release=r),prototype=AnalysisComponentOwner.prototype as any,refresh=prototype.refresh;
+ t.mock.method(prototype,'refresh',async function(this:any,...args:any[]){await gate;return refresh.apply(this,args);});
+ const application=new QualityApplication(library);let settled=false;
+ try{
+  // The complete ownership graph is assembled before initialization yields.
+  const vmaf=application.qualityVmaf,cambi=application.qualityCambi;
+  const closed=application.close().then(()=>{settled=true;});
+  await new Promise(r=>setImmediate(r));assert.equal(settled,false);assert.throws(()=>new MediaLibraryIndex([],{database,watch:false}),/另一个实例/);
+  release();await closed;await application.ready;
+  assert.equal(application.qualityVmaf,vmaf);assert.equal(application.qualityCambi,cambi);
+  const reopened=new MediaLibraryIndex([],{database,watch:false});await reopened.close();
+ }finally{release();await application.close();await rm(dir,{recursive:true,force:true});}
+});

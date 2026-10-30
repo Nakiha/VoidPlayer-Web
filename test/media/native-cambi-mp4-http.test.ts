@@ -1,3 +1,4 @@
+import {replaceRunnerAnalysisDirectory} from '../helpers/analysis-component-fixture.ts';
 // @ts-ignore actual Worker boundary helper
 import {holdScoringWorker,controlledExecutionDeadline} from '../helpers/analysis-lifecycle.mjs';
 import {assertOfficial} from '../helpers/official-quality-oracle.mjs';
@@ -38,7 +39,7 @@ for(const [codec,depth,variant='forward']of [['h264',8],['hevc',8],['hevc',10],[
 
 
 test('strict MP4 CAMBI distinguishes a missing component without substituting another metric',{timeout:120000},async t=>{
- const missing=await cambiFixture({container:'mp4',component:false});t.after(()=>missing.close());(missing.service.library.qualityCambi as any).runner.analysisDir=path.join(missing.directory,'missing-analysis');const response=await missing.request('/api/quality/cambi/jobs',missing.input,'missing');assert.equal(response.status,503);const body=await response.json();assert.equal(body.code,'component-unavailable');assert.ok(body.recovery.operations.includes('/api/agent/operations/cambi.capability'));assert.equal((await missing.json('/api/quality/cambi/jobs')).entries.length,0);
+ const missing=await cambiFixture({container:'mp4',component:false});t.after(()=>missing.close());await replaceRunnerAnalysisDirectory((missing.service.library.qualityCambi as any).runner,path.join(missing.directory,'missing-analysis'));const response=await missing.request('/api/quality/cambi/jobs',missing.input,'missing');assert.equal(response.status,503);const body=await response.json();assert.equal(body.code,'component-unavailable');assert.ok(body.recovery.operations.includes('/api/agent/operations/cambi.capability'));assert.equal((await missing.json('/api/quality/cambi/jobs')).entries.length,0);
 });
 
 for(const mode of ['cancel','deadline'] as const)test(`strict MP4 CAMBI analysis ${mode} retains admission until physical exit`,{timeout:120000},async t=>{

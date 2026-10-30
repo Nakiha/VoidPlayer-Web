@@ -12,20 +12,19 @@ import type {
   CambiPrepared,
   CambiNative,
 } from "../../../shared/analysis/quality/cambi.ts";
-import { ScoringWorkerOwner } from "../quality/scoring-worker-owner.ts";
+import { AnalysisScoringRunner } from "../quality/analysis-scoring-runner.ts";
+import type {AnalysisComponentOwner} from "../quality/component-owner.ts";
 import type { CambiHooks } from "./runner.ts";
-import { analysisComponent } from "../quality/analysis-component.ts";
 import { AdminError } from "../../admin-error.ts";
 
-export class WasmCambiRunner extends ScoringWorkerOwner {
-  readonly analysisDir: string;
+export class WasmCambiRunner extends AnalysisScoringRunner {
   constructor(
     library: QualityExecutionContext,
     coreDir: string,
     analysisDir: string,
+    components?: AnalysisComponentOwner,
   ) {
-    super(library, coreDir, 'cambi');
-    this.analysisDir = analysisDir;
+    super(library, coreDir, analysisDir, 'cambi', components);
   }
   /** Reclaim only legacy interrupted scratch data; new runs never write raw clips. */
   directory(id: string) {
@@ -42,7 +41,7 @@ export class WasmCambiRunner extends ScoringWorkerOwner {
       input,
       signal,
       () => {},
-      (s) =>
+      async (s) =>
         this.worker<{
           frame: import("../../../shared/analysis/quality/psnr.ts").PsnrFrame;
           provenance: import("../../../shared/analysis/quality/frame-pair.ts").PairProvenance;
@@ -63,7 +62,7 @@ export class WasmCambiRunner extends ScoringWorkerOwner {
   }
   assertAvailable() {
     try {
-      analysisComponent(this.analysisDir);
+      this.components.snapshot("vmaf");
     } catch (error) {
       throw new AdminError(
         503,
@@ -81,7 +80,7 @@ export class WasmCambiRunner extends ScoringWorkerOwner {
       reason: "component-unavailable",
     };
     try {
-      const { component: c, version } = analysisComponent(this.analysisDir);
+      const { component: c, version } = await this.components.verify("vmaf");
       return {
         ...basic,
         enabled: true,
@@ -101,9 +100,9 @@ export class WasmCambiRunner extends ScoringWorkerOwner {
       };
     }
   }
-  private contract(): NonNullable<QualityExecutionContract["analysis"]> {
+  private async contract(): Promise<NonNullable<QualityExecutionContract["analysis"]>> {
     return {
-      component: analysisComponent(this.analysisDir).component,
+      component: (await this.components.verify("vmaf",true)).component,
       recipe: "libvmaf-cambi-63-memory-heatmaps-v1",
     };
   }
@@ -128,11 +127,11 @@ export class WasmCambiRunner extends ScoringWorkerOwner {
       { budget: { maxElapsedMs: Math.min(input.budget.maxElapsedMs, 30000) } },
       signal,
       () => {},
-      (combined) =>
+      async (combined) =>
         this.worker(
           "../cambi/decode-worker.ts",
           {
-            ...this.data(input, this.contract()),
+            ...this.data(input, await this.contract()),
             mode: "preflight",
             expectedExecutionContract: expected,
           },
@@ -159,7 +158,7 @@ export class WasmCambiRunner extends ScoringWorkerOwner {
       hooks.admitted,
       async (combined) => {
         let executedContract: QualityExecutionContract | undefined;
-        const contract = this.contract(),
+        const contract = await this.contract(),
           data = this.data(input, contract);
         hooks.phase("decode-and-score");
         const value = await this.worker<{
@@ -198,7 +197,7 @@ export class WasmCambiRunner extends ScoringWorkerOwner {
         combined.throwIfAborted();
         hooks.prepared(value.prepared);
         hooks.phase("source-final");
-        if (canonicalJson(contract) !== canonicalJson(this.contract()))
+        if (canonicalJson(contract) !== canonicalJson(await this.contract()))
           throw new CambiError(
             "component-unavailable",
             "Analysis component changed during scoring",
@@ -227,7 +226,7 @@ export class WasmCambiRunner extends ScoringWorkerOwner {
           combined,
         );
         combined.throwIfAborted();
-        if (canonicalJson(contract) !== canonicalJson(this.contract()))
+        if (canonicalJson(contract) !== canonicalJson(await this.contract()))
           throw new CambiError(
             "component-unavailable",
             "Analysis component changed during final verification",

@@ -54,6 +54,7 @@ export type TemporalJob<K extends Kind, I extends Input> = Omit<
 interface Executor {
   readonly admission?: import('../../quality-admission.ts').QualityAdmission;
   readonly stopUncertain: boolean;
+  readonly ready?: Promise<void>;
   assertAvailable(): void;
   close(): Promise<void>;
 }
@@ -158,6 +159,7 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
     return taskEdges(this.db, this.kind, actor, id);
   }
   protected async recover() {
+    await this.executor.ready;
     for (const job of this.all())
       if (!this.terminal(job.state)) {
         if (job.process) await stopOwnedNative(job.process);
@@ -222,7 +224,7 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
   get(id: string, actor: string) {
     const row = this.db
       .prepare(
-        `SELECT body,fingerprint FROM quality_${this.kind}_jobs WHERE id=? AND actor=?`,
+        `SELECT body,fingerprint,result IS NOT NULL AS retained FROM quality_${this.kind}_jobs WHERE id=? AND actor=?`,
       )
       .get(id, actor);
     if (!row)
@@ -238,7 +240,7 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
         `Stored ${this.label} request changed.`,
         `stored-${this.kind}-invalid`,
       );
-    return job;
+    return {...job, resultRetained: !!row.retained};
   }
   history(actor: string, after = 0, limit = 8) {
     if (
@@ -255,11 +257,11 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
       );
     const rows = this.db
       .prepare(
-        `SELECT rowid,body FROM quality_${this.kind}_jobs WHERE actor=? AND rowid>? ORDER BY rowid LIMIT ?`,
+        `SELECT rowid,body,result IS NOT NULL AS retained FROM quality_${this.kind}_jobs WHERE actor=? AND rowid>? ORDER BY rowid LIMIT ?`,
       )
       .all(actor, after, limit + 1);
     return {
-      entries: rows.slice(0, limit).map((r) => JSON.parse(String(r.body))),
+      entries: rows.slice(0, limit).map((r) => ({...JSON.parse(String(r.body)),resultRetained:!!r.retained})),
       after: rows.length
         ? Number(rows[Math.min(limit, rows.length) - 1].rowid)
         : after,

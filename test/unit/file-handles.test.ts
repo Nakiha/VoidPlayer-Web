@@ -88,3 +88,13 @@ test('IndexedDB request success is provisional until commit; aborted writes neve
   assert.equal(await store.get('alias'),undefined);assert.equal(await store.get('canonical'),undefined);assert.ok(await store.get(record.key));
  }finally{IDBObjectStore.prototype.put=put;globalThis.indexedDB=previous;}
 });
+
+test('restored history adopts only the verified handle key, without duplicating or merging other local files',async()=>{
+ const {SourceCatalog}=await import('../../src/ui/source-catalog.ts');
+ const {store}=memoryStore(),original=new File(['same'],'a.mp4',{lastModified:7}),changed=new File(['same'],'a.mp4',{lastModified:8}),other=new File(['other'],'a.mp4',{lastModified:9});
+ const catalog=new SourceCatalog();catalog.addFile(original);catalog.addFile(other);
+ await saveFileHandle(handleKey(original),handle({getFile:async()=>changed}) as unknown as FsFileHandle,original,store);
+ const reopened=await restoreHandleFile(handleKey(original),store);catalog.restoreFile(handleKey(original),reopened);
+ assert.deepEqual(new Set(catalog.recent().map(r=>r.key)),new Set([handleKey(changed),handleKey(other)]));
+ const reload=new SourceCatalog(catalog.recent());assert.deepEqual(await restoreHandleFile(reload.recent().find(r=>r.lastModified===8)!.key,store),changed);
+});

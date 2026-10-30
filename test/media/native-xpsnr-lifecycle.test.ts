@@ -1,3 +1,4 @@
+import {replaceRunnerAnalysisDirectory} from '../helpers/analysis-component-fixture.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,cp,readFile,writeFile,rm} from 'node:fs/promises';
@@ -74,7 +75,7 @@ for(const replacement of ['source-size','source-table','cache-table','cache-buil
 test(`final ${replacement} replacement refuses scoring publication and preserves completed companions`,{timeout:120000},async t=>{
  const f=await xpsnrFixture({containers:['mp4','flv']});t.after(()=>f.close());
  const runner=(f.service.library.qualityXpsnr as any).runner,run=runner.run.bind(runner);
- const analysisDir=path.join(f.directory,'analysis');await cp(runner.analysisDir,analysisDir,{recursive:true});runner.analysisDir=analysisDir;
+ const analysisDir=path.join(f.directory,'analysis');await cp(runner.analysisDir,analysisDir,{recursive:true});await replaceRunnerAnalysisDirectory(runner,analysisDir);
  let prepared=false;let resume:()=>void=()=>{};const gate=new Promise<void>(r=>resume=r);
  const worker=runner.worker.bind(runner);
  runner.worker=async(entry:string,data:any,...args:any[])=>{if(data.mode==='verify'){await gate;}return worker(entry,data,...args);};

@@ -38,3 +38,17 @@ for(const kind of ['vmaf','xpsnr'] as const){
     }
   });
 }
+
+for(const kind of ['vmaf','xpsnr','cambi'] as const)test(`${kind}: result release advances observation atomically and keeps immutable receipt`,async()=>{
+ const {releaseScoringResult}=await import('../../server/analysis/quality/result-retention.ts');
+ const db=openIndexDatabase(':memory:'),table=kind==='cambi'?'cambi_jobs':`quality_${kind}_jobs`,publications=kind==='cambi'?'cambi_publications':`quality_${kind}_publications`,column=kind==='cambi'?'job':'job_id';
+ try{
+  db.exec(`CREATE TABLE ${table}(id TEXT PRIMARY KEY,body TEXT,result TEXT,reserved INTEGER,snapshot TEXT,prepared TEXT);CREATE TABLE ${publications}(${column} TEXT,body TEXT);CREATE TABLE quality_reexecutions(job_id TEXT,body TEXT);CREATE TABLE cambi_heat(job TEXT,data BLOB)`);
+  const body={state:'completed',revision:7,resultDigest:'a'.repeat(64),attemptId:'original-attempt'};
+  db.prepare(`INSERT INTO ${table} VALUES(?,?,?,?,?,?)`).run('job',JSON.stringify(body),'{}',1024,null,null);db.prepare('INSERT INTO cambi_heat VALUES(?,?)').run('job',new Uint8Array([1]));
+  releaseScoringResult(db,kind,'job');const row=db.prepare(`SELECT body,result FROM ${table} WHERE id=?`).get('job')!;
+  assert.deepEqual(JSON.parse(String(row.body)),{...body,revision:8});assert.equal(row.result,null);
+  releaseScoringResult(db,kind,'job');assert.equal(JSON.parse(String(db.prepare(`SELECT body FROM ${table}`).get()!.body)).revision,8,'repeated release does not invent another change');
+  if(kind==='cambi')assert.equal(db.prepare('SELECT count(*) n FROM cambi_heat').get()!.n,0);
+ }finally{db.close();}
+});

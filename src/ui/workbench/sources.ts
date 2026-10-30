@@ -395,8 +395,8 @@ export function createSourcesPane(shared: WorkbenchShared) {
    * for next time), otherwise the legacy file input. */
   async function reselectLocal(item: SourceItem) {
     if (session.getState().busy || sourceInUse(item, session.getState().tracks)) return;
-    const openLive = (file: File) => {
-      catalog.addFile(file); save();
+    const openLive = (file: File,previousKey?:string) => {
+      if(previousKey)catalog.restoreFile(previousKey,file);else catalog.addFile(file);save();
       const live: SourceItem = { key: handleKey(file), name: file.name, size: file.size, lastModified: file.lastModified, file };
       const empty = SLOTS.find(slot => !session.getState().tracks.some(t => t.slot === slot));
       if (empty) void load(live, empty);
@@ -407,7 +407,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
       try {
         const restored=await restoreHandleSource(item.key);
         handleKnown.set(restored.key,true);handleKnown.set(item.key,true);
-        openLive(restored.file);
+        openLive(restored.file,item.key);
         return;
       } catch (error) {
         if (error instanceof FileHandleError) reason = error.kind;

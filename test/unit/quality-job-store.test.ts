@@ -141,7 +141,7 @@ test('scoring storage counts UTF-8 inputs, frozen plans, lineage, publications a
  const dir=await mkdtemp(join(tmpdir(),'vp-scoring-retention-')),db=openIndexDatabase(join(dir,'jobs.sqlite'));
  t.after(async()=>{db.close();await rm(dir,{recursive:true,force:true});});
  db.exec('CREATE TABLE quality_reexecutions(job_id TEXT,body TEXT); CREATE TABLE cambi_heat(job TEXT,data BLOB);');
- const body=JSON.stringify({state:'completed',input:{name:'测试片源'}}),snapshot=JSON.stringify({frozen:'时间轴'.repeat(30)}),prepared=JSON.stringify({identity:'帧'}),result=JSON.stringify({score:42}),publication=JSON.stringify({text:'评审'}),receipt=JSON.stringify({reason:'重新执行'});
+ const body=JSON.stringify({state:'completed',revision:7,input:{name:'测试片源'}}),snapshot=JSON.stringify({frozen:'时间轴'.repeat(30)}),prepared=JSON.stringify({identity:'帧'}),result=JSON.stringify({score:42}),publication=JSON.stringify({text:'评审'}),receipt=JSON.stringify({reason:'重新执行'});
  const bytes=(s:string)=>Buffer.byteLength(s);
  assert.equal(reserveScoringBytes(4096,JSON.parse(body),JSON.parse(snapshot)),4096+bytes(body)+bytes(snapshot)+128*1024);
  for(const kind of ['vmaf','xpsnr','cambi'] as const){
@@ -157,7 +157,7 @@ test('scoring storage counts UTF-8 inputs, frozen plans, lineage, publications a
   assert.equal(Number(row().reserved),retained+bytes(result)+(kind==='cambi'?4096:0));
   assert.equal(Number(db.prepare(`SELECT reserved FROM ${table} WHERE id='pending'`).get()!.reserved),888888);
   releaseScoringResult(db,kind,kind);assert.equal(row().result,null);assert.equal(Number(row().reserved),retained);
-  assert.equal(row().body,body);if(kind!=='cambi')assert.equal(row().snapshot,snapshot);
+  assert.deepEqual(JSON.parse(String(row().body)),{...JSON.parse(body),revision:8});if(kind!=='cambi')assert.equal(row().snapshot,snapshot);
   releaseScoringResult(db,kind,kind);assert.equal(Number(row().reserved),retained,'repeat release remains idempotent');
  }
  assert.equal(Number(db.prepare('SELECT count(*) n FROM cambi_heat').get()!.n),0);

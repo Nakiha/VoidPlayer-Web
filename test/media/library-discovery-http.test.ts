@@ -15,7 +15,7 @@ async function setup(t:any,persistent=true){const dir=await mkdtemp(path.join(tm
   const fixtures=JSON.parse(await readFile(new URL('../helpers/library-discovery-samples.json',import.meta.url),'utf8'));
   for(const format of ['mp4','mkv','ts']){const fixture=fixtures.samples.find((s:any)=>s.name===`h264-8-tagged.${format}`);await writeFile(path.join(media,`reference.${format}`),Buffer.from(fixture.bytes,'base64'));}
   library=new MediaLibraryIndex([media],{...(persistent?{database:path.join(dir,'library.sqlite')}:{}),watch:false});await library.refresh();
-  server=createMediaServer({library,roots:[media],onLog(){}});await new Promise<void>(resolve=>server!.listen(0,'127.0.0.1',resolve));
+  server=createMediaServer({library,roots:[media],onLog(){}});await library.qualityApplication.ready;await new Promise<void>(resolve=>server!.listen(0,'127.0.0.1',resolve));
   const base=`http://127.0.0.1:${(server.address() as AddressInfo).port}`,actor=`guest-${randomUUID()}`,headers={cookie:`voidplayer-user=${actor}`,'x-voidplayer-actor':actor};
   const post=(body:unknown,key:string=randomUUID(),extra={})=>fetch(base+'/api/library/preparations',{method:'POST',headers:{...headers,origin:base,'x-voidplayer-action':'library-preparation','content-type':'application/json','idempotency-key':key,...extra},body:JSON.stringify(body)});
   const wait=async(id:string)=>{const deadline=Date.now()+15000;for(;;){const r=await fetch(base+`/api/library/preparations/${id}`,{headers});assert.equal(r.status,200);const job=await r.json();if(!['queued','running','cancelling'].includes(job.state))return job;if(Date.now()>deadline)throw Error('Preparation did not settle');await new Promise(r=>setTimeout(r,10));}};

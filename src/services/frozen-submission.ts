@@ -19,8 +19,10 @@ export function assertJobReceipt(
   owner: string,
   pending: FrozenSubmission<unknown>,
   expectedInput: unknown = pending.body,
+  field: "job" | "relation" | "plan" = "job",
 ) {
-  const r = value as {
+  const envelope=value as Record<string,unknown>;
+  const r = {...envelope,job:envelope?.[field]} as {
     replayed?: unknown;
     job?: {
       id?: unknown;

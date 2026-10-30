@@ -15,6 +15,10 @@ XPSNR 使用同一产物的 `vpa_xpsnr_*` ABI 1。
 播放产物在独立后台 Worker 中解码，不访问页面播放实例。PSNR/SSIM 保留
 共享像素实现；两端选择、色彩、ROI 和源证据相同。
 
+分析组件由 `QualityApplication` 拥有的 `AnalysisComponentOwner` 统一核验。启动核验使用有界异步文件读取及 crypto 线程池 SHA-256；能力查询先异步检查 dev/ino/size/mtimeNs/ctimeNs，只有身份变化才重新哈希，未变化时读取先前验证的同一文件快照；三个评分器共用正在进行的核验，不在 HTTP 主线程同步读取/哈希完整 WASM，也不在 SQLite 提交事务内做文件 IO。文件预算为 manifest/provenance 各 256 KiB、glue 4 MiB、WASM 64 MiB；核验占用 inspection 准入（256 MiB 内存预留、69 MiB 读取、1 线程）。忙时能力接口明确报告延后核验，可保留先前已验证描述，不冒充本次核验完成。
+
+提交事务只检查已验证的组件快照；任务进入实际执行后，在同一执行准入内再次验证当前文件，冻结实际组件契约，并在执行及最终来源核验后再次检查。产物变化会失效快照，拒绝发布分数；没有永久缓存或跳过执行期核验。关闭时先排空评分执行，再释放组件 owner。
+
 libvmaf 固定为 v3.0.0（`17a67b238ce0539bdeafdc95961abac64fa16ea8`），
 模型 v0.6.1 / NEG、单线程、关闭 CPU 专用指令、CAMBI window 63。
 CAMBI 修改仅将官方 gray16le 热图写入内存；五尺度转换与算法保持不变。

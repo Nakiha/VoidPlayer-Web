@@ -13,26 +13,25 @@ import type {
   XpsnrPrepared,
   XpsnrNativeResult,
 } from "../../../shared/analysis/quality/xpsnr.ts";
-import { ScoringWorkerOwner } from "../quality/scoring-worker-owner.ts";
+import { AnalysisScoringRunner } from "../quality/analysis-scoring-runner.ts";
+import type {AnalysisComponentOwner} from "../quality/component-owner.ts";
 import { AdminError } from "../../admin-error.ts";
 import type { VmafHooks as XpsnrHooks } from "../vmaf/runner.ts";
-import { analysisComponent } from "../quality/analysis-component.ts";
 
 /** Uses the existing job lifecycle and physical Worker-exit supervision. The
  * decoding Worker feeds pixels directly into the existing analysis artifact. */
-export class WasmXpsnrRunner extends ScoringWorkerOwner {
-  readonly analysisDir: string;
+export class WasmXpsnrRunner extends AnalysisScoringRunner {
   constructor(
     library: QualityExecutionContext,
     coreDir: string,
     analysisDir: string,
+    components?: AnalysisComponentOwner,
   ) {
-    super(library, coreDir, 'xpsnr');
-    this.analysisDir = analysisDir;
+    super(library, coreDir, analysisDir, 'xpsnr', components);
   }
   assertAvailable() {
     try {
-      analysisComponent(this.analysisDir, "xpsnr");
+      this.components.snapshot("xpsnr");
     } catch (error) {
       throw new AdminError(
         503,
@@ -50,10 +49,7 @@ export class WasmXpsnrRunner extends ScoringWorkerOwner {
       reason: "component-unavailable",
     };
     try {
-      const { component: c, version } = analysisComponent(
-        this.analysisDir,
-        "xpsnr",
-      );
+      const { component: c, version } = await this.components.verify("xpsnr");
       return {
         ...basic,
         enabled: true,
@@ -72,11 +68,11 @@ export class WasmXpsnrRunner extends ScoringWorkerOwner {
       };
     }
   }
-  private contract(
+  private async contract(
     input: XpsnrInput,
-  ): NonNullable<QualityExecutionContract["analysis"]> {
+  ): Promise<NonNullable<QualityExecutionContract["analysis"]>> {
     return {
-      component: analysisComponent(this.analysisDir, "xpsnr").component,
+      component: (await this.components.verify("xpsnr",true)).component,
       recipe: "xpsnr-pixel-api-clip-v1",
     };
   }
@@ -105,7 +101,7 @@ export class WasmXpsnrRunner extends ScoringWorkerOwner {
       { budget: { maxElapsedMs: Math.min(input.budget.maxElapsedMs, 30000) } },
       signal,
       () => {},
-      (combined) =>
+      async (combined) =>
         this.worker<{
           contract: QualityExecutionContract;
           indexBytes: number;
@@ -113,7 +109,7 @@ export class WasmXpsnrRunner extends ScoringWorkerOwner {
         }>(
           "../xpsnr/decode-worker.ts",
           {
-            ...this.data(input, snapshot, this.contract(input)),
+            ...this.data(input, snapshot, await this.contract(input)),
             mode: "preflight",
             expectedExecutionContract: expected,
           },
@@ -131,7 +127,7 @@ export class WasmXpsnrRunner extends ScoringWorkerOwner {
       signal,
       () => {},
       async (combined) => {
-        const contract = this.contract(input);
+        const contract = await this.contract(input);
         const value = await this.worker(
           "../xpsnr/decode-worker.ts",
           { ...this.data(input, snapshot, contract), mode: "preflight" },
@@ -169,7 +165,7 @@ export class WasmXpsnrRunner extends ScoringWorkerOwner {
       hooks.admitted,
       async (combined) => {
         let executedContract: QualityExecutionContract | undefined;
-        const contract = this.contract(input),
+        const contract = await this.contract(input),
           data = this.data(input, snapshot, contract);
         hooks.phase("decode-and-score");
         const value = await this.worker<{
@@ -192,7 +188,7 @@ export class WasmXpsnrRunner extends ScoringWorkerOwner {
         combined.throwIfAborted();
         hooks.prepared(value.prepared);
         hooks.phase("source-final");
-        if (canonicalJson(contract) !== canonicalJson(this.contract(input)))
+        if (canonicalJson(contract) !== canonicalJson(await this.contract(input)))
           throw new XpsnrError(
             "component-unavailable",
             "Analysis component changed during scoring",
@@ -211,7 +207,7 @@ export class WasmXpsnrRunner extends ScoringWorkerOwner {
           combined,
         );
         combined.throwIfAborted();
-        if (canonicalJson(contract) !== canonicalJson(this.contract(input)))
+        if (canonicalJson(contract) !== canonicalJson(await this.contract(input)))
           throw new XpsnrError(
             "component-unavailable",
             "Analysis component changed during final verification",

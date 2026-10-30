@@ -1,3 +1,4 @@
+import {replaceRunnerAnalysisDirectory} from '../helpers/analysis-component-fixture.ts';
 import test from 'node:test';
 import {DEFAULT_QUALITY_RESOURCES} from '../../shared/service/quality-resources.ts';
 import assert from 'node:assert/strict';
@@ -91,7 +92,7 @@ for(const replacement of ['source-size','source-table','cache-table','cache-buil
 test(`final ${replacement} replacement refuses scoring publication and preserves completed companions`,{timeout:120000},async t=>{
  const f=await nativeFixture({containers:['mp4','flv']});t.after(()=>f.close());
  const runner=(f.service.library.qualityVmaf as any).runner,run=runner.run.bind(runner);
- const analysisDir=path.join(f.directory,'analysis');await cp(runner.analysisDir,analysisDir,{recursive:true});runner.analysisDir=analysisDir;
+ const analysisDir=path.join(f.directory,'analysis');await cp(runner.analysisDir,analysisDir,{recursive:true});await replaceRunnerAnalysisDirectory(runner,analysisDir);
  let prepared=false;let resume:()=>void=()=>{};const gate=new Promise<void>(r=>resume=r);
  const worker=runner.worker.bind(runner);
  runner.worker=async(entry:string,data:any,...args:any[])=>{if(data.mode==='verify'){await gate;}return worker(entry,data,...args);};
@@ -133,4 +134,25 @@ for(const containers of [['flv','flv'],['mp4','mp4']] as const)test(`SIGKILL own
  const restored=await call('/api/quality/vmaf/jobs/'+created.job.id);assert.equal(restored.state,'interrupted');assert.equal(restored.attemptId,before.attemptId);assert.equal(restored.metrics.psnr.state,'completed');assert.equal(restored.metrics.ssim.state,'completed');assert.equal(restored.metrics.vmaf.state,'interrupted');assert.equal(restored.process,null);assert.equal((await call('/api/quality/vmaf/jobs',f.input)).job.id,before.id);assert.equal(c.events.filter((e:any)=>e.event==='analysis-held').length,0);
  const result=await call('/api/quality/vmaf/jobs/'+created.job.id+'/result');assert.equal(result.vmaf,null);assert.equal(result.companionPairs,8);
  c.child.kill('SIGTERM');await c.closed;assert.equal(c.events.filter((e:any)=>e.event==='analysis-execution-start').length,0,'the entire restarted process lifetime performed no new execution');
+});
+
+test('component verification is shared, asynchronous, admission bounded and invalidates tampered artifacts',async t=>{
+ const {AnalysisComponentOwner}=await import('../../server/analysis/quality/component-owner.ts');
+ const {QualityAdmission}=await import('../../server/quality-admission.ts');
+ const fs=(await import('node:fs')).default,{syncBuiltinESMExports}=await import('node:module');
+ const directory=await mkdtemp(path.join(tmpdir(),'vp-component-owner-'));await cp(path.resolve('public/vendor/voidplayer-analysis'),directory,{recursive:true});
+ const admission=new QualityAdmission(),owner=new AnalysisComponentOwner(directory,admission);t.after(async()=>{await owner.close();await rm(directory,{recursive:true,force:true});});await owner.ready;
+ const original=fs.readFileSync;let synchronousReads=0;
+ fs.readFileSync=((...args:any[])=>{if(String(args[0]).startsWith(directory))synchronousReads++;return (original as any)(...args);}) as typeof original;syncBuiltinESMExports();
+ try{
+  const [vmaf,xpsnr]=await Promise.all([owner.verify('vmaf'),owner.verify('xpsnr')]);
+  assert.equal(vmaf.component.binarySha256,xpsnr.component.binarySha256);assert.notEqual(vmaf.component.sourceRevision,xpsnr.component.sourceRevision);assert.equal(synchronousReads,0);
+  assert.equal(admission.resources().running,0);const release=admission.acquire();
+  try{assert.deepEqual(await owner.verify('vmaf'),vmaf,'unchanged descriptors do not contend with source inspection');
+   const changed=path.join(directory,'voidplayer-analysis.js');await writeFile(changed,await readFile(changed));
+   await assert.rejects(owner.verify('vmaf'),{code:'quality-busy'});assert.deepEqual(owner.snapshot('vmaf'),vmaf);
+  }finally{release();}
+  const file=path.join(directory,'voidplayer-analysis.js');await writeFile(file,Buffer.concat([await readFile(file),Buffer.from('\n// altered')]));
+  await assert.rejects(owner.verify('vmaf'),{code:'component-unavailable'});assert.throws(()=>owner.snapshot('vmaf'),{code:'component-unavailable'});assert.equal(synchronousReads,0);assert.equal(admission.resources().running,0);
+ }finally{fs.readFileSync=original;syncBuiltinESMExports();}
 });

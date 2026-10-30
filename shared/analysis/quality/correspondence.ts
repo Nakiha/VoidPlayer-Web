@@ -1,3 +1,5 @@
+import {PAIR_LIMITS,FORWARD_PAIR_LIMITS} from './frame-pair.ts';
+import {PSNR_LIMITS} from './psnr.ts';
 import {clockKey,compareClocks,compareClockSums,clockToUs,normalizeClock} from '../../media/indexing/rational-clock.ts';
 import {qualitySourceIndex,qualitySourceClock} from './source-index.ts';
 import type {QualityIndexDocument} from './source-index.ts';
@@ -60,6 +62,13 @@ export function correspondenceInput(value:unknown):CorrespondenceInput{
   correspondenceKeys(v.budget,Object.keys(QUALITY_RANGE_LIMITS).filter(k=>k.startsWith('max')));for(const k of ['maxReadBytes','maxPackets','maxOutputFrames','maxInputBytes','maxElapsedMs'] as const)if(!integer(v.budget[k])||v.budget[k]<1||v.budget[k]>QUALITY_RANGE_LIMITS[k])fail(`Invalid range budget.${k}`);
   correspondenceKeys(v.planningBudget,['maxIndexBytes','maxIndexPackets','maxElapsedMs']);for(const k of ['maxIndexBytes','maxIndexPackets','maxElapsedMs'] as const)if(!integer(v.planningBudget[k])||v.planningBudget[k]<1||v.planningBudget[k]>CORRESPONDENCE_LIMITS[k])fail(`Invalid planning budget.${k}`);
   return JSON.parse(canonicalJson({...v,client:client(v.client)}));
+}
+
+/** v1 receipt defaults match durable acceptance, without rewriting the frozen wire body. */
+export function normalizeCorrespondenceInput(value:unknown):CorrespondenceInput{
+ const input=correspondenceInput(value);
+ input.recipe.budget={...PAIR_LIMITS,maxPackets:FORWARD_PAIR_LIMITS.maxPackets,maxOutputFrames:FORWARD_PAIR_LIMITS.maxOutputFrames,maxSamples:PSNR_LIMITS.maxSamples,maxInputBytes:PSNR_LIMITS.maxInputBytes,...input.recipe.budget};
+ return JSON.parse(canonicalJson(input));
 }
 
 /** Exact clock joins over raw cache records; no nearest-frame or content inference. */

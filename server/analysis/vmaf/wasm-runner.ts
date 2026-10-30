@@ -13,24 +13,23 @@ import type {
   VmafPrepared,
   VmafNativeResult,
 } from "../../../shared/analysis/quality/vmaf.ts";
-import { ScoringWorkerOwner } from "../quality/scoring-worker-owner.ts";
+import { AnalysisScoringRunner } from "../quality/analysis-scoring-runner.ts";
+import type {AnalysisComponentOwner} from "../quality/component-owner.ts";
 import type { VmafHooks } from "./runner.ts";
-import { analysisComponent } from "../quality/analysis-component.ts";
 
 /** Uses the existing job lifecycle and physical Worker-exit supervision. The
  * decoding Worker feeds pixels directly into the existing analysis artifact. */
-export class WasmVmafRunner extends ScoringWorkerOwner {
-  readonly analysisDir: string;
+export class WasmVmafRunner extends AnalysisScoringRunner {
   constructor(
     library: QualityExecutionContext,
     coreDir: string,
     analysisDir: string,
+    components?: AnalysisComponentOwner,
   ) {
-    super(library, coreDir, 'vmaf');
-    this.analysisDir = analysisDir;
+    super(library, coreDir, analysisDir, 'vmaf', components);
   }
   assertAvailable() {
-    analysisComponent(this.analysisDir);
+    this.components.snapshot("vmaf");
   }
   async capability() {
     const basic = {
@@ -41,7 +40,7 @@ export class WasmVmafRunner extends ScoringWorkerOwner {
       reason: "component-unavailable",
     };
     try {
-      const { component: c, version } = analysisComponent(this.analysisDir);
+      const { component: c, version } = await this.components.verify("vmaf");
       return {
         ...basic,
         enabled: true,
@@ -60,11 +59,11 @@ export class WasmVmafRunner extends ScoringWorkerOwner {
       };
     }
   }
-  private contract(
+  private async contract(
     input: VmafInput,
-  ): NonNullable<QualityExecutionContract["analysis"]> {
+  ): Promise<NonNullable<QualityExecutionContract["analysis"]>> {
     return {
-      component: analysisComponent(this.analysisDir).component,
+      component: (await this.components.verify("vmaf",true)).component,
       model: input.model,
       recipe: "libvmaf-pixel-api-clip-v1",
     };
@@ -93,7 +92,7 @@ export class WasmVmafRunner extends ScoringWorkerOwner {
       { budget: { maxElapsedMs: Math.min(input.budget.maxElapsedMs, 30000) } },
       signal,
       () => {},
-      (combined) =>
+      async (combined) =>
         this.worker<{
           contract: QualityExecutionContract;
           indexBytes: number;
@@ -101,7 +100,7 @@ export class WasmVmafRunner extends ScoringWorkerOwner {
         }>(
           "decode-worker.ts",
           {
-            ...this.data(input, snapshot, this.contract(input)),
+            ...this.data(input, snapshot, await this.contract(input)),
             mode: "preflight",
             expectedExecutionContract: expected,
           },
@@ -119,7 +118,7 @@ export class WasmVmafRunner extends ScoringWorkerOwner {
       signal,
       () => {},
       async (combined) => {
-        const contract = this.contract(input);
+        const contract = await this.contract(input);
         const value = await this.worker(
           "decode-worker.ts",
           { ...this.data(input, snapshot, contract), mode: "preflight" },
@@ -157,7 +156,7 @@ export class WasmVmafRunner extends ScoringWorkerOwner {
       hooks.admitted,
       async (combined) => {
         let executedContract: QualityExecutionContract | undefined;
-        const contract = this.contract(input),
+        const contract = await this.contract(input),
           data = this.data(input, snapshot, contract);
         hooks.phase("decode-and-score");
         const value = await this.worker<{
@@ -180,7 +179,7 @@ export class WasmVmafRunner extends ScoringWorkerOwner {
         combined.throwIfAborted();
         hooks.prepared(value.prepared);
         hooks.phase("source-final");
-        if (canonicalJson(contract) !== canonicalJson(this.contract(input)))
+        if (canonicalJson(contract) !== canonicalJson(await this.contract(input)))
           throw new VmafError(
             "component-unavailable",
             "Analysis component changed during scoring",
@@ -199,7 +198,7 @@ export class WasmVmafRunner extends ScoringWorkerOwner {
           combined,
         );
         combined.throwIfAborted();
-        if (canonicalJson(contract) !== canonicalJson(this.contract(input)))
+        if (canonicalJson(contract) !== canonicalJson(await this.contract(input)))
           throw new VmafError(
             "component-unavailable",
             "Analysis component changed during final verification",

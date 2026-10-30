@@ -29,6 +29,7 @@ test('committed FLV/TS records agree with ffprobe and raw PES clocks without fil
   const dir = await mkdtemp(path.join(tmpdir(), 'vp-native-records-')), media = path.join(dir, 'media'); await mkdir(media);
   const library = new MediaLibraryIndex([media], { database: path.join(dir, 'index.sqlite'), watch: false });
   const server = createMediaServer({ roots: [media], library, onLog() {} });
+  await library.qualityApplication.ready;
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   t.after(async () => { server.closeAllConnections(); await new Promise<void>(r => server.close(() => r())); await library.close(); await rm(dir, { recursive: true, force: true }); });
