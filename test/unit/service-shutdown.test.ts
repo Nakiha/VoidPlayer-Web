@@ -10,6 +10,9 @@ import {loadConfig} from '../../server/config.ts';
 import {startService} from '../../server/runtime.ts';
 import {Worker} from 'node:worker_threads';
 import {once} from 'node:events';
+import {LibraryPairRunner} from '../../server/analysis/quality/runner.ts';
+import {jobInput} from '../helpers/quality-job-fixture.ts';
+import {openIndexDatabase} from '../../server/sqlite.ts';
 
 const owners=['taskService','reexecutionService','correspondenceService','cambiService','xpsnrService','vmafService','discoveryService','rangeService','jobService','pairRunner','indexJobs'];
 for(const kind of ['database','build'] as const)test(`index ${kind} stop failure retains the real SQLite worker and library ownership`,async()=>{
@@ -35,7 +38,7 @@ function library(failed='') {
   const value=Object.assign(Object.create(MediaLibraryIndex.prototype),{
     stop(){calls.push('stop');if(failed==='stop')throw failure;},
     store:{close(){calls.push('database');}},
-    ...Object.fromEntries(owners.map(name=>[name,{close(){calls.push(name);if(name===failed)throw failure;}}])),
+    ...Object.fromEntries(owners.map(name=>[name,{stopExecution(){calls.push(name);if(name===failed)throw failure;},close(){calls.push(name);if(name===failed)throw failure;}}])),
   }) as MediaLibraryIndex;
   return {value,calls,failure};
 }
@@ -49,7 +52,7 @@ test('independent closes start before a slow owner settles and aggregate origina
 test('every library shutdown failure still stops independent owners and retains shared storage',async t=>{
   for(const failed of ['stop',...owners])await t.test(failed,async()=>{
     const {value,calls,failure}=library(failed),closed=value.close();assert.equal(value.close(),closed);
-    await assert.rejects(closed,(error:AggregateError)=>{assert.ok(error.errors.some(e=>e.cause===failure));return true;});
+    await assert.rejects(closed,(error:AggregateError)=>{const contains=(e:any):boolean=>e===failure||!!e?.cause&&contains(e.cause)||!!e?.errors?.some(contains);assert.ok(contains(error));return true;});
     assert.deepEqual(new Set(calls),new Set(['stop',...owners]));assert.equal(calls.includes('database'),false);
     await assert.rejects(value.close());assert.equal(calls.length,owners.length+1,'settled owners are not closed twice');
   });
@@ -110,4 +113,27 @@ test('real runtime retains the shared index after admin failure but still stops 
     library.store.close();service=undefined;
     t.mock.restoreAll();const restarted=await startService(config,false);await restarted.close();
   }finally{t.mock.restoreAll();if(service)(service.library as any).store.close();await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+});
+
+test('running range drains its real child Worker before committing parent state and disposing databases',async()=>{
+ const dir=await mkdtemp(path.join(tmpdir(),'vp-range-shutdown-')),database=path.join(dir,'library.sqlite');
+ const library=new MediaLibraryIndex([],{database,watch:false});let worker!:Worker,online!:Promise<unknown>,stopSeen!:()=>void,release!:()=>void;
+ const stopped=new Promise<void>(r=>stopSeen=r),gate=new Promise<void>(r=>release=r);
+ (library as any).pairRunner=new LibraryPairRunner(library,'/unused',data=>{
+   worker=new Worker('setInterval(()=>{},1000)',{eval:true,execArgv:[],workerData:data});online=once(worker,'online');
+   const terminate=worker.terminate.bind(worker);worker.terminate=()=>{stopSeen();return gate.then(terminate);};return worker;
+ });
+ const jobs=library.qualityJobs,ranges=library.qualityRanges,actor={id:'owner',name:'Owner'},pair=jobInput().request;
+ pair.budget={maxReadBytes:1024,maxInputBytes:1024};
+ const parent=ranges.submit({schema:'voidplayer-quality-range',version:1,client:{id:'shutdown-test',kind:'agent'},interval:{startAu:0,endAu:0},correspondence:{mode:'explicit-au-table'},sampling:{mode:'all'},pairs:[pair],budget:{maxReadBytes:4096,maxPackets:128,maxOutputFrames:128,maxInputBytes:4096,maxElapsedMs:10000}},actor,'shutdown','key').job;
+ try{
+   await online;const child=ranges.get(parent.id,actor.id).samples[0].jobId;
+   let settled=false;const close=library.close().then(()=>{settled=true;});await stopped;await new Promise(r=>setImmediate(r));
+   assert.equal(settled,false);assert.throws(()=>new MediaLibraryIndex([],{database,watch:false}),/另一个实例/);
+   assert.ok(jobs.get(child,actor.id));release();await close;assert.equal(worker.threadId,-1);
+   for(const [file,table,id]of [[database+'.quality.sqlite','quality_jobs',child],[database+'.quality-ranges.sqlite','quality_ranges',parent.id]]){
+     const db=openIndexDatabase(file);try{const row=db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(id)!;assert.equal(table==='quality_jobs'?row.state:JSON.parse(String(row.body)).state,'interrupted');}finally{db.close();}
+   }
+   const reopened=new MediaLibraryIndex([],{database,watch:false});await reopened.close();
+ }finally{release();await library.close();await rm(dir,{recursive:true,force:true});}
 });

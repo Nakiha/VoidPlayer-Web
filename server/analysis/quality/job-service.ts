@@ -117,9 +117,11 @@ export class QualityJobService {
     }
   }
   resources() {
-    return {...this.store.counts(), admissionBlocked: !!this.runner.stopUncertain, available: !this.closed && !this.failed};
+    return {...this.store.counts(), admissionBlocked: this.failed || !!this.runner.stopUncertain, available: !this.closed && !this.failed};
   }
-  close() { return this.closing ??= this.stop(); }
+  private stopping?:Promise<void>;
+  stopExecution() { return this.stopping ??= this.stop(); }
+  close() { return this.closing ??= this.stopExecution().then(()=>{this.unqueue?.();this.store.close();}); }
   private async stop() {
     this.closed = true;clearTimeout(this.timer);this.timer = undefined;
     for(const a of this.active.values())a.controller.abort(new AdminError(499, 'Quality service stopping.', 'service-shutdown'));
@@ -130,6 +132,6 @@ export class QualityJobService {
       if (!terminalQualityJob(job.state)) this.store.finish(job.id, job.attempt?.id ?? null, 'interrupted',
         {code:'service-shutdown',message:'Service stopped before execution; no automatic retry.'}, this.now());
     }
-    this.unqueue?.();this.store.close();
+
   }
 }

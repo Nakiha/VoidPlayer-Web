@@ -423,24 +423,37 @@ export class MediaLibraryIndex {
   close(ownersStopped?: Promise<void>) { return this.closing ??= this.closeOwned(ownersStopped); }
   private async closeOwned(ownersStopped?: Promise<void>) {
     this.closed = true;
-    await closeResources('Library shutdown incomplete; shared database ownership retained', [
-      ['external index owners', () => ownersStopped],
+    const internal = (async()=>{
+    await closeResources('Internal execution shutdown incomplete', [
       ['scan scheduling', () => this.stop()],
       ['task observations', () => this.taskService?.close()],
       ['reexecution planning', () => this.reexecutionService?.close()],
-      ['correspondence planning', () => this.correspondenceService?.close()],
-      ['CAMBI', () => this.cambiService?.close()],
-      ['XPSNR', () => this.xpsnrService?.close()],
-      ['VMAF', () => this.vmafService?.close()],
-      ['discovery', () => this.discoveryService?.close()],
-      ['ranges', () => this.rangeService?.close()],
-      ['single-frame jobs', () => this.jobService?.close()],
+      ['correspondence planning', () => this.correspondenceService?.stopExecution()],
+      ['CAMBI', () => this.cambiService?.stopExecution()],
+      ['XPSNR', () => this.xpsnrService?.stopExecution()],
+      ['VMAF', () => this.vmafService?.stopExecution()],
+      ['discovery', () => this.discoveryService?.stopExecution()],
+      ['ranges', () => this.rangeService?.stopExecution()],
+      ['single-frame jobs', () => this.jobService?.stopExecution()],
       ['pair executor', () => this.pairRunner?.close()],
       ['library scan', () => this.pending?.catch(() => {})],
       ['index executors', () => this.indexJobs.close()],
     ]);
     // An uncertain child may still use this connection. Never unlock it just
     // because other independent executors have successfully stopped.
+    await closeResources('Quality storage disposal incomplete', [
+      ['range storage',()=>this.rangeService?.close()],
+      ['correspondence storage',()=>this.correspondenceService?.close()],
+      ['single storage',()=>this.jobService?.close()],
+      ['CAMBI storage',()=>this.cambiService?.close()],
+      ['XPSNR storage',()=>this.xpsnrService?.close()],
+      ['VMAF storage',()=>this.vmafService?.close()],
+      ['preparation storage',()=>this.discoveryService?.close()],
+    ]);
+    })();
+    await closeResources('Library shutdown incomplete; shared database ownership retained', [
+      ['internal owners',()=>internal], ['external index owners',()=>ownersStopped],
+    ]);
     this.store.close();
   }
   /** Serialize configuration with scans. Persist first; a failed DB switch rolls

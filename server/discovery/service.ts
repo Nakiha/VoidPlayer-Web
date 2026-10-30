@@ -44,9 +44,11 @@ export class LibraryDiscoveryService {
         message:this.closed?'Service stopped; no automatic retry.':'Preparation failed; inspect its code and source version before submitting a new explicit operation.'});
     }
   }
-  close(){return this.closing??=this.stop();}
+  private stopping?:Promise<void>;
+  stopExecution(){return this.stopping??=this.stop();}
+  close(){return this.closing??=this.stopExecution().then(()=>{this.unqueue();this.store.close();});}
   private async stop(){this.closed=true;clearTimeout(this.timer);this.active?.controller.abort(new AdminError(499,'Library preparation service stopping.','service-shutdown'));
     await this.active?.done;await this.probe.close();if(this.failed)throw this.fatal;
     for(const job of this.store.unfinished())this.store.finish(job.id,'interrupted',Date.now(),{code:'service-shutdown',message:'Service stopped; no automatic retry.'});
-    this.unqueue();this.store.close();}
+  }
 }
