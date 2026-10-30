@@ -1,3 +1,4 @@
+import {closeResources} from './shutdown.ts';
 import type {AdminStatus,RootConfiguration,LogPage,LogDocument,AnalysisSettings,RootReasonCode} from '../shared/service/admin.ts';
 export type {RootReasonCode} from '../shared/service/admin.ts';
 import { AnalysisScheduler } from './analysis/bitstream/scheduler.ts';
@@ -67,7 +68,13 @@ export class AdminController {
   private cpu = process.cpuUsage();
   private cpuAt = performance.now();
   private cpuPercent = 0;
-  constructor(config: ServiceConfig, library: MediaLibraryIndex, build = { version: 'development', revision: 'source' }) { this.config = config; this.library = library; this.build = build; this.measurements = new Measurements(library); this.workspaces = new WorkspaceStore(path.join(config.dataDir, 'workspaces.sqlite')); this.annotations = new AnnotationStore(path.join(config.dataDir, 'annotations.sqlite')); }
+  constructor(config: ServiceConfig, library: MediaLibraryIndex, build = { version: 'development', revision: 'source' }) { this.config = config; this.library = library; this.build = build; this.measurements = new Measurements(library); this.workspaces = new WorkspaceStore(path.join(config.dataDir, 'workspaces.sqlite'));
+    try { this.annotations = new AnnotationStore(path.join(config.dataDir, 'annotations.sqlite')); }
+    catch (error) {
+      try { this.workspaces.close(); }
+      catch (cleanup) { throw new AggregateError([error, cleanup], 'Admin initialization failed', { cause: error }); }
+      throw error;
+    } }
   get caches() { return new CacheManager(this.config.dataDir, this.library.frameIndexes, this.annotations, this.library.thumbnails); }
   status(): AdminStatus {
     const now = performance.now(), elapsed = now - this.cpuAt;
@@ -179,5 +186,12 @@ export class AdminController {
     if (!version) throw new AdminError(428, '删除需要当前日志版本。');
     const { file } = await this.logFile(name, version); await fs.unlink(file); return { ok: true };
   }
-  async close() { await this.measurements.close(); await this.mutation?.catch(() => {}); await this.analysisInstance?.close(); this.workspaces.close(); this.annotations.close(); }
+  private closing?: Promise<void>;
+  close() { return this.closing ??= closeResources('Admin shutdown incomplete', [
+    ['measurements', () => this.measurements.close()],
+    ['configuration mutation', () => this.mutation?.catch(() => {})],
+    ['bitstream analysis', () => this.analysisInstance?.close()],
+    ['workspaces', () => this.workspaces.close()],
+    ['annotations', () => this.annotations.close()],
+  ]); }
 }

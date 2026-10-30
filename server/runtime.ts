@@ -1,3 +1,4 @@
+import {closeResources,cleanupAfterFailure} from './shutdown.ts';
 import { stat, access, mkdir } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import path from 'node:path';
@@ -26,7 +27,7 @@ export async function startService(config: ServiceConfig, requireStatic = true, 
   const tls = config.tls ? await prepareTls(config.tls, config.dataDir) : undefined;
   const library = new MediaLibraryIndex(config.mediaRoots, { analysisCoreDir:process.env.VOIDPLAYER_ANALYSIS_CORE_DIR || path.join(config.staticDir,'vendor/voidplayer-analysis'), coreDir: process.env.VOIDPLAYER_WASM_CORE_DIR || path.join(config.staticDir,'vendor/voidplayer-core'), ttlMs: config.indexTtlMs, database: path.join(config.dataDir, 'library.sqlite'), settleMs: 1000, watch: config.indexWatch });
   let admin: AdminController;
-  try { library.discovery; library.qualityJobs; library.qualityRanges; library.qualityCorrespondence;await library.qualityCambi.ready;await library.qualityCambi.capability();await library.qualityXpsnr.ready;await library.qualityXpsnr.capability();await library.qualityVmaf.ready;await library.qualityVmaf.capability(); library.qualityReexecutions; library.start(); admin = new AdminController(config, library, build); } catch (error) { await library.close(); throw error; }
+  try { library.discovery; library.qualityJobs; library.qualityRanges; library.qualityCorrespondence;await library.qualityCambi.ready;await library.qualityCambi.capability();await library.qualityXpsnr.ready;await library.qualityXpsnr.capability();await library.qualityVmaf.ready;await library.qualityVmaf.capability(); library.qualityReexecutions; library.start(); admin = new AdminController(config, library, build); } catch (error) { return cleanupAfterFailure(error, 'Service initialization failed', [['library', () => library.close()]]); }
   const connection = tls ? { ...tls, port: config.port } : undefined;
   const gateway = new ProtocolGateway(), listeners: ManagedServer[] = [];
   const shared = { library, admin, connection, traffic:createTrafficState(), roots: library.roots, staticDir: staticOk ? config.staticDir : undefined, logsDir: config.logsDir ?? undefined,
@@ -38,10 +39,21 @@ export async function startService(config: ServiceConfig, requireStatic = true, 
     await new Promise<void>((resolve,reject)=>{server.once('error',reject);server.listen(port,host,()=>{server.removeListener('error',reject);resolve();});});
     return (server.address() as {port:number}).port;
   };
-  const closeListeners = async () => { await Promise.all(listeners.filter(server=>server.listening).map(server=>new Promise<void>(resolve=>{
+  const closeListeners = async () => { await closeResources('Listeners failed to close', listeners.filter(server=>server.listening).map((server,index)=>[`listener ${index}`,()=>new Promise<void>((resolve,reject)=>{
     const force=setTimeout(()=>server.closeAllConnections(),5000);force.unref();
-    server.close(()=>{clearTimeout(force);resolve();});
-  }))); };
+    server.close(error=>{clearTimeout(force);if(error)reject(error);else resolve();});
+  })] as const)); };
+  // Admin analysis may still access the shared library index while stopping.
+  // Start all independent owners now; the library awaits admin before releasing
+  // that shared database, including when listener shutdown itself fails.
+  const closeStack = async () => {
+    let listenerFailure: unknown;
+    try { await closeListeners(); } catch(error) { listenerFailure = error; }
+    const adminStopped = admin.close(), libraryStopped = library.close(adminStopped);
+    const owners = [['admin', () => adminStopped], ['library', () => libraryStopped]] as const;
+    if (listenerFailure) return cleanupAfterFailure(listenerFailure, 'Service shutdown incomplete', owners);
+    await closeResources('Service shutdown incomplete', owners);
+  };
   let server: ManagedServer, guide: ManagedServer | undefined;
   try {
     if(tls && connection){
@@ -55,10 +67,11 @@ export async function startService(config: ServiceConfig, requireStatic = true, 
         await listen(guide,httpPort,config.host);
       }
     }else{server=createMediaServer(shared);await listen(server,config.port,config.host);}
-  } catch(error){await closeListeners();await admin.close();await library.close();throw error;}
+  } catch(error){return cleanupAfterFailure(error, 'Service listener startup failed', [['service', closeStack]]);}
   const address = tls?.hosts.find(h => !['localhost', '127.0.0.1', '::1'].includes(h)) ?? config.host;
   console.log(`媒体服务: ${tls ? 'https' : 'http'}://${address.includes(':') ? `[${address}]` : address}:${(server.address() as {port:number}).port} · ${config.mediaRoots.length} 个媒体目录`);
   if (tls?.caFile) console.log(`首次访问：将 ${tls.caFile} 复制到客户端，导入当前用户的受信任根证书。\nCA SHA-256: ${tls.fingerprint}\nWindows: certutil -user -addstore Root voidplayer-ca.crt`);
   if (guide) console.log(`HTTP 入口: http://${address.includes(':') ? `[${address}]` : address}:${(guide.address() as { port: number }).port}/`);
-  return { server, library, tls, guide, close: async () => { library.stop(); await closeListeners(); await admin.close(); await library.close(); } };
+  let closing: Promise<void> | undefined;
+  return { server, library, tls, guide, close: () => closing ??= closeStack() };
 }
