@@ -1,5 +1,5 @@
 import { th,t,msg,onLanguageChange } from '../i18n.ts';
-import { currentActor,identityHealth } from '../services/identity.ts';
+import { confirmedActor,observeIdentity,identityHealth } from '../services/identity.ts';
 import { LibraryDiscoveryClient } from '../services/library-discovery.ts';
 import type { DiscoveryItem,DiscoveryPage } from '../services/library-discovery.ts';
 import { parseDiscoveryQuery,preparationInput } from '../../shared/media/discovery.ts';
@@ -24,11 +24,11 @@ export function installDiscovery(signal:AbortSignal){
   const api=new LibraryDiscoveryClient();let active=false,scope=0,owner='',controller=new AbortController(),busy=false;
   let querySequence=0,detailSequence=0,historySequence=0,selectedJobSequence=0,identitySequence=0;
   let selected:DiscoveryItem|null=null,page:DiscoveryPage|null=null,job:PreparationJob|null=null,pending:Pending|null=null,moreJobs:number|null=null,historyAdvanced=false,polling=false;
-  let queryParams=new URLSearchParams(),expectedActor:string|null|undefined;
+  let queryParams=new URLSearchParams();
   let client:string;try{client=sessionStorage.getItem('voidplayer-library-discovery-client')??randomUUID();if(!/^[a-zA-Z0-9._:-]{1,80}$/.test(client))client=randomUUID();sessionStorage.setItem('voidplayer-library-discovery-client',client);}catch{client=randomUUID();}
   const pendingKey=(actor:string)=>`voidplayer-library-preparation:${actor}:${client}`;
   const context=()=>({scope,owner,signal:AbortSignal.any([signal,controller.signal])});
-  const valid=(c:ReturnType<typeof context>)=>active&&!c.signal.aborted&&c.scope===scope&&owner===c.owner&&(currentActor()?.id??'')===c.owner&&expectedActor===undefined;
+  const valid=(c:ReturnType<typeof context>)=>active&&!c.signal.aborted&&c.scope===scope&&owner===c.owner&&(confirmedActor()?.id??'')===c.owner;
   const error=(e:unknown)=>e instanceof Error?e.message:String(e);
   const terminal=(state:string)=>!['queued','running','cancelling'].includes(state);
   function actions(){for(const id of ['probe','index','check'])$(id).toggleAttribute('disabled',!selected||!owner||!!pending||busy||id==='index'&&!['flv','mp4'].includes(String(selected.technical.probe?.container.value)));
@@ -70,12 +70,12 @@ export function installDiscovery(signal:AbortSignal){
       if(pending.actor!==c.owner)return;const frozen=structuredClone(pending);busy=true;actions();const accepted=await api.submit(frozen.input,frozen.key,c.owner,c.signal);
       if(!valid(c)||pending?.key!==frozen.key)return;sessionStorage.removeItem(pendingKey(c.owner));pending=null;job=accepted.job;await inspectJob(job.id);await history();
     }catch(e){if(valid(c))$('job-status').textContent=error(e);}finally{if(valid(c)){busy=false;actions();}}}
-  async function start(){if(expectedActor!==undefined&&(currentActor()?.id??null)!==expectedActor)return;controller.abort();controller=new AbortController();scope++;owner=currentActor()?.id??'';
+  async function start(){controller.abort();controller=new AbortController();scope++;owner=confirmedActor()?.id??'';
     selected=null;page=null;job=null;pending=null;busy=false;polling=false;moreJobs=null;historyAdvanced=false;renderDetail();$('list').replaceChildren();$('jobs').replaceChildren();$('job').textContent='';$('job-status').textContent='';
-    $('owner').textContent=currentActor()?`${currentActor()!.name} · ${owner} · ${client}`:t(msg('qualityWorkflow.identityRequired','请先选择服务身份。'));
+    $('owner').textContent=confirmedActor()?`${confirmedActor()!.name} · ${owner} · ${client}`:t(msg('qualityWorkflow.identityRequired','请先选择服务身份。'));
     try{const saved=sessionStorage.getItem(pendingKey(owner));if(saved){const parsed=JSON.parse(saved);const input=preparationInput(parsed.input);if(parsed.actor===owner&&input.client.id===client&&typeof parsed.key==='string'&&/^[a-zA-Z0-9._:-]{1,120}$/.test(parsed.key))pending={actor:owner,key:parsed.key,input};}}
     catch{try{sessionStorage.removeItem(pendingKey(owner));}catch{}$('job-status').textContent=t(msg('discovery.invalidDraft','保存的本地请求无效，未自动重试，现可重新选择。'));}
-    actions();if(!active)return;const c=context();if(pending){try{const fresh=await api.detail(pending.input.source,c.owner,c.signal);if(valid(c)){selected=fresh;renderDetail();}}catch(e){if(valid(c)&&pending){$('detail').hidden=false;$('source').textContent=`${pending.input.source.id}@${pending.input.source.version}`;$('readiness').textContent=error(e);actions();}}}
+    actions();if(!active||!owner)return;const c=context();if(pending){try{const fresh=await api.detail(pending.input.source,c.owner,c.signal);if(valid(c)){selected=fresh;renderDetail();}}catch(e){if(valid(c)&&pending){$('detail').hidden=false;$('source').textContent=`${pending.input.source.id}@${pending.input.source.version}`;$('readiness').textContent=error(e);actions();}}}
     try{const roots=await api.request<{roots:{id:string;name:string}[]}>('/api/library/browse?recursive=1&limit=1',c.owner,c.signal);if(valid(c)){const control=$<HTMLSelectElement>('root'),old=control.value;control.replaceChildren(new Option(t(msg('libraryBrowser.allLibraries','所有媒体库')),''));for(const root of roots.roots)control.add(new Option(root.name,root.id));control.value=[...control.options].some(o=>o.value===old)?old:'';}}
     catch(e){if(valid(c))$('query-status').textContent=error(e);}
     if(valid(c)){void browse();void history();}}
@@ -90,13 +90,7 @@ export function installDiscovery(signal:AbortSignal){
   }catch(e){if(valid(c)&&ticket===detailSequence)$('readiness').textContent=error(e);}};
   $('refresh-jobs').onclick=()=>{historyAdvanced=false;void history();if(job)void inspectJob(job.id);};$('more-jobs').onclick=()=>void history(true);
   $('cancel').onclick=async()=>{if(!job||terminal(job.state))return;const c=context(),id=job.id;try{await api.cancel(id,c.owner,c.signal);if(valid(c))await inspectJob(id);}catch(e){if(valid(c))$('job-status').textContent=error(e);}};
-  window.addEventListener('voidplayer-identity-change',()=>{if(active&&(expectedActor===undefined||(currentActor()?.id??null)===expectedActor)){expectedActor=undefined;void start();}},{signal});
-  window.addEventListener('storage',event=>{if(event.key!=='voidplayer.identity'||!active)return;controller.abort();scope++;owner='';selected=null;job=null;pending=null;renderDetail();$('jobs').replaceChildren();$('job').textContent='';
-    try{const hint=JSON.parse(event.newValue??'null');expectedActor=typeof hint?.id==='string'?hint.id:null;}catch{expectedActor=undefined;}
-    const ticket=++identitySequence;void identityHealth().then(async health=>{if(ticket!==identitySequence||!active)return;
-      if(expectedActor!==undefined&&(health.actor?.id??null)!==expectedActor)health=await identityHealth();if(ticket!==identitySequence||!active)return;
-      if(expectedActor!==undefined&&(health.actor?.id??null)!==expectedActor)throw Error('actor-changed');expectedActor=undefined;await start();
-    }).catch(e=>{if(ticket===identitySequence&&active)$('job-status').textContent=error(e);});},{signal});
+  observeIdentity(signal,{invalidated:()=>{identitySequence++;controller.abort();scope++;owner='';selected=null;job=null;pending=null;renderDetail();$('jobs').replaceChildren();$('job').textContent='';},confirmed:()=>{if(active)void start();},failed:e=>{if(active)$('job-status').textContent=error(e);}});
   const timer=setInterval(()=>{if(active&&owner&&!document.hidden&&!polling){polling=true;const ticket=scope;void Promise.all([historyAdvanced?Promise.resolve():history(),job&&!terminal(job.state)?inspectJob(job.id):Promise.resolve()]).finally(()=>{if(ticket===scope)polling=false;});}},1000);
   signal.addEventListener('abort',()=>{controller.abort();clearInterval(timer);},{once:true});onLanguageChange(()=>{if(active)renderDetail();},signal);
   return {activate(value:boolean){active=value;controller.abort();scope++;if(!value)return;const ticket=++identitySequence;void identityHealth().then(()=>{if(active&&ticket===identitySequence)void start();}).catch(e=>{if(active)$('job-status').textContent=error(e);});}};

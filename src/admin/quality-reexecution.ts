@@ -1,5 +1,5 @@
 import {t,th,msg} from '../i18n.ts';
-import {currentActor} from '../services/identity.ts';
+import {confirmedActor,observeIdentity} from '../services/identity.ts';
 import {QualityClient} from '../services/quality-jobs.ts';
 import {QualityReexecutionClient} from '../services/quality-reexecution.ts';
 import {reexecutionPath} from '../../shared/analysis/quality/reexecution.ts';
@@ -22,7 +22,7 @@ export function installQualityReexecution(root:HTMLElement,kind:ReexecutionKind,
   const q=<T extends HTMLElement=HTMLElement>(selector:string)=>root.querySelector<T>('[data-'+selector+']')!;
   const api=new QualityClient(),client=new QualityReexecutionClient(sessionStorage,location.origin);let id='',actor='',generation=0,controller=new AbortController(),plan:ReexecutionPlan|null=null,busy=false;
   const context=()=>({id,actor,generation,signal:controller.signal});
-  const valid=(c:ReturnType<typeof context>)=>!!id&&!signal.aborted&&!c.signal.aborted&&c.id===id&&c.actor===actor&&c.generation===generation&&currentActor()?.id===actor;
+  const valid=(c:ReturnType<typeof context>)=>!!id&&!signal.aborted&&!c.signal.aborted&&c.id===id&&c.actor===actor&&c.generation===generation&&confirmedActor()?.id===actor;
   function lock(){
     const p=actor?client.pending(actor,kind):null,matching=p?.jobId===id;
     q<HTMLTextAreaElement>('reason').disabled=busy||!!p;q<HTMLButtonElement>('plan').disabled=busy||!!p;
@@ -30,7 +30,7 @@ export function installQualityReexecution(root:HTMLElement,kind:ReexecutionKind,
     q<HTMLButtonElement>('execute').disabled=busy||!!p||!plan?.eligible||!q<HTMLInputElement>('confirm').checked;
     q('replay').hidden=!matching;q<HTMLButtonElement>('replay').disabled=busy;q('clear').hidden=!matching||!p?.rejected;
     if(p){q<HTMLTextAreaElement>('reason').value=p.body.reason;q('cost').textContent=JSON.stringify(p.body.confirm,null,2);q('status').textContent=p.rejected?t(msg('reexecution.rejected','服务端已明确拒绝此请求。可结束本地请求，或读取原任务链。')):t(msg('reexecution.unknown','提交结果尚未确认。仅允许冻结的原 actor、原请求与原键回放；不要创建新键。'));
-      if(!matching){const button=document.createElement('button');button.type='button';button.textContent=t(msg('reexecution.pendingOther','先查看此用户尚未确认的原重算请求'));button.onclick=()=>{if(currentActor()?.id===actor)navigate(p.jobId);};q('chain').append(button);}}
+      if(!matching){const button=document.createElement('button');button.type='button';button.textContent=t(msg('reexecution.pendingOther','先查看此用户尚未确认的原重算请求'));button.onclick=()=>{if(confirmedActor()?.id===actor)navigate(p.jobId);};q('chain').append(button);}}
   }
   async function chain(){const c=context();if(!c.id)return;try{const value=await api.request<{retryOf:{retryOf:string;rootJobId:string;generation:number;reason:string}|null;successor:{id:string;lineage:{generation:number};state:string}|null}>(c.actor,reexecutionPath(kind,c.id)+'/reexecutions',c.signal);if(!valid(c))return;q('chain').replaceChildren();
     const link=(target:string,text:string)=>{const b=document.createElement('button');b.type='button';b.textContent=text;b.onclick=()=>{if(valid(c))navigate(target);};q('chain').append(b);};
@@ -42,12 +42,12 @@ export function installQualityReexecution(root:HTMLElement,kind:ReexecutionKind,
     }catch(error){if(valid(c))q('status').textContent=String(error);}finally{if(valid(c)){busy=false;lock();}}}
   async function send(replay:boolean){const c=context();busy=true;try{
     const p=replay?client.pending(c.actor,kind):client.freeze(c.actor,kind,c.id,plan!);if(!p||p.jobId!==c.id)throw Error('No matching frozen reexecution request');lock();
-    const accepted=await client.send(p,currentActor()?.id??'',c.signal);if(!valid(c))return;q('status').textContent=t(msg('reexecution.accepted','已取得原子受理回执。新计算由服务端持有；关闭观察不会取消它。'));await chain();if(!valid(c))return;plan=null;q<HTMLInputElement>('confirm').checked=false;q('cost').textContent='';navigate(accepted.job.id);
+    const accepted=await client.send(p,confirmedActor()?.id??'',c.signal);if(!valid(c))return;q('status').textContent=t(msg('reexecution.accepted','已取得原子受理回执。新计算由服务端持有；关闭观察不会取消它。'));await chain();if(!valid(c))return;plan=null;q<HTMLInputElement>('confirm').checked=false;q('cost').textContent='';navigate(accepted.job.id);
     }catch(error){if(valid(c))q('status').textContent=String(error);}finally{if(valid(c)){busy=false;lock();}}}
   q('plan').onclick=()=>void preview();q('execute').onclick=()=>{if(plan?.eligible&&q<HTMLInputElement>('confirm').checked)void send(false);};q('replay').onclick=()=>void send(true);
   q('clear').onclick=()=>{try{client.clearRejected(actor,kind);plan=null;q('cost').textContent='';q('status').textContent='';lock();void chain();}catch(error){q('status').textContent=String(error);}};
   q('reason').oninput=()=>{plan=null;q<HTMLInputElement>('confirm').checked=false;q('cost').textContent='';q('blocks').textContent='';lock();};q('confirm').onchange=lock;
   function clear(){controller.abort();controller=new AbortController();generation++;id='';actor='';plan=null;busy=false;root.hidden=true;for(const field of ['chain','cost','previous','blocks','status'])q(field).replaceChildren();q<HTMLTextAreaElement>('reason').value='';q<HTMLInputElement>('confirm').checked=false;}
-  window.addEventListener('voidplayer-identity-change',clear,{signal});window.addEventListener('storage',e=>{if(e.key==='voidplayer.identity')clear();},{signal});signal.addEventListener('abort',clear,{once:true});clear();
-  return {clear,show(jobId:string){const owner=currentActor()?.id??'';if(!owner){clear();return;}if(id===jobId&&actor===owner)return;clear();id=jobId;actor=owner;root.hidden=false;try{lock();void chain();}catch(error){q('status').textContent=String(error);}}};
+  observeIdentity(signal,{invalidated:clear});signal.addEventListener('abort',clear,{once:true});clear();
+  return {clear,show(jobId:string){const owner=confirmedActor()?.id??'';if(!owner){clear();return;}if(id===jobId&&actor===owner)return;clear();id=jobId;actor=owner;root.hidden=false;try{lock();void chain();}catch(error){q('status').textContent=String(error);}}};
 }

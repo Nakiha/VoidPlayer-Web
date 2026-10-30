@@ -8,7 +8,7 @@ import {installQualityCandidate} from '../ui/quality-candidate.ts';
 import { ssimPlan, SSIM_VARIANT } from '../../shared/analysis/quality/ssim.ts';
 import { localizedText, type LocalizedValue } from '../ui/live-localization.ts';
 import { t, th, msg, onLanguageChange, formatDate } from '../i18n.ts';
-import { currentActor,identityHealth } from '../services/identity.ts';
+import { confirmedActor,observeIdentity } from '../services/identity.ts';
 import { QualityClient } from '../services/quality-jobs.ts';
 import { QualityJobObserver, type QualityObservation } from '../analysis/quality/job-observer.ts';
 import type { QualityFramePage } from '../../shared/analysis/quality/selection.ts';
@@ -72,7 +72,7 @@ export function installQualityJobs(signal:AbortSignal){
   const reexecutionRoot=document.createElement('section');reexecutionRoot.id='quality-reexecution';$('job-detail').append(reexecutionRoot);
   const reexecution=installQualityReexecution(reexecutionRoot,'single',signal,id=>{void observer?.select(id);});
   const initial=new URLSearchParams(location.search),initialSpace=initial.get('qualitySpace')??'default',initialMark=initial.get('qualityAnnotation');
-  let seededMark=false,identityCheck=0;let expectedActor:string|null|undefined;
+  let seededMark=false;
   const pickers=new Map<Side,{page:QualityFramePage|null;entry:LibraryEntry|null;target:PairTarget|null;sequence:number;offset:number|null;revision?:number}>();
   const seedSource=new Map<Side,(entry:LibraryEntry)=>Promise<void>>();
   for(const side of sides)pickers.set(side,{page:null,entry:null,target:null,sequence:0,offset:null});
@@ -80,7 +80,7 @@ export function installQualityJobs(signal:AbortSignal){
   try{clientInput.value=sessionStorage.getItem('voidplayer-quality-client')??randomUUID();if(!/^[a-zA-Z0-9._:-]{1,80}$/.test(clientInput.value))clientInput.value=randomUUID();sessionStorage.setItem('voidplayer-quality-client',clientInput.value);}catch{clientInput.value=randomUUID();}
   let appliedClient=clientInput.value;
   const context=()=>({scope,actor:lastActor,signal:AbortSignal.any([signal,controller.signal])});
-  const valid=(c:ReturnType<typeof context>)=>active&&!signal.aborted&&!c.signal.aborted&&c.scope===scope&&currentActor()?.id===c.actor;
+  const valid=(c:ReturnType<typeof context>)=>active&&!signal.aborted&&!c.signal.aborted&&c.scope===scope&&confirmedActor()?.id===c.actor;
   const errorText=(error:unknown)=>error instanceof Error?error.message:String(error);
   const setError=(id:string,error:unknown)=>{localizedText($(id),errorText(error));};
   // Local form validation belongs to the form, not the polled observer state.
@@ -213,11 +213,10 @@ export function installQualityJobs(signal:AbortSignal){
     localizedText($('availability'),()=>enabled?t(msg('qualityWorkflow.available','持久单帧 PSNR 可用；支持性仍按每个来源和执行结果判定。')):t(msg('qualityWorkflow.unavailable','此实例不提供持久画质任务（例如临时数据库）。不会回退到浏览器临时计算。')));actions();return enabled;
   }
   async function start(){
-    if(expectedActor!==undefined&&(currentActor()?.id??null)!==expectedActor)return;
-    reexecution.clear();clearFormError();observer?.dispose();observer=null;controller.abort();controller=new AbortController();scope++;lastActor=currentActor()?.id??'';enabled=false;lastResult='';observation=null;resetAttachment();
+    reexecution.clear();clearFormError();observer?.dispose();observer=null;controller.abort();controller=new AbortController();scope++;lastActor=confirmedActor()?.id??'';enabled=false;lastResult='';observation=null;resetAttachment();
     $('job-list').replaceChildren();$('job-detail').hidden=true;$('attachment').hidden=true;for(const id of ['job-json','job-title','job-input','job-result','job-state','job-reason'])$(id).replaceChildren();
     for(const [side,picker]of pickers){picker.sequence++;picker.target=null;picker.page=null;picker.entry=null;const root=document.querySelector<HTMLElement>(`[data-quality-source="${side}"]`)!;root.querySelector('[data-media-list]')!.replaceChildren();localizedText(root.querySelector<HTMLElement>('[data-source-status]')!,'');root.querySelector<HTMLElement>('[data-proof]')!.hidden=true;root.querySelector<HTMLSelectElement>('[data-frame]')!.replaceChildren(new Option('—',''));root.querySelector<HTMLElement>('[data-frame-more]')!.hidden=true;}
-    $('owner').textContent=currentActor()?`${currentActor()!.name} · ${lastActor}`:'';
+    $('owner').textContent=confirmedActor()?`${confirmedActor()!.name} · ${lastActor}`:'';
     actions();if(!active||!lastActor){localizedText($('availability'),()=>t(msg('qualityWorkflow.identityRequired','请先选择服务身份。')));return;}
     const c=context();
     try{observer=new QualityJobObserver(api,lastActor,appliedClient,value=>{if(valid(c))render(value);},sessionStorage);if(await discover(c)){await observer?.poll();
@@ -229,29 +228,13 @@ export function installQualityJobs(signal:AbortSignal){
     }
     }catch(error){if(valid(c))setError('availability',error);}}
   $('client-apply').onclick=()=>{if(!/^[a-zA-Z0-9._:-]{1,80}$/.test(clientInput.value)){setError('observer-status',t(msg('qualityWorkflow.invalidClient','客户端 ID 须为 1–80 个字母、数字、点、下划线、冒号或连字符。')));return;}try{sessionStorage.setItem('voidplayer-quality-client',clientInput.value);appliedClient=clientInput.value;}catch(error){setError('observer-status',error);return;}void start();};
-  window.addEventListener('voidplayer-identity-change',()=>{if(active&&(expectedActor===undefined||(currentActor()?.id??null)===expectedActor)){expectedActor=undefined;void start();}},{signal});
-  window.addEventListener('storage',event=>{
-    if(event.key!=='voidplayer.identity'||!active)return;
-    // The cookie may have changed before /health returns. Revoke publication
-    // immediately; never send another captured-user request during confirmation.
-    const check=++identityCheck;try{const hint=JSON.parse(event.newValue??'null');expectedActor=typeof hint?.id==='string'?hint.id:hint===null?null:undefined;}catch{expectedActor=undefined;}
+  observeIdentity(signal,{invalidated:()=>{
     clearFormError();scope++;observer?.dispose();observer=null;controller.abort();lastActor='';enabled=false;observation=null;lastResult='';resetAttachment();
     localizedText($('availability'),()=>t(msg('qualityWorkflow.confirmIdentity','正在向服务确认当前用户…')));$('owner').textContent='';$('job-list').replaceChildren();$('job-detail').hidden=true;$('attachment').hidden=true;for(const id of ['job-json','job-title','job-input','job-result','job-state','job-reason'])$(id).replaceChildren();
     for(const picker of pickers.values()){picker.sequence++;picker.page=null;picker.target=null;}actions();
-    void (async()=>{
-      let health=await identityHealth();
-      if(check!==identityCheck||!active||signal.aborted)return;
-      // A focus health read may already have captured the previous cookie. One
-      // fresh read confirms the notification rather than restoring old scope.
-      if(expectedActor!==undefined&&(health.actor?.id??null)!==expectedActor)health=await identityHealth();
-      if(check!==identityCheck||!active||signal.aborted)return;
-      if(expectedActor!==undefined&&(health.actor?.id??null)!==expectedActor)throw new Error(t(msg('qualityWorkflow.identityUnconfirmed','当前用户尚未由服务确认，请刷新页面重试。')));
-      expectedActor=undefined;if(!observer)void start();
-    })().catch(error=>{if(check===identityCheck&&active&&!signal.aborted)setError('availability',error);});
-  },{signal});
-  window.addEventListener('focus',()=>{if(active)void identityHealth().catch(error=>setError('availability',error));},{signal});
-  onLanguageChange(()=>{if(active&&observation&&currentActor()?.id===lastActor)render(observation);},signal);
-  const timer=setInterval(()=>{if(active&&enabled&&qualityViewVisible('single')&&currentActor()?.id===lastActor)void observer?.poll();},1000);
+  },confirmed:()=>{if(active)void start();},failed:error=>{if(active)setError('availability',t(msg('qualityWorkflow.identityUnconfirmed','当前用户尚未由服务确认，请刷新页面重试。'))+' '+errorText(error));}});
+  onLanguageChange(()=>{if(active&&observation&&confirmedActor()?.id===lastActor)render(observation);},signal);
+  const timer=setInterval(()=>{if(active&&enabled&&qualityViewVisible('single')&&confirmedActor()?.id===lastActor)void observer?.poll();},1000);
   signal.addEventListener('abort',()=>{clearInterval(timer);observer?.dispose();controller.abort();},{once:true});
   return {activate(value:boolean){cambi.activate(value);ranges.activate(value);correspondence.activate(value);vmaf.activate(value);xpsnr.activate(value);if(active===value)return;active=value;if(value)void start();else{reexecution.clear();scope++;observer?.dispose();observer=null;controller.abort();}}};
 }

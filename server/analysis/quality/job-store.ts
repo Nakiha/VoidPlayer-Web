@@ -1,4 +1,4 @@
-import {taskSummaries} from '../../tasks/summary.ts';
+import {taskSummaries,retainedTaskResults} from '../../tasks/summary.ts';
 import {ReexecutionLedger} from './reexecution-ledger.ts';
 import type {ReexecutionCreation} from './reexecution-ledger.ts';
 import type {QualityExecutionContract,ReexecutionMetadata,ReexecutionRequest} from '../../../shared/analysis/quality/reexecution.ts';
@@ -25,6 +25,7 @@ const reason = (code: string, message: string): QualityJobReason => ({code, mess
  * lock is crash-released; recovery cannot run against a live owning service. */
 export class QualityJobStore {
   taskSummaries(actor:string,id?:string,filter?:import('../../../shared/service/tasks.ts').TaskFilter){return taskSummaries(this.db,'single',actor,id,filter);}
+  taskRetainedResults(actor:string,ids:readonly string[]){return retainedTaskResults(this.db,actor,ids);}
 
   private db: ReturnType<typeof openIndexDatabase>;
   private unlock: () => void;

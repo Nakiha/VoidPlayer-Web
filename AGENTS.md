@@ -39,6 +39,7 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 
 - UI 与 Agent 必须共用领域规则，不允许各自实现。浏览器视图操作经 `session.ts`；持久业务命令使用 `shared/` 契约与服务端适配器，不得依赖已加载轨道、暂停/播放状态或 GUI 确认。GUI 观察业务变化，不自动定位、抢焦点或打开媒体。
 - 日志只留本地（IndexedDB），上传仅由用户在日志面板显式触发。
+- 管理端身份观察统一使用 `src/services/identity.ts` 的 `observeIdentity` / `confirmedActor`；跨窗通知只触发服务确认，确认期间撤销旧观察，最新确认即使返回同一 actor 也须恢复。不得再给每个评分面板各写一套 storage/health 恢复逻辑。
 - 解码路径选择按失败阶段决定（`MediaOpenError.stage`），不要新增“整体 try/catch 换路径”。
 - 帧资源必须显式 `close()`；解码后端不直接画 canvas（必须经过 `src/presentation/presenter.ts`）。
 - WASM core 的构建和裁剪在 `VoidPlayer-FFmpeg-Build` 仓库（分支 `wasm`），本仓库只消费产物。

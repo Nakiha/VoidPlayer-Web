@@ -3,6 +3,7 @@ import { Worker } from 'node:worker_threads';
 import { randomUUID } from 'node:crypto';
 import { AdminError } from './admin-error.ts';
 import { QualityAdmission } from './quality-admission.ts';
+import { closeResources } from './shutdown.ts';
 import { mediaIndexIdentityKey } from '../shared/media/indexing/media-index-identity.ts';
 import type { MediaIndexIdentity } from '../shared/media/indexing/media-index-identity.ts';
 import type { FrameIndexOperation, FrameIndexCallArgs, FrameIndexResult, FrameIndexResponse } from './frame-index-protocol.ts';
@@ -68,6 +69,10 @@ export class FrameIndexJobs {
   private pending = new Map<number, PendingRequest>();
   private nextId = 1;
   private closed = false;
+  private closing?: Promise<void>;
+  private stoppingWorkers = new Map<Worker, Promise<void>>();
+  private stopFailure: unknown;
+  private stopFailed = false;
   private database: string;
   private coreDir: string;
   private createBuildWorker:(data:{database:string;coreDir:string})=>Worker;
@@ -84,10 +89,42 @@ export class FrameIndexJobs {
 
   constructor(privateDatabase: string, coreDir: string, createBuildWorker: (data: {database:string;coreDir:string})=>Worker = data=>new Worker(new URL('./frame-index-build-worker.ts',import.meta.url),{workerData:data}), qualityAdmission = new QualityAdmission()) {
     this.database = privateDatabase; this.coreDir = coreDir; this.createBuildWorker=createBuildWorker;this.qualityAdmission=qualityAdmission;
-    qualityAdmission.register(() => !!(this.uploads || this.builds.size || this.buildWorkers.size || this.pending.size));
+    qualityAdmission.register(() => !!(this.stopFailed || this.stoppingWorkers.size || this.uploads || this.builds.size || this.buildWorkers.size || this.pending.size));
+  }
+
+  private available() {
+    if (this.closed) throw new AdminError(503, '索引服务已关闭。');
+    if (this.stopFailed) throw new AdminError(503, '索引 Worker 尚未确认退出。', 'index-stop-uncertain');
+  }
+
+  private rejectQueued(error: Error) {
+    for (const job of this.buildQueue.splice(0)) { this.builds.delete(job.key); job.reject(error); }
+  }
+
+  /** A worker is forgotten only after physical stop. Failed stops remain owned
+   * and observed; neither another call nor close may retry an uncertain stop. */
+  private stopWorker(worker: Worker): Promise<void> {
+    const prior = this.stoppingWorkers.get(worker);
+    if (prior) return prior;
+    const stopped = (async () => {
+      try {
+        await worker.terminate();
+        this.buildWorkers.delete(worker);
+        if (this.worker === worker) this.worker = undefined;
+        this.stoppingWorkers.delete(worker);
+      } catch (error) {
+        this.stopFailed = true;
+        this.stopFailure ??= error;
+        this.rejectQueued(new AdminError(503, '索引 Worker 尚未确认退出。', 'index-stop-uncertain'));
+        throw error;
+      }
+    })();
+    this.stoppingWorkers.set(worker, stopped);
+    return stopped;
   }
 
   acquireUpload(): () => void {
+    this.available();
     this.qualityAdmission.ordinary();
     if (this.closed || this.uploads >= this.maxUploads) throw new AdminError(503, '索引上传繁忙，请稍后重试。');
     this.uploads++;
@@ -102,16 +139,18 @@ export class FrameIndexJobs {
     });
     const fail = (error: Error) => {
       if (this.worker !== worker) return;
+      // RPC generation changes immediately, but the retiring generation stays
+      // owned in stoppingWorkers until termination succeeds.
       this.worker = undefined;
       for (const [id, entry] of this.pending) {
         clearTimeout(entry.timer);
         entry.reject(error);
         this.pending.delete(id);
       }
-      void worker.terminate();
+      void this.stopWorker(worker).catch(() => { /* Latched; close reports physical uncertainty. */ });
     };
     worker.on('message', (result: FrameIndexResponse) => {
-      if (this.worker !== worker) return;
+      if (this.worker !== worker || this.closed) return;
       const entry = this.pending.get(result.rpcId);
       if (!entry) return;
       clearTimeout(entry.timer);
@@ -128,7 +167,7 @@ export class FrameIndexJobs {
   async call<K extends FrameIndexOperation>(op: K, ...args: FrameIndexCallArgs<K>): Promise<FrameIndexResult<K>> {
     if (op === 'put') this.qualityAdmission.ordinary();
     const [data = {}, transfer = [], timeoutMs = 60000] = args;
-    if (this.closed) throw new AdminError(503, '索引服务已关闭。');
+    this.available();
     if ((op === 'cached-indexes' || op === 'semantic-query' || op === 'technical-filter' || op === 'discovery-browse' || op === 'discovery-detail') && this.pending.size >= QUERY_CONCURRENCY_LIMIT) {
       throw new AdminError(503, 'Cached media queries are busy; retry later.', 'media-query-busy');
     }
@@ -166,7 +205,7 @@ export class FrameIndexJobs {
 
   startBuild(request: Omit<BuildRequest, 'buildId'>, options: FrameIndexBuildOptions = {}) {
     this.qualityAdmission.ordinary();
-    if (this.closed) throw new AdminError(503, '索引服务已关闭。');
+    this.available();
     const policy = { ...(options.policy ?? this.defaultBuildPolicy) };
     if (!Number.isSafeInteger(policy.idleTimeoutMs) || policy.idleTimeoutMs < 1000
       || !Number.isSafeInteger(policy.absoluteTimeoutMs) || policy.absoluteTimeoutMs <= policy.idleTimeoutMs) {
@@ -218,7 +257,7 @@ export class FrameIndexJobs {
   }
 
   private pumpBuilds() {
-    while (!this.closed && this.activeBuilds < this.maxConcurrentBuilds && this.buildQueue.length) {
+    while (!this.closed && !this.stopFailed && this.activeBuilds < this.maxConcurrentBuilds && this.buildQueue.length) {
       const job = this.buildQueue.shift()!;
       this.activeBuilds++;
       void this.runBuild(job.request, job.policy, progress => { this.notifyBuildProgress(job, progress); this.notifyBuildUpdate(job); }, () => this.notifyBuildUpdate(job))
@@ -252,8 +291,7 @@ export class FrameIndexJobs {
         clearTimeout(idleTimer);
         clearTimeout(absoluteTimer);
         // Hold both the build slot and quality exclusion until physical exit.
-        void worker.terminate().then(() => {
-          this.buildWorkers.delete(worker);
+        void this.stopWorker(worker).then(() => {
           if (error) reject(error); else resolve(value);
         }, stopError => reject(stopError));
       };
@@ -296,24 +334,17 @@ export class FrameIndexJobs {
     });
   }
 
-  async close() {
+  close() { return this.closing ??= this.closeOwned(); }
+  private async closeOwned() {
     this.closed = true;
-    for (const job of this.buildQueue.splice(0)) {
-      this.builds.delete(job.key);
-      job.reject(new AdminError(503, '索引服务已关闭。'));
-    }
+    this.rejectQueued(new AdminError(503, '索引服务已关闭。'));
     for (const entry of this.pending.values()) {
       clearTimeout(entry.timer);
       entry.reject(new AdminError(503, '索引服务已关闭。'));
     }
     this.pending.clear();
-    const workers = [...this.buildWorkers];
-    this.buildWorkers.clear();
-    const databaseWorker = this.worker;
-    this.worker = undefined;
-    await Promise.allSettled([
-      ...(databaseWorker ? [databaseWorker.terminate()] : []),
-      ...workers.map(worker => worker.terminate()),
-    ]);
+    const workers = new Set([...this.buildWorkers, ...this.stoppingWorkers.keys(), ...(this.worker ? [this.worker] : [])]);
+    await closeResources('Index workers failed to physically stop', [...workers].map((worker,index) => [`index worker ${index}`, () => this.stopWorker(worker)] as const));
+    if (this.stopFailed) throw this.stopFailure;
   }
 }

@@ -2,6 +2,7 @@ import { reexecutionKind } from "../../shared/analysis/quality/reexecution.ts";
 import { createHmac, randomBytes } from "node:crypto";
 import { AdminError } from "../admin-error.ts";
 import type { MediaLibraryIndex } from "../library.ts";
+import { TASK_RETENTION_BATCH } from "./summary.ts";
 import {
   TASK_LIMITS,
   taskPath,
@@ -67,29 +68,38 @@ export class TaskCenterService {
         "Matching history exceeds the snapshot budget. Narrow the filters.",
         "task-snapshot-budget",
       );
-    for (const row of rows) this.rangeRetention(row, actor);
+    this.rangeRetention(rows, actor);
     return rows;
   }
-  private rangeRetention(row: TaskSummary, actor: string) {
-    if (row.kind !== "range") return;
-    const retained = this.library.qualityRanges
-      .taskEdges(actor, row.id)
-      .filter((e) => {
-        if (e.id !== row.id) return false;
-        const child = this.library.qualityJobs.taskSummaries(
-          actor,
-          e.target,
-        )[0];
-        return (
-          child?.result.available &&
-          (!e.attemptId ||
-            (e.attemptId === child.attemptId &&
-              e.digest === child.resultDigest))
-        );
-      }).length;
-    row.result = { ...row.result, available: retained > 0, retained };
-    if (!retained)
-      row.links = row.links.filter((link) => link.rel !== "result");
+  private rangeRetention(rows: TaskSummary[], actor: string) {
+    const ranges = rows.filter((row) => row.kind === "range");
+    for (let start = 0; start < ranges.length; start += TASK_RETENTION_BATCH) {
+      const batch = ranges.slice(start, start + TASK_RETENTION_BATCH);
+      const edges = this.library.qualityRanges.taskChildEdges(
+        actor,
+        batch.map((row) => row.id),
+      );
+      const children = this.library.qualityJobs.taskRetainedResults(actor, [
+        ...new Set(edges.map((edge) => edge.target)),
+      ]);
+      const counts = new Map<string, number>();
+      for (const edge of edges) {
+        const child = children.get(edge.target);
+        if (
+          child &&
+          (!edge.attemptId ||
+            (edge.attemptId === child.attemptId &&
+              edge.digest === child.resultDigest))
+        )
+          counts.set(edge.id, (counts.get(edge.id) ?? 0) + 1);
+      }
+      for (const row of batch) {
+        const retained = counts.get(row.id) ?? 0;
+        row.result = { ...row.result, available: retained > 0, retained };
+        if (!retained)
+          row.links = row.links.filter((link) => link.rel !== "result");
+      }
+    }
   }
   private expired(): never {
     throw new AdminError(
@@ -222,7 +232,7 @@ export class TaskCenterService {
         "Task not found for this actor.",
         "task-not-found",
       );
-    this.rangeRetention(task, actor);
+    this.rangeRetention([task], actor);
     const related: TaskDetail["related"] = [];
     for (const e of edges) {
       if (

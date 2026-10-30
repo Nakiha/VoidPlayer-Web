@@ -29,6 +29,7 @@ export class QualityJobService {
     this.now = now; this.runner = runner; this.store = new QualityJobStore(file, now());
   }
   taskSummaries(actor:string,id?:string,filter?:import('../../../shared/service/tasks.ts').TaskFilter){return this.store.taskSummaries(actor,id,filter);}
+  taskRetainedResults(actor:string,ids:readonly string[]){return this.store.taskRetainedResults(actor,ids);}
   private available() {
     if (this.closed || this.failed) throw new AdminError(503, 'Quality job service is unavailable.', 'quality-service-unavailable');
   }
