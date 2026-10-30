@@ -195,3 +195,11 @@ export async function compressWorkspace(document: WorkspaceFile): Promise<Blob> 
   if (blob.size > MAX_BYTES) throw new Error('工作区内容超过 32 MiB，请减少缩略图或标注。');
   return new Response(blob.stream().pipeThrough(new CompressionStream('gzip'))).blob();
 }
+
+/** A linked workspace carries its marks in the live annotation space. The base
+ * projection is an ordinary valid document; the stored seed retains its original
+ * format/evidence and must never be replayed over newer shared annotations. */
+export function workspaceBaseDocument(value: unknown): WorkspaceFile {
+  const document = parseWorkspace(value);
+  return parseWorkspace({ ...document, version: 1, marks: [], thumbnails: [] });
+}
