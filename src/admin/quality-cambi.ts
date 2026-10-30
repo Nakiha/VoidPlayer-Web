@@ -228,6 +228,7 @@ export function installQualityCambi(signal: AbortSignal) {
     void detail();
   }
   async function submit(p: Pending, c: ReturnType<typeof context>) {
+    const receiptContext = context("actor");
     try {
       const r = await journal.execute(
         c.actor,
@@ -244,13 +245,13 @@ export function installQualityCambi(signal: AbortSignal) {
         (response, frozen) => assertJobReceipt(response, c.actor, frozen),
       );
       if (valid(c)) {
-        lock();
         select(r.job.id);
         void history();
       }
-    } catch (error) {
-      if (valid(c)) lock();
-      throw error;
+    } finally {
+      // Submission controls project actor-owned acceptance, independently of
+      // which task is selected when its valid receipt eventually arrives.
+      if (valid(receiptContext)) lock();
     }
   }
   function history(more = false): Promise<void> {

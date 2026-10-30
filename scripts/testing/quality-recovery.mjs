@@ -3,21 +3,20 @@ import {randomUUID} from 'node:crypto';
 import {chooseTestGuest} from '../test-identity.mjs';
 import {installAdminObservationLifecycle,drainAdminObservations} from './admin-observation-lifecycle.mjs';
 
+async function bounded(promise,label){
+ let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Recovery gate did not complete: '+label)),15000);})]);}finally{clearTimeout(timer);}
+}
 const gate=()=>{let release;const promise=new Promise(r=>release=r);return {promise,release};};
 /** Production services and real persisted jobs, with controlled original POST
  * delivery and transient read failures. No throughput or machine-speed gate. */
 export async function checkTemporalRecovery(browser,kind,f){
  const contexts=[],releases=[],errors=[],collection=`/api/quality/${kind}/jobs`,storage=`voidplayer-${kind}-pending:${f.actor}`;
  const key='recovery-'+randomUUID(),body=structuredClone(f.input),posts=[];let accepted;
- const context=async(pending,ignorePostAbort=false)=>{
+ const context=async(pending)=>{
   const c=await browser.newContext();contexts.push(c);await c.addInitScript(installAdminObservationLifecycle);
   await c.addCookies([{name:'voidplayer-user',value:f.actor,url:f.base}]);
   c.on('page',p=>p.on('pageerror',e=>errors.push(e.message)));
   if(pending)await c.addInitScript(({storage,pending,origin})=>{if(location.origin===origin)sessionStorage.setItem(storage,JSON.stringify(pending));},{storage,pending,origin:f.base});
-  if(ignorePostAbort)await c.addInitScript(collection=>{
-   const fetch=window.fetch.bind(window);
-   window.fetch=(input,options)=>fetch(input,options?.method==='POST'&&String(input)===collection?{...options,signal:undefined}:options);
-  },collection);
   return c;
  };
  const open=async c=>{const p=await c.newPage();p.setDefaultTimeout(15000);await p.goto(f.base+`/admin/?qualityView=${kind}#quality`);await chooseTestGuest(p);return p;};
@@ -47,7 +46,7 @@ export async function checkTemporalRecovery(browser,kind,f){
   const slow=await context(),list=await open(slow);await list.locator(`[data-${kind}-job]`).first().waitFor();
   const held=gate(),seen=gate();releases.push(held.release);let reads=0;
   await list.route('**'+collection+'?**',async route=>{reads++;seen.release();if(reads===1)await held.promise;await route.fulfill({json:{entries:[accepted],after:1,more:false}});});
-  await list.locator(`#${kind}-refresh`).click();await seen.promise;
+  await list.locator(`#${kind}-refresh`).click();await bounded(seen.promise,'slow history entered');
   for(let n=0;n<3;n++)await list.locator(`#${kind}-refresh`).click();assert.equal(reads,1,'same-scope refreshes share the in-flight history read');
   held.release();await list.waitForFunction(({kind,id})=>{const rows=[...document.querySelectorAll('[data-'+kind+'-job]')];return rows.length===1&&rows[0].dataset[kind+'Job']===id;},{kind,id:accepted.id});
   await drainAdminObservations(list);await slow.close();
@@ -70,16 +69,37 @@ export async function checkTemporalRecovery(browser,kind,f){
   await view.waitForFunction(kind=>document.querySelectorAll('[data-'+kind+'-candidate]').length===2,kind);assert.ok(annotationReads>=2);
   await drainAdminObservations(view);await evidence.close();
 
-  // A non-cooperative original POST may deliver a valid receipt after selection changes.
-  const late=await context({body,key,attempted:true},true),latePage=await open(late),delivery=gate(),posted=gate();releases.push(delivery.release);
-  await latePage.locator(`[data-${kind}-job]`).first().waitFor();
-  await latePage.route('**'+collection,async route=>{if(route.request().method()!=='POST')return route.continue();const response=await route.fetch();posted.release();await delivery.promise;await route.fulfill({response});});
-  await latePage.locator(`#${kind}-retry`).click();await posted.promise;
-  const other=latePage.locator(`[data-${kind}-job]`).filter({hasNotText:accepted.id}).first(),otherId=await other.getAttribute(`data-${kind}-job`);assert.ok(otherId);
-  await other.click();await latePage.locator(`#${kind}-title`).filter({hasText:otherId}).waitFor();delivery.release();
-  await latePage.waitForFunction(storage=>JSON.parse(sessionStorage.getItem(storage))?.confirmed===true,storage);
-  assert.match(await latePage.locator(`#${kind}-title`).textContent(),new RegExp(otherId));
-  await drainAdminObservations(latePage);await late.close();assert.deepEqual(errors,[]);
+  await checkLateQualityReceipt(browser,kind,f,{body,key,jobId:accepted.id});assert.deepEqual(errors,[]);
   return {originalKeyRecoveredAfterActorConflict:true,coalescedSlowHistory:true,completeEvidenceRecovered:true,lateReceiptConfirmedWithoutViewChange:true,pageErrors:errors};
  }finally{for(const release of releases)release();for(const c of contexts)await c.close().catch(()=>{});}
+}
+
+
+/** A valid late receipt settles actor-owned controls without navigating away
+ * from the task selected meanwhile. Uses original production response bytes. */
+export async function checkLateQualityReceipt(browser,kind,f,{body,key,jobId}){
+ const collection=`/api/quality/${kind}/jobs`,storage=`voidplayer-${kind}-pending:${f.actor}`,errors=[];
+ const history=await f.json(collection);let other=history.entries.find(j=>j.id!==jobId);
+ if(!other)other=(await f.json(collection,body,'late-other-'+randomUUID())).job;
+ other=await f.wait(other.id);
+ const c=await browser.newContext(),delivery=gate(),posted=gate();let page;
+ try{
+  await c.addInitScript(installAdminObservationLifecycle);await c.addCookies([{name:'voidplayer-user',value:f.actor,url:f.base}]);
+  c.on('page',p=>p.on('pageerror',e=>errors.push(e.message)));
+  await c.addInitScript(({storage,pending,origin,collection})=>{
+   if(location.origin===origin)sessionStorage.setItem(storage,JSON.stringify(pending));
+   const fetch=window.fetch.bind(window);window.fetch=(input,options)=>fetch(input,options?.method==='POST'&&String(input)===collection?{...options,signal:undefined}:options);
+  },{storage,pending:{body,key,attempted:true},origin:f.base,collection});
+  page=await c.newPage();page.setDefaultTimeout(15000);
+  await page.route('**'+collection+'?**',route=>route.fulfill({json:{entries:[other],after:1,more:false}}));
+  await page.goto(f.base+`/admin/?qualityView=${kind}#quality`);await chooseTestGuest(page);
+  await page.locator(`[data-${kind}-job="${other.id}"]`).waitFor();
+  await page.route('**'+collection,async route=>{if(route.request().method()!=='POST')return route.continue();const response=await route.fetch();assert.equal((await response.json()).job.id,jobId);posted.release();await delivery.promise;await route.fulfill({response});});
+  await page.locator(`#${kind}-retry`).click();await bounded(posted.promise,'late replay entered');
+  await page.locator(`[data-${kind}-job="${other.id}"]`).click();await page.locator(`#${kind}-title`).filter({hasText:other.id}).waitFor();delivery.release();
+  await page.waitForFunction(({storage,kind})=>JSON.parse(sessionStorage.getItem(storage))?.confirmed===true&&!document.getElementById(kind+'-submit').disabled&&document.getElementById(kind+'-retry').hidden,{storage,kind});
+  assert.match(await page.locator(`#${kind}-title`).textContent(),new RegExp(other.id));
+  await drainAdminObservations(page);assert.deepEqual(errors,[]);
+  return {lateReceiptConfirmedWithoutViewChange:true,submissionControlsRecovered:true,pageErrors:errors};
+ }finally{delivery.release();await c.close();}
 }

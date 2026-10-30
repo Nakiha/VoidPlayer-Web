@@ -152,6 +152,7 @@ export function installTemporalQuality<Input, Score>(
     return config.readInput(input);
   }
   async function submit(p: Pending, c: ReturnType<typeof context>) {
+    const receiptContext = context("actor");
     try {
       const r = await journal.execute(
         c.actor,
@@ -168,12 +169,12 @@ export function installTemporalQuality<Input, Score>(
         (response, frozen) => assertJobReceipt(response, c.actor, frozen),
       );
       if (!valid(c)) return;
-      lock();
       select(r.job.id);
       void list();
-    } catch (error) {
-      if (valid(c)) lock();
-      throw error;
+    } finally {
+      // Submission controls project actor-owned acceptance, independently of
+      // which task is selected when its valid receipt eventually arrives.
+      if (valid(receiptContext)) lock();
     }
   }
   function list(more = false): Promise<void> {
