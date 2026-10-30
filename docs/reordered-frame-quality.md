@@ -29,7 +29,7 @@ NALs and repeated parameter sets are checked without feeding it to the decoder.
 The source end is the existing complete producer-bound index, not an inferred
 duration. Boundary reads count against the normal byte budget.
 
-Each side has at most32 AUs. PTS must be known and globally unique; DTS must be
+Each side has at most512 AUs. PTS must be known and globally unique; DTS must be
 known and strictly increase in decode order. Nonzero CTS and reordered PTS are
 allowed. Missing/duplicate clocks, incomplete/oversized windows, CRA/open starts,
 unknown/multiple/field pictures and changed parameter sets are refused. A cached
@@ -100,10 +100,12 @@ byte-position attributed; their actual WASM outputs must all occur in drain.
 Each existing GOP browser case additionally submits this delayed source through
 GUI, attaches its result and compares raw snapshot Worker pixels with the oracle.
 Node media tests compare every selected output including drain, metric/grid and
-immutable identity fields, exact32/64 budgets and actual native-send cancellation.
+immutable identity fields, the historical 32/64 budgets (current ceilings are 512/1024) and actual native-send cancellation.
 The registered Chromium/WebKit ×8/10 real GUI cases exercise submission through
 the shared durable job, Agent facts, existing annotation and raw pair/block view,
 including actor/client/space races, cache/source changes and playback isolation.
 Native packaged acceptance also scores these fixtures with an empty PATH and
 checks persisted jobs/evidence across restart. Full CI and independent review
 remain the release gates; functional success is not a performance claim.
+
+Current AU ceilings come from `FORWARD_PAIR_LIMITS` in `shared/analysis/quality/frame-pair.ts`: 512 per side and 1024 inputs/outputs per pair. These are ceilings, not an admission guarantee; explicit request, memory, source-byte and elapsed-time budgets can impose smaller windows. Historical 32/64 evidence above describes the limits at the time of that run.

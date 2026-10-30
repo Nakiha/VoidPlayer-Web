@@ -86,7 +86,7 @@ test('FFmpeg record batches persist by identity and stream as NDJSON with build 
   assert.deepEqual(Buffer.from(reconstructed.index.records, 'base64'), Buffer.concat([manyRecords, untimed]), 'batch base64 padding is reassembled safely');
 
   const admin = new AdminController(config, library);
-  const server = createMediaServer({ roots: [media], library, admin, onLog() {} }); await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+  const server = createMediaServer({ roots: [media], library, admin, onLog() {} }); await library.qualityApplication.ready; await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   const endpoint = `${base}/api/media/${entry.id}/frame-index?v=${entry.version}&kind=ffmpeg&stream=video%3A0&schema=3&indexer=${indexerBuild}`;
   try {
@@ -130,6 +130,7 @@ test('frame-index HTTP failures finish before the deadline and release request r
   const entry = library.browse().entries[0];
   const logs: Record<string, unknown>[] = [];
   const server = createMediaServer({ roots: [media], library, onLog: value => logs.push(value) });
+  await library.qualityApplication.ready;
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   const endpoint = `${base}/api/media/${entry.id}/frame-index?v=${entry.version}`;

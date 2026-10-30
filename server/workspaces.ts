@@ -8,7 +8,7 @@ import type { IndexDatabase } from './sqlite.ts';
 import type { Actor } from './identity.ts';
 import { AdminError } from './admin-error.ts';
 import { ANNOTATION_BYTES } from './annotations.ts';
-import { parseWorkspace } from '../shared/review/workspace-file.ts';
+import { parseWorkspace, workspaceBaseDocument } from '../shared/review/workspace-file.ts';
 import type { WorkspaceFile } from '../shared/review/workspace-file.ts';
 
 export const WORKSPACE_BYTES = 32 * 1024 * 1024;
@@ -135,8 +135,7 @@ export class WorkspaceStore {
   }
   private liveDocument(json: string, space: string | null) {
     const document = JSON.parse(json) as WorkspaceFile;
-    if (space) { document.marks = []; document.thumbnails = []; }
-    return document;
+    return space ? workspaceBaseDocument(document) : document;
   }
   private shareInput(value: unknown) {
     const input = this.input(value);

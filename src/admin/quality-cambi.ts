@@ -266,9 +266,10 @@ export function installQualityCambi(signal: AbortSignal) {
     }
   }
   function history(more = false): Promise<void> {
+    const pageAfter=more?after:0;
+    browsingMore = more || browsingMore;
     return observation.run("history", "actor", async () => {
       if (!actor) return;
-      browsingMore = more || browsingMore;
       const c = context("actor", "history");
       try {
         const p = await api.request<{
@@ -277,7 +278,7 @@ export function installQualityCambi(signal: AbortSignal) {
           more: boolean;
         }>(
           c.actor,
-          `/api/quality/cambi/jobs?after=${more ? after : 0}&limit=8`,
+          `/api/quality/cambi/jobs?after=${pageAfter}&limit=8`,
           c.signal,
         );
         if (!valid(c)) return;
@@ -298,7 +299,7 @@ export function installQualityCambi(signal: AbortSignal) {
       } catch (e) {
         if (valid(c)) error(e);
       }
-    });
+    },`${more}:${pageAfter}`);
   }
   function frames(more = false): Promise<boolean> {
     if (more && observation.busy("frames")) return Promise.resolve(false);
@@ -368,12 +369,14 @@ export function installQualityCambi(signal: AbortSignal) {
         $("title").textContent = id + " · " + j.state;
         $("state").textContent = JSON.stringify(j, null, 2);
         input("cancel").disabled = terminalCambi(j.state);
-        input("publish").disabled = !j.resultDigest;
+        input("publish").disabled = !j.resultDigest || j.resultRetained === false;
         input("stop-keep").disabled =
           terminalCambi(j.state) ||
           !!j.stopRequested ||
           j.state === "cancelling";
-        $("validation").textContent = j.resultDigest
+        $("validation").textContent = j.resultRetained === false && j.resultDigest
+          ? t(msg('qualityWorkspace.resultReleased','评分结果已回收；原始摘要与回执保留。'))
+          : j.resultDigest
           ? j.state === "partial"
             ? t(
                 msg(
@@ -408,13 +411,14 @@ export function installQualityCambi(signal: AbortSignal) {
           await frames();
           if (valid(c)) revision = j.revision;
         }
-        if (terminalCambi(j.state) && !j.resultDigest) {
+        if (terminalCambi(j.state) && (!j.resultDigest || j.resultRetained === false)) {
           resetFrames();
           $("frames").replaceChildren();
           $("summary").replaceChildren();
+          if(j.resultRetained===false&&j.resultDigest)$("summary").textContent=t(msg('qualityWorkspace.resultReleased','评分结果已回收；原始摘要与回执保留。'));
           revision = j.revision;
         }
-        if (j.resultDigest && revision !== j.revision) {
+        if (j.resultDigest && j.resultRetained !== false && revision !== j.revision) {
           const summary = await api.request<QualityScoreSummary>(
             c.actor,
             `/api/quality/cambi/jobs/${id}/result`,

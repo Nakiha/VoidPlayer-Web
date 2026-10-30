@@ -223,3 +223,43 @@ test('malformed persisted submission is retained and cannot be overwritten or se
  await assert.rejects(journal.execute('a','old-key',async()=>{sent++;return {};},()=>{}));
  assert.equal(sent,0);assert.equal(storage.getItem('a'),raw);
 });
+
+test('relation/plan receipts bind normalized full inputs, original actor/key and the correct envelope',async()=>{
+ const {correspondenceFixture}=await import('../helpers/correspondence-fixture.ts');
+ const {normalizeCorrespondenceInput}=await import('../../shared/analysis/quality/correspondence.ts');
+ const f=await correspondenceFixture(),pending={key:'plan-key',body:f.request};
+ const receipt={replayed:false,plan:{id:'plan',actor:{id:'owner'},key:pending.key,input:normalizeCorrespondenceInput(f.request)}};
+ assert.doesNotThrow(()=>assertJobReceipt(receipt,'owner',pending,normalizeCorrespondenceInput(pending.body),'plan'));
+ for(const mutate of [
+  (r:any)=>delete r.replayed,(r:any)=>{r.plan.actor.id='other';},(r:any)=>{r.plan.key='different';},
+  (r:any)=>{r.plan.input.recipe.roi.width=64;},(r:any)=>{r.plan.input.relation.id='different';},
+  (r:any)=>{r.plan.input.referenceBuildId='other';},(r:any)=>{r.plan.input.planningBudget.maxElapsedMs=1;},
+ ]){const invalid=structuredClone(receipt);mutate(invalid);assert.throws(()=>assertJobReceipt(invalid,'owner',pending,normalizeCorrespondenceInput(pending.body),'plan'),/acknowledgement/);}
+ assert.throws(()=>assertJobReceipt({replayed:false,job:receipt.plan},'owner',pending,normalizeCorrespondenceInput(pending.body),'plan'));
+ assert.doesNotThrow(()=>assertJobReceipt({replayed:true,relation:f.relation},'owner',{key:f.relation.key,body:f.relation.input},f.relation.input,'relation'));
+ assert.equal(pending.body.recipe.budget?.maxPackets,undefined,'validating defaulted receipt must not rewrite the original wire body');
+});
+
+test('correspondence acknowledgement requires a complete durable plan/relation before confirming a frozen key',async()=>{
+ const {assertCorrespondenceReceipt}=await import('../../src/services/correspondence-receipt.ts');
+ const {correspondenceFixture}=await import('../helpers/correspondence-fixture.ts');
+ const {normalizeCorrespondenceInput}=await import('../../shared/analysis/quality/correspondence.ts');
+ const f=await correspondenceFixture(),pending={key:'plan-key',body:f.request};
+ const plan={id:'22222222-2222-4222-8222-222222222222',actor:f.relation.actor,key:pending.key,requestId:'request',revision:1,createdAt:1,startedAt:null,endedAt:null,attemptId:null,state:'queued',reason:null,resultDigest:null,relation:f.relation,input:normalizeCorrespondenceInput(f.request)};
+ assert.doesNotThrow(()=>assertCorrespondenceReceipt({plan,replayed:false},'owner',pending,'plan'));
+ for(const field of ['id','actor','key','requestId','revision','createdAt','startedAt','endedAt','attemptId','state','reason','resultDigest','relation','input']){
+  const invalid:any=structuredClone(plan);delete invalid[field];assert.throws(()=>assertCorrespondenceReceipt({plan:invalid,replayed:true},'owner',pending,'plan'),field);
+ }
+ const wrong=structuredClone(plan);wrong.relation.id='33333333-3333-4333-8333-333333333333';assert.throws(()=>assertCorrespondenceReceipt({plan:wrong,replayed:false},'owner',pending,'plan'));
+ assert.doesNotThrow(()=>assertCorrespondenceReceipt({relation:f.relation,replayed:true},'owner',{key:f.relation.key,body:f.relation.input},'relation'));
+ const incomplete:any=structuredClone(f.relation);delete incomplete.assessment;assert.throws(()=>assertCorrespondenceReceipt({relation:incomplete,replayed:false},'owner',{key:f.relation.key,body:f.relation.input},'relation'));
+});
+
+test('observation coalesces the same page but a different cursor supersedes its old publication',async()=>{
+ const scope=new QualityObservationScope(),gate=deferred<void>(),published:number[]=[];let oldSignal:AbortSignal|undefined;
+ const first=scope.run('history','actor',async()=>{const c=scope.capture('actor','history');oldSignal=c.signal;await gate.promise;if(c.current())published.push(0);},'first:0');
+ assert.equal(scope.run('history','actor',async()=>assert.fail('same page must share its request'),'first:0'),first);
+ const next=scope.run('history','actor',async()=>{const c=scope.capture('actor','history');if(c.current())published.push(2);},'more:2');
+ try{assert.equal(oldSignal!.aborted,true,'a different pagination intent cannot reuse the first-page request');}finally{gate.resolve();}
+ await Promise.all([first,next]);assert.deepEqual(published,[2]);scope.close();
+});

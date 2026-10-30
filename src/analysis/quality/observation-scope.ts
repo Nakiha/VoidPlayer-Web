@@ -9,6 +9,7 @@ export class QualityObservationScope {
     string,
     {
       level: ObservationLevel;
+      request: string;
       promise: Promise<unknown>;
       controller: AbortController;
     }
@@ -61,16 +62,18 @@ export class QualityObservationScope {
     key: string,
     level: ObservationLevel,
     work: () => Promise<T>,
+    request = key,
   ): Promise<T> {
     const existing = this.slots.get(key);
-    if (existing) return existing.promise as Promise<T>;
+    if (existing?.request === request && existing.level === level) return existing.promise as Promise<T>;
+    if(existing)this.cancel(key);
     let resolve!: (value: T | PromiseLike<T>) => void,
       reject!: (error: unknown) => void;
     const promise = new Promise<T>((a, b) => {
       resolve = a;
       reject = b;
     });
-    const entry = { level, promise, controller: new AbortController() };
+    const entry = { level, request, promise, controller: new AbortController() };
     this.slots.set(key, entry);
     // Capture caller identity/selection synchronously, after the slot exists.
     try {

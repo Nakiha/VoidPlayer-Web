@@ -14,10 +14,8 @@ function limitHistory(history: RecentSource[]) {
     return count <= HISTORY_LIMIT;
   });
 }
-// Identity and fingerprint are both required: distinct roots must not collapse,
-// and a replaced library file must not inherit access from an old history item.
-export const sourceKey = (entry: { name: string; size: number; lastModified: number; version?: string }, libraryId?: string, version = entry.version) =>
-  JSON.stringify([libraryId ?? null, entry.name, entry.size, entry.lastModified, version ?? null]);
+import {sourceKey} from '../../shared/media/io/source-identity.ts';
+export {sourceKey} from '../../shared/media/io/source-identity.ts';
 
 /** Keeps source access separate from decoded-frame resources. History stores
  * metadata only; a past local file requires a fresh browser file selection. */
@@ -72,6 +70,11 @@ export class SourceCatalog {
     this.history = limitHistory([...history.values()]);
   }
   addFile(file: File) { this.local.set(sourceKey(file), file); this.remember(file); }
+  restoreFile(previousKey:string,file:File){
+    const next=sourceKey(file);
+    if(next!==previousKey){this.local.delete(previousKey);this.history=this.history.filter(h=>h.key!==previousKey);}
+    this.addFile(file);
+  }
   remember(entry: { name: string; size: number; lastModified: number; version?: string }, libraryId?: string, version = entry.version, rootId?: string) {
     const key = sourceKey(entry, libraryId, version);
     const openedAt = Date.now();

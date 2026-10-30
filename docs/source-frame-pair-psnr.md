@@ -1,6 +1,6 @@
 # 内部可信单帧对 PSNR 桥 v1
 
-> 当前普通依赖帧扩展见 [有界前向帧完整工作流](forward-frame-quality.md)：每侧显式闭合起点至目标、最多 32 AU、严格前向 PTS=DTS 与逐输入唯一即时输出。下文的 isolated-key/两包描述保留为不带 `decode` 的兼容路径；重排、延迟输出和序列仍不支持。
+> 当前普通依赖帧扩展见 [有界前向帧完整工作流](forward-frame-quality.md)：每侧显式闭合起点至目标、最多 512 AU、严格前向 PTS=DTS 与逐输入唯一即时输出。下文的 isolated-key/两包描述保留为不带 `decode` 的兼容路径；重排、延迟输出和序列仍不支持。
 
 这是 #112 / #114 的一个可独立验收小切片。`FramePairClient.measure` 在一次性独立 Worker 中验证两侧已有缓存身份、读取单个闭合关键 AU、解码原始平面，然后调用 [PSNR 核心](source-plane-psnr.md)。该内部入口不依赖 Session、播放游标或 GUI；媒体库一次性和持久 HTTP 适配分别见 [服务端闭环](source-library-psnr.md) 与 [任务 v1](source-psnr-jobs.md)。内部帧对执行体支持 [显式 SSIM 伴随度量](source-plane-ssim.md)，本身不实现 durable jobs、帧序列、自动对齐或 VMAF，#114 未整体完成。
 

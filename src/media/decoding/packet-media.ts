@@ -13,8 +13,8 @@ import { abortableWait, loadAborted, onLoadAbort } from '../../../shared/media/i
 import { randomUUID } from '../../../shared/utils/uuid.ts';
 import { MediaOpenError } from '../../../shared/media/io/media-errors.ts';
 import { VideoSample } from 'mediabunny';
-import { floorIndex, WASM_CORE_GLUE_PATH, WASM_CORE_GLUE_PATH_MT, reserveFallbackThreads } from './ffmpeg-media.ts';
-import type { FallbackDeps } from './ffmpeg-media.ts';
+import { floorIndex, WASM_CORE_GLUE_PATH, WASM_CORE_GLUE_PATH_MT, reserveFallbackThreads } from './fallback-runtime.ts';
+import type { FallbackDeps } from './fallback-runtime.ts';
 import type { MediaMeta, MediaSource, DecodedFrame } from '../source.ts';
 import type { PacketInput } from '../../../shared/media/containers/flv-demux.ts';
 import type { PreparedFlv } from './flv-engine.ts';

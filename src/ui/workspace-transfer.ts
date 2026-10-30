@@ -155,13 +155,13 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
         layout = Promise.resolve(options.restore(document, fromShare));
         void layout.catch(() => {});
       });
-      try { await session.restoreWorkspace(document, async (info, signal, progress) => {
-        if (!info.source) { const file = files.get(info.id); if (!file) throw new FileHandleError(problems.get(info.id) ?? 'unavailable', localAccessMessage(info.name, problems.get(info.id) ?? 'unavailable')); return openMedia(file, undefined, progress, signal); }
+      try { await session.restoreWorkspace(document, async (info, signal, progress, configuration) => {
+        if (!info.source) { const file = files.get(info.id); if (!file) throw new FileHandleError(problems.get(info.id) ?? 'unavailable', localAccessMessage(info.name, problems.get(info.id) ?? 'unavailable')); return openMedia(file, undefined, progress, signal, configuration); }
         const pinned = await resolveLibraryReference(info, signal);
         if (pinned.mtimeChanged) warnMtime(info.name);
         const { mtimeChanged: _ignored, ...reference } = pinned;
         const source = await openMediaFromUrl(reference.url, info, undefined, progress, signal,undefined,
-          new URL(reference.url,location.href).origin===location.origin?ownLibraryIndexReference(reference.id,new URL(reference.url,location.href).searchParams.get('v')!):undefined); updateMediaInfo(source,{source:reference},'identity'); return source;
+          new URL(reference.url,location.href).origin===location.origin?ownLibraryIndexReference(reference.id,new URL(reference.url,location.href).searchParams.get('v')!):undefined,configuration); updateMediaInfo(source,{source:reference},'identity'); return source;
       }, { allowUnavailable: true, progressive });
         await layout;
       } catch(error) { await rollback?.(); throw error; }
@@ -191,13 +191,13 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
     if (!files) return;
     for (const info of pending) {
       if (!info.source && !files.has(info.id)) continue;
-      await options.act(() => session.relinkTrack(info.slot, async (signal, progress) => {
-        if (!info.source) return openMedia(files.get(info.id)!, undefined, progress, signal);
+      await options.act(() => session.relinkTrack(info.slot, async (signal, progress, configuration) => {
+        if (!info.source) return openMedia(files.get(info.id)!, undefined, progress, signal, configuration);
         const pinned = await resolveLibraryReference(info, signal);
         if (pinned.mtimeChanged) warnMtime(info.name);
         const { mtimeChanged: _ignored, ...reference } = pinned;
         const source = await openMediaFromUrl(reference.url, info, undefined, progress, signal,undefined,
-          new URL(reference.url,location.href).origin===location.origin?ownLibraryIndexReference(reference.id,new URL(reference.url,location.href).searchParams.get('v')!):undefined);
+          new URL(reference.url,location.href).origin===location.origin?ownLibraryIndexReference(reference.id,new URL(reference.url,location.href).searchParams.get('v')!):undefined,configuration);
         updateMediaInfo(source, { source: reference }, 'identity'); return source;
       }), 'workspace.relink');
     }

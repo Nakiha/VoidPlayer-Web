@@ -1,3 +1,5 @@
+import type {DecodeConfiguration} from '../../shared/color/decode-policy-types.ts';
+import {captureDecodeConfiguration} from '../media/policy/color-mode.ts';
 import {updateMediaInfo} from '../media/state.ts';
 import type { MediaSource, MediaOpenProgress } from '../media/source.ts';
 import { openMediaFromUrl } from '../media/source.ts';
@@ -24,11 +26,11 @@ export function mediaUrl(id: string, version?: string): string {
   return `/api/media/${encodeURIComponent(id)}${version ? `?v=${encodeURIComponent(version)}` : ''}`;
 }
 
-export async function openLibraryItem(entry: LibraryEntry, onProgress?: MediaOpenProgress, signal?: AbortSignal): Promise<MediaSource> {
+export async function openLibraryItem(entry: LibraryEntry, onProgress?: MediaOpenProgress, signal?: AbortSignal, configuration:DecodeConfiguration=captureDecodeConfiguration()): Promise<MediaSource> {
   if (entry.state && entry.state !== 'ready') throw new Error(entry.state === 'pending' ? '片源仍在写入，请稍后重试。' : '片源已从媒体库移除。');
   contextLog().info('media', '从媒体库载入', { id: entry.id, name: entry.name, root: entry.root, size: entry.size });
   if(!entry.version){const current=await fetchLibraryItem(entry.id,signal);if(!current?.version)throw new Error('媒体库片源版本不可用。');entry=current;}
-  const source = await openMediaFromUrl(mediaUrl(entry.id, entry.version), entry, undefined, onProgress, signal,ownLibraryIndexReference(entry.id,entry.version!));
+  const source = await openMediaFromUrl(mediaUrl(entry.id, entry.version), entry, undefined, onProgress, signal,ownLibraryIndexReference(entry.id,entry.version!),undefined,configuration);
   updateMediaInfo(source,{source:{kind:'library',id:entry.id,url:mediaUrl(entry.id,entry.version)}},'identity');
   return source;
 }

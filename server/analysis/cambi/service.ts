@@ -132,6 +132,7 @@ export class NativeCambiService {
       .map((r) => JSON.parse(String(r.body)) as CambiJob);
   }
   private async recover() {
+    await this.runner.ready;
     for (const j of this.all())
       if (!terminalCambi(j.state)) {
         if (j.process) await stopOwnedNative(j.process);
@@ -206,7 +207,7 @@ export class NativeCambiService {
   }
   get(id: string, actor: string) {
     const r = this.db
-      .prepare("SELECT body,fingerprint FROM cambi_jobs WHERE id=? AND actor=?")
+      .prepare("SELECT body,fingerprint,result IS NOT NULL AS retained FROM cambi_jobs WHERE id=? AND actor=?")
       .get(id, actor);
     if (!r) throw new AdminError(404, "CAMBI job not found", "cambi-not-found");
     const j = JSON.parse(String(r.body)) as CambiJob;
@@ -216,7 +217,7 @@ export class NativeCambiService {
         "Stored CAMBI request changed",
         "stored-cambi-invalid",
       );
-    return j;
+    return {...j, resultRetained: !!r.retained};
   }
   private descriptorValue: Awaited<
     ReturnType<WasmCambiRunner["cambiCapability"]>
@@ -238,11 +239,11 @@ export class NativeCambiService {
     this.cursor(after, limit, 8);
     const rows = this.db
       .prepare(
-        "SELECT rowid,body FROM cambi_jobs WHERE actor=? AND rowid>? ORDER BY rowid LIMIT ?",
+        "SELECT rowid,body,result IS NOT NULL AS retained FROM cambi_jobs WHERE actor=? AND rowid>? ORDER BY rowid LIMIT ?",
       )
       .all(actor, after, limit + 1);
     return {
-      entries: rows.slice(0, limit).map((r) => JSON.parse(String(r.body))),
+      entries: rows.slice(0, limit).map((r) => ({...JSON.parse(String(r.body)),resultRetained:!!r.retained})),
       after: rows.length
         ? Number(rows[Math.min(rows.length, limit) - 1].rowid)
         : after,

@@ -1,3 +1,4 @@
+import {replaceRunnerAnalysisDirectory} from '../helpers/analysis-component-fixture.ts';
 import {assertVmafOfficial as assertOfficial} from '../helpers/official-quality-oracle.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';
 import {readFile,writeFile,copyFile} from 'node:fs/promises';import path from 'node:path';import {randomUUID} from 'node:crypto';
@@ -46,7 +47,7 @@ for(const {depth,distorted,model,codec,containers}of [...existing.map(([depth,di
  console.log(JSON.stringify({codec,depth,model,frames:result.vmaf.frames.length,rawBytes:result.raw.bytes,work:result.work,native:result.vmaf.resources,executionWallMs:final.endedAt-final.startedAt,preparedFramesPerSecond:8000/(final.endedAt-final.startedAt),pooled:result.vmaf.pooled}));
 });
 test('missing analysis component remains explicitly unavailable',{timeout:120000},async t=>{
- const f=await nativeFixture();t.after(()=>f.close());(f.service.library.qualityVmaf as any).runner.analysisDir=path.join(f.directory,'missing-analysis');const c=await f.json('/api/quality/vmaf/capability');assert.equal(c.enabled,false);assert.equal((await f.request('/api/quality/vmaf/jobs',f.input)).status,503);
+ const f=await nativeFixture();t.after(()=>f.close());await replaceRunnerAnalysisDirectory((f.service.library.qualityVmaf as any).runner,path.join(f.directory,'missing-analysis'));const c=await f.json('/api/quality/vmaf/capability');assert.equal(c.enabled,false);assert.equal((await f.request('/api/quality/vmaf/jobs',f.input)).status,503);
 });
 
 test('MP4 decode/input/index budgets reject before reporting a fabricated native score',{timeout:120000},async t=>{

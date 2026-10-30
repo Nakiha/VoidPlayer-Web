@@ -81,8 +81,8 @@ native pixels.
 
 ## Budgets and ownership
 
-Each forward side is at most **32 AUs including the start and target**; a pair
-at most **64 inputs and 64 observed outputs**. A mixed isolated/forward pair charges
+Each forward side is at most **512 AUs including the start and target**; a pair
+at most **1024 inputs and 1024 observed outputs**. A mixed isolated/forward pair charges
 both paths. `budget.maxPackets` and `budget.maxOutputFrames` may only tighten the
 forward defaults. Old isolated requests retain defaults of 2/2, including their
 serialized idempotency fingerprints.
@@ -137,7 +137,7 @@ fixture hashes, clocks and generator version are recorded in
 native frames, independent BigInt SSE/SSIM, live FFmpeg→registered media→explicit
 cache→candidate HTTP→durable job→shared evidence→restart, fingerprint conflicts,
 forged windows, duplicate/wrong PTS, dependency tag changes, read/packet/output
-budgets, real reordered B-stream refusal and the actual32/64 boundary.
+budgets, real reordered B-stream refusal and the historical 32/64 boundary (current ceilings are 512/1024).
 
 The full Chromium/WebKit × H.2648/HEVC10 matrix uses **real GUI clicks** to submit
 forward AU2/AU5, then checks Agent/job/result equality, actual Worker raw planes in
@@ -153,3 +153,5 @@ performance or resolve historical CI timeout causes.
 The separate [packet-identity closed-GOP mode](reordered-frame-quality.md) supports
 a bounded reordered/delayed subset using the fixed additive core ABI. This does
 not alter the legacy forward mode, its provenance or admission rules.
+
+Current AU ceilings come from `FORWARD_PAIR_LIMITS` in `shared/analysis/quality/frame-pair.ts`: 512 per side and 1024 inputs/outputs per pair. These are ceilings, not an admission guarantee; explicit request, memory, source-byte and elapsed-time budgets can impose smaller windows. Historical 32/64 evidence above describes the limits at the time of that run.

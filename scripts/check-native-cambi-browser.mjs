@@ -1,3 +1,4 @@
+import {checkReleasedScoringResult} from './testing/workflow-boundaries.mjs';
 import {checkLateQualityReceipt} from './testing/quality-recovery.mjs';
 import assert from 'node:assert/strict';import {mkdir,writeFile} from 'node:fs/promises';import path from 'node:path';import {execFileSync} from 'node:child_process';import {randomUUID} from 'node:crypto';import {chromium,webkit} from 'playwright';
 import {installAdminObservationLifecycle,drainAdminObservations} from './testing/admin-observation-lifecycle.mjs';
@@ -102,6 +103,7 @@ try{f=await cambiFixture({depth,container,codec,variant,staticDir:'dist'});brows
    const result=await probe.evaluate(async url=>{try{await fetch(url);return {rejected:false};}catch(error){return {rejected:true,name:error.name};}},crossOrigin);assert.equal(result.rejected,true);assert.equal(result.name,'TypeError');const rejected=await observed;if(!rejected.ok)throw rejected.error;assert.ok(failures.includes(rejected.error));
   }finally{await control.close();}
  }
+ phase='cross-window-release';if(depth===8&&container==='flv')await checkReleasedScoringResult(browser,'cambi',f);
  phase='late-submit-receipt';const lateSubmission=depth===8&&container==='flv'?await checkLateQualityReceipt(browser,'cambi',f,{body:JSON.parse(posts[0].body),key:posts[0].key,jobId:job.id}):null;
  phase='cambi-progress-and-partial';const progress=depth===8&&container==='flv'?await checkCambiProgress(browser,engine):null;
  phase='cambi-pagination-ownership';const pagination=depth===8&&container==='flv'?await checkCambiPagination(browser):null;

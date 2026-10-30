@@ -18,7 +18,7 @@ import { installLibraryBrowser } from '../library-browser.ts';
 import { installLibraryFileMenu } from '../library-file-menu.ts';
 import { installSourceScrollbar } from '../source-scrollbar.ts';
 import { sourceInUse, sourceKey } from '../source-catalog.ts';
-import { FileHandleError, handleKey, hasFileHandle, pickVideoFiles, restoreHandleFile, saveFileHandle, supportsFileHandles } from '../../services/file-handles.ts';
+import { FileHandleError, handleKey, hasFileHandle, pickVideoFiles, restoreHandleSource, saveFileHandle, supportsFileHandles } from '../../services/file-handles.ts';
 import type { SourceItem } from '../source-catalog.ts';
 import { libraryAccessMessage, localAccessMessage } from '../source-access-message.ts';
 import type { LibraryAccessProblem, LocalAccessProblem } from '../../../shared/media/io/source-access.ts';
@@ -187,9 +187,9 @@ export function createSourcesPane(shared: WorkbenchShared) {
     try {
       await act(async () => {
         try {
-          await session.load(slot, async (signal, report) => {
+          await session.load(slot, async (signal, report, configuration) => {
             const onProgress = (stage: MediaLoadStage) => { progress(stage); report(stage); };
-            const source = await (item.file ? openMedia(item.file, undefined, onProgress, signal) : openLibraryItem(item.library!, onProgress, signal));
+            const source = await (item.file ? openMedia(item.file, undefined, onProgress, signal, configuration) : openLibraryItem(item.library!, onProgress, signal, configuration));
             if (loadingSource === pendingLoad) { pendingLoad.status = () => t(msg("sources.showingFirstFrame", "正在显示首帧")); renderSources(); }
             return source;
           }, item.name);
@@ -395,8 +395,8 @@ export function createSourcesPane(shared: WorkbenchShared) {
    * for next time), otherwise the legacy file input. */
   async function reselectLocal(item: SourceItem) {
     if (session.getState().busy || sourceInUse(item, session.getState().tracks)) return;
-    const openLive = (file: File) => {
-      catalog.addFile(file); save();
+    const openLive = (file: File,previousKey?:string) => {
+      if(previousKey)catalog.restoreFile(previousKey,file);else catalog.addFile(file);save();
       const live: SourceItem = { key: handleKey(file), name: file.name, size: file.size, lastModified: file.lastModified, file };
       const empty = SLOTS.find(slot => !session.getState().tracks.some(t => t.slot === slot));
       if (empty) void load(live, empty);
@@ -405,8 +405,9 @@ export function createSourcesPane(shared: WorkbenchShared) {
     let reason: LocalAccessProblem = supportsFileHandles() ? 'unavailable' : 'unsupported';
     if (supportsFileHandles()) {
       try {
-        openLive(await restoreHandleFile(item.key));
-        handleKnown.set(item.key, true);
+        const restored=await restoreHandleSource(item.key);
+        handleKnown.set(restored.key,true);handleKnown.set(item.key,true);
+        openLive(restored.file,item.key);
         return;
       } catch (error) {
         if (error instanceof FileHandleError) reason = error.kind;

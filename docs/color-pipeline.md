@@ -21,6 +21,8 @@ PQ/HLG 使用实际资源标签，不用源标签覆盖浏览器已转换资源�
 - Agent 工具 `set_review_color_mode` 接受 `reference` / `browser`；`set_reference_decode` 接受 decoder=hardware/software、depth=1/2/4/8，UI 共用 session.setReferenceDecode 的重载/失败回滚。状态返回 `colorMode`、`referenceDecode` 及实际轨道 decoder。配置成功后保存到本地，刷新恢复。首帧、播放、seek、截图使用同一选择。
 - 显式 `colorPipeline` URL 仍供底层诊断，启动时不读取用户模式；它不是第三个用户菜单选项。没有 WebGPU 时仍能用共同 WebGL/CPU 呈现正确 SDR，但浏览器拟合不作保证。
 
+会话拥有唯一配置事务，覆盖显式色彩切换和工作区恢复的准备、提交、回滚与资源释放。新载入可以立即取消旧意图，但须等待旧事务恢复稳定条件后才捕获自己的不可变解码配置；容器探测、远端 HEAD 和媒体库版本读取期间不再重读全局偏好。UI 和 Agent 使用相同入口。事务尚未提交时，新设置操作只从上次已提交的配置补默认字段；与临时值相同的显式设置仍接管旧恢复，不能按临时全局值短路为无操作。
+
 工作区导入复用同一回滚策略：准备失败时恢复原模式、解码偏好和呈现通道，再重绘原健康轨道。原导入异常始终保留；presenter 或重绘回滚失败作为带 cause 的 AggregateError 子项和本地诊断报告，受影响轨道停用并释放，保留媒体身份和标注。取消仍返回 AbortError；新意图中止旧重绘，迟到资源仅释放。
 
 review 导出继续使用 `voidplayer-web-review` version 1，保留 media、marks、alignment、frameEvidence 等现有字段；`comparison`（version 2）与 workspace 共用快照，包含 colorMode、referenceDecode、presentation=`voidplayer-color-v2`、请求的 outputColorSpace 和完整 colorOutput 参数。旧 version 1 `voidplayer-sdr-v1` 仍可导入，恢复固定默认 SDR 条件；缺少 comparison 时沿用当前选择，未知契约拒绝。`color` 描述与当前 session 一致：reference 请求 SDR 时为 `reference-sdr`、请求 HDR 时为 `reference-hdr-requested`，browser 为 `browser-match-approximate`，均不是实际 GPU 使用或 HDR/色准认证。旧 browser 导出的 `browser-managed-unverified` 仍表示未认证的浏览器条件；消费者应优先读取 comparison，旧文件缺失时只能使用旧 color 描述，未知描述不能推定 reference。仅支持旧固定 color 字符串的消费者应保留为未知并继续读取原标注字段，无 schema/version 或标注形状迁移。

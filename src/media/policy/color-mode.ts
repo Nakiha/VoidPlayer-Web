@@ -1,5 +1,5 @@
-import type {ColorMode,ReferenceDecode} from '../../../shared/color/decode-policy-types.ts';
-export type {ColorMode,ReferenceDecode} from '../../../shared/color/decode-policy-types.ts';
+import type {ColorMode,ReferenceDecode,DecodeConfiguration} from '../../../shared/color/decode-policy-types.ts';
+export type {ColorMode,ReferenceDecode,DecodeConfiguration} from '../../../shared/color/decode-policy-types.ts';
 let referenceDecode:ReferenceDecode={decoder:'hardware',depth:2};
 export const getReferenceDecode=():ReferenceDecode=>({...referenceDecode});
 export function setReferenceDecode(value:ReferenceDecode){
@@ -13,3 +13,5 @@ export function setColorMode(value: ColorMode | null) {
   if(value!==null&&value!=='reference'&&value!=='browser')throw new Error('未知色彩模式。');
   current=value;
 }
+
+export const captureDecodeConfiguration = ():DecodeConfiguration => Object.freeze({colorMode:getColorMode(),referenceDecode:Object.freeze(getReferenceDecode())});

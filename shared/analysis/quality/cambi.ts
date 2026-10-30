@@ -406,6 +406,8 @@ export type CambiJob = import("./reexecution.ts").ReexecutionMetadata & {
     targetFrames: number;
     scoredFrames?: number;
   };
+  /** Mutable observation fact; the immutable digest survives explicit release. */
+  resultRetained?: boolean;
   resultDigest: string | null;
   process: { pid: number; startTicks: string; bootId: string } | null;
   /** Explicit cooperative stop: drain the current closed GOP, then verify and retain a prefix. */

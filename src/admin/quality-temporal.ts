@@ -1,3 +1,4 @@
+import {t,msg} from '../i18n.ts';
 import { qualityViewVisible } from "./quality-navigation.ts";
 import { renderQualitySummary } from "./quality-summary.ts";
 import type { QualityScoreSummary } from "./quality-summary.ts";
@@ -20,11 +21,12 @@ import type { AnnotationRecord } from "../../shared/review/annotation-record.ts"
 import { randomUUID } from "../../shared/utils/uuid.ts";
 type ObservationJob = Pick<
   VmafJob,
-  "id" | "state" | "revision" | "resultDigest"
+  "id" | "state" | "revision" | "resultDigest" | "resultRetained"
 >;
 interface ComparisonObserver {
   activate(active: boolean, actor: string): void;
   has(id: string): boolean;
+  unavailable?(id:string):void;
   toggle(id: string, on: boolean): void;
 }
 export interface TemporalObserverConfig<Input, Score> {
@@ -190,8 +192,9 @@ export function installTemporalQuality<Input, Score>(
     }
   }
   function list(more = false): Promise<void> {
+    const pageAfter=more?after:0;
+    browsingMore = more || browsingMore;
     return observation.run("history", "actor", async () => {
-      browsingMore = more || browsingMore;
       const c = context("actor", "history");
       if (!c.actor) return;
       try {
@@ -201,7 +204,7 @@ export function installTemporalQuality<Input, Score>(
           more: boolean;
         }>(
           c.actor,
-          `/api/quality/${kind}/jobs?after=${more ? after : 0}&limit=8`,
+          `/api/quality/${kind}/jobs?after=${pageAfter}&limit=8`,
           c.signal,
         );
         if (!valid(c)) return;
@@ -209,6 +212,7 @@ export function installTemporalQuality<Input, Score>(
         $("more").hidden = !p.more;
         if (!more) $("history").replaceChildren();
         for (const j of p.entries) {
+          if(j.resultRetained===false)comparison?.unavailable?.(j.id);
           const b = document.createElement("button");
           b.type = "button";
           b.dataset[kind + "Job"] = j.id;
@@ -221,7 +225,7 @@ export function installTemporalQuality<Input, Score>(
             check.type = "checkbox";
             check.setAttribute("aria-label", "Compare " + j.id);
             check.checked = comparison.has(j.id);
-            check.disabled = j.state !== "completed";
+            check.disabled = j.state !== "completed" || j.resultRetained === false;
             check.dataset[kind + "Compare"] = j.id;
             check.onchange = () => comparison.toggle(j.id, check.checked);
             const row = document.createElement("div");
@@ -233,7 +237,7 @@ export function installTemporalQuality<Input, Score>(
       } catch (e) {
         if (valid(c)) error(e);
       }
-    });
+    },`${more}:${pageAfter}`);
   }
   function frames(more = false): Promise<boolean> {
     return observation.run("frames", "selection", async () => {
@@ -332,8 +336,12 @@ export function installTemporalQuality<Input, Score>(
         $("title").textContent = id + " · " + j.state;
         $("state").textContent = JSON.stringify(j, null, 2);
         input("cancel").disabled = terminalObservation(j.state);
-        input("publish").disabled = j.state !== "completed";
-        if (j.resultDigest && revision !== j.revision) {
+        input("publish").disabled = j.state !== "completed" || j.resultRetained === false;
+        if(j.resultRetained === false){
+          comparison?.unavailable?.(id);
+          observation.cancel("frames");next=null;$("frames").replaceChildren();$("summary").replaceChildren();$("frames-more").hidden=true;$("summary").textContent=t(msg('qualityWorkspace.resultReleased','评分结果已回收；原始摘要与回执保留。'));revision=j.revision;
+        }
+        if (j.resultDigest && j.resultRetained !== false && revision !== j.revision) {
           const r = await api.request<QualityScoreSummary>(
             c.actor,
             `/api/quality/${kind}/jobs/${id}/result`,

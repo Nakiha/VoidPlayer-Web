@@ -1,4 +1,4 @@
-import { sourceKey } from '../ui/source-catalog.ts';
+import { sourceKey } from '../../shared/media/io/source-identity.ts';
 import { matchMediaIdentity } from '../../shared/media/io/media-identity.ts';
 import type { LocalAccessProblem } from '../../shared/media/io/source-access.ts';
 
@@ -34,6 +34,7 @@ export type HandleRecord = HandleMeta & { key: string; handle: FsFileHandle; sav
 export type HandleStore = {
   get(key: string): Promise<HandleRecord | undefined>;
   put(record: HandleRecord): Promise<void>;
+  putMany(records: HandleRecord[]): Promise<void>;
   remove(key: string): Promise<void>;
   trim(limit?: number): Promise<void>;
 };
@@ -63,27 +64,25 @@ export function indexedDBHandleStore(): HandleStore {
     database.then(db => new Promise<T>((resolve, reject) => {
       const tx = db.transaction('handles', mode);
       tx.onabort = () => reject(tx.error ?? new Error('文件句柄事务中断。'));
+      tx.onerror = () => reject(tx.error ?? new Error('文件句柄事务失败。'));
+      let result:T;tx.oncomplete=()=>resolve(result);
       const request = task(tx.objectStore('handles'));
-      request.onsuccess = () => resolve(request.result as T);
+      request.onsuccess = () => {result=request.result as T;};
       request.onerror = () => reject(request.error);
     }));
   return {
-    get: key => run('readonly', store => store.get(key)).catch(() => undefined),
+    get: key => run('readonly', store => store.get(key)),
     put: record => run('readwrite', store => store.put(record)).then(() => {}),
     remove: key => run('readwrite', store => store.delete(key)).then(() => {}),
+    putMany: records => database.then(db => new Promise<void>((resolve,reject)=>{
+      const tx=db.transaction('handles','readwrite');tx.oncomplete=()=>resolve();
+      tx.onabort=tx.onerror=()=>reject(tx.error??new Error('文件句柄事务中断。'));
+      try{for(const record of records)tx.objectStore('handles').put(record);}catch(error){tx.abort();reject(error);}
+    })),
     trim: async (limit = 300) => {
       const db = await database;
-      const keys = await new Promise<string[]>((resolve, reject) => {
-        const request = db.transaction('handles').objectStore('handles').getAllKeys();
-        request.onsuccess = () => resolve(request.result as string[]);
-        request.onerror = () => reject(request.error);
-      }).catch(() => [] as string[]);
-      if (keys.length <= limit) return;
-      const all = await new Promise<HandleRecord[]>((resolve, reject) => {
-        const request = db.transaction('handles').objectStore('handles').getAll();
-        request.onsuccess = () => resolve(request.result as HandleRecord[]);
-        request.onerror = () => reject(request.error);
-      }).catch(() => [] as HandleRecord[]);
+      const all=await run('readonly',store=>store.getAll()) as HandleRecord[];
+      if(all.length<=limit)return;
       const drop = all.sort((a, b) => a.savedAt - b.savedAt).slice(0, all.length - limit).map(r => r.key);
       await new Promise<void>((resolve, reject) => {
         const tx = db.transaction('handles', 'readwrite');
@@ -98,38 +97,48 @@ export function indexedDBHandleStore(): HandleStore {
  * 'unsupported' (no persistent browser access), 'unavailable' (no record), 'denied' (grant refused), 'stale'
  * (file moved, renamed, replaced, or handle invalid — the record is deleted).
  * A bare lastModified drift refreshes the stored fingerprint instead. */
-export async function restoreHandleFile(key: string, store?: HandleStore, allowPrompt = true): Promise<File> {
+export async function restoreHandleSource(key: string, store?: HandleStore, allowPrompt = true): Promise<{file:File;key:string}> {
   if (!store && !supportsFileHandles()) throw new FileHandleError('unsupported', '当前浏览器不支持持久访问本地文件。');
   store ??= indexedDBHandleStore();
   const record = await store.get(key).catch(() => undefined);
   if (!record?.handle) throw new FileHandleError('unavailable', '没有可恢复的本地文件句柄。');
-  const handle = record.handle;
+  const handle = record.handle;let file:File;
   try {
     if (typeof handle.queryPermission === 'function') {
       const state = await handle.queryPermission({ mode: 'read' });
       if (state !== 'granted') {
-        const next = allowPrompt && typeof handle.requestPermission === 'function'
-          ? await handle.requestPermission({ mode: 'read' })
-          : 'denied';
+        const next = allowPrompt && typeof handle.requestPermission === 'function' ? await handle.requestPermission({ mode: 'read' }) : 'denied';
         if (next !== 'granted') throw new FileHandleError('denied', `已拒绝访问本地文件 ${record.name}。`);
       }
     }
-    const file = await handle.getFile();
-    const match = matchMediaIdentity(record, file);
-    if (!match.ok) {
-      await store.remove(key).catch(() => {});
-      throw new FileHandleError('stale', `本地文件 ${record.name} 已变化（${match.mismatches.map(m => m.field === 'name' ? '文件名' : '大小').join('、')}），请重新选择。`);
-    }
-    if (match.mtimeChanged) await store.put({ ...record, size: file.size, lastModified: file.lastModified, savedAt: Date.now() }).catch(() => {});
-    return file;
+    file = await handle.getFile();
   } catch (error) {
     if (error instanceof FileHandleError) throw error;
     const name = error instanceof Error ? error.name : '';
-    await store.remove(key).catch(() => {});
-    if (name === 'NotFoundError' || name === 'InvalidStateError') throw new FileHandleError('stale', `本地文件 ${record.name} 已移动或删除，请重新选择。`);
     if (name === 'AbortError' || name === 'SecurityError') throw new FileHandleError('denied', `已拒绝访问本地文件 ${record.name}。`);
+    if (name === 'NotFoundError' || name === 'InvalidStateError') {
+      await store.remove(key).catch(() => {});
+      throw new FileHandleError('stale', `本地文件 ${record.name} 已移动或删除，请重新选择。`);
+    }
     throw new FileHandleError('unavailable', `无法恢复本地文件 ${record.name}，请重新选择。`);
   }
+  const match = matchMediaIdentity(record, file);
+  if (!match.ok) {
+    await store.remove(key).catch(() => {});
+    throw new FileHandleError('stale', `本地文件 ${record.name} 已变化（${match.mismatches.map(m => m.field === 'name' ? '文件名' : '大小').join('、')}），请重新选择。`);
+  }
+  const canonical=sourceKey(file);
+  if(match.mtimeChanged||canonical!==key){
+    // Keep the original workspace/history key as an alias. Both fingerprints
+    // commit together before a caller may remember the new canonical key.
+    const refreshed={...record,size:file.size,lastModified:file.lastModified,savedAt:Date.now()};
+    try{await store.putMany([{...refreshed,key},...(canonical===key?[]:[{...refreshed,key:canonical}])]);}
+    catch{throw new FileHandleError('unavailable',`无法保存本地文件 ${record.name} 的恢复状态，请重试。`);}
+  }
+  return {file,key:canonical};
+}
+export async function restoreHandleFile(key:string,store?:HandleStore,allowPrompt=true):Promise<File>{
+  return (await restoreHandleSource(key,store,allowPrompt)).file;
 }
 
 export async function saveFileHandle(key: string, handle: FsFileHandle, meta: HandleMeta, store: HandleStore = indexedDBHandleStore()): Promise<void> {

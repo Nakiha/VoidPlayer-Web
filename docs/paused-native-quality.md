@@ -12,7 +12,7 @@ FLV packet timeline 在检查单图、唯一时钟后，将绝对 AU/配置序�
 
 显式只读查询现有可信 `psnr-source`，再按 **捕获 AU** 读取 `psnr-frames?afterAu=AU&limit=1&buildId=BUILD`。共享 `bindNativePresentedFrame` 比较实际服务 URL/ID/version、producer、完整索引 namespace/build、精确配置字节、AU/配置/包 offset/size/PTS/DTS 与几何；时钟只作一致性校验，不能搜索候选或跨源配对。查询期间换帧/换身份/换来源的迟到回复不落入新选择。锁定后后续播放不改写已经明确的任务意图，实际执行仍重新验证来源、缓存和原始帧。
 
-子集：当前浏览器真实支持的 H.264/HEVC WebCodecs FLV/Enhanced FLV，逐行单图、明确完整色彩/色度位置，已有质量预算内的 isolated/forward/闭合32 AU GOP。平台/profile 支持按实际 decoder 结果判断；WebCodecs 不等于硬件解码。本地 Chromium 正例为 H.264 High 8bit；WebKit 为 H.264 High 8bit、HEVC Main 8bit/Main10 10bit；本地 Chromium 的 HEVC 走软件回退时本入口明确拒绝，不伪称原生覆盖。
+子集：当前浏览器真实支持的 H.264/HEVC WebCodecs FLV/Enhanced FLV，逐行单图、明确完整色彩/色度位置，已有质量预算内的 isolated/forward/闭合512 AU GOP。平台/profile 支持按实际 decoder 结果判断；WebCodecs 不等于硬件解码。本地 Chromium 正例为 H.264 High 8bit；WebKit 为 H.264 High 8bit、HEVC Main 8bit/Main10 10bit；本地 Chromium 的 HEVC 走软件回退时本入口明确拒绝，不伪称原生覆盖。
 
 WASM 播放、其他容器、转换成 CPU YUV/RGBA 的资源不能直接捕获。只允许有显式精确方形 SAR、无源裁剪、无旋转的可证明几何；原生 allocation 可在严格可见矩形外带 padding，但可见源网格必须完全等同 SPS，不能用四舍五入 display 尺寸证明 SAR。ROI 为两侧相同的偶数整数可见源网格，不是 CSS、截图或原生色彩转换后的像素。
 

@@ -465,3 +465,47 @@ for (const waiting of [true, false]) test(`workspace rollback resynchronizes a r
     } finally { gate.resolve(); }
   });
 });
+
+for(const replacement of [false,true])test(`workspace configuration rollback fences ${replacement?'superseding':'one'} source open until presentation settles`,async()=>{
+ await sessionTest(async session=>{
+  await session.load('A',async()=>fixture('original').source);
+  const document=session.exportWorkspace('http://localhost/');document.comparison!.colorMode='reference';
+  const entered=deferred<void>(),gate=deferred<void>();let opens=0,received:unknown;
+  session.onColorModeChange=async()=>{if(getColorMode()==='reference'){entered.resolve();await gate.promise;}};
+  const restoring=session.restoreWorkspace(document,async()=>fixture('workspace').source),old=assert.rejects(restoring,{name:'AbortError'});
+  await entered.promise;
+  const load=session.load('B',async(_signal,_progress,configuration)=>{opens++;received=configuration;return fixture('new').source;}),cancelled=replacement?assert.rejects(load,{name:'AbortError'}):undefined;
+  const latest=replacement?session.load('B',async(_signal,_progress,configuration)=>{opens++;received=configuration;return fixture('latest').source;}):load;
+  await turn();assert.equal(opens,0,'new source cannot consume temporary workspace comparison conditions');
+  gate.resolve();await old;await cancelled;await latest;
+  assert.equal(opens,1);assert.equal(getColorMode(),'browser');assert.equal((received as any).colorMode,'browser');assert.ok(Object.isFrozen((received as any).referenceDecode));
+  assert.deepEqual(session.getState().tracks.map(t=>t.name),['original',replacement?'latest':'new']);
+ });
+});
+test('new load also waits for a failed restore presentation rollback before opening',async()=>{
+ await sessionTest(async session=>{
+  await session.load('A',async()=>fixture('retained').source);
+  const document=session.exportWorkspace('http://localhost/');document.comparison!.colorMode='reference';
+  const entered=deferred<void>(),gate=deferred<void>();let calls=0,opened=false;
+  session.onColorModeChange=async()=>{if(++calls===1)throw Error('presentation prepare rejected');entered.resolve();await gate.promise;};
+  const restoring=session.restoreWorkspace(document,async()=>fixture('workspace').source),rejected=assert.rejects(restoring,/presentation prepare rejected/);
+  await entered.promise;const load=session.load('B',async(_signal,_progress,configuration)=>{opened=true;assert.equal(configuration.colorMode,'browser');return fixture('new').source;});
+  await turn();assert.equal(opened,false);gate.resolve();await rejected;await load;assert.equal(opened,true);assert.equal(getColorMode(),'browser');
+ });
+});
+
+for(const command of ['decode','output','same-restore-mode'] as const)test(`explicit ${command} intent during restoration uses committed defaults and supersedes temporary conditions`,async()=>{
+ await sessionTest(async session=>{
+  await session.load('A',async()=>fixture('retained').source);
+  const before=session.getState(),document=session.exportWorkspace('http://localhost/');document.comparison!.colorMode='reference';document.comparison!.referenceDecode={decoder:'software',depth:4};
+  const entered=deferred<void>(),gate=deferred<void>();
+  session.onColorModeChange=async()=>{if(getColorMode()==='reference'){entered.resolve();await gate.promise;}};
+  const restoring=session.restoreWorkspace(document,async()=>fixture('workspace').source),cancelled=assert.rejects(restoring,{name:'AbortError'});
+  await entered.promise;
+  const changed=command==='decode'?session.setReferenceDecode({decoder:'software',depth:8}):command==='output'?session.setColorOutput({...before.colorOutput,hdrWhiteNits:250}):session.setColorMode('reference');
+  gate.resolve();await cancelled;await changed;
+  const after=session.getState();assert.equal(after.colorMode,command==='same-restore-mode'?'reference':'browser');
+  assert.deepEqual(after.referenceDecode,command==='decode'?{decoder:'software',depth:8}:before.referenceDecode);
+  assert.equal(after.colorOutput.hdrWhiteNits,command==='output'?250:before.colorOutput.hdrWhiteNits);assert.equal(after.tracks[0].name,'retained');
+ });
+});

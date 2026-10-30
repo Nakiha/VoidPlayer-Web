@@ -1,3 +1,4 @@
+import {SessionConfiguration} from './session/configuration.ts';
 import { evidenceWorkspaceVersion } from '../shared/review/quality-evidence.ts';
 import type { PresentedFrameToken } from '../shared/analysis/bitstream/contract.ts';
 import type {NativePresentedFrame} from '../shared/review/native-presented-frame.ts';
@@ -11,9 +12,9 @@ import { unavailableSource } from './session/unavailable-source.ts';
 import { getPresentationChannel, setPresentationChannel } from './presentation/presentation-channel.ts';
 import { SessionResources } from './session/resources.ts';
 import { schedulePresentationTick } from './presentation/presentation-tick.ts';
-import { getColorMode, setColorMode, getReferenceDecode, setReferenceDecode } from './media/policy/color-mode.ts';
-import { type ReferenceDecode, type ColorMode } from '../shared/color/decode-policy-types.ts';
-import { getColorOutput, setColorOutput, defaultColorOutput } from '../shared/color/color-output.ts';
+import { getColorMode, getReferenceDecode } from './media/policy/color-mode.ts';
+import { type ReferenceDecode, type ColorMode, type DecodeConfiguration } from '../shared/color/decode-policy-types.ts';
+import { getColorOutput, defaultColorOutput } from '../shared/color/color-output.ts';
 import type { ColorOutput } from '../shared/color/color-output.ts';
 import type { AnnotationDocument } from '../shared/review/annotation-record.ts';import {recordPresentedFrame,updateMediaInfo} from './media/state.ts';
 import type { MediaLoadStatus, MediaOpenProgress } from './media/progress.ts';
@@ -40,7 +41,7 @@ type Track = { visible?: boolean; pendingRelink?: boolean; source: MediaSource; 
   /** source 实例 generation：每次打开/重建（含色彩模式切换）递增，
    * 与稳定 mediaId 分离——mediaId 供标注/工作区引用，generation 隔离旧实例的异步结果。 */
   sourceGen: number };
-type SourceOpener = (signal: AbortSignal, onProgress: MediaOpenProgress) => Promise<MediaSource>;
+type SourceOpener = (signal: AbortSignal, onProgress: MediaOpenProgress, configuration: DecodeConfiguration) => Promise<MediaSource>;
 export class ReviewSession {
   private metadataSource?: MediaSource;
   /** UI and agents share the same source-owned, cache-only query lifecycle. */
@@ -84,27 +85,28 @@ export class ReviewSession {
       if (original) source[key] = async function* (...args) { for await (const frame of original(...args)) yield resources.own(frame); };
     }
   }
-  private async openCandidate(open: SourceOpener, signal: AbortSignal, progress: MediaOpenProgress = () => {}) {
+  private async openCandidate(open: SourceOpener, signal: AbortSignal, progress: MediaOpenProgress = () => {}, configuration:DecodeConfiguration=this.configuration.snapshot()) {
     const source = await abortableLoad(Promise.resolve().then(() => {
-      signal.throwIfAborted(); return open(signal, progress);
+      signal.throwIfAborted(); return open(signal, progress, configuration);
     }), signal, late => late.dispose());
     this.trackSourceResources(source);
     this.openers.set(source, open);
     return source;
   }
   private openers=new WeakMap<MediaSource,SourceOpener>();
+  private configuration=new SessionConfiguration();
   private changingColor=false;
   onColorModeChange?:()=>Promise<void>;
-  async setReferenceDecode(options:ReferenceDecode){return this.setColorMode(getColorMode()??'reference',options);}
-  async setColorOutput(options:ColorOutput){return this.setColorMode(getColorMode()??'browser',getReferenceDecode(),options);}
-  async refreshColorOutput(){return this.setColorMode(getColorMode()??'browser',getReferenceDecode(),getColorOutput(),true);}
-  async setColorMode(mode:ColorMode,decode:ReferenceDecode=getReferenceDecode(),output:ColorOutput=getColorOutput(),force=false){
+  async setReferenceDecode(options:ReferenceDecode){const base=this.configuration.defaults();return this.setColorMode(base.colorMode??'reference',options,base.colorOutput);}
+  async setColorOutput(options:ColorOutput){const base=this.configuration.defaults();return this.setColorMode(base.colorMode??'browser',base.referenceDecode,options);}
+  async refreshColorOutput(){const base=this.configuration.defaults();return this.setColorMode(base.colorMode??'browser',base.referenceDecode,base.colorOutput,true);}
+  async setColorMode(mode:ColorMode,decode:ReferenceDecode=this.configuration.defaults().referenceDecode,output:ColorOutput=this.configuration.defaults().colorOutput,force=false){
     validateColorTransition(mode, decode, output, this.changingColor);
-    if (!force && isSameColorConfiguration(mode, decode, output)) return this.getState();
+    if (!force && !this.configuration.pending && isSameColorConfiguration(mode, decode, output)) return this.getState();
     ++this.analysisIntentSeq;
     this.changingColor=true;
-    try{await this.run('color-mode',{mode},async (current, signal)=>{
-      const previous=getColorMode(),previousDecode=getReferenceDecode(),previousOutput=getColorOutput(),prepared:{slot:Slot;track:Track;source:MediaSource;frame:DecodedFrame;reusesSession:boolean}[]=[];
+    try{await this.run('color-mode',{mode},(current, signal)=>this.configuration.run(async previousConfiguration=>{
+      const prepared:{slot:Slot;track:Track;source:MediaSource;frame:DecodedFrame;reusesSession:boolean}[]=[];
       // Failed sources are already disposed; missing references are restored only by relink.
       const entries = [...this.tracks].filter(([, track]) => !track.failure && !track.pendingRelink);
       const reconfigured: { slot: Slot; track: Track }[] = [];
@@ -116,7 +118,7 @@ export class ReviewSession {
         // Buffered frames belong to the old decoder/presentation contract, including
         // when an in-place reconfiguration later has to roll back.
         this.releaseReaders('color-mode', entries.map(([, track]) => track.source));
-        setColorMode(mode);setReferenceDecode(decode);setColorOutput(output);
+        this.configuration.apply({colorMode:mode,referenceDecode:decode,colorOutput:output});
         for(const [slot,track] of entries){
           const reusesSession=!!track.source.reconfigureColorMode;
           let source:MediaSource;
@@ -151,14 +153,14 @@ export class ReviewSession {
         committed=true;
         persistColorConfiguration(mode, decode, output);
       }catch(error){
-        setColorMode(previous);setReferenceDecode(previousDecode);setColorOutput(previousOutput);
+        this.configuration.apply(previousConfiguration);
         const rollbackErrors = await this.rollbackPresentation(entries, current, signal, error, '色彩模式', reconfigured);
         if (rollbackErrors.length && !(error instanceof Error && error.name === 'AbortError'))
           throw new AggregateError([error, ...rollbackErrors], `${errorText(error)}；${rollbackErrors.map(errorText).join('；')}`);
         throw error;
       }
       finally{signal.removeEventListener('abort',onAbort);if(!committed)controller.abort();for(const p of prepared){p.frame.close();if(!committed&&!p.reusesSession)p.source.dispose();}}
-    });return this.getState();}finally{this.changingColor=false;}
+    }));return this.getState();}finally{this.changingColor=false;}
   }
   /** Restore presentation independently per retained track; cancellation never commits a late frame. */
   private async rollbackPresentation(entries: [Slot, Track][], current: () => boolean, signal: AbortSignal,
@@ -625,7 +627,7 @@ export class ReviewSession {
       return operation;
     });
   }
-  async load(slot: Slot, open: (signal: AbortSignal, onProgress: MediaOpenProgress) => Promise<MediaSource>, name = '视频') {
+  async load(slot: Slot, open: SourceOpener, name = '视频') {
     if(this.changingColor)throw new Error('请等待色彩模式切换完成。');
     slotValue(slot);
     // 换片使旧定位意图失效：旧定位结果不得覆盖新片。
@@ -649,7 +651,9 @@ export class ReviewSession {
       await traceOperation('session', 'load', { slot, replacing, targetPtsUs: status.targetPtsUs }, async () => {
         // Keep the queued milestone observable and never call a superseded opener.
         await Promise.resolve(); check(); progress('inspect');
-        const opened = await this.openCandidate(open, controller.signal, progress);
+        await abortableLoad(this.configuration.settled(), controller.signal);check();
+        const configuration=this.configuration.snapshot();
+        const opened = await this.openCandidate(open, controller.signal, progress, configuration);
         source = opened; check();
         if (opened.info.source && [...this.tracks].some(([other, track]) => other !== slot && track.source.info.source?.id === opened.info.source!.id)) throw new Error('该片源已在视图中，不能重复添加。');
         const updatePending = () => {
@@ -1120,16 +1124,16 @@ export class ReviewSession {
   }
   /** Active scenes swap atomically; an empty linked scene can publish slots
    * and first frames progressively. Both paths belong to this shared facade. */
-  async restoreWorkspace(value: unknown, open: (info: MediaInfo, signal: AbortSignal, onProgress: MediaOpenProgress) => Promise<MediaSource>, options: { allowUnavailable?: boolean; progressive?: boolean } = {}) {
+  async restoreWorkspace(value: unknown, open: (info: MediaInfo, signal: AbortSignal, onProgress: MediaOpenProgress, configuration: DecodeConfiguration) => Promise<MediaSource>, options: { allowUnavailable?: boolean; progressive?: boolean } = {}) {
     const document = parseWorkspace(value);
-    await this.run('restoreWorkspace', { tracks: document.tracks.length, marks: document.marks.length }, async (current, signal) => {
+    await this.run('restoreWorkspace', { tracks: document.tracks.length, marks: document.marks.length }, (current, signal) => this.configuration.run(async previousConfiguration => {
       const next = new Map<Slot, Track>(); let committed = false;
-      const previousMode = getColorMode(), previousDecode = getReferenceDecode(), previousOutput = getColorOutput(), previousChannel = getPresentationChannel();
+      const previousChannel = getPresentationChannel();
       const retained = [...this.tracks].filter(([, track]) => !track.failure && !track.pendingRelink);
       const selected = new Map<Slot, DecodedFrame>();
       const progressive = options.progressive && options.allowUnavailable && this.tracks.size === 0;
       try {
-        if (document.comparison) { setColorMode(document.comparison.colorMode); setReferenceDecode(document.comparison.referenceDecode); setColorOutput(document.comparison.version===2?document.comparison.colorOutput:defaultColorOutput()); }
+        if (document.comparison) this.configuration.apply({colorMode:document.comparison.colorMode,referenceDecode:document.comparison.referenceDecode,colorOutput:document.comparison.version===2?document.comparison.colorOutput:defaultColorOutput()});
         setPresentationChannel(document.viewport.channel ?? 'rgb');
         if (progressive) {
           // A linked workspace is already the active scene. Publish its slots
@@ -1153,7 +1157,7 @@ export class ReviewSession {
           if (status) { this.mediaLoad = status; this.abortIncoming = () => this.decodeAbort?.abort(new DOMException('工作区导入已取消。', 'AbortError')); this.emit(); }
           try {
             progress('inspect');
-            source = await this.openCandidate((signal, progress) => open(info, signal, progress), signal, progress);
+            source = await this.openCandidate((signal, progress, configuration) => open(info, signal, progress, configuration), signal, progress);
             if (status) {
               const opened = source;
               opened.onInfoChange = () => { if (current() && !signal.aborted) { status.indexProgress = opened.info.indexProgress; status.indexedDurationUs = opened.info.durationUs; this.emit(); } };
@@ -1203,7 +1207,7 @@ export class ReviewSession {
         }, selected, undefined, signal);
       } catch (error) {
         if (progressive) throw error; // Successfully presented peers remain usable after cancellation.
-        setColorMode(previousMode); setReferenceDecode(previousDecode); setColorOutput(previousOutput); setPresentationChannel(previousChannel);
+        this.configuration.apply(previousConfiguration);setPresentationChannel(previousChannel);
         const rollbackErrors = await this.rollbackPresentation(retained, current, signal, error, '工作区');
         if (rollbackErrors.length && !(error instanceof Error && error.name === 'AbortError'))
           throw new AggregateError([error, ...rollbackErrors], `${errorText(error)}；${rollbackErrors.map(errorText).join('；')}`);
@@ -1213,7 +1217,7 @@ export class ReviewSession {
         if (!committed) for (const [slot, track] of next) if (!progressive || this.tracks.get(slot)?.source !== track.source) track.source.dispose();
         if (progressive && current()) { this.abortIncoming = undefined; if (signal.aborted && this.mediaLoad?.state === 'loading') { this.mediaLoad.state = 'cancelled'; this.mediaLoad.finishedAt = Date.now(); } }
       }
-    });
+    }));
     return this.getState();
   }
   /** Reattach one missing reference without replacing peers or annotation IDs. */

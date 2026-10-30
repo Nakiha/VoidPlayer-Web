@@ -1,3 +1,4 @@
+import {pairViewFixture} from '../helpers/pair-view-fixture.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
@@ -116,4 +117,19 @@ test('v4 data and old URLs migrate to writable workspaces without reviving a del
     assert.equal(store.read(oldReview,bob).document.positionUs,500);store.update(oldReview,'"1"',{name:'同一工作区',document:doc},bob);
     assert.equal(store.list(bob,true).entries.length,1);
   }finally{store.close();await rm(root,{recursive:true,force:true});}
+});
+
+
+test('candidate v3 sharing projects a valid live base across read/update/reopen without replaying its seed',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'vp-candidate-workspace-')),file=path.join(root,'workspaces.sqlite');let store=new WorkspaceStore(file);
+ try{
+  const {evidence}=await pairViewFixture(),doc=document();
+  doc.version=3;doc.media[0].source={kind:'library',id:evidence.value.sources.reference.binding.mediaId,url:`http://example.test/api/media/${evidence.value.sources.reference.binding.mediaId}?v=${evidence.value.sources.reference.binding.mediaVersion}`};
+  doc.marks[0].qualityEvidence=[evidence];doc.marks[0].qualityCandidate={schema:'voidplayer-quality-candidate',version:1,assessment:'not-subjectively-assessed'};
+  const valid=parseWorkspace(doc),id=randomUUID(),shared=store.shareWorkspace(id,{name:'Candidate',document:valid},undefined,alice);
+  assert.equal(shared.seeds!.document.version,3);assert.equal(shared.seeds!.document.marks[0].qualityCandidate?.assessment,'not-subjectively-assessed');
+  for(const read of [store.read(id,alice),store.read(id,bob)]){const base=parseWorkspace(read.document);assert.equal(base.version,1);assert.deepEqual(base.marks,[]);assert.deepEqual(base.thumbnails,[]);assert.equal(read.space,`workspace-${id}`);assert.deepEqual(base.media,valid.media);}
+  const edited=store.read(id,bob).document;edited.positionUs=500;store.update(id,'"1"',{name:'Edited',document:edited},bob);
+  store.close();store=new WorkspaceStore(file);const reopened=store.read(id,alice);assert.equal(parseWorkspace(reopened.document).positionUs,500);assert.equal(reopened.space,`workspace-${id}`);
+ }finally{store.close();await rm(root,{recursive:true,force:true});}
 });

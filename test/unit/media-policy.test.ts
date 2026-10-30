@@ -73,3 +73,22 @@ test('a cancelled open releases a late source exactly once and never selects ano
   controller.abort(new DOMException('cancelled','AbortError'));await assert.rejects(pending,/cancelled/);
   resolve(s.value);await new Promise(r=>setTimeout(r,0));assert.equal(s.disposed(),1);assert.equal(software,0);
 });
+
+test('URL opening captures decoder preference before asynchronous metadata and container reads',async()=>{
+  const {openMediaFromUrl}=await import('../../src/media/source.ts');
+  const {getColorMode,getReferenceDecode,setColorMode,setReferenceDecode}=await import('../../src/media/policy/color-mode.ts');
+  const savedFetch=globalThis.fetch,mode=getColorMode(),decode=getReferenceDecode();
+  let release!:()=>void;const gate=new Promise<void>(resolve=>release=resolve);let admittedDepth=0;
+  const selected=source('ffmpeg-wasm');
+  selected.value.reconfigureColorMode=async(next,preference)=>{assert.equal(next,'reference');admittedDepth=preference.depth;};
+  try {
+    setColorMode('reference');setReferenceDecode({decoder:'software',depth:8});
+    globalThis.fetch=async(_url,init)=>{
+      if(init?.method==='HEAD'){await gate;return new Response(null,{headers:{'content-length':'9'}});}
+      return new Response(new Uint8Array([70,76,86,1,1,0,0,0,9]),{status:206,headers:{'content-range':'bytes 0-8/9'}});
+    };
+    const opening=openMediaFromUrl('https://example.invalid/renamed.bin',{name:'renamed.bin',size:0,lastModified:0},async()=>selected.value);
+    setColorMode('browser');setReferenceDecode({decoder:'hardware',depth:1});release();
+    assert.equal(await opening,selected.value);assert.equal(admittedDepth,8);
+  } finally {release();globalThis.fetch=savedFetch;setColorMode(mode);setReferenceDecode(decode);selected.value.dispose();}
+});

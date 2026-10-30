@@ -57,7 +57,7 @@ limits. Each selected window pays for **all** inputs and outputs: repeated
 pre-roll, post-target pictures and drain. Child packet/output budgets are
 tightened to those complete windows. Parent maximums are 64 MiB source reads,
 512 MiB numeric input views, 4096 packets/outputs and 120 seconds execution.
-Each child retains its 32 AU per side, 30 second deadline, 256 MiB heap, 32 MiB
+Each child retains its 512 AU per side, 30 second deadline, 256 MiB heap, 32 MiB
 retained frames and 128 KiB result limits. Up to two 32 MiB index documents per
 selected pair are separately reserved (at most 4 GiB of cumulative loads; one
 child live). Reservations bound admitted work; they are not process RSS claims.

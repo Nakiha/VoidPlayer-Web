@@ -1,3 +1,4 @@
+import {checkReleasedScoringResult} from './workflow-boundaries.mjs';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {chooseTestGuest} from '../test-identity.mjs';
@@ -72,7 +73,7 @@ export async function checkTemporalRecovery(browser,kind,f){
   await view.waitForFunction(kind=>document.querySelectorAll('[data-'+kind+'-candidate]').length===2,kind);assert.ok(annotationReads>=2);
   await drainAdminObservations(view);await evidence.close();
 
-  await checkLateQualityReceipt(browser,kind,f,{body,key,jobId:accepted.id});assert.deepEqual(errors,[]);
+  await checkReleasedScoringResult(browser,kind,f);await checkLateQualityReceipt(browser,kind,f,{body,key,jobId:accepted.id});assert.deepEqual(errors,[]);
   return {originalKeyRecoveredAfterActorConflict:true,coalescedSlowHistory:true,completeEvidenceRecovered:true,lateReceiptConfirmedWithoutViewChange:true,pageErrors:errors};
  }finally{for(const release of releases)release();for(const c of contexts)await c.close().catch(()=>{});}
 }

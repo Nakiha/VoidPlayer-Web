@@ -1,3 +1,4 @@
+import {replaceRunnerAnalysisDirectory} from '../helpers/analysis-component-fixture.ts';
 import {assertOfficial,assertVmafOfficial} from '../helpers/official-quality-oracle.mjs';
 import {xpsnrFixture,xpsnrOracle} from '../helpers/native-xpsnr.mjs';
 import {parseXpsnrStatistics} from '../../shared/analysis/quality/xpsnr.ts';
@@ -62,7 +63,7 @@ test('HTTP prerequisites: unknown metadata, cache miss, missing analysis artifac
  const unknown=await runHttpQuality(f.base,{query:{codec:'h264',includeUnknown:'1',limit:'1'}},{fetchImpl});assert.equal(unknown.discovery.length,2);assert.ok(unknown.discovery.some((e:any)=>e.decision.state==='unknown'));
  const cli=await promisify(execFile)(process.execPath,['examples/http-quality.mjs',f.base],{timeout:30000,maxBuffer:1048576});const cliReport=JSON.parse(cli.stdout);assert.equal(cliReport.discovery.length,2);assert.deepEqual(cliReport.writesAuthorized,[]);
  const missing=await runHttpQuality(f.base,input,{allow:{identity:true},fetchImpl});assert.equal(missing.reason,'cache-miss');assert.ok(missing.next[0].endsWith('library.prepare'));assert.ok(!seen.includes('POST /api/library/preparations'));
- (f.service.library.qualityVmaf as any).runner.analysisDir=join(f.directory,'missing-analysis');
+ await replaceRunnerAnalysisDirectory((f.service.library.qualityVmaf as any).runner,join(f.directory,'missing-analysis'));
  const unavailable=await runHttpQuality(f.base,{...input,mode:'vmaf',identity:{id:missing.actor.id}},{allow,fetchImpl});assert.equal(unavailable.nativeCapability.enabled,false);assert.ok(!seen.includes('POST /api/quality/vmaf/jobs'));assert.ok(!seen.includes('POST /api/quality/correspondence-plans'));
  await assert.rejects(()=>runHttpQuality(f.base,input,{cookie:'voidplayer-user='+f.actor,actor:'guest-'+randomUUID(),allow}),{code:'actor-changed'});
  const original=await readFile(join(f.media,f.entries[0].name));await writeFile(join(f.media,f.entries[0].name),Buffer.concat([original,Buffer.from([0])]));await f.service.library.refresh();

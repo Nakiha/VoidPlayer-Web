@@ -1,3 +1,4 @@
+import {AnalysisComponentOwner} from './analysis/quality/component-owner.ts';
 import path from 'node:path';
 import type { MediaLibraryIndex } from './library.ts';
 import { AdminError } from './admin-error.ts';
@@ -31,6 +32,7 @@ export class QualityApplication {
     this.indexReaders.add(close);
     return close;
   }
+  private components?:AnalysisComponentOwner;
   private jobs?: QualityJobService;
   private ranges?: QualityRangeService;
   private correspondence?: CorrespondenceService;
@@ -57,13 +59,14 @@ export class QualityApplication {
     try {
       this.preparation=new LibraryDiscoveryService({...execution,durableQualityJobsEnabled:this.library.durableQualityJobsEnabled,quality:this.quality});
       if(!this.library.durableQualityJobsEnabled)return;
+      this.components=new AnalysisComponentOwner(analysisDir,execution.qualityAdmission);
       const file=this.library.indexDatabase;
       this.jobs=new QualityJobService(file+'.quality.sqlite',this.quality);
       this.ranges=new QualityRangeService(file+'.quality-ranges.sqlite',this.jobs);
       this.correspondence=new CorrespondenceService(file+'.quality-correspondence.sqlite',this.quality,this.ranges);
-      this.cambi=new NativeCambiService(file+'.quality-cambi.sqlite',new WasmCambiRunner(execution,coreDir,analysisDir));
-      this.xpsnr=new NativeXpsnrService(file+'.quality-xpsnr.sqlite',new WasmXpsnrRunner(execution,coreDir,analysisDir),this.correspondence);
-      this.vmaf=new NativeVmafService(file+'.quality-vmaf.sqlite',new WasmVmafRunner(execution,coreDir,analysisDir),this.correspondence);
+      this.cambi=new NativeCambiService(file+'.quality-cambi.sqlite',new WasmCambiRunner(execution,coreDir,analysisDir,this.components));
+      this.xpsnr=new NativeXpsnrService(file+'.quality-xpsnr.sqlite',new WasmXpsnrRunner(execution,coreDir,analysisDir,this.components),this.correspondence);
+      this.vmaf=new NativeVmafService(file+'.quality-vmaf.sqlite',new WasmVmafRunner(execution,coreDir,analysisDir,this.components),this.correspondence);
       const services={quality:this.quality,qualityJobs:this.jobs,qualityRanges:this.ranges,qualityCorrespondence:this.correspondence,
         qualityCambi:this.cambi,qualityVmaf:this.vmaf,qualityXpsnr:this.xpsnr};
       this.reexecutions=new QualityReexecutionService(services);
@@ -117,6 +120,7 @@ export class QualityApplication {
         ['media execution',()=>this.library.stopExecution()],
         ['attached index readers',()=>closeResources('Index reader drain incomplete',[...this.indexReaders].map((stop,index)=>[`reader ${index}`,stop] as const))],
       ]);
+      await this.components?.close();
       await closeResources('Quality storage disposal incomplete',[
         ['range storage',()=>this.ranges?.close()],
         ['correspondence storage',()=>this.correspondence?.close()],
