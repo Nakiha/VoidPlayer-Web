@@ -8,8 +8,28 @@ import {MediaLibraryIndex} from '../../server/library.ts';
 import {AdminController} from '../../server/admin.ts';
 import {loadConfig} from '../../server/config.ts';
 import {startService} from '../../server/runtime.ts';
+import {Worker} from 'node:worker_threads';
+import {once} from 'node:events';
 
 const owners=['taskService','reexecutionService','correspondenceService','cambiService','xpsnrService','vmafService','discoveryService','rangeService','jobService','pairRunner','indexJobs'];
+for(const kind of ['database','build'] as const)test(`index ${kind} stop failure retains the real SQLite worker and library ownership`,async()=>{
+  const directory=await mkdtemp(path.join(tmpdir(),'vp-index-stop-')),database=path.join(directory,'library.sqlite');
+  let index:MediaLibraryIndex|undefined,worker:Worker|undefined,stop:(()=>Promise<number>)|undefined;
+  try{
+    index=new MediaLibraryIndex([],{database,watch:false});
+    worker=new Worker(new URL('../helpers/index-ownership-worker.ts',import.meta.url),{workerData:{database}});
+    await once(worker,'message');stop=worker.terminate.bind(worker);let stops=0;
+    worker.terminate=async()=>{stops++;throw Error('physical termination rejected');};
+    const jobs=index.indexJobs as any;if(kind==='database')jobs.worker=worker;else jobs.buildWorkers.add(worker);
+    const closing=index.close();await assert.rejects(closing,AggregateError);assert.equal(index.close(),closing);await assert.rejects(index.close());assert.equal(stops,1);
+    assert.ok(kind==='database'?jobs.worker===worker:jobs.buildWorkers.has(worker));
+    assert.throws(()=>new MediaLibraryIndex([],{database,watch:false}),/另一个实例/);
+    assert.throws(()=>index!.qualityAdmission.acquire(),e=>(e as any).code==='quality-busy');
+    const ping=once(worker,'message');worker.postMessage('ping');assert.equal((await ping)[0].n,0,'unconfirmed worker really remains able to use SQLite');
+  }finally{
+    await stop?.();if(index)(index as any).store.close();await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});
+  }
+});
 function library(failed='') {
   const calls:string[]=[],failure=Error('physical exit unconfirmed');
   const value=Object.assign(Object.create(MediaLibraryIndex.prototype),{

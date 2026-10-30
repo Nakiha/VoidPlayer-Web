@@ -9,6 +9,33 @@ import { demuxFlv, FlvReader } from '../../shared/media/containers/flv-demux.ts'
 import { serializeFlvIndex } from '../../shared/media/indexing/flv-index-cache.ts';
 import { syntheticFlv } from '../flv-fixture.ts';
 import { FLV_MEDIA_INDEX_IDENTITY } from '../../shared/media/indexing/media-index-identity.ts';
+import {Worker} from 'node:worker_threads';
+import {once} from 'node:events';
+
+for(const kind of ['database','build'] as const)test(`runtime ${kind} termination rejection remains observed and blocks queued replacement work`,async()=>{
+  const root=await mkdtemp(path.join(tmpdir(),'vp-runtime-index-stop-')),database=path.join(root,'library.sqlite');
+  const library=new MediaLibraryIndex([],{database,watch:false}),jobs=library.indexJobs as any;
+  let worker:Worker|undefined,stop:(()=>Promise<number>)|undefined;
+  try{
+    const failure=Error('injected stop failure');
+    if(kind==='database'){
+      const result=jobs.call('epoch').then(()=>null,(error:Error)=>error);worker=jobs.worker;stop=worker!.terminate.bind(worker);
+      worker!.terminate=async()=>{throw failure;};worker!.emit('messageerror');assert.match((await result).message,/反序列化/);
+    }else{
+      worker=new Worker(new URL('../helpers/index-ownership-worker.ts',import.meta.url),{workerData:{database}});await once(worker,'message');stop=worker.terminate.bind(worker);
+      worker.terminate=async()=>{throw failure;};let starts=0;jobs.createBuildWorker=()=>{starts++;return worker;};
+      const request={id:'a'.repeat(24),version:'b'.repeat(24),epoch:0,size:1,filePath:'unused',identity:FLV_MEDIA_INDEX_IDENTITY};
+      const active=jobs.startBuild(request),queued=jobs.startBuild({...request,id:'c'.repeat(24)});
+      const activeRejected=assert.rejects(active.promise,e=>e===failure),queuedRejected=assert.rejects(queued.promise,(e:any)=>e.code==='index-stop-uncertain');
+      worker.emit('messageerror');await Promise.all([activeRejected,queuedRejected]);assert.equal(starts,1);assert.equal(jobs.buildQueue.length,0);
+    }
+    await new Promise(r=>setImmediate(r));assert.ok(jobs.stoppingWorkers.has(worker));assert.notEqual(worker!.threadId,-1);
+    await assert.rejects(jobs.call('epoch'),(e:any)=>e.code==='index-stop-uncertain');
+    assert.throws(()=>jobs.acquireUpload(),(e:any)=>e.code==='index-stop-uncertain');
+    assert.throws(()=>library.qualityAdmission.acquire(),(e:any)=>e.code==='quality-busy');
+    await assert.rejects(library.close(),AggregateError);assert.throws(()=>new MediaLibraryIndex([],{database,watch:false}),/另一个实例/);
+  }finally{await stop?.();(library as any).store.close();await rm(root,{recursive:true,force:true});}
+});
 
 test('identity-aware cache RPC checks media version and clear epoch', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'vp-index-worker-')); await mkdir(path.join(root, 'media'));
