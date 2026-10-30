@@ -157,7 +157,7 @@ test('all platform/runtime suites run independently of the compiled package jobs
     assert.doesNotMatch(body, /continue-on-error:/);
   }
   assert.match(runtimeJob.body, /if: always\(\)[\s\S]*name: native-runtime-reports-\$\{\{ matrix\.os \}\}-\$\{\{ matrix\.runtime \}\}[\s\S]*path: \.run\/test-suites\//);
-  const expectedCounts = { node: 27, bun: 41 };
+  const expectedCounts = { node: 27, bun: 42 };
   for (const runtime of ['node', 'bun']) {
     const suite = `ci-native-${runtime}`, command = `run: node scripts/run-tests.mjs ${suite}\n`;
     assert.equal(runtimeJob.body.split(command).length - 1, 1);

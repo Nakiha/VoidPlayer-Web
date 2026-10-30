@@ -28,7 +28,7 @@ for(const kind of ['vmaf','xpsnr'] as const){
     let service:any,release!:()=>void;const done=new Promise<void>(r=>release=r),failure=Error('executor exit unconfirmed');
     try{
       const executor={stopUncertain:false,close:async()=>{throw failure;},assertAvailable(){}};
-      service=create(file,executor);await service.ready;const controller=new AbortController();service.active={id:'owned-attempt',controller,done};
+      service=create(file,executor);await service.ready;const controller=new AbortController();service.active.set('owned-attempt',{id:'owned-attempt',controller,done});
       const closed=service.close();assert.equal(service.close(),closed);await new Promise(r=>setImmediate(r));assert.equal(controller.signal.aborted,true);release();
       await assert.rejects(closed,(error:AggregateError)=>{assert.ok(error.errors.some(e=>e.cause===failure));return true;});
       assert.throws(()=>create(file,{...executor,close:async()=>{}}),/另一个实例/);
