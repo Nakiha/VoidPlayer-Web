@@ -310,8 +310,6 @@
 .bitstream-diagram-legend button[data-filter="all"][aria-pressed="true"] { color:var(--accent); background:var(--surface-selected); }
 .bitstream-diagram-empty { position:absolute; inset:0; pointer-events:auto; }
 
-.multi-choice-menu .choice-check { width: 1em; flex: 0 0 auto; }
-.multi-choice-menu button[aria-checked="false"] .choice-check { visibility: hidden; }
 .analysis-charts { --analysis-chart-min-plot-height: 36px; --analysis-type-row-min-height: 10px; display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
 .analysis-shared-axis { position:relative; height:22px; flex:0 0 22px; min-width:0; overflow:visible; }
 .analysis-range-navigation { position:relative; height:var(--range-navigation-height,28px); flex:0 0 var(--range-navigation-height,28px); margin:12px 0 4px; padding-top:0; }

@@ -2,7 +2,7 @@ import { mountLocalizedShell } from './localized-shell.ts';
 import { installLanguageControls } from './language.ts';
 import { installFocusFeedback } from './focus-feedback.ts';
 import { requestError } from '../admin/diagnostics.ts';
-import { installLiveLocalization, localizedText, localizedAttribute, type LocalizedValue } from './live-localization.ts';
+import { installLiveLocalization, localizedText, type LocalizedValue } from './live-localization.ts';
 import { onLanguageChange, t, th, msg } from '../i18n.ts';
 import '../themes/accessibility.css';
 import './connection-guide.css';

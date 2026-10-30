@@ -23,7 +23,6 @@ import {
 import type {
   CambiInput,
   CambiJob,
-  CambiFrame,
   CambiFramePage,
 } from "../../shared/analysis/quality/cambi.ts";
 import type { DiscoveryPage } from "../services/library-discovery.ts";

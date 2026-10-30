@@ -1,7 +1,7 @@
 # Unified actor task center
 
 The task center is a read model of preparation, correspondence, single-pair,
-range, native VMAF/XPSNR and single-source CAMBI records. The read model does not
+range, VMAF/XPSNR and single-source CAMBI records. The read model does not
 schedule work; explicit recomputation controls delegate to the original scoring
 services.
 It uses the current self-declared service actor, not strong authentication.
@@ -11,7 +11,13 @@ kind, metric, raw state, createdFrom (inclusive epoch milliseconds), createdTo
 (exclusive), limit (1..50) and cursor. Source filtering matches ID and version
 on the same side. Metric filters identify requested scoring metrics or named
 preparation/planning operations; they do not assert that a metric completed.
-Per-metric outcomes remain independent. The query reads complete matching
+Per-metric outcomes remain independent. `TASK_LIMITS` owns the fixed query
+snapshot row/byte budgets independently of store retention; changing an algorithm's
+history limits cannot resize a task query. The existing row budget remains 2240.
+Domain `limits.historyRows` is deprecated, non-enforcing compatibility metadata;
+`limits.historyRetention` declares `logical-byte-budget` and its deprecated status.
+Actual retention is charged to the store's published `reservedBytes` or
+`historyBytes`, including durable recovery intents. The query reads complete matching
 actor-owned metadata within the shared snapshot budget, not the first page of each legacy API. SQL projects
 metadata without loading full inputs, results, index documents or pixels into JS.
 

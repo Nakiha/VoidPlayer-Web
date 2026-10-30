@@ -8,7 +8,6 @@ import { icon } from './icons.ts';
 import { playbackIcon } from './playback-icon.ts';
 import { PANEL_SHORTCUTS, shortcutTooltip } from './shortcuts.ts';
 import type { Shortcut } from './shortcuts.ts';
-import type { Slot } from '../../shared/review/model.ts';
 
 const panelButton = (id: 'inspector' | 'analysis' | 'subtracks' | 'sources', label: string, glyph: 'info' | 'chart' | 'rows' | 'film', extra = '') =>
   iconButton({ glyph, label, tooltip: shortcutTooltip(label, PANEL_SHORTCUTS[id]), iconClass: extra, attributes: { id: `toggle-${id}`, 'aria-controls': `${id}-panel`, 'aria-expanded': 'false' } });

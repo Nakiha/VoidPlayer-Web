@@ -6,7 +6,7 @@ import type { MediaDiagnostic } from '../shared/media/io/media-errors.ts';
 import { diagnosticMessage } from './ui/diagnostic-message.ts';
 import { mountLocalizedShell } from './ui/localized-shell.ts';
 import { installLanguageControls } from './ui/language.ts';
-import { t, th, t as tr, getLocale, onLanguageChange, msg } from './i18n.ts';
+import { t as tr, getLocale, onLanguageChange, msg } from './i18n.ts';
 import { isHdrTransfer } from './presentation/presentation-color.ts';
 import { updateColorFlow } from './ui/color-flow.ts';
 import { initializeGpuPresentation } from './presentation/webgpu-presenter.ts';

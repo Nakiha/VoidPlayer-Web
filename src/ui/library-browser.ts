@@ -1,7 +1,7 @@
 import { fetchLibraryPage, LibraryChangedError } from '../services/library.ts';
 import type { LibraryPage, LibraryEntry } from '../services/library.ts';
 import { installChoiceMenu } from './choice-menu.ts';
-import { onLanguageChange, t, msg , th } from '../i18n.ts';
+import { onLanguageChange, t, msg } from '../i18n.ts';
 import { createIconButton } from './controls.ts';
 import { icon } from './icons.ts';
 import { libraryLocationExpression, parseLibraryLocationInput, parseLibraryLocationLink } from './library-link.ts';

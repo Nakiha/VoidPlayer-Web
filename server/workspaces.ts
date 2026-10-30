@@ -119,7 +119,7 @@ export class WorkspaceStore {
     if (!changed.changes) throw new AdminError(409, '工作区已更新，请载入服务器版本或另存为副本。');
     return this.row(id);
   }
-  remove(id: string, revision: string | undefined, actor: Actor) {
+  remove(id: string, revision: string | undefined, _actor: Actor) {
     this.db.exec('BEGIN IMMEDIATE');
     try {
       const row = this.row(id); this.match(row, revision);

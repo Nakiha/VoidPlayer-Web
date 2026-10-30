@@ -234,7 +234,7 @@ for(const mode of ['advancing','stalled'] as const)test(`product prepare-ts ${mo
 });
 
 test('product TS admission abort settles a genuinely held Range request and terminates its own worker',{timeout:10000},async()=>{
-  const {createServer}=await import('node:http'),{admitTsMedia}=await import('../../src/media/decoding/ts-media.ts');
+  const {createServer}=await import('node:http'),{admitTsMedia}=await import('../../src/media/decoding/js-container-media.ts');
   const bytes=await readFile('fixtures/ts-analysis/h264-static.ts');let entered!:()=>void;const requested=new Promise<void>(resolve=>{entered=resolve;});
   const server=createServer(()=>entered());await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
   const worker=new Worker(new URL('../../src/media/decoding/packet-worker.ts',import.meta.url));const exited=once(worker,'exit');const abort=new AbortController();

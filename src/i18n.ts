@@ -6,8 +6,8 @@ export { parseLanguagePreference, resolveLocale };
 export type { Locale, LanguagePreference };
 export type MessageKey = keyof Sources;
 export type Descriptor<K extends MessageKey = MessageKey> = { id: K; source: Sources[K] };
-/** Default source stays beside the owning UI. Values remain text, never HTML. */
-export function msg<K extends MessageKey>(id: K, source: Sources[K]): Descriptor<K> { return id as unknown as Descriptor<K>; }
+/** Source is required by extraction and type checking; runtime descriptors use only the ID. */
+export function msg<K extends MessageKey>(id: K, _source: Sources[K]): Descriptor<K> { return id as unknown as Descriptor<K>; }
 type Args<K extends MessageKey> = keyof MessageParameters[K] extends never ? [] : [MessageParameters[K]];
 export const LANGUAGE_KEY = 'voidplayer.language';
 let englishAttempt = 0;

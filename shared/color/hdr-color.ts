@@ -1,7 +1,7 @@
 import type { FrameDescription } from '../media/frame-description.ts';
 import { validateYuv, yuvSample, yuvReconstructedSample, visibleChromaBounds } from './yuv-color.ts';
 
-import { HDR_PREVIEW_POLICY, hdrTransfer, resolveHdrPreviewPlan, validateHdrPreviewPolicy } from './hdr-policy.ts';
+import { HDR_PREVIEW_POLICY, resolveHdrPreviewPlan, validateHdrPreviewPolicy } from './hdr-policy.ts';
 import type { HdrTransfer, ColorTriple, HdrPreviewPolicy } from './hdr-policy.ts';
 export * from './hdr-policy.ts';
 

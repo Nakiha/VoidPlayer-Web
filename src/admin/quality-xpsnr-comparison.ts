@@ -3,7 +3,7 @@ import {currentActor} from '../services/identity.ts';
 import {QualityClient} from '../services/quality-jobs.ts';
 import {readXpsnrComparison} from '../services/xpsnr-comparison.ts';
 import type {LoadedXpsnrComparison} from '../services/xpsnr-comparison.ts';
-import {comparisonView,comparisonFromUrl,comparisonLocation,comparisonDb,sortedComparison,COMPARISON_SORTS} from '../../shared/analysis/quality/xpsnr-comparison.ts';
+import {comparisonView,comparisonFromUrl,comparisonDb,sortedComparison,COMPARISON_SORTS} from '../../shared/analysis/quality/xpsnr-comparison.ts';
 import type {ComparisonView,ComparisonSort} from '../../shared/analysis/quality/xpsnr-comparison.ts';
 import {qualityPairViewUrl} from '../../shared/review/quality-pair-view.ts';
 import type {AnnotationRecord} from '../../shared/review/annotation-record.ts';

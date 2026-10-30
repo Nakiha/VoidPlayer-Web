@@ -36,6 +36,7 @@ export class QualityRangeService {
   }
   private matchesChild(parent:QualityRangeJob,sample:RangeSample,child:ReturnType<QualityJobService['get']>,pair=parent.plan.input.pairs.find(p=>p.reference.picture.au===sample.au)){
     if(!pair||child.id!==sample.jobId||child.input.client.id!==`range:${parent.id}`||child.input.client.kind!==parent.plan.input.client.kind
+      ||child.submitted.actorId!==parent.actor.id||digest(child.input.client)!==digest(child.submitted.client)
       ||child.submitted.idempotencyKey!==`sample:${sample.au}`||child.submitted.requestId!==parent.requestId)return false;
     const request=structuredClone(pair),elapsed=child.input.request.budget?.maxElapsedMs;
     if(!elapsed||elapsed>Math.min(pair.budget?.maxElapsedMs??30000,parent.plan.input.budget.maxElapsedMs))return false;
@@ -153,14 +154,9 @@ export class QualityRangeService {
   private completedResult(job:QualityRangeJob,sample:RangeSample){
     const check=(condition:unknown)=>{if(!condition)throw new AdminError(500,'Stored range child result is invalid.','stored-range-result-invalid');};
     const child=this.jobs.get(sample.jobId,job.actor.id),pair=job.plan.input.pairs.find(p=>p.reference.picture.au===sample.au);
-    check(pair&&job.plan.selectedAus.includes(sample.au)&&child.state==='completed'&&child.attempt?.state==='completed'
-      &&child.submitted.actorId===job.actor.id&&child.submitted.client.id===`range:${job.id}`
-      &&child.submitted.client.kind===job.plan.input.client.kind&&child.submitted.idempotencyKey===`sample:${sample.au}`&&child.submitted.requestId===job.requestId);
-    const actual=qualityJobRequest(child.input),expected=qualityJobRequest({schema:'voidplayer-psnr-frame-job',version:1,client:child.input.client,request:pair});
-    const budget=actual.input.request.budget!,elapsed=budget.maxElapsedMs!;
-    check(digest(actual.input.client)===digest(child.submitted.client)&&elapsed<=expected.input.request.budget!.maxElapsedMs!&&elapsed<=job.plan.input.budget.maxElapsedMs);
-    expected.input.request.budget!.maxElapsedMs=elapsed;
-    check(digest(expected.input)===digest(actual.input));
+    check(this.matchesChild(job,sample,child,pair)&&job.plan.selectedAus.includes(sample.au)
+      &&child.state==='completed'&&child.attempt?.state==='completed');
+    const actual=qualityJobRequest(child.input),budget=actual.input.request.budget!,elapsed=budget.maxElapsedMs!;
     const result=this.jobs.result(child.id,job.actor.id),value=qualityEvidenceValue(result.value),r=value.result,m=r.metric,request=actual.input.request;
     check(result.schema==='voidplayer-quality-job-result'&&result.version===1&&result.jobId===child.id&&result.attemptId===child.attempt!.id
       &&result.completedAt===child.endedAt&&child.attempt!.endedAt===child.endedAt&&digest(result.submitted)===digest(child.submitted)

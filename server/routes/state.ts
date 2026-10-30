@@ -7,7 +7,7 @@ import type { AdminController } from '../admin.ts';
 import { ANNOTATION_BYTES } from '../annotations.ts';
 import { WORKSPACE_BYTES } from '../workspaces.ts';
 import { sendJson } from '../http-utils.ts';
-import { browserUserId, guestActor, identityCookie, requireCapturedActor } from '../identity.ts';
+import { guestActor, identityCookie, requireCapturedActor } from '../identity.ts';
 import { encryptedRequest } from '../tls.ts';
 import { localRequest } from '../reveal.ts';
 import type { RouteContext } from './context.ts';

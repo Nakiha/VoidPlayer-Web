@@ -5,7 +5,7 @@ import {openIndexDatabase} from '../../server/sqlite.ts';
 import {taskSummaries,taskEdges,rangeTaskChildren,retainedTaskResults} from '../../server/tasks/summary.ts';
 import type {TaskCommands} from '../../server/quality-service-ports.ts';
 import {TaskCenterService} from '../../server/tasks/service.ts';
-import {taskQuery,TASK_KINDS,TASK_HISTORY_ROWS,TASK_LIMITS} from '../../shared/service/tasks.ts';
+import {taskQuery,TASK_KINDS,TASK_LIMITS} from '../../shared/service/tasks.ts';
 import type {TaskKind,TaskFilter} from '../../shared/service/tasks.ts';
 import type {MediaLibraryIndex} from '../../server/library.ts';
 
@@ -55,6 +55,7 @@ test('retention batches cover full admitted 1024-sample ranges without the ordin
 });
 
 test('strict shared query: same-side version, exact enums, half-open time and no duplicate/unknown fields',()=>{
+ assert.equal(TASK_LIMITS.rows,2240,'snapshot budget remains stable independently of legacy domain limits');
  for(const s of ['limit=0','limit=51','kind=nr','state=stopping','createdFrom=-1','createdFrom=1.5','createdFrom=2&createdTo=2','foo=x','kind=single&kind=range','mediaVersion='+ 'a'.repeat(24),'cursor=guess'])assert.throws(()=>query(s),s);
  assert.deepEqual(query('kind=vmaf&state=partial&metric=ssim&createdFrom=0&createdTo=9&limit=1'),{filter:{kind:'vmaf',metric:'ssim',state:'partial',createdFrom:0,createdTo:9},limit:1});
 });

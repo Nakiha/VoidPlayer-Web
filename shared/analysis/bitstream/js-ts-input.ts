@@ -1,5 +1,5 @@
 import {TsContainerPacketSource} from '../../media/containers/mpeg2-ts-packet-source.ts';
-import { TsPacketSource, tsPictureStream, parseTsPacketIndex, retainVerifiedTsIndex, TsSourceChangedError } from '../../media/containers/ts-packet-source.ts';
+import { retainVerifiedTsIndex, TsSourceChangedError } from '../../media/containers/ts-packet-source.ts';
 import {MatroskaPacketSource} from '../../media/containers/matroska-packet-source.ts';
 import { parseJsPacketIndex } from '../../media/indexing/js-packet-index-parser.ts';
 import {isSealedJsIndex} from '../../media/indexing/js-index-proof.ts';

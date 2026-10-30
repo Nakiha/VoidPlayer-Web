@@ -1,3 +1,4 @@
+import { BYTE_HISTORY_RETENTION } from '../service/history-retention.ts';
 import type { CachedField } from './indexing/semantic-query.ts';
 
 /** Technical discovery is evidence for selection, never quality admission. */
@@ -8,7 +9,8 @@ export const DISCOVERY_LIMITS = Object.freeze({ pageSize: 32, inspectedPerPage: 
   cachedIdentitiesPerSource:4,cachedProjectionBytesPerIdentity:45056,
   probeBytes: 4 * 1024 * 1024, probeReadCalls: 512, probeStreams: 32, probeResultBytes: 32768,
   flvPrefixBytes:65536,flvTagHeaders:8,flvConfigurationBytes:4096,
-  elapsedMs: 30000, workerHeapMiB: 256, queued: 8, actorOutstanding: 4, historyRows: 1000,
+  elapsedMs: 30000, workerHeapMiB: 256, queued: 8, actorOutstanding: 4, /** @deprecated Compatibility metadata only; not a storage row cap. */
+  historyRows: 1000, historyRetention: BYTE_HISTORY_RETENTION,
   historyBytes: 64 * 1024 * 1024, queueWaitMs: 60000 });
 export type DiscoveryField = Omit<CachedField,'source'> & {source:CachedField['source']|'container-or-codec-metadata'};
 export type DiscoverySource = { id: string; version: string };

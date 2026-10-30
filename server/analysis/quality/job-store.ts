@@ -1,7 +1,7 @@
 import {taskSummaries,retainedTaskResults} from '../../tasks/summary.ts';
 import {ReexecutionLedger} from './reexecution-ledger.ts';
 import type {ReexecutionCreation} from './reexecution-ledger.ts';
-import type {QualityExecutionContract,ReexecutionMetadata,ReexecutionRequest} from '../../../shared/analysis/quality/reexecution.ts';
+import type {QualityExecutionContract,ReexecutionMetadata} from '../../../shared/analysis/quality/reexecution.ts';
 import {sameExecutionContract} from '../../../shared/analysis/quality/reexecution.ts';
 import {pairPacketCount} from '../../../shared/analysis/quality/frame-pair.ts';
 import { createHash, randomUUID } from 'node:crypto';

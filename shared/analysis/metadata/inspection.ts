@@ -375,7 +375,6 @@ export function coarsenBucketsShared(
   if (!Number.isFinite(baseWidthUs) || !Number.isFinite(coarseWidthUs)) return [];
   if (!Number.isFinite(originUs)) return [];
   // 公共网格原样使用：禁止 Math.round(coarse/width)*width 逐轨改写。
-  const width = Math.max(baseWidthUs, 1);
   const coarse = Math.max(1, coarseWidthUs);
   const byIndex = new Map<number, CoarsenedBucket>();
   const covered = new Map<number, number>();

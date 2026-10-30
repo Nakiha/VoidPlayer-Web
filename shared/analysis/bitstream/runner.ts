@@ -5,8 +5,8 @@ import {avcGeometry} from '../../media/codecs/avc-geometry.ts';
 import {hevcGeometry} from '../../media/codecs/hevc-geometry.ts';
 import { makeDemandPlan } from './demand.ts';
 import type { DemandPlan } from './demand.ts';
-import { analysisIndexIdentity, isProduct, validateOutput, validateRecords, readBlock, writeBlock, metadata, PRODUCT_LIMIT, PRODUCT_SCHEMA, metadataBudgetBytes } from './products.ts';
-import type { AnalysisOutput, AnalysisProduct, AnalysisSummary, AnalysisBlocks, FrameMetadata } from './products.ts';
+import { analysisIndexIdentity, isProduct, validateOutput, validateRecords, writeBlock, PRODUCT_LIMIT, PRODUCT_SCHEMA, metadataBudgetBytes } from './products.ts';
+import type { AnalysisOutput, AnalysisProduct, AnalysisSummary, FrameMetadata } from './products.ts';
 import {isAnnexB} from '../../media/codecs/nal-framing.ts';
 import { validateAnalysisCore } from './core-abi.ts';
 import { readNalus, readContainerHeader } from "./diagrams.ts";
@@ -14,7 +14,6 @@ import {
   ANALYSIS_RECIPE,
   ANALYZER_VERSION,
   BUDGET,
-  validateResult,
   validateMetadata,
   validateTarget,
   validateRange,
@@ -567,7 +566,6 @@ async function runRange(
   // Reuse this independent metadata plan across all picture chunks; the
   // decoder session owns its reader and closes it on success or failure.
   const input = await openAnalysisInput(reader, signal, false, {sourceVersion:target.sourceVersion,indexIdentity:target.indexIdentity});
-  let first: number;
   const missing = new Set<number>();
   let lastCached: AnalysisOutput | undefined;
   try {
@@ -589,7 +587,6 @@ async function runRange(
       );
     // Metadata enumerates every expected picture: cached points alone never
     // prove interval coverage. Keep only missing ordinals, not 32 block arrays.
-    first = matches[0].pts;
     for (const packet of matches) {
       signal.throwIfAborted();
       const picture = input.picture(packet, target.sourceVersion);
@@ -597,7 +594,7 @@ async function runRange(
       signal.throwIfAborted();
       const reusable = hit && reusableResult(hit, input.codec, buildId, picture, packet.pts, target);
       if (hit && reusable) { await onResult(hit); signal.throwIfAborted(); lastCached = hit; }
-      else { if (!missing.size) first = packet.pts; missing.add(packet.au); }
+      else { missing.add(packet.au); }
     }
     if (!missing.size) { input.close(); return lastCached!; }
     // A factory keeps WASM allocation out of entirely cached range requests.

@@ -186,7 +186,7 @@ export class FrameIndexStore {
       if (epoch !== this.epoch) throw new AdminError(409, '索引缓存已被清理，请在下次载入时重新提交。');
       const media = this.db.prepare("SELECT 1 FROM media JOIN roots ON media.root_id=roots.id WHERE media.id=? AND version=? AND media.state='ready' AND roots.active=1").get(id, version);
       if (!media) throw new AdminError(409, '媒体已改变，未保存旧索引。');
-      const { text, bytes, frames, scannedBytes, identity } = prepared;
+      const { text, frames, scannedBytes, identity } = prepared;
       if(identity.kind==='mp4'&&producer?.kind!=='server-mp4-scan-v1')throw new AdminError(409,'MP4 quality indexes require the server parser producer.','untrusted-cache');
       if ((identity.kind === 'js-ts'||identity.kind==='js-matroska') && !parseJsPacketIndex(JSON.parse(text), `${id}@${version}`, scannedBytes))
         throw new AdminError(409, 'JS TS 索引源身份与提交不匹配。');

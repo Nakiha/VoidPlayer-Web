@@ -11,7 +11,7 @@ import { wasmPacketDecoder, nativePacketDecoder } from './flv-decoder.ts';
 import type { PacketDecoder, PacketFrame } from './flv-decoder.ts';
 import type { PacketDecodeIndex } from '../../../shared/media/indexing/packet-decode-index.ts';
 import { hevcDisplayOrder, recoveredHevcTimes } from '../../../shared/media/codecs/hevc-timeline.ts';
-import type { FlvCodec, FlvIndex, FlvPacket } from '../../../shared/media/containers/flv-demux.ts';
+import type { FlvCodec, FlvPacket } from '../../../shared/media/containers/flv-demux.ts';
 import { PacketTimeline } from './packet-timeline.ts';
 
 /** Packet tables are decode anchors; actual output frames own display time. */

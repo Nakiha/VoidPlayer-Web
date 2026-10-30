@@ -7,7 +7,6 @@ import { settleScoringReservations } from "../quality/result-retention.ts";
 import type { QualityExecutionContract } from "../../../shared/analysis/quality/reexecution.ts";
 import { sameExecutionContract } from "../../../shared/analysis/quality/reexecution.ts";
 import { randomUUID } from "node:crypto";
-import path from "node:path";
 import { AdminError } from "../../admin-error.ts";
 import type { Actor } from "../../identity.ts";
 import type { CorrespondenceService } from "../quality/correspondence-service.ts";
@@ -305,11 +304,6 @@ export class NativeVmafService extends TemporalScoringService<
             this.db.exec("ROLLBACK");
             throw error;
           }
-        },
-        process: (process) => {
-          j = this.get(id, j.actor.id);
-          j.process = process;
-          this.save(j);
         },
       });
       j = this.get(id, j.actor.id);

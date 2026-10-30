@@ -906,7 +906,7 @@ export class ReviewSession {
     return { ptsUs: frame.ptsUs, sourcePtsUs: frame.sourcePtsUs, durationUs: frame.durationUs };
   }
   private offerThumbnail(slot: Slot, source: MediaSource, frame: DecodedFrame, localTarget: number) {
-    offerSessionThumbnail(slot, source, frame, localTarget, this.nextSourceGen, this.resources, () => this.tracks.get(slot)?.source === source);
+    offerSessionThumbnail(source, frame, localTarget, this.nextSourceGen, this.resources, () => this.tracks.get(slot)?.source === source);
   }
   private async drawAt(ptsUs: number, current: () => boolean, tracks = this.tracks, commit?: () => void, selected?: Map<Slot, DecodedFrame>, kept?: Set<Slot>, signal?: AbortSignal) {
     const entries = [...tracks].filter(([, t]) => !t.failure);

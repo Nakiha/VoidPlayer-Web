@@ -5,7 +5,7 @@ import { MediaOpenError } from '../../../shared/media/io/media-errors.ts';
 import { abortableLoad, loadAborted } from '../../../shared/media/io/media-abort.ts';
 import { contextLog } from '../../logging/log.ts';
 import { explainMediaFailure } from '../diagnostics.ts';
-import { admitReferenceSource, referenceSource } from './reference-source.ts';
+import { admitReferenceSource } from './reference-source.ts';
 import type { ReferenceDecode } from '../../../shared/color/decode-policy-types.ts';
 
 export interface MediaOpenPlan {

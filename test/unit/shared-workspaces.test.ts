@@ -11,7 +11,7 @@ import { AnnotationStore } from '../../server/annotations.ts';
 import { loadConfig } from '../../server/config.ts';
 import { startService } from '../../server/runtime.ts';
 import { parseWorkspace } from '../../shared/review/workspace-file.ts';
-import { applyMarkEdit } from '../../src/session/marks.ts';
+import { applyMarkEdit } from '../../shared/review/marks.ts';
 import { Viewport } from '../../shared/presentation/viewport.ts';
 const alice={id:'alice',name:'Alice'},bob={id:'bob',name:'Bob'};
 const document=()=>parseWorkspace({schema:'voidplayer-workspace',version:1,name:'评审',generatedAt:new Date().toISOString(),serverUrl:'http://example.test/',positionUs:0,viewport:new Viewport().snapshot(),tracks:[{slot:'A',mediaId:'video',offsetUs:0}],media:[{id:'video',name:'sample.mp4',size:100,lastModified:10,codec:'h264',decoder:'webcodecs',width:100,height:100,durationUs:1000,firstPtsUs:0,source:{kind:'library',id:'a'.repeat(24),url:`http://example.test/api/media/${'a'.repeat(24)}?v=${'b'.repeat(24)}`}}],marks:[{id:'mark',slot:'A',mediaId:'video',text:'画面问题',severity:3,origin:'human',createdAt:new Date().toISOString(),frame:{ptsUs:0,sourcePtsUs:0,durationUs:33333},comparison:[],region:null}]});

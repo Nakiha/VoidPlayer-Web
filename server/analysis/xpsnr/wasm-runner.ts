@@ -68,9 +68,7 @@ export class WasmXpsnrRunner extends AnalysisScoringRunner {
       };
     }
   }
-  private async contract(
-    input: XpsnrInput,
-  ): Promise<NonNullable<QualityExecutionContract["analysis"]>> {
+  private async contract(): Promise<NonNullable<QualityExecutionContract["analysis"]>> {
     return {
       component: (await this.components.verify("xpsnr",true)).component,
       recipe: "xpsnr-pixel-api-clip-v1",
@@ -109,7 +107,7 @@ export class WasmXpsnrRunner extends AnalysisScoringRunner {
         }>(
           "../xpsnr/decode-worker.ts",
           {
-            ...this.data(input, snapshot, await this.contract(input)),
+            ...this.data(input, snapshot, await this.contract()),
             mode: "preflight",
             expectedExecutionContract: expected,
           },
@@ -127,7 +125,7 @@ export class WasmXpsnrRunner extends AnalysisScoringRunner {
       signal,
       () => {},
       async (combined) => {
-        const contract = await this.contract(input);
+        const contract = await this.contract();
         const value = await this.worker(
           "../xpsnr/decode-worker.ts",
           { ...this.data(input, snapshot, contract), mode: "preflight" },
@@ -165,7 +163,7 @@ export class WasmXpsnrRunner extends AnalysisScoringRunner {
       hooks.admitted,
       async (combined) => {
         let executedContract: QualityExecutionContract | undefined;
-        const contract = await this.contract(input),
+        const contract = await this.contract(),
           data = this.data(input, snapshot, contract);
         hooks.phase("decode-and-score");
         const value = await this.worker<{
@@ -188,7 +186,7 @@ export class WasmXpsnrRunner extends AnalysisScoringRunner {
         combined.throwIfAborted();
         hooks.prepared(value.prepared);
         hooks.phase("source-final");
-        if (canonicalJson(contract) !== canonicalJson(await this.contract(input)))
+        if (canonicalJson(contract) !== canonicalJson(await this.contract()))
           throw new XpsnrError(
             "component-unavailable",
             "Analysis component changed during scoring",
@@ -207,7 +205,7 @@ export class WasmXpsnrRunner extends AnalysisScoringRunner {
           combined,
         );
         combined.throwIfAborted();
-        if (canonicalJson(contract) !== canonicalJson(await this.contract(input)))
+        if (canonicalJson(contract) !== canonicalJson(await this.contract()))
           throw new XpsnrError(
             "component-unavailable",
             "Analysis component changed during final verification",

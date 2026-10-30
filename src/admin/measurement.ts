@@ -1,7 +1,7 @@
 import { requestError } from './diagnostics.ts';
 import { apiError } from '../services/api-error.ts';
-import { localizedText, localizedAttribute, type LocalizedValue } from '../ui/live-localization.ts';
-import { onLanguageChange, formatDate, formatNumber, t, th, msg } from '../i18n.ts';
+import { localizedText, type LocalizedValue } from '../ui/live-localization.ts';
+import { onLanguageChange, formatDate, t, th, msg } from '../i18n.ts';
 import { installChoiceMenu } from '../ui/choice-menu.ts';
 import { icon } from '../ui/icons.ts';
 import type { MeasurementResult, MeasurementKind } from '../../shared/service/measurement.ts';
@@ -42,7 +42,7 @@ export function installMeasurements(life: AbortSignal, notice: (message: Localiz
     'measure-limit': [{ value: '64', label: '64 MiB' }, { value: '256', label: '256 MiB' }, { value: '1024', label: '1 GiB' }],
     'measure-media': [],
   };
-  const menus = Object.fromEntries(Object.entries(choices).map(([id, options]) => {
+  const menus = Object.fromEntries(Object.keys(choices).map(id => {
     const menu = installChoiceMenu(id, () => id === 'measure-kind' ? Object.entries(kinds).map(([value,label]) => ({value,label})) : id === 'measure-seconds' ? [5,10,15].map(value => ({value:String(value),label:t(msg("activity.durationSeconds", "{s} 秒"),{s:value})})) : choices[id], value => { values[id] = value; if (id === 'measure-kind') configure(); else controls(); });
     $(`${id}-menu`).classList.add('admin-choice-menu'); return [id, menu];
   }));

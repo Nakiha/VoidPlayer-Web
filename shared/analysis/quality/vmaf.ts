@@ -1,3 +1,4 @@
+import { BYTE_HISTORY_RETENTION } from '../../service/history-retention.ts';
 import {
   clockFraction,
   clockKey,
@@ -52,7 +53,8 @@ export const VMAF_LIMITS = Object.freeze({
   queued: 4,
   actorOutstanding: 2,
   queueWaitMs: 60000,
-  historyRows: 16,
+  /** @deprecated Compatibility metadata only; not a storage row cap. */
+  historyRows: 16, historyRetention: BYTE_HISTORY_RETENTION,
   reservedBytes: 256 * 1024 * 1024,
   page: 4,
 });

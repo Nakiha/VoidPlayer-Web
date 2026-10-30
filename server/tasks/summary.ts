@@ -1,6 +1,6 @@
 import type { IndexDatabase } from "../sqlite.ts";
 import { AdminError } from "../admin-error.ts";
-import { TASK_HISTORY_ROWS, TASK_LIMITS } from "../../shared/service/tasks.ts";
+import { TASK_LIMITS } from "../../shared/service/tasks.ts";
 import { QUALITY_RANGE_LIMITS } from "../../shared/analysis/quality/ranges.ts";
 import type {
   TaskKind,

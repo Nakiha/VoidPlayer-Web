@@ -37,7 +37,7 @@ export function installWorkspaceSharing(options: {
     await navigator.clipboard.writeText(url);
     options.toasts.show(() => t(msg('sharing.editableCopied', '工作区链接已复制，接收者可编辑和保存')));
   }
-  async function create(trigger?: HTMLElement) {
+  async function create() {
     if (busy) throw new Error(t(msg("workspace.saving", "工作区正在保存，请稍后再分享。")));
     if (options.isOpening()) throw new Error(t(msg("workspace.saving", "工作区正在保存，请稍后再分享。")));
     // A retry retains the same request and ID if the server response was lost.
@@ -65,7 +65,7 @@ export function installWorkspaceSharing(options: {
       throw error;
     } finally { busy = false; update(); }
   }
-  for (const button of buttons) button.addEventListener('click', () => void create(button).catch(() => {}), {signal:options.signal});
+  for (const button of buttons) button.addEventListener('click', () => void create().catch(() => {}), {signal:options.signal});
   update();
   return { create, update, async copySaved(id: string) {
     try { await copy(new URL(`/?workspace=${encodeURIComponent(id)}`, location.origin).href); }

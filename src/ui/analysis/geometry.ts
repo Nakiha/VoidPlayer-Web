@@ -49,7 +49,6 @@ export interface BucketGlyph {
 
 export type AnalysisGlyph = SampleGlyph | BucketGlyph;
 
-export interface SizeRow { y: number; h: number }
 
 export type SizeScale = 'linear' | 'log';
 
@@ -74,7 +73,6 @@ export function barHeight(rowH: number, value: number, yMax: number, scale: Size
   return Math.max(1, (Math.min(value, yMax) / yMax) * (rowH - 6));
 }
 
-const MAX_CELL_PX = 56;
 /** 最小容量预算（CSS px），不是缩放后的柱宽上限。 */
 export const TARGET_BAR_PX = 7;
 const LANE_GAP_PX = 1;
@@ -115,8 +113,6 @@ export interface MergedLayoutOptions {
   rowH: number;
   yMaxSize: number;
   mediaBySlot: ReadonlyMap<Slot, { mediaId: string; sourceVersion: string; indexRevision: number }>;
-  /** 稀疏样本的单元上限，避免横跨数秒的巨柱。 */
-  maxCellPx?: number;
   /** Shared cadence width keeps the bucket/raw seam visually continuous. */
   barWidthPx?: number;
   /** 大小纵轴：默认线性；对数为共同 log10(1+v) 基准。 */
@@ -217,8 +213,6 @@ export function layoutMergedSamples(
 ): SampleGlyph[] {
   const { trackOrder, viewStart, viewEnd, gutter, plotW, rowY, rowH, yMaxSize, mediaBySlot } = opts;
   const scale = opts.scale ?? 'linear';
-  void MAX_CELL_PX;
-  void opts.maxCellPx;
   const lanes = Math.max(1, trackOrder.length);
   const slotIndex = new Map<Slot, number>(trackOrder.map((s, i) => [s, i]));
   const glyphs: SampleGlyph[] = [];
@@ -446,27 +440,6 @@ export function layoutMergedBuckets(
       });
     }
   }
-  return glyphs;
-}
-
-/** 分轨行布局：同一套时间分组，各轨在各自的行高里绘制，x 仍共享时间轴。 */
-export function layoutRowSamples(
-  groups: readonly TimeGroup[],
-  slot: Slot,
-  row: SizeRow,
-  base: Omit<MergedLayoutOptions, 'trackOrder' | 'rowY' | 'rowH' | 'mediaBySlot'> & {
-    media: { mediaId: string; sourceVersion: string; indexRevision: number };
-  },
-): SampleGlyph[] {
-  const glyphs = layoutMergedSamples(groups, {
-    trackOrder: [slot],
-    viewStart: base.viewStart, viewEnd: base.viewEnd,
-    gutter: base.gutter, plotW: base.plotW,
-    rowY: row.y, rowH: row.h, yMaxSize: base.yMaxSize,
-    mediaBySlot: new Map([[slot, base.media]]),
-    maxCellPx: base.maxCellPx,
-    scale: base.scale,
-  });
   return glyphs;
 }
 
