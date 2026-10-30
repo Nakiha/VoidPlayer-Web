@@ -137,7 +137,7 @@ test('compatibility entries point to registered domain implementations without c
 });
 
 test('identity browser checks match the lightweight job while real PSNR evidence remains required with its core', () => {
-  // identity.yml installs only Chromium and intentionally downloads no decoder.
+  // The legacy identity-only selector needs no decoder; daily CI folds it into the core browser profile.
   for (const row of selectCases({suite:'ci-identity-browser',platform:'linux'}).selected) {
     assert.deepEqual(row.engines,['chromium'],`${row.id}: identity job installs Chromium only`);
     assert.deepEqual(row.fixtures,[],`${row.id}: identity job has no downloaded decoder/media`);
@@ -230,7 +230,7 @@ test('FLV analysis prerequisites are locally generated for unit and browser cons
 });
 
 test('every required browser cell is selected by an actual CI suite or expanded engine/input matrix', () => {
-  const workflows = ['release-preview.yml', 'identity.yml'].map(file => readFileSync(new URL('../../.github/workflows/' + file, import.meta.url), 'utf8'));
+  const workflows = ['release-preview.yml', 'checks.yml'].map(file => readFileSync(new URL('../../.github/workflows/' + file, import.meta.url), 'utf8'));
   assert.equal(validateCiBrowserCoverage(workflows), true);
   const missing = clone(); missing.cases.find(row => row.id === 'browser-library-webkit').suites = ['browser'];
   assert.throws(() => validateCiBrowserCoverage(workflows, missing), /browser-library-webkit/);

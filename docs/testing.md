@@ -2,11 +2,22 @@
 
 套件与稳定 case ID 以 `scripts/testing/manifest.json` 为准，统一入口为 `scripts/run-tests.mjs`。`package.json` 保留原有单项命令。不要把某次历史测试数量或构建成功当作当前兼容性结论。
 
-画质浏览器门禁的逐项用途、失败证据与 PR 诊断边界见 [browser-quality-gates.md](browser-quality-gates.md)。PR 的 `ci-cache-pr` 保留53项必需检查；唯一的 WebKit 多页面暂停帧长流程另列非阻塞诊断，其全部断言和失败报告保留，main/tag 的 `ci-cache` 仍要求该完整流程。原生 decode/paint/AU/drain 矩阵独立必跑，不把诊断失败、取消或跳过称作产品通过。
+日常 PR/main 验证在 `.github/workflows/checks.yml`；完整兼容性与独立发布在 `.github/workflows/release-preview.yml`。两者共用 `prepare-cores.yml`，core 缓存命中后仍核验固定来源及 ABI。
 
-码流分析的 `ci-analysis-browser` 保留完整本地套件。CI 将 MP4、legacy FLV、enhanced FLV 三个矩阵分片分别放在 Chromium/WebKit 的独立并行 job 中，使用 `ci-analysis-matrix-{mp4,flv-legacy,flv-enhanced}`；每个 job 只跑一个矩阵 case，合计保留每种引擎全部 36 格。流式图表、增量索引、几何、布局由 `analysis-browser` job 的 `ci-analysis-ui` 必跑，使用逐例生成的小素材，不下载 QA 样片。普通只读分析面板两引擎用例归入已有样片环境的 `uncovered` job。三个真实分析 Node 用例由 `unit` job 的 `ci-node-media` 必跑，不在每种浏览器重复执行。`release-set` 同时依赖 `analysis-browser` 与整个 `analysis-matrix`，任一分片失败、取消或跳过都不能产出验证通过的发布集。
+| 触发 | 必跑内容 | 边界 |
+| --- | --- | --- |
+| PR、main 推送 | `source` 162 项 + `ci-node-media` 60 项，构成完整 222 项 Node 用例；`ci-pr-browser` 33 项覆盖 Chromium/WebKit 核心流程 | 7 个执行 job：源码、两个 core、媒体 Node、两个浏览器、最终汇总；不打三平台包，不运行性能测试 |
+| 显式运行 Full verification、版本标签 | 全浏览器矩阵、完整缓存/评分流程、HEVC 全帧验证、三平台 × Node/Bun、三平台原生包与发布集校验 | 全部成功才能产出 verified release set；只有版本标签生成未公开的 Release 草稿 |
 
-各矩阵、流式图表与增量索引 case 仍拥有独立服务、浏览器、临时目录和 600 秒整例 watchdog。原有逐操作超时、整片 ready/EOF/帧数、取消、身份与性能断言保持不变；没有延长 job 超时或降低性能门槛。直接调用 `node scripts/testing/browser/media/bitstream-analysis.mjs <engine>` 会依次运行 matrix、diagrams、index 三组；每组独占服务、浏览器、临时素材及报告，一组失败仍完成其他独立组，最终非零退出。
+日常浏览器选择在统一 manifest 的 `ci-pr-browser` 声明：真实原生帧协议、PSNR/SSIM/VMAF/CAMBI/XPSNR 到候选/原帧证据、任务重执行、身份/Agent 标注与连接引导，以及完整分析 UI。数值域的 8/10-bit、ROI、区间、多 GOP 和生命周期由完整媒体 Node 分区覆盖；GUI 的完整深度/容器组合仍在显式全量验证中。日常检查通过不等于完整兼容性认证。
+
+需要完整兼容性结论或准备发版时，显式运行全量验证；变更核心 ABI、解码/呈现、时钟、持久化协议或发布流程时，至少运行受影响的专项验证，并明确尚未覆盖的平台。普通修改不再自动启动全量发布流水线。完整用例和原超时继续保留，不能靠删除失败、增加重试或扩大阈值使汇总变绿。`Required verification` 在任何前置失败、取消或跳过时失败；未完成状态不算通过。
+
+原 PR #156 的画质门禁审计与失败证据见 [browser-quality-gates.md](browser-quality-gates.md)，其中 `ci-cache-pr` 的历史策略已被上述分层替代。`ci-cache-pr` 仅保留为旧本地选择器；全量流水线必跑完整 `ci-cache`，不再另设同一用例的非阻塞诊断副本。
+
+码流分析的 `ci-analysis-browser` 保留完整本地套件。全量验证将 MP4、legacy FLV、enhanced FLV 三个矩阵分片分别放在 Chromium/WebKit 的独立并行 job 中，使用 `ci-analysis-matrix-{mp4,flv-legacy,flv-enhanced}`；每个 job 只跑一个矩阵 case，合计保留每种引擎全部 36 格。流式图表、增量索引、几何、布局由 `analysis-browser` job 的 `ci-analysis-ui` 必跑，使用逐例生成的小素材，不下载 QA 样片。普通只读分析面板两引擎用例归入已有样片环境的 `uncovered` job。三个真实分析 Node 用例由 `unit` job 的 `ci-node-media` 必跑，不在每种浏览器重复执行。`release-set` 同时依赖 `analysis-browser` 与整个 `analysis-matrix`，任一分片失败、取消或跳过都不能产出验证通过的发布集。
+
+各矩阵、流式图表与增量索引 case 仍拥有独立服务、浏览器、临时目录和 600 秒整例 watchdog。原有逐操作超时、整片 ready/EOF/帧数、取消与身份断言保持不变；云端不采集性能基准。本机性能命令及阈值保留。直接调用 `node scripts/testing/browser/media/bitstream-analysis.mjs <engine>` 会依次运行 matrix、diagrams、index 三组；每组独占服务、浏览器、临时素材及报告，一组失败仍完成其他独立组，最终非零退出。
 
 统一 runner 会按清单准备明确标记 `prepareOnDemand` 的本地衍生 fixture，目前仅 `analysis-flv`：任一所需输出缺失时，先验证三个固定 MP4 输入，再调用 `node scripts/make-analysis-flv-fixtures.ts`，重新检查六种基础 FLV 与 H.264 损坏/重复配置变体。每次套件内只准备一次，生成器拥有独立 300 秒超时、取消与子进程清理；失败记录在套件目录的 `fixtures/analysis-flv/`，依赖它的 case 失败，其他独立 case 继续。`unit`、`media` 和浏览器入口共用此前置流程；core、基础视频和 FATE 等外部资源仍须事先显式同步，不会自动下载。
 
@@ -14,7 +25,7 @@
 
 新增用例先明确一个可解释的行为、必要环境和独立的预期依据，再选择层级。纯计算放 Node 逻辑；取消、迟到结果和资源释放放可控异步模块测试；真实解码/像素身份放媒体集成；焦点和手势放浏览器交互；完整应用流程只覆盖实际接线。一个行为可以有多条相互支持的断言，不需要机械拆成每个断言一个 case。禁止为了减少维护成本而删除矩阵、扩大容差、增加重试或用同一实现生成预期来掩盖错误。
 
-本地 `unit` 是完整入口。CI 的 `source` 与 `ci-node-media` 在每个平台必须互斥，且并集严格等于 `unit`；新增用例缺少归属或被两边重复选择都会使清单验证失败。独立的 `analysis-logic` job 已移除，其用例仍属于 `source` 并受门禁保护，原 `ci-analysis-logic` 仅保留为本地领域筛选。原生 Node/Bun 或不同平台的重复有独立兼容性目的，继续保留。发布汇总同时依赖源码和媒体分片，任一失败、取消或跳过均不能生成验证通过的发布集。
+本地 `unit` 是完整入口。CI 的 `source` 与 `ci-node-media` 在 Linux Node 执行中必须互斥，且并集严格等于 `unit`；新增用例缺少归属或被两边重复选择都会使清单验证失败。独立的 `analysis-logic` job 已移除，其用例仍属于 `source` 并受门禁保护，原 `ci-analysis-logic` 仅保留为本地领域筛选。原生 Node/Bun 或不同平台的重复有独立兼容性目的，继续保留。发布汇总同时依赖源码和媒体分片，任一失败、取消或跳过均不能生成验证通过的发布集。
 
 `--plan` 输出本次选择的层级、责任、实际执行模块、引擎/输入、素材、工具和预算，不启动服务、不构建、不运行测试。每次实际执行也在报告目录写入 `plan.json`。已有用例的层级可按其所属目录给出初始分类；尚未人工梳理的责任保持 `reviewNeeded: true`，不把分类自动视为已经覆盖某项产品能力。analysis 先作为明确责任的试点：
 
@@ -48,11 +59,11 @@ node scripts/run-tests.mjs ci-node-media
 
 | 入口 | 范围与准备 | CI 对应 |
 | --- | --- | --- |
-| `npm run test:fast` | 明确登记的轻量 Node 逻辑与测试基础设施契约；不需要媒体、core 或浏览器 | 本地快速反馈；完整 Node 检查由 playback job 运行 |
-| `npm run test:source` | 所有不依赖媒体、core、浏览器、外部工具或构建的 Node 逻辑测试；新增适用用例必须登记 | 独立 `source-logic` job，不等待解码器构建 |
-| `npm run test:contract` | 清单、覆盖下限、独立结果、生命周期、发布依赖等契约 | identity / playback job；release identity 在安装依赖前也检查清单 |
+| `npm run test:fast` | 明确登记的轻量 Node 逻辑与测试基础设施契约；不需要媒体、core 或浏览器 | 本地快速反馈；CI 的 source / ci-node-media 构成完整 Node 检查 |
+| `npm run test:source` | 所有不依赖媒体、core、浏览器、外部工具或构建的 Node 逻辑测试；新增适用用例必须登记 | 日常与全量的 `source-logic`，不等待解码器构建 |
+| `npm run test:contract` | 清单、覆盖下限、独立结果、生命周期、发布依赖等契约 | 日常 source；全量 release identity 在安装依赖前也检查清单 |
 | `npm run test:suite -- unit` | 全部 Node 测试，包括真实 WASM 与媒体断言；准备完整媒体环境 | CI 为 `source-logic: source` 与 `unit: ci-node-media` 的互斥并集 |
-| `npm run test:browser:all` | 自动化浏览器检查及内部矩阵；Chromium/WebKit、媒体/core/FFmpeg，默认构建一次 | `ci-audio`、`ci-playback`、`ci-cache`、`ci-flv`、`ci-fate`、`ci-analysis-ui`、`ci-analysis-matrix-*`、`uncovered`、`flv-startup` 与 HEVC 四格矩阵 |
+| `npm run test:browser:all` | 自动化浏览器检查及内部矩阵；Chromium/WebKit、媒体/core/FFmpeg，默认构建一次 | 全量流水线的 `ci-audio`、`ci-playback`、`ci-cache`、`ci-flv`、`ci-fate`、`ci-analysis-ui`、`ci-analysis-matrix-*`、`uncovered`、`flv-startup` 与 HEVC 四格矩阵 |
 | `npm run test:media` | 真实媒体 Node / 浏览器检查；包括特殊的可信 HTTPS 功能用例 | playback / hevc-browser job；可信 HTTPS 仅在一次性 CI 主机执行 |
 | `npm run test:suite -- release` | 固定 core 来源、原生归档、归档浏览器及三平台汇总；需先生成对应产物 | decoder / native-release / release-set；打包及草稿操作仍由 workflow 管理 |
 | `npm run test:perf` | 索引构建、争用和可信 HTTPS 播放性能；所有结果显式 informational | 不在 GitHub CI 执行；在明确的本机环境单独验收 |
@@ -63,7 +74,7 @@ FLV 浏览器回归固定 640×480 视口，两种引擎均解码原始尺寸的
 
 HEVC 时间线检查保留每个输入两轮各 600 帧、每帧源尺寸截图、帧身份和 seek/逐帧/尾帧断言。Linux Chromium 每次全尺寸截图实测可耗时约 0.6–1.4 秒，因此 Chromium 单项总预算为 30 分钟，CI job 留出 35 分钟；这不是实时播放性能阈值。每 100 帧以及打开、seek、重开边界记录进度和呈现/截图/读回耗时；页面连续 180 秒没有进度则立即失败并输出最后阶段，关闭页面与浏览器。播放基准的帧率、延迟与停顿阈值不变。
 
-Node/WASM 单元由独立 `source-logic` / `unit` job 分工；串行 `playback` CI job 包含音频、播放、片源 UI、标注/缓存、FLV、FATE 和可信 HTTPS 检查。Linux 实测前序检查全部通过后，HTTPS 可在第 35 分钟才开始；该 job 总预算为 45 分钟，为后续检查和报告上传留出余量。统一清单中的各用例时限、FATE 步骤时限和必需断言均保持不变；不能将总预算取消解释为已完成 HTTPS 验证。
+Node/WASM 单元由独立 `source-logic` / `unit` job 分工；全量流水线的串行 `playback` job 包含音频、播放、片源 UI、标注/缓存、FLV、FATE 和可信 HTTPS 检查。Linux 实测前序检查全部通过后，HTTPS 可在第 35 分钟才开始；该 job 总预算为 45 分钟，为后续检查和报告上传留出余量。统一清单中的各用例时限、FATE 步骤时限和必需断言均保持不变；不能将总预算取消解释为已完成 HTTPS 验证。
 
 analysis matrix、FLV startup 和 HDR 功能套件通过 `scripts/testing/playback-presentation.mjs` 等待真实 Session 呈现事件：commit 与实际帧时间必须严格前进，源/generation、已提交帧和可用的精确 picture 身份必须匹配。20 秒无严格进展、60 秒总期限及独立 65 秒宿主 watchdog 限制宿主等待（浏览器清理由调用方 finally 负责）；重复帧与元数据心跳不能续期。暂停后保留原 100ms 稳定性观察，并拒绝迟到呈现。playing 时长从实际进入播放起计算，中途暂停再恢复也失败。只读窗口订阅直接复用 Session 状态与呈现事件，不复制帧资源或改变渲染/解码算法。
 
@@ -233,7 +244,7 @@ npm run test:presentation:browser
 
 帧队列同时按数量和字节限制，播放报告的 `measurements.buffers` 记录每轨当前值、峰值及上限。这仅统计队列内已解码帧，不代表浏览器总内存；解码器、压缩文件、画布与 GPU 还会占用内存。
 
-GitHub CI 只运行 `--functional-only`，检查载入、真实呈现、解码路径、资源释放和队列边界；失败仍阻止发布汇总。`--benchmark-only` 与无参数的完整入口保留为显式测试工具，不由工作流调度。原可信 HTTPS 工具需要一次性证书环境；普通本机性能测试继续使用 `bench-playback.mjs`，不会自动修改本机信任库。身份工作流仅在 PR 和 main 推送时触发，避免同一 PR 分支推送重复运行。
+GitHub CI 只运行 `--functional-only`，检查载入、真实呈现、解码路径、资源释放和队列边界；失败仍阻止发布汇总。`--benchmark-only` 与无参数的完整入口保留为显式测试工具，不由工作流调度。原可信 HTTPS 工具需要一次性证书环境；普通本机性能测试继续使用 `bench-playback.mjs`，不会自动修改本机信任库。身份与 HTTP 引导已并入日常浏览器 profile；原独立 identity 工作流移除，其 Node 用例仍由 source 完整执行。
 
 这些是当前设备上的 canvas 呈现证据，不是物理显示扫描、所有 Safari 版本、HDR 保真或低端硬件性能保证。浏览器下载和剪贴板还受宿主权限影响，不能用“调用成功”代替实际文件/内容送达验证。
 

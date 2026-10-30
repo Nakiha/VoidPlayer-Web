@@ -1,5 +1,7 @@
 # Quality browser gate audit
 
+Historical PR #156 audit. The scheduling policy below was superseded on 2026-10-30 by the daily/full split in [testing.md](testing.md). Test findings remain historical evidence; the full release workflow now runs the complete required cache suite, and daily CI uses the explicitly documented core-browser profile.
+
 This audit concerns the browser checks used by PR #156. It does not establish that the failures of PR #149 or #154 were fixed, and does not waive their reviews or required checks. No playback threshold, numerical assertion, timeout, product code or branch protection changes.
 
 ## What the checks protect

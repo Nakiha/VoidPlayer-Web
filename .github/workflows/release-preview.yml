@@ -1,11 +1,8 @@
-name: Build and verify standalone releases
+name: Full verification and standalone releases
 
 on:
-  pull_request:
   push:
-    branches: [main]
     tags: ['v*']
-    paths-ignore: ['docs/**', '**/*.md']
   workflow_dispatch:
 
 permissions:
@@ -31,140 +28,9 @@ jobs:
       - run: node scripts/release-version.mjs
       - run: node --test test/release-pipeline.test.mjs test/test-manifest.test.mjs
 
-  analysis-core:
-    name: Build pinned independent analysis WASM
-    runs-on: ubuntu-24.04
+  cores:
     needs: identity
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24.15.0'
-      - name: Read analysis lock
-        id: analysis-lock
-        run: |
-          node --input-type=module -e '
-          import {readFileSync,appendFileSync} from "node:fs";
-          const lock=JSON.parse(readFileSync("scripts/release-analysis.json","utf8"));
-          for(const [key,value]of Object.entries(lock))appendFileSync(process.env.GITHUB_OUTPUT,`${key}=${value}\n`);
-          '
-      - uses: actions/cache@v4
-        id: analysis-cache
-        with:
-          path: public/vendor/voidplayer-analysis
-          key: release-analysis-v1-${{ hashFiles('scripts/release-analysis.json', 'scripts/prepare-analysis-core.mjs', 'scripts/core-capabilities.mjs', 'scripts/core-artifacts.mjs') }}
-      - uses: actions/checkout@v4
-        if: steps.analysis-cache.outputs.cache-hit != 'true'
-        with:
-          repository: ${{ steps.analysis-lock.outputs.repository }}
-          ref: ${{ steps.analysis-lock.outputs.revision }}
-          path: .run/analysis-source
-      - uses: mymindstorm/setup-emsdk@v14
-        if: steps.analysis-cache.outputs.cache-hit != 'true'
-        with:
-          version: ${{ steps.analysis-lock.outputs.emscripten }}
-          actions-cache-folder: .run/emsdk-analysis-cache
-      - name: Build independent analysis core
-        if: steps.analysis-cache.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p .run/analysis-source/.build
-          printf '{"type":"commonjs"}\n' > .run/analysis-source/.build/package.json
-          python -m pip install meson==1.9.1 ninja==1.13.0
-          bash .run/analysis-source/scripts/build-analysis.sh
-          node scripts/prepare-analysis-core.mjs .run/analysis-source/dist/voidplayer-analysis
-      - name: Verify analysis reference ABI including restored caches
-        run: node scripts/prepare-analysis-core.mjs public/vendor/voidplayer-analysis
-      - uses: actions/upload-artifact@v4
-        with:
-          name: release-analysis-core
-          path: public/vendor/voidplayer-analysis/
-          if-no-files-found: error
-          retention-days: 14
-
-  decoder:
-    name: Build pinned WASM decoder
-    outputs:
-      ffmpegRepository: ${{ steps.core.outputs.ffmpegRepository }}
-      ffmpegRevision: ${{ steps.core.outputs.ffmpegRevision }}
-    runs-on: ubuntu-24.04
-    needs: identity
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24.15.0'
-      - name: Read decoder lock
-        id: core
-        run: |
-          node --input-type=module -e '
-          import { readFileSync, appendFileSync } from "node:fs";
-          const lock = JSON.parse(readFileSync("scripts/release-core.json", "utf8"));
-          for (const [key, value] of Object.entries(lock)) appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
-          '
-      - name: Restore exact decoder build
-        id: cache
-        uses: actions/cache@v4
-        with:
-          path: public/vendor/voidplayer-core
-          key: release-core-v1-${{ runner.os }}-${{ hashFiles('scripts/release-core.json', 'scripts/prepare-release-core.mjs', 'scripts/core-capabilities.mjs', 'scripts/core-artifacts.mjs') }}
-      - name: Checkout decoder build source
-        if: steps.cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ steps.core.outputs.repository }}
-          ref: ${{ steps.core.outputs.revision }}
-          path: .run/core-source
-      - name: Checkout FFmpeg source
-        if: steps.cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ steps.core.outputs.ffmpegRepository }}
-          ref: ${{ steps.core.outputs.ffmpegRevision }}
-          path: .run/core-source/.build/sources/ffmpeg-wasm
-      - name: Checkout dav1d source
-        if: steps.cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ steps.core.outputs.dav1dRepository }}
-          ref: ${{ steps.core.outputs.dav1dRevision }}
-          path: .run/core-source/.build/sources/dav1d-wasm
-      - name: Setup Emscripten
-        if: steps.cache.outputs.cache-hit != 'true'
-        uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: ${{ steps.core.outputs.emscripten }}
-          actions-cache-folder: .run/emsdk-cache
-      - uses: actions/setup-python@v5
-        if: steps.cache.outputs.cache-hit != 'true'
-        with:
-          python-version: '3.12'
-      - name: Install decoder build tools
-        if: steps.cache.outputs.cache-hit != 'true'
-        env:
-          MESON_VERSION: ${{ steps.core.outputs.meson }}
-          NINJA_VERSION: ${{ steps.core.outputs.ninja }}
-        run: python -m pip install "meson==$MESON_VERSION" "ninja==$NINJA_VERSION"
-      - name: Build both decoder variants using upstream build script
-        if: steps.cache.outputs.cache-hit != 'true'
-        env:
-          FFMPEG_REF: ${{ steps.core.outputs.ffmpegRef }}
-        run: |
-          # Meson emits CommonJS probes with an .exe extension; do not inherit
-          # the web application's package.json type=module in the build tree.
-          printf '%s\n' '{"type":"commonjs"}' > .run/core-source/.build/package.json
-          bash .run/core-source/scripts/build-wasm.sh --ffmpeg-ref "$FFMPEG_REF" --skip-package
-          bash .run/core-source/scripts/build-wasm.sh --ffmpeg-ref "$FFMPEG_REF" --skip-package --mt
-          node scripts/prepare-release-core.mjs .run/core-source
-      - name: Verify decoder provenance and required interfaces
-        run: node scripts/run-tests.mjs --case release-core
-      - uses: actions/upload-artifact@v4
-        with:
-          name: release-core
-          path: public/vendor/voidplayer-core/
-          if-no-files-found: error
-          retention-days: 14
+    uses: ./.github/workflows/prepare-cores.yml
 
   source-logic:
     name: Verify all source-only Node logic
@@ -187,7 +53,7 @@ jobs:
 
   analysis-browser:
     name: Verify analysis panel (${{ matrix.engine }})
-    needs: [decoder, analysis-core]
+    needs: cores
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -237,7 +103,7 @@ jobs:
 
   ssim-browser:
     name: Verify SSIM measurement and immutable evidence (${{ matrix.engine }})
-    needs: [decoder, analysis-core]
+    needs: cores
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
@@ -278,7 +144,7 @@ jobs:
 
   analysis-matrix:
     name: Verify analysis matrix (${{ matrix.engine }}, ${{ matrix.part }})
-    needs: [decoder, analysis-core]
+    needs: cores
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -319,12 +185,6 @@ jobs:
           sudo apt-get install -y ffmpeg
       - run: npx playwright install --with-deps ${{ matrix.engine }}
       - run: node scripts/run-tests.mjs --prepare
-      - name: Verify TS packet, raw timing, whole, cache and cancellation contracts
-        if: matrix.part == 'ts' && matrix.engine == 'chromium'
-        run: node scripts/run-tests.mjs --case node-bitstream-analysis-ts --prepared
-      - name: Verify JS container decode, index authority, restart and corruption contracts
-        if: matrix.part == 'js-containers' && matrix.engine == 'chromium'
-        run: node scripts/run-tests.mjs --case node-js-container-matrix,node-js-container-server-cache --prepared
       - name: Verify ${{ matrix.part }} analysis matrix on ${{ matrix.engine }}
         run: node scripts/run-tests.mjs ci-analysis-matrix-${{ matrix.part }} --engine ${{ matrix.engine }} --prepared
       - uses: actions/upload-artifact@v4
@@ -343,7 +203,7 @@ jobs:
 
   unit:
     name: Verify media-dependent Node regressions
-    needs: [decoder, analysis-core]
+    needs: cores
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -364,39 +224,10 @@ jobs:
           name: release-analysis-core
           path: public/vendor/voidplayer-analysis
       - run: npm ci
-      - name: Checkout pinned codec QA samples
-        uses: actions/checkout@v4
+      - uses: ./.github/actions/media-fixtures
         with:
-          repository: Nakiha/VoidPlayer
-          ref: 881eb5ccd706c33aa1ff35ab3a67ac3a226ccfba
-          path: .run/qa-samples
-          sparse-checkout: resources/video
-          lfs: true
-      - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
-      - name: Prepare complete unit-test fixtures
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg libnss3-tools libdav1d-dev
-          npm run fixtures:flv
-          npm run fixtures:hlg
-      - name: Prepare verified pinned FATE fixtures
-        uses: ./.github/actions/fate-fixtures
-      - name: Restore pinned native raw-plane oracle
-        id: oracle-cache
-        uses: actions/cache@v4
-        with:
-          path: .run/native-oracle
-          key: native-oracle-v1-${{ runner.os }}-${{ hashFiles('scripts/release-core.json', 'scripts/build-native-oracle.sh') }}
-      - name: Checkout pinned native oracle source
-        if: steps.oracle-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ needs.decoder.outputs.ffmpegRepository }}
-          ref: ${{ needs.decoder.outputs.ffmpegRevision }}
-          path: .run/oracle-source
-      - name: Build native reference decoder including VVC
-        if: steps.oracle-cache.outputs.cache-hit != 'true'
-        run: bash scripts/build-native-oracle.sh .run/oracle-source .run/native-oracle
+          ffmpeg-repository: ${{ needs.cores.outputs.ffmpegRepository }}
+          ffmpeg-revision: ${{ needs.cores.outputs.ffmpegRevision }}
       - run: node scripts/run-tests.mjs ci-node-media
         env:
           VOIDPLAYER_FFMPEG_ORACLE: ${{ github.workspace }}/.run/native-oracle/ffmpeg
@@ -413,7 +244,7 @@ jobs:
 
   playback:
     name: Verify trusted HTTPS, WebCodecs and source UI
-    needs: [decoder, analysis-core]
+    needs: cores
     runs-on: ubuntu-24.04
     # Node and cache suites have separate required jobs; preserve the original
     # browser/FATE case deadlines and this job budget.
@@ -436,43 +267,17 @@ jobs:
           name: release-analysis-core
           path: public/vendor/voidplayer-analysis
       - run: npm ci
-      - name: Checkout pinned codec QA samples
-        uses: actions/checkout@v4
+      - uses: ./.github/actions/media-fixtures
         with:
-          repository: Nakiha/VoidPlayer
-          ref: 881eb5ccd706c33aa1ff35ab3a67ac3a226ccfba
-          path: .run/qa-samples
-          sparse-checkout: resources/video
-          lfs: true
-      - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
-      - name: Prepare complete unit-test fixtures
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg libnss3-tools libdav1d-dev
-          npm run fixtures:flv
-          npm run fixtures:hlg
-      - name: Prepare verified pinned FATE fixtures
-        uses: ./.github/actions/fate-fixtures
-      - name: Restore pinned native raw-plane oracle
-        id: oracle-cache
-        uses: actions/cache@v4
-        with:
-          path: .run/native-oracle
-          key: native-oracle-v1-${{ runner.os }}-${{ hashFiles('scripts/release-core.json', 'scripts/build-native-oracle.sh') }}
-      - name: Checkout pinned native oracle source
-        if: steps.oracle-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ needs.decoder.outputs.ffmpegRepository }}
-          ref: ${{ needs.decoder.outputs.ffmpegRevision }}
-          path: .run/oracle-source
-      - name: Build native reference decoder including VVC
-        if: steps.oracle-cache.outputs.cache-hit != 'true'
-        run: bash scripts/build-native-oracle.sh .run/oracle-source .run/native-oracle
+          ffmpeg-repository: ${{ needs.cores.outputs.ffmpegRepository }}
+          ffmpeg-revision: ${{ needs.cores.outputs.ffmpegRevision }}
       - run: npx playwright install --with-deps chromium webkit
       - name: Build browser regression inputs
         id: browser-inputs
         run: node scripts/run-tests.mjs --prepare
+      - name: Verify identity and Agent annotation flows
+        if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
+        run: node scripts/run-tests.mjs --case browser-agent-annotations-chromium,browser-identity-chromium,identity-http-guide --prepared
       - name: Verify opportunistic audio before the full playback suites
         if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
         run: node scripts/run-tests.mjs ci-audio --prepared
@@ -535,7 +340,7 @@ jobs:
 
   cache-browser:
     name: Verify annotation persistence and unified cache management
-    needs: [decoder, analysis-core]
+    needs: cores
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -556,39 +361,10 @@ jobs:
           name: release-analysis-core
           path: public/vendor/voidplayer-analysis
       - run: npm ci
-      - name: Checkout pinned codec QA samples
-        uses: actions/checkout@v4
+      - uses: ./.github/actions/media-fixtures
         with:
-          repository: Nakiha/VoidPlayer
-          ref: 881eb5ccd706c33aa1ff35ab3a67ac3a226ccfba
-          path: .run/qa-samples
-          sparse-checkout: resources/video
-          lfs: true
-      - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
-      - name: Prepare complete unit-test fixtures
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg libnss3-tools libdav1d-dev
-          npm run fixtures:flv
-          npm run fixtures:hlg
-      - name: Prepare verified pinned FATE fixtures
-        uses: ./.github/actions/fate-fixtures
-      - name: Restore pinned native raw-plane oracle
-        id: oracle-cache
-        uses: actions/cache@v4
-        with:
-          path: .run/native-oracle
-          key: native-oracle-v1-${{ runner.os }}-${{ hashFiles('scripts/release-core.json', 'scripts/build-native-oracle.sh') }}
-      - name: Checkout pinned native oracle source
-        if: steps.oracle-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ needs.decoder.outputs.ffmpegRepository }}
-          ref: ${{ needs.decoder.outputs.ffmpegRevision }}
-          path: .run/oracle-source
-      - name: Build native reference decoder including VVC
-        if: steps.oracle-cache.outputs.cache-hit != 'true'
-        run: bash scripts/build-native-oracle.sh .run/oracle-source .run/native-oracle
+          ffmpeg-repository: ${{ needs.cores.outputs.ffmpegRepository }}
+          ffmpeg-revision: ${{ needs.cores.outputs.ffmpegRevision }}
       - run: npx playwright install --with-deps chromium webkit
       - name: Build browser regression inputs
         id: browser-inputs
@@ -602,29 +378,8 @@ jobs:
       - name: Verify annotation persistence and unified cache management
         env:
           DEBUG: pw:browser
-        if: ${{ github.event_name != 'pull_request' && !cancelled() && steps.browser-inputs.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
         run: node scripts/run-tests.mjs ci-cache --prepared
-      - name: Verify required PR quality and cache behavior
-        env:
-          DEBUG: pw:browser
-        if: ${{ github.event_name == 'pull_request' && !cancelled() && steps.browser-inputs.outcome == 'success' }}
-        run: node scripts/run-tests.mjs ci-cache-pr --prepared
-      - name: Diagnostic only - WebKit multi-page paused native presentation
-        id: webkit-paused-diagnostic
-        continue-on-error: true
-        env:
-          DEBUG: pw:browser
-        if: ${{ github.event_name == 'pull_request' && !cancelled() && steps.browser-inputs.outcome == 'success' }}
-        run: node scripts/run-tests.mjs --case browser-presented-quality-webkit --prepared --directory .run/test-suites/quality-browser-diagnostics
-      - name: Record non-blocking WebKit diagnostic outcome
-        if: ${{ always() && github.event_name == 'pull_request' }}
-        env:
-          DIAGNOSTIC_OUTCOME: ${{ steps.webkit-paused-diagnostic.outcome }}
-        run: |
-          node --input-type=module -e '
-          import {appendFileSync} from "node:fs";
-          appendFileSync(process.env.GITHUB_STEP_SUMMARY, `WebKit multi-page paused-native diagnostic: **${process.env.DIAGNOSTIC_OUTCOME || "not run"}** (non-blocking on PRs). This is not full WebKit paused-frame certification. See quality-browser-diagnostics/results.json.\n`);
-          '
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -635,8 +390,6 @@ jobs:
             /tmp/voidplayer-caches-*.png
             .run/workspace-sharing-browser-*/
             .run/test-suites/ci-cache/
-            .run/test-suites/ci-cache-pr/
-            .run/test-suites/quality-browser-diagnostics/
             .run/test-suites/preparation/
             .run/test-suites/build-receipt.json
             .run/playback-reports/
@@ -644,7 +397,7 @@ jobs:
 
   uncovered-regressions:
     name: Verify browser regressions no other job runs
-    needs: [decoder, analysis-core]
+    needs: cores
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     strategy:
@@ -707,7 +460,7 @@ jobs:
 
   hevc-browser:
     name: Verify HEVC timeline (${{ matrix.engine }}, ${{ matrix.input }})
-    needs: [decoder, analysis-core]
+    needs: cores
     runs-on: ubuntu-24.04
     # Chromium software graphics audits 1200 full-source captures. The case
     # has a separate no-progress watchdog; leave room for its 30-minute budget.
@@ -758,7 +511,7 @@ jobs:
 
   native-runtime:
     name: Verify runtime suites (${{ matrix.os }}, ${{ matrix.runtime }})
-    needs: [decoder, analysis-core]
+    needs: cores
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
@@ -808,7 +561,7 @@ jobs:
 
   native-release:
     name: Standalone ${{ matrix.platform }}
-    needs: [decoder, analysis-core]
+    needs: cores
     timeout-minutes: 20
     strategy:
       fail-fast: false

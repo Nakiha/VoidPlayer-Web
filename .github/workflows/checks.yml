@@ -1,0 +1,152 @@
+name: Verify changes
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-logic:
+    name: Verify all source-only Node logic
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - run: node scripts/release-version.mjs
+      - run: npm ci
+      - run: node scripts/run-tests.mjs source
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: source-logic-reports
+          path: .run/test-suites/source/
+          if-no-files-found: error
+
+  cores:
+    needs: source-logic
+    uses: ./.github/workflows/prepare-cores.yml
+
+  unit:
+    name: Verify media-dependent Node regressions
+    needs: cores
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use primary Ubuntu package archive
+        if: runner.os == 'Linux'
+        run: bash scripts/testing/prepare-ci-apt.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-core
+          path: public/vendor/voidplayer-core
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-analysis-core
+          path: public/vendor/voidplayer-analysis
+      - run: npm ci
+      - uses: ./.github/actions/media-fixtures
+        with:
+          ffmpeg-repository: ${{ needs.cores.outputs.ffmpegRepository }}
+          ffmpeg-revision: ${{ needs.cores.outputs.ffmpegRevision }}
+      - run: node scripts/run-tests.mjs ci-node-media
+        env:
+          VOIDPLAYER_FFMPEG_ORACLE: ${{ github.workspace }}/.run/native-oracle/ffmpeg
+      - name: Preserve complete unit outcomes and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: media-node-reports
+          path: |
+            .run/test-suites/ci-node-media/
+            .run/test-suites/build-receipt.json
+          if-no-files-found: error
+          retention-days: 30
+
+  browser:
+    name: Verify core browser flows (${{ matrix.engine }})
+    needs: cores
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/testing/prepare-ci-apt.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-core
+          path: public/vendor/voidplayer-core
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-analysis-core
+          path: public/vendor/voidplayer-analysis
+      - name: Prepare generated-media browser tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          npx playwright install --with-deps ${{ matrix.engine }}
+      - run: node scripts/run-tests.mjs ci-pr-browser --engine ${{ matrix.engine }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-browser-reports-${{ matrix.engine }}
+          include-hidden-files: true
+          path: |
+            .run/test-suites/ci-pr-browser/
+            .run/agent-annotations/
+            .run/cambi-reexecution/
+            .run/analysis-reports/
+            .run/native-vmaf/browser-${{ matrix.engine }}-8/
+            .run/native-cambi/browser-${{ matrix.engine }}-8/
+            .run/native-xpsnr/browser-${{ matrix.engine }}-8/
+            .run/native-presented-protocol/${{ matrix.engine }}/
+            .run/quality-workflow/${{ matrix.engine }}-8*/
+            .run/library-pair-browser-${{ matrix.engine }}/
+            .run/browser-fixtures/bitstream-*-${{ matrix.engine }}/
+            .run/browser-fixtures/browser-contracts-${{ matrix.engine }}/
+            .run/playback-reports/
+            /tmp/voidplayer-*.png
+          if-no-files-found: error
+          retention-days: 14
+
+  required:
+    name: Required verification
+    if: ${{ always() }}
+    needs: [source-logic, cores, unit, browser]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require every selected verification to succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node --input-type=module <<'JS'
+          const results = Object.entries(JSON.parse(process.env.RESULTS));
+          if (results.length !== 4 || results.some(([, job]) => job.result !== 'success')) {
+            console.error('Required verification incomplete:', results);
+            process.exit(1);
+          }
+          JS
