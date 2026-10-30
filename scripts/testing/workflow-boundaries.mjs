@@ -58,6 +58,7 @@ export async function checkCorrespondenceReceipts(browser,f){
 }
 export async function checkPreparationReceipts(browser,f){
  const c=await ownedContext(browser,f),p=await c.newPage(),delivery=gate(),seen=gate(),source={id:f.entries[0].id,version:f.entries[0].version},posts=[];
+ let paginated=false,holdFirst=false;const firstPage=gate(),firstSeen=gate();
  const jobs=[0,1].map(()=>({id:randomUUID(),state:'running',input:{source,operation:'probe',client:{id:'regression',name:'Regression'}},result:null}));
  try{
   await p.route('**/api/library/preparations**',async route=>{
@@ -66,7 +67,13 @@ export async function checkPreparationReceipts(browser,f){
     if(url.pathname.endsWith('/cancel')){seen.release();await delivery.promise;jobs[0].state='cancelled';return route.fulfill({json:jobs[0]});}
     posts.push({key:route.request().headers()['idempotency-key'],body:route.request().postData()});return route.fulfill({json:{}});
    }
-   const id=url.pathname.split('/').at(-1);return route.fulfill({json:id==='preparations'?{jobs,next:null}:jobs.find(j=>j.id===id)});
+   const id=url.pathname.split('/').at(-1);
+   if(id==='preparations'&&paginated){
+    const before=Number(url.searchParams.get('before')??0);
+    if(before===0&&holdFirst){firstSeen.release();await firstPage.promise;}
+    return route.fulfill({json:{jobs:[jobs[before===0?0:1]],next:before===0?1:null}}).catch(()=>{});
+   }
+   return route.fulfill({json:id==='preparations'?{jobs,next:null}:jobs.find(j=>j.id===id)});
   });
   await p.goto(f.base+'/admin/#discovery');await p.locator(`[data-job-id="${jobs[0].id}"]`).click();await p.locator('#discovery-cancel').click();await seen.promise;
   await p.locator(`[data-job-id="${jobs[1].id}"]`).click();await p.waitForFunction(id=>document.getElementById('discovery-job').textContent.includes(id),jobs[1].id);delivery.release();
@@ -75,8 +82,12 @@ export async function checkPreparationReceipts(browser,f){
   assert.equal(await p.locator('#discovery-probe').isDisabled(),true);await p.locator('#discovery-retry').click();await p.waitForFunction(()=>!document.getElementById('discovery-retry').disabled);
   assert.equal(posts.length,2);assert.deepEqual(posts[0],posts[1]);
   const saved=await p.evaluate(()=>Object.keys(sessionStorage).filter(k=>k.startsWith('voidplayer-library-preparation:')).map(k=>JSON.parse(sessionStorage.getItem(k))));assert.equal(saved.length,1);assert.equal(saved[0].key,posts[0].key);assert.equal(saved[0].confirmed,undefined);
-  return {lateCancelPreservesSelection:true,malformedReceiptRetainsFrozenSubmission:true};
- }finally{delivery.release();await drainAdminObservations(p);await c.close();}
+  paginated=true;await p.locator('#discovery-refresh-jobs').click();await p.waitForFunction(()=>document.querySelectorAll('#discovery-jobs [data-job-id]').length===1&&!document.getElementById('discovery-more-jobs').hidden);
+  holdFirst=true;await p.locator('#discovery-refresh-jobs').click();await firstSeen.promise;
+  await p.locator('#discovery-more-jobs').click();await p.locator(`#discovery-jobs [data-job-id="${jobs[1].id}"]`).waitFor();
+  firstPage.release();await drainAdminObservations(p);assert.equal(await p.locator('#discovery-jobs [data-job-id]').count(),2,'late first page cannot erase the explicitly requested next page');
+  return {lateCancelPreservesSelection:true,malformedReceiptRetainsFrozenSubmission:true,differentCursorSupersedesSlowRefresh:true};
+ }finally{firstPage.release();delivery.release();await drainAdminObservations(p);await c.close();}
 }
 
 export async function checkCandidateWorkspaceRoundtrip(browser,f,annotation){

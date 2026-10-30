@@ -266,9 +266,10 @@ export function installQualityCambi(signal: AbortSignal) {
     }
   }
   function history(more = false): Promise<void> {
+    const pageAfter=more?after:0;
+    browsingMore = more || browsingMore;
     return observation.run("history", "actor", async () => {
       if (!actor) return;
-      browsingMore = more || browsingMore;
       const c = context("actor", "history");
       try {
         const p = await api.request<{
@@ -277,7 +278,7 @@ export function installQualityCambi(signal: AbortSignal) {
           more: boolean;
         }>(
           c.actor,
-          `/api/quality/cambi/jobs?after=${more ? after : 0}&limit=8`,
+          `/api/quality/cambi/jobs?after=${pageAfter}&limit=8`,
           c.signal,
         );
         if (!valid(c)) return;
@@ -298,7 +299,7 @@ export function installQualityCambi(signal: AbortSignal) {
       } catch (e) {
         if (valid(c)) error(e);
       }
-    });
+    },`${more}:${pageAfter}`);
   }
   function frames(more = false): Promise<boolean> {
     if (more && observation.busy("frames")) return Promise.resolve(false);

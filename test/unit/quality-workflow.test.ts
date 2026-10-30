@@ -254,3 +254,12 @@ test('correspondence acknowledgement requires a complete durable plan/relation b
  assert.doesNotThrow(()=>assertCorrespondenceReceipt({relation:f.relation,replayed:true},'owner',{key:f.relation.key,body:f.relation.input},'relation'));
  const incomplete:any=structuredClone(f.relation);delete incomplete.assessment;assert.throws(()=>assertCorrespondenceReceipt({relation:incomplete,replayed:false},'owner',{key:f.relation.key,body:f.relation.input},'relation'));
 });
+
+test('observation coalesces the same page but a different cursor supersedes its old publication',async()=>{
+ const scope=new QualityObservationScope(),gate=deferred<void>(),published:number[]=[];let oldSignal:AbortSignal|undefined;
+ const first=scope.run('history','actor',async()=>{const c=scope.capture('actor','history');oldSignal=c.signal;await gate.promise;if(c.current())published.push(0);},'first:0');
+ assert.equal(scope.run('history','actor',async()=>assert.fail('same page must share its request'),'first:0'),first);
+ const next=scope.run('history','actor',async()=>{const c=scope.capture('actor','history');if(c.current())published.push(2);},'more:2');
+ try{assert.equal(oldSignal!.aborted,true,'a different pagination intent cannot reuse the first-page request');}finally{gate.resolve();}
+ await Promise.all([first,next]);assert.deepEqual(published,[2]);scope.close();
+});

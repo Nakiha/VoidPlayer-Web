@@ -192,8 +192,9 @@ export function installTemporalQuality<Input, Score>(
     }
   }
   function list(more = false): Promise<void> {
+    const pageAfter=more?after:0;
+    browsingMore = more || browsingMore;
     return observation.run("history", "actor", async () => {
-      browsingMore = more || browsingMore;
       const c = context("actor", "history");
       if (!c.actor) return;
       try {
@@ -203,7 +204,7 @@ export function installTemporalQuality<Input, Score>(
           more: boolean;
         }>(
           c.actor,
-          `/api/quality/${kind}/jobs?after=${more ? after : 0}&limit=8`,
+          `/api/quality/${kind}/jobs?after=${pageAfter}&limit=8`,
           c.signal,
         );
         if (!valid(c)) return;
@@ -236,7 +237,7 @@ export function installTemporalQuality<Input, Score>(
       } catch (e) {
         if (valid(c)) error(e);
       }
-    });
+    },`${more}:${pageAfter}`);
   }
   function frames(more = false): Promise<boolean> {
     return observation.run("frames", "selection", async () => {

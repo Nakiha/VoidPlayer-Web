@@ -25,7 +25,7 @@ type Pending=FrozenSubmission<PreparationInput>;
 export function installDiscovery(signal:AbortSignal){
   const $=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(`discovery-${id}`)as T;
   const api=new LibraryDiscoveryClient();let active=false,owner='',busy=false,invalidDraft=false;const observation=new QualityObservationScope();
-  let querySequence=0,detailSequence=0,historySequence=0,identitySequence=0;
+  let querySequence=0,detailSequence=0,identitySequence=0;
   let selected:DiscoveryItem|null=null,page:DiscoveryPage|null=null,job:PreparationJob|null=null,pending:Pending|null=null,moreJobs:number|null=null,historyAdvanced=false,selectedJobId='';
   let queryParams=new URLSearchParams();
   let client:string;try{client=sessionStorage.getItem('voidplayer-library-discovery-client')??randomUUID();if(!/^[a-zA-Z0-9._:-]{1,80}$/.test(client))client=randomUUID();sessionStorage.setItem('voidplayer-library-discovery-client',client);}catch{client=randomUUID();}
@@ -65,13 +65,13 @@ export function installDiscovery(signal:AbortSignal){
       job=value;$('job').textContent=JSON.stringify(value,null,2);actions();
       if(value.state==='completed'&&selected&&value.input.source.id===selected.source.id&&value.input.source.version===selected.source.version){const detailTicket=detailSequence;const fresh=await api.detail(selected.source,c.owner,c.signal);if(valid(c)&&id===selectedJobId&&detailTicket===detailSequence){selected=fresh;renderDetail();}}
     }catch(e){if(valid(c)&&id===selectedJobId)$('job-status').textContent=error(e);}});}
-  function history(more=false):Promise<void>{return observation.run('history','actor',async()=>{if(!owner)return;const c=context('actor','history'),ticket=++historySequence;try{const result=await api.jobs(c.owner,c.signal,more?moreJobs??0:0);if(!valid(c)||ticket!==historySequence)return;
+  function history(more=false):Promise<void>{const before=more?moreJobs??0:0;if(more)historyAdvanced=true;return observation.run('history','actor',async()=>{if(!owner)return;const c=context('actor','history');try{const result=await api.jobs(c.owner,c.signal,before);if(!valid(c))return;
       moreJobs=result.next;$('more-jobs').hidden=moreJobs===null;if(more)historyAdvanced=true;
       const list=$('jobs'),existing=new Map([...list.querySelectorAll<HTMLButtonElement>('button[data-job-id]')].map(b=>[b.dataset.jobId!,b]));
       for(const [index,value] of result.jobs.entries()){const button=existing.get(value.id)??document.createElement('button');existing.delete(value.id);button.type='button';button.dataset.jobId=value.id;const label=`${value.state} · ${value.input.operation} · ${value.input.source.id}@${value.input.source.version} · ${value.id}`;if(button.textContent!==label)button.textContent=label;button.onclick=()=>void chooseJob(value.id);
         if(more){if(!button.isConnected)list.append(button);}else if(list.children[index]!==button)list.insertBefore(button,list.children[index]??null);}
       if(!more)for(const button of existing.values())button.remove();
-    }catch(e){if(valid(c)&&ticket===historySequence)$('job-status').textContent=t(msg('discovery.observeError','观察暂不可用：{error}。不表示后台任务失败。'),{error:error(e)});}});}
+    }catch(e){if(valid(c))$('job-status').textContent=t(msg('discovery.observeError','观察暂不可用：{error}。不表示后台任务失败。'),{error:error(e)});}},`${more}:${before}`);}
   async function submit(operation?:PreparationInput['operation']){if(busy||!owner||!active||invalidDraft)return;const c=context(),view=context('selection');
     try{
       if(!pending){if(!selected||!operation)return;sessionStorage.setItem('voidplayer-library-discovery-client',client);
