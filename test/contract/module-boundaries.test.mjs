@@ -76,3 +76,10 @@ test('embedded Bun Worker addresses resolve from the compiled server root',()=>{
  project({'server/analysis/bitstream/scheduler.ts':scheduler,'server/analysis/bitstream/worker.ts':'export {};'},root=>assert.throws(()=>checkModuleBoundaries(root),/missing compiled-url dependency/));
  project({'server/analysis/bitstream/scheduler.ts':scheduler.replace('./analysis/worker.ts','./analysis/bitstream/worker.ts'),'server/analysis/bitstream/worker.ts':'export {};'},root=>assert.equal(checkModuleBoundaries(root).edges.filter(e=>e.to==='server/analysis/bitstream/worker.ts').length,2));
 });
+
+test('service, decoder and bitstream validation dependencies retain their declared direction',()=>{
+ project({'src/services/access.ts':"import '../../src/ui/view.ts';",'src/ui/view.ts':'export {};'},root=>assert.throws(()=>checkModuleBoundaries(root),/service imports UI/));
+ project({'src/media/decoding/packet-media.ts':"import './ffmpeg-media.ts';",'src/media/decoding/ffmpeg-media.ts':'export {};'},root=>assert.throws(()=>checkModuleBoundaries(root),/concrete decoder imports routing facade/));
+ project({'shared/analysis/bitstream/contract.ts':"import './diagrams.ts';",'shared/analysis/bitstream/diagrams.ts':'export {};'},root=>assert.throws(()=>checkModuleBoundaries(root),/analysis contract imports product\/display owner/));
+ project({'shared/analysis/bitstream/contract.ts':"import type {Picture} from './diagrams.ts';",'shared/analysis/bitstream/diagrams.ts':'export type Picture=number;'},root=>assert.doesNotThrow(()=>checkModuleBoundaries(root)));
+});

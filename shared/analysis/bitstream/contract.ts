@@ -1,5 +1,5 @@
 import { parseMediaIndexIdentity } from "../../media/indexing/media-index-identity.ts";
-import { validateDiagram, validateContainerHeader } from "./diagrams.ts";
+import { validateDiagram, validateContainerHeader } from "./diagram-validation.ts";
 import type { FrameDescription } from "../../media/frame-description.ts";
 import { AnalysisFailure, ANALYSIS_REASON_CODES } from "./failure.ts";
 import type { AnalysisReasonCode } from "./failure.ts";
@@ -159,16 +159,8 @@ export function validateRange(target: AnalysisRangeTarget) {
       "Analysis interval budget exceeded",
     );
 }
-export const BUDGET = Object.freeze({
-  packets: 300,
-  inputBytes: 32 * 1024 * 1024,
-  packetBytes: 8 * 1024 * 1024,
-  blocks: 131072,
-  resultBytes: 8 * 1024 * 1024,
-  cacheBytes: 32 * 1024 * 1024,
-  requests: 32,
-  leaseMs: 30000,
-});
+export {BUDGET} from "./limits.ts";
+import {BUDGET} from "./limits.ts";
 export function pictureId(key: SourcePictureKey): string {
   return JSON.stringify([
     key.sourceVersion,

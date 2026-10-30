@@ -6,6 +6,7 @@ import type { FsFileHandle, HandleRecord, HandleStore } from '../../src/services
 const memoryStore = () => {
   const map = new Map<string, HandleRecord>();
   const store: HandleStore = {
+    putMany: async records=>{for(const record of records)map.set(record.key,record);},
     get: async key => map.get(key),
     put: async record => { map.set(record.key, record); },
     remove: async key => { map.delete(key); },
@@ -59,4 +60,31 @@ test('changed or vanished files go stale and drop the stored handle', async () =
 
 test('handle keys reuse the catalog identity', async () => {
   assert.equal(handleKey(file()), handleKey({ name: 'a.mp4', size: 10, lastModified: 7 }));
+});
+
+test('mtime drift commits canonical access before returning, and preserves old workspace aliases',async()=>{
+ const {store,map}=memoryStore(),original=file(),changed=file({lastModified:8}),access=handle({getFile:async()=>changed});
+ const oldKey=handleKey(original);await saveFileHandle(oldKey,access as unknown as FsFileHandle,original,store);
+ const first=await restoreHandleFile(oldKey,store),canonical=handleKey(first);
+ assert.notEqual(canonical,oldKey);assert.equal(map.get(canonical)?.lastModified,8);assert.equal(map.get(oldKey)?.lastModified,8);
+ assert.deepEqual(await restoreHandleFile(canonical,store),changed);assert.deepEqual(await restoreHandleFile(oldKey,store),changed);
+ const saved=store.putMany;store.putMany=async()=>{throw Error('storage aborted');};
+ await saveFileHandle(oldKey,access as unknown as FsFileHandle,original,store);
+ await assert.rejects(restoreHandleFile(oldKey,store),e=>e instanceof FileHandleError&&e.kind==='unavailable');
+ assert.ok(map.get(oldKey),'storage failure must not destroy the recoverable handle');store.putMany=saved;
+});
+
+test('IndexedDB request success is provisional until commit; aborted writes never report success',async()=>{
+ const {IDBFactory,IDBObjectStore}=await import('fake-indexeddb');
+ const {indexedDBHandleStore}=await import('../../src/services/file-handles.ts');
+ const previous=globalThis.indexedDB,put=IDBObjectStore.prototype.put;
+ globalThis.indexedDB=new IDBFactory();
+ try{
+  const store=indexedDBHandleStore(),record={key:'committed',name:'file',size:1,lastModified:0,savedAt:0,handle:{kind:'file',name:'file'} as FsFileHandle};
+  await store.put(record);assert.ok(await store.get(record.key));
+  IDBObjectStore.prototype.put=function(...args:Parameters<typeof put>){const request=put.apply(this,args);request.addEventListener('success',()=>queueMicrotask(()=>this.transaction.abort()));return request;};
+  await assert.rejects(store.put({...record,key:'aborted'}));assert.equal(await store.get('aborted'),undefined);
+  await assert.rejects(store.putMany([{...record,key:'alias'},{...record,key:'canonical'}]));
+  assert.equal(await store.get('alias'),undefined);assert.equal(await store.get('canonical'),undefined);assert.ok(await store.get(record.key));
+ }finally{IDBObjectStore.prototype.put=put;globalThis.indexedDB=previous;}
 });

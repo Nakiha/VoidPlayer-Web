@@ -50,6 +50,10 @@ export function checkModuleBoundaries(root) {
     if (from.startsWith('src/')) assert.ok(!to.startsWith('server/'), `${from}: frontend imports server ${to}`);
     if (from.startsWith('shared/')) assert.ok(!/^(src|server)\//.test(to), `${from}: shared code imports host ${to}`);
     if (from.startsWith('server/') && to.startsWith('src/')) assert.ok(false, `${from}: server imports frontend ${to}`);
+    if(from.startsWith('src/services/'))assert.ok(!to.startsWith('src/ui/'),`${from}: service imports UI ${to}`);
+    if(['src/media/decoding/packet-media.ts','src/media/decoding/ffmpeg-container-media.ts','src/media/decoding/fallback-runtime.ts'].includes(from))
+      assert.ok(!['src/media/decoding/software-media.ts','src/media/decoding/ffmpeg-media.ts'].includes(to),`${from}: concrete decoder imports routing facade ${to}`);
+    if(from==='shared/analysis/bitstream/contract.ts'&&edge.kind!=='type')assert.ok(!/shared\/analysis\/bitstream\/(diagrams|products)\.ts$/.test(to),`${from}: analysis contract imports product/display owner ${to}`);
     edges.push({ from, to, kind: edge.kind });
   }
   for (const file of files) {

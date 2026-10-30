@@ -1,7 +1,7 @@
 import { probeContainer } from '../policy/container-probe.ts';
 import type { ContainerKind } from '../policy/container-probe.ts';
 import type { RandomAccessInput } from '../../../shared/media/io/range-reader.ts';
-import type { FallbackDeps } from './ffmpeg-media.ts';
+import type { FallbackDeps } from './fallback-runtime.ts';
 import type { MediaMeta, MediaSource } from '../source.ts';
 import { MediaOpenError } from '../../../shared/media/io/media-errors.ts';
 import { loadAborted } from '../../../shared/media/io/media-abort.ts';
@@ -22,6 +22,6 @@ export async function openSoftwareMedia(input: RandomAccessInput, meta: MediaMet
       contextLog().info('media', 'MP4 压缩包路径不可用，使用 FFmpeg 解封装', { reason: error.message });
     }
   }
-  const { openFFmpegMedia, openFFmpegContainerFromUrl } = await import('./ffmpeg-media.ts');
+  const { openFFmpegMedia, openFFmpegContainerFromUrl } = await import('./ffmpeg-container-media.ts');
   return 'file' in input ? openFFmpegMedia(input.file as File, deps) : openFFmpegContainerFromUrl(input.url, meta, deps);
 }

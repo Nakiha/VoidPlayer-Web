@@ -18,7 +18,7 @@ import { installLibraryBrowser } from '../library-browser.ts';
 import { installLibraryFileMenu } from '../library-file-menu.ts';
 import { installSourceScrollbar } from '../source-scrollbar.ts';
 import { sourceInUse, sourceKey } from '../source-catalog.ts';
-import { FileHandleError, handleKey, hasFileHandle, pickVideoFiles, restoreHandleFile, saveFileHandle, supportsFileHandles } from '../../services/file-handles.ts';
+import { FileHandleError, handleKey, hasFileHandle, pickVideoFiles, restoreHandleSource, saveFileHandle, supportsFileHandles } from '../../services/file-handles.ts';
 import type { SourceItem } from '../source-catalog.ts';
 import { libraryAccessMessage, localAccessMessage } from '../source-access-message.ts';
 import type { LibraryAccessProblem, LocalAccessProblem } from '../../../shared/media/io/source-access.ts';
@@ -405,8 +405,9 @@ export function createSourcesPane(shared: WorkbenchShared) {
     let reason: LocalAccessProblem = supportsFileHandles() ? 'unavailable' : 'unsupported';
     if (supportsFileHandles()) {
       try {
-        openLive(await restoreHandleFile(item.key));
-        handleKnown.set(item.key, true);
+        const restored=await restoreHandleSource(item.key);
+        handleKnown.set(restored.key,true);handleKnown.set(item.key,true);
+        openLive(restored.file);
         return;
       } catch (error) {
         if (error instanceof FileHandleError) reason = error.kind;

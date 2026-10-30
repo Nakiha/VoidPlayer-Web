@@ -148,7 +148,7 @@ async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftwa
         ...(reference ? {} : { nativeColorMode: 'browser' as const }), forceWasm });
     };
     const openFfmpeg = async () => {
-      const { openFFmpegMedia, openFFmpegContainerFromUrl } = await import('./decoding/ffmpeg-media.ts');
+      const { openFFmpegMedia, openFFmpegContainerFromUrl } = await import('./decoding/ffmpeg-container-media.ts');
       return 'file' in input ? openFFmpegMedia(input.file as File, { signal, onProgress })
         : openFFmpegContainerFromUrl(input.url, meta, { signal, onProgress });
     };
