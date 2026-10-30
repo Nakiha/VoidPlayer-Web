@@ -16,6 +16,7 @@
     "src/admin/quality-ranges.ts",
     "src/admin/quality-reexecution.ts",
     "src/admin/quality-summary.ts",
+    "src/admin/quality-temporal.ts",
     "src/admin/quality-vmaf.ts",
     "src/admin/quality-xpsnr-comparison.ts",
     "src/admin/quality-xpsnr.ts",

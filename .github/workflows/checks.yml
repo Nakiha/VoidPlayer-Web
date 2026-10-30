@@ -38,10 +38,14 @@ jobs:
     uses: ./.github/workflows/prepare-cores.yml
 
   unit:
-    name: Verify media-dependent Node regressions
+    name: Verify media Node (${{ matrix.part }})
     needs: cores
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [analysis, containers, playback-quality]
     steps:
       - uses: actions/checkout@v4
       - name: Use primary Ubuntu package archive
@@ -64,16 +68,16 @@ jobs:
         with:
           ffmpeg-repository: ${{ needs.cores.outputs.ffmpegRepository }}
           ffmpeg-revision: ${{ needs.cores.outputs.ffmpegRevision }}
-      - run: node scripts/run-tests.mjs ci-node-media
+      - run: node scripts/run-tests.mjs ci-node-media-${{ matrix.part }}
         env:
           VOIDPLAYER_FFMPEG_ORACLE: ${{ github.workspace }}/.run/native-oracle/ffmpeg
       - name: Preserve complete unit outcomes and failures
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: media-node-reports
+          name: media-node-reports-${{ matrix.part }}
           path: |
-            .run/test-suites/ci-node-media/
+            .run/test-suites/ci-node-media-${{ matrix.part }}/
             .run/test-suites/build-receipt.json
           if-no-files-found: error
           retention-days: 30

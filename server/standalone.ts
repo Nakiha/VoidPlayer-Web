@@ -111,7 +111,8 @@ async function main() {
   const service = await startService(config, false, { version, revision });
   let closing = false;
   const close = async () => { if (closing) return; closing = true; await service.close(); };
-  process.on('SIGINT', close); process.on('SIGTERM', close);
+  const stop = () => { void close().catch(error => { console.error(error); process.exitCode = 1; }); };
+  process.on('SIGINT', stop); process.on('SIGTERM', stop);
 }
 void main().catch(error => {
   console.error(error instanceof Error ? error.message : String(error));

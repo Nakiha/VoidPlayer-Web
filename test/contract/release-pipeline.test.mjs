@@ -37,7 +37,10 @@ test('daily verification is bounded and full release verification is explicit', 
   assert.match(cores, /workflow_call:/);
   assert.match(coreJobs.decoder.body, /run-tests\.mjs --case release-core/);
   assert.match(jobs['source-logic'].body, /run-tests\.mjs source/);
-  assert.match(jobs.unit.body, /run-tests\.mjs ci-node-media\n/);
+  assert.match(jobs.unit.body, /run-tests\.mjs ci-node-media-\$\{\{ matrix.part \}\}\n/);
+  assert.match(jobs.unit.body, /fail-fast: false/);
+  assert.match(jobs.unit.body, /name: media-node-reports-\$\{\{ matrix.part \}\}/);
+  assert.match(jobs.unit.body, /\.run\/test-suites\/ci-node-media-\$\{\{ matrix.part \}\}\//);
   assert.match(jobs.unit.body, /uses: \.\/\.github\/actions\/media-fixtures/);
   assert.match(jobs.browser.body, /engine: \[chromium, webkit\]/);
   assert.match(jobs.browser.body, /run-tests\.mjs ci-pr-browser --engine \$\{\{ matrix.engine \}\}/);
@@ -56,6 +59,12 @@ test('daily verification is bounded and full release verification is explicit', 
     assert.equal(run(outcomes) === 0, result === 'success', `${dependency}: ${result}`);
   }
   const manifest = JSON.parse(await readFile(new URL('../../scripts/testing/manifest.json', import.meta.url), 'utf8'));
+  const parts = /part: \[([^\]]+)\]/.exec(jobs.unit.body)[1].split(',').map(v=>v.trim());
+  assert.deepEqual(parts,manifest.ciNodeMediaShards);
+  const media = manifest.cases.filter(row=>row.suites.includes('ci-node-media'));
+  const partitioned = parts.flatMap(part=>manifest.cases.filter(row=>row.suites.includes('ci-node-media-'+part)));
+  assert.equal(new Set(partitioned.map(row=>row.id)).size,partitioned.length,'no repeated execution');
+  assert.deepEqual(partitioned.map(row=>row.id).sort(),media.map(row=>row.id).sort(),'complete media coverage, not a daily subset');
   const profile = manifest.cases.filter(row => row.suites.includes('ci-pr-browser'));
   assert.equal(profile.length, 33, 'daily profile growth requires an explicit coverage/budget review');
   assert.ok(profile.every(row => row.required && row.fixtures.every(value => ['core', 'analysis-core'].includes(value))));
@@ -148,7 +157,7 @@ test('all platform/runtime suites run independently of the compiled package jobs
     assert.doesNotMatch(body, /continue-on-error:/);
   }
   assert.match(runtimeJob.body, /if: always\(\)[\s\S]*name: native-runtime-reports-\$\{\{ matrix\.os \}\}-\$\{\{ matrix\.runtime \}\}[\s\S]*path: \.run\/test-suites\//);
-  const expectedCounts = { node: 25, bun: 39 };
+  const expectedCounts = { node: 27, bun: 41 };
   for (const runtime of ['node', 'bun']) {
     const suite = `ci-native-${runtime}`, command = `run: node scripts/run-tests.mjs ${suite}\n`;
     assert.equal(runtimeJob.body.split(command).length - 1, 1);
@@ -159,6 +168,7 @@ test('all platform/runtime suites run independently of the compiled package jobs
       assert.equal(cases.length, expectedCounts[runtime], `${runtime}/${platform} keeps every case`);
       assert.equal(new Set(cases.map(row => row.id)).size, cases.length);
       assert.ok(cases.every(row => row.required));
+      for(const id of [`${runtime}-service-shutdown`,`${runtime}-temporal-scoring-service`]) assert.ok(cases.some(row=>row.id===id),`${runtime}/${platform} preserves real ownership/restart regressions`);
       for (const id of [`${runtime}-native-xpsnr-http`, `${runtime}-analysis-xpsnr-sequence-http`]) {
         const xpsnr = cases.find(row => row.id === id);
         assert.ok(xpsnr, `${runtime}/${platform} keeps both XPSNR groups`);

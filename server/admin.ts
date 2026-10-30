@@ -1,3 +1,4 @@
+import {closeResources} from './shutdown.ts';
 import type {AdminStatus,RootConfiguration,LogPage,LogDocument,AnalysisSettings,RootReasonCode} from '../shared/service/admin.ts';
 export type {RootReasonCode} from '../shared/service/admin.ts';
 import { AnalysisScheduler } from './analysis/bitstream/scheduler.ts';
@@ -67,7 +68,13 @@ export class AdminController {
   private cpu = process.cpuUsage();
   private cpuAt = performance.now();
   private cpuPercent = 0;
-  constructor(config: ServiceConfig, library: MediaLibraryIndex, build = { version: 'development', revision: 'source' }) { this.config = config; this.library = library; this.build = build; this.measurements = new Measurements(library); this.workspaces = new WorkspaceStore(path.join(config.dataDir, 'workspaces.sqlite')); this.annotations = new AnnotationStore(path.join(config.dataDir, 'annotations.sqlite')); }
+  constructor(config: ServiceConfig, library: MediaLibraryIndex, build = { version: 'development', revision: 'source' }) { this.config = config; this.library = library; this.build = build; this.measurements = new Measurements(library); this.workspaces = new WorkspaceStore(path.join(config.dataDir, 'workspaces.sqlite'));
+    try { this.annotations = new AnnotationStore(path.join(config.dataDir, 'annotations.sqlite')); }
+    catch (error) {
+      try { this.workspaces.close(); }
+      catch (cleanup) { throw new AggregateError([error, cleanup], 'Admin initialization failed', { cause: error }); }
+      throw error;
+    } }
   get caches() { return new CacheManager(this.config.dataDir, this.library.frameIndexes, this.annotations, this.library.thumbnails); }
   status(): AdminStatus {
     const now = performance.now(), elapsed = now - this.cpuAt;
@@ -86,6 +93,7 @@ export class AdminController {
     return { roots: this.library.definitions.map(({ id, path, name }) => ({ id, path, name })), revision: origin?.revision ?? null, writable: !!origin && !origin.rootsFromCli && !changed && writeAccess, changedExternally: changed, configFile: origin?.file ?? null, reasonCode: (changed ? 'external-change' : origin?.rootsFromCli ? 'cli-override' : !origin ? 'no-source' : !writeAccess ? 'not-writable' : null) as RootReasonCode | null, reason: changed ? '配置文件已被外部修改，请重启服务以重新载入。' : origin?.rootsFromCli ? '当前根目录由 --folder 覆盖，请修改启动参数或改用配置文件。' : !origin ? '此服务未提供可写配置来源。' : !writeAccess ? '配置所在目录不可写，请调整数据目录权限。' : null };
   }
   saveRoots(document: unknown) {
+    if (this.closing) throw new AdminError(503, '服务正在关闭。');
     if (this.mutation) throw new AdminError(409, '另一项配置修改正在保存，请稍后重试。');
     const operation = this.updateRoots(document).finally(() => { this.mutation = null; });
     this.mutation = operation; return operation;
@@ -120,6 +128,7 @@ export class AdminController {
       reasonCode: (changed ? 'external-change' : !origin ? 'no-source' : !writeAccess ? 'not-writable' : null) as RootReasonCode | null };
   }
   saveAnalysisSettings(document: unknown) {
+    if (this.closing) throw new AdminError(503, '服务正在关闭。');
     if (this.mutation) throw new AdminError(409, '另一项配置修改正在保存，请稍后重试。');
     const operation = this.updateAnalysisSettings(document).finally(() => { this.mutation = null; });
     this.mutation = operation; return operation;
@@ -179,5 +188,16 @@ export class AdminController {
     if (!version) throw new AdminError(428, '删除需要当前日志版本。');
     const { file } = await this.logFile(name, version); await fs.unlink(file); return { ok: true };
   }
-  async close() { await this.measurements.close(); await this.mutation?.catch(() => {}); await this.analysisInstance?.close(); this.workspaces.close(); this.annotations.close(); }
+  private closing?: Promise<void>;
+  close() { return this.closing ??= closeResources('Admin shutdown incomplete', [
+    ['measurements', () => this.measurements.close()],
+    // A pending settings write may create the analysis scheduler. Drain that
+    // producer before closing its eventual executor; the library waits for both.
+    ['configuration mutation and bitstream analysis', async () => {
+      await this.mutation?.catch(() => {});
+      await this.analysisInstance?.close();
+    }],
+    ['workspaces', () => this.workspaces.close()],
+    ['annotations', () => this.annotations.close()],
+  ]); }
 }

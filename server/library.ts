@@ -1,3 +1,4 @@
+import {closeResources} from './shutdown.ts';
 import {WasmCambiRunner} from './analysis/cambi/wasm-runner.ts';
 import {WasmVmafRunner} from './analysis/vmaf/wasm-runner.ts';
 import {NativeCambiService} from './analysis/cambi/service.ts';
@@ -215,8 +216,8 @@ export class MediaLibraryIndex {
   stop() {
     this.stopped = true;
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
-    this.watchers?.close(); this.watchers = null;
-    this.cancel();
+    try { this.watchers?.close(); }
+    finally { this.watchers = null; this.cancel(); }
   }
   private async io<T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> {
     if (signal?.aborted) throw new DOMException('扫描已取消', 'AbortError');
@@ -418,19 +419,29 @@ export class MediaLibraryIndex {
       return real;
     } catch { return null; }
   }
-  close() { return this.closing ??= this.closeOwned(); }
-  private async closeOwned() {
-    this.closed = true; this.stop();
-    this.taskService?.close();
-    await this.reexecutionService?.close();
-    await this.correspondenceService?.close();
-    await this.cambiService?.close();
-    await this.xpsnrService?.close();
-    await this.vmafService?.close();
-    await this.discoveryService?.close();
-    await this.rangeService?.close();
-    await this.jobService?.close();
-    await this.pairRunner?.close();await this.pending?.catch(() => {}); await this.indexJobs.close(); this.store.close();
+  /** External owners (for example admin analysis) may share the index. */
+  close(ownersStopped?: Promise<void>) { return this.closing ??= this.closeOwned(ownersStopped); }
+  private async closeOwned(ownersStopped?: Promise<void>) {
+    this.closed = true;
+    await closeResources('Library shutdown incomplete; shared database ownership retained', [
+      ['external index owners', () => ownersStopped],
+      ['scan scheduling', () => this.stop()],
+      ['task observations', () => this.taskService?.close()],
+      ['reexecution planning', () => this.reexecutionService?.close()],
+      ['correspondence planning', () => this.correspondenceService?.close()],
+      ['CAMBI', () => this.cambiService?.close()],
+      ['XPSNR', () => this.xpsnrService?.close()],
+      ['VMAF', () => this.vmafService?.close()],
+      ['discovery', () => this.discoveryService?.close()],
+      ['ranges', () => this.rangeService?.close()],
+      ['single-frame jobs', () => this.jobService?.close()],
+      ['pair executor', () => this.pairRunner?.close()],
+      ['library scan', () => this.pending?.catch(() => {})],
+      ['index executors', () => this.indexJobs.close()],
+    ]);
+    // An uncertain child may still use this connection. Never unlock it just
+    // because other independent executors have successfully stopped.
+    this.store.close();
   }
   /** Serialize configuration with scans. Persist first; a failed DB switch rolls
    * back the file before allowing scans again. Existing byte streams stay open. */

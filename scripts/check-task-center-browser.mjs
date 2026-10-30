@@ -1,3 +1,4 @@
+import {checkTaskResultRelease} from './testing/task-result-release.mjs';
 import assert from 'node:assert/strict';
 import {mkdir,writeFile} from 'node:fs/promises';
 import path from 'node:path';
@@ -63,6 +64,7 @@ try{
  await page.locator('[data-pane="overview"]').click();check('closing task observation hides private details',await page.locator('#tasks-detail').isHidden());check('completed original result remains available',(await f.json(`/api/tasks/vmaf/${native.id}`)).task.result.available);
  await player.bringToFront();await player.waitForFunction(pos=>window.voidPlayer.getState().positionUs>pos,before.positionUs,{polling:50});const after=await player.evaluate(()=>window.voidPlayer.getState());check('other playback is neither sought nor replaced',after.playing&&after.positionUs>before.positionUs&&JSON.stringify(after.tracks.map(t=>t.id))===JSON.stringify(before.tracks.map(t=>t.id)));
  await drainAdminObservations(page);check('GUI sends only the explicit cancellation write',browserWrites.every(w=>w.path===`/api/tasks/single/${single.id}/cancel`&&w.method==='POST'&&w.body==='{}'));assert.deepEqual(errors,[]);
- await page.locator('[data-pane="tasks"]').click();await page.locator('#tasks-candidates a').waitFor();await page.screenshot({path:path.join(directory,'task-center.png'),fullPage:true});await writeFile(path.join(directory,'evidence.json'),JSON.stringify({engine,checks,rangeId:range.id,vmafId:native.id,singleId:single.id,candidateId:pub.createdIds[0],actorIsolation:true,playback:{before:before.positionUs,after:after.positionUs}},null,2));console.log(JSON.stringify({engine,passed:checks.length,checks}));
+ phase='release-navigation-lifecycle';const releaseEvidence=await checkTaskResultRelease(browser,f);check('release state follows target and actor, with late receipts fenced',true);
+ await page.locator('[data-pane="tasks"]').click();await page.locator('#tasks-candidates a').waitFor();await page.screenshot({path:path.join(directory,'task-center.png'),fullPage:true});await writeFile(path.join(directory,'evidence.json'),JSON.stringify({engine,checks,releaseEvidence,rangeId:range.id,vmafId:native.id,singleId:single.id,candidateId:pub.createdIds[0],actorIsolation:true,playback:{before:before.positionUs,after:after.positionUs}},null,2));console.log(JSON.stringify({engine,passed:checks.length,checks}));
 }catch(error){if(page&&!page.isClosed())await saveBrowserFailure({page,directory,name:'task-center',context:{engine,phase},error,evidence});throw error;}
 finally{for(const r of releases)r.resolve();for(const g of gates){Atomics.store(g,0,1);Atomics.notify(g,0);}for(const worker of workers)await worker.terminate();await context?.unrouteAll({behavior:'wait'}).catch(()=>{});await browser?.close();await f?.close();}

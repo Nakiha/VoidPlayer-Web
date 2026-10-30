@@ -6,8 +6,10 @@
 
 ## 当前验收状态（2026-10-30）
 
-收敛候选在 `codex/quality-convergence`，阶段二十四已完成本机定向收尾，
-尚未合入 main。Web PR #161 与上游 core PR #14 分别交付消费端和固定构建。
+Web PR #161 已以 `b0ddaba` 合入 main，24 次阶段提交保留；合并前日常
+CI 七项全部通过（含媒体 Node 60/60）。上游 core PR #14 独立跟踪固定构建。
+本页保留本轮基础收敛的分阶段证据；后续工程整改见
+[工程审计整改](engineering-convergence.md)。
 三个感知评分器均使用既有分析 WASM；没有第三个 core、avfilter 或生产评分 CLI。
 本机实际闭环、双浏览器、生命周期与播放回归完成；输入域和未认证范围见
 [评分契约](analysis-wasm-scoring.md)。

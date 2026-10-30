@@ -31,7 +31,7 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 
 ## 硬约束
 
-- 显式参考关系与整数微秒时钟计划见 `docs/reference-clock-plans.md`；共享契约/原始 AU 解释在 `shared/analysis/quality/correspondence.ts`，持久适配在 `server/analysis/quality/correspondence-*.ts`。关系声明不认证内容；分段半开 offset 仅精确唯一 PTS 匹配，不 nearest、不补洞。规划只读固定可信 cache build，独立预算、队列/历史、单槽 Worker 物理退出；显式稳定回执提交原 range，无外层持锁、无重启重算或自动候选。GUI/HTTP 共用规则，迟到响应须按 actor/view 围栏。
+- 显式参考关系与有理数源时钟对应计划见 `docs/reference-clock-plans.md`；共享契约/原始 AU 解释在 `shared/analysis/quality/correspondence.ts`，持久适配在 `server/analysis/quality/correspondence-*.ts`。关系声明不认证内容；分段半开 offset 仅精确唯一 PTS 匹配，不 nearest、不补洞。规划只读固定可信 cache build，独立预算、队列/历史、单槽 Worker 物理退出；显式稳定回执提交原 range，无外层持锁、无重启重算或自动候选。GUI/HTTP 共用规则，迟到响应须按 actor/view 围栏。
 
 - 有界区间/抽样任务见 `docs/bounded-quality-ranges.md`；共享计划/聚合/策略在 `shared/analysis/quality/ranges.ts`，服务在 `server/analysis/quality/range-*.ts`。显式 AU 表与 all/stride 不自动对齐；coverage 区分未映射、未采样、不支持及未评分缺口。父协调器调用持久子任务且不得外层获取共享许可；实际 Worker 退出才释放容量。PSNR 汇总 SSE/count，SSIM 按平面窗口加权。候选须显式阈值/top-N/间距/文字/严重度，先冻结 IDs 再重放原子命令，不是人工判断。GUI 只被动查看，原帧链接走已有只读 viewer。
 
@@ -91,9 +91,9 @@ node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 
 ## 独立发布
 
-- 正式打包走 `.github/workflows/release-preview.yml`：固定解码器源码/工具链后准备共享 core，再在 Linux x64、Windows x64、macOS ARM64 原生 runner 打包和测试。
+- 日常 PR/main 检查走 `.github/workflows/checks.yml`；正式打包由手动或版本标签触发 `.github/workflows/release-preview.yml`：固定解码器源码/工具链后准备共享 core，再在 Linux x64、Windows x64、macOS ARM64 原生 runner 打包和测试。
 - `scripts/release-core.json` 固定上游修订，更新前先推送解码器源码；不要引用本地未提交改动或浮动版本。
-- `scripts/package-release.mjs` 生成独立程序、资源、来源清单与校验和；`npm run test:release` 校验解压产物，无需真实片源。分支上传预览 artifact；版本标签需匹配包版本和发布说明，经三平台汇总校验后生成 Release 草稿，不自动公开发布。`node --test test/release-pipeline.test.mjs` 验证版本、产物汇总和草稿重跑边界。
+- `scripts/package-release.mjs` 生成独立程序、资源、来源清单与校验和；`npm run test:release` 校验解压产物，无需真实片源。手动全量验证的分支运行上传预览 artifact；版本标签需匹配包版本和发布说明，经三平台汇总校验后生成 Release 草稿，不自动公开发布。`node --test test/release-pipeline.test.mjs` 验证版本、产物汇总和草稿重跑边界。
 
 播放器独立 ROI 与原子测量候选见 `docs/quality-roi-candidates.md`，入口 `src/ui/quality-roi.ts`。普通播放 token 不可充当质量缓存身份；工具从加载媒体显式选择 AU，由独立 Worker 核验并通过 presenter 呈现后选 ROI，不能按 PTS 猜帧或隐式建索引。GUI/Agent 共用 `create-quality-candidate`，结果派生锚点/ROI、显式文字/严重度、未人工判断状态；事务/回执优先/actor 围栏不得省略。
 
@@ -101,11 +101,12 @@ node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 
 媒体库技术发现与显式准备见 `docs/library-discovery.md`；共享字段/过滤/请求规范在 `shared/media/discovery.ts`，生产无解码 probe 在 `shared/media/probe.ts`，服务适配在 `server/discovery/`。发现只读复用有界缓存或已有 probe，不隐式读取媒体、建索引或提升评分准入；parser-local stream/clock 不能冒用质量 AU/namespace/build。准备任务与评分共享实例执行准入，取消必须等待 IO/DB 关闭和 Worker 物理退出；观察断线不取消后台工作。
 
-评分架构与当前验收见 `docs/analysis-wasm-scoring.md`。VMAF/CAMBI 默认使用现有分析 WASM core 的像素 API，不经过 avfilter，不启动原生评分进程；后台解码使用播放产物的独立实例。原生执行器仅保留旧记录兼容与独立数值对照。历史原生连续序列 VMAF 见 `docs/native-vmaf.md`。固定官方 Netflix/vmaf v3.0.0 与 v0.6.1/NEG 模型，Linux x64 可信组件由宿主配置 manifest hash，不依赖 PATH 或接受 HTTP 程序路径。共享计划/准入在 `shared/analysis/quality/vmaf.ts`，独立 native 进程和持久服务在 `server/analysis/vmaf/`，GUI 为 `src/admin/quality-vmaf.ts`。只消费已提交 C 计划；连续呈现顺序与整帧 SDR 色彩/几何严格准入，不能把稀疏抽样拼成时序。PSNR/SSIM 与 native 状态独立，实际退出后才释放容量；序列附件不可伪装空间热图。
+评分执行架构和支持范围统一见 `docs/analysis-wasm-scoring.md`；分阶段实测与历史失败见 `docs/quality-convergence.md`。产品只有播放 core 与分析 core：后台解码使用播放产物的独立 Worker，VMAF/CAMBI/XPSNR 使用既有分析 core 的像素 API，不经 avfilter/framesync，不启动评分 CLI，不生成原始 YUV 临时文件。构建/算法/模型/ABI 由上游固定产物与本仓 release lock 约束，禁止引入仅 Linux 可用的生产评分组件。
 
-原生单源 CAMBI 见 `docs/native-cambi.md`：共享契约/预算在 `shared/analysis/quality/cambi.ts`，持久服务在 `server/analysis/cambi/`，复用已固定 native 组件、真实 Worker/supervisor 与实例共享准入，不要求 C 参考计划或虚构 PSNR pair。五尺度原始 gray16le 证据逐帧按需读，区域只表示热图统计/源坐标格点映射，不是小裁剪重算或目标跟踪。共享单源候选命令/附件在 `shared/review/cambi-evidence.ts` 与既有标注事务，版本3导出和DB5兼容围栏必须保留；导入降历史。GUI在 `src/admin/quality-cambi.ts` 与 `src/ui/cambi-view.ts`，FLV result/attachment v1 与严格 MP4 v2 并存，MP4 先按 decode-AU 抽样再按精确 source PTS 写 native 帧，完整 sample/table/producer 与 input/output token 见证不可丢失。原始源快照必须重新核源/cache/AU/rawSHA并经presenter，不能干预原播放器或查非owner私有job。
+VMAF/XPSNR 公共持久生命周期在 `server/analysis/quality/temporal-service.ts`，公共面板观察器在 `src/admin/quality-temporal.ts`；修正队列/回执/恢复/取消/关闭/分页/身份围栏应在公共层处理，算法、准入与证据策略仍由各指标实现。VMAF 的持久服务/GUI 在 `server/analysis/vmaf/`、`src/admin/quality-vmaf.ts`，请求/回执与数值语义见 `docs/native-vmaf.md`。CAMBI 服务/GUI 在 `server/analysis/cambi/`、`src/admin/quality-cambi.ts`，单源五尺度热图/候选及独立源快照见 `docs/native-cambi.md`。这些文件名、`Native*` 类名和旧 wire/schema 字段为兼容历史而保留，不代表生产原生执行器；旧结果与进程恢复只能按原 provenance 解释，不能改写为 WASM 身份。
 
-可信非分片 MP4 评分链路见 `docs/trusted-mp4-quality.md`。严格表读取在 `shared/media/indexing/mp4-quality-index.ts`，显式准备沿用 A 的任务、事务 cache 与共享物理退出准入。MP4 namespace/producer/result v2 与旧 FLV v1 并存；源适配读取真实 sample payload，不伪造/计费 FLV tag。时钟身份保留原始 ticks/timebase，跨源对应和节奏使用有理数精确比较；整数微秒仅用于传输/显示投影，不能用其取整值做匹配、修 POC 或 nearest。只读 viewer 使用已有可信 cache；VMAF 可复用严格 MP4/FLV 适配，但仍限连续等间距整帧 limited BT.709 SDR，MP4/混合结果及序列关联使用 v2，逐点保留 track/sample/ticks/table 见证。FLV v1 指纹/回执不变，native runner/supervisor 不扩大；CAMBI 单独校验严格 MP4 avc1 H2648 / hvc1 HEVC8/10、精确恒定时钟与整帧 SDR，使用单源 v2 sample/table/producer 证据；不能从 VMAF/元数据就绪继承准入。
+宿主控制精确源时钟、AU/token、选择顺序、ROI 和完整排空；评分器仅接收像素与明确序号。VMAF/XPSNR 只消费已提交对应计划，不能拼接稀疏抽样冒充时序。CAMBI 不要求参考计划，按自己的单源/容器契约独立准入；五尺度热图区域统计不是小裁剪重算或目标跟踪。普通附件、候选回执、版本/历史兼容及原帧复核围栏不得丢失。关闭观察不取消后台执行，真实 Worker/IO 退出后才放容量；无法确认退出时保留相关存储所有权。
+可信非分片 MP4 评分链路见 `docs/trusted-mp4-quality.md`。严格表读取在 `shared/media/indexing/mp4-quality-index.ts`，显式准备沿用 A 的任务、事务 cache 与共享物理退出准入。MP4 namespace/producer/result v2 与旧 FLV v1 并存；源适配读取真实 sample payload，不伪造/计费 FLV tag。时钟身份保留原始 ticks/timebase，跨源对应和节奏使用有理数精确比较；整数微秒仅用于传输/显示投影，不能用其取整值做匹配、修 POC 或 nearest。只读 viewer 使用已有可信 cache；VMAF 可复用严格 MP4/FLV 适配，但仍限连续等间距整帧 limited BT.709 SDR，MP4/混合结果及序列关联使用 v2，逐点保留 track/sample/ticks/table 见证。FLV v1 指纹/回执不变，执行器与原见证的支持范围不自动扩大；CAMBI 单独校验严格 MP4 avc1 H2648 / hvc1 HEVC8/10、精确恒定时钟与整帧 SDR，使用单源 v2 sample/table/producer 证据；不能从 VMAF/元数据就绪继承准入。
 
 普通 HTTP Agent 渐进任务/操作发现见 `docs/agent-quality-workflow.md`。`shared/service/agent-operations.ts` 复用领域常量，JSON 与嵌入式 Markdown 共用描述，不增加第二套 validator；元数据可读不等于质量准入。`examples/http-quality.mjs` 只能使用公开 HTTP，默认只读，各类写入分别显式授权，不保存凭据；未知 POST 仅原 actor/body/key 或原 plan digest/policy 回放，不能换 key 猜重试，不静默配对或发布。
 
@@ -113,8 +114,8 @@ node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 
 统一任务中心见 `docs/unified-task-center.md`。`shared/service/tasks.ts` 是 GUI/HTTP 共用严格筛选契约；`server/tasks/` 从原七个存储投影当前 actor 的摘要；在 SQL 中应用筛选后检查快照预算，超出需缩小筛选，不允许各取首页后伪全量筛选。短期冻结快照分页须明确失效重取，不将状态变化混入原快照；真实阶段/未知进度和结果回收分别保留。详情关联须核对原 actor/receipt/input/attempt/digest，取消只委托原服务并保留物理退出准入。不得借任务中心自动评分、重试、发布、建索引或移动播放头；actor 是自述归属，不是认证。
 
-可选原生 XPSNR 见 `docs/native-xpsnr.md`，共享契约在 `shared/analysis/quality/xpsnr.ts`，服务/GUI 在 `server/analysis/xpsnr/` 与 `src/admin/quality-xpsnr.ts`。固定 FFmpeg 源码/最小 LGPL 组件、参考输入在前、连续短序列时域状态与官方逐平面池化/Infinity 必须保留，不能平均逐帧 dB、稀疏拼帧、冒用 VMAF pool 或缺组件替代算法。复用可信 C/source/原生解码及物理退出监督，独立有界持久历史进入同一任务中心。版本比较只接纳完全相同冻结参考片段、raw SHA 与 recipe/component；不认证内容、不宣称感知优越。候选是显式整帧时间测量，附件/回执/原帧复核保持兼容，不能伪空间热图。
-显式评分重新执行见 `docs/explicit-quality-reexecution.md`。原提交重放与新计算必须分开；single/range/native VMAF/XPSNR 仅已物理停止的 failed/interrupted/cancelled/partial 可只读核验冻结条件并明确确认全量成本，原子创建一个带 retryOf 的新任务。每 job 仍只有原 attempt，旧结果/候选不变、不复用分数或自动发布。条件/执行器见证缺失须 blocked/new intent，不重建索引/C 计划或自动换模型。四种评分数据库 v2 的新 job 与回执同事务；未知提交只原 actor/body/key 回放，重启不自动重算。
+XPSNR 契约与对照见 `docs/native-xpsnr.md`；共享规则在 `shared/analysis/quality/xpsnr.ts`，服务/GUI 在 `server/analysis/xpsnr/`、`src/admin/quality-xpsnr.ts`。固定标量算法直接编入分析 WASM；参考输入在前、单片段时域状态、官方逐平面池化及 Infinity 语义不得替代。版本比较只接纳同一冻结参考片段、raw SHA 与 recipe/component，不认证内容或感知优越；候选是时间测量，不能伪空间热图。数值 CLI 仅为维护者生成独立对照的工具，不是部署依赖。
+显式评分重新执行见 `docs/explicit-quality-reexecution.md`。原提交重放与新计算必须分开；single/range/VMAF/XPSNR 仅已物理停止的 failed/interrupted/cancelled/partial 可只读核验冻结条件并明确确认全量成本，原子创建一个带 retryOf 的新任务。每 job 仍只有原 attempt，旧结果/候选不变、不复用分数或自动发布。条件/执行器见证缺失须 blocked/new intent，不重建索引/C 计划或自动换模型。四种评分数据库 v2 的新 job 与回执同事务；未知提交只原 actor/body/key 回放，重启不自动重算。
 
 CAMBI 显式重算复用 `reexecution.ts` / 原服务同库 `ReexecutionLedger`，见 `docs/explicit-quality-reexecution.md` 的单源扩展。仅物理停止 failed/interrupted/cancelled 且有完整冻结单源执行见证允许预检/确认全部费用/创建唯一后继，不新增 partial，不借 C/reference/model。见证先于原始解码保存，失败/取消/重启清理未完成分数热图不清理见证；源/cache/producer/core、实际 AU 选择排序、固定组件/recipe 漂移或旧无见证任务需新意图。原 actor/body/key 回执优先，事务前后崩溃不得产生无回执后继，取消实际退出前不得放准入；三遍执行 witness 与独立预检、累计索引/源读取/五尺度预算分别计量。GUI/CAMBI/任务中心/HTTPAgent 共用确认和追溯，不修改旧任务/附件/候选，不自动发布或准备索引。
 

@@ -1,3 +1,4 @@
+import {closeResources} from '../../shutdown.ts';
 import { requirePacketOutputWitness } from "../../../shared/analysis/quality/frame-pair.ts";
 import {
   reserveScoringBytes,
@@ -1197,10 +1198,11 @@ export class NativeCambiService {
       this.active?.controller.abort(
         new CambiError("cancelled", "CAMBI service stopping"),
       );
-      const stopping = this.runner.close();
-      await this.active?.done;
-      await stopping;
-      await this.ready;
+      await closeResources('CAMBI physical shutdown incomplete', [
+        ['executor', () => this.runner.close()],
+        ['active attempt', () => this.active?.done],
+        ['recovery', () => this.ready],
+      ]);
       if (this.fatal) throw this.fatal;
       for (const j of this.all())
         if (!terminalCambi(j.state)) {
