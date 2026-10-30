@@ -1,4 +1,9 @@
 import test from 'node:test';
+import {FrozenSubmissionJournal} from '../../src/services/frozen-submission.ts';
+import {QualityObservationScope} from '../../src/analysis/quality/observation-scope.ts';
+import {candidateAnnotations} from '../../src/analysis/quality/candidate-evidence.ts';
+import {ApiError} from '../../src/services/api-error.ts';
+import type {AnnotationRecord} from '../../shared/review/annotation-record.ts';
 import assert from 'node:assert/strict';
 import { QualityJobObserver } from '../../src/analysis/quality/job-observer.ts';
 import type { QualityTransport,QualityHistory } from '../../src/services/quality-jobs.ts';
@@ -113,4 +118,56 @@ test('candidate preflight uses the complete HTTP operation validator before stor
  const invalid=[...[0,-1,6,1.5,NaN,Infinity].map(severity=>({...base,candidate:{...base.candidate,severity}})),{...base,candidate:{...base.candidate,text:' '}},{...base,space:'bad/space'},{...base,space:undefined as unknown as string},{...base,space:null as unknown as string},{...base,id:''},{...base,evidence:{...base.evidence,digest:'bad'}}];
  const original=globalThis.fetch;let sent=0;globalThis.fetch=async()=>{sent++;throw new Error('unexpected POST');};
  try{for(const command of invalid){assert.throws(()=>qualityCandidateOperation(command,client));assert.throws(()=>createQualityCandidate(command,client,'actor'));}assert.throws(()=>qualityCandidateOperation(base,{kind:'gui',id:'invalid/client'}));assert.equal(sent,0);}finally{globalThis.fetch=original;}
+});
+
+// Shared operation and observation protocols, exercised without DOM or machine-speed races.
+test('unknown receipt followed by actor rejection retains the original body/key, then confirms the original operation',async()=>{
+ const store=memory(),journal=new FrozenSubmissionJournal(store,a=>'pending:'+a,v=>v as {n:number},undefined,()=> 'original');
+ const p=journal.freeze('a',{n:1}),seen:unknown[]=[];
+ await assert.rejects(journal.execute('a',p.key,async frozen=>{seen.push(frozen.body);throw new TypeError('lost response');},()=>{}));
+ await assert.rejects(journal.execute('a',p.key,async frozen=>{seen.push(frozen.body);throw new ApiError(409,'Actor changed','actor-changed');},()=>{}));
+ assert.equal(journal.pending('a')?.key,p.key);assert.deepEqual(journal.pending('a')?.body,{n:1});
+ const r=await journal.execute('a',p.key,async frozen=>{seen.push(frozen.body);return {id:'original-job'};},r=>assert.equal(r.id,'original-job'));
+ assert.equal(r.id,'original-job');assert.equal(journal.pending('a')?.confirmed,true);assert.deepEqual(seen,[{n:1},{n:1},{n:1}]);
+});
+test('legacy pending is uncertain; a definite first rejection frees only a provably unsent key',async()=>{
+ const store=memory(),journal=new FrozenSubmissionJournal(store,a=>a,v=>v,undefined,()=> 'fresh');
+ store.setItem('legacy',JSON.stringify({body:{n:1},key:'old'}));
+ await assert.rejects(journal.execute('legacy','old',async()=>{throw new ApiError(409,'actor','actor-changed');},()=>{}));assert.ok(journal.pending('legacy'));
+ const p=journal.freeze('fresh',{n:2});await assert.rejects(journal.execute('fresh',p.key,async()=>{throw new ApiError(400,'Rejected');},()=>{}));assert.equal(journal.pending('fresh'),null);
+});
+test('submission coalesces duplicate clicks; persisted attempts and valid receipts outlive observation',async()=>{
+ const store=memory(),journal=new FrozenSubmissionJournal(store,a=>a,v=>v,undefined,()=> 'key'),gate=deferred<{id:string}>();let sends=0;
+ const p=journal.freeze('a',{n:1}),send=()=>{sends++;return gate.promise;},check=(r:{id:string})=>assert.equal(r.id,'job');
+ const first=journal.execute('a',p.key,send,check),second=journal.execute('a',p.key,send,check);assert.equal(first,second);await Promise.resolve();assert.equal(sends,1);
+ gate.resolve({id:'job'});await first;assert.equal(journal.pending('a')?.confirmed,true);
+ const old=deferred<{id:string}>();journal.clearConfirmed('a');const again=journal.freeze('a',{n:2});const late=journal.execute('a',again.key,()=>old.promise,check);await Promise.resolve();
+ store.setItem('a',JSON.stringify({key:'newer',body:{n:3},attempted:false}));old.resolve({id:'job'});await late;assert.equal(journal.pending('a')?.key,'newer');assert.equal(journal.pending('a')?.confirmed,undefined);
+});
+test('storage or acknowledgement validation failure cannot manufacture acceptance or issue an unrecoverable POST',async()=>{
+ const store=memory(),journal=new FrozenSubmissionJournal(store,a=>a,v=>v,undefined,()=> 'key');let sends=0;
+ const p=journal.freeze('a',{n:1});const original=store.setItem;store.setItem=()=>{throw Error('Storage denied');};
+ await assert.rejects(journal.execute('a',p.key,async()=>{sends++;return {};},()=>{}));assert.equal(sends,0);store.setItem=original;
+ await assert.rejects(journal.execute('a',p.key,async()=>({}),()=>{throw Error('Incomplete receipt');}));assert.notEqual(journal.pending('a')?.confirmed,true);
+});
+test('observation coalesces slow history without invalidating successful responses; selection has its own scope',async()=>{
+ const scope=new QualityObservationScope(),gate=deferred<number>();let reads=0,commits=0;
+ const first=scope.run('history','actor',async()=>{const c=scope.capture('actor');reads++;const value=await gate.promise;if(c.current())commits++;return value;});
+ for(let n=0;n<5;n++)assert.equal(scope.run('history','actor',async()=>assert.fail('overlap')),first);
+ await Promise.resolve();const selected=scope.capture();scope.select();assert.equal(selected.current(),false);
+ gate.resolve(1);await first;assert.equal(reads,1);assert.equal(commits,1);scope.close();
+});
+test('ignored abort replies cannot publish to a new identity, target or request slot',async()=>{
+ const scope=new QualityObservationScope(),old=deferred<void>(),fresh=deferred<void>();let writes=0;
+ const a=scope.run('detail','selection',async()=>{const c=scope.capture();await old.promise;if(c.current())writes++;});await Promise.resolve();
+ scope.invalidate();const b=scope.run('detail','selection',async()=>{const c=scope.capture();await fresh.promise;if(c.current())writes++;});await Promise.resolve();
+ old.resolve();await a;assert.equal(writes,0);assert.equal(scope.run('detail','selection',async()=>assert.fail('old completion removed fresh slot')),b);
+ fresh.resolve();await b;assert.equal(writes,1);scope.close();
+});
+test('candidate evidence assembles completely before commit and retries a failed later annotation',async()=>{
+ const receipt={policy:{space:'default'},createdIds:['one','two']};let reads=0,fail=true;
+ const read=async(space:string,id:string)=>{reads++;if(id==='two'&&fail)throw Error('Temporary annotation read');return {space,id,deleted:false} as AnnotationRecord;};
+ await assert.rejects(candidateAnnotations(receipt,read));assert.equal(reads,2);fail=false;
+ assert.equal((await candidateAnnotations(receipt,read)).length,2);assert.equal(reads,4);
+ await assert.rejects(candidateAnnotations({...receipt,createdIds:['one','one']},read));
 });
