@@ -214,3 +214,12 @@ test('replacing one read slot preserves unrelated actor and selection reads',asy
  scope.cancel('frames');assert.equal(frames!.current(),false);assert.equal(detail!.current(),true);assert.equal(history!.current(),true);
  gate.resolve();await Promise.all([a,b,c]);scope.close();
 });
+
+
+test('malformed persisted submission is retained and cannot be overwritten or sent under a new key',async()=>{
+ const storage=memory(),raw='{incomplete';storage.setItem('a',raw);
+ const journal=new FrozenSubmissionJournal(storage,a=>a,v=>v);let sent=0;
+ assert.throws(()=>journal.freeze('a',{n:2}));
+ await assert.rejects(journal.execute('a','old-key',async()=>{sent++;return {};},()=>{}));
+ assert.equal(sent,0);assert.equal(storage.getItem('a'),raw);
+});

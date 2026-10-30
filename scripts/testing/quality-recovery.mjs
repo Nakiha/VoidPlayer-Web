@@ -82,7 +82,7 @@ export async function checkLateQualityReceipt(browser,kind,f,{body,key,jobId}){
  const history=await f.json(collection);let other=history.entries.find(j=>j.id!==jobId);
  if(!other)other=(await f.json(collection,body,'late-other-'+randomUUID())).job;
  other=await f.wait(other.id);
- const c=await browser.newContext(),delivery=gate(),posted=gate();let page;
+ const c=await browser.newContext(),delivery=gate(),posted=gate(),capability=gate(),capabilitySeen=gate();let page;
  try{
   await c.addInitScript(installAdminObservationLifecycle);await c.addCookies([{name:'voidplayer-user',value:f.actor,url:f.base}]);
   c.on('page',p=>p.on('pageerror',e=>errors.push(e.message)));
@@ -92,14 +92,16 @@ export async function checkLateQualityReceipt(browser,kind,f,{body,key,jobId}){
   },{storage,pending:{body,key,attempted:true},origin:f.base,collection});
   page=await c.newPage();page.setDefaultTimeout(15000);
   await page.route('**'+collection+'?**',route=>route.fulfill({json:{entries:[other],after:1,more:false}}));
+  await page.route(`**/api/quality/${kind}/capability`,async route=>{const response=await route.fetch();capabilitySeen.release();await capability.promise;await route.fulfill({response}).catch(()=>{});});
   await page.goto(f.base+`/admin/?qualityView=${kind}#quality`);await chooseTestGuest(page);
   await page.locator(`[data-${kind}-job="${other.id}"]`).waitFor();
   await page.route('**'+collection,async route=>{if(route.request().method()!=='POST')return route.continue();const response=await route.fetch();assert.equal((await response.json()).job.id,jobId);posted.release();await delivery.promise;await route.fulfill({response});});
-  await page.locator(`#${kind}-retry`).click();await bounded(posted.promise,'late replay entered');
-  await page.locator(`[data-${kind}-job="${other.id}"]`).click();await page.locator(`#${kind}-title`).filter({hasText:other.id}).waitFor();delivery.release();
+  await bounded(capabilitySeen.promise,'actor capability entered');await page.locator(`#${kind}-retry`).click();await bounded(posted.promise,'late replay entered');
+  await page.locator(`[data-${kind}-job="${other.id}"]`).click();await page.locator(`#${kind}-title`).filter({hasText:other.id}).waitFor();delivery.release();capability.release();
   await page.waitForFunction(({storage,kind})=>JSON.parse(sessionStorage.getItem(storage))?.confirmed===true&&!document.getElementById(kind+'-submit').disabled&&document.getElementById(kind+'-retry').hidden,{storage,kind});
+  await page.waitForFunction(kind=>!!document.getElementById(kind+'-capability').textContent,kind);
   assert.match(await page.locator(`#${kind}-title`).textContent(),new RegExp(other.id));
   await drainAdminObservations(page);assert.deepEqual(errors,[]);
-  return {lateReceiptConfirmedWithoutViewChange:true,submissionControlsRecovered:true,pageErrors:errors};
- }finally{delivery.release();await c.close();}
+  return {lateReceiptConfirmedWithoutViewChange:true,submissionControlsRecovered:true,capabilitySurvivedSelection:true,pageErrors:errors};
+ }finally{delivery.release();capability.release();await c.close();}
 }

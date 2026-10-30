@@ -72,7 +72,7 @@ export function installQualityCambi(signal: AbortSignal) {
         return this.scope.signal;
       },
     }),
-    valid = (c: ReturnType<typeof context>, _sameView = true) =>
+    valid = (c: ReturnType<typeof context>) =>
       active &&
       !signal.aborted &&
       c.actor === actor &&
@@ -129,6 +129,7 @@ export function installQualityCambi(signal: AbortSignal) {
       "title",
       "state",
       "validation",
+      "capability",
     ])
       $(id).replaceChildren();
     input("space").value = "default";
@@ -136,8 +137,6 @@ export function installQualityCambi(signal: AbortSignal) {
     try {
       lock();
     } catch (e) {
-      journal.clearConfirmed(actor);
-      lock();
       error(e);
     }
   }
@@ -156,7 +155,7 @@ export function installQualityCambi(signal: AbortSignal) {
         "/api/library/discovery?" + q,
         c.signal,
       );
-      if (!valid(c, false) || ticket !== mediaSeq) return;
+      if (!valid(c) || ticket !== mediaSeq) return;
       nextCursor = p.nextCursor;
       $("next").hidden = !nextCursor;
       if (!more) $("media").replaceChildren();
@@ -167,7 +166,7 @@ export function installQualityCambi(signal: AbortSignal) {
           e.file.name + " · " + e.source.version + " · " + e.scoring.state;
         b.dataset.cambiMedia = e.source.id;
         b.onclick = () => {
-          if (!valid(c, false)) return;
+          if (!valid(c)) return;
           try {
             if (pending() && !pending()?.confirmed)
               throw Error("Retry the original frozen request first");
@@ -185,7 +184,7 @@ export function installQualityCambi(signal: AbortSignal) {
             }>(owner.actor, e.scoring.source, owner.signal)
             .then(
               (v) => {
-                if (valid(owner, false) && seq === mediaSeq) {
+                if (valid(owner) && seq === mediaSeq) {
                   if (!["flv", "mp4"].includes(v.binding.indexIdentity.kind)) {
                     source = null;
                     error(
@@ -200,7 +199,7 @@ export function installQualityCambi(signal: AbortSignal) {
                 }
               },
               (e) => {
-                if (valid(owner, false) && seq === mediaSeq) {
+                if (valid(owner) && seq === mediaSeq) {
                   source = null;
                   error(e);
                 }
@@ -210,7 +209,7 @@ export function installQualityCambi(signal: AbortSignal) {
         $("media").append(b);
       }
     } catch (e) {
-      if (valid(c, false) && ticket === mediaSeq) error(e);
+      if (valid(c) && ticket === mediaSeq) error(e);
     }
   }
   function select(id: string) {
@@ -226,6 +225,18 @@ export function installQualityCambi(signal: AbortSignal) {
       $(id).replaceChildren();
     ($("policy-inputs") as HTMLFieldSetElement).disabled = false;
     void detail();
+  }
+  function capability(): Promise<void> {
+    return observation.run("capability", "actor", async () => {
+      if (!active || !actor) return;
+      const c = context("actor", "capability");
+      try {
+        const value = await api.request(c.actor, "/api/quality/cambi/capability", c.signal);
+        if (valid(c)) $("capability").textContent = JSON.stringify(value, null, 2);
+      } catch (e) {
+        if (valid(c)) error(e);
+      }
+    });
   }
   async function submit(p: Pending, c: ReturnType<typeof context>) {
     const receiptContext = context("actor");
@@ -269,7 +280,7 @@ export function installQualityCambi(signal: AbortSignal) {
           `/api/quality/cambi/jobs?after=${more ? after : 0}&limit=8`,
           c.signal,
         );
-        if (!valid(c, false)) return;
+        if (!valid(c)) return;
         after = p.after;
         $("history-more").hidden = !p.more;
         if (!more) $("history").replaceChildren();
@@ -280,12 +291,12 @@ export function installQualityCambi(signal: AbortSignal) {
           b.textContent = j.id + " · " + j.state;
           b.onclick = () => {
             const click = context();
-            if (valid(click, false) && click.actor === c.actor) select(j.id);
+            if (valid(click) && click.actor === c.actor) select(j.id);
           };
           $("history").append(b);
         }
       } catch (e) {
-        if (valid(c, false)) error(e);
+        if (valid(c)) error(e);
       }
     });
   }
@@ -620,6 +631,7 @@ export function installQualityCambi(signal: AbortSignal) {
       if (active) {
         void history();
         void browse();
+        void capability();
         if (resume?.actor === actor) select(resume.id);
       }
     },
@@ -648,18 +660,7 @@ export function installQualityCambi(signal: AbortSignal) {
       if (active) {
         void history();
         void browse();
-        const c = context();
-        void api
-          .request(c.actor, "/api/quality/cambi/capability", c.signal)
-          .then(
-            (d) => {
-              if (valid(c, false))
-                $("capability").textContent = JSON.stringify(d, null, 2);
-            },
-            (e) => {
-              if (valid(c, false)) error(e);
-            },
-          );
+        void capability();
       }
     },
   };

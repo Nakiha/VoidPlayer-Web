@@ -82,7 +82,7 @@ export function installTemporalQuality<Input, Score>(
       return this.scope.signal;
     },
   });
-  const valid = (c: ReturnType<typeof context>, _sameView = true) =>
+  const valid = (c: ReturnType<typeof context>) =>
     active &&
     !signal.aborted &&
     actor === c.actor &&
@@ -151,6 +151,18 @@ export function installTemporalQuality<Input, Score>(
   function body() {
     return config.readInput(input);
   }
+  function capability(): Promise<void> {
+    return observation.run("capability", "actor", async () => {
+      if (!active || !actor) return;
+      const c = context("actor", "capability");
+      try {
+        const value = await api.request(c.actor, `/api/quality/${kind}/capability`, c.signal);
+        if (valid(c)) $("capability").textContent = JSON.stringify(value, null, 2);
+      } catch (e) {
+        if (valid(c)) error(e);
+      }
+    });
+  }
   async function submit(p: Pending, c: ReturnType<typeof context>) {
     const receiptContext = context("actor");
     try {
@@ -192,7 +204,7 @@ export function installTemporalQuality<Input, Score>(
           `/api/quality/${kind}/jobs?after=${more ? after : 0}&limit=8`,
           c.signal,
         );
-        if (!valid(c, false)) return;
+        if (!valid(c)) return;
         after = p.after;
         $("more").hidden = !p.more;
         if (!more) $("history").replaceChildren();
@@ -202,7 +214,7 @@ export function installTemporalQuality<Input, Score>(
           b.dataset[kind + "Job"] = j.id;
           b.textContent = j.id + " · " + j.state;
           b.onclick = () => {
-            if (valid(c, false)) select(j.id);
+            if (valid(c)) select(j.id);
           };
           if (comparison) {
             const check = document.createElement("input");
@@ -219,7 +231,7 @@ export function installTemporalQuality<Input, Score>(
           } else $("history").append(b);
         }
       } catch (e) {
-        if (valid(c, false)) error(e);
+        if (valid(c)) error(e);
       }
     });
   }
@@ -506,7 +518,10 @@ export function installTemporalQuality<Input, Score>(
     invalidated: reset,
     confirmed: () => {
       reset();
-      if (active) void list();
+      if (active) {
+        void list();
+        void capability();
+      }
     },
     failed: error,
   });
@@ -531,18 +546,7 @@ export function installTemporalQuality<Input, Score>(
       reset();
       if (active) {
         void list();
-        const c = context();
-        void api
-          .request(c.actor, `/api/quality/${kind}/capability`, c.signal)
-          .then(
-            (r) => {
-              if (valid(c, false))
-                $("capability").textContent = JSON.stringify(r, null, 2);
-            },
-            (e) => {
-              if (valid(c, false)) error(e);
-            },
-          );
+        void capability();
       }
     },
   };
