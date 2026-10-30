@@ -5,9 +5,9 @@ import {requireCapturedActor} from '../../identity.ts';import {AdminError,adminE
 export async function handleVmafRoutes(ctx:RouteContext,req:IncomingMessage,res:ServerResponse,url:URL){
  if(!url.pathname.startsWith('/api/quality/vmaf'))return false;
  try{
-  if(url.pathname==='/api/quality/vmaf/capability'&&req.method==='GET'){sendJson(res,200,await ctx.library.qualityVmaf.capability());return true;}
+  if(url.pathname==='/api/quality/vmaf/capability'&&req.method==='GET'){sendJson(res,200,await ctx.quality.qualityVmaf.capability());return true;}
   requireCapturedActor(req,ctx.actor);if(!ctx.actor)throw new AdminError(401,'Choose an identity first.','identity-required');
-  const service=ctx.library.qualityVmaf,actor=ctx.actor;
+  const service=ctx.quality.qualityVmaf,actor=ctx.actor;
   if(req.method!=='GET'&&!adminWriteAllowed(req,'quality-job'))throw new AdminError(403,'Use the same-origin quality-job action.','origin-required');
   const item=/^\/api\/quality\/vmaf\/jobs\/(vmaf-[a-f0-9-]{36})(?:\/(result|frames|cancel|candidates|evidence))?$/.exec(url.pathname),collection=url.pathname==='/api/quality/vmaf/jobs',preflight=url.pathname==='/api/quality/vmaf/preflight';
   const allowed=item?.[2]==='evidence'?['index','attemptId','digest','side']:req.method==='GET'&&(collection||item?.[2]==='frames')?['after','limit']:[];

@@ -7,7 +7,13 @@ import { installQualityReexecution } from "./quality-reexecution.ts";
 import { th, t, msg } from "../i18n.ts";
 import { confirmedActor, observeIdentity } from "../services/identity.ts";
 import { QualityClient } from "../services/quality-jobs.ts";
-import { ApiError } from "../services/api-error.ts";
+import {
+  FrozenSubmissionJournal,
+  assertJobReceipt,
+} from "../services/frozen-submission.ts";
+import type { FrozenSubmission } from "../services/frozen-submission.ts";
+import { QualityObservationScope } from "../analysis/quality/observation-scope.ts";
+import { candidateAnnotations } from "../analysis/quality/candidate-evidence.ts";
 import { randomUUID } from "../../shared/utils/uuid.ts";
 import {
   cambiInput,
@@ -35,45 +41,43 @@ export function installQualityCambi(signal: AbortSignal) {
   const $ = (id: string) => document.getElementById("cambi-" + id)!,
     input = (id: string) => $(id) as HTMLInputElement;
   const api = new QualityClient();
+  const observation = new QualityObservationScope();
   let browsingMore = false,
     active = false,
     actor = "",
-    epoch = 0,
-    view = 0,
-    controller = new AbortController(),
     source: SourceBinding | null = null,
     nextCursor: string | null = null,
     selected = "",
     revision = 0,
-    busy = false,
     after = 0,
     frameAfter: number | null = null,
-    listSeq = 0,
-    mediaSeq = 0,
-    detailSeq = 0,
-    frameSeq = 0,
-    frameBusy = false;
+    mediaSeq = 0;
+  let publicationToken = "";
   let resumeSelection: { actor: string; id: string } | null = null;
-  type Pending = {
-    key: string;
-    body: CambiInput;
-    confirmed?: boolean;
-    attempted?: boolean;
-  };
-  const storage = (a: string) => "voidplayer-cambi-pending:" + a,
-    pending = (): Pending | null => {
-      const v = JSON.parse(sessionStorage.getItem(storage(actor)) ?? "null");
-      return v ? { ...v, body: cambiInput(v.body) } : null;
-    };
-  const context = () => ({ actor, epoch, view, signal: controller.signal }),
-    valid = (c: ReturnType<typeof context>, sameView = true) =>
+  type Pending = FrozenSubmission<CambiInput>;
+  const storage = (a: string) => "voidplayer-cambi-pending:" + a;
+  const journal = new FrozenSubmissionJournal(
+    sessionStorage,
+    storage,
+    cambiInput,
+  );
+  const pending = () => journal.pending(actor);
+  const context = (
+      level: "actor" | "selection" = "selection",
+      slot?: string,
+    ) => ({
+      actor,
+      scope: observation.capture(level, slot),
+      get signal() {
+        return this.scope.signal;
+      },
+    }),
+    valid = (c: ReturnType<typeof context>) =>
       active &&
       !signal.aborted &&
-      !c.signal.aborted &&
       c.actor === actor &&
       confirmedActor()?.id === c.actor &&
-      c.epoch === epoch &&
-      (!sameView || c.view === view),
+      c.scope.current(),
     error = (e: unknown) => {
       $("status").textContent = e instanceof Error ? e.message : String(e);
     };
@@ -94,8 +98,7 @@ export function installQualityCambi(signal: AbortSignal) {
     (id) => select(id),
   );
   function resetFrames() {
-    frameSeq++;
-    frameBusy = false;
+    observation.cancel("frames");
     frameAfter = null;
     input("frames-more").disabled = false;
     $("frames-more").hidden = true;
@@ -104,20 +107,15 @@ export function installQualityCambi(signal: AbortSignal) {
     resetFrames();
     browsingMore = false;
     reexecution.clear();
-    controller.abort();
-    controller = new AbortController();
-    epoch++;
-    view++;
+    observation.invalidate();
     actor = confirmedActor()?.id ?? "";
     source = null;
     selected = "";
-    busy = false;
     revision = 0;
+    publicationToken = "";
     after = 0;
     frameAfter = null;
-    listSeq++;
     mediaSeq++;
-    detailSeq++;
     $("detail").hidden = true;
     for (const id of [
       "media",
@@ -131,6 +129,7 @@ export function installQualityCambi(signal: AbortSignal) {
       "title",
       "state",
       "validation",
+      "capability",
     ])
       $(id).replaceChildren();
     input("space").value = "default";
@@ -138,14 +137,12 @@ export function installQualityCambi(signal: AbortSignal) {
     try {
       lock();
     } catch (e) {
-      sessionStorage.removeItem(storage(actor));
-      lock();
       error(e);
     }
   }
   async function browse(more = false) {
     if (!actor) return;
-    const c = context(),
+    const c = context("actor"),
       ticket = ++mediaSeq;
     try {
       const q = new URLSearchParams({
@@ -158,7 +155,7 @@ export function installQualityCambi(signal: AbortSignal) {
         "/api/library/discovery?" + q,
         c.signal,
       );
-      if (!valid(c, false) || ticket !== mediaSeq) return;
+      if (!valid(c) || ticket !== mediaSeq) return;
       nextCursor = p.nextCursor;
       $("next").hidden = !nextCursor;
       if (!more) $("media").replaceChildren();
@@ -169,7 +166,7 @@ export function installQualityCambi(signal: AbortSignal) {
           e.file.name + " · " + e.source.version + " · " + e.scoring.state;
         b.dataset.cambiMedia = e.source.id;
         b.onclick = () => {
-          if (!valid(c, false)) return;
+          if (!valid(c)) return;
           try {
             if (pending() && !pending()?.confirmed)
               throw Error("Retry the original frozen request first");
@@ -180,14 +177,14 @@ export function installQualityCambi(signal: AbortSignal) {
           source = null;
           $("source").textContent = "loading";
           const seq = ++mediaSeq,
-            owner = context();
+            owner = context("actor");
           void api
             .request<{
               binding: SourceBinding;
             }>(owner.actor, e.scoring.source, owner.signal)
             .then(
               (v) => {
-                if (valid(owner, false) && seq === mediaSeq) {
+                if (valid(owner) && seq === mediaSeq) {
                   if (!["flv", "mp4"].includes(v.binding.indexIdentity.kind)) {
                     source = null;
                     error(
@@ -202,7 +199,7 @@ export function installQualityCambi(signal: AbortSignal) {
                 }
               },
               (e) => {
-                if (valid(owner, false) && seq === mediaSeq) {
+                if (valid(owner) && seq === mediaSeq) {
                   source = null;
                   error(e);
                 }
@@ -212,265 +209,267 @@ export function installQualityCambi(signal: AbortSignal) {
         $("media").append(b);
       }
     } catch (e) {
-      if (valid(c, false) && ticket === mediaSeq) error(e);
+      if (valid(c) && ticket === mediaSeq) error(e);
     }
   }
   function select(id: string) {
+    observation.select();
     resetFrames();
     $("detail").hidden = true;
-    view++;
-    detailSeq++;
     selected = id;
     reexecution.show(id);
     revision = 0;
-    busy = false;
+    publicationToken = "";
     frameAfter = null;
     for (const id of ["summary", "frames", "links", "publication"])
       $(id).replaceChildren();
     ($("policy-inputs") as HTMLFieldSetElement).disabled = false;
     void detail();
   }
+  function capability(): Promise<void> {
+    return observation.run("capability", "actor", async () => {
+      if (!active || !actor) return;
+      const c = context("actor", "capability");
+      try {
+        const value = await api.request(c.actor, "/api/quality/cambi/capability", c.signal);
+        if (valid(c)) $("capability").textContent = JSON.stringify(value, null, 2);
+      } catch (e) {
+        if (valid(c)) error(e);
+      }
+    });
+  }
   async function submit(p: Pending, c: ReturnType<typeof context>) {
-    const prior = JSON.parse(
-        sessionStorage.getItem(storage(c.actor)) ?? "null",
-      ),
-      previouslyAttempted = !!prior?.attempted;
-    if (prior?.key === p.key)
-      sessionStorage.setItem(
-        storage(c.actor),
-        JSON.stringify({ ...prior, attempted: true }),
-      );
-    let r: { job: CambiJob };
+    const receiptContext = context("actor");
     try {
-      r = await api.request(
+      const r = await journal.execute(
         c.actor,
-        "/api/quality/cambi/jobs",
-        c.signal,
-        "POST",
-        p.body,
         p.key,
+        (frozen) =>
+          api.request<{ job: CambiJob }>(
+            c.actor,
+            "/api/quality/cambi/jobs",
+            c.signal,
+            "POST",
+            frozen.body,
+            frozen.key,
+          ),
+        (response, frozen) => assertJobReceipt(response, c.actor, frozen),
       );
-    } catch (e) {
-      if (
-        e instanceof ApiError &&
-        !previouslyAttempted &&
-        e.status >= 400 &&
-        e.status < 500 &&
-        e.code !== "idempotency-conflict"
-      ) {
-        const raw = JSON.parse(
-          sessionStorage.getItem(storage(c.actor)) ?? "null",
-        );
-        if (raw?.key === p.key) sessionStorage.removeItem(storage(c.actor));
-        if (valid(c)) lock();
+      if (valid(c)) {
+        select(r.job.id);
+        void history();
       }
-      throw e;
-    }
-    const raw = JSON.parse(sessionStorage.getItem(storage(c.actor)) ?? "null");
-    if (raw?.key === p.key)
-      sessionStorage.setItem(
-        storage(c.actor),
-        JSON.stringify({ ...raw, confirmed: true }),
-      );
-    if (valid(c)) {
-      lock();
-      select(r.job.id);
-      void history();
-    }
-  }
-  async function history(more = false) {
-    if (!actor) return;
-    browsingMore = more || browsingMore;
-    const c = context(),
-      seq = ++listSeq;
-    try {
-      const p = await api.request<{
-        entries: CambiJob[];
-        after: number;
-        more: boolean;
-      }>(
-        c.actor,
-        `/api/quality/cambi/jobs?after=${more ? after : 0}&limit=8`,
-        c.signal,
-      );
-      if (!valid(c, false) || seq !== listSeq) return;
-      after = p.after;
-      $("history-more").hidden = !p.more;
-      if (!more) $("history").replaceChildren();
-      for (const j of p.entries) {
-        const b = document.createElement("button");
-        b.type = "button";
-        b.dataset.cambiJob = j.id;
-        b.textContent = j.id + " · " + j.state;
-        b.onclick = () => {
-          const click = context();
-          if (valid(click, false) && click.actor === c.actor) select(j.id);
-        };
-        $("history").append(b);
-      }
-    } catch (e) {
-      if (valid(c, false) && seq === listSeq) error(e);
-    }
-  }
-  async function frames(more = false) {
-    if (!actor || !selected || (more && (frameBusy || frameAfter === null)))
-      return false;
-    const c = context(),
-      id = selected,
-      seq = ++frameSeq,
-      cursor = more ? frameAfter! : 0;
-    frameBusy = true;
-    input("frames-more").disabled = true;
-    const current = () => valid(c) && id === selected && seq === frameSeq;
-    try {
-      const p = await api.request<CambiFramePage>(
-        c.actor,
-        `/api/quality/cambi/jobs/${id}/frames?after=${cursor}&limit=4`,
-        c.signal,
-      );
-      if (!current()) return false;
-      frameAfter = p.next;
-      $("frames-more").hidden = p.next === null;
-      if (!more) $("frames").replaceChildren();
-      for (const f of p.entries) {
-        const row = document.createElement("pre");
-        row.dataset.cambiFrame = String(f.index);
-        row.textContent = JSON.stringify(f, null, 2);
-        const link = document.createElement("a");
-        link.href = `/quality.html?cambi=1&cambiJob=${id}&index=${f.index}${p.publishable ? "" : "&preview=1"}`;
-        link.target = "_blank";
-        link.rel = "noopener";
-        link.dataset.cambiInspect = String(f.index);
-        link.textContent = p.publishable
-          ? t(msg("cambi.open", "CAMBI · 查看原始热图、源快照与真实区域"))
-          : t(msg("cambi.preview", "预览暂存分数与热图"));
-        $("frames").append(link, row);
-      }
-      return true;
-    } catch (e) {
-      if (current()) error(e);
-      return false;
     } finally {
-      if (current()) {
-        frameBusy = false;
-        input("frames-more").disabled = false;
-      }
+      // Submission controls project actor-owned acceptance, independently of
+      // which task is selected when its valid receipt eventually arrives.
+      if (valid(receiptContext)) lock();
     }
   }
-  async function detail() {
-    if (!selected || busy) return;
-    busy = true;
-    const c = context(),
-      id = selected,
-      seq = ++detailSeq;
-    try {
-      const j = await api.request<CambiJob>(
-        c.actor,
-        `/api/quality/cambi/jobs/${id}`,
-        c.signal,
-      );
-      if (!valid(c) || id !== selected) return;
-      for (const button of $("history").querySelectorAll<HTMLButtonElement>(
-        "[data-cambi-job]",
-      ))
-        if (button.dataset.cambiJob === id)
-          button.textContent = id + " · " + j.state;
-      $("detail").hidden = false;
-      $("title").textContent = id + " · " + j.state;
-      $("state").textContent = JSON.stringify(j, null, 2);
-      input("cancel").disabled = terminalCambi(j.state);
-      input("publish").disabled = !j.resultDigest;
-      input("stop-keep").disabled =
-        terminalCambi(j.state) || !!j.stopRequested || j.state === "cancelling";
-      $("validation").textContent = j.resultDigest
-        ? j.state === "partial"
-          ? t(
-              msg(
-                "cambi.partial",
-                "部分结果已核验；未评分范围不计零分，可复用已完成证据。",
-              ),
-            )
-          : ""
-        : terminalCambi(j.state)
-          ? (j.reason?.message ?? "")
-          : j.stopRequested
-            ? t(
-                msg(
-                  "cambi.finishingPartial",
-                  "正在排空当前解码窗口并核验来源；完成后保留已算部分。可随时立即取消。",
-                ),
-              )
-            : j.progress.scoredFrames
-              ? t(
-                  msg(
-                    "cambi.provisional",
-                    "运行中结果为暂存，尚未完成排空和来源核验，不能发布。",
-                  ),
-                )
-              : "";
-      if (
-        !j.resultDigest &&
-        !terminalCambi(j.state) &&
-        j.progress.scoredFrames &&
-        revision !== j.revision
-      ) {
-        await frames();
-        if (valid(c)) revision = j.revision;
-      }
-      if (terminalCambi(j.state) && !j.resultDigest) {
-        resetFrames();
-        $("frames").replaceChildren();
-        $("summary").replaceChildren();
-        revision = j.revision;
-      }
-      if (j.resultDigest && revision !== j.revision) {
-        const summary = await api.request<QualityScoreSummary>(
+  function history(more = false): Promise<void> {
+    return observation.run("history", "actor", async () => {
+      if (!actor) return;
+      browsingMore = more || browsingMore;
+      const c = context("actor", "history");
+      try {
+        const p = await api.request<{
+          entries: CambiJob[];
+          after: number;
+          more: boolean;
+        }>(
           c.actor,
-          `/api/quality/cambi/jobs/${id}/result`,
+          `/api/quality/cambi/jobs?after=${more ? after : 0}&limit=8`,
           c.signal,
         );
         if (!valid(c)) return;
-        renderQualitySummary($("summary"), summary);
-        const loaded = await frames();
+        after = p.after;
+        $("history-more").hidden = !p.more;
+        if (!more) $("history").replaceChildren();
+        for (const j of p.entries) {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.dataset.cambiJob = j.id;
+          b.textContent = j.id + " · " + j.state;
+          b.onclick = () => {
+            const click = context();
+            if (valid(click) && click.actor === c.actor) select(j.id);
+          };
+          $("history").append(b);
+        }
+      } catch (e) {
+        if (valid(c)) error(e);
+      }
+    });
+  }
+  function frames(more = false): Promise<boolean> {
+    if (more && observation.busy("frames")) return Promise.resolve(false);
+    return observation.run("frames", "selection", async () => {
+      if (!actor || !selected || (more && frameAfter === null)) return false;
+      const c = context("selection", "frames"),
+        id = selected,
+        cursor = more ? frameAfter! : 0;
+      input("frames-more").disabled = true;
+      const current = () => valid(c) && id === selected;
+      try {
+        const p = await api.request<CambiFramePage>(
+          c.actor,
+          `/api/quality/cambi/jobs/${id}/frames?after=${cursor}&limit=4`,
+          c.signal,
+        );
+        if (!current()) return false;
+        const nodes = document.createDocumentFragment();
+        for (const f of p.entries) {
+          const row = document.createElement("pre");
+          row.dataset.cambiFrame = String(f.index);
+          row.textContent = JSON.stringify(f, null, 2);
+          const link = document.createElement("a");
+          link.href = `/quality.html?cambi=1&cambiJob=${id}&index=${f.index}${p.publishable ? "" : "&preview=1"}`;
+          link.target = "_blank";
+          link.rel = "noopener";
+          link.dataset.cambiInspect = String(f.index);
+          link.textContent = p.publishable
+            ? t(msg("cambi.open", "CAMBI · 查看原始热图、源快照与真实区域"))
+            : t(msg("cambi.preview", "预览暂存分数与热图"));
+          nodes.append(link, row);
+        }
+        if (!current()) return false;
+        if (more) $("frames").append(nodes);
+        else $("frames").replaceChildren(nodes);
+        frameAfter = p.next;
+        $("frames-more").hidden = p.next === null;
+        return true;
+      } catch (e) {
+        if (current()) error(e);
+        return false;
+      } finally {
+        if (current()) {
+          input("frames-more").disabled = false;
+        }
+      }
+    });
+  }
+  function detail(): Promise<void> {
+    return observation.run("detail", "selection", async () => {
+      if (!selected) return;
+      const c = context("selection", "detail"),
+        id = selected;
+      try {
+        const j = await api.request<CambiJob>(
+          c.actor,
+          `/api/quality/cambi/jobs/${id}`,
+          c.signal,
+        );
+        if (!valid(c) || id !== selected) return;
+        for (const button of $("history").querySelectorAll<HTMLButtonElement>(
+          "[data-cambi-job]",
+        ))
+          if (button.dataset.cambiJob === id)
+            button.textContent = id + " · " + j.state;
+        $("detail").hidden = false;
+        $("title").textContent = id + " · " + j.state;
+        $("state").textContent = JSON.stringify(j, null, 2);
+        input("cancel").disabled = terminalCambi(j.state);
+        input("publish").disabled = !j.resultDigest;
+        input("stop-keep").disabled =
+          terminalCambi(j.state) ||
+          !!j.stopRequested ||
+          j.state === "cancelling";
+        $("validation").textContent = j.resultDigest
+          ? j.state === "partial"
+            ? t(
+                msg(
+                  "cambi.partial",
+                  "部分结果已核验；未评分范围不计零分，可复用已完成证据。",
+                ),
+              )
+            : ""
+          : terminalCambi(j.state)
+            ? (j.reason?.message ?? "")
+            : j.stopRequested
+              ? t(
+                  msg(
+                    "cambi.finishingPartial",
+                    "正在排空当前解码窗口并核验来源；完成后保留已算部分。可随时立即取消。",
+                  ),
+                )
+              : j.progress.scoredFrames
+                ? t(
+                    msg(
+                      "cambi.provisional",
+                      "运行中结果为暂存，尚未完成排空和来源核验，不能发布。",
+                    ),
+                  )
+                : "";
+        if (
+          !j.resultDigest &&
+          !terminalCambi(j.state) &&
+          j.progress.scoredFrames &&
+          revision !== j.revision
+        ) {
+          await frames();
+          if (valid(c)) revision = j.revision;
+        }
+        if (terminalCambi(j.state) && !j.resultDigest) {
+          resetFrames();
+          $("frames").replaceChildren();
+          $("summary").replaceChildren();
+          revision = j.revision;
+        }
+        if (j.resultDigest && revision !== j.revision) {
+          const summary = await api.request<QualityScoreSummary>(
+            c.actor,
+            `/api/quality/cambi/jobs/${id}/result`,
+            c.signal,
+          );
+          if (!valid(c)) return;
+          renderQualitySummary($("summary"), summary);
+          const loaded = await frames();
+          if (!valid(c)) return;
+          if (loaded) revision = j.revision;
+        }
+        const pub = await api.request<{
+          createdIds: string[];
+          policy: Record<string, string | number> & { space: string };
+        } | null>(
+          c.actor,
+          `/api/quality/cambi/jobs/${id}/candidates`,
+          c.signal,
+        );
         if (!valid(c)) return;
-        if (loaded) revision = j.revision;
-      }
-      const pub = await api.request<{
-        createdIds: string[];
-        policy: Record<string, string | number>;
-      } | null>(c.actor, `/api/quality/cambi/jobs/${id}/candidates`, c.signal);
-      if (!valid(c)) return;
-      $("publication").textContent = JSON.stringify(pub, null, 2);
-      ($("policy-inputs") as HTMLFieldSetElement).disabled = !!pub;
-      if (pub) {
-        for (const [k, v] of Object.entries(pub.policy))
-          input(k).value = String(v);
-        if (!$("links").childElementCount)
-          for (const markId of pub.createdIds) {
-            const a = await api.request<AnnotationRecord>(
-              c.actor,
-              `/api/annotations/spaces/${encodeURIComponent(String(pub.policy.space))}/${markId}`,
-              c.signal,
+        const token = JSON.stringify(pub);
+        if (token === publicationToken) return;
+        const records = await candidateAnnotations(pub, (space, markId) =>
+          api.request<AnnotationRecord>(
+            c.actor,
+            `/api/annotations/spaces/${encodeURIComponent(space)}/${markId}`,
+            c.signal,
+          ),
+        );
+        if (!valid(c)) return;
+        const links = document.createDocumentFragment();
+        for (const record of records)
+          for (const e of record.document.mark.cambiEvidence ?? []) {
+            const link = document.createElement("a");
+            link.href = `/quality.html?cambi=1&space=${encodeURIComponent(record.space)}&annotationId=${record.id}&evidenceId=${e.id}`;
+            link.target = "_blank";
+            link.rel = "noopener";
+            link.dataset.cambiCandidate = record.id;
+            link.textContent = t(
+              msg("cambi.open", "CAMBI · 查看原始热图、源快照与真实区域"),
             );
-            if (!valid(c)) return;
-            for (const e of a.document.mark.cambiEvidence ?? []) {
-              const link = document.createElement("a");
-              link.href = `/quality.html?cambi=1&space=${encodeURIComponent(a.space)}&annotationId=${a.id}&evidenceId=${e.id}`;
-              link.target = "_blank";
-              link.rel = "noopener";
-              link.dataset.cambiCandidate = a.id;
-              link.textContent = t(
-                msg("cambi.open", "CAMBI · 查看原始热图、源快照与真实区域"),
-              );
-              $("links").append(link);
-            }
+            links.append(link);
           }
+        if (!valid(c)) return;
+        $("publication").textContent = JSON.stringify(pub, null, 2);
+        $("links").replaceChildren(links);
+        ($("policy-inputs") as HTMLFieldSetElement).disabled = !!pub;
+        if (pub)
+          for (const [k, v] of Object.entries(pub.policy))
+            input(k).value = String(v);
+        publicationToken = token;
+      } catch (e) {
+        if (valid(c)) error(e);
       }
-    } catch (e) {
-      if (valid(c)) error(e);
-    } finally {
-      if (seq === detailSeq) busy = false;
-    }
+    });
   }
   input("client").value = randomUUID();
   $("search-form").onsubmit = (e) => {
@@ -507,8 +506,8 @@ export function installQualityCambi(signal: AbortSignal) {
           ].map((k) => [k, CAMBI_LIMITS[k as keyof typeof CAMBI_LIMITS]]),
         ),
       });
-      const p = { body, key: randomUUID() };
-      sessionStorage.setItem(storage(actor), JSON.stringify(p));
+      journal.clearConfirmed(actor);
+      const p = journal.freeze(actor, body);
       lock();
       void submit(p, c).catch((e) => {
         if (valid(c)) error(e);
@@ -531,7 +530,7 @@ export function installQualityCambi(signal: AbortSignal) {
   };
   $("new").onclick = () => {
     if (pending()?.confirmed) {
-      sessionStorage.removeItem(storage(actor));
+      journal.clearConfirmed(actor);
       lock();
     }
   };
@@ -611,6 +610,7 @@ export function installQualityCambi(signal: AbortSignal) {
         () => {
           if (valid(c)) {
             revision = 0;
+            publicationToken = "";
             void detail();
           }
         },
@@ -631,6 +631,7 @@ export function installQualityCambi(signal: AbortSignal) {
       if (active) {
         void history();
         void browse();
+        void capability();
         if (resume?.actor === actor) select(resume.id);
       }
     },
@@ -646,7 +647,7 @@ export function installQualityCambi(signal: AbortSignal) {
     "abort",
     () => {
       clearInterval(timer);
-      controller.abort();
+      observation.close();
     },
     { once: true },
   );
@@ -659,18 +660,7 @@ export function installQualityCambi(signal: AbortSignal) {
       if (active) {
         void history();
         void browse();
-        const c = context();
-        void api
-          .request(c.actor, "/api/quality/cambi/capability", c.signal)
-          .then(
-            (d) => {
-              if (valid(c, false))
-                $("capability").textContent = JSON.stringify(d, null, 2);
-            },
-            (e) => {
-              if (valid(c, false)) error(e);
-            },
-          );
+        void capability();
       }
     },
   };

@@ -11,7 +11,7 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 - `src/presentation/presenter.ts` 唯一决定帧如何上屏；同目录保存 WebGPU/WebGL、HDR 与 YUV 呈现。`shared/presentation/viewport.ts` 保存纯几何与状态，DOM 接线在 `src/ui/view-bindings.ts` 和 `src/ui/viewport-gestures.ts`。
 - `src/analysis/{metadata,bitstream}/` 保存浏览器分析适配、Worker 与服务；`src/ui/analysis/` 保存面板与图表，`chart-overlay.ts` 为图表覆盖层，`picture-overlay/` 为源画面宏块/QP 覆盖层；`src/session/{metadata-analysis,bitstream-analysis}.ts` 协调会话行为。
 - `src/review/` 保存评审与工作区浏览器客户端；`src/services/` 保存媒体库、连接、身份和文件客户端；`src/logging/` 保存本地诊断；面板与交互位于 `src/ui/`，管理页面位于 `src/admin/`。
-- `server/`：Node 服务，`app.ts` 负责装配；路由在 `routes/`，深度分析服务在 `analysis/bitstream/`，配置与运行入口在 `config.ts` / `runtime.ts`。共享代码统一从 `shared/` 引入，禁止服务端与浏览器层互相引用（包括类型）。
+- `server/`：Node 服务，`runtime.ts` / `app.ts` 负责入口装配，`quality-application.ts` 显式创建、恢复与关闭评分应用；媒体库不通过属性读取创建评分服务；路由在 `routes/`，深度分析服务在 `analysis/bitstream/`，配置与运行入口在 `config.ts` / `runtime.ts`。共享代码统一从 `shared/` 引入，禁止服务端与浏览器层互相引用（包括类型）。
 - `shared/analysis/quality/`：无宿主依赖的源平面度量核心。PSNR 的输入域、ROI、色彩前提和工作预算见 `docs/source-plane-psnr.md`；内部单帧桥及受信任的宿主输入边界见 `docs/source-frame-pair-psnr.md`；浏览器适配位于 `src/analysis/quality/`。数值核心与任务能力分别发现；持久任务已提供单帧 PSNR、可选 SSIM/grid 与 GUI/Agent 闭环，不代表序列或全部 #121 完成。
 - 普通依赖帧的有界前向测量见 `docs/forward-frame-quality.md`：目标显式携带闭合起点，每侧至多 32 个连续 AU，唯一严格前向 PTS=DTS；每次送包后、下个输入前必须恰好一帧，最终 drain 不得残留。不是按 PTS 搜索输出或宣称 packet opaque ABI，旧前向模式仍拒绝重排/延迟输出；固定 packet identity ABI1 的闭合 GOP 模式见 `docs/reordered-frame-quality.md`，以 opaque 输入 token 绑定全部输出与 drain，不按 PTS 归属 AU，仍限每侧32 AU。依赖窗口进入请求幂等、完整 provenance/预算、持久附件及只读原帧复核；旧 isolated-key 请求保持兼容。
 - 可选 SSIM 伴随 PSNR 的语义与预算见 `docs/source-plane-ssim.md`，数值/结构校验在 `shared/analysis/quality/ssim*.ts`。固定 FFmpeg 均匀 8×8、步长 4 变种，不得混称高斯 SSIM；有效窗口的各平面覆盖须保留。共用同次可信解码、持久任务/附件和原帧查看；不得扩大源/几何支持。
@@ -86,7 +86,7 @@ node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 用 `npm run clean` 先看各分类体积（默认 dry-run），`npm run clean -- --apply` 才删除；
 `--keep-days=N` 控制保留窗口（默认 14 天），`--only=media,logs` 限定分类。
 脚本只删「位于仓库内 + 被 git 忽略 + 不在保护清单」的路径，`.run/data`（服务端 SQLite）、
-`.run/identity-private`、`logs/`、`artifacts/latest-release.json` 与文档引用的取证报告永不删除。
+`.run/identity-private`、`logs/`、`artifacts/latest-release.json` 与文档引用的取证报告永不删除。未知 `.run` 目录不属于清理集合；验收输出按统一清单声明，配置数据目录、历史数据库与 `.voidplayer-user-data` 标记另行保护。
 
 套件注册与 CI 选例共用 `scripts/testing/manifest.json`，执行入口为 `scripts/run-tests.mjs`；新增测试必须登记。完整说明见 `docs/testing.md`。旧 npm 命令和脚本路径保留兼容。
 

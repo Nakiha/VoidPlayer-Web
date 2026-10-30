@@ -218,9 +218,11 @@ export class QualityRangeService {
       job.samples.push({au,jobId:child.id,state:child.state,reason:null});this.save(job);
       while(!terminalQualityJob(child.state)){
         job=this.get(job.id,job.actor.id);
-        if((this.closed||job.cancelRequestedAt!==null||this.now()>=deadline)&&child.state!=='cancelling')this.jobs.cancel(child.id,job.actor.id,job.requestId);
+        // A draining child already owns interruption/physical stop. Keep reading its
+        // terminal fact; external cancellation is deliberately closed to new commands.
+        if((this.closed||job.cancelRequestedAt!==null||this.now()>=deadline)&&child.state!=='cancelling'&&this.jobs.resources().available)this.jobs.cancel(child.id,job.actor.id,job.requestId);
         await pause();child=this.jobs.get(child.id,job.actor.id);
-        if(!this.jobs.resources().available){job=this.get(job.id,job.actor.id);job.state='cancelling';job.reason={code:'worker-stop-uncertain',message:'Child service unavailable or physical stop unconfirmed; parent admission retained.'};this.save(job);throw new Error(job.reason.message);}
+        if(this.jobs.resources().admissionBlocked){job=this.get(job.id,job.actor.id);job.state='cancelling';job.reason={code:'worker-stop-uncertain',message:'Child service unavailable or physical stop unconfirmed; parent admission retained.'};this.save(job);throw new Error(job.reason.message);}
       }
       job=this.get(job.id,job.actor.id);const sample=job.samples.find(s=>s.au===au)!;
       sample.state=this.sampleState(child);sample.reason=child.reason;
@@ -261,5 +263,7 @@ export class QualityRangeService {
     return {...publication,assessment:'not-subjectively-assessed',ranking:'finite-psnr-db-ascending-reference-au-ties',coverage:this.coverage(job)};
   }
   publication(id:string,actor:string){this.get(id,actor);const row=this.db.prepare('SELECT body FROM quality_range_publications WHERE range_id=?').get(id);return row?JSON.parse(String(row.body)) as Publication:null;}
-  close(){return this.closing??=(async()=>{this.closed=true;await this.active;if(this.fatal)throw this.fatal;for(const j of this.rows())if(!terminalRange(j.state)){j.state='interrupted';j.endedAt=this.now();j.reason={code:'service-shutdown',message:'Service stopped before execution; no automatic retry.'};this.save(j);}this.db.close();this.unlock();})();}
+  private stopping?:Promise<void>;
+  stopExecution(){return this.stopping??=(async()=>{this.closed=true;await this.active;if(this.fatal)throw this.fatal;for(const j of this.rows())if(!terminalRange(j.state)){j.state='interrupted';j.endedAt=this.now();j.reason={code:'service-shutdown',message:'Service stopped before execution; no automatic retry.'};this.save(j);}})();}
+  close(){return this.closing??=this.stopExecution().then(()=>{this.db.close();this.unlock();});}
 }

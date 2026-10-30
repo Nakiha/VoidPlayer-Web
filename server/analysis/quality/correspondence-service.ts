@@ -168,5 +168,7 @@ export class CorrespondenceService{
       plan.state=this.closed?'interrupted':plan.state==='cancelling'||plan.state==='cancelled'?'cancelled':'failed';plan.endedAt=now();plan.reason={code:this.closed?'service-shutdown':(e as {code?:string}).code??'planning-failed',message:e instanceof Error?e.message.slice(0,300):'Planning failed; no automatic retry.'};this.save(plan);
     }
   }
-  close(){return this.closing??=(async()=>{this.closed=true;clearTimeout(this.timer);this.active?.controller.abort(new AdminError(499,'Planner stopping.','service-shutdown'));await this.active?.done;if(this.failed)throw this.fatal;for(const plan of this.plans())if(!terminalCorrespondence(plan.state)){plan.state='interrupted';plan.endedAt=now();plan.reason={code:'service-shutdown',message:'Planning stopped; no automatic retry.'};this.save(plan);}this.unqueue?.();this.db.close();this.unlock();})();}
+  private stopping?:Promise<void>;
+  stopExecution(){return this.stopping??=(async()=>{this.closed=true;clearTimeout(this.timer);this.active?.controller.abort(new AdminError(499,'Planner stopping.','service-shutdown'));await this.active?.done;if(this.failed)throw this.fatal;for(const plan of this.plans())if(!terminalCorrespondence(plan.state)){plan.state='interrupted';plan.endedAt=now();plan.reason={code:'service-shutdown',message:'Planning stopped; no automatic retry.'};this.save(plan);}})();}
+  close(){return this.closing??=this.stopExecution().then(()=>{this.unqueue?.();this.db.close();this.unlock();});}
 }

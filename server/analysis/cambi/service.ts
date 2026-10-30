@@ -1394,8 +1394,9 @@ export class NativeCambiService {
     }
     return pub;
   }
-  close() {
-    return (this.closing ??= (async () => {
+  private stopping?: Promise<void>;
+  stopExecution() {
+    return (this.stopping ??= (async () => {
       this.closed = true;
       clearTimeout(this.timer);
       for (const active of this.active.values())
@@ -1422,9 +1423,9 @@ export class NativeCambiService {
           };
           this.save(j);
         }
-      this.unqueue?.();
-      this.db.close();
-      this.unlock();
+
     })());
   }
+  close() { return this.closing ??= this.stopExecution().then(()=>{this.unqueue?.();this.db.close();this.unlock();}); }
+
 }

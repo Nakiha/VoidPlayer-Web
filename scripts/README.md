@@ -64,3 +64,5 @@ Vite 与独立程序共用 `release-version.mjs` 的版本规则。标签构建�
 - `check-quality-roi-browser.mjs`：播放器已载入媒体的显式 AU 独立快照与偶数源网格 ROI → 持久 PSNR/SSIM/grid → 原子共享测量候选 → 原帧查看，Chromium/WebKit × H2648/HEVC10；完整 `ci-cache` 必需且要求 core。不继承旧播放 token 的 PTS 关联、不完成索引，Agent 共用 `create-quality-candidate`；见 [契约与矩阵](../docs/quality-roi-candidates.md)。
 
 Existing local page MCP: `node scripts/mcp-page-bridge.ts --existing-origin http://127.0.0.1:5180`; explicitly pair/consent in the already-open page. See `docs/local-mcp-page-bridge.md`. `check-existing-page-bridge-browser.mjs` verifies the real independent stdio client against ordinary pages with existing Files/ROI; no protocol simulation substitutes for this GUI check.
+
+评分应用的装配/关闭、冻结提交、观察与清理集合见 [所有权契约](../docs/quality-ownership.md)。`clean.mjs` 不推断未知 `.run` 目录为垃圾，验收目录必须先在统一清单声明。

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {installAdminObservationLifecycle,drainAdminObservations} from './testing/admin-observation-lifecycle.mjs';
 import {mkdtemp,mkdir,readFile,writeFile,rm} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {Worker} from 'node:worker_threads';
@@ -46,6 +47,10 @@ try{
   workers.add(worker);worker.once('exit',()=>workers.delete(worker));return worker;
  };
  browser=await ({chromium,webkit}[engine]).launch({headless:true});const context=await browser.newContext({locale:'en-US',viewport:{width:1400,height:1000},deviceScaleFactor:2});
+ await context.addInitScript(installAdminObservationLifecycle);
+ // Keep original result responses alive across selection changes so the test
+ // exercises the generation fence even when a transport ignores cancellation.
+ await context.addInitScript(()=>{const fetch=window.fetch.bind(window);window.fetch=(input,options)=>fetch(input,/\/api\/quality\/ranges\/[^/]+\/results\?/.test(String(input))?{...options,signal:undefined}:options);});
  await context.addCookies([{name:'voidplayer-user',value:cookie.split('=')[1],url:base}]);
  await context.addInitScript(()=>{
   const NativeWorker=window.Worker;
@@ -129,7 +134,7 @@ try{
  assert.equal(await get(`/api/quality/ranges/${otherId}/candidates`),null,'late replies never publish into another range');
  await page.locator(`[data-range-id="${id}"]`).click();await page.locator(`[data-candidate-id="${publication.createdIds[0]}"]`).waitFor();
  const after=await player.evaluate(()=>window.voidPlayer.getState());assert.equal(after.playing,true);assert.ok(after.positionUs>before.positionUs);assert.deepEqual(after.tracks.map(t=>t.id),before.tracks.map(t=>t.id));assert.equal(after.marks.length,before.marks.length);
- assert.deepEqual(errors,[]);await writeFile(path.join(directory,'evidence.json'),JSON.stringify({engine,depth,id,coverage:done.coverage,summary:done.job.summary,candidateId:publication.createdIds[0],nativeHashes:hashes,selectedBlock:3,viewFences:['selection','observation-close','actor-change'],player:{beforePosition:before.positionUs,afterPosition:after.positionUs,sameTracks:true},pageErrors:errors},null,2)+'\n');
+ await drainAdminObservations(page);assert.deepEqual(errors,[]);await writeFile(path.join(directory,'evidence.json'),JSON.stringify({engine,depth,id,coverage:done.coverage,summary:done.job.summary,candidateId:publication.createdIds[0],nativeHashes:hashes,selectedBlock:3,viewFences:['selection','observation-close','actor-change'],player:{beforePosition:before.positionUs,afterPosition:after.positionUs,sameTracks:true},pageErrors:errors},null,2)+'\n');
  console.log(`PASS ${engine}/${depth}: service-owned range survives closed observer; AU coverage/native SSE, policy candidate, original-plane hashes/block3 independent A playback and late selection/close/actor fences`);
 }catch(error){if(page&&!page.isClosed())await saveBrowserFailure({page,directory,name:'quality-ranges',context:{engine,depth,phase},error,evidence}).catch(()=>{});throw error;}
 finally{clearInterval(progress);Atomics.store(gate,0,1);Atomics.notify(gate,0);await browser?.close();await service?.close();await rm(temp,{recursive:true,force:true});}

@@ -616,8 +616,9 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
     }
     return this.get(id, actor);
   }
-  close() {
-    return (this.closing ??= (async () => {
+  private stopping?: Promise<void>;
+  stopExecution() {
+    return (this.stopping ??= (async () => {
       this.closed = true;
       clearTimeout(this.timer);
       for(const active of this.active.values())active.controller.abort(
@@ -645,8 +646,9 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
             }
           this.finish(job, null);
         }
-      this.unqueue?.();this.db.close();
-      this.unlock();
+
     })());
   }
+  close() { return this.closing ??= this.stopExecution().then(()=>{this.unqueue?.();this.db.close();this.unlock();}); }
+
 }

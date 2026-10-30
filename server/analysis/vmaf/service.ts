@@ -599,7 +599,7 @@ export class NativeVmafService extends TemporalScoringService<
       p.limit > 8 ||
       !Number.isInteger(p.minFrameDistance) ||
       p.minFrameDistance < 1 ||
-      p.minFrameDistance > 32 ||
+      p.minFrameDistance > VMAF_LIMITS.frames ||
       !Number.isInteger(p.severity) ||
       p.severity < 1 ||
       p.severity > 5 ||

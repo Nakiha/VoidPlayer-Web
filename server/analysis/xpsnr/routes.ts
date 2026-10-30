@@ -5,9 +5,9 @@ import {requireCapturedActor} from '../../identity.ts';import {AdminError,adminE
 export async function handleXpsnrRoutes(ctx:RouteContext,req:IncomingMessage,res:ServerResponse,url:URL){
  if(!url.pathname.startsWith('/api/quality/xpsnr'))return false;
  try{
-  if(url.pathname==='/api/quality/xpsnr/capability'&&req.method==='GET'){sendJson(res,200,await ctx.library.qualityXpsnr.capability());return true;}
+  if(url.pathname==='/api/quality/xpsnr/capability'&&req.method==='GET'){sendJson(res,200,await ctx.quality.qualityXpsnr.capability());return true;}
   requireCapturedActor(req,ctx.actor);if(!ctx.actor)throw new AdminError(401,'Choose an identity first.','identity-required');
-  const service=ctx.library.qualityXpsnr,actor=ctx.actor;
+  const service=ctx.quality.qualityXpsnr,actor=ctx.actor;
   if(req.method!=='GET'&&!adminWriteAllowed(req,'quality-job'))throw new AdminError(403,'Use the same-origin quality-job action.','origin-required');
   const item=/^\/api\/quality\/xpsnr\/jobs\/(xpsnr-[a-f0-9-]{36})(?:\/(result|frames|cancel|candidates|evidence))?$/.exec(url.pathname),collection=url.pathname==='/api/quality/xpsnr/jobs',preflight=url.pathname==='/api/quality/xpsnr/preflight';
   const compare=url.pathname==='/api/quality/xpsnr/compare';

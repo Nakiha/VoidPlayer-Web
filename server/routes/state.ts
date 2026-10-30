@@ -69,15 +69,15 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
             // app's routing URL uses a synthetic localhost base. The write
             // guard above has already checked Origin against Host and TLS.
             origin:new URL(req.headers.origin!).origin,
-            resolveCambi:ref=>library.qualityCambi.evidence(ref,ctx.actor!.id),
+            resolveCambi:ref=>ctx.quality.qualityCambi.evidence(ref,ctx.actor!.id),
             resolve(ref) {
-              if(ref.jobId.startsWith('xpsnr-'))return library.qualityXpsnr.evidence(ref,ctx.actor!.id);
-              if(ref.jobId.startsWith('vmaf-'))return library.qualityVmaf.evidence(ref,ctx.actor!.id);
+              if(ref.jobId.startsWith('xpsnr-'))return ctx.quality.qualityXpsnr.evidence(ref,ctx.actor!.id);
+              if(ref.jobId.startsWith('vmaf-'))return ctx.quality.qualityVmaf.evidence(ref,ctx.actor!.id);
               // Ownership first; do not reveal state/digests of another actor's job.
-              const job = library.qualityJobs.get(ref.jobId,ctx.actor!.id);
+              const job = ctx.quality.qualityJobs.get(ref.jobId,ctx.actor!.id);
               if (job.state !== 'completed' || !job.result.available || job.attempt?.id !== ref.attemptId || job.result.digest !== ref.digest)
                 throw new AdminError(409, 'Completed result reference is unavailable or changed.', 'evidence-unavailable');
-              return library.qualityJobs.result(ref.jobId,ctx.actor!.id);
+              return ctx.quality.qualityJobs.result(ref.jobId,ctx.actor!.id);
             },
           })); return true;
         }

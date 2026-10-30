@@ -26,7 +26,7 @@ export async function handleQualityRoutes(ctx:RouteContext,req:IncomingMessage,r
       const timer=setTimeout(()=>req.destroy(new Error('Source-build request body timeout')),10000);
       try{
         const body=await readAdminJson(req,1024);clearTimeout(timer);qualityKeys(body,['version']);
-        const value=await ctx.library.quality.buildSource(source[1],(body as {version:string}).version,controller.signal);
+        const value=await ctx.quality.quality.buildSource(source[1],(body as {version:string}).version,controller.signal);
         if(!res.destroyed)sendJson(res,200,value);
       }finally{clearTimeout(timer);}
       return true;
@@ -36,8 +36,8 @@ export async function handleQualityRoutes(ctx:RouteContext,req:IncomingMessage,r
       if([...url.searchParams.keys()].some(key=>!(source[2]==='psnr-source'?['v']:['v','afterAu','limit','buildId']).includes(key)))throw new AdminError(400,'Unexpected quality source parameters.','invalid-request');
       for(const key of ['afterAu','limit'])if(url.searchParams.has(key)&&!/^\d{1,9}$/.test(url.searchParams.get(key)!))throw new AdminError(400,'Invalid bounded frame query.','invalid-request');
       const version=url.searchParams.get('v')??'';
-      const value=source[2]==='psnr-source'?await ctx.library.quality.source(source[1],version,controller.signal)
-        :await ctx.library.quality.frames(source[1],version,{afterAu:Number(url.searchParams.get('afterAu')??0),limit:Number(url.searchParams.get('limit')??50),...(url.searchParams.has('buildId')?{buildId:url.searchParams.get('buildId')!}:{})},controller.signal);
+      const value=source[2]==='psnr-source'?await ctx.quality.quality.source(source[1],version,controller.signal)
+        :await ctx.quality.quality.frames(source[1],version,{afterAu:Number(url.searchParams.get('afterAu')??0),limit:Number(url.searchParams.get('limit')??50),...(url.searchParams.has('buildId')?{buildId:url.searchParams.get('buildId')!}:{})},controller.signal);
       sendJson(res,200,value);return true;
     }
     if(req.method!=='POST')throw new AdminError(405,'Method not allowed.');
@@ -46,7 +46,7 @@ export async function handleQualityRoutes(ctx:RouteContext,req:IncomingMessage,r
     const timer=setTimeout(()=>req.destroy(new Error('Quality request body timeout')),10000);
     try {
       const request=libraryPairRequest(await readAdminJson(req,16*1024));clearTimeout(timer);
-      const value=await ctx.library.quality.measure(request,controller.signal);
+      const value=await ctx.quality.quality.measure(request,controller.signal);
       if(!res.destroyed)sendJson(res,200,{...value,request:{id:ctx.requestId,actorId:ctx.actor.id}});
     } finally {clearTimeout(timer);}
   } catch(error) {

@@ -18,8 +18,8 @@ export async function handleTaskRoutes(ctx:RouteContext,req:IncomingMessage,res:
     const kind=match?.[1] as TaskKind,id=match?.[2]??'';
     if(req.method==='GET'||req.method==='HEAD'){
       if(match?.[3])throw new AdminError(405,'Cancel requires an explicit POST.','method-not-allowed');
-      if(collection){let query;try{query=taskQuery(url.searchParams);}catch(e){throw new AdminError(400,(e as Error).message,'invalid-task-query');}reply(200,ctx.library.tasks.query(ctx.actor.id,query));}
-      else{if(url.search)throw new AdminError(400,'Task detail takes no query.','invalid-task-query');reply(200,ctx.library.tasks.detail(kind,id,ctx.actor.id));}return true;
+      if(collection){let query;try{query=taskQuery(url.searchParams);}catch(e){throw new AdminError(400,(e as Error).message,'invalid-task-query');}reply(200,ctx.quality.tasks.query(ctx.actor.id,query));}
+      else{if(url.search)throw new AdminError(400,'Task detail takes no query.','invalid-task-query');reply(200,ctx.quality.tasks.detail(kind,id,ctx.actor.id));}return true;
     }
     if(req.method!=='POST'||!match?.[3])throw new AdminError(405,'Method not allowed.','method-not-allowed');
     if(url.search)throw new AdminError(400,'Cancel takes no query.','invalid-task-query');
@@ -29,9 +29,9 @@ export async function handleTaskRoutes(ctx:RouteContext,req:IncomingMessage,res:
     try{const body=await readAdminJson(req,256);if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).length)throw new AdminError(400,'Cancel requires an empty object.','invalid-task-cancel');if(match[3]==='release-result'){
       if(!['single','vmaf','cambi','xpsnr'].includes(kind))throw new AdminError(400,'This task has no releasable scoring payload.','unsupported-result-release');
       if(!ctx.options.admin)throw new AdminError(503,'Evidence storage must be available before releasing results.','storage-unavailable');
-      const service=kind==='single'?ctx.library.qualityJobs:kind==='vmaf'?ctx.library.qualityVmaf:kind==='cambi'?ctx.library.qualityCambi:ctx.library.qualityXpsnr;
-      service.get(id,ctx.actor.id);if(kind==='single'&&ctx.library.qualityRanges.referencesResult(id))throw new AdminError(409,'A range still references this result; it is retained.','result-pinned-by-range');if(ctx.options.admin.annotations.referencesQualityResult(id))throw new AdminError(409,'Shared or historical evidence still references this result; it is retained.','result-pinned-by-evidence');reply(200,service.releaseResult(id,ctx.actor.id));
-    }else reply(200,ctx.library.tasks.cancel(kind,id,ctx.actor.id,ctx.requestId));}finally{clearTimeout(timer);}
+      const service=kind==='single'?ctx.quality.qualityJobs:kind==='vmaf'?ctx.quality.qualityVmaf:kind==='cambi'?ctx.quality.qualityCambi:ctx.quality.qualityXpsnr;
+      service.get(id,ctx.actor.id);if(kind==='single'&&ctx.quality.qualityRanges.referencesResult(id))throw new AdminError(409,'A range still references this result; it is retained.','result-pinned-by-range');if(ctx.options.admin.annotations.referencesQualityResult(id))throw new AdminError(409,'Shared or historical evidence still references this result; it is retained.','result-pinned-by-evidence');reply(200,service.releaseResult(id,ctx.actor.id));
+    }else reply(200,ctx.quality.tasks.cancel(kind,id,ctx.actor.id,ctx.requestId));}finally{clearTimeout(timer);}
   }catch(e){if(!res.headersSent&&!res.destroyed)reply(e instanceof AdminError?e.status:500,{error:e instanceof AdminError?e.message:'Task center request failed.',code:e instanceof AdminError?e.code:'task-center-failed',recovery:(e as {code?:string})?.code==='task-cursor-expired'?'Restart GET /api/tasks without cursor, retaining the same filters and selected target.':null,links:{collection:'/api/tasks',guide:'/agent/quality/tasks.md'}});}
   return true;
 }

@@ -2,8 +2,14 @@ import { qualityViewVisible } from "./quality-navigation.ts";
 import { renderQualitySummary } from "./quality-summary.ts";
 import type { QualityScoreSummary } from "./quality-summary.ts";
 import { installQualityReexecution } from "./quality-reexecution.ts";
-import { confirmedActor,observeIdentity } from "../services/identity.ts";
-import { ApiError } from "../services/api-error.ts";
+import { confirmedActor, observeIdentity } from "../services/identity.ts";
+import {
+  FrozenSubmissionJournal,
+  assertJobReceipt,
+} from "../services/frozen-submission.ts";
+import type { FrozenSubmission } from "../services/frozen-submission.ts";
+import { QualityObservationScope } from "../analysis/quality/observation-scope.ts";
+import { candidateAnnotations } from "../analysis/quality/candidate-evidence.ts";
 import { QualityClient } from "../services/quality-jobs.ts";
 import { qualityFacts } from "../ui/quality-evidence.ts";
 import { qualityPairViewUrl } from "../../shared/review/quality-pair-view.ts";
@@ -40,20 +46,14 @@ export function installTemporalQuality<Input, Score>(
   const input = (id: string) => $(id) as HTMLInputElement;
   const comparison = config.installComparison?.((id) => select(id));
   const api = new QualityClient();
+  const observation = new QualityObservationScope();
   let browsingMore = false,
     active = false,
     actor = "",
-    controller = new AbortController(),
-    epoch = 0,
-    view = 0,
     selected = "",
     after = 0,
     next: number | null = null,
     revision = 0,
-    busy = false,
-    listToken = 0,
-    detailToken = 0,
-    frameToken = 0,
     policyToken = "";
   const reexecutionRoot = document.createElement("section");
   reexecutionRoot.id = `${kind}-reexecution`;
@@ -64,24 +64,30 @@ export function installTemporalQuality<Input, Score>(
     signal,
     (id) => select(id),
   );
-  type Pending = { body: Input; key: string; confirmed?: boolean };
-  const key = (owner: string) => `voidplayer-${kind}-pending:` + owner;
-  const pending = (owner: string): Pending | null => {
-    const p = JSON.parse(sessionStorage.getItem(key(owner)) ?? "null");
-    if (!p) return null;
-    if (typeof p.key !== "string")
-      throw Error(`Invalid stored ${label} receipt`);
-    return { ...p, body: config.parseInput(p.body) };
-  };
-  const context = () => ({ actor, epoch, view, signal: controller.signal });
-  const valid = (c: ReturnType<typeof context>, sameView = true) =>
+  type Pending = FrozenSubmission<Input>;
+  const key = (owner: string) => `voidplayer-${kind}-pending:${owner}`;
+  const journal = new FrozenSubmissionJournal(
+    sessionStorage,
+    key,
+    config.parseInput,
+  );
+  const pending = (owner: string) => journal.pending(owner);
+  const context = (
+    level: "actor" | "selection" = "selection",
+    slot?: string,
+  ) => ({
+    actor,
+    scope: observation.capture(level, slot),
+    get signal() {
+      return this.scope.signal;
+    },
+  });
+  const valid = (c: ReturnType<typeof context>) =>
     active &&
     !signal.aborted &&
-    !c.signal.aborted &&
     actor === c.actor &&
     confirmedActor()?.id === c.actor &&
-    epoch === c.epoch &&
-    (!sameView || view === c.view);
+    c.scope.current();
   const error = (e: unknown) => {
     $("status").textContent = e instanceof Error ? e.message : String(e);
   };
@@ -103,10 +109,7 @@ export function installTemporalQuality<Input, Score>(
   };
   function select(id: string) {
     reexecution.clear();
-    view++;
-    detailToken++;
-    frameToken++;
-    busy = false;
+    observation.select();
     selected = id;
     revision = 0;
     next = null;
@@ -120,18 +123,11 @@ export function installTemporalQuality<Input, Score>(
   function reset() {
     browsingMore = false;
     reexecution.clear();
-    controller.abort();
-    controller = new AbortController();
-    epoch++;
-    view++;
+    observation.invalidate();
     actor = confirmedActor()?.id ?? "";
     selected = "";
     revision = 0;
     after = 0;
-    busy = false;
-    listToken++;
-    detailToken++;
-    frameToken++;
     $("detail").hidden = true;
     for (const id of [
       "history",
@@ -155,121 +151,129 @@ export function installTemporalQuality<Input, Score>(
   function body() {
     return config.readInput(input);
   }
+  function capability(): Promise<void> {
+    return observation.run("capability", "actor", async () => {
+      if (!active || !actor) return;
+      const c = context("actor", "capability");
+      try {
+        const value = await api.request(c.actor, `/api/quality/${kind}/capability`, c.signal);
+        if (valid(c)) $("capability").textContent = JSON.stringify(value, null, 2);
+      } catch (e) {
+        if (valid(c)) error(e);
+      }
+    });
+  }
   async function submit(p: Pending, c: ReturnType<typeof context>) {
-    let r: { job: ObservationJob };
+    const receiptContext = context("actor");
     try {
-      r = await api.request<{ job: ObservationJob }>(
+      const r = await journal.execute(
         c.actor,
-        `/api/quality/${kind}/jobs`,
-        c.signal,
-        "POST",
-        p.body,
         p.key,
+        (frozen) =>
+          api.request<{ job: ObservationJob }>(
+            c.actor,
+            `/api/quality/${kind}/jobs`,
+            c.signal,
+            "POST",
+            frozen.body,
+            frozen.key,
+          ),
+        (response, frozen) => assertJobReceipt(response, c.actor, frozen),
       );
-    } catch (e) {
-      if (
-        e instanceof ApiError &&
-        e.status >= 400 &&
-        e.status < 500 &&
-        e.code !== "idempotency-conflict"
-      ) {
-        const stored = pending(c.actor);
-        if (stored?.key === p.key) sessionStorage.removeItem(key(c.actor));
-        if (valid(c)) lock();
-      }
-      throw e;
-    }
-    const stored = pending(c.actor);
-    if (stored?.key === p.key)
-      sessionStorage.setItem(
-        key(c.actor),
-        JSON.stringify({ ...stored, confirmed: true }),
-      );
-    if (!valid(c)) return;
-    lock();
-    select(r.job.id);
-    void list();
-  }
-  async function list(more = false) {
-    browsingMore = more || browsingMore;
-    const c = context(),
-      token = ++listToken;
-    if (!c.actor) return;
-    try {
-      const p = await api.request<{
-        entries: ObservationJob[];
-        after: number;
-        more: boolean;
-      }>(
-        c.actor,
-        `/api/quality/${kind}/jobs?after=${more ? after : 0}&limit=8`,
-        c.signal,
-      );
-      if (!valid(c, false) || token !== listToken) return;
-      after = p.after;
-      $("more").hidden = !p.more;
-      if (!more) $("history").replaceChildren();
-      for (const j of p.entries) {
-        const b = document.createElement("button");
-        b.type = "button";
-        b.dataset[kind + "Job"] = j.id;
-        b.textContent = j.id + " · " + j.state;
-        b.onclick = () => {
-          if (valid(c, false)) select(j.id);
-        };
-        if (comparison) {
-          const check = document.createElement("input");
-          check.type = "checkbox";
-          check.setAttribute("aria-label", "Compare " + j.id);
-          check.checked = comparison.has(j.id);
-          check.disabled = j.state !== "completed";
-          check.dataset[kind + "Compare"] = j.id;
-          check.onchange = () => comparison.toggle(j.id, check.checked);
-          const row = document.createElement("div");
-          row.className = kind + "-history-entry";
-          row.append(check, b);
-          $("history").append(row);
-        } else $("history").append(b);
-      }
-    } catch (e) {
-      if (valid(c, false) && token === listToken) error(e);
+      if (!valid(c)) return;
+      select(r.job.id);
+      void list();
+    } finally {
+      // Submission controls project actor-owned acceptance, independently of
+      // which task is selected when its valid receipt eventually arrives.
+      if (valid(receiptContext)) lock();
     }
   }
-  async function frames(more = false) {
-    const c = context(),
-      id = selected,
-      token = ++frameToken;
-    try {
-      const p = await api.request<{
-        entries: {
-          index: number;
-          score: Score | null;
-          pair: LibraryPairResult;
-        }[];
-        next: number | null;
-      }>(
-        c.actor,
-        `/api/quality/${kind}/jobs/${id}/frames?after=${more ? (next ?? 0) : 0}&limit=4`,
-        c.signal,
-      );
-      if (!valid(c) || id !== selected || token !== frameToken) return false;
-      if (!more) $("frames").replaceChildren();
-      next = p.next;
-      $("frames-more").hidden = next === null;
-      for (const f of p.entries) {
-        const root = document.createElement("section"),
-          title = document.createElement("h4");
-        title.textContent = config.frameLabel(f.index, f.score);
-        root.dataset[kind + "Frame"] = String(f.index);
-        root.append(title);
-        qualityFacts(root, f.pair);
-        $("frames").append(root);
+  function list(more = false): Promise<void> {
+    return observation.run("history", "actor", async () => {
+      browsingMore = more || browsingMore;
+      const c = context("actor", "history");
+      if (!c.actor) return;
+      try {
+        const p = await api.request<{
+          entries: ObservationJob[];
+          after: number;
+          more: boolean;
+        }>(
+          c.actor,
+          `/api/quality/${kind}/jobs?after=${more ? after : 0}&limit=8`,
+          c.signal,
+        );
+        if (!valid(c)) return;
+        after = p.after;
+        $("more").hidden = !p.more;
+        if (!more) $("history").replaceChildren();
+        for (const j of p.entries) {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.dataset[kind + "Job"] = j.id;
+          b.textContent = j.id + " · " + j.state;
+          b.onclick = () => {
+            if (valid(c)) select(j.id);
+          };
+          if (comparison) {
+            const check = document.createElement("input");
+            check.type = "checkbox";
+            check.setAttribute("aria-label", "Compare " + j.id);
+            check.checked = comparison.has(j.id);
+            check.disabled = j.state !== "completed";
+            check.dataset[kind + "Compare"] = j.id;
+            check.onchange = () => comparison.toggle(j.id, check.checked);
+            const row = document.createElement("div");
+            row.className = kind + "-history-entry";
+            row.append(check, b);
+            $("history").append(row);
+          } else $("history").append(b);
+        }
+      } catch (e) {
+        if (valid(c)) error(e);
       }
-      return true;
-    } catch (e) {
-      if (valid(c) && id === selected && token === frameToken) error(e);
-      return false;
-    }
+    });
+  }
+  function frames(more = false): Promise<boolean> {
+    return observation.run("frames", "selection", async () => {
+      const c = context("selection", "frames"),
+        id = selected;
+      try {
+        const p = await api.request<{
+          entries: {
+            index: number;
+            score: Score | null;
+            pair: LibraryPairResult;
+          }[];
+          next: number | null;
+        }>(
+          c.actor,
+          `/api/quality/${kind}/jobs/${id}/frames?after=${more ? (next ?? 0) : 0}&limit=4`,
+          c.signal,
+        );
+        if (!valid(c) || id !== selected) return false;
+        const nodes = document.createDocumentFragment();
+        for (const f of p.entries) {
+          const root = document.createElement("section"),
+            title = document.createElement("h4");
+          title.textContent = config.frameLabel(f.index, f.score);
+          root.dataset[kind + "Frame"] = String(f.index);
+          root.append(title);
+          qualityFacts(root, f.pair);
+          nodes.append(root);
+        }
+        if (!valid(c) || id !== selected) return false;
+        if (more) $("frames").append(nodes);
+        else $("frames").replaceChildren(nodes);
+        next = p.next;
+        $("frames-more").hidden = next === null;
+        return true;
+      } catch (e) {
+        if (valid(c) && id === selected) error(e);
+        return false;
+      }
+    });
   }
   async function publication(c: ReturnType<typeof context>, id: string) {
     const p = await api.request<{
@@ -279,71 +283,72 @@ export function installTemporalQuality<Input, Score>(
     if (!valid(c) || id !== selected) return;
     const token = JSON.stringify(p);
     if (token === policyToken) return;
-    policyToken = token;
+    const records = await candidateAnnotations(p, (space, annotationId) =>
+      api.request<AnnotationRecord>(
+        c.actor,
+        `/api/annotations/spaces/${encodeURIComponent(space)}/${annotationId}`,
+        c.signal,
+      ),
+    );
+    if (!valid(c) || id !== selected) return;
+    const links = document.createDocumentFragment();
+    for (const record of records)
+      for (const e of record.document.mark.qualityEvidence ?? []) {
+        const a = document.createElement("a");
+        a.href = qualityPairViewUrl(
+          { space: record.space, annotationId: record.id, evidenceId: e.id },
+          location.origin,
+        );
+        a.target = "_blank";
+        a.rel = "noopener";
+        a.textContent = `Open original frame pair (not a ${label} heatmap)`;
+        a.dataset[kind + "Candidate"] = record.id;
+        links.append(a);
+      }
+    if (!valid(c) || id !== selected) return;
     $("publication").textContent = JSON.stringify(p, null, 2);
-    $("links").replaceChildren();
+    $("links").replaceChildren(links);
     ($("policy-inputs") as HTMLFieldSetElement).disabled = !!p;
     if (p)
       for (const [field, value] of Object.entries(p.policy))
         input(field).value = String(value);
-    if (p)
-      for (const annotationId of p.createdIds) {
-        const record = await api.request<AnnotationRecord>(
-          c.actor,
-          `/api/annotations/spaces/${encodeURIComponent(p.policy.space)}/${annotationId}`,
-          c.signal,
-        );
-        if (!valid(c) || id !== selected) return;
-        for (const e of record.document.mark.qualityEvidence ?? []) {
-          const a = document.createElement("a");
-          a.href = qualityPairViewUrl(
-            { space: record.space, annotationId: record.id, evidenceId: e.id },
-            location.origin,
-          );
-          a.target = "_blank";
-          a.rel = "noopener";
-          a.textContent = `Open original frame pair (not a ${label} heatmap)`;
-          a.dataset[kind + "Candidate"] = annotationId;
-          $("links").append(a);
-        }
-      }
+    policyToken = token;
   }
-  async function detail() {
-    if (!selected || busy) return;
-    busy = true;
-    const c = context(),
-      id = selected,
-      token = ++detailToken;
-    try {
-      const j = await api.request<ObservationJob>(
-        c.actor,
-        `/api/quality/${kind}/jobs/${id}`,
-        c.signal,
-      );
-      if (!valid(c) || id !== selected) return;
-      reexecution.show(j.id);
-      $("detail").hidden = false;
-      $("title").textContent = id + " · " + j.state;
-      $("state").textContent = JSON.stringify(j, null, 2);
-      input("cancel").disabled = terminalObservation(j.state);
-      input("publish").disabled = j.state !== "completed";
-      if (j.resultDigest && revision !== j.revision) {
-        const r = await api.request<QualityScoreSummary>(
+
+  function detail(): Promise<void> {
+    return observation.run("detail", "selection", async () => {
+      if (!selected) return;
+      const c = context("selection", "detail"),
+        id = selected;
+      try {
+        const j = await api.request<ObservationJob>(
           c.actor,
-          `/api/quality/${kind}/jobs/${id}/result`,
+          `/api/quality/${kind}/jobs/${id}`,
           c.signal,
         );
         if (!valid(c) || id !== selected) return;
-        renderQualitySummary($("summary"), r);
-        if (await frames()) revision = j.revision;
+        reexecution.show(j.id);
+        $("detail").hidden = false;
+        $("title").textContent = id + " · " + j.state;
+        $("state").textContent = JSON.stringify(j, null, 2);
+        input("cancel").disabled = terminalObservation(j.state);
+        input("publish").disabled = j.state !== "completed";
+        if (j.resultDigest && revision !== j.revision) {
+          const r = await api.request<QualityScoreSummary>(
+            c.actor,
+            `/api/quality/${kind}/jobs/${id}/result`,
+            c.signal,
+          );
+          if (!valid(c) || id !== selected) return;
+          renderQualitySummary($("summary"), r);
+          if (await frames()) revision = j.revision;
+        }
+        if (!valid(c) || id !== selected) return;
+        await publication(c, id);
+      } catch (e) {
+        if (valid(c) && id === selected) error(e);
       }
-      if (!valid(c) || id !== selected) return;
-      await publication(c, id);
-    } catch (e) {
-      if (valid(c) && id === selected) error(e);
-    } finally {
-      if (token === detailToken) busy = false;
-    }
+    });
   }
   try {
     input("client").value =
@@ -360,8 +365,8 @@ export function installTemporalQuality<Input, Score>(
       let p = pending(actor);
       if (p && !p.confirmed) throw Error("Retry the frozen submission first");
       const b = body();
-      p = { body: b, key: randomUUID() };
-      sessionStorage.setItem(key(actor), JSON.stringify(p));
+      journal.clearConfirmed(actor);
+      p = journal.freeze(actor, b);
       lock();
       void submit(p, c).catch((e) => {
         if (valid(c)) error(e);
@@ -385,7 +390,7 @@ export function installTemporalQuality<Input, Score>(
   $("new").onclick = () => {
     try {
       if (!pending(actor)?.confirmed) return;
-      sessionStorage.removeItem(key(actor));
+      journal.clearConfirmed(actor);
       lock();
     } catch (e) {
       error(e);
@@ -489,7 +494,8 @@ export function installTemporalQuality<Input, Score>(
           digest: string;
         }>
       ).detail;
-      if (!active || p.actor !== actor || confirmedActor()?.id !== actor) return;
+      if (!active || p.actor !== actor || confirmedActor()?.id !== actor)
+        return;
       try {
         if (pending(actor) && !pending(actor)?.confirmed)
           throw Error(`Retry the original frozen ${label} submission first`);
@@ -508,7 +514,17 @@ export function installTemporalQuality<Input, Score>(
     },
     { signal },
   );
-  observeIdentity(signal,{invalidated:reset,confirmed:()=>{reset();if(active)void list();},failed:error});
+  observeIdentity(signal, {
+    invalidated: reset,
+    confirmed: () => {
+      reset();
+      if (active) {
+        void list();
+        void capability();
+      }
+    },
+    failed: error,
+  });
   const timer = setInterval(() => {
     if (active && qualityViewVisible(kind)) {
       if (selected) void detail();
@@ -519,7 +535,7 @@ export function installTemporalQuality<Input, Score>(
     "abort",
     () => {
       clearInterval(timer);
-      controller.abort();
+      observation.close();
     },
     { once: true },
   );
@@ -530,18 +546,7 @@ export function installTemporalQuality<Input, Score>(
       reset();
       if (active) {
         void list();
-        const c = context();
-        void api
-          .request(c.actor, `/api/quality/${kind}/capability`, c.signal)
-          .then(
-            (r) => {
-              if (valid(c, false))
-                $("capability").textContent = JSON.stringify(r, null, 2);
-            },
-            (e) => {
-              if (valid(c, false)) error(e);
-            },
-          );
+        void capability();
       }
     },
   };

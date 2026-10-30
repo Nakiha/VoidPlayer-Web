@@ -17,7 +17,8 @@ export async function checkCambiPagination(browser){
   await context.addInitScript(installAdminObservationLifecycle);
   await context.addInitScript(()=>{
    const fetch=window.fetch.bind(window);let sequence=0;window.__cambiPageReads=[];
-   window.fetch=async(...args)=>{const id=String(args[0]).includes('/frames?')?++sequence:0;const response=await fetch(...args);if(!id)return response;const get=response.body.getReader.bind(response.body);
+   window.fetch=async(...args)=>{const id=String(args[0]).includes('/frames?')?++sequence:0;// Deliberately non-cooperative transport: view fencing must survive ignored abort.
+   const response=await fetch(args[0],id?{...args[1],signal:undefined}:args[1]);if(!id)return response;const get=response.body.getReader.bind(response.body);
     response.body.getReader=(...args)=>{const reader=get(...args),read=reader.read.bind(reader);reader.read=async(...args)=>{const value=await read(...args);if(value.done)window.__cambiPageReads.push(id);return value;};return reader;};return response;};
   });
   page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));

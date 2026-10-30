@@ -1,20 +1,8 @@
 import {closeResources} from './shutdown.ts';
-import {WasmCambiRunner} from './analysis/cambi/wasm-runner.ts';
-import {WasmVmafRunner} from './analysis/vmaf/wasm-runner.ts';
-import {NativeCambiService} from './analysis/cambi/service.ts';
-import {TaskCenterService} from './tasks/service.ts';
-import {NativeXpsnrService} from './analysis/xpsnr/service.ts';
-import {WasmXpsnrRunner} from './analysis/xpsnr/wasm-runner.ts';
-import {QualityReexecutionService} from './analysis/quality/reexecution-service.ts';
-import {NativeVmafService} from './analysis/vmaf/service.ts';
+import {FrameIndexJobs} from './frame-index-jobs.ts';
+import {QualityAdmission} from './quality-admission.ts';
 import type {LibraryScanStatus} from '../shared/service/admin.ts';
-import { FrameIndexJobs } from './frame-index-jobs.ts';
-import { QualityAdmission } from './quality-admission.ts';
-import { LibraryPairRunner } from './analysis/quality/runner.ts';
-import { QualityJobService } from './analysis/quality/job-service.ts';
-import { LibraryDiscoveryService } from './discovery/service.ts';
-import { QualityRangeService } from './analysis/quality/range-service.ts';
-import {CorrespondenceService} from './analysis/quality/correspondence-service.ts';
+import type {QualityApplication} from './quality-application.ts';
 import { AdminError } from './admin-error.ts';
 import { FrameIndexStore } from './frame-index-store.ts';
 import { MediaThumbnailStore } from './media-thumbnail-store.ts';
@@ -44,39 +32,34 @@ export class MediaLibraryIndex {
   private store: LibraryStore;
   readonly indexJobs: FrameIndexJobs;
   readonly qualityAdmission = new QualityAdmission();
-  private pairRunner?: LibraryPairRunner;
-  private jobService?: QualityJobService;
-  private discoveryService?: LibraryDiscoveryService;
-  get discovery() { if(this.closed)throw new AdminError(503,'Library discovery is closed.','discovery-unavailable');return this.discoveryService??=new LibraryDiscoveryService(this); }
-  private taskService?:TaskCenterService;
-  get tasks(){if(this.closed)throw new AdminError(503,'Task center closed.','task-center-unavailable');return this.taskService??=new TaskCenterService(this);}
-  private reexecutionService?:QualityReexecutionService;
-  get qualityReexecutions(){if(this.closed)throw new AdminError(503,'Quality reexecution is closed.','reexecution-unavailable');this.qualityJobs;return this.reexecutionService??=new QualityReexecutionService(this);}
-  private rangeService?: QualityRangeService;
-  private correspondenceService?:CorrespondenceService;
-  private cambiService?:NativeCambiService;
-  get nativeCambiDescriptor(){return this.cambiService?.descriptor??null;}
-  get qualityCambi(){if(this.closed||!this.durableQualityJobsEnabled)throw new AdminError(503,'CAMBI requires persistent library storage','quality-storage-unavailable');return this.cambiService??=new NativeCambiService(this.indexDatabase+'.quality-cambi.sqlite',new WasmCambiRunner(this,this.coreDirectory,this.options.analysisCoreDir??path.join(path.dirname(this.coreDirectory),'voidplayer-analysis')));}
-  private vmafService?:NativeVmafService;
-  get nativeVmafDescriptor(){return this.vmafService?.descriptor??null;}
-  get qualityVmaf(){if(this.closed)throw new AdminError(503,'VMAF service closed.','vmaf-service-unavailable');if(!this.durableQualityJobsEnabled)throw new AdminError(503,'VMAF needs persistent library storage.','quality-storage-unavailable');return this.vmafService??=new NativeVmafService(this.indexDatabase+'.quality-vmaf.sqlite',new WasmVmafRunner(this,this.coreDirectory,this.options.analysisCoreDir??path.join(path.dirname(this.coreDirectory),'voidplayer-analysis')),this.qualityCorrespondence);}
-  private xpsnrService?:NativeXpsnrService;
-  get nativeXpsnrDescriptor(){return this.xpsnrService?.descriptor??null;}
-  get qualityXpsnr(){if(this.closed)throw new AdminError(503,'XPSNR service closed.','xpsnr-service-unavailable');if(!this.durableQualityJobsEnabled)throw new AdminError(503,'XPSNR needs persistent library storage.','quality-storage-unavailable');return this.xpsnrService??=new NativeXpsnrService(this.indexDatabase+'.quality-xpsnr.sqlite',new WasmXpsnrRunner(this,this.coreDirectory,this.options.analysisCoreDir??path.join(path.dirname(this.coreDirectory),'voidplayer-analysis')),this.qualityCorrespondence);}
-  private closing?: Promise<void>;
-  private coreDirectory: string;
-  get quality() { return this.pairRunner ??= new LibraryPairRunner(this,this.coreDirectory); }
-  get durableQualityJobsEnabled() { return this.options.database !== undefined && this.options.database !== ':memory:'; }
-  get qualityJobs() {
-    if (this.closed) throw new AdminError(503,'Quality job service closed.','quality-service-unavailable');
-    if (!this.durableQualityJobsEnabled) throw new AdminError(503,'Durable quality jobs require a persistent library database.','quality-storage-unavailable');
-    return this.jobService ??= new QualityJobService(this.indexDatabase + '.quality.sqlite', this.quality);
+  private application?:QualityApplication;
+  attachQualityApplication(application:QualityApplication){
+    if(this.closed||this.application)throw Error('Quality application already attached or media closed');
+    this.application=application;
   }
-  get qualityRanges() {
-    const jobs=this.qualityJobs;
-    return this.rangeService??=new QualityRangeService(this.indexDatabase+'.quality-ranges.sqlite',jobs);
+  get attachedQualityApplication(){return this.application;}
+  get qualityApplication(){
+    if(!this.application)throw new AdminError(503,'Quality application must be explicitly assembled.','quality-storage-unavailable');
+    return this.application;
   }
-  get qualityCorrespondence(){const ranges=this.qualityRanges;return this.correspondenceService??=new CorrespondenceService(this.indexDatabase+'.quality-correspondence.sqlite',this.quality,ranges);}
+  // Compatibility reads forward existing instances only; they never create resources.
+  get quality(){return this.qualityApplication.quality;}
+  get discovery(){return this.qualityApplication.discovery;}
+  get qualityJobs(){return this.qualityApplication.qualityJobs;}
+  get qualityRanges(){return this.qualityApplication.qualityRanges;}
+  get qualityCorrespondence(){return this.qualityApplication.qualityCorrespondence;}
+  get qualityCambi(){return this.qualityApplication.qualityCambi;}
+  get qualityVmaf(){return this.qualityApplication.qualityVmaf;}
+  get qualityXpsnr(){return this.qualityApplication.qualityXpsnr;}
+  get qualityReexecutions(){return this.qualityApplication.qualityReexecutions;}
+  get tasks(){return this.qualityApplication.tasks;}
+  get nativeCambiDescriptor(){return this.qualityApplication.nativeCambiDescriptor;}
+  get nativeVmafDescriptor(){return this.qualityApplication.nativeVmafDescriptor;}
+  get nativeXpsnrDescriptor(){return this.qualityApplication.nativeXpsnrDescriptor;}
+  private closing?:Promise<void>;
+  private stopping?:Promise<void>;
+  private coreDirectory:string;
+  get durableQualityJobsEnabled(){return this.options.database!==undefined&&this.options.database!==':memory:';}
   readonly frameIndexes: FrameIndexStore;
   readonly thumbnails: MediaThumbnailStore;
   private pending: Promise<void> | null = null;
@@ -107,6 +90,7 @@ export class MediaLibraryIndex {
     this.initialized = !!this.store.db.prepare('SELECT 1 FROM roots WHERE active=1 AND scanned_at IS NOT NULL LIMIT 1').get();
     if (this.initialized) this.refreshedAt = this.now();
   }
+  get corePaths(){return {decoding:this.coreDirectory,analysis:this.options.analysisCoreDir??path.join(path.dirname(this.coreDirectory),'voidplayer-analysis')};}
   get analysisDirectory() { return path.join(path.dirname(this.store.file), 'bitstream-analysis'); }
   get indexDatabase() { return this.store.file; }
   get ready() { return this.initialized; }
@@ -419,29 +403,18 @@ export class MediaLibraryIndex {
       return real;
     } catch { return null; }
   }
-  /** External owners (for example admin analysis) may share the index. */
-  close(ownersStopped?: Promise<void>) { return this.closing ??= this.closeOwned(ownersStopped); }
-  private async closeOwned(ownersStopped?: Promise<void>) {
-    this.closed = true;
-    await closeResources('Library shutdown incomplete; shared database ownership retained', [
-      ['external index owners', () => ownersStopped],
-      ['scan scheduling', () => this.stop()],
-      ['task observations', () => this.taskService?.close()],
-      ['reexecution planning', () => this.reexecutionService?.close()],
-      ['correspondence planning', () => this.correspondenceService?.close()],
-      ['CAMBI', () => this.cambiService?.close()],
-      ['XPSNR', () => this.xpsnrService?.close()],
-      ['VMAF', () => this.vmafService?.close()],
-      ['discovery', () => this.discoveryService?.close()],
-      ['ranges', () => this.rangeService?.close()],
-      ['single-frame jobs', () => this.jobService?.close()],
-      ['pair executor', () => this.pairRunner?.close()],
-      ['library scan', () => this.pending?.catch(() => {})],
-      ['index executors', () => this.indexJobs.close()],
+  /** Compatibility entry; the attached application is the sole quality lifetime owner. */
+  close(ownersStopped?:Promise<void>){return this.closing??=this.application?this.application.close(ownersStopped):this.closeMedia(ownersStopped);}
+  stopExecution(){return this.stopping??=(async()=>{
+    this.closed=true;
+    await closeResources('Media execution shutdown incomplete',[
+      ['scan scheduling',()=>this.stop()],['library scan',()=>this.pending?.catch(()=>{})],['index executors',()=>this.indexJobs.close()],
     ]);
-    // An uncertain child may still use this connection. Never unlock it just
-    // because other independent executors have successfully stopped.
-    this.store.close();
+  })();}
+  releaseStorage(){this.store.close();}
+  private async closeMedia(external?:Promise<void>){
+    await closeResources('Media shutdown incomplete; database ownership retained',[['media execution',()=>this.stopExecution()],['external owners',()=>external]]);
+    this.releaseStorage();
   }
   /** Serialize configuration with scans. Persist first; a failed DB switch rolls
    * back the file before allowing scans again. Existing byte streams stay open. */

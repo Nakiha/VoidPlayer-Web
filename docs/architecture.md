@@ -16,6 +16,8 @@
 
 `shared/analysis/quality/` 保存 [源平面 PSNR](source-plane-psnr.md)、[内部帧对执行体](source-frame-pair-psnr.md)和共享的有界原始帧解码器；`shared/wasm/frame.ts` / `shared/media/ffmpeg-color.ts` 保存宿主中立的帧 ABI 和色彩枚举映射。浏览器 Blob 适配在 `src/analysis/quality/`；媒体库文件、可信缓存证据、Node/Bun Worker 与一次性 HTTP 调用在 `server/analysis/quality/`，见 [服务端闭环](source-library-psnr.md)。不依赖 Session 或呈现器，不自动配对；持久单帧 PSNR 的事务提交/幂等、服务持有执行、物理退出围栏和独占恢复在同目录 `job-*` 适配，见 [任务 v1](source-psnr-jobs.md)。`quality.jobs` 仅声明该受限范围，#121 没有整体完成。
 
+评分应用由 `server/quality-application.ts` 显式装配和恢复；媒体库只提供媒体/索引能力。任务中心使用读取投影和独立命令，执行器接收窄依赖。关闭先等待执行和父子协调，再释放存储。前端冻结提交、观察代次和完整证据装配的公共所有权见 [评分所有权契约](quality-ownership.md)。
+
 ## 会话与时间
 
 `src/session.ts` 的 `ReviewSession` 是 UI 与页面 Agent 共用的浏览器会话入口。无宿主依赖的标注规则位于 `shared/review/`，HTTP 业务操作无需实例化浏览器会话。轨道为 A–H，时间单位是整数微秒，每个片源首个视频时间戳归零后再应用轨道偏移。
