@@ -75,7 +75,9 @@ automatic publication or changed-source retry.
 Independent official scores and every heatmap scale hash are checked on actual
 HTTP/Worker/Node/Bun/browser/standalone paths, including192-frame rational-rate
 clips. See stage logs for current platform status rather than inferring it from
-small fixtures. Natural official fixtures retain their BSD-2-Clause-Patent
+small fixtures. Local screening observations, false-positive/miss examples and
+the five legacy proxy migration decisions are recorded in the
+[screening evaluation](cambi-screening-evaluation.md). Natural official fixtures retain their BSD-2-Clause-Patent
 notice in test/helpers/native-cambi-official-NOTICE.txt; algorithm licensing and
 source are shipped by the upstream analysis build.
 

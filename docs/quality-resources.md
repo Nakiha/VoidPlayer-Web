@@ -32,3 +32,4 @@ PUT 正文 `{revision,limits}`，严格结构见 `shared/service/quality-resourc
 回归覆盖聚合准入/预算、持久队列和原回执、实际 VMAF 双 Worker 降限/取消、
 配置 HTTP 归属/来源/revision/重载，以及双浏览器管理页保存和响应式布局。
 排队/执行时间来自持久时间戳，实际 heap 来自算法结果；准入快照不冒充 CPU/RSS 实测。
+实际 HTTP、heap/RSS 与播放观察见[本机筛查验收](cambi-screening-evaluation.md#本机资源及播放观察)。

@@ -1,0 +1,3266 @@
+{
+  "schema": "voidplayer-cambi-screening-observations",
+  "version": 1,
+  "startedAt": "2026-10-30T08:17:36.511Z",
+  "finishedAt": "2026-10-30T08:18:27.886Z",
+  "revision": "542ef11e588d88e85d4d9b7a1625cf89fbc655f5",
+  "dirty": false,
+  "host": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M5",
+    "logicalCpus": 10,
+    "memoryBytes": 34359738368,
+    "node": "v24.15.0"
+  },
+  "fixtureSha256": "7210e17c9a03c85008f8a14f0253f414eb13478ac8e8944e4551a3137edbca25",
+  "recipe": {
+    "feature": "cambi",
+    "mode": "no-reference",
+    "prediction": false,
+    "fullRef": false,
+    "eotf": "bt1886",
+    "subsample": 1,
+    "encBitdepthOverride": 0,
+    "sourceResolutionOverrides": 0,
+    "windowAdjustment": "floor(floor(63*(width+height)/375)/16)",
+    "sourceRange": "limited",
+    "color": "bt709-sdr",
+    "windowSize": 63,
+    "topk": 0.6,
+    "tviThreshold": 0.019,
+    "maxLogContrast": 2,
+    "encResolution": "source-visible-no-resize",
+    "internalBitDepth": 10,
+    "threads": 1,
+    "cpuMask": 0,
+    "scoreDirection": "higher-is-more-banding",
+    "thresholdCalibration": "none",
+    "temporal": "independent-per-frame-no-tracking",
+    "heatmapLayout": "gray16le-row-major-frames-concatenated",
+    "heatmapMeaning": "upstream-scaled-c-values-not-cropped-rescore",
+    "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8"
+  },
+  "rounds": 3,
+  "method": {
+    "labels": "Known synthetic construction, not human visibility/quality labels. Natural source is unlabelled.",
+    "threshold": "10 is an illustrative fixed coarse-step screening policy, not a calibrated recommendation or product default.",
+    "runtime": "Independent cold HTTP jobs with committed media; OS caches may remain warm. No time/throughput assertion.",
+    "processRss": "10ms samples of this whole Node service/test process including Workers, not an isolated task or OS quota.",
+    "http": "Sequential read-only library probes, bounded128 samples, no flood or percentile gate.",
+    "limitations": [
+      "Small structured fixture set, not a population accuracy estimate.",
+      "Natural footage is one processed repeated frame.",
+      "No subjective pass/fail, temporal tracking, HDR or arbitrary-content certification.",
+      "Content-changing texture and noise are covered; camera motion, cuts and flicker need separate labelled temporal data."
+    ]
+  },
+  "grouped": [
+    {
+      "pattern": "banded",
+      "depth": 8,
+      "target": "coarse-step-present",
+      "description": "100+floor(x/24) luma codes, no added noise",
+      "screeningOutcome": "injected-step-hit",
+      "pooled": {
+        "min": 19.31058975259314,
+        "max": 19.31058975259314,
+        "mean": 19.31058975259314,
+        "harmonic_mean": 19.31058975259314
+      },
+      "executionMs": {
+        "count": 3,
+        "p50": 221,
+        "p95": 231,
+        "max": 231
+      },
+      "queueMs": {
+        "count": 3,
+        "p50": 0,
+        "p95": 1,
+        "max": 1
+      },
+      "processRssPeakBytes": 464175104,
+      "libraryHttpP95Ms": {
+        "count": 3,
+        "p50": 1.164415999999619,
+        "p95": 3.8969170000000304,
+        "max": 3.8969170000000304
+      }
+    },
+    {
+      "pattern": "banded",
+      "depth": 10,
+      "target": "coarse-step-present",
+      "description": "100+floor(x/24) luma codes, no added noise",
+      "screeningOutcome": "injected-step-hit",
+      "pooled": {
+        "min": 19.317805256837296,
+        "max": 19.317805256837296,
+        "mean": 19.317805256837296,
+        "harmonic_mean": 19.317805256837296
+      },
+      "executionMs": {
+        "count": 3,
+        "p50": 224,
+        "p95": 226,
+        "max": 226
+      },
+      "queueMs": {
+        "count": 3,
+        "p50": 0,
+        "p95": 1,
+        "max": 1
+      },
+      "processRssPeakBytes": 422658048,
+      "libraryHttpP95Ms": {
+        "count": 3,
+        "p50": 0.735540999998193,
+        "p95": 0.8610000000007858,
+        "max": 0.8610000000007858
+      }
+    },
+    {
+      "pattern": "smooth",
+      "depth": 8,
+      "target": "no-added-coarse-step",
+      "description": "80+140*x/width luma ramp, quantized at source depth; 8-bit plateaus are not a pristine reference",
+      "screeningOutcome": "coarse-step-policy-false-positive",
+      "pooled": {
+        "min": 11.802178920014123,
+        "max": 11.802178920014123,
+        "mean": 11.802178920014123,
+        "harmonic_mean": 11.802178920014123
+      },
+      "executionMs": {
+        "count": 3,
+        "p50": 216,
+        "p95": 218,
+        "max": 218
+      },
+      "queueMs": {
+        "count": 3,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "processRssPeakBytes": 470646784,
+      "libraryHttpP95Ms": {
+        "count": 3,
+        "p50": 1.0881669999998849,
+        "p95": 1.138333999999304,
+        "max": 1.138333999999304
+      }
+    },
+    {
+      "pattern": "smooth",
+      "depth": 10,
+      "target": "no-added-coarse-step",
+      "description": "80+140*x/width luma ramp, quantized at source depth; 8-bit plateaus are not a pristine reference",
+      "screeningOutcome": "coarse-step-policy-negative",
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "executionMs": {
+        "count": 3,
+        "p50": 210,
+        "p95": 211,
+        "max": 211
+      },
+      "queueMs": {
+        "count": 3,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "processRssPeakBytes": 388186112,
+      "libraryHttpP95Ms": {
+        "count": 3,
+        "p50": 3.655709000002389,
+        "p95": 3.7293750000026193,
+        "max": 3.7293750000026193
+      }
+    },
+    {
+      "pattern": "texture",
+      "depth": 8,
+      "target": "no-added-coarse-step",
+      "description": "Periodic high-detail luma ((31*x+17*y+11*frame)%220); content changes across frames",
+      "screeningOutcome": "coarse-step-policy-negative",
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "executionMs": {
+        "count": 3,
+        "p50": 223,
+        "p95": 224,
+        "max": 224
+      },
+      "queueMs": {
+        "count": 3,
+        "p50": 1,
+        "p95": 1,
+        "max": 1
+      },
+      "processRssPeakBytes": 418136064,
+      "libraryHttpP95Ms": {
+        "count": 3,
+        "p50": 0.7775840000012977,
+        "p95": 0.8088750000006257,
+        "max": 0.8088750000006257
+      }
+    },
+    {
+      "pattern": "texture",
+      "depth": 10,
+      "target": "no-added-coarse-step",
+      "description": "Periodic high-detail luma ((31*x+17*y+11*frame)%220); content changes across frames",
+      "screeningOutcome": "coarse-step-policy-negative",
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "executionMs": {
+        "count": 3,
+        "p50": 239,
+        "p95": 241,
+        "max": 241
+      },
+      "queueMs": {
+        "count": 3,
+        "p50": 1,
+        "p95": 1,
+        "max": 1
+      },
+      "processRssPeakBytes": 405274624,
+      "libraryHttpP95Ms": {
+        "count": 3,
+        "p50": 0.9696669999975711,
+        "p95": 0.9853329999968992,
+        "max": 0.9853329999968992
+      }
+    },
+    {
+      "pattern": "grain",
+      "depth": 8,
+      "target": "coarse-step-present",
+      "description": "The banded ramp plus deterministic uniform [-7,7] luma noise; injected steps may be perceptually masked",
+      "screeningOutcome": "injected-step-miss",
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "executionMs": {
+        "count": 3,
+        "p50": 222,
+        "p95": 223,
+        "max": 223
+      },
+      "queueMs": {
+        "count": 3,
+        "p50": 0,
+        "p95": 1,
+        "max": 1
+      },
+      "processRssPeakBytes": 473972736,
+      "libraryHttpP95Ms": {
+        "count": 3,
+        "p50": 0.7034999999996217,
+        "p95": 0.7182090000005701,
+        "max": 0.7182090000005701
+      }
+    },
+    {
+      "pattern": "grain",
+      "depth": 10,
+      "target": "coarse-step-present",
+      "description": "The banded ramp plus deterministic uniform [-7,7] luma noise; injected steps may be perceptually masked",
+      "screeningOutcome": "injected-step-miss",
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "executionMs": {
+        "count": 3,
+        "p50": 248,
+        "p95": 251,
+        "max": 251
+      },
+      "queueMs": {
+        "count": 3,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "processRssPeakBytes": 434716672,
+      "libraryHttpP95Ms": {
+        "count": 3,
+        "p50": 0.7732909999976982,
+        "p95": 0.9847920000029262,
+        "max": 0.9847920000029262
+      }
+    },
+    {
+      "pattern": "flat",
+      "depth": 8,
+      "target": "no-added-coarse-step",
+      "description": "Constant luma100; chroma128",
+      "screeningOutcome": "coarse-step-policy-negative",
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "executionMs": {
+        "count": 3,
+        "p50": 216,
+        "p95": 218,
+        "max": 218
+      },
+      "queueMs": {
+        "count": 3,
+        "p50": 1,
+        "p95": 1,
+        "max": 1
+      },
+      "processRssPeakBytes": 474398720,
+      "libraryHttpP95Ms": {
+        "count": 3,
+        "p50": 0.7377500000002328,
+        "p95": 0.7729170000020531,
+        "max": 0.7729170000020531
+      }
+    },
+    {
+      "pattern": "flat",
+      "depth": 10,
+      "target": "no-added-coarse-step",
+      "description": "Constant luma100; chroma128",
+      "screeningOutcome": "coarse-step-policy-negative",
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "executionMs": {
+        "count": 3,
+        "p50": 217,
+        "p95": 219,
+        "max": 219
+      },
+      "queueMs": {
+        "count": 3,
+        "p50": 0,
+        "p95": 1,
+        "max": 1
+      },
+      "processRssPeakBytes": 400769024,
+      "libraryHttpP95Ms": {
+        "count": 3,
+        "p50": 0.7017919999998412,
+        "p95": 0.8138340000004973,
+        "max": 0.8138340000004973
+      }
+    },
+    {
+      "pattern": "natural",
+      "depth": 8,
+      "target": "unlabelled",
+      "description": "Pinned licensed processed natural frame, repeated four times; 10-bit version left-shifts8-bit codes and does not restore precision",
+      "screeningOutcome": "unlabelled",
+      "pooled": {
+        "min": 0.21075948397926966,
+        "max": 0.21075948397926966,
+        "mean": 0.21075948397926966,
+        "harmonic_mean": 0.2107594839792697
+      },
+      "executionMs": {
+        "count": 3,
+        "p50": 302,
+        "p95": 307,
+        "max": 307
+      },
+      "queueMs": {
+        "count": 3,
+        "p50": 0,
+        "p95": 1,
+        "max": 1
+      },
+      "processRssPeakBytes": 504889344,
+      "libraryHttpP95Ms": {
+        "count": 3,
+        "p50": 0.8075839999983145,
+        "p95": 0.8551659999975527,
+        "max": 0.8551659999975527
+      }
+    },
+    {
+      "pattern": "natural",
+      "depth": 10,
+      "target": "unlabelled",
+      "description": "Pinned licensed processed natural frame, repeated four times; 10-bit version left-shifts8-bit codes and does not restore precision",
+      "screeningOutcome": "unlabelled",
+      "pooled": {
+        "min": 1.09350061945666,
+        "max": 1.09350061945666,
+        "mean": 1.09350061945666,
+        "harmonic_mean": 1.0935006194566599
+      },
+      "executionMs": {
+        "count": 3,
+        "p50": 346,
+        "p95": 347,
+        "max": 347
+      },
+      "queueMs": {
+        "count": 3,
+        "p50": 1,
+        "p95": 1,
+        "max": 1
+      },
+      "processRssPeakBytes": 428949504,
+      "libraryHttpP95Ms": {
+        "count": 3,
+        "p50": 0.7812080000003334,
+        "p95": 1.1652499999981956,
+        "max": 1.1652499999981956
+      }
+    }
+  ],
+  "rows": [
+    {
+      "pattern": "banded",
+      "depth": 8,
+      "round": 0,
+      "target": "coarse-step-present",
+      "description": "100+floor(x/24) luma codes, no added noise",
+      "screeningOutcome": "injected-step-hit",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "43c529ad26e60f0ae1318ab651f93ef00adc669408ee7e69388d949d571c4c28",
+        "rawSha256": "c93a08234d14d0f00e6dfedfcefcc5953a92cf44ced05c7ffbbf29e2f18a8e87",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        19.31058975259314,
+        19.31058975259314,
+        19.31058975259314,
+        19.31058975259314
+      ],
+      "pooled": {
+        "min": 19.31058975259314,
+        "max": 19.31058975259314,
+        "mean": 19.31058975259314,
+        "harmonic_mean": 19.31058975259314
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 254.46666700000014,
+        "queueMs": 1,
+        "executionMs": 231,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 85,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 4924,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 1220,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 77,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 339460096,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.4437080000000151,
+          "p95": 2.511457999999948,
+          "max": 2.511457999999948
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 21,
+          "p50": 0.7677499999999782,
+          "p95": 0.9113749999999072,
+          "max": 0.9364170000001195
+        }
+      }
+    },
+    {
+      "pattern": "banded",
+      "depth": 8,
+      "round": 1,
+      "target": "coarse-step-present",
+      "description": "100+floor(x/24) luma codes, no added noise",
+      "screeningOutcome": "injected-step-hit",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "43c529ad26e60f0ae1318ab651f93ef00adc669408ee7e69388d949d571c4c28",
+        "rawSha256": "c93a08234d14d0f00e6dfedfcefcc5953a92cf44ced05c7ffbbf29e2f18a8e87",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        19.31058975259314,
+        19.31058975259314,
+        19.31058975259314,
+        19.31058975259314
+      ],
+      "pooled": {
+        "min": 19.31058975259314,
+        "max": 19.31058975259314,
+        "mean": 19.31058975259314,
+        "harmonic_mean": 19.31058975259314
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 234.2487500000002,
+        "queueMs": 0,
+        "executionMs": 219,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 80,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 4924,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 1220,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 72,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 367640576,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.26825000000008004,
+          "p95": 0.7134170000003905,
+          "max": 0.7134170000003905
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 19,
+          "p50": 0.6299999999996544,
+          "p95": 3.8969170000000304,
+          "max": 3.8969170000000304
+        }
+      }
+    },
+    {
+      "pattern": "banded",
+      "depth": 8,
+      "round": 2,
+      "target": "coarse-step-present",
+      "description": "100+floor(x/24) luma codes, no added noise",
+      "screeningOutcome": "injected-step-hit",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "43c529ad26e60f0ae1318ab651f93ef00adc669408ee7e69388d949d571c4c28",
+        "rawSha256": "c93a08234d14d0f00e6dfedfcefcc5953a92cf44ced05c7ffbbf29e2f18a8e87",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        19.31058975259314,
+        19.31058975259314,
+        19.31058975259314,
+        19.31058975259314
+      ],
+      "pooled": {
+        "min": 19.31058975259314,
+        "max": 19.31058975259314,
+        "mean": 19.31058975259314,
+        "harmonic_mean": 19.31058975259314
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 242.69033299999955,
+        "queueMs": 0,
+        "executionMs": 221,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 80,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 4924,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 1220,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 72,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 464175104,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.2717500000007931,
+          "p95": 0.7553750000006403,
+          "max": 0.7553750000006403
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 20,
+          "p50": 0.6242089999996097,
+          "p95": 1.164415999999619,
+          "max": 3.702874999999949
+        }
+      }
+    },
+    {
+      "pattern": "smooth",
+      "depth": 8,
+      "round": 0,
+      "target": "no-added-coarse-step",
+      "description": "80+140*x/width luma ramp, quantized at source depth; 8-bit plateaus are not a pristine reference",
+      "screeningOutcome": "coarse-step-policy-false-positive",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "771815c7a1e8e3263a7ef0feaf58d7752583bbdcf926d3262307dd12e00ab495",
+        "rawSha256": "b043abcc3e4d458f8fea9b16aabef047b79d82fa344a8829ee83d0b8c76ca7ae",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        11.802178920014123,
+        11.802178920014123,
+        11.802178920014123,
+        11.802178920014123
+      ],
+      "pooled": {
+        "min": 11.802178920014123,
+        "max": 11.802178920014123,
+        "mean": 11.802178920014123,
+        "harmonic_mean": 11.802178920014123
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 242.4964170000003,
+        "queueMs": 0,
+        "executionMs": 218,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 78,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 6093,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 1220,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 71,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 415809536,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.25599999999940337,
+          "p95": 0.7376249999997526,
+          "max": 0.7376249999997526
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 20,
+          "p50": 0.598957999999584,
+          "p95": 1.0651660000003176,
+          "max": 3.5930000000007567
+        }
+      }
+    },
+    {
+      "pattern": "smooth",
+      "depth": 8,
+      "round": 1,
+      "target": "no-added-coarse-step",
+      "description": "80+140*x/width luma ramp, quantized at source depth; 8-bit plateaus are not a pristine reference",
+      "screeningOutcome": "coarse-step-policy-false-positive",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "771815c7a1e8e3263a7ef0feaf58d7752583bbdcf926d3262307dd12e00ab495",
+        "rawSha256": "b043abcc3e4d458f8fea9b16aabef047b79d82fa344a8829ee83d0b8c76ca7ae",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        11.802178920014123,
+        11.802178920014123,
+        11.802178920014123,
+        11.802178920014123
+      ],
+      "pooled": {
+        "min": 11.802178920014123,
+        "max": 11.802178920014123,
+        "mean": 11.802178920014123,
+        "harmonic_mean": 11.802178920014123
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 237.82095800000025,
+        "queueMs": 0,
+        "executionMs": 216,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 78,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 6093,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 1220,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 71,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 470646784,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.23779199999989942,
+          "p95": 0.6632079999999405,
+          "max": 0.6632079999999405
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 20,
+          "p50": 0.5428750000000946,
+          "p95": 1.138333999999304,
+          "max": 3.4664590000002136
+        }
+      }
+    },
+    {
+      "pattern": "smooth",
+      "depth": 8,
+      "round": 2,
+      "target": "no-added-coarse-step",
+      "description": "80+140*x/width luma ramp, quantized at source depth; 8-bit plateaus are not a pristine reference",
+      "screeningOutcome": "coarse-step-policy-false-positive",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "771815c7a1e8e3263a7ef0feaf58d7752583bbdcf926d3262307dd12e00ab495",
+        "rawSha256": "b043abcc3e4d458f8fea9b16aabef047b79d82fa344a8829ee83d0b8c76ca7ae",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        11.802178920014123,
+        11.802178920014123,
+        11.802178920014123,
+        11.802178920014123
+      ],
+      "pooled": {
+        "min": 11.802178920014123,
+        "max": 11.802178920014123,
+        "mean": 11.802178920014123,
+        "harmonic_mean": 11.802178920014123
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 230.35308299999997,
+        "queueMs": 0,
+        "executionMs": 215,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 78,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 6093,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 1220,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 70,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 419102720,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.25270799999998417,
+          "p95": 0.6739579999994021,
+          "max": 0.6739579999994021
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 19,
+          "p50": 0.5786659999994299,
+          "p95": 1.0881669999998849,
+          "max": 1.0881669999998849
+        }
+      }
+    },
+    {
+      "pattern": "texture",
+      "depth": 8,
+      "round": 0,
+      "target": "no-added-coarse-step",
+      "description": "Periodic high-detail luma ((31*x+17*y+11*frame)%220); content changes across frames",
+      "screeningOutcome": "coarse-step-policy-negative",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "f3a03e39cad2a253b79fee8fe47323ae6721c11d24ed73181555b3b1ca79996a",
+        "rawSha256": "e143c425efbc7c936a51acb9a0136650905b7c2850b2a1907c6dc004b5ad1062",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 237.35537499999919,
+        "queueMs": 1,
+        "executionMs": 223,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 86,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 811897,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 1296,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 78,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 362594304,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.2650420000009035,
+          "p95": 0.7090420000004087,
+          "max": 0.7090420000004087
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 20,
+          "p50": 0.5491249999995489,
+          "p95": 0.8088750000006257,
+          "max": 3.832582999999431
+        }
+      }
+    },
+    {
+      "pattern": "texture",
+      "depth": 8,
+      "round": 1,
+      "target": "no-added-coarse-step",
+      "description": "Periodic high-detail luma ((31*x+17*y+11*frame)%220); content changes across frames",
+      "screeningOutcome": "coarse-step-policy-negative",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "f3a03e39cad2a253b79fee8fe47323ae6721c11d24ed73181555b3b1ca79996a",
+        "rawSha256": "e143c425efbc7c936a51acb9a0136650905b7c2850b2a1907c6dc004b5ad1062",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 239.16625000000022,
+        "queueMs": 0,
+        "executionMs": 224,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 86,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 811897,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 1296,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 78,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 418136064,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.2603750000016589,
+          "p95": 0.6439589999990858,
+          "max": 0.6439589999990858
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 20,
+          "p50": 0.5489999999990687,
+          "p95": 0.6905829999996058,
+          "max": 0.8802500000001601
+        }
+      }
+    },
+    {
+      "pattern": "texture",
+      "depth": 8,
+      "round": 2,
+      "target": "no-added-coarse-step",
+      "description": "Periodic high-detail luma ((31*x+17*y+11*frame)%220); content changes across frames",
+      "screeningOutcome": "coarse-step-policy-negative",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "f3a03e39cad2a253b79fee8fe47323ae6721c11d24ed73181555b3b1ca79996a",
+        "rawSha256": "e143c425efbc7c936a51acb9a0136650905b7c2850b2a1907c6dc004b5ad1062",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 235.07520899999872,
+        "queueMs": 1,
+        "executionMs": 218,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 86,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 811897,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 1296,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 78,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 417431552,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.24008400000093388,
+          "p95": 0.6635829999995622,
+          "max": 0.6635829999995622
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 20,
+          "p50": 0.5677919999998267,
+          "p95": 0.7775840000012977,
+          "max": 0.8751250000004802
+        }
+      }
+    },
+    {
+      "pattern": "grain",
+      "depth": 8,
+      "round": 0,
+      "target": "coarse-step-present",
+      "description": "The banded ramp plus deterministic uniform [-7,7] luma noise; injected steps may be perceptually masked",
+      "screeningOutcome": "injected-step-miss",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "56c8b6791fd304979820d58ac78ca19d603ffc848b7e7e17d78ea2817d386e14",
+        "rawSha256": "605c9355fe26283b7873334fb3d961dfaf93ff7bb55bf8840399c9d2cf082c2b",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 236.8854169999995,
+        "queueMs": 0,
+        "executionMs": 222,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 84,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 559471,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 1296,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 76,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 472891392,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.2468750000007276,
+          "p95": 0.6546249999992142,
+          "max": 0.6546249999992142
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 20,
+          "p50": 0.5862919999999576,
+          "p95": 0.7034999999996217,
+          "max": 1.5234159999999974
+        }
+      }
+    },
+    {
+      "pattern": "grain",
+      "depth": 8,
+      "round": 1,
+      "target": "coarse-step-present",
+      "description": "The banded ramp plus deterministic uniform [-7,7] luma noise; injected steps may be perceptually masked",
+      "screeningOutcome": "injected-step-miss",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "56c8b6791fd304979820d58ac78ca19d603ffc848b7e7e17d78ea2817d386e14",
+        "rawSha256": "605c9355fe26283b7873334fb3d961dfaf93ff7bb55bf8840399c9d2cf082c2b",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 238.61283399999957,
+        "queueMs": 1,
+        "executionMs": 220,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 84,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 559471,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 1296,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 76,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 419643392,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.25666699999965203,
+          "p95": 0.7420839999995223,
+          "max": 0.7420839999995223
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 20,
+          "p50": 0.5254580000000715,
+          "p95": 0.7182090000005701,
+          "max": 0.8490409999994881
+        }
+      }
+    },
+    {
+      "pattern": "grain",
+      "depth": 8,
+      "round": 2,
+      "target": "coarse-step-present",
+      "description": "The banded ramp plus deterministic uniform [-7,7] luma noise; injected steps may be perceptually masked",
+      "screeningOutcome": "injected-step-miss",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "56c8b6791fd304979820d58ac78ca19d603ffc848b7e7e17d78ea2817d386e14",
+        "rawSha256": "605c9355fe26283b7873334fb3d961dfaf93ff7bb55bf8840399c9d2cf082c2b",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 239.69587500000125,
+        "queueMs": 0,
+        "executionMs": 223,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 84,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 559471,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 1296,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 77,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 473972736,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.23500000000058208,
+          "p95": 0.6566669999992882,
+          "max": 0.6566669999992882
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 20,
+          "p50": 0.5479579999991984,
+          "p95": 0.6833750000005239,
+          "max": 0.7419169999993755
+        }
+      }
+    },
+    {
+      "pattern": "flat",
+      "depth": 8,
+      "round": 0,
+      "target": "no-added-coarse-step",
+      "description": "Constant luma100; chroma128",
+      "screeningOutcome": "coarse-step-policy-negative",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "cf70775ab1228adf232120ed372bf7c90a9f3a12cc81cb0d7dc80f220c7bda77",
+        "rawSha256": "d2ed4a386ad5568e5aea250201aeddf629f017347bb59168838a1adbb0aede40",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 237.12158400000044,
+        "queueMs": 1,
+        "executionMs": 216,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 79,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 4611,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 1220,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 71,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 419299328,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.2284589999981108,
+          "p95": 0.6771669999980077,
+          "max": 0.6771669999980077
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 20,
+          "p50": 0.5242079999989073,
+          "p95": 0.6152499999989232,
+          "max": 0.9701659999991534
+        }
+      }
+    },
+    {
+      "pattern": "flat",
+      "depth": 8,
+      "round": 1,
+      "target": "no-added-coarse-step",
+      "description": "Constant luma100; chroma128",
+      "screeningOutcome": "coarse-step-policy-negative",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "cf70775ab1228adf232120ed372bf7c90a9f3a12cc81cb0d7dc80f220c7bda77",
+        "rawSha256": "d2ed4a386ad5568e5aea250201aeddf629f017347bb59168838a1adbb0aede40",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 232.36895800000275,
+        "queueMs": 1,
+        "executionMs": 216,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 79,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 4611,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 1220,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 71,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 474398720,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.22045799999978044,
+          "p95": 0.6380000000026484,
+          "max": 0.6380000000026484
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 19,
+          "p50": 0.5309999999990396,
+          "p95": 0.7729170000020531,
+          "max": 0.7729170000020531
+        }
+      }
+    },
+    {
+      "pattern": "flat",
+      "depth": 8,
+      "round": 2,
+      "target": "no-added-coarse-step",
+      "description": "Constant luma100; chroma128",
+      "screeningOutcome": "coarse-step-policy-negative",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "cf70775ab1228adf232120ed372bf7c90a9f3a12cc81cb0d7dc80f220c7bda77",
+        "rawSha256": "d2ed4a386ad5568e5aea250201aeddf629f017347bb59168838a1adbb0aede40",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 236.17758400000093,
+        "queueMs": 1,
+        "executionMs": 218,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 79,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 4611,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 1220,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 71,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 420003840,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.2351249999992433,
+          "p95": 0.5968339999999444,
+          "max": 0.5968339999999444
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 20,
+          "p50": 0.5382499999977881,
+          "p95": 0.7377500000002328,
+          "max": 1.1147920000003069
+        }
+      }
+    },
+    {
+      "pattern": "natural",
+      "depth": 8,
+      "round": 0,
+      "target": "unlabelled",
+      "description": "Pinned licensed processed natural frame, repeated four times; 10-bit version left-shifts8-bit codes and does not restore precision",
+      "screeningOutcome": "unlabelled",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "6dd109864436e149834cab86b7a9dbac227343637a1f727cd82cb506071be530",
+        "rawSha256": "e8476064ca6c39e93c3e0825e42322ff6e5231348abb1f06b00de9d83cde2b6f",
+        "width": 1280,
+        "height": 720,
+        "frames": 4,
+        "upstream": {
+          "repository": "https://github.com/Netflix/vmaf_resource",
+          "revision": "5e7b853baf97cea275ce8175d80c6f3c817169d4",
+          "file": "python/test/resource/yuv/KristenAndSara_1280x720_8bit_processed.yuv",
+          "sha256": "41a2c05e4c5ba39b3ea01b6c8afde05b79f129f7da3ea1a4c6639013929c5bf8",
+          "license": "BSD-2-Clause-Patent",
+          "notice": "test/helpers/native-cambi-official-NOTICE.txt",
+          "transformation": "Repeat one original processed frame four times; 10bit variant explicitly left-shifts8bit codes by2, does not restore source precision"
+        }
+      },
+      "scores": [
+        0.21075948397926966,
+        0.21075948397926966,
+        0.21075948397926966,
+        0.21075948397926966
+      ],
+      "pooled": {
+        "min": 0.21075948397926966,
+        "max": 0.21075948397926966,
+        "mean": 0.21075948397926966,
+        "harmonic_mean": 0.2107594839792697
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 319.0742500000015,
+        "queueMs": 1,
+        "executionMs": 299,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 162,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 391224,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 1280,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 154,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 9820800,
+        "processRssPeakBytes": 504889344,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.23120900000139954,
+          "p95": 0.6564169999983278,
+          "max": 0.6564169999983278
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 27,
+          "p50": 0.5571249999993597,
+          "p95": 0.8551659999975527,
+          "max": 3.498875000001135
+        }
+      }
+    },
+    {
+      "pattern": "natural",
+      "depth": 8,
+      "round": 1,
+      "target": "unlabelled",
+      "description": "Pinned licensed processed natural frame, repeated four times; 10-bit version left-shifts8-bit codes and does not restore precision",
+      "screeningOutcome": "unlabelled",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "6dd109864436e149834cab86b7a9dbac227343637a1f727cd82cb506071be530",
+        "rawSha256": "e8476064ca6c39e93c3e0825e42322ff6e5231348abb1f06b00de9d83cde2b6f",
+        "width": 1280,
+        "height": 720,
+        "frames": 4,
+        "upstream": {
+          "repository": "https://github.com/Netflix/vmaf_resource",
+          "revision": "5e7b853baf97cea275ce8175d80c6f3c817169d4",
+          "file": "python/test/resource/yuv/KristenAndSara_1280x720_8bit_processed.yuv",
+          "sha256": "41a2c05e4c5ba39b3ea01b6c8afde05b79f129f7da3ea1a4c6639013929c5bf8",
+          "license": "BSD-2-Clause-Patent",
+          "notice": "test/helpers/native-cambi-official-NOTICE.txt",
+          "transformation": "Repeat one original processed frame four times; 10bit variant explicitly left-shifts8bit codes by2, does not restore source precision"
+        }
+      },
+      "scores": [
+        0.21075948397926966,
+        0.21075948397926966,
+        0.21075948397926966,
+        0.21075948397926966
+      ],
+      "pooled": {
+        "min": 0.21075948397926966,
+        "max": 0.21075948397926966,
+        "mean": 0.21075948397926966,
+        "harmonic_mean": 0.2107594839792697
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 323.3141660000001,
+        "queueMs": 0,
+        "executionMs": 302,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 163,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 391224,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 1280,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 155,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 9820800,
+        "processRssPeakBytes": 405504000,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.2571250000000873,
+          "p95": 0.6974589999990712,
+          "max": 0.6974589999990712
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 27,
+          "p50": 0.6000409999978729,
+          "p95": 0.8075839999983145,
+          "max": 3.7280419999988226
+        }
+      }
+    },
+    {
+      "pattern": "natural",
+      "depth": 8,
+      "round": 2,
+      "target": "unlabelled",
+      "description": "Pinned licensed processed natural frame, repeated four times; 10-bit version left-shifts8-bit codes and does not restore precision",
+      "screeningOutcome": "unlabelled",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "6dd109864436e149834cab86b7a9dbac227343637a1f727cd82cb506071be530",
+        "rawSha256": "e8476064ca6c39e93c3e0825e42322ff6e5231348abb1f06b00de9d83cde2b6f",
+        "width": 1280,
+        "height": 720,
+        "frames": 4,
+        "upstream": {
+          "repository": "https://github.com/Netflix/vmaf_resource",
+          "revision": "5e7b853baf97cea275ce8175d80c6f3c817169d4",
+          "file": "python/test/resource/yuv/KristenAndSara_1280x720_8bit_processed.yuv",
+          "sha256": "41a2c05e4c5ba39b3ea01b6c8afde05b79f129f7da3ea1a4c6639013929c5bf8",
+          "license": "BSD-2-Clause-Patent",
+          "notice": "test/helpers/native-cambi-official-NOTICE.txt",
+          "transformation": "Repeat one original processed frame four times; 10bit variant explicitly left-shifts8bit codes by2, does not restore source precision"
+        }
+      },
+      "scores": [
+        0.21075948397926966,
+        0.21075948397926966,
+        0.21075948397926966,
+        0.21075948397926966
+      ],
+      "pooled": {
+        "min": 0.21075948397926966,
+        "max": 0.21075948397926966,
+        "mean": 0.21075948397926966,
+        "harmonic_mean": 0.2107594839792697
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 322.9681249999994,
+        "queueMs": 0,
+        "executionMs": 307,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 167,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 391224,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 1280,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 159,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 9820800,
+        "processRssPeakBytes": 415645696,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.24070800000117742,
+          "p95": 0.6366670000024897,
+          "max": 0.6366670000024897
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 27,
+          "p50": 0.5698340000017197,
+          "p95": 0.7765410000029078,
+          "max": 1.3564159999987169
+        }
+      }
+    },
+    {
+      "pattern": "banded",
+      "depth": 10,
+      "round": 0,
+      "target": "coarse-step-present",
+      "description": "100+floor(x/24) luma codes, no added noise",
+      "screeningOutcome": "injected-step-hit",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "9e0d36bf8f1bbf583dceccfe2494b3470523fe8c1c5e42f53725e047a6c0885e",
+        "rawSha256": "d98ba08a41f1a77e0f4a6c5da13e339770d0f3e57e31509fd94d6d17904c664b",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        19.317805256837296,
+        19.317805256837296,
+        19.317805256837296,
+        19.317805256837296
+      ],
+      "pooled": {
+        "min": 19.317805256837296,
+        "max": 19.317805256837296,
+        "mean": 19.317805256837296,
+        "harmonic_mean": 19.317805256837296
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 238.6194170000017,
+        "queueMs": 1,
+        "executionMs": 222,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 85,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 52472,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 35120,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 78,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 395165696,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.2296249999999418,
+          "p95": 0.6632080000017595,
+          "max": 0.6632080000017595
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 20,
+          "p50": 0.5342080000009446,
+          "p95": 0.735540999998193,
+          "max": 0.9846250000009604
+        }
+      }
+    },
+    {
+      "pattern": "banded",
+      "depth": 10,
+      "round": 1,
+      "target": "coarse-step-present",
+      "description": "100+floor(x/24) luma codes, no added noise",
+      "screeningOutcome": "injected-step-hit",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "9e0d36bf8f1bbf583dceccfe2494b3470523fe8c1c5e42f53725e047a6c0885e",
+        "rawSha256": "d98ba08a41f1a77e0f4a6c5da13e339770d0f3e57e31509fd94d6d17904c664b",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        19.317805256837296,
+        19.317805256837296,
+        19.317805256837296,
+        19.317805256837296
+      ],
+      "pooled": {
+        "min": 19.317805256837296,
+        "max": 19.317805256837296,
+        "mean": 19.317805256837296,
+        "harmonic_mean": 19.317805256837296
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 246.0649999999987,
+        "queueMs": 0,
+        "executionMs": 226,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 87,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 52472,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 35120,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 80,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 392036352,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.23558300000149757,
+          "p95": 0.6707079999978305,
+          "max": 0.6707079999978305
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 21,
+          "p50": 0.5392920000012964,
+          "p95": 0.7352499999979045,
+          "max": 0.7600409999977273
+        }
+      }
+    },
+    {
+      "pattern": "banded",
+      "depth": 10,
+      "round": 2,
+      "target": "coarse-step-present",
+      "description": "100+floor(x/24) luma codes, no added noise",
+      "screeningOutcome": "injected-step-hit",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "9e0d36bf8f1bbf583dceccfe2494b3470523fe8c1c5e42f53725e047a6c0885e",
+        "rawSha256": "d98ba08a41f1a77e0f4a6c5da13e339770d0f3e57e31509fd94d6d17904c664b",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        19.317805256837296,
+        19.317805256837296,
+        19.317805256837296,
+        19.317805256837296
+      ],
+      "pooled": {
+        "min": 19.317805256837296,
+        "max": 19.317805256837296,
+        "mean": 19.317805256837296,
+        "harmonic_mean": 19.317805256837296
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 243.6889999999985,
+        "queueMs": 0,
+        "executionMs": 224,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 85,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 52472,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 35120,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 78,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 422658048,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.262708999998722,
+          "p95": 1.8810839999969176,
+          "max": 1.8810839999969176
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 21,
+          "p50": 0.5187500000029104,
+          "p95": 0.8610000000007858,
+          "max": 1.0499159999999392
+        }
+      }
+    },
+    {
+      "pattern": "smooth",
+      "depth": 10,
+      "round": 0,
+      "target": "no-added-coarse-step",
+      "description": "80+140*x/width luma ramp, quantized at source depth; 8-bit plateaus are not a pristine reference",
+      "screeningOutcome": "coarse-step-policy-negative",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "c87ff8633a67d7d62b8d6da5a10d0532b8e38c32912cd5d89df1bf38f28b2fd5",
+        "rawSha256": "7929d6af8e7af5ffebe4204225c61cbac92a040e9f9db0f6f3181e9cbe50aaf8",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 223.70945899999788,
+        "queueMs": 0,
+        "executionMs": 210,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 71,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 48254,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 35120,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 63,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 388186112,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.2266249999993306,
+          "p95": 0.6366659999985131,
+          "max": 0.6366659999985131
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 19,
+          "p50": 0.5941670000029262,
+          "p95": 3.655709000002389,
+          "max": 3.655709000002389
+        }
+      }
+    },
+    {
+      "pattern": "smooth",
+      "depth": 10,
+      "round": 1,
+      "target": "no-added-coarse-step",
+      "description": "80+140*x/width luma ramp, quantized at source depth; 8-bit plateaus are not a pristine reference",
+      "screeningOutcome": "coarse-step-policy-negative",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "c87ff8633a67d7d62b8d6da5a10d0532b8e38c32912cd5d89df1bf38f28b2fd5",
+        "rawSha256": "7929d6af8e7af5ffebe4204225c61cbac92a040e9f9db0f6f3181e9cbe50aaf8",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 220.38187499999913,
+        "queueMs": 0,
+        "executionMs": 207,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 71,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 48254,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 35120,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 64,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 387399680,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.22808399999848916,
+          "p95": 0.6467919999995502,
+          "max": 0.6467919999995502
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 18,
+          "p50": 0.523457999999664,
+          "p95": 3.7293750000026193,
+          "max": 3.7293750000026193
+        }
+      }
+    },
+    {
+      "pattern": "smooth",
+      "depth": 10,
+      "round": 2,
+      "target": "no-added-coarse-step",
+      "description": "80+140*x/width luma ramp, quantized at source depth; 8-bit plateaus are not a pristine reference",
+      "screeningOutcome": "coarse-step-policy-negative",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "c87ff8633a67d7d62b8d6da5a10d0532b8e38c32912cd5d89df1bf38f28b2fd5",
+        "rawSha256": "7929d6af8e7af5ffebe4204225c61cbac92a040e9f9db0f6f3181e9cbe50aaf8",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 226.08845799999835,
+        "queueMs": 0,
+        "executionMs": 211,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 71,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 48254,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 35120,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 64,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 386695168,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.23475000000325963,
+          "p95": 0.6657080000004498,
+          "max": 0.6657080000004498
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 19,
+          "p50": 0.573499999998603,
+          "p95": 1.8007079999952111,
+          "max": 1.8007079999952111
+        }
+      }
+    },
+    {
+      "pattern": "texture",
+      "depth": 10,
+      "round": 0,
+      "target": "no-added-coarse-step",
+      "description": "Periodic high-detail luma ((31*x+17*y+11*frame)%220); content changes across frames",
+      "screeningOutcome": "coarse-step-policy-negative",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "66e1ab2a9441d203c4ff892761dc566af1283873826f5d14026546d22ee6e9fd",
+        "rawSha256": "ca43b57eb85476af04f66b8b2196d1f0adaff00c61626f880980a79db1c8db72",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 259.45508300000074,
+        "queueMs": 1,
+        "executionMs": 239,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 101,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 1003754,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 35192,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 93,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 389267456,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.22449999999662396,
+          "p95": 0.6898750000036671,
+          "max": 0.6898750000036671
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 22,
+          "p50": 0.5351670000018203,
+          "p95": 0.9696669999975711,
+          "max": 1.061874999999418
+        }
+      }
+    },
+    {
+      "pattern": "texture",
+      "depth": 10,
+      "round": 1,
+      "target": "no-added-coarse-step",
+      "description": "Periodic high-detail luma ((31*x+17*y+11*frame)%220); content changes across frames",
+      "screeningOutcome": "coarse-step-policy-negative",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "66e1ab2a9441d203c4ff892761dc566af1283873826f5d14026546d22ee6e9fd",
+        "rawSha256": "ca43b57eb85476af04f66b8b2196d1f0adaff00c61626f880980a79db1c8db72",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 258.0373330000002,
+        "queueMs": 1,
+        "executionMs": 237,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 101,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 1003754,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 35192,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 94,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 387612672,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.2266250000029686,
+          "p95": 0.6557079999984126,
+          "max": 0.6557079999984126
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 22,
+          "p50": 0.5727079999996931,
+          "p95": 0.9853329999968992,
+          "max": 3.643708000003244
+        }
+      }
+    },
+    {
+      "pattern": "texture",
+      "depth": 10,
+      "round": 2,
+      "target": "no-added-coarse-step",
+      "description": "Periodic high-detail luma ((31*x+17*y+11*frame)%220); content changes across frames",
+      "screeningOutcome": "coarse-step-policy-negative",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "66e1ab2a9441d203c4ff892761dc566af1283873826f5d14026546d22ee6e9fd",
+        "rawSha256": "ca43b57eb85476af04f66b8b2196d1f0adaff00c61626f880980a79db1c8db72",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 255.36804200000188,
+        "queueMs": 0,
+        "executionMs": 241,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 103,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 1003754,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 35192,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 95,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 405274624,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.23875000000407454,
+          "p95": 0.657666999999492,
+          "max": 0.657666999999492
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 21,
+          "p50": 0.551791999998386,
+          "p95": 0.8303330000053393,
+          "max": 0.934332999997423
+        }
+      }
+    },
+    {
+      "pattern": "grain",
+      "depth": 10,
+      "round": 0,
+      "target": "coarse-step-present",
+      "description": "The banded ramp plus deterministic uniform [-7,7] luma noise; injected steps may be perceptually masked",
+      "screeningOutcome": "injected-step-miss",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "c8f2c008c6950ab13d5a3970f3b8bb3d94c3015dfb9ff1cf78fd82b6775d63a6",
+        "rawSha256": "5c5c82868faf15bf52969e747ad5d0aa5c8a476369b23141232b1de5e962c8a5",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 270.5219580000048,
+        "queueMs": 0,
+        "executionMs": 248,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 110,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 784821,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 35188,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 102,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 434716672,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.2275840000002063,
+          "p95": 0.7744170000005397,
+          "max": 0.7744170000005397
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 23,
+          "p50": 0.5261250000039581,
+          "p95": 0.726875000000291,
+          "max": 0.8743329999997513
+        }
+      }
+    },
+    {
+      "pattern": "grain",
+      "depth": 10,
+      "round": 1,
+      "target": "coarse-step-present",
+      "description": "The banded ramp plus deterministic uniform [-7,7] luma noise; injected steps may be perceptually masked",
+      "screeningOutcome": "injected-step-miss",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "c8f2c008c6950ab13d5a3970f3b8bb3d94c3015dfb9ff1cf78fd82b6775d63a6",
+        "rawSha256": "5c5c82868faf15bf52969e747ad5d0aa5c8a476369b23141232b1de5e962c8a5",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 270.2464590000018,
+        "queueMs": 0,
+        "executionMs": 251,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 112,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 784821,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 35188,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 103,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 378060800,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.2490830000024289,
+          "p95": 0.6342079999958514,
+          "max": 0.6342079999958514
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 23,
+          "p50": 0.5395419999986188,
+          "p95": 0.7732909999976982,
+          "max": 1.066584000000148
+        }
+      }
+    },
+    {
+      "pattern": "grain",
+      "depth": 10,
+      "round": 2,
+      "target": "coarse-step-present",
+      "description": "The banded ramp plus deterministic uniform [-7,7] luma noise; injected steps may be perceptually masked",
+      "screeningOutcome": "injected-step-miss",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "c8f2c008c6950ab13d5a3970f3b8bb3d94c3015dfb9ff1cf78fd82b6775d63a6",
+        "rawSha256": "5c5c82868faf15bf52969e747ad5d0aa5c8a476369b23141232b1de5e962c8a5",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 262.2232920000024,
+        "queueMs": 0,
+        "executionMs": 248,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 110,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 784821,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 35188,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 103,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 375668736,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.22662499999569263,
+          "p95": 0.6680840000044554,
+          "max": 0.6680840000044554
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 22,
+          "p50": 0.5072500000023865,
+          "p95": 0.9847920000029262,
+          "max": 1.0532919999968726
+        }
+      }
+    },
+    {
+      "pattern": "flat",
+      "depth": 10,
+      "round": 0,
+      "target": "no-added-coarse-step",
+      "description": "Constant luma100; chroma128",
+      "screeningOutcome": "coarse-step-policy-negative",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "e35ab27a342166440d39e4486829989470bb0a2fe826d3070aba42b1e810b196",
+        "rawSha256": "7949e54e5b25e0a20a6989800e2a7614002cedc1359880a8cb642d84d3ff87e0",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 229.15316699999676,
+        "queueMs": 1,
+        "executionMs": 213,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 79,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 3316,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 35096,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 72,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 369917952,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.21120800000062445,
+          "p95": 0.615124999996624,
+          "max": 0.615124999996624
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 19,
+          "p50": 0.5114170000015292,
+          "p95": 0.7017919999998412,
+          "max": 0.7017919999998412
+        }
+      }
+    },
+    {
+      "pattern": "flat",
+      "depth": 10,
+      "round": 1,
+      "target": "no-added-coarse-step",
+      "description": "Constant luma100; chroma128",
+      "screeningOutcome": "coarse-step-policy-negative",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "e35ab27a342166440d39e4486829989470bb0a2fe826d3070aba42b1e810b196",
+        "rawSha256": "7949e54e5b25e0a20a6989800e2a7614002cedc1359880a8cb642d84d3ff87e0",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 240.08941700000287,
+        "queueMs": 0,
+        "executionMs": 219,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 80,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 3316,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 35096,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 72,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 400769024,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.2402090000032331,
+          "p95": 0.7798750000001746,
+          "max": 0.7798750000001746
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 20,
+          "p50": 0.5667909999974654,
+          "p95": 0.8138340000004973,
+          "max": 1.0021669999987353
+        }
+      }
+    },
+    {
+      "pattern": "flat",
+      "depth": 10,
+      "round": 2,
+      "target": "no-added-coarse-step",
+      "description": "Constant luma100; chroma128",
+      "screeningOutcome": "coarse-step-policy-negative",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "e35ab27a342166440d39e4486829989470bb0a2fe826d3070aba42b1e810b196",
+        "rawSha256": "7949e54e5b25e0a20a6989800e2a7614002cedc1359880a8cb642d84d3ff87e0",
+        "width": 640,
+        "height": 352,
+        "frames": 4,
+        "upstream": null
+      },
+      "scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "pooled": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "harmonic_mean": 0
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 234.7520000000004,
+        "queueMs": 0,
+        "executionMs": 217,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 80,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 3316,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 35096,
+          "indexPackets": 16,
+          "heapBytes": 23265280,
+          "elapsedMs": 72,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 2400640,
+        "processRssPeakBytes": 363528192,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.2255829999994603,
+          "p95": 0.6414169999989099,
+          "max": 0.6414169999989099
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 20,
+          "p50": 0.4712500000023283,
+          "p95": 0.6724170000015874,
+          "max": 1.038749999999709
+        }
+      }
+    },
+    {
+      "pattern": "natural",
+      "depth": 10,
+      "round": 0,
+      "target": "unlabelled",
+      "description": "Pinned licensed processed natural frame, repeated four times; 10-bit version left-shifts8-bit codes and does not restore precision",
+      "screeningOutcome": "unlabelled",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "66dc07938d83ecca80c97c2e0806a6a89a1d4cc538251a4f9278df2fd7ae790f",
+        "rawSha256": "0d1b6dc1d0bd490eee9c0c40761fd45b58bac64041b25fad5d7487238e223f27",
+        "width": 1280,
+        "height": 720,
+        "frames": 4,
+        "upstream": {
+          "repository": "https://github.com/Netflix/vmaf_resource",
+          "revision": "5e7b853baf97cea275ce8175d80c6f3c817169d4",
+          "file": "python/test/resource/yuv/KristenAndSara_1280x720_8bit_processed.yuv",
+          "sha256": "41a2c05e4c5ba39b3ea01b6c8afde05b79f129f7da3ea1a4c6639013929c5bf8",
+          "license": "BSD-2-Clause-Patent",
+          "notice": "test/helpers/native-cambi-official-NOTICE.txt",
+          "transformation": "Repeat one original processed frame four times; 10bit variant explicitly left-shifts8bit codes by2, does not restore source precision"
+        }
+      },
+      "scores": [
+        1.09350061945666,
+        1.09350061945666,
+        1.09350061945666,
+        1.09350061945666
+      ],
+      "pooled": {
+        "min": 1.09350061945666,
+        "max": 1.09350061945666,
+        "mean": 1.09350061945666,
+        "harmonic_mean": 1.0935006194566599
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 361.71204099999886,
+        "queueMs": 0,
+        "executionMs": 346,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 208,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 742657,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 35148,
+          "indexPackets": 16,
+          "heapBytes": 27918336,
+          "elapsedMs": 200,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 9820800,
+        "processRssPeakBytes": 417710080,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.22087499999906868,
+          "p95": 0.6122919999979786,
+          "max": 0.6122919999979786
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 30,
+          "p50": 0.511583999999857,
+          "p95": 0.6863749999974971,
+          "max": 0.9519580000051064
+        }
+      }
+    },
+    {
+      "pattern": "natural",
+      "depth": 10,
+      "round": 1,
+      "target": "unlabelled",
+      "description": "Pinned licensed processed natural frame, repeated four times; 10-bit version left-shifts8-bit codes and does not restore precision",
+      "screeningOutcome": "unlabelled",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "66dc07938d83ecca80c97c2e0806a6a89a1d4cc538251a4f9278df2fd7ae790f",
+        "rawSha256": "0d1b6dc1d0bd490eee9c0c40761fd45b58bac64041b25fad5d7487238e223f27",
+        "width": 1280,
+        "height": 720,
+        "frames": 4,
+        "upstream": {
+          "repository": "https://github.com/Netflix/vmaf_resource",
+          "revision": "5e7b853baf97cea275ce8175d80c6f3c817169d4",
+          "file": "python/test/resource/yuv/KristenAndSara_1280x720_8bit_processed.yuv",
+          "sha256": "41a2c05e4c5ba39b3ea01b6c8afde05b79f129f7da3ea1a4c6639013929c5bf8",
+          "license": "BSD-2-Clause-Patent",
+          "notice": "test/helpers/native-cambi-official-NOTICE.txt",
+          "transformation": "Repeat one original processed frame four times; 10bit variant explicitly left-shifts8bit codes by2, does not restore source precision"
+        }
+      },
+      "scores": [
+        1.09350061945666,
+        1.09350061945666,
+        1.09350061945666,
+        1.09350061945666
+      ],
+      "pooled": {
+        "min": 1.09350061945666,
+        "max": 1.09350061945666,
+        "mean": 1.09350061945666,
+        "harmonic_mean": 1.0935006194566599
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 364.03654199999437,
+        "queueMs": 1,
+        "executionMs": 347,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 208,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 742657,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 35148,
+          "indexPackets": 16,
+          "heapBytes": 27918336,
+          "elapsedMs": 200,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 9820800,
+        "processRssPeakBytes": 428949504,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.22770799999852898,
+          "p95": 0.6517089999979362,
+          "max": 0.6517089999979362
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 30,
+          "p50": 0.554707999996026,
+          "p95": 0.7812080000003334,
+          "max": 1.010667000002286
+        }
+      }
+    },
+    {
+      "pattern": "natural",
+      "depth": 10,
+      "round": 2,
+      "target": "unlabelled",
+      "description": "Pinned licensed processed natural frame, repeated four times; 10-bit version left-shifts8-bit codes and does not restore precision",
+      "screeningOutcome": "unlabelled",
+      "illustrativeThreshold": 10,
+      "input": {
+        "encodedSha256": "66dc07938d83ecca80c97c2e0806a6a89a1d4cc538251a4f9278df2fd7ae790f",
+        "rawSha256": "0d1b6dc1d0bd490eee9c0c40761fd45b58bac64041b25fad5d7487238e223f27",
+        "width": 1280,
+        "height": 720,
+        "frames": 4,
+        "upstream": {
+          "repository": "https://github.com/Netflix/vmaf_resource",
+          "revision": "5e7b853baf97cea275ce8175d80c6f3c817169d4",
+          "file": "python/test/resource/yuv/KristenAndSara_1280x720_8bit_processed.yuv",
+          "sha256": "41a2c05e4c5ba39b3ea01b6c8afde05b79f129f7da3ea1a4c6639013929c5bf8",
+          "license": "BSD-2-Clause-Patent",
+          "notice": "test/helpers/native-cambi-official-NOTICE.txt",
+          "transformation": "Repeat one original processed frame four times; 10bit variant explicitly left-shifts8bit codes by2, does not restore source precision"
+        }
+      },
+      "scores": [
+        1.09350061945666,
+        1.09350061945666,
+        1.09350061945666,
+        1.09350061945666
+      ],
+      "pooled": {
+        "min": 1.09350061945666,
+        "max": 1.09350061945666,
+        "mean": 1.09350061945666,
+        "harmonic_mean": 1.0935006194566599
+      },
+      "component": {
+        "executor": "analysis-wasm",
+        "abi": 1,
+        "manifestSha256": "15a0bee5497d681ede0b14a2c9d94af5ac5c9784c8f0b5e73381f3d22d62ab41",
+        "binarySha256": "a08c870a84e4aedc2e8015ccee79c8dec2f0c1734f55f96779e2c91af44bee8d",
+        "glueSha256": "4dc4637ed61798b0255b88d4463bd3512c0ef49b40db9ed762a28e866a2b7c12",
+        "provenanceSha256": "13c794814aed04bafa34d2585a9b7295d0f3f3616e958ef43be7f9c47402f097",
+        "sourceRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
+        "coreRevision": "19e755f65003750873f88587369f3a1f340e14c1"
+      },
+      "observed": {
+        "submitToObservedTerminalMs": 364.2231250000041,
+        "queueMs": 1,
+        "executionMs": 345,
+        "scorer": {
+          "executor": "analysis-wasm",
+          "wallMs": 210,
+          "heapBytes": 67108864
+        },
+        "decode": {
+          "readBytes": 742657,
+          "packets": 4,
+          "outputFrames": 4,
+          "indexBytes": 35148,
+          "indexPackets": 16,
+          "heapBytes": 27918336,
+          "elapsedMs": 202,
+          "executionWitness": {
+            "passes": 3,
+            "assetBytes": 18544503,
+            "producerBytes": 6214545
+          }
+        },
+        "heatBytes": 9820800,
+        "processRssPeakBytes": 415399936,
+        "libraryHttpBaselineMs": {
+          "count": 8,
+          "p50": 0.2178330000024289,
+          "p95": 0.6209999999991851,
+          "max": 0.6209999999991851
+        },
+        "libraryHttpDuringJobMs": {
+          "count": 30,
+          "p50": 0.5433340000017779,
+          "p95": 1.1652499999981956,
+          "max": 2.2695420000018203
+        }
+      }
+    }
+  ]
+}
