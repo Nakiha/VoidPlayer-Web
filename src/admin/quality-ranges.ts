@@ -45,6 +45,7 @@ export function installQualityRanges(signal: AbortSignal) {
     revision = 0;
   let browsingMore = false,
     publicationToken = "";
+  let detailsReleased = false;
   const valid = (owner: string, s: AbortSignal) =>
     active && !s.aborted && actor === owner && confirmedActor()?.id === owner;
   const request = <T>(
@@ -79,6 +80,7 @@ export function installQualityRanges(signal: AbortSignal) {
     browsingMore = false;
     publicationToken = "";
     observation.select();
+    detailsReleased = false;
     $("list").replaceChildren();
     $("detail").hidden = true;
     $("more").hidden = true;
@@ -131,6 +133,7 @@ export function installQualityRanges(signal: AbortSignal) {
               revision = 0;
               next = null;
               publicationToken = "";
+              detailsReleased = false;
               observation.select();
               $("detail").hidden = true;
               $("results").replaceChildren();
@@ -153,6 +156,7 @@ export function installQualityRanges(signal: AbortSignal) {
     }, `${more}:${pageAfter}`);
   }
   function results(more = false): Promise<boolean> {
+    if (detailsReleased) return Promise.resolve(false);
     const pageAfter = more ? (next ?? 0) : 0;
     return observation.run("frames", "selection", async () => {
       const owner = actor,
@@ -224,7 +228,13 @@ export function installQualityRanges(signal: AbortSignal) {
           "queued",
           "running",
         ].includes(job.state);
-        const loaded = revision !== job.revision ? await results() : false;
+        detailsReleased = !!job.resultRetention;
+        if (detailsReleased) {
+          observation.cancel("frames"); next = null; $("results").replaceChildren(); $("results-more").hidden = true;
+          $("status").textContent = t(msg('tasks.released','私有结果已释放，原任务回执保留。'));
+          revision = job.revision;
+        }
+        const loaded = !detailsReleased && revision !== job.revision ? await results() : false;
         if (!valid(owner, s) || selected !== id) return;
         if (loaded) revision = job.revision;
         const token = JSON.stringify(response.publication);
@@ -293,6 +303,7 @@ export function installQualityRanges(signal: AbortSignal) {
       revision = 0;
       next = null;
       publicationToken = "";
+      detailsReleased = false;
       observation.select();
       $("detail").hidden = true;
       $("results").replaceChildren();

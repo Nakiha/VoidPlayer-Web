@@ -7,6 +7,7 @@ import {VMAF_LIMITS} from '../analysis/quality/vmaf.ts';
 
 export const TASK_KINDS=['preparation','correspondence','single','range','vmaf','xpsnr','cambi'] as const;
 export type TaskKind=typeof TASK_KINDS[number];
+export const TASK_RESULT_KINDS:readonly TaskKind[]=['single','range','vmaf','xpsnr','cambi'];
 export const TASK_METRICS=['probe','quality-index','correspondence','psnr','ssim','vmaf','xpsnr','cambi'] as const;
 export const TASK_STATES=['queued','preparing','running','cancelling','completed','blocked','partial','failed','cancelled','interrupted'] as const;
 export const TASK_HISTORY_ROWS={preparation:DISCOVERY_LIMITS.historyRows,correspondence:CORRESPONDENCE_LIMITS.historyRows,single:QUALITY_JOB_LIMITS.historyRows,range:QUALITY_RANGE_LIMITS.historyRows,vmaf:VMAF_LIMITS.historyRows,xpsnr:VMAF_LIMITS.historyRows,cambi:CAMBI_LIMITS.historyRows} as const;
@@ -18,7 +19,7 @@ export type TaskSummary={kind:TaskKind;id:string;revision:number;state:string;ph
   createdAt:number;startedAt:number|null;endedAt:number|null;reason:{code:string;message:string}|null;
   sources:{role:'source'|'reference'|'distorted';mediaId:string;mediaVersion:string}[];metrics:string[];
   progress:{scored?:number;target?:number;prepared?:number;metrics?:unknown};
-  result:{available:boolean;scored?:number;retained?:number};attemptId:string|null;resultDigest:string|null;links:TaskLink[]};
+  result:{available:boolean;scored?:number;retained?:number;released?:boolean;releasePending?:boolean};attemptId:string|null;resultDigest:string|null;links:TaskLink[]};
 export type TaskPage={schema:'voidplayer-task-page';version:1;filter:TaskFilter;capturedAt:number;expiresAt:number;entries:TaskSummary[];nextCursor:string|null;total:number;limits:typeof TASK_LIMITS};
 export type TaskDetail={schema:'voidplayer-task-detail';version:1;task:TaskSummary;related:{kind:TaskKind;id:string;relation:string;href:string}[];links:TaskLink[]};
 export const taskPath=(kind:TaskKind,id:string)=>`/api/tasks/${kind}/${encodeURIComponent(id)}`;

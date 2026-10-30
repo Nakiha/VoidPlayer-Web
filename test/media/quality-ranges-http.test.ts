@@ -7,6 +7,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {loadConfig} from '../../server/config.ts';
 import {startService} from '../../server/runtime.ts';
 import {AnnotationStore} from '../../server/annotations.ts';
+import {QualityJobService} from '../../server/analysis/quality/job-service.ts';
 import {openIndexDatabase} from '../../server/sqlite.ts';
 import {SSIM_VARIANT} from '../../shared/analysis/quality/ssim.ts';
 // @ts-ignore shared test readiness helper
@@ -61,9 +62,11 @@ for(const [codec,depth] of [['h264',8],['hevc',10]] as const)test(`bounded range
   const changed=structuredClone(input);changed.pairs[0].roi.width=30;assert.equal((await post('/api/quality/ranges',changed)).status,400,'invalid SSIM edge is rejected before idempotency conflict');
   const policy={space:'default',side:'reference',metric:'psnr',maxDb:120,limit:1,minAuDistance:1,text:'Range measurement candidate',severity:3};
   const mutate=AnnotationStore.prototype.mutate;let injected=false;
-  AnnotationStore.prototype.mutate=function(...args:Parameters<AnnotationStore['mutate']>){const value=mutate.apply(this,args);if(!injected&&(args[1] as {action?:string}).action==='create-quality-candidate'){injected=true;throw new Error('test: response lost after annotation commit');}return value;};
+  AnnotationStore.prototype.mutate=function(...args:Parameters<AnnotationStore['mutate']>){if(!injected&&(args[1] as {action?:string}).action==='create-quality-candidate'){injected=true;if(codec==='h264')throw new Error('test: failed before annotation commit');const value=mutate.apply(this,args);throw new Error('test: response lost after annotation commit');}return mutate.apply(this,args);};
   try{assert.equal((await post(`/api/quality/ranges/${first.id}/candidates`,policy)).status,500);}finally{AnnotationStore.prototype.mutate=mutate;}
   assert.equal(injected,true);const frozen=await get(`/api/quality/ranges/${first.id}/candidates`).then(r=>r.json());assert.equal(frozen.selected.length,1);assert.deepEqual(frozen.createdIds,[]);
+  const pendingRelease=await post(`/api/tasks/range/${first.id}/release-result`,{});assert.equal(pendingRelease.status,200);
+  const pinned=(await pendingRelease.json()).retainedChildren;assert.equal(pinned.length,1);assert.equal(service.quality.qualityRanges.referencesResult(pinned[0]),true,'frozen publication pins even before an annotation transaction exists');
   const published=await post(`/api/quality/ranges/${first.id}/candidates`,policy).then(r=>r.json());assert.deepEqual(published.createdIds,frozen.selected.map((x:any)=>x.id));
   const annotation=await get(`/api/annotations/spaces/default/${published.createdIds[0]}`).then(r=>r.json());assert.equal(annotation.revision,1);assert.equal(annotation.document.mark.text,policy.text);assert.equal(annotation.document.mark.qualityEvidence.length,1);
   assert.equal((await post(`/api/quality/ranges/${first.id}/candidates`,{...policy,severity:4})).status,409);
@@ -71,9 +74,31 @@ for(const [codec,depth] of [['h264',8],['hevc',10]] as const)test(`bounded range
   const stride={...input,sampling:{mode:'stride',every:2,offset:0}},acceptedStride=await post('/api/quality/ranges',stride,'stride').then(r=>r.json()),s=await wait(acceptedStride.job.id);assert.equal(s.job.state,'completed');assert.equal(s.coverage.complete,false);assert.deepEqual(s.coverage.unsampled,[1]);assert.deepEqual(s.coverage.holes,[]);
   const holes={...input,interval:{startAu:0,endAu:2}},acceptedHoles=await post('/api/quality/ranges',holes,'holes').then(r=>r.json()),h=await wait(acceptedHoles.job.id);assert.equal(h.job.state,'partial');assert.deepEqual(h.coverage.unmapped,[2]);assert.deepEqual(h.coverage.holes,[2]);
   const missing=structuredClone(input);missing.pairs=missing.pairs.map((p,au)=>({...p,reference:unsupported(au),distorted:unsupported(1-au)}));const acceptedMissing=await post('/api/quality/ranges',missing,'unsupported').then(r=>r.json()),u=await wait(acceptedMissing.job.id);assert.equal(u.job.state,'failed');assert.deepEqual(u.coverage.unsupported.map((x:any)=>x.au),[0,1]);assert.deepEqual(u.coverage.holes,[0,1]);
-  const saved=done.job;await service.close();service=undefined;
+  const parentRelease=await post(`/api/tasks/range/${first.id}/release-result`,{});assert.equal(parentRelease.status,200);
+  const releaseReceipt=await parentRelease.json();assert.equal(releaseReceipt.retainedChildren.length,1,'published evidence remains pinned');assert.equal(releaseReceipt.releasedChildren.length,1);
+  const archived=await get(`/api/quality/ranges/${first.id}`).then(r=>r.json());assert.deepEqual(archived.job.summary,done.job.summary);assert.deepEqual(archived.coverage,done.coverage);
+  assert.equal((await get(`/api/quality/ranges/${first.id}/results`)).status,409);
+  assert.equal((await post(`/api/tasks/single/${releaseReceipt.retainedChildren[0]}/release-result`,{})).status,409);
+  const snapshot=await get('/api/tasks?kind=range').then(r=>r.json()),projection=snapshot.entries.find((j:any)=>j.id===first.id);
+  assert.equal(projection.result.available,false);assert.equal(projection.result.released,true);assert.equal(projection.result.retained,0);assert.equal(projection.result.scored,2);
+  await post(`/api/tasks/range/${first.id}/release-result`,{});
+  assert.equal((await get(`/api/quality/ranges/${first.id}`).then(r=>r.json())).job.revision,archived.job.revision,'release replay does not churn revisions');
+  const unpublished=await post(`/api/tasks/range/${s.job.id}/release-result`,{});assert.equal(unpublished.status,200);assert.equal((await unpublished.json()).retainedChildren.length,0);
+  assert.equal((await post(`/api/quality/ranges/${s.job.id}/candidates`,policy)).status,409,'archived input cannot generate new evidence');
+  assert.equal((await post('/api/quality/ranges',stride,'stride').then(r=>r.json())).job.id,s.job.id,'original submission remains the same archived receipt');
+  // Inject loss after one real child transaction. Parent intent already committed;
+  // restart/replay must settle the remainder without restoring scores or running work.
+  const releaseChild=QualityJobService.prototype.releaseResult;let lost=false;
+  QualityJobService.prototype.releaseResult=function(id:string,owner:string){const value=releaseChild.call(this,id,owner);if(!lost&&id===h.job.samples[0].jobId){lost=true;throw Error('response lost after child release');}return value;};
+  try{assert.equal((await post(`/api/tasks/range/${h.job.id}/release-result`,{})).status,500);}finally{QualityJobService.prototype.releaseResult=releaseChild;}
+  assert.equal(lost,true);const pending=await get(`/api/tasks/range/${h.job.id}`).then(r=>r.json());assert.equal(pending.task.result.releasePending,true);assert.ok(pending.links.some((l:any)=>l.rel==='release-result'));
+  const saved=archived.job;await service.close();service=undefined;
   const db=openIndexDatabase(join(config.dataDir,'library.sqlite.quality.sqlite'));try{for(const sample of saved.samples)db.prepare('UPDATE quality_jobs SET result_json=NULL,result_sha=NULL WHERE id=?').run(sample.jobId);}finally{db.close();}
-  service=await startService(config,false);const restored=await get(`/api/quality/ranges/${first.id}`).then(r=>r.json());assert.deepEqual(restored.job,saved);
+  service=await startService(config,false);
+  const settled=await post(`/api/tasks/range/${h.job.id}/release-result`,{});assert.equal(settled.status,200);assert.equal((await settled.json()).retainedChildren.length,0);
+  for(const sample of h.job.samples){assert.equal(service.quality.qualityRanges.referencesResult(sample.jobId),false);assert.equal((await get(`/api/quality/jobs/${sample.jobId}/result`)).status,409);}
+  const finalDetail=await get(`/api/tasks/range/${h.job.id}`).then(r=>r.json());assert.equal(finalDetail.task.result.releasePending,false);assert.equal(finalDetail.links.some((l:any)=>l.rel==='release-result'),false);
+  const restored=await get(`/api/quality/ranges/${first.id}`).then(r=>r.json());assert.deepEqual(restored.job,saved);
   const replayed=await post(`/api/quality/ranges/${first.id}/candidates`,policy).then(r=>r.json());assert.deepEqual(replayed.createdIds,published.createdIds,'annotation receipt precedes unavailable private result lookup');
   const record=await get(`/api/annotations/spaces/default/${published.createdIds[0]}`).then(r=>r.json());assert.equal(record.revision,1);
 });

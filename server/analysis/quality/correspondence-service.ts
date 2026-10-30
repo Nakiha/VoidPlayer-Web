@@ -45,13 +45,14 @@ export class CorrespondenceService{
     mkdirSync(path.dirname(file),{recursive:true});this.unlock=lockDatabase(file);let db:ReturnType<typeof openIndexDatabase>|undefined;
     try{
       this.db=db=openIndexDatabase(file);db.exec('PRAGMA busy_timeout=0;');
-      if(Number(db.prepare('PRAGMA user_version').get()!.user_version)>1)throw Error('Reference plans require a newer application');
+      if(Number(db.prepare('PRAGMA user_version').get()!.user_version)>2)throw Error('Reference plans require a newer application');
       db.exec(`PRAGMA journal_mode=WAL;
         CREATE TABLE IF NOT EXISTS quality_relations(id TEXT PRIMARY KEY,actor TEXT NOT NULL,client TEXT NOT NULL,key TEXT NOT NULL,fingerprint TEXT NOT NULL,body TEXT NOT NULL,reserved INTEGER NOT NULL,UNIQUE(actor,client,key));
         CREATE TABLE IF NOT EXISTS quality_correspondence_plans(id TEXT PRIMARY KEY,actor TEXT NOT NULL,client TEXT NOT NULL,key TEXT NOT NULL,fingerprint TEXT NOT NULL,body TEXT NOT NULL,result TEXT,reserved INTEGER NOT NULL,UNIQUE(actor,client,key));
-        CREATE TABLE IF NOT EXISTS quality_plan_executions(plan_id TEXT PRIMARY KEY,body TEXT NOT NULL);
-        PRAGMA user_version=1;`);
+        CREATE TABLE IF NOT EXISTS quality_plan_executions(plan_id TEXT PRIMARY KEY,body TEXT NOT NULL,reserved INTEGER NOT NULL);`);
       db.exec('BEGIN IMMEDIATE');try{
+        if(!db.prepare('PRAGMA table_info(quality_plan_executions)').all().some(r=>r.name==='reserved'))db.exec('ALTER TABLE quality_plan_executions ADD COLUMN reserved INTEGER NOT NULL DEFAULT 0');
+        db.exec("UPDATE quality_plan_executions SET reserved=length(CAST(body AS BLOB))+1024+CASE WHEN json_extract(body,'$.rangeId') IS NULL THEN 34 ELSE 0 END; PRAGMA user_version=2;");
         for(const plan of this.plans())if(!terminalCorrespondence(plan.state)){
           plan.state='interrupted';plan.endedAt=now();plan.reason={code:'service-restarted',message:'Planning interrupted; no automatic replan, scoring or publication.'};this.save(plan);
         }
@@ -68,7 +69,7 @@ export class CorrespondenceService{
   private save(p:CorrespondencePlan){p.revision++;this.db.prepare('UPDATE quality_correspondence_plans SET body=? WHERE id=?').run(JSON.stringify(p),p.id);if(terminalCorrespondence(p.state))this.settle(p.id);}
   private settle(id?:string){this.db.prepare("UPDATE quality_correspondence_plans SET reserved=length(CAST(body AS BLOB))+coalesce(length(CAST(result AS BLOB)),0)+1024 WHERE json_extract(body,'$.state') NOT IN ('queued','running','cancelling')"+(id?' AND id=?':'')).run(...(id?[id]:[]));}
   private capacity(reserved:number){
-    const bytes=Number(this.db.prepare('SELECT (SELECT coalesce(sum(reserved),0) FROM quality_relations)+(SELECT coalesce(sum(reserved),0) FROM quality_correspondence_plans) AS n').get()!.n);
+    const bytes=Number(this.db.prepare('SELECT (SELECT coalesce(sum(reserved),0) FROM quality_relations)+(SELECT coalesce(sum(reserved),0) FROM quality_correspondence_plans)+(SELECT coalesce(sum(reserved),0) FROM quality_plan_executions) AS n').get()!.n);
     if(bytes+reserved>LIMITS.reservedBytes)throw new AdminError(429,'Reference relation/plan history budget full; existing receipts retained.','correspondence-history-full');
   }
   createRelation(value:unknown,actor:Actor,requestId:string,key:unknown){
@@ -137,14 +138,18 @@ export class CorrespondenceService{
     else{
       if(plan.state!=='completed')throw new AdminError(409,'Plan is not executable.','plan-blocked');const input=structuredClone(this.rangeInput(id,actor.id));input.client={id:`clock-plan:${id}`,kind:plan.input.client.kind};
       intent={actor:{id:actor.id,name:actor.name},requestId,key:'execute',input,inputDigest:hash(input),digest,rangeId:null};
-      this.db.prepare('INSERT INTO quality_plan_executions VALUES(?,?)').run(id,JSON.stringify(intent));
+      // Reserve the eventual 36-byte range ID before the downstream commit.
+      // This transaction ends before calling B; a lost reply reuses the exact
+      // durable input/key without holding an outer database or compute permit.
+      const body=JSON.stringify(intent),reserved=Buffer.byteLength(JSON.stringify({...intent,rangeId:'0'.repeat(36)}))+1024;
+      this.db.exec('BEGIN IMMEDIATE');try{this.capacity(reserved);this.db.prepare('INSERT INTO quality_plan_executions(plan_id,body,reserved) VALUES(?,?,?)').run(id,body,reserved);this.db.exec('COMMIT');}catch(error){this.db.exec('ROLLBACK');throw error;}
     }
     const expected=structuredClone(this.rangeInput(id,actor.id));expected.client={id:`clock-plan:${id}`,kind:plan.input.client.kind};
     if(hash(expected)!==intent.inputDigest)throw new AdminError(500,'Frozen execution intent differs from its plan.','stored-plan-invalid');
     // No metadata Worker or outer permit is held. The durable B key is the
     // recovery point if its commit succeeds but this receipt update is lost.
     const accepted=this.ranges.submit(intent.input,intent.actor,intent.requestId,intent.key);intent.rangeId=accepted.job.id;
-    this.db.prepare('UPDATE quality_plan_executions SET body=? WHERE plan_id=?').run(JSON.stringify(intent),id);return accepted;
+    const body=JSON.stringify(intent);this.db.prepare('UPDATE quality_plan_executions SET body=?,reserved=? WHERE plan_id=?').run(body,Buffer.byteLength(body)+1024,id);return accepted;
   }
   cancel(id:string,actor:string){this.available();const plan=this.get(id,actor);if(!terminalCorrespondence(plan.state)){if(plan.state==='queued'){plan.state='cancelled';plan.endedAt=now();}else plan.state='cancelling';this.save(plan);if(this.active?.id===id)this.active.controller.abort(new AdminError(499,'Planning explicitly cancelled.','cancelled'));}return this.get(id,actor);}
   private wake(){if(this.timer||this.closed||this.failed||!this.plans().some(p=>p.state==='queued'))return;this.timer=setTimeout(()=>{this.timer=undefined;this.pump();this.wake();},250);this.timer.unref();}

@@ -4,7 +4,7 @@ import {AdminError} from '../admin-error.ts';
 import {adminWriteAllowed,readAdminJson} from '../admin.ts';
 import {requireCapturedActor} from '../identity.ts';
 import {sendJson} from '../http-utils.ts';
-import {TASK_KINDS,taskQuery} from '../../shared/service/tasks.ts';
+import {TASK_KINDS,TASK_RESULT_KINDS,taskQuery} from '../../shared/service/tasks.ts';
 import type {TaskKind} from '../../shared/service/tasks.ts';
 
 export async function handleTaskRoutes(ctx:RouteContext,req:IncomingMessage,res:ServerResponse,url:URL){
@@ -27,8 +27,9 @@ export async function handleTaskRoutes(ctx:RouteContext,req:IncomingMessage,res:
     if(!adminWriteAllowed(req,action))throw new AdminError(403,'Use the same-origin task cancellation action.','origin-required');
     const timer=setTimeout(()=>req.destroy(new Error('Task cancel body timeout')),10000);
     try{const body=await readAdminJson(req,256);if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).length)throw new AdminError(400,'Cancel requires an empty object.','invalid-task-cancel');if(match[3]==='release-result'){
-      if(!['single','vmaf','cambi','xpsnr'].includes(kind))throw new AdminError(400,'This task has no releasable scoring payload.','unsupported-result-release');
+      if(!TASK_RESULT_KINDS.includes(kind))throw new AdminError(400,'This task has no releasable scoring payload.','unsupported-result-release');
       if(!ctx.options.admin)throw new AdminError(503,'Evidence storage must be available before releasing results.','storage-unavailable');
+      if(kind==='range'){reply(200,ctx.quality.qualityRanges.releaseResult(id,ctx.actor.id,child=>ctx.options.admin!.annotations.referencesQualityResult(child)));return true;}
       const service=kind==='single'?ctx.quality.qualityJobs:kind==='vmaf'?ctx.quality.qualityVmaf:kind==='cambi'?ctx.quality.qualityCambi:ctx.quality.qualityXpsnr;
       service.get(id,ctx.actor.id);if(kind==='single'&&ctx.quality.qualityRanges.referencesResult(id))throw new AdminError(409,'A range still references this result; it is retained.','result-pinned-by-range');if(ctx.options.admin.annotations.referencesQualityResult(id))throw new AdminError(409,'Shared or historical evidence still references this result; it is retained.','result-pinned-by-evidence');reply(200,service.releaseResult(id,ctx.actor.id));
     }else reply(200,ctx.quality.tasks.cancel(kind,id,ctx.actor.id,ctx.requestId));}finally{clearTimeout(timer);}

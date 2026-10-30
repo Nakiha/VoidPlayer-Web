@@ -93,3 +93,36 @@ test('exact fractional-frame offsets preserve canonical identity, reject inconsi
   assert.equal(parse([{id:'a',referenceStartUs:0,referenceEndUs:1,offsetUs:0,offset:{ticks:1,timescale:3000000}},
     {id:'b',referenceStartUs:1,referenceEndUs:2,offsetUs:0,offset:{ticks:1,timescale:3000000}}]).clock.segments.length,2);
 });
+
+test('execution intents are atomically reserved, migrated and replayed through rejection and lost downstream acceptance',async t=>{
+ const directory=await mkdtemp(join(tmpdir(),'vp-intent-quota-')),file=join(directory,'plans.sqlite'),f=await correspondenceFixture();
+ const {QualityRangeService}=await import('../../server/analysis/quality/range-service.ts');
+ let reject=true,lost=false,downstream=0;const accepted=new Map<string,any>();
+ const ranges={plan:QualityRangeService.prototype.plan,get:(id:string)=>[...accepted.values()].find(j=>j.id===id),submit(input:any,actor:any,requestId:string,key:string){
+   downstream++;if(reject)throw Object.assign(Error('range queue full'),{code:'range-queue-full'});
+   let job=accepted.get(input.client.id);if(!job){job={id:randomUUID(),requestId,key,plan:this.plan(input)};accepted.set(input.client.id,job);}
+   if(lost){lost=false;throw Error('lost acceptance');}return {job,replayed:true};
+ }};
+ const runner={planCorrespondence:async(relation:any,input:any,_signal:any,observer:any)=>{observer.admitted();return buildCorrespondence(relation,input,f.sources,work);}} as LibraryPairRunner;
+ let service=new CorrespondenceService(file,runner,ranges as unknown as QualityRangeService);const db=openIndexDatabase(file);
+ t.after(async()=>{db.close();await service.close();await rm(directory,{recursive:true,force:true});});
+ const actor={id:'owner',name:'Owner'},relation=service.createRelation(f.relation.input,actor,'relation','relation').relation;
+ const plan=service.submit({...f.request,relation:{id:relation.id,revision:1}},actor,'plan','plan').plan;
+ await until(()=>service.get(plan.id,actor.id).state==='completed');const done=service.get(plan.id,actor.id),body={digest:done.resultDigest};
+ const relationBytes=Number(db.prepare('SELECT sum(reserved) n FROM quality_relations').get()!.n);
+ db.prepare('UPDATE quality_correspondence_plans SET reserved=? WHERE id=?').run(CORRESPONDENCE_LIMITS.reservedBytes-relationBytes,done.id);
+ assert.throws(()=>service.execute(done.id,actor,body,'first'),{code:'correspondence-history-full'});
+ assert.equal(downstream,0);assert.equal(db.prepare('SELECT count(*) n FROM quality_plan_executions').get()!.n,0);
+ db.exec('UPDATE quality_correspondence_plans SET reserved=length(CAST(body AS BLOB))+length(CAST(result AS BLOB))+1024');
+ assert.throws(()=>service.execute(done.id,actor,body,'original-execute'),{code:'range-queue-full'});
+ const intent=()=>db.prepare('SELECT body,reserved FROM quality_plan_executions WHERE plan_id=?').get(done.id)!;
+ const original=String(intent().body),reserved=Number(intent().reserved);assert.equal(reserved,Buffer.byteLength(original)+1024+34);
+ assert.throws(()=>service.execute(done.id,actor,body,'different-request'),{code:'range-queue-full'});assert.equal(intent().reserved,reserved);assert.equal(String(intent().body),original);
+ await service.close();db.exec('ALTER TABLE quality_plan_executions DROP COLUMN reserved; PRAGMA user_version=1');
+ service=new CorrespondenceService(file,runner,ranges as unknown as QualityRangeService);assert.equal(intent().reserved,reserved);assert.equal(String(intent().body),original);
+ reject=false;lost=true;assert.throws(()=>service.execute(done.id,actor,body,'lost'),/lost acceptance/);assert.equal(accepted.size,1);assert.equal(service.detail(done.id,actor.id).execution!.state,'submission-unconfirmed');
+ const replay=service.execute(done.id,actor,body,'recover');assert.equal(replay.job.requestId,'original-execute');assert.equal(replay.job.key,'execute');assert.equal(accepted.size,1);
+ assert.equal(Number(intent().reserved),Buffer.byteLength(String(intent().body))+1024);
+ const calls=downstream;assert.equal(service.execute(done.id,actor,body,'again').job.id,replay.job.id);assert.equal(downstream,calls);
+ await service.close();service=new CorrespondenceService(file,runner,ranges as unknown as QualityRangeService);assert.equal(service.taskRange(done.id,actor.id),replay.job.id);assert.equal(intent().reserved,Buffer.byteLength(String(intent().body))+1024);
+});

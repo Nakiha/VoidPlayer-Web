@@ -133,8 +133,28 @@ try{
  }finally{await identityGate.dispose();}
  assert.equal(await get(`/api/quality/ranges/${otherId}/candidates`),null,'late replies never publish into another range');
  await page.locator(`[data-range-id="${id}"]`).click();await page.locator(`[data-candidate-id="${publication.createdIds[0]}"]`).waitFor();
+ phase='cross-window-range-release';
+ // Keep an already successful result response alive across the explicit release.
+ let releaseCached, cachedReady;const cachedGate=new Promise(r=>releaseCached=r),readyCached=new Promise(r=>cachedReady=r);
+ const pattern=`**/api/quality/ranges/${id}/results?*`;
+ const cachedResult=async route=>{const response=await route.fetch();assert.equal(response.status(),200);cachedReady();await cachedGate;await route.fulfill({response});};
+ await page.route(pattern,cachedResult);
+ const peer=await context.newPage();
+ try{
+  await page.locator(`[data-range-id="${otherId}"]`).click();await page.waitForFunction(id=>document.querySelector('#quality-range-title').textContent.includes(id),otherId);
+  await page.locator(`[data-range-id="${id}"]`).click();await bounded(readyCached,'cached successful range response');
+  await peer.goto(base+'/admin/#tasks');await peer.locator('[data-pane="tasks"]').click();
+  await peer.locator(`[data-task-id="${id}"]`).click();await peer.locator('#tasks-release').waitFor({state:'visible'});
+  await peer.locator('#tasks-release').click();await peer.locator('#tasks-release').waitFor({state:'hidden'});
+  const archived=await get(`/api/quality/ranges/${id}`);assert.ok(archived.job.resultRetention.settledAt);assert.deepEqual(archived.job.summary,done.job.summary);
+  releaseCached();await page.waitForFunction(()=>document.querySelector('#quality-range-status').textContent.includes('released')&&document.querySelector('#quality-range-results').children.length===0,null,{polling:50});
+  assert.equal(await page.locator('#quality-range-results-more').isVisible(),false);
+  await page.locator(`[data-candidate-id="${publication.createdIds[0]}"]`).waitFor();
+  assert.equal((await get(`/api/tasks/range/${id}`)).task.result.available,false);
+  await drainAdminObservations(peer);
+ }finally{releaseCached();await page.unroute(pattern,cachedResult);await peer.close();}
  const after=await player.evaluate(()=>window.voidPlayer.getState());assert.equal(after.playing,true);assert.ok(after.positionUs>before.positionUs);assert.deepEqual(after.tracks.map(t=>t.id),before.tracks.map(t=>t.id));assert.equal(after.marks.length,before.marks.length);
- await drainAdminObservations(page);assert.deepEqual(errors,[]);await writeFile(path.join(directory,'evidence.json'),JSON.stringify({engine,depth,id,coverage:done.coverage,summary:done.job.summary,candidateId:publication.createdIds[0],nativeHashes:hashes,selectedBlock:3,viewFences:['selection','observation-close','actor-change'],player:{beforePosition:before.positionUs,afterPosition:after.positionUs,sameTracks:true},pageErrors:errors},null,2)+'\n');
+ await drainAdminObservations(page);assert.deepEqual(errors,[]);await writeFile(path.join(directory,'evidence.json'),JSON.stringify({engine,depth,id,coverage:done.coverage,summary:done.job.summary,candidateId:publication.createdIds[0],nativeHashes:hashes,selectedBlock:3,viewFences:['selection','observation-close','actor-change','cross-window-release-with-late-result'],player:{beforePosition:before.positionUs,afterPosition:after.positionUs,sameTracks:true},pageErrors:errors},null,2)+'\n');
  console.log(`PASS ${engine}/${depth}: service-owned range survives closed observer; AU coverage/native SSE, policy candidate, original-plane hashes/block3 independent A playback and late selection/close/actor fences`);
 }catch(error){if(page&&!page.isClosed())await saveBrowserFailure({page,directory,name:'quality-ranges',context:{engine,depth,phase},error,evidence}).catch(()=>{});throw error;}
 finally{clearInterval(progress);Atomics.store(gate,0,1);Atomics.notify(gate,0);await browser?.close();await service?.close();await rm(temp,{recursive:true,force:true});}

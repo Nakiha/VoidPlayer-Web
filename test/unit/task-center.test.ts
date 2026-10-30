@@ -128,3 +128,13 @@ test('reexecution edges are bidirectional, actor-scoped and never count a succes
   assert.throws(()=>f.center.detail(kind,original.id,'actor-B'),{status:404});
  }
 });
+
+test('range archive preserves historical edges and frozen snapshots while current detail withdraws results',t=>{
+ const f=fixture();t.after(()=>f.close());const child=f.insert('single'),parent=f.insert('range','actor-A',{samples:[{au:0,jobId:child.id,state:'completed',result:{attemptId:child.attemptId,digest:child.digest}}]});
+ const frozen=f.center.query('actor-A',{filter:{kind:'range'},limit:1});assert.equal(frozen.entries[0].result.available,true);
+ f.db.prepare("UPDATE quality_ranges SET body=json_set(body,'$.resultRetention',json(?)) WHERE id=?").run(JSON.stringify({releasedAt:200,settledAt:null}),parent.id);
+ const current=f.center.detail('range',parent.id,'actor-A');assert.equal(current.task.result.available,false);assert.equal(current.task.result.retained,0);assert.equal(current.task.result.scored,1);assert.equal(current.task.result.releasePending,true);assert.ok(current.links.some(l=>l.rel==='release-result'));assert.ok(current.related.some(l=>l.id===child.id));
+ assert.equal(frozen.entries[0].result.available,true);
+ f.db.prepare("UPDATE quality_ranges SET body=json_set(body,'$.resultRetention.settledAt',201) WHERE id=?").run(parent.id);
+ assert.equal(f.center.detail('range',parent.id,'actor-A').links.some(l=>l.rel==='release-result'),false);
+});

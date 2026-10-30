@@ -41,6 +41,7 @@ test('independent parent actor/queue, settled history bytes and future schema pr
   const jobs={submit(){const job={id:randomUUID(),state:'queued',reason:null};children.set(job.id,job);return {job};},get(id:string){return children.get(id);},cancel(id:string){children.get(id).state='cancelled';},resources(){return {available:true};}} as unknown as QualityJobService;
   let ranges:QualityRangeService|undefined=new QualityRangeService(file,jobs);t.after(async()=>{await ranges?.close();await rm(dir,{recursive:true,force:true});});
   const v=input([0]);v.interval.endAu=0;const owner={id:'owner',name:'Owner'},first=ranges.submit(v,owner,'first','first').job;
+  assert.throws(()=>ranges!.releaseResult(first.id,owner.id,()=>false),{code:'result-release-blocked'});assert.throws(()=>ranges!.releaseResult(first.id,'foreign',()=>false),{code:'range-not-found'});assert.equal(ranges.get(first.id,owner.id).resultRetention,undefined);
   ranges.submit(v,owner,'two','two');assert.throws(()=>ranges!.submit(v,owner,'over-actor','over-actor'),{code:'range-queue-full'});
   ranges.submit(v,{id:'other',name:'Other'},'three','three');ranges.submit(v,{id:'third',name:'Third'},'four','four');
   assert.throws(()=>ranges!.submit(v,{id:'fourth',name:'Fourth'},'over-queue','over-queue'),{code:'range-queue-full'});

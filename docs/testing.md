@@ -418,3 +418,10 @@ JS 容器矩阵的 corrupt-cache/fresh-runtime 两次 reload 分别记录命名�
 共享层另以 `tsconfig.shared.json` 在无 DOM 类型环境编译，真实编译负例证明 window、document、IndexedDB、VideoFrame 不可进入共享代码。标准 Fetch/Blob、AbortSignal 与 WebAssembly 可由两种宿主使用。共享源码及其类型配置参与准备构建指纹、前端来源摘要和发布源码包，移动公共实现后不能复用过期构建。
 
 后台/多窗口用例等待会话事实（例如 playing 和实际位置推进）时使用有界的定时轮询，不把浏览器 rAF 当业务事实更新通知。`check-quality-annotation-browser.mjs` 以受控 rAF 饥饿作负对照：旧 rAF 等待不再采样，但真实解码/播放持续推进，同条件的50ms定时轮询仍能验证。该控制不放宽300秒用例预算、播放隔离或最终像素断言；动画/呈现时序测试继续使用各自原始要求。
+
+Frontend HTML entry names live in `scripts/frontend-entries.mjs`. Vite inputs,
+embedded source evidence and test preparation fingerprints consume that definition.
+A prepared receipt hashes every entry's actual bytes, including `quality.html`;
+source archives and already-dirty checkouts must reject a stale receipt after any
+entry change. `test-runner.test.mjs` exercises real preparation/reuse/rejection and
+rebuild for each HTML entry, without relying on Git's dirty marker.

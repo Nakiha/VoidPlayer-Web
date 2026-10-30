@@ -10,6 +10,8 @@ Pages freeze membership and summary facts for60 seconds. Keep filters with nextC
 
 Explicit cancel is POST /api/tasks/{kind}/{id}/cancel with {}, same Origin and captured actor. Use library-preparation action for preparation, quality-job otherwise. It delegates to the owning service. Cancelling retains admission until confirmed physical exit. If the receipt is lost, read the same task; repeating cancel does not create computation or roll back completed results. Closing GUI or HTTP observation never cancels a durable job.
 
+Explicit result release is POST /api/tasks/{kind}/{id}/release-result with {}, quality-job action, same Origin and captured actor, for single/range/VMAF/XPSNR/CAMBI. Follow [tasks.release.range](/api/agent/operations/tasks.release.range) for ranges. It preserves receipts and historical summary/coverage; frozen publication and shared/historical evidence remain pinned. A range archives detail before child cleanup; result.releasePending keeps the same action available after a crash. Read and repeat only the same explicit target to settle an unknown response. No computation, index build or publication is created.
+
 For a physically stopped failed/interrupted/cancelled/partial single, range, VMAF, XPSNR or stopped failed/interrupted/cancelled CAMBI task, follow its reexecution-plan link and the [explicit full recomputation contract](/agent/quality/recovery.md). Task detail exposes verified predecessor/successor links. Reexecution requires a separate reason, exact cost confirmation and frozen actor/body/key; it never starts automatically. No partial resume, automatic publication, new scheduler or global administration. Changed conditions need new intent.
 `,
  '/agent/quality.md':`# Choose a quality task
@@ -126,6 +128,8 @@ identical pixel domain; SSIM pools valid windows per plane before Y4:U1:V1.
 Parent coordination does not hold a second execution permit around children.
 Cancel explicitly; capacity remains held until physical exit. Disconnecting
 observation never cancels durable work. Restart interrupts rather than reruns.
+
+After physical stop, explicit [range result release](/api/agent/operations/tasks.release.range) preserves input/summary/coverage and original receipts while releasing unpinned children. Archived /results returns409 range-result-released; no new candidate policy can be derived. Original frozen publication receipts still replay, including a publication interrupted before its first annotation write.
 
 [Operations](/api/agent/tasks/quality.range) · [Explicit candidates](/agent/quality/candidates.md)
 `,

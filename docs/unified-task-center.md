@@ -149,3 +149,13 @@ old scores/candidates occurs. Preparation and C plans are not reexecuted here.
 CAMBI is projected from its original bounded `cambi_jobs` store using only scalar metadata: one `source` role, metric `cambi`, exact phase/prepared/scored/target facts and committed result availability. Provisional stored scores remain unavailable as immutable results. It has no fabricated reference/C-plan edge. Explicit task-center cancellation delegates to the original CAMBI service; candidate receipt links require the entire frozen ref (including frame, scale and region) to match a server-verified same-origin annotation attachment before opening its independent five-scale viewer. No heatmap bytes are loaded by task queries.
 
 CAMBI delegates to the same explicit confirmation/receipt panel, limited to physically stopped failed/interrupted/cancelled tasks with a persisted single-source contract. Source/cache/producer/core, AU selection/order and analysis core/component/recipe must match. Missing historical witness requires new intent; no partial status or automatic preparation/publication is added.
+
+Range result release uses the same explicit task-center action as single/VMAF/
+XPSNR/CAMBI. It archives parent detail, releases only unpinned child payloads and
+retains frozen publication/annotation evidence, coverage, summary and receipts.
+An interrupted two-store release projects `result.releasePending:true` and keeps
+its action available; replay settles the same target. `result.released:true`
+withdraws result links and excludes protected published children from the archived
+range's retained-detail count. Historical child relationships remain traceable.
+The GUI observes current detail; an older frozen query page keeps its original facts.
+See [range release](bounded-quality-ranges.md#explicit-result-release).

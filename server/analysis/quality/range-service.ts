@@ -32,8 +32,11 @@ export class QualityRangeService {
   taskChildEdges(actor:string,ids:readonly string[]){return rangeTaskChildren(this.db,actor,ids);}
   taskChild(id:string,childId:string,actor:string){
     const parent=this.get(id,actor),sample=parent.samples.find(s=>s.jobId===childId);if(!sample)return false;
-    const child=this.jobs.get(childId,actor),pair=parent.plan.input.pairs.find(p=>p.reference.picture.au===sample.au);
-    if(!pair||child.input.client.id!==`range:${id}`||child.submitted.idempotencyKey!==`sample:${sample.au}`||child.submitted.requestId!==parent.requestId)return false;
+    return this.matchesChild(parent,sample,this.jobs.get(childId,actor));
+  }
+  private matchesChild(parent:QualityRangeJob,sample:RangeSample,child:ReturnType<QualityJobService['get']>,pair=parent.plan.input.pairs.find(p=>p.reference.picture.au===sample.au)){
+    if(!pair||child.id!==sample.jobId||child.input.client.id!==`range:${parent.id}`||child.input.client.kind!==parent.plan.input.client.kind
+      ||child.submitted.idempotencyKey!==`sample:${sample.au}`||child.submitted.requestId!==parent.requestId)return false;
     const request=structuredClone(pair),elapsed=child.input.request.budget?.maxElapsedMs;
     if(!elapsed||elapsed>Math.min(pair.budget?.maxElapsedMs??30000,parent.plan.input.budget.maxElapsedMs))return false;
     request.budget={...request.budget,maxElapsedMs:elapsed};
@@ -55,7 +58,7 @@ export class QualityRangeService {
     let db:ReturnType<typeof openIndexDatabase>|undefined;
     try{
       this.db=db=openIndexDatabase(file);db.exec('PRAGMA busy_timeout=0;');
-      if(Number(db.prepare('PRAGMA user_version').get()!.user_version)>2)throw Error('Quality ranges require a newer application');
+      if(Number(db.prepare('PRAGMA user_version').get()!.user_version)>3)throw Error('Quality ranges require a newer application');
       db.exec(`
         PRAGMA journal_mode=WAL;BEGIN IMMEDIATE;
         CREATE TABLE IF NOT EXISTS quality_ranges(
@@ -64,7 +67,7 @@ export class QualityRangeService {
           reserved INTEGER NOT NULL,UNIQUE(actor,client,key)
         );
         CREATE TABLE IF NOT EXISTS quality_range_publications(range_id TEXT PRIMARY KEY,body TEXT NOT NULL);
-      `);this.reexecutions=new ReexecutionLedger(db);db.exec('PRAGMA user_version=2;COMMIT;');
+      `);this.reexecutions=new ReexecutionLedger(db);db.exec('PRAGMA user_version=3;COMMIT;');
       // Child terminal commits precede the parent's next poll. Recover their
       // already committed facts atomically, without resubmission or source IO.
       db.exec('BEGIN IMMEDIATE');
@@ -101,7 +104,49 @@ export class QualityRangeService {
   }
   private rows(){return this.db.prepare("SELECT body FROM quality_ranges WHERE json_extract(body,'$.state') IN ('queued','running','cancelling') ORDER BY rowid").all().map(r=>JSON.parse(String(r.body)) as QualityRangeJob);}
   private save(job:QualityRangeJob){job.revision++;const body=JSON.stringify(job);this.db.prepare('UPDATE quality_ranges SET body=?,reserved=CASE WHEN ? THEN ? ELSE reserved END WHERE id=?').run(body,terminalRange(job.state)?1:0,Buffer.byteLength(body)+1024,job.id);}
-  referencesResult(id:string){return !!this.db.prepare("SELECT 1 FROM quality_ranges,json_each(body,'$.samples') s WHERE json_extract(s.value,'$.jobId')=? LIMIT 1").get(id);}
+  referencesResult(id:string){return this.referencedResults([id]).has(id);}
+  private referencedResults(ids:readonly string[]){
+    if(!ids.length)return new Set<string>();
+    const rows=this.db.prepare(`SELECT DISTINCT json_extract(s.value,'$.jobId') AS id FROM quality_ranges p,json_each(p.body,'$.samples') s
+      WHERE json_extract(s.value,'$.jobId') IN (SELECT value FROM json_each(?)) AND (
+        json_extract(p.body,'$.resultRetention.releasedAt') IS NULL OR EXISTS(
+          SELECT 1 FROM quality_range_publications pub,json_each(pub.body,'$.selected') item
+          WHERE pub.range_id=p.id AND json_extract(item.value,'$.evidence.jobId')=json_extract(s.value,'$.jobId')))`)
+      .all(JSON.stringify(ids));
+    return new Set(rows.map(r=>String(r.id)));
+  }
+  /** Explicit two-phase archive. Parent intent commits before child payloads
+   * are released in their own store; replay settles a crash between stores. */
+  releaseResult(id:string,actor:string,evidencePinned:(id:string)=>boolean){
+    if(this.closed||this.fatal||!this.jobs.resources().available||this.jobs.resources().admissionBlocked)
+      throw new AdminError(409,'Physical execution stop is unconfirmed.','result-release-blocked');
+    let job=this.get(id,actor);
+    if(!terminalRange(job.state)||job.endedAt===null||this.progress(job).active)
+      throw new AdminError(409,'Wait for the range and its children to stop.','result-release-blocked');
+    if(job.samples.length>LIMITS.samples||new Set(job.samples.map(s=>s.au)).size!==job.samples.length||new Set(job.samples.map(s=>s.jobId)).size!==job.samples.length)
+      throw new AdminError(409,'Stored range samples are invalid.','result-release-blocked');
+    const pairs=new Map(job.plan.input.pairs.map(p=>[p.reference.picture.au,p]));
+    for(const sample of job.samples){
+      const child=this.jobs.get(sample.jobId,actor);
+      if(!this.matchesChild(job,sample,child,pairs.get(sample.au))||!terminalQualityJob(child.state)||child.attempt&&child.attempt.endedAt===null
+        ||sample.result&&(child.attempt?.id!==sample.result.attemptId||child.result.digest!==sample.result.digest))
+        throw new AdminError(409,'Range child association or physical stop is unconfirmed.','result-release-blocked');
+    }
+    if(!job.resultRetention){
+      this.db.exec('BEGIN IMMEDIATE');try{job.resultRetention={releasedAt:this.now(),settledAt:null};this.save(job);this.db.exec('COMMIT');}catch(error){this.db.exec('ROLLBACK');throw error;}
+    }
+    // Publishing froze its evidence IDs before any annotation write. Both a
+    // pending publication and historical annotations continue to pin payloads.
+    const rangePins=this.referencedResults(job.samples.map(s=>s.jobId));
+    for(const sample of job.samples){
+      if(rangePins.has(sample.jobId)||evidencePinned(sample.jobId))continue;
+      this.jobs.releaseResult(sample.jobId,actor);
+    }
+    job=this.get(id,actor);
+    if(job.resultRetention!.settledAt===null){job.resultRetention!.settledAt=this.now();this.save(job);}
+    const retained=job.samples.filter(s=>this.jobs.get(s.jobId,actor).result.available).map(s=>s.jobId);
+    return {jobId:id,released:true,receiptRetained:true,retainedChildren:retained,releasedChildren:job.samples.filter(s=>!retained.includes(s.jobId)).map(s=>s.jobId),retention:job.resultRetention};
+  }
   private sampleState(child:ReturnType<QualityJobService['get']>){
     return ['unsupported-source','unsupported-format','incompatible-input','missing-color'].includes(child.reason?.code??'')?'unsupported':child.state;
   }
@@ -238,7 +283,8 @@ export class QualityRangeService {
   }
   results(id:string,actor:string,after=0,limit:number=LIMITS.page){
     if(!Number.isSafeInteger(after)||after<0||!Number.isSafeInteger(limit)||limit<1||limit>LIMITS.page)throw new AdminError(400,'Invalid result cursor.','invalid-cursor');
-    const job=this.get(id,actor),samples=job.samples.filter(s=>s.state==='completed'&&s.au>=after);
+    const job=this.get(id,actor);if(job.resultRetention)throw new AdminError(409,'Range details were explicitly released; summary and receipts remain.','range-result-released');
+    const samples=job.samples.filter(s=>s.state==='completed'&&s.au>=after);
     const entries=samples.slice(0,limit).map(s=>({au:s.au,result:this.jobs.result(s.jobId,actor)}));
     return {entries,nextAu:samples.length>limit?entries.at(-1)!.au+1:null,coverage:this.coverage(job),summary:job.summary};
   }
@@ -249,6 +295,7 @@ export class QualityRangeService {
     const row=this.db.prepare('SELECT body FROM quality_range_publications WHERE range_id=?').get(id);let publication:Publication;
     if(row){publication=JSON.parse(String(row.body));if(digest(publication.policy)!==digest(policy))throw new AdminError(409,'Publication already binds another policy.','publication-conflict');}
     else{
+      if(job.resultRetention)throw new AdminError(409,'Range details were explicitly released; a new publication cannot be derived.','range-result-released');
       const results=job.samples.filter(s=>s.state==='completed').map(s=>({au:s.au,result:this.jobs.result(s.jobId,actor.id)}));
       publication={policy,origin,createdIds:[],selected:selectRangeCandidates(results,policy).map(x=>{const sample=job.samples.find(s=>s.au===x.au)!;return {au:x.au,id:randomUUID(),operationId:randomUUID(),evidence:{jobId:sample.jobId,attemptId:sample.result!.attemptId,digest:sample.result!.digest,side:policy.side}};})};
       // Freeze the entire decision before the first annotation transaction.

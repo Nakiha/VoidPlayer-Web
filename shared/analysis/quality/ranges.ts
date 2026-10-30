@@ -56,6 +56,8 @@ export type QualityRangeJob = ReexecutionMetadata & {
   reason:QualityJobReason|null;samples:RangeSample[];
   summary:ReturnType<typeof aggregateRange>;
   cancelRequestedAt:number|null;revision:number;
+  /** Absent on legacy rows. Summary, coverage, input and sample receipts remain. */
+  resultRetention?:{releasedAt:number;settledAt:number|null};
 };
 const fail=(message:string):never=>{throw new Error(message);};
 function keys(value:unknown,allowed:string[]){

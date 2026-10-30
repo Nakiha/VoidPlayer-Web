@@ -1,3 +1,4 @@
+import { FRONTEND_HTML_INPUTS } from '../../scripts/frontend-entries.mjs';
 import {selectCases} from '../../scripts/testing/manifest.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -438,3 +439,12 @@ test('sampled playback observation requires committed frame advance and rejects 
  }
  const stalled=fixture(),pending=stalled.run();stalled.state.positionUs=200;stalled.tick();stalled.expire();await assert.rejects(pending,/no committed frame advance/);assert.equal(stalled.active.size,0);
 });
+
+for (const entry of FRONTEND_HTML_INPUTS) test(`prepared archive build rejects changed HTML entry ${entry}`, async () => temporary(async root => {
+  const source=path.join(root,entry); await mkdir(path.dirname(source),{recursive:true}); await writeFile(source,'version-one');
+  const command=[process.execPath,'-e',`const fs=require('node:fs'),path=require('node:path'),entry=${JSON.stringify(entry)};fs.mkdirSync(path.join('dist',path.dirname(entry)),{recursive:true});fs.copyFileSync(entry,path.join('dist',entry))`];
+  const options={root,directory:path.join(root,'reports'),output:silent,command};
+  await prepareBuild(options); await prepareBuild({...options,prepared:true});
+  await writeFile(source,'version-two'); await assert.rejects(prepareBuild({...options,prepared:true}),/stale/);
+  await prepareBuild(options); assert.equal(await readFile(path.join(root,'dist',entry),'utf8'),'version-two');
+}));

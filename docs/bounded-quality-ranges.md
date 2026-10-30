@@ -47,19 +47,20 @@ budget. Include explicit `decode` windows for dependent/reordered targets as in
 normalized by reference AU. `all` selects every integer position in the inclusive
 reference **decode-order AU interval**; `stride` selects positions satisfying
 `(au-startAu)%every === offset`. It does not select by presentation time or infer
-unlisted mappings. The interval is at most 256 positions, with at most 64
-selected positions and at least one mapped selected pair.
+unlisted mappings. The current published `QUALITY_RANGE_LIMITS` allows at most
+4096 interval positions, with at most 1024 selected positions and at least one mapped selected pair.
 
 The plan exposes selected, unmapped and unsampled positions, exact dependency
 packet/output reservations, read and numeric input reservations, separately
 listed repeated index document loads, maximum result bytes and fixed live memory
 limits. Each selected window pays for **all** inputs and outputs: repeated
 pre-roll, post-target pictures and drain. Child packet/output budgets are
-tightened to those complete windows. Parent maximums are 64 MiB source reads,
-512 MiB numeric input views, 4096 packets/outputs and 120 seconds execution.
+tightened to those complete windows. Current parent maximums are 32 GiB source
+reads, 128 GiB cumulative numeric input views, 1,048,576 packets/outputs and
+600 seconds execution. The submitted parent budget can be lower.
 Each child retains its 512 AU per side, 30 second deadline, 256 MiB heap, 32 MiB
 retained frames and 128 KiB result limits. Up to two 32 MiB index documents per
-selected pair are separately reserved (at most 4 GiB of cumulative loads; one
+selected pair are separately reserved (at most 64 GiB of cumulative loads; one
 child live). Reservations bound admitted work; they are not process RSS claims.
 
 ## Ownership, history and recovery
@@ -81,8 +82,9 @@ admission and rejects new submissions. It is not a successful cleanup.
 
 The parent queue has at most four unfinished records, with at most two per actor;
 queue waiting expires after five minutes when selected for execution. History
-retains at most 100 parents and 16 MiB of logical reservations (plan bytes plus
-64 KiB parent metadata/publication allowance per row). Child history retains its
+uses a 16 MiB logical reservation budget rather than a lifetime parent row cap.
+Queued parents reserve serialized plan bytes plus 1 KiB per target and a 32 KiB
+allowance; terminal parent rows settle to their body bytes plus 1 KiB. Child history retains its
 own independent limits. Full history never silently deletes old receipts.
 Logical reservation is not physical SQLite/WAL disk usage. A process-level
 exclusive owner lock precedes startup recovery. Unfinished parents/children become
@@ -169,3 +171,35 @@ Fresh checks: `test/unit/quality-ranges.test.ts`,
 `test/media/quality-job-lifecycle.test.ts` and the four Chromium/WebKit 8/10-bit
 cases in `scripts/check-quality-ranges-browser.mjs`. All are registered in the
 existing required manifest suites; CI gates and workflows are unchanged.
+
+## Explicit result release
+
+`POST /api/tasks/range/{id}/release-result` with explicit `{}`, captured actor and
+same-origin `quality-job` action archives a physically stopped range. It keeps
+frozen input, summary, coverage, sample IDs/attempts/digests, submission and
+reexecution receipts. `job.resultRetention={releasedAt,settledAt}` is absent on
+legacy rows. Range database v3 rejects older applications; v1/v2 histories are
+retained without changing their measurement facts.
+
+The parent first commits `releasedAt` with `settledAt:null`, then releases each
+unpinned child result through its original service, and finally records settlement.
+This deliberately spans two stores without a fictitious cross-database transaction.
+A failure/crash between stores retains an explicit pending release; repeating the
+same actor/ID endpoint settles it without recomputation. No restart cleanup or
+new job is automatic. Repeating a settled release does not advance revisions.
+
+Archive withdraws range `/results` access and disallows deriving a new candidate
+policy (`409 range-result-released`). Existing frozen publication replays remain
+receipt-first. Every selected child in a frozen publication, including a publication
+interrupted before its first annotation write, stays pinned. Shared/historical
+annotation references and any other retaining parent also prevent child release.
+Unselected children may be reclaimed. Input, historical score coverage and summary
+are never reinterpreted as newly unavailable measurements or rescored holes.
+
+The release reply lists `retainedChildren` and `releasedChildren` (children with no
+remaining private payload). Task-center `result.released` and `releasePending`
+distinguish archived detail from historical `scored`; current retained detail is
+zero even when a published child remains protected. A pending release exposes the
+same action for recovery. Old frozen task snapshots remain immutable; fresh detail
+shows current retention. The range panel clears cached result pages and stops
+pagination after observing archive, while retaining summary and published evidence.
