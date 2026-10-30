@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join,resolve } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { readdirSync,readlinkSync,realpathSync,statSync,openSync,closeSync,fstatSync } from 'node:fs';
+import { QualityApplication } from '../../server/quality-application.ts';
 import { LibraryPairRunner } from '../../server/analysis/quality/runner.ts';
 import {fileStatWitness,sameFileStat} from '../../server/file-stat.ts';
 import type { AddressInfo } from 'node:net';
@@ -58,6 +59,18 @@ for(const [codec,depth] of [['h264',8],['hevc',8],['hevc',10]] as const)test(`HT
  library=new MediaLibraryIndex([media],{database:join(dir,'library.sqlite'),watch:false});await library.refresh();
  server=createMediaServer({library,roots:[media],onLog(){}});await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
  const base=`http://127.0.0.1:${(server.address() as AddressInfo).port}`,cookie=`voidplayer-user=guest-${randomUUID()}`;
+ // Recompose the real HTTP owner rather than shadowing a media compatibility
+ // getter. Every injected runner is the one used by routes and lifecycle drain.
+ async function replacePairRunner(factory?:ConstructorParameters<typeof LibraryPairRunner>[2],timers?:ConstructorParameters<typeof LibraryPairRunner>[3]){
+  const port=(server.address() as AddressInfo).port;
+  await new Promise<void>(resolve=>server.close(()=>resolve()));await library.close();
+  library=new MediaLibraryIndex([media],{database:join(dir,'library.sqlite'),watch:false});await library.ready;
+  const runner=new LibraryPairRunner(library,resolve('public/vendor/voidplayer-core'),factory,timers);
+  const quality=new QualityApplication(library,{pairRunner:runner});await quality.ready;
+  server=createMediaServer({library,quality,roots:[media],onLog(){}});await new Promise<void>(resolve=>server.listen(port,'127.0.0.1',resolve));
+  assert.equal(library.quality,runner);assert.equal(quality.quality,runner);return runner;
+ }
+
  const entries=(await fetch(base+'/api/library').then(r=>r.json())).entries;
  const bindings:LibraryPairBinding[]=[],targets:PairTarget[]=[];
  for(const [i,name] of ['reference.flv','distorted.flv'].entries()){
@@ -132,13 +145,12 @@ for(const [codec,depth] of [['h264',8],['hevc',8],['hevc',10]] as const)test(`HT
    let releaseStop!:()=>void,stopping!:()=>void,exited=false,first=true;
    const stopGate=new Promise<void>(resolve=>releaseStop=resolve),stopRequested=new Promise<void>(resolve=>stopping=resolve),ready=new Int32Array(new SharedArrayBuffer(4));
    let exitPromise:Promise<void>=Promise.resolve();
-   const runner=new LibraryPairRunner(library,resolve('public/vendor/voidplayer-core'),data=>{
+   const runner=await replacePairRunner(data=>{
     if(!first)return new Worker(new URL('../../server/analysis/quality/worker.ts',import.meta.url),{workerData:data});first=false;
     const worker=new Worker(new URL('../helpers/quality-stall-worker.ts',import.meta.url),{workerData:{ready:ready.buffer}}),terminate=worker.terminate.bind(worker);
     exitPromise=new Promise<void>(resolve=>worker.once('exit',()=>{exited=true;resolve();}));
     worker.terminate=async()=>{stopping();await stopGate;return terminate();};return worker;
    });
-   Object.defineProperty(library,'quality',{value:runner,configurable:true});
    const controller=new AbortController(),body=mode==='deadline'?{...request,budget:{maxElapsedMs:250}}:request;
    const pending=fetch(base+'/api/quality/psnr-pair',{method:'POST',headers,body:JSON.stringify(body),signal:controller.signal});
    const result=mode==='disconnect'?assert.rejects(pending,{name:'AbortError'}):pending.then(async response=>{assert.equal(response.status,413);assert.equal((await response.json()).code,'budget-exceeded');});
@@ -157,18 +169,16 @@ for(const [codec,depth] of [['h264',8],['hevc',8],['hevc',10]] as const)test(`HT
    const recovered=await post(request);assert.equal(recovered.status,200);assert.deepEqual((await recovered.json()).result.metric,expected);
    }finally{releaseStop();controller.abort();await result.catch(()=>{});await runner.close();}
   }
-  delete (library as unknown as Record<string,unknown>).quality;
   const descriptors=()=>process.platform!=='linux'?0:readdirSync('/proc/self/fd').filter(fd=>{try{return readlinkSync('/proc/self/fd/'+fd).startsWith(dir+'/');}catch{return false;}}).length;
   for(const operation of ['measure','source'] as const)for(const phase of (operation==='measure'?['source','resolve','decode','publish']:['source','resolve','publish']))for(const mode of ['disconnect','deadline','close'] as const){
    const descriptorBaseline=descriptors();
    const state=new Int32Array(new SharedArrayBuffer(20));let releaseStop!:()=>void,stopping!:()=>void,worker!:Worker,deadline!:(()=>void);
    const stopGate=new Promise<void>(resolve=>releaseStop=resolve),stopRequested=new Promise<void>(resolve=>stopping=resolve);
    const clock=mode==='deadline'?{set(callback:()=>void,ms:number){assert.equal(ms,30000);deadline=callback;return {} as ReturnType<typeof setTimeout>;},clear(){}}:undefined;
-   const runner=new LibraryPairRunner(library,resolve('public/vendor/voidplayer-core'),data=>{
+   const runner=await replacePairRunner(data=>{
     worker=new Worker(new URL('../helpers/quality-phase-worker.ts',import.meta.url),{workerData:{...data,hangPhase:phase,phaseState:state.buffer}});
     const terminate=worker.terminate.bind(worker);worker.terminate=async()=>{stopping();await stopGate;return terminate();};return worker;
    },clock);
-   Object.defineProperty(library,'quality',{value:runner,configurable:true});
    const controller=new AbortController(),pending=operation==='measure'?fetch(base+'/api/quality/psnr-pair',{method:'POST',headers,body:JSON.stringify(request),signal:controller.signal}):fetch(`${base}/api/media/${targets[0].mediaId}/psnr-source?v=${targets[0].mediaVersion}`,{headers:{cookie},signal:controller.signal});
    const checked=mode==='disconnect'?assert.rejects(pending,{name:'AbortError'}):pending.then(async response=>{assert.equal(response.status,mode==='deadline'?413:499);assert.equal((await response.json()).code,mode==='deadline'?'budget-exceeded':'cancelled');});void checked.catch(()=>{});
    const waitFlag=async(index:number)=>{if(Atomics.load(state,index)===0)await (Atomics as typeof Atomics & {waitAsync(array:Int32Array,index:number,value:number,timeout:number):{value:Promise<string>|string}}).waitAsync(state,index,0,5000).value;assert.equal(Atomics.load(state,index),1,`${phase}/${mode}: expected phase/cancel/recovery marker ${index}`);};
@@ -183,13 +193,12 @@ for(const [codec,depth] of [['h264',8],['hevc',8],['hevc',10]] as const)test(`HT
     if(mode==='disconnect'){try{worker.postMessage({type:'resume'});}catch{}assert.equal(Atomics.load(state,4),0,'terminated source IO cannot resume after cancellation');}
     assert.ok(descriptors()<=descriptorBaseline,`${operation}/${phase}/${mode}: owned source/database descriptors leaked after physical exit`);
    }finally{releaseStop();controller.abort();try{worker?.postMessage({type:'resume'});}catch{}await checked.catch(()=>{});await runner.close();}
-   delete (library as unknown as Record<string,unknown>).quality;
-  }
+   }
+  await replacePairRunner();
   const gatedSource=await targetFor('gated-source.flv');
   for(const mutation of ['source-change','cache-clear'] as const){
    const gate=new Int32Array(new SharedArrayBuffer(8));
-   const runner=new LibraryPairRunner(library,resolve('public/vendor/voidplayer-core'),data=>new Worker(new URL('../helpers/quality-gated-worker.ts',import.meta.url),{workerData:{...data,gate:gate.buffer}}));
-   Object.defineProperty(library,'quality',{value:runner,configurable:true});
+   const runner=await replacePairRunner(data=>new Worker(new URL('../helpers/quality-gated-worker.ts',import.meta.url),{workerData:{...data,gate:gate.buffer}}));
    const target=mutation==='source-change'?gatedSource:targets[0],pending=post(pairRequest(target));
    try{
     if(Atomics.load(gate,0)===0)await (Atomics as typeof Atomics & {waitAsync(array:Int32Array,index:number,value:number,timeout:number):{value:Promise<string>|string}}).waitAsync(gate,0,0,5000).value;
@@ -199,8 +208,8 @@ for(const [codec,depth] of [['h264',8],['hevc',8],['hevc',10]] as const)test(`HT
     Atomics.store(gate,1,1);Atomics.notify(gate,1);
     const response=await pending;assert.equal(response.status,409);const error=await response.json();assert.equal(error.code,mutation==='source-change'?'source-changed':'cache-miss');assert.equal(error.result,undefined);
    }finally{Atomics.store(gate,1,1);Atomics.notify(gate,1);await runner.close();await pending.catch(()=>{});}
-   delete (library as unknown as Record<string,unknown>).quality;
-  }
+   }
+  await replacePairRunner();
  }
  const changed=Buffer.from(fixture.bytes);changed[changed.length-5]^=1;await writeFile(join(media,'reference.flv'),changed);
  const stale=await post(request);assert.equal(stale.status,409);assert.equal((await stale.json()).code,'source-changed');

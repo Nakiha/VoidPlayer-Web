@@ -11,7 +11,7 @@ const gate=()=>{let release;const promise=new Promise(r=>release=r);return {prom
  * delivery and transient read failures. No throughput or machine-speed gate. */
 export async function checkTemporalRecovery(browser,kind,f){
  const contexts=[],releases=[],errors=[],collection=`/api/quality/${kind}/jobs`,storage=`voidplayer-${kind}-pending:${f.actor}`;
- const key='recovery-'+randomUUID(),body=structuredClone(f.input),posts=[];let accepted;
+ const key='recovery-'+randomUUID(),body=structuredClone(f.input),posts=[];let accepted,rejectionCode;
  const context=async(pending)=>{
   const c=await browser.newContext();contexts.push(c);await c.addInitScript(installAdminObservationLifecycle);
   await c.addCookies([{name:'voidplayer-user',value:f.actor,url:f.base}]);
@@ -26,6 +26,9 @@ export async function checkTemporalRecovery(browser,kind,f){
    if(route.request().method()!=='POST')return route.continue();
    posts.push({key:route.request().headers()['idempotency-key'],body:route.request().postData()});
    if(!lost){lost=true;const response=await route.fetch();assert.ok(response.ok());accepted=(await response.json()).job;return route.abort('failed');}
+   // Inspect the original response before delivery; a second CDP body read
+   // after the client's own reader/abort can lose Chromium's response handle.
+   if(posts.length===2){const response=await route.fetch();assert.equal(response.status(),409);rejectionCode=(await response.json()).code;await route.fulfill({response});return;}
    await route.continue();
   });
   const p=await open(c);await p.locator(`#${kind}-retry`).click();
@@ -33,7 +36,7 @@ export async function checkTemporalRecovery(browser,kind,f){
   assert.equal(await p.locator(`#${kind}-submit`).isDisabled(),true);
   await c.addCookies([{name:'voidplayer-user',value:'guest-'+randomUUID(),url:f.base}]);
   const rejected=p.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname===collection);
-  await p.locator(`#${kind}-retry`).click();const rejection=await rejected;assert.equal(rejection.status(),409);assert.equal((await rejection.json()).code,'actor-changed');
+  await p.locator(`#${kind}-retry`).click();const rejection=await rejected;assert.equal(rejection.status(),409);assert.equal(rejectionCode,'actor-changed');
   await p.waitForFunction(({kind})=>document.getElementById(kind+'-status').textContent.includes('identity')||document.getElementById(kind+'-status').textContent.includes('身份')||document.getElementById(kind+'-status').textContent.includes('actor'),{kind});
   const retained=await p.evaluate(storage=>JSON.parse(sessionStorage.getItem(storage)),storage);assert.equal(retained.key,key);assert.equal(retained.confirmed,undefined);assert.equal(await p.locator(`#${kind}-submit`).isDisabled(),true);
   await c.addCookies([{name:'voidplayer-user',value:f.actor,url:f.base}]);await p.locator(`#${kind}-retry`).click();
