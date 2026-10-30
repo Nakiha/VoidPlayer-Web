@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {openIndexDatabase} from '../../server/sqlite.ts';
-import {taskSummaries,taskEdges} from '../../server/tasks/summary.ts';
+import {taskSummaries,taskEdges,rangeTaskChildren,retainedTaskResults} from '../../server/tasks/summary.ts';
 import {TaskCenterService} from '../../server/tasks/service.ts';
 import {taskQuery,TASK_KINDS,TASK_HISTORY_ROWS,TASK_LIMITS} from '../../shared/service/tasks.ts';
 import type {TaskKind,TaskFilter} from '../../shared/service/tasks.ts';
@@ -24,6 +24,7 @@ function fixture(){
  };
  const owner=(kind:TaskKind)=>({taskSummaries:(actor:string,id?:string,filter?:TaskFilter)=>taskSummaries(db,kind,actor,id,filter),taskEdges:(actor:string,id?:string)=>taskEdges(db,kind as 'range'|'correspondence'|'vmaf',actor,id),cancel:()=>{throw Error('Cancellation callback not installed');}});
  const services={preparation:owner('preparation'),correspondence:owner('correspondence'),single:owner('single'),range:owner('range'),vmaf:owner('vmaf'),xpsnr:owner('xpsnr'),cambi:owner('cambi')};
+ Object.assign(services.range,{taskChildEdges:(actor:string,ids:string[])=>rangeTaskChildren(db,actor,ids)});Object.assign(services.single,{taskRetainedResults:(actor:string,ids:string[])=>retainedTaskResults(db,actor,ids)});
  Object.assign(services.range,{taskChild:()=>true});Object.assign(services.correspondence,{taskRange:(id:string)=>JSON.parse(String(db.prepare('SELECT body FROM quality_plan_executions WHERE plan_id=?').get(id)?.body??'null'))?.rangeId??null,get:(id:string)=>JSON.parse(String(db.prepare('SELECT body FROM quality_correspondence_plans WHERE id=?').get(id)!.body))});Object.assign(services.vmaf,{get:(id:string)=>JSON.parse(String(db.prepare('SELECT body FROM quality_vmaf_jobs WHERE id=?').get(id)!.body))});
  const retries=new Map<string,{parentId:string;jobId:string}[]>();
  const qualityReexecutions={links:(kind:string,actor:string)=>retries.get(kind+'/'+actor)??[],chain:(kind:string,id:string,actor:string)=>({retryOf:retries.get(kind+'/'+actor)?.find(r=>r.jobId===id)?{retryOf:retries.get(kind+'/'+actor)!.find(r=>r.jobId===id)!.parentId}:null,successor:retries.get(kind+'/'+actor)?.find(r=>r.parentId===id)?{id:retries.get(kind+'/'+actor)!.find(r=>r.parentId===id)!.jobId}:null})};
@@ -32,6 +33,24 @@ function fixture(){
  return {db,insert,center,library,retries,source,other,clock:(value:number)=>{clock=value;},close:()=>{center.close();db.close();}};
 }
 const query=(s='')=>taskQuery(new URLSearchParams(s));
+
+test('large range snapshots use bounded indexed metadata batches, never one full relation scan per row',t=>{
+ const f=fixture();t.after(f.close);const count=1000;
+ f.db.exec('BEGIN');for(let i=0;i<count;i++){const child=f.insert('single');f.insert('range','actor-A',{createdAt:i,samples:[{jobId:child.id,result:{attemptId:child.attemptId,digest:child.digest}}]});}f.db.exec('COMMIT');
+ const queries:string[]=[],prepare=f.db.prepare.bind(f.db);t.mock.method(f.db,'prepare',(sql:string)=>{queries.push(sql);return prepare(sql);});
+ const page=f.center.query('actor-A',query('kind=range&limit=50'));assert.equal(page.total,count);assert.equal(page.entries.length,50);assert.ok(page.entries.every(row=>row.result.retained===1));
+ assert.ok(queries.length<=7+2*Math.ceil(count/8),`metadata query count ${queries.length} must follow bounded batches, not range/child count`);
+ const cursorQueries=queries.length;f.center.query('actor-A',query(`kind=range&limit=50&cursor=${page.nextCursor}`));assert.equal(queries.length,cursorQueries,'frozen pages do not re-read live relations');
+ for(const sql of queries.filter(sql=>sql.includes('json_each(?)'))){const plan=prepare('EXPLAIN QUERY PLAN '+sql).all('[]','actor-A',8193) as {detail:string}[];assert.ok(plan.some(row=>/SEARCH [pq] USING INDEX/.test(row.detail)),JSON.stringify(plan));}
+});
+test('retention batches cover full admitted 1024-sample ranges without the ordinary summary row cap or result parsing',t=>{
+ const f=fixture();t.after(f.close);const parents=[];
+ f.db.exec('BEGIN');for(let parent=0;parent<8;parent++){const samples=[];for(let i=0;i<1024;i++){const child=f.insert('single');samples.push({jobId:child.id,result:{attemptId:child.attemptId,digest:child.digest}});}parents.push(f.insert('range','actor-A',{samples}));}f.db.exec('COMMIT');
+ const page=f.center.query('actor-A',query('kind=range'));assert.equal(page.total,8);assert.ok(page.entries.every(row=>row.result.retained===1024));
+ const child=f.insert('single'),foreign=f.insert('single','actor-B'),released=f.insert('single');f.db.prepare('UPDATE quality_jobs SET result_json=NULL WHERE id=?').run(released.id);
+ const parent=f.insert('range','actor-A',{samples:[{jobId:child.id,result:{attemptId:child.attemptId,digest:child.digest}},{jobId:child.id,result:{attemptId:'wrong',digest:child.digest}},{jobId:child.id,result:{attemptId:child.attemptId,digest:'wrong'}},{jobId:foreign.id},{jobId:released.id},{jobId:randomUUID()}]});
+ const fresh=f.center.query('actor-A',query('kind=range'));assert.equal(fresh.entries.find(row=>row.id===parent.id)!.result.retained,1);assert.equal(page.entries[0].result.retained,1024,'prior snapshot remains immutable');
+});
 
 test('strict shared query: same-side version, exact enums, half-open time and no duplicate/unknown fields',()=>{
  for(const s of ['limit=0','limit=51','kind=nr','state=stopping','createdFrom=-1','createdFrom=1.5','createdFrom=2&createdTo=2','foo=x','kind=single&kind=range','mediaVersion='+ 'a'.repeat(24),'cursor=guess'])assert.throws(()=>query(s),s);

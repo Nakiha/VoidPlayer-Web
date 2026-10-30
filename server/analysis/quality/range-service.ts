@@ -1,4 +1,4 @@
-import {taskSummaries,taskEdges} from '../../tasks/summary.ts';
+import {taskSummaries,taskEdges,rangeTaskChildren} from '../../tasks/summary.ts';
 import {ReexecutionLedger} from './reexecution-ledger.ts';
 import type {ReexecutionCreation} from './reexecution-ledger.ts';
 import type {QualityExecutionContract,ReexecutionRequest} from '../../../shared/analysis/quality/reexecution.ts';
@@ -29,6 +29,7 @@ type Publication={policy:RangeCandidatePolicy;origin:string;selected:{au:number;
 export class QualityRangeService {
   taskSummaries(actor:string,id?:string,filter?:import('../../../shared/service/tasks.ts').TaskFilter){return taskSummaries(this.db,'range',actor,id,filter);}
   taskEdges(actor:string,id?:string){return taskEdges(this.db,'range',actor,id);}
+  taskChildEdges(actor:string,ids:readonly string[]){return rangeTaskChildren(this.db,actor,ids);}
   taskChild(id:string,childId:string,actor:string){
     const parent=this.get(id,actor),sample=parent.samples.find(s=>s.jobId===childId);if(!sample)return false;
     const child=this.jobs.get(childId,actor),pair=parent.plan.input.pairs.find(p=>p.reference.picture.au===sample.au);

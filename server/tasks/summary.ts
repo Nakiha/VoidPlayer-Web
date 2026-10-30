@@ -1,6 +1,7 @@
 import type { IndexDatabase } from "../sqlite.ts";
 import { AdminError } from "../admin-error.ts";
 import { TASK_HISTORY_ROWS, TASK_LIMITS } from "../../shared/service/tasks.ts";
+import { QUALITY_RANGE_LIMITS } from "../../shared/analysis/quality/ranges.ts";
 import type {
   TaskKind,
   TaskSummary,
@@ -26,6 +27,83 @@ export type TaskEdge = {
   attemptId?: string;
   digest?: string;
 };
+// At most 8 * 1024 minimal edges/results at once, independent of history size.
+export const TASK_RETENTION_BATCH = 8;
+const retentionChildren = TASK_RETENTION_BATCH * QUALITY_RANGE_LIMITS.samples;
+export function rangeTaskChildren(
+  db: IndexDatabase,
+  actor: string,
+  parents: readonly string[],
+): TaskEdge[] {
+  if (parents.length > TASK_RETENTION_BATCH)
+    throw new Error("Range retention batch exceeds its metadata budget");
+  if (!parents.length) return [];
+  const rows = db
+    .prepare(
+      `SELECT p.id,json_extract(s.value,'$.jobId') AS target,json_extract(s.value,'$.result.attemptId') AS attempt,json_extract(s.value,'$.result.digest') AS digest
+    FROM json_each(?) selected CROSS JOIN quality_ranges p JOIN json_each(p.body,'$.samples') s
+    WHERE p.id=selected.value AND p.actor=? LIMIT ?`,
+    )
+    .all(JSON.stringify([...new Set(parents)]), actor, retentionChildren + 1);
+  if (rows.length > retentionChildren)
+    throw new AdminError(
+      503,
+      "Range samples exceed the metadata budget.",
+      "task-snapshot-budget",
+    );
+  return edgeRows(rows, "range");
+}
+export function retainedTaskResults(
+  db: IndexDatabase,
+  actor: string,
+  ids: readonly string[],
+) {
+  if (ids.length > retentionChildren)
+    throw new Error("Child retention batch exceeds its metadata budget");
+  if (!ids.length)
+    return new Map<string, Pick<TaskSummary, "attemptId" | "resultDigest">>();
+  // Never copy/parse result_json, input_json, or unrelated actors' records.
+  const rows = db
+    .prepare(
+      `SELECT q.id,q.attempt_id,q.result_sha FROM json_each(?) selected CROSS JOIN quality_jobs q
+    WHERE q.id=selected.value AND q.actor_id=? AND q.result_sha IS NOT NULL AND q.result_json IS NOT NULL LIMIT ?`,
+    )
+    .all(JSON.stringify([...new Set(ids)]), actor, retentionChildren + 1);
+  return new Map(
+    rows.map((row) => [
+      String(row.id),
+      {
+        attemptId: row.attempt_id === null ? null : String(row.attempt_id),
+        resultDigest: String(row.result_sha),
+      },
+    ]),
+  );
+}
+function edgeRows(
+  rows: Record<string, unknown>[],
+  kind: "range" | "correspondence" | "vmaf" | "xpsnr",
+): TaskEdge[] {
+  return rows.map((r) => ({
+    from: kind,
+    id: String(r.id),
+    to:
+      kind === "range"
+        ? "single"
+        : kind === "correspondence"
+          ? "range"
+          : "correspondence",
+    target: String(r.target),
+    relation:
+      kind === "range"
+        ? "child-sample"
+        : kind === "correspondence"
+          ? "submitted-range"
+          : "frozen-plan",
+    ...(r.attempt
+      ? { attemptId: String(r.attempt), digest: String(r.digest) }
+      : {}),
+  }));
+}
 export function taskEdges(
   db: IndexDatabase,
   kind: "range" | "correspondence" | "vmaf" | "xpsnr",
@@ -53,28 +131,7 @@ export function taskEdges(
       "task-snapshot-budget",
     );
 
-  return rows
-    .slice(0, max)
-    .map((r) => ({
-      from: kind,
-      id: String(r.id),
-      to:
-        kind === "range"
-          ? "single"
-          : kind === "correspondence"
-            ? "range"
-            : "correspondence",
-      target: String(r.target),
-      relation:
-        kind === "range"
-          ? "child-sample"
-          : kind === "correspondence"
-            ? "submitted-range"
-            : "frozen-plan",
-      ...(r.attempt
-        ? { attemptId: String(r.attempt), digest: String(r.digest) }
-        : {}),
-    }));
+  return edgeRows(rows, kind);
 }
 /** Filter before applying the snapshot budget; never truncate matching history. Never select input/body/result
  * blobs into JS, read an index or decode pixels to populate the task center. */
