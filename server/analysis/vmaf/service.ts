@@ -1,24 +1,16 @@
 import {
-  reserveScoringBytes,settleScoringReservations,
-  releaseScoringResult,
-} from "../quality/result-retention.ts";
-import { taskSummaries, taskEdges } from "../../tasks/summary.ts";
-import { ReexecutionLedger } from "../quality/reexecution-ledger.ts";
-import type { ReexecutionCreation } from "../quality/reexecution-ledger.ts";
-import type {
-  QualityExecutionContract,
-  ReexecutionRequest,
-} from "../../../shared/analysis/quality/reexecution.ts";
+  TemporalScoringService,
+  scoringDigest as digest,
+  scoringNow as now,
+} from "../quality/temporal-service.ts";
+import { settleScoringReservations } from "../quality/result-retention.ts";
+import type { QualityExecutionContract } from "../../../shared/analysis/quality/reexecution.ts";
 import { sameExecutionContract } from "../../../shared/analysis/quality/reexecution.ts";
-import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, rmSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { openIndexDatabase } from "../../sqlite.ts";
-import { lockDatabase } from "../../library-store.ts";
 import { AdminError } from "../../admin-error.ts";
 import type { Actor } from "../../identity.ts";
 import type { CorrespondenceService } from "../quality/correspondence-service.ts";
-import { qualityIdempotencyKey } from "../quality/job-request.ts";
 import { qualityEvidenceValue } from "../../../shared/review/quality-evidence.ts";
 import type { QualityEvidenceRef } from "../../../shared/review/quality-evidence.ts";
 import type { QualityJobResult } from "../../../shared/analysis/quality/jobs.ts";
@@ -40,11 +32,7 @@ import type {
   VmafAssociation,
 } from "../../../shared/analysis/quality/vmaf.ts";
 import type { WasmVmafRunner } from "./wasm-runner.ts";
-import {stopOwnedNative} from "../quality/legacy-process.ts";
-const digest = (v: unknown) =>
-  createHash("sha256").update(canonicalJson(v)).digest("hex");
-const now = () => Math.floor(performance.timeOrigin + performance.now());
-const waiting = () => ({ state: "waiting" as const, reason: null });
+
 const reason = (error: unknown) => ({
   code:
     typeof (error as { code?: unknown })?.code === "string"
@@ -74,168 +62,23 @@ type CandidatePolicy = {
   text: string;
   severity: number;
 };
-/** Separate metric outcomes, one service-owned attempt, no automatic retry/work sharing. */
-export class NativeVmafService {
-
-  taskSummaries(
-    actor: string,
-    id?: string,
-    filter?: import("../../../shared/service/tasks.ts").TaskFilter,
-  ) {
-    return taskSummaries(this.db, "vmaf", actor, id, filter);
-  }
-  taskEdges(actor: string, id?: string) {
-    return taskEdges(this.db, "vmaf", actor, id);
-  }
-
-  readonly reexecutions: ReexecutionLedger;
-  private db: ReturnType<typeof openIndexDatabase>;
-  private unlock: () => void;
-  readonly ready: Promise<void>;
-  private recovered = false;
-  private closed = false;
-  private fatal: unknown;
-  private active?: {
-    id: string;
-    controller: AbortController;
-    done: Promise<void>;
-  };
-  private timer?: ReturnType<typeof setTimeout>;
-  private closing?: Promise<void>;
-  private file: string;
-  private runner: WasmVmafRunner;
-  private plans: CorrespondenceService;
+export class NativeVmafService extends TemporalScoringService<
+  "vmaf",
+  VmafInput
+> {
   constructor(
     file: string,
     runner: WasmVmafRunner,
     plans: CorrespondenceService,
   ) {
-    this.file = file;
+    super(file, runner, plans, "vmaf", VMAF_LIMITS);
     this.runner = runner;
-    this.plans = plans;
-    mkdirSync(path.dirname(file), { recursive: true });
-    this.unlock = lockDatabase(file);
-    let db: ReturnType<typeof openIndexDatabase> | undefined;
-    try {
-      this.db = db = openIndexDatabase(file);
-      db.exec("PRAGMA busy_timeout=0;");
-      if (Number(db.prepare("PRAGMA user_version").get()!.user_version) > 2)
-        throw new AdminError(
-          409,
-          "VMAF history requires a newer application.",
-          "future-vmaf-schema",
-        );
-      db.exec(
-        `PRAGMA journal_mode=WAL;BEGIN IMMEDIATE;CREATE TABLE IF NOT EXISTS quality_vmaf_jobs(id TEXT PRIMARY KEY,actor TEXT NOT NULL,client TEXT NOT NULL,key TEXT NOT NULL,fingerprint TEXT NOT NULL,body TEXT NOT NULL,snapshot TEXT NOT NULL,prepared TEXT,result TEXT,reserved INTEGER NOT NULL,UNIQUE(actor,client,key));CREATE TABLE IF NOT EXISTS quality_vmaf_publications(job_id TEXT PRIMARY KEY,body TEXT NOT NULL);`,
-      );
-      this.reexecutions = new ReexecutionLedger(db);
-      db.exec("PRAGMA user_version=2;COMMIT;");
-    } catch (error) {
-      db?.close();
-      this.unlock();
-      throw error;
-    }
-    this.ready = this.recover();
-    void this.ready.catch((error) => {
-      this.fatal = error;
-    });
   }
-  private async recover() {
-    for (const job of this.all())
-      if (!terminalVmaf(job.state)) {
-        if (job.process) await stopOwnedNative(job.process);
-        job.state = "interrupted";
-        job.phase = "done";
-        job.endedAt = now();
-        job.process = null;
-        job.reason = {
-          code: "service-restarted",
-          message:
-            "Previous execution interrupted; completed companion facts retained without retry.",
-        };
-        for (const m of Object.values(job.metrics))
-          if (["waiting", "running"].includes(m.state)) {
-            m.state = "interrupted";
-            m.reason = job.reason;
-          }
-        this.finish(job, null);
-      }
-    // Exactly one prior executor could own raw files. No new work starts before
-    // every durably recorded supervisor above has physically exited.
-    rmSync(this.file.replace(/\.quality-vmaf\.sqlite$/, ".vmaf-tmp"), {
-      recursive: true,
-      force: true,
-    });
-    this.recovered = true;
+  protected metricError(code: string, message: string) {
+    return new VmafError(code, message);
   }
-  private available() {
-    if (
-      this.closed ||
-      this.fatal ||
-      !this.recovered ||
-      this.runner.stopUncertain
-    )
-      throw new AdminError(
-        503,
-        "VMAF service unavailable or recovering.",
-        "vmaf-service-unavailable",
-      );
-  }
-  private all() {
-    return this.db
-      .prepare(
-        `SELECT body FROM quality_vmaf_jobs WHERE json_extract(body,'$.state') IN ('queued','preparing','running','cancelling') ORDER BY rowid`,
-      )
-      .all()
-      .map((r) => JSON.parse(String(r.body)) as VmafJob);
-  }
-  private save(job: VmafJob) {
-    job.revision++;
-    this.db
-      .prepare("UPDATE quality_vmaf_jobs SET body=? WHERE id=?")
-      .run(JSON.stringify(job), job.id);
-    if (terminalVmaf(job.state)) settleScoringReservations(this.db, "vmaf", job.id);
-  }
-  get(id: string, actor: string) {
-    const row = this.db
-      .prepare(
-        "SELECT body,fingerprint FROM quality_vmaf_jobs WHERE id=? AND actor=?",
-      )
-      .get(id, actor);
-    if (!row)
-      throw new AdminError(404, "VMAF job not found.", "vmaf-not-found");
-    const job = JSON.parse(String(row.body)) as VmafJob;
-    if (digest(job.input) !== row.fingerprint)
-      throw new AdminError(
-        500,
-        "Stored VMAF request changed.",
-        "stored-vmaf-invalid",
-      );
-    return job;
-  }
-  history(actor: string, after = 0, limit = 8) {
-    if (
-      !Number.isSafeInteger(after) ||
-      after < 0 ||
-      !Number.isInteger(limit) ||
-      limit < 1 ||
-      limit > 16
-    )
-      throw new AdminError(400, "Invalid VMAF cursor.", "invalid-cursor");
-    const rows = this.db
-      .prepare(
-        "SELECT rowid,body FROM quality_vmaf_jobs WHERE actor=? AND rowid>? ORDER BY rowid LIMIT ?",
-      )
-      .all(actor, after, limit + 1);
-    return {
-      entries: rows.slice(0, limit).map((r) => JSON.parse(String(r.body))),
-      after: rows.length
-        ? Number(rows[Math.min(limit, rows.length) - 1].rowid)
-        : after,
-      more: rows.length > limit,
-    };
-  }
-  private parse(value: unknown) {
+  private runner: WasmVmafRunner;
+  protected parse(value: unknown) {
     try {
       return vmafInput(value);
     } catch (error) {
@@ -245,20 +88,6 @@ export class NativeVmafService {
         "invalid-vmaf-request",
       );
     }
-  }
-  private snapshot(input: VmafInput, actor: string): VmafPlanSnapshot {
-    const plan = this.plans.get(input.plan.id, actor);
-    if (
-      plan.state !== "completed" ||
-      plan.attemptId !== input.plan.attemptId ||
-      plan.resultDigest !== input.plan.digest
-    )
-      throw new AdminError(
-        409,
-        "Pin a completed correspondence attempt/digest.",
-        "vmaf-plan-changed",
-      );
-    return { ...input.plan, value: this.plans.result(plan.id, actor) };
   }
   private cachedCapability: Awaited<
     ReturnType<WasmVmafRunner["capability"]>
@@ -281,202 +110,6 @@ export class NativeVmafService {
     this.available();
     const input = this.parse(value);
     return this.runner.preflight(input, this.snapshot(input, actor), signal);
-  }
-  submit(
-    value: unknown,
-    actor: Actor,
-    requestId: string,
-    key: unknown,
-    reexecution?: ReexecutionCreation,
-  ) {
-    this.available();
-    const input = this.parse(value),
-      k = qualityIdempotencyKey(key),
-      fingerprint = digest(input);
-    this.db.exec("BEGIN IMMEDIATE");
-    let accepted: { job: VmafJob; replayed: boolean };
-    try {
-      accepted = (() => {
-        if (reexecution) {
-          const prior = this.reexecutions.replay(
-            reexecution.parentId,
-            actor.id,
-            reexecution.key,
-            reexecution.request,
-          );
-          if (prior)
-            return {
-              job: this.reexecutions.verify(
-                prior,
-                this.get(prior.jobId, actor.id),
-              ),
-              replayed: true,
-            };
-          const parent = this.get(reexecution.parentId, actor.id);
-          if (
-            parent.revision !== reexecution.parentRevision ||
-            !["failed", "partial", "interrupted", "cancelled"].includes(
-              parent.state,
-            ) ||
-            parent.endedAt === null ||
-            parent.process
-          )
-            throw new AdminError(
-              409,
-              "Original native execution has not physically stopped.",
-              "reexecution-blocked",
-            );
-        }
-        const prior = this.db
-          .prepare(
-            "SELECT id,fingerprint FROM quality_vmaf_jobs WHERE actor=? AND client=? AND key=?",
-          )
-          .get(actor.id, input.client.id, k);
-        if (prior) {
-          if (prior.fingerprint !== fingerprint)
-            throw new AdminError(
-              409,
-              "VMAF key binds a different recipe.",
-              "idempotency-conflict",
-            );
-          return { job: this.get(String(prior.id), actor.id), replayed: true };
-        }
-        this.runner.assertAvailable();
-        const snapshot = this.snapshot(input, actor.id),
-          all = this.all(),
-          live = all.filter((j) => !terminalVmaf(j.state));
-        if (
-          live.length >= VMAF_LIMITS.queued ||
-          live.filter((j) => j.actor.id === actor.id).length >=
-            VMAF_LIMITS.actorOutstanding
-        )
-          throw new AdminError(
-            429,
-            "VMAF bounded queue is full.",
-            "vmaf-queue-full",
-          );
-        settleScoringReservations(this.db, "vmaf");
-        const reserved = reserveScoringBytes(VMAF_LIMITS.resultBytes,input,snapshot),
-          used = Number(
-            this.db
-              .prepare(
-                "SELECT coalesce(sum(reserved),0) AS n FROM quality_vmaf_jobs",
-              )
-              .get()!.n,
-          );
-        if (used + reserved > VMAF_LIMITS.reservedBytes)
-          throw new AdminError(
-            429,
-            "VMAF history budget is full; old receipts retained.",
-            "vmaf-history-full",
-          );
-        const createdAt = now(),
-          job: VmafJob = {
-            ...(reexecution
-              ? {
-                  executionContract: reexecution.contract,
-                  retryOf: reexecution.lineage,
-                }
-              : {}),
-            schema: "voidplayer-native-vmaf-job-state",
-            version: 1,
-            id: "vmaf-" + randomUUID(),
-            actor: { id: actor.id, name: actor.name },
-            key: k,
-            requestId,
-            input,
-            revision: 1,
-            createdAt,
-            queueUntil: createdAt + VMAF_LIMITS.queueWaitMs,
-            startedAt: null,
-            endedAt: null,
-            attemptId: null,
-            state: "queued",
-            phase: "queued",
-            reason: null,
-            progress: {
-              preparedFrames: 0,
-              targetFrames: snapshot.value.rangePlan?.input.pairs.length ?? 0,
-            },
-            metrics: {
-              psnr: waiting(),
-              ssim: input.metrics.ssim
-                ? waiting()
-                : { state: "not-requested", reason: null },
-              vmaf: waiting(),
-            },
-            resultDigest: null,
-            process: null,
-          };
-        this.db
-          .prepare(
-            "INSERT INTO quality_vmaf_jobs VALUES(?,?,?,?,?,?,?,NULL,NULL,?)",
-          )
-          .run(
-            job.id,
-            actor.id,
-            input.client.id,
-            k,
-            fingerprint,
-            JSON.stringify(job),
-            JSON.stringify(snapshot),
-            reserved,
-          );
-        if (reexecution)
-          this.reexecutions.insert({
-            actorId: actor.id,
-            parentId: reexecution.parentId,
-            jobId: job.id,
-            key: reexecution.key,
-            request: reexecution.request,
-            lineage: reexecution.lineage,
-          });
-        return { job: this.get(job.id, actor.id), replayed: false };
-      })();
-      this.db.exec("COMMIT");
-    } catch (error) {
-      this.db.exec("ROLLBACK");
-      throw error;
-    }
-    if (!accepted.replayed) this.pump();
-    return { ...accepted, job: this.get(accepted.job.id, actor.id) };
-  }
-  reexecutionReceipt(
-    id: string,
-    actor: string,
-    key?: string,
-    request?: ReexecutionRequest,
-  ) {
-    this.get(id, actor);
-    const receipt =
-      key && request
-        ? this.reexecutions.replay(id, actor, key, request)
-        : this.reexecutions.get(id, actor);
-    if (receipt)
-      this.reexecutions.verify(receipt, this.get(receipt.jobId, actor));
-    return receipt;
-  }
-  frozenSnapshot(id: string, actor: string) {
-    const job = this.get(id, actor),
-      snapshot = JSON.parse(
-        String(
-          this.db
-            .prepare("SELECT snapshot FROM quality_vmaf_jobs WHERE id=?")
-            .get(id)!.snapshot,
-        ),
-      ) as VmafPlanSnapshot;
-    if (
-      snapshot.id !== job.input.plan.id ||
-      snapshot.attemptId !== job.input.plan.attemptId ||
-      snapshot.digest !== job.input.plan.digest ||
-      digest(snapshot.value) !== snapshot.digest
-    )
-      throw new AdminError(
-        409,
-        "Frozen VMAF C plan snapshot changed.",
-        "stored-input-invalid",
-      );
-    return snapshot;
   }
   async reexecutionPreflight(
     id: string,
@@ -501,76 +134,6 @@ export class NativeVmafService {
       expected,
       signal,
     );
-  }
-  reexecute(creation: ReexecutionCreation, actor: Actor, requestId: string) {
-    this.available();
-    const original = this.get(creation.parentId, actor.id);
-    return this.submit(
-      original.input,
-      actor,
-      requestId,
-      "reexecution:" + randomUUID(),
-      creation,
-    );
-  }
-  private wake() {
-    if (
-      this.timer ||
-      this.closed ||
-      this.fatal ||
-      !this.all().some((j) => j.state === "queued")
-    )
-      return;
-    this.timer = setTimeout(() => {
-      this.timer = undefined;
-      this.pump();
-    }, 250);
-    this.timer.unref();
-  }
-  private pump() {
-    if (this.active || this.closed || this.fatal || !this.recovered) return;
-    for (const j of this.all().filter(
-      (j) => j.state === "queued" && j.queueUntil <= now(),
-    )) {
-      j.reason = {
-        code: "queue-expired",
-        message: "VMAF queue deadline exceeded before execution",
-      };
-      j.state = "failed";
-      j.phase = "done";
-      j.endedAt = now();
-      for (const m of Object.values(j.metrics))
-        if (m.state === "waiting") {
-          m.state = "failed";
-          m.reason = j.reason;
-        }
-      this.finish(j, null);
-    }
-    const job = this.all().find((j) => j.state === "queued");
-    if (!job) return;
-    const active = {
-      id: job.id,
-      controller: new AbortController(),
-      done: Promise.resolve(),
-    };
-    this.active = active;
-    active.done = this.execute(job.id, active.controller.signal)
-      .catch((error) => {
-        this.fatal = error;
-        console.error("VMAF service stopped; durable history retained.");
-      })
-      .finally(() => {
-        if (this.active === active) this.active = undefined;
-        this.wake();
-      });
-  }
-  private prepared(id: string) {
-    const row = this.db
-      .prepare("SELECT prepared FROM quality_vmaf_jobs WHERE id=?")
-      .get(id);
-    return row?.prepared
-      ? (JSON.parse(String(row.prepared)) as VmafPrepared)
-      : null;
   }
   private validatePrepared(
     value: VmafPrepared,
@@ -666,7 +229,7 @@ export class NativeVmafService {
         "Prepared sequence result budget exceeded",
       );
   }
-  private async execute(id: string, signal: AbortSignal) {
+  protected async execute(id: string, signal: AbortSignal) {
     let j = this.get(id, this.all().find((x) => x.id === id)!.actor.id);
     const snapshot = JSON.parse(
       String(
@@ -789,7 +352,7 @@ export class NativeVmafService {
       this.finish(j, null);
     }
   }
-  private finish(job: VmafJob, native: VmafResult["vmaf"]) {
+  protected finish(job: VmafJob, native: VmafResult["vmaf"]) {
     const prepared = this.prepared(job.id);
     let result: VmafResult | null = null;
     if (prepared) {
@@ -821,61 +384,6 @@ export class NativeVmafService {
       this.db.exec("ROLLBACK");
       throw error;
     }
-  }
-  releaseResult(id: string, actor: string) {
-    this.available();
-    const j = this.get(id, actor);
-    if (!terminalVmaf(j.state) || j.process || this.active?.id === id)
-      throw new AdminError(
-        409,
-        "Wait for physical task completion before releasing results.",
-        "result-still-running",
-      );
-    if (
-      this.db
-        .prepare("SELECT 1 FROM quality_vmaf_publications WHERE job_id=?")
-        .get(id)
-    )
-      throw new AdminError(
-        409,
-        "A frozen publication retains this result.",
-        "result-publication-pinned",
-      );
-    releaseScoringResult(this.db, "vmaf", id);
-    return { jobId: id, released: true, receiptRetained: true };
-  }
-  cancel(id: string, actor: string) {
-    this.available();
-    const j = this.get(id, actor);
-    if (terminalVmaf(j.state)) return j;
-    if (j.state === "queued") {
-      if (this.active?.id === id)
-        this.active.controller.abort(
-          new VmafError("cancelled", "VMAF cancelled before admission"),
-        );
-      j.state = "cancelled";
-      j.phase = "done";
-      j.endedAt = now();
-      j.reason = {
-        code: "cancelled",
-        message: "VMAF cancelled before execution",
-      };
-      for (const m of Object.values(j.metrics))
-        if (m.state === "waiting") {
-          m.state = "cancelled";
-          m.reason = j.reason;
-        }
-      this.finish(j, null);
-    } else {
-      j.state = "cancelling";
-      j.phase = "stopping";
-      this.save(j);
-      if (this.active?.id === id)
-        this.active.controller.abort(
-          new VmafError("cancelled", "VMAF explicitly cancelled"),
-        );
-    }
-    return this.get(id, actor);
   }
   result(id: string, actor: string) {
     const j = this.get(id, actor);
@@ -947,14 +455,12 @@ export class NativeVmafService {
     const r = this.result(id, actor),
       indices = r.prepared.pairs.map((_, i) => i).filter((i) => i >= after);
     return {
-      entries: indices
-        .slice(0, limit)
-        .map((index) => ({
-          index,
-          score: r.vmaf?.frames[index]?.score ?? null,
-          pair: r.prepared.pairs[index],
-          ref: this.ref(id, actor, index, "reference"),
-        })),
+      entries: indices.slice(0, limit).map((index) => ({
+        index,
+        score: r.vmaf?.frames[index]?.score ?? null,
+        pair: r.prepared.pairs[index],
+        ref: this.ref(id, actor, index, "reference"),
+      })),
       next: indices.length > limit ? indices[limit] : null,
     };
   }
@@ -1205,37 +711,5 @@ export class NativeVmafService {
       }
     }
     return publication;
-  }
-  close() {
-    return (this.closing ??= (async () => {
-      this.closed = true;
-      clearTimeout(this.timer);
-      this.active?.controller.abort(
-        new VmafError("cancelled", "VMAF service stopping"),
-      );
-      const stop = this.runner.close();
-      await this.active?.done;
-      await stop;
-      await this.ready;
-      if (this.fatal) throw this.fatal;
-      for (const j of this.all())
-        if (!terminalVmaf(j.state)) {
-          j.state = "interrupted";
-          j.phase = "done";
-          j.endedAt = now();
-          j.reason = {
-            code: "service-shutdown",
-            message: "Service stopped; no automatic retry",
-          };
-          for (const m of Object.values(j.metrics))
-            if (["waiting", "running"].includes(m.state)) {
-              m.state = "interrupted";
-              m.reason = j.reason;
-            }
-          this.finish(j, null);
-        }
-      this.db.close();
-      this.unlock();
-    })());
   }
 }

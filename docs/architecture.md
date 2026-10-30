@@ -179,6 +179,14 @@ viewers revalidate their frozen inputs independently of the active player.
 Each metric applies its own source, geometry, color, continuity and work budget.
 CAMBI's supported single-source inputs do not inherit admission from VMAF.
 
+`server/analysis/quality/temporal-service.ts` owns VMAF/XPSNR durable storage,
+queueing, recovery, receipts, cancellation, result release and shutdown. Numerical
+execution, validation, pooling, evidence and publication policy remain in each
+metric service. CAMBI retains its distinct single-source/heatmap state machine
+and shares physical-owner shutdown and retained-result accounting.
+`src/admin/quality-temporal.ts` owns the common observer/draft/page fences; metric
+views supply their input construction, score labels and optional comparison.
+
 The domain services remain in `server/analysis/{vmaf,xpsnr,cambi}/`; request and
 numerical contracts are linked from the scoring authority. Historical `native-*`
 filenames, `Native*` classes and wire names preserve existing identities. Old
