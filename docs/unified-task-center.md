@@ -57,6 +57,7 @@ confirmed reexecution controls delegate writes to their original services.
 Admin observers share `observeIdentity` / `confirmedActor` in
 `src/services/identity.ts`. Storage notifications immediately invalidate old
 observation and queue a fresh service read after older identity operations.
+Bursts coalesce into the current read and a fresh read for the latest epoch.
 Only the latest confirmation epoch restores observers, including when the
 service returns the already-known actor. Notifications do not authenticate an
 actor, and their payload cannot override the cookie-backed service response.

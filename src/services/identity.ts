@@ -58,7 +58,8 @@ export function identityHealth(
 // same actor and therefore emits no legacy identity-change event.
 let uncertain = false,
   scopeRevision = 0,
-  scopeUsers = 0;
+  scopeUsers = 0,
+  confirming = false;
 const scopeEvent = "voidplayer-identity-scope";
 export const confirmedActor = () => (uncertain ? null : actor);
 type IdentityScope = {
@@ -74,22 +75,31 @@ const publishScope = (
     new CustomEvent(scopeEvent, { detail: { state, error } }),
   );
 function confirmScope() {
-  const ticket = ++scopeRevision;
+  scopeRevision++;
   uncertain = true;
   publishScope("invalidated");
+  if (!confirming) void readScope();
+}
+async function readScope() {
+  confirming = true;
   // Queue a new read after any older health/identity operation, never reuse a
-  // response captured before this notification. Only the newest epoch publishes.
-  void identityHealth({ fresh: true }).then(
-    () => {
-      if (ticket === scopeRevision) {
-        uncertain = false;
-        publishScope("confirmed");
+  // response captured before this notification. Coalesce bursts into the current
+  // read and one fresh read for the latest epoch, rather than an HTTP backlog.
+  try {
+    while (uncertain) {
+      const ticket = scopeRevision;
+      try { await identityHealth({ fresh: true }); }
+      catch (error) {
+        if (ticket !== scopeRevision) continue;
+        publishScope("failed", error);
+        if (ticket === scopeRevision) return;
+        continue;
       }
-    },
-    (error) => {
-      if (ticket === scopeRevision) publishScope("failed", error);
-    },
-  );
+      if (ticket !== scopeRevision) continue;
+      uncertain = false;
+      publishScope("confirmed");
+    }
+  } finally { confirming = false; }
 }
 const scopeStorage = (event: StorageEvent) => {
   if (event.key === "voidplayer.identity" || event.key === null) confirmScope();

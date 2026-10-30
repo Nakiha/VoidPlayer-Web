@@ -23,7 +23,7 @@ test('shared observer identity confirmation fences old reads, restores unchanged
   const notify=(id:string)=>target.dispatchEvent(Object.assign(new Event('storage'),{key:'voidplayer.identity',newValue:JSON.stringify({id})}));
   const initial=identityHealth();await spin(()=>requests.length===1);reply(0,'A');await initial;assert.equal(confirmedActor()!.id,'A');
   const old=identityHealth();await spin(()=>requests.length===2);notify('B');assert.equal(confirmedActor(),null);reply(1,'A');await old;
-  await spin(()=>requests.length===3);notify('C');reply(2,'B');await spin(()=>requests.length===4);assert.equal(confirmedActor(),null);reply(3,'C');await spin(()=>owners.b.at(-1)==='C');
+  await spin(()=>requests.length===3);for(let n=0;n<64;n++)notify('C');assert.equal(requests.length,3,'a burst does not queue one health request per notification');reply(2,'B');await spin(()=>requests.length===4);assert.equal(confirmedActor(),null);reply(3,'C');await spin(()=>owners.b.at(-1)==='C');
   assert.deepEqual(owners.a.filter(v=>v!=='pending'),['A','C']);assert.deepEqual(owners.b.filter(v=>v!=='pending'),['A','C']);
   notify('B');await spin(()=>requests.length===5);reply(4,'C');await spin(()=>owners.b.filter(v=>v==='C').length===2);assert.equal(confirmedActor()!.id,'C','late hints cannot replace the service-confirmed cookie identity');
   a.abort();const stopped=owners.a.length;notify('C');await spin(()=>requests.length===6);requests[5].reject(Error('offline'));await spin(()=>failures.length===1);assert.equal(confirmedActor(),null);
