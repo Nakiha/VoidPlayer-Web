@@ -92,6 +92,12 @@ SIGTERM 与 owner 回归 25 项通过，Bun 同组 11 项通过。修正后的�
 源码套件通过 164/164；最终构建、类型检查和契约检查通过。
 证据：`.run/test-suites/engineering-final-source/results.json`。
 
+最后复核补充配置写入与分析执行器的依赖：配置写入可能在 await 后首次
+创建 scheduler，关闭需先等待已有写入，再关闭最终实例；工作区、标注、
+测速等独立 owner 仍立即清理。关闭后拒绝新的配置写入。新增回归覆盖
+写入成功及失败时创建的迟到实例，Node 启动/owner 同组 26 项、Bun owner
+同组 12 项通过，类型检查通过。
+
 本机首次媒体分片执行选用了旧的裁剪版对照 FFmpeg（只有 MOV/Matroska/
 rawvideo），TS 用例因此无法读入对照素材。这份失败不作为产品失败或
 通过证据；使用发布锁固定的 FFmpeg 修订和现有 oracle 构建脚本重新

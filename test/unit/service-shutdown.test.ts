@@ -48,6 +48,17 @@ test('admin cleanup attempts every independent owner even when one close fails',
     const close=admin.close();assert.equal(admin.close(),close);await assert.rejects(close);assert.deepEqual(new Set(calls),new Set(['measurements','analysisInstance','workspaces','annotations']));
   }
 });
+test('admin drains settings that create analysis during shutdown before releasing shared ownership',async()=>{
+  for(const failed of [false,true]){
+    let release!:()=>void;const gate=new Promise<void>(r=>release=r),calls:string[]=[];
+    const admin=Object.assign(Object.create(AdminController.prototype),Object.fromEntries(['measurements','workspaces','annotations'].map(name=>[name,{close(){calls.push(name);}}]))) as any;
+    admin.mutation=gate.then(()=>{admin.analysisInstance={close(){calls.push('late analysis');}};if(failed)throw Error('settings failed after creating analysis');});
+    let settled=false;const closed=admin.close().then(()=>{settled=true;});
+    assert.throws(()=>admin.saveRoots(null),/服务正在关闭/);assert.throws(()=>admin.saveAnalysisSettings(null),/服务正在关闭/);
+    await new Promise(r=>setImmediate(r));assert.equal(settled,false);assert.deepEqual(new Set(calls),new Set(['measurements','workspaces','annotations']));
+    release();await closed;assert.equal(settled,true);assert.equal(calls.filter(x=>x==='late analysis').length,1);
+  }
+});
 test('rollback keeps both the initiating error and cleanup errors, with every cleanup attempted',async()=>{
   const original=Error('listen failed'),cleanup=Error('close failed'),calls:string[]=[];
   await assert.rejects(cleanupAfterFailure(original,'startup failed',[['first',()=>{calls.push('first');throw cleanup;}],['second',()=>{calls.push('second');}]]),(error:AggregateError)=>{assert.equal(error.cause,original);assert.equal(error.errors[0],original);assert.equal(error.errors[1].errors[0].cause,cleanup);return true;});
