@@ -1346,3 +1346,18 @@ test('analysis admission defaults to two tracks; limits drain, queued cancellati
     if (locationDescriptor) Object.defineProperty(globalThis, 'location', locationDescriptor); else Reflect.deleteProperty(globalThis, 'location');
   }
 });
+
+test('workspace open intent cancellation fences session commit and disposes a late source without replacing the active scene', async () => {
+  const session = new ReviewSession(() => {}), original = media('active'), late = media('stale-workspace');
+  try {
+    await session.load('A', async () => original.source);
+    const mark = session.addMark({slot:'A',text:'current work'}), document = session.exportWorkspace('http://localhost/');
+    document.marks = []; document.name = 'stale';
+    const pending = deferred<MediaSource>(), started = deferred<void>(), intent = new AbortController();
+    const restoring = session.restoreWorkspace(document, async () => { started.resolve(); return pending.promise; }, {allowUnavailable:true,signal:intent.signal});
+    const rejected = assert.rejects(restoring, {name:'AbortError'});
+    await started.promise; intent.abort(new DOMException('new workspace intent','AbortError')); pending.resolve(late.source);
+    await rejected; await new Promise(r => setTimeout(r, 0));
+    assert.deepEqual(session.getState().marks, [mark]); assert.equal(original.disposed, 0); assert.equal(late.disposed, 1);
+  } finally { await session.dispose(); }
+});

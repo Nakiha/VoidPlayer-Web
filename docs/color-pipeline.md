@@ -233,3 +233,9 @@ presentation geometry without rewriting decoded samples. This shape uses the
 packet-fed software decoder when a native decoder cannot express the container
 crop. Multiple sample descriptions retain actual decoded geometry per frame;
 the first entry's dimensions must not crop subsequent configurations.
+
+Workspace restoration also accepts the owning open intent's abort signal. It is
+combined with the session operation signal before configuration changes, source
+opening and final presentation commit. Superseding the intent cannot commit a
+late scene or convert cancellation into an unavailable placeholder; configuration
+rollback and late-source disposal remain owned by the existing restore lease.

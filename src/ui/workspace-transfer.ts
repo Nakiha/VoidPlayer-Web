@@ -21,6 +21,7 @@ import { matchMediaIdentity } from '../../shared/media/io/media-identity.ts';
 import type { MediaIdentityMismatch } from '../../shared/media/io/media-identity.ts';
 import { icon } from './icons.ts';
 import { installSavedWorkspaces } from './saved-workspaces.ts';
+import type { WorkspaceOpenOperation } from './saved-workspaces.ts';
 import { onLanguageChange, t, th, msg } from '../i18n.ts';
 
 function relinkMtimeWarning(name: string) {
@@ -133,17 +134,21 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       throw error;
     }
   }
-  async function importWorkspace(value: unknown, supplied: File[] = [], recovery = false, fromShare = false) {
+  async function importWorkspace(value: unknown, supplied: File[] = [], recovery = false, fromShare = false, operation?: WorkspaceOpenOperation) {
     if (importing) throw new Error(t(msg("transfer.importing", "工作区正在导入，请等待完成。")));
+    operation ??= saved?.beginOpen();
+    const current = () => !lifetime.signal.aborted && (!operation || operation.current());
+    if (!current()) return false;
     importing = true;
     try {
       const document = parseWorkspace(value, location.href);
       await options.closeSettings();
+      if (!current()) return false;
       const active = document.tracks.map(t => document.media.find(m => m.id === t.mediaId)!);
       const warnMtime = (name: string) => options.toasts.show(() => relinkMtimeWarning(name));
       const problems = new Map<string, LocalAccessProblem>();
-      const files = await resolveLocalFiles(active.filter(m => !m.source), supplied, !recovery, warnMtime, lifetime.signal, problems);
-      if (!files) return false;
+      const files = await resolveLocalFiles(active.filter(m => !m.source), supplied, !recovery, warnMtime, operation?.signal ?? lifetime.signal, problems);
+      if (!files || !current()) return false;
       const rollback=options.beforeRestore();
       const progressive = session.getState().tracks.length === 0 && document.tracks.length > 0;
       let layout: Promise<void> | undefined, stopLayout: (() => void) | undefined;
@@ -162,23 +167,31 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
         const { mtimeChanged: _ignored, ...reference } = pinned;
         const source = await openMediaFromUrl(reference.url, info, undefined, progress, signal,undefined,
           new URL(reference.url,location.href).origin===location.origin?ownLibraryIndexReference(reference.id,new URL(reference.url,location.href).searchParams.get('v')!):undefined,configuration); updateMediaInfo(source,{source:reference},'identity'); return source;
-      }, { allowUnavailable: true, progressive });
+      }, { allowUnavailable: true, progressive, signal: operation?.signal });
         await layout;
       } catch(error) { await rollback?.(); throw error; }
       finally { stopLayout?.(); }
+      if (!current()) return false;
       annotationThumbnails.clear();
       // Progressive restore may have already rendered the annotation cards.
       // Hydrate through the shared publisher so those cards receive previews too.
       for (const { id, ...image } of document.thumbnails ?? []) publishMarkPreview(id, image);
       if (!layout) await options.restore(document, fromShare);
+      if (!current()) return false;
       if (!fromShare) { sharing?.detach(); const url=new URL(location.href);url.searchParams.delete('workspace');url.searchParams.delete('share');url.searchParams.delete('review');history.replaceState(null,'',url); }
-      saved?.detach(document.name);
+      if (operation) operation.detach(document.name); else saved?.detach(document.name);
       if (!document.comparison) options.toasts.show(() => t(msg("transfer.legacyConditions", "旧工作区未记录比较条件，已沿用当前色彩和解码设置。")));
       return true;
     } finally { importing = false; }
   }
-  async function importFile(file: File, supplied: File[] = []) { await importWorkspace(await readWorkspaceFile(file, location.href), supplied); }
-  saved = installSavedWorkspaces({ signal: lifetime.signal, snapshot: exportWorkspace, open: async (value, space) => { const opened=await importWorkspace(space ? mapSharedWorkspace(value,location.origin) : value, [], false, !!space); if(opened && space)await options.openSharedSpace(space); return opened; }, copyLink: id => sharing!.copySaved(id), canSave: () => session.getState().tracks.length > 0, changed: () => sharing?.update(), report: error => { if (!document.querySelector<HTMLDialogElement>('#settings')!.open) void options.act(() => { throw error; }, 'workspace.server'); } });
+  async function importFile(file: File, supplied: File[] = []) {
+    if (importing) throw new Error(t(msg("transfer.importing", "工作区正在导入，请等待完成。")));
+    const operation = saved?.beginOpen();
+    const document = await readWorkspaceFile(file, location.href);
+    if (operation && !operation.current()) return;
+    await importWorkspace(document, supplied, false, false, operation);
+  }
+  saved = installSavedWorkspaces({ signal: lifetime.signal, snapshot: exportWorkspace, open: async (value, space, operation) => { const opened=await importWorkspace(space ? mapSharedWorkspace(value,location.origin) : value, [], false, !!space, operation); if(opened && space && operation.current())await options.openSharedSpace(space); return opened && operation.current(); }, copyLink: id => sharing!.copySaved(id), canSave: () => session.getState().tracks.length > 0, changed: () => sharing?.update(), report: error => { if (!document.querySelector<HTMLDialogElement>('#settings')!.open) void options.act(() => { throw error; }, 'workspace.server'); } });
   // A seek keeps the last committed workspace snapshot valid. Sharing is
   // available once loaded tracks and their workspace binding are ready; the snapshot is captured
   // synchronously before any network work begins.

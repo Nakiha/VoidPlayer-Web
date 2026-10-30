@@ -84,7 +84,7 @@ async function harness(t: TestContext, shared = false) {
   await identityHealth();
   let document = workspace('A'), openError: Error | undefined;
   const controller = installSavedWorkspaces({ signal: lifetime.signal, snapshot: () => structuredClone(document), canSave: () => true,
-    open: async value => { document = value; controller.detach(value.name); if (openError) throw openError; return true; }, copyLink: async () => {}, report: error => errors.push(error) });
+    open: async (value, _space, operation) => { document = value; operation.detach(value.name); if (openError) throw openError; return true; }, copyLink: async () => {}, report: error => errors.push(error) });
   await controller.open('A');
   assert.equal(controller.binding()?.id, 'A');
   calls.length = 0;
@@ -236,4 +236,26 @@ test('opening reports failures after its own intentional detach', async t => {
   assert.deepEqual(h.errors, [error]);
   assert.equal(h.el('message').hidden, false);
   assert.equal(h.el('message').textContent, error.message);
+});
+
+for (const status of [200, 404, 500]) test(`late open ${status} cannot replace an imported workspace or report its error`, async t => {
+  const h = await harness(t), pending = h.block(c => c.method === 'GET' && c.url === '/api/workspaces/A');
+  const opening = h.controller.open('A'); await pending.started; h.detach();
+  pending.resolve(status === 200 ? json(record('A')) : json({error:'old open failed'}, status));
+  await opening; h.assertDetached();
+});
+test('an accepted import intent fences an old open before import commit', async t => {
+  const h = await harness(t), pending = h.block(c => c.url === '/api/workspaces/A');
+  const opening = h.controller.open('A'); await pending.started;
+  const importOperation = h.controller.beginOpen();
+  pending.resolve(json(record('Old A'))); await opening;
+  assert.equal(importOperation.current(), true); assert.equal(h.controller.name(), 'A');
+  importOperation.detach('B'); assert.equal(h.controller.name(), 'B'); assert.equal(h.controller.binding(), undefined);
+});
+test('actor roundtrip and page shutdown invalidate pending opens', async t => {
+  const h = await harness(t), pending = h.block(c => c.url === '/api/workspaces/A');
+  const opening = h.controller.open('A'); await pending.started;
+  await h.setActor('bob'); await h.setActor('alice'); pending.resolve(json(record('Old A'))); await opening;
+  assert.equal(h.controller.binding(), undefined); assert.notEqual(h.controller.name(), 'Old A');
+  const operation = h.controller.beginOpen(); h.lifetime.abort(); assert.equal(operation.current(), false);
 });

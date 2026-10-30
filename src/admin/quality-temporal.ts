@@ -217,8 +217,9 @@ export function installTemporalQuality<Input, Score>(
           b.type = "button";
           b.dataset[kind + "Job"] = j.id;
           b.textContent = j.id + " · " + j.state;
+          const row = context("actor");
           b.onclick = () => {
-            if (valid(c)) select(j.id);
+            if (valid(row)) select(j.id);
           };
           if (comparison) {
             const check = document.createElement("input");
