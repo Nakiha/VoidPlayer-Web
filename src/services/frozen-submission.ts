@@ -7,6 +7,7 @@ export type FrozenSubmission<T> = {
   key: string;
   confirmed?: boolean;
   attempted?: boolean;
+  rejected?: { status: number; code?: string; verified?: true };
 };
 type StoragePort = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 export type SubmissionCodec<T> = {
@@ -17,6 +18,7 @@ export function assertJobReceipt(
   value: unknown,
   owner: string,
   pending: FrozenSubmission<unknown>,
+  expectedInput: unknown = pending.body,
 ) {
   const r = value as {
     replayed?: unknown;
@@ -34,7 +36,7 @@ export function assertJobReceipt(
     !r.job.id ||
     (r.job.actor?.id ?? r.job.submitted?.actorId) !== owner ||
     (r.job.key ?? r.job.submitted?.idempotencyKey) !== pending.key ||
-    canonicalJson(r.job.input) !== canonicalJson(pending.body)
+    canonicalJson(r.job.input) !== canonicalJson(expectedInput)
   )
     throw Error(
       "Incomplete submission acknowledgement; retain the original request",
@@ -99,27 +101,39 @@ export class FrozenSubmissionJournal<T> {
     if (this.pending(owner)?.confirmed)
       this.storage.removeItem(this.key(owner));
   }
+  /** Explicit user abandonment is distinct from an automatic view/HTTP failure. */
+  abandon(owner: string) {
+    this.storage.removeItem(this.key(owner));
+  }
   execute<R>(
     owner: string,
     key: string,
     send: (p: FrozenSubmission<T>) => Promise<R>,
     validate: (value: R, p: FrozenSubmission<T>) => void,
     retainConfirmed = true,
+    rejection: "remove" | "mark" | "keep" = "remove",
   ): Promise<R> {
     const identity = this.key(owner) + "\0" + key,
       prior = this.sending.get(identity);
     if (prior) return prior as Promise<R>;
-    const work = Promise.resolve().then(async () => {
+    let resolve!: (value: R | PromiseLike<R>) => void,
+      reject!: (error: unknown) => void;
+    const work = new Promise<R>((a, b) => {
+      resolve = a;
+      reject = b;
+    });
+    this.sending.set(identity, work);
+    void (async () => {
       const p = this.pending(owner);
       if (!p || p.key !== key)
         throw Error("Original frozen submission is unavailable");
       // Legacy records without an attempt marker are uncertain, never presumed unsent.
-      const previouslyAttempted = p.attempted !== false;
-      this.save(owner, { ...p, attempted: true });
+      const previouslyAttempted =
+        p.attempted !== false && !p.rejected?.verified;
+      this.save(owner, { ...p, attempted: true, rejected: undefined });
       let result: R;
       try {
         result = await send(structuredClone(p));
-        validate(result, p);
       } catch (error) {
         if (
           !previouslyAttempted &&
@@ -128,19 +142,38 @@ export class FrozenSubmissionJournal<T> {
           error.status < 500 &&
           error.code !== "idempotency-conflict"
         ) {
-          if (this.pending(owner)?.key === key)
-            this.storage.removeItem(this.key(owner));
+          if (this.pending(owner)?.key === key) {
+            if (rejection === "remove")
+              this.storage.removeItem(this.key(owner));
+            else if (rejection === "mark")
+              this.save(owner, {
+                ...p,
+                attempted: true,
+                rejected: {
+                  status: error.status,
+                  code: error.code,
+                  verified: true,
+                },
+              });
+          }
         }
         throw error;
       }
+      // Successful but malformed receipts remain unknown, regardless of the
+      // exception type a domain validator uses.
+      validate(result, p);
       if (this.pending(owner)?.key === key) {
         if (retainConfirmed)
-          this.save(owner, { ...p, attempted: true, confirmed: true });
+          this.save(owner, {
+            ...p,
+            attempted: true,
+            confirmed: true,
+            rejected: undefined,
+          });
         else this.storage.removeItem(this.key(owner));
       }
       return result;
-    });
-    this.sending.set(identity, work);
+    })().then(resolve, reject);
     void work
       .finally(() => {
         if (this.sending.get(identity) === work) this.sending.delete(identity);

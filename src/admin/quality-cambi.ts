@@ -304,9 +304,7 @@ export function installQualityCambi(signal: AbortSignal) {
           c.signal,
         );
         if (!current()) return false;
-        frameAfter = p.next;
-        $("frames-more").hidden = p.next === null;
-        if (!more) $("frames").replaceChildren();
+        const nodes = document.createDocumentFragment();
         for (const f of p.entries) {
           const row = document.createElement("pre");
           row.dataset.cambiFrame = String(f.index);
@@ -319,8 +317,13 @@ export function installQualityCambi(signal: AbortSignal) {
           link.textContent = p.publishable
             ? t(msg("cambi.open", "CAMBI · 查看原始热图、源快照与真实区域"))
             : t(msg("cambi.preview", "预览暂存分数与热图"));
-          $("frames").append(link, row);
+          nodes.append(link, row);
         }
+        if (!current()) return false;
+        if (more) $("frames").append(nodes);
+        else $("frames").replaceChildren(nodes);
+        frameAfter = p.next;
+        $("frames-more").hidden = p.next === null;
         return true;
       } catch (e) {
         if (current()) error(e);

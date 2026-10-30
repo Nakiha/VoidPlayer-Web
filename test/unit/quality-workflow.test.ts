@@ -1,5 +1,6 @@
+import {normalizeQualityJobInput} from '../../shared/analysis/quality/job-input.ts';
 import test from 'node:test';
-import {FrozenSubmissionJournal} from '../../src/services/frozen-submission.ts';
+import {FrozenSubmissionJournal,assertJobReceipt} from '../../src/services/frozen-submission.ts';
 import {QualityObservationScope} from '../../src/analysis/quality/observation-scope.ts';
 import {candidateAnnotations} from '../../src/analysis/quality/candidate-evidence.ts';
 import {ApiError} from '../../src/services/api-error.ts';
@@ -13,28 +14,29 @@ import type { LibraryPairBinding } from '../../shared/analysis/quality/library-p
 import { wrapFlv,pairAvcc,admissionIdr,preparedPair,pairRequest } from '../helpers/frame-pair-fixture.ts';
 function deferred<T>(){let resolve!:(value:T)=>void,reject!:(reason:unknown)=>void;const promise=new Promise<T>((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};}
 function memory(){const values=new Map<string,string>();return {getItem:(key:string)=>values.get(key)??null,setItem:(key:string,value:string)=>{values.set(key,value);},removeItem:(key:string)=>{values.delete(key);}};}
-const input={schema:'voidplayer-psnr-frame-job',version:1,client:{kind:'browser',id:'tab-1'},request:{}}as QualityJobInput;
-function job(id='job-1',revision=1):QualityJob{return {id,revision,sequence:revision,state:'running',phase:'decode',createdAt:1,submitted:{actorId:'a',client:input.client},result:{available:false},attempt:{id:'attempt-1'},input}as QualityJob;}
-function transport():QualityTransport{return {submit:async()=>({job:job(),replayed:false}),get:async()=>job(),result:async()=>assert.fail('no result'),cancel:async()=>({...job(),state:'cancelling'}),changes:async()=>({schema:'voidplayer-quality-jobs',version:1,resources:{queued:0,activeAttempts:0},limits:{},entries:[],cursor:0,head:0,more:false})as QualityHistory};}
+const examplePair=await preparedPair(wrapFlv('h264',pairAvcc,[admissionIdr]));
+const input={schema:'voidplayer-psnr-frame-job',version:1,client:{kind:'browser',id:'tab-1'},request:pairRequest(examplePair.target)}as QualityJobInput;
+function job(id='job-1',revision=1,key='key'):QualityJob{return {id,revision,sequence:revision,state:'running',phase:'decode',createdAt:1,submitted:{actorId:'a',client:input.client,idempotencyKey:key},result:{available:false},attempt:{id:'attempt-1'},input:normalizeQualityJobInput(input)}as QualityJob;}
+function transport():QualityTransport{return {submit:async(_actor,_body,key)=>({job:job('job-1',1,key),replayed:false}),get:async()=>job(),result:async()=>assert.fail('no result'),cancel:async()=>({...job(),state:'cancelling'}),changes:async()=>({schema:'voidplayer-quality-jobs',version:1,resources:{queued:0,activeAttempts:0},limits:{},entries:[],cursor:0,head:0,more:false})as QualityHistory};}
 
 test('submission is frozen and saved before POST; double click and lost response retry reuse key/body across reload',async()=>{
  const io=transport(),storage=memory(),calls:{actor:string;body:QualityJobInput;key:string}[]=[],gate=deferred<{job:QualityJob;replayed:boolean}>();
  io.submit=async(actor,body,key)=>{assert.ok(storage.getItem('voidplayer-quality-pending:a:tab-1'));calls.push({actor,body,key});return gate.promise;};
  const o=new QualityJobObserver(io,'a','tab-1',()=>{},storage,()=> 'original-key');
- const first=o.submit(input),second=o.submit({...input,request:{changed:true}as any});assert.equal(first,second);assert.equal(calls.length,1);
- input.request={}as any;gate.reject(new TypeError('lost response'));await first;assert.ok(o.snapshot().pending);assert.equal(o.snapshot().jobs.length,0);o.dispose();
- io.submit=async(actor,body,key)=>{calls.push({actor,body,key});return {job:job(),replayed:true};};
+ const original=structuredClone(input);const first=o.submit(original),second=o.submit({...input,request:{changed:true}as any});assert.equal(first,second);assert.equal(calls.length,1);
+ original.request={}as any;gate.reject(new TypeError('lost response'));await first;assert.ok(o.snapshot().pending);assert.equal(o.snapshot().jobs.length,0);o.dispose();
+ io.submit=async(actor,body,key)=>{calls.push({actor,body,key});return {job:job('job-1',1,key),replayed:true};};
  const restored=new QualityJobObserver(io,'a','tab-1',()=>{},storage,()=>assert.fail('retry must not mint a key'));
  await restored.submit({...input,request:{different:true}as any});assert.deepEqual(calls[0],calls[1]);assert.equal(restored.snapshot().jobs.length,1);assert.equal(restored.snapshot().pending,null);restored.dispose();
 });
 
-test('dispose/actor/client switch fences ignored-abort replies and only stops observation; uncertain request remains actor/client scoped',async()=>{
+test('dispose/actor/client switch fences DOM while valid ignored-abort receipts settle only their original keys',async()=>{
  const io=transport(),store=memory(),gate=deferred<{job:QualityJob;replayed:boolean}>();let cancelled=0,published=0;
  io.cancel=async()=>{cancelled++;return job();};io.submit=()=>gate.promise;
  const old=new QualityJobObserver(io,'a','tab-1',()=>{published++;},store,()=> 'key');const request=old.submit(input);old.dispose();const count=published;
  const actor=new QualityJobObserver(io,'b','tab-1',()=>{},store);assert.equal(actor.snapshot().pending,null);
  const client=new QualityJobObserver(io,'a','tab-2',()=>{},store);assert.equal(client.snapshot().pending,null);
- gate.resolve({job:job(),replayed:false});await request;assert.equal(published,count);assert.equal(cancelled,0);assert.ok(store.getItem('voidplayer-quality-pending:a:tab-1'));
+ gate.resolve({job:job(),replayed:false});await request;assert.equal(published,count);assert.equal(cancelled,0);assert.equal(store.getItem('voidplayer-quality-pending:a:tab-1'),null,'valid late receipt settles its original key without publishing to a disposed view');
  actor.dispose();client.dispose();
 });
 
@@ -95,7 +97,7 @@ test('explicit history resync ignores an old page, restarts at zero and does not
  io.submit=async()=>{sent++;return {job:job(),replayed:false};};
  io.changes=async(_actor,after)=>{assert.equal(after,0);if(count++===0)return gate.promise;return {schema:'voidplayer-quality-jobs',version:1,entries:[job('fresh',3)],head:3,cursor:3,more:false,resources:{queued:0,activeAttempts:0},limits:{}};};
  const o=new QualityJobObserver(io,'a','tab-1',()=>{},memory()),poll=o.poll();await o.resync();gate.resolve({schema:'voidplayer-quality-jobs',version:1,entries:[job('old',9)],head:9,cursor:9,more:false,resources:{queued:0,activeAttempts:0},limits:{}});await poll;
- assert.equal(o.snapshot().jobs.length,0);await o.poll();assert.deepEqual(o.snapshot().jobs.map(j=>j.id),['fresh']);assert.equal(sent,0);o.dispose();
+ assert.deepEqual(o.snapshot().jobs.map(j=>j.id),['fresh']);assert.equal(count,2,'resync starts a fresh page immediately and the late old page is ignored');assert.equal(sent,0);o.dispose();
 });
 
 test('independent ROI uses its own source grid, even snapping and strict bounds, never playback transforms',async()=>{
@@ -170,4 +172,45 @@ test('candidate evidence assembles completely before commit and retries a failed
  await assert.rejects(candidateAnnotations(receipt,read));assert.equal(reads,2);fail=false;
  assert.equal((await candidateAnnotations(receipt,read)).length,2);assert.equal(reads,4);
  await assert.rejects(candidateAnnotations({...receipt,createdIds:['one','one']},read));
+});
+
+test('late valid PSNR acceptance confirms its key without selecting the old job over a newer target',async()=>{
+ const io=transport(),store=memory(),gate=deferred<{job:QualityJob;replayed:boolean}>();
+ io.submit=()=>gate.promise;io.get=async(_actor,id)=>job(id);
+ const observer=new QualityJobObserver(io,'a','tab-1',()=>{},store,()=> 'key');
+ const submitting=observer.submit(input);await observer.select('new-target');gate.resolve({job:job('accepted-original'),replayed:false});await submitting;
+ assert.equal(observer.snapshot().detail?.id,'new-target');assert.equal(observer.snapshot().pending,null);assert.equal(observer.snapshot().busy,false);assert.equal(store.getItem('voidplayer-quality-pending:a:tab-1'),null);observer.dispose();
+});
+
+test('a previously rejected operation becomes unknown again before a replay can be accepted',async()=>{
+ const store=memory(),journal=new FrozenSubmissionJournal(store,a=>a,v=>v,undefined,()=> 'key'),p=journal.freeze('a',{n:1});
+ await assert.rejects(journal.execute('a',p.key,async()=>{throw new ApiError(409,'Not accepted');},()=>{},false,'mark'));
+ assert.equal(journal.pending('a')?.rejected?.verified,true);
+ await assert.rejects(journal.execute('a',p.key,async()=>{throw new TypeError('Accepted but receipt lost');},()=>{},false,'mark'));
+ assert.equal(journal.pending('a')?.rejected,undefined);assert.equal(journal.pending('a')?.attempted,true);
+ await assert.rejects(journal.execute('a',p.key,async()=>{throw new ApiError(409,'Actor changed','actor-changed');},()=>{},false,'mark'));
+ assert.equal(journal.pending('a')?.rejected,undefined);
+});
+
+
+test('PSNR receipt compares canonical v1 defaults without rewriting the frozen wire body',()=>{
+ const raw=structuredClone(input),before=JSON.stringify(raw),p={key:'key',body:raw};
+ assert.equal(raw.request.budget,undefined);
+ assertJobReceipt({job:job(),replayed:true},'a',p,normalizeQualityJobInput(raw));
+ assert.equal(JSON.stringify(raw),before);
+ const changed=job();changed.input.request.roi.width-=2;
+ assert.throws(()=>assertJobReceipt({job:changed,replayed:true},'a',p,normalizeQualityJobInput(raw)),/acknowledgement/);
+});
+test('a validator error after HTTP success cannot mark or discard an unknown operation',async()=>{
+ const journal=new FrozenSubmissionJournal(memory(),a=>a,v=>v,undefined,()=> 'key'),p=journal.freeze('a',{n:1});
+ await assert.rejects(journal.execute('a',p.key,async()=>({}),()=>{throw new ApiError(400,'Malformed successful receipt');},false,'mark'));
+ assert.equal(journal.pending('a')?.key,p.key);assert.equal(journal.pending('a')?.rejected,undefined);
+});
+test('replacing one read slot preserves unrelated actor and selection reads',async()=>{
+ const scope=new QualityObservationScope(),gate=deferred<void>();let history,detail,frames;
+ const a=scope.run('history','actor',async()=>{history=scope.capture('actor','history');await gate.promise;});
+ const b=scope.run('detail','selection',async()=>{detail=scope.capture('selection','detail');await gate.promise;});
+ const c=scope.run('frames','selection',async()=>{frames=scope.capture('selection','frames');await gate.promise;});
+ scope.cancel('frames');assert.equal(frames!.current(),false);assert.equal(detail!.current(),true);assert.equal(history!.current(),true);
+ gate.resolve();await Promise.all([a,b,c]);scope.close();
 });

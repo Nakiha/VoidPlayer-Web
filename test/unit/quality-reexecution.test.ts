@@ -47,7 +47,8 @@ test('GUI transport/body-budget failures stay unknown; only a definite parsed 4x
   const api={async request<T>():Promise<T>{if(known)throw new ApiError(409,'Frozen conditions changed','reexecution-blocked');throw Error('Response byte budget or truncated body');}};
   const client=new QualityReexecutionClient(storage,'http://localhost:8123',api,()=> 'frozen-browser-key'),p=client.freeze(actor.id,'single',parentId,clientPlan);
   await assert.rejects(client.send(p,actor.id,new AbortController().signal));assert.equal(client.pending(actor.id,'single')?.rejected,undefined);assert.throws(()=>client.clearRejected(actor.id,'single'));
-  known=true;await assert.rejects(client.send(p,actor.id,new AbortController().signal),{status:409});assert.equal(client.pending(actor.id,'single')!.rejected!.status,409);client.clearRejected(actor.id,'single');assert.equal(client.pending(actor.id,'single'),null);
+  known=true;await assert.rejects(client.send(p,actor.id,new AbortController().signal),{status:409});assert.equal(client.pending(actor.id,'single')!.rejected,undefined);assert.throws(()=>client.clearRejected(actor.id,'single'),/unknown/);
+  const fresh=client.freeze('fresh-actor','single',parentId,clientPlan);await assert.rejects(client.send(fresh,'fresh-actor',new AbortController().signal),{status:409});assert.equal(client.pending('fresh-actor','single')!.rejected!.status,409);client.clearRejected('fresh-actor','single');assert.equal(client.pending('fresh-actor','single'),null);
 });
 test('GUI persistence failure or unresolved capacity never sends/evicts, and origins do not inherit another server request',()=>{
   const storage=new MemoryStorage();storage.fail=true;let calls=0;const api={async request<T>():Promise<T>{calls++;throw Error('Must not send');}};
@@ -80,4 +81,13 @@ test('producer build pins public implementation bytes, excludes data/config and 
   const directory=await mkdtemp(path.join(tmpdir(),'vp-quality-producer-'));t.after(()=>rm(directory,{recursive:true,force:true}));await mkdir(path.join(directory,'server'));await mkdir(path.join(directory,'shared'));const file=path.join(directory,'server','recipe.ts');await writeFile(file,'export const recipe = 1;');await writeFile(path.join(directory,'shared','pixel.ts'),'export const pixel = 1;');const first=hashQualityProducer(directory);
   await writeFile(path.join(directory,'server','private-config.json'),'dummy configuration excluded from implementation digest');assert.deepEqual(hashQualityProducer(directory),first);
   await writeFile(file,'export const recipe = 2;');assert.notEqual(hashQualityProducer(directory).sha256,first.sha256);await truncate(file,8*1024*1024+1);assert.throws(()=>hashQualityProducer(directory),/byte budget/);
+});
+
+
+test('legacy rejected receipt without first-attempt proof remains unknown',()=>{
+ const storage=new MemoryStorage(),client=new QualityReexecutionClient(storage,'http://localhost:8123',undefined,()=> 'legacy-key');
+ client.freeze(actor.id,'single',parentId,clientPlan);
+ const key=storage.key(0)!,p=JSON.parse(storage.getItem(key)!);delete p.attempted;p.rejected={status:409,code:'actor-changed'};storage.setItem(key,JSON.stringify(p));
+ assert.equal(client.pending(actor.id,'single')?.rejected,undefined);assert.throws(()=>client.clearRejected(actor.id,'single'),/unknown/);
+ assert.ok(storage.getItem(key));
 });

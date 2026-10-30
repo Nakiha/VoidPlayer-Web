@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import { AdminError } from '../../admin-error.ts';
-import { pairBudget } from '../../../shared/analysis/quality/frame-pair.ts';
 import { PSNR_LIMITS } from '../../../shared/analysis/quality/psnr.ts';
 import { QUALITY_JOB_LIMITS } from '../../../shared/analysis/quality/jobs.ts';
+import { normalizeQualityJobInput } from '../../../shared/analysis/quality/job-input.ts';
 import type { QualityJobInput } from '../../../shared/analysis/quality/jobs.ts';
 import { libraryPairRequest, qualityKeys } from './request.ts';
 
@@ -25,24 +25,7 @@ export function qualityJobRequest(value: unknown) {
     if (n !== undefined && (!Number.isSafeInteger(n) || n < 1 || n > PSNR_LIMITS[key]))
       throw new AdminError(400, 'Invalid PSNR job budget.', 'invalid-request');
   }
-  const target = (t: typeof request.reference) => ({
-    mediaId: t.mediaId, mediaVersion: t.mediaVersion, size: t.size,
-    indexIdentity: {kind: t.indexIdentity.kind, streamKey: t.indexIdentity.streamKey,
-      schemaVersion: t.indexIdentity.schemaVersion, indexerBuild: t.indexIdentity.indexerBuild},
-    indexBuildId: t.indexBuildId, picture: {sourceVersion: t.picture.sourceVersion, stream: t.picture.stream,
-      configuration: t.picture.configuration, au: t.picture.au, picture: t.picture.picture,
-      layer: t.picture.layer, field: t.picture.field}, sourcePtsUs: t.sourcePtsUs,
-    ...(t.decode?{decode:t.decode.mode==='packet-identity-gop-v1'?{mode:t.decode.mode,startAu:t.decode.startAu,endAu:t.decode.endAu}:{mode:t.decode.mode,startAu:t.decode.startAu}}:{}),
-  });
-  const normalized: QualityJobInput = {schema: input.schema, version: 1,
-    client: {id: input.client.id, kind: input.client.kind}, request: {
-      pairing: 'caller-specified', reference: target(request.reference), distorted: target(request.distorted),
-      roi: {x: roi.x, y: roi.y, width: roi.width, height: roi.height},
-      ...(request.spatial === undefined ? {} : {spatial:{blockWidth:request.spatial.blockWidth,blockHeight:request.spatial.blockHeight}}),
-      ...(request.ssim === undefined ? {} : {ssim:{variant:request.ssim.variant}}),
-      budget: {...pairBudget(request), maxSamples: request.budget?.maxSamples ?? PSNR_LIMITS.maxSamples,
-        maxInputBytes: request.budget?.maxInputBytes ?? PSNR_LIMITS.maxInputBytes},
-    }};
+  const normalized = normalizeQualityJobInput(input);
   const json = JSON.stringify(normalized);
   if (Buffer.byteLength(json) > QUALITY_JOB_LIMITS.requestBytes)
     throw new AdminError(413, 'PSNR job request budget exceeded.', 'budget-exceeded');

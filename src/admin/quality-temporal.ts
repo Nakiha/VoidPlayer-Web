@@ -240,9 +240,7 @@ export function installTemporalQuality<Input, Score>(
           c.signal,
         );
         if (!valid(c) || id !== selected) return false;
-        if (!more) $("frames").replaceChildren();
-        next = p.next;
-        $("frames-more").hidden = next === null;
+        const nodes = document.createDocumentFragment();
         for (const f of p.entries) {
           const root = document.createElement("section"),
             title = document.createElement("h4");
@@ -250,8 +248,13 @@ export function installTemporalQuality<Input, Score>(
           root.dataset[kind + "Frame"] = String(f.index);
           root.append(title);
           qualityFacts(root, f.pair);
-          $("frames").append(root);
+          nodes.append(root);
         }
+        if (!valid(c) || id !== selected) return false;
+        if (more) $("frames").append(nodes);
+        else $("frames").replaceChildren(nodes);
+        next = p.next;
+        $("frames-more").hidden = next === null;
         return true;
       } catch (e) {
         if (valid(c) && id === selected) error(e);

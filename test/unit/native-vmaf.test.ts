@@ -1,3 +1,4 @@
+import {NativeVmafService} from '../../server/analysis/vmaf/service.ts';
 import test from 'node:test';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
 import {vmafInput,vmafSequence,VMAF_LIMITS,VMAF_CAPABILITY} from '../../shared/analysis/quality/vmaf.ts';
 import {agentManifest,serviceCapabilities} from '../../shared/service/agent.ts';
@@ -50,4 +51,11 @@ test('strict MP4 presentation eligibility retains raw clocks/table/producer and 
    (f:any)=>f.snapshot.value.rangePlan.input.pairs[1].reference.decode.mode='forward-one-output-per-au-v1',
   ]){f=make();alter(f);assert.throws(()=>vmafSequence(f.snapshot as any,f.indexes as any,250000),`${row.codec}/${row.depth}: raw source substitution must refuse`);}
  }
+});
+
+test('VMAF candidate spacing follows the admitted sequence length instead of the historical 32-frame cap',()=>{
+ const policy={space:'default',side:'reference',maxScore:90,limit:1,minFrameDistance:60,text:'Spacing candidate',severity:3};
+ const parse=(value:unknown)=>(NativeVmafService.prototype as any).policy(value);
+ assert.equal(parse(policy).minFrameDistance,60);assert.equal(parse({...policy,minFrameDistance:1024}).minFrameDistance,1024);
+ assert.throws(()=>parse({...policy,minFrameDistance:1025}),{code:'invalid-vmaf-policy'});
 });

@@ -164,17 +164,20 @@ export function installQualityRanges(signal: AbortSignal) {
           s,
         );
         if (!valid(owner, s) || selected !== id) return false;
-        if (!more) $("results").replaceChildren();
-        next = page.nextAu;
-        $("results-more").hidden = next === null;
+        const nodes = document.createDocumentFragment();
         for (const entry of page.entries) {
           const root = document.createElement("section"),
             title = document.createElement("h4");
           title.textContent = `AU ${entry.au}`;
           root.append(title);
           qualityFacts(root, entry.result.value);
-          $("results").append(root);
+          nodes.append(root);
         }
+        if (!valid(owner, s) || selected !== id) return false;
+        if (more) $("results").append(nodes);
+        else $("results").replaceChildren(nodes);
+        next = page.nextAu;
+        $("results-more").hidden = next === null;
         $("status").textContent = "";
         return true;
       } catch (e) {
