@@ -13,6 +13,7 @@ import { QualityJobService } from '../../server/analysis/quality/job-service.ts'
 import { QualityJobStore } from '../../server/analysis/quality/job-store.ts';
 import { QUALITY_JOB_LIMITS } from '../../shared/analysis/quality/jobs.ts';
 import { jobInput } from '../helpers/quality-job-fixture.ts';
+import {DEFAULT_QUALITY_RESOURCES} from '../../shared/service/quality-resources.ts';
 const actor={id:'test-actor',name:'Test actor'},other={id:'other-actor',name:'Other'};
 const value={schema:'voidplayer-library-frame-pair-psnr',version:1};
 async function until(check:()=>boolean){for(let i=0;i<200;i++){if(check())return;await new Promise(resolve=>setTimeout(resolve,5));}assert.fail('Expected asynchronous job transition did not occur');}
@@ -41,6 +42,28 @@ test('explicit cancel keeps the physical-stop permit; next queued attempt cannot
  f.workers[0].release();await until(()=>f.jobs.get(first.id).state==='cancelled');await until(()=>f.workers.length===2);
  assert.equal(f.jobs.get(next.id).attempt?.number,1);assert.equal(f.jobs.get(first.id).result.available,false);
  f.workers[1].events.emit('message',{ok:true,value});f.workers[1].release();await until(()=>f.jobs.get(next.id).state==='completed');
+});
+test('configured same-algorithm concurrency runs two owners; lower limit waits for both physical exits',async t=>{
+ const f=await fixture(t),l={...structuredClone(DEFAULT_QUALITY_RESOURCES),concurrency:2,perExecutor:{...DEFAULT_QUALITY_RESOURCES.perExecutor,psnr:2}};
+ f.gate.configure(l);
+ const a=f.jobs.submit(jobInput(),actor,'a','a').job,b=f.jobs.submit(jobInput(),other,'b','b').job;
+ assert.equal(f.workers.length,2);assert.equal(f.gate.resources().running,2);
+ f.gate.configure({...l,concurrency:1});
+ const c=f.jobs.submit(jobInput(),actor,'c','c').job;assert.equal(c.attempt,null);
+ f.jobs.cancel(a.id,actor.id,'cancel-a');await f.workers[0].stopping;
+ assert.equal(f.workers.length,2);assert.equal(f.gate.resources().running,2);
+ f.workers[0].release();await until(()=>f.jobs.get(a.id).state==='cancelled');
+ await new Promise(r=>setTimeout(r,300));assert.equal(f.workers.length,2);assert.equal(f.jobs.get(c.id).attempt,null);
+ f.jobs.cancel(b.id,other.id,'cancel-b');f.workers[1].release();await until(()=>f.workers.length===3);
+ f.workers[2].events.emit('message',{ok:true,value});f.workers[2].release();await until(()=>f.jobs.get(c.id).state==='completed');
+});
+test('global queue rejection never defeats original receipt replay or creates an attempt',async t=>{
+ const f=await fixture(t),release=f.gate.acquire();t.after(release);
+ f.gate.configure({...structuredClone(DEFAULT_QUALITY_RESOURCES),outstanding:1});
+ const a=f.jobs.submit(jobInput(),actor,'a','a');assert.equal(a.job.attempt,null);
+ assert.throws(()=>f.jobs.submit(jobInput(),other,'b','b'),{code:'quality-global-queue-full'});
+ assert.equal(f.jobs.submit(jobInput(),actor,'lost-response','a').job.id,a.job.id);assert.equal(f.workers.length,0);
+ f.jobs.cancel(a.job.id,actor.id,'cancel');assert.equal(f.jobs.submit(jobInput(),other,'b','b').job.attempt,null);
 });
 test('a success message held at terminate cannot defeat an earlier cancellation commit',async t=>{
  const f=await fixture(t),job=f.jobs.submit(jobInput(),actor,'request','key').job;

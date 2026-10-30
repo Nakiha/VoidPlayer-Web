@@ -9,6 +9,7 @@ import { loadConfig } from '../../server/config.ts';
 import { MediaLibraryIndex } from '../../server/library.ts';
 import { AdminController } from '../../server/admin.ts';
 import { createMediaServer } from '../../server/app.ts';
+import {DEFAULT_QUALITY_RESOURCES} from '../../shared/service/quality-resources.ts';
 
 type Fixture = { root: string; media: string; base: string; library: MediaLibraryIndex; admin: AdminController; config: Awaited<ReturnType<typeof loadConfig>> };
 async function fixture(run: (f: Fixture) => Promise<void>) {
@@ -26,6 +27,25 @@ async function fixture(run: (f: Fixture) => Promise<void>) {
   finally { await new Promise<void>(r => server.close(() => r())); await admin.close(); await library.close(); await fs.rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
 }
 const mutation = (base: string, method: string, value?: unknown, extra = {}) => ({ method, headers: { origin: base, 'content-type': 'application/json', 'x-voidplayer-action': 'admin', ...extra }, body: value === undefined ? undefined : JSON.stringify(value) });
+
+test('quality resource settings persist revisioned attribution; stale origins, actors and revisions cannot change admission',async()=>{
+ await fixture(async({base,admin,library,root})=>{
+  const actor=admin.workspaces.identify(undefined,'Resource operator'),headers={cookie:`voidplayer-user=${actor.id}`,'x-voidplayer-actor':actor.id};
+  const original=await(await fetch(base+'/api/admin/quality-resources')).json();
+  const limits={...structuredClone(DEFAULT_QUALITY_RESOURCES),concurrency:2,perExecutor:{...DEFAULT_QUALITY_RESOURCES.perExecutor,cambi:2},memoryBytes:4*1024**3};
+  const url=base+'/api/admin/quality-resources',body={revision:original.revision,limits};
+  assert.equal((await fetch(url,mutation('https://elsewhere.test','PUT',body,headers))).status,403);
+  assert.equal((await fetch(url,mutation(base,'PUT',body,{...headers,'x-voidplayer-actor':'different'}))).status,409);
+  const response=await fetch(url,mutation(base,'PUT',body,headers));assert.equal(response.status,200);
+  const current=await response.json();assert.equal(current.limits.concurrency,2);assert.equal(current.history.length,1);
+  assert.equal(current.history[0].actor.id,actor.id);assert.deepEqual(current.history[0].before,original.limits);assert.deepEqual(current.history[0].after,limits);
+  assert.equal(library.qualityAdmission.capacity('cambi'),2);
+  assert.equal((await fetch(url,mutation(base,'PUT',body,headers))).status,409);
+  const loaded=await loadConfig([],'production',root);assert.deepEqual(loaded.qualityResources,limits);assert.equal(loaded.qualityResourceHistory?.[0].actor.id,actor.id);
+  assert.equal((await fetch(url,mutation(base,'PUT',{revision:current.revision,limits:{...limits,concurrency:99}},headers))).status,400);
+  assert.equal(library.qualityAdmission.capacity('cambi'),2);
+ });
+});
 
 test('admin trusts all users while requiring same-origin mutations', async () => {
   await fixture(async ({ base }) => {

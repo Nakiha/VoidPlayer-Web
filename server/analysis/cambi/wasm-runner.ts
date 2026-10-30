@@ -24,7 +24,7 @@ export class WasmCambiRunner extends ScoringWorkerOwner {
     coreDir: string,
     analysisDir: string,
   ) {
-    super(library, coreDir);
+    super(library, coreDir, 'cambi');
     this.analysisDir = analysisDir;
   }
   /** Reclaim only legacy interrupted scratch data; new runs never write raw clips. */

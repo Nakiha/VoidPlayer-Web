@@ -26,7 +26,7 @@ export class WasmVmafRunner extends ScoringWorkerOwner {
     coreDir: string,
     analysisDir: string,
   ) {
-    super(library, coreDir);
+    super(library, coreDir, 'vmaf');
     this.analysisDir = analysisDir;
   }
   assertAvailable() {

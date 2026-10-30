@@ -51,13 +51,15 @@ export class DiscoveryStore extends DiscoveryCatalog {
   list(actor:string,before=0,limit=32){if(!Number.isSafeInteger(before)||before<0||!Number.isSafeInteger(limit)||limit<1||limit>32)throw new AdminError(400,'Invalid preparation page.','invalid-preparation-page');
     const rows=this.db.prepare(`SELECT ordinal,id FROM discovery_jobs WHERE actor_id=? ${before?'AND ordinal<?':''} ORDER BY ordinal DESC LIMIT ?`).all(actor,...(before?[before]:[]),limit+1);
     return {schema:'voidplayer-library-preparations',version:1,jobs:rows.slice(0,limit).map(r=>{const job=this.get(String(r.id),actor);return {...job,result:job.result===null?null:{available:true,url:`/api/library/preparations/${job.id}`}};}),next:rows.length>limit?Number(rows[limit-1].ordinal):null};}
-  submit(value:unknown,actor:Actor,requestId:string,key:unknown,now:number){
+  queueCounts(){return this.db.prepare(`SELECT actor_id AS actor,count(*) AS count FROM discovery_jobs WHERE state IN ${pending} GROUP BY actor_id`).all().map(r=>({actor:String(r.actor),count:Number(r.count)}));}
+  submit(value:unknown,actor:Actor,requestId:string,key:unknown,now:number,admit?:()=>void){
     let input;try{input=preparationInput(value);}catch{throw new AdminError(400,'Invalid version-pinned preparation request.','invalid-preparation-request');}
     if(typeof key!=='string'||!/^[a-zA-Z0-9._:-]{1,120}$/.test(key))throw new AdminError(400,'Idempotency-Key required.','invalid-idempotency-key');
     const json=JSON.stringify(input),fingerprint=digest(json);
     return this.transaction(()=>{
       const prior=this.db.prepare('SELECT id,fingerprint FROM discovery_jobs WHERE actor_id=? AND client_id=? AND idempotency_key=?').get(actor.id,input.client.id,key);
       if(prior){if(prior.fingerprint!==fingerprint)throw new AdminError(409,'Idempotency-Key binds another preparation.','idempotency-conflict');return {job:this.get(String(prior.id)),replayed:true};}
+      admit?.();
       this.sourcePin(input.source);
       const all=this.db.prepare('SELECT coalesce(sum(reserved_bytes),0) AS bytes FROM discovery_jobs').get()!;
       if(Number(all.bytes)+LIMITS.probeResultBytes+Buffer.byteLength(json)+1024>LIMITS.historyBytes)throw new AdminError(429,'Preparation history is full; receipts retained.','preparation-history-full');

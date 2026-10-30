@@ -4233,6 +4233,69 @@
     "source": "有界区间与抽样任务",
     "params": {}
   },
+  "qualityResources.actorOutstanding": {
+    "source": "每人未完成计算上限",
+    "params": {}
+  },
+  "qualityResources.change": {
+    "source": "{date} · {actor} · 总并发 {before} → {after}",
+    "params": {
+      "actor": "string | number",
+      "after": "string | number",
+      "before": "string | number",
+      "date": "string | number"
+    }
+  },
+  "qualityResources.concurrency": {
+    "source": "评分总并发",
+    "params": {}
+  },
+  "qualityResources.help": {
+    "source": "所有评分任务共用这些限制。调低只影响后续准入，不会中断正在执行的任务。评分与索引构建、码流分析互斥；元数据准备和对应规划各限一路。",
+    "params": {}
+  },
+  "qualityResources.history": {
+    "source": "最近的配置变更",
+    "params": {}
+  },
+  "qualityResources.memory": {
+    "source": "同时预留的内存（MiB）",
+    "params": {}
+  },
+  "qualityResources.outstanding": {
+    "source": "未完成计算总上限",
+    "params": {}
+  },
+  "qualityResources.read": {
+    "source": "同时预留的读取量（MiB）",
+    "params": {}
+  },
+  "qualityResources.reservationHelp": {
+    "source": "内存和读取量显示已准入任务的预算预留，不是操作系统内存限额或实时网速。当前计算核为单线程；每个算法上限仍须同时满足总并发及资源预算。",
+    "params": {}
+  },
+  "qualityResources.save": {
+    "source": "保存评分配置",
+    "params": {}
+  },
+  "qualityResources.status": {
+    "source": "{running} 项运行 · {outstanding} 项未完成 · 预留内存 {memory} MiB · 预留读取 {read} MiB · {threads} 个线程",
+    "params": {
+      "memory": "string | number",
+      "outstanding": "string | number",
+      "read": "string | number",
+      "running": "string | number",
+      "threads": "string | number"
+    }
+  },
+  "qualityResources.threads": {
+    "source": "计算线程总上限",
+    "params": {}
+  },
+  "qualityResources.title": {
+    "source": "评分资源",
+    "params": {}
+  },
   "qualityRoi.buildCancelRequested": {
     "source": "已请求取消缓存构建；服务将在文件和 Worker 实际关闭后释放容量。若构建已提交，请显式重新读取缓存。",
     "params": {}

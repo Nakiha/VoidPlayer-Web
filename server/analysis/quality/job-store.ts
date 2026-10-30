@@ -114,7 +114,8 @@ export class QualityJobStore {
       progress: {scoredPairs: completed ? 1 : 0, targetPairs: 1, decodedFrames: completed ?
         [input.request.reference,input.request.distorted].reduce((n,t)=>n+pairPacketCount(t),0) : null}};
   }
-  submit(request: ReturnType<typeof qualityJobRequest>, actor: Actor, requestId: string, key: string, now: number,reexecution?:ReexecutionCreation,expectedExecutionContract?:QualityExecutionContract) {
+  queueCounts(){return this.db.prepare(`SELECT actor_id AS actor,count(*) AS count FROM quality_jobs WHERE state IN ${pending} GROUP BY actor_id`).all().map(r=>({actor:String(r.actor),count:Number(r.count)}));}
+  submit(request: ReturnType<typeof qualityJobRequest>, actor: Actor, requestId: string, key: string, now: number,reexecution?:ReexecutionCreation,expectedExecutionContract?:QualityExecutionContract,admit?:()=>void) {
     return this.transaction(() => {
       if(reexecution){const prior=this.reexecutions.replay(reexecution.parentId,actor.id,reexecution.key,reexecution.request);if(prior){const job=this.get(prior.jobId);if(job.submitted.actorId!==actor.id)throw new AdminError(500,'Stored successor actor changed.','stored-reexecution-invalid');return {job:this.reexecutions.verify(prior,job),replayed:true};}const parent=this.get(reexecution.parentId);if(parent.submitted.actorId!==actor.id||parent.revision!==reexecution.parentRevision||!['failed','interrupted','cancelled'].includes(parent.state)||parent.endedAt===null||parent.attempt&&parent.attempt.endedAt===null)throw new AdminError(409,'Original execution is not terminal and physically stopped.','reexecution-blocked');}
       const prior = this.db.prepare('SELECT id,fingerprint FROM quality_jobs WHERE actor_id=? AND client_id=? AND idempotency_key=?')
@@ -123,6 +124,7 @@ export class QualityJobStore {
         if (prior.fingerprint !== request.fingerprint) throw new AdminError(409, 'Idempotency-Key already binds another request.', 'idempotency-conflict');
         return {job: this.get(String(prior.id)), replayed: true};
       }
+      admit?.();
       const history = this.db.prepare('SELECT coalesce(sum(reserved_bytes),0) AS bytes FROM quality_jobs').get()!;
       const charge = Buffer.byteLength(request.json) + LIMITS.resultBytes+16*1024;
       if (Number(history.bytes) + charge > LIMITS.reservedBytes)

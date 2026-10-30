@@ -7,12 +7,16 @@ import { parseTls } from './tls.ts';
 import type {XpsnrComponentConfig} from '../shared/analysis/quality/xpsnr.ts';
 import type {VmafComponentConfig} from '../shared/analysis/quality/vmaf.ts';
 import type { TlsConfig } from './tls.ts';
+import {qualityResourceLimits} from '../shared/service/quality-resources.ts';
+import type {QualityResourceLimits,QualityResourceChange} from '../shared/service/quality-resources.ts';
 
 export interface ServiceConfig {
   mediaRoots: MediaRoot[]; dataDir: string; host: string; port: number; devPort: number;
   staticDir: string; logsDir: string | null; allowLocalReveal: boolean; indexTtlMs: number; indexWatch: boolean; analysisConcurrency: number;
   /** Legacy configuration, retained for compatibility; all users are trusted. */
   adminUsers: string[];
+  qualityResources?: QualityResourceLimits;
+  qualityResourceHistory?: QualityResourceChange[];
   /** Deprecated: accepted for old config files, ignored by analysis WASM scoring. */
   nativeVmaf?:VmafComponentConfig;
   /** Deprecated: accepted for old config files, ignored by analysis WASM scoring. */
@@ -51,9 +55,15 @@ export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd
   catch (error) { if (configFile || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
   const defaults: ServiceConfig = { dataDir: paths.dataDir ?? path.resolve(cwd, '.run/data'), mediaRoots: mode === 'dev' ? [path.resolve(cwd, 'fixtures/video')] : [], host: '127.0.0.1', port: 5180, devPort: 5178, staticDir: paths.staticDir ?? path.resolve(cwd, 'dist'), logsDir: paths.logsDir ?? path.resolve(cwd, 'logs'), allowLocalReveal: false, indexTtlMs: 30000, indexWatch: true, analysisConcurrency: DEFAULT_ANALYSIS_CONCURRENCY, adminUsers: [] };
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('服务配置必须是 JSON 对象。');
-  for (const key of Object.keys(data)) if (!Object.hasOwn(defaults, key) && !['tls', 'httpPort','nativeVmaf','nativeXpsnr'].includes(key)) throw new Error(`未知配置项: ${key}`);
+  for (const key of Object.keys(data)) if (!Object.hasOwn(defaults, key) && !['tls', 'httpPort','nativeVmaf','nativeXpsnr','qualityResources','qualityResourceHistory'].includes(key)) throw new Error(`未知配置项: ${key}`);
   if (process.env.VOIDPLAYER_ADMIN_USERS !== undefined) overrides.adminUsers = process.env.VOIDPLAYER_ADMIN_USERS.split(',').map(id => id.trim()).filter(Boolean);
   const config = { ...defaults, ...data, ...overrides } as ServiceConfig;
+  if(config.qualityResources!==undefined)config.qualityResources=qualityResourceLimits(config.qualityResources);
+  if(config.qualityResourceHistory!==undefined){
+    const h=config.qualityResourceHistory;
+    if(!Array.isArray(h)||h.length>32||Buffer.byteLength(JSON.stringify(h))>65536)throw Error('Invalid quality resource history');
+    for(const c of h){if(!c||!Number.isSafeInteger(c.at)||typeof c.actor?.id!=='string'||typeof c.actor.name!=='string'||typeof c.requestId!=='string'||!/^[a-f0-9]{64}$/.test(c.previousRevision))throw Error('Invalid quality resource change');qualityResourceLimits(c.before);qualityResourceLimits(c.after);}
+  }
   if(config.nativeVmaf!==undefined){const c=config.nativeVmaf;if(!c||typeof c!=='object'||Object.keys(c).sort().join(',')!=='directory,manifestSha256'||typeof c.directory!=='string'||!c.directory||!/^[a-f0-9]{64}$/.test(c.manifestSha256))throw Error('nativeVmaf requires trusted directory and manifestSha256');config.nativeVmaf={directory:path.resolve(path.dirname(file),c.directory),manifestSha256:c.manifestSha256};}
   if(config.nativeXpsnr!==undefined){const c=config.nativeXpsnr;if(!c||typeof c!=='object'||Object.keys(c).sort().join(',')!=='directory,manifestSha256'||typeof c.directory!=='string'||!c.directory||!/^[a-f0-9]{64}$/.test(c.manifestSha256))throw Error('nativeXpsnr requires trusted directory and manifestSha256');config.nativeXpsnr={directory:path.resolve(path.dirname(file),c.directory),manifestSha256:c.manifestSha256};}
   config.tls = parseTls(config.tls, path.dirname(file));

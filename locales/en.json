@@ -3981,6 +3981,58 @@
     "source": "有界区间与抽样任务",
     "translation": "Bounded ranges and sampling jobs"
   },
+  "qualityResources.actorOutstanding": {
+    "source": "每人未完成计算上限",
+    "translation": "Unfinished compute per person"
+  },
+  "qualityResources.change": {
+    "source": "{date} · {actor} · 总并发 {before} → {after}",
+    "translation": "{date} · {actor} · Total concurrency {before} → {after}"
+  },
+  "qualityResources.concurrency": {
+    "source": "评分总并发",
+    "translation": "Total scoring concurrency"
+  },
+  "qualityResources.help": {
+    "source": "所有评分任务共用这些限制。调低只影响后续准入，不会中断正在执行的任务。评分与索引构建、码流分析互斥；元数据准备和对应规划各限一路。",
+    "translation": "All scoring tasks share these limits. Lowering limits affects new admission and does not stop running work. Scoring excludes index construction and bitstream analysis; metadata preparation and correspondence planning each use one slot."
+  },
+  "qualityResources.history": {
+    "source": "最近的配置变更",
+    "translation": "Recent configuration changes"
+  },
+  "qualityResources.memory": {
+    "source": "同时预留的内存（MiB）",
+    "translation": "Concurrent memory reservations (MiB)"
+  },
+  "qualityResources.outstanding": {
+    "source": "未完成计算总上限",
+    "translation": "Unfinished compute limit"
+  },
+  "qualityResources.read": {
+    "source": "同时预留的读取量（MiB）",
+    "translation": "Concurrent read reservations (MiB)"
+  },
+  "qualityResources.reservationHelp": {
+    "source": "内存和读取量显示已准入任务的预算预留，不是操作系统内存限额或实时网速。当前计算核为单线程；每个算法上限仍须同时满足总并发及资源预算。",
+    "translation": "Memory and reads show admitted work budgets, not OS memory limits or live bandwidth. Compute kernels are single-threaded; algorithm limits must also fit total concurrency and resource budgets."
+  },
+  "qualityResources.save": {
+    "source": "保存评分配置",
+    "translation": "Save scoring settings"
+  },
+  "qualityResources.status": {
+    "source": "{running} 项运行 · {outstanding} 项未完成 · 预留内存 {memory} MiB · 预留读取 {read} MiB · {threads} 个线程",
+    "translation": "{running} running · {outstanding} unfinished · {memory} MiB memory reserved · {read} MiB reads reserved · {threads} threads"
+  },
+  "qualityResources.threads": {
+    "source": "计算线程总上限",
+    "translation": "Compute thread limit"
+  },
+  "qualityResources.title": {
+    "source": "评分资源",
+    "translation": "Scoring resources"
+  },
   "qualityRoi.buildCancelRequested": {
     "source": "已请求取消缓存构建；服务将在文件和 Worker 实际关闭后释放容量。若构建已提交，请显式重新读取缓存。",
     "translation": "Cache cancellation requested. Service capacity is released after the file and Worker actually close. If the cache was already committed, explicitly read it again."

@@ -52,6 +52,7 @@ export type TemporalJob<K extends Kind, I extends Input> = Omit<
   >;
 };
 interface Executor {
+  readonly admission?: import('../../quality-admission.ts').QualityAdmission;
   readonly stopUncertain: boolean;
   assertAvailable(): void;
   close(): Promise<void>;
@@ -68,11 +69,12 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
   protected recovered = false;
   protected closed = false;
   protected fatal: unknown;
-  protected active?: {
+  protected active = new Map<string,{
     id: string;
     controller: AbortController;
     done: Promise<void>;
-  };
+  }>();
+  private unqueue?:()=>void;
   protected timer?: ReturnType<typeof setTimeout>;
   private closing?: Promise<void>;
   protected file: string;
@@ -139,6 +141,7 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
         );
       throw error;
     }
+    this.unqueue=executor.admission?.registerQueue(()=>this.all().map(j=>({actor:j.actor.id,count:1})));
     this.ready = this.recover();
     void this.ready.catch((error) => {
       this.fatal = error;
@@ -334,6 +337,7 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
           return { job: this.get(String(prior.id), actor.id), replayed: true };
         }
         this.executor.assertAvailable();
+        this.executor.admission?.assertQueue(actor.id);
         const snapshot = this.snapshot(input, actor.id),
           all = this.all(),
           live = all.filter((j) => !this.terminal(j.state));
@@ -502,7 +506,7 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
     this.timer.unref();
   }
   protected pump() {
-    if (this.active || this.closed || this.fatal || !this.recovered) return;
+    if (this.closed || this.fatal || !this.recovered) return;
     for (const j of this.all().filter(
       (j) => j.state === "queued" && j.queueUntil <= now(),
     )) {
@@ -520,14 +524,15 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
         }
       this.finish(j, null);
     }
-    const job = this.all().find((j) => j.state === "queued");
-    if (!job) return;
+    while(this.active.size<(this.executor.admission?.capacity(this.kind)??1)){
+    const job = this.all().find((j) => j.state === "queued"&&!this.active.has(j.id));
+    if (!job) break;
     const active = {
       id: job.id,
       controller: new AbortController(),
       done: Promise.resolve(),
     };
-    this.active = active;
+    this.active.set(job.id,active);
     active.done = this.execute(job.id, active.controller.signal)
       .catch((error) => {
         this.fatal = error;
@@ -536,9 +541,11 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
         );
       })
       .finally(() => {
-        if (this.active === active) this.active = undefined;
+        this.active.delete(job.id);
         this.wake();
       });
+    }
+    this.wake();
   }
   protected prepared(id: string) {
     const row = this.db
@@ -551,7 +558,7 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
   releaseResult(id: string, actor: string) {
     this.available();
     const j = this.get(id, actor);
-    if (!this.terminal(j.state) || j.process || this.active?.id === id)
+    if (!this.terminal(j.state) || j.process || this.active.has(id))
       throw new AdminError(
         409,
         "Wait for physical task completion before releasing results.",
@@ -577,8 +584,7 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
     const j = this.get(id, actor);
     if (this.terminal(j.state)) return j;
     if (j.state === "queued") {
-      if (this.active?.id === id)
-        this.active.controller.abort(
+        this.active.get(id)?.controller.abort(
           this.metricError(
             "cancelled",
             `${this.label} cancelled before admission`,
@@ -601,8 +607,7 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
       j.state = "cancelling";
       j.phase = "stopping";
       this.save(j);
-      if (this.active?.id === id)
-        this.active.controller.abort(
+        this.active.get(id)?.controller.abort(
           this.metricError("cancelled", `${this.label} explicitly cancelled`),
         );
     }
@@ -612,12 +617,12 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
     return (this.closing ??= (async () => {
       this.closed = true;
       clearTimeout(this.timer);
-      this.active?.controller.abort(
+      for(const active of this.active.values())active.controller.abort(
         this.metricError("cancelled", `${this.label} service stopping`),
       );
       await closeResources(`${this.label} physical shutdown incomplete`, [
         ["executor", () => this.executor.close()],
-        ["active attempt", () => this.active?.done],
+        ["active attempts", () => Promise.all([...this.active.values()].map(a=>a.done))],
         ["recovery", () => this.ready],
       ]);
       if (this.fatal) throw this.fatal;
@@ -637,7 +642,7 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
             }
           this.finish(job, null);
         }
-      this.db.close();
+      this.unqueue?.();this.db.close();
       this.unlock();
     })());
   }

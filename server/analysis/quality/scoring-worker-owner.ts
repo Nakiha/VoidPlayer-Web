@@ -2,6 +2,7 @@ import type { QualityExecutionContract } from "../../../shared/analysis/quality/
 import { Worker } from "node:worker_threads";
 import type { MediaLibraryIndex } from "../../library.ts";
 import { AdminError } from "../../admin-error.ts";
+import type {QualityExecutor} from '../../../shared/service/quality-resources.ts';
 declare const VOIDPLAYER_COMPILED: boolean;
 class ScoringWorkerError extends AdminError {
   constructor(code: string, message: string) {
@@ -20,10 +21,13 @@ export class ScoringWorkerOwner {
   stopUncertain = false;
   protected library: MediaLibraryIndex;
   protected coreDir: string;
-  constructor(library: MediaLibraryIndex, coreDir: string) {
+  private executor: QualityExecutor;
+  constructor(library: MediaLibraryIndex, coreDir: string, executor: QualityExecutor = 'inspection') {
     this.library = library;
     this.coreDir = coreDir;
+    this.executor = executor;
   }
+  get admission() { return this.library.qualityAdmission; }
   protected createWorker(url: URL, data: object) {
     return new Worker(url, {
       workerData: data,
@@ -175,7 +179,9 @@ export class ScoringWorkerOwner {
     let release: () => void;
     try {
       signal.throwIfAborted();
-      release = this.library.qualityAdmission.acquire();
+      // One scalar Worker runs decoder and scorer on the same thread. Reserve
+      // its JS heap, decoder heaps, retained planes/indexes and analysis memory.
+      release = this.admission.acquire({executor:this.executor, memoryBytes:1280*1024**2, readBytes:2*1024**3, threads:1});
     } catch (error) {
       return Promise.reject(error);
     }

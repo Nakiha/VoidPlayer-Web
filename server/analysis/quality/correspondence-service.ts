@@ -59,7 +59,9 @@ export class CorrespondenceService{
         db.exec('COMMIT');
       }catch(e){db.exec('ROLLBACK');throw e;}
     }catch(e){db?.close();this.unlock();throw e;}
+    this.unqueue=runner.admission?.registerQueue(()=>this.plans().map(p=>({actor:p.actor.id,count:1})));
   }
+  private unqueue?:()=>void;
   private available(){if(this.closed||this.failed||this.runner.stopUncertain)throw new AdminError(503,'Reference plan service unavailable.','correspondence-unavailable');}
   private parse<T>(fn:()=>T):T{try{return fn();}catch(e){if(e instanceof AdminError)throw e;throw new AdminError(400,(e as Error).message,'invalid-correspondence');}}
   private plans(){return this.db.prepare("SELECT body FROM quality_correspondence_plans WHERE json_extract(body,'$.state') IN ('queued','running','cancelling') ORDER BY rowid").all().map(r=>JSON.parse(String(r.body)) as CorrespondencePlan);}
@@ -98,6 +100,7 @@ export class CorrespondenceService{
     this.available();const input=this.normalize(value),k=qualityIdempotencyKey(key),fingerprint=hash(input);
     const prior=this.db.prepare('SELECT id,fingerprint FROM quality_correspondence_plans WHERE actor=? AND client=? AND key=?').get(actor.id,input.client.id,k);
     if(prior){if(prior.fingerprint!==fingerprint)throw new AdminError(409,'Plan key binds another request.','idempotency-conflict');return {plan:this.get(String(prior.id),actor.id),replayed:true};}
+    this.runner.admission?.assertQueue(actor.id);
     const relation=this.relation(input.relation.id,actor.id);if(input.relation.revision!==relation.revision)throw new AdminError(409,'Reference relation revision changed.','relation-conflict');
     const unfinished=this.plans().filter(p=>!terminalCorrespondence(p.state));if(unfinished.length>=LIMITS.queued||unfinished.filter(p=>p.actor.id===actor.id).length>=LIMITS.actorOutstanding)throw new AdminError(429,'Correspondence planning queue full.','correspondence-queue-full');
     const plan:CorrespondencePlan={id:randomUUID(),actor:{id:actor.id,name:actor.name},requestId,key:k,relation,input,createdAt:now(),startedAt:null,endedAt:null,attemptId:null,state:'queued',reason:null,resultDigest:null,revision:1};
@@ -165,5 +168,5 @@ export class CorrespondenceService{
       plan.state=this.closed?'interrupted':plan.state==='cancelling'||plan.state==='cancelled'?'cancelled':'failed';plan.endedAt=now();plan.reason={code:this.closed?'service-shutdown':(e as {code?:string}).code??'planning-failed',message:e instanceof Error?e.message.slice(0,300):'Planning failed; no automatic retry.'};this.save(plan);
     }
   }
-  close(){return this.closing??=(async()=>{this.closed=true;clearTimeout(this.timer);this.active?.controller.abort(new AdminError(499,'Planner stopping.','service-shutdown'));await this.active?.done;if(this.failed)throw this.fatal;for(const plan of this.plans())if(!terminalCorrespondence(plan.state)){plan.state='interrupted';plan.endedAt=now();plan.reason={code:'service-shutdown',message:'Planning stopped; no automatic retry.'};this.save(plan);}this.db.close();this.unlock();})();}
+  close(){return this.closing??=(async()=>{this.closed=true;clearTimeout(this.timer);this.active?.controller.abort(new AdminError(499,'Planner stopping.','service-shutdown'));await this.active?.done;if(this.failed)throw this.fatal;for(const plan of this.plans())if(!terminalCorrespondence(plan.state)){plan.state='interrupted';plan.endedAt=now();plan.reason={code:'service-shutdown',message:'Planning stopped; no automatic retry.'};this.save(plan);}this.unqueue?.();this.db.close();this.unlock();})();}
 }

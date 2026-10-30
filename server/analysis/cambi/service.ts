@@ -72,11 +72,12 @@ export class NativeCambiService {
   private closed = false;
   private recovered = false;
   private fatal: unknown;
-  private active?: {
+  private active = new Map<string,{
     id: string;
     controller: AbortController;
     done: Promise<void>;
-  };
+  }>();
+  private unqueue?:()=>void;
   private timer?: ReturnType<typeof setTimeout>;
   private closing?: Promise<void>;
   readonly ready: Promise<void>;
@@ -100,6 +101,7 @@ export class NativeCambiService {
       this.unlock();
       throw error;
     }
+    this.unqueue=runner.admission?.registerQueue(()=>this.all().map(j=>({actor:j.actor.id,count:1})));
     this.ready = this.recover();
     void this.ready.catch((e) => {
       this.fatal = e;
@@ -265,6 +267,7 @@ export class NativeCambiService {
           return { job: this.get(String(prior.id), actor.id), replayed: true };
         }
         this.runner.assertAvailable();
+        this.runner.admission?.assertQueue(actor.id);
         const all = this.all(),
           live = all.filter((j) => !terminalCambi(j.state));
         if (
@@ -408,7 +411,7 @@ export class NativeCambiService {
     this.timer.unref();
   }
   private pump() {
-    if (this.closed || this.fatal || !this.recovered || this.active) return;
+    if (this.closed || this.fatal || !this.recovered) return;
     for (const j of this.all())
       if (j.state === "queued" && j.queueUntil <= now()) {
         j.state = "failed";
@@ -420,23 +423,26 @@ export class NativeCambiService {
         };
         this.save(j);
       }
-    const job = this.all().find((j) => j.state === "queued");
-    if (!job) return;
+    while(this.active.size<(this.runner.admission?.capacity('cambi')??1)){
+    const job = this.all().find((j) => j.state === "queued"&&!this.active.has(j.id));
+    if (!job) break;
     const a = {
       id: job.id,
       controller: new AbortController(),
       done: Promise.resolve(),
     };
-    this.active = a;
+    this.active.set(job.id,a);
     a.done = this.execute(job, a.controller.signal)
       .catch((e) => {
         this.fatal = e;
         console.error("CAMBI service stopped; history retained");
       })
       .finally(() => {
-        if (this.active === a) this.active = undefined;
+        this.active.delete(job.id);
         this.wake();
       });
+    }
+    this.wake();
   }
   private async execute(initial: CambiJob, signal: AbortSignal) {
     let j = initial,
@@ -694,7 +700,7 @@ export class NativeCambiService {
   releaseResult(id: string, actor: string) {
     this.available();
     const j = this.get(id, actor);
-    if (!terminalCambi(j.state) || j.process || this.active?.id === id)
+    if (!terminalCambi(j.state) || j.process || this.active.has(id))
       throw new AdminError(
         409,
         "Wait for physical task completion before releasing results.",
@@ -714,8 +720,7 @@ export class NativeCambiService {
     const j = this.get(id, actor);
     if (terminalCambi(j.state)) return j;
     if (j.state === "queued") {
-      if (this.active?.id === id)
-        this.active.controller.abort(
+        this.active.get(id)?.controller.abort(
           new CambiError("cancelled", "CAMBI cancelled"),
         );
       j.state = "cancelled";
@@ -727,7 +732,7 @@ export class NativeCambiService {
       j.state = "cancelling";
       j.phase = "stopping";
       this.save(j);
-      this.active?.controller.abort(
+      this.active.get(id)?.controller.abort(
         new CambiError("cancelled", "CAMBI explicitly cancelled"),
       );
     }
@@ -1195,12 +1200,12 @@ export class NativeCambiService {
     return (this.closing ??= (async () => {
       this.closed = true;
       clearTimeout(this.timer);
-      this.active?.controller.abort(
+      for(const active of this.active.values())active.controller.abort(
         new CambiError("cancelled", "CAMBI service stopping"),
       );
       await closeResources('CAMBI physical shutdown incomplete', [
         ['executor', () => this.runner.close()],
-        ['active attempt', () => this.active?.done],
+        ['active attempts', () => Promise.all([...this.active.values()].map(a=>a.done))],
         ['recovery', () => this.ready],
       ]);
       if (this.fatal) throw this.fatal;
@@ -1215,7 +1220,7 @@ export class NativeCambiService {
           };
           this.save(j);
         }
-      this.db.close();
+      this.unqueue?.();this.db.close();
       this.unlock();
     })());
   }
