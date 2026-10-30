@@ -370,6 +370,11 @@ export function installQualityCambi(signal: AbortSignal) {
         c.signal,
       );
       if (!valid(c) || id !== selected) return;
+      for (const button of $("history").querySelectorAll<HTMLButtonElement>(
+        "[data-cambi-job]",
+      ))
+        if (button.dataset.cambiJob === id)
+          button.textContent = id + " · " + j.state;
       $("detail").hidden = false;
       $("title").textContent = id + " · " + j.state;
       $("state").textContent = JSON.stringify(j, null, 2);

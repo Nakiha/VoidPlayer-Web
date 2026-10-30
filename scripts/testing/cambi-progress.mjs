@@ -139,6 +139,10 @@ export async function checkCambiProgress(browser, engine) {
     assert.equal(done.state, "partial");
     await page.locator("#cambi-title").filter({ hasText: "partial" }).waitFor();
     await page
+      .locator(`[data-cambi-job="${job.id}"]`)
+      .filter({ hasText: "partial" })
+      .waitFor();
+    await page
       .locator("#cambi-validation")
       .filter({ hasText: "未评分范围不计零分" })
       .waitFor();
