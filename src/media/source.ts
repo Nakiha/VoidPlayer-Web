@@ -1,6 +1,6 @@
 import { prepareYuvFrame, createYuvBufferPool } from './decoding/yuv-frame.ts';
-import { getColorMode,getReferenceDecode } from './policy/color-mode.ts';
-import type { ColorMode, ReferenceDecode } from '../../shared/color/decode-policy-types.ts';
+import { captureDecodeConfiguration } from './policy/color-mode.ts';
+import type { ColorMode, ReferenceDecode, DecodeConfiguration } from '../../shared/color/decode-policy-types.ts';
 import { probeContainer } from './policy/container-probe.ts';
 import { openSoftwareMedia } from './decoding/software-media.ts';
 import { openMediaPlan } from './policy/media-policy.ts';
@@ -126,12 +126,12 @@ export { MediaOpenError } from '../../shared/media/io/media-errors.ts';
 export type { OpenStage } from '../../shared/media/io/media-errors.ts';
 /** File and URL differ only in byte access. Container adapters are selected
  * once, before the shared native/software/reference policy is applied. */
-async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftware?: () => Promise<MediaSource>, onProgress?: MediaOpenProgress, signal?: AbortSignal, nativePresentedLibrary?:import('../../shared/media/io/library-reference-types.ts').LibraryIndexReference): Promise<MediaSource> {
+async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftware?: () => Promise<MediaSource>, onProgress?: MediaOpenProgress, signal?: AbortSignal, nativePresentedLibrary?:import('../../shared/media/io/library-reference-types.ts').LibraryIndexReference, configuration:DecodeConfiguration=captureDecodeConfiguration()): Promise<MediaSource> {
   const pipelineStartedAt = performance.now();
   const container = await probeContainer(input, signal);
   const packetMp4 = container === 'isobmff';
   const mp4DemuxPlan = packetMp4 ? 'packet' : null;
-  const reference = getColorMode() === 'reference', preference = getReferenceDecode();
+  const reference = configuration.colorMode === 'reference', preference = configuration.referenceDecode;
   const colorMode = reference ? 'reference' : 'browser';
   let nativeOpens = 0, softwareOpens = 0;
   const libraryReference='url' in input?input.library:undefined;
@@ -190,13 +190,13 @@ async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftwa
   } finally {if(tsAdmission?.kind==='js-packet-static')tsAdmission.close();}
 }
 
-export async function openMedia(file: File, openFallback: ((file: File) => Promise<MediaSource>) | undefined = undefined, onProgress?: MediaOpenProgress, signal?: AbortSignal): Promise<MediaSource> {
+export async function openMedia(file: File, openFallback: ((file: File) => Promise<MediaSource>) | undefined = undefined, onProgress?: MediaOpenProgress, signal?: AbortSignal, configuration:DecodeConfiguration=captureDecodeConfiguration()): Promise<MediaSource> {
   loadAborted(signal);
   if (!(file instanceof File) || file.size === 0) throw new MediaOpenError('input', '请选择非空的视频文件。');
-  return openInput({ file }, file, openFallback ? () => openFallback(file) : undefined, onProgress, signal);
+  return openInput({ file }, file, openFallback ? () => openFallback(file) : undefined, onProgress, signal, undefined, configuration);
 }
 
-export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallback: ((url: string, meta: MediaMeta) => Promise<MediaSource>) | undefined = undefined, onProgress?: MediaOpenProgress, signal?: AbortSignal, library?:import('../../shared/media/io/library-reference-types.ts').LibraryIndexReference, nativePresentedLibrary?:import('../../shared/media/io/library-reference-types.ts').LibraryIndexReference): Promise<MediaSource> {
+export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallback: ((url: string, meta: MediaMeta) => Promise<MediaSource>) | undefined = undefined, onProgress?: MediaOpenProgress, signal?: AbortSignal, library?:import('../../shared/media/io/library-reference-types.ts').LibraryIndexReference, nativePresentedLibrary?:import('../../shared/media/io/library-reference-types.ts').LibraryIndexReference, configuration:DecodeConfiguration=captureDecodeConfiguration()): Promise<MediaSource> {
   loadAborted(signal);
   if (!meta.size) {
     const head = await fetch(url, { method: 'HEAD', signal });
@@ -204,7 +204,7 @@ export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallbac
     meta = { ...meta, size: Number(head.headers.get('content-length')) };
   }
   if (!Number.isSafeInteger(meta.size) || meta.size <= 0) throw new MediaOpenError('input', '媒体文件长度无效。');
-  return openInput({ url, size: meta.size, ...(library?{library}:{}) }, meta, openFallback ? () => openFallback(url, meta) : undefined, onProgress, signal, nativePresentedLibrary);
+  return openInput({ url, size: meta.size, ...(library?{library}:{}) }, meta, openFallback ? () => openFallback(url, meta) : undefined, onProgress, signal, nativePresentedLibrary, configuration);
 }
 
 async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortSignal, onProgress?: MediaOpenProgress, access?:RandomAccessInput, rawNative=false): Promise<MediaSource> {

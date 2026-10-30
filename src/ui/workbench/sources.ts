@@ -187,9 +187,9 @@ export function createSourcesPane(shared: WorkbenchShared) {
     try {
       await act(async () => {
         try {
-          await session.load(slot, async (signal, report) => {
+          await session.load(slot, async (signal, report, configuration) => {
             const onProgress = (stage: MediaLoadStage) => { progress(stage); report(stage); };
-            const source = await (item.file ? openMedia(item.file, undefined, onProgress, signal) : openLibraryItem(item.library!, onProgress, signal));
+            const source = await (item.file ? openMedia(item.file, undefined, onProgress, signal, configuration) : openLibraryItem(item.library!, onProgress, signal, configuration));
             if (loadingSource === pendingLoad) { pendingLoad.status = () => t(msg("sources.showingFirstFrame", "正在显示首帧")); renderSources(); }
             return source;
           }, item.name);
