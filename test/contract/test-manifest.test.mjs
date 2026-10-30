@@ -431,3 +431,21 @@ test('paused native quality keeps explicit preparation and independent mandatory
  assert.ok(selectCases({suite:'ci-native-bun',platform:'win32'}).selected.some(r=>r.id==='bun-quality-source-build'));
  const release=readFileSync(new URL('../../scripts/check-quality-release.mjs',import.meta.url),'utf8');assert.match(release,/quality-source-build/);assert.ok(!release.includes('frame-index?v=${entry.version}&build=1'));
 });
+
+test('media Node domain partitions are a complete disjoint selection and reject drift',()=>{
+  for(const platform of ['linux','darwin','win32']){
+    const all=selectCases({suite:'ci-node-media',platform}).selected;
+    const parts=testManifest.ciNodeMediaShards.flatMap(name=>selectCases({suite:'ci-node-media-'+name,platform}).selected);
+    assert.equal(new Set(parts.map(row=>row.id)).size,parts.length,'no repeated cases across isolated workers');
+    assert.deepEqual(parts.map(row=>row.id).sort(),all.map(row=>row.id).sort(),platform+': complete media union');
+    for(const row of parts)assert.ok(row.required&&all.includes(row),'same original case/command/budget');
+  }
+  const first=testManifest.cases.find(row=>row.suites.includes('ci-node-media'));
+  for(const mutate of [
+    m=>{m.cases.find(row=>row.id===first.id).suites=m.cases.find(row=>row.id===first.id).suites.filter(s=>!s.startsWith('ci-node-media-'));},
+    m=>{const row=m.cases.find(row=>row.id===first.id);row.suites.push('ci-node-media-'+m.ciNodeMediaShards.find(name=>!row.suites.includes('ci-node-media-'+name)));},
+    m=>{m.cases.find(row=>row.suites.includes('source')).suites.push('ci-node-media-analysis');},
+    m=>{delete m.ciNodeMediaShards;},
+    m=>{m.ciNodeMediaShards=['analysis','analysis','containers'];},
+  ]){const m=clone();mutate(m);assert.throws(()=>validateManifest(m),/partition/);}
+});

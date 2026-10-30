@@ -98,6 +98,26 @@ export function validateManifest(manifest = testManifest, root = repositoryRoot)
   for (const row of manifest.cases.filter(row => row.suites.includes('ci-node-media'))) {
     if (!row.suites.includes('unit')) fail(`${row.id}: media CI partition must belong to unit`);
   }
+  // These are domain partitions, not hash shards or timing-based selection.
+  // Every complete media Node case has one owner, on the same supported hosts.
+  const partitions = manifest.ciNodeMediaShards ?? [];
+  const media = manifest.cases.filter(row => row.suites.includes('ci-node-media'));
+  if (media.length && (!Array.isArray(partitions) || partitions.length !== 3
+    || new Set(partitions).size !== 3 || partitions.some(name => !/^[a-z][a-z-]*$/.test(name)))) {
+    fail('Media Node CI requires exactly three distinct domain partitions');
+  } else {
+    for (const name of partitions) {
+      const suite = `ci-node-media-${name}`;
+      if (!manifest.suites.includes(suite) || !manifest.cases.some(row => row.suites.includes(suite))) fail(`${suite}: missing or empty partition`);
+    }
+    for (const row of manifest.cases) {
+      const owned = partitions.filter(name => row.suites.includes(`ci-node-media-${name}`));
+      if (row.suites.includes('ci-node-media') ? owned.length !== 1 : owned.length !== 0)
+        fail(`${row.id}: media Node case needs exactly one domain partition, and partitions may not select other cases`);
+      if (row.suites.some(suite => suite.startsWith('ci-node-media-') && !partitions.includes(suite.slice('ci-node-media-'.length))))
+        fail(`${row.id}: undeclared media Node partition`);
+    }
+  }
   function inspect(directory, category) {
     for (const entry of readdirSync(path.join(root, directory), { withFileTypes: true })) {
       const relative = `${directory}/${entry.name}`;

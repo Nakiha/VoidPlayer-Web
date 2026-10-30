@@ -6,12 +6,31 @@
 
 | 触发 | 必跑内容 | 边界 |
 | --- | --- | --- |
-| PR、main 推送 | `source` 与 `ci-node-media` 构成完整 Node 用例并集（当前数量由清单枚举）；`ci-pr-browser` 覆盖 Chromium/WebKit 核心流程 | 7 个执行 job：源码、两个 core、媒体 Node、两个浏览器、最终汇总；不打三平台包，不运行性能测试 |
+| PR、main 推送 | `source` 与 `ci-node-media` 构成完整 Node 用例并集（当前数量由清单枚举）；`ci-pr-browser` 覆盖 Chromium/WebKit 核心流程 | 9 个执行 job：源码、两个 core、三个隔离的媒体 Node 分片、两个浏览器、最终汇总；不打三平台包，不运行性能测试 |
 | 显式运行 Full verification、版本标签 | 全浏览器矩阵、完整缓存/评分流程、HEVC 全帧验证、三平台 × Node/Bun、三平台原生包与发布集校验 | 全部成功才能产出 verified release set；只有版本标签生成未公开的 Release 草稿 |
 
 日常浏览器选择在统一 manifest 的 `ci-pr-browser` 声明：真实原生帧协议、PSNR/SSIM/VMAF/CAMBI/XPSNR 到候选/原帧证据、任务重执行、身份/Agent 标注与连接引导，以及完整分析 UI。数值域的 8/10-bit、ROI、区间、多 GOP 和生命周期由完整媒体 Node 分区覆盖；GUI 的完整深度/容器组合仍在显式全量验证中。日常检查通过不等于完整兼容性认证。
 
 需要完整兼容性结论或准备发版时，显式运行全量验证；变更核心 ABI、解码/呈现、时钟、持久化协议或发布流程时，至少运行受影响的专项验证，并明确尚未覆盖的平台。普通修改不再自动启动全量发布流水线。完整用例和原超时继续保留，不能靠删除失败、增加重试或扩大阈值使汇总变绿。`Required verification` 在任何前置失败、取消或跳过时失败；未完成状态不算通过。
+
+媒体 Node 的完整集合仍为 `ci-node-media`；日常执行分成清单中的三组：
+`ci-node-media-analysis`（分析 core/码流与评分）、`ci-node-media-containers`
+（TS/JS 容器与包身份）、`ci-node-media-playback-quality`（播放、源平面与评审）。
+每个原用例必须恰好属于一组，三组在 Linux/macOS/Windows 上的选择并集必须
+等于完整分区；命令、required、fixture 与整例时限复用原登记，不按 hash、
+改动路径或测得速度跳过用例。当前分组为 8/8/44 项。
+
+GitHub 的三个 matrix job 有各自的检出、素材、core、服务、Worker 和报告，
+不在同一工作目录并发修改素材。共用固定准备 action 与缓存，`fail-fast: false`
+保证一组失败时其余组仍给出结果；最终 `unit` matrix 和 Required verification
+均须成功。单个分片 job 的总预算30分钟，原单例 watchdog不变。全量发布仍可
+直接执行完整分区。单机复现请逐组执行，不能在同一 checkout 盲目并发：
+
+```sh
+node scripts/run-tests.mjs ci-node-media-analysis
+node scripts/run-tests.mjs ci-node-media-containers
+node scripts/run-tests.mjs ci-node-media-playback-quality
+```
 
 原 PR #156 的画质门禁审计与失败证据见 [browser-quality-gates.md](browser-quality-gates.md)，其中 `ci-cache-pr` 的历史策略已被上述分层替代。`ci-cache-pr` 仅保留为旧本地选择器；全量流水线必跑完整 `ci-cache`，不再另设同一用例的非阻塞诊断副本。
 
