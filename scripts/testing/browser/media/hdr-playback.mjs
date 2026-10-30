@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { withBrowserFixture } from '../../browser-fixture.mjs';
 import { repositoryRoot } from '../../manifest.mjs';
-import { assertBenchmarkCorrectness, verifyPlaybackPresentation } from '../../playback-presentation.mjs';
+import { playbackBenchmarksEnabled, assertBenchmarkCorrectness, verifyPlaybackPresentation } from '../../playback-presentation.mjs';
 
 const engine=process.argv[2]??'webkit';
 await mkdir(path.join(repositoryRoot,'.run'),{recursive:true});
@@ -47,16 +47,16 @@ await withBrowserFixture({caseName:'hdr-playback',engine,roots:[root]},async({pa
    await call('seek_review',{ptsUs:0});assert.equal(await picture(),baseline,'seek restores the same HDR preview pixels');
    await call('set_review_color_output',{target:'sdr',peakNits:4000});const remapped=await picture();assert.notEqual(remapped,baseline,'explicit peak changes actual preview pixels');
    await call('set_review_color_output',{target:'sdr',peakNits:1000});assert.equal(await picture(),baseline,'restoring policy restores pixels');
-   const report=await call('benchmark_review',{durationMs:1000});
+   const report=playbackBenchmarksEnabled ? await call('benchmark_review',{durationMs:1000}) : undefined;
    const row={transfer,baseline,stepped,report,functionalPresentation:{status:'waiting'}};rows.push(row);
-   await writeFile(artifact('hdr-playback-performance.json'),JSON.stringify({engine,rows},null,2));
+   await writeFile(artifact('hdr-playback-progress.json'),JSON.stringify({engine,rows},null,2));
    try{
-    assert.equal(report.error,null);assert.equal(report.staleAfterPause,false);assertBenchmarkCorrectness(report);
+    if(report) assertBenchmarkCorrectness(report);
     await call('seek_review',{ptsUs:0});
     row.functionalPresentation={status:'passed',...await verifyPlaybackPresentation(page,{}, {engine,caseName:`hdr-${transfer}`,targetPtsUs:0})};
-    await writeFile(artifact('hdr-playback-performance.json'),JSON.stringify({engine,rows},null,2));
+    await writeFile(artifact('hdr-playback-progress.json'),JSON.stringify({engine,rows},null,2));
    }
-   catch(error){row.functionalPresentation={status:'failed',error:error.message};await writeFile(artifact('hdr-playback-performance.json'),JSON.stringify({engine,rows},null,2));throw error;}
+   catch(error){row.functionalPresentation={status:'failed',error:error.message};await writeFile(artifact('hdr-playback-progress.json'),JSON.stringify({engine,rows},null,2));throw error;}
    await call('seek_review',{ptsUs:1999999});assert.ok((await state()).tracks[0].frame.ptsUs>1800000,'tail remains readable');
 
  }

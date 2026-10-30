@@ -1,3 +1,4 @@
+import { playbackBenchmarksEnabled, verifyPlaybackPresentation } from './testing/playback-presentation.mjs';
 // Real native/WASM decoding through the production facade. Synthetic SDR
 // clips isolate policy; hardware/GPU use and high-resolution speed are separate.
 import assert from 'node:assert/strict';
@@ -116,9 +117,12 @@ try {
       for (const ptsUs of [1000000, 0, 500000]) await call('seek_review', { ptsUs });
       assert.equal((await call('get_review_session')).tracks[0].frame.ptsUs, 480000);
       if (!fault && !software && codec === 'av1' && !local) {
+        if (!playbackBenchmarksEnabled) await verifyPlaybackPresentation(page);
+        else {
         const benchmark = await call('benchmark_review', { durationMs: 1200 });
         console.log(`BENCH ${JSON.stringify(benchmark)}`);
         assert.equal(benchmark.error, null); assert.equal(benchmark.staleAfterPause, false);
+        }
       }
       assert.deepEqual(errors, []);
       console.log(`PASS ${engine}: ${codec} ${local ? 'local sniff' : 'remote'} ${fault ?? (software ? 'saved software' : 'default hardware')} -> ${state.tracks[0].decoder}`);

@@ -55,11 +55,11 @@ node scripts/run-tests.mjs ci-node-media
 | `npm run test:browser:all` | 自动化浏览器检查及内部矩阵；Chromium/WebKit、媒体/core/FFmpeg，默认构建一次 | `ci-audio`、`ci-playback`、`ci-cache`、`ci-flv`、`ci-fate`、`ci-analysis-ui`、`ci-analysis-matrix-*`、`uncovered`、`flv-startup` 与 HEVC 四格矩阵 |
 | `npm run test:media` | 真实媒体 Node / 浏览器检查；包括特殊的可信 HTTPS 功能用例 | playback / hevc-browser job；可信 HTTPS 仅在一次性 CI 主机执行 |
 | `npm run test:suite -- release` | 固定 core 来源、原生归档、归档浏览器及三平台汇总；需先生成对应产物 | decoder / native-release / release-set；打包及草稿操作仍由 workflow 管理 |
-| `npm run test:perf` | 索引构建、争用和可信 HTTPS 播放性能；所有结果显式 informational | `ci-perf`，保留 `continue-on-error`；可信 HTTPS 仅在一次性 CI 主机执行 |
+| `npm run test:perf` | 索引构建、争用和可信 HTTPS 播放性能；所有结果显式 informational | 不在 GitHub CI 执行；在明确的本机环境单独验收 |
 
 `browser` 是自动化浏览器套件。需要 Windows 可见桌面的 Chrome/Edge 色彩与 WebGPU 检查属于清单中的 `manual-regression`，仍使用原有专用命令；外部服务、用户指定媒体的诊断/实验/基准属于显式工具分类，不会自动变成发布门禁。清单记录限制和理由，不能把 `npm test` 当作 fast，也不能把旧 `test:browser` 当作完整浏览器套件。
 
-FLV 浏览器回归固定 640×480 视口，两种引擎均解码原始尺寸的输入。Chromium 的隔离 headless 进程显式启用 SwiftShader WebGL，避免 GPU 黑名单把整帧 YUV 转换送进逐像素 CPU 兜底；这不代表物理 GPU 或大视口性能验收。普通本地命令仍按原有全部性能阈值必过。GitHub 虚拟 runner 显式设置 `VOIDPLAYER_FLV_VIRTUAL_PERF=report`，只在 Linux headless Chromium、未验证物理硬件、已知 WebCodecs/WASM 与 browser-managed/WebGL 渲染路径中把 `below-realtime` 和 `A:presentation-stall` 留作非阻断性能报告；基准的阈值、`passed:false` 和失败原因不变，负面结果写入 job summary。没有采样/帧、错误、延迟、同步偏差与暂停后冒帧等失败仍阻断，seek、逐帧、尾帧与 Range 原有断言也保留。每个输入的完整结果保存到 `.run/playback-reports/flv/<engine>/` 并随 CI 报告上传。0.6.0 预检的 [1080p HEVC 负面记录](evidence/release-0.6.0/flv-legacy-hevc-ci.json)为 0.366×，[AV1 负面记录](evidence/release-0.6.0/flv-private-av1-ci.json)为 0.8998×，不能把功能门禁通过解释成实时播放达标。
+FLV 浏览器回归固定 640×480 视口，两种引擎均解码原始尺寸的输入。Chromium 的隔离 headless 进程显式启用 SwiftShader WebGL，避免 GPU 黑名单把整帧 YUV 转换送进逐像素 CPU 兜底；这不代表物理 GPU 或大视口性能验收。普通本地命令仍按原有全部性能阈值必过。GitHub CI 不执行性能基准：FLV、Range、参考解码、HDR、分析矩阵与 HTTPS 功能流程验证实际呈现帧的推进、身份和暂停稳定性；HTTPS 继续做三轮双轨播放、队列容量和资源释放检查。`VOIDPLAYER_FUNCTIONAL_ONLY=1` 可在本机复现该功能路径，普通本地命令仍保留原基准阈值。历史云端性能报告只保留为历史证据，不作为当前验收结论。
 
 HEVC 时间线检查保留每个输入两轮各 600 帧、每帧源尺寸截图、帧身份和 seek/逐帧/尾帧断言。Linux Chromium 每次全尺寸截图实测可耗时约 0.6–1.4 秒，因此 Chromium 单项总预算为 30 分钟，CI job 留出 35 分钟；这不是实时播放性能阈值。每 100 帧以及打开、seek、重开边界记录进度和呈现/截图/读回耗时；页面连续 180 秒没有进度则立即失败并输出最后阶段，关闭页面与浏览器。播放基准的帧率、延迟与停顿阈值不变。
 
@@ -67,7 +67,7 @@ Node/WASM 单元由独立 `source-logic` / `unit` job 分工；串行 `playback`
 
 analysis matrix、FLV startup 和 HDR 功能套件通过 `scripts/testing/playback-presentation.mjs` 等待真实 Session 呈现事件：commit 与实际帧时间必须严格前进，源/generation、已提交帧和可用的精确 picture 身份必须匹配。20 秒无严格进展、60 秒总期限及独立 65 秒宿主 watchdog 限制宿主等待（浏览器清理由调用方 finally 负责）；重复帧与元数据心跳不能续期。暂停后保留原 100ms 稳定性观察，并拒绝迟到呈现。playing 时长从实际进入播放起计算，中途暂停再恢复也失败。只读窗口订阅直接复用 Session 状态与呈现事件，不复制帧资源或改变渲染/解码算法。
 
-原 1/1.5/2/4 秒 benchmark 窗口、绝对性能阈值、`passed:false` 和原因保留为独立报告，不用功能等待期间的帧补写原样本。错误、错源/错帧、提前结束、异常中断和暂停残留仍阻断；短窗口无帧由独立严格呈现证明替代。FLV 分辨率/open-GOP 的实际帧仍须推进超过既有 100ms 媒体下限，再核对帧所属尺寸和显式后段 seek；缓存 workload 仍做 20 次播放、保留实际 playing 时长、命中率和几何断言。源码 benchmark 的绝对目标尚未达标不能解释成物理硬件验收；可信 HTTPS 配对脚本目前也没有候选/基线回归比值阈值。
+本机运行仍保留原 1/1.5/2/4 秒 benchmark 窗口和阈值；GitHub CI 不采集这些样本，也不生成性能判定。功能用例仍拒绝错误、错源/错帧、异常中断和暂停残留。FLV 分辨率/open-GOP 的实际帧仍须推进超过既有 100ms 媒体下限，再核对帧所属尺寸和显式后段 seek；缓存 workload 仍做 20 次播放并验证缓存与几何行为。功能等待超时用于发现卡死，不是吞吐或帧率指标。
 
 ```sh
 npm run test:manifest
@@ -233,7 +233,7 @@ npm run test:presentation:browser
 
 帧队列同时按数量和字节限制，播放报告的 `measurements.buffers` 记录每轨当前值、峰值及上限。这仅统计队列内已解码帧，不代表浏览器总内存；解码器、压缩文件、画布与 GPU 还会占用内存。
 
-CI 将这两类检查分开运行：`--functional-only` 检查载入、解码路径、资源释放和队列边界，失败仍阻止发布汇总；`--benchmark-only` 单独输出性能报告，保留原阈值和非零失败退出码，但该步骤不阻止合并或发布汇总。无参数时仍依次运行全部检查。共享 runner 的绝对速度不是目标设备性能，也没有 main 的同环境对照，不能独自判定 PR 性能回退。身份工作流仅在 PR 和 main 推送时触发，避免同一 PR 分支推送重复运行。
+GitHub CI 只运行 `--functional-only`，检查载入、真实呈现、解码路径、资源释放和队列边界；失败仍阻止发布汇总。`--benchmark-only` 与无参数的完整入口保留为显式测试工具，不由工作流调度。原可信 HTTPS 工具需要一次性证书环境；普通本机性能测试继续使用 `bench-playback.mjs`，不会自动修改本机信任库。身份工作流仅在 PR 和 main 推送时触发，避免同一 PR 分支推送重复运行。
 
 这些是当前设备上的 canvas 呈现证据，不是物理显示扫描、所有 Safari 版本、HDR 保真或低端硬件性能保证。浏览器下载和剪贴板还受宿主权限影响，不能用“调用成功”代替实际文件/内容送达验证。
 
@@ -338,7 +338,7 @@ npm run test:fate:browser
 
 2026-09-12 本机编码矩阵的原始产物位于 `artifacts/local-codecs-2026-09-12/`（`report.json`、`chromium-4k-recheck.json`、`exact-recheck/report.json`）；这些产物未提交，当前 checkout 无法直接复核。历史记录中的载入/定位通过不等于首次播放全部通过，后续 4K 软件复测也不能抹去首次失败或推广为稳定性能保证。需要重新取证时使用 `scripts/check-local-codec-matrix.mjs`，按其 `CODEC_FILES`、`CODEC_BROWSER`、`CODEC_MODE` 和 `CODEC_REPEATS` 配置明确输入与环境。
 
-配对 HTTPS 对照在隔离目录构建固定 PR base，并把 feature 的三个公共测试脚本同步到 baseline；两边的应用代码保持各自版本。执行前仍强制检查脚本、媒体及 WASM 的字节一致，报告保存实际 harness SHA-256，采用 baseline-feature-feature-baseline 次序。`perf-https-pair` 在自己的套件中为 required：启动或测量失败使套件 `passed=false`。CI job 保留性能测量的 informational 定位，但显式输出失败与原始证据，不能用绿色外层 job 推断无回归。
+2026-10-30 按项目要求移除了 GitHub CI 的配对 HTTPS 性能 job、独立播放测速步骤和性能摘要。旧配对脚本保留为未调度的历史工具，原始报告不改写为通过；后续性能验收在明确的本机环境进行。
 
 ### 有限 fMP4 分区
 

@@ -8,28 +8,6 @@ import { fileURLToPath } from 'node:url';
 import { releaseVersion, readReleaseIdentity, readBuildIdentity, verifyFrontendIdentity, readReleaseNotes } from '../../scripts/release-version.mjs';
 import { verifyReleaseSet, sha256, releasePlatforms } from '../../scripts/check-release-set.mjs';
 import { stageRelease, verifyDraftReleaseSet } from '../../scripts/stage-release.mjs';
-import { blockingFlvBenchmarkFailures } from '../../scripts/testing/flv-benchmark-policy.mjs';
-
-test('virtual FLV timing reports retain negative verdicts and never waive functional failures', () => {
-  const benchmark = { passed: false, tracks: [{ decoder: 'ffmpeg-wasm' }], environment: { hardwareUseVerified: false, userAgent: 'Mozilla/5.0 (X11; Linux x86_64) HeadlessChrome/153.0' }, failures: ['below-realtime', 'A:presentation-stall'] };
-  const context = { virtualRunner: true, engine: 'chromium', renderer: 'webgl-yuv' };
-  assert.deepEqual(blockingFlvBenchmarkFailures(benchmark, context), []);
-  assert.equal(benchmark.passed, false);
-  assert.deepEqual(benchmark.failures, ['below-realtime', 'A:presentation-stall']);
-  for (const patch of [{ virtualRunner: false }, { engine: 'webkit' }, { renderer: 'cpu-yuv' }, { renderer: 'unknown' }]) {
-    assert.deepEqual(blockingFlvBenchmarkFailures(benchmark, { ...context, ...patch }), benchmark.failures);
-  }
-  for (const failure of ['insufficient-sample', 'no-frames', 'A:no-frames', 'frame-lag', 'track-skew', 'pause-latency', 'stale-frame-after-pause', 'playback-error', 'interrupted', 'premature-end', 'media-changed', 'page-not-visible', 'unknown']) {
-    assert.deepEqual(blockingFlvBenchmarkFailures({ ...benchmark, failures: [...benchmark.failures, failure] }, context), [failure]);
-  }
-  assert.deepEqual(blockingFlvBenchmarkFailures({ ...benchmark, tracks: [{ decoder: 'webcodecs' }] }, { ...context, renderer: 'browser-managed' }), []);
-  for (const environment of [{}, { ...benchmark.environment, hardwareUseVerified: true }, { ...benchmark.environment, userAgent: 'Chrome/153.0' }, { ...benchmark.environment, userAgent: 'HeadlessChrome/153.0 Macintosh' }]) {
-    assert.deepEqual(blockingFlvBenchmarkFailures({ ...benchmark, environment }, context), benchmark.failures);
-  }
-  assert.deepEqual(blockingFlvBenchmarkFailures({ ...benchmark, tracks: [{ decoder: 'unknown' }] }, context), benchmark.failures);
-  assert.deepEqual(blockingFlvBenchmarkFailures({ ...benchmark, tracks: [] }, context), benchmark.failures);
-});
-
 // These structural contracts run in the identity job before npm ci. Keep them
 // dependency-free and fail closed if the workflow's job/needs syntax changes.
 function workflowJobs(source) {
@@ -59,18 +37,10 @@ test('release workflow gates verified artifacts and draft staging on every verif
     assert.ok(jobs[need], `unknown dependency ${need}`);
     return [need, ...dependencies(need)];
   }));
-  // This one PR-only measurement is informational. Every other verification
-  // job remains required, including any newly added job not explicitly audited.
-  const informational = jobs['paired-https'];
-  assert.ok(informational, 'paired performance job exists');
-  assert.deepEqual(informational.needs, ['decoder', 'analysis-core']);
-  assert.match(informational.body, /^    if: github.event_name == 'pull_request'$/m);
-  assert.match(informational.body, /id: paired-performance\n        continue-on-error: true/);
-  assert.match(informational.body, /cp scripts\/check-http-playback.mjs scripts\/bench-playback.mjs scripts\/test-certificate-trust.mjs/);
-  assert.match(informational.body, /run: node scripts\/run-tests\.mjs ci-perf-pair --prepared/);
-  assert.match(informational.body, /if: always\(\)[\s\S]*name: paired-https-performance-reports/);
-  assert.doesNotMatch(informational.body, /stage-release|check-release-set|verified-release-set/);
-  assert.deepEqual([...dependencies('release-set')].sort(), Object.keys(jobs).filter(id => !['release-set', 'release-draft', 'paired-https'].includes(id)).sort(),
+  assert.equal(jobs['paired-https'], undefined, 'cloud benchmark comparison is removed');
+  assert.doesNotMatch(workflow, /ci-perf|bench-playback|benchmark-only|VIRTUAL_PERF|performance-reports/);
+  assert.match(jobs.playback.body, /run-tests\.mjs ci-https --prepared/);
+  assert.deepEqual([...dependencies('release-set')].sort(), Object.keys(jobs).filter(id => !['release-set', 'release-draft'].includes(id)).sort(),
     'every new required verification job must be in the release dependency graph');
   for (const id of dependencies('release-set')) {
     assert.doesNotMatch(jobs[id].body, /^    (?:if|continue-on-error):/m, `${id} must retain success-only job gating`);

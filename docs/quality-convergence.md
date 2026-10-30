@@ -486,3 +486,22 @@ Chromium/WebKit各16项完成；WebKit H264/HEVC8/10实际执行，Chromium
 须由当前提交CI再次确认；并未据本机通过推断浏览器底层根因已修。
 [原始失败日志](https://github.com/Nakiha/VoidPlayer-Web/actions/runs/40980442675/job/123819068459)，
 本地副本`.run/quality-convergence/cache-failure-fd73779.log`。
+
+
+## 阶段二十：移除 GitHub CI 性能测量
+
+按用户要求，云端共享 runner 不再承担性能验收。删除 PR base/候选配对
+HTTPS 性能 job、独立播放基准步骤、FLV 性能摘要和对应 CI 套件入口；
+删除已无调用的虚拟 runner 性能豁免策略。旧性能报告仍是历史负面证据，
+本次改变验收职责，不将旧结果改写为性能修复或通过。
+
+FLV、Range、参考 FLV、HDR、分析矩阵在 GitHub Actions 中不调用基准，
+改用已有严格呈现证明，验证实际帧推进、源/帧身份、播放错误和暂停稳定性。
+HTTPS 功能流程继续三轮双轨真实播放、队列容量、Worker 释放及资源回收检查，
+不输出速度或性能结论。功能等待期限和原逐帧/seek/尾帧断言保留。
+本机基准命令与阈值保留；VOIDPLAYER_FUNCTIONAL_ONLY=1 可复现 CI 功能模式。
+
+本机新功能路径7/7浏览器用例通过（双引擎FLV/启动、Range、参考FLV、HDR），
+Chromium/WebKit MP4分析矩阵2/2（合计24组合）通过；报告无benchmark结果，
+严格呈现和暂停证明存在。完整contract43/43、定向契约92/92、构建通过。
+可信HTTPS证书功能路径及三平台完整验收仍由本提交CI给出实际结论。

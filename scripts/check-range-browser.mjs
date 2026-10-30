@@ -1,3 +1,4 @@
+import { playbackBenchmarksEnabled, verifyPlaybackPresentation } from './testing/playback-presentation.mjs';
 // Production Worker path: native-decode rejection must lead to bounded packet IO.
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -39,7 +40,7 @@ try {
       await page.goto(base); await page.waitForFunction(() => !!window.voidPlayer);
       // Assert decoder-capability policy explicitly in browser matching mode.
       await page.evaluate(() => window.voidPlayer.tools.find(t => t.name === 'set_review_color_mode').execute({ mode: 'browser' }));
-      const result = await page.evaluate(async file => {
+      const result = await page.evaluate(async ({ file, playbackBenchmarksEnabled }) => {
         const call = (name, params = {}) => window.voidPlayer.tools.find(t => t.name === name).execute(params);
         const listing = await call('list_library', { search: file });
         const item = listing.entries.find(e => e.name === file);
@@ -66,9 +67,10 @@ try {
         }
         await call('step_review', { direction: 1 });
         const last = await call('get_review_session');
-        const bench = await call('benchmark_review', { durationMs: 1000 });
+        const bench = playbackBenchmarksEnabled ? await call('benchmark_review', { durationMs: 1000 }) : undefined;
         return { first, last, bench, boundary, seekFrames };
-      }, file);
+      }, { file, playbackBenchmarksEnabled });
+      if (!playbackBenchmarksEnabled) result.functionalPresentation = await verifyPlaybackPresentation(page);
       assert.deepEqual(errors, []);
       // New Chromium builds can decode High 4:2:2 natively. Preserve the
       // capability-first policy; VVC and FFV1 exercise mandatory WASM here.
@@ -90,9 +92,9 @@ try {
       }
       assert.ok(result.last.tracks[0].frame.ptsUs > 0);
       assert.ok(requests.length > 0 && requests.every(r => /^bytes=/.test(r.range ?? '')));
-      assert.ok(!result.bench.error, JSON.stringify(result.bench));
-      // VVC CPU throughput is reported, not an absolute machine-specific gate.
-      console.log(JSON.stringify({ browser: name, file, reads: requests.length, benchmark: result.bench }));
+      if (result.bench) assert.ok(!result.bench.error, JSON.stringify(result.bench));
+      // Local benchmarks remain separate from the CI presentation proof.
+      console.log(JSON.stringify({ browser: name, file, reads: requests.length, benchmark: result.bench, functionalPresentation: result.functionalPresentation }));
     } finally { await page.close(); }
   }
   // New finite codec cases use actual product UI loading for both local and

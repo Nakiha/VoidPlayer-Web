@@ -1,3 +1,4 @@
+import { verifyPlaybackPresentation } from './testing/playback-presentation.mjs';
 // Trusted HTTPS playback, repeated source-button clicks and decoder cleanup.
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
@@ -137,16 +138,19 @@ try {
       }
       assert.equal(ffmpegWorkers.size, secure ? 0 : 2);
       if (secure) assert.equal(packetWorkers.size, 2, 'each packet MP4 source owns one packet worker');
-      const report = await page.evaluate(() => window.voidPlayer.tools.find(t => t.name === 'benchmark_review').execute({ durationMs: 12000 }));
-      assert.equal(report.error, null);
-      assert.equal(report.staleAfterPause, false);
-      assert.equal(report.tracks.length, 2);
-      for (const track of report.tracks) {
+      await page.evaluate(() => window.voidPlayer.seek(0));
+      const presentation = await verifyPlaybackPresentation(page, { minPlayingMs: 12000 });
+      const state = await page.evaluate(() => window.voidPlayer.getState());
+      assert.equal(state.error, null);
+      assert.equal(state.tracks.length, 2);
+      for (const track of state.tracks) {
         assert.equal(track.decoder, secure ? 'webcodecs' : 'ffmpeg-wasm');
         if (secure) assert.ok(['prefer-hardware', 'no-preference'].includes(track.hardwareAcceleration));
         else assert.equal(track.coreVariant, 'single-thread');
       }
-      for (const queue of Object.values(report.measurements.buffers)) {
+      const buffers = state.playback?.buffers;
+      assert.equal(Object.keys(buffers ?? {}).length, 2, 'both track queues were observed');
+      for (const queue of Object.values(buffers)) {
         assert.ok(queue.peakFrames <= 4, 'queue frame cap');
         assert.ok(queue.peakBytes <= 4 * 1920 * 1080 * 4, 'queue byte cap');
       }
@@ -156,8 +160,8 @@ try {
       assert.equal(ffmpegWorkers.size, 0, 'removing both tracks must release FFmpeg workers');
       assert.equal(packetWorkers.size, 0, 'removing both tracks must release packet workers');
       const unloadedBytes = await residentBytes();
-      reports.push({ round, loadedBytes, unloadedBytes, report });
-      console.log(JSON.stringify({ round, loadedBytes, unloadedBytes, performancePassed: report.passed, failures: report.failures, measurements: report.measurements }));
+      reports.push({ round, loadedBytes, unloadedBytes, presentation, buffers });
+      console.log(JSON.stringify({ round, loadedBytes, unloadedBytes, presentation, buffers }));
     }
     if (reports.every(r => r.loadedBytes !== null)) {
       assert.ok(Math.max(...reports.map(r => r.loadedBytes)) < 1536 * 1024 * 1024, '1080p dual-track browser private resident memory stays below 1.5 GiB');
