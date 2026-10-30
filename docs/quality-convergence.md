@@ -546,3 +546,23 @@ core 准备，媒体准备复用同一 composite action；恢复缓存仍验证�
 （未运行可选 shellcheck/pyflakes）。本次只变更调度、清单和测试基础设施，
 没有重复运行完整平台发布流程，也不据此宣称当前提交已完成全平台验收。
 证据：`.run/test-suites/quality-ci-daily-profile/results.json`。
+
+
+## 阶段二十三：VMAF 浏览器验收排空观察请求
+
+阶段二十 Linux 全量评分/缓存组 68/70，两项 MP4 VMAF WebKit 用例在
+late-actor-response 结束时记录 jobs 历史请求的 access-control pageerror。
+原测试在响应头抵达后就结束观察，未等待页面原有响应读取完成；这与
+已修正的 CAMBI/任务中心测试夹具存在同一生命周期缺口。
+
+VMAF 复用已有 admin observation 夹具：重载、关闭观察页和身份围栏断言
+完成之后，停止测试拥有的轮询并排空原 reader；不复制响应、不额外请求，
+不屏蔽 pageerror。后台任务仍在关闭观察者后继续，迟到旧身份响应仍必须
+被拒绝。成功证据写入 adminReadersDrained 与完整 pageErrors。
+
+本机 Chromium/WebKit × H.264 8-bit、HEVC 8/10-bit 六项通过；每项完整
+执行 MP4/MP4、MP4/FLV、FLV/MP4 三组真实评分、官方数值、原帧哈希、
+候选发布、后台继续和身份围栏，合计 18 组。夹具契约 20/20 通过，含
+原始流排空及真实 HTTP/JSON/流/跨域错误传播。Linux 同项尚未复验，
+不据本机结果宣称旧远端失败根因已完全证实。
+证据：`.run/test-suites/quality-final-vmaf/results.json`。

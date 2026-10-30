@@ -1,3 +1,4 @@
+import {installAdminObservationLifecycle,drainAdminObservations} from './testing/admin-observation-lifecycle.mjs';
 import {holdScoringWorker} from '../test/helpers/analysis-lifecycle.mjs';
 import {assertVmafOfficial as assertOfficial} from '../test/helpers/official-quality-oracle.mjs';
 import assert from 'node:assert/strict';
@@ -28,7 +29,7 @@ async function runCase(containers){
   const runner=f.service.library.qualityVmaf.runner,run=runner.run.bind(runner);
   scoringGate=holdScoringWorker(runner,'result');
   browser=await({chromium,webkit}[engine]).launch({headless:true,...(engine==='webkit'&&process.env.VOIDPLAYER_WEBKIT_EXECUTABLE?{executablePath:process.env.VOIDPLAYER_WEBKIT_EXECUTABLE}:{})});
-  context=await browser.newContext({locale:'en-US',viewport:{width:1440,height:1000}});await context.addCookies([{name:'voidplayer-user',value:f.actor,url:f.base}]);context.on('page',p=>p.on('pageerror',e=>errors.push(e.message)));
+  context=await browser.newContext({locale:'en-US',viewport:{width:1440,height:1000}});await context.addInitScript(installAdminObservationLifecycle);await context.addCookies([{name:'voidplayer-user',value:f.actor,url:f.base}]);context.on('page',p=>p.on('pageerror',e=>errors.push(e.message)));
   phase='independent-player';
   execFileSync('ffmpeg',['-v','error','-f','lavfi','-i','testsrc2=size=160x96:rate=10:duration=120','-c:v','libx264','-preset','ultrafast','-threads','1','-bf','0','-g','10','-pix_fmt','yuv420p','-movflags','+faststart',path.join(f.media,'A.mp4')],{stdio:'pipe'});
   await f.service.library.refresh();const [a]=await waitForAnnotationMedia(f.service.library,['A.mp4']);const player=await context.newPage();await player.goto(f.base);await chooseTestGuest(player);await player.waitForFunction(()=>!!window.voidPlayer);
@@ -57,10 +58,10 @@ async function runCase(containers){
   phase='GUI-unknown-submit';let lost=false;const posts=[];
   await context.route('**/api/quality/vmaf/jobs',async route=>{if(route.request().method()==='POST'){posts.push({key:route.request().headers()['idempotency-key'],body:route.request().postData()});if(!lost){lost=true;const response=await route.fetch();assert.equal(response.status(),202);await route.abort('failed');return;}}await route.continue();});
   await page.locator('#vmaf-submit').click();await page.waitForFunction(()=>!document.querySelector('#vmaf-retry').hidden&&document.querySelector('#vmaf-inputs').disabled);await until(()=>scoringGate.held,Boolean,'Actual analysis Worker result not held');
-  await page.reload();await page.locator('#vmaf-retry').waitFor({state:'visible'});await page.locator('#vmaf-retry').click();await page.waitForFunction(()=>document.querySelector('#vmaf-title').textContent.includes('running'));
+  await drainAdminObservations(page);await page.reload();await page.locator('#vmaf-retry').waitFor({state:'visible'});await page.locator('#vmaf-retry').click();await page.waitForFunction(()=>document.querySelector('#vmaf-title').textContent.includes('running'));
   assert.equal(posts.length,2);assert.equal(posts[0].key,posts[1].key);assert.equal(posts[0].body,posts[1].body);
   const jobs=await f.json('/api/quality/vmaf/jobs');assert.equal(jobs.entries.length,1);const id=jobs.entries[0].id;
-  phase='close-observer-while-analysis-held';await page.close();assert.equal((await f.json('/api/quality/vmaf/jobs/'+id)).state,'running');scoringGate.release();
+  phase='close-observer-while-analysis-held';await drainAdminObservations(page);await page.close();assert.equal((await f.json('/api/quality/vmaf/jobs/'+id)).state,'running');scoringGate.release();
   const job=await f.wait(id);assert.equal(job.state,'completed',JSON.stringify(job));assert.equal(job.metrics.psnr.state,'completed');assert.equal(job.metrics.ssim.state,'completed');
   const summary=await f.json(`/api/quality/vmaf/jobs/${id}/result`),oracle=await officialOracle(f,depth);assertOfficial(summary.vmaf.frames,oracle.result.frames.map(v=>({index:v.frameNum,score:v.metrics.vmaf})));assertOfficial(summary.vmaf.pooled,oracle.result.pooled_metrics.vmaf);assert.equal(summary.raw.referenceSha256,oracle.hashes[0]);assert.equal(summary.raw.distortedSha256,oracle.hashes[1]);
   phase='reopen-history-and-publish';page=await context.newPage();evidence=recordBrowserEvidence(page);await page.goto(f.base+'/admin/?qualityView=vmaf#quality');await page.locator(`[data-vmaf-job="${id}"]`).click();await page.waitForFunction(()=>document.querySelector('#vmaf-title').textContent.includes('completed'));await page.locator('[data-vmaf-frame="0"]').waitFor();
@@ -77,8 +78,11 @@ async function runCase(containers){
   phase='late-actor-response';await page.bringToFront();let release,seen=false;const gate=new Promise(r=>release=r);let held=false;
   await page.route(`**/api/quality/vmaf/jobs/${id}`,async route=>{if(!held){held=true;const response=await route.fetch();seen=true;await gate;await route.fulfill({response}).catch(()=>{});}else await route.continue();});await until(()=>seen,Boolean,'Actual late detail response was not observed');
   const peer=await player.evaluate(async()=>{const r=await fetch('/api/identity',{method:'POST',headers:{'content-type':'application/json','x-voidplayer-action':'identity'},body:JSON.stringify({name:'MP4 VMAF peer',mode:'create'})});const v=await r.json();localStorage.setItem('voidplayer.identity',JSON.stringify(v.actor));return v.actor;});
-  await page.waitForResponse(r=>new URL(r.url()).pathname==='/api/quality/vmaf/jobs'&&r.request().headers()['x-voidplayer-actor']===peer.id);release();await page.waitForFunction(()=>document.querySelector('#vmaf-detail').hidden&&document.querySelector('#vmaf-title').textContent===''&&document.querySelector('#vmaf-history').textContent==='');assert.equal(await page.locator('#vmaf-plan').inputValue(),'');assert.deepEqual(errors,[]);
-  await page.screenshot({path:path.join(directory,'history.png'),fullPage:true});const result={containers,job:id,attempt:job.attemptId,frames:summary.vmaf.frames.length,pooled:summary.vmaf.pooled,hashes,work:summary.work,native:summary.vmaf.resources,posts,requests,originalPlayer:{before:before.positionUs,after:after.positionUs},closedObserver:true};reports.push(result);await writeFile(path.join(directory,'evidence.json'),JSON.stringify(result,null,2));
+  await page.waitForResponse(r=>new URL(r.url()).pathname==='/api/quality/vmaf/jobs'&&r.request().headers()['x-voidplayer-actor']===peer.id);release();await page.waitForFunction(()=>document.querySelector('#vmaf-detail').hidden&&document.querySelector('#vmaf-title').textContent===''&&document.querySelector('#vmaf-history').textContent==='');assert.equal(await page.locator('#vmaf-plan').inputValue(),'');
+  // Finish the identity fence before stopping observers. Drain the original
+  // response readers before teardown; browser errors are never filtered.
+  await drainAdminObservations(page);assert.deepEqual(errors,[]);
+  await page.screenshot({path:path.join(directory,'history.png'),fullPage:true});const result={containers,job:id,attempt:job.attemptId,frames:summary.vmaf.frames.length,pooled:summary.vmaf.pooled,hashes,work:summary.work,native:summary.vmaf.resources,posts,requests,originalPlayer:{before:before.positionUs,after:after.positionUs},closedObserver:true,adminReadersDrained:true,pageErrors:errors};reports.push(result);await writeFile(path.join(directory,'evidence.json'),JSON.stringify(result,null,2));
   console.log(`PASS ${engine}/${codec}/${depth} ${containers.join('→')}: GUI discovery/prepare/C/VMAF+PSNR/SSIM, unknown replay, closed observer, shared v2 originals and actor fence`);
  }catch(error){if(page&&!page.isClosed())await saveBrowserFailure({page,directory,name:'mp4-vmaf',context:{engine,codec,depth,containers,phase},error,evidence}).catch(()=>{});throw error;}
  finally{scoringGate?.release();clearInterval(beat);await context?.close();await browser?.close();await f?.close();}
