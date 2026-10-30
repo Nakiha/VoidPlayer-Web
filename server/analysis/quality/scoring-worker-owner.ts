@@ -41,7 +41,7 @@ export class ScoringWorkerOwner {
     signal: AbortSignal,
     progress?: (n: number, total: number) => void,
     onContract?: (value: QualityExecutionContract) => void,
-    onEvent?: (message: Record<string, any>) => Promise<void>,
+    onEvent?: (message: Record<string, any>) => Promise<void|{stopRequested?:boolean}>,
   ): Promise<T> {
     const control = new Int32Array(new SharedArrayBuffer(8));
     const url = new URL(
@@ -54,7 +54,7 @@ export class ScoringWorkerOwner {
     return new Promise<T>((resolve, reject) => {
       let finishing = false,
         exited = false,
-        eventWork: Promise<void> | undefined;
+        eventWork: Promise<void|{stopRequested?:boolean}> | undefined;
       const finish = async (ok: boolean, value: unknown) => {
         if (finishing) return;
         finishing = true;
@@ -101,11 +101,12 @@ export class ScoringWorkerOwner {
             return onEvent(message);
           });
           void eventWork.then(
-            () => {
+            (outcome) => {
               if (!finishing)
                 worker.postMessage({
                   type: "scoring-ack",
                   index: message.index,
+                  stopRequested: outcome?.stopRequested===true,
                 });
             },
             (error) => void finish(false, error),

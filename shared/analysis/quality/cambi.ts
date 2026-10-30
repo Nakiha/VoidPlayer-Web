@@ -31,6 +31,7 @@ export const CAMBI_LIMITS = Object.freeze({
   stdoutBytes: 65536,
   resultBytes: 32 * 1024 * 1024,
   page: 4,
+  frameBytes: 512 * 1024,
   queue: 4,
   actorOutstanding: 2,
   historyRows: 8,
@@ -341,6 +342,14 @@ export type CambiPrepared = {
     };
   };
 };
+export type CambiFramePage = {
+  state:'provisional-uncommitted-attempt'|'immutable-partial'|'immutable-completed';
+  publishable:boolean;
+  attemptId:string|null;
+  coverage:CambiCoverage;
+  entries:CambiFrame[];
+  next:number|null;
+};
 export type CambiNative = {
   version: string;
   recipe: typeof CAMBI_RECIPE;
@@ -386,6 +395,7 @@ export type CambiJob = import("./reexecution.ts").ReexecutionMetadata & {
     | "running"
     | "cancelling"
     | "completed"
+    | "partial"
     | "failed"
     | "cancelled"
     | "interrupted";
@@ -398,6 +408,8 @@ export type CambiJob = import("./reexecution.ts").ReexecutionMetadata & {
   };
   resultDigest: string | null;
   process: { pid: number; startTicks: string; bootId: string } | null;
+  /** Explicit cooperative stop: drain the current closed GOP, then verify and retain a prefix. */
+  stopRequested?: boolean;
 };
 export const terminalCambi = (state: CambiJob["state"]) =>
   !["queued", "preparing", "running", "cancelling"].includes(state);
@@ -422,6 +434,9 @@ export const CAMBI_CAPABILITY = {
   limits: CAMBI_LIMITS,
   requiresReference: false,
   requiresCorrespondence: false,
+  progressiveResults: 'provisional-owner-only-until-gop-drain-and-final-source-verification',
+  stopAndKeep: 'explicit-stop-at-closed-gop-boundary; validated-partial-result; no-automatic-resume',
+  committedResultStates: ['completed','partial'],
   heatmaps:
     "five official gray16le scales; source-grid mapping; on-demand per-frame per-scale reads",
   threshold: "caller-declared-uncalibrated-candidate-not-pass-fail",

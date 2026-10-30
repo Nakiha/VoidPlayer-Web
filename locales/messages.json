@@ -2229,7 +2229,7 @@
     "params": {}
   },
   "cambi.cancel": {
-    "source": "取消此后台任务并释放执行资源",
+    "source": "立即取消（丢弃暂存结果）",
     "params": {}
   },
   "cambi.candidates": {
@@ -2238,6 +2238,10 @@
   },
   "cambi.find": {
     "source": "从技术发现选择单源",
+    "params": {}
+  },
+  "cambi.finishingPartial": {
+    "source": "正在排空当前解码窗口并核验来源；完成后保留已算部分。可随时立即取消。",
     "params": {}
   },
   "cambi.frames": {
@@ -2260,12 +2264,36 @@
     "source": "CAMBI · 查看原始热图、源快照与真实区域",
     "params": {}
   },
+  "cambi.partial": {
+    "source": "部分结果已核验；未评分范围不计零分，可复用已完成证据。",
+    "params": {}
+  },
   "cambi.policyNote": {
     "source": "阈值由调用者指定，未校准。区域来自所选尺度中达到 cellThreshold 的真实热图单元包围框；保留帧、尺度、统计与坐标映射，不是裁剪重算或人工缺陷判断。关闭页面不会取消后台执行。",
     "params": {}
   },
   "cambi.prepare": {
     "source": "缺少可信缓存时，显式前往技术准备；此处不会自动探测或建索引。",
+    "params": {}
+  },
+  "cambi.preview": {
+    "source": "预览暂存分数与热图",
+    "params": {}
+  },
+  "cambi.provisional": {
+    "source": "运行中结果为暂存，尚未完成排空和来源核验，不能发布。",
+    "params": {}
+  },
+  "cambi.provisionalFacts": {
+    "source": "暂存计算信息（未核验，不是不可变证据）",
+    "params": {}
+  },
+  "cambi.provisionalTitle": {
+    "source": "CAMBI · 暂存评分与热图",
+    "params": {}
+  },
+  "cambi.provisionalView": {
+    "source": "暂存预览：GOP 排空及来源最终核验尚未完成。这里只显示已算分数和热图，不提供经核验源快照，也不能发布证据。",
     "params": {}
   },
   "cambi.publish": {
@@ -2278,6 +2306,10 @@
   },
   "cambi.scope": {
     "source": "使用分析 WASM core；可信 FLV/Enhanced FLV 8/10 位，或严格 MP4 avc1 H2648 / hvc1 HEVC8/10；限范围 BT.709 SDR，整帧、方形像素、不裁剪，长边至少320。分数越高表示检测到更多色带，不是产品合格线；内部按10位处理。允许明确抽样，未采样帧不冒充覆盖。没有跨帧目标跟踪，未认证引用完整性，无法检测错误隐藏。",
+    "params": {}
+  },
+  "cambi.stopKeep": {
+    "source": "停止并保留已算部分",
     "params": {}
   },
   "cambi.submit": {

@@ -47,3 +47,10 @@ test('resource limits reject unbounded, fractional and misleading auxiliary para
   }
   const l=limits(),a=new QualityAdmission();a.configure(l);l.concurrency=8;const view=a.resources();view.limits.concurrency=8;assert.equal(a.resources().limits.concurrency,4);
 });
+test('quality index preparation retains explicit exclusive admission even when scoring concurrency is raised',()=>{
+ const a=new QualityAdmission();a.configure(limits());
+ const scoring=a.acquire(reservation());assert.throws(()=>a.acquire(reservation('preparation'),true),{code:'quality-busy'});scoring();
+ const index=a.acquire(reservation('preparation'),true);assert.equal(a.resources().exclusiveOwner,true);
+ for(const kind of ['psnr','vmaf','inspection'] as const)assert.throws(()=>a.acquire(reservation(kind)),{code:'quality-busy'});
+ index();assert.equal(a.resources().exclusiveOwner,false);a.acquire(reservation())();
+});

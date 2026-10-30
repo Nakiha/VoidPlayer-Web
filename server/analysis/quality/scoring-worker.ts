@@ -48,6 +48,7 @@ try {
   };
   memory();
   if (workerData.metric === "cambi") {
+    let stopRequested=false;
     const prepared = (await runCambiDecode(
       workerData,
       (frames, total) =>
@@ -80,9 +81,10 @@ try {
         // One frame in flight. Persistence acknowledges before the next decode,
         // so neither Worker messages nor heatmap storage grows without backpressure.
         await new Promise<void>((resolve) => {
-          const ack = (message: { type: string; index: number }) => {
+          const ack = (message: { type: string; index: number;stopRequested?:boolean }) => {
             if (message.type === "scoring-ack" && message.index === index) {
               parentPort!.off("message", ack);
+              stopRequested ||= message.stopRequested===true;
               resolve();
             }
           };
@@ -100,10 +102,11 @@ try {
           );
         });
       },
+      ()=>stopRequested,
     )) as CambiPrepared;
     if (!scorer) throw Error("Empty CAMBI sequence");
     const native: CambiNative = {
-      ...scorer.finish().cambi!,
+      ...scorer.finish({allowPartialCambi:stopRequested}).cambi!,
       version: loaded.version,
       recipe: CAMBI_RECIPE,
       component: loaded.component,
@@ -112,7 +115,7 @@ try {
         wallMs: Math.ceil(performance.now() - started),
         heapBytes: scorer.heapBytes,
       },
-      outputBytes: prepared.output.heatBytes,
+      outputBytes: prepared.output.scales.reduce((n,s)=>n+s.bytes,0)*prepared.frames.length,
     };
     parentPort!.postMessage({ ok: true, value: { prepared, native } });
   } else if (workerData.metric === "xpsnr") {

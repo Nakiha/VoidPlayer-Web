@@ -158,10 +158,10 @@ export class QualityJobStore {
           reason_json: JSON.stringify(reason('queue-expired', 'Queue waiting deadline exceeded; execution did not start.'))});
     });
   }
-  blocked(id: string) {
+  blocked(id: string, message='Waiting for the shared instance compute admission.') {
     const job = this.get(id);
-    if (job.state === 'queued' && job.reason?.code !== 'compute-busy') this.transaction(() => this.patch(id, {
-      reason_json: JSON.stringify(reason('compute-busy', 'Waiting for the shared instance compute admission.'))}));
+    if (job.state === 'queued' && (job.reason?.code !== 'compute-busy'||job.reason.message!==message)) this.transaction(() => this.patch(id, {
+      reason_json: JSON.stringify(reason('compute-busy',message.slice(0,300)))}));
   }
   start(id: string, now: number): string {
     return this.transaction(() => {

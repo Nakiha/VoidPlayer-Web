@@ -107,7 +107,7 @@ export class QualityJobService {
         this.store.stopUncertain(id);throw error;
       }
       if (!attempt && error instanceof AdminError && error.code === 'quality-busy') {
-        this.store.blocked(id);return;
+        this.store.blocked(id,error.message);return;
       }
       const known = error instanceof AdminError || error instanceof FramePairError || error instanceof PsnrError;
       const why: QualityJobReason = known ? {code:error.code,message:error.message.slice(0, 300)}

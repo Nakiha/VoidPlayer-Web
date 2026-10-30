@@ -216,6 +216,9 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
     if (this.terminal(job.state))
       settleScoringReservations(this.db, this.kind, job.id);
   }
+  protected blocked(job:TemporalJob<K,I>,error:AdminError){
+    if(job.reason?.message!==error.message){job.reason={code:error.code,message:error.message.slice(0,300)};this.save(job);}
+  }
   get(id: string, actor: string) {
     const row = this.db
       .prepare(

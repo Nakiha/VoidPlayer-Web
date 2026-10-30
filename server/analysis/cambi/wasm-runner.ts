@@ -192,6 +192,7 @@ export class WasmCambiRunner extends ScoringWorkerOwner {
               message.score,
               message.maps,
             );
+            return {stopRequested:hooks.stopRequested?.()===true};
           },
         );
         combined.throwIfAborted();

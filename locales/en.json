@@ -2053,8 +2053,8 @@
     "translation": "Every frame deserves to be seen."
   },
   "cambi.cancel": {
-    "source": "取消此后台任务并释放执行资源",
-    "translation": "Cancel this background job and release its resources"
+    "source": "立即取消（丢弃暂存结果）",
+    "translation": "Cancel now (discard provisional results)"
   },
   "cambi.candidates": {
     "source": "从真实热图显式创建共享空间候选",
@@ -2063,6 +2063,10 @@
   "cambi.find": {
     "source": "从技术发现选择单源",
     "translation": "Select one source from technical discovery"
+  },
+  "cambi.finishingPartial": {
+    "source": "正在排空当前解码窗口并核验来源；完成后保留已算部分。可随时立即取消。",
+    "translation": "Draining the current decode window and verifying the source before keeping scored results. Immediate cancellation remains available."
   },
   "cambi.frames": {
     "source": "更多逐帧事实",
@@ -2084,6 +2088,10 @@
     "source": "CAMBI · 查看原始热图、源快照与真实区域",
     "translation": "CAMBI · open original heatmap, source snapshot and actual region"
   },
+  "cambi.partial": {
+    "source": "部分结果已核验；未评分范围不计零分，可复用已完成证据。",
+    "translation": "Partial results verified; unscored coverage is not zero. Completed evidence can be reused."
+  },
   "cambi.policyNote": {
     "source": "阈值由调用者指定，未校准。区域来自所选尺度中达到 cellThreshold 的真实热图单元包围框；保留帧、尺度、统计与坐标映射，不是裁剪重算或人工缺陷判断。关闭页面不会取消后台执行。",
     "translation": "Caller-declared thresholds are uncalibrated. Regions bound actual cells at or above cellThreshold in the selected scale. Preserve the frame, scale, statistics and coordinate mapping; this is neither cropped rescoring nor a human defect assessment. Closing this page does not cancel background execution."
@@ -2091,6 +2099,26 @@
   "cambi.prepare": {
     "source": "缺少可信缓存时，显式前往技术准备；此处不会自动探测或建索引。",
     "translation": "Missing a trusted cache? Open explicit technical preparation; this panel never probes or builds an index automatically."
+  },
+  "cambi.preview": {
+    "source": "预览暂存分数与热图",
+    "translation": "Preview provisional scores and heatmaps"
+  },
+  "cambi.provisional": {
+    "source": "运行中结果为暂存，尚未完成排空和来源核验，不能发布。",
+    "translation": "Running results are provisional. GOP drain and final source verification are incomplete; evidence cannot be published."
+  },
+  "cambi.provisionalFacts": {
+    "source": "暂存计算信息（未核验，不是不可变证据）",
+    "translation": "Provisional computation facts (unverified, not immutable evidence)"
+  },
+  "cambi.provisionalTitle": {
+    "source": "CAMBI · 暂存评分与热图",
+    "translation": "CAMBI · Provisional scores and heatmaps"
+  },
+  "cambi.provisionalView": {
+    "source": "暂存预览：GOP 排空及来源最终核验尚未完成。这里只显示已算分数和热图，不提供经核验源快照，也不能发布证据。",
+    "translation": "Provisional preview: GOP drain and final source verification are incomplete. Only scored values and heatmaps are shown, without a verified source snapshot or publishable evidence."
   },
   "cambi.publish": {
     "source": "显式共享候选与证据",
@@ -2103,6 +2131,10 @@
   "cambi.scope": {
     "source": "使用分析 WASM core；可信 FLV/Enhanced FLV 8/10 位，或严格 MP4 avc1 H2648 / hvc1 HEVC8/10；限范围 BT.709 SDR，整帧、方形像素、不裁剪，长边至少320。分数越高表示检测到更多色带，不是产品合格线；内部按10位处理。允许明确抽样，未采样帧不冒充覆盖。没有跨帧目标跟踪，未认证引用完整性，无法检测错误隐藏。",
     "translation": "Uses the analysis WASM core; trusted FLV/Enhanced FLV 8/10-bit or strict MP4 avc1 H2648 / hvc1 HEVC8/10; limited BT.709 SDR, full uncropped square-pixel frames with a long edge of at least320. Higher scores indicate more detected banding, not a product pass/fail threshold; internal processing uses10 bits. Explicit sampling leaves unsampled coverage visible. No object tracking, reference-integrity certification or concealment detection."
+  },
+  "cambi.stopKeep": {
+    "source": "停止并保留已算部分",
+    "translation": "Stop and keep scored results"
   },
   "cambi.submit": {
     "source": "发起持久单源 CAMBI",

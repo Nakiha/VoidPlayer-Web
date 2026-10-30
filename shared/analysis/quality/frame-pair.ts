@@ -1130,6 +1130,7 @@ async function* inspectSequence(
   loadDecoder: (budget: PairBudget) => Promise<PairDecoder>,
   signal: AbortSignal,
   sides: 1 | 2,
+  stopAfterWindow?: () => boolean,
 ): AsyncGenerator<InspectedFramePair, void> {
   let decoder: PairDecoder | undefined;
   type Stream = {
@@ -1166,7 +1167,7 @@ async function* inspectSequence(
   };
   try {
     if (!requests.length) fail("invalid-request", "Empty frame sequence");
-    for (const request of requests) {
+    sequence: for (const request of requests) {
       const started = performance.now(),
         budget = pairBudget(request),
         frames: DecodedPairFrame[] = [],
@@ -1197,6 +1198,10 @@ async function* inspectSequence(
         let stream = streams[side];
         if (!stream || stream.window !== window) {
           drain(stream);
+          // CAMBI frames are independent, but their source identities are only
+          // complete after the current closed GOP has drained. Never stop in
+          // the middle of a window and label its provisional witness verified.
+          if(stream && stopAfterWindow?.())break sequence;
           let windowBytes = 0;
           const read = async (offset: number, length: number) => {
             timed();
@@ -1327,7 +1332,7 @@ async function* inspectSequence(
 
 /** Pair and single-source metrics share the same identity/drain machinery. */
 export function inspectFrameSequence(requests:readonly FramePairRequest[],sources:[CachedPairSource<QualityIndexDocument>,CachedPairSource<QualityIndexDocument>],loadDecoder:(budget:PairBudget)=>Promise<PairDecoder>,signal:AbortSignal){return inspectSequence(requests,sources,loadDecoder,signal,2);}
-export async function* inspectSourceSequence(targets:readonly PairTarget[],source:CachedPairSource<QualityIndexDocument>,loadDecoder:(budget:PairBudget)=>Promise<PairDecoder>,signal:AbortSignal,budget?:Partial<PairBudget>){
+export async function* inspectSourceSequence(targets:readonly PairTarget[],source:CachedPairSource<QualityIndexDocument>,loadDecoder:(budget:PairBudget)=>Promise<PairDecoder>,signal:AbortSignal,budget?:Partial<PairBudget>,stopAfterWindow?:()=>boolean){
   const requests=targets.map(target=>({pairing:'caller-specified' as const,reference:target,distorted:target,roi:{x:0,y:0,width:2,height:2},budget}));
-  for await(const pair of inspectSequence(requests,[source,source],loadDecoder,signal,1))yield {frame:pair.frames[0],provenance:pair.provenance.reference,decoder:pair.decoder,sourceGeometry:pair.sourceGeometry.reference,work:pair.work};
+  for await(const pair of inspectSequence(requests,[source,source],loadDecoder,signal,1,stopAfterWindow))yield {frame:pair.frames[0],provenance:pair.provenance.reference,decoder:pair.decoder,sourceGeometry:pair.sourceGeometry.reference,work:pair.work};
 }

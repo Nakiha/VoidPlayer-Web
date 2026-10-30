@@ -268,6 +268,7 @@ export class NativeVmafService extends TemporalScoringService<
           j.state = "preparing";
           j.phase = "component";
           j.startedAt = now();
+          j.reason = null;
           j.attemptId = randomUUID();
           j.metrics.psnr.state = "running";
           if (j.input.metrics.ssim) j.metrics.ssim.state = "running";
@@ -326,8 +327,7 @@ export class NativeVmafService extends TemporalScoringService<
         !j.attemptId &&
         error instanceof AdminError &&
         error.code === "quality-busy"
-      )
-        return;
+      ){this.blocked(j,error);return;}
       j.reason = reason(error);
       const cancelled = j.state === "cancelling" || signal.aborted;
       for (const m of Object.values(j.metrics))

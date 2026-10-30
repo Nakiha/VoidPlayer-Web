@@ -56,8 +56,9 @@ export class LibraryPairRunner {
   reexecutionPreflight(requests:FramePairRequest[],expected:QualityExecutionContract,signal:AbortSignal):Promise<ReexecutionPreflight>{return this.run({mode:'reexecution-preflight',requests,expected},30000,signal);}
   private run<T extends WorkerValue>(task:QualityTask,elapsedMs:number,signal:AbortSignal,hooks?:QualityRunHooks):Promise<T>{
     if(this.closed)return Promise.reject(new AdminError(503,'Quality service closed.','busy'));
+    if(this.stopFailed)return Promise.reject(new AdminError(503,'Quality executor physical stop is unconfirmed.','stop-uncertain'));
     let release:()=>void;
-    try{signal.throwIfAborted();release=this.admission.acquire({executor:task.mode==='measure'?'psnr':task.mode==='correspondence-plan'?'planning':task.mode==='build-source'?'preparation':'inspection',memoryBytes:640*1024**2,readBytes:task.mode==='build-source'?192*1024**2:64*1024**2,threads:1});}catch(error){return Promise.reject(error);}
+    try{signal.throwIfAborted();release=this.admission.acquire({executor:task.mode==='measure'?'psnr':task.mode==='correspondence-plan'?'planning':task.mode==='build-source'?'preparation':'inspection',memoryBytes:640*1024**2,readBytes:task.mode==='build-source'?192*1024**2:64*1024**2,threads:1},task.mode==='build-source');}catch(error){return Promise.reject(error);}
     // Persist the attempt synchronously after admission and before any Worker can
     // execute. A failed commit starts no work and immediately returns the permit.
     try{hooks?.admitted();signal.throwIfAborted();}catch(error){release();return Promise.reject(error);}

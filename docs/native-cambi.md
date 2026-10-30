@@ -40,7 +40,23 @@ time. No invented native CPU/RSS. Limits must hold together with time/index/outp
 budgets; their maxima are not a guaranteed workload.
 
 Read `/jobs/{id}`, `/result`, `/frames?after=0&limit=4`, `/heatmap?index=N&scale=S`
-and `/picture?index=N`. Only committed completed results are inspectable/publishable.
+and `/picture?index=N`. Running `/result` and `/frames` expose owner-only
+provisional values with `publishable=false`, `validation` and no pooled score.
+Five-scale `/heatmap` bytes carry `X-VoidPlayer-Evidence-State`; provisional
+maps are not verified evidence and cannot publish or open a verified source picture.
+Frames are stored by `(job,index)` with a 512 KiB per-frame and 32 MiB total
+metadata budget; pagination reads only the requested bounded rows.
+
+`POST /jobs/{id}/stop-and-keep {}` is an explicit cooperative stop. It finishes
+the current closed GOP and final source/core verification before committing a
+`partial` result. A queued job cancels without starting work. A single-GOP job
+may finish completely. Selected, scored and unscored counts retain the original
+interval; official pooling covers only the verified prefix. This reuses the
+already calculated scores and heatmaps for viewing/publication, with no rescore.
+Repeating stop on the same job creates no new task/attempt. Immediate `/cancel`
+still stops Workers and discards provisional data. Stop-and-keep does not resume
+the remainder, weaken budgets or preserve an invalid source/drain witness.
+Committed completed and partial results can be inspected and published.
 Original source/cache/AU/raw identity is revalidated for pictures; this never
 rescores or seeks the player. Explicit cancel waits for Worker plus pending sink
 IO before freeing capacity. Restart interrupts and removes uncommitted heatmaps.
@@ -51,7 +67,7 @@ cell bounds become immutable source regions, not arbitrary score-only boxes.
 Policy/IDs/operation receipts freeze before annotation writes and replay before
 private result lookup. Imported evidence is historical. Unpinned private results
 can be released; receipts and storage cost remain. Stopped failed/interrupted/
-cancelled jobs can explicitly validate full reexecution; no partial resume,
+cancelled or partial jobs can explicitly validate full reexecution; no partial resume,
 automatic publication or changed-source retry.
 
 ## Evidence and compatibility

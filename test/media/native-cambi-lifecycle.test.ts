@@ -1,4 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
+import {requirePacketOutputWitness} from '../../shared/analysis/quality/frame-pair.ts';
+import {startService} from '../../server/runtime.ts';
 import {writeFile,readFile,cp} from 'node:fs/promises';import path from 'node:path';import {spawn} from 'node:child_process';
 import {cambiFixture} from '../helpers/native-cambi.mjs';import {until} from '../helpers/native-vmaf.mjs';
 // @ts-ignore JavaScript Worker boundary helper
@@ -39,7 +41,7 @@ test(`CAMBI ${corruption} stream never produces a score or retained heatmaps`,{t
  const release=f.service.library.qualityAdmission.acquire();release();
 });
 
-test('CAMBI shared queue hides provisional frames and supports explicit queued cancellation',{timeout:120000},async t=>{
+test('CAMBI shared queue labels bounded provisional frames without publishing and supports explicit queued cancellation',{timeout:120000},async t=>{
  const f=await cambiFixture();t.after(()=>f.close());const release=f.service.library.qualityAdmission.acquire();
  const a=await f.json('/api/quality/cambi/jobs',f.input,'queue1'),b=await f.json('/api/quality/cambi/jobs',f.input,'queue2');
  assert.equal((await f.request('/api/quality/cambi/jobs',f.input,'queue3')).status,429);
@@ -48,9 +50,65 @@ test('CAMBI shared queue hides provisional frames and supports explicit queued c
  const runner=(f.service.library.qualityCambi as any).runner,run=runner.runCambi.bind(runner);
  let resume:()=>void=()=>{},seen=false;const gate=new Promise<void>(r=>resume=r);t.after(()=>resume());
  runner.runCambi=(id:any,input:any,signal:any,hooks:any)=>run(id,input,signal,{...hooks,streamFrame:async(...args:any[])=>{await hooks.streamFrame(...args);if(!seen){seen=true;await gate;}}});release();
- await until(()=>seen,Boolean);assert.equal((await f.request(`/api/quality/cambi/jobs/${a.job.id}/frames`)).status,409);
+ await until(()=>seen,Boolean);const page=await f.json(`/api/quality/cambi/jobs/${a.job.id}/frames`);assert.equal(page.state,'provisional-uncommitted-attempt');assert.equal(page.publishable,false);assert.equal(page.entries.length,1);
+ const heat=await f.request(`/api/quality/cambi/jobs/${a.job.id}/heatmap?index=0&scale=0`);assert.equal(heat.status,200);assert.equal(heat.headers.get('x-voidplayer-evidence-state'),'provisional-uncommitted-attempt');
+ assert.equal((await f.request(`/api/quality/cambi/jobs/${a.job.id}/picture?index=0`)).status,409);
  const task=await f.json(`/api/tasks/cambi/${a.job.id}`);assert.equal(task.task.result.available,false);assert.equal(task.task.progress.scored,1);assert.equal(task.task.progress.prepared,1);
- assert.equal((await f.request(`/api/quality/cambi/jobs/${a.job.id}/result`)).status,409);resume();assert.equal((await f.wait(a.job.id)).state,'completed');
+ const summary=await f.json(`/api/quality/cambi/jobs/${a.job.id}/result`);assert.equal(summary.publishable,false);assert.equal(summary.pooled,null);resume();assert.equal((await f.wait(a.job.id)).state,'completed');
+});
+
+for(const [codec,depth] of [['h264',8],['hevc',8],['hevc',10]] as const)
+test(`CAMBI ${codec}/${depth} stop-and-keep drains a real GOP and reuses validated partial evidence`,{timeout:120000},async t=>{
+ const f=await cambiFixture({codec,depth,sequence:true});let restored:Awaited<ReturnType<typeof startService>>|undefined;
+ const service=f.service.library.qualityCambi as any,runner=service.runner,run=runner.runCambi.bind(runner);
+ let release:()=>void=()=>{},seen=false;const hold=new Promise<void>(r=>release=r);t.after(async()=>{release();await restored?.close();await f.close();});
+ runner.runCambi=(id:any,input:any,signal:any,hooks:any)=>run(id,input,signal,{...hooks,streamFrame:async(...args:any[])=>{await hooks.streamFrame(...args);if(!seen){seen=true;await hold;}}});
+ const job=(await f.json('/api/quality/cambi/jobs',f.input,'partial')).job,url='/api/quality/cambi/jobs/'+job.id;
+ await until(()=>seen,Boolean);const provisional=await f.json(url+'/frames');assert.equal(provisional.publishable,false);assert.equal(provisional.entries[0].index,0);
+ const requestPolicy={space:'default',minScore:0,limit:1,scale:0,cellThreshold:1,text:'Inspect this validated partial banding candidate',severity:2};
+ assert.equal((await f.request(url+'/candidates',requestPolicy)).status,409);
+ assert.equal((await f.json(url+'/stop-and-keep',{})).stopRequested,true);
+ assert.equal((await f.json(url+'/stop-and-keep',{})).attemptId,provisional.attemptId);
+ assert.throws(()=>f.service.library.qualityAdmission.acquire(),{code:'quality-busy'});release();
+ const done=await f.wait(job.id);assert.equal(done.state,'partial',JSON.stringify(done));assert.ok(done.resultDigest);assert.equal(done.attemptId,provisional.attemptId);
+ const result=await f.json(url+'/result');assert.equal(result.validation,'committed');assert.equal(result.publishable,true);
+ assert.ok(result.coverage.scored>0&&result.coverage.scored<result.coverage.selected);assert.equal(result.coverage.scored+result.coverage.unscored,result.coverage.selected);
+ const frames=await f.json(url+'/frames');assert.equal(frames.state,'immutable-partial');assert.equal(frames.entries[0].score,provisional.entries[0].score);
+ for(const frame of frames.entries)requirePacketOutputWitness(frame.provenance);
+ for(const frame of frames.entries)assert.ok(Math.abs(frame.score-f.sample.cambi.frames[frame.index])<=0.000001,'partial frame retains the independent official sequence oracle');
+ assert.equal(service.db.prepare('SELECT count(*) n FROM cambi_frames WHERE job=?').get(job.id).n,0);
+ const task=(await f.json('/api/tasks/cambi/'+job.id)).task;assert.equal(task.state,'partial');assert.equal(task.result.available,true);
+ const before=f.service.library.qualityAdmission.resources();assert.equal(before.running,0);
+ assert.equal((await f.request(url+'/picture?index=0')).status,200);
+ const pub=await f.json(url+'/candidates',requestPolicy);assert.ok(pub.createdIds.length<=1);
+ if(codec==='hevc'&&depth===8){
+  assert.equal(pub.createdIds.length,1);const attachment=await f.json('/api/annotations/spaces/default/'+pub.createdIds[0]);assert.equal(attachment.document.mark.cambiEvidence[0].value.coverage.unscored,result.coverage.unscored);
+ }else{assert.equal(pub.createdIds.length,0);assert.equal(result.pooled.max,0,'zero heatmaps must never invent a spatial candidate');}
+ assert.deepEqual((await f.json(url+'/candidates',requestPolicy)).createdIds,pub.createdIds);
+ assert.equal((await f.json(url+'/stop-and-keep',{})).resultDigest,done.resultDigest);
+ assert.equal((await f.json('/api/quality/cambi/jobs',f.input,'partial')).job.id,job.id);
+ if(codec==='hevc'&&depth===8){
+  const before=JSON.stringify(await f.json('/api/annotations/spaces/default/'+pub.createdIds[0]));
+  const plan=await f.json(url+'/reexecution-plan',{reason:'Explicit full rerun after keeping partial evidence'});assert.equal(plan.eligible,true,JSON.stringify(plan));
+  const successor=await f.json(url+'/reexecutions',{schema:'voidplayer-quality-reexecution',version:1,reason:plan.reason,planDigest:plan.digest,confirm:plan.cost},'rerun-partial');
+  assert.equal((await f.wait(successor.job.id)).state,'completed');assert.equal((await f.json('/api/quality/cambi/jobs/'+successor.job.id+'/result')).coverage.scored,192);
+  assert.equal((await f.json(url)).resultDigest,done.resultDigest);assert.equal(JSON.stringify(await f.json('/api/annotations/spaces/default/'+pub.createdIds[0])),before);
+  await f.stop();restored=await startService(f.config,false);
+  const base=`http://127.0.0.1:${(restored.server.address() as any).port}`,get=async(p:string)=>(await fetch(base+p,{headers:{cookie:f.headers.cookie,'x-voidplayer-actor':f.actor}})).json();
+  assert.equal((await get(url)).state,'partial');assert.equal((await get(url)).resultDigest,done.resultDigest);assert.equal((await get(url+'/result')).coverage.unscored,128);
+  assert.equal(JSON.stringify(await get('/api/annotations/spaces/default/'+pub.createdIds[0])),before);
+ }
+});
+
+test('stop-and-keep never preserves provisional scores when the final source identity changes',{timeout:120000},async t=>{
+ const f=await cambiFixture({codec:'hevc',depth:8,sequence:true});t.after(()=>f.close());
+ const runner=(f.service.library.qualityCambi as any).runner,run=runner.runCambi.bind(runner);let release:()=>void=()=>{},seen=false;
+ const hold=new Promise<void>(r=>release=r);t.after(()=>release());runner.runCambi=(id:any,input:any,signal:any,hooks:any)=>run(id,input,signal,{...hooks,streamFrame:async(...args:any[])=>{await hooks.streamFrame(...args);if(!seen){seen=true;await hold;}}});
+ const job=(await f.json('/api/quality/cambi/jobs',f.input,'bad-partial')).job,url='/api/quality/cambi/jobs/'+job.id;await until(()=>seen,Boolean);
+ await f.json(url+'/stop-and-keep',{});const file=path.join(f.media,f.fileName);await writeFile(file,Buffer.concat([await readFile(file),Buffer.from([0])]));release();
+ const done=await f.wait(job.id);assert.equal(done.state,'failed');assert.equal(done.resultDigest,null);
+ for(const suffix of ['/result','/frames','/heatmap?index=0&scale=0'])assert.equal((await f.request(url+suffix)).status,409);
+ const service=f.service.library.qualityCambi as any;for(const table of ['cambi_heat','cambi_frames','cambi_progress'])assert.equal(service.db.prepare(`SELECT count(*) n FROM ${table} WHERE job=?`).get(job.id).n,0);
 });
 
 test('CAMBI final source check rejects changed bytes and cleans provisional maps',{timeout:120000},async t=>{
