@@ -45,6 +45,7 @@ export function installQualityRanges(signal: AbortSignal) {
     revision = 0;
   let browsingMore = false,
     publicationToken = "";
+  let detailsReleased = false;
   const valid = (owner: string, s: AbortSignal) =>
     active && !s.aborted && actor === owner && confirmedActor()?.id === owner;
   const request = <T>(
@@ -79,6 +80,7 @@ export function installQualityRanges(signal: AbortSignal) {
     browsingMore = false;
     publicationToken = "";
     observation.select();
+    detailsReleased = false;
     $("list").replaceChildren();
     $("detail").hidden = true;
     $("more").hidden = true;
@@ -94,17 +96,19 @@ export function installQualityRanges(signal: AbortSignal) {
       $(id).replaceChildren();
   }
   function list(more = false): Promise<void> {
+    const pageAfter = more ? after : 0;
+    browsingMore = more || browsingMore;
     return observation.run("history", "actor", async () => {
       const owner = actor,
         s = observation.capture("actor", "history").signal;
       if (!owner) return;
-      browsingMore = more;
+
       try {
         const page = await request<{
           entries: Omit<QualityRangeJob, "plan">[];
           after: number;
           more: boolean;
-        }>(owner, `/api/quality/ranges?after=${more ? after : 0}&limit=10`, s);
+        }>(owner, `/api/quality/ranges?after=${pageAfter}&limit=10`, s);
         if (!valid(owner, s)) return;
         after = page.after;
         $("more").hidden = !page.more;
@@ -121,13 +125,15 @@ export function installQualityRanges(signal: AbortSignal) {
             button = document.createElement("button");
             button.type = "button";
             button.dataset.rangeId = job.id;
+            const row = observation.capture("actor");
             button.onclick = () => {
-              if (!valid(owner, s)) return;
+              if (!row.current() || !valid(owner, row.signal)) return;
               reexecution.clear();
               selected = job.id;
               revision = 0;
               next = null;
               publicationToken = "";
+              detailsReleased = false;
               observation.select();
               $("detail").hidden = true;
               $("results").replaceChildren();
@@ -147,9 +153,11 @@ export function installQualityRanges(signal: AbortSignal) {
       } catch (e) {
         if (valid(owner, s)) $("status").textContent = String(e);
       }
-    });
+    }, `${more}:${pageAfter}`);
   }
   function results(more = false): Promise<boolean> {
+    if (detailsReleased) return Promise.resolve(false);
+    const pageAfter = more ? (next ?? 0) : 0;
     return observation.run("frames", "selection", async () => {
       const owner = actor,
         s = observation.capture("selection", "frames").signal,
@@ -160,7 +168,7 @@ export function installQualityRanges(signal: AbortSignal) {
           nextAu: number | null;
         }>(
           owner,
-          `/api/quality/ranges/${id}/results?after=${more ? (next ?? 0) : 0}&limit=4`,
+          `/api/quality/ranges/${id}/results?after=${pageAfter}&limit=4`,
           s,
         );
         if (!valid(owner, s) || selected !== id) return false;
@@ -185,7 +193,7 @@ export function installQualityRanges(signal: AbortSignal) {
           $("status").textContent = String(e);
         return false;
       }
-    });
+    }, `${selected}:${more}:${pageAfter}`);
   }
   function detail(): Promise<void> {
     return observation.run("detail", "selection", async () => {
@@ -220,7 +228,13 @@ export function installQualityRanges(signal: AbortSignal) {
           "queued",
           "running",
         ].includes(job.state);
-        const loaded = revision !== job.revision ? await results() : false;
+        detailsReleased = !!job.resultRetention;
+        if (detailsReleased) {
+          observation.cancel("frames"); next = null; $("results").replaceChildren(); $("results-more").hidden = true;
+          $("status").textContent = t(msg('tasks.released','私有结果已释放，原任务回执保留。'));
+          revision = job.revision;
+        }
+        const loaded = !detailsReleased && revision !== job.revision ? await results() : false;
         if (!valid(owner, s) || selected !== id) return;
         if (loaded) revision = job.revision;
         const token = JSON.stringify(response.publication);
@@ -289,6 +303,7 @@ export function installQualityRanges(signal: AbortSignal) {
       revision = 0;
       next = null;
       publicationToken = "";
+      detailsReleased = false;
       observation.select();
       $("detail").hidden = true;
       $("results").replaceChildren();
@@ -298,6 +313,7 @@ export function installQualityRanges(signal: AbortSignal) {
     { signal },
   );
   $("refresh").onclick = () => {
+    browsingMore = false;
     void list();
     void detail();
   };

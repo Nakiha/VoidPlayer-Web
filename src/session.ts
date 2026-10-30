@@ -906,7 +906,7 @@ export class ReviewSession {
     return { ptsUs: frame.ptsUs, sourcePtsUs: frame.sourcePtsUs, durationUs: frame.durationUs };
   }
   private offerThumbnail(slot: Slot, source: MediaSource, frame: DecodedFrame, localTarget: number) {
-    offerSessionThumbnail(slot, source, frame, localTarget, this.nextSourceGen, this.resources, () => this.tracks.get(slot)?.source === source);
+    offerSessionThumbnail(source, frame, localTarget, this.nextSourceGen, this.resources, () => this.tracks.get(slot)?.source === source);
   }
   private async drawAt(ptsUs: number, current: () => boolean, tracks = this.tracks, commit?: () => void, selected?: Map<Slot, DecodedFrame>, kept?: Set<Slot>, signal?: AbortSignal) {
     const entries = [...tracks].filter(([, t]) => !t.failure);
@@ -1124,9 +1124,12 @@ export class ReviewSession {
   }
   /** Active scenes swap atomically; an empty linked scene can publish slots
    * and first frames progressively. Both paths belong to this shared facade. */
-  async restoreWorkspace(value: unknown, open: (info: MediaInfo, signal: AbortSignal, onProgress: MediaOpenProgress, configuration: DecodeConfiguration) => Promise<MediaSource>, options: { allowUnavailable?: boolean; progressive?: boolean } = {}) {
+  async restoreWorkspace(value: unknown, open: (info: MediaInfo, signal: AbortSignal, onProgress: MediaOpenProgress, configuration: DecodeConfiguration) => Promise<MediaSource>, options: { allowUnavailable?: boolean; progressive?: boolean; signal?: AbortSignal } = {}) {
     const document = parseWorkspace(value);
-    await this.run('restoreWorkspace', { tracks: document.tracks.length, marks: document.marks.length }, (current, signal) => this.configuration.run(async previousConfiguration => {
+    await this.run('restoreWorkspace', { tracks: document.tracks.length, marks: document.marks.length }, (sessionCurrent, sessionSignal) => this.configuration.run(async previousConfiguration => {
+      const signal = options.signal ? AbortSignal.any([sessionSignal, options.signal]) : sessionSignal;
+      const current = () => sessionCurrent() && !signal.aborted;
+      signal.throwIfAborted();
       const next = new Map<Slot, Track>(); let committed = false;
       const previousChannel = getPresentationChannel();
       const retained = [...this.tracks].filter(([, track]) => !track.failure && !track.pendingRelink);

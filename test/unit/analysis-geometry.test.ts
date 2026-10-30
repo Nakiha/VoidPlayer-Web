@@ -330,3 +330,33 @@ test('top-panel floating cards yield to the range editor like the viewport panel
   assert.equal(floatingAvoidanceShift({ top: 88, left: 400, width: 200, height: 200 }, peer, 320), -80, 'when neither side clears, the card clamps towards the roomier side');
   assert.equal(floatingAvoidanceShift({ top: 384, left: 424, width: 204, height: 300 }, { top: 378, left: 298, right: 638, bottom: 428 }, 720), -314, 'cards below the editor move up to keep their full content visible');
 });
+
+import {buildAnalysisModel} from '../../src/ui/analysis/model.ts';
+import {loadAnalysisPreferences} from '../../src/ui/analysis/preferences.ts';
+import {runSourceQuery} from '../../shared/analysis/metadata/adapters.ts';
+
+test('current chart honors merged/rows preferences for three sparse tracks without dropping duplicates or inventing DTS',()=>{
+  const sel=([{slot:'A',mediaId:'A'},{slot:'B',mediaId:'B'},{slot:'C',mediaId:'C'}] as const).map(t=>({...t}));
+  const sources=[[0,100000,100000],[50000,150000],[0,200000]];
+  const results=new Map(sel.map((track,index)=>[track.slot,runSourceQuery(sources[index].map((pts,i)=>({pts,dts:index===0&&i===1?null:pts,size:1000,key:i===0})),{
+    mediaId:track.mediaId,sourceVersion:`${track.mediaId}@1`,firstPtsUs:0,durationUs:300000,indexRevision:1,coverageUs:{start:0,end:300000},
+    capability:{hasSize:true,hasDts:true,keySource:'container',pictureType:'key-only',qp:'unsupported',indexState:'complete'},
+  },{requestId:1,axis:'pts',startUs:0,endUs:300000,pixelWidth:1800,bitrateWindowUs:1000000})]));
+  const before=JSON.stringify([...results]),colors={key:'#f00',delta:'#0f0',unknown:'#888',grid:'#444',text:'#fff',axisText:'#aaa'};
+  const base={sel,results,range:{start:-100000,end:300000},width:1800,availableHeight:400,slotColors:new Map<Slot,string>(),colors,rubber:null};
+  const expected=[...results.values()].flatMap(r=>r.samples.map(s=>s.sampleId)).sort();
+  for(const layoutMode of ['merged','rows'] as const){
+    const model=buildAnalysisModel({...base,prefs:{...loadAnalysisPreferences(),showSize:true,layoutMode}})!;
+    assert.equal(model.merged,layoutMode==='merged');
+    if(layoutMode==='rows'){
+      assert.equal(model.bucketGlyphs!.reduce((count,g)=>count+g.count,0),expected.length,'the conservative rows LOD retains every queried sample');
+      continue;
+    }
+    assert.deepEqual(model.sampleGlyphs!.flatMap(g=>g.stackedIds).sort(),expected);
+    assert.ok(model.groups.some(g=>g.membersByTrack.get('A')?.length===2));
+    const dts=buildAnalysisModel({...base,prefs:{...loadAnalysisPreferences(),showSize:true,axis:'dts',layoutMode}})!;
+    const missing=results.get('A')!.samples.find(s=>s.dtsUs===null)!.sampleId;
+    assert.deepEqual(dts.sampleGlyphs!.flatMap(g=>g.stackedIds).sort(),expected.filter(id=>id!==missing));
+  }
+  assert.equal(JSON.stringify([...results]),before,'chart projection leaves query ordering and clock facts intact');
+});

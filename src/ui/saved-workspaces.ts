@@ -19,13 +19,21 @@ export function savedWorkspaceShell() {
     <div class="saved-workspace-pages" hidden><button id="saved-workspace-first" disabled>${th(msg("savedWorkspaces.backToLatest", "返回最新"))}</button><button id="saved-workspace-next" disabled>${th(msg("savedWorkspaces.nextPage", "下一页"))}</button></div></div>${checkpointHistoryShell()}`;
 }
 
-export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(): WorkspaceFile; open(document: WorkspaceFile, space?: string): Promise<boolean>; copyLink(id: string, trigger: HTMLElement): Promise<void>; canSave(): boolean; report(error: Error): void; changed?(): void }) {
+/** One accepted open intent, including its own successful import detach. */
+export interface WorkspaceOpenOperation {
+  readonly signal: AbortSignal;
+  current(): boolean;
+  detach(name?: string): void;
+}
+export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(): WorkspaceFile; open(document: WorkspaceFile, space: string | undefined, operation: WorkspaceOpenOperation): Promise<boolean>; copyLink(id: string, trigger: HTMLElement): Promise<void>; canSave(): boolean; report(error: Error): void; changed?(): void }) {
   const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(`saved-workspace-${id}`) as T;
   const client = new SavedWorkspaceClient(options.signal);
   const columns = document.querySelector<HTMLElement>('.workspace-list-columns')!;
   let binding: SavedWorkspace | undefined, busy = false, available = false, before = '', next: string | null = null, search = '', sequence = 0;
   let refreshAfterBusy = false, bindingEpoch = 0;
-  let opening = false;
+  let opening = false, openEpoch = 0;
+  let openController = new AbortController();
+  const invalidateOpen = () => { ++openEpoch; openController.abort(new DOMException(t(msg('workspace.changed', '当前工作区已切换，请在新工作区重新分享。')), 'AbortError')); };
   let idle: Promise<void> = Promise.resolve();
   const captureRequest = () => ({ binding, owner: currentActor()?.id, epoch: bindingEpoch });
   const isCurrent = (request: ReturnType<typeof captureRequest>) => !options.signal.aborted && request.epoch === bindingEpoch && request.owner === currentActor()?.id;
@@ -99,17 +107,29 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
     }
     localizeEmpty();
   },options.signal);
+  function detach(name = '') {
+    bindingEpoch++; binding = undefined; $<HTMLInputElement>('name').value = name; $('conflict').hidden = true; controls();
+  }
+  function beginOpen(): WorkspaceOpenOperation {
+    invalidateOpen(); openController = new AbortController();
+    const epoch = openEpoch, owner = currentActor()?.id, signal = AbortSignal.any([options.signal, openController.signal]);
+    const current = () => !signal.aborted && epoch === openEpoch && owner === currentActor()?.id;
+    return { signal, current, detach(name) { if (current()) detach(name); } };
+  }
   async function load(id: string) {
+    const operation = beginOpen();
     opening = true; controls();
     try {
-      const owner = (await identityHealth()).actor?.id;
+      await identityHealth();
+      if (!operation.current()) return;
       const record = await client.read(id);
-      if (owner !== currentActor()?.id) return;
-      if (!await options.open(record.document, record.space ?? undefined)) return;
-      if (owner !== currentActor()?.id) return;
+      if (!operation.current()) return;
+      if (!await options.open(record.document, record.space ?? undefined, operation)) return;
+      if (!operation.current()) return;
       binding = record; delete $('reload').dataset.unavailable; $<HTMLInputElement>('name').value = record.name; $('conflict').hidden = true; message(''); controls();
       const url = new URL(location.href); url.searchParams.delete('share'); url.searchParams.delete('review'); url.searchParams.set('workspace', record.id); history.replaceState(null, '', url);
-    } finally { opening = false; controls(); }
+    } catch (error) { if (operation.current()) throw error; }
+    finally { opening = false; controls(); }
   }
   async function persist(document = options.snapshot(), request = captureRequest()) {
     // Keep the target and document from before any preparation/network await.
@@ -176,7 +196,7 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
   window.addEventListener('voidplayer-identity-change', event => {
     const { actor, previous } = (event as CustomEvent).detail;
     if (actor?.id === previous?.id) return;
-    ++sequence; ++bindingEpoch; binding = undefined; before = ''; next = null;
+    ++sequence; invalidateOpen(); ++bindingEpoch; binding = undefined; before = ''; next = null;
     $('conflict').hidden = true; $('list').replaceChildren(); columns.hidden = true;
     search = ''; $('search-button').hidden = true; $<HTMLInputElement>('search').value = ''; message(''); controls();
     if (actor && !document.getElementById('settings-pane-workspace')!.hidden) { if (busy) refreshAfterBusy = true; else refresh(); }
@@ -216,5 +236,5 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
       },true);
       if (!result) throw new Error(t(msg("workspace.saving", "工作区正在保存，请稍后再分享。")));
       return result;
-    }, detach(name = '') { bindingEpoch++; binding = undefined; $<HTMLInputElement>('name').value = name; $('conflict').hidden = true; controls(); }, open(id: string) { return act(() => load(id)); }, update: controls };
+    }, beginOpen, detach(name = '') { invalidateOpen(); detach(name); }, open(id: string) { return act(() => load(id)); }, update: controls };
 }

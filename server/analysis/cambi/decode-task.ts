@@ -35,7 +35,6 @@ import { instantiateCore } from "../../../shared/wasm/core.ts";
 import { validateDescription } from "../../../shared/media/frame-description.ts";
 import {
   CAMBI_LIMITS,
-  CAMBI_RECIPE,
   CambiError,
   cambiOutputBudget,
   cambiIntervalClocks,

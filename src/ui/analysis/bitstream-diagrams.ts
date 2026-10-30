@@ -330,7 +330,7 @@ export function installBitstreamDiagrams(host: HTMLElement, session: ReviewSessi
       }
       canvas.setAttribute('aria-label', t(msg('analysis.referenceCanvas', '帧参考关系图。横轴为整片时间；总览显示帧类型分布，放大后显示参考金字塔和连线。方向键选择，回车查看。')));
     } else {
-      const types = [...new Set([...data!.types, ...headerTypes])].sort((a,b) => a-b), shownTypes = types.filter(type => !hiddenTypes.has(type)), codec = data!.codec!;
+      const types = [...new Set([...data!.types, ...headerTypes])].sort((a,b) => a-b), shownTypes = types.filter(type => !hiddenTypes.has(type));
       let rowTypes: number[];
       const headerCounts = Array(64).fill(0), headerBytes = Array(64).fill(0);
       for (const header of headers) for (const n of header.nalus) if (!hiddenTypes.has(n.type)) { headerCounts[n.type]++; headerBytes[n.type] += n.size; }

@@ -3,7 +3,6 @@ import { hevcGeometry, hevcFieldPictures } from '../../media/codecs/hevc-geometr
 import {qualitySourceIndex,isMp4QualityDocument,qualityIndexPacketCount} from './source-index.ts';
 import type {QualityIndexDocument,QualityVideoIndex} from './source-index.ts';
 import { FramePairError, PAIR_LIMITS, forwardPacketPlan, gopPacketPlan, FORWARD_PAIR_LIMITS, requireInspectionGeometry, type PairTarget } from './frame-pair.ts';
-import type {FlvIndex} from '../../media/containers/flv-demux.ts';
 import type { LibraryPairBinding } from './library-pair.ts';
 import {nativeConfigurationHex} from '../../media/codecs/native-picture-identity.ts';
 

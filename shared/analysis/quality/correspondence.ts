@@ -1,3 +1,4 @@
+import { BYTE_HISTORY_RETENTION } from '../../service/history-retention.ts';
 import {PAIR_LIMITS,FORWARD_PAIR_LIMITS} from './frame-pair.ts';
 import {PSNR_LIMITS} from './psnr.ts';
 import {clockKey,compareClocks,compareClockSums,clockToUs,normalizeClock} from '../../media/indexing/rational-clock.ts';
@@ -9,7 +10,8 @@ import type {QualityRangeInput,QualityRangePlan} from './ranges.ts';
 import type {FramePairRequest} from './frame-pair.ts';
 import type {LibraryPairBinding} from './library-pair.ts';
 
-export const CORRESPONDENCE_LIMITS=Object.freeze({segments:32,requestBytes:128*1024,resultBytes:8*1024*1024,page:32,historyRows:100,reservedBytes:256*1024*1024,planReservation:8*1024*1024,queued:4,actorOutstanding:2,maxIndexBytes:64*1024*1024,maxIndexPackets:500000,maxElapsedMs:30000});
+export const CORRESPONDENCE_LIMITS=Object.freeze({segments:32,requestBytes:128*1024,resultBytes:8*1024*1024,page:32,/** @deprecated Compatibility metadata only; not a storage row cap. */
+  historyRows: 100, historyRetention: BYTE_HISTORY_RETENTION,reservedBytes:256*1024*1024,planReservation:8*1024*1024,queued:4,actorOutstanding:2,maxIndexBytes:64*1024*1024,maxIndexPackets:500000,maxElapsedMs:30000});
 export type RelationSource={mediaId:string;mediaVersion:string;stream:'video';configuration:0};
 export type ClockSegment={id:string;referenceStartUs:number;referenceEndUs:number;offsetUs:number;offset?:{ticks:number;timescale:number}};
 export const segmentOffset=(segment:ClockSegment)=>segment.offset??{ticks:segment.offsetUs,timescale:1000000};

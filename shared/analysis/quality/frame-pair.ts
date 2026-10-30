@@ -18,7 +18,6 @@ import {
 } from "../../media/indexing/media-index-identity.ts";
 import type { MediaIndexIdentity } from "../../media/indexing/media-index-identity.ts";
 import { scanFlv } from "../../media/containers/flv-demux.ts";
-import type { FlvIndex } from "../../media/containers/flv-demux.ts";
 import { nalRanges } from "../../media/codecs/nal-framing.ts";
 import { inspectPacketPicture } from "../../media/codecs/packet-picture.ts";
 import { avcGeometry } from "../../media/codecs/avc-geometry.ts";

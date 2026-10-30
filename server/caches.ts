@@ -1,5 +1,5 @@
 import type {CacheOverview} from '../shared/service/admin.ts';
-import type {CacheKind,CacheEntry} from '../shared/service/caches.ts';
+import type {CacheEntry} from '../shared/service/caches.ts';
 export type {CacheKind,CacheEntry} from '../shared/service/caches.ts';
 import { stat, statfs } from 'node:fs/promises';
 import path from 'node:path';

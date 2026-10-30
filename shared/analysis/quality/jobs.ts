@@ -1,10 +1,12 @@
+import { BYTE_HISTORY_RETENTION } from '../../service/history-retention.ts';
 import type {ReexecutionMetadata} from './reexecution.ts';
 import type { FramePairRequest } from './frame-pair.ts';
 import type { LibraryPairResult } from './library-pair.ts';
 
 export const QUALITY_JOB_LIMITS = Object.freeze({
   running: 1, queued: 4, actorOutstanding: 2, queueWaitMs: 300_000,
-  requestBytes: 16 * 1024, resultBytes: 128 * 1024, historyRows: 1000,
+  requestBytes: 16 * 1024, resultBytes: 128 * 1024, /** @deprecated Compatibility metadata only; not a storage row cap. */
+  historyRows: 1000, historyRetention: BYTE_HISTORY_RETENTION,
   reservedBytes: 64 * 1024 * 1024, pageSize: 50,
 });
 export type QualityJobState = 'queued' | 'preparing' | 'running' | 'cancelling'

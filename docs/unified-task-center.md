@@ -1,7 +1,7 @@
 # Unified actor task center
 
 The task center is a read model of preparation, correspondence, single-pair,
-range, native VMAF/XPSNR and single-source CAMBI records. The read model does not
+range, VMAF/XPSNR and single-source CAMBI records. The read model does not
 schedule work; explicit recomputation controls delegate to the original scoring
 services.
 It uses the current self-declared service actor, not strong authentication.
@@ -11,7 +11,13 @@ kind, metric, raw state, createdFrom (inclusive epoch milliseconds), createdTo
 (exclusive), limit (1..50) and cursor. Source filtering matches ID and version
 on the same side. Metric filters identify requested scoring metrics or named
 preparation/planning operations; they do not assert that a metric completed.
-Per-metric outcomes remain independent. The query reads complete matching
+Per-metric outcomes remain independent. `TASK_LIMITS` owns the fixed query
+snapshot row/byte budgets independently of store retention; changing an algorithm's
+history limits cannot resize a task query. The existing row budget remains 2240.
+Domain `limits.historyRows` is deprecated, non-enforcing compatibility metadata;
+`limits.historyRetention` declares `logical-byte-budget` and its deprecated status.
+Actual retention is charged to the store's published `reservedBytes` or
+`historyBytes`, including durable recovery intents. The query reads complete matching
 actor-owned metadata within the shared snapshot budget, not the first page of each legacy API. SQL projects
 metadata without loading full inputs, results, index documents or pixels into JS.
 
@@ -149,3 +155,13 @@ old scores/candidates occurs. Preparation and C plans are not reexecuted here.
 CAMBI is projected from its original bounded `cambi_jobs` store using only scalar metadata: one `source` role, metric `cambi`, exact phase/prepared/scored/target facts and committed result availability. Provisional stored scores remain unavailable as immutable results. It has no fabricated reference/C-plan edge. Explicit task-center cancellation delegates to the original CAMBI service; candidate receipt links require the entire frozen ref (including frame, scale and region) to match a server-verified same-origin annotation attachment before opening its independent five-scale viewer. No heatmap bytes are loaded by task queries.
 
 CAMBI delegates to the same explicit confirmation/receipt panel, limited to physically stopped failed/interrupted/cancelled tasks with a persisted single-source contract. Source/cache/producer/core, AU selection/order and analysis core/component/recipe must match. Missing historical witness requires new intent; no partial status or automatic preparation/publication is added.
+
+Range result release uses the same explicit task-center action as single/VMAF/
+XPSNR/CAMBI. It archives parent detail, releases only unpinned child payloads and
+retains frozen publication/annotation evidence, coverage, summary and receipts.
+An interrupted two-store release projects `result.releasePending:true` and keeps
+its action available; replay settles the same target. `result.released:true`
+withdraws result links and excludes protected published children from the archived
+range's retained-detail count. Historical child relationships remain traceable.
+The GUI observes current detail; an older frozen query page keeps its original facts.
+See [range release](bounded-quality-ranges.md#explicit-result-release).

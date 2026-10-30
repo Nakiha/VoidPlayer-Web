@@ -78,7 +78,8 @@ Read-only reexecution preflight is a separate single witness pass. Stage counts
 and per-pass limits are part of the exact confirmed cost. No existing
 execution/queue/heap/frame limits are increased.
 
-Single/range/VMAF/XPSNR databases migrate to version 2. Old rows and request/result
+The reexecution ledger was introduced in single/range/VMAF/XPSNR database version 2;
+range database v3 additionally records explicit detail release and resumable cleanup. Old rows and request/result
 fingerprints stay unchanged; older applications refuse this newer database.
 Single history reservations include bounded witness/receipt overhead, range
 reservations add the same allowance, and native metrics retain their existing reservations.

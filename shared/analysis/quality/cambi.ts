@@ -1,3 +1,4 @@
+import { BYTE_HISTORY_RETENTION } from '../../service/history-retention.ts';
 import type {
   ScoringComponent,
   AnalysisScoringResources,
@@ -34,7 +35,8 @@ export const CAMBI_LIMITS = Object.freeze({
   frameBytes: 512 * 1024,
   queue: 4,
   actorOutstanding: 2,
-  historyRows: 8,
+  /** @deprecated Compatibility metadata only; not a storage row cap. */
+  historyRows: 8, historyRetention: BYTE_HISTORY_RETENTION,
   historyBytes: 1024 * 1024 * 1024,
 });
 export const CAMBI_RECIPE = Object.freeze({

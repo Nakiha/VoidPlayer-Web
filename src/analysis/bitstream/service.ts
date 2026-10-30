@@ -14,7 +14,6 @@ import {
   BUDGET,
   pictureId,
   matchesAnalysisLayout,
-  validateResult,
   validateMetadata,
   validateTarget,
   validateRange,

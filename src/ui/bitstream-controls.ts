@@ -95,7 +95,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     if (event.key === 'Escape' && !(event.target as Element).closest('[popover]:popover-open')) { event.preventDefault(); event.stopPropagation(); setOpen(false); trigger.focus(); }
   }, {signal:life.signal});
   function automatic(slot: Slot, entry: Entry) {
-    if (!entry.enabled || lastState.busy || lastState.playing || cached(slot,entry)) return;
+    if (!entry.enabled || lastState.busy || lastState.playing || cached(slot)) return;
     const state = session.getBitstreamAnalysisState(slot);
     if ((state.state === 'pending' && state.stream?.product !== 'summary') || state.state === 'paused' || state.state === 'unsupported' || entry.request) return;
     // The picture provider plans bounded preroll from a verified closed anchor.
@@ -130,7 +130,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     const entry = entries.get(slot);
     entry?.request?.abort(); entry?.overlay?.dispose(); entry?.tooltip?.remove(); entries.delete(slot);
   }
-  function cached(slot: Slot, entry: Entry) {
+  function cached(slot: Slot) {
     const token = session.getPresentedFrame(slot);
     return session.cachedBitstreamAnalysis(slot, token ?? undefined);
   }
@@ -141,7 +141,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
       entry.overlay = createAnalysisOverlay(session, slot, canvases[slot]);
       entry.overlay.setDisplay({ fill: mode, boundaries, labels });
       const canvas = $(`bitstream-overlay-${slot}`); canvas.style.opacity = String(opacity / 100);
-      const result = cached(slot, entry); if (result) entry.overlay.setResult(result);
+      const result = cached(slot); if (result) entry.overlay.setResult(result);
       const tooltip = document.createElement('output'); tooltip.className = 'bitstream-hit-tooltip'; tooltip.hidden = true;
       panel.closest('.viewport-surface')!.append(tooltip); entry.tooltip = tooltip;
     }).finally(() => { entry.loading = undefined; });
@@ -201,7 +201,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     if (!state.tracks.length) { initialized=false; if(open) setOpen(false); }
     for(const [slot,entry] of entries) {
       automatic(slot,entry);
-      const result=cached(slot,entry);
+      const result=cached(slot);
       if(result?.confidence==='exact') entry.capabilities=result.capabilities;
       if(result && entry.enabled) entry.overlay?.setResult(result);
     }
@@ -254,7 +254,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
   }
   async function run(slot: Slot) {
     const entry = entryFor(slot); if (!entry) return;
-    if (cached(slot, entry)?.confidence === 'exact' && !canRetryAnalysis(session.getBitstreamAnalysisState(slot))) { setVisibility(slot, true); return; }
+    if (cached(slot)?.confidence === 'exact' && !canRetryAnalysis(session.getBitstreamAnalysisState(slot))) { setVisibility(slot, true); return; }
     if (entry.request) return;
     const requested = session.getPresentedFrame(slot), controller = new AbortController();
     entry.requestedKey = inspectionKey(requested) ?? undefined;

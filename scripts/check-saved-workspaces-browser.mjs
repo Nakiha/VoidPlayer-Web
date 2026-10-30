@@ -101,6 +101,24 @@ try {
   await admin.locator('#admin-workspace-delete').click();await admin.locator('#admin-workspace-confirm-delete').click();await admin.locator('#admin-workspace-conflict').waitFor({state:'visible'});
   assert.equal((await fetch(base+'/api/workspaces/'+id)).status,200,'stale delete cannot remove the workspace');
   for(const width of [720,390]){await admin.setViewportSize({width,height:900});assert.ok(await admin.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));}
+  // The real file-import entry supersedes a saved open before its GET returns.
+  let releaseOldOpen, oldOpenStarted;
+  const oldOpenGate = new Promise(resolve => { releaseOldOpen = resolve; });
+  const startedOldOpen = new Promise(resolve => { oldOpenStarted = resolve; });
+  const heldOpen = async route => { const response = await route.fetch(); oldOpenStarted(); await oldOpenGate; await route.fulfill({response}); };
+  await page.route(`**/api/workspaces/${id}`, heldOpen);
+  await settings(page); await page.locator(`.saved-workspace-open[data-workspace-id="${id}"]`).click();
+  await startedOldOpen;
+  const imported = structuredClone(newer.document); imported.name = '独立导入的工作区'; imported.marks[0].text = '导入后标注';
+  await page.locator('#workspace-file').setInputFiles({name:'import.voidplayer',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(imported))});
+  await page.waitForFunction(() => document.querySelector('#saved-workspace-name').value === '独立导入的工作区' && !window.voidPlayer.getState().busy);
+  const oldReply = page.waitForResponse(response => response.url() === `${base}/api/workspaces/${id}` && response.request().method() === 'GET');
+  releaseOldOpen(); await (await oldReply).finished();
+  await page.waitForFunction(() => !document.querySelector('#saved-workspace-save').disabled);
+  assert.equal(await page.locator('#saved-workspace-name').inputValue(), imported.name);
+  assert.equal((await page.evaluate(() => window.voidPlayer.getState())).marks[0].text, '导入后标注');
+  assert.equal(new URL(page.url()).searchParams.has('workspace'), false);
+  await page.unroute(`**/api/workspaces/${id}`, heldOpen);
   const storageState=await context.storageState();await context.close();await service.close();service=await startService(config);await service.library.refresh();
   const restarted=await browser.newContext({locale:'zh-CN', viewport:{width:1200,height:800},storageState});const restored=await restarted.newPage();restored.on('pageerror',e=>errors.push(e.message));
   await restored.goto(base+'/?workspace='+id);await restored.waitForFunction(()=>window.voidPlayer?.getState().tracks.length===2&&!window.voidPlayer.getState().busy&&document.querySelector('#source-search').value==='h264');

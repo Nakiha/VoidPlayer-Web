@@ -124,8 +124,21 @@ try {
   await page.waitForFunction(() => !!document.querySelector('[data-operation-id="gui-closed"]'));
   await page.locator('#settings-open').click(); await page.locator('#settings-tab-workspace').click();
   assert.equal(await page.locator('[data-operation-id="gui-closed"] a').isVisible(), true, 'reopened workspace shows activity directly');
-  const [popup] = await Promise.all([context.waitForEvent('page'), page.locator('[data-operation-id="gui-closed"] a').click()]);
-  await ready(popup);
+  // A cold deep link must not accept a workspace intent before its initial
+  // actor confirmation. Hold that boundary so a fast annotation GET cannot win.
+  let releaseIdentity,identitySeen;const identityGate=new Promise(r=>releaseIdentity=r),seenIdentity=new Promise(r=>identitySeen=r);
+  const coldReads=[];
+  const observeColdRead=request=>{try{if(request.frame().page()!==page&&new URL(request.url()).pathname.endsWith('/mark-B'))coldReads.push(request.url());}catch{}};
+  const holdIdentity=async route=>{if(route.request().frame().page()===page)return route.continue();const response=await route.fetch();identitySeen();await identityGate;await route.fulfill({response});};
+  context.on('request',observeColdRead);await context.route('**/api/health',holdIdentity);
+  let popup;
+  try{
+    [popup] = await Promise.all([context.waitForEvent('page'), page.locator('[data-operation-id="gui-closed"] a').click()]);
+    await popup.waitForFunction(()=>!!window.voidPlayer);await seenIdentity;
+    assert.deepEqual(coldReads,[],'annotation restoration waits for the initial actor');
+    releaseIdentity();await ready(popup);
+  }finally{releaseIdentity();context.off('request',observeColdRead);await context.unroute('**/api/health',holdIdentity);}
+
   assert.equal((await popup.evaluate(() => window.voidPlayer.getState())).tracks[0].name, 'B.mp4');
   assert.equal((await read()).tracks[0].name, 'A.mp4');
   assert.deepEqual(errors, []);

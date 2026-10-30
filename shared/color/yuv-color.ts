@@ -122,7 +122,7 @@ export function yuvChannelGray(d: FrameDescription, pixels: Uint8Array | Uint8Cl
  * 'y'/'u'/'v' isolates the source plane as gray without matrix conversion. */
 export function yuvToRgba(d: FrameDescription, pixels: Uint8Array | Uint8ClampedArray, channel: 'rgb' | 'y' | 'u' | 'v' = 'rgb'): Uint8ClampedArray<ArrayBuffer> {
   validateYuv(d,pixels.byteLength);
-  const l=d.yuv!, plan=resolveYuvColor(d);
+  const plan=resolveYuvColor(d);
   if (!plan.supported) throw new Error('Unsupported YUV color plan');
   const out=new Uint8ClampedArray(d.width*d.height*4);
   for(let y=0;y<d.height;y++) for(let x=0;x<d.width;x++) {

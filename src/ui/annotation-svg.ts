@@ -1,4 +1,4 @@
-import { t, msg, onLanguageChange } from '../i18n.ts';
+import { t, msg } from '../i18n.ts';
 import { DEFAULT_ANNOTATION_COLOR, drawingStrokeWidth } from '../../shared/review/annotation.ts';
 import type { PresentationGeometry } from '../presentation/presentation-surface.ts';
 import type { Drawing } from '../../shared/review/annotation.ts';

@@ -1,10 +1,8 @@
-import {analysisIndexIdentity} from './products.ts';
 import type {ProductIndexIdentity} from './products.ts';
 import { BUDGET, pictureId } from './contract.ts';
 import type { AnalysisResult, ReadonlyAnalysisResult, SourcePictureKey } from './contract.ts';
-import { OwnedBlocks, packLegacy, isProduct, productKey, validateOutput } from './products.ts';
+import { OwnedBlocks, isProduct, productKey, validateOutput } from './products.ts';
 import type { AnalysisBlocks } from './products.ts';
-import type { MediaIndexIdentity } from '../../media/indexing/media-index-identity.ts';
 /** Exact blocks have a private packed owner; summaries live only in DiagramStore. */
 export class AnalysisCache {
   private entries = new Map<string, { owner: OwnedBlocks; view: ReadonlyAnalysisResult; bytes: number; key: string }>();

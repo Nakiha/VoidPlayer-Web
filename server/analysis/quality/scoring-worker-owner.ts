@@ -188,16 +188,14 @@ export class ScoringWorkerOwner {
     }
     const controller = new AbortController(),
       combined = AbortSignal.any([signal, controller.signal]);
-    const timer = setTimeout(
-      () =>
-        controller.abort(
+    const deadline = performance.now() + input.budget.maxElapsedMs;
+    const expire = () => controller.abort(
           new ScoringWorkerError(
             "budget-exceeded",
             "Whole scoring execution deadline exceeded",
           ),
-        ),
-      input.budget.maxElapsedMs,
-    );
+        );
+    const timer = setTimeout(expire, input.budget.maxElapsedMs);
     const entry = {
       stop: () =>
         controller.abort(
@@ -209,7 +207,13 @@ export class ScoringWorkerOwner {
       try {
         admitted();
         combined.throwIfAborted();
-        return await work(combined);
+        const result = await work(combined);
+        // The last source/component verification is asynchronous too. The
+        // owner accepts success only while its whole execution is still live.
+        // Check elapsed time as well: synchronous work may delay the timer.
+        if (performance.now() >= deadline) expire();
+        combined.throwIfAborted();
+        return result;
       } finally {
         clearTimeout(timer);
         this.active.delete(entry);

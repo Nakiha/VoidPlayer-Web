@@ -1,7 +1,6 @@
 import { log } from '../logging/log.ts';
 import type { DecodedFrame, MediaSource } from '../media/source.ts';
 import { referenceVersion } from '../../shared/media/io/media-reference.ts';
-import type { Slot } from '../../shared/review/model.ts';
 import { localCacheKey, serverCacheKey } from '../../shared/thumbnails/contract.ts';
 import { offerFirstFrameCandidate, settleOffer } from '../thumbnails/offer.ts';
 import { thumbnailState } from '../thumbnails/state.ts';
@@ -18,7 +17,6 @@ import type { SessionResources } from './resources.ts';
  * see thumbnails/state.ts counters.
  */
 export function offerSessionThumbnail(
-  slot: Slot,
   source: MediaSource,
   frame: DecodedFrame,
   localTarget: number,

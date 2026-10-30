@@ -6,7 +6,6 @@ import type { RandomAccessInput } from '../../../shared/media/io/range-reader.ts
 import type { MediaMeta, MediaSource } from '../source.ts';
 import type { FallbackDeps } from './ffmpeg-media.ts';
 import { loadAborted, onLoadAbort } from '../../../shared/media/io/media-abort.ts';
-import { contextLog } from '../../logging/log.ts';
 
 export type JsContainerAdmission = {
   kind:'js-packet-static'; open(forceWasm:boolean):Promise<MediaSource>; close():void;

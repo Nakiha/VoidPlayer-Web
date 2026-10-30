@@ -44,7 +44,7 @@ for(const kind of ['single','range','vmaf','xpsnr'] as const)test(`real ${kind}:
   let nativeKilled=false;
   if((kind==='vmaf'||kind==='xpsnr')){
     const nativeRunner=((kind==='xpsnr'?library.qualityXpsnr:library.qualityVmaf) as any).runner,run=nativeRunner.run.bind(nativeRunner);
-    nativeRunner.run=(input:any,snapshot:any,signal:any,hooks:any)=>run(input,snapshot,signal,{...hooks,...({prepared:(p:any)=>{hooks.prepared(p);if(!nativeKilled){nativeKilled=true;throw Error('Injected failure after real companion preparation');}}}),process:(p:any)=>{hooks.process(p);if(p&&!nativeKilled){nativeKilled=true;process.kill(p.pid,'SIGKILL');}}});
+    nativeRunner.run=(input:any,snapshot:any,signal:any,hooks:any)=>run(input,snapshot,signal,{...hooks,...({prepared:(p:any)=>{hooks.prepared(p);if(!nativeKilled){nativeKilled=true;throw Error('Injected failure after real companion preparation');}}})});
   }
   const collection=kind==='single'?'/api/quality/jobs':kind==='range'?'/api/quality/ranges':'/api/quality/'+kind+'/jobs';
   const first=(kind==='range'?await f.json('/api/quality/correspondence-plans/'+f.input.plan.id+'/execute',{digest:f.input.plan.digest}):await f.json(collection,input,'initial-execution')).job,url=collection+'/'+first.id;
@@ -125,7 +125,7 @@ for(const kind of ['single','range','vmaf','xpsnr'] as const)test(`${kind}: SIGK
   const f=await (kind==='xpsnr'?xpsnrFixture:nativeFixture)({distorted:true,containers:['mp4','flv']});let closeProcess=async()=>{};t.after(async()=>{await closeProcess();await f.close();});
   const lib=f.service.library,runner=lib.quality as any,create=runner.createWorker;let gate:Int32Array|undefined;
   runner.createWorker=(data:any)=>{if(data.mode==='measure'&&!gate){gate=new Int32Array(new SharedArrayBuffer(20));return new Worker(new URL('../helpers/quality-phase-worker.ts',import.meta.url),{workerData:{...data,hangPhase:'decode',phaseState:gate.buffer}});}return create(data);};
-  if((kind==='vmaf'||kind==='xpsnr')){const r=((kind==='xpsnr'?lib.qualityXpsnr:lib.qualityVmaf) as any).runner,run=r.run.bind(r);r.run=(...args:any[])=>run(args[0],args[1],args[2],{...args[3],...({prepared:(p:any)=>{args[3].prepared(p);throw Error('Injected failure after real companion preparation');}}),process:(p:any)=>{args[3].process(p);if(p)process.kill(p.pid,'SIGKILL');}});}
+  if((kind==='vmaf'||kind==='xpsnr')){const r=((kind==='xpsnr'?lib.qualityXpsnr:lib.qualityVmaf) as any).runner,run=r.run.bind(r);r.run=(...args:any[])=>run(args[0],args[1],args[2],{...args[3],...({prepared:(p:any)=>{args[3].prepared(p);throw Error('Injected failure after real companion preparation');}})});}
   const range=lib.qualityCorrespondence.result(f.input.plan.id,f.actor).rangePlan!.input;
   const collection=kind==='single'?'/api/quality/jobs':kind==='range'?'/api/quality/ranges':'/api/quality/'+kind+'/jobs';
   const body=kind==='single'?{schema:'voidplayer-psnr-frame-job',version:1,client:{id:'crash-original',kind:'agent'},request:range.pairs[0]}:kind==='range'?range:f.input;
@@ -151,7 +151,7 @@ for(const kind of ['single','range','vmaf','xpsnr'] as const)test(`${kind}: chan
   const {cp,mkdir,truncate}=await import('node:fs/promises'),{openIndexDatabase}=await import('../../server/sqlite.ts');
   const f=await (kind==='xpsnr'?xpsnrFixture:nativeFixture)({distorted:true,containers:['mp4','flv']});t.after(()=>f.close());const lib=f.service.library,runner=lib.quality as any,create=runner.createWorker;let gate:Int32Array|undefined,measures=0;
   runner.createWorker=(data:any)=>{if(data.mode==='measure'){measures++;if(!gate){gate=new Int32Array(new SharedArrayBuffer(20));return new Worker(new URL('../helpers/quality-phase-worker.ts',import.meta.url),{workerData:{...data,hangPhase:'decode',phaseState:gate.buffer}});}}return create(data);};
-  if((kind==='vmaf'||kind==='xpsnr')){const r=((kind==='xpsnr'?lib.qualityXpsnr:lib.qualityVmaf) as any).runner,run=r.run.bind(r);r.run=(...args:any[])=>run(args[0],args[1],args[2],{...args[3],...({prepared:(p:any)=>{args[3].prepared(p);throw Error('Injected failure after real companion preparation');}}),process:(p:any)=>{args[3].process(p);if(p)process.kill(p.pid,'SIGKILL');}});}
+  if((kind==='vmaf'||kind==='xpsnr')){const r=((kind==='xpsnr'?lib.qualityXpsnr:lib.qualityVmaf) as any).runner,run=r.run.bind(r);r.run=(...args:any[])=>run(args[0],args[1],args[2],{...args[3],...({prepared:(p:any)=>{args[3].prepared(p);throw Error('Injected failure after real companion preparation');}})});}
   const collection=kind==='single'?'/api/quality/jobs':kind==='range'?'/api/quality/ranges':'/api/quality/'+kind+'/jobs',range=lib.qualityCorrespondence.result(f.input.plan.id,f.actor).rangePlan!.input;
   const accepted=kind==='range'?await f.json('/api/quality/correspondence-plans/'+f.input.plan.id+'/execute',{digest:f.input.plan.digest}):await f.json(collection,kind==='single'?{schema:'voidplayer-psnr-frame-job',version:1,client:{id:'frozen-negatives',kind:'agent'},request:range.pairs[0]}:f.input,'negative-original');const url=collection+'/'+accepted.job.id;
   const read=async()=>{const r=await f.json(url);return kind==='range'?r.job:r;};if(kind==='single'||kind==='range'){await until(()=>gate&&Atomics.load(gate,0),Boolean);await f.json(url+'/cancel',{});}await until(read,(j:any)=>['failed','cancelled','partial'].includes(j.state));

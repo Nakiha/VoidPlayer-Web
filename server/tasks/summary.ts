@@ -1,6 +1,6 @@
 import type { IndexDatabase } from "../sqlite.ts";
 import { AdminError } from "../admin-error.ts";
-import { TASK_HISTORY_ROWS, TASK_LIMITS } from "../../shared/service/tasks.ts";
+import { TASK_LIMITS } from "../../shared/service/tasks.ts";
 import { QUALITY_RANGE_LIMITS } from "../../shared/analysis/quality/ranges.ts";
 import type {
   TaskKind,
@@ -240,7 +240,7 @@ export function taskSummaries(
         : kind === "preparation"
           ? "result_json IS NOT NULL"
           : kind === "range"
-            ? `${j("summary.scoredPairs")}>0`
+            ? `${j("summary.scoredPairs")}>0 AND ${j("resultRetention.releasedAt")} IS NULL`
             : `result IS NOT NULL AND ${j("resultDigest")} IS NOT NULL`;
   const metric =
     kind === "preparation"
@@ -323,7 +323,8 @@ export function taskSummaries(
     )
       return [];
   }
-  const projection = `SELECT id,${times},${phase} AS phase,${sourceFields},${result} AS available,${metric},${progress},${attempt} AS attempt_id,${resultDigest} AS result_digest FROM ${table} WHERE ${columnar ? "actor_id" : "actor"}=?`;
+  const retention = kind === "range" ? `${j("resultRetention.releasedAt")} AS released_at,${j("resultRetention.settledAt")} AS settled_at` : "NULL AS released_at,NULL AS settled_at";
+  const projection = `SELECT id,${retention},${times},${phase} AS phase,${sourceFields},${result} AS available,${metric},${progress},${attempt} AS attempt_id,${resultDigest} AS result_digest FROM ${table} WHERE ${columnar ? "actor_id" : "actor"}=?`;
   const rows = db
     .prepare(
       `SELECT * FROM (${projection}) WHERE ${predicates.length ? predicates.join(" AND ") : "1"} ORDER BY created_at DESC,id DESC LIMIT ?`,
@@ -378,6 +379,7 @@ export function taskSummaries(
       },
       result: {
         available,
+        ...(kind === "range" ? {released:r.released_at!==null,releasePending:r.released_at!==null&&r.settled_at===null,retained:0} : {}),
         ...(r.scored !== null ? { scored: Number(r.scored) } : {}),
       },
       attemptId: r.attempt_id === null ? null : String(r.attempt_id),

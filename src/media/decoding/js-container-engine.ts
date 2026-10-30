@@ -13,7 +13,6 @@ import type { PacketView } from '../../../shared/analysis/metadata/adapters.ts';
 import type { MediaOpenProgress } from '../progress.ts';
 import type { IndexProgress } from '../workers/worker-protocol.ts';
 import { MediaOpenError } from '../../../shared/media/io/media-errors.ts';
-import { TsCombinationNotMigrated } from '../../../shared/media/containers/ts-packet-source.ts';
 import { inspectCachedTracks } from '../../../shared/media/containers/cached-track-metadata.ts';
 import {localJsSourceVersion,loadLocalJsIndex,saveLocalJsIndex} from '../indexing/js-packet-index-cache.ts';
 import {loadServerJsIndex} from '../indexing/js-packet-index-client.ts';

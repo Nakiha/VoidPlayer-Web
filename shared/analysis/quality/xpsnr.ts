@@ -23,7 +23,6 @@ import type {
   VmafPlanSnapshot,
   VmafMetricState,
   VmafSequence,
-  VmafSequenceFrame,
   VmafAssociation,
 } from "./vmaf.ts";
 import type { LibraryPairResult } from "./library-pair.ts";

@@ -6,9 +6,13 @@ export const QUALITY_AGENT_DOCUMENTS:Record<string,string>={
 
 Use [tasks.query](/api/agent/operations/tasks.query), then [tasks.get](/api/agent/operations/tasks.get). GET /api/tasks reads all bounded preparation, correspondence, single, range, VMAF, XPSNR and single-source CAMBI history for the current self-declared actor. This identity is attribution, not strong authentication. No media/index/pixel read or implicit preparation occurs. Filter by exact media ID/version on the same side, kind/metric/raw state, and inclusive createdFrom/exclusive createdTo epoch milliseconds.
 
+Task query row/byte limits are independent snapshot budgets. Domain limits.historyRows is deprecated compatibility metadata, not an enforced retention cap; limits.historyRetention describes the logical-byte policy. Actual retained data is charged against the store reservedBytes/historyBytes budget.
+
 Pages freeze membership and summary facts for60 seconds. Keep filters with nextCursor; refresh without cursor for changes.409 task-cursor-expired after restart, expiry, eviction, changed filters or actor means restart without cursor. Preserve an explicitly selected kind/ID separately. Detail always reads current facts and original verified relationships; unknown phase/progress stays unknown. Stored availability is not fresh source verification. Follow original result/candidate/viewer links. Range scored counts remain distinct from retained child results.
 
 Explicit cancel is POST /api/tasks/{kind}/{id}/cancel with {}, same Origin and captured actor. Use library-preparation action for preparation, quality-job otherwise. It delegates to the owning service. Cancelling retains admission until confirmed physical exit. If the receipt is lost, read the same task; repeating cancel does not create computation or roll back completed results. Closing GUI or HTTP observation never cancels a durable job.
+
+Explicit result release is POST /api/tasks/{kind}/{id}/release-result with {}, quality-job action, same Origin and captured actor, for single/range/VMAF/XPSNR/CAMBI. Follow [tasks.release.range](/api/agent/operations/tasks.release.range) for ranges. It preserves receipts and historical summary/coverage; frozen publication and shared/historical evidence remain pinned. A range archives detail before child cleanup; result.releasePending keeps the same action available after a crash. Read and repeat only the same explicit target to settle an unknown response. No computation, index build or publication is created.
 
 For a physically stopped failed/interrupted/cancelled/partial single, range, VMAF, XPSNR or stopped failed/interrupted/cancelled CAMBI task, follow its reexecution-plan link and the [explicit full recomputation contract](/agent/quality/recovery.md). Task detail exposes verified predecessor/successor links. Reexecution requires a separate reason, exact cost confirmation and frozen actor/body/key; it never starts automatically. No partial resume, automatic publication, new scheduler or global administration. Changed conditions need new intent.
 `,
@@ -126,6 +130,8 @@ identical pixel domain; SSIM pools valid windows per plane before Y4:U1:V1.
 Parent coordination does not hold a second execution permit around children.
 Cancel explicitly; capacity remains held until physical exit. Disconnecting
 observation never cancels durable work. Restart interrupts rather than reruns.
+
+After physical stop, explicit [range result release](/api/agent/operations/tasks.release.range) preserves input/summary/coverage and original receipts while releasing unpinned children. Archived /results returns409 range-result-released; no new candidate policy can be derived. Original frozen publication receipts still replay, including a publication interrupted before its first annotation write.
 
 [Operations](/api/agent/tasks/quality.range) · [Explicit candidates](/agent/quality/candidates.md)
 `,

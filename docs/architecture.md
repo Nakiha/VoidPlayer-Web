@@ -215,4 +215,4 @@ XPSNR uses reference-first temporal state and the official per-plane pooling in
 the same analysis WASM artifact. Version comparison requires identical frozen
 reference/domain/recipe witnesses, not merely matching names or durations. See
 [numerical and comparison contract](native-xpsnr.md).
-显式评分重新执行见 `docs/explicit-quality-reexecution.md`。原提交重放与新计算必须分开；single/range/VMAF/XPSNR 仅已物理停止的 failed/interrupted/cancelled/partial 可只读核验冻结条件并明确确认全量成本，原子创建一个带 retryOf 的新任务。每 job 仍只有原 attempt，旧结果/候选不变、不复用分数或自动发布。条件/执行器见证缺失须 blocked/new intent，不重建索引/C 计划或自动换模型。四种评分数据库 v2 的新 job 与回执同事务；未知提交只原 actor/body/key 回放，重启不自动重算。
+显式评分重新执行见 `docs/explicit-quality-reexecution.md`。原提交重放与新计算必须分开；single/range/VMAF/XPSNR 仅已物理停止的 failed/interrupted/cancelled/partial 可只读核验冻结条件并明确确认全量成本，原子创建一个带 retryOf 的新任务。每 job 仍只有原 attempt，旧结果/候选不变、不复用分数或自动发布。条件/执行器见证缺失须 blocked/new intent，不重建索引/C 计划或自动换模型。新 job 与回执同事务；各存储的当前版本、迁移和旧应用拒绝规则以[重执行契约](explicit-quality-reexecution.md)及[区间归档契约](bounded-quality-ranges.md)为准；未知提交只原 actor/body/key 回放，重启不自动重算。

@@ -1,7 +1,7 @@
 import { workspaceCopyName } from './workspace-copy-name.ts';
 import { requestError } from './diagnostics.ts';
-import { localizedText, localizedAttribute, type LocalizedValue } from '../ui/live-localization.ts';
-import { formatDate, formatNumber, t, th, msg } from '../i18n.ts';
+import { localizedText, type LocalizedValue } from '../ui/live-localization.ts';
+import { formatDate, t, th, msg } from '../i18n.ts';
 import { emptyState, properties } from './presentation.ts';
 import { SavedWorkspaceClient } from '../review/saved-workspaces.ts';
 import type { WorkspaceRecord, SavedWorkspace } from '../review/saved-workspaces.ts';

@@ -5,6 +5,7 @@ import type {TaskReadServices,TaskCommands} from "../quality-service-ports.ts";
 import { TASK_RETENTION_BATCH } from "./summary.ts";
 import {
   TASK_LIMITS,
+  TASK_RESULT_KINDS,
   taskPath,
   taskPending,
 } from "../../shared/service/tasks.ts";
@@ -73,7 +74,7 @@ export class TaskCenterService {
     return rows;
   }
   private rangeRetention(rows: TaskSummary[], actor: string) {
-    const ranges = rows.filter((row) => row.kind === "range");
+    const ranges = rows.filter((row) => row.kind === "range" && !row.result.released);
     for (let start = 0; start < ranges.length; start += TASK_RETENTION_BATCH) {
       const batch = ranges.slice(start, start + TASK_RETENTION_BATCH);
       const edges = this.services.qualityRanges.taskChildEdges(
@@ -331,9 +332,9 @@ export class TaskCenterService {
         });
     }
     if (
-      ["single", "vmaf", "cambi", "xpsnr"].includes(kind) &&
+      TASK_RESULT_KINDS.includes(kind) &&
       !taskPending(task.state) &&
-      task.result.available
+      (task.result.available || task.result.releasePending)
     )
       links.push({
         rel: "release-result",

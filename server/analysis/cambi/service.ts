@@ -39,7 +39,6 @@ import type {
   CambiJob,
   CambiResult,
   CambiPrepared,
-  CambiNative,
   CambiFrame,
   CambiFramePage,
 } from "../../../shared/analysis/quality/cambi.ts";
@@ -656,11 +655,6 @@ export class NativeCambiService {
           }
           prepared = p;
         },
-        process: (p) => {
-          j = this.get(j.id, j.actor.id);
-          j.process = p;
-          this.save(j);
-        },
         streamFrame: async (frame, header, score, maps) => {
           if (!prepared) prepared = { ...header, frames: [] };
           if (
@@ -675,7 +669,6 @@ export class NativeCambiService {
           prepared.frames.push(frame);
           await persistFrame(frame.index, score, maps);
         },
-        frame: persistFrame,
       });
       j = this.get(j.id, j.actor.id);
       if (j.state === "cancelling" || signal.aborted)

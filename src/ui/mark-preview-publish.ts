@@ -1,4 +1,4 @@
-import { t, msg, onLanguageChange } from '../i18n.ts';
+import { t, msg } from '../i18n.ts';
 import { annotationThumbnails } from './annotation-thumbnails.ts';
 
 export type MarkPreview = { url: string; width: number; height: number; signature?: string };

@@ -1,4 +1,3 @@
-import { avcGeometry } from '../codecs/avc-geometry.ts';
 import { MediaOpenError } from '../io/media-errors.ts';
 import type { RangeReader } from '../io/range-reader.ts';
 

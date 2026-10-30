@@ -1,6 +1,6 @@
 import {parseBudgetedJson,admitJson} from '../../../shared/analysis/bitstream/json-budget.ts';
 import { encodeProduct, decodeProduct, metadataBudgetBytes, productKey, isProduct, validateProduct, PRODUCT_LIMIT } from '../../../shared/analysis/bitstream/products.ts';
-import type { AnalysisOutput, AnalysisProduct, AnalysisSummary } from '../../../shared/analysis/bitstream/products.ts';
+import type { AnalysisOutput, AnalysisSummary } from '../../../shared/analysis/bitstream/products.ts';
 import { createHash, randomUUID } from "node:crypto";
 import {
   open,

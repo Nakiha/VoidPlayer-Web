@@ -1,14 +1,11 @@
 import {BUDGET} from './limits.ts';
 import {validateContainerHeader,validateDiagram} from './diagram-validation.ts';
-import {analysisIndexIdentity} from './products.ts';
 import type {ProductIndexIdentity} from './products.ts';
 import { summaryOf, validateProduct, productKey } from './products.ts';
-import type { AnalysisSummary, AnalysisOutput } from './products.ts';
-import type { MediaIndexIdentity } from '../../media/indexing/media-index-identity.ts';
+import type { AnalysisSummary } from './products.ts';
 import { isAnnexB, nalRanges } from '../../media/codecs/nal-framing.ts';
 import type { AnalysisAxis } from '../metadata/types.ts';
 import type { AnalysisResult, SourcePictureKey } from './contract.ts';
-import { pictureId } from './contract.ts';
 export interface NaluRecord { offset: number; size: number; type: number; temporalId: number; layer: number }
 export interface PictureReferences {
   kind: 'active-lists'; state: 'ready' | 'unsupported'; poc: number;

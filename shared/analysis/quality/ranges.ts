@@ -1,3 +1,4 @@
+import { BYTE_HISTORY_RETENTION } from '../../service/history-retention.ts';
 import type {ReexecutionMetadata} from './reexecution.ts';
 import { pairPacketCount, pairBudget } from './frame-pair.ts';
 import type { FramePairRequest, PairTarget } from './frame-pair.ts';
@@ -7,7 +8,8 @@ import {mediaIndexIdentityKey} from '../../media/indexing/media-index-identity.t
 
 export const QUALITY_RANGE_LIMITS = Object.freeze({
   universe:4096, samples:1024, requestBytes:4*1024*1024,
-  historyRows:100, reservedBytes:16*1024*1024, queued:4,
+  /** @deprecated Compatibility metadata only; not a storage row cap. */
+  historyRows: 100, historyRetention: BYTE_HISTORY_RETENTION, reservedBytes:16*1024*1024, queued:4,
   actorOutstanding:2, page:4,
   maxReadBytes:32*1024*1024*1024, maxPackets:1048576,
   maxOutputFrames:1048576, maxInputBytes:128*1024*1024*1024,
@@ -56,6 +58,8 @@ export type QualityRangeJob = ReexecutionMetadata & {
   reason:QualityJobReason|null;samples:RangeSample[];
   summary:ReturnType<typeof aggregateRange>;
   cancelRequestedAt:number|null;revision:number;
+  /** Absent on legacy rows. Summary, coverage, input and sample receipts remain. */
+  resultRetention?:{releasedAt:number;settledAt:number|null};
 };
 const fail=(message:string):never=>{throw new Error(message);};
 function keys(value:unknown,allowed:string[]){

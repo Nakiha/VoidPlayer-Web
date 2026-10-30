@@ -5,7 +5,7 @@ import {openIndexDatabase} from '../../server/sqlite.ts';
 import {taskSummaries,taskEdges,rangeTaskChildren,retainedTaskResults} from '../../server/tasks/summary.ts';
 import type {TaskCommands} from '../../server/quality-service-ports.ts';
 import {TaskCenterService} from '../../server/tasks/service.ts';
-import {taskQuery,TASK_KINDS,TASK_HISTORY_ROWS,TASK_LIMITS} from '../../shared/service/tasks.ts';
+import {taskQuery,TASK_KINDS,TASK_LIMITS} from '../../shared/service/tasks.ts';
 import type {TaskKind,TaskFilter} from '../../shared/service/tasks.ts';
 import type {MediaLibraryIndex} from '../../server/library.ts';
 
@@ -55,6 +55,7 @@ test('retention batches cover full admitted 1024-sample ranges without the ordin
 });
 
 test('strict shared query: same-side version, exact enums, half-open time and no duplicate/unknown fields',()=>{
+ assert.equal(TASK_LIMITS.rows,2240,'snapshot budget remains stable independently of legacy domain limits');
  for(const s of ['limit=0','limit=51','kind=nr','state=stopping','createdFrom=-1','createdFrom=1.5','createdFrom=2&createdTo=2','foo=x','kind=single&kind=range','mediaVersion='+ 'a'.repeat(24),'cursor=guess'])assert.throws(()=>query(s),s);
  assert.deepEqual(query('kind=vmaf&state=partial&metric=ssim&createdFrom=0&createdTo=9&limit=1'),{filter:{kind:'vmaf',metric:'ssim',state:'partial',createdFrom:0,createdTo:9},limit:1});
 });
@@ -127,4 +128,14 @@ test('reexecution edges are bidirectional, actor-scoped and never count a succes
   if(kind==='range')assert.equal(parent.task.result.retained,0,'successor is a new computation, not an old scored child');
   assert.throws(()=>f.center.detail(kind,original.id,'actor-B'),{status:404});
  }
+});
+
+test('range archive preserves historical edges and frozen snapshots while current detail withdraws results',t=>{
+ const f=fixture();t.after(()=>f.close());const child=f.insert('single'),parent=f.insert('range','actor-A',{samples:[{au:0,jobId:child.id,state:'completed',result:{attemptId:child.attemptId,digest:child.digest}}]});
+ const frozen=f.center.query('actor-A',{filter:{kind:'range'},limit:1});assert.equal(frozen.entries[0].result.available,true);
+ f.db.prepare("UPDATE quality_ranges SET body=json_set(body,'$.resultRetention',json(?)) WHERE id=?").run(JSON.stringify({releasedAt:200,settledAt:null}),parent.id);
+ const current=f.center.detail('range',parent.id,'actor-A');assert.equal(current.task.result.available,false);assert.equal(current.task.result.retained,0);assert.equal(current.task.result.scored,1);assert.equal(current.task.result.releasePending,true);assert.ok(current.links.some(l=>l.rel==='release-result'));assert.ok(current.related.some(l=>l.id===child.id));
+ assert.equal(frozen.entries[0].result.available,true);
+ f.db.prepare("UPDATE quality_ranges SET body=json_set(body,'$.resultRetention.settledAt',201) WHERE id=?").run(parent.id);
+ assert.equal(f.center.detail('range',parent.id,'actor-A').links.some(l=>l.rel==='release-result'),false);
 });

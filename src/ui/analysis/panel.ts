@@ -14,7 +14,6 @@ import type { Slot } from '../../../shared/review/model.ts';
 import type { ReviewSession } from '../../session.ts';
 import type { AnalysisDiagram, AnalysisCapability } from '../../../shared/analysis/metadata/types.ts';
 import { BITRATE_WINDOW_OPTIONS_US, DEFAULT_BITRATE_WINDOW_US } from '../../../shared/analysis/metadata/statistics.ts';
-import type { TimeGroup } from '../../../shared/analysis/metadata/grouping.ts';
 import type { DirectTarget, InspectionState } from '../../../shared/analysis/metadata/inspection.ts';
 import { pickGlyph, paddedChartDomain, containerChartColumn, chartFrameHoverStart } from './geometry.ts';
 import type { AnalysisGlyph } from './geometry.ts';
@@ -445,7 +444,6 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   const knownTrackIds = new Set<string>();
   let lastViewSig = '';
   let lastGlyphs: AnalysisGlyph[] = [];
-  let lastGroups: TimeGroup[] = [];
   // 有序轴派生索引由 inspection.ts 按快照身份缓存（WeakMap），此处不再自建键控缓存。
 
   const readColors = () => {
@@ -821,7 +819,6 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       lastModel = null;
       lastGeom = null;
       lastGlyphs = [];
-      lastGroups = [];
       lastViewSig = '';
       inspection.state.lastInspection = null;
       renderFloat(null, null);
@@ -859,7 +856,6 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     lastGeom = { gutter: geom.gutter, plotW: geom.plotW, width: drawn.width };
     canvas.dataset.plotLeft = String(geom.gutter); canvas.dataset.plotRight = String(geom.gutter + geom.plotW);
     lastGlyphs = (model as { glyphs?: AnalysisGlyph[] }).glyphs ?? [];
-    lastGroups = (model as { groups?: TimeGroup[] }).groups ?? [];
     positionPlayhead();
     // 视图变化后把检查点重锚到光标（滚轮/捏合只动视图，不产生 pointermove），
     // 不展示过期内容；键盘检查中不抢夺焦点位置。

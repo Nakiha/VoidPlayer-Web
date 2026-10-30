@@ -6,7 +6,7 @@ import { createIconButton } from './controls.ts';
 import { icon } from './icons.ts';
 import { markSymbol, identifyMark, bindMarkHover } from './mark-symbol.ts';
 import type { ReviewSession } from '../session.ts';
-import { onLanguageChange, t, msg , th } from '../i18n.ts';
+import { onLanguageChange, t, msg } from '../i18n.ts';
 
 type AnnotationEntry = { mark: Mark; slot: Slot; offsetUs: number };
 

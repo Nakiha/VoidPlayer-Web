@@ -75,8 +75,8 @@ export class Measurements {
     if (!this.job || this.job.result.id !== id) throw new AdminError(404, '测速任务不存在或已被新的任务替代。');
     return this.job;
   }
-  cancel(id: string, owner: string) { this.stop(this.task(id), 'user'); return this.status(); }
-  finish(id: string, owner: string, input: unknown) {
+  cancel(id: string, _owner: string) { this.stop(this.task(id), 'user'); return this.status(); }
+  finish(id: string, _owner: string, input: unknown) {
     const job = this.task(id), value = input as MeasurementResult['client'];
     if (job.result.kind === 'storage') throw new AdminError(400, '存储任务由服务器完成。');
     if (!value || !Number.isSafeInteger(value.bytes) || value.bytes < 0 || value.bytes > job.reserved || !Number.isSafeInteger(value.requests) || value.requests < 0 || value.requests > job.result.requests || !Number.isFinite(value.elapsedMs) || value.elapsedMs <= 0 || value.elapsedMs > (job.result.seconds + 30) * 1000) throw new AdminError(400, '浏览器测量结果无效。');
@@ -125,7 +125,7 @@ export class Measurements {
       finally { this.release(job); }
     }
   }
-  async transfer(req: IncomingMessage, res: ServerResponse, id: string, owner: string) {
+  async transfer(req: IncomingMessage, res: ServerResponse, id: string, _owner: string) {
     const job = this.task(id);
     if (job.result.kind === 'storage') throw new AdminError(400, '存储任务不接受客户端传输。');
     const upload = job.result.kind === 'upload';

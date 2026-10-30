@@ -158,3 +158,21 @@ input matrices have not been independently validated. Target clock-domain
 overlap rejection covers conflicting relations; the defensive target-AU-reuse
 branch is not separately triggered by these fixtures. Budget tests do not certify
 whole-process RSS, performance or every database failure mode.
+
+## Execution-intent storage accounting
+
+Correspondence database v2 adds a `reserved` byte count to each durable
+`quality_plan_executions` intent. Startup migrates v1 rows and recalculates the
+same UTF-8 logical count, without resubmitting or changing input/key/actor/plan
+facts. Existing over-quota histories and receipts remain readable/replayable;
+new writes requiring additional capacity are rejected.
+
+The shared 256 MiB history quota includes relations, plans and execution intents.
+Before submitting the downstream range, one transaction checks capacity and saves
+both frozen intent and reservation. Its count includes the serialized body, 1024
+bytes of metadata allowance and the eventual 36-character range ID (34 bytes over
+JSON `null`). A downstream refusal still leaves a fully charged unconfirmed
+intent. Replay never charges a second intent. Acceptance updates range ID and
+actual count in the same statement; the conservative pending reservation covers
+this update even when the store is full. The transaction ends before range
+submission, so it holds neither an outer compute permit nor a cross-store lock.

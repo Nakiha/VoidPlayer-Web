@@ -1,7 +1,6 @@
 import { identityHealth } from '../services/identity.ts';
 import { SLOTS } from '../../shared/review/model.ts';
 import type { ReviewSession } from '../session.ts';
-import type { Slot } from '../../shared/review/model.ts';
 import { mediaActionUrl } from '../../shared/media/io/media-reference.ts';
 import { icon } from './icons.ts';
 import { onLanguageChange, t, msg } from '../i18n.ts';

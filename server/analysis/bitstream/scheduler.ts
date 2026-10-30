@@ -1,7 +1,7 @@
 import type {AnalysisResources} from '../../../shared/service/admin.ts';
 import {validateDemandPlan} from '../../../shared/analysis/bitstream/demand.ts';
 import type {DemandPlan} from '../../../shared/analysis/bitstream/demand.ts';
-import { analysisIndexIdentity, isProduct, isSummary, validateOutput, productKey, metadata, metadataBudgetBytes, PRODUCT_LIMIT, SUMMARY_BATCH_LIMIT, encodeProduct } from '../../../shared/analysis/bitstream/products.ts';
+import { analysisIndexIdentity, isProduct, isSummary, validateOutput, productKey, metadata, metadataBudgetBytes, PRODUCT_LIMIT, SUMMARY_BATCH_LIMIT } from '../../../shared/analysis/bitstream/products.ts';
 import type { AnalysisOutput, AnalysisSummary } from '../../../shared/analysis/bitstream/products.ts';
 import { FLV_MEDIA_INDEX_IDENTITY, JS_TS_MEDIA_INDEX_IDENTITY,JS_MATROSKA_MEDIA_INDEX_IDENTITY } from '../../../shared/media/indexing/media-index-identity.ts';
 import { DEFAULT_ANALYSIS_CONCURRENCY, validAnalysisConcurrency, ANALYSIS_WORKER_HEAP_BYTES } from './limits.ts';
@@ -13,14 +13,12 @@ import {
   ANALYSIS_RECIPE,
   ANALYZER_VERSION,
   BUDGET,
-  validateResult,
   validateTarget,
   validateRange,
   validateStream,
   pictureId,
 } from "../../../shared/analysis/bitstream/contract.ts";
 import type {
-  AnalysisResult,
   AnalysisTarget,
   AnalysisRangeTarget,
   AnalysisStreamTarget,

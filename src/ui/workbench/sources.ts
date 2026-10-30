@@ -1,6 +1,6 @@
 import { loadStageLabel } from '../media-progress.ts';
 import type { MediaLoadStage } from '../media-progress.ts';
-import { formatDate, onLanguageChange, t, msg , th } from '../../i18n.ts';
+import { formatDate, t, msg } from '../../i18n.ts';
 import { SLOTS } from '../../../shared/review/model.ts';
 import type { Slot } from '../../../shared/review/model.ts';
 import { createIconButton } from '../controls.ts';
