@@ -218,7 +218,9 @@ export class QualityRangeService {
       job.samples.push({au,jobId:child.id,state:child.state,reason:null});this.save(job);
       while(!terminalQualityJob(child.state)){
         job=this.get(job.id,job.actor.id);
-        if((this.closed||job.cancelRequestedAt!==null||this.now()>=deadline)&&child.state!=='cancelling')this.jobs.cancel(child.id,job.actor.id,job.requestId);
+        // A draining child already owns interruption/physical stop. Keep reading its
+        // terminal fact; external cancellation is deliberately closed to new commands.
+        if((this.closed||job.cancelRequestedAt!==null||this.now()>=deadline)&&child.state!=='cancelling'&&this.jobs.resources().available)this.jobs.cancel(child.id,job.actor.id,job.requestId);
         await pause();child=this.jobs.get(child.id,job.actor.id);
         if(this.jobs.resources().admissionBlocked){job=this.get(job.id,job.actor.id);job.state='cancelling';job.reason={code:'worker-stop-uncertain',message:'Child service unavailable or physical stop unconfirmed; parent admission retained.'};this.save(job);throw new Error(job.reason.message);}
       }

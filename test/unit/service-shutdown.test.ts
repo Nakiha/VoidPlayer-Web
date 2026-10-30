@@ -1,3 +1,5 @@
+import {createMediaServer} from '../../server/app.ts';
+import {AnalysisScheduler} from '../../server/analysis/bitstream/scheduler.ts';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -40,7 +42,7 @@ function library(failed='') {
     stop(){calls.push('stop');if(failed==='stop')throw failure;},store:{close(){calls.push('database');}},indexJobs:{close(){calls.push('indexJobs');if(failed==='indexJobs')throw failure;}}
   }) as MediaLibraryIndex;
   const fields={taskService:'taskCenter',reexecutionService:'reexecutions',correspondenceService:'correspondence',cambiService:'cambi',xpsnrService:'xpsnr',vmafService:'vmaf',discoveryService:'preparation',rangeService:'ranges',jobService:'jobs',pairRunner:'quality'};
-  const app=Object.assign(Object.create(QualityApplication.prototype),{library:value});
+  const app=Object.assign(Object.create(QualityApplication.prototype),{library:value,indexReaders:new Set()});
   for(const [name,field]of Object.entries(fields)){
     const stop=()=>{calls.push(name);if(name===failed)throw failure;};
     app[field]=['taskService','reexecutionService','pairRunner'].includes(name)?{close:stop}:{stopExecution:stop,close(){}};
@@ -137,7 +139,12 @@ test('running range drains its real child Worker before committing parent state 
    await online;const child=ranges.get(parent.id,actor.id).samples[0].jobId;
    let settled=false;const close=library.close().then(()=>{settled=true;});await stopped;await new Promise(r=>setImmediate(r));
    assert.equal(settled,false);assert.throws(()=>new MediaLibraryIndex([],{database,watch:false}),/另一个实例/);
-   assert.ok(jobs.get(child,actor.id));release();await close;assert.equal(worker.threadId,-1);
+   assert.ok(jobs.get(child,actor.id));
+   let reads=0,observed!:()=>void;const polled=new Promise<void>(r=>observed=r),get=jobs.get.bind(jobs);
+   jobs.get=(...args:Parameters<typeof jobs.get>)=>{const value=get(...args);if(!jobs.resources().available&&++reads>=2)observed();return value;};
+   let timer:ReturnType<typeof setTimeout>|undefined;
+   try{await Promise.race([polled,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Parent did not keep reading the draining child')),5000);})]);}finally{clearTimeout(timer);}
+   assert.equal(worker.threadId>=0,true);assert.equal(settled,false);release();await close;assert.equal(worker.threadId,-1);
    for(const [file,table,id]of [[database+'.quality.sqlite','quality_jobs',child],[database+'.quality-ranges.sqlite','quality_ranges',parent.id]]){
      const db=openIndexDatabase(file);try{const row=db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(id)!;assert.equal(table==='quality_jobs'?row.state:JSON.parse(String(row.body)).state,'interrupted');}finally{db.close();}
    }
@@ -158,4 +165,40 @@ test('media property reads cannot assemble quality services; one explicit applic
    await app.close();await library.close();
    const reopened=new MediaLibraryIndex([],{database,watch:false});await reopened.close();
  }finally{await library.close();await rm(dir,{recursive:true,force:true});}
+});
+
+
+test('an embedded HTTP owner waits for its local bitstream scheduler before releasing its media index',async t=>{
+ let release!:()=>void,seen!:()=>void,application!:QualityApplication,released=false;
+ const gate=new Promise<void>(r=>release=r),started=new Promise<void>(r=>seen=r);
+ const closeAnalysis=AnalysisScheduler.prototype.close,closeApplication=QualityApplication.prototype.close,releaseStorage=MediaLibraryIndex.prototype.releaseStorage;
+ t.mock.method(AnalysisScheduler.prototype,'close',async function(this:AnalysisScheduler){seen();await gate;await closeAnalysis.call(this);});
+ t.mock.method(QualityApplication.prototype,'close',function(this:QualityApplication,external?:Promise<void>){application=this;return closeApplication.call(this,external);});
+ t.mock.method(MediaLibraryIndex.prototype,'releaseStorage',function(this:MediaLibraryIndex){released=true;return releaseStorage.call(this);});
+ const server=createMediaServer({roots:[]});
+ try{
+  await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));await new Promise<void>((resolve,reject)=>server.close(e=>e?reject(e):resolve()));
+  await started;await new Promise(r=>setImmediate(r));assert.equal(released,false,'listener closure cannot release storage while analysis is still draining');
+  release();await application.close();assert.equal(released,true);
+ }finally{release();if(server.listening)await new Promise<void>(r=>server.close(()=>r()));await application?.close();}
+});
+
+
+test('a supplied media library drains attached HTTP readers in either close order',async t=>{
+ for(const order of ['listener-first','application-first'])await t.test(order,async()=>{
+  const dir=await mkdtemp(path.join(tmpdir(),'vp-attached-reader-')),database=path.join(dir,'library.sqlite');
+  const library=new MediaLibraryIndex([],{database,watch:false});let release!:()=>void,seen!:()=>void,stops=0;
+  const gate=new Promise<void>(r=>release=r),started=new Promise<void>(r=>seen=r),original=AnalysisScheduler.prototype.close;
+  const mock=t.mock.method(AnalysisScheduler.prototype,'close',async function(this:AnalysisScheduler){stops++;seen();await gate;await original.call(this);});
+  const server=createMediaServer({roots:[],library});
+  try{
+   await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));
+   if(order==='listener-first')await new Promise<void>((resolve,reject)=>server.close(e=>e?reject(e):resolve()));
+   const closed=library.close();await started;await new Promise(r=>setImmediate(r));
+   assert.throws(()=>new MediaLibraryIndex([],{database,watch:false}),/另一个实例/);
+   assert.throws(()=>library.qualityApplication.attachIndexReader(async()=>{}),{code:'service-closed'});
+   release();await closed;if(server.listening)await new Promise<void>(r=>server.close(()=>r()));assert.equal(stops,1);
+   const reopened=new MediaLibraryIndex([],{database,watch:false});await reopened.close();
+  }finally{release();if(server.listening)await new Promise<void>(r=>server.close(()=>r()));await library.close();mock.mock.restore();await rm(dir,{recursive:true,force:true});}
+ });
 });

@@ -66,6 +66,7 @@ export function createMediaServer(options: ServerOptions): Server {
   if (!options.library) library.start();
   const analysisCore = process.env.VOIDPLAYER_ANALYSIS_CORE_DIR || path.join(options.staticDir ?? path.join(process.cwd(), 'public'), 'vendor/voidplayer-analysis');
   const analysis = options.admin?.analysisFor(analysisCore) ?? new AnalysisScheduler(library, analysisCore, library.analysisDirectory);
+  const stopLocalAnalysis = options.admin ? undefined : quality.attachIndexReader(() => analysis.close());
   const staticDir = options.staticDir ? path.resolve(options.staticDir) : undefined;
   const staticRoot = staticDir ? fs.realpath(staticDir).catch(() => null) : Promise.resolve(null);
   const staticAssets = staticRoot.then(root => root ? new StaticAssets(root) : null);
@@ -145,8 +146,12 @@ export function createMediaServer(options: ServerOptions): Server {
   };
   const server = options.tls ? createSecureServer(options.tls, handleRequest) : createServer(handleRequest);
   server.on('close',()=>existingPages?.close());
-  if (!options.admin) server.on('close',()=>{void analysis.close();});
   server.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
-  if (!options.library) server.on('close', () => { void quality.close().catch(error=>console.error('Application shutdown failed',error)); });
+  server.on('close', () => {
+    // A supplied library remains caller-owned. The registered reader is still
+    // part of the application drain if the caller closes it before this server.
+    const stopped = options.library ? stopLocalAnalysis?.() : quality.close();
+    void stopped?.catch(error => console.error('Application shutdown failed', error));
+  });
   return server;
 }

@@ -21,6 +21,16 @@ import { TaskCenterService } from './tasks/service.ts';
 export class QualityApplication {
   readonly ready: Promise<void>;
   private closing?: Promise<void>;
+  private indexReaders = new Set<() => Promise<void>>();
+  /** Explicitly attach a local reader of the shared media index. Closing its
+   * HTTP listener and closing the application share the same drain promise. */
+  attachIndexReader(stop: () => Promise<void>) {
+    if(this.closing)throw new AdminError(503,'Application is closing.','service-closed');
+    let stopping:Promise<void>|undefined;
+    const close=()=>stopping??=(async()=>{await stop();this.indexReaders.delete(close);})();
+    this.indexReaders.add(close);
+    return close;
+  }
   private jobs?: QualityJobService;
   private ranges?: QualityRangeService;
   private correspondence?: CorrespondenceService;
@@ -105,6 +115,7 @@ export class QualityApplication {
         ['single jobs',()=>this.jobs?.stopExecution()],
         ['pair executor',()=>this.quality.close()],
         ['media execution',()=>this.library.stopExecution()],
+        ['attached index readers',()=>closeResources('Index reader drain incomplete',[...this.indexReaders].map((stop,index)=>[`reader ${index}`,stop] as const))],
       ]);
       await closeResources('Quality storage disposal incomplete',[
         ['range storage',()=>this.ranges?.close()],
