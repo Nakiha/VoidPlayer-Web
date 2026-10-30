@@ -450,3 +450,20 @@ b85c9a2 的 Windows Node 套件23/24通过；XPSNR HTTP文件前22个子用例
 Agent HTTP8/8、实际无浏览器工作流9/9、快速82/82、XPSNR基础HTTP Node/Bun
 各17/17、构建、共享类型及模块边界通过。改动是公开能力/恢复说明与错误文案，
 不改变评分算法、帧选择或历史记录；最终完整CI继续验证当前提交。
+
+
+## 阶段十八：消除包内验收的嵌套总限时
+
+8dfc4f6的Windows包内基础发现/MP4、VMAF/CAMBI官方分数与五尺度热图、
+XPSNR各容器矩阵全部通过后，重执行仍在运行时被旧release-quality的120秒
+总限时截断。它串行嵌入三个已各自登记为180/180/120秒的验收脚本，却没有
+应用这些边界。独立日志已证明这是外层调度截止，不能记作完整包验收通过。
+
+注册入口release-quality改为只跑基础组；analysis-quality、XPSNR和重执行
+在三平台发布CI中各执行一次，也加入完整release套件。四项仍全部required，
+原120/180/180/120秒单项限时和20分钟job限时保留。兼容直接调用
+check-quality-release.mjs默认仍运行完整流程，--base-only仅供登记入口拆组。
+发布契约校验四项均在每个平台必跑、预算不变，无删减断言或静默跳过。
+使用9c384de的已验证干净macOS包复验新调度4/4通过，完整contract43/43、
+发布流水线契约20/20通过。当前产品提交的三平台结论仍由最终CI提供。
+[原始Windows截止日志](https://github.com/Nakiha/VoidPlayer-Web/actions/runs/40969990215/job/123784984672)。

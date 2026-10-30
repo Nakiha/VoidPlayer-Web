@@ -956,6 +956,9 @@ jobs:
       - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
       - run: node scripts/run-tests.mjs --case release-analysis
       - run: node scripts/run-tests.mjs --case release-quality
+      - run: node scripts/run-tests.mjs --case release-analysis-quality
+      - run: node scripts/run-tests.mjs --case release-native-xpsnr
+      - run: node scripts/run-tests.mjs --case release-quality-reexecution
       - name: Install network playback browser
         if: runner.os == 'Linux' || runner.os == 'Windows'
         run: npx playwright install --with-deps chromium

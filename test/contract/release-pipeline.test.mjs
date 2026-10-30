@@ -150,6 +150,16 @@ test('all platform/runtime suites run independently of the compiled package jobs
   for (const suite of ['--case release-analysis', '--case release-quality', 'ci-native-http --prepared', 'ci-native-https --prepared']) assert.ok(packaged.body.includes(`run: node scripts/run-tests.mjs ${suite}\n`));
   assert.doesNotMatch(packaged.body, /Prepare pinned Linux native quality components/);
   assert.equal(manifest.cases.find(row => row.id === 'release-quality').timeoutMs, 120000, 'runtime suites must not consume or enlarge the compiled acceptance budget');
+  for (const [id, deadline] of [['release-quality',120000],['release-analysis-quality',180000],['release-native-xpsnr',180000],['release-quality-reexecution',120000]]) {
+    const row=manifest.cases.find(entry=>entry.id===id);
+    assert.equal(row.required,true);
+    assert.ok(row.suites.includes('release'));
+    assert.equal(row.timeoutMs,deadline);
+    assert.deepEqual(row.platforms,['linux','darwin','win32']);
+    assert.equal(packaged.body.split(`run: node scripts/run-tests.mjs --case ${id}\n`).length-1,1);
+  }
+  assert.ok(manifest.cases.find(row=>row.id==='release-quality').command.includes('--base-only'));
+
 });
 
 test('cache suite runs once in its own required job with the same pinned preparation and evidence', async () => {
