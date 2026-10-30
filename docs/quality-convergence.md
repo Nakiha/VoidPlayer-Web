@@ -467,3 +467,22 @@ check-quality-release.mjs默认仍运行完整流程，--base-only仅供登记�
 使用9c384de的已验证干净macOS包复验新调度4/4通过，完整contract43/43、
 发布流水线契约20/20通过。当前产品提交的三平台结论仍由最终CI提供。
 [原始Windows截止日志](https://github.com/Nakiha/VoidPlayer-Web/actions/runs/40969990215/job/123784984672)。
+
+
+## 阶段十九：原生帧协议矩阵复用受控浏览器页面
+
+fd73779的评分/缓存综合套件69/70；唯一失败是WebKit原生帧协议矩阵在
+反复创建上下文后，后续空白测试页goto等待load超过30秒，尚未进入该项
+解码断言。原始日志没有给出浏览器底层根因，不能将其声明为已诊断的引擎
+缺陷。同次独立多页面暂停帧诊断已通过（52.7秒）。完整本地npm test222/222、
+三平台包、六组运行时、媒体Node和完整HEVC时间轴均已通过。
+
+协议矩阵使用一个明确拥有的context/page，只导航一次。每项仍新建实际
+解码器、源帧和presenter并显式释放；相邻项及最终检查canvas已清空。全部
+条码、AU、重排/排空、负/重复时钟、多图像与场编码断言保留，不重试或延长
+超时。context与Vite由共同cleanup管理，失败也逐项释放并保留原错误。
+Chromium/WebKit各16项完成；WebKit H264/HEVC8/10实际执行，Chromium
+仍仅允许原有明确的HEVC不可用结果。完整contract43/43通过。Linux结果
+须由当前提交CI再次确认；并未据本机通过推断浏览器底层根因已修。
+[原始失败日志](https://github.com/Nakiha/VoidPlayer-Web/actions/runs/40980442675/job/123819068459)，
+本地副本`.run/quality-convergence/cache-failure-fd73779.log`。
