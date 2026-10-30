@@ -1,11 +1,13 @@
 // Actual AAC/Opus output + equal media IO with the speaker off/on.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, rm, copyFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, copyFile, writeFile, readdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromium, webkit } from 'playwright';
 import { saveBrowserFailure, recordBrowserEvidence } from './browser-failure-evidence.mjs';
+import { createHash } from 'node:crypto';
+import { snapshotBuild } from './testing/build.mjs';
 import { cleanupResources } from './testing/lifecycle.mjs';
 import { createMediaServer } from '../server/app.ts';
 import { MediaLibraryIndex } from '../server/library.ts';
@@ -21,7 +23,7 @@ const artifacts = path.join(root, '.run/opportunistic-audio', container + (local
 let browser, server, library, activePage, evidence, tracing = false;
 let lifecycleTrace = [];
 let failure;
-const routeErrors = [];
+const workerInstrumentation = [];
 try {
   const media = path.join(temporary, 'media'); await mkdir(media);
   const fixture = path.join(media, 'audio.flv');
@@ -38,7 +40,21 @@ try {
   const id = listing.entries.find(e => e.name === `audio.${extension}`).id;
   const second = listing.entries.find(e => e.name === `second.${extension}`).id;
   let traffic = [];
-  server = createMediaServer({ roots: library.roots, library, staticDir: path.join(root, 'dist'), onLog() {} });
+  // Instrument only this fixture's verified build copy. Browser Worker requests
+  // still use the actual HTTP server and its isolation/content-length headers;
+  // no second route.fetch proxy request races with reload or server teardown.
+  const staticDir = await snapshotBuild(path.join(root, 'dist'), path.join(temporary, 'static'));
+  const prefix = `if (typeof self.FileReaderSync !== 'undefined') { const NativeReader = self.FileReaderSync; self.FileReaderSync = class extends NativeReader { readAsArrayBuffer(blob) { self.postMessage({type:'audio-test-blob-read', bytes:blob.size}); return super.readAsArrayBuffer(blob); } }; } const blobRead = Blob.prototype.arrayBuffer; Blob.prototype.arrayBuffer = function() { self.postMessage({type:'audio-test-blob-read', bytes:this.size}); return blobRead.call(this); };\n`;
+  for (const name of await readdir(path.join(staticDir, 'assets'))) {
+    if (!/^(?:ffmpeg|packet)-worker-[^/]+\.js$/.test(name)) continue;
+    const filename = path.join(staticDir, 'assets', name), original = await readFile(filename);
+    const instrumented = Buffer.concat([Buffer.from(prefix), original]);
+    await writeFile(filename, instrumented);
+    workerInstrumentation.push({ name, originalSha256: createHash('sha256').update(original).digest('hex'),
+      instrumentedSha256: createHash('sha256').update(instrumented).digest('hex') });
+  }
+  assert.equal(workerInstrumentation.length, 2, 'instrument both compiled decoding Workers');
+  server = createMediaServer({ roots: library.roots, library, staticDir, onLog() {} });
   server.on('request', (req, res) => {
     if (req.url.startsWith('/audio-test-lifecycle?')) lifecycleTrace.push({ time: Date.now(), stage: new URL(req.url, 'http://localhost').searchParams.get('stage') });
     if (req.url.split('?')[0] === `/api/media/${id}` || req.url.split('?')[0] === `/api/media/${second}`) {
@@ -61,7 +77,7 @@ try {
     activePage = page; lifecycleTrace = [];
     const browserEvidence = recordBrowserEvidence(page);
     let glBackends = [];
-    evidence = () => ({ ...browserEvidence(), lifecycleTrace, glBackends, routeErrors: routeErrors.map(error => String(error.stack ?? error)) });
+    evidence = () => ({ ...browserEvidence(), lifecycleTrace, glBackends, workerInstrumentation });
     const errors = []; page.on('pageerror', e => errors.push(e.message));
     // Count actual output nodes and verify a pause/mute immediately stops all of them.
     await page.addInitScript(() => {
@@ -120,16 +136,6 @@ try {
           node.addEventListener('ended', () => window.audioEvidence.live.delete(node)); return node;
         }
       };
-    });
-    await page.context().route(/\/assets\/(?:ffmpeg|packet)-worker-[^/]+\.js$/, async route => {
-      try {
-        const response = await route.fetch();
-        const prefix = `if (typeof self.FileReaderSync !== 'undefined') { const NativeReader = self.FileReaderSync; self.FileReaderSync = class extends NativeReader { readAsArrayBuffer(blob) { self.postMessage({type:'audio-test-blob-read', bytes:blob.size}); return super.readAsArrayBuffer(blob); } }; } const blobRead = Blob.prototype.arrayBuffer; Blob.prototype.arrayBuffer = function() { self.postMessage({type:'audio-test-blob-read', bytes:this.size}); return blobRead.call(this); };\n`;
-        await route.fulfill({ response, body: prefix + await response.text() });
-      } catch (error) {
-        routeErrors.push(error);
-        await route.abort().catch(() => {});
-      }
     });
     await page.addInitScript(() => {
       const NativeWorker = window.Worker;
@@ -271,9 +277,6 @@ try {
       report[1].lifecycleTrace = [...lifecycleTrace];
       assert.equal((await state(page)).audioSlot, null, 'audio selection is never persisted');
     }
-    // Finish owned interception before navigation teardown closes its server.
-    await page.context().unrouteAll({ behavior: 'wait' });
-    assert.deepEqual(routeErrors, [], 'Worker interception completed without failures');
     await page.close();
   }
   // Both runs complete the same video traversal and then the same seek/replay.
@@ -281,8 +284,8 @@ try {
   if (local) assert.ok(report[0].blobReads.length, 'local control observes actual Blob IO');
   assert.deepEqual(report[1].blobReads, report[0].blobReads, 'speaker adds zero local Blob reads');
   assert.deepEqual(report[1].traffic, report[0].traffic, 'speaker adds zero media requests and bytes');
-  await writeFile(path.join(artifacts, `${browserName}.json`), JSON.stringify(report, null, 2));
-  console.log(JSON.stringify({ container, local, report })); console.log('PASS default mute, decoded audio, seek, single slot, button geometry, restore and identical media IO');
+  await writeFile(path.join(artifacts, `${browserName}.json`), JSON.stringify(report.map(row => ({ ...row, workerInstrumentation })), null, 2));
+  console.log(JSON.stringify({ container, local, workerInstrumentation, report })); console.log('PASS default mute, decoded audio, seek, single slot, button geometry, restore and identical media IO');
 } catch (error) {
   failure = { error };
   if (tracing) await activePage.context().tracing.stop({ path: path.join(artifacts, `${browserName}-navigation.zip`) }).catch(() => {});
@@ -290,10 +293,6 @@ try {
     context: { caseName: 'opportunistic-audio', engine: browserName }, error, evidence });
 } finally {
   await cleanupResources([
-    ['Worker routes', async () => {
-      for (const context of browser?.contexts() ?? []) await context.unrouteAll({ behavior: 'wait' });
-      if (routeErrors.length) throw new AggregateError(routeErrors, 'Worker interception failed');
-    }],
     ['browser', () => browser?.close()],
     ['server', async () => { if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); } }],
     ['library', () => library?.close()],

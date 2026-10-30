@@ -6,20 +6,31 @@
 
 ## 当前验收状态（2026-10-30）
 
-代码候选 `9c384dee798ecbf6b015aeb74baa006c0d5b5de7` 已分阶段推送，尚未合入 main。
-三个感知评分器均使用既有分析 WASM；没有新增第三个 core、avfilter 或生产评分 CLI。
-本地实际闭环、双浏览器、生命周期与播放回归完成。三平台发布门槛独立以
-[PR #161 的精确提交检查](https://github.com/Nakiha/VoidPlayer-Web/pull/161/checks)
-为准；本地完成门槛不替代未完成或失败的远端检查。
-此处是当前状态；后续各阶段段落保留当时的失败、限制和待验收记录。
+收敛候选在 `codex/quality-convergence`，阶段二十四已完成本机定向收尾，
+尚未合入 main。Web PR #161 与上游 core PR #14 分别交付消费端和固定构建。
+三个感知评分器均使用既有分析 WASM；没有第三个 core、avfilter 或生产评分 CLI。
+本机实际闭环、双浏览器、生命周期与播放回归完成；输入域和未认证范围见
+[评分契约](analysis-wasm-scoring.md)。
 
-最终代码干净 macOS ARM64 包：
-`voidplayer-1.0.0-preview.9c384dee-darwin-arm64-2026-10-29T21-24-39-105Z.tar.gz`。
-SHA-256：`c7d97449b51159997ffca1908d01fabd756d141a948da82fb74c797496536f33`。
-空 PATH/无关 cwd 的真实解压程序通过发现与准备、PSNR/SSIM/网格、VMAF/CAMBI/XPSNR、
-官方分数/五尺度热图、共享证据、持久幂等及显式重执行；独立包契约同时通过
-升级/备份/恢复、SQLite互斥、HTTP/Range/取消、身份及工作区保留。
-最终 contract 43/43，Node 与 Bun 同组真实 HTTP 各53/53，播放基准12/12。
+当前验收证据分层：
+- 完整本机 Node 222/222 在 fd73779；此后产品行为未变化的测试/CI收尾
+  不重复当作完整 Node 新实测。最新日常浏览器 profile 33/33、契约43/43通过。
+- 阶段二十三 VMAF 六项/18组完整流程通过；阶段二十四音频完整13/13通过。
+  两项夹具修正没有修改生产播放器或评分器。
+- d772b70 的三平台独立包、六组平台运行时通过；同次音频代理请求失败、
+  MP4 VMAF WebKit 两项失败，可信 HTTPS 因前序失败跳过，不能认定全量通过。
+  上述失败已分别完成本机专项修正与复验，Linux 同项尚未复验。
+- d0a8f26 的新日常 CI 已通过源码、两个 core 和两个浏览器分片；
+  媒体 Node/最终汇总仍以 [PR #161 当前检查](https://github.com/Nakiha/VoidPlayer-Web/pull/161/checks)
+  的实际结果为准，不用旧提交绿色替代当前提交状态。
+
+最近的干净 macOS ARM64 独立包（32aaca1）：
+`voidplayer-1.0.0-preview.32aaca1b-darwin-arm64-2026-10-30T01-12-43-335Z.tar.gz`。
+SHA-256：`19dbb238463071e7d7905e7f6785785622d38d8801d65bccef2cd7be6d4e8d57`。
+空 PATH/无关 cwd 的解压程序及独立包契约5/5通过，覆盖评分/证据/重执行、
+SQLite升级与备份恢复。之后的修改为测试夹具、CI和记录，未重新打包认证。
+本机播放基准12/12；性能结论仅适用于该本机环境。
+后续各阶段保留当时的失败、限制和待验收记录。
 
 ## 启动时基线（修复前）
 
@@ -566,3 +577,22 @@ VMAF 复用已有 admin observation 夹具：重载、关闭观察页和身份�
 原始流排空及真实 HTTP/JSON/流/跨域错误传播。Linux 同项尚未复验，
 不据本机结果宣称旧远端失败根因已完全证实。
 证据：`.run/test-suites/quality-final-vmaf/results.json`。
+
+
+## 阶段二十四：音频计数不再代理 Worker 请求
+
+阶段二十一使代理错误明确归属失败，但仍保留了 route.fetch 的第二次
+HTTP 请求。现在音频夹具先复制并核验完整构建快照，仅在其私有 assets
+副本中的两个解码 Worker 前追加原有 Blob 读取计数；原始与插桩字节摘要
+写入报告。测试完成删除整个私有副本，不修改 dist 或发布产物。
+
+浏览器直接通过真实服务获取 Worker，内容长度和隔离响应头由原服务
+生成，不再依赖测试代理请求、伪造响应头或失败重试。保留实际文件与媒体
+Range 读取统计、AAC/Opus输出、seek/单轨切换同步停止、页面关闭释放与
+原静音/启用两组等量 IO 断言。原始 ECONNRESET 仍保留为历史失败；
+本次移除的是触发该失败的额外代理环节，没有声称诊断出所有网络重置原因。
+
+本机完整 ci-audio 13/13通过，覆盖轨道元数据、FLV、普通/faststart/分片
+MP4、TS、MKV、WebM及本地/媒体库输入；VMAF六项亦通过。构建通过，
+未改生产播放/解码路径，不重复运行播放性能或平台打包矩阵。
+证据：`.run/test-suites/quality-final-audio/results.json`。
