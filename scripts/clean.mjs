@@ -18,8 +18,25 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, rmSync } from 'node:fs';
 import path from 'node:path';
+import { DATA_DIRECTORY_MARKER, persistentDataFile } from '../shared/service/data-directory.ts';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
+
+// Only declared test/release outputs are disposable. Unknown ignored directories
+// may contain old CLI-selected data and are never inferred to be evidence.
+const declaredOutputs = new Set();
+const configFile = path.resolve(process.env.VOIDPLAYER_CONFIG || path.join(repoRoot, 'voidplayer.config.json'));
+const configuredData = existsSync(configFile) ? JSON.parse(readFileSync(configFile, 'utf8')).dataDir : undefined;
+if (configuredData !== undefined && typeof configuredData !== 'string') throw Error('Invalid configured data directory; cleanup refused');
+const configuredDataPath = configuredData ? path.resolve(path.dirname(configFile), configuredData) : null;
+const manifestFile = path.join(repoRoot, 'scripts/testing/manifest.json');
+if (existsSync(manifestFile)) {
+  const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
+  for (const test of manifest.cases ?? []) for (const output of test.artifacts ?? []) {
+    const match = /^\.run\/([A-Za-z0-9_-]+)(?:\/|$)/.exec(output);
+    if (match) declaredOutputs.add('.run/' + match[1]);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // 分类：每一类给出「相对于仓库根的候选路径」判定与说明。
@@ -59,9 +76,8 @@ const CATEGORIES = {
     match: relative => /^\.run\/[^/]+\.log$/.test(relative),
   },
   evidence: {
-    description: '.run 顶层的历史验收证据目录（兜底分类）',
-    // 兜底：.run 顶层其余条目。年龄与保护清单仍会过滤。
-    match: relative => /^\.run\/[^/]+$/.test(relative),
+    description: '测试清单明确声明的验收产物',
+    match: relative => declaredOutputs.has(relative),
   },
 };
 
@@ -161,14 +177,25 @@ for (const file of markdownFiles) {
 
 const isProtected = relative => {
   const normalized = relative.split(path.sep).join('/');
+  const absolute = path.join(repoRoot, relative);
+  if (configuredDataPath && (configuredDataPath === absolute || configuredDataPath.startsWith(absolute + path.sep) || absolute.startsWith(configuredDataPath + path.sep))) return true;
   if (PROTECTED.includes(normalized)) return true;
   if ([...documentedPaths].some(reference => reference === normalized || reference.startsWith(normalized + '/'))) return true;
   // 文档里以链接形式引用的日期化证据目录
   if (/^artifacts\/local-codecs-/.test(normalized)) return true;
   // .run 顶层的手工笔记
   if (/^\.run\/[^/]+\.md$/.test(normalized)) return true;
+  if (containsUserData(path.join(repoRoot, relative))) return true;
   return false;
 };
+
+// Do not follow symlinks. A marker or legacy durable database protects the whole
+// candidate ancestor, including when a user selected a known output name as dataDir.
+function containsUserData(absolute) {
+  const stat = lstatSync(absolute);
+  if (!stat.isDirectory()) return path.basename(absolute) === DATA_DIRECTORY_MARKER || persistentDataFile(path.basename(absolute));
+  return readdirSync(absolute).some(name => name === DATA_DIRECTORY_MARKER || persistentDataFile(name) || containsUserData(path.join(absolute, name)));
+}
 
 // ---------------------------------------------------------------------------
 // 工具
@@ -261,7 +288,7 @@ const consider = (relative, categoryName) => {
   candidates.set(relative, { categoryName, size: diskUsage(absolute) });
 };
 
-// evidence 是兜底分类，必须最后评估，否则会把其他分类已认领的条目重复计入。
+// Declared evidence is evaluated last so explicit categories retain their ownership.
 for (const [name, category] of selected) {
   if (name === 'evidence') continue;
   for (const relative of [...topLevel('.run'), ...topLevel('artifacts')]) {

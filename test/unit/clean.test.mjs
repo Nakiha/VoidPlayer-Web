@@ -13,9 +13,14 @@ test('cleanup defaults to dry-run and protects tracked files, user data and docu
   try {
     await mkdir(path.join(root, 'scripts'));
     await copyFile(new URL('../../scripts/clean.mjs', import.meta.url), path.join(root, 'scripts/clean.mjs'));
+    await mkdir(path.join(root,'shared/service'),{recursive:true});
+    await copyFile(new URL('../../shared/service/data-directory.ts',import.meta.url),path.join(root,'shared/service/data-directory.ts'));
+    await mkdir(path.join(root,'scripts/testing'),{recursive:true});
+    await writeFile(path.join(root,'scripts/testing/manifest.json'),JSON.stringify({cases:[{artifacts:['.run/stale','.run/recent','.run/declared-data','.run/marker-parent','.run/config-parent']}]}));
+    await writeFile(path.join(root,'voidplayer.config.json'),JSON.stringify({dataDir:'.run/config-parent/custom'}));
     await writeFile(path.join(root, '.gitignore'), '.run/\nartifacts/\n');
     git('init', '--quiet');
-    const fixtures = ['.run/stale/frame.bin', '.run/tracked/source.ts', '.run/data/workspaces.sqlite', '.run/evidence/report.json', '.run/recent/frame.bin', 'artifacts/latest-release.json', 'artifacts/voidplayer-old.tar.gz'];
+    const fixtures = ['.run/stale/frame.bin', '.run/tracked/source.ts', '.run/data/workspaces.sqlite', '.run/evidence/report.json', '.run/custom-user-data/workspaces.sqlite', '.run/unknown/user.bin', '.run/declared-data/nested/library.sqlite', '.run/marker-parent/data/.voidplayer-user-data', '.run/config-parent/custom/user.bin', '.run/recent/frame.bin', 'artifacts/latest-release.json', 'artifacts/voidplayer-old.tar.gz'];
     for (const file of fixtures) {
       await mkdir(path.dirname(path.join(root, file)), { recursive: true });
       await writeFile(path.join(root, file), 'keep bytes');
@@ -36,7 +41,7 @@ test('cleanup defaults to dry-run and protects tracked files, user data and docu
     await assert.rejects(access(path.join(root, '.run/stale')));
     await access(path.join(root, '.run/recent/frame.bin'));
     clean('--apply', '--keep-days=0');
-    for (const file of ['.run/data/workspaces.sqlite', '.run/evidence/report.json', 'artifacts/latest-release.json']) assert.equal(await readFile(path.join(root, file), 'utf8'), 'keep bytes');
+    for (const file of ['.run/config-parent/custom/user.bin', '.run/custom-user-data/workspaces.sqlite', '.run/unknown/user.bin', '.run/declared-data/nested/library.sqlite', '.run/marker-parent/data/.voidplayer-user-data', '.run/data/workspaces.sqlite', '.run/evidence/report.json', 'artifacts/latest-release.json']) assert.equal(await readFile(path.join(root, file), 'utf8'), 'keep bytes');
     assert.equal(await readFile(path.join(root, '.run/tracked/source.ts'), 'utf8'), 'uncommitted change');
     assert.equal(await readFile(path.join(outside, 'user.txt'), 'utf8'), 'outside bytes');
     assert.throws(() => clean('--only=unknown'), /未知分类/);

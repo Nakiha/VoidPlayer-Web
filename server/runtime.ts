@@ -1,5 +1,6 @@
 import {closeResources,cleanupAfterFailure} from './shutdown.ts';
-import { stat, access, mkdir } from 'node:fs/promises';
+import { DATA_DIRECTORY_MARKER } from '../shared/service/data-directory.ts';
+import { stat, access, mkdir, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import path from 'node:path';
 import { MediaLibraryIndex } from './library.ts';
@@ -24,6 +25,7 @@ export async function validateServiceConfig(config: ServiceConfig, requireStatic
 
 export async function startService(config: ServiceConfig, requireStatic = true, build?: { version: string; revision: string }) {
   const { staticOk } = await validateServiceConfig(config, requireStatic, false);
+  await writeFile(path.join(config.dataDir, DATA_DIRECTORY_MARKER), 'VoidPlayer durable user data v1\n', { flag: 'wx' }).catch(error => { if(error.code!=='EEXIST')throw error; });
   const tls = config.tls ? await prepareTls(config.tls, config.dataDir) : undefined;
   const library = new MediaLibraryIndex(config.mediaRoots, { analysisCoreDir:process.env.VOIDPLAYER_ANALYSIS_CORE_DIR || path.join(config.staticDir,'vendor/voidplayer-analysis'), coreDir: process.env.VOIDPLAYER_WASM_CORE_DIR || path.join(config.staticDir,'vendor/voidplayer-core'), ttlMs: config.indexTtlMs, database: path.join(config.dataDir, 'library.sqlite'), settleMs: 1000, watch: config.indexWatch });
   let admin: AdminController;
