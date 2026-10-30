@@ -44,3 +44,15 @@ export function controlledExecutionDeadline(milliseconds, run) {
     return { work, expire() { if (!expire) throw Error('Deadline absent'); const fn = expire; expire = null; fn(); } };
   } finally { globalThis.setTimeout = schedule; }
 }
+/** Hold the final parent-side artifact checksum, after both real Workers have
+ * exited. The checksum still runs after release; only its scheduling is held. */
+export function holdFinalComponentVerification(runner) {
+  const verify = runner.components.verify.bind(runner.components);
+  let ownedChecks = 0, held = false, release;
+  const gate = new Promise(resolve => { release = resolve; });
+  runner.components.verify = async (...args) => {
+    if (args[1] === true && ++ownedChecks === 3) { held = true; await gate; }
+    return verify(...args);
+  };
+  return {get held(){return held;},release};
+}

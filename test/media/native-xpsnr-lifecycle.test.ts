@@ -6,7 +6,7 @@ import path from 'node:path';
 import {tmpdir} from 'node:os';
 import {xpsnrFixture,until} from '../helpers/native-xpsnr.mjs';
 // @ts-ignore JavaScript Worker boundary helper
-import {holdScoringWorker,controlledExecutionDeadline} from '../helpers/analysis-lifecycle.mjs';
+import {holdScoringWorker,controlledExecutionDeadline,holdFinalComponentVerification} from '../helpers/analysis-lifecycle.mjs';
 import {analysisComponent} from '../../server/analysis/quality/analysis-component.ts';
 
 test('pinned analysis component rejects tampered glue, WASM, model identity and provenance',async t=>{
@@ -117,4 +117,19 @@ for(const containers of [['flv','flv'],['mp4','mp4']] as const)test(`SIGKILL own
  const restored=await call('/api/quality/xpsnr/jobs/'+created.job.id);assert.equal(restored.state,'interrupted');assert.equal(restored.attemptId,before.attemptId);assert.equal(restored.metrics.psnr.state,'completed');assert.equal(restored.metrics.ssim.state,'completed');assert.equal(restored.metrics.xpsnr.state,'interrupted');assert.equal(restored.process,null);assert.equal((await call('/api/quality/xpsnr/jobs',f.input)).job.id,before.id);assert.equal(c.events.filter((e:any)=>e.event==='analysis-held').length,0);
  const result=await call('/api/quality/xpsnr/jobs/'+created.job.id+'/result');assert.equal(result.xpsnr,null);assert.equal(result.companionPairs,8);
  c.child.kill('SIGTERM');await c.closed;assert.equal(c.events.filter((e:any)=>e.event==='analysis-execution-start').length,0,'the entire restarted process lifetime performed no new execution');
+});
+
+test('XPSNR: deadline during final artifact verification cannot commit success',{timeout:120000},async t=>{
+ const f=await xpsnrFixture();t.after(()=>f.close());const runner=(f.service.library.qualityXpsnr as any).runner;
+ const verification=holdFinalComponentVerification(runner),workers=holdScoringWorker(runner,'never-hold');t.after(()=>verification.release());
+ const run=runner.run.bind(runner);let expire:()=>void=()=>{};
+ runner.run=(...args:any[])=>{const clock=controlledExecutionDeadline(5000,()=>run(...args));expire=clock.expire;return clock.work;};
+ const input={...f.input,budget:{...f.input.budget,maxElapsedMs:5000}},created=await f.json('/api/quality/xpsnr/jobs',input,'final-deadline');
+ await until(()=>verification.held,Boolean);
+ assert.ok(workers.workers.length>=2);assert.ok(workers.workers.every((w:any)=>w.threadId===-1));
+ assert.throws(()=>f.service.library.qualityAdmission.acquire(),{code:'quality-busy'});
+ expire();verification.release();const final=await f.wait(created.job.id);
+ assert.equal(final.state,'partial');assert.equal(final.reason.code,'budget-exceeded');assert.equal(final.metrics.xpsnr.state,'failed');assert.equal(final.metrics.psnr.state,'completed');
+ assert.equal((await f.json('/api/quality/xpsnr/jobs/'+created.job.id+'/result')).xpsnr,null);
+ const release=f.service.library.qualityAdmission.acquire();release();
 });

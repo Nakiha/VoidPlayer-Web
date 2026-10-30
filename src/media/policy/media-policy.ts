@@ -52,8 +52,10 @@ export function openMediaPlan(plan: MediaOpenPlan): Promise<MediaSource> {
       log.info('media', source.info.decoder === 'webcodecs' ? '使用 WebCodecs 解码路径' : 'WASM 回退解码已启用', { name: plan.meta.name, codec: source.info.codec });
       return source;
     } catch (error) {
+      // Until admission succeeds, this plan owns the acquired adapter source.
+      // Cancellation cannot bypass its release when the admission rejects late.
+      if (adapterManagedAdmission) { source?.dispose(); loadAborted(plan.signal); throw error; }
       loadAborted(plan.signal);
-      if (adapterManagedAdmission) { source?.dispose(); throw error; }
       if (plan.nativeOwnsFallback) throw error;
       nativeError = error;
     }

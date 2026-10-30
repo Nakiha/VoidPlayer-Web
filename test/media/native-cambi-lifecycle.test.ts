@@ -5,7 +5,7 @@ import {startService} from '../../server/runtime.ts';
 import {writeFile,readFile,cp} from 'node:fs/promises';import path from 'node:path';import {spawn} from 'node:child_process';
 import {cambiFixture} from '../helpers/native-cambi.mjs';import {until} from '../helpers/native-vmaf.mjs';
 // @ts-ignore JavaScript Worker boundary helper
-import {holdScoringWorker,controlledExecutionDeadline} from '../helpers/analysis-lifecycle.mjs';
+import {holdScoringWorker,controlledExecutionDeadline,holdFinalComponentVerification} from '../helpers/analysis-lifecycle.mjs';
 
 for(const mode of ['cancel','deadline','crash'] as const)
 test(`CAMBI actual analysis ${mode}, physical exit before shared admission`,{timeout:120000},async t=>{
@@ -130,4 +130,19 @@ test('CAMBI final verification rejects a changed analysis artifact and discards 
  const done=await f.wait((await f.json('/api/quality/cambi/jobs',f.input,'changed-artifact')).job.id);
  assert.equal(done.state,'failed');assert.equal(done.reason.code,'component-unavailable');assert.equal(done.resultDigest,null);
  assert.equal(service.db.prepare('SELECT count(*) AS n FROM cambi_heat WHERE job=?').get(done.id).n,0);
+});
+
+test('CAMBI: deadline during final artifact verification cannot commit success',{timeout:120000},async t=>{
+ const f=await cambiFixture();t.after(()=>f.close());const runner=(f.service.library.qualityCambi as any).runner;
+ const verification=holdFinalComponentVerification(runner),workers=holdScoringWorker(runner,'never-hold');t.after(()=>verification.release());
+ const run=runner.runCambi.bind(runner);let expire:()=>void=()=>{};
+ runner.runCambi=(...args:any[])=>{const clock=controlledExecutionDeadline(5000,()=>run(...args));expire=clock.expire;return clock.work;};
+ const input={...f.input,budget:{...f.input.budget,maxElapsedMs:5000}},created=await f.json('/api/quality/cambi/jobs',input,'final-deadline');
+ await until(()=>verification.held,Boolean);
+ assert.ok(workers.workers.length>=2);assert.ok(workers.workers.every((w:any)=>w.threadId===-1));
+ assert.throws(()=>f.service.library.qualityAdmission.acquire(),{code:'quality-busy'});
+ expire();verification.release();const final=await f.wait(created.job.id);
+ assert.equal(final.state,'failed');assert.equal(final.reason.code,'budget-exceeded');assert.equal(final.resultDigest,null);
+ assert.equal((await f.request('/api/quality/cambi/jobs/'+created.job.id+'/result')).status,409);
+ const release=f.service.library.qualityAdmission.acquire();release();
 });

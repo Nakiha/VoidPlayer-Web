@@ -92,3 +92,17 @@ test('URL opening captures decoder preference before asynchronous metadata and c
     assert.equal(await opening,selected.value);assert.equal(admittedDepth,8);
   } finally {release();globalThis.fetch=savedFetch;setColorMode(mode);setReferenceDecode(decode);selected.value.dispose();}
 });
+
+for (const cancelled of [false, true]) for (const admission of ['admitReference','reconfigureColorMode'] as const)
+test(`${admission}: rejected admission releases its owned source exactly once${cancelled ? ' after cancellation' : ''}`, async () => {
+  const candidate=source(),controller=new AbortController();let reject!: (e:Error)=>void,started!:()=>void;
+  const ready=new Promise<void>(resolve=>started=resolve),failed=new Promise<MediaSource>((_resolve,r)=>reject=r);
+  if(admission==='admitReference')candidate.value.admitReference=()=>{started();return failed;};
+  else candidate.value.reconfigureColorMode=async()=>{started();await failed;};
+  let fallbacks=0;
+  const pending=openMediaPlan(plan({reference:true,signal:controller.signal,native:async()=>candidate.value,software:async()=>{fallbacks++;throw Error('unexpected fallback');}}));
+  const rejected=assert.rejects(pending,cancelled?{name:'AbortError'}:/admission failed/);
+  await ready;if(cancelled)controller.abort(new DOMException('cancelled','AbortError'));
+  reject(Error('admission failed'));await rejected;await new Promise(r=>setTimeout(r,0));
+  assert.equal(candidate.disposed(),1);assert.equal(fallbacks,0);
+});
