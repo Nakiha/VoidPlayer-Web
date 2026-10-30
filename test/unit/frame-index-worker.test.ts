@@ -17,7 +17,7 @@ for(const kind of ['database','build'] as const)test(`runtime ${kind} terminatio
   const library=new MediaLibraryIndex([],{database,watch:false}),jobs=library.indexJobs as any;
   let worker:Worker|undefined,stop:(()=>Promise<number>)|undefined;
   try{
-    const failure=Error('injected stop failure');
+    const failure=kind==='build'?undefined:Error('injected stop failure');
     if(kind==='database'){
       const result=jobs.call('epoch').then(()=>null,(error:Error)=>error);worker=jobs.worker;stop=worker!.terminate.bind(worker);
       worker!.terminate=async()=>{throw failure;};worker!.emit('messageerror');assert.match((await result).message,/反序列化/);
@@ -34,7 +34,7 @@ for(const kind of ['database','build'] as const)test(`runtime ${kind} terminatio
     assert.throws(()=>jobs.acquireUpload(),(e:any)=>e.code==='index-stop-uncertain');
     assert.throws(()=>library.qualityAdmission.acquire(),(e:any)=>e.code==='quality-busy');
     await assert.rejects(library.close(),AggregateError);assert.throws(()=>new MediaLibraryIndex([],{database,watch:false}),/另一个实例/);
-  }finally{await stop?.();(library as any).store.close();await rm(root,{recursive:true,force:true});}
+  }finally{await stop?.();try{await library.close();}catch{}(library as any).store.close();await rm(root,{recursive:true,force:true});}
 });
 
 test('identity-aware cache RPC checks media version and clear epoch', async () => {

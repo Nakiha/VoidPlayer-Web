@@ -72,6 +72,7 @@ export class FrameIndexJobs {
   private closing?: Promise<void>;
   private stoppingWorkers = new Map<Worker, Promise<void>>();
   private stopFailure: unknown;
+  private stopFailed = false;
   private database: string;
   private coreDir: string;
   private createBuildWorker:(data:{database:string;coreDir:string})=>Worker;
@@ -88,12 +89,12 @@ export class FrameIndexJobs {
 
   constructor(privateDatabase: string, coreDir: string, createBuildWorker: (data: {database:string;coreDir:string})=>Worker = data=>new Worker(new URL('./frame-index-build-worker.ts',import.meta.url),{workerData:data}), qualityAdmission = new QualityAdmission()) {
     this.database = privateDatabase; this.coreDir = coreDir; this.createBuildWorker=createBuildWorker;this.qualityAdmission=qualityAdmission;
-    qualityAdmission.register(() => !!(this.stopFailure || this.stoppingWorkers.size || this.uploads || this.builds.size || this.buildWorkers.size || this.pending.size));
+    qualityAdmission.register(() => !!(this.stopFailed || this.stoppingWorkers.size || this.uploads || this.builds.size || this.buildWorkers.size || this.pending.size));
   }
 
   private available() {
     if (this.closed) throw new AdminError(503, '索引服务已关闭。');
-    if (this.stopFailure) throw new AdminError(503, '索引 Worker 尚未确认退出。', 'index-stop-uncertain');
+    if (this.stopFailed) throw new AdminError(503, '索引 Worker 尚未确认退出。', 'index-stop-uncertain');
   }
 
   private rejectQueued(error: Error) {
@@ -112,6 +113,7 @@ export class FrameIndexJobs {
         if (this.worker === worker) this.worker = undefined;
         this.stoppingWorkers.delete(worker);
       } catch (error) {
+        this.stopFailed = true;
         this.stopFailure ??= error;
         this.rejectQueued(new AdminError(503, '索引 Worker 尚未确认退出。', 'index-stop-uncertain'));
         throw error;
@@ -255,7 +257,7 @@ export class FrameIndexJobs {
   }
 
   private pumpBuilds() {
-    while (!this.closed && !this.stopFailure && this.activeBuilds < this.maxConcurrentBuilds && this.buildQueue.length) {
+    while (!this.closed && !this.stopFailed && this.activeBuilds < this.maxConcurrentBuilds && this.buildQueue.length) {
       const job = this.buildQueue.shift()!;
       this.activeBuilds++;
       void this.runBuild(job.request, job.policy, progress => { this.notifyBuildProgress(job, progress); this.notifyBuildUpdate(job); }, () => this.notifyBuildUpdate(job))
@@ -343,6 +345,6 @@ export class FrameIndexJobs {
     this.pending.clear();
     const workers = new Set([...this.buildWorkers, ...this.stoppingWorkers.keys(), ...(this.worker ? [this.worker] : [])]);
     await closeResources('Index workers failed to physically stop', [...workers].map((worker,index) => [`index worker ${index}`, () => this.stopWorker(worker)] as const));
-    if (this.stopFailure) throw this.stopFailure;
+    if (this.stopFailed) throw this.stopFailure;
   }
 }

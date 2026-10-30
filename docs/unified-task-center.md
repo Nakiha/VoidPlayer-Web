@@ -11,9 +11,17 @@ kind, metric, raw state, createdFrom (inclusive epoch milliseconds), createdTo
 (exclusive), limit (1..50) and cursor. Source filtering matches ID and version
 on the same side. Metric filters identify requested scoring metrics or named
 preparation/planning operations; they do not assert that a metric completed.
-Per-metric outcomes remain independent. The query reads all actor-owned metadata within each original
-store's hard history cap, not the first page of each legacy API. SQL projects
+Per-metric outcomes remain independent. The query reads complete matching
+actor-owned metadata within the shared snapshot budget, not the first page of each legacy API. SQL projects
 metadata without loading full inputs, results, index documents or pixels into JS.
+
+Range retention is projected in batches of eight parent IDs. Each batch reads
+only those parents' edges and the corresponding minimal retained child metadata
+by primary key, checking actor/attempt/digest before counting. At most 8192
+edges/children are held per batch, covering eight admitted 1024-sample ranges
+without applying the ordinary summary-row cap to their children. There is no
+per-parent full-history scan or per-child result-body read. Frozen cursor pages
+reuse their original counts; only a fresh snapshot observes later releases.
 
 Each first page captures a frozen read set, sorted by descending creation time,
 then kind and ID. Subsequent pages retain its membership and facts even when
@@ -43,7 +51,17 @@ Time controls use local time and send exact epoch milliseconds. A refresh or
 reopen makes a fresh snapshot, retains the target and never seeks or loads a
 player source. Expired pages restart the original query. Actor/view/target
 fences apply after each await, including publication and annotation reads;
-switching actor clears old private DOM. Only an explicit cancel button writes.
+switching actor clears old private DOM. Explicit cancellation, result release and
+confirmed reexecution controls delegate writes to their original services.
+
+Admin observers share `observeIdentity` / `confirmedActor` in
+`src/services/identity.ts`. Storage notifications immediately invalidate old
+observation and queue a fresh service read after older identity operations.
+Only the latest confirmation epoch restores observers, including when the
+service returns the already-known actor. Notifications do not authenticate an
+actor, and their payload cannot override the cookie-backed service response.
+Failure leaves observation suspended; focus or explicit identity selection can
+recover it. Disposing the last observer removes the shared window listeners.
 Candidate receipt links use original range/VMAF/XPSNR/CAMBI publication records, and viewer
 links require the annotation evidence ref to match the frozen selected ref.
 Single-pair annotations retain their original sharing workflow; this package
