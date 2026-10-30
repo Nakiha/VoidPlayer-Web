@@ -1,3 +1,4 @@
+import {QualityApplication} from '../../server/quality-application.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
@@ -29,7 +30,8 @@ test('whole-library discovery scans bounded pages, reports cumulative unknown an
   t.after(async()=>{await library?.close();await rm(dir,{recursive:true,force:true});});
   for(let i=0;i<5;i++)await writeFile(path.join(dir,`sample-${i}.flv`),'not probed');
   library=new MediaLibraryIndex([dir],{database:path.join(dir,'library.sqlite'),watch:false});await library.refresh();
-  const store=library.discovery.store;
+  const application=new QualityApplication(library);await application.ready;
+  const store=application.discovery.store;
   const q=parseDiscoveryQuery(new URLSearchParams('codec=h264&limit=2'));
   const first=store.browse(q);assert.equal(first.entries.length,2);assert.equal(first.coverage.cumulative.unknown,2);assert.equal(first.coverage.totals,null);assert.ok(first.nextCursor);
   const second=store.browse({...q,cursor:first.nextCursor!});assert.equal(second.entries.length,2);assert.equal(second.coverage.cumulative.unknown,4);
@@ -55,7 +57,8 @@ test('whole-library discovery scans bounded pages, reports cumulative unknown an
 test('discovery reuses bounded existing cache namespaces without probing, never joins or silently chooses conflicting evidence',async t=>{
  const dir=await mkdtemp(path.join(tmpdir(),'vp-discovery-cached-'));await writeFile(path.join(dir,'cached.mp4'),Buffer.alloc(10000));
  const library=new MediaLibraryIndex([dir],{database:path.join(dir,'library.sqlite'),watch:false});await library.refresh();t.after(async()=>{await library.close();await rm(dir,{recursive:true,force:true});});
- const entry=library.browse().entries[0],store=library.discovery.store,records=Buffer.alloc(48);records.writeBigInt64LE(0n);records.writeBigInt64LE(0n,8);records.writeBigInt64LE(40n,16);records.writeBigInt64LE(-1n,24);records.writeInt32LE(100,32);
+ const application=new QualityApplication(library);await application.ready;
+ const entry=library.browse().entries[0],store=application.discovery.store,records=Buffer.alloc(48);records.writeBigInt64LE(0n);records.writeBigInt64LE(0n,8);records.writeBigInt64LE(40n,16);records.writeBigInt64LE(-1n,24);records.writeInt32LE(100,32);
  const put=(build:string,width:number)=>{const identity={kind:'ffmpeg' as const,streamKey:'video:0',schemaVersion:3,indexerBuild:build.repeat(40)};
   library.frameIndexes.put(entry.id,entry.version!,entry.size,{schema:3,kind:'ffmpeg-container',size:entry.size,codec:'h264',width,height:360,timeBaseNum:1,timeBaseDen:1000,streamIndex:0,
    indexerBuild:identity.indexerBuild,recordBytes:48,firstPts:'0',originVerified:true,indexIntegrity:'complete',count:1,records:records.toString('base64')},library.frameIndexes.epoch,identity);};
@@ -78,7 +81,7 @@ test('future discovery schema is rejected before creating current tables and clo
 });
 test('100000-row discovery uses bounded primary-key seeks even on deep sparse-search pages',async t=>{
  const dir=await mkdtemp(path.join(tmpdir(),'vp-discovery-deep-')),library=new MediaLibraryIndex([dir],{database:path.join(dir,'library.sqlite'),watch:false});await library.refresh();
- t.after(async()=>{await library.close();await rm(dir,{recursive:true,force:true});});const store=library.discovery.store,root=String(store.db.prepare('SELECT id FROM roots LIMIT 1').get()!.id);
+ t.after(async()=>{await library.close();await rm(dir,{recursive:true,force:true});});const application=new QualityApplication(library);await application.ready;const store=application.discovery.store,root=String(store.db.prepare('SELECT id FROM roots LIMIT 1').get()!.id);
  const insert=store.db.prepare("INSERT INTO media(id,root_id,path,parent,size,modified,version,state,generation,observed_at) VALUES(?,?,?,'',1,1,?,'ready',1,1)");
  store.transaction(()=>{for(let i=0;i<100000;i++)insert.run(i.toString(16).padStart(24,'0'),root,i===99999?'needle.flv':`plain-${i}.flv`,'b'.repeat(24));});
  const plan=store.db.prepare('EXPLAIN QUERY PLAN SELECT id,root_id,path,state FROM media INDEXED BY sqlite_autoindex_media_1 WHERE id>? ORDER BY id LIMIT ?').all('000000000000000000015f90',65).map(r=>String(r.detail));

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {openIndexDatabase} from '../../server/sqlite.ts';
 import {taskSummaries,taskEdges,rangeTaskChildren,retainedTaskResults} from '../../server/tasks/summary.ts';
+import type {TaskCommands} from '../../server/quality-service-ports.ts';
 import {TaskCenterService} from '../../server/tasks/service.ts';
 import {taskQuery,TASK_KINDS,TASK_HISTORY_ROWS,TASK_LIMITS} from '../../shared/service/tasks.ts';
 import type {TaskKind,TaskFilter} from '../../shared/service/tasks.ts';
@@ -29,8 +30,9 @@ function fixture(){
  const retries=new Map<string,{parentId:string;jobId:string}[]>();
  const qualityReexecutions={links:(kind:string,actor:string)=>retries.get(kind+'/'+actor)??[],chain:(kind:string,id:string,actor:string)=>({retryOf:retries.get(kind+'/'+actor)?.find(r=>r.jobId===id)?{retryOf:retries.get(kind+'/'+actor)!.find(r=>r.jobId===id)!.parentId}:null,successor:retries.get(kind+'/'+actor)?.find(r=>r.parentId===id)?{id:retries.get(kind+'/'+actor)!.find(r=>r.parentId===id)!.jobId}:null})};
  const library={qualityReexecutions,durableQualityJobsEnabled:true,discovery:{store:services.preparation,cancel:services.preparation.cancel},qualityCorrespondence:services.correspondence,qualityJobs:services.single,qualityRanges:services.range,qualityVmaf:services.vmaf,qualityXpsnr:services.xpsnr,qualityCambi:services.cambi} as unknown as MediaLibraryIndex;
- let clock=1000;const center=new TaskCenterService(library,()=>clock);
- return {db,insert,center,library,retries,source,other,clock:(value:number)=>{clock=value;},close:()=>{center.close();db.close();}};
+ const commands={preparation:services.preparation.cancel,correspondence:services.correspondence.cancel,single:services.single.cancel,range:services.range.cancel,vmaf:services.vmaf.cancel,xpsnr:services.xpsnr.cancel,cambi:services.cambi.cancel};
+ let clock=1000;const center=new TaskCenterService(library,commands,()=>clock);
+ return {db,insert,center,library,commands,retries,source,other,clock:(value:number)=>{clock=value;},close:()=>{center.close();db.close();}};
 }
 const query=(s='')=>taskQuery(new URLSearchParams(s));
 
@@ -84,7 +86,7 @@ test('cursor is scoped, signed, bounded, expiring, restart-invalid and recoverab
  const f=fixture();t.after(f.close);for(let n=0;n<4;n++)f.insert('single');
  const a=f.center.query('actor-A',query('limit=1')),cursor=a.nextCursor!;
  for(const [actor,s]of [['actor-B',`cursor=${cursor}`],['actor-A',`cursor=${cursor}&metric=psnr`],['actor-A',`cursor=${cursor.slice(0,-1)}${cursor.at(-1)==='0'?'1':'0'}`]])assert.throws(()=>f.center.query(actor,query(s)),(e:any)=>e.code==='task-cursor-expired');
- const restarted=new TaskCenterService(f.library);assert.throws(()=>restarted.query('actor-A',query(`cursor=${cursor}`)),(e:any)=>e.code==='task-cursor-expired');restarted.close();
+ const restarted=new TaskCenterService(f.library,f.commands);assert.throws(()=>restarted.query('actor-A',query(`cursor=${cursor}`)),(e:any)=>e.code==='task-cursor-expired');restarted.close();
  f.clock(1000+TASK_LIMITS.snapshotMs);assert.throws(()=>f.center.query('actor-A',query(`cursor=${cursor}`)),(e:any)=>e.code==='task-cursor-expired');
  assert.equal(f.center.query('actor-A',query()).total,4);
  const old=f.center.query('actor-A',query('limit=1'));f.center.query('actor-A',query('limit=1'));f.center.query('actor-A',query('limit=1'));
@@ -107,7 +109,7 @@ test('detail traces only same-actor pinned relationships and distinguishes retai
 });
 
 test('hard history excess fails closed, never returns a silently incomplete first window',t=>{
- const temporary=new TaskCenterService({durableQualityJobsEnabled:false}as MediaLibraryIndex);assert.throws(()=>temporary.query('actor-A',query()),(e:any)=>e.code==='task-storage-unavailable');temporary.close();
+ const temporary=new TaskCenterService({durableQualityJobsEnabled:false}as MediaLibraryIndex,{} as TaskCommands);assert.throws(()=>temporary.query('actor-A',query()),(e:any)=>e.code==='task-storage-unavailable');temporary.close();
  const f=fixture();t.after(f.close);for(let n=0;n<=TASK_LIMITS.rows;n++)f.insert('vmaf','actor-A',{createdAt:n+100});assert.throws(()=>f.center.query('actor-A',query()),(e:any)=>e.code==='task-snapshot-budget');
  assert.equal(f.center.query('actor-A',query('createdFrom=100&createdTo=101')).total,1,'SQL filters reach oldest history beyond the snapshot budget');
 });

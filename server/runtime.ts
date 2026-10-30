@@ -3,6 +3,7 @@ import { DATA_DIRECTORY_MARKER } from '../shared/service/data-directory.ts';
 import { stat, access, mkdir, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import path from 'node:path';
+import {QualityApplication} from './quality-application.ts';
 import { MediaLibraryIndex } from './library.ts';
 import { createMediaServer, createTrafficState } from './app.ts';
 import type { ServiceConfig } from './config.ts';
@@ -28,11 +29,13 @@ export async function startService(config: ServiceConfig, requireStatic = true, 
   await writeFile(path.join(config.dataDir, DATA_DIRECTORY_MARKER), 'VoidPlayer durable user data v1\n', { flag: 'wx' }).catch(error => { if(error.code!=='EEXIST')throw error; });
   const tls = config.tls ? await prepareTls(config.tls, config.dataDir) : undefined;
   const library = new MediaLibraryIndex(config.mediaRoots, { analysisCoreDir:process.env.VOIDPLAYER_ANALYSIS_CORE_DIR || path.join(config.staticDir,'vendor/voidplayer-analysis'), coreDir: process.env.VOIDPLAYER_WASM_CORE_DIR || path.join(config.staticDir,'vendor/voidplayer-core'), ttlMs: config.indexTtlMs, database: path.join(config.dataDir, 'library.sqlite'), settleMs: 1000, watch: config.indexWatch });
+  const quality=new QualityApplication(library,{coreDir:process.env.VOIDPLAYER_WASM_CORE_DIR||path.join(config.staticDir,'vendor/voidplayer-core'),analysisCoreDir:process.env.VOIDPLAYER_ANALYSIS_CORE_DIR||path.join(config.staticDir,'vendor/voidplayer-analysis')});
   let admin: AdminController;
-  try { library.discovery; library.qualityJobs; library.qualityRanges; library.qualityCorrespondence;await library.qualityCambi.ready;await library.qualityCambi.capability();await library.qualityXpsnr.ready;await library.qualityXpsnr.capability();await library.qualityVmaf.ready;await library.qualityVmaf.capability(); library.qualityReexecutions; library.start(); admin = new AdminController(config, library, build); } catch (error) { return cleanupAfterFailure(error, 'Service initialization failed', [['library', () => library.close()]]); }
+  try {await quality.ready;await Promise.all([quality.qualityCambi.capability(),quality.qualityXpsnr.capability(),quality.qualityVmaf.capability()]);library.start();admin=new AdminController(config,library,build);}
+  catch(error){return cleanupAfterFailure(error,'Service initialization failed',[['application',()=>quality.close()]]);}
   const connection = tls ? { ...tls, port: config.port } : undefined;
   const gateway = new ProtocolGateway(), listeners: ManagedServer[] = [];
-  const shared = { library, admin, connection, traffic:createTrafficState(), roots: library.roots, staticDir: staticOk ? config.staticDir : undefined, logsDir: config.logsDir ?? undefined,
+  const shared = { library, quality, admin, connection, traffic:createTrafficState(), roots: library.roots, staticDir: staticOk ? config.staticDir : undefined, logsDir: config.logsDir ?? undefined,
     clientAddress: gateway.clientAddress,
     allowLocalReveal: config.allowLocalReveal && ['127.0.0.1', 'localhost', '::1'].includes(config.host) && ['darwin', 'win32'].includes(process.platform),
   };
@@ -51,7 +54,7 @@ export async function startService(config: ServiceConfig, requireStatic = true, 
   const closeStack = async () => {
     let listenerFailure: unknown;
     try { await closeListeners(); } catch(error) { listenerFailure = error; }
-    const adminStopped = admin.close(), libraryStopped = library.close(adminStopped);
+    const adminStopped = admin.close(), libraryStopped = quality.close(adminStopped);
     const owners = [['admin', () => adminStopped], ['library', () => libraryStopped]] as const;
     if (listenerFailure) return cleanupAfterFailure(listenerFailure, 'Service shutdown incomplete', owners);
     await closeResources('Service shutdown incomplete', owners);
@@ -75,5 +78,5 @@ export async function startService(config: ServiceConfig, requireStatic = true, 
   if (tls?.caFile) console.log(`首次访问：将 ${tls.caFile} 复制到客户端，导入当前用户的受信任根证书。\nCA SHA-256: ${tls.fingerprint}\nWindows: certutil -user -addstore Root voidplayer-ca.crt`);
   if (guide) console.log(`HTTP 入口: http://${address.includes(':') ? `[${address}]` : address}:${(guide.address() as { port: number }).port}/`);
   let closing: Promise<void> | undefined;
-  return { server, library, tls, guide, close: () => closing ??= closeStack() };
+  return { server, library, quality, tls, guide, close: () => closing ??= closeStack() };
 }

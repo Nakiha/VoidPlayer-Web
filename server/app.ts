@@ -1,3 +1,4 @@
+import {QualityApplication} from './quality-application.ts';
 import {ExistingPageRequests} from './bridge/existing-pages.ts';
 import {handleCambiRoutes} from './analysis/cambi/routes.ts';
 import {handleTaskRoutes} from './tasks/routes.ts';
@@ -48,6 +49,7 @@ export interface ServerOptions {
   connection?: ConnectionOptions;
   clientAddress?: (req: IncomingMessage) => string;
   library?: MediaLibraryIndex;
+  quality?:QualityApplication;
   admin?: AdminController;
   allowLocalReveal?: boolean;
   reveal?: (absolutePath: string) => Promise<void>;
@@ -60,6 +62,7 @@ export interface ServerOptions {
 export function createMediaServer(options: ServerOptions): Server {
   const roots = options.roots.map(r => path.resolve(r));
   const library = options.library ?? new MediaLibraryIndex(roots,{coreDir:process.env.VOIDPLAYER_WASM_CORE_DIR || (options.staticDir ? path.join(options.staticDir,'vendor/voidplayer-core') : undefined)});
+  const quality=options.quality??library.attachedQualityApplication??new QualityApplication(library);
   if (!options.library) library.start();
   const analysisCore = process.env.VOIDPLAYER_ANALYSIS_CORE_DIR || path.join(options.staticDir ?? path.join(process.cwd(), 'public'), 'vendor/voidplayer-analysis');
   const analysis = options.admin?.analysisFor(analysisCore) ?? new AnalysisScheduler(library, analysisCore, library.analysisDirectory);
@@ -88,7 +91,7 @@ export function createMediaServer(options: ServerOptions): Server {
     let logged = false;
     traffic.activeRequests++;
     const ctx: RouteContext = {
-      options, library, requestId,
+      options, library, quality, requestId,
       actor: guestActor(browserUserId(req)) ?? options.admin?.workspaces.user(browserUserId(req)) ?? null,
       adminExtra: { traffic, sockets, recentRequests },
     };
@@ -103,6 +106,7 @@ export function createMediaServer(options: ServerOptions): Server {
     };
     res.once('finish', finish); res.once('close', finish);
     try {
+      await quality.ready;
       const url = new URL(req.url ?? '/', 'http://localhost');
       if (await handleConnectionRoutes(ctx, req, res, url)) return;
       if (await handleStateRoutes(ctx, req, res, url)) return;
@@ -143,6 +147,6 @@ export function createMediaServer(options: ServerOptions): Server {
   server.on('close',()=>existingPages?.close());
   if (!options.admin) server.on('close',()=>{void analysis.close();});
   server.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
-  if (!options.library) server.on('close', () => { void library.close(); });
+  if (!options.library) server.on('close', () => { void quality.close().catch(error=>console.error('Application shutdown failed',error)); });
   return server;
 }

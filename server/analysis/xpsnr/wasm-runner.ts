@@ -1,4 +1,4 @@
-import type { MediaLibraryIndex } from "../../library.ts";
+import type { QualityExecutionContext } from "../quality/execution-context.ts";
 import type { QualityExecutionContract } from "../../../shared/analysis/quality/reexecution.ts";
 import {
   XPSNR_CAPABILITY,
@@ -23,7 +23,7 @@ import { analysisComponent } from "../quality/analysis-component.ts";
 export class WasmXpsnrRunner extends ScoringWorkerOwner {
   readonly analysisDir: string;
   constructor(
-    library: MediaLibraryIndex,
+    library: QualityExecutionContext,
     coreDir: string,
     analysisDir: string,
   ) {

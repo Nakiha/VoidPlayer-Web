@@ -14,7 +14,7 @@ export async function handleQualityRangeRoutes(ctx:RouteContext,req:IncomingMess
     if(!ctx.actor)throw new AdminError(401,'Select an identity first.','identity-required');
     if(req.method!=='GET'&&!adminWriteAllowed(req,'quality-job'))
       throw new AdminError(403,'Use the same-origin quality-job action.','origin-required');
-    const ranges=ctx.library.qualityRanges,actor=ctx.actor;
+    const ranges=ctx.quality.qualityRanges,actor=ctx.actor;
     const item=/^\/api\/quality\/ranges\/([a-f0-9-]{36})(?:\/(results|cancel|candidates))?$/.exec(url.pathname);
     const collection=url.pathname==='/api/quality/ranges',plan=url.pathname==='/api/quality/ranges/plan';
     const allowedQuery=req.method==='GET'&&(collection||item?.[2]==='results')?['after','limit']:[];

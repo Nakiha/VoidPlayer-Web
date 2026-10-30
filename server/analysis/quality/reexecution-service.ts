@@ -1,4 +1,4 @@
-import type {MediaLibraryIndex} from '../../library.ts';
+import type {ReexecutionServices} from '../../quality-service-ports.ts';
 import type {Actor} from '../../identity.ts';
 import {AdminError} from '../../admin-error.ts';
 import {CAMBI_LIMITS,cambiOutputBudget} from '../../../shared/analysis/quality/cambi.ts';
@@ -15,24 +15,24 @@ type Description={job:{id:string;state:string;revision:number;endedAt:number|nul
  * validation uses the existing killable runners and returns after physical exit;
  * only then does the original service atomically accept a fresh durable job. */
 export class QualityReexecutionService{
-  private library:MediaLibraryIndex;
+  private services:ReexecutionServices;
   private stopping=new AbortController();
   private active=new Set<Promise<unknown>>();
-  constructor(library:MediaLibraryIndex){this.library=library;}
-  private service(kind:ReexecutionKind){return kind==='single'?this.library.qualityJobs:kind==='range'?this.library.qualityRanges:kind==='xpsnr'?this.library.qualityXpsnr:kind==='cambi'?this.library.qualityCambi:this.library.qualityVmaf;}
+  constructor(services:ReexecutionServices){this.services=services;}
+  private service(kind:ReexecutionKind){return kind==='single'?this.services.qualityJobs:kind==='range'?this.services.qualityRanges:kind==='xpsnr'?this.services.qualityXpsnr:kind==='cambi'?this.services.qualityCambi:this.services.qualityVmaf;}
   private job(kind:ReexecutionKind,id:string,actor:string){const service=this.service(kind),job=service.get(id,actor);if(job.retryOf){const receipt=service.reexecutionReceipt(job.retryOf.retryOf,actor);if(!receipt||receipt.jobId!==id||executionDigest(receipt.lineage)!==executionDigest(job.retryOf))throw new AdminError(409,'Stored execution lineage changed.','stored-reexecution-invalid');}return job;}
   private describe(kind:ReexecutionKind,id:string,actor:string):Description{
     const base=(budget:Record<string,number>,pairs:number,reservation:Record<string,unknown>):ReexecutionCost=>({scope:'entire-frozen-input-from-start',selectedPairs:pairs,reusesPreviousScores:false,budget,reservation:{...reservation,executionWitness:executionWitnessReservation(kind,pairs),witness:{maxCoreAssetBytes:REEXECUTION_LIMITS.maxReadBytes,maxProducerBytes:REEXECUTION_LIMITS.maxProducerBytes,maxIndexBytes:REEXECUTION_LIMITS.maxIndexBytes,maxIndexPackets:REEXECUTION_LIMITS.maxIndexPackets,maxElapsedMs:REEXECUTION_LIMITS.maxElapsedMs},newAttemptPerJob:1}});
     if(kind==='single'){
-      const j=this.library.qualityJobs.get(id,actor),input=this.library.qualityJobs.reexecutionInput(id,actor);
+      const j=this.services.qualityJobs.get(id,actor),input=this.services.qualityJobs.reexecutionInput(id,actor);
       return {job:j,input,requests:[input.request],contract:j.executionContract,cost:base({...pairBudget(input.request),maxInputBytes:input.request.budget!.maxInputBytes!,maxSamples:input.request.budget!.maxSamples!},1,{}),previous:{reason:j.reason,result:j.result},correspondence:null};
     }
     if(kind==='range'){
-      const service=this.library.qualityRanges,j=service.get(id,actor),input=service.reexecutionInput(id,actor),requests=input.pairs.filter(p=>j.plan.selectedAus.includes(p.reference.picture.au));
-      return {job:j,input,requests,contract:service.executionContract(id,actor),cost:base({...input.budget},requests.length,{...j.plan.reservation,interval:input.interval,selectedPositions:j.plan.selectedAus.length,unmappedPositions:j.plan.unmappedAus.length,unsampledPositions:j.plan.unsampledAus.length}),previous:{reason:j.reason,result:{summary:{scoredPairs:j.summary.scoredPairs,work:j.summary.work,pixelDomains:j.summary.groups.length},coverage:service.coverage(j),results:`${reexecutionPath(kind,id)}/results`}},correspondence:this.library.qualityCorrespondence.executionContext(j.retryOf?.rootJobId??id,actor)};
+      const service=this.services.qualityRanges,j=service.get(id,actor),input=service.reexecutionInput(id,actor),requests=input.pairs.filter(p=>j.plan.selectedAus.includes(p.reference.picture.au));
+      return {job:j,input,requests,contract:service.executionContract(id,actor),cost:base({...input.budget},requests.length,{...j.plan.reservation,interval:input.interval,selectedPositions:j.plan.selectedAus.length,unmappedPositions:j.plan.unmappedAus.length,unsampledPositions:j.plan.unsampledAus.length}),previous:{reason:j.reason,result:{summary:{scoredPairs:j.summary.scoredPairs,work:j.summary.work,pixelDomains:j.summary.groups.length},coverage:service.coverage(j),results:`${reexecutionPath(kind,id)}/results`}},correspondence:this.services.qualityCorrespondence.executionContext(j.retryOf?.rootJobId??id,actor)};
     }
     if(kind==='cambi'){
-      const service=this.library.qualityCambi,j=service.get(id,actor),selection=(j.executionContract?.nativeCambi?.selection??j.executionContract?.analysis?.selection);
+      const service=this.services.qualityCambi,j=service.get(id,actor),selection=(j.executionContract?.nativeCambi?.selection??j.executionContract?.analysis?.selection);
       const pictures=selection&&'pictures'in selection?selection.pictures:undefined,count=selection?pictures?.length??('selectedPictures'in selection?selection.selectedPictures:0):0;
       const output=selection?cambiOutputBudget(selection.geometry.width,selection.geometry.height,count,j.input):null;
       const analysis=!!j.executionContract?.analysis;
@@ -40,7 +40,7 @@ export class QualityReexecutionService{
       const cost=base({...j.input.budget,maxReadBytes:CAMBI_LIMITS.maxReadBytes,maxPackets:CAMBI_LIMITS.maxPackets,maxIndexBytes:CAMBI_LIMITS.maxIndexBytes,maxIndexPackets:CAMBI_LIMITS.maxIndexPackets},0,{selectedPictures:selection?count:null,selectedAus:pictures?.map(p=>p.au)??null,sourcePtsUs:pictures?.map(p=>p.sourcePtsUs)??null,selectionSha256:selection?executionDigest(selection):null,frameOrder:selection?.frameOrder??null,interval:j.input.interval,sampling:j.input.sampling,output,workerOldGenerationLimitBytes:256*1024*1024,decoderWasmMemoryMaximumBytes:256*1024*1024,...(analysis?{analysisWasmMemoryMaximumBytes:Math.min(j.input.budget.nativeMemoryBytes,512*1024*1024)}:{nativeAssetVerificationPasses:3,nativeAssetMaxBytesPerPass:5*16*1024*1024+32768}),persistentWitnessReceiptBytes:32*1024,dependencyInputs});cost.selectedPictures=count;
       return {job:j,input:j.input,requests:[],contract:j.executionContract,cost,previous:{reason:j.reason,result:{digest:j.resultDigest,progress:j.progress,resultAvailable:!!j.resultDigest,discardedIncompleteHeatmaps:true}},correspondence:null};
     }
-    const service=kind==='xpsnr'?this.library.qualityXpsnr:this.library.qualityVmaf,j=service.get(id,actor),snapshot=service.frozenSnapshot(id,actor),range=snapshot.value.rangePlan;
+    const service=kind==='xpsnr'?this.services.qualityXpsnr:this.services.qualityVmaf,j=service.get(id,actor),snapshot=service.frozenSnapshot(id,actor),range=snapshot.value.rangePlan;
     if(!range)throw new AdminError(409,'Original native sequence plan has no frozen input.','plan-changed');
     return {job:j,input:j.input,requests:range.input.pairs,contract:j.executionContract,cost:base({...range.input.budget,...j.input.budget},range.input.pairs.length,{...range.reservation,nativeAssetVerificationPasses:3}),previous:{reason:j.reason,result:{digest:j.resultDigest,metrics:j.metrics,progress:j.progress,result:`${reexecutionPath(kind,id)}/result`}},correspondence:j.input.plan};
   }
@@ -59,9 +59,9 @@ export class QualityReexecutionService{
     if(prior)block('successor-exists','This original already has a durable successor. Observe the chain; do not change keys to create another.','observe-original');
     if(plan.blocks.length)return plan;
     try{
-      if(kind==='cambi')await this.library.qualityCambi.reexecutionPreflight(id,actor,d.contract!,combined);
-      else if(kind==='vmaf'||kind==='xpsnr')await (kind==='xpsnr'?this.library.qualityXpsnr:this.library.qualityVmaf).reexecutionPreflight(id,actor,d.contract!,combined);
-      else {const resources=this.library.qualityJobs.resources();if(!resources.available||resources.admissionBlocked)throw new AdminError(503,'Physical executor exit is unconfirmed.','physical-stop-unconfirmed');await this.library.quality.reexecutionPreflight(d.requests,d.contract!,combined);}
+      if(kind==='cambi')await this.services.qualityCambi.reexecutionPreflight(id,actor,d.contract!,combined);
+      else if(kind==='vmaf'||kind==='xpsnr')await (kind==='xpsnr'?this.services.qualityXpsnr:this.services.qualityVmaf).reexecutionPreflight(id,actor,d.contract!,combined);
+      else {const resources=this.services.qualityJobs.resources();if(!resources.available||resources.admissionBlocked)throw new AdminError(503,'Physical executor exit is unconfirmed.','physical-stop-unconfirmed');await this.services.quality.reexecutionPreflight(d.requests,d.contract!,combined);}
       combined.throwIfAborted();
       // Re-read all frozen records after the owned IO probe, before offering a
       // confirmation digest. Terminal originals and C receipts must not drift.

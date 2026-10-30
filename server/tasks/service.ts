@@ -1,7 +1,7 @@
 import { reexecutionKind } from "../../shared/analysis/quality/reexecution.ts";
 import { createHmac, randomBytes } from "node:crypto";
 import { AdminError } from "../admin-error.ts";
-import type { MediaLibraryIndex } from "../library.ts";
+import type {TaskReadServices,TaskCommands} from "../quality-service-ports.ts";
 import { TASK_RETENTION_BATCH } from "./summary.ts";
 import {
   TASK_LIMITS,
@@ -32,14 +32,15 @@ type Snapshot = {
 export class TaskCenterService {
   private snapshots = new Map<string, Snapshot>();
   private secret = randomBytes(32);
-  private library: MediaLibraryIndex;
+  private services:TaskReadServices;
+  private commands:TaskCommands;
   private now: () => number;
-  constructor(library: MediaLibraryIndex, now = Date.now) {
-    this.library = library;
+  constructor(services:TaskReadServices,commands:TaskCommands, now = Date.now) {
+    this.services=services;this.commands=commands;
     this.now = now;
   }
   private owners() {
-    const l = this.library;
+    const l = this.services;
     return {
       preparation: l.discovery.store,
       correspondence: l.qualityCorrespondence,
@@ -51,7 +52,7 @@ export class TaskCenterService {
     };
   }
   private collect(actor: string, filter: TaskFilter = {}): TaskSummary[] {
-    if (!this.library.durableQualityJobsEnabled)
+    if (!this.services.durableQualityJobsEnabled)
       throw new AdminError(
         503,
         "Task history requires persistent storage.",
@@ -75,11 +76,11 @@ export class TaskCenterService {
     const ranges = rows.filter((row) => row.kind === "range");
     for (let start = 0; start < ranges.length; start += TASK_RETENTION_BATCH) {
       const batch = ranges.slice(start, start + TASK_RETENTION_BATCH);
-      const edges = this.library.qualityRanges.taskChildEdges(
+      const edges = this.services.qualityRanges.taskChildEdges(
         actor,
         batch.map((row) => row.id),
       );
-      const children = this.library.qualityJobs.taskRetainedResults(actor, [
+      const children = this.services.qualityJobs.taskRetainedResults(actor, [
         ...new Set(edges.map((edge) => edge.target)),
       ]);
       const counts = new Map<string, number>();
@@ -183,13 +184,13 @@ export class TaskCenterService {
     });
   }
   detail(kind: TaskKind, id: string, actor: string): TaskDetail {
-    if (!this.library.durableQualityJobsEnabled)
+    if (!this.services.durableQualityJobsEnabled)
       throw new AdminError(
         503,
         "Task history requires persistent storage.",
         "task-storage-unavailable",
       );
-    const l = this.library,
+    const l = this.services,
       owners = this.owners();
     const task = owners[kind].taskSummaries(actor, id)[0];
     const edges = [
@@ -248,28 +249,28 @@ export class TaskCenterService {
         if (
           e.from !== e.to ||
           !reexecutionKind(e.from) ||
-          this.library.qualityReexecutions.chain(e.from, e.id, actor).successor
+          this.services.qualityReexecutions.chain(e.from, e.id, actor).successor
             ?.id !== e.target
         )
           continue;
       } else {
         if (
           e.from === "correspondence" &&
-          this.library.qualityCorrespondence.taskRange(e.id, actor) !== e.target
+          this.services.qualityCorrespondence.taskRange(e.id, actor) !== e.target
         )
           continue;
         if (
           e.from === "range" &&
-          !this.library.qualityRanges.taskChild(e.id, e.target, actor)
+          !this.services.qualityRanges.taskChild(e.id, e.target, actor)
         )
           continue;
         if (e.from === "vmaf" || e.from === "xpsnr") {
           const pin = (
               e.from === "vmaf"
-                ? this.library.qualityVmaf
-                : this.library.qualityXpsnr
+                ? this.services.qualityVmaf
+                : this.services.qualityXpsnr
             ).get(e.id, actor).input.plan,
-            plan = this.library.qualityCorrespondence.get(e.target, actor);
+            plan = this.services.qualityCorrespondence.get(e.target, actor);
           if (
             pin.id !== plan.id ||
             pin.attemptId !== plan.attemptId ||
@@ -295,8 +296,8 @@ export class TaskCenterService {
     }
     const links = [...task.links];
     if (kind === "correspondence") {
-      const plan = this.library.qualityCorrespondence.get(id, actor),
-        relation = this.library.qualityCorrespondence.relation(
+      const plan = this.services.qualityCorrespondence.get(id, actor),
+        relation = this.services.qualityCorrespondence.relation(
           plan.relation.id,
           actor,
         );
@@ -352,30 +353,7 @@ export class TaskCenterService {
     // Resolve actor ownership before delegating. Original services remain the
     // authority for idempotent cancellation and confirmed physical exit.
     this.detail(kind, id, actor);
-    const l = this.library;
-    switch (kind) {
-      case "preparation":
-        l.discovery.cancel(id, actor);
-        break;
-      case "correspondence":
-        l.qualityCorrespondence.cancel(id, actor);
-        break;
-      case "single":
-        l.qualityJobs.cancel(id, actor, requestId);
-        break;
-      case "range":
-        l.qualityRanges.cancel(id, actor);
-        break;
-      case "vmaf":
-        l.qualityVmaf.cancel(id, actor);
-        break;
-      case "xpsnr":
-        l.qualityXpsnr.cancel(id, actor);
-        break;
-      case "cambi":
-        l.qualityCambi.cancel(id, actor);
-        break;
-    }
+    this.commands[kind](id,actor,requestId);
     return this.detail(kind, id, actor);
   }
   close() {

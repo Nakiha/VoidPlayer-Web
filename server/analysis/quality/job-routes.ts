@@ -19,7 +19,7 @@ export async function handleQualityJobRoutes(ctx: RouteContext, req: IncomingMes
     if (!ctx.actor) throw new AdminError(401, 'Select an intranet identity first.', 'identity-required');
     if (req.method !== 'GET' && !adminWriteAllowed(req, 'quality-job'))
       throw new AdminError(403, 'Use the same-origin quality-job action.', 'origin-required');
-    const jobs = ctx.library.qualityJobs;
+    const jobs = ctx.quality.qualityJobs;
     if (collection && req.method === 'GET') {
       if ([...url.searchParams.keys()].some(key => !['after', 'limit'].includes(key)))
         throw new AdminError(400, 'Unknown history query.', 'invalid-request');

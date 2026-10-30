@@ -15,7 +15,7 @@ export async function handleQualityReexecutionRoutes(ctx:RouteContext,req:Incomi
     requireCapturedActor(req,ctx.actor);if(!ctx.actor)throw new AdminError(401,'Select an identity first.','identity-required');
     if(!reexecutionId(kind,id))throw new AdminError(404,'Quality job not found.','job-not-found');
     if(url.search)throw new AdminError(400,'Reexecution uses no implicit cursor or request parameters.','invalid-request');
-    const service=ctx.library.qualityReexecutions;
+    const service=ctx.quality.qualityReexecutions;
     if(req.method==='GET'&&match[3]==='reexecutions'){sendJson(res,200,service.chain(kind,id,ctx.actor.id));return true;}
     if(req.method!=='POST')throw new AdminError(405,'Method not allowed.','method-not-allowed');
     if(!adminWriteAllowed(req,'quality-job'))throw new AdminError(403,'Use the same-origin quality-job action.','origin-required');

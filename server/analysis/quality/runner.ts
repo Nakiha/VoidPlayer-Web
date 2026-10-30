@@ -1,6 +1,6 @@
 import type {QualityExecutionContract,ReexecutionPreflight} from '../../../shared/analysis/quality/reexecution.ts';
 import { Worker } from 'node:worker_threads';
-import type { MediaLibraryIndex } from '../../library.ts';
+import type { QualityExecutionContext } from './execution-context.ts';
 import { AdminError } from '../../admin-error.ts';
 import { PAIR_LIMITS, pairBudget } from '../../../shared/analysis/quality/frame-pair.ts';
 import type { FramePairRequest } from '../../../shared/analysis/quality/frame-pair.ts';
@@ -24,13 +24,13 @@ export class LibraryPairRunner {
   private closed=false;
   private stopFailed=false;
   private stopError:unknown;
-  private library:MediaLibraryIndex;
+  private library:QualityExecutionContext;
   private coreDir:string;
   private createWorker:(data:QualityWorkerData)=>Worker;
   private timers:QualityTimers;
   get stopUncertain(){return this.stopFailed;}
   get admission(){return this.library.qualityAdmission;}
-  constructor(library:MediaLibraryIndex,coreDir:string,
+  constructor(library:QualityExecutionContext,coreDir:string,
     createWorker=(data:QualityWorkerData)=>new Worker(new URL(typeof VOIDPLAYER_COMPILED!=='undefined'&&VOIDPLAYER_COMPILED?'./analysis/quality/worker.ts':'./worker.ts',import.meta.url),
       {workerData:data,resourceLimits:{maxOldGenerationSizeMb:256}}),timers:QualityTimers={set:(callback,ms)=>setTimeout(callback,ms),clear:timer=>clearTimeout(timer)}){this.library=library;this.coreDir=coreDir;this.createWorker=createWorker;this.timers=timers;}
   source(id:string,version:string,signal=new AbortController().signal):Promise<LibraryPairBinding>{

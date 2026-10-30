@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { MediaLibraryIndex } from "../../library.ts";
+import type { QualityExecutionContext } from "../quality/execution-context.ts";
 import type { QualityExecutionContract } from "../../../shared/analysis/quality/reexecution.ts";
 import {
   CAMBI_CAPABILITY,
@@ -20,7 +20,7 @@ import { AdminError } from "../../admin-error.ts";
 export class WasmCambiRunner extends ScoringWorkerOwner {
   readonly analysisDir: string;
   constructor(
-    library: MediaLibraryIndex,
+    library: QualityExecutionContext,
     coreDir: string,
     analysisDir: string,
   ) {

@@ -1,6 +1,6 @@
 import type { QualityExecutionContract } from "../../../shared/analysis/quality/reexecution.ts";
 import { Worker } from "node:worker_threads";
-import type { MediaLibraryIndex } from "../../library.ts";
+import type { QualityExecutionContext } from "./execution-context.ts";
 import { AdminError } from "../../admin-error.ts";
 import type {QualityExecutor} from '../../../shared/service/quality-resources.ts';
 declare const VOIDPLAYER_COMPILED: boolean;
@@ -19,10 +19,10 @@ export class ScoringWorkerOwner {
   private active = new Set<{ stop(): void; done: Promise<unknown> }>();
   private closed = false;
   stopUncertain = false;
-  protected library: MediaLibraryIndex;
+  protected library: QualityExecutionContext;
   protected coreDir: string;
   private executor: QualityExecutor;
-  constructor(library: MediaLibraryIndex, coreDir: string, executor: QualityExecutor = 'inspection') {
+  constructor(library: QualityExecutionContext, coreDir: string, executor: QualityExecutor = 'inspection') {
     this.library = library;
     this.coreDir = coreDir;
     this.executor = executor;

@@ -8,6 +8,7 @@ import {MediaLibraryIndex} from '../../server/library.ts';
 import {AdminController} from '../../server/admin.ts';
 import {loadConfig} from '../../server/config.ts';
 import {startService} from '../../server/runtime.ts';
+import {QualityApplication} from '../../server/quality-application.ts';
 import {Worker} from 'node:worker_threads';
 import {once} from 'node:events';
 import {LibraryPairRunner} from '../../server/analysis/quality/runner.ts';
@@ -36,10 +37,15 @@ for(const kind of ['database','build'] as const)test(`index ${kind} stop failure
 function library(failed='') {
   const calls:string[]=[],failure=Error('physical exit unconfirmed');
   const value=Object.assign(Object.create(MediaLibraryIndex.prototype),{
-    stop(){calls.push('stop');if(failed==='stop')throw failure;},
-    store:{close(){calls.push('database');}},
-    ...Object.fromEntries(owners.map(name=>[name,{stopExecution(){calls.push(name);if(name===failed)throw failure;},close(){calls.push(name);if(name===failed)throw failure;}}])),
+    stop(){calls.push('stop');if(failed==='stop')throw failure;},store:{close(){calls.push('database');}},indexJobs:{close(){calls.push('indexJobs');if(failed==='indexJobs')throw failure;}}
   }) as MediaLibraryIndex;
+  const fields={taskService:'taskCenter',reexecutionService:'reexecutions',correspondenceService:'correspondence',cambiService:'cambi',xpsnrService:'xpsnr',vmafService:'vmaf',discoveryService:'preparation',rangeService:'ranges',jobService:'jobs',pairRunner:'quality'};
+  const app=Object.assign(Object.create(QualityApplication.prototype),{library:value});
+  for(const [name,field]of Object.entries(fields)){
+    const stop=()=>{calls.push(name);if(name===failed)throw failure;};
+    app[field]=['taskService','reexecutionService','pairRunner'].includes(name)?{close:stop}:{stopExecution:stop,close(){}};
+  }
+  value.attachQualityApplication(app);
   return {value,calls,failure};
 }
 test('independent closes start before a slow owner settles and aggregate original failures',async()=>{
@@ -106,7 +112,7 @@ test('real runtime retains the shared index after admin failure but still stops 
     t.mock.method(AdminController.prototype,'close',async function(this:AdminController){await close.call(this);throw original;});
     await assert.rejects(service.close(),AggregateError);
     const library=service.library as any;
-    assert.equal(library.indexJobs.closed,true);assert.equal(library.cambiService.closed,true);assert.equal(library.vmafService.closed,true);
+    assert.equal(library.indexJobs.closed,true);assert.equal(library.attachedQualityApplication.cambi.closed,true);assert.equal(library.attachedQualityApplication.vmaf.closed,true);
     assert.throws(()=>new MediaLibraryIndex([],{database:library.indexDatabase}),/另一个实例/);
     // The injected error occurs after the real admin has stopped. Only the test
     // can therefore prove it is safe to release the deliberately retained index.
@@ -119,10 +125,11 @@ test('running range drains its real child Worker before committing parent state 
  const dir=await mkdtemp(path.join(tmpdir(),'vp-range-shutdown-')),database=path.join(dir,'library.sqlite');
  const library=new MediaLibraryIndex([],{database,watch:false});let worker!:Worker,online!:Promise<unknown>,stopSeen!:()=>void,release!:()=>void;
  const stopped=new Promise<void>(r=>stopSeen=r),gate=new Promise<void>(r=>release=r);
- (library as any).pairRunner=new LibraryPairRunner(library,'/unused',data=>{
+ const pairRunner=new LibraryPairRunner(library,'/unused',data=>{
    worker=new Worker('setInterval(()=>{},1000)',{eval:true,execArgv:[],workerData:data});online=once(worker,'online');
    const terminate=worker.terminate.bind(worker);worker.terminate=()=>{stopSeen();return gate.then(terminate);};return worker;
  });
+ const application=new QualityApplication(library,{pairRunner});await application.ready;
  const jobs=library.qualityJobs,ranges=library.qualityRanges,actor={id:'owner',name:'Owner'},pair=jobInput().request;
  pair.budget={maxReadBytes:1024,maxInputBytes:1024};
  const parent=ranges.submit({schema:'voidplayer-quality-range',version:1,client:{id:'shutdown-test',kind:'agent'},interval:{startAu:0,endAu:0},correspondence:{mode:'explicit-au-table'},sampling:{mode:'all'},pairs:[pair],budget:{maxReadBytes:4096,maxPackets:128,maxOutputFrames:128,maxInputBytes:4096,maxElapsedMs:10000}},actor,'shutdown','key').job;
@@ -136,4 +143,19 @@ test('running range drains its real child Worker before committing parent state 
    }
    const reopened=new MediaLibraryIndex([],{database,watch:false});await reopened.close();
  }finally{release();await library.close();await rm(dir,{recursive:true,force:true});}
+});
+
+test('media property reads cannot assemble quality services; one explicit application owns stable instances',async()=>{
+ const dir=await mkdtemp(path.join(tmpdir(),'vp-explicit-quality-')),database=path.join(dir,'library.sqlite');
+ const library=new MediaLibraryIndex([],{database,watch:false});
+ try{
+   assert.equal(library.attachedQualityApplication,undefined);
+   assert.throws(()=>library.qualityJobs,{code:'quality-storage-unavailable'});
+   const db=openIndexDatabase(database);try{assert.equal(db.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name='discovery_meta'").get()!.n,0);}finally{db.close();}
+   const app=new QualityApplication(library);await app.ready;
+   assert.equal(library.qualityJobs,app.qualityJobs);assert.equal(library.qualityJobs,app.qualityJobs);
+   assert.equal(library.qualityRanges,app.qualityRanges);assert.throws(()=>new QualityApplication(library),/already attached/);
+   await app.close();await library.close();
+   const reopened=new MediaLibraryIndex([],{database,watch:false});await reopened.close();
+ }finally{await library.close();await rm(dir,{recursive:true,force:true});}
 });

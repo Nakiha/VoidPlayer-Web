@@ -1,3 +1,4 @@
+import type {QualityApplication} from '../quality-application.ts';
 import type { Actor } from '../identity.ts';
 import type { MediaLibraryIndex } from '../library.ts';
 import type { ServerOptions } from '../app.ts';
@@ -6,6 +7,7 @@ import type { ServerOptions } from '../app.ts';
 export type RouteContext = {
   options: ServerOptions;
   library: MediaLibraryIndex;
+  quality:QualityApplication;
   actor: Actor | null;
   requestId: string;
   adminExtra: {

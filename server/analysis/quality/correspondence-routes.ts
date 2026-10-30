@@ -14,7 +14,7 @@ export async function handleCorrespondenceRoutes(ctx:RouteContext,req:IncomingMe
     if(req.method!=='GET'&&!adminWriteAllowed(req,'quality-job'))throw new AdminError(403,'Use the same-origin quality-job action.','origin-required');
     const match=/^\/api\/quality\/(reference-relations|correspondence-plans)(?:\/([a-f0-9-]{36})(?:\/(rows|range-input|execute|cancel))?)?$/.exec(url.pathname);
     if(!match)throw new AdminError(404,'Reference plan route not found.','plan-not-found');
-    const [,kind,id,operation]=match,service=ctx.library.qualityCorrespondence,actor=ctx.actor,relation=kind==='reference-relations';
+    const [,kind,id,operation]=match,service=ctx.quality.qualityCorrespondence,actor=ctx.actor,relation=kind==='reference-relations';
     if(relation&&operation)throw new AdminError(404,'Relation operation not found.','relation-not-found');
     const allowed=req.method==='GET'&&(!id||operation==='rows')?['after','limit']:[];
     if([...url.searchParams.keys()].some(k=>!allowed.includes(k)||url.searchParams.getAll(k).length!==1))throw new AdminError(400,'Unknown or repeated correspondence query.','invalid-request');

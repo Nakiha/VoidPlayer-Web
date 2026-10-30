@@ -1,6 +1,8 @@
 import { AdminError } from '../admin-error.ts';
 import type { Actor } from '../identity.ts';
-import type { MediaLibraryIndex } from '../library.ts';
+import type {QualityExecutionContext} from '../analysis/quality/execution-context.ts';
+import type {LibraryPairRunner} from '../analysis/quality/runner.ts';
+type DiscoveryContext=QualityExecutionContext & {readonly durableQualityJobsEnabled:boolean;readonly quality:Pick<LibraryPairRunner,'buildSource'|'stopUncertain'>};
 import { DiscoveryStore } from './store.ts';
 import { DiscoveryProbeRunner } from './probe-runner.ts';
 import type { ProbeValue } from './probe-runner.ts';
@@ -15,9 +17,9 @@ export class LibraryDiscoveryService {
   private fatal:unknown;
   private failed=false;
   private closing?:Promise<void>;
-  private library:MediaLibraryIndex;
+  private library:DiscoveryContext;
   private unqueue:()=>void;
-  constructor(library:MediaLibraryIndex,probe=new DiscoveryProbeRunner(library.indexDatabase,library.qualityAdmission)){this.library=library;this.store=new DiscoveryStore(library.indexDatabase);this.probe=probe;this.unqueue=library.qualityAdmission.registerQueue(()=>this.store.queueCounts());}
+  constructor(library:DiscoveryContext,probe=new DiscoveryProbeRunner(library.indexDatabase,library.qualityAdmission)){this.library=library;this.store=new DiscoveryStore(library.indexDatabase);this.probe=probe;this.unqueue=library.qualityAdmission.registerQueue(()=>this.store.queueCounts());}
   private available(){if(this.closed||this.failed)throw new AdminError(503,'Library preparation service is unavailable.','preparation-unavailable');
     if(!this.library.durableQualityJobsEnabled)throw new AdminError(503,'Preparation jobs require a persistent library database.','preparation-storage-unavailable');}
   submit(value:unknown,actor:Actor,requestId:string,key:unknown){this.available();const result=this.store.submit(value,actor,requestId,key,Date.now(),()=>this.library.qualityAdmission.assertQueue(actor.id));
