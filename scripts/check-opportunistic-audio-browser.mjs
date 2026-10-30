@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromium, webkit } from 'playwright';
 import { saveBrowserFailure, recordBrowserEvidence } from './browser-failure-evidence.mjs';
+import { cleanupResources } from './testing/lifecycle.mjs';
 import { createMediaServer } from '../server/app.ts';
 import { MediaLibraryIndex } from '../server/library.ts';
 const root = path.resolve(import.meta.dirname, '..');
@@ -19,6 +20,8 @@ const temporary = await mkdtemp(path.join(tmpdir(), 'voidplayer-audio-'));
 const artifacts = path.join(root, '.run/opportunistic-audio', container + (local ? '-local' : '')); await mkdir(artifacts, { recursive: true });
 let browser, server, library, activePage, evidence, tracing = false;
 let lifecycleTrace = [];
+let failure;
+const routeErrors = [];
 try {
   const media = path.join(temporary, 'media'); await mkdir(media);
   const fixture = path.join(media, 'audio.flv');
@@ -58,7 +61,7 @@ try {
     activePage = page; lifecycleTrace = [];
     const browserEvidence = recordBrowserEvidence(page);
     let glBackends = [];
-    evidence = () => ({ ...browserEvidence(), lifecycleTrace, glBackends });
+    evidence = () => ({ ...browserEvidence(), lifecycleTrace, glBackends, routeErrors: routeErrors.map(error => String(error.stack ?? error)) });
     const errors = []; page.on('pageerror', e => errors.push(e.message));
     // Count actual output nodes and verify a pause/mute immediately stops all of them.
     await page.addInitScript(() => {
@@ -119,9 +122,14 @@ try {
       };
     });
     await page.context().route(/\/assets\/(?:ffmpeg|packet)-worker-[^/]+\.js$/, async route => {
-      const response = await route.fetch();
-      const prefix = `if (typeof self.FileReaderSync !== 'undefined') { const NativeReader = self.FileReaderSync; self.FileReaderSync = class extends NativeReader { readAsArrayBuffer(blob) { self.postMessage({type:'audio-test-blob-read', bytes:blob.size}); return super.readAsArrayBuffer(blob); } }; } const blobRead = Blob.prototype.arrayBuffer; Blob.prototype.arrayBuffer = function() { self.postMessage({type:'audio-test-blob-read', bytes:this.size}); return blobRead.call(this); };\n`;
-      await route.fulfill({ response, body: prefix + await response.text() });
+      try {
+        const response = await route.fetch();
+        const prefix = `if (typeof self.FileReaderSync !== 'undefined') { const NativeReader = self.FileReaderSync; self.FileReaderSync = class extends NativeReader { readAsArrayBuffer(blob) { self.postMessage({type:'audio-test-blob-read', bytes:blob.size}); return super.readAsArrayBuffer(blob); } }; } const blobRead = Blob.prototype.arrayBuffer; Blob.prototype.arrayBuffer = function() { self.postMessage({type:'audio-test-blob-read', bytes:this.size}); return blobRead.call(this); };\n`;
+        await route.fulfill({ response, body: prefix + await response.text() });
+      } catch (error) {
+        routeErrors.push(error);
+        await route.abort().catch(() => {});
+      }
     });
     await page.addInitScript(() => {
       const NativeWorker = window.Worker;
@@ -263,6 +271,9 @@ try {
       report[1].lifecycleTrace = [...lifecycleTrace];
       assert.equal((await state(page)).audioSlot, null, 'audio selection is never persisted');
     }
+    // Finish owned interception before navigation teardown closes its server.
+    await page.context().unrouteAll({ behavior: 'wait' });
+    assert.deepEqual(routeErrors, [], 'Worker interception completed without failures');
     await page.close();
   }
   // Both runs complete the same video traversal and then the same seek/replay.
@@ -273,12 +284,19 @@ try {
   await writeFile(path.join(artifacts, `${browserName}.json`), JSON.stringify(report, null, 2));
   console.log(JSON.stringify({ container, local, report })); console.log('PASS default mute, decoded audio, seek, single slot, button geometry, restore and identical media IO');
 } catch (error) {
+  failure = { error };
   if (tracing) await activePage.context().tracing.stop({ path: path.join(artifacts, `${browserName}-navigation.zip`) }).catch(() => {});
   await saveBrowserFailure({ page: activePage, directory: artifacts, name: browserName,
     context: { caseName: 'opportunistic-audio', engine: browserName }, error, evidence });
-  throw error;
 } finally {
-  await browser?.close();
-  if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
-  await library?.close(); await rm(temporary, { recursive: true, force: true });
+  await cleanupResources([
+    ['Worker routes', async () => {
+      for (const context of browser?.contexts() ?? []) await context.unrouteAll({ behavior: 'wait' });
+      if (routeErrors.length) throw new AggregateError(routeErrors, 'Worker interception failed');
+    }],
+    ['browser', () => browser?.close()],
+    ['server', async () => { if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); } }],
+    ['library', () => library?.close()],
+    ['temporary media', () => rm(temporary, { recursive: true, force: true })],
+  ], failure, console.error, 'Opportunistic audio fixture');
 }
