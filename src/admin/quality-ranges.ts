@@ -1,7 +1,7 @@
 import {qualityViewVisible} from './quality-navigation.ts';
 import {installQualityReexecution} from './quality-reexecution.ts';
 import {t,th,msg} from '../i18n.ts';
-import {currentActor} from '../services/identity.ts';
+import {confirmedActor,observeIdentity} from '../services/identity.ts';
 import {QualityClient} from '../services/quality-jobs.ts';
 import {qualityFacts} from '../ui/quality-evidence.ts';
 import {qualityPairViewUrl} from '../../shared/review/quality-pair-view.ts';
@@ -37,13 +37,13 @@ export function installQualityRanges(signal:AbortSignal){
   let active=false,controller=new AbortController(),actor='',selected='';
   let after=0,next:number|null=null,revision=0,busy=false;
   let browsingMore=false,listGeneration=0,resultGeneration=0,viewGeneration=0,detailGeneration=0,publicationToken='';
-  const valid=(owner:string,s:AbortSignal)=>active&&!s.aborted&&actor===owner&&currentActor()?.id===owner;
+  const valid=(owner:string,s:AbortSignal)=>active&&!s.aborted&&actor===owner&&confirmedActor()?.id===owner;
   const request=<T>(owner:string,url:string,s:AbortSignal,method='GET',body?:unknown)=>api.request<T>(owner,url,s,method,body);
   const reexecutionRoot=document.createElement('section');reexecutionRoot.id='quality-range-reexecution';$('detail').append(reexecutionRoot);
-  const reexecution=installQualityReexecution(reexecutionRoot,'range',signal,id=>window.dispatchEvent(new CustomEvent('voidplayer-quality-range-select',{detail:{id,actor:currentActor()?.id}})));
+  const reexecution=installQualityReexecution(reexecutionRoot,'range',signal,id=>window.dispatchEvent(new CustomEvent('voidplayer-quality-range-select',{detail:{id,actor:confirmedActor()?.id}})));
   function reset(){
     reexecution.clear();controller.abort();controller=new AbortController();
-    actor=currentActor()?.id??'';selected='';after=0;next=null;revision=0;
+    actor=confirmedActor()?.id??'';selected='';after=0;next=null;revision=0;
     browsingMore=false;publicationToken='';listGeneration++;resultGeneration++;viewGeneration++;detailGeneration++;busy=false;
     $('list').replaceChildren();$('detail').hidden=true;$('more').hidden=true;$('status').textContent='';
     for(const id of ['title','coverage','summary','plan','results','candidates'])$(id).replaceChildren();
@@ -112,7 +112,7 @@ export function installQualityRanges(signal:AbortSignal){
   }
   window.addEventListener('voidplayer-quality-range-select',event=>{
     const request=(event as CustomEvent<{id:string;actor:string}>).detail;
-    if(!active||request?.actor!==actor||currentActor()?.id!==actor||!/^[a-f0-9-]{36}$/.test(request.id))return;
+    if(!active||request?.actor!==actor||confirmedActor()?.id!==actor||!/^[a-f0-9-]{36}$/.test(request.id))return;
     reexecution.clear();selected=request.id;revision=0;next=null;publicationToken='';viewGeneration++;detailGeneration++;resultGeneration++;busy=false;
     $('detail').hidden=true;$('results').replaceChildren();$('candidates').replaceChildren();void detail();
   },{signal});
@@ -121,8 +121,7 @@ export function installQualityRanges(signal:AbortSignal){
     const owner=actor,s=controller.signal,id=selected,view=viewGeneration;
     void request(owner,`/api/quality/ranges/${id}/cancel`,s,'POST',{}).then(()=>{if(valid(owner,s)&&id===selected&&view===viewGeneration)void detail();},e=>{if(valid(owner,s)&&id===selected&&view===viewGeneration)$('status').textContent=String(e);});
   };
-  window.addEventListener('voidplayer-identity-change',()=>{reset();if(active)void list();},{signal});
-  window.addEventListener('storage',e=>{if(e.key==='voidplayer.identity'){reset();actor='';}},{signal});
+  observeIdentity(signal,{invalidated:reset,confirmed:()=>{reset();if(active){void list();}}});
   const timer=setInterval(()=>{if(active&&qualityViewVisible('ranges')){if(selected)void detail();else if(!browsingMore)void list();}},1000);
   signal.addEventListener('abort',()=>{clearInterval(timer);controller.abort();},{once:true});
   return {activate(value:boolean){if(active===value)return;active=value;reset();if(active)void list();}};

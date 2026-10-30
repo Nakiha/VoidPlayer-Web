@@ -2,7 +2,7 @@ import {installQualityReexecution} from './quality-reexecution.ts';
 import {REEXECUTION_KINDS,reexecutionKind} from '../../shared/analysis/quality/reexecution.ts';
 import {canonicalJson} from '../../shared/analysis/quality/cambi.ts';
 import {t,th,msg,formatDate} from '../i18n.ts';
-import {currentActor,identityHealth} from '../services/identity.ts';
+import {confirmedActor,observeIdentity} from '../services/identity.ts';
 import {QualityClient} from '../services/quality-jobs.ts';
 import {TASK_KINDS,TASK_METRICS,TASK_STATES,taskQuery,taskPath} from '../../shared/service/tasks.ts';
 import type {TaskPage,TaskDetail,TaskKind,TaskSummary} from '../../shared/service/tasks.ts';
@@ -52,10 +52,10 @@ export function installTasks(signal:AbortSignal){
   function reset(){
     clearReexecution();releaseState(false);
     life.abort();detailLife.abort();life=new AbortController();detailLife=new AbortController();epoch++;listGeneration++;detailGeneration++;detailBusy=false;
-    actor=currentActor()?.id??'';next=null;detail=null;$('list').replaceChildren();$('detail').hidden=true;$('more').hidden=true;$('status').textContent='';$('snapshot').textContent='';$('cancel-status').textContent='';$('cancel').toggleAttribute('disabled',false);for(const id of ['title','facts','related','links','candidates'])$(id).replaceChildren();delete $('candidates').dataset.state;restore();
+    actor=confirmedActor()?.id??'';next=null;detail=null;$('list').replaceChildren();$('detail').hidden=true;$('more').hidden=true;$('status').textContent='';$('snapshot').textContent='';$('cancel-status').textContent='';$('cancel').toggleAttribute('disabled',false);for(const id of ['title','facts','related','links','candidates'])$(id).replaceChildren();delete $('candidates').dataset.state;restore();
   }
   const context=()=>({owner:actor,epoch,signal:AbortSignal.any([signal,life.signal])});
-  const valid=(c:ReturnType<typeof context>)=>active&&!c.signal.aborted&&c.epoch===epoch&&c.owner===actor&&currentActor()?.id===actor;
+  const valid=(c:ReturnType<typeof context>)=>active&&!c.signal.aborted&&c.epoch===epoch&&c.owner===actor&&confirmedActor()?.id===actor;
   function choose(kind:TaskKind,id:string){clearReexecution();releaseState(false);detailLife.abort();detailLife=new AbortController();detailGeneration++;detailBusy=false;selected={kind,id};detail=null;$('detail').hidden=true;for(const part of ['title','facts','related','links','candidates'])$(part).replaceChildren();delete $('candidates').dataset.state;$('cancel-status').textContent='';$('cancel').toggleAttribute('disabled',false);save();void loadDetail();}
   function row(task:TaskSummary){const button=document.createElement('button');button.type='button';button.dataset.taskId=task.id;button.dataset.taskKind=task.kind;
     button.textContent=`${task.kind} · ${task.state}${task.phase?` / ${task.phase}`:''} · ${task.metrics.join(', ')} · ${formatDate(task.createdAt)} · ${task.id}`;button.onclick=()=>choose(task.kind,task.id);return button;}
@@ -118,8 +118,7 @@ export function installTasks(signal:AbortSignal){
       .finally(()=>{if(valid(c)&&!s.aborted&&selected?.kind===target.kind&&selected?.id===target.id)releaseState(false);});
   };
   const changed=()=>{reset();if(active){void list();void loadDetail();}};
-  window.addEventListener('voidplayer-identity-change',changed,{signal});
-  window.addEventListener('storage',e=>{if(e.key!=='voidplayer.identity')return;reset();actor='';selected=null;form.reset();const version=epoch;void identityHealth().then(()=>{if(epoch===version)changed();},()=>{});},{signal});
+  observeIdentity(signal,{invalidated:()=>{reset();actor='';selected=null;form.reset();},confirmed:changed});
   const timer=setInterval(()=>{if(active&&!document.hidden)void loadDetail();},2000);
   signal.addEventListener('abort',()=>{clearInterval(timer);life.abort();detailLife.abort();},{once:true});
   return {activate(value:boolean){if(active===value)return;active=value;reset();if(active){void list();void loadDetail();}}};

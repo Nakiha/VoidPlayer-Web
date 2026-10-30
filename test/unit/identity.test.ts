@@ -8,6 +8,30 @@ import { openIndexDatabase } from '../../server/sqlite.ts';
 import { loadConfig } from '../../server/config.ts';
 import { startService } from '../../server/runtime.ts';
 
+test('shared observer identity confirmation fences old reads, restores unchanged actors, and detaches every scope',async()=>{
+ const previous={window:globalThis.window,storage:globalThis.localStorage,fetch:globalThis.fetch};
+ const target=new EventTarget(),storage=new Map<string,string>(),requests:{resolve:(response:Response)=>void;reject:(error:Error)=>void}[]=[];
+ Object.assign(globalThis,{window:target,localStorage:{setItem:(k:string,v:string)=>storage.set(k,v)},fetch:()=>new Promise<Response>((resolve,reject)=>requests.push({resolve,reject}))});
+ const a=new AbortController(),b=new AbortController();
+ try{
+  const {observeIdentity,confirmedActor,identityHealth,chooseIdentity}=await import('../../src/services/identity.ts');
+  const owners={a:[] as string[],b:[] as string[]},failures:unknown[]=[];
+  observeIdentity(a.signal,{invalidated:()=>owners.a.push('pending'),confirmed:()=>owners.a.push(confirmedActor()!.id)});
+  observeIdentity(b.signal,{invalidated:()=>owners.b.push('pending'),confirmed:()=>owners.b.push(confirmedActor()!.id),failed:error=>failures.push(error)});
+  const spin=async(predicate:()=>boolean)=>{for(let n=0;n<100&&!predicate();n++)await new Promise(r=>setImmediate(r));assert.ok(predicate());};
+  const reply=(index:number,id:string)=>requests[index].resolve(new Response(JSON.stringify({service:'voidplayer-media',actor:{id,name:id}})));
+  const notify=(id:string)=>target.dispatchEvent(Object.assign(new Event('storage'),{key:'voidplayer.identity',newValue:JSON.stringify({id})}));
+  const initial=identityHealth();await spin(()=>requests.length===1);reply(0,'A');await initial;assert.equal(confirmedActor()!.id,'A');
+  const old=identityHealth();await spin(()=>requests.length===2);notify('B');assert.equal(confirmedActor(),null);reply(1,'A');await old;
+  await spin(()=>requests.length===3);notify('C');reply(2,'B');await spin(()=>requests.length===4);assert.equal(confirmedActor(),null);reply(3,'C');await spin(()=>owners.b.at(-1)==='C');
+  assert.deepEqual(owners.a.filter(v=>v!=='pending'),['A','C']);assert.deepEqual(owners.b.filter(v=>v!=='pending'),['A','C']);
+  notify('B');await spin(()=>requests.length===5);reply(4,'C');await spin(()=>owners.b.filter(v=>v==='C').length===2);assert.equal(confirmedActor()!.id,'C','late hints cannot replace the service-confirmed cookie identity');
+  a.abort();const stopped=owners.a.length;notify('C');await spin(()=>requests.length===6);requests[5].reject(Error('offline'));await spin(()=>failures.length===1);assert.equal(confirmedActor(),null);
+  target.dispatchEvent(new Event('focus'));await spin(()=>requests.length===7);reply(6,'C');await spin(()=>owners.b.at(-1)==='C');assert.equal(owners.a.length,stopped);
+  notify('C');await spin(()=>requests.length===8);requests[7].reject(Error('offline again'));await spin(()=>failures.length===2);const chosen=chooseIdentity({id:'D'});await spin(()=>requests.length===9);reply(8,'D');await chosen;assert.equal(confirmedActor()!.id,'D');assert.equal(owners.b.at(-1),'D');notify('D');await spin(()=>requests.length===10);b.abort();const after=owners.b.length;reply(9,'D');await new Promise(r=>setImmediate(r));target.dispatchEvent(new Event('focus'));target.dispatchEvent(new Event('storage'));await new Promise(r=>setImmediate(r));assert.equal(owners.b.length,after);assert.equal(requests.length,10);
+ }finally{a.abort();b.abort();Object.assign(globalThis,{window:previous.window,localStorage:previous.storage,fetch:previous.fetch});}
+});
+
 test('user IDs survive rename, existing names switch without merging, normalized names stay unique', () => {
   const store = new WorkspaceStore(':memory:');
   try {

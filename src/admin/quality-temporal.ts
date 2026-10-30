@@ -2,7 +2,7 @@ import { qualityViewVisible } from "./quality-navigation.ts";
 import { renderQualitySummary } from "./quality-summary.ts";
 import type { QualityScoreSummary } from "./quality-summary.ts";
 import { installQualityReexecution } from "./quality-reexecution.ts";
-import { currentActor } from "../services/identity.ts";
+import { confirmedActor,observeIdentity } from "../services/identity.ts";
 import { ApiError } from "../services/api-error.ts";
 import { QualityClient } from "../services/quality-jobs.ts";
 import { qualityFacts } from "../ui/quality-evidence.ts";
@@ -79,7 +79,7 @@ export function installTemporalQuality<Input, Score>(
     !signal.aborted &&
     !c.signal.aborted &&
     actor === c.actor &&
-    currentActor()?.id === c.actor &&
+    confirmedActor()?.id === c.actor &&
     epoch === c.epoch &&
     (!sameView || view === c.view);
   const error = (e: unknown) => {
@@ -124,7 +124,7 @@ export function installTemporalQuality<Input, Score>(
     controller = new AbortController();
     epoch++;
     view++;
-    actor = currentActor()?.id ?? "";
+    actor = confirmedActor()?.id ?? "";
     selected = "";
     revision = 0;
     after = 0;
@@ -489,7 +489,7 @@ export function installTemporalQuality<Input, Score>(
           digest: string;
         }>
       ).detail;
-      if (!active || p.actor !== actor || currentActor()?.id !== actor) return;
+      if (!active || p.actor !== actor || confirmedActor()?.id !== actor) return;
       try {
         if (pending(actor) && !pending(actor)?.confirmed)
           throw Error(`Retry the original frozen ${label} submission first`);
@@ -508,25 +508,7 @@ export function installTemporalQuality<Input, Score>(
     },
     { signal },
   );
-  window.addEventListener(
-    "voidplayer-identity-change",
-    () => {
-      reset();
-      if (active) void list();
-    },
-    { signal },
-  );
-  window.addEventListener(
-    "storage",
-    (e) => {
-      if (e.key === "voidplayer.identity") {
-        reset();
-        actor = "";
-        comparison?.activate(active, "");
-      }
-    },
-    { signal },
-  );
+  observeIdentity(signal,{invalidated:reset,confirmed:()=>{reset();if(active)void list();},failed:error});
   const timer = setInterval(() => {
     if (active && qualityViewVisible(kind)) {
       if (selected) void detail();
