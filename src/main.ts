@@ -642,6 +642,9 @@ Object.defineProperty(window, 'voidPlayer', { value: Object.freeze(api), configu
 installPageBridge(session,api.tools,uiEvents.signal);
 const annotationLink = new URL(location.href).searchParams;
 if (annotationLink.has('annotation')) void act(async () => {
+  // A cold annotation deep link must establish its actor before accepting the
+  // workspace open intent, just like saved-workspace and recovery entry points.
+  await identitySettings.ready;
   const space=annotationLink.get('space') ?? 'default', id=annotationLink.get('annotation')!;
   if(!/^[a-zA-Z0-9_-]{1,200}$/.test(space) || !/^[a-zA-Z0-9_-]{1,200}$/.test(id))throw new Error(tr(msg("player.invalidAnnotationAddress", "标注地址无效。")));
   const record=await new AnnotationClient(uiEvents.signal).read(space,id);
