@@ -152,3 +152,9 @@ attempt/digest、来源见证和数值，不能用基础关联替代结果验证
 元数据图表只按当前 `prefs.layoutMode` 与公共时间分组/几何显示，退役的严格
 配对布局策略及无效单元宽度参数不再存在。重复时间戳、缺失 DTS、未配对样本
 和桶/原始样本覆盖继续由当前查询、分组和图表模型回归验证。
+
+## 双源时域评分的唯一执行协议
+
+`TemporalScoringService` 统一 VMAF/XPSNR 的冻结合同、准入后状态推进、attempt、进度、伴随结果事务、取消/关闭/停止不确定性、最终结果事务与读取摘要核验。指标适配器保留 prepared 准入、数值结果、证据与候选策略；原表名、schema、指纹和事务边界不变。
+
+`TemporalScoringRunner` 统一 preflight/重执行 preflight、decode-and-score、两次组件终验、来源终验和累计索引预算合并。整个流程沿用一个 `ScoringWorkerOwner` 准入与 deadline，只有真实 Worker/IO 退出才交回资源。VMAF 模型和 recipe、XPSNR filter/recipe/reference-first/逐平面池化/Infinity 仍由各自适配和数值核心拥有。CAMBI 的单源、渐进热图及 stop-and-keep 不进入这个双源协议。
