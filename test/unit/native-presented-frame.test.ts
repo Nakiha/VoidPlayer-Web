@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {NativePictureInputs,nativeConfigurationHex} from '../../shared/media/codecs/native-picture-identity.ts';
 import {rgbaDescription} from '../../shared/media/frame-description.ts';
 import {ReviewSession} from '../../src/session.ts';
-import type {MediaSource,DecodedFrame} from '../../src/media/source.ts';
+import type {MediaSource,DecodedFrame} from '../../src/media/contract.ts';
 const packet=(au=0)=>({au,configuration:0,pts:2000000+au*40000,dts:2000000+au*40000,offset:100+au*100,size:32,configurationHex:'1'.repeat(16)});
 test('native accepted input membership is single use, epoch separated, bounded and fail closed',()=>{
  const q=new NativePictureInputs(2);q.reset();q.accepted(0,packet());const first=q.output(0)!;assert.equal(first.au,0);assert.equal(first.epoch,1);

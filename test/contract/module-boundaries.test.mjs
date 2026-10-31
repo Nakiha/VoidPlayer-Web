@@ -203,3 +203,42 @@ test('quality admin consumers use named workspace, resource and reexecution entr
     project({ 'src/admin/tasks.ts': syntax, 'src/admin/quality/temporal.ts': 'export type T=number' }, root =>
       assert.throws(() => checkModuleBoundaries(root), /quality admin implementation is private/));
 });
+
+test('media backends and analysis consumers cannot depend on the opening route, even for types', () => {
+  for (const from of ['src/media/decoding/backend.ts', 'src/media/policy/backend.ts', 'src/analysis/quality/backend.ts'])
+    for (const syntax of ["import type {T} from 'TARGET'", "export type {T} from 'TARGET'", "import('TARGET')", "require('TARGET')", "new URL('TARGET',import.meta.url)"])
+      project({
+        [from]: syntax.replace('TARGET', from.includes('/analysis/') ? '../../media/source.ts' : '../source.ts'),
+        'src/media/source.ts': 'export type T=number',
+      }, root => assert.throws(() => checkModuleBoundaries(root), /media implementation imports opening route/));
+  project({ 'src/session/playback.ts': "import type {T} from '../media/source.ts'", 'src/media/source.ts': 'export type T=number' }, root =>
+    assert.throws(() => checkModuleBoundaries(root), /media types belong to src\/media\/contract/));
+  project({ 'src/main.ts': "import './media/source.ts'", 'src/media/source.ts': 'export {}' }, root =>
+    assert.doesNotThrow(() => checkModuleBoundaries(root)));
+});
+test('browser media contract owns declarations without implementation dependencies or runtime state', () => {
+  project({ 'src/media/contract.ts': "import type {T} from '../../shared/media/types.ts';export interface Source { info:T }", 'shared/media/types.ts': 'export type T=number' }, root =>
+    assert.doesNotThrow(() => checkModuleBoundaries(root)));
+  for (const code of ['export const state=[];', 'export function open(){}', 'export class Source {}'])
+    project({ 'src/media/contract.ts': code }, root => assert.throws(() => checkModuleBoundaries(root), /cannot own runtime state or execution/));
+  project({ 'src/media/contract.ts': "import './state.ts'", 'src/media/state.ts': 'export {}' }, root =>
+    assert.throws(() => checkModuleBoundaries(root), /must use type-only dependencies/));
+  project({ 'src/media/contract.ts': "import type {T} from './state.ts'", 'src/media/state.ts': 'export type T=number' }, root =>
+    assert.throws(() => checkModuleBoundaries(root), /browser media contract imports implementation/));
+});
+test('media and color base contracts cannot obtain facts through review aliases', () => {
+  for (const from of ['shared/media/types.ts', 'shared/color/color-info.ts', 'src/media/state.ts'])
+    project({ [from]: `import type {T} from '${from.startsWith('src/') ? '../../shared/review/model.ts' : '../review/model.ts'}'`, 'shared/review/model.ts': 'export type T=number' }, root =>
+      assert.throws(() => checkModuleBoundaries(root), /media\/color imports review-owned base contracts/));
+  project({ 'shared/color/color-info.ts': "export * from '../review/proxy.ts'", 'shared/review/proxy.ts': 'export {}' }, root =>
+    assert.throws(() => checkModuleBoundaries(root), /media\/color imports review-owned base contracts/));
+  project({ 'shared/review/model.ts': "import type {T} from '../media/types.ts'", 'shared/media/types.ts': 'export type T=number' }, root =>
+    assert.doesNotThrow(() => checkModuleBoundaries(root)));
+});
+test('whole-file fallback budget is internal media policy', () => {
+  const target = 'src/media/policy/fallback-budget.ts', code = 'export const limit=512';
+  project({ 'src/ui/panel.ts': "import '../media/policy/fallback-budget.ts'", [target]: code }, root =>
+    assert.throws(() => checkModuleBoundaries(root), /fallback input budget belongs to media policy/));
+  project({ 'src/media/decoding/backend.ts': "import '../policy/fallback-budget.ts'", [target]: code }, root =>
+    assert.doesNotThrow(() => checkModuleBoundaries(root)));
+});

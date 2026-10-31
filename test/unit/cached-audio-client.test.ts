@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { attachCachedContainerAudio } from '../../src/media/audio/cached-audio-client.ts';
-import type { MediaSource } from '../../src/media/source.ts';
+import type { MediaSource } from '../../src/media/contract.ts';
 
 class FakeWorker {
   static instances:FakeWorker[]=[];

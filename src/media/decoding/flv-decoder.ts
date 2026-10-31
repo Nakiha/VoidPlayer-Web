@@ -12,7 +12,7 @@ import { verifyHevcFrame } from './hevc-frame.ts';
 import { MediaOpenError } from '../../../shared/media/io/media-errors.ts';
 import { flvDecoderConfig } from '../../../shared/media/containers/flv-demux.ts';
 import type { FlvIndex } from '../../../shared/media/containers/flv-demux.ts';
-import type { MediaInfo } from '../../../shared/review/model.ts';
+import type { MediaInfo } from '../../../shared/media/types.ts';
 import { ffmpegColorInfo } from '../metadata.ts';
 import { preferredVideoConfig } from '../policy/decoder-policy.ts';
 import { loadCore } from './core-loader.ts';

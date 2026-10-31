@@ -1,5 +1,5 @@
 import type { SessionResources } from './resources.ts';
-import type { DecodedFrame } from '../media/source.ts';
+import type { DecodedFrame } from '../media/contract.ts';
 
 /** One independent, bounded producer per track. Never await decoding on the presentation path. */
 export class FrameQueue {

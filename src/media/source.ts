@@ -1,17 +1,17 @@
+import type { FrameDescription } from '../../shared/media/frame-description.ts';
+import type { DecodedFrame, MediaSource, MediaMeta } from './contract.ts';
+export type { DecodedFrame, MediaSource, MediaMeta } from './contract.ts';
 import { prepareYuvFrame, createYuvBufferPool } from './decoding/yuv-frame.ts';
 import { captureDecodeConfiguration } from './policy/color-mode.ts';
-import type { ColorMode, ReferenceDecode, DecodeConfiguration } from '../../shared/color/decode-policy-types.ts';
+import type { DecodeConfiguration } from '../../shared/color/decode-policy-types.ts';
 import { probeContainer } from './policy/container-probe.ts';
 import { openSoftwareMedia } from './decoding/software-media.ts';
 import { openMediaPlan } from './policy/media-policy.ts';
-import type { MediaInfoChange } from './state.ts';
-import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample } from '../../shared/analysis/metadata/types.ts';
 import { avcGeometry, nativeAvcCompatible } from '../../shared/media/codecs/avc-geometry.ts';
 import { readMp4Configurations } from '../../shared/media/containers/mp4-config.ts';
 import { hevcDisplayOrder } from '../../shared/media/codecs/hevc-timeline.ts';
 import { RangeReader } from '../../shared/media/io/range-reader.ts';
 import { sampleDescription } from './decoding/frame-resource.ts';
-import type { FrameDescription } from '../../shared/media/frame-description.ts';
 import type { MediaOpenProgress } from './progress.ts';
 export type { MediaOpenProgress } from './progress.ts';
 import { loadAborted, onLoadAbort } from '../../shared/media/io/media-abort.ts';
@@ -19,86 +19,12 @@ import { randomUUID } from '../../shared/utils/uuid.ts';
 import type { RandomAccessInput } from '../../shared/media/io/range-reader.ts';
 import { MediaOpenError } from '../../shared/media/io/media-errors.ts';
 import { Input, BlobSource, UrlSource, ALL_FORMATS, IsobmffInputFormat, VideoSampleSink, UnsupportedInputFormatError } from 'mediabunny';
-import type { CachedAudioBatch } from '../../shared/media/audio-types.ts';
 import type { VideoSample } from 'mediabunny';
 import { NativeAnalysisAdapter } from '../analysis/metadata/native-adapter.ts';
-import type { MediaInfo, FrameInfo } from '../../shared/review/model.ts';
+import type { MediaInfo } from '../../shared/media/types.ts';
 import { contextLog } from '../logging/log.ts';
 import { preferredVideoConfig } from './policy/decoder-policy.ts';
 
-export interface DecodedFrame extends FrameInfo {
-  readonly nativePresentedInput?: {instance:string;sourceVersion:string;input:import('../../shared/media/codecs/native-picture-identity.ts').NativePictureIdentity};
-  presentedCommit?: number;
-  readonly sourcePicture?: import('../../shared/analysis/bitstream/contract.ts').SourcePictureKey;
-  /** Filled only by the presenter after a successful paint; never decoder tags. */
-  presentation?: import('../../shared/review/model.ts').PresentationInfo;
-  readonly description: FrameDescription;
-  readonly copyMs?: number;
-  readonly rotation?: number;
-  /** Resource form: a WebCodecs sample, YUV planes, or RGBA8 pixels. The presenter decides
-   *  how a kind reaches the canvas; backends never paint. */
-  readonly kind: 'video-sample' | 'rgba8' | 'yuv';
-  readonly width: number;
-  readonly height: number;
-  /** Approximate bytes held by this frame, for queue memory budgets. */
-  readonly byteSize: number;
-  readonly sample?: VideoSample;
-  readonly pixels?: Uint8ClampedArray;
-  close(): void;
-}
-export interface MediaSource {
-  readonly nativePresentedInstance?:string;
-  readonly nativePresentedTransport?:Readonly<{source:{kind:'library';id:string;url:string};sourceVersion:string}>;
-  /** Retained reference only; no analysis instance or IO until explicit request. */
-  bitstreamFile?: Blob;
-  /** Read-only confirmed packet frontier; starts metadata indexing, never seeks. */
-  getBitstreamIndex?(): Promise<import('../../shared/analysis/bitstream/stream.ts').AnalysisIndexFrontier>;
-  getBitstreamFfmpegIndex?(): Promise<import('../../shared/media/indexing/ffmpeg-index-cache.ts').FfmpegIndexDocument>;
-  getBitstreamFlvIndex?(): Promise<import("../../shared/media/indexing/flv-index-cache.ts").FlvIndexDocument>;
-  bitstreamIndexIdentity?: import('../../shared/media/indexing/media-index-identity.ts').MediaIndexIdentity;
-  info: MediaInfo;
-  /** Cache-only, bounded metadata inspection; never enables audio output. */
-  requestCachedMetadata?(): void;
-  setMetadataInspectionEnabled?(enabled: boolean): void;
-  /** Fire-and-forget cache observation; implementations must never read missing bytes. */
-  requestCachedAudio?(ptsUs: number, generation: number): void;
-  setCachedAudioEnabled?(enabled: boolean): void;
-  onCachedAudio?: (generation: number, batch: CachedAudioBatch) => void;
-  /** Background container indexing can extend duration after the first frame. */
-  onInfoChange?: (change?:MediaInfoChange) => void;
-  ensureIndexed?(ptsUs?: number): Promise<void>;
-  /** Container adapters may verify or replace only the decoder while retaining
-   * their existing demux/index session. This is used by reference-color admission. */
-  admitReference?(depth: number): Promise<MediaSource>;
-  /** Change presentation/decoder policy over the existing container session. */
-  reconfigureColorMode?(mode: ColorMode, decode: ReferenceDecode, signal?: AbortSignal): Promise<void>;
-  frameAt(ptsUs: number): Promise<DecodedFrame>;
-  framesAfter(ptsUs: number, count: number): Promise<DecodedFrame[]>;
-  /** Sequential presentation-order frames starting at ptsUs, for playback. */
-  framesFrom(ptsUs: number): AsyncGenerator<DecodedFrame>;
-  /** Continue after an already displayed frame without re-decoding its GOP. */
-  framesFollowing?(ptsUs: number): AsyncGenerator<DecodedFrame>;
-  /**
-   * 可选的只读码流分析查询（顶部分析面板与 Agent 共用）。返回压缩样本
-   * 负载统计，不解码、不 seek；缺失能力时方法不存在，调用方显示
-   * pending/unsupported，不伪造数据。
-   */
-  getAnalysisCapability?(): AnalysisCapability;
-  queryAnalysis?(query: AnalysisQuery & { requestId: number }): Promise<AnalysisResult>;
-  /**
-   * 展示序排名（只读，不解码）：归一化媒体时间 tUs 在 axis 下的排名，
-   * 即 axis 时间严格小于 tUs 的样本数。复用分析查询的有序轴缓存，
-   * O(log N) 且不物化样本数组；索引构建中返回暂定值。
-   */
-  rankAnalysisTime?(tUs: number, axis: AnalysisAxis): Promise<AnalysisRank>;
-  analysisSampleAtNumber?(number: number, axis: AnalysisAxis): Promise<{ ptsUs: number | null; complete: boolean }>;
-  /**
-   * 按样本身份（桶峰值等）有界定位单个样本，不依赖某次查询是否返回了 raw 列表。
-   * 身份格式由 adapter 层解析；未索引/不属于本媒体返回 null。
-   */
-  locateAnalysisSample?(sampleId: string): Promise<AnalysisSample | null>;
-  dispose(): void;
-}
 export async function inspectVideoTrack(input: Input) {
   let format;
   try { format = await input.getFormat(); }
@@ -117,7 +43,7 @@ export async function inspectVideoTrack(input: Input) {
   const codec = await track.getCodecParameterString() ?? (await track.getCodec())!;
   return { track, codec, format: format.name };
 }
-export interface MediaMeta { name: string; size: number; lastModified: number; }
+
 
 // Where opening failed decides whether the WASM fallback can help: container
 // and codec stages can (mediabunny/WebCodecs gaps); input and resource stages

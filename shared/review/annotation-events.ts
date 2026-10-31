@@ -1,5 +1,6 @@
 import type { AnnotationClientIdentity, AnnotationOperation, AnnotationRecord } from './annotation-record.ts';
-import type { FrameInfo, Mark } from './model.ts';
+import type { FrameInfo } from '../media/types.ts';
+import type { Mark } from './model.ts';
 import { referenceVersion } from '../media/io/media-reference.ts';
 
 export type AnnotationEvent = {

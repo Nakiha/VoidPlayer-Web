@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { admitReferenceSource } from '../../src/media/policy/reference-source.ts';
 import { rgbaDescription } from '../../shared/media/frame-description.ts';
-import type { DecodedFrame, MediaSource } from '../../src/media/source.ts';
+import type { DecodedFrame, MediaSource } from '../../src/media/contract.ts';
 
 const color = { matrix: 'bt709', primaries: 'bt709', transfer: 'bt709', fullRange: false };
 

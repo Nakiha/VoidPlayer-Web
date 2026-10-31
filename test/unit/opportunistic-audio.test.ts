@@ -4,7 +4,7 @@ import { RangeReader } from '../../shared/media/io/range-reader.ts';
 import { FlvCachedAudio, aacConfig } from '../../src/media/audio/flv-cached-audio.ts';
 import { OpportunisticAudio } from '../../src/media/audio/opportunistic-audio.ts';
 import type { FlvIndex } from '../../shared/media/containers/flv-demux.ts';
-import type { MediaSource } from '../../src/media/source.ts';
+import type { MediaSource } from '../../src/media/contract.ts';
 import type { CachedAudioBatch } from '../../shared/media/audio-types.ts';
 import { CachedContainerAudio } from '../../src/media/audio/cached-container-audio.ts';
 import { ObservedBytes } from '../../src/media/indexing/observed-bytes.ts';

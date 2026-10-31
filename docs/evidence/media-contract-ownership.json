@@ -1,0 +1,435 @@
+{
+  "method": "TypeScript AST leaf tokens excluding EOF/trivia; UTF-8 bytes with whitespace removed. Contract moves have zero slimming credit; these are dependency ownership changes.",
+  "mediaStage": {
+    "baseline": "c9f1682d26147879b0af553690de8e6d51269bb0",
+    "beforeTokens": 100770,
+    "afterTokens": 100933,
+    "tokenDelta": 163,
+    "beforeBytes": 421327,
+    "afterBytes": 422657,
+    "byteDelta": 1330,
+    "files": [
+      {
+        "file": "shared/color/color-info.ts",
+        "beforeTokens": 0,
+        "afterTokens": 31,
+        "beforeBytes": 0,
+        "afterBytes": 190
+      },
+      {
+        "file": "shared/color/yuv-color.ts",
+        "beforeTokens": 1392,
+        "afterTokens": 1392,
+        "beforeBytes": 4981,
+        "afterBytes": 4978
+      },
+      {
+        "file": "shared/media/ffmpeg-color.ts",
+        "beforeTokens": 342,
+        "afterTokens": 342,
+        "beforeBytes": 1324,
+        "afterBytes": 1328
+      },
+      {
+        "file": "shared/media/frame-description.ts",
+        "beforeTokens": 524,
+        "afterTokens": 524,
+        "beforeBytes": 2181,
+        "afterBytes": 2185
+      },
+      {
+        "file": "shared/media/io/media-reference.ts",
+        "beforeTokens": 578,
+        "afterTokens": 578,
+        "beforeBytes": 2555,
+        "afterBytes": 2545
+      },
+      {
+        "file": "shared/media/types.ts",
+        "beforeTokens": 0,
+        "afterTokens": 313,
+        "beforeBytes": 0,
+        "afterBytes": 2057
+      },
+      {
+        "file": "shared/presentation/presentation-info.ts",
+        "beforeTokens": 0,
+        "afterTokens": 57,
+        "beforeBytes": 0,
+        "afterBytes": 279
+      },
+      {
+        "file": "shared/review/annotation-events.ts",
+        "beforeTokens": 561,
+        "afterTokens": 567,
+        "beforeBytes": 2185,
+        "afterBytes": 2220
+      },
+      {
+        "file": "shared/review/annotation-record.ts",
+        "beforeTokens": 753,
+        "afterTokens": 759,
+        "beforeBytes": 3239,
+        "afterBytes": 3274
+      },
+      {
+        "file": "shared/review/marks.ts",
+        "beforeTokens": 1186,
+        "afterTokens": 1192,
+        "beforeBytes": 4458,
+        "afterBytes": 4493
+      },
+      {
+        "file": "shared/review/model.ts",
+        "beforeTokens": 1494,
+        "afterTokens": 1133,
+        "beforeBytes": 7143,
+        "afterBytes": 4825
+      },
+      {
+        "file": "shared/review/quality-candidate.ts",
+        "beforeTokens": 493,
+        "afterTokens": 499,
+        "beforeBytes": 2005,
+        "afterBytes": 2040
+      },
+      {
+        "file": "shared/review/workspace-file.ts",
+        "beforeTokens": 3639,
+        "afterTokens": 3645,
+        "beforeBytes": 13602,
+        "afterBytes": 13637
+      },
+      {
+        "file": "src/analysis/bitstream/service.ts",
+        "beforeTokens": 9226,
+        "afterTokens": 9226,
+        "beforeBytes": 36441,
+        "afterBytes": 36443
+      },
+      {
+        "file": "src/media/audio/cached-audio-client.ts",
+        "beforeTokens": 634,
+        "afterTokens": 634,
+        "beforeBytes": 2394,
+        "afterBytes": 2396
+      },
+      {
+        "file": "src/media/audio/opportunistic-audio.ts",
+        "beforeTokens": 2036,
+        "afterTokens": 2036,
+        "beforeBytes": 7412,
+        "afterBytes": 7414
+      },
+      {
+        "file": "src/media/contract.ts",
+        "beforeTokens": 0,
+        "afterTokens": 598,
+        "beforeBytes": 0,
+        "afterBytes": 4887
+      },
+      {
+        "file": "src/media/decoding/ffmpeg-container-media.ts",
+        "beforeTokens": 5253,
+        "afterTokens": 5253,
+        "beforeBytes": 24005,
+        "afterBytes": 24003
+      },
+      {
+        "file": "src/media/decoding/ffmpeg-media.ts",
+        "beforeTokens": 84,
+        "afterTokens": 84,
+        "beforeBytes": 484,
+        "afterBytes": 486
+      },
+      {
+        "file": "src/media/decoding/flv-decoder.ts",
+        "beforeTokens": 3662,
+        "afterTokens": 3662,
+        "beforeBytes": 16317,
+        "afterBytes": 16316
+      },
+      {
+        "file": "src/media/decoding/flv-media.ts",
+        "beforeTokens": 81,
+        "afterTokens": 81,
+        "beforeBytes": 461,
+        "afterBytes": 463
+      },
+      {
+        "file": "src/media/decoding/js-container-media.ts",
+        "beforeTokens": 484,
+        "afterTokens": 484,
+        "beforeBytes": 2236,
+        "afterBytes": 2238
+      },
+      {
+        "file": "src/media/decoding/native-yuv-source.ts",
+        "beforeTokens": 3858,
+        "afterTokens": 3858,
+        "beforeBytes": 13682,
+        "afterBytes": 13684
+      },
+      {
+        "file": "src/media/decoding/packet-media.ts",
+        "beforeTokens": 5126,
+        "afterTokens": 5126,
+        "beforeBytes": 22932,
+        "afterBytes": 22933
+      },
+      {
+        "file": "src/media/decoding/software-media.ts",
+        "beforeTokens": 263,
+        "afterTokens": 263,
+        "beforeBytes": 1593,
+        "afterBytes": 1595
+      },
+      {
+        "file": "src/media/decoding/yuv-frame.ts",
+        "beforeTokens": 704,
+        "afterTokens": 704,
+        "beforeBytes": 3076,
+        "afterBytes": 3078
+      },
+      {
+        "file": "src/media/indexing/cached-track-metadata-client.ts",
+        "beforeTokens": 443,
+        "afterTokens": 443,
+        "beforeBytes": 2005,
+        "afterBytes": 2007
+      },
+      {
+        "file": "src/media/policy/fallback-budget.ts",
+        "beforeTokens": 0,
+        "afterTokens": 10,
+        "beforeBytes": 0,
+        "afterBytes": 182
+      },
+      {
+        "file": "src/media/policy/media-policy.ts",
+        "beforeTokens": 704,
+        "afterTokens": 704,
+        "beforeBytes": 3416,
+        "afterBytes": 3418
+      },
+      {
+        "file": "src/media/policy/reference-source.ts",
+        "beforeTokens": 814,
+        "afterTokens": 814,
+        "beforeBytes": 3817,
+        "afterBytes": 3819
+      },
+      {
+        "file": "src/media/source.ts",
+        "beforeTokens": 3961,
+        "afterTokens": 3446,
+        "beforeBytes": 21423,
+        "afterBytes": 17193
+      },
+      {
+        "file": "src/media/state.ts",
+        "beforeTokens": 464,
+        "afterTokens": 446,
+        "beforeBytes": 1973,
+        "afterBytes": 1912
+      },
+      {
+        "file": "src/media/workers/worker-protocol.ts",
+        "beforeTokens": 1963,
+        "afterTokens": 1963,
+        "beforeBytes": 8671,
+        "afterBytes": 8670
+      },
+      {
+        "file": "src/presentation/presenter.ts",
+        "beforeTokens": 3327,
+        "afterTokens": 3327,
+        "beforeBytes": 13321,
+        "afterBytes": 13323
+      },
+      {
+        "file": "src/presentation/webgpu-color-surface.d.mts",
+        "beforeTokens": 185,
+        "afterTokens": 185,
+        "beforeBytes": 857,
+        "afterBytes": 859
+      },
+      {
+        "file": "src/presentation/webgpu-presenter.ts",
+        "beforeTokens": 2097,
+        "afterTokens": 2097,
+        "beforeBytes": 9785,
+        "afterBytes": 9787
+      },
+      {
+        "file": "src/services/library.ts",
+        "beforeTokens": 812,
+        "afterTokens": 818,
+        "beforeBytes": 3756,
+        "afterBytes": 3796
+      },
+      {
+        "file": "src/session.ts",
+        "beforeTokens": 17963,
+        "afterTokens": 17969,
+        "beforeBytes": 72226,
+        "afterBytes": 72270
+      },
+      {
+        "file": "src/session/bitstream-analysis.ts",
+        "beforeTokens": 2720,
+        "afterTokens": 2720,
+        "beforeBytes": 10685,
+        "afterBytes": 10687
+      },
+      {
+        "file": "src/session/metadata-analysis.ts",
+        "beforeTokens": 1694,
+        "afterTokens": 1694,
+        "beforeBytes": 8287,
+        "afterBytes": 8289
+      },
+      {
+        "file": "src/session/playback.ts",
+        "beforeTokens": 1537,
+        "afterTokens": 1537,
+        "beforeBytes": 5253,
+        "afterBytes": 5255
+      },
+      {
+        "file": "src/session/quality-pair-view.ts",
+        "beforeTokens": 1717,
+        "afterTokens": 1717,
+        "beforeBytes": 6904,
+        "afterBytes": 6906
+      },
+      {
+        "file": "src/session/resources.ts",
+        "beforeTokens": 572,
+        "afterTokens": 572,
+        "beforeBytes": 2162,
+        "afterBytes": 2164
+      },
+      {
+        "file": "src/session/thumbnail.ts",
+        "beforeTokens": 480,
+        "afterTokens": 480,
+        "beforeBytes": 2935,
+        "afterBytes": 2937
+      },
+      {
+        "file": "src/session/unavailable-source.ts",
+        "beforeTokens": 92,
+        "afterTokens": 92,
+        "beforeBytes": 443,
+        "afterBytes": 444
+      },
+      {
+        "file": "src/thumbnails/offer.ts",
+        "beforeTokens": 980,
+        "afterTokens": 980,
+        "beforeBytes": 5272,
+        "afterBytes": 5274
+      },
+      {
+        "file": "src/thumbnails/pixel-worker.ts",
+        "beforeTokens": 163,
+        "afterTokens": 163,
+        "beforeBytes": 824,
+        "afterBytes": 826
+      },
+      {
+        "file": "src/ui/cambi-view.ts",
+        "beforeTokens": 3606,
+        "afterTokens": 3606,
+        "beforeBytes": 13427,
+        "afterBytes": 13429
+      },
+      {
+        "file": "src/ui/index-progress.ts",
+        "beforeTokens": 131,
+        "afterTokens": 131,
+        "beforeBytes": 609,
+        "afterBytes": 608
+      },
+      {
+        "file": "src/ui/quality-roi.ts",
+        "beforeTokens": 5843,
+        "afterTokens": 5843,
+        "beforeBytes": 23714,
+        "afterBytes": 23716
+      },
+      {
+        "file": "src/ui/source-catalog.ts",
+        "beforeTokens": 1756,
+        "afterTokens": 1756,
+        "beforeBytes": 6636,
+        "afterBytes": 6635
+      },
+      {
+        "file": "src/ui/workspace-state.ts",
+        "beforeTokens": 372,
+        "afterTokens": 378,
+        "beforeBytes": 1404,
+        "afterBytes": 1449
+      },
+      {
+        "file": "src/ui/workspace-transfer.ts",
+        "beforeTokens": 4001,
+        "afterTokens": 4001,
+        "beforeBytes": 16816,
+        "afterBytes": 16815
+      }
+    ]
+  },
+  "dependencies": {
+    "before": {
+      "openingRouteConsumers": 34,
+      "openingRouteEdges": 35,
+      "openingRouteTypeEdges": 31,
+      "lowLevelReviewModelEdges": 12
+    },
+    "after": {
+      "openingRouteConsumers": 4,
+      "openingRouteEdges": 4,
+      "openingRouteTypeEdges": 0,
+      "lowLevelReviewModelEdges": 0
+    }
+  },
+  "combinedAudit": {
+    "baseline": "2c1fbc20acbb1707c4a4fe938ce5e93685b3d356",
+    "beforeTokens": 174623,
+    "afterTokens": 174729,
+    "tokenDelta": 106,
+    "beforeBytes": 734706,
+    "afterBytes": 739437,
+    "byteDelta": 4731
+  },
+  "runtimeEquivalence": {
+    "existingModules": 47,
+    "changedExecutableBodies": 0,
+    "exception": "Unchanged MAX_FALLBACK_FILE_BYTES constant moved to media policy; import declarations and erased types excluded."
+  },
+  "validation": {
+    "build": "passed",
+    "boundaryTests": 56,
+    "fastCases": "88/88",
+    "contractCases": "47/47",
+    "realMediaNodeCases": "3/3",
+    "mediaBrowserCases": "8/8",
+    "playbackBenchmark": {
+      "browser": "webkit",
+      "headless": true,
+      "repeats": 3,
+      "durationMs": 8000,
+      "passed": "12/12",
+      "scenarios": [
+        "hevc-4k-solo",
+        "vvc-wasm-solo",
+        "vvc+hevc-4k",
+        "mpeg2ts+h264"
+      ],
+      "scope": "isolated temporary local HTTP service; existing benchmark thresholds; no comparative or cross-machine performance claim"
+    }
+  }
+}

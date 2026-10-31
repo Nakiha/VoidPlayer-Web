@@ -286,7 +286,7 @@ test('stream progress waits for transport completion after all pictures, and fol
     progress({ pictures: 1, totalPictures: 1, checkedUs: 1000, totalUs: 1000, indexComplete: true, waitingForIndex: false });
     reached(); await gate;
   };
-  const source = { info: {}, bitstreamFile: new Blob() } as import('../../src/media/source.ts').MediaSource;
+  const source = { info: {}, bitstreamFile: new Blob() } as import('../../src/media/contract.ts').MediaSource;
   const run = service.requestStream(source, { mode: 'stream', sourceVersion: 'local:uuid', firstPtsUs: 0, durationUs: 100 }, 'A');
   await pending;
   assert.equal(service.state.state, 'pending'); assert.equal(service.state.stream!.pictures, 1);
@@ -579,7 +579,7 @@ test('session preserves source completion across eviction, multiple picture task
     bitstreamFile:new Blob(['fixture']),
     async frameAt(time: number) { const au=Math.min(2,Math.floor(time/100)); return {kind:'video-sample',ptsUs:au*100,sourcePtsUs:100+au*100,durationUs:100,description:rgbaDescription(16,16),width:16,height:16,byteSize:1024,sourcePicture:{...result().picture,au},close(){}}; },
     async framesAfter(){return[];}, async *framesFrom(){}, dispose(){},
-  } as unknown as import('../../src/media/source.ts').MediaSource;
+  } as unknown as import('../../src/media/contract.ts').MediaSource;
   const session = new ReviewSession((_slot,frame)=>{frame.presentedCommit=++commit;});
   try {
     await session.load('A',async()=>source);
@@ -696,7 +696,7 @@ for (const { mode, failure } of localTransportCases) {
         if (fail && failure === 'index-provider') throw new Error('injected index provider failure');
         return Promise.resolve({ packets: 1, complete: true });
       },
-    } as unknown as import('../../src/media/source.ts').MediaSource;
+    } as unknown as import('../../src/media/contract.ts').MediaSource;
     const wireResult = mode === 'stream' ? { ...result(), picture: { ...result().picture, au: 0 },
       gop: { startAu: 0, endAu: 1, configuration: 0, anchor: 'closed' as const } } : result();
     const token: import('../../shared/analysis/bitstream/contract.ts').PresentedFrameToken = {

@@ -7,7 +7,7 @@ import { presentationColor } from './presentation-color.ts';
 import { THUMB_MAX_EDGE } from '../../shared/thumbnails/contract.ts';
 import { createPresentationSurface } from './presentation-surface.ts';
 import type { PresentationGeometry } from './presentation-surface.ts';
-import type { DecodedFrame } from '../media/source.ts';
+import type { DecodedFrame } from '../media/contract.ts';
 import { log } from '../logging/log.ts';
 import { getColorOutput } from '../../shared/color/color-output.ts';
 import {hdrDisplayAvailable} from './display-capabilities.ts';

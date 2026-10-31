@@ -6,7 +6,7 @@ import type {CambiEvidence} from '../../shared/review/cambi-evidence.ts';
 import {cambiScales,CAMBI_LIMITS} from '../../shared/analysis/quality/cambi.ts';
 import type {CambiFrame,CambiJob,CambiPrepared,CambiNative} from '../../shared/analysis/quality/cambi.ts';
 import {paintFrame,setPresentationGeometry,disposePresentation} from '../presentation/presenter.ts';
-import type {DecodedFrame} from '../media/source.ts';
+import type {DecodedFrame} from '../media/contract.ts';
 import type {FrameDescription} from '../../shared/media/frame-description.ts';
 import './quality-pair-view.css';
 await initializeLanguage();

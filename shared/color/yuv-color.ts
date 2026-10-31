@@ -1,6 +1,6 @@
 import { validateYuv, yuvSample, yuvReconstructedSample, visibleChromaBounds } from './yuv-planes.ts';
 export { validateYuv, yuvSample, yuvReconstructedSample, visibleChromaBounds, chromaOffset } from './yuv-planes.ts';
-export type { YuvLayout } from './yuv-planes.ts';import type { ColorInfo } from '../review/model.ts';
+export type { YuvLayout } from './yuv-planes.ts';import type { ColorInfo } from './color-info.ts';
 import type { FrameDescription } from '../media/frame-description.ts';
 import { hdrTransfer } from './hdr-policy.ts';
 import { hdrToSdrPreview } from './hdr-color.ts';

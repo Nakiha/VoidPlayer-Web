@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mediaActionUrl, pinLibraryReference } from '../../shared/media/io/media-reference.ts';
 import { SourceCatalog } from '../../src/ui/source-catalog.ts';
-import type { MediaInfo } from '../../shared/review/model.ts';
+import type { MediaInfo } from '../../shared/media/types.ts';
 import { LibraryAccessError } from '../../shared/media/io/source-access.ts';
 import { libraryAccessMessage } from '../../src/ui/source-access-message.ts';
 const id = 'a'.repeat(24), version = 'b'.repeat(24), base = 'https://media.example/player';

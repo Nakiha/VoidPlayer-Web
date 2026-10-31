@@ -2,7 +2,7 @@ import { rgbaDescription } from '../../shared/media/frame-description.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ReviewSession } from '../../src/session.ts';
-import type { MediaSource } from '../../src/media/source.ts';
+import type { MediaSource } from '../../src/media/contract.ts';
 
 // 与 session.test.ts 相同的轻量片源替身。
 function media(name = 'A', starts = [0, 40000, 120000, 160000], end = 200000) {

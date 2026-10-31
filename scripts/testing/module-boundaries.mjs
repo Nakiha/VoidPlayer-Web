@@ -150,9 +150,21 @@ export function checkModuleBoundaries(root) {
   }
   for (const dir of ['src', 'server', 'shared']) scan(path.join(root, dir));
   assert.ok(files.length, 'No production modules found');
+  const mediaContract = path.join(root, 'src/media/contract.ts');
+  if (existsSync(mediaContract)) {
+    const tree = ts.createSourceFile(mediaContract, readFileSync(mediaContract, 'utf8'), ts.ScriptTarget.Latest, true);
+    for (const statement of tree.statements)
+      assert.ok(
+        ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement) ||
+        ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement),
+        'src/media/contract.ts: browser media contract cannot own runtime state or execution',
+      );
+  }
   for (const file of files)
     for (const edge of moduleEdges(readFileSync(file, 'utf8'), file)) {
     const from = portable(path.relative(root, file));
+    if (from === 'src/media/contract.ts')
+      assert.equal(edge.kind, 'type', `${from}: browser media contract must use type-only dependencies`);
     if (edge.specifier === null) { assert.ok(computedLoaders.has(from), `${from}: unregistered computed module load`); continue; }
       if (!edge.specifier.startsWith('.')) {
         if (from.startsWith('src/')) assert.ok(!isBuiltin(edge.specifier), `${from}: browser code imports Node builtin ${edge.specifier}`);
@@ -162,6 +174,17 @@ export function checkModuleBoundaries(root) {
     const target = path.resolve(edge.kind === 'compiled-url' ? path.join(root,'server') : path.dirname(file), edge.specifier), to = portable(path.relative(root, target));
     assert.ok(!to.startsWith('../'), `${from}: dependency escapes project: ${to}`);
     assert.ok(existsSync(target), `${from}: missing ${edge.kind} dependency: ${to}`);
+    if (from === 'src/media/contract.ts')
+      assert.ok(to.startsWith('shared/'), `${from}: browser media contract imports implementation ${to}`);
+    if (/^src\/(media|analysis)\//.test(from) && from !== 'src/media/source.ts')
+      assert.ok(to !== 'src/media/source.ts', `${from}: media implementation imports opening route ${to}`);
+    if (to === 'src/media/source.ts')
+      assert.notEqual(edge.kind, 'type', `${from}: media types belong to src/media/contract.ts`);
+    if (/^shared\/(media|color)\//.test(from) || from.startsWith('src/media/'))
+      assert.ok(!to.startsWith('shared/review/') ||
+        (from.startsWith('src/media/') && to !== 'shared/review/model.ts'), `${from}: media/color imports review-owned base contracts ${to}`);
+    if (to === 'src/media/policy/fallback-budget.ts')
+      assert.ok(from.startsWith('src/media/'), `${from}: fallback input budget belongs to media policy`);
     if (qualityInternals.has(to))
       assert.ok(qualityInternals.get(to).includes(from), `${from}: quality internal capability is private: ${to}`);
     if (to.startsWith('src/admin/quality/') && !from.startsWith('src/admin/quality/'))

@@ -1,4 +1,4 @@
-import type { ColorInfo } from '../review/model.ts';
+import type { ColorInfo } from '../color/color-info.ts';
 
 // FFmpeg AVColor* enums (libavutil/pixfmt.h), shared by container and packet paths.
 const PRIMARIES: Record<number, string> = { 1:'bt709',4:'bt470m',5:'bt470bg',6:'smpte170m',7:'smpte240m',8:'film',9:'bt2020',10:'smpte428',11:'smpte431',12:'display-p3',22:'ebu3213' };

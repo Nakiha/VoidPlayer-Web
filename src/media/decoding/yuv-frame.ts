@@ -1,6 +1,6 @@
 import { needsNativeFrameResource } from '../policy/frame-resources.ts';
 import { getColorMode } from '../policy/color-mode.ts';
-import type { DecodedFrame } from '../source.ts';
+import type { DecodedFrame } from '../contract.ts';
 import { resolveYuvColor, validateYuv } from '../../../shared/color/yuv-color.ts';
 
 /** One recycled CPU buffer per source; never shares bytes with a live frame. */

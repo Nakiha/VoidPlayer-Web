@@ -2,7 +2,8 @@ import { annotationMediaKey } from './annotation-record.ts';
 import type { AnnotationDocument } from './annotation-record.ts';
 import { drawingsValue } from './annotation.ts';
 import { regionValue, slotValue } from './model.ts';
-import type { FrameInfo, Mark, MediaInfo, Slot } from './model.ts';
+import type { FrameInfo, MediaInfo } from '../media/types.ts';
+import type { Mark, Slot } from './model.ts';
 import { randomUUID } from '../utils/uuid.ts';
 import { discussionValue } from './mark-discussion.ts';
 

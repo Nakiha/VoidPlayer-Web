@@ -4,7 +4,7 @@ import { containerFromHeader, probeContainer } from '../../src/media/policy/cont
 import { openMediaPlan } from '../../src/media/policy/media-policy.ts';
 import { MediaOpenError } from '../../shared/media/io/media-errors.ts';
 import type { MediaOpenPlan } from '../../src/media/policy/media-policy.ts';
-import type { MediaSource } from '../../src/media/source.ts';
+import type { MediaSource } from '../../src/media/contract.ts';
 
 test('container routing is byte-based for local and remote inputs, including renamed TS/FLV', async () => {
   const cases: Array<[Uint8Array, string]> = [[new Uint8Array([70,76,86,1,1,0,0,0,9]),'flv'],

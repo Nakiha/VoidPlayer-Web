@@ -1,4 +1,5 @@
-import type { Mark, MediaInfo } from './model.ts';
+import type { Mark } from './model.ts';
+import type { MediaInfo } from '../media/types.ts';
 import { evidenceWorkspaceVersion, historicalMarks } from './quality-evidence.ts';
 import type { QualityEvidenceRef } from './quality-evidence.ts';
 import { parseWorkspace } from './workspace-file.ts';

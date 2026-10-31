@@ -1,7 +1,8 @@
-import type {MediaInfo} from '../../shared/review/model.ts';
-import type {MediaSource,DecodedFrame} from './source.ts';
+import type { MediaInfoChange } from './contract.ts';
+import type {MediaInfo} from '../../shared/media/types.ts';
+import type {MediaSource,DecodedFrame} from './contract.ts';
 import {contextLog} from '../logging/log.ts';
-export type MediaInfoChange={revision:number;reason:'index'|'presented-frame'|'identity'|'cached-metadata';changed:string[];before:MediaInfo;after:MediaInfo};
+export type { MediaInfoChange } from './contract.ts';
 const equal=(a:unknown,b:unknown)=>a===b||(typeof a==='object'&&typeof b==='object'&&JSON.stringify(a)===JSON.stringify(b));
 /** Single update boundary for source metadata. Stable info identity preserves
  * catalog references; events carry detached snapshots of exactly this change. */

@@ -1,6 +1,6 @@
 // Disposable, single-job CPU executor. It never receives media URLs or decoders.
 import { renderThumbnailCanvas } from '../presentation/presenter.ts';
-import type { DecodedFrame } from '../media/source.ts';
+import type { DecodedFrame } from '../media/contract.ts';
 import { THUMB_MAX_EDGE } from '../../shared/thumbnails/contract.ts';
 import { encodeThumbnailCanvas } from './encode.ts';
 
