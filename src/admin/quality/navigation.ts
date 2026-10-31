@@ -1,4 +1,4 @@
-import { msg, th } from '../i18n.ts';
+import { msg, th } from '../../i18n.ts';
 
 const views = ['single', 'correspondence', 'vmaf', 'cambi', 'ranges', 'xpsnr'] as const;
 export type QualityView = (typeof views)[number];

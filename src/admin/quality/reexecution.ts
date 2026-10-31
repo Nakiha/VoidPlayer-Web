@@ -1,9 +1,9 @@
-import {t,th,msg} from '../i18n.ts';
-import {confirmedActor,observeIdentity} from '../services/identity.ts';
-import {QualityClient} from '../services/quality-jobs.ts';
-import {QualityReexecutionClient} from '../services/quality-reexecution.ts';
-import {reexecutionPath} from '../../shared/analysis/quality/reexecution.ts';
-import type {ReexecutionKind,ReexecutionPlan} from '../../shared/analysis/quality/reexecution.ts';
+import {t,th,msg} from '../../i18n.ts';
+import {confirmedActor,observeIdentity} from '../../services/identity.ts';
+import {QualityClient} from '../../services/quality-jobs.ts';
+import {QualityReexecutionClient} from '../../services/quality-reexecution.ts';
+import {reexecutionPath} from '../../../shared/analysis/quality/reexecution.ts';
+import type {ReexecutionKind,ReexecutionPlan} from '../../../shared/analysis/quality/reexecution.ts';
 
 /** All metric views and the task center consume the same plan/confirmation/receipt protocol. This panel
  * owns observation only. It never cancels a job when hidden or disposed. */

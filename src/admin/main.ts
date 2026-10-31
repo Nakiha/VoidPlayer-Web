@@ -1,8 +1,8 @@
 import {installTasks} from './tasks.ts';
-import { installQualityJobs } from './quality.ts';
+import { installQualityJobs } from './quality/workspace.ts';
 import { installDiscovery } from './discovery.ts';
 import { installAnalysisSettings } from './analysis.ts';
-import {installQualityResources} from './quality-resources.ts';
+import {installQualityResources} from './quality/resources.ts';
 import { requestError, rootReason } from './diagnostics.ts';
 import { apiError } from '../services/api-error.ts';
 import { mountLocalizedShell } from '../ui/localized-shell.ts';

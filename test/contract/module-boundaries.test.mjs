@@ -194,3 +194,12 @@ test('shared temporal facts and XPSNR cannot obtain contracts from VMAF', () => 
     project({ [`shared/analysis/quality/${name}.ts`]: "import type {T} from './vmaf.ts'", 'shared/analysis/quality/vmaf.ts': 'export type T=number' }, root =>
       assert.throws(() => checkModuleBoundaries(root), /temporal facts depend on another metric/));
 });
+
+test('quality admin consumers use named workspace, resource and reexecution entries', () => {
+  for (const entry of ['workspace', 'resources', 'reexecution'])
+    project({ 'src/admin/main.ts': `import './quality/${entry}.ts'`, [`src/admin/quality/${entry}.ts`]: 'export {}' }, root =>
+      assert.doesNotThrow(() => checkModuleBoundaries(root)));
+  for (const syntax of ["import type {T} from './quality/temporal.ts'", "export * from './quality/temporal.ts'", "import('./quality/temporal.ts')"])
+    project({ 'src/admin/tasks.ts': syntax, 'src/admin/quality/temporal.ts': 'export type T=number' }, root =>
+      assert.throws(() => checkModuleBoundaries(root), /quality admin implementation is private/));
+});

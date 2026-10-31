@@ -25,3 +25,9 @@
 这也约束类型、re-export、require 和字面量动态 import；旧 `vmaf/runner.ts`
 只允许兼容 Hooks 的纯类型转发。中立 `temporal-contract.ts` 不得依赖具体指标，
 XPSNR 也不得借 VMAF 取得共同合同或限制。所有权见 [质量域](quality-ownership.md)。
+
+管理端质量工作台集中在 `src/admin/quality/`。目录外只访问 `workspace.ts`、
+`resources.ts` 和任务中心复用的 `reexecution.ts`；temporal、指标面板、navigation、
+fields 和 summary 是工作台内部实现。边界负例覆盖外部类型引用、re-export 和动态加载。
+归组同步更新直接/动态导入及浏览器测试 hook 路径；发布入口仍为原 `src/admin/main.ts`，
+本次移动的模块没有 Worker 入口或资产 URL，不需要新增发布清单例外。

@@ -20,6 +20,7 @@ const qualityInternals = new Map([
   ]],
   ['server/analysis/quality/result-commands.ts', ['server/quality-application.ts', 'server/quality-service-ports.ts']],
 ]);
+const qualityAdminEntries = new Set(['workspace.ts', 'resources.ts', 'reexecution.ts']);
 export function moduleEdges(code, file) {
   const tree = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true), edges = [];
   const add = (node, kind) => { if (node && ts.isStringLiteralLike(node)) edges.push({ specifier: node.text, kind }); else if (kind === 'load') edges.push({specifier:null,kind:'computed-load'}); };
@@ -163,6 +164,8 @@ export function checkModuleBoundaries(root) {
     assert.ok(existsSync(target), `${from}: missing ${edge.kind} dependency: ${to}`);
     if (qualityInternals.has(to))
       assert.ok(qualityInternals.get(to).includes(from), `${from}: quality internal capability is private: ${to}`);
+    if (to.startsWith('src/admin/quality/') && !from.startsWith('src/admin/quality/'))
+      assert.ok(qualityAdminEntries.has(to.slice('src/admin/quality/'.length)), `${from}: quality admin implementation is private: ${to}`);
     if (from === 'server/analysis/vmaf/runner.ts' && to === 'server/analysis/quality/temporal-runner.ts')
       assert.equal(edge.kind, 'type', `${from}: compatibility hooks must remain type-only`);
     if (from === 'shared/analysis/quality/temporal-contract.ts' || from === 'shared/analysis/quality/xpsnr.ts')

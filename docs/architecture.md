@@ -144,7 +144,7 @@ permit. The child runner alone owns the shared physical execution slot. Parent a
 uncertain Worker exit retains the affected ownership.
 `range-routes.ts` exposes actor-fenced planning/submission, paged history/results,
 explicit cancellation and frozen-ID publication through the original atomic
-annotation command. `src/admin/quality-ranges.ts` only observes and opens explicit
+annotation command. `src/admin/quality/ranges.ts` only observes and opens explicit
 read-only original-frame viewers. No player/presenter state is required.
 See [bounded-quality-ranges.md](bounded-quality-ranges.md) for coverage, budget,
 crash/receipt recovery and unassessed-candidate semantics. CAMBI uses its own single-source domain; correctness does not certify performance
@@ -186,7 +186,7 @@ queueing, recovery, receipts, cancellation, result release and shutdown. Numeric
 execution, validation, pooling, evidence and publication policy remain in each
 metric service. CAMBI retains its distinct single-source/heatmap state machine
 and shares physical-owner shutdown and retained-result accounting.
-`src/admin/quality-temporal.ts` owns the common observer/draft/page fences; metric
+`src/admin/quality/temporal.ts` owns the common observer/draft/page fences; metric
 views supply their input construction, score labels and optional comparison.
 
 The domain services remain in `server/analysis/{vmaf,xpsnr,cambi}/`; request and

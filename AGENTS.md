@@ -12,7 +12,7 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 - `src/analysis/{metadata,bitstream}/` 保存浏览器分析适配、Worker 与服务；`src/ui/analysis/` 保存面板与图表，`chart-overlay.ts` 为图表覆盖层，`picture-overlay/` 为源画面宏块/QP 覆盖层；`src/session/{metadata-analysis,bitstream-analysis}.ts` 协调会话行为。
 - `src/review/` 保存评审与工作区浏览器客户端；`src/services/` 保存媒体库、连接、身份和文件客户端；`src/logging/` 保存本地诊断；面板与交互位于 `src/ui/`，管理页面位于 `src/admin/`。
 - `server/`：Node 服务，`runtime.ts` / `app.ts` 负责入口装配，`quality-application.ts` 显式创建、恢复与关闭评分应用；媒体库不通过属性读取创建评分服务；路由在 `routes/`，深度分析服务在 `analysis/bitstream/`，配置与运行入口在 `config.ts` / `runtime.ts`。共享代码统一从 `shared/` 引入，禁止服务端与浏览器层互相引用（包括类型）。
-- `shared/analysis/quality/` 保存无宿主评分与对应计划契约，`server/analysis/{quality,vmaf,xpsnr,cambi}/` 保存文件/Worker/持久任务适配，`src/analysis/quality/`、`src/admin/quality*.ts` 保存客户端与观察。支持域和迁移规则见下表，不按类名推断执行后端。
+- `shared/analysis/quality/` 保存无宿主评分与对应计划契约，`server/analysis/{quality,vmaf,xpsnr,cambi}/` 保存文件/Worker/持久任务适配，`src/analysis/quality/`、`src/admin/quality/` 保存客户端与观察。支持域和迁移规则见下表，不按类名推断执行后端。
 - `scripts/dev.ts` 同进程启动 Vite 和媒体 API；`scripts/service.mjs` 管理 macOS 用户服务；`deploy/` 为便携运行与自动用户使用说明。
 - `test/{unit,contract,media}/`：node:test，无浏览器依赖；`helpers/` 为可复用模块，顶层旧文件为兼容入口。WASM 用例在 Node worker_threads 里跑真实 core。
 - `scripts/testing/`：统一清单、构建、生命周期与报告接入；`browser/{ui,annotations,media,workspace}/` 保存领域浏览器用例，顶层 `check-*-browser.mjs` 保留兼容入口。
@@ -56,11 +56,11 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 | 源平面 PSNR / SSIM | `shared/analysis/quality/{psnr,ssim,frame-pair}.ts`；[PSNR](docs/source-plane-psnr.md)、[单帧桥](docs/source-frame-pair-psnr.md)、[SSIM](docs/source-plane-ssim.md) |
 | 前向 / 重排帧身份 | [有界前向](docs/forward-frame-quality.md)、[闭合 GOP token](docs/reordered-frame-quality.md) |
 | 媒体库与显式准备 | `server/discovery/`、`shared/media/{discovery,probe}.ts`；[发现](docs/library-discovery.md)、[严格 MP4](docs/trusted-mp4-quality.md)、[暂停原生 FLV](docs/paused-native-quality.md) |
-| 单帧任务与观察 | `server/analysis/quality/job-*.ts`、`src/analysis/quality/job-observer.ts`、`src/admin/quality.ts`；[文件适配](docs/source-library-psnr.md)、[持久任务](docs/source-psnr-jobs.md)、[GUI/Agent](docs/psnr-task-workflow.md) |
+| 单帧任务与观察 | `server/analysis/quality/job-*.ts`、`src/analysis/quality/job-observer.ts`、`src/admin/quality/workspace.ts`；[文件适配](docs/source-library-psnr.md)、[持久任务](docs/source-psnr-jobs.md)、[GUI/Agent](docs/psnr-task-workflow.md) |
 | 对应计划与区间 | `shared/analysis/quality/{correspondence,ranges}.ts`、服务端同名服务；[参考时钟](docs/reference-clock-plans.md)、[区间/聚合/归档](docs/bounded-quality-ranges.md) |
 | 空间候选与证据 | `shared/review/quality-evidence.ts`、`src/ui/quality-roi.ts`；[ROI 候选](docs/quality-roi-candidates.md)、[证据挂接](docs/annotation-psnr-evidence.md)、[只读原帧](docs/annotation-psnr-pair-view.md) |
 | WASM 评分 | [架构与支持域](docs/analysis-wasm-scoring.md)、[VMAF](docs/native-vmaf.md)、[CAMBI](docs/native-cambi.md)、[XPSNR](docs/native-xpsnr.md)、[版本比较](docs/xpsnr-comparison.md)；`Native*` 与旧 wire 名为历史兼容，不代表生产原生执行器 |
-| 所有权与持久生命周期 | `temporal-service.ts` / `quality-temporal.ts` 统一 VMAF/XPSNR 生命周期，CAMBI 保留单源策略；[所有权](docs/quality-ownership.md)、[显式重执行及存储迁移](docs/explicit-quality-reexecution.md) |
+| 所有权与持久生命周期 | `temporal-service.ts` / `src/admin/quality/temporal.ts` 统一 VMAF/XPSNR 生命周期，CAMBI 保留单源策略；[所有权](docs/quality-ownership.md)、[显式重执行及存储迁移](docs/explicit-quality-reexecution.md) |
 | 任务与资源 | `server/tasks/`、`shared/service/tasks.ts`、`server/quality-admission.ts`；[任务中心](docs/unified-task-center.md)、[资源管理](docs/quality-resources.md)；查询快照与历史字节保留分别拥有预算 |
 | HTTP Agent / 页面桥 | [HTTP 入口](docs/agent-http.md)、[渐进评分工作流](docs/agent-quality-workflow.md)、[本机 stdio 桥](docs/local-mcp-page-bridge.md) |
 | 当前支持与历史证据 | [文档导航](docs/README.md)、[阶段实测与失败](docs/quality-convergence.md)；roadmap 当前状态以 #112 为汇总，历史失败不改写 |

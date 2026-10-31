@@ -210,3 +210,16 @@ range 引用、annotation evidence 引用，再交给实际结果 owner。range 
 
 本轮净减少采用语法 token 口径，幅度很小；主要收益是协议份数减少、共同事实有中立入口、外部依赖变窄。
 目录迁移及其 import 路径修订单独审查，不把路径变化、格式或新增注释计算为实现瘦身。
+
+本机验收：`npm run build`（包含宿主/共享/独立环境检查）、
+`npm run format:check -- --base 2c1fbc2`、fast 88/88、contract 47/47 全部通过。
+真实 Node HTTP/WASM 覆盖 VMAF/XPSNR 原数值与支持域矩阵、两指标物理退出生命周期、
+任务中心，以及 ROI/有理时钟/192 帧完整序列和末帧证据。两指标的真实标注事务提交后
+故意抛错，再重启并移除私有结果，原冻结请求恢复相同 candidate/operation/ref，
+createdIds 补确认，标注 revision 保持 1，评分执行次数为 0；改 policy 仍拒绝。
+
+8 组真实浏览器 case 全部通过：VMAF 8-bit 与 XPSNR 8-bit 各 Chromium/WebKit，
+以及 WebKit XPSNR comparison、CAMBI 8-bit、Task center 和 admin。它们验证迁移后的
+质量工作台装配、观察/分页恢复、结果释放、候选和资源设置。13 个移动模块逐一与基线
+正文对照，除相对模块路径外一致；i18n scope 与测试 hook 同步迁移，目录内部访问负例通过。
+本轮没有修改播放/解码路径，也没有新增性能结论；跨平台结果仍以 CI 为准。
