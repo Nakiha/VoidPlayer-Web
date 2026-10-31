@@ -14,16 +14,10 @@ export class WasmVmafRunner extends TemporalScoringRunner<VmafInput, VmafNativeR
   assertAvailable() {
     this.components.snapshot('vmaf');
   }
-  capability() {
-    return this.describeCapability(VMAF_CAPABILITY);
-  }
+  capability() { return this.describeCapability(VMAF_CAPABILITY); }
   protected async contract(input: VmafInput): Promise<NonNullable<QualityExecutionContract['analysis']>> {
     return { component: (await this.components.verify('vmaf', true)).component, model: input.model, recipe: 'libvmaf-pixel-api-clip-v1' };
   }
-  protected componentIdentity(input: VmafInput) {
-    return { modelSha256: VMAF_MODELS[input.model].sha256 };
-  }
-  protected metricError(code: string, message: string) {
-    return new VmafError(code, message);
-  }
+  protected componentIdentity(input: VmafInput) { return { modelSha256: VMAF_MODELS[input.model].sha256 }; }
+  protected metricError(code: string, message: string) { return new VmafError(code, message); }
 }

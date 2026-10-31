@@ -4,21 +4,8 @@ import { MediaOpenError } from '../../../shared/media/io/media-errors.ts';
 import type { OpenStage } from '../../../shared/media/io/media-errors.ts';
 import type { MediaOpenProgress } from '../progress.ts';
 import { contextLog } from '../../logging/log.ts';
-import type {
-  MediaIndexClientTrace,
-  MediaIndexRecordBatch,
-  MediaIndexRecordManifest,
-} from '../../../shared/media/indexing/media-index-types.ts';
-import type {
-  FfmpegCommands,
-  FfmpegInitResult as InitResult,
-  WorkerMessage,
-  IndexBatch,
-  IndexError,
-  IndexEvent,
-  IndexInputPayload,
-  CommandsShape,
-} from './worker-protocol.ts';
+import type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest } from '../../../shared/media/indexing/media-index-types.ts';
+import type { FfmpegCommands, FfmpegInitResult as InitResult, WorkerMessage, IndexBatch, IndexError, IndexEvent, IndexInputPayload, CommandsShape } from './worker-protocol.ts';
 
 export class WorkerRpc<C extends CommandsShape<C> = FfmpegCommands> {
   onCachedAudio?: (generation: number, batch: CachedAudioBatch) => void;
@@ -34,42 +21,29 @@ export class WorkerRpc<C extends CommandsShape<C> = FfmpegCommands> {
   private indexReady = false;
   private indexBuildId?: string;
   private indexTerminal = false;
-  private workerId = randomUUID();
-  private requests: { id: number; type: string; pts?: unknown; index?: unknown }[] = [];
+  private workerId=randomUUID();
+  private requests:{id:number;type:string;pts?:unknown;index?:unknown}[]=[];
   private worker: Worker;
   private nextId = 1;
   private failure: Error | null = null;
-  private pending = new Map<
-    number,
-    { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout>; refresh?: () => void }
-  >();
+  private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout>; refresh?: () => void }>();
   private onTerminate: () => void;
-  private cleanupCallbackErrors: readonly unknown[] = Object.freeze([]);
+  private cleanupCallbackErrors:readonly unknown[]=Object.freeze([]);
   /** Direct teardown rethrows these errors. A post failure inside a settled
    * Promise executor cannot do so; its caller can inspect this bounded record. */
-  get terminationCallbackErrors(): readonly unknown[] {
-    return this.cleanupCallbackErrors;
-  }
+  get terminationCallbackErrors():readonly unknown[]{return this.cleanupCallbackErrors;}
   constructor(worker: Worker, onTerminate: () => void = () => {}, onProgress?: MediaOpenProgress) {
     this.onTerminate = onTerminate;
     this.worker = worker;
     const onMessage = (data: WorkerMessage<C>) => {
       if ('type' in data) {
-        if (data.type === 'cached-bytes') {
-          this.byteRequests.get(data.id)?.(data);
-          return;
-        }
-        if (data.type === 'cached-audio') {
-          if (!this.failure) this.onCachedAudio?.(data.generation, data.data);
-          return;
-        }
+        if (data.type === 'cached-bytes') { this.byteRequests.get(data.id)?.(data); return; }
+        if (data.type === 'cached-audio') { if (!this.failure) this.onCachedAudio?.(data.generation, data.data); return; }
         if (data.type === 'ready') {
           const entry = this.pending.get(data.id);
           if (!entry) return;
           if (data.id === this.indexRequestId) this.indexReady = true;
-          clearTimeout(entry.timer);
-          this.pending.delete(data.id);
-          entry.resolve(data.data);
+          clearTimeout(entry.timer); this.pending.delete(data.id); entry.resolve(data.data);
           return;
         }
         if (data.type === 'index-complete' || data.type === 'index-error') {
@@ -83,34 +57,25 @@ export class WorkerRpc<C extends CommandsShape<C> = FfmpegCommands> {
           return;
         }
         if (data.type === 'index-batch') {
-          if (
-            this.failure ||
-            data.id !== this.indexRequestId ||
-            this.indexTerminal ||
-            (this.indexBuildId !== undefined && data.data.buildId !== this.indexBuildId)
-          )
-            return;
+          if (this.failure || data.id !== this.indexRequestId || this.indexTerminal
+            || (this.indexBuildId !== undefined && data.data.buildId !== this.indexBuildId)) return;
           if (this.indexHandlers) this.indexHandlers.batch?.(data.data);
           else this.queuedIndexEvents.push({ type: 'index-batch', data: data.data });
           return;
         }
-        if (data.type === 'index-waiting') {
-          if (!this.failure) this.onIndexWaiting?.(data.data === true);
-          return;
-        }
+        if (data.type === 'index-waiting') { if (!this.failure) this.onIndexWaiting?.(data.data === true); return; }
         if (data.type === 'index-progress') {
           if (!this.failure && (data.id === this.indexRequestId || this.pending.has(data.id)) && !this.indexTerminal) {
             // Real scan advances keep waiting extraction RPCs alive, too.
             for (const entry of this.pending.values()) entry.refresh?.();
             const rawProgress = data.data;
-            if (typeof rawProgress.durationUs === 'number')
-              this.onIndexProgress?.({
-                durationUs: rawProgress.durationUs,
-                scannedBytes: rawProgress.scannedBytes,
-                totalBytes: rawProgress.totalBytes,
-                packets: rawProgress.packets,
-              });
-            const progress = { scannedBytes: rawProgress.scannedBytes, totalBytes: rawProgress.totalBytes, packets: rawProgress.packets };
+            if (typeof rawProgress.durationUs === 'number') this.onIndexProgress?.({
+              durationUs: rawProgress.durationUs, scannedBytes: rawProgress.scannedBytes,
+              totalBytes: rawProgress.totalBytes, packets: rawProgress.packets,
+            });
+            const progress = {
+              scannedBytes: rawProgress.scannedBytes, totalBytes: rawProgress.totalBytes, packets: rawProgress.packets,
+            };
             if (this.indexProgressHandler) this.indexProgressHandler(progress);
             else if (data.id === this.indexRequestId) this.queuedIndexProgress = progress;
           }
@@ -118,10 +83,7 @@ export class WorkerRpc<C extends CommandsShape<C> = FfmpegCommands> {
         }
         if (data.type === 'progress') {
           const entry = this.pending.get(data.id);
-          if (!this.failure && entry && data.progress) {
-            entry.refresh?.();
-            onProgress?.(data.progress);
-          }
+          if (!this.failure && entry && data.progress) { entry.refresh?.(); onProgress?.(data.progress); }
           return;
         }
         return;
@@ -134,43 +96,31 @@ export class WorkerRpc<C extends CommandsShape<C> = FfmpegCommands> {
         closeLateFrame(payload);
         return;
       }
-      if (data.ok && data.diagnostics?.length)
-        contextLog().info('media', '原生解码路径探测', { workerId: this.workerId, requestId: id, decisions: data.diagnostics });
+      if (data.ok && data.diagnostics?.length) contextLog().info('media', '原生解码路径探测', { workerId: this.workerId, requestId: id, decisions: data.diagnostics });
       clearTimeout(entry.timer);
       this.pending.delete(id);
       if (ok) entry.resolve(payload);
       else {
-        const failure = data.stage
-          ? new MediaOpenError(data.stage, data.error ?? '解码器错误', data.code)
-          : new Error(data.error ?? 'WASM 解码器错误');
+        const failure = data.stage ? new MediaOpenError(data.stage, data.error ?? '解码器错误', data.code) : new Error(data.error ?? 'WASM 解码器错误');
         if (data.stack) failure.stack += `\nWorker: ${data.stack}`;
-        contextLog().warn('media', '解码 worker 请求失败', {
-          workerId: this.workerId,
-          requestId: id,
-          recentRequests: this.requests,
-          error: failure,
-        });
+        contextLog().warn('media', '解码 worker 请求失败', {workerId:this.workerId,requestId:id,recentRequests:this.requests,error:failure});
         entry.reject(failure);
       }
     };
     const fail = (message: string) => this.terminate(new Error(`WASM 解码 worker 异常：${message}`));
     if (typeof worker.addEventListener === 'function') {
       worker.addEventListener('message', (event: MessageEvent<WorkerMessage<C>>) => onMessage(event.data));
-      worker.addEventListener('error', (event) => fail(event.message ?? 'unknown'));
+      worker.addEventListener('error', event => fail(event.message ?? 'unknown'));
       worker.addEventListener('messageerror', () => fail('Invalid worker reply (反序列化失败)'));
     } else {
       const nodeWorker = worker as unknown as { on(type: string, listener: (...args: any[]) => void): void };
       nodeWorker.on('message', onMessage);
-      nodeWorker.on('error', (error) => fail(error instanceof Error ? error.message : String(error)));
+      nodeWorker.on('error', error => fail(error instanceof Error ? error.message : String(error)));
       nodeWorker.on('messageerror', () => fail('Invalid worker reply (反序列化失败)'));
-      nodeWorker.on('exit', (code) => fail(`exit ${code}`));
+      nodeWorker.on('exit', code => fail(`exit ${code}`));
     }
   }
-  setIndexHandlers(handlers?: {
-    batch?: (data: IndexBatch) => void;
-    complete?: (data: InitResult) => void;
-    error?: (data: IndexError) => void;
-  }) {
+  setIndexHandlers(handlers?: { batch?: (data: IndexBatch) => void; complete?: (data: InitResult) => void; error?: (data: IndexError) => void }) {
     this.indexHandlers = handlers;
     if (!handlers) return;
     const queued = this.queuedIndexEvents.splice(0);
@@ -219,90 +169,41 @@ export class WorkerRpc<C extends CommandsShape<C> = FfmpegCommands> {
   }
   private pushIndexInput(input: IndexInputPayload, transfer: Transferable[] = []) {
     if (this.failure || this.indexTerminal || this.indexRequestId === undefined) return;
-    try {
-      this.worker.postMessage({ id: this.indexRequestId, type: 'index-input', ...input }, transfer);
-    } catch (error) {
-      this.reportIndexError(error instanceof Error ? error.message : String(error));
-    }
+    try { this.worker.postMessage({ id: this.indexRequestId, type: 'index-input', ...input }, transfer); }
+    catch (error) { this.reportIndexError(error instanceof Error ? error.message : String(error)); }
   }
-  requestCachedBytes(offset: number, length: number, ctx?: number) {
-    return this.requestAudioCache(offset, length, ctx).then((reply) => reply?.data);
-  }
-  requestCachedWindows(ctx?: number) {
-    return this.requestAudioCache(0, 0, ctx, true).then((reply) => reply?.windows ?? []);
-  }
-  private requestAudioCache(
-    offset: number,
-    length: number,
-    ctx?: number,
-    windows = false,
-  ): Promise<{ data?: Uint8Array; windows?: CachedWindow[] } | undefined> {
+  requestCachedBytes(offset: number, length: number, ctx?: number) { return this.requestAudioCache(offset, length, ctx).then(reply => reply?.data); }
+  requestCachedWindows(ctx?: number) { return this.requestAudioCache(0, 0, ctx, true).then(reply => reply?.windows ?? []); }
+  private requestAudioCache(offset: number, length: number, ctx?: number, windows = false): Promise<{ data?: Uint8Array; windows?: CachedWindow[] } | undefined> {
     if (this.failure || this.byteRequests.size >= 8) return Promise.resolve(undefined);
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       const id = this.nextByteId--;
-      const finish = (reply?: { data?: Uint8Array; windows?: CachedWindow[] }) => {
-        clearTimeout(timer);
-        this.byteRequests.delete(id);
-        resolve(reply);
-      };
+      const finish = (reply?: { data?: Uint8Array; windows?: CachedWindow[] }) => { clearTimeout(timer); this.byteRequests.delete(id); resolve(reply); };
       const timer = setTimeout(() => finish(), 1000);
       this.byteRequests.set(id, finish);
-      try {
-        this.worker.postMessage({ id, type: 'peek-audio', offset, length, ctx, windows });
-      } catch {
-        finish();
-      }
+      try { this.worker.postMessage({ id, type: 'peek-audio', offset, length, ctx, windows }); } catch { finish(); }
     });
   }
   setCachedAudioObservation(ctx: number, enabled: boolean) {
-    if (!this.failure)
-      try {
-        this.worker.postMessage({ id: 0, type: 'observe-audio', ctx, enabled });
-      } catch {}
+    if (!this.failure) try { this.worker.postMessage({ id: 0, type: 'observe-audio', ctx, enabled }); } catch {}
   }
   /** Optional cache observation has no pending entry, timeout, or video-worker failure path. */
   requestCachedAudio(pts: number, generation: number) {
     if (this.failure) return;
-    try {
-      this.worker.postMessage({ id: 0, type: 'cached-audio', pts, generation });
-    } catch {}
+    try { this.worker.postMessage({ id: 0, type: 'cached-audio', pts, generation }); } catch {}
   }
-  call<K extends keyof C & string>(
-    type: K,
-    payload: NoInfer<C[K]['request']>,
-    transfer: Transferable[] = [],
-    timeoutMs = 15000,
-    idleTimeout = false,
-  ): Promise<C[K]['response']> {
+  call<K extends keyof C & string>(type: K, payload: NoInfer<C[K]['request']>, transfer: Transferable[] = [], timeoutMs = 15000, idleTimeout = false): Promise<C[K]['response']> {
     if (this.failure) return Promise.reject(this.failure);
     const id = this.nextId++;
     if (type === 'init') this.indexRequestId = id;
-    this.requests.push({
-      id,
-      type,
-      pts: 'pts' in payload ? payload.pts : undefined,
-      index: 'index' in payload ? payload.index : undefined,
-    });
-    if (this.requests.length > 16) this.requests.shift();
+    this.requests.push({id,type,pts:'pts' in payload ? payload.pts : undefined,index:'index' in payload ? payload.index : undefined});if(this.requests.length>16)this.requests.shift();
     return new Promise<C[K]['response']>((resolve, reject) => {
       const expire = () => this.terminate(new Error(`WASM ${type} 超时（${timeoutMs} ms）`));
-      const entry = {
-        resolve: resolve as (v: unknown) => void,
-        reject,
-        timer: setTimeout(expire, timeoutMs),
-        refresh: idleTimeout
-          ? () => {
-              clearTimeout(entry.timer);
-              entry.timer = setTimeout(expire, timeoutMs);
-            }
-          : undefined,
-      };
+      const entry = { resolve: resolve as (v: unknown) => void, reject, timer: setTimeout(expire, timeoutMs),
+        refresh: idleTimeout ? () => { clearTimeout(entry.timer); entry.timer = setTimeout(expire, timeoutMs); } : undefined };
       this.pending.set(id, entry);
-      try {
-        this.worker.postMessage({ id, type, ...payload }, transfer);
-      } catch (error) {
-        this.terminate(error instanceof Error ? error : new Error(String(error)));
-      }
+      try { this.worker.postMessage({ id, type, ...payload }, transfer); }
+      catch (error) { this.terminate(error instanceof Error ? error : new Error(String(error))); }
     });
   }
   terminate(error = new Error('WASM worker 已释放。'), reportIndexFailure = true) {
@@ -310,33 +211,21 @@ export class WorkerRpc<C extends CommandsShape<C> = FfmpegCommands> {
     const notifyIndex = reportIndexFailure && this.indexReady && !this.indexTerminal;
     this.failure = error;
     for (const finish of this.byteRequests.values()) finish();
-    const callbackErrors: unknown[] = [];
+    const callbackErrors:unknown[]=[];
     if (notifyIndex) {
       this.indexTerminal = true;
       this.queuedIndexProgress = undefined;
       const indexError = { error: error.message, stage: 'resource' as const };
-      if (this.indexHandlers) {
-        try {
-          this.indexHandlers.error?.(indexError);
-        } catch (error) {
-          callbackErrors.push(error);
-        }
-      } else this.queuedIndexEvents.push({ type: 'index-error', data: indexError });
+      if (this.indexHandlers) {try {this.indexHandlers.error?.(indexError);}catch(error){callbackErrors.push(error);}}
+      else this.queuedIndexEvents.push({ type: 'index-error', data: indexError });
     }
-    try {
-      this.onTerminate();
-    } catch (error) {
-      callbackErrors.push(error);
-    }
-    this.cleanupCallbackErrors = Object.freeze(callbackErrors.slice());
-    for (const entry of this.pending.values()) {
-      clearTimeout(entry.timer);
-      entry.reject(error);
-    }
+    try {this.onTerminate();}catch(error){callbackErrors.push(error);}
+    this.cleanupCallbackErrors=Object.freeze(callbackErrors.slice());
+    for (const entry of this.pending.values()) { clearTimeout(entry.timer); entry.reject(error); }
     this.pending.clear();
     this.worker.terminate();
-    if (callbackErrors.length === 1) throw callbackErrors[0];
-    if (callbackErrors.length > 1) throw new AggregateError(callbackErrors, 'Worker cleanup callbacks failed.');
+    if(callbackErrors.length===1)throw callbackErrors[0];
+    if(callbackErrors.length>1)throw new AggregateError(callbackErrors,'Worker cleanup callbacks failed.');
   }
 }
 

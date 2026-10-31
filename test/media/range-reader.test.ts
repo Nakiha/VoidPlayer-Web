@@ -6,63 +6,34 @@ import { RangeReader } from '../../shared/media/io/range-reader.ts';
 import { createRangeBridge } from '../../src/media/io/range-bridge.ts';
 import { WorkerRpc } from '../../src/media/decoding/ffmpeg-media.ts';
 
-test('Range cache is bounded, pinned to a file version and validates response bodies', async (t) => {
-  let requests = 0,
-    invalid = '',
-    cancelled = 0;
+test('Range cache is bounded, pinned to a file version and validates response bodies', async t => {
+  let requests = 0, invalid = '', cancelled = 0;
   t.mock.method(globalThis, 'fetch', async (_url: unknown, options: RequestInit) => {
     requests++;
     const range = (options.headers as Record<string, string>).Range;
-    const [, a, b] = /^bytes=(\d+)-(\d+)$/.exec(range)!,
-      start = +a,
-      end = +b;
-    if (invalid === 'whole')
-      return new Response(
-        new ReadableStream({
-          cancel() {
-            cancelled++;
-          },
-        }),
-        { status: 200 },
-      );
+    const [, a, b] = /^bytes=(\d+)-(\d+)$/.exec(range)!, start = +a, end = +b;
+    if (invalid === 'whole') return new Response(new ReadableStream({ cancel() { cancelled++; } }), { status: 200 });
     const length = end - start + 1 + (invalid === 'overflow' ? 1 : invalid === 'short' ? -1 : 0);
-    return new Response(new Uint8Array(length).fill(start / 262144), {
-      status: 206,
-      headers: { 'Content-Range': `bytes ${start}-${end}/16777216`, ETag: invalid === 'version' ? '"new"' : '"old"' },
-    });
+    return new Response(new Uint8Array(length).fill(start / 262144), { status: 206,
+      headers: { 'Content-Range': `bytes ${start}-${end}/16777216`, ETag: invalid === 'version' ? '"new"' : '"old"' } });
   });
   const reader = new RangeReader({ url: 'https://test.invalid/video', size: 16 * 1024 ** 2 });
   try {
-    await reader.read(0, 10);
-    await reader.read(10, 10);
-    assert.equal(requests, 1);
+    await reader.read(0, 10); await reader.read(10, 10); assert.equal(requests, 1);
     for (let i = 1; i <= 33; i++) assert.equal((await reader.read(i * 262144, 1))[0], i);
-    const before = requests;
-    await reader.read(0, 1);
-    assert.equal(requests, before + 1, 'evicts beyond 8 MiB');
+    const before = requests; await reader.read(0, 1); assert.equal(requests, before + 1, 'evicts beyond 8 MiB');
     for (const mode of ['whole', 'version', 'overflow', 'short']) {
-      invalid = mode;
-      await assert.rejects(reader.read(15 * 1024 ** 2, 1));
+      invalid = mode; await assert.rejects(reader.read(15 * 1024 ** 2, 1));
     }
     assert.equal(cancelled, 1, '200 body cancelled before any read');
-  } finally {
-    reader.close();
-  }
+  } finally { reader.close(); }
 });
 
-test('Synchronous FFmpeg AVIO requests bounded chunks through the async bridge and preserves IO errors', { timeout: 30000 }, async (t) => {
-  const { mkdtemp, rm } = await import('node:fs/promises'),
-    { tmpdir } = await import('node:os'),
-    { join } = await import('node:path'),
-    { execFileSync } = await import('node:child_process');
-  const directory = await mkdtemp(join(tmpdir(), 'vp-residual-avio-'));
-  t.after(() => rm(directory, { recursive: true, force: true }));
-  const file = join(directory, 'ffv1.avi');
-  execFileSync('ffmpeg', ['-y', '-v', 'error', '-i', 'fixtures/video/ffv1_yuv422p_8bit.mkv', '-an', '-c:v', 'copy', '-f', 'avi', file]);
-  const bytes = await readFile(file);
+test('Synchronous FFmpeg AVIO requests bounded chunks through the async bridge and preserves IO errors', { timeout: 30000 }, async t => {
+  const {mkdtemp,rm}=await import('node:fs/promises'),{tmpdir}=await import('node:os'),{join}=await import('node:path'),{execFileSync}=await import('node:child_process');const directory=await mkdtemp(join(tmpdir(),'vp-residual-avio-'));t.after(()=>rm(directory,{recursive:true,force:true}));const file=join(directory,'ffv1.avi');execFileSync('ffmpeg',['-y','-v','error','-i','fixtures/video/ffv1_yuv422p_8bit.mkv','-an','-c:v','copy','-f','avi',file]);
+  const bytes=await readFile(file);
   const core = new URL('../../public/vendor/voidplayer-core/', import.meta.url);
-  let requests = 0,
-    fail = false;
+  let requests = 0, fail = false;
   t.mock.method(globalThis, 'fetch', async (_url: unknown, options: RequestInit) => {
     requests++;
     if (fail) return new Response(null, { status: 503 });
@@ -76,25 +47,14 @@ test('Synchronous FFmpeg AVIO requests bounded chunks through the async bridge a
     const bridge = createRangeBridge(worker as unknown as globalThis.Worker, 'https://test.invalid/video', bytes.length);
     const rpc = new WorkerRpc(worker as unknown as globalThis.Worker, () => bridge.close());
     try {
-      const pending = rpc.call('init', {
-        name: 'test',
-        glueURL: new URL('voidplayer-core.js', core).href,
-        wasmBinary: await readFile(new URL('voidplayer-core.wasm', core)),
-        range: { size: bytes.length, shared: bridge.shared },
+      const pending = rpc.call('init', { name: 'test',
+        glueURL: new URL('voidplayer-core.js', core).href, wasmBinary: await readFile(new URL('voidplayer-core.wasm', core)), range: { size: bytes.length, shared: bridge.shared },
       });
-      if (failing) {
-        await assert.rejects(pending, /503/);
-        continue;
-      }
-      const init = await pending;
-      assert.equal(init.ioMode, 'http-range');
-      assert.ok(init.ticks.length > 1);
+      if (failing) { await assert.rejects(pending, /503/); continue; }
+      const init = await pending; assert.equal(init.ioMode, 'http-range'); assert.ok(init.ticks.length > 1);
       const frame = await rpc.call('extract', { ctx: init.ctx, index: 1 });
-      assert.equal(frame.pixels.byteLength, 320 * 180 * 2);
-      assert.ok(new Set(new Uint8Array(frame.pixels).subarray(0, 4096)).size > 2);
-    } finally {
-      rpc.terminate();
-    }
+      assert.equal(frame.pixels.byteLength, 320 * 180 * 2); assert.ok(new Set(new Uint8Array(frame.pixels).subarray(0, 4096)).size > 2);
+    } finally { rpc.terminate(); }
   }
   assert.ok(requests >= 2);
 });

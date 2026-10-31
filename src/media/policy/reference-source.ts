@@ -13,25 +13,18 @@ export function offerVerifiedFrame(source: MediaSource, firstFrame: DecodedFrame
   const release = () => {
     const frame = pending;
     pending = undefined;
-    try {
-      frame?.close();
-    } catch {}
+    try { frame?.close(); } catch {}
   };
-  source.frameAt = async (ptsUs) => {
+  source.frameAt = async ptsUs => {
     if (pending) {
       const frame = pending;
       pending = undefined;
       if (ptsUs === 0) return frame;
-      try {
-        frame.close();
-      } catch {}
+      try { frame.close(); } catch {}
     }
     return frameAt(ptsUs);
   };
-  source.dispose = () => {
-    release();
-    dispose();
-  };
+  source.dispose = () => { release(); dispose(); };
   return source;
 }
 
@@ -41,37 +34,17 @@ export function referenceSource(source: MediaSource): MediaSource {
     if (frame.kind !== 'yuv' || !resolveYuvColor(frame.description).supported) {
       const hdr = isHdrTransfer(frame.description.color.transfer) || isHdrTransfer(source.info.color?.transfer);
       frame.close();
-      throw new MediaOpenError(
-        'decode',
-        hdr
-          ? '自有色彩需要标签明确的高位深 BT.2100 原始平面，无法处理此 HDR 资源。请尝试“浏览器色彩”。'
-          : '自有色彩无法处理此视频的像素格式或颜色信息。请在“色彩与解码”中切换为“浏览器色彩”后重试。',
-        hdr ? 'reference-hdr-unsupported' : 'reference-format-unsupported',
-      );
+      throw new MediaOpenError('decode', hdr
+        ? '自有色彩需要标签明确的高位深 BT.2100 原始平面，无法处理此 HDR 资源。请尝试“浏览器色彩”。'
+        : '自有色彩无法处理此视频的像素格式或颜色信息。请在“色彩与解码”中切换为“浏览器色彩”后重试。', hdr ? 'reference-hdr-unsupported' : 'reference-format-unsupported');
     }
     return frame;
   };
-  const at = source.frameAt.bind(source),
-    after = source.framesAfter.bind(source),
-    from = source.framesFrom.bind(source),
-    following = source.framesFollowing?.bind(source);
-  source.frameAt = async (pts) => verify(await at(pts));
-  source.framesAfter = async (pts, count) => {
-    const frames = await after(pts, count);
-    try {
-      return frames.map(verify);
-    } catch (error) {
-      frames.forEach((f) => f.close());
-      throw error;
-    }
-  };
-  source.framesFrom = async function* (pts) {
-    for await (const frame of from(pts)) yield verify(frame);
-  };
-  if (following)
-    source.framesFollowing = async function* (pts) {
-      for await (const frame of following(pts)) yield verify(frame);
-    };
+  const at = source.frameAt.bind(source), after = source.framesAfter.bind(source), from = source.framesFrom.bind(source), following = source.framesFollowing?.bind(source);
+  source.frameAt = async pts => verify(await at(pts));
+  source.framesAfter = async (pts, count) => { const frames = await after(pts, count); try { return frames.map(verify); } catch (error) { frames.forEach(f => f.close()); throw error; } };
+  source.framesFrom = async function* (pts) { for await (const frame of from(pts)) yield verify(frame); };
+  if (following) source.framesFollowing = async function* (pts) { for await (const frame of following(pts)) yield verify(frame); };
   return source;
 }
 

@@ -19,16 +19,10 @@ export class WasmXpsnrRunner extends TemporalScoringRunner<XpsnrInput, XpsnrNati
       throw new AdminError(503, (error as Error).message, 'component-unavailable');
     }
   }
-  capability() {
-    return this.describeCapability(XPSNR_CAPABILITY);
-  }
+  capability() { return this.describeCapability(XPSNR_CAPABILITY); }
   protected async contract(): Promise<NonNullable<QualityExecutionContract['analysis']>> {
     return { component: (await this.components.verify('xpsnr', true)).component, recipe: 'xpsnr-pixel-api-clip-v1' };
   }
-  protected componentIdentity(input: XpsnrInput) {
-    return { filterSha256: XPSNR_FILTER_SHA256 };
-  }
-  protected metricError(code: string, message: string) {
-    return new XpsnrError(code, message);
-  }
+  protected componentIdentity(input: XpsnrInput) { return { filterSha256: XPSNR_FILTER_SHA256 }; }
+  protected metricError(code: string, message: string) { return new XpsnrError(code, message); }
 }

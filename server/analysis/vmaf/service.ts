@@ -1,14 +1,18 @@
-import { TemporalScoringService, scoringDigest as digest, scoringNow as now } from '../quality/temporal-service.ts';
-import { settleScoringReservations } from '../quality/result-retention.ts';
-import type { QualityExecutionContract } from '../../../shared/analysis/quality/reexecution.ts';
-import { randomUUID } from 'node:crypto';
-import { AdminError } from '../../admin-error.ts';
-import type { Actor } from '../../identity.ts';
-import type { CorrespondenceService } from '../quality/correspondence-service.ts';
-import { qualityEvidenceValue } from '../../../shared/review/quality-evidence.ts';
-import type { QualityEvidenceRef } from '../../../shared/review/quality-evidence.ts';
-import type { QualityJobResult } from '../../../shared/analysis/quality/jobs.ts';
-import type { AnnotationStore } from '../../annotations.ts';
+import {
+  TemporalScoringService,
+  scoringDigest as digest,
+  scoringNow as now,
+} from "../quality/temporal-service.ts";
+import { settleScoringReservations } from "../quality/result-retention.ts";
+import type { QualityExecutionContract } from "../../../shared/analysis/quality/reexecution.ts";
+import { randomUUID } from "node:crypto";
+import { AdminError } from "../../admin-error.ts";
+import type { Actor } from "../../identity.ts";
+import type { CorrespondenceService } from "../quality/correspondence-service.ts";
+import { qualityEvidenceValue } from "../../../shared/review/quality-evidence.ts";
+import type { QualityEvidenceRef } from "../../../shared/review/quality-evidence.ts";
+import type { QualityJobResult } from "../../../shared/analysis/quality/jobs.ts";
+import type { AnnotationStore } from "../../annotations.ts";
 import {
   vmafInput,
   canonicalJson,
@@ -16,7 +20,7 @@ import {
   VMAF_LIMITS,
   terminalVmaf,
   VmafError,
-} from '../../../shared/analysis/quality/vmaf.ts';
+} from "../../../shared/analysis/quality/vmaf.ts";
 import type {
   VmafInput,
   VmafJob,
@@ -24,26 +28,37 @@ import type {
   VmafPlanSnapshot,
   VmafPrepared,
   VmafAssociation,
-} from '../../../shared/analysis/quality/vmaf.ts';
-import type { WasmVmafRunner } from './wasm-runner.ts';
-
+} from "../../../shared/analysis/quality/vmaf.ts";
+import type { WasmVmafRunner } from "./wasm-runner.ts";
 type Publication = {
   policy: CandidatePolicy;
-  selected: { index: number; id: string; operationId: string; ref: QualityEvidenceRef }[];
+  selected: {
+    index: number;
+    id: string;
+    operationId: string;
+    ref: QualityEvidenceRef;
+  }[];
   createdIds: string[];
 };
 type CandidatePolicy = {
   space: string;
-  side: 'reference' | 'distorted';
+  side: "reference" | "distorted";
   maxScore: number;
   limit: number;
   minFrameDistance: number;
   text: string;
   severity: number;
 };
-export class NativeVmafService extends TemporalScoringService<'vmaf', VmafInput> {
-  constructor(file: string, runner: WasmVmafRunner, plans: CorrespondenceService) {
-    super(file, runner, plans, 'vmaf', VMAF_LIMITS);
+export class NativeVmafService extends TemporalScoringService<
+  "vmaf",
+  VmafInput
+> {
+  constructor(
+    file: string,
+    runner: WasmVmafRunner,
+    plans: CorrespondenceService,
+  ) {
+    super(file, runner, plans, "vmaf", VMAF_LIMITS);
     this.runner = runner;
   }
   protected metricError(code: string, message: string) {
@@ -54,47 +69,80 @@ export class NativeVmafService extends TemporalScoringService<'vmaf', VmafInput>
     try {
       return vmafInput(value);
     } catch (error) {
-      throw new AdminError(400, (error as Error).message, 'invalid-vmaf-request');
+      throw new AdminError(
+        400,
+        (error as Error).message,
+        "invalid-vmaf-request",
+      );
     }
   }
-  private cachedCapability: Awaited<ReturnType<WasmVmafRunner['capability']>> | null = null;
+  private cachedCapability: Awaited<
+    ReturnType<WasmVmafRunner["capability"]>
+  > | null = null;
   private capabilityCheckedAt = 0;
   get descriptor() {
-    return this.cachedCapability ? { ...this.cachedCapability, checkedAt: this.capabilityCheckedAt } : null;
+    return this.cachedCapability
+      ? { ...this.cachedCapability, checkedAt: this.capabilityCheckedAt }
+      : null;
   }
   async capability() {
     const value = await this.runner.capability();
-    if (value.reason === 'quality-busy' && this.cachedCapability) return { ...this.descriptor!, verification: 'deferred-admission-busy' };
+    if (value.reason === "quality-busy" && this.cachedCapability)
+      return { ...this.descriptor!, verification: "deferred-admission-busy" };
     this.cachedCapability = value;
     this.capabilityCheckedAt = now();
-    return { ...this.descriptor!, verification: 'checked' };
+    return { ...this.descriptor!, verification: "checked" };
   }
   async preflight(value: unknown, actor: string, signal: AbortSignal) {
     this.available();
     const input = this.parse(value);
     return this.runner.preflight(input, this.snapshot(input, actor), signal);
   }
-  async reexecutionPreflight(id: string, actor: string, expected: QualityExecutionContract, signal: AbortSignal) {
+  async reexecutionPreflight(
+    id: string,
+    actor: string,
+    expected: QualityExecutionContract,
+    signal: AbortSignal,
+  ) {
     await this.ready;
     this.available();
     const job = this.get(id, actor);
     const stored = this.frozenSnapshot(id, actor);
     const current = this.snapshot(job.input, actor);
     if (canonicalJson(stored) !== canonicalJson(current))
-      throw new AdminError(409, 'Frozen C plan changed; use a new intent.', 'vmaf-plan-changed');
-    return this.runner.reexecutionPreflight(job.input, stored, expected, signal);
+      throw new AdminError(
+        409,
+        "Frozen C plan changed; use a new intent.",
+        "vmaf-plan-changed",
+      );
+    return this.runner.reexecutionPreflight(
+      job.input,
+      stored,
+      expected,
+      signal,
+    );
   }
-  protected validatePrepared(value: VmafPrepared, snapshot: VmafPlanSnapshot, input: VmafInput) {
+  protected validatePrepared(
+    value: VmafPrepared,
+    snapshot: VmafPlanSnapshot,
+    input: VmafInput) {
     if (
       !value ||
       value.pairs.length < 2 ||
       value.pairs.length > VMAF_LIMITS.frames ||
       canonicalJson(value.sequence.pairs) !==
-        canonicalJson([...snapshot.value.rangePlan!.input.pairs].sort((a, b) => a.reference.sourcePtsUs - b.reference.sourcePtsUs)) ||
+        canonicalJson(
+          [...snapshot.value.rangePlan!.input.pairs].sort(
+            (a, b) => a.reference.sourcePtsUs - b.reference.sourcePtsUs,
+          ),
+        ) ||
       value.sequence.cadenceUs !== input.cadenceUs ||
       canonicalJson(value.sequence.cadence) !== canonicalJson(input.cadence)
     )
-      throw new VmafError('worker-result-invalid', 'Prepared sequence identity changed');
+      throw new VmafError(
+        "worker-result-invalid",
+        "Prepared sequence identity changed",
+      );
     if (
       value.pairs.length !== value.sequence.pairs.length ||
       value.geometry.width < VMAF_LIMITS.minDimension ||
@@ -103,10 +151,18 @@ export class NativeVmafService extends TemporalScoringService<'vmaf', VmafInput>
       value.geometry.height > VMAF_LIMITS.height ||
       ![8, 10].includes(value.geometry.bitDepth) ||
       value.raw.bytes !==
-        ((value.geometry.width * value.geometry.height * 3) / 2) * (value.geometry.bitDepth === 8 ? 1 : 2) * value.pairs.length * 2 ||
-      [value.raw.referenceSha256, value.raw.distortedSha256].some((h) => !/^[a-f0-9]{64}$/.test(h))
+        ((value.geometry.width * value.geometry.height * 3) / 2) *
+          (value.geometry.bitDepth === 8 ? 1 : 2) *
+          value.pairs.length *
+          2 ||
+      [value.raw.referenceSha256, value.raw.distortedSha256].some(
+        (h) => !/^[a-f0-9]{64}$/.test(h),
+      )
     )
-      throw new VmafError('worker-result-invalid', 'Prepared raw frame count/geometry differs');
+      throw new VmafError(
+        "worker-result-invalid",
+        "Prepared raw frame count/geometry differs",
+      );
     for (const [index, pair] of value.pairs.entries()) {
       qualityEvidenceValue(pair);
       const expected = value.sequence.pairs[index];
@@ -115,22 +171,28 @@ export class NativeVmafService extends TemporalScoringService<'vmaf', VmafInput>
         pair.result.metric.bitDepth !== value.geometry.bitDepth ||
         !!pair.result.ssim !== input.metrics.ssim
       )
-        throw new VmafError('worker-result-invalid', 'Prepared metric recipe changed');
-      for (const side of ['reference', 'distorted'] as const) {
+        throw new VmafError(
+          "worker-result-invalid",
+          "Prepared metric recipe changed",
+        );
+      for (const side of ["reference", "distorted"] as const) {
         const p = pair.result.provenance[side],
           e = expected[side];
         for (const field of [
-          'mediaId',
-          'mediaVersion',
-          'size',
-          'indexIdentity',
-          'indexBuildId',
-          'sourcePtsUs',
-          'picture',
-          'decode',
+          "mediaId",
+          "mediaVersion",
+          "size",
+          "indexIdentity",
+          "indexBuildId",
+          "sourcePtsUs",
+          "picture",
+          "decode",
         ] as const)
           if (canonicalJson(p[field]) !== canonicalJson(e[field]))
-            throw new VmafError('worker-result-invalid', 'Prepared source/picture identity changed');
+            throw new VmafError(
+              "worker-result-invalid",
+              "Prepared source/picture identity changed",
+            );
       }
     }
     const budget = snapshot.value.rangePlan!.input.budget;
@@ -140,9 +202,18 @@ export class NativeVmafService extends TemporalScoringService<'vmaf', VmafInput>
       value.work.outputFrames > budget.maxOutputFrames ||
       value.work.inputBytes > budget.maxInputBytes
     )
-      throw new VmafError('worker-result-invalid', 'Prepared work exceeds frozen total budget');
-    if (value.raw.bytes > input.budget.maxRawBytes || Buffer.byteLength(JSON.stringify(value)) > VMAF_LIMITS.resultBytes)
-      throw new VmafError('budget-exceeded', 'Prepared sequence result budget exceeded');
+      throw new VmafError(
+        "worker-result-invalid",
+        "Prepared work exceeds frozen total budget",
+      );
+    if (
+      value.raw.bytes > input.budget.maxRawBytes ||
+      Buffer.byteLength(JSON.stringify(value)) > VMAF_LIMITS.resultBytes
+    )
+      throw new VmafError(
+        "budget-exceeded",
+        "Prepared sequence result budget exceeded",
+      );
   }
   summary(id: string, actor: string) {
     const j = this.get(id, actor),
@@ -163,11 +234,11 @@ export class NativeVmafService extends TemporalScoringService<'vmaf', VmafInput>
         })),
       },
       coverage: {
-        scope: 'selected-continuous-clip-not-whole-file',
+        scope: "selected-continuous-clip-not-whole-file",
         targetFrames: r.prepared.pairs.length,
         preparedFrames: r.prepared.pairs.length,
         vmafScoredFrames: r.vmaf?.frames.length ?? 0,
-        vmaf: r.vmaf ? 'complete-selected-clip' : 'unscored',
+        vmaf: r.vmaf ? "complete-selected-clip" : "unscored",
       },
       raw: r.prepared.raw,
       work: r.prepared.work,
@@ -177,41 +248,83 @@ export class NativeVmafService extends TemporalScoringService<'vmaf', VmafInput>
       framesUrl: `/api/quality/vmaf/jobs/${id}/frames`,
     };
   }
-  frames(id: string, actor: string, after = 0, limit: number = VMAF_LIMITS.page) {
-    if (!Number.isSafeInteger(after) || after < 0 || !Number.isInteger(limit) || limit < 1 || limit > VMAF_LIMITS.page)
-      throw new AdminError(400, 'Invalid VMAF frame page.', 'invalid-cursor');
+  frames(
+    id: string,
+    actor: string,
+    after = 0,
+    limit: number = VMAF_LIMITS.page,
+  ) {
+    if (
+      !Number.isSafeInteger(after) ||
+      after < 0 ||
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > VMAF_LIMITS.page
+    )
+      throw new AdminError(400, "Invalid VMAF frame page.", "invalid-cursor");
     const r = this.result(id, actor),
       indices = r.prepared.pairs.map((_, i) => i).filter((i) => i >= after);
     return {
-      entries: indices
-        .slice(0, limit)
-        .map((index) => ({
-          index,
-          score: r.vmaf?.frames[index]?.score ?? null,
-          pair: r.prepared.pairs[index],
-          ref: this.ref(id, actor, index, 'reference'),
-        })),
+      entries: indices.slice(0, limit).map((index) => ({
+        index,
+        score: r.vmaf?.frames[index]?.score ?? null,
+        pair: r.prepared.pairs[index],
+        ref: this.ref(id, actor, index, "reference"),
+      })),
       next: indices.length > limit ? indices[limit] : null,
     };
   }
-  private ref(id: string, actor: string, index: number, side: 'reference' | 'distorted'): QualityEvidenceRef {
+  private ref(
+    id: string,
+    actor: string,
+    index: number,
+    side: "reference" | "distorted",
+  ): QualityEvidenceRef {
     const j = this.get(id, actor);
-    if (!j.attemptId || !j.resultDigest) throw new AdminError(409, 'Completed companion unavailable.', 'vmaf-result-unavailable');
-    return { jobId: `${id}-f${index}`, attemptId: j.attemptId, digest: j.resultDigest, side };
+    if (!j.attemptId || !j.resultDigest)
+      throw new AdminError(
+        409,
+        "Completed companion unavailable.",
+        "vmaf-result-unavailable",
+      );
+    return {
+      jobId: `${id}-f${index}`,
+      attemptId: j.attemptId,
+      digest: j.resultDigest,
+      side,
+    };
   }
   evidence(ref: QualityEvidenceRef, actor: string): QualityJobResult {
     const match = /^(vmaf-[a-f0-9-]{36})-f(\d{1,4})$/.exec(ref.jobId);
-    if (!match) throw new AdminError(400, 'Invalid VMAF companion reference.', 'invalid-evidence-reference');
+    if (!match)
+      throw new AdminError(
+        400,
+        "Invalid VMAF companion reference.",
+        "invalid-evidence-reference",
+      );
     const j = this.get(match[1], actor);
-    if (!terminalVmaf(j.state) || j.attemptId !== ref.attemptId || j.resultDigest !== ref.digest)
-      throw new AdminError(409, 'VMAF companion reference changed.', 'evidence-unavailable');
+    if (
+      !terminalVmaf(j.state) ||
+      j.attemptId !== ref.attemptId ||
+      j.resultDigest !== ref.digest
+    )
+      throw new AdminError(
+        409,
+        "VMAF companion reference changed.",
+        "evidence-unavailable",
+      );
     const r = this.result(j.id, actor),
       index = Number(match[2]),
       value = structuredClone(r.prepared.pairs[index]);
-    if (!value) throw new AdminError(404, 'VMAF frame not found.', 'vmaf-frame-not-found');
+    if (!value)
+      throw new AdminError(
+        404,
+        "VMAF frame not found.",
+        "vmaf-frame-not-found",
+      );
     if (r.vmaf) {
       const association: VmafAssociation = {
-        schema: 'voidplayer-vmaf-sequence-association',
+        schema: "voidplayer-vmaf-sequence-association",
         version: value.version,
         jobId: j.id,
         attemptId: j.attemptId,
@@ -219,9 +332,11 @@ export class NativeVmafService extends TemporalScoringService<'vmaf', VmafInput>
         plan: r.plan,
         sequence: {
           cadenceUs: r.prepared.sequence.cadenceUs,
-          ...(r.prepared.sequence.cadence ? { cadence: r.prepared.sequence.cadence } : {}),
-          referenceIntegrity: 'not-certified',
-          concealmentDetection: 'unavailable',
+          ...(r.prepared.sequence.cadence
+            ? { cadence: r.prepared.sequence.cadence }
+            : {}),
+          referenceIntegrity: "not-certified",
+          concealmentDetection: "unavailable",
           pairs: r.prepared.pairs.map((p) => ({
             reference: vmafSequenceFrame(p.result.provenance.reference),
             distorted: vmafSequenceFrame(p.result.provenance.distorted),
@@ -237,27 +352,43 @@ export class NativeVmafService extends TemporalScoringService<'vmaf', VmafInput>
         spatial: ((roi) =>
           roi.x !== 0 ||
           roi.y !== 0 ||
-          roi.width !== r.prepared.pairs[index].result.provenance.reference.decoded.description.width ||
-          roi.height !== r.prepared.pairs[index].result.provenance.reference.decoded.description.height)(
-          r.prepared.sequence.pairs[index].roi,
-        )
-          ? 'cropped-region-temporal-score-not-localized'
-          : 'full-frame-temporal-score-not-localized',
+          roi.width !==
+            r.prepared.pairs[index].result.provenance.reference.decoded
+              .description.width ||
+          roi.height !==
+            r.prepared.pairs[index].result.provenance.reference.decoded
+              .description.height)(r.prepared.sequence.pairs[index].roi)
+          ? "cropped-region-temporal-score-not-localized"
+          : "full-frame-temporal-score-not-localized",
       };
       if (association.frames > 32) {
         const pairs = association.sequence.pairs,
-          indices = [...new Set([0, index, pairs.length - 1])].sort((a, b) => a - b);
-        association.sequence = { ...association.sequence, indices, pairsSha256: digest(pairs), pairs: indices.map((i) => pairs[i]) };
+          indices = [...new Set([0, index, pairs.length - 1])].sort(
+            (a, b) => a - b,
+          );
+        association.sequence = {
+          ...association.sequence,
+          indices,
+          pairsSha256: digest(pairs),
+          pairs: indices.map((i) => pairs[i]),
+        };
       }
-      (value as typeof value & { sequenceVmaf: VmafAssociation }).sequenceVmaf = association;
+      (value as typeof value & { sequenceVmaf: VmafAssociation }).sequenceVmaf =
+        association;
     }
     return {
-      schema: 'voidplayer-quality-job-result',
+      schema: "voidplayer-quality-job-result",
       version: 1,
       jobId: ref.jobId,
       attemptId: ref.attemptId,
       completedAt: j.endedAt!,
-      submitted: { actorId: j.actor.id, actorName: j.actor.name, client: j.input.client, requestId: j.requestId, idempotencyKey: j.key },
+      submitted: {
+        actorId: j.actor.id,
+        actorName: j.actor.name,
+        client: j.input.client,
+        requestId: j.requestId,
+        idempotencyKey: j.key,
+      },
       value,
     };
   }
@@ -265,10 +396,11 @@ export class NativeVmafService extends TemporalScoringService<'vmaf', VmafInput>
     const p = value as CandidatePolicy;
     if (
       !p ||
-      typeof p !== 'object' ||
-      Object.keys(p).sort().join(',') !== 'limit,maxScore,minFrameDistance,severity,side,space,text' ||
+      typeof p !== "object" ||
+      Object.keys(p).sort().join(",") !==
+        "limit,maxScore,minFrameDistance,severity,side,space,text" ||
       !/^[A-Za-z0-9_-]{1,200}$/.test(p.space) ||
-      !['reference', 'distorted'].includes(p.side) ||
+      !["reference", "distorted"].includes(p.side) ||
       !Number.isFinite(p.maxScore) ||
       p.maxScore < 0 ||
       p.maxScore > 100 ||
@@ -281,31 +413,63 @@ export class NativeVmafService extends TemporalScoringService<'vmaf', VmafInput>
       !Number.isInteger(p.severity) ||
       p.severity < 1 ||
       p.severity > 5 ||
-      typeof p.text !== 'string' ||
+      typeof p.text !== "string" ||
       !p.text.trim() ||
       p.text.length > 2000
     )
-      throw new AdminError(400, 'Provide explicit VMAF candidate threshold, text, severity and spacing.', 'invalid-vmaf-policy');
+      throw new AdminError(
+        400,
+        "Provide explicit VMAF candidate threshold, text, severity and spacing.",
+        "invalid-vmaf-policy",
+      );
     return structuredClone(p);
   }
   publication(id: string, actor: string) {
     this.get(id, actor);
-    const row = this.db.prepare('SELECT body FROM quality_vmaf_publications WHERE job_id=?').get(id);
+    const row = this.db
+      .prepare("SELECT body FROM quality_vmaf_publications WHERE job_id=?")
+      .get(id);
     return row ? (JSON.parse(String(row.body)) as Publication) : null;
   }
-  publish(id: string, actor: Actor, value: unknown, origin: string, annotations: AnnotationStore, requestId: string) {
+  publish(
+    id: string,
+    actor: Actor,
+    value: unknown,
+    origin: string,
+    annotations: AnnotationStore,
+    requestId: string,
+  ) {
     this.available();
     const j = this.get(id, actor.id),
       policy = this.policy(value);
     let publication = this.publication(id, actor.id);
-    if (publication && canonicalJson(publication.policy) !== canonicalJson(policy))
-      throw new AdminError(409, 'Candidate policy is already frozen.', 'candidate-policy-conflict');
+    if (
+      publication &&
+      canonicalJson(publication.policy) !== canonicalJson(policy)
+    )
+      throw new AdminError(
+        409,
+        "Candidate policy is already frozen.",
+        "candidate-policy-conflict",
+      );
     if (!publication) {
       const r = this.result(id, actor.id);
-      if (!r.vmaf || j.state !== 'completed') throw new AdminError(409, 'Completed VMAF result required.', 'vmaf-result-unavailable');
+      if (!r.vmaf || j.state !== "completed")
+        throw new AdminError(
+          409,
+          "Completed VMAF result required.",
+          "vmaf-result-unavailable",
+        );
       const selected: number[] = [];
-      for (const f of [...r.vmaf.frames].sort((a, b) => a.score - b.score || a.index - b.index))
-        if (f.score <= policy.maxScore && selected.every((i) => Math.abs(i - f.index) >= policy.minFrameDistance)) {
+      for (const f of [...r.vmaf.frames].sort(
+        (a, b) => a.score - b.score || a.index - b.index,
+      ))
+        if (
+          f.score <= policy.maxScore &&
+          selected.every(
+            (i) => Math.abs(i - f.index) >= policy.minFrameDistance,
+          )
+        ) {
           selected.push(f.index);
           if (selected.length === policy.limit) break;
         }
@@ -319,20 +483,27 @@ export class NativeVmafService extends TemporalScoringService<'vmaf', VmafInput>
         })),
         createdIds: [],
       };
-      this.db.prepare('INSERT INTO quality_vmaf_publications VALUES(?,?)').run(id, JSON.stringify(publication));
-      settleScoringReservations(this.db, 'vmaf', id);
+      this.db
+        .prepare("INSERT INTO quality_vmaf_publications VALUES(?,?)")
+        .run(id, JSON.stringify(publication));
+      settleScoringReservations(this.db, "vmaf", id);
     }
     for (const item of publication.selected) {
       annotations.mutate(
         policy.space,
         {
-          action: 'create-quality-candidate',
+          action: "create-quality-candidate",
           operationId: item.operationId,
           id: item.id,
           revision: 0,
           client: {
-            kind: j.input.client.kind === 'browser' ? 'gui' : j.input.client.kind === 'agent' ? 'agent' : 'http',
-            id: 'vmaf_' + j.id,
+            kind:
+              j.input.client.kind === "browser"
+                ? "gui"
+                : j.input.client.kind === "agent"
+                  ? "agent"
+                  : "http",
+            id: "vmaf_" + j.id,
           },
           evidence: item.ref,
           candidate: { text: policy.text, severity: policy.severity },
@@ -343,8 +514,10 @@ export class NativeVmafService extends TemporalScoringService<'vmaf', VmafInput>
       );
       if (!publication.createdIds.includes(item.id)) {
         publication.createdIds.push(item.id);
-        this.db.prepare('UPDATE quality_vmaf_publications SET body=? WHERE job_id=?').run(JSON.stringify(publication), id);
-        settleScoringReservations(this.db, 'vmaf', id);
+        this.db
+          .prepare("UPDATE quality_vmaf_publications SET body=? WHERE job_id=?")
+          .run(JSON.stringify(publication), id);
+        settleScoringReservations(this.db, "vmaf", id);
       }
     }
     return publication;

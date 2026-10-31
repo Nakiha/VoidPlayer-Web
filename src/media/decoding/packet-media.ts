@@ -1,9 +1,5 @@
-import { nativeLibraryTransport } from '../../../shared/review/native-presented-frame.ts';
-import {
-  JS_TS_MEDIA_INDEX_IDENTITY,
-  JS_MATROSKA_MEDIA_INDEX_IDENTITY,
-  FLV_MEDIA_INDEX_IDENTITY,
-} from '../../../shared/media/indexing/media-index-identity.ts';
+import {nativeLibraryTransport} from '../../../shared/review/native-presented-frame.ts';
+import { JS_TS_MEDIA_INDEX_IDENTITY, JS_MATROSKA_MEDIA_INDEX_IDENTITY, FLV_MEDIA_INDEX_IDENTITY } from '../../../shared/media/indexing/media-index-identity.ts';
 import { coreAssetUrl } from './core-url.ts';
 import { referenceVersion } from '../../../shared/media/io/media-reference.ts';
 import { attachCachedTrackMetadata } from '../indexing/cached-track-metadata-client.ts';
@@ -27,69 +23,34 @@ import { contextLog } from '../../logging/log.ts';
 import { getColorMode } from '../policy/color-mode.ts';
 import type { ColorMode, ReferenceDecode } from '../../../shared/color/decode-policy-types.ts';
 import { hdrTransfer } from '../../../shared/color/hdr-policy.ts';
-const isHdrTransfer = (transfer: string | null | undefined) => hdrTransfer(transfer) !== null;
 import { resolveYuvColor } from '../../../shared/color/yuv-color.ts';
 import type { MediaInfo } from '../../../shared/review/model.ts';
-import type {
-  AnalysisAxis,
-  AnalysisCapability,
-  AnalysisQuery,
-  AnalysisRank,
-  AnalysisResult,
-  AnalysisSample,
-} from '../../../shared/analysis/metadata/types.ts';
+import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample } from '../../../shared/analysis/metadata/types.ts';
 
-export async function openPacketMedia(
-  container: 'flv' | 'mp4' | 'ts' | 'matroska',
-  input: PacketInput,
-  meta: MediaMeta,
-  deps: FallbackDeps & {
-    forceWasm?: boolean;
-    nativePresentedLibrary?: import('../../../shared/media/io/library-reference-types.ts').LibraryIndexReference;
-    sourceVersion?: string;
-    preparedTs?: { rpc: WorkerRpc<PacketCommands>; session: string; hasDts: boolean };
-  } = {},
-): Promise<MediaSource> {
-  const nativeLibrary = 'url' in input ? (input.library ?? deps.nativePresentedLibrary) : undefined;
-  const nativePresentedTransport =
-    container === 'flv' && 'url' in input && nativeLibrary
-      ? nativeLibraryTransport(input.url, nativeLibrary, globalThis.location?.origin ?? '')
-      : undefined;
-  const nativePresentedInstance = nativePresentedTransport ? randomUUID() : undefined;
+const isHdrTransfer = (transfer: string | null | undefined) => hdrTransfer(transfer) !== null;
+
+export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matroska', input: PacketInput, meta: MediaMeta, deps: FallbackDeps & { forceWasm?: boolean; nativePresentedLibrary?:import('../../../shared/media/io/library-reference-types.ts').LibraryIndexReference; sourceVersion?: string; preparedTs?: {rpc:WorkerRpc<PacketCommands>; session:string; hasDts:boolean} } = {}): Promise<MediaSource> {
+  const nativeLibrary='url' in input?input.library??deps.nativePresentedLibrary:undefined;
+  const nativePresentedTransport=container==='flv'&&'url' in input&&nativeLibrary
+    ?nativeLibraryTransport(input.url,nativeLibrary,globalThis.location?.origin??''):undefined;
+  const nativePresentedInstance=nativePresentedTransport?randomUUID():undefined;
   loadAborted(deps.signal);
-  if ((container === 'ts' || container === 'matroska') && !deps.sourceVersion)
-    throw new MediaOpenError('input', 'JS TS source namespace is required');
+  if((container==='ts'||container==='matroska') && !deps.sourceVersion)throw new MediaOpenError('input','JS TS source namespace is required');
   let reservation = reserveFallbackThreads();
   let reservationHeld = true;
-  const holdReservation = () => {
-    if (!reservationHeld) {
-      reservation = reserveFallbackThreads();
-      reservationHeld = true;
-    }
-  };
-  const releaseReservation = () => {
-    if (reservationHeld) {
-      reservation.release();
-      reservationHeld = false;
-    }
-  };
+  const holdReservation = () => { if (!reservationHeld) { reservation = reserveFallbackThreads(); reservationHeld = true; } };
+  const releaseReservation = () => { if (reservationHeld) { reservation.release(); reservationHeld = false; } };
   let rpc: WorkerRpc<PacketCommands> | undefined;
   try {
     const single = deps.glueURL ?? coreAssetUrl(WASM_CORE_GLUE_PATH, document.baseURI);
-    const candidates =
-      !deps.glueURL && !deps.wasmBinary && globalThis.crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined'
-        ? [coreAssetUrl(WASM_CORE_GLUE_PATH_MT, document.baseURI), single]
-        : [single];
-    if (deps.preparedTs) rpc = deps.preparedTs.rpc;
+    const candidates = !deps.glueURL && !deps.wasmBinary && globalThis.crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined'
+      ? [coreAssetUrl(WASM_CORE_GLUE_PATH_MT, document.baseURI), single] : [single];
+    if(deps.preparedTs)rpc=deps.preparedTs.rpc;
     type Init = PacketInitResult;
-    let init: Init | null | undefined,
-      selected = single,
-      failure: unknown;
+    let init: Init | null | undefined, selected = single, failure: unknown;
     let prepared: PreparedFlv | undefined;
     const createRpc = async () => {
-      const worker = deps.workerFactory
-        ? deps.workerFactory()
-        : new Worker(new URL('./packet-worker.ts', import.meta.url), { type: 'module' });
+      const worker = deps.workerFactory ? deps.workerFactory() : new Worker(new URL('./packet-worker.ts', import.meta.url), { type: 'module' });
       return new WorkerRpc<PacketCommands>(worker, undefined, deps.onProgress);
     };
     // Read the startup packet outside every decoder deadline. Only actual index
@@ -102,9 +63,7 @@ export async function openPacketMedia(
         deps.onProgress?.('inspect');
         prepared = await rpc.call('prepare', { input }, [], 60000, true);
         if (!deps.forceWasm) init = await rpc.call('native', {}, [], 60000);
-      } finally {
-        detachAbort();
-      }
+      } finally { detachAbort(); }
     }
     for (const glueURL of candidates) {
       if (init) break;
@@ -115,42 +74,20 @@ export async function openPacketMedia(
       const detachAbort = onLoadAbort(deps.signal, () => currentRpc.terminate(deps.signal!.reason));
       try {
         if (container !== 'flv') deps.onProgress?.('inspect');
-        init = await rpc.call(
-          'init',
-          {
-            input,
-            glueURL,
-            wasmBinary: deps.wasmBinary,
-            forceWasm: container === 'flv' || !!deps.forceWasm,
-            threads: reservation.threads,
-            ...(container === 'ts' || container === 'matroska'
-              ? {
-                  container,
-                  persistent: true,
-                  sourceVersion: deps.sourceVersion!,
-                  preparedTsSession: rpc === deps.preparedTs?.rpc ? deps.preparedTs?.session : undefined,
-                }
-              : { container, prepared: restore }),
-          },
-          [],
-          container === 'flv' && glueURL.includes('core-mt.') ? 10000 : 60000,
-          container === 'ts' || container === 'matroska',
-        );
+        init = await rpc.call('init', { input, glueURL, wasmBinary: deps.wasmBinary,
+          forceWasm: container === 'flv' || !!deps.forceWasm, threads: reservation.threads,
+          ...((container==='ts'||container==='matroska')?{container,persistent:true,sourceVersion:deps.sourceVersion!,preparedTsSession:rpc===deps.preparedTs?.rpc?deps.preparedTs?.session:undefined}:{container,prepared:restore}) }, [],
+          container === 'flv' && glueURL.includes('core-mt.') ? 10000 : 60000, (container==='ts'||container==='matroska'));
         selected = glueURL;
       } catch (error) {
-        rpc.terminate();
-        rpc = undefined;
-        failure = error;
+        rpc.terminate(); rpc = undefined; failure = error;
         loadAborted(deps.signal);
         if (error instanceof MediaOpenError && error.stage !== 'decode') throw error;
         contextLog().warn('media', '压缩包解码器初始化失败，尝试下一个 core', {
           coreVariant: glueURL.includes('core-mt.') ? 'multi-thread' : 'single-thread',
-          indexReused: !!prepared,
-          error: error instanceof Error ? error.message : String(error),
+          indexReused: !!prepared, error: error instanceof Error ? error.message : String(error),
         });
-      } finally {
-        detachAbort();
-      }
+      } finally { detachAbort(); }
     }
     if (!init || !rpc) throw failure;
     const startup = prepared;
@@ -158,56 +95,24 @@ export async function openPacketMedia(
     const activeRpc = rpc;
     if (init.decoder === 'webcodecs' && !deps.rawNative) releaseReservation();
     let { times, durations, ...details } = init;
-    const info: MediaInfo = {
-      id: container === 'ts' || container === 'matroska' ? deps.sourceVersion! : randomUUID(),
-      name: meta.name,
-      size: meta.size,
-      lastModified: meta.lastModified,
-      indexSource: 'client',
-      indexState: 'complete',
-      indexKind: container === 'ts' || container === 'matroska' ? 'packet-locators' : 'packet-offsets',
-      seekStrategy: 'packet-anchor',
-      ...details,
-      ...(init.decoder === 'ffmpeg-wasm'
-        ? { coreVariant: selected.includes('core-mt.') ? ('multi-thread' as const) : ('single-thread' as const) }
-        : {}),
-    };
-    let presentationMode: ColorMode = deps.rawNative
-      ? 'reference'
-      : (deps.nativeColorMode ?? (getColorMode() === 'reference' ? 'reference' : 'browser'));
+    const info: MediaInfo = { id: (container==='ts'||container==='matroska')?deps.sourceVersion!:randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
+      indexSource: 'client', indexState: 'complete', indexKind: (container==='ts'||container==='matroska')?'packet-locators':'packet-offsets', seekStrategy: 'packet-anchor',
+      ...details, ...(init.decoder === 'ffmpeg-wasm' ? { coreVariant: selected.includes('core-mt.') ? 'multi-thread' as const : 'single-thread' as const } : {}) };
+    let presentationMode: ColorMode = deps.rawNative ? 'reference' : deps.nativeColorMode ?? (getColorMode() === 'reference' ? 'reference' : 'browser');
     let nativeWitnessReadback = false;
     let verifiedNativeYuv: MediaSource | undefined;
     let activateVerifiedNativeYuv = (_adapter: MediaSource) => {};
     let deactivateVerifiedNativeYuv = () => {};
-    contextLog().info('media', `${container.toUpperCase()} 已通过 TS 解封装载入`, {
-      name: meta.name,
-      codec: init.codec,
-      decoder: init.decoder,
-      packets: times.length,
-      io: 'file' in input ? 'blob-chunks' : 'http-range',
-      timelineSource: init.timelineSource,
-      indexWarning: init.indexWarning,
-      hardwareAcceleration: init.hardwareAcceleration,
-      coreVariant: info.coreVariant,
-      requestedThreads: init.decoder === 'ffmpeg-wasm' ? reservation.threads : undefined,
-      startupPacketOffset: startup?.index.packets[0]?.offset,
-      startupNextOffset: startup?.nextOffset,
-      startupIndexComplete: startup?.complete,
-    });
-    const yuvPool = createYuvBufferPool();
+    contextLog().info('media', `${container.toUpperCase()} 已通过 TS 解封装载入`, { name: meta.name, codec: init.codec, decoder: init.decoder, packets: times.length, io: 'file' in input ? 'blob-chunks' : 'http-range',timelineSource:init.timelineSource,indexWarning:init.indexWarning,hardwareAcceleration:init.hardwareAcceleration, coreVariant: info.coreVariant, requestedThreads: init.decoder === 'ffmpeg-wasm' ? reservation.threads : undefined,
+      startupPacketOffset: startup?.index.packets[0]?.offset, startupNextOffset: startup?.nextOffset, startupIndexComplete: startup?.complete });
+    const yuvPool=createYuvBufferPool();
     if (container === 'flv') info.opportunisticAudio = 'flv-aac';
-    let disposed = false,
-      spare: ArrayBuffer | undefined;
+    let disposed = false, spare: ArrayBuffer | undefined;
     let serial = Promise.resolve();
     let indexing: Promise<void> | undefined;
     const indexWaiters = new Set<() => void>();
-    const wakeIndex = () => {
-      for (const resolve of indexWaiters) resolve();
-      indexWaiters.clear();
-    };
-    activeRpc.onIndexWaiting = (indexWaiting) => {
-      if (!disposed) updateMediaInfo(source, { indexWaiting }, 'index');
-    };
+    const wakeIndex = () => { for (const resolve of indexWaiters) resolve(); indexWaiters.clear(); };
+    activeRpc.onIndexWaiting = indexWaiting => { if (!disposed) updateMediaInfo(source, { indexWaiting }, 'index'); };
     activeRpc.onIndexProgress = ({ durationUs, ...indexProgress }) => {
       if (disposed) return;
       updateMediaInfo(source, { durationUs, indexProgress }, 'index');
@@ -217,46 +122,23 @@ export async function openPacketMedia(
       if (indexing) return indexing;
       if (container !== 'flv') return Promise.resolve();
       if (info.indexState === 'error') return Promise.reject(new Error(info.indexError));
-      indexing = activeRpc.call('complete-index', {}, [], 60000, true).then(
-        (result) => {
-          if (disposed) return;
-          contextLog().info('media', 'FLV 后台索引完成', {
-            name: meta.name,
-            originPtsUs: result.firstPtsUs,
-            earliestRelativePtsUs: result.times[0],
-            packets: result.times.length,
-            durationBeforeUs: info.durationUs,
-            durationUs: result.durationUs,
-            indexSource: result.indexSource,
-            indexIntegrity: result.indexIntegrity,
-            indexTruncatedAt: result.indexTruncatedAt,
-          });
-          times = result.times;
-          durations = result.durations;
-          updateMediaInfo(
-            source,
-            {
-              firstPtsUs: result.firstPtsUs,
-              durationUs: result.durationUs,
-              indexState: 'complete',
-              indexSource: result.indexSource,
-              indexWarning: result.indexWarning,
-              indexIntegrity: result.indexIntegrity,
-              indexTruncatedAt: result.indexTruncatedAt,
-            },
-            'index',
-          );
+      indexing = activeRpc.call('complete-index', {}, [], 60000, true).then(result => {
+        if (disposed) return;
+        contextLog().info('media', 'FLV 后台索引完成', { name: meta.name, originPtsUs: result.firstPtsUs,
+          earliestRelativePtsUs: result.times[0], packets: result.times.length,
+          durationBeforeUs: info.durationUs, durationUs: result.durationUs, indexSource: result.indexSource,
+          indexIntegrity:result.indexIntegrity,indexTruncatedAt:result.indexTruncatedAt });
+        times = result.times; durations = result.durations;
+        updateMediaInfo(source,{firstPtsUs:result.firstPtsUs,durationUs:result.durationUs,indexState:'complete',indexSource:result.indexSource,indexWarning:result.indexWarning,indexIntegrity:result.indexIntegrity,indexTruncatedAt:result.indexTruncatedAt},'index');
+        wakeIndex();
+      }, error => {
+        if (!disposed) {
+          updateMediaInfo(source,{indexState:'error',indexError:error instanceof Error?error.message:String(error)},'index');
           wakeIndex();
-        },
-        (error) => {
-          if (!disposed) {
-            updateMediaInfo(source, { indexState: 'error', indexError: error instanceof Error ? error.message : String(error) }, 'index');
-            wakeIndex();
-            contextLog().warn('media', 'FLV 后台索引失败', { error: info.indexError });
-          }
-          throw error;
-        },
-      );
+          contextLog().warn('media', 'FLV 后台索引失败', { error: info.indexError });
+        }
+        throw error;
+      });
       // Observed background failures remain visible in metadata and reject
       // subsequent requests beyond the already displayed startup frame.
       void indexing.catch(() => {});
@@ -268,134 +150,57 @@ export async function openPacketMedia(
       if (info.indexState === 'error') throw new Error(info.indexError);
       if (info.indexState !== 'building' || (ptsUs === 0 && !indexing)) return;
       void completeIndex().catch(() => {});
-      while (!disposed && info.indexState === 'building' && ptsUs >= info.durationUs)
-        await new Promise<void>((resolve) => indexWaiters.add(resolve));
+      while (!disposed && info.indexState === 'building' && ptsUs >= info.durationUs) await new Promise<void>(resolve => indexWaiters.add(resolve));
       if (disposed) throw new Error('媒体已释放。');
       if ((info.indexState as string) === 'error') throw new Error(info.indexError);
     };
     const toDecodedFrame = async (frame: PacketFrame): Promise<DecodedFrame> => {
       const position = floorIndex(times, frame.pts - info.firstPtsUs);
-      if (disposed) {
-        frame.frame?.close();
-        throw new Error('媒体已释放。');
-      }
+      if (disposed) { frame.frame?.close(); throw new Error('媒体已释放。'); }
       const sample = frame.frame ? new VideoSample(frame.frame, { rotation: frame.rotation ?? 0 }) : undefined;
       const pixels = frame.pixels ? new Uint8ClampedArray(frame.pixels) : undefined;
-      try {
-        validateDescription(frame.description, pixels?.byteLength);
-      } catch (error) {
-        sample?.close();
-        throw error;
-      }
+      try { validateDescription(frame.description, pixels?.byteLength); } catch (error) { sample?.close(); throw error; }
       let closed = false;
       // Preserve encoded metadata separately from the browser's actual resource
       // tags. A platform may return an SDR-tagged resource for an HDR source.
-      const description =
-        info.color && !frame.description.sourceColor
-          ? { ...frame.description, sourceColor: { ...info.color }, sourceColorOrigin: 'container' as const }
-          : frame.description;
-      const rawFrame = {
-        description,
-        rotation: frame.rotation,
-        kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8',
-        ...(nativePresentedInstance && frame.nativePicture
-          ? {
-              nativePresentedInput: {
-                instance: nativePresentedInstance,
-                sourceVersion: nativePresentedTransport!.sourceVersion,
-                input: frame.nativePicture,
-              },
-            }
-          : {}),
-        ...(frame.packetPicture
-          ? {
-              sourcePicture: {
-                ...frame.packetPicture,
-                sourceVersion: info.source ? `${info.source.id}@${referenceVersion(info.source.url)}` : info.id,
-                picture: 0 as const,
-                layer: 0 as const,
-                field: 'frame' as const,
-              },
-            }
-          : {}),
-        width: frame.width,
-        height: frame.height,
-        ptsUs: frame.pts - info.firstPtsUs,
-        sourcePtsUs: frame.pts,
-        durationUs: frame.durationUs ?? durations[position],
-        byteSize: frame.description.byteLength,
-        sample,
-        pixels,
-        close() {
-          if (closed) return;
-          closed = true;
-          sample?.close();
-          if (!disposed && pixels) spare = pixels.buffer as ArrayBuffer;
-        },
+      const description = info.color && !frame.description.sourceColor
+        ? { ...frame.description, sourceColor: { ...info.color }, sourceColorOrigin: 'container' as const } : frame.description;
+      const rawFrame = { description, rotation: frame.rotation, kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8',
+        ...(nativePresentedInstance&&frame.nativePicture?{nativePresentedInput:{instance:nativePresentedInstance,sourceVersion:nativePresentedTransport!.sourceVersion,input:frame.nativePicture}}:{}),
+        ...(frame.packetPicture ? { sourcePicture: { ...frame.packetPicture, sourceVersion: info.source ? `${info.source.id}@${referenceVersion(info.source.url)}` : info.id, picture: 0 as const, layer: 0 as const, field: 'frame' as const } } : {}),
+        width: frame.width, height: frame.height, ptsUs: frame.pts - info.firstPtsUs, sourcePtsUs: frame.pts,
+        durationUs: frame.durationUs ?? durations[position], byteSize: frame.description.byteLength, sample, pixels,
+        close() { if (closed) return; closed = true; sample?.close(); if (!disposed && pixels) spare = pixels.buffer as ArrayBuffer; },
       } satisfies DecodedFrame;
       const rawForWitness = nativeWitnessReadback || verifiedNativeYuv !== undefined;
-      const decoded =
-        rawForWitness || presentationMode === 'browser' ? rawFrame : await prepareYuvFrame(rawFrame, yuvPool, deps.preserveNativeSample);
-      if (disposed) {
-        decoded.close();
-        throw new Error('媒体已释放。');
-      }
-      if (
-        !rawForWitness &&
-        presentationMode === 'reference' &&
-        (decoded.kind !== 'yuv' || !resolveYuvColor(decoded.description).supported)
-      ) {
+      const decoded = rawForWitness || presentationMode === 'browser' ? rawFrame : await prepareYuvFrame(rawFrame, yuvPool, deps.preserveNativeSample);
+      if (disposed) { decoded.close(); throw new Error('媒体已释放。'); }
+      if (!rawForWitness && presentationMode === 'reference' && (decoded.kind !== 'yuv' || !resolveYuvColor(decoded.description).supported)) {
         const hdr = isHdrTransfer(decoded.description.color.transfer) || isHdrTransfer(info.color?.transfer);
         decoded.close();
-        throw new MediaOpenError(
-          'decode',
-          hdr
-            ? '此 HDR 视频未提供可核对的高位深 BT.2100 平面。请在“色彩与解码”中切换为“浏览器色彩”后重试。'
-            : '自有色彩无法处理此视频的像素格式或颜色信息。请在“色彩与解码”中切换为“浏览器色彩”后重试。',
-          hdr ? 'reference-hdr-unsupported' : 'reference-format-unsupported',
-        );
+        throw new MediaOpenError('decode', hdr ? '此 HDR 视频未提供可核对的高位深 BT.2100 平面。请在“色彩与解码”中切换为“浏览器色彩”后重试。'
+          : '自有色彩无法处理此视频的像素格式或颜色信息。请在“色彩与解码”中切换为“浏览器色彩”后重试。', hdr ? 'reference-hdr-unsupported' : 'reference-format-unsupported');
       }
       return decoded;
     };
-    const extract = (pts: number, next = false): Promise<DecodedFrame | null> => {
+    const extract = (pts:number,next=false):Promise<DecodedFrame|null> => {
       const task = serial.then(async () => {
         if (disposed) throw new Error('媒体已释放。');
-        const recycle = spare;
-        spare = undefined;
-        const frame = await activeRpc.call(
-          next ? 'next' : 'at',
-          { pts: pts + info.firstPtsUs, recycle },
-          recycle ? [recycle] : [],
-          60000,
-          true,
-        );
-        if (!frame) return null;
-        if (container === 'flv' && !indexing && backgroundTimer === undefined)
-          backgroundTimer = setTimeout(() => {
-            if (!disposed) void completeIndex().catch(() => {});
-          }, 0);
+        const recycle = spare; spare = undefined;
+        const frame = await activeRpc.call(next?'next':'at', {pts:pts+info.firstPtsUs,recycle}, recycle ? [recycle] : [], 60000, true);
+        if(!frame)return null;
+        if (container === 'flv' && !indexing && backgroundTimer === undefined) backgroundTimer = setTimeout(() => { if (!disposed) void completeIndex().catch(() => {}); }, 0);
         return toDecodedFrame(frame);
       });
-      serial = task.then(
-        () => {},
-        () => {},
-      );
+      serial = task.then(() => {}, () => {});
       return task;
     };
     const setDecoder = async (kind: 'software' | 'native') => {
       if (kind === 'software') holdReservation();
-      const result =
-        kind === 'software'
-          ? await activeRpc.call(
-              'switch-software',
-              { glueURL: selected, wasmBinary: deps.wasmBinary, threads: reservation.threads },
-              [],
-              60000,
-            )
-          : await activeRpc.call('switch-native', {}, [], 60000);
-      Object.assign(info, result, {
-        ...(kind === 'software' ? { coreVariant: selected.includes('core-mt.') ? 'multi-thread' : 'single-thread' } : {}),
-      });
+      const result = kind === 'software'
+        ? await activeRpc.call('switch-software', { glueURL: selected, wasmBinary: deps.wasmBinary, threads: reservation.threads }, [], 60000)
+        : await activeRpc.call('switch-native', {}, [], 60000);
+      Object.assign(info, result, { ...(kind === 'software' ? { coreVariant: selected.includes('core-mt.') ? 'multi-thread' : 'single-thread' } : {}) });
       if (kind === 'native') delete info.coreVariant;
       return result;
     };
@@ -408,21 +213,14 @@ export async function openPacketMedia(
         holdReservation();
         if (decode.decoder === 'software' && info.decoder === 'webcodecs') await setDecoder('software');
         if (decode.decoder === 'hardware' && info.decoder === 'ffmpeg-wasm') {
-          try {
-            await setDecoder('native');
-          } catch {
-            /* Browser decoding may not be available; keep the shared software decoder. */
-          }
+          try { await setDecoder('native'); } catch { /* Browser decoding may not be available; keep the shared software decoder. */ }
         }
         if (decode.decoder === 'hardware' && info.decoder === 'webcodecs') {
           let witness: DecodedFrame | undefined, candidate: MediaSource | undefined, probe: DecodedFrame | undefined;
           try {
-            const raw = await activeRpc.call(
-              'reference-witness',
-              { glueURL: selected, wasmBinary: deps.wasmBinary, threads: reservation.threads },
-              [],
-              60000,
-            );
+            const raw = await activeRpc.call('reference-witness', {
+              glueURL: selected, wasmBinary: deps.wasmBinary, threads: reservation.threads,
+            }, [], 60000);
             witness = await toDecodedFrame(raw);
             const { nativeYuvSource, verifyNativeWitness } = await import('./native-yuv-source.ts');
             presentationMode = 'reference';
@@ -436,14 +234,9 @@ export async function openPacketMedia(
             activateVerifiedNativeYuv(candidate);
             candidate = undefined;
           } catch (error) {
-            probe?.close();
-            probe = undefined;
-            candidate?.dispose();
-            candidate = undefined;
-            if (signal?.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
-              presentationMode = previousMode;
-              throw error;
-            }
+            probe?.close(); probe = undefined;
+            candidate?.dispose(); candidate = undefined;
+            if (signal?.aborted || error instanceof DOMException && error.name === 'AbortError') { presentationMode = previousMode; throw error; }
             loadAborted(signal);
             contextLog().warn('media', '硬件首帧核验失败，复用共享容器索引并切换软件解码器', {
               error: error instanceof Error ? error.message : String(error),
@@ -451,74 +244,45 @@ export async function openPacketMedia(
             await setDecoder('software');
           } finally {
             nativeWitnessReadback = false;
-            probe?.close();
-            candidate?.dispose();
-            witness?.close();
+            probe?.close(); candidate?.dispose(); witness?.close();
           }
         }
         presentationMode = 'reference';
-        try {
-          const first = await source.frameAt(0);
-          first.close();
-        } catch (error) {
-          presentationMode = previousMode;
-          throw error;
-        }
+        try { const first = await source.frameAt(0); first.close(); }
+        catch (error) { presentationMode = previousMode; throw error; }
         if (info.decoder === 'webcodecs') releaseReservation();
       } else {
         deactivateVerifiedNativeYuv();
         if (info.decoder === 'ffmpeg-wasm') {
-          try {
-            await setDecoder('native');
-          } catch {
-            /* Keep the decoder if WebCodecs cannot be restored. */
-          }
+          try { await setDecoder('native'); } catch { /* Keep the decoder if WebCodecs cannot be restored. */ }
         }
         presentationMode = 'browser';
-        try {
-          const first = await source.frameAt(0);
-          first.close();
-        } catch (error) {
-          presentationMode = previousMode;
-          throw error;
-        }
+        try { const first = await source.frameAt(0); first.close(); }
+        catch (error) { presentationMode = previousMode; throw error; }
         if (info.decoder === 'webcodecs') releaseReservation();
       }
     };
     let stopAudio = () => {};
     const source: MediaSource = {
-      ...(nativePresentedInstance ? { nativePresentedInstance, nativePresentedTransport } : {}),
-      info,
-      ensureIndexed,
-      ...(container === 'ts' || container === 'matroska'
-        ? { bitstreamIndexIdentity: container === 'ts' ? JS_TS_MEDIA_INDEX_IDENTITY : JS_MATROSKA_MEDIA_INDEX_IDENTITY }
-        : {}),
-      ...(container === 'flv'
-        ? {
-            requestCachedAudio(ptsUs: number, generation: number) {
-              if (!disposed) activeRpc.requestCachedAudio(ptsUs + info.firstPtsUs, generation);
-            },
-          }
-        : {}),
+      ...(nativePresentedInstance?{nativePresentedInstance,nativePresentedTransport}:{}),
+      info, ensureIndexed,
+      ...((container==='ts'||container==='matroska')?{bitstreamIndexIdentity:container==='ts'?JS_TS_MEDIA_INDEX_IDENTITY:JS_MATROSKA_MEDIA_INDEX_IDENTITY}:{}),
+      ...(container === 'flv' ? {
+        requestCachedAudio(ptsUs: number, generation: number) { if (!disposed) activeRpc.requestCachedAudio(ptsUs + info.firstPtsUs, generation); },
+      } : {}),
       reconfigureColorMode,
       async admitReference(depth) {
-        await reconfigureColorMode(
-          'reference',
-          { decoder: info.decoder === 'webcodecs' ? 'hardware' : 'software', depth: depth as ReferenceDecode['depth'] },
-          deps.signal,
-        );
+        await reconfigureColorMode('reference', { decoder: info.decoder === 'webcodecs' ? 'hardware' : 'software', depth: depth as ReferenceDecode['depth'] }, deps.signal);
         return source;
       },
-      ...(container === 'flv'
-        ? {
-            bitstreamIndexIdentity: FLV_MEDIA_INDEX_IDENTITY,
-            async getBitstreamFlvIndex() {
-              await completeIndex();
-              if (disposed) throw new Error('媒体已释放。');
-              return activeRpc.call('analysis-flv-index', {});
-            },
-          }
-        : {}),
+      ...(container === 'flv' ? {
+        bitstreamIndexIdentity: FLV_MEDIA_INDEX_IDENTITY,
+        async getBitstreamFlvIndex() {
+          await completeIndex();
+          if (disposed) throw new Error('媒体已释放。');
+          return activeRpc.call('analysis-flv-index', {});
+        },
+      } : {}),
       async getBitstreamIndex() {
         if (disposed) throw new Error('媒体已释放。');
         if (info.indexState === 'error') throw new Error(info.indexError);
@@ -527,44 +291,30 @@ export async function openPacketMedia(
       },
       getAnalysisCapability(): AnalysisCapability {
         return {
-          hasSize: true,
-          hasDts: container === 'ts' || container === 'matroska' ? !!deps.preparedTs?.hasDts : true,
-          keySource: container === 'ts' || container === 'matroska' ? 'verified' : 'container',
-          pictureType: 'key-only',
-          qp: 'unsupported',
+          hasSize: true, hasDts: (container==='ts'||container==='matroska')?!!deps.preparedTs?.hasDts:true, keySource: (container==='ts'||container==='matroska')?'verified':'container',
+          pictureType: 'key-only', qp: 'unsupported',
           indexState: info.indexState ?? 'complete',
           ...(info.indexError ? { indexError: info.indexError } : {}),
           ...(info.indexState === 'building' ? { note: '后台索引构建中，数值为暂定。' } : {}),
-          ...(info.indexIntegrity && info.indexIntegrity !== 'complete' ? { note: info.indexWarning } : {}),
+          ...(info.indexIntegrity&&info.indexIntegrity!=='complete'?{note:info.indexWarning}:{}),
         };
       },
       async queryAnalysis(query: AnalysisQuery & { requestId: number }): Promise<AnalysisResult> {
         if (disposed) throw new Error('媒体已释放。');
         if (query.signal?.aborted) throw query.signal.reason;
         const complete = (info.indexState ?? 'complete') === 'complete';
-        const call = activeRpc.call(
-          'analysis',
-          {
-            mediaId: info.id,
-            axis: query.axis,
-            startUs: query.startUs,
-            endUs: query.endUs,
-            pixelWidth: query.pixelWidth,
-            bitrateWindowUs: query.bitrateWindowUs,
-            maxSamples: query.maxSamples ?? 5000,
-            ...(query.bucketsOnly ? { bucketsOnly: true } : {}),
-            ...(query.bucketOriginUs !== undefined ? { bucketOriginUs: query.bucketOriginUs } : {}),
-            ...(query.curveStartUs !== undefined ? { curveStartUs: query.curveStartUs } : {}),
-            ...(query.curveEndUs !== undefined ? { curveEndUs: query.curveEndUs } : {}),
-            ...(query.curvePixelWidth !== undefined ? { curvePixelWidth: query.curvePixelWidth } : {}),
-            firstPtsUs: info.firstPtsUs,
-            durationUs: info.durationUs,
-            coverageUs:
-              complete && (!info.indexIntegrity || info.indexIntegrity === 'complete') ? { start: 0, end: info.durationUs } : null,
-          },
-          [],
-          60000,
-        );
+        const call = activeRpc.call('analysis', {
+          mediaId: info.id, axis: query.axis, startUs: query.startUs, endUs: query.endUs,
+          pixelWidth: query.pixelWidth, bitrateWindowUs: query.bitrateWindowUs,
+          maxSamples: query.maxSamples ?? 5000,
+          ...(query.bucketsOnly ? { bucketsOnly: true } : {}),
+          ...(query.bucketOriginUs !== undefined ? { bucketOriginUs: query.bucketOriginUs } : {}),
+          ...(query.curveStartUs !== undefined ? { curveStartUs: query.curveStartUs } : {}),
+          ...(query.curveEndUs !== undefined ? { curveEndUs: query.curveEndUs } : {}),
+          ...(query.curvePixelWidth !== undefined ? { curvePixelWidth: query.curvePixelWidth } : {}),
+          firstPtsUs: info.firstPtsUs, durationUs: info.durationUs,
+          coverageUs: complete && (!info.indexIntegrity||info.indexIntegrity==='complete') ? { start: 0, end: info.durationUs } : null,
+        }, [], 60000);
         // signal 仅表示“结果不再消费”（调用方不再等待），worker 侧排队/执行中的
         // 统计不会因此撤销；调用方必须按 requestId/版本丢弃旧结果，不得冒充已取消计算。
         // B3：共用 abortableWait，settled 后清理监听器。
@@ -578,7 +328,7 @@ export async function openPacketMedia(
             ...result.capability,
             indexState: (info.indexState ?? 'complete') as AnalysisCapability['indexState'],
             ...(info.indexError ? { indexError: info.indexError } : {}),
-            ...(info.indexIntegrity && info.indexIntegrity !== 'complete' ? { note: info.indexWarning } : {}),
+            ...(info.indexIntegrity&&info.indexIntegrity!=='complete'?{note:info.indexWarning}:{}),
           },
           coverageUs: result.coverageUs ?? null,
         };
@@ -586,125 +336,79 @@ export async function openPacketMedia(
       async locateAnalysisSample(sampleId: string): Promise<AnalysisSample | null> {
         if (disposed) throw new Error('媒体已释放。');
         // 身份解析只在 mint 它的 adapter 层做（worker 内 O(1) 反查），主线程不猜格式。
-        return activeRpc.call('analysis-locate', { mediaId: info.id, firstPtsUs: info.firstPtsUs, sampleId }, [], 60000);
+        return activeRpc.call('analysis-locate', {
+          mediaId: info.id, firstPtsUs: info.firstPtsUs, sampleId,
+        }, [], 60000);
       },
       async rankAnalysisTime(tUs: number, axis: AnalysisAxis): Promise<AnalysisRank> {
         if (disposed) throw new Error('媒体已释放。');
         if (!Number.isFinite(tUs)) throw new Error('排名时间必须是有限微秒数。');
         // 与 queryAnalysis 同一包表、同一有序轴缓存；complete 以主线程索引状态为准。
-        const result = await activeRpc.call('analysis-rank', { mediaId: info.id, firstPtsUs: info.firstPtsUs, axis, tUs }, [], 60000);
+        const result = await activeRpc.call('analysis-rank', {
+          mediaId: info.id, firstPtsUs: info.firstPtsUs, axis, tUs,
+        }, [], 60000);
         return { ...result, complete: (info.indexState ?? 'complete') === 'complete' };
       },
       async analysisSampleAtNumber(number: number, axis: AnalysisAxis): Promise<{ ptsUs: number | null; complete: boolean }> {
         if (disposed) throw new Error('媒体已释放。');
-        const ptsUs = await activeRpc.call('analysis-number', { mediaId: info.id, firstPtsUs: info.firstPtsUs, axis, number }, [], 60000);
+        const ptsUs = await activeRpc.call('analysis-number', {
+          mediaId: info.id, firstPtsUs: info.firstPtsUs, axis, number,
+        }, [], 60000);
         return { ptsUs, complete: (info.indexState ?? 'complete') === 'complete' };
       },
-      async frameAt(pts) {
-        await ensureIndexed(pts);
-        const frame = await extract(pts);
-        if (!frame) throw new MediaOpenError('decode', '没有可显示帧。');
-        return frame;
-      },
-      async framesAfter(pts, count) {
-        if (count <= 0) return [];
+      async frameAt(pts) { await ensureIndexed(pts);const frame=await extract(pts);if(!frame)throw new MediaOpenError('decode','没有可显示帧。');return frame; },
+      async framesAfter(pts,count){
+        if(count<=0)return [];
         if (info.indexState === 'building') void completeIndex().catch(() => {});
         await ensureIndexed(pts);
-        const result: DecodedFrame[] = [];
-        try {
-          for (let i = 0; i < count; i++) {
-            const f = await extract(pts, true);
-            if (!f) break;
-            result.push(f);
-            pts = f.ptsUs;
-          }
-        } catch (error) {
-          result.forEach((f) => f.close());
-          throw error;
-        }
+        const result:DecodedFrame[]=[];
+        try{for(let i=0;i<count;i++){const f=await extract(pts,true);if(!f)break;result.push(f);pts=f.ptsUs;}}catch(error){result.forEach(f=>f.close());throw error;}
         return result;
       },
-      async *framesFrom(pts) {
-        await ensureIndexed(pts);
-        let frame = await extract(pts);
-        while (frame && !disposed) {
-          const after = frame.ptsUs;
-          yield frame;
+      async *framesFrom(pts){
+        await ensureIndexed(pts);let frame=await extract(pts);
+        while(frame&&!disposed){
+          const after=frame.ptsUs;yield frame;
           if (info.indexState === 'building') void completeIndex().catch(() => {});
           await ensureIndexed(after); // Wait only for the requested prefix; worker waits at its live decode frontier.
-          frame = await extract(after, true);
+          frame=await extract(after,true);
         }
-        if (frame && disposed) frame.close();
+        if(frame&&disposed)frame.close();
       },
-      async *framesFollowing(pts) {
+      async *framesFollowing(pts){
         // Establish the live frontier before strict next can see startup-prefix EOF.
         // As in framesAfter, start the memoized build without awaiting the full scan.
         if (info.indexState === 'building') void completeIndex().catch(() => {});
-        while (!disposed) {
+        while(!disposed){
           await ensureIndexed(pts);
-          const frame = await extract(pts, true);
-          if (!frame) return;
-          pts = frame.ptsUs;
-          yield frame;
+          const frame=await extract(pts,true);if(!frame)return;
+          pts=frame.ptsUs;yield frame;
           if (info.indexState === 'building') void completeIndex().catch(() => {});
         }
       },
-      dispose() {
-        if (!disposed) {
-          stopMetadata();
-          stopAudio();
-          deactivateVerifiedNativeYuv();
-          disposed = true;
-          yuvPool.dispose();
-          wakeIndex();
-          activeRpc.onIndexProgress = undefined;
-          activeRpc.onIndexWaiting = undefined;
-          clearTimeout(backgroundTimer);
-          source.onInfoChange = undefined;
-          source.onCachedAudio = undefined;
-          activeRpc.onCachedAudio = undefined;
-          spare = undefined;
-          releaseReservation();
-          activeRpc.terminate();
-        }
-      },
+      dispose() { if (!disposed) { stopMetadata(); stopAudio(); deactivateVerifiedNativeYuv(); disposed = true; yuvPool.dispose(); wakeIndex(); activeRpc.onIndexProgress = undefined; activeRpc.onIndexWaiting = undefined; clearTimeout(backgroundTimer); source.onInfoChange = undefined; source.onCachedAudio = undefined; activeRpc.onCachedAudio = undefined; spare = undefined; releaseReservation(); activeRpc.terminate(); } },
     };
-    const baseFrameAt = source.frameAt.bind(source),
-      baseFramesAfter = source.framesAfter.bind(source),
-      baseFramesFrom = source.framesFrom.bind(source),
-      baseFramesFollowing = source.framesFollowing?.bind(source);
-    activateVerifiedNativeYuv = (adapter) => {
-      verifiedNativeYuv = adapter;
-      source.frameAt = adapter.frameAt.bind(adapter);
-      source.framesAfter = adapter.framesAfter.bind(adapter);
-      source.framesFrom = adapter.framesFrom.bind(adapter);
-      source.framesFollowing = adapter.framesFollowing?.bind(adapter) ?? baseFramesFollowing;
+    const baseFrameAt=source.frameAt.bind(source),baseFramesAfter=source.framesAfter.bind(source),baseFramesFrom=source.framesFrom.bind(source),baseFramesFollowing=source.framesFollowing?.bind(source);
+    activateVerifiedNativeYuv=adapter=>{
+      verifiedNativeYuv=adapter;
+      source.frameAt=adapter.frameAt.bind(adapter);
+      source.framesAfter=adapter.framesAfter.bind(adapter);
+      source.framesFrom=adapter.framesFrom.bind(adapter);
+      source.framesFollowing=adapter.framesFollowing?.bind(adapter) ?? baseFramesFollowing;
     };
-    deactivateVerifiedNativeYuv = () => {
-      const adapter = verifiedNativeYuv;
-      if (!adapter) return;
-      verifiedNativeYuv = undefined;
-      source.frameAt = baseFrameAt;
-      source.framesAfter = baseFramesAfter;
-      source.framesFrom = baseFramesFrom;
-      source.framesFollowing = baseFramesFollowing;
+    deactivateVerifiedNativeYuv=()=>{
+      const adapter=verifiedNativeYuv;
+      if(!adapter)return;
+      verifiedNativeYuv=undefined;
+      source.frameAt=baseFrameAt;
+      source.framesAfter=baseFramesAfter;
+      source.framesFrom=baseFramesFrom;
+      source.framesFollowing=baseFramesFollowing;
       adapter.dispose();
     };
     const stopMetadata = attachCachedTrackMetadata(source, (offset, length) => activeRpc.requestCachedBytes(offset, length));
-    activeRpc.onCachedAudio = (generation, batch) => {
-      if (!disposed) source.onCachedAudio?.(generation, batch);
-    };
-    if (container === 'mp4' || container === 'matroska' || container === 'ts')
-      stopAudio = attachCachedContainerAudio(
-        source,
-        (offset, length) => activeRpc.requestCachedBytes(offset, length),
-        undefined,
-        () => activeRpc.requestCachedWindows(),
-      );
+    activeRpc.onCachedAudio = (generation, batch) => { if (!disposed) source.onCachedAudio?.(generation, batch); };
+    if (container === 'mp4'||container==='matroska'||container==='ts') stopAudio = attachCachedContainerAudio(source, (offset, length) => activeRpc.requestCachedBytes(offset, length),undefined,()=>activeRpc.requestCachedWindows());
     return source;
-  } catch (error) {
-    releaseReservation();
-    rpc?.terminate();
-    throw error;
-  }
+  } catch (error) { releaseReservation(); rpc?.terminate(); throw error; }
 }

@@ -1,21 +1,48 @@
 # 紧凑格式与检索
 
-代码格式由固定版本 Prettier 和 `.prettierrc.json` 决定：2 空格、LF、单引号、分号，目标宽度 140，短对象使用 `objectWrap: collapse`。短 import、类型和调用能放下时保持一行；超过 160 字符应检查语义分组。字符串、SQL、模板和元数据允许合理超宽，格式器不改写嵌入语言。
+声明紧凑，执行顺序清楚。基础使用 2 空格、LF、单引号和分号；普通代码目标约 140 字符，超过 160 时检查语义分组。字符串、SQL、模板和元数据允许合理例外。行宽不是强制换行算法，也不能替代对语法结构的判断。
 
-声明紧凑，执行顺序清楚。副作用、await、状态变更、监听器注册/移除、资源获取/释放分别展示；循环、复杂分支和 try/catch/finally 使用可审查的块结构。简单 guard 可保持短式。不要用文件行数上限拆职责，也不要把完整流程压成一行。
+以下短结构都允许保持一行，不能因为格式器偏好而强制展开：
 
-```sh
-npm run format                         # 写入已迁移文件及本地改动、新增的代码文件
-npm run format:check                   # 只检查，不改文件
-npm run format:check -- --base origin/main # 加上本分支已提交的改动
-npm run format -- src/path/file.ts     # 显式迁移另一个文件
+```ts
+import { first, second } from './module.ts';
+const journal = new FrozenSubmissionJournal(sessionStorage, storage, cambiInput);
+const sx = x + d.visibleRect.x, sy = y + d.visibleRect.y;
+const e = clamp(signal), a = 0.17883277, b = 1 - 4 * a, c = 0.5 - a * Math.log(4 * a);
+type Point = { x: number; y: number };
+interface Rect { x: number; y: number; width: number; height: number; }
+get terminationCallbackErrors(): readonly unknown[] { return this.cleanupCallbackErrors; }
+frameAt(pts: number) { return this.source.frameAt(pts); }
+if (closed) return;
+if (closed) { return; }
 ```
 
-`scripts/testing/format-files.json` 是首批迁移集合，包含评分服务、代表性面板、路由、边界检查及本轮修改。日常 CI 取 PR 的 base SHA 或 main 推送前的 SHA，对该次改动的所有代码文件整文件检查，也检查首批集合。既有未触碰文件不全仓重排；以后触碰即迁移，后续再修改也不能回到旧格式。找不到比较提交时明确失败，不静默跳过。生成目录、vendor、翻译数据、JSON 样本及历史取证不属于格式集合。
+多步副作用、await、状态变更、监听器注册/移除、资源获取/释放清楚分行；循环、复杂分支和 try/catch/finally 保留可审查的块结构：
 
-`test/contract/format.test.mjs` 检查短声明、执行/释放顺序、幂等格式及提交/工作树/新增文件的门禁。必要的源码结构断言使用 TypeScript AST，不能把 `env.PATH=empty` 的空格或调用参数的换行当作契约。
+```ts
+const lease = acquire();
+try {
+  await run();
+  commit();
+} finally {
+  await stop();
+  lease.release();
+}
+```
 
-默认按职责限定检索范围，避免单行大 JSON 和历史证据淹没结果：
+修一个条件不要求迁移文件其余布局。格式迁移必须明确列出范围、说明目的，并单独审查；不得顺带全文件重排，也不按文件行数拆职责。本轮仅保留 `server/analysis/cambi/routes.ts` 的显式排版整理，让原来挤在一行的读取、取消和 finally 流程可审查。其余既有文件保留未修改部分的布局。
+
+```sh
+npm run format:check                         # 只读检查本地改动行和新文件
+npm run format:check -- --base origin/main   # 也覆盖本分支已经提交的改动行
+npm run format:check -- src/path/file.ts     # 显式检查选中文件的基础卫生
+```
+
+CI 取 PR 的 base SHA 或 main 推送前的 SHA，只检查新增/修改行的 LF、缩进 Tab 和尾随空白。没有已管理文件清单、整文件 Prettier 相等检查或自动写入模式；未修改的旧布局不会阻止小修复，检查也不会拒绝上述紧凑结构。暂不采用格式器强制完整布局，`printWidth` 和 `objectWrap` 不能表达这里的全部偏好。
+
+`test/contract/format.test.mjs` 覆盖上述紧凑样例、只改旧文件一行、提交/暂存/工作树插入后的行号、新文件、显式全文件检查和只读行为。必要的源码结构断言使用 TypeScript AST，不能把 `env.PATH=empty` 的空格或调用参数换行当作契约。
+
+默认按职责限定检索范围，避免大 JSON 和历史证据淹没结果：
 
 ```sh
 rg -n -C 2 -g '!**/generated/**' '目标符号' src server shared

@@ -41,21 +41,15 @@ export class BrowserWorker extends NodeWorker {
       this.addEventListener(type, listener);
     }
   }
-  get onmessage() {
-    return this.#properties.get('message') ?? null;
-  }
+  get onmessage() { return this.#properties.get('message') ?? null; }
   set onmessage(listener: ((event: any) => void) | null) {
     this.setHandler('message', listener);
   }
-  get onerror() {
-    return this.#properties.get('error') ?? null;
-  }
+  get onerror() { return this.#properties.get('error') ?? null; }
   set onerror(listener: ((event: any) => void) | null) {
     this.setHandler('error', listener);
   }
-  get onmessageerror() {
-    return this.#properties.get('messageerror') ?? null;
-  }
+  get onmessageerror() { return this.#properties.get('messageerror') ?? null; }
   set onmessageerror(listener: ((event: any) => void) | null) {
     this.setHandler('messageerror', listener);
   }
