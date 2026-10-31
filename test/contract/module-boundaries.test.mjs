@@ -175,3 +175,22 @@ test('browser and server compilation keep their host globals separate', () => {
       for (const name of names) assert.match(result.stdout, new RegExp(`Cannot find name '${name}'`));
     });
 });
+
+test('quality protocols reject external type, runtime, re-export and dynamic penetration', () => {
+  const internals = ['candidate-publication', 'prepared-facts', 'temporal-service', 'temporal-runner', 'result-commands'];
+  for (const name of internals) for (const syntax of [
+    "import type {T} from 'TARGET'", "export * from 'TARGET'", "import('TARGET')", "require('TARGET')",
+  ]) {
+    const target = `server/analysis/quality/${name}.ts`;
+    project({ 'server/routes/probe.ts': syntax.replace('TARGET', `../analysis/quality/${name}.ts`), [target]: 'export type T=number;' }, root =>
+      assert.throws(() => checkModuleBoundaries(root), /quality internal capability is private/));
+  }
+  for (const name of ['candidate-publication', 'prepared-facts', 'temporal-service'])
+    project({ 'server/analysis/vmaf/service.ts': `import '../quality/${name}.ts'`, [`server/analysis/quality/${name}.ts`]: 'export {}' }, root =>
+      assert.doesNotThrow(() => checkModuleBoundaries(root)));
+});
+test('shared temporal facts and XPSNR cannot obtain contracts from VMAF', () => {
+  for (const name of ['temporal-contract', 'xpsnr'])
+    project({ [`shared/analysis/quality/${name}.ts`]: "import type {T} from './vmaf.ts'", 'shared/analysis/quality/vmaf.ts': 'export type T=number' }, root =>
+      assert.throws(() => checkModuleBoundaries(root), /temporal facts depend on another metric/));
+});

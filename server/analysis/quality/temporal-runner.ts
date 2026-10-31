@@ -1,7 +1,8 @@
+import type { TemporalPrepared, TemporalPlanSnapshot } from '../../../shared/analysis/quality/temporal-contract.ts';
 import type { QualityExecutionContext } from './execution-context.ts';
 import type { QualityExecutionContract } from '../../../shared/analysis/quality/reexecution.ts';
 import { canonicalJson } from '../../../shared/analysis/quality/vmaf.ts';
-import type { VmafInput, VmafPrepared, VmafPlanSnapshot, VmafNativeResult } from '../../../shared/analysis/quality/vmaf.ts';
+import type { VmafInput, VmafNativeResult } from '../../../shared/analysis/quality/vmaf.ts';
 import type { XpsnrInput, XpsnrNativeResult } from '../../../shared/analysis/quality/xpsnr.ts';
 import { AnalysisScoringRunner } from './analysis-scoring-runner.ts';
 import type { AnalysisComponentOwner } from './component-owner.ts';
@@ -12,7 +13,7 @@ export type TemporalHooks = {
   admitted(): void;
   phase(name: string): void;
   progress(frames: number, total: number): void;
-  prepared(value: VmafPrepared): void;
+  prepared(value: TemporalPrepared): void;
 };
 /** One physical ownership span covers preflight, decode/score, component and
  * source verification. Metric adapters supply identities and errors only. */
@@ -51,7 +52,7 @@ export abstract class TemporalScoringRunner<
       return { ...basic, reason: (error as { code?: string }).code ?? 'component-unavailable' };
     }
   }
-  private data(input: I, snapshot: VmafPlanSnapshot, contract: QualityExecutionContract['analysis']) {
+  private data(input: I, snapshot: TemporalPlanSnapshot, contract: QualityExecutionContract['analysis']) {
     return {
       metric: this.kind,
       database: this.library.indexDatabase,
@@ -62,7 +63,7 @@ export abstract class TemporalScoringRunner<
       analysisContract: contract,
     };
   }
-  async reexecutionPreflight(input: I, snapshot: VmafPlanSnapshot, expected: QualityExecutionContract, signal: AbortSignal) {
+  async reexecutionPreflight(input: I, snapshot: TemporalPlanSnapshot, expected: QualityExecutionContract, signal: AbortSignal) {
     return this.owned(
       { budget: { maxElapsedMs: Math.min(input.budget.maxElapsedMs, 30000) } },
       signal,
@@ -75,7 +76,7 @@ export abstract class TemporalScoringRunner<
         ),
     );
   }
-  async preflight(input: I, snapshot: VmafPlanSnapshot, signal: AbortSignal) {
+  async preflight(input: I, snapshot: TemporalPlanSnapshot, signal: AbortSignal) {
     return this.owned(
       input,
       signal,
@@ -97,7 +98,7 @@ export abstract class TemporalScoringRunner<
       },
     );
   }
-  async run(input: I, snapshot: VmafPlanSnapshot, signal: AbortSignal, hooks: TemporalHooks) {
+  async run(input: I, snapshot: TemporalPlanSnapshot, signal: AbortSignal, hooks: TemporalHooks) {
     return this.owned(
       { budget: { maxElapsedMs: Math.min(input.budget.maxElapsedMs, input.budget.nativeCpuSeconds * 1000) } },
       signal,
@@ -107,7 +108,7 @@ export abstract class TemporalScoringRunner<
         const contract = await this.contract(input),
           data = this.data(input, snapshot, contract);
         hooks.phase('decode-and-score');
-        const value = await this.worker<{ prepared: VmafPrepared; native: N }>(
+        const value = await this.worker<{ prepared: TemporalPrepared; native: N }>(
           '../quality/scoring-worker.ts',
           { ...data, mode: 'decode', expectedExecutionContract: hooks.expectedExecutionContract },
           combined,

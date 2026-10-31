@@ -1,12 +1,10 @@
+import type { TemporalPrepared } from '../../../shared/analysis/quality/temporal-contract.ts';
 import { normalizeClock } from "../../../shared/media/indexing/rational-clock.ts";
 import { createHash } from "node:crypto";
 import { parentPort, workerData } from "node:worker_threads";
 import { AnalysisScorer } from "../../../shared/analysis/quality/analysis-core.ts";
 import { VMAF_MODELS } from "../../../shared/analysis/quality/vmaf.ts";
-import type {
-  VmafNativeResult,
-  VmafPrepared,
-} from "../../../shared/analysis/quality/vmaf.ts";
+import type { VmafNativeResult } from "../../../shared/analysis/quality/vmaf.ts";
 import { loadAnalysisScoring } from "./analysis-component.ts";
 import { runCambiDecode } from "../cambi/decode-task.ts";
 import { CAMBI_RECIPE } from "../../../shared/analysis/quality/cambi.ts";
@@ -140,7 +138,7 @@ try {
         xpsnr.feed(reference, distorted, roi, index);
         memory();
       },
-    )) as VmafPrepared;
+    )) as TemporalPrepared;
     if (!xpsnr) throw Error("Empty XPSNR sequence");
     const scores = xpsnr.finish();
     const db = (value: number): XpsnrDb =>
@@ -212,7 +210,7 @@ try {
         scorer.feed(reference, distorted, roi, index);
         memory();
       },
-    )) as VmafPrepared;
+    )) as TemporalPrepared;
     if (!scorer) throw Error("Empty scoring sequence");
     const scores = scorer.finish().vmaf!;
     const result: VmafNativeResult = {

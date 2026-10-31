@@ -17,3 +17,11 @@
 `shared/color/yuv-planes.ts` 拥有布局、校验、采样和可见 chroma 边界。YUV 颜色转换、HDR 参考转换与帧描述单向依赖该模块；`yuv-color.ts` 保留原导出兼容，不再与 HDR 转换形成运行时环。
 
 本轮评估了 ReviewSession 和分析面板。工作区恢复仍跨统一 run 队列、配置 lease、源与轨道提交/回滚；分析面板已经有 queries、inspection 和 settled demand owner，统一在 abort 时释放订阅与观察器。这次没有发现可与现有状态完整分离、同时降低协议份数的额外提取，不按文件长度拆 facade 或搬走闭包函数。
+
+质量评分域使用具名公开能力：指标 `service.ts` 保留 policy、准入与证据，应用通过
+`QualityApplication` 装配，跨服务命令通过 `quality-service-ports.ts` 取得窄能力。
+`candidate-publication.ts`、`prepared-facts.ts`、`temporal-service.ts`、
+`temporal-runner.ts` 和 `result-commands.ts` 只允许登记的装配/指标调用者访问。
+这也约束类型、re-export、require 和字面量动态 import；旧 `vmaf/runner.ts`
+只允许兼容 Hooks 的纯类型转发。中立 `temporal-contract.ts` 不得依赖具体指标，
+XPSNR 也不得借 VMAF 取得共同合同或限制。所有权见 [质量域](quality-ownership.md)。

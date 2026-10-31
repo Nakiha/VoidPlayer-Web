@@ -9,6 +9,17 @@ const portable = file => file.replaceAll('\\', '/');
 const computedLoaders = new Set(['src/i18n.ts','src/media/decoding/core-loader.ts','src/analysis/bitstream/local-worker.ts','server/frame-index-builder.ts','server/analysis/bitstream/worker.ts','server/analysis/quality/task.ts','server/analysis/vmaf/decode-task.ts','server/analysis/cambi/decode-task.ts','server/analysis/quality/analysis-component.ts']);
 const entrypoints = new Set(['bootstrap.ts','agent.ts','build-info.ts','env.d.ts','i18n.ts','main.ts','session.ts']);
 const codeFile = file => /\.(?:[cm]?js|[cm]?ts|tsx)$/.test(file);
+// Internal protocols have named callers, not directory-wide friendship. This
+// applies to type edges and re-exports too, so a facade cannot leak the protocol.
+const qualityInternals = new Map([
+  ['server/analysis/quality/candidate-publication.ts', ['server/analysis/vmaf/service.ts', 'server/analysis/xpsnr/service.ts']],
+  ['server/analysis/quality/prepared-facts.ts', ['server/analysis/vmaf/service.ts', 'server/analysis/xpsnr/service.ts']],
+  ['server/analysis/quality/temporal-service.ts', ['server/analysis/vmaf/service.ts', 'server/analysis/xpsnr/service.ts']],
+  ['server/analysis/quality/temporal-runner.ts', [
+    'server/analysis/quality/temporal-service.ts', 'server/analysis/vmaf/runner.ts', 'server/analysis/vmaf/wasm-runner.ts', 'server/analysis/xpsnr/wasm-runner.ts',
+  ]],
+  ['server/analysis/quality/result-commands.ts', ['server/quality-application.ts', 'server/quality-service-ports.ts']],
+]);
 export function moduleEdges(code, file) {
   const tree = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true), edges = [];
   const add = (node, kind) => { if (node && ts.isStringLiteralLike(node)) edges.push({ specifier: node.text, kind }); else if (kind === 'load') edges.push({specifier:null,kind:'computed-load'}); };
@@ -150,6 +161,12 @@ export function checkModuleBoundaries(root) {
     const target = path.resolve(edge.kind === 'compiled-url' ? path.join(root,'server') : path.dirname(file), edge.specifier), to = portable(path.relative(root, target));
     assert.ok(!to.startsWith('../'), `${from}: dependency escapes project: ${to}`);
     assert.ok(existsSync(target), `${from}: missing ${edge.kind} dependency: ${to}`);
+    if (qualityInternals.has(to))
+      assert.ok(qualityInternals.get(to).includes(from), `${from}: quality internal capability is private: ${to}`);
+    if (from === 'server/analysis/vmaf/runner.ts' && to === 'server/analysis/quality/temporal-runner.ts')
+      assert.equal(edge.kind, 'type', `${from}: compatibility hooks must remain type-only`);
+    if (from === 'shared/analysis/quality/temporal-contract.ts' || from === 'shared/analysis/quality/xpsnr.ts')
+      assert.ok(!/^shared\/analysis\/quality\/(vmaf|xpsnr)\.ts$/.test(to), `${from}: temporal facts depend on another metric: ${to}`);
     if (from.startsWith('src/')) assert.ok(!to.startsWith('server/'), `${from}: frontend imports server ${to}`);
     if (from.startsWith('shared/')) assert.ok(!/^(src|server)\//.test(to), `${from}: shared code imports host ${to}`);
     if (from.startsWith('server/') && to.startsWith('src/')) assert.ok(false, `${from}: server imports frontend ${to}`);

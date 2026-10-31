@@ -1,0 +1,117 @@
+{
+  "baseline": "2c1fbc20acbb1707c4a4fe938ce5e93685b3d356",
+  "method": "TypeScript AST leaf tokens excluding EOF and trivia; UTF-8 bytes after removing whitespace. All changed server/shared production files and added helpers included. UI path migration excluded and credited zero.",
+  "beforeTokens": 29375,
+  "afterTokens": 29318,
+  "tokenDelta": -57,
+  "beforeBytes": 118075,
+  "afterBytes": 121318,
+  "byteDelta": 3243,
+  "files": [
+    {
+      "file": "server/analysis/quality/candidate-publication.ts",
+      "beforeTokens": 0,
+      "afterTokens": 610,
+      "beforeBytes": 0,
+      "afterBytes": 2691
+    },
+    {
+      "file": "server/analysis/quality/prepared-facts.ts",
+      "beforeTokens": 0,
+      "afterTokens": 449,
+      "beforeBytes": 0,
+      "afterBytes": 2071
+    },
+    {
+      "file": "server/analysis/quality/result-commands.ts",
+      "beforeTokens": 0,
+      "afterTokens": 244,
+      "beforeBytes": 0,
+      "afterBytes": 1479
+    },
+    {
+      "file": "server/analysis/quality/scoring-worker.ts",
+      "beforeTokens": 1662,
+      "afterTokens": 1667,
+      "beforeBytes": 6594,
+      "afterBytes": 6676
+    },
+    {
+      "file": "server/analysis/quality/temporal-runner.ts",
+      "beforeTokens": 1139,
+      "afterTokens": 1145,
+      "beforeBytes": 5329,
+      "afterBytes": 5432
+    },
+    {
+      "file": "server/analysis/quality/temporal-service.ts",
+      "beforeTokens": 5643,
+      "afterTokens": 5649,
+      "beforeBytes": 20369,
+      "afterBytes": 20551
+    },
+    {
+      "file": "server/analysis/vmaf/decode-task.ts",
+      "beforeTokens": 2881,
+      "afterTokens": 2886,
+      "beforeBytes": 11566,
+      "afterBytes": 11652
+    },
+    {
+      "file": "server/analysis/vmaf/service.ts",
+      "beforeTokens": 3138,
+      "afterTokens": 2146,
+      "beforeBytes": 11944,
+      "afterBytes": 8405
+    },
+    {
+      "file": "server/analysis/xpsnr/service.ts",
+      "beforeTokens": 3767,
+      "afterTokens": 2797,
+      "beforeBytes": 14445,
+      "afterBytes": 10979
+    },
+    {
+      "file": "server/quality-application.ts",
+      "beforeTokens": 1622,
+      "afterTokens": 1661,
+      "beforeBytes": 7406,
+      "afterBytes": 7641
+    },
+    {
+      "file": "server/quality-service-ports.ts",
+      "beforeTokens": 346,
+      "afterTokens": 447,
+      "beforeBytes": 2430,
+      "afterBytes": 3111
+    },
+    {
+      "file": "server/tasks/routes.ts",
+      "beforeTokens": 898,
+      "afterTokens": 782,
+      "beforeBytes": 3911,
+      "afterBytes": 3303
+    },
+    {
+      "file": "shared/analysis/quality/temporal-contract.ts",
+      "beforeTokens": 0,
+      "afterTokens": 3659,
+      "beforeBytes": 0,
+      "afterBytes": 14295
+    },
+    {
+      "file": "shared/analysis/quality/vmaf.ts",
+      "beforeTokens": 5332,
+      "afterTokens": 2238,
+      "beforeBytes": 21408,
+      "afterBytes": 10215
+    },
+    {
+      "file": "shared/analysis/quality/xpsnr.ts",
+      "beforeTokens": 2947,
+      "afterTokens": 2938,
+      "beforeBytes": 12673,
+      "afterBytes": 12817
+    }
+  ]
+}

@@ -1,16 +1,18 @@
+import { temporalWitness } from '../../../shared/analysis/quality/temporal-contract.ts';
 import {
   TemporalScoringService,
   scoringDigest as digest,
   scoringNow as now,
 } from "../quality/temporal-service.ts";
-import { settleScoringReservations } from "../quality/result-retention.ts";
+import { candidatePublication, publishCandidates } from '../quality/candidate-publication.ts';
+import type { CandidatePolicy } from '../quality/candidate-publication.ts';
+import { validatePreparedFacts } from '../quality/prepared-facts.ts';
 import {
   comparisonLocation,
   pinComparison,
 } from "../../../shared/analysis/quality/xpsnr-comparison.ts";
 import type { XpsnrComparison } from "../../../shared/analysis/quality/xpsnr-comparison.ts";
 import type { QualityExecutionContract } from "../../../shared/analysis/quality/reexecution.ts";
-import { randomUUID } from "node:crypto";
 import { AdminError } from "../../admin-error.ts";
 import type { Actor } from "../../identity.ts";
 import type { CorrespondenceService } from "../quality/correspondence-service.ts";
@@ -36,25 +38,6 @@ import type {
 } from "../../../shared/analysis/quality/xpsnr.ts";
 import type { WasmXpsnrRunner } from "./wasm-runner.ts";
 import { clockKey } from "../../../shared/media/indexing/rational-clock.ts";
-type Publication = {
-  policy: CandidatePolicy;
-  selected: {
-    index: number;
-    id: string;
-    operationId: string;
-    ref: QualityEvidenceRef;
-  }[];
-  createdIds: string[];
-};
-type CandidatePolicy = {
-  space: string;
-  side: "reference" | "distorted";
-  maxScore: number;
-  limit: number;
-  minFrameDistance: number;
-  text: string;
-  severity: number;
-};
 export class NativeXpsnrService extends TemporalScoringService<
   "xpsnr",
   XpsnrInput
@@ -158,76 +141,17 @@ export class NativeXpsnrService extends TemporalScoringService<
         "Prepared sequence identity changed",
       );
     if (
-      value.pairs.length !== value.sequence.pairs.length ||
       value.geometry.width < XPSNR_LIMITS.minDimension ||
       value.geometry.height < XPSNR_LIMITS.minDimension ||
       value.geometry.width > XPSNR_LIMITS.width ||
       value.geometry.height > XPSNR_LIMITS.height ||
-      ![8, 10].includes(value.geometry.bitDepth) ||
-      value.raw.bytes !==
-        ((value.geometry.width * value.geometry.height * 3) / 2) *
-          (value.geometry.bitDepth === 8 ? 1 : 2) *
-          value.pairs.length *
-          2 ||
-      [value.raw.referenceSha256, value.raw.distortedSha256].some(
-        (h) => !/^[a-f0-9]{64}$/.test(h),
-      )
+      ![8, 10].includes(value.geometry.bitDepth)
     )
       throw new XpsnrError(
         "worker-result-invalid",
         "Prepared raw frame count/geometry differs",
       );
-    for (const [index, pair] of value.pairs.entries()) {
-      qualityEvidenceValue(pair);
-      const expected = value.sequence.pairs[index];
-      if (
-        canonicalJson(pair.result.metric.roi) !== canonicalJson(expected.roi) ||
-        pair.result.metric.bitDepth !== value.geometry.bitDepth ||
-        !!pair.result.ssim !== input.metrics.ssim
-      )
-        throw new XpsnrError(
-          "worker-result-invalid",
-          "Prepared metric recipe changed",
-        );
-      for (const side of ["reference", "distorted"] as const) {
-        const p = pair.result.provenance[side],
-          e = expected[side];
-        for (const field of [
-          "mediaId",
-          "mediaVersion",
-          "size",
-          "indexIdentity",
-          "indexBuildId",
-          "sourcePtsUs",
-          "picture",
-          "decode",
-        ] as const)
-          if (canonicalJson(p[field]) !== canonicalJson(e[field]))
-            throw new XpsnrError(
-              "worker-result-invalid",
-              "Prepared source/picture identity changed",
-            );
-      }
-    }
-    const budget = snapshot.value.rangePlan!.input.budget;
-    if (
-      value.work.readBytes > budget.maxReadBytes ||
-      value.work.packets > budget.maxPackets ||
-      value.work.outputFrames > budget.maxOutputFrames ||
-      value.work.inputBytes > budget.maxInputBytes
-    )
-      throw new XpsnrError(
-        "worker-result-invalid",
-        "Prepared work exceeds frozen total budget",
-      );
-    if (
-      value.raw.bytes > input.budget.maxRawBytes ||
-      Buffer.byteLength(JSON.stringify(value)) > XPSNR_LIMITS.resultBytes
-    )
-      throw new XpsnrError(
-        "budget-exceeded",
-        "Prepared sequence result budget exceeded",
-      );
+    validatePreparedFacts(value, snapshot, input, XPSNR_LIMITS.resultBytes, this.metricError);
   }
   summary(id: string, actor: string) {
     const j = this.get(id, actor),
@@ -426,49 +350,14 @@ export class NativeXpsnrService extends TemporalScoringService<
         attemptId: j.attemptId,
         resultDigest: j.resultDigest!,
         plan: r.plan,
-        sequence: {
-          cadenceUs: r.prepared.sequence.cadenceUs,
-          ...(r.prepared.sequence.cadence
-            ? { cadence: r.prepared.sequence.cadence }
-            : {}),
-          referenceIntegrity: "not-certified",
-          concealmentDetection: "unavailable",
-          pairs: r.prepared.pairs.map((p) => ({
-            reference: xpsnrSequenceFrame(p.result.provenance.reference),
-            distorted: xpsnrSequenceFrame(p.result.provenance.distorted),
-          })),
-        },
-        index,
-        frames: r.prepared.pairs.length,
+        ...temporalWitness(r.prepared, index, digest),
         planes: r.xpsnr.frames[index].planes,
         pooled: r.xpsnr.pooled,
         component: r.xpsnr.component,
         recipe: r.xpsnr.recipe,
-        raw: r.prepared.raw,
         statisticsSha256: r.xpsnr.statistics.sha256,
-        spatial: (() => {
-          const roi = value.result.metric.roi,
-            d = value.result.provenance.reference.decoded.description;
-          return roi.x ||
-            roi.y ||
-            roi.width !== d.width ||
-            roi.height !== d.height
-            ? "cropped-region-temporal-score-not-localized"
-            : "full-frame-temporal-score-not-localized";
-        })(),
       };
-      if (association.frames > 32) {
-        const pairs = association.sequence.pairs,
-          indices = [...new Set([0, index, pairs.length - 1])].sort(
-            (a, b) => a - b,
-          );
-        association.sequence = {
-          ...association.sequence,
-          indices,
-          pairsSha256: digest(pairs),
-          pairs: indices.map((i) => pairs[i]),
-        };
-      }
+
       (
         value as typeof value & { sequenceXpsnr: XpsnrAssociation }
       ).sequenceXpsnr = association;
@@ -523,10 +412,7 @@ export class NativeXpsnrService extends TemporalScoringService<
   }
   publication(id: string, actor: string) {
     this.get(id, actor);
-    const row = this.db
-      .prepare("SELECT body FROM quality_xpsnr_publications WHERE job_id=?")
-      .get(id);
-    return row ? (JSON.parse(String(row.body)) as Publication) : null;
+    return candidatePublication(this.db, 'xpsnr', id);
   }
   publish(
     id: string,
@@ -539,17 +425,7 @@ export class NativeXpsnrService extends TemporalScoringService<
     this.available();
     const j = this.get(id, actor.id),
       policy = this.policy(value);
-    let publication = this.publication(id, actor.id);
-    if (
-      publication &&
-      canonicalJson(publication.policy) !== canonicalJson(policy)
-    )
-      throw new AdminError(
-        409,
-        "Candidate policy is already frozen.",
-        "candidate-policy-conflict",
-      );
-    if (!publication) {
+    return publishCandidates(this.db, 'xpsnr', j, actor, policy, origin, annotations, requestId, () => {
       const r = this.result(id, actor.id);
       if (!r.xpsnr || j.state !== "completed")
         throw new AdminError(
@@ -570,55 +446,7 @@ export class NativeXpsnrService extends TemporalScoringService<
           selected.push(f.index);
           if (selected.length === policy.limit) break;
         }
-      publication = {
-        policy,
-        selected: selected.map((index) => ({
-          index,
-          id: randomUUID(),
-          operationId: randomUUID(),
-          ref: this.ref(id, actor.id, index, policy.side),
-        })),
-        createdIds: [],
-      };
-      this.db
-        .prepare("INSERT INTO quality_xpsnr_publications VALUES(?,?)")
-        .run(id, JSON.stringify(publication));
-      settleScoringReservations(this.db, "xpsnr", id);
-    }
-    for (const item of publication.selected) {
-      annotations.mutate(
-        policy.space,
-        {
-          action: "create-quality-candidate",
-          operationId: item.operationId,
-          id: item.id,
-          revision: 0,
-          client: {
-            kind:
-              j.input.client.kind === "browser"
-                ? "gui"
-                : j.input.client.kind === "agent"
-                  ? "agent"
-                  : "http",
-            id: "xpsnr_" + j.id,
-          },
-          evidence: item.ref,
-          candidate: { text: policy.text, severity: policy.severity },
-        },
-        actor,
-        requestId,
-        { origin, resolve: (ref) => this.evidence(ref, actor.id) },
-      );
-      if (!publication.createdIds.includes(item.id)) {
-        publication.createdIds.push(item.id);
-        this.db
-          .prepare(
-            "UPDATE quality_xpsnr_publications SET body=? WHERE job_id=?",
-          )
-          .run(JSON.stringify(publication), id);
-        settleScoringReservations(this.db, "xpsnr", id);
-      }
-    }
-    return publication;
+      return selected.map(index => ({ index, ref: this.ref(id, actor.id, index, policy.side) }));
+    }, ref => this.evidence(ref, actor.id));
   }
 }

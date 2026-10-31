@@ -1,3 +1,4 @@
+import type { FramePairRequest } from './frame-pair.ts';
 import type { ReexecutionMetadata } from "./reexecution.ts";
 import {
   clockFraction,
@@ -10,21 +11,11 @@ import type {
   ScoringComponent,
   AnalysisScoringResources,
 } from "./scoring-component.ts";
-import {
-  canonicalJson,
-  VMAF_LIMITS,
-  vmafSequence,
-  vmafSequenceFrame,
-  vmafSourceVersion,
-  validateTemporalSequenceWitness,
-} from "./vmaf.ts";
+import { canonicalJson } from './correspondence.ts';
+import { TEMPORAL_RESOURCE_LIMITS, temporalSequence, temporalSequenceFrame, temporalSourceVersion, validateTemporalSequenceWitness } from './temporal-contract.ts';
 import type {
-  VmafPrepared,
-  VmafPlanSnapshot,
-  VmafMetricState,
-  VmafSequence,
-  VmafAssociation,
-} from "./vmaf.ts";
+  TemporalPrepared, TemporalPlanSnapshot, TemporalMetricState, TemporalSequence, TemporalAssociation, TemporalPlanPin,
+} from './temporal-contract.ts';
 import type { LibraryPairResult } from "./library-pair.ts";
 import type { QualityVideoIndex } from "./source-index.ts";
 import type { PsnrStatistics } from "./psnr.ts";
@@ -34,7 +25,9 @@ export const XPSNR_FILTER_SHA256 =
   "4b59b32eb4a501ac74f6d767a916ef1a29833e1895b150cfa96b8e4ffb91f3d7";
 export const XPSNR_SUPERVISOR_SOURCE_SHA256 =
   "df6ab9f43548839f3743d773958468f0e5f6416268006843eb68deab43eff48f";
-export const XPSNR_LIMITS = Object.freeze({ ...VMAF_LIMITS });
+export const XPSNR_LIMITS = Object.freeze({
+  ...TEMPORAL_RESOURCE_LIMITS, frames: 1024, width: 4096, height: 2304, minDimension: 64,
+});
 export const XPSNR_RECIPE = "ffmpeg-xpsnr-reference-first-temporal-v1";
 export type XpsnrDb = PsnrStatistics["psnr"];
 export type XpsnrPlanes = { y: XpsnrDb; u: XpsnrDb; v: XpsnrDb };
@@ -46,7 +39,7 @@ export type XpsnrInput = {
   schema: "voidplayer-native-xpsnr-job";
   version: 1;
   client: { id: string; kind: "browser" | "agent" | "other" };
-  plan: { id: string; attemptId: string; digest: string };
+  plan: TemporalPlanPin;
   recipe: typeof XPSNR_RECIPE;
   cadenceUs: number;
   cadence?: RationalClock;
@@ -58,9 +51,9 @@ export type XpsnrInput = {
     nativeMemoryBytes: number;
   };
 };
-export type XpsnrPlanSnapshot = VmafPlanSnapshot;
-export type XpsnrPrepared = VmafPrepared;
-export type XpsnrSequence = VmafSequence;
+export type XpsnrPlanSnapshot = TemporalPlanSnapshot;
+export type XpsnrPrepared = TemporalPrepared;
+export type XpsnrSequence = TemporalSequence;
 export type XpsnrNativeResult = {
   frames: { index: number; planes: XpsnrPlanes; minimum: XpsnrDb }[];
   pooled: { planes: XpsnrPlanes; minimum: XpsnrDb };
@@ -86,7 +79,7 @@ export type XpsnrNativeResult = {
     width: number;
     height: number;
     bitDepth: 8 | 10;
-    roi?: VmafAssociation["recipe"]["roi"];
+    roi?: FramePairRequest["roi"];
     cadenceUs: number;
     cadence?: RationalClock;
     frameRate: { numerator: number; denominator: number };
@@ -119,9 +112,9 @@ export type XpsnrResult = {
   prepared: XpsnrPrepared;
   xpsnr: XpsnrNativeResult | null;
   metrics: {
-    psnr: VmafMetricState;
-    ssim: VmafMetricState;
-    xpsnr: VmafMetricState;
+    psnr: TemporalMetricState;
+    ssim: TemporalMetricState;
+    xpsnr: TemporalMetricState;
   };
 };
 export type XpsnrJob = ReexecutionMetadata & {
@@ -266,16 +259,16 @@ export function xpsnrSequence(
   cadence?: RationalClock,
 ) {
   try {
-    return vmafSequence(snapshot, indexes, cadenceUs, cadence);
+    return temporalSequence(snapshot, indexes, cadenceUs, cadence, { frames: XPSNR_LIMITS.frames, fail });
   } catch (e) {
     throw new XpsnrError(
       "unsupported-xpsnr-sequence",
-      (e as Error).message.replaceAll("VMAF", "XPSNR"),
+      (e as Error).message,
     );
   }
 }
-export const xpsnrSequenceFrame = vmafSequenceFrame;
-export const xpsnrSourceVersion = vmafSourceVersion;
+export const xpsnrSequenceFrame = temporalSequenceFrame;
+export const xpsnrSourceVersion = (sources: Parameters<typeof temporalSourceVersion>[0]) => temporalSourceVersion(sources, fail);
 export function xpsnrDb(v: unknown): XpsnrDb {
   if (v === "inf") return { kind: "positive-infinity", db: null };
   if (
@@ -330,23 +323,13 @@ export function parseXpsnrStatistics(text: string, frames: number) {
     fail("Official plane minimum differs");
   return { frames: values, pooled: { planes, minimum } };
 }
-export type XpsnrAssociation = {
+export type XpsnrAssociation = TemporalAssociation & {
   schema: "voidplayer-xpsnr-sequence-association";
-  version: 1 | 2;
-  jobId: string;
-  attemptId: string;
-  resultDigest: string;
-  plan: XpsnrInput["plan"];
-  sequence: VmafAssociation["sequence"];
-  index: number;
-  frames: number;
   planes: XpsnrPlanes;
   pooled: XpsnrNativeResult["pooled"];
   component: XpsnrNativeResult["component"];
   recipe: XpsnrNativeResult["recipe"];
-  raw: XpsnrPrepared["raw"];
   statisticsSha256: string;
-  spatial: VmafAssociation["spatial"];
 };
 export function validateXpsnrAssociation(
   value: unknown,
@@ -469,7 +452,7 @@ export function validateXpsnrAssociation(
     fail("Sequence cadence differs from scoring recipe");
   object(v.raw, ["referenceSha256", "distortedSha256", "bytes"]);
   try {
-    validateTemporalSequenceWitness(v, pair);
+    validateTemporalSequenceWitness(v, pair, XPSNR_LIMITS, fail, object);
   } catch (error) {
     fail((error as Error).message);
   }

@@ -1,3 +1,4 @@
+import type { TemporalPlanSnapshot, TemporalPrepared } from '../../../shared/analysis/quality/temporal-contract.ts';
 import type {
   QualityExecutionContract,
   ExecutionEnvironment,
@@ -38,11 +39,7 @@ import {
   VMAF_LIMITS,
   VmafError,
 } from "../../../shared/analysis/quality/vmaf.ts";
-import type {
-  VmafInput,
-  VmafPlanSnapshot,
-  VmafPrepared,
-} from "../../../shared/analysis/quality/vmaf.ts";
+import type { VmafInput } from "../../../shared/analysis/quality/vmaf.ts";
 import type {
   PsnrFrame,
   PsnrRoi,
@@ -52,7 +49,7 @@ export type VmafDecodeData = {
   database: string;
   coreDir: string;
   input: Pick<VmafInput, "cadenceUs" | "cadence" | "metrics" | "budget">;
-  snapshot: VmafPlanSnapshot;
+  snapshot: TemporalPlanSnapshot;
   control: SharedArrayBuffer;
   analysisContract?: QualityExecutionContract["analysis"];
   expectedExecutionContract?: QualityExecutionContract;
@@ -270,7 +267,7 @@ export async function runVmafDecode(
       check();
       return loaded;
     };
-    const result: VmafPrepared = {
+    const result: TemporalPrepared = {
       sequence,
       geometry: { width: 0, height: 0, bitDepth: 8 },
       pairs: [],
