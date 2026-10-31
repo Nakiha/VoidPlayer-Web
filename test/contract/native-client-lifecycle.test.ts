@@ -164,3 +164,24 @@ test('Node browser host turns an unexpected physical exit into a browser transpo
     await worker.terminate();
   }
 });
+
+test('Node browser host supports self, property handlers and transferable reply options', async () => {
+  const entry = 'self.onmessage=e=>self.postMessage(e.data,{transfer:[e.data]});';
+  const worker = new BrowserWorker(new URL('data:text/javascript,' + encodeURIComponent(entry)));
+  try {
+    const reply = new Promise<ArrayBuffer>((resolve, reject) => {
+      worker.onmessage = (e) => resolve(e.data);
+      worker.onerror = (e) => reject(e.error ?? Error(e.message));
+    });
+    const bytes = new Uint8Array([4, 9, 16]);
+    worker.postMessage(bytes.buffer, [bytes.buffer]);
+    assert.equal(bytes.byteLength, 0);
+    assert.deepEqual([...new Uint8Array(await reply)], [4, 9, 16]);
+    worker.onmessage = null;
+    worker.onerror = null;
+    assert.equal(worker.listenerCount('message'), 0);
+    assert.equal(worker.listenerCount('exit'), 0);
+  } finally {
+    await worker.terminate();
+  }
+});

@@ -1,3 +1,4 @@
+import '../helpers/browser-worker-host.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -20,53 +21,92 @@ test('open-GOP completion and cached indexes preserve the startup clock and sign
     assert.ok(complete.durationUs > 2000000);
     const cached = parseFlvIndex(serializeFlvIndex(engine.index, bytes.length), bytes.length);
     assert.deepEqual(flvMediaTiming(cached), flvMediaTiming(engine.index));
-    assert.ok(cached.packets.some(p => p.pts < origin));
+    assert.ok(cached.packets.some((p) => p.pts < origin));
     assert.equal(startup.index.packets.length, 1);
-  } finally { engine.close(); }
+  } finally {
+    engine.close();
+  }
 });
 
 test('real WASM open-GOP startup, complete playback and repeated seeks share frame identity', async () => {
   const file = new File([new Uint8Array(bytes)], 'open-gop.flv');
   const source = await openFlvMedia({ file }, file, {
     glueURL: new URL('../../public/vendor/voidplayer-core/voidplayer-core.js', import.meta.url).href,
-    wasmBinary: await readFile(new URL('../../public/vendor/voidplayer-core/voidplayer-core.wasm', import.meta.url)), forceWasm: true,
+    wasmBinary: await readFile(new URL('../../public/vendor/voidplayer-core/voidplayer-core.wasm', import.meta.url)),
+    forceWasm: true,
   });
   try {
-    const first = await source.frameAt(0), origin = first.sourcePtsUs;
-    const pixels = Buffer.from(first.pixels!); assert.equal(first.ptsUs, 0); first.close();
+    const first = await source.frameAt(0),
+      origin = first.sourcePtsUs;
+    const pixels = Buffer.from(first.pixels!);
+    assert.equal(first.ptsUs, 0);
+    first.close();
     await source.ensureIndexed!();
     assert.equal(source.info.indexState, 'complete');
     assert.equal(source.info.firstPtsUs, origin);
     const times: number[] = [];
-    for await (const frame of source.framesFrom(0)) { times.push(frame.ptsUs); frame.close(); }
-    const reference = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v', '-show_entries', 'frame=pts_time', '-of', 'json', '-i', 'pipe:0'], { input: bytes, encoding: 'utf8' })).frames
-      .map((f: { pts_time: string }) => Math.round(Number(f.pts_time) * 1000000) - origin).filter((pts: number) => pts >= 0);
+    for await (const frame of source.framesFrom(0)) {
+      times.push(frame.ptsUs);
+      frame.close();
+    }
+    const reference = JSON.parse(
+      execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v', '-show_entries', 'frame=pts_time', '-of', 'json', '-i', 'pipe:0'], {
+        input: bytes,
+        encoding: 'utf8',
+      }),
+    )
+      .frames.map((f: { pts_time: string }) => Math.round(Number(f.pts_time) * 1000000) - origin)
+      .filter((pts: number) => pts >= 0);
     assert.deepEqual(times, reference, 'every display frame matches independent FFmpeg output');
     assert.equal(times[0], 0);
     assert.ok(times.every((p, i) => i === 0 || p > times[i - 1]));
     for (const time of [1500000, 0, 2700000, 0]) {
       const frame = await source.frameAt(time);
-      try { if (time === 0) { assert.equal(frame.sourcePtsUs, origin); assert.deepEqual(Buffer.from(frame.pixels!), pixels); } }
-      finally { frame.close(); }
+      try {
+        if (time === 0) {
+          assert.equal(frame.sourcePtsUs, origin);
+          assert.deepEqual(Buffer.from(frame.pixels!), pixels);
+        }
+      } finally {
+        frame.close();
+      }
     }
-  } finally { source.dispose(); }
+  } finally {
+    source.dispose();
+  }
 });
 
-test('a non-IDR recovery-point start is rejected before feeding an invalid native key chunk', async t => {
+test('a non-IDR recovery-point start is rejected before feeding an invalid native key chunk', async (t) => {
   const saved = Object.getOwnPropertyDescriptor(globalThis, 'VideoDecoder');
-  let decoded = 0, closed = 0;
+  let decoded = 0,
+    closed = 0;
   class Decoder {
     state = 'configured';
-    static async isConfigSupported(config: VideoDecoderConfig) { return { supported: true, config }; }
-    configure() {} reset() {} decode() { decoded++; }
-    close() { this.state = 'closed'; closed++; }
+    static async isConfigSupported(config: VideoDecoderConfig) {
+      return { supported: true, config };
+    }
+    configure() {}
+    reset() {}
+    decode() {
+      decoded++;
+    }
+    close() {
+      this.state = 'closed';
+      closed++;
+    }
   }
   Object.defineProperty(globalThis, 'VideoDecoder', { configurable: true, value: Decoder });
-  t.after(() => { if (saved) Object.defineProperty(globalThis, 'VideoDecoder', saved); else Reflect.deleteProperty(globalThis, 'VideoDecoder'); });
+  t.after(() => {
+    if (saved) Object.defineProperty(globalThis, 'VideoDecoder', saved);
+    else Reflect.deleteProperty(globalThis, 'VideoDecoder');
+  });
   const engine = new FlvEngine({ file: new Blob([new Uint8Array(bytes)]) });
   try {
     assert.equal(await engine.open('', undefined, false, 1, undefined, true), null);
-    assert.equal(decoded, 0); assert.equal(closed, 1);
-    assert.ok(engine.nativeDiagnostics.some(e => e.phase === 'first-frame' && String(e.error).includes('IDR')));
-  } finally { engine.close(); }
+    assert.equal(decoded, 0);
+    assert.equal(closed, 1);
+    assert.ok(engine.nativeDiagnostics.some((e) => e.phase === 'first-frame' && String(e.error).includes('IDR')));
+  } finally {
+    engine.close();
+  }
 });

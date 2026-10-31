@@ -31,6 +31,34 @@ export class BrowserWorker extends NodeWorker {
     if (entry.exit) this.off('exit', entry.exit);
     this.#listeners.delete(listener);
   }
+  #properties = new Map<string, (event: any) => void>();
+  private setHandler(type: string, listener: ((event: any) => void) | null) {
+    const previous = this.#properties.get(type);
+    if (previous) this.removeEventListener(type, previous);
+    this.#properties.delete(type);
+    if (listener) {
+      this.#properties.set(type, listener);
+      this.addEventListener(type, listener);
+    }
+  }
+  get onmessage() {
+    return this.#properties.get('message') ?? null;
+  }
+  set onmessage(listener: ((event: any) => void) | null) {
+    this.setHandler('message', listener);
+  }
+  get onerror() {
+    return this.#properties.get('error') ?? null;
+  }
+  set onerror(listener: ((event: any) => void) | null) {
+    this.setHandler('error', listener);
+  }
+  get onmessageerror() {
+    return this.#properties.get('messageerror') ?? null;
+  }
+  set onmessageerror(listener: ((event: any) => void) | null) {
+    this.setHandler('messageerror', listener);
+  }
   override terminate() {
     this.#stopping = true;
     return super.terminate();
