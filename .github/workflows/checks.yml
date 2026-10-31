@@ -31,6 +31,7 @@ jobs:
         env:
           FORMAT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: npm run format:check -- --base "$FORMAT_BASE"
+      - run: npm run check:environments
       - run: node scripts/run-tests.mjs source
       - uses: actions/upload-artifact@v4
         if: always()

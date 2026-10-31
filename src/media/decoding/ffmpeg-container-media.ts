@@ -22,7 +22,8 @@ import { contextLog } from '../../logging/log.ts';
 import { indexRecoveryWarning } from '../../../shared/media/indexing/index-integrity.ts';
 import { updateMediaInfo } from '../state.ts';
 import { ffmpegColorInfo } from '../metadata.ts';
-import { isHdrTransfer } from '../../presentation/presentation-color.ts';
+import { hdrTransfer } from '../../../shared/color/hdr-policy.ts';
+const isHdrTransfer = (transfer: string | null | undefined) => hdrTransfer(transfer) !== null;
 import { resolveYuvColor } from '../../../shared/color/yuv-color.ts';
 import type { MediaIndexIdentity } from '../../../shared/media/indexing/media-index-identity.ts';
 import type { MediaIndexClientTrace } from '../../../shared/media/indexing/media-index-types.ts';
@@ -35,20 +36,15 @@ import type { FfmpegIndexRecordSink } from '../indexing/media-index-session.ts';
 // synchronous CPU work and must stay off the UI thread. Pixels come back as
 // transferred buffers; the frame index travels once at open.
 
-
 export interface WasmDecodedFrame extends DecodedFrame {
   pixels: Uint8ClampedArray;
 }
 
-import {floorIndex,nextIndex,reserveFallbackThreads,WASM_CORE_GLUE_PATH,WASM_CORE_GLUE_PATH_MT} from './fallback-runtime.ts';
-import type {FallbackDeps} from './fallback-runtime.ts';
+import { floorIndex, nextIndex, reserveFallbackThreads, WASM_CORE_GLUE_PATH, WASM_CORE_GLUE_PATH_MT } from './fallback-runtime.ts';
+import type { FallbackDeps } from './fallback-runtime.ts';
 async function createWorker(): Promise<Worker> {
-  if (typeof Worker !== 'undefined') return new Worker(new URL('./ffmpeg-worker.ts', import.meta.url), { type: 'module' });
-  // Node tests: worker_threads with the same message surface.
-  const { Worker: NodeWorker } = await import('node:worker_threads');
-  return new NodeWorker(new URL('./ffmpeg-worker.ts', import.meta.url), { type: 'module' } as object) as unknown as Worker;
+  return new Worker(new URL('./ffmpeg-worker.ts', import.meta.url), { type: 'module' });
 }
-
 
 type FallbackInput = File | (MediaMeta & { url: string });
 
@@ -58,7 +54,9 @@ function ffmpegIndexMediaUrl(url: string): string | undefined {
     if (!/^\/api\/media\/[0-9a-f]{24}$/.test(source.pathname) || !source.searchParams.has('v')) return undefined;
     source.searchParams.set('kind', 'ffmpeg');
     return source.href;
-  } catch { return undefined; }
+  } catch {
+    return undefined;
+  }
 }
 
 /** Raw container adapter; higher layers select it through the shared router. */
@@ -73,16 +71,21 @@ export function openFFmpegMedia(file: File, deps: FallbackDeps = {}): Promise<Me
 async function openFallbackInput(file: FallbackInput, deps: FallbackDeps): Promise<MediaSource> {
   loadAborted(deps.signal);
   const openStart = performance.now();
-  const threadReservation=reserveFallbackThreads();
+  const threadReservation = reserveFallbackThreads();
   try {
-    return await openFFmpegMediaInner(file, deps, openStart,threadReservation);
+    return await openFFmpegMediaInner(file, deps, openStart, threadReservation);
   } catch (error) {
     threadReservation.release();
     throw error;
   }
 }
 
-async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, openStart: number,threadReservation:ReturnType<typeof reserveFallbackThreads>): Promise<MediaSource> {
+async function openFFmpegMediaInner(
+  file: FallbackInput,
+  deps: FallbackDeps,
+  openStart: number,
+  threadReservation: ReturnType<typeof reserveFallbackThreads>,
+): Promise<MediaSource> {
   // The Blob crosses into the worker by reference; there the custom AVIO
   // reads it in chunks via FileReaderSync, so the file never enters WASM
   // memory at all. Environments without FileReaderSync (Node tests) buffer
@@ -114,20 +117,29 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   for (const glueURL of candidates) {
     loadAborted(deps.signal);
     rpc?.terminate();
-    const worker = deps.workerFactory?.() ?? await createWorker();
+    const worker = deps.workerFactory?.() ?? (await createWorker());
     let bridge: ReturnType<typeof createRangeBridge> | undefined;
     try {
       if ('url' in file) bridge = createRangeBridge(worker, file.url, file.size);
-    } catch (error) { worker.terminate(); throw error; }
+    } catch (error) {
+      worker.terminate();
+      throw error;
+    }
     rpc = new WorkerRpc(worker, () => bridge?.close(), deps.onProgress);
     const activeRpc = rpc;
-    audioWindows = () => bridge ? Promise.resolve(bridge.cachedWindows()) : activeRpc.requestCachedWindows(init?.ctx);
-    peekAudio = (offset, length) => bridge ? Promise.resolve(bridge.peek(offset, length))
-      : activeRpc.requestCachedBytes(offset, length, init?.ctx);
+    audioWindows = () => (bridge ? Promise.resolve(bridge.cachedWindows()) : activeRpc.requestCachedWindows(init?.ctx));
+    peekAudio = (offset, length) =>
+      bridge ? Promise.resolve(bridge.peek(offset, length)) : activeRpc.requestCachedBytes(offset, length, init?.ctx);
     const detachAbort = onLoadAbort(deps.signal, () => activeRpc.terminate(deps.signal!.reason));
     try {
-      const payload: FfmpegCommands['init']['request'] = { glueURL, name: file.name, threads, mediaSize: file.size, externalIndexSession: !!indexUrl,
-        ...('url' in file ? { range: { shared: bridge!.shared, size: file.size } } : { blob: file }) };
+      const payload: FfmpegCommands['init']['request'] = {
+        glueURL,
+        name: file.name,
+        threads,
+        mediaSize: file.size,
+        externalIndexSession: !!indexUrl,
+        ...('url' in file ? { range: { shared: bridge!.shared, size: file.size } } : { blob: file }),
+      };
       const transfer: Transferable[] = [];
       if (deps.wasmBinary) {
         payload.wasmBinary = new Uint8Array(deps.wasmBinary).buffer;
@@ -142,62 +154,107 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       init = await rpc.call('init', payload, transfer, 24 * 60 * 60 * 1000);
       coreVariant = glueURL.includes('core-mt.') ? 'multi-thread' : 'single-thread';
       scoped.info('media', 'WASM core 已就绪', {
-        coreVariant, crossOriginIsolated: !!globalThis.crossOriginIsolated,
-        ioMode: init.ioMode, indexSource: init.indexSource, localIndexBuildCalls: init.localIndexBuildCalls ?? 0, readMs, initIndexMs: init.indexMs, threads,
+        coreVariant,
+        crossOriginIsolated: !!globalThis.crossOriginIsolated,
+        ioMode: init.ioMode,
+        indexSource: init.indexSource,
+        localIndexBuildCalls: init.localIndexBuildCalls ?? 0,
+        readMs,
+        initIndexMs: init.indexMs,
+        threads,
       });
       scoped.info('media', '媒体管线追踪', {
-        phase: 'first-frame-ready', name: file.name, container: 'ffmpeg', demuxBackend: 'ffmpeg-wasm',
-        indexBackend: init.indexSource ?? 'client', indexIdentity: init.indexIdentity,
-        indexBuildId: init.indexTrace?.indexBuildId, serverIndexRequests: init.indexTrace?.serverIndexRequests ?? 0,
-        firstIndexBatchMs: init.indexTrace?.firstIndexBatchMs, indexCompleteMs: init.indexTrace?.indexCompleteMs,
+        phase: 'first-frame-ready',
+        name: file.name,
+        container: 'ffmpeg',
+        demuxBackend: 'ffmpeg-wasm',
+        indexBackend: init.indexSource ?? 'client',
+        indexIdentity: init.indexIdentity,
+        indexBuildId: init.indexTrace?.indexBuildId,
+        serverIndexRequests: init.indexTrace?.serverIndexRequests ?? 0,
+        firstIndexBatchMs: init.indexTrace?.firstIndexBatchMs,
+        indexCompleteMs: init.indexTrace?.indexCompleteMs,
         recordImportMs: init.indexTrace?.recordImportMs,
-        decoderBackend: 'ffmpeg-wasm', firstFrameReadyMs: Math.round(performance.now() - openStart),
-        firstPtsUs: Math.round((init.firstPts ?? init.ticks[0]) * 1e6 * init.tbNum / init.tbDen),
+        decoderBackend: 'ffmpeg-wasm',
+        firstFrameReadyMs: Math.round(performance.now() - openStart),
+        firstPtsUs: Math.round(((init.firstPts ?? init.ticks[0]) * 1e6 * init.tbNum) / init.tbDen),
       });
       break;
     } catch (error) {
       lastError = error;
       loadAborted(deps.signal);
-      if (error instanceof MediaOpenError && ['input', 'resource'].includes(error.stage)) { rpc.terminate(); throw error; }
-      scoped.warn('media', 'WASM core 初始化失败，尝试下一个候选', { glueURL, error: error instanceof Error ? error.message : String(error) });
+      if (error instanceof MediaOpenError && ['input', 'resource'].includes(error.stage)) {
+        rpc.terminate();
+        throw error;
+      }
+      scoped.warn('media', 'WASM core 初始化失败，尝试下一个候选', {
+        glueURL,
+        error: error instanceof Error ? error.message : String(error),
+      });
       init = null;
-    } finally { detachAbort(); }
+    } finally {
+      detachAbort();
+    }
   }
   if (!init || !rpc) {
     rpc?.terminate();
     throw lastError ?? new Error('WASM 解码 core 不可用。');
   }
 
-  if (!init.ticks.length || !init.tbNum || !init.tbDen) { rpc.terminate(); throw new Error('WASM 解码器未提供有效的首帧时间基准。'); }
+  if (!init.ticks.length || !init.tbNum || !init.tbDen) {
+    rpc.terminate();
+    throw new Error('WASM 解码器未提供有效的首帧时间基准。');
+  }
   const firstTick = init.firstPts ?? init.ticks[0];
-  const ticksToUs = (t: number) => Math.round(t * 1e6 * init.tbNum / init.tbDen);
+  const ticksToUs = (t: number) => Math.round((t * 1e6 * init.tbNum) / init.tbDen);
   let ticks = init.ticks;
   let durationsTicks = init.durations;
   if (init.firstFrame) {
     ticks = [firstTick];
     durationsTicks = [init.firstFrame.duration];
   }
-  let relUs = ticks.map(t => ticksToUs(t) - ticksToUs(firstTick));
-  const frameDurationsUs = (times: number[], durations: number[]) => durations.map((d, i) => {
-    const declared = ticksToUs(d);
-    return declared > 0 ? declared : (i + 1 < times.length ? ticksToUs(times[i + 1] - times[i]) : (i > 0 ? ticksToUs(times[i] - times[i - 1]) : 0));
-  });
+  let relUs = ticks.map((t) => ticksToUs(t) - ticksToUs(firstTick));
+  const frameDurationsUs = (times: number[], durations: number[]) =>
+    durations.map((d, i) => {
+      const declared = ticksToUs(d);
+      return declared > 0
+        ? declared
+        : i + 1 < times.length
+          ? ticksToUs(times[i + 1] - times[i])
+          : i > 0
+            ? ticksToUs(times[i] - times[i - 1])
+            : 0;
+    });
   let durationsUs = frameDurationsUs(ticks, durationsTicks);
   const firstFrameDurationUs = Math.max(0, durationsUs[0] || 0);
   const initialDurationUs = Math.max(1, firstFrameDurationUs || 40_000);
-  const initialStableCoverageUs = init.firstFrame ? Math.max(1, firstFrameDurationUs) : Math.max(1, relUs[relUs.length - 1] + durationsUs[durationsUs.length - 1]);
+  const initialStableCoverageUs = init.firstFrame
+    ? Math.max(1, firstFrameDurationUs)
+    : Math.max(1, relUs[relUs.length - 1] + durationsUs[durationsUs.length - 1]);
   const initialDuration = init.firstFrame ? initialDurationUs : initialStableCoverageUs;
   const info: MediaInfo = {
-    id: randomUUID(), name: file.name, size: file.size, lastModified: file.lastModified,
-    codec: init.codec, decoder: 'ffmpeg-wasm', coreVariant, width: init.width, height: init.height,
-    firstPtsUs: ticksToUs(firstTick), durationUs: initialDuration, stableCoverageUs: initialStableCoverageUs,
+    id: randomUUID(),
+    name: file.name,
+    size: file.size,
+    lastModified: file.lastModified,
+    codec: init.codec,
+    decoder: 'ffmpeg-wasm',
+    coreVariant,
+    width: init.width,
+    height: init.height,
+    firstPtsUs: ticksToUs(firstTick),
+    durationUs: initialDuration,
+    stableCoverageUs: initialStableCoverageUs,
     pixelFormat: init.pixelFormat ?? null,
     color: ffmpegColorInfo(init),
     colorSource: 'decoder',
-    indexIntegrity: init.indexIntegrity, indexTruncatedAt: init.indexTruncatedAt,
+    indexIntegrity: init.indexIntegrity,
+    indexTruncatedAt: init.indexTruncatedAt,
     indexWarning: indexRecoveryWarning(init.indexIntegrity),
-    indexSource: init.indexPending ? (indexUrl ? 'server' : 'client') : init.indexSource ?? 'client', indexState: init.indexPending ? 'building' : 'complete',
-    indexKind: 'timestamps', seekAnchorCount: init.seekAnchorCount ?? 0,
+    indexSource: init.indexPending ? (indexUrl ? 'server' : 'client') : (init.indexSource ?? 'client'),
+    indexState: init.indexPending ? 'building' : 'complete',
+    indexKind: 'timestamps',
+    seekAnchorCount: init.seekAnchorCount ?? 0,
     seekStrategy: init.seekAnchorCount ? 'demuxer-keyframe' : 'demuxer-timestamp',
   };
 
@@ -207,48 +264,75 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   let previousIndex = -1;
   let referencePresentation = false;
   const indexWaiters = new Set<() => void>();
-  const wakeIndex = () => { for (const resolve of indexWaiters) resolve(); indexWaiters.clear(); };
-  const waitForIndexUpdate = () => new Promise<void>(resolve => indexWaiters.add(resolve));
+  const wakeIndex = () => {
+    for (const resolve of indexWaiters) resolve();
+    indexWaiters.clear();
+  };
+  const waitForIndexUpdate = () => new Promise<void>((resolve) => indexWaiters.add(resolve));
   let source: MediaSource;
   let stopAudio = () => {};
   let analysisSummary = init.analysis;
   const activeRpc = rpc;
   let containerSession: FfmpegContainerSession | undefined;
   let firstIndexBatchLogged = false;
-  const applyIndexBatch = (result: { analysis?: FfmpegAnalysisSummary; ctx: number; ticks: number[]; durations: number[]; stableCoverageUs: number; seekAnchorCount: number; buildId: string; indexIdentity?: MediaIndexIdentity; indexTrace?: MediaIndexClientTrace }) => {
+  const applyIndexBatch = (result: {
+    analysis?: FfmpegAnalysisSummary;
+    ctx: number;
+    ticks: number[];
+    durations: number[];
+    stableCoverageUs: number;
+    seekAnchorCount: number;
+    buildId: string;
+    indexIdentity?: MediaIndexIdentity;
+    indexTrace?: MediaIndexClientTrace;
+  }) => {
     if (disposed || result.ctx !== init!.ctx) return;
     analysisSummary = result.analysis ?? analysisSummary;
     if (!firstIndexBatchLogged) {
       firstIndexBatchLogged = true;
       contextLog().info('media', '媒体管线追踪', {
-        phase: 'first-index-batch', name: file.name, container: 'ffmpeg', demuxBackend: 'ffmpeg-wasm',
-        indexBackend: 'server', indexIdentity: result.indexIdentity ?? init!.indexIdentity,
-        indexBuildId: result.buildId, serverIndexRequests: result.indexTrace?.serverIndexRequests ?? init!.indexTrace?.serverIndexRequests ?? 0,
-        firstIndexBatchMs: result.indexTrace?.firstIndexBatchMs, recordImportMs: result.indexTrace?.recordImportMs,
+        phase: 'first-index-batch',
+        name: file.name,
+        container: 'ffmpeg',
+        demuxBackend: 'ffmpeg-wasm',
+        indexBackend: 'server',
+        indexIdentity: result.indexIdentity ?? init!.indexIdentity,
+        indexBuildId: result.buildId,
+        serverIndexRequests: result.indexTrace?.serverIndexRequests ?? init!.indexTrace?.serverIndexRequests ?? 0,
+        firstIndexBatchMs: result.indexTrace?.firstIndexBatchMs,
+        recordImportMs: result.indexTrace?.recordImportMs,
         decoderBackend: 'ffmpeg-wasm',
       });
     }
     const lastTick = ticks[ticks.length - 1];
-    if (result.ticks.length !== result.durations.length || result.ticks.some(tick => !Number.isSafeInteger(tick))
-      || (result.ticks.length && lastTick !== undefined && result.ticks[0] < lastTick)
-      || !Number.isFinite(result.stableCoverageUs) || result.stableCoverageUs < 0) {
+    if (
+      result.ticks.length !== result.durations.length ||
+      result.ticks.some((tick) => !Number.isSafeInteger(tick)) ||
+      (result.ticks.length && lastTick !== undefined && result.ticks[0] < lastTick) ||
+      !Number.isFinite(result.stableCoverageUs) ||
+      result.stableCoverageUs < 0
+    ) {
       activeRpc.terminate(new MediaOpenError('resource', '服务端 FFmpeg 索引 batch 破坏了呈现时间顺序。'));
       return;
     }
     if (result.ticks.length) {
       ticks.push(...result.ticks);
       durationsTicks.push(...result.durations);
-      relUs = ticks.map(t => ticksToUs(t) - ticksToUs(firstTick));
+      relUs = ticks.map((t) => ticksToUs(t) - ticksToUs(firstTick));
       durationsUs = frameDurationsUs(ticks, durationsTicks);
     }
     const stableCoverageUs = Math.max(info.stableCoverageUs ?? 1, Math.floor(result.stableCoverageUs));
-    updateMediaInfo(source, {
-      stableCoverageUs,
-      durationUs: Math.max(info.durationUs, stableCoverageUs),
-      indexSource: 'server',
-      seekAnchorCount: result.seekAnchorCount,
-      seekStrategy: result.seekAnchorCount ? 'demuxer-keyframe' : 'demuxer-timestamp',
-    }, 'index');
+    updateMediaInfo(
+      source,
+      {
+        stableCoverageUs,
+        durationUs: Math.max(info.durationUs, stableCoverageUs),
+        indexSource: 'server',
+        seekAnchorCount: result.seekAnchorCount,
+        seekStrategy: result.seekAnchorCount ? 'demuxer-keyframe' : 'demuxer-timestamp',
+      },
+      'index',
+    );
     containerSession?.index.updateCoverage(stableCoverageUs, info.durationUs);
     wakeIndex();
   };
@@ -261,33 +345,59 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     }
     ticks = result.ticks;
     durationsTicks = result.durations;
-    relUs = ticks.map(t => ticksToUs(t) - ticksToUs(firstTick));
+    relUs = ticks.map((t) => ticksToUs(t) - ticksToUs(firstTick));
     durationsUs = frameDurationsUs(ticks, durationsTicks);
     const durationUs = Math.max(1, relUs[relUs.length - 1] + durationsUs[durationsUs.length - 1]);
     contextLog().info('media', 'FFmpeg 索引完成', {
-      name: file.name, indexSource: result.indexSource, frames: ticks.length,
-      firstPtsUs: info.firstPtsUs, durationUs, indexMs: result.indexMs,
-      localIndexBuildCalls: result.localIndexBuildCalls ?? 0, seekAnchorCount: result.seekAnchorCount ?? 0,
+      name: file.name,
+      indexSource: result.indexSource,
+      frames: ticks.length,
+      firstPtsUs: info.firstPtsUs,
+      durationUs,
+      indexMs: result.indexMs,
+      localIndexBuildCalls: result.localIndexBuildCalls ?? 0,
+      seekAnchorCount: result.seekAnchorCount ?? 0,
     });
     contextLog().info('media', '媒体管线追踪', {
-      phase: 'index-complete', name: file.name, container: 'ffmpeg', demuxBackend: 'ffmpeg-wasm',
-      indexBackend: result.indexSource ?? info.indexSource, indexIdentity: result.indexIdentity ?? init!.indexIdentity,
-      indexBuildId: result.indexTrace?.indexBuildId, serverIndexRequests: result.indexTrace?.serverIndexRequests ?? 0,
-      firstIndexBatchMs: result.indexTrace?.firstIndexBatchMs, indexCompleteMs: result.indexTrace?.indexCompleteMs,
+      phase: 'index-complete',
+      name: file.name,
+      container: 'ffmpeg',
+      demuxBackend: 'ffmpeg-wasm',
+      indexBackend: result.indexSource ?? info.indexSource,
+      indexIdentity: result.indexIdentity ?? init!.indexIdentity,
+      indexBuildId: result.indexTrace?.indexBuildId,
+      serverIndexRequests: result.indexTrace?.serverIndexRequests ?? 0,
+      firstIndexBatchMs: result.indexTrace?.firstIndexBatchMs,
+      indexCompleteMs: result.indexTrace?.indexCompleteMs,
       recordImportMs: result.indexTrace?.recordImportMs,
-      decoderBackend: 'ffmpeg-wasm', firstPtsUs: info.firstPtsUs, durationUs,
-      stableCoverageUs: durationUs, seekAnchorCount: result.seekAnchorCount ?? 0,
+      decoderBackend: 'ffmpeg-wasm',
+      firstPtsUs: info.firstPtsUs,
+      durationUs,
+      stableCoverageUs: durationUs,
+      seekAnchorCount: result.seekAnchorCount ?? 0,
     });
-    updateMediaInfo(source, {
-      durationUs, stableCoverageUs: durationUs, indexState: 'complete', indexSource: result.indexSource ?? info.indexSource,
-      indexIntegrity: result.indexIntegrity, indexTruncatedAt: result.indexTruncatedAt,
-      indexWarning: indexRecoveryWarning(result.indexIntegrity),
-      seekAnchorCount: result.seekAnchorCount ?? info.seekAnchorCount,
-      seekStrategy: result.seekAnchorCount ? 'demuxer-keyframe' : 'demuxer-timestamp',
-    }, 'index');
-    if (result.indexIntegrity === 'prefix') contextLog().warn('media', 'FFmpeg 已保留损坏文件的有效前段', {
-      name: file.name, indexTruncatedAt: result.indexTruncatedAt, durationUs, frames: ticks.length,
-    });
+    updateMediaInfo(
+      source,
+      {
+        durationUs,
+        stableCoverageUs: durationUs,
+        indexState: 'complete',
+        indexSource: result.indexSource ?? info.indexSource,
+        indexIntegrity: result.indexIntegrity,
+        indexTruncatedAt: result.indexTruncatedAt,
+        indexWarning: indexRecoveryWarning(result.indexIntegrity),
+        seekAnchorCount: result.seekAnchorCount ?? info.seekAnchorCount,
+        seekStrategy: result.seekAnchorCount ? 'demuxer-keyframe' : 'demuxer-timestamp',
+      },
+      'index',
+    );
+    if (result.indexIntegrity === 'prefix')
+      contextLog().warn('media', 'FFmpeg 已保留损坏文件的有效前段', {
+        name: file.name,
+        indexTruncatedAt: result.indexTruncatedAt,
+        durationUs,
+        frames: ticks.length,
+      });
     containerSession?.index.markComplete(durationUs);
     wakeIndex();
   };
@@ -310,14 +420,17 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       if (ptsUs < (info.stableCoverageUs ?? info.durationUs)) return;
       throw new Error(info.indexError ?? 'FFmpeg 索引失败。');
     }
-    while (!disposed && currentIndexState() === 'building' && ptsUs >= (info.stableCoverageUs ?? info.durationUs)) await waitForIndexUpdate();
+    while (!disposed && currentIndexState() === 'building' && ptsUs >= (info.stableCoverageUs ?? info.durationUs))
+      await waitForIndexUpdate();
     if (disposed) throw new Error('媒体已释放。');
-    if (currentIndexState() === 'error' && ptsUs >= (info.stableCoverageUs ?? info.durationUs)) throw new Error(info.indexError ?? 'FFmpeg 索引失败。');
+    if (currentIndexState() === 'error' && ptsUs >= (info.stableCoverageUs ?? info.durationUs))
+      throw new Error(info.indexError ?? 'FFmpeg 索引失败。');
   };
   const extract = async (index: number): Promise<WasmDecodedFrame> => {
     if (disposed) throw new Error('媒体已释放。');
     if (!Number.isInteger(index) || index < 0 || index >= ticks.length) throw new Error('帧索引无效。');
-    const started = performance.now(), randomAccess = index !== previousIndex + 1;
+    const started = performance.now(),
+      randomAccess = index !== previousIndex + 1;
     let output: WasmFrameOutput & { seek?: { decodedFrames: number; restarts: number } };
     if (index === 0 && firstFrame && (firstFrame.picture || info.indexState !== 'complete' || init.codec !== 'h264')) {
       // The primed frame may first be consumed as a native-decoder witness,
@@ -328,18 +441,39 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     } else {
       const payload: FfmpegCommands['extract']['request'] = { ctx: init.ctx, index };
       const transfer: Transferable[] = [];
-      if (spare) { payload.recycle = spare; transfer.push(spare); spare = null; }
-      try { output = await rpc.call('extract', payload, transfer); }
-      catch (error) {
-        scoped.warn('media', 'WASM 帧定位失败', { index, targetPtsUs: relUs[index], indexState: info.indexState, indexKind: info.indexKind, seekStrategy: info.seekStrategy, seekAnchorCount: info.seekAnchorCount, elapsedMs: Math.round(performance.now() - started), error: String(error) });
+      if (spare) {
+        payload.recycle = spare;
+        transfer.push(spare);
+        spare = null;
+      }
+      try {
+        output = await rpc.call('extract', payload, transfer);
+      } catch (error) {
+        scoped.warn('media', 'WASM 帧定位失败', {
+          index,
+          targetPtsUs: relUs[index],
+          indexState: info.indexState,
+          indexKind: info.indexKind,
+          seekStrategy: info.seekStrategy,
+          seekAnchorCount: info.seekAnchorCount,
+          elapsedMs: Math.round(performance.now() - started),
+          error: String(error),
+        });
         throw error;
       }
     }
     previousIndex = index;
-    if (randomAccess) scoped.info('media', 'WASM 帧定位完成', { index, targetPtsUs: relUs[index], elapsedMs: Math.round(performance.now() - started), seekStrategy: info.seekStrategy, ...output.seek });
+    if (randomAccess)
+      scoped.info('media', 'WASM 帧定位完成', {
+        index,
+        targetPtsUs: relUs[index],
+        elapsedMs: Math.round(performance.now() - started),
+        seekStrategy: info.seekStrategy,
+        ...output.seek,
+      });
     if (disposed) throw new Error('媒体已释放。');
     const pixels = new Uint8ClampedArray(output.pixels);
-    validateDescription(output.description,pixels.byteLength);
+    validateDescription(output.description, pixels.byteLength);
     let closed = false;
     const decoded: WasmDecodedFrame = {
       kind: output.description.yuv ? 'yuv' : 'rgba8',
@@ -350,16 +484,37 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       pixels,
       ptsUs: ticksToUs(output.pts) - ticksToUs(firstTick),
       sourcePtsUs: ticksToUs(output.pts),
-      ...(output.picture ? {sourcePicture: {sourceVersion: info.source ? `${info.source.id}@${new URL(info.source.url, globalThis.location?.href ?? 'http://localhost').searchParams.get('v')}` : info.id,
-        ...output.picture, picture: 0 as const, layer: 0 as const, field: 'frame' as const}} : {}),
+      ...(output.picture
+        ? {
+            sourcePicture: {
+              sourceVersion: info.source
+                ? `${info.source.id}@${new URL(info.source.url, globalThis.location?.href ?? 'http://localhost').searchParams.get('v')}`
+                : info.id,
+              ...output.picture,
+              picture: 0 as const,
+              layer: 0 as const,
+              field: 'frame' as const,
+            },
+          }
+        : {}),
       durationUs: ticksToUs(output.duration) || durationsUs[index] || initialDurationUs,
-      close() { if (!closed) { closed = true; if (!disposed) spare = pixels.buffer as ArrayBuffer; } },
+      close() {
+        if (!closed) {
+          closed = true;
+          if (!disposed) spare = pixels.buffer as ArrayBuffer;
+        }
+      },
     };
     if (referencePresentation && (decoded.kind !== 'yuv' || !resolveYuvColor(decoded.description).supported)) {
       const hdr = isHdrTransfer(decoded.description.color.transfer) || isHdrTransfer(info.color?.transfer);
       decoded.close();
-      throw new MediaOpenError('decode', hdr ? '此 HDR 视频未提供标签明确的高位深 BT.2100 原始平面。请在“色彩与解码”中切换为“浏览器色彩”后重试。'
-        : '自有色彩无法处理此视频的像素格式或颜色信息。请在“色彩与解码”中切换为“浏览器色彩”后重试。', hdr ? 'reference-hdr-unsupported' : 'reference-format-unsupported');
+      throw new MediaOpenError(
+        'decode',
+        hdr
+          ? '此 HDR 视频未提供标签明确的高位深 BT.2100 原始平面。请在“色彩与解码”中切换为“浏览器色彩”后重试。'
+          : '自有色彩无法处理此视频的像素格式或颜色信息。请在“色彩与解码”中切换为“浏览器色彩”后重试。',
+        hdr ? 'reference-hdr-unsupported' : 'reference-format-unsupported',
+      );
     }
     return decoded;
   };
@@ -379,18 +534,27 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   }
 
   source = {
-    info, ensureIndexed,
+    info,
+    ensureIndexed,
     bitstreamIndexIdentity: init.indexIdentity,
     async getBitstreamFfmpegIndex() {
       await ensureIndexed();
-      return activeRpc.call('analysis-ffmpeg-index', {ctx: init!.ctx, size: file.size});
+      return activeRpc.call('analysis-ffmpeg-index', { ctx: init!.ctx, size: file.size });
     },
     async getBitstreamIndex() {
       if (disposed || info.indexState === 'error') throw new Error(info.indexError ?? '索引不可用。');
-      return { packets: analysisSummary?.confirmedPackets ?? (info.indexState === 'complete' ? null : 0), complete: info.indexState === 'complete' };
+      return {
+        packets: analysisSummary?.confirmedPackets ?? (info.indexState === 'complete' ? null : 0),
+        complete: info.indexState === 'complete',
+      };
     },
-    getAnalysisCapability: () => ({ hasSize: true, hasDts: analysisSummary?.hasDts ?? false, keySource: 'container',
-      pictureType: 'key-only', qp: 'unsupported', indexState: info.indexState ?? 'complete',
+    getAnalysisCapability: () => ({
+      hasSize: true,
+      hasDts: analysisSummary?.hasDts ?? false,
+      keySource: 'container',
+      pictureType: 'key-only',
+      qp: 'unsupported',
+      indexState: info.indexState ?? 'complete',
       ...(info.indexError ? { indexError: info.indexError } : {}),
       ...(info.indexWarning ? { note: info.indexWarning } : {}),
     }),
@@ -399,12 +563,20 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       if (info.indexState === 'error') throw new Error(info.indexError ?? 'FFmpeg 索引失败。');
       const { signal, ...request } = query;
       if (signal?.aborted) throw signal.reason;
-      const promise = activeRpc.call('analysis', { ...request, ctx: init!.ctx,
-        mediaId: info.id, firstPtsUs: info.firstPtsUs, durationUs: info.durationUs,
+      const promise = activeRpc.call('analysis', {
+        ...request,
+        ctx: init!.ctx,
+        mediaId: info.id,
+        firstPtsUs: info.firstPtsUs,
+        durationUs: info.durationUs,
         coverageUs: info.indexState === 'complete' && info.indexIntegrity !== 'prefix' ? { start: 0, end: info.durationUs } : null,
       });
       const result = await (signal ? abortableWait(promise, signal) : promise);
-      return { ...result, requestId: query.requestId, ...(info.indexWarning ? { capability: { ...result.capability, note: info.indexWarning } } : {}) };
+      return {
+        ...result,
+        requestId: query.requestId,
+        ...(info.indexWarning ? { capability: { ...result.capability, note: info.indexWarning } } : {}),
+      };
     },
     async locateAnalysisSample(sampleId: string) {
       return activeRpc.call('analysis-locate', { ctx: init!.ctx, mediaId: info.id, firstPtsUs: info.firstPtsUs, sampleId });
@@ -421,10 +593,18 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       const previous = referencePresentation;
       referencePresentation = mode === 'reference';
       if (!referencePresentation) return;
-      try { const frame = await source!.frameAt(0); frame.close(); }
-      catch (error) { referencePresentation = previous; throw error; }
+      try {
+        const frame = await source!.frameAt(0);
+        frame.close();
+      } catch (error) {
+        referencePresentation = previous;
+        throw error;
+      }
     },
-    async admitReference() { await source!.reconfigureColorMode?.('reference', { decoder: 'software', depth: 1 }); return source!; },
+    async admitReference() {
+      await source!.reconfigureColorMode?.('reference', { decoder: 'software', depth: 1 });
+      return source!;
+    },
     async frameAt(ptsUs) {
       await ensureIndexed(ptsUs);
       return extract(floorIndex(relUs, ptsUs));
@@ -441,7 +621,10 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       try {
         for (let i = start; i < Math.min(start + count, ticks.length); i++) frames.push(await extract(i));
         return frames;
-      } catch (error) { for (const frame of frames) frame.close(); throw error; }
+      } catch (error) {
+        for (const frame of frames) frame.close();
+        throw error;
+      }
     },
     async *framesFrom(ptsUs) {
       await ensureIndexed(ptsUs);
@@ -461,7 +644,9 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     dispose() {
       if (disposed) return;
       disposed = true;
-      stopMetadata(); stopAudio(); source.onCachedAudio = undefined;
+      stopMetadata();
+      stopAudio();
+      source.onCachedAudio = undefined;
       wakeIndex();
       firstFrame = undefined;
       spare = null;
@@ -473,10 +658,14 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     },
   };
   const stopMetadata = attachCachedTrackMetadata(source, peekAudio);
-  stopAudio = attachCachedContainerAudio(source, peekAudio,
-    'url' in file ? undefined : enabled => activeRpc.setCachedAudioObservation(init!.ctx, enabled), audioWindows);
+  stopAudio = attachCachedContainerAudio(
+    source,
+    peekAudio,
+    'url' in file ? undefined : (enabled) => activeRpc.setCachedAudioObservation(init!.ctx, enabled),
+    audioWindows,
+  );
   activeRpc.setIndexHandlers({ batch: applyIndexBatch, complete: applyIndexComplete, error: applyIndexError });
-  activeRpc.setIndexProgressHandler(progress => {
+  activeRpc.setIndexProgressHandler((progress) => {
     if (!disposed) updateMediaInfo(source, { indexProgress: progress }, 'index');
   });
   if (init.indexPending && init.indexIdentity) {
@@ -486,16 +675,20 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       complete: (manifest, frames, trace) => activeRpc.sendIndexComplete(init!.ctx, manifest, frames, trace),
       legacy: (index, trace) => activeRpc.sendLegacyIndex(init!.ctx, index, trace),
       fallback: () => activeRpc.startLocalIndex(init!.ctx),
-      progress: progress => { if (!disposed) updateMediaInfo(source, { indexProgress: progress }, 'index'); },
-      error: message => activeRpc.reportIndexError(message),
+      progress: (progress) => {
+        if (!disposed) updateMediaInfo(source, { indexProgress: progress }, 'index');
+      },
+      error: (message) => activeRpc.reportIndexError(message),
     };
-    containerSession = new FfmpegContainerSession(new FfmpegMediaIndexSession({
-      url: indexUrl,
-      identity: init.indexIdentity,
-      firstPtsUs: info.firstPtsUs,
-      durationUs: initialStableCoverageUs,
-      sink,
-    }));
+    containerSession = new FfmpegContainerSession(
+      new FfmpegMediaIndexSession({
+        url: indexUrl,
+        identity: init.indexIdentity,
+        firstPtsUs: info.firstPtsUs,
+        durationUs: initialStableCoverageUs,
+        sink,
+      }),
+    );
   }
   return source;
 }

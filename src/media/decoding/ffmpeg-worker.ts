@@ -1,4 +1,4 @@
-import {ffmpegAnalysisConfiguration} from '../../../shared/media/indexing/ffmpeg-analysis-config.ts';
+import { ffmpegAnalysisConfiguration } from '../../../shared/media/indexing/ffmpeg-analysis-config.ts';
 import { FfmpegPacketIndex } from '../../../shared/analysis/metadata/ffmpeg-adapter.ts';
 import { workerReply } from '../workers/worker-protocol.ts';
 import type { FfmpegCommands, FfmpegInitResult, WorkerMessage, WorkerRequest, IndexInput } from '../workers/worker-protocol.ts';
@@ -13,7 +13,14 @@ import { randomUUID } from '../../../shared/utils/uuid.ts';
 import { loadCore } from './core-loader.ts';
 import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
 import type { MediaIndexTrace, MediaIndexRecordBatch, MediaIndexRecordManifest } from '../../../shared/media/indexing/media-index-types.ts';
-import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_SCHEMA, parseFfmpegIndex, serializeFfmpegIndex, FFMPEG_NO_TIMESTAMP, lastFfmpegPts } from '../../../shared/media/indexing/ffmpeg-index-cache.ts';
+import {
+  FFMPEG_INDEX_RECORD_BYTES,
+  FFMPEG_INDEX_SCHEMA,
+  parseFfmpegIndex,
+  serializeFfmpegIndex,
+  FFMPEG_NO_TIMESTAMP,
+  lastFfmpegPts,
+} from '../../../shared/media/indexing/ffmpeg-index-cache.ts';
 // Web Worker hosting the self-built FFmpeg WASM core. Decoding is synchronous
 // CPU work; it must never run on the UI thread. The page talks to this worker
 // over a small RPC: init (open + first presentable frame), index-input (already
@@ -22,29 +29,12 @@ import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_SCHEMA, parseFfmpegIndex, seria
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-// Dual environment: web worker (browser) and node:worker_threads (tests).
-// Messages queue until the initial script evaluation completes in both
-// environments, so wiring the listener from a microtask is race-free.
 type Request = WorkerRequest<FfmpegCommands> | IndexInput;
 type Port = {
   onmessage: null | ((event: { data: Request }) => void);
   postMessage(message: WorkerMessage<FfmpegCommands>, transfer?: Transferable[]): void;
 };
-const port: Port = (() => {
-  if (typeof process === 'undefined' || !process.versions?.node) return globalThis as unknown as Port;
-  const shim: Pick<Port, 'onmessage'> = { onmessage: null };
-  let parent: import('node:worker_threads').MessagePort | null = null;
-  void import('node:worker_threads').then(({ parentPort }) => {
-    if (!parentPort) throw new Error('worker_threads parentPort 不可用');
-    parent = parentPort;
-    parentPort.on('message', (data: Request) => shim.onmessage?.({ data }));
-  });
-  return {
-    get onmessage() { return shim.onmessage; },
-    set onmessage(fn) { shim.onmessage = fn; },
-    postMessage: (message, transfer) => parent?.postMessage(message, transfer as ArrayBuffer[]),
-  };
-})();
+const port = globalThis as unknown as Port;
 const reply = workerReply<FfmpegCommands>();
 
 let core: any = null;
@@ -52,10 +42,11 @@ let heap: () => Uint8Array;
 /** Native IO must unwind allocations before the original JS read failure is
  * propagated with its input/resource stage intact. */
 function ioCall(name: string, result: string | null, types: string[], args: unknown[]): any {
-  core.vpDemuxError=undefined;
-  const value=core.ccall(name,result,types,args);
-  const error=core.vpDemuxError;core.vpDemuxError=undefined;
-  if(error)throw error;
+  core.vpDemuxError = undefined;
+  const value = core.ccall(name, result, types, args);
+  const error = core.vpDemuxError;
+  core.vpDemuxError = undefined;
+  if (error) throw error;
   return value;
 }
 
@@ -67,11 +58,23 @@ type FfmpegIndexSink = {
   legacy(index: unknown, trace: MediaIndexTrace): FfmpegInitResult | undefined;
   fallback(): FfmpegInitResult | undefined;
 };
-type DecodeContext = { packets: FfmpegPacketIndex; indexComplete: boolean; ticks: number[]; durations: number[]; blobHandle: number; path: string; indexSink?: FfmpegIndexSink };
+type DecodeContext = {
+  packets: FfmpegPacketIndex;
+  indexComplete: boolean;
+  ticks: number[];
+  durations: number[];
+  blobHandle: number;
+  path: string;
+  indexSink?: FfmpegIndexSink;
+};
 const contexts = new Map<number, DecodeContext>();
 const observations = new Map<number, ObservedBytes>();
 
-async function init(payload: FfmpegCommands['init']['request'], onProgress: MediaOpenProgress, onReady?: (data: FfmpegInitResult) => void): Promise<FfmpegInitResult> {
+async function init(
+  payload: FfmpegCommands['init']['request'],
+  onProgress: MediaOpenProgress,
+  onReady?: (data: FfmpegInitResult) => void,
+): Promise<FfmpegInitResult> {
   onProgress('decoder');
   ({ core, heap } = await loadCore(payload.glueURL, payload.wasmBinary ? new Uint8Array(payload.wasmBinary) : undefined));
   requireFrameAbi(core);
@@ -79,7 +82,8 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
   const ctx = core.ccall('vp_create', 'number', [], []);
   if (!ctx) throw new Error('无法创建 WASM 解码上下文。');
   const path = `/vp-in-${randomUUID()}`;
-  const observed = new ObservedBytes(); observations.set(ctx, observed);
+  const observed = new ObservedBytes();
+  observations.set(ctx, observed);
   let blobHandle = 0;
   let firstPresentation: ReturnType<typeof readWasmFrame> | undefined;
   try {
@@ -91,28 +95,36 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
     onProgress('inspect');
     let ioMode: FfmpegInitResult['ioMode'] = 'memfs';
     if (payload.range) {
-      ioMode = 'http-range'; blobHandle = ctx;
+      ioMode = 'http-range';
+      blobHandle = ctx;
       const { shared, size } = payload.range;
-      core.vpBlobs.set(blobHandle, rangeBlobReader(shared, size, message => port.postMessage(message)));
+      core.vpBlobs.set(
+        blobHandle,
+        rangeBlobReader(shared, size, (message) => port.postMessage(message)),
+      );
       if (ioCall('vp_open_blob', 'number', ['number', 'number', 'i64'], [ctx, blobHandle, BigInt(size)]) !== 0) {
         throw new MediaOpenError('container', '软件解码器未能打开视频轨道：封装、编码可能不受支持，或文件数据不完整。');
       }
     } else if (payload.blob && typeof FileReaderSync !== 'undefined') {
       ioMode = 'blob';
       blobHandle = ctx; // the ctx pointer is already a unique id per context
-      const blob = payload.blob, reader = new FileReaderSync();
+      const blob = payload.blob,
+        reader = new FileReaderSync();
       core.vpBlobs.set(blobHandle, {
         blob: { slice: (start: number, end: number) => ({ start, end }) },
-        reader: { readAsArrayBuffer({ start, end }: { start: number; end: number }) {
-          const buffer = reader.readAsArrayBuffer(blob.slice(start, end));
-          observed.add(start, new Uint8Array(buffer)); return buffer;
-        } },
+        reader: {
+          readAsArrayBuffer({ start, end }: { start: number; end: number }) {
+            const buffer = reader.readAsArrayBuffer(blob.slice(start, end));
+            observed.add(start, new Uint8Array(buffer));
+            return buffer;
+          },
+        },
       });
       if (ioCall('vp_open_blob', 'number', ['number', 'number', 'i64'], [ctx, blobHandle, BigInt(payload.blob.size)]) !== 0) {
         throw new MediaOpenError('container', '软件解码器未能打开视频轨道：封装、编码可能不受支持，或文件数据不完整。');
       }
     } else {
-      const bytes = payload.file ?? await payload.blob?.arrayBuffer();
+      const bytes = payload.file ?? (await payload.blob?.arrayBuffer());
       if (!bytes) throw new Error('缺少媒体数据。');
       if (bytes.byteLength > 512 * 1024 * 1024) throw new Error('文件超过 WASM 回退解码的内存上限。');
       observed.add(0, new Uint8Array(bytes));
@@ -124,23 +136,24 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
     onProgress('index');
     const indexStart = performance.now();
     const hasIndexIdentityAbi = typeof core._vp_stream_index === 'function' && typeof core._vp_core_build_id === 'function';
-    const streamIndex = hasIndexIdentityAbi ? core.ccall('vp_stream_index', 'number', ['number'], [ctx]) as number : -1;
-    const indexerBuild = hasIndexIdentityAbi ? core.ccall('vp_core_build_id', 'string', [], []) as string : '';
+    const streamIndex = hasIndexIdentityAbi ? (core.ccall('vp_stream_index', 'number', ['number'], [ctx]) as number) : -1;
+    const indexerBuild = hasIndexIdentityAbi ? (core.ccall('vp_core_build_id', 'string', [], []) as string) : '';
     const indexIdentity = { kind: 'ffmpeg' as const, streamKey: `video:${streamIndex}`, schemaVersion: FFMPEG_INDEX_SCHEMA, indexerBuild };
-    const canImportIndex = hasIndexIdentityAbi
-      && typeof core._vp_index_import === 'function'
-      && typeof core._vp_index_export === 'function'
-      && typeof core._vp_index_export_bytes === 'function'
-      && typeof core._vp_index_seek_anchors === 'function'
-      && typeof core._vp_index_abi_version === 'function'
-      && typeof core._vp_index_record_bytes === 'function'
-      && /^[a-f0-9]{40}$/.test(indexerBuild)
-      && core.ccall('vp_index_abi_version', 'number', [], []) === FFMPEG_INDEX_SCHEMA
-      && typeof core._vp_index_stream_abi_version === 'function'
-      && core.ccall('vp_index_stream_abi_version', 'number', [], []) === 2
-      && typeof core._vp_index_import_begin === 'function'
-      && typeof core._vp_index_import_batch === 'function'
-      && core.ccall('vp_index_record_bytes', 'number', [], []) === FFMPEG_INDEX_RECORD_BYTES;
+    const canImportIndex =
+      hasIndexIdentityAbi &&
+      typeof core._vp_index_import === 'function' &&
+      typeof core._vp_index_export === 'function' &&
+      typeof core._vp_index_export_bytes === 'function' &&
+      typeof core._vp_index_seek_anchors === 'function' &&
+      typeof core._vp_index_abi_version === 'function' &&
+      typeof core._vp_index_record_bytes === 'function' &&
+      /^[a-f0-9]{40}$/.test(indexerBuild) &&
+      core.ccall('vp_index_abi_version', 'number', [], []) === FFMPEG_INDEX_SCHEMA &&
+      typeof core._vp_index_stream_abi_version === 'function' &&
+      core.ccall('vp_index_stream_abi_version', 'number', [], []) === 2 &&
+      typeof core._vp_index_import_begin === 'function' &&
+      typeof core._vp_index_import_batch === 'function' &&
+      core.ccall('vp_index_record_bytes', 'number', [], []) === FFMPEG_INDEX_RECORD_BYTES;
     let streamImportStarted = false;
     let streamedBuildId = '';
     let streamedCount = 0;
@@ -152,12 +165,16 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
     const importRecordManifest = (manifest: MediaIndexRecordManifest, trace: MediaIndexTrace) => {
       externalIndexTrace = trace;
       const metadata = manifest.metadata;
-      if (metadata.size !== payload.mediaSize || metadata.codec !== core.ccall('vp_codec_name', 'string', ['number'], [ctx])
-        || metadata.timeBaseNum !== core.ccall('vp_tb_num', 'number', ['number'], [ctx])
-        || metadata.timeBaseDen !== core.ccall('vp_tb_den', 'number', ['number'], [ctx])
-        || metadata.width !== core.ccall('vp_width', 'number', ['number'], [ctx])
-        || metadata.height !== core.ccall('vp_height', 'number', ['number'], [ctx])
-        || metadata.streamIndex !== streamIndex || metadata.indexerBuild !== indexerBuild) {
+      if (
+        metadata.size !== payload.mediaSize ||
+        metadata.codec !== core.ccall('vp_codec_name', 'string', ['number'], [ctx]) ||
+        metadata.timeBaseNum !== core.ccall('vp_tb_num', 'number', ['number'], [ctx]) ||
+        metadata.timeBaseDen !== core.ccall('vp_tb_den', 'number', ['number'], [ctx]) ||
+        metadata.width !== core.ccall('vp_width', 'number', ['number'], [ctx]) ||
+        metadata.height !== core.ccall('vp_height', 'number', ['number'], [ctx]) ||
+        metadata.streamIndex !== streamIndex ||
+        metadata.indexerBuild !== indexerBuild
+      ) {
         throw new MediaOpenError('resource', '服务端索引元数据与当前解码流不匹配。');
       }
       const originVerified = metadata.originVerified === true;
@@ -168,9 +185,11 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
     };
     const importRecordBatch = (batch: MediaIndexRecordBatch, trace: MediaIndexTrace) => {
       externalIndexTrace = trace;
-      if (!firstPresentation || !streamedBuildId || batch.buildId !== streamedBuildId) throw new MediaOpenError('resource', 'FFmpeg 索引 batch 不属于当前 build。');
+      if (!firstPresentation || !streamedBuildId || batch.buildId !== streamedBuildId)
+        throw new MediaOpenError('resource', 'FFmpeg 索引 batch 不属于当前 build。');
       if (!streamImportStarted) {
-        if (core.ccall('vp_index_import_begin', 'number', ['number'], [ctx]) !== 1) throw new MediaOpenError('resource', 'FFmpeg 无法开始渐进导入服务端索引。');
+        if (core.ccall('vp_index_import_begin', 'number', ['number'], [ctx]) !== 1)
+          throw new MediaOpenError('resource', 'FFmpeg 无法开始渐进导入服务端索引。');
         streamImportStarted = true;
       }
       const safeTick = lastFfmpegPts(batch.records, streamedSafeTick);
@@ -180,10 +199,17 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
       const importStarted = performance.now();
       try {
         heap().set(batch.records, ptr);
-        const imported = core.ccall('vp_index_import_batch', 'number', ['number', 'number', 'number', 'number', 'i64', 'number'],
-          [ctx, ptr, batch.count, batch.seq, safeTick, 0]) as number;
+        const imported = core.ccall(
+          'vp_index_import_batch',
+          'number',
+          ['number', 'number', 'number', 'number', 'i64', 'number'],
+          [ctx, ptr, batch.count, batch.seq, safeTick, 0],
+        ) as number;
         if (imported !== batch.count) throw new MediaOpenError('resource', '服务端 FFmpeg 索引 batch 无法安全导入。');
-      } finally { core._free(ptr); recordImportMs += performance.now() - importStarted; }
+      } finally {
+        core._free(ptr);
+        recordImportMs += performance.now() - importStarted;
+      }
       streamedCount += batch.count;
       streamedLastSeq = batch.seq;
       streamedSafeTick = safeTick;
@@ -192,32 +218,52 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
       const timeBaseNum = core.ccall('vp_tb_num', 'number', ['number'], [ctx]) as number;
       const timeBaseDen = core.ccall('vp_tb_den', 'number', ['number'], [ctx]) as number;
       entry.packets.append(batch.records, timeBaseNum, timeBaseDen);
-      const newTicks: number[] = [], newDurations: number[] = [];
+      const newTicks: number[] = [],
+        newDurations: number[] = [];
       for (let i = previousCount; i < streamedCount; i++) {
         const rawTick = BigInt(core.ccall('vp_index_ticks', 'i64', ['number', 'number'], [ctx, i]));
         if (rawTick === FFMPEG_NO_TIMESTAMP) continue;
         const tick = Number(rawTick);
         const duration = Number(core.ccall('vp_index_duration', 'i64', ['number', 'number'], [ctx, i]));
         if (tick < firstPresentation.pts) continue;
-        if (!originRecordSkipped && tick === firstPresentation.pts) { originRecordSkipped = true; continue; }
+        if (!originRecordSkipped && tick === firstPresentation.pts) {
+          originRecordSkipped = true;
+          continue;
+        }
         newTicks.push(tick);
         newDurations.push(duration);
       }
       entry.ticks.push(...newTicks);
       entry.durations.push(...newDurations);
-      const toUs = (value: number) => Math.round(value * 1e6 * timeBaseNum / timeBaseDen);
+      const toUs = (value: number) => Math.round((value * 1e6 * timeBaseNum) / timeBaseDen);
       const lastDuration = entry.durations.at(-1) ?? 1;
       const durationCoverageUs = lastDuration > 0 ? Math.max(1, toUs(lastDuration)) : 1;
       const stableCoverageUs = Math.max(1, toUs(Number(safeTick) - firstPresentation.pts) + durationCoverageUs);
-      port.postMessage({ id: indexRequestId!, type: 'index-batch', data: { ctx, analysis: entry.packets.summary, ticks: newTicks, durations: newDurations,
-        stableCoverageUs, seekAnchorCount: core.ccall('vp_index_seek_anchors', 'number', ['number'], [ctx]), buildId: streamedBuildId,
-        indexIdentity, indexTrace: { ...externalIndexTrace, recordImportMs } } });
+      port.postMessage({
+        id: indexRequestId!,
+        type: 'index-batch',
+        data: {
+          ctx,
+          analysis: entry.packets.summary,
+          ticks: newTicks,
+          durations: newDurations,
+          stableCoverageUs,
+          seekAnchorCount: core.ccall('vp_index_seek_anchors', 'number', ['number'], [ctx]),
+          buildId: streamedBuildId,
+          indexIdentity,
+          indexTrace: { ...externalIndexTrace, recordImportMs },
+        },
+      });
     };
     const finishRecordImport = (manifest: MediaIndexRecordManifest, _frames: number, trace: MediaIndexTrace) => {
       externalIndexTrace = trace;
       if (!streamImportStarted) return;
-      const result = core.ccall('vp_index_import_batch', 'number', ['number', 'number', 'number', 'number', 'i64', 'number'],
-        [ctx, 0, 0, streamedLastSeq + 1, streamedSafeTick, 1]) as number;
+      const result = core.ccall(
+        'vp_index_import_batch',
+        'number',
+        ['number', 'number', 'number', 'number', 'i64', 'number'],
+        [ctx, 0, 0, streamedLastSeq + 1, streamedSafeTick, 1],
+      ) as number;
       if (result !== 0) throw new MediaOpenError('resource', 'FFmpeg 无法完成服务端索引导入。');
       applyRecovery(manifest.metadata);
     };
@@ -225,13 +271,22 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
       if (!validFfmpegRecovery(metadata, payload.mediaSize ?? payload.blob?.size ?? payload.file?.byteLength ?? payload.range?.size ?? 0))
         throw new MediaOpenError('resource', 'FFmpeg 索引损坏边界无效。');
       if (metadata.indexIntegrity !== 'prefix') return;
-      if (typeof core._vp_index_recovery_abi_version !== 'function' || core.ccall('vp_index_recovery_abi_version', 'number', [], []) !== 1
-        || core.ccall('vp_index_apply_prefix', 'number', ['number', 'i64', 'i64'], [ctx, BigInt(metadata.indexTruncatedAt!), BigInt(metadata.indexEndDts!)]) !== 1)
+      if (
+        typeof core._vp_index_recovery_abi_version !== 'function' ||
+        core.ccall('vp_index_recovery_abi_version', 'number', [], []) !== 1 ||
+        core.ccall(
+          'vp_index_apply_prefix',
+          'number',
+          ['number', 'i64', 'i64'],
+          [ctx, BigInt(metadata.indexTruncatedAt!), BigInt(metadata.indexEndDts!)],
+        ) !== 1
+      )
         throw new MediaOpenError('resource', 'FFmpeg 无法安全导入损坏前段索引。');
     };
     const makeIndexResult = (count: number, indexSource: 'server' | 'client', localIndexBuildCalls: number): FfmpegInitResult => {
       if (count <= 0) throw new Error('FFmpeg WASM 无法建立该文件的帧索引。');
-      const ticks: number[] = [], durations: number[] = [];
+      const ticks: number[] = [],
+        durations: number[] = [];
       for (let i = 0; i < count; i++) {
         const raw = BigInt(core.ccall('vp_index_ticks', 'i64', ['number', 'number'], [ctx, i]));
         if (raw === FFMPEG_NO_TIMESTAMP) continue;
@@ -250,35 +305,56 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
         prefix++;
       }
       if (firstPresentation && ticks[prefix] !== timelineOrigin) throw new MediaOpenError('resource', '索引中找不到已展示的首帧时间戳。');
-      if (prefix) { ticks.splice(0, prefix); durations.splice(0, prefix); }
+      if (prefix) {
+        ticks.splice(0, prefix);
+        durations.splice(0, prefix);
+      }
       if (!ticks.length) throw new MediaOpenError('decode', '视频只有预滚包，没有可显示的画面。');
       const entry = contexts.get(ctx);
       if (entry) {
-        entry.ticks = ticks; entry.durations = durations;
+        entry.ticks = ticks;
+        entry.durations = durations;
         if (!entry.packets.summary.packetCount) {
           const bytes = core.ccall('vp_index_export_bytes', 'number', ['number'], [ctx]) as number;
           const ptr = core._malloc(bytes);
           if (!ptr) throw new MediaOpenError('resource', 'FFmpeg 包索引内存分配失败。');
           try {
-            if (core.ccall('vp_index_export', 'number', ['number', 'number', 'number'], [ctx, ptr, bytes]) !== count) throw new Error('FFmpeg 包索引导出失败。');
-            entry.packets.append(heap().subarray(ptr, ptr + bytes), core.ccall('vp_tb_num', 'number', ['number'], [ctx]), core.ccall('vp_tb_den', 'number', ['number'], [ctx]));
-          } finally { core._free(ptr); }
+            if (core.ccall('vp_index_export', 'number', ['number', 'number', 'number'], [ctx, ptr, bytes]) !== count)
+              throw new Error('FFmpeg 包索引导出失败。');
+            entry.packets.append(
+              heap().subarray(ptr, ptr + bytes),
+              core.ccall('vp_tb_num', 'number', ['number'], [ctx]),
+              core.ccall('vp_tb_den', 'number', ['number'], [ctx]),
+            );
+          } finally {
+            core._free(ptr);
+          }
         }
         if (entry.packets.summary.packetCount !== count) throw new Error('FFmpeg 播放与分析索引记录数不一致。');
         entry.indexComplete = true;
       }
       return {
         ...readRecovery(),
-        ctx, path, ticks, durations, analysis: entry?.packets.summary, indexMs: Math.round(performance.now() - indexStart), indexSource,
-        localIndexBuildCalls, ioMode, indexIdentity,
+        ctx,
+        path,
+        ticks,
+        durations,
+        analysis: entry?.packets.summary,
+        indexMs: Math.round(performance.now() - indexStart),
+        indexSource,
+        localIndexBuildCalls,
+        ioMode,
+        indexIdentity,
         indexTrace: { ...externalIndexTrace, recordImportMs },
-        seekAnchorCount: typeof core._vp_index_seek_anchors === 'function' ? core.ccall('vp_index_seek_anchors', 'number', ['number'], [ctx]) : 0,
+        seekAnchorCount:
+          typeof core._vp_index_seek_anchors === 'function' ? core.ccall('vp_index_seek_anchors', 'number', ['number'], [ctx]) : 0,
         tbNum: core.ccall('vp_tb_num', 'number', ['number'], [ctx]),
         tbDen: core.ccall('vp_tb_den', 'number', ['number'], [ctx]),
         width: core.ccall('vp_width', 'number', ['number'], [ctx]),
         height: core.ccall('vp_height', 'number', ['number'], [ctx]),
         codec: core.ccall('vp_codec_name', 'string', ['number'], [ctx]),
-        pixelFormat: typeof core._vp_pixel_format === 'function' ? core.ccall('vp_pixel_format', 'string', ['number'], [ctx]) || null : null,
+        pixelFormat:
+          typeof core._vp_pixel_format === 'function' ? core.ccall('vp_pixel_format', 'string', ['number'], [ctx]) || null : null,
         colorPrimaries: core.ccall('vp_color_primaries', 'number', ['number'], [ctx]),
         colorTransfer: core.ccall('vp_color_transfer', 'number', ['number'], [ctx]),
         colorSpace: core.ccall('vp_color_space', 'number', ['number'], [ctx]),
@@ -288,10 +364,13 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
     const readRecovery = (): FfmpegIndexRecovery => {
       if (typeof core._vp_index_recovery_abi_version !== 'function' || core.ccall('vp_index_recovery_abi_version', 'number', [], []) !== 1)
         throw new MediaOpenError('resource', 'FFmpeg 损坏恢复接口版本不匹配。');
-      return core.ccall('vp_index_integrity', 'number', ['number'], [ctx]) ? {
-        indexIntegrity: 'prefix', indexTruncatedAt: Number(core.ccall('vp_index_truncated_at', 'i64', ['number'], [ctx])),
-        indexEndDts: String(core.ccall('vp_index_end_dts', 'i64', ['number'], [ctx])),
-      } : { indexIntegrity: 'complete' };
+      return core.ccall('vp_index_integrity', 'number', ['number'], [ctx])
+        ? {
+            indexIntegrity: 'prefix',
+            indexTruncatedAt: Number(core.ccall('vp_index_truncated_at', 'i64', ['number'], [ctx])),
+            indexEndDts: String(core.ccall('vp_index_end_dts', 'i64', ['number'], [ctx])),
+          }
+        : { indexIntegrity: 'complete' };
     };
     const externalIndex = payload.externalIndexSession === true && canImportIndex && Number.isSafeInteger(payload.mediaSize);
     if (externalIndex && typeof core._vp_prime_first_presentable === 'function') {
@@ -316,7 +395,8 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
             timeBaseDen: core.ccall('vp_tb_den', 'number', ['number'], [ctx]),
             width: core.ccall('vp_width', 'number', ['number'], [ctx]),
             height: core.ccall('vp_height', 'number', ['number'], [ctx]),
-            streamIndex, indexerBuild,
+            streamIndex,
+            indexerBuild,
           });
           if (parsed) {
             const ptr = core._malloc(parsed.records.byteLength);
@@ -327,32 +407,53 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
               if (imported !== parsed.document.count) throw new MediaOpenError('resource', '服务器索引无法安全导入，已停止这次解码。');
               let expectedAnchors = 0;
               const view = new DataView(parsed.records.buffer, parsed.records.byteOffset, parsed.records.byteLength);
-              for (let i = 0; i < parsed.document.count; i++) if ((view.getUint32(i * FFMPEG_INDEX_RECORD_BYTES + 36, true) & 2) !== 0) expectedAnchors++;
+              for (let i = 0; i < parsed.document.count; i++)
+                if ((view.getUint32(i * FFMPEG_INDEX_RECORD_BYTES + 36, true) & 2) !== 0) expectedAnchors++;
               if (core.ccall('vp_index_seek_anchors', 'number', ['number'], [ctx]) !== expectedAnchors) {
                 throw new MediaOpenError('resource', '服务器索引的 seek anchor 数量不匹配，已停止这次解码。');
               }
               applyRecovery(parsed.document);
               return makeIndexResult(imported, 'server', 0);
-            } finally { core._free(ptr); }
+            } finally {
+              core._free(ptr);
+            }
           }
           const built = ioCall('vp_index_build', 'number', ['number'], [ctx]) as number;
           return makeIndexResult(built, 'client', 1);
         },
         fallback: () => makeIndexResult(ioCall('vp_index_build', 'number', ['number'], [ctx]) as number, 'client', 1),
       };
-      contexts.set(ctx, { packets: new FfmpegPacketIndex(), indexComplete: false, ticks: [firstTicks], durations: firstDurations, blobHandle, path, indexSink });
+      contexts.set(ctx, {
+        packets: new FfmpegPacketIndex(),
+        indexComplete: false,
+        ticks: [firstTicks],
+        durations: firstDurations,
+        blobHandle,
+        path,
+        indexSink,
+      });
       const ready: FfmpegInitResult = {
-        ctx, path, ticks: [firstTicks], durations: [firstPresentation.duration],
-        firstPts: firstTicks, firstFrame: firstPresentation, indexMs: 0,
-        indexSource: 'server', localIndexBuildCalls: 0, ioMode, indexPending: true,
-        indexIdentity, indexTrace: externalIndexTrace,
+        ctx,
+        path,
+        ticks: [firstTicks],
+        durations: [firstPresentation.duration],
+        firstPts: firstTicks,
+        firstFrame: firstPresentation,
+        indexMs: 0,
+        indexSource: 'server',
+        localIndexBuildCalls: 0,
+        ioMode,
+        indexPending: true,
+        indexIdentity,
+        indexTrace: externalIndexTrace,
         seekAnchorCount: 0,
         tbNum: core.ccall('vp_tb_num', 'number', ['number'], [ctx]),
         tbDen: core.ccall('vp_tb_den', 'number', ['number'], [ctx]),
         width: core.ccall('vp_width', 'number', ['number'], [ctx]),
         height: core.ccall('vp_height', 'number', ['number'], [ctx]),
         codec: core.ccall('vp_codec_name', 'string', ['number'], [ctx]),
-        pixelFormat: typeof core._vp_pixel_format === 'function' ? core.ccall('vp_pixel_format', 'string', ['number'], [ctx]) || null : null,
+        pixelFormat:
+          typeof core._vp_pixel_format === 'function' ? core.ccall('vp_pixel_format', 'string', ['number'], [ctx]) || null : null,
         colorPrimaries: core.ccall('vp_color_primaries', 'number', ['number'], [ctx]),
         colorTransfer: core.ccall('vp_color_transfer', 'number', ['number'], [ctx]),
         colorSpace: core.ccall('vp_color_space', 'number', ['number'], [ctx]),
@@ -368,7 +469,11 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
     if (contexts.has(ctx)) throw error;
     observations.delete(ctx);
     if (blobHandle) core.vpBlobs.delete(blobHandle);
-    try { core.FS.unlink(path); } catch { /* best effort */ }
+    try {
+      core.FS.unlink(path);
+    } catch {
+      /* best effort */
+    }
     core.ccall('vp_destroy', null, ['number'], [ctx]);
     throw error;
   }
@@ -383,11 +488,16 @@ function extract(ctx: number, index: number, recycle?: ArrayBuffer) {
   if (result !== 1 || Number(core.ccall('vp_last_ticks', 'i64', ['number'], [ctx])) !== ticks[index]) {
     throw new Error(`WASM 解码未能命中索引帧 ${index}（结果 ${result}）。`);
   }
-  return { ...readWasmFrame(core, heap, ctx, recycle),
-    seek: typeof core._vp_extract_frames === 'function' ? {
-      decodedFrames: core.ccall('vp_extract_frames', 'number', ['number'], [ctx]),
-      restarts: core.ccall('vp_extract_restarts', 'number', ['number'], [ctx]),
-    } : undefined };
+  return {
+    ...readWasmFrame(core, heap, ctx, recycle),
+    seek:
+      typeof core._vp_extract_frames === 'function'
+        ? {
+            decodedFrames: core.ccall('vp_extract_frames', 'number', ['number'], [ctx]),
+            restarts: core.ccall('vp_extract_restarts', 'number', ['number'], [ctx]),
+          }
+        : undefined,
+  };
 }
 
 port.onmessage = async (event: { data: Request }) => {
@@ -396,34 +506,62 @@ port.onmessage = async (event: { data: Request }) => {
   if (type === 'peek-audio') {
     const data = observations.get(message.ctx ?? 0)?.peek(message.offset, message.length);
     const windows = message.windows ? observations.get(message.ctx ?? 0)?.cachedWindows() : undefined;
-    port.postMessage({ id, type: 'cached-bytes', data, windows }, data ? [data.buffer as ArrayBuffer] : []); return;
+    port.postMessage({ id, type: 'cached-bytes', data, windows }, data ? [data.buffer as ArrayBuffer] : []);
+    return;
   }
-  if (type === 'observe-audio') { observations.get(message.ctx)?.setEnabled(message.enabled); return; }
+  if (type === 'observe-audio') {
+    observations.get(message.ctx)?.setEnabled(message.enabled);
+    return;
+  }
   if (type === 'init') indexRequestId = id;
   let readyContext: number | undefined;
   try {
     if (type === 'init') {
-      const result = await init(message, progress => port.postMessage({ id, type: 'progress', progress }), data => {
-        readyContext = data.ctx;
-        port.postMessage({ id, type: 'ready', data }, [data.firstFrame!.pixels]);
-      });
+      const result = await init(
+        message,
+        (progress) => port.postMessage({ id, type: 'progress', progress }),
+        (data) => {
+          readyContext = data.ctx;
+          port.postMessage({ id, type: 'ready', data }, [data.firstFrame!.pixels]);
+        },
+      );
       if (readyContext !== undefined) {
         if (!('indexPending' in result && result.indexPending)) port.postMessage({ id, type: 'index-complete', data: result });
       } else port.postMessage(reply(message, result));
     } else if (type === 'analysis-ffmpeg-index') {
       const ctx = message.ctx;
       if (!contexts.get(ctx)?.indexComplete) throw new Error('Complete FFmpeg index required');
-      const len=core._vp_index_export_bytes(ctx),ptr=core._malloc(len);
-      if(len<=0 || !ptr) throw new Error('Invalid FFmpeg index export');
+      const len = core._vp_index_export_bytes(ctx),
+        ptr = core._malloc(len);
+      if (len <= 0 || !ptr) throw new Error('Invalid FFmpeg index export');
       try {
-        const count=core._vp_index_export(ctx,ptr,len);
-        if(count*48!==len)throw new Error('Incomplete FFmpeg index export');
-        const index=serializeFfmpegIndex({size:message.size,codec:core.ccall('vp_codec_name','string',['number'],[ctx]),
-          timeBaseNum:core._vp_tb_num(ctx),timeBaseDen:core._vp_tb_den(ctx),width:core._vp_width(ctx),height:core._vp_height(ctx),
-          analysisConfiguration:ffmpegAnalysisConfiguration(core,heap,ctx),streamIndex:core._vp_stream_index(ctx),indexerBuild:core.ccall('vp_core_build_id','string',[],[]),
-          ...(core._vp_index_integrity(ctx)?{indexIntegrity:'prefix' as const,indexTruncatedAt:Number(core._vp_index_truncated_at(ctx)),indexEndDts:String(core._vp_index_end_dts(ctx))}:{})},heap().slice(ptr,ptr+len));
-        port.postMessage(reply(message,index));
-      } finally {core._free(ptr);}
+        const count = core._vp_index_export(ctx, ptr, len);
+        if (count * 48 !== len) throw new Error('Incomplete FFmpeg index export');
+        const index = serializeFfmpegIndex(
+          {
+            size: message.size,
+            codec: core.ccall('vp_codec_name', 'string', ['number'], [ctx]),
+            timeBaseNum: core._vp_tb_num(ctx),
+            timeBaseDen: core._vp_tb_den(ctx),
+            width: core._vp_width(ctx),
+            height: core._vp_height(ctx),
+            analysisConfiguration: ffmpegAnalysisConfiguration(core, heap, ctx),
+            streamIndex: core._vp_stream_index(ctx),
+            indexerBuild: core.ccall('vp_core_build_id', 'string', [], []),
+            ...(core._vp_index_integrity(ctx)
+              ? {
+                  indexIntegrity: 'prefix' as const,
+                  indexTruncatedAt: Number(core._vp_index_truncated_at(ctx)),
+                  indexEndDts: String(core._vp_index_end_dts(ctx)),
+                }
+              : {}),
+          },
+          heap().slice(ptr, ptr + len),
+        );
+        port.postMessage(reply(message, index));
+      } finally {
+        core._free(ptr);
+      }
     } else if (type === 'index-input') {
       const ctx = message.ctx;
       const sink = contexts.get(ctx)?.indexSink;
@@ -439,13 +577,29 @@ port.onmessage = async (event: { data: Request }) => {
     } else if (type === 'analysis' || type === 'analysis-locate' || type === 'analysis-rank' || type === 'analysis-number') {
       const entry = contexts.get(message.ctx);
       if (!entry) throw new Error('媒体已释放。');
-      const packets = entry.packets, firstPtsUs = message.firstPtsUs ?? 0, mediaId = message.mediaId ?? '';
+      const packets = entry.packets,
+        firstPtsUs = message.firstPtsUs ?? 0,
+        mediaId = message.mediaId ?? '';
       if (type === 'analysis') {
-        const result = packets.query({ mediaId, firstPtsUs, durationUs: message.durationUs,
-          sourceVersion: '', indexRevision: packets.summary.packetCount,
-          capability: { hasSize: true, hasDts: packets.summary.hasDts, keySource: 'container', pictureType: 'key-only', qp: 'unsupported', indexState: entry.indexComplete ? 'complete' : 'building' },
-          coverageUs: entry.indexComplete ? message.coverageUs : null,
-        }, { ...message, requestId: id });
+        const result = packets.query(
+          {
+            mediaId,
+            firstPtsUs,
+            durationUs: message.durationUs,
+            sourceVersion: '',
+            indexRevision: packets.summary.packetCount,
+            capability: {
+              hasSize: true,
+              hasDts: packets.summary.hasDts,
+              keySource: 'container',
+              pictureType: 'key-only',
+              qp: 'unsupported',
+              indexState: entry.indexComplete ? 'complete' : 'building',
+            },
+            coverageUs: entry.indexComplete ? message.coverageUs : null,
+          },
+          { ...message, requestId: id },
+        );
         port.postMessage(reply(message, result));
       } else if (type === 'analysis-locate') port.postMessage(reply(message, packets.locate(mediaId, firstPtsUs, message.sampleId)));
       else if (type === 'analysis-rank') port.postMessage(reply(message, packets.rank(firstPtsUs, message.axis, message.tUs)));
@@ -459,7 +613,11 @@ port.onmessage = async (event: { data: Request }) => {
       if (contexts.delete(ctx)) {
         observations.delete(ctx);
         if (entry?.blobHandle) core.vpBlobs.delete(entry.blobHandle);
-        try { core.FS.unlink(message.path); } catch { /* already gone */ }
+        try {
+          core.FS.unlink(message.path);
+        } catch {
+          /* already gone */
+        }
         core.ccall('vp_destroy', null, ['number'], [ctx]);
       }
       port.postMessage(reply(message, null));

@@ -239,3 +239,9 @@ combined with the session operation signal before configuration changes, source
 opening and final presentation commit. Superseding the intent cannot commit a
 late scene or convert cancellation into an unavailable placeholder; configuration
 rollback and late-source disposal remain owned by the existing restore lease.
+
+### 资源需求与平面基元归属
+
+页面装配通过 `media/policy/frame-resources.ts` 注入当前消费者的 native resource 需求；解码准备不再导入具体 WebGPU presenter。每次取帧读取需求，browser 模式继续保留浏览器资源，reference/显式平面路径仍在媒体源背压内等待 copyTo，关闭和缓冲回收沿原 owner 完成。低层诊断入口显式装配自己的需求查询。
+
+布局、校验、可见 chroma 边界和采样统一由 `shared/color/yuv-planes.ts` 拥有，YUV 与 HDR 转换单向依赖它。`yuv-color.ts` 兼容导出保留；本次不改变矩阵、范围、传递函数、采样或数值精度。
