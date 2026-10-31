@@ -1,3 +1,4 @@
+import '../helpers/browser-worker-host.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSourceQuerier, sortByAxis, mergeAppendedSort } from '../../shared/analysis/metadata/adapters.ts';
@@ -166,7 +167,7 @@ test('abandoning partial index work preserves the prior cache and a later append
   assert.deepEqual(finishAnalysisSteps(cooperative.query(table,context,query)), createSourceQuerier()(table,context,query));
 });
 test('real worker cancellation stops an executing sort and executing statistics, retaining metadata for the next request', async t => {
-  const { Worker } = await import('node:worker_threads');
+  const { BrowserWorker: Worker } = await import('../helpers/browser-worker-host.ts');
   const worker = new Worker(new URL('../../src/analysis/metadata/native-worker.ts', import.meta.url));
   t.after(async () => { await worker.terminate(); });
   const messages: any[] = [];

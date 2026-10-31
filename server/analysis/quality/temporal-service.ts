@@ -29,6 +29,11 @@ import type {
   VmafPlanSnapshot,
   VmafPrepared,
 } from "../../../shared/analysis/quality/vmaf.ts";
+import type { VmafResult, VmafNativeResult } from '../../../shared/analysis/quality/vmaf.ts';
+import type { XpsnrResult, XpsnrNativeResult } from '../../../shared/analysis/quality/xpsnr.ts';
+import { sameExecutionContract } from '../../../shared/analysis/quality/reexecution.ts';
+import type { QualityExecutionContract } from '../../../shared/analysis/quality/reexecution.ts';
+import type { TemporalHooks } from './temporal-runner.ts';
 import type { XpsnrInput } from "../../../shared/analysis/quality/xpsnr.ts";
 
 export const scoringDigest = (value: unknown) =>
@@ -51,7 +56,10 @@ export type TemporalJob<K extends Kind, I extends Input> = Omit<
     VmafMetricState
   >;
 };
-interface Executor {
+type Native<K extends Kind> = { vmaf: VmafNativeResult; xpsnr: XpsnrNativeResult }[K];
+type Result<K extends Kind> = { vmaf: VmafResult; xpsnr: XpsnrResult }[K];
+interface Executor<K extends Kind, I extends Input> {
+  run(input: I, snapshot: VmafPlanSnapshot, signal: AbortSignal, hooks: TemporalHooks): Promise<{ native: Native<K> }>;
   readonly admission?: import('../../quality-admission.ts').QualityAdmission;
   readonly stopUncertain: boolean;
   readonly ready?: Promise<void>;
@@ -60,7 +68,7 @@ interface Executor {
 }
 
 /** Shared durable ownership, not a numerical metric. Domain subclasses retain
- * input parsing, preparation validation, execution, pooling, evidence and policy.
+ * input parsing, preparation validation, numerical results, evidence and policy.
  * The original tables/wire names, transactions and receipts stay unchanged. */
 export abstract class TemporalScoringService<K extends Kind, I extends Input> {
   readonly reexecutions: ReexecutionLedger;
@@ -79,7 +87,7 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
   protected timer?: ReturnType<typeof setTimeout>;
   private closing?: Promise<void>;
   protected file: string;
-  protected executor: Executor;
+  protected executor: Executor<K, I>;
   protected plans: CorrespondenceService;
   protected kind: K;
   protected limits: typeof VMAF_LIMITS;
@@ -90,16 +98,14 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
     return !["queued", "preparing", "running", "cancelling"].includes(state);
   }
   protected abstract parse(value: unknown): I;
-  protected abstract execute(id: string, signal: AbortSignal): Promise<void>;
-  protected abstract finish(job: TemporalJob<K, I>, native: null): void;
+  protected abstract validatePrepared(value: VmafPrepared, snapshot: VmafPlanSnapshot, input: I): void;
   protected abstract metricError(code: string, message: string): Error;
   protected constructor(
     file: string,
-    executor: Executor,
+    executor: Executor<K, I>,
     plans: CorrespondenceService,
     kind: K,
-    limits: typeof VMAF_LIMITS,
-  ) {
+    limits: typeof VMAF_LIMITS) {
     this.file = file;
     this.executor = executor;
     this.plans = plans;
@@ -552,6 +558,138 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
     }
     this.wake();
   }
+  protected async execute(id: string, signal: AbortSignal) {
+    let j = this.get(id, this.all().find((x) => x.id === id)!.actor.id);
+    const snapshot = JSON.parse(
+      String(this.db.prepare(`SELECT snapshot FROM quality_${this.kind}_jobs WHERE id=?`).get(id)!.snapshot),
+    ) as VmafPlanSnapshot;
+    try {
+      const value = await this.executor.run(j.input, snapshot, signal, {
+        expectedExecutionContract: j.executionContract,
+        contract: (contract) => {
+          j = this.get(id, j.actor.id);
+          if (
+            Buffer.byteLength(JSON.stringify(contract)) > 16 * 1024 ||
+            (j.executionContract && !sameExecutionContract(j.executionContract, contract))
+          )
+            throw new AdminError(409, 'Frozen native execution contract changed.', 'execution-contract-conflict');
+          if (!j.executionContract) {
+            j.executionContract = contract;
+            this.save(j);
+          }
+        },
+        admitted: () => {
+          j = this.get(id, j.actor.id);
+          if (j.state !== 'queued' || j.queueUntil <= now())
+            throw this.metricError('queue-expired', `${this.label} queue changed before admission`);
+          j.state = 'preparing';
+          j.phase = 'component';
+          j.startedAt = now();
+          j.reason = null;
+          j.attemptId = randomUUID();
+          j.metrics.psnr.state = 'running';
+          if (j.input.metrics.ssim) j.metrics.ssim.state = 'running';
+          this.save(j);
+        },
+        phase: (phase) => {
+          j = this.get(id, j.actor.id);
+          j.phase = phase;
+          if (phase === 'native' || phase === 'decode-and-score') {
+            j.state = 'running';
+            j.metrics[this.kind].state = 'running';
+          }
+          this.save(j);
+        },
+        progress: (frames, total) => {
+          j = this.get(id, j.actor.id);
+          j.progress = { preparedFrames: frames, targetFrames: total };
+          this.save(j);
+        },
+        prepared: (value) => {
+          this.validatePrepared(value, snapshot, j.input);
+          j = this.get(id, j.actor.id);
+          j.metrics.psnr = { state: 'completed', reason: null };
+          if (j.input.metrics.ssim) j.metrics.ssim = { state: 'completed', reason: null };
+          this.db.exec('BEGIN IMMEDIATE');
+          try {
+            this.db.prepare(`UPDATE quality_${this.kind}_jobs SET prepared=? WHERE id=?`).run(JSON.stringify(value), id);
+            this.save(j);
+            this.db.exec('COMMIT');
+          } catch (error) {
+            this.db.exec('ROLLBACK');
+            throw error;
+          }
+        },
+      });
+      j = this.get(id, j.actor.id);
+      Object.assign(j.metrics[this.kind], { state: 'completed', reason: null });
+      j.state = j.state === 'cancelling' ? 'cancelled' : 'completed';
+      j.reason = null;
+      j.phase = 'done';
+      j.endedAt = now();
+      this.finish(j, value.native);
+    } catch (error) {
+      if (this.executor.stopUncertain) throw error;
+      j = this.get(id, j.actor.id);
+      if (this.terminal(j.state)) return;
+      if (!j.attemptId && error instanceof AdminError && error.code === 'quality-busy') {
+        this.blocked(j, error);
+        return;
+      }
+      j.reason = {
+        code: typeof (error as { code?: unknown })?.code === 'string' ? String((error as { code: string }).code) : 'execution-failed',
+        message: error instanceof Error ? error.message.slice(0, 300) : `${this.label} execution failed`,
+      };
+      const cancelled = j.state === 'cancelling' || signal.aborted;
+      for (const m of Object.values(j.metrics))
+        if (['waiting', 'running'].includes(m.state)) {
+          m.state = this.closed ? 'interrupted' : cancelled ? 'cancelled' : 'failed';
+          m.reason = j.reason;
+        }
+      j.state = this.closed ? 'interrupted' : cancelled ? 'cancelled' : this.prepared(j.id) ? 'partial' : 'failed';
+      j.phase = 'done';
+      j.process = null;
+      j.endedAt = now();
+      this.finish(j, null);
+    }
+  }
+  protected finish(job: TemporalJob<K, I>, native: Native<K> | null) {
+    const prepared = this.prepared(job.id);
+    let result: Result<K> | null = null;
+    if (prepared) {
+      result = {
+        schema: `voidplayer-native-${this.kind}-result`,
+        version: prepared.pairs[0].version,
+        plan: { ...job.input.plan },
+        prepared,
+        [this.kind]: native,
+        metrics: structuredClone(job.metrics),
+      } as unknown as Result<K>;
+      if (Buffer.byteLength(JSON.stringify(result)) > this.limits.resultBytes)
+        throw this.metricError('budget-exceeded', `${this.label} result history limit exceeded`);
+      job.resultDigest = digest(result);
+    }
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      this.db
+        .prepare(`UPDATE quality_${this.kind}_jobs SET result=?,prepared=NULL WHERE id=?`)
+        .run(result ? JSON.stringify(result) : null, job.id);
+      this.save(job);
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+  result(id: string, actor: string) {
+    const j = this.get(id, actor);
+    const row = this.db.prepare(`SELECT result FROM quality_${this.kind}_jobs WHERE id=?`).get(id);
+    if (!row?.result || !j.resultDigest)
+      throw new AdminError(409, `Immutable ${this.label} result is unavailable.`, `${this.kind}-result-unavailable`);
+    const value = JSON.parse(String(row.result)) as Result<K>;
+    if (digest(value) !== j.resultDigest) throw new AdminError(500, `Stored ${this.label} result changed.`, `stored-${this.kind}-invalid`);
+    return value;
+  }
   protected prepared(id: string) {
     const row = this.db
       .prepare(`SELECT prepared FROM quality_${this.kind}_jobs WHERE id=?`)
@@ -652,5 +790,4 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
     })());
   }
   close() { return this.closing ??= this.stopExecution().then(()=>{this.unqueue?.();this.db.close();this.unlock();}); }
-
 }

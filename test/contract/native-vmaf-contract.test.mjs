@@ -1,4 +1,7 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';
+import {hasAssignment} from '../helpers/source-contract.mjs';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
 import {VMAF_SOURCE_REVISION,VMAF_SUPERVISOR_SOURCE_SHA256,VMAF_MODELS,VMAF_CAPABILITY} from '../../shared/analysis/quality/vmaf.ts';
 import {agentManifest,serviceCapabilities} from '../../shared/service/agent.ts';
 const read=p=>readFile(new URL('../../'+p,import.meta.url),'utf8');
@@ -15,7 +18,7 @@ test('real native tests are mandatory in existing full suites, remain outside li
  for(const engine of ['chromium','webkit'])for(const depth of [8,10]){const c=byId(`browser-native-vmaf-${depth}-${engine}`);assert.equal(c.required,true);assert.equal(c.build,true);assert.ok(c.suites.includes('ci-cache'));assert.ok(c.fixtures.includes('core'));assert.ok(!c.suites.some(s=>s.startsWith('ci-identity')));}
  const packaged=await read('scripts/package-release.mjs');for(const worker of ['decode-worker.ts'])assert.ok(packaged.includes('server/analysis/vmaf/'+worker));
  const fixed=JSON.parse(await read('test/helpers/native-vmaf-samples.json'));assert.equal(fixed.samples.length,5);assert.match(fixed.rawOracle,/ffmpeg decode/);assert.ok(!/execFileSync\('ffmpeg'/.test(await read('test/helpers/native-vmaf.mjs')));
- assert.match(await read('scripts/check-quality-release.mjs'),/check-analysis-quality-release\.mjs/);assert.match(await read('scripts/check-analysis-quality-release.mjs'),/env.PATH = empty/);assert.match(await read('scripts/check-analysis-quality-release.mjs'),/analysis-quality-oracle.json/);const compiled=byId('release-analysis-quality');assert.equal(compiled.required,true);assert.deepEqual(compiled.platforms,['linux','darwin','win32']);
+ assert.match(await read('scripts/check-quality-release.mjs'),/check-analysis-quality-release\.mjs/);assert.ok(hasAssignment(await read('scripts/check-analysis-quality-release.mjs'),'env','PATH','empty'));assert.match(await read('scripts/check-analysis-quality-release.mjs'),/analysis-quality-oracle.json/);const compiled=byId('release-analysis-quality');assert.equal(compiled.required,true);assert.deepEqual(compiled.platforms,['linux','darwin','win32']);
 });
 
 test('MP4 native matrix is explicitly advertised and adds every required browser cell without changing the official executor',async()=>{

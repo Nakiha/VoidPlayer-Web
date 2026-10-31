@@ -19,12 +19,19 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '24.15.0'
           cache: npm
       - run: node scripts/release-version.mjs
       - run: npm ci
+      - name: Check changed-line code hygiene
+        env:
+          FORMAT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: npm run format:check -- --base "$FORMAT_BASE"
+      - run: npm run check:environments
       - run: node scripts/run-tests.mjs source
       - uses: actions/upload-artifact@v4
         if: always()

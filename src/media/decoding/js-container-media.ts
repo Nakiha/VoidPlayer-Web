@@ -15,9 +15,7 @@ export type JsContainerAdmission = {
  * Only an explicit unsupported combination selects the unmigrated route. */
 export async function admitJsContainerMedia(format:'ts'|'matroska',input:RandomAccessInput,meta:MediaMeta,sourceVersion:string,deps:FallbackDeps):Promise<JsContainerAdmission> {
   loadAborted(deps.signal);
-  const worker = deps.workerFactory ? deps.workerFactory() : typeof Worker !== 'undefined'
-    ? new Worker(new URL('./packet-worker.ts',import.meta.url),{type:'module'})
-    : new (await import('node:worker_threads')).Worker(new URL('./packet-worker.ts',import.meta.url)) as unknown as Worker;
+  const worker = deps.workerFactory ? deps.workerFactory() : new Worker(new URL('./packet-worker.ts',import.meta.url),{type:'module'});
   const rpc = new WorkerRpc<PacketCommands>(worker,undefined,deps.onProgress);
   const detach = onLoadAbort(deps.signal,()=>rpc.terminate(deps.signal!.reason));
   try {

@@ -23,6 +23,8 @@ try{
   await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/gpu-presentation-test${unified?'?colorPipeline=unified':''}`);
   const report=await page.evaluate(async(unified)=>{
    const {initializeGpuPresentation,keepNativeGpuResource}=await import('/src/presentation/webgpu-presenter.ts');
+   const {configureFrameResourceDemand}=await import('/src/media/policy/frame-resources.ts');
+   configureFrameResourceDemand(keepNativeGpuResource);
    const {paintFrame,captureFrame,setPresentationGeometry,disposePresentation}=await import('/src/presentation/presenter.ts');
    const {VideoSample}=await import('/node_modules/mediabunny/dist/modules/src/index.js');
    const {rgbaDescription}=await import('/shared/media/frame-description.ts');

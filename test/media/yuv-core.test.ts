@@ -1,3 +1,4 @@
+import '../helpers/browser-worker-host.ts';
 import test from 'node:test';
 import { createHash } from 'node:crypto';
 const ffmpeg = process.env.VOIDPLAYER_FFMPEG_ORACLE || 'ffmpeg';

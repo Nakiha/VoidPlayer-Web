@@ -12,12 +12,9 @@ import { MediaOpenError } from '../../../shared/media/io/media-errors.ts';
 import { createSourceQuerier, locateSampleById } from '../../../shared/analysis/metadata/adapters.ts';
 
 async function start() {
-  // The production path uses the browser Worker; Node exercises this same
-  // demux/decoder implementation with the real WASM binary.
-  const parent = typeof process !== 'undefined' && process.versions?.node
-    ? (await import('node:worker_threads')).parentPort : null;
   const reply = workerReply<PacketCommands>();
-  const send = (value: WorkerMessage<PacketCommands>, transfer: Transferable[] = []) => parent ? parent.postMessage(value, { transfer: transfer as ArrayBuffer[] }) : (globalThis as unknown as { postMessage(v: unknown, t: Transferable[]): void }).postMessage(value, transfer);
+  const send = (value: WorkerMessage<PacketCommands>, transfer: Transferable[] = []) =>
+    (globalThis as unknown as { postMessage(v: unknown, t: Transferable[]): void }).postMessage(value, transfer);
   let engine: FlvEngine | Mp4Engine | JsContainerEngine | undefined;
   let tsSession: string | undefined;
   let chain = Promise.resolve();
@@ -45,12 +42,14 @@ async function start() {
         audioTimer = undefined;
         const request = audioRequest; audioRequest = undefined;
         if (!request) return;
-        try {
+          try {
           const data = engine instanceof FlvEngine && engine.index
             ? engine.cachedAudio.read(engine.index, request.pts) : { packets: [] };
           send({ id: 0, type: 'cached-audio', generation: request.generation, data }, data.packets.map(p => p.data.buffer as ArrayBuffer));
-        } catch { /* Optional audio cannot fail the video command chain. */ }
-      }, 0);
+        } catch {
+            /* Optional audio cannot fail the video command chain. */
+          }
+        }, 0);
       return;
     }
     if (message.type === 'analysis-flv-index') {
@@ -194,8 +193,7 @@ async function start() {
       }
     });
   };
-  if (parent) parent.on('message', receive);
-  else globalThis.onmessage = e => receive(e.data);
+  globalThis.onmessage = (e) => receive(e.data);
 }
 void start();
 

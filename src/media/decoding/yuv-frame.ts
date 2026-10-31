@@ -1,4 +1,4 @@
-import { keepNativeGpuResource } from '../../presentation/webgpu-presenter.ts';
+import { needsNativeFrameResource } from '../policy/frame-resources.ts';
 import { getColorMode } from '../policy/color-mode.ts';
 import type { DecodedFrame } from '../source.ts';
 import { resolveYuvColor, validateYuv } from '../../../shared/color/yuv-color.ts';
@@ -15,7 +15,7 @@ export function createYuvBufferPool(){
 export async function prepareYuvFrame(frame: DecodedFrame, pool?:ReturnType<typeof createYuvBufferPool>, preserveNativeSample=false): Promise<DecodedFrame> {
   // Browser-managed color must also survive WebGPU failure and mode-switch
   // preparation, which runs before the previous GPU surfaces are replaced.
-  if(getColorMode()==='browser'||keepNativeGpuResource())return frame;
+  if(getColorMode()==='browser'||needsNativeFrameResource())return frame;
   if(frame.kind!=='video-sample' || !frame.sample) return frame;
   const d=frame.description;
   const fallback=(reason:string) => { d.colorFallback=reason; return frame; };

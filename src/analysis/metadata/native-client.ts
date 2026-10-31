@@ -14,9 +14,7 @@ export class NativeAnalysisClient {
 
   private open() {
     return this.opening ??= (async () => {
-      const worker = this.factory ? this.factory() : typeof Worker !== 'undefined'
-        ? new Worker(new URL('./native-worker.ts', import.meta.url), { type: 'module' })
-        : new (await import('node:worker_threads')).Worker(new URL('./native-worker.ts', import.meta.url)) as unknown as Worker;
+      const worker = this.factory ? this.factory() : new Worker(new URL('./native-worker.ts', import.meta.url), { type: 'module' });
       if (this.failure) { void worker.terminate(); throw this.failure; }
       this.worker = worker;
       const receive = (reply: NativeAnalysisReply) => {
@@ -32,7 +30,7 @@ export class NativeAnalysisClient {
         worker.addEventListener('message',message);worker.addEventListener('error',error);worker.addEventListener('messageerror',invalid);
         this.detachListeners=()=>{worker.removeEventListener('message',message);worker.removeEventListener('error',error);worker.removeEventListener('messageerror',invalid);};
       } else {
-        const node = worker as unknown as import('node:worker_threads').Worker;
+        const node = worker as unknown as { on(type: string, listener: (...args: any[]) => void): void; off(type: string, listener: (...args: any[]) => void): void };
         const error=(error:unknown)=>this.close(error instanceof Error?error:new Error(String(error)));
         const exit=(code:number)=>this.close(new Error(`Native analysis worker exit ${code}.`));
         const invalid=()=>this.close(new Error('Invalid native analysis worker reply.'));

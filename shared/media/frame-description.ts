@@ -1,5 +1,5 @@
-import { validateYuv } from '../color/yuv-color.ts';
-import type { YuvLayout } from '../color/yuv-color.ts';
+import { validateYuv } from '../color/yuv-planes.ts';
+import type { YuvLayout } from '../color/yuv-planes.ts';
 import type { ColorInfo } from '../review/model.ts';
 import { MediaOpenError } from './io/media-errors.ts';
 export type FrameDescription = {

@@ -1,3 +1,4 @@
+import '../helpers/browser-worker-host.ts';
 import {openPacketMedia} from '../../src/media/decoding/packet-media.ts';
 import {createHash} from 'node:crypto';
 import {test} from 'node:test';

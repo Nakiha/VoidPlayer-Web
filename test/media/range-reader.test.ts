@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { Worker } from 'node:worker_threads';
+import { BrowserWorker as Worker } from '../helpers/browser-worker-host.ts';
 import { RangeReader } from '../../shared/media/io/range-reader.ts';
 import { createRangeBridge } from '../../src/media/io/range-bridge.ts';
 import { WorkerRpc } from '../../src/media/decoding/ffmpeg-media.ts';

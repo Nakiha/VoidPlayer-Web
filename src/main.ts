@@ -9,7 +9,8 @@ import { installLanguageControls } from './ui/language.ts';
 import { t as tr, getLocale, onLanguageChange, msg } from './i18n.ts';
 import { isHdrTransfer } from './presentation/presentation-color.ts';
 import { updateColorFlow } from './ui/color-flow.ts';
-import { initializeGpuPresentation } from './presentation/webgpu-presenter.ts';
+import { configureFrameResourceDemand } from './media/policy/frame-resources.ts';
+import { initializeGpuPresentation, keepNativeGpuResource } from './presentation/webgpu-presenter.ts';
 import { indexProgressLabel } from './ui/index-progress.ts';
 import { fileBasename } from './ui/filename.ts';
 import { AnnotationClient } from './review/annotation-client.ts';
@@ -98,6 +99,7 @@ if(!new URLSearchParams(location.search).has('colorPipeline'))setColorMode(saved
 // GPU warmup runs after first paint: early frames use the canvas path, surface
 // creation failures already fall back inside initializeGpuPresentation, and
 // color policy (set above) is only read lazily at decode time.
+configureFrameResourceDemand(keepNativeGpuResource);
 const gpuReady=initializeGpuPresentation(Object.values(canvases)).catch(error => {
   log.warn('media', 'GPU 后台初始化失败，已保留现有呈现路径。', { error: error instanceof Error ? error.message : String(error) });
 });

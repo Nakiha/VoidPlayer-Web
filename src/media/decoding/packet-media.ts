@@ -22,10 +22,12 @@ import type { PacketFrame } from './flv-decoder.ts';
 import { contextLog } from '../../logging/log.ts';
 import { getColorMode } from '../policy/color-mode.ts';
 import type { ColorMode, ReferenceDecode } from '../../../shared/color/decode-policy-types.ts';
-import { isHdrTransfer } from '../../presentation/presentation-color.ts';
+import { hdrTransfer } from '../../../shared/color/hdr-policy.ts';
 import { resolveYuvColor } from '../../../shared/color/yuv-color.ts';
 import type { MediaInfo } from '../../../shared/review/model.ts';
 import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample } from '../../../shared/analysis/metadata/types.ts';
+
+const isHdrTransfer = (transfer: string | null | undefined) => hdrTransfer(transfer) !== null;
 
 export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matroska', input: PacketInput, meta: MediaMeta, deps: FallbackDeps & { forceWasm?: boolean; nativePresentedLibrary?:import('../../../shared/media/io/library-reference-types.ts').LibraryIndexReference; sourceVersion?: string; preparedTs?: {rpc:WorkerRpc<PacketCommands>; session:string; hasDts:boolean} } = {}): Promise<MediaSource> {
   const nativeLibrary='url' in input?input.library??deps.nativePresentedLibrary:undefined;
@@ -48,9 +50,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     let init: Init | null | undefined, selected = single, failure: unknown;
     let prepared: PreparedFlv | undefined;
     const createRpc = async () => {
-      const worker = deps.workerFactory ? deps.workerFactory() : typeof Worker !== 'undefined'
-        ? new Worker(new URL('./packet-worker.ts', import.meta.url), { type: 'module' })
-        : new (await import('node:worker_threads')).Worker(new URL('./packet-worker.ts', import.meta.url)) as unknown as Worker;
+      const worker = deps.workerFactory ? deps.workerFactory() : new Worker(new URL('./packet-worker.ts', import.meta.url), { type: 'module' });
       return new WorkerRpc<PacketCommands>(worker, undefined, deps.onProgress);
     };
     // Read the startup packet outside every decoder deadline. Only actual index

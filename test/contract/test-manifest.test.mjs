@@ -1,3 +1,4 @@
+import { hasAwaitedCall, hasAssignment } from '../helpers/source-contract.mjs';
 import {parseOptions} from '../../scripts/testing/options.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -412,7 +413,7 @@ test('forward ordinary-frame GUI matrix extends the full core-backed metric job 
 });
 
 
-test('paused native quality keeps explicit preparation and independent mandatory native identity checks',()=>{
+test('paused native quality keeps explicit preparation and independent mandatory native identity checks', ()=> {
  const rows=selectCases({suite:'ci-cache',platform:'linux'}).selected.filter(r=>r.id.startsWith('browser-presented-quality-'));
  assert.deepEqual(rows.map(r=>r.engines[0]),['chromium','webkit']);
  for(const row of rows){assert.equal(row.required,true);assert.deepEqual(row.fixtures,['core']);assert.equal(row.build,true);assert.equal(row.timeoutMs,300000);assert.equal(row.suites.includes('ci-identity-browser'),false);}
@@ -426,7 +427,7 @@ test('paused native quality keeps explicit preparation and independent mandatory
  const long=readFileSync(new URL('../../scripts/check-presented-quality-browser.mjs',import.meta.url),'utf8');
  assert.doesNotMatch(long,/checkNativePresentedProtocol/,'the protocol is no longer hidden behind a multi-page GPU scenario');
  const protocol=readFileSync(new URL('../../scripts/check-native-presented-protocol.mjs',import.meta.url),'utf8');
- assert.match(protocol,/await checkNativePresentedProtocol\(browser,fixtures,engine\)/);
+  assert.ok(hasAwaitedCall(protocol, 'checkNativePresentedProtocol', ['browser', 'fixtures', 'engine']));
  assert.ok(selectCases({suite:'source',platform:'linux'}).selected.some(r=>r.id==='node-quality-source-build'));
  assert.ok(selectCases({suite:'ci-native-bun',platform:'win32'}).selected.some(r=>r.id==='bun-quality-source-build'));
  const release=readFileSync(new URL('../../scripts/check-quality-release.mjs',import.meta.url),'utf8');assert.match(release,/quality-source-build/);assert.ok(!release.includes('frame-index?v=${entry.version}&build=1'));
@@ -448,4 +449,34 @@ test('media Node domain partitions are a complete disjoint selection and reject 
     m=>{delete m.ciNodeMediaShards;},
     m=>{m.ciNodeMediaShards=['analysis','analysis','containers'];},
   ]){const m=clone();mutate(m);assert.throws(()=>validateManifest(m),/partition/);}
+});
+
+test('source contracts ignore whitespace and reject changed operations', () => {
+  for (const source of ['env.PATH=empty;', 'env.PATH = empty;', 'env . PATH\n = empty;'])
+    assert.ok(hasAssignment(source, 'env', 'PATH', 'empty'));
+  for (const source of ['env.PATH===empty;', 'env.PATH = unsafe;', '/* env.PATH=empty */'])
+    assert.equal(hasAssignment(source, 'env', 'PATH', 'empty'), false);
+  assert.ok(
+    hasAwaitedCall('await checkNativePresentedProtocol( browser,\n fixtures, engine );', 'checkNativePresentedProtocol', [
+      'browser',
+      'fixtures',
+      'engine',
+    ]),
+  );
+  assert.equal(
+    hasAwaitedCall('checkNativePresentedProtocol(browser,fixtures,engine);', 'checkNativePresentedProtocol', [
+      'browser',
+      'fixtures',
+      'engine',
+    ]),
+    false,
+  );
+  assert.equal(
+    hasAwaitedCall('await checkNativePresentedProtocol(engine,fixtures,browser);', 'checkNativePresentedProtocol', [
+      'browser',
+      'fixtures',
+      'engine',
+    ]),
+    false,
+  );
 });

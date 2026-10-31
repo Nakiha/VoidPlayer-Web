@@ -22,29 +22,12 @@ import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_SCHEMA, parseFfmpegIndex, seria
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-// Dual environment: web worker (browser) and node:worker_threads (tests).
-// Messages queue until the initial script evaluation completes in both
-// environments, so wiring the listener from a microtask is race-free.
 type Request = WorkerRequest<FfmpegCommands> | IndexInput;
 type Port = {
   onmessage: null | ((event: { data: Request }) => void);
   postMessage(message: WorkerMessage<FfmpegCommands>, transfer?: Transferable[]): void;
 };
-const port: Port = (() => {
-  if (typeof process === 'undefined' || !process.versions?.node) return globalThis as unknown as Port;
-  const shim: Pick<Port, 'onmessage'> = { onmessage: null };
-  let parent: import('node:worker_threads').MessagePort | null = null;
-  void import('node:worker_threads').then(({ parentPort }) => {
-    if (!parentPort) throw new Error('worker_threads parentPort 不可用');
-    parent = parentPort;
-    parentPort.on('message', (data: Request) => shim.onmessage?.({ data }));
-  });
-  return {
-    get onmessage() { return shim.onmessage; },
-    set onmessage(fn) { shim.onmessage = fn; },
-    postMessage: (message, transfer) => parent?.postMessage(message, transfer as ArrayBuffer[]),
-  };
-})();
+const port = globalThis as unknown as Port;
 const reply = workerReply<FfmpegCommands>();
 
 let core: any = null;
@@ -71,7 +54,8 @@ type DecodeContext = { packets: FfmpegPacketIndex; indexComplete: boolean; ticks
 const contexts = new Map<number, DecodeContext>();
 const observations = new Map<number, ObservedBytes>();
 
-async function init(payload: FfmpegCommands['init']['request'], onProgress: MediaOpenProgress, onReady?: (data: FfmpegInitResult) => void): Promise<FfmpegInitResult> {
+async function init(payload: FfmpegCommands['init']['request'], onProgress: MediaOpenProgress, onReady?: (data: FfmpegInitResult) => void,
+): Promise<FfmpegInitResult> {
   onProgress('decoder');
   ({ core, heap } = await loadCore(payload.glueURL, payload.wasmBinary ? new Uint8Array(payload.wasmBinary) : undefined));
   requireFrameAbi(core);
@@ -368,7 +352,9 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
     if (contexts.has(ctx)) throw error;
     observations.delete(ctx);
     if (blobHandle) core.vpBlobs.delete(blobHandle);
-    try { core.FS.unlink(path); } catch { /* best effort */ }
+    try { core.FS.unlink(path); } catch {
+      /* best effort */
+    }
     core.ccall('vp_destroy', null, ['number'], [ctx]);
     throw error;
   }
@@ -459,7 +445,9 @@ port.onmessage = async (event: { data: Request }) => {
       if (contexts.delete(ctx)) {
         observations.delete(ctx);
         if (entry?.blobHandle) core.vpBlobs.delete(entry.blobHandle);
-        try { core.FS.unlink(message.path); } catch { /* already gone */ }
+        try { core.FS.unlink(message.path); } catch {
+          /* already gone */
+        }
         core.ccall('vp_destroy', null, ['number'], [ctx]);
       }
       port.postMessage(reply(message, null));

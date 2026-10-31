@@ -4,7 +4,7 @@ import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { Worker } from 'node:worker_threads';
+import { BrowserWorker as Worker } from '../helpers/browser-worker-host.ts';
 import { once } from 'node:events';
 import { execFileSync } from 'node:child_process';
 import { WorkerRpc } from '../../src/media/workers/worker-rpc.ts';

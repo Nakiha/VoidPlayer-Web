@@ -1,3 +1,4 @@
+import '../helpers/browser-worker-host.ts';
 import {openPacketMedia} from '../../src/media/decoding/packet-media.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -116,7 +117,7 @@ test('WASM fallback decodes H.266/VVC through the n9.0.1 core', async () => {
 });
 
 test('openMedia keeps FFV1 on JS packets and never invokes a container fallback', async () => {
-  const {Worker:NodeWorker}=await import('node:worker_threads'),deps=await nodeCoreDeps();
+  const { BrowserWorker: NodeWorker } = await import('../helpers/browser-worker-host.ts'),deps=await nodeCoreDeps();
   const globals=globalThis as unknown as {document?:{baseURI:string};Worker?:unknown};
   const priorDocument=globals.document,priorWorker=globals.Worker;
   globals.document={baseURI:new URL('../../public/index.html',import.meta.url).href};

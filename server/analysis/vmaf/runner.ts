@@ -1,3 +1,2 @@
-import type {QualityExecutionContract} from '../../../shared/analysis/quality/reexecution.ts';
-import type {VmafPrepared} from '../../../shared/analysis/quality/vmaf.ts';
-export type VmafHooks={expectedExecutionContract?:QualityExecutionContract;contract?(value:QualityExecutionContract):void;admitted():void;phase(name:string):void;progress(frames:number,total:number):void;prepared(value:VmafPrepared):void};
+// Compatibility type name; the paired execution protocol belongs to quality.
+export type { TemporalHooks as VmafHooks } from '../quality/temporal-runner.ts';

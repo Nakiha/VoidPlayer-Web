@@ -1,5 +1,5 @@
 import {openPacketMedia} from '../../src/media/decoding/packet-media.ts';
-import {Worker} from 'node:worker_threads';
+import { BrowserWorker as Worker } from '../helpers/browser-worker-host.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';

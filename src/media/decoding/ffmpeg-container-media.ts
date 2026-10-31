@@ -22,7 +22,8 @@ import { contextLog } from '../../logging/log.ts';
 import { indexRecoveryWarning } from '../../../shared/media/indexing/index-integrity.ts';
 import { updateMediaInfo } from '../state.ts';
 import { ffmpegColorInfo } from '../metadata.ts';
-import { isHdrTransfer } from '../../presentation/presentation-color.ts';
+import { hdrTransfer } from '../../../shared/color/hdr-policy.ts';
+const isHdrTransfer = (transfer: string | null | undefined) => hdrTransfer(transfer) !== null;
 import { resolveYuvColor } from '../../../shared/color/yuv-color.ts';
 import type { MediaIndexIdentity } from '../../../shared/media/indexing/media-index-identity.ts';
 import type { MediaIndexClientTrace } from '../../../shared/media/indexing/media-index-types.ts';
@@ -43,12 +44,8 @@ export interface WasmDecodedFrame extends DecodedFrame {
 import {floorIndex,nextIndex,reserveFallbackThreads,WASM_CORE_GLUE_PATH,WASM_CORE_GLUE_PATH_MT} from './fallback-runtime.ts';
 import type {FallbackDeps} from './fallback-runtime.ts';
 async function createWorker(): Promise<Worker> {
-  if (typeof Worker !== 'undefined') return new Worker(new URL('./ffmpeg-worker.ts', import.meta.url), { type: 'module' });
-  // Node tests: worker_threads with the same message surface.
-  const { Worker: NodeWorker } = await import('node:worker_threads');
-  return new NodeWorker(new URL('./ffmpeg-worker.ts', import.meta.url), { type: 'module' } as object) as unknown as Worker;
+  return new Worker(new URL('./ffmpeg-worker.ts', import.meta.url), { type: 'module' });
 }
-
 
 type FallbackInput = File | (MediaMeta & { url: string });
 

@@ -10,7 +10,6 @@ import {
 } from "../../../shared/analysis/quality/xpsnr-comparison.ts";
 import type { XpsnrComparison } from "../../../shared/analysis/quality/xpsnr-comparison.ts";
 import type { QualityExecutionContract } from "../../../shared/analysis/quality/reexecution.ts";
-import { sameExecutionContract } from "../../../shared/analysis/quality/reexecution.ts";
 import { randomUUID } from "node:crypto";
 import { AdminError } from "../../admin-error.ts";
 import type { Actor } from "../../identity.ts";
@@ -37,16 +36,6 @@ import type {
 } from "../../../shared/analysis/quality/xpsnr.ts";
 import type { WasmXpsnrRunner } from "./wasm-runner.ts";
 import { clockKey } from "../../../shared/media/indexing/rational-clock.ts";
-const reason = (error: unknown) => ({
-  code:
-    typeof (error as { code?: unknown })?.code === "string"
-      ? String((error as { code: string }).code)
-      : "execution-failed",
-  message:
-    error instanceof Error
-      ? error.message.slice(0, 300)
-      : "XPSNR execution failed",
-});
 type Publication = {
   policy: CandidatePolicy;
   selected: {
@@ -139,11 +128,10 @@ export class NativeXpsnrService extends TemporalScoringService<
       signal,
     );
   }
-  private validatePrepared(
+  protected validatePrepared(
     value: XpsnrPrepared,
     snapshot: XpsnrPlanSnapshot,
-    input: XpsnrInput,
-  ) {
+    input: XpsnrInput) {
     if (
       !value ||
       value.pairs.length < 2 ||
@@ -240,177 +228,6 @@ export class NativeXpsnrService extends TemporalScoringService<
         "budget-exceeded",
         "Prepared sequence result budget exceeded",
       );
-  }
-  protected async execute(id: string, signal: AbortSignal) {
-    let j = this.get(id, this.all().find((x) => x.id === id)!.actor.id);
-    const snapshot = JSON.parse(
-      String(
-        this.db
-          .prepare("SELECT snapshot FROM quality_xpsnr_jobs WHERE id=?")
-          .get(id)!.snapshot,
-      ),
-    ) as XpsnrPlanSnapshot;
-    try {
-      const value = await this.runner.run(j.input, snapshot, signal, {
-        expectedExecutionContract: j.executionContract,
-        contract: (contract) => {
-          j = this.get(id, j.actor.id);
-          if (
-            Buffer.byteLength(JSON.stringify(contract)) > 16 * 1024 ||
-            (j.executionContract &&
-              !sameExecutionContract(j.executionContract, contract))
-          )
-            throw new AdminError(
-              409,
-              "Frozen native execution contract changed.",
-              "execution-contract-conflict",
-            );
-          if (!j.executionContract) {
-            j.executionContract = contract;
-            this.save(j);
-          }
-        },
-        admitted: () => {
-          j = this.get(id, j.actor.id);
-          if (j.state !== "queued" || j.queueUntil <= now())
-            throw new XpsnrError(
-              "queue-expired",
-              "XPSNR queue changed before admission",
-            );
-          j.state = "preparing";
-          j.phase = "component";
-          j.startedAt = now();
-          j.reason = null;
-          j.attemptId = randomUUID();
-          j.metrics.psnr.state = "running";
-          if (j.input.metrics.ssim) j.metrics.ssim.state = "running";
-          this.save(j);
-        },
-        phase: (phase) => {
-          j = this.get(id, j.actor.id);
-          j.phase = phase;
-          if (phase === "native" || phase === "decode-and-score") {
-            j.state = "running";
-            j.metrics.xpsnr.state = "running";
-          }
-          this.save(j);
-        },
-        progress: (frames, total) => {
-          j = this.get(id, j.actor.id);
-          j.progress = { preparedFrames: frames, targetFrames: total };
-          this.save(j);
-        },
-        prepared: (value) => {
-          this.validatePrepared(value, snapshot, j.input);
-          j = this.get(id, j.actor.id);
-          j.metrics.psnr = { state: "completed", reason: null };
-          if (j.input.metrics.ssim)
-            j.metrics.ssim = { state: "completed", reason: null };
-          this.db.exec("BEGIN IMMEDIATE");
-          try {
-            this.db
-              .prepare("UPDATE quality_xpsnr_jobs SET prepared=? WHERE id=?")
-              .run(JSON.stringify(value), id);
-            this.save(j);
-            this.db.exec("COMMIT");
-          } catch (error) {
-            this.db.exec("ROLLBACK");
-            throw error;
-          }
-        },
-      });
-      j = this.get(id, j.actor.id);
-      j.metrics.xpsnr = { state: "completed", reason: null };
-      j.state = j.state === "cancelling" ? "cancelled" : "completed";
-      j.reason = null;
-      j.phase = "done";
-      j.endedAt = now();
-      this.finish(j, value.native);
-    } catch (error) {
-      if (this.runner.stopUncertain) throw error;
-      j = this.get(id, j.actor.id);
-      if (terminalXpsnr(j.state)) return;
-      if (
-        !j.attemptId &&
-        error instanceof AdminError &&
-        error.code === "quality-busy"
-      ){this.blocked(j,error);return;}
-      j.reason = reason(error);
-      const cancelled = j.state === "cancelling" || signal.aborted;
-      for (const m of Object.values(j.metrics))
-        if (["waiting", "running"].includes(m.state)) {
-          m.state = this.closed
-            ? "interrupted"
-            : cancelled
-              ? "cancelled"
-              : "failed";
-          m.reason = j.reason;
-        }
-      j.state = this.closed
-        ? "interrupted"
-        : cancelled
-          ? "cancelled"
-          : this.prepared(j.id)
-            ? "partial"
-            : "failed";
-      j.phase = "done";
-      j.process = null;
-      j.endedAt = now();
-      this.finish(j, null);
-    }
-  }
-  protected finish(job: XpsnrJob, native: XpsnrResult["xpsnr"]) {
-    const prepared = this.prepared(job.id);
-    let result: XpsnrResult | null = null;
-    if (prepared) {
-      result = {
-        schema: "voidplayer-native-xpsnr-result",
-        version: prepared.pairs[0].version,
-        plan: { ...job.input.plan },
-        prepared,
-        xpsnr: native,
-        metrics: structuredClone(job.metrics),
-      };
-      if (Buffer.byteLength(JSON.stringify(result)) > XPSNR_LIMITS.resultBytes)
-        throw new XpsnrError(
-          "budget-exceeded",
-          "XPSNR result history limit exceeded",
-        );
-      job.resultDigest = digest(result);
-    }
-    this.db.exec("BEGIN IMMEDIATE");
-    try {
-      this.db
-        .prepare(
-          "UPDATE quality_xpsnr_jobs SET result=?,prepared=NULL WHERE id=?",
-        )
-        .run(result ? JSON.stringify(result) : null, job.id);
-      this.save(job);
-      this.db.exec("COMMIT");
-    } catch (error) {
-      this.db.exec("ROLLBACK");
-      throw error;
-    }
-  }
-  result(id: string, actor: string) {
-    const j = this.get(id, actor);
-    const row = this.db
-      .prepare("SELECT result FROM quality_xpsnr_jobs WHERE id=?")
-      .get(id);
-    if (!row?.result || !j.resultDigest)
-      throw new AdminError(
-        409,
-        "Immutable XPSNR result is unavailable.",
-        "xpsnr-result-unavailable",
-      );
-    const value = JSON.parse(String(row.result)) as XpsnrResult;
-    if (digest(value) !== j.resultDigest)
-      throw new AdminError(
-        500,
-        "Stored XPSNR result changed.",
-        "stored-xpsnr-invalid",
-      );
-    return value;
   }
   summary(id: string, actor: string) {
     const j = this.get(id, actor),

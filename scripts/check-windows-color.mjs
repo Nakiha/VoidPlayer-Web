@@ -101,6 +101,8 @@ try{
    await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/windows-color${pipeline==='unified'?'?colorPipeline=unified':''}`);
    entry.environment=await page.evaluate(async()=>{
     const {initializeGpuPresentation,keepNativeGpuResource}=await import('/src/presentation/webgpu-presenter.ts');
+   const {configureFrameResourceDemand}=await import('/src/media/policy/frame-resources.ts');
+   configureFrameResourceDemand(keepNativeGpuResource);
     await initializeGpuPresentation([...document.querySelectorAll('canvas')]);
     const adapter=await navigator.gpu?.requestAdapter(),i=adapter?.info;
     const {buildInfo}=await import('/src/build-info.ts');

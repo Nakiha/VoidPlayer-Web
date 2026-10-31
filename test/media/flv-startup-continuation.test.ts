@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { Worker } from 'node:worker_threads';
+import { BrowserWorker as Worker } from '../helpers/browser-worker-host.ts';
 import { scanFlv } from '../../shared/media/containers/flv-demux.ts';
 import { wrapFlv } from '../helpers/frame-pair-fixture.ts';
 import { openPacketMedia } from '../../src/media/decoding/packet-media.ts';

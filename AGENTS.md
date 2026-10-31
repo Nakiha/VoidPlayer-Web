@@ -40,6 +40,13 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 - HTTP 标注、幂等回执与操作事件同事务；事件消费不阻塞写入，过期游标明确要求快照重同步。任务中心在 SQL 筛选后检查独立快照预算，禁止各取首页伪全量筛选；冻结分页失效须重取，详情关联核对原 actor/receipt/input/attempt/digest；actor 是自述归属，不是认证。
 - 本机 stdio 页面桥必须遵守专项授权契约：只用真实映射 peer 判定本机，顶层页面点击授予范围，凭据仅存内存，不把 Origin/epoch/声明名当认证。仅共享白名单与现有 facade，不透传全工具/任意脚本路径、不上传 File/日志、不自动连接。授权失效废弃排队命令，已派发回执未知不假回滚或换键；迟到消息按 document/epoch/correlation 围栏。关闭 stdin 真实释放自有资源，stdout 仅协议帧，modern/legacy 生命周期分别验证。
 
+## 格式与层内边界
+
+- [紧凑格式](docs/code-format.md)：2 空格、LF、单引号、分号，目标约 140 字符；短变量组、数据声明、getter、转发方法及简单 guard 允许单行，副作用和生命周期操作清楚分行。不因触碰文件就整文件重排，格式迁移须明确选择范围并单独审查。`npm run format:check -- --base origin/main` 只查改动行的基础卫生，不强制完整布局；不要用源码空格断言行为。
+- [模块边界](docs/module-boundaries.md)：浏览器禁止 Node 内建依赖；media/analysis/session 不反向依赖 UI 或入口，media/analysis 不依赖 session 或具体 presenter；静态运行时依赖禁止循环，纯类型和 Worker URL 单独处理。
+- `check:shared` 不带 Node 类型，只允许明确的可移植 Web API；`check:environments` 分别编译浏览器与服务端。Node Worker 测试兼容只由 `test/helpers/browser-worker-*` 提供。新增全局环境能力须明确契约和负例。
+- 默认在 `src server shared` 查实现、在 `test scripts` 的代码文件中查回归。大 JSON 样本和 `docs/evidence` 只在需要对应证据时检索。
+
 ## 按工作流查阅契约
 
 修改相关模块前先读对应文档；具体支持域、版本和数值上限以负责该行为的契约及共享常量为准，不在本文件复制另一套版本表。
@@ -64,7 +71,9 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 
 ```sh
 npm run check:boundaries # 宿主依赖、模块归属与 Worker 入口
-npm run check:shared     # 无 DOM 类型的共享层编译
+npm run check:shared     # 可移植 Web API、无 Node 类型的共享层编译
+npm run check:environments # 浏览器与服务端分别编译
+npm run format:check     # 改动行的 LF、缩进 Tab 和尾随空白（只读）
 npm run test:fast        # 无媒体/core/浏览器依赖的快速逻辑与基础设施契约
 npm run test:contract    # 清单、生命周期、发布与执行报告契约
 npm run test:browser:all # 完整自动化浏览器套件（单次构建，独立结果）

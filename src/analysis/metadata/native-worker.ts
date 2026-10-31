@@ -4,10 +4,8 @@ import type { PacketView } from '../../../shared/analysis/metadata/adapters.ts';
 import type { NativeAnalysisRequest, NativeAnalysisReply } from '../../../shared/analysis/metadata/native-protocol.ts';
 
 async function start() {
-  const parent = typeof process !== 'undefined' && process.versions?.node
-    ? (await import('node:worker_threads')).parentPort : null;
-  const send = (reply: NativeAnalysisReply) => parent ? parent.postMessage(reply)
-    : (globalThis as unknown as { postMessage(reply: NativeAnalysisReply): void }).postMessage(reply);
+  const send = (reply: NativeAnalysisReply) =>
+    (globalThis as unknown as { postMessage(reply: NativeAnalysisReply): void }).postMessage(reply);
   const packets: PacketView[] = [], querier = createCooperativeQuerier();
   const queued = new Map<number, NativeAnalysisRequest>();
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -55,7 +53,6 @@ async function start() {
     queued.set(message.id, message);
     if (!active && timer === undefined) timer = setTimeout(drain, 0);
   };
-  if (parent) parent.on('message', receive);
-  else (globalThis as unknown as { onmessage: (event: MessageEvent<NativeAnalysisRequest>) => void }).onmessage = event => receive(event.data);
+  (globalThis as unknown as { onmessage: (event: MessageEvent<NativeAnalysisRequest>) => void }).onmessage = (event) => receive(event.data);
 }
 void start();

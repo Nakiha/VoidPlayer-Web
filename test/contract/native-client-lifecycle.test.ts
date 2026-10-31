@@ -1,3 +1,4 @@
+import { BrowserWorker } from '../helpers/browser-worker-host.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Worker } from 'node:worker_threads';
@@ -64,4 +65,40 @@ for(const outcome of ['resolve','reject'] as const)test(`controlled Node termina
     for(const name of names)assert.deepEqual(worker.listeners(name),[external.get(name)],`${name}: only the external callback remains`);
     assert.doesNotThrow(()=>worker.emit('error',new Error('external listener survives')));
   }finally{ended(0);client.close();}
+});
+
+test('Node browser host turns an unexpected physical exit into a browser transport failure', async () => {
+  const worker = new BrowserWorker(
+    new URL('data:text/javascript,' + encodeURIComponent("const {parentPort}=await import('node:worker_threads'); parentPort.close();")),
+  );
+  const client = new NativeAnalysisClient(() => worker as unknown as globalThis.Worker);
+  try {
+    await assert.rejects(client.call('rank', { firstPtsUs: 0, axis: 'pts', tUs: 0 }), /Worker exited unexpectedly/);
+    await new Promise((resolve) => setImmediate(resolve));
+    for (const event of ['message', 'error', 'messageerror', 'exit']) assert.equal(worker.listenerCount(event), 0);
+  } finally {
+    client.close();
+    await worker.terminate();
+  }
+});
+
+test('Node browser host supports self, property handlers and transferable reply options', async () => {
+  const entry = 'self.onmessage=e=>self.postMessage(e.data,{transfer:[e.data]});';
+  const worker = new BrowserWorker(new URL('data:text/javascript,' + encodeURIComponent(entry)));
+  try {
+    const reply = new Promise<ArrayBuffer>((resolve, reject) => {
+      worker.onmessage = (e) => resolve(e.data);
+      worker.onerror = (e) => reject(e.error ?? Error(e.message));
+    });
+    const bytes = new Uint8Array([4, 9, 16]);
+    worker.postMessage(bytes.buffer, [bytes.buffer]);
+    assert.equal(bytes.byteLength, 0);
+    assert.deepEqual([...new Uint8Array(await reply)], [4, 9, 16]);
+    worker.onmessage = null;
+    worker.onerror = null;
+    assert.equal(worker.listenerCount('message'), 0);
+    assert.equal(worker.listenerCount('exit'), 0);
+  } finally {
+    await worker.terminate();
+  }
 });

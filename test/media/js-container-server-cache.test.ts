@@ -6,7 +6,7 @@ import {execFileSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {Worker} from 'node:worker_threads';
+import { BrowserWorker as Worker } from '../helpers/browser-worker-host.ts';
 import {MediaLibraryIndex} from '../../server/library.ts';
 import {createMediaServer} from '../../server/app.ts';
 import {JS_TS_MEDIA_INDEX_IDENTITY,JS_MATROSKA_MEDIA_INDEX_IDENTITY} from '../../shared/media/indexing/media-index-identity.ts';

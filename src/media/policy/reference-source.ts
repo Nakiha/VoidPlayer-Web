@@ -1,6 +1,7 @@
 import type { MediaSource, DecodedFrame } from '../source.ts';
 import { MediaOpenError } from '../../../shared/media/io/media-errors.ts';
-import { isHdrTransfer } from '../../presentation/presentation-color.ts';
+import { hdrTransfer } from '../../../shared/color/hdr-policy.ts';
+const isHdrTransfer = (transfer: string | null | undefined) => hdrTransfer(transfer) !== null;
 import { resolveYuvColor } from '../../../shared/color/yuv-color.ts';
 import { contextLog } from '../../logging/log.ts';
 

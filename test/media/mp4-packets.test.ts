@@ -1,3 +1,4 @@
+import '../helpers/browser-worker-host.ts';
 import { packetFixture } from '../packet-fixture.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

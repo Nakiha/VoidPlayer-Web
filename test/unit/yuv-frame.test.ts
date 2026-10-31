@@ -1,3 +1,4 @@
+import { configureFrameResourceDemand } from '../../src/media/policy/frame-resources.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { prepareYuvFrame } from '../../src/media/decoding/yuv-frame.ts';
@@ -45,4 +46,74 @@ test('normal native copies release the decoder sample before queuing and recycle
   assert.notEqual(a.pixels!.buffer,b.pixels!.buffer);a.close();
   const c=await prepareYuvFrame(make(),pool);assert.equal(c.pixels!.buffer,a.pixels!.buffer);
   pool.dispose();b.close();c.close();assert.equal(closed,3);
+});
+
+test('consumer resource demand switches at frame pulls and plane copies stay inside backpressure', async () => {
+  const previous = getColorMode();
+  let retain = true,
+    copies = 0,
+    closed = 0,
+    clonesClosed = 0,
+    finish!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const frame = {
+    kind: 'video-sample',
+    byteSize: 6,
+    description: rgbaDescription(2, 2, { format: 'I420', byteLength: 6, stride: null }),
+    sample: {
+      rotation: 0,
+      toVideoFrame: () => ({
+        codedWidth: 2,
+        codedHeight: 2,
+        allocationSize: () => 6,
+        async copyTo(out: Uint8Array) {
+          copies++;
+          await gate;
+          out.set([16, 235, 16, 235, 128, 128]);
+          return [
+            { offset: 0, stride: 2 },
+            { offset: 4, stride: 1 },
+            { offset: 5, stride: 1 },
+          ];
+        },
+        close() {
+          clonesClosed++;
+        },
+      }),
+    },
+    close() {
+      closed++;
+    },
+  } as unknown as DecodedFrame;
+  try {
+    setColorMode('reference');
+    configureFrameResourceDemand(() => retain);
+    assert.equal(await prepareYuvFrame(frame), frame);
+    assert.equal(copies, 0);
+    assert.equal(closed, 0);
+    retain = false;
+    let settled = false;
+    const pending = prepareYuvFrame(frame).then((value) => {
+      settled = true;
+      return value;
+    });
+    await Promise.resolve();
+    assert.equal(copies, 1);
+    assert.equal(settled, false);
+    assert.equal(closed, 0);
+    finish();
+    const converted = await pending;
+    assert.equal(converted.kind, 'yuv');
+    assert.equal(closed, 1);
+    assert.equal(clonesClosed, 1);
+    converted.close();
+    converted.close();
+    assert.equal(closed, 1);
+  } finally {
+    finish();
+    configureFrameResourceDemand(() => false);
+    setColorMode(previous);
+  }
 });

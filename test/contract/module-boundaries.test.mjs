@@ -49,12 +49,16 @@ test('shared code rejects computed loads and browser packages',()=>{
   for(const code of ["import(modulePath)","require(modulePath)","import 'react-dom'"])
     project({'shared/a.ts':code},root=>assert.throws(()=>checkModuleBoundaries(root),/computed module load|host package/));
 });
-test('shared sources compile without a DOM type environment',()=>{
+test('shared sources compile with portable Web APIs and without Node or window globals', ()=> {
   execFileSync(process.execPath,[path.join(root,'node_modules/typescript/bin/tsc'),'-p',path.join(root,'tsconfig.shared.json')],{cwd:root,stdio:'pipe'});
-  project({'shared/bad.ts':'export const x = [window, document, indexedDB, VideoFrame];'},temp=>{
-    writeFileSync(path.join(temp,'tsconfig.json'),JSON.stringify({compilerOptions:{target:'ES2023',module:'ESNext',moduleResolution:'bundler',lib:['ES2023'],types:['node'],typeRoots:[path.join(root,'node_modules/@types')],strict:true,noEmit:true,skipLibCheck:true},include:['shared']}));
+  project({'shared/bad.ts': 'export const x = [window, document, process, Buffer];' }, (temp)=> {
+    writeFileSync(path.join(temp,'tsconfig.json'),JSON.stringify({compilerOptions: {target:'ES2023',module:'ESNext',moduleResolution:'bundler',lib: ['ES2023', 'WebWorker'],types: [],typeRoots:[path.join(root,'node_modules/@types')],strict:true,noEmit:true,skipLibCheck:true,
+        },include:['shared'],
+      }),
+    );
     const result=spawnSync(process.execPath,[path.join(root,'node_modules/typescript/bin/tsc'),'-p',path.join(temp,'tsconfig.json')],{encoding:'utf8'});
-    assert.equal(result.status,1);for(const name of ['window','document','indexedDB','VideoFrame'])assert.match(result.stdout,new RegExp(`Cannot find name '${name}'`));
+    assert.equal(result.status,1);
+    for (const name of ['window','document', 'process', 'Buffer'])assert.match(result.stdout,new RegExp(`Cannot find name '${name}'`));
   });
 });
 test('shared edits invalidate prepared frontend builds',async()=>{
@@ -82,4 +86,92 @@ test('service, decoder and bitstream validation dependencies retain their declar
  project({'src/media/decoding/packet-media.ts':"import './ffmpeg-media.ts';",'src/media/decoding/ffmpeg-media.ts':'export {};'},root=>assert.throws(()=>checkModuleBoundaries(root),/concrete decoder imports routing facade/));
  project({'shared/analysis/bitstream/contract.ts':"import './diagrams.ts';",'shared/analysis/bitstream/diagrams.ts':'export {};'},root=>assert.throws(()=>checkModuleBoundaries(root),/analysis contract imports product\/display owner/));
  project({'shared/analysis/bitstream/contract.ts':"import type {Picture} from './diagrams.ts';",'shared/analysis/bitstream/diagrams.ts':'export type Picture=number;'},root=>assert.doesNotThrow(()=>checkModuleBoundaries(root)));
+});
+
+for (const specifier of ['node:fs', 'fs', 'fs/promises', 'node:worker_threads'])
+  for (const syntax of [
+    (s) => `import '${s}'`,
+    (s) => `export * from '${s}'`,
+    (s) => `import('${s}')`,
+    (s) => `type T=import('${s}').Stats`,
+    (s) => `import fs = require('${s}')`,
+  ])
+    test(`browser refuses Node builtin ${syntax(specifier)}`, () =>
+      project({ 'src/media/probe.ts': syntax(specifier) }, (root) =>
+        assert.throws(() => checkModuleBoundaries(root), /browser code imports Node builtin/),
+      ));
+for (const from of ['src/media/decoding/probe.ts', 'src/analysis/quality/probe.ts', 'src/session/probe.ts', 'src/session.ts'])
+  test(`${from} cannot depend on UI or application entries`, () => {
+    for (const to of ['src/ui/view.ts', 'src/admin/panel.ts', 'src/main.ts', 'src/agent.ts'])
+      project(
+        {
+          [from]: `import type {T} from '${path.posix.relative(path.posix.dirname(from), to).replace(/^(?!\.)/, './')}'`,
+          [to]: 'export type T=number',
+        },
+        (root) => assert.throws(() => checkModuleBoundaries(root), /lower layer imports UI\/application entry/),
+      );
+  });
+test('media cannot observe a concrete presenter or session owner', () => {
+  for (const to of ['src/presentation/gpu.ts', 'src/session.ts'])
+    project({ 'src/media/probe.ts': `import '../${to.slice(4)}'`, [to]: 'export {}' }, (root) =>
+      assert.throws(() => checkModuleBoundaries(root), /imports concrete presentation|imports session/),
+    );
+});
+test('static runtime cycles fail with their complete path, while type and Worker edges stay independent', () => {
+  for (const first of ["import './b.ts'", "export * from './b.ts'", "import('./b.ts')"])
+    project({ 'shared/a.ts': first, 'shared/b.ts': "import './a.ts'" }, (root) =>
+      assert.throws(() => checkModuleBoundaries(root), /Runtime dependency cycle: shared\/a.ts -> shared\/b.ts -> shared\/a.ts/),
+    );
+  for (const first of [
+    "import type {T} from './b.ts'",
+    "import {type T} from './b.ts'",
+    "export {type T} from './b.ts'",
+    "new URL('./b.ts',import.meta.url)",
+  ])
+    project({ 'shared/a.ts': first, 'shared/b.ts': "import './a.ts';export type T=number;" }, (root) =>
+      assert.doesNotThrow(() => checkModuleBoundaries(root)),
+    );
+  project(
+    { 'shared/a.ts': "import {type T, value} from './b.ts'", 'shared/b.ts': "import './a.ts';export type T=number;export const value=1;" },
+    (root) => assert.throws(() => checkModuleBoundaries(root), /Runtime dependency cycle/),
+  );
+});
+test('shared portable globals exclude Worker, storage and codec constructors without rejecting shadowed names', () => {
+  for (const name of ['indexedDB', 'VideoFrame', 'Worker', 'self', 'postMessage'])
+    project({ 'shared/a.ts': `export const value = ${name};` }, (root) =>
+      assert.throws(() => checkModuleBoundaries(root), /shared code uses host global/),
+    );
+  project({ 'shared/a.ts': 'const self=1;export const value=self;' }, (root) => assert.doesNotThrow(() => checkModuleBoundaries(root)));
+});
+
+test('portable shared checks also reject qualified and statically indexed Worker globals', () => {
+  for (const expression of ['globalThis.indexedDB', "globalThis['indexedDB']", 'globalThis.VideoFrame'])
+    project({ 'shared/a.ts': `export const value=${expression};` }, (root) =>
+      assert.throws(() => checkModuleBoundaries(root), /shared code uses host global/),
+    );
+});
+test('browser and server compilation keep their host globals separate', () => {
+  for (const [environment, names] of [
+    ['browser', ['process', 'Buffer']],
+    ['server', ['window', 'document', 'VideoFrame']],
+  ])
+    project({ 'probe.ts': `export const values=[${names.join(',')}];` }, (temp) => {
+      writeFileSync(
+        path.join(temp, 'tsconfig.json'),
+        JSON.stringify({
+          extends: path.join(root, `tsconfig.${environment}.json`),
+          compilerOptions: {
+            types: [path.join(root, environment === 'browser' ? 'node_modules/vite/client' : 'node_modules/@types/node')],
+          },
+          include: ['probe.ts'],
+        }),
+      );
+      const result = spawnSync(
+        process.execPath,
+        [path.join(root, 'node_modules/typescript/bin/tsc'), '-p', path.join(temp, 'tsconfig.json')],
+        { encoding: 'utf8' },
+      );
+      assert.equal(result.status, 1);
+      for (const name of names) assert.match(result.stdout, new RegExp(`Cannot find name '${name}'`));
+    });
 });
