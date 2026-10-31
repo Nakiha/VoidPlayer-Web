@@ -1,4 +1,4 @@
-import type { DecodedFrame } from '../media/source.ts';
+import type { DecodedFrame } from '../media/contract.ts';
 
 export type ResourceKind = 'frames' | 'decodeReservations' | 'readback' | 'derived';
 export const SESSION_RESOURCE_BYTES = 256 * 1024 * 1024;

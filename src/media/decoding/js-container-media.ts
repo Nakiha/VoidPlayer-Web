@@ -3,7 +3,7 @@ import { openPacketMedia } from './packet-media.ts';
 import { WorkerRpc } from '../workers/worker-rpc.ts';
 import type { PacketCommands } from '../workers/worker-protocol.ts';
 import type { RandomAccessInput } from '../../../shared/media/io/range-reader.ts';
-import type { MediaMeta, MediaSource } from '../source.ts';
+import type { MediaMeta, MediaSource } from '../contract.ts';
 import type { FallbackDeps } from './ffmpeg-media.ts';
 import { loadAborted, onLoadAbort } from '../../../shared/media/io/media-abort.ts';
 

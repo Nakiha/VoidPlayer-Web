@@ -26,7 +26,7 @@ import type {
   AnalysisStreamTarget,
   PresentedFrameToken,
 } from "../../../shared/analysis/bitstream/contract.ts";
-import type { MediaSource } from "../../media/source.ts";
+import type { MediaSource } from '../../media/contract.ts';
 import { referenceVersion } from "../../../shared/media/io/media-reference.ts";
 import { AnalysisFailure, failureInfo, restoreFailure } from "../../../shared/analysis/bitstream/failure.ts";
 import type { AnalysisFailureInfo } from "../../../shared/analysis/bitstream/failure.ts";

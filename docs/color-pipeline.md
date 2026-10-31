@@ -4,6 +4,12 @@
 
 原始 WASM 帧 ABI v2 读取与 FFmpeg 色彩枚举映射分别位于 `shared/wasm/frame.ts` 和 `shared/media/ffmpeg-color.ts`，浏览器解码器与服务端单帧评分共用；原浏览器模块保留兼容导出。此迁移不改变标签映射、帧布局或呈现默认值。服务端直接比较原始平面，仍不借用显示色彩补齐缺失信息。
 
+源标签合同 `ColorInfo` 位于 `shared/color/color-info.ts`；`FrameInfo` / `MediaInfo`
+位于 `shared/media/types.ts`，请求与实际呈现事实 `PresentationInfo` 位于
+`shared/presentation/presentation-info.ts`。浏览器帧/源资源合同在 `src/media/contract.ts`，
+不依赖打开入口或评审模型；原 review 类型转发仅保留兼容。此次归位不改变标签、
+像素布局、默认颜色或 presenter 的上屏/capture 所有权。
+
 首帧、播放、seek、截图由 `presenter.ts` 选择同一色彩管线。解码器只交付资源，不画 canvas。
 应用保留“自有色彩”和“浏览器色彩”（软件回退近似匹配）两个选项，未保存偏好时默认浏览器色彩。转换归属与 SDR/HDR 显示目标独立设置，UI/Agent 共用 session 事务。自有色彩支持标签明确的高位深 PQ/HLG 平面；支持的 WebGPU/HDR 环境可使用浮点扩展输出，其余环境明确使用 SDR 预览。请求目标与每轨实际输出分开报告，不承诺物理亮度校准或跨设备逐像素一致。
 

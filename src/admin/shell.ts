@@ -1,8 +1,8 @@
 import {tasksShell} from './tasks.ts';
-import { qualityJobsShell } from './quality.ts';
+import { qualityJobsShell } from './quality/workspace.ts';
 import { discoveryShell } from './discovery.ts';
 import { analysisSettingsShell } from './analysis.ts';
-import {qualityResourceShell} from './quality-resources.ts';
+import {qualityResourceShell} from './quality/resources.ts';
 import { t, th, msg } from '../i18n.ts';
 import { annotationAdminShell } from './annotations.ts';
 import { cacheShell } from './caches.ts';

@@ -15,7 +15,7 @@ import { MediaOpenError } from '../../../shared/media/io/media-errors.ts';
 import { VideoSample } from 'mediabunny';
 import { floorIndex, WASM_CORE_GLUE_PATH, WASM_CORE_GLUE_PATH_MT, reserveFallbackThreads } from './fallback-runtime.ts';
 import type { FallbackDeps } from './fallback-runtime.ts';
-import type { MediaMeta, MediaSource, DecodedFrame } from '../source.ts';
+import type { MediaMeta, MediaSource, DecodedFrame } from '../contract.ts';
 import type { PacketInput } from '../../../shared/media/containers/flv-demux.ts';
 import type { PreparedFlv } from './flv-engine.ts';
 import type { PacketFrame } from './flv-decoder.ts';
@@ -24,7 +24,7 @@ import { getColorMode } from '../policy/color-mode.ts';
 import type { ColorMode, ReferenceDecode } from '../../../shared/color/decode-policy-types.ts';
 import { hdrTransfer } from '../../../shared/color/hdr-policy.ts';
 import { resolveYuvColor } from '../../../shared/color/yuv-color.ts';
-import type { MediaInfo } from '../../../shared/review/model.ts';
+import type { MediaInfo } from '../../../shared/media/types.ts';
 import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample } from '../../../shared/analysis/metadata/types.ts';
 
 const isHdrTransfer = (transfer: string | null | undefined) => hdrTransfer(transfer) !== null;

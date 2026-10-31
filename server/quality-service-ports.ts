@@ -1,3 +1,4 @@
+import type { QualityResultCommands } from './analysis/quality/result-commands.ts';
 import type {QualityJobService} from './analysis/quality/job-service.ts';
 import type {QualityRangeService} from './analysis/quality/range-service.ts';
 import type {CorrespondenceService} from './analysis/quality/correspondence-service.ts';
@@ -32,3 +33,14 @@ export type TaskReadServices={
  readonly qualityReexecutions:Pick<QualityReexecutionService,'chain'>;
 };
 export type TaskCommands=Readonly<Record<TaskKind,(id:string,actor:string,requestId:string)=>unknown>>;
+
+/** Result reclamation borrows commands and retention queries, never storage/lifetime access. */
+export type ResultReleaseServices = {
+ readonly qualityJobs: Pick<QualityJobService, 'get' | 'releaseResult'>;
+ readonly qualityRanges: Pick<QualityRangeService, 'referencesResult' | 'releaseResult'>;
+ readonly qualityVmaf: Pick<NativeVmafService, 'get' | 'releaseResult'>;
+ readonly qualityXpsnr: Pick<NativeXpsnrService, 'get' | 'releaseResult'>;
+ readonly qualityCambi: Pick<NativeCambiService, 'get' | 'releaseResult'>;
+};
+export type ResultEvidence = { referencesQualityResult(id: string): boolean };
+export type ResultCommands = Pick<QualityResultCommands, 'release'>;

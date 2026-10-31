@@ -4,10 +4,10 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {updateMediaInfo,recordPresentedFrame} from '../../src/media/state.ts';
 import {rgbaDescription} from '../../shared/media/frame-description.ts';
-import type {DecodedFrame,MediaSource} from '../../src/media/source.ts';
+import type {DecodedFrame,MediaSource} from '../../src/media/contract.ts';
 import {ReviewSession} from '../../src/session.ts';
 import {openPacketMedia} from '../../src/media/decoding/packet-media.ts';
-import type {MediaInfo} from '../../shared/review/model.ts';
+import type {MediaInfo} from '../../shared/media/types.ts';
 import type {MediaInfoChange} from '../../src/media/state.ts';
 test('metadata changes increment one revision and emit detached complete snapshots',()=>{
   const events:MediaInfoChange[]=[];

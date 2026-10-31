@@ -1,13 +1,13 @@
-import {t,th,msg} from '../i18n.ts';
-import {currentActor} from '../services/identity.ts';
-import {QualityClient} from '../services/quality-jobs.ts';
-import {readXpsnrComparison} from '../services/xpsnr-comparison.ts';
-import type {LoadedXpsnrComparison} from '../services/xpsnr-comparison.ts';
-import {comparisonView,comparisonFromUrl,comparisonDb,sortedComparison,COMPARISON_SORTS} from '../../shared/analysis/quality/xpsnr-comparison.ts';
-import type {ComparisonView,ComparisonSort} from '../../shared/analysis/quality/xpsnr-comparison.ts';
-import {qualityPairViewUrl} from '../../shared/review/quality-pair-view.ts';
-import type {AnnotationRecord} from '../../shared/review/annotation-record.ts';
-import type {QualityEvidenceRef} from '../../shared/review/quality-evidence.ts';
+import {t,th,msg} from '../../i18n.ts';
+import {currentActor} from '../../services/identity.ts';
+import {QualityClient} from '../../services/quality-jobs.ts';
+import {readXpsnrComparison} from '../../services/xpsnr-comparison.ts';
+import type {LoadedXpsnrComparison} from '../../services/xpsnr-comparison.ts';
+import {comparisonView,comparisonFromUrl,comparisonDb,sortedComparison,COMPARISON_SORTS} from '../../../shared/analysis/quality/xpsnr-comparison.ts';
+import type {ComparisonView,ComparisonSort} from '../../../shared/analysis/quality/xpsnr-comparison.ts';
+import {qualityPairViewUrl} from '../../../shared/review/quality-pair-view.ts';
+import type {AnnotationRecord} from '../../../shared/review/annotation-record.ts';
+import type {QualityEvidenceRef} from '../../../shared/review/quality-evidence.ts';
 
 export function xpsnrComparisonShell(){return `<section id="xpsnr-comparison-panel" class="xpsnr-comparison" aria-labelledby="xpsnr-comparison-heading">
   <h3 id="xpsnr-comparison-heading">${th(msg('xcompare.title','同一参考片段 · 版本比较'))}</h3>

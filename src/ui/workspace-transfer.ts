@@ -8,7 +8,7 @@ import { installWorkspaceSharing } from './workspace-sharing.ts';
 import type { ToastStack } from './toast.ts';
 import {updateMediaInfo} from '../media/state.ts';
 import type { ReviewSession } from '../session.ts';
-import type { MediaInfo } from '../../shared/review/model.ts';
+import type { MediaInfo } from '../../shared/media/types.ts';
 import { openMedia, openMediaFromUrl } from '../media/source.ts';
 import { parseWorkspace, readWorkspaceFile } from '../../shared/review/workspace-file.ts';
 import type { WorkspaceFile } from '../../shared/review/workspace-file.ts';

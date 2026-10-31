@@ -1,4 +1,4 @@
-import { msg, th } from '../i18n.ts';
+import { msg, th } from '../../i18n.ts';
 
 /** Human labels keep the existing API field names out of the normal form. */
 export function qualityFieldLabel(id: string) {

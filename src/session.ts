@@ -30,8 +30,9 @@ import { offerSessionThumbnail } from './session/thumbnail.ts';
 import { describeMediaMismatch, matchMediaIdentity } from '../shared/media/io/media-identity.ts';
 import { FrameQueue, PlaybackMeasurements } from './session/playback.ts';
 import { planBackwardStep, planForwardStep, slotValue, timeUs } from '../shared/review/model.ts';
-import type { FrameInfo, Mark, MediaInfo, Slot } from '../shared/review/model.ts';
-import type { DecodedFrame, MediaSource } from './media/source.ts';
+import type { FrameInfo, MediaInfo } from '../shared/media/types.ts';
+import type { Mark, Slot } from '../shared/review/model.ts';
+import type { DecodedFrame, MediaSource } from './media/contract.ts';
 import type { AnalysisAxis, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample, AnalysisStatus } from '../shared/analysis/metadata/types.ts';
 import { contextLog, log, operationContext, traceOperation, withLogContext } from './logging/log.ts';
 

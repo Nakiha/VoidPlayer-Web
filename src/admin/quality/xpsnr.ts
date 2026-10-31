@@ -1,17 +1,17 @@
-import { installTemporalQuality } from "./quality-temporal.ts";
-import { qualityFieldLabel } from "./quality-fields.ts";
-import { clockToUs } from "../../shared/media/indexing/rational-clock.ts";
+import { installTemporalQuality } from "./temporal.ts";
+import { qualityFieldLabel } from "./fields.ts";
+import { clockToUs } from "../../../shared/media/indexing/rational-clock.ts";
 import {
   xpsnrComparisonShell,
   installXpsnrComparison,
-} from "./quality-xpsnr-comparison.ts";
-import { th, msg } from "../i18n.ts";
+} from "./xpsnr-comparison.ts";
+import { th, msg } from "../../i18n.ts";
 import {
   xpsnrInput,
   XPSNR_LIMITS,
   XPSNR_RECIPE,
-} from "../../shared/analysis/quality/xpsnr.ts";
-import type { XpsnrDb } from "../../shared/analysis/quality/xpsnr.ts";
+} from "../../../shared/analysis/quality/xpsnr.ts";
+import type { XpsnrDb } from "../../../shared/analysis/quality/xpsnr.ts";
 
 /** This panel observes the same durable commands as HTTP agents. It never scores
  * browser pixels, controls playback or guesses alignment. Technical recipe names

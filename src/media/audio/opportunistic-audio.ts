@@ -1,4 +1,4 @@
-import type { MediaSource } from '../source.ts';
+import type { MediaSource } from '../contract.ts';
 import type { AudioStatus, CachedAudioBatch, CachedAudioConfig } from '../../../shared/media/audio-types.ts';
 
 // WebCodecs audio is not in every TypeScript DOM declaration or browser.

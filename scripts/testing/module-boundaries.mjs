@@ -9,6 +9,18 @@ const portable = file => file.replaceAll('\\', '/');
 const computedLoaders = new Set(['src/i18n.ts','src/media/decoding/core-loader.ts','src/analysis/bitstream/local-worker.ts','server/frame-index-builder.ts','server/analysis/bitstream/worker.ts','server/analysis/quality/task.ts','server/analysis/vmaf/decode-task.ts','server/analysis/cambi/decode-task.ts','server/analysis/quality/analysis-component.ts']);
 const entrypoints = new Set(['bootstrap.ts','agent.ts','build-info.ts','env.d.ts','i18n.ts','main.ts','session.ts']);
 const codeFile = file => /\.(?:[cm]?js|[cm]?ts|tsx)$/.test(file);
+// Internal protocols have named callers, not directory-wide friendship. This
+// applies to type edges and re-exports too, so a facade cannot leak the protocol.
+const qualityInternals = new Map([
+  ['server/analysis/quality/candidate-publication.ts', ['server/analysis/vmaf/service.ts', 'server/analysis/xpsnr/service.ts']],
+  ['server/analysis/quality/prepared-facts.ts', ['server/analysis/vmaf/service.ts', 'server/analysis/xpsnr/service.ts']],
+  ['server/analysis/quality/temporal-service.ts', ['server/analysis/vmaf/service.ts', 'server/analysis/xpsnr/service.ts']],
+  ['server/analysis/quality/temporal-runner.ts', [
+    'server/analysis/quality/temporal-service.ts', 'server/analysis/vmaf/runner.ts', 'server/analysis/vmaf/wasm-runner.ts', 'server/analysis/xpsnr/wasm-runner.ts',
+  ]],
+  ['server/analysis/quality/result-commands.ts', ['server/quality-application.ts', 'server/quality-service-ports.ts']],
+]);
+const qualityAdminEntries = new Set(['workspace.ts', 'resources.ts', 'reexecution.ts']);
 export function moduleEdges(code, file) {
   const tree = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true), edges = [];
   const add = (node, kind) => { if (node && ts.isStringLiteralLike(node)) edges.push({ specifier: node.text, kind }); else if (kind === 'load') edges.push({specifier:null,kind:'computed-load'}); };
@@ -138,9 +150,30 @@ export function checkModuleBoundaries(root) {
   }
   for (const dir of ['src', 'server', 'shared']) scan(path.join(root, dir));
   assert.ok(files.length, 'No production modules found');
+  const mediaContract = path.join(root, 'src/media/contract.ts');
+  if (existsSync(mediaContract)) {
+    const tree = ts.createSourceFile(mediaContract, readFileSync(mediaContract, 'utf8'), ts.ScriptTarget.Latest, true);
+    for (const statement of tree.statements) {
+      assert.ok(
+        ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement) ||
+        ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement),
+        'src/media/contract.ts: browser media contract cannot own runtime state or execution',
+      );
+      // Node strips declaration-level type imports/exports completely. Inline
+      // type specifiers can leave an empty declaration that still loads its module.
+      if (ts.isImportDeclaration(statement))
+        assert.equal(statement.importClause?.isTypeOnly, true,
+          'src/media/contract.ts: browser media contract must use type-only dependencies via whole-declaration import type');
+      if (ts.isExportDeclaration(statement))
+        assert.equal(statement.isTypeOnly, true,
+          'src/media/contract.ts: browser media contract must use type-only dependencies via whole-declaration export type');
+    }
+  }
   for (const file of files)
     for (const edge of moduleEdges(readFileSync(file, 'utf8'), file)) {
     const from = portable(path.relative(root, file));
+    if (from === 'src/media/contract.ts')
+      assert.equal(edge.kind, 'type', `${from}: browser media contract must use type-only dependencies`);
     if (edge.specifier === null) { assert.ok(computedLoaders.has(from), `${from}: unregistered computed module load`); continue; }
       if (!edge.specifier.startsWith('.')) {
         if (from.startsWith('src/')) assert.ok(!isBuiltin(edge.specifier), `${from}: browser code imports Node builtin ${edge.specifier}`);
@@ -150,6 +183,25 @@ export function checkModuleBoundaries(root) {
     const target = path.resolve(edge.kind === 'compiled-url' ? path.join(root,'server') : path.dirname(file), edge.specifier), to = portable(path.relative(root, target));
     assert.ok(!to.startsWith('../'), `${from}: dependency escapes project: ${to}`);
     assert.ok(existsSync(target), `${from}: missing ${edge.kind} dependency: ${to}`);
+    if (from === 'src/media/contract.ts')
+      assert.ok(to.startsWith('shared/'), `${from}: browser media contract imports implementation ${to}`);
+    if (/^src\/(media|analysis)\//.test(from) && from !== 'src/media/source.ts')
+      assert.ok(to !== 'src/media/source.ts', `${from}: media implementation imports opening route ${to}`);
+    if (to === 'src/media/source.ts')
+      assert.notEqual(edge.kind, 'type', `${from}: media types belong to src/media/contract.ts`);
+    if (/^shared\/(media|color)\//.test(from) || from.startsWith('src/media/'))
+      assert.ok(!to.startsWith('shared/review/') ||
+        (from.startsWith('src/media/') && to !== 'shared/review/model.ts'), `${from}: media/color imports review-owned base contracts ${to}`);
+    if (to === 'src/media/policy/fallback-budget.ts')
+      assert.ok(from.startsWith('src/media/'), `${from}: fallback input budget belongs to media policy`);
+    if (qualityInternals.has(to))
+      assert.ok(qualityInternals.get(to).includes(from), `${from}: quality internal capability is private: ${to}`);
+    if (to.startsWith('src/admin/quality/') && !from.startsWith('src/admin/quality/'))
+      assert.ok(qualityAdminEntries.has(to.slice('src/admin/quality/'.length)), `${from}: quality admin implementation is private: ${to}`);
+    if (from === 'server/analysis/vmaf/runner.ts' && to === 'server/analysis/quality/temporal-runner.ts')
+      assert.equal(edge.kind, 'type', `${from}: compatibility hooks must remain type-only`);
+    if (from === 'shared/analysis/quality/temporal-contract.ts' || from === 'shared/analysis/quality/xpsnr.ts')
+      assert.ok(!/^shared\/analysis\/quality\/(vmaf|xpsnr)\.ts$/.test(to), `${from}: temporal facts depend on another metric: ${to}`);
     if (from.startsWith('src/')) assert.ok(!to.startsWith('server/'), `${from}: frontend imports server ${to}`);
     if (from.startsWith('shared/')) assert.ok(!/^(src|server)\//.test(to), `${from}: shared code imports host ${to}`);
     if (from.startsWith('server/') && to.startsWith('src/')) assert.ok(false, `${from}: server imports frontend ${to}`);

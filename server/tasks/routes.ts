@@ -1,13 +1,20 @@
 import type {IncomingMessage,ServerResponse} from 'node:http';
-import type {RouteContext} from '../routes/context.ts';
+import type { Actor } from '../identity.ts';
+import type { TaskCenterService } from './service.ts';
+import type { ResultEvidence, ResultCommands } from '../quality-service-ports.ts';
 import {AdminError} from '../admin-error.ts';
 import {adminWriteAllowed,readAdminJson} from '../admin.ts';
 import {requireCapturedActor} from '../identity.ts';
 import {sendJson} from '../http-utils.ts';
-import {TASK_KINDS,TASK_RESULT_KINDS,taskQuery} from '../../shared/service/tasks.ts';
+import {TASK_KINDS,taskQuery} from '../../shared/service/tasks.ts';
 import type {TaskKind} from '../../shared/service/tasks.ts';
 
-export async function handleTaskRoutes(ctx:RouteContext,req:IncomingMessage,res:ServerResponse,url:URL){
+type TaskRouteContext = {
+  actor: Actor | null; requestId: string;
+  quality: { tasks: Pick<TaskCenterService, 'query' | 'detail' | 'cancel'>; qualityResults: ResultCommands };
+  options: { admin?: { annotations: ResultEvidence } };
+};
+export async function handleTaskRoutes(ctx:TaskRouteContext,req:IncomingMessage,res:ServerResponse,url:URL){
   if(url.pathname!=='/api/tasks'&&!url.pathname.startsWith('/api/tasks/'))return false;
   const reply=(status:number,value:unknown)=>sendJson(res,status,req.method==='HEAD'?undefined:value);
   try{
@@ -27,11 +34,7 @@ export async function handleTaskRoutes(ctx:RouteContext,req:IncomingMessage,res:
     if(!adminWriteAllowed(req,action))throw new AdminError(403,'Use the same-origin task cancellation action.','origin-required');
     const timer=setTimeout(()=>req.destroy(new Error('Task cancel body timeout')),10000);
     try{const body=await readAdminJson(req,256);if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).length)throw new AdminError(400,'Cancel requires an empty object.','invalid-task-cancel');if(match[3]==='release-result'){
-      if(!TASK_RESULT_KINDS.includes(kind))throw new AdminError(400,'This task has no releasable scoring payload.','unsupported-result-release');
-      if(!ctx.options.admin)throw new AdminError(503,'Evidence storage must be available before releasing results.','storage-unavailable');
-      if(kind==='range'){reply(200,ctx.quality.qualityRanges.releaseResult(id,ctx.actor.id,child=>ctx.options.admin!.annotations.referencesQualityResult(child)));return true;}
-      const service=kind==='single'?ctx.quality.qualityJobs:kind==='vmaf'?ctx.quality.qualityVmaf:kind==='cambi'?ctx.quality.qualityCambi:ctx.quality.qualityXpsnr;
-      service.get(id,ctx.actor.id);if(kind==='single'&&ctx.quality.qualityRanges.referencesResult(id))throw new AdminError(409,'A range still references this result; it is retained.','result-pinned-by-range');if(ctx.options.admin.annotations.referencesQualityResult(id))throw new AdminError(409,'Shared or historical evidence still references this result; it is retained.','result-pinned-by-evidence');reply(200,service.releaseResult(id,ctx.actor.id));
+      reply(200,ctx.quality.qualityResults.release(kind,id,ctx.actor.id,ctx.options.admin?.annotations));
     }else reply(200,ctx.quality.tasks.cancel(kind,id,ctx.actor.id,ctx.requestId));}finally{clearTimeout(timer);}
   }catch(e){if(!res.headersSent&&!res.destroyed)reply(e instanceof AdminError?e.status:500,{error:e instanceof AdminError?e.message:'Task center request failed.',code:e instanceof AdminError?e.code:'task-center-failed',recovery:(e as {code?:string})?.code==='task-cursor-expired'?'Restart GET /api/tasks without cursor, retaining the same filters and selected target.':null,links:{collection:'/api/tasks',guide:'/agent/quality/tasks.md'}});}
   return true;

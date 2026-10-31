@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ReviewSession } from '../../src/session.ts';
 import { rgbaDescription } from '../../shared/media/frame-description.ts';
-import type { MediaSource } from '../../src/media/source.ts';
+import type { MediaSource } from '../../src/media/contract.ts';
 
 function media(name = 'A', starts = [0, 40000, 120000, 160000], end = 200000) {
   let closed = 0, disposed = 0;

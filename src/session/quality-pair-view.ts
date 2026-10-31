@@ -4,7 +4,7 @@ import { SessionResources } from './resources.ts';
 import { PAIR_VIEW_SIDES,pairViewReference,pairViewEvidence,qualityFactKey,verifyInspectedPair,verifyPairViewPresentation } from '../../shared/review/quality-pair-view.ts';
 import type { PairViewReference,PairViewSide,PairViewPresentation } from '../../shared/review/quality-pair-view.ts';
 import type { QualityEvidence } from '../../shared/review/quality-evidence.ts';
-import type { DecodedFrame } from '../media/source.ts';
+import type { DecodedFrame } from '../media/contract.ts';
 import type { AnnotationRecord } from '../../shared/review/annotation-record.ts';
 import type { InspectedFramePair } from '../../shared/analysis/quality/frame-pair.ts';
 import { psnrBlock } from '../../shared/analysis/quality/psnr-spatial.ts';

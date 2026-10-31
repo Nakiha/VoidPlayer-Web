@@ -1,7 +1,8 @@
 import type {DecodeConfiguration} from '../../shared/color/decode-policy-types.ts';
 import {captureDecodeConfiguration} from '../media/policy/color-mode.ts';
 import {updateMediaInfo} from '../media/state.ts';
-import type { MediaSource, MediaOpenProgress } from '../media/source.ts';
+import type { MediaSource } from '../media/contract.ts';
+import type { MediaOpenProgress } from '../media/progress.ts';
 import { openMediaFromUrl } from '../media/source.ts';
 import { contextLog } from '../logging/log.ts';
 import {ownLibraryIndexReference} from '../media/indexing/library-index-reference.ts';

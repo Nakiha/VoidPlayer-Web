@@ -2,7 +2,7 @@ import { probeContainer } from '../policy/container-probe.ts';
 import type { ContainerKind } from '../policy/container-probe.ts';
 import type { RandomAccessInput } from '../../../shared/media/io/range-reader.ts';
 import type { FallbackDeps } from './fallback-runtime.ts';
-import type { MediaMeta, MediaSource } from '../source.ts';
+import type { MediaMeta, MediaSource } from '../contract.ts';
 import { MediaOpenError } from '../../../shared/media/io/media-errors.ts';
 import { loadAborted } from '../../../shared/media/io/media-abort.ts';
 import { contextLog } from '../../logging/log.ts';

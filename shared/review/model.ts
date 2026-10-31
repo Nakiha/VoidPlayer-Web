@@ -1,57 +1,11 @@
-import type { FrameDescription } from '../media/frame-description.ts';
+import type { FrameInfo } from '../media/types.ts';
+export type { FrameInfo, MediaInfo } from '../media/types.ts';
+export type { ColorInfo } from '../color/color-info.ts';
+export type { PresentationInfo } from '../presentation/presentation-info.ts';
 import type { Drawing } from './annotation.ts';
 export const SLOTS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const;
 export type Slot = typeof SLOTS[number];
 export type Region = { left: number; top: number; width: number; height: number };
-export type FrameInfo = { ptsUs: number; sourcePtsUs: number; durationUs: number };
-/** Source color metadata; null fields mean the selected metadata source did not specify them. */
-export type ColorInfo = {
-  primaries: string | null;
-  transfer: string | null;
-  matrix: string | null;
-  fullRange: boolean | null;
-};
-export type MediaInfo = {
-  trackMetadata?: import('../media/containers/cached-track-metadata.ts').CachedTrackMetadata;
-  opportunisticAudio?: 'flv-aac' | 'cached-container';
-  jsIndexReused?:boolean;
-  jsIndexPacketsScanned?:number;
-  demuxBackend?:string;
-  indexBackend?:string;
-  container?: 'flv' | 'isobmff' | 'mpegts' | 'matroska' | 'other';
-  indexKind?: 'packet-offsets' | 'packet-locators' | 'timestamps' | 'container';
-  seekStrategy?: 'packet-anchor' | 'demuxer-keyframe' | 'demuxer-timestamp' | 'browser';
-  seekAnchorCount?: number;
-  metadataRevision?:number;
-  /** Description of the currently presented frame; prefetch never updates it. */
-  output?:FrameDescription;
-  presentation?: PresentationInfo;
-  indexSource?: 'client' | 'server';
-  indexState?: 'building' | 'complete' | 'error';
-  indexError?: string;
-  /** Exclusive end of the stable, seekable timeline prefix while indexing. */
-  stableCoverageUs?: number;
-  indexProgress?: { scannedBytes: number; totalBytes: number; packets: number };
-  indexWaiting?: boolean;
-  indexWarning?: string;
-  /** Index completion does not certify an undamaged, fully covered source. */
-  indexIntegrity?: import('../media/indexing/index-integrity.ts').IndexIntegrity;
-  indexTruncatedAt?: number;
-  /** Explicit recovery provenance; original packet timestamps remain in the demux index. */
-  timelineSource?: 'hevc-poc';
-  id: string; name: string; size: number; lastModified: number;
-  source?: { kind: 'library'; id: string; url: string };
-  coreVariant?: 'single-thread' | 'multi-thread';
-  /** Requested WebCodecs preference; does not attest actual hardware use. */
-  hardwareAcceleration?: 'prefer-hardware' | 'no-preference';
-  codec: string; decoder: 'webcodecs' | 'ffmpeg-wasm'; width: number; height: number; durationUs: number; firstPtsUs: number;
-  color?: ColorInfo;
-  colorSource?: 'container' | 'decoder';
-  /** Source decoder format before conversion to presentation RGBA (FFmpeg). */
-  pixelFormat?: string | null;
-  /** Browser output buffer layout; may differ from the encoded source format. */
-  decodedPixelFormat?: string | null;
-};
 export type MarkReply = { id: string; text: string; createdAt: string; author: { id: string; name: string } };
 export type Mark = {
   qualityCandidate?: {schema:'voidplayer-quality-candidate';version:1;assessment:'not-subjectively-assessed'};
@@ -161,9 +115,3 @@ export function formatTime(us: number): string {
   const ms = Math.floor(Math.max(0, us) / 1000);
   return `${Math.floor(ms / 60000).toString().padStart(2, '0')}:${Math.floor(ms / 1000 % 60).toString().padStart(2, '0')}.${(ms % 1000).toString().padStart(3, '0')}`;
 }
-
-/** Whole-file memory cap for the WASM fallback (the file lives in MEMFS). */
-export const MAX_FALLBACK_FILE_BYTES = 512 * 1024 * 1024;
-
-export type PresentationInfo = { requestedTarget: 'sdr' | 'hdr'; actualTarget: 'sdr' | 'hdr'; captureTarget: 'sdr'; executor: string; contract: string;
-    displayHdr: boolean; outputColorSpace: 'srgb' | 'display-p3'; outputFormat: 'unorm8' | 'float16'; toneMapping: 'standard' | 'extended'; fallbackReason?: string };

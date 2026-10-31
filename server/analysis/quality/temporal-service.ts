@@ -1,3 +1,4 @@
+import { TEMPORAL_RESOURCE_LIMITS, type TemporalMetricState, type TemporalPlanSnapshot, type TemporalPrepared } from '../../../shared/analysis/quality/temporal-contract.ts';
 import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
@@ -18,17 +19,8 @@ import {
 } from "./result-retention.ts";
 import { stopOwnedNative } from "./legacy-process.ts";
 import type { CorrespondenceService } from "./correspondence-service.ts";
-import {
-  canonicalJson,
-  VMAF_LIMITS,
-} from "../../../shared/analysis/quality/vmaf.ts";
-import type {
-  VmafInput,
-  VmafJob,
-  VmafMetricState,
-  VmafPlanSnapshot,
-  VmafPrepared,
-} from "../../../shared/analysis/quality/vmaf.ts";
+import { canonicalJson } from '../../../shared/analysis/quality/correspondence.ts';
+import type { VmafInput, VmafJob } from "../../../shared/analysis/quality/vmaf.ts";
 import type { VmafResult, VmafNativeResult } from '../../../shared/analysis/quality/vmaf.ts';
 import type { XpsnrResult, XpsnrNativeResult } from '../../../shared/analysis/quality/xpsnr.ts';
 import { sameExecutionContract } from '../../../shared/analysis/quality/reexecution.ts';
@@ -51,15 +43,15 @@ export type TemporalJob<K extends Kind, I extends Input> = Omit<
 > & {
   schema: `voidplayer-native-${K}-job-state`;
   input: I;
-  metrics: { psnr: VmafMetricState; ssim: VmafMetricState } & Record<
+  metrics: { psnr: TemporalMetricState; ssim: TemporalMetricState } & Record<
     K,
-    VmafMetricState
+    TemporalMetricState
   >;
 };
 type Native<K extends Kind> = { vmaf: VmafNativeResult; xpsnr: XpsnrNativeResult }[K];
 type Result<K extends Kind> = { vmaf: VmafResult; xpsnr: XpsnrResult }[K];
 interface Executor<K extends Kind, I extends Input> {
-  run(input: I, snapshot: VmafPlanSnapshot, signal: AbortSignal, hooks: TemporalHooks): Promise<{ native: Native<K> }>;
+  run(input: I, snapshot: TemporalPlanSnapshot, signal: AbortSignal, hooks: TemporalHooks): Promise<{ native: Native<K> }>;
   readonly admission?: import('../../quality-admission.ts').QualityAdmission;
   readonly stopUncertain: boolean;
   readonly ready?: Promise<void>;
@@ -90,7 +82,7 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
   protected executor: Executor<K, I>;
   protected plans: CorrespondenceService;
   protected kind: K;
-  protected limits: typeof VMAF_LIMITS;
+  protected limits: typeof TEMPORAL_RESOURCE_LIMITS;
   protected get label() {
     return this.kind.toUpperCase();
   }
@@ -98,14 +90,14 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
     return !["queued", "preparing", "running", "cancelling"].includes(state);
   }
   protected abstract parse(value: unknown): I;
-  protected abstract validatePrepared(value: VmafPrepared, snapshot: VmafPlanSnapshot, input: I): void;
+  protected abstract validatePrepared(value: TemporalPrepared, snapshot: TemporalPlanSnapshot, input: I): void;
   protected abstract metricError(code: string, message: string): Error;
   protected constructor(
     file: string,
     executor: Executor<K, I>,
     plans: CorrespondenceService,
     kind: K,
-    limits: typeof VMAF_LIMITS) {
+    limits: typeof TEMPORAL_RESOURCE_LIMITS) {
     this.file = file;
     this.executor = executor;
     this.plans = plans;
@@ -274,7 +266,7 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
       more: rows.length > limit,
     };
   }
-  protected snapshot(input: I, actor: string): VmafPlanSnapshot {
+  protected snapshot(input: I, actor: string): TemporalPlanSnapshot {
     const plan = this.plans.get(input.plan.id, actor);
     if (
       plan.state !== "completed" ||
@@ -477,7 +469,7 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
             )
             .get(id)!.snapshot,
         ),
-      ) as VmafPlanSnapshot;
+      ) as TemporalPlanSnapshot;
     if (
       snapshot.id !== job.input.plan.id ||
       snapshot.attemptId !== job.input.plan.attemptId ||
@@ -562,7 +554,7 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
     let j = this.get(id, this.all().find((x) => x.id === id)!.actor.id);
     const snapshot = JSON.parse(
       String(this.db.prepare(`SELECT snapshot FROM quality_${this.kind}_jobs WHERE id=?`).get(id)!.snapshot),
-    ) as VmafPlanSnapshot;
+    ) as TemporalPlanSnapshot;
     try {
       const value = await this.executor.run(j.input, snapshot, signal, {
         expectedExecutionContract: j.executionContract,
@@ -695,7 +687,7 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
       .prepare(`SELECT prepared FROM quality_${this.kind}_jobs WHERE id=?`)
       .get(id);
     return row?.prepared
-      ? (JSON.parse(String(row.prepared)) as VmafPrepared)
+      ? (JSON.parse(String(row.prepared)) as TemporalPrepared)
       : null;
   }
   releaseResult(id: string, actor: string) {
@@ -779,7 +771,7 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
             code: "service-shutdown",
             message: "Service stopped; no automatic retry",
           };
-          for (const metric of Object.values(job.metrics) as VmafMetricState[])
+          for (const metric of Object.values(job.metrics) as TemporalMetricState[])
             if (["waiting", "running"].includes(metric.state)) {
               metric.state = "interrupted";
               metric.reason = job.reason;

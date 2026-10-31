@@ -11,7 +11,7 @@ import type { TsEngine } from '../decoding/ts-engine.ts';
 import type { Mp4Engine } from '../decoding/mp4-engine.ts';
 import type { PacketFrame } from '../decoding/flv-decoder.ts';
 import type { CachedWindow, CachedAudioBatch } from '../../../shared/media/audio-types.ts';
-import type { MediaInfo } from '../../../shared/review/model.ts';
+import type { MediaInfo } from '../../../shared/media/types.ts';
 import type { AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample } from '../../../shared/analysis/metadata/types.ts';
 
 // Command maps are the single wire contract for callers and Worker responders.

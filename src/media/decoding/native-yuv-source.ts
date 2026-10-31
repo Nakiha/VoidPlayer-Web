@@ -1,4 +1,4 @@
-import type {DecodedFrame,MediaSource} from '../source.ts';
+import type {DecodedFrame,MediaSource} from '../contract.ts';
 import {MediaOpenError} from '../../../shared/media/io/media-errors.ts';
 import {chromaOffset,resolveYuvColor,validateYuv,yuvSample,visibleChromaBounds} from '../../../shared/color/yuv-color.ts';
 import { hdrTransfer } from '../../../shared/color/hdr-policy.ts';

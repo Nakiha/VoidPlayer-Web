@@ -1,4 +1,4 @@
-import {installQualityReexecution} from './quality-reexecution.ts';
+import {installQualityReexecution} from './quality/reexecution.ts';
 import {REEXECUTION_KINDS,reexecutionKind} from '../../shared/analysis/quality/reexecution.ts';
 import {canonicalJson} from '../../shared/analysis/quality/cambi.ts';
 import {t,th,msg,formatDate} from '../i18n.ts';

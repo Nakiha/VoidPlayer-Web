@@ -8,7 +8,7 @@ import { BrowserWorker as Worker } from '../helpers/browser-worker-host.ts';
 import { scanFlv } from '../../shared/media/containers/flv-demux.ts';
 import { wrapFlv } from '../helpers/frame-pair-fixture.ts';
 import { openPacketMedia } from '../../src/media/decoding/packet-media.ts';
-import type { MediaSource, DecodedFrame } from '../../src/media/source.ts';
+import type { MediaSource, DecodedFrame } from '../../src/media/contract.ts';
 import type { PacketInput } from '../../shared/media/containers/flv-demux.ts';
 import { ReviewSession } from '../../src/session.ts';
 

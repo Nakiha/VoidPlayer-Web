@@ -1,4 +1,4 @@
-import type { MediaInfo } from '../../shared/review/model.ts';
+import type { MediaInfo } from '../../shared/media/types.ts';
 import type { LibraryEntry } from '../services/library.ts';
 import type { LibraryAccessProblem } from '../../shared/media/io/source-access.ts';
 

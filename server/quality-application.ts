@@ -1,3 +1,4 @@
+import { QualityResultCommands } from './analysis/quality/result-commands.ts';
 import {AnalysisComponentOwner} from './analysis/quality/component-owner.ts';
 import path from 'node:path';
 import type { MediaLibraryIndex } from './library.ts';
@@ -41,6 +42,7 @@ export class QualityApplication {
   private xpsnr?: NativeXpsnrService;
   private reexecutions?: QualityReexecutionService;
   private taskCenter?: TaskCenterService;
+  private resultCommands?: QualityResultCommands;
   readonly quality: LibraryPairRunner;
   private preparation?:LibraryDiscoveryService;
   get discovery(){return this.required(this.preparation);}
@@ -69,6 +71,7 @@ export class QualityApplication {
       this.vmaf=new NativeVmafService(file+'.quality-vmaf.sqlite',new WasmVmafRunner(execution,coreDir,analysisDir,this.components),this.correspondence);
       const services={quality:this.quality,qualityJobs:this.jobs,qualityRanges:this.ranges,qualityCorrespondence:this.correspondence,
         qualityCambi:this.cambi,qualityVmaf:this.vmaf,qualityXpsnr:this.xpsnr};
+      this.resultCommands=new QualityResultCommands(services);
       this.reexecutions=new QualityReexecutionService(services);
       this.taskCenter=new TaskCenterService({...services,qualityReexecutions:this.reexecutions,discovery:this.discovery,durableQualityJobsEnabled:true},{
         preparation:(id,actor)=>this.discovery.cancel(id,actor),
@@ -95,6 +98,7 @@ export class QualityApplication {
   get qualityVmaf(){return this.required(this.vmaf);}
   get qualityXpsnr(){return this.required(this.xpsnr);}
   get qualityReexecutions(){return this.required(this.reexecutions);}
+  get qualityResults(){return this.required(this.resultCommands);}
   get tasks(){return this.required(this.taskCenter);}
   get nativeCambiDescriptor(){return this.cambi?.descriptor??null;}
   get nativeVmafDescriptor(){return this.vmaf?.descriptor??null;}

@@ -1,33 +1,33 @@
-import { qualityViewVisible } from "./quality-navigation.ts";
+import { qualityViewVisible } from "./navigation.ts";
 import {
   renderQualitySummary,
   type QualityScoreSummary,
-} from "./quality-summary.ts";
-import { installQualityReexecution } from "./quality-reexecution.ts";
-import { th, t, msg } from "../i18n.ts";
-import { confirmedActor, observeIdentity } from "../services/identity.ts";
-import { QualityClient } from "../services/quality-jobs.ts";
+} from "./summary.ts";
+import { installQualityReexecution } from "./reexecution.ts";
+import { th, t, msg } from "../../i18n.ts";
+import { confirmedActor, observeIdentity } from "../../services/identity.ts";
+import { QualityClient } from "../../services/quality-jobs.ts";
 import {
   FrozenSubmissionJournal,
   assertJobReceipt,
-} from "../services/frozen-submission.ts";
-import type { FrozenSubmission } from "../services/frozen-submission.ts";
-import { QualityObservationScope } from "../analysis/quality/observation-scope.ts";
-import { candidateAnnotations } from "../analysis/quality/candidate-evidence.ts";
-import { randomUUID } from "../../shared/utils/uuid.ts";
+} from "../../services/frozen-submission.ts";
+import type { FrozenSubmission } from "../../services/frozen-submission.ts";
+import { QualityObservationScope } from "../../analysis/quality/observation-scope.ts";
+import { candidateAnnotations } from "../../analysis/quality/candidate-evidence.ts";
+import { randomUUID } from "../../../shared/utils/uuid.ts";
 import {
   cambiInput,
   CAMBI_LIMITS,
   terminalCambi,
-} from "../../shared/analysis/quality/cambi.ts";
+} from "../../../shared/analysis/quality/cambi.ts";
 import type {
   CambiInput,
   CambiJob,
   CambiFramePage,
-} from "../../shared/analysis/quality/cambi.ts";
-import type { DiscoveryPage } from "../services/library-discovery.ts";
-import type { AnnotationRecord } from "../../shared/review/annotation-record.ts";
-import type { SourceBinding } from "../../shared/analysis/quality/frame-pair.ts";
+} from "../../../shared/analysis/quality/cambi.ts";
+import type { DiscoveryPage } from "../../services/library-discovery.ts";
+import type { AnnotationRecord } from "../../../shared/review/annotation-record.ts";
+import type { SourceBinding } from "../../../shared/analysis/quality/frame-pair.ts";
 export function qualityCambiShell() {
   return `<section id="quality-cambi" class="admin-panel"><h2>${th(msg("cambi.title", "CAMBI · 单源色带筛查"))}</h2><p>${th(msg("cambi.scope", "使用分析 WASM core；可信 FLV/Enhanced FLV 8/10 位，或严格 MP4 avc1 H2648 / hvc1 HEVC8/10；限范围 BT.709 SDR，整帧、方形像素、不裁剪，长边至少320。分数越高表示检测到更多色带，不是产品合格线；内部按10位处理。允许明确抽样，未采样帧不冒充覆盖。没有跨帧目标跟踪，未认证引用完整性，无法检测错误隐藏。"))}</p><details class="quality-advanced"><summary>${th(msg("qualityWorkspace.capability", "执行器与支持范围"))}</summary><pre id="cambi-capability"></pre></details>
  <form id="cambi-search-form"><label>${th(msg("cambi.find", "从技术发现选择单源"))}<input id="cambi-search" maxlength="300"></label><button id="cambi-browse" type="submit">${th(msg("admin.search", "搜索"))}</button><button id="cambi-next" type="button" hidden>${th(msg("admin.nextPage", "下一页"))}</button></form><div id="cambi-media"></div><p id="cambi-source"></p><a href="/admin/#discovery" target="_blank" rel="noopener">${th(msg("cambi.prepare", "缺少可信缓存时，显式前往技术准备；此处不会自动探测或建索引。"))}</a>

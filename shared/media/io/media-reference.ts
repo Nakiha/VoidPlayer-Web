@@ -1,4 +1,4 @@
-import type { MediaInfo } from '../../review/model.ts';
+import type { MediaInfo } from '../types.ts';
 import { describeMediaMismatch, matchMediaIdentity } from './media-identity.ts';
 import { LibraryAccessError } from './source-access.ts';
 

@@ -13,7 +13,7 @@ import {psnrGridPlan,type PsnrRoi} from '../../shared/analysis/quality/psnr.ts';
 import {ssimPlan,SSIM_VARIANT} from '../../shared/analysis/quality/ssim.ts';
 import {terminalQualityJob} from '../../shared/analysis/quality/jobs.ts';
 import {paintFrame,setPresentationGeometry} from '../presentation/presenter.ts';
-import type {DecodedFrame} from '../media/source.ts';
+import type {DecodedFrame} from '../media/contract.ts';
 import {installQualityCandidate} from './quality-candidate.ts';
 import {qualityFacts,forwardOutputText} from './quality-evidence.ts';
 import {randomUUID} from '../../shared/utils/uuid.ts';

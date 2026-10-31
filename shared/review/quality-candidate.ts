@@ -1,7 +1,8 @@
 import { qualityEvidenceValue } from './quality-evidence.ts';
 import type { QualityEvidence } from './quality-evidence.ts';
 import type { AnnotationDocument } from './annotation-record.ts';
-import type { Mark, MediaInfo } from './model.ts';
+import type { Mark } from './model.ts';
+import type { MediaInfo } from '../media/types.ts';
 
 /** Only the host-resolved immutable result supplies source/clock/ROI facts.
  * Text and severity are explicit caller input, never inferred from a score. */

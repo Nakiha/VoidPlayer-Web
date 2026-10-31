@@ -6,7 +6,7 @@ import { type ColorMode, type ReferenceDecode } from '../../shared/color/decode-
 import { getPresentationChannel, setPresentationChannel } from '../../src/presentation/presentation-channel.ts';
 import { rgbaDescription } from '../../shared/media/frame-description.ts';
 import { getLogEvents } from '../../src/logging/log.ts';
-import type { DecodedFrame, MediaSource } from '../../src/media/source.ts';
+import type { DecodedFrame, MediaSource } from '../../src/media/contract.ts';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;

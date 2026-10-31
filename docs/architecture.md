@@ -28,6 +28,11 @@
 
 ## 解码与呈现
 
+浏览器帧/源/文件元数据合同统一位于 `src/media/contract.ts`；`source.ts` 只负责打开实现与路由。
+解码器、session 和 presenter 直接依赖合同，不能让具体后端反向依赖打开入口。
+共享媒体时间/描述、源色彩与呈现事实分别由 `shared/media/types.ts`、`shared/color/color-info.ts`
+和 `shared/presentation/presentation-info.ts` 拥有，review 只保留评审与多轨协调。
+
 v0.3.0 将本地/远程入口统一为字节识别（`container-probe.ts`）、解码选择与失败阶段策略（`media-policy.ts`）、软件适配器选择（`software-media.ts`）和 reference 原始平面准入（`reference-source.ts`）。容器只负责解封装/索引差异，不再各写一套 reference 回退和上屏规则。Mediabunny 已支持的容器共用 WebCodecs 入口；新增格式不应复制解码偏好、色彩校验或呈现代码。
 
 FFmpeg 容器回退原本就调用 `vp_index_build` 扫描包建立 PTS/时长索引；旧的 `indexState` 缺失不能解释成无索引。TS 的修复是保留关键包字节位置与 DTS，随机定位从目标前的 GOP 解码，避免用 PTS 定位越过目标后从起点重解码。只有 TS 的二分定位索引写入包偏移；其他容器保留自身索引语义。首次扫描仍随文件长度增长，损坏或时间戳异常文件仍可能回扫。
@@ -144,7 +149,7 @@ permit. The child runner alone owns the shared physical execution slot. Parent a
 uncertain Worker exit retains the affected ownership.
 `range-routes.ts` exposes actor-fenced planning/submission, paged history/results,
 explicit cancellation and frozen-ID publication through the original atomic
-annotation command. `src/admin/quality-ranges.ts` only observes and opens explicit
+annotation command. `src/admin/quality/ranges.ts` only observes and opens explicit
 read-only original-frame viewers. No player/presenter state is required.
 See [bounded-quality-ranges.md](bounded-quality-ranges.md) for coverage, budget,
 crash/receipt recovery and unassessed-candidate semantics. CAMBI uses its own single-source domain; correctness does not certify performance
@@ -186,7 +191,7 @@ queueing, recovery, receipts, cancellation, result release and shutdown. Numeric
 execution, validation, pooling, evidence and publication policy remain in each
 metric service. CAMBI retains its distinct single-source/heatmap state machine
 and shares physical-owner shutdown and retained-result accounting.
-`src/admin/quality-temporal.ts` owns the common observer/draft/page fences; metric
+`src/admin/quality/temporal.ts` owns the common observer/draft/page fences; metric
 views supply their input construction, score labels and optional comparison.
 
 The domain services remain in `server/analysis/{vmaf,xpsnr,cambi}/`; request and

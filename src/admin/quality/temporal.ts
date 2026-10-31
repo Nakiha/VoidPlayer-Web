@@ -1,24 +1,24 @@
-import {t,msg} from '../i18n.ts';
-import { qualityViewVisible } from "./quality-navigation.ts";
-import { renderQualitySummary } from "./quality-summary.ts";
-import type { QualityScoreSummary } from "./quality-summary.ts";
-import { installQualityReexecution } from "./quality-reexecution.ts";
-import { confirmedActor, observeIdentity } from "../services/identity.ts";
+import {t,msg} from '../../i18n.ts';
+import { qualityViewVisible } from "./navigation.ts";
+import { renderQualitySummary } from "./summary.ts";
+import type { QualityScoreSummary } from "./summary.ts";
+import { installQualityReexecution } from "./reexecution.ts";
+import { confirmedActor, observeIdentity } from "../../services/identity.ts";
 import {
   FrozenSubmissionJournal,
   assertJobReceipt,
-} from "../services/frozen-submission.ts";
-import type { FrozenSubmission } from "../services/frozen-submission.ts";
-import { QualityObservationScope } from "../analysis/quality/observation-scope.ts";
-import { candidateAnnotations } from "../analysis/quality/candidate-evidence.ts";
-import { QualityClient } from "../services/quality-jobs.ts";
-import { qualityFacts } from "../ui/quality-evidence.ts";
-import { qualityPairViewUrl } from "../../shared/review/quality-pair-view.ts";
-import { terminalVmaf as terminalObservation } from "../../shared/analysis/quality/vmaf.ts";
-import type { VmafJob } from "../../shared/analysis/quality/vmaf.ts";
-import type { LibraryPairResult } from "../../shared/analysis/quality/library-pair.ts";
-import type { AnnotationRecord } from "../../shared/review/annotation-record.ts";
-import { randomUUID } from "../../shared/utils/uuid.ts";
+} from "../../services/frozen-submission.ts";
+import type { FrozenSubmission } from "../../services/frozen-submission.ts";
+import { QualityObservationScope } from "../../analysis/quality/observation-scope.ts";
+import { candidateAnnotations } from "../../analysis/quality/candidate-evidence.ts";
+import { QualityClient } from "../../services/quality-jobs.ts";
+import { qualityFacts } from "../../ui/quality-evidence.ts";
+import { qualityPairViewUrl } from "../../../shared/review/quality-pair-view.ts";
+import { terminalVmaf as terminalObservation } from "../../../shared/analysis/quality/vmaf.ts";
+import type { VmafJob } from "../../../shared/analysis/quality/vmaf.ts";
+import type { LibraryPairResult } from "../../../shared/analysis/quality/library-pair.ts";
+import type { AnnotationRecord } from "../../../shared/review/annotation-record.ts";
+import { randomUUID } from "../../../shared/utils/uuid.ts";
 type ObservationJob = Pick<
   VmafJob,
   "id" | "state" | "revision" | "resultDigest" | "resultRetained"

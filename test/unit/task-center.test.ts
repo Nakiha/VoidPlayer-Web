@@ -139,3 +139,22 @@ test('range archive preserves historical edges and frozen snapshots while curren
  f.db.prepare("UPDATE quality_ranges SET body=json_set(body,'$.resultRetention.settledAt',201) WHERE id=?").run(parent.id);
  assert.equal(f.center.detail('range',parent.id,'actor-A').links.some(l=>l.rel==='release-result'),false);
 });
+
+test('result commands own release retention checks and delegate only after actor lookup', async () => {
+ const {QualityResultCommands}=await import('../../server/analysis/quality/result-commands.ts');
+ const calls:string[]=[],receipt={jobId:'job',released:true,receiptRetained:true};
+ const owner=(kind:string)=>({get(id:string,actor:string){calls.push(`get:${kind}:${id}:${actor}`);},releaseResult(){calls.push(`release:${kind}`);return receipt;}});
+ let rangePinned=false,evidencePinned=false;
+ const ranges={referencesResult(){calls.push('range-reference');return rangePinned;},releaseResult(id:string,actor:string,pinned:(id:string)=>boolean){calls.push(`range:${id}:${actor}`);assert.equal(pinned('child'),evidencePinned);return receipt;}};
+ const command=new QualityResultCommands({qualityJobs:owner('single'),qualityRanges:ranges,qualityVmaf:owner('vmaf'),qualityXpsnr:owner('xpsnr'),qualityCambi:owner('cambi')} as unknown as import('../../server/quality-service-ports.ts').ResultReleaseServices);
+ const evidence={referencesQualityResult(id:string){calls.push(`evidence:${id}`);return evidencePinned;}};
+ for(const kind of ['single','vmaf','xpsnr','cambi']as const){
+  calls.length=0;assert.equal(command.release(kind,'job','actor',evidence),receipt);
+  assert.deepEqual(calls,[`get:${kind}:job:actor`,...(kind==='single'?['range-reference']:[]),'evidence:job',`release:${kind}`]);
+ }
+ rangePinned=true;calls.length=0;assert.throws(()=>command.release('single','job','actor',evidence),{code:'result-pinned-by-range'});assert.deepEqual(calls,['get:single:job:actor','range-reference']);
+ rangePinned=false;evidencePinned=true;
+ for(const kind of ['single','vmaf','xpsnr','cambi']as const){calls.length=0;assert.throws(()=>command.release(kind,'job','actor',evidence),{code:'result-pinned-by-evidence'});assert.ok(!calls.some(c=>c.startsWith('release:')));}
+ calls.length=0;assert.equal(command.release('range','job','actor',evidence),receipt);assert.deepEqual(calls,['range:job:actor','evidence:child']);
+ calls.length=0;assert.throws(()=>command.release('vmaf','job','actor'),{code:'storage-unavailable'});assert.throws(()=>command.release('preparation','job','actor',evidence),{code:'unsupported-result-release'});assert.deepEqual(calls,[]);
+});

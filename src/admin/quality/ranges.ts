@@ -1,15 +1,15 @@
-import { QualityObservationScope } from "../analysis/quality/observation-scope.ts";
-import { candidateAnnotations } from "../analysis/quality/candidate-evidence.ts";
-import { qualityViewVisible } from "./quality-navigation.ts";
-import { installQualityReexecution } from "./quality-reexecution.ts";
-import { t, th, msg } from "../i18n.ts";
-import { confirmedActor, observeIdentity } from "../services/identity.ts";
-import { QualityClient } from "../services/quality-jobs.ts";
-import { qualityFacts } from "../ui/quality-evidence.ts";
-import { qualityPairViewUrl } from "../../shared/review/quality-pair-view.ts";
-import type { QualityRangeJob } from "../../shared/analysis/quality/ranges.ts";
-import type { QualityJobResult } from "../../shared/analysis/quality/jobs.ts";
-import type { AnnotationRecord } from "../../shared/review/annotation-record.ts";
+import { QualityObservationScope } from "../../analysis/quality/observation-scope.ts";
+import { candidateAnnotations } from "../../analysis/quality/candidate-evidence.ts";
+import { qualityViewVisible } from "./navigation.ts";
+import { installQualityReexecution } from "./reexecution.ts";
+import { t, th, msg } from "../../i18n.ts";
+import { confirmedActor, observeIdentity } from "../../services/identity.ts";
+import { QualityClient } from "../../services/quality-jobs.ts";
+import { qualityFacts } from "../../ui/quality-evidence.ts";
+import { qualityPairViewUrl } from "../../../shared/review/quality-pair-view.ts";
+import type { QualityRangeJob } from "../../../shared/analysis/quality/ranges.ts";
+import type { QualityJobResult } from "../../../shared/analysis/quality/jobs.ts";
+import type { AnnotationRecord } from "../../../shared/review/annotation-record.ts";
 
 export function qualityRangesShell() {
   return `<section id="quality-ranges" class="admin-panel">

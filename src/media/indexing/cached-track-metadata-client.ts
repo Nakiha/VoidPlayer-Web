@@ -1,4 +1,4 @@
-import type { MediaSource } from '../source.ts';
+import type { MediaSource } from '../contract.ts';
 import type { AudioPeek } from '../../../shared/media/audio-types.ts';
 import { inspectCachedTracks } from '../../../shared/media/containers/cached-track-metadata.ts';
 import { updateMediaInfo } from '../state.ts';

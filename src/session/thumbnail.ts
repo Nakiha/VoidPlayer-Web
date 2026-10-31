@@ -1,5 +1,5 @@
 import { log } from '../logging/log.ts';
-import type { DecodedFrame, MediaSource } from '../media/source.ts';
+import type { DecodedFrame, MediaSource } from '../media/contract.ts';
 import { referenceVersion } from '../../shared/media/io/media-reference.ts';
 import { localCacheKey, serverCacheKey } from '../../shared/thumbnails/contract.ts';
 import { offerFirstFrameCandidate, settleOffer } from '../thumbnails/offer.ts';

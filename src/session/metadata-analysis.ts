@@ -1,5 +1,5 @@
 import type { AnalysisAxis, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample, AnalysisStatus } from '../../shared/analysis/metadata/types.ts';
-import type { MediaSource } from '../media/source.ts';
+import type { MediaSource } from '../media/contract.ts';
 import { abortableWait } from '../../shared/media/io/media-abort.ts';
 import type { Slot } from '../../shared/review/model.ts';
 import { slotValue } from '../../shared/review/model.ts';

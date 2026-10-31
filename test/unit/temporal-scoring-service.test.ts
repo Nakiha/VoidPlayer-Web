@@ -52,3 +52,41 @@ for(const kind of ['vmaf','xpsnr','cambi'] as const)test(`${kind}: result releas
   if(kind==='cambi')assert.equal(db.prepare('SELECT count(*) n FROM cambi_heat').get()!.n,0);
  }finally{db.close();}
 });
+
+// A real portable pair measurement supplies validated evidence; mutate only the
+// frozen facts to prove that the shared post-check rejects drift for both metrics.
+for (const kind of ['vmaf', 'xpsnr'] as const) test(`${kind}: prepared facts bind recipe, source identity and frozen budgets`, async () => {
+  const { pairViewFixture } = await import('../helpers/pair-view-fixture.ts');
+  const { validatePreparedFacts } = await import('../../server/analysis/quality/prepared-facts.ts');
+  const { VmafError } = await import('../../shared/analysis/quality/vmaf.ts');
+  const { XpsnrError } = await import('../../shared/analysis/quality/xpsnr.ts');
+  const f = await pairViewFixture(), ErrorType = kind === 'vmaf' ? VmafError : XpsnrError;
+  const make = () => ({
+    sequence: { pairs: [{ ...structuredClone(f.request), roi: structuredClone(f.evidence.value.result.metric.roi) }] },
+    pairs: [structuredClone(f.evidence.value)], geometry: { width: 32, height: 32, bitDepth: 8 },
+    raw: { bytes: 3072, referenceSha256: 'a'.repeat(64), distortedSha256: 'b'.repeat(64) }, work: { readBytes: 1, packets: 1, outputFrames: 1, inputBytes: 1 },
+  } as unknown as import('../../shared/analysis/quality/temporal-contract.ts').TemporalPrepared);
+  const snapshot = { value: { rangePlan: { input: { budget: {
+    maxReadBytes: 1, maxPackets: 1, maxOutputFrames: 1, maxInputBytes: 1,
+  } } } } } as import('../../shared/analysis/quality/temporal-contract.ts').TemporalPlanSnapshot;
+  const input = { metrics: { ssim: false }, budget: { maxRawBytes: 3072 } };
+  const check = (v: ReturnType<typeof make>, i = input, bytes = 1e6) =>
+    validatePreparedFacts(v, snapshot, i, bytes, (code, message) => new ErrorType(code, message));
+  assert.doesNotThrow(() => check(make()));
+  const rejects = (v: ReturnType<typeof make>, code = 'worker-result-invalid') =>
+    assert.throws(() => check(v), (error: unknown) => error instanceof ErrorType && error.code === code);
+  for (const side of ['reference', 'distorted'] as const)
+    for (const field of ['mediaId', 'mediaVersion', 'size', 'indexIdentity', 'indexBuildId', 'sourcePtsUs', 'picture', 'decode'] as const) {
+      const v = make(); Object.assign(v.sequence.pairs[0][side], { [field]: 'changed' }); rejects(v);
+    }
+  let v = make(); v.sequence.pairs[0].roi.x++; rejects(v);
+  v = make(); v.geometry.bitDepth = 10; rejects(v);
+  assert.throws(() => check(make(), { ...input, metrics: { ssim: true } }), { code: 'worker-result-invalid' });
+  for (const field of ['readBytes', 'packets', 'outputFrames', 'inputBytes'] as const) {
+    v = make(); v.work[field]++; rejects(v);
+  }
+  v = make(); v.raw.bytes++; rejects(v);
+  v = make(); v.raw.referenceSha256 = 'changed'; rejects(v);
+  assert.throws(() => check(make(), { ...input, budget: { maxRawBytes: 3071 } }), { code: 'budget-exceeded' });
+  assert.throws(() => check(make(), input, 1), { code: 'budget-exceeded' });
+});

@@ -6,7 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { floorIndex, nextIndex, openFFmpegMedia } from '../../src/media/decoding/ffmpeg-media.ts';
 import { openMedia } from '../../src/media/source.ts';
 import type { FallbackDeps } from '../../src/media/decoding/ffmpeg-media.ts';
-import type { MediaSource } from '../../src/media/source.ts';
+import type { MediaSource } from '../../src/media/contract.ts';
 
 // --- pure index navigation ---
 

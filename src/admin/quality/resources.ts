@@ -1,12 +1,12 @@
-import { th, t, msg, formatDate } from "../i18n.ts";
-import { localizedText, type LocalizedValue } from "../ui/live-localization.ts";
-import { observeIdentity, confirmedActor } from "../services/identity.ts";
-import { requestError, rootReason } from "./diagnostics.ts";
-import { qualityResourceLimits } from "../../shared/service/quality-resources.ts";
+import { th, t, msg, formatDate } from "../../i18n.ts";
+import { localizedText, type LocalizedValue } from "../../ui/live-localization.ts";
+import { observeIdentity, confirmedActor } from "../../services/identity.ts";
+import { requestError, rootReason } from "../diagnostics.ts";
+import { qualityResourceLimits } from "../../../shared/service/quality-resources.ts";
 import type {
   QualityResourceSettings,
   QualityResourceLimits,
-} from "../../shared/service/quality-resources.ts";
+} from "../../../shared/service/quality-resources.ts";
 
 const fields = () =>
   [

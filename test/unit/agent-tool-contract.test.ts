@@ -4,7 +4,7 @@ import { reviewTools } from '../../src/agent.ts';
 import { ReviewSession } from '../../src/session.ts';
 import { sessionLog } from '../../src/logging/log.ts';
 import { rgbaDescription } from '../../shared/media/frame-description.ts';
-import type { MediaSource } from '../../src/media/source.ts';
+import type { MediaSource } from '../../src/media/contract.ts';
 import type { AnalysisQuery } from '../../shared/analysis/metadata/types.ts';
 
 function toolsWithSpy() {

@@ -6,7 +6,8 @@ import { qualityEvidenceList, evidenceWorkspaceVersion } from './quality-evidenc
 import { drawingsValue } from './annotation.ts';
 import { discussionValue } from './mark-discussion.ts';
 import { regionValue, slotValue, timeUs, SLOTS } from './model.ts';
-import type { FrameInfo, Mark, MediaInfo, Slot } from './model.ts';
+import type { FrameInfo, MediaInfo } from '../media/types.ts';
+import type { Mark, Slot } from './model.ts';
 import { BITRATE_WINDOW_OPTIONS_US } from '../analysis/metadata/statistics.ts';
 import { ANALYSIS_DIAGRAMS, type AnalysisDiagram } from '../analysis/metadata/types.ts';
 import { Viewport } from '../presentation/viewport.ts';

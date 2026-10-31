@@ -6,7 +6,7 @@ import {getColorOutput,setColorOutput,defaultColorOutput} from '../../shared/col
 import {getColorMode,setColorMode,getReferenceDecode,setReferenceDecode} from '../../src/media/policy/color-mode.ts';
 import { minFrameDurationUs, planBackwardStep, planForwardStep, regionValue, timeUs, SLOTS } from '../../shared/review/model.ts';
 import { reviewTools } from '../../src/agent.ts';
-import type { MediaSource } from '../../src/media/source.ts';
+import type { MediaSource } from '../../src/media/contract.ts';
 import type { AnnotationDocument } from '../../shared/review/annotation-record.ts';
 
 function deferred<T>() { let resolve!: (v: T) => void; const promise = new Promise<T>(r => resolve = r); return { promise, resolve }; }

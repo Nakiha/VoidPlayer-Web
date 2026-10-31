@@ -5,7 +5,7 @@ import { getPresentationChannel } from './presentation-channel.ts';
 import { detectGpuProfile } from './webgpu-calibration.ts';
 import { createExternalSurface } from './webgpu-color-surface.mjs';
 import type { GpuSurface } from './webgpu-color-surface.mjs';
-import type { DecodedFrame } from '../media/source.ts';
+import type { DecodedFrame } from '../media/contract.ts';
 import type { PresentationGeometry } from './presentation-surface.ts';
 import { resolveYuvColor } from '../../shared/color/yuv-color.ts';
 import { isHdrTransfer } from './presentation-color.ts';

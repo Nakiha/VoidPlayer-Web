@@ -5,14 +5,14 @@ import {setImmediate} from 'node:timers/promises';
 const hooks=registerHooks({load(url,ctx,next){
  if(url.endsWith('.css'))return {format:'module',source:'export {};',shortCircuit:true};
  if(url.endsWith('/src/services/identity.ts'))return {format:'module',source:'export const confirmedActor=()=>({id:"owner"});export const currentActor=confirmedActor;export const identityHealth=async()=>({actor:confirmedActor()}); export const observeIdentity=()=>{};',shortCircuit:true};
- if(url.endsWith('/src/admin/quality-reexecution.ts'))return {format:'module',source:'export const installQualityReexecution=()=>({clear(){},show(){}});',shortCircuit:true};
- if(url.endsWith('/src/admin/quality-navigation.ts'))return {format:'module',source:'export const qualityViewVisible=()=>true;',shortCircuit:true};
+ if(url.endsWith('/src/admin/quality/reexecution.ts'))return {format:'module',source:'export const installQualityReexecution=()=>({clear(){},show(){}});',shortCircuit:true};
+ if(url.endsWith('/src/admin/quality/navigation.ts'))return {format:'module',source:'export const qualityViewVisible=()=>true;',shortCircuit:true};
  if(url.endsWith('/src/ui/icons.ts'))return {format:'module',source:'export const icon=()=>"";',shortCircuit:true};
  return next(url,ctx);
 }});
-const {installTemporalQuality}=await import('../../src/admin/quality-temporal.ts');
-const {installQualityRanges}=await import('../../src/admin/quality-ranges.ts');
-const {installQualityCorrespondence}=await import('../../src/admin/quality-correspondence.ts');
+const {installTemporalQuality}=await import('../../src/admin/quality/temporal.ts');
+const {installQualityRanges}=await import('../../src/admin/quality/ranges.ts');
+const {installQualityCorrespondence}=await import('../../src/admin/quality/correspondence.ts');
 hooks.deregister();
 class Element extends EventTarget{
  children=[];dataset={};value='';textContent='';hidden=false;disabled=false;

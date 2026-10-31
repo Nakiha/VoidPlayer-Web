@@ -1,4 +1,4 @@
-import type { DecodedFrame } from '../media/source.ts';
+import type { DecodedFrame } from '../media/contract.ts';
 import type { PresentationGeometry } from './presentation-surface.ts';
 export interface GpuSurface {
   device: unknown;

@@ -1,4 +1,4 @@
-import type { MediaSource, MediaMeta } from '../source.ts';
+import type { MediaSource, MediaMeta } from '../contract.ts';
 import type { RandomAccessInput } from '../../../shared/media/io/range-reader.ts';
 import type { MediaOpenProgress } from '../progress.ts';
 import { MediaOpenError } from '../../../shared/media/io/media-errors.ts';

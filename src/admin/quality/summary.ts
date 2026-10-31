@@ -1,7 +1,7 @@
-import { msg, t } from '../i18n.ts';
-import type { VmafNativeResult } from '../../shared/analysis/quality/vmaf.ts';
-import type { XpsnrNativeResult, XpsnrDb } from '../../shared/analysis/quality/xpsnr.ts';
-import type { CambiNative } from '../../shared/analysis/quality/cambi.ts';
+import { msg, t } from '../../i18n.ts';
+import type { VmafNativeResult } from '../../../shared/analysis/quality/vmaf.ts';
+import type { XpsnrNativeResult, XpsnrDb } from '../../../shared/analysis/quality/xpsnr.ts';
+import type { CambiNative } from '../../../shared/analysis/quality/cambi.ts';
 
 /** The routes expose their official pools. Never average displayed frame scores. */
 export type QualityScoreSummary = {

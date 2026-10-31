@@ -76,7 +76,7 @@ test('MP4 unknown annotation commit, restart and reclaimed result replay the fro
  f.service.library.qualityVmaf.db.prepare('UPDATE quality_vmaf_jobs SET result=NULL WHERE id=?').run(j.id);const port=Number(new URL(f.base).port);await f.stop();f.config.port=port;restarted=await startService(f.config,false);
  let executions=0;const runner=(restarted.library.qualityVmaf as any).runner,run=runner.run.bind(runner);runner.run=(...args:any[])=>{executions++;return run(...args);};
  assert.equal((await f.request(`/api/quality/vmaf/jobs/${j.id}/result`)).status,409);assert.equal((await f.json('/api/quality/vmaf/jobs',f.input,'unknown-mp4')).job.attemptId,done.attemptId);
- assert.deepEqual((await f.json(`/api/quality/vmaf/jobs/${j.id}/candidates`,policy)).createdIds,[id]);assert.equal((await f.json('/api/annotations/spaces/default/'+id)).revision,1);assert.equal(executions,0);
+ const recovered=await f.json(`/api/quality/vmaf/jobs/${j.id}/candidates`,policy);assert.deepEqual(recovered.createdIds,[id]);assert.deepEqual(recovered.selected,frozen.selected);assert.equal((await f.json('/api/annotations/spaces/default/'+id)).revision,1);assert.equal(executions,0);
  assert.equal((await f.request(`/api/quality/vmaf/jobs/${j.id}/candidates`,{...policy,severity:3})).status,409);
 });
 

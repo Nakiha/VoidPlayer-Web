@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { prepareYuvFrame } from '../../src/media/decoding/yuv-frame.ts';
 import { getColorMode, setColorMode } from '../../src/media/policy/color-mode.ts';
 import { rgbaDescription } from '../../shared/media/frame-description.ts';
-import type { DecodedFrame } from '../../src/media/source.ts';
+import type { DecodedFrame } from '../../src/media/contract.ts';
 
 test('browser mode retains native color ownership without an active GPU surface',async()=>{
   const previous=getColorMode();let copied=0,closed=0;

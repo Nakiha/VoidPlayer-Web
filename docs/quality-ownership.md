@@ -158,3 +158,68 @@ attempt/digest、来源见证和数值，不能用基础关联替代结果验证
 `TemporalScoringService` 统一 VMAF/XPSNR 的冻结合同、准入后状态推进、attempt、进度、伴随结果事务、取消/关闭/停止不确定性、最终结果事务与读取摘要核验。指标适配器保留 prepared 准入、数值结果、证据与候选策略；原表名、schema、指纹和事务边界不变。
 
 `TemporalScoringRunner` 统一 preflight/重执行 preflight、decode-and-score、两次组件终验、来源终验和累计索引预算合并。整个流程沿用一个 `ScoringWorkerOwner` 准入与 deadline，只有真实 Worker/IO 退出才交回资源。VMAF 模型和 recipe、XPSNR filter/recipe/reference-first/逐平面池化/Infinity 仍由各自适配和数值核心拥有。CAMBI 的单源、渐进热图及 stop-and-keep 不进入这个双源协议。
+
+## 质量域内部能力与共同事实
+
+`shared/analysis/quality/temporal-contract.ts` 拥有共同的 `TemporalPrepared`、
+`TemporalPlanSnapshot`、序列帧、指标执行状态和时序见证，并统一生成完整/首选末帧压缩见证。共同资源与保留默认值在中立合同中，
+两指标分别采用，几何与帧数准入仍由各指标明确声明。VMAF/XPSNR 提供各自
+限制和错误构造；模型、reference-first、逐平面/Infinity、cadence 准入与数值结果
+仍在对应指标适配。历史 VMAF 类型名保留兼容，新公共事实消费者直接使用中立入口。
+XPSNR 不再导入 VMAF，也不从其常量继承支持域。
+
+`candidate-publication.ts` 只借用 `TemporalScoringService` 已打开的数据库，统一
+冻结 publication、提交标注、记录 createdIds 和原 ID 重放。指标 service 先确认
+actor、校验 policy，并提供延迟执行的选帧/证据适配。已有 publication 先核对冻结
+policy，再重放原 candidate/operation/ref；不会调用选帧或提前读取私有评分结果。
+冻结 publication、标注事务与确认回写保持独立，不增加跨库事务。数据库 schema、
+表名、旧 publication 正文和幂等标注回执继续兼容。该模块没有数据库/Worker/计时器、
+admission 或关闭链路的所有权。
+
+`prepared-facts.ts` 在指标自己的 sequence/cadence/geometry 检查之后，统一核验
+ROI、bit depth、SSIM、来源/index/picture/decode 身份以及冻结工作和结果预算。
+这不是评分准入，也不替代指标各自的支持域、时序与数值核验。
+
+`QualityResultCommands` 是结果释放的应用命令入口，由 `QualityApplication`
+显式装配，依赖 `quality-service-ports.ts` 中的窄命令与保留查询。它协调 actor 读取、
+range 引用、annotation evidence 引用，再交给实际结果 owner。range 继续拥有
+原持久归档意图和子结果回收；任务中心仍是有界读模型。任务 HTTP handler 只接收
+查询/取消与释放能力，保留身份、请求校验和响应映射；不再获得具体评分服务、
+媒体库或完整配置类型。释放命令不创建资源，没有新增关闭步骤。
+
+边界检查以具名调用者限制 publication、prepared 核验、temporal service/runner
+和结果释放实现的访问，包括类型、re-export 和动态 import。外部模块不能直接
+导入这些实现；公开 metric service、`QualityApplication` 和窄端口是稳定入口。
+`test/contract/module-boundaries.test.mjs` 的隔离负例验证非法引用确实失败。
+
+### 本轮工程化计量
+
+基线 `2c1fbc2`，计入全部改动的 server/shared 生产源码与新增 helper；
+[逐文件账目](evidence/quality-domain-convergence.json) 保留两种计量，测试、脚本与文档不计入生产源码。
+语法 token 用 TypeScript AST 的叶子 token 计数，排除 EOF、注释和空白，避免 regex/template 的裸 scanner 误计。
+
+| 验收项 | 结果 |
+| --- | --- |
+| 冻结/提交确认/重放协议 | 2 → 1 |
+| prepared 共同事实核验 | 2 → 1，指标 cadence/几何准入独立 |
+| 时序见证构造与压缩 | 2 → 1 |
+| 生产语法 token | 29,375 → 29,318，净减 57 |
+| 去空白 UTF-8 字节 | 118,075 → 121,318，增加 3,243；不宣称字节缩减 |
+| 质量管理 UI 归组 | 13 个文件迁入 `src/admin/quality/`，瘦身记 0 |
+| 资源生命周期 | 新增数据库/Worker/订阅/计时器/许可/关闭步骤均为 0 |
+
+本轮净减少采用语法 token 口径，幅度很小；主要收益是协议份数减少、共同事实有中立入口、外部依赖变窄。
+目录迁移及其 import 路径修订单独审查，不把路径变化、格式或新增注释计算为实现瘦身。
+
+本机验收：`npm run build`（包含宿主/共享/独立环境检查）、
+`npm run format:check -- --base 2c1fbc2`、fast 88/88、contract 47/47 全部通过。
+真实 Node HTTP/WASM 覆盖 VMAF/XPSNR 原数值与支持域矩阵、两指标物理退出生命周期、
+任务中心，以及 ROI/有理时钟/192 帧完整序列和末帧证据。两指标的真实标注事务提交后
+故意抛错，再重启并移除私有结果，原冻结请求恢复相同 candidate/operation/ref，
+createdIds 补确认，标注 revision 保持 1，评分执行次数为 0；改 policy 仍拒绝。
+
+8 组真实浏览器 case 全部通过：VMAF 8-bit 与 XPSNR 8-bit 各 Chromium/WebKit，
+以及 WebKit XPSNR comparison、CAMBI 8-bit、Task center 和 admin。它们验证迁移后的
+质量工作台装配、观察/分页恢复、结果释放、候选和资源设置。13 个移动模块逐一与基线
+正文对照，除相对模块路径外一致；i18n scope 与测试 hook 同步迁移，目录内部访问负例通过。
+本轮没有修改播放/解码路径，也没有新增性能结论；跨平台结果仍以 CI 为准。

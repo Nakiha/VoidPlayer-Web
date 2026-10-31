@@ -3,7 +3,7 @@ import type { AnalysisStreamTarget, PresentedFrameToken } from '../../shared/ana
 import { AnalysisFailure, failureInfo } from '../../shared/analysis/bitstream/failure.ts';
 import type { BitstreamAnalysisService, DeepAnalysisState } from '../analysis/bitstream/service.ts';
 import { AnalysisTaskPool } from '../../shared/analysis/bitstream/task-pool.ts';
-import type { MediaSource } from '../media/source.ts';
+import type { MediaSource } from '../media/contract.ts';
 import { referenceVersion } from '../../shared/media/io/media-reference.ts';
 import type { Slot } from '../../shared/review/model.ts';
 import { slotValue } from '../../shared/review/model.ts';

@@ -1,4 +1,4 @@
-import type { MediaSource, DecodedFrame } from '../source.ts';
+import type { MediaSource, DecodedFrame } from '../contract.ts';
 import { MediaOpenError } from '../../../shared/media/io/media-errors.ts';
 import { hdrTransfer } from '../../../shared/color/hdr-policy.ts';
 const isHdrTransfer = (transfer: string | null | undefined) => hdrTransfer(transfer) !== null;
