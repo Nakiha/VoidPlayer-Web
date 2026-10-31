@@ -1,29 +1,22 @@
-import { closeResources } from "../../shutdown.ts";
-import { requirePacketOutputWitness } from "../../../shared/analysis/quality/frame-pair.ts";
-import {
-  reserveScoringBytes,
-  settleScoringReservations,
-  releaseScoringResult,
-} from "../quality/result-retention.ts";
-import { ReexecutionLedger } from "../quality/reexecution-ledger.ts";
-import type { ReexecutionCreation } from "../quality/reexecution-ledger.ts";
-import type {
-  QualityExecutionContract,
-  ReexecutionRequest,
-} from "../../../shared/analysis/quality/reexecution.ts";
-import { sameExecutionContract } from "../../../shared/analysis/quality/reexecution.ts";
-import { taskSummaries } from "../../tasks/summary.ts";
-import { mkdirSync, rmSync } from "node:fs";
-import path from "node:path";
-import { randomUUID, createHash } from "node:crypto";
-import { openIndexDatabase } from "../../sqlite.ts";
-import { lockDatabase } from "../../library-store.ts";
-import { AdminError } from "../../admin-error.ts";
-import type { Actor } from "../../identity.ts";
-import type { AnnotationStore } from "../../annotations.ts";
-import { qualityIdempotencyKey } from "../quality/job-request.ts";
-import { stopOwnedNative } from "../quality/legacy-process.ts";
-import type { WasmCambiRunner } from "./wasm-runner.ts";
+import { closeResources } from '../../shutdown.ts';
+import { requirePacketOutputWitness } from '../../../shared/analysis/quality/frame-pair.ts';
+import { reserveScoringBytes, settleScoringReservations, releaseScoringResult } from '../quality/result-retention.ts';
+import { ReexecutionLedger } from '../quality/reexecution-ledger.ts';
+import type { ReexecutionCreation } from '../quality/reexecution-ledger.ts';
+import type { QualityExecutionContract, ReexecutionRequest } from '../../../shared/analysis/quality/reexecution.ts';
+import { sameExecutionContract } from '../../../shared/analysis/quality/reexecution.ts';
+import { taskSummaries } from '../../tasks/summary.ts';
+import { mkdirSync, rmSync } from 'node:fs';
+import path from 'node:path';
+import { randomUUID, createHash } from 'node:crypto';
+import { openIndexDatabase } from '../../sqlite.ts';
+import { lockDatabase } from '../../library-store.ts';
+import { AdminError } from '../../admin-error.ts';
+import type { Actor } from '../../identity.ts';
+import type { AnnotationStore } from '../../annotations.ts';
+import { qualityIdempotencyKey } from '../quality/job-request.ts';
+import { stopOwnedNative } from '../quality/legacy-process.ts';
+import type { WasmCambiRunner } from './wasm-runner.ts';
 import {
   cambiInput,
   cambiCheck,
@@ -33,7 +26,7 @@ import {
   terminalCambi,
   CambiError,
   cambiOutputBudget,
-} from "../../../shared/analysis/quality/cambi.ts";
+} from '../../../shared/analysis/quality/cambi.ts';
 import type {
   CambiInput,
   CambiJob,
@@ -41,30 +34,14 @@ import type {
   CambiPrepared,
   CambiFrame,
   CambiFramePage,
-} from "../../../shared/analysis/quality/cambi.ts";
-import { cambiRef } from "../../../shared/review/cambi-evidence.ts";
-import type {
-  CambiRef,
-  CambiEvidence,
-} from "../../../shared/review/cambi-evidence.ts";
-const digest = (v: unknown) =>
-  createHash("sha256").update(canonicalJson(v)).digest("hex");
-const hash = (v: Uint8Array) => createHash("sha256").update(v).digest("hex");
+} from '../../../shared/analysis/quality/cambi.ts';
+import { cambiRef } from '../../../shared/review/cambi-evidence.ts';
+import type { CambiRef, CambiEvidence } from '../../../shared/review/cambi-evidence.ts';
+const digest = (v: unknown) => createHash('sha256').update(canonicalJson(v)).digest('hex');
+const hash = (v: Uint8Array) => createHash('sha256').update(v).digest('hex');
 const now = () => Math.floor(performance.timeOrigin + performance.now());
-type Policy = {
-  space: string;
-  minScore: number;
-  limit: number;
-  scale: number;
-  cellThreshold: number;
-  text: string;
-  severity: number;
-};
-type Publication = {
-  policy: Policy;
-  selected: { id: string; operationId: string; ref: CambiRef }[];
-  createdIds: string[];
-};
+type Policy = { space: string; minScore: number; limit: number; scale: number; cellThreshold: number; text: string; severity: number };
+type Publication = { policy: Policy; selected: { id: string; operationId: string; ref: CambiRef }[]; createdIds: string[] };
 export class NativeCambiService {
   readonly reexecutions: ReexecutionLedger;
   private db: ReturnType<typeof openIndexDatabase>;
@@ -73,14 +50,7 @@ export class NativeCambiService {
   private closed = false;
   private recovered = false;
   private fatal: unknown;
-  private active = new Map<
-    string,
-    {
-      id: string;
-      controller: AbortController;
-      done: Promise<void>;
-    }
-  >();
+  private active = new Map<string, { id: string; controller: AbortController; done: Promise<void> }>();
   private unqueue?: () => void;
   private timer?: ReturnType<typeof setTimeout>;
   private closing?: Promise<void>;
@@ -92,9 +62,8 @@ export class NativeCambiService {
     let db: ReturnType<typeof openIndexDatabase> | undefined;
     try {
       this.db = db = openIndexDatabase(file);
-      db.exec("PRAGMA busy_timeout=0;");
-      if (Number(db.prepare("PRAGMA user_version").get()!.user_version) > 3)
-        throw Error("Future CAMBI database");
+      db.exec('PRAGMA busy_timeout=0;');
+      if (Number(db.prepare('PRAGMA user_version').get()!.user_version) > 3) throw Error('Future CAMBI database');
       db.exec(
         `PRAGMA journal_mode=WAL;BEGIN IMMEDIATE;CREATE TABLE IF NOT EXISTS cambi_jobs(id TEXT PRIMARY KEY,actor TEXT,client TEXT,key TEXT,fingerprint TEXT,body TEXT,result TEXT,reserved INTEGER,UNIQUE(actor,client,key));CREATE TABLE IF NOT EXISTS cambi_heat(job TEXT,frame INTEGER,scale INTEGER,sha TEXT,data BLOB,PRIMARY KEY(job,frame,scale));CREATE TABLE IF NOT EXISTS cambi_publications(job TEXT PRIMARY KEY,body TEXT);`,
       );
@@ -107,20 +76,14 @@ export class NativeCambiService {
       this.unlock();
       throw error;
     }
-    this.unqueue = runner.admission?.registerQueue(() =>
-      this.all().map((j) => ({ actor: j.actor.id, count: 1 })),
-    );
+    this.unqueue = runner.admission?.registerQueue(() => this.all().map((j) => ({ actor: j.actor.id, count: 1 })));
     this.ready = this.recover();
     void this.ready.catch((e) => {
       this.fatal = e;
     });
   }
-  taskSummaries(
-    actor: string,
-    id?: string,
-    filter?: import("../../../shared/service/tasks.ts").TaskFilter,
-  ) {
-    return taskSummaries(this.db, "cambi", actor, id, filter);
+  taskSummaries(actor: string, id?: string, filter?: import('../../../shared/service/tasks.ts').TaskFilter) {
+    return taskSummaries(this.db, 'cambi', actor, id, filter);
   }
   private all() {
     return this.db
@@ -135,219 +98,116 @@ export class NativeCambiService {
     for (const j of this.all())
       if (!terminalCambi(j.state)) {
         if (j.process) await stopOwnedNative(j.process);
-        j.state = "interrupted";
-        j.phase = "done";
+        j.state = 'interrupted';
+        j.phase = 'done';
         j.endedAt = now();
         j.process = null;
-        j.reason = {
-          code: "service-restarted",
-          message: "Interrupted; no automatic recomputation",
-        };
-        this.db.prepare("DELETE FROM cambi_heat WHERE job=?").run(j.id);
+        j.reason = { code: 'service-restarted', message: 'Interrupted; no automatic recomputation' };
+        this.db.prepare('DELETE FROM cambi_heat WHERE job=?').run(j.id);
         this.clearPreview(j.id);
-        this.db
-          .prepare("UPDATE cambi_jobs SET result=NULL WHERE id=?")
-          .run(j.id);
+        this.db.prepare('UPDATE cambi_jobs SET result=NULL WHERE id=?').run(j.id);
         this.save(j);
         rmSync(this.runner.directory(j.id), { recursive: true, force: true });
       }
     this.recovered = true;
   }
   private available() {
-    if (
-      this.closed ||
-      this.fatal ||
-      !this.recovered ||
-      this.runner.stopUncertain
-    )
-      throw new AdminError(
-        503,
-        "CAMBI service recovering or unavailable",
-        "cambi-service-unavailable",
-      );
+    if (this.closed || this.fatal || !this.recovered || this.runner.stopUncertain)
+      throw new AdminError(503, 'CAMBI service recovering or unavailable', 'cambi-service-unavailable');
   }
   private save(j: CambiJob) {
     j.revision++;
-    this.db
-      .prepare("UPDATE cambi_jobs SET body=? WHERE id=?")
-      .run(JSON.stringify(j), j.id);
-    if (terminalCambi(j.state))
-      settleScoringReservations(this.db, "cambi", j.id);
+    this.db.prepare('UPDATE cambi_jobs SET body=? WHERE id=?').run(JSON.stringify(j), j.id);
+    if (terminalCambi(j.state)) settleScoringReservations(this.db, 'cambi', j.id);
   }
   private clearPreview(id: string) {
-    this.db.prepare("DELETE FROM cambi_frames WHERE job=?").run(id);
-    this.db.prepare("DELETE FROM cambi_progress WHERE job=?").run(id);
+    this.db.prepare('DELETE FROM cambi_frames WHERE job=?').run(id);
+    this.db.prepare('DELETE FROM cambi_progress WHERE job=?').run(id);
   }
   private preview(id: string, actor: string) {
     const j = this.get(id, actor);
-    if (terminalCambi(j.state))
-      throw new AdminError(
-        409,
-        "No provisional CAMBI result available.",
-        "cambi-result-unavailable",
-      );
-    const row = this.db
-      .prepare("SELECT header FROM cambi_progress WHERE job=?")
-      .get(id);
-    if (!row)
-      throw new AdminError(
-        409,
-        "No CAMBI frame has been scored yet.",
-        "cambi-result-unavailable",
-      );
-    const header = JSON.parse(String(row.header)) as Omit<
-      CambiPrepared,
-      "frames"
-    >;
+    if (terminalCambi(j.state)) throw new AdminError(409, 'No provisional CAMBI result available.', 'cambi-result-unavailable');
+    const row = this.db.prepare('SELECT header FROM cambi_progress WHERE job=?').get(id);
+    if (!row) throw new AdminError(409, 'No CAMBI frame has been scored yet.', 'cambi-result-unavailable');
+    const header = JSON.parse(String(row.header)) as Omit<CambiPrepared, 'frames'>;
     header.coverage.scored = j.progress.scoredFrames ?? 0;
-    header.coverage.unscored =
-      header.coverage.selected - header.coverage.scored;
+    header.coverage.unscored = header.coverage.selected - header.coverage.scored;
     return { job: j, header };
   }
   get(id: string, actor: string) {
     const r = this.db
-      .prepare("SELECT body,fingerprint,result IS NOT NULL AS retained FROM cambi_jobs WHERE id=? AND actor=?")
+      .prepare('SELECT body,fingerprint,result IS NOT NULL AS retained FROM cambi_jobs WHERE id=? AND actor=?')
       .get(id, actor);
-    if (!r) throw new AdminError(404, "CAMBI job not found", "cambi-not-found");
+    if (!r) throw new AdminError(404, 'CAMBI job not found', 'cambi-not-found');
     const j = JSON.parse(String(r.body)) as CambiJob;
-    if (digest(j.input) !== r.fingerprint)
-      throw new AdminError(
-        500,
-        "Stored CAMBI request changed",
-        "stored-cambi-invalid",
-      );
-    return {...j, resultRetained: !!r.retained};
+    if (digest(j.input) !== r.fingerprint) throw new AdminError(500, 'Stored CAMBI request changed', 'stored-cambi-invalid');
+    return { ...j, resultRetained: !!r.retained };
   }
-  private descriptorValue: Awaited<
-    ReturnType<WasmCambiRunner["cambiCapability"]>
-  > | null = null;
+  private descriptorValue: Awaited<ReturnType<WasmCambiRunner['cambiCapability']>> | null = null;
   get descriptor() {
     return this.descriptorValue;
   }
   async capability() {
     const d = await this.runner.cambiCapability();
-    if (d.reason === "quality-busy" && this.descriptorValue)
-      return {
-        ...this.descriptorValue,
-        verification: "deferred-admission-busy",
-      };
+    if (d.reason === 'quality-busy' && this.descriptorValue) return { ...this.descriptorValue, verification: 'deferred-admission-busy' };
     this.descriptorValue = d;
-    return { ...d, verification: "artifact-hashes-verified" };
+    return { ...d, verification: 'artifact-hashes-verified' };
   }
   history(actor: string, after = 0, limit = 8) {
     this.cursor(after, limit, 8);
     const rows = this.db
-      .prepare(
-        "SELECT rowid,body,result IS NOT NULL AS retained FROM cambi_jobs WHERE actor=? AND rowid>? ORDER BY rowid LIMIT ?",
-      )
+      .prepare('SELECT rowid,body,result IS NOT NULL AS retained FROM cambi_jobs WHERE actor=? AND rowid>? ORDER BY rowid LIMIT ?')
       .all(actor, after, limit + 1);
     return {
-      entries: rows.slice(0, limit).map((r) => ({...JSON.parse(String(r.body)),resultRetained:!!r.retained})),
-      after: rows.length
-        ? Number(rows[Math.min(rows.length, limit) - 1].rowid)
-        : after,
+      entries: rows.slice(0, limit).map((r) => ({ ...JSON.parse(String(r.body)), resultRetained: !!r.retained })),
+      after: rows.length ? Number(rows[Math.min(rows.length, limit) - 1].rowid) : after,
       more: rows.length > limit,
     };
   }
-  submit(
-    value: unknown,
-    actor: Actor,
-    requestId: string,
-    key: unknown,
-    reexecution?: ReexecutionCreation,
-  ) {
+  submit(value: unknown, actor: Actor, requestId: string, key: unknown, reexecution?: ReexecutionCreation) {
     this.available();
     const input = cambiInput(value),
       k = qualityIdempotencyKey(key),
       fp = digest(input);
-    this.db.exec("BEGIN IMMEDIATE");
+    this.db.exec('BEGIN IMMEDIATE');
     let accepted: { job: CambiJob; replayed: boolean };
     try {
       accepted = (() => {
         if (reexecution) {
-          const prior = this.reexecutions.replay(
-            reexecution.parentId,
-            actor.id,
-            reexecution.key,
-            reexecution.request,
-          );
-          if (prior)
-            return {
-              job: this.reexecutions.verify(
-                prior,
-                this.get(prior.jobId, actor.id),
-              ),
-              replayed: true,
-            };
+          const prior = this.reexecutions.replay(reexecution.parentId, actor.id, reexecution.key, reexecution.request);
+          if (prior) return { job: this.reexecutions.verify(prior, this.get(prior.jobId, actor.id)), replayed: true };
           const parent = this.get(reexecution.parentId, actor.id);
           if (
             parent.revision !== reexecution.parentRevision ||
-            !["failed", "interrupted", "cancelled", "partial"].includes(
-              parent.state,
-            ) ||
+            !['failed', 'interrupted', 'cancelled', 'partial'].includes(parent.state) ||
             parent.endedAt === null ||
             parent.process
           )
-            throw new AdminError(
-              409,
-              "Original CAMBI execution has not physically stopped.",
-              "reexecution-blocked",
-            );
+            throw new AdminError(409, 'Original CAMBI execution has not physically stopped.', 'reexecution-blocked');
         }
         const prior = this.db
-          .prepare(
-            "SELECT id,fingerprint FROM cambi_jobs WHERE actor=? AND client=? AND key=?",
-          )
+          .prepare('SELECT id,fingerprint FROM cambi_jobs WHERE actor=? AND client=? AND key=?')
           .get(actor.id, input.client.id, k);
         if (prior) {
-          if (fp !== prior.fingerprint)
-            throw new AdminError(
-              409,
-              "CAMBI key binds different source/recipe",
-              "idempotency-conflict",
-            );
+          if (fp !== prior.fingerprint) throw new AdminError(409, 'CAMBI key binds different source/recipe', 'idempotency-conflict');
           return { job: this.get(String(prior.id), actor.id), replayed: true };
         }
         this.runner.assertAvailable();
         this.runner.admission?.assertQueue(actor.id);
         const all = this.all(),
           live = all.filter((j) => !terminalCambi(j.state));
-        if (
-          live.length >= CAMBI_LIMITS.queue ||
-          live.filter((j) => j.actor.id === actor.id).length >=
-            CAMBI_LIMITS.actorOutstanding
-        )
-          throw new AdminError(429, "CAMBI queue full", "cambi-queue-full");
-        settleScoringReservations(this.db, "cambi");
-        const reserved = reserveScoringBytes(
-          input.budget.maxHeatBytes + CAMBI_LIMITS.resultBytes,
-          input,
-        );
-        if (
-          Number(
-            this.db
-              .prepare("SELECT coalesce(sum(reserved),0) n FROM cambi_jobs")
-              .get()!.n,
-          ) +
-            reserved >
-          CAMBI_LIMITS.historyBytes
-        )
-          throw new AdminError(
-            429,
-            "CAMBI durable evidence budget full; receipts retained",
-            "cambi-history-full",
-          );
+        if (live.length >= CAMBI_LIMITS.queue || live.filter((j) => j.actor.id === actor.id).length >= CAMBI_LIMITS.actorOutstanding)
+          throw new AdminError(429, 'CAMBI queue full', 'cambi-queue-full');
+        settleScoringReservations(this.db, 'cambi');
+        const reserved = reserveScoringBytes(input.budget.maxHeatBytes + CAMBI_LIMITS.resultBytes, input);
+        if (Number(this.db.prepare('SELECT coalesce(sum(reserved),0) n FROM cambi_jobs').get()!.n) + reserved > CAMBI_LIMITS.historyBytes)
+          throw new AdminError(429, 'CAMBI durable evidence budget full; receipts retained', 'cambi-history-full');
         const t = now(),
           job: CambiJob = {
-            ...(reexecution
-              ? {
-                  executionContract: reexecution.contract,
-                  retryOf: reexecution.lineage,
-                }
-              : {}),
-            schema: "voidplayer-cambi-job-state",
+            ...(reexecution ? { executionContract: reexecution.contract, retryOf: reexecution.lineage } : {}),
+            schema: 'voidplayer-cambi-job-state',
             version: 1,
-            id: "cambi-" + randomUUID(),
+            id: 'cambi-' + randomUUID(),
             actor: { id: actor.id, name: actor.name },
             key: k,
             requestId,
@@ -358,24 +218,16 @@ export class NativeCambiService {
             startedAt: null,
             endedAt: null,
             attemptId: null,
-            state: "queued",
-            phase: "queued",
+            state: 'queued',
+            phase: 'queued',
             reason: null,
             progress: { preparedFrames: 0, targetFrames: 0 },
             resultDigest: null,
             process: null,
           };
         this.db
-          .prepare("INSERT INTO cambi_jobs VALUES(?,?,?,?,?,?,NULL,?)")
-          .run(
-            job.id,
-            actor.id,
-            input.client.id,
-            k,
-            fp,
-            JSON.stringify(job),
-            reserved,
-          );
+          .prepare('INSERT INTO cambi_jobs VALUES(?,?,?,?,?,?,NULL,?)')
+          .run(job.id, actor.id, input.client.id, k, fp, JSON.stringify(job), reserved);
         if (reexecution)
           this.reexecutions.insert({
             actorId: actor.id,
@@ -387,65 +239,34 @@ export class NativeCambiService {
           });
         return { job: this.get(job.id, actor.id), replayed: false };
       })();
-      this.db.exec("COMMIT");
+      this.db.exec('COMMIT');
     } catch (error) {
-      this.db.exec("ROLLBACK");
+      this.db.exec('ROLLBACK');
       throw error;
     }
     if (!accepted.replayed) this.pump();
     return { ...accepted, job: this.get(accepted.job.id, actor.id) };
   }
-  reexecutionReceipt(
-    id: string,
-    actor: string,
-    key?: string,
-    request?: ReexecutionRequest,
-  ) {
+  reexecutionReceipt(id: string, actor: string, key?: string, request?: ReexecutionRequest) {
     this.get(id, actor);
-    const receipt =
-      key && request
-        ? this.reexecutions.replay(id, actor, key, request)
-        : this.reexecutions.get(id, actor);
-    if (receipt)
-      this.reexecutions.verify(receipt, this.get(receipt.jobId, actor));
+    const receipt = key && request ? this.reexecutions.replay(id, actor, key, request) : this.reexecutions.get(id, actor);
+    if (receipt) this.reexecutions.verify(receipt, this.get(receipt.jobId, actor));
     return receipt;
   }
-  async reexecutionPreflight(
-    id: string,
-    actor: string,
-    expected: QualityExecutionContract,
-    signal: AbortSignal,
-  ) {
+  async reexecutionPreflight(id: string, actor: string, expected: QualityExecutionContract, signal: AbortSignal) {
     await this.ready;
     this.available();
     const j = this.get(id, actor);
-    if (j.process)
-      throw new AdminError(
-        409,
-        "Native process exit unconfirmed",
-        "physical-stop-unconfirmed",
-      );
+    if (j.process) throw new AdminError(409, 'Native process exit unconfirmed', 'physical-stop-unconfirmed');
     return this.runner.cambiReexecutionPreflight(j.input, expected, signal);
   }
   reexecute(creation: ReexecutionCreation, actor: Actor, requestId: string) {
     this.available();
     const original = this.get(creation.parentId, actor.id);
-    return this.submit(
-      original.input,
-      actor,
-      requestId,
-      "reexecution:" + randomUUID(),
-      creation,
-    );
+    return this.submit(original.input, actor, requestId, 'reexecution:' + randomUUID(), creation);
   }
   private wake() {
-    if (
-      this.timer ||
-      this.closed ||
-      this.fatal ||
-      !this.all().some((j) => j.state === "queued")
-    )
-      return;
+    if (this.timer || this.closed || this.fatal || !this.all().some((j) => j.state === 'queued')) return;
     this.timer = setTimeout(() => {
       this.timer = undefined;
       this.pump();
@@ -455,31 +276,22 @@ export class NativeCambiService {
   private pump() {
     if (this.closed || this.fatal || !this.recovered) return;
     for (const j of this.all())
-      if (j.state === "queued" && j.queueUntil <= now()) {
-        j.state = "failed";
-        j.phase = "done";
+      if (j.state === 'queued' && j.queueUntil <= now()) {
+        j.state = 'failed';
+        j.phase = 'done';
         j.endedAt = now();
-        j.reason = {
-          code: "queue-expired",
-          message: "CAMBI queue deadline exceeded",
-        };
+        j.reason = { code: 'queue-expired', message: 'CAMBI queue deadline exceeded' };
         this.save(j);
       }
-    while (this.active.size < (this.runner.admission?.capacity("cambi") ?? 1)) {
-      const job = this.all().find(
-        (j) => j.state === "queued" && !this.active.has(j.id),
-      );
+    while (this.active.size < (this.runner.admission?.capacity('cambi') ?? 1)) {
+      const job = this.all().find((j) => j.state === 'queued' && !this.active.has(j.id));
       if (!job) break;
-      const a = {
-        id: job.id,
-        controller: new AbortController(),
-        done: Promise.resolve(),
-      };
+      const a = { id: job.id, controller: new AbortController(), done: Promise.resolve() };
       this.active.set(job.id, a);
       a.done = this.execute(job, a.controller.signal)
         .catch((e) => {
           this.fatal = e;
-          console.error("CAMBI service stopped; history retained");
+          console.error('CAMBI service stopped; history retained');
         })
         .finally(() => {
           this.active.delete(job.id);
@@ -491,12 +303,8 @@ export class NativeCambiService {
   private async execute(initial: CambiJob, signal: AbortSignal) {
     let j = initial,
       prepared: CambiPrepared | null = null;
-    const persistFrame = async (
-      index: number,
-      score: number,
-      maps: { scale: number; bytes: Uint8Array; sha256: string }[],
-    ) => {
-      if (!prepared) throw Error("Missing prepared CAMBI frame");
+    const persistFrame = async (index: number, score: number, maps: { scale: number; bytes: Uint8Array; sha256: string }[]) => {
+      if (!prepared) throw Error('Missing prepared CAMBI frame');
       const f = prepared.frames[index];
       if (
         !f ||
@@ -506,25 +314,15 @@ export class NativeCambiService {
         score < 0 ||
         new Set(maps.map((m) => m.scale)).size !== 5
       )
-        throw Error("CAMBI frame protocol changed");
+        throw Error('CAMBI frame protocol changed');
       const original = { score: f.score, heatmaps: f.heatmaps };
       f.heatmaps = [];
-      this.db.exec("BEGIN IMMEDIATE");
+      this.db.exec('BEGIN IMMEDIATE');
       try {
         for (const m of maps) {
-          if (
-            hash(m.bytes) !== m.sha256 ||
-            m.bytes.length !== prepared.output.scales[m.scale].bytes
-          )
-            throw Error("CAMBI heatmap changed");
-          this.db
-            .prepare("INSERT INTO cambi_heat VALUES(?,?,?,?,?)")
-            .run(j.id, index, m.scale, m.sha256, m.bytes);
-          f.heatmaps.push({
-            scale: m.scale,
-            sha256: m.sha256,
-            bytes: m.bytes.length,
-          });
+          if (hash(m.bytes) !== m.sha256 || m.bytes.length !== prepared.output.scales[m.scale].bytes) throw Error('CAMBI heatmap changed');
+          this.db.prepare('INSERT INTO cambi_heat VALUES(?,?,?,?,?)').run(j.id, index, m.scale, m.sha256, m.bytes);
+          f.heatmaps.push({ scale: m.scale, sha256: m.sha256, bytes: m.bytes.length });
         }
         f.score = score;
         prepared.coverage.scored++;
@@ -534,35 +332,17 @@ export class NativeCambiService {
         const body = JSON.stringify(f),
           { frames: _, ...header } = prepared,
           headerBody = JSON.stringify(header);
-        const previous = this.db
-          .prepare("SELECT bytes FROM cambi_progress WHERE job=?")
-          .get(j.id);
-        const bytes =
-          (previous ? Number(previous.bytes) : Buffer.byteLength(headerBody)) +
-          Buffer.byteLength(body);
-        if (
-          Buffer.byteLength(body) > CAMBI_LIMITS.frameBytes ||
-          bytes > CAMBI_LIMITS.resultBytes
-        )
-          throw new CambiError(
-            "budget-exceeded",
-            "CAMBI progressive evidence exceeds its bounded storage",
-          );
-        if (!previous)
-          this.db
-            .prepare("INSERT INTO cambi_progress VALUES(?,?,?)")
-            .run(j.id, headerBody, bytes);
-        else
-          this.db
-            .prepare("UPDATE cambi_progress SET bytes=? WHERE job=?")
-            .run(bytes, j.id);
-        this.db
-          .prepare("INSERT INTO cambi_frames VALUES(?,?,?)")
-          .run(j.id, index, body);
+        const previous = this.db.prepare('SELECT bytes FROM cambi_progress WHERE job=?').get(j.id);
+        const bytes = (previous ? Number(previous.bytes) : Buffer.byteLength(headerBody)) + Buffer.byteLength(body);
+        if (Buffer.byteLength(body) > CAMBI_LIMITS.frameBytes || bytes > CAMBI_LIMITS.resultBytes)
+          throw new CambiError('budget-exceeded', 'CAMBI progressive evidence exceeds its bounded storage');
+        if (!previous) this.db.prepare('INSERT INTO cambi_progress VALUES(?,?,?)').run(j.id, headerBody, bytes);
+        else this.db.prepare('UPDATE cambi_progress SET bytes=? WHERE job=?').run(bytes, j.id);
+        this.db.prepare('INSERT INTO cambi_frames VALUES(?,?,?)').run(j.id, index, body);
         this.save(j);
-        this.db.exec("COMMIT");
+        this.db.exec('COMMIT');
       } catch (error) {
-        this.db.exec("ROLLBACK");
+        this.db.exec('ROLLBACK');
         f.score = original.score;
         f.heatmaps = original.heatmaps;
         throw error;
@@ -577,14 +357,9 @@ export class NativeCambiService {
           j = this.get(j.id, j.actor.id);
           if (
             Buffer.byteLength(JSON.stringify(contract)) > 16 * 1024 ||
-            (j.executionContract &&
-              !sameExecutionContract(j.executionContract, contract))
+            (j.executionContract && !sameExecutionContract(j.executionContract, contract))
           )
-            throw new AdminError(
-              409,
-              "Frozen CAMBI execution contract changed",
-              "execution-contract-conflict",
-            );
+            throw new AdminError(409, 'Frozen CAMBI execution contract changed', 'execution-contract-conflict');
           if (!j.executionContract) {
             j.executionContract = contract;
             this.save(j);
@@ -592,9 +367,8 @@ export class NativeCambiService {
         },
         admitted: () => {
           j = this.get(j.id, j.actor.id);
-          if (j.state !== "queued" || j.queueUntil <= now())
-            throw new CambiError("queue-expired", "CAMBI admission changed");
-          j.state = "preparing";
+          if (j.state !== 'queued' || j.queueUntil <= now()) throw new CambiError('queue-expired', 'CAMBI admission changed');
+          j.state = 'preparing';
           j.startedAt = now();
           j.reason = null;
           j.attemptId = randomUUID();
@@ -603,52 +377,28 @@ export class NativeCambiService {
         phase: (p) => {
           j = this.get(j.id, j.actor.id);
           j.phase = p;
-          if (
-            (p === "native" || p === "decode-and-score") &&
-            j.state !== "cancelling"
-          )
-            j.state = "running";
+          if ((p === 'native' || p === 'decode-and-score') && j.state !== 'cancelling') j.state = 'running';
           this.save(j);
         },
         progress: (n, total) => {
           j = this.get(j.id, j.actor.id);
-          j.progress = {
-            ...j.progress,
-            preparedFrames: n,
-            targetFrames: total,
-          };
+          j.progress = { ...j.progress, preparedFrames: n, targetFrames: total };
           this.save(j);
         },
         prepared: (p) => {
-          this.validatePrepared(
-            p,
-            j.input,
-            this.get(j.id, j.actor.id).stopRequested === true,
-          );
+          this.validatePrepared(p, j.input, this.get(j.id, j.actor.id).stopRequested === true);
           if (prepared) {
-            if (prepared.frames.length !== p.frames.length)
-              throw Error("Streamed CAMBI frame count changed");
+            if (prepared.frames.length !== p.frames.length) throw Error('Streamed CAMBI frame count changed');
             for (const [index, frame] of p.frames.entries()) {
               const saved = prepared.frames[index];
-              const before =
-                  saved.provenance.dependency?.outputIdentity?.outputs,
+              const before = saved.provenance.dependency?.outputIdentity?.outputs,
                 after = frame.provenance.dependency?.outputIdentity?.outputs;
-              if (
-                before &&
-                (!after ||
-                  canonicalJson(before) !==
-                    canonicalJson(after.slice(0, before.length)))
-              )
-                throw Error("Streamed CAMBI output witness changed");
+              if (before && (!after || canonicalJson(before) !== canonicalJson(after.slice(0, before.length))))
+                throw Error('Streamed CAMBI output witness changed');
               const comparable = structuredClone(frame);
-              if (before)
-                comparable.provenance.dependency!.outputIdentity!.outputs =
-                  before;
-              if (
-                canonicalJson({ ...saved, score: null, heatmaps: [] }) !==
-                canonicalJson(comparable)
-              )
-                throw Error("Streamed CAMBI identity changed");
+              if (before) comparable.provenance.dependency!.outputIdentity!.outputs = before;
+              if (canonicalJson({ ...saved, score: null, heatmaps: [] }) !== canonicalJson(comparable))
+                throw Error('Streamed CAMBI identity changed');
               frame.score = saved.score;
               frame.heatmaps = saved.heatmaps;
             }
@@ -660,65 +410,52 @@ export class NativeCambiService {
           if (
             frame.index !== prepared.frames.length ||
             header.coverage.selected !== prepared.coverage.selected ||
-            canonicalJson(header.geometry) !==
-              canonicalJson(prepared.geometry) ||
+            canonicalJson(header.geometry) !== canonicalJson(prepared.geometry) ||
             canonicalJson(header.output) !== canonicalJson(prepared.output)
           )
-            throw Error("CAMBI streaming order or layout changed");
+            throw Error('CAMBI streaming order or layout changed');
           this.validateFrame(frame, frame.index, j.input, false);
           prepared.frames.push(frame);
           await persistFrame(frame.index, score, maps);
         },
       });
       j = this.get(j.id, j.actor.id);
-      if (j.state === "cancelling" || signal.aborted)
-        throw new CambiError("cancelled", "CAMBI cancelled before commit");
+      if (j.state === 'cancelling' || signal.aborted) throw new CambiError('cancelled', 'CAMBI cancelled before commit');
       const result: CambiResult = {
-        schema: "voidplayer-cambi-result",
-        version: j.input.source.indexIdentity.kind === "mp4" ? 2 : 1,
+        schema: 'voidplayer-cambi-result',
+        version: j.input.source.indexIdentity.kind === 'mp4' ? 2 : 1,
         prepared: prepared!,
         native: output.native,
       };
       result.prepared.coverage.scored = result.prepared.frames.length;
-      result.prepared.coverage.unscored =
-        result.prepared.coverage.selected - result.prepared.frames.length;
+      result.prepared.coverage.unscored = result.prepared.coverage.selected - result.prepared.frames.length;
       if (Buffer.byteLength(JSON.stringify(result)) > CAMBI_LIMITS.resultBytes)
-        throw new CambiError(
-          "budget-exceeded",
-          "CAMBI summary exceeds durable budget",
-        );
+        throw new CambiError('budget-exceeded', 'CAMBI summary exceeds durable budget');
       const partial = result.prepared.coverage.unscored > 0;
-      j.state = partial ? "partial" : "completed";
+      j.state = partial ? 'partial' : 'completed';
       if (partial)
         j.reason = {
-          code: "stopped-with-results",
-          message:
-            "Stopped at a closed GOP boundary; validated scored prefix retained. Unscored coverage is not zero.",
+          code: 'stopped-with-results',
+          message: 'Stopped at a closed GOP boundary; validated scored prefix retained. Unscored coverage is not zero.',
         };
-      j.phase = "done";
+      j.phase = 'done';
       j.endedAt = now();
       j.resultDigest = digest(result);
       j.process = null;
-      this.db.exec("BEGIN IMMEDIATE");
+      this.db.exec('BEGIN IMMEDIATE');
       try {
         this.clearPreview(j.id);
-        this.db
-          .prepare("UPDATE cambi_jobs SET result=? WHERE id=?")
-          .run(JSON.stringify(result), j.id);
+        this.db.prepare('UPDATE cambi_jobs SET result=? WHERE id=?').run(JSON.stringify(result), j.id);
         this.save(j);
-        this.db.exec("COMMIT");
+        this.db.exec('COMMIT');
       } catch (e) {
-        this.db.exec("ROLLBACK");
+        this.db.exec('ROLLBACK');
         throw e;
       }
     } catch (e) {
       if (this.runner.stopUncertain) throw e;
       j = this.get(j.id, j.actor.id);
-      if (
-        !j.attemptId &&
-        e instanceof AdminError &&
-        e.code === "quality-busy"
-      ) {
+      if (!j.attemptId && e instanceof AdminError && e.code === 'quality-busy') {
         if (j.reason?.message !== e.message) {
           j.reason = { code: e.code, message: e.message.slice(0, 300) };
           this.save(j);
@@ -726,66 +463,43 @@ export class NativeCambiService {
         return;
       }
       if (terminalCambi(j.state)) return;
-      j.state = this.closed
-        ? "interrupted"
-        : signal.aborted || j.state === "cancelling"
-          ? "cancelled"
-          : "failed";
-      j.phase = "done";
+      j.state = this.closed ? 'interrupted' : signal.aborted || j.state === 'cancelling' ? 'cancelled' : 'failed';
+      j.phase = 'done';
       j.endedAt = now();
       j.process = null;
       j.reason = {
-        code: (e as { code?: string }).code ?? "execution-failed",
-        message: e instanceof Error ? e.message.slice(0, 300) : "CAMBI failed",
+        code: (e as { code?: string }).code ?? 'execution-failed',
+        message: e instanceof Error ? e.message.slice(0, 300) : 'CAMBI failed',
       };
-      this.db.prepare("DELETE FROM cambi_heat WHERE job=?").run(j.id);
+      this.db.prepare('DELETE FROM cambi_heat WHERE job=?').run(j.id);
       this.clearPreview(j.id);
-      this.db.prepare("UPDATE cambi_jobs SET result=NULL WHERE id=?").run(j.id);
+      this.db.prepare('UPDATE cambi_jobs SET result=NULL WHERE id=?').run(j.id);
       this.save(j);
     }
   }
-  private validatePrepared(
-    p: CambiPrepared,
-    input: CambiInput,
-    allowPartial = false,
-  ) {
+  private validatePrepared(p: CambiPrepared, input: CambiInput, allowPartial = false) {
     cambiCheck(
-      input.source.indexIdentity.kind !== "mp4" ||
-        (p.frameOrder === "source-pts-after-decode-au-selection" &&
-          p.frames.every(
-            (f, i) =>
-              i === 0 ||
-              f.target.sourcePtsUs > p.frames[i - 1].target.sourcePtsUs,
-          )),
-      "MP4 CAMBI frame order changed",
+      input.source.indexIdentity.kind !== 'mp4' ||
+        (p.frameOrder === 'source-pts-after-decode-au-selection' &&
+          p.frames.every((f, i) => i === 0 || f.target.sourcePtsUs > p.frames[i - 1].target.sourcePtsUs)),
+      'MP4 CAMBI frame order changed',
     );
     cambiCheck(
       p.frames.length >= 1 &&
         p.frames.length <= CAMBI_LIMITS.frames &&
-        (p.coverage.selected === p.frames.length ||
-          (allowPartial && p.coverage.selected > p.frames.length)),
-      "Invalid prepared CAMBI frame count",
+        (p.coverage.selected === p.frames.length || (allowPartial && p.coverage.selected > p.frames.length)),
+      'Invalid prepared CAMBI frame count',
     );
-    const expected = cambiOutputBudget(
-      p.geometry.width,
-      p.geometry.height,
-      p.coverage.selected,
-      input,
-    );
+    const expected = cambiOutputBudget(p.geometry.width, p.geometry.height, p.coverage.selected, input);
     cambiCheck(
       canonicalJson(p.output) === canonicalJson(expected) &&
         [8, 10].includes(p.geometry.bitDepth) &&
         p.rawBytes <= input.budget.maxRawBytes,
-      "Invalid CAMBI prepared budgets",
+      'Invalid CAMBI prepared budgets',
     );
     for (const [i, f] of p.frames.entries()) this.validateFrame(f, i, input);
   }
-  private validateFrame(
-    f: CambiPrepared["frames"][number],
-    i: number,
-    input: CambiInput,
-    complete = true,
-  ) {
+  private validateFrame(f: CambiPrepared['frames'][number], i: number, input: CambiInput, complete = true) {
     requirePacketOutputWitness(f.provenance, complete);
     cambiCheck(
       f.index === i &&
@@ -805,49 +519,35 @@ export class NativeCambiService {
             validation: undefined,
             container: undefined,
           }),
-      "Prepared CAMBI target changed",
+      'Prepared CAMBI target changed',
     );
   }
   releaseResult(id: string, actor: string) {
     this.available();
     const j = this.get(id, actor);
     if (!terminalCambi(j.state) || j.process || this.active.has(id))
-      throw new AdminError(
-        409,
-        "Wait for physical task completion before releasing results.",
-        "result-still-running",
-      );
-    if (this.db.prepare("SELECT 1 FROM cambi_publications WHERE job=?").get(id))
-      throw new AdminError(
-        409,
-        "A frozen publication retains this result.",
-        "result-publication-pinned",
-      );
-    releaseScoringResult(this.db, "cambi", id);
+      throw new AdminError(409, 'Wait for physical task completion before releasing results.', 'result-still-running');
+    if (this.db.prepare('SELECT 1 FROM cambi_publications WHERE job=?').get(id))
+      throw new AdminError(409, 'A frozen publication retains this result.', 'result-publication-pinned');
+    releaseScoringResult(this.db, 'cambi', id);
     return { jobId: id, released: true, receiptRetained: true };
   }
   cancel(id: string, actor: string) {
     this.available();
     const j = this.get(id, actor);
     if (terminalCambi(j.state)) return j;
-    if (j.state === "queued") {
-      this.active
-        .get(id)
-        ?.controller.abort(new CambiError("cancelled", "CAMBI cancelled"));
-      j.state = "cancelled";
-      j.phase = "done";
+    if (j.state === 'queued') {
+      this.active.get(id)?.controller.abort(new CambiError('cancelled', 'CAMBI cancelled'));
+      j.state = 'cancelled';
+      j.phase = 'done';
       j.endedAt = now();
-      j.reason = { code: "cancelled", message: "Cancelled before admission" };
+      j.reason = { code: 'cancelled', message: 'Cancelled before admission' };
       this.save(j);
     } else {
-      j.state = "cancelling";
-      j.phase = "stopping";
+      j.state = 'cancelling';
+      j.phase = 'stopping';
       this.save(j);
-      this.active
-        .get(id)
-        ?.controller.abort(
-          new CambiError("cancelled", "CAMBI explicitly cancelled"),
-        );
+      this.active.get(id)?.controller.abort(new CambiError('cancelled', 'CAMBI explicitly cancelled'));
     }
     return this.get(id, actor);
   }
@@ -855,13 +555,8 @@ export class NativeCambiService {
     this.available();
     const j = this.get(id, actor);
     if (terminalCambi(j.state)) return j;
-    if (j.state === "queued") return this.cancel(id, actor);
-    if (j.state === "cancelling")
-      throw new AdminError(
-        409,
-        "Immediate cancellation is already stopping this task.",
-        "cambi-stop-conflict",
-      );
+    if (j.state === 'queued') return this.cancel(id, actor);
+    if (j.state === 'cancelling') throw new AdminError(409, 'Immediate cancellation is already stopping this task.', 'cambi-stop-conflict');
     if (!j.stopRequested) {
       j.stopRequested = true;
       this.save(j);
@@ -870,27 +565,12 @@ export class NativeCambiService {
   }
   result(id: string, actor: string) {
     const j = this.get(id, actor),
-      row = this.db.prepare("SELECT result FROM cambi_jobs WHERE id=?").get(id);
-    if (
-      !["completed", "partial"].includes(j.state) ||
-      !row?.result ||
-      !j.resultDigest
-    )
-      throw new AdminError(
-        409,
-        "CAMBI result unavailable: incomplete/failed/cancelled is not zero",
-        "cambi-result-unavailable",
-      );
+      row = this.db.prepare('SELECT result FROM cambi_jobs WHERE id=?').get(id);
+    if (!['completed', 'partial'].includes(j.state) || !row?.result || !j.resultDigest)
+      throw new AdminError(409, 'CAMBI result unavailable: incomplete/failed/cancelled is not zero', 'cambi-result-unavailable');
     const r = JSON.parse(String(row.result)) as CambiResult;
-    if (
-      r.version !== (j.input.source.indexIdentity.kind === "mp4" ? 2 : 1) ||
-      digest(r) !== j.resultDigest
-    )
-      throw new AdminError(
-        500,
-        "Stored CAMBI result changed",
-        "stored-cambi-invalid",
-      );
+    if (r.version !== (j.input.source.indexIdentity.kind === 'mp4' ? 2 : 1) || digest(r) !== j.resultDigest)
+      throw new AdminError(500, 'Stored CAMBI result changed', 'stored-cambi-invalid');
     return r;
   }
   summary(id: string, actor: string) {
@@ -898,10 +578,10 @@ export class NativeCambiService {
     if (!job.resultDigest) {
       const { header } = this.preview(id, actor);
       return {
-        schema: "voidplayer-cambi-progress",
+        schema: 'voidplayer-cambi-progress',
         version: 1,
         job,
-        validation: "provisional-uncommitted-attempt",
+        validation: 'provisional-uncommitted-attempt',
         publishable: false,
         geometry: header.geometry,
         coverage: header.coverage,
@@ -915,7 +595,7 @@ export class NativeCambiService {
     return {
       schema: r.schema,
       version: r.version,
-      validation: "committed",
+      validation: 'committed',
       publishable: true,
       job: this.get(id, actor),
       geometry: r.prepared.geometry,
@@ -924,54 +604,30 @@ export class NativeCambiService {
       component: r.native!.component,
       pooled: r.native!.pooled,
       resources: r.native!.resources,
-      output: {
-        ...r.prepared.output,
-        actualBytes: r.native!.outputBytes,
-        rawBytes: r.prepared.rawBytes,
-      },
+      output: { ...r.prepared.output, actualBytes: r.native!.outputBytes, rawBytes: r.prepared.rawBytes },
       work: r.prepared.work,
       worst: [...r.prepared.frames]
         .sort((a, b) => b.score! - a.score! || a.index - b.index)
         .slice(0, 8)
-        .map((f) => ({
-          index: f.index,
-          au: f.target.picture.au,
-          sourcePtsUs: f.target.sourcePtsUs,
-          score: f.score,
-        })),
+        .map((f) => ({ index: f.index, au: f.target.picture.au, sourcePtsUs: f.target.sourcePtsUs, score: f.score })),
       framesUrl: `/api/quality/cambi/jobs/${id}/frames`,
     };
   }
   private cursor(after: number, limit: number, max: number) {
-    if (
-      !Number.isSafeInteger(after) ||
-      after < 0 ||
-      !Number.isInteger(limit) ||
-      limit < 1 ||
-      limit > max
-    )
-      throw new AdminError(400, "Invalid CAMBI page", "invalid-cursor");
+    if (!Number.isSafeInteger(after) || after < 0 || !Number.isInteger(limit) || limit < 1 || limit > max)
+      throw new AdminError(400, 'Invalid CAMBI page', 'invalid-cursor');
   }
-  frames(
-    id: string,
-    actor: string,
-    after = 0,
-    limit: number = CAMBI_LIMITS.page,
-  ): CambiFramePage {
+  frames(id: string, actor: string, after = 0, limit: number = CAMBI_LIMITS.page): CambiFramePage {
     this.cursor(after, limit, CAMBI_LIMITS.page);
     const j = this.get(id, actor);
     if (!j.resultDigest) {
       const { header } = this.preview(id, actor);
       const rows = this.db
-        .prepare(
-          "SELECT body FROM cambi_frames WHERE job=? AND frame>=? ORDER BY frame LIMIT ?",
-        )
+        .prepare('SELECT body FROM cambi_frames WHERE job=? AND frame>=? ORDER BY frame LIMIT ?')
         .all(id, after, limit + 1);
-      const entries = rows
-        .slice(0, limit)
-        .map((r) => JSON.parse(String(r.body)) as CambiFrame);
+      const entries = rows.slice(0, limit).map((r) => JSON.parse(String(r.body)) as CambiFrame);
       return {
-        state: "provisional-uncommitted-attempt",
+        state: 'provisional-uncommitted-attempt',
         publishable: false,
         attemptId: j.attemptId,
         coverage: header.coverage,
@@ -982,8 +638,7 @@ export class NativeCambiService {
     const r = this.result(id, actor),
       entries = r.prepared.frames.filter((f) => f.score !== null);
     return {
-      state:
-        j.state === "partial" ? "immutable-partial" : "immutable-completed",
+      state: j.state === 'partial' ? 'immutable-partial' : 'immutable-completed',
       publishable: true,
       attemptId: j.attemptId,
       coverage: r.prepared.coverage,
@@ -991,115 +646,53 @@ export class NativeCambiService {
       next: after + limit < entries.length ? after + limit : null,
     };
   }
-  private heat(
-    id: string,
-    index: number,
-    scale: number,
-    sha: string,
-    bytes: number,
-  ) {
-    const row = this.db
-      .prepare(
-        "SELECT sha,data FROM cambi_heat WHERE job=? AND frame=? AND scale=?",
-      )
-      .get(id, index, scale);
-    if (!row || row.sha !== sha)
-      throw new AdminError(
-        409,
-        "CAMBI heatmap unavailable",
-        "cambi-heatmap-unavailable",
-      );
+  private heat(id: string, index: number, scale: number, sha: string, bytes: number) {
+    const row = this.db.prepare('SELECT sha,data FROM cambi_heat WHERE job=? AND frame=? AND scale=?').get(id, index, scale);
+    if (!row || row.sha !== sha) throw new AdminError(409, 'CAMBI heatmap unavailable', 'cambi-heatmap-unavailable');
     const data = new Uint8Array(row.data as Uint8Array);
-    if (data.length !== bytes || hash(data) !== sha)
-      throw new AdminError(
-        500,
-        "Stored CAMBI heatmap changed",
-        "stored-cambi-invalid",
-      );
+    if (data.length !== bytes || hash(data) !== sha) throw new AdminError(500, 'Stored CAMBI heatmap changed', 'stored-cambi-invalid');
     return data;
   }
   heatmap(id: string, actor: string, index: number, scale: number) {
     const job = this.get(id, actor);
     if (!job.resultDigest) {
-      if (
-        !Number.isInteger(index) ||
-        index < 0 ||
-        index >= CAMBI_LIMITS.frames ||
-        !Number.isInteger(scale) ||
-        scale < 0 ||
-        scale > 4
-      )
-        throw new AdminError(
-          400,
-          "Invalid CAMBI heatmap index/scale",
-          "invalid-request",
-        );
+      if (!Number.isInteger(index) || index < 0 || index >= CAMBI_LIMITS.frames || !Number.isInteger(scale) || scale < 0 || scale > 4)
+        throw new AdminError(400, 'Invalid CAMBI heatmap index/scale', 'invalid-request');
       const { header } = this.preview(id, actor),
-        row = this.db
-          .prepare("SELECT body FROM cambi_frames WHERE job=? AND frame=?")
-          .get(id, index);
+        row = this.db.prepare('SELECT body FROM cambi_frames WHERE job=? AND frame=?').get(id, index);
       const f = row ? (JSON.parse(String(row.body)) as CambiFrame) : null,
         s = header.output.scales[scale],
         m = f?.heatmaps.find((m) => m.scale === scale);
-      if (!f || !m)
-        throw new AdminError(
-          404,
-          "No provisional CAMBI frame at this index.",
-          "cambi-not-found",
-        );
+      if (!f || !m) throw new AdminError(404, 'No provisional CAMBI frame at this index.', 'cambi-not-found');
       return {
         data: this.heat(id, index, scale, m.sha256, s.bytes),
         sha256: m.sha256,
         scale: s,
         target: f.target,
-        validation: "provisional-uncommitted-attempt",
+        validation: 'provisional-uncommitted-attempt',
       };
     }
     const r = this.result(id, actor),
       f = r.prepared.frames[index],
       s = r.prepared.output.scales[scale],
       m = f?.heatmaps.find((m) => m.scale === scale);
-    if (!f || !s || !m)
-      throw new AdminError(404, "CAMBI frame/scale missing", "cambi-not-found");
-    return {
-      data: this.heat(id, index, scale, m.sha256, s.bytes),
-      sha256: m.sha256,
-      scale: s,
-      target: f.target,
-      validation: "committed",
-    };
+    if (!f || !s || !m) throw new AdminError(404, 'CAMBI frame/scale missing', 'cambi-not-found');
+    return { data: this.heat(id, index, scale, m.sha256, s.bytes), sha256: m.sha256, scale: s, target: f.target, validation: 'committed' };
   }
   evidence(refValue: CambiRef, actor: string) {
     const ref = cambiRef(refValue),
       j = this.get(ref.jobId, actor),
       r = this.result(j.id, actor);
     if (j.attemptId !== ref.attemptId || j.resultDigest !== ref.digest)
-      throw new AdminError(
-        409,
-        "CAMBI attempt changed",
-        "evidence-unavailable",
-      );
+      throw new AdminError(409, 'CAMBI attempt changed', 'evidence-unavailable');
     const frame = r.prepared.frames[ref.index],
       scale = r.prepared.output.scales[ref.scale];
-    if (
-      !frame ||
-      ref.region.x + ref.region.width > scale.width ||
-      ref.region.y + ref.region.height > scale.height
-    )
-      throw new AdminError(
-        400,
-        "CAMBI region out of scale bounds",
-        "invalid-cambi-region",
-      );
+    if (!frame || ref.region.x + ref.region.width > scale.width || ref.region.y + ref.region.height > scale.height)
+      throw new AdminError(400, 'CAMBI region out of scale bounds', 'invalid-cambi-region');
     const m = frame.heatmaps[ref.scale],
       data = this.heat(j.id, ref.index, ref.scale, m.sha256, m.bytes),
       stats = this.stats(data, scale.width, ref.region);
-    if (!stats.max)
-      throw new AdminError(
-        409,
-        "No nonzero official heatmap evidence in this region",
-        "cambi-no-spatial-evidence",
-      );
+    if (!stats.max) throw new AdminError(409, 'No nonzero official heatmap evidence in this region', 'cambi-no-spatial-evidence');
     return {
       completedAt: j.endedAt!,
       value: {
@@ -1116,19 +709,11 @@ export class NativeCambiService {
           bytes: scale.bytes,
           mapping: scale.mapping,
         },
-        region: {
-          ...stats,
-          meaning:
-            "official-heatmap-cell-statistics-not-cropped-CAMBI" as const,
-        },
+        region: { ...stats, meaning: 'official-heatmap-cell-statistics-not-cropped-CAMBI' as const },
       },
     };
   }
-  private stats(
-    data: Uint8Array,
-    width: number,
-    r: { x: number; y: number; width: number; height: number },
-  ) {
+  private stats(data: Uint8Array, width: number, r: { x: number; y: number; width: number; height: number }) {
     const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
     let sum = 0,
       max = 0;
@@ -1142,26 +727,18 @@ export class NativeCambiService {
     return { samples, mean: sum / samples, max };
   }
   sharedHeatmap(e: CambiEvidence, scale = e.ref.scale) {
-    if (e.verification !== "server-verified")
-      throw new AdminError(
-        409,
-        "Historical CAMBI evidence cannot fetch verified heatmaps",
-        "historical-evidence",
-      );
-    if (!Number.isInteger(scale) || scale < 0 || scale > 4)
-      throw new AdminError(400, "Invalid CAMBI scale", "invalid-request");
+    if (e.verification !== 'server-verified')
+      throw new AdminError(409, 'Historical CAMBI evidence cannot fetch verified heatmaps', 'historical-evidence');
+    if (!Number.isInteger(scale) || scale < 0 || scale > 4) throw new AdminError(400, 'Invalid CAMBI scale', 'invalid-request');
     const m = e.value.frame.heatmaps[scale];
     return this.heat(e.ref.jobId, e.ref.index, scale, m.sha256, m.bytes);
   }
-  private async inspectPicture(
-    fact: CambiPrepared["frames"][number],
-    signal: AbortSignal,
-  ) {
+  private async inspectPicture(fact: CambiPrepared['frames'][number], signal: AbortSignal) {
     const p = fact.target,
       input: CambiInput = {
-        schema: "voidplayer-cambi-job",
+        schema: 'voidplayer-cambi-job',
         version: 1,
-        client: { id: "cambi-inspection", kind: "other" },
+        client: { id: 'cambi-inspection', kind: 'other' },
         source: {
           mediaId: p.mediaId,
           mediaVersion: p.mediaVersion,
@@ -1184,29 +761,21 @@ export class NativeCambiService {
       frame = actual.frame,
       d = frame.description,
       l = d.yuv!,
-      h = createHash("sha256");
+      h = createHash('sha256');
     for (const [i, plane] of l.planes.entries())
       for (let y = 0; y < (i ? d.height / 2 : d.height); y++) {
         const n = (i ? d.width / 2 : d.width) * (l.bitDepth === 8 ? 1 : 2);
-        h.update(
-          frame.pixels.subarray(
-            plane.offset + y * plane.stride,
-            plane.offset + y * plane.stride + n,
-          ),
-        );
+        h.update(frame.pixels.subarray(plane.offset + y * plane.stride, plane.offset + y * plane.stride + n));
       }
     if (
-      h.digest("hex") !== fact.rawSha256 ||
+      h.digest('hex') !== fact.rawSha256 ||
       canonicalJson({
         ...actual.provenance,
         dependency: actual.provenance.dependency
           ? {
               ...actual.provenance.dependency,
               outputIdentity: actual.provenance.dependency.outputIdentity
-                ? {
-                    ...actual.provenance.dependency.outputIdentity,
-                    generation: "ephemeral",
-                  }
+                ? { ...actual.provenance.dependency.outputIdentity, generation: 'ephemeral' }
                 : undefined,
             }
           : undefined,
@@ -1217,66 +786,45 @@ export class NativeCambiService {
             ? {
                 ...fact.provenance.dependency,
                 outputIdentity: fact.provenance.dependency.outputIdentity
-                  ? {
-                      ...fact.provenance.dependency.outputIdentity,
-                      generation: "ephemeral",
-                    }
+                  ? { ...fact.provenance.dependency.outputIdentity, generation: 'ephemeral' }
                   : undefined,
               }
             : undefined,
         }) ||
       canonicalJson(actual.decoder) !== canonicalJson(fact.decoder)
     )
-      throw new AdminError(
-        409,
-        "CAMBI source snapshot differs from scored raw picture",
-        "cambi-picture-changed",
-      );
+      throw new AdminError(409, 'CAMBI source snapshot differs from scored raw picture', 'cambi-picture-changed');
     return {
       description: frame.description,
-      pixelsBase64: Buffer.from(frame.pixels).toString("base64"),
+      pixelsBase64: Buffer.from(frame.pixels).toString('base64'),
       source: p,
       rawSha256: fact.rawSha256,
-      inspection: "same-raw-picture-no-rescore",
+      inspection: 'same-raw-picture-no-rescore',
     };
   }
   async sharedPicture(e: CambiEvidence, signal: AbortSignal) {
-    if (e.verification !== "server-verified")
-      throw new AdminError(
-        409,
-        "Historical CAMBI evidence cannot inspect a verified source",
-        "historical-evidence",
-      );
+    if (e.verification !== 'server-verified')
+      throw new AdminError(409, 'Historical CAMBI evidence cannot inspect a verified source', 'historical-evidence');
     return this.inspectPicture(e.value.frame, signal);
   }
   async picture(id: string, actor: string, index: number, signal: AbortSignal) {
     const r = this.result(id, actor),
       f = r.prepared.frames[index];
-    if (!f) throw new AdminError(404, "CAMBI frame missing", "cambi-not-found");
+    if (!f) throw new AdminError(404, 'CAMBI frame missing', 'cambi-not-found');
     return this.inspectPicture(f, signal);
   }
   publication(id: string, actor: string) {
     this.get(id, actor);
-    const r = this.db
-      .prepare("SELECT body FROM cambi_publications WHERE job=?")
-      .get(id);
+    const r = this.db.prepare('SELECT body FROM cambi_publications WHERE job=?').get(id);
     return r ? (JSON.parse(String(r.body)) as Publication) : null;
   }
-  publish(
-    id: string,
-    actor: Actor,
-    value: unknown,
-    origin: string,
-    annotations: AnnotationStore,
-    requestId: string,
-  ) {
+  publish(id: string, actor: Actor, value: unknown, origin: string, annotations: AnnotationStore, requestId: string) {
     this.available();
     const j = this.get(id, actor.id),
       p = value as Policy;
     cambiCheck(
       p &&
-        Object.keys(p).sort().join(",") ===
-          "cellThreshold,limit,minScore,scale,severity,space,text" &&
+        Object.keys(p).sort().join(',') === 'cellThreshold,limit,minScore,scale,severity,space,text' &&
         /^[A-Za-z0-9_-]{1,200}$/.test(p.space) &&
         Number.isFinite(p.minScore) &&
         p.minScore >= 0 &&
@@ -1289,28 +837,22 @@ export class NativeCambiService {
         Number.isInteger(p.cellThreshold) &&
         p.cellThreshold >= 1 &&
         p.cellThreshold <= 65535 &&
-        typeof p.text === "string" &&
+        typeof p.text === 'string' &&
         p.text.trim() &&
         p.text.length <= 2000 &&
         Number.isInteger(p.severity) &&
         p.severity >= 1 &&
         p.severity <= 5,
-      "Explicit uncalibrated CAMBI policy/text/severity required",
+      'Explicit uncalibrated CAMBI policy/text/severity required',
     );
     let pub = this.publication(id, actor.id);
     if (pub && canonicalJson(pub.policy) !== canonicalJson(p))
-      throw new AdminError(
-        409,
-        "CAMBI candidate policy frozen",
-        "candidate-policy-conflict",
-      );
+      throw new AdminError(409, 'CAMBI candidate policy frozen', 'candidate-policy-conflict');
     if (!pub) {
       const r = this.result(id, actor.id),
         s = r.prepared.output.scales[p.scale];
-      const selected: Publication["selected"] = [];
-      for (const f of [...r.prepared.frames].sort(
-        (a, b) => b.score! - a.score! || a.index - b.index,
-      )) {
+      const selected: Publication['selected'] = [];
+      for (const f of [...r.prepared.frames].sort((a, b) => b.score! - a.score! || a.index - b.index)) {
         if (f.score! < p.minScore) continue;
         const m = f.heatmaps[p.scale],
           bytes = this.heat(id, f.index, p.scale, m.sha256, m.bytes),
@@ -1343,27 +885,20 @@ export class NativeCambiService {
         if (selected.length >= p.limit) break;
       }
       pub = { policy: structuredClone(p), selected, createdIds: [] };
-      this.db
-        .prepare("INSERT INTO cambi_publications VALUES(?,?)")
-        .run(id, JSON.stringify(pub));
-      settleScoringReservations(this.db, "cambi", id);
+      this.db.prepare('INSERT INTO cambi_publications VALUES(?,?)').run(id, JSON.stringify(pub));
+      settleScoringReservations(this.db, 'cambi', id);
     }
     for (const item of pub.selected) {
       annotations.mutate(
         p.space,
         {
-          action: "create-cambi-candidate",
+          action: 'create-cambi-candidate',
           id: item.id,
           operationId: item.operationId,
           revision: 0,
           client: {
-            kind:
-              j.input.client.kind === "browser"
-                ? "gui"
-                : j.input.client.kind === "agent"
-                  ? "agent"
-                  : "http",
-            id: "cambi_" + j.id,
+            kind: j.input.client.kind === 'browser' ? 'gui' : j.input.client.kind === 'agent' ? 'agent' : 'http',
+            id: 'cambi_' + j.id,
           },
           candidate: { text: p.text, severity: p.severity },
           cambi: item.ref,
@@ -1373,17 +908,15 @@ export class NativeCambiService {
         {
           origin,
           resolve: () => {
-            throw Error("No reference-pair lookup for NR");
+            throw Error('No reference-pair lookup for NR');
           },
           resolveCambi: (ref) => this.evidence(ref, actor.id),
         },
       );
       if (!pub.createdIds.includes(item.id)) {
         pub.createdIds.push(item.id);
-        this.db
-          .prepare("UPDATE cambi_publications SET body=? WHERE job=?")
-          .run(JSON.stringify(pub), id);
-        settleScoringReservations(this.db, "cambi", id);
+        this.db.prepare('UPDATE cambi_publications SET body=? WHERE job=?').run(JSON.stringify(pub), id);
+        settleScoringReservations(this.db, 'cambi', id);
       }
     }
     return pub;
@@ -1393,33 +926,28 @@ export class NativeCambiService {
     return (this.stopping ??= (async () => {
       this.closed = true;
       clearTimeout(this.timer);
-      for (const active of this.active.values())
-        active.controller.abort(
-          new CambiError("cancelled", "CAMBI service stopping"),
-        );
-      await closeResources("CAMBI physical shutdown incomplete", [
-        ["executor", () => this.runner.close()],
-        [
-          "active attempts",
-          () => Promise.all([...this.active.values()].map((a) => a.done)),
-        ],
-        ["recovery", () => this.ready],
+      for (const active of this.active.values()) active.controller.abort(new CambiError('cancelled', 'CAMBI service stopping'));
+      await closeResources('CAMBI physical shutdown incomplete', [
+        ['executor', () => this.runner.close()],
+        ['active attempts', () => Promise.all([...this.active.values()].map((a) => a.done))],
+        ['recovery', () => this.ready],
       ]);
       if (this.fatal) throw this.fatal;
       for (const j of this.all())
         if (!terminalCambi(j.state)) {
-          j.state = "interrupted";
-          j.phase = "done";
+          j.state = 'interrupted';
+          j.phase = 'done';
           j.endedAt = now();
-          j.reason = {
-            code: "service-shutdown",
-            message: "Interrupted; no automatic retry",
-          };
+          j.reason = { code: 'service-shutdown', message: 'Interrupted; no automatic retry' };
           this.save(j);
         }
-
     })());
   }
-  close() { return this.closing ??= this.stopExecution().then(()=>{this.unqueue?.();this.db.close();this.unlock();}); }
-
+  close() {
+    return (this.closing ??= this.stopExecution().then(() => {
+      this.unqueue?.();
+      this.db.close();
+      this.unlock();
+    }));
+  }
 }

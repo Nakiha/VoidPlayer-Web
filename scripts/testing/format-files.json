@@ -1,0 +1,13 @@
+[
+  "scripts/tools/development/format.mjs",
+  "server/analysis/cambi/routes.ts",
+  "server/analysis/cambi/service.ts",
+  "src/admin/quality-cambi.ts",
+  "src/admin/quality-correspondence.ts",
+  "test/contract/format.test.mjs",
+  "test/contract/native-cambi-contract.test.mjs",
+  "test/contract/native-vmaf-contract.test.mjs",
+  "test/contract/native-xpsnr-contract.test.mjs",
+  "test/contract/test-manifest.test.mjs",
+  "test/helpers/source-contract.mjs"
+]

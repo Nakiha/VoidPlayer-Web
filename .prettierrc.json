@@ -1,0 +1,10 @@
+{
+  "printWidth": 140,
+  "tabWidth": 2,
+  "useTabs": false,
+  "singleQuote": true,
+  "semi": true,
+  "endOfLine": "lf",
+  "objectWrap": "collapse",
+  "embeddedLanguageFormatting": "off"
+}

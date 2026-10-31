@@ -83,7 +83,9 @@
     "test:hdr:browser": "node scripts/run-tests.mjs --alias test:hdr:browser",
     "test:hdr:native": "node scripts/run-tests.mjs --alias test:hdr:native",
     "check:boundaries": "node scripts/testing/module-boundaries.mjs",
-    "check:shared": "tsc -p tsconfig.shared.json"
+    "check:shared": "tsc -p tsconfig.shared.json",
+    "format": "node scripts/tools/development/format.mjs --write",
+    "format:check": "node scripts/tools/development/format.mjs"
   },
   "dependencies": {
     "@messageformat/runtime": "3.0.2",
@@ -98,6 +100,7 @@
     "@types/node": "26.4.1",
     "fake-indexeddb": "6.2.4",
     "playwright": "^1.63.0",
+    "prettier": "3.6.2",
     "typescript": "7.0.2",
     "typescript-ast": "npm:typescript@5.9.3",
     "vite": "8.2.2"
