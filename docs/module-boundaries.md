@@ -41,6 +41,12 @@ fields 和 summary 是工作台内部实现。边界负例覆盖外部类型引�
 `source.ts` 继续拥有打开和失败阶段路由，原类型名只保留兼容转发；生产类型消费者
 全部直达合同。media/analysis 不得反向引用打开入口，包含纯类型、动态加载与 URL。
 
+合同中的模块导入/重导出必须使用整条 `import type` / `export type`。Node 24 原生
+TypeScript 加载会保留行内 `import { type T }` / `export { type T }` 的模块求值，
+不能仅凭导出绑定都是类型就认定合同不会执行依赖。该约束直接检查声明的 `isTypeOnly`，
+不修改通用依赖边和循环分类。回归以会抛错的目标模块验证两种整条声明不加载目标、
+两种行内声明被门禁拒绝且在原生 Node 加载时确实执行目标。
+
 共享源色彩为 `shared/color/color-info.ts`，帧时间与基础媒体描述为
 `shared/media/types.ts`，请求/实际呈现事实为 `shared/presentation/presentation-info.ts`。
 `shared/review/model.ts` 保留 Slot/Mark、评审校验与多轨步进，历史媒体类型名只做纯类型兼容转发。

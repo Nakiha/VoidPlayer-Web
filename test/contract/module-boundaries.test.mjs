@@ -226,6 +226,23 @@ test('browser media contract owns declarations without implementation dependenci
   project({ 'src/media/contract.ts': "import type {T} from './state.ts'", 'src/media/state.ts': 'export type T=number' }, root =>
     assert.throws(() => checkModuleBoundaries(root), /browser media contract imports implementation/));
 });
+for (const [declaration, erased] of [
+  ["import type {T} from '../../shared/probe.ts'; export interface Frame { value:T }", true],
+  ["export type {T} from '../../shared/probe.ts';", true],
+  ["import {type T} from '../../shared/probe.ts'; export interface Frame { value:T }", false],
+  ["export {type T} from '../../shared/probe.ts';", false],
+]) test(`media contract gate matches native Node type erasure: ${declaration}`, () => {
+  project({ 'src/media/contract.ts': declaration, 'shared/probe.ts': "export type T=number; throw Error('PROBE_RUNTIME_EXECUTED');" }, root => {
+    if (erased) assert.doesNotThrow(() => checkModuleBoundaries(root));
+    else assert.throws(() => checkModuleBoundaries(root), /whole-declaration (import|export) type/);
+    writeFileSync(path.join(root, 'package.json'), JSON.stringify({ type: 'module' }));
+    const result = spawnSync(process.execPath, ['--experimental-strip-types', path.join(root, 'src/media/contract.ts')], {
+      cwd: root, encoding: 'utf8', timeout: 10000,
+    });
+    assert.equal(result.status, erased ? 0 : 1, result.stderr);
+    if (!erased) assert.match(result.stderr, /PROBE_RUNTIME_EXECUTED/);
+  });
+});
 test('media and color base contracts cannot obtain facts through review aliases', () => {
   for (const from of ['shared/media/types.ts', 'shared/color/color-info.ts', 'src/media/state.ts'])
     project({ [from]: `import type {T} from '${from.startsWith('src/') ? '../../shared/review/model.ts' : '../review/model.ts'}'`, 'shared/review/model.ts': 'export type T=number' }, root =>

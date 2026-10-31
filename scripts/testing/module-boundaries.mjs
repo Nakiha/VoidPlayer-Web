@@ -153,12 +153,21 @@ export function checkModuleBoundaries(root) {
   const mediaContract = path.join(root, 'src/media/contract.ts');
   if (existsSync(mediaContract)) {
     const tree = ts.createSourceFile(mediaContract, readFileSync(mediaContract, 'utf8'), ts.ScriptTarget.Latest, true);
-    for (const statement of tree.statements)
+    for (const statement of tree.statements) {
       assert.ok(
         ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement) ||
         ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement),
         'src/media/contract.ts: browser media contract cannot own runtime state or execution',
       );
+      // Node strips declaration-level type imports/exports completely. Inline
+      // type specifiers can leave an empty declaration that still loads its module.
+      if (ts.isImportDeclaration(statement))
+        assert.equal(statement.importClause?.isTypeOnly, true,
+          'src/media/contract.ts: browser media contract must use type-only dependencies via whole-declaration import type');
+      if (ts.isExportDeclaration(statement))
+        assert.equal(statement.isTypeOnly, true,
+          'src/media/contract.ts: browser media contract must use type-only dependencies via whole-declaration export type');
+    }
   }
   for (const file of files)
     for (const edge of moduleEdges(readFileSync(file, 'utf8'), file)) {
