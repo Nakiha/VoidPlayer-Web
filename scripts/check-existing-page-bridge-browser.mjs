@@ -13,6 +13,15 @@ const temp=await mkdtemp(path.join(os.tmpdir(),'vp-existing-browser-'));
 const checks=[],errors=[],requests=[];let browser,client,service,phase='setup';
 const check=(label,value=true)=>{assert.ok(value,label);checks.push(label);console.error('PASS '+label);};
 async function eventually(fn){const end=Date.now()+12000;for(;;){const value=await fn();if(value)return value;if(Date.now()>end)throw Error('Timeout: '+phase);await new Promise(r=>setTimeout(r,40));}}
+async function openMcpSettings(page){
+  if(!await page.locator('#settings').isVisible())await page.locator('#settings-open').click();
+  await page.locator('#settings-tab-mcp').click();
+}
+async function closeSettings(page){
+  await page.locator('#settings-close').click();
+  await page.locator('#settings').waitFor({state:'hidden'});
+}
+
 try{
   const fileA=path.join(temp,'Public-generated-A.mp4'),fileB=path.join(temp,'Public-generated-B.mp4');
   for(const [file,source]of [[fileA,'testsrc2'],[fileB,'smptebars']])execFileSync('ffmpeg',['-v','error','-f','lavfi','-i',source+'=size=160x96:rate=10','-t','4','-c:v','libx264','-threads','1','-pix_fmt','yuv420p','-g','10','-bf','2','-movflags','+faststart',file]);
@@ -28,23 +37,23 @@ try{
   check('existing ROI drawn through GUI before CLI exists');
   await a.evaluate(origin=>{const frame=document.createElement('iframe');frame.id='bridge-framing-test';frame.src=origin;document.body.append(frame);},origin);
   await a.frameLocator('#bridge-framing-test').locator('#app:not([data-initializing])').waitFor();
-  check('embedded ordinary page has no bridge authorization UI',await a.frameLocator('#bridge-framing-test').locator('#page-bridge-open').count()===0);await a.locator('#bridge-framing-test').evaluate(e=>e.remove());
+  check('embedded ordinary page has no bridge authorization UI',await a.frameLocator('#bridge-framing-test').locator('#settings-tab-mcp[hidden]').count()===1);await a.locator('#bridge-framing-test').evaluate(e=>e.remove());
   const beforeA=await a.locator('#name-A').textContent(),beforeB=await b.locator('#name-A').textContent();
   check('two ordinary pages loaded File before independent CLI exists');
   check('ordinary HTML has no launcher bootstrap',!(await (await fetch(origin)).text()).includes('name="voidplayer-page-bridge"'));
   async function start(){client=await startMcpClient({existingOrigin:origin});await client.initialize();await client.call('get_bridge_status');return client;}
-  async function pair(page,code=client.pairingCode){await page.locator('#page-bridge-open').click();await page.locator('#page-bridge-code').fill(code);await page.locator('#page-bridge-pair').click();}
+  async function pair(page,code=client.pairingCode){await openMcpSettings(page);await page.locator('#page-bridge-code').fill(code);await page.locator('#page-bridge-pair').click();}
   async function connect(page,scopes=['read']){for(const scope of ['read','view','annotate'])await page.locator('#page-bridge-'+scope).setChecked(scopes.includes(scope));await page.locator('#page-bridge-connect').click();return eventually(async()=>{const s=await client.call('get_bridge_status');return s.connected?s:false;});}
   phase='unauthorized';await start();
   check('unauthorized status has no workspace or tracks',!(await client.call('get_bridge_status')).workspace);
   check('unauthorized read denied',(await client.call('get_review_session',{epoch:'none',input:{}})).code==='host-unavailable');
-  await pair(a,'0'.repeat(32));await a.locator('#page-bridge-status').getByText('Pairing unavailable',{exact:false}).waitFor();check('wrong pairing rejected');await a.locator('#page-bridge-close').click();
+  await pair(a,'0'.repeat(32));await a.locator('#page-bridge-status').getByText('Pairing unavailable',{exact:false}).waitFor();check('wrong pairing rejected');await closeSettings(a);
   await pair(a);await eventually(()=>a.locator('#page-bridge-read').isEnabled());
-  await eventually(async()=>!(await a.locator('#page-bridge-client').textContent()).includes('{}'));
+  await eventually(async()=>(await a.locator('#page-bridge-client').textContent())!=='—');
   check('pairing alone does not authorize',(await client.call('get_bridge_status')).connected===false);
   for(const scope of ['read','view','annotate'])check(scope+' defaults unchecked',!await a.locator('#page-bridge-'+scope).isChecked());
   check('consent names exact existing page', (await a.locator('#page-bridge-status').textContent()).includes(origin));
-  await pair(b);await b.locator('#page-bridge-status').getByText('Pairing unavailable',{exact:false}).waitFor();check('second page cannot consume code twice');await b.locator('#page-bridge-close').click();
+  await pair(b);await b.locator('#page-bridge-status').getByText('Pairing unavailable',{exact:false}).waitFor();check('second page cannot consume code twice');await closeSettings(b);
   phase='readonly';let status=await connect(a),epoch=status.epoch;
   const call=(name,input={},operationId)=>client.call(name,{epoch,input,...(operationId?{operationId}:{})});
   check('accurate A selected',status.workspace.includes(beforeA));
@@ -64,7 +73,7 @@ try{
   check('annotation-only returns only created ID and completion',typeof annotateOnly.id==='string'&&Object.keys(annotateOnly).sort().join(',')==='completed,id');
   check('annotation-only cannot read prior ROI',(await call('get_review_marks')).code==='scope-denied');
   await a.locator('#page-bridge-revoke').click();await eventually(async()=>!(await client.call('get_bridge_status')).connected);
-  phase='view-annotate';status=await connect(a,['read','view','annotate']);epoch=status.epoch;await a.locator('#page-bridge-close').click();
+  phase='view-annotate';status=await connect(a,['read','view','annotate']);epoch=status.epoch;await closeSettings(a);
   check('pause real independent stdio',(await call('pause_review',{},'pause')).completed);
   await call('seek_review',{ptsUs:500000},'seek');const state=await call('get_review_session');
   check('exact seek preserves loaded track',state.positionUs===500000&&state.tracks[0].name===beforeA);
@@ -79,19 +88,19 @@ try{
   phase='unknown-write';let release,seen;const gate=new Promise(r=>release=r),entered=new Promise(r=>seen=r);let held=false;
   await a.route('**/api/page-bridge/reply',async route=>{if(held){await route.continue();return;}held=true;seen();await gate;await route.abort().catch(()=>{});});
   const pending=call('add_review_mark',{...input,text:'Unknown original write'},'unknown');await Promise.race([entered,new Promise((_,reject)=>setTimeout(()=>reject(Error('Write response gate deadline')),12000))]);
-  await a.locator('#page-bridge-open').click();await a.locator('#page-bridge-revoke').click();
+  await openMcpSettings(a);await a.locator('#page-bridge-revoke').click();
   const unknown=await pending;check('revoked dispatched write remains unknown',unknown.code==='outcome-unknown'&&unknown.automaticReplay===false);
   release();await a.unrouteAll({behavior:'wait'});status=await connect(a,['read','view','annotate']);epoch=status.epoch;
   check('unknown receipt retained',(await client.call('get_bridge_receipt',{operationId:'unknown'})).outcome==='unknown');
   check('late write not duplicated',(await call('get_review_marks')).entries.filter(e=>e.text==='Unknown original write').length===1);
-  phase='identity';await a.locator('#page-bridge-close').click();await a.locator('#settings-open').click();await a.locator('#settings-tab-identity').click();await a.locator('#identity-name').fill('Public test new identity');await a.locator('#identity-save').click();await eventually(async()=>!(await client.call('get_bridge_status')).connected);check('identity switch revokes');await a.locator('#settings-close').click();await a.locator('#page-bridge-open').click();
-  status=await connect(a,['read','view']);epoch=status.epoch;await a.locator('#page-bridge-close').click();
+  phase='identity';await closeSettings(a);await a.locator('#settings-open').click();await a.locator('#settings-tab-identity').click();await a.locator('#identity-name').fill('Public test new identity');await a.locator('#identity-save').click();await eventually(async()=>!(await client.call('get_bridge_status')).connected);check('identity switch revokes');await closeSettings(a);await openMcpSettings(a);
+  status=await connect(a,['read','view']);epoch=status.epoch;await closeSettings(a);
   phase='source';await a.locator('#file-A').setInputFiles(fileB);await eventually(async()=>!(await client.call('get_bridge_status')).connected);check('source change revokes');
-  await a.locator('#image-A').waitFor({state:'visible'});await a.locator('#page-bridge-open').click();status=await connect(a);epoch=status.epoch;
+  await a.locator('#image-A').waitFor({state:'visible'});await openMcpSettings(a);status=await connect(a);epoch=status.epoch;
   phase='reload';await a.reload();await eventually(async()=>!(await client.call('get_bridge_status')).connected);check('reload revokes');
   check('old epoch unavailable',(await call('get_review_session')).code==='host-unavailable');
   await client.close();check('EOF preserves normal service',(await fetch(origin)).ok);await start();await pair(b);status=await connect(b);epoch=status.epoch;
-  phase='EOF';check('live EOF clean exit',(await client.close()).code===0);await eventually(()=>b.locator('#page-bridge-open[data-connected="false"]').isVisible());
+  phase='EOF';check('live EOF clean exit',(await client.close()).code===0);await eventually(()=>b.locator('#settings-pane-mcp[data-connected="false"]').isVisible());
   check('EOF preserves File and page',await b.locator('#name-A').textContent()===beforeB);check('EOF preserves original normal service',(await fetch(origin+'/api/agent')).ok);
   phase='fresh-client-same-loaded-page';await start();await b.locator('#page-bridge-reset').click();await b.locator('#page-bridge-code').fill(client.pairingCode);await b.locator('#page-bridge-pair').click();status=await connect(b);epoch=status.epoch;
   check('fresh client pairs same loaded page without reload or file reselection',(await call('get_review_session')).tracks[0].name===beforeB);

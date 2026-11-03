@@ -956,22 +956,32 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .annotation-row > .annotation-card-actions { flex-wrap:wrap; justify-content:flex-end; gap:2px; }
 .annotation-card-actions > button:not(.icon-button) { font-size:11px; min-height:24px; padding:2px 5px; }
 
-.quality-roi-dialog{width:min(1100px,94vw);max-height:90vh;overflow:auto;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:20px}
-.quality-roi-views,.quality-roi-pickers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
-.quality-roi-views[hidden]{display:none}
-.quality-roi-stage{position:relative;width:100%;background:#111;overflow:hidden}
-.quality-roi-stage canvas,.quality-roi-overlay{position:absolute;inset:0;width:100%;height:100%}
-.quality-roi-overlay{touch-action:none;cursor:crosshair;z-index:3}
-.quality-roi-overlay rect{stroke:#ffcc00;stroke-width:2;fill:#ffcc001a;pointer-events:none}
-.quality-roi-dialog label,.quality-candidate-form label{display:inline-flex;gap:8px;margin:8px;align-items:center}
-.quality-roi-dialog select{max-width:100%}
-.quality-roi-dialog button,.quality-candidate-form button{margin:6px}
-.quality-roi-views p{overflow-wrap:anywhere;font-size:12px}
+.quality-roi-dialog { width: min(1050px, calc(100vw - 24px)); background: var(--surface-panel); overscroll-behavior: contain; }
+.quality-roi-dialog > .dialog-heading { position: sticky; z-index: 4; top: calc(-1 * var(--content-inset)); padding: var(--content-inset) 0 8px; margin-top: calc(-1 * var(--content-inset)); background: var(--surface-panel); }
+.quality-roi-dialog a { color: var(--accent); }
+.quality-roi-dialog:not([data-selection-mode]) { width: min(480px, calc(100vw - 24px)); }
+.quality-roi-section { display: grid; gap: 10px; padding: 14px; margin-bottom: var(--section-gap); border-radius: var(--radius-panel); background: color-mix(in srgb, var(--surface-panel), var(--text) 3%); }
+.quality-roi-section h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.quality-roi-dialog p { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.quality-roi-dialog > p:not(:empty) { margin: 10px 0; }
+.quality-roi-dialog p:empty { display: none; }
+.quality-roi-actions, .quality-roi-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.quality-roi-dialog button { white-space: normal; }
+.quality-roi-section label { display: flex; align-items: center; gap: 8px; }
+.quality-roi-fields input { width: 76px; }
+.quality-roi-views, .quality-roi-pickers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.quality-roi-pickers fieldset { display: grid; gap: 8px; min-width: 0; margin: 0; border: 1px solid var(--divider); border-radius: var(--radius-control); }
+.quality-roi-pickers select { width: 100%; min-width: 0; }
+.quality-roi-views section { min-width: 0; }
+.quality-roi-views p { margin-bottom: 6px; }
+.quality-roi-stage { position: relative; width: 100%; background: #111; overflow: hidden; border-radius: var(--radius-control); }
+.quality-roi-stage canvas, .quality-roi-overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
+.quality-roi-overlay { touch-action: none; cursor: crosshair; z-index: 3; }
+.quality-roi-overlay rect { stroke: #ffcc00; stroke-width: 2; fill: #ffcc001a; pointer-events: none; }
+.quality-candidate-form label { display: inline-flex; gap: 8px; margin: 8px; align-items: center; }
+.quality-candidate-form button { margin: 6px; }
 .quality-candidate-form input[data-candidate-text]{min-width:240px}
 .quality-pair-open{display:block;margin:8px 0}
 @media(max-width:650px){.quality-roi-views,.quality-roi-pickers{grid-template-columns:1fr}}
 
 .quality-candidate-badge{display:block;flex:none;font-size:10px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.quality-roi-dialog::backdrop{background:#0008}
-
-.source-quality-tools{flex:none;padding:4px 8px}.source-quality-tools button{display:flex;align-items:center;gap:6px;max-width:100%}

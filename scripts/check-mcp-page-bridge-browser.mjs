@@ -16,6 +16,15 @@ const gates=[],sessions=[];
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);gates.push(()=>resolve());return {promise,resolve};};
 async function gateWait(gate){let timer;try{await Promise.race([gate.promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Gate timeout: '+phase)),12000);})]);}finally{clearTimeout(timer);}}
 async function eventually(fn){const end=Date.now()+12000;for(;;){const value=await fn();if(value)return value;if(Date.now()>=end)throw Error('Condition timeout: '+phase);await new Promise(r=>setTimeout(r,40));}}
+async function openMcpSettings(page){
+  if(!await page.locator('#settings').isVisible())await page.locator('#settings-open').click();
+  await page.locator('#settings-tab-mcp').click();
+}
+async function closeSettings(page){
+  await page.locator('#settings-close').click();
+  await page.locator('#settings').waitFor({state:'hidden'});
+}
+
 try{
   const a=path.join(temp,'Explicit-A.mp4'),b=path.join(temp,'Explicit-B.mp4');
   for(const [file,source]of [[a,'testsrc2=size=160x96:rate=10'],[b,'smptebars=size=160x96:rate=10']])execFileSync('ffmpeg',['-v','error','-f','lavfi','-i',source,'-t','4','-c:v','libx264','-threads','1','-pix_fmt','yuv420p','-g','10','-bf','2','-movflags','+faststart',file]);
@@ -34,7 +43,7 @@ try{
     await page.locator('#image-A').waitFor({state:'visible'});await page.waitForFunction(()=>document.querySelector('#pts-A')?.textContent!=='—');
   }
   const bBefore={time:await pageB.locator('#pts-A').textContent(),name:await pageB.locator('#name-A').textContent()};
-  phase='read-only';await pageA.locator('#page-bridge-open').click();await pageA.locator('#page-bridge-connect').click();
+  phase='read-only';await openMcpSettings(pageA);await pageA.locator('#page-bridge-connect').click();
   let status=await eventually(async()=>{const s=await client.call('get_bridge_status');return s.connected?s:false;}),epoch=status.epoch;
   check('explicit A workspace target',status.workspace.includes('Explicit-A.mp4'));
   check('client declaration is not authentication',status.clientIdentity==='self-declared-not-authenticated');
@@ -43,7 +52,7 @@ try{
   check('MCP existing ROI list is read-only',(await call('get_review_marks')).entries.length===0);
   check('read-only seek denied',(await call('seek_review',{ptsUs:500000},'readonly-seek')).code==='scope-denied');
   check('read-only annotation denied',(await call('add_review_mark',{slot:'A',text:'forbidden'},'readonly-mark')).code==='scope-denied');
-  await pageB.locator('#page-bridge-open').click();await pageB.locator('#page-bridge-connect').click();
+  await openMcpSettings(pageB);await pageB.locator('#page-bridge-connect').click();
   await pageB.locator('#page-bridge-status').getByText('Connection could not be confirmed.',{exact:false}).waitFor();
   check('B cannot replace active A grant',(await client.call('get_bridge_status')).epoch===epoch);
   phase='view-and-annotation';await pageA.locator('#page-bridge-revoke').click();
@@ -51,7 +60,7 @@ try{
   check('old epoch unavailable',(await call('seek_review',{ptsUs:500000},'revoked-seek')).code==='host-unavailable');
   await pageA.locator('#page-bridge-view').check();await pageA.locator('#page-bridge-annotate').check();await pageA.locator('#page-bridge-connect').click();
   status=await eventually(async()=>{const s=await client.call('get_bridge_status');return s.connected?s:false;});epoch=status.epoch;
-  await pageA.locator('#page-bridge-close').click();
+  await closeSettings(pageA);
   check('MCP pause completes',(await call('pause_review',{},'pause-1')).completed);
   phase='delivery-ack-is-not-active-domain-work';
   const ackSeen=deferred(),ackRelease=deferred();let ackHeld=false;
@@ -76,7 +85,7 @@ try{
   await pageA.locator('#annotations-A rect.annotation-object').waitFor({state:'visible'});
   check('annotation rendered in page DOM');
   await pageA.screenshot({path:path.join(dir,'mcp-created-roi.png')});
-  await pageA.locator('#page-bridge-open').click();
+  await openMcpSettings(pageA);
   check('B File and frame unchanged',await pageB.locator('#pts-A').textContent()===bBefore.time&&await pageB.locator('#name-A').textContent()===bBefore.name);
   phase='committed-page-write-lost-reply';
   const seen=deferred(),release=deferred();let held=false;
@@ -125,11 +134,11 @@ try{
   await pageA.locator('#page-bridge-connect').click();status=await eventually(async()=>{const s=await client.call('get_bridge_status');return s.connected?s:false;});epoch=status.epoch;
   lateRelease.resolve();await cdp.send('Fetch.disable');await cdp.detach();sessions.splice(sessions.indexOf(cdp),1);
   check('late old command cannot mutate new grant',(await call('get_review_session')).positionUs===500000);
-  phase='explicit-source-replacement';await pageA.locator('#page-bridge-close').click();await pageA.locator('#file-A').setInputFiles(b);
+  phase='explicit-source-replacement';await closeSettings(pageA);await pageA.locator('#file-A').setInputFiles(b);
   await eventually(async()=>!(await client.call('get_bridge_status')).connected);check('explicit source replacement revokes the old grant');
-  await pageA.locator('#image-A').waitFor({state:'visible'});await pageA.locator('#page-bridge-open').click();await eventually(()=>pageA.locator('#page-bridge-connect').isEnabled());await pageA.locator('#page-bridge-connect').click();
+  await pageA.locator('#image-A').waitFor({state:'visible'});await openMcpSettings(pageA);await eventually(()=>pageA.locator('#page-bridge-connect').isEnabled());await pageA.locator('#page-bridge-connect').click();
   status=await eventually(async()=>{const s=await client.call('get_bridge_status');return s.connected?s:false;});epoch=status.epoch;
-  phase='reload-and-close';const oldEpoch=epoch;await pageA.reload();await pageA.locator('#page-bridge-open').waitFor();
+  phase='reload-and-close';const oldEpoch=epoch;await pageA.reload();await pageA.locator('#settings-open').waitFor();
   await eventually(async()=>!(await client.call('get_bridge_status')).connected);
   check('reload invalidates epoch',(await client.call('seek_review',{epoch:oldEpoch,operationId:'after-reload',input:{ptsUs:0}})).code==='host-unavailable');
   await pageB.locator('#page-bridge-connect').click();status=await eventually(async()=>{const s=await client.call('get_bridge_status');return s.connected?s:false;});check('B connects only after explicit click',status.workspace.includes('Explicit-B.mp4'));
@@ -139,10 +148,10 @@ try{
   check('no script evaluation or full-tool forwarding',!(await client.rpc('tools/call',{name:'get_review_logs',arguments:{}})).result);
   check('no page exceptions',pageErrors.length===0);assert.deepEqual(client.errors,[]);
   await pageA.screenshot({path:path.join(dir,'disconnected.png')});
-  await pageA.locator('#page-bridge-open').click();await pageA.locator('#page-bridge-connect').click();
+  await openMcpSettings(pageA);await pageA.locator('#page-bridge-connect').click();
   await eventually(async()=>(await client.call('get_bridge_status')).connected);check('EOF starts with a live explicit grant');
   check('stdio EOF shutdown',(await client.close()).code===0);
-  await pageA.locator('#page-bridge-open[data-connected="false"]').waitFor({state:'visible'});check('EOF invalidates the live page grant');
+  await pageA.locator('#settings-pane-mcp[data-connected="false"]').waitFor({state:'visible'});check('EOF invalidates the live page grant');
   await writeFile(path.join(dir,'evidence.json'),JSON.stringify({passed:true,browser:browser.version(),channel:process.env.MCP_BROWSER_CHANNEL??'chromium',checks,network,pageErrors},null,2));
   console.log(JSON.stringify({passed:true,browser:browser.version(),checks:checks.length,phase}));
 }catch(error){await writeFile(path.join(dir,'failure.json'),JSON.stringify({phase,error:String(error),stack:error.stack,checks,network,pageErrors,channelResponses},null,2));throw error;}

@@ -5,8 +5,8 @@ export const CHART_HOVER_STYLE_EVENT = 'chart-hover-style-change';
 let current: ChartHoverStyle | undefined;
 export function chartHoverStyle(): ChartHoverStyle {
   if (current) return current;
-  try { current = localStorage.getItem(KEY) === 'combined' ? 'combined' : 'separate'; }
-  catch { current = 'separate'; }
+  try { current = localStorage.getItem(KEY) === 'separate' ? 'separate' : 'combined'; }
+  catch { current = 'combined'; }
   return current;
 }
 export function setChartHoverStyle(style: ChartHoverStyle) {

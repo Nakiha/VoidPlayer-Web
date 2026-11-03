@@ -3419,8 +3419,8 @@
     "source": "客户端名称为自行声明，并非认证身份。仅授权此页面及当前工作区，不跟随其他标签。",
     "params": {}
   },
-  "pageBridge.close": {
-    "source": "关闭面板",
+  "pageBridge.clientLabel": {
+    "source": "MCP 客户端",
     "params": {}
   },
   "pageBridge.connect": {
@@ -3432,7 +3432,7 @@
     "params": {}
   },
   "pageBridge.connected": {
-    "source": "已连接此页面；关闭面板仍保留授权，可随时重新打开并撤销。",
+    "source": "已连接此页面。关闭设置后授权仍有效，可在此撤销。",
     "params": {}
   },
   "pageBridge.empty": {
@@ -3500,6 +3500,14 @@
   },
   "pageBridge.revoked": {
     "source": "已撤销；已开始的操作可能仍会完成。重新连接必须再次确认。",
+    "params": {}
+  },
+  "pageBridge.scopes": {
+    "source": "授权范围",
+    "params": {}
+  },
+  "pageBridge.target": {
+    "source": "连接对象",
     "params": {}
   },
   "pageBridge.title": {
@@ -4356,6 +4364,14 @@
     "source": "已锁定两侧所选暂停帧；请明确核验原始帧与 ROI。相同 PTS 不表示跨源对应关系。",
     "params": {}
   },
+  "qualityRoi.entry": {
+    "source": "ROI 测量",
+    "params": {}
+  },
+  "qualityRoi.framesStep": {
+    "source": "选择帧来源",
+    "params": {}
+  },
   "qualityRoi.history": {
     "source": "在任务管理中继续观察历史任务",
     "params": {}
@@ -4364,12 +4380,16 @@
     "source": "请先载入媒体库片源；本工具不上传本地文件。",
     "params": {}
   },
-  "qualityRoi.open": {
-    "source": "独立 ROI 测量",
+  "qualityRoi.modeExplicit": {
+    "source": "手动选择帧",
     "params": {}
   },
-  "qualityRoi.openPresented": {
-    "source": "测量暂停画面",
+  "qualityRoi.modePresented": {
+    "source": "当前暂停画面",
+    "params": {}
+  },
+  "qualityRoi.openTool": {
+    "source": "打开测量",
     "params": {}
   },
   "qualityRoi.preparationLifetime": {
@@ -4378,10 +4398,6 @@
   },
   "qualityRoi.presentedSelection": {
     "source": "分别选择已暂停的原生解码轨道，锁定真正上屏的帧。后台测量该 AU 的原始源平面，不测屏幕转换后的像素；之后播放变化不改写已锁定的选择。不会自动暂停、定位或建立索引。不支持的解码与几何会明确拒绝。",
-    "params": {}
-  },
-  "qualityRoi.presentedTitle": {
-    "source": "测量锁定的暂停画面",
     "params": {}
   },
   "qualityRoi.ready": {
@@ -4394,6 +4410,10 @@
   },
   "qualityRoi.refresh": {
     "source": "重新读取缓存候选",
+    "params": {}
+  },
+  "qualityRoi.roiStep": {
+    "source": "框选测量区域",
     "params": {}
   },
   "qualityRoi.selectAu": {
@@ -4412,8 +4432,8 @@
     "source": "快照核验已取消；正在等待 Worker 实际退出后复用容量。",
     "params": {}
   },
-  "qualityRoi.title": {
-    "source": "独立帧对与 ROI 测量",
+  "qualityRoi.submitStep": {
+    "source": "提交测量",
     "params": {}
   },
   "qualityRoi.verify": {
@@ -5023,6 +5043,10 @@
     "source": "输入名字或选择已有用户",
     "params": {}
   },
+  "settingsShell.experimental": {
+    "source": "实验性功能",
+    "params": {}
+  },
   "settingsShell.feedback": {
     "source": "反馈",
     "params": {}
@@ -5053,6 +5077,10 @@
   },
   "settingsShell.name": {
     "source": "名字",
+    "params": {}
+  },
+  "settingsShell.openInNewTab": {
+    "source": "在新标签页打开",
     "params": {}
   },
   "settingsShell.openSourceCredits": {
@@ -5116,11 +5144,7 @@
     "params": {}
   },
   "settingsShell.wasmThreads": {
-    "source": "WASM 解码线程",
-    "params": {}
-  },
-  "settingsShell.wasmThreadsDescription": {
-    "source": "重新打开视频后生效。自动模式优先使用多线程，启动失败时回退到单线程。",
+    "source": "解码线程",
     "params": {}
   },
   "settingsShell.workspace": {

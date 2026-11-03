@@ -3,7 +3,12 @@ import assert from 'node:assert/strict';import {mkdtemp,mkdir,readFile,writeFile
 import {loadConfig} from '../server/config.ts';import {startService} from '../server/runtime.ts';import {waitForAnnotationMedia} from './testing/agent-annotations-ready.mjs';import {recordBrowserEvidence,saveBrowserFailure} from './browser-failure-evidence.mjs';import {ssimOracle} from '../test/helpers/ssim-oracle.mjs';
 const root=path.resolve(import.meta.dirname,'..'),engine=process.argv[2]??'chromium',directory=process.env.VOIDPLAYER_TEST_ARTIFACTS??path.join(root,'.run/presented-quality',engine),temp=await mkdtemp(path.join(tmpdir(),'vp-presented-quality-'));
 const fixtures=JSON.parse(await readFile(path.join(root,'test/helpers/native-presented-samples.json'),'utf8')),reports=[];let service,browser,page,evidence,phase='setup',releasePending,failure;const heartbeat=setInterval(()=>console.log(JSON.stringify({presentedQuality:true,engine,phase})),10000).unref();
-const openTool=async()=>{if(!await page.locator('#quality-roi-presented-open').isVisible())await page.locator('#toggle-sources').click();await page.locator('#quality-roi-presented-open').click();};
+const openTool=async()=>{
+ await page.locator('#settings-open').click();
+ await page.locator('#settings-tab-experimental').click();
+ await page.locator('#quality-roi-open').click();
+ await page.locator('[data-roi-mode="presented"]').click();
+};
 try{await mkdir(directory,{recursive:true});const media=path.join(temp,'media');await mkdir(media);for(const s of fixtures.samples)for(const side of ['reference','distorted']){const data=Buffer.from(s.flv,'base64');assert.equal(createHash('sha256').update(data).digest('hex'),s.flvSha256);await writeFile(path.join(media,`${s.codec}-${s.depth}-${side}.flv`),data);}
  await writeFile(path.join(temp,'voidplayer.config.json'),JSON.stringify({mediaRoots:[media],dataDir:'data',staticDir:path.join(root,'dist'),logsDir:null,indexWatch:false}));const config=await loadConfig([],'production',temp);config.port=0;service=await startService(config);await service.library.refresh();const base=`http://127.0.0.1:${service.server.address().port}`;
  const identity=await fetch(base+'/api/identity',{method:'POST',headers:{origin:base,'content-type':'application/json','x-voidplayer-action':'identity'},body:JSON.stringify({name:'Presented quality owner'})});assert.equal(identity.status,200);const actor=(await identity.json()).actor,cookie=identity.headers.get('set-cookie').split(';')[0],headers={cookie,origin:base,'content-type':'application/json','x-voidplayer-actor':actor.id};

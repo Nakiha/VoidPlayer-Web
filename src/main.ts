@@ -104,8 +104,11 @@ const gpuReady=initializeGpuPresentation(Object.values(canvases)).catch(error =>
   log.warn('media', 'GPU 后台初始化失败，已保留现有呈现路径。', { error: error instanceof Error ? error.message : String(error) });
 });
 const session = new ReviewSession((slot, frame) => paintFrame(canvases[slot], frame));
-document.getElementById('quality-roi-open')!.onclick=()=>{try{openQualityRoi(session);}catch(error){notify(error instanceof Error?error.message:String(error));}};
-document.getElementById('quality-roi-presented-open')!.onclick=()=>{try{openQualityRoi(session,'presented');}catch(error){notify(error instanceof Error?error.message:String(error));}};
+$<HTMLButtonElement>('quality-roi-open').onclick=async()=>{
+  await settings.close();
+  if ($<HTMLDialogElement>('settings').open || uiEvents.signal.aborted) return;
+  openQualityRoi(session);
+};
 session.setBitstreamAnalysisConcurrency(analysisConcurrency());
 window.addEventListener(ANALYSIS_CONCURRENCY_EVENT, event => session.setBitstreamAnalysisConcurrency((event as CustomEvent<number>).detail), { signal: uiEvents.signal });
 session.onColorModeChange=async()=>{const {refreshGpuColorMode}=await import('./presentation/webgpu-presenter.ts');await refreshGpuColorMode();};

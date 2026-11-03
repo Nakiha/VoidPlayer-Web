@@ -107,15 +107,16 @@ export function installSettings() {
     tab.addEventListener('keydown', event => {
       if (!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
       event.preventDefault();
-      const index = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (tabs.indexOf(tab) + (['ArrowDown','ArrowRight'].includes(event.key) ? 1 : -1) + tabs.length) % tabs.length;
-      tabs[index].focus({ preventScroll: true }); tabs[index].click();
+      const available = tabs.filter(tab => !tab.hidden);
+      const index = event.key === 'Home' ? 0 : event.key === 'End' ? available.length - 1 : (available.indexOf(tab) + (['ArrowDown','ArrowRight'].includes(event.key) ? 1 : -1) + available.length) % available.length;
+      available[index].focus({ preventScroll: true }); available[index].click();
     }, { signal: life.signal });
   }
   document.addEventListener('keydown', event => {
     if (matchesShortcut(event, 'settings') && !event.isComposing) { event.preventDefault(); if (!document.querySelector('dialog[open]') || dialog.open) open(document.activeElement instanceof HTMLElement ? document.activeElement : trigger); }
   }, { signal: life.signal });
   return { openPane(id: string, invoker: HTMLElement | null = trigger) {
-    if (!settingsPanes().some(([key]) => key === id)) throw new Error(t(msg("settings.unknownSettingsPage", "未知设置页面。")));
+    if (!tabs.some(tab => !tab.hidden && tab.dataset.settingsPane === id)) throw new Error(t(msg("settings.unknownSettingsPage", "未知设置页面。")));
     if (dialog.open) select(id); else selected = id;
     open(invoker); tabs.find(t => t.dataset.settingsPane === id)!.focus({ preventScroll: true });
   }, close: dismiss, dispose() { ++closeEpoch; life.abort(); dialog.close(); } };

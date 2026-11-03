@@ -13,7 +13,12 @@ import {recordBrowserEvidence,saveBrowserFailure} from './browser-failure-eviden
 const root=path.resolve(import.meta.dirname,'..'),engine=process.argv[2]??'chromium',depth=Number(process.argv[3]??8),temp=await mkdtemp(path.join(tmpdir(),'vp-quality-roi-'));
 const directory=process.env.VOIDPLAYER_TEST_ARTIFACTS??path.join(root,'.run/quality-roi',`${engine}-${depth}`);
 let service,browser,page,evidence,phase='setup',heldGate;const gates=[],liveWorkers=new Set();
-const openRoi=async()=>{if(!await page.locator('#quality-roi-open').isVisible())await page.locator('#toggle-sources').click();await page.locator('#quality-roi-open').click();};
+const openRoi=async()=>{
+ await page.locator('#settings-open').click();
+ await page.locator('#settings-tab-experimental').click();
+ await page.locator('#quality-roi-open').click();
+ await page.locator('[data-roi-mode="explicit"]').click();
+};
 const progress=setInterval(()=>console.log(JSON.stringify({qualityRoi:true,engine,depth,phase})),10000).unref();
 try{
  await mkdir(directory,{recursive:true});const media=path.join(temp,'media');await mkdir(media);
