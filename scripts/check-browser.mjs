@@ -1232,6 +1232,24 @@ try {
     assert.ok(splitHeader.aCenter > 1280 * .15, 'A controls remain past the moved video seam');
     assert.ok(Math.abs(splitHeader.bLeft - splitHeader.expectedBLeft) <= 1, 'B heading stays at the center');
     assert.equal(splitHeader.aCopyHit, true, 'A copy button receives clicks above the drawing surface');
+    const screens = await page.locator('.screens').boundingBox();
+    const grip = page.locator('.divider-grip');
+    const assertGripGap = async right => {
+      const box = await grip.boundingBox();
+      const gap = right ? screens.x + screens.width - box.x - box.width : box.x - screens.x;
+      assert.ok(gap >= 4 - .02 && gap < 5.02, `grip edge gap: ${gap}px`);
+    };
+    const gripBox = await grip.boundingBox();
+    const gripY = gripBox.y + gripBox.height / 2;
+    await page.mouse.move(gripBox.x + gripBox.width / 2, gripY);
+    await page.mouse.down();
+    await page.mouse.move(screens.x, gripY);
+    await assertGripGap(false);
+    await page.mouse.move(screens.x + screens.width - 1, gripY);
+    await assertGripGap(true);
+    await page.mouse.up();
+    await page.locator('#divider').press('ArrowRight');
+    await assertGripGap(true);
     // B is smaller in uniform-pixel mode. The wipe can hide it completely
     // without either image leaving the stage, even with a small shared pan.
     await page.evaluate(() => window.voidPlayer.setViewport({ zoom: 1.25, offsetX: 80, offsetY: 15, splitPos: .5 }));

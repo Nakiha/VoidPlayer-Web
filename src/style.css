@@ -268,7 +268,7 @@ textarea { resize: vertical; min-height: 56px; max-height: 220px; padding: var(-
 #seek-form { display: flex; align-items: center; gap: var(--content-gap); }
 #seek-seconds { width: 140px; }
 .evidence { display: flex; flex-direction: column; font-size: var(--text-sm); color: var(--text-secondary); }
-.screens.split:not(.single) { display: block; }
+.screens.split:not(.single) { display: block; overflow: clip; }
 .screens.split:not(.single) .video-card { position: absolute; inset: 0; border: 0; }
 .screens.split:not(.single) .video-card.view-first { clip-path: polygon(0 0, 50% 0, 50% var(--row-height), var(--split-x, 50%) var(--row-height), var(--split-x, 50%) 100%, 0 100%); }
 .screens.split:not(.single) .video-card.view-second { clip-path: polygon(50% 0, 100% 0, 100% 100%, var(--split-x, 50%) 100%, var(--split-x, 50%) var(--row-height), 50% var(--row-height)); }

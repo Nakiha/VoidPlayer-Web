@@ -294,6 +294,7 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
   $('arrangement').setAttribute('aria-label', viewport.arrangement === 'grid' ? tr(msg("player.switchToHorizontalLayout", "切换为横向布局")) : tr(msg("shell.switchToGridLayout", "切换为田字布局")));
   $('arrangement').dataset.tooltip = viewport.arrangement === 'grid' ? tr(msg("player.arrangeTracksHorizontally", "横向排列轨道")) : tr(msg("shell.arrangeTracksInAGrid", "田字排列轨道"));
   }
+  $('divider').hidden = !splitActive;
   syncSplitGeometry();
   for (const card of cards) {
     const slot = card.dataset.slot as Slot;
@@ -323,9 +324,6 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
     $(`pts-${slot}`).title = t?.frame ? tr(msg("player.sourceTimestampSFrameDurationS", "源时间戳 {p0} µs · 帧时长 {p1} µs"), { p0: t.frame.sourcePtsUs, p1: t.frame.durationUs }) : '';
   }
   fitTask.schedule();
-  const divider = $('divider');
-  divider.hidden = !splitActive;
-  divider.setAttribute('aria-valuenow', String(Math.round(viewport.splitPos * 100)));
   for (const button of document.querySelectorAll<HTMLButtonElement>('#layout-mode button')) {
     button.disabled = !loaded || (button.dataset.mode === 'split' && visibleTracks.length < 2);
     button.dataset.tooltip = button.dataset.mode === 'split' ? tr(msg("player.wipeBetweenTheFirstTwoTracksIn", "擦拭对比当前排序的前两个轨道")) : tr(msg("player.showAllTracksSeparately", "独立显示所有轨道"));

@@ -103,8 +103,7 @@ export class Viewport {
     this.channel = channel;
   }
 
-  /** While dragging the splitter the position is NOT clamped (the divider may
-   *  leave the stage); pass clamp=true when the gesture ends. */
+  /** Pass clamp=true to constrain a position to the normalized viewport. */
   setSplitPos(pos: number, clamp = false) {
     if (!Number.isFinite(pos)) return;
     this.splitPos = clamp ? Math.min(1, Math.max(0, pos)) : pos;
@@ -229,11 +228,15 @@ export class PanMomentumFilter {
 
 
 /** One shared seam snapped in screen space, including a fractional panel origin. */
-export function splitPixelGeometry(fraction:number, width:number, left:number, dpr:number) {
-  const scale=Number.isFinite(dpr)&&dpr>0?dpr:1;
-  const x=Math.round((left+fraction*width)*scale)/scale-left;
+export function splitPixelGeometry(fraction: number, width: number, left: number, dpr: number, inset = 0) {
+  const scale = Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
+  let pixel = Math.round((left + fraction * width) * scale);
+  if (inset > 0) {
+    const min = Math.ceil((left + inset) * scale), max = Math.floor((left + width - inset) * scale);
+    pixel = min <= max ? Math.max(min, Math.min(max, pixel)) : Math.round((left + width / 2) * scale);
+  }
   // Two physical pixels straddle the clip boundary without half-pixel line edges.
-  return {x,strokeWidth:2/scale};
+  return { x: pixel / scale - left, strokeWidth: 2 / scale };
 }
 
 

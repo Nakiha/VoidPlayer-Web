@@ -165,8 +165,7 @@ export function installViewportGestures(deps: ViewportGestureDeps) {
     });
   }
 
-  // Splitter: draggable divider (unclamped while dragging, clamped on release,
-  // like the desktop) with a 5% keyboard step.
+  // Drag and keyboard updates share the grip bounds in syncSplitGeometry.
   const divider = $<HTMLElement>('divider');
   let dividerDrag: number | null = null;
   divider.addEventListener('pointerdown', e => {
@@ -185,10 +184,6 @@ export function installViewportGestures(deps: ViewportGestureDeps) {
   const endDividerDrag = (e: PointerEvent) => {
     if (dividerDrag !== e.pointerId) return;
     dividerDrag = null;
-    viewport.setSplitPos(viewport.splitPos, true);
-    syncSplitGeometry();
-    divider.setAttribute('aria-valuenow', String(Math.round(viewport.splitPos * 100)));
-    applyViewTransform();
     log.info('ui', '分割线拖拽结束', { splitPos: Math.round(viewport.splitPos * 1000) / 1000 });
   };
   divider.addEventListener('pointerup', endDividerDrag);
@@ -199,7 +194,6 @@ export function installViewportGestures(deps: ViewportGestureDeps) {
     e.stopPropagation();
     viewport.setSplitPos(viewport.splitPos + (e.code === 'ArrowRight' ? 0.05 : -0.05), true);
     syncSplitGeometry();
-    divider.setAttribute('aria-valuenow', String(Math.round(viewport.splitPos * 100)));
     applyViewTransform();
     log.info('ui', '分割线键盘调整', { splitPos: Math.round(viewport.splitPos * 1000) / 1000, trigger: 'keyboard' });
   });

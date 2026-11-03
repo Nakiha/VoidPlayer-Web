@@ -22,6 +22,7 @@ export type ViewBindingDeps = {
 /** Viewport geometry wiring: fit, transform, split seam. Pure DOM reads/writes, no decode. */
 export function createViewBindings(deps: ViewBindingDeps) {
   const { $, screens, canvases, grids, viewport, session, drawingEditor } = deps;
+  const divider = $('divider'), grip = divider.querySelector<HTMLElement>('.divider-grip')!;
   const fittedTracks = new Map<Slot, FittedTrack>();
   let primaryFitted: { width: number; height: number } | null = null;
 
@@ -70,7 +71,13 @@ export function createViewBindings(deps: ViewBindingDeps) {
 
   function syncSplitGeometry() {
     const rect = screens.getBoundingClientRect();
-    const seam = splitPixelGeometry(viewport.splitPos, rect.width, rect.left, devicePixelRatio);
+    const inset = !divider.hidden && rect.width > 0 ? grip.getBoundingClientRect().width / 2 + 4 : 0;
+    if (inset > 0) {
+      const min = Math.min(.5, inset / rect.width);
+      viewport.setSplitPos(Math.max(min, Math.min(1 - min, viewport.splitPos)));
+    }
+    divider.setAttribute('aria-valuenow', String(Math.round(viewport.splitPos * 100)));
+    const seam = splitPixelGeometry(viewport.splitPos, rect.width, rect.left, devicePixelRatio, inset);
     for (const [name, value] of [['--split-x', `${seam.x}px`], ['--split-stroke-width', `${seam.strokeWidth}px`]]) {
       if (screens.style.getPropertyValue(name) !== value) screens.style.setProperty(name, value);
     }
