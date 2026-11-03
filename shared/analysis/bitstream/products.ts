@@ -64,16 +64,31 @@ export function validateRecords(frame: FrameMetadata, count: number, at: (i: num
   if (frame.confidence === 'exact' && (!count || w % 4 || h % 4 || frame.reasons.length || frame.capabilities.blocks !== 'ready')) throw new AnalysisFailure('unsupported-picture-layout', 'Incomplete picture');
   // Dimensions are admitted before allocation, independent of producer claims.
   if (![w, h].every(n => Number.isInteger(n) && n > 0) || w > 4096 || h > 2304) throw new AnalysisFailure('resource-limit', 'Invalid analysis geometry');
-  const cells = new Uint8Array(Math.ceil(w / 4) * Math.ceil(h / 4));
+  const stride = Math.ceil(w / 4);
+  const cells = new Uint8Array(stride * Math.ceil(h / 4));
+  const qpRequired = frame.capabilities.qp === 'ready', maxQp = frame.codec === 'vvc' ? 63 : 51;
+  const aligned = (n: number) => Number.isInteger(n) && n % 4 === 0;
   let area = 0, sum = 0;
   for (let i = 0; i < count; i++) {
-    const b = at(i);
-    if (![b.x,b.y,b.width,b.height].every(n => Number.isInteger(n) && n % 4 === 0) || b.x < 0 || b.y < 0 || b.width <= 0 || b.height <= 0 || b.x + b.width > w || b.y + b.height > h || !['intra','inter','skip'].includes(b.mode) || (frame.capabilities.qp==='ready' && b.qp===null) || (b.qp !== null && (!Number.isInteger(b.qp) || b.qp < 0 || b.qp > (frame.codec === 'vvc' ? 63 : 51)))) throw new Error('Invalid packed analysis block');
-    for (let y = b.y / 4; y < (b.y + b.height) / 4; y++) for (let x = b.x / 4; x < (b.x + b.width) / 4; x++) { const p = y * Math.ceil(w / 4) + x; if (cells[p]) throw new AnalysisFailure('unsupported-picture-layout', 'Overlapping analysis blocks'); cells[p] = 1; }
-    area += b.width * b.height; sum += (b.qp ?? 0) * b.width * b.height;
+    const { x, y, width, height, mode, qp } = at(i);
+    if (!aligned(x) || !aligned(y) || !aligned(width) || !aligned(height) ||
+        x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > w || y + height > h ||
+        (mode !== 'intra' && mode !== 'inter' && mode !== 'skip') ||
+        (qp === null ? qpRequired : !Number.isInteger(qp) || qp < 0 || qp > maxQp))
+      throw new Error('Invalid packed analysis block');
+    const startX = x / 4, endX = (x + width) / 4, endY = (y + height) / 4;
+    for (let row = y / 4; row < endY; row++) {
+      const start = row * stride;
+      for (let cell = start + startX; cell < start + endX; cell++) {
+        if (cells[cell]) throw new AnalysisFailure('unsupported-picture-layout', 'Overlapping analysis blocks');
+        cells[cell] = 1;
+      }
+    }
+    const blockArea = width * height;
+    area += blockArea; sum += (qp ?? 0) * blockArea;
   }
   if (frame.confidence === 'exact' && area !== w * h) throw new AnalysisFailure('unsupported-picture-layout', 'Incomplete block coverage');
-  return frame.capabilities.qp === 'ready' && area ? sum / area : null;
+  return qpRequired && area ? sum / area : null;
 }
 /** Conservative JSON/UTF-8 allocation budget without constructing a JSON string. */
 export function metadataBudgetBytes(value:unknown) {

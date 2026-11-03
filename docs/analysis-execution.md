@@ -8,7 +8,7 @@ digest separates artifact caches; full and fast outputs must be equivalent.
 
 An explicit single-picture `blocks` request can use fast execution with a
 complete index and a syntax-proven closed anchor. `input.plan` supplies the
-actual reference preroll. A cold continuous VVC `blocks` request can also use
+actual reference preroll. A cold continuous HEVC or VVC `blocks` request can also use
 fast execution when the complete reference chain fits 128 pictures and the
 32 MiB input budget, starts at a verified closed anchor, and has one decoder
 configuration. The decoder carries syntax reference state across open GOPs.

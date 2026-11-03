@@ -72,9 +72,11 @@ for(const [name,reason,fastOpen] of vvcCases){
  test(`VVC precise blocks ${name}: same reference preroll and winning target`,{skip:!ready?'VVC fixtures require the synced h266 sample':!extension?'requires upstream execution ABI1; older pinned core remains full':false},()=>assertPreciseBlocks(name,12,fastOpen,reason));
 }
 
-for (const name of ['vvc', 'vvc-late-hash', 'vvc-late-grain', 'vvc-late-changed-pps']) {
+for (const [name, fallback] of [
+ ['vvc', 0], ['vvc-late-hash', 1], ['vvc-late-grain', 1], ['vvc-late-changed-pps', 1], ['main10', 0], ['normal', 1],
+] as const) {
  const fixture = `fixtures/analysis-execution/${name}.mp4`;
- test(`VVC continuous blocks ${name}: publish only winning results`, { skip: !extension || !existsSync(fixture) }, async () => {
+ test(`Continuous blocks ${name}: publish only winning results`, { skip: !extension || !existsSync(fixture) }, async () => {
   const data = await readFile(fixture);
   const input = await openAnalysisInput(reader(data), new AbortController().signal);
   const firstPtsUs = Math.min(...input.packets.map(packet => packet.pts));
@@ -105,8 +107,8 @@ for (const name of ['vvc', 'vvc-late-hash', 'vvc-late-grain', 'vvc-late-changed-
   assert.deepEqual(fast.output.map(canonical), full.output.map(canonical));
   assert.ok(full.firstDecoded < count);
   assert.equal(fast.counters.fastOpen, 1);
-  assert.equal(fast.counters.fallback, name === 'vvc' ? 0 : 1);
-  if (name === 'vvc') {
+  assert.equal(fast.counters.fallback, fallback);
+  if (!fallback) {
    assert.equal(fast.firstDecoded, count);
    const cached = new Map(fast.output.map(result => [result.picture.au, result]));
    const delivered = new Set<number>();

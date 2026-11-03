@@ -5,7 +5,7 @@ import {avcGeometry} from '../../media/codecs/avc-geometry.ts';
 import {hevcGeometry} from '../../media/codecs/hevc-geometry.ts';
 import { makeDemandPlan } from './demand.ts';
 import type { DemandPlan } from './demand.ts';
-import { analysisIndexIdentity, isProduct, validateOutput, validateRecords, writeBlock, PRODUCT_LIMIT, PRODUCT_SCHEMA, metadataBudgetBytes } from './products.ts';
+import { analysisIndexIdentity, isProduct, validateOutput, validateRecords, PRODUCT_LIMIT, PRODUCT_SCHEMA, metadataBudgetBytes } from './products.ts';
 import type { AnalysisOutput, AnalysisProduct, AnalysisSummary, FrameMetadata } from './products.ts';
 import {isAnnexB} from '../../media/codecs/nal-framing.ts';
 import { validateAnalysisCore } from './core-abi.ts';
@@ -330,8 +330,14 @@ async function runPictureAttempt(
           if (target.product === 'summary') { result = summary; validateOutput(result); }
           else {
             if (blockCount*12 + PRODUCT_LIMIT.metadata > PRODUCT_LIMIT.frame) throw new AnalysisFailure('resource-limit','Packed analysis allocation budget exceeded');
-            const payload = new ArrayBuffer(blockCount*12), packed = new DataView(payload);
-            for(let i=0;i<blockCount;i++) writeBlock(packed,i,blockAt(i));
+            // Copy the validated little-endian records before the core frees
+            // them. The wire format uses a null QP sentinel and a reserved byte.
+            const payload = new Uint8Array(view.buffer, view.byteOffset, blockCount * 12).slice().buffer;
+            const packed = new DataView(payload);
+            for (let offset = 0; offset < payload.byteLength; offset += 12) {
+              if (depth !== 8) packed.setInt16(offset + 8, -32768, true);
+              packed.setUint8(offset + 11, 0);
+            }
             result = {...summary,product:'blocks',encoding:'blocks-le12-v1',payload};
             // Producer already checked geometry directly in the WASM view.
           }
@@ -714,7 +720,7 @@ async function runStream(
   // Bound the first publication delay and the work a late pixel requirement can replay.
   const maxChainPictures = 128;
   const total = input.totalPackets;
-  if (target.product !== 'blocks' || input.codec !== 'vvc' || input.acknowledge ||
+  if (target.product !== 'blocks' || (input.codec !== 'vvc' && input.codec !== 'hevc') || input.acknowledge ||
       (input.indexIntegrity !== undefined && input.indexIntegrity !== 'complete') ||
       total === null || total < 1 || total > maxChainPictures)
     return runPicture(reader, pictureTarget, core, buildId, signal, streamOptions);
