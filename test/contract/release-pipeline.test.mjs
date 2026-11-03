@@ -81,6 +81,7 @@ test('daily verification is bounded and full release verification is explicit', 
 test('release workflow gates verified artifacts and draft staging on every verification job', async () => {
   const workflow = await readFile(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
   const jobs = workflowJobs(workflow);
+  assert.match(jobs.identity.body, /- run: npm ci[\s\S]*- run: node --test test\/release-pipeline\.test\.mjs test\/test-manifest\.test\.mjs/);
   const cores = workflowJobs(await readFile(new URL('../../.github/workflows/prepare-cores.yml', import.meta.url), 'utf8'));
   assert.match(jobs.cores.body, /uses: \.\/\.github\/workflows\/prepare-cores\.yml/);
   assert.match(cores['analysis-core'].body, /name: Verify analysis reference ABI including restored caches\n        run: node scripts\/prepare-analysis-core.mjs public\/vendor\/voidplayer-analysis/);

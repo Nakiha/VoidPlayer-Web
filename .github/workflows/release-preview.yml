@@ -25,6 +25,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24.15.0'
+          cache: npm
+      - run: npm ci
       - run: node scripts/release-version.mjs
       - run: node --test test/release-pipeline.test.mjs test/test-manifest.test.mjs
 
