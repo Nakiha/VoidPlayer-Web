@@ -492,7 +492,7 @@ async function runPictureAttempt(
   }
 }
 
-/** Only an explicit single-picture blocks request may use a private fast attempt.
+/** A single-picture blocks request can use a private fast attempt.
  * Summary, range, legacy and viewport work keeps incremental full publication,
  * even when only one cache miss remains in a selected GOP.
  * A late pixel requirement discards their owners and opens a new full decoder
@@ -708,9 +708,71 @@ async function runStream(
   const input = await openAnalysisInput(reader, signal, true, {  sourceVersion:target.sourceVersion,indexIdentity:target.indexIdentity,frontier,
     waiting: async waitingForIndex => { await report({ ...latest, waitingForIndex }); } });
   const first = input.packets[0];
-  return runPicture(reader, { product: target.product, indexIdentity: target.indexIdentity, sourceVersion: target.sourceVersion,
-    sourcePtsUs: first.pts, normalizedMediaUs: Math.max(0, first.pts - target.firstPtsUs) },
-    core, buildId, signal, { input, sequential: true, stream: target, onResult, onProgress: report, cached });
+  const pictureTarget = { product: target.product, indexIdentity: target.indexIdentity, sourceVersion: target.sourceVersion,
+    sourcePtsUs: first.pts, normalizedMediaUs: Math.max(0, first.pts - target.firstPtsUs) };
+  const streamOptions = { input, sequential: true, stream: target, onResult, onProgress: report, cached };
+  // Bound the first publication delay and the work a late pixel requirement can replay.
+  const maxChainPictures = 128;
+  const total = input.totalPackets;
+  if (target.product !== 'blocks' || input.codec !== 'vvc' || input.acknowledge ||
+      (input.indexIntegrity !== undefined && input.indexIntegrity !== 'complete') ||
+      total === null || total < 1 || total > maxChainPictures)
+    return runPicture(reader, pictureTarget, core, buildId, signal, streamOptions);
+
+  try {
+    const confirmed = input.indexComplete || !frontier || (await frontier()).complete;
+    signal.throwIfAborted();
+    if (confirmed && !input.indexComplete) await input.ensure?.(total);
+    // Preserve one decoder and one configuration across dependent GOPs. The
+    // first AU must be independently decodable, even if the container calls it a key.
+    if (input.indexComplete && input.packets.length === total &&
+        input.packets.every((packet, i) => packet.configuration === first.configuration && (!i || !packet.discontinuity)) &&
+        input.packets.reduce((sum, packet) => sum + packet.size, 0) <= BUDGET.inputBytes &&
+        first.size <= BUDGET.packetBytes) {
+      const evidence = inspectPacketPicture(input.codec, input.configurations[first.configuration], await input.readUnit(first));
+      if (evidence.singlePicture && evidence.closedRandomAccess) {
+        // A cached prefix or hole keeps the established incremental cache path.
+        // Reuse probed entries when handing the request back to that path.
+        const probed = new Map<number, AnalysisOutput | null>();
+        if (cached) {
+          streamOptions.cached = picture => probed.has(picture.au) ? Promise.resolve(probed.get(picture.au)!) : cached(picture);
+          for (const packet of input.packets) {
+            signal.throwIfAborted();
+            const hit = await cached(input.picture(packet, target.sourceVersion));
+            probed.set(packet.au, hit);
+            if (hit) return await runPicture(reader, pictureTarget, core, buildId, signal, { ...streamOptions, keepInput: true });
+          }
+        }
+        signal.throwIfAborted();
+        const instance = typeof core === 'function' ? await core() : core;
+        signal.throwIfAborted();
+        if (hasExecutionExtension(instance)) {
+          let pictures = 0;
+          await report({ ...latest, totalPictures: total, indexComplete: true });
+          const result = await executeAnalysisAttempt({
+            fast: true, policy: executionPolicy(), signal,
+            event: (event, bytes) => instance[EXECUTION_EVENT]?.(event, bytes),
+            publish: async value => {
+              await onResult(value);
+              signal.throwIfAborted();
+              pictures++;
+              await report({ ...latest, pictures, gopStartAu: value.gop?.startAu,
+                checkedUs: Math.min(target.durationUs - 1, Math.floor(target.durationUs * pictures / total)) });
+            },
+            attempt: (executionMode, publish, onExecution, reserve) => runPictureAttempt(reader, pictureTarget, instance, buildId, signal,
+              { input, keepInput: true, sequential: true, stream: target, executionMode, onResult: publish, onExecution, reserve }),
+          });
+          const totalUs = Math.max(target.durationUs, input.sourceEndUs - target.firstPtsUs);
+          await report({ ...latest, totalUs, checkedUs: totalUs });
+          return result;
+        }
+        core = instance;
+      }
+    }
+    return await runPicture(reader, pictureTarget, core, buildId, signal, { ...streamOptions, keepInput: true });
+  } finally {
+    input.close();
+  }
 }
 
 // Legacy defaults remain source-compatible. Products are explicit opt-in.

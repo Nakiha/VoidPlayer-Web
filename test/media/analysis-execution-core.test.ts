@@ -71,6 +71,53 @@ for(const [name,reason,fastOpen] of vvcCases){
  const ready=existsSync(path.join('fixtures/analysis-execution',name+'.mp4'));
  test(`VVC precise blocks ${name}: same reference preroll and winning target`,{skip:!ready?'VVC fixtures require the synced h266 sample':!extension?'requires upstream execution ABI1; older pinned core remains full':false},()=>assertPreciseBlocks(name,12,fastOpen,reason));
 }
+
+for (const name of ['vvc', 'vvc-late-hash', 'vvc-late-grain', 'vvc-late-changed-pps']) {
+ const fixture = `fixtures/analysis-execution/${name}.mp4`;
+ test(`VVC continuous blocks ${name}: publish only winning results`, { skip: !extension || !existsSync(fixture) }, async () => {
+  const data = await readFile(fixture);
+  const input = await openAnalysisInput(reader(data), new AbortController().signal);
+  const firstPtsUs = Math.min(...input.packets.map(packet => packet.pts));
+  const target = { mode: 'stream', product: 'blocks', sourceVersion: name, firstPtsUs, durationUs: input.sourceEndUs - firstPtsUs } as const;
+  const count = input.packets.length;
+  input.close();
+  const run = async (full: boolean) => {
+   const counters = emptyCounters(), output: AnalysisOutput[] = [];
+   const core = countCore(await create(), counters);
+   if (full) {
+    const mode = core._vpa_execution_mode.bind(core);
+    core._vpa_execution_mode = () => mode(0);
+   }
+   let firstDecoded = 0, progress = 0;
+   await analyzeStream(reader(data), target, core, manifest.buildId, new AbortController().signal, async result => {
+    if (!output.length) firstDecoded = counters.decodedAU;
+    output.push(result);
+   }, async state => {
+    assert.equal(state.pictures, output.length);
+    progress = state.pictures;
+   }, undefined, async () => null);
+   assert.equal(output.length, count);
+   assert.equal(progress, count);
+   assert.equal(new Set(output.map(result => result.picture.au)).size, count);
+   return { counters, output, firstDecoded };
+  };
+  const full = await run(true), fast = await run(false);
+  assert.deepEqual(fast.output.map(canonical), full.output.map(canonical));
+  assert.ok(full.firstDecoded < count);
+  assert.equal(fast.counters.fastOpen, 1);
+  assert.equal(fast.counters.fallback, name === 'vvc' ? 0 : 1);
+  if (name === 'vvc') {
+   assert.equal(fast.firstDecoded, count);
+   const cached = new Map(fast.output.map(result => [result.picture.au, result]));
+   const delivered = new Set<number>();
+   await analyzeStream(reader(data), target, () => { throw Error('Warm stream initialized decoder'); }, manifest.buildId,
+    new AbortController().signal, async result => { delivered.add(result.picture.au); }, async () => {},
+    undefined, async picture => cached.get(picture.au) ?? null);
+   assert.equal(delivered.size, count);
+  }
+  else assert.equal(fast.counters.fullOpen, 1);
+ });
+}
 test('a one-picture legacy range and a viewport with one missing blocks picture stay full',async()=>{
  const data=await readFile('fixtures/analysis-execution/normal.mp4'),input=await openAnalysisInput(reader(data),new AbortController().signal),packet=input.packets[12],firstPtsUs=Math.min(...input.packets.map(p=>p.pts)),durationUs=input.sourceEndUs-firstPtsUs;input.close();
  const cache=new Map<number,AnalysisOutput>(),target={mode:'stream' as const,product:'blocks' as const,sourceVersion:'one-miss',firstPtsUs,durationUs,window:{startUs:100000,endUs:200000,axis:'pts' as const}};

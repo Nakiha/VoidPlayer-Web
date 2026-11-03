@@ -6,13 +6,15 @@ The semantic `blocks-basic-v2` recipe, EXACT rules, GOP/picture/index identities
 resource limits and playback paths remain unchanged. Exact Core buildId/WASM
 digest separates artifact caches; full and fast outputs must be equivalent.
 
-Only an explicit single-picture `blocks` request with a complete index and
-syntax-proven closed anchor admits fast execution.
-`input.plan` supplies the actual reference preroll; dependent/open or incremental
-full-film work stays on the original full path. Summary, range, viewport and legacy
-requests also keep full, incremental publication, even with one cache miss left in
-a GOP. This preserves summary first-result latency and pause/resume work while
-retaining the measured precise-frame benefit. The new Core extension's existing
+An explicit single-picture `blocks` request can use fast execution with a
+complete index and a syntax-proven closed anchor. `input.plan` supplies the
+actual reference preroll. A cold continuous VVC `blocks` request can also use
+fast execution when the complete reference chain fits 128 pictures and the
+32 MiB input budget, starts at a verified closed anchor, and has one decoder
+configuration. The decoder carries syntax reference state across open GOPs.
+Cached, unsealed or oversized streams use the incremental full path. Summary,
+range, viewport and legacy requests also keep full incremental publication.
+The Core extension's existing
 FFmpeg parameter-set parser decides whether the
 configuration really permits HEVC Main8/Main10 or VVC Main10 4:2:0 8..10 bit
 pruning. PCM/TQB/extensions stay full; VVC in-band parameter changes, film grain
@@ -46,9 +48,11 @@ exact pictures, which the existing cache/resume protocol can safely reuse.
 Consequently the external worker/HTTP protocol needs no rollback/generation change.
 
 Staging a cold summary GOP delayed the first publication and wasted decoded work
-on pause, so that experiment is not the product policy. Exact analysis only
-stages its requested picture, after its own packet/suffix SEI processing
-and necessary reference/reorder work; it does not validate unseen future AUs.
+on pause, so summaries keep incremental delivery. Exact analysis stages its
+requested picture after packet and suffix SEI processing and necessary
+reference/reorder work. An eligible continuous blocks request publishes after
+its bounded chain completes. This can delay the first result even when total
+throughput improves.
 
 The sorter dependency (Core PR9), FFmpeg analysis change (FFmpeg PR1), Core
 execution change (Core PR10) and the VVC pruning change (FFmpeg PR3, Core PR12)
