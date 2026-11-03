@@ -25,7 +25,7 @@ test('daily verification is bounded and full release verification is explicit', 
   const read = name => readFile(new URL(`../../.github/workflows/${name}.yml`, import.meta.url), 'utf8');
   const daily = await read('checks'), release = await read('release-preview'), cores = await read('prepare-cores');
   const jobs = workflowJobs(daily), coreJobs = workflowJobs(cores);
-  assert.deepEqual(Object.keys(jobs).sort(), ['browser', 'cores', 'required', 'source-logic', 'unit']);
+  assert.deepEqual(Object.keys(jobs).sort(), ['browser', 'cores', 'qa-media', 'required', 'source-logic', 'unit']);
   assert.deepEqual(Object.keys(coreJobs).sort(), ['analysis-core', 'decoder']);
   assert.match(daily, /on:\n  pull_request:\n  push:\n    branches: \[main\]/);
   const fullTriggers = release.slice(release.indexOf('\non:\n'), release.indexOf('\npermissions:'));
@@ -86,7 +86,7 @@ test('release workflow gates verified artifacts and draft staging on every verif
   assert.match(cores['analysis-core'].body, /name: Verify analysis reference ABI including restored caches\n        run: node scripts\/prepare-analysis-core.mjs public\/vendor\/voidplayer-analysis/);
   const required = ['native-release', 'native-runtime', 'unit', 'playback', 'cache-browser', 'source-logic', 'analysis-browser', 'analysis-matrix', 'ssim-browser', 'hevc-browser', 'uncovered-regressions'];
   assert.deepEqual([...jobs['release-set'].needs].sort(), required.sort());
-  assert.deepEqual(jobs.unit.needs, ['cores']);
+  assert.deepEqual(jobs.unit.needs, ['cores', 'qa-media']);
   assert.match(jobs.unit.body, /run: node scripts\/run-tests\.mjs ci-node-media\n        env:\n          VOIDPLAYER_FFMPEG_ORACLE:/);
   assert.equal((workflow.match(/run: node scripts\/run-tests\.mjs ci-node-media(?:\n|$)/g) ?? []).length, 1, 'media Node partition runs exactly once with no case filter');
   assert.doesNotMatch(jobs.playback.body, /run-tests\.mjs unit/);
@@ -241,7 +241,7 @@ test('cache suite runs once in its own required job with the same pinned prepara
   assert.deepEqual(prior.find(row=>row.id==='browser-mcp-page-bridge-chromium')?.command,['node','scripts/check-mcp-page-bridge-browser.mjs']);
   assert.equal(prior.filter(row=>row.id!=='browser-mcp-page-bridge-chromium').length,55,'retain the existing cache matrix alongside the required MCP case');
   assert.ok(cases.every(row => row.required && row.kind === 'regression'));
-  assert.deepEqual(cache.needs, ['cores']);
+  assert.deepEqual(cache.needs, ['cores', 'qa-media']);
   assert.match(cache.body, /^    runs-on: ubuntu-24\.04$/m);
   assert.match(cache.body, /^    timeout-minutes: 45$/m);
   assert.match(jobs.playback.body, /^    timeout-minutes: 45$/m);
@@ -279,7 +279,7 @@ test('browser workflow collects independent outcomes and uploads failure evidenc
 test('analysis matrix runs as independent required jobs with distinct evidence', async () => {
   const jobs = workflowJobs(await readFile(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8'));
   const matrix = jobs['analysis-matrix'];
-  assert.deepEqual(matrix.needs, ['cores']);
+  assert.deepEqual(matrix.needs, ['cores', 'qa-media']);
   assert.match(matrix.body, /timeout-minutes: 30/);
   assert.match(matrix.body, /fail-fast: false/);
   assert.match(matrix.body, /engine: \[chromium, webkit\]\n        part: \[mp4, flv-legacy, flv-enhanced, fmp4, ts, js-containers\]/);
@@ -542,7 +542,6 @@ test('every FATE consumer restores an exact manifest cache and verifies before s
   }
   const preparation = await readFile(new URL('../../.github/actions/media-fixtures/action.yml', import.meta.url), 'utf8');
   assert.equal((preparation.match(/uses: \.\/\.github\/actions\/fate-fixtures/g) ?? []).length, 1);
-  assert.match(preparation, /ref: 881eb5ccd706c33aa1ff35ab3a67ac3a226ccfba/);
   for (const id of ['unit', 'cache-browser', 'playback']) assert.match(jobs[id].body, /uses: \.\/\.github\/actions\/media-fixtures/);
   const action = await readFile(new URL('../../.github/actions/fate-fixtures/action.yml',import.meta.url),'utf8');
   assert.match(action,/node scripts\/sync-fate-samples\.mjs --cache-key/);
@@ -554,6 +553,29 @@ test('every FATE consumer restores an exact manifest cache and verifies before s
   assert.match(action,/if: success\(\) && steps\.verify\.outcome == 'success' && steps\.restore\.outputs\.cache-hit != 'true'\n      uses: actions\/cache\/save@v4/);
   assert.ok(action.indexOf('id: verify')>action.indexOf('uses: actions/cache/restore@v4'));
   assert.ok(action.indexOf('uses: actions/cache/save@v4')>action.indexOf('id: verify'));
+});
+
+test('daily and release sample consumers share one verified QA media artifact', async () => {
+  const read = name => readFile(new URL(`../../.github/workflows/${name}.yml`, import.meta.url), 'utf8');
+  const prepare = await read('prepare-qa-media');
+  assert.match(prepare, /run: bash scripts\/fetch-qa-media\.sh[\s\S]*uses: actions\/cache\/save@v4[\s\S]*name: qa-media/);
+  const action = await readFile(new URL('../../.github/actions/qa-media/action.yml', import.meta.url), 'utf8');
+  assert.match(action, /uses: actions\/download-artifact@v4[\s\S]*name: qa-media\n\s+path: fixtures\/video/);
+  const mediaFixtures = await readFile(new URL('../../.github/actions/media-fixtures/action.yml', import.meta.url), 'utf8');
+  assert.match(mediaFixtures, /uses: \.\/\.github\/actions\/qa-media/);
+  assert.doesNotMatch(mediaFixtures, /lfs: true|sync-samples/);
+  for (const [name, consumers] of [
+    ['checks', ['unit']],
+    ['release-preview', ['analysis-matrix', 'unit', 'playback', 'cache-browser', 'uncovered-regressions', 'hevc-browser', 'native-release']],
+  ]) {
+    const workflow = await read(name);
+    const jobs = workflowJobs(workflow);
+    assert.doesNotMatch(workflow, /lfs: true|sync-samples/);
+    assert.match(jobs['qa-media'].body, /uses: \.\/\.github\/workflows\/prepare-qa-media\.yml/);
+    assert.deepEqual(Object.keys(jobs).filter(id => /uses: \.\/\.github\/actions\/(?:qa-media|media-fixtures)/.test(jobs[id].body)), consumers);
+    for (const id of consumers) assert.ok(jobs[id].needs.includes('qa-media'), id);
+    assert.ok(!jobs.cores.needs.includes('qa-media'));
+  }
 });
 
 test('SSIM dual-browser real task/evidence checks gate release output without extending serial source UI budgets',async()=>{

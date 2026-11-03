@@ -28,6 +28,10 @@ jobs:
       - run: node scripts/release-version.mjs
       - run: node --test test/release-pipeline.test.mjs test/test-manifest.test.mjs
 
+  qa-media:
+    needs: identity
+    uses: ./.github/workflows/prepare-qa-media.yml
+
   cores:
     needs: identity
     uses: ./.github/workflows/prepare-cores.yml
@@ -144,7 +148,7 @@ jobs:
 
   analysis-matrix:
     name: Verify analysis matrix (${{ matrix.engine }}, ${{ matrix.part }})
-    needs: cores
+    needs: [cores, qa-media]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -170,15 +174,7 @@ jobs:
           name: release-analysis-core
           path: public/vendor/voidplayer-analysis
       - run: npm ci
-      - name: Checkout pinned codec QA samples
-        uses: actions/checkout@v4
-        with:
-          repository: Nakiha/VoidPlayer
-          ref: 881eb5ccd706c33aa1ff35ab3a67ac3a226ccfba
-          path: .run/qa-samples
-          sparse-checkout: resources/video
-          lfs: true
-      - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
+      - uses: ./.github/actions/qa-media
       - name: Install analysis fixture tools
         run: |
           sudo apt-get update
@@ -203,7 +199,7 @@ jobs:
 
   unit:
     name: Verify media-dependent Node regressions
-    needs: cores
+    needs: [cores, qa-media]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -244,7 +240,7 @@ jobs:
 
   playback:
     name: Verify trusted HTTPS, WebCodecs and source UI
-    needs: cores
+    needs: [cores, qa-media]
     runs-on: ubuntu-24.04
     # Node and cache suites have separate required jobs; preserve the original
     # browser/FATE case deadlines and this job budget.
@@ -340,7 +336,7 @@ jobs:
 
   cache-browser:
     name: Verify annotation persistence and unified cache management
-    needs: cores
+    needs: [cores, qa-media]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -397,7 +393,7 @@ jobs:
 
   uncovered-regressions:
     name: Verify browser regressions no other job runs
-    needs: cores
+    needs: [cores, qa-media]
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     strategy:
@@ -422,15 +418,7 @@ jobs:
           name: release-analysis-core
           path: public/vendor/voidplayer-analysis
       - run: npm ci
-      - name: Checkout pinned codec QA samples
-        uses: actions/checkout@v4
-        with:
-          repository: Nakiha/VoidPlayer
-          ref: 881eb5ccd706c33aa1ff35ab3a67ac3a226ccfba
-          path: .run/qa-samples
-          sparse-checkout: resources/video
-          lfs: true
-      - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
+      - uses: ./.github/actions/qa-media
       - name: Prepare generated fixtures
         run: |
           sudo apt-get update
@@ -460,7 +448,7 @@ jobs:
 
   hevc-browser:
     name: Verify HEVC timeline (${{ matrix.engine }}, ${{ matrix.input }})
-    needs: cores
+    needs: [cores, qa-media]
     runs-on: ubuntu-24.04
     # Chromium software graphics audits 1200 full-source captures. The case
     # has a separate no-progress watchdog; leave room for its 30-minute budget.
@@ -488,14 +476,7 @@ jobs:
           name: release-analysis-core
           path: public/vendor/voidplayer-analysis
       - run: npm ci
-      - uses: actions/checkout@v4
-        with:
-          repository: Nakiha/VoidPlayer
-          ref: 881eb5ccd706c33aa1ff35ab3a67ac3a226ccfba
-          path: .run/qa-samples
-          sparse-checkout: resources/video
-          lfs: true
-      - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
+      - uses: ./.github/actions/qa-media
       - run: npx playwright install --with-deps ${{ matrix.engine }}
       # Preserve all eight full 600-frame sweeps (two reopen rounds per cell).
       - run: node scripts/run-tests.mjs --case hevc-timeline-${{ matrix.engine }}-${{ matrix.input }}
@@ -561,7 +542,7 @@ jobs:
 
   native-release:
     name: Standalone ${{ matrix.platform }}
-    needs: cores
+    needs: [cores, qa-media]
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -599,15 +580,7 @@ jobs:
       - run: node scripts/run-tests.mjs --prepare
       - run: node scripts/package-release.mjs --target bun-${{ matrix.platform }}
       - run: node scripts/run-tests.mjs --case release
-      - name: Checkout pinned analysis acceptance samples
-        uses: actions/checkout@v4
-        with:
-          repository: Nakiha/VoidPlayer
-          ref: 881eb5ccd706c33aa1ff35ab3a67ac3a226ccfba
-          path: .run/qa-samples
-          sparse-checkout: resources/video
-          lfs: true
-      - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
+      - uses: ./.github/actions/qa-media
       - run: node scripts/run-tests.mjs --case release-analysis
       - run: node scripts/run-tests.mjs --case release-quality
       - run: node scripts/run-tests.mjs --case release-analysis-quality

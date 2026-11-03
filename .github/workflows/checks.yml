@@ -40,13 +40,17 @@ jobs:
           path: .run/test-suites/source/
           if-no-files-found: error
 
+  qa-media:
+    needs: source-logic
+    uses: ./.github/workflows/prepare-qa-media.yml
+
   cores:
     needs: source-logic
     uses: ./.github/workflows/prepare-cores.yml
 
   unit:
     name: Verify media Node (${{ matrix.part }})
-    needs: cores
+    needs: [cores, qa-media]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:

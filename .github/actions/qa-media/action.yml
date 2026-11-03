@@ -1,0 +1,9 @@
+name: Restore verified QA media
+description: Download the QA media prepared once for this workflow run.
+runs:
+  using: composite
+  steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: qa-media
+        path: fixtures/video

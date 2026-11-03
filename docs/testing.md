@@ -195,12 +195,14 @@ CI 细分套件是统一清单的标签，本地执行相同标签会枚举相�
 ```sh
 npm ci
 bash scripts/sync-wasm-core.sh
-bash scripts/sync-samples.sh
+bash scripts/fetch-qa-media.sh .run/qa-media fixtures/video
 npx playwright install webkit chromium
 npm run fixtures:flv
 npm run fixtures:hlg
 node scripts/sync-fate-samples.mjs
 ```
+
+日常检查和发布流程从 [QA 样片仓](https://github.com/Nakiha/VoidPlayer-QA-Fixtures) 获取同一份固定版本的附件。每次运行只准备一份，校验归档 SHA-256 后供各测试任务复用。更新样片时发布新版本，并同步更新 `scripts/fetch-qa-media.sh` 里的下载地址和校验值。已有本地样片仍可用 `bash scripts/sync-samples.sh` 同步。
 
 FLV 样片生成需要 Python 3、ffmpeg 和 ffprobe。`fixtures/`、`dist/` 和 `public/vendor/voidplayer-core/` 是本机产物，不进入 Git。需要基础合成样片时运行 `python3 test/generate-fixtures.py`。
 

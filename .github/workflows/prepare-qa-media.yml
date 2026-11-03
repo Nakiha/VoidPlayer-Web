@@ -1,0 +1,33 @@
+name: Prepare QA media
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache/restore@v4
+        id: restore
+        with:
+          path: .run/qa-media/qa-media.tar.gz
+          key: qa-media-${{ hashFiles('scripts/fetch-qa-media.sh') }}
+      - name: Verify and extract pinned sample archive
+        run: bash scripts/fetch-qa-media.sh .run/qa-media fixtures/video
+      - uses: actions/cache/save@v4
+        if: steps.restore.outputs.cache-hit != 'true'
+        with:
+          path: .run/qa-media/qa-media.tar.gz
+          key: ${{ steps.restore.outputs.cache-primary-key }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qa-media
+          path: fixtures/video/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

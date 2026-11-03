@@ -10,16 +10,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Checkout pinned codec QA samples
-      uses: actions/checkout@v4
-      with:
-        repository: Nakiha/VoidPlayer
-        ref: 881eb5ccd706c33aa1ff35ab3a67ac3a226ccfba
-        path: .run/qa-samples
-        sparse-checkout: resources/video
-        lfs: true
-    - shell: bash
-      run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
+    - uses: ./.github/actions/qa-media
     - name: Prepare media fixtures
       shell: bash
       run: |
