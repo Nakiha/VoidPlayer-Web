@@ -1,3 +1,4 @@
+import { copyAnalysisCoreManifests } from '../helpers/analysis-core-manifests.ts';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -149,7 +150,7 @@ test('unconsumed whole IO remains bounded until a result is acknowledged',async(
 });
 test('library TS whole, cache restart and corrupt-hole repair use independent source-bound demux',async()=>{
  const {MediaLibraryIndex}=await import('../../server/library.ts');const {AnalysisScheduler}=await import('../../server/analysis/bitstream/scheduler.ts');
- const {mkdtemp,rm,mkdir,copyFile,writeFile}=await import('node:fs/promises');const {tmpdir}=await import('node:os');const {join,resolve}=await import('node:path');const {execFileSync}=await import('node:child_process');
+ const {mkdtemp,rm,mkdir,writeFile}=await import('node:fs/promises');const {tmpdir}=await import('node:os');const {join,resolve}=await import('node:path');const {execFileSync}=await import('node:child_process');
  const temp=await mkdtemp(join(tmpdir(),'vp-ts-library-')),media=join(temp,'media');await mkdir(media);
  execFileSync('ffmpeg',['-y','-v','error','-copyts','-i','fixtures/ts-analysis/h264-static.ts','-map','0:v:0','-an','-c:v','copy','-frames:v','120','-mpegts_copyts','1','-f','mpegts',join(media,'short.ts')]);
  const library=new MediaLibraryIndex([media],{database:join(temp,'library.sqlite'),watch:false}),coreDir=resolve('public/vendor/voidplayer-analysis'),directory=join(temp,'analysis');let scheduler=new AnalysisScheduler(library,coreDir,directory);
@@ -165,7 +166,7 @@ test('library TS whole, cache restart and corrupt-hole repair use independent so
  };
  try {
   const expected=await consume((await scheduler.submit(entry.id,entry.version!,target,'owner')).requestId);await scheduler.close();
-  const manifestOnly=join(temp,'manifest-only');await mkdir(manifestOnly);await copyFile(join(coreDir,'manifest.json'),join(manifestOnly,'manifest.json'));scheduler=new AnalysisScheduler(library,manifestOnly,directory);
+  const manifestOnly=join(temp,'manifest-only');await mkdir(manifestOnly);await copyAnalysisCoreManifests(coreDir, manifestOnly);scheduler=new AnalysisScheduler(library,manifestOnly,directory);
   assert.deepEqual(await consume((await scheduler.submit(entry.id,entry.version!,{...target,indexIdentity:JS_TS_MEDIA_INDEX_IDENTITY},'owner')).requestId,expected),expected,'restart keeps all 120 finite-source records without JS/WASM');
   await scheduler.close();scheduler=new AnalysisScheduler(library,coreDir,directory);await writeFile(scheduler.store.chunkFile(expected.get(60).id),'{broken');await consume((await scheduler.submit(entry.id,entry.version!,{...target,indexIdentity:JS_TS_MEDIA_INDEX_IDENTITY},'owner')).requestId,expected);
  }finally{await scheduler.close();await library.close();await rm(temp,{recursive:true,force:true});}

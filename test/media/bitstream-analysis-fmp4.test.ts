@@ -1,3 +1,4 @@
+import { copyAnalysisCoreManifests } from '../helpers/analysis-core-manifests.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -107,7 +108,7 @@ test('real video-copy fMP4 with audio traf keeps video payload/config and playba
 for (const codec of ['h264', 'hevc', 'vvc']) test(`media library fMP4 ${codec}: independent stream index, cache restart and corrupt-hole repair`, async () => {
   const { MediaLibraryIndex } = await import('../../server/library.ts');
   const { AnalysisScheduler } = await import('../../server/analysis/bitstream/scheduler.ts');
-  const { mkdtemp, rm, mkdir, copyFile, writeFile } = await import('node:fs/promises');
+  const { mkdtemp, rm, mkdir, writeFile } = await import('node:fs/promises');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
   const temp = await mkdtemp(join(tmpdir(), 'vp-fmp4-analysis-'));
@@ -148,7 +149,7 @@ for (const codec of ['h264', 'hevc', 'vvc']) test(`media library fMP4 ${codec}: 
     assert.deepEqual(local.blocks, expected.get(60).result.blocks); assert.deepEqual(local.references, expected.get(60).result.references);
     await scheduler.close();
     const manifestOnly = join(temp, 'manifest-only'); await mkdir(manifestOnly);
-    await copyFile(join(coreDir, 'manifest.json'), join(manifestOnly, 'manifest.json'));
+    await copyAnalysisCoreManifests(coreDir, manifestOnly);
     scheduler = new AnalysisScheduler(library, manifestOnly, directory);
     const hits = await consume((await scheduler.submit(entry.id, entry.version!, demand, 'owner')).requestId, expected);
     assert.deepEqual(hits, expected, 'restart reuses every exact record without JS/WASM');

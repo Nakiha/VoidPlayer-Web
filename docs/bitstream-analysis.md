@@ -39,7 +39,7 @@ Field picture、palette 的使用、损坏/concealment、不完整覆盖和非 4
 
 ## 服务、缓存与资源预算
 
-路由是 `/api/media/:id/bitstream-analysis/{capabilities,requests,chunks/:id}` 和 `/api/bitstream-analysis/requests/:requestId`。写请求需要同源 Origin、专用 action header 和确切媒体版本；API 不接受文件路径。capabilities 是实现的 admission 范围，每个 picture 仍需独立验证。
+路由是 `/api/media/:id/bitstream-analysis/{capabilities,requests,chunks/:id}` 和 `/api/bitstream-analysis/requests/:requestId`。写请求需要同源 Origin、专用 action header 和确切媒体版本；API 不接受文件路径。capabilities 是实现的 admission 范围，每个 picture 仍需独立验证。服务端 capabilities 和任务使用同一产物选择规则，返回的 buildId 对应实际执行的服务端构建；浏览器本地分析从自身的 core 清单读取 buildId。
 
 服务端全局默认同时运行 8 个独立 worker，管理页「概览 → 分析资源」可设为 1–32 路，写回配置文件 `analysisConcurrency` 并立即生效；HTTP/HTTPS 入口共享同一调度器。调高立即补充排队任务，调低不终止已启动任务。服务端码流分析构建每路 WASM heap 上限为 1 GiB，按需增长。管理页可为新建 VVC 分析任务设置 1–4 个线程以及 1 到线程数套帧上下文，默认 1/1，保存到 `analysisDecoder`。默认 8 路并发的 WASM heap 理论上限为 8 GiB，进程还需要为 JS 元数据、运行时和传输缓冲分配内存。超出运行路数的请求排队，排队单帧优先于区间和整片请求；不抢占正在运行的 decoder，等待索引或 consumer ACK 的任务也占用名额，只有 worker 终止完成才释放名额；每个 work 可以有多个 owner 隔离的 consumer lease，取消一个不终止另一个。GET 状态续租，30 秒失联回收；最后一个 consumer 退出时终止 worker。HTTP、播放和帧索引队列不等待分析。每个可信 picture checksum 校验后原子 rename 单独提交；区间 manifest 仅在完整完成后提交。异常/取消保留之前已完成的 chunks。重启、坏 checksum、截断、丢失 chunk、版本或 build 变化不能形成错误的完成覆盖。
 

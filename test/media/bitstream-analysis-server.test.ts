@@ -1,3 +1,4 @@
+import { copyAnalysisCoreManifests } from '../helpers/analysis-core-manifests.ts';
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, readFile, symlink, access, copyFile, open, mkdir, unlink } from "node:fs/promises";
@@ -162,6 +163,10 @@ test("HTTP writes require same origin and version; server failures never downloa
   const base = `http://127.0.0.1:${(server.address() as any).port}`,
     url = `${base}/api/media/${f.entry.id}/bitstream-analysis/requests?v=${f.entry.version}`;
   try {
+    const capabilities = await fetch(url.replace('/requests?', '/capabilities?'));
+    assert.equal(capabilities.status, 200);
+    const { buildId } = await capabilities.json();
+    assert.equal(typeof buildId, 'string');
     const body = JSON.stringify({
       version: f.entry.version!,
       target: target(f.entry),
@@ -197,11 +202,11 @@ test("HTTP writes require same origin and version; server failures never downloa
           `${base}/api/bitstream-analysis/requests/${request.requestId}`,
         )
       ).json();
+      assert.equal(state.buildId, buildId, 'status must use the advertised core identity');
       if (state.state === "complete") {
-        assert.equal(
-          (await (await fetch(base + state.resultUrl)).json()).confidence,
-          "exact",
-        );
+        const result = await (await fetch(base + state.resultUrl)).json();
+        assert.equal(result.confidence, "exact");
+        assert.equal(result.buildId, buildId, 'result must use the advertised core identity');
         return;
       }
       assert.notEqual(state.state, "error", state.error);
@@ -707,7 +712,7 @@ test('overlapping ranges reuse atomic picture chunks after restart and repair ev
 
 test('whole stream restart rebuilds lease cursors from persistent pictures without WASM and repairs evicted or corrupt holes', async () => {
   const { execFileSync } = await import('node:child_process');
-  const { mkdir, copyFile, writeFile } = await import('node:fs/promises');
+  const { mkdir, writeFile } = await import('node:fs/promises');
   const media = await mkdtemp(join(tmpdir(), 'vp-stream-restart-')), name = 'restart.mp4';
   execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i',
     'testsrc2=size=128x64:rate=30:duration=4', '-an', '-c:v', 'libx264', '-g', '30', '-bf', '2',
@@ -740,10 +745,10 @@ test('whole stream restart rebuilds lease cursors from persistent pictures witho
     const first = await scheduler.submit(f.entry.id, f.entry.version!, demand, 'owner');
     const expected = await consume(first.requestId);
     await scheduler.close();
-    // A manifest is enough to establish cache identity. No JS or WASM exists
+    // Core manifests are enough to establish cache identity. No JS or WASM exists
     // here: a hidden eager load or re-decode cannot accidentally pass.
     const manifestOnly = join(f.folder, 'manifest-only'); await mkdir(manifestOnly);
-    await copyFile(join(coreDir, 'manifest.json'), join(manifestOnly, 'manifest.json'));
+    await copyAnalysisCoreManifests(coreDir, manifestOnly);
     scheduler = new AnalysisScheduler(f.library, manifestOnly, directory);
     assert.equal(await scheduler.streamStatus(first.requestId, 'owner', 120), null);
     const resumed = await scheduler.submit(f.entry.id, f.entry.version!, demand, 'owner');
@@ -932,10 +937,10 @@ test('summary pages resume without duplicate writes; warm work has zero decode a
   for(;;){const state=await scheduler.streamStatus(warm.requestId,'owner',cursor);assert.ok(state);for(const ref of state.chunks){const value=await scheduler.store.getOutput(ref.id,ref.au);assert.ok(value&&'product' in value&&value.product==='summary');assert.equal(value.picture.au,ref.au);assert.ok(!warmReceived.has(value.picture.au));warmReceived.add(value.picture.au);cursor=ref.cursor;}warmWait.observe(snapshot(state,cursor,warmReceived.size));if(state.state==='complete'&&cursor===180){complete=state;warmWait.done();break;}assert.ok(['running','queued','complete'].includes(state.state),JSON.stringify(state));await new Promise(r=>setTimeout(r,5));}
   assert.equal(warmReceived.size,180);assert.ok(complete);for(const name of ['init','open','feed','step','decodedAU'] as const)assert.equal(complete.counters![name],0);assert.ok([...writes.values()].every(n=>n===1));scheduler.release(warm.requestId,'owner');
   // A completely fresh client/server process receives cached GOP packets;
-  // only the manifest is present, so a decoder initialization would fail.
+  // only core manifests are present, so a decoder initialization would fail.
   await scheduler.close();
   const manifestOnly = join(f.folder, 'summary-manifest-only'); await mkdir(manifestOnly);
-  await copyFile(join(coreDir, 'manifest.json'), join(manifestOnly, 'manifest.json'));
+  await copyAnalysisCoreManifests(coreDir, manifestOnly);
   const restarted = new AnalysisScheduler(f.library, manifestOnly, join(f.folder, 'analysis'));
   restarted.store.putOutput = async () => { throw Error('warm GOP must reuse existing disk records'); };
   try {
@@ -1027,7 +1032,7 @@ test('explicit legacy index namespace rejects old valid records and preserves cu
 test('canonical blocks single and stream reuse one record across restart without a decoder',async()=>{
  const {mkdir}=await import('node:fs/promises');const media=await mkdtemp(join(tmpdir(),'vp-blocks-canonical-'));
  (await import('node:child_process')).execFileSync('ffmpeg',['-y','-v','error','-f','lavfi','-i','testsrc2=size=64x64:rate=1:duration=1','-an','-c:v','libx264','-g','1','-bf','0',join(media,'one.mp4')]);
- const f=await fixture(media,'one.mp4'),manifestOnly=join(f.folder,'manifest-only');await mkdir(manifestOnly);await copyFile(join(coreDir,'manifest.json'),join(manifestOnly,'manifest.json'));
+ const f=await fixture(media,'one.mp4'),manifestOnly=join(f.folder,'manifest-only');await mkdir(manifestOnly);await copyAnalysisCoreManifests(coreDir, manifestOnly);
  try{for(const order of ['single-first','stream-first']){
   const directory=join(f.folder,order),single={...target(f.entry),product:'blocks' as const},stream={mode:'stream' as const,product:'blocks' as const,sourceVersion:single.sourceVersion,firstPtsUs:0,durationUs:1000000};let scheduler=new AnalysisScheduler(f.library,coreDir,directory),id='';
   const readStream=async()=>{const request=await scheduler.submit(f.entry.id,f.entry.version!,stream,'owner');for(let i=0;i<500;i++){const state=await scheduler.streamStatus(request.requestId,'owner',0);assert.ok(state);if(state.chunks.length){assert.equal(state.chunks.length,1);const ref=state.chunks[0];assert.ok(await scheduler.store.getOutput(ref.id));assert.equal(state.counters?.init??0,0);assert.equal(state.counters?.feed??0,0);return ref.id;}assert.ok(!['error','limited'].includes(state.state),JSON.stringify(state));await new Promise(r=>setTimeout(r,10));}throw Error('no cached stream');};

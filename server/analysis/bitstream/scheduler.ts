@@ -154,7 +154,27 @@ export class AnalysisScheduler {
     this.unregisterQuality = library.qualityAdmission.register(() => !!(this.pendingSubmissions || this.running.size || [...this.work.values()].some(work => work.state === 'queued')));
     this.store = new AnalysisStore(directory, undefined, () => this.protectedFiles());
   }
-  async buildIdentity() { const manifest=JSON.parse(await readFile(path.join(this.coreDir,'manifest.json'),'utf8'));return manifest.buildId ?? manifest.revision; }
+  async buildIdentity() {
+    return (await this.resolveCore(this.decoder)).buildId;
+  }
+  private async resolveCore(decoder: AnalysisDecoderSettings): Promise<{ buildId: string; threaded: boolean }> {
+    const manifest = JSON.parse(
+      await readFile(path.join(this.coreDir, "manifest.json"), "utf8"),
+    );
+    if (manifest.abi !== 1 || manifest.semanticVersion !== ANALYZER_VERSION)
+      throw new Error("Analysis core ABI/version mismatch");
+    const threaded = await readFile(path.join(this.coreDir, 'threading.json'), 'utf8')
+      .then(text => JSON.parse(text), error => { if (error.code !== 'ENOENT') throw error; return null; });
+    if (threaded && (threaded.abi !== 1 || threaded.revision !== manifest.revision ||
+        !/^[a-f0-9]{40}:mt-[a-f0-9]{16}$/.test(threaded.buildId) || threaded.maxThreads !== MAX_ANALYSIS_THREADS))
+      throw new Error('Analysis threading ABI/version mismatch');
+    if (!threaded && decoder.threads > 1)
+      throw new AnalysisFailure('internal-error', 'Configured analysis threads require the server analysis core variant');
+    const core = threaded ?? manifest;
+    if (!Number.isSafeInteger(core.heapMaxBytes) || core.heapMaxBytes <= 0 || core.heapMaxBytes > ANALYSIS_WORKER_HEAP_BYTES)
+      throw new AnalysisFailure('resource-limit', 'Analysis core exceeds server heap reservation');
+    return { buildId: core.buildId ?? core.revision, threaded: !!threaded };
+  }
   submit(
     mediaId: string,
     version: string,
@@ -221,23 +241,8 @@ export class AnalysisScheduler {
         target={...target,indexIdentity:undefined};
       }
     } finally { await probe.close(); }
-    const manifest = JSON.parse(
-      await readFile(path.join(this.coreDir, "manifest.json"), "utf8"),
-    );
-    if (manifest.abi !== 1 || manifest.semanticVersion !== ANALYZER_VERSION)
-      throw new Error("Analysis core ABI/version mismatch");
     const decoder = this.decoder;
-    const threaded = await readFile(path.join(this.coreDir, 'threading.json'), 'utf8')
-      .then(text => JSON.parse(text), error => { if (error.code !== 'ENOENT') throw error; return null; });
-    if (threaded && (threaded.abi !== 1 || threaded.revision !== manifest.revision ||
-        !/^[a-f0-9]{40}:mt-[a-f0-9]{16}$/.test(threaded.buildId) || threaded.maxThreads !== MAX_ANALYSIS_THREADS))
-      throw new Error('Analysis threading ABI/version mismatch');
-    if (!threaded && decoder.threads > 1)
-      throw new AnalysisFailure('internal-error', 'Configured analysis threads require the server analysis core variant');
-    const core = threaded ?? manifest;
-    if (!Number.isSafeInteger(core.heapMaxBytes) || core.heapMaxBytes <= 0 || core.heapMaxBytes > ANALYSIS_WORKER_HEAP_BYTES)
-      throw new AnalysisFailure('resource-limit', 'Analysis core exceeds server heap reservation');
-    const buildId = core.buildId ?? core.revision;
+    const { buildId, threaded } = await this.resolveCore(decoder);
     const id = target.product==='blocks' && 'picture' in target && target.picture
       ? createHash("sha256").update(productKey(target.picture,buildId,target.indexIdentity ?? null,'blocks')).digest("hex")
       : createHash("sha256")
@@ -292,7 +297,7 @@ export class AnalysisScheduler {
         filePath,
         target,
         chunks: chunks ?? (cached ? [id] : []),
-        buildId, threaded: !!threaded, decoder,
+        buildId, threaded, decoder,
         state: cached || chunks ? "complete" : "queued",
         consumers: new Set(),
         seq: 0,
