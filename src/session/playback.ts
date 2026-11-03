@@ -9,6 +9,8 @@ export class FrameQueue {
   private stopped = false;
   private suspended = false;
   private wake: (() => void) | undefined;
+  private frameChanged?: () => void;
+  private lookahead = 0;
   private bytes = 0;
   private peakFrames = 0;
   private peakBytes = 0;
@@ -34,13 +36,15 @@ export class FrameQueue {
     try {
       while (!this.stopped) {
         // Bounded by both count and bytes: four 4K RGBA frames are ~133 MB.
-        while (!this.stopped && (this.suspended || this.frames.length >= this.capacity || this.bytes >= this.effectiveBudgetBytes || (this.frames.length > 0 && this.resources && !this.resources.canPrefetch(Math.max(this.estimateBytes, this.largestFrameBytes))))) {
+        while (!this.stopped && this.frames.length >= this.lookahead &&
+            (this.suspended || this.frames.length >= this.capacity || this.bytes >= this.effectiveBudgetBytes ||
+             (this.frames.length > 0 && this.resources && !this.resources.canPrefetch(Math.max(this.estimateBytes, this.largestFrameBytes))))) {
           await new Promise<void>(r => { this.wake = r; });
         }
         if (this.stopped) break;
         // Reserve before next(): independent tracks cannot all prefetch into
         // the same remaining bytes. One required frame per track guarantees progress.
-        const release = this.resources?.reserve('decodeReservations', Math.max(this.estimateBytes, this.largestFrameBytes), this.frames.length === 0);
+        const release = this.resources?.reserve('decodeReservations', Math.max(this.estimateBytes, this.largestFrameBytes), this.frames.length === 0 || this.frames.length < this.lookahead);
         if (this.resources && !release) continue;
         let next: IteratorResult<DecodedFrame>;
         this.nextStartedMs = performance.now();
@@ -53,9 +57,38 @@ export class FrameQueue {
         this.frames.push(next.value);
         this.peakFrames = Math.max(this.peakFrames, this.frames.length);
         this.peakBytes = Math.max(this.peakBytes, this.bytes);
+        this.frameChanged?.();
       }
     } catch (error) { if (!this.stopped) this.error = error; }
-    finally { this.unsubscribe?.(); await this.gen.return(undefined).catch(() => {}); }
+    finally { this.frameChanged?.(); this.unsubscribe?.(); await this.gen.return(undefined).catch(() => {}); }
+  }
+  /** A paused consumer may require up to two frames for exact multi-track
+   * stepping. Count them as essential just as the previous frame probe did. */
+  async waitForSuccessors(after: number, count: 1 | 2, signal?: AbortSignal) {
+    this.lookahead = count;
+    try {
+      for (;;) {
+        signal?.throwIfAborted();
+        this.take(after).frame?.close();
+        if (this.error) throw this.error;
+        if (this.frames.length >= count || this.ended || this.stopped) return;
+        await new Promise<void>((resolve, reject) => {
+          const finish = () => { this.frameChanged = undefined; signal?.removeEventListener('abort', abort); };
+          const abort = () => { finish(); reject(signal?.reason); };
+          this.frameChanged = () => { finish(); resolve(); };
+          signal?.addEventListener('abort', abort, { once: true });
+          this.wake?.(); this.wake = undefined;
+        });
+      }
+    } finally { this.lookahead = 0; }
+  }
+  takeNext() {
+    const frame = this.frames.shift();
+    if (frame) {
+      this.bytes -= frame.byteSize;
+      this.wake?.(); this.wake = undefined;
+    }
+    return frame;
   }
   take(target: number): { frame: DecodedFrame | null; dropped: number } {
     let frame: DecodedFrame | null = null; let dropped = 0;
@@ -72,6 +105,7 @@ export class FrameQueue {
   resume() { this.suspended = false; this.wake?.(); this.wake = undefined; }
   stop() {
     this.stopped = true;
+    this.frameChanged?.();
     this.wake?.(); this.wake = undefined;
     for (const frame of this.frames.splice(0)) frame.close();
     this.bytes = 0;

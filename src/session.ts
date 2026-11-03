@@ -812,14 +812,9 @@ export class ReviewSession {
     ++this.analysisIntentSeq;
     try {
       await this.run('step', { direction }, async (current, signal) => {
-        let entries = this.playableEntries();
+        const entries = this.playableEntries();
         if (!entries.length || entries.some(([, t]) => !t.frame)) throw new Error('请先打开视频。');
-        if (direction > 0) {
-          await this.ensureTrackIndexes(this.positionUs, current);
-          entries = this.playableEntries();
-          if (!current() || signal.aborted) return;
-          await this.stepForward(entries, current, signal);
-        }
+        if (direction > 0) await this.stepForward(entries, current, signal);
         else await this.stepBackward(entries, current, signal);
       });
     } catch (error) {
@@ -837,37 +832,33 @@ export class ReviewSession {
   // that steps the most tracks without skipping frames, and keep the current
   // frame on tracks the target does not move.
   private async stepForward(entries: [Slot, Track][], current: () => boolean, signal?: AbortSignal) {
-    this.releaseReaders('step', entries.map(([, t]) => t.source));
-    const decodeTasks = entries.map(async ([slot, t]) =>
-      [slot, await t.source.framesAfter(t.frame!.ptsUs, 2)] as const);
-    const probed = await abortableLoad(Promise.allSettled(decodeTasks), signal, late => {
-      for (const r of late) if (r.status === 'fulfilled') for (const f of r.value[1]) f?.close();
+    const start = performance.now();
+    const readers = entries.map(([, t]) => this.frameReader(t));
+    readers.forEach(reader => reader.suspend());
+    const count = entries.length === 1 ? 1 : 2;
+    const probed = await Promise.allSettled(readers.map((reader, i) =>
+      reader.waitForSuccessors(entries[i][1].frame!.ptsUs, count, signal)));
+    if (!current() || signal?.aborted) throw new DOMException('定位已取消。', 'AbortError');
+    probed.forEach((result, i) => { if (result.status === 'rejected') this.failTrack(...entries[i], result.reason); });
+    const failed = probed.find(result => result.status === 'rejected');
+    if (failed && entries.every(([, t]) => t.failure)) throw failed.reason;
+
+    const target = planForwardStep(entries.flatMap(([, t], i) => {
+      if (t.failure) return [];
+      const [next, nextNext] = readers[i].frames;
+      return [{ currentUs: t.frame!.ptsUs + t.offsetUs, durationUs: t.frame!.durationUs,
+        nextUs: next ? next.ptsUs + t.offsetUs : null, nextNextUs: nextNext ? nextNext.ptsUs + t.offsetUs : null }];
+    }));
+    if (target == null || target < 0 || target >= this.durationUs) return;
+    entries.forEach(([slot, track], i) => {
+      const next = readers[i].frames[0];
+      if (track.failure || !next || next.ptsUs + track.offsetUs > target) return;
+      const frame = readers[i].takeNext()!;
+      try { this.presentFrame(slot, track, frame); track.syncState = undefined; }
+      finally { frame.close(); }
     });
-    const gathered = new Map<Slot, (DecodedFrame | null)[]>();
-    for (const r of probed) if (r.status === 'fulfilled') gathered.set(r.value[0], r.value[1]);
-    const closeGathered = () => { for (const frames of gathered.values()) for (const f of frames) f?.close(); };
-    const failed = probed.find(r => r.status === 'rejected');
-    if (!current() || signal?.aborted) { closeGathered(); throw new DOMException('定位已取消。', 'AbortError'); }
-    if (failed?.status === 'rejected') {
-      try { probed.forEach((r, i) => { if (r.status === 'rejected') this.failTrack(...entries[i], r.reason); }); } catch (error) { closeGathered(); throw error; }
-      entries = entries.filter(([, t]) => !t.failure);
-      if (!entries.length) { closeGathered(); throw failed.reason; }
-    }
-    const target = planForwardStep(
-      entries.map(([slot, t]) => {
-        const [next, nextNext] = gathered.get(slot) ?? [];
-        return { currentUs: t.frame!.ptsUs+t.offsetUs, durationUs: t.frame!.durationUs, nextUs: next ? next.ptsUs+t.offsetUs : null, nextNextUs: nextNext ? nextNext.ptsUs+t.offsetUs : null };
-      }));
-    if (target == null || target < 0 || target >= this.durationUs) { closeGathered(); return; }
-    const selected = new Map<Slot, DecodedFrame>();
-    for (const [slot,t] of entries) {
-      const next = gathered.get(slot)?.[0];
-      if (next && target >= next.ptsUs+t.offsetUs) selected.set(slot, next);
-    }
-    const chosen = new Set(selected.values());
-    for (const frames of gathered.values()) for (const f of frames) if (f && !chosen.has(f)) f.close();
-    const kept = new Set(entries.map(([slot]) => slot).filter(slot => !selected.has(slot)));
-    await this.drawAt(target, current, this.tracks, undefined, selected, kept, signal);
+    this.positionUs = target;
+    this.decodeMs = Math.round(performance.now() - start);
   }
   private async stepBackward(entries: [Slot, Track][], current: () => boolean, signal?: AbortSignal) {
     this.releaseReaders('step', entries.map(([, t]) => t.source));
@@ -903,6 +894,21 @@ export class ReviewSession {
     const kept = new Set(entries.map(([slot]) => slot).filter(slot => !selected.has(slot)));
     await this.drawAt(target, current, this.tracks, undefined, selected, kept, signal);
   }
+  private frameReader(track: Track) {
+    let reader = this.readers.get(track.source);
+    if (!reader) {
+      const pts = track.frame!.ptsUs;
+      const frames = track.source.framesFollowing?.(pts) ?? track.source.framesFrom(pts);
+      reader = new FrameQueue(frames, 4, undefined, this.resources, track.source.info.width * track.source.info.height * 4);
+      this.readers.set(track.source, reader);
+    }
+    return reader;
+  }
+  private presentFrame(slot: Slot, track: Track, frame: DecodedFrame) {
+    this.draw(slot, frame);
+    recordPresentedFrame(track.source, frame);
+    track.frame = this.frameInfo(frame);
+  }
   private frameInfo(frame: FrameInfo): FrameInfo {
     return { ptsUs: frame.ptsUs, sourcePtsUs: frame.sourcePtsUs, durationUs: frame.durationUs };
   }
@@ -935,9 +941,7 @@ export class ReviewSession {
       for (let i = 0; i < entries.length; i++) {
         const r = results[i];
         if (r.status !== 'fulfilled' || !r.value) continue;
-        this.draw(entries[i][0], r.value);
-        recordPresentedFrame(entries[i][1].source,r.value);
-        entries[i][1].frame = this.frameInfo(r.value);
+        this.presentFrame(...entries[i], r.value);
         entries[i][1].syncState = undefined;
       }
       commit?.();
@@ -977,9 +981,8 @@ export class ReviewSession {
     const active = () => this.playing && revision === this.revision;
     const entries = this.playableEntries();
     const readers = entries.map(([slot, t]) => {
-      let reader = this.readers.get(t.source);
-      const reused = !!reader;
-      if (!reader) { reader = new FrameQueue(t.source.framesFollowing?.(t.frame!.ptsUs)??t.source.framesFrom(t.frame!.ptsUs), 4, undefined, this.resources, t.source.info.width * t.source.info.height * 4); this.readers.set(t.source, reader); }
+      const reused = this.readers.has(t.source);
+      const reader = this.frameReader(t);
       scoped.debug('session', '播放队列就绪', { slot, mediaId: t.source.info.id, reused, frameUs: t.frame!.ptsUs, buffer: reader.snapshot() });
       return reader;
     });
@@ -1033,9 +1036,7 @@ export class ReviewSession {
           if (!frame) continue;
           try {
             if (frame.ptsUs !== track.frame?.ptsUs) {
-              this.draw(slot, frame);
-              recordPresentedFrame(track.source,frame);
-              track.frame = this.frameInfo(frame);
+              this.presentFrame(slot, track, frame);
               metrics.draw(slot, performance.now(), dropped);
             }
           } catch (error) { this.failTrack(slot, track, error); } finally { frame.close(); }

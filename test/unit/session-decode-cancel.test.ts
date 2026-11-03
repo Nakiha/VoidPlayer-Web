@@ -118,18 +118,24 @@ test('REVIEW-03: 前后逐帧的探测等待同样可被新意图中止', async 
   await session.load('A', async () => m.source);
   await session.seek(40000);
   const releaseProbe = deferred<void>();
-  const origAfter = m.source.framesAfter.bind(m.source);
-  m.source.framesAfter = async (pts, count) => {
+  const entered = deferred<void>(), returned = deferred<void>();
+  const original = m.source.framesFrom.bind(m.source);
+  m.source.framesFrom = async function* (pts) {
+    entered.resolve();
     await releaseProbe.promise;
-    return origAfter(pts, count);
+    try { yield* original(pts); }
+    finally { returned.resolve(); }
   };
   const stepping = session.step(1);
   const stepRejected = assert.rejects(stepping, /取消|取代/);
-  await new Promise(resolve => setTimeout(resolve, 10));
+  await entered.promise;
   // 新 seek 应能中止旧 step 的探测等待
   const seeked = await session.seek(0);
   assert.equal(seeked.positionUs, 0);
+  const beforeClose = m.closed;
   releaseProbe.resolve();
   await stepRejected;
+  await returned.promise;
+  assert.equal(m.closed, beforeClose + 1);
   await session.dispose();
 });

@@ -93,7 +93,7 @@ test('VFR stepping uses frame boundaries rather than an assumed frame rate', asy
   await session.step(1); assert.equal(session.getState().tracks[0].frame?.ptsUs, 40000);
   await session.step(1); assert.equal(session.getState().tracks[0].frame?.ptsUs, 120000);
   await session.step(-1); assert.equal(session.getState().tracks[0].frame?.ptsUs, 40000);
-  assert.equal(m.closed, 6);
+  assert.equal(m.closed, 5);
   await session.dispose(); assert.equal(m.disposed, 1);
 });
 
@@ -906,12 +906,50 @@ test('a track waiting for an index lets healthy clocks advance and rejoins after
   } finally { gate.resolve(); await session.dispose(); }
 });
 
+test('forward stepping, playback and pause reuse one sequential reader until a seek', async () => {
+  const session = new ReviewSession(() => {});
+  const { source } = media('A', Array.from({ length: 50 }, (_, i) => i * 40000), 2000000);
+  const original = source.framesFrom.bind(source);
+  let readers = 0, decoded = 0;
+  source.framesAfter = async () => { throw Error('step must use the playback reader'); };
+  source.framesFollowing = async function* (pts) {
+    readers++;
+    for await (const frame of original(pts)) {
+      if (frame.ptsUs <= pts) { frame.close(); continue; }
+      decoded++;
+      yield frame;
+    }
+  };
+  try {
+    await session.load('A', async () => source);
+    await session.step(1);
+    assert.equal(decoded, 1, 'one track needs only its immediate successor');
+    await session.step(1);
+    assert.equal(session.getState().positionUs, 80000);
+    await session.play();
+    session.pause();
+    const before = session.getState().tracks[0].frame!.ptsUs;
+    await session.step(1);
+    assert.equal(session.getState().tracks[0].frame?.ptsUs, before + 40000);
+    assert.equal(readers, 1);
+    await session.seek(400000);
+    await session.step(1);
+    assert.equal(session.getState().positionUs, 440000);
+    assert.equal(readers, 2);
+  } finally { await session.dispose(); }
+});
+
 test('forward stepping requests the current prefix, never the entire unfinished index', async () => {
   const session = new ReviewSession(() => {}), fixture = media();
   const requested: (number | undefined)[] = [];
   fixture.source.info.indexState = 'building';
   fixture.source.ensureIndexed = async pts => { requested.push(pts); if (pts === undefined || pts === Infinity) throw new Error('full index requested'); };
-  try { await session.load('A', async () => fixture.source); await session.step(1); assert.ok(requested.every(Number.isFinite)); assert.equal(session.getState().positionUs, 40000); }
+  const from = fixture.source.framesFrom.bind(fixture.source);
+  fixture.source.framesFollowing = async function* (pts) {
+    await fixture.source.ensureIndexed!(pts);
+    yield* from(pts);
+  };
+  try { await session.load('A', async () => fixture.source); await session.step(1); assert.deepEqual(requested, [0]); assert.equal(session.getState().positionUs, 40000); }
   finally { await session.dispose(); }
 });
 
