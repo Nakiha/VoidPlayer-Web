@@ -4,9 +4,17 @@ import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 
+export async function verifyPlaybackOptimization(directory, lock, suffix) {
+ if (!lock.optimization) return;
+ const name = `voidplayer-ffmpeg-manifest${suffix}.json`;
+ const manifest = JSON.parse(await readFile(path.join(directory, name), 'utf8'));
+ assert.deepEqual(manifest.optimization, lock.optimization, `Playback optimization differs from release lock: ${name}`);
+}
+
 /** Bind generated capability evidence to the exact packaged WASM bytes. At
  * preparation time a live module independently verifies the recorded registry. */
 export async function verifyCoreCapabilities(directory,lock,product,suffix='',core){
+ if (product === 'playback') await verifyPlaybackOptimization(directory, lock, suffix);
  const stem=product==='analysis'?'voidplayer-analysis':`voidplayer-core${suffix}`;
  const capability=JSON.parse(await readFile(path.join(directory,`capabilities${suffix}.json`),'utf8'));
  const binary=await readFile(path.join(directory,stem+'.wasm'));
@@ -35,6 +43,7 @@ export async function verifyCoreCapabilities(directory,lock,product,suffix='',co
 }
 if(process.argv[1]&&pathToFileURL(path.resolve(process.argv[1])).href===import.meta.url){
  const [directory,lockFile,product,suffix='']=process.argv.slice(2),lock=JSON.parse(await readFile(lockFile,'utf8'));
+ if (product === 'playback') await verifyPlaybackOptimization(directory, lock, suffix);
  const stem=product==='analysis'?'voidplayer-analysis':`voidplayer-core${suffix}`,create=(await import(pathToFileURL(path.resolve(directory,stem+'.js')).href)).default;
  const core=await create({wasmBinary:await readFile(path.join(directory,stem+'.wasm'))});await verifyCoreCapabilities(directory,lock,product,suffix,core);
  process.exit(0); // This probe owns any pthread pool it creates.

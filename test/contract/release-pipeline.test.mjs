@@ -479,15 +479,18 @@ test('analysis preparation rejects provenance claiming references when actual ex
 
 test('core sync replaces both variants, drops stale unpinned metadata and preserves destination on failure', async () => {
   const { syncPlaybackCore, verifyCoreArtifact, playbackFiles } = await import('../../scripts/core-artifacts.mjs');
+  const { verifyPlaybackOptimization } = await import('../../scripts/core-capabilities.mjs');
   const root = await mkdtemp(path.join(os.tmpdir(), 'vp-core-sync-'));
   const source = path.join(root, 'source'), target = path.join(root, 'target');
-  const lock = { revision: 'a'.repeat(40), ffmpegRef: 'test' };
+  const lock = { revision: 'a'.repeat(40), ffmpegRef: 'test', optimization: { compile: '3', link: '2', lto: '1', simd: '1' } };
   try {
     await mkdir(source); await mkdir(target);
     const files = {};
     for (const name of playbackFiles) {
       await mkdir(path.dirname(path.join(source, name)), { recursive: true });
-      const bytes = Buffer.from(`new ${name}`); files[name] = sha256(bytes);
+      const bytes = Buffer.from(name.startsWith('voidplayer-ffmpeg-manifest')
+        ? JSON.stringify({ optimization: lock.optimization }) : `new ${name}`);
+      files[name] = sha256(bytes);
       await writeFile(path.join(source, name), bytes);
     }
     const provenance = { schema: 'voidplayer-core-build', source: lock, files };
@@ -496,6 +499,11 @@ test('core sync replaces both variants, drops stale unpinned metadata and preser
     await syncPlaybackCore(source, target, lock);
     assert.match(await readFile(path.join(target, 'voidplayer-core-mt.js'), 'utf8'), /^new /);
     await verifyCoreArtifact(target, lock, 'voidplayer-core-build', playbackFiles);
+    for (const suffix of ['', '-mt']) {
+      await verifyPlaybackOptimization(target, lock, suffix);
+      await assert.rejects(verifyPlaybackOptimization(target, { optimization: { ...lock.optimization, lto: '0' } }, suffix),
+        /Playback optimization differs from release lock/);
+    }
     await writeFile(path.join(source, 'voidplayer-core-mt.js'), 'mismatched MT');
     await assert.rejects(syncPlaybackCore(source, target, lock), /bytes differ/);
     await verifyCoreArtifact(target, lock, 'voidplayer-core-build', playbackFiles);

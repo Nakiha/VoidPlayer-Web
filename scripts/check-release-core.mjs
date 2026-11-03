@@ -1,5 +1,6 @@
 // Validate the shared artifact on every native runner, including restored caches.
 import assert from 'node:assert/strict';
+import {verifyPlaybackOptimization} from './core-capabilities.mjs';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -45,6 +46,9 @@ if (process.argv[3] === '--variant') {
     assert.ok(!path.isAbsolute(file) && !file.split(/[\\/]/).includes('..'), 'Unsafe core manifest path');
     assert.equal(createHash('sha256').update(await readFile(path.join(directory, file))).digest('hex'), hash, file);
   }
-  for (const suffix of ['', '-mt']) execFileSync(process.execPath, [import.meta.filename, directory, '--variant', 'voidplayer-core' + suffix, lock.revision], { stdio: 'inherit', timeout: 30000 });
+  for (const suffix of ['', '-mt']) {
+    await verifyPlaybackOptimization(directory, lock, suffix);
+    execFileSync(process.execPath, [import.meta.filename, directory, '--variant', 'voidplayer-core' + suffix, lock.revision], { stdio: 'inherit', timeout: 30000 });
+  }
   console.log('PASS decoder provenance and file hashes');
 }

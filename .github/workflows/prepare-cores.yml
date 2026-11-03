@@ -80,8 +80,8 @@ jobs:
         run: |
           node --input-type=module -e '
           import { readFileSync, appendFileSync } from "node:fs";
-          const lock = JSON.parse(readFileSync("scripts/release-core.json", "utf8"));
-          for (const [key, value] of Object.entries(lock)) appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
+          const {optimization, ...lock} = JSON.parse(readFileSync("scripts/release-core.json", "utf8"));
+          for (const [key, value] of Object.entries({...lock, ...optimization})) appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
           '
       - name: Restore exact decoder build
         id: cache
@@ -130,6 +130,10 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         env:
           FFMPEG_REF: ${{ steps.core.outputs.ffmpegRef }}
+          WASM_OPT_LEVEL: ${{ steps.core.outputs.compile }}
+          WASM_LINK_OPT_LEVEL: ${{ steps.core.outputs.link }}
+          WASM_LTO: ${{ steps.core.outputs.lto }}
+          WASM_SIMD: ${{ steps.core.outputs.simd }}
         run: |
           # Meson emits CommonJS probes with an .exe extension; do not inherit
           # the web application's package.json type=module in the build tree.
