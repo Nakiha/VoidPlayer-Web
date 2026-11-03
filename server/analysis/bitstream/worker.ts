@@ -17,6 +17,8 @@ import {
   analyzeRange,
   analyzeStream,
 } from "../../../shared/analysis/bitstream/runner.ts";
+const buildId: string = workerData.buildId;
+let core: any;
 try {
   const file = await open(workerData.filePath, "r");
   const stat = await file.stat();
@@ -58,24 +60,22 @@ try {
   };
   try {
     const counters=emptyCounters();const delivered=new Set<number>();
-    const manifest = JSON.parse(
-      await readFile(path.join(workerData.coreDir, "manifest.json"), "utf8"),
-    );
     const loadCore = async () => {
-      const initStarted=performance.now();
-      const module = await import(
-        pathToFileURL(path.join(workerData.coreDir, "voidplayer-analysis.js"))
-          .href
-      );
-      const core = await module.default({
-        wasmBinary: new Uint8Array(
-          await readFile(
-            path.join(workerData.coreDir, "voidplayer-analysis.wasm"),
-          ),
-        ),
+      if (core) return core;
+      const initStarted = performance.now();
+      const stem = workerData.threaded ? 'voidplayer-analysis-mt' : 'voidplayer-analysis';
+      const module = await import(pathToFileURL(path.join(workerData.coreDir, stem + '.js')).href);
+      const { threads, contexts } = workerData.decoder;
+      core = await module.default({
+        wasmBinary: await readFile(path.join(workerData.coreDir, stem + '.wasm')),
+        ...(workerData.threaded ? { analysisThreads: threads > 1 ? threads : 0 } : {}),
       });
       validateAnalysisCore(core);
-      counters.init++;counters.initMs+=performance.now()-initStarted;return countCore(core,counters);
+      if (workerData.threaded && core._vpa_configure_threads(threads, contexts) !== 0)
+        throw new AnalysisFailure('internal-error', 'Analysis decoder thread settings rejected');
+      counters.init++;
+      counters.initMs += performance.now() - initStarted;
+      return countCore(core, counters);
     };
     const cachedResults=new Set<string>();
     let pendingCacheKey="";
@@ -122,24 +122,24 @@ try {
       await send({ type: "chunk", result, counters:{...counters}, cacheHit:hit }, isProduct(result) && result.product === "blocks" ? [result.payload] : []);
     };
     if (workerData.target.mode === 'stream')
-      await analyzeStream(reader, workerData.target, loadCore, (manifest.buildId ?? manifest.revision),
+      await analyzeStream(reader, workerData.target, loadCore, buildId,
         new AbortController().signal, publish,
         async progress => parentPort!.postMessage({ type: 'progress', progress }),
         workerData.externalIndex ? () => new Promise((resolve, reject) => {
           indexReply = { resolve, reject }; parentPort!.postMessage({ type: 'index' });
         }) : undefined, picture => new Promise<AnalysisOutput | null>(resolve => {
-          pendingCacheKey=JSON.stringify([picture,manifest.buildId ?? manifest.revision]);cacheReply = resolve; parentPort!.postMessage({ type: 'cache', picture });
+          pendingCacheKey=JSON.stringify([picture,buildId]);cacheReply = resolve; parentPort!.postMessage({ type: 'cache', picture });
         }), plan=>parentPort!.postMessage({type:'plan',plan}));
     else if ("startUs" in workerData.target)
       await analyzeRange(
         reader,
         workerData.target,
         loadCore,
-        (manifest.buildId ?? manifest.revision),
+        buildId,
         new AbortController().signal,
         publish,
         picture => new Promise<AnalysisOutput | null>(resolve => {
-          pendingCacheKey=JSON.stringify([picture,manifest.buildId ?? manifest.revision]);cacheReply = resolve; parentPort!.postMessage({ type: 'cache', picture });
+          pendingCacheKey=JSON.stringify([picture,buildId]);cacheReply = resolve; parentPort!.postMessage({ type: 'cache', picture });
         }),
       );
     else
@@ -148,16 +148,19 @@ try {
           reader,
           workerData.target,
           await loadCore(),
-          (manifest.buildId ?? manifest.revision),
+          buildId,
           new AbortController().signal,
         ),
       );
     await flushCachedGop();
+    core?.PThread?.terminateAllThreads();
+    core = undefined;
     parentPort!.postMessage({type:"counters",counters});parentPort!.postMessage({ ok: true, type: "complete" });
   } finally {
     reader.close();
   }
 } catch (error) {
+  core?.PThread?.terminateAllThreads();
   parentPort!.postMessage({
     ok: false,
     error: error instanceof Error ? error.message : String(error),

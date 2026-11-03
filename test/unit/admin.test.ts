@@ -138,16 +138,24 @@ test('analysis settings persist, hot-apply across listeners and reject stale or 
   try {
     const before = await (await fetch(base + '/api/admin/analysis')).json();
     assert.equal(before.concurrency, 8); assert.equal(before.writable, true);
+    assert.deepEqual(before.decoder, { threads: 1, contexts: 1 });
     for (const concurrency of [0, 33, 1.5, '8', null]) {
       assert.equal((await fetch(base + '/api/admin/analysis', mutation(base, 'PUT', { revision: before.revision, concurrency }))).status, 400);
     }
     assert.equal((await fetch(base + '/api/admin/analysis', mutation('http://elsewhere.test', 'PUT', { revision: before.revision, concurrency: 12 }))).status, 403);
-    const saved = await fetch(base + '/api/admin/analysis', mutation(base, 'PUT', { revision: before.revision, concurrency: 12 }));
+    for (const decoder of [null, { threads: 1, contexts: 2 }, { threads: 5, contexts: 1 }, { threads: 2.5, contexts: 1 }]) {
+      const response = await fetch(base + '/api/admin/analysis', mutation(base, 'PUT', { revision: before.revision, concurrency: 12, decoder }));
+      assert.equal(response.status, 400);
+    }
+    const decoder = { threads: 3, contexts: 2 };
+    const saved = await fetch(base + '/api/admin/analysis', mutation(base, 'PUT', { revision: before.revision, concurrency: 12, decoder }));
     assert.equal(saved.status, 200); const after = await saved.json();
+    assert.deepEqual(after.decoder, decoder);
     assert.equal(after.concurrency, 12); assert.notEqual(after.revision, before.revision);
     assert.equal(admin.analysis.resources().concurrency, 12);
     assert.equal((await (await fetch(other + '/api/admin/status')).json()).analysis.concurrency, 12);
     const loaded = await loadConfig([], 'production', root);
+    assert.deepEqual(loaded.analysisDecoder, decoder);
     assert.equal(loaded.analysisConcurrency, 12); assert.deepEqual(loaded.mediaRoots, config.mediaRoots);
     assert.equal((await fetch(other + '/api/admin/analysis', mutation(other, 'PUT', { revision: before.revision, concurrency: 2 }))).status, 409);
     // A --folder override only restricts editing roots, not independent resource settings.
@@ -156,6 +164,7 @@ test('analysis settings persist, hot-apply across listeners and reject stale or 
     assert.equal((await fetch(base + '/api/admin/analysis', mutation(base, 'PUT', { revision: after.revision, concurrency: 32 }))).status, 200);
     assert.equal(admin.analysis.resources().concurrency, 32);
     const current = await (await fetch(base + '/api/admin/analysis')).json();
+    assert.deepEqual(current.decoder, decoder);
     await fs.writeFile(config.origin!.file, JSON.stringify({ mediaRoots: config.mediaRoots, analysisConcurrency: 12 }));
     assert.equal((await (await fetch(base + '/api/admin/analysis')).json()).reasonCode, 'external-change');
     assert.equal((await fetch(base + '/api/admin/analysis', mutation(base, 'PUT', { revision: current.revision, concurrency: 2 }))).status, 409);

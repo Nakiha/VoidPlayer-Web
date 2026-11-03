@@ -2,7 +2,7 @@ import {closeResources} from './shutdown.ts';
 import type {AdminStatus,RootConfiguration,LogPage,LogDocument,AnalysisSettings,RootReasonCode} from '../shared/service/admin.ts';
 export type {RootReasonCode} from '../shared/service/admin.ts';
 import { AnalysisScheduler } from './analysis/bitstream/scheduler.ts';
-import { MAX_ANALYSIS_CONCURRENCY, validAnalysisConcurrency } from './analysis/bitstream/limits.ts';
+import { MAX_ANALYSIS_CONCURRENCY, DEFAULT_ANALYSIS_DECODER, MAX_ANALYSIS_THREADS, validAnalysisConcurrency, validAnalysisDecoder } from './analysis/bitstream/limits.ts';
 import { promises as fs, constants } from 'node:fs';
 import type { IncomingMessage } from 'node:http';
 import path from 'node:path';
@@ -58,7 +58,7 @@ export class AdminController {
   analysisFor(coreDir: string) {
     if (!this.analysisInstance) {
       this.analysisInstance = new AnalysisScheduler(this.library, coreDir, this.library.analysisDirectory);
-      this.analysisInstance.setConcurrency(this.config.analysisConcurrency);
+      this.analysisInstance.configure(this.config.analysisConcurrency, this.config.analysisDecoder ?? DEFAULT_ANALYSIS_DECODER);
     }
     return this.analysisInstance;
   }
@@ -125,7 +125,8 @@ export class AdminController {
     const origin = this.config.origin;
     const changed = !!origin && configRevision(await configText(origin.file)) !== origin.revision;
     const writeAccess = !!origin && await fs.access(path.dirname(origin.file), constants.W_OK).then(() => true, () => false);
-    return { ...this.analysis.resources(), min: 1, max: MAX_ANALYSIS_CONCURRENCY, revision: origin?.revision ?? null,
+    return { ...this.analysis.resources(), decoder: this.config.analysisDecoder ?? DEFAULT_ANALYSIS_DECODER,
+      maxThreads: MAX_ANALYSIS_THREADS, min: 1, max: MAX_ANALYSIS_CONCURRENCY, revision: origin?.revision ?? null,
       writable: !!origin && !changed && writeAccess,
       reasonCode: (changed ? 'external-change' : !origin ? 'no-source' : !writeAccess ? 'not-writable' : null) as RootReasonCode | null };
   }
@@ -165,17 +166,21 @@ export class AdminController {
     return this.qualitySettings();
   }
   private async updateAnalysisSettings(document: unknown) {
-    const input = document as { revision?: unknown; concurrency?: unknown } | null;
+    const input = document as { revision?: unknown; concurrency?: unknown; decoder?: unknown } | null;
     if (!input || typeof input.revision !== 'string' || !validAnalysisConcurrency(input.concurrency))
       throw new AdminError(400, '请提供配置版本及 1–32 的分析并发数。');
+    const decoder = input.decoder === undefined ? this.config.analysisDecoder ?? DEFAULT_ANALYSIS_DECODER : input.decoder;
+    if (!validAnalysisDecoder(decoder))
+      throw new AdminError(400, '请选择 1–4 个分析线程，帧上下文数须介于 1 和线程数之间。');
     const origin = this.config.origin;
     if (!origin || input.revision !== origin.revision) throw new AdminError(409, '配置已更新或无法写回，请重新载入后再编辑。');
     const before = await configText(origin.file);
     if (configRevision(before) !== origin.revision) throw new AdminError(409, '配置文件已被外部修改，请重启服务后再编辑。');
-    const after = JSON.stringify({ ...(before ? JSON.parse(before) : {}), analysisConcurrency: input.concurrency }, null, 2) + '\n';
+    const after = JSON.stringify({ ...(before ? JSON.parse(before) : {}), analysisConcurrency: input.concurrency, analysisDecoder: decoder }, null, 2) + '\n';
     await atomicWrite(origin.file, after);
-    this.config.analysisConcurrency = input.concurrency; origin.revision = configRevision(after);
-    this.analysis.setConcurrency(input.concurrency);
+    this.config.analysisConcurrency = input.concurrency; this.config.analysisDecoder = decoder;
+    origin.revision = configRevision(after);
+    this.analysis.configure(input.concurrency, decoder);
     return this.analysisSettings();
   }
   async logs(before = '', limit = 40): Promise<LogPage> {

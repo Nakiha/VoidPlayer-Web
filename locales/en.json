@@ -115,6 +115,14 @@
     "source": "服务端分析并发数",
     "translation": "Server analysis concurrency"
   },
+  "admin.analysisContexts": {
+    "source": "VVC 帧上下文数",
+    "translation": "VVC frame contexts"
+  },
+  "admin.analysisDecoderHelp": {
+    "source": "每路服务端 VVC 分析默认使用 1 个线程和 1 套帧上下文。上下文数不得超过线程数。提高配置会增加 CPU 和内存开销，新建任务生效。",
+    "translation": "Each server-side VVC analysis defaults to one thread and one frame context. Contexts cannot outnumber threads. Higher settings use more CPU and memory and apply to new jobs."
+  },
   "admin.analysisReload": {
     "source": "载入配置",
     "translation": "Load configuration"
@@ -138,6 +146,10 @@
   "admin.analysisSaved": {
     "source": "分析配置已保存",
     "translation": "Analysis settings saved"
+  },
+  "admin.analysisThreads": {
+    "source": "VVC 解码线程数",
+    "translation": "VVC decoding threads"
   },
   "admin.annotationMeta": {
     "source": "{author} · 版本 {revision} · {date}",

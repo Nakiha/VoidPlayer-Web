@@ -1,5 +1,6 @@
 import { validateQualityCore } from '../shared/analysis/quality/analysis-core.ts';
 import { validateXpsnrCore } from '../shared/analysis/quality/analysis-xpsnr.ts';
+import {analysisFiles} from './core-artifacts.mjs';
 import {verifyCoreCapabilities} from './core-capabilities.mjs';
 import { pathToFileURL } from 'node:url';
 import { validateAnalysisCore } from '../shared/analysis/bitstream/core-abi.ts';
@@ -45,15 +46,27 @@ assert.equal(manifest.quality.xpsnr.filterSha256,lock.xpsnrFilterSha256);
 assert.equal(manifest.quality.avfilter,false);
 await verifyCoreCapabilities(source,lock,'analysis','',core);
 assert.equal(typeof core._vpa_feed_known,'function','Known timestamp feed ABI');
+const threaded = JSON.parse(await readFile(path.join(source, 'threading.json'), 'utf8'));
+const threadedWasm = await readFile(path.join(source, 'voidplayer-analysis-mt.wasm'));
+const threadedDigest = createHash('sha256').update(threadedWasm).digest('hex');
+assert.equal(threaded.revision, lock.revision);
+assert.equal(threaded.ffmpegRevision, lock.threadedFfmpegRevision);
+assert.equal(threaded.buildId, lock.revision + ':mt-' + threadedDigest.slice(0, 16));
+assert.equal(threaded.abi, lock.threadingAbi);
+assert.equal(threaded.heapMaxBytes, lock.threadedHeapMaxBytes);
+assert.equal(threaded.maxThreads, lock.maxThreads);
+const createThreaded = (await import(pathToFileURL(path.join(source, 'voidplayer-analysis-mt.js')).href)).default;
+const threadCore = await createThreaded({ wasmBinary: threadedWasm, analysisThreads: 2 });
+try {
+  validateAnalysisCore(threadCore);
+  assert.equal(threadCore._vpa_configure_threads(1, 1), 0);
+  assert.equal(threadCore._vpa_configure_threads(2, 2), 0);
+  assert.ok(threadCore._vpa_configure_threads(1, 2) < 0);
+  assert.ok(threadCore._vpa_configure_threads(lock.maxThreads + 1, 1) < 0);
+} finally { threadCore.PThread.terminateAllThreads(); }
 await mkdir(target, { recursive: true });
 const hashes = {};
-for (const file of [
-  "voidplayer-analysis.js",
-  "voidplayer-analysis.wasm",
-  "LICENSE", "LICENSE.libvmaf", "LICENSE.libsvm",
-  "manifest.json",
-  "capabilities.json",
-]) {
+for (const file of analysisFiles) {
   const bytes = await readFile(path.join(source, file));
   hashes[file] = createHash("sha256").update(bytes).digest("hex");
   if (source !== target)

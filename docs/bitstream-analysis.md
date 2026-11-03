@@ -41,7 +41,7 @@ Field picture、palette 的使用、损坏/concealment、不完整覆盖和非 4
 
 路由是 `/api/media/:id/bitstream-analysis/{capabilities,requests,chunks/:id}` 和 `/api/bitstream-analysis/requests/:requestId`。写请求需要同源 Origin、专用 action header 和确切媒体版本；API 不接受文件路径。capabilities 是实现的 admission 范围，每个 picture 仍需独立验证。
 
-服务端全局默认同时运行 8 个独立 worker，管理页「概览 → 分析资源」可设为 1–32 路，写回配置文件 `analysisConcurrency` 并立即生效；HTTP/HTTPS 入口共享同一调度器。调高立即补充排队任务，调低不终止已启动任务。单任务核心最大 heap 准入为 512 MiB，默认并发对应最多 4 GiB 的 WASM heap 容量；这不是进程 RSS 上限，JS 元数据、运行时和传输缓冲另占内存。超出运行路数的请求排队，排队单帧优先于区间和整片请求；不抢占正在运行的 decoder，等待索引或 consumer ACK 的任务也占用名额，只有 worker 终止完成才释放名额；每个 work 可以有多个 owner 隔离的 consumer lease，取消一个不终止另一个。GET 状态续租，30 秒失联回收；最后一个 consumer 退出时终止 worker。HTTP、播放和帧索引队列不等待分析。每个可信 picture checksum 校验后原子 rename 单独提交；区间 manifest 仅在完整完成后提交。异常/取消保留之前已完成的 chunks。重启、坏 checksum、截断、丢失 chunk、版本或 build 变化不能形成错误的完成覆盖。
+服务端全局默认同时运行 8 个独立 worker，管理页「概览 → 分析资源」可设为 1–32 路，写回配置文件 `analysisConcurrency` 并立即生效；HTTP/HTTPS 入口共享同一调度器。调高立即补充排队任务，调低不终止已启动任务。服务端码流分析构建每路 WASM heap 上限为 1 GiB，按需增长。管理页可为新建 VVC 分析任务设置 1–4 个线程以及 1 到线程数套帧上下文，默认 1/1，保存到 `analysisDecoder`。默认 8 路并发的 WASM heap 理论上限为 8 GiB，进程还需要为 JS 元数据、运行时和传输缓冲分配内存。超出运行路数的请求排队，排队单帧优先于区间和整片请求；不抢占正在运行的 decoder，等待索引或 consumer ACK 的任务也占用名额，只有 worker 终止完成才释放名额；每个 work 可以有多个 owner 隔离的 consumer lease，取消一个不终止另一个。GET 状态续租，30 秒失联回收；最后一个 consumer 退出时终止 worker。HTTP、播放和帧索引队列不等待分析。每个可信 picture checksum 校验后原子 rename 单独提交；区间 manifest 仅在完整完成后提交。异常/取消保留之前已完成的 chunks。重启、坏 checksum、截断、丢失 chunk、版本或 build 变化不能形成错误的完成覆盖。
 
 | 资源 | 上限 |
 | --- | --- |
@@ -53,7 +53,7 @@ Field picture、palette 的使用、损坏/concealment、不完整覆盖和非 4
 | 元数据索引 / 逻辑读取 | 250000 sample；64 MiB（含重复逻辑 read） |
 | coded 尺寸 | 4096×2304；4px 网格完整且无重叠 |
 | 核心 collecting + sealed | 32 picture；每 picture 131072 blocks；records 总 32 MiB |
-| WASM heap | 初始 64 MiB，最大 512 MiB；stack 4 MiB |
+| WASM heap | 初始 64 MiB；服务端码流分析最大 1 GiB，浏览器与评分构建最大 512 MiB；stack 4 MiB |
 | 单 picture 结果 / 出站 chunk | 8 MiB，按每条 128B + header 的保守 JSON 上界在 JS records 分配前检查；每 consumer 一块 ACK 背压 |
 | HTTP 结果传输 | 同时 2 个，额外读请求有界等待；不限制 worker 运行路数 |
 | 本地结果缓存 | 私有紧凑块与只读访问器的逻辑计量 32 MiB LRU，会话结束回收，无持久化 |
@@ -203,7 +203,7 @@ CI 运行字段/图表等价、零新增解码计数、预算、损坏和取消�
 
 产品 schema 为 2（key 与服务端产品文件同步隔离旧 schema）；LE12 编码和 VAP1 外层 framing 不变。H264/HEVC 可附加 `sourceLayout`，只从当前 configuration 的 SPS 解析 coded 和精确 visibleRect，记录 configuration-sps-v1 provenance。metadata/header/预算与 checksum 一并验证该证明。遮罩允许浏览器 plane padding 或预裁剪，但必须 coded 完全相等，或 result coded 与 SPS 完全相等且 presented visibleRect 与 SPS 完全相等、plane 完整包含可见域；未知配置不能用尺寸取整猜测。旧 legacy 元数据仍可读，缺该证明且几何不匹配的旧 blocks 不授权遮罩或精确请求暖命中。
 
-32 MiB 是每个 work 的未确认 descriptor 内容字节与下一帧最大预留的双重背压：初始下一帧 <=3 MiB（legacy8 MiB），每次 ACK 前检查 pending+next；暂停/终止前不发下一次 producer ACK。3 MiB/8 MiB 分配准入在 runner 构造 payload/legacy块对象数组之前，legacy额外按实际bounded metadata保守预算。并发默认8、最大32，因此32×N MiB仅是逻辑未确认引用上界（256/1024 MiB），并非RAM；共享128 MiB store会在保护文件无法驱逐时明确拒绝新写，重复引用不等于重复文件。实际每worker同一时刻最多一份输出（产品3 MiB/legacy8 MiB准入），另计最多两个HTTP读取slot、受限编码/解析临时拷贝和独立512 MiB WASM heap上限；不宣称全局32 MiB或RSS总上界。
+32 MiB 是每个 work 的未确认 descriptor 内容字节与下一帧最大预留的双重背压：初始下一帧 <=3 MiB（legacy8 MiB），每次 ACK 前检查 pending+next；暂停/终止前不发下一次 producer ACK。3 MiB/8 MiB 分配准入在 runner 构造 payload/legacy块对象数组之前，legacy额外按实际bounded metadata保守预算。并发默认8、最大32，因此32×N MiB仅是逻辑未确认引用上界（256/1024 MiB），并非RAM；共享128 MiB store会在保护文件无法驱逐时明确拒绝新写，重复引用不等于重复文件。实际每worker同一时刻最多一份输出（产品3 MiB/legacy8 MiB准入），另计最多两个HTTP读取slot、受限编码/解析临时拷贝和每路独立的服务端 1 GiB WASM heap 上限；不宣称全局32 MiB或RSS总上界。
 
 所有stream产品（summary、blocks和默认legacy full）均绑定本次独立读取的当前build；worker plan/cache/coverage、remote status和最终产品必须与它一致。完整stream恢复也只从当前实际owned blocks播种，旧AU仅发coverage，不重复chunk或cache.put；块被逐出则允许从仍拥有的已校验输出修复。legacy owner保留当前index namespace，不能以summary可读性替代完整产品。
 

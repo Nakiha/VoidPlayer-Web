@@ -42,7 +42,7 @@ export async function verifyReleaseSet(directory, identity, { bunVersion, coreSo
     else sharedCore = coreHashes;
     assert.deepEqual(manifest.analysis?.source, analysisSource, 'analysis source matches lock');
     const analysisHashes = Object.fromEntries(Object.entries(manifest.files).filter(([name]) => name.startsWith('dist/vendor/voidplayer-analysis/')).sort(([a], [b]) => a.localeCompare(b)));
-    for (const file of ['voidplayer-analysis.js','voidplayer-analysis.wasm','manifest.json','provenance.json','LICENSE']) assert.match(analysisHashes[`dist/vendor/voidplayer-analysis/${file}`] ?? '', /^[a-f0-9]{64}$/, file);
+    for (const file of ['voidplayer-analysis.js','voidplayer-analysis.wasm','voidplayer-analysis-mt.js','voidplayer-analysis-mt.wasm','threading.json','manifest.json','provenance.json','LICENSE']) assert.match(analysisHashes[`dist/vendor/voidplayer-analysis/${file}`] ?? '', /^[a-f0-9]{64}$/, file);
     if(sharedAnalysis) assert.deepEqual(analysisHashes,sharedAnalysis,'all platforms ship identical analysis bytes and provenance');else sharedAnalysis=analysisHashes;
     for (const [assetName, contents] of [[name, bytes], [name + '.sha256', checksum]]) assets.push({ name: assetName, bytes: contents.length, sha256: sha256(contents) });
   }

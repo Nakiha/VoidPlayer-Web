@@ -135,6 +135,115 @@ test('a one-picture legacy range and a viewport with one missing blocks picture 
  assert.equal(legacyCounters.fastOpen,0);assert.equal(legacyCounters.fullOpen,1);assert.equal(legacyCounters.stagedBytesPeak,0);
 });
 
+for (const [name, product, fallback] of [
+ ['vvc-long', 'blocks', 0], ['vvc-long-late-hash', 'blocks', 1], ['vvc-late-hash', 'summary', 1],
+] as const) {
+ const fixture = `fixtures/analysis-execution/${name}.mp4`;
+ test(`VVC progressive ${product} ${name}: verified prefix survives a full replay`, { skip: !extension || !existsSync(fixture) }, async () => {
+  const data = await readFile(fixture), signal = new AbortController().signal;
+  const input = await openAnalysisInput(reader(data), signal);
+  const firstPtsUs = Math.min(...input.packets.map(packet => packet.pts)), count = input.packets.length;
+  const target = { mode: 'stream', product, sourceVersion: name, firstPtsUs, durationUs: input.sourceEndUs - firstPtsUs } as const;
+  input.close();
+  if (product === 'blocks') assert.ok(count > 128);
+  const run = async (full: boolean) => {
+   const counters = emptyCounters(), outputs: AnalysisOutput[] = [];
+   const core = countCore(await create(), counters);
+   if (full) {
+    const mode = core._vpa_execution_mode.bind(core);
+    core._vpa_execution_mode = () => mode(0);
+   }
+   let firstDecoded = 0, previous = 0, visibleAtFallback = 0;
+   for (const key of ['_vpa_feed', '_vpa_feed_known', '_vpa_step'] as const) {
+    const call = core[key].bind(core);
+    core[key] = (...args: any[]) => {
+     const result = call(...args);
+     if (result === RETRY_FULL) visibleAtFallback = outputs.length;
+     return result;
+    };
+   }
+   await analyzeStream(reader(data), target, core, manifest.buildId, signal, async result => {
+    if (!outputs.length) firstDecoded = counters.decodedAU;
+    outputs.push(result);
+   }, async state => {
+    assert.equal(state.pictures, outputs.length);
+    assert.ok(state.pictures >= previous);
+    previous = state.pictures;
+   });
+   assert.equal(outputs.length, count);
+   assert.equal(new Set(outputs.map(row => row.picture.au)).size, count);
+   assert.equal(previous, count);
+   return { counters, outputs, firstDecoded, visibleAtFallback };
+  };
+  const fast = await run(false), full = await run(true);
+  assert.equal(fast.counters.fastOpen, 1);
+  assert.equal(fast.counters.fallback, fallback);
+  assert.equal(fast.counters.stagedBytesPeak, 0);
+  assert.ok(fast.firstDecoded < count);
+  if (fallback) assert.ok(fast.visibleAtFallback > 0, 'the verified prefix was already visible when the decoder requested pixels');
+  assert.deepEqual(fast.outputs.map(canonical), full.outputs.map(canonical));
+ });
+}
+
+test('VVC server thread settings preserve progressive outputs through a late full replay', {
+ skip: !existsSync('public/vendor/voidplayer-analysis/threading.json') ||
+   !existsSync('fixtures/analysis-execution/vvc-long-late-hash.mp4'),
+}, async () => {
+ const data = await readFile('fixtures/analysis-execution/vvc-long-late-hash.mp4');
+ const signal = new AbortController().signal;
+ const input = await openAnalysisInput(reader(data), signal);
+ const firstPtsUs = Math.min(...input.packets.map(packet => packet.pts));
+ const count = input.packets.length;
+ const target = { mode: 'stream', product: 'blocks', sourceVersion: 'vvc-threading',
+  firstPtsUs, durationUs: input.sourceEndUs - firstPtsUs } as const;
+ input.close();
+ const stem = path.resolve('public/vendor/voidplayer-analysis/voidplayer-analysis-mt');
+ const createThreaded = (await import(pathToFileURL(stem + '.js').href)).default;
+ const wasmBinary = await readFile(stem + '.wasm');
+ let expected: unknown;
+ for (const [threads, contexts] of [[1, 1], [2, 2], [4, 2]]) {
+  const core = await createThreaded({ wasmBinary, analysisThreads: threads > 1 ? threads : 0 });
+  try {
+   assert.equal(core._vpa_configure_threads(threads, contexts), 0);
+   const counters = emptyCounters(), outputs: AnalysisOutput[] = [];
+   await analyzeStream(reader(data), target, countCore(core, counters), manifest.buildId, signal,
+    async result => { outputs.push(result); }, async () => {});
+   assert.equal(outputs.length, count);
+   assert.equal(counters.fallback, 1);
+   const ordered = outputs.sort((a, b) => a.picture.au - b.picture.au).map(canonical);
+   if (threads === 1) expected = ordered;
+   else assert.deepEqual(ordered, expected);
+  } finally { core.PThread.terminateAllThreads(); }
+ }
+});
+
+test('VVC viewport summaries use a private fast attempt with the same output as full', {
+ skip: !extension || !existsSync('fixtures/analysis-execution/vvc.mp4'),
+}, async () => {
+ const data = await readFile('fixtures/analysis-execution/vvc.mp4'), signal = new AbortController().signal;
+ const input = await openAnalysisInput(reader(data), signal);
+ const firstPtsUs = Math.min(...input.packets.map(packet => packet.pts));
+ const durationUs = input.sourceEndUs - firstPtsUs;
+ input.close();
+ const target = { mode: 'stream', product: 'summary', sourceVersion: 'vvc-viewport', firstPtsUs, durationUs,
+  window: { startUs: 0, endUs: durationUs, axis: 'pts' } } as const;
+ const run = async (full: boolean) => {
+  const counters = emptyCounters(), outputs: AnalysisOutput[] = [];
+  const core = countCore(await create(), counters);
+  if (full) {
+   const mode = core._vpa_execution_mode.bind(core);
+   core._vpa_execution_mode = () => mode(0);
+  }
+  await analyzeStream(reader(data), target, core, manifest.buildId, signal, async result => { outputs.push(result); }, async () => {});
+  return { counters, outputs };
+ };
+ const fast = await run(false), full = await run(true);
+ assert.ok(fast.counters.fastOpen > 0);
+ assert.equal(fast.counters.fallback, 0);
+ assert.ok(fast.outputs.length > 0);
+ assert.deepEqual(fast.outputs.map(canonical), full.outputs.map(canonical));
+});
+
 test('H264 retains incremental GOP summaries, exact QP/refs and cache-only reuse',async()=>{
  const data=await readFile('fixtures/analysis-execution/h264.mp4'),input=await openAnalysisInput(reader(data),new AbortController().signal),firstPtsUs=Math.min(...input.packets.map(p=>p.pts)),durationUs=input.sourceEndUs-firstPtsUs,packet=input.packets[12],picture=input.picture(packet,'h264');input.close();
  const target={mode:'stream' as const,product:'summary' as const,sourceVersion:'h264',firstPtsUs,durationUs,window:{startUs:100000,endUs:300000,axis:'pts' as const}},cache=new Map<number,AnalysisOutput>(),counters=emptyCounters();let firstDecoded=0;

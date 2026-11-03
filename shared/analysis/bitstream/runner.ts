@@ -31,7 +31,7 @@ import type {
 import { inspectPacketPicture } from "../../media/codecs/packet-picture.ts";
 import { openAnalysisInput } from "./input.ts";
 import type { AnalysisReader } from "./input.ts";
-import { AnalysisFailure, coreFailure } from "./failure.ts";
+import { AnalysisFailure, RetryFullAnalysis, coreFailure } from "./failure.ts";
 import { groupAnalysisGops, gopForAu, viewportAnalysisGops } from './stream.ts';
 import type { AnalysisIndexFrontier, StreamProgress } from './stream.ts';
 async function runPictureAttempt(
@@ -441,6 +441,7 @@ async function runPictureAttempt(
           );
         const ret = core._vpa_drain();
         if (ret < 0) throw coreFailure(ret, "Analysis drain failed");
+        if (ret === 2) continue;
         drained = true;
         continue;
       }
@@ -498,18 +499,18 @@ async function runPictureAttempt(
   }
 }
 
-/** A single-picture blocks request can use a private fast attempt.
- * Summary, range, legacy and viewport work keeps incremental full publication,
- * even when only one cache miss remains in a selected GOP.
+/** Exact blocks and explicit VVC viewport products can use a private fast attempt.
+ * Other summary, range, legacy and viewport work keeps full publication.
  * A late pixel requirement discards their owners and opens a new full decoder
  * at the very same syntax-proven anchor. The input/index identities never change.
- * Open/dependent or unsealed work keeps the original continuous full path.
+ * A VVC viewport can reuse the closed-anchor preroll verified by input.plan.
  * HEVC and VVC both admit the attempt once the core exposes the execution
  * extension and the anchor proof holds; the core decides config eligibility. */
 async function runPicture(...args: Parameters<typeof runPictureAttempt>): Promise<AnalysisOutput> {
   const [reader, target, factory, buildId, signal, options = {}] = args;
-  if (target.product !== 'blocks' || options.stream || options.viewport ||
-      options.desiredAus || options.endSourcePtsUs !== undefined)
+  const vvcViewport = options.viewport && options.input?.codec === 'vvc' && !!target.product;
+  if (options.stream || (!vvcViewport && (target.product !== 'blocks' || options.viewport ||
+      options.desiredAus || options.endSourcePtsUs !== undefined)))
     return runPictureAttempt(reader,target,factory,buildId,signal,{...options,executionMode:0});
   const input = options.input ?? await openAnalysisInput(reader, signal, false,
     {sourceVersion:target.sourceVersion,indexIdentity:target.indexIdentity});
@@ -520,7 +521,7 @@ async function runPicture(...args: Parameters<typeof runPictureAttempt>): Promis
     if ((input.codec === 'hevc' || input.codec === 'vvc') && input.indexComplete && !policy.full) {
       const group = gopForAu(groupAnalysisGops(input.packets), planned.target.au);
       // Do not start a no-pixels DPB from a container-key/open-GOP guess.
-      const bounded = planned.start === group.startAu;
+      const bounded = vvcViewport || planned.start === group.startAu;
       if (bounded) {
         const anchor = input.packets[planned.start];
         if (anchor.size > BUDGET.packetBytes) throw new AnalysisFailure('resource-limit','Analysis anchor budget exceeded');
@@ -529,7 +530,7 @@ async function runPicture(...args: Parameters<typeof runPictureAttempt>): Promis
           if (typeof core === 'function') core = await core();
           signal.throwIfAborted();
           fast = hasExecutionExtension(core);
-          if (fast) decodeEnd = group.endAu;
+          if (fast && !vvcViewport) decodeEnd = group.endAu;
         }
       }
     }
@@ -720,6 +721,60 @@ async function runStream(
   // Bound the first publication delay and the work a late pixel requirement can replay.
   const maxChainPictures = 128;
   const total = input.totalPackets;
+  // A completed VVC output has already passed its AU's pixel-requirement
+  // checks, including suffix SEI, and every dependency needed for that output.
+  // Later AUs may require a fresh full DPB without invalidating that prefix.
+  const progressiveVvc = input.codec === 'vvc' && (target.product === 'summary' ||
+    (target.product === 'blocks' && total !== null && total > maxChainPictures));
+  if (progressiveVvc && !input.acknowledge && (input.indexIntegrity === undefined || input.indexIntegrity === 'complete')) {
+    try {
+      if (!input.indexComplete && total !== null && (!frontier || (await frontier()).complete)) {
+        signal.throwIfAborted();
+        await input.ensure?.(total);
+      }
+      if (input.indexComplete && first.size <= BUDGET.packetBytes) {
+        const proof = inspectPacketPicture(input.codec, input.configurations[first.configuration], await input.readUnit(first));
+        signal.throwIfAborted();
+        if (proof.singlePicture && proof.closedRandomAccess) {
+          // Retain only AU identities, never packed results. The existing
+          // awaited publication remains the producer's backpressure boundary.
+          const committed = new Set<number>();
+          let consumerFailed = false;
+          let selectedFast = false;
+          let instance: any;
+          const factory = core;
+          const load = async () => instance ??= typeof factory === 'function' ? await factory() : factory;
+          const callConsumer = async <T,>(deliver: (value: T) => Promise<void>, value: T) => {
+            try { await deliver(value); }
+            catch (error) { consumerFailed = true; throw error; }
+          };
+          const publish = async (value: AnalysisOutput) => {
+            const au = value.picture.au;
+            if (committed.has(au)) return;
+            await callConsumer(onResult, value);
+            committed.add(au);
+          };
+          const progress = async (value: StreamProgress) => {
+            if (value.pictures < committed.size || value.checkedUs < latest.checkedUs) return;
+            await callConsumer(report, value);
+          };
+          const attempt = (executionMode: 0 | 1) => runPictureAttempt(reader, pictureTarget, load, buildId, signal, {
+            ...streamOptions, keepInput: true, executionMode, onResult: publish, onProgress: progress,
+            onExecution: fast => { selectedFast = fast; instance?.[EXECUTION_EVENT]?.(fast ? 'fast-open' : 'full-open'); },
+          });
+          try { return await attempt(1); }
+          catch (error) {
+            signal.throwIfAborted();
+            if (consumerFailed || !selectedFast || !(error instanceof RetryFullAnalysis) ||
+                error.reason !== 'decoder-requires-pixels') throw error;
+            instance?.[EXECUTION_EVENT]?.('fallback');
+          }
+          return await attempt(0);
+        }
+      }
+      return await runPicture(reader, pictureTarget, core, buildId, signal, { ...streamOptions, keepInput: true });
+    } finally { input.close(); }
+  }
   if (target.product !== 'blocks' || (input.codec !== 'vvc' && input.codec !== 'hevc') || input.acknowledge ||
       (input.indexIntegrity !== undefined && input.indexIntegrity !== 'complete') ||
       total === null || total < 1 || total > maxChainPictures)

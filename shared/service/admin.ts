@@ -69,6 +69,8 @@ export type LogDocument = {
     document: unknown;
 };
 export type AnalysisSettings = {
+    decoder: { threads: number; contexts: number };
+    maxThreads: number;
     min: number;
     max: number;
     revision: null | string;

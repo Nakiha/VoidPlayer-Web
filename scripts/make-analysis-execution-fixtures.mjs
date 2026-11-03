@@ -137,15 +137,14 @@ if (!existsSync(vvcSource)) {
   const extended = ppsBits.slice(0, stopBit - 1) + '101';
   const changedPps = Buffer.concat([pps.subarray(0, 2), escape(Buffer.from(
     extended.padEnd(Math.ceil(extended.length / 8) * 8, '0').match(/.{8}/g).map(bits => parseInt(bits, 2))))]);
-  const writeFixture = async (name, patch) => {
-    const payloads = clip.map((p, i) => patch?.[i] ?? units[i]);
+  const writeFixture = async (name, payloads = units, packets = clip) => {
     const tfdt = Buffer.alloc(12); tfdt.writeUInt32BE(0x01000000); tfdt.writeBigUInt64BE(96000n, 4);
     const run = (a, b, offset) => box('trun', u32(0x01000f00 | (offset === undefined ? 0 : 1), b - a),
       ...(offset === undefined ? [] : [u32(offset)]),
-      ...clip.slice(a, b).map((p, k) => u32(1000, payloads[a + k].length, p.key ? 0x02000000 : 0x01010000,
+      ...packets.slice(a, b).map((p, k) => u32(1000, payloads[a + k].length, p.key ? 0x02000000 : 0x01010000,
         Math.round((p.pts - firstPts) * 0.06) - p.au * 1000)));
     const moof = (offset) => box('moof', box('mfhd', u32(0, 1)), box('traf', box('tfhd', u32(0x020000, layout.trackId)),
-      box('tfdt', tfdt), run(0, clip.length, offset)));
+      box('tfdt', tfdt), run(0, packets.length, offset)));
     const fragment = moof(0);
     await writeFile(path.join(out, name + '.mp4'), Buffer.concat([layout.bytes, moof(fragment.length + 8), box('mdat', ...payloads)]));
   };
@@ -156,6 +155,12 @@ if (!existsSync(vvcSource)) {
   await writeFixture('vvc-late-changed-pps', patched(10, changedPps, true));
   await writeFixture('vvc-late-hash', patched(10, sei(132, Buffer.from([1, 0, 0, 0, 0, 0, 0, 0]), false), false));
   await writeFixture('vvc-late-grain', patched(10, sei(19, Buffer.from([0, 2]), true), true));
+  const long = vvcInput.packets.slice(0, 144);
+  if (long.length !== 144) throw Error('VVC long fixture needs 144 access units');
+  const longUnits = await Promise.all(long.map(p => vvcInput.readUnit(p)));
+  await writeFixture('vvc-long', longUnits, long);
+  longUnits[136] = Buffer.concat([longUnits[136], framed(sei(132, Buffer.from([1, 0, 0, 0, 0, 0, 0, 0]), false))]);
+  await writeFixture('vvc-long-late-hash', longUnits, long);
   console.log('VVC execution fixtures written from', path.basename(vvcSource));
   vvcInput.close();
 }

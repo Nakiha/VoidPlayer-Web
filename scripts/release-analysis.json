@@ -1,6 +1,6 @@
 {
   "repository": "Nakiha/VoidPlayer-FFmpeg-Build",
-  "revision": "e8d7bda23087fd2827c7b85ee056618920b1e6f4",
+  "revision": "cc47fd248f56f8ebd75e82368fff82f2c1cfe375",
   "ffmpegRepository": "Nakiha/FFmpeg",
   "ffmpegRevision": "856df065ba064815eba3c6e3e77c5268e912f7ee",
   "emscripten": "6.0.9",
@@ -11,6 +11,10 @@
   "capabilityAbi": 1,
   "demuxers": [],
   "qualityAbi": 1,
+  "threadingAbi": 1,
+  "threadedFfmpegRevision": "a2bbd5995ec0290da13f68d7156c292f2598f26a",
+  "threadedHeapMaxBytes": 1073741824,
+  "maxThreads": 4,
   "vmafRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
   "xpsnrAbi": 1,
   "xpsnrRevision": "8998a1a670c81a04d144c36f9e2d3aa680c10720",

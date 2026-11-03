@@ -12,8 +12,21 @@ actual reference preroll. A cold continuous HEVC or VVC `blocks` request can als
 fast execution when the complete reference chain fits 128 pictures and the
 32 MiB input budget, starts at a verified closed anchor, and has one decoder
 configuration. The decoder carries syntax reference state across open GOPs.
-Cached, unsealed or oversized streams use the incremental full path. Summary,
-range, viewport and legacy requests also keep full incremental publication.
+VVC also supports progressive no-pixels execution for sealed summary streams
+and blocks streams over 128 pictures. These streams retain one decoder across
+dependent GOPs and commit each validated output through the existing per-picture
+backpressure. The decoder checks the picture's AU, including suffix SEI, and
+completes its reference work before making that picture available. A later
+pixel requirement closes the pruned decoder and replays once with full pixels
+from the same verified anchor. The host remembers committed AU identities and
+suppresses duplicate publication and progress during replay.
+
+VVC viewport requests with explicit summary or blocks output can use a bounded
+private attempt per missing group, including the verified closed-anchor
+preroll for a dependent group. A late retry preserves the existing one-retry
+policy for the whole viewport. Other viewport, range and legacy requests keep
+their full path. Unsealed streams and adapters that acknowledge input while
+publishing retain their existing execution policy.
 The Core extension's existing
 FFmpeg parameter-set parser decides whether the
 configuration really permits HEVC Main8/Main10 or VVC Main10 4:2:0 8..10 bit
@@ -39,20 +52,19 @@ whole request to one retry; subsequent groups stay full. Cancel, source change,
 invalid requests, corrupt data, missing references and ENOMEM are not general
 retry triggers. Malformed new parameter sets preserve their parser error.
 
-No speculative result or coverage/progress increment reaches a cache, chart,
-server store or overlay. Once decoding the requested transaction succeeds, the
-winning owners flow through existing awaited per-picture backpressure. Publication
+For bounded attempts, staged results and their coverage stay private until the
+transaction completes. The winning owners then flow through existing awaited
+per-picture backpressure. Publication
 is outside the retry catch: cancellation or consumer error during commit cannot
 start another generation. A cancelled commit may retain its already committed
 exact pictures, which the existing cache/resume protocol can safely reuse.
 Consequently the external worker/HTTP protocol needs no rollback/generation change.
 
 Staging a cold summary GOP delayed the first publication and wasted decoded work
-on pause, so summaries keep incremental delivery. Exact analysis stages its
-requested picture after packet and suffix SEI processing and necessary
-reference/reorder work. An eligible continuous blocks request publishes after
-its bounded chain completes. This can delay the first result even when total
-throughput improves.
+on pause, so continuous summaries keep incremental delivery. Exact analysis
+stages its requested picture after packet and suffix SEI processing and necessary
+reference/reorder work. Continuous blocks requests using the bounded transaction
+publish after the chain completes, which can delay the first result.
 
 The sorter dependency (Core PR9), FFmpeg analysis change (FFmpeg PR1), Core
 execution change (Core PR10) and the VVC pruning change (FFmpeg PR3, Core PR12)

@@ -73,13 +73,24 @@ try {
   await page.locator('#identity').filter({ hasText: '访客' }).waitFor();
 
   await page.waitForFunction(() => document.getElementById('analysis-concurrency')?.value === '8');
+  const analysisThreads = page.getByLabel('VVC 解码线程数');
+  const analysisContexts = page.getByLabel('VVC 帧上下文数');
+  assert.equal(await analysisThreads.inputValue(), '1');
+  assert.equal(await analysisContexts.inputValue(), '1');
+  await analysisContexts.fill('2');
+  assert.equal(await page.locator('#analysis-resource-save').isDisabled(), true);
+  await analysisThreads.fill('3');
   await page.getByLabel('服务端分析并发数').fill('12');
   await page.getByRole('button', { name: '保存分析配置', exact: true }).click();
   await page.locator('#analysis-resource-save-state').filter({ hasText: '分析配置已保存' }).waitFor();
-  assert.equal(JSON.parse(await readFile(file, 'utf8')).analysisConcurrency, 12);
+  const analysisConfig = JSON.parse(await readFile(file, 'utf8'));
+  assert.equal(analysisConfig.analysisConcurrency, 12);
+  assert.deepEqual(analysisConfig.analysisDecoder, { threads: 3, contexts: 2 });
   assert.equal((await (await fetch(base + '/api/admin/status')).json()).analysis.concurrency, 12);
   await page.reload();
   await page.waitForFunction(() => document.getElementById('analysis-concurrency')?.value === '12');
+  assert.equal(await analysisThreads.inputValue(), '3');
+  assert.equal(await analysisContexts.inputValue(), '2');
   await page.locator('#quality-resource-reload').click();
   await page.waitForFunction(()=>document.querySelector('[data-quality-resource="concurrency"]')?.value==='1');
   await page.locator('[data-quality-resource="concurrency"]').fill('2');

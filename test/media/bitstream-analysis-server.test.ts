@@ -420,6 +420,37 @@ test("legal interlaced and high-depth inputs report the same capability reasons 
   }
 });
 
+test('configured server VVC analysis runs in a threaded worker', {
+  skip: !await access(join(coreDir, 'threading.json')).then(() => true, () => false) ||
+    !await access(resolve('fixtures/video/h266_10s_1920x1080.mp4')).then(() => true, () => false),
+}, async () => {
+  const f = await fixture(resolve('fixtures/video'), 'h266_10s_1920x1080.mp4');
+  const scheduler = new AnalysisScheduler(f.library, coreDir, join(f.folder, 'analysis'));
+  scheduler.configure(1, { threads: 2, contexts: 2 });
+  const { buildId } = JSON.parse(await readFile(join(coreDir, 'threading.json'), 'utf8'));
+  const stream = { mode: 'stream', product: 'summary', sourceVersion: `${f.entry.id}@${f.entry.version}`,
+    firstPtsUs: 0, durationUs: 10000000, window: { startUs: 0, endUs: 100000, axis: 'pts' } } as const;
+  try {
+    const request = await scheduler.submit(f.entry.id, f.entry.version!, stream, 'threaded');
+    let cursor = 0;
+    for (let n = 0; ; n++) {
+      assert.ok(n < 500, 'threaded viewport request completes');
+      const state = await scheduler.streamStatus(request.requestId, 'threaded', cursor);
+      assert.ok(state && ['running', 'queued', 'complete'].includes(state.state), JSON.stringify(state));
+      for (const ref of state.chunks) cursor = ref.cursor;
+      if (state.state === 'complete' && cursor === state.published) {
+        assert.ok(cursor > 0);
+        const status = scheduler.status(request.requestId, 'threaded');
+        assert.equal(status?.buildId, buildId);
+        assert.ok(status?.counters?.fastOpen, 'threaded VVC can prune pixels');
+        break;
+      }
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    scheduler.release(request.requestId, 'threaded');
+  } finally { await scheduler.close(); await f.close(); }
+});
+
 test('server viewport requests keep different windows separate and publish only their intersecting GOP', async () => {
   const { execFileSync } = await import('node:child_process');
   const media = await mkdtemp(join(tmpdir(), 'vp-viewport-stream-')), name = 'viewport.mp4';

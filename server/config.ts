@@ -1,4 +1,5 @@
-import { DEFAULT_ANALYSIS_CONCURRENCY, validAnalysisConcurrency } from './analysis/bitstream/limits.ts';
+import { DEFAULT_ANALYSIS_CONCURRENCY, validAnalysisConcurrency, validAnalysisDecoder } from './analysis/bitstream/limits.ts';
+import type { AnalysisDecoderSettings } from './analysis/bitstream/limits.ts';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -13,6 +14,7 @@ import type {QualityResourceLimits,QualityResourceChange} from '../shared/servic
 export interface ServiceConfig {
   mediaRoots: MediaRoot[]; dataDir: string; host: string; port: number; devPort: number;
   staticDir: string; logsDir: string | null; allowLocalReveal: boolean; indexTtlMs: number; indexWatch: boolean; analysisConcurrency: number;
+  analysisDecoder?: AnalysisDecoderSettings;
   /** Legacy configuration, retained for compatibility; all users are trusted. */
   adminUsers: string[];
   qualityResources?: QualityResourceLimits;
@@ -55,7 +57,7 @@ export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd
   catch (error) { if (configFile || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
   const defaults: ServiceConfig = { dataDir: paths.dataDir ?? path.resolve(cwd, '.run/data'), mediaRoots: mode === 'dev' ? [path.resolve(cwd, 'fixtures/video')] : [], host: '127.0.0.1', port: 5180, devPort: 5178, staticDir: paths.staticDir ?? path.resolve(cwd, 'dist'), logsDir: paths.logsDir ?? path.resolve(cwd, 'logs'), allowLocalReveal: false, indexTtlMs: 30000, indexWatch: true, analysisConcurrency: DEFAULT_ANALYSIS_CONCURRENCY, adminUsers: [] };
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('服务配置必须是 JSON 对象。');
-  for (const key of Object.keys(data)) if (!Object.hasOwn(defaults, key) && !['tls', 'httpPort','nativeVmaf','nativeXpsnr','qualityResources','qualityResourceHistory'].includes(key)) throw new Error(`未知配置项: ${key}`);
+  for (const key of Object.keys(data)) if (!Object.hasOwn(defaults, key) && !['tls', 'httpPort','nativeVmaf','nativeXpsnr','qualityResources','qualityResourceHistory','analysisDecoder'].includes(key)) throw new Error(`未知配置项: ${key}`);
   if (process.env.VOIDPLAYER_ADMIN_USERS !== undefined) overrides.adminUsers = process.env.VOIDPLAYER_ADMIN_USERS.split(',').map(id => id.trim()).filter(Boolean);
   const config = { ...defaults, ...data, ...overrides } as ServiceConfig;
   if(config.qualityResources!==undefined)config.qualityResources=qualityResourceLimits(config.qualityResources);
@@ -75,6 +77,8 @@ export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd
   if (typeof config.host !== 'string' || !config.host.trim()) throw new Error('host 无效。');
   if (mode === 'dev' && !['127.0.0.1', 'localhost', '::1'].includes(config.host)) throw new Error('开发服务仅监听本机；远端使用构建后的正式服务。');
   if (typeof config.allowLocalReveal !== 'boolean') throw new Error('allowLocalReveal 必须是布尔值。');
+  if (config.analysisDecoder !== undefined && !validAnalysisDecoder(config.analysisDecoder))
+    throw new Error('analysisDecoder 需要 1–4 个线程，帧上下文数必须介于 1 和线程数之间。');
   if (!validAnalysisConcurrency(config.analysisConcurrency)) throw new Error('analysisConcurrency 必须是 1–32 的整数。');
   if (typeof config.indexWatch !== 'boolean') throw new Error('indexWatch 必须是布尔值。');
   if (!Array.isArray(config.adminUsers) || config.adminUsers.length > 100 || config.adminUsers.some(id => typeof id !== 'string' || !id.trim() || id !== id.normalize('NFC').trim() || id.length > 128 || /[\p{Cc}\p{Cf}]/u.test(id)) || new Set(config.adminUsers).size !== config.adminUsers.length) throw new Error('adminUsers 必须是不重复的用户名列表。');

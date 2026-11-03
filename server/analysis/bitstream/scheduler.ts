@@ -4,7 +4,8 @@ import type {DemandPlan} from '../../../shared/analysis/bitstream/demand.ts';
 import { analysisIndexIdentity, isProduct, isSummary, validateOutput, productKey, metadata, metadataBudgetBytes, PRODUCT_LIMIT, SUMMARY_BATCH_LIMIT } from '../../../shared/analysis/bitstream/products.ts';
 import type { AnalysisOutput, AnalysisSummary } from '../../../shared/analysis/bitstream/products.ts';
 import { FLV_MEDIA_INDEX_IDENTITY, JS_TS_MEDIA_INDEX_IDENTITY,JS_MATROSKA_MEDIA_INDEX_IDENTITY } from '../../../shared/media/indexing/media-index-identity.ts';
-import { DEFAULT_ANALYSIS_CONCURRENCY, validAnalysisConcurrency, ANALYSIS_WORKER_HEAP_BYTES } from './limits.ts';
+import { DEFAULT_ANALYSIS_CONCURRENCY, DEFAULT_ANALYSIS_DECODER, MAX_ANALYSIS_THREADS, validAnalysisConcurrency, validAnalysisDecoder, ANALYSIS_WORKER_HEAP_BYTES } from './limits.ts';
+import type { AnalysisDecoderSettings } from './limits.ts';
 import { Worker } from "node:worker_threads";
 import { randomUUID, createHash } from "node:crypto";
 import { open, readFile } from "node:fs/promises";
@@ -53,6 +54,8 @@ type Work = {
   target: AnalysisTarget | AnalysisRangeTarget | AnalysisStreamTarget;
   chunks: string[];
   buildId: string;
+  threaded: boolean;
+  decoder: AnalysisDecoderSettings;
   state:
     | "queued"
     | "running"
@@ -79,8 +82,14 @@ export class AnalysisScheduler {
   private timer?: ReturnType<typeof setInterval>;
   private closed = false;
   private concurrency = DEFAULT_ANALYSIS_CONCURRENCY;
+  private decoder: AnalysisDecoderSettings = DEFAULT_ANALYSIS_DECODER;
   setConcurrency(value: number) {
+    this.configure(value, this.decoder);
+  }
+  configure(value: number, decoder: AnalysisDecoderSettings) {
     if (!validAnalysisConcurrency(value)) throw new RangeError("Invalid analysis concurrency");
+    if (!validAnalysisDecoder(decoder)) throw new RangeError("Invalid analysis decoder settings");
+    this.decoder = { ...decoder };
     this.concurrency = value;
     // Reductions only affect future admission; existing workers keep their slots.
     this.pump();
@@ -217,11 +226,20 @@ export class AnalysisScheduler {
     );
     if (manifest.abi !== 1 || manifest.semanticVersion !== ANALYZER_VERSION)
       throw new Error("Analysis core ABI/version mismatch");
-    if (!Number.isSafeInteger(manifest.heapMaxBytes) || manifest.heapMaxBytes <= 0 ||
-        manifest.heapMaxBytes > ANALYSIS_WORKER_HEAP_BYTES)
+    const decoder = this.decoder;
+    const threaded = await readFile(path.join(this.coreDir, 'threading.json'), 'utf8')
+      .then(text => JSON.parse(text), error => { if (error.code !== 'ENOENT') throw error; return null; });
+    if (threaded && (threaded.abi !== 1 || threaded.revision !== manifest.revision ||
+        !/^[a-f0-9]{40}:mt-[a-f0-9]{16}$/.test(threaded.buildId) || threaded.maxThreads !== MAX_ANALYSIS_THREADS))
+      throw new Error('Analysis threading ABI/version mismatch');
+    if (!threaded && decoder.threads > 1)
+      throw new AnalysisFailure('internal-error', 'Configured analysis threads require the server analysis core variant');
+    const core = threaded ?? manifest;
+    if (!Number.isSafeInteger(core.heapMaxBytes) || core.heapMaxBytes <= 0 || core.heapMaxBytes > ANALYSIS_WORKER_HEAP_BYTES)
       throw new AnalysisFailure('resource-limit', 'Analysis core exceeds server heap reservation');
+    const buildId = core.buildId ?? core.revision;
     const id = target.product==='blocks' && 'picture' in target && target.picture
-      ? createHash("sha256").update(productKey(target.picture,manifest.buildId ?? manifest.revision,target.indexIdentity ?? null,'blocks')).digest("hex")
+      ? createHash("sha256").update(productKey(target.picture,buildId,target.indexIdentity ?? null,'blocks')).digest("hex")
       : createHash("sha256")
       .update(
         JSON.stringify([
@@ -234,7 +252,7 @@ export class AnalysisScheduler {
               : target.sourcePtsUs,
           ANALYSIS_RECIPE,
           ANALYZER_VERSION,
-          (manifest.buildId ?? manifest.revision),
+          buildId,
         ]),
       )
       .digest("hex");
@@ -262,7 +280,7 @@ export class AnalysisScheduler {
       const cached = "startUs" in target || "mode" in target ? null : await this.store.getOutput(id,"picture" in target ? target.picture?.au : undefined);
       if (
         cached &&
-        (cached.buildId !== (manifest.buildId ?? manifest.revision) ||
+        (cached.buildId !== buildId ||
           cached.picture.sourceVersion !== target.sourceVersion)
       )
         throw new Error("Invalid analysis cache identity");
@@ -274,7 +292,7 @@ export class AnalysisScheduler {
         filePath,
         target,
         chunks: chunks ?? (cached ? [id] : []),
-        buildId: (manifest.buildId ?? manifest.revision),
+        buildId, threaded: !!threaded, decoder,
         state: cached || chunks ? "complete" : "queued",
         consumers: new Set(),
         seq: 0,
@@ -494,6 +512,7 @@ export class AnalysisScheduler {
           workerData: {
             filePath: work.filePath,
             coreDir: this.coreDir,
+            buildId: work.buildId, threaded: work.threaded, decoder: work.decoder,
             target: work.target,
             externalIndex: !!index,
             flvSnapshot, jsSnapshot,

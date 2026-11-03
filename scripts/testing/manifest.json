@@ -9,6 +9,9 @@
     "paths": [
       "public/vendor/voidplayer-analysis/voidplayer-analysis.js",
       "public/vendor/voidplayer-analysis/voidplayer-analysis.wasm",
+      "public/vendor/voidplayer-analysis/voidplayer-analysis-mt.js",
+      "public/vendor/voidplayer-analysis/voidplayer-analysis-mt.wasm",
+      "public/vendor/voidplayer-analysis/threading.json",
       "public/vendor/voidplayer-analysis/manifest.json"
     ],
     "prepare": [
