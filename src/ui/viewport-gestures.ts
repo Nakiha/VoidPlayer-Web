@@ -98,11 +98,11 @@ export function installViewportGestures(deps: ViewportGestureDeps) {
   for (const slot of SLOTS) {
     const stage = $(`stage-${slot}`);
     stage.addEventListener('contextmenu', e => e.preventDefault());
-    let pan: { pointer: number; x: number; y: number } | null = null;
+    let pan: { pointer: number; x: number; y: number; moved: boolean } | null = null;
     stage.addEventListener('pointerdown', e => {
       if (e.button !== 2 || !session.getState().tracks.length) return;
       e.preventDefault();
-      pan = { pointer: e.pointerId, x: e.clientX, y: e.clientY };
+      pan = { pointer: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
       activePanPointer = e.pointerId;
       suppressPanContextMenu = true;
       clearTimeout(contextMenuExpiry);
@@ -111,9 +111,17 @@ export function installViewportGestures(deps: ViewportGestureDeps) {
     });
     stage.addEventListener('pointermove', e => {
       if (!pan || pan.pointer !== e.pointerId) return;
-      queuePan(e.clientX - pan.x, e.clientY - pan.y);
+      const dx = e.clientX - pan.x, dy = e.clientY - pan.y;
+      if (!dx && !dy) return;
       pan.x = e.clientX;
       pan.y = e.clientY;
+      if (pan.moved) {
+        queuePan(dx, dy);
+      } else {
+        pan.moved = true;
+        viewport.panBy(dx, dy);
+        applyViewTransform();
+      }
     });
     const endPan = (e: PointerEvent) => {
       if (!pan || pan.pointer !== e.pointerId) return;

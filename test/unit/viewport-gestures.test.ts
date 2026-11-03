@@ -18,7 +18,7 @@ class DocumentStub extends EventTarget {
   querySelector() { return null; }
 }
 
-test('right-drag batches move work per animation frame and suppresses page menus through release', t => {
+test('right-drag starts immediately, batches later moves and suppresses page menus through release', t => {
   const oldDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
   const oldRaf = globalThis.requestAnimationFrame;
   const oldCancelRaf = globalThis.cancelAnimationFrame;
@@ -78,19 +78,24 @@ test('right-drag batches move work per animation frame and suppresses page menus
   assert.equal(menuBeforePan.defaultPrevented, false, 'unrelated page context menus remain available');
 
   pointer('pointerdown', 10, 20);
+  pointer('pointermove', 10, 20);
+  assert.equal(transformUpdates, 0, 'zero movement does not start the drag');
+  assert.equal(frames.size, 0);
   pointer('pointermove', 14, 21);
+  assert.equal(transformUpdates, 1, 'the first movement updates without waiting for a frame');
+  assert.equal(frames.size, 0);
   pointer('pointermove', 25, 25);
   pointer('pointermove', 40, 30);
-  assert.equal(transformUpdates, 0, 'pointer bursts wait for the next frame');
-  assert.deepEqual([viewport.offsetX, viewport.offsetY], [0, 0]);
+  assert.equal(transformUpdates, 1, 'subsequent bursts wait for the next frame');
+  assert.deepEqual([viewport.offsetX, viewport.offsetY], [4, 1]);
   runNextFrame();
-  assert.equal(transformUpdates, 1, 'the burst produces one transform update for the frame');
+  assert.equal(transformUpdates, 2, 'the burst produces one transform update for the frame');
   assert.deepEqual([viewport.offsetX, viewport.offsetY], [30, 10]);
 
   pointer('pointermove', 43, 31);
   pointer('pointermove', 47, 34);
   pointer('pointerup', 47, 34);
-  assert.equal(transformUpdates, 2, 'release flushes the pending movement once');
+  assert.equal(transformUpdates, 3, 'release flushes the pending movement once');
   assert.deepEqual([viewport.offsetX, viewport.offsetY], [37, 14]);
 
   // In a browser this event bubbles from the sidebar to document; dispatching
