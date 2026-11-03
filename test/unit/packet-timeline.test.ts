@@ -71,7 +71,7 @@ test('next after an unrelated seek discards lookahead from the old display posit
 });
 
 test('output arriving during packet IO defers submission without advancing the packet cursor', async () => {
-  const ready: FlvFrame[] = [], accepted: number[] = [];
+  const ready: FlvFrame[] = [], accepted: number[] = [], reads: number[] = [];
   const frame = (pts: number): FlvFrame => ({ pts, width: 4, height: 4, description: rgbaDescription(4, 4), pixels: new ArrayBuffer(64) });
   const index: FlvIndex = { codec: 'h264', description: new Uint8Array(), packets: [
     { pts: 0, dts: 0, key: true, offset: 0, size: 1 }, { pts: 40000, dts: 40000, key: false, offset: 1, size: 1 },
@@ -80,6 +80,7 @@ test('output arriving during packet IO defers submission without advancing the p
   const decoder: PacketDecoder = { kind: 'webcodecs', reset() {}, close() {}, async drain() {}, receive() { return ready.shift() ?? null; },
     async send(_bytes, packet) { if (ready.length) return false; accepted.push(packet.pts); if (packet.pts) ready.push(frame(packet.pts)); } };
   const timeline = new PacketTimeline(index, decoder, async packet => {
+    reads.push(packet.offset);
     if (packet.offset === 1 && !delivered) { delivered = true; ready.push(frame(0)); }
     return new Uint8Array(1);
   });
@@ -88,6 +89,7 @@ test('output arriving during packet IO defers submission without advancing the p
     assert.equal((await timeline.next(0))?.pts, 40000);
     assert.equal(await timeline.next(40000), null);
     assert.deepEqual(accepted, [0, 40000]);
+    assert.deepEqual(reads, [0, 1], 'retry reuses the original bytes');
   } finally { timeline.close(); }
 });
 

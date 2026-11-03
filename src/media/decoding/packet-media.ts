@@ -1,6 +1,6 @@
 import {nativeLibraryTransport} from '../../../shared/review/native-presented-frame.ts';
 import { JS_TS_MEDIA_INDEX_IDENTITY, JS_MATROSKA_MEDIA_INDEX_IDENTITY, FLV_MEDIA_INDEX_IDENTITY } from '../../../shared/media/indexing/media-index-identity.ts';
-import { coreAssetUrl } from './core-url.ts';
+import { wasmThreadMode } from '../policy/wasm-threads.ts';
 import { referenceVersion } from '../../../shared/media/io/media-reference.ts';
 import { attachCachedTrackMetadata } from '../indexing/cached-track-metadata-client.ts';
 import { WorkerRpc } from '../workers/worker-rpc.ts';
@@ -13,7 +13,7 @@ import { abortableWait, loadAborted, onLoadAbort } from '../../../shared/media/i
 import { randomUUID } from '../../../shared/utils/uuid.ts';
 import { MediaOpenError } from '../../../shared/media/io/media-errors.ts';
 import { VideoSample } from 'mediabunny';
-import { floorIndex, WASM_CORE_GLUE_PATH, WASM_CORE_GLUE_PATH_MT, reserveFallbackThreads } from './fallback-runtime.ts';
+import { floorIndex, fallbackCoreCandidates, fallbackCoreVariant, reserveFallbackThreads } from './fallback-runtime.ts';
 import type { FallbackDeps } from './fallback-runtime.ts';
 import type { MediaMeta, MediaSource, DecodedFrame } from '../contract.ts';
 import type { PacketInput } from '../../../shared/media/containers/flv-demux.ts';
@@ -42,9 +42,12 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
   const releaseReservation = () => { if (reservationHeld) { reservation.release(); reservationHeld = false; } };
   let rpc: WorkerRpc<PacketCommands> | undefined;
   try {
-    const single = deps.glueURL ?? coreAssetUrl(WASM_CORE_GLUE_PATH, document.baseURI);
-    const candidates = !deps.glueURL && !deps.wasmBinary && globalThis.crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined'
-      ? [coreAssetUrl(WASM_CORE_GLUE_PATH_MT, document.baseURI), single] : [single];
+    const mode = wasmThreadMode();
+    let candidates = fallbackCoreCandidates(deps, deps.glueURL ?? document.baseURI, mode);
+    const single = candidates.at(-1)!;
+    // VVC packet playback has reported MT-only startup and mid-stream failures.
+    const singleForVvc = mode === 'auto' && candidates.length > 1 ? single : undefined;
+    const threadsFor = (url: string) => deps.glueURL || fallbackCoreVariant(url) === 'multi-thread' ? reservation.threads : 1;
     if(deps.preparedTs)rpc=deps.preparedTs.rpc;
     type Init = PacketInitResult;
     let init: Init | null | undefined, selected = single, failure: unknown;
@@ -62,6 +65,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
       try {
         deps.onProgress?.('inspect');
         prepared = await rpc.call('prepare', { input }, [], 60000, true);
+        if (singleForVvc && prepared.index.codec === 'vvc') candidates = [single];
         if (!deps.forceWasm) init = await rpc.call('native', {}, [], 60000);
       } finally { detachAbort(); }
     }
@@ -75,16 +79,17 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
       try {
         if (container !== 'flv') deps.onProgress?.('inspect');
         init = await rpc.call('init', { input, glueURL, wasmBinary: deps.wasmBinary,
-          forceWasm: container === 'flv' || !!deps.forceWasm, threads: reservation.threads,
+          forceWasm: container === 'flv' || !!deps.forceWasm, threads: threadsFor(glueURL), singleForVvc: glueURL === single ? undefined : singleForVvc,
           ...((container==='ts'||container==='matroska')?{container,persistent:true,sourceVersion:deps.sourceVersion!,preparedTsSession:rpc===deps.preparedTs?.rpc?deps.preparedTs?.session:undefined}:{container,prepared:restore}) }, [],
-          container === 'flv' && glueURL.includes('core-mt.') ? 10000 : 60000, (container==='ts'||container==='matroska'));
-        selected = glueURL;
+          container === 'flv' && fallbackCoreVariant(glueURL) === 'multi-thread' ? 10000 : 60000, (container==='ts'||container==='matroska'));
+        selected = init?.codec === 'vvc' && singleForVvc ? singleForVvc : glueURL;
       } catch (error) {
         rpc.terminate(); rpc = undefined; failure = error;
         loadAborted(deps.signal);
         if (error instanceof MediaOpenError && error.stage !== 'decode') throw error;
+        if (glueURL === single) break;
         contextLog().warn('media', '压缩包解码器初始化失败，尝试下一个 core', {
-          coreVariant: glueURL.includes('core-mt.') ? 'multi-thread' : 'single-thread',
+          coreVariant: fallbackCoreVariant(glueURL),
           indexReused: !!prepared, error: error instanceof Error ? error.message : String(error),
         });
       } finally { detachAbort(); }
@@ -97,13 +102,13 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     let { times, durations, ...details } = init;
     const info: MediaInfo = { id: (container==='ts'||container==='matroska')?deps.sourceVersion!:randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
       indexSource: 'client', indexState: 'complete', indexKind: (container==='ts'||container==='matroska')?'packet-locators':'packet-offsets', seekStrategy: 'packet-anchor',
-      ...details, ...(init.decoder === 'ffmpeg-wasm' ? { coreVariant: selected.includes('core-mt.') ? 'multi-thread' as const : 'single-thread' as const } : {}) };
+      ...details, ...(init.decoder === 'ffmpeg-wasm' ? { coreVariant: fallbackCoreVariant(selected) } : {}) };
     let presentationMode: ColorMode = deps.rawNative ? 'reference' : deps.nativeColorMode ?? (getColorMode() === 'reference' ? 'reference' : 'browser');
     let nativeWitnessReadback = false;
     let verifiedNativeYuv: MediaSource | undefined;
     let activateVerifiedNativeYuv = (_adapter: MediaSource) => {};
     let deactivateVerifiedNativeYuv = () => {};
-    contextLog().info('media', `${container.toUpperCase()} 已通过 TS 解封装载入`, { name: meta.name, codec: init.codec, decoder: init.decoder, packets: times.length, io: 'file' in input ? 'blob-chunks' : 'http-range',timelineSource:init.timelineSource,indexWarning:init.indexWarning,hardwareAcceleration:init.hardwareAcceleration, coreVariant: info.coreVariant, requestedThreads: init.decoder === 'ffmpeg-wasm' ? reservation.threads : undefined,
+    contextLog().info('media', `${container.toUpperCase()} 已通过 TS 解封装载入`, { name: meta.name, codec: init.codec, decoder: init.decoder, packets: times.length, io: 'file' in input ? 'blob-chunks' : 'http-range',timelineSource:init.timelineSource,indexWarning:init.indexWarning,hardwareAcceleration:init.hardwareAcceleration, coreVariant: info.coreVariant, requestedThreads: init.decoder === 'ffmpeg-wasm' ? threadsFor(selected) : undefined,
       startupPacketOffset: startup?.index.packets[0]?.offset, startupNextOffset: startup?.nextOffset, startupIndexComplete: startup?.complete });
     const yuvPool=createYuvBufferPool();
     if (container === 'flv') info.opportunisticAudio = 'flv-aac';
@@ -198,9 +203,9 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     const setDecoder = async (kind: 'software' | 'native') => {
       if (kind === 'software') holdReservation();
       const result = kind === 'software'
-        ? await activeRpc.call('switch-software', { glueURL: selected, wasmBinary: deps.wasmBinary, threads: reservation.threads }, [], 60000)
+        ? await activeRpc.call('switch-software', { glueURL: selected, wasmBinary: deps.wasmBinary, threads: threadsFor(selected) }, [], 60000)
         : await activeRpc.call('switch-native', {}, [], 60000);
-      Object.assign(info, result, { ...(kind === 'software' ? { coreVariant: selected.includes('core-mt.') ? 'multi-thread' : 'single-thread' } : {}) });
+      Object.assign(info, result, { ...(kind === 'software' ? { coreVariant: fallbackCoreVariant(selected) } : {}) });
       if (kind === 'native') delete info.coreVariant;
       return result;
     };
@@ -219,7 +224,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
           let witness: DecodedFrame | undefined, candidate: MediaSource | undefined, probe: DecodedFrame | undefined;
           try {
             const raw = await activeRpc.call('reference-witness', {
-              glueURL: selected, wasmBinary: deps.wasmBinary, threads: reservation.threads,
+              glueURL: selected, wasmBinary: deps.wasmBinary, threads: threadsFor(selected),
             }, [], 60000);
             witness = await toDecodedFrame(raw);
             const { nativeYuvSource, verifyNativeWitness } = await import('./native-yuv-source.ts');

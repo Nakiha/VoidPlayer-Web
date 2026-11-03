@@ -109,6 +109,14 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
    }
   }
   if(pane==='performance') {
+   const threadMode = page.locator('#wasm-thread-mode');
+   assert.equal(await threadMode.innerText(), '自动');
+   for (const [value, label] of [['multi-thread', '多线程优先'], ['single-thread', '单线程'], ['auto', '自动']]) {
+    await threadMode.click();
+    await page.locator(`#wasm-thread-mode-menu [data-value="${value}"]`).click();
+    assert.equal(await threadMode.innerText(), label);
+    assert.equal(await page.evaluate(() => localStorage.getItem('voidplayer.wasm-thread-mode')), value);
+   }
    assert.equal(await page.locator('#analysis-concurrency').innerText(),'2 路');
    for(const value of [1,3,4,8,2]) {
     await page.locator('#analysis-concurrency').click();

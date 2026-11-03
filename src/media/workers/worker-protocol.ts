@@ -70,7 +70,7 @@ export interface PacketCommands {
   'cached-audio': Command<{ pts: number; generation: number }, null>;
   prepare: Command<{ input: PacketInput }, PreparedFlv>;
   native: Command<Empty, PacketInitResult | null>;
-  init: Command<SoftwareOptions & { input: PacketInput; forceWasm?: boolean } & ({container: 'ts'|'matroska'; sourceVersion: string; preparedTsSession?: string;persistent?:boolean} | {container?: 'flv' | 'mp4'; prepared?: PreparedFlv}), PacketInitResult>;
+  init: Command<SoftwareOptions & { input: PacketInput; forceWasm?: boolean; singleForVvc?: string } & ({container: 'ts'|'matroska'; sourceVersion: string; preparedTsSession?: string;persistent?:boolean} | {container?: 'flv' | 'mp4'; prepared?: PreparedFlv}), PacketInitResult>;
   'analysis-ts-index': Command<Empty, import('../../../shared/media/indexing/ts-packet-index.ts').TsPacketIndex>;
   'analysis-flv-index': Command<Empty, import('../../../shared/media/indexing/flv-index-cache.ts').FlvIndexDocument>;
   'analysis-index': Command<Empty, import('../../../shared/analysis/bitstream/stream.ts').AnalysisIndexFrontier>;

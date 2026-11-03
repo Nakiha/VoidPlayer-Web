@@ -4927,6 +4927,18 @@
     "source": "未知设置页面。",
     "params": {}
   },
+  "settings.wasmThreadsAuto": {
+    "source": "自动",
+    "params": {}
+  },
+  "settings.wasmThreadsMulti": {
+    "source": "多线程优先",
+    "params": {}
+  },
+  "settings.wasmThreadsSingle": {
+    "source": "单线程",
+    "params": {}
+  },
   "settingsShell.about": {
     "source": "关于",
     "params": {}
@@ -5101,6 +5113,14 @@
   },
   "settingsShell.videoDecoding": {
     "source": "视频解码",
+    "params": {}
+  },
+  "settingsShell.wasmThreads": {
+    "source": "WASM 解码线程",
+    "params": {}
+  },
+  "settingsShell.wasmThreadsDescription": {
+    "source": "重新打开视频后生效。自动模式为 VVC 使用单线程；多线程不可用时回退到单线程。",
     "params": {}
   },
   "settingsShell.workspace": {

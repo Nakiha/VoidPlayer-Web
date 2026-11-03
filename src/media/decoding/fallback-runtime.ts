@@ -1,3 +1,5 @@
+import { coreAssetUrl } from './core-url.ts';
+import type { WasmThreadMode } from '../policy/wasm-threads.ts';
 import type {MediaOpenProgress} from '../progress.ts';
 // Greatest index whose time is at most ptsUs (0 when none), and the first
 // index strictly after ptsUs (-1 when none). Pure binary-search helpers for
@@ -22,6 +24,17 @@ export function nextIndex(timesUs: number[], ptsUs: number): number {
 export const WASM_CORE_GLUE_PATH = 'vendor/voidplayer-core/voidplayer-core.js';
 export const WASM_CORE_GLUE_PATH_MT = 'vendor/voidplayer-core/voidplayer-core-mt.js';
 export const WASM_CORE_WASM_PATH = 'vendor/voidplayer-core/voidplayer-core.wasm';
+
+export function fallbackCoreCandidates(deps: FallbackDeps, base: string, mode: WasmThreadMode): string[] {
+  if (deps.glueURL) return [deps.glueURL];
+  const single = coreAssetUrl(WASM_CORE_GLUE_PATH, base);
+  return mode !== 'single-thread' && !deps.wasmBinary && globalThis.crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined'
+    ? [coreAssetUrl(WASM_CORE_GLUE_PATH_MT, base), single] : [single];
+}
+
+export function fallbackCoreVariant(glueURL: string) {
+  return glueURL.includes('core-mt.') ? 'multi-thread' : 'single-thread';
+}
 
 export interface FallbackDeps {
   /** Keep native packet frames intact for the reference Worker readback gate. */

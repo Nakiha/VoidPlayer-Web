@@ -76,6 +76,7 @@ try {
       // capability-first policy; VVC and FFV1 exercise mandatory WASM here.
       if (!file.startsWith('h264_')) assert.equal(result.first.tracks[0].decoder, 'ffmpeg-wasm');
       else assert.ok(['webcodecs', 'ffmpeg-wasm'].includes(result.first.tracks[0].decoder));
+      if (file.startsWith('h266_')) assert.equal(result.first.tracks[0].coreVariant, 'single-thread');
       if (file === 'h264_boundary.mp4') {
         assert.equal(result.first.tracks[0].decoder, 'webcodecs', 'intact samples in an overdeclared mdat retain native decoding');
         assert.match(result.first.tracks[0].indexWarning, /mdat/);

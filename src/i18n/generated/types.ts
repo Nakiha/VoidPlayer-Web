@@ -1152,6 +1152,9 @@ export interface Sources {
   "settings.chartHoverCombined": "合并显示";
   "settings.chartHoverSeparate": "各图独立显示";
   "settings.unknownSettingsPage": "未知设置页面。";
+  "settings.wasmThreadsAuto": "自动";
+  "settings.wasmThreadsMulti": "多线程优先";
+  "settings.wasmThreadsSingle": "单线程";
   "settingsShell.about": "关于";
   "settingsShell.accentColor": "主题色";
   "settingsShell.accentColorHex": "主题色 HEX";
@@ -1196,6 +1199,8 @@ export interface Sources {
   "settingsShell.user": "用户";
   "settingsShell.version": "版本";
   "settingsShell.videoDecoding": "视频解码";
+  "settingsShell.wasmThreads": "WASM 解码线程";
+  "settingsShell.wasmThreadsDescription": "重新打开视频后生效。自动模式为 VVC 使用单线程；多线程不可用时回退到单线程。";
   "settingsShell.workspace": "工作区";
   "sharing.addVideo": "请先添加视频再分享。";
   "sharing.copyLink": "复制链接";
@@ -2719,6 +2724,9 @@ export interface MessageParameters {
   "settings.chartHoverCombined": {  };
   "settings.chartHoverSeparate": {  };
   "settings.unknownSettingsPage": {  };
+  "settings.wasmThreadsAuto": {  };
+  "settings.wasmThreadsMulti": {  };
+  "settings.wasmThreadsSingle": {  };
   "settingsShell.about": {  };
   "settingsShell.accentColor": {  };
   "settingsShell.accentColorHex": {  };
@@ -2763,6 +2771,8 @@ export interface MessageParameters {
   "settingsShell.user": {  };
   "settingsShell.version": {  };
   "settingsShell.videoDecoding": {  };
+  "settingsShell.wasmThreads": {  };
+  "settingsShell.wasmThreadsDescription": {  };
   "settingsShell.workspace": {  };
   "sharing.addVideo": {  };
   "sharing.copyLink": {  };

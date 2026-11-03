@@ -10,6 +10,7 @@ export class PacketTimeline {
   private pictures = new Map<number, import('../../../shared/media/codecs/packet-picture.ts').PacketPicture>();
   private configuration=-1;
   private drained=false;
+  private blocked?: { retry: () => Promise<void | boolean>; draining: boolean; received: boolean };
   private started=false;
   private lastPts=-Infinity;
   private deliveredPts:number|null=null;
@@ -47,7 +48,7 @@ export class PacketTimeline {
       if(this.configuration!==-1||id!==0)await this.decoder.reconfigure?.({codec:this.index.codec,codecParameters:this.index.codecConfigurations?.[id]??this.index.codecParameters,description:this.index.configurations?.[id]??this.index.description});
       this.configuration=id;
     }
-    this.pictures.clear();this.decoder.reset();this.drained=false;
+    this.pictures.clear();this.blocked=undefined;this.decoder.reset();this.drained=false;
   }
   private async start(target:number){
     this.pending?.frame?.close();this.pending=null;
@@ -68,17 +69,36 @@ export class PacketTimeline {
   private async pull(recycle?:ArrayBuffer,minimum=Number.MIN_SAFE_INTEGER):Promise<PacketFrame|null>{
     if(this.pending){const f=this.pending;this.pending=null;if(f.packetPicture&&!this.validPicture(f.pts,f.packetPicture))f.packetPicture=undefined;return f;}
     for(;;){
-      const frame=this.decoder.receive(minimum,recycle);
+      // Count even frames below the seek threshold as progress while input is blocked.
+      const blocked = this.blocked;
+      const frame = this.decoder.receive(blocked ? Number.MIN_SAFE_INTEGER : minimum, recycle);
       if(frame){
+        if (blocked) blocked.received = true;
+        if (frame.pts < minimum) { frame.frame?.close(); continue; }
         if(!Number.isSafeInteger(frame.pts)||frame.pts<this.lastPts){frame.frame?.close();throw new MediaOpenError('decode',`解码输出显示顺序无效：${frame.pts} < ${this.lastPts}`);}
         if(frame.pts===this.lastPts){frame.frame?.close();continue;}
         this.lastPts=frame.pts;
         const picture=this.pictures.get(frame.pts);frame.packetPicture=picture&&this.validPicture(frame.pts,picture)?picture:undefined;this.pictures.delete(frame.pts);return frame;
       }
+      if (blocked) {
+        if (!blocked.received) throw new MediaOpenError('decode', '解码器拒绝输入且没有可取出的帧。');
+        if (await blocked.retry() === false) blocked.received = false;
+        else {
+          this.blocked = undefined;
+          if (blocked.draining) this.drained = true;
+          else this.cursor++;
+        }
+        continue;
+      }
       const packet=this.index.packets[this.cursor];
       if (!packet && this.growth) { await this.growth(); continue; }
       if(!packet||(packet.configuration??0)!==this.configuration||(packet.discontinuity&&this.cursor!==this.segmentStart)){
-        if(!this.drained){this.drained=true;await this.decoder.drain();continue;}
+        if (!this.drained) {
+          if (await this.decoder.drain() === false) {
+            this.blocked = { retry: () => this.decoder.drain(), draining: true, received: false };
+          } else this.drained = true;
+          continue;
+        }
         if(!packet)return null;
         await this.configure(packet.configuration??0);
         this.segmentStart=this.cursor;this.anchor=this.cursor;continue;
@@ -97,7 +117,9 @@ export class PacketTimeline {
         inputPicture={au:packet.sequenceNumber??this.cursor,configuration:this.configuration,singlePicture:evidence.singlePicture&&unique};
         if(evidence.singlePicture&&unique&&packet.identityKnown!==false)this.pictures.set(packet.pts,{au:packet.sequenceNumber??this.cursor,configuration:this.configuration,stream:this.pictureStream});
       }
-      if (await this.decoder.send(bytes,packet,inputPicture) !== false) this.cursor++;
+      if (await this.decoder.send(bytes, packet, inputPicture) === false) {
+        this.blocked = { retry: () => this.decoder.send(bytes, packet, inputPicture), draining: false, received: false };
+      } else this.cursor++;
     }
   }
   private anchor=0;
@@ -152,5 +174,5 @@ export class PacketTimeline {
       if(failure.stage==='decode'||failure.stage==='resource')this.failure=failure;throw failure;
     }
   }
-  close(){this.pending?.frame?.close();this.pending=null;this.decoder.close();}
+  close(){this.blocked=undefined;this.pending?.frame?.close();this.pending=null;this.decoder.close();}
 }

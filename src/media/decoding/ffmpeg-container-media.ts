@@ -1,4 +1,4 @@
-import { coreAssetUrl } from './core-url.ts';
+import { wasmThreadMode } from '../policy/wasm-threads.ts';
 import { attachCachedTrackMetadata } from '../indexing/cached-track-metadata-client.ts';
 import { abortableWait } from '../../../shared/media/io/media-abort.ts';
 import type { AnalysisAxis, AnalysisQuery } from '../../../shared/analysis/metadata/types.ts';
@@ -41,7 +41,7 @@ export interface WasmDecodedFrame extends DecodedFrame {
   pixels: Uint8ClampedArray;
 }
 
-import {floorIndex,nextIndex,reserveFallbackThreads,WASM_CORE_GLUE_PATH,WASM_CORE_GLUE_PATH_MT} from './fallback-runtime.ts';
+import {floorIndex,nextIndex,reserveFallbackThreads,fallbackCoreCandidates,fallbackCoreVariant} from './fallback-runtime.ts';
 import type {FallbackDeps} from './fallback-runtime.ts';
 async function createWorker(): Promise<Worker> {
   return new Worker(new URL('./ffmpeg-worker.ts', import.meta.url), { type: 'module' });
@@ -92,16 +92,10 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   // single-threaded core when it is not vendored, cannot start, or hangs
   // (nested pthread workers wedging in some WebKit builds) — a wedged worker
   // is terminated and replaced.
-  const candidates: string[] = [];
+  const candidates = fallbackCoreCandidates(deps, deps.glueURL ?? location.origin, wasmThreadMode());
   const indexUrl = 'url' in file ? ffmpegIndexMediaUrl(file.url) : undefined;
-  if (deps.glueURL) candidates.push(deps.glueURL);
-  else {
-    if (globalThis.crossOriginIsolated) candidates.push(coreAssetUrl(`/${WASM_CORE_GLUE_PATH_MT}`, location.origin));
-    candidates.push(coreAssetUrl(`/${WASM_CORE_GLUE_PATH}`, location.origin));
-  }
   const scoped = contextLog();
   const readMs = Math.round(performance.now() - openStart);
-  const threads = threadReservation.threads;
   let coreVariant: 'single-thread' | 'multi-thread' = 'single-thread';
   let peekAudio: AudioPeek = async () => undefined;
   let audioWindows = async () => [] as import('../../../shared/media/audio-types.ts').CachedWindow[];
@@ -109,6 +103,8 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   let rpc: WorkerRpc | null = null;
   let lastError: unknown = null;
   for (const glueURL of candidates) {
+    const variant = fallbackCoreVariant(glueURL);
+    const threads = deps.glueURL || variant === 'multi-thread' ? threadReservation.threads : 1;
     loadAborted(deps.signal);
     rpc?.terminate();
     const worker = deps.workerFactory?.() ?? await createWorker();
@@ -137,7 +133,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       // safety cap here; supported cores return after first-frame priming and
       // stream their index through the main-thread session below.
       init = await rpc.call('init', payload, transfer, 24 * 60 * 60 * 1000);
-      coreVariant = glueURL.includes('core-mt.') ? 'multi-thread' : 'single-thread';
+      coreVariant = variant;
       scoped.info('media', 'WASM core 已就绪', {
         coreVariant, crossOriginIsolated: !!globalThis.crossOriginIsolated,
         ioMode: init.ioMode, indexSource: init.indexSource, localIndexBuildCalls: init.localIndexBuildCalls ?? 0, readMs, initIndexMs: init.indexMs, threads,

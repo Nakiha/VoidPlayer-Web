@@ -1,3 +1,4 @@
+import { setWasmThreadMode, wasmThreadMode } from '../media/policy/wasm-threads.ts';
 import { t, onLanguageChange, msg } from '../i18n.ts';
 import { settingsPanes } from './settings-shell.ts';
 import { matchesShortcut } from './shortcuts.ts';
@@ -34,6 +35,15 @@ export function installSettings() {
   window.addEventListener(ANALYSIS_CONCURRENCY_EVENT, syncConcurrencyMenu, { signal: life.signal });
   onLanguageChange(syncConcurrencyMenu, life.signal); syncConcurrencyMenu();
   life.signal.addEventListener('abort', () => concurrencyMenu.dispose(), { once: true });
+  const wasmChoices = () => [
+    { value: 'auto', label: t(msg('settings.wasmThreadsAuto', '自动')) },
+    { value: 'multi-thread', label: t(msg('settings.wasmThreadsMulti', '多线程优先')) },
+    { value: 'single-thread', label: t(msg('settings.wasmThreadsSingle', '单线程')) },
+  ];
+  const wasmMenu = installChoiceMenu('wasm-thread-mode', wasmChoices, value => { setWasmThreadMode(value); syncWasmMenu(); });
+  const syncWasmMenu = () => wasmMenu.sync(wasmThreadMode(), wasmChoices().find(choice => choice.value === wasmThreadMode())!.label, true);
+  onLanguageChange(syncWasmMenu, life.signal); syncWasmMenu();
+  life.signal.addEventListener('abort', () => wasmMenu.dispose(), { once: true });
   const narrow = matchMedia('(max-width: 600px)');
   const revealTab = () => {
     if (narrow.matches && dialog.open) dialog.querySelector('[role=tab][aria-selected=true]')!.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });

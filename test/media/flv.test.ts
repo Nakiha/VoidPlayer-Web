@@ -140,3 +140,34 @@ test('real AVC playback keeps a large corrupt tail usable and restarts recovered
   }finally{engine.close();}
  }
 });
+
+test('packet WASM retries the same input after real FFmpeg backpressure without losing output', async () => {
+  const { wasmFlvDecoder } = await import('../../src/media/decoding/flv-decoder.ts');
+  const { file, ref } = await fixture('standard-h264');
+  const reader = new FlvReader({ file });
+  const index = await demuxFlv(reader);
+  const decoder = await wasmFlvDecoder(index, new URL('voidplayer-core.js', core).href, await readFile(new URL('voidplayer-core.wasm', core)));
+  const pts: number[] = [];
+  const receive = () => {
+    for (;;) {
+      const frame = decoder.receive(Number.MIN_SAFE_INTEGER);
+      if (!frame) return;
+      pts.push(frame.pts);
+    }
+  };
+  let retries = 0;
+  try {
+    for (const packet of index.packets) {
+      const bytes = await reader.read(packet.offset, packet.size);
+      if (await decoder.send(bytes, packet) === false) {
+        retries++;
+        receive();
+        assert.equal(await decoder.send(bytes, packet), true);
+      }
+    }
+    assert.equal(await decoder.drain(), true);
+    receive();
+    assert.ok(retries > 0, 'sending without reading reaches the actual FFmpeg EAGAIN path');
+    assert.deepEqual(pts, ref.times);
+  } finally { decoder.close(); reader.close(); }
+});

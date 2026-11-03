@@ -4641,6 +4641,18 @@
     "source": "未知设置页面。",
     "translation": "Unknown settings page."
   },
+  "settings.wasmThreadsAuto": {
+    "source": "自动",
+    "translation": "Auto"
+  },
+  "settings.wasmThreadsMulti": {
+    "source": "多线程优先",
+    "translation": "Prefer multithreaded"
+  },
+  "settings.wasmThreadsSingle": {
+    "source": "单线程",
+    "translation": "Single-threaded"
+  },
   "settingsShell.about": {
     "source": "关于",
     "translation": "About"
@@ -4816,6 +4828,14 @@
   "settingsShell.videoDecoding": {
     "source": "视频解码",
     "translation": "Video decoding"
+  },
+  "settingsShell.wasmThreads": {
+    "source": "WASM 解码线程",
+    "translation": "WASM decoder threads"
+  },
+  "settingsShell.wasmThreadsDescription": {
+    "source": "重新打开视频后生效。自动模式为 VVC 使用单线程；多线程不可用时回退到单线程。",
+    "translation": "Applies when you reopen a video. Auto uses single-threaded decoding for VVC. If multithreaded decoding fails to start, the player uses the single-threaded core."
   },
   "settingsShell.workspace": {
     "source": "工作区",

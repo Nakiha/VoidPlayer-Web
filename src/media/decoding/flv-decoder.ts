@@ -24,6 +24,7 @@ import { hevcFieldPictures } from '../../../shared/media/codecs/hevc-geometry.ts
  * may use a shifted decoder clock and must never be used as frame identity. */
 export interface PacketFrame { nativePicture?:NativePictureIdentity; rotation?: 0 | 90 | 180 | 270; packetPicture?: import('../../../shared/media/codecs/packet-picture.ts').PacketPicture; durationUs?: number; description: FrameDescription; pts: number; width: number; height: number; frame?: VideoFrame; pixels?: ArrayBuffer; }
 export type FlvFrame = PacketFrame;
+export type PacketCore = string | { url: string; singleForVvc: string };
 type PacketConfiguration = Pick<PacketDecodeIndex, 'codec' | 'description' | 'codecParameters'>;
 function packetDecoderConfig(index: PacketConfiguration): VideoDecoderConfig | null {
   if(index.codec==='hevc'&&isAnnexB(index.description))return hevcAnnexBDecoderConfig(index.description);
@@ -40,7 +41,7 @@ export interface PacketDecoder {
   send(bytes: Uint8Array, packet: PacketDecodePacket, picture?: {au:number;configuration:number;singlePicture:boolean}): Promise<void | boolean>;
   snapshot?(): Record<string, unknown>;
   receive(minimum: number, recycle?: ArrayBuffer): PacketFrame | null;
-  drain(): Promise<void>;
+  drain(): Promise<void | boolean>;
   close(): void;
 }
 
@@ -200,12 +201,14 @@ export async function nativeFlvDecoder(index: PacketDecodeIndex, initialConfig?:
 
 // Emscripten's generated module has a dynamically named C API.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function wasmFlvDecoder(index: PacketConfiguration, glueURL: string, wasmBinary?: Uint8Array, threads = 1): Promise<PacketDecoder> {
+export async function wasmFlvDecoder(index: PacketConfiguration, selection: PacketCore, wasmBinary?: Uint8Array, threads = 1): Promise<PacketDecoder> {
+  const singleVvc = typeof selection !== 'string' && index.codec === 'vvc';
+  const glueURL = typeof selection === 'string' ? selection : singleVvc ? selection.singleForVvc : selection.url;
   const { core, heap } = await loadCore(glueURL, wasmBinary);
   requireFrameAbi(core);
   if (typeof core._vp_packet_open !== 'function') throw new MediaOpenError('decode', 'WASM core 版本过旧，请同步带 FLV 压缩包接口的产物。');
   const call = (name: string, types: string[], args: unknown[], result: string | null = 'number') => core.ccall(name, result, types, args);
-  call('vp_set_threads', ['number'], [threads], null);
+  call('vp_set_threads', ['number'], [singleVvc ? 1 : threads], null);
   const ctx = call('vp_create', [], []);
   if (!ctx) throw new MediaOpenError('resource', '无法创建 FLV 解码上下文。');
   const configure = (next: PacketConfiguration) => {
@@ -227,20 +230,33 @@ export async function wasmFlvDecoder(index: PacketConfiguration, glueURL: string
     } finally { core._free(extra); }
   };
   try { configure(index); } catch (error) { call('vp_destroy', ['number'], [ctx], null); throw error; }
+  const canRetry = typeof core._vp_packet_try_send === 'function';
+  let packetPending = false;
+  const submit = (pts: bigint, dts: bigint, key: number, eof: number) => {
+    const status = call(canRetry ? 'vp_packet_try_send' : 'vp_packet_send',
+      ['number', 'i64', 'i64', 'number', 'number'], [ctx, pts, dts, key, eof]);
+    if (canRetry && status === 1) return false;
+    if (status !== 0) throw new MediaOpenError('decode', `WASM 无法提交${eof ? '解码结束信号' : '视频包'}（返回值 ${status}）。`);
+    return true;
+  };
   return {
     kind: 'ffmpeg-wasm',
-    async reconfigure(next) { configure(next); },
+    async reconfigure(next) { packetPending = false; configure(next); },
     metadata() {
       return { colorSource: 'decoder', pixelFormat: typeof core._vp_pixel_format === 'function' ? call('vp_pixel_format', ['number'], [ctx], 'string') || null : null,
         color: ffmpegColorInfo({ colorPrimaries: call('vp_color_primaries', ['number'], [ctx]), colorTransfer: call('vp_color_transfer', ['number'], [ctx]),
           colorSpace: call('vp_color_space', ['number'], [ctx]), colorRange: call('vp_color_range', ['number'], [ctx]) }) };
     },
-    reset() { call('vp_packet_reset', ['number'], [ctx], null); },
+    reset() { packetPending = false; call('vp_packet_reset', ['number'], [ctx], null); },
     async send(bytes, packet) {
-      const ptr = call('vp_packet_alloc', ['number', 'number'], [ctx, bytes.length]);
-      if (!ptr) throw new MediaOpenError('resource', '无法分配 FLV 压缩包内存。');
-      checkedHeap(heap(), ptr, bytes.length, '写入压缩视频包').set(bytes, ptr);
-      if (call('vp_packet_send', ['number', 'i64', 'i64', 'number', 'number'], [ctx, BigInt(packet.pts), packet.dts === null ? -9223372036854775808n : BigInt(packet.dts), +packet.key, 0]) !== 0) throw new MediaOpenError('decode', 'WASM 拒绝 FLV 视频包。');
+      if (!packetPending) {
+        const ptr = call('vp_packet_alloc', ['number', 'number'], [ctx, bytes.length]);
+        if (!ptr) throw new MediaOpenError('resource', '无法分配视频包内存。');
+        checkedHeap(heap(), ptr, bytes.length, '写入压缩视频包').set(bytes, ptr);
+      }
+      packetPending = false;
+      packetPending = !submit(BigInt(packet.pts), packet.dts === null ? -9223372036854775808n : BigInt(packet.dts), +packet.key, 0);
+      return !packetPending;
     },
     receive(minimum, recycle) {
       const status = call('vp_packet_receive', ['number', 'i64'], [ctx, BigInt(minimum)]);
@@ -249,9 +265,7 @@ export async function wasmFlvDecoder(index: PacketConfiguration, glueURL: string
       const output=readWasmFrame(core,heap,ctx,recycle);
       return {...output,width:output.description.width,height:output.description.height};
     },
-    async drain() {
-      if (call('vp_packet_send', ['number', 'i64', 'i64', 'number', 'number'], [ctx, 0n, 0n, 0, 1]) !== 0) throw new MediaOpenError('decode', 'FLV 解码器无法完成尾帧输出。');
-    },
+    async drain() { return submit(0n, 0n, 0, 1); },
     close() { call('vp_destroy', ['number'], [ctx], null); },
   };
 }

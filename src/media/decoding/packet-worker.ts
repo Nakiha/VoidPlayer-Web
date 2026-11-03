@@ -113,9 +113,10 @@ async function start() {
           tsSession = undefined;
           if (!engine) throw new MediaOpenError('input','Packet engine is not initialized');
           const progress = (progress: import('../progress.ts').MediaLoadStage) => send({id,type:'progress',progress});
+          const core = message.singleForVvc ? { url: message.glueURL, singleForVvc: message.singleForVvc } : message.glueURL;
           const data = engine instanceof JsContainerEngine
-            ? await engine.open(message.glueURL,message.wasmBinary,message.forceWasm,message.threads,progress,data=>send({id,type:'index-progress',data}))
-            : await engine.open(message.glueURL,message.wasmBinary,message.forceWasm,message.threads,progress);
+            ? await engine.open(core,message.wasmBinary,message.forceWasm,message.threads,progress,data=>send({id,type:'index-progress',data}))
+            : await engine.open(core,message.wasmBinary,message.forceWasm,message.threads,progress);
           if (!data) throw new MediaOpenError('decode', '压缩包 worker 未能初始化解码器。');
           send(reply(message, data));
         } else if (type === 'reference-witness' && (engine instanceof FlvEngine || engine instanceof Mp4Engine || engine instanceof JsContainerEngine)) {

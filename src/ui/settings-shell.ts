@@ -76,7 +76,12 @@ export function settingsShell() {
         ${paneTitle(t(msg("settingsShell.colorDecoding", "色彩与解码")))}
         ${colorSettingsShell()}
         <div class="settings-section">
-          <div class="settings-group"><div class="settings-action-row settings-key-value-row"><h4 id="analysis-concurrency-label">${th(msg('settingsShell.analysisConcurrency', '分析并发数'))}</h4><button id="analysis-concurrency" type="button" class="settings-choice" aria-labelledby="analysis-concurrency-label"></button></div></div>
+          <div class="settings-group"><div class="settings-action-row settings-key-value-row">
+            <div><h4 id="wasm-thread-mode-label">${th(msg('settingsShell.wasmThreads', 'WASM 解码线程'))}</h4>
+            <p id="wasm-thread-mode-description">${th(msg('settingsShell.wasmThreadsDescription', '重新打开视频后生效。自动模式为 VVC 使用单线程；多线程不可用时回退到单线程。'))}</p></div>
+            <button id="wasm-thread-mode" type="button" class="settings-choice" aria-labelledby="wasm-thread-mode-label" aria-describedby="wasm-thread-mode-description"></button>
+          </div>
+          <div class="settings-action-row settings-key-value-row"><h4 id="analysis-concurrency-label">${th(msg('settingsShell.analysisConcurrency', '分析并发数'))}</h4><button id="analysis-concurrency" type="button" class="settings-choice" aria-labelledby="analysis-concurrency-label"></button></div></div>
         </div>
       </section>
       <section id="settings-pane-about" role="tabpanel" aria-labelledby="settings-tab-about" tabindex="0" hidden>
