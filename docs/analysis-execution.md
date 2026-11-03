@@ -52,15 +52,14 @@ and necessary reference/reorder work; it does not validate unseen future AUs.
 
 The sorter dependency (Core PR9), FFmpeg analysis change (FFmpeg PR1), Core
 execution change (Core PR10) and the VVC pruning change (FFmpeg PR3, Core PR12)
-have merged into their analysis target branches.
-The Web analysis lock pins tested Core source
-`11c73368a4a8fca138e459ed8bd168e2c34618ae` and FFmpeg source
-`b726b4e422075b1670244cb5953df1dcf400f421`; both exact commits remain in the merged
-history. The clean exact-source artifact enables HEVC and VVC pruning and H264
-loop-filter discard. Execution media tests must run without extension-only skips
-against this pinned artifact; the VVC cases additionally require the synced h266
-sample and report that skip explicitly where it is missing. Older cores remain
-supported through full execution.
+have merged into their analysis target branches. The current Core and FFmpeg
+revisions are recorded in [the Web analysis lock](../scripts/release-analysis.json).
+The pinned artifact enables HEVC and VVC pruning and H264 loop-filter discard.
+VVC shares the playback decoder's optimized CABAC and Wasm SIMD kernels. The
+pixel kernels accelerate full execution, while syntax-only execution continues
+to skip reconstruction and filtering. The pinned artifact runs the execution
+media tests with the extension enabled. The VVC cases require the synced h266
+sample and report a skip if it is missing. Older cores use full execution.
 
 H264 remains an incremental analysis path. The independent Core uses FFmpeg's
 existing loop-filter discard policy because its macroblock hook already omits
