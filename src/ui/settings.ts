@@ -1,5 +1,5 @@
-import { MAX_WASM_DECODE_COUNT, setVvcFrameContextCount, setVvcThreadCount, setWasmThreadMode,
-  vvcFrameContextCount, vvcThreadCount, wasmThreadMode } from '../media/policy/wasm-threads.ts';
+import { MAX_WASM_DECODE_COUNT, setVvcFrameContextCount, setVvcThreadCount, setVvcLiveGrowth, setWasmThreadMode,
+  vvcFrameContextCount, vvcLiveGrowth, vvcThreadCount, wasmThreadMode } from '../media/policy/wasm-threads.ts';
 import { t, onLanguageChange, msg } from '../i18n.ts';
 import { settingsPanes } from './settings-shell.ts';
 import { matchesShortcut } from './shortcuts.ts';
@@ -55,9 +55,14 @@ export function installSettings() {
     input.addEventListener('change', () => {
       if (input.validity.valid) write(input.value === '' ? '' : String(input.valueAsNumber));
       input.value = String(read() || '');
+      syncVvcTuning();
     }, { signal: life.signal });
   }
+  const liveGrowth = document.getElementById('vvc-live-growth') as HTMLInputElement;
+  liveGrowth.checked = vvcLiveGrowth();
+  liveGrowth.addEventListener('change', () => setVvcLiveGrowth(liveGrowth.checked), { signal: life.signal });
   function syncVvcTuning() {
+    liveGrowth.disabled = wasmThreadMode() === 'single-thread' || !!vvcThreadCount() || !!vvcFrameContextCount();
     for (const { input } of vvcTuning) {
       input.disabled = wasmThreadMode() === 'single-thread';
       input.placeholder = t(msg('settings.wasmThreadsAuto', '自动'));

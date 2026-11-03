@@ -1163,6 +1163,7 @@ export default {
   "settings.chartHoverSeparate": () => "［S~e~p~a~r~a~t~e~ c~a~r~d~s~ ········］",
   "settings.unknownSettingsPage": () => "［U~n~k~n~o~w~n~ s~e~t~t~i~n~g~s~ p~a~g~e~. ········］",
   "settings.vvcFrameContexts": () => "［V~V~C~ f~r~a~m~e~ c~o~n~t~e~x~t~s~ ········］",
+  "settings.vvcLiveGrowth": () => "［V~V~C~ a~u~t~o~m~a~t~i~c~ e~x~p~a~n~s~i~o~n~ (e~x~p~e~r~i~m~e~n~t~a~l~) ········］",
   "settings.vvcThreads": () => "［V~V~C~ d~e~c~o~d~e~ t~h~r~e~a~d~s~ ········］",
   "settings.vvcTuningHint": () => "［L~e~a~v~e~ b~l~a~n~k~ f~o~r~ A~u~t~o~. R~e~o~p~e~n~ t~h~e~ s~o~u~r~c~e~ a~f~t~e~r~ c~h~a~n~g~i~n~g~ t~h~e~s~e~ s~e~t~t~i~n~g~s~. ········］",
   "settings.wasmThreadsAuto": () => "［A~u~t~o~ ········］",

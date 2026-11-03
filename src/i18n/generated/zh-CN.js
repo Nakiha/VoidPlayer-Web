@@ -1163,6 +1163,7 @@ export default {
   "settings.chartHoverSeparate": () => "各图独立显示",
   "settings.unknownSettingsPage": () => "未知设置页面。",
   "settings.vvcFrameContexts": () => "VVC 帧上下文数",
+  "settings.vvcLiveGrowth": () => "VVC 自动扩容（实验）",
   "settings.vvcThreads": () => "VVC 解码线程数",
   "settings.vvcTuningHint": () => "留空使用自动配置。修改后重新打开片源。",
   "settings.wasmThreadsAuto": () => "自动",

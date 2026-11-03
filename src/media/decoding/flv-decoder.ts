@@ -1,3 +1,4 @@
+import type { VvcTuningAxis, VvcTuningState } from '../contract.ts';
 import { decodeThreadsForCodec } from '../policy/wasm-threads.ts';
 import type { DecodeThreads } from '../policy/wasm-threads.ts';
 import { checkedHeap } from '../../../shared/wasm/heap.ts';
@@ -35,6 +36,7 @@ function packetDecoderConfig(index: PacketConfiguration): VideoDecoderConfig | n
 export interface PacketDecoder {
   kind: 'webcodecs' | 'ffmpeg-wasm';
   hardwareAcceleration?: MediaInfo['hardwareAcceleration'];
+  tuneVvc?(axis?: VvcTuningAxis): VvcTuningState | null;
   metadata?(): Pick<MediaInfo, 'color' | 'colorSource' | 'pixelFormat'>;
   reconfigure?(index: PacketConfiguration): Promise<void>;
   reset(): void;
@@ -204,12 +206,18 @@ export async function nativeFlvDecoder(index: PacketDecodeIndex, initialConfig?:
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function wasmFlvDecoder(index: PacketConfiguration, glueURL: string, wasmBinary?: Uint8Array, budget: DecodeThreads = 1): Promise<PacketDecoder> {
   const threads = decodeThreadsForCodec(budget, index.codec);
-  const { core, heap } = await loadCore(glueURL, wasmBinary, undefined, threads);
+  const tuning = index.codec === 'vvc' && typeof budget === 'object' ? budget.vvcTuning : undefined;
+  const { core, heap } = await loadCore(glueURL, wasmBinary, undefined, tuning?.threads ?? threads);
   requireFrameAbi(core);
   if (typeof core._vp_packet_open !== 'function') throw new MediaOpenError('decode', 'WASM core 版本过旧，请同步带 FLV 压缩包接口的产物。');
   const call = (name: string, types: string[], args: unknown[], result: string | null = 'number') => core.ccall(name, result, types, args);
   call('vp_set_threads', ['number'], [threads], null);
+  const liveGrowth = tuning && typeof core._vp_vvc_tuning === 'function';
   if (index.codec === 'vvc' && typeof budget === 'object') core._vp_set_vvc_frame_contexts?.(budget.vvcFrameContexts);
+  if (liveGrowth) {
+    core._vp_set_vvc_frame_context_capacity(tuning.contexts);
+    core._vp_set_vvc_thread_capacity(tuning.threads);
+  }
   const ctx = call('vp_create', [], []);
   if (!ctx) throw new MediaOpenError('resource', '无法创建 FLV 解码上下文。');
   const configure = (next: PacketConfiguration) => {
@@ -240,8 +248,35 @@ export async function wasmFlvDecoder(index: PacketConfiguration, glueURL: string
     if (status !== 0) throw new MediaOpenError('decode', `WASM 无法提交${eof ? '解码结束信号' : '视频包'}（返回值 ${status}）。`);
     return true;
   };
+  const readTuning = (): VvcTuningState | null => {
+    if (!liveGrowth) return null;
+    const ptr = core._vp_vvc_tuning(ctx) >>> 0;
+    if (!ptr) return null;
+    const bytes = heap();
+    const view = new DataView(bytes.buffer, ptr, 32);
+    const get = (index: number) => view.getInt32(index * 4, true);
+    return { threads: get(0), contexts: get(1), inFlight: get(2), dispatched: get(3), saturated: get(4),
+      submitted: get(5), full: get(6), maxFrameWaitUs: get(7), heapBytes: bytes.byteLength, maxThreads: tuning.threads, maxContexts: tuning.contexts };
+  };
+  const tuneVvc = readTuning() ? (axis?: VvcTuningAxis): VvcTuningState | null => {
+    const before = readTuning();
+    if (!before || !axis) return before;
+    const current = before[axis];
+    const limit = axis === 'threads' ? before.maxThreads : before.maxContexts;
+    const count = Math.min(limit, current + 2);
+    if (count <= current) return { ...before, rejected: 'core' };
+    const projected = axis === 'contexts' ? before.heapBytes * count / current : before.heapBytes + (count - current) * 8 * 1024 ** 2;
+    if (projected + 128 * 1024 ** 2 > 3 * 1024 ** 3) return { ...before, rejected: 'budget' };
+    const active = axis === 'threads' ? core._vp_grow_vvc_threads(ctx, count) : core._vp_grow_vvc_frame_contexts(ctx, count);
+    if (active > current) {
+      // Preserve the active setting if the packet stream later changes configuration.
+      if (axis === 'threads') core._vp_set_threads(active);
+      else core._vp_set_vvc_frame_contexts(active);
+    }
+    return { ...(readTuning() ?? before), ...(active <= current ? { rejected: 'core' } : {}) };
+  } : undefined;
   return {
-    kind: 'ffmpeg-wasm',
+    kind: 'ffmpeg-wasm', tuneVvc,
     async reconfigure(next) { packetPending = false; configure(next); },
     metadata() {
       return { colorSource: 'decoder', pixelFormat: typeof core._vp_pixel_format === 'function' ? call('vp_pixel_format', ['number'], [ctx], 'string') || null : null,

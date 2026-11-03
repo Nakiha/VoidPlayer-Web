@@ -58,11 +58,12 @@ export interface FfmpegCommands {
   extract: Command<{ ctx: number; index: number; recycle?: ArrayBuffer }, WasmFrameOutput & { seek?: { decodedFrames: number; restarts: number } }>;
   dispose: Command<{ ctx: number; path: string }, null>;
 }
-export type PacketInitResult = (NonNullable<Awaited<ReturnType<FlvEngine['open']>>> | Awaited<ReturnType<Mp4Engine['open']>> | Awaited<ReturnType<TsEngine['open']>>) & Pick<MediaInfo, 'timelineSource' | 'seekAnchorCount' | 'jsIndexReused' | 'jsIndexPacketsScanned'>;
+export type PacketInitResult = (NonNullable<Awaited<ReturnType<FlvEngine['open']>>> | Awaited<ReturnType<Mp4Engine['open']>> | Awaited<ReturnType<TsEngine['open']>>) & Pick<MediaInfo, 'timelineSource' | 'seekAnchorCount' | 'jsIndexReused' | 'jsIndexPacketsScanned'> & { vvcLiveGrowth?: boolean };
 type Empty = Record<string, never>;
 type SoftwareOptions = { glueURL: string; wasmBinary?: Uint8Array; threads?: DecodeThreads };
 type AnalysisOrigin = { mediaId?: string; firstPtsUs?: number };
 export interface PacketCommands {
+  'tune-vvc': Command<{ axis?: import('../contract.ts').VvcTuningAxis }, ReturnType<Mp4Engine['tuneVvc']>>;
   'prepare-js':Command<{input:PacketInput;sourceVersion:string;format:'ts'|'matroska';persistent?:boolean},{admitted:true;session:string;index:import('../../../shared/media/containers/matroska-packet-index.ts').JsPacketIndex}|{admitted:false;reason:string}>;
   'analysis-js-index':Command<Empty,import('../../../shared/media/containers/matroska-packet-index.ts').JsPacketIndex>;
   'prepare-ts': Command<{input: PacketInput; sourceVersion: string},

@@ -28,11 +28,11 @@ import { getTrackAnalysisCapabilities, locateTrackAnalysisSample, queryTrackAnal
 import { currentColorEvidence, currentComparisonConditions, isSameColorConfiguration, persistColorConfiguration, validateColorTransition } from './session/color.ts';
 import { offerSessionThumbnail } from './session/thumbnail.ts';
 import { describeMediaMismatch, matchMediaIdentity } from '../shared/media/io/media-identity.ts';
-import { FrameQueue, PlaybackMeasurements } from './session/playback.ts';
+import { FrameQueue, PlaybackMeasurements, VvcGrowthMonitor, VvcGrowthPolicy } from './session/playback.ts';
 import { planBackwardStep, planForwardStep, slotValue, timeUs } from '../shared/review/model.ts';
 import type { FrameInfo, MediaInfo } from '../shared/media/types.ts';
 import type { Mark, Slot } from '../shared/review/model.ts';
-import type { DecodedFrame, MediaSource } from './media/contract.ts';
+import type { DecodedFrame, MediaSource, VvcTuningAxis, VvcTuningState } from './media/contract.ts';
 import type { AnalysisAxis, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample, AnalysisStatus } from '../shared/analysis/metadata/types.ts';
 import { contextLog, log, operationContext, traceOperation, withLogContext } from './logging/log.ts';
 
@@ -974,6 +974,7 @@ export class ReviewSession {
     void this.playbackLoop(revision, base, start);
     return this.getState();
   }
+  private readonly vvcGrowth = new WeakMap<MediaSource, { policy: VvcGrowthPolicy; blocked: Set<VvcTuningAxis>; pending: boolean }>();
   // Decoders run independently. A bounded queue provides backpressure; the
   // common clock waits for both tracks instead of leaving their frames behind.
   private async playbackLoop(revision: number, base: number, start: number) {
@@ -988,6 +989,31 @@ export class ReviewSession {
     });
     readers.forEach(r => r.resume());
     const metrics = this.measurements = new PlaybackMeasurements();
+    const tuningSource = this.tracks.size === 1 ? entries[0]?.[1].source : undefined;
+    const tuneVvc = tuningSource?.tuneVvc?.bind(tuningSource);
+    const monitor = tuneVvc ? new VvcGrowthMonitor() : null;
+    let tuning = tuningSource && this.vvcGrowth.get(tuningSource);
+    if (tuneVvc && tuningSource && !tuning) {
+      const blocked = new Set<VvcTuningAxis>();
+      tuning = { blocked, policy: new VvcGrowthPolicy(blocked), pending: false };
+      this.vvcGrowth.set(tuningSource, tuning);
+    }
+    const growth = tuning;
+    growth?.policy.restartObservation();
+    let deferred: { core: VvcTuningState; window: NonNullable<ReturnType<VvcGrowthMonitor['sample']>>; deadline: number } | undefined;
+    const grow = async (axis: VvcTuningAxis, core: VvcTuningState, window: NonNullable<ReturnType<VvcGrowthMonitor['sample']>>) => {
+      if (!active() || this.tracks.size !== 1 || globalThis.document?.visibilityState === 'hidden') return;
+      try {
+        const result = await tuneVvc!(axis);
+        growth?.policy.applied(axis, window, core, result);
+        if (!active()) return;
+        monitor?.reset();
+        scoped.info('media', 'VVC 实时扩容结果', { mediaId: tuningSource?.info.id, axis, observation: window, before: core, result });
+      } catch (error) {
+        if (active()) scoped.warn('media', 'VVC 实时扩容失败', { mediaId: tuningSource?.info.id, axis, error: errorText(error) });
+        growth?.blocked.add(axis);
+      }
+    };
     let lastTick = start, lastEmit = start, lastSample = start, lastProgress = start;
     let cancelTick: (() => void) | undefined;
     const stop = () => { readers.forEach(r => r.suspend()); cancelTick?.(); };
@@ -1018,6 +1044,38 @@ export class ReviewSession {
           this.positionUs + Math.round(elapsed * 1000), coverage));
         const advance = target - this.positionUs;
         metrics.waitingMs += Math.max(0, elapsed - advance / 1000);
+        if (monitor && tuneVvc && tuningSource && growth && !growth.pending) {
+          const reader = readers[0];
+          const eligible = !reader.ended && !reader.error && tuningSource.info.indexState === 'complete'
+            && this.durationUs - target > 2_000_000 && globalThis.document?.visibilityState !== 'hidden';
+          const window = monitor.sample(elapsed, advance, coverage <= this.positionUs && !reader.frames.length, eligible);
+          if (!eligible) deferred = undefined;
+          if (deferred && (reader.frames.length >= 2 || now >= deferred.deadline)) {
+            const request = deferred; deferred = undefined;
+            growth.pending = true;
+            void grow('contexts', request.core, request.window).finally(() => { growth.pending = false; });
+          } else if (window && !deferred) {
+            growth.pending = true;
+            void tuneVvc().then(async core => {
+              if (!active() || !core) return;
+              scoped.debug('media', 'VVC 扩容采样', { ...window, ...core });
+              const assessment = growth.policy.assess(window);
+              if (assessment) {
+                scoped.info('media', 'VVC 实时扩容效果', { mediaId: tuningSource.info.id, ...assessment, heapBytes: core.heapBytes });
+                monitor.reset();
+                return;
+              }
+              const axis = growth.policy.choose(window, core);
+              if (axis === 'contexts' && reader.frames.length < 2) {
+                deferred = { core, window, deadline: performance.now() + 750 };
+              } else if (axis) {
+                await grow(axis, core, window);
+              }
+            }).catch(error => {
+              if (active()) scoped.debug('media', 'VVC 扩容采样失败', { mediaId: tuningSource.info.id, error: errorText(error) });
+            }).finally(() => { growth.pending = false; });
+          }
+        }
         if (advance > 0) { lastProgress = now; metrics.firstAdvanceMs ??= now - metrics.startedMs; }
         if (now - lastProgress > 15000) {
           readers.forEach((reader, i) => {

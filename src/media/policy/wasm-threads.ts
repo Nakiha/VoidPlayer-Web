@@ -20,9 +20,11 @@ export function setWasmThreadMode(value: string) {
 }
 
 export const MAX_WASM_DECODE_COUNT = 0x7fffffff;
-export type DecodeThreads = number | { general: number; vvc: number; vvcFrameContexts: number };
+export type DecodeThreads = number | { general: number; vvc: number; vvcFrameContexts: number; vvcTuning?: { contexts: number; threads: number } };
+export const VVC_EXPERIMENTAL_CAPACITY = 12;
 const vvcThreadsKey = 'voidplayer.vvc-thread-mode';
 const vvcContextsKey = 'voidplayer.vvc-frame-contexts';
+const vvcLiveGrowthKey = 'voidplayer.vvc-live-growth';
 const vvcTuning = new Map<string, number>();
 
 function readVvcCount(key: string) {
@@ -43,6 +45,9 @@ function writeVvcCount(key: string, value: string) {
   try { globalThis.localStorage?.setItem(key, count ? String(count) : 'auto'); }
   catch { /* Keep the selection in memory when storage is unavailable. */ }
 }
+
+export function vvcLiveGrowth() { return readVvcCount(vvcLiveGrowthKey) === 1; }
+export function setVvcLiveGrowth(enabled: boolean) { writeVvcCount(vvcLiveGrowthKey, enabled ? '1' : ''); }
 
 export function vvcThreadCount() { return readVvcCount(vvcThreadsKey); }
 export function vvcFrameContextCount() { return readVvcCount(vvcContextsKey); }

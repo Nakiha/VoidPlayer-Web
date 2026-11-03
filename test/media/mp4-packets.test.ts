@@ -6,6 +6,8 @@ import { readFile } from 'node:fs/promises';
 import { visiblePixelHash } from '../helpers/visible-pixels.ts';
 import {fileURLToPath} from 'node:url';
 import { Mp4Engine } from '../../src/media/decoding/mp4-engine.ts';
+import { WorkerRpc } from '../../src/media/workers/worker-rpc.ts';
+import type { PacketCommands } from '../../src/media/workers/worker-protocol.ts';
 import {nativeFrames,nativeVisibleHash,nativeVisibleFrameBytes,nativeVideoMetadata,nativeSeekFrame} from '../helpers/media/native-pixels.ts';
 import {mkdtemp,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -49,6 +51,49 @@ test('MP4 packet worker shares the session frame contract, handles EOF and relea
     assert.deepEqual(await source.framesAfter(source.info.durationUs, 2), []);
     source.dispose(); await assert.rejects(source.frameAt(0), /释放/);
   } finally { source.dispose(); }
+});
+
+test('MP4 VVC grows workers and contexts on the same decoder without changing frame identity', { timeout: 120000 }, async () => {
+  const bytes = await packetFixture('h266_10s_1920x1080.mp4');
+  const glueURL = new URL('voidplayer-core-mt.js', core).href;
+  const wasmBinary = await readFile(new URL('voidplayer-core-mt.wasm', core));
+  async function decode(grow: boolean) {
+    const rpc = new WorkerRpc<PacketCommands>(new Worker(new URL('../../src/media/decoding/packet-worker.ts', import.meta.url)));
+    try {
+      const init = await rpc.call('init', { input: { file: new Blob([bytes]) }, container: 'mp4', glueURL, wasmBinary, forceWasm: true,
+        threads: { general: 4, vvc: 4, vvcFrameContexts: 4, ...(grow ? { vvcTuning: { threads: 6, contexts: 6 } } : {}) } });
+      const output: Array<[number, string]> = [];
+      const record = (frame: NonNullable<Awaited<ReturnType<Mp4Engine['at']>>>) =>
+        output.push([frame.pts, visiblePixelHash(frame.description, frame.pixels!)]);
+      let frame = await rpc.call('at', { pts: init.firstPtsUs });
+      for (let i = 0; i < 48; i++) {
+        assert.ok(frame);
+        if (grow && (i === 12 || i === 24)) {
+          const axis = i === 12 ? 'contexts' : 'threads';
+          const before = await rpc.call('tune-vvc', {});
+          assert.ok(before);
+          assert.ok(before.dispatched > 0 && before.inFlight > 0);
+          const after = await rpc.call('tune-vvc', { axis });
+          assert.equal(after?.[axis], 6);
+          assert.equal(after?.[axis === 'contexts' ? 'threads' : 'contexts'], before[axis === 'contexts' ? 'threads' : 'contexts']);
+        }
+        record(frame);
+        frame = await rpc.call('next', { pts: frame.pts });
+      }
+      const tail = await rpc.call('at', { pts: init.firstPtsUs + init.times.at(-1)! });
+      assert.ok(tail); record(tail);
+      assert.equal(await rpc.call('next', { pts: tail.pts }), null);
+      const first = await rpc.call('at', { pts: init.firstPtsUs });
+      assert.ok(first); record(first);
+      if (grow) {
+        const state = await rpc.call('tune-vvc', {});
+        assert.deepEqual([state?.threads, state?.contexts], [6, 6]);
+      }
+      await rpc.call('dispose', {});
+      return output;
+    } finally { rpc.terminate(); }
+  }
+  assert.deepEqual(await decode(true), await decode(false));
 });
 
 for(const codec of ['h264','hevc'] as const)test(`multi-stsd ${codec} preserves every configuration and native-reference plane through packet software decoding`,async t=>{

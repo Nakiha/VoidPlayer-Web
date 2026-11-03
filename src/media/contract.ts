@@ -29,7 +29,15 @@ export interface DecodedFrame extends FrameInfo {
   readonly pixels?: Uint8ClampedArray;
   close(): void;
 }
+export type VvcTuningAxis = 'threads' | 'contexts';
+export type VvcTuningState = {
+  threads: number; contexts: number; inFlight: number; dispatched: number; saturated: number;
+  submitted: number; full: number; maxFrameWaitUs: number; heapBytes: number; maxThreads: number; maxContexts: number;
+  rejected?: 'budget' | 'core';
+};
+
 export interface MediaSource {
+  tuneVvc?(axis?: VvcTuningAxis): Promise<VvcTuningState | null>;
   readonly nativePresentedInstance?:string;
   readonly nativePresentedTransport?:Readonly<{source:{kind:'library';id:string;url:string};sourceVersion:string}>;
   /** Retained reference only; no analysis instance or IO until explicit request. */

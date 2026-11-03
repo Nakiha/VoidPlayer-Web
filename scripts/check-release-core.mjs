@@ -30,6 +30,8 @@ if (process.argv[3] === '--variant') {
       assert.equal(core.ccall('vp_packet_open', 'number', ['number', 'string', 'number', 'number'], [ctx, 'av1', 0, 0]), 0, 'dav1d must open');
       assert.equal(typeof core._vp_set_vvc_threads, 'function');
       assert.equal(typeof core._vp_set_vvc_frame_contexts, 'function');
+      for (const symbol of ['_vp_set_vvc_frame_context_capacity', '_vp_set_vvc_thread_capacity',
+        '_vp_grow_vvc_frame_contexts', '_vp_grow_vvc_threads', '_vp_vvc_tuning']) assert.equal(typeof core[symbol], 'function', symbol);
       core._vp_set_vvc_frame_contexts(18);
       assert.equal(core.ccall('vp_packet_open', 'number', ['number', 'string', 'number', 'number'], [ctx, 'vvc', 0, 0]), 0, 'VVC must open with an explicit context count');
     } finally { core.ccall('vp_destroy', null, ['number'], [ctx]); }

@@ -62,8 +62,10 @@ export class Mp4Engine {
       }
       const firstPtsUs=this.primed.pts;
       const activeDecoder=this.timeline.decoder;
+      const { width, height, description } = this.primed;
+      const vvcLiveGrowth = !!activeDecoder.tuneVvc && width === 3840 && height === 2160 && description.yuv?.bitDepth === 8;
       const color=activeDecoder.kind==='webcodecs'?playback.color:null;
-      return {codec,decoder:activeDecoder.kind,hardwareAcceleration:activeDecoder.hardwareAcceleration,width:this.displayed(this.primed).width,height:this.displayed(this.primed).height,...activeDecoder.metadata?.(),
+      return {codec,decoder:activeDecoder.kind,hardwareAcceleration:activeDecoder.hardwareAcceleration,vvcLiveGrowth,width:this.displayed(this.primed).width,height:this.displayed(this.primed).height,...activeDecoder.metadata?.(),
         ...(color?{colorSource:'container' as const,color:{primaries:color.primaries??null,transfer:color.transfer??null,matrix:color.matrix??null,fullRange:color.fullRange??null}}:{}),
         ...(recovered?{timelineSource:'hevc-poc' as const}:{}),
         indexIntegrity: playback.indexIntegrity, indexTruncatedAt: playback.indexTruncatedAt, indexWarning: playback.indexWarning,
@@ -71,6 +73,7 @@ export class Mp4Engine {
         firstPtsUs,durationUs:firstPts+duration-firstPtsUs,times:pts.filter(p=>p>=firstPtsUs).map(p=>p-firstPtsUs),durations};
     }catch(error){this.close();throw error;}
   }
+  tuneVvc(axis?: import('../contract.ts').VvcTuningAxis) { return this.timeline?.decoder.tuneVvc?.(axis) ?? null; }
   /** 只读分析查询共用：返回 demux 包表，不转移底层缓冲。 */
   get analysisIndex(): PacketDecodeIndex | undefined { return this.index; }
   async at(pts:number,recycle?:ArrayBuffer){

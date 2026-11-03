@@ -4677,6 +4677,10 @@
     "source": "VVC 帧上下文数",
     "translation": "VVC frame contexts"
   },
+  "settings.vvcLiveGrowth": {
+    "source": "VVC 自动扩容（实验）",
+    "translation": "VVC automatic expansion (experimental)"
+  },
   "settings.vvcThreads": {
     "source": "VVC 解码线程数",
     "translation": "VVC decode threads"

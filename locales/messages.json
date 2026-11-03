@@ -4963,6 +4963,10 @@
     "source": "VVC 帧上下文数",
     "params": {}
   },
+  "settings.vvcLiveGrowth": {
+    "source": "VVC 自动扩容（实验）",
+    "params": {}
+  },
   "settings.vvcThreads": {
     "source": "VVC 解码线程数",
     "params": {}

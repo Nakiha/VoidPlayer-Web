@@ -131,6 +131,10 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
     assert.equal(await page.evaluate(() => localStorage.getItem('voidplayer.wasm-thread-mode')), value);
    }
    const vvcThreads = page.locator('#vvc-thread-mode'), vvcContexts = page.locator('#vvc-frame-contexts');
+   const vvcGrowth = page.locator('#vvc-live-growth');
+   assert.equal(await vvcGrowth.isChecked(), false);
+   await vvcGrowth.check();
+   assert.equal(await page.evaluate(() => localStorage.getItem('voidplayer.vvc-live-growth')), '1');
    for (const [input, key, value] of [
     [vvcThreads, 'voidplayer.vvc-thread-mode', '14'], [vvcContexts, 'voidplayer.vvc-frame-contexts', '18'],
    ]) {
@@ -139,11 +143,14 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
     await input.fill(value);
     await input.press('Tab');
     assert.equal(await input.inputValue(), value);
+    assert.equal(await vvcGrowth.isDisabled(), true);
     assert.equal(await page.evaluate(key => localStorage.getItem(key), key), value);
     await input.fill('');
     await input.press('Tab');
     assert.equal(await page.evaluate(key => localStorage.getItem(key), key), 'auto');
    }
+   assert.equal(await vvcGrowth.isEnabled(), true);
+   await vvcGrowth.uncheck();
    assert.equal(await page.locator('#analysis-concurrency').innerText(),'2 路');
    for(const value of [1,3,4,8,2]) {
     await page.locator('#analysis-concurrency').click();

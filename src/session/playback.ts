@@ -1,5 +1,5 @@
 import type { SessionResources } from './resources.ts';
-import type { DecodedFrame } from '../media/contract.ts';
+import type { DecodedFrame, VvcTuningAxis, VvcTuningState } from '../media/contract.ts';
 
 /** One independent, bounded producer per track. Never await decoding on the presentation path. */
 export class FrameQueue {
@@ -151,5 +151,80 @@ export class PlaybackMeasurements {
           fps: this.wallMs > 0 ? t.drawn * 1000 / this.wallMs : 0,
           maxGapMs: t.maxGapMs, p95GapMs: intervals[Math.max(0, Math.ceil(intervals.length * .95) - 1)] ?? 0 }];
       })) };
+  }
+}
+
+/** Observe continuous playback in separate windows, excluding pauses and long UI ticks. */
+export class VvcGrowthMonitor {
+  private wallMs = 0;
+  private skippedMs = 0;
+  private advanceUs = 0;
+  private starvedMs = 0;
+  private slowWindows = 0;
+
+  reset() { this.wallMs = this.skippedMs = this.advanceUs = this.starvedMs = this.slowWindows = 0; }
+
+  sample(elapsed: number, advanceUs: number, starved: boolean, eligible: boolean) {
+    if (!eligible) { this.reset(); return; }
+    if (elapsed > 100) {
+      this.skippedMs += elapsed;
+    } else {
+      this.wallMs += elapsed;
+      this.advanceUs += advanceUs;
+      if (starved) this.starvedMs += Math.max(0, elapsed - advanceUs / 1000);
+    }
+    const total = this.wallMs + this.skippedMs;
+    if (total < 2000) return;
+    const skipped = this.skippedMs / total;
+    const speed = this.wallMs ? this.advanceUs / (this.wallMs * 1000) : 1;
+    const starvation = this.wallMs ? this.starvedMs / this.wallMs : 0;
+    this.wallMs = this.skippedMs = this.advanceUs = this.starvedMs = 0;
+    this.slowWindows = skipped < .5 && speed < .95 && starvation >= .10 ? this.slowWindows + 1 : 0;
+    return { speed, starvation, skipped, grow: this.slowWindows >= 2 };
+  }
+}
+
+
+type VvcObservation = NonNullable<ReturnType<VvcGrowthMonitor['sample']>>;
+
+export class VvcGrowthPolicy {
+  private trial?: { axis: VvcTuningAxis; before: VvcObservation; warmup: boolean; first?: VvcObservation };
+
+  private readonly blocked: Set<VvcTuningAxis>;
+
+  constructor(blocked: Set<VvcTuningAxis>) { this.blocked = blocked; }
+
+  restartObservation() {
+    if (this.trial) {
+      this.trial.warmup = true;
+      this.trial.first = undefined;
+    }
+  }
+
+  choose(window: VvcObservation, core: VvcTuningState): VvcTuningAxis | undefined {
+    if (this.trial || !window.grow || !core.dispatched) return;
+    const saturated = core.saturated / core.dispatched >= .12;
+    if (saturated && core.threads < core.maxThreads && !this.blocked.has('threads')) return 'threads';
+    const full = core.submitted > 0 && core.full / core.submitted >= .75 && core.maxFrameWaitUs >= 1000;
+    if (full && core.contexts < core.maxContexts && !this.blocked.has('contexts')) return 'contexts';
+  }
+
+  applied(axis: VvcTuningAxis, before: VvcObservation, old: VvcTuningState, next: VvcTuningState | null) {
+    if (!next || next[axis] <= old[axis]) { this.blocked.add(axis); return; }
+    this.trial = { axis, before, warmup: true };
+  }
+
+  assess(window: VvcObservation) {
+    const trial = this.trial;
+    if (!trial || window.skipped >= .5) return;
+    if (trial.warmup) { trial.warmup = false; return; }
+    if (!trial.first) { trial.first = window; return; }
+    const speed = (trial.first.speed + window.speed) / 2;
+    const starvation = (trial.first.starvation + window.starvation) / 2;
+    const helpful = speed >= trial.before.speed + .03 ||
+      (speed >= trial.before.speed - .01 && starvation <= trial.before.starvation - .05);
+    if (!helpful) this.blocked.add(trial.axis);
+    this.trial = undefined;
+    return { axis: trial.axis, before: trial.before, speed, starvation, helpful };
   }
 }

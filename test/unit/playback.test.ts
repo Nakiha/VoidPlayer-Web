@@ -1,7 +1,7 @@
 import { rgbaDescription } from '../../shared/media/frame-description.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { FrameQueue, PlaybackMeasurements } from '../../src/session/playback.ts';
+import { FrameQueue, PlaybackMeasurements, VvcGrowthMonitor, VvcGrowthPolicy } from '../../src/session/playback.ts';
 import { assessPlayback } from '../../src/session/benchmark.ts';
 import { WorkerRpc } from '../../src/media/decoding/ffmpeg-media.ts';
 const turn = () => new Promise<void>(r => setTimeout(r, 0));
@@ -139,4 +139,49 @@ test('queue diagnostics distinguish an in-flight producer from queued frame cove
     const ready=queue.snapshot();assert.equal(ready.firstPtsUs,1);assert.equal(ready.lastPtsUs,1);assert.equal(ready.producerWaitMs,null);assert.equal(ready.ended,true);
   } finally {release();queue.stop();await queue.done;}
   assert.equal(closed,2);
+});
+
+test('VVC growth needs consecutive windows of slow playback with an empty decode queue', () => {
+  const monitor = new VvcGrowthMonitor();
+  const window = (starved: boolean, longTick = false) => {
+    let result: ReturnType<VvcGrowthMonitor['sample']>;
+    if (longTick) monitor.sample(150, 0, true, true);
+    for (let i = 0; i < (longTick ? 37 : 40); i++) result = monitor.sample(50, 40000, starved, true);
+    assert.ok(result);
+    return result;
+  };
+  assert.equal(window(false).grow, false);
+  assert.equal(window(true).grow, false);
+  assert.equal(window(true, true).grow, true);
+  assert.equal(monitor.sample(2000, 0, true, true)?.grow, false);
+  assert.equal(window(true).grow, false);
+  monitor.sample(50, 0, true, false);
+  assert.equal(window(true).grow, false);
+});
+
+test('VVC growth chooses one axis, waits for two measured windows and blocks an unhelpful increase', () => {
+  const blocked = new Set<'threads' | 'contexts'>();
+  const policy = new VvcGrowthPolicy(blocked);
+  const slow = { speed: .8, starvation: .2, skipped: 0, grow: true };
+  const core = { threads: 6, contexts: 6, inFlight: 5, dispatched: 100, saturated: 50,
+    submitted: 30, full: 30, maxFrameWaitUs: 4000, heapBytes: 100, maxThreads: 12, maxContexts: 12 };
+  assert.equal(policy.choose(slow, core), 'threads');
+  policy.applied('threads', slow, core, { ...core, threads: 8 });
+  assert.equal(policy.choose(slow, core), undefined);
+  assert.equal(policy.assess(slow), undefined); // Warm-up.
+  assert.equal(policy.assess(slow), undefined);
+  assert.equal(policy.assess(slow)?.helpful, false);
+  assert.ok(blocked.has('threads'));
+  assert.equal(policy.choose(slow, { ...core, full: 0 }), undefined);
+  assert.equal(policy.choose(slow, core), 'contexts');
+  const contextLimited = { ...core, threads: 8, saturated: 2 };
+  assert.equal(policy.choose(slow, contextLimited), 'contexts');
+  policy.applied('contexts', slow, contextLimited, { ...contextLimited, contexts: 8 });
+  const faster = { ...slow, speed: .92, starvation: .12 };
+  assert.equal(policy.assess({ ...faster, skipped: .8 }), undefined);
+  assert.equal(policy.assess(faster), undefined);
+  assert.equal(policy.assess(faster), undefined);
+  assert.equal(policy.assess(faster)?.helpful, true);
+  assert.equal(policy.choose({ ...faster, speed: 1, grow: false }, contextLimited), undefined);
+  assert.equal(policy.choose(slow, contextLimited), 'contexts');
 });

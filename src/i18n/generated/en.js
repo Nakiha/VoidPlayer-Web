@@ -1163,6 +1163,7 @@ export default {
   "settings.chartHoverSeparate": () => "Separate cards",
   "settings.unknownSettingsPage": () => "Unknown settings page.",
   "settings.vvcFrameContexts": () => "VVC frame contexts",
+  "settings.vvcLiveGrowth": () => "VVC automatic expansion (experimental)",
   "settings.vvcThreads": () => "VVC decode threads",
   "settings.vvcTuningHint": () => "Leave blank for Auto. Reopen the source after changing these settings.",
   "settings.wasmThreadsAuto": () => "Auto",
