@@ -316,14 +316,13 @@ for (const outcome of ['acknowledge', 'reset', 'error', 'dispose'] as const) {
       assert.equal(settled, false, 'transport receipt must not expose unimported coverage');
       assert.equal(source.info.stableCoverageUs, 1);
       if (outcome === 'reset') {
+        const rejected = assert.rejects(observed, /服务端 FFmpeg 播放索引不可用/);
         controller.enqueue(new TextEncoder().encode(JSON.stringify({ type: 'reset', buildId: '22222222-2222-4222-8222-222222222222' }) + '\n'));
-        await new Promise(resolve => setImmediate(resolve));
-        assert.ok(worker.indexActions.includes('fallback'));
+        await rejected;
+        assert.equal(worker.indexActions.includes('fallback'), false, 'library media cannot rebuild a server index locally');
         worker.publishBatch();
-        await new Promise(resolve => setImmediate(resolve));
-        assert.equal(settled, false, 'the abandoned stream must not unlock a replacement build');
-        worker.finishIndex();
-        (await observed).close();
+        assert.equal(source.info.stableCoverageUs, 1, 'late acknowledgement must not unlock the abandoned stream');
+        assert.equal(source.info.indexState, 'error');
       } else if (outcome === 'acknowledge') {
         worker.emit({ id: worker.initId, type: 'index-batch', data: { ctx: 1, ticks: [originTicks + 3_600],
           durations: [3_600], stableCoverageUs: 80_000, seekAnchorCount: 1,
@@ -347,7 +346,7 @@ for (const outcome of ['acknowledge', 'reset', 'error', 'dispose'] as const) {
       }
     } finally {
       source.dispose();
-      // A reset cancels and closes the response body before local fallback.
+      // The transport may have already canceled the response body.
       try { controller.close(); } catch {}
       globalThis.fetch = originalFetch;
     }

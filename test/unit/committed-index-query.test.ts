@@ -469,7 +469,7 @@ test('post-snapshot LRU touch is bound to the returned TS/Matroska commit, not a
   const f = await fixture(t), writer = f.library.frameIndexes;
   const matroskaDoc = { schema: 1, kind: 'js-matroska-packets', build: MATROSKA_PACKET_BUILD, sourceVersion: f.source,
     size: f.entry.size, streamKey: 'video:0', pid: 1, codec: 'vp9', configuration: [], completeness: { state: 'complete', packets: 3 },
-    packets: f.tsDoc.packets.map((p, au) => ({ au, locator: au * 188, blockOffset: au * 188, configuration: 0,
+    packets: f.tsDoc.packets.map((p, au) => ({ au, locator: au * 188, blockOffset: au * 188, payloadOffset: au * 188 + 4, configuration: 0,
       timestamp: p.timestamp, ptsUs: p.ptsUs, durationUs: p.durationUs, size: p.size, key: p.key,
       timing: { pts: (au + 1) * 100, dts: null, timebase: [1000000, 1000000000], origin: 'matroska-block' } })) };
   for (const [doc, identity] of [[f.tsDoc, ts], [matroskaDoc, matroska]] as const) {
