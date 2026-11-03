@@ -32,7 +32,7 @@ Vite 与独立程序共用 `release-version.mjs` 的版本规则。标签构建�
 
 ## 播放核心同步与打包前校验
 
-FFmpeg 源码在 `Nakiha/FFmpeg` 维护两条线：`wasm-playback` 和 `wasm-analysis`。Builder 的 `wasm` 分支同时维护两套构建脚本。Web CI 用 `release-core.json` 和 `release-analysis.json` 锁定各自的 Builder 和 FFmpeg 提交；播放锁的 `ffmpegRef` 也用于命名上游构建目录。分析脚本按锁定的 SHA 读取源码。
+FFmpeg 源码在 `Nakiha/FFmpeg` 维护两条以 FFmpeg `n9.0.2` 为基线的分支：`wasm-n9.0.2-playback` 和 `wasm-n9.0.2-analysis`。Builder 的 `wasm` 分支同时维护两套构建脚本。Web CI 用 `release-core.json` 和 `release-analysis.json` 锁定各自的 Builder 和 FFmpeg 提交；播放锁的 `ffmpegRef` 也用于命名上游构建目录。分析脚本按锁定的 SHA 读取源码。
 
 `sync-wasm-core.sh` 同时接受上游相邻 ST/MT 原始构建目录和扁平 release-core artifact。同步先准备完整目录，再替换目标；缺少 MT 的本地原始构建会移除旧 MT 和旧 provenance，避免单线程新版本与多线程旧版本混用。带 provenance 的 artifact 必须匹配 `release-core.json` 且通过逐文件 SHA-256 校验，失败保留原目标。正式打包必须包含 ST/MT 两套核心。
 
