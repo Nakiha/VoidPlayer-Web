@@ -3,7 +3,7 @@
   "revision": "2b802eb133c63c50e4dc4c0513a008795242e361",
   "ffmpegRepository": "Nakiha/FFmpeg",
   "ffmpegRevision": "2e4669a09a7da2a20383a0dde2ca1ed44729abec",
-  "ffmpegRef": "n9.0.2-vp-vvc-compact-coeffs",
+  "ffmpegRef": "wasm-playback",
   "dav1dRepository": "videolan/dav1d",
   "dav1dRevision": "42b2b24fb8819f1ed3643aa9cf2a62f03868e3aa",
   "emscripten": "6.0.9",
