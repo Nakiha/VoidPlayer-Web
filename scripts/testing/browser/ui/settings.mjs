@@ -130,6 +130,14 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
     assert.equal(await threadMode.innerText(), label);
     assert.equal(await page.evaluate(() => localStorage.getItem('voidplayer.wasm-thread-mode')), value);
    }
+   const vvcMode = page.locator('#vvc-thread-mode');
+   assert.equal(await vvcMode.innerText(), '自动');
+   for (const [value, label] of [['4', '4 线程 / 4 套上下文'], ['8', '8 线程 / 6 套上下文'], ['auto', '自动']]) {
+    await vvcMode.click();
+    await page.locator(`#vvc-thread-mode-menu [data-value="${value}"]`).click();
+    assert.equal(await vvcMode.innerText(), label);
+    assert.equal(await page.evaluate(() => localStorage.getItem('voidplayer.vvc-thread-mode')), value);
+   }
    assert.equal(await page.locator('#analysis-concurrency').innerText(),'2 路');
    for(const value of [1,3,4,8,2]) {
     await page.locator('#analysis-concurrency').click();

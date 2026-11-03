@@ -4661,6 +4661,14 @@
     "source": "未知设置页面。",
     "translation": "Unknown settings page."
   },
+  "settings.vvcThreadMode": {
+    "source": "VVC 解码配置",
+    "translation": "VVC decode profile"
+  },
+  "settings.vvcThreadPreset": {
+    "source": "{threads, number} 线程 / {contexts, number} 套上下文",
+    "translation": "{threads, number} threads / {contexts, number} contexts"
+  },
   "settings.wasmThreadsAuto": {
     "source": "自动",
     "translation": "Auto"

@@ -3,6 +3,27 @@ import assert from 'node:assert/strict';
 import { Worker } from 'node:worker_threads';
 import { liveHeap } from '../../shared/wasm/core.ts';
 import { checkedHeap } from '../../src/media/decoding/flv-decoder.ts';
+import { reserveFallbackThreads } from '../../src/media/decoding/fallback-runtime.ts';
+import { decodeThreadsForCodec, setVvcThreadMode } from '../../src/media/policy/wasm-threads.ts';
+
+test('VVC uses its own automatic or manual budget within the shared CPU allowance', t => {
+  const cpu = t.mock.getter(Navigator.prototype, 'hardwareConcurrency', () => 12);
+  setVvcThreadMode('auto');
+  const first = reserveFallbackThreads(), second = reserveFallbackThreads();
+  try {
+    assert.equal(decodeThreadsForCodec(first.threads, 'vvc'), 6);
+    assert.equal(decodeThreadsForCodec(first.threads, 'hevc'), 4);
+    assert.equal(decodeThreadsForCodec(second.threads, 'vvc'), 4);
+  } finally { first.release(); second.release(); }
+  setVvcThreadMode('8');
+  const manual = reserveFallbackThreads();
+  try { assert.equal(decodeThreadsForCodec(manual.threads, 'vvc'), 8); }
+  finally { manual.release(); }
+  cpu.mock.mockImplementation(() => 4);
+  const lowCpu = reserveFallbackThreads();
+  try { assert.equal(decodeThreadsForCodec(lowCpu.threads, 'vvc'), 2); }
+  finally { lowCpu.release(); setVvcThreadMode('auto'); }
+});
 
 for (const shared of [false, true]) test(`live WASM heap survives ${shared ? 'other-thread shared' : 'detached nonshared'} memory growth`, async () => {
   const memory = new WebAssembly.Memory({ initial: 1, maximum: 4, shared });

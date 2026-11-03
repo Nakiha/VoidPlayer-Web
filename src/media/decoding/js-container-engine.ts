@@ -1,3 +1,4 @@
+import type { DecodeThreads } from '../policy/wasm-threads.ts';
 import { RangeReader, type RandomAccessInput } from '../../../shared/media/io/range-reader.ts';
 import { TsPacketSource } from '../../../shared/media/containers/ts-packet-source.ts';
 import type { TsPlaybackPrefix } from '../../../shared/media/containers/ts-packet-source.ts';
@@ -249,7 +250,7 @@ export class JsContainerEngine {
     this.updateStatistics(this.document);
     return this.document;
   }
-  async open(glueURL: string, wasmBinary?: Uint8Array, forceWasm = true, threads = 1, onProgress?: MediaOpenProgress, onIndexProgress?: (data:IndexProgress)=>void) {
+  async open(glueURL: string, wasmBinary?: Uint8Array, forceWasm = true, threads: DecodeThreads = 1, onProgress?: MediaOpenProgress, onIndexProgress?: (data:IndexProgress)=>void) {
     try {
       this.check();
       onProgress?.('index');
@@ -313,7 +314,7 @@ export class JsContainerEngine {
       throw new MediaOpenError('input', 'JS TS frame position out of bounds');
     return this.at(this.index!.packets[this.index!.order[position]].pts, recycle);
   }
-  async referenceWitness(glueURL: string, wasmBinary?: Uint8Array, threads = 1) {
+  async referenceWitness(glueURL: string, wasmBinary?: Uint8Array, threads: DecodeThreads = 1) {
     this.check();
     if (this.timeline?.decoder.kind !== 'webcodecs') throw new MediaOpenError('decode', 'JS TS native decoder is not ready');
     const decoder = await this.createSoftware(this.index!, glueURL, wasmBinary, threads);
@@ -334,7 +335,7 @@ export class JsContainerEngine {
     if (this.startup) { next.replaceIndex(this.index!); next.setGrowth(this.waitForGrowth); }
     this.outputSize = { width: first.width, height: first.height };
   }
-  async switchToSoftware(glueURL: string, wasmBinary?: Uint8Array, threads = 1) {
+  async switchToSoftware(glueURL: string, wasmBinary?: Uint8Array, threads: DecodeThreads = 1) {
     this.check();
     if (this.timeline!.decoder.kind === 'webcodecs')
       await this.replaceDecoder(await this.createSoftware(this.index!, glueURL, wasmBinary, threads));

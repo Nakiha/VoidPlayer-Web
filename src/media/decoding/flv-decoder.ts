@@ -1,3 +1,5 @@
+import { decodeThreadsForCodec } from '../policy/wasm-threads.ts';
+import type { DecodeThreads } from '../policy/wasm-threads.ts';
 import { checkedHeap } from '../../../shared/wasm/heap.ts';
 export { checkedHeap } from '../../../shared/wasm/heap.ts';
 import type {PacketDecodeIndex,PacketDecodePacket} from '../../../shared/media/indexing/packet-decode-index.ts';
@@ -200,8 +202,9 @@ export async function nativeFlvDecoder(index: PacketDecodeIndex, initialConfig?:
 
 // Emscripten's generated module has a dynamically named C API.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function wasmFlvDecoder(index: PacketConfiguration, glueURL: string, wasmBinary?: Uint8Array, threads = 1): Promise<PacketDecoder> {
-  const { core, heap } = await loadCore(glueURL, wasmBinary);
+export async function wasmFlvDecoder(index: PacketConfiguration, glueURL: string, wasmBinary?: Uint8Array, budget: DecodeThreads = 1): Promise<PacketDecoder> {
+  const threads = decodeThreadsForCodec(budget, index.codec);
+  const { core, heap } = await loadCore(glueURL, wasmBinary, undefined, threads);
   requireFrameAbi(core);
   if (typeof core._vp_packet_open !== 'function') throw new MediaOpenError('decode', 'WASM core 版本过旧，请同步带 FLV 压缩包接口的产物。');
   const call = (name: string, types: string[], args: unknown[], result: string | null = 'number') => core.ccall(name, result, types, args);
@@ -210,14 +213,14 @@ export async function wasmFlvDecoder(index: PacketConfiguration, glueURL: string
   if (!ctx) throw new MediaOpenError('resource', '无法创建 FLV 解码上下文。');
   const configure = (next: PacketConfiguration) => {
     const description = next.codec === 'av1' ? next.description.subarray(4) : next.description;
-    const extra = core._malloc(Math.max(1, description.length));
+    const extra = core._malloc(Math.max(1, description.length)) >>> 0;
     try {
       if (!extra) throw new MediaOpenError('resource', '无法分配 FLV 配置头内存。');
       checkedHeap(heap(), extra, description.length, '写入配置头').set(description, extra);
       let status:number;
       if(next.codecParameters){
         if(typeof core._vp_packet_open_config!=='function'||core._vp_packet_config_bytes?.()!==40)throw new MediaOpenError('decode','WASM packet configuration ABI unavailable: decoder assets must match the player build','wasm-core-incompatible');
-        const ptr=core._malloc(40);if(!ptr)throw new MediaOpenError('resource','Cannot allocate packet parameters');
+        const ptr=core._malloc(40) >>> 0;if(!ptr)throw new MediaOpenError('resource','Cannot allocate packet parameters');
         const p=next.codecParameters;
         try{const view=new DataView(heap().buffer);[1,40,p.width,p.height,p.sarNum,p.sarDen,p.colorPrimaries,p.colorTransfer,p.colorSpace,p.colorRange].forEach((v,i)=>view.setInt32(ptr+i*4,v,true));
           status=call('vp_packet_open_config',['number','string','number','number','number'],[ctx,next.codec,extra,description.length,ptr]);
@@ -247,7 +250,7 @@ export async function wasmFlvDecoder(index: PacketConfiguration, glueURL: string
     reset() { packetPending = false; call('vp_packet_reset', ['number'], [ctx], null); },
     async send(bytes, packet) {
       if (!packetPending) {
-        const ptr = call('vp_packet_alloc', ['number', 'number'], [ctx, bytes.length]);
+        const ptr = call('vp_packet_alloc', ['number', 'number'], [ctx, bytes.length], 'pointer');
         if (!ptr) throw new MediaOpenError('resource', '无法分配视频包内存。');
         checkedHeap(heap(), ptr, bytes.length, '写入压缩视频包').set(bytes, ptr);
       }

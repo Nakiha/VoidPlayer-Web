@@ -1,3 +1,4 @@
+import type { DecodeThreads } from '../policy/wasm-threads.ts';
 import { inspectMp4Playback } from '../../../shared/media/containers/mp4-playback.ts';
 import { loadLibraryMp4Playback } from '../indexing/mp4-playback-client.ts';
 import type { MediaOpenProgress } from '../progress.ts';
@@ -35,7 +36,7 @@ export class Mp4Engine {
   }
   cachedWindows() { return this.reader.cachedWindows(); }
   peekCachedBytes(offset: number, length: number) { return this.reader.peek(offset, length) ?? this.audioMetadata.peek(offset, length); }
-  async open(glueURL:string,wasmBinary?:Uint8Array,forceWasm=true,threads=1,onProgress?:MediaOpenProgress){
+  async open(glueURL:string,wasmBinary?:Uint8Array,forceWasm=true,threads:DecodeThreads=1,onProgress?:MediaOpenProgress){
     try{
       onProgress?.('inspect');
       const playback = 'url' in this.reader.input && this.reader.input.library
@@ -78,7 +79,7 @@ export class Mp4Engine {
   }
   async next(pts:number,recycle?:ArrayBuffer){const frame=await this.timeline!.next(pts,recycle);return frame?this.displayed(frame):null;}
   /** Produce a first-frame software witness from this MP4 index and reader. */
-  async referenceWitness(glueURL:string,wasmBinary?:Uint8Array,threads=1):Promise<PacketFrame>{
+  async referenceWitness(glueURL:string,wasmBinary?:Uint8Array,threads:DecodeThreads=1):Promise<PacketFrame>{
     if(this.timeline?.decoder.kind!=='webcodecs'||!this.timeline)throw new MediaOpenError('decode','MP4 原生解码器尚未就绪。');
     const decoder=await wasmPacketDecoder(this.index,glueURL,wasmBinary,threads);
     const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size),true);
@@ -86,7 +87,7 @@ export class Mp4Engine {
     finally{timeline.close();}
   }
   /** Replace the active decoder without rebuilding the MP4 sample table. */
-  async switchToSoftware(glueURL:string,wasmBinary?:Uint8Array,threads=1){
+  async switchToSoftware(glueURL:string,wasmBinary?:Uint8Array,threads:DecodeThreads=1){
     if(this.timeline?.decoder.kind==='webcodecs'){
       const decoder=await wasmPacketDecoder(this.index,glueURL,wasmBinary,threads);
       const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size),true);

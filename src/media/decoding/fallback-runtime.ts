@@ -1,4 +1,5 @@
 import { coreAssetUrl } from './core-url.ts';
+import { vvcThreadMode } from '../policy/wasm-threads.ts';
 import type { WasmThreadMode } from '../policy/wasm-threads.ts';
 import type {MediaOpenProgress} from '../progress.ts';
 // Greatest index whose time is at most ptsUs (0 when none), and the first
@@ -52,19 +53,23 @@ export interface FallbackDeps {
   workerFactory?: () => Worker;
 }
 
-// Player-side thread budget: fallback decoders share the host's cores, each
-// live fallback track getting an equal share of (cores − 2), capped by the
-// pthread pool the mt core was built with.
+// Reserve CPU headroom for presentation, then share the remaining budget across fallback tracks.
 let liveFallbacks = 0;
-function threadBudget(): number {
-  const cores = globalThis.navigator?.hardwareConcurrency ?? 4;
-  return Math.max(1, Math.min(4, Math.floor((cores - 2) / Math.max(1, liveFallbacks))));
-}
-
-/** Shared budget for packet-fed fallback workers and file-fed fallback workers. */
+let reservedFallbackThreads = 0;
 export function reserveFallbackThreads() {
   liveFallbacks++;
+  const cores = globalThis.navigator?.hardwareConcurrency ?? 4;
+  const available = cores - 2;
+  const share = Math.max(1, Math.min(Math.floor(available / liveFallbacks), available - reservedFallbackThreads));
+  const mode = vvcThreadMode();
+  const threads = { general: Math.min(4, share), vvc: Math.min(mode === 'auto' ? 6 : Number(mode), share) };
+  const reserved = Math.max(threads.general, threads.vvc);
+  reservedFallbackThreads += reserved;
   let released = false;
-  return { threads: threadBudget(), release() { if (!released) { released = true; liveFallbacks--; } } };
+  return { threads, release() {
+    if (released) return;
+    released = true;
+    liveFallbacks--;
+    reservedFallbackThreads -= reserved;
+  } };
 }
-

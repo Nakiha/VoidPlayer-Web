@@ -4947,6 +4947,17 @@
     "source": "未知设置页面。",
     "params": {}
   },
+  "settings.vvcThreadMode": {
+    "source": "VVC 解码配置",
+    "params": {}
+  },
+  "settings.vvcThreadPreset": {
+    "source": "{threads, number} 线程 / {contexts, number} 套上下文",
+    "params": {
+      "contexts": "number",
+      "threads": "number"
+    }
+  },
   "settings.wasmThreadsAuto": {
     "source": "自动",
     "params": {}

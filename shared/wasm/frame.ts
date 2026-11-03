@@ -8,7 +8,7 @@ export function requireFrameAbi(core: any): void {
 }
 /** Copy descriptor and exactly its valid pixels before any further decode call. */
 export function readWasmFrame(core: any, heap: () => Uint8Array, ctx: number, recycle?: ArrayBuffer): WasmFrameOutput {
-  const ptr=core.ccall('vp_frame_info','number',['number'],[ctx]);
+  const ptr=core.ccall('vp_frame_info','pointer',['number'],[ctx]);
   const memory=heap();
   if (!Number.isSafeInteger(ptr)||ptr<=0||ptr+160>memory.byteLength) throw new MediaOpenError('decode','WASM 帧描述指针越界。');
   const view=new DataView(memory.buffer,ptr,160);
@@ -41,7 +41,7 @@ export function readWasmFrame(core: any, heap: () => Uint8Array, ctx: number, re
   }
   description.sourcePixelFormat=core.ccall('vp_frame_format','string',['number'],[ctx])||null;
   validateDescription(description,description.byteLength);
-  const pixelPtr=core.ccall('vp_pixels','number',['number'],[ctx]),len=description.byteLength;
+  const pixelPtr=core.ccall('vp_pixels','pointer',['number'],[ctx]),len=description.byteLength;
   const pixels=heap(); // ccall(string) can grow memory; refresh the view.
   if(!Number.isSafeInteger(pixelPtr)||pixelPtr<=0||pixelPtr+storageBytes>pixels.byteLength)throw new MediaOpenError('decode','WASM 输出像素范围越界。');
   const out=recycle?.byteLength===len?new Uint8Array(recycle):new Uint8Array(len);
@@ -53,7 +53,7 @@ export function readWasmFrame(core: any, heap: () => Uint8Array, ctx: number, re
   } else out.set(pixels.subarray(pixelPtr,pixelPtr+len));
   let picture: WasmFrameOutput['picture'];
   if (typeof core._vp_picture_info === 'function' && typeof core._vp_picture_abi_version === 'function' && core._vp_picture_abi_version() === 1) {
-    const id = core._vp_picture_info(ctx);
+    const id = core._vp_picture_info(ctx) >>> 0;
     if (id) {
       if(!Number.isSafeInteger(id) || id<1 || id+56>heap().byteLength)throw new MediaOpenError('decode','WASM picture identity pointer out of bounds');
       const v = new DataView(heap().buffer,id,56), au=Number(v.getBigUint64(24,true)), stream=v.getInt32(36,true);

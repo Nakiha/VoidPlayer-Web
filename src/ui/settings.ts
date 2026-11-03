@@ -1,4 +1,4 @@
-import { setWasmThreadMode, wasmThreadMode } from '../media/policy/wasm-threads.ts';
+import { setVvcThreadMode, setWasmThreadMode, vvcThreadMode, VVC_FRAME_CONTEXT_LIMIT, VVC_THREAD_OPTIONS, wasmThreadMode } from '../media/policy/wasm-threads.ts';
 import { t, onLanguageChange, msg } from '../i18n.ts';
 import { settingsPanes } from './settings-shell.ts';
 import { matchesShortcut } from './shortcuts.ts';
@@ -40,10 +40,21 @@ export function installSettings() {
     { value: 'multi-thread', label: t(msg('settings.wasmThreadsMulti', '多线程优先')) },
     { value: 'single-thread', label: t(msg('settings.wasmThreadsSingle', '单线程')) },
   ];
-  const wasmMenu = installChoiceMenu('wasm-thread-mode', wasmChoices, value => { setWasmThreadMode(value); syncWasmMenu(); });
+  const wasmMenu = installChoiceMenu('wasm-thread-mode', wasmChoices, value => { setWasmThreadMode(value); syncWasmMenu(); syncVvcMenu(); });
   const syncWasmMenu = () => wasmMenu.sync(wasmThreadMode(), wasmChoices().find(choice => choice.value === wasmThreadMode())!.label, true);
   onLanguageChange(syncWasmMenu, life.signal); syncWasmMenu();
   life.signal.addEventListener('abort', () => wasmMenu.dispose(), { once: true });
+  const vvcChoices = () => [
+    { value: 'auto', label: t(msg('settings.wasmThreadsAuto', '自动')) },
+    ...VVC_THREAD_OPTIONS.map(threads => ({ value: String(threads),
+      label: t(msg('settings.vvcThreadPreset', '{threads, number} 线程 / {contexts, number} 套上下文'),
+        { threads, contexts: Math.min(threads, VVC_FRAME_CONTEXT_LIMIT) }) })),
+  ];
+  const vvcMenu = installChoiceMenu('vvc-thread-mode', vvcChoices, value => { setVvcThreadMode(value); syncVvcMenu(); });
+  const syncVvcMenu = () => vvcMenu.sync(vvcThreadMode(), vvcChoices().find(choice => choice.value === vvcThreadMode())!.label,
+    wasmThreadMode() !== 'single-thread');
+  onLanguageChange(syncVvcMenu, life.signal); syncVvcMenu();
+  life.signal.addEventListener('abort', () => vvcMenu.dispose(), { once: true });
   const narrow = matchMedia('(max-width: 600px)');
   const revealTab = () => {
     if (narrow.matches && dialog.open) dialog.querySelector('[role=tab][aria-selected=true]')!.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });

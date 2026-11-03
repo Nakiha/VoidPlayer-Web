@@ -1159,6 +1159,8 @@ export default {
   "settings.chartHoverCombined": () => "［C~o~m~b~i~n~e~d~ c~a~r~d~ ········］",
   "settings.chartHoverSeparate": () => "［S~e~p~a~r~a~t~e~ c~a~r~d~s~ ········］",
   "settings.unknownSettingsPage": () => "［U~n~k~n~o~w~n~ s~e~t~t~i~n~g~s~ p~a~g~e~. ········］",
+  "settings.vvcThreadMode": () => "［V~V~C~ d~e~c~o~d~e~ p~r~o~f~i~l~e~ ········］",
+  "settings.vvcThreadPreset": (d) => "［" + number("en", d.threads, 0) + " t~h~r~e~a~d~s~ / " + number("en", d.contexts, 0) + " c~o~n~t~e~x~t~s~ ········］",
   "settings.wasmThreadsAuto": () => "［A~u~t~o~ ········］",
   "settings.wasmThreadsMulti": () => "［P~r~e~f~e~r~ m~u~l~t~i~t~h~r~e~a~d~e~d~ ········］",
   "settings.wasmThreadsSingle": () => "［S~i~n~g~l~e~-t~h~r~e~a~d~e~d~ ········］",

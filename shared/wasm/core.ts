@@ -4,18 +4,23 @@ declare const WebAssembly: typeof Wasm;
  * A pthread can grow shared memory without refreshing Module.HEAPU8 in this
  * worker. External callers must get a current view from memory.buffer instead.
  */
-export async function instantiateCore(factory: (options: Record<string, unknown>) => Promise<any>, binary: Uint8Array, maxMemoryBytes?: number) {
+export async function instantiateCore(
+  factory: (options: Record<string, unknown>) => Promise<any>, binary: Uint8Array, maxMemoryBytes?: number, pthreadPoolSize?: number,
+) {
   const module = await WebAssembly.compile(binary as Uint8Array<ArrayBuffer>);
   let memory: Wasm.Memory | undefined;
-  const core = await factory({ wasmBinary: binary, instantiateWasm(imports: Wasm.Imports, receive: (instance: Wasm.Instance, module: Wasm.Module) => void) {
-    const instance = new WebAssembly.Instance(module, imports);
-    const memories = new Set([...Object.values(instance.exports), ...Object.values(imports).flatMap(Object.values)].filter(value => value instanceof WebAssembly.Memory));
-    if (memories.size !== 1) throw new Error('WASM core 必须提供唯一的线性内存。');
-    memory = [...memories][0] as Wasm.Memory;
-    if (maxMemoryBytes !== undefined) limitMemoryGrowth(memory, maxMemoryBytes);
-    receive(instance, module);
-    return instance.exports;
-  } });
+  const core = await factory({
+    wasmBinary: binary, vpPthreadPoolSize: pthreadPoolSize,
+    instantiateWasm(imports: Wasm.Imports, receive: (instance: Wasm.Instance, module: Wasm.Module) => void) {
+      const instance = new WebAssembly.Instance(module, imports);
+      const memories = new Set([...Object.values(instance.exports), ...Object.values(imports).flatMap(Object.values)].filter(value => value instanceof WebAssembly.Memory));
+      if (memories.size !== 1) throw new Error('WASM core 必须提供唯一的线性内存。');
+      memory = [...memories][0] as Wasm.Memory;
+      if (maxMemoryBytes !== undefined) limitMemoryGrowth(memory, maxMemoryBytes);
+      receive(instance, module);
+      return instance.exports;
+    },
+  });
   if (!memory) throw new Error('WASM core 未调用内存初始化接口。');
   const heap = liveHeap(memory);
   return { core, heap };

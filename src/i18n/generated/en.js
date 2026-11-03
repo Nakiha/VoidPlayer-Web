@@ -1159,6 +1159,8 @@ export default {
   "settings.chartHoverCombined": () => "Combined card",
   "settings.chartHoverSeparate": () => "Separate cards",
   "settings.unknownSettingsPage": () => "Unknown settings page.",
+  "settings.vvcThreadMode": () => "VVC decode profile",
+  "settings.vvcThreadPreset": (d) => number("en", d.threads, 0) + " threads / " + number("en", d.contexts, 0) + " contexts",
   "settings.wasmThreadsAuto": () => "Auto",
   "settings.wasmThreadsMulti": () => "Prefer multithreaded",
   "settings.wasmThreadsSingle": () => "Single-threaded",

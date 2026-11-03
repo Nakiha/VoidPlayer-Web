@@ -56,7 +56,10 @@ const observations = new Map<number, ObservedBytes>();
 async function init(payload: FfmpegCommands['init']['request'], onProgress: MediaOpenProgress, onReady?: (data: FfmpegInitResult) => void,
 ): Promise<FfmpegInitResult> {
   onProgress('decoder');
-  ({ core, heap } = await loadCore(payload.glueURL, payload.wasmBinary ? new Uint8Array(payload.wasmBinary) : undefined));
+  const binary = payload.wasmBinary ? new Uint8Array(payload.wasmBinary) : undefined;
+  const budget = payload.threads;
+  const pool = typeof budget === 'object' ? Math.max(budget.general, budget.vvc) : budget;
+  ({ core, heap } = await loadCore(payload.glueURL, binary, undefined, pool));
   requireFrameAbi(core);
   core.vpBlobs = new Map();
   const ctx = core.ccall('vp_create', 'number', [], []);
@@ -67,7 +70,9 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
   let firstPresentation: ReturnType<typeof readWasmFrame> | undefined;
   try {
     // Player-assigned decode thread budget (no-op on the single-thread core).
-    if (payload.threads) core.ccall('vp_set_threads', null, ['number'], [payload.threads]);
+    const threads = typeof budget === 'object' ? budget.general : budget;
+    if (threads) core.ccall('vp_set_threads', null, ['number'], [threads]);
+    if (typeof budget === 'object') core._vp_set_vvc_threads?.(budget.vvc);
     // Blobs read on demand through the custom AVIO (FileReaderSync chunks), so
     // no whole-file copy ever enters WASM memory. Node workers lack
     // FileReaderSync and buffer the bytes once (capped) into MEMFS.
@@ -157,7 +162,7 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
         streamImportStarted = true;
       }
       const safeTick = lastFfmpegPts(batch.records, streamedSafeTick);
-      const ptr = core._malloc(batch.records.byteLength);
+      const ptr = core._malloc(batch.records.byteLength) >>> 0;
       if (!ptr) throw new MediaOpenError('resource', 'FFmpeg 索引 batch 内存分配失败。');
       const previousCount = streamedCount;
       const importStarted = performance.now();
@@ -240,7 +245,7 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
         entry.ticks = ticks; entry.durations = durations;
         if (!entry.packets.summary.packetCount) {
           const bytes = core.ccall('vp_index_export_bytes', 'number', ['number'], [ctx]) as number;
-          const ptr = core._malloc(bytes);
+          const ptr = core._malloc(bytes) >>> 0;
           if (!ptr) throw new MediaOpenError('resource', 'FFmpeg 包索引内存分配失败。');
           try {
             if (core.ccall('vp_index_export', 'number', ['number', 'number', 'number'], [ctx, ptr, bytes]) !== count) throw new Error('FFmpeg 包索引导出失败。');
@@ -304,7 +309,7 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
             streamIndex, indexerBuild,
           });
           if (parsed) {
-            const ptr = core._malloc(parsed.records.byteLength);
+            const ptr = core._malloc(parsed.records.byteLength) >>> 0;
             if (!ptr) throw new Error('FFmpeg 索引导入内存分配失败。');
             try {
               heap().set(parsed.records, ptr);
@@ -399,7 +404,7 @@ port.onmessage = async (event: { data: Request }) => {
     } else if (type === 'analysis-ffmpeg-index') {
       const ctx = message.ctx;
       if (!contexts.get(ctx)?.indexComplete) throw new Error('Complete FFmpeg index required');
-      const len=core._vp_index_export_bytes(ctx),ptr=core._malloc(len);
+      const len=core._vp_index_export_bytes(ctx),ptr=core._malloc(len) >>> 0;
       if(len<=0 || !ptr) throw new Error('Invalid FFmpeg index export');
       try {
         const count=core._vp_index_export(ctx,ptr,len);

@@ -1,3 +1,4 @@
+import type { DecodeThreads } from '../policy/wasm-threads.ts';
 import type { FfmpegAnalysisSummary } from '../../../shared/analysis/metadata/ffmpeg-adapter.ts';
 import type { WasmFrameOutput } from '../decoding/wasm-frame.ts';
 import type { MediaIndexIdentity } from '../../../shared/media/indexing/media-index-identity.ts';
@@ -53,13 +54,13 @@ export interface FfmpegCommands {
   'analysis-locate': Command<{ ctx: number } & AnalysisOrigin & { sampleId: string }, AnalysisSample | null>;
   'analysis-rank': Command<{ ctx: number } & AnalysisOrigin & { axis: 'pts' | 'dts'; tUs: number }, Omit<AnalysisRank, 'complete'>>;
   'analysis-number': Command<{ ctx: number } & AnalysisOrigin & { axis: 'pts' | 'dts'; number: number }, number | null>;
-  init: Command<{ glueURL: string; wasmBinary?: ArrayBuffer | Uint8Array; name: string; file?: ArrayBuffer; blob?: Blob; range?: { shared: SharedArrayBuffer; size: number }; threads?: number; externalIndexSession?: boolean; mediaSize?: number }, FfmpegInitResult>;
+  init: Command<{ glueURL: string; wasmBinary?: ArrayBuffer | Uint8Array; name: string; file?: ArrayBuffer; blob?: Blob; range?: { shared: SharedArrayBuffer; size: number }; threads?: DecodeThreads; externalIndexSession?: boolean; mediaSize?: number }, FfmpegInitResult>;
   extract: Command<{ ctx: number; index: number; recycle?: ArrayBuffer }, WasmFrameOutput & { seek?: { decodedFrames: number; restarts: number } }>;
   dispose: Command<{ ctx: number; path: string }, null>;
 }
 export type PacketInitResult = (NonNullable<Awaited<ReturnType<FlvEngine['open']>>> | Awaited<ReturnType<Mp4Engine['open']>> | Awaited<ReturnType<TsEngine['open']>>) & Pick<MediaInfo, 'timelineSource' | 'seekAnchorCount' | 'jsIndexReused' | 'jsIndexPacketsScanned'>;
 type Empty = Record<string, never>;
-type SoftwareOptions = { glueURL: string; wasmBinary?: Uint8Array; threads?: number };
+type SoftwareOptions = { glueURL: string; wasmBinary?: Uint8Array; threads?: DecodeThreads };
 type AnalysisOrigin = { mediaId?: string; firstPtsUs?: number };
 export interface PacketCommands {
   'prepare-js':Command<{input:PacketInput;sourceVersion:string;format:'ts'|'matroska';persistent?:boolean},{admitted:true;session:string;index:import('../../../shared/media/containers/matroska-packet-index.ts').JsPacketIndex}|{admitted:false;reason:string}>;

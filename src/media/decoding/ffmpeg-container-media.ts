@@ -1,4 +1,4 @@
-import { wasmThreadMode } from '../policy/wasm-threads.ts';
+import { decodeThreadsForCodec, wasmThreadMode } from '../policy/wasm-threads.ts';
 import { attachCachedTrackMetadata } from '../indexing/cached-track-metadata-client.ts';
 import { abortableWait } from '../../../shared/media/io/media-abort.ts';
 import type { AnalysisAxis, AnalysisQuery } from '../../../shared/analysis/metadata/types.ts';
@@ -136,7 +136,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       coreVariant = variant;
       scoped.info('media', 'WASM core 已就绪', {
         coreVariant, crossOriginIsolated: !!globalThis.crossOriginIsolated,
-        ioMode: init.ioMode, indexSource: init.indexSource, localIndexBuildCalls: init.localIndexBuildCalls ?? 0, readMs, initIndexMs: init.indexMs, threads,
+        ioMode: init.ioMode, indexSource: init.indexSource, localIndexBuildCalls: init.localIndexBuildCalls ?? 0, readMs, initIndexMs: init.indexMs, threads: decodeThreadsForCodec(threads, init.codec),
       });
       scoped.info('media', '媒体管线追踪', {
         phase: 'first-frame-ready', name: file.name, container: 'ffmpeg', demuxBackend: 'ffmpeg-wasm',

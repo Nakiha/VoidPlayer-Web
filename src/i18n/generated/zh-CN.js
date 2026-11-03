@@ -1159,6 +1159,8 @@ export default {
   "settings.chartHoverCombined": () => "合并显示",
   "settings.chartHoverSeparate": () => "各图独立显示",
   "settings.unknownSettingsPage": () => "未知设置页面。",
+  "settings.vvcThreadMode": () => "VVC 解码配置",
+  "settings.vvcThreadPreset": (d) => number("zh", d.threads, 0) + " 线程 / " + number("zh", d.contexts, 0) + " 套上下文",
   "settings.wasmThreadsAuto": () => "自动",
   "settings.wasmThreadsMulti": () => "多线程优先",
   "settings.wasmThreadsSingle": () => "单线程",

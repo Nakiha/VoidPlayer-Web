@@ -1,3 +1,4 @@
+import type { DecodeThreads } from '../policy/wasm-threads.ts';
 import { FlvCachedAudio } from '../audio/flv-cached-audio.ts';
 import { PacketTimeline } from './packet-timeline.ts';
 import { FlvIndexClient } from '../indexing/flv-index-client.ts';
@@ -123,7 +124,7 @@ export class FlvEngine {
       this.indexingFailure = error; this.wake(); throw error;
     } finally { this.serverProgress=undefined; this.scanReader?.close(); this.scanReader = undefined; }
   }
-  async open(glueURL: string, wasmBinary?: Uint8Array, forceWasm = false, threads = 1, onProgress?: MediaOpenProgress, nativeOnly = false) {
+  async open(glueURL: string, wasmBinary?: Uint8Array, forceWasm = false, threads: DecodeThreads = 1, onProgress?: MediaOpenProgress, nativeOnly = false) {
     try {
       await this.prepare(onProgress);
       if (!forceWasm) {
@@ -180,7 +181,7 @@ export class FlvEngine {
   /** Decode the first output with a temporary software decoder over this
    * engine's already-open FLV index and reader. No scan, cache client, or
    * timeline is created for the witness. */
-  async referenceWitness(glueURL: string, wasmBinary?: Uint8Array, threads = 1): Promise<FlvFrame> {
+  async referenceWitness(glueURL: string, wasmBinary?: Uint8Array, threads: DecodeThreads = 1): Promise<FlvFrame> {
     if (this.decoder?.kind !== 'webcodecs' || !this.timeline) throw new MediaOpenError('decode', 'FLV 原生解码器尚未就绪。');
     const decoder = await wasmFlvDecoder(this.index, glueURL, wasmBinary, threads);
     const timeline = new PacketTimeline(this.index, decoder, packet => this.reader.read(packet.offset, packet.size),true,()=>this.indexComplete);
@@ -200,7 +201,7 @@ export class FlvEngine {
   }
   /** Switch only the decoder after reference admission rejects native output.
    * The packet index, reader, and cache lifecycle remain owned by this engine. */
-  async switchToSoftware(glueURL: string, wasmBinary?: Uint8Array, threads = 1) {
+  async switchToSoftware(glueURL: string, wasmBinary?: Uint8Array, threads: DecodeThreads = 1) {
     if (this.decoder?.kind === 'webcodecs') {
       const target=this.primed?.pts??this.index.packets[(this.index.displayOrder??this.index.order)[0]].pts;
       const decoder=await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
