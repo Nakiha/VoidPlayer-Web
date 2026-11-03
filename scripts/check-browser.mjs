@@ -1302,6 +1302,11 @@ try {
       stage.dispatchEvent(wheel);
     });
     await page.waitForFunction(() => window.voidPlayer.getViewport().zoom > 1);
+    const zoomBeforeFractionalWheel = await page.evaluate(() => window.voidPlayer.getViewport().zoom);
+    await page.locator('#stage-A').dispatchEvent('wheel', {
+      deltaY: 90.90908893868948, deltaMode: 0, ctrlKey: false, bubbles: true, cancelable: true,
+    });
+    await page.waitForFunction(before => window.voidPlayer.getViewport().zoom < before, zoomBeforeFractionalWheel);
     await page.evaluate(() => window.voidPlayer.setViewport({ zoom: 1, offsetX: 0, offsetY: 0 }));
     const beforeFocus = await page.locator('#stage-A').boundingBox();
     const focusButton = await page.locator('#toggle-chrome').boundingBox();

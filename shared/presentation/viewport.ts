@@ -189,7 +189,7 @@ export function normalizeWheelDelta(delta: number, deltaMode: number): number {
 export function classifyWheel(deltaY: number, deltaMode: number, ctrlKey: boolean): WheelIntent {
   if (ctrlKey) return 'zoom';
   if (deltaY !== 0 && (deltaMode === 1 || deltaMode === 2)) return 'zoom';
-  return Math.abs(deltaY) >= 50 && Number.isInteger(deltaY) ? 'zoom' : 'pan';
+  return Number.isFinite(deltaY) && Math.abs(deltaY) >= 50 ? 'zoom' : 'pan';
 }
 
 /** macOS sends synthetic "momentum" wheel events after the fingers leave the

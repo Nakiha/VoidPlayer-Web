@@ -125,9 +125,10 @@ test('wheel classification: known signals first, heuristic otherwise', () => {
   assert.equal(classifyWheel(-1, 1, false), 'zoom');
   assert.equal(classifyWheel(1, 2, false), 'zoom');
   assert.equal(classifyWheel(0, 1, false), 'pan');
-  // Heuristic: large integer notch = mouse wheel, small/fractional = trackpad.
+  // Large pixel deltas zoom, including fractional deltas from a mouse wheel.
   assert.equal(classifyWheel(120, 0, false), 'zoom');
   assert.equal(classifyWheel(-100, 0, false), 'zoom');
+  assert.equal(classifyWheel(90.90908893868948, 0, false), 'zoom');
   assert.equal(classifyWheel(3.000030517578125, 0, false), 'pan');
   assert.equal(classifyWheel(12, 0, false), 'pan');
 });
