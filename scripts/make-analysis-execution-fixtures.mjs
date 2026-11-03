@@ -37,8 +37,8 @@ execFileSync('ffmpeg',['-v','error','-f','lavfi','-i','testsrc2=size=320x192:rat
 // clip from the pinned QA sample with the repository's own MP4 reader and a
 // minimal fragmented writer (same approach as the analysis-fmp4 fixtures), so
 // no VVC-capable tooling is required. The late-requirement variants inject one
-// length-prefixed NAL into AU 10 exactly like the HEVC set: an in-band PPS, a
-// suffix decoded-picture-hash SEI and a prefix film-grain SEI.
+// length-prefixed NAL into AU 10: a repeated or changed PPS, a suffix
+// decoded-picture-hash SEI or a prefix film-grain SEI.
 const vvcSource = path.join(root, 'fixtures/video/h266_10s_1920x1080.mp4');
 if (!existsSync(vvcSource)) {
   console.log('skip VVC fixtures: synced h266 sample missing');
@@ -127,6 +127,16 @@ if (!existsSync(vvcSource)) {
     return null;
   })();
   if (!pps) throw Error('VVC PPS missing in the first access unit');
+  // Add an opaque PPS extension bit. The PPS changes on the wire without
+  // changing any slice syntax or decoded pixels.
+  const rbsp = pps.subarray(2).filter((value, i, bytes) =>
+    !(value === 3 && i >= 2 && bytes[i - 1] === 0 && bytes[i - 2] === 0));
+  const ppsBits = Array.from(rbsp, byte => byte.toString(2).padStart(8, '0')).join('');
+  const stopBit = ppsBits.lastIndexOf('1');
+  if (stopBit < 1 || ppsBits[stopBit - 1] !== '0') throw Error('Expected VVC PPS without extensions');
+  const extended = ppsBits.slice(0, stopBit - 1) + '101';
+  const changedPps = Buffer.concat([pps.subarray(0, 2), escape(Buffer.from(
+    extended.padEnd(Math.ceil(extended.length / 8) * 8, '0').match(/.{8}/g).map(bits => parseInt(bits, 2))))]);
   const writeFixture = async (name, patch) => {
     const payloads = clip.map((p, i) => patch?.[i] ?? units[i]);
     const tfdt = Buffer.alloc(12); tfdt.writeUInt32BE(0x01000000); tfdt.writeBigUInt64BE(96000n, 4);
@@ -143,6 +153,7 @@ if (!existsSync(vvcSource)) {
     ? Buffer.concat([framed(nal), unit]) : Buffer.concat([unit, framed(nal)]));
   await writeFixture('vvc');
   await writeFixture('vvc-late-pps', patched(10, pps, true));
+  await writeFixture('vvc-late-changed-pps', patched(10, changedPps, true));
   await writeFixture('vvc-late-hash', patched(10, sei(132, Buffer.from([1, 0, 0, 0, 0, 0, 0, 0]), false), false));
   await writeFixture('vvc-late-grain', patched(10, sei(19, Buffer.from([0, 2]), true), true));
   console.log('VVC execution fixtures written from', path.basename(vvcSource));

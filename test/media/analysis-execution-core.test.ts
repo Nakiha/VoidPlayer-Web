@@ -66,9 +66,11 @@ async function assertPreciseBlocks(name:string,au:number,fastOpen:number,reason:
 }
 for(const [name,reason,fastOpen] of [['normal',null,1],['late-hash',4,1],['late-grain',3,1],['late-pps',2,1],['main10',null,1],['main10-late-hash',4,1],['main10-late-grain',3,1],['main10-late-pps',2,1],['open-gop',null,0]] as const)
 test(`HEVC precise blocks ${name}: same reference preroll and winning target`,{skip:!extension?'requires upstream execution ABI1; older pinned core remains full':false},()=>assertPreciseBlocks(name,name==='open-gop'?36:12,fastOpen,reason));
-const vvcReady=['vvc','vvc-late-hash','vvc-late-pps','vvc-late-grain'].every(name=>existsSync(path.join('fixtures/analysis-execution',name+'.mp4')));
-for(const [name,reason,fastOpen] of [['vvc',null,1],['vvc-late-hash',4,1],['vvc-late-pps',2,1],['vvc-late-grain',3,1]] as const)
-test(`VVC precise blocks ${name}: same reference preroll and winning target`,{skip:!vvcReady?'VVC fixtures require the synced h266 sample':!extension?'requires upstream execution ABI1; older pinned core remains full':false},()=>assertPreciseBlocks(name,12,fastOpen,reason));
+const vvcCases=[['vvc',null,1],['vvc-late-hash',4,1],['vvc-late-pps',null,1],['vvc-late-changed-pps',2,1],['vvc-late-grain',3,1]] as const;
+for(const [name,reason,fastOpen] of vvcCases){
+ const ready=existsSync(path.join('fixtures/analysis-execution',name+'.mp4'));
+ test(`VVC precise blocks ${name}: same reference preroll and winning target`,{skip:!ready?'VVC fixtures require the synced h266 sample':!extension?'requires upstream execution ABI1; older pinned core remains full':false},()=>assertPreciseBlocks(name,12,fastOpen,reason));
+}
 test('a one-picture legacy range and a viewport with one missing blocks picture stay full',async()=>{
  const data=await readFile('fixtures/analysis-execution/normal.mp4'),input=await openAnalysisInput(reader(data),new AbortController().signal),packet=input.packets[12],firstPtsUs=Math.min(...input.packets.map(p=>p.pts)),durationUs=input.sourceEndUs-firstPtsUs;input.close();
  const cache=new Map<number,AnalysisOutput>(),target={mode:'stream' as const,product:'blocks' as const,sourceVersion:'one-miss',firstPtsUs,durationUs,window:{startUs:100000,endUs:200000,axis:'pts' as const}};
