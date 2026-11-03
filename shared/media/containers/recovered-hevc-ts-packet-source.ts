@@ -20,7 +20,7 @@ export class RecoveredHevcTsPacketSource {
  constructor(reader:TsPacketReader,version:string,signal:AbortSignal){this.reader=reader;this.version=version;this.signal=signal;signal.throwIfAborted();signal.addEventListener('abort',this.abort,{once:true});}
  private async read(at:number,n:number){this.signal.throwIfAborted();if(this.closed)fail('closed');if(!Number.isSafeInteger(at)||!Number.isSafeInteger(n)||at<0||n<0||n>32*1024*1024||at+n>this.reader.size)fail('read bounds');const b=await abortableWait(this.reader.read(at,n),this.signal);this.signal.throwIfAborted();if(b.length!==n)fail('short read');this.bytesRead+=n;if(this.indexing&&this.bytesRead>this.reader.size*4+32*1024*1024)throw new MediaOpenError('resource','Broadcast index IO budget');return b;}
  private async payload(start:number,end:number,pid:number){const b=await readTsPesPayload((at,n)=>this.read(at,n),start,end,pid,this.checkPsi!);this.packetsRead++;return b;}
- async open(cached?:unknown,progress?:(p:{packets:number;scannedBytes:number;totalBytes:number;bytesRead:number})=>void):Promise<TsPacketIndex>{
+ async open(cached?:unknown,progress?:(p:{packets:number;scannedBytes:number;totalBytes:number;bytesRead:number})=>void, serverPlayback = false):Promise<TsPacketIndex>{
   try{
    this.indexing=true;const prefix=await this.read(0,Math.min(1024*1024,this.reader.size));let offset=-1;
    for(let at=0;at<188&&at+188*3<prefix.length;at++)if([0,1,2,3].every(i=>prefix[at+i*188]===0x47)){offset=at;break;}
@@ -30,6 +30,7 @@ export class RecoveredHevcTsPacketSource {
    const streams=this.checkPsi.videoStreams;if(streams.length!==1||streams[0].type!==36)throw new TsCombinationNotMigrated('late-PSI recovery currently requires one declared HEVC stream');const pid=streams[0].pid;
    const restored=parseTsPacketIndex(cached,this.version,this.reader.size);
    if(restored&&isSealedJsIndex(restored)&&restored.codec==='hevc'&&restored.transportOffset===offset&&restored.exactPictureMapping===false){if(restored.pid!==pid)fail('source PID changed');this.index=restored;const first=await this.readUnit(0),parts=nalRanges('hevc',new Uint8Array([0,0,1]),first).filter(r=>[32,33,34].includes(first[r.offset]>>1&63)).flatMap(r=>[0,0,0,1,...first.subarray(r.offset,r.offset+r.size)]);if(parts.length!==restored.configuration.length||parts.some((b,i)=>b!==restored.configuration[i]))fail('configuration changed');this.indexReused=true;return restored;}
+   if (serverPlayback) throw new MediaOpenError('input', '服务端 TS 播放索引与媒体不一致。');
    const clocks=await readTsPesClocks({size,read:(at,n)=>this.read(offset+at,n),close(){}},pid,this.signal),entries=[...clocks],packets:TsPacketRecord[]=[];let configuration:Uint8Array|undefined;
    for(let n=0;n<entries.length;n++){
     const [position,timing]=entries[n],start=offset+position,limit=offset+(entries[n+1]?.[0]??size),bytes=await this.payload(start,limit,pid),ranges=nalRanges('hevc',new Uint8Array([0,0,1]),bytes);

@@ -24,7 +24,7 @@ try {
   browser = await (name === 'chromium' ? chromium : webkit).launch({ headless: true });
   const base = `http://127.0.0.1:${server.address().port}`;
   const packetWorker='/assets/'+(await readdir(path.join(root,'dist/assets'))).find(file=>/^packet-worker-.*\.js$/.test(file));
-  for (const file of ['h266_10s_1920x1080.mp4', 'h264_high422p_1s_320x180.mp4', 'ffv1_yuv422p_8bit.mkv', 'h264_boundary.mp4', 'h264_truncated.mp4']) {
+  for (const file of ['h266_10s_1920x1080.mp4', 'h265_10s_1920x1080.mp4', 'h264_high422p_1s_320x180.mp4', 'ffv1_yuv422p_8bit.mkv', 'h264_boundary.mp4', 'h264_truncated.mp4']) {
     const page = await browser.newPage({locale:'zh-CN'});
     // Exercise unreadable main-thread resources after real packet open and
     // transfer, through playback and seek. Worker receive is covered separately
@@ -44,13 +44,17 @@ try {
       await page.goto(base); await page.waitForFunction(() => !!window.voidPlayer);
       // Assert decoder-capability policy explicitly in browser matching mode.
       await page.evaluate(() => window.voidPlayer.tools.find(t => t.name === 'set_review_color_mode').execute({ mode: 'browser' }));
-      const result = await page.evaluate(async ({ file, playbackBenchmarksEnabled }) => {
+      const first = await page.evaluate(async file => {
         const call = (name, params = {}) => window.voidPlayer.tools.find(t => t.name === name).execute(params);
         const listing = await call('list_library', { search: file });
         const item = listing.entries.find(e => e.name === file);
         if (!item) throw new Error('Missing Range fixture: ' + file);
         await call('load_library_item', { id: item.id, slot: 'A' });
-        const first = await call('get_review_session');
+        return call('get_review_session');
+      }, file);
+      const startupReads = requests.slice();
+      const result = await page.evaluate(async ({ file, playbackBenchmarksEnabled, first }) => {
+        const call = (name, params = {}) => window.voidPlayer.tools.find(t => t.name === name).execute(params);
         const duration = first.tracks[0].durationUs;
         let boundary;
         if (file === 'h264_truncated.mp4') {
@@ -73,13 +77,24 @@ try {
         const last = await call('get_review_session');
         const bench = playbackBenchmarksEnabled ? await call('benchmark_review', { durationMs: 1000 }) : undefined;
         return { first, last, bench, boundary, seekFrames };
-      }, { file, playbackBenchmarksEnabled });
+      }, { file, playbackBenchmarksEnabled, first });
       if (!playbackBenchmarksEnabled) result.functionalPresentation = await verifyPlaybackPresentation(page);
       assert.deepEqual(errors, []);
       // New Chromium builds can decode High 4:2:2 natively. Preserve the
       // capability-first policy; VVC and FFV1 exercise mandatory WASM here.
-      if (!file.startsWith('h264_')) assert.equal(result.first.tracks[0].decoder, 'ffmpeg-wasm');
+      if (!file.startsWith('h264_') && !file.startsWith('h265_')) assert.equal(result.first.tracks[0].decoder, 'ffmpeg-wasm');
       else assert.ok(['webcodecs', 'ffmpeg-wasm'].includes(result.first.tracks[0].decoder));
+      assert.equal(result.first.tracks[0].indexSource, 'server', 'library playback uses the server index');
+      if (file.startsWith('h265_')) {
+        assert.equal(result.first.tracks[0].timelineSource, 'hevc-poc');
+        const startupBytes = startupReads.reduce((total, headers) => {
+          const match = /^bytes=(\d+)-(\d+)$/.exec(headers.range ?? '');
+          assert.ok(match, 'startup reads must be bounded Range requests');
+          return total + Number(match[2]) - Number(match[1]) + 1;
+        }, 0);
+        assert.ok(startupBytes > 0 && startupBytes < result.first.tracks[0].size / 2, `HEVC startup transferred ${startupBytes} source bytes`);
+        console.log(`${name} server HEVC POC startup: ${startupReads.length} requests, ${startupBytes} source bytes`);
+      }
       if (file.startsWith('h266_') && name === 'chromium' && await page.evaluate(() => crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined')) {
         assert.ok(triedMt, 'automatic VVC playback must attempt the MT core before any fallback');
       }
@@ -102,6 +117,27 @@ try {
       if (result.bench) assert.ok(!result.bench.error, JSON.stringify(result.bench));
       // Local benchmarks remain separate from the CI presentation proof.
       console.log(JSON.stringify({ browser: name, file, reads: requests.length, benchmark: result.bench, functionalPresentation: result.functionalPresentation }));
+    } finally { await page.close(); }
+  }
+  if (name === 'chromium') {
+    const page = await browser.newPage();
+    const requests = [];
+    try {
+      await page.context().route(/\/frame-index\?/, route => route.fulfill({ status: 404, body: '{}' }));
+      page.context().on('request', request => {
+        if (/^\/api\/media\/[0-9a-f]{24}$/.test(new URL(request.url()).pathname)) requests.push(request.url());
+      });
+      await page.goto(base);
+      await page.waitForFunction(() => !!window.voidPlayer);
+      const failure = await page.evaluate(async () => {
+        const call = (name, params = {}) => window.voidPlayer.tools.find(t => t.name === name).execute(params);
+        const { entries } = await call('list_library', { search: 'h265_10s_1920x1080.mp4' });
+        try { await call('load_library_item', { id: entries[0].id, slot: 'A' }); }
+        catch (error) { return error.message; }
+        return null;
+      });
+      assert.match(failure, /MP4/);
+      assert.deepEqual(requests, [], 'failed server index must not trigger a client media read');
     } finally { await page.close(); }
   }
   // New finite codec cases use actual product UI loading for both local and

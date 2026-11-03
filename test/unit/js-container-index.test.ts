@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { localJsSourceVersion } from '../../src/media/indexing/js-packet-index-cache.ts';
 import { parseJsPacketIndex } from '../../shared/media/indexing/js-packet-index-parser.ts';
 import {jsDecodeIndex} from '../../src/media/indexing/js-decode-index.ts';
 import {MATROSKA_PACKET_BUILD} from '../../shared/media/containers/matroska-packet-index.ts';
@@ -35,19 +34,8 @@ test('Matroska visible reference Block accepts UNU bit0=1 while high reserved bi
  await assert.rejects(clocksFor(ebml('a0',ebml('a1',block(0x10)),ebml('fb',Buffer.from([0xff])))),/reserved video block flags/);
 });
 
-test('local JS identity covers every byte, is independent of read cursors and bounds each allocation',async()=>{
- const bytes=new Uint8Array(2*1024*1024+19),reads:number[]=[];
- const version=()=>localJsSourceVersion({size:bytes.length,async read(at,n){reads.push(n);return bytes.slice(at,at+n);}},new AbortController().signal);
- const first=await version();assert.equal(await version(),first);bytes[1024*1024+123]=1;assert.notEqual(await version(),first,'middle changes cannot reuse a source identity based only on metadata or edge samples');
- assert.ok(reads.every(n=>n<=1024*1024));assert.equal(reads.length,9);
-});
-test('source identity cancellation does not await a held read or create exact metadata',async()=>{
- const controller=new AbortController();let resolve!:(b:Uint8Array)=>void;
- const pending=localJsSourceVersion({size:128,read:()=>new Promise(r=>resolve=r)},controller.signal);controller.abort();
- await assert.rejects(pending,{name:'AbortError'});resolve(new Uint8Array(128));
-});
 test('a structurally valid serialized Matroska index cannot mint decode identities by claiming completeness',()=>{
- const doc={schema:1,kind:'js-matroska-packets',build:MATROSKA_PACKET_BUILD,sourceVersion:'source',size:1024,streamKey:'video:0',pid:1,codec:'vp8',configuration:[],completeness:{state:'complete',packets:2},packets:[0,1].map(au=>({au,locator:200+au,configuration:0,blockOffset:300+au*100,timestamp:au/10,ptsUs:au*100000,durationUs:100000,size:20,key:au===0,timing:{pts:au*100,dts:null,timebase:[1000000,1000000000],origin:'matroska-block'}}))};
+ const doc={schema:1,kind:'js-matroska-packets',build:MATROSKA_PACKET_BUILD,sourceVersion:'source',size:1024,streamKey:'video:0',pid:1,codec:'vp8',configuration:[],completeness:{state:'complete',packets:2},packets:[0,1].map(au=>({au,locator:200+au,configuration:0,blockOffset:300+au*100,payloadOffset:308+au*100,timestamp:au/10,ptsUs:au*100000,durationUs:100000,size:20,key:au===0,timing:{pts:au*100,dts:null,timebase:[1000000,1000000000],origin:'matroska-block'}}))};
  const parsed=parseJsPacketIndex(doc,'source',1024);assert.ok(parsed);assert.throws(()=>jsDecodeIndex(parsed),/Unverified complete/);
  const fake=structuredClone(doc);fake.packets.pop();fake.completeness.packets=1;const partial=parseJsPacketIndex(fake,'source',1024);assert.ok(partial);assert.throws(()=>jsDecodeIndex(partial),/Unverified complete/,'self-consistent truncation still has no scan authority');
  const wrong=structuredClone(doc);wrong.packets[0].timing.dts=0 as unknown as null;assert.equal(parseJsPacketIndex(wrong,'source',1024),undefined,'Matroska cannot invent a raw DTS field');

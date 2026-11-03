@@ -48,7 +48,6 @@ type FfmpegIndexSink = {
   batch(batch: MediaIndexRecordBatch, trace: MediaIndexTrace): void;
   complete(manifest: MediaIndexRecordManifest, frames: number, trace: MediaIndexTrace): FfmpegInitResult | undefined;
   legacy(index: unknown, trace: MediaIndexTrace): FfmpegInitResult | undefined;
-  fallback(): FfmpegInitResult | undefined;
 };
 type DecodeContext = { packets: FfmpegPacketIndex; indexComplete: boolean; ticks: number[]; durations: number[]; blobHandle: number; path: string; indexSink?: FfmpegIndexSink };
 const contexts = new Map<number, DecodeContext>();
@@ -278,6 +277,8 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
       } : { indexIntegrity: 'complete' };
     };
     const externalIndex = payload.externalIndexSession === true && canImportIndex && Number.isSafeInteger(payload.mediaSize);
+    if (payload.externalIndexSession && (!externalIndex || typeof core._vp_prime_first_presentable !== 'function'))
+      throw new MediaOpenError('decode', 'WASM core 不支持导入服务端播放索引。');
     if (externalIndex && typeof core._vp_prime_first_presentable === 'function') {
       const primed = ioCall('vp_prime_first_presentable', 'number', ['number'], [ctx]);
       if (primed !== 1) throw new MediaOpenError('decode', 'FFmpeg 无法解出首个可显示画面。');
@@ -322,7 +323,6 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
           const built = ioCall('vp_index_build', 'number', ['number'], [ctx]) as number;
           return makeIndexResult(built, 'client', 1);
         },
-        fallback: () => makeIndexResult(ioCall('vp_index_build', 'number', ['number'], [ctx]) as number, 'client', 1),
       };
       contexts.set(ctx, { packets: new FfmpegPacketIndex(), indexComplete: false, ticks: [firstTicks], durations: firstDurations, blobHandle, path, indexSink });
       const ready: FfmpegInitResult = {
@@ -419,7 +419,6 @@ port.onmessage = async (event: { data: Request }) => {
       else if (message.action === 'batch') sink.batch(message.batch, message.trace);
       else if (message.action === 'complete') result = sink.complete(message.manifest, message.frames, message.trace);
       else if (message.action === 'legacy') result = sink.legacy(message.index, message.trace);
-      else if (message.action === 'fallback') result = sink.fallback();
       else throw new Error('未知索引输入');
       if (result) port.postMessage({ id: indexRequestId!, type: 'index-complete', data: result });
     } else if (type === 'analysis' || type === 'analysis-locate' || type === 'analysis-rank' || type === 'analysis-number') {

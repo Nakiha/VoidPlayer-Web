@@ -74,7 +74,7 @@ export interface PacketCommands {
   'analysis-ts-index': Command<Empty, import('../../../shared/media/indexing/ts-packet-index.ts').TsPacketIndex>;
   'analysis-flv-index': Command<Empty, import('../../../shared/media/indexing/flv-index-cache.ts').FlvIndexDocument>;
   'analysis-index': Command<Empty, import('../../../shared/analysis/bitstream/stream.ts').AnalysisIndexFrontier>;
-  'complete-index': Command<Empty, Awaited<ReturnType<FlvEngine['completeIndex']>>>;
+  'complete-index': Command<Empty, Awaited<ReturnType<FlvEngine['completeIndex']>> | Awaited<ReturnType<TsEngine['completeIndex']>>>;
   'reference-witness': Command<SoftwareOptions, PacketFrame>;
   'switch-software': Command<SoftwareOptions, Awaited<ReturnType<FlvEngine['switchToSoftware']>> | Awaited<ReturnType<Mp4Engine['switchToSoftware']>> | Awaited<ReturnType<TsEngine['switchToSoftware']>>>;
   'switch-native': Command<Empty, Awaited<ReturnType<FlvEngine['switchToNative']>> | Awaited<ReturnType<Mp4Engine['switchToNative']>> | Awaited<ReturnType<TsEngine['switchToNative']>>>;
@@ -113,7 +113,6 @@ export type IndexInput = { id: number; type: 'index-input'; ctx: number } & (
   | { action: 'batch'; batch: MediaIndexRecordBatch; trace: MediaIndexClientTrace }
   | { action: 'complete'; manifest: MediaIndexRecordManifest; frames: number; trace: MediaIndexClientTrace }
   | { action: 'legacy'; index: unknown; trace: MediaIndexClientTrace }
-  | { action: 'fallback' }
 );
 
 type WithoutRouting<T> = T extends unknown ? Omit<T, 'id' | 'type'> : never;

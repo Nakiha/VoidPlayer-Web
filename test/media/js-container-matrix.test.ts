@@ -18,8 +18,6 @@ import {TsCombinationNotMigrated} from '../../shared/media/containers/ts-packet-
 import {RangeReader} from '../../shared/media/io/range-reader.ts';
 import {MediaOpenError} from '../../shared/media/io/media-errors.ts';
 import {wasmFlvDecoder} from '../../src/media/decoding/flv-decoder.ts';
-import {IDBFactory,IDBDatabase} from 'fake-indexeddb';
-import {localJsSourceVersion,saveLocalJsIndex,loadLocalJsIndex,JS_PACKET_CACHE_DATABASE} from '../../src/media/indexing/js-packet-index-cache.ts';
 
 const names=['h264.ts','hevc.ts','h264.mkv','hevc.mkv','hevc10.ts','hevc10.mkv','hevc-audio.mkv','vp8.webm','vp9.webm'] as const;
 test('real 20-picture VP9 WebM rejects a later invisible SimpleBlock during initial admission',async()=>{
@@ -34,36 +32,6 @@ test('real 20-picture VP9 WebM rejects a later invisible SimpleBlock during init
   visit(0,bytes.length);assert.equal(offsets.length,20);bytes[offsets[3]]|=8;
   const changed=source(bytes);try{await assert.rejects(changed.open(),TsCombinationNotMigrated,'AU3 Invisible must not be indexed as an ordinary visible picture');}finally{changed.close();}
  }finally{await rm(directory,{recursive:true,force:true});}
-});
-for(const operation of ['load','save'] as const)for(const storeName of ['indexes','keys'] as const)test(`local JS cache ${operation} cancellation releases a queued ${storeName} transaction (fake-indexeddb)`,async t=>{
- const previous=globalThis.indexedDB;globalThis.indexedDB=new IDBFactory();t.after(()=>{globalThis.indexedDB=previous;});
- const directory=await mkdtemp(join(tmpdir(),'vp-cache-abort-')),file=join(directory,'twelve.webm');t.after(()=>rm(directory,{recursive:true,force:true}));
- execFileSync('ffmpeg',['-y','-hide_banner','-loglevel','error','-i','fixtures/js-container/vp9.webm','-frames:v','12','-an','-c:v','copy',file]);
- const bytes=new Uint8Array(await readFile(file)),reader={size:bytes.length,async read(at:number,n:number){return bytes.subarray(at,at+n);},close(){}},version=await localJsSourceVersion(reader,new AbortController().signal);
- const source=new MatroskaPacketSource(reader,version,new AbortController().signal);let index:MatroskaPacketIndex;try{index=await source.open();assert.equal(index.packets.length,12);}finally{source.close();}
- await saveLocalJsIndex(index);
- const db=await new Promise<IDBDatabase>((resolve,reject)=>{const request=indexedDB.open(JS_PACKET_CACHE_DATABASE);request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});t.after(()=>db.close());
- if(operation==='save')await new Promise<void>((resolve,reject)=>{const tx=db.transaction(['indexes','entries'],'readwrite');tx.objectStore('indexes').clear();tx.objectStore('entries').clear();tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});
- const hold=db.transaction(storeName,'readwrite'),held=hold.objectStore(storeName);let holding=true,started!:()=>void;const ready=new Promise<void>(resolve=>started=resolve);
- const pump=()=>{if(!holding)return;const req=held.get('held');req.onsuccess=()=>{started();pump();};};pump();await ready;
- const original=IDBDatabase.prototype.transaction;let queued!:()=>void;const queuedPromise=new Promise<void>(resolve=>queued=resolve);
- IDBDatabase.prototype.transaction=function(...args:Parameters<typeof original>){const tx=original.apply(this,args);if(args[0]===storeName||Array.isArray(args[0])&&args[0].includes(storeName))queued();return tx;};
- const controller=new AbortController();let pending:Promise<unknown>|undefined;
- try{
-  pending=operation==='load'?loadLocalJsIndex(reader,version,'matroska',controller.signal,true):saveLocalJsIndex(index,controller.signal);
-  await Promise.race([queuedPromise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('Cache operation did not enqueue')),1000))]);controller.abort();
-  const outcome=await Promise.race([pending.then(()=> 'resolved',error=>error?.name),new Promise(resolve=>setTimeout(()=>resolve('still-pending'),100))]);
-  assert.equal(outcome,'AbortError','cancellation must settle before the held transaction is released');
- }finally{IDBDatabase.prototype.transaction=original;holding=false;hold.abort();await pending?.catch(()=>{});}
- if(operation==='save'){const stored=await new Promise(resolve=>{const req=db.transaction('indexes').objectStore('indexes').get(`matroska:${version}`);req.onsuccess=()=>resolve(req.result);});assert.equal(stored,undefined,'cancelled queued save cannot persist a late complete-scan receipt');}
-});
-test('local JS cache cancellation closes a late database connection (controlled Node request)',async t=>{
- const previous=globalThis.indexedDB;let began!:()=>void;const ready=new Promise<void>(resolve=>began=resolve);let closed=0;
- const req={onsuccess:undefined as (()=>void)|undefined,onerror:undefined,onupgradeneeded:undefined,result:{close(){closed++;}}};
- globalThis.indexedDB={open(){began();return req;}} as unknown as IDBFactory;t.after(()=>{globalThis.indexedDB=previous;});
- const controller=new AbortController(),pending=loadLocalJsIndex({size:1,async read(){return Uint8Array.of(0);},close(){}},'local-js-v1:1:controlled','matroska',controller.signal,true);
- await ready;controller.abort();const outcome=await Promise.race([pending.then(()=> 'resolved',error=>error?.name),new Promise(resolve=>setTimeout(()=>resolve('still-pending'),100))]);
- req.onsuccess?.();await pending.catch(()=>{});await new Promise(resolve=>setImmediate(resolve));assert.equal(outcome,'AbortError');assert.equal(closed,1,'late open result must close exactly once');
 });
 for(const name of names)test(`JS ${name}: real 600-picture packet decode, raw clocks, random seek, EOF and independent analysis`,async()=>{
  const bytes=new Uint8Array(await readFile(`fixtures/js-container/${name}`)),format=name.endsWith('.ts')?'ts':'matroska';

@@ -25,3 +25,30 @@ export async function verifyLibraryIndexReference(url:string,version:string,size
   if(metadata.id!==reference.id||metadata.version!==reference.version||metadata.size!==size||metadata.state!=='ready')
     throw new MediaOpenError('input','Library source metadata or version changed');
 }
+
+/** Media URLs on this service stay server-indexed when reopened from a saved workspace. */
+export function libraryIndexReferenceFromUrl(url: string): LibraryIndexReference | undefined {
+  const origin = globalThis.location?.origin;
+  if (!origin) return;
+  const source = new URL(url, origin), id = /^\/api\/media\/([0-9a-f]{24})$/.exec(source.pathname)?.[1], version = source.searchParams.get('v');
+  if (!id) return;
+  if (source.origin !== origin || !version || source.username || source.password)
+    throw new MediaOpenError('input', '媒体库播放需要当前服务提供的版本化链接。');
+  return ownLibraryIndexReference(id, version);
+}
+
+export async function loadLibraryPlaybackContainer(url: string, size: number, reference: LibraryIndexReference, signal?: AbortSignal) {
+  const own = libraryIndexReferenceFromUrl(url);
+  if (!own || own.id !== reference.id || own.version !== reference.version || own.origin !== reference.origin)
+    throw new MediaOpenError('input', '媒体库播放引用无效。');
+  const source = new URL(url, own.origin);
+  source.pathname += '/playback-container';
+  const response = await fetch(source, { cache: 'no-store', credentials: 'same-origin', redirect: 'error', signal });
+  if (!response.ok) throw new MediaOpenError('input', `服务端媒体识别失败（${response.status}）。`);
+  const value = await response.json();
+  const container: import('../../../shared/media/containers/container-header.ts').ContainerKind = value.container;
+  if (value.id !== own.id || value.version !== own.version || value.size !== size
+    || !['flv', 'isobmff', 'mpegts', 'matroska', 'other'].includes(container))
+    throw new MediaOpenError('input', '服务端媒体信息与当前版本不一致。');
+  return container;
+}

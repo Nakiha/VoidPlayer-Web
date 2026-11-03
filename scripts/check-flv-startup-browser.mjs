@@ -63,29 +63,31 @@ async function run() {
     await save(); return row.functionalPresentation;
   };
   const start = performance.now();
-  const first = await within('load', 0, () => invoke('load_library_item', { id: fixture.entry.id, slot: 'A' }), 8000);
+  let loaded = false;
+  const loading = within('load', 0, () => invoke('load_library_item', { id: fixture.entry.id, slot: 'A' }), 15000);
+  void loading.then(() => { loaded = true; }, () => {});
+  try {
+    await within('wait-for-server-index', 0, async () => {
+      while (!fixture.counts().delayed) {
+        if (loaded) throw new Error('FLV loaded before the server index gate');
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+    });
+    assert.equal(loaded, false);
+    assert.equal(fixture.counts().ranges, 0, 'library FLV must wait for its index before fetching media bytes');
+  } finally { fixture.release(); }
+  const first = await loading;
   const startupMs = Math.round(performance.now() - start);
   assert.equal(first.tracks[0].decoder, 'webcodecs'); assert.equal(first.tracks[0].frame.ptsUs, 0);
-  assert.equal(first.tracks[0].indexState, 'building'); assert.equal(wasmRequests.length, 0, 'native startup never fetches a WASM core');
+  assert.equal(first.tracks[0].indexState, 'complete'); assert.equal(first.tracks[0].indexSource, 'server');
+  assert.equal(wasmRequests.length, 0, 'native startup never fetches a WASM core');
   await page.locator('#toggle-subtracks').click();
   await page.locator('.track-duration').waitFor();
-  const dock = async () => page.evaluate(() => ({ duration: document.querySelector('.track-duration').textContent, ruler: document.querySelector('#subtrack-ruler').textContent }));
-  const startupDock = await dock();
   await page.screenshot({ path: `.run/playback-reports/flv-startup-${browserName}.png` });
-  await within('seek-to-zero', 0, () => invoke('seek_review', { ptsUs: 0 }), 3000);
-  let finished = false; const seek = within('seek-uncovered-region', 2500000, () => invoke('seek_review', { ptsUs: 2500000 }), 8000).then(s => { finished = true; return s; });
-  await new Promise(r => setTimeout(r, 100)); assert.equal(finished, false); assert.ok(fixture.counts().delayed > 0);
-  fixture.release(); await seek;
-  // Progressive indexing resolves the seek on the validated prefix; the full
-  // index completes asynchronously.
-  phase('complete-index-after-tail-release', 2500000);
-  await page.waitForFunction(() => window.voidPlayer.getState().tracks[0]?.indexState === 'complete');
-  const complete = await call('get_review_session');
+  const complete = await call('seek_review', { ptsUs: 2500000 });
   const expectedDuration = formatTime(complete.tracks[0].durationUs);
   await page.waitForFunction(text => document.querySelector('.track-duration').textContent === text, expectedDuration);
-  const completeDock = await dock();
-  assert.notEqual(completeDock.duration, startupDock.duration); assert.notEqual(completeDock.ruler, startupDock.ruler);
-  assert.ok(completeDock.ruler.endsWith(expectedDuration), 'ruler follows completed index duration');
+  assert.ok((await page.locator('#subtrack-ruler').textContent()).endsWith(expectedDuration), 'ruler follows the server index duration');
   assert.match(complete.tracks[0].indexWarning, /尾部不完整/);
   assert.match(await page.locator('#meta-A').textContent(), /尾部不完整/);
   await page.waitForFunction(async () => (await (await fetch('/api/admin/frame-indexes')).json()).count === 1);
@@ -192,7 +194,7 @@ async function run() {
   assert.ok(packetWorkerStarts > 0, 'FLV packets use the shared packet worker');
   assert.ok(packetWorkerCloses > 0, 'removing a packet source disposes its worker');
   assert.deepEqual(errors, []);
-  console.log(`PASS ${browserName}: first frame ${startupMs} ms with 256 MiB tail blocked; no WASM load, cached reopening, playback, admin UI and MCP`);
+  console.log(`PASS ${browserName}: first frame ${startupMs} ms after the server index gate; no browser media reads before indexing and no WASM load, cached reopening, playback, admin UI and MCP`);
 }
 try {
   // Leave time to capture diagnostics before the suite runner's hard deadline.

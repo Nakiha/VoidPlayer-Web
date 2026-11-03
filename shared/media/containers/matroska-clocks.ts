@@ -53,7 +53,7 @@ export async function matroskaStructure(reader:TsPacketReader,trackId:number,sig
   };
   const uint=async(at:number,end:number)=>{if(end-at>8||end<=at)bad('invalid clock integer');let n=0;for(const b of await read(at,end-at))n=n*256+b;if(!Number.isSafeInteger(n))bad('clock exceeds safe range');return n;};
   let scale=1_000_000,segments=0,selectedTrack=false,videoTracks=0,trailingOffset:number|undefined;
-  const clocks=new Map<number,{pts:number;blockOffset:number;size:number;timebase:[number,number]}>();
+  const clocks=new Map<number,{pts:number;blockOffset:number;payloadOffset:number;size:number;timebase:[number,number]}>();
   let configuration:MatroskaTrackConfiguration|undefined;
   const track=async(start:number,end:number)=>{
     let id=0,type=0,unsupported=false,codecId='',description=new Uint8Array(),privateRange:{start:number;end:number}|undefined,width=0,height=0,displayWidth=0,displayHeight=0,displayUnit=0;
@@ -114,7 +114,7 @@ export async function matroskaStructure(reader:TsPacketReader,trackId:number,sig
       if(!Number.isSafeInteger(pts))bad('block clock exceeds safe range');
       const locator=start+ordinal++;
       if(clocks.size>=250000)throw new MediaOpenError('resource','JS Matroska packet budget');
-      clocks.set(locator,{pts,blockOffset:offset,size:blockEnd-data-id.width-3,timebase:[scale,1e9]});
+      clocks.set(locator,{pts,blockOffset:offset,payloadOffset:data+id.width+3,size:blockEnd-data-id.width-3,timebase:[scale,1e9]});
       return true;
     };
     while(at<end){const h=await header(at,end);

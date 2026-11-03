@@ -1,3 +1,4 @@
+import { buildMp4PlaybackDocument } from './mp4-playback-builder.ts';
 import { buildJsTsIndexDocument } from './js-ts-index-builder.ts';
 import {TsCombinationNotMigrated} from '../shared/media/containers/ts-packet-source.ts';
 import { parentPort, workerData } from 'node:worker_threads';
@@ -28,6 +29,15 @@ parentPort!.on('message', async (request: {
   try {
     if (store.has(request.id, request.version, request.identity.kind, request.identity)) {
       parentPort!.postMessage({ value: { built: false, epoch: store.epoch } });
+      return;
+    }
+    if (request.identity.kind === 'mp4-playback') {
+      if (store.epoch !== request.epoch) throw new AdminError(409, '索引缓存已被清理，请重新请求。');
+      const sourceVersion = `${request.id}@${request.version}`;
+      const doc = await buildMp4PlaybackDocument(request.filePath, request.size, request.version, sourceVersion,
+        progress => parentPort!.postMessage({ type: 'progress', data: { phase: 'scan', ...progress } }));
+      store.commit(request.id, request.version, prepareFrameIndex(doc, request.size, request.identity, sourceVersion), request.epoch);
+      parentPort!.postMessage({ value: { built: true, epoch: request.epoch } });
       return;
     }
     if(request.identity.kind==='flv'){

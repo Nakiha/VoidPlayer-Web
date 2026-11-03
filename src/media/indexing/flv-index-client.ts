@@ -13,10 +13,11 @@ export class FlvIndexClient {
   }
   private size: number;
   get serverIndexRequired(): boolean { return this.transport.hasEndpoint; }
-  async read(prefix: FlvIndex) {
+  async read(prefix?: FlvIndex) {
     const value = await this.transport.read();
-    if(!value && this.serverIndexRequired)throw new MediaOpenError('container','服务端 FLV 索引未能完成，请检查索引服务或升级服务端；网络媒体库不会改为客户端全文件扫描。');
+    if(!value && this.serverIndexRequired)throw new MediaOpenError(prefix ? 'container' : 'input','服务端 FLV 索引未能完成，请检查索引服务或升级服务端；网络媒体库不会改为客户端全文件扫描。');
     const cached = value ? parseFlvIndex(value, this.size) : null;
+    if (!prefix) return cached;
     if (!cached || cached.codec !== prefix.codec || cached.description.length !== prefix.description.length
       || cached.description.some((b, i) => b !== prefix.description[i]) || cached.packets.length < prefix.packets.length) return null;
     const originalConfigs = prefix.configurations ?? [prefix.description], cachedConfigs = cached.configurations ?? [cached.description];

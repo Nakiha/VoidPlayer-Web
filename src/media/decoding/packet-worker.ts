@@ -58,9 +58,9 @@ async function start() {
       send(reply(message, serializeFlvIndex(engine.index, engine.reader.size)));
       return;
     }
-    if(message.type==='analysis-js-index'){const index=engine instanceof JsContainerEngine?engine.packetIndex:undefined;if(!index){send({id:message.id,ok:false,error:'JS packet index unavailable',stage:'container'});return;}send(reply(message,index));return;}
+    if(message.type==='analysis-js-index'){const index=engine instanceof JsContainerEngine&&engine.indexComplete?engine.packetIndex:undefined;if(!index){send({id:message.id,ok:false,error:'JS packet index unavailable',stage:'container'});return;}send(reply(message,index));return;}
     if (message.type === 'analysis-ts-index') {
-      const index=engine instanceof JsContainerEngine?engine.packetIndex:undefined;
+      const index=engine instanceof JsContainerEngine&&engine.indexComplete?engine.packetIndex:undefined;
       if(!index||index.kind!=='js-ts-packets'){send({id:message.id,ok:false,error:'TS packet index is not ready (worker 未初始化 or closed)',stage:'container'});return;}
       send(reply(message,index));
       return;
@@ -68,7 +68,14 @@ async function start() {
     if (message.type === 'analysis-index') {
       const packets = engine instanceof FlvEngine ? engine.index?.packets : engine?.analysisIndex?.packets;
       if (!packets) { send({id:message.id,ok:false,error:'Packet index is not ready (worker 未初始化 or closed)',stage:'container'});return; }
-      send(reply(message, { packets: packets.length, complete: engine instanceof FlvEngine ? engine.indexComplete : true }));
+      send(reply(message, { packets: packets.length, complete: engine instanceof FlvEngine || engine instanceof JsContainerEngine ? engine.indexComplete : true }));
+      return;
+    }
+    if (message.type === 'complete-index' && engine instanceof JsContainerEngine) {
+      const current = engine, id = message.id;
+      current.onIndexWaiting = waiting => send({ id, type: 'index-waiting', data: waiting });
+      void current.completeIndex(data => send({ id, type: 'index-progress', data }))
+        .then(data => send(reply(message, data)), error => send({ id, ok: false, error: error instanceof Error ? error.message : String(error), stack: workerStack(error), stage: error instanceof MediaOpenError ? error.stage : 'container' }));
       return;
     }
     if (message.type === 'complete-index' && engine instanceof FlvEngine) {
@@ -143,7 +150,7 @@ async function start() {
           // 查询走同一串行 chain 保序，但只做区间二分与有界物化，不重算全片。
           const packets = engine instanceof FlvEngine ? engine.index?.packets : engine?.analysisIndex?.packets;
           if (!packets?.length) throw new MediaOpenError('container', '索引尚未建立，暂无分析数据。');
-          const complete = engine instanceof FlvEngine ? engine.indexComplete : true;
+          const complete = engine instanceof FlvEngine || engine instanceof JsContainerEngine ? engine.indexComplete : true;
           const mediaId = message.mediaId ?? '';
           const data = querier(packets, {
             mediaId, sourceVersion: `${mediaId}@${packets.length}${complete ? '' : '+'}`, indexRevision: packets.length,

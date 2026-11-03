@@ -1,3 +1,4 @@
+import { MP4_PLAYBACK_INDEX_BYTES, parseMp4Playback } from '../shared/media/indexing/mp4-playback-index.ts';
 import {parseMp4QualityDocument} from '../shared/media/indexing/mp4-quality-index.ts';
 import type {QualityIndexDocument} from '../shared/analysis/quality/source-index.ts';
 import { preparePacketStorage, packetStorage, restorePacketDocument, invalidPackets } from './committed-packet-storage.ts';
@@ -12,7 +13,7 @@ import { AdminError } from './admin-error.ts';
 import { FLV_INDEX_BYTES, FLV_INDEX_SCHEMA, parseFlvIndex, serializeFlvIndex } from '../shared/media/indexing/flv-index-cache.ts';
 import type { FlvIndexDocument } from '../shared/media/indexing/flv-index-cache.ts';
 import { FFMPEG_INDEX_BYTES, FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_RECORD_LIMIT, encodeBase64, parseFfmpegIndex, lastFfmpegPts, FFMPEG_NO_TIMESTAMP } from '../shared/media/indexing/ffmpeg-index-cache.ts';
-import { FLV_MEDIA_INDEX_IDENTITY, MP4_QUALITY_MEDIA_INDEX_IDENTITY, JS_TS_MEDIA_INDEX_IDENTITY, JS_MATROSKA_MEDIA_INDEX_IDENTITY } from '../shared/media/indexing/media-index-identity.ts';
+import { MP4_PLAYBACK_MEDIA_INDEX_IDENTITY, FLV_MEDIA_INDEX_IDENTITY, MP4_QUALITY_MEDIA_INDEX_IDENTITY, JS_TS_MEDIA_INDEX_IDENTITY, JS_MATROSKA_MEDIA_INDEX_IDENTITY } from '../shared/media/indexing/media-index-identity.ts';
 import type { MediaIndexIdentity, MediaIndexKind } from '../shared/media/indexing/media-index-identity.ts';
 import { validFfmpegRecovery } from '../shared/media/indexing/index-integrity.ts';
 import type { LibraryPairBinding, FlvProducerEvidence, QualityProducerEvidence, Mp4ProducerEvidence } from '../shared/analysis/quality/library-pair.ts';
@@ -88,7 +89,7 @@ export class FrameIndexStore {
 
   /** JS documents can only be committed by the server's completed parser.
    * A separate stored seal detects damaged documents after process restart. */
-  private validJsTsCache(id: string, version: string, identity: MediaIndexIdentity) {
+  private validServerDocument(id: string, version: string, identity: MediaIndexIdentity) {
     const row=this.db.prepare('SELECT metadata_json FROM media_index_manifests WHERE media_id=? AND media_version=? AND '+identityWhere+' AND complete=1').get(id,version,...identityArgs(identity));
     if(!row)return null; // A cache miss needs no eviction transaction.
     let valid=false;
@@ -104,19 +105,19 @@ export class FrameIndexStore {
 
   has(id: string, version: string, kind: FrameIndexKind = 'flv', identity?: MediaIndexIdentity): boolean {
     const selected = identity ?? (kind === 'flv' ? FLV_MEDIA_INDEX_IDENTITY : undefined);
-    if (selected?.kind === 'js-ts' || selected?.kind === 'js-matroska') {
+    if (selected?.kind === 'js-ts' || selected?.kind === 'js-matroska' || selected?.kind === 'mp4-playback') {
       // The seal and reconstructed document must come from the same snapshot;
       // a concurrent clear/recommit must never make us delete its valid winner.
       this.db.exec('BEGIN');
       let valid: boolean | null;
-      try { valid = this.validJsTsCache(id, version, selected); this.db.exec('COMMIT'); }
+      try { valid = this.validServerDocument(id, version, selected); this.db.exec('COMMIT'); }
       catch (error) { this.db.exec('ROLLBACK'); throw error; }
       if (valid !== false) return valid === true;
       // Corrupt-cache eviction is a separate write transaction. Revalidate under
       // the writer lock so a concurrent valid replacement cannot be deleted.
       this.db.exec('BEGIN IMMEDIATE');
       try {
-        valid = this.validJsTsCache(id, version, selected);
+        valid = this.validServerDocument(id, version, selected);
         if (valid === false) this.db.prepare('DELETE FROM media_index_manifests WHERE media_id=? AND media_version=? AND ' + identityWhere)
           .run(id, version, ...identityArgs(selected));
         this.db.exec('COMMIT'); return valid === true;
@@ -159,7 +160,7 @@ export class FrameIndexStore {
 
   private readJson(id: string, version: string, kind: FrameIndexKind, identity?: MediaIndexIdentity): { json: string; hit: boolean } {
     const selected = identity ?? (kind === 'flv' ? FLV_MEDIA_INDEX_IDENTITY : undefined);
-    if((selected?.kind==='js-ts'||selected?.kind==='js-matroska')&&!this.validJsTsCache(id,version,selected))return { json: JSON.stringify({epoch:this.epoch,index:null}), hit: false };
+    if((selected?.kind==='js-ts'||selected?.kind==='js-matroska'||selected?.kind==='mp4-playback')&&!this.validServerDocument(id,version,selected))return { json: JSON.stringify({epoch:this.epoch,index:null}), hit: false };
     if (!selected) return { json: JSON.stringify({ epoch: this.epoch, index: null }), hit: false };
     if (selected.kind === 'ffmpeg') {
       const row = this.db.prepare('SELECT epoch,metadata_json FROM frame_index_epoch,media_index_manifests WHERE frame_index_epoch.id=1 AND media_id=? AND media_version=? AND ' + identityWhere + ' AND complete=1').get(id, version, ...identityArgs(selected));
@@ -175,7 +176,7 @@ export class FrameIndexStore {
   }
 
   put(id: string, version: string, size: number, value: unknown, epoch: unknown, identity: MediaIndexIdentity = FLV_MEDIA_INDEX_IDENTITY) {
-    if((identity.kind==='js-ts'||identity.kind==='js-matroska'||identity.kind==='mp4'))throw new AdminError(405,'JS TS 索引只能由服务端完整扫描构建。');
+    if((identity.kind==='js-ts'||identity.kind==='js-matroska'||identity.kind==='mp4'||identity.kind==='mp4-playback'))throw new AdminError(405,'此索引只能由服务端构建。');
     if (epoch !== this.epoch) throw new AdminError(409, '索引缓存已被清理，请在下次载入时重新提交。');
     return this.commit(id, version, prepareFrameIndex(value, size, identity, `${id}@${version}`), epoch);
   }
@@ -257,7 +258,7 @@ export class FrameIndexStore {
         const proof:Mp4ProducerEvidence={producer:producer.kind,sourceStat:producer.sourceStat,sourceVersion:`${id}@${version}`,size:scannedBytes,epoch:Number(epoch),packetCommitId:String(row.build_id),documentSha256:createHash('sha256').update(text).digest('hex'),trackId:doc.trackId,timescale:doc.timescale,tableSha256:doc.moov.sha256};
         this.db.prepare('UPDATE media_index_manifests SET producer_json=? WHERE media_id=? AND media_version=? AND '+identityWhere).run(JSON.stringify(proof),id,version,...identityArgs(identity));
       }
-      if ((identity.kind==='js-ts'||identity.kind==='js-matroska')) this.db.prepare('UPDATE media_index_manifests SET metadata_json=? WHERE media_id=? AND media_version=? AND '+identityWhere)
+      if ((identity.kind==='js-ts'||identity.kind==='js-matroska'||identity.kind==='mp4-playback')) this.db.prepare('UPDATE media_index_manifests SET metadata_json=? WHERE media_id=? AND media_version=? AND '+identityWhere)
         .run(JSON.stringify({jsIndexSha256:createHash('sha256').update(text).digest('hex')}),id,version,...identityArgs(identity));
       if (prepared.semanticHeader) {
         const header = prepared.semanticHeader;
@@ -471,7 +472,15 @@ export function prepareFrameIndex(value: unknown, size: number, identityOrKind: 
   let identity: MediaIndexIdentity;
   let text: string, bytes: number, frames: number;
   let semanticHeader: CommittedIndexHeader | undefined;
-  if(expectedKind==='mp4'){
+  if (expectedKind === 'mp4-playback') {
+    if (!sourceVersion) throw new AdminError(400, 'MP4 播放索引缺少媒体版本。');
+    frames = parseMp4Playback(value, size, sourceVersion).index.packets.length;
+    identity = MP4_PLAYBACK_MEDIA_INDEX_IDENTITY;
+    if (typeof identityOrKind !== 'string' && identityArgs(identityOrKind).some((v,i) => v !== identityArgs(identity)[i]))
+      throw new AdminError(409, 'MP4 播放索引身份不匹配。');
+    text = JSON.stringify(value); bytes = Buffer.byteLength(text);
+    if (bytes > MP4_PLAYBACK_INDEX_BYTES) throw new AdminError(413, 'MP4 播放索引过大。');
+  } else if(expectedKind==='mp4'){
     const doc=parseMp4QualityDocument(value,size);identity=MP4_QUALITY_MEDIA_INDEX_IDENTITY;
     if(typeof identityOrKind!=='string'&&identityArgs(identityOrKind).some((v,i)=>v!==identityArgs(identity)[i]))throw new AdminError(409,'MP4 quality index identity differs.');
     text=JSON.stringify(doc);bytes=Buffer.byteLength(text);frames=doc.samples.length;if(bytes>PAIR_LIMITS.maxIndexBytes)throw new AdminError(413,'MP4 quality index exceeds byte budget.','budget-exceeded');

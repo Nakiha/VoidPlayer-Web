@@ -121,6 +121,7 @@ export async function readTsPesClocks(reader: TsPacketReader, pid: number, signa
 
 /** Thin, independently owned demux/index cursor shared by decoder and analysis
  * consumers. No WASM, decoder, playback seek or persistent cache is owned here. */
+export type TsPlaybackPrefix = Pick<TsPacketIndex,'codec'|'pid'|'configuration'|'packets'> & { nextPtsUs: number };
 export class TsPacketSource {
   private input: Input;
   private sink?: EncodedPacketSink;
@@ -130,6 +131,7 @@ export class TsPacketSource {
   private codec: 'h264' | 'hevc' = 'h264';
   private exactPictureMapping=true;
   index?: TsPacketIndex;
+  private playbackPrefix?: TsPlaybackPrefix;
   nativeConfig?: VideoDecoderConfig;
   bytesRead = 0;
   packetsRead = 0;
@@ -203,7 +205,7 @@ export class TsPacketSource {
     }
     return evidence;
   }
-  async open(cached?: unknown, progress?: typeof this.progress): Promise<TsPacketIndex> {
+  async open(cached?: unknown, progress?: typeof this.progress, serverPlayback = false, publishPrefix?: (prefix: TsPlaybackPrefix)=>void): Promise<TsPacketIndex> {
     try {
       this.indexBytesRead=0;this.progress=progress; this.publishProgress(true);
       this.check(); await this.input.getFormat(); this.check();
@@ -238,8 +240,10 @@ export class TsPacketSource {
           || restored.packets[0].timestamp !== first.timestamp) throw new TsSourceChangedError();
         this.index = sealCompleteIndex(restored); this.indexReused = true; this.cursor = { au: 0, packet: first }; return restored;
       }
+      if (serverPlayback) throw new MediaOpenError('input', '服务端 TS 播放索引与媒体不一致。');
       const clocks = await readTsPesClocks({ size: this.reader.size, read: (at, length) => this.read(at, length), close() {} }, track.id, this.signal, bytes=>{this.scannedBytes=bytes;this.publishProgress();});
-      const packets: TsPacketRecord[] = [];
+      const packets: TsPacketRecord[] = [], presentationTimes = new Set<number>();
+      let highPts = -Infinity;
       for await (const packet of this.sink.packets()) {
         this.check();
         if (packets.length >= 250000 || !Number.isSafeInteger(packet.sequenceNumber) || packet.sequenceNumber < 0
@@ -255,24 +259,36 @@ export class TsPacketSource {
         const raw = clocks.get(packet.sequenceNumber);
         if (raw?.pts != null && raw.dts != null && Math.abs(raw.pts-raw.dts)>2**32) fail('wrapped DTS is outside initial admission');
         if (raw?.pts != null && Math.round(raw.pts * 1e6 / 90000) !== ptsUs) fail('PES/packet timestamp mapping mismatch');
+        if (presentationTimes.has(ptsUs)) fail('ambiguous packet presentation timestamps');
+        presentationTimes.add(ptsUs);
+        if (this.playbackPrefix && ptsUs < this.playbackPrefix.nextPtsUs) fail('display order crosses the published GOP boundary');
+        const published = this.playbackPrefix?.packets.length ?? 0;
+        if (publishPrefix && evidence.closedRandomAccess && ptsUs > highPts && packets.length >= published + Math.max(32,Math.floor(published/32))) {
+          const prefix = {codec:this.codec,pid:track.id,configuration:[...configuration],packets:packets.slice(),nextPtsUs:ptsUs};
+          publishPrefix(prefix);
+          this.playbackPrefix = prefix;
+        }
+        highPts = Math.max(highPts,ptsUs);
         packets.push({ au: packets.length, locator: packet.sequenceNumber, configuration: 0, pesOffset: raw ? packet.sequenceNumber : null, timestamp: packet.timestamp, ptsUs, durationUs, size: packet.byteLength, key: evidence.closedRandomAccess,
           timing: { pts: raw?.pts ?? null, dts: raw?.dts ?? null, timebase: [1, 90000], origin: raw?.pts != null ? 'pes' : 'derived' } });
         this.packetsRead++;this.indexedPackets=packets.length;this.publishProgress();
       }
       clocks.clear();
-      if (!packets.length || new Set(packets.map(p => p.ptsUs)).size !== packets.length) fail('missing or ambiguous packet presentation timestamps');
+      if (!packets.length) fail('missing packet presentation timestamps');
       this.index = { schema: 2, ...(!this.exactPictureMapping?{exactPictureMapping:false as const}:{}), completeness: { state: 'complete', packets: packets.length }, kind: 'js-ts-packets', build: TS_PACKET_BUILD, sourceVersion: this.sourceVersion, size: this.reader.size,
         streamKey: 'video:0', pid: track.id, codec: this.codec, configuration: [...configuration], packets };
       this.index = sealCompleteIndex(this.index);this.publishProgress(true);
-      this.cursor = { au: 0, packet: first };
+      this.cursor ??= { au: 0, packet: first };
+      this.playbackPrefix = undefined;
       return this.index;
-    } catch (error) { this.close(); this.signal.throwIfAborted(); throw error; }
+    } catch (error) { if (!this.playbackPrefix) this.close(); this.signal.throwIfAborted(); throw error; }
     finally {this.progress=undefined;this.indexBytesRead=undefined;}
   }
   async readUnit(au: number): Promise<Uint8Array> {
     try {
     this.check();
-    const target = this.index?.packets[au];
+    const index = this.index ?? this.playbackPrefix;
+    const target = index?.packets[au];
     if (!target || !Number.isSafeInteger(au) || au < 0) fail('access-unit ordinal out of bounds');
     let packet: EncodedPacket | null;
     if (this.cursor?.au === au) packet = this.cursor.packet;
@@ -283,16 +299,16 @@ export class TsPacketSource {
     // length and timestamp equality, not nearest-PTS association.
     if (!packet || packet.sequenceNumber !== target.locator || packet.byteLength !== target.size || Math.round(packet.timestamp * 1e6) !== target.ptsUs) fail('packet/index identity mismatch');
     if (target.pesOffset !== null) {
-      const actual = (await readTsPesClocks({ size: 188, read: () => this.read(target.pesOffset!, 188), close() {} }, this.index!.pid, this.signal)).get(0);
+      const actual = (await readTsPesClocks({ size: 188, read: () => this.read(target.pesOffset!, 188), close() {} }, index!.pid, this.signal)).get(0);
       if (!actual || actual.pts !== target.timing.pts || actual.dts !== target.timing.dts) fail('cached PES clock identity mismatch');
     }
-    const evidence = this.validatePicture(packet.data, Uint8Array.from(this.index!.configuration));
+    const evidence = this.validatePicture(packet.data, Uint8Array.from(index!.configuration));
     if (target.key && !evidence.closedRandomAccess) fail('container key does not prove a closed IDR anchor');
     this.cursor = { au, packet };
     return packet.data;
     } catch(error) {this.signal.throwIfAborted();throw error;}
   }
-  close() { if (this.closed) return; this.closed = true; this.signal.removeEventListener('abort', this.abort); this.cursor = undefined; this.index = undefined; this.nativeConfig = undefined; this.sink = undefined; this.sets.clear(); try { this.input.dispose(); } finally { this.reader.close(); } }
+  close() { if (this.closed) return; this.closed = true; this.signal.removeEventListener('abort', this.abort); this.cursor = undefined; this.index = undefined; this.playbackPrefix = undefined; this.nativeConfig = undefined; this.sink = undefined; this.sets.clear(); try { this.input.dispose(); } finally { this.reader.close(); } }
 }
 
 /** Feed the existing packet timeline; keep unknown DTS distinct from PTS. */

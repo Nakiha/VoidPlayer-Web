@@ -42,6 +42,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
   const releaseReservation = () => { if (reservationHeld) { reservation.release(); reservationHeld = false; } };
   let rpc: WorkerRpc<PacketCommands> | undefined;
   try {
+    const libraryPlayback = 'url' in input && !!input.library;
     const candidates = fallbackCoreCandidates(deps, deps.glueURL ?? document.baseURI, wasmThreadMode());
     const single = candidates.at(-1)!;
     const threadsFor = (url: string) => deps.glueURL || fallbackCoreVariant(url) === 'multi-thread' ? reservation.threads : 1;
@@ -61,7 +62,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
       const detachAbort = onLoadAbort(deps.signal, () => currentRpc.terminate(deps.signal!.reason));
       try {
         deps.onProgress?.('inspect');
-        prepared = await rpc.call('prepare', { input }, [], 60000, true);
+        prepared = await rpc.call('prepare', { input }, [], libraryPlayback ? 120000 : 60000, true);
         if (!deps.forceWasm) init = await rpc.call('native', {}, [], 60000);
       } finally { detachAbort(); }
     }
@@ -77,7 +78,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
         init = await rpc.call('init', { input, glueURL, wasmBinary: deps.wasmBinary,
           forceWasm: container === 'flv' || !!deps.forceWasm, threads: threadsFor(glueURL),
           ...((container==='ts'||container==='matroska')?{container,persistent:true,sourceVersion:deps.sourceVersion!,preparedTsSession:rpc===deps.preparedTs?.rpc?deps.preparedTs?.session:undefined}:{container,prepared:restore}) }, [],
-          container === 'flv' && fallbackCoreVariant(glueURL) === 'multi-thread' ? 10000 : 60000, (container==='ts'||container==='matroska'));
+          container === 'flv' && fallbackCoreVariant(glueURL) === 'multi-thread' ? 10000 : libraryPlayback ? 120000 : 60000, libraryPlayback || container==='ts' || container==='matroska');
         selected = glueURL;
       } catch (error) {
         rpc.terminate(); rpc = undefined; failure = error;
@@ -97,7 +98,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     if (init.decoder === 'webcodecs' && !deps.rawNative) releaseReservation();
     let { times, durations, ...details } = init;
     const info: MediaInfo = { id: (container==='ts'||container==='matroska')?deps.sourceVersion!:randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
-      indexSource: 'client', indexState: 'complete', indexKind: (container==='ts'||container==='matroska')?'packet-locators':'packet-offsets', seekStrategy: 'packet-anchor',
+      indexState: 'complete', indexKind: (container==='ts'||container==='matroska')?'packet-locators':'packet-offsets', seekStrategy: 'packet-anchor',
       ...details, ...(init.decoder === 'ffmpeg-wasm' ? { coreVariant: fallbackCoreVariant(selected) } : {}) };
     let presentationMode: ColorMode = deps.rawNative ? 'reference' : deps.nativeColorMode ?? (getColorMode() === 'reference' ? 'reference' : 'browser');
     let nativeWitnessReadback = false;
@@ -121,22 +122,22 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     };
     const completeIndex = () => {
       if (indexing) return indexing;
-      if (container !== 'flv') return Promise.resolve();
+      if (info.indexState === 'complete') return Promise.resolve();
       if (info.indexState === 'error') return Promise.reject(new Error(info.indexError));
       indexing = activeRpc.call('complete-index', {}, [], 60000, true).then(result => {
         if (disposed) return;
-        contextLog().info('media', 'FLV 后台索引完成', { name: meta.name, originPtsUs: result.firstPtsUs,
+        contextLog().info('media', '后台索引完成', { name: meta.name, originPtsUs: result.firstPtsUs,
           earliestRelativePtsUs: result.times[0], packets: result.times.length,
           durationBeforeUs: info.durationUs, durationUs: result.durationUs, indexSource: result.indexSource,
           indexIntegrity:result.indexIntegrity,indexTruncatedAt:result.indexTruncatedAt });
         times = result.times; durations = result.durations;
-        updateMediaInfo(source,{firstPtsUs:result.firstPtsUs,durationUs:result.durationUs,indexState:'complete',indexSource:result.indexSource,indexWarning:result.indexWarning,indexIntegrity:result.indexIntegrity,indexTruncatedAt:result.indexTruncatedAt},'index');
+        updateMediaInfo(source,{firstPtsUs:result.firstPtsUs,durationUs:result.durationUs,indexState:'complete',indexSource:result.indexSource,indexWarning:result.indexWarning,indexIntegrity:result.indexIntegrity,indexTruncatedAt:result.indexTruncatedAt,...('seekAnchorCount' in result?{seekAnchorCount:result.seekAnchorCount,jsIndexPacketsScanned:result.jsIndexPacketsScanned}:{})},'index');
         wakeIndex();
       }, error => {
         if (!disposed) {
           updateMediaInfo(source,{indexState:'error',indexError:error instanceof Error?error.message:String(error)},'index');
           wakeIndex();
-          contextLog().warn('media', 'FLV 后台索引失败', { error: info.indexError });
+          contextLog().warn('media', '后台索引失败', { error: info.indexError });
         }
         throw error;
       });
@@ -148,12 +149,12 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     let backgroundTimer: ReturnType<typeof setTimeout> | undefined;
     const ensureIndexed = async (ptsUs = Infinity) => {
       if (disposed) throw new Error('媒体已释放。');
-      if (info.indexState === 'error') throw new Error(info.indexError);
+      if (info.indexState === 'error' && (container !== 'ts' || ptsUs >= info.durationUs)) throw new Error(info.indexError);
       if (info.indexState !== 'building' || (ptsUs === 0 && !indexing)) return;
       void completeIndex().catch(() => {});
       while (!disposed && info.indexState === 'building' && ptsUs >= info.durationUs) await new Promise<void>(resolve => indexWaiters.add(resolve));
       if (disposed) throw new Error('媒体已释放。');
-      if ((info.indexState as string) === 'error') throw new Error(info.indexError);
+      if ((info.indexState as string) === 'error' && (container !== 'ts' || ptsUs >= info.durationUs)) throw new Error(info.indexError);
     };
     const toDecodedFrame = async (frame: PacketFrame): Promise<DecodedFrame> => {
       const position = floorIndex(times, frame.pts - info.firstPtsUs);
@@ -190,7 +191,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
         const recycle = spare; spare = undefined;
         const frame = await activeRpc.call(next?'next':'at', {pts:pts+info.firstPtsUs,recycle}, recycle ? [recycle] : [], 60000, true);
         if(!frame)return null;
-        if (container === 'flv' && !indexing && backgroundTimer === undefined) backgroundTimer = setTimeout(() => { if (!disposed) void completeIndex().catch(() => {}); }, 0);
+        if (info.indexState === 'building' && !indexing && backgroundTimer === undefined) backgroundTimer = setTimeout(() => { if (!disposed) void completeIndex().catch(() => {}); }, 0);
         return toDecodedFrame(frame);
       });
       serial = task.then(() => {}, () => {});
@@ -287,7 +288,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
       async getBitstreamIndex() {
         if (disposed) throw new Error('媒体已释放。');
         if (info.indexState === 'error') throw new Error(info.indexError);
-        if (container === 'flv' && info.indexState === 'building') void completeIndex().catch(() => {});
+        if (info.indexState === 'building') void completeIndex().catch(() => {});
         return activeRpc.call('analysis-index', {});
       },
       getAnalysisCapability(): AnalysisCapability {

@@ -30,7 +30,6 @@ export interface FfmpegIndexRecordSink {
   batch(batch: MediaIndexRecordBatch, trace: MediaIndexClientTrace): void;
   complete(manifest: MediaIndexRecordManifest, frames: number, trace: MediaIndexClientTrace): void;
   legacy(index: unknown, trace: MediaIndexClientTrace): void;
-  fallback(): void;
   progress(progress: MediaIndexScanProgress): void;
   error(message: string): void;
 }
@@ -83,7 +82,7 @@ export class FfmpegMediaIndexSession implements MediaIndexSession {
     void this.client.read().then(index => {
       if (this.disposed) return;
       if (!index) {
-        options.sink.fallback();
+        this.fail(this.client.failureReason?.message ?? '服务端 FFmpeg 播放索引不可用。');
       } else if ((index as { streamed?: unknown }).streamed !== true) {
         options.sink.legacy(index, this.client.diagnostics());
       }

@@ -1,6 +1,8 @@
 import { MediaOpenError } from '../io/media-errors.ts';
 import type { RangeReader } from '../io/range-reader.ts';
 
+export type Mp4Reader = Pick<RangeReader, 'size' | 'read'> & Partial<Pick<RangeReader, 'readMetadata'>>;
+
 interface Box { start: number; type: string; data: number; end: number; truncated?: boolean; declaredEnd?: number; ignoredTail?: boolean; }
 const invalid = (message: string): never => { throw new MediaOpenError('container', `MP4：${message}`); };
 /** ISO/IEC 14496-1 ES_Descriptor -> DecoderConfig -> DecoderSpecificInfo.
@@ -19,7 +21,7 @@ function mpeg4DecoderSpecificInfo(bytes:Uint8Array):Uint8Array {
   };
   return walk(4,bytes.length,0)??invalid('缺少 MPEG-4 DecoderSpecificInfo。');
 }
-async function boxes(reader: RangeReader, start: number, end: number, root = false, videoExtensions = false): Promise<Box[]> {
+async function boxes(reader: Mp4Reader, start: number, end: number, root = false, videoExtensions = false): Promise<Box[]> {
   const result: Box[] = [];
   let fragmented = false;
   const ignoreTail = (type?: string) => {
@@ -61,7 +63,7 @@ async function boxes(reader: RangeReader, start: number, end: number, root = fal
 
 /** Only extracts the unsupported VVC configuration record. Sample tables, edits,
  * B-frame order and seeking stay with mediabunny's public packet API. */
-export async function readVvcConfig(reader: RangeReader, trackId: number): Promise<Uint8Array> {
+export async function readVvcConfig(reader: Mp4Reader, trackId: number): Promise<Uint8Array> {
   const moov = (await boxes(reader, 0, reader.size, true)).find(b => b.type === 'moov');
   if (!moov) return invalid('缺少 moov。');
   for (const track of (await boxes(reader, moov.data, moov.end)).filter(b => b.type === 'trak')) {
@@ -97,11 +99,11 @@ export interface Mp4Configurations { displayBounds?:{width:number;height:number}
 /** Keep stsd entries and stsc's per-chunk description selection together. The
  * public packet API remains responsible for edit lists and timestamps; these
  * tables own validated byte offsets and the available decode-order prefix. */
-export async function readMp4Configurations(reader: RangeReader, trackId: number, maxSamples = 2_000_000, rawTiming = false): Promise<Mp4Configurations> {
+export async function readMp4Configurations(reader: Mp4Reader, trackId: number, maxSamples = 2_000_000, rawTiming = false): Promise<Mp4Configurations> {
   const root=await boxes(reader,0,reader.size,true),moov=root.find(b=>b.type==='moov');
   if(!moov)return invalid('缺少 moov。');
   if(root.some(b=>b.type==='moof') && root.filter(b=>b.type==='moov'||b.type==='moof').reduce((n,b)=>n+b.end-b.start,0)>24*1024*1024)throw new MediaOpenError('resource','MP4 fragment metadata 超过上限。');
-  if(root.some(b=>b.type==='moof') && reader.readMetadata)reader={size:reader.size,read:reader.readMetadata.bind(reader)} as RangeReader;
+  if(root.some(b=>b.type==='moof') && reader.readMetadata)reader={size:reader.size,read:reader.readMetadata.bind(reader)} as Mp4Reader;
   for(const track of (await boxes(reader,moov.data,moov.end)).filter(b=>b.type==='trak')){
     let nested=await boxes(reader,track.data,track.end);
     const tkhd=nested.find(b=>b.type==='tkhd');if(!tkhd)continue;
@@ -235,7 +237,7 @@ export async function readMp4Configurations(reader: RangeReader, trackId: number
 
 /** Finite, self-contained fragments only. This maps bytes/raw ticks; Mediabunny
  * owns edit-list-adjusted packet timestamps. No codec payload inspection here. */
-async function readFragmentConfigurations(reader: RangeReader, root: Box[], moov: Box, stbl: Box[], trackId: number,
+async function readFragmentConfigurations(reader: Mp4Reader, root: Box[], moov: Box, stbl: Box[], trackId: number,
   descriptions: Uint8Array[], maxSamples: number, rawTiming: boolean): Promise<Mp4Configurations> {
   const safe = (n: number, label: string) => { if (!Number.isSafeInteger(n) || n < 0) invalid(`${label} 超出安全整数范围。`); return n; };
   if (root.some(b => b.type === 'pssh')) return invalid('加密分片 MP4 暂不支持。');

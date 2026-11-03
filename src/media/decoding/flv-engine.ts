@@ -57,10 +57,14 @@ export class FlvEngine {
     this.timeline?.setGrowth(this.growing ? this.waitForGrowth : undefined);
     this.wake();
   }
+  private readonly libraryPlayback: boolean;
+  private libraryIndexProgress?: MediaOpenProgress;
   constructor(input: FlvInput, prepared?: PreparedFlv) {
     this.reader = new FlvReader(input, prepared?.version);
+    this.libraryPlayback = 'url' in input && !!input.library;
     this.cachedAudio = new FlvCachedAudio(this.reader);
     this.cache = new FlvIndexClient('url' in input ? input.url : undefined, this.reader.size, progress => {
+      this.libraryIndexProgress?.('index');
       if(this.index)this.serverProgress?.({...progress,durationUs:flvMediaTiming(this.index).durationUs});
     });
     if (prepared) { this.index = prepared.index; this.checkpoint = prepared; }
@@ -70,16 +74,25 @@ export class FlvEngine {
       onProgress?.('index');
       // First-frame reads stay small; bulk scan read-ahead starts after display.
       try {
-        this.checkpoint = await scanFlv(this.reader, () => onProgress?.('index'), undefined, true);
+        if (this.libraryPlayback) {
+          this.libraryIndexProgress = onProgress;
+          const index = await this.cache.read();
+          if (!index) throw new MediaOpenError('input', '服务端 FLV 播放索引不可用。');
+          this.checkpoint = { index, nextOffset: index.truncatedAt ?? this.reader.size, complete: true };
+        } else this.checkpoint = await scanFlv(this.reader, () => onProgress?.('index'), undefined, true);
         this.index = this.checkpoint.index;
         flvDecoderConfig(this.index);
       } catch (error) { this.close(); throw error; }
-      finally { this.reader.setIndexing(false); }
+      finally { this.libraryIndexProgress = undefined; this.reader.setIndexing(false); }
     }
     this.cachedAudio.prime();
     return { ...this.checkpoint!, version: this.reader.version };
   }
   async completeIndex(onProgress?: MediaOpenProgress, cached?: FlvIndex, publish?: (data: { durationUs: number; scannedBytes: number; totalBytes: number; packets: number }) => void) {
+    if (this.libraryPlayback && this.indexComplete) return {
+      ...flvMediaTiming(this.index), indexSource: 'server' as const, indexWarning: flvIndexWarning(this.index),
+      indexIntegrity: flvIndexIntegrity(this.index), indexTruncatedAt: this.index.truncatedAt,
+    };
     this.growing = !this.checkpoint!.complete;
     // Startup deliberately drained one packet for display. Restart that cursor
     // once, before streaming, then retain it across every index publication.

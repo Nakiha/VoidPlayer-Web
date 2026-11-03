@@ -1,4 +1,3 @@
-import {loadLocalJsIndex,saveLocalJsIndex} from '../../media/indexing/js-packet-index-cache.ts';
 import { emptyCounters, countCore, countProduct } from '../../../shared/analysis/bitstream/counters.ts';
 import { analysisIndexIdentity, isProduct } from '../../../shared/analysis/bitstream/products.ts';
 import type { AnalysisOutput } from '../../../shared/analysis/bitstream/products.ts';
@@ -47,7 +46,6 @@ scope.onmessage = async ({ data }) => {
     });
     const makeReader = () => {
       return Object.assign(new RangeReader({file:data.file}), {
-        indexCache: {load:loadLocalJsIndex,save:saveLocalJsIndex},
         ...(data.externalSnapshot ? {flvIndex: async () => await snapshot() as import('../../../shared/media/indexing/flv-index-cache.ts').FlvIndexDocument} : {}),
       });
     };

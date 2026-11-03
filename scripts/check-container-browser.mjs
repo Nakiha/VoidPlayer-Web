@@ -21,6 +21,7 @@ try {
     '-c:v', 'libx264', '-threads', '1', '-preset', 'ultrafast', '-g', '25', '-bf', '0',
     '-color_range', 'tv', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', path.join(root, 'h264.mp4')]);
   encode(['-i', path.join(root, 'h264.mp4'), '-c', 'copy', '-f', 'mpegts', path.join(root, 'h264.ts')]);
+  encode(['-stream_loop','3','-i','fixtures/video/h264_9s_1920x1080.mp4','-map','0:v:0','-t','18','-c','copy','-f','mpegts',path.join(root,'progressive.ts')]);
   // The misleading suffix must not send local TS through Mp4Engine.
   await copyFile(path.join(root, 'mpeg2.ts'), path.join(root, 'renamed.mp4'));
   library = new MediaLibraryIndex([root], { watch: false }); await library.refresh();
@@ -29,6 +30,32 @@ try {
   const base = `http://127.0.0.1:${server.address().port}`;
   browser = await (engine === 'webkit' ? webkit : chromium).launch({ headless: true,
     ...(engine === 'chromium' && process.env.CHROME_EXECUTABLE_PATH ? { executablePath: process.env.CHROME_EXECUTABLE_PATH } : {}) });
+  const localPage = await browser.newPage();
+  try {
+    await localPage.goto(base); await localPage.waitForFunction(() => window.voidPlayer);
+    await localPage.evaluate(() => {
+      window.__localTs = [];
+      window.voidPlayer.subscribeState(() => {
+        const track = window.voidPlayer.getState().tracks[0];
+        if (track?.frame) window.__localTs.push({state:track.indexState,coverage:track.durationUs,origin:track.firstPtsUs});
+      });
+    });
+    await localPage.locator('#file-A').setInputFiles(path.join(root,'progressive.ts'));
+    await localPage.waitForFunction(() => window.__localTs.length > 0);
+    const first = await localPage.evaluate(() => window.__localTs[0]);
+    assert.equal(first.state,'building','a local TS frame is presented before full indexing');
+    assert.ok(first.coverage > 0 && first.coverage < 18e6);
+    await localPage.evaluate(() => { void window.voidPlayer.play(); });
+    await localPage.waitForFunction(() => window.voidPlayer.getState().positionUs > 250000);
+    await localPage.waitForFunction(() => window.voidPlayer.getState().tracks[0]?.indexState === 'complete');
+    const final = await localPage.evaluate(() => window.__localTs);
+    assert.ok(final.some(entry=>entry.state==='building'&&entry.coverage>first.coverage),'stable GOP coverage grows during indexing');
+    assert.ok(final.every(entry=>entry.origin===first.origin),'background indexing preserves the public clock origin');
+    const sought = await localPage.evaluate(async()=>{await window.voidPlayer.pause();return window.voidPlayer.seek(14e6);});
+    assert.ok(Math.abs(sought.tracks[0].frame.ptsUs-14e6)<34000);
+    assert.equal(sought.error,null);
+    console.log(`PASS ${engine}: local TS first frame, growing coverage, playback and final seek`);
+  } finally { await localPage.close(); }
   for (const [name, local, software] of [
     ['renamed.mp4', true, false], ['mpeg2.ts', false, false],
     ['h264.ts', true, false], ['h264.ts', false, false],
@@ -41,7 +68,7 @@ try {
     await page.addInitScript(()=>{window.__packetWork={accepted:0,receives:0,containerOpens:0};window.__indexStreams=[];const Base=Worker;window.Worker=class extends Base{constructor(url,options){super(url,options);this.addEventListener('message',event=>{if(event.data?.type==='container-test-work')window.__packetWork=event.data.work;if(event.data?.type==='container-test-index'){const message=event.data;let stream=window.__indexStreams.find(stream=>stream.id===message.id);if(!stream){stream={id:message.id,events:[],done:false,error:null};window.__indexStreams.push(stream);}if(message.error)stream.error=message.error;if(message.event){stream.events.push(message.event);if(message.event.type==='complete')stream.done=true;}}});}};});
     await context.route(/voidplayer-core(?:-mt)?\.js(?:\?|$)/,async route=>{
       const response=await route.fetch(),body=await response.text();let matched=false;
-      const wrapped=body.replace(/export\s+default\s+([\w$]+)\s*;/,(_,name)=>{matched=true;return `const original=${name};export default async options=>{const core=await original(options),work={accepted:0,receives:0,containerOpens:0},ccall=core.ccall;core.ccall=function(name,result,types,args){const value=ccall.call(core,name,result,types,args);if(name==='vp_packet_send'&&args?.[4]===0&&value===0)work.accepted++;if(name==='vp_packet_receive')work.receives++;if(['vp_open','vp_open_blob','vp_open_range'].includes(name))work.containerOpens++;self.postMessage({type:'container-test-work',work:{...work}});return value;};return core;};`;});
+      const wrapped=body.replace(/export\s+default\s+([\w$]+)\s*;/,(_,name)=>{matched=true;return `const original=${name};export default async options=>{const core=await original(options),work={accepted:0,receives:0,containerOpens:0},ccall=core.ccall;core.ccall=function(name,result,types,args){const value=ccall.call(core,name,result,types,args);if((name==='vp_packet_send'||name==='vp_packet_try_send')&&args?.[4]===0&&value===0)work.accepted++;if(name==='vp_packet_receive')work.receives++;if(['vp_open','vp_open_blob','vp_open_range'].includes(name))work.containerOpens++;self.postMessage({type:'container-test-work',work:{...work}});return value;};return core;};`;});
       assert.ok(matched,'real core export is instrumented');await route.fulfill({response,body:wrapped});
     });
     page.on('pageerror', e => errors.push(e.message));

@@ -478,7 +478,6 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       batch: (batch, trace) => activeRpc.sendIndexBatch(init!.ctx, batch, trace),
       complete: (manifest, frames, trace) => activeRpc.sendIndexComplete(init!.ctx, manifest, frames, trace),
       legacy: (index, trace) => activeRpc.sendLegacyIndex(init!.ctx, index, trace),
-      fallback: () => activeRpc.startLocalIndex(init!.ctx),
       progress: progress => { if (!disposed) updateMediaInfo(source, { indexProgress: progress }, 'index'); },
       error: message => activeRpc.reportIndexError(message),
     };

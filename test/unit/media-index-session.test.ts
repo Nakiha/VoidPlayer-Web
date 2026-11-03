@@ -5,24 +5,19 @@ import { FfmpegMediaIndexSession } from '../../src/media/indexing/media-index-se
 
 const identity = { kind: 'ffmpeg' as const, streamKey: 'video:0', schemaVersion: 3, indexerBuild: 'a'.repeat(40) };
 const sink = (overrides: Record<string, (...args: any[]) => void> = {}) => ({
-  manifest() {}, batch() {}, complete() {}, legacy() {}, fallback() {}, progress() {}, error() {}, ...overrides,
+  manifest() {}, batch() {}, complete() {}, legacy() {}, progress() {}, error() {}, ...overrides,
 });
 
-test('an FFmpeg index session owns local fallback and coverage finality', async () => {
-  let fallbackCalls = 0;
+test('an unavailable server index fails pending seeks without discarding ready frames', async () => {
+  const errors: string[] = [];
   const session = new FfmpegMediaIndexSession({
     identity, firstPtsUs: 900_000, durationUs: 40_000,
-    sink: sink({ fallback: () => { fallbackCalls++; } }),
+    sink: sink({ error: (message: string) => { errors.push(message); } }),
   });
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(fallbackCalls, 1);
-  assert.equal(session.state, 'building');
+  await assert.rejects(session.ensure(80_000), /服务端 FFmpeg 播放索引/);
+  assert.equal(session.state, 'error');
   await session.ensure(20_000);
-  session.updateCoverage(80_000);
-  await session.ensure(70_000);
-  session.markComplete(120_000);
-  assert.equal(session.state, 'complete');
-  assert.equal(session.durationUs, 120_000);
+  assert.equal(errors.length, 1);
   session.dispose();
 });
 

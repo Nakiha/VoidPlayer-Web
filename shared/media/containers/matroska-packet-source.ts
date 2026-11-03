@@ -70,6 +70,7 @@ export class MatroskaPacketSource {
     }
     return evidence;
   }
+  private directPlayback = false;
   private configurationSets(codec:string,description:Uint8Array){
     if(codec!=='h264'&&codec!=='hevc')return;let at=codec==='h264'?6:23;
     const read=(length:number)=>{if(at+length>description.length)throw new MediaOpenError('container','Truncated Matroska configuration');const result=description.subarray(at,at+length);at+=length;return result;};
@@ -78,8 +79,21 @@ export class MatroskaPacketSource {
     else{if(description.length<23||description[0]!==1)throw new MediaOpenError('container','Invalid Matroska hvcC');for(let i=0;i<description[22];i++){const type=read(1)[0]&63,n=read(2),count=n[0]*256+n[1];if([32,33,34].includes(type))add(type,count);else for(let j=0;j<count;j++){const len=read(2);read(len[0]*256+len[1]);}}}
     if(!(codec==='h264'?[7,8]:[32,33,34]).every(type=>this.sets.has(type)))throw new MediaOpenError('container','Missing Matroska static parameter sets');
   }
-  async open(cached?:unknown,progress?:(p:{packets:number;scannedBytes:number;totalBytes:number;bytesRead:number})=>void):Promise<MatroskaPacketIndex>{
-    try{this.indexingBytes=0;this.progress=progress;this.check();await this.input.getFormat();const tracks=await this.input.getVideoTracks();
+  async open(cached?:unknown,progress?:(p:{packets:number;scannedBytes:number;totalBytes:number;bytesRead:number})=>void, serverPlayback = false):Promise<MatroskaPacketIndex>{
+    try{
+      if (serverPlayback) {
+        this.check();
+        const index = parseMatroskaPacketIndex(cached, this.version, this.reader.size);
+        if (!index || !isSealedJsIndex(index)) throw new MediaOpenError('input', '服务端 Matroska 播放索引不可用。');
+        const config = index.nativeConfig;
+        this.nativeConfig = config && { ...config, description: config.description && new Uint8Array(config.description) };
+        this.configurationSets(index.codec, Uint8Array.from(index.configuration));
+        this.directPlayback = true;
+        this.index = index;
+        this.indexReused = true;
+        return index;
+      }
+      this.indexingBytes=0;this.progress=progress;this.check();await this.input.getFormat();const tracks=await this.input.getVideoTracks();
       if(tracks.length!==1)throw new TsCombinationNotMigrated('Matroska requires one video track');
       const track=tracks[0],name=await track.getCodec();
       const structure=await matroskaStructure({size:this.reader.size,read:(at,n)=>this.read(at,n),close(){}},track.id,this.signal,!!cached);
@@ -106,15 +120,26 @@ export class MatroskaPacketSource {
         const raw=clocks.get(packet.sequenceNumber),ptsUs=Math.round(packet.timestamp*1e6),durationUs=Math.round(packet.duration*1e6);
         if(!raw||raw.size!==packet.byteLength||Math.round(raw.pts*raw.timebase[0]/1000)!==ptsUs||!Number.isSafeInteger(raw.pts*raw.timebase[0])||!Number.isSafeInteger(durationUs)||durationUs<0||packets.length&&packet.sequenceNumber<=packets.at(-1)!.locator)throw new MediaOpenError('container','Matroska block/packet clock or locator mismatch');
         const picture=this.picture(packet.data,codec,configuration);
-        packets.push({au:packets.length,locator:packet.sequenceNumber,configuration:0,blockOffset:raw.blockOffset,timestamp:packet.timestamp,ptsUs,durationUs,size:packet.byteLength,key:picture.closedRandomAccess,timing:{pts:raw.pts,dts:null,timebase:raw.timebase,origin:'matroska-block'}});this.packetsRead++;
+        packets.push({au:packets.length,locator:packet.sequenceNumber,configuration:0,blockOffset:raw.blockOffset,payloadOffset:raw.payloadOffset,timestamp:packet.timestamp,ptsUs,durationUs,size:packet.byteLength,key:picture.closedRandomAccess,timing:{pts:raw.pts,dts:null,timebase:raw.timebase,origin:'matroska-block'}});this.packetsRead++;
         if(packets.length%128===0)progress?.({packets:packets.length,scannedBytes:this.scannedBytes,totalBytes:this.reader.size,bytesRead:this.bytesRead});
       }
       if(!packets.length||packets.length!==clocks.size||new Set(packets.map(p=>p.ptsUs)).size!==packets.length)throw new MediaOpenError('container','Incomplete or ambiguous Matroska packet enumeration');
-      this.index=sealJsIndex<MatroskaPacketIndex>({schema:1,kind:'js-matroska-packets',build:MATROSKA_PACKET_BUILD,sourceVersion:this.version,size:this.reader.size,...(structure.trailingOffset!==undefined?{indexIntegrity:'prefix' as const,indexTruncatedAt:structure.trailingOffset}:{}),streamKey:'video:0',pid:track.id,codec,...(codec==='ffv1'?{codecParameters:structure.configuration.parameters}:{}),configuration:[...configuration],packets,completeness:{state:'complete',packets:packets.length}});
+      const native = this.nativeConfig;
+      const description = native?.description;
+      const nativeConfig = native && { ...native, description: description && [...(ArrayBuffer.isView(description)
+        ? new Uint8Array(description.buffer, description.byteOffset, description.byteLength) : new Uint8Array(description))] };
+      this.index=sealJsIndex<MatroskaPacketIndex>({schema:1,kind:'js-matroska-packets',build:MATROSKA_PACKET_BUILD,sourceVersion:this.version,size:this.reader.size,...(structure.trailingOffset!==undefined?{indexIntegrity:'prefix' as const,indexTruncatedAt:structure.trailingOffset}:{}),streamKey:'video:0',pid:track.id,codec,...(codec==='ffv1'?{codecParameters:structure.configuration.parameters}:{}),configuration:[...configuration],nativeConfig,packets,completeness:{state:'complete',packets:packets.length}});
       this.cursor={au:0,packet:first};progress?.({packets:packets.length,scannedBytes:this.reader.size,totalBytes:this.reader.size,bytesRead:this.bytesRead});return this.index;
     }catch(error){this.close();this.signal.throwIfAborted();throw error;}finally{this.indexingBytes=undefined;this.progress=undefined;}
   }
   async readUnit(au:number){this.check();const target=this.index?.packets[au];if(!target||!Number.isSafeInteger(au)||au<0)throw new MediaOpenError('input','Matroska AU ordinal out of bounds');
+    if (this.directPlayback) {
+      const bytes = await this.read(target.payloadOffset, target.size);
+      const picture = this.picture(bytes, this.index!.codec, Uint8Array.from(this.index!.configuration));
+      if (target.key && !picture.closedRandomAccess) throw new MediaOpenError('container', 'Matroska key does not prove safe anchor');
+      this.packetsRead++;
+      return bytes;
+    }
     const packet=this.cursor?.au===au?this.cursor.packet:this.cursor?.au===au-1?await this.sink!.getNextPacket(this.cursor.packet):await this.sink!.getPacket(target.timestamp);this.check();this.packetsRead++;
     if(!packet||packet.sequenceNumber!==target.locator||packet.byteLength!==target.size||Math.round(packet.timestamp*1e6)!==target.ptsUs)throw new MediaOpenError('container','Matroska packet/index identity mismatch');
     const picture=this.picture(packet.data,this.index!.codec,Uint8Array.from(this.index!.configuration));if(target.key&&!picture.closedRandomAccess)throw new MediaOpenError('container','Matroska key does not prove safe anchor');

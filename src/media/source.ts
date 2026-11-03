@@ -1,3 +1,4 @@
+import { libraryIndexReferenceFromUrl, loadLibraryPlaybackContainer } from './indexing/library-index-reference.ts';
 import type { FrameDescription } from '../../shared/media/frame-description.ts';
 import type { DecodedFrame, MediaSource, MediaMeta } from './contract.ts';
 export type { DecodedFrame, MediaSource, MediaMeta } from './contract.ts';
@@ -54,7 +55,9 @@ export type { OpenStage } from '../../shared/media/io/media-errors.ts';
  * once, before the shared native/software/reference policy is applied. */
 async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftware?: () => Promise<MediaSource>, onProgress?: MediaOpenProgress, signal?: AbortSignal, nativePresentedLibrary?:import('../../shared/media/io/library-reference-types.ts').LibraryIndexReference, configuration:DecodeConfiguration=captureDecodeConfiguration()): Promise<MediaSource> {
   const pipelineStartedAt = performance.now();
-  const container = await probeContainer(input, signal);
+  const container = 'url' in input && input.library
+    ? await loadLibraryPlaybackContainer(input.url, input.size, input.library, signal)
+    : await probeContainer(input, signal);
   const packetMp4 = container === 'isobmff';
   const mp4DemuxPlan = packetMp4 ? 'packet' : null;
   const reference = configuration.colorMode === 'reference', preference = configuration.referenceDecode;
@@ -130,6 +133,7 @@ export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallbac
     meta = { ...meta, size: Number(head.headers.get('content-length')) };
   }
   if (!Number.isSafeInteger(meta.size) || meta.size <= 0) throw new MediaOpenError('input', '媒体文件长度无效。');
+  library ??= libraryIndexReferenceFromUrl(url);
   return openInput({ url, size: meta.size, ...(library?{library}:{}) }, meta, openFallback ? () => openFallback(url, meta) : undefined, onProgress, signal, nativePresentedLibrary, configuration);
 }
 

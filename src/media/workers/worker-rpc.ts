@@ -153,12 +153,6 @@ export class WorkerRpc<C extends CommandsShape<C> = FfmpegCommands> {
     this.indexBuildId = '';
     this.pushIndexInput({ action: 'legacy', ctx, index, trace });
   }
-  startLocalIndex(ctx: number) {
-    // A reset/failed transport can race an acknowledgement already in flight.
-    // The replacement local build must establish its own usable timeline.
-    this.indexBuildId = '';
-    this.pushIndexInput({ action: 'fallback', ctx });
-  }
   reportIndexError(error: string, stage: OpenStage = 'resource') {
     if (this.failure || this.indexTerminal) return;
     this.indexTerminal = true;

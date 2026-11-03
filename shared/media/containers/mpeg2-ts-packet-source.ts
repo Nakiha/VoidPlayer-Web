@@ -4,7 +4,7 @@ import {nalRanges} from '../codecs/nal-framing.ts';
 import {abortableWait} from '../io/media-abort.ts';
 import {MediaOpenError} from '../io/media-errors.ts';
 import {TsPacketSource,readTsPesClocks,TsCombinationNotMigrated,TsSourceChangedError} from './ts-packet-source.ts';
-import type {TsPacketReader} from './ts-packet-source.ts';
+import type {TsPacketReader,TsPlaybackPrefix} from './ts-packet-source.ts';
 import {TS_PACKET_BUILD,parseTsPacketIndex} from '../indexing/ts-packet-index.ts';
 import type {TsPacketIndex,TsPacketRecord} from '../indexing/ts-packet-index.ts';
 import {staticTsPsi} from './ts-static-psi.ts';
@@ -41,7 +41,7 @@ export class Mpeg2TsPacketSource {
   private async payload(start:number,end:number,pid:number){
     const out=await readTsPesPayload((at,n)=>this.read(at,n),start,end,pid,this.checkPsi!);this.packetsRead++;return out;
   }
-  async open(cached?:unknown,progress?:(p:{packets:number;scannedBytes:number;totalBytes:number;bytesRead:number})=>void):Promise<TsPacketIndex>{
+  async open(cached?:unknown,progress?:(p:{packets:number;scannedBytes:number;totalBytes:number;bytesRead:number})=>void, serverPlayback = false):Promise<TsPacketIndex>{
     try{if(!this.version||this.reader.size%188)error('missing source identity or partial transport');
       this.checkPsi=staticTsPsi(await this.read(0,Math.min(188*348,this.reader.size)));const streams=this.checkPsi.videoStreams;
       if(streams.length!==1||streams[0].type!==2)throw new TsCombinationNotMigrated('MPEG-2 adapter requires one declared MPEG-2 video track');const pid=streams[0].pid;
@@ -50,6 +50,7 @@ export class Mpeg2TsPacketSource {
         if(restored.pid!==pid)throw new TsSourceChangedError();this.index=restored;
         await this.readUnit(0);this.indexReused=true;return restored;
       }
+      if (serverPlayback) throw new MediaOpenError('input', '服务端 TS 播放索引与媒体不一致。');
       const clocks=await readTsPesClocks({size:this.reader.size,read:(a,n)=>this.read(a,n),close(){}},pid,this.signal),entries=[...clocks],packets:TsPacketRecord[]=[];let configuration:Uint8Array|undefined;
       for(let au=0;au<entries.length;au++){
         const [start,clock]=entries[au],end=entries[au+1]?.[0]??this.reader.size;
@@ -85,6 +86,7 @@ export async function createTsPacketSource(reader:TsPacketReader,version:string,
 export class TsContainerPacketSource {
   private source?:TsPacketSource|Mpeg2TsPacketSource|RecoveredHevcTsPacketSource;
   private closed=false;index?:TsPacketIndex;
+  private publishedPackets=0;
   private progress?:Parameters<TsPacketSource['open']>[1];private readBytes=0;private scanned=0;private scannedPackets=0;private lastProgress=-Infinity;
   private publish(force=false){const now=performance.now();if(this.progress&&(force||now-this.lastProgress>=25)){this.lastProgress=now;this.progress({packets:this.scannedPackets,scannedBytes:this.scanned,totalBytes:this.reader.size,bytesRead:this.readBytes});}}
   private reader:TsPacketReader;private version:string;private signal:AbortSignal;
@@ -105,17 +107,23 @@ export class TsContainerPacketSource {
     return {limit:aligned,damage:aligned===this.reader.size?undefined:'short' as const};
   }
   private bounded(limit:number):TsPacketReader{return{size:limit,read:(at,n)=>this.reader.read(at,n),close:()=>this.reader.close()};}
-  async open(cached?:unknown,progress?:Parameters<TsPacketSource['open']>[1]){
+  async open(cached?:unknown,progress?:Parameters<TsPacketSource['open']>[1], serverPlayback = false,publishPrefix?: (prefix: TsPlaybackPrefix)=>void){
     try{
       this.progress=progress;
       if(this.closed)error('source closed');
       const restored=parseTsPacketIndex(cached,this.version,this.reader.size),trusted=restored&&isSealedJsIndex(restored)?restored:undefined;
+      if (serverPlayback && !trusted) error('server playback requires a verified index');
+      if (serverPlayback && trusted?.recovery) {
+        this.source = new RecoveredHevcTsPacketSource(this.reader, this.version, this.signal);
+        this.index = await this.source.open(trusted, progress, true);
+        return this.index;
+      }
       let bounds;
       try{bounds=trusted&&!trusted.recovery?{limit:trusted.transportLimit??this.reader.size,damage:undefined}:await this.transportEnd();}
       catch(e){
         if(!(e instanceof TsCombinationNotMigrated)||!/(188-byte TS|complete startup PSI)/.test(e.message))throw e;
         this.source=new RecoveredHevcTsPacketSource(this.reader,this.version,this.signal);
-        this.index=await this.source.open(trusted,progress);return this.index;
+        this.index=await this.source.open(trusted,progress,serverPlayback);return this.index;
       }
       let {limit,damage}=bounds;
       // A short last transport packet may contain part of the final PES. Drop
@@ -130,10 +138,24 @@ export class TsContainerPacketSource {
         }
         if(finalPes<188)error('no complete TS prefix');limit=finalPes;
       }
-      const reader=this.bounded(limit);this.source=await createTsPacketSource(reader,this.version,this.signal);
+      const reader = this.bounded(limit);
+      this.source = serverPlayback
+        ? trusted!.codec === 'mpeg2video'
+          ? new Mpeg2TsPacketSource(reader, this.version, this.signal)
+          : new TsPacketSource(reader, this.version, this.signal)
+        : await createTsPacketSource(reader, this.version, this.signal);
       if(this.closed){this.source.close();error('source closed');}
       const inner=trusted?sealJsIndex({...trusted,size:limit,indexIntegrity:undefined,indexTruncatedAt:undefined,transportLimit:undefined}):undefined;
-      let index=await this.source.open(inner,p=>{this.scannedPackets=Math.max(this.scannedPackets,p.packets);this.scanned=Math.max(this.scanned,p.scannedBytes);this.publish(true);});
+      const report: NonNullable<typeof progress> = p=>{
+        this.scannedPackets=Math.max(this.scannedPackets,p.packets);this.scanned=Math.max(this.scanned,p.scannedBytes);this.publish(true);
+      };
+      const source = this.source;
+      let index = source instanceof TsPacketSource && !damage && publishPrefix
+        ? await source.open(inner,report,serverPlayback,prefix=>{
+          publishPrefix(prefix);
+          this.publishedPackets=prefix.packets.length;
+        })
+        : await source.open(inner,report,serverPlayback);
       if(damage==='gap'){
         let key=index.packets.findLastIndex(p=>p.key);
         if(index.codec==='hevc')for(let au=index.packets.length-1;au>Math.max(key,index.packets.length-512);au--){
@@ -148,8 +170,8 @@ export class TsContainerPacketSource {
       }
       this.index=trusted??(damage?sealJsIndex({...index,size:this.reader.size,indexIntegrity:'prefix' as const,indexTruncatedAt:limit,transportLimit:limit}):index);
       this.publish(true);return this.index;
-    }catch(e){this.close();throw e;}finally{this.progress=undefined;}
+    }catch(e){if(!this.publishedPackets)this.close();throw e;}finally{this.progress=undefined;}
   }
-  readUnit(au:number){if(!this.source||!this.index?.packets[au])throw new MediaOpenError('container','TS AU outside playable prefix');return this.source.readUnit(au);}
+  readUnit(au:number){if(!this.source||au>=(this.index?.packets.length??this.publishedPackets))throw new MediaOpenError('container','TS AU outside playable prefix');return this.source.readUnit(au);}
   close(){if(this.closed)return;this.closed=true;this.index=undefined;if(this.source)this.source.close();else this.reader.close();}
 }

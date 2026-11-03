@@ -1,27 +1,20 @@
+import { inspectMp4Playback } from '../../../shared/media/containers/mp4-playback.ts';
+import { loadLibraryMp4Playback } from '../indexing/mp4-playback-client.ts';
 import type { MediaOpenProgress } from '../progress.ts';
-import { Input, CustomSource, MP4, QTFF, EncodedPacketSink } from 'mediabunny';
-import type { EncodedPacket } from 'mediabunny';
-import {avcGeometry} from '../../../shared/media/codecs/avc-geometry.ts';
 import { MediaOpenError } from '../../../shared/media/io/media-errors.ts';
 import { RangeReader } from '../../../shared/media/io/range-reader.ts';
 import { Mp4CachedMetadata } from '../indexing/mp4-cached-metadata.ts';
 import type { RandomAccessInput } from '../../../shared/media/io/range-reader.ts';
-import { readMp4Configurations, validateFragmentPacket } from '../../../shared/media/containers/mp4-config.ts';
 import { wasmPacketDecoder, nativePacketDecoder } from './flv-decoder.ts';
 import type { PacketDecoder, PacketFrame } from './flv-decoder.ts';
 import type { PacketDecodeIndex } from '../../../shared/media/indexing/packet-decode-index.ts';
-import { hevcDisplayOrder, recoveredHevcTimes } from '../../../shared/media/codecs/hevc-timeline.ts';
-import type { FlvCodec, FlvPacket } from '../../../shared/media/containers/flv-demux.ts';
 import { PacketTimeline } from './packet-timeline.ts';
 
 /** Packet tables are decode anchors; actual output frames own display time. */
 export class Mp4Engine {
   private reader:RangeReader;
-  private input:Input;
+  private controller = new AbortController();
   private audioMetadata = new Mp4CachedMetadata();
-  private fragmented = false;
-  private sink!:EncodedPacketSink;
-  private packets:EncodedPacket[]=[];
   private index!:PacketDecodeIndex;
   private timeline?:PacketTimeline;
   private primed:PacketFrame|null=null;
@@ -39,66 +32,20 @@ export class Mp4Engine {
   }
   constructor(source:RandomAccessInput){
     this.reader=new RangeReader(source);
-    this.input=new Input({source:new CustomSource({getSize:()=>this.reader.size,read:async(start,end)=>{
-      const bytes = await (this.fragmented ? this.reader.readMetadata(start,end-start) : this.reader.read(start,end-start)); this.audioMetadata.observe(start, bytes); return bytes;
-    },maxCacheSize:1024*1024}),formats:[MP4,QTFF]});
   }
   cachedWindows() { return this.reader.cachedWindows(); }
   peekCachedBytes(offset: number, length: number) { return this.reader.peek(offset, length) ?? this.audioMetadata.peek(offset, length); }
   async open(glueURL:string,wasmBinary?:Uint8Array,forceWasm=true,threads=1,onProgress?:MediaOpenProgress){
     try{
       onProgress?.('inspect');
-      try{await this.input.getFormat();}catch(error){if(error instanceof MediaOpenError)throw error;throw new MediaOpenError('container','不是可通过 MP4 索引读取的文件。');}
-      const track=await this.input.getPrimaryVideoTrack();if(!track)throw new MediaOpenError('container','MP4 没有视频轨道。');
+      const playback = 'url' in this.reader.input && this.reader.input.library
+        ? await loadLibraryMp4Playback(this.reader.input, this.controller.signal, () => onProgress?.('index'))
+        : await inspectMp4Playback(this.reader, () => onProgress?.('index'), (at, bytes) => this.audioMetadata.observe(at, bytes));
       this.audioMetadata.retainPrefix(this.reader.peek(0, Math.min(65536, this.reader.size)));
-      if(![0,90,180,270].includes(track.rotation))throw new MediaOpenError('container','MP4 旋转角度不受支持。');
-      this.rotation=track.rotation as typeof this.rotation;
-      const id=await track.getInternalCodecId(),known=await track.getCodec();
-      const codec:PacketDecodeIndex['codec']=id==='mp4v'?'mpeg4':['jpeg','mjpa','mjpb'].includes(String(id))?'mjpeg':['apch','apcn','apcs','apco','ap4h','ap4x'].includes(String(id))?'prores':id==='vvc1'||id==='vvi1'?'vvc':({avc:'h264',hevc:'hevc',av1:'av1'} as Record<string,FlvCodec>)[known??''];
-      if(!codec)throw new MediaOpenError('codec','此 MP4 编码需要 FFmpeg 解封装。');
-      const configs=await readMp4Configurations(this.reader,track.id);
-      this.fragmented = !!configs.fragmentSequenceNumbers;this.displayBounds=configs.descriptions.length===1?configs.displayBounds??[]:[];
-      let available = configs.availableSamples ?? configs.sampleSizes!.length;
-      onProgress?.('index');this.sink=new EncodedPacketSink(track);
-      for await(const packet of this.sink.packets(undefined,undefined,{metadataOnly:true})){
-        this.packets.push(packet);if(this.packets.length===available)break;if(this.packets.length>2_000_000)throw new MediaOpenError('resource','MP4 包索引超过上限。');
-      }
-      if(!this.packets.length||this.packets[0].type!=='key')throw new MediaOpenError('container','MP4 缺少起始关键帧。');
-      if(available!==this.packets.length)throw new MediaOpenError('container','MP4 包数量与 sample 表不一致。');
-      if (configs.indexIntegrity === 'prefix') {
-        let cut = 0;
-        for (let i = 1; i < this.packets.length; i++) if (this.packets[i].type === 'key') cut = i;
-        if (!cut) throw new MediaOpenError('input', 'MP4 损坏前没有可确认完整的 GOP。');
-        available = cut;
-        this.packets.length = cut;
-        configs.indexTruncatedAt = configs.sampleOffsets![cut];
-        configs.warning = `文件尾部缺失：仅播放前 ${cut} 个完整视频包；已舍弃末尾可能缺少参考帧的 GOP。`;
-      }
-      const resolution=await track.getTimeResolution();
-      const packets:FlvPacket[]=this.packets.map((p,i)=>{
-        validateFragmentPacket(configs, i, p, resolution);
-        const configuration=configs.sampleConfigurations?.[i]??0;
-        if(i>0&&configuration!==(configs.sampleConfigurations?.[i-1]??0)&&p.type!=='key')throw new MediaOpenError('container','MP4 配置切换缺少随机访问点。');
-        if(configs.sampleSizes?.[i]!==p.byteLength)throw new MediaOpenError('container','MP4 sample 长度与包索引不一致。');
-        return {configuration,sequenceNumber:i,offset:configs.sampleOffsets![i],size:p.byteLength,pts:Math.round(p.timestamp*1e6),dts:Math.round(p.timestamp*1e6-(configs.compositionOffsets![i]/resolution)*1e6),key:p.type==='key'};
-      });
-      const prefixConfigs = { ...configs, sampleOffsets: configs.sampleOffsets!.slice(0, available), sampleSizes: configs.sampleSizes!.slice(0, available), compositionOffsets: configs.compositionOffsets!.slice(0, available) };
-      const displayOrder=codec==='hevc'?await hevcDisplayOrder(this.reader,prefixConfigs,()=>onProgress?.('index')):null;
-      const recovered=displayOrder&&recoveredHevcTimes(displayOrder,packets.map(p=>p.pts),this.packets.map(p=>Math.round(p.duration*1e6)));
-      if(displayOrder&&!recovered)throw new MediaOpenError('container','HEVC 图片顺序与容器时间不一致，但无法从非等距时间线恢复显示时间。');
-      if(recovered)packets.forEach((p,i)=>{p.originalPts=p.pts;p.pts=recovered[i];});
-      const order=packets.map((_,i)=>i).sort((a,b)=>packets[a].pts-packets[b].pts),pts=order.map(i=>packets[i].pts);
-      if(pts.some((p,i)=>i>0&&p<=pts[i-1]))throw new MediaOpenError('container','MP4 包时间戳存在歧义，需要容器解码路径。');
-      const durations=order.map((p,i)=>(recovered||configs.fragmentSequenceNumbers)&&i+1<pts.length?pts[i+1]-pts[i]:Math.round((configs.sampleDurations?.[p] !== undefined ? configs.sampleDurations[p]/resolution : this.packets[p].duration)*1e6)||(i+1<pts.length?pts[i+1]-pts[i]:i?pts[i]-pts[i-1]:40000));
-      const firstPts=pts[0],duration=pts.at(-1)!-firstPts+durations.at(-1)!;
-      this.index={codec,...(['mpeg4','mjpeg','prores'].includes(codec)?{codecParameters:configs.codecParameters![0],codecConfigurations:configs.codecParameters}:{}),description:configs.descriptions[0],configurations:configs.descriptions,packets,order,firstPts,duration,durations,
-        ...(configs.indexIntegrity === 'prefix' ? { truncatedAt: configs.indexTruncatedAt } : {})};
-      const containerCrop=codec==='h264'&&configs.descriptions.some((description,i)=>{const g=avcGeometry(description),bounds=this.displayBounds[i];return g&&bounds&&(bounds.width<g.width||bounds.height<g.height);});
-      // Multi-stsd previously used software decoding. Track-level WebCodecs
-      // metadata describes the last entry, and reconfiguring from descriptions
-      // alone does not preserve per-entry color interpretation on every engine.
-      // Keep those inputs on the JS packet table with the verified WASM decoder.
-      this.nativeConfig=containerCrop||configs.descriptions.length>1||['mpeg4','mjpeg','prores'].includes(codec)?undefined:await track.getDecoderConfig()??undefined;
+      const { index, rotation, displayBounds, nativeConfig, recovered } = playback;
+      this.index = index; this.rotation = rotation; this.displayBounds = displayBounds; this.nativeConfig = nativeConfig;
+      const { codec, firstPts, duration, durations } = index;
+      const pts = index.order.map(i => index.packets[i].pts);
       onProgress?.('decoder');
       const native=!forceWasm&&this.nativeConfig?await nativePacketDecoder(this.index,this.nativeConfig):null;
       const decoder:PacketDecoder=native||await wasmPacketDecoder(this.index,glueURL,wasmBinary,threads);
@@ -114,12 +61,12 @@ export class Mp4Engine {
       }
       const firstPtsUs=this.primed.pts;
       const activeDecoder=this.timeline.decoder;
-      const color=activeDecoder.kind==='webcodecs'?await track.getColorSpace():null;
+      const color=activeDecoder.kind==='webcodecs'?playback.color:null;
       return {codec,decoder:activeDecoder.kind,hardwareAcceleration:activeDecoder.hardwareAcceleration,width:this.displayed(this.primed).width,height:this.displayed(this.primed).height,...activeDecoder.metadata?.(),
         ...(color?{colorSource:'container' as const,color:{primaries:color.primaries??null,transfer:color.transfer??null,matrix:color.matrix??null,fullRange:color.fullRange??null}}:{}),
         ...(recovered?{timelineSource:'hevc-poc' as const}:{}),
-        indexIntegrity: configs.indexIntegrity, indexTruncatedAt: configs.indexTruncatedAt,
-        indexWarning: [configs.warning, recovered ? '容器未记录图片重排时间，已按 HEVC 图片顺序恢复等距时间线。' : undefined].filter(Boolean).join(' ') || undefined,
+        indexIntegrity: playback.indexIntegrity, indexTruncatedAt: playback.indexTruncatedAt, indexWarning: playback.indexWarning,
+        indexSource: 'url' in this.reader.input && this.reader.input.library ? 'server' as const : 'client' as const,
         firstPtsUs,durationUs:firstPts+duration-firstPtsUs,times:pts.filter(p=>p>=firstPtsUs).map(p=>p-firstPtsUs),durations};
     }catch(error){this.close();throw error;}
   }
@@ -174,5 +121,5 @@ export class Mp4Engine {
     if(!Number.isInteger(position)||position<0||position>=this.index.order.length)throw new MediaOpenError('input','MP4 帧位置越界。');
     return this.at(this.index.packets[this.index.order[position]].pts,recycle);
   }
-  close(){this.primed?.frame?.close();this.primed=null;this.timeline?.close();this.timeline=undefined;this.input.dispose();this.reader.close();this.packets=[];}
+  close(){this.primed?.frame?.close();this.primed=null;this.timeline?.close();this.timeline=undefined;this.controller.abort();this.reader.close();}
 }

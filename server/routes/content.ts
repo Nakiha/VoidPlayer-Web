@@ -1,3 +1,5 @@
+import { containerFromHeader } from '../../shared/media/containers/container-header.ts';
+import { fileVersion } from '../library.ts';
 import { handleMediaQueryRoutes } from './media-query.ts';
 import { handleThumbnailRoute } from './thumbnail.ts';
 import { handleFrameIndexRoute } from './frame-index.ts';
@@ -41,6 +43,30 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
   }
   if (await handleFrameIndexRoute(library, req, res, url)) return true;
   if (await handleThumbnailRoute(library, req, res, url)) return true;
+  const playbackMatch = /^\/api\/media\/([0-9a-f]{24})\/playback-container$/.exec(url.pathname);
+  if (playbackMatch) {
+    try {
+      if (req.method !== 'GET') throw new AdminError(405, '不支持的媒体播放操作。');
+      const id = playbackMatch[1], version = url.searchParams.get('v'), entry = library.metadata(id);
+      const absolute = version && entry?.version === version && await library.resolve(id, version);
+      if (!absolute || !entry || entry.state !== 'ready') throw new AdminError(409, '媒体不可用或已改变。');
+      const handle = await fs.open(absolute, 'r');
+      try {
+        const bytes = new Uint8Array(Math.min(entry.size, 1024));
+        for (let read = 0; read < bytes.length;) {
+          const { bytesRead } = await handle.read(bytes, read, bytes.length - read, read);
+          if (!bytesRead) throw new AdminError(409, '媒体在识别期间截断。');
+          read += bytesRead;
+        }
+        if (fileVersion(await handle.stat()) !== version || !await library.resolve(id, version!))
+          throw new AdminError(409, '媒体在识别期间改变。');
+        sendJson(res, 200, { id, version, size: entry.size, container: containerFromHeader(bytes) });
+      } finally { await handle.close(); }
+    } catch (error) {
+      if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, adminErrorBody(error));
+    }
+    return true;
+  }
   const actionMatch = /^\/api\/media\/([0-9a-f]{24})\/(location|reveal|metadata)$/.exec(url.pathname);
   if (actionMatch) {
     const action = actionMatch[2];

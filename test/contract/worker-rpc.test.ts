@@ -108,8 +108,10 @@ for (const terminal of ['index-complete', 'index-error'] as const) test(`increme
   const stub = browserWorker(), rpc = new WorkerRpc(stub.worker);
   const pending = rpc.call('init', { glueURL: '', name: 'test' });
   stub.emit({ id: 1, type: 'ready', data: init }); assert.equal(await pending, init);
-  rpc.startLocalIndex(1);
-  assert.deepEqual(stub.sent[1].message, { id: 1, type: 'index-input', action: 'fallback', ctx: 1 });
+  const manifest = { buildId: batch.buildId } as Parameters<typeof rpc.sendIndexManifest>[1];
+  const trace = {} as Parameters<typeof rpc.sendIndexManifest>[2];
+  rpc.sendIndexManifest(1, manifest, trace);
+  assert.deepEqual(stub.sent[1].message, { id: 1, type: 'index-input', action: 'manifest', ctx: 1, manifest, trace });
   stub.emit({ id: 99, type: 'index-batch', data: batch });
   stub.emit({ id: 1, type: 'index-batch', data: { ...batch, buildId: 'stale' } });
   stub.emit({ id: 1, type: 'index-batch', data: batch });
