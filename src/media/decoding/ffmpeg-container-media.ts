@@ -137,6 +137,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       scoped.info('media', 'WASM core 已就绪', {
         coreVariant, crossOriginIsolated: !!globalThis.crossOriginIsolated,
         ioMode: init.ioMode, indexSource: init.indexSource, localIndexBuildCalls: init.localIndexBuildCalls ?? 0, readMs, initIndexMs: init.indexMs, threads: decodeThreadsForCodec(threads, init.codec),
+        requestedFrameContexts: init.codec === 'vvc' ? typeof threads === 'object' ? threads.vvcFrameContexts : 1 : undefined,
       });
       scoped.info('media', '媒体管线追踪', {
         phase: 'first-frame-ready', name: file.name, container: 'ffmpeg', demuxBackend: 'ffmpeg-wasm',

@@ -72,7 +72,10 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
     // Player-assigned decode thread budget (no-op on the single-thread core).
     const threads = typeof budget === 'object' ? budget.general : budget;
     if (threads) core.ccall('vp_set_threads', null, ['number'], [threads]);
-    if (typeof budget === 'object') core._vp_set_vvc_threads?.(budget.vvc);
+    if (typeof budget === 'object') {
+      core._vp_set_vvc_threads?.(budget.vvc);
+      core._vp_set_vvc_frame_contexts?.(budget.vvcFrameContexts);
+    }
     // Blobs read on demand through the custom AVIO (FileReaderSync chunks), so
     // no whole-file copy ever enters WASM memory. Node workers lack
     // FileReaderSync and buffer the bytes once (capped) into MEMFS.

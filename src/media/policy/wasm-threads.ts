@@ -19,28 +19,35 @@ export function setWasmThreadMode(value: string) {
   catch { /* Keep the selection in memory when storage is unavailable. */ }
 }
 
-export const VVC_THREAD_OPTIONS = [2, 4, 6, 8] as const;
-export const VVC_FRAME_CONTEXT_LIMIT = 6;
-export type VvcThreadMode = 'auto' | `${typeof VVC_THREAD_OPTIONS[number]}`;
-export type DecodeThreads = number | { general: number; vvc: number };
-const vvcKey = 'voidplayer.vvc-thread-mode';
-let vvcMode: VvcThreadMode | undefined;
+export const MAX_WASM_DECODE_COUNT = 0x7fffffff;
+export type DecodeThreads = number | { general: number; vvc: number; vvcFrameContexts: number };
+const vvcThreadsKey = 'voidplayer.vvc-thread-mode';
+const vvcContextsKey = 'voidplayer.vvc-frame-contexts';
+const vvcTuning = new Map<string, number>();
 
-function parseVvcMode(value: string | null): VvcThreadMode {
-  return VVC_THREAD_OPTIONS.some(threads => String(threads) === value) ? value as VvcThreadMode : 'auto';
+function readVvcCount(key: string) {
+  if (vvcTuning.has(key)) return vvcTuning.get(key)!;
+  try { return parseVvcCount(globalThis.localStorage?.getItem(key)); }
+  catch { return 0; }
 }
 
-export function vvcThreadMode(): VvcThreadMode {
-  if (vvcMode !== undefined) return vvcMode;
-  try { return parseVvcMode(globalThis.localStorage?.getItem(vvcKey) ?? null); }
-  catch { return 'auto'; }
+function parseVvcCount(value: string | null | undefined) {
+  if (!value || !/^\d+$/.test(value)) return 0;
+  const count = Number(value);
+  return count <= MAX_WASM_DECODE_COUNT ? count : 0;
 }
 
-export function setVvcThreadMode(value: string) {
-  vvcMode = parseVvcMode(value);
-  try { globalThis.localStorage?.setItem(vvcKey, vvcMode); }
+function writeVvcCount(key: string, value: string) {
+  const count = parseVvcCount(value);
+  vvcTuning.set(key, count);
+  try { globalThis.localStorage?.setItem(key, count ? String(count) : 'auto'); }
   catch { /* Keep the selection in memory when storage is unavailable. */ }
 }
+
+export function vvcThreadCount() { return readVvcCount(vvcThreadsKey); }
+export function vvcFrameContextCount() { return readVvcCount(vvcContextsKey); }
+export function setVvcThreadCount(value: string) { writeVvcCount(vvcThreadsKey, value); }
+export function setVvcFrameContextCount(value: string) { writeVvcCount(vvcContextsKey, value); }
 
 export function decodeThreadsForCodec(threads: DecodeThreads, codec: string): number {
   return typeof threads === 'number' ? threads : codec === 'vvc' ? threads.vvc : threads.general;

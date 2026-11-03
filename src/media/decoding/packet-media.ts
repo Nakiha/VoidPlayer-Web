@@ -105,7 +105,10 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     let verifiedNativeYuv: MediaSource | undefined;
     let activateVerifiedNativeYuv = (_adapter: MediaSource) => {};
     let deactivateVerifiedNativeYuv = () => {};
-    contextLog().info('media', `${container.toUpperCase()} 已通过 TS 解封装载入`, { name: meta.name, codec: init.codec, decoder: init.decoder, packets: times.length, io: 'file' in input ? 'blob-chunks' : 'http-range',timelineSource:init.timelineSource,indexWarning:init.indexWarning,hardwareAcceleration:init.hardwareAcceleration, coreVariant: info.coreVariant, requestedThreads: init.decoder === 'ffmpeg-wasm' ? decodeThreadsForCodec(threadsFor(selected), init.codec) : undefined,
+    const selectedThreads = threadsFor(selected);
+    contextLog().info('media', `${container.toUpperCase()} 已通过 TS 解封装载入`, { name: meta.name, codec: init.codec, decoder: init.decoder, packets: times.length, io: 'file' in input ? 'blob-chunks' : 'http-range',timelineSource:init.timelineSource,indexWarning:init.indexWarning,hardwareAcceleration:init.hardwareAcceleration, coreVariant: info.coreVariant, requestedThreads: init.decoder === 'ffmpeg-wasm' ? decodeThreadsForCodec(selectedThreads, init.codec) : undefined,
+      requestedFrameContexts: init.decoder === 'ffmpeg-wasm' && init.codec === 'vvc'
+        ? typeof selectedThreads === 'object' ? selectedThreads.vvcFrameContexts : 1 : undefined,
       startupPacketOffset: startup?.index.packets[0]?.offset, startupNextOffset: startup?.nextOffset, startupIndexComplete: startup?.complete });
     const yuvPool=createYuvBufferPool();
     if (container === 'flv') info.opportunisticAudio = 'flv-aac';

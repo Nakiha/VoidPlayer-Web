@@ -90,6 +90,8 @@ kbd { background: var(--surface-input); border-radius: 4px; padding: 2px 6px; fo
 .log-session-row .settings-choice { flex: 1; min-width: 0; }
 .settings-choice { display: flex; justify-content: space-between; gap: 12px; min-width: 0; min-height: 32px; padding: 6px 10px; border: 0; box-shadow: none; background: var(--surface-control); transition: none; }
 .settings-content .settings-choice { background: color-mix(in srgb, var(--settings-card-fill, var(--surface-panel)), var(--text) 6%); }
+input.settings-choice { border-radius: var(--radius-control); color: var(--text); font: inherit; }
+input.settings-choice:disabled { opacity: var(--disabled-opacity); }
 .settings-choice > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 .settings-choice > .icon { flex: none; color: var(--text-secondary); }
 .settings-window > .choice-menu { max-width: min(max(420px, var(--menu-trigger-width, 0px)), calc(100vw - 24px)); max-height: min(320px, calc(100dvh - 32px)); }

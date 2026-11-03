@@ -1160,8 +1160,9 @@ export interface Sources {
   "settings.chartHoverCombined": "合并显示";
   "settings.chartHoverSeparate": "各图独立显示";
   "settings.unknownSettingsPage": "未知设置页面。";
-  "settings.vvcThreadMode": "VVC 解码配置";
-  "settings.vvcThreadPreset": "{threads, number} 线程 / {contexts, number} 套上下文";
+  "settings.vvcFrameContexts": "VVC 帧上下文数";
+  "settings.vvcThreads": "VVC 解码线程数";
+  "settings.vvcTuningHint": "留空使用自动配置。修改后重新打开片源。";
   "settings.wasmThreadsAuto": "自动";
   "settings.wasmThreadsMulti": "多线程优先";
   "settings.wasmThreadsSingle": "单线程";
@@ -2743,8 +2744,9 @@ export interface MessageParameters {
   "settings.chartHoverCombined": {  };
   "settings.chartHoverSeparate": {  };
   "settings.unknownSettingsPage": {  };
-  "settings.vvcThreadMode": {  };
-  "settings.vvcThreadPreset": { "contexts": number; "threads": number };
+  "settings.vvcFrameContexts": {  };
+  "settings.vvcThreads": {  };
+  "settings.vvcTuningHint": {  };
   "settings.wasmThreadsAuto": {  };
   "settings.wasmThreadsMulti": {  };
   "settings.wasmThreadsSingle": {  };

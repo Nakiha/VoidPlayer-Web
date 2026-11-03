@@ -4959,16 +4959,17 @@
     "source": "未知设置页面。",
     "params": {}
   },
-  "settings.vvcThreadMode": {
-    "source": "VVC 解码配置",
+  "settings.vvcFrameContexts": {
+    "source": "VVC 帧上下文数",
     "params": {}
   },
-  "settings.vvcThreadPreset": {
-    "source": "{threads, number} 线程 / {contexts, number} 套上下文",
-    "params": {
-      "contexts": "number",
-      "threads": "number"
-    }
+  "settings.vvcThreads": {
+    "source": "VVC 解码线程数",
+    "params": {}
+  },
+  "settings.vvcTuningHint": {
+    "source": "留空使用自动配置。修改后重新打开片源。",
+    "params": {}
   },
   "settings.wasmThreadsAuto": {
     "source": "自动",

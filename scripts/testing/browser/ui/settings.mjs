@@ -130,13 +130,19 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
     assert.equal(await threadMode.innerText(), label);
     assert.equal(await page.evaluate(() => localStorage.getItem('voidplayer.wasm-thread-mode')), value);
    }
-   const vvcMode = page.locator('#vvc-thread-mode');
-   assert.equal(await vvcMode.innerText(), '自动');
-   for (const [value, label] of [['4', '4 线程 / 4 套上下文'], ['8', '8 线程 / 6 套上下文'], ['auto', '自动']]) {
-    await vvcMode.click();
-    await page.locator(`#vvc-thread-mode-menu [data-value="${value}"]`).click();
-    assert.equal(await vvcMode.innerText(), label);
-    assert.equal(await page.evaluate(() => localStorage.getItem('voidplayer.vvc-thread-mode')), value);
+   const vvcThreads = page.locator('#vvc-thread-mode'), vvcContexts = page.locator('#vvc-frame-contexts');
+   for (const [input, key, value] of [
+    [vvcThreads, 'voidplayer.vvc-thread-mode', '14'], [vvcContexts, 'voidplayer.vvc-frame-contexts', '18'],
+   ]) {
+    assert.equal(await input.getAttribute('placeholder'), '自动');
+    assert.equal(await input.inputValue(), '');
+    await input.fill(value);
+    await input.press('Tab');
+    assert.equal(await input.inputValue(), value);
+    assert.equal(await page.evaluate(key => localStorage.getItem(key), key), value);
+    await input.fill('');
+    await input.press('Tab');
+    assert.equal(await page.evaluate(key => localStorage.getItem(key), key), 'auto');
    }
    assert.equal(await page.locator('#analysis-concurrency').innerText(),'2 路');
    for(const value of [1,3,4,8,2]) {

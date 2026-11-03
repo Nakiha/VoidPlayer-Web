@@ -1,5 +1,5 @@
 import { coreAssetUrl } from './core-url.ts';
-import { vvcThreadMode } from '../policy/wasm-threads.ts';
+import { vvcFrameContextCount, vvcThreadCount } from '../policy/wasm-threads.ts';
 import type { WasmThreadMode } from '../policy/wasm-threads.ts';
 import type {MediaOpenProgress} from '../progress.ts';
 // Greatest index whose time is at most ptsUs (0 when none), and the first
@@ -61,8 +61,8 @@ export function reserveFallbackThreads() {
   const cores = globalThis.navigator?.hardwareConcurrency ?? 4;
   const available = cores - 2;
   const share = Math.max(1, Math.min(Math.floor(available / liveFallbacks), available - reservedFallbackThreads));
-  const mode = vvcThreadMode();
-  const threads = { general: Math.min(4, share), vvc: Math.min(mode === 'auto' ? 6 : Number(mode), share) };
+  const vvc = vvcThreadCount() || Math.min(6, share);
+  const threads = { general: Math.min(4, share), vvc, vvcFrameContexts: vvcFrameContextCount() || Math.min(6, vvc) };
   const reserved = Math.max(threads.general, threads.vvc);
   reservedFallbackThreads += reserved;
   let released = false;

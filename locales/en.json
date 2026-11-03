@@ -4673,13 +4673,17 @@
     "source": "未知设置页面。",
     "translation": "Unknown settings page."
   },
-  "settings.vvcThreadMode": {
-    "source": "VVC 解码配置",
-    "translation": "VVC decode profile"
+  "settings.vvcFrameContexts": {
+    "source": "VVC 帧上下文数",
+    "translation": "VVC frame contexts"
   },
-  "settings.vvcThreadPreset": {
-    "source": "{threads, number} 线程 / {contexts, number} 套上下文",
-    "translation": "{threads, number} threads / {contexts, number} contexts"
+  "settings.vvcThreads": {
+    "source": "VVC 解码线程数",
+    "translation": "VVC decode threads"
+  },
+  "settings.vvcTuningHint": {
+    "source": "留空使用自动配置。修改后重新打开片源。",
+    "translation": "Leave blank for Auto. Reopen the source after changing these settings."
   },
   "settings.wasmThreadsAuto": {
     "source": "自动",

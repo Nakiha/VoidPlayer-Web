@@ -27,6 +27,10 @@ if (process.argv[3] === '--variant') {
       core.FS.writeFile('/invalid.bin', new Uint8Array([1, 2, 3, 4]));
       assert.notEqual(core.ccall('vp_open', 'number', ['number', 'string'], [ctx, '/invalid.bin']), 0);
       assert.equal(core.ccall('vp_packet_open', 'number', ['number', 'string', 'number', 'number'], [ctx, 'av1', 0, 0]), 0, 'dav1d must open');
+      assert.equal(typeof core._vp_set_vvc_threads, 'function');
+      assert.equal(typeof core._vp_set_vvc_frame_contexts, 'function');
+      core._vp_set_vvc_frame_contexts(18);
+      assert.equal(core.ccall('vp_packet_open', 'number', ['number', 'string', 'number', 'number'], [ctx, 'vvc', 0, 0]), 0, 'VVC must open with an explicit context count');
     } finally { core.ccall('vp_destroy', null, ['number'], [ctx]); }
     console.log(`PASS ${stem}: required interfaces, invalid input, AV1 decoder`);
     process.exit(0);

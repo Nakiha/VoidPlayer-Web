@@ -209,6 +209,7 @@ export async function wasmFlvDecoder(index: PacketConfiguration, glueURL: string
   if (typeof core._vp_packet_open !== 'function') throw new MediaOpenError('decode', 'WASM core 版本过旧，请同步带 FLV 压缩包接口的产物。');
   const call = (name: string, types: string[], args: unknown[], result: string | null = 'number') => core.ccall(name, result, types, args);
   call('vp_set_threads', ['number'], [threads], null);
+  if (index.codec === 'vvc' && typeof budget === 'object') core._vp_set_vvc_frame_contexts?.(budget.vvcFrameContexts);
   const ctx = call('vp_create', [], []);
   if (!ctx) throw new MediaOpenError('resource', '无法创建 FLV 解码上下文。');
   const configure = (next: PacketConfiguration) => {
