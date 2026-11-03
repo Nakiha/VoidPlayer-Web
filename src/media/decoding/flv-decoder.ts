@@ -24,7 +24,6 @@ import { hevcFieldPictures } from '../../../shared/media/codecs/hevc-geometry.ts
  * may use a shifted decoder clock and must never be used as frame identity. */
 export interface PacketFrame { nativePicture?:NativePictureIdentity; rotation?: 0 | 90 | 180 | 270; packetPicture?: import('../../../shared/media/codecs/packet-picture.ts').PacketPicture; durationUs?: number; description: FrameDescription; pts: number; width: number; height: number; frame?: VideoFrame; pixels?: ArrayBuffer; }
 export type FlvFrame = PacketFrame;
-export type PacketCore = string | { url: string; singleForVvc: string };
 type PacketConfiguration = Pick<PacketDecodeIndex, 'codec' | 'description' | 'codecParameters'>;
 function packetDecoderConfig(index: PacketConfiguration): VideoDecoderConfig | null {
   if(index.codec==='hevc'&&isAnnexB(index.description))return hevcAnnexBDecoderConfig(index.description);
@@ -201,14 +200,12 @@ export async function nativeFlvDecoder(index: PacketDecodeIndex, initialConfig?:
 
 // Emscripten's generated module has a dynamically named C API.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function wasmFlvDecoder(index: PacketConfiguration, selection: PacketCore, wasmBinary?: Uint8Array, threads = 1): Promise<PacketDecoder> {
-  const singleVvc = typeof selection !== 'string' && index.codec === 'vvc';
-  const glueURL = typeof selection === 'string' ? selection : singleVvc ? selection.singleForVvc : selection.url;
+export async function wasmFlvDecoder(index: PacketConfiguration, glueURL: string, wasmBinary?: Uint8Array, threads = 1): Promise<PacketDecoder> {
   const { core, heap } = await loadCore(glueURL, wasmBinary);
   requireFrameAbi(core);
   if (typeof core._vp_packet_open !== 'function') throw new MediaOpenError('decode', 'WASM core 版本过旧，请同步带 FLV 压缩包接口的产物。');
   const call = (name: string, types: string[], args: unknown[], result: string | null = 'number') => core.ccall(name, result, types, args);
-  call('vp_set_threads', ['number'], [singleVvc ? 1 : threads], null);
+  call('vp_set_threads', ['number'], [threads], null);
   const ctx = call('vp_create', [], []);
   if (!ctx) throw new MediaOpenError('resource', '无法创建 FLV 解码上下文。');
   const configure = (next: PacketConfiguration) => {

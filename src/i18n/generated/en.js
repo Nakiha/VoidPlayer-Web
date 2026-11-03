@@ -1202,7 +1202,7 @@ export default {
   "settingsShell.version": () => "Version",
   "settingsShell.videoDecoding": () => "Video decoding",
   "settingsShell.wasmThreads": () => "WASM decoder threads",
-  "settingsShell.wasmThreadsDescription": () => "Applies when you reopen a video. Auto uses single-threaded decoding for VVC. If multithreaded decoding fails to start, the player uses the single-threaded core.",
+  "settingsShell.wasmThreadsDescription": () => "Applies when you reopen a video. Auto prefers multithreaded decoding and falls back to the single-threaded core if startup fails.",
   "settingsShell.workspace": () => "Workspace",
   "sharing.addVideo": () => "Add a video before sharing.",
   "sharing.copyLink": () => "Copy link",

@@ -34,6 +34,10 @@ try {
       VideoFrame.prototype.allocationSize = function() { throw new DOMException('Opaque frame', 'NotSupportedError'); };
     });
     const errors = [], requests = [];
+    let triedMt = false;
+    page.context().on('request', request => {
+      if (new URL(request.url()).pathname.endsWith('/voidplayer-core-mt.js')) triedMt = true;
+    });
     page.on('pageerror', e => errors.push(e.message));
     page.on('request', r => { if (/\/api\/media\/[0-9a-f]+$/.test(new URL(r.url()).pathname)) requests.push(r.headers()); });
     try {
@@ -76,7 +80,9 @@ try {
       // capability-first policy; VVC and FFV1 exercise mandatory WASM here.
       if (!file.startsWith('h264_')) assert.equal(result.first.tracks[0].decoder, 'ffmpeg-wasm');
       else assert.ok(['webcodecs', 'ffmpeg-wasm'].includes(result.first.tracks[0].decoder));
-      if (file.startsWith('h266_')) assert.equal(result.first.tracks[0].coreVariant, 'single-thread');
+      if (file.startsWith('h266_') && name === 'chromium' && await page.evaluate(() => crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined')) {
+        assert.ok(triedMt, 'automatic VVC playback must attempt the MT core before any fallback');
+      }
       if (file === 'h264_boundary.mp4') {
         assert.equal(result.first.tracks[0].decoder, 'webcodecs', 'intact samples in an overdeclared mdat retain native decoding');
         assert.match(result.first.tracks[0].indexWarning, /mdat/);

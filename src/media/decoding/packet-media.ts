@@ -42,11 +42,8 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
   const releaseReservation = () => { if (reservationHeld) { reservation.release(); reservationHeld = false; } };
   let rpc: WorkerRpc<PacketCommands> | undefined;
   try {
-    const mode = wasmThreadMode();
-    let candidates = fallbackCoreCandidates(deps, deps.glueURL ?? document.baseURI, mode);
+    const candidates = fallbackCoreCandidates(deps, deps.glueURL ?? document.baseURI, wasmThreadMode());
     const single = candidates.at(-1)!;
-    // VVC packet playback has reported MT-only startup and mid-stream failures.
-    const singleForVvc = mode === 'auto' && candidates.length > 1 ? single : undefined;
     const threadsFor = (url: string) => deps.glueURL || fallbackCoreVariant(url) === 'multi-thread' ? reservation.threads : 1;
     if(deps.preparedTs)rpc=deps.preparedTs.rpc;
     type Init = PacketInitResult;
@@ -65,7 +62,6 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
       try {
         deps.onProgress?.('inspect');
         prepared = await rpc.call('prepare', { input }, [], 60000, true);
-        if (singleForVvc && prepared.index.codec === 'vvc') candidates = [single];
         if (!deps.forceWasm) init = await rpc.call('native', {}, [], 60000);
       } finally { detachAbort(); }
     }
@@ -79,10 +75,10 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
       try {
         if (container !== 'flv') deps.onProgress?.('inspect');
         init = await rpc.call('init', { input, glueURL, wasmBinary: deps.wasmBinary,
-          forceWasm: container === 'flv' || !!deps.forceWasm, threads: threadsFor(glueURL), singleForVvc: glueURL === single ? undefined : singleForVvc,
+          forceWasm: container === 'flv' || !!deps.forceWasm, threads: threadsFor(glueURL),
           ...((container==='ts'||container==='matroska')?{container,persistent:true,sourceVersion:deps.sourceVersion!,preparedTsSession:rpc===deps.preparedTs?.rpc?deps.preparedTs?.session:undefined}:{container,prepared:restore}) }, [],
           container === 'flv' && fallbackCoreVariant(glueURL) === 'multi-thread' ? 10000 : 60000, (container==='ts'||container==='matroska'));
-        selected = init?.codec === 'vvc' && singleForVvc ? singleForVvc : glueURL;
+        selected = glueURL;
       } catch (error) {
         rpc.terminate(); rpc = undefined; failure = error;
         loadAborted(deps.signal);

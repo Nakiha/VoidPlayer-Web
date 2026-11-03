@@ -1202,7 +1202,7 @@ export default {
   "settingsShell.version": () => "版本",
   "settingsShell.videoDecoding": () => "视频解码",
   "settingsShell.wasmThreads": () => "WASM 解码线程",
-  "settingsShell.wasmThreadsDescription": () => "重新打开视频后生效。自动模式为 VVC 使用单线程；多线程不可用时回退到单线程。",
+  "settingsShell.wasmThreadsDescription": () => "重新打开视频后生效。自动模式优先使用多线程，启动失败时回退到单线程。",
   "settingsShell.workspace": () => "工作区",
   "sharing.addVideo": () => "请先添加视频再分享。",
   "sharing.copyLink": () => "复制链接",

@@ -8,7 +8,7 @@ import { Mp4CachedMetadata } from '../indexing/mp4-cached-metadata.ts';
 import type { RandomAccessInput } from '../../../shared/media/io/range-reader.ts';
 import { readMp4Configurations, validateFragmentPacket } from '../../../shared/media/containers/mp4-config.ts';
 import { wasmPacketDecoder, nativePacketDecoder } from './flv-decoder.ts';
-import type { PacketCore, PacketDecoder, PacketFrame } from './flv-decoder.ts';
+import type { PacketDecoder, PacketFrame } from './flv-decoder.ts';
 import type { PacketDecodeIndex } from '../../../shared/media/indexing/packet-decode-index.ts';
 import { hevcDisplayOrder, recoveredHevcTimes } from '../../../shared/media/codecs/hevc-timeline.ts';
 import type { FlvCodec, FlvPacket } from '../../../shared/media/containers/flv-demux.ts';
@@ -45,7 +45,7 @@ export class Mp4Engine {
   }
   cachedWindows() { return this.reader.cachedWindows(); }
   peekCachedBytes(offset: number, length: number) { return this.reader.peek(offset, length) ?? this.audioMetadata.peek(offset, length); }
-  async open(glueURL:PacketCore,wasmBinary?:Uint8Array,forceWasm=true,threads=1,onProgress?:MediaOpenProgress){
+  async open(glueURL:string,wasmBinary?:Uint8Array,forceWasm=true,threads=1,onProgress?:MediaOpenProgress){
     try{
       onProgress?.('inspect');
       try{await this.input.getFormat();}catch(error){if(error instanceof MediaOpenError)throw error;throw new MediaOpenError('container','不是可通过 MP4 索引读取的文件。');}

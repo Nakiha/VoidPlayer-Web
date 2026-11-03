@@ -5120,7 +5120,7 @@
     "params": {}
   },
   "settingsShell.wasmThreadsDescription": {
-    "source": "重新打开视频后生效。自动模式为 VVC 使用单线程；多线程不可用时回退到单线程。",
+    "source": "重新打开视频后生效。自动模式优先使用多线程，启动失败时回退到单线程。",
     "params": {}
   },
   "settingsShell.workspace": {

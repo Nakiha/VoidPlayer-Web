@@ -6,7 +6,7 @@ import { MediaOpenError } from '../../../shared/media/io/media-errors.ts';
 import { scanFlv, flvDecoderConfig, flvIndexWarning, flvIndexIntegrity, flvMediaTiming, FlvReader } from '../../../shared/media/containers/flv-demux.ts';
 import type { FlvInput, FlvIndex, FlvCheckpoint } from '../../../shared/media/containers/flv-demux.ts';
 import { nativeFlvDecoder, wasmFlvDecoder, packetDecodeError } from './flv-decoder.ts';
-import type { PacketCore, PacketDecoder, FlvFrame } from './flv-decoder.ts';
+import type { PacketDecoder, FlvFrame } from './flv-decoder.ts';
 import type { RangeVersion } from '../../../shared/media/io/range-reader.ts';
 
 export interface PreparedFlv extends FlvCheckpoint { version: RangeVersion; }
@@ -110,7 +110,7 @@ export class FlvEngine {
       this.indexingFailure = error; this.wake(); throw error;
     } finally { this.serverProgress=undefined; this.scanReader?.close(); this.scanReader = undefined; }
   }
-  async open(glueURL: PacketCore, wasmBinary?: Uint8Array, forceWasm = false, threads = 1, onProgress?: MediaOpenProgress, nativeOnly = false) {
+  async open(glueURL: string, wasmBinary?: Uint8Array, forceWasm = false, threads = 1, onProgress?: MediaOpenProgress, nativeOnly = false) {
     try {
       await this.prepare(onProgress);
       if (!forceWasm) {

@@ -7,7 +7,7 @@ import {jsPictureStream} from '../../../shared/media/containers/matroska-packet-
 import {jsDecodeIndex} from '../indexing/js-decode-index.ts';
 import { PacketTimeline } from './packet-timeline.ts';
 import { nativePacketDecoder, wasmPacketDecoder } from './flv-decoder.ts';
-import type { PacketCore, PacketFrame, PacketDecoder } from './flv-decoder.ts';
+import type { PacketFrame, PacketDecoder } from './flv-decoder.ts';
 import type { PacketDecodeIndex } from '../../../shared/media/indexing/packet-decode-index.ts';
 import type { PacketView } from '../../../shared/analysis/metadata/adapters.ts';
 import type { MediaOpenProgress } from '../progress.ts';
@@ -100,7 +100,7 @@ export class JsContainerEngine {
       dts:packet.timing.dts===null?null:Math.round(packet.timing.dts*1e6*packet.timing.timebase[0]/packet.timing.timebase[1]),size:packet.size,key:packet.key}))};
     return this.document;
   }
-  async open(glueURL: PacketCore, wasmBinary?: Uint8Array, forceWasm = true, threads = 1, onProgress?: MediaOpenProgress, onIndexProgress?: (data:IndexProgress)=>void) {
+  async open(glueURL: string, wasmBinary?: Uint8Array, forceWasm = true, threads = 1, onProgress?: MediaOpenProgress, onIndexProgress?: (data:IndexProgress)=>void) {
     try {
       this.check();
       onProgress?.('index');

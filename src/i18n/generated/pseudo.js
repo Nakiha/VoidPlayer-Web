@@ -1202,7 +1202,7 @@ export default {
   "settingsShell.version": () => "［V~e~r~s~i~o~n~ ········］",
   "settingsShell.videoDecoding": () => "［V~i~d~e~o~ d~e~c~o~d~i~n~g~ ········］",
   "settingsShell.wasmThreads": () => "［W~A~S~M~ d~e~c~o~d~e~r~ t~h~r~e~a~d~s~ ········］",
-  "settingsShell.wasmThreadsDescription": () => "［A~p~p~l~i~e~s~ w~h~e~n~ y~o~u~ r~e~o~p~e~n~ a~ v~i~d~e~o~. A~u~t~o~ u~s~e~s~ s~i~n~g~l~e~-t~h~r~e~a~d~e~d~ d~e~c~o~d~i~n~g~ f~o~r~ V~V~C~. I~f~ m~u~l~t~i~t~h~r~e~a~d~e~d~ d~e~c~o~d~i~n~g~ f~a~i~l~s~ t~o~ s~t~a~r~t~, t~h~e~ p~l~a~y~e~r~ u~s~e~s~ t~h~e~ s~i~n~g~l~e~-t~h~r~e~a~d~e~d~ c~o~r~e~. ········］",
+  "settingsShell.wasmThreadsDescription": () => "［A~p~p~l~i~e~s~ w~h~e~n~ y~o~u~ r~e~o~p~e~n~ a~ v~i~d~e~o~. A~u~t~o~ p~r~e~f~e~r~s~ m~u~l~t~i~t~h~r~e~a~d~e~d~ d~e~c~o~d~i~n~g~ a~n~d~ f~a~l~l~s~ b~a~c~k~ t~o~ t~h~e~ s~i~n~g~l~e~-t~h~r~e~a~d~e~d~ c~o~r~e~ i~f~ s~t~a~r~t~u~p~ f~a~i~l~s~. ········］",
   "settingsShell.workspace": () => "［W~o~r~k~s~p~a~c~e~ ········］",
   "sharing.addVideo": () => "［A~d~d~ a~ v~i~d~e~o~ b~e~f~o~r~e~ s~h~a~r~i~n~g~. ········］",
   "sharing.copyLink": () => "［C~o~p~y~ l~i~n~k~ ········］",
