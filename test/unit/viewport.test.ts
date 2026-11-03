@@ -121,13 +121,13 @@ test('apply validates patches for the automation surface', () => {
 test('wheel classification: known signals first, heuristic otherwise', () => {
   // Chromium/Firefox trackpad pinch arrives as ctrl+wheel.
   assert.equal(classifyWheel(4, 0, true), 'zoom');
-  // WebKit tags trackpad-originated scrolls.
-  assert.equal(classifyWheel(3, 0, false, true), 'pan');
-  assert.equal(classifyWheel(-120, 0, false, false), 'zoom');
+  // A single line notch is only 40 normalized pixels.
+  assert.equal(classifyWheel(-1, 1, false), 'zoom');
+  assert.equal(classifyWheel(1, 2, false), 'zoom');
+  assert.equal(classifyWheel(0, 1, false), 'pan');
   // Heuristic: large integer notch = mouse wheel, small/fractional = trackpad.
   assert.equal(classifyWheel(120, 0, false), 'zoom');
   assert.equal(classifyWheel(-100, 0, false), 'zoom');
-  assert.equal(classifyWheel(53, 1, false), 'zoom'); // line mode normalized (53*40)
   assert.equal(classifyWheel(3.000030517578125, 0, false), 'pan');
   assert.equal(classifyWheel(12, 0, false), 'pan');
 });

@@ -184,17 +184,12 @@ export function normalizeWheelDelta(delta: number, deltaMode: number): number {
   return deltaMode === 1 ? delta * 40 : deltaMode === 2 ? delta * 800 : delta;
 }
 
-/** Browsers cannot reliably tell a mouse wheel from trackpad scrolling.
- *  Known signals first: ctrl+wheel is trackpad pinch on Chromium/Firefox, and
- *  WebKit tags trackpad-originated scrolls with directionInvertedFromDevice.
- *  Otherwise fall back to a heuristic: mouse notches are large integer deltas,
- *  trackpad pixel scrolling is small and usually fractional (dpr-scaled). */
-export function classifyWheel(deltaY: number, deltaMode: number, ctrlKey: boolean, webkitDirectionInverted?: boolean): WheelIntent {
+/** Pinch and discrete vertical wheel input zoom. Pixel-mode scrolling has
+ *  no reliable device identity, so retain the notch heuristic for that case. */
+export function classifyWheel(deltaY: number, deltaMode: number, ctrlKey: boolean): WheelIntent {
   if (ctrlKey) return 'zoom';
-  if (webkitDirectionInverted === true) return 'pan';
-  if (webkitDirectionInverted === false) return 'zoom';
-  const dy = normalizeWheelDelta(deltaY, deltaMode);
-  return Math.abs(dy) >= 50 && Number.isInteger(dy) ? 'zoom' : 'pan';
+  if (deltaY !== 0 && (deltaMode === 1 || deltaMode === 2)) return 'zoom';
+  return Math.abs(deltaY) >= 50 && Number.isInteger(deltaY) ? 'zoom' : 'pan';
 }
 
 /** macOS sends synthetic "momentum" wheel events after the fingers leave the

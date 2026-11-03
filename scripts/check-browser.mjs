@@ -1296,6 +1296,13 @@ try {
     await settle(page);
     const pinchView = await page.evaluate(() => window.voidPlayer.getViewport());
     assert.deepEqual([pinchView.zoom, pinchView.offsetX, pinchView.offsetY], [1, 0, 0], 'pinching to zoom out also recenters at the minimum zoom');
+    await page.locator('#stage-A').evaluate(stage => {
+      const wheel = new WheelEvent('wheel', { deltaY: -1, deltaMode: 1, bubbles: true, cancelable: true });
+      Object.defineProperty(wheel, 'webkitDirectionInvertedFromDevice', { value: true });
+      stage.dispatchEvent(wheel);
+    });
+    await page.waitForFunction(() => window.voidPlayer.getViewport().zoom > 1);
+    await page.evaluate(() => window.voidPlayer.setViewport({ zoom: 1, offsetX: 0, offsetY: 0 }));
     const beforeFocus = await page.locator('#stage-A').boundingBox();
     const focusButton = await page.locator('#toggle-chrome').boundingBox();
     assert.equal(await page.locator('#toggle-chrome').getAttribute('data-tooltip'), '专注模式 (F)');

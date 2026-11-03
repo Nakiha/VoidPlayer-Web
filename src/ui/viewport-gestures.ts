@@ -134,8 +134,7 @@ export function installViewportGestures(deps: ViewportGestureDeps) {
   screens.addEventListener('wheel', e => {
     if (!session.getState().tracks.length) return;
     e.preventDefault();
-    const inverted = (e as WheelEvent & { webkitDirectionInvertedFromDevice?: boolean }).webkitDirectionInvertedFromDevice;
-    if (classifyWheel(e.deltaY, e.deltaMode, e.ctrlKey, inverted) === 'pan') {
+    if (classifyWheel(e.deltaY, e.deltaMode, e.ctrlKey) === 'pan') {
       const dx = -normalizeWheelDelta(e.deltaX, e.deltaMode);
       const dy = -normalizeWheelDelta(e.deltaY, e.deltaMode);
       if (!panMomentum.accept(dx, dy, e.timeStamp)) return;
