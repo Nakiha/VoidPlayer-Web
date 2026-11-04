@@ -1,3 +1,4 @@
+import { checkAcknowledgedInputBudget } from '../helpers/bitstream-input-budget.ts';
 import { copyAnalysisCoreManifests } from '../helpers/analysis-core-manifests.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -306,4 +307,8 @@ test('MP4 decode tick table is opt-in and ordinary playback config does not read
     const analysis = await readMp4Configurations(source, track.id, 250000, true);
     assert.equal(analysis.decodeTimes?.length, ordinary.sampleSizes!.length); assert.equal(analysis.decodeTimes?.[0], 0);
   } finally { media.dispose(); }
+});
+
+test('viewport FLV renews IO only on acknowledged outputs and enumerates the complete index', async () => {
+  await checkAcknowledgedInputBudget(await readFile('fixtures/flv-analysis/legacy-h264.flv'));
 });
