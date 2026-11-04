@@ -115,7 +115,8 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     const yuvPool=createYuvBufferPool();
     if (container === 'flv') info.opportunisticAudio = 'flv-aac';
     let disposed = false, spare: ArrayBuffer | undefined;
-    const verifiedFrame = createVerifiedFrameHandoff();
+    const pictureVersion = () => info.source ? `${info.source.id}@${referenceVersion(info.source.url)}` : info.id;
+    const verifiedFrame = createVerifiedFrameHandoff(pictureVersion);
     let serial = Promise.resolve();
     let indexing: Promise<void> | undefined;
     const indexWaiters = new Set<() => void>();
@@ -175,7 +176,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
         ? { ...frame.description, sourceColor: { ...info.color }, sourceColorOrigin: 'container' as const } : frame.description;
       const rawFrame = { description, rotation: frame.rotation, kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8',
         ...(nativePresentedInstance&&frame.nativePicture?{nativePresentedInput:{instance:nativePresentedInstance,sourceVersion:nativePresentedTransport!.sourceVersion,input:frame.nativePicture}}:{}),
-        ...(frame.packetPicture ? { sourcePicture: { ...frame.packetPicture, sourceVersion: info.source ? `${info.source.id}@${referenceVersion(info.source.url)}` : info.id, picture: 0 as const, layer: 0 as const, field: 'frame' as const } } : {}),
+        ...(frame.packetPicture ? { sourcePicture: { ...frame.packetPicture, sourceVersion: pictureVersion(), picture: 0 as const, layer: 0 as const, field: 'frame' as const } } : {}),
         width: frame.width, height: frame.height, ptsUs: frame.pts - info.firstPtsUs, sourcePtsUs: frame.pts,
         durationUs: frame.durationUs ?? durations[position], byteSize: frame.description.byteLength, sample, pixels,
         close() { if (closed) return; closed = true; sample?.close(); if (!disposed && pixels) spare = pixels.buffer as ArrayBuffer; },

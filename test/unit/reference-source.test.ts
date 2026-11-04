@@ -76,6 +76,21 @@ test('a verified origin frame transfers ownership once and is never served for a
   assert.equal(closed, 4, 'invalidating an unconsumed origin closes it once');
 });
 
+test('verified frame delivery uses the finalized namespace without inventing or changing its AU witness', () => {
+  let version = 'temporary', closed = 0;
+  const slot = createVerifiedFrameHandoff(() => version);
+  const sourcePicture = { sourceVersion: version, stream: 'video', configuration: 2, au: 17, picture: 0 as const, layer: 0 as const, field: 'frame' as const };
+  slot.offer({ ...yuvFrame(2), sourcePicture, close() { closed++; } });
+  version = 'library@version';
+  const delivered = slot.take(0)!;
+  assert.deepEqual(delivered.sourcePicture, { ...sourcePicture, sourceVersion: version });
+  delivered.close();
+  slot.clear();
+  assert.equal(closed, 1);
+  slot.offer(yuvFrame(2));
+  assert.equal(slot.take(0)?.sourcePicture, undefined, 'an unverified frame never gains an inferred AU');
+});
+
 test('reference admission reuses a validated software witness when native geometry mismatches', async () => {
   const originalWorker = globalThis.Worker;
   globalThis.Worker = IdleWorker as unknown as typeof Worker;

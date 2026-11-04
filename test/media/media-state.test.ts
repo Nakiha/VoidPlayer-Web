@@ -27,13 +27,16 @@ test('software admission hands its validated frame to presentation without anoth
   try {
     await source.admitReference!(1);
     assert.equal(requests.filter(type => type === 'at').length, 1, 'admission consumes the primed frame');
+    source.info.source = { kind: 'library', id: 'a'.repeat(24), url: `/api/media/${'a'.repeat(24)}?v=${'b'.repeat(24)}` };
     const first = await source.frameAt(0);
     assert.equal(requests.filter(type => type === 'at').length, 1, 'presentation consumes the validated frame');
+    assert.equal(first.sourcePicture?.sourceVersion, `${'a'.repeat(24)}@${'b'.repeat(24)}`, 'first presentation uses the attached library namespace');
     const hash = visiblePixelHash(first.description, first.pixels!);
     first.close();
     const replay = await source.frameAt(0);
     assert.equal(requests.filter(type => type === 'at').length, 2, 'the handoff is consumed exactly once');
     assert.equal(visiblePixelHash(replay.description, replay.pixels!), hash);
+    assert.deepEqual(first.sourcePicture, replay.sourcePicture, 'handoff preserves the same actual AU witness as a fresh read');
     replay.close();
 
     await source.reconfigureColorMode!('reference', { decoder: 'software', depth: 1 });

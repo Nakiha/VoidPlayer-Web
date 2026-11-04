@@ -27,6 +27,7 @@ import { hdrTransfer } from '../../../shared/color/hdr-policy.ts';
 const isHdrTransfer = (transfer: string | null | undefined) => hdrTransfer(transfer) !== null;
 import { resolveYuvColor } from '../../../shared/color/yuv-color.ts';
 import { createVerifiedFrameHandoff } from './verified-frame-handoff.ts';
+import { referenceVersion } from '../../../shared/media/io/media-reference.ts';
 import type { MediaIndexIdentity } from '../../../shared/media/indexing/media-index-identity.ts';
 import type { MediaIndexClientTrace } from '../../../shared/media/indexing/media-index-types.ts';
 import { FfmpegContainerSession, FfmpegMediaIndexSession } from '../indexing/media-index-session.ts';
@@ -200,7 +201,8 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   };
 
   let disposed = false;
-  const verifiedFrame = createVerifiedFrameHandoff();
+  const pictureVersion = () => info.source ? `${info.source.id}@${referenceVersion(info.source.url)}` : info.id;
+  const verifiedFrame = createVerifiedFrameHandoff(pictureVersion);
   let spare: ArrayBuffer | null = null;
   let firstFrame = init.firstFrame;
   let previousIndex = -1;
@@ -380,7 +382,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       pixels,
       ptsUs: ticksToUs(output.pts) - ticksToUs(firstTick),
       sourcePtsUs: ticksToUs(output.pts),
-      ...(output.picture ? {sourcePicture: {sourceVersion: info.source ? `${info.source.id}@${new URL(info.source.url, globalThis.location?.href ?? 'http://localhost').searchParams.get('v')}` : info.id,
+      ...(output.picture ? {sourcePicture: {sourceVersion: pictureVersion(),
         ...output.picture, picture: 0 as const, layer: 0 as const, field: 'frame' as const}} : {}),
       durationUs: ticksToUs(output.duration) || durationsUs[index] || initialDurationUs,
       close() { if (!closed) { closed = true; if (!disposed) spare = pixels.buffer as ArrayBuffer; } },
