@@ -75,7 +75,7 @@ try {
   releaseWorkspace();
   await second.waitForFunction(() => {
     const state = window.voidPlayer.getState();
-    return state.busy && state.tracks.length === 2 && !!state.tracks[0].frame && state.tracks[1].pendingRelink;
+    return state.busy && state.tracks.length === 1 && !!state.tracks[0].frame && state.mediaLoad?.slot === 'B';
   });
   assert.equal(await second.locator('#start-panel').isVisible(), false);
   assert.equal(await second.locator('#image-A').isVisible(), true, 'the first track is presented while the later source is still opening');

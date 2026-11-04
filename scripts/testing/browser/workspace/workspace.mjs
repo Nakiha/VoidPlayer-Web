@@ -55,21 +55,21 @@ await withBrowserFixture({ caseName: 'workspace', engine: name, pageOptions: {"v
  });
  assert.deepEqual(await restored.evaluate(() => window.voidPlayer.getState().marks), saved.marks);
  assert.deepEqual(await restored.evaluate(() => window.voidPlayer.getState().tracks.map(t => t.id)), saved.tracks.map(t => t.mediaId));
- // Missing sources retain their saved track and annotation anchors for relink.
+ // Unavailable sources are skipped; annotation history remains without placeholder tracks.
  const bad=structuredClone(saved);bad.media.find(m=>m.id===bad.tracks[1].mediaId).source.url=base+'api/media/not-found';
  const failure=await restored.evaluate(async value=>{try{await window.voidPlayer.importWorkspace(value);return '';}catch(e){return e.message;}},bad);
- assert.equal(failure,'');assert.equal(await restored.evaluate(()=>window.voidPlayer.getState().tracks[1].pendingRelink),true);assert.deepEqual(await restored.evaluate(()=>window.voidPlayer.getState().marks),saved.marks);
- const relinkToast=restored.locator('.toast').filter({hasText:'个片源待重新关联'});
- await relinkToast.waitFor({state:'visible'});
- assert.equal(await relinkToast.count(),1,'missing sources have one shared relink notice');
- assert.equal(await relinkToast.locator('.toast-action').textContent(),'在媒体库中选择');
+ assert.equal(failure,'');assert.equal(await restored.evaluate(()=>window.voidPlayer.getState().tracks.length),1);assert.deepEqual(await restored.evaluate(()=>window.voidPlayer.getState().marks),saved.marks);
+ const skippedNotice=restored.locator('.toast').filter({hasText:'以下片源无法打开，已跳过'});
+ await skippedNotice.waitFor({state:'visible'});
+ assert.equal(await skippedNotice.count(),1,'skipped sources have one warning');
+ assert.equal(await skippedNotice.locator('.toast-action').count(),0);
  assert.equal(await restored.locator('.track-failure,[id^="failure-"]').count(),0,'track notices no longer overlay the picture');
  assert.equal(await restored.locator('.toast-warning').filter({hasText:'已停用'}).count(),0,'missing sources do not also emit runtime-failure warnings');
- assert.deepEqual(await restored.evaluate(()=>window.voidPlayer.getState().tracks.map(t=>t.id)),saved.tracks.map(t=>t.mediaId));
+ assert.deepEqual(await restored.evaluate(()=>window.voidPlayer.getState().tracks.map(t=>t.id)),[saved.tracks[0].mediaId]);
  // Plain JSON drop uses the same transaction.
  await restored.evaluate(value=>{const data=new DataTransfer();data.items.add(new File([JSON.stringify(value)],'workspace.json',{type:'application/json'}));document.body.dispatchEvent(new DragEvent('drop',{dataTransfer:data,bubbles:true,cancelable:true}));},saved);
  await restored.waitForFunction(()=>!window.voidPlayer.getState().busy&&!window.voidPlayer.getState().error);
- await relinkToast.waitFor({state:'hidden'});
+ await skippedNotice.waitFor({state:'hidden'});
  // Native range clicks must not be overwritten by pre-seek state emissions.
  await page.evaluate(()=>{
   const range=document.querySelector('#timeline'),descriptor=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value');window.rangeWrites=[];
@@ -93,14 +93,15 @@ await withBrowserFixture({ caseName: 'workspace', engine: name, pageOptions: {"v
  await page.screenshot({path:artifact(`voidplayer-settings-dark-${name}.png`)});
  await page.locator('[data-theme-choice=light]').click();await page.screenshot({path:artifact(`voidplayer-settings-light-${name}.png`)});await page.locator('#settings-close').click();await page.waitForFunction(()=>!document.querySelector('#settings').open && document.activeElement===document.querySelector('#settings-open'));
  const peer=await context.newPage();await peer.goto(base);assert.equal(await peer.locator('html').getAttribute('data-accent'),'purple');await peer.close();
- // A local reference cannot silently bind another file. Canceling relink preserves the workspace.
+ // Unavailable local references never open a modal or occupy a track.
  const local=structuredClone(saved);delete local.media.find(m=>m.id===local.tracks[0].mediaId).source;
- await restored.evaluate(value=>{window.localImport=window.voidPlayer.importWorkspace(value);},local);
- await restored.locator('.workspace-relink').waitFor();await restored.locator('.workspace-relink [aria-label="取消导入"]').click();
- await restored.evaluate(()=>window.localImport);assert.deepEqual(await restored.evaluate(()=>window.voidPlayer.getState().marks),saved.marks);
+ await restored.evaluate(value=>window.voidPlayer.importWorkspace(value),local);
+ assert.equal(await restored.locator('.workspace-relink').count(),0);
+ assert.deepEqual(await restored.evaluate(()=>window.voidPlayer.getState().marks),saved.marks);
+ assert.equal(await restored.evaluate(()=>window.voidPlayer.getState().tracks.some(track=>!track.frame)),false);
  // Supply the exact local file with its original metadata; restore still retains saved anchors.
  const info=local.media.find(m=>m.id===local.tracks[0].mediaId),bytes=await readFile(path.join(root,'fixtures/video',info.name));
  await restored.evaluate(async({document,bytes,info})=>{const file=new File([Uint8Array.from(atob(bytes),c=>c.charCodeAt(0))],info.name,{lastModified:info.lastModified});await window.voidPlayer.importWorkspace(document,[file]);},{document:local,bytes:bytes.toString('base64'),info});
  assert.deepEqual(await restored.evaluate(()=>window.voidPlayer.getState().marks),saved.marks);
- assert.deepEqual(errors,[]);console.log(`PASS ${name}: gzip import, JSON drop, ordered tracks/offsets/marks/view/layout, missing-source recovery, local relink/cancel, no transient seek rollback, settings and accent persistence`);
+ assert.deepEqual(errors,[]);console.log(`PASS ${name}: gzip import, JSON drop, ordered tracks/offsets/marks/view/layout, unavailable-source skipping, local skip/supplied-file restore, no transient seek rollback, settings and accent persistence`);
 });

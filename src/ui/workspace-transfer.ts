@@ -1,11 +1,11 @@
 import {ownLibraryIndexReference} from '../media/indexing/library-index-reference.ts';
 import { installWorkspaceRecovery } from './workspace-recovery.ts';
-import { FileHandleError, restoreHandleFile, handleKey, supportsFileHandles } from '../services/file-handles.ts';
+import { FileHandleError, restoreHandleFile, handleKey } from '../services/file-handles.ts';
 import { LibraryAccessError } from '../../shared/media/io/source-access.ts';
 import { libraryAccessMessage, localAccessMessage } from './source-access-message.ts';
 import type { LocalAccessProblem } from '../../shared/media/io/source-access.ts';
 import { installWorkspaceSharing } from './workspace-sharing.ts';
-import type { ToastStack, ToastAction } from './toast.ts';
+import type { ToastStack } from './toast.ts';
 import {updateMediaInfo} from '../media/state.ts';
 import type { ReviewSession } from '../session.ts';
 import type { MediaInfo } from '../../shared/media/types.ts';
@@ -18,24 +18,17 @@ import { annotationThumbnails } from './annotation-thumbnails.ts';
 import { publishMarkPreview } from './mark-preview-publish.ts';
 import { pinLibraryReference } from '../../shared/media/io/media-reference.ts';
 import { matchMediaIdentity } from '../../shared/media/io/media-identity.ts';
-import type { MediaIdentityMismatch } from '../../shared/media/io/media-identity.ts';
-import { icon } from './icons.ts';
 import { installSavedWorkspaces } from './saved-workspaces.ts';
 import type { WorkspaceOpenOperation } from './saved-workspaces.ts';
-import { onLanguageChange, t, th, msg } from '../i18n.ts';
+import { t, msg } from '../i18n.ts';
 
-function relinkMtimeWarning(name: string) {
+function fileMtimeWarning(name: string) {
   return t(msg('transfer.mtimeWarning','「{name}」修改时间与工作区记录不一致，已按同名同大小文件恢复；如内容被替换请重新检查标注。'),{name});
 }
-function relinkMismatch(name: string, mismatches: MediaIdentityMismatch[]) {
-  const details=mismatches.map(mismatch=>t(mismatch.field==='name'?msg('transfer.nameMismatch','文件名 {expected} → {actual}'):msg('transfer.sizeMismatch','大小 {expected} → {actual}'),{expected:mismatch.expected,actual:mismatch.actual})).join(t(msg('transfer.detailSeparator','、')));
-  return t(msg('transfer.identityMismatch','片源 {name} 已发生变化，与工作区记录不一致（{details}）。请重新选择片源并检查标注。'),{name,details});
-}
-
 export const isWorkspaceFile = (file: File) => /\.(voidplayer|json|gz)$/i.test(file.name);
 
-/** Browser files cannot be reopened from a JSON path. Resolve every missing file before touching the session. */
-async function resolveLocalFiles(media: MediaInfo[], supplied: File[], prompt = true, onMtimeWarning?: (name: string) => void, signal?: AbortSignal, problems = new Map<string, LocalAccessProblem>(), allowPermissionPrompt = false) {
+/** Resolve supplied files or already-authorized handles without interrupting workspace restore. */
+async function resolveLocalFiles(media: MediaInfo[], supplied: File[], onMtimeWarning?: (name: string) => void, signal?: AbortSignal, problems = new Map<string, LocalAccessProblem>()) {
   const files = new Map<string, File>();
   const accept = (info: MediaInfo, file: File) => {
     const match = matchMediaIdentity(info, file);
@@ -46,60 +39,11 @@ async function resolveLocalFiles(media: MediaInfo[], supplied: File[], prompt = 
   };
   for (const info of media) { const file = supplied.find(f => matchMediaIdentity(info, f).ok); if (file) accept(info, file); }
   for (const info of media) if (!files.has(info.id)) {
-    try { const file = await restoreHandleFile(handleKey(info), undefined, allowPermissionPrompt); if (!accept(info, file)) problems.set(info.id, 'stale'); }
+    try { const file = await restoreHandleFile(handleKey(info), undefined, false); if (!accept(info, file)) problems.set(info.id, 'stale'); }
     catch (error) { problems.set(info.id, error instanceof FileHandleError ? error.kind : 'unavailable'); }
   }
   if (signal?.aborted) return null;
-  if (!prompt) return files;
-  const missing = media.filter(info => !files.has(info.id));
-  if (!missing.length) return files;
-  const dialog = document.createElement('dialog'); dialog.className = 'workspace-relink'; dialog.setAttribute('aria-label', t(msg("transfer.relinkTitle", "重新连接本地视频")));
-  dialog.innerHTML = `<header class="dialog-heading"><h2>${th(msg("transfer.relinkTitle", "重新连接本地视频"))}</h2><button class="icon-button" aria-label="${th(msg("transfer.cancelImport", "取消导入"))}">${icon('close')}</button></header><p>${th(msg("transfer.relinkBody", "工作区保存了视频引用。请重新选择这些本地文件，也可以稍后关联，先恢复轨道和标注。"))}</p><div class="relink-files"></div><p role="alert"></p><button class="relink-later">${th(msg("transfer.later", "稍后关联"))}</button><button class="relink-continue" disabled>${th(msg("transfer.openWorkspace", "打开工作区"))}</button>`;
-  const lifetime = new AbortController();
-  const inputs: { info: MediaInfo; input: HTMLInputElement }[] = [];
-  let warning: (() => string) | undefined;
-  const proceed = dialog.querySelector<HTMLButtonElement>('.relink-continue')!;
-  function localize() {
-    const title = t(msg("transfer.relinkTitle", "重新连接本地视频"));
-    dialog.setAttribute('aria-label', title); dialog.querySelector('h2')!.textContent = title;
-    dialog.querySelector('header button')!.setAttribute('aria-label', t(msg("transfer.cancelImport", "取消导入")));
-    dialog.querySelector(':scope > p')!.textContent = t(msg("transfer.relinkBody", "工作区保存了视频引用。请重新选择这些本地文件，也可以稍后关联，先恢复轨道和标注。"));
-    if (!supportsFileHandles()) dialog.querySelector(':scope > p')!.textContent += ` ${localAccessMessage(missing.map(info => info.name).join(t(msg('transfer.detailSeparator', '、'))), 'unsupported')}`;
-    dialog.querySelector('.relink-later')!.textContent = t(msg("transfer.later", "稍后关联"));
-    proceed.textContent = t(msg("transfer.openWorkspace", "打开工作区"));
-    dialog.querySelector('[role=alert]')!.textContent = warning?.() ?? '';
-    for (const {info,input} of inputs) input.setAttribute('aria-label', t(msg("sources.reselectName", "重新选择 {name}"), {name:info.name}));
-  }
-  onLanguageChange(localize, lifetime.signal);
-  for (const info of missing) {
-    const label = document.createElement('label'); label.className = 'relink-file';
-    const name = document.createElement('span'); name.textContent = info.name;
-    const input = document.createElement('input'); input.type = 'file'; input.accept = 'video/*,.mkv,.ts,.flv,.avi'; input.setAttribute('aria-label', t(msg("sources.reselectName", "重新选择 {name}"), { name: info.name }));
-    input.onchange = () => {
-      const file = input.files?.[0]; files.delete(info.id);
-      const match = file ? matchMediaIdentity(info, file) : undefined;
-      warning = !match ? undefined : !match.ok
-        ? () => relinkMismatch(info.name, match.mismatches)
-        : match.mtimeChanged ? () => relinkMtimeWarning(info.name) : undefined;
-      dialog.querySelector('[role=alert]')!.textContent = warning?.() ?? '';
-      if (match?.ok && file) files.set(info.id, file);
-      proceed.disabled = files.size !== media.length;
-    };
-    inputs.push({info,input});
-    label.append(name, input); dialog.querySelector('.relink-files')!.append(label);
-  }
-  document.body.append(dialog);
-  localize();
-  return new Promise<Map<string, File> | null>(resolve => {
-    dialog.querySelector('header button')!.addEventListener('click', () => dialog.close());
-    proceed.onclick = () => dialog.close('open');
-    dialog.querySelector<HTMLButtonElement>('.relink-later')!.onclick = () => dialog.close('open');
-    const abort = () => dialog.close();
-    signal?.addEventListener('abort', abort, {once:true});
-    dialog.addEventListener('close', () => { const result = dialog.returnValue === 'open' ? files : null; lifetime.abort(); signal?.removeEventListener('abort', abort); dialog.remove(); resolve(result); }, { once: true });
-    dialog.showModal();
-    if (signal?.aborted) abort();
-  });
+  return files;
 }
 
 export function installWorkspaceTransfer(session: ReviewSession, options: {
@@ -134,7 +78,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       throw error;
     }
   }
-  async function importWorkspace(value: unknown, supplied: File[] = [], recovery = false, fromShare = false, operation?: WorkspaceOpenOperation) {
+  async function importWorkspace(value: unknown, supplied: File[] = [], fromShare = false, operation?: WorkspaceOpenOperation) {
     if (importing) throw new Error(t(msg("transfer.importing", "工作区正在导入，请等待完成。")));
     operation ??= saved?.beginOpen();
     const current = () => !lifetime.signal.aborted && (!operation || operation.current());
@@ -145,15 +89,17 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       await options.closeSettings();
       if (!current()) return false;
       const active = document.tracks.map(t => document.media.find(m => m.id === t.mediaId)!);
-      const warnMtime = (name: string) => options.toasts.show(() => relinkMtimeWarning(name));
+      const warnMtime = (name: string) => options.toasts.show(() => fileMtimeWarning(name));
       const problems = new Map<string, LocalAccessProblem>();
-      const files = await resolveLocalFiles(active.filter(m => !m.source), supplied, !recovery, warnMtime, operation?.signal ?? lifetime.signal, problems);
+      const files = await resolveLocalFiles(active.filter(m => !m.source), supplied, warnMtime, operation?.signal ?? lifetime.signal, problems);
       if (!files || !current()) return false;
+      const skipped: { name: string; error: string }[] = [];
       const rollback=options.beforeRestore();
       const progressive = session.getState().tracks.length === 0 && document.tracks.length > 0;
       let layout: Promise<void> | undefined, stopLayout: (() => void) | undefined;
       if (progressive) stopLayout = session.subscribe(() => {
-        if (layout || !session.getState().tracks.length) return;
+        const state = session.getState(), selected = document.layout?.selected;
+        if (layout || !state.tracks.length || selected && state.busy && !state.tracks.some(track => track.slot === selected)) return;
         stopLayout?.();
         // Restore panels only after the shared facade has published its slots;
         // an actually empty workbench deliberately closes the analysis panel.
@@ -167,7 +113,9 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
         const { mtimeChanged: _ignored, ...reference } = pinned;
         const source = await openMediaFromUrl(reference.url, info, undefined, progress, signal,undefined,
           new URL(reference.url,location.href).origin===location.origin?ownLibraryIndexReference(reference.id,new URL(reference.url,location.href).searchParams.get('v')!):undefined,configuration); updateMediaInfo(source,{source:reference},'identity'); return source;
-      }, { allowUnavailable: true, progressive, signal: operation?.signal });
+      }, { skipUnavailable: true, progressive, signal: operation?.signal, onSkipped: (info, error) => {
+        skipped.push({ name: info.name, error: error instanceof Error ? error.message : String(error) });
+      } });
         await layout;
       } catch(error) { await rollback?.(); throw error; }
       finally { stopLayout?.(); }
@@ -180,7 +128,10 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       if (!current()) return false;
       if (!fromShare) { sharing?.detach(); const url=new URL(location.href);url.searchParams.delete('workspace');url.searchParams.delete('share');url.searchParams.delete('review');history.replaceState(null,'',url); }
       if (operation) operation.detach(document.name); else saved?.detach(document.name);
-      if (!document.comparison) options.toasts.show(() => t(msg("transfer.legacyConditions", "旧工作区未记录比较条件，已沿用当前色彩和解码设置。")));
+      if (skipped.length) options.toasts.show(() => t(msg('transfer.sourcesSkipped', '以下片源无法打开，已跳过：{details}'), {
+        details: skipped.map(item => `${item.name}：${item.error}`).join('；'),
+      }), { kind: 'warning', durationMs: 8000 });
+      else if (!document.comparison) options.toasts.show(() => t(msg("transfer.legacyConditions", "旧工作区未记录比较条件，已沿用当前色彩和解码设置。")));
       return true;
     } finally { importing = false; }
   }
@@ -189,62 +140,15 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
     const operation = saved?.beginOpen();
     const document = await readWorkspaceFile(file, location.href);
     if (operation && !operation.current()) return;
-    await importWorkspace(document, supplied, false, false, operation);
+    await importWorkspace(document, supplied, false, operation);
   }
-  saved = installSavedWorkspaces({ signal: lifetime.signal, snapshot: exportWorkspace, open: async (value, space, operation) => { const opened=await importWorkspace(space ? mapSharedWorkspace(value,location.origin) : value, [], false, !!space, operation); if(opened && space && operation.current())await options.openSharedSpace(space); return opened && operation.current(); }, copyLink: id => sharing!.copySaved(id), canSave: () => session.getState().tracks.length > 0, changed: () => sharing?.update(), report: error => { if (!document.querySelector<HTMLDialogElement>('#settings')!.open) void options.act(() => { throw error; }, 'workspace.server'); } });
+  saved = installSavedWorkspaces({ signal: lifetime.signal, snapshot: exportWorkspace, open: async (value, space, operation) => { const opened=await importWorkspace(space ? mapSharedWorkspace(value,location.origin) : value, [], !!space, operation); if(opened && space && operation.current())await options.openSharedSpace(space); return opened && operation.current(); }, copyLink: id => sharing!.copySaved(id), canSave: () => session.getState().tracks.length > 0, changed: () => sharing?.update(), report: error => { if (!document.querySelector<HTMLDialogElement>('#settings')!.open) void options.act(() => { throw error; }, 'workspace.server'); } });
   // A seek keeps the last committed workspace snapshot valid. Sharing is
   // available once loaded tracks and their workspace binding are ready; the snapshot is captured
   // synchronously before any network work begins.
   sharing = installWorkspaceSharing({ signal:lifetime.signal, snapshot:exportWorkspace, binding:saved.binding, save:saved.share, toasts:options.toasts, openSpace:options.openSharedSpace, scope:options.annotationScope, isOpening:saved.isOpening, canShare:()=>session.getState().tracks.length>0&&!saved!.isOpening(), report:error=>void options.act(()=>{throw error;}, 'workspace.share') });
-  let missingSignature = '', dismissMissing: (() => void) | undefined;
-  async function relinkMissing(kind?: 'local' | 'library') {
-    const pending = session.getState().tracks.filter(t => t.pendingRelink && (!kind || (kind === 'library') === !!t.source));
-    const warnMtime = (name: string) => options.toasts.show(() => relinkMtimeWarning(name));
-    const files = await resolveLocalFiles(pending.filter(t => !t.source), [], true, warnMtime, lifetime.signal, new Map(), true);
-    if (!files) return;
-    for (const info of pending) {
-      if (!info.source && !files.has(info.id)) continue;
-      await options.act(() => session.relinkTrack(info.slot, async (signal, progress, configuration) => {
-        if (!info.source) return openMedia(files.get(info.id)!, undefined, progress, signal, configuration);
-        const pinned = await resolveLibraryReference(info, signal);
-        if (pinned.mtimeChanged) warnMtime(info.name);
-        const { mtimeChanged: _ignored, ...reference } = pinned;
-        const source = await openMediaFromUrl(reference.url, info, undefined, progress, signal,undefined,
-          new URL(reference.url,location.href).origin===location.origin?ownLibraryIndexReference(reference.id,new URL(reference.url,location.href).searchParams.get('v')!):undefined,configuration);
-        updateMediaInfo(source, { source: reference }, 'identity'); return source;
-      }, { allowUnavailable: true }), 'workspace.relink');
-    }
-  }
-  function updateMissing() {
-    if (session.getState().busy) return;
-    const pending = session.getState().tracks.filter(t => t.pendingRelink);
-    const signature = JSON.stringify(pending.map(t => [t.slot, t.id, t.failure?.message, t.failure?.reason]));
-    if (signature === missingSignature) return;
-    missingSignature = signature; dismissMissing?.();
-    if (!pending.length) return;
-    const actions: ToastAction[] = [];
-    const retry = (kind: 'local' | 'library') => {
-      void relinkMissing(kind).catch(error => options.toasts.show(String(error), { kind: 'error' })).finally(() => { missingSignature = ''; updateMissing(); });
-    };
-    const local = pending.filter(track => !track.source), library = pending.filter(track => track.source);
-    if (local.length) actions.push({
-      label: () => local.some(track => track.failure?.reason === 'denied') && supportsFileHandles()
-        ? t(msg('transfer.authorizeLocal', '授权并重试')) : t(msg('transfer.reselectLocal', '重新选择文件')),
-      onClick: () => retry('local'),
-    });
-    if (library.some(track => !['missing', 'changed'].includes(track.failure?.reason ?? ''))) actions.push({
-      label: () => t(msg('transfer.retryLibrary', '重试媒体库')), onClick: () => retry('library'),
-    });
-    if (library.some(track => ['missing', 'changed'].includes(track.failure?.reason ?? ''))) actions.push({
-      label: () => t(msg('transfer.browseLibrary', '在媒体库中选择')), onClick: () => {
-        const toggle = document.getElementById('toggle-sources');
-        if (toggle?.getAttribute('aria-expanded') !== 'true') toggle?.click();
-      },
-    });
-    dismissMissing = options.toasts.show(() => `${t(msg("transfer.pendingRelink", "{n, plural, other {# 个片源待重新关联；轨道、偏移和标注已保留。}}"), { n: pending.length })} ${pending.map(track => `${track.slot}：${track.failure?.message ?? ''}`).join('；')}`, { kind: 'warning', durationMs: 0, actions });
-  }
-  const recovery = installWorkspaceRecovery(session, { snapshot: exportWorkspace, restore: document => importWorkspace(document, [], true), ready: options.identityReady, toasts: options.toasts });
-  const unsubscribe = session.subscribe(() => { saved?.update(); sharing?.update(); updateMissing(); });
+  const recovery = installWorkspaceRecovery(session, { snapshot: exportWorkspace, restore: document => importWorkspace(document), ready: options.identityReady, toasts: options.toasts });
+  const unsubscribe = session.subscribe(() => { saved?.update(); sharing?.update(); });
   const finishOpening = () => { if (lifetime.signal.aborted) return; document.getElementById('app')!.removeAttribute('data-workspace-opening'); options.openingChanged?.(); };
   if (savedId && /^[a-f0-9-]{36}$/.test(savedId)) void options.identityReady.then(()=>saved!.open(savedId)).catch(error=>options.toasts.show((error as Error).message,{kind:'error',durationMs:0})).finally(finishOpening);
   else if (legacyId && /^[a-f0-9-]{36}$/.test(legacyId)) void options.identityReady.then(async()=>{
@@ -254,5 +158,5 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
     await saved!.open(legacyId);
   }).catch(error=>options.toasts.show((error as Error).message,{kind:'error',durationMs:0})).finally(finishOpening);
   input.addEventListener('change', () => { const file = input.files?.[0]; input.value = ''; if (file) void options.act(() => importFile(file), 'workspace.import'); }, { signal: lifetime.signal });
-  return { exportWorkspace, importWorkspace, importFile, relinkMissing, shareWorkspace: sharing.create, dispose() { recovery.dispose(); dismissMissing?.(); lifetime.abort(); unsubscribe(); sharing.dispose(); } };
+  return { exportWorkspace, importWorkspace, importFile, shareWorkspace: sharing.create, dispose() { recovery.dispose(); lifetime.abort(); unsubscribe(); sharing.dispose(); } };
 }

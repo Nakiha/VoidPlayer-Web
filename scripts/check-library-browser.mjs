@@ -141,15 +141,17 @@ try {
   // source, so an observer attached afterwards can miss it on a slow machine.
   const mtimeWarning = page.locator('.toast').filter({ hasText: '修改时间与工作区记录不一致' }).waitFor({ timeout: 30000 });
   await page.evaluate(value => window.voidPlayer.importWorkspace(value), saved);
-  await page.waitForFunction(() => { const state = window.voidPlayer.getState(); return state.tracks.length > 0 && !state.busy && state.tracks.every(t => !t.pendingRelink); });
+  await page.waitForFunction(() => { const state = window.voidPlayer.getState(); return state.tracks.length > 0 && !state.busy && state.tracks.every(t => !!t.frame); });
   await mtimeWarning;
   // A real byte change (size differs) still refuses with a field-level message.
   await writeFile(sample, Buffer.concat([bytes, Buffer.from([0])])); await library.refresh();
   await page.evaluate(value => window.voidPlayer.importWorkspace(value), saved);
   const unavailable = await page.evaluate(() => window.voidPlayer.getState());
-  assert.equal(unavailable.tracks[0].pendingRelink, true);
-  assert.match(unavailable.tracks[0].failure.message, /已发生变化/);
-  assert.match(unavailable.tracks[0].failure.message, /大小/);
+  assert.deepEqual(unavailable.tracks, []);
+  const warning = page.locator('.toast-warning').filter({hasText:'以下片源无法打开，已跳过'});
+  assert.match(await warning.innerText(), /已发生变化/);
+  assert.match(await warning.innerText(), /大小/);
+  assert.equal(await warning.locator('.toast-action').count(),0);
   assert.deepEqual(unavailable.marks, saved.marks);
   await writeFile(sample, bytes); await utimes(sample, 1000, 1000); await library.refresh();
   assert.deepEqual(unavailable.marks, saved.marks);

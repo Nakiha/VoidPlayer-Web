@@ -814,13 +814,6 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .timeline-hover::before { content: ''; position: absolute; inset: 0; background: var(--accent); }
 
 
-.workspace-relink { width: min(540px, calc(100vw - 24px)); }
-.workspace-relink p { color: var(--text-secondary); }
-.relink-file { display: grid; gap: 8px; padding-block: 12px; overflow-wrap: anywhere; }
-.relink-continue { margin-top: 12px; color: var(--accent); }
-
-.workspace-relink { background: var(--surface-panel); }
-
 .library-navigation { flex: 1; min-width: 0; display: flex; align-items: center; height: var(--control-small-height); border-radius: var(--radius-control); background: var(--search-fill); }
 .library-navigation .library-location { flex: 1; width: 0; min-width: 0; height: 100%; padding-inline: var(--field-padding-inline); border: 0; background: transparent; color: var(--text); font-size: var(--text-sm); text-overflow: ellipsis; }
 .library-navigation .library-location:focus { outline: 0; text-overflow: clip; }

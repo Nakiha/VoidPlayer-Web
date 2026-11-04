@@ -105,9 +105,9 @@ try{
   await other.setViewportSize({width:390,height:844});assert.ok(await other.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await other.screenshot({path:path.join(evidence,'03-narrow.png')});await other.locator('.toast-error .toast-close').click();
   phase='service-restart';
   await service.close();service=await startService(config);await service.library.refresh();await other.reload();await other.waitForFunction(()=>window.voidPlayer?.getState().positionUs===400000&&!window.voidPlayer.getState().busy);await other.waitForFunction(id=>window.voidPlayer.getState().marks.some(m=>m.id===id),later.id);
-  // Source deletion makes the saved link show a missing source, not an immutable copy.
+  // Source deletion skips the unavailable track and leaves a warning.
   phase='missing-source';
-  await rm(path.join(root,'media/sample.mp4'));await service.library.refresh();await other.reload();await other.waitForFunction(()=>window.voidPlayer?.getState().tracks[0]?.pendingRelink && !window.voidPlayer.getState().busy);
+  await rm(path.join(root,'media/sample.mp4'));await service.library.refresh();await other.reload();await other.waitForFunction(()=>window.voidPlayer&&!window.voidPlayer.getState().busy&&window.voidPlayer.getState().tracks.length===0);
   assert.deepEqual(errors,[]);console.log(`PASS ${name}: one-click writable sharing, source/position/layout restoration, recipient saves, conflicts, live annotations/deletion, same URL, clipboard, restart and missing sources`);
 }catch(error){failed=true;diagnostic('test-failed',{message:String(error),stack:error?.stack});throw error;}
 finally{

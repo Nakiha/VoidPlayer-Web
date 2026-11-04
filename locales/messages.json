@@ -6479,35 +6479,8 @@
     "source": "视频",
     "params": {}
   },
-  "transfer.authorizeLocal": {
-    "source": "授权并重试",
-    "params": {}
-  },
-  "transfer.browseLibrary": {
-    "source": "在媒体库中选择",
-    "params": {}
-  },
-  "transfer.cancelImport": {
-    "source": "取消导入",
-    "params": {}
-  },
-  "transfer.detailSeparator": {
-    "source": "、",
-    "params": {}
-  },
-  "transfer.identityMismatch": {
-    "source": "片源 {name} 已发生变化，与工作区记录不一致（{details}）。请重新选择片源并检查标注。",
-    "params": {
-      "details": "string | number",
-      "name": "string | number"
-    }
-  },
   "transfer.importing": {
     "source": "工作区正在导入，请等待完成。",
-    "params": {}
-  },
-  "transfer.later": {
-    "source": "稍后关联",
     "params": {}
   },
   "transfer.legacyConditions": {
@@ -6520,44 +6493,10 @@
       "name": "string | number"
     }
   },
-  "transfer.nameMismatch": {
-    "source": "文件名 {expected} → {actual}",
+  "transfer.sourcesSkipped": {
+    "source": "以下片源无法打开，已跳过：{details}",
     "params": {
-      "actual": "string | number",
-      "expected": "string | number"
-    }
-  },
-  "transfer.openWorkspace": {
-    "source": "打开工作区",
-    "params": {}
-  },
-  "transfer.pendingRelink": {
-    "source": "{n, plural, other {# 个片源待重新关联；轨道、偏移和标注已保留。}}",
-    "params": {
-      "n": "number"
-    }
-  },
-  "transfer.relinkBody": {
-    "source": "工作区保存了视频引用。请重新选择这些本地文件，也可以稍后关联，先恢复轨道和标注。",
-    "params": {}
-  },
-  "transfer.relinkTitle": {
-    "source": "重新连接本地视频",
-    "params": {}
-  },
-  "transfer.reselectLocal": {
-    "source": "重新选择文件",
-    "params": {}
-  },
-  "transfer.retryLibrary": {
-    "source": "重试媒体库",
-    "params": {}
-  },
-  "transfer.sizeMismatch": {
-    "source": "大小 {expected} → {actual}",
-    "params": {
-      "actual": "string | number",
-      "expected": "string | number"
+      "details": "string | number"
     }
   },
   "ui.pixelWidth": {

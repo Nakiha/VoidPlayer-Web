@@ -142,7 +142,7 @@ export function createTracksPane(shared: WorkbenchShared) {
     ];
     const cells = $('inspect-playback').querySelectorAll('dd');
     cells.forEach((cell, i) => { if (cell.textContent !== values[i]) cell.textContent = values[i]; });
-    $('inspect-decoder-concurrency').hidden = selected.decoder !== 'ffmpeg-wasm' || !!selected.pendingRelink || !!selected.failure;
+    $('inspect-decoder-concurrency').hidden = selected.decoder !== 'ffmpeg-wasm' || !!selected.failure;
     $('inspect-decoder-threads').textContent = selected.decoderThreads?.toString() ?? '—';
     $('inspect-decoder-contexts').textContent = selected.decoderFrameContexts?.toString() ?? '—';
   }

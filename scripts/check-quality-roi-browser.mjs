@@ -39,7 +39,7 @@ try{
  // Observe actual Worker output, not a mock decoder or DOM screenshot oracle.
  await context.addInitScript(()=>{const NativeWorker=window.Worker;window.Worker=class extends NativeWorker{constructor(...args){super(...args);this.addEventListener('message',event=>{const r=event.data?.result;if(r?.frames&&r?.provenance)window.__roiRaw=r.frames.map(f=>Array.from(f.pixels));});}};});
  page=await context.newPage();evidence=recordBrowserEvidence(page);const errors=[];page.on('pageerror',e=>errors.push(e.message));
- const ready=p=>p.waitForFunction(()=>{const s=window.voidPlayer?.getState();if(s?.tracks.some(t=>t.failure))throw new Error(JSON.stringify(s.tracks));return s&&!s.busy&&s.tracks.length===2&&s.tracks.every(t=>t.frame&&!t.pendingRelink);});
+ const ready=p=>p.waitForFunction(()=>{const s=window.voidPlayer?.getState();if(s?.tracks.some(t=>t.failure))throw new Error(JSON.stringify(s.tracks));return s&&!s.busy&&s.tracks.length===2&&s.tracks.every(t=>t.frame);});
  phase='player-load';await page.goto(`${base}/?workspace=${workspace.id}`);await ready(page);await page.waitForFunction(id=>JSON.parse(localStorage.getItem('voidplayer.identity')??'null')?.id===id,actor.id);
  const observerContext=await browser.newContext({locale:'en-US',viewport:{width:1280,height:900}}),observer=await observerContext.newPage();let privateReads=0;observer.on('request',r=>{if(new URL(r.url()).pathname.startsWith('/api/quality/jobs'))privateReads++;});
  const guest=await observerContext.request.post(base+'/api/identity',{headers:{origin:base,'x-voidplayer-action':'identity'},data:{guest:true}});assert.equal(guest.status(),200);

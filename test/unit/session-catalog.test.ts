@@ -50,22 +50,14 @@ test('closed-track media stays in the export while a mark still references it', 
   } finally { await session.dispose(); }
 });
 
-test('relink accepts a modified-time change but still rejects size or name mismatch', async () => {
+test('unavailable sources create no tracks or retained unreferenced media', async () => {
   const source = new ReviewSession(() => {}), restored = new ReviewSession(() => {});
   try {
     await source.load('A', async () => media('clip').source);
-    const document = source.exportWorkspace('http://localhost/');
-    await restored.restoreWorkspace(document, async () => { throw Error('offline'); }, { allowUnavailable: true });
-    assert.equal(restored.getState().tracks[0].pendingRelink, true);
-    const bigger = media('clip'); bigger.source.info.size = 11;
-    await assert.rejects(restored.relinkTrack('A', async () => bigger.source), /不一致/);
-    assert.equal(restored.getState().tracks[0].pendingRelink, true);
-    const renamed = media('clip'); renamed.source.info.name = 'other.mp4';
-    await assert.rejects(restored.relinkTrack('A', async () => renamed.source), /不一致/);
-    const modified = media('clip'); modified.source.info.lastModified = 999;
-    await restored.relinkTrack('A', async () => modified.source);
-    assert.equal(restored.getState().tracks[0].pendingRelink, undefined);
-    assert.equal(restored.getState().tracks[0].id, 'clip');
+    await restored.restoreWorkspace(source.exportWorkspace('http://localhost/'), async () => { throw Error('offline'); }, { skipUnavailable: true });
+    assert.deepEqual(restored.getState().tracks, []);
+    assert.deepEqual(restored.exportWorkspace('http://localhost/').media, []);
+    assert.equal('relinkTrack' in restored, false);
   } finally { await source.dispose(); await restored.dispose(); }
 });
 
@@ -77,19 +69,18 @@ test('partial workspace restoration logs the full unavailable source reason with
     source.addMark({ slot: 'A', text: 'preserve' });
     const document = source.exportWorkspace('http://localhost/');
     const cursor = getLogEvents({ limit: 2000 }).lastSeq;
-    await restored.restoreWorkspace(document, async () => { throw new Error('persistent local file access is unsupported'); }, { allowUnavailable: true });
+    await restored.restoreWorkspace(document, async () => { throw new Error('persistent local file access is unsupported'); }, { skipUnavailable: true });
     const state = restored.getState();
-    assert.equal(state.tracks[0].pendingRelink, true);
-    assert.equal(state.tracks[0].frame, null);
+    assert.deepEqual(state.tracks, []);
     assert.deepEqual(state.marks, document.marks);
-    const failure = getLogEvents({ sinceSeq: cursor, limit: 2000 }).events.find(event => event.msg === '工作区片源恢复失败，保留轨道待重新关联');
+    const failure = getLogEvents({ sinceSeq: cursor, limit: 2000 }).events.find(event => event.msg === '工作区片源恢复失败，已跳过');
     assert.equal(failure?.level, 'warn');
     assert.equal((failure?.data as { error: string }).error, 'persistent local file access is unsupported');
     assert.equal((failure?.data as { sourceKind: string }).sourceKind, 'local');
   } finally { await source.dispose(); await restored.dispose(); }
 });
 
-test('empty workspace restore publishes slots immediately and frames independently without disposing live sources', async () => {
+test('progressive restore publishes only ready tracks without disposing live sources', async () => {
   const original = new ReviewSession(() => {}), restored = new ReviewSession(() => {});
   const a = media('A'), b = media('B');
   let release!: () => void, reached!: () => void;
@@ -102,18 +93,18 @@ test('empty workspace restore publishes slots immediately and frames independent
     const document = original.exportWorkspace('http://localhost/');
     const restore = restored.restoreWorkspace(document, async (info, _signal, progress) => {
       progress('inspect');
-      assert.equal(restored.getState().tracks.length, 2, 'all saved slots exist before opening the first file');
+      assert.equal(restored.getState().tracks.length, info.id === 'A' ? 0 : 1, 'unopened files do not create placeholder tracks');
       if (info.id === 'B') { reached(); await gate; return b.source; }
       return a.source;
-    }, { allowUnavailable: true, progressive: true });
+    }, { skipUnavailable: true, progressive: true });
     await waiting;
     const partial = restored.getState();
     assert.equal(partial.busy, true); assert.ok(partial.tracks[0].frame);
-    assert.equal(partial.tracks[1].pendingRelink, true);
+    assert.equal(partial.tracks.length, 1);
     assert.equal(partial.mediaLoad?.slot, 'B'); assert.equal(partial.mediaLoad?.state, 'loading');
     assert.deepEqual(partial.marks, document.marks); assert.equal(a.disposed, 0);
     release(); await restore;
-    assert.ok(restored.getState().tracks.every(track => track.frame && !track.pendingRelink));
+    assert.ok(restored.getState().tracks.every(track => track.frame));
     assert.equal(restored.getState().tracks[1].offsetUs, 40000);
     assert.equal(a.disposed, 0); assert.equal(b.disposed, 0);
     await restored.seek(80000);
@@ -130,13 +121,13 @@ test('cancelling progressive restoration preserves presented peers and disposes 
     await original.load('A', async () => media('A').source); await original.load('B', async () => media('B').source);
     const restoring = restored.restoreWorkspace(original.exportWorkspace('http://localhost/'), async info => {
       if (info.id === 'B') { reached(); await gate; return late.source; } return a.source;
-    }, { allowUnavailable: true, progressive: true });
+    }, { skipUnavailable: true, progressive: true });
     const rejected = assert.rejects(restoring, error => error instanceof Error && error.name === 'AbortError');
     await waiting; restored.cancelLoad(); await rejected;
     assert.ok(restored.getState().tracks[0].frame); assert.equal(a.disposed, 0);
     assert.equal(restored.getState().mediaLoad?.state, 'cancelled');
     release(); await new Promise(resolve => setImmediate(resolve));
-    assert.equal(late.disposed, 1); assert.equal(restored.getState().tracks[1].pendingRelink, true);
+    assert.equal(late.disposed, 1); assert.equal(restored.getState().tracks.length, 1);
     await restored.seek(40000);
   } finally { release?.(); await original.dispose(); await restored.dispose(); }
 });

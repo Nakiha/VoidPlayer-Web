@@ -98,14 +98,13 @@ test('agent fixture readiness is bounded and preserves missing/offline failures'
   for (const state of ['missing', 'offline']) await assert.rejects(waitForAnnotationMedia({ browse: () => ({ entries: [{ name: 'A.mp4', state }] }) }, ['A.mp4']), new RegExp(`A.mp4:${state}`));
 });
 
-test('agent browser readiness rejects disabled/relink tracks that satisfied the old ready predicate', () => {
-  const failed = { busy: false, tracks: [{ name: 'A.mp4', pendingRelink: true, failure: { message: 'still being written' } }] };
+test('agent browser readiness rejects disabled tracks that satisfied the old ready predicate', () => {
+  const failed = { busy: false, tracks: [{ name: 'A.mp4', failure: { message: 'still being written' } }] };
   assert.equal(failed.tracks.length === 1 && !failed.busy, true);
   assert.throws(() => annotationWorkspacePlayable(failed), /still being written/);
-  assert.throws(() => annotationWorkspacePlayable({ busy: false, tracks: [{ pendingRelink: true }] }), /pending relink/);
   assert.equal(annotationWorkspacePlayable({ busy: false, tracks: [{ frame: { ptsUs: 0 } }] }), true);
   assert.equal(annotationWorkspacePlayable({ busy: true, tracks: [{ frame: { ptsUs: 0 } }] }), false);
-  assert.equal(annotationWorkspacePlayable({ busy: true, tracks: [{ pendingRelink: true, frame: null, failure: null }] }), false, 'progressive placeholders are still loading');
+  assert.equal(annotationWorkspacePlayable({ busy: true, tracks: [{ frame: null, failure: null }] }), false, 'unopened tracks are still loading');
   assert.equal(annotationWorkspacePlayable({ busy: false, tracks: [{}] }), false);
 });
 

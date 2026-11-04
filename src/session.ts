@@ -8,7 +8,6 @@ import { BitstreamSessionCoordinator, trackSourceVersion } from './session/bitst
 import { OpportunisticAudio } from './media/audio/opportunistic-audio.ts';
 import { mediaDiagnostic } from '../shared/media/io/media-errors.ts';
 import type { MediaDiagnostic } from '../shared/media/io/media-errors.ts';
-import { unavailableSource } from './session/unavailable-source.ts';
 import { getPresentationChannel, setPresentationChannel } from './presentation/presentation-channel.ts';
 import { SessionResources } from './session/resources.ts';
 import { schedulePresentationTick } from './presentation/presentation-tick.ts';
@@ -27,7 +26,6 @@ import { applyMarkEdit, buildMark, mergeStoredMarks } from '../shared/review/mar
 import { getTrackAnalysisCapabilities, locateTrackAnalysisSample, queryTrackAnalysis, rankTrackAnalysisFrame, resolveTrackAnalysisSeek } from './session/metadata-analysis.ts';
 import { currentColorEvidence, currentComparisonConditions, isSameColorConfiguration, persistColorConfiguration, validateColorTransition } from './session/color.ts';
 import { offerSessionThumbnail } from './session/thumbnail.ts';
-import { describeMediaMismatch, matchMediaIdentity } from '../shared/media/io/media-identity.ts';
 import { FrameQueue, PlaybackMeasurements, VvcGrowthMonitor, VvcGrowthPolicy, vvcInputLimited } from './session/playback.ts';
 import { planBackwardStep, planForwardStep, slotValue, timeUs } from '../shared/review/model.ts';
 import type { FrameInfo, MediaInfo } from '../shared/media/types.ts';
@@ -38,7 +36,7 @@ import { contextLog, log, operationContext, traceOperation, withLogContext } fro
 
 const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 
-type Track = { visible?: boolean; pendingRelink?: boolean; source: MediaSource; frame: FrameInfo | null; offsetUs:number; failure?: { message: string; positionUs: number; reason?: string }; syncState?: 'index-wait' | 'catching-up';
+type Track = { visible?: boolean; source: MediaSource; frame: FrameInfo | null; offsetUs:number; failure?: { message: string; positionUs: number; reason?: string }; syncState?: 'index-wait' | 'catching-up';
   /** source 实例 generation：每次打开/重建（含色彩模式切换）递增，
    * 与稳定 mediaId 分离——mediaId 供标注/工作区引用，generation 隔离旧实例的异步结果。 */
   sourceGen: number };
@@ -108,8 +106,8 @@ export class ReviewSession {
     this.changingColor=true;
     try{await this.run('color-mode',{mode},(current, signal)=>this.configuration.run(async previousConfiguration=>{
       const prepared:{slot:Slot;track:Track;source:MediaSource;frame:DecodedFrame;reusesSession:boolean}[]=[];
-      // Failed sources are already disposed; missing references are restored only by relink.
-      const entries = [...this.tracks].filter(([, track]) => !track.failure && !track.pendingRelink);
+      // Failed playback sources are already disposed.
+      const entries = [...this.tracks].filter(([, track]) => !track.failure);
       const reconfigured: { slot: Slot; track: Track }[] = [];
       const controller=new AbortController();let committed=false;
       const onAbort=()=>controller.abort(signal.reason ?? new DOMException('切换已取消。','AbortError'));
@@ -284,7 +282,7 @@ export class ReviewSession {
   private bitstream = new BitstreamSessionCoordinator({
     track: slot => {
       const track = this.tracks.get(slot);
-      return track ? { instance: track, generation: track.sourceGen, available: !track.failure && !track.pendingRelink } : undefined;
+      return track ? { instance: track, generation: track.sourceGen, available: !track.failure } : undefined;
     },
     subscribeInvalidation: listener => this.subscribe(listener),
     changed: () => this.emit(),
@@ -324,7 +322,7 @@ export class ReviewSession {
   /** Only library media intent, not the ordinary playback token's AU claim.
    * Explicit analysis chooses an AU and paints independently verified snapshots. */
   qualitySourceChoices(){return this.order.flatMap(slot=>{const track=this.tracks.get(slot),source=track?.source.info.source;
-    return track&&!track.failure&&!track.pendingRelink&&source?.kind==='library'?[{slot,generation:track.sourceGen,source:structuredClone(source),name:track.source.info.name}]:[];});}
+    return track&&!track.failure&&source?.kind==='library'?[{slot,generation:track.sourceGen,source:structuredClone(source),name:track.source.info.name}]:[];});}
   getPresentedFrame(slot:Slot):PresentedFrameToken|null{
     slotValue(slot);const track=this.tracks.get(slot),token=this.presentedFrames.get(slot);
     if(!track||track.failure||!track.frame||!token||track.frame.sourcePtsUs!==token.sourcePtsUs)return null;
@@ -336,7 +334,7 @@ export class ReviewSession {
   captureNativePresented(slot:Slot):NativePresentedFrame {
     slotValue(slot);const track=this.tracks.get(slot),record=this.nativePresentedFrames.get(slot);
     if(this.playing||this.busy)throw new Error('Pause the current player before capturing its presented frame.');
-    if(!track||track.failure||track.pendingRelink||!track.frame||track.source.info.decoder!=='webcodecs'||!record||!track.source.info.source
+    if(!track||track.failure||!track.frame||track.source.info.decoder!=='webcodecs'||!record||!track.source.info.source
       ||track.frame.sourcePtsUs!==record.input.input.pts
       ||!track.source.nativePresentedTransport||record.input.instance!==track.source.nativePresentedInstance
       ||record.input.sourceVersion!==track.source.nativePresentedTransport.sourceVersion
@@ -416,7 +414,7 @@ export class ReviewSession {
     if (this.audioSlot && (this.tracks.get(this.audioSlot)?.source !== this.audioSource || this.tracks.get(this.audioSlot)?.failure)) {
       this.audioSlot = null; this.audioSource = undefined; this.audioOutput.select();
     }
-    const state = { busy: this.busy, playing: this.playing, error: this.error, mediaLoad: this.mediaLoad, tracks: [...this.tracks].map(([slot,t])=>({slot,...t.source.info,offsetUs:t.offsetUs,failure:t.failure,pendingRelink:!!t.pendingRelink,syncState:t.syncState})) };
+    const state = { busy: this.busy, playing: this.playing, error: this.error, mediaLoad: this.mediaLoad, tracks: [...this.tracks].map(([slot,t])=>({slot,...t.source.info,offsetUs:t.offsetUs,failure:t.failure,syncState:t.syncState})) };
     const signature = JSON.stringify(state);
     if (signature !== this.lastTransition) {
       log.info('session', '状态变化', { before: this.lastTransition ? JSON.parse(this.lastTransition) : null, after: state, positionUs: this.positionUs });
@@ -434,9 +432,8 @@ export class ReviewSession {
       const info = track.source.info;
       log.warn('session', '故障现场：轨道', { ...context, slot, mediaId: info.id, name: info.name, decoder: info.decoder,
         width: info.width, height: info.height, durationUs: info.durationUs, offsetUs: track.offsetUs, frame: track.frame,
-        // failure/pendingRelink 是区分"打开失败待重新关联"与"播放中途逐帧门拒绝"
-        // 的关键字段，必须出现在快照里；状态变化日志的整串 JSON 会被 budget 截断。
-        failure: track.failure ?? null, pendingRelink: track.pendingRelink ?? false,
+        // Preserve the playback failure independently of truncated state summaries.
+        failure: track.failure ?? null,
         container: info.container, indexKind: info.indexKind, seekStrategy: info.seekStrategy, seekAnchorCount: info.seekAnchorCount,
         indexState: info.indexState, indexError: info.indexError, indexProgress: info.indexProgress, indexWaiting: info.indexWaiting, syncState: track.syncState, color: info.color });
       log.warn('session', '故障现场：播放队列', { reason, slot, mediaId: info.id, queue: this.readers.get(track.source)?.snapshot() ?? null });
@@ -450,7 +447,7 @@ export class ReviewSession {
       playback: this.measurements?.snapshot() ?? null,
       resources: this.resources.snapshot(),
       frameEvidence: 'decoded-and-drawn-to-canvas', audio: this.audioSlot ? 'opportunistic' : 'muted', audioSlot: this.audioSlot, audioStatus: this.audioOutput.status, audioPacketsPlayed: this.audioOutput.playedPackets, color: currentColorEvidence(),colorMode:getColorMode(),referenceDecode:getReferenceDecode(),colorOutput:getColorOutput(),
-      tracks: this.order.flatMap(slot => { const t = this.tracks.get(slot); return t ? [{ slot, ...t.source.info, frame: t.frame, visible: t.visible !== false, offsetUs:t.offsetUs, failure:t.failure,syncState:t.syncState, sourceGen:t.sourceGen, pendingRelink:t.pendingRelink }] : []; }),
+      tracks: this.order.flatMap(slot => { const t = this.tracks.get(slot); return t ? [{ slot, ...t.source.info, frame: t.frame, visible: t.visible !== false, offsetUs:t.offsetUs, failure:t.failure,syncState:t.syncState, sourceGen:t.sourceGen }] : []; }),
       marks: this.marks,
     });
   }
@@ -578,7 +575,7 @@ export class ReviewSession {
     }
     return resolved;
   }
-  private get durationUs() { return Math.max(0, ...[...this.tracks.values()].filter(t => !t.failure || t.pendingRelink).map(t => t.source.info.durationUs + t.offsetUs)); }
+  private get durationUs() { return Math.max(0, ...[...this.tracks.values()].filter(t => !t.failure).map(t => t.source.info.durationUs + t.offsetUs)); }
   pause() {
     this.audioOutput.pause();
     const wasPlaying = this.playing;
@@ -1196,7 +1193,7 @@ export class ReviewSession {
   }
   /** Active scenes swap atomically; an empty linked scene can publish slots
    * and first frames progressively. Both paths belong to this shared facade. */
-  async restoreWorkspace(value: unknown, open: (info: MediaInfo, signal: AbortSignal, onProgress: MediaOpenProgress, configuration: DecodeConfiguration) => Promise<MediaSource>, options: { allowUnavailable?: boolean; progressive?: boolean; signal?: AbortSignal } = {}) {
+  async restoreWorkspace(value: unknown, open: (info: MediaInfo, signal: AbortSignal, onProgress: MediaOpenProgress, configuration: DecodeConfiguration) => Promise<MediaSource>, options: { skipUnavailable?: boolean; progressive?: boolean; signal?: AbortSignal; onSkipped?(info: MediaInfo, error: unknown): void } = {}) {
     const document = parseWorkspace(value);
     await this.run('restoreWorkspace', { tracks: document.tracks.length, marks: document.marks.length }, (sessionCurrent, sessionSignal) => this.configuration.run(async previousConfiguration => {
       const signal = options.signal ? AbortSignal.any([sessionSignal, options.signal]) : sessionSignal;
@@ -1204,21 +1201,17 @@ export class ReviewSession {
       signal.throwIfAborted();
       const next = new Map<Slot, Track>(); let committed = false;
       const previousChannel = getPresentationChannel();
-      const retained = [...this.tracks].filter(([, track]) => !track.failure && !track.pendingRelink);
+      const retained = [...this.tracks].filter(([, track]) => !track.failure);
       const selected = new Map<Slot, DecodedFrame>();
-      const progressive = options.progressive && options.allowUnavailable && this.tracks.size === 0;
+      const progressive = options.progressive && options.skipUnavailable && this.tracks.size === 0;
       try {
         if (document.comparison) this.configuration.apply({colorMode:document.comparison.colorMode,referenceDecode:document.comparison.referenceDecode,colorOutput:document.comparison.version===2?document.comparison.colorOutput:defaultColorOutput()});
         setPresentationChannel(document.viewport.channel ?? 'rgb');
         if (progressive) {
-          // A linked workspace is already the active scene. Publish its slots
-          // before opening any source, then use the normal load milestones.
+          // Publish the document without inventing tracks for unopened sources.
           this.catalog = new Map(document.media.map(info => [info.id, info]));
-          this.tracks = new Map(document.tracks.map(track => [track.slot, {
-            source: unavailableSource(this.catalog.get(track.mediaId)!), frame: null, offsetUs: track.offsetUs,
-            visible: track.visible, sourceGen: ++this.nextSourceGen, pendingRelink: true,
-          }]));
-          this.order = [...this.tracks.keys(), ...SLOTS.filter(slot => !this.tracks.has(slot))];
+          this.tracks = new Map();
+          this.order = [...document.tracks.map(track => track.slot), ...SLOTS.filter(slot => !document.tracks.some(track => track.slot === slot))];
           this.marks = document.marks; this.measurements = null; this.positionUs = document.positionUs;
           this.emit();
         }
@@ -1258,12 +1251,13 @@ export class ReviewSession {
             }
           } catch (error) {
             source?.dispose();
-            if (!options.allowUnavailable || signal.aborted || !current()) throw error;
-            log.warn('session', '工作区片源恢复失败，保留轨道待重新关联', { slot: track.slot, name: info.name, sourceKind: info.source ? 'library' : 'local', sourceId: info.source?.id, reason: (error as { kind?: string })?.kind, httpStatus: (error as { status?: number })?.status, error: errorText(error), pendingRelink: true });
-            next.set(track.slot, { source: unavailableSource(info), frame: null, offsetUs: track.offsetUs, visible: track.visible, sourceGen: ++this.nextSourceGen,
-              pendingRelink: true, failure: { message: errorText(error), positionUs: document.positionUs, reason: (error as { kind?: string })?.kind } });
+            if (!options.skipUnavailable || signal.aborted || !current()) throw error;
+            selected.get(track.slot)?.close(); selected.delete(track.slot); next.delete(track.slot);
+            log.warn('session', '工作区片源恢复失败，已跳过', { slot: track.slot, name: info.name,
+              sourceKind: info.source ? 'library' : 'local', sourceId: info.source?.id, reason: (error as { kind?: string })?.kind,
+              httpStatus: (error as { status?: number })?.status, error: errorText(error) });
+            options.onSkipped?.(structuredClone(info), error);
             if (progressive) {
-              this.tracks.get(track.slot)?.source.dispose(); this.tracks.set(track.slot, next.get(track.slot)!);
               status!.state = 'error'; status!.error = errorText(error); status!.finishedAt = Date.now(); this.emit();
             }
           }
@@ -1278,7 +1272,8 @@ export class ReviewSession {
             this.catalog.set(track.source.info.id, track.source.info);
             track.source.onInfoChange = () => { if ([...this.tracks.values()].some(t => t.source === track.source)) this.emit(); };
           }
-          this.marks = document.marks; this.measurements = null; committed = true;
+          this.marks = document.marks; this.measurements = null; this.pruneCatalog(); committed = true;
+          this.mediaLoad = null;
         }, selected, undefined, signal);
       } catch (error) {
         if (progressive) throw error; // Successfully presented peers remain usable after cancellation.
@@ -1293,42 +1288,6 @@ export class ReviewSession {
         if (progressive && current()) { this.abortIncoming = undefined; if (signal.aborted && this.mediaLoad?.state === 'loading') { this.mediaLoad.state = 'cancelled'; this.mediaLoad.finishedAt = Date.now(); } }
       }
     }));
-    return this.getState();
-  }
-  /** Reattach one missing reference without replacing peers or annotation IDs. */
-  async relinkTrack(slot: Slot, open: SourceOpener, options: { allowUnavailable?: boolean } = {}) {
-    slotValue(slot);
-    await this.run('relinkTrack', { slot }, async (current, signal) => {
-      const previous = this.tracks.get(slot);
-      if (!previous?.pendingRelink) throw new Error('该轨道无需重新关联。');
-      const startedAt = Date.now();
-      let stage: MediaLoadStage = 'queued';
-      let source: MediaSource | undefined, committed = false;
-      try {
-        source = await this.openCandidate(open, signal, next => { stage = next; });
-        const old = previous.source.info, info = source.info;
-        const match = matchMediaIdentity(old, info);
-        if (!match.ok) throw new Error(describeMediaMismatch(old.name, match.mismatches));
-        if (match.mtimeChanged) log.info('session', '重新关联接受仅修改时间不同的片源', { slot, name: old.name });
-        updateMediaInfo(source, { id: old.id }, 'identity');
-        stage = 'synchronize';
-        await abortableLoad(Promise.resolve(source.ensureIndexed?.(Math.max(0, this.positionUs - previous.offsetUs))), signal);
-        stage = 'first-frame';
-        const frame = await abortableLoad(source.frameAt(Math.max(0, Math.min(source.info.durationUs - 1, this.positionUs - previous.offsetUs))), signal, late => late.close());
-        try {
-          if (!current() || signal.aborted) throw new DOMException('重新关联已取消。', 'AbortError');
-          this.draw(slot, frame); recordPresentedFrame(source, frame);
-          this.tracks.set(slot, { source, offsetUs: previous.offsetUs, visible: previous.visible, frame: this.frameInfo(frame), sourceGen: ++this.nextSourceGen });
-          this.catalog.set(old.id, source.info); source.onInfoChange = () => this.emit(); committed = true;
-          this.mediaLoad = { name: info.name, slot, stage: 'first-frame', state: 'complete', startedAt, finishedAt: Date.now(), targetPtsUs: this.positionUs };
-        } finally { frame.close(); }
-      } catch (error) {
-        if (!options.allowUnavailable || !current() || signal.aborted) throw error;
-        previous.failure = { message: errorText(error), positionUs: this.positionUs, reason: (error as { kind?: string })?.kind };
-        this.mediaLoad = { name: previous.source.info.name, slot, stage, state: 'error', error: errorText(error), startedAt, finishedAt: Date.now(), targetPtsUs: this.positionUs };
-        log.warn('session', '片源重试失败，保留原轨道和标注', { slot, error: errorText(error), reason: previous.failure.reason });
-      } finally { if (!committed) source?.dispose(); }
-    });
     return this.getState();
   }
   private comparisonConditions(): ComparisonConditions {

@@ -38,29 +38,23 @@ await withBrowserFixture({ caseName: 'source-access', engine, pageOptions: { red
   await page.waitForFunction(() => window.voidPlayer);
   await page.locator('#start-workspace-card').click();
   await settled(page);
-  const notice = page.locator('.toast-warning').filter({ hasText: '个片源待重新关联' });
+  const notice = page.locator('.toast-warning').filter({ hasText: '以下片源无法打开，已跳过' });
   await notice.waitFor({ state: 'visible' });
   assert.match(await notice.innerText(), /MP4 播放索引版本不受支持。.*HTTP 400/s);
-  assert.equal(await page.locator('.toast-warning').count(), 1, 'automatic recovery has one actionable warning');
-  assert.equal(await notice.locator('.toast-action').innerText(), '重试媒体库');
-  await notice.locator('.toast-action').click();
-  await settled(page);
-  await notice.waitFor({ state: 'visible' });
-  assert.equal(await page.locator('.toast-warning').count(), 1, 'a failed retry updates the same warning');
-  assert.equal(await page.locator('.toast-error').count(), 0);
+  assert.equal(await page.locator('.toast-warning').count(), 1, 'automatic recovery has one warning without a relink state');
+  assert.equal(await notice.locator('.toast-action').count(), 0, 'skipped-source warnings have no recovery actions');
+  assert.deepEqual(await page.evaluate(() => window.voidPlayer.getState().tracks), []);
+  assert.equal(await page.locator('.workspace-relink').count(), 0);
   assert.equal(await page.evaluate(() => window.voidPlayer.getState().error), null);
   assert.deepEqual((await call(page, 'export_workspace')).marks, saved.marks);
   await page.screenshot({ path: artifact('specific-index-error.png') });
+  await notice.locator('.toast-close').click();
   await page.unroute(indexRoute);
-  await notice.locator('.toast-action').click();
-  await settled(page);
-  await notice.waitFor({ state: 'hidden' });
+  await call(page, 'import_workspace', { document: saved });
   const recovered = await call(page, 'export_workspace');
   assert.deepEqual(recovered.tracks, saved.tracks);
   assert.deepEqual(recovered.marks, saved.marks);
   assert.ok(await page.evaluate(() => window.voidPlayer.getState().tracks[0].frame));
-  assert.equal(await page.evaluate(() => window.voidPlayer.getState().mediaLoad.state), 'complete');
-  assert.equal(await page.locator('#source-activity-track-A').getAttribute('data-state'), 'ready', 'successful retry clears the old failed load status');
 
   const onceContext = await newContext({ reducedMotion: 'reduce' });
   await onceContext.addInitScript(() => {
@@ -89,18 +83,19 @@ await withBrowserFixture({ caseName: 'source-access', engine, pageOptions: { red
   mixed.media.push({ ...mixed.media[0], id: localId, name: 'missing-local.mp4', source: undefined });
   mixed.tracks.push({ slot: 'B', mediaId: localId, offsetUs: 0, visible: true });
   await once.route(indexRoute, route => route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'MP4 播放索引版本不受支持。' }) }));
-  const importing = call(once, 'import_workspace', { document: mixed });
-  await once.locator('.workspace-relink').waitFor({ state: 'visible' });
-  await once.locator('.relink-later').click(); await importing;
-  const mixedNotice = once.locator('.toast-warning').filter({ hasText: '个片源待重新关联' });
+  await call(once, 'import_workspace', { document: mixed });
+  assert.equal(await once.locator('.workspace-relink').count(), 0);
+  const mixedNotice = once.locator('.toast-warning').filter({ hasText: '以下片源无法打开，已跳过' });
   await mixedNotice.waitFor({ state: 'visible' });
-  assert.deepEqual(await mixedNotice.locator('.toast-action').allTextContents(), ['重新选择文件', '重试媒体库']);
+  assert.equal(await mixedNotice.locator('.toast-action').count(), 0);
+  assert.deepEqual(await once.evaluate(() => window.voidPlayer.getState().tracks), []);
+  assert.match(await mixedNotice.innerText(), /missing-local.mp4/);
   await once.setViewportSize({ width: 360, height: 780 });
   const actionBounds = await mixedNotice.locator('button').evaluateAll(buttons => buttons.map(button => {
     const { left, right } = button.getBoundingClientRect(); return { left, right };
   }));
-  assert.ok(actionBounds.every(bounds => bounds.left >= 0 && bounds.right <= 360), 'all recovery actions fit a narrow screen');
-  await once.screenshot({ path: artifact('mixed-source-actions.png') });
+  assert.ok(actionBounds.every(bounds => bounds.left >= 0 && bounds.right <= 360), 'warning dismiss controls fit a narrow screen');
+  await once.screenshot({ path: artifact('mixed-source-skipped.png') });
 
   // Chromium's real cloneable handle exercises storage without driving an OS picker.
   // WebKit has no native picker; check that another attempt can also be cancelled.
@@ -128,5 +123,5 @@ await withBrowserFixture({ caseName: 'source-access', engine, pageOptions: { red
   assert.equal(await permission.evaluate(() => window.voidPlayer.getState().tracks.length), 0, 'permission check never loads or plays a video');
   await permission.screenshot({ path: artifact('file-access-retry.png') });
   assert.deepEqual(errors, []);
-  console.log(`${engine}: source recovery, exact HTTP errors, retry, one-time local files and permission retry passed`);
+  console.log(`${engine}: skipped-source warnings, exact HTTP errors, one-time local files and permission retry passed`);
 });

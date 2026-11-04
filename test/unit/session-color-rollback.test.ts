@@ -198,34 +198,21 @@ test('new seek cancels a rollback redraw wait and a late old frame never commits
 });
 
 
-test('missing references retain their failure and anchors until relinking under the new color settings', async () => {
+test('skipped references remain annotation history while available tracks accept color changes', async () => {
   await sessionTest(async session => {
-    const missing = fixture('missing'), healthy = fixture('healthy-relink');
-    await session.load('A', async () => missing.source);
-    await session.load('B', async () => healthy.source);
-    await session.setTrackOffset('A', 10000); await session.seek(50000);
-    session.addMark({ slot: 'A', text: 'missing reference anchor' });
-    const workspace = session.exportWorkspace('http://localhost/');
-    const survivor = fixture('healthy-relink');
+    const missing = fixture('missing'), healthy = fixture('healthy');
+    await session.load('A', async () => missing.source); await session.load('B', async () => healthy.source);
+    session.addMark({ slot: 'A', text: 'historical annotation' });
+    const workspace = session.exportWorkspace('http://localhost/'), survivor = fixture('healthy');
     await session.restoreWorkspace(workspace, async info => {
       if (info.id === missing.source.info.id) throw new Error('missing file');
       return survivor.source;
-    }, { allowUnavailable: true });
-    const before = session.getState();
+    }, { skipUnavailable: true });
     await session.setColorMode('reference', { decoder: 'software', depth: 4 });
-    assert.deepEqual(session.getState().tracks[0], before.tracks[0]);
-    const restored = fixture('missing');
-    await session.relinkTrack('A', async () => {
-      assert.equal(getColorMode(), 'reference');
-      assert.deepEqual(getReferenceDecode(), { decoder: 'software', depth: 4 });
-      await restored.source.reconfigureColorMode!('reference', getReferenceDecode());
-      return restored.source;
-    });
-    const after = session.getState();
-    assert.equal(after.tracks[0].failure, undefined); assert.equal(after.tracks[0].pendingRelink, undefined);
-    assert.equal(after.tracks[0].id, before.tracks[0].id); assert.equal(after.tracks[0].offsetUs, 10000);
-    assert.equal(after.positionUs, before.positionUs); assert.deepEqual(after.marks, before.marks);
-    assert.equal(restored.mode, after.colorMode); assert.equal(after.resources.totalBytes, 0);
+    const state = session.getState();
+    assert.deepEqual(state.tracks.map(track => track.slot), ['B']);
+    assert.deepEqual(state.marks, workspace.marks);
+    assert.equal(survivor.mode, state.colorMode); assert.equal(state.resources.totalBytes, 0);
   });
 });
 
@@ -392,7 +379,7 @@ test('workspace failure releases prepared candidates while rollback leaves faile
     await session.restoreWorkspace(saved, async info => {
       if (info.id === missing.source.info.id) throw new Error('missing reference');
       return fixture('survivor').source;
-    }, { allowUnavailable: true });
+    }, { skipUnavailable: true });
     const unavailable = session.getState().tracks[1];
     await assert.rejects(session.restoreWorkspace(saved, async info => {
       if (info.id === missing.source.info.id) throw new Error('later import failure');

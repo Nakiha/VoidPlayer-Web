@@ -25,7 +25,7 @@ function media(name = 'A', starts = [0, 40000, 120000, 160000], end = 200000) {
   return { source };
 }
 
-test('track failure snapshot carries failure message and pendingRelink', async () => {
+test('track failure snapshot carries the playback failure message', async () => {
   const { getLogEvents } = await import('../../src/logging/log.ts');
   const fixture = media('failure-diagnostics');
   fixture.source.framesFrom = async function* () {
@@ -44,6 +44,6 @@ test('track failure snapshot carries failure message and pendingRelink', async (
     assert.ok(snapshot, 'failure captures a per-track snapshot');
     assert.match(String((snapshot.failure as { message: string } | null)?.message), /synthetic mid-stream failure/,
       '快照必须带上未被截断的失败原因，供事后定位');
-    assert.equal(snapshot.pendingRelink, false, '快照必须区分播放中途失败与待重新关联');
+    assert.equal('pendingRelink' in snapshot, false);
   } finally { await session.dispose(); }
 });

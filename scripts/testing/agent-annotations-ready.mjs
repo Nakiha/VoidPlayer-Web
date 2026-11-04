@@ -21,8 +21,6 @@ export async function waitForAnnotationMedia(library, names, { timeoutMs = 5000,
 export function annotationWorkspacePlayable(state = globalThis.window?.voidPlayer?.getState()) {
   if (!state || !Array.isArray(state.tracks)) return false;
   for (const track of state.tracks) if (track.failure) throw new Error(`Agent annotation fixture track failed: ${track.failure.message}`);
-  // Progressive restore publishes pendingRelink placeholders while it is still opening a source.
   if (state.busy) return false;
-  if (state.tracks.some(track => track.pendingRelink)) throw new Error('Agent annotation fixture track failed: pending relink');
   return state.tracks.length === 1 && !state.busy && !!state.tracks[0].frame;
 }

@@ -15,8 +15,7 @@ export function createTrackToasts(toasts: Pick<ToastStack, 'show'>, openLogs: ()
 
   return (tracks: readonly Track[]) => {
     if (signal.aborted) return;
-    // Relink notices and their action are owned by workspace-transfer.
-    const active = tracks.filter(track => !track.pendingRelink && (track.failure || track.syncState));
+    const active = tracks.filter(track => (track.failure || track.syncState));
     const slots = new Set(active.map(track => track.slot));
     for (const [slot, notice] of notices) {
       if (!slots.has(slot)) { notice.dismiss(); notices.delete(slot); }

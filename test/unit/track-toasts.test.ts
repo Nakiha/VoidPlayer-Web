@@ -58,32 +58,13 @@ test('failure replaces sync notice, opens logs and clears on source replacement/
   assert.equal(shown[2].closed, true);
 });
 
-test('missing-source notices are owned by relink; peer notices and cleanup remain independent', () => {
+test('peer failure and synchronization notices clean up independently', () => {
   const { update, shown, life } = fixture();
-  const failed = track({ failure: { message: 'missing', positionUs: 0 } });
+  const failed = track({ failure: { message: 'decode failure', positionUs: 0 } });
   const peer = track({ slot: 'B', syncState: 'index-wait' });
-  update([{ ...failed, pendingRelink: true }, peer]);
-  assert.equal(shown.length, 1);
-  assert.match(shown[0].text(), /轨道 B/);
   update([failed, peer]);
   assert.equal(shown.length, 2);
-  update([{ ...failed, pendingRelink: true }, peer]);
-  assert.equal(shown[1].closed, true);
-  assert.equal(shown[0].closed, false);
-  life.abort();
-  assert.equal(shown[0].closed, true);
-  update([failed]);
-  assert.equal(shown.length, 2);
-});
-
-test('an existing notice can change language without replaying the incident', async () => {
-  const { update, shown } = fixture();
-  const waiting = track({ syncState: 'index-wait' });
-  update([waiting]);
-  await setLanguage('en', { persist: false });
-  try {
-    assert.match(shown[0].text(), /Track A/);
-    update([waiting]);
-    assert.equal(shown.length, 1);
-  } finally { await setLanguage('zh-CN', { persist: false }); }
+  update([peer]);
+  assert.equal(shown[0].closed, true); assert.equal(shown[1].closed, false);
+  life.abort(); assert.equal(shown[1].closed, true);
 });

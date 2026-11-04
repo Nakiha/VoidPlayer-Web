@@ -327,7 +327,7 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
   for (const slot of SLOTS) {
     const t = state.tracks.find(t => t.slot === slot);
     $(`empty-${slot}`).hidden = !!t || openingWorkspace;
-    $(`image-${slot}`).hidden = !t || !!t.pendingRelink;
+    $(`image-${slot}`).hidden = !t;
     const name = $(`name-${slot}`);
     name.textContent = t ? fileBasename(t.name) : (slot === 'A' ? tr(msg("player.referenceVideo", "参考视频")) : tr(msg("player.comparisonVideo", "对比视频")));
     if (t) name.parentElement!.dataset.tooltip = t.name;

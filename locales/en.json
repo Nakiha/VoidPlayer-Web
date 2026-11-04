@@ -6083,33 +6083,9 @@
     "source": "视频",
     "translation": "Video"
   },
-  "transfer.authorizeLocal": {
-    "source": "授权并重试",
-    "translation": "Authorize and retry"
-  },
-  "transfer.browseLibrary": {
-    "source": "在媒体库中选择",
-    "translation": "Choose in library"
-  },
-  "transfer.cancelImport": {
-    "source": "取消导入",
-    "translation": "Cancel import"
-  },
-  "transfer.detailSeparator": {
-    "source": "、",
-    "translation": ", "
-  },
-  "transfer.identityMismatch": {
-    "source": "片源 {name} 已发生变化，与工作区记录不一致（{details}）。请重新选择片源并检查标注。",
-    "translation": "Source {name} has changed and differs from the workspace record ({details}). Pick the source again and check its marks."
-  },
   "transfer.importing": {
     "source": "工作区正在导入，请等待完成。",
     "translation": "The workspace is importing. Wait for it to finish."
-  },
-  "transfer.later": {
-    "source": "稍后关联",
-    "translation": "Later"
   },
   "transfer.legacyConditions": {
     "source": "旧工作区未记录比较条件，已沿用当前色彩和解码设置。",
@@ -6119,37 +6095,10 @@
     "source": "「{name}」修改时间与工作区记录不一致，已按同名同大小文件恢复；如内容被替换请重新检查标注。",
     "translation": "The modification time of “{name}” differs from the workspace record. The file was restored using its name and size; recheck marks if its contents were replaced."
   },
-  "transfer.nameMismatch": {
-    "source": "文件名 {expected} → {actual}",
-    "translation": "Filename {expected} → {actual}"
-  },
-  "transfer.openWorkspace": {
-    "source": "打开工作区",
-    "translation": "Open workspace"
-  },
-  "transfer.pendingRelink": {
-    "source": "{n, plural, other {# 个片源待重新关联；轨道、偏移和标注已保留。}}",
-    "translation": "{n, plural, one {# source needs relinking; tracks, offsets, and marks are kept.} other {# sources need relinking; tracks, offsets, and marks are kept.}}"
-  },
-  "transfer.relinkBody": {
-    "source": "工作区保存了视频引用。请重新选择这些本地文件，也可以稍后关联，先恢复轨道和标注。",
-    "translation": "The workspace saved video references. Pick those local files again, or link them later and restore tracks and marks first."
-  },
-  "transfer.relinkTitle": {
-    "source": "重新连接本地视频",
-    "translation": "Reconnect local videos"
-  },
-  "transfer.reselectLocal": {
-    "source": "重新选择文件",
-    "translation": "Select files again"
-  },
-  "transfer.retryLibrary": {
-    "source": "重试媒体库",
-    "translation": "Retry library"
-  },
-  "transfer.sizeMismatch": {
-    "source": "大小 {expected} → {actual}",
-    "translation": "Size {expected} → {actual}"
+  "transfer.sourcesSkipped": {
+    "source": "以下片源无法打开，已跳过：{details}",
+    "translation": "The following sources could not be opened and were skipped: {details}",
+    "needsReview": false
   },
   "ui.pixelWidth": {
     "source": "{width} 像素",

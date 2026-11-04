@@ -235,20 +235,19 @@ await withBrowserFixture({caseName:'i18n-dialogs',engine,pageOptions:{viewport:{
  for(const route of stalled)await route.abort();await page.unroute(`**/api/media/${sample.id}?*`);
  await page.evaluate(async id=>{await window.voidPlayer.tools.find(t=>t.name==='load_library_item').execute({slot:'A',id});},library.entries.find(e=>e.name==='sample.mp4').id);
  const workspace=await page.evaluate(()=>window.voidPlayer.exportWorkspace());delete workspace.media[0].source;
- // Keep import pending so the open dialog remains reviewable during peer switches.
- await page.evaluate(document=>{window.__import=window.voidPlayer.importWorkspace(document);},workspace);
- const relink=page.locator('.workspace-relink');await relink.waitFor({state:'visible'});
- const bytes=await readFile(path.join(repositoryRoot,'fixtures/video/ci_h264_smoke.mp4'));
- await relink.locator('input[type=file]').setInputFiles({name:'sample.mp4',mimeType:'video/mp4',buffer:bytes});
- await relink.locator('.relink-continue').waitFor({state:'visible'});assert.equal(await relink.locator('.relink-continue').isEnabled(),true);
- await relink.locator('input').evaluate(e=>{e.focus();window.__relinkInput=e;window.__selectedFile=e.files[0];window.__relinkDialog=e.closest('dialog');});
- await switchLanguage('en');assert.match(await relink.locator('[role=alert]').innerText(),/modification time/);assert.equal(await relink.getAttribute('aria-label'),'Reconnect local videos');assert.equal(await relink.locator('h2').innerText(),'Reconnect local videos');
- assert.equal(await relink.locator('header button').getAttribute('aria-label'),'Cancel import');assert.equal(await relink.locator('.relink-later').innerText(),'Later');
- assert.equal(await relink.locator('.relink-continue').innerText(),'Open workspace');assert.match(await relink.locator('input').getAttribute('aria-label'),/^Pick sample.mp4 again$/);
- assert.deepEqual(await relink.locator('input').evaluate(e=>({same:e===window.__relinkInput,dialog:e.closest('dialog')===window.__relinkDialog,file:e.files[0]===window.__selectedFile,focus:e===document.activeElement,name:e.files[0].name,enabled:!document.querySelector('.relink-continue').disabled})),{same:true,dialog:true,file:true,focus:true,name:'sample.mp4',enabled:true});
- await page.screenshot({path:artifact('relink-en.png')});await switchLanguage('zh-CN');assert.equal(await relink.locator('h2').innerText(),'重新连接本地视频');
- await relink.locator('header button').click();assert.equal(await page.evaluate(()=>window.__import),false);
+ // Missing inputs restore immediately and leave only a localized warning.
+ await page.evaluate(document=>window.voidPlayer.importWorkspace(document),workspace);
+ assert.equal(await page.locator('.workspace-relink').count(),0);
+ const skipped=page.locator('.toast-warning').filter({hasText:'sample.mp4'});await skipped.waitFor({state:'visible'});
+ assert.equal(await skipped.locator('.toast-action').count(),0);
+ const close=skipped.locator('.toast-close');await close.evaluate(e=>{e.focus();window.__skipClose=e;});
+ await switchLanguage('en');assert.match(await skipped.innerText(),/could not be opened and were skipped/);
+ assert.equal(await close.evaluate(e=>e===window.__skipClose&&e===document.activeElement),true);
+ await switchLanguage('zh-CN');assert.match(await skipped.innerText(),/以下片源无法打开，已跳过/);
+ assert.deepEqual(await page.evaluate(()=>window.voidPlayer.getState().tracks),[]);
+ assert.deepEqual(await page.evaluate(()=>window.voidPlayer.getState().marks),workspace.marks);
+ await page.screenshot({path:artifact('skipped-source-warning.png')});
  await peer.close();assert.deepEqual(errors,[]);
- await writeFile(artifact('dialog-report.json'),JSON.stringify({engine,assertions:['onboarding-text/aria','onboarding-filter/active-option/node/focus/selection','folder-meta/node/focus','stalled-load-stage/cancel-node/focus','relink-text/aria','relink-file/dialog/node/focus','relink-cancel-preserves-session'],errors},null,2));
- console.log(`PASS ${engine}: onboarding, folder cache and relink modal switch in place`);
+ await writeFile(artifact('dialog-report.json'),JSON.stringify({engine,assertions:['onboarding-text/aria','onboarding-filter/active-option/node/focus/selection','folder-meta/node/focus','stalled-load-stage/cancel-node/focus','skipped-warning/no-modal','skipped-warning/translation/focus','skipped-source-preserves-marks'],errors},null,2));
+ console.log(`PASS ${engine}: onboarding, folder cache and skipped-source warnings switch in place`);
 });

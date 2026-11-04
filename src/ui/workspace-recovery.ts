@@ -127,9 +127,8 @@ export function installWorkspaceRecovery(session: ReviewSession, options: {
             const ok = await options.restore(checkpoint.document);
             if (ok) {
               active = true; clearRecovery(); schedule();
-              const missing = session.getState().tracks.filter(track => track.pendingRelink).length;
-              // The transfer observer owns the single actionable notice for unavailable sources.
-              if (!missing) options.toasts.show(() => t(msg('recovery.restored', '工作区已恢复。')));
+              if (session.getState().tracks.length === checkpoint.document.tracks.length)
+                options.toasts.show(() => t(msg('recovery.restored', '工作区已恢复。')));
             }
           } catch (error) { options.toasts.show(String(error), { kind: 'error' }); }
         },cardLife.signal));
