@@ -1073,11 +1073,21 @@ try {
     assert.equal(managed.tracks[0].output.color.transfer,'hlg');assert.ok(managed.tracks[0].output.yuv.bitDepth>=10);
     assert.equal(managed.tracks[0].presentation.actualTarget,'sdr');
     assert.equal(await page.locator('.toast-warning').count(),0);
+    await page.locator('#toggle-inspector').click();
+    assert.equal(await page.locator('#inspect-decoder-concurrency').isVisible(), true);
+    assert.equal(await page.locator('#inspect-decoder-threads').textContent(), String(managed.tracks[0].decoderThreads));
+    assert.equal(await page.locator('#inspect-decoder-contexts').textContent(), String(managed.tracks[0].decoderFrameContexts));
+    assert.ok(managed.tracks[0].decoderThreads > 0 && managed.tracks[0].decoderFrameContexts > 0);
     await page.locator('#settings-open').click();await page.locator('#settings-tab-performance').click();
     await page.locator('[data-color-mode=browser]').click();
     await page.waitForFunction(() => { const state = window.voidPlayer.getState(); return state.colorMode === 'browser' && !state.busy; });
     await page.locator('#settings-close').click();
     await page.evaluate(async id => window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ id, slot: 'A' }), id);
+    const nativeState = await page.evaluate(() => window.voidPlayer.getState());
+    assert.equal(await page.locator('#inspect-decoder-concurrency').isVisible(), nativeState.tracks[0].decoder === 'ffmpeg-wasm');
+    const performanceRows = page.locator('#inspect-playback dd');
+    assert.equal(await page.locator('[data-frame-timing] + section #inspect-playback-title').textContent(), '播放性能');
+    assert.deepEqual(await performanceRows.allTextContents(), ['—', '—', '—', '—', '—']);
     await page.locator('#play').click();
     // A virtual runner can use CPU HDR conversion without WebGL/WebGPU.
     // This checks eventual UI playback; the separate benchmarks check speed.
@@ -1098,7 +1108,18 @@ try {
     assert.ok(state.positionUs > 500000, 'HLG browser playback advances through real frames');
     assert.ok(state.tracks[0].frame && !state.tracks[0].failure);
     assert.equal(state.error, null);
+    const values = await performanceRows.allTextContents();
+    assert.match(values[0], /^\d+\.\d{2}×$/);
+    assert.ok(parseFloat(values[1]) > 0, 'playing the track records presented frames');
+    assert.match(values[2], /^\d+$/);
+    assert.match(values[3], /^\d+\.\d ms$/);
+    assert.match(values[4], /^\d+ \/ \d+$/);
     await page.screenshot({ path: path.join(screenshots, `${browserName}-dolby-browser-color.png`) });
+    await page.locator('#inspect-playback').scrollIntoViewIfNeeded();
+    await page.locator('#inspector-panel').screenshot({ path: path.join(screenshots, `${browserName}-track-performance.png`) });
+    const replacement = listing.entries.find(item => item.name === 'ci_h264_smoke.mp4').id;
+    await page.evaluate(async id => window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ id, slot: 'A' }), replacement);
+    assert.deepEqual(await performanceRows.allTextContents(), ['—', '—', '—', '—', '—'], 'replacement does not inherit playback metrics');
   });
 
   await check('paused AV1 frame retains its pixels and aspect ratio after hiding and showing', async page => {

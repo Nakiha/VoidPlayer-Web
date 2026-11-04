@@ -34,6 +34,9 @@ export type MediaInfo = {
   id: string; name: string; size: number; lastModified: number;
   source?: { kind: 'library'; id: string; url: string };
   coreVariant?: 'single-thread' | 'multi-thread';
+  /** Active software decoder counts confirmed by the core. */
+  decoderThreads?: number;
+  decoderFrameContexts?: number;
   /** Requested WebCodecs preference; does not attest actual hardware use. */
   hardwareAcceleration?: 'prefer-hardware' | 'no-preference';
   codec: string; decoder: 'webcodecs' | 'ffmpeg-wasm'; width: number; height: number; durationUs: number; firstPtsUs: number;

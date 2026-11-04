@@ -1,5 +1,6 @@
 import type { SessionResources } from './resources.ts';
 import type { DecodedFrame, VvcTuningAxis, VvcTuningState } from '../media/contract.ts';
+import type { Slot } from '../../shared/review/model.ts';
 
 /** One independent, bounded producer per track. Never await decoding on the presentation path. */
 export class FrameQueue {
@@ -120,6 +121,7 @@ export class FrameQueue {
 
 export class PlaybackMeasurements {
   readonly startedMs = performance.now();
+  private readonly sourceGenerations: Partial<Record<Slot, number>>;
   wallMs = 0;
   mediaUs = 0;
   waitingMs = 0;
@@ -130,6 +132,9 @@ export class PlaybackMeasurements {
   private tracks = new Map<string, { drawn: number; dropped: number; lastMs: number; maxGapMs: number; intervals: number[] }>();
   private heldUntil = new Map<string,number>();
   private buffers: Record<string, ReturnType<FrameQueue['snapshot']>> = {};
+  constructor(sourceGenerations: Partial<Record<Slot, number>> = {}) {
+    this.sourceGenerations = { ...sourceGenerations };
+  }
   buffer(slot: string, queue: FrameQueue) { this.buffers[slot] = queue.snapshot(); }
   holdBeforeStart(slot:string, now:number) { this.heldUntil.set(slot,now); }
   draw(slot: string, now: number, dropped: number) {
@@ -142,7 +147,7 @@ export class PlaybackMeasurements {
     this.tracks.set(slot, t);
   }
   snapshot() {
-    return { wallMs: this.wallMs, mediaUs: this.mediaUs, waitingMs: this.waitingMs, firstAdvanceMs: this.firstAdvanceMs, firstPresentationMs: this.firstPresentationMs, buffers: { ...this.buffers },
+    return { wallMs: this.wallMs, mediaUs: this.mediaUs, waitingMs: this.waitingMs, firstAdvanceMs: this.firstAdvanceMs, firstPresentationMs: this.firstPresentationMs, buffers: { ...this.buffers }, sourceGenerations: { ...this.sourceGenerations },
       speed: this.wallMs > 0 ? this.mediaUs / (this.wallMs * 1000) : 0,
       maxFrameLagUs: this.maxFrameLagUs, maxFrameSkewUs: this.maxFrameSkewUs,
       tracks: Object.fromEntries([...this.tracks].map(([slot, t]) => {

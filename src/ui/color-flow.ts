@@ -62,10 +62,11 @@ export function colorSettingsShell() {
       <p id="color-mode-description" class="color-flow-note" role="status"></p>
       <div id="hardware-depth-row" class="color-setting-row settings-key-value-row" hidden><label for="hardware-buffer-depth">${th(msg("colorFlow.hardwareBufferDepth", "硬件缓冲深度"))}</label><button id="hardware-buffer-depth" class="settings-choice"></button></div>
       <div class="color-setting-row settings-key-value-row"><label id="wasm-thread-mode-label" for="wasm-thread-mode">${th(msg('settingsShell.wasmThreads', '解码线程'))}</label><button id="wasm-thread-mode" type="button" class="settings-choice" aria-labelledby="wasm-thread-mode-label"></button></div>
-      <div class="color-setting-row settings-key-value-row"><label for="vvc-thread-mode">${th(msg('settings.vvcThreads', 'VVC 解码线程数'))}</label><input id="vvc-thread-mode" type="number" class="settings-choice" min="1" step="1"></div>
-      <div class="color-setting-row settings-key-value-row"><label for="vvc-frame-contexts">${th(msg('settings.vvcFrameContexts', 'VVC 帧上下文数'))}</label><input id="vvc-frame-contexts" type="number" class="settings-choice" min="1" step="1"></div>
-      <label class="color-setting-row settings-key-value-row"><span>${th(msg('settings.vvcLiveGrowth', 'VVC 自动扩容（实验）'))}</span><input id="vvc-live-growth" type="checkbox"></label>
-      <p class="color-flow-note">${th(msg('settings.vvcTuningHint', '留空使用自动配置。修改后重新打开片源。'))}</p>
+      <div id="vvc-manual-settings" hidden>
+        <div class="color-setting-row settings-key-value-row"><label for="vvc-thread-mode">${th(msg('settings.vvcThreads', 'VVC 解码线程数'))}</label><input id="vvc-thread-mode" type="number" class="settings-choice" min="1" step="1"></div>
+        <div class="color-setting-row settings-key-value-row"><label for="vvc-frame-contexts">${th(msg('settings.vvcFrameContexts', 'VVC 帧上下文数'))}</label><input id="vvc-frame-contexts" type="number" class="settings-choice" min="1" step="1"></div>
+        <p class="color-flow-note">${th(msg('settings.vvcTuningHint', '留空使用自动配置。修改后重新打开片源。'))}</p>
+      </div>
       <div class="color-setting-row settings-key-value-row"><span>${th(msg("colorOutput.displayTarget", "显示目标"))}</span><div id="color-output-target" class="color-segmented segmented" role="group" aria-label="${th(msg("colorOutput.displayTarget", "显示目标"))}"><button data-color-target="sdr" aria-pressed="false">SDR</button><button data-color-target="hdr" aria-pressed="false">HDR</button></div></div>
       <div id="hdr-source-peak-row" class="color-setting-row settings-key-value-row" hidden><label for="hdr-source-peak">${th(msg("colorOutput.assumedPeak", "HDR 假定峰值"))}</label><button id="hdr-source-peak" class="settings-choice"></button></div>
       <p id="color-output-description" class="color-flow-note" role="status"></p>

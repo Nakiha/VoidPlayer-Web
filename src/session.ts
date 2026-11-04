@@ -966,6 +966,7 @@ export class ReviewSession {
     this.error = null; this.errorDiagnostic = undefined;
     ++this.revision;
     this.playing = true;
+    this.measurements = null;
     scoped.info('session', '开始播放', { positionUs: this.positionUs });
     const revision = this.revision;
     const base = this.positionUs;
@@ -988,7 +989,7 @@ export class ReviewSession {
       return reader;
     });
     readers.forEach(r => r.resume());
-    const metrics = this.measurements = new PlaybackMeasurements();
+    const metrics = this.measurements = new PlaybackMeasurements(Object.fromEntries(entries.map(([slot, track]) => [slot, track.sourceGen])));
     const tuningSource = this.tracks.size === 1 ? entries[0]?.[1].source : undefined;
     const tuneVvc = tuningSource?.tuneVvc?.bind(tuningSource);
     const monitor = tuneVvc ? new VvcGrowthMonitor() : null;

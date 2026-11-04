@@ -1,21 +1,24 @@
-export type WasmThreadMode = 'auto' | 'single-thread' | 'multi-thread';
+export type WasmThreadMode = 'auto' | 'auto-grow' | 'manual' | 'single-thread';
 
-const key = 'voidplayer.wasm-thread-mode';
+const key = 'voidplayer.wasm-thread-mode-v2';
 let mode: WasmThreadMode | undefined;
-
-function parse(value: string | null): WasmThreadMode {
-  return value === 'single-thread' || value === 'multi-thread' ? value : 'auto';
-}
 
 export function wasmThreadMode(): WasmThreadMode {
   if (mode !== undefined) return mode;
-  try { return parse(globalThis.localStorage?.getItem(key) ?? null); }
-  catch { return 'auto'; }
+  try {
+    const saved = globalThis.localStorage?.getItem(key);
+    if (saved === 'auto' || saved === 'auto-grow' || saved === 'manual' || saved === 'single-thread') return saved;
+    // Older builds stored the overrides and growth switch independently.
+    if (globalThis.localStorage?.getItem('voidplayer.wasm-thread-mode') === 'single-thread') return 'single-thread';
+    if (vvcThreadCount() || vvcFrameContextCount()) return 'manual';
+    if (readVvcCount(vvcLiveGrowthKey) === 1) return 'auto-grow';
+  } catch { /* Storage can be unavailable. */ }
+  return 'auto';
 }
 
-export function setWasmThreadMode(value: string) {
-  mode = parse(value);
-  try { globalThis.localStorage?.setItem(key, mode); }
+export function setWasmThreadMode(value: WasmThreadMode) {
+  mode = value;
+  try { globalThis.localStorage?.setItem(key, value); }
   catch { /* Keep the selection in memory when storage is unavailable. */ }
 }
 
@@ -45,9 +48,6 @@ function writeVvcCount(key: string, value: string) {
   try { globalThis.localStorage?.setItem(key, count ? String(count) : 'auto'); }
   catch { /* Keep the selection in memory when storage is unavailable. */ }
 }
-
-export function vvcLiveGrowth() { return readVvcCount(vvcLiveGrowthKey) === 1; }
-export function setVvcLiveGrowth(enabled: boolean) { writeVvcCount(vvcLiveGrowthKey, enabled ? '1' : ''); }
 
 export function vvcThreadCount() { return readVvcCount(vvcThreadsKey); }
 export function vvcFrameContextCount() { return readVvcCount(vvcContextsKey); }

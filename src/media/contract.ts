@@ -8,7 +8,7 @@ import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisRank, Ana
 
 /** Browser resource contracts only. Consumers close frames and dispose sources;
  * implementations choose decoding, while the presenter owns painting and captures. */
-export type MediaInfoChange={revision:number;reason:'index'|'presented-frame'|'identity'|'cached-metadata';changed:string[];before:MediaInfo;after:MediaInfo};
+export type MediaInfoChange={revision:number;reason:'index'|'presented-frame'|'identity'|'cached-metadata'|'decoder';changed:string[];before:MediaInfo;after:MediaInfo};
 export interface DecodedFrame extends FrameInfo {
   readonly nativePresentedInput?: {instance:string;sourceVersion:string;input:import('../../shared/media/codecs/native-picture-identity.ts').NativePictureIdentity};
   presentedCommit?: number;

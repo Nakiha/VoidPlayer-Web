@@ -4963,10 +4963,6 @@
     "source": "VVC 帧上下文数",
     "params": {}
   },
-  "settings.vvcLiveGrowth": {
-    "source": "VVC 自动扩容（实验）",
-    "params": {}
-  },
   "settings.vvcThreads": {
     "source": "VVC 解码线程数",
     "params": {}
@@ -4979,8 +4975,12 @@
     "source": "自动",
     "params": {}
   },
-  "settings.wasmThreadsMulti": {
-    "source": "多线程优先",
+  "settings.wasmThreadsAutoGrow": {
+    "source": "自动扩容",
+    "params": {}
+  },
+  "settings.wasmThreadsManual": {
+    "source": "手动",
     "params": {}
   },
   "settings.wasmThreadsSingle": {
@@ -6219,6 +6219,14 @@
     "source": "解码像素格式",
     "params": {}
   },
+  "tracks.decoderFrameContexts": {
+    "source": "帧上下文",
+    "params": {}
+  },
+  "tracks.decoderThreads": {
+    "source": "解码线程",
+    "params": {}
+  },
   "tracks.dimensions": {
     "source": "尺寸",
     "params": {}
@@ -6316,6 +6324,30 @@
   },
   "tracks.pixelFormat": {
     "source": "像素格式",
+    "params": {}
+  },
+  "tracks.playbackDropped": {
+    "source": "跳过帧数",
+    "params": {}
+  },
+  "tracks.playbackFps": {
+    "source": "上屏帧率",
+    "params": {}
+  },
+  "tracks.playbackGapP95": {
+    "source": "上屏间隔 P95",
+    "params": {}
+  },
+  "tracks.playbackPerformance": {
+    "source": "播放性能",
+    "params": {}
+  },
+  "tracks.playbackQueue": {
+    "source": "播放队列",
+    "params": {}
+  },
+  "tracks.playbackSessionSpeed": {
+    "source": "会话速度",
     "params": {}
   },
   "tracks.preferHardwareActualHardwareUseUnverified": {

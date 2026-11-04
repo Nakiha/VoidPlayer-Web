@@ -27,6 +27,8 @@ for (const name of ['h266_10s_1920x1080.mp4', 'h264_high422p_1s_320x180.mp4', 'h
     const directory=await mkdtemp(join(tmpdir(),'vp-mp4-oracle-')),file=join(directory,name);await writeFile(file,bytes);
     try {
       const init = await engine.open(deps.glueURL, deps.wasmBinary);
+      assert.equal(init.decoderThreads, 1);
+      assert.equal(init.decoderFrameContexts, 1);
       const probe=nativeVideoMetadata(file);assert.equal(init.codec,probe.codec_name);assert.equal(init.pixelFormat,probe.pix_fmt);
       const positions=[0,1,2,Math.floor(init.times.length*.6),0,init.times.length-1],first=await engine.extract(0),native=nativeFrames(file,positions,first.description.sourcePixelFormat!,nativeVisibleFrameBytes(first.description));first.frame?.close();
       if (name.startsWith('h266')) assert.ok(readBytes < bytes.length / 2, `initial read ${readBytes}/${bytes.length}`);
@@ -62,6 +64,8 @@ test('MP4 VVC grows workers and contexts on the same decoder without changing fr
     try {
       const init = await rpc.call('init', { input: { file: new Blob([bytes]) }, container: 'mp4', glueURL, wasmBinary, forceWasm: true,
         threads: { general: 4, vvc: 4, vvcFrameContexts: 4, ...(grow ? { vvcTuning: { threads: 6, contexts: 6 } } : {}) } });
+      assert.equal(init.decoderThreads, 4);
+      assert.equal(init.decoderFrameContexts, 4);
       const output: Array<[number, string]> = [];
       const record = (frame: NonNullable<Awaited<ReturnType<Mp4Engine['at']>>>) =>
         output.push([frame.pts, visiblePixelHash(frame.description, frame.pixels!)]);

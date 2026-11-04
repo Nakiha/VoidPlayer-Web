@@ -1,5 +1,5 @@
-import { MAX_WASM_DECODE_COUNT, setVvcFrameContextCount, setVvcThreadCount, setVvcLiveGrowth, setWasmThreadMode,
-  vvcFrameContextCount, vvcLiveGrowth, vvcThreadCount, wasmThreadMode } from '../media/policy/wasm-threads.ts';
+import { MAX_WASM_DECODE_COUNT, setVvcFrameContextCount, setVvcThreadCount, setWasmThreadMode,
+  vvcFrameContextCount, vvcThreadCount, wasmThreadMode, type WasmThreadMode } from '../media/policy/wasm-threads.ts';
 import { t, onLanguageChange, msg } from '../i18n.ts';
 import { settingsPanes } from './settings-shell.ts';
 import { matchesShortcut } from './shortcuts.ts';
@@ -38,13 +38,12 @@ export function installSettings() {
   life.signal.addEventListener('abort', () => concurrencyMenu.dispose(), { once: true });
   const wasmChoices = () => [
     { value: 'auto', label: t(msg('settings.wasmThreadsAuto', '自动')) },
-    { value: 'multi-thread', label: t(msg('settings.wasmThreadsMulti', '多线程优先')) },
+    { value: 'auto-grow', label: t(msg('settings.wasmThreadsAutoGrow', '自动扩容')) },
+    { value: 'manual', label: t(msg('settings.wasmThreadsManual', '手动')) },
     { value: 'single-thread', label: t(msg('settings.wasmThreadsSingle', '单线程')) },
   ];
-  const wasmMenu = installChoiceMenu('wasm-thread-mode', wasmChoices, value => { setWasmThreadMode(value); syncWasmMenu(); syncVvcTuning(); });
-  const syncWasmMenu = () => wasmMenu.sync(wasmThreadMode(), wasmChoices().find(choice => choice.value === wasmThreadMode())!.label, true);
-  onLanguageChange(syncWasmMenu, life.signal); syncWasmMenu();
-  life.signal.addEventListener('abort', () => wasmMenu.dispose(), { once: true });
+  const wasmMenu = installChoiceMenu('wasm-thread-mode', wasmChoices, value => { setWasmThreadMode(value as WasmThreadMode); syncWasmMenu(); });
+  const manualSettings = document.getElementById('vvc-manual-settings')!;
   const vvcTuning = [
     { input: document.getElementById('vvc-thread-mode') as HTMLInputElement, read: vvcThreadCount, write: setVvcThreadCount },
     { input: document.getElementById('vvc-frame-contexts') as HTMLInputElement, read: vvcFrameContextCount, write: setVvcFrameContextCount },
@@ -55,21 +54,17 @@ export function installSettings() {
     input.addEventListener('change', () => {
       if (input.validity.valid) write(input.value === '' ? '' : String(input.valueAsNumber));
       input.value = String(read() || '');
-      syncVvcTuning();
     }, { signal: life.signal });
   }
-  const liveGrowth = document.getElementById('vvc-live-growth') as HTMLInputElement;
-  liveGrowth.checked = vvcLiveGrowth();
-  liveGrowth.addEventListener('change', () => setVvcLiveGrowth(liveGrowth.checked), { signal: life.signal });
-  function syncVvcTuning() {
-    liveGrowth.disabled = wasmThreadMode() === 'single-thread' || !!vvcThreadCount() || !!vvcFrameContextCount();
-    for (const { input } of vvcTuning) {
-      input.disabled = wasmThreadMode() === 'single-thread';
-      input.placeholder = t(msg('settings.wasmThreadsAuto', '自动'));
-    }
+  function syncWasmMenu() {
+    const mode = wasmThreadMode();
+    wasmMenu.sync(mode, wasmChoices().find(choice => choice.value === mode)!.label, true);
+    manualSettings.hidden = mode !== 'manual';
+    for (const { input } of vvcTuning) input.placeholder = t(msg('settings.wasmThreadsAuto', '自动'));
   }
-  onLanguageChange(syncVvcTuning, life.signal);
-  syncVvcTuning();
+  onLanguageChange(syncWasmMenu, life.signal);
+  syncWasmMenu();
+  life.signal.addEventListener('abort', () => wasmMenu.dispose(), { once: true });
   const narrow = matchMedia('(max-width: 600px)');
   const revealTab = () => {
     if (narrow.matches && dialog.open) dialog.querySelector('[role=tab][aria-selected=true]')!.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });

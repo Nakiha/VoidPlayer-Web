@@ -1,6 +1,6 @@
 import {nativeLibraryTransport} from '../../../shared/review/native-presented-frame.ts';
 import { JS_TS_MEDIA_INDEX_IDENTITY, JS_MATROSKA_MEDIA_INDEX_IDENTITY, FLV_MEDIA_INDEX_IDENTITY } from '../../../shared/media/indexing/media-index-identity.ts';
-import { decodeThreadsForCodec, VVC_EXPERIMENTAL_CAPACITY, vvcFrameContextCount, vvcLiveGrowth, vvcThreadCount, wasmThreadMode } from '../policy/wasm-threads.ts';
+import { decodeThreadsForCodec, VVC_EXPERIMENTAL_CAPACITY, wasmThreadMode } from '../policy/wasm-threads.ts';
 import { referenceVersion } from '../../../shared/media/io/media-reference.ts';
 import { attachCachedTrackMetadata } from '../indexing/cached-track-metadata-client.ts';
 import { WorkerRpc } from '../workers/worker-rpc.ts';
@@ -36,16 +36,17 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
   const nativePresentedInstance=nativePresentedTransport?randomUUID():undefined;
   loadAborted(deps.signal);
   if((container==='ts'||container==='matroska') && !deps.sourceVersion)throw new MediaOpenError('input','JS TS source namespace is required');
-  let reservation = reserveFallbackThreads();
+  const mode = wasmThreadMode();
+  let reservation = reserveFallbackThreads(mode);
   let reservationHeld = true;
-  const holdReservation = () => { if (!reservationHeld) { reservation = reserveFallbackThreads(); reservationHeld = true; } };
+  const holdReservation = () => { if (!reservationHeld) { reservation = reserveFallbackThreads(mode); reservationHeld = true; } };
   const releaseReservation = () => { if (reservationHeld) { reservation.release(); reservationHeld = false; } };
   let rpc: WorkerRpc<PacketCommands> | undefined;
   try {
     const libraryPlayback = 'url' in input && !!input.library;
-    const candidates = fallbackCoreCandidates(deps, deps.glueURL ?? document.baseURI, wasmThreadMode());
+    const candidates = fallbackCoreCandidates(deps, deps.glueURL ?? document.baseURI, mode);
     const single = candidates.at(-1)!;
-    const allowLiveGrowth = container === 'mp4' && 'file' in input && vvcLiveGrowth() && !vvcThreadCount() && !vvcFrameContextCount();
+    const allowLiveGrowth = container === 'mp4' && 'file' in input && mode === 'auto-grow';
     const threadsFor = (url: string) => {
       if (!deps.glueURL && fallbackCoreVariant(url) !== 'multi-thread') return 1;
       const threads = reservation.threads;
@@ -212,7 +213,8 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
       const result = kind === 'software'
         ? await activeRpc.call('switch-software', { glueURL: selected, wasmBinary: deps.wasmBinary, threads: threadsFor(selected) }, [], 60000)
         : await activeRpc.call('switch-native', {}, [], 60000);
-      Object.assign(info, result, { ...(kind === 'software' ? { coreVariant: fallbackCoreVariant(selected) } : {}) });
+      Object.assign(info, { decoderThreads: undefined, decoderFrameContexts: undefined }, result,
+        { ...(kind === 'software' ? { coreVariant: fallbackCoreVariant(selected) } : {}) });
       if (kind === 'native') delete info.coreVariant;
       return result;
     };
@@ -277,8 +279,14 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     let stopAudio = () => {};
     const source: MediaSource = {
       ...(supportsLiveGrowth ? {
-        tuneVvc: (axis?: VvcTuningAxis) => disposed || info.decoder !== 'ffmpeg-wasm'
-          ? Promise.resolve(null) : activeRpc.call('tune-vvc', { axis }, [], 60000),
+        async tuneVvc(axis?: VvcTuningAxis) {
+          if (disposed || info.decoder !== 'ffmpeg-wasm') return null;
+          const result = await activeRpc.call('tune-vvc', { axis }, [], 60000);
+          if (result && !disposed && info.decoder === 'ffmpeg-wasm') {
+            updateMediaInfo(source, { decoderThreads: result.threads, decoderFrameContexts: result.contexts }, 'decoder');
+          }
+          return result;
+        },
       } : {}),
       ...(nativePresentedInstance?{nativePresentedInstance,nativePresentedTransport}:{}),
       info, ensureIndexed,

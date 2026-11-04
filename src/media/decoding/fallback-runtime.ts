@@ -1,6 +1,5 @@
 import { coreAssetUrl } from './core-url.ts';
-import { vvcFrameContextCount, vvcThreadCount } from '../policy/wasm-threads.ts';
-import type { WasmThreadMode } from '../policy/wasm-threads.ts';
+import { vvcFrameContextCount, vvcThreadCount, wasmThreadMode, type WasmThreadMode } from '../policy/wasm-threads.ts';
 import type {MediaOpenProgress} from '../progress.ts';
 // Greatest index whose time is at most ptsUs (0 when none), and the first
 // index strictly after ptsUs (-1 when none). Pure binary-search helpers for
@@ -56,13 +55,15 @@ export interface FallbackDeps {
 // Reserve CPU headroom for presentation, then share the remaining budget across fallback tracks.
 let liveFallbacks = 0;
 let reservedFallbackThreads = 0;
-export function reserveFallbackThreads() {
+export function reserveFallbackThreads(mode = wasmThreadMode()) {
   liveFallbacks++;
   const cores = globalThis.navigator?.hardwareConcurrency ?? 4;
   const available = cores - 2;
   const share = Math.max(1, Math.min(Math.floor(available / liveFallbacks), available - reservedFallbackThreads));
-  const vvc = vvcThreadCount() || Math.min(6, share);
-  const threads = { general: Math.min(4, share), vvc, vvcFrameContexts: vvcFrameContextCount() || Math.min(6, vvc) };
+  const vvc = (mode === 'manual' ? vvcThreadCount() : 0) || Math.min(6, share);
+  const contexts = (mode === 'manual' ? vvcFrameContextCount() : 0) || Math.min(6, vvc);
+  const threads = mode === 'single-thread' ? { general: 1, vvc: 1, vvcFrameContexts: 1 }
+    : { general: Math.min(4, share), vvc, vvcFrameContexts: contexts };
   const reserved = Math.max(threads.general, threads.vvc);
   reservedFallbackThreads += reserved;
   let released = false;

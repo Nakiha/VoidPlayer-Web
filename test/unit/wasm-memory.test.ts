@@ -18,11 +18,21 @@ test('VVC automatic settings share CPU headroom and explicit tuning bypasses the
   } finally { first.release(); second.release(); }
   setVvcThreadCount('14');
   setVvcFrameContextCount('18');
-  const manual = reserveFallbackThreads();
+  const manual = reserveFallbackThreads('manual');
   try {
     assert.equal(decodeThreadsForCodec(manual.threads, 'vvc'), 14);
     assert.equal(manual.threads.vvcFrameContexts, 18);
-  } finally { manual.release(); setVvcThreadCount('auto'); setVvcFrameContextCount('auto'); }
+  } finally { manual.release(); }
+  for (const mode of ['auto', 'auto-grow', 'single-thread'] as const) {
+    const reservation = reserveFallbackThreads(mode);
+    const expected = mode === 'single-thread' ? 1 : 6;
+    try {
+      assert.equal(reservation.threads.vvc, expected);
+      assert.equal(reservation.threads.vvcFrameContexts, expected);
+    } finally { reservation.release(); }
+  }
+  setVvcThreadCount('auto');
+  setVvcFrameContextCount('auto');
   cpu.mock.mockImplementation(() => 4);
   const lowCpu = reserveFallbackThreads();
   try {

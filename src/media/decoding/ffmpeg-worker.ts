@@ -10,7 +10,7 @@ import { MediaOpenError } from '../../../shared/media/io/media-errors.ts';
 import { validFfmpegRecovery } from '../../../shared/media/indexing/index-integrity.ts';
 import type { FfmpegIndexRecovery } from '../../../shared/media/indexing/index-integrity.ts';
 import { randomUUID } from '../../../shared/utils/uuid.ts';
-import { loadCore } from './core-loader.ts';
+import { decoderConcurrency, loadCore } from './core-loader.ts';
 import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
 import type { MediaIndexTrace, MediaIndexRecordBatch, MediaIndexRecordManifest } from '../../../shared/media/indexing/media-index-types.ts';
 import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_SCHEMA, parseFfmpegIndex, serializeFfmpegIndex, FFMPEG_NO_TIMESTAMP, lastFfmpegPts } from '../../../shared/media/indexing/ffmpeg-index-cache.ts';
@@ -260,6 +260,7 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
       }
       return {
         ...readRecovery(),
+        ...decoderConcurrency(core, ctx),
         ctx, path, ticks, durations, analysis: entry?.packets.summary, indexMs: Math.round(performance.now() - indexStart), indexSource,
         localIndexBuildCalls, ioMode, indexIdentity,
         indexTrace: { ...externalIndexTrace, recordImportMs },
@@ -334,6 +335,7 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
       };
       contexts.set(ctx, { packets: new FfmpegPacketIndex(), indexComplete: false, ticks: [firstTicks], durations: firstDurations, blobHandle, path, indexSink });
       const ready: FfmpegInitResult = {
+        ...decoderConcurrency(core, ctx),
         ctx, path, ticks: [firstTicks], durations: [firstPresentation.duration],
         firstPts: firstTicks, firstFrame: firstPresentation, indexMs: 0,
         indexSource: 'server', localIndexBuildCalls: 0, ioMode, indexPending: true,

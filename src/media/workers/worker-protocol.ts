@@ -19,6 +19,8 @@ import type { AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample } from
 // No result type is selected by the caller. Engine imports above are type-only.
 type Command<Request extends object, Response> = { request: Request; response: Response };
 export interface FfmpegInitResult extends FfmpegIndexRecovery {
+  decoderThreads?: number;
+  decoderFrameContexts?: number;
   analysis?: FfmpegAnalysisSummary;
   ctx: number;
   firstPts?: number;

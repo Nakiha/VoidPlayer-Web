@@ -31,9 +31,19 @@ if (process.argv[3] === '--variant') {
       assert.equal(typeof core._vp_set_vvc_threads, 'function');
       assert.equal(typeof core._vp_set_vvc_frame_contexts, 'function');
       for (const symbol of ['_vp_set_vvc_frame_context_capacity', '_vp_set_vvc_thread_capacity',
-        '_vp_grow_vvc_frame_contexts', '_vp_grow_vvc_threads', '_vp_vvc_tuning']) assert.equal(typeof core[symbol], 'function', symbol);
+        '_vp_grow_vvc_frame_contexts', '_vp_grow_vvc_threads', '_vp_vvc_tuning',
+        '_vp_decoder_threads', '_vp_decoder_frame_contexts']) assert.equal(typeof core[symbol], 'function', symbol);
+      core._vp_set_threads(3);
       core._vp_set_vvc_frame_contexts(18);
+      core._vp_set_vvc_thread_capacity(4);
       assert.equal(core.ccall('vp_packet_open', 'number', ['number', 'string', 'number', 'number'], [ctx, 'vvc', 0, 0]), 0, 'VVC must open with an explicit context count');
+      assert.equal(core._vp_decoder_threads(ctx), stem.endsWith('-mt') ? 3 : 1, 'active decoder threads');
+      assert.equal(core._vp_decoder_frame_contexts(ctx), 18, 'active frame contexts');
+      if (stem.endsWith('-mt')) {
+        assert.equal(core._vp_grow_vvc_threads(ctx, 4), 4);
+        assert.equal(core._vp_decoder_threads(ctx), 4, 'getter follows online thread growth');
+        assert.equal(core._vp_decoder_frame_contexts(ctx), 18);
+      }
     } finally { core.ccall('vp_destroy', null, ['number'], [ctx]); }
     console.log(`PASS ${stem}: required interfaces, invalid input, AV1 and VVC decoders`);
     // Let Node finish closing its async handles after the decoder is destroyed.

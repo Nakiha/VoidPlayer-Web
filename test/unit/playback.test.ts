@@ -46,7 +46,8 @@ test('prefetch is bounded and stopping a full queue releases every frame', async
 });
 
 test('benchmark rejects slow playback and missing or stalled presentation, even with a healthy timeline', () => {
-  const healthy = { firstAdvanceMs: null, firstPresentationMs: null, wallMs: 2000, mediaUs: 2000000, waitingMs: 0, buffers: {}, speed: 1, maxFrameLagUs: 16000, maxFrameSkewUs: 16000,
+  const healthy = { firstAdvanceMs: null, firstPresentationMs: null, wallMs: 2000, mediaUs: 2000000, waitingMs: 0, buffers: {}, sourceGenerations: { A: 1 },
+    speed: 1, maxFrameLagUs: 16000, maxFrameSkewUs: 16000,
     tracks: { A: { drawn: 120, dropped: 0, fps: 60, p95GapMs: 17, maxGapMs: 20 } } };
   assert.deepEqual(assessPlayback(healthy, 1, false), []);
   assert.ok(assessPlayback({ ...healthy, speed: .5 }, 1, false).includes('below-realtime'));

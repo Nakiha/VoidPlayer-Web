@@ -122,6 +122,31 @@ export function createTracksPane(shared: WorkbenchShared) {
     if (dd.dataset.tooltip) { dd.tabIndex = 0; dd.setAttribute('aria-description', dd.dataset.tooltip); }
   }
 
+  const performanceLabels = () => [
+    t(msg('tracks.playbackSessionSpeed', '会话速度')),
+    t(msg('tracks.playbackFps', '上屏帧率')),
+    t(msg('tracks.playbackDropped', '跳过帧数')),
+    t(msg('tracks.playbackGapP95', '上屏间隔 P95')),
+    t(msg('tracks.playbackQueue', '播放队列')),
+  ];
+  function renderPlayback(state: WorkbenchState, selected: WorkbenchState['tracks'][number]) {
+    const sample = state.playback;
+    const playback = sample && sample.sourceGenerations[selected.slot] === selected.sourceGen && sample.wallMs > 0 ? sample : null;
+    const track = playback?.tracks[selected.slot], buffer = playback?.buffers[selected.slot];
+    const values = [
+      playback ? `${playback.speed.toFixed(2)}×` : '—',
+      track ? `${track.fps.toFixed(1)} fps` : '—',
+      track ? String(track.dropped) : '—',
+      track ? `${track.p95GapMs.toFixed(1)} ms` : '—',
+      buffer ? `${buffer.frames} / ${buffer.capacity}` : '—',
+    ];
+    const cells = $('inspect-playback').querySelectorAll('dd');
+    cells.forEach((cell, i) => { if (cell.textContent !== values[i]) cell.textContent = values[i]; });
+    $('inspect-decoder-concurrency').hidden = selected.decoder !== 'ffmpeg-wasm' || !!selected.pendingRelink || !!selected.failure;
+    $('inspect-decoder-threads').textContent = selected.decoderThreads?.toString() ?? '—';
+    $('inspect-decoder-contexts').textContent = selected.decoderFrameContexts?.toString() ?? '—';
+  }
+
   function renderInspector(state: WorkbenchState) {
     const selected = state.tracks.find(t => t.slot === view.selected);
     const signature = state.tracks.map(t => `${t.slot}:${t.id}:${t.metadataRevision ?? 0}`).join('/') + view.selected;
@@ -158,6 +183,18 @@ export function createTracksPane(shared: WorkbenchShared) {
           const dd = text('dd', '—'); dd.id = id; timing.append(text('dt', label), dd);
         }
         properties.append(timing);
+        const performance = document.createElement('section');
+        const heading = text('h3', t(msg('tracks.playbackPerformance', '播放性能')));
+        heading.id = 'inspect-playback-title';
+        performance.setAttribute('aria-labelledby', heading.id);
+        const stats = document.createElement('dl'); stats.id = 'inspect-playback';
+        for (const label of performanceLabels()) stats.append(text('dt', label), text('dd', '—'));
+        const concurrency = document.createElement('dl'); concurrency.id = 'inspect-decoder-concurrency';
+        const threads = text('dd', '—'); threads.id = 'inspect-decoder-threads';
+        const contexts = text('dd', '—'); contexts.id = 'inspect-decoder-contexts';
+        concurrency.append(text('dt', t(msg('tracks.decoderThreads', '解码线程'))), threads,
+          text('dt', t(msg('tracks.decoderFrameContexts', '帧上下文'))), contexts);
+        performance.append(heading, stats, concurrency); properties.append(performance);
       }
     }
     if (selected) {
@@ -166,6 +203,7 @@ export function createTracksPane(shared: WorkbenchShared) {
       $('inspect-frame-duration').textContent = selected.frame ? `${+(selected.frame.durationUs / 1000).toFixed(3)} ms` : '—';
       const delta = trackTiming(selected, state.positionUs).frameDeltaUs;
       $('inspect-frame-delta').textContent = delta == null ? '—' : `${delta > 0 ? '+' : ''}${+(delta / 1000).toFixed(3)} ms`;
+      renderPlayback(state, selected);
     }
   }
 
@@ -329,6 +367,11 @@ export function createTracksPane(shared: WorkbenchShared) {
       $('track-properties').querySelector('[data-frame-title]')!.textContent = t(msg('tracks.currentFrame', '当前帧'));
       const labels = [t(msg('tracks.clipPts','片内 PTS')),t(msg('tracks.sourcePts','源 PTS')),t(msg('tracks.frameDuration','帧时长')),t(msg('tracks.relativeToPlayhead','相对游标'))];
       [...$('track-properties').querySelectorAll('[data-frame-timing] dt')].forEach((node,i) => { node.textContent = labels[i]; });
+      $('inspect-playback-title').textContent = t(msg('tracks.playbackPerformance', '播放性能'));
+      const playbackLabels = performanceLabels();
+      $('inspect-playback').querySelectorAll('dt').forEach((node, i) => { node.textContent = playbackLabels[i]; });
+      const concurrencyLabels = [t(msg('tracks.decoderThreads', '解码线程')), t(msg('tracks.decoderFrameContexts', '帧上下文'))];
+      $('inspect-decoder-concurrency').querySelectorAll('dt').forEach((node, i) => { node.textContent = concurrencyLabels[i]; });
     } else if(!selected) $('track-properties').querySelector('.panel-empty')?.replaceChildren(t(msg('tracks.noTrackLoaded','尚未载入轨道')));
     for (const track of state.tracks) {
       const row = $('subtrack-list').querySelector<HTMLElement>(`[data-track-drag="${track.slot}"]`);

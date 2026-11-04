@@ -18,7 +18,7 @@ import type { FlvIndex } from '../../../shared/media/containers/flv-demux.ts';
 import type { MediaInfo } from '../../../shared/media/types.ts';
 import { ffmpegColorInfo } from '../metadata.ts';
 import { preferredVideoConfig } from '../policy/decoder-policy.ts';
-import { loadCore } from './core-loader.ts';
+import { decoderConcurrency, loadCore } from './core-loader.ts';
 import { NativePictureInputs,nativeConfigurationHex } from '../../../shared/media/codecs/native-picture-identity.ts';
 import type { NativePictureIdentity } from '../../../shared/media/codecs/native-picture-identity.ts';
 import { hevcFieldPictures } from '../../../shared/media/codecs/hevc-geometry.ts';
@@ -37,7 +37,7 @@ export interface PacketDecoder {
   kind: 'webcodecs' | 'ffmpeg-wasm';
   hardwareAcceleration?: MediaInfo['hardwareAcceleration'];
   tuneVvc?(axis?: VvcTuningAxis): VvcTuningState | null;
-  metadata?(): Pick<MediaInfo, 'color' | 'colorSource' | 'pixelFormat'>;
+  metadata?(): Pick<MediaInfo, 'color' | 'colorSource' | 'pixelFormat' | 'decoderThreads' | 'decoderFrameContexts'>;
   reconfigure?(index: PacketConfiguration): Promise<void>;
   reset(): void;
   /** false means input was not accepted: drain receive() and retry this packet. */
@@ -279,7 +279,7 @@ export async function wasmFlvDecoder(index: PacketConfiguration, glueURL: string
     kind: 'ffmpeg-wasm', tuneVvc,
     async reconfigure(next) { packetPending = false; configure(next); },
     metadata() {
-      return { colorSource: 'decoder', pixelFormat: typeof core._vp_pixel_format === 'function' ? call('vp_pixel_format', ['number'], [ctx], 'string') || null : null,
+      return { ...decoderConcurrency(core, ctx), colorSource: 'decoder', pixelFormat: typeof core._vp_pixel_format === 'function' ? call('vp_pixel_format', ['number'], [ctx], 'string') || null : null,
         color: ffmpegColorInfo({ colorPrimaries: call('vp_color_primaries', ['number'], [ctx]), colorTransfer: call('vp_color_transfer', ['number'], [ctx]),
           colorSpace: call('vp_color_space', ['number'], [ctx]), colorRange: call('vp_color_range', ['number'], [ctx]) }) };
     },

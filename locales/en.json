@@ -4677,10 +4677,6 @@
     "source": "VVC 帧上下文数",
     "translation": "VVC frame contexts"
   },
-  "settings.vvcLiveGrowth": {
-    "source": "VVC 自动扩容（实验）",
-    "translation": "VVC automatic expansion (experimental)"
-  },
   "settings.vvcThreads": {
     "source": "VVC 解码线程数",
     "translation": "VVC decode threads"
@@ -4693,9 +4689,13 @@
     "source": "自动",
     "translation": "Auto"
   },
-  "settings.wasmThreadsMulti": {
-    "source": "多线程优先",
-    "translation": "Prefer multithreaded"
+  "settings.wasmThreadsAutoGrow": {
+    "source": "自动扩容",
+    "translation": "Auto-expand"
+  },
+  "settings.wasmThreadsManual": {
+    "source": "手动",
+    "translation": "Manual"
   },
   "settings.wasmThreadsSingle": {
     "source": "单线程",
@@ -5849,6 +5849,14 @@
     "source": "解码像素格式",
     "translation": "Decoded pixel format"
   },
+  "tracks.decoderFrameContexts": {
+    "source": "帧上下文",
+    "translation": "Frame contexts"
+  },
+  "tracks.decoderThreads": {
+    "source": "解码线程",
+    "translation": "Decode threads"
+  },
   "tracks.dimensions": {
     "source": "尺寸",
     "translation": "Dimensions"
@@ -5933,6 +5941,30 @@
   "tracks.pixelFormat": {
     "source": "像素格式",
     "translation": "Pixel format"
+  },
+  "tracks.playbackDropped": {
+    "source": "跳过帧数",
+    "translation": "Skipped frames"
+  },
+  "tracks.playbackFps": {
+    "source": "上屏帧率",
+    "translation": "Presented FPS"
+  },
+  "tracks.playbackGapP95": {
+    "source": "上屏间隔 P95",
+    "translation": "Frame interval P95"
+  },
+  "tracks.playbackPerformance": {
+    "source": "播放性能",
+    "translation": "Playback performance"
+  },
+  "tracks.playbackQueue": {
+    "source": "播放队列",
+    "translation": "Playback queue"
+  },
+  "tracks.playbackSessionSpeed": {
+    "source": "会话速度",
+    "translation": "Session speed"
   },
   "tracks.preferHardwareActualHardwareUseUnverified": {
     "source": "硬件优先（实际硬件使用未验证）",

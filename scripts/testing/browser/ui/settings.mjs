@@ -124,17 +124,18 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
    assert.equal(await page.locator('#wasm-thread-mode-description').count(), 0);
    assert.equal(await page.locator('#hardware-depth-row + .color-setting-row #wasm-thread-mode').count(), 1);
    assert.equal(await threadMode.innerText(), '自动');
-   for (const [value, label] of [['multi-thread', '多线程优先'], ['single-thread', '单线程'], ['auto', '自动']]) {
+   const vvcThreads = page.locator('#vvc-thread-mode'), vvcContexts = page.locator('#vvc-frame-contexts');
+   const selectMode = async (value, label) => {
     await threadMode.click();
+    assert.deepEqual(await page.locator('#wasm-thread-mode-menu [role=menuitemradio]').allTextContents(), ['自动','自动扩容','手动','单线程']);
     await page.locator(`#wasm-thread-mode-menu [data-value="${value}"]`).click();
     assert.equal(await threadMode.innerText(), label);
-    assert.equal(await page.evaluate(() => localStorage.getItem('voidplayer.wasm-thread-mode')), value);
-   }
-   const vvcThreads = page.locator('#vvc-thread-mode'), vvcContexts = page.locator('#vvc-frame-contexts');
-   const vvcGrowth = page.locator('#vvc-live-growth');
-   assert.equal(await vvcGrowth.isChecked(), false);
-   await vvcGrowth.check();
-   assert.equal(await page.evaluate(() => localStorage.getItem('voidplayer.vvc-live-growth')), '1');
+    assert.equal(await page.evaluate(() => localStorage.getItem('voidplayer.wasm-thread-mode-v2')), value);
+    for (const input of [vvcThreads, vvcContexts]) assert.equal(await input.isVisible(), value === 'manual');
+   };
+   assert.equal(await page.locator('#vvc-live-growth').count(), 0);
+   assert.equal(await vvcThreads.isVisible(), false);
+   await selectMode('manual','手动');
    for (const [input, key, value] of [
     [vvcThreads, 'voidplayer.vvc-thread-mode', '14'], [vvcContexts, 'voidplayer.vvc-frame-contexts', '18'],
    ]) {
@@ -143,14 +144,14 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
     await input.fill(value);
     await input.press('Tab');
     assert.equal(await input.inputValue(), value);
-    assert.equal(await vvcGrowth.isDisabled(), true);
     assert.equal(await page.evaluate(key => localStorage.getItem(key), key), value);
-    await input.fill('');
-    await input.press('Tab');
-    assert.equal(await page.evaluate(key => localStorage.getItem(key), key), 'auto');
    }
-   assert.equal(await vvcGrowth.isEnabled(), true);
-   await vvcGrowth.uncheck();
+   await selectMode('auto-grow','自动扩容');
+   await selectMode('single-thread','单线程');
+   await selectMode('manual','手动');
+   assert.equal(await vvcThreads.inputValue(), '14');
+   assert.equal(await vvcContexts.inputValue(), '18');
+   await selectMode('auto','自动');
    assert.equal(await page.locator('#analysis-concurrency').innerText(),'2 路');
    for(const value of [1,3,4,8,2]) {
     await page.locator('#analysis-concurrency').click();
@@ -416,7 +417,11 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
  await page.locator('#settings-open').click();assert.equal(await page.locator('#settings').evaluate(e=>e.getAnimations().length),0);
  await page.keyboard.press('Escape');await page.locator('#settings').waitFor({state:'hidden'});
  // Archived sessions remain selectable after reload, using the same menu inside the modal.
- await page.reload(); await page.locator('#settings-open').click(); await page.locator('#settings-tab-logs').click();
+ await page.reload(); await page.locator('#settings-open').click();
+ await page.locator('#settings-tab-performance').click();
+ assert.equal(await page.locator('#wasm-thread-mode').innerText(), '自动');
+ assert.equal(await page.locator('#vvc-thread-mode').isVisible(), false);
+ await page.locator('#settings-tab-logs').click();
  await page.waitForFunction(()=>document.querySelector('.log-json').value.startsWith('{'));
  await page.locator('#log-session').click();
  await page.locator(`#log-session-menu [data-value="${originalSession}"]`).click();
@@ -427,5 +432,24 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
  await page.locator('#log-session').click(); await page.locator('#settings-tab-appearance').click();
  assert.equal(await page.locator('#log-session-menu').evaluate(e=>e.matches(':popover-open')),false,'switching panes closes the menu');
  assert.equal(await page.locator('#log-session-menu').evaluate(e=>e.getAnimations().length),0,'reduced motion disables fading');
+ for (const [preferences, label] of [
+  [{'voidplayer.wasm-thread-mode':'multi-thread','voidplayer.vvc-thread-mode':'14','voidplayer.vvc-frame-contexts':'18'},'手动'],
+  [{'voidplayer.wasm-thread-mode':'auto','voidplayer.vvc-live-growth':'1'},'自动扩容'],
+  [{'voidplayer.wasm-thread-mode':'single-thread','voidplayer.vvc-thread-mode':'14','voidplayer.vvc-live-growth':'1'},'单线程'],
+  [{'voidplayer.wasm-thread-mode-v2':'auto','voidplayer.vvc-thread-mode':'14','voidplayer.vvc-live-growth':'1'},'自动'],
+ ]) {
+  const context = await newContext({ reducedMotion:'reduce' });
+  const migrated = await context.newPage();
+  try {
+   await migrated.addInitScript(values => { for (const [key, value] of Object.entries(values)) localStorage.setItem(key, value); }, preferences);
+   await migrated.goto(page.url());await migrated.locator('#settings-open').click();await migrated.locator('#settings-tab-performance').click();
+   assert.equal(await migrated.locator('#wasm-thread-mode').innerText(), label);
+   assert.equal(await migrated.locator('#vvc-thread-mode').isVisible(), label === '手动');
+   if (label === '手动') {
+    assert.equal(await migrated.locator('#vvc-thread-mode').inputValue(), '14');
+    assert.equal(await migrated.locator('#vvc-frame-contexts').inputValue(), '18');
+   }
+  } finally { await migrated.close(); }
+ }
  assert.equal(uploads,0);assert.deepEqual(errors,[]);console.log(`PASS ${name}: direct settings, nine persistent panes, unified geometry/material, Escape/focus/shortcut/navigation, log download without upload, narrow layouts`);
 });

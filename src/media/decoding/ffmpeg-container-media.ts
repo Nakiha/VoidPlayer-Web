@@ -184,6 +184,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   const info: MediaInfo = {
     id: randomUUID(), name: file.name, size: file.size, lastModified: file.lastModified,
     codec: init.codec, decoder: 'ffmpeg-wasm', coreVariant, width: init.width, height: init.height,
+    decoderThreads: init.decoderThreads, decoderFrameContexts: init.decoderFrameContexts,
     firstPtsUs: ticksToUs(firstTick), durationUs: initialDuration, stableCoverageUs: initialStableCoverageUs,
     pixelFormat: init.pixelFormat ?? null,
     color: ffmpegColorInfo(init),
