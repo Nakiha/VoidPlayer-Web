@@ -1,6 +1,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
+import '../test/helpers/browser-worker-host.ts';
 import { openFlvMedia } from '../src/media/decoding/flv-media.ts';
 import { openFFmpegMedia } from '../src/media/decoding/ffmpeg-media.ts';
 import { openPacketMedia } from '../src/media/decoding/packet-media.ts';

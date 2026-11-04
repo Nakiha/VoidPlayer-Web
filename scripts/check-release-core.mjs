@@ -35,9 +35,9 @@ if (process.argv[3] === '--variant') {
       core._vp_set_vvc_frame_contexts(18);
       assert.equal(core.ccall('vp_packet_open', 'number', ['number', 'string', 'number', 'number'], [ctx, 'vvc', 0, 0]), 0, 'VVC must open with an explicit context count');
     } finally { core.ccall('vp_destroy', null, ['number'], [ctx]); }
-    console.log(`PASS ${stem}: required interfaces, invalid input, AV1 decoder`);
-    process.exit(0);
-  } catch (error) { console.error(error); process.exit(1); }
+    console.log(`PASS ${stem}: required interfaces, invalid input, AV1 and VVC decoders`);
+    // Let Node finish closing its async handles after the decoder is destroyed.
+  } catch (error) { console.error(error); process.exitCode = 1; }
 } else {
   const lock = JSON.parse(await readFile(path.join(root, 'scripts/release-core.json'), 'utf8'));
   const provenance = JSON.parse(await readFile(path.join(directory, 'provenance.json'), 'utf8'));

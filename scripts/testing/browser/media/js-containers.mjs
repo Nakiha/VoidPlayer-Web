@@ -10,6 +10,10 @@ const engine=process.argv[2]??'webkit';
 const filter=process.argv.find(x=>x.startsWith('--fixture='))?.slice('--fixture='.length);
 const names=['h264.ts','hevc.ts','h264.mkv','hevc.mkv','hevc10.ts','hevc10.mkv','hevc-audio.mkv','vp8.webm','vp9.webm'];
 assert.ok(!filter||names.includes(filter),'known focused fixture');
+function assertLocalReopen({sourceVersion,...picture},{sourceVersion:previousVersion,...previousPicture}){
+ assert.notEqual(sourceVersion,previousVersion,'each local open gets a new source identity');
+ assert.deepEqual(picture,previousPicture,'the first picture retains its stream, configuration and AU coordinates');
+}
 await withBrowserFixture({caseName:'js-containers',engine,timeoutMs:600000,roots:[path.join(repositoryRoot,'fixtures/js-container')]},async({page,browser,server,url,ready,artifact,stage,defer})=>{
  const rows=[],errors=[],requests=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>requests.push({url:r.url(),method:r.method()}));
  const blobDiagnostics=[];page.on('pageerror',error=>blobDiagnostics.push({event:'pageerror',message:error.message,stack:error.stack,at:Date.now()}));await page.exposeFunction('__vpReportBlob',row=>blobDiagnostics.push(row));
@@ -58,10 +62,13 @@ await withBrowserFixture({caseName:'js-containers',engine,timeoutMs:600000,roots
   assert.equal(track.demuxBackend,name.endsWith('.ts')?'js-ts-packets':'js-matroska-packets');assert.equal(track.indexBackend,name.endsWith('.ts')?'js-ts-packet-index':'js-matroska-packet-index');
   assert.equal(track.indexIntegrity,'complete');assert.equal(track.codec,name.startsWith('hevc')?'hevc':name.split('.')[0]);
   if(policy==='software')assert.equal(track.decoder,'ffmpeg-wasm');
-  if(input==='library'||policy==='browser'){assert.equal(track.jsIndexReused,true,'independent Worker reuses authenticated complete metadata');assert.equal(track.jsIndexPacketsScanned,0);}
-  else {assert.equal(track.jsIndexReused,false);assert.equal(track.jsIndexPacketsScanned,600);}
+  if(input==='library'){
+   assert.equal(track.indexSource,'server');assert.equal(track.jsIndexReused,true,'library playback uses the authenticated server index');assert.equal(track.jsIndexPacketsScanned,0);
+  }else{
+   assert.equal(track.indexSource,'client');assert.equal(track.jsIndexReused,false);assert.equal(track.jsIndexPacketsScanned,600);
+  }
   const first=await call('get_presented_frame',{slot:'A'});assert.ok(first.picture);assert.match(first.picture.stream,/mediabunny-1\.55\.7-(?:ts|matroska)-packets/);
-  if(input==='local'){if(localPictures.has(name))assert.deepEqual(first.picture,localPictures.get(name),'decode backend changes preserve source/config/AU identity');else localPictures.set(name,first.picture);}
+  if(input==='local'){if(localPictures.has(name))assertLocalReopen(first.picture,localPictures.get(name));else localPictures.set(name,first.picture);}
   await call('seek_review',{ptsUs:18_666_667});const token=await call('get_presented_frame',{slot:'A'});assert.ok(token.picture);assert.ok(token.normalizedMediaUs>18_000_000);
   const before=await call('get_review_session');let analysis;
   if(name.startsWith('h264')||name.startsWith('hevc')){
@@ -82,8 +89,7 @@ await withBrowserFixture({caseName:'js-containers',engine,timeoutMs:600000,roots
   rows.push({name,input,policy,demuxBackend:track.demuxBackend,indexBackend:track.indexBackend,decoder:track.decoder,hardwareAcceleration:track.hardwareAcceleration,hardwareUseVerified:false,indexSource:track.indexSource,indexReused:track.jsIndexReused,indexPacketsScanned:track.jsIndexPacketsScanned,picture:token.picture,analysis,presentation});
   await writeFile(artifact('matrix.json'),JSON.stringify({engine,rows,errors},null,2));
  }
- // Persisted receipt validation runs in a new source Worker after a full page
- // reload. A self-consistent dropped/renumbered row cannot authorize reuse.
+ // Local files rebuild their index after reload, preserving picture identity.
  navigation.checkpoint('matrix-complete',{rows:rows.length,pageErrors:errors.length});
  const name=filter??'hevc.mkv';
  const clearThumbnails=()=>page.evaluate(async()=>{
@@ -99,16 +105,15 @@ await withBrowserFixture({caseName:'js-containers',engine,timeoutMs:600000,roots
  };
  await call('remove_review_track',{slot:'A'});
  await call('set_review_color_mode',{mode:'reference'});await call('set_reference_decode',{decoder:'software',depth:2});
- await page.evaluate(async()=>{const db=await new Promise((ok,bad)=>{const r=indexedDB.open('voidplayer-js-packet-index-v1',1);r.onsuccess=()=>ok(r.result);r.onerror=()=>bad(r.error);});
-  try{await new Promise((ok,bad)=>{const tx=db.transaction('indexes','readwrite'),s=tx.objectStore('indexes'),cursor=s.openCursor();cursor.onsuccess=()=>{const c=cursor.result;if(!c)return;const record=c.value,d=JSON.parse(record.payload);d.packets.splice(2,1);d.packets.forEach((p,i)=>p.au=i);d.completeness.packets=d.packets.length;record.payload=JSON.stringify(d);c.update(record);c.continue();};tx.oncomplete=ok;tx.onerror=()=>bad(tx.error);});}finally{db.close();}});
- await stage('corrupt-cache-reload',()=>navigation.reload('corrupt-cache-reload',()=>page.reload()));await page.waitForFunction(()=>window.voidPlayer?.tools);await clearThumbnails();
+ await stage('fresh-runtime-reload',()=>navigation.reload('fresh-runtime-reload',()=>page.reload()));await page.waitForFunction(()=>window.voidPlayer?.tools);await clearThumbnails();
  await page.locator('#file-A').setInputFiles(path.join(repositoryRoot,'fixtures/js-container',name));await stable();
- let restored=(await call('get_review_session')).tracks[0];assert.equal(restored.decoder,'ffmpeg-wasm');await thumbnailPersisted();assert.equal(restored.jsIndexReused,false);assert.equal(restored.jsIndexPacketsScanned,600,'invalid persisted receipt rebuilds actual EOF coverage');
- navigation.checkpoint('corrupt-cache-rebuilt',{decoder:restored.decoder,indexReused:restored.jsIndexReused,packetsScanned:restored.jsIndexPacketsScanned,pageErrors:errors.length});
- await call('remove_review_track',{slot:'A'});await stage('fresh-runtime-reload',()=>navigation.reload('fresh-runtime-reload',()=>page.reload()));await page.waitForFunction(()=>window.voidPlayer?.tools);await clearThumbnails();
- await page.locator('#file-A').setInputFiles(path.join(repositoryRoot,'fixtures/js-container',name));await stable();restored=(await call('get_review_session')).tracks[0];assert.equal(restored.decoder,'ffmpeg-wasm');await thumbnailPersisted();assert.equal(restored.jsIndexReused,true);assert.equal(restored.jsIndexPacketsScanned,0,'complete rebuilt index survives page and Worker restarts');
+ const restored=(await call('get_review_session')).tracks[0];
+ assert.equal(restored.decoder,'ffmpeg-wasm');assert.equal(restored.indexSource,'client');assert.equal(restored.indexIntegrity,'complete');
+ assert.equal(restored.jsIndexReused,false);assert.equal(restored.jsIndexPacketsScanned,600);
+ assertLocalReopen((await call('get_presented_frame',{slot:'A'})).picture,localPictures.get(name));
+ await thumbnailPersisted();
  await writeFile(artifact('blob-diagnostics.json'),JSON.stringify({errors:blobDiagnostics,lastDocument:await page.evaluate(()=>window.__vpBlobDiagnostics)},null,2));
- assert.deepEqual(errors,[]);await writeFile(artifact('matrix.json'),JSON.stringify({engine,rows,errors,persistence:{corruptRebuilt:true,freshRuntimeReused:true,thumbnailBytesPersisted:true,jpegBlobReads:0}},null,2));
- navigation.checkpoint('fresh-runtime-reused',{rows:rows.length,indexReused:restored.jsIndexReused,packetsScanned:restored.jsIndexPacketsScanned,pageErrors:errors.length});
- console.log(`PASS ${engine}: ${rows.length} actual JS-container local/library decoder/analysis cases plus corrupt-cache rebuild and fresh-runtime reuse; hardware use not inferred`);
+ assert.deepEqual(errors,[]);await writeFile(artifact('matrix.json'),JSON.stringify({engine,rows,errors,persistence:{freshRuntimeRebuilt:true,thumbnailBytesPersisted:true,jpegBlobReads:0}},null,2));
+ navigation.checkpoint('fresh-runtime-rebuilt',{rows:rows.length,indexReused:restored.jsIndexReused,packetsScanned:restored.jsIndexPacketsScanned,pageErrors:errors.length});
+ console.log(`PASS ${engine}: ${rows.length} JS-container local/library decoder and analysis cases, plus fresh-runtime index rebuild and thumbnail persistence`);
 });

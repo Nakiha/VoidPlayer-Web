@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import path from "node:path";
 import { selectDiagrams, inspectCurrentWindow, requestInspection } from '../controls.mjs';
 
 
@@ -7,21 +6,19 @@ export async function run(context) {
 const { page, artifact, phase, checkpoint, rows, call, stable, library, gate } = context;
 
 
-    // Hold real FLV playback completion and the independent analysis frontier
-    // at 128 validated packets, beyond several complete GOPs. Neither
-    // subscriber may treat this prefix as EOF.
+    // Library playback requires the complete server index. Hold only the
+    // independent analysis subscriber at 128 validated packets.
     for (const cancel of [false, true]) {
       await call('remove_review_track', { slot: 'A' });
       await call('set_review_color_mode', { mode: 'browser' });
       const gatedId = library.entries.find(e => e.name === `incremental-${cancel ? 'cancel' : 'continue'}.flv`).id;
-      gate.hold(gatedId);
       await call('load_library_item', { slot: 'A', id: gatedId });
-      await page.waitForFunction(() => window.voidPlayer.getState().tracks.some(t => t.slot === 'A' && !t.failure));
+      await stable();
+      assert.equal((await call('get_analysis_capabilities'))[0].capability.indexState, 'complete');
+      gate.hold(gatedId);
       if (!await page.locator('#analysis-panel').isVisible()) await page.locator('#toggle-analysis').click();
       await selectDiagrams(page,'overview');
       await page.locator('[data-seg="full"]').click();
-      await page.waitForFunction(() => window.voidPlayer.tools.find(t => t.name === 'get_analysis_capabilities').execute({})[0]?.capability.indexState === 'building');
-      assert.equal((await call('get_analysis_capabilities'))[0].capability.indexState, 'building');
       await selectDiagrams(page,'nalu-size');
       // The automatic viewport waits for sealed metadata before choosing local
       // GOPs; the explicit full-film API retains incremental-prefix semantics.
@@ -36,7 +33,7 @@ const { page, artifact, phase, checkpoint, rows, call, stable, library, gate } =
         return state.state === 'pending' && state.stream?.waitingForIndex && state.stream.pictures > 0;
       }, undefined, { timeout: 30000 });
       const partial = await call('get_bitstream_analysis_state');
-      assert.ok(gate.heldBatches > 0, 'shared index batch delivery is still gated');
+      assert.ok(gate.heldManifests > 0, 'analysis index finality is still gated');
       assert.equal(partial.stream.indexComplete, false);
       assert.ok(partial.stream.pictures > 0 && partial.stream.pictures < 300);
       assert.match(await page.locator('.analysis-track-control[data-slot="A"] .analysis-chip').getAttribute('aria-description'), /等待索引/);
@@ -51,7 +48,7 @@ const { page, artifact, phase, checkpoint, rows, call, stable, library, gate } =
         const previousSpan = await page.evaluate(() => { const d = document.querySelector('#analysis-shared-axis').dataset; return +d.viewEnd - +d.viewStart; });
         const gatedSpan = Math.min(1_000_000, Math.max(10_000, previousSpan / 2));
         assert.ok(gatedSpan < previousSpan, 'the gated prefix allows a real zoom gesture');
-        checkpoint('paused-gated-zoom', { previousSpan, gatedSpan, heldBatches: gate.heldBatches, paused });
+        checkpoint('paused-gated-zoom', { previousSpan, gatedSpan, heldManifests: gate.heldManifests, paused });
         await phase('paused-gated-zoom', () => inspectCurrentWindow(page, gatedSpan));
         assert.equal((await call('get_bitstream_analysis_state', {slot:'A'})).state, 'paused', 'window navigation cannot restart paused work');
         await page.evaluate(() => { void window.voidPlayer.tools.find(t=>t.name==='resume_bitstream_analysis').execute({slot:'A'}).catch(()=>{}); });
@@ -71,7 +68,6 @@ const { page, artifact, phase, checkpoint, rows, call, stable, library, gate } =
           return state.completedStream?.pictures === 300 && state.completedStream.indexComplete;
         }, undefined, { timeout: 30000 });
       }
-      await page.waitForFunction(() => window.voidPlayer.tools.find(t => t.name === 'get_analysis_capabilities').execute({})[0]?.capability.indexState === 'complete');
       if (cancel) {
         await inspectCurrentWindow(page);
         await page.waitForFunction(() => {

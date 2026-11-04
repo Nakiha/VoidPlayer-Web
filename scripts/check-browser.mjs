@@ -1818,14 +1818,14 @@ try {
     try {
       let request = nextRequest();
       await add(entries[0]).click();
-      await request;
+      assert.ok((await request).headers().range, 'library MP4 reads the first packet via Range after obtaining its server index');
       const cancel = row(entries[0]).getByRole('button', { name: '取消载入：same.mp4', exact: true });
       await cancel.waitFor();
-      assert.equal(await page.locator('#source-activity-stage').textContent(), '正在读取视频信息');
+      assert.equal(await page.locator('#source-activity-stage').textContent(), '正在解码首帧');
       assert.match(await page.locator('#source-activity-name').textContent(), /same\.mp4/);
       assert.equal(await page.locator('#source-activity-cancel').isVisible(), false, 'collapsed state only shows track controls');
       assert.equal(await page.locator('#source-activity-details').isVisible(),false,'incoming load retains the collapsed preference');
-      assert.equal(await page.locator('#source-activity-track-A [role=progressbar]').getAttribute('aria-valuenow'),null,'stalled inspection has an indeterminate circle');
+      assert.equal(await page.locator('#source-activity-track-A [role=progressbar]').getAttribute('aria-valuenow'),null,'stalled first-frame decode has an indeterminate circle');
       await page.locator('#source-activity-toggle').click();
       assert.equal(await page.locator('#source-activity-cancel').isVisible(), true);
       await page.waitForFunction(() => !document.getElementById('source-activity-time').textContent.includes('0 秒'));

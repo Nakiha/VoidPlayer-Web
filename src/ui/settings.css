@@ -346,7 +346,7 @@ input.settings-choice:disabled { opacity: var(--disabled-opacity); }
 .workspace-current-section > #saved-workspace-message:not([hidden]) { margin: 0; }
 
 /* Controls share their parent surface; borders communicate editability. */
-.settings-content :is(.settings-card, .settings-group) :is(input:not([type=color]), textarea, kbd) {
+.settings-content :is(.settings-card, .settings-group) :is(input:not([type=color], .settings-choice), textarea, kbd) {
   background: transparent; box-shadow: none; border: 1px solid var(--divider);
 }
 .settings-content .saved-workspace-search input { border: 0; }

@@ -8,10 +8,9 @@ import { snapshotBuild } from '../build.mjs';
 
 export async function withAnalysisFixture(options, run) {
   const {engine, scenario, matrixPart, desktopPerformance} = options;
-  let limitsDir, staticDir, referenceFixtures, gatedId, releaseIndexGate = true, heldBatches = 0;
-  const indexGateWaiters = new Set();
-  const releaseGate=()=>{releaseIndexGate=true;for(const resolve of indexGateWaiters)resolve();indexGateWaiters.clear();};
-  const gate={hold(id){gatedId=id;releaseIndexGate=false;heldBatches=0;},release:releaseGate,get heldBatches(){return heldBatches;}};
+  let limitsDir, staticDir, referenceFixtures, gatedId, releaseIndexGate = true, heldManifests = 0;
+  const releaseGate=()=>{releaseIndexGate=true;};
+  const gate={hold(id){gatedId=id;releaseIndexGate=false;heldManifests=0;},release:releaseGate,get heldManifests(){return heldManifests;}};
   const matrixCase='bitstream-analysis-matrix'+(matrixPart?'-'+matrixPart:'')+(desktopPerformance?'-desktop':'');
   const name=scenario==='matrix'?matrixCase:'bitstream-analysis-'+(scenario==='overlay'?'layout':scenario);
   const roots=scenario==='matrix'?['fixtures/video','fixtures/flv-analysis','fixtures/fmp4-analysis','fixtures/ts-analysis'].map(file=>path.join(repositoryRoot,file)):[];
@@ -36,9 +35,8 @@ export async function withAnalysisFixture(options, run) {
         return handle;
       };
       library.indexJobs.call=async(op,data={},...args)=>{
-        if(data.id===gatedId&&op==='get'&&!releaseIndexGate){heldBatches++;await new Promise(resolve=>indexGateWaiters.add(resolve));}
         const result=await call(op,data,...args);
-        if(data.id===gatedId&&op==='stream-manifest'&&!releaseIndexGate&&result?.manifest){heldBatches++;return {...result,manifest:{...result.manifest,complete:false}};}
+        if(data.id===gatedId&&op==='stream-manifest'&&!releaseIndexGate&&result?.manifest){heldManifests++;return {...result,manifest:{...result.manifest,complete:false}};}
         return result;
       };
       const server = createMediaServer({ roots, library, staticDir, onLog() {} });

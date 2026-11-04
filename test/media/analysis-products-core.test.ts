@@ -11,7 +11,12 @@ import {resolve} from 'node:path';
 const manifest=JSON.parse(await readFile('public/vendor/voidplayer-analysis/manifest.json','utf8'));
 const factory=(await import(pathToFileURL(resolve('public/vendor/voidplayer-analysis/voidplayer-analysis.js')).href)).default;
 async function reader(name:string){const file=await open(resolve('fixtures/video',name));const {size}=await file.stat();return {size,async read(offset:number,length:number){const bytes=new Uint8Array(length);assert.equal((await file.read(bytes,0,length,offset)).bytesRead,length);return bytes;},close(){void file.close();}};}
-const canonical=(value:unknown)=>JSON.parse(JSON.stringify(value, (key,v)=>key==='elapsedMs'?undefined:v));
+// Products can take different decode paths. Compare picture data and identity
+// exactly while keeping execution diagnostics outside the equality check.
+function canonical({metrics:{elapsedMs,bytesRead,heapBytes,...metrics},...value}:AnalysisSummary|ReturnType<typeof legacyOf>){
+ assert.ok(bytesRead>0&&heapBytes>0);
+ return JSON.parse(JSON.stringify({...value,metrics}));
+}
 for(const [name,startUs,endUs,expected] of [['mhw_hevc_fullrange_bt709_3s.mp4',500000,700000,180],['h264_9s_1920x1080.mp4',500000,700000,30],['h266_10s_1920x1080.mp4',0,10000,49]] as const)
 test(`products ${name}: exact fields, summary queries, warm zero decoder`,async()=>{
  const input=await openAnalysisInput(await reader(name),new AbortController().signal), firstPtsUs=Math.min(...input.packets.map(p=>p.pts)),durationUs=input.sourceEndUs-firstPtsUs;input.close();
