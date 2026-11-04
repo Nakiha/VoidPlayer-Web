@@ -448,6 +448,7 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
       });
       const settleControl = selector => page.locator(selector).evaluate(el => Promise.all(el.getAnimations().map(a=>a.finished)));
       for (const [background, file] of [['bright','glass-bright.mp4'],['dark','glass-dark.mp4'],['complex','stream.mp4']]) {
+        await call('remove_review_track', {slot:'A'});
         await call('load_library_item', {slot:'A',id:library.entries.find(entry=>entry.name===file).id}); await stable();
         // Cover the chrome as well as the picture center: fitted letterboxing
         // would otherwise test the toolbar against the theme instead of video.
