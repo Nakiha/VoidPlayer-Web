@@ -9,6 +9,7 @@ import {analyzePicture,analyzeRange,analyzeStream} from '../../shared/analysis/b
 import {openAnalysisInput} from '../../shared/analysis/bitstream/input.ts';
 import {countCore,emptyCounters} from '../../shared/analysis/bitstream/counters.ts';
 import {RETRY_FULL} from '../../shared/analysis/bitstream/execution-error.ts';
+import {createThreadedAnalysisCore} from '../../server/analysis/bitstream/core-memory.ts';
 import {isProduct,readBlock} from '../../shared/analysis/bitstream/products.ts';
 import type {AnalysisOutput} from '../../shared/analysis/bitstream/products.ts';
 const manifest=JSON.parse(await readFile('public/vendor/voidplayer-analysis/manifest.json','utf8'));
@@ -202,14 +203,25 @@ test('VVC server thread settings preserve progressive outputs through a late ful
  const wasmBinary = await readFile(stem + '.wasm');
  let expected: unknown;
  for (const [threads, contexts] of [[1, 1], [2, 2], [4, 2]]) {
-  const core = await createThreaded({ wasmBinary, analysisThreads: threads > 1 ? threads : 0 });
+  const core = await createThreadedAnalysisCore(createThreaded, wasmBinary, threads > 1 ? threads : 0);
   try {
    assert.equal(core._vpa_configure_threads(threads, contexts), 0);
+   const initialHeap = core.HEAPU8, step = core._vpa_step.bind(core);
+   let staleViewInjected = false;
+   core._vpa_step = () => {
+    const ret = step();
+    // Reproduce a delayed main-runtime view update after real decoder growth.
+    if (ret === 1 && core.HEAPU8.byteLength > initialHeap.byteLength) {
+     core.HEAPU8 = initialHeap; staleViewInjected = true;
+    }
+    return ret;
+   };
    const counters = emptyCounters(), outputs: AnalysisOutput[] = [];
    await analyzeStream(reader(data), target, countCore(core, counters), manifest.buildId, signal,
     async result => { outputs.push(result); }, async () => {});
    assert.equal(outputs.length, count);
    assert.equal(counters.fallback, 1);
+   assert.equal(staleViewInjected, true, 'the real decoder crossed the initial shared-memory view');
    const ordered = outputs.sort((a, b) => a.picture.au - b.picture.au).map(canonical);
    if (threads === 1) expected = ordered;
    else assert.deepEqual(ordered, expected);

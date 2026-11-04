@@ -5,9 +5,39 @@ import {RETRY_FULL} from '../../shared/analysis/bitstream/execution-error.ts';
 import {AnalysisFailure, coreFailure} from '../../shared/analysis/bitstream/failure.ts';
 import {metadataBudgetBytes, PRODUCT_LIMIT} from '../../shared/analysis/bitstream/products.ts';
 import type {AnalysisOutput} from '../../shared/analysis/bitstream/products.ts';
+import {createThreadedAnalysisCore} from '../../server/analysis/bitstream/core-memory.ts';
 const result=(au:number,attempt:string):AnalysisOutput=>({picture:{au},attempt,blocks:[]} as unknown as AnalysisOutput);
 const cost=(r:AnalysisOutput)=>metadataBudgetBytes(r)+40;
 const policyOptions=()=>({fast:true,policy:executionPolicy(),signal:new AbortController().signal});
+
+test('threaded analysis reads the current shared memory after growth outside the main runtime', async () => {
+ const memory = new WebAssembly.Memory({ initial: 1, maximum: 3, shared: true });
+ const binary = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]);
+ const core = await createThreadedAnalysisCore(async options => {
+  options.instantiateWasm({ env: { memory } }, () => {});
+  return { HEAPU8: new Uint8Array(memory.buffer) };
+ }, binary, 2);
+ const original = core.HEAPU8;
+ memory.grow(1);
+ new Uint8Array(memory.buffer).set([17, 29, 41], original.byteLength);
+ assert.equal(original.byteLength, 65536, 'the old shared view remains fixed after growth');
+ assert.equal(core.HEAPU8.byteLength, 131072);
+ assert.deepEqual([...core.HEAPU8.subarray(65536, 65539)], [17, 29, 41]);
+ core.HEAPU8 = new Uint8Array(memory.buffer);
+ memory.grow(1);
+ assert.equal(core.HEAPU8.byteLength, 196608, 'runtime view updates do not disable subsequent growth tracking');
+});
+
+test('threaded analysis rejects unavailable WASM and missing memory imports before publishing a core', async () => {
+ const runtime = globalThis.WebAssembly;
+ try {
+  Object.defineProperty(globalThis, 'WebAssembly', { configurable: true, writable: true, value: undefined });
+  await assert.rejects(createThreadedAnalysisCore(async () => { assert.fail('missing runtime initialized a core'); }, new Uint8Array(), 2), /requires WebAssembly/);
+ } finally { globalThis.WebAssembly = runtime; }
+ await assert.rejects(createThreadedAnalysisCore(async options => {
+  options.instantiateWasm({}, () => { assert.fail('missing memory initialized an instance'); });
+ }, new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]), 2), /must import its WASM memory/);
+});
 
 test('late retry discards every speculative owner before full publishes/cache writes',async()=>{
  const visible:AnalysisOutput[]=[],modes:number[]=[],policy=executionPolicy();let finished=false;

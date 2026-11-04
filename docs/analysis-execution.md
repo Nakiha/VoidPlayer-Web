@@ -21,6 +21,12 @@ pixel requirement closes the pruned decoder and replays once with full pixels
 from the same verified anchor. The host remembers committed AU identities and
 suppresses duplicate publication and progress during replay.
 
+The server's threaded Core factory retains the imported WebAssembly memory and
+refreshes the host byte view when that memory grows. Pthread growth can leave
+the main runtime's old fixed SharedArrayBuffer view shorter than valid output
+pointers. Block/reference bounds checks use the current view; this does not
+relax pointer validation, change decoder memory limits, or restart failed work.
+
 VVC viewport requests with explicit summary or blocks output can use a bounded
 private attempt per missing group, including the verified closed-anchor
 preroll for a dependent group. A late retry preserves the existing one-retry

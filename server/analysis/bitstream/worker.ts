@@ -3,6 +3,7 @@ import { isProduct, isSummary, metadataBudgetBytes, SUMMARY_BATCH_LIMIT } from '
 import type { AnalysisOutput, AnalysisSummary } from '../../../shared/analysis/bitstream/products.ts';
 import {sealJsIndex} from '../../../shared/media/indexing/js-index-proof.ts';
 import { validateAnalysisCore } from '../../../shared/analysis/bitstream/core-abi.ts';
+import { createThreadedAnalysisCore } from './core-memory.ts';
 import { parentPort, workerData } from "node:worker_threads";
 import { open, readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
@@ -66,10 +67,10 @@ try {
       const stem = workerData.threaded ? 'voidplayer-analysis-mt' : 'voidplayer-analysis';
       const module = await import(pathToFileURL(path.join(workerData.coreDir, stem + '.js')).href);
       const { threads, contexts } = workerData.decoder;
-      core = await module.default({
-        wasmBinary: await readFile(path.join(workerData.coreDir, stem + '.wasm')),
-        ...(workerData.threaded ? { analysisThreads: threads > 1 ? threads : 0 } : {}),
-      });
+      const wasmBinary = await readFile(path.join(workerData.coreDir, stem + '.wasm'));
+      core = workerData.threaded
+        ? await createThreadedAnalysisCore(module.default, wasmBinary, threads > 1 ? threads : 0)
+        : await module.default({ wasmBinary });
       validateAnalysisCore(core);
       if (workerData.threaded && core._vpa_configure_threads(threads, contexts) !== 0)
         throw new AnalysisFailure('internal-error', 'Analysis decoder thread settings rejected');
