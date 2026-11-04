@@ -365,19 +365,22 @@ export class ReviewSession {
   requestBitstreamViewport(slot: Slot, window: NonNullable<import('../shared/analysis/bitstream/contract.ts').AnalysisStreamTarget['window']>) {
     return this.requestBitstreamStream(slot, undefined, window, 'automatic', 'summary');
   }
+  cancelBitstreamViewport(slot: Slot) { slotValue(slot); this.bitstream.cancelAutomatic(slot); }
   async requestBitstreamStream(slot: Slot, signal?: AbortSignal, window?: import('../shared/analysis/bitstream/contract.ts').AnalysisStreamTarget['window'], intent: 'explicit' | 'automatic' = 'explicit', product?:'summary'|'blocks') {
     const track = this.tracks.get(slot);
     const target: import('../shared/analysis/bitstream/contract.ts').AnalysisStreamTarget | undefined = track ? { mode: 'stream', product, sourceVersion: trackSourceVersion(track.source),
       firstPtsUs: track.source.info.firstPtsUs, durationUs: Math.ceil(track.source.info.durationUs),
       ...(window ? { window } : {}), ...(track.source.bitstreamIndexIdentity ? { indexIdentity: track.source.bitstreamIndexIdentity } : {}) } : undefined;
     const progress = await this.runBitstreamTask(slot, signal, { state: 'pending', stream: { slot, product, checkedUs: 0,
-      totalUs: window ? window.endUs - window.startUs : Math.ceil(track?.source.info.durationUs ?? 0), pictures: 0, totalPictures: 0, ...(window ? { window } : {}) } }, (service, taskSignal) => {
-      return service.requestStream(track!.source, target!, slot, taskSignal, intent === 'automatic' && product === 'summary');
+      totalUs: window ? window.endUs - window.startUs : Math.ceil(track?.source.info.durationUs ?? 0), pictures: 0, totalPictures: 0, ...(window ? { window } : {}) } }, async (service, taskSignal) => {
+      const progress = await service.requestStream(track!.source, target!, slot, taskSignal, intent === 'automatic' && product === 'summary');
+      // Publish whole-source completion before releasing admission to waiting automatic windows.
+      if (this.tracks.get(slot) === track && !window) {
+        const sourceVersion = trackSourceVersion(track!.source);
+        this.bitstream.complete(slot, track!.sourceGen, { slot, sourceVersion, ...progress });
+      }
+      return progress;
     }, intent, target);
-    if (this.tracks.get(slot) === track && !window) {
-      const sourceVersion = trackSourceVersion(track!.source);
-      this.bitstream.complete(slot, track!.sourceGen, { slot, sourceVersion, ...progress });
-    }
     return progress;
   }
   queryBitstreamDiagrams(slot: Slot, startAu?: number, limit = 128) {
@@ -628,9 +631,10 @@ export class ReviewSession {
   async load(slot: Slot, open: SourceOpener, name = '视频') {
     if(this.changingColor)throw new Error('请等待色彩模式切换完成。');
     slotValue(slot);
-    // 换片使旧定位意图失效：旧定位结果不得覆盖新片。
+    if (this.tracks.has(slot)) throw new Error(`轨道 ${slot} 已有视频，不能覆盖；请使用空轨道。`);
+    // 新增轨道使旧的分析定位意图失效。
     ++this.analysisIntentSeq;
-    const scoped = contextLog(), replacing = this.tracks.get(slot)?.source.info.name;
+    const scoped = contextLog();
     // Preparing a source is independent of the transport. A second load still
     // supersedes the first, but opening/indexing never owns the session queue.
     if (this.busy) this.pause();
@@ -646,7 +650,7 @@ export class ReviewSession {
     this.abortIncoming = abort;
     this.mediaLoad = status; this.error = null; this.errorDiagnostic = undefined; this.emit();
     try {
-      await traceOperation('session', 'load', { slot, replacing, targetPtsUs: status.targetPtsUs }, async () => {
+      await traceOperation('session', 'load', { slot, targetPtsUs: status.targetPtsUs }, async () => {
         // Keep the queued milestone observable and never call a superseded opener.
         await Promise.resolve(); check(); progress('inspect');
         await abortableLoad(this.configuration.settled(), controller.signal);check();
@@ -676,20 +680,18 @@ export class ReviewSession {
         const frame = await abortableLoad(Promise.resolve().then(() => opened.frameAt(localTarget)), controller.signal, late => late.close());
         try {
           check();
+          if (this.tracks.has(slot)) throw new Error(`轨道 ${slot} 已有视频，不能覆盖；请使用空轨道。`);
           // Draw only the incoming source. Existing canvases, decode cursors,
           // buffered frames, alignment offsets and annotation anchors survive.
           this.draw(slot, frame); recordPresentedFrame(opened, frame);
-          const previous = this.tracks.get(slot), resume = this.playing;
+          const resume = this.playing;
           if (resume) { ++this.revision; this.stopPlayback?.(); this.stopPlayback = undefined; }
-          if (previous) { this.releaseReaders('replace', [previous.source]); if (!previous.failure) previous.source.dispose(); }
           const behind = resume && frame.ptsUs + frame.durationUs <= this.positionUs && opened.info.durationUs > this.positionUs;
           this.tracks.set(slot, { source: opened, frame: this.frameInfo(frame), offsetUs: 0, sourceGen: ++this.nextSourceGen, ...(behind ? { syncState: 'catching-up' as const } : {}) });
           this.catalog.set(opened.info.id, opened.info);
           this.pruneCatalog();
           opened.onInfoChange = () => { if ([...this.tracks.values()].some(t => t.source === opened)) this.emit(); };
-          // Adding a short track never clamps the clock. Replacement can shrink
-          // the entire session's extent after removing its longest source.
-          this.positionUs = Math.min(this.positionUs, Math.max(0, this.durationUs - 1));
+          // Adding a short track never clamps the existing playback clock.
           committed = true;
           status.name = opened.info.name; status.state = 'complete'; status.finishedAt = Date.now();
           this.emit();
@@ -706,14 +708,14 @@ export class ReviewSession {
         status.state = 'error'; status.error = errorText(error); status.finishedAt = Date.now();
         this.error = errorText(error); this.errorDiagnostic = mediaDiagnostic(error); this.captureDiagnostics('load-error', error);
       }
-      scoped[controller.signal.aborted ? 'info' : 'warn']('session', `载入轨道 ${slot} 失败`, { replacing, targetPtsUs: status.targetPtsUs, error: errorText(error) });
+      scoped[controller.signal.aborted ? 'info' : 'warn']('session', `载入轨道 ${slot} 失败`, { targetPtsUs: status.targetPtsUs, error: errorText(error) });
       throw controller.signal.aborted ? controller.signal.reason : error;
     } finally {
       if (!committed) release();
       if (this.abortIncoming === abort) this.abortIncoming = undefined;
       if (this.mediaLoad === status) this.emit();
     }
-    scoped.info('media', `轨道 ${slot} 已载入`, { name: source!.info.name, replacing, requestedUs: status.targetPtsUs, positionUs: this.positionUs, frame: this.tracks.get(slot)?.frame });
+    scoped.info('media', `轨道 ${slot} 已载入`, { name: source!.info.name, requestedUs: status.targetPtsUs, positionUs: this.positionUs, frame: this.tracks.get(slot)?.frame });
     return this.getState();
   }
   /**

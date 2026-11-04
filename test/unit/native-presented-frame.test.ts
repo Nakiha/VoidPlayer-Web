@@ -36,7 +36,7 @@ test('paused capture follows successful paint, never prefetch, legacy tags, PTS 
   a.value.info.decoder='ffmpeg-wasm';assert.throws(()=>session.captureNativePresented('A'),/identity/);a.value.info.decoder='webcodecs';
   const forged=structuredClone(first);forged.input.au=1;assert.equal(session.isNativePresentedCurrent(forged),false);
   await session.seek(40000);assert.equal(session.isNativePresentedCurrent(first),false);assert.equal(session.captureNativePresented('A').input.au,1);
-  const b=source('replacement');await session.load('A',async()=>b.value);const second=session.captureNativePresented('A');assert.equal(second.sourceVersion,first.sourceVersion);assert.notEqual(second.instance,first.instance);assert.ok(second.sourceGeneration>first.sourceGeneration);assert.equal(session.isNativePresentedCurrent(first),false);
+  const b=source('reopened');await session.removeTrack('A');await session.load('A',async()=>b.value);const second=session.captureNativePresented('A');assert.equal(second.sourceVersion,first.sourceVersion);assert.notEqual(second.instance,first.instance);assert.ok(second.sourceGeneration>first.sourceGeneration);assert.equal(session.isNativePresentedCurrent(first),false);
   b.value.info.source!.url=b.value.info.source!.url.replace('b'.repeat(24),'c'.repeat(24));assert.throws(()=>session.captureNativePresented('A'),/identity/);
  }finally{await session.dispose();}assert.throws(()=>session.captureNativePresented('A'));
  for(const options of [{native:false},{wrongClock:true}]){const s=new ReviewSession((_slot,f)=>{f.presentedCommit=1;});try{await s.load('A',async()=>source('invalid',options).value);assert.throws(()=>s.captureNativePresented('A'),/identity/);}finally{await s.dispose();}}

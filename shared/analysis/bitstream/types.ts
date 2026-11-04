@@ -32,6 +32,8 @@ export interface AnalysisInputOptions {
   indexIdentity?: import('../../media/indexing/media-index-identity.ts').MediaIndexIdentity;
   frontier?: () => Promise<AnalysisIndexFrontier>;
   waiting?: (waiting: boolean) => Promise<void>;
+  /** Viewport streams bound unconsumed IO between acknowledged outputs, not lifetime IO. */
+  perOutputBudget?: boolean;
 }
 
 export interface AnalysisInput {

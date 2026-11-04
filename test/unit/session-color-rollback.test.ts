@@ -243,7 +243,8 @@ test('workspace opener and presentation rollback failures retain both causes and
     const frameCalls = source.calls.frame;
     await assert.rejects(session.seek(120000), /停用/); assert.equal(source.calls.frame, frameCalls, 'failed source is not decoded again');
     await assert.rejects(session.play(), /停用/);
-    await session.load('A', async () => fixture('replacement').source);
+    await session.removeTrack('A');
+    await session.load('A', async () => fixture('reopened').source);
     assert.equal(session.getState().tracks[0].failure, undefined);
   });
 });

@@ -423,12 +423,13 @@ for (const slot of SLOTS) $(`remove-track-${slot}`).onclick = async () => {
   if (remaining) document.querySelector<HTMLElement>(`.card-heading [data-drag-surface="${remaining.slot}"]`)?.focus();
   else $('open').focus();
 };
-async function importFiles(files: File[], slots: Slot[], handles?: (FsFileHandle | undefined)[], addOnly = false) {
+async function importFiles(files: File[], handles?: (FsFileHandle | undefined)[]) {
+  dropSlots(files.length, session.getState().tracks.map(track => track.slot));
   const context = operationContext();
   const revision = ++importRevision;
   for (let i = 0; i < files.length; i++) {
     if (revision !== importRevision) throw new DOMException(tr(msg("player.fileImportWasSupersededByANewer", "文件导入已被新的请求取代。")), 'AbortError');
-    const slot = addOnly ? dropSlots(files.length - i, session.getState().tracks.map(track => track.slot))[0] : slots[i];
+    const slot = dropSlots(files.length - i, session.getState().tracks.map(track => track.slot))[0];
     await withLogContext(context, () => session.load(slot, (signal, progress, configuration) => openMedia(files[i], undefined, progress, signal, configuration), files[i].name));
     workbench.rememberFile(files[i]);
     // Remember drop-time handles so history rows can reopen without a picker.
@@ -445,13 +446,13 @@ const unbindDrop = bindFileDrop(document.body, {
   },
   loaded: () => session.getState().tracks.map(track => track.slot),
   hover: slots => dropFeedback.show(slots),
-  load: (files, slots, handles) => act(() => importFiles(files, slots, handles, true), 'files.drop', { files, slots }),
+  load: (files, slots, handles) => act(() => importFiles(files, handles), 'files.drop', { files, slots }),
   error: error => { log.warn('ui', '拖入文件失败', { error }); showError(error); },
 });
 for (const slot of SLOTS) {
   $<HTMLInputElement>(`file-${slot}`).onchange = event => {
     const input = event.target as HTMLInputElement; const file = input.files?.[0]; input.value = '';
-    if (file) void act(() => importFiles([file], [slot]), 'files.select', { file, slot });
+    if (file) void act(() => importFiles([file]), 'files.select', { file, slot });
   };
   $<HTMLInputElement>(`file-${slot}`).oncancel = () => log.info('ui', '取消文件选择', { slot });
   const stage = $(`stage-${slot}`);
@@ -513,7 +514,8 @@ onLanguageChange(syncFullscreenLabel, uiEvents.signal);
 $<HTMLButtonElement>('fullscreen').disabled = !document.fullscreenEnabled;
 $('open').onclick = () => {
   const state = session.getState();
-  const slot = SLOTS.find(slot => !state.tracks.some(t => t.slot === slot)) ?? workbench.selected();
+  const slot = SLOTS.find(slot => !state.tracks.some(t => t.slot === slot));
+  if (!slot) { showWarning(tr(msg('sources.noEmptyTracks', '没有空轨道，请先关闭一个视频。'))); return; }
   $<HTMLInputElement>(`file-${slot}`).click();
 };
 $('play').onclick = () => { if (!session.getState().busy) void act(() => session.getState().playing ? session.pause() : session.play(), 'play.toggle'); };

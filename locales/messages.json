@@ -5285,10 +5285,6 @@
     "source": "浏览媒体库",
     "params": {}
   },
-  "shell.cancelAdding": {
-    "source": "取消添加",
-    "params": {}
-  },
   "shell.centerTrackKeepingZoom": {
     "source": "居中轨道 {p30} 画面，保留倍率",
     "params": {
@@ -5301,10 +5297,6 @@
   },
   "shell.checkingLibraryConnectionOpenServerSettingsNew": {
     "source": "正在检查媒体库连接，打开服务管理（新标签页）",
-    "params": {}
-  },
-  "shell.chooseAViewToReplace": {
-    "source": "选择要替换的视图",
     "params": {}
   },
   "shell.chooseLocalFiles": {
@@ -5865,6 +5857,10 @@
     "source": "片源已不在媒体库中。",
     "params": {}
   },
+  "sources.noEmptyTracks": {
+    "source": "没有空轨道，请先关闭一个视频。",
+    "params": {}
+  },
   "sources.noMatch": {
     "source": "没有匹配的片源",
     "params": {}
@@ -5902,10 +5898,6 @@
     "params": {
       "name": "string | number"
     }
-  },
-  "sources.replaceTrack": {
-    "source": "替换当前轨道",
-    "params": {}
   },
   "sources.reselectInSourcesName": {
     "source": "在片源中重新选择：{name}",

@@ -142,6 +142,12 @@ export class BitstreamSessionCoordinator {
     this.host.changed();
   }
 
+  /** A chart no longer needs this automatic window; explicit work keeps its owner. */
+  cancelAutomatic(slot: Slot) {
+    this.automatic.delete(slot);
+    if (this.tasks.get(slot)?.intent === 'automatic') this.cancel(slot, true);
+  }
+
   cancel(slot?: Slot, preservePaused = false, preserveAutomatic = false) {
     if (!preserveAutomatic) { if (slot === undefined) this.automatic.clear(); else this.automatic.delete(slot); }
     for (const [key, task] of this.tasks) {

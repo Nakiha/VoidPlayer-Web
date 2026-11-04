@@ -14,10 +14,11 @@ export async function prepareAnalysisFixtures(directory, profiles) {
       : ['-c:v', 'libx265', '-x265-params', 'pools=1:frame-threads=1:log-level=error:bframes=0']),
     '-pix_fmt', depth === 8 ? 'yuv420p' : 'yuv420p10le', path.join(directory, `depth-${depth}.mp4`),
   ]);
-  for (const [profile, file, duration] of [['streams', 'stream', 4], ['incremental', 'incremental', 10]]) if (needs(profile)) ff([
+  for (const [profile, file, duration] of [['streams', 'stream', 4], ['incremental', 'incremental', 10], ['incremental', 'viewport', 32]]) if (needs(profile)) ff([
     '-f', 'lavfi', '-i', `testsrc2=size=128x64:rate=30:duration=${duration}`, '-an', '-c:v', 'libx264', '-g', '30', '-bf', '2',
     '-x264-params', 'scenecut=0:open-gop=0', path.join(directory, `${file}.mp4`),
   ]);
+  if (needs('incremental')) await copyFile(path.join(directory, 'viewport.mp4'), path.join(directory, 'viewport-next.mp4'));
   if (needs('streams')) {
     await copyFile(path.join(directory, 'stream.mp4'), path.join(directory, 'stream-2.mp4'));
     for (const [name, color] of [['bright', 'white'], ['dark', '0x080b12']]) ff([

@@ -134,6 +134,7 @@ try {
     assert.ok(ids[name], `Missing fixture: ${name}`);
     let baseline;
     for (const mode of ['cold', 'warm', 'local']) {
+    await page.evaluate(async () => { const tools = window.voidPlayer.tools; if (window.voidPlayer.getState().tracks.some(t => t.slot === 'A')) await tools.find(t => t.name === 'remove_review_track').execute({ slot: 'A' }); });
     if (mode === 'local') {
       const previousGen = await page.evaluate(() => window.voidPlayer.getState().tracks.find(track => track.slot === 'A')?.sourceGen);
       await page.locator('#file-A').setInputFiles(join(root, 'fixtures/video', name));
@@ -178,6 +179,8 @@ try {
   }
   // Smooth wheel zoom with the exact mixed-container pair from the reported issue.
   await page.evaluate(async ids => {
+    const remove = window.voidPlayer.tools.find(t => t.name === 'remove_review_track');
+    for (const track of window.voidPlayer.getState().tracks) await remove.execute({ slot: track.slot });
     const load = window.voidPlayer.tools.find(t => t.name === 'load_library_item');
     await load.execute({ id: ids['mpeg2_10s_1280x720.ts'], slot: 'A' });
     await load.execute({ id: ids['av1_10s_1920x1080.webm'], slot: 'B' });

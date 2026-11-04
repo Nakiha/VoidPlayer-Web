@@ -69,6 +69,7 @@ export function installWorkspaceRecovery(session: ReviewSession, options: {
   let last = '', timer: ReturnType<typeof setTimeout> | undefined, writing = false, again = false, warned = false;
   let generation = 0;
   const recovery = document.getElementById('start-workspace-recovery')!;
+  const start = document.getElementById('start-panel')!;
   let cardLife = new AbortController();
   const clearRecovery = () => { cardLife.abort(); cardLife = new AbortController(); recovery.replaceChildren(); recovery.hidden = true; };
   try {
@@ -113,6 +114,7 @@ export function installWorkspaceRecovery(session: ReviewSession, options: {
   document.addEventListener('visibilitychange', () => { if (document.hidden) void flush(); }, { signal: lifetime.signal });
   async function initialize() {
     const currentGeneration = ++generation;
+    start.setAttribute('data-recovery-pending', '');
     initialized = false; active = false; last = ''; clearRecovery();
     actor = currentActor()?.id ?? 'local';
     const expectedActor = actor;
@@ -136,9 +138,14 @@ export function installWorkspaceRecovery(session: ReviewSession, options: {
       }
     } catch {
       options.toasts.show(() => t(msg('recovery.readFailed', '无法读取本机工作区恢复记录，请检查浏览器存储。')), { kind: 'error' });
-    } finally { if (!disposed && actor === expectedActor && generation === currentGeneration) initialized = true; }
+    } finally {
+      if (!disposed && actor === expectedActor && generation === currentGeneration) {
+        initialized = true;
+        start.removeAttribute('data-recovery-pending');
+      }
+    }
   }
-  void options.ready.then(initialize);
+  void options.ready.then(initialize, () => start.removeAttribute('data-recovery-pending'));
   window.addEventListener('voidplayer-identity-change', () => { void initialize(); }, { signal: lifetime.signal });
-  return { flush, dispose() { disposed = true; clearTimeout(timer); clearInterval(interval); unsubscribe(); lifetime.abort(); clearRecovery(); store.close(); } };
+  return { flush, dispose() { disposed = true; clearTimeout(timer); clearInterval(interval); unsubscribe(); lifetime.abort(); clearRecovery(); start.removeAttribute('data-recovery-pending'); store.close(); } };
 }

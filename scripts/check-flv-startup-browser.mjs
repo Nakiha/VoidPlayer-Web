@@ -114,6 +114,7 @@ async function run() {
   // MCP mutations use the same endpoint and permission checks as the UI.
   assert.deepEqual(await call('clear_frame_indexes', { scope: 'all' }), { removed: 0 });
   for (const codec of ['h264', 'hevc']) {
+    await call('remove_review_track', { slot: 'A' });
     context.caseName = `resolution-${codec}`; phase('load-local-file', 0);
     const bytes = [...await resolutionFlv(codec)];
     await page.evaluate(async ({ bytes, codec }) => {
@@ -142,6 +143,7 @@ async function run() {
   // A non-IDR H.264 recovery point has leading B pictures before its PTS.
   context.caseName = 'open-gop'; phase('load-local-file', 0);
   const openGop = [...await openGopFlv()];
+  await call('remove_review_track', { slot: 'A' });
   await page.evaluate(async bytes => window.voidPlayer.loadFile('A', new File([Uint8Array.from(bytes)], 'open-gop.flv')), openGop);
   const completedGop = await call('seek_review', { ptsUs: 1500000 });
   assert.equal(completedGop.tracks[0].indexState, 'complete');

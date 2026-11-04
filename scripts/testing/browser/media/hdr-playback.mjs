@@ -36,6 +36,7 @@ await withBrowserFixture({caseName:'hdr-playback',engine,roots:[root]},async({pa
  const rows=[];
  // The file chooser exercises the local MP4 packet path independently of library Range.
  for(const transfer of ['pq','hlg']){
+   if ((await state()).tracks.length) await call('remove_review_track', { slot: 'A' });
    await page.locator('#file-A').setInputFiles(path.join(root,`${transfer}.mp4`));await stable();
    // Complete the asynchronous GPU startup before comparing repeatable viewport pixels.
    await call('set_review_color_output',{target:'hdr',peakNits:1000});await call('set_review_color_output',{target:'sdr',peakNits:1000});

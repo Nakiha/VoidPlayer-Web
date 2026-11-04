@@ -32,9 +32,10 @@ test('export excludes catalog entries no longer referenced by tracks or marks', 
     await session.load('B', async () => media('second').source);
     await session.removeTrack('A');
     assert.deepEqual(session.exportWorkspace('http://localhost/').media.map(m => m.id), ['second']);
-    // Replacing a track must also drop the previous media id from the catalog.
-    await session.load('B', async () => media('replaced').source);
-    assert.deepEqual(session.exportWorkspace('http://localhost/').media.map(m => m.id), ['replaced']);
+    // Closing a track drops its unreferenced media id before another source is added.
+    await session.removeTrack('B');
+    await session.load('B', async () => media('next-source').source);
+    assert.deepEqual(session.exportWorkspace('http://localhost/').media.map(m => m.id), ['next-source']);
   } finally { await session.dispose(); }
 });
 

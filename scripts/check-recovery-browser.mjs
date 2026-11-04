@@ -41,11 +41,47 @@ try {
   }
   assert.ok(saved, 'checkpoint transaction committed before reload');
   const checkpointIdentity = await page.evaluate(() => sessionStorage.getItem('voidplayer.checkpoint'));
+  // Hold the real checkpoint database open result: recent rows must not paint before the recovery decision.
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem('vp-test-recovery-gate-done')) return;
+    let released = false; const deliveries = [], open = IDBFactory.prototype.open;
+    window.__releaseCheckpointOpen = () => { released = true; sessionStorage.setItem('vp-test-recovery-gate-done', '1'); deliveries.splice(0).forEach(deliver => deliver()); };
+    IDBFactory.prototype.open = function(name, ...args) {
+      const request = open.call(this, name, ...args);
+      if (name !== 'voidplayer-workspace-checkpoints') return request;
+      let callback;
+      Object.defineProperty(request, 'onsuccess', { configurable: true, get() { return callback; }, set(value) { callback = value; } });
+      request.addEventListener('success', event => {
+        const deliver = () => callback?.call(request, event);
+        if (released) deliver(); else deliveries.push(deliver);
+      }, { once: true });
+      return request;
+    };
+    window.__recentPaints = [];
+    let frames = 0, visibleFrames = 0;
+    const sample = () => {
+      const row = document.querySelector('.start-recent-row'), panel = document.querySelector('#start-panel');
+      const visible = !!row && getComputedStyle(row).visibility === 'visible' && row.getClientRects().length > 0;
+      if (visible) { visibleFrames++; window.__recentPaints.push({ top: row.getBoundingClientRect().top, recovery: !!document.querySelector('#start-workspace-card'), pending: panel.hasAttribute('data-recovery-pending') }); }
+      if (++frames < 300 && visibleFrames < 8) requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
   await page.reload(); await page.waitForFunction(() => window.voidPlayer);
   assert.equal(await page.evaluate(() => sessionStorage.getItem('voidplayer.checkpoint')), checkpointIdentity, 'reload retains its own checkpoint identity');
+  await page.waitForFunction(() => document.querySelector('#start-panel')?.hasAttribute('data-recovery-pending') && document.querySelectorAll('.start-recent-row').length > 0);
+  assert.equal(await page.locator('.start-recent-row').first().isVisible(), false, 'recent rows wait for the checkpoint decision');
+  await page.evaluate(() => window.__releaseCheckpointOpen());
+
   assert.equal((await page.evaluate(() => window.voidPlayer.getState())).tracks.length, 0, 'restoration is offered, not automatic');
   const card = page.locator('#start-workspace-card');
   await card.waitFor();
+  await page.waitForFunction(() => window.__recentPaints.length >= 8);
+  const paints = await page.evaluate(() => window.__recentPaints);
+  assert.ok(paints.every(frame => frame.recovery && !frame.pending), 'recovery card and recent rows first paint together');
+  assert.ok(Math.max(...paints.map(frame => frame.top)) - Math.min(...paints.map(frame => frame.top)) < .5, 'the visible recent list never moves to make room for a late card');
+  console.log(`PASS ${engine}: recovery and recent rows paint together without a layout shift`);
+
   assert.match(await card.textContent(), /clip\.mp4/);
   assert.deepEqual(await card.locator('.start-workspace-track > .slot').allTextContents(), ['A']);
   assert.equal(await card.locator('.start-workspace-track > .slot').getAttribute('class'), 'slot slot-A');
@@ -185,6 +221,7 @@ try {
     await localContext.addInitScript(() => Object.defineProperty(window, 'showOpenFilePicker', { value: undefined, configurable: true }));
     const localPage = await localContext.newPage(); localPage.on('pageerror', error => errors.push(error.message));
     await localPage.goto(base); await localPage.waitForFunction(() => window.voidPlayer);
+    await localPage.waitForFunction(() => !document.querySelector('#start-panel').hasAttribute('data-recovery-pending'));
     const localDocument = structuredClone(snapshot); for (const info of localDocument.media) delete info.source;
     const importing = localPage.evaluate(document => window.voidPlayer.tools.find(tool => tool.name === 'import_workspace').execute({ document }), localDocument);
     await importing;

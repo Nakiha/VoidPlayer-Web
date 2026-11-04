@@ -5001,10 +5001,6 @@
     "source": "浏览媒体库",
     "translation": "Browse library"
   },
-  "shell.cancelAdding": {
-    "source": "取消添加",
-    "translation": "Cancel adding"
-  },
   "shell.centerTrackKeepingZoom": {
     "source": "居中轨道 {p30} 画面，保留倍率",
     "translation": "Center track {p30}, keeping zoom"
@@ -5016,10 +5012,6 @@
   "shell.checkingLibraryConnectionOpenServerSettingsNew": {
     "source": "正在检查媒体库连接，打开服务管理（新标签页）",
     "translation": "Checking library connection; open server settings (new tab)"
-  },
-  "shell.chooseAViewToReplace": {
-    "source": "选择要替换的视图",
-    "translation": "Choose a view to replace"
   },
   "shell.chooseLocalFiles": {
     "source": "选择本地文件",
@@ -5525,6 +5517,10 @@
     "source": "片源已不在媒体库中。",
     "translation": "This source is no longer in the media library."
   },
+  "sources.noEmptyTracks": {
+    "source": "没有空轨道，请先关闭一个视频。",
+    "translation": "No empty tracks. Close a video first."
+  },
   "sources.noMatch": {
     "source": "没有匹配的片源",
     "translation": "No matching sources"
@@ -5556,10 +5552,6 @@
   "sources.removeFromViewName": {
     "source": "从视图移除：{name}",
     "translation": "Remove from view: {name}"
-  },
-  "sources.replaceTrack": {
-    "source": "替换当前轨道",
-    "translation": "Replace the current track"
   },
   "sources.reselectInSourcesName": {
     "source": "在片源中重新选择：{name}",

@@ -869,6 +869,31 @@ test('a newer automatic window cancels active automatic work', async () => {
 });
 
 
+test('withdrawing viewport demand stops automatic work and fences automatic waiters without cancelling explicit work', async () => {
+  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream-analysis.ts');
+  const instance = {}, coordinator = new BitstreamSessionCoordinator({ track: () => ({ instance, generation: 1, available: true }), subscribeInvalidation: () => () => {}, changed() {} });
+  let started!: () => void, automaticSignal!: AbortSignal;
+  const ready = new Promise<void>(resolve => { started = resolve; });
+  try {
+    const automatic = coordinator.run('A', undefined, { state: 'pending' }, async (_service, signal) => {
+      automaticSignal = signal; started();
+      await new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
+    }, 'automatic');
+    const cancelled = assert.rejects(automatic, /cancelled/i);
+    await ready; coordinator.cancelAutomatic('A'); await cancelled;
+    assert.equal(automaticSignal.aborted, true);
+    let release!: () => void, explicitStarted!: () => void, explicitSignal!: AbortSignal;
+    const gate = new Promise<void>(resolve => { release = resolve; }), admitted = new Promise<void>(resolve => { explicitStarted = resolve; });
+    const explicit = coordinator.run('A', undefined, { state: 'pending' }, async (_service, signal) => { explicitSignal = signal; explicitStarted(); await gate; });
+    await admitted;
+    const waiting = coordinator.run('A', undefined, { state: 'pending' }, async () => assert.fail('withdrawn viewport must not start'), 'automatic');
+    const superseded = assert.rejects(waiting, /superseded/);
+    coordinator.cancelAutomatic('A');
+    assert.equal(explicitSignal.aborted, false);
+    release(); await explicit; await superseded;
+  } finally { coordinator.dispose(); }
+});
+
 test('automatic summary cache validation publishes no pending work, but misses and build changes do', async t => {
   const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream-analysis.ts');
   const { BitstreamAnalysisService } = await import('../../src/analysis/bitstream/service.ts');

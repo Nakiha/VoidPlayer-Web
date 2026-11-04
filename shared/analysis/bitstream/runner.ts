@@ -673,7 +673,9 @@ async function runStream(
       } catch (error) { reader.close(); throw error; }
     }
     if (typeof core === 'function') { const factory = core; let instance: Promise<any> | undefined; core = () => instance ??= Promise.resolve().then(factory); }
-    const input = await openAnalysisInput(reader, signal, false, { sourceVersion: target.sourceVersion, indexIdentity: target.indexIdentity });
+    const input = await openAnalysisInput(reader, signal, false, {
+      sourceVersion: target.sourceVersion, indexIdentity: target.indexIdentity, perOutputBudget: true,
+    });
     try {
       const demandPlan=makeDemandPlan(input.packets,target,buildId); if(demandPlan)onPlan?.(demandPlan);
       const groups = viewportAnalysisGops(input.packets, target.firstPtsUs, target.window);
@@ -691,7 +693,7 @@ async function runStream(
         group.anchor = evidence.closedRandomAccess ? 'closed' : 'dependent';
         const publish = async (result: AnalysisOutput) => {
           last = { ...result, gop: { ...group } };
-          await onResult(last); signal.throwIfAborted(); pictures++; await progress();
+          await onResult(last); signal.throwIfAborted(); input.acknowledge?.(); pictures++; await progress();
         };
         const missing = new Set<number>();
         for (let au = group.startAu; au < group.endAu; au++) {

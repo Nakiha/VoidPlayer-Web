@@ -1068,7 +1068,7 @@ try {
         });
       });
       observe.observe(document.body,{subtree:true,childList:true});
-      void window.voidPlayer.loadFile('A',new File(['invalid'],'animated-toast.flv')).catch(()=>{});
+      void window.voidPlayer.loadFile('B',new File(['invalid'],'animated-toast.flv')).catch(()=>{});
     });
     await page.waitForFunction(()=>window.toastMidpoint);
     const midpoint=await page.evaluate(()=>window.toastMidpoint);
@@ -1079,7 +1079,7 @@ try {
     assert.equal(await warning.evaluate(el=>el.classList.contains('toast-enter')),false,'finished entrance cleans its animation class');
     await warning.locator('.toast-close').click(); await warning.waitFor({state:'detached'});
     await page.emulateMedia({reducedMotion:'reduce'});
-    await page.evaluate(()=>window.voidPlayer.loadFile('A',new File(['invalid'],'reduced-toast.flv')).catch(()=>{}));
+    await page.evaluate(()=>window.voidPlayer.loadFile('B',new File(['invalid'],'reduced-toast.flv')).catch(()=>{}));
     await warning.waitFor({state:'visible'});
     assert.deepEqual(await warning.evaluate(el=>({opacity:getComputedStyle(el).opacity,animations:el.getAnimations().length,enter:el.classList.contains('toast-enter')})),{opacity:'1',animations:0,enter:false});
   });
@@ -1117,7 +1117,7 @@ try {
   });
 
   await check('warning toasts remain above settings and clickable before and after modal opens', async page => {
-    const triggerWarning = () => page.evaluate(() => window.voidPlayer.loadFile('A', new File(['invalid'], 'broken.flv')).catch(() => {}));
+    const triggerWarning = () => page.evaluate(() => window.voidPlayer.loadFile('B', new File(['invalid'], 'broken.flv')).catch(() => {}));
     const warning = page.locator('.toast-warning');
     const assertTop = async () => {
       await warning.waitFor({ state: 'visible' });
@@ -1168,7 +1168,7 @@ try {
     await page.locator('[data-color-mode=browser]').click();
     await page.waitForFunction(() => { const state = window.voidPlayer.getState(); return state.colorMode === 'browser' && !state.busy; });
     await page.locator('#settings-close').click();
-    await page.evaluate(async id => window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ id, slot: 'A' }), id);
+
     const nativeState = await page.evaluate(() => window.voidPlayer.getState());
     assert.equal(await page.locator('#inspect-decoder-concurrency').isVisible(), nativeState.tracks[0].decoder === 'ffmpeg-wasm');
     const performanceRows = page.locator('#inspect-playback dd');
@@ -1204,6 +1204,7 @@ try {
     await page.locator('#inspect-playback').scrollIntoViewIfNeeded();
     await page.locator('#inspector-panel').screenshot({ path: path.join(screenshots, `${browserName}-track-performance.png`) });
     const replacement = listing.entries.find(item => item.name === 'ci_h264_smoke.mp4').id;
+    await page.locator('#remove-track-A').click();
     await page.evaluate(async id => window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ id, slot: 'A' }), replacement);
     assert.deepEqual(await performanceRows.allTextContents(), ['—', '—', '—', '—', '—'], 'replacement does not inherit playback metrics');
   });
@@ -1984,7 +1985,39 @@ try {
     await page.evaluate(() => window.activityLife.abort());
   });
 
-  await check('stalled source loads can be cancelled or replaced without locking the add buttons', async page => {
+  await check('all source additions preserve occupied tracks and full capacity has no replace dialog', async page => {
+    const bytes = [...await readFile(path.join(fixtures, 'ci_h264_smoke.mp4'))];
+    await page.locator('#file-A').setInputFiles({ name: 'first.mp4', mimeType: 'video/mp4', buffer: Buffer.from(bytes) });
+    await page.waitForFunction(() => window.voidPlayer.getState().tracks[0]?.frame);
+    const first = await page.evaluate(() => window.voidPlayer.getState().tracks[0].id);
+    await page.locator('#file-A').setInputFiles({ name: 'second.mp4', mimeType: 'video/mp4', buffer: Buffer.from(bytes) });
+    await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 2 && window.voidPlayer.getState().tracks.every(track => track.frame));
+    assert.equal(await page.evaluate(() => window.voidPlayer.getState().tracks.find(track => track.slot === 'A').id), first, 'even the A file input adds to an empty track');
+    assert.equal(await page.locator('#name-B').textContent(), 'second.mp4');
+    const occupied = await page.evaluate(async bytes => {
+      try { await window.voidPlayer.loadFile('A', new File([new Uint8Array(bytes)], 'blocked.mp4')); }
+      catch (error) { return error.message; }
+    }, bytes);
+    assert.match(occupied, /已有视频.*不能覆盖/);
+    await page.locator('.card-heading [data-drag-surface="A"]').focus(); await page.keyboard.press('Alt+ArrowRight');
+    assert.deepEqual(await page.evaluate(() => window.voidPlayer.getState().tracks.map(track => track.slot)), ['B', 'A']);
+    await page.evaluate(async bytes => {
+      for (const slot of 'CDEFGH') await window.voidPlayer.loadFile(slot, new File([new Uint8Array(bytes)], `${slot}.mp4`));
+    }, bytes);
+    const identities = () => page.evaluate(() => window.voidPlayer.getState().tracks.map(({ slot, id, sourceGen, offsetUs }) => ({ slot, id, sourceGen, offsetUs })));
+    const before = await identities();
+    let pickers = 0; page.on('filechooser', () => pickers++);
+    await page.locator('#open').click();
+    await page.locator('.toast-warning').filter({ hasText: '没有空轨道' }).waitFor();
+    assert.equal(pickers, 0, 'full capacity never falls back to a file picker for an occupied slot');
+    if (await page.locator('#toggle-sources').getAttribute('aria-expanded') !== 'true') await page.locator('#toggle-sources').click();
+    await page.getByRole('button', { name: '添加到视图：ci_h264_smoke.mp4', exact: true }).click();
+    assert.equal(await page.locator('#replace-source-dialog').count(), 0);
+    assert.deepEqual(await identities(), before, 'library additions at capacity cannot alter sources or order');
+    await page.screenshot({ path: path.join(screenshots, `${browserName}-tracks-full.png`) });
+  });
+
+  await check('stalled incoming loads can be cancelled or superseded without locking the add buttons', async page => {
     const entries = listing.entries.filter(entry => entry.name === 'same.mp4');
     const stalled = [];
     await page.route(`**/api/media/${encodeURIComponent(entries[0].id)}?*`, route => { stalled.push(route); });
@@ -1998,6 +2031,9 @@ try {
       assert.ok((await request).headers().range, 'library MP4 reads the first packet via Range after obtaining its server index');
       const cancel = row(entries[0]).getByRole('button', { name: '取消载入：same.mp4', exact: true });
       await cancel.waitFor();
+      assert.equal(await page.locator('.frame-loading').count(), 0, 'loading is represented only by the existing badge');
+      assert.equal(await page.locator('#empty-A').isVisible(), true, 'the initial view remains until an actual frame is ready');
+      assert.equal(await page.evaluate(() => window.voidPlayer.getState().tracks.length), 0, 'loading feedback creates no source track');
       assert.equal(await page.locator('#source-activity-stage').textContent(), '正在解码首帧');
       assert.match(await page.locator('#source-activity-name').textContent(), /same\.mp4/);
       assert.equal(await page.locator('#source-activity-cancel').isVisible(), false, 'collapsed state only shows track controls');
@@ -2063,6 +2099,7 @@ try {
       assert.equal(await add(entries[1]).isEnabled(), true);
       await page.locator('#source-activity-cancel').click();
       assert.equal(await page.locator('#source-activity-stage').textContent(), '已取消载入');
+      assert.equal(await page.locator('#empty-A').isVisible(), true, 'cancellation returns to recent files');
       await page.waitForFunction(() => !window.voidPlayer.getState().busy);
       assert.equal(await add(entries[0]).isEnabled(), true);
       request = nextRequest();
@@ -2079,8 +2116,49 @@ try {
       assert.equal(await page.locator('.source-row[aria-busy="true"]').count(), 0);
       assert.equal(await page.locator('#source-activity-stage').textContent(), '已上屏');
       assert.equal(await page.locator('#source-activity-cancel').isVisible(), false);
-      await page.evaluate(() => window.voidPlayer.loadFile('A', new File([], 'empty.ts')).catch(() => {}));
+      assert.equal(await page.locator('#image-A').isVisible(), true);
+      // Pending additions must not expand an empty viewport or resize the already presented frame.
+      const original = await page.evaluate(() => window.voidPlayer.getState().tracks[0].id);
+      const originalBox = await page.locator('#image-A').boundingBox();
+      await page.evaluate(id => { window.pendingLoad = window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ slot: 'B', id }).catch(error => error.name); }, entries[0].id);
+      await page.locator('#source-activity-track-B[data-state=pending]').waitFor();
+      assert.equal(await page.locator('#source-activity-track-B').getAttribute('data-state'), 'pending');
+      assert.equal(await page.locator('.video-card[data-slot=B]').isVisible(), false);
+      assert.deepEqual(await page.locator('#image-A').boundingBox(), originalBox, 'preparing an additional source preserves the viewport layout');
+      assert.deepEqual(await page.evaluate(() => window.voidPlayer.getState().tracks.map(t => t.id)), [original]);
+      await page.locator('#source-activity-cancel').click();
+      assert.equal(await page.evaluate(() => window.pendingLoad), 'AbortError');
+      assert.equal(await page.locator('.video-card[data-slot=B]').isVisible(), false);
+      // Direct facade calls cannot overwrite a presented source, even while a slot is available elsewhere.
+      const occupied = await page.evaluate(async id => {
+        try { await window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ slot: 'A', id }); }
+        catch (error) { return error.message; }
+      }, entries[0].id);
+      assert.match(occupied, /已有视频.*不能覆盖/);
+      assert.deepEqual(await page.locator('#image-A').boundingBox(), originalBox);
+      assert.equal(await page.evaluate(() => window.voidPlayer.getState().tracks[0].id), original);
+      // Workspace restoration reports loading in its badge and publishes only ready source frames.
+      const workspace = await page.evaluate(() => window.voidPlayer.exportWorkspace());
+      await page.locator('#remove-track-A').click();
+      const restoring = [], restoreRoute = `**/api/media/${encodeURIComponent(entries[1].id)}?*`;
+      await page.route(restoreRoute, route => restoring.push(route));
+      const restoreRequest = page.waitForRequest(request => new URL(request.url()).pathname === `/api/media/${encodeURIComponent(entries[1].id)}`);
+      await page.evaluate(document => { window.pendingRestore = window.voidPlayer.importWorkspace(document); }, workspace);
+      await page.locator('#source-activity-track-A[data-state=pending]').waitFor();
+      assert.equal(await page.locator('#source-activity-track-A').getAttribute('data-state'), 'pending');
+      assert.equal(await page.evaluate(() => window.voidPlayer.getState().tracks.length), 0);
+      await restoreRequest;
+      assert.equal(await page.locator('.image-wrap:visible').count(), 0);
+      assert.equal(await page.locator('.frame-loading').count(), 0);
+      await page.screenshot({ path: path.join(screenshots, `${browserName}-workspace-loading.png`) });
+      await page.unroute(restoreRoute);
+      await Promise.all(restoring.map(route => route.continue()));
+      await page.evaluate(() => window.pendingRestore);
+      assert.equal(await page.locator('#image-A').isVisible(), true);
+      assert.equal(await page.locator('#source-activity-track-A').getAttribute('data-state'), 'ready');
+      await page.evaluate(() => window.voidPlayer.loadFile('B', new File([], 'empty.ts')).catch(() => {}));
       assert.equal(await page.locator('#source-activity-stage').textContent(), '载入失败');
+      assert.equal(await page.locator('.frame-loading').count(), 0, 'failure leaves no loading or missing-source placeholder');
       assert.match(await page.locator('#source-activity-hint').textContent(), /非空的视频文件/);
       await page.emulateMedia({ colorScheme: 'dark' });
       await page.screenshot({ path: path.join(screenshots, `${browserName}-error.png`) });

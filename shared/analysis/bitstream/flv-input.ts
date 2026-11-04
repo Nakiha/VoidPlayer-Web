@@ -11,15 +11,16 @@ import type { AnalysisReader, AnalysisPacket, AnalysisInputOptions } from './typ
  * No presentation-order numbering and no payload copies in the metadata index. */
 export async function openFlvAnalysisInput(reader: AnalysisReader, signal: AbortSignal,
   continuous: boolean, options?: AnalysisInputOptions) {
-  let closed = false, bytesRead = 0;
+  let closed = false, bytesRead = 0, unconsumedBytes = 0;
   const read = async (offset: number, length: number) => {
     signal.throwIfAborted();
     if (closed) throw new AnalysisFailure('cancelled', 'Analysis input closed');
-    if (length > BUDGET.inputBytes || (!continuous && bytesRead + length > 64 * 1024 * 1024))
+    if (length > BUDGET.inputBytes || (!continuous && (options?.perOutputBudget ? unconsumedBytes : bytesRead) + length > 64 * 1024 * 1024))
       throw new AnalysisFailure('resource-limit', 'Analysis input budget exceeded');
     const bytes = await reader.read(offset, length);
     signal.throwIfAborted();
     bytesRead += bytes.length;
+    unconsumedBytes += bytes.length;
     return bytes;
   };
   let checkpoint: FlvCheckpoint;
@@ -115,6 +116,7 @@ export async function openFlvAnalysisInput(reader: AnalysisReader, signal: Abort
     const readUnit = (packet: AnalysisPacket) => read(packet.offset, packet.size);
     return {
       codec, packets, configurations, reader, read, readUnit, picture,
+      ...(options?.perOutputBudget ? { acknowledge() { unconsumedBytes = 0; } } : {}),
       ensure: continuous ? ensure : undefined,
       get sealedEnd() { return sealedEnd; },
       get indexComplete() { return scanComplete && externalComplete; },

@@ -14,11 +14,11 @@ export async function openMp4AnalysisInput(
   continuous = false,
   streamIndex?: AnalysisInputOptions,
 ) {
-  let bytesRead = 0;
+  let bytesRead = 0, unconsumedBytes = 0;
   let fragmented = false;
   const readInternal = async (offset: number, length: number, metadata = false) => {
     signal.throwIfAborted();
-    if (length > BUDGET.inputBytes || (!continuous && bytesRead + length > 64 * 1024 * 1024))
+    if (length > BUDGET.inputBytes || (!continuous && (streamIndex?.perOutputBudget ? unconsumedBytes : bytesRead) + length > 64 * 1024 * 1024))
       throw new AnalysisFailure(
         "resource-limit",
         "Analysis input budget exceeded",
@@ -26,6 +26,7 @@ export async function openMp4AnalysisInput(
     const b = await (metadata && reader.readMetadata ? reader.readMetadata(offset, length) : reader.read(offset, length));
     signal.throwIfAborted();
     bytesRead += b.length;
+    unconsumedBytes += b.length;
     return b;
   };
   const read = (offset: number, length: number) => readInternal(offset, length);
@@ -172,7 +173,8 @@ export async function openMp4AnalysisInput(
       }
       return cursor < sealedEnd;
     };
-    if (streamIndex) await ensure(0);
+    const progressive = !!(streamIndex?.frontier || streamIndex?.waiting);
+    if (progressive) await ensure(0);
     else {
       while (await append()) {}
       await repair(0, packets.length);
@@ -193,7 +195,7 @@ export async function openMp4AnalysisInput(
       codec,
       configurations: configurations.descriptions,
       packets,
-      ensure: streamIndex ? ensure : undefined,
+      ensure: progressive ? ensure : undefined,
       get sealedEnd() { return sealedEnd; },
       get indexComplete() { return indexComplete; },
       indexIntegrity: configurations.indexIntegrity,
@@ -203,6 +205,7 @@ export async function openMp4AnalysisInput(
       reader,
       read,
       readUnit: (packet: AnalysisPacket) => read(packet.offset, packet.size),
+      ...(streamIndex?.perOutputBudget ? { acknowledge() { unconsumedBytes = 0; } } : {}),
       get bytesRead() {
         return bytesRead;
       },

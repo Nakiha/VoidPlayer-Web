@@ -1242,11 +1242,9 @@ export interface Sources {
   "shell.arrangeTracksInAGrid": "田字排列轨道";
   "shell.bitstreamAnalysis": "码流分析";
   "shell.browseLibrary": "浏览媒体库";
-  "shell.cancelAdding": "取消添加";
   "shell.centerTrackKeepingZoom": "居中轨道 {p30} 画面，保留倍率";
   "shell.checkingConnection10OpenServerSettingsNew": "正在检查连接\n打开服务管理（新标签页）";
   "shell.checkingLibraryConnectionOpenServerSettingsNew": "正在检查媒体库连接，打开服务管理（新标签页）";
-  "shell.chooseAViewToReplace": "选择要替换的视图";
   "shell.chooseLocalFiles": "选择本地文件";
   "shell.closeTrack": "关闭轨道 {p0}";
   "shell.closeTrack2": "关闭轨道";
@@ -1373,6 +1371,7 @@ export interface Sources {
   "sources.localFilesCount": "本地文件（{n}）";
   "sources.localNoUpload": "本机（不上传）";
   "sources.locateUnavailable": "片源已不在媒体库中。";
+  "sources.noEmptyTracks": "没有空轨道，请先关闭一个视频。";
   "sources.noMatch": "没有匹配的片源";
   "sources.noRecentShort": "暂无最近片源";
   "sources.noRecentVideos": "还没有最近打开的视频";
@@ -1381,7 +1380,6 @@ export interface Sources {
   "sources.referenceNeedsReselect": " · 引用不可用，需重新选择";
   "sources.removeFromView": "从视图移除";
   "sources.removeFromViewName": "从视图移除：{name}";
-  "sources.replaceTrack": "替换当前轨道";
   "sources.reselectInSourcesName": "在片源中重新选择：{name}";
   "sources.reselectLocalFile": "重新选择本地文件";
   "sources.reselectName": "重新选择 {name}";
@@ -2835,11 +2833,9 @@ export interface MessageParameters {
   "shell.arrangeTracksInAGrid": {  };
   "shell.bitstreamAnalysis": {  };
   "shell.browseLibrary": {  };
-  "shell.cancelAdding": {  };
   "shell.centerTrackKeepingZoom": { "p30": string | number };
   "shell.checkingConnection10OpenServerSettingsNew": {  };
   "shell.checkingLibraryConnectionOpenServerSettingsNew": {  };
-  "shell.chooseAViewToReplace": {  };
   "shell.chooseLocalFiles": {  };
   "shell.closeTrack": { "p0": string | number };
   "shell.closeTrack2": {  };
@@ -2966,6 +2962,7 @@ export interface MessageParameters {
   "sources.localFilesCount": { "n": string | number };
   "sources.localNoUpload": {  };
   "sources.locateUnavailable": {  };
+  "sources.noEmptyTracks": {  };
   "sources.noMatch": {  };
   "sources.noRecentShort": {  };
   "sources.noRecentVideos": {  };
@@ -2974,7 +2971,6 @@ export interface MessageParameters {
   "sources.referenceNeedsReselect": {  };
   "sources.removeFromView": {  };
   "sources.removeFromViewName": { "name": string | number };
-  "sources.replaceTrack": {  };
   "sources.reselectInSourcesName": { "name": string | number };
   "sources.reselectLocalFile": {  };
   "sources.reselectName": { "name": string | number };

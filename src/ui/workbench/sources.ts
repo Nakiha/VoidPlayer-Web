@@ -305,7 +305,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
         try {
           const tracks = session.getState().tracks.filter(track => sourceInUse(item, [track]));
           for (const track of tracks) {
-            // Do not remove a replacement loaded into this slot while awaiting.
+            // A closed slot may have been filled again while awaiting.
             if (session.getState().tracks.some(current => current.slot === track.slot && current.id === track.id)) await session.removeTrack(track.slot);
           }
         } finally { button.disabled = false; }
@@ -329,14 +329,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
         if (sourceInUse(item, tracks)) return;
         const empty = SLOTS.find(slot => !tracks.some(t => t.slot === slot));
         if (empty) { void load(item, empty); return; }
-        const dialog = $<HTMLDialogElement>('replace-source-dialog');
-        $('replace-source-name').textContent = item.name;
-        const targets = $('replace-source-targets'); targets.replaceChildren();
-        for (const track of tracks) {
-          const choose = document.createElement('button'); choose.textContent = track.name; choose.dataset.tooltip = t(msg("sources.replaceTrack", "替换当前轨道"));
-          choose.onclick = () => { dialog.close(); void load(item, track.slot); }; targets.append(choose);
-        }
-        dialog.showModal();
+        void act(() => { throw new Error(t(msg('sources.noEmptyTracks', '没有空轨道，请先关闭一个视频。'))); }, 'ui.source-full');
       }; actions.append(button);
     } else if (item.libraryId) {
       const button = createIconButton({ glyph: 'refresh', label: t(msg("sources.checkReference", "检查媒体引用")) });
@@ -705,7 +698,6 @@ export function createSourcesPane(shared: WorkbenchShared) {
     showIdentity();
     refreshIdentity = showIdentity;
     window.addEventListener('voidplayer-identity-change', showIdentity, { signal: lifecyle.signal });
-    $('replace-source-close').onclick = () => $<HTMLDialogElement>('replace-source-dialog').close();
     $('source-search').oninput = () => { if (!libraryBrowser.isRecent()) libraryBrowser.search($<HTMLInputElement>('source-search').value); renderSources(); };
     $('sources-search-toggle').onclick = () => setSearching(!$('source-tools').classList.contains('searching'));
     $('source-search').onkeydown = event => { if (event.key === 'Escape') { event.preventDefault(); setSearching(false); } };
@@ -760,7 +752,6 @@ export function createSourcesPane(shared: WorkbenchShared) {
       const meta=row.querySelector('.source-meta');
       if(meta)meta.textContent=t(msg("sources.folderMetaLibrary", "媒体库 · {root}"),{root:libraryBrowser.page()?.roots.find(root=>root.id===row.dataset.rootId)?.name??''});
     }
-    for(const button of $('replace-source-targets').querySelectorAll<HTMLElement>('button'))button.dataset.tooltip=t(msg("sources.replaceTrack", "替换当前轨道"));
     sourceSignature = ''; // Reuses unchanged rows and updates source heading/count/status controls.
     refreshIdentity();
     renderSources();

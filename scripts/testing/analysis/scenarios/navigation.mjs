@@ -9,6 +9,86 @@ const { page, artifact, engine, limitsDir, errors, call, stable, library, refere
 
       await page.setViewportSize({width:1280,height:720});
 
+      // Cold windows must schedule work without playback/progress events from an existing task.
+      for (const input of ['local-file', 'library']) {
+        if ((await call('get_review_session')).tracks.length) {
+          await selectDiagrams(page, 'overview'); await call('remove_review_track', { slot: 'A' });
+        }
+        if (input === 'local-file') await page.locator('#file-A').setInputFiles(path.join(limitsDir, 'viewport.mp4'));
+        else await call('load_library_item', { slot: 'A', id: library.entries.find(entry => entry.name === 'viewport.mp4').id });
+        await stable(); await selectDiagrams(page, 'overview');
+        assert.equal((await call('export_workspace')).layout.analysisView.view.end, 10000000, 'a fresh long source starts with ten seconds');
+        const playback = { positionUs: (await call('get_review_session')).positionUs };
+        const editWindow = async (start, end) => {
+          await openRangeEditor(page);
+          const current = (await call('export_workspace')).layout.analysisView.view;
+          const edges = start * 1000000 < current.end ? [['start', start], ['end', end]] : [['end', end], ['start', start]];
+          for (const [edge, seconds] of edges) {
+            await page.locator(`#analysis-range-time-${edge}`).press('Enter');
+            const field = page.locator(`#analysis-range-input-${edge}`);
+            await field.fill(`00:${String(seconds).padStart(2, '0')}.000`); await field.press('Enter');
+          }
+          await page.keyboard.press('Escape');
+        };
+        const complete = async (start, end) => {
+          await page.waitForFunction(({ start, end }) => {
+            const state = window.voidPlayer.tools.find(tool => tool.name === 'get_bitstream_analysis_state').execute({ slot: 'A' });
+            return state.state === 'ready' && state.stream?.window?.startUs === start * 1000000 && state.stream.window.endUs === end * 1000000;
+          }, { start, end }).catch(async error => {
+            console.error('Viewport did not settle', { input, start, end, state: await call('get_bitstream_analysis_state', { slot: 'A' }), view: (await call('export_workspace')).layout.analysisView.view });
+            throw error;
+          });
+          const state = await call('get_bitstream_analysis_state', { slot: 'A' });
+          assert.equal(state.stream.pictures, 30); assert.equal(state.stream.totalPictures, 30);
+        };
+        await editWindow(2, 3); await selectDiagrams(page, 'nalu-types'); await complete(2, 3);
+        await editWindow(4, 5); await complete(4, 5);
+        await editWindow(25, 26); await complete(25, 26);
+        const chart = await call('query_bitstream_chart', { slot: 'A', pixelWidth: 4096 });
+        assert.equal(chart.count, 90, 'three disjoint windows analyze three intersecting GOPs, not the whole source');
+        assert.equal((await call('get_review_session')).positionUs, playback.positionUs, 'automatic window analysis never seeks');
+        // Withdrawing demand must abort preparation, including remote calls; it may not finish the old source in the background.
+        const pattern = input === 'local-file' ? '**/vendor/voidplayer-analysis/manifest.json*' : '**/bitstream-analysis/capabilities*';
+        let release; const gate = new Promise(resolve => { release = resolve; });
+        await page.route(pattern, async route => { await gate; await route.continue().catch(() => {}); });
+        const requested = page.waitForRequest(pattern); void requested.catch(() => {});
+        try {
+          await editWindow(27, 28); await requested;
+          await page.waitForFunction(() => window.voidPlayer.tools.find(tool => tool.name === 'get_bitstream_analysis_state').execute({ slot: 'A' }).state === 'pending');
+          await page.locator('#toggle-analysis').click();
+          await page.waitForFunction(() => window.voidPlayer.tools.find(tool => tool.name === 'get_bitstream_analysis_state').execute({ slot: 'A' }).state === 'cancelled');
+        } finally { release(); await page.unroute(pattern); }
+        await page.locator('#toggle-analysis').click(); await complete(27, 28);
+        await selectDiagrams(page, 'overview');
+        // New files only fill empty slots; a fresh scene initializes ten seconds again.
+        await page.locator('[data-seg="full"]').click();
+        assert.equal((await call('export_workspace')).layout.analysisView.view, null);
+        const existingId = (await call('get_review_session')).tracks[0].id;
+        if (input === 'local-file') await page.locator('#file-A').setInputFiles(path.join(limitsDir, 'viewport-next.mp4'));
+        else {
+          await assert.rejects(call('load_library_item', { slot: 'A', id: library.entries.find(entry => entry.name === 'viewport-next.mp4').id }), /已有视频.*不能覆盖/);
+          await call('load_library_item', { slot: 'B', id: library.entries.find(entry => entry.name === 'viewport-next.mp4').id });
+        }
+        await page.waitForFunction(() => window.voidPlayer.getState().tracks.some(track => track.slot === 'B' && track.name.endsWith('viewport-next.mp4')));
+        assert.equal((await call('get_review_session')).tracks.find(track => track.slot === 'A').id, existingId);
+        assert.equal((await call('export_workspace')).layout.analysisView.view, null, 'adding a peer preserves the chosen full-film view');
+        await call('remove_review_track', { slot: 'A' }); await call('remove_review_track', { slot: 'B' });
+        if (input === 'local-file') await page.locator('#file-A').setInputFiles(path.join(limitsDir, 'viewport-next.mp4'));
+        else await call('load_library_item', { slot: 'A', id: library.entries.find(entry => entry.name === 'viewport-next.mp4').id });
+        await stable();
+        assert.equal((await call('export_workspace')).layout.analysisView.view.end, 10000000, 'a fresh scene never silently switches to full-film analysis');
+        if (input === 'library') {
+          const saved = await call('export_workspace');
+          saved.layout.analysisView.view = { start: 4000000, end: 5000000 };
+          await call('import_workspace', { document: saved });
+          assert.deepEqual((await call('export_workspace')).layout.analysisView.view, saved.layout.analysisView.view, 'an explicit workspace range takes priority over the default');
+          await call('load_library_item', { slot: 'B', id: library.entries.find(entry => entry.name === 'viewport.mp4').id });
+          assert.deepEqual((await call('export_workspace')).layout.analysisView.view, saved.layout.analysisView.view, 'adding a peer preserves the chosen comparison window');
+          await call('remove_review_track', { slot: 'B' });
+        }
+        console.log(`PASS ${engine}/${input}: cold GOP coverage, cancellation and ten-second fresh-source range`);
+      }
+
       for (const input of ['local-file','library']) {
         if ((await call('get_review_session')).tracks.length) await call('remove_review_track',{slot:'A'});
         if (input==='local-file') await page.locator('#file-A').setInputFiles(path.join(limitsDir,'incremental.mp4'));

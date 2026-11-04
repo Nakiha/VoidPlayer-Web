@@ -138,7 +138,7 @@ for (const variant of ['st', 'mt'] as const) {
   });
 }
 
-test('replacing a source cancels its pending startup continuation and physically exits its Worker', { timeout: 30000 }, async () => {
+test('closing a source cancels its pending startup continuation and physically exits its Worker', { timeout: 30000 }, async () => {
   const old = await harness('st'), replacement = await harness('st');
   const session = new ReviewSession(() => {}), timer = holdBackgroundStart();
   const iterator = old.source.framesFollowing!(0);
@@ -148,8 +148,9 @@ test('replacing a source cancels its pending startup continuation and physically
     await bounded(old.nextReply.promise, 'old continuation never reached the reply gate');
     const snapshot = structuredClone(old.source.info), exited = once(old.worker, 'exit');
     replacement.releaseReplies();
+    await session.removeTrack('A');
     await session.load('A', async () => replacement.source);
-    await bounded(exited, 'replaced Worker remained alive'); await rejected;
+    await bounded(exited, 'closed Worker remained alive'); await rejected;
     old.releaseReplies();
     assert.deepEqual(old.source.info, snapshot, 'late old index/next replies do not mutate disposed source');
     assert.equal(session.getState().tracks[0].id, replacement.source.info.id);

@@ -52,7 +52,7 @@ try {
  const observerContext=await browser.newContext({locale:'en-US',viewport:{width:1280,height:900},deviceScaleFactor:2}),observer=await observerContext.newPage();
  await observer.addInitScript(()=>{const native=window.requestAnimationFrame.bind(window);window.__qualityRafGate=false;window.requestAnimationFrame=callback=>window.__qualityRafGate?0:native(callback);});
  observerPage=observer;phase='observer-restore';await observer.goto(`${base}/?workspace=${workspace.id}`);await chooseTestGuest(observer);await observer.waitForFunction(annotationWorkspacePlayable);
- phase='observer-replace';const a=entries[0];await observer.evaluate(async url=>{const blob=await fetch(url).then(r=>r.blob());await window.voidPlayer.loadFile('A',new File([blob],'A.mp4'));},`${base}/api/media/${a.id}?v=${a.version}`);
+ phase='observer-reopen';const a=entries[0];await observer.evaluate(async url=>{for(const track of window.voidPlayer.getState().tracks)await window.voidPlayer.tools.find(t=>t.name==='remove_review_track').execute({slot:track.slot});const blob=await fetch(url).then(r=>r.blob());await window.voidPlayer.loadFile('A',new File([blob],'A.mp4'));},`${base}/api/media/${a.id}?v=${a.version}`);
  await observer.waitForFunction(()=>!window.voidPlayer.getState().busy&&window.voidPlayer.getState().tracks[0]?.frame&&window.voidPlayer.getState().marks.length===0);
  // Observe a session fact from the host. Deliberately starving page rAF
  // must not also make the test depend on a page poller's scheduling/timeout.

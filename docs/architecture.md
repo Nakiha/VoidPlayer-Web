@@ -117,6 +117,10 @@ HTTP Agent 从 `/llms.txt`、`/agent.md` 和 `/api/agent` 逐层发现任务与�
   版本刷新，Agent 仍读取同一个 session；日志在同一变更入口记录有界字段差异。
   Worker 失败附带请求 ID 和最近 16 次操作（不含压缩包或像素内容）。
 
+载入状态仅由原有徽章和详情表现，包括后台索引进度圈。viewport 不显示加载占位，不因待载入片源提前展开空轨道或修改当前文件名；首帧交给 presenter 并提交真实轨道后才直接更新画面与布局。添加片源只使用空轨道，已占用轨道在打开源前和首帧提交前均拒绝覆盖；普通添加入口不提供替换弹窗或回退到当前轨道。轨道标题拖动只改变显示顺序。新增期间保留已有画面和布局。渐进工作区恢复只展示已就绪轨道；已有会话的工作区替换仍整体提交。
+
+最近打开的首屏内容等本机工作区恢复查询结束后一次显示；恢复卡片和最近条目不会分两次呈现再推动布局。没有记录或读取失败也释放首屏等待状态，不新增占位面板或边框。
+
 Viewport fit uses the area unobscured by the actual header and transport bounds,
 with a small edge clearance. This is a fitting/centering constraint, not a crop:
 the presentation stage stays full size and zoomed/panned video can still appear
@@ -138,7 +142,7 @@ and does not exit focus mode.
 - 无显式数据库路径的嵌入式/测试媒体库使用独立临时 SQLite 文件，使 Worker 与主线程共享同一数据库；close 先停止 Worker，再删除临时目录。正式便携数据目录保持不变。
 - `SessionResources` 默认 256 MiB 协调应用拥有的帧、待解码预留、读回和派生任务。所有队列共享预算；每轨保留必需后继帧的前进能力，超额显式计入 `overBudgetBytes`。减少预取/取消派生任务优先，不改变位深、精度或评审逐帧语义。诊断不声称覆盖解码器内部、WASM 堆或 GPU 总显存。
 - 本地 JPEG 缓存为独立数据库，32 MiB / 512 条 LRU，升级迁移旧记录并淘汰。Object URL 的闲置缓存为 8 MiB / 128 条；可见图片持有独立引用，离开视口或 DOM 后释放，旧 URL 替换后等最后引用释放再 revoke。本地键包含 stream + recipe。
-- 工作区在现有格式 v1 内添加可选 `comparison`，旧文件提示使用本机当前条件；未知呈现契约拒绝载入。本机检查点保存内容与比较条件、保持服务器显式保存。不可用片源保留为待关联轨道；重新关联经过同一个 session facade，保留媒体/标注 ID 和偏移。
+- 工作区在现有格式 v1 内添加可选 `comparison`，旧文件提示使用本机当前条件；未知呈现契约拒绝载入。本机检查点保存内容与比较条件、保持服务器显式保存。不可用片源直接跳过并以 warning toast 提示文件名与原因，不创建缺失轨道或重关联入口；已有标注及其历史媒体信息保留。
 
 ### Bounded quality ranges
 

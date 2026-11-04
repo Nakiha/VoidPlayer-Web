@@ -520,7 +520,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         view = { start: Math.floor(s), end: Math.ceil(s + span) };
       }
     }
-    save(); refreshTools(); requestRender(); scheduleQuery();
+    save(); refreshTools(); queueAutomaticStreams(); requestRender(); scheduleQuery();
   }
 
   let viewRaf = 0;
@@ -564,7 +564,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     if (state?.state === 'paused') status += ` · ${t(msg('analysis.streamPaused','已暂停'))}`;
     return { status, pending, percent, state: state?.state ?? 'idle', name: track?.name ?? '' };
   }
-  // One automatic attempt per loaded source identity; session admission owns
+  // One automatic attempt per source/window identity; session admission owns
   // the shared local/library concurrency limit and independent track tasks.
   const automaticStreams = new Map<Slot, string>();
   function visibleAnalysisWindow(slot: Slot) {
@@ -573,15 +573,16 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     const endUs = Math.min(Math.ceil(track.durationUs), Math.ceil(range.end - track.offsetUs));
     return { startUs, endUs, axis: prefs.axis };
   }
-  function automaticDemands() {
+  function automaticWindows() {
     if (signal.aborted || !open || !([...diagrams].some(mode => mode !== 'bitrate' && mode !== 'size') || diagrams.has('bitrate') && loadMetrics.has('qp'))) return [];
     return selectedTracks().flatMap(track => {
       const window = visibleAnalysisWindow(track.slot);
       const identity = `${track.mediaId}:${track.sourceGen}:${JSON.stringify(window)}`, state = session.getBitstreamAnalysisState(track.slot);
-      if (window.endUs <= window.startUs || automaticStreams.get(track.slot) === identity || state.state === 'paused' || state.completedStream || caps.get(track.slot)?.indexState === 'error') return [];
+      if (window.endUs <= window.startUs || state.state === 'paused' || state.completedStream || caps.get(track.slot)?.indexState === 'error') return [];
       return [{ slot: track.slot, window, identity }];
     });
   }
+  const automaticDemands = () => automaticWindows().filter(({ slot, identity }) => automaticStreams.get(slot) !== identity);
   // Playback emits session updates every 100 ms. Only actual demand changes
   // restart the settle delay, otherwise those updates can starve analysis.
   const automaticDemand = createSettledAnalysisDemand(() => {
@@ -592,6 +593,12 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     }
   });
   function queueAutomaticStreams() {
+    const active = new Set(automaticWindows().map(({ slot }) => slot));
+    for (const slot of automaticStreams.keys()) {
+      if (active.has(slot)) continue;
+      automaticStreams.delete(slot);
+      session.cancelBitstreamViewport(slot);
+    }
     const demands = automaticDemands();
     automaticDemand.update(demands.length ? JSON.stringify(demands.map(({ slot, identity }) => [slot, identity])) : undefined);
   }
@@ -1117,7 +1124,10 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       if (!entries.length || tracks.some(previous => {
         const current = entries.find(track => track.slot === previous.slot);
         return current && current.mediaId !== previous.mediaId;
-      })) view = null;
+      })) {
+        view = null;
+        viewInitialized = false;
+      }
       tracks = entries;
       if (!tracks.length) viewInitialized = false;
       if (!viewInitialized && tracks.length) {
@@ -1151,6 +1161,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       updateStatus();
       refreshStream();
     }
+    queueAutomaticStreams();
   };
 
   const onProgress = (pos: number) => {
@@ -1233,6 +1244,8 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     queries.dispose();
     window.clearTimeout(buildingTimer);
     automaticDemand.dispose();
+    for (const slot of automaticStreams.keys()) session.cancelBitstreamViewport(slot);
+    automaticStreams.clear();
     if (viewRaf) cancelAnimationFrame(viewRaf);
     if (resizeRaf) cancelAnimationFrame(resizeRaf);
     offSession();
