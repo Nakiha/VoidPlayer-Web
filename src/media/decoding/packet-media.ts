@@ -1,6 +1,6 @@
 import {nativeLibraryTransport} from '../../../shared/review/native-presented-frame.ts';
 import { JS_TS_MEDIA_INDEX_IDENTITY, JS_MATROSKA_MEDIA_INDEX_IDENTITY, FLV_MEDIA_INDEX_IDENTITY } from '../../../shared/media/indexing/media-index-identity.ts';
-import { decodeThreadsForCodec, VVC_EXPERIMENTAL_CAPACITY, wasmThreadMode } from '../policy/wasm-threads.ts';
+import { decodeThreadsForCodec, wasmThreadMode } from '../policy/wasm-threads.ts';
 import { referenceVersion } from '../../../shared/media/io/media-reference.ts';
 import { attachCachedTrackMetadata } from '../indexing/cached-track-metadata-client.ts';
 import { WorkerRpc } from '../workers/worker-rpc.ts';
@@ -13,7 +13,7 @@ import { abortableWait, loadAborted, onLoadAbort } from '../../../shared/media/i
 import { randomUUID } from '../../../shared/utils/uuid.ts';
 import { MediaOpenError } from '../../../shared/media/io/media-errors.ts';
 import { VideoSample } from 'mediabunny';
-import { floorIndex, fallbackCoreCandidates, fallbackCoreVariant, reserveFallbackThreads } from './fallback-runtime.ts';
+import { floorIndex, fallbackCoreCandidates, fallbackCoreVariant, fallbackDecodeThreads, reserveFallbackThreads } from './fallback-runtime.ts';
 import type { FallbackDeps } from './fallback-runtime.ts';
 import type { MediaMeta, MediaSource, DecodedFrame, VvcTuningAxis } from '../contract.ts';
 import type { PacketInput } from '../../../shared/media/containers/flv-demux.ts';
@@ -46,14 +46,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     const libraryPlayback = 'url' in input && !!input.library;
     const candidates = fallbackCoreCandidates(deps, deps.glueURL ?? document.baseURI, mode);
     const single = candidates.at(-1)!;
-    const allowLiveGrowth = container === 'mp4' && 'file' in input && mode === 'auto-grow';
-    const threadsFor = (url: string) => {
-      if (!deps.glueURL && fallbackCoreVariant(url) !== 'multi-thread') return 1;
-      const threads = reservation.threads;
-      return allowLiveGrowth && fallbackCoreVariant(url) === 'multi-thread' && threads.vvcFrameContexts === 6
-        ? { ...threads, vvcTuning: { contexts: VVC_EXPERIMENTAL_CAPACITY,
-          threads: Math.min(VVC_EXPERIMENTAL_CAPACITY, globalThis.navigator?.hardwareConcurrency ?? threads.vvc) } } : threads;
-    };
+    const threadsFor = (url: string) => fallbackDecodeThreads(reservation.threads, url, mode, !!deps.glueURL);
     if(deps.preparedTs)rpc=deps.preparedTs.rpc;
     type Init = PacketInitResult;
     let init: Init | null | undefined, selected = single, failure: unknown;
@@ -104,7 +97,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     prepared = undefined;
     const activeRpc = rpc;
     if (init.decoder === 'webcodecs' && !deps.rawNative) releaseReservation();
-    let { times, durations, vvcLiveGrowth: supportsLiveGrowth, ...details } = init;
+    let { times, durations, ...details } = init;
     const info: MediaInfo = { id: (container==='ts'||container==='matroska')?deps.sourceVersion!:randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
       indexState: 'complete', indexKind: (container==='ts'||container==='matroska')?'packet-locators':'packet-offsets', seekStrategy: 'packet-anchor',
       ...details, ...(init.decoder === 'ffmpeg-wasm' ? { coreVariant: fallbackCoreVariant(selected) } : {}) };
@@ -278,7 +271,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     };
     let stopAudio = () => {};
     const source: MediaSource = {
-      ...(supportsLiveGrowth ? {
+      ...(mode === 'auto-grow' && info.codec === 'vvc' ? {
         async tuneVvc(axis?: VvcTuningAxis) {
           if (disposed || info.decoder !== 'ffmpeg-wasm') return null;
           const result = await activeRpc.call('tune-vvc', { axis }, [], 60000);

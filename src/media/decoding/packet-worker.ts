@@ -126,7 +126,7 @@ async function start() {
           if (!data) throw new MediaOpenError('decode', '压缩包 worker 未能初始化解码器。');
           send(reply(message, data));
         } else if (type === 'tune-vvc') {
-          send(reply(message, engine instanceof Mp4Engine ? engine.tuneVvc(message.axis) : null));
+          send(reply(message, engine?.tuneVvc(message.axis) ?? null));
         } else if (type === 'reference-witness' && (engine instanceof FlvEngine || engine instanceof Mp4Engine || engine instanceof JsContainerEngine)) {
           const frame = await engine.referenceWitness(message.glueURL, message.wasmBinary, message.threads);
           try { send(reply(message, frame), frame.frame ? [frame.frame] : [frame.pixels!]); }

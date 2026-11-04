@@ -107,7 +107,9 @@ export class PacketTimeline {
       // Random access starts at a CRA; negative-leading HEVC/VVC pictures can
       // reference the previous GOP, so retain the explicit anchor boundary.
       if((this.index.codec==='hevc'||this.index.codec==='vvc'||this.index.codec==='mpeg2video'||this.index.packets[this.anchorIndex()].discontinuity)&&packet.pts<this.index.packets[this.anchorIndex()].pts){this.cursor++;continue;}
+      const readStarted = this.decoder.recordInputWait ? performance.now() : 0;
       const bytes=await this.read(packet);
+      this.decoder.recordInputWait?.(performance.now() - readStarted);
       let inputPicture: {au:number;configuration:number;singlePicture:boolean}|undefined;
       if (this.identifyPictures && this.pictures.size < 512) {
         const evidence=inspectPacketPicture(this.index.codec,this.index.configurations?.[this.configuration]??this.index.description,bytes);

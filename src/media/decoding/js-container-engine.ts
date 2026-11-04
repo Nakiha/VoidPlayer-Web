@@ -61,6 +61,7 @@ export class JsContainerEngine {
   };
   private indexTask?: Promise<ReturnType<JsContainerEngine['timing']>>;
   get indexComplete() { return !this.startup; }
+  tuneVvc(axis?: import('../contract.ts').VvcTuningAxis) { return this.timeline?.decoder.tuneVvc?.(axis) ?? null; }
 
   private tsSource(reader: RangeReader, size = reader.size) {
     return new TsContainerPacketSource({size,read:(at,length)=>reader.read(at,length),close:()=>reader.close()},

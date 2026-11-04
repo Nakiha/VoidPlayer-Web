@@ -11,7 +11,7 @@ cd "$source_dir"
   --disable-x86asm --disable-programs --enable-ffmpeg --enable-ffprobe \
   --enable-protocol=file,pipe --enable-demuxer=mov,matroska,rawvideo,mpegts,flv,avi,mpegps,mpegvideo \
   --enable-libdav1d --enable-decoder=ffv1,h264,hevc,vvc,rawvideo,mpeg1video,mpeg2video,mpeg4,mjpeg,prores,vp8,vp9,libdav1d --enable-encoder=rawvideo,ffv1 \
-  --enable-muxer=rawvideo,matroska --enable-filter=setsar,format,null,scale,select \
+  --enable-muxer=rawvideo,matroska,avi --enable-filter=setsar,format,null,scale,select \
   --enable-parser=h264,hevc,vvc,mpegvideo,mpeg4video,mjpeg,vp8,vp9 --enable-swscale --enable-avfilter
 make -j2 ffmpeg ffprobe
 cp ffmpeg ffprobe "$output_dir/"

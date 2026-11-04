@@ -28,7 +28,7 @@ import { getTrackAnalysisCapabilities, locateTrackAnalysisSample, queryTrackAnal
 import { currentColorEvidence, currentComparisonConditions, isSameColorConfiguration, persistColorConfiguration, validateColorTransition } from './session/color.ts';
 import { offerSessionThumbnail } from './session/thumbnail.ts';
 import { describeMediaMismatch, matchMediaIdentity } from '../shared/media/io/media-identity.ts';
-import { FrameQueue, PlaybackMeasurements, VvcGrowthMonitor, VvcGrowthPolicy } from './session/playback.ts';
+import { FrameQueue, PlaybackMeasurements, VvcGrowthMonitor, VvcGrowthPolicy, vvcInputLimited } from './session/playback.ts';
 import { planBackwardStep, planForwardStep, slotValue, timeUs } from '../shared/review/model.ts';
 import type { FrameInfo, MediaInfo } from '../shared/media/types.ts';
 import type { Mark, Slot } from '../shared/review/model.ts';
@@ -1060,6 +1060,11 @@ export class ReviewSession {
             void tuneVvc().then(async core => {
               if (!active() || !core) return;
               scoped.debug('media', 'VVC 扩容采样', { ...window, ...core });
+              if (vvcInputLimited(core)) {
+                monitor.reset();
+                growth.policy.restartObservation();
+                return;
+              }
               const assessment = growth.policy.assess(window);
               if (assessment) {
                 scoped.info('media', 'VVC 实时扩容效果', { mediaId: tuningSource.info.id, ...assessment, heapBytes: core.heapBytes });

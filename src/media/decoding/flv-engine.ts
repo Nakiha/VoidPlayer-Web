@@ -50,6 +50,7 @@ export class FlvEngine {
   private wake() { for (const resolve of this.waiters) resolve(); this.waiters.clear(); }
   /** Indexing is terminal; file integrity is reported separately. */
   get indexComplete(): boolean { return !!this.checkpoint?.complete; }
+  tuneVvc(axis?: import('../contract.ts').VvcTuningAxis) { return this.decoder?.tuneVvc?.(axis) ?? null; }
   private publishIndex(checkpoint: FlvCheckpoint) {
     this.checkpoint = checkpoint; this.index = checkpoint.index;
     this.timeline?.appendIndex(this.index);

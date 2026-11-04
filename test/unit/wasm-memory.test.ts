@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Worker } from 'node:worker_threads';
 import { liveHeap } from '../../shared/wasm/core.ts';
 import { checkedHeap } from '../../src/media/decoding/flv-decoder.ts';
-import { reserveFallbackThreads } from '../../src/media/decoding/fallback-runtime.ts';
+import { fallbackDecodeThreads, reserveFallbackThreads } from '../../src/media/decoding/fallback-runtime.ts';
 import { decodeThreadsForCodec, setVvcFrameContextCount, setVvcThreadCount } from '../../src/media/policy/wasm-threads.ts';
 
 test('VVC automatic settings share CPU headroom and explicit tuning bypasses the automatic limits', t => {
@@ -38,8 +38,18 @@ test('VVC automatic settings share CPU headroom and explicit tuning bypasses the
   try {
     assert.equal(decodeThreadsForCodec(lowCpu.threads, 'vvc'), 2);
     assert.equal(lowCpu.threads.vvcFrameContexts, 2);
+    const growing = fallbackDecodeThreads(lowCpu.threads, 'voidplayer-core-mt.js', 'auto-grow');
+    assert.deepEqual(growing, { ...lowCpu.threads, vvcTuning: { contexts: 12, threads: 4 } });
+    assert.equal(fallbackDecodeThreads(lowCpu.threads, 'voidplayer-core.js', 'auto-grow'), 1);
+    assert.equal(fallbackDecodeThreads(lowCpu.threads, 'voidplayer-core-mt.js', 'auto'), lowCpu.threads);
   }
   finally { lowCpu.release(); setVvcThreadCount('auto'); }
+  cpu.mock.mockImplementation(() => 2);
+  const growing = reserveFallbackThreads('auto-grow'), replacement = reserveFallbackThreads('auto-grow');
+  try {
+    assert.deepEqual([growing.threads.vvc, growing.threads.vvcFrameContexts], [2, 2]);
+    assert.deepEqual([replacement.threads.vvc, replacement.threads.vvcFrameContexts], [2, 2]);
+  } finally { growing.release(); replacement.release(); }
 });
 
 for (const shared of [false, true]) test(`live WASM heap survives ${shared ? 'other-thread shared' : 'detached nonshared'} memory growth`, async () => {

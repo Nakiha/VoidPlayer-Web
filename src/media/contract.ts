@@ -34,6 +34,8 @@ export type VvcTuningState = {
   threads: number; contexts: number; inFlight: number; dispatched: number; saturated: number;
   submitted: number; full: number; maxFrameWaitUs: number; heapBytes: number; maxThreads: number; maxContexts: number;
   rejected?: 'budget' | 'core';
+  inputWaitMs?: number;
+  sampleMs?: number;
 };
 
 export interface MediaSource {

@@ -49,6 +49,7 @@ export interface FfmpegInitResult extends FfmpegIndexRecovery {
 }
 
 export interface FfmpegCommands {
+  'tune-vvc': Command<{ ctx: number; axis?: import('../contract.ts').VvcTuningAxis }, import('../contract.ts').VvcTuningState | null>;
   'analysis-ffmpeg-index': Command<{ctx: number; size: number}, import('../../../shared/media/indexing/ffmpeg-index-cache.ts').FfmpegIndexDocument>;
   'peek-audio': Command<{ offset: number; length: number; ctx?: number; windows?: boolean }, null>;
   'observe-audio': Command<{ ctx: number; enabled: boolean }, null>;
@@ -60,12 +61,12 @@ export interface FfmpegCommands {
   extract: Command<{ ctx: number; index: number; recycle?: ArrayBuffer }, WasmFrameOutput & { seek?: { decodedFrames: number; restarts: number } }>;
   dispose: Command<{ ctx: number; path: string }, null>;
 }
-export type PacketInitResult = (NonNullable<Awaited<ReturnType<FlvEngine['open']>>> | Awaited<ReturnType<Mp4Engine['open']>> | Awaited<ReturnType<TsEngine['open']>>) & Pick<MediaInfo, 'timelineSource' | 'seekAnchorCount' | 'jsIndexReused' | 'jsIndexPacketsScanned'> & { vvcLiveGrowth?: boolean };
+export type PacketInitResult = (NonNullable<Awaited<ReturnType<FlvEngine['open']>>> | Awaited<ReturnType<Mp4Engine['open']>> | Awaited<ReturnType<TsEngine['open']>>) & Pick<MediaInfo, 'timelineSource' | 'seekAnchorCount' | 'jsIndexReused' | 'jsIndexPacketsScanned'>;
 type Empty = Record<string, never>;
 type SoftwareOptions = { glueURL: string; wasmBinary?: Uint8Array; threads?: DecodeThreads };
 type AnalysisOrigin = { mediaId?: string; firstPtsUs?: number };
 export interface PacketCommands {
-  'tune-vvc': Command<{ axis?: import('../contract.ts').VvcTuningAxis }, ReturnType<Mp4Engine['tuneVvc']>>;
+  'tune-vvc': Command<{ axis?: import('../contract.ts').VvcTuningAxis }, import('../contract.ts').VvcTuningState | null>;
   'prepare-js':Command<{input:PacketInput;sourceVersion:string;format:'ts'|'matroska';persistent?:boolean},{admitted:true;session:string;index:import('../../../shared/media/containers/matroska-packet-index.ts').JsPacketIndex}|{admitted:false;reason:string}>;
   'analysis-js-index':Command<Empty,import('../../../shared/media/containers/matroska-packet-index.ts').JsPacketIndex>;
   'prepare-ts': Command<{input: PacketInput; sourceVersion: string},

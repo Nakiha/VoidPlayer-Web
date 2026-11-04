@@ -11,6 +11,7 @@ import { validFfmpegRecovery } from '../../../shared/media/indexing/index-integr
 import type { FfmpegIndexRecovery } from '../../../shared/media/indexing/index-integrity.ts';
 import { randomUUID } from '../../../shared/utils/uuid.ts';
 import { decoderConcurrency, loadCore } from './core-loader.ts';
+import { createVvcTuner } from './vvc-tuning.ts';
 import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
 import type { MediaIndexTrace, MediaIndexRecordBatch, MediaIndexRecordManifest } from '../../../shared/media/indexing/media-index-types.ts';
 import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_SCHEMA, parseFfmpegIndex, serializeFfmpegIndex, FFMPEG_NO_TIMESTAMP, lastFfmpegPts } from '../../../shared/media/indexing/ffmpeg-index-cache.ts';
@@ -49,7 +50,7 @@ type FfmpegIndexSink = {
   complete(manifest: MediaIndexRecordManifest, frames: number, trace: MediaIndexTrace): FfmpegInitResult | undefined;
   legacy(index: unknown, trace: MediaIndexTrace): FfmpegInitResult | undefined;
 };
-type DecodeContext = { packets: FfmpegPacketIndex; indexComplete: boolean; ticks: number[]; durations: number[]; blobHandle: number; path: string; indexSink?: FfmpegIndexSink };
+type DecodeContext = { packets: FfmpegPacketIndex; indexComplete: boolean; ticks: number[]; durations: number[]; blobHandle: number; path: string; indexSink?: FfmpegIndexSink; tuner?: ReturnType<typeof createVvcTuner> };
 const contexts = new Map<number, DecodeContext>();
 const observations = new Map<number, ObservedBytes>();
 
@@ -58,7 +59,7 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
   onProgress('decoder');
   const binary = payload.wasmBinary ? new Uint8Array(payload.wasmBinary) : undefined;
   const budget = payload.threads;
-  const pool = typeof budget === 'object' ? Math.max(budget.general, budget.vvc) : budget;
+  const pool = typeof budget === 'object' ? Math.max(budget.general, budget.vvc, budget.vvcTuning?.threads ?? 0) : budget;
   ({ core, heap } = await loadCore(payload.glueURL, binary, undefined, pool));
   requireFrameAbi(core);
   core.vpBlobs = new Map();
@@ -76,6 +77,7 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
       core._vp_set_vvc_threads?.(budget.vvc);
       core._vp_set_vvc_frame_contexts?.(budget.vvcFrameContexts);
     }
+    const tuner = createVvcTuner(core, heap, ctx, typeof budget === 'object' ? budget.vvcTuning : undefined);
     // Blobs read on demand through the custom AVIO (FileReaderSync chunks), so
     // no whole-file copy ever enters WASM memory. Node workers lack
     // FileReaderSync and buffer the bytes once (capped) into MEMFS.
@@ -84,7 +86,7 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
     if (payload.range) {
       ioMode = 'http-range'; blobHandle = ctx;
       const { shared, size } = payload.range;
-      core.vpBlobs.set(blobHandle, rangeBlobReader(shared, size, message => port.postMessage(message)));
+      core.vpBlobs.set(blobHandle, rangeBlobReader(shared, size, message => port.postMessage(message), tuner?.recordInputWait));
       if (ioCall('vp_open_blob', 'number', ['number', 'number', 'i64'], [ctx, blobHandle, BigInt(size)]) !== 0) {
         throw new MediaOpenError('container', '软件解码器未能打开视频轨道：封装、编码可能不受支持，或文件数据不完整。');
       }
@@ -95,7 +97,9 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
       core.vpBlobs.set(blobHandle, {
         blob: { slice: (start: number, end: number) => ({ start, end }) },
         reader: { readAsArrayBuffer({ start, end }: { start: number; end: number }) {
+          const started = tuner ? performance.now() : 0;
           const buffer = reader.readAsArrayBuffer(blob.slice(start, end));
+          tuner?.recordInputWait(performance.now() - started);
           observed.add(start, new Uint8Array(buffer)); return buffer;
         } },
       });
@@ -333,7 +337,7 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
           return makeIndexResult(built, 'client', 1);
         },
       };
-      contexts.set(ctx, { packets: new FfmpegPacketIndex(), indexComplete: false, ticks: [firstTicks], durations: firstDurations, blobHandle, path, indexSink });
+      contexts.set(ctx, { packets: new FfmpegPacketIndex(), indexComplete: false, ticks: [firstTicks], durations: firstDurations, blobHandle, path, indexSink, tuner });
       const ready: FfmpegInitResult = {
         ...decoderConcurrency(core, ctx),
         ctx, path, ticks: [firstTicks], durations: [firstPresentation.duration],
@@ -356,7 +360,7 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
       return ready;
     }
     const count = ioCall('vp_index_build', 'number', ['number'], [ctx]) as number;
-    contexts.set(ctx, { packets: new FfmpegPacketIndex(), indexComplete: false, ticks: [], durations: [], blobHandle, path });
+    contexts.set(ctx, { packets: new FfmpegPacketIndex(), indexComplete: false, ticks: [], durations: [], blobHandle, path, tuner });
     return makeIndexResult(count, 'client', 1);
   } catch (error) {
     if (contexts.has(ctx)) throw error;
@@ -406,6 +410,8 @@ port.onmessage = async (event: { data: Request }) => {
       if (readyContext !== undefined) {
         if (!('indexPending' in result && result.indexPending)) port.postMessage({ id, type: 'index-complete', data: result });
       } else port.postMessage(reply(message, result));
+    } else if (type === 'tune-vvc') {
+      port.postMessage(reply(message, contexts.get(message.ctx)?.tuner?.tune(message.axis) ?? null));
     } else if (type === 'analysis-ffmpeg-index') {
       const ctx = message.ctx;
       if (!contexts.get(ctx)?.indexComplete) throw new Error('Complete FFmpeg index required');

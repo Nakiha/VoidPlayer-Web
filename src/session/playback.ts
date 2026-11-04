@@ -192,6 +192,10 @@ export class VvcGrowthMonitor {
 
 type VvcObservation = NonNullable<ReturnType<VvcGrowthMonitor['sample']>>;
 
+export function vvcInputLimited(core: VvcTuningState) {
+  return (core.inputWaitMs ?? 0) > (core.sampleMs ?? 0) * .25;
+}
+
 export class VvcGrowthPolicy {
   private trial?: { axis: VvcTuningAxis; before: VvcObservation; warmup: boolean; first?: VvcObservation };
 
@@ -207,7 +211,7 @@ export class VvcGrowthPolicy {
   }
 
   choose(window: VvcObservation, core: VvcTuningState): VvcTuningAxis | undefined {
-    if (this.trial || !window.grow || !core.dispatched) return;
+    if (this.trial || !window.grow || !core.dispatched || vvcInputLimited(core)) return;
     const saturated = core.saturated / core.dispatched >= .12;
     if (saturated && core.threads < core.maxThreads && !this.blocked.has('threads')) return 'threads';
     const full = core.submitted > 0 && core.full / core.submitted >= .75 && core.maxFrameWaitUs >= 1000;

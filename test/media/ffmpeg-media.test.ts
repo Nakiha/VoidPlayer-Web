@@ -2,11 +2,41 @@ import '../helpers/browser-worker-host.ts';
 import {openPacketMedia} from '../../src/media/decoding/packet-media.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { WorkerRpc } from '../../src/media/workers/worker-rpc.ts';
+import type { FfmpegCommands } from '../../src/media/workers/worker-protocol.ts';
 import { floorIndex, nextIndex, openFFmpegMedia } from '../../src/media/decoding/ffmpeg-media.ts';
 import { openMedia } from '../../src/media/source.ts';
 import type { FallbackDeps } from '../../src/media/decoding/ffmpeg-media.ts';
 import type { MediaSource } from '../../src/media/contract.ts';
+
+test('FFmpeg container worker exposes live VVC tuning independently of MP4 packets', { timeout: 120000 }, async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'vp-vvc-container-'));
+  const rpc = new WorkerRpc<FfmpegCommands>(new Worker(new URL('../../src/media/decoding/ffmpeg-worker.ts', import.meta.url)));
+  try {
+    const file = join(directory, 'vvc.avi');
+    execFileSync(process.env.VOIDPLAYER_FFMPEG_ORACLE || 'ffmpeg',
+      ['-v', 'error', '-y', '-i', resolve('fixtures/video/h266_10s_1920x1080.mp4'), '-map', '0:v:0', '-c', 'copy', '-tag:v', 'VVC1', file]);
+    const bytes = await readFile(file);
+    const core = new URL('../../public/vendor/voidplayer-core/', import.meta.url);
+    // Use the normal first-frame handshake. Full index admission belongs to
+    // the independent container/index tests.
+    const init = await rpc.call('init', { name: 'vvc.avi', file: Uint8Array.from(bytes).buffer,
+      glueURL: new URL('voidplayer-core-mt.js', core).href, wasmBinary: await readFile(new URL('voidplayer-core-mt.wasm', core)),
+      externalIndexSession: true, mediaSize: bytes.length,
+      threads: { general: 4, vvc: 4, vvcFrameContexts: 4, vvcTuning: { threads: 6, contexts: 6 } } });
+    assert.equal(init.codec, 'vvc'); assert.ok(init.firstFrame?.pixels.byteLength);
+    const before = await rpc.call('tune-vvc', { ctx: init.ctx });
+    assert.deepEqual([before?.threads, before?.contexts], [4, 4]);
+    assert.equal((await rpc.call('tune-vvc', { ctx: init.ctx, axis: 'threads' }))?.threads, 6);
+    assert.equal((await rpc.call('tune-vvc', { ctx: init.ctx, axis: 'contexts' }))?.contexts, 6);
+    await rpc.call('dispose', { ctx: init.ctx, path: init.path });
+    assert.equal(await rpc.call('tune-vvc', { ctx: init.ctx }), null);
+  } finally { rpc.terminate(); await rm(directory, { recursive: true, force: true }); }
+});
 
 // --- pure index navigation ---
 

@@ -15,6 +15,7 @@ import type { AudioPeek } from '../../../shared/media/audio-types.ts';
 import { randomUUID } from '../../../shared/utils/uuid.ts';
 import { MediaOpenError } from '../../../shared/media/io/media-errors.ts';
 import type { OpenStage } from '../../../shared/media/io/media-errors.ts';
+import type { VvcTuningAxis } from '../contract.ts';
 import type { DecodedFrame, MediaSource, MediaMeta } from '../contract.ts';
 import type { MediaInfo } from '../../../shared/media/types.ts';
 import { MAX_FALLBACK_FILE_BYTES } from '../policy/fallback-budget.ts';
@@ -41,7 +42,7 @@ export interface WasmDecodedFrame extends DecodedFrame {
   pixels: Uint8ClampedArray;
 }
 
-import {floorIndex,nextIndex,reserveFallbackThreads,fallbackCoreCandidates,fallbackCoreVariant} from './fallback-runtime.ts';
+import {floorIndex,nextIndex,reserveFallbackThreads,fallbackCoreCandidates,fallbackCoreVariant,fallbackDecodeThreads} from './fallback-runtime.ts';
 import type {FallbackDeps} from './fallback-runtime.ts';
 async function createWorker(): Promise<Worker> {
   return new Worker(new URL('./ffmpeg-worker.ts', import.meta.url), { type: 'module' });
@@ -92,7 +93,8 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   // single-threaded core when it is not vendored, cannot start, or hangs
   // (nested pthread workers wedging in some WebKit builds) — a wedged worker
   // is terminated and replaced.
-  const candidates = fallbackCoreCandidates(deps, deps.glueURL ?? location.origin, wasmThreadMode());
+  const mode = wasmThreadMode();
+  const candidates = fallbackCoreCandidates(deps, deps.glueURL ?? location.origin, mode);
   const indexUrl = 'url' in file ? ffmpegIndexMediaUrl(file.url) : undefined;
   const scoped = contextLog();
   const readMs = Math.round(performance.now() - openStart);
@@ -104,7 +106,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   let lastError: unknown = null;
   for (const glueURL of candidates) {
     const variant = fallbackCoreVariant(glueURL);
-    const threads = deps.glueURL || variant === 'multi-thread' ? threadReservation.threads : 1;
+    const threads = fallbackDecodeThreads(threadReservation.threads, glueURL, mode, !!deps.glueURL);
     loadAborted(deps.signal);
     rpc?.terminate();
     const worker = deps.workerFactory?.() ?? await createWorker();
@@ -375,6 +377,14 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
 
   source = {
     info, ensureIndexed,
+    ...(mode === 'auto-grow' && info.codec === 'vvc' ? {
+      async tuneVvc(axis?: VvcTuningAxis) {
+        if (disposed) return null;
+        const result = await activeRpc.call('tune-vvc', { ctx: init!.ctx, axis }, [], 60000);
+        if (result && !disposed) updateMediaInfo(source, { decoderThreads: result.threads, decoderFrameContexts: result.contexts }, 'decoder');
+        return result;
+      },
+    } : {}),
     bitstreamIndexIdentity: init.indexIdentity,
     async getBitstreamFfmpegIndex() {
       await ensureIndexed();

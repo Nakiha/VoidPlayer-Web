@@ -166,6 +166,8 @@ test('VVC growth chooses one axis, waits for two measured windows and blocks an 
   const slow = { speed: .8, starvation: .2, skipped: 0, grow: true };
   const core = { threads: 6, contexts: 6, inFlight: 5, dispatched: 100, saturated: 50,
     submitted: 30, full: 30, maxFrameWaitUs: 4000, heapBytes: 100, maxThreads: 12, maxContexts: 12 };
+  assert.equal(policy.choose(slow, { ...core, inputWaitMs: 1500, sampleMs: 2000 }), undefined);
+  assert.equal(policy.choose(slow, { ...core, inputWaitMs: 20, sampleMs: 2000 }), 'threads');
   assert.equal(policy.choose(slow, core), 'threads');
   policy.applied('threads', slow, core, { ...core, threads: 8 });
   assert.equal(policy.choose(slow, core), undefined);

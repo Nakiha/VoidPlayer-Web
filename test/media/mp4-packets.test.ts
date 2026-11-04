@@ -12,7 +12,51 @@ import {nativeFrames,nativeVisibleHash,nativeVisibleFrameBytes,nativeVideoMetada
 import {mkdtemp,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {createServer} from 'node:http';
+import {setWasmThreadMode} from '../../src/media/policy/wasm-threads.ts';
 const core = new URL('../../public/vendor/voidplayer-core/', import.meta.url);
+
+test('VVC automatic growth accepts local and HTTP MP4 with a two-thread starting budget', { timeout: 120000 }, async t => {
+  t.mock.getter(Navigator.prototype, 'hardwareConcurrency', () => 4);
+  setWasmThreadMode('auto-grow');
+  t.after(() => setWasmThreadMode('auto'));
+  const { openPacketMedia } = await import('../../src/media/decoding/packet-media.ts');
+  const bytes = await packetFixture('h266_10s_1920x1080.mp4');
+  const wasmBinary = await readFile(new URL('voidplayer-core-mt.wasm', core));
+  const server = createServer((req, res) => {
+    const range = /^bytes=(\d+)-(\d+)$/.exec(req.headers.range ?? '');
+    assert.ok(range);
+    const start = Number(range[1]), end = Math.min(Number(range[2]), bytes.length - 1);
+    res.writeHead(206, { 'content-range': `bytes ${start}-${end}/${bytes.length}`, 'content-length': end - start + 1 });
+    res.end(bytes.subarray(start, end + 1));
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const file = new File([bytes], 'vvc.mp4');
+    const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/video.mp4`;
+    for (const input of [{ file }, { url, size: bytes.length }]) {
+      const source = await openPacketMedia('mp4', input, file, {
+        glueURL: new URL('voidplayer-core-mt.js', core).href, wasmBinary, forceWasm: true,
+      });
+      try {
+        const first = await source.frameAt(0), signature = visiblePixelHash(first.description, first.pixels!);
+        first.close();
+        assert.deepEqual([source.info.decoderThreads, source.info.decoderFrameContexts], [2, 2]);
+        const frames = await source.framesAfter(0, 12);
+        frames.forEach(frame => frame.close());
+        assert.equal((await source.tuneVvc!('threads'))?.threads, 4);
+        assert.equal((await source.tuneVvc!('contexts'))?.contexts, 4);
+        assert.deepEqual([source.info.decoderThreads, source.info.decoderFrameContexts], [4, 4]);
+        const restored = await source.frameAt(0);
+        assert.equal(visiblePixelHash(restored.description, restored.pixels!), signature);
+        restored.close();
+      } finally { source.dispose(); }
+    }
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+  }
+});
 
 for (const name of ['h266_10s_1920x1080.mp4', 'h264_high422p_1s_320x180.mp4', 'hevc-packet-1080p.mp4']) {
   test(`MP4 packet WASM ${name}: metadata-only indexing and exact pixels across GOP seeks and EOF`, { timeout: 120000 }, async () => {

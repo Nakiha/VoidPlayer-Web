@@ -1,5 +1,6 @@
 import { coreAssetUrl } from './core-url.ts';
-import { vvcFrameContextCount, vvcThreadCount, wasmThreadMode, type WasmThreadMode } from '../policy/wasm-threads.ts';
+import { VVC_EXPERIMENTAL_CAPACITY, vvcFrameContextCount, vvcThreadCount, wasmThreadMode,
+  type DecodeThreads, type WasmThreadMode } from '../policy/wasm-threads.ts';
 import type {MediaOpenProgress} from '../progress.ts';
 // Greatest index whose time is at most ptsUs (0 when none), and the first
 // index strictly after ptsUs (-1 when none). Pure binary-search helpers for
@@ -36,6 +37,14 @@ export function fallbackCoreVariant(glueURL: string) {
   return glueURL.includes('core-mt.') ? 'multi-thread' : 'single-thread';
 }
 
+export function fallbackDecodeThreads(budget: DecodeThreads, glueURL: string, mode: WasmThreadMode, explicitCore = false): DecodeThreads {
+  const multi = fallbackCoreVariant(glueURL) === 'multi-thread';
+  if (!multi && !explicitCore) return 1;
+  if (!multi || mode !== 'auto-grow' || typeof budget === 'number') return budget;
+  return { ...budget, vvcTuning: { contexts: VVC_EXPERIMENTAL_CAPACITY,
+    threads: Math.max(budget.vvc, Math.min(VVC_EXPERIMENTAL_CAPACITY, globalThis.navigator?.hardwareConcurrency ?? budget.vvc)) } };
+}
+
 export interface FallbackDeps {
   /** Keep native packet frames intact for the reference Worker readback gate. */
   rawNative?: boolean;
@@ -60,7 +69,9 @@ export function reserveFallbackThreads(mode = wasmThreadMode()) {
   const cores = globalThis.navigator?.hardwareConcurrency ?? 4;
   const available = cores - 2;
   const share = Math.max(1, Math.min(Math.floor(available / liveFallbacks), available - reservedFallbackThreads));
-  const vvc = (mode === 'manual' ? vvcThreadCount() : 0) || Math.min(6, share);
+  // VVC only creates its growable executor when opened with at least two threads.
+  const minimum = mode === 'auto-grow' && cores > 1 ? 2 : 1;
+  const vvc = (mode === 'manual' ? vvcThreadCount() : 0) || Math.min(6, Math.max(minimum, share));
   const contexts = (mode === 'manual' ? vvcFrameContextCount() : 0) || Math.min(6, vvc);
   const threads = mode === 'single-thread' ? { general: 1, vvc: 1, vvcFrameContexts: 1 }
     : { general: Math.min(4, share), vvc, vvcFrameContexts: contexts };

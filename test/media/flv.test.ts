@@ -7,6 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { demuxFlv, FlvReader } from '../../shared/media/containers/flv-demux.ts';
 import { openFlvMedia } from '../../src/media/decoding/flv-media.ts';
+import { setWasmThreadMode } from '../../src/media/policy/wasm-threads.ts';
 
 const names = ['standard-h264', 'legacy-hevc', 'private-av1', 'private-vvc', 'enhanced-hevc', 'enhanced-av1', 'enhanced-vvc'];
 const core = new URL('../../public/vendor/voidplayer-core/', import.meta.url);
@@ -44,6 +45,52 @@ for (const name of names) {
     } finally { source.dispose(); }
   });
 }
+
+test('VVC FLV grows the live decoder from local and HTTP sources', { timeout: 120000 }, async t => {
+  t.mock.getter(Navigator.prototype, 'hardwareConcurrency', () => 12);
+  setWasmThreadMode('auto-grow');
+  t.after(() => setWasmThreadMode('auto'));
+  const wasmBinary = await readFile(new URL('voidplayer-core-mt.wasm', core));
+  for (const name of ['private-vvc', 'enhanced-vvc']) {
+    const { bytes, file } = await fixture(name);
+    const server = createServer((req, res) => {
+      const range = /^bytes=(\d+)-(\d+)$/.exec(req.headers.range ?? '');
+      assert.ok(range);
+      const start = Number(range[1]), end = Math.min(Number(range[2]), bytes.length - 1);
+      res.writeHead(206, { 'content-range': `bytes ${start}-${end}/${bytes.length}`, 'content-length': end - start + 1 });
+      res.end(bytes.subarray(start, end + 1));
+    });
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/video.flv`;
+      for (const input of [{ file }, { url, size: bytes.length }]) {
+        const source = await openFlvMedia(input, file, {
+          glueURL: new URL('voidplayer-core-mt.js', core).href, wasmBinary, forceWasm: true,
+        });
+        try {
+          await source.ensureIndexed!();
+          const first = await source.frameAt(0), pixels = first.pixels!.slice();
+          first.close();
+          const frames = await source.framesAfter(0, 12);
+          frames.forEach(frame => frame.close());
+          assert.deepEqual([source.info.decoderThreads, source.info.decoderFrameContexts], [6, 6]);
+          const contexts = await source.tuneVvc!('contexts');
+          assert.equal(contexts?.contexts, 8);
+          const threads = await source.tuneVvc!('threads');
+          assert.equal(threads?.threads, 8);
+          assert.ok((threads?.sampleMs ?? -1) >= 0 && (threads?.inputWaitMs ?? -1) >= 0);
+          assert.deepEqual([source.info.decoderThreads, source.info.decoderFrameContexts], [8, 8]);
+          const restored = await source.frameAt(0);
+          assert.deepEqual(restored.pixels, pixels);
+          restored.close();
+        } finally { source.dispose(); }
+      }
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>(resolve => server.close(() => resolve()));
+    }
+  }
+});
 
 test('FLV index rejects invalid headers, tag size mismatch and missing sequence headers', async () => {
   const { bytes } = await fixture('standard-h264');

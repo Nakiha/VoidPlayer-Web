@@ -4,7 +4,7 @@ import { MediaOpenError } from '../../../shared/media/io/media-errors.ts';
 /** Synchronous Blob AVIO adapter. Allocation size is independent of the fixed
  * transport window; only the decoder worker blocks on each bounded transfer. */
 export function rangeBlobReader(shared: SharedArrayBuffer, size: number,
-  request: (message: RangeReadRequest) => void) {
+  request: (message: RangeReadRequest) => void, onWait?: (ms: number) => void) {
   const control = new Int32Array(shared, 0, 4), data = new Uint8Array(shared, 16);
   const fail = (message: string): never => { throw new MediaOpenError('input', message); };
   return {
@@ -24,7 +24,10 @@ export function rangeBlobReader(shared: SharedArrayBuffer, size: number,
         const state = Atomics.load(control, 0);
         if (state === -2 || Atomics.compareExchange(control, 0, state, 0) === -2) return fail('媒体读取已取消。');
         request({ type: 'read-range', offset: start + at, length: count });
-        if (Atomics.wait(control, 0, 0, 30000) === 'timed-out') return fail(`媒体 Range 读取超时（offset=${start + at}, bytes=${count}）。`);
+        const started = onWait ? performance.now() : 0;
+        const wait = Atomics.wait(control, 0, 0, 30000);
+        onWait?.(performance.now() - started);
+        if (wait === 'timed-out') return fail(`媒体 Range 读取超时（offset=${start + at}, bytes=${count}）。`);
         const status = Atomics.load(control, 0), received = Atomics.load(control, 1);
         if (status !== 1) return fail(status === -1 ? new TextDecoder().decode(data.subarray(0, Math.max(0, Math.min(received, data.length)))) : '媒体读取已取消。');
         if (received !== count) return fail(`WASM Range 响应长度错误（offset=${start + at}, expected=${count}, actual=${received}）。`);
