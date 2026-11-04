@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import path from "node:path";
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { selectDiagrams, openRangeEditor, inspectCurrentWindow } from '../controls.mjs';
 import { recordStatusEvidence, installStatusReadEvidence } from '../status-evidence.mjs';
 import { recordBrowserEvidence, saveBrowserFailure } from '../../../browser-failure-evidence.mjs';
@@ -802,12 +802,15 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
       assert.equal(await page.locator('.analysis-no-charts').isVisible(), true);
       assert.equal(await page.locator('.analysis-linked-card:visible').count(), 0, 'empty selection hides the shared card');
       assert.ok(requests.slice(requestsBefore).filter(r => r.method === 'POST' && /bitstream-analysis\/requests/.test(r.url)).every(r => r.target?.mode==='stream' && r.target.window), 'chart selections and hover do not launch whole-source analysis');
-      const importing = call('import_workspace', { document: multiple });
       if (input === 'local-file') {
-        await page.getByLabel('重新选择 incremental.mp4', { exact: true }).setInputFiles(path.join(limitsDir, 'incremental.mp4'));
-        await page.getByRole('button', { name: '打开工作区', exact: true }).click();
-      }
-      await importing;
+        const info = multiple.media.find(media => media.name === 'incremental.mp4' && !media.source);
+        const bytes = await readFile(path.join(limitsDir, 'incremental.mp4'));
+        await page.evaluate(async ({ document, info, bytes }) => {
+          const file = new File([Uint8Array.from(atob(bytes), c => c.charCodeAt(0))], info.name, { lastModified: info.lastModified });
+          await window.voidPlayer.importWorkspace(document, [file]);
+        }, { document: multiple, info, bytes: bytes.toString('base64') });
+      } else await call('import_workspace', { document: multiple });
+      assert.equal(await page.locator('.workspace-relink').count(), 0, 'workspace inputs restore without a relink dialog');
       await page.waitForFunction(() => document.querySelectorAll('.bitstream-diagrams canvas').length === 3);
       assert.deepEqual((await call('export_workspace')).layout.analysisView.diagrams, choices);
       assert.deepEqual((await call('export_workspace')).layout.analysisView.view, multiple.layout.analysisView.view);
