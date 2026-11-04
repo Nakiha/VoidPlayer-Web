@@ -839,6 +839,7 @@ export default {
   "player.fileImportWasSupersededByANewer": () => "File import was superseded by a newer request.",
   "player.fillView": () => "Fill view",
   "player.frames": (d) => plural(d.count, 0, en, { one: number("en", d.count, 0) + " frame", other: number("en", d.count, 0) + " frames" }),
+  "player.graphicsRecoveryFailed": () => "The picture could not be restored. Refresh the page; if it is still missing, fully exit and reopen the browser.",
   "player.hdrDisplay": () => " · HDR output",
   "player.hdrSource": () => " · HDR source",
   "player.hdrSourceSdrFallback": () => " · HDR source (SDR preview)",

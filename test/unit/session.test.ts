@@ -7,9 +7,33 @@ import {getColorMode,setColorMode,getReferenceDecode,setReferenceDecode} from '.
 import { minFrameDurationUs, planBackwardStep, planForwardStep, regionValue, timeUs, SLOTS } from '../../shared/review/model.ts';
 import { reviewTools } from '../../src/agent.ts';
 import type { MediaSource } from '../../src/media/contract.ts';
+import type { DecodedFrame } from '../../src/media/contract.ts';
 import type { AnnotationDocument } from '../../shared/review/annotation-record.ts';
 
 function deferred<T>() { let resolve!: (v: T) => void; const promise = new Promise<T>(r => resolve = r); return { promise, resolve }; }
+test('presentation recovery updates actual output without decoding or advancing identity; stale commits are ignored', async () => {
+  let commit = 0, reads = 0, presented!: DecodedFrame;
+  const session = new ReviewSession((_slot, frame) => {
+    frame.presentedCommit = ++commit;
+    frame.presentation = {requestedTarget:'sdr',actualTarget:'sdr',captureTarget:'sdr',executor:'webgpu-yuv',contract:'common-yuv-sdr',
+      displayHdr:false,outputColorSpace:'srgb',outputFormat:'unorm8',toneMapping:'standard'};
+    presented = frame;
+  });
+  try {
+    const source = media('recovery').source, read = source.frameAt.bind(source);
+    source.frameAt = async time => { reads++; return read(time); };
+    await session.load('A', async () => source);
+    const token = session.getPresentedFrame('A'), before = session.getState(), readCount = reads;
+    const recovered = {...presented,presentation:{...presented.presentation!,executor:'cpu-yuv'}};
+    session.recordRecoveredPresentation('A', recovered);
+    assert.equal(session.getState().tracks[0].presentation?.executor, 'cpu-yuv');
+    assert.deepEqual(session.getPresentedFrame('A'), token);
+    assert.equal(session.getState().positionUs, before.positionUs); assert.equal(reads, readCount);
+    await session.seek(40000);
+    session.recordRecoveredPresentation('A', recovered);
+    assert.equal(session.getState().tracks[0].presentation?.executor, 'webgpu-yuv');
+  } finally { await session.dispose(); }
+});
 test('reference decoder changes reload tracks and roll back failed depth changes',async()=>{
  const previous=getColorMode(),decode=getReferenceDecode();setColorMode('reference');setReferenceDecode({decoder:'software',depth:2});
  const session=new ReviewSession(()=>{});let fail=false,opens=0;

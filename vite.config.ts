@@ -30,7 +30,7 @@ async function buildInfo() {
   }
   hashSources(sourceDir, 'src/');
   hashSources(resolve(import.meta.dirname, 'shared'), 'shared/');
-  for (const file of ['package-lock.json', ...FRONTEND_HTML_INPUTS, 'public/theme-init.js', 'public/startup-guard.js']) hash.update(file).update(readFileSync(resolve(import.meta.dirname, file)));
+  for (const file of ['package-lock.json', 'vite.config.ts', ...FRONTEND_HTML_INPUTS, 'public/theme-init.js', 'public/startup-guard.js']) hash.update(file).update(readFileSync(resolve(import.meta.dirname, file)));
   const wasmDigests = Object.fromEntries(['voidplayer-core.wasm', 'voidplayer-core-mt.wasm'].map(name => {
     try { return [name, createHash('sha256').update(readFileSync(resolve(coreDir, name))).digest('hex')]; }
     catch { return [name, null]; }
@@ -79,6 +79,26 @@ export default defineConfig({
     },
   }, {
     name: 'voidplayer-build-evidence',
+    transformIndexHtml: { order: 'post', handler(html, context) {
+      const bundle = context.bundle;
+      if (!bundle || context.path !== '/index.html') return;
+      const entry = Object.values(bundle).find(chunk => chunk.type === 'chunk'
+        && normalizePath(chunk.facadeModuleId ?? '').endsWith('/src/main.ts'));
+      if (!entry) throw new Error('Player startup chunk missing');
+      const files = new Set<string>();
+      function visit(file: string) {
+        const chunk = bundle![file];
+        if (!chunk || chunk.type !== 'chunk' || files.has(file)) return;
+        files.add(file);
+        for (const dependency of chunk.imports) visit(dependency);
+      }
+      visit(entry.fileName);
+      const urls = [...files].map(file => '/' + file).filter(url => !html.includes(`href="${url}"`));
+      // Fetch/compile only: bootstrap still selects the language before evaluating main.
+      // The HTTP connection guide must never preload the player graph.
+      return [{ tag: 'script', attrs: { 'data-startup-preload': '' }, injectTo: 'head',
+        children: `if(globalThis.isSecureContext&&location.pathname!=='/connection'){for(const href of ${JSON.stringify(urls)}){const link=document.createElement('link');link.rel='modulepreload';link.crossOrigin='anonymous';link.href=href;document.head.append(link);}}` }];
+    } },
     async closeBundle() { if (buildCatalog) await prepareStaticAssets(outputDirectory); },
     async buildStart() {
       productionBuildInfo = buildCatalog ? buildInfo() : undefined;

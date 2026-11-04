@@ -8,6 +8,7 @@ try {
   for (const [name, engine] of Object.entries({ chromium, webkit })) {
     browser = await engine.launch({ headless: true });
     const page = await browser.newPage({locale:'zh-CN'});
+    const errors = [];page.on('pageerror', error => errors.push(error.message));
     await page.route('**/presentation-test', route => route.fulfill({ contentType: 'text/html', body: '<div class="frame-stage"><canvas id="source" width="2" height="2"></canvas></div>' }));
     await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/presentation-test`);
     const result = await page.evaluate(async () => {
@@ -48,12 +49,27 @@ try {
       HTMLCanvasElement.prototype.getContext = function(type, ...args) { return type === 'webgl' ? null : getContext.call(this, type, ...args); };
       setPresentationGeometry(source, geometry); paintFrame(source, rgba(colors));
       const fallback = pixels(); disposePresentation();
+      HTMLCanvasElement.prototype.getContext = function(type, ...args) {
+        if (type === 'webgl') return {createShader(){return {};},shaderSource(){},compileShader(){},getShaderParameter(){return false;},
+          getShaderInfoLog(){return 'Injected shader setup failure';},getExtension(){return null;}};
+        return getContext.call(this,type,...args);
+      };
+      setPresentationGeometry(source,geometry);paintFrame(source,rgba(colors));
+      const failedGl = pixels();disposePresentation();
+      HTMLCanvasElement.prototype.getContext = function(type, ...args) {
+        if (this.classList.contains('frame-presentation')) return null;
+        return getContext.call(this,type,...args);
+      };
+      setPresentationGeometry(source,geometry);paintFrame(source,rgba(colors));
+      const missingViewport = pixels(), sourceVisible = !source.classList.contains('frame-source');disposePresentation();
       HTMLCanvasElement.prototype.getContext = getContext;
-      return { eager, nativeEager, first, native, rotation, rotationExpected, retained, fallback, expected: [...colors], surfaces: document.querySelectorAll('.frame-presentation').length };
+      return { eager, nativeEager, first, native, rotation, rotationExpected, retained, fallback, failedGl, missingViewport, sourceVisible,
+        expected: [...colors], surfaces: document.querySelectorAll('.frame-presentation').length };
     });
     assert.equal(result.eager, 0, 'RGBA playback does not draw the hidden canvas');
     assert.equal(result.nativeEager, 0, 'native playback does not draw the hidden canvas');
-    for (const key of ['first','native','retained','fallback']) assert.deepEqual(result[key], result.expected, key);
+    for (const key of ['first','native','retained','fallback','failedGl','missingViewport']) assert.deepEqual(result[key], result.expected, key);
+    assert.equal(result.sourceVisible,true,'unavailable viewport contexts do not hide a working source canvas');
     assert.deepEqual(result.rotation, result.rotationExpected);
     assert.equal(result.surfaces, 0);
     console.log(`PASS ${name}: direct native/RGBA upload, lazy pixels, rotation, buffer recycling, 2D fallback and cleanup`);
@@ -159,17 +175,105 @@ try {
       const lossFrame={kind:'yuv',description:loss.description,pixels:loss.pixels,width:5,height:3};
       setPresentationGeometry(source,{width:100,height:60,imageWidth:100,imageHeight:60,zoom:1,offsetX:0,offsetY:0,dpr:1});paintFrame(source,lossFrame);
       const surface=document.querySelector('.frame-presentation');
+      const commit = lossFrame.presentedCommit;
+      const originalPixels = loss.pixels.slice();
+      loss.pixels.fill(0); // Decoder buffers may be recycled while the player is paused.
       const lost=new Promise(resolve=>surface.addEventListener('webglcontextlost',resolve,{once:true}));
       surface.getContext('webgl').getExtension('WEBGL_lose_context').loseContext();await lost;
-      paintFrame(source,lossFrame);
       const recovered=captureFrame(source).getContext('2d').getImageData(0,0,5,3).data;
-      const cpu=yuvToRgba(loss.description,loss.pixels);
+      const cpu=yuvToRgba(loss.description,originalPixels);
+      if (lossFrame.presentedCommit !== commit || source.dataset.presentationRecovery !== 'ready') throw new Error('Paused recovery changed frame identity or failed');
       results.push({contextLoss:source.dataset.colorExecutor,max:Math.max(...recovered.map((v,i)=>Math.abs(v-cpu[i])))});
+      setPresentationGeometry(source,{width:100,height:60,imageWidth:100,imageHeight:60,zoom:2,offsetX:3,offsetY:-2,dpr:2});
+      const resized=captureFrame(source).getContext('2d').getImageData(0,0,5,3).data;
+      results.push({contextLossResize:true,max:Math.max(...resized.map((v,i)=>Math.abs(v-cpu[i])))});
       disposePresentation();
       return results;
     });
     for(const r of yuvResults)assert.ok(r.max<=1,JSON.stringify(r));
     console.log(`PASS ${name}: ${yuvResults.length} YUV reference cases, range/matrix/depth/layout/crop/rotation`);
+    const recovery = await browser.newPage();
+    recovery.on('pageerror', error => errors.push(error.message));
+    await recovery.route('**/gpu-recovery-test', route => route.fulfill({contentType:'text/html',body:'<div class="frame-stage"><canvas id="source"></canvas></div>'}));
+    await recovery.route('**/src/presentation/webgpu-color-surface.mjs*', route => route.fulfill({contentType:'text/javascript',body:`
+      import { yuvToRgba } from '/shared/color/yuv-color.ts';
+      window.testDevices = []; window.testSurfaces = []; window.releaseGpu = null;
+      export async function createExternalSurface(canvas, shared) {
+        let resolveLost;
+        const device = shared ?? { alive:true, lost:new Promise(resolve => { resolveLost=resolve; }),
+          lose(){ if(!this.alive)return;this.alive=false;resolveLost({reason:'unknown',message:'Injected device loss'}); },
+          destroy(){this.lose();} };
+        if (!shared) window.testDevices.push(device);
+        if (window.deadNextDevice && !shared) { window.deadNextDevice=false;device.lose(); }
+        if (!shared && (window.testDevices.length === 2 || window.holdNextGpu)) {
+          window.holdNextGpu=false;await new Promise(resolve => { window.releaseGpu=resolve; });
+        }
+        let current, disposed=false;
+        const surface = {device,lost:device.lost,errors:[],outputTarget:'sdr',outputFallbackReason:null,nativeHdrAvailable:false,
+          nativeHdrReason:'unavailable',outputConfiguration:{displayHdr:false,format:'rgba8unorm',colorSpace:'srgb',toneMapping:'standard'},
+          get available(){return device.alive&&!disposed;},setGeometry(){},
+          present(frame){if(!this.available)throw Error('Lost');current={...frame,pixels:frame.pixels.slice()};},
+          captureSource(target){if(!current)throw Error('No frame');target.width=current.width;target.height=current.height;
+            target.getContext('2d').putImageData(new ImageData(yuvToRgba(current.description,current.pixels),current.width,current.height),0,0);return target;},
+          clear(){current=null;},dispose(){if(disposed)return;disposed=true;this.clear();if(!shared)device.destroy();}};
+        window.testSurfaces.push(surface);return surface;
+      }
+    `}));
+    await recovery.goto(`http://127.0.0.1:${server.httpServer.address().port}/gpu-recovery-test`);
+    await recovery.evaluate(async () => {
+      const { setColorMode } = await import('/src/media/policy/color-mode.ts');setColorMode('reference');
+      const gpu = await import('/src/presentation/webgpu-presenter.ts');
+      const presenter = await import('/src/presentation/presenter.ts');
+      const { yuvFixture } = await import('/test/helpers/yuv-fixture.ts');
+      const { SessionResources } = await import('/src/session/resources.ts');
+      const source=document.getElementById('source'), f=yuvFixture();
+      const frame={kind:'yuv',description:f.description,pixels:f.pixels,width:5,height:3,byteSize:f.pixels.length};
+      const resources=new SessionResources();let notices=0;
+      presenter.bindPresentationResources(source,resources,()=>{notices++;});
+      const geometry={width:100,height:60,imageWidth:100,imageHeight:60,zoom:1,offsetX:0,offsetY:0,dpr:1};
+      await gpu.initializeGpuPresentation([source]);presenter.setPresentationGeometry(source,geometry);presenter.paintFrame(source,frame);
+      const read=()=>[...presenter.captureFrame(source).getContext('2d').getImageData(0,0,5,3).data];
+      window.recoveryTest={gpu,presenter,source,resources,frame,expected:read(),read,notices:()=>notices};
+      f.pixels.fill(0);window.testDevices[0].lose();
+    });
+    await recovery.waitForFunction(() => window.releaseGpu && document.getElementById('source').dataset.presentationRecovery === 'ready');
+    const during = await recovery.evaluate(() => {
+      const t=window.recoveryTest;return {actual:t.read(),expected:t.expected,notices:t.notices(),devices:window.testDevices.length,commit:t.frame.presentedCommit};
+    });
+    assert.deepEqual(during.actual,during.expected,'paused frame survives recycled bytes and device loss');
+    assert.equal(during.devices,2);assert.equal(during.notices,1);
+    await recovery.evaluate(async () => {
+      const t=window.recoveryTest,{yuvFixture}=await import('/test/helpers/yuv-fixture.ts');
+      const f=yuvFixture();f.pixels[0]=235;
+      t.latest={...t.frame,pixels:f.pixels};t.presenter.paintFrame(t.source,t.latest);t.latestExpected=t.read();
+      window.releaseGpu();
+    });
+    await recovery.waitForFunction(() => document.getElementById('source').dataset.colorExecutor === 'webgpu-yuv');
+    assert.deepEqual(await recovery.evaluate(()=>window.recoveryTest.read()),await recovery.evaluate(()=>window.recoveryTest.latestExpected),'recovery redraws the latest frame');
+    await recovery.evaluate(()=>window.testDevices[1].lose());
+    await recovery.waitForFunction(()=>document.getElementById('source').dataset.colorExecutor !== 'webgpu-yuv');
+    assert.equal(await recovery.evaluate(()=>window.testDevices.length),2,'repeated loss stops after one rebuild');
+    assert.deepEqual(await recovery.evaluate(()=>window.recoveryTest.read()),await recovery.evaluate(()=>window.recoveryTest.latestExpected));
+    await recovery.evaluate(async () => {
+      window.deadNextDevice=true;
+      await window.recoveryTest.gpu.initializeGpuPresentation([window.recoveryTest.source]);
+    });
+    assert.deepEqual(await recovery.evaluate(()=>window.recoveryTest.read()),await recovery.evaluate(()=>window.recoveryTest.latestExpected),'already-lost device keeps the fallback frame');
+    await recovery.evaluate(() => {
+      window.holdNextGpu=true;window.releaseGpu=null;
+      window.lateInitialization=window.recoveryTest.gpu.initializeGpuPresentation([window.recoveryTest.source]);
+    });
+    await recovery.waitForFunction(()=>window.releaseGpu);
+    const remaining = await recovery.evaluate(() => {
+      const t=window.recoveryTest;t.presenter.setPresentationGeometry(t.source,null);t.presenter.disposePresentation();
+      window.releaseGpu();
+      return window.lateInitialization.then(()=>({bytes:t.resources.totalBytes,live:window.testSurfaces.filter(s=>s.available).length,
+        surfaces:document.querySelectorAll('.frame-presentation').length}));
+    });
+    assert.deepEqual(remaining,{bytes:0,live:0,surfaces:0});
+    await recovery.close();
+    assert.deepEqual(errors, [], 'presentation failures recover without uncaught page errors');
+    console.log(`PASS ${name}: injected WebGPU loss, paused/latest frame redraw, bounded rebuild and complete resource cleanup`);
     await browser.close(); browser = null;
   }
 } finally { await browser?.close(); await server.close(); }

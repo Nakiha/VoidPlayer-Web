@@ -1,12 +1,36 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { GpuPresentationGuard } from '../../src/presentation/gpu-presentation-guard.ts';
+import { retainPresentationFrame } from '../../src/presentation/retained-frame.ts';
+import { SessionResources } from '../../src/session/resources.ts';
+import { rgbaDescription } from '../../shared/media/frame-description.ts';
+import type { DecodedFrame } from '../../src/media/contract.ts';
 
 function deferred<T>() {
   let resolve!: (v: T) => void;
   const promise = new Promise<T>(r => { resolve = r; });
   return { promise, resolve };
 }
+
+test('retained presentation owns recycled pixels, native clones and a bounded releasable lease', () => {
+  const resources = new SessionResources(16), pixels = new Uint8ClampedArray([255, 0, 0, 255]);
+  let originalClosed = 0, cloneClosed = 0;
+  const frame: DecodedFrame = {kind:'rgba8',width:1,height:1,byteSize:4,ptsUs:0,sourcePtsUs:0,durationUs:1,
+    description:rgbaDescription(1,1),pixels,close(){originalClosed++;}};
+  const retained = retainPresentationFrame(frame, resources);
+  pixels.fill(0); frame.close();
+  assert.deepEqual([...retained.pixels!], [255,0,0,255]);
+  assert.equal(resources.totalBytes, 4);
+  retained.close(); retained.close();
+  assert.equal(resources.totalBytes, 0); assert.equal(originalClosed, 1);
+  const sample = {clone(){return {close(){cloneClosed++;}};}} as unknown as DecodedFrame['sample'];
+  const native = retainPresentationFrame({...frame,kind:'video-sample',pixels:undefined,sample}, resources);
+  native.close(); native.close();
+  assert.equal(cloneClosed, 1); assert.equal(originalClosed, 1); assert.equal(resources.totalBytes, 0);
+  const broken = {clone(){throw Error('resource lost');}} as unknown as DecodedFrame['sample'];
+  assert.throws(() => retainPresentationFrame({...frame,kind:'video-sample',sample:broken}, resources), /resource lost/);
+  assert.equal(resources.totalBytes, 0);
+});
 
 type FakeSurface = { mode: string; disposed: boolean; dispose(): void };
 function fakeSurface(mode: string): FakeSurface {

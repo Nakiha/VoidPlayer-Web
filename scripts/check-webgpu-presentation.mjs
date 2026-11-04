@@ -114,6 +114,43 @@ try{
   }
   for(const c of report.depths){assert.equal(c.width,5);assert.equal(c.height,3);assert.ok(c.black.every(v=>v<=1),JSON.stringify(c));assert.ok(c.white.every(v=>v>=254),JSON.stringify(c));}
   console.log(`PASS ${name}: ${unified?'common planes':'default resource contracts'} without calibration, clone ownership, sync capture, four rotations, paused zoom, ${report.depths.length} high-depth/shift/layout cases, RGBA fallback/re-entry, cleanup`);
+  await page.evaluate(async () => {
+    const request = navigator.gpu.requestAdapter.bind(navigator.gpu);
+    window.lossDevices = [];
+    navigator.gpu.requestAdapter = async (...args) => {
+      const adapter = await request(...args);
+      if (adapter) {
+        const create = adapter.requestDevice.bind(adapter);
+        adapter.requestDevice = async (...args) => { const device = await create(...args); window.lossDevices.push(device); return device; };
+      }
+      return adapter;
+    };
+    const { setColorMode } = await import('/src/media/policy/color-mode.ts');setColorMode('reference');
+    const gpu = await import('/src/presentation/webgpu-presenter.ts'), presenter = await import('/src/presentation/presenter.ts');
+    const { yuvFixture } = await import('/test/helpers/yuv-fixture.ts');
+    const source = document.getElementById('source'), f = yuvFixture();
+    const frame = {kind:'yuv',description:f.description,pixels:f.pixels,width:5,height:3};
+    await gpu.initializeGpuPresentation([source]);
+    presenter.setPresentationGeometry(source,{width:50,height:30,imageWidth:50,imageHeight:30,zoom:1,offsetX:0,offsetY:0,dpr:1});
+    presenter.paintFrame(source,frame);
+    const read = () => [...presenter.captureFrame(source).getContext('2d').getImageData(0,0,5,3).data];
+    window.realLoss = {source,presenter,expected:read(),read,commit:frame.presentedCommit};
+    f.pixels.fill(0);window.lossDevices[0].destroy();
+  });
+  await page.waitForFunction(() => window.lossDevices.length === 2 && window.realLoss.source.dataset.colorExecutor === 'webgpu-yuv'
+    && window.realLoss.source.dataset.presentationRecovery === 'ready');
+  const restored = await page.evaluate(() => ({actual:window.realLoss.read(),expected:window.realLoss.expected}));
+  assert.deepEqual(restored.actual,restored.expected,'real device rebuild restores the paused frame');
+  await page.evaluate(() => window.lossDevices[1].destroy());
+  await page.waitForFunction(() => window.realLoss.source.dataset.colorExecutor !== 'webgpu-yuv');
+  const fallbackLoss = await page.evaluate(() => {
+    const value={actual:window.realLoss.read(),expected:window.realLoss.expected,devices:window.lossDevices.length};
+    window.realLoss.presenter.disposePresentation();return value;
+  });
+  assert.deepEqual(fallbackLoss.actual,fallbackLoss.expected,'repeated real device loss retains compatibility pixels');
+  assert.equal(fallbackLoss.devices,2,'real device rebuild has a finite retry budget');
+  evidence.results.at(-1).deviceLoss = {restored:true,repeatedLossFallback:true,devices:fallbackLoss.devices};
+  console.log(`PASS ${name}: real device destruction, paused rebuild and bounded repeated-loss fallback`);
   await browser.close();browser=undefined;
  }
 }catch(error){evidence.error=String(error);throw error;}

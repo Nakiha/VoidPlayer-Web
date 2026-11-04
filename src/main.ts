@@ -1,6 +1,5 @@
-import {openQualityRoi} from './ui/quality-roi.ts';
 import { evidenceWorkspaceVersion } from '../shared/review/quality-evidence.ts';
-import { attachQualityDialog } from './ui/quality-evidence.ts';
+import { currentActor } from './services/identity.ts';
 import { mediaDiagnostic } from '../shared/media/io/media-errors.ts';
 import type { MediaDiagnostic } from '../shared/media/io/media-errors.ts';
 import { diagnosticMessage } from './ui/diagnostic-message.ts';
@@ -10,6 +9,9 @@ import { t as tr, getLocale, onLanguageChange, msg } from './i18n.ts';
 import { isHdrTransfer } from './presentation/presentation-color.ts';
 import { updateColorFlow } from './ui/color-flow.ts';
 import { configureFrameResourceDemand } from './media/policy/frame-resources.ts';
+import { setColorMode, setReferenceDecode } from './media/policy/color-mode.ts';
+import { setColorOutput } from '../shared/color/color-output.ts';
+import { hdrDisplayAvailable } from './presentation/display-capabilities.ts';
 import { initializeGpuPresentation, keepNativeGpuResource } from './presentation/webgpu-presenter.ts';
 import { indexProgressLabel } from './ui/index-progress.ts';
 import { fileBasename } from './ui/filename.ts';
@@ -87,9 +89,6 @@ $<HTMLButtonElement>('start-identity').onclick = () => settings.openPane('identi
 const removeBrandEffects = installBrandEffects($<HTMLButtonElement>('brand-about'),
   () => settings.openPane('about', $<HTMLElement>('brand-about')));
 const canvases = Object.fromEntries(SLOTS.map(slot => [slot, $<HTMLCanvasElement>(`canvas-${slot}`)])) as Record<Slot, HTMLCanvasElement>;
-const {setColorMode,setReferenceDecode}=await import('./media/policy/color-mode.ts');
-const {setColorOutput}=await import('../shared/color/color-output.ts');
-const {hdrDisplayAvailable}=await import('./presentation/display-capabilities.ts');
 try{const saved=localStorage.getItem('voidplayer.color-output');if(saved)setColorOutput(JSON.parse(saved));}catch{}
 try{const saved=localStorage.getItem('voidplayer.reference-decode');if(saved)setReferenceDecode(JSON.parse(saved));}catch{}
 let savedColorMode:'reference'|'browser'='browser';
@@ -105,9 +104,13 @@ const gpuReady=initializeGpuPresentation(Object.values(canvases)).catch(error =>
 });
 const session = new ReviewSession((slot, frame) => paintFrame(canvases[slot], frame));
 $<HTMLButtonElement>('quality-roi-open').onclick=async()=>{
-  await settings.close();
-  if ($<HTMLDialogElement>('settings').open || uiEvents.signal.aborted) return;
-  openQualityRoi(session);
+  const actor = currentActor()?.id;
+  await act(async () => {
+    await settings.close();
+    const { openQualityRoi } = await import('./ui/quality-roi.ts');
+    if ($<HTMLDialogElement>('settings').open || uiEvents.signal.aborted || currentActor()?.id !== actor) return;
+    openQualityRoi(session);
+  });
 };
 session.setBitstreamAnalysisConcurrency(analysisConcurrency());
 window.addEventListener(ANALYSIS_CONCURRENCY_EVENT, event => session.setBitstreamAnalysisConcurrency((event as CustomEvent<number>).detail), { signal: uiEvents.signal });
@@ -165,7 +168,13 @@ const identitySettings = installIdentitySettings(actor => session.setActor(actor
 const drawingEditor = installDrawingEditor(session, canvases);
 const markPreviewBackfill = installMarkPreviewBackfill(session, canvases, () => drawingEditor.active());
 const notify = (message: string) => { toasts.show(message); };
-const workbench = installWorkbench(session, act, openMarkDialog, notify, id=>act(async()=>{const target=await annotationSync.qualityTarget(id);await attachQualityDialog(target,annotationSync.rememberQuality);},'ui.attach-psnr'),()=>annotationSync.scope());
+const workbench = installWorkbench(session, act, openMarkDialog, notify, id=>act(async()=>{
+  const actor = currentActor()?.id, space = annotationSync.scope();
+  const { attachQualityDialog } = await import('./ui/quality-evidence.ts');
+  if (uiEvents.signal.aborted || currentActor()?.id !== actor || annotationSync.scope() !== space) return;
+  const target = await annotationSync.qualityTarget(id);
+  await attachQualityDialog(target,annotationSync.rememberQuality);
+},'ui.attach-psnr'),()=>annotationSync.scope());
 $('toggle-annotations').onclick = () => { if (drawingEditor.active()) $('mark-close').click(); else drawingEditor.open(workbench.selected()); };
 const removeTrackDrag = installTrackDrag(session);
 const sourceActions = installSourceActions(session, act, () => { void workbench.refreshLibrary(); }, notify);
@@ -217,7 +226,11 @@ async function act(action: () => unknown | Promise<unknown>, name = 'ui.action',
   try { await traceOperation('ui', name, { trigger: inputTrigger, data }, action); } catch (e) { showError(e); }
   render();
 }
-for (const canvas of Object.values(canvases)) bindPresentationResources(canvas, session.resources);
+for (const slot of SLOTS) bindPresentationResources(canvases[slot], session.resources, frame => session.recordRecoveredPresentation(slot, frame));
+window.addEventListener('voidplayer:presentation-error', () => {
+  showWarning(tr(msg('player.graphicsRecoveryFailed', '画面恢复失败，请刷新页面；若仍无画面，请完全退出并重新打开浏览器。')));
+}, { signal: uiEvents.signal });
+window.addEventListener('voidplayer:ui-error', event => showError((event as CustomEvent).detail), { signal: uiEvents.signal });
 const annotationSync = installAnnotationSync(session, () => drawingEditor.active());
 const viewport = new Viewport();
 const workspaceTransfer = installWorkspaceTransfer(session, {

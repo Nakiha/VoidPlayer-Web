@@ -29,6 +29,38 @@ const entries=new Map<HTMLCanvasElement,{canvas:HTMLCanvasElement;surface:GpuSur
 // REVIEW-02：跨异步失效守卫。完整 source 列表独立保存，不从已提交 entries 反推；
 // 旧初始化/刷新迟到只清理自己那批，不碰新一代资源。
 const gpuGuard=new GpuPresentationGuard<HTMLCanvasElement>();
+type GpuChange = 'lost' | 'restored';
+const listeners = new Set<(sources: HTMLCanvasElement[], change: GpuChange) => void>();
+let recoveryRemaining = 1;
+export function observeGpuRecovery(listener: (sources: HTMLCanvasElement[], change: GpuChange) => void) {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+}
+function notifyRecovery(sources: HTMLCanvasElement[], change: GpuChange) {
+  for (const listener of listeners) {
+    try { listener(sources, change); } catch (error) { log.warn('media', '图形恢复观察失败。', { reason: String(error) }); }
+  }
+}
+async function deviceLost(token: number, device: unknown, info: { reason: string; message: string }) {
+  if (!gpuGuard.isCurrent(token)) return;
+  const sources = [...entries].filter(([, entry]) => entry.surface.device === device).map(([source]) => source);
+  if (!sources.length) return;
+  active = false;
+  for (const source of sources) {
+    const entry = entries.get(source)!;
+    entry.disabled = true; entry.canvas.hidden = true; source.classList.remove('frame-source');
+    source.dataset.colorOutputReason = 'webgpu-device-lost';
+    try { entry.surface.clear(); } catch { /* Lost devices may reject cleanup submissions. */ }
+  }
+  log.warn('media', 'WebGPU 设备丢失，重绘保留画面。', { reason: info.reason, message: info.message, retry: recoveryRemaining > 0 });
+  notifyRecovery(sources, 'lost');
+  if (!gpuGuard.isCurrent(token) || recoveryRemaining-- <= 0) return;
+  const refreshed = await refreshLocked();
+  if (!gpuGuard.isCurrent(refreshed)) return;
+  const recovered = sources.filter(source => entries.get(source)?.surface.available);
+  if (recovered.length) notifyRecovery(recovered, 'restored');
+  else log.warn('media', 'WebGPU 重建未成功，继续使用兼容呈现路径。');
+}
 function disposeCommittedLocked(){
   active=false;unified=false;experimentalProfile=false;
   for(const [source,entry] of [...entries].reverse()){try{entry.surface.dispose();}catch{}try{entry.canvas.remove();}catch{}try{source.classList.remove('frame-source');}catch{}}
@@ -53,6 +85,7 @@ async function initializeLocked(sources:HTMLCanvasElement[],token:number,geometr
       source.closest('.frame-stage')!.prepend(canvas);
       try{
         const surface=await createExternalSurface(canvas,device,mode);
+        if (!surface.available) { surface.dispose(); throw new Error('WebGPU device lost during initialization'); }
         if(!gpuGuard.isCurrent(token)){try{surface.dispose();}catch{}try{canvas.remove();}catch{}cleanupPending();return;}
         device=surface.device;pending.set(source,{canvas,surface});
       }
@@ -68,6 +101,12 @@ async function initializeLocked(sources:HTMLCanvasElement[],token:number,geometr
     active=true;
     unified=commonPlanes;
     experimentalProfile=requested!==null;
+    const watched = new Set<unknown>();
+    for (const entry of entries.values()) if (!watched.has(entry.surface.device)) {
+      watched.add(entry.surface.device);
+      void entry.surface.lost.then(info => deviceLost(token, entry.surface.device, info))
+        .catch(error => log.warn('media', 'WebGPU 恢复失败，保留兼容路径。', { reason: String(error) }));
+    }
     log.info('media','WebGPU 色彩路径已启用。',{profile:mode,selection:commonPlanes?'explicit-common-planes':requested?'explicit-experiment':'resource-contract',nativeContract:'browser-managed',yuvContract:requested?'experimental-profile':'common-yuv',requestedOutput:getColorOutput().target,actualOutputs:[...entries.values()].map(entry=>entry.surface.outputTarget)});
   }catch(error){
     // 只清理本批候选，不全局 dispose，避免清掉新一代已提交资源。
@@ -76,26 +115,38 @@ async function initializeLocked(sources:HTMLCanvasElement[],token:number,geometr
   }
 }
 export async function initializeGpuPresentation(sources:HTMLCanvasElement[]) {
+  recoveryRemaining = 1;
   const token=gpuGuard.beginInitialize(sources);
   await initializeLocked(sources,token);
 }
-export async function refreshGpuColorMode(){
+async function refreshLocked(){
   const geometryBySource=new Map([...entries].map(([source,entry])=>[source,entry.geometry] as const));
   const {token,sources}=gpuGuard.beginRefresh();
   // 刷新只释放已提交；在途旧初始化看到 epoch 失效后会自行清理，不会被误提交。
   disposeCommittedLocked();
   const targets=sources.length?sources:[...geometryBySource.keys()];
   await initializeLocked(targets,token,geometryBySource);
-  if(!gpuGuard.isCurrent(token))return;
+  if(!gpuGuard.isCurrent(token))return token;
   for(const [source,geometry] of geometryBySource)gpuGeometry(source,geometry);
+  return token;
+}
+export async function refreshGpuColorMode(){
+  recoveryRemaining = 1;
+  await refreshLocked();
 }
 export function gpuGeometry(source:HTMLCanvasElement,g:PresentationGeometry|null){
   const entry=entries.get(source);if(!entry)return false;
+  if (!entry.surface.available) { entry.disabled = true; entry.canvas.hidden = true; source.classList.remove('frame-source'); }
   entry.geometry=g;if(entry.disabled){if(!g){entry.disabled=false;entry.surface.clear();}return false;}
   entry.canvas.hidden=!g;
   source.classList.toggle('frame-source',!!g);
   if(!g)entry.surface.clear();
-  entry.surface.setGeometry(g);return true;
+  try { entry.surface.setGeometry(g); return true; }
+  catch (error) {
+    entry.disabled = true; entry.canvas.hidden = true; source.classList.remove('frame-source');
+    log.warn('media', 'WebGPU 视口重绘失败，使用兼容路径。', { reason: String(error) });
+    return false;
+  }
 }
 const timings=new WeakMap<HTMLCanvasElement,{values:number[];count:number}>();
 export function gpuPaint(source:HTMLCanvasElement,frame:DecodedFrame){
@@ -117,9 +168,12 @@ export function gpuPaint(source:HTMLCanvasElement,frame:DecodedFrame){
   const d=frame.description,swap=rotation===90||rotation===270;
   const width=swap?d.height:d.width,height=swap?d.width:d.height;
   if(source.width!==width)source.width=width;if(source.height!==height)source.height=height;
-  entry.surface.setGeometry(entry.geometry,rotation);
-  const resource=frame.kind==='yuv'?null:frame.sample!.toVideoFrame();
-  try{entry.surface.present(resource??frame);}
+  let resource: VideoFrame | undefined;
+  try{
+    entry.surface.setGeometry(entry.geometry,rotation);
+    resource=frame.kind==='yuv'?undefined:frame.sample!.toVideoFrame();
+    entry.surface.present(resource??frame);
+  }
   catch(error){entry.disabled=true;entry.canvas.hidden=true;entry.surface.clear();source.classList.remove('frame-source');source.dataset.colorOutputReason='webgpu-presentation-failed';log.info('media','WebGPU 资源呈现失败，使用现有呈现路径。',{reason:String(error)});return false;}
   finally{resource?.close();}
   source.dataset.colorExecutor=frame.kind==='yuv'?'webgpu-yuv':nativeHdr?'webgpu-browser-hdr-float':'webgpu-external';

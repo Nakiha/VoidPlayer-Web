@@ -839,6 +839,7 @@ export default {
   "player.fileImportWasSupersededByANewer": () => "［F~i~l~e~ i~m~p~o~r~t~ w~a~s~ s~u~p~e~r~s~e~d~e~d~ b~y~ a~ n~e~w~e~r~ r~e~q~u~e~s~t~. ········］",
   "player.fillView": () => "［F~i~l~l~ v~i~e~w~ ········］",
   "player.frames": (d) => "［" + plural(d.count, 0, en, { one: number("en", d.count, 0) + " f~r~a~m~e~", other: number("en", d.count, 0) + " f~r~a~m~e~s~" }) + " ········］",
+  "player.graphicsRecoveryFailed": () => "［T~h~e~ p~i~c~t~u~r~e~ c~o~u~l~d~ n~o~t~ b~e~ r~e~s~t~o~r~e~d~. R~e~f~r~e~s~h~ t~h~e~ p~a~g~e~; i~f~ i~t~ i~s~ s~t~i~l~l~ m~i~s~s~i~n~g~, f~u~l~l~y~ e~x~i~t~ a~n~d~ r~e~o~p~e~n~ t~h~e~ b~r~o~w~s~e~r~. ········］",
   "player.hdrDisplay": () => "［ · H~D~R~ o~u~t~p~u~t~ ········］",
   "player.hdrSource": () => "［ · H~D~R~ s~o~u~r~c~e~ ········］",
   "player.hdrSourceSdrFallback": () => "［ · H~D~R~ s~o~u~r~c~e~ (S~D~R~ p~r~e~v~i~e~w~) ········］",

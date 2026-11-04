@@ -8,17 +8,19 @@ export function presentationRect(g:PresentationGeometry){const width=g.imageWidt
 export function presentationSampling(sourceWidth: number, geometry: PresentationGeometry) {
   return geometry.imageWidth * geometry.zoom * geometry.dpr > sourceWidth ? 'nearest' : 'bilinear';
 }
-export function createPresentationSurface(source: HTMLCanvasElement) {
+export function createPresentationSurface(source: HTMLCanvasElement, onLost?: () => void, force2d = false) {
   const stage = source.closest<HTMLElement>('.frame-stage');
   if (!stage) return null;
   const canvas = document.createElement('canvas'); canvas.className = 'frame-presentation'; canvas.setAttribute('role', 'img'); canvas.setAttribute('aria-label', source.getAttribute('aria-label') ?? '当前视频画面');
   stage.prepend(canvas);
-  const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: false, antialias: false, preserveDrawingBuffer: true });
+  const gl = force2d ? null : canvas.getContext('webgl', { alpha: true, premultipliedAlpha: false, antialias: false, preserveDrawingBuffer: true });
   const ctx = gl ? null : canvas.getContext('2d');
+  if (!gl && !ctx) { canvas.remove(); return null; }
   let useGl=!!gl,disposed=false;
   canvas.addEventListener('webglcontextlost', () => {
     if(disposed)return;
     useGl=false;canvas.hidden=true;source.classList.remove('frame-source');
+    onLost?.();
   });
   let yuv: ReturnType<typeof createYuvSurface> | null = null;
   let activeYuv=false,yuvRotation=0;
@@ -28,25 +30,31 @@ export function createPresentationSurface(source: HTMLCanvasElement) {
   let texture: WebGLTexture | null = null, program: WebGLProgram | null = null, buffer: WebGLBuffer | null = null;
   let position=0;
   let viewportLocation:WebGLUniformLocation|null=null,originLocation:WebGLUniformLocation|null=null,sizeLocation:WebGLUniformLocation|null=null;
-  if (gl) {
-    const shader = (type: number, code: string) => {
-      const shader = gl.createShader(type)!; gl.shaderSource(shader, code); gl.compileShader(shader);
-      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader) ?? 'Presentation shader failed');
-      return shader;
-    };
-    const vertex = shader(gl.VERTEX_SHADER, 'attribute vec2 position; varying vec2 uv; void main(){ uv=(position+1.0)*0.5; gl_Position=vec4(position,0.0,1.0); }');
-    const fragment = shader(gl.FRAGMENT_SHADER, 'precision highp float; varying vec2 uv; uniform sampler2D image; uniform vec2 viewport; uniform vec2 origin; uniform vec2 size; void main(){ vec2 p=(vec2(uv.x,1.0-uv.y)*viewport-origin)/size; if(any(lessThan(p,vec2(0.0)))||any(greaterThanEqual(p,vec2(1.0)))) discard; gl_FragColor=texture2D(image,p); }');
-    program = gl.createProgram()!; gl.attachShader(program, vertex); gl.attachShader(program, fragment); gl.linkProgram(program);
-    gl.deleteShader(vertex); gl.deleteShader(fragment);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error('Presentation program failed');
-    gl.useProgram(program);
-    buffer = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buffer); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,3,-1,-1,3]), gl.STATIC_DRAW);
-    viewportLocation=gl.getUniformLocation(program,'viewport');originLocation=gl.getUniformLocation(program,'origin');sizeLocation=gl.getUniformLocation(program,'size');
-    position = gl.getAttribLocation(program, 'position'); gl.enableVertexAttribArray(position); gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
-    texture = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  try {
+    if (gl) {
+      const shader = (type: number, code: string) => {
+        const shader = gl.createShader(type)!; gl.shaderSource(shader, code); gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader) ?? 'Presentation shader failed');
+        return shader;
+      };
+      const vertex = shader(gl.VERTEX_SHADER, 'attribute vec2 position; varying vec2 uv; void main(){ uv=(position+1.0)*0.5; gl_Position=vec4(position,0.0,1.0); }');
+      const fragment = shader(gl.FRAGMENT_SHADER, 'precision highp float; varying vec2 uv; uniform sampler2D image; uniform vec2 viewport; uniform vec2 origin; uniform vec2 size; void main(){ vec2 p=(vec2(uv.x,1.0-uv.y)*viewport-origin)/size; if(any(lessThan(p,vec2(0.0)))||any(greaterThanEqual(p,vec2(1.0)))) discard; gl_FragColor=texture2D(image,p); }');
+      program = gl.createProgram()!; gl.attachShader(program, vertex); gl.attachShader(program, fragment); gl.linkProgram(program);
+      gl.deleteShader(vertex); gl.deleteShader(fragment);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error('Presentation program failed');
+      gl.useProgram(program);
+      buffer = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buffer); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,3,-1,-1,3]), gl.STATIC_DRAW);
+      viewportLocation=gl.getUniformLocation(program,'viewport');originLocation=gl.getUniformLocation(program,'origin');sizeLocation=gl.getUniformLocation(program,'size');
+      position = gl.getAttribLocation(program, 'position'); gl.enableVertexAttribArray(position); gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+      texture = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    }
+  } catch (error) {
+    disposed = true; canvas.remove();
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+    throw error;
   }
   function draw() {
     if (!geometry || !geometry.width || !geometry.height || (gl && !useGl)) return;

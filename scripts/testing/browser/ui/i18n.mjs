@@ -224,7 +224,13 @@ await withBrowserFixture({caseName:'i18n-dialogs',engine,pageOptions:{viewport:{
  assert.equal(await sampleRow.locator('[data-action=cancel-load]').getAttribute('aria-label'),'Cancel load: sample.mp4');
  assert.equal(await sampleRow.locator('[data-action=cancel-load]').evaluate(e=>e===window.__cancel&&e===document.activeElement),true);
  assert.equal(await page.locator('#source-activity-details').isVisible(),false,'loading details remain collapsed by default');
- assert.match(await page.locator('#source-activity-track-A').getAttribute('aria-description'),/Reading video information/i);
+ // Stalled byte IO does not freeze a particular milestone. Check the live
+ // stage's translation even when decoder setup advances before the switch.
+ const load = await page.evaluate(()=>window.voidPlayer.getState().mediaLoad);
+ const stageText={queued:'Preparing to load',download:'Reading video data',decode:'Selecting a decoder',inspect:'Reading video information',
+  index:'Building the frame index',decoder:'Starting the software decoder','first-frame':'Decoding the first frame',synchronize:'Seeking to the current position'};
+ assert.equal(load.state,'loading');assert.equal(load.slot,'A');
+ assert.equal(await page.locator('#source-activity-track-A').getAttribute('aria-description'),stageText[load.stage]);
  await switchLanguage('zh-CN');assert.equal(await cancel.evaluate(e=>e===window.__cancel),true);await cancel.click();
  for(const route of stalled)await route.abort();await page.unroute(`**/api/media/${sample.id}?*`);
  await page.evaluate(async id=>{await window.voidPlayer.tools.find(t=>t.name==='load_library_item').execute({slot:'A',id});},library.entries.find(e=>e.name==='sample.mp4').id);

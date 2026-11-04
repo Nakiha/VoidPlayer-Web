@@ -3378,6 +3378,10 @@
     "source": "{count, plural, other {# 帧}}",
     "translation": "{count, plural, one {# frame} other {# frames}}"
   },
+  "player.graphicsRecoveryFailed": {
+    "source": "画面恢复失败，请刷新页面；若仍无画面，请完全退出并重新打开浏览器。",
+    "translation": "The picture could not be restored. Refresh the page; if it is still missing, fully exit and reopen the browser."
+  },
   "player.hdrDisplay": {
     "source": " · HDR 输出",
     "translation": " · HDR output",

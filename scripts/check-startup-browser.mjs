@@ -26,6 +26,18 @@ try {
     for (const theme of ['dark', 'light']) {
       const page = await browser.newPage({locale:'zh-CN',  colorScheme: theme });
       const errors = []; page.on('pageerror', error => errors.push(error.message));
+      const qualityRequests = [], parserRequests = [];
+      page.on('request', request => {
+        if (/\/src\/ui\/quality-(?:roi|evidence)\.ts/.test(request.url())) qualityRequests.push(request.url());
+        if (/mediabunny|\/src\/analysis\/metadata\/native-adapter\.ts/.test(request.url())) parserRequests.push(request.url());
+      });
+      let healthRequests = 0, releaseHealth;
+      const healthGate = new Promise(resolve => { releaseHealth = resolve; });
+      await page.route('**/api/health', async route => {
+        healthRequests++;
+        await healthGate;
+        await route.continue();
+      });
       await page.addInitScript(() => {
         // Hold GPU setup after shell insertion; no real GPU/decode is needed here.
         window.releaseStartupGpu = null;
@@ -56,9 +68,23 @@ try {
       await page.waitForFunction(() => window.startupFrames.length > 2);
       assert.ok((await page.evaluate(() => window.startupFrames)).every(frame => frame.ready && frame.single && !frame.inert));
       assert.deepEqual(errors, []);
+      releaseHealth();
       await page.locator('#identity-welcome').waitFor();
+      assert.equal(qualityRequests.length, 0, 'unused measurement and evidence dialogs do not load at startup');
+      assert.equal(parserRequests.length, 0, 'media parsing is loaded only when a media source is opened');
+      assert.equal(healthRequests, 1, 'welcome reuses the initial identity confirmation');
       await page.locator('#identity-welcome').evaluate(async el => { await Promise.all(el.getAnimations({ subtree: true }).map(a => a.finished)); });
       await page.screenshot({ path: `/tmp/voidplayer-startup-${name}-${theme}.png` });
+      if (theme === 'dark') {
+        await page.locator('#identity-welcome [data-guest]').click();
+        await page.locator('#identity-welcome').waitFor({state:'detached'});
+        await page.locator('#settings-open').click();
+        await page.locator('#settings-tab-experimental').click();
+        await page.locator('#quality-roi-open').click();
+        await page.locator('#quality-roi-dialog').waitFor({state:'visible'});
+        assert.ok(qualityRequests.length > 0, 'measurement loads on explicit use');
+        await page.locator('#quality-roi-dialog .icon-button').click();
+      }
       await page.close();
     }
     // Static bootstrap dependencies fail before bootstrap's try/catch runs.
@@ -110,6 +136,12 @@ try {
     assert.equal(await built.locator('#startup-fallback').isVisible(), false);
     assert.deepEqual(builtErrors, []);
     await built.close();
+    const guide = await browser.newPage({locale:'zh-CN'}), guidePlayerRequests = [];
+    guide.on('request', request => { if (/\/assets\/main-[^/]+\.js/.test(request.url())) guidePlayerRequests.push(request.url()); });
+    await guide.goto(builtBase + '/connection');
+    await guide.locator('#connection-unavailable').waitFor({state:'visible'});
+    assert.equal(guidePlayerRequests.length, 0, 'connection guide does not preload the player graph');
+    await guide.close();
     // A hanging request has no error event. The deadline exposes the fallback, while
     // a late successful load must be able to replace the fallback with the UI.
     const slow = await browser.newPage({locale:'zh-CN'});

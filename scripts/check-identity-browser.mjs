@@ -51,11 +51,14 @@ try {
   const settled = (...pages) => Promise.all(pages.map(p => p.waitForLoadState('networkidle')));
   const settings = async p => { await p.locator('#settings-open').click(); await p.locator('#settings-tab-identity').click(); await p.waitForFunction(() => !document.querySelector('#identity-name').disabled); await settled(p); if ((await p.locator('#identity-current').innerText()) !== '访客') { await p.locator('#identity-users').click(); await p.locator('#identity-users-menu [data-value=rename]').click(); } };
   if (insecure) await routeInsecureTestOrigin(page);
+  const guidePlayerRequests = [];
+  if (insecure) page.on('request', request => { if (/\/assets\/main-[^/]+\.js/.test(request.url())) guidePlayerRequests.push(request.url()); });
   const initial = await page.goto(base);
   if (insecure) {
     await page.locator('#connection-unavailable').waitFor({ state: 'visible' });
     assert.equal(await page.evaluate(() => isSecureContext), false);
     assert.equal(await page.evaluate(() => typeof window.voidPlayer), 'undefined');
+    assert.equal(guidePlayerRequests.length, 0, 'ordinary HTTP guide does not preload player modules');
     assert.deepEqual(errors, []);
     console.log('PASS ordinary HTTP: dedicated HTTPS guide, player not initialized');
   } else {

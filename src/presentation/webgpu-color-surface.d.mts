@@ -2,6 +2,7 @@ import type { DecodedFrame } from '../media/contract.ts';
 import type { PresentationGeometry } from './presentation-surface.ts';
 export interface GpuSurface {
   device: unknown;
+  lost: Promise<{ reason: string; message: string }>;
   available: boolean;
   outputTarget: 'sdr' | 'hdr';
   outputFallbackReason: string | null;

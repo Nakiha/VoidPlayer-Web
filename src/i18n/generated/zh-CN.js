@@ -839,6 +839,7 @@ export default {
   "player.fileImportWasSupersededByANewer": () => "文件导入已被新的请求取代。",
   "player.fillView": () => "填满视图",
   "player.frames": (d) => plural(d.count, 0, zh, { other: number("zh", d.count, 0) + " 帧" }),
+  "player.graphicsRecoveryFailed": () => "画面恢复失败，请刷新页面；若仍无画面，请完全退出并重新打开浏览器。",
   "player.hdrDisplay": () => " · HDR 输出",
   "player.hdrSource": () => " · HDR 源",
   "player.hdrSourceSdrFallback": () => " · HDR 源（SDR 预览）",

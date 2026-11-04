@@ -1,4 +1,4 @@
-import { showQualityEvidence } from './quality-evidence.ts';
+import { currentActor } from '../services/identity.ts';
 import type { Mark, Slot } from '../../shared/review/model.ts';
 import { formatTime } from '../../shared/review/model.ts';
 import { annotationThumbnails } from './annotation-thumbnails.ts';
@@ -85,7 +85,16 @@ export function installAnnotationPanel(
     const space=qualitySpace?.();if(space&&space!=='local'){const measure=document.createElement('a');measure.className='annotation-measure-psnr';measure.href=`/admin/?qualitySpace=${encodeURIComponent(space)}&qualityAnnotation=${encodeURIComponent(mark.id)}#quality`;measure.target='_blank';measure.rel='noopener';measure.textContent=t(msg('qualityWorkflow.measureForMark','测量并关联 PSNR'));measure.onclick=e=>e.stopPropagation();actions.append(measure);}
     if(mark.qualityEvidence?.length||mark.cambiEvidence?.length){
       const evidence=document.createElement('button');evidence.type='button';evidence.className='annotation-psnr-evidence';evidence.textContent=`${mark.cambiEvidence?.length?'CAMBI':'PSNR'} (${(mark.qualityEvidence?.length??0)+(mark.cambiEvidence?.length??0)})`;
-      evidence.onclick=e=>{e.stopPropagation();hidePreview();const snapshot=session.exportWorkspace(location.origin+'/');const original=snapshot.marks.find(m=>m.id===mark.id);if(original)showQualityEvidence(original,{mark:original,media:snapshot.media},qualitySpace?.());};actions.append(evidence);
+      evidence.onclick=async e=>{
+        e.stopPropagation();hidePreview();
+        const actor = currentActor()?.id, space = qualitySpace?.();
+        try {
+          const { showQualityEvidence } = await import('./quality-evidence.ts');
+          if (lifecycle.signal.aborted || currentActor()?.id !== actor || qualitySpace?.() !== space) return;
+          const snapshot = session.exportWorkspace(location.origin+'/'), original = snapshot.marks.find(m=>m.id===mark.id);
+          if (original) showQualityEvidence(original,{mark:original,media:snapshot.media},space);
+        } catch (error) { window.dispatchEvent(new CustomEvent('voidplayer:ui-error', { detail: error })); }
+      };actions.append(evidence);
     }
     return actions;
   }

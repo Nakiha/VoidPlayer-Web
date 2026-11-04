@@ -19,14 +19,13 @@ import { loadAborted, onLoadAbort } from '../../shared/media/io/media-abort.ts';
 import { randomUUID } from '../../shared/utils/uuid.ts';
 import type { RandomAccessInput } from '../../shared/media/io/range-reader.ts';
 import { MediaOpenError } from '../../shared/media/io/media-errors.ts';
-import { Input, BlobSource, UrlSource, ALL_FORMATS, IsobmffInputFormat, VideoSampleSink, UnsupportedInputFormatError } from 'mediabunny';
-import type { VideoSample } from 'mediabunny';
-import { NativeAnalysisAdapter } from '../analysis/metadata/native-adapter.ts';
+import type { Input, VideoSampleSink, VideoSample } from 'mediabunny';
 import type { MediaInfo } from '../../shared/media/types.ts';
 import { contextLog } from '../logging/log.ts';
 import { preferredVideoConfig } from './policy/decoder-policy.ts';
 
 export async function inspectVideoTrack(input: Input) {
+  const { UnsupportedInputFormatError } = await import('mediabunny');
   let format;
   try { format = await input.getFormat(); }
   catch (error) {
@@ -84,13 +83,19 @@ async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftwa
     const software = packetJs ? () => tsAdmission.open(true) : customSoftware ?? (packetMp4 ? () => openMp4Packet(true)
       : ffmpegPlan ? openFfmpeg : () => openSoftwareMedia(input, meta, { signal, onProgress }, container));
     const countedSoftware = async () => { softwareOpens++; return software(); };
+    const openBrowser = async () => {
+      const { Input, BlobSource, UrlSource, ALL_FORMATS } = await import('mediabunny');
+      loadAborted(signal);
+      return openWebCodecsInput(new Input({ source: 'file' in input ? new BlobSource(input.file) : new UrlSource(input.url), formats: ALL_FORMATS }),
+        meta, signal, onProgress, input, reference);
+    };
     const native = async () => {
       nativeOpens++;
       return container === 'flv'
         ? (async () => { const { openFlvMedia } = await import('./decoding/flv-media.ts'); return openFlvMedia(input, meta, { signal, onProgress, rawNative: reference, nativePresentedLibrary }); })()
         : packetJs ? tsAdmission.open(false) : packetMp4 ? openMp4Packet(false)
           : ffmpegPlan && !customSoftware ? openFfmpeg()
-            : openWebCodecsInput(new Input({ source: 'file' in input ? new BlobSource(input.file) : new UrlSource(input.url), formats: ALL_FORMATS }), meta, signal, onProgress, input, reference);
+            : openBrowser();
     };
     contextLog().info('media', '媒体适配器选择', { container, mp4DemuxPlan, tsDemuxPlan:tsAdmission?.kind, input: 'file' in input ? 'local' : 'remote', reference,
       preference: reference ? preference.decoder : 'hardware', software: packetJs?(container==='matroska'?'packet-matroska':'packet-ts'):container === 'flv' ? 'packet-flv' : container === 'isobmff' ? 'packet-mp4' : 'ffmpeg-container' });
@@ -147,6 +152,10 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
     // the WASM fallback exists precisely for that case.
     throw new MediaOpenError('decode', '当前浏览器不支持 WebCodecs。请通过 localhost 或 HTTPS，在支持的桌面浏览器中打开。');
     }
+    const [{ IsobmffInputFormat, VideoSampleSink }, { NativeAnalysisAdapter }] = await Promise.all([
+      import('mediabunny'), import('../analysis/metadata/native-adapter.ts'),
+    ]);
+    loadAborted(signal);
     onProgress?.('inspect');
     const { track, codec, format } = await inspectVideoTrack(input);
     if (!await track.canDecode()) throw new MediaOpenError('decode', `已识别 ${format} / ${codec}，但当前浏览器不支持该编码配置的解码。`);

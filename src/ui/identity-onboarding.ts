@@ -3,14 +3,15 @@ import { onLanguageChange, t, th, msg } from '../i18n.ts';
 import { icon } from './icons.ts';
 
 type User = { id: string; name: string };
-let pending: Promise<void> | undefined;
-/** Player and admin share one explicit identity choice; read requests never create identities. */
-export function chooseInitialIdentity(signal: AbortSignal): Promise<void> {
+let pending: Promise<boolean> | undefined;
+/** Confirm identity once, complete any initial choice, and report whether user management is available. */
+export function chooseInitialIdentity(signal: AbortSignal): Promise<boolean> {
   return pending ??= choose(signal).finally(() => { pending = undefined; });
 }
 async function choose(signal: AbortSignal) {
   const health = await identityHealth();
-  if (!health.capabilities?.admin || currentActor() || signal.aborted) return;
+  if (!health.capabilities?.admin || signal.aborted) return false;
+  if (currentActor()) return true;
   let busy = false, closing = false, expanded = false, active = -1;
   let users: User[] = [], filtered: User[] = [], listState: 'loading' | 'ready' | 'error' = 'loading';
   let completeWelcome!: () => void;
@@ -185,4 +186,5 @@ async function choose(signal: AbortSignal) {
   window.visualViewport?.removeEventListener('resize', positionDropdown);
   window.visualViewport?.removeEventListener('scroll', positionDropdown);
   welcome.remove();
+  return !signal.aborted;
 }

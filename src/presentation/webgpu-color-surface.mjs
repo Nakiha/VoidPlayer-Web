@@ -8,7 +8,7 @@ import { createBrowserHdrBridge } from './browser-hdr-bridge.mjs';
 // One submission per microtask across canvases. Flush before overwriting a
 // resource already referenced by queued commands. Frame closure follows submit.
 const batches=new WeakMap();
-function flush(device){const batch=batches.get(device);if(!batch?.commands.length)return;const commands=batch.commands.splice(0);batch.surfaces.clear();device.queue.submit(commands);for(const close of batch.closes.splice(0))close();}
+function flush(device){const batch=batches.get(device);if(!batch?.commands.length)return;const commands=batch.commands.splice(0);batch.surfaces.clear();try{device.queue.submit(commands);}finally{for(const close of batch.closes.splice(0))close();}}
 function beforeWrite(device,token){if(batches.get(device)?.surfaces.has(token))flush(device);}
 function submit(device,token,command){let batch=batches.get(device);if(!batch){batch={commands:[],surfaces:new Set(),closes:[]};batches.set(device,batch);}const schedule=!batch.commands.length;batch.commands.push(command);batch.surfaces.add(token);if(schedule)queueMicrotask(()=>flush(device));}
 function retire(device,frame){if(!frame)return;const batch=batches.get(device);if(batch?.commands.length)batch.closes.push(()=>frame.close());else frame.close();}
@@ -21,11 +21,15 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
   const device = sharedDevice ?? await adapter.requestDevice();
   const ownsDevice = !sharedDevice;const token={};
   const errors = [];
-  const onError = e => errors.push(e.error.message);
+  const onError = e => { errors.push(e.error.message); if (errors.length > 32) errors.shift(); };
   device.addEventListener('uncapturederror', onError);
   if (!['external','copy','hybrid','planes','webkit-planes'].includes(mode)) throw new Error('Unknown GPU input mode');
   let lost = false, disposed = false, current, copiedTexture, copiedWidth=0, copiedHeight=0, copiedFormat;
-  device.lost.then(() => { lost = true; });
+  device.lost.then(() => {
+    lost = true;
+    const batch = batches.get(device);
+    if (batch) { batch.commands.length = 0; batch.surfaces.clear(); for (const close of batch.closes.splice(0)) close(); }
+  });
   let geometry=null,rotation=0;
   let context, externalUniform, yuvBuffer, yuvSize=0, yuvUniform, yuvParams, browserHdrBridge;
   try {
@@ -110,7 +114,7 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
     outputConfiguration:{displayHdr,format,colorSpace:hdrOutput?'display-p3':'srgb',toneMapping:hdrOutput?'extended':'standard'},
     setGeometry(g,r=rotation){if(JSON.stringify(g)===JSON.stringify(geometry)&&r===rotation)return;geometry=g;rotation=r;if(current&&g)this.presentRetained();},
     presentRetained(){const w=geometry?Math.max(1,Math.round(geometry.width*geometry.dpr)):canvas.width,h=geometry?Math.max(1,Math.round(geometry.height*geometry.dpr)):canvas.height;if(canvas.width!==w)canvas.width=w;if(canvas.height!==h)canvas.height=h;if(current?.yuv&&yuvParams)yuvParams[3]=presentationChannelCode(getPresentationChannel());render(context.getCurrentTexture(),format,geometry?geometry.imageWidth*geometry.zoom*geometry.dpr<current.displayWidth:w<current.displayWidth);},
-    device, adapter: adapter ? {vendor:adapter.info?.vendor,architecture:adapter.info?.architecture,device:adapter.info?.device} : null,errors,
+    device, lost: device.lost, adapter: adapter ? {vendor:adapter.info?.vendor,architecture:adapter.info?.architecture,device:adapter.info?.device} : null,errors,
     // Own one clone so paused redraw and capture use precisely the same resource.
     present(frame,width=frame.displayWidth,height=frame.displayHeight) {
       beforeWrite(device,token);

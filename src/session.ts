@@ -909,6 +909,12 @@ export class ReviewSession {
     recordPresentedFrame(track.source, frame);
     track.frame = this.frameInfo(frame);
   }
+  /** Presentation-only recovery cannot advance time or publish a stale source's facts. */
+  recordRecoveredPresentation(slot: Slot, frame: DecodedFrame) {
+    const track = this.tracks.get(slot), token = this.presentedFrames.get(slot);
+    if (!track || track.failure || !token || token.commit !== frame.presentedCommit || token.sourcePtsUs !== frame.sourcePtsUs) return;
+    if (recordPresentedFrame(track.source, frame)) this.emit();
+  }
   private frameInfo(frame: FrameInfo): FrameInfo {
     return { ptsUs: frame.ptsUs, sourcePtsUs: frame.sourcePtsUs, durationUs: frame.durationUs };
   }

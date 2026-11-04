@@ -837,6 +837,7 @@ export interface Sources {
   "player.fileImportWasSupersededByANewer": "文件导入已被新的请求取代。";
   "player.fillView": "填满视图";
   "player.frames": "{count, plural, other {# 帧}}";
+  "player.graphicsRecoveryFailed": "画面恢复失败，请刷新页面；若仍无画面，请完全退出并重新打开浏览器。";
   "player.hdrDisplay": " · HDR 输出";
   "player.hdrSource": " · HDR 源";
   "player.hdrSourceSdrFallback": " · HDR 源（SDR 预览）";
@@ -2430,6 +2431,7 @@ export interface MessageParameters {
   "player.fileImportWasSupersededByANewer": {  };
   "player.fillView": {  };
   "player.frames": { "count": number };
+  "player.graphicsRecoveryFailed": {  };
   "player.hdrDisplay": {  };
   "player.hdrSource": {  };
   "player.hdrSourceSdrFallback": {  };

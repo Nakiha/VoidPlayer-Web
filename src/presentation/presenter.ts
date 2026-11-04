@@ -1,5 +1,6 @@
 import type { SessionResources } from '../session/resources.ts';
-import { gpuPaint, gpuCapture, gpuGeometry, gpuFallbackGeometry, disposeGpuPresentation } from './webgpu-presenter.ts';
+import { gpuPaint, gpuCapture, gpuGeometry, gpuFallbackGeometry, disposeGpuPresentation, observeGpuRecovery } from './webgpu-presenter.ts';
+import { retainPresentationFrame } from './retained-frame.ts';
 import { yuvToRgba, yuvPixelRgb, resolveYuvColor } from '../../shared/color/yuv-color.ts';
 import { getPresentationChannel } from './presentation-channel.ts';
 import { validateDescription } from '../../shared/media/frame-description.ts';
@@ -20,7 +21,13 @@ import { HDR_PREVIEW_POLICY } from '../../shared/color/hdr-policy.ts';
 let presentedCommit = 0;
 const performanceSamples = new WeakMap<HTMLCanvasElement, { copy: number[]; submit: number[]; count: number }>();
 export function paintFrame(canvas: HTMLCanvasElement, frame: DecodedFrame) {
-  const record=()=>{frame.presentedCommit=++presentedCommit;const requestedTarget=getColorOutput().target,hdr=canvas.dataset.displayTarget==='hdr',displayHdr=hdrDisplayAvailable();frame.presentation={requestedTarget,actualTarget:hdr?'hdr':'sdr',captureTarget:'sdr',executor:canvas.dataset.colorExecutor??'unknown',contract:canvas.dataset.colorContract??'unknown',displayHdr,outputColorSpace:hdr?'display-p3':'srgb',outputFormat:hdr?'float16':'unorm8',toneMapping:hdr?'extended':'standard',...(requestedTarget==='hdr'&&!hdr?{fallbackReason:canvas.dataset.colorOutputReason??(!displayHdr?'hdr-display-unavailable':'webgpu-not-ready')}: {})};};
+  paintFrameNow(canvas, frame);
+  const retained = retainPresentationFrame(frame, captureBudgets.get(canvas));
+  retainedFrames.get(canvas)?.close();
+  retainedFrames.set(canvas, retained);
+}
+function paintFrameNow(canvas: HTMLCanvasElement, frame: DecodedFrame, recovering = false) {
+  const record=()=>{if(!recovering)frame.presentedCommit=++presentedCommit;const requestedTarget=getColorOutput().target,hdr=canvas.dataset.displayTarget==='hdr',displayHdr=hdrDisplayAvailable();frame.presentation={requestedTarget,actualTarget:hdr?'hdr':'sdr',captureTarget:'sdr',executor:canvas.dataset.colorExecutor??'unknown',contract:canvas.dataset.colorContract??'unknown',displayHdr,outputColorSpace:hdr?'display-p3':'srgb',outputFormat:hdr?'float16':'unorm8',toneMapping:hdr?'extended':'standard',...(requestedTarget==='hdr'&&!hdr?{fallbackReason:canvas.dataset.colorOutputReason??(!displayHdr?'hdr-display-unavailable':'webgpu-not-ready')}: {})};};
   if(gpuPaint(canvas,frame)){
     // GPU warmup may finish after a GL frame. Retire its viewport surface only
     // after successful GPU presentation; two visible surfaces retain stale pixels.
@@ -30,7 +37,7 @@ export function paintFrame(canvas: HTMLCanvasElement, frame: DecodedFrame) {
   canvas.dataset.displayTarget='sdr';canvas.dataset.captureTarget='sdr';
   canvas.dataset.colorContract=frame.kind==='yuv'?(presentationColor(frame.kind,frame.description).hdr?'common-yuv-hdr-preview':'common-yuv-sdr'):frame.kind==='rgba8'?'rgba-resource':'browser-managed';
   const fallbackGeometry=gpuFallbackGeometry(canvas);
-  if(fallbackGeometry&&!surfaces.has(canvas)){const surface=createPresentationSurface(canvas);if(surface){surfaces.set(canvas,surface);surface.geometry(fallbackGeometry);}}
+  if(fallbackGeometry&&!surfaces.has(canvas)){const surface=createFallbackSurface(canvas);if(surface)surface.geometry(fallbackGeometry);}
   const start=performance.now();
   paintFrameContent(canvas,frame);
   if(frame.kind!=='yuv')canvas.dataset.colorExecutor=frame.kind==='rgba8'?'rgba-upload':'browser-managed';
@@ -119,7 +126,48 @@ function paintFrameContent(canvas: HTMLCanvasElement, frame: DecodedFrame) {
 
 const captureBudgets = new WeakMap<HTMLCanvasElement, SessionResources>();
 const captureLeases = new Map<HTMLCanvasElement, () => void>();
-export function bindPresentationResources(canvas: HTMLCanvasElement, resources: SessionResources) { captureBudgets.set(canvas, resources); }
+const retainedFrames = new Map<HTMLCanvasElement, DecodedFrame>();
+const recoveryObservers = new WeakMap<HTMLCanvasElement, (frame: DecodedFrame) => void>();
+const cpuFallback = new WeakSet<HTMLCanvasElement>();
+export function bindPresentationResources(canvas: HTMLCanvasElement, resources: SessionResources, recovered?: (frame: DecodedFrame) => void) {
+  captureBudgets.set(canvas, resources);
+  if (recovered) recoveryObservers.set(canvas, recovered);
+}
+function createFallbackSurface(canvas: HTMLCanvasElement) {
+  let surface: ReturnType<typeof createPresentationSurface> = null;
+  try {
+    surface = createPresentationSurface(canvas, () => {
+      if (!surface || surfaces.get(canvas) !== surface) return;
+      cpuFallback.add(canvas);
+      recoverFrame(canvas, true);
+    }, cpuFallback.has(canvas));
+  } catch (error) {
+    if (cpuFallback.has(canvas)) throw error;
+    cpuFallback.add(canvas);
+    log.warn('media', 'WebGL 初始化失败，使用兼容画布。', { reason: String(error) });
+    surface = createPresentationSurface(canvas, undefined, true);
+  }
+  if (surface) surfaces.set(canvas, surface);
+  return surface;
+}
+function recoverFrame(canvas: HTMLCanvasElement, replaceSurface = false) {
+  const frame = retainedFrames.get(canvas);
+  if (!frame || !currentGeometry.get(canvas)) return;
+  try {
+    if (replaceSurface) { const surface = surfaces.get(canvas); surfaces.delete(canvas); surface?.dispose(); }
+    const geometry = currentGeometry.get(canvas)!;
+    if (!surfaces.has(canvas) && !gpuGeometry(canvas, geometry)) createFallbackSurface(canvas)?.geometry(geometry);
+    paintFrameNow(canvas, frame, true);
+    recoveryObservers.get(canvas)?.(frame);
+    canvas.dataset.presentationRecovery = 'ready';
+    log.info('media', '图形资源恢复后已重绘同一帧。', { canvas: canvas.id, sourcePtsUs: frame.sourcePtsUs, executor: canvas.dataset.colorExecutor });
+  } catch (error) {
+    canvas.dataset.presentationRecovery = 'failed';
+    log.warn('media', '图形画面恢复失败。', { canvas: canvas.id, reason: String(error) });
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('voidplayer:presentation-error', { detail: error }));
+  }
+}
+observeGpuRecovery(sources => { for (const source of sources) recoverFrame(source); });
 /** Materialize source-sized pixels on demand; playback never calls this. */
 export function captureFrame(canvas: HTMLCanvasElement) {
   const resources = captureBudgets.get(canvas), bytes = canvas.width * canvas.height * 4;
@@ -226,14 +274,18 @@ const currentGeometry=new WeakMap<HTMLCanvasElement,PresentationGeometry|null>()
 export function observePresentationGeometry(canvas:HTMLCanvasElement,listener:(g:PresentationGeometry|null)=>void){const set=geometryObservers.get(canvas)??new Set();set.add(listener);geometryObservers.set(canvas,set);listener(currentGeometry.get(canvas)??null);return()=>{set.delete(listener);if(!set.size)geometryObservers.delete(canvas);};}
 export function setPresentationGeometry(canvas: HTMLCanvasElement, geometry: PresentationGeometry | null) {
   currentGeometry.set(canvas,geometry);for(const listener of geometryObservers.get(canvas)??[]){try{listener(geometry);}catch{}}
-  if (!geometry) { captureLeases.get(canvas)?.(); captureLeases.delete(canvas); }
+  if (!geometry) {
+    captureLeases.get(canvas)?.(); captureLeases.delete(canvas);
+    retainedFrames.get(canvas)?.close(); retainedFrames.delete(canvas); cpuFallback.delete(canvas);
+  }
   if(gpuGeometry(canvas,geometry))return;
   if (!geometry) {
     if (surfaces.has(canvas)) { surfaces.get(canvas)!.dispose(); surfaces.delete(canvas); canvas.width = canvas.height = 1; }
     return;
   }
-  if (!surfaces.has(canvas) && geometry) { const surface = createPresentationSurface(canvas); if (surface) surfaces.set(canvas, surface); }
+  if (!surfaces.has(canvas) && geometry) createFallbackSurface(canvas);
   surfaces.get(canvas)?.geometry(geometry);
 }
 export function disposePresentation() {
+  for (const [canvas, frame] of retainedFrames) { frame.close(); cpuFallback.delete(canvas); } retainedFrames.clear();
   for (const release of captureLeases.values()) release(); captureLeases.clear(); disposeGpuPresentation(); for (const surface of surfaces.values()) surface.dispose(); surfaces.clear(); }

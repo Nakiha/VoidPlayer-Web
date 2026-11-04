@@ -1,7 +1,7 @@
 import { t, onLanguageChange, msg } from '../i18n.ts';
 import { chooseInitialIdentity } from './identity-onboarding.ts';
 import { installChoiceMenu } from './choice-menu.ts';
-import { chooseIdentity, currentActor, identityHealth } from '../services/identity.ts';
+import { chooseIdentity, currentActor } from '../services/identity.ts';
 import type { Actor } from '../services/identity.ts';
 
 export function installIdentitySettings(setActor: (actor: Actor | null) => void) {
@@ -49,8 +49,9 @@ export function installIdentitySettings(setActor: (actor: Actor | null) => void)
     render();
   }
   async function refresh() {
-    try { const health = await identityHealth(); if (!health.capabilities?.admin) return; await chooseInitialIdentity(life.signal); await refreshUsers(); }
-    catch (error) { if (!life.signal.aborted) $('message').textContent = (error as Error).message; }
+    try {
+      if (await chooseInitialIdentity(life.signal)) await refreshUsers();
+    } catch (error) { if (!life.signal.aborted) $('message').textContent = (error as Error).message; }
   }
   input.addEventListener('focus', () => { if (unchangedGuest()) input.select(); }, { signal: life.signal });
   input.addEventListener('input', () => { defaultedGuest = false; $('message').textContent = ''; render(); }, { signal: life.signal });
