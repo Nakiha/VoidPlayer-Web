@@ -353,7 +353,7 @@ test('packaging rejects stale frontend versions, revisions and release modes', (
   assert.throws(() => verifyFrontendIdentity(null, identity), /Frontend build version/);
 });
 
-const locked = { bunVersion: '1.4.2', coreSource: { revision: 'b'.repeat(40) }, analysisSource: {revision:'c'.repeat(40)} };
+const locked = { bunVersion: '1.4.4', coreSource: { revision: 'b'.repeat(40) }, analysisSource: {revision:'c'.repeat(40)} };
 async function makeSet(root        , mutate = (_     , __        ) => {}) {
   const directory = path.join(root, 'set'); await mkdir(directory, { recursive: true });
   const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot , 'System32', 'tar.exe') : 'tar';
