@@ -20,6 +20,8 @@ The shared contract unifies index identity, lifecycle, progress, persistence, tr
 
 The media index identity is `(media ID, media version, kind, stream key, schema version, indexer build)`. SQLite stores identity-keyed manifests and sequence-keyed batches. FFmpeg metadata includes source size, stream index, codec, time base, dimensions, and core build SHA. Release checks require index ABI v3, stream ABI v2, 48-byte records, the scan/export/import symbols, and a core build ID matching the pinned revision.
 
+Mediabunny-backed TS, Matroska and MP4 playback identities include the dependency version from `shared/media/mediabunny-version.ts`, which must match `package.json`. A parser upgrade changes this namespace; old documents cannot be reused under the new identity. Metadata probes record the same parser version. Existing frozen quality witnesses are not relabeled.
+
 The lifecycle keeps four facts separate:
 
 1. **Presentation ready:** the first presentable frame is available.

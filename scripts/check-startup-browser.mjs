@@ -29,7 +29,7 @@ try {
       const qualityRequests = [], parserRequests = [];
       page.on('request', request => {
         if (/\/src\/ui\/quality-(?:roi|evidence)\.ts/.test(request.url())) qualityRequests.push(request.url());
-        if (/mediabunny|\/src\/analysis\/metadata\/native-adapter\.ts/.test(request.url())) parserRequests.push(request.url());
+        if (/\/node_modules\/mediabunny\/|\/mediabunny\.js(?:\?|$)|\/src\/analysis\/metadata\/native-adapter\.ts/.test(request.url())) parserRequests.push(request.url());
       });
       let healthRequests = 0, releaseHealth;
       const healthGate = new Promise(resolve => { releaseHealth = resolve; });
@@ -71,7 +71,7 @@ try {
       releaseHealth();
       await page.locator('#identity-welcome').waitFor();
       assert.equal(qualityRequests.length, 0, 'unused measurement and evidence dialogs do not load at startup');
-      assert.equal(parserRequests.length, 0, 'media parsing is loaded only when a media source is opened');
+      assert.equal(parserRequests.length, 0, `media parsing is loaded only when a media source is opened: ${parserRequests.join(', ')}`);
       assert.equal(healthRequests, 1, 'welcome reuses the initial identity confirmation');
       await page.locator('#identity-welcome').evaluate(async el => { await Promise.all(el.getAnimations({ subtree: true }).map(a => a.finished)); });
       await page.screenshot({ path: `/tmp/voidplayer-startup-${name}-${theme}.png` });

@@ -1,5 +1,6 @@
 import type {TsPacketIndex,TsPacketRecord} from '../indexing/ts-packet-index.ts';
-export const MATROSKA_PACKET_BUILD='mediabunny-1.55.7-matroska-packets-v6';
+import { MEDIABUNNY_VERSION } from '../mediabunny-version.ts';
+export const MATROSKA_PACKET_BUILD = `mediabunny-${MEDIABUNNY_VERSION}-matroska-packets-v6` as const;
 export interface MatroskaPacketRecord extends Omit<TsPacketRecord,'timing'|'pesOffset'> {
   blockOffset:number;
   payloadOffset:number;

@@ -1,6 +1,8 @@
+import { MEDIABUNNY_VERSION } from '../mediabunny-version.ts';
+
 /** Versioned JS TS metadata shape; complete-source verification belongs to TsPacketSource. */
 export const JS_TS_INDEX_BYTES = 64 * 1024 * 1024;
-export const TS_PACKET_BUILD = 'mediabunny-1.55.7-ts-packets-v6';
+export const TS_PACKET_BUILD = `mediabunny-${MEDIABUNNY_VERSION}-ts-packets-v6` as const;
 export interface TsPacketRecord {
   au: number;
   transportEnd?:number;

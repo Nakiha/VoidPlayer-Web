@@ -5,6 +5,7 @@ import {withBrowserFixture} from '../../browser-fixture.mjs';
 import {repositoryRoot} from '../../manifest.mjs';
 import {verifyPlaybackPresentation} from '../../playback-presentation.mjs';
 import {observeNavigations} from '../../navigation-diagnostics.mjs';
+import {JS_TS_MEDIA_INDEX_IDENTITY,JS_MATROSKA_MEDIA_INDEX_IDENTITY} from '../../../../shared/media/indexing/media-index-identity.ts';
 
 const engine=process.argv[2]??'webkit';
 const filter=process.argv.find(x=>x.startsWith('--fixture='))?.slice('--fixture='.length);
@@ -67,7 +68,8 @@ await withBrowserFixture({caseName:'js-containers',engine,timeoutMs:600000,roots
   }else{
    assert.equal(track.indexSource,'client');assert.equal(track.jsIndexReused,false);assert.equal(track.jsIndexPacketsScanned,600);
   }
-  const first=await call('get_presented_frame',{slot:'A'});assert.ok(first.picture);assert.match(first.picture.stream,/mediabunny-1\.55\.7-(?:ts|matroska)-packets/);
+  const first=await call('get_presented_frame',{slot:'A'});assert.ok(first.picture);
+  assert.ok([JS_TS_MEDIA_INDEX_IDENTITY,JS_MATROSKA_MEDIA_INDEX_IDENTITY].some(identity=>first.picture.stream.includes(identity.indexerBuild)));
   if(input==='local'){if(localPictures.has(name))assertLocalReopen(first.picture,localPictures.get(name));else localPictures.set(name,first.picture);}
   await call('seek_review',{ptsUs:18_666_667});const token=await call('get_presented_frame',{slot:'A'});assert.ok(token.picture);assert.ok(token.normalizedMediaUs>18_000_000);
   const before=await call('get_review_session');let analysis;

@@ -1,6 +1,7 @@
 import { TS_PACKET_BUILD } from './ts-packet-index.ts';
 import {MATROSKA_PACKET_BUILD} from '../containers/matroska-packet-index.ts';
 import { FFMPEG_INDEX_SCHEMA } from './ffmpeg-index-cache.ts';
+import { MEDIABUNNY_VERSION } from '../mediabunny-version.ts';
 export type MediaIndexKind = 'flv' | 'ffmpeg' | 'js-ts' | 'js-matroska' | 'mp4' | 'mp4-playback';
 
 export interface MediaIndexIdentity {
@@ -17,7 +18,7 @@ export const JS_MATROSKA_MEDIA_INDEX_IDENTITY:MediaIndexIdentity={kind:'js-matro
 
 export const FLV_INDEXER_BUILD = 'flv-demux-v3';
 export const MP4_PLAYBACK_MEDIA_INDEX_IDENTITY: MediaIndexIdentity = {
-  kind: 'mp4-playback', streamKey: 'video:0', schemaVersion: 1, indexerBuild: 'mediabunny-1.55.7-mp4-playback-v1',
+  kind: 'mp4-playback', streamKey: 'video:0', schemaVersion: 1, indexerBuild: `mediabunny-${MEDIABUNNY_VERSION}-mp4-playback-v1`,
 };
 export const MP4_QUALITY_MEDIA_INDEX_IDENTITY:MediaIndexIdentity={kind:'mp4',streamKey:'video:0',schemaVersion:1,indexerBuild:'mp4-quality-tables-v1'};
 export const FLV_MEDIA_INDEX_IDENTITY: MediaIndexIdentity = {

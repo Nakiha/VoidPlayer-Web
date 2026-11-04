@@ -41,6 +41,7 @@ test('a structurally valid serialized Matroska index cannot mint decode identiti
  const wrong=structuredClone(doc);wrong.packets[0].timing.dts=0 as unknown as null;assert.equal(parseJsPacketIndex(wrong,'source',1024),undefined,'Matroska cannot invent a raw DTS field');
  assert.equal(parseJsPacketIndex({...doc,build:'old-js-build'},'source',1024),undefined);assert.equal(parseJsPacketIndex(doc,'other-source',1024),undefined);
  assert.equal(parseJsPacketIndex({...doc,build:'mediabunny-1.55.7-matroska-packets-v2'},'source',1024),undefined,'pre-Invisible-admission cache must rebuild');
+ assert.equal(parseJsPacketIndex({...doc,build:'mediabunny-1.55.7-matroska-packets-v6'},'source',1024),undefined,'prior parser dependency cannot reuse the current cache namespace');
 });
 test('HEVC Annex-B configuration stays Annex-B in diagram/cache validation',()=>{
  const configuration=Uint8Array.from([0,0,0,1,64,1,0,0,0,1,66,1,0,0,0,1,68,1]);

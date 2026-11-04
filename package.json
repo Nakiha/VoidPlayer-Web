@@ -88,21 +88,21 @@
     "check:environments": "tsc -p tsconfig.browser.json && tsc -p tsconfig.server.json"
   },
   "dependencies": {
-    "@messageformat/runtime": "3.0.2",
-    "@peculiar/x509": "2.1.0",
+    "@messageformat/runtime": "3.0.3",
+    "@peculiar/x509": "3.1.0",
     "@phosphor-icons/core": "2.1.1",
-    "mediabunny": "1.55.7",
+    "mediabunny": "1.65.1",
     "reflect-metadata": "0.2.2"
   },
   "devDependencies": {
-    "@messageformat/core": "3.4.0",
-    "@messageformat/parser": "5.1.1",
-    "@types/node": "26.4.1",
-    "fake-indexeddb": "6.2.4",
-    "playwright": "^1.63.0",
+    "@messageformat/core": "3.4.1",
+    "@messageformat/parser": "5.2.0",
+    "@types/node": "26.6.6",
+    "fake-indexeddb": "6.2.7",
+    "playwright": "^1.64.1",
     "typescript": "7.0.2",
     "typescript-ast": "npm:typescript@5.9.3",
-    "vite": "8.2.2"
+    "vite": "8.3.5"
   },
   "description": "VoidPlayer web: local-file and library video review in the browser (WebCodecs + trimmed FFmpeg WASM fallback)",
   "engines": {

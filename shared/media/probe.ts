@@ -7,6 +7,7 @@ import { avcGeometry } from './codecs/avc-geometry.ts';
 import { hevcGeometry } from './codecs/hevc-geometry.ts';
 import { DISCOVERY_LIMITS as LIMITS } from './discovery.ts';
 import type { DiscoveryField, DiscoverySource, DiscoveryStream, MediaProbe } from './discovery.ts';
+import { MEDIABUNNY_VERSION } from './mediabunny-version.ts';
 
 export const unknownProbeField = (reason: string, status: DiscoveryField['status'] = 'unknown'): DiscoveryField => ({value:null,status,source:'unavailable',reason});
 const known = (value: string|number|boolean|null|undefined, source: DiscoveryField['source'] = 'container-index'): DiscoveryField =>
@@ -95,6 +96,6 @@ export async function probeMedia(source:DiscoverySource,size:number,read:(offset
       inventory={scope:'initial-container-declarations',reason:streamInventoryComplete?null:declared?.reason??(declared?.complete?'parser-and-header-track-inventory-mismatch':'bounded-TS-initial-program-metadata-only'),declaredTrackCount:declared?.complete?declared.tracks.length:null};
     }finally{input.dispose();}
   }
-  check();return {schema:'voidplayer-media-probe',version:1,source,parser:'voidplayer-bounded-metadata-v1/mediabunny-1.55.7',container,streams,streamInventoryComplete,inventory,
+  check();return {schema:'voidplayer-media-probe',version:1,source,parser:`voidplayer-bounded-metadata-v1/mediabunny-${MEDIABUNNY_VERSION}`,container,streams,streamInventoryComplete,inventory,
     coverage:{scope,fullPacketEnumeration:false,decodedPictures:false,bytesRead,readCalls,...(prefixCoverage?{prefix:prefixCoverage}:{})}};
 }
