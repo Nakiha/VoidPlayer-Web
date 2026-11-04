@@ -11,6 +11,7 @@ import { resolveYuvColor } from '../../shared/color/yuv-color.ts';
 import { isHdrTransfer } from './presentation-color.ts';
 import { validateDescription } from '../../shared/media/frame-description.ts';
 import { GpuPresentationGuard } from './gpu-presentation-guard.ts';
+import { hdrDisplayAvailable } from './display-capabilities.ts';
 
 // Browser compensation is diagnostic-only: a neutral decoded probe cannot
 // certify other codecs, backing resources, or color tags.
@@ -32,6 +33,12 @@ const gpuGuard=new GpuPresentationGuard<HTMLCanvasElement>();
 type GpuChange = 'lost' | 'restored';
 const listeners = new Set<(sources: HTMLCanvasElement[], change: GpuChange) => void>();
 let recoveryRemaining = 1;
+let configuredKey = '';
+let initializing: { key: string; token: number; promise: Promise<void> } | undefined;
+function configurationKey() {
+  const pipeline = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('colorPipeline');
+  return JSON.stringify([getColorMode(), getColorOutput(), pipeline, hdrDisplayAvailable()]);
+}
 export function observeGpuRecovery(listener: (sources: HTMLCanvasElement[], change: GpuChange) => void) {
   listeners.add(listener);
   return () => { listeners.delete(listener); };
@@ -62,11 +69,11 @@ async function deviceLost(token: number, device: unknown, info: { reason: string
   else log.warn('media', 'WebGPU 重建未成功，继续使用兼容呈现路径。');
 }
 function disposeCommittedLocked(){
-  active=false;unified=false;experimentalProfile=false;
+  active=false;unified=false;experimentalProfile=false;configuredKey='';
   for(const [source,entry] of [...entries].reverse()){try{entry.surface.dispose();}catch{}try{entry.canvas.remove();}catch{}try{source.classList.remove('frame-source');}catch{}}
   entries.clear();
 }
-async function initializeLocked(sources:HTMLCanvasElement[],token:number,geometryBySource?:Map<HTMLCanvasElement,PresentationGeometry|null>){
+async function initializeLocked(sources:HTMLCanvasElement[],token:number,key:string,geometryBySource?:Map<HTMLCanvasElement,PresentationGeometry|null>){
   if(typeof location!=='undefined'&&new URLSearchParams(location.search).get('colorPipeline')==='legacy')return;
   const commonPlanes=typeof location!=='undefined'&&new URLSearchParams(location.search).get('colorPipeline')==='unified';
   const policy=getColorMode();
@@ -99,6 +106,7 @@ async function initializeLocked(sources:HTMLCanvasElement[],token:number,geometr
     }
     pending.clear();
     active=true;
+    configuredKey=key;
     unified=commonPlanes;
     experimentalProfile=requested!==null;
     const watched = new Set<unknown>();
@@ -114,10 +122,17 @@ async function initializeLocked(sources:HTMLCanvasElement[],token:number,geometr
     if(gpuGuard.isCurrent(token))log.info('media','WebGPU 初始化失败，保留现有呈现路径。',{reason:String(error)});
   }
 }
+async function initializeForConfiguration(sources: HTMLCanvasElement[], token: number, geometry?: Map<HTMLCanvasElement, PresentationGeometry | null>) {
+  const key = configurationKey(), promise = initializeLocked(sources, token, key, geometry);
+  const pending = { key, token, promise };
+  initializing = pending;
+  try { await promise; }
+  finally { if (initializing === pending) initializing = undefined; }
+}
 export async function initializeGpuPresentation(sources:HTMLCanvasElement[]) {
   recoveryRemaining = 1;
   const token=gpuGuard.beginInitialize(sources);
-  await initializeLocked(sources,token);
+  await initializeForConfiguration(sources,token);
 }
 async function refreshLocked(){
   const geometryBySource=new Map([...entries].map(([source,entry])=>[source,entry.geometry] as const));
@@ -125,14 +140,27 @@ async function refreshLocked(){
   // 刷新只释放已提交；在途旧初始化看到 epoch 失效后会自行清理，不会被误提交。
   disposeCommittedLocked();
   const targets=sources.length?sources:[...geometryBySource.keys()];
-  await initializeLocked(targets,token,geometryBySource);
+  await initializeForConfiguration(targets,token,geometryBySource);
   if(!gpuGuard.isCurrent(token))return token;
   for(const [source,geometry] of geometryBySource)gpuGeometry(source,geometry);
   return token;
 }
 export async function refreshGpuColorMode(){
+  const started = performance.now(), key = configurationKey(), pending = initializing;
   recoveryRemaining = 1;
-  await refreshLocked();
+  if (pending?.key === key && gpuGuard.isCurrent(pending.token)) {
+    await pending.promise;
+    if (!gpuGuard.isCurrent(pending.token)) return;
+  }
+  const sources = gpuGuard.sources();
+  if (active && configuredKey === key && entries.size === sources.length
+    && sources.every(source => { const entry = entries.get(source); return entry && !entry.disabled && entry.surface.available; })) {
+    log.info('media', 'WebGPU 呈现准备完成。', { action: 'reuse', durationMs: performance.now() - started, surfaces: entries.size });
+    return;
+  }
+  const token = await refreshLocked();
+  if (!gpuGuard.isCurrent(token)) return;
+  log.info('media', 'WebGPU 呈现准备完成。', { action: 'rebuild', durationMs: performance.now() - started, surfaces: entries.size });
 }
 export function gpuGeometry(source:HTMLCanvasElement,g:PresentationGeometry|null){
   const entry=entries.get(source);if(!entry)return false;

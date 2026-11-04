@@ -202,9 +202,9 @@ export class FlvEngine {
   }
   /** Switch only the decoder after reference admission rejects native output.
    * The packet index, reader, and cache lifecycle remain owned by this engine. */
-  async switchToSoftware(glueURL: string, wasmBinary?: Uint8Array, threads: DecodeThreads = 1) {
-    if (this.decoder?.kind === 'webcodecs') {
-      const target=this.primed?.pts??this.index.packets[(this.index.displayOrder??this.index.order)[0]].pts;
+  async switchToSoftware(glueURL: string, wasmBinary?: Uint8Array, threads: DecodeThreads = 1, replace = false, pts?: number) {
+    if (replace || this.decoder?.kind === 'webcodecs') {
+      const target=pts??this.primed?.pts??this.index.packets[(this.index.displayOrder??this.index.order)[0]].pts;
       const decoder=await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
       const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size),true,()=>this.indexComplete);
       let primed:FlvFrame;

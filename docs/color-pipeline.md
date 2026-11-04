@@ -27,6 +27,7 @@ PQ/HLG 使用实际资源标签，不用源标签覆盖浏览器已转换资源�
 - 硬件缓冲深度为每轨 1/2/4/8 帧，默认 2；每源固定 Worker 数和顺序读回队列受此上限约束，应用播放队列与解码器内部队列另有自身预算。更多缓冲不保证更快。配置只在 reference 下显示；软件解码隐藏深度控件但保留选择。底层使用 prefer-hardware 偏好，不冒充实际 GPU 使用的证明。
 - 硬件准入支持 NV12/I420 8-bit SDR，以及 I420P10/I420P12、位深和标签一致的 PQ/HLG。载入时临时打开真实 WASM 取得同 PTS 首帧，核对全部原始 YUV 样本、coded/crop、位深、子采样及 resolved matrix/range/primaries/transfer；通过后沿用该帧确认的 chroma location，释放 WASM 源。保留硬件资源原始 color 和容器 sourceColor，不用源标签覆盖资源，也不拟合 RGB。容器 range 可以与实际帧不同；源 HDR 与资源 HDR 身份不一致、低位深 HDR 或 primaries/matrix 冲突拒绝。此验证增加首帧载入成本，不增加逐帧 WASM 解码。首帧证据不是动态码流全程认证；后续公开格式、尺寸、裁剪或色彩标签变化明确报错，提示切换软件，不静默沿用旧契约。
 - 硬件能力/读回/首帧核对失败进入现有 decode 阶段软件回退；input/resource 失败不换后端。播放中的错误继续由会话处理，不新增整体 catch 换路径。每次关闭/seek 归还预取帧，源释放时终止 Worker 并拒绝待处理请求；已交付缓冲只在 frame.close 后回收，每 Worker 最多一个空闲缓冲。
+- 软件源在色彩准入中验证的起点帧保留一次，交给下一次 `frameAt(0)`，避免首次上屏再次 seek 和解码。改取其他位置、开始其他帧提取、重新配置色彩或释放源时关闭未交付帧；取消或释放后的迟到验证帧也关闭。此交接不跳过色彩检查，不改变源 PTS 或后续播放顺序，也不复用已经交付的缓冲。
 - **匹配浏览器（browser）**：WebCodecs 优先，原生资源沿用浏览器输出；WASM 回退使用中性探针选择的 Apple/CV/普通 SDR 候选。这个选择仅是近似兼容，不认证未测编码、位深或资源；无有效探针时软件保留普通 SDR 转换。不会按 UA/文件名加 BT601 或 GAMMA22 修正，因此 Windows Edge 的已知资源差异不能承诺消除。
   原生资源的托管归属不依赖 WebGPU 是否成功初始化；无 WebGPU 时仍保留原生 sample，经浏览器纹理导入或 Canvas 绘制。切换模式准备首帧时也按目标用户模式决定，不能因旧 GPU 状态而先转换为自有 YUV 路径。
 - 切换暂停播放，只重新准备健康且已关联轨道的相同时间位置；已失败（源已释放）与待重新关联轨道不参与准备或回滚重绘，保留原失败状态，恢复时应用当时的当前设置。保留媒体 ID、标注、对齐偏移；全部准备成功后再替换。进入事务即释放旧播放队列，避免回滚后复用旧解码/呈现契约的缓存帧。失败恢复旧模式并逐轨恢复源和画面；源重配或重绘回滚失败时记录带轨道、阶段与原始错误的本地诊断，停用并释放对应轨道，健康轨道仍可继续切换。呈现器回滚失败仍尝试恢复源，但停用受影响轨道，不能仅恢复全局设置后报告可用。回滚重绘同样可被新定位意图中止，迟到帧只释放、不上屏；不自动恢复播放。成功选择只保存在本地 localStorage。
@@ -78,6 +79,8 @@ Windows 模式切换验证使用 `npm run test:color:modes`（需先运行本地
 - 每个 surface 保留当前 clone 或已上传 YUV buffer；原生 HDR 另外复用一个 float16 转换表面和浮点纹理；自有截图按需用同一 shader 渲染源尺寸 SDR 预览，旋转后物化 2D 画布；原生 HDR 截图按需由浏览器转换为 sRGB。自有 HDR 浮点表面截图显式关闭扩展输出并执行保存的预览策略，不能将普通截图标为 HDR 导出。SDR 和原始 YUV 播放不维护隐藏 RGBA 中间画布；原生 HDR 中转仅服务于浏览器浮点呈现。
 - GPU 丢失、资源超限/导入失败、RGBA 或未满足浮点转换能力的原生 PQ/HLG 使用下述旧路径，记本地原因。WebGPU 准入（`gpuPaint`）对实际资源 transfer 判定，别名与标准名等价；原生 HDR 只通过上述浏览器浮点转换，不使用未经验证的 external HDR 导入。降级原因随每轨 `presentation.fallbackReason` 和本地日志报告。清空槽位后可重新尝试；暂停时丢失 GPU 需要 seek。`colorPipeline=legacy` 可显式选择旧路径对照。
 - 可见页面播放时 rAF 与 20 ms timer 竞争且只执行一次，防止浏览器可见状态下异常节流；暂停取消、隐藏不启用兜底。该机制不承诺物理屏幕刷新率。
+
+工作区恢复在色彩模式、显示目标、完整预览策略、诊断入口和显示 HDR 能力均未改变时复用健康的呈现资源；同配置的启动初始化仍在途时等待并复用该批资源。配置变化、设备丢失或轨道呈现失败继续经过原 epoch 围栏重建，不能复用失效设备。原生/YUV/浏览器 HDR 管线按设备和编译条件共享；每轨 uniform、像素缓冲、HDR 转换表面和保留帧仍独立，编译失败不留失败缓存。日志分别记录呈现准备的复用/重建及耗时，不把解码首帧时间当作实际显示器上屏时间。
 
 ## 显式统一平面路径
 
@@ -185,10 +188,15 @@ NotSupportedError 保留可播放资源并记录原因；其他错误继续传�
 
 ## 验证与证据边界
 
+2026-11-05 的[本机性能记录](evidence/first-frame-thread-2026-11-05.json)保留每轮取样和执行条件。Mac Chrome 156、4K HEVC、HDR、DPR 2，预热服务端索引且启动 GPU 已就绪后，GPU 复用的独立对照中，原生优先首帧提交中位数为 116.67 → 85.25 ms，软件为 217.43 → 195.75 ms；随后软件首帧交接的独立对照为 193.42 → 142.24 ms。两组对照分别测量，不能把耗时或百分比直接叠加；这里测到应用提交画面，不是物理屏幕扫描，也不代表冷索引或其他机器的性能。
+
+同机 WebKit 强制软件解码连续三次换片，实际线程由 4/1/3 恢复为 4/4/4；第 2 次播放由约 0.65× 恢复到约 1×。最终独立复跑连续换片 3/3、常规播放基准 12/12，通过既有门限。CI 只验证功能与生命周期，不新增性能门禁。
+
 - `npm test`：布局/矩阵/范围/高位深/heap growth、真实 single/mt core、packet/container 与生命周期。
 - `npm run test:webgpu:browser`：自动资源探针、原生 clone 生命周期、按需截图、旋转/缩放与直接高位深平面。
 - `npm run test:webgpu:browser -- chrome msedge`：Windows 有窗口浏览器；`npm run test:color:windows` 补合成彩色与独立 FFmpeg 平面对照，`-- --file <MP4>` 补原片同 PTS 取证。测量方法与 WASM 证据边界见 [Windows 色彩验证](windows-color-validation.md)；历史失败不能替代当前实跑。
 - `npm run test:presentation:browser`：Chromium/WebKit shader 对 CPU 参考、裁剪/旋转/采样及旧 PQ/HLG 路径。
+- `node scripts/testing/browser/media/hdr-color.mjs chrome --require-webgpu`：真实 GPU 的 HDR/SDR 像素、共享管线和独立轨道缓冲；原生 HDR 转换未提供时核对明确拒绝。加 `--experimental-hdr` 显式验证 Chrome 实验性浮点转换的正向路径；模拟显示能力的读回不认证物理显示效果。
 - `npm run test:browser`：轨道、尺寸调度、双轨布局、关闭与恢复。
 - `node scripts/bench-playback.mjs webkit`：真实应用连续播放；Chrome 可用 BENCH_CHANNEL=chrome。
 - `scripts/diagnose-sdr-color.mjs`：同一 FLV、同 PTS 比较，新增 plane/shader 参考及 copyMs；不会自动上传片源、像素、日志。

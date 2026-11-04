@@ -132,7 +132,7 @@ async function start() {
           try { send(reply(message, frame), frame.frame ? [frame.frame] : [frame.pixels!]); }
           finally { frame.frame?.close(); }
         } else if (type === 'switch-software' && (engine instanceof FlvEngine || engine instanceof Mp4Engine || engine instanceof JsContainerEngine)) {
-          send(reply(message, await engine.switchToSoftware(message.glueURL, message.wasmBinary, message.threads)));
+          send(reply(message, await engine.switchToSoftware(message.glueURL, message.wasmBinary, message.threads, message.replace, message.pts)));
         } else if (type === 'switch-native' && (engine instanceof FlvEngine || engine instanceof Mp4Engine || engine instanceof JsContainerEngine)) {
           send(reply(message, await engine.switchToNative()));
         } else if (type === 'dispose') {

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { admitReferenceSource } from '../../src/media/policy/reference-source.ts';
+import { createVerifiedFrameHandoff } from '../../src/media/decoding/verified-frame-handoff.ts';
 import { rgbaDescription } from '../../shared/media/frame-description.ts';
 import type { DecodedFrame, MediaSource } from '../../src/media/contract.ts';
 
@@ -52,6 +53,28 @@ function mediaSource(decoder: string, width: number) {
 class IdleWorker {
   terminate() {}
 }
+
+test('a verified origin frame transfers ownership once and is never served for a different target', () => {
+  const slot = createVerifiedFrameHandoff();
+  let closed = 0;
+  const frame = () => ({ ...yuvFrame(2), close() { closed++; } });
+  const first = frame();
+  slot.offer(first);
+  assert.equal(slot.take(0), first);
+  assert.equal(slot.take(0), undefined);
+  slot.clear();
+  assert.equal(closed, 0, 'handed-off frames belong to the caller');
+  first.close();
+  slot.offer(frame());
+  assert.equal(slot.take(1), undefined);
+  assert.equal(closed, 2, 'a nonzero seek releases the unconsumed origin');
+  slot.offer(frame());
+  slot.offer(frame());
+  assert.equal(closed, 3, 'replacement closes the old origin');
+  slot.clear();
+  slot.clear();
+  assert.equal(closed, 4, 'invalidating an unconsumed origin closes it once');
+});
 
 test('reference admission reuses a validated software witness when native geometry mismatches', async () => {
   const originalWorker = globalThis.Worker;

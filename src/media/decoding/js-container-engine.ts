@@ -323,10 +323,10 @@ export class JsContainerEngine {
     try { return await witness.at(this.index!.firstPts); }
     finally { witness.close(); }
   }
-  private async replaceDecoder(decoder: PacketDecoder) {
+  private async replaceDecoder(decoder: PacketDecoder, pts = this.index!.firstPts) {
     const next = this.makeTimeline(decoder);
     let first:PacketFrame;
-    try {first=await this.first(next,this.index!.firstPts);}
+    try {first=await this.first(next,pts);}
     catch(error){next.close();throw error;}
     // Commit only after the candidate produced a valid actual frame. A failed
     // candidate leaves the previous decoder/source usable for transaction rollback.
@@ -336,10 +336,10 @@ export class JsContainerEngine {
     if (this.startup) { next.replaceIndex(this.index!); next.setGrowth(this.waitForGrowth); }
     this.outputSize = { width: first.width, height: first.height };
   }
-  async switchToSoftware(glueURL: string, wasmBinary?: Uint8Array, threads: DecodeThreads = 1) {
+  async switchToSoftware(glueURL: string, wasmBinary?: Uint8Array, threads: DecodeThreads = 1, replace = false, pts?: number) {
     this.check();
-    if (this.timeline!.decoder.kind === 'webcodecs')
-      await this.replaceDecoder(await this.createSoftware(this.index!, glueURL, wasmBinary, threads));
+    if (replace || this.timeline!.decoder.kind === 'webcodecs')
+      await this.replaceDecoder(await this.createSoftware(this.index!, glueURL, wasmBinary, threads), pts);
     return this.decoderInfo();
   }
   async switchToNative() {

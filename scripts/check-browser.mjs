@@ -1461,6 +1461,76 @@ try {
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'open');
   });
 
+  await check('GPU startup shares programs and reuses unchanged workspace presentation safely', async page => {
+    const entry = path.join(temporary, 'gpu-startup.ts');
+    await writeFile(entry, `export {initializeGpuPresentation,refreshGpuColorMode,disposeGpuPresentation,keepNativeGpuResource} from ${JSON.stringify(path.join(root, 'src/presentation/webgpu-presenter.ts'))};
+      export {setColorMode} from ${JSON.stringify(path.join(root, 'src/media/policy/color-mode.ts'))};
+      export {getColorOutput,setColorOutput} from ${JSON.stringify(path.join(root, 'shared/color/color-output.ts'))};
+      export {createExternalSurface} from ${JSON.stringify(path.join(root, 'src/presentation/webgpu-color-surface.mjs'))};`);
+    const fixture = await buildFixture({ configFile:false, logLevel:'silent', build:{ write:false, minify:false,
+      lib:{ entry, formats:['iife'], name:'GpuStartupFixture' }, rolldownOptions:{output:{codeSplitting:false}} } });
+    const script = [fixture].flat().flatMap(output => output.output).find(output => output.type === 'chunk').code;
+    await page.route('**/gpu-startup-fixture', route => route.fulfill({ contentType:'text/html', body:'<!doctype html><body></body>' }));
+    await page.goto(`${base}/gpu-startup-fixture`); await page.addScriptTag({ content:script });
+    const result = await page.evaluate(async () => {
+      const {initializeGpuPresentation,refreshGpuColorMode,disposeGpuPresentation,keepNativeGpuResource,setColorMode,getColorOutput,setColorOutput,createExternalSurface} = GpuStartupFixture;
+      const stats = { devices:0, pipelines:0 }, devices = [];
+      const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
+      let blockNext;
+      const makeDevice = () => {
+        const loss = deferred(), gate = blockNext; blockNext = undefined; stats.devices++;
+        const device = { lost:loss.promise, lose:() => loss.resolve({ reason:'unknown', message:'injected loss' }), fail:false,
+          addEventListener(){}, removeEventListener(){}, destroy(){ loss.resolve({ reason:'destroyed', message:'' }); },
+          createShaderModule:() => ({ getCompilationInfo:async () => ({ messages:[] }) }),
+          createRenderPipelineAsync:async () => { stats.pipelines++; if (gate) await gate.promise; if (device.fail) { device.fail=false; throw Error('injected compile failure'); } return {}; },
+          createBuffer:() => ({ destroy(){} }), createSampler:() => ({}), queue:{ submit(){} } };
+        devices.push(device); return device;
+      };
+      Object.defineProperty(navigator, 'gpu', { configurable:true, value:{ requestAdapter:async () => ({requestDevice:async () => makeDevice()}),getPreferredCanvasFormat:() => 'bgra8unorm' } });
+      if (!globalThis.GPUBufferUsage) globalThis.GPUBufferUsage = { UNIFORM:1, COPY_DST:2 };
+      const originalContext = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function(type, ...args) {
+        return type === 'webgpu' ? { configure(){}, unconfigure(){} } : originalContext.call(this, type, ...args);
+      };
+      const sources = Array.from({length:8}, () => {
+        const stage = document.createElement('div'); stage.className='frame-stage';
+        const source = document.createElement('canvas'); stage.append(source); document.body.append(stage); return source;
+      });
+      const until = async condition => { for(let i=0;i<100;i++) { if(condition()) return; await new Promise(r=>setTimeout(r,0)); } throw Error('GPU lifecycle did not settle'); };
+      const assert = (condition, message) => { if (!condition) throw Error(message); };
+      const nodes = () => [...document.querySelectorAll('.frame-presentation')];
+      try {
+        setColorMode('reference');
+        await initializeGpuPresentation(sources);
+        assert(stats.devices===1 && stats.pipelines===4, 'eight SDR surfaces share one native/YUV program set');
+        const before = nodes(); await refreshGpuColorMode();
+        assert(stats.devices===1 && nodes().every((node,i)=>node===before[i]), 'unchanged restoration retains the device and canvases');
+        const output = getColorOutput(); setColorOutput({...output,hdrWhiteNits:250}); await refreshGpuColorMode();
+        assert(stats.devices===2 && nodes().every(node=>!before.includes(node)), 'changed output rebuilds presentation');
+        devices.at(-1).lose(); await until(()=>stats.devices===3 && nodes().length===8 && keepNativeGpuResource());
+        devices.at(-1).lose(); await new Promise(r=>setTimeout(r,10));
+        assert(stats.devices===3, 'a second device loss stays in fallback without another automatic rebuild');
+        await refreshGpuColorMode(); assert(stats.devices===4, 'an explicit refresh cannot reuse a lost device');
+        disposeGpuPresentation();
+        let gate = deferred(); blockNext=gate;
+        const startup = initializeGpuPresentation(sources); await until(()=>stats.devices===5);
+        const joined = refreshGpuColorMode(); gate.resolve(); await Promise.all([startup,joined]);
+        assert(stats.devices===5 && nodes().length===8, 'same-configuration restore joins the in-flight startup');
+        disposeGpuPresentation(); gate=deferred(); blockNext=gate;
+        const stale = initializeGpuPresentation(sources); await until(()=>stats.devices===6);
+        const staleCanvas=nodes()[0];
+        setColorOutput({...output,hdrWhiteNits:300}); await refreshGpuColorMode(); const current=nodes().filter(node=>node!==staleCanvas);
+        gate.resolve(); await stale;
+        assert(stats.devices===7 && nodes().length===8 && nodes().every((node,i)=>node===current[i]), 'late startup cannot overwrite a newer output configuration');
+        const borrowed = makeDevice(); borrowed.fail=true;
+        await createExternalSurface(document.createElement('canvas'),borrowed,'planes').then(()=>{throw Error('compile failure was swallowed');},()=>{});
+        const retry = await createExternalSurface(document.createElement('canvas'),borrowed,'planes'); retry.dispose();
+        return stats;
+      } finally { disposeGpuPresentation(); HTMLCanvasElement.prototype.getContext=originalContext; }
+    });
+    assert.equal(result.devices, 8);
+  });
+
   await check('analysis overlay preserves dense small-block edges when scaled down', async page => {
     const entry = path.join(temporary, 'overlay-raster.ts');
     await writeFile(entry, `export {createAnalysisOverlay} from ${JSON.stringify(path.join(root, 'src/ui/analysis/picture-overlay/controller.ts'))};

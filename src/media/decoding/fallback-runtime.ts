@@ -71,14 +71,35 @@ export function reserveFallbackThreads(mode = wasmThreadMode()) {
   const share = Math.max(1, Math.min(Math.floor(available / liveFallbacks), available - reservedFallbackThreads));
   // VVC only creates its growable executor when opened with at least two threads.
   const minimum = mode === 'auto-grow' && cores > 1 ? 2 : 1;
-  const vvc = (mode === 'manual' ? vvcThreadCount() : 0) || Math.min(6, Math.max(minimum, share));
-  const contexts = (mode === 'manual' ? vvcFrameContextCount() : 0) || Math.min(6, vvc);
-  const threads = mode === 'single-thread' ? { general: 1, vvc: 1, vvcFrameContexts: 1 }
+  const manualVvc = mode === 'manual' ? vvcThreadCount() : 0, manualContexts = mode === 'manual' ? vvcFrameContextCount() : 0;
+  const vvc = manualVvc || Math.min(6, Math.max(minimum, share));
+  const contexts = manualContexts || Math.min(6, vvc);
+  let threads = mode === 'single-thread' ? { general: 1, vvc: 1, vvcFrameContexts: 1 }
     : { general: Math.min(4, share), vvc, vvcFrameContexts: contexts };
-  const reserved = Math.max(threads.general, threads.vvc);
+  let reserved = Math.max(threads.general, threads.vvc);
   reservedFallbackThreads += reserved;
   let released = false;
-  return { threads, release() {
+  return { get threads() { return threads; }, grow() {
+    if (released || mode === 'single-thread') return;
+    const headroom = Math.max(1, Math.min(Math.floor(available / liveFallbacks), available - reservedFallbackThreads + reserved));
+    const general = Math.max(threads.general, Math.min(4, headroom));
+    const vvc = Math.max(threads.vvc, manualVvc || Math.min(6, headroom));
+    const contexts = Math.max(threads.vvcFrameContexts, manualContexts || Math.min(6, vvc));
+    if (general === threads.general && vvc === threads.vvc && contexts === threads.vvcFrameContexts) return;
+    const previous = threads, previousReserved = reserved;
+    threads = { general, vvc, vvcFrameContexts: contexts };
+    reserved = Math.max(general, vvc);
+    reservedFallbackThreads += reserved - previousReserved;
+    const candidate = threads;
+    let rolledBack = false;
+    return { threads, rollback() {
+      if (released || rolledBack || threads !== candidate) return;
+      rolledBack = true;
+      reservedFallbackThreads -= reserved - previousReserved;
+      reserved = previousReserved;
+      threads = previous;
+    } };
+  }, release() {
     if (released) return;
     released = true;
     liveFallbacks--;

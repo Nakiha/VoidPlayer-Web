@@ -8,6 +8,8 @@ import { createBrowserHdrBridge } from './browser-hdr-bridge.mjs';
 // One submission per microtask across canvases. Flush before overwriting a
 // resource already referenced by queued commands. Frame closure follows submit.
 const batches=new WeakMap();
+// Programs belong to the device; per-track buffers and retained frames remain private.
+const programsByDevice = new WeakMap();
 function flush(device){const batch=batches.get(device);if(!batch?.commands.length)return;const commands=batch.commands.splice(0);batch.surfaces.clear();try{device.queue.submit(commands);}finally{for(const close of batch.closes.splice(0))close();}}
 function beforeWrite(device,token){if(batches.get(device)?.surfaces.has(token))flush(device);}
 function submit(device,token,command){let batch=batches.get(device);if(!batch){batch={commands:[],surfaces:new Set(),closes:[]};batches.set(device,batch);}const schedule=!batch.commands.length;batch.commands.push(command);batch.surfaces.add(token);if(schedule)queueMicrotask(()=>flush(device));}
@@ -51,43 +53,56 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
   const nativeHdrReason=outputFallbackReason??(browserHdrBridge?.available?null:browserHdrBridge?.reason??'hdr-output-not-requested');
   const format=hdrOutput?'rgba16float':sdrFormat;
   if(!hdrOutput)context.configure({device,format,colorSpace:'srgb',alphaMode:'premultiplied'});
-  const nativeShader = copied => device.createShaderModule({code:`
-    @group(0) @binding(0) var input: ${copied?'texture_2d<f32>':'texture_external'};
-    @group(0) @binding(1) var smp: sampler;
-    @group(0) @binding(2) var<uniform> geom:array<vec4f,2>;
-    struct V { @builtin(position) p: vec4f, @location(0) uv: vec2f }
-    @vertex fn vs(@builtin(vertex_index) i:u32)->V {
-      var p=array<vec2f,3>(vec2f(-1,-1),vec2f(3,-1),vec2f(-1,3));
-      var o:V; o.p=vec4f(p[i],0,1); o.uv=vec2f((p[i].x+1)*0.5,(1-p[i].y)*0.5); return o;
-    }
-    fn samplePoint(pixel:vec2f)->vec3f{
-      let size=geom[1].yz;let uv=(clamp(pixel,vec2f(0),size-1)+0.5)/size;
-      return ${hdrOutput?'max':'clamp'}(${copied?'textureSampleLevel':'textureSampleBaseClampToEdge'}(input,smp,uv${copied?',0.0':''}).rgb,vec3f(0)${hdrOutput?'':',vec3f(1)'});
-    }
-    @fragment fn fs(v:V)->@location(0) vec4f {
-      var uv=(v.p.xy-geom[0].xy)/geom[0].zw;
-      if(any(uv<vec2f(0))||any(uv>=vec2f(1))){discard;}
-      if(geom[1].x==90){uv=vec2f(uv.y,1-uv.x);}else if(geom[1].x==180){uv=1-uv;}else if(geom[1].x==270){uv=vec2f(1-uv.y,uv.x);}
-      let pixel=uv*geom[1].yz-0.5;
-      if(geom[1].w>0){let a=floor(pixel);let w=fract(pixel);return vec4f(mix(mix(samplePoint(a),samplePoint(a+vec2f(1,0)),w.x),mix(samplePoint(a+vec2f(0,1)),samplePoint(a+vec2f(1,1)),w.x),w.y),1);}
-      return vec4f(samplePoint(floor(pixel+0.5)),1);
-    }`});
-  const shader=nativeShader(mode==='copy');
-  const compilation = await shader.getCompilationInfo();
-  if (compilation.messages.some(m => m.type==='error')) { if(ownsDevice)device.destroy(); throw new Error(JSON.stringify(compilation.messages)); }
-  const pipelines = new Map();
-  for (const target of new Set([format,sdrFormat,'rgba8unorm'])) pipelines.set(target, await device.createRenderPipelineAsync({
-    layout:'auto', vertex:{module:shader,entryPoint:'vs'}, fragment:{module:shader,entryPoint:'fs',targets:[{format:target}]},primitive:{topology:'triangle-list'}
-  }));
-  const bridgePipelines=new Map();
-  if(browserHdrBridge?.available){
-    const module=nativeShader(true);
-    for(const target of new Set([format,sdrFormat,'rgba8unorm']))bridgePipelines.set(target,await device.createRenderPipelineAsync({layout:'auto',vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',targets:[{format:target}]},primitive:{topology:'triangle-list'}}));
+  const formats = [...new Set([format, sdrFormat, 'rgba8unorm'])];
+  let programs = programsByDevice.get(device);
+  if (!programs) { programs = new Map(); programsByDevice.set(device, programs); }
+  const programKey = JSON.stringify([mode, hdrOutput, !!browserHdrBridge?.available, formats]);
+  let compiling = programs.get(programKey);
+  if (!compiling) {
+    compiling = (async () => {
+      const nativeShader = copied => device.createShaderModule({code:`
+        @group(0) @binding(0) var input: ${copied?'texture_2d<f32>':'texture_external'};
+        @group(0) @binding(1) var smp: sampler;
+        @group(0) @binding(2) var<uniform> geom:array<vec4f,2>;
+        struct V { @builtin(position) p: vec4f, @location(0) uv: vec2f }
+        @vertex fn vs(@builtin(vertex_index) i:u32)->V {
+          var p=array<vec2f,3>(vec2f(-1,-1),vec2f(3,-1),vec2f(-1,3));
+          var o:V; o.p=vec4f(p[i],0,1); o.uv=vec2f((p[i].x+1)*0.5,(1-p[i].y)*0.5); return o;
+        }
+        fn samplePoint(pixel:vec2f)->vec3f{
+          let size=geom[1].yz;let uv=(clamp(pixel,vec2f(0),size-1)+0.5)/size;
+          return ${hdrOutput?'max':'clamp'}(${copied?'textureSampleLevel':'textureSampleBaseClampToEdge'}(input,smp,uv${copied?',0.0':''}).rgb,vec3f(0)${hdrOutput?'':',vec3f(1)'});
+        }
+        @fragment fn fs(v:V)->@location(0) vec4f {
+          var uv=(v.p.xy-geom[0].xy)/geom[0].zw;
+          if(any(uv<vec2f(0))||any(uv>=vec2f(1))){discard;}
+          if(geom[1].x==90){uv=vec2f(uv.y,1-uv.x);}else if(geom[1].x==180){uv=1-uv;}else if(geom[1].x==270){uv=vec2f(1-uv.y,uv.x);}
+          let pixel=uv*geom[1].yz-0.5;
+          if(geom[1].w>0){let a=floor(pixel);let w=fract(pixel);return vec4f(mix(mix(samplePoint(a),samplePoint(a+vec2f(1,0)),w.x),mix(samplePoint(a+vec2f(0,1)),samplePoint(a+vec2f(1,1)),w.x),w.y),1);}
+          return vec4f(samplePoint(floor(pixel+0.5)),1);
+        }`});
+      const shader=nativeShader(mode==='copy');
+      const compilation = await shader.getCompilationInfo();
+      if (compilation.messages.some(m => m.type==='error')) throw new Error(JSON.stringify(compilation.messages));
+      const pipelines = new Map();
+      for (const target of formats) pipelines.set(target, await device.createRenderPipelineAsync({
+        layout:'auto', vertex:{module:shader,entryPoint:'vs'}, fragment:{module:shader,entryPoint:'fs',targets:[{format:target}]},primitive:{topology:'triangle-list'}
+      }));
+      const bridgePipelines=new Map();
+      if(browserHdrBridge?.available){
+        const module=nativeShader(true);
+        for(const target of formats)bridgePipelines.set(target,await device.createRenderPipelineAsync({layout:'auto',vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',targets:[{format:target}]},primitive:{topology:'triangle-list'}}));
+      }
+      const yuvModule=device.createShaderModule({code:yuvKernel});
+      const yuvInfo=await yuvModule.getCompilationInfo();if(yuvInfo.messages.some(m=>m.type==='error'))throw new Error(yuvInfo.messages.map(m=>m.message+' at '+m.lineNum).join('\n'));
+      const yuvPipelines=new Map();
+      for(const target of formats)yuvPipelines.set(target,await device.createRenderPipelineAsync({layout:'auto',vertex:{module:yuvModule,entryPoint:'vs'},fragment:{module:yuvModule,entryPoint:'fs',targets:[{format:target}]},primitive:{topology:'triangle-list'}}));
+      return { pipelines, bridgePipelines, yuvPipelines };
+    })();
+    programs.set(programKey, compiling);
+    void compiling.catch(() => { if (programs.get(programKey) === compiling) programs.delete(programKey); });
   }
-  const yuvModule=device.createShaderModule({code:yuvKernel});
-  const yuvInfo=await yuvModule.getCompilationInfo();if(yuvInfo.messages.some(m=>m.type==='error'))throw new Error(yuvInfo.messages.map(m=>m.message+' at '+m.lineNum).join('\n'));
-  const yuvPipelines=new Map();
-  for(const target of new Set([format,sdrFormat,'rgba8unorm']))yuvPipelines.set(target,await device.createRenderPipelineAsync({layout:'auto',vertex:{module:yuvModule,entryPoint:'vs'},fragment:{module:yuvModule,entryPoint:'fs',targets:[{format:target}]},primitive:{topology:'triangle-list'}}));
+  const { pipelines, bridgePipelines, yuvPipelines } = await compiling;
   yuvUniform=device.createBuffer({size:192,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   externalUniform=device.createBuffer({size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   const samplers = {nearest:device.createSampler(),linear:device.createSampler({minFilter:'linear',magFilter:'linear'})};

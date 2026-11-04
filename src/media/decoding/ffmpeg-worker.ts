@@ -53,11 +53,14 @@ type FfmpegIndexSink = {
 type DecodeContext = { packets: FfmpegPacketIndex; indexComplete: boolean; ticks: number[]; durations: number[]; blobHandle: number; path: string; indexSink?: FfmpegIndexSink; tuner?: ReturnType<typeof createVvcTuner> };
 const contexts = new Map<number, DecodeContext>();
 const observations = new Map<number, ObservedBytes>();
+const contextAliases = new Map<number, number>();
+let coreInput: { glueURL: string; binary?: Uint8Array; size: number } | undefined;
 
 async function init(payload: FfmpegCommands['init']['request'], onProgress: MediaOpenProgress, onReady?: (data: FfmpegInitResult) => void,
 ): Promise<FfmpegInitResult> {
   onProgress('decoder');
   const binary = payload.wasmBinary ? new Uint8Array(payload.wasmBinary) : undefined;
+  coreInput = { glueURL: payload.glueURL, binary, size: payload.mediaSize ?? payload.blob?.size ?? payload.file?.byteLength ?? 0 };
   const budget = payload.threads;
   const pool = typeof budget === 'object' ? Math.max(budget.general, budget.vvc, budget.vvcTuning?.threads ?? 0) : budget;
   ({ core, heap } = await loadCore(payload.glueURL, binary, undefined, pool));
@@ -390,8 +393,96 @@ function extract(ctx: number, index: number, recycle?: ArrayBuffer) {
     } : undefined };
 }
 
+/** Reuse the completed index; the old decoder remains intact until the exact
+ * requested tick has been decoded by a candidate with its own pthread pool. */
+async function restoreThreads(ctx: number, index: number, threads: import('../policy/wasm-threads.ts').DecodeThreads) {
+  const entry = contexts.get(ctx), input = coreInput;
+  if (!entry?.indexComplete || !input || !Number.isInteger(index) || index < 0 || index >= entry.ticks.length)
+    throw new MediaOpenError('input', '线程恢复需要完整索引和有效目标帧。');
+  const oldCore = core, oldHeap = heap;
+  const bytes = oldCore._vp_index_export_bytes(ctx), ptr = oldCore._malloc(bytes) >>> 0;
+  if (bytes <= 0 || !ptr) throw new MediaOpenError('resource', '无法导出线程恢复所需的索引。');
+  let records: Uint8Array;
+  try {
+    if (oldCore._vp_index_export(ctx, ptr, bytes) * FFMPEG_INDEX_RECORD_BYTES !== bytes)
+      throw new MediaOpenError('resource', '线程恢复索引导出不完整。');
+    records = oldHeap().slice(ptr, ptr + bytes);
+  } finally { oldCore._free(ptr); }
+  const recovery = { prefix: oldCore._vp_index_integrity(ctx), at: oldCore._vp_index_truncated_at(ctx), end: oldCore._vp_index_end_dts(ctx) };
+  const pool = typeof threads === 'number' ? threads : Math.max(threads.general, threads.vvc, threads.vvcTuning?.threads ?? 0);
+  const candidate = await loadCore(input.glueURL, input.binary, undefined, pool);
+  const next = candidate.core, nextHeap = candidate.heap;
+  let nextCtx = 0, committed = false;
+  try {
+    requireFrameAbi(next);
+    next.vpBlobs = new Map();
+    next._vp_set_threads(typeof threads === 'number' ? threads : threads.general);
+    if (typeof threads === 'object') {
+      next._vp_set_vvc_threads?.(threads.vvc);
+      next._vp_set_vvc_frame_contexts?.(threads.vvcFrameContexts);
+    }
+    nextCtx = next.ccall('vp_create', 'number', [], []);
+    if (!nextCtx) throw new MediaOpenError('resource', '无法创建线程恢复解码器。');
+    if (entry.blobHandle) next.vpBlobs.set(entry.blobHandle, oldCore.vpBlobs.get(entry.blobHandle));
+    else next.FS.writeFile(entry.path, oldCore.FS.readFile(entry.path));
+    const call = (name: string, result: string | null, types: string[], args: unknown[]) => {
+      next.vpDemuxError = undefined;
+      const value = next.ccall(name, result, types, args), error = next.vpDemuxError;
+      next.vpDemuxError = undefined;
+      if (error) throw error;
+      return value;
+    };
+    const opened = entry.blobHandle
+      ? call('vp_open_blob', 'number', ['number', 'number', 'i64'], [nextCtx, entry.blobHandle, BigInt(input.size)])
+      : call('vp_open', 'number', ['number', 'string'], [nextCtx, entry.path]);
+    if (opened !== 0) throw new MediaOpenError('decode', '线程恢复解码器无法打开当前片源。');
+    for (const field of ['vp_codec_name', 'vp_tb_num', 'vp_tb_den', 'vp_stream_index']) {
+      const result = field === 'vp_codec_name' ? 'string' : 'number';
+      if (call(field, result, ['number'], [nextCtx]) !== oldCore.ccall(field, result, ['number'], [ctx]))
+        throw new MediaOpenError('input', '线程恢复时片源流信息发生变化。');
+    }
+    const imported = next._malloc(records.byteLength) >>> 0;
+    if (!imported) throw new MediaOpenError('resource', '线程恢复索引内存分配失败。');
+    try {
+      nextHeap().set(records, imported);
+      if (next._vp_index_import(nextCtx, imported, records.byteLength / FFMPEG_INDEX_RECORD_BYTES) * FFMPEG_INDEX_RECORD_BYTES !== records.byteLength)
+        throw new MediaOpenError('resource', '线程恢复索引导入不完整。');
+      if (recovery.prefix && next.ccall('vp_index_apply_prefix', 'number', ['number', 'i64', 'i64'], [nextCtx, recovery.at, recovery.end]) !== 1)
+        throw new MediaOpenError('resource', '线程恢复未能保留索引完整性状态。');
+    } finally { next._free(imported); }
+    const target = BigInt(entry.ticks[index]);
+    if (call('vp_extract', 'number', ['number', 'i64'], [nextCtx, target]) !== 1
+      || call('vp_last_ticks', 'i64', ['number'], [nextCtx]) !== target)
+      throw new MediaOpenError('decode', '线程恢复未命中原始索引帧。');
+    const frame = readWasmFrame(next, nextHeap, nextCtx);
+    const observed = observations.get(ctx);
+    contexts.delete(ctx); observations.delete(ctx);
+    contexts.set(nextCtx, { ...entry, indexSink: undefined });
+    if (observed) observations.set(nextCtx, observed);
+    for (const alias of contextAliases.keys()) {
+      if (alias === nextCtx) contextAliases.delete(alias);
+      else contextAliases.set(alias, nextCtx);
+    }
+    if (ctx !== nextCtx) contextAliases.set(ctx, nextCtx);
+    core = next; heap = nextHeap; committed = true;
+    oldCore.ccall('vp_destroy', null, ['number'], [ctx]);
+    oldCore.vpBlobs.delete(entry.blobHandle);
+    try { oldCore.FS.unlink(entry.path); } catch {}
+    return { ctx: nextCtx, ...decoderConcurrency(next, nextCtx), frame };
+  } finally {
+    if (!committed) {
+      if (nextCtx) next.ccall('vp_destroy', null, ['number'], [nextCtx]);
+      next.vpBlobs?.clear();
+      try { next.FS.unlink(entry.path); } catch {}
+    }
+  }
+}
+
 port.onmessage = async (event: { data: Request }) => {
   const message = event.data;
+  // Cache/analysis requests may already be in flight when the main thread
+  // receives the new context. They still refer to this same immutable source.
+  if ('ctx' in message && typeof message.ctx === 'number') message.ctx = contextAliases.get(message.ctx) ?? message.ctx;
   const { id, type } = message;
   if (type === 'peek-audio') {
     const data = observations.get(message.ctx ?? 0)?.peek(message.offset, message.length);
@@ -410,6 +501,9 @@ port.onmessage = async (event: { data: Request }) => {
       if (readyContext !== undefined) {
         if (!('indexPending' in result && result.indexPending)) port.postMessage({ id, type: 'index-complete', data: result });
       } else port.postMessage(reply(message, result));
+    } else if (type === 'restore-threads') {
+      const result = await restoreThreads(message.ctx, message.index, message.threads);
+      port.postMessage(reply(message, result), [result.frame.pixels]);
     } else if (type === 'tune-vvc') {
       port.postMessage(reply(message, contexts.get(message.ctx)?.tuner?.tune(message.axis) ?? null));
     } else if (type === 'analysis-ffmpeg-index') {
@@ -458,6 +552,7 @@ port.onmessage = async (event: { data: Request }) => {
       const ctx = message.ctx;
       const entry = contexts.get(ctx);
       if (contexts.delete(ctx)) {
+        contextAliases.clear();
         observations.delete(ctx);
         if (entry?.blobHandle) core.vpBlobs.delete(entry.blobHandle);
         try { core.FS.unlink(message.path); } catch {

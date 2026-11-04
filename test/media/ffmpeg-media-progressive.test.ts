@@ -5,8 +5,8 @@ import { rgbaDescription } from '../../shared/media/frame-description.ts';
 
 const description = rgbaDescription(1, 1);
 const originTicks = 90_000;
-const frame = (pts: number, duration = 3_600) => ({
-  pts, duration, description, pixels: new Uint8Array([1, 2, 3, 255]).buffer,
+const frame = (pts: number, duration = 3_600, outputDescription = description) => ({
+  pts, duration, description: outputDescription, pixels: new Uint8Array([1, 2, 3, 255]).buffer,
 });
 
 class DelayedIndexWorker {
@@ -17,6 +17,7 @@ class DelayedIndexWorker {
   extractedIndices:number[]=[];
   indexActions: string[] = [];
   firstDuration: number;
+  outputDescription = description;
   constructor(firstDuration = 3_600) { this.firstDuration = firstDuration; }
 
   addEventListener(type: string, listener: (event: { data: any }) => void) {
@@ -37,14 +38,14 @@ class DelayedIndexWorker {
       queueMicrotask(() => this.emit({
         id: message.id, type: 'ready', data: {
           ctx: 1, path: '/fake.ts', ticks: [originTicks], durations: [this.firstDuration],
-          firstPts: originTicks, firstFrame: frame(originTicks, this.firstDuration), tbNum: 1, tbDen: 90_000,
+          firstPts: originTicks, firstFrame: frame(originTicks, this.firstDuration, this.outputDescription), tbNum: 1, tbDen: 90_000,
           width: 1, height: 1, codec: 'mpeg2video', indexSource: 'server', indexPending: true,
           indexIdentity: { kind: 'ffmpeg', streamKey: 'video:0', schemaVersion: 3, indexerBuild: 'a'.repeat(40) },
         },
       }));
     } else if (message.type === 'extract') {
       this.extractRequests++;this.extractedIndices.push(message.index);
-      this.emit({ id: message.id, ok: true, data: frame(originTicks + message.index * 3_600) });
+      this.emit({ id: message.id, ok: true, data: frame(originTicks + message.index * 3_600, 3_600, this.outputDescription) });
     }
   }
 
@@ -96,6 +97,44 @@ function openWith(worker: DelayedIndexWorker) {
     },
   );
 }
+
+test('FFmpeg color admission hands off its checked frame and releases it on reconfiguration and cancellation', async () => {
+  const worker = new DelayedIndexWorker();
+  worker.outputDescription = rgbaDescription(1, 1, {
+    format: 'YUV', byteLength: 4, color: { matrix: 'bt709', primaries: 'bt709', transfer: 'bt709', fullRange: false },
+    yuv: { bitDepth: 8, bitShift: 0, subsampleX: 1, subsampleY: 1, semiplanar: false, chromaLocation: 1,
+      planes: [0, 1, 2].map(offset => ({ offset, stride: 1, width: 1, height: 1 })) },
+  });
+  const source = await openWith(worker);
+  const frameAt = source.frameAt.bind(source);
+  let validated: Awaited<ReturnType<typeof frameAt>> | undefined, closed = 0;
+  source.frameAt = async pts => {
+    const frame = await frameAt(pts), close = frame.close.bind(frame);
+    frame.close = () => { closed++; close(); };
+    validated = frame;
+    return frame;
+  };
+  try {
+    await source.admitReference!(1);
+    const first = validated!;
+    const display = await frameAt(0);
+    assert.equal(display, first, 'presentation receives the validated resource without another copy or decode');
+    display.close();
+    assert.equal(closed, 1);
+    await source.admitReference!(1);
+    await source.reconfigureColorMode!('browser', { decoder: 'software', depth: 1 });
+    assert.equal(closed, 2);
+    const controller = new AbortController(), captured = source.frameAt;
+    source.frameAt = async pts => { const frame = await captured(pts); controller.abort(); return frame; };
+    await assert.rejects(source.reconfigureColorMode!('reference', { decoder: 'software', depth: 1 }, controller.signal), { name: 'AbortError' });
+    assert.equal(closed, 3);
+    source.frameAt = captured;
+    await source.admitReference!(1);
+    source.dispose();
+    assert.equal(closed, 4);
+    await assert.rejects(source.frameAt(0), /媒体已释放/);
+  } finally { source.dispose(); }
+});
 
 test('FFmpeg source presents its first frame before index completion and keeps its timeline origin', async () => {
   const worker = new DelayedIndexWorker();

@@ -7,6 +7,7 @@ import { WorkerRpc } from '../workers/worker-rpc.ts';
 import { attachCachedContainerAudio } from '../audio/cached-audio-client.ts';
 import type { PacketCommands, PacketInitResult } from '../workers/worker-protocol.ts';
 import { prepareYuvFrame, createYuvBufferPool } from './yuv-frame.ts';
+import { createVerifiedFrameHandoff } from './verified-frame-handoff.ts';
 import { updateMediaInfo } from '../state.ts';
 import { validateDescription } from '../../../shared/media/frame-description.ts';
 import { abortableWait, loadAborted, onLoadAbort } from '../../../shared/media/io/media-abort.ts';
@@ -114,6 +115,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     const yuvPool=createYuvBufferPool();
     if (container === 'flv') info.opportunisticAudio = 'flv-aac';
     let disposed = false, spare: ArrayBuffer | undefined;
+    const verifiedFrame = createVerifiedFrameHandoff();
     let serial = Promise.resolve();
     let indexing: Promise<void> | undefined;
     const indexWaiters = new Set<() => void>();
@@ -190,7 +192,10 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
       return decoded;
     };
     const extract = (pts:number,next=false):Promise<DecodedFrame|null> => {
+      verifiedFrame.clear();
       const task = serial.then(async () => {
+        if (disposed) throw new Error('媒体已释放。');
+        await restoreThreadBudget(pts);
         if (disposed) throw new Error('媒体已释放。');
         const recycle = spare; spare = undefined;
         const frame = await activeRpc.call(next?'next':'at', {pts:pts+info.firstPtsUs,recycle}, recycle ? [recycle] : [], 60000, true);
@@ -200,6 +205,33 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
       });
       serial = task.then(() => {}, () => {});
       return task;
+    };
+    let failedGrowth: string | undefined;
+    const restoreThreadBudget = async (pts: number) => {
+      if (!reservationHeld || info.decoder !== 'ffmpeg-wasm' || info.coreVariant !== 'multi-thread'
+        || mode === 'auto-grow' && info.codec === 'vvc') return;
+      const growth = reservation.grow();
+      if (!growth) return;
+      const budget = threadsFor(selected), threads = decodeThreadsForCodec(budget, info.codec);
+      const signature = JSON.stringify(budget);
+      if (signature === failedGrowth || threads <= (info.decoderThreads ?? 1)) { growth.rollback(); return; }
+      const previousThreads = info.decoderThreads;
+      try {
+        // Serialized with frame extraction. The Worker primes a candidate over
+        // the existing index before replacing its decoder; failed growth keeps
+        // the original source and cursor usable.
+        const result = await activeRpc.call('switch-software', { glueURL: selected, wasmBinary: deps.wasmBinary,
+          threads: budget, replace: true, pts: pts + info.firstPtsUs }, [], 60000);
+        if (disposed) return;
+        updateMediaInfo(source, { decoderThreads: result.decoderThreads, decoderFrameContexts: result.decoderFrameContexts }, 'decoder');
+        contextLog().info('media', '软件解码线程预算已恢复', { name: meta.name, previousThreads, threads: info.decoderThreads });
+      } catch (error) {
+        growth.rollback();
+        if (disposed || error instanceof MediaOpenError && error.stage === 'input') throw error;
+        failedGrowth = signature;
+        contextLog().warn('media', '软件解码线程升级失败，保留原解码器', { name: meta.name, previousThreads,
+          error: error instanceof Error ? error.message : String(error) });
+      }
     };
     const setDecoder = async (kind: 'software' | 'native') => {
       if (kind === 'software') holdReservation();
@@ -214,7 +246,17 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     const reconfigureColorMode = async (mode: ColorMode, decode: ReferenceDecode, signal?: AbortSignal) => {
       if (disposed) throw new Error('媒体已释放。');
       loadAborted(signal);
+      verifiedFrame.clear();
       const previousMode = presentationMode;
+      const validateFirst = async () => {
+        const frame = await source.frameAt(0);
+        try {
+          loadAborted(signal);
+          if (disposed) throw new Error('媒体已释放。');
+          if (info.decoder === 'ffmpeg-wasm') { verifiedFrame.offer(frame); return; }
+        } catch (error) { frame.close(); throw error; }
+        frame.close();
+      };
       if (mode === 'reference') {
         deactivateVerifiedNativeYuv();
         holdReservation();
@@ -255,7 +297,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
           }
         }
         presentationMode = 'reference';
-        try { const first = await source.frameAt(0); first.close(); }
+        try { await validateFirst(); }
         catch (error) { presentationMode = previousMode; throw error; }
         if (info.decoder === 'webcodecs') releaseReservation();
       } else {
@@ -264,7 +306,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
           try { await setDecoder('native'); } catch { /* Keep the decoder if WebCodecs cannot be restored. */ }
         }
         presentationMode = 'browser';
-        try { const first = await source.frameAt(0); first.close(); }
+        try { await validateFirst(); }
         catch (error) { presentationMode = previousMode; throw error; }
         if (info.decoder === 'webcodecs') releaseReservation();
       }
@@ -373,7 +415,12 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
         }, [], 60000);
         return { ptsUs, complete: (info.indexState ?? 'complete') === 'complete' };
       },
-      async frameAt(pts) { await ensureIndexed(pts);const frame=await extract(pts);if(!frame)throw new MediaOpenError('decode','没有可显示帧。');return frame; },
+      async frameAt(pts) {
+        await ensureIndexed(pts);
+        const frame = verifiedFrame.take(pts) ?? await extract(pts);
+        if (!frame) throw new MediaOpenError('decode','没有可显示帧。');
+        return frame;
+      },
       async framesAfter(pts,count){
         if(count<=0)return [];
         if (info.indexState === 'building') void completeIndex().catch(() => {});
@@ -403,7 +450,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
           if (info.indexState === 'building') void completeIndex().catch(() => {});
         }
       },
-      dispose() { if (!disposed) { stopMetadata(); stopAudio(); deactivateVerifiedNativeYuv(); disposed = true; yuvPool.dispose(); wakeIndex(); activeRpc.onIndexProgress = undefined; activeRpc.onIndexWaiting = undefined; clearTimeout(backgroundTimer); source.onInfoChange = undefined; source.onCachedAudio = undefined; activeRpc.onCachedAudio = undefined; spare = undefined; releaseReservation(); activeRpc.terminate(); } },
+      dispose() { if (!disposed) { verifiedFrame.clear(); stopMetadata(); stopAudio(); deactivateVerifiedNativeYuv(); disposed = true; yuvPool.dispose(); wakeIndex(); activeRpc.onIndexProgress = undefined; activeRpc.onIndexWaiting = undefined; clearTimeout(backgroundTimer); source.onInfoChange = undefined; source.onCachedAudio = undefined; activeRpc.onCachedAudio = undefined; spare = undefined; releaseReservation(); activeRpc.terminate(); } },
     };
     const baseFrameAt=source.frameAt.bind(source),baseFramesAfter=source.framesAfter.bind(source),baseFramesFrom=source.framesFrom.bind(source),baseFramesFollowing=source.framesFollowing?.bind(source);
     activateVerifiedNativeYuv=adapter=>{

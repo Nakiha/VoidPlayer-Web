@@ -88,14 +88,14 @@ export class Mp4Engine {
     finally{timeline.close();}
   }
   /** Replace the active decoder without rebuilding the MP4 sample table. */
-  async switchToSoftware(glueURL:string,wasmBinary?:Uint8Array,threads:DecodeThreads=1){
-    if(this.timeline?.decoder.kind==='webcodecs'){
+  async switchToSoftware(glueURL:string,wasmBinary?:Uint8Array,threads:DecodeThreads=1,replace=false,pts?:number){
+    if(replace||this.timeline?.decoder.kind==='webcodecs'){
       const decoder=await wasmPacketDecoder(this.index,glueURL,wasmBinary,threads);
       const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size),true);
-      const target=this.primed?.pts??this.index.packets[this.index.order[0]].pts;
+      const target=pts??this.primed?.pts??this.index.packets[this.index.order[0]].pts;
       let primed:PacketFrame;
       try{primed=await timeline.at(target);}catch(error){timeline.close();throw error;}
-      this.primed?.frame?.close();this.timeline.close();this.timeline=timeline;this.primed=primed;
+      this.primed?.frame?.close();this.timeline!.close();this.timeline=timeline;this.primed=primed;
     }
     return this.decoderInfo();
   }

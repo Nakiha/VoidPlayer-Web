@@ -6,6 +6,46 @@ import { checkedHeap } from '../../src/media/decoding/flv-decoder.ts';
 import { fallbackDecodeThreads, reserveFallbackThreads } from '../../src/media/decoding/fallback-runtime.ts';
 import { decodeThreadsForCodec, setVvcFrameContextCount, setVvcThreadCount } from '../../src/media/policy/wasm-threads.ts';
 
+test('fallback reservations recover released headroom and roll back failed or disposed growth', t => {
+  t.mock.getter(Navigator.prototype, 'hardwareConcurrency', () => 8);
+  const old = reserveFallbackThreads('auto'), incoming = reserveFallbackThreads('auto');
+  try {
+    assert.equal(incoming.threads.general, 1);
+    assert.equal(incoming.grow(), undefined, 'a live old source still owns its budget');
+    old.release();
+    const failed = incoming.grow()!;
+    assert.equal(failed.threads.general, 4);
+    assert.equal(failed.threads.vvc, 6);
+    failed.rollback(); failed.rollback();
+    assert.equal(incoming.threads.general, 1);
+    const restored = incoming.grow()!;
+    assert.equal(restored.threads.general, 4);
+    assert.equal(incoming.grow(), undefined, 'successful growth is not reserved a second time');
+    incoming.release();
+    restored.rollback();
+    const fresh = reserveFallbackThreads('auto');
+    assert.equal(fresh.threads.general, 4, 'late rollback cannot resurrect a disposed reservation');
+    fresh.release();
+    assert.equal(incoming.grow(), undefined);
+    const single = reserveFallbackThreads('single-thread');
+    assert.equal(single.grow(), undefined);
+    single.release();
+  } finally { old.release(); incoming.release(); }
+});
+
+test('fallback growth shares free CPU headroom without shrinking or borrowing another live reservation', t => {
+  t.mock.getter(Navigator.prototype, 'hardwareConcurrency', () => 12);
+  const old = reserveFallbackThreads('auto'), peer = reserveFallbackThreads('auto'), incoming = reserveFallbackThreads('auto');
+  try {
+    assert.equal(incoming.threads.general, 1);
+    old.release();
+    const growth = incoming.grow()!;
+    assert.equal(growth.threads.general, 4);
+    assert.equal(peer.threads.general, 4);
+    assert.ok(peer.threads.vvc + growth.threads.vvc <= 10, 'two presentation CPU cores remain outside the shared budget');
+  } finally { old.release(); peer.release(); incoming.release(); }
+});
+
 test('VVC automatic settings share CPU headroom and explicit tuning bypasses the automatic limits', t => {
   const cpu = t.mock.getter(Navigator.prototype, 'hardwareConcurrency', () => 12);
   setVvcThreadCount('auto');

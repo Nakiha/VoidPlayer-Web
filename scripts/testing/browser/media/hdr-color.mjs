@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { createServer } from 'vite';
 import { chromium, webkit } from 'playwright';
 
-const args = process.argv.slice(2), requireWebGpu = args.includes('--require-webgpu');
-const targets = args.filter(a => a !== '--require-webgpu');
+const args = process.argv.slice(2), requireWebGpu = args.includes('--require-webgpu'), experimentalHdr = args.includes('--experimental-hdr');
+if (experimentalHdr && !requireWebGpu) throw new Error('--experimental-hdr requires --require-webgpu');
+const targets = args.filter(a => !['--require-webgpu', '--experimental-hdr'].includes(a));
 if (!targets.length) targets.push('chromium');
 if (targets.some(t => !['chromium', 'webkit', 'chrome', 'msedge'].includes(t))) throw new Error('Unknown HDR test browser');
 const server = await createServer({ server: { port: 0, host: '127.0.0.1' } });
@@ -12,7 +13,7 @@ let browser;
 try {
   for (const name of targets) {
     const engine = name === 'webkit' ? webkit : chromium;
-    browser = await engine.launch({ headless: !requireWebGpu, ...(['chrome', 'msedge'].includes(name) ? { channel: name } : {}) });
+    browser = await engine.launch({ headless: !requireWebGpu, ...(experimentalHdr ? { args:['--enable-blink-features=CanvasGlobalHDRHeadroom'] } : {}), ...(['chrome', 'msedge'].includes(name) ? { channel: name } : {}) });
     const page = await browser.newPage();
     await page.route('**/hdr-color-test', route => route.fulfill({ contentType: 'text/html', body: '<canvas id="gl" width="1" height="1"></canvas>' }));
     await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/hdr-color-test`);
@@ -131,8 +132,27 @@ try {
           const captured=capture.getContext('2d').getImageData(0,0,2,2).data;
           const maxCapture=Math.max(...captured.map((v,i)=>Math.abs(v-expected[i])));
           if(maxPreview>1||maxCapture>1)throw new Error('HDR canvas SDR preview/capture differs from shared CPU transform');
+          const peer=await createExternalSurface(document.createElement('canvas'),surface.device,'planes');
+          try {
+            const peerPixels=f.pixels.slice(),plane=f.description.yuv.planes[0],view=new DataView(peerPixels.buffer);
+            for(let y=0;y<2;y++)for(let x=0;x<2;x++)view.setUint16(plane.offset+y*plane.stride+x*2,940,true);
+            peer.present({...frame,pixels:peerPixels});
+            const peerRead=await peer.capture(),peerExpected=yuvToRgba(f.description,peerPixels);
+            if(Math.max(...peerRead.map((v,i)=>Math.abs(v-peerExpected[i])))>1)throw Error('Shared GPU programs changed peer pixels');
+            const retained=await surface.captureHdrPixels();
+            if(Math.max(...retained.map((v,i)=>Math.abs(v-pixels[i])))>.004)throw Error('Peer presentation overwrote another track');
+          } finally { peer.dispose(); }
+          if(!surface.available)throw Error('Disposing a borrowed surface destroyed the shared device');
           const native=new VideoFrame(new Uint16Array([64,940,64,940,512,512]),{format:'I420P10',codedWidth:2,codedHeight:2,timestamp:0,colorSpace:{matrix:'bt2020-ncl',primaries:'bt2020',transfer:'pq',fullRange:false}});
-          try{surface.present(native);const raw=await surface.captureHdrPixels();const nativeMax=Math.max(...raw);extended={simulatedDisplayCapability:true,max,maxPreview,maxCapture,nativeMax,nativeHdrEnabledInProduct:false};}
+          try {
+            extended={simulatedDisplayCapability:true,max,maxPreview,maxCapture,nativeHdrAvailable:surface.nativeHdrAvailable,nativeHdrReason:surface.nativeHdrReason};
+            if(surface.nativeHdrAvailable){surface.present(native);const raw=await surface.captureHdrPixels();extended.nativeMax=Math.max(...raw);}
+            else {
+              let failure;try{surface.present(native);}catch(error){failure=error;}
+              if(failure?.message!==surface.nativeHdrReason)throw Error('Unavailable native HDR bridge must reject the resource explicitly');
+              extended.nativeRejected=true;
+            }
+          }
           finally{native.close();}
           const {renderThumbnailCanvas}=await import('/src/presentation/presenter.ts');const {hdrYuvToRgba}=await import('/shared/color/hdr-color.ts');
           const thumbFrame=yuvFixture(10,false,false,'bt2020-ncl',3,2);thumbFrame.description.color.transfer='pq';
@@ -144,7 +164,12 @@ try {
           if(extended.thumbnailMax>1)throw new Error('HDR thumbnail must use the fixed default preview recipe');
         }finally{surface.dispose();}
         setColorMode('browser');const browserSurface=await createExternalSurface(document.createElement('canvas'),undefined,'planes');
-        try{if(browserSurface.outputTarget!=='sdr')throw new Error('Browser-managed HDR target must downgrade to SDR');}finally{browserSurface.dispose();window.matchMedia=original;setColorOutput(defaultColorOutput());setColorMode(previousMode);}
+        try {
+          if(browserSurface.outputTarget!=='hdr')throw Error('Browser color mode preserves the supported extended display target');
+          const copy=await createExternalSurface(document.createElement('canvas'),browserSurface.device,'copy');
+          try{if(copy.outputTarget!=='sdr'||copy.outputFallbackReason!=='hdr-copy-mode-unavailable')throw Error('Copy-only resources must retain their explicit SDR fallback');}
+          finally{copy.dispose();}
+        } finally{browserSurface.dispose();window.matchMedia=original;setColorOutput(defaultColorOutput());setColorMode(previousMode);}
       }
       return { vectors: vectors.length, policies: policies.length, glMax, glWorst, glError, gpu, extended };
     }, requireWebGpu);
@@ -153,6 +178,7 @@ try {
       assert.equal(result.gpu.tested, true); assert.deepEqual(result.gpu.errors, []);
       assert.ok(result.gpu.maxCodeDelta <= 1, `${name}: WGSL code error ${result.gpu.maxCodeDelta}`);
       assert.ok(result.gpu.maxNitsRelative <= .001, `${name}: WGSL nits error ${result.gpu.maxNitsRelative}`);
+      if(experimentalHdr)assert.equal(result.extended.nativeHdrAvailable,true,'Experimental HDR must exercise the native float bridge');
     }
     if(requireWebGpu)console.log('Extended surface diagnostics (simulated display capability): '+JSON.stringify(result.extended));
     console.log(`PASS ${name}: ${result.vectors} vectors × ${result.policies} policies; GLSL max ${result.glMax} code; ${requireWebGpu ? `WGSL max ${result.gpu.maxCodeDelta} code, nits relative ${result.gpu.maxNitsRelative}` : 'WebGPU not requested'}`);

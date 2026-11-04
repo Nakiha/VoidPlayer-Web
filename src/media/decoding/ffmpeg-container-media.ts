@@ -26,6 +26,7 @@ import { ffmpegColorInfo } from '../metadata.ts';
 import { hdrTransfer } from '../../../shared/color/hdr-policy.ts';
 const isHdrTransfer = (transfer: string | null | undefined) => hdrTransfer(transfer) !== null;
 import { resolveYuvColor } from '../../../shared/color/yuv-color.ts';
+import { createVerifiedFrameHandoff } from './verified-frame-handoff.ts';
 import type { MediaIndexIdentity } from '../../../shared/media/indexing/media-index-identity.ts';
 import type { MediaIndexClientTrace } from '../../../shared/media/indexing/media-index-types.ts';
 import { FfmpegContainerSession, FfmpegMediaIndexSession } from '../indexing/media-index-session.ts';
@@ -199,6 +200,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   };
 
   let disposed = false;
+  const verifiedFrame = createVerifiedFrameHandoff();
   let spare: ArrayBuffer | null = null;
   let firstFrame = init.firstFrame;
   let previousIndex = -1;
@@ -311,12 +313,43 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     if (disposed) throw new Error('媒体已释放。');
     if (currentIndexState() === 'error' && ptsUs >= (info.stableCoverageUs ?? info.durationUs)) throw new Error(info.indexError ?? 'FFmpeg 索引失败。');
   };
-  const extract = async (index: number): Promise<WasmDecodedFrame> => {
+  let serial = Promise.resolve(), failedGrowth: string | undefined;
+  const restoreThreadBudget = async (index: number) => {
+    if (info.indexState !== 'complete' || coreVariant !== 'multi-thread' || mode === 'auto-grow' && info.codec === 'vvc') return;
+    const growth = threadReservation.grow();
+    if (!growth) return;
+    const budget = fallbackDecodeThreads(growth.threads, candidates.find(url => fallbackCoreVariant(url) === coreVariant)!, mode, !!deps.glueURL);
+    const signature = JSON.stringify(budget);
+    if (signature === failedGrowth || decodeThreadsForCodec(budget, info.codec) <= (info.decoderThreads ?? 1)) { growth.rollback(); return; }
+    const previousThreads = info.decoderThreads;
+    try {
+      const result = await activeRpc.call('restore-threads', { ctx: init.ctx, index, threads: budget }, [], 60000);
+      if (disposed) throw new Error('媒体已释放。');
+      init.ctx = result.ctx;
+      updateMediaInfo(source, { decoderThreads: result.decoderThreads, decoderFrameContexts: result.decoderFrameContexts }, 'decoder');
+      scoped.info('media', '软件解码线程预算已恢复', { name: file.name, previousThreads, threads: info.decoderThreads });
+      return result.frame;
+    } catch (error) {
+      growth.rollback();
+      if (disposed || error instanceof MediaOpenError && error.stage === 'input') throw error;
+      failedGrowth = signature;
+      scoped.warn('media', '软件解码线程升级失败，保留原解码器', { name: file.name, previousThreads, error: String(error) });
+    }
+  };
+  const extract = (index: number): Promise<WasmDecodedFrame> => {
+    const task = serial.then(() => extractLocked(index));
+    serial = task.then(() => {}, () => {});
+    return task;
+  };
+  const extractLocked = async (index: number): Promise<WasmDecodedFrame> => {
+    verifiedFrame.clear();
     if (disposed) throw new Error('媒体已释放。');
     if (!Number.isInteger(index) || index < 0 || index >= ticks.length) throw new Error('帧索引无效。');
     const started = performance.now(), randomAccess = index !== previousIndex + 1;
     let output: WasmFrameOutput & { seek?: { decodedFrames: number; restarts: number } };
-    if (index === 0 && firstFrame && (firstFrame.picture || info.indexState !== 'complete' || init.codec !== 'h264')) {
+    const restored = await restoreThreadBudget(index);
+    if (restored) output = restored;
+    else if (index === 0 && firstFrame && (firstFrame.picture || info.indexState !== 'complete' || init.codec !== 'h264')) {
       // The primed frame may first be consumed as a native-decoder witness,
       // before the player asks for its initial image. Keep the cache replayable
       // and give each caller a private buffer because returned buffers can be
@@ -422,17 +455,28 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       const ptsUs = await activeRpc.call('analysis-number', { ctx: init!.ctx, firstPtsUs: info.firstPtsUs, axis, number });
       return { ptsUs, complete: info.indexState === 'complete' };
     },
-    async reconfigureColorMode(mode) {
+    async reconfigureColorMode(mode, _decode, signal) {
+      if (disposed) throw new Error('媒体已释放。');
+      loadAborted(signal);
+      verifiedFrame.clear();
       const previous = referencePresentation;
       referencePresentation = mode === 'reference';
       if (!referencePresentation) return;
-      try { const frame = await source!.frameAt(0); frame.close(); }
+      let frame: DecodedFrame | undefined;
+      try {
+        frame = await source!.frameAt(0);
+        loadAborted(signal);
+        if (disposed) throw new Error('媒体已释放。');
+        verifiedFrame.offer(frame);
+        frame = undefined;
+      }
       catch (error) { referencePresentation = previous; throw error; }
+      finally { frame?.close(); }
     },
-    async admitReference() { await source!.reconfigureColorMode?.('reference', { decoder: 'software', depth: 1 }); return source!; },
+    async admitReference() { await source!.reconfigureColorMode?.('reference', { decoder: 'software', depth: 1 }, deps.signal); return source!; },
     async frameAt(ptsUs) {
       await ensureIndexed(ptsUs);
-      return extract(floorIndex(relUs, ptsUs));
+      return verifiedFrame.take(ptsUs) ?? extract(floorIndex(relUs, ptsUs));
     },
     async framesAfter(ptsUs, count) {
       if (count <= 0) return [];
@@ -465,6 +509,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     },
     dispose() {
       if (disposed) return;
+      verifiedFrame.clear();
       disposed = true;
       stopMetadata(); stopAudio(); source.onCachedAudio = undefined;
       wakeIndex();

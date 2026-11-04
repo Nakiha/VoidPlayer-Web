@@ -1,0 +1,813 @@
+{
+  "schema": "voidplayer-first-frame-thread-evidence",
+  "version": 1,
+  "date": "2026-11-05",
+  "baselineRevision": "428af000f45eeea10fba6bc8cbf9345f8b55ec99",
+  "limits": [
+    "Local same-machine observations only; no CI performance gate.",
+    "CPU presentation commit is not physical display scanout.",
+    "GPU reuse and verified-frame handoff are separate controlled comparisons; do not add their timings or percentages.",
+    "Native prefer-hardware request does not independently certify physical hardware decoding."
+  ],
+  "gpuReuse": {
+    "setup": {
+      "sample": "mhw_hevc_fullrange_bt709_3s.mp4",
+      "size": "3840x2160",
+      "viewport": "1056x786",
+      "dpr": 2,
+      "target": "HDR",
+      "repeatsPerPath": 5,
+      "client": "fresh page and decoder per run, startup GPU initialization completed before restore",
+      "serverIndex": "warmed by initial library load",
+      "measurement": "first presented-frame event (CPU submission), not physical display scanout",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "baselineRevision": "428af000"
+    },
+    "summary": [
+      {
+        "path": "WebCodecs prefer-hardware",
+        "baselineFirstCommitMedianMs": 116.67,
+        "optimizedFirstCommitMedianMs": 85.25,
+        "reductionPercent": 26.9,
+        "restoreGpuCreation": {
+          "devices": 0,
+          "pipelines": 0
+        }
+      },
+      {
+        "path": "FFmpeg WASM software",
+        "baselineFirstCommitMedianMs": 217.43,
+        "optimizedFirstCommitMedianMs": 195.75,
+        "reductionPercent": 10.0,
+        "restoreGpuCreation": {
+          "devices": 0,
+          "pipelines": 0
+        }
+      }
+    ],
+    "trials": {
+      "baseline": [
+        {
+          "mode": "hardware",
+          "repeat": 1,
+          "firstCommitMs": 110.77500000596046,
+          "restore": {
+            "devices": 2,
+            "pipelines": 54
+          }
+        },
+        {
+          "mode": "hardware",
+          "repeat": 2,
+          "firstCommitMs": 116.87999999523163,
+          "restore": {
+            "devices": 2,
+            "pipelines": 54
+          }
+        },
+        {
+          "mode": "hardware",
+          "repeat": 3,
+          "firstCommitMs": 116.67499999701977,
+          "restore": {
+            "devices": 2,
+            "pipelines": 54
+          }
+        },
+        {
+          "mode": "hardware",
+          "repeat": 4,
+          "firstCommitMs": 116.2199999988079,
+          "restore": {
+            "devices": 2,
+            "pipelines": 54
+          }
+        },
+        {
+          "mode": "hardware",
+          "repeat": 5,
+          "firstCommitMs": 119.06499999761581,
+          "restore": {
+            "devices": 2,
+            "pipelines": 54
+          }
+        },
+        {
+          "mode": "software",
+          "repeat": 1,
+          "firstCommitMs": 213.67500001192093,
+          "restore": {
+            "devices": 1,
+            "pipelines": 48
+          }
+        },
+        {
+          "mode": "software",
+          "repeat": 2,
+          "firstCommitMs": 208.15000000596046,
+          "restore": {
+            "devices": 1,
+            "pipelines": 48
+          }
+        },
+        {
+          "mode": "software",
+          "repeat": 3,
+          "firstCommitMs": 220.875,
+          "restore": {
+            "devices": 1,
+            "pipelines": 48
+          }
+        },
+        {
+          "mode": "software",
+          "repeat": 4,
+          "firstCommitMs": 217.43000000715256,
+          "restore": {
+            "devices": 1,
+            "pipelines": 48
+          }
+        },
+        {
+          "mode": "software",
+          "repeat": 5,
+          "firstCommitMs": 219.48499999940395,
+          "restore": {
+            "devices": 1,
+            "pipelines": 48
+          }
+        }
+      ],
+      "optimized": [
+        {
+          "mode": "hardware",
+          "repeat": 1,
+          "firstCommitMs": 84.62999999523163,
+          "restore": {
+            "devices": 0,
+            "pipelines": 0
+          }
+        },
+        {
+          "mode": "hardware",
+          "repeat": 2,
+          "firstCommitMs": 87.26500000059605,
+          "restore": {
+            "devices": 0,
+            "pipelines": 0
+          }
+        },
+        {
+          "mode": "hardware",
+          "repeat": 3,
+          "firstCommitMs": 84.375,
+          "restore": {
+            "devices": 0,
+            "pipelines": 0
+          }
+        },
+        {
+          "mode": "hardware",
+          "repeat": 4,
+          "firstCommitMs": 88.28500001132488,
+          "restore": {
+            "devices": 0,
+            "pipelines": 0
+          }
+        },
+        {
+          "mode": "hardware",
+          "repeat": 5,
+          "firstCommitMs": 85.25,
+          "restore": {
+            "devices": 0,
+            "pipelines": 0
+          }
+        },
+        {
+          "mode": "software",
+          "repeat": 1,
+          "firstCommitMs": 192.4299999922514,
+          "restore": {
+            "devices": 0,
+            "pipelines": 0
+          }
+        },
+        {
+          "mode": "software",
+          "repeat": 2,
+          "firstCommitMs": 195.74500000476837,
+          "restore": {
+            "devices": 0,
+            "pipelines": 0
+          }
+        },
+        {
+          "mode": "software",
+          "repeat": 3,
+          "firstCommitMs": 197.3800000101328,
+          "restore": {
+            "devices": 0,
+            "pipelines": 0
+          }
+        },
+        {
+          "mode": "software",
+          "repeat": 4,
+          "firstCommitMs": 193.1550000011921,
+          "restore": {
+            "devices": 0,
+            "pipelines": 0
+          }
+        },
+        {
+          "mode": "software",
+          "repeat": 5,
+          "firstCommitMs": 202.72499999403954,
+          "restore": {
+            "devices": 0,
+            "pipelines": 0
+          }
+        }
+      ]
+    }
+  },
+  "verifiedFrameHandoff": {
+    "setup": {
+      "media": "mhw_hevc_fullrange_bt709_3s.mp4",
+      "browser": "Mac Chrome 156, visible",
+      "dpr": 2,
+      "target": "HDR",
+      "repeatsPerMode": 5,
+      "index": "warm server index",
+      "pageAndDecoder": "fresh each trial; GPU startup finished before restore",
+      "measurement": "restore request to first CPU presentation commit; not physical display scanout",
+      "control": "same current GPU optimizations in both builds; only packet-media.ts and ffmpeg-container-media.ts restored to HEAD in before build"
+    },
+    "groups": [
+      {
+        "build": "before-handoff-final",
+        "mode": "hardware",
+        "meanMs": 76.4030000001192,
+        "medianMs": 74.57500000298023,
+        "minMs": 66.45999999344349,
+        "maxMs": 92.54500000178814,
+        "partsMeanMs": {
+          "control_reference_modules": 38.567000007629396,
+          "worker_boot_container": 11.783999994397163,
+          "cached_index": 3.3200000017881393,
+          "decoder_init": 1.488000002503395,
+          "initial_decode_io": 16.79099999666214,
+          "frame_rpc": 0.2500000029802322,
+          "other_delivery_presentation": 4.202999994158745
+        },
+        "cases": [
+          {
+            "repeat": 1,
+            "firstMs": 73.10500000417233,
+            "parts": {
+              "control_reference_modules": 35.065000012516975,
+              "worker_boot_container": 12.059999987483025,
+              "cached_index": 4.145000010728836,
+              "decoder_init": 1.7049999982118607,
+              "initial_decode_io": 15.984999999403954,
+              "frame_rpc": 0.10500000417232513,
+              "other_delivery_presentation": 4.03999999165535
+            },
+            "frameRpcMs": [
+              0.10500000417232513
+            ],
+            "restore": {
+              "devices": 0,
+              "pipelines": 0
+            }
+          },
+          {
+            "repeat": 2,
+            "firstMs": 66.45999999344349,
+            "parts": {
+              "control_reference_modules": 33.20499999821186,
+              "worker_boot_container": 10.91499999165535,
+              "cached_index": 2.814999997615814,
+              "decoder_init": 0.9900000095367432,
+              "initial_decode_io": 15.084999993443489,
+              "frame_rpc": 0.0949999988079071,
+              "other_delivery_presentation": 3.355000004172325
+            },
+            "frameRpcMs": [
+              0.0949999988079071
+            ],
+            "restore": {
+              "devices": 0,
+              "pipelines": 0
+            }
+          },
+          {
+            "repeat": 3,
+            "firstMs": 75.32999999821186,
+            "parts": {
+              "control_reference_modules": 38.86500000953674,
+              "worker_boot_container": 11.689999997615814,
+              "cached_index": 3.614999994635582,
+              "decoder_init": 1.645000010728836,
+              "initial_decode_io": 15.904999986290932,
+              "frame_rpc": 0.10000000894069672,
+              "other_delivery_presentation": 3.509999990463257
+            },
+            "frameRpcMs": [
+              0.10000000894069672
+            ],
+            "restore": {
+              "devices": 0,
+              "pipelines": 0
+            }
+          },
+          {
+            "repeat": 4,
+            "firstMs": 74.57500000298023,
+            "parts": {
+              "control_reference_modules": 37.28500001132488,
+              "worker_boot_container": 11.20499999821186,
+              "cached_index": 2.814999997615814,
+              "decoder_init": 1.6400000005960464,
+              "initial_decode_io": 16.075000002980232,
+              "frame_rpc": 0.45000000298023224,
+              "other_delivery_presentation": 5.104999989271164
+            },
+            "frameRpcMs": [
+              0.45000000298023224
+            ],
+            "restore": {
+              "devices": 0,
+              "pipelines": 0
+            }
+          },
+          {
+            "repeat": 5,
+            "firstMs": 92.54500000178814,
+            "parts": {
+              "control_reference_modules": 48.41500000655651,
+              "worker_boot_container": 13.049999997019768,
+              "cached_index": 3.2100000083446503,
+              "decoder_init": 1.459999993443489,
+              "initial_decode_io": 20.905000001192093,
+              "frame_rpc": 0.5,
+              "other_delivery_presentation": 5.004999995231628
+            },
+            "frameRpcMs": [
+              0.5
+            ],
+            "restore": {
+              "devices": 0,
+              "pipelines": 0
+            }
+          }
+        ]
+      },
+      {
+        "build": "before-handoff-final",
+        "mode": "software",
+        "meanMs": 193.54099999964237,
+        "medianMs": 193.4150000065565,
+        "minMs": 189.82999999821186,
+        "maxMs": 196.1799999922514,
+        "partsMeanMs": {
+          "control_reference_modules": 42.765999999642375,
+          "worker_boot_container": 12.602000001072884,
+          "cached_index": 3.604000002145767,
+          "decoder_init": 34.27499999701977,
+          "initial_decode_io": 54.95,
+          "frame_rpc": 39.66899999976158,
+          "other_delivery_presentation": 5.675
+        },
+        "cases": [
+          {
+            "repeat": 1,
+            "firstMs": 193.4150000065565,
+            "parts": {
+              "control_reference_modules": 43.395000010728836,
+              "worker_boot_container": 13.780000001192093,
+              "cached_index": 3.8499999940395355,
+              "decoder_init": 33.900000005960464,
+              "initial_decode_io": 53.69499999284744,
+              "frame_rpc": 39.23499999940395,
+              "other_delivery_presentation": 5.560000002384186
+            },
+            "frameRpcMs": [
+              0.6050000041723251,
+              38.62999999523163
+            ],
+            "restore": {
+              "devices": 0,
+              "pipelines": 0
+            }
+          },
+          {
+            "repeat": 2,
+            "firstMs": 196.1799999922514,
+            "parts": {
+              "control_reference_modules": 45.349999994039536,
+              "worker_boot_container": 10.734999999403954,
+              "cached_index": 4.695000007748604,
+              "decoder_init": 35.00499999523163,
+              "initial_decode_io": 55.275000005960464,
+              "frame_rpc": 39.605000004172325,
+              "other_delivery_presentation": 5.514999985694885
+            },
+            "frameRpcMs": [
+              0.3449999988079071,
+              39.26000000536442
+            ],
+            "restore": {
+              "devices": 0,
+              "pipelines": 0
+            }
+          },
+          {
+            "repeat": 3,
+            "firstMs": 189.82999999821186,
+            "parts": {
+              "control_reference_modules": 42.5249999910593,
+              "worker_boot_container": 12.165000006556511,
+              "cached_index": 2.885000005364418,
+              "decoder_init": 33.104999989271164,
+              "initial_decode_io": 53.46999999880791,
+              "frame_rpc": 40.020000010728836,
+              "other_delivery_presentation": 5.659999996423721
+            },
+            "frameRpcMs": [
+              0.29999999701976776,
+              39.72000001370907
+            ],
+            "restore": {
+              "devices": 0,
+              "pipelines": 0
+            }
+          },
+          {
+            "repeat": 4,
+            "firstMs": 192.33500000834465,
+            "parts": {
+              "control_reference_modules": 39.730000004172325,
+              "worker_boot_container": 13.930000007152557,
+              "cached_index": 3.0699999928474426,
+              "decoder_init": 35.46999999880791,
+              "initial_decode_io": 55.18000000715256,
+              "frame_rpc": 39.33499999344349,
+              "other_delivery_presentation": 5.620000004768372
+            },
+            "frameRpcMs": [
+              0.2199999988079071,
+              39.11499999463558
+            ],
+            "restore": {
+              "devices": 0,
+              "pipelines": 0
+            }
+          },
+          {
+            "repeat": 5,
+            "firstMs": 195.94499999284744,
+            "parts": {
+              "control_reference_modules": 42.82999999821186,
+              "worker_boot_container": 12.399999991059303,
+              "cached_index": 3.520000010728836,
+              "decoder_init": 33.894999995827675,
+              "initial_decode_io": 57.12999999523163,
+              "frame_rpc": 40.1499999910593,
+              "other_delivery_presentation": 6.020000010728836
+            },
+            "frameRpcMs": [
+              0.5549999922513962,
+              39.59499999880791
+            ],
+            "restore": {
+              "devices": 0,
+              "pipelines": 0
+            }
+          }
+        ]
+      },
+      {
+        "build": "after-handoff-final",
+        "mode": "hardware",
+        "meanMs": 79.58099999725819,
+        "medianMs": 78.12999999523163,
+        "minMs": 67.07999999821186,
+        "maxMs": 90.71500000357628,
+        "partsMeanMs": {
+          "control_reference_modules": 41.09499999880791,
+          "worker_boot_container": 11.930999997258187,
+          "cached_index": 3.5809999972581865,
+          "decoder_init": 1.2180000007152558,
+          "initial_decode_io": 16.81000000536442,
+          "frame_rpc": 0.5450000017881393,
+          "other_delivery_presentation": 4.400999996066093
+        },
+        "cases": [
+          {
+            "repeat": 1,
+            "firstMs": 88.8049999922514,
+            "parts": {
+              "control_reference_modules": 46.554999992251396,
+              "worker_boot_container": 12.180000007152557,
+              "cached_index": 3.7149999886751175,
+              "decoder_init": 1.3100000023841858,
+              "initial_decode_io": 18.680000007152557,
+              "frame_rpc": 0.5700000077486038,
+              "other_delivery_presentation": 5.794999986886978
+            },
+            "frameRpcMs": [
+              0.5700000077486038
+            ],
+            "restore": {
+              "devices": 0,
+              "pipelines": 0
+            }
+          },
+          {
+            "repeat": 2,
+            "firstMs": 78.12999999523163,
+            "parts": {
+              "control_reference_modules": 41.99500000476837,
+              "worker_boot_container": 11.149999991059303,
+              "cached_index": 3.7999999970197678,
+              "decoder_init": 1.1050000041723251,
+              "initial_decode_io": 14.355000004172325,
+              "frame_rpc": 0.8700000047683716,
+              "other_delivery_presentation": 4.854999989271164
+            },
+            "frameRpcMs": [
+              0.8700000047683716
+            ],
+            "restore": {
+              "devices": 0,
+              "pipelines": 0
+            }
+          },
+          {
+            "repeat": 3,
+            "firstMs": 90.71500000357628,
+            "parts": {
+              "control_reference_modules": 45.61499999463558,
+              "worker_boot_container": 13.314999997615814,
+              "cached_index": 3.855000004172325,
+              "decoder_init": 1.3400000035762787,
+              "initial_decode_io": 21.5,
+              "frame_rpc": 0.7650000005960464,
+              "other_delivery_presentation": 4.325000002980232
+            },
+            "frameRpcMs": [
+              0.7650000005960464
+            ],
+            "restore": {
+              "devices": 0,
+              "pipelines": 0
+            }
+          },
+          {
+            "repeat": 4,
+            "firstMs": 67.07999999821186,
+            "parts": {
+              "control_reference_modules": 34.435000002384186,
+              "worker_boot_container": 11.640000000596046,
+              "cached_index": 2.8199999928474426,
+              "decoder_init": 0.9549999982118607,
+              "initial_decode_io": 13.945000007748604,
+              "frame_rpc": 0.08499999344348907,
+              "other_delivery_presentation": 3.2000000029802322
+            },
+            "frameRpcMs": [
+              0.08499999344348907
+            ],
+            "restore": {
+              "devices": 0,
+              "pipelines": 0
+            }
+          },
+          {
+            "repeat": 5,
+            "firstMs": 73.17499999701977,
+            "parts": {
+              "control_reference_modules": 36.875,
+              "worker_boot_container": 11.36999998986721,
+              "cached_index": 3.7150000035762787,
+              "decoder_init": 1.3799999952316284,
+              "initial_decode_io": 15.570000007748604,
+              "frame_rpc": 0.4350000023841858,
+              "other_delivery_presentation": 3.8299999982118607
+            },
+            "frameRpcMs": [
+              0.4350000023841858
+            ],
+            "restore": {
+              "devices": 0,
+              "pipelines": 0
+            }
+          }
+        ]
+      },
+      {
+        "build": "after-handoff-final",
+        "mode": "software",
+        "meanMs": 145.2119999974966,
+        "medianMs": 142.24000000953674,
+        "minMs": 140.58999998867512,
+        "maxMs": 151.39000000059605,
+        "partsMeanMs": {
+          "control_reference_modules": 39.26099999845028,
+          "worker_boot_container": 12.013999998569489,
+          "cached_index": 3.7140000015497208,
+          "decoder_init": 32.38400000333786,
+          "initial_decode_io": 51.46499999761581,
+          "frame_rpc": 0.4450000047683716,
+          "other_delivery_presentation": 5.92899999320507
+        },
+        "cases": [
+          {
+            "repeat": 1,
+            "firstMs": 142.24000000953674,
+            "parts": {
+              "control_reference_modules": 37.41000001132488,
+              "worker_boot_container": 11.349999994039536,
+              "cached_index": 3.730000004172325,
+              "decoder_init": 32.48499999940395,
+              "initial_decode_io": 51.58499999344349,
+              "frame_rpc": 0.42500001192092896,
+              "other_delivery_presentation": 5.254999995231628
+            },
+            "frameRpcMs": [
+              0.42500001192092896
+            ],
+            "restore": {
+              "devices": 0,
+              "pipelines": 0
+            }
+          },
+          {
+            "repeat": 2,
+            "firstMs": 140.58999998867512,
+            "parts": {
+              "control_reference_modules": 37.50499999523163,
+              "worker_boot_container": 10.864999994635582,
+              "cached_index": 3.9100000113248825,
+              "decoder_init": 31.875,
+              "initial_decode_io": 50.229999989271164,
+              "frame_rpc": 0.5600000023841858,
+              "other_delivery_presentation": 5.644999995827675
+            },
+            "frameRpcMs": [
+              0.5600000023841858
+            ],
+            "restore": {
+              "devices": 0,
+              "pipelines": 0
+            }
+          },
+          {
+            "repeat": 3,
+            "firstMs": 150.20499999821186,
+            "parts": {
+              "control_reference_modules": 40.71499998867512,
+              "worker_boot_container": 12.465000003576279,
+              "cached_index": 4.129999995231628,
+              "decoder_init": 33.11500000953674,
+              "initial_decode_io": 52.73999999463558,
+              "frame_rpc": 0.3700000047683716,
+              "other_delivery_presentation": 6.670000001788139
+            },
+            "frameRpcMs": [
+              0.3700000047683716
+            ],
+            "restore": {
+              "devices": 0,
+              "pipelines": 0
+            }
+          },
+          {
+            "repeat": 4,
+            "firstMs": 141.63499999046326,
+            "parts": {
+              "control_reference_modules": 38.019999995827675,
+              "worker_boot_container": 12.230000004172325,
+              "cached_index": 2.739999994635582,
+              "decoder_init": 31.655000001192093,
+              "initial_decode_io": 50.68000000715256,
+              "frame_rpc": 0.48499999940395355,
+              "other_delivery_presentation": 5.824999988079071
+            },
+            "frameRpcMs": [
+              0.48499999940395355
+            ],
+            "restore": {
+              "devices": 0,
+              "pipelines": 0
+            }
+          },
+          {
+            "repeat": 5,
+            "firstMs": 151.39000000059605,
+            "parts": {
+              "control_reference_modules": 42.65500000119209,
+              "worker_boot_container": 13.159999996423721,
+              "cached_index": 4.060000002384186,
+              "decoder_init": 32.79000000655651,
+              "initial_decode_io": 52.09000000357628,
+              "frame_rpc": 0.38500000536441803,
+              "other_delivery_presentation": 6.249999985098839
+            },
+            "frameRpcMs": [
+              0.38500000536441803
+            ],
+            "restore": {
+              "devices": 0,
+              "pipelines": 0
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "threadRestoration": {
+    "setup": {
+      "media": "mhw_hevc_fullrange_bt709_3s.mp4",
+      "browser": "Playwright WebKit, headless",
+      "mode": "reference color, forced FFmpeg WASM, requested software decode depth 2",
+      "flow": "three replacements in the same page, default playback benchmark thresholds unchanged",
+      "comparison": "same machine; final after benchmarks run separately from media regression tests",
+      "evidence": "application presentation and media clock; physical screen scanout not verified"
+    },
+    "before": [
+      {
+        "repeat": 1,
+        "passed": true,
+        "decoder": "ffmpeg-wasm",
+        "threads": 4,
+        "speed": 0.9951835715424262,
+        "failures": []
+      },
+      {
+        "repeat": 2,
+        "passed": false,
+        "decoder": "ffmpeg-wasm",
+        "threads": 1,
+        "speed": 0.6481762812748728,
+        "failures": [
+          "below-realtime"
+        ]
+      },
+      {
+        "repeat": 3,
+        "passed": true,
+        "decoder": "ffmpeg-wasm",
+        "threads": 3,
+        "speed": 0.9951373069898721,
+        "failures": []
+      }
+    ],
+    "after": [
+      {
+        "repeat": 1,
+        "passed": true,
+        "decoder": "ffmpeg-wasm",
+        "threads": 4,
+        "speed": 0.9959641076769691,
+        "failures": []
+      },
+      {
+        "repeat": 2,
+        "passed": true,
+        "decoder": "ffmpeg-wasm",
+        "threads": 4,
+        "speed": 0.9982731742415154,
+        "failures": []
+      },
+      {
+        "repeat": 3,
+        "passed": true,
+        "decoder": "ffmpeg-wasm",
+        "threads": 4,
+        "speed": 0.9978676504864719,
+        "failures": []
+      }
+    ]
+  },
+  "validation": {
+    "logicAndLifecycleTests": 156,
+    "realMediaAndPixelTests": 39,
+    "regularPlayback": {
+      "passed": 12,
+      "runs": 12
+    },
+    "softwareReplacementPlayback": {
+      "passed": 3,
+      "runs": 3
+    },
+    "presentationBrowsers": [
+      "Chromium",
+      "WebKit"
+    ],
+    "hdrGpu": "Chrome real WebGPU, default explicit native-HDR rejection and experimental positive bridge path; 794 vectors x 3 policies",
+    "build": "passed including shared/environment/boundary checks"
+  }
+}

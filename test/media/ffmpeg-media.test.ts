@@ -8,10 +8,99 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { WorkerRpc } from '../../src/media/workers/worker-rpc.ts';
 import type { FfmpegCommands } from '../../src/media/workers/worker-protocol.ts';
-import { floorIndex, nextIndex, openFFmpegMedia } from '../../src/media/decoding/ffmpeg-media.ts';
+import { floorIndex, nextIndex, openFFmpegMedia, openFFmpegContainerFromUrl } from '../../src/media/decoding/ffmpeg-media.ts';
 import { openMedia } from '../../src/media/source.ts';
 import type { FallbackDeps } from '../../src/media/decoding/ffmpeg-media.ts';
 import type { MediaSource } from '../../src/media/contract.ts';
+import { reserveFallbackThreads } from '../../src/media/decoding/fallback-runtime.ts';
+import { setWasmThreadMode, wasmThreadMode } from '../../src/media/policy/wasm-threads.ts';
+import { visiblePixelHash } from '../helpers/visible-pixels.ts';
+import { createMediaServer } from '../../server/app.ts';
+import { MediaLibraryIndex } from '../../server/library.ts';
+
+for (const backend of ['packet', 'container'] as const) test(`${backend}: released replacement budget restores actual WASM threads without changing source pixels or index`, { timeout: 120000 }, async t => {
+  t.mock.getter(Navigator.prototype, 'hardwareConcurrency', () => 8);
+  const mode = wasmThreadMode(); setWasmThreadMode('auto');
+  const old = reserveFallbackThreads('auto');
+  const core = new URL('../../public/vendor/voidplayer-core/', import.meta.url);
+  const directory = await mkdtemp(join(tmpdir(), 'vp-budget-'));
+  const path = join(directory, 'ffv1.avi');
+  if (backend === 'container') execFileSync(process.env.VOIDPLAYER_FFMPEG_ORACLE || 'ffmpeg',
+    ['-v', 'error', '-y', '-i', resolve('fixtures/video/ffv1_yuv422p_8bit.mkv'), '-map', '0:v:0', '-c', 'copy', '-f', 'avi', path]);
+  const file = backend === 'packet'
+    ? new File([await readFile(new URL('../../fixtures/video/h264_9s_1920x1080.mp4', import.meta.url))], 'clip.mp4')
+    : new File([await readFile(path)], 'ffv1.avi');
+  const deps = { glueURL: new URL('voidplayer-core-mt.js', core).href, wasmBinary: await readFile(new URL('voidplayer-core-mt.wasm', core)) };
+  let source: MediaSource | undefined;
+  let closeLibrary: (() => Promise<void>) | undefined;
+  try {
+    if (backend === 'packet') source = await openPacketMedia('mp4', { file }, file, { ...deps, forceWasm: true });
+    else {
+      const library = new MediaLibraryIndex([directory], { watch: false });
+      const server = createMediaServer({ roots: [directory], library, onLog() {} });
+      closeLibrary = async () => { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await library.close(); };
+      await library.refresh();
+      const entry = library.browse().entries[0];
+      await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+      const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/api/media/${entry.id}?v=${entry.version}`;
+      source = await openFFmpegContainerFromUrl(url, { name: file.name, size: file.size, lastModified: file.lastModified }, deps);
+    }
+    await source.ensureIndexed?.();
+    assert.equal(source.info.decoderThreads, 1);
+    const first = await source.frameAt(0), hash = visiblePixelHash(first.description, first.pixels!);
+    const originalId = source.info.id, originalIndex = source.info.indexSource;
+    first.close();
+    const sought = await source.frameAt(1_000_000), targetPts = sought.ptsUs;
+    const targetHash = visiblePixelHash(sought.description, sought.pixels!), targetPicture = sought.sourcePicture;
+    sought.close();
+    old.release();
+    const upgraded = await source.frameAt(1_000_000);
+    assert.equal(source.info.decoderThreads, 4, 'metadata reports the actual upgraded core, not just the host budget');
+    assert.equal(visiblePixelHash(upgraded.description, upgraded.pixels!), targetHash);
+    assert.equal(upgraded.ptsUs, targetPts);
+    assert.deepEqual(upgraded.sourcePicture, targetPicture);
+    assert.equal(source.info.id, originalId);
+    assert.equal(source.info.indexSource, originalIndex);
+    upgraded.close();
+    const frames = await source.framesAfter(0, 3);
+    assert.equal(frames.length, 3);
+    assert.ok(frames.every((frame, i) => frame.ptsUs > (i ? frames[i - 1].ptsUs : 0)));
+    frames.forEach(frame => frame.close());
+    const replay = await source.frameAt(0);
+    assert.equal(visiblePixelHash(replay.description, replay.pixels!), hash);
+    replay.close();
+  } finally {
+    source?.dispose(); old.release(); setWasmThreadMode(mode);
+    await closeLibrary?.();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('failed thread growth releases its extra reservation and keeps the original packet decoder usable', async t => {
+  t.mock.getter(Navigator.prototype, 'hardwareConcurrency', () => 8);
+  const mode = wasmThreadMode(); setWasmThreadMode('auto');
+  const old = reserveFallbackThreads('auto'), core = new URL('../../public/vendor/voidplayer-core/', import.meta.url);
+  const binary = await readFile(new URL('voidplayer-core-mt.wasm', core));
+  const file = new File([await readFile(new URL('../../fixtures/video/h264_9s_1920x1080.mp4', import.meta.url))], 'clip.mp4');
+  let source: MediaSource | undefined;
+  try {
+    source = await openPacketMedia('mp4', { file }, file, { forceWasm: true, glueURL: new URL('voidplayer-core-mt.js', core).href, wasmBinary: binary });
+    const first = await source.frameAt(0), hash = visiblePixelHash(first.description, first.pixels!);
+    first.close();
+    binary.fill(0); // The existing Worker owns a separate copy; only the new candidate fails compilation.
+    old.release();
+    for (let repeat = 0; repeat < 2; repeat++) {
+      const retained = await source.frameAt(0);
+      assert.equal(source.info.decoderThreads, 1);
+      assert.equal(visiblePixelHash(retained.description, retained.pixels!), hash);
+      retained.close();
+    }
+    source.dispose();
+    const fresh = reserveFallbackThreads('auto');
+    assert.equal(fresh.threads.general, 4, 'failed growth and source disposal return all reservations');
+    fresh.release();
+  } finally { source?.dispose(); old.release(); setWasmThreadMode(mode); }
+});
 
 test('FFmpeg container worker exposes live VVC tuning independently of MP4 packets', { timeout: 120000 }, async () => {
   const directory = await mkdtemp(join(tmpdir(), 'vp-vvc-container-'));

@@ -49,6 +49,9 @@ export interface FfmpegInitResult extends FfmpegIndexRecovery {
 }
 
 export interface FfmpegCommands {
+  'restore-threads': Command<{ ctx: number; index: number; threads: DecodeThreads }, {
+    ctx: number; decoderThreads?: number; decoderFrameContexts?: number; frame: WasmFrameOutput;
+  }>;
   'tune-vvc': Command<{ ctx: number; axis?: import('../contract.ts').VvcTuningAxis }, import('../contract.ts').VvcTuningState | null>;
   'analysis-ffmpeg-index': Command<{ctx: number; size: number}, import('../../../shared/media/indexing/ffmpeg-index-cache.ts').FfmpegIndexDocument>;
   'peek-audio': Command<{ offset: number; length: number; ctx?: number; windows?: boolean }, null>;
@@ -81,7 +84,7 @@ export interface PacketCommands {
   'analysis-index': Command<Empty, import('../../../shared/analysis/bitstream/stream.ts').AnalysisIndexFrontier>;
   'complete-index': Command<Empty, Awaited<ReturnType<FlvEngine['completeIndex']>> | Awaited<ReturnType<TsEngine['completeIndex']>>>;
   'reference-witness': Command<SoftwareOptions, PacketFrame>;
-  'switch-software': Command<SoftwareOptions, Awaited<ReturnType<FlvEngine['switchToSoftware']>> | Awaited<ReturnType<Mp4Engine['switchToSoftware']>> | Awaited<ReturnType<TsEngine['switchToSoftware']>>>;
+  'switch-software': Command<SoftwareOptions & { replace?: boolean; pts?: number }, Awaited<ReturnType<FlvEngine['switchToSoftware']>> | Awaited<ReturnType<Mp4Engine['switchToSoftware']>> | Awaited<ReturnType<TsEngine['switchToSoftware']>>>;
   'switch-native': Command<Empty, Awaited<ReturnType<FlvEngine['switchToNative']>> | Awaited<ReturnType<Mp4Engine['switchToNative']>> | Awaited<ReturnType<TsEngine['switchToNative']>>>;
   dispose: Command<Empty, null>;
   extract: Command<{ position: number; recycle?: ArrayBuffer }, PacketFrame | null>;
