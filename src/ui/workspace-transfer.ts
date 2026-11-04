@@ -5,7 +5,7 @@ import { LibraryAccessError } from '../../shared/media/io/source-access.ts';
 import { libraryAccessMessage, localAccessMessage } from './source-access-message.ts';
 import type { LocalAccessProblem } from '../../shared/media/io/source-access.ts';
 import { installWorkspaceSharing } from './workspace-sharing.ts';
-import type { ToastStack } from './toast.ts';
+import type { ToastStack, ToastAction } from './toast.ts';
 import {updateMediaInfo} from '../media/state.ts';
 import type { ReviewSession } from '../session.ts';
 import type { MediaInfo } from '../../shared/media/types.ts';
@@ -35,7 +35,7 @@ function relinkMismatch(name: string, mismatches: MediaIdentityMismatch[]) {
 export const isWorkspaceFile = (file: File) => /\.(voidplayer|json|gz)$/i.test(file.name);
 
 /** Browser files cannot be reopened from a JSON path. Resolve every missing file before touching the session. */
-async function resolveLocalFiles(media: MediaInfo[], supplied: File[], prompt = true, onMtimeWarning?: (name: string) => void, signal?: AbortSignal, problems = new Map<string, LocalAccessProblem>()) {
+async function resolveLocalFiles(media: MediaInfo[], supplied: File[], prompt = true, onMtimeWarning?: (name: string) => void, signal?: AbortSignal, problems = new Map<string, LocalAccessProblem>(), allowPermissionPrompt = false) {
   const files = new Map<string, File>();
   const accept = (info: MediaInfo, file: File) => {
     const match = matchMediaIdentity(info, file);
@@ -46,7 +46,7 @@ async function resolveLocalFiles(media: MediaInfo[], supplied: File[], prompt = 
   };
   for (const info of media) { const file = supplied.find(f => matchMediaIdentity(info, f).ok); if (file) accept(info, file); }
   for (const info of media) if (!files.has(info.id)) {
-    try { const file = await restoreHandleFile(handleKey(info), undefined, false); if (!accept(info, file)) problems.set(info.id, 'stale'); }
+    try { const file = await restoreHandleFile(handleKey(info), undefined, allowPermissionPrompt); if (!accept(info, file)) problems.set(info.id, 'stale'); }
     catch (error) { problems.set(info.id, error instanceof FileHandleError ? error.kind : 'unavailable'); }
   }
   if (signal?.aborted) return null;
@@ -197,10 +197,10 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
   // synchronously before any network work begins.
   sharing = installWorkspaceSharing({ signal:lifetime.signal, snapshot:exportWorkspace, binding:saved.binding, save:saved.share, toasts:options.toasts, openSpace:options.openSharedSpace, scope:options.annotationScope, isOpening:saved.isOpening, canShare:()=>session.getState().tracks.length>0&&!saved!.isOpening(), report:error=>void options.act(()=>{throw error;}, 'workspace.share') });
   let missingSignature = '', dismissMissing: (() => void) | undefined;
-  async function relinkMissing() {
-    const pending = session.getState().tracks.filter(t => t.pendingRelink);
+  async function relinkMissing(kind?: 'local' | 'library') {
+    const pending = session.getState().tracks.filter(t => t.pendingRelink && (!kind || (kind === 'library') === !!t.source));
     const warnMtime = (name: string) => options.toasts.show(() => relinkMtimeWarning(name));
-    const files = await resolveLocalFiles(pending.filter(t => !t.source), [], true, warnMtime, lifetime.signal);
+    const files = await resolveLocalFiles(pending.filter(t => !t.source), [], true, warnMtime, lifetime.signal, new Map(), true);
     if (!files) return;
     for (const info of pending) {
       if (!info.source && !files.has(info.id)) continue;
@@ -212,17 +212,36 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
         const source = await openMediaFromUrl(reference.url, info, undefined, progress, signal,undefined,
           new URL(reference.url,location.href).origin===location.origin?ownLibraryIndexReference(reference.id,new URL(reference.url,location.href).searchParams.get('v')!):undefined,configuration);
         updateMediaInfo(source, { source: reference }, 'identity'); return source;
-      }), 'workspace.relink');
+      }, { allowUnavailable: true }), 'workspace.relink');
     }
   }
   function updateMissing() {
     if (session.getState().busy) return;
     const pending = session.getState().tracks.filter(t => t.pendingRelink);
-    const signature = JSON.stringify(pending.map(t => [t.slot, t.id, t.failure?.message]));
+    const signature = JSON.stringify(pending.map(t => [t.slot, t.id, t.failure?.message, t.failure?.reason]));
     if (signature === missingSignature) return;
     missingSignature = signature; dismissMissing?.();
-    if (pending.length) dismissMissing = options.toasts.show(() => `${t(msg("transfer.pendingRelink", "{n, plural, other {# 个片源待重新关联；轨道、偏移和标注已保留。}}"), { n: pending.length })} ${pending.map(track => `${track.slot}：${track.failure?.message ?? ''}`).join('；')}`, { kind: 'warning', durationMs: 0,
-      action: { label: () => t(msg("transfer.relinkNow", "重新关联")), onClick: () => { void relinkMissing().catch(error => options.toasts.show(String(error), { kind: 'error' })).finally(() => { missingSignature = ''; updateMissing(); }); } } });
+    if (!pending.length) return;
+    const actions: ToastAction[] = [];
+    const retry = (kind: 'local' | 'library') => {
+      void relinkMissing(kind).catch(error => options.toasts.show(String(error), { kind: 'error' })).finally(() => { missingSignature = ''; updateMissing(); });
+    };
+    const local = pending.filter(track => !track.source), library = pending.filter(track => track.source);
+    if (local.length) actions.push({
+      label: () => local.some(track => track.failure?.reason === 'denied') && supportsFileHandles()
+        ? t(msg('transfer.authorizeLocal', '授权并重试')) : t(msg('transfer.reselectLocal', '重新选择文件')),
+      onClick: () => retry('local'),
+    });
+    if (library.some(track => !['missing', 'changed'].includes(track.failure?.reason ?? ''))) actions.push({
+      label: () => t(msg('transfer.retryLibrary', '重试媒体库')), onClick: () => retry('library'),
+    });
+    if (library.some(track => ['missing', 'changed'].includes(track.failure?.reason ?? ''))) actions.push({
+      label: () => t(msg('transfer.browseLibrary', '在媒体库中选择')), onClick: () => {
+        const toggle = document.getElementById('toggle-sources');
+        if (toggle?.getAttribute('aria-expanded') !== 'true') toggle?.click();
+      },
+    });
+    dismissMissing = options.toasts.show(() => `${t(msg("transfer.pendingRelink", "{n, plural, other {# 个片源待重新关联；轨道、偏移和标注已保留。}}"), { n: pending.length })} ${pending.map(track => `${track.slot}：${track.failure?.message ?? ''}`).join('；')}`, { kind: 'warning', durationMs: 0, actions });
   }
   const recovery = installWorkspaceRecovery(session, { snapshot: exportWorkspace, restore: document => importWorkspace(document, [], true), ready: options.identityReady, toasts: options.toasts });
   const unsubscribe = session.subscribe(() => { saved?.update(); sharing?.update(); updateMissing(); });

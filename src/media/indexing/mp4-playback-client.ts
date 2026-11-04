@@ -14,7 +14,10 @@ export async function loadLibraryMp4Playback(input: Extract<RandomAccessInput, {
     onIndex?.();
     const value = await client.read();
     signal.throwIfAborted();
-    if (!value) throw new MediaOpenError('input', client.failureReason?.message ?? '服务端 MP4 播放索引不可用。');
+    if (!value) {
+      const failure = client.failureReason;
+      throw new MediaOpenError('input', failure ? `${failure.message}${failure.status ? `（HTTP ${failure.status}）` : ''}` : '服务端 MP4 播放索引不可用。');
+    }
     return parseMp4Playback(value, input.size, `${input.library!.id}@${input.library!.version}`);
   } finally { detach(); client.close(); }
 }

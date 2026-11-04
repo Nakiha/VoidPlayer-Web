@@ -2742,6 +2742,46 @@
     "source": "软件解码器资源与播放器版本不匹配，请更新解码器资源并刷新页面后重试。",
     "translation": "Software decoder assets do not match this player version. Update the decoder assets, refresh the page, and try again."
   },
+  "fileAccess.apiName": {
+    "source": "File System Access API",
+    "translation": "File System Access API"
+  },
+  "fileAccess.available": {
+    "source": "检测到文件访问接口，可以选择视频验证权限和保存能力。",
+    "translation": "File access is available. Select a video to verify permission and handle storage."
+  },
+  "fileAccess.cancelled": {
+    "source": "已取消选择，可以再次尝试。",
+    "translation": "Selection cancelled. You can try again."
+  },
+  "fileAccess.failed": {
+    "source": "未能取得或保存文件访问权限。请检查浏览器的网站权限后重试。",
+    "translation": "Could not obtain or save file access. Check this site’s browser permissions and try again."
+  },
+  "fileAccess.help": {
+    "source": "选择一个视频以验证访问权限和本机句柄保存，不会上传或播放。曾拒绝授权时可再次尝试；浏览器未提供此能力时，本地视频仅在本次页面可用，不进入最近打开。",
+    "translation": "Select a video to verify file access and local handle storage. It will not be uploaded or played. You can try again after denying access. If the browser does not provide this capability, local videos are available only on this page and do not appear in Recently opened."
+  },
+  "fileAccess.success": {
+    "source": "已验证文件访问和句柄保存。刷新后仍需浏览器允许读取；曾拒绝时可以重新尝试。",
+    "translation": "File access and handle storage verified. Reopening after a refresh still requires browser permission; you can try again after denying access."
+  },
+  "fileAccess.title": {
+    "source": "持久访问本地文件",
+    "translation": "Persistent local file access"
+  },
+  "fileAccess.try": {
+    "source": "尝试启用",
+    "translation": "Try enabling"
+  },
+  "fileAccess.unsupported": {
+    "source": "当前浏览器未提供持久文件访问能力。本地视频按一次性文件打开。",
+    "translation": "This browser does not provide persistent file access. Local videos are opened for this page only."
+  },
+  "fileDrop.release": {
+    "source": "松开以添加视频",
+    "translation": "Release to add video"
+  },
   "identity.chooseExisting": {
     "source": "选择已有用户",
     "translation": "Choose an existing user"
@@ -4505,10 +4545,6 @@
     "source": "工作区已恢复。",
     "translation": "Workspace restored."
   },
-  "recovery.restoredWithMissing": {
-    "source": "工作区布局和标注已恢复，{n} 个片源尚未打开。",
-    "translation": "Workspace layout and annotations restored; {n} sources have not been opened."
-  },
   "recovery.saveFailed": {
     "source": "工作区本机自动恢复保存失败，请导出文件或显式保存到服务器。",
     "translation": "Local recovery saving failed. Export a file or save explicitly to the server."
@@ -6047,6 +6083,14 @@
     "source": "视频",
     "translation": "Video"
   },
+  "transfer.authorizeLocal": {
+    "source": "授权并重试",
+    "translation": "Authorize and retry"
+  },
+  "transfer.browseLibrary": {
+    "source": "在媒体库中选择",
+    "translation": "Choose in library"
+  },
   "transfer.cancelImport": {
     "source": "取消导入",
     "translation": "Cancel import"
@@ -6091,13 +6135,17 @@
     "source": "工作区保存了视频引用。请重新选择这些本地文件，也可以稍后关联，先恢复轨道和标注。",
     "translation": "The workspace saved video references. Pick those local files again, or link them later and restore tracks and marks first."
   },
-  "transfer.relinkNow": {
-    "source": "重新关联",
-    "translation": "Relink now"
-  },
   "transfer.relinkTitle": {
     "source": "重新连接本地视频",
     "translation": "Reconnect local videos"
+  },
+  "transfer.reselectLocal": {
+    "source": "重新选择文件",
+    "translation": "Select files again"
+  },
+  "transfer.retryLibrary": {
+    "source": "重试媒体库",
+    "translation": "Retry library"
   },
   "transfer.sizeMismatch": {
     "source": "大小 {expected} → {actual}",

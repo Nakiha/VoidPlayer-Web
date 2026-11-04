@@ -4,12 +4,13 @@ export interface IndexStreamCursor {
 }
 
 export type IndexStreamEventResult = 'continue' | 'complete' | 'stop';
+export type IndexStreamFailure = { code?: string; message: string; status?: number };
 export interface IndexStreamTransportHandlers {
   cursor(): IndexStreamCursor;
   onEvent(event: unknown): IndexStreamEventResult;
 }
 export type IndexStreamTransportResult =
-  | { status: 'complete' | 'stopped' | 'aborted' | 'failed' }
+  | { status: 'complete' | 'stopped' | 'aborted' | 'failed'; failure?: IndexStreamFailure }
   | { status: 'legacy'; bytes: Uint8Array };
 export interface IndexStreamTransportTrace {
   serverIndexRequests: number;
@@ -88,13 +89,21 @@ export class IndexStreamTransport {
       }
 
       if (!response.ok) {
-        clearRequestTimeout();
-        await response.body?.cancel().catch(() => {});
         if (response.status >= 500) {
+          await response.body?.cancel().catch(() => {});
           if (!await retry()) return { status: 'aborted' };
           continue;
         }
-        return { status: 'failed' };
+        let failure: IndexStreamFailure = { status: response.status, message: `索引请求失败（HTTP ${response.status}）。` };
+        try {
+          const bytes = await this.readLegacy(response, resetIdleTimeout, 8192);
+          const body = bytes ? JSON.parse(new TextDecoder().decode(bytes)) : null;
+          if (typeof body?.error === 'string' && body.error.trim()) failure = {
+            ...failure, message: body.error.slice(0, 4096), ...(typeof body.code === 'string' ? { code: body.code.slice(0, 100) } : {}),
+          };
+        } catch { /* Keep the HTTP status when the error body is absent, oversized or invalid. */ }
+        finally { clearRequestTimeout(); }
+        return { status: 'failed', failure };
       }
 
       if (!response.headers.get('content-type')?.toLowerCase().includes('application/x-ndjson')) {
@@ -156,7 +165,7 @@ export class IndexStreamTransport {
 
   diagnostics(): IndexStreamTransportTrace { return { ...this.trace }; }
 
-  private async readLegacy(response: Response, onChunk: () => void): Promise<Uint8Array | null> {
+  private async readLegacy(response: Response, onChunk: () => void, maxBytes = this.options.maxBytes): Promise<Uint8Array | null> {
     const reader = response.body?.getReader();
     if (!reader) return null;
     const chunks: Uint8Array[] = [];
@@ -167,7 +176,7 @@ export class IndexStreamTransport {
         if (done) break;
         onChunk();
         size += value.length;
-        if (size > this.options.maxBytes) throw new Error('索引缓存超过上限。');
+        if (size > maxBytes) throw new Error('索引缓存超过上限。');
         chunks.push(value);
       }
     } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }

@@ -1,7 +1,7 @@
 // UI regressions against a fresh build, with an isolated local server and browser.
 // Usage: npm run test:browser -- [webkit|chromium]
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, copyFile, utimes, rm, access, realpath, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, copyFile, utimes, rm, access, realpath, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromium, webkit } from 'playwright';
@@ -145,6 +145,92 @@ try {
     assert.equal(await page.locator('#start-library-more > span').isVisible(), true, '581px with sources retains the library action label');
     await page.screenshot({ path: path.join(screenshots, 'start-header-narrow.png') });
   });
+
+  await check('file drop feedback uses a centered theme bubble with borderless thirty-percent fill', async page => {
+    const entry = listing.entries.find(entry => entry.name === 'ci_h264_smoke.mp4');
+    const call = (name, args) => page.evaluate(({ name, args }) => window.voidPlayer.tools.find(tool => tool.name === name).execute(args), { name, args });
+    await call('load_library_item', { id: entry.id, slot: 'A' });
+    const heading = '.video-card.view-first .card-heading';
+    const drag = (selector, type = 'dragover', count = 1, text = false) => page.evaluate(({ selector, type, count, text }) => {
+      const target = document.querySelector(selector), box = target.getBoundingClientRect(), data = new DataTransfer();
+      if (text) data.setData('text/plain', 'native text drag');
+      else for (let i = 0; i < count; i++) data.items.add(new File(['preview'], `video-${i}.mp4`, { type: 'video/mp4' }));
+      target.dispatchEvent(new DragEvent(type, { dataTransfer: data, bubbles: true, cancelable: true, clientX: box.left + box.width / 2, clientY: box.top + box.height / 2 }));
+    }, { selector, type, count, text });
+    const overlay = page.locator('#file-drop-feedback');
+    await page.setViewportSize({ width: 1056, height: 786 });
+    await page.evaluate(() => window.voidPlayer.setViewport({ zoom: 6.18 }));
+    for (const theme of ['light', 'dark']) {
+      await page.emulateMedia({ colorScheme: theme }); await drag(heading);
+      await overlay.waitFor({ state: 'visible' }); await settle(page);
+      assert.equal(await overlay.locator('.file-drop-bubble').innerText(), '松开以添加视频');
+      assert.equal(await overlay.locator('.file-drop-panel').count(), 0);
+      const paint = await overlay.evaluate(el => {
+        const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
+        const ctx = canvas.getContext('2d');
+        const alpha = color => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = color; ctx.fillRect(0, 0, 1, 1); return ctx.getImageData(0, 0, 1, 1).data[3]; };
+        const bubble = getComputedStyle(el.querySelector('.file-drop-bubble'));
+        const reference = document.createElement('span'); reference.style.color = 'var(--accent)'; reference.style.background = 'var(--glass-control-selected-hover)'; el.append(reference);
+        const expected = getComputedStyle(reference), matchesTheme = bubble.color === expected.color && getComputedStyle(el.querySelector('.file-drop-bubble'), '::before').backgroundColor === expected.backgroundColor;
+        reference.remove();
+        return { fillAlpha: alpha(getComputedStyle(el).backgroundColor), bubbleAlpha: alpha(bubble.backgroundColor), bubbleBorder: parseFloat(bubble.borderTopWidth),
+          matchesTheme, outline: getComputedStyle(el, '::after').borderTopStyle, shadow: getComputedStyle(el).boxShadow };
+      });
+      assert.ok(Math.abs(paint.fillAlpha - 255 * .3) <= 1, 'the target fill has thirty-percent opacity');
+      assert.equal(paint.bubbleAlpha, 255, 'button chrome prevents bright video from washing out the theme text'); assert.equal(paint.bubbleBorder, 0);
+      assert.equal(paint.matchesTheme, true, 'bubble text and fill match the Add local video button highlight');
+      assert.equal(await overlay.locator('.file-drop-bubble .icon[data-icon=filePlus]').count(), 1);
+      assert.equal(paint.outline, 'none'); assert.equal(paint.shadow, 'none', 'there is no outline or solid frame');
+      assert.equal(await page.evaluate(() => {
+        const overlay = document.getElementById('file-drop-feedback'), header = document.querySelector('.view-first .card-heading').getBoundingClientRect();
+        overlay.style.pointerEvents = 'auto';
+        try { return document.elementFromPoint(header.left + header.width / 2, header.top + header.height / 2) === overlay; }
+        finally { overlay.style.removeProperty('pointer-events'); }
+      }), true, 'the feedback paints above the track heading');
+      assert.equal(await overlay.evaluate(el => getComputedStyle(el).pointerEvents), 'none', 'feedback never intercepts drop targeting');
+      const bubble = await overlay.locator('.file-drop-bubble').boundingBox(), surface = await page.locator('.viewport-surface').boundingBox();
+      const fill = await overlay.boundingBox();
+      for (const key of ['x', 'y', 'width', 'height']) assert.ok(Math.abs(fill[key] - surface[key]) <= 1, 'fill covers the entire viewport without an inset');
+      assert.ok(Math.abs(bubble.x + bubble.width / 2 - surface.x - surface.width / 2) <= 1
+        && Math.abs(bubble.y + bubble.height / 2 - surface.y - surface.height / 2) <= 1, 'the theme bubble stays centered independently of video zoom');
+      await page.screenshot({ path: path.join(screenshots, `file-drop-${theme}-${browserName}.png`) });
+      await overlay.locator('.file-drop-bubble').screenshot({ path: path.join(screenshots, `file-drop-bubble-${theme}-${browserName}.png`) });
+    }
+    await drag(heading, 'dragover', 8); await overlay.waitFor({ state: 'hidden' });
+    await drag(heading, 'dragover', 7); await overlay.waitFor({ state: 'visible' }); await settle(page);
+    assert.equal(await overlay.locator('.file-drop-bubble').count(), 1, 'multiple files share the same simple bubble');
+    await page.setViewportSize({ width: 360, height: 640 }); await settle(page);
+    const bubble = await overlay.locator('.file-drop-bubble').boundingBox();
+    assert.ok(bubble.x >= 0 && bubble.x + bubble.width <= 360 && bubble.y >= 0 && bubble.y + bubble.height <= 640, 'the bubble fits on a narrow screen');
+    await page.screenshot({ path: path.join(screenshots, `file-drop-multiple-${browserName}.png`) });
+    await page.keyboard.press('Escape'); await overlay.waitFor({ state: 'hidden' });
+    await drag(heading, 'dragover', 1, true); assert.equal(await overlay.isVisible(), false, 'text dragging stays native');
+    await drag('#open'); await settle(page);
+    assert.equal(await overlay.isVisible(), true, 'a hidden new track still has visible feedback');
+    await drag('#open', 'dragend'); await overlay.waitFor({ state: 'hidden' });
+    await call('load_library_item', { id: listing.entries.find(item => item.name === 'h264_9s_1920x1080.mp4').id, slot: 'B' });
+    await page.setViewportSize({ width: 1056, height: 786 });
+    await page.evaluate(() => window.voidPlayer.setViewport({ mode: 'split', splitPos: .37 }));
+    await drag(heading); await settle(page);
+    assert.equal(await overlay.evaluate(el => !el.closest('.video-card') && getComputedStyle(el).clipPath === 'none'), true, 'the bubble and target remain outside split clips');
+    await page.screenshot({ path: path.join(screenshots, `file-drop-split-${browserName}.png`) });
+    await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await overlay.waitFor({ state: 'hidden' });
+    const bytes = [...await readFile(path.join(fixtures, 'ci_h264_smoke.mp4'))];
+    const existing = await page.evaluate(() => window.voidPlayer.getState().tracks.map(({ slot, id, sourceGen, offsetUs }) => ({ slot, id, sourceGen, offsetUs })));
+    await drag(heading);
+    await page.evaluate(({ bytes, heading }) => {
+      const data = new DataTransfer(); data.items.add(new File([new Uint8Array(bytes)], 'dropped-video.mp4', { type: 'video/mp4' }));
+      document.querySelector(heading).dispatchEvent(new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true }));
+    }, { bytes, heading });
+    await overlay.waitFor({ state: 'hidden' });
+    await page.waitForFunction(() => !window.voidPlayer.getState().busy && !!window.voidPlayer.getState().tracks.find(track => track.slot === 'C')?.frame);
+    assert.equal(await page.evaluate(() => window.voidPlayer.getState().tracks.length), 3, 'actual drop fills the next slot and preserves existing tracks');
+    assert.deepEqual(await page.evaluate(() => window.voidPlayer.getState().tracks.filter(track => track.slot !== 'C')
+      .map(({ slot, id, sourceGen, offsetUs }) => ({ slot, id, sourceGen, offsetUs }))), existing, 'dropping on an occupied heading keeps both library sources intact');
+    await drag(heading, 'drop', 6);
+    await page.locator('.toast-message').filter({ hasText: '当前有 5 条空轨道，无法添加 6 个视频' }).waitFor();
+    assert.equal(await page.evaluate(() => window.voidPlayer.getState().tracks.length), 3, 'an oversized batch imports no files');
+  }, { deviceScaleFactor: 2 });
 
   await check('keyboard focus uses a theme fill while mouse dropdowns have no focus ring', async page => {
     await page.locator('#toggle-sources').click();
@@ -345,7 +431,7 @@ try {
   });
 
   await check('recent list resizes symmetrically, preserves rows/scroll and remembers its width', async page => {
-    await page.addInitScript(() => localStorage.setItem('voidplayer.sources.v1', JSON.stringify(Array.from({ length: 40 }, (_, i) => ({ name: `recent-${i}.mp4`, size: 1000, lastModified: 1000 + i })))));
+    await page.addInitScript(rootId => localStorage.setItem('voidplayer.sources.v1', JSON.stringify(Array.from({ length: 40 }, (_, i) => ({ name: `recent-${i}.mp4`, size: 1000, lastModified: 1000 + i, libraryId: (i + 100).toString(16).padStart(24, '0'), libraryRootId: rootId })))), listing.entries[0].rootId);
     await page.reload(); await page.waitForFunction(() => window.voidPlayer);
     const panel = page.locator('#start-panel'), list = page.locator('#start-library-list');
     const left = page.locator('#start-resize-left'), right = page.locator('#start-resize-right');
@@ -1977,9 +2063,11 @@ try {
     page.on('request', request => { if (request.url().includes(foreignId)) foreignRequests++; });
     await page.addInitScript(history => localStorage.setItem('voidplayer.sources.v1', JSON.stringify(history)), history);
     await page.reload(); await page.waitForFunction(() => window.voidPlayer);
-    await page.waitForFunction(() => document.querySelectorAll('.start-recent-row').length === 2);
+    const localSupported = await page.evaluate(() => typeof window.showOpenFilePicker === 'function' && isSecureContext);
+    await page.waitForFunction(count => document.querySelectorAll('.start-recent-row').length === count, localSupported ? 2 : 1);
     const rows = await page.locator('.start-recent-row').allTextContents();
-    assert.ok(rows.some(text => text.includes(original.name)) && rows.some(text => text.includes('my-local.mp4')));
+    assert.ok(rows.some(text => text.includes(original.name)));
+    assert.equal(rows.some(text => text.includes('my-local.mp4')), localSupported);
     assert.equal(foreignRequests, 0, 'other libraries are not queried against this service');
     await page.waitForFunction(() => JSON.parse(localStorage.getItem('voidplayer.sources.v1')).some(item => item.libraryRootId && item.name === 'ci_h264_smoke.mp4'));
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('voidplayer.sources.v1')));
@@ -1988,7 +2076,7 @@ try {
     await page.locator('#toggle-sources').click();
     await page.locator('#library-root').click();
     await page.locator('#library-root-menu').getByRole('menuitemradio', { name: '最近使用', exact: true }).click();
-    assert.equal(await page.locator('#source-list .source-row').count(), 2, 'both history views use the same library scope');
+    assert.equal(await page.locator('#source-list .source-row').count(), localSupported ? 2 : 1, 'both history views use the same library scope');
   });
 
   await check('unresolved library history keeps its origin and shares failure messages across entry points', async page => {
@@ -2026,30 +2114,21 @@ try {
     await page.screenshot({ path: path.join(screenshots, 'source-reference-unavailable.png') });
   });
 
-  await check('unsupported local history requires selection from either entry point and creates no empty track', async page => {
+  await check('unsupported local files do not appear in either recent entry point or create empty tracks', async page => {
     await page.addInitScript(() => {
       Object.defineProperty(window, 'showOpenFilePicker', { value: undefined, configurable: true });
       localStorage.setItem('voidplayer.sources.v1', JSON.stringify([{ name: 'local-history.mp4', size: 100, lastModified: 1 }]));
     });
     await page.reload(); await page.waitForFunction(() => window.voidPlayer);
-    const row = page.locator('.start-recent-row').filter({ hasText: 'local-history.mp4' });
-    assert.match(await row.textContent(), /本地文件.*需重新选择/);
-    let chooser = page.waitForEvent('filechooser');
-    await row.click(); await chooser;
-    const notice = page.locator('.toast').filter({ hasText: '当前浏览器不支持保存本地文件访问权限' });
-    await notice.waitFor();
-    assert.match(await notice.textContent(), /刷新后仍需重新选择/);
+    assert.equal(await page.locator('.start-recent-row').filter({ hasText: 'local-history.mp4' }).count(), 0);
     await page.locator('#toggle-sources').click();
     await page.locator('#library-root').click();
     await page.locator('#library-root-menu').getByRole('menuitemradio', { name: '最近使用', exact: true }).click();
-    chooser = page.waitForEvent('filechooser');
-    await page.locator('#source-list').getByRole('button', { name: '重新选择 local-history.mp4', exact: true }).click();
-    await chooser;
-    assert.equal(await notice.count(), 2);
+    assert.equal(await page.locator('#source-list').getByText('local-history.mp4', { exact: true }).count(), 0);
     assert.equal((await page.evaluate(() => window.voidPlayer.getState())).tracks.length, 0);
     const logs = await page.evaluate(() => window.voidPlayer.tools.find(tool => tool.name === 'get_review_logs').execute({ limit: 2000 }));
     assert.ok(logs.events.some(event => event.msg === '会话启动' && event.data.persistentLocalFiles === false));
-    assert.ok(logs.events.some(event => event.data?.reason === 'unsupported'));
+    assert.equal(await page.locator('.toast').filter({ hasText: '重新选择' }).count(), 0, 'one-time histories do not produce a reselect warning');
     await page.screenshot({ path: path.join(screenshots, 'local-history-unsupported.png') });
   });
   await check('canvas grid repaints for system theme changes without geometry changes', async page => {

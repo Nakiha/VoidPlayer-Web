@@ -14,6 +14,7 @@ import { installLazyAnalysisPanel } from './analysis/lazy-panel.ts';
 import { WorkspaceState } from './workspace-state.ts';
 import type { Panel } from './workspace-state.ts';
 import { SourceCatalog } from './source-catalog.ts';
+import { supportsFileHandles } from '../services/file-handles.ts';
 import { createTracksPane } from './workbench/tracks.ts';
 import { createSourcesPane } from './workbench/sources.ts';
 import type { WorkbenchShared, WorkbenchState } from './workbench/shared.ts';
@@ -27,7 +28,7 @@ function readHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KE
 export function installWorkbench(session: ReviewSession, act: Action, addMark: (slot: Slot, markId?: string) => void, notify: (message: string) => void = () => {}, attachQuality?: (id:string)=>Promise<void>,qualitySpace?:()=>string) {
   const view = new WorkspaceState();
   if (new URL(location.href).searchParams.get('library') === '1') view.panels.sources = true;
-  const catalog = new SourceCatalog(readHistory(), { isolateLibraries: true });
+  const catalog = new SourceCatalog(readHistory(), { isolateLibraries: true, rememberLocalFiles: supportsFileHandles });
   const lifecyle = new AbortController();
   const workspace = $('workspace');
   installStartPanelResize($('start-panel'), lifecyle.signal);

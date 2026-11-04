@@ -2926,6 +2926,46 @@
     "source": "软件解码器资源与播放器版本不匹配，请更新解码器资源并刷新页面后重试。",
     "params": {}
   },
+  "fileAccess.apiName": {
+    "source": "File System Access API",
+    "params": {}
+  },
+  "fileAccess.available": {
+    "source": "检测到文件访问接口，可以选择视频验证权限和保存能力。",
+    "params": {}
+  },
+  "fileAccess.cancelled": {
+    "source": "已取消选择，可以再次尝试。",
+    "params": {}
+  },
+  "fileAccess.failed": {
+    "source": "未能取得或保存文件访问权限。请检查浏览器的网站权限后重试。",
+    "params": {}
+  },
+  "fileAccess.help": {
+    "source": "选择一个视频以验证访问权限和本机句柄保存，不会上传或播放。曾拒绝授权时可再次尝试；浏览器未提供此能力时，本地视频仅在本次页面可用，不进入最近打开。",
+    "params": {}
+  },
+  "fileAccess.success": {
+    "source": "已验证文件访问和句柄保存。刷新后仍需浏览器允许读取；曾拒绝时可以重新尝试。",
+    "params": {}
+  },
+  "fileAccess.title": {
+    "source": "持久访问本地文件",
+    "params": {}
+  },
+  "fileAccess.try": {
+    "source": "尝试启用",
+    "params": {}
+  },
+  "fileAccess.unsupported": {
+    "source": "当前浏览器未提供持久文件访问能力。本地视频按一次性文件打开。",
+    "params": {}
+  },
+  "fileDrop.release": {
+    "source": "松开以添加视频",
+    "params": {}
+  },
   "identity.chooseExisting": {
     "source": "选择已有用户",
     "params": {}
@@ -4783,12 +4823,6 @@
     "source": "工作区已恢复。",
     "params": {}
   },
-  "recovery.restoredWithMissing": {
-    "source": "工作区布局和标注已恢复，{n} 个片源尚未打开。",
-    "params": {
-      "n": "string | number"
-    }
-  },
   "recovery.saveFailed": {
     "source": "工作区本机自动恢复保存失败，请导出文件或显式保存到服务器。",
     "params": {}
@@ -6445,6 +6479,14 @@
     "source": "视频",
     "params": {}
   },
+  "transfer.authorizeLocal": {
+    "source": "授权并重试",
+    "params": {}
+  },
+  "transfer.browseLibrary": {
+    "source": "在媒体库中选择",
+    "params": {}
+  },
   "transfer.cancelImport": {
     "source": "取消导入",
     "params": {}
@@ -6499,12 +6541,16 @@
     "source": "工作区保存了视频引用。请重新选择这些本地文件，也可以稍后关联，先恢复轨道和标注。",
     "params": {}
   },
-  "transfer.relinkNow": {
-    "source": "重新关联",
-    "params": {}
-  },
   "transfer.relinkTitle": {
     "source": "重新连接本地视频",
+    "params": {}
+  },
+  "transfer.reselectLocal": {
+    "source": "重新选择文件",
+    "params": {}
+  },
+  "transfer.retryLibrary": {
+    "source": "重试媒体库",
     "params": {}
   },
   "transfer.sizeMismatch": {

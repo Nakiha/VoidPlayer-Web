@@ -8,6 +8,7 @@ import { analysisConcurrency, setAnalysisConcurrency, ANALYSIS_CONCURRENCY_EVENT
 import { MAX_ANALYSIS_CONCURRENCY } from '../../shared/analysis/bitstream/task-pool.ts';
 import { installChoiceMenu } from './choice-menu.ts';
 import { installSourceScrollbar } from './source-scrollbar.ts';
+import { FileHandleError, handleKey, pickVideoFiles, restoreHandleFile, saveFileHandle, supportsFileHandles } from '../services/file-handles.ts';
 
 /** One persistent window, with independent scrolling panes and one close/focus lifecycle. */
 export function installSettings() {
@@ -16,6 +17,32 @@ export function installSettings() {
   const close = document.getElementById('settings-close') as HTMLButtonElement;
   const tabs = [...dialog.querySelectorAll<HTMLButtonElement>('[data-settings-pane]')];
   const life = new AbortController();
+  const fileAccess = document.getElementById('local-file-access-try') as HTMLButtonElement;
+  const fileStatus = document.getElementById('local-file-access-status')!;
+  let fileAccessResult: 'idle' | 'success' | 'cancelled' | 'failed' = 'idle';
+  const syncFileAccess = () => {
+    fileStatus.textContent = !supportsFileHandles() ? t(msg('fileAccess.unsupported', '当前浏览器未提供持久文件访问能力。本地视频按一次性文件打开。'))
+      : fileAccessResult === 'success' ? t(msg('fileAccess.success', '已验证文件访问和句柄保存。刷新后仍需浏览器允许读取；曾拒绝时可以重新尝试。'))
+      : fileAccessResult === 'cancelled' ? t(msg('fileAccess.cancelled', '已取消选择，可以再次尝试。'))
+      : fileAccessResult === 'failed' ? t(msg('fileAccess.failed', '未能取得或保存文件访问权限。请检查浏览器的网站权限后重试。'))
+      : t(msg('fileAccess.available', '检测到文件访问接口，可以选择视频验证权限和保存能力。'));
+  };
+  fileAccess.addEventListener('click', () => {
+    // Invoke the native picker directly in the click gesture, before any storage work.
+    const picked = pickVideoFiles(false);
+    fileAccess.disabled = true;
+    void picked.then(async files => {
+      if (!files?.length) { fileAccessResult = 'cancelled'; return; }
+      const { file, handle } = files[0], key = handleKey(file);
+      await saveFileHandle(key, handle, file);
+      await restoreHandleFile(key, undefined, false);
+      fileAccessResult = 'success';
+    }).catch(error => {
+      fileAccessResult = 'failed';
+      if (!(error instanceof FileHandleError)) console.warn('Local file access check failed', error);
+    }).finally(() => { if (!life.signal.aborted) { fileAccess.disabled = false; syncFileAccess(); } });
+  }, { signal: life.signal });
+  onLanguageChange(syncFileAccess, life.signal); syncFileAccess();
   const scrollbar = installSourceScrollbar(document.getElementById('settings-pane-appearance')!, document.getElementById('settings-scrollbar')!, document.getElementById('settings-scrollbar-thumb')!, life.signal);
   const contentChanges = new MutationObserver(scrollbar.update);
   for (const pane of dialog.querySelectorAll('[role=tabpanel]')) contentChanges.observe(pane, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['hidden'] });

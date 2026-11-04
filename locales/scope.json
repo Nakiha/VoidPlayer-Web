@@ -76,6 +76,7 @@
     "src/ui/diagnostic-message.ts",
     "src/ui/drawing-editor.ts",
     "src/ui/file-drop.ts",
+    "src/ui/file-drop-feedback.ts",
     "src/ui/filename.ts",
     "src/ui/floating-panels.ts",
     "src/ui/focus-feedback.ts",

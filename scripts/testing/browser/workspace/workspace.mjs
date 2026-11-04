@@ -62,7 +62,7 @@ await withBrowserFixture({ caseName: 'workspace', engine: name, pageOptions: {"v
  const relinkToast=restored.locator('.toast').filter({hasText:'个片源待重新关联'});
  await relinkToast.waitFor({state:'visible'});
  assert.equal(await relinkToast.count(),1,'missing sources have one shared relink notice');
- assert.equal(await relinkToast.locator('.toast-action').textContent(),'重新关联');
+ assert.equal(await relinkToast.locator('.toast-action').textContent(),'在媒体库中选择');
  assert.equal(await restored.locator('.track-failure,[id^="failure-"]').count(),0,'track notices no longer overlay the picture');
  assert.equal(await restored.locator('.toast-warning').filter({hasText:'已停用'}).count(),0,'missing sources do not also emit runtime-failure warnings');
  assert.deepEqual(await restored.evaluate(()=>window.voidPlayer.getState().tracks.map(t=>t.id)),saved.tracks.map(t=>t.mediaId));

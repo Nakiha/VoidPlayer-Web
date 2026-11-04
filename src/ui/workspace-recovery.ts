@@ -1,6 +1,7 @@
 import { t, msg, onLanguageChange } from '../i18n.ts';
 import { WorkspaceCheckpoints, checkpointTabId, CheckpointCapacityError } from '../review/workspace-checkpoint.ts';
 import { installCheckpointHistory } from './checkpoint-history.ts';
+import { supportsFileHandles } from '../services/file-handles.ts';
 import { currentActor } from '../services/identity.ts';
 import type { ReviewSession } from '../session.ts';
 import type { WorkspaceFile } from '../../shared/review/workspace-file.ts';
@@ -28,7 +29,7 @@ function recoveryCard(checkpoint: WorkspaceFile, restore: () => Promise<void>, s
   tracks.className = 'start-workspace-tracks';
   for (const track of checkpoint.tracks) {
     const info = checkpoint.media.find(media => media.id === track.mediaId);
-    if (!info) continue;
+    if (!info || (!info.source && !supportsFileHandles())) continue;
     const row = document.createElement('span'); row.className = 'start-workspace-track';
     const thumb = document.createElement('span'); thumb.className = 'start-workspace-thumb';
     thumb.innerHTML = icon('film');
@@ -119,14 +120,16 @@ export function installWorkspaceRecovery(session: ReviewSession, options: {
       const checkpoint = await store.read(actor, `${previousId}:${actor}`);
       if (disposed || actor !== expectedActor || generation !== currentGeneration) return;
       const url = new URL(location.href);
-      if (checkpoint?.document.tracks.length && !session.getState().tracks.length && !url.searchParams.has('share') && !url.searchParams.has('workspace')) {
+      const restorable = checkpoint?.document.tracks.some(track => supportsFileHandles() || checkpoint.document.media.find(media => media.id === track.mediaId)?.source);
+      if (restorable && checkpoint && !session.getState().tracks.length && !url.searchParams.has('share') && !url.searchParams.has('workspace')) {
         recovery.replaceChildren(recoveryCard(checkpoint.document, async () => {
           try {
             const ok = await options.restore(checkpoint.document);
             if (ok) {
               active = true; clearRecovery(); schedule();
               const missing = session.getState().tracks.filter(track => track.pendingRelink).length;
-              options.toasts.show(() => missing ? t(msg('recovery.restoredWithMissing', '工作区布局和标注已恢复，{n} 个片源尚未打开。'), { n: missing }) : t(msg('recovery.restored', '工作区已恢复。')), { kind: missing ? 'warning' : 'info' });
+              // The transfer observer owns the single actionable notice for unavailable sources.
+              if (!missing) options.toasts.show(() => t(msg('recovery.restored', '工作区已恢复。')));
             }
           } catch (error) { options.toasts.show(String(error), { kind: 'error' }); }
         },cardLife.signal));

@@ -17,7 +17,7 @@ import { type ReferenceDecode, type ColorMode, type DecodeConfiguration } from '
 import { getColorOutput, defaultColorOutput } from '../shared/color/color-output.ts';
 import type { ColorOutput } from '../shared/color/color-output.ts';
 import type { AnnotationDocument } from '../shared/review/annotation-record.ts';import {recordPresentedFrame,updateMediaInfo} from './media/state.ts';
-import type { MediaLoadStatus, MediaOpenProgress } from './media/progress.ts';
+import type { MediaLoadStatus, MediaLoadStage, MediaOpenProgress } from './media/progress.ts';
 import { abortableLoad } from '../shared/media/io/media-abort.ts';
 import { parseWorkspace, workspaceUrl } from '../shared/review/workspace-file.ts';
 import type { ComparisonConditions, WorkspaceFile } from '../shared/review/workspace-file.ts';
@@ -38,7 +38,7 @@ import { contextLog, log, operationContext, traceOperation, withLogContext } fro
 
 const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 
-type Track = { visible?: boolean; pendingRelink?: boolean; source: MediaSource; frame: FrameInfo | null; offsetUs:number; failure?: { message: string; positionUs: number }; syncState?: 'index-wait' | 'catching-up';
+type Track = { visible?: boolean; pendingRelink?: boolean; source: MediaSource; frame: FrameInfo | null; offsetUs:number; failure?: { message: string; positionUs: number; reason?: string }; syncState?: 'index-wait' | 'catching-up';
   /** source 实例 generation：每次打开/重建（含色彩模式切换）递增，
    * 与稳定 mediaId 分离——mediaId 供标注/工作区引用，generation 隔离旧实例的异步结果。 */
   sourceGen: number };
@@ -1261,7 +1261,7 @@ export class ReviewSession {
             if (!options.allowUnavailable || signal.aborted || !current()) throw error;
             log.warn('session', '工作区片源恢复失败，保留轨道待重新关联', { slot: track.slot, name: info.name, sourceKind: info.source ? 'library' : 'local', sourceId: info.source?.id, reason: (error as { kind?: string })?.kind, httpStatus: (error as { status?: number })?.status, error: errorText(error), pendingRelink: true });
             next.set(track.slot, { source: unavailableSource(info), frame: null, offsetUs: track.offsetUs, visible: track.visible, sourceGen: ++this.nextSourceGen,
-              pendingRelink: true, failure: { message: `待重新关联：${errorText(error)}`, positionUs: document.positionUs } });
+              pendingRelink: true, failure: { message: errorText(error), positionUs: document.positionUs, reason: (error as { kind?: string })?.kind } });
             if (progressive) {
               this.tracks.get(track.slot)?.source.dispose(); this.tracks.set(track.slot, next.get(track.slot)!);
               status!.state = 'error'; status!.error = errorText(error); status!.finishedAt = Date.now(); this.emit();
@@ -1296,27 +1296,38 @@ export class ReviewSession {
     return this.getState();
   }
   /** Reattach one missing reference without replacing peers or annotation IDs. */
-  async relinkTrack(slot: Slot, open: SourceOpener) {
+  async relinkTrack(slot: Slot, open: SourceOpener, options: { allowUnavailable?: boolean } = {}) {
     slotValue(slot);
     await this.run('relinkTrack', { slot }, async (current, signal) => {
       const previous = this.tracks.get(slot);
       if (!previous?.pendingRelink) throw new Error('该轨道无需重新关联。');
-      const source = await this.openCandidate(open, signal); let committed = false;
+      const startedAt = Date.now();
+      let stage: MediaLoadStage = 'queued';
+      let source: MediaSource | undefined, committed = false;
       try {
+        source = await this.openCandidate(open, signal, next => { stage = next; });
         const old = previous.source.info, info = source.info;
         const match = matchMediaIdentity(old, info);
         if (!match.ok) throw new Error(describeMediaMismatch(old.name, match.mismatches));
         if (match.mtimeChanged) log.info('session', '重新关联接受仅修改时间不同的片源', { slot, name: old.name });
         updateMediaInfo(source, { id: old.id }, 'identity');
+        stage = 'synchronize';
         await abortableLoad(Promise.resolve(source.ensureIndexed?.(Math.max(0, this.positionUs - previous.offsetUs))), signal);
+        stage = 'first-frame';
         const frame = await abortableLoad(source.frameAt(Math.max(0, Math.min(source.info.durationUs - 1, this.positionUs - previous.offsetUs))), signal, late => late.close());
         try {
           if (!current() || signal.aborted) throw new DOMException('重新关联已取消。', 'AbortError');
           this.draw(slot, frame); recordPresentedFrame(source, frame);
           this.tracks.set(slot, { source, offsetUs: previous.offsetUs, visible: previous.visible, frame: this.frameInfo(frame), sourceGen: ++this.nextSourceGen });
           this.catalog.set(old.id, source.info); source.onInfoChange = () => this.emit(); committed = true;
+          this.mediaLoad = { name: info.name, slot, stage: 'first-frame', state: 'complete', startedAt, finishedAt: Date.now(), targetPtsUs: this.positionUs };
         } finally { frame.close(); }
-      } finally { if (!committed) source.dispose(); }
+      } catch (error) {
+        if (!options.allowUnavailable || !current() || signal.aborted) throw error;
+        previous.failure = { message: errorText(error), positionUs: this.positionUs, reason: (error as { kind?: string })?.kind };
+        this.mediaLoad = { name: previous.source.info.name, slot, stage, state: 'error', error: errorText(error), startedAt, finishedAt: Date.now(), targetPtsUs: this.positionUs };
+        log.warn('session', '片源重试失败，保留原轨道和标注', { slot, error: errorText(error), reason: previous.failure.reason });
+      } finally { if (!committed) source?.dispose(); }
     });
     return this.getState();
   }

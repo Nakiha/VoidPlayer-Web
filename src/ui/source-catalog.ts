@@ -26,8 +26,10 @@ export class SourceCatalog {
   private recentLibrary = new Map<string, LibraryEntry>();
   private recentProblems = new Map<string, LibraryAccessProblem>();
   private activeRoots?: Set<string>;
-  constructor(stored: unknown = [], privateOptions: { isolateLibraries?: boolean } = {}) {
-    if (privateOptions.isolateLibraries) this.activeRoots = new Set();
+  private options: { rememberLocalFiles?: () => boolean };
+  constructor(stored: unknown = [], options: { isolateLibraries?: boolean; rememberLocalFiles?: () => boolean } = {}) {
+    this.options = options;
+    if (options.isolateLibraries) this.activeRoots = new Set();
     this.history = [];
     if (Array.isArray(stored)) for (const entry of stored) {
       if (!entry || typeof entry !== 'object' || typeof entry.name !== 'string' ||
@@ -76,6 +78,7 @@ export class SourceCatalog {
     this.addFile(file);
   }
   remember(entry: { name: string; size: number; lastModified: number; version?: string }, libraryId?: string, version = entry.version, rootId?: string) {
+    if (!libraryId && this.options.rememberLocalFiles?.() === false) return;
     const key = sourceKey(entry, libraryId, version);
     const openedAt = Date.now();
     const libraryRootId = libraryId ? rootId ?? this.recentLibrary.get(libraryId)?.rootId ?? this.library.find(item => item.id === libraryId)?.rootId ?? this.history.find(item => item.libraryId === libraryId)?.libraryRootId : undefined;
@@ -84,7 +87,7 @@ export class SourceCatalog {
     ...this.history.filter(h => h.key !== key)];
     this.history = limitHistory(this.history);
   }
-  recent() { return this.history.filter(item => !this.activeRoots || !item.libraryId || !!item.libraryRootId && this.activeRoots.has(item.libraryRootId)).map(h => this.resolve(h)); }
+  recent() { return this.retainedHistory().filter(item => !this.activeRoots || !item.libraryId || !!item.libraryRootId && this.activeRoots.has(item.libraryRootId)).map(h => this.resolve(h)); }
   available() {
     const items = new Map<string, SourceItem>();
     for (const file of this.local.values()) items.set(sourceKey(file), this.resolve({ key: sourceKey(file), name: file.name, size: file.size, lastModified: file.lastModified }));
@@ -94,7 +97,8 @@ export class SourceCatalog {
     }
     return [...items.values()];
   }
-  serializable() { return this.history.map(h => ({ ...h })); }
+  private retainedHistory() { return this.history.filter(item => item.libraryId || this.options.rememberLocalFiles?.() !== false); }
+  serializable() { return this.retainedHistory().map(h => ({ ...h })); }
   private resolve(h: RecentSource): SourceItem {
     // Match both server id and fingerprint: a reused id must not silently load
     // changed bytes when the user chooses an old history entry.

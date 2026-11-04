@@ -2,7 +2,7 @@ import { FLV_MEDIA_INDEX_IDENTITY } from '../../../shared/media/indexing/media-i
 import type { MediaIndexIdentity, MediaIndexKind } from '../../../shared/media/indexing/media-index-identity.ts';
 import { decodeIndexBase64 } from './index-stream-encoding.ts';
 import { IndexStreamTransport } from './index-stream-transport.ts';
-import type { IndexStreamEventResult } from './index-stream-transport.ts';
+import type { IndexStreamEventResult, IndexStreamFailure } from './index-stream-transport.ts';
 import { FfmpegIndexConsumer } from './ffmpeg-index-consumer.ts';
 import type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest, MediaIndexScanProgress, ServerIndexResult } from '../../../shared/media/indexing/media-index-types.ts';
 export type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest, MediaIndexScanProgress, ServerIndexResult } from '../../../shared/media/indexing/media-index-types.ts';
@@ -20,7 +20,7 @@ export class MediaIndexClient {
   private controller = new AbortController();
   private endpoint?: string;
   private lookup: Promise<ServerIndexResult | null>;
-  private serverFailure?:{code?:string;message:string};
+  private serverFailure?: IndexStreamFailure;
   private transport: IndexStreamTransport;
   private ffmpegConsumer?: FfmpegIndexConsumer;
   private readonly kind: MediaIndexKind;
@@ -136,6 +136,7 @@ export class MediaIndexClient {
       cursor: () => this.ffmpegConsumer?.isActive ? this.ffmpegConsumer.cursor() : { after: lastSeq },
       onEvent: consumeLegacyEvent,
     });
+    if ('failure' in transportResult && transportResult.failure) this.serverFailure = transportResult.failure;
     if (transportResult.status === 'legacy') {
       if (this.ffmpegConsumer?.isActive) return null;
       try {

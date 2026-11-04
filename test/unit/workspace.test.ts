@@ -5,6 +5,22 @@ import type { ReviewTrack } from '../../src/ui/workspace-state.ts';
 import { SourceCatalog, sourceInUse } from '../../src/ui/source-catalog.ts';
 import type { Mark } from '../../shared/review/model.ts';
 
+test('one-time local files stay usable in memory without appearing in recent or persisted history', () => {
+  const file = new File(['video'], 'local.mp4', { lastModified: 1 });
+  const prior = new SourceCatalog(); prior.addFile(file);
+  const entry = { id: 'library-1', name: 'server.mp4', root: 'samples', size: 10, lastModified: 1 };
+  prior.remember(entry, entry.id);
+  let supported = false;
+  const catalog = new SourceCatalog(prior.serializable(), { rememberLocalFiles: () => supported });
+  catalog.setLibrary([entry]); catalog.addFile(file); catalog.remember(file);
+  assert.deepEqual(catalog.recent().map(item => item.libraryId), [entry.id]);
+  assert.deepEqual(catalog.serializable().map(item => item.libraryId), [entry.id]);
+  assert.equal(catalog.available().find(item => item.file)?.file, file);
+  supported = true; catalog.addFile(file);
+  assert.equal(catalog.recent()[0].file, file);
+  assert.equal(catalog.serializable()[0].name, file.name);
+});
+
 const track: ReviewTrack = { id: 'new', slot: 'A', name: 'clip.mp4', size: 10, lastModified: 1,
   codec: 'avc1', decoder: 'webcodecs', width: 1920, height: 1080, durationUs: 1000000, firstPtsUs: 10000,
   frame: { ptsUs: 100000, sourcePtsUs: 110000, durationUs: 33333 } };

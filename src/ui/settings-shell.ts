@@ -117,6 +117,14 @@ export function settingsShell() {
         </div>
       </section>
       <section id="settings-pane-experimental" role="tabpanel" aria-labelledby="settings-tab-experimental" tabindex="0" hidden>
+        <div class="settings-section"><h4 class="settings-section-title" id="local-file-access-label">${th(msg('fileAccess.title', '持久访问本地文件'))}</h4>
+          <div class="settings-group"><div class="settings-action-row">
+            <span>${th(msg('fileAccess.apiName', 'File System Access API'))}</span>
+            <button id="local-file-access-try" type="button" aria-describedby="local-file-access-status">${th(msg('fileAccess.try', '尝试启用'))}</button>
+          </div></div>
+          <p id="local-file-access-status" class="settings-caption" role="status"></p>
+          <p class="settings-caption">${th(msg('fileAccess.help', '选择一个视频以验证访问权限和本机句柄保存，不会上传或播放。曾拒绝授权时可再次尝试；浏览器未提供此能力时，本地视频仅在本次页面可用，不进入最近打开。'))}</p>
+        </div>
         <div class="settings-group"><div class="settings-action-row">
           <h4 id="quality-tasks-label" class="settings-icon-label">${icon('chart')}<span>${th(msg('qualityWorkflow.title','画质评分'))}</span></h4>
           <a id="quality-tasks-open" href="/admin/#quality" target="_blank" rel="noopener" aria-describedby="quality-tasks-label">${th(msg('settingsShell.openInNewTab', '在新标签页打开'))} ↗</a>

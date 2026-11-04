@@ -165,12 +165,13 @@ export async function pickVideoFiles(multiple: boolean): Promise<PickedVideo[] |
   if (!supportsFileHandles()) throw new FileHandleError('unsupported', '当前浏览器不支持持久访问本地文件。');
   try {
     const picker = (window as unknown as FsPickerWindow).showOpenFilePicker!;
-    const handles = await picker({ multiple, types: VIDEO_TYPES });
+    const handles = await picker.call(window, { multiple, types: VIDEO_TYPES });
     const picked: PickedVideo[] = [];
     for (const handle of handles) picked.push({ file: await handle.getFile(), handle });
     return picked;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') return null;
+    if (error instanceof Error && error.name === 'NotAllowedError') throw new FileHandleError('denied', '本地文件访问未获授权，请检查浏览器的网站权限后重试。');
     throw new FileHandleError('unavailable', '系统文件选择器不可用。');
   }
 }

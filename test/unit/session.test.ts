@@ -1216,6 +1216,11 @@ test('workspace comparison conditions apply before opening; partial recovery and
     assert.equal(state.tracks.length, 2); assert.equal(state.tracks[0].pendingRelink, true);
     assert.equal(state.tracks[0].frame, null); assert.equal(state.positionUs, 50000); assert.deepEqual(state.marks, document.marks);
     assert.deepEqual(restored.exportWorkspace('http://localhost/').tracks, document.tracks);
+    await restored.relinkTrack('A', async () => { throw new Error('HTTP 400: unsupported index version'); }, { allowUnavailable: true });
+    state = restored.getState();
+    assert.equal(state.tracks[0].failure?.message, 'HTTP 400: unsupported index version');
+    assert.equal(state.tracks[0].pendingRelink, true); assert.equal(state.error, null);
+    assert.deepEqual(state.marks, document.marks);
     await restored.relinkTrack('A', async () => media('missing').source);
     state = restored.getState(); assert.equal(state.tracks[0].pendingRelink, undefined);
     assert.equal(state.tracks[0].id, 'missing'); assert.equal(state.tracks[0].offsetUs, 10000);

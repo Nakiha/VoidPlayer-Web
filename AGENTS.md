@@ -42,6 +42,8 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 
 ## 格式与层内边界
 
+- UI 未经用户明确要求不得新增边框，包括 `border` 或用 inset shadow 模拟的实线边框；沿用既有主题色与背景层次。
+
 - [紧凑格式](docs/code-format.md)：2 空格、LF、单引号、分号，目标约 140 字符；短变量组、数据声明、getter、转发方法及简单 guard 允许单行，副作用和生命周期操作清楚分行。不因触碰文件就整文件重排，格式迁移须明确选择范围并单独审查。`npm run format:check -- --base origin/main` 只查改动行的基础卫生，不强制完整布局；不要用源码空格断言行为。
 - [模块边界](docs/module-boundaries.md)：浏览器禁止 Node 内建依赖；media/analysis/session 不反向依赖 UI 或入口，media/analysis 不依赖 session 或具体 presenter；静态运行时依赖禁止循环，纯类型和 Worker URL 单独处理。
 - `check:shared` 不带 Node 类型，只允许明确的可移植 Web API；`check:environments` 分别编译浏览器与服务端。Node Worker 测试兼容只由 `test/helpers/browser-worker-*` 提供。新增全局环境能力须明确契约和负例。

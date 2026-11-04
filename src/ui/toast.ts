@@ -11,6 +11,7 @@ export type ToastOptions = {
   /** Auto-dismiss delay. 0 or negative disables it. Defaults: info 5000, warning/error 0. */
   durationMs?: number;
   action?: ToastAction;
+  actions?: ToastAction[];
 };
 
 const DEFAULT_DURATION: Record<ToastKind, number> = { info: 5000, warning: 0, error: 0 };
@@ -91,10 +92,11 @@ export function installToasts(signal?: AbortSignal) {
   }
 
   function show(message: string | (() => string), options: ToastOptions = {}) {
+    const actions = options.actions ?? (options.action ? [options.action] : []);
     const kind = options.kind ?? 'info';
     const duration = options.durationMs ?? DEFAULT_DURATION[kind];
     const el = document.createElement('div');
-    el.className = `toast${kind === 'info' ? '' : ` toast-${kind}`} toast-enter`;
+    el.className = `toast${kind === 'info' ? '' : ` toast-${kind}`}${actions.length > 1 ? ' toast-multiple-actions' : ''} toast-enter`;
     el.setAttribute('role', kind === 'info' ? 'status' : 'alert');
     const label = document.createElement('span');
     label.className = 'toast-message';
@@ -103,16 +105,19 @@ export function installToasts(signal?: AbortSignal) {
     const stopLanguage = onLanguageChange(() => {
       if(!el.isConnected) return;
       if(typeof message === 'function')label.textContent = message();
-      if(typeof options.action?.label === 'function')el.querySelector('.toast-action')!.textContent=options.action.label();
+      for (const [index, button] of [...el.querySelectorAll('.toast-action')].entries()) {
+        const label = actions[index].label;
+        if (typeof label === 'function') button.textContent = label();
+      }
       el.querySelector('.toast-close')?.setAttribute('aria-label',t(msg("toast.dismissNotification", "关闭通知")));
     });
     el.addEventListener('toast-remove', stopLanguage, {once:true});
-    if (options.action) {
+    for (const action of actions) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'toast-action';
-      button.textContent = typeof options.action.label === 'function' ? options.action.label() : options.action.label;
-      button.onclick = () => { options.action!.onClick(); dismiss(el, timer); };
+      button.textContent = typeof action.label === 'function' ? action.label() : action.label;
+      button.onclick = () => { action.onClick(); dismiss(el, timer); };
       el.append(button);
     }
     const close = document.createElement('button');

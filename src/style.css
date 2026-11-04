@@ -90,8 +90,11 @@ button.brand:hover, :root[data-keyboard-navigation] button.brand:focus-visible {
 .file-button { display: inline-flex; align-items: center; justify-content: center; width: var(--control-small-height); height: var(--control-small-height); color: var(--viewport-muted); cursor: pointer; }
 .file-button input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
 .frame-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.frame-stage.drop-target { position: relative; background: var(--drag-target-fill); }
-.frame-stage.drop-target::after { content: '松开以打开视频'; position: absolute; top: var(--space-5); padding: var(--space-2) var(--space-4); border-radius: var(--radius-control); background: var(--accent); color: var(--accent-on); pointer-events: none; }
+.file-drop-feedback { position: absolute; inset: 0; z-index: 8; display: grid; place-items: center; pointer-events: none; background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.file-drop-feedback * { pointer-events: none; }
+.file-drop-bubble { position: relative; isolation: isolate; display: inline-flex; align-items: center; gap: var(--control-gap); min-height: var(--control-height); max-width: 100%; padding: var(--tool-inset) var(--control-padding-inline); border-radius: var(--radius-control); background: var(--surface); color: var(--accent); text-align: center; }
+/* Keep the button's chrome backplate beneath its highlight, independent of video pixels. */
+.file-drop-bubble::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--glass-control-selected-hover); }
 .empty { display: flex; flex-direction: column; align-items: center; gap: var(--section-gap); }
 .empty-open { display: inline-flex; align-items: center; gap: var(--section-gap); padding: var(--space-4) var(--space-5); border-radius: var(--radius-control); border: var(--control-border-width) solid var(--border); background: var(--surface-control); color: var(--viewport-text); cursor: pointer; }
 .empty-open:hover { background: var(--viewport-header); }
@@ -924,6 +927,9 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .toast-enter { animation: toast-appear var(--toast-enter-duration, 120ms) ease-out; }
 .toast-leaving { opacity: 0; transform: translateY(-6px); overflow: hidden; transition: opacity var(--toast-exit-duration, 220ms) var(--panel-motion-easing, ease-out), transform var(--toast-exit-duration, 220ms) var(--panel-motion-easing, ease-out), height var(--toast-exit-duration, 220ms) var(--panel-motion-easing, ease-out), padding-top var(--toast-exit-duration, 220ms) var(--panel-motion-easing, ease-out), padding-bottom var(--toast-exit-duration, 220ms) var(--panel-motion-easing, ease-out), margin-top var(--toast-exit-duration, 220ms) var(--panel-motion-easing, ease-out), margin-bottom var(--toast-exit-duration, 220ms) var(--panel-motion-easing, ease-out), border-top-width var(--toast-exit-duration, 220ms) var(--panel-motion-easing, ease-out), border-bottom-width var(--toast-exit-duration, 220ms) var(--panel-motion-easing, ease-out); }
 .toast-message { flex: 1; min-width: 0; }
+.toast-multiple-actions { flex-wrap: wrap; }
+.toast-multiple-actions .toast-message { flex-basis: 100%; }
+.toast-multiple-actions .toast-close { margin-left: auto; }
 .toast-warning { background: var(--warning-fill); color: var(--warning-text); border-color: color-mix(in srgb, var(--warning-text) 35%, var(--border)); }
 .toast-error { background: var(--toast-error-fill); color: var(--toast-error-text); border-color: var(--toast-error-border); }
 .toast-action { flex: none; }

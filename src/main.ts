@@ -32,6 +32,7 @@ import { installNumericChoice } from './ui/numeric-choice.ts';
 import { installHeaderActions } from './ui/header-actions.ts';
 import { installTopbarCompact } from './ui/topbar-compact.ts';
 import { SLOTS } from '../shared/review/model.ts';
+import { dropSlots } from '../shared/review/drop-slots.ts';
 import { installTooltips } from './ui/tooltips.ts';
 import { installToasts } from './ui/toast.ts';
 import { AnalysisFailure } from '../shared/analysis/bitstream/failure.ts';
@@ -62,6 +63,7 @@ import type { Slot } from '../shared/review/model.ts';
 import { registerReviewTools, reviewTools } from './agent.ts';
 import {installPageBridge} from './agent/page-bridge.ts';
 import { bindFileDrop } from './ui/file-drop.ts';
+import { installFileDropFeedback } from './ui/file-drop-feedback.ts';
 import { handleKey, saveFileHandle } from './services/file-handles.ts';
 import type { FsFileHandle } from './services/file-handles.ts';
 import { exportLog, getLogSessions, log, operationContext, readLogs, traceOperation, withLogContext } from './logging/log.ts';
@@ -155,7 +157,6 @@ void gpuReady.then(()=>{const state=session.getState();if(hdrDisplayAvailable()&
 session.subscribe(renderColorMode);renderColorMode();
 for(const button of colorButtons)button.onclick=()=>{if(session.getState().busy)return;void act(()=>session.setColorMode(button.dataset.colorMode as 'reference'|'browser')).finally(renderColorMode);};
 for(const button of decoderButtons)button.onclick=()=>{if(session.getState().busy)return;void act(()=>session.setReferenceDecode({...session.getState().referenceDecode,decoder:button.dataset.referenceDecoder as 'hardware'|'software'})).finally(renderColorMode);};
-window.addEventListener('pagehide',event=>{if(!event.persisted){void session.dispose();removeBrandEffects();disposePresentation();}});
 const toasts = installToasts(uiEvents.signal);
 const renderTrackToasts = createTrackToasts(toasts, () => settings.openPane('logs', $<HTMLElement>('settings-open')), uiEvents.signal);
 const removeLogPanel = installLogPanel($('diagnostic-logs'), toasts);
@@ -241,6 +242,8 @@ const workspaceTransfer = installWorkspaceTransfer(session, {
   beforeRestore() { if (drawingEditor.active()) $('mark-close').click(); return annotationSync.snapshotMode(); },
   async restore(document, resumeCloudAnnotations) { if (!resumeCloudAnnotations) await annotationSync.captureSnapshot(); viewport.apply(document.viewport); setPresentationChannel(viewport.channel); await workbench.restore(document.layout ?? workbench.getState()); render(); },
 });
+// Recovery's pagehide listener must capture the scene before disposal clears its tracks.
+window.addEventListener('pagehide',event=>{if(!event.persisted){void session.dispose();removeBrandEffects();disposePresentation();}});
 const screens = document.querySelector<HTMLElement>('.screens')!;
 const viewportChrome = installViewportChrome(document.querySelector<HTMLElement>('.viewport-surface')!, $<HTMLButtonElement>('toggle-chrome'));
 const grids = Object.fromEntries(SLOTS.map(slot => [slot, installPixelGrid($<HTMLCanvasElement>(`grid-${slot}`), $(`grid-label-${slot}`))])) as Record<Slot, ReturnType<typeof installPixelGrid>>;
@@ -420,12 +423,13 @@ for (const slot of SLOTS) $(`remove-track-${slot}`).onclick = async () => {
   if (remaining) document.querySelector<HTMLElement>(`.card-heading [data-drag-surface="${remaining.slot}"]`)?.focus();
   else $('open').focus();
 };
-async function importFiles(files: File[], slots: Slot[], handles?: (FsFileHandle | undefined)[]) {
+async function importFiles(files: File[], slots: Slot[], handles?: (FsFileHandle | undefined)[], addOnly = false) {
   const context = operationContext();
   const revision = ++importRevision;
   for (let i = 0; i < files.length; i++) {
     if (revision !== importRevision) throw new DOMException(tr(msg("player.fileImportWasSupersededByANewer", "文件导入已被新的请求取代。")), 'AbortError');
-    await withLogContext(context, () => session.load(slots[i], (signal, progress, configuration) => openMedia(files[i], undefined, progress, signal, configuration), files[i].name));
+    const slot = addOnly ? dropSlots(files.length - i, session.getState().tracks.map(track => track.slot))[0] : slots[i];
+    await withLogContext(context, () => session.load(slot, (signal, progress, configuration) => openMedia(files[i], undefined, progress, signal, configuration), files[i].name));
     workbench.rememberFile(files[i]);
     // Remember drop-time handles so history rows can reopen without a picker.
     // Plain <input> files have no handle; those rows bootstrap one on reselect.
@@ -433,20 +437,15 @@ async function importFiles(files: File[], slots: Slot[], handles?: (FsFileHandle
     if (handle) await saveFileHandle(handleKey(files[i]), handle, files[i]).catch(() => {});
   }
 }
+const dropFeedback = installFileDropFeedback(document.querySelector<HTMLElement>('.viewport-surface')!);
 const unbindDrop = bindFileDrop(document.body, {
   document: {
     accepts: files => files.some(isWorkspaceFile),
     load: files => act(async () => { const documents = files.filter(isWorkspaceFile); if (documents.length !== 1) throw new Error(tr(msg("player.openOneWorkspaceFileAtATime", "每次请打开一个工作区文件。"))); await workspaceTransfer.importFile(documents[0], files.filter(f => !isWorkspaceFile(f))); }, 'workspace.drop'),
   },
-  target: event => {
-    const stage = event.target instanceof Element ? event.target.closest('.video-card')?.querySelector('.frame-stage') : null;
-    return stage?.closest<HTMLElement>('[data-slot]')?.dataset.slot as Slot | undefined;
-  },
   loaded: () => session.getState().tracks.map(track => track.slot),
-  hover: slots => {
-    for (const slot of SLOTS) $(`stage-${slot}`).classList.toggle('drop-target', slots.includes(slot));
-  },
-  load: (files, slots) => act(() => importFiles(files, slots), 'files.drop', { files, slots }),
+  hover: slots => dropFeedback.show(slots),
+  load: (files, slots, handles) => act(() => importFiles(files, slots, handles, true), 'files.drop', { files, slots }),
   error: error => { log.warn('ui', '拖入文件失败', { error }); showError(error); },
 });
 for (const slot of SLOTS) {
@@ -670,7 +669,7 @@ if (annotationLink.has('annotation')) void act(async () => {
   if(opened)await annotationSync.openSpace(space);
 },'annotation.open');
 
-import.meta.hot?.dispose(() => { unregister(); annotationSync.dispose(); identitySettings.dispose(); workspaceTransfer.dispose(); removeThemeControls(); settings.dispose(); depthMenu.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); channelMenu.dispose(); removeHeaderActions(); drawingEditor.dispose(); markPreviewBackfill.dispose(); disposePresentation(); unbindDrop(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
+import.meta.hot?.dispose(() => { unregister(); annotationSync.dispose(); identitySettings.dispose(); workspaceTransfer.dispose(); removeThemeControls(); settings.dispose(); depthMenu.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); channelMenu.dispose(); removeHeaderActions(); drawingEditor.dispose(); markPreviewBackfill.dispose(); disposePresentation(); unbindDrop(); dropFeedback.dispose(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
 render();
 // First frame is rendered and handlers are wired; only GPU warmup (background)
 // and the annotation deep-link restore (already async) are still outstanding,
