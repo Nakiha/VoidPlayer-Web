@@ -300,12 +300,14 @@ export class JsContainerEngine {
   }
   async at(pts: number, recycle?: ArrayBuffer) {
     this.check();
+    this.reader.setPlaybackReadAhead(false);
     if (this.primed?.pts === pts) { const frame = this.primed; this.primed = null; return this.timed(frame); }
     this.primed?.frame?.close(); this.primed = null;
     return this.timed(await this.timeline!.at(pts, recycle));
   }
   async next(pts: number, recycle?: ArrayBuffer) {
     this.check();
+    this.reader.setPlaybackReadAhead(true);
     const frame = await this.timeline!.next(pts, recycle);
     return frame && this.timed(frame);
   }
@@ -317,6 +319,7 @@ export class JsContainerEngine {
   }
   async referenceWitness(glueURL: string, wasmBinary?: Uint8Array, threads: DecodeThreads = 1) {
     this.check();
+    this.reader.setPlaybackReadAhead(false);
     if (this.timeline?.decoder.kind !== 'webcodecs') throw new MediaOpenError('decode', 'JS TS native decoder is not ready');
     const decoder = await this.createSoftware(this.index!, glueURL, wasmBinary, threads);
     const witness = this.makeTimeline(decoder);
@@ -324,6 +327,7 @@ export class JsContainerEngine {
     finally { witness.close(); }
   }
   private async replaceDecoder(decoder: PacketDecoder, pts = this.index!.firstPts) {
+    this.reader.setPlaybackReadAhead(false);
     const next = this.makeTimeline(decoder);
     let first:PacketFrame;
     try {first=await this.first(next,pts);}

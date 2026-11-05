@@ -4,6 +4,8 @@ export type RandomAccessInput = { file: Blob } | { url: string; size: number; li
 export interface RangeVersion { validator?: string; ifRange?: string; }
 const BLOCK = 256 * 1024;
 const CACHE_BYTES = 8 * 1024 * 1024;
+const PLAYBACK_AHEAD_BYTES = 2 * 1024 * 1024;
+type ReadAhead = { start: number; end: number; controller: AbortController; pending: boolean; task: Promise<void>; error?: unknown };
 
 /** Bounded compressed-byte cache, shared by async demux and the synchronous AVIO bridge. */
 export class RangeReader {
@@ -16,6 +18,8 @@ export class RangeReader {
   readonly input: RandomAccessInput;
   private blockSize: number;
   private readAheadBlocks = 1;
+  private playbackReadAhead = false;
+  private ahead?: ReadAhead;
   constructor(input: RandomAccessInput, blockSize = BLOCK, version?: RangeVersion) {
     this.blockSize = blockSize;
     this.input = input;
@@ -52,7 +56,21 @@ export class RangeReader {
     return output;
   }
   protected setReadAheadBlocks(blocks: number) { this.readAheadBlocks = Math.max(1, Math.min(blocks, Math.floor(CACHE_BYTES / this.blockSize))); }
+  /** Only sequential playback opts in. Each consumed window can start one
+   * bounded fetch; an idle/paused consumer never keeps filling the cache. */
+  setPlaybackReadAhead(enabled: boolean) {
+    this.playbackReadAhead = enabled && 'url' in this.input;
+    if (!this.playbackReadAhead) {
+      this.ahead?.controller.abort();
+      this.ahead = undefined;
+    }
+  }
   read(offset: number, length: number): Promise<Uint8Array> {
+    const run = async () => {
+      const bytes = await this.readInner(offset, length);
+      if (length) this.prefetchAfter(offset + length);
+      return bytes;
+    };
     // A slow background scan must not hold already cached startup frames
     // behind a pending network request. Cache hits need no IO serialization.
     if (!this.controller.signal.aborted && Number.isSafeInteger(offset) && Number.isSafeInteger(length)
@@ -61,9 +79,9 @@ export class RangeReader {
       for (let p = Math.floor(offset / this.blockSize) * this.blockSize; p < offset + length; p += this.blockSize) {
         if (!this.cache.has(p)) { cached = false; break; }
       }
-      if (cached) return this.readInner(offset, length);
+      if (cached) return run();
     }
-    const task = this.serial.then(() => this.readInner(offset, length));
+    const task = this.serial.then(run);
     this.serial = task.catch(() => {});
     return task;
   }
@@ -91,6 +109,14 @@ export class RangeReader {
     for (let position = offset; position < offset + length;) {
       const start = Math.floor(position / this.blockSize) * this.blockSize;
       let bytes = this.cache.get(start);
+      const ahead = this.ahead;
+      if (!bytes && ahead && start >= ahead.start && start < ahead.end) {
+        // Join the speculative request instead of fetching the same bytes twice.
+        await ahead.task;
+        if (this.controller.signal.aborted || ahead.controller.signal.aborted) throw new MediaOpenError('input', '媒体读取已取消。');
+        if (ahead.error) throw ahead.error;
+        bytes = this.cache.get(start);
+      }
       if (!bytes) {
         // Coalesce scan windows into one request, keeping the same bounded
         // block cache and all Range/version/body checks. Never prefetch during
@@ -98,10 +124,7 @@ export class RangeReader {
         const end = Math.min(start + this.blockSize * this.readAheadBlocks, this.size);
         const window = await this.load(start, end);
         if (this.controller.signal.aborted) throw new MediaOpenError('input', '媒体读取已取消。');
-        for (let p = start; p < end; p += this.blockSize) {
-          // Copy blocks so an evicted window cannot stay pinned by one slice.
-          this.cache.set(p, window.slice(p - start, Math.min(p - start + this.blockSize, window.length)));
-        }
+        this.cacheWindow(start, window);
         bytes = this.cache.get(start)!;
       }
       this.cache.delete(start); this.cache.set(start, bytes);
@@ -112,10 +135,44 @@ export class RangeReader {
     }
     return output;
   }
-  private async load(start: number, end: number): Promise<Uint8Array> {
+  private cacheWindow(start: number, window: Uint8Array) {
+    for (let at = 0; at < window.length; at += this.blockSize) {
+      // Copy blocks so an evicted window cannot stay pinned by one slice.
+      this.cache.delete(start + at);
+      this.cache.set(start + at, window.slice(at, at + this.blockSize));
+    }
+    while (this.cache.size > CACHE_BYTES / this.blockSize) this.cache.delete(this.cache.keys().next().value!);
+  }
+  private prefetchAfter(position: number) {
+    if (!this.playbackReadAhead || this.controller.signal.aborted || this.ahead?.pending || this.ahead?.error) return;
+    let start = Math.ceil(position / this.blockSize) * this.blockSize;
+    while (this.cache.has(start)) start += this.blockSize;
+    // Keep roughly one complete request available for decoding while the next
+    // is in flight, including on links only moderately faster than the media.
+    if (start >= this.size || start - position >= PLAYBACK_AHEAD_BYTES) return;
+    let end = Math.min(start + PLAYBACK_AHEAD_BYTES, this.size);
+    for (let at = start + this.blockSize; at < end; at += this.blockSize) {
+      if (this.cache.has(at)) { end = at; break; }
+    }
+    const ahead: ReadAhead = { start, end, controller: new AbortController(), pending: true, task: Promise.resolve() };
+    this.ahead = ahead;
+    ahead.task = (async () => {
+      try {
+        const bytes = await this.load(start, end, ahead.controller.signal);
+        if (this.ahead === ahead && !ahead.controller.signal.aborted && !this.controller.signal.aborted) this.cacheWindow(start, bytes);
+      } catch (error) {
+        // Preserve failures for the first actual consumer of this range, with
+        // no detached rejection or automatic retry of a changed source.
+        if (!ahead.controller.signal.aborted) ahead.error = error;
+      } finally { ahead.pending = false; }
+    })();
+  }
+  private async load(start: number, end: number, signal = this.controller.signal): Promise<Uint8Array> {
     try {
+      signal.throwIfAborted();
       if ('file' in this.input) return new Uint8Array(await this.input.file.slice(start, end).arrayBuffer());
-      const response = await fetch(this.input.url, { headers: { Range: `bytes=${start}-${end - 1}`, ...(this.ifRange ? { 'If-Range': this.ifRange } : {}) }, signal: this.controller.signal });
+      const response = await fetch(this.input.url, { headers: { Range: `bytes=${start}-${end - 1}`, ...(this.ifRange ? { 'If-Range': this.ifRange } : {}) }, signal });
+      signal.throwIfAborted();
       const validator = response.headers.get('etag') ?? response.headers.get('last-modified') ?? undefined;
       if (response.status !== 206 || response.headers.get('content-range') !== `bytes ${start}-${end - 1}/${this.size}` || (this.validator && validator !== this.validator)) {
         await response.body?.cancel();
@@ -148,5 +205,5 @@ export class RangeReader {
       throw new MediaOpenError('input', `读取媒体失败：${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  close() { this.controller.abort(); this.cache.clear(); }
+  close() { this.setPlaybackReadAhead(false); this.controller.abort(); this.cache.clear(); }
 }

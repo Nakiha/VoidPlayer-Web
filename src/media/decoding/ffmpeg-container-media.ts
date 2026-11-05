@@ -105,6 +105,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   let audioWindows = async () => [] as import('../../../shared/media/audio-types.ts').CachedWindow[];
   let init: InitResult | null = null;
   let rpc: WorkerRpc | null = null;
+  let rangeBridge: ReturnType<typeof createRangeBridge> | undefined;
   let lastError: unknown = null;
   for (const glueURL of candidates) {
     const variant = fallbackCoreVariant(glueURL);
@@ -137,6 +138,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       // safety cap here; supported cores return after first-frame priming and
       // stream their index through the main-thread session below.
       init = await rpc.call('init', payload, transfer, 24 * 60 * 60 * 1000);
+      rangeBridge = bridge;
       coreVariant = variant;
       scoped.info('media', 'WASM core 已就绪', {
         coreVariant, crossOriginIsolated: !!globalThis.crossOriginIsolated,
@@ -348,6 +350,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     if (disposed) throw new Error('媒体已释放。');
     if (!Number.isInteger(index) || index < 0 || index >= ticks.length) throw new Error('帧索引无效。');
     const started = performance.now(), randomAccess = index !== previousIndex + 1;
+    rangeBridge?.setPlaybackReadAhead(!randomAccess && index > 0);
     let output: WasmFrameOutput & { seek?: { decodedFrames: number; restarts: number } };
     const restored = await restoreThreadBudget(index);
     if (restored) output = restored;

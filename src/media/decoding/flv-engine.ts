@@ -174,15 +174,17 @@ export class FlvEngine {
     }
   }
   async at(pts:number,recycle?:ArrayBuffer):Promise<FlvFrame>{
+    this.reader.setPlaybackReadAhead(false);
     if(this.primed&&this.primed.pts===pts){const f=this.primed;this.primed=null;return f;}
     if(this.startup?.pts===pts)return cloneFrame(this.startup,recycle);
     this.primed?.frame?.close();this.primed=null;return this.timeline!.at(pts,recycle);
   }
-  next(pts:number,recycle?:ArrayBuffer){return this.timeline!.next(pts,recycle);}
+  next(pts:number,recycle?:ArrayBuffer){this.reader.setPlaybackReadAhead(true);return this.timeline!.next(pts,recycle);}
   /** Decode the first output with a temporary software decoder over this
    * engine's already-open FLV index and reader. No scan, cache client, or
    * timeline is created for the witness. */
   async referenceWitness(glueURL: string, wasmBinary?: Uint8Array, threads: DecodeThreads = 1): Promise<FlvFrame> {
+    this.reader.setPlaybackReadAhead(false);
     if (this.decoder?.kind !== 'webcodecs' || !this.timeline) throw new MediaOpenError('decode', 'FLV 原生解码器尚未就绪。');
     const decoder = await wasmFlvDecoder(this.index, glueURL, wasmBinary, threads);
     const timeline = new PacketTimeline(this.index, decoder, packet => this.reader.read(packet.offset, packet.size),true,()=>this.indexComplete);
@@ -203,6 +205,7 @@ export class FlvEngine {
   /** Switch only the decoder after reference admission rejects native output.
    * The packet index, reader, and cache lifecycle remain owned by this engine. */
   async switchToSoftware(glueURL: string, wasmBinary?: Uint8Array, threads: DecodeThreads = 1, replace = false, pts?: number) {
+    this.reader.setPlaybackReadAhead(false);
     if (replace || this.decoder?.kind === 'webcodecs') {
       const target=pts??this.primed?.pts??this.index.packets[(this.index.displayOrder??this.index.order)[0]].pts;
       const decoder=await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
@@ -219,6 +222,7 @@ export class FlvEngine {
   }
   /** Restore browser decoding over the same packet index after a color-mode switch. */
   async switchToNative(){
+    this.reader.setPlaybackReadAhead(false);
     if(this.decoder?.kind==='ffmpeg-wasm'){
       const decoder=await nativeFlvDecoder(this.index,undefined,undefined,true);
       if(decoder){

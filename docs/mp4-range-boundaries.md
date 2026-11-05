@@ -7,6 +7,18 @@ requested length; cancellation, HTTP failures and source version changes reject
 the logical read rather than returning partially assembled bytes. Offsets remain
 safe JavaScript integers and are never coerced to 32 bits.
 
+Sequential playback opts into asynchronous compressed-byte read-ahead. When
+less than 2 MiB remains ahead of consumption, the reader starts at most one
+2 MiB Range request, overlapping network latency with decoding. A demand for
+that range joins the existing request; cached reads remain available while it
+is pending. The compressed cache stays within 8 MiB, independently of the
+decoded-frame queue and the 256 KiB synchronous bridge transfer window. No
+recursive fetch runs without consumption. Metadata/probing/index readers stay
+on their existing demand/scan policies. Seek and decoder replacement disable
+read-ahead and abort the old speculative request; close also discards cached
+bytes. Late responses cannot refill the cache, and speculative response/version
+failures reject the eventual consumer with the original input error.
+
 AVIO reads starting at or beyond the known physical EOF return an empty buffer.
 Requests crossing EOF are clipped before calculating their length. This matters
 when a demuxer seeks using an overstated atom size: the old adapter could produce

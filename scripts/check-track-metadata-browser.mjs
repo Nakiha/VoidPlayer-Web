@@ -94,6 +94,7 @@ try {
    if(open&&f.name==='audio.mp4'&&!local){
     // Exercise hidden stale rows after replacing the inspected source in-place.
     await page.locator('#toggle-inspector').click();
+    await tool(page,'remove_review_track',{slot:'A'});
     await tool(page,'load_library_item',{slot:'A',id:listing.entries.find(e=>e.name==='silent.mp4').id});
     assert.equal(await page.evaluate(()=>window.voidPlayer.getState().tracks[0].trackMetadata),undefined,'hidden replacement does not request metadata');
     const beforeHidden=structuredClone(traffic),hiddenEvidence=await page.evaluate(()=>window.metadataEvidence);

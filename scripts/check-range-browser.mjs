@@ -136,7 +136,7 @@ try {
         catch (error) { return error.message; }
         return null;
       });
-      assert.match(failure, /MP4/);
+      assert.match(failure, /HTTP 404/);
       assert.deepEqual(requests, [], 'failed server index must not trigger a client media read');
     } finally { await page.close(); }
   }

@@ -18,7 +18,9 @@ async function serve(bytes: Uint8Array, size = bytes.length) {
     const match = /^bytes=(\d+)-(\d+)$/.exec(req.headers.range ?? '');
     if (!match) { res.writeHead(400); res.end(); return; }
     const start = Number(match[1]), end = Number(match[2]); requests.push({ start, end });
-    assert.ok(end < size && end - start < 256 * 1024);
+    // Startup remains demand-only (256 KiB); sequential playback can prefetch
+    // up to 2 MiB while retaining the same bounded compressed-byte cache.
+    assert.ok(end < size && end - start < 2 * 1024 * 1024);
     const data = new Uint8Array(end - start + 1);
     if (start < bytes.length) data.set(bytes.subarray(start, Math.min(end + 1, bytes.length)));
     res.writeHead(206, { 'Content-Range': `bytes ${start}-${end}/${size}`, 'Content-Length': data.length, ETag: '"unchanged"' }); res.end(data);
@@ -79,6 +81,13 @@ for (const name of ['h266_10s_1920x1080.mp4', 'h264_high422p_1s_320x180.mp4', 'h
         finally { actual.close(); expected.close(); }
       }
       const frames = await source.framesAfter(0, 3); assert.equal(frames.length, 3); frames.forEach(f => f.close());
+      if (name.startsWith('h266')) assert.ok(host.requests.some(r => r.end - r.start + 1 > 256 * 1024), 'sequential playback enables compressed prefetch');
+      // A seek following sequential reads must discard the old speculative
+      // request without changing frame identity or poisoning subsequent IO.
+      const target = Math.floor(source.info.durationUs * .6);
+      const expected = await reference.frameAt(target), actual = await source.frameAt(target);
+      try { assert.equal(visiblePixelHash(actual.description, actual.pixels!), visiblePixelHash(expected.description, expected.pixels!)); }
+      finally { actual.close(); expected.close(); }
       assert.deepEqual(await source.framesAfter(source.info.durationUs, 3), []);
     } finally { source?.dispose(); reference.dispose(); await host.close(); }
   });

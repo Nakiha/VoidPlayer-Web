@@ -75,12 +75,17 @@ export class Mp4Engine {
   /** 只读分析查询共用：返回 demux 包表，不转移底层缓冲。 */
   get analysisIndex(): PacketDecodeIndex | undefined { return this.index; }
   async at(pts:number,recycle?:ArrayBuffer){
+    this.reader.setPlaybackReadAhead(false);
     if(this.primed&&this.primed.pts===pts){const f=this.primed;this.primed=null;return this.displayed(f);}
     this.primed?.frame?.close();this.primed=null;return this.displayed(await this.timeline!.at(pts,recycle));
   }
-  async next(pts:number,recycle?:ArrayBuffer){const frame=await this.timeline!.next(pts,recycle);return frame?this.displayed(frame):null;}
+  async next(pts:number,recycle?:ArrayBuffer){
+    this.reader.setPlaybackReadAhead(true);
+    const frame=await this.timeline!.next(pts,recycle);return frame?this.displayed(frame):null;
+  }
   /** Produce a first-frame software witness from this MP4 index and reader. */
   async referenceWitness(glueURL:string,wasmBinary?:Uint8Array,threads:DecodeThreads=1):Promise<PacketFrame>{
+    this.reader.setPlaybackReadAhead(false);
     if(this.timeline?.decoder.kind!=='webcodecs'||!this.timeline)throw new MediaOpenError('decode','MP4 原生解码器尚未就绪。');
     const decoder=await wasmPacketDecoder(this.index,glueURL,wasmBinary,threads);
     const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size),true);
@@ -89,6 +94,7 @@ export class Mp4Engine {
   }
   /** Replace the active decoder without rebuilding the MP4 sample table. */
   async switchToSoftware(glueURL:string,wasmBinary?:Uint8Array,threads:DecodeThreads=1,replace=false,pts?:number){
+    this.reader.setPlaybackReadAhead(false);
     if(replace||this.timeline?.decoder.kind==='webcodecs'){
       const decoder=await wasmPacketDecoder(this.index,glueURL,wasmBinary,threads);
       const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size),true);
@@ -101,6 +107,7 @@ export class Mp4Engine {
   }
   /** Restore WebCodecs without reopening the MP4 input or rebuilding its sample table. */
   async switchToNative(){
+    this.reader.setPlaybackReadAhead(false);
     if(this.timeline?.decoder.kind==='ffmpeg-wasm'&&this.nativeConfig){
       const decoder=await nativePacketDecoder(this.index,this.nativeConfig);
       if(decoder){
