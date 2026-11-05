@@ -275,7 +275,7 @@ textarea { resize: vertical; min-height: 56px; max-height: 220px; padding: var(-
 .screens.split:not(.single) .video-card { position: absolute; inset: 0; border: 0; }
 .screens.split:not(.single) .video-card.view-first { clip-path: polygon(0 0, 50% 0, 50% var(--row-height), var(--split-x, 50%) var(--row-height), var(--split-x, 50%) 100%, 0 100%); }
 .screens.split:not(.single) .video-card.view-second { clip-path: polygon(50% 0, 100% 0, 100% 100%, var(--split-x, 50%) 100%, var(--split-x, 50%) var(--row-height), 50% var(--row-height)); }
-.screens.split:not(.single) .card-heading { position: absolute; top: 0; left: 0; width: 50%; z-index: 2; }
+.screens.split:not(.single) .card-heading { position: absolute; top: 0; left: 0; width: 50%; }
 .screens.split:not(.single) .video-card.view-second .card-heading { left: 50%; right: 0; width: 50%; }
 #divider { position: absolute; top: var(--row-height); bottom: 0; left: var(--split-x, 50%); width: var(--control-height); margin-left: calc(var(--control-height) / -2); z-index: 3; cursor: col-resize; touch-action: none; }
 .divider-line { position: absolute; top: 0; bottom: 0; left: 50%; width: var(--split-stroke-width, 1px); margin-left: calc(var(--split-stroke-width, 1px) / -2); background: var(--split-line); pointer-events: none; }

@@ -4,6 +4,7 @@ const name = process.argv[2] ?? 'webkit';
 await withBrowserFixture({ caseName: 'annotation-rendering', engine: name, pageOptions: {"viewport": {"width": 1408, "height": 789}, "deviceScaleFactor": 2} }, async ({ page, url: base, ready, newContext }) => {
 
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await checkSplitHeaders(await newContext({viewport:{width:1408,height:789},deviceScaleFactor:2}),base);
  // 本回归校验的是 WebGL 呈现面（presentation-surface.ts）的采样与图层约束：
  // 断言直接读 gl.texParameteri / gl.readPixels。浏览器模式在支持 WebGPU 的机器
  // 上会异步切到 WebGPU 画布（无 role、无 webgl 上下文），使这些断言在最需要它
@@ -63,6 +64,40 @@ await withBrowserFixture({ caseName: 'annotation-rendering', engine: name, pageO
  console.log(`PASS ${process.argv[2]??'webkit'}: DPR 2 log replay, actual video pixels, grid compositing, constant round handles, zoomed editing, viewport toolbar`);
 
 });
+
+async function checkSplitHeaders(context, url) {
+ const page=await context.newPage(), errors=[];
+ page.on('pageerror',error=>errors.push(error.message));
+ await page.addInitScript(()=>localStorage.setItem('voidplayer.color-mode','browser'));
+ await page.goto(url);await page.waitForFunction(()=>window.voidPlayer);
+ await page.evaluate(async()=>{
+  const call=(name,args={})=>window.voidPlayer.tools.find(tool=>tool.name===name).execute(args),library=await call('list_library');
+  for(const[slot,name]of[['A','mhw_hevc_fullrange_bt709_3s.mp4'],['B','h264_9s_1920x1080.mp4']])
+   await call('load_library_item',{slot,id:library.entries.find(entry=>entry.name===name).id});
+ });
+ const settle=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ for(const annotating of [false,true]) {
+  if(annotating)await page.locator('#toggle-annotations').click();
+  for(const mode of ['side-by-side','split','side-by-side'])for(const zoom of [1,2]) {
+   await page.evaluate(({mode,zoom})=>window.voidPlayer.setViewport({mode,zoom,offsetX:0,offsetY:-40}),{mode,zoom});
+   await settle();
+   for(const slot of ['A','B']) {
+    const hit=await page.locator(`[data-inspect="${slot}"]`).evaluate(button=>{
+     const box=button.getBoundingClientRect(),target=document.elementFromPoint(box.left+box.width/2,box.top+box.height/2);
+     return {heading:target?.closest('.card-heading')?.dataset.trackDrag,cursor:target&&getComputedStyle(target).cursor};
+    });
+    assert.equal(hit.heading,slot,`${mode}, zoom ${zoom}, annotating ${annotating}: header ${slot} must receive the pointer`);
+    assert.notEqual(hit.cursor,'crosshair');
+    await page.locator(`[data-inspect="${slot}"]`).click();
+    await settle();
+    assert.match(await page.locator('#track-properties [data-inspector-title]').textContent(),new RegExp(slot));
+   }
+  }
+ }
+ assert.equal(await page.evaluate(()=>window.voidPlayer.getState().marks.flatMap(mark=>mark.drawings).length),0,'header clicks must not draw');
+ assert.deepEqual(errors,[]);await page.close();
+ console.log('PASS mixed 4K/1080p headers: pointer targets and inspector clicks across split, side-by-side, zoom, pan and annotation mode');
+}
 
 
 async function checkWorkspace(context, url) {
