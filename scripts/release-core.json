@@ -2,7 +2,7 @@
   "repository": "Nakiha/VoidPlayer-FFmpeg-Build",
   "revision": "f953818bc96a61c5dd8a535dc523723887bd9c97",
   "ffmpegRepository": "Nakiha/FFmpeg",
-  "ffmpegRevision": "2bca64930b56b1452558fe649b7a051d6af894e1",
+  "ffmpegRevision": "cfa90f8c0295ac24467acbc30a1dcfaedef0e279",
   "ffmpegRef": "wasm-n9.0.2-playback",
   "dav1dRepository": "videolan/dav1d",
   "dav1dRevision": "42b2b24fb8819f1ed3643aa9cf2a62f03868e3aa",
