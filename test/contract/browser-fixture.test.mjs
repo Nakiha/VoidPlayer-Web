@@ -20,9 +20,13 @@ async function scenario(body) {
   try {await body({options,events,page,context,browser,dependencies,directory,getTemp:()=>temp});}
   finally {await rm(directory,{recursive:true,force:true});if(temp)await rm(temp,{recursive:true,force:true});}
 }
-test('normal fixture completion isolates data and closes every resource in reverse order',async()=>scenario(async({options,events,getTemp})=>{
-  assert.equal(await withBrowserFixture(options,async fixture=>{await fixture.ready();return 'done';}),'done');
+test('normal fixture completion isolates data and closes every resource in reverse order',async()=>scenario(async({options,events,getTemp,directory})=>{
+  assert.equal(await withBrowserFixture(options,async fixture=>{await fixture.ready();await fixture.stage('interaction',async()=>{});return 'done';}),'done');
   assert.deepEqual(events,['page','context','browser','server','temp']);await assert.rejects(access(getTemp()));
+  const timing=JSON.parse(await readFile(path.join(directory,'timings-fixture-test-webkit.json'),'utf8'));
+  assert.equal(timing.status,'passed');assert.equal(timing.aborted,false);
+  assert.deepEqual(timing.phases.map(row=>row.name),['ready','interaction','cleanup-page-create','cleanup-browser-context','cleanup-browser-launch','cleanup-server-start','cleanup-temporary-data']);
+  assert.ok(timing.phases.every(row=>row.status==='passed'&&row.durationMs>=0));
 }));
 test('named behavior stages retain the case watchdog instead of imposing the short operation deadline', async () => scenario(async ({ options, directory }) => {
   await withBrowserFixture({ ...options, phaseTimeoutMs: 5 }, fixture => fixture.stage('long-behavior', () => new Promise(resolve => setTimeout(resolve, 20))));
@@ -87,6 +91,9 @@ test('cleanup-only failures fail the fixture after every cleanup was attempted',
   browser.close=async()=>{events.push('browser');throw Error('cleanup-only');};
   await assert.rejects(withBrowserFixture(options,async()=>{}),AggregateError);assert.deepEqual(events,['page','context','browser','server','temp']);
   const report=JSON.parse(await readFile(path.join(directory,'fixture-test-failure.json'),'utf8'));assert.equal(report.phase,'cleanup');
+  const timing=JSON.parse(await readFile(path.join(directory,'timings-fixture-test-webkit.json'),'utf8'));
+  assert.equal(timing.status,'failed');assert.equal(timing.phases.find(row=>row.name==='cleanup-browser-launch').status,'failed');
+  assert.equal(timing.phases.at(-1).name,'cleanup-temporary-data');
 }));
 
 test('extra contexts remain case-owned and close before the primary page and browser on failure', async () => scenario(async ({ options, events, browser }) => {

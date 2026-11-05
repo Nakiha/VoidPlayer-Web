@@ -35,7 +35,15 @@ export async function withBrowserFixture({ caseName, engine = 'webkit', pageOpti
   signal?.addEventListener('abort', abort, { once: true });
   if (signal?.aborted) abort();
   const cleanup = async (name, close) => {
-    await withinBrowserPhase(close, cleanupTimeoutMs, { caseName, engine, phase: `cleanup-${name}` });
+    const entry = { name: `cleanup-${name}`, elapsedMs: Date.now() - startedAt, status: 'running' };
+    remember(phases, entry);
+    try {
+      await withinBrowserPhase(close, cleanupTimeoutMs, { caseName, engine, phase: entry.name });
+      entry.status = 'passed';
+    } catch (error) {
+      entry.status = 'failed'; entry.error = error.message;
+      throw error;
+    } finally { entry.durationMs = Date.now() - startedAt - entry.elapsedMs; }
   };
   const acquire = async (name, open, close) => {
     if (closing || controller.signal.aborted) throw controller.signal.reason ?? new Error('Fixture already closing');
@@ -148,10 +156,16 @@ export async function withBrowserFixture({ caseName, engine = 'webkit', pageOpti
         try { await saveBrowserFailure({ page, directory, name: caseName, context: { caseName, engine, phase: 'cleanup' }, error, evidence, extra: failureDetails() }); }
         catch (cause) { console.error(`${caseName}: cleanup evidence could not be saved`, cause); }
       }
+      failure ??= { error };
       throw error;
     } finally {
-      await persistCleanupErrors();
       for (const [name, handler] of interrupts) process.off(name, handler);
+      await persistCleanupErrors();
+      const timing = { caseName, engine, startedAt: new Date(startedAt).toISOString(),
+        status: failure ? 'failed' : 'passed', aborted: controller.signal.aborted,
+        durationMs: Date.now() - startedAt, ...failureDetails(), cleanupErrors };
+      await writeFile(artifact(`timings-${caseName}-${engine}.json`), JSON.stringify(timing, null, 2) + '\n')
+        .catch(error => console.error(`${caseName}: timing report could not be saved`, error));
     }
   }
   return result;

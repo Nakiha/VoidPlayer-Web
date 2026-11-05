@@ -1,12 +1,13 @@
 import { spawn, execFileSync } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
-import { mkdir, writeFile, rename, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, rename, mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { finished } from 'node:stream/promises';
 
 import { browserEntries } from './testing/manifest.mjs';
+import { writeExecutionSummary } from './testing/execution-summary.mjs';
 
 export const browserRegressionSuites = Object.fromEntries(['uncovered', 'flv-startup'].map(suite => [suite, browserEntries(suite)]));
 
@@ -68,6 +69,7 @@ async function runCase(entry, logPath, options) {
 
 async function runOwnedCase(entry, logPath, { cwd, timeoutMs, output, signal, directory, temporaryDirectory }) {
   const started = performance.now();
+  const startedAt = new Date().toISOString();
   let timedOut = false, cancelled = false, error = null;
   const log = createWriteStream(logPath);
   // Observe open/write errors immediately, not after the child has exited.
@@ -77,6 +79,7 @@ async function runOwnedCase(entry, logPath, { cwd, timeoutMs, output, signal, di
   const executable = command[0] === 'node' ? process.execPath : command[0];
   const child = spawn(executable, command.slice(1), { cwd, detached: grouped, stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, ...entry.env, TMPDIR: temporaryDirectory, TEMP: temporaryDirectory, TMP: temporaryDirectory,
+      GITHUB_STEP_SUMMARY: undefined,
       VOIDPLAYER_TEST_CASE: entry.id ?? entry.name, VOIDPLAYER_TEST_ARTIFACTS: path.resolve(directory, entry.name) } });
   for (const stream of [child.stdout, child.stderr]) stream.on('data', chunk => { if (!log.destroyed) log.write(chunk); output.write(chunk); });
   const result = await new Promise(resolve => {
@@ -101,55 +104,85 @@ async function runOwnedCase(entry, logPath, { cwd, timeoutMs, output, signal, di
     child.on('close', (exitCode, signal) => finish({ exitCode, signal }));
   });
   log.end(); await logFinished;
-  return { ...result, timedOut, cancelled, error, durationMs: Math.round(performance.now() - started) };
+  return { ...result, startedAt, timedOut, cancelled, error, durationMs: Math.round(performance.now() - started) };
 }
 
 // Each browser owns its process and result. One failing script must never hide
 // later correctness checks; the aggregate exit status still gates the release.
 export async function runBrowserRegressions(entries, {
   directory, cwd = process.cwd(), timeoutMs, output = process.stdout, signal, beforeCase, stopOnFailure=false,
+  buildDurationMs = 0, concurrency = 1, summaryPath,
   removeTemporary = directory => rm(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }),
 } = {}) {
+  if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 2 || stopOnFailure && concurrency !== 1)
+    throw new Error('Execution concurrency must be one or two; dependent stages require serial execution');
   await mkdir(directory, { recursive: true });
-  const results = [];
+  const results = new Map();
+  const startedAt = Date.now() - buildDurationMs;
   const names = entries.map(entry => entry.name);
   if (new Set(names).size !== names.length || names.some(name => !/^[a-zA-Z0-9_-]+$/.test(name))) throw new Error('Duplicate or unsafe case name');
-  const report = () => ({ complete: results.length === entries.length, expectedCount: entries.length,
-    passed: results.length === entries.length && results.every(result => result.required === false || result.status === 'passed'), results });
-  const saveReport = async () => {
+  const report = () => ({ startedAt: new Date(startedAt).toISOString(), durationMs: Date.now() - startedAt,
+    buildDurationMs, concurrency, complete: results.size === entries.length, expectedCount: entries.length,
+    passed: results.size === entries.length && [...results.values()].every(result => result.required === false || result.status === 'passed'),
+    results: entries.flatMap(entry => results.has(entry.name) ? [results.get(entry.name)] : []) });
+  let saving = Promise.resolve();
+  const saveReport = (snapshot = report()) => {
     const target = path.join(directory, 'results.json');
-    await writeFile(target + '.tmp', JSON.stringify(report(), null, 2) + '\n');
-    await rename(target + '.tmp', target);
+    saving = saving.then(async () => {
+      await writeFile(target + '.tmp', JSON.stringify(snapshot, null, 2) + '\n');
+      await rename(target + '.tmp', target);
+    });
+    return saving;
   };
   await saveReport();
-  for (const entry of entries) {
+  const runEntry = async entry => {
     const logPath = path.join(directory, `${entry.name}.log`);
-    output.write(`::group::${entry.name}\n`);
+    output.write(concurrency === 1 ? `::group::${entry.name}\n` : `RUN ${entry.name}\n`);
     let result;
+    const preparationStarted = performance.now();
+    let preparationMs = 0;
     try {
-      if (stopOnFailure && results.some(row=>row.status!=='passed')) result={error:'Earlier dependent npm stage failed',phase:'dependency',durationMs:0,exitCode:null};
+      if (stopOnFailure && [...results.values()].some(row=>row.status!=='passed')) result={error:'Earlier dependent npm stage failed',phase:'dependency',durationMs:0,exitCode:null};
       else if (signal?.aborted) result = { cancelled: true, error: 'suite cancelled', durationMs: 0, exitCode: null };
       else {
-        await beforeCase?.(entry);
-        result = await runCase(entry, logPath, { cwd, timeoutMs: timeoutMs ?? entry.timeoutMs ?? 300000, output, signal, directory, removeTemporary });
+        try { await beforeCase?.(entry); }
+        finally { preparationMs = Math.round(performance.now() - preparationStarted); }
+        if (signal?.aborted) result = { cancelled: true, error: 'suite cancelled', durationMs: 0, exitCode: null };
+        else result = await runCase(entry, logPath, { cwd, timeoutMs: timeoutMs ?? entry.timeoutMs ?? 300000,
+          output: concurrency === 1 ? output : { write() {} }, signal, directory, removeTemporary });
       }
     } catch (cause) {
       result = { error: cause.message, phase: 'prepare', durationMs: 0, exitCode: null };
       await writeFile(logPath, cause.stack + '\n');
     }
     const status = result.cancelled ? 'cancelled' : result.exitCode === 0 && !result.timedOut && !result.error ? 'passed' : 'failed';
-    results.push({ ...entry, ...result, status, logPath });
-    output.write(`::endgroup::\n${status.toUpperCase()} ${entry.name} (${result.durationMs} ms)\n`);
+    results.set(entry.name, { ...entry, ...result, preparationMs, status, logPath });
+    if (concurrency === 1) output.write('::endgroup::\n');
+    else if (status === 'failed') {
+      output.write(`::group::${entry.name}\n${await readFile(logPath, 'utf8')}\n::endgroup::\n`);
+    }
+    output.write(`${status.toUpperCase()} ${entry.name} (${result.durationMs} ms)\n`);
     // Flush after every script so partial evidence survives cancellation.
     await saveReport();
-  }
-  return report();
+  };
+  let next = 0;
+  const workers = await Promise.allSettled(Array.from({ length: Math.min(concurrency, entries.length) }, async () => {
+    while (next < entries.length) await runEntry(entries[next++]);
+  }));
+  const errors = workers.filter(row => row.status === 'rejected').map(row => row.reason);
+  if (errors.length) throw new AggregateError(errors, 'Execution/reporting failed after all active cases exited');
+  const completed = report();
+  await saveReport(completed);
+  await writeExecutionSummary(completed, directory, summaryPath).catch(error => output.write(`Execution summary unavailable: ${error.message}\n`));
+  return completed;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const suite = process.argv[2];
   if (!Object.hasOwn(browserRegressionSuites, suite ?? '')) throw new Error(`Unknown browser regression suite: ${suite}`);
-  const report = await runBrowserRegressions(browserRegressionSuites[suite], { directory: `.run/browser-regressions/${suite}` });
+  const report = await runBrowserRegressions(browserRegressionSuites[suite], {
+    directory: `.run/browser-regressions/${suite}`, summaryPath: process.env.GITHUB_STEP_SUMMARY,
+  });
   const failed = report.results.filter(result => result.status === 'failed');
   console.log(`Browser regressions: ${report.results.length - failed.length}/${report.results.length} passed`);
   for (const result of failed) console.error(`FAIL ${result.name}: ${result.error ?? (result.timedOut ? 'timed out' : `exit ${result.exitCode}, signal ${result.signal}`)}; ${result.logPath}`);

@@ -8,6 +8,8 @@ import path from 'node:path';
 import { runBrowserRegressions } from '../../scripts/run-browser-regressions.mjs';
 import { runTestSuite, parseOptions, suiteExitCode } from '../../scripts/run-tests.mjs';
 import { prepareBuild, buildFingerprint } from '../../scripts/testing/build.mjs';
+import { writeExecutionSummary } from '../../scripts/testing/execution-summary.mjs';
+import { executionConcurrency } from '../../scripts/testing/execution-plan.mjs';
 const silent = { write() {} };
 const entry = (id, code, extra = {}) => ({ id, name: id, command: ['node','-e',code], required: true, build: false, tools: [], fixtures: [], restrictions: [], ...extra });
 async function temporary(body) {
@@ -18,6 +20,8 @@ test('required failure gates aggregate; independent cases still finish and infor
   const report = await runBrowserRegressions([entry('failed','process.exit(7)'),entry('next','console.log("next")'),entry('info','process.exit(9)',{required:false})], { directory, output: silent });
   assert.equal(report.complete, true); assert.equal(report.passed, false);
   assert.deepEqual(report.results.map(row => row.status), ['failed','passed','failed']);
+  assert.match(await readFile(path.join(directory,'summary.md'),'utf8'),/Failed; 3\/3 results/);
+  assert.ok(report.durationMs>=report.buildDurationMs);
   const info = await runBrowserRegressions([entry('info','process.exit(9)',{required:false})], { directory, output: silent });
   assert.equal(info.passed,true); assert.equal(info.results[0].exitCode,9);
   assert.equal(suiteExitCode(info),1,'standalone informational suites retain failure status for CI warnings');
@@ -42,6 +46,56 @@ test('failed prerequisite and spawn failures retain later independent results', 
   assert.deepEqual(report.results.map(row=>row.status),['failed','failed','passed']);
   assert.equal(report.results[0].phase,'prepare'); assert.match(report.results[1].error,/ENOENT/);
 }));
+test('bounded workers publish incomplete results until every isolated case finishes, in catalog order', async () => temporary(async directory => {
+  const release=path.join(directory,'release'), ready=path.join(directory,'ready');
+  const held=entry('held',`const fs=require('node:fs');fs.writeFileSync(${JSON.stringify(ready)},'ready');setInterval(()=>{if(fs.existsSync(${JSON.stringify(release)}))process.exit(7);},5);`,{timeoutMs:5000});
+  const next=entry('next',`const fs=require('node:fs');setInterval(()=>{if(fs.existsSync(${JSON.stringify(ready)}))process.exit(0);},5);`,{timeoutMs:5000});
+  const running=runBrowserRegressions([held,next],{directory,concurrency:2,output:silent});
+  try {
+    let partial;
+    for(let n=0;n<400;n++) {
+      partial=await readFile(path.join(directory,'results.json'),'utf8').then(JSON.parse).catch(()=>null);
+      if(partial?.results.some(row=>row.name==='next'))break;
+      await new Promise(resolve=>setTimeout(resolve,10));
+    }
+    assert.equal(partial.complete,false);assert.equal(partial.passed,false);
+    assert.deepEqual(partial.results.map(row=>row.name),['next']);
+    await writeFile(release,'finish');
+    const report=await running;
+    assert.deepEqual(report.results.map(row=>[row.name,row.status]),[['held','failed'],['next','passed']]);
+    assert.equal(new Set(report.results.map(row=>row.temporaryDirectory)).size,2);
+    assert.deepEqual(JSON.parse(await readFile(path.join(directory,'results.json'),'utf8')),report);
+  } finally {await writeFile(release,'finish');await running;}
+}));
+test('parallel cancellation reaps both active children and never dispatches the remaining case', async () => temporary(async directory => {
+  const controller=new AbortController(), markers=['a','b'].map(name=>path.join(directory,name));
+  const entries=markers.map((file,index)=>entry(`active-${index}`,`require('node:fs').writeFileSync(${JSON.stringify(file)},String(process.pid));setInterval(()=>{},1000);`));
+  const forbidden=path.join(directory,'forbidden');
+  entries.push(entry('pending',`require('node:fs').writeFileSync(${JSON.stringify(forbidden)},'dispatched');`));
+  const running=runBrowserRegressions(entries,{directory,concurrency:2,output:silent,signal:controller.signal});
+  try {
+    let pids=[];
+    for(let n=0;n<400;n++) {
+      pids=await Promise.all(markers.map(file=>readFile(file,'utf8').catch(()=>null)));
+      if(pids.every(Boolean))break;
+      await new Promise(resolve=>setTimeout(resolve,10));
+    }
+    assert.ok(pids.every(Boolean));controller.abort();
+    const report=await running;
+    assert.equal(report.passed,false);assert.deepEqual(report.results.map(row=>row.status),['cancelled','cancelled','cancelled']);
+    for(const pid of pids)assert.throws(()=>process.kill(Number(pid),0));
+    await assert.rejects(readFile(forbidden),{code:'ENOENT'});
+  } finally {controller.abort();await running;}
+}));
+test('only source-only independent selections use two workers; media and dependent stages stay serial', () => {
+  const source=entry('source','',{suites:['source'],engines:['node']});
+  const selection={selected:[source,{...source,id:'second'}]};
+  assert.equal(executionConcurrency(selection),2);
+  for(const extra of [{fixtures:['core']},{build:true},{tools:['ffmpeg']},{engines:['webkit']},{suites:['ci-node-media']}])
+    assert.equal(executionConcurrency({selected:[source,{...source,...extra}]}),1);
+  assert.equal(executionConcurrency({...selection,stopOnFailure:true}),1);
+  assert.equal(executionConcurrency({selected:[source]}),1);
+});
 test('suite builds once for multiple cases, and a broken build does not hide source-only checks', async () => temporary(async directory => {
   const selected=[entry('a','process.exit(0)',{build:true}),entry('b','process.exit(0)',{build:true}),entry('source','process.exit(0)')];
   let builds=0;
@@ -49,6 +103,36 @@ test('suite builds once for multiple cases, and a broken build does not hide sou
   assert.equal(passed.passed,true);assert.equal(builds,1);
   const failed=await runTestSuite({selected,excluded:[]},{directory,output:silent,build:async()=>{throw Error('build failed');}});
   assert.deepEqual(failed.results.map(row=>row.status),['failed','failed','passed']);
+}));
+test('cost summary retains failed stages, build and preparation costs without summing nested stages', async () => temporary(async directory => {
+  await mkdir(path.join(directory,'case-a'));
+  const startedAt='2026-11-05T12:00:00.000Z';
+  await writeFile(path.join(directory,'case-a/timings-scene-webkit.json'),JSON.stringify({startedAt,phases:[
+    {name:'whole-scene',status:'failed',durationMs:1000},{name:'inner-step',status:'passed',durationMs:400},
+  ]}));
+  await writeFile(path.join(directory,'case-a/timings-old-webkit.json'),JSON.stringify({startedAt:'2026-11-04T12:00:00.000Z',
+    phases:[{name:'stale-scene',status:'passed',durationMs:900000}]}));
+  const report={passed:false,expectedCount:2,durationMs:1800,buildDurationMs:200,results:[
+    {name:'case-a',id:'case-a',startedAt,status:'failed',preparationMs:100,durationMs:1000},
+    {name:'case-b',id:'case-b',status:'cancelled',preparationMs:0,durationMs:0},
+  ]};
+  const target=path.join(directory,'job-summary.md');
+  await writeExecutionSummary(report,directory,target);
+  const summary=await readFile(target,'utf8');
+  assert.match(summary,/Failed; 2\/2 results\. Wall 1\.80 s; build 0\.20 s; case preparation 0\.10 s/);
+  assert.match(summary,/whole-scene \| failed \| 1\.00/);assert.match(summary,/case-b \| cancelled/);
+  assert.doesNotMatch(summary,/stale-scene/);
+  assert.deepEqual(report.results.map(row=>row.status),['failed','cancelled']);
+}));
+test('only the owning invocation publishes job summaries and reporting errors cannot hide a failed test', async () => temporary(async directory => {
+  const target=path.join(directory,'job.md');
+  const child=entry('child','console.log(String(process.env.GITHUB_STEP_SUMMARY));',{env:{GITHUB_STEP_SUMMARY:target}});
+  const passed=await runBrowserRegressions([child],{directory,summaryPath:target,output:silent});
+  assert.equal(passed.passed,true);assert.equal((await readFile(passed.results[0].logPath,'utf8')).trim(),'undefined');
+  assert.match(await readFile(target,'utf8'),/Passed; 1\/1 results/);
+  const failed=await runBrowserRegressions([entry('failed','process.exit(7)')],{directory,summaryPath:directory,output:silent});
+  assert.equal(failed.passed,false);assert.equal(failed.results[0].exitCode,7);
+  assert.equal(JSON.parse(await readFile(path.join(directory,'results.json'),'utf8')).passed,false);
 }));
 test('selected derived fixtures prepare once, verify every output, and never run base downloads', async () => temporary(async root => {
   await writeFile(path.join(root, 'source.mp4'), 'source');

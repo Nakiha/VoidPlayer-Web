@@ -1,5 +1,10 @@
 import { parseAnalysisOptions, analysisResponsibilities } from './analysis/plan.mjs';
 
+export function executionConcurrency(selection) {
+  return !selection.stopOnFailure && selection.selected.length > 1 && selection.selected.every(row =>
+    row.suites?.includes('source') && !row.build && !row.fixtures.length && !row.tools.length && row.engines.join() === 'node') ? 2 : 1;
+}
+
 export function describeTestPlan(selection) {
   const cases = selection.selected.map(row => {
     const owner = row.implementation ?? row.script;
@@ -17,6 +22,7 @@ export function describeTestPlan(selection) {
     return { id: row.id, owner, layer, responsibility, reviewNeeded: !responsibility, stages,
       engines: row.engines, inputs: row.inputs, fixtures: row.fixtures, tools: row.tools, build: row.build, required: row.required, timeoutMs: row.timeoutMs, command };
   });
-  return { cases, summary: { total: cases.length, responsibilityReviewNeeded: cases.filter(row => row.reviewNeeded).length,
+  return { cases, summary: { total: cases.length, concurrency: executionConcurrency(selection),
+    responsibilityReviewNeeded: cases.filter(row => row.reviewNeeded).length,
     layers: Object.fromEntries([...new Set(cases.map(row => row.layer))].sort().map(layer => [layer, cases.filter(row => row.layer === layer).length])) }, excluded: selection.excluded };
 }

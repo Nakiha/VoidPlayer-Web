@@ -8,23 +8,27 @@ export { parseOptions } from './testing/options.mjs';
 import { prepareBuild } from './testing/build.mjs';
 import { createFixturePrerequisites } from './testing/fixtures.mjs';
 import { runBrowserRegressions } from './run-browser-regressions.mjs';
-import { describeTestPlan } from './testing/execution-plan.mjs';
+import { describeTestPlan, executionConcurrency } from './testing/execution-plan.mjs';
 
-export async function runTestSuite(selection, { root = repositoryRoot, directory, prepared = false, output = process.stdout, signal, build = prepareBuild, fixtures = testManifest.fixtures } = {}) {
+export async function runTestSuite(selection, { root = repositoryRoot, directory, prepared = false, output = process.stdout, signal,
+  build = prepareBuild, fixtures = testManifest.fixtures, summaryPath } = {}) {
   if (!selection.selected.length) throw new Error('No applicable cases selected; inspect --list and exclusions');
   directory = path.resolve(directory ?? path.join(root, '.run/test-suites/selected'));
   await mkdir(directory, { recursive: true });
   await writeFile(path.join(directory, 'selection.json'), JSON.stringify(selection, null, 2) + '\n');
   await writeFile(path.join(directory, 'plan.json'), JSON.stringify(describeTestPlan(selection), null, 2) + '\n');
-  let buildFailure;
+  let buildFailure, buildDurationMs = 0;
   if (selection.selected.some(row => row.build)) {
+    const started = performance.now();
     try { await build({ root, directory, prepared, output, signal }); }
     catch (error) { buildFailure = error; }
+    finally { buildDurationMs = Math.round(performance.now() - started); }
   }
   const checkedTools = new Map();
   const checkFixture = createFixturePrerequisites({ fixtures, root, directory, output, signal });
   return runBrowserRegressions(selection.selected.map(row => ({ ...row, name: row.id })), {
-    cwd: root, directory, signal, output, stopOnFailure:selection.stopOnFailure,
+    cwd: root, directory, signal, output, stopOnFailure:selection.stopOnFailure, buildDurationMs,
+    concurrency: executionConcurrency(selection), summaryPath,
     beforeCase: async row => {
       if (row.build && buildFailure) throw buildFailure;
       if (row.restrictions.some(reason => reason.includes('Disposable CI') || reason.includes('disposable CI')) && process.env.CI !== 'true') {
@@ -63,7 +67,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
       if (options.plan) console.log(JSON.stringify(describeTestPlan(selection), null, 2));
       else if (options.list) console.log(JSON.stringify(selection, null, 2));
       else {
-        const report = await runTestSuite(selection, { ...options, signal: controller.signal, directory: options.directory ?? path.join(repositoryRoot, '.run/test-suites', options.alias?.replaceAll(':', '-') ?? options.suite ?? 'selected') });
+        const report = await runTestSuite(selection, { ...options, signal: controller.signal, summaryPath: process.env.GITHUB_STEP_SUMMARY,
+          directory: options.directory ?? path.join(repositoryRoot, '.run/test-suites', options.alias?.replaceAll(':', '-') ?? options.suite ?? 'selected') });
         console.log(`Required checks ${report.passed ? 'passed' : 'failed'}; ${report.results.filter(row => row.status === 'passed').length}/${report.expectedCount} cases passed`);
         for (const row of report.results.filter(row => row.status !== 'passed')) console.error(`${row.required === false ? 'INFO' : 'FAIL'} ${row.id}: ${row.error ?? `exit ${row.exitCode}`} (${row.logPath})`);
         process.exitCode = controller.signal.aborted ? 1 : suiteExitCode(report);
