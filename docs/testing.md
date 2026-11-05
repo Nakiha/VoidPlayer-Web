@@ -8,7 +8,7 @@
 
 | 触发 | 必跑内容 | 边界 |
 | --- | --- | --- |
-| PR、main 推送 | `source` 与 `ci-node-media` 构成完整 Node 用例并集（当前数量由清单枚举）；`ci-pr-browser` 覆盖 Chromium/WebKit 核心流程 | 9 个执行 job：源码、两个 core、三个隔离的媒体 Node 分片、两个浏览器、最终汇总；不打三平台包，不运行性能测试 |
+| PR、main 推送 | `source` 与 `ci-node-media` 构成完整 Node 用例并集（当前数量由清单枚举）；`ci-pr-browser` 覆盖 Chromium/WebKit 核心流程 | 源码、共享样片准备、两个 core、三个隔离的媒体 Node 分片、两个浏览器、最终汇总；不打三平台包，不运行性能测试 |
 | 显式运行 Full verification、版本标签 | 全浏览器矩阵、完整缓存/评分流程、HEVC 全帧验证、三平台 × Node/Bun、三平台原生包与发布集校验 | 全部成功才能产出 verified release set；只有版本标签生成未公开的 Release 草稿 |
 
 日常浏览器选择在统一 manifest 的 `ci-pr-browser` 声明：真实原生帧协议、PSNR/SSIM/VMAF/CAMBI/XPSNR 到候选/原帧证据、任务重执行、身份/Agent 标注与连接引导，以及完整分析 UI。数值域的 8/10-bit、ROI、区间、多 GOP 和生命周期由完整媒体 Node 分区覆盖；GUI 的完整深度/容器组合仍在显式全量验证中。日常检查通过不等于完整兼容性认证。
@@ -36,7 +36,7 @@ node scripts/run-tests.mjs ci-node-media-playback-quality
 
 原 PR #156 的画质门禁审计与失败证据见 [browser-quality-gates.md](browser-quality-gates.md)，其中 `ci-cache-pr` 的历史策略已被上述分层替代。`ci-cache-pr` 仅保留为旧本地选择器；全量流水线必跑完整 `ci-cache`，不再另设同一用例的非阻塞诊断副本。
 
-码流分析的 `ci-analysis-browser` 保留完整本地套件。全量验证将 MP4、legacy FLV、enhanced FLV 三个矩阵分片分别放在 Chromium/WebKit 的独立并行 job 中，使用 `ci-analysis-matrix-{mp4,flv-legacy,flv-enhanced}`；每个 job 只跑一个矩阵 case，合计保留每种引擎全部 36 格。流式图表、增量索引、几何、布局由 `analysis-browser` job 的 `ci-analysis-ui` 必跑，使用逐例生成的小素材，不下载 QA 样片。普通只读分析面板两引擎用例归入已有样片环境的 `uncovered` job。三个真实分析 Node 用例由 `unit` job 的 `ci-node-media` 必跑，不在每种浏览器重复执行。`release-set` 同时依赖 `analysis-browser` 与整个 `analysis-matrix`，任一分片失败、取消或跳过都不能产出验证通过的发布集。
+码流分析的 `ci-analysis-browser` 保留完整本地套件。全量验证将 MP4、legacy FLV、enhanced FLV、fMP4、TS、JS 容器六个矩阵分片分别放在 Chromium/WebKit 的独立并行 job 中，使用对应 `ci-analysis-matrix-*` 选择器；每个 job 只跑一个矩阵 case，覆盖格由清单与矩阵文件枚举。流式图表、增量索引、几何、布局由 `analysis-browser` job 的 `ci-analysis-ui` 必跑，使用逐例生成的小素材，不下载 QA 样片。普通只读分析面板两引擎用例归入已有样片环境的 `uncovered` job。真实分析 Node 用例由 `unit` job 的 `ci-node-media` 必跑，不在每种浏览器重复执行。`release-set` 同时依赖 `analysis-browser` 与整个 `analysis-matrix`，任一分片失败、取消或跳过都不能产出验证通过的发布集。
 
 各矩阵、流式图表与增量索引 case 仍拥有独立服务、浏览器、临时目录和 600 秒整例 watchdog。原有逐操作超时、整片 ready/EOF/帧数、取消与身份断言保持不变；云端不采集性能基准。本机性能命令及阈值保留。直接调用 `node scripts/testing/browser/media/bitstream-analysis.mjs <engine>` 会依次运行 matrix、diagrams、index 三组；每组独占服务、浏览器、临时素材及报告，一组失败仍完成其他独立组，最终非零退出。
 
@@ -46,7 +46,17 @@ node scripts/run-tests.mjs ci-node-media-playback-quality
 
 新增用例先明确一个可解释的行为、必要环境和独立的预期依据，再选择层级。纯计算放 Node 逻辑；取消、迟到结果和资源释放放可控异步模块测试；真实解码/像素身份放媒体集成；焦点和手势放浏览器交互；完整应用流程只覆盖实际接线。一个行为可以有多条相互支持的断言，不需要机械拆成每个断言一个 case。禁止为了减少维护成本而删除矩阵、扩大容差、增加重试或用同一实现生成预期来掩盖错误。
 
+新增或扩充测试与实现同 PR 审查四件事：保护的行为及现有覆盖缺口、独立预期、必要环境、增加的运行成本。修 bug 应给出修复前失败和修复后通过的证据；无法直接回放旧版本时说明原因及替代故障注入。默认扩充已有职责用例；新增文件应有独立职责，优先复用现有夹具。浏览器入口内部增加循环、素材、输入组合或重复初始化，也属于成本变更。
+
+纯逻辑回归保持无媒体/core/服务依赖。浏览器证明 DOM、手势、焦点、真实呈现与接线；已有纯函数的数值穷举由 Node 负责。真实帧身份、300 AU 完整消费、跨浏览器零解码缓存复用、取消和完整排空保留真实媒体证明。迁移或合并时逐组记录旧行为与新责任的对应，确认替代证明后再审查历史基线；文件数、断言数和入口总数不作为覆盖充分性的依据。
+
+本地开发先运行 `test:fast`、受影响领域或精确 `--case`；PR/main 仍运行完整 Node 并集及两引擎核心浏览器流程。完整兼容性矩阵由现有手动/标签流水线承担，发布还需固定产物的三平台程序包及发布集验收。每次验证说明实际范围；选中子集的绿色不能冒充完整验收。
+
+成本目标按逻辑、媒体、浏览器职责和同条件基线评审，不照搬统一的秒数上限。日常浏览器选择保护必需行为、引擎和环境，而不冻结入口总数。运行时间用于定位重复准备和慢场景，不设置云端性能门禁，不参与选例、超时或通过判定。
+
 本地 `unit` 是完整入口。CI 的 `source` 与 `ci-node-media` 在 Linux Node 执行中必须互斥，且并集严格等于 `unit`；新增用例缺少归属或被两边重复选择都会使清单验证失败。独立的 `analysis-logic` job 已移除，其用例仍属于 `source` 并受门禁保护，原 `ci-analysis-logic` 仅保留为本地领域筛选。原生 Node/Bun 或不同平台的重复有独立兼容性目的，继续保留。发布汇总同时依赖源码和媒体分片，任一失败、取消或跳过均不能生成验证通过的发布集。
+
+完全由 `source` 用例组成、且无媒体/core/构建/外部工具依赖的独立选择使用两个有界执行 worker；每项仍拥有独立进程、临时目录、日志与原 watchdog。结果按清单顺序发布，全部完成前不能通过；取消回收所有活动子进程，排队项只记录取消。媒体、浏览器及有依赖顺序的 npm 阶段保持串行。`--plan` 与实际结果均声明并发度；并发时终端只展开失败日志，完整逐项日志仍上传。
 
 `--plan` 输出本次选择的层级、责任、实际执行模块、引擎/输入、素材、工具和预算，不启动服务、不构建、不运行测试。每次实际执行也在报告目录写入 `plan.json`。已有用例的层级可按其所属目录给出初始分类；尚未人工梳理的责任保持 `reviewNeeded: true`，不把分类自动视为已经覆盖某项产品能力。analysis 先作为明确责任的试点：
 
@@ -61,6 +71,18 @@ node scripts/run-tests.mjs ci-node-media-playback-quality
 | 普通 analysis 页面 | 只读容器查询、双轨配对、DTS、播放共存 | 复用 `uncovered` 的 QA 样片环境 |
 
 行为组在 `scripts/testing/analysis/plan.mjs` 声明职责、阶段和生成素材 profile；场景函数位于 `scenarios/`，无导入即执行的副作用，通过显式 context 使用当前 case 的服务与控件。`fixture.mjs` 只拥有生命周期和故障 gate，`controls.mjs` 只操作公共 UI/Session facade；预期和断言留在场景内。每例生成素材位于其临时目录，成功/失败均由夹具删除。领域阶段用 `stage()` 命名，保留 case 的整体 watchdog；内部等待继续使用原逐操作期限，命名阶段不会偷偷增加 30 秒限制或延长整例预算。
+
+分析浏览器的输入职责与通用 UI 职责分别验证：
+
+| 行为 | 执行责任 |
+| --- | --- |
+| 双轨 overlay 的输入、真实 picture 身份、opt-in、缓存激活、显示/hover 零新增分析、关闭工具条后的帧更新 | `layout` 在本地文件与媒体库分别运行，两种引擎保留 |
+| 轨道/图表显隐及长按、窄/宽视口 × 最小/最大高度 × 单图/组合图的首帧与滚动 | `layout` 使用已验证的媒体库双轨运行一次完整 UI 矩阵；三种背景 × 两种主题的材质验证保留 |
+| 300 AU 完整消费、共享视口与偏移、工作区输入恢复 | `charts` 在本地文件与媒体库分别运行；跨浏览器恢复仍核对 300 个不同 AU、零解码和零逐帧下载 |
+| 指针/键盘、PTS/DTS、主题像素、卡片与纵向滚动 | `charts` 使用媒体库运行一次完整交互矩阵，两种引擎保留 |
+| 几何和时间投影的数值边界 | 既有 `analysis-geometry`、`analysis-canvas`、`analysis-projection`、`analysis-selection` Node 用例；浏览器继续证明实际 DOM、像素和接线 |
+
+合并的是通用 UI 与输入来源的重复交叉执行，不缩减编码、容器、深度或解码策略矩阵。输入特有断言仍在各输入内执行；后续新增 UI 行为就近加入一次通用交互，不重新复制整段输入循环。
 
 analysis 行为组和普通 analysis 页面均先把已构建的静态资源复制到自己的临时目录；服务端、浏览器 Worker 与矩阵的 build-info 校验读取同一快照。复制前后及副本的字节摘要必须一致，复制期间遭遇重建则在启动浏览器前明确失败；之后其他本地套件重建 `dist` 不会删除当前页面将要加载的分块或替换 core 身份。快照随 case 清理。其他尚未迁移的专用脚本仍应避免在运行中重建其共享 `dist`。
 
@@ -145,6 +167,8 @@ node scripts/run-tests.mjs uncovered --prepared
 `--prepared` 必须有当前 job 显式生成的凭据，校验源码（包括未提交改动）、配置、Node/平台、实际 core 字节和 dist 输出；过期或损坏时失败。普通运行不自动读取旧凭据。不同平台/job 不共享构建凭据。构建日志在报告下的 `build/`，显示本次构建或验证后的复用。
 
 新入口的选择清单在 `.run/test-suites/<suite>/selection.json`，逐项日志和聚合结果在同目录的 `<case>.log`、`results.json`；单例筛选默认目录为 `selected`，可用 `--directory` 另选目录。旧 runner 仍支持 `node scripts/run-browser-regressions.mjs uncovered` / `flv-startup`，保留 `.run/browser-regressions/<suite>/` 的报告路径与 case 名。
+
+`results.json` 记录总时间、构建时间、并发度和每项前置准备/执行时间；`summary.md` 列出最慢项，由顶层 CLI 追加到 GitHub job 摘要，子用例和故障注入不能污染 job 摘要。公共浏览器夹具在成功、失败及取消后写入 `timings-<case>-<engine>.json`，保留行为阶段和清理耗时；套件摘要只读取所属 case 本次执行开始后的阶段证据，避免复用目录中的旧通过记录。嵌套阶段可以重叠，不相加冒充总时间。报告辅助输出失败不改写原测试结果，未完成或失败的结果仍按原门禁处理。
 
 每个 case 是独立子进程，断言失败、准备失败或超时后仍运行其他独立 case；required 的失败、取消或缺失结果使总检查失败。报告从运行前开始写入，未完成的通过前缀不会成为通过套件。informational 失败保留原始退出码、日志和状态，但不阻断 required 聚合。纯 informational 套件有失败时仍返回非零，CI 在独立性能步骤使用 `continue-on-error` 并显示警告。SIGINT/SIGTERM 会清理活动子进程树并记录取消结果。父级 runner 为每项提供独占系统临时目录（TMPDIR/TEMP/TMP），正常、失败、超时和取消后均删除；即使子进程被强制结束也不会绕过该清理。报告记录 temporaryDirectory、temporaryDataRemoved 与独立 cleanupErrors，日志和失败截图目录保留。
 

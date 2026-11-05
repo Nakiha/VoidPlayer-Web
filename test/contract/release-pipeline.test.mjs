@@ -25,8 +25,10 @@ test('daily verification is bounded and full release verification is explicit', 
   const read = name => readFile(new URL(`../../.github/workflows/${name}.yml`, import.meta.url), 'utf8');
   const daily = await read('checks'), release = await read('release-preview'), cores = await read('prepare-cores');
   const jobs = workflowJobs(daily), coreJobs = workflowJobs(cores);
-  assert.deepEqual(Object.keys(jobs).sort(), ['browser', 'cores', 'qa-media', 'required', 'source-logic', 'unit']);
-  assert.deepEqual(Object.keys(coreJobs).sort(), ['analysis-core', 'decoder']);
+  const reachable = id => new Set(jobs[id].needs.flatMap(need => [need, ...reachable(need)]));
+  assert.deepEqual([...reachable('required')].sort(),Object.keys(jobs).filter(id=>id!=='required').sort(),
+    'every daily job must be owned by the required verification dependency graph');
+  assert.ok(coreJobs['analysis-core']&&coreJobs.decoder,'both independent core artifacts are prepared');
   assert.match(daily, /on:\n  pull_request:\n  push:\n    branches: \[main\]/);
   const fullTriggers = release.slice(release.indexOf('\non:\n'), release.indexOf('\npermissions:'));
   assert.match(fullTriggers, /tags: \['v\*'\]/);
@@ -66,7 +68,7 @@ test('daily verification is bounded and full release verification is explicit', 
   assert.equal(new Set(partitioned.map(row=>row.id)).size,partitioned.length,'no repeated execution');
   assert.deepEqual(partitioned.map(row=>row.id).sort(),media.map(row=>row.id).sort(),'complete media coverage, not a daily subset');
   const profile = manifest.cases.filter(row => row.suites.includes('ci-pr-browser'));
-  assert.equal(profile.length, 33, 'daily profile growth requires an explicit coverage/budget review');
+  assert.deepEqual([...new Set(profile.flatMap(row=>row.engines))].sort(),['chromium','webkit']);
   assert.ok(profile.every(row => row.required && row.fixtures.every(value => ['core', 'analysis-core'].includes(value))));
   for (const engine of ['chromium', 'webkit']) for (const family of ['contracts', 'native-presented-protocol', 'quality-workflow-8', 'native-vmaf-8', 'native-cambi-8', 'native-xpsnr-8', 'ssim-workflow-8', 'cambi-reexecution', 'identity'])
     assert.ok(profile.some(row => row.id === `browser-${family}-${engine}`), `${family}/${engine}`);

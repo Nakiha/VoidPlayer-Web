@@ -114,6 +114,8 @@ node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 
 套件注册与 CI 选例共用 `scripts/testing/manifest.json`，执行入口为 `scripts/run-tests.mjs`；新增测试必须登记。完整说明见 `docs/testing.md`。旧 npm 命令和脚本路径保留兼容。
 
+新增或扩充测试同 PR 说明行为缺口、独立预期、必要层级及运行成本；修 bug 保留修复前失败/修复后通过或等价故障注入证据。默认扩充已有职责用例，内部循环与素材扩充也需审查成本。迁移用行为映射核对替代覆盖，不按入口数或源码布局冻结测试；成本摘要只作诊断，不改变云端通过判定。
+
 ## 独立发布
 
 - 日常 PR/main 检查走 `.github/workflows/checks.yml`；正式打包由手动或版本标签触发 `.github/workflows/release-preview.yml`：固定解码器源码/工具链后准备共享 core，再在 Linux x64、Windows x64、macOS ARM64 原生 runner 打包和测试。
