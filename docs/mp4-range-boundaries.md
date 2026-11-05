@@ -9,11 +9,11 @@ safe JavaScript integers and are never coerced to 32 bits.
 
 Sequential playback of both File/Blob and URL inputs opts into the same
 asynchronous compressed-byte read-ahead. A File can reside on a mounted network
-drive; its source type does not establish low latency. When
-less than 2 MiB remains ahead of consumption, the reader starts at most one
-2 MiB Range request, overlapping network latency with decoding. A demand for
+drive; its source type does not establish low latency. Initially, when less
+than 2 MiB remains ahead of consumption, the reader starts at most one 2 MiB
+request, overlapping latency with decoding. A demand for
 that range joins the existing request; cached reads remain available while it
-is pending. The compressed cache stays within 8 MiB, independently of the
+is pending. The compressed cache starts at 8 MiB, independently of the
 decoded-frame queue and the 256 KiB synchronous bridge transfer window. No
 recursive fetch runs without consumption. Metadata/probing/index readers stay
 on their existing demand/scan policies. Seek and decoder replacement disable
@@ -33,6 +33,39 @@ outside the LRU, preserving cache-only metadata/audio observation after a full
 container scan. Observation never starts IO. Progressive TS startup playback
 uses its own reader; the concurrent full index scanner retains its existing
 read policy until it finishes.
+
+Sequential playback adapts from observed byte consumption and actual input
+starvation. It samples forward byte progress over at least 250 ms, excludes
+blocked input time once at least 100 ms of non-IO observation is available
+(otherwise retaining the wall-clock rate), smooths the
+rate, and retains twelve successful refill durations. Refill time includes
+callback scheduling, so slow callbacks alone never grow memory. Growth requires
+at least two waits of 4 ms or more, totaling at least 20 ms, after a 500 ms
+warmup and with at least one second between growth decisions. The current read
+must have encountered a new wait; old warmup waits cannot trigger delayed
+growth after recovery. Presentation
+`waitingMs`, codec type, thread count and File/URL labels are not inputs.
+
+The target low watermark covers 1.5 times the refill P95 plus 50 ms, multiplied
+by measured byte consumption, with a 2 MiB minimum. Repeated starvation also
+raises the watermark by at least half the prior batch. If observed consumption
+uses at least 70 percent of the request service rate, the batch doubles up to
+8 MiB to amortize per-request latency. The cache grows in 8/16/32 MiB tiers to
+hold the watermark, a complete next batch, 1 MiB of history and the current
+block. Unread forward blocks take priority over consumed history during
+eviction. These are per-reader limits; the one in-flight body, logical read
+output, metadata prefix and decoder/GPU allocations are separate.
+
+After fifteen seconds without input starvation, targets may shrink, at most
+once every five seconds. A smaller batch must have ample headroom even if its
+completion takes as long as the observed larger request. Pauses reset rate
+sampling; they do not count as evidence of a slower input. Seek/decoder
+replacement disables read-ahead, restores the 8 MiB baseline, trims history,
+and cancels the old speculative operation with the same physical-settlement
+rule for Blob IO. Probe, metadata and index readers remain at their original
+budgets. `readAheadSnapshot()` reports these measurements and limits without
+IO or cache promotion. Insufficient sustained bandwidth cannot be repaired by
+unbounded buffering: growth stops at 32 MiB plus one in-flight batch.
 
 AVIO reads starting at or beyond the known physical EOF return an empty buffer.
 Requests crossing EOF are clipped before calculating their length. This matters

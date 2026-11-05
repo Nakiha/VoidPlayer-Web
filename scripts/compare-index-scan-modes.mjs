@@ -32,17 +32,18 @@ if(signature[0]===0x47){
   const {wasmFlvDecoder}=await import('../src/media/decoding/flv-decoder.ts');
   const directory=process.env.WASM_CORE_DIR||path.resolve('public/vendor/voidplayer-core'),url=pathToFileURL(path.join(directory,'voidplayer-core.js')).href,binary=readFileSync(path.join(directory,'voidplayer-core.wasm'));
   const run=async diagnostic=>{
-    const fd=openSync(inputPath,'r');let bytesRead=0,reads=0,decoded=0,softwareOpens=0;
+    const fd=openSync(inputPath,'r');let bytesRead=0,reads=0,decoded=0,softwareOpens=0,playback=false;
     class DiskBlob extends Blob {
       get size(){return fileStat.size;}
       arrayBuffer(){throw new Error('Whole-file materialization forbidden');}
-      slice(start=0,end=fileStat.size){const n=Math.min(end,fileStat.size)-start;assert.ok(n>=0&&n<=256*1024);const bytes=Buffer.alloc(n);let count=0;while(count<n){const got=readSync(fd,bytes,count,n-count,start+count);if(!got)throw new Error('short diagnostic read');count+=got;}reads++;bytesRead+=n;return new Blob([bytes]);}
+      slice(start=0,end=fileStat.size){const n=Math.min(end,fileStat.size)-start;assert.ok(n>=0&&n<=(playback?8*1024*1024:256*1024),'index scans stay within 256 KiB; playback requests stay within 8 MiB');const bytes=Buffer.alloc(n);let count=0;while(count<n){const got=readSync(fd,bytes,count,n-count,start+count);if(!got)throw new Error('short diagnostic read');count+=got;}reads++;bytesRead+=n;return new Blob([bytes]);}
     }
     const engine=new JsContainerEngine({file:new DiskBlob()},'js-index-scan-diagnostic',{software:async(...args)=>{softwareOpens++;const decoder=await wasmFlvDecoder(...args);return {...decoder,async send(bytes,packet){const result=await decoder.send(bytes,packet);if(result!==false)decoded++;return result;}};}});
     try{
       const started=performance.now(),index=await engine.prepare(),indexWallMs=performance.now()-started;
       assert.equal(softwareOpens,0,'Indexing itself must not instantiate a WASM decoder');
       const records=Buffer.from(JSON.stringify(index)),indexBytesRead=bytesRead,indexReadCalls=reads;
+      playback=true;
       const opened=await engine.open(url,binary,true);let diagnosticOutputs=0;
       if(diagnostic){let frame=await engine.extract(0);while(frame){diagnosticOutputs++;const pts=frame.pts;frame.frame?.close();frame=await engine.next(pts);}assert.equal(diagnosticOutputs,index.packets.length);}
       const scanDecodedPackets=diagnostic?decoded:0,scanWallMs=diagnostic?performance.now()-started:indexWallMs;

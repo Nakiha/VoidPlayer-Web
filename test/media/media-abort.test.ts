@@ -40,7 +40,7 @@ for (const backend of ['ffmpeg', 'packet'] as const) {
     let started!: () => void;
     const ready = new Promise<void>(resolve => { started = resolve; });
     let terminated = 0, created = 0;
-    const worker = { addEventListener() {}, postMessage() { started(); }, terminate() { terminated++; } };
+    const worker = { addEventListener() {}, removeEventListener() {}, postMessage() { started(); }, terminate() { terminated++; } };
     const deps = { signal: controller.signal, glueURL: 'file:///unused/voidplayer-core.js', workerFactory() { created++; return worker as unknown as Worker; } };
     const file = new File(['not read by the stalled worker'], 'capture.ts');
     const loading = backend === 'ffmpeg' ? openFFmpegMedia(file, deps) : openPacketMedia('mp4', { file }, file, deps);

@@ -328,6 +328,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     const signature = JSON.stringify(budget);
     if (signature === failedGrowth || decodeThreadsForCodec(budget, info.codec) <= (info.decoderThreads ?? 1)) { growth.rollback(); return; }
     const previousThreads = info.decoderThreads;
+    rangeBridge?.setPlaybackReadAhead(false);
     try {
       const result = await activeRpc.call('restore-threads', { ctx: init.ctx, index, threads: budget }, [], 60000);
       if (disposed) throw new Error('媒体已释放。');

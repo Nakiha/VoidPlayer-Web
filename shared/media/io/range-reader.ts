@@ -1,10 +1,9 @@
 import { MediaOpenError } from './media-errors.ts';
+import { BASE_CACHE_BYTES, PlaybackReadAhead } from './playback-read-ahead.ts';
 
 export type RandomAccessInput = { file: Blob } | { url: string; size: number; library?:import('./library-reference-types.ts').LibraryIndexReference };
 export interface RangeVersion { validator?: string; ifRange?: string; }
 const BLOCK = 256 * 1024;
-const CACHE_BYTES = 8 * 1024 * 1024;
-const PLAYBACK_AHEAD_BYTES = 2 * 1024 * 1024;
 type ReadAhead = { start: number; end: number; controller: AbortController; pending: boolean; task: Promise<void>; error?: unknown };
 
 /** Bounded compressed-byte cache, shared by async demux and the synchronous AVIO bridge. */
@@ -21,8 +20,11 @@ export class RangeReader {
   private playbackReadAhead = false;
   private ahead?: ReadAhead;
   private pendingAhead?: ReadAhead;
+  private policy: PlaybackReadAhead;
+  private playbackPosition?: number;
   constructor(input: RandomAccessInput, blockSize = BLOCK, version?: RangeVersion) {
     this.blockSize = blockSize;
+    this.policy = new PlaybackReadAhead(blockSize);
     this.input = input;
     this.size = 'file' in input ? input.file.size : input.size;
     this.validator = version?.validator; this.ifRange = version?.ifRange;
@@ -56,7 +58,14 @@ export class RangeReader {
     }
     return output;
   }
-  protected setReadAheadBlocks(blocks: number) { this.readAheadBlocks = Math.max(1, Math.min(blocks, Math.floor(CACHE_BYTES / this.blockSize))); }
+  protected setReadAheadBlocks(blocks: number) { this.readAheadBlocks = Math.max(1, Math.min(blocks, Math.floor(BASE_CACHE_BYTES / this.blockSize))); }
+  /** Cache-only diagnostics. Refill time includes callback scheduling; growth
+   * additionally requires actual input starvation, never presentation waiting. */
+  readAheadSnapshot() {
+    return {...this.policy.snapshot(),enabled:this.playbackReadAhead,
+      cachedBytes:[...this.cache.values()].reduce((sum,bytes) => sum+bytes.length,0),
+      inFlightBytes:this.pendingAhead?.pending ? this.pendingAhead.end-this.pendingAhead.start : 0};
+  }
   /** Only sequential playback opts in. Each consumed window can start one
    * bounded fetch; an idle/paused consumer never keeps filling the cache. */
   setPlaybackReadAhead(enabled: boolean) {
@@ -64,11 +73,19 @@ export class RangeReader {
     if (!this.playbackReadAhead) {
       this.ahead?.controller.abort();
       this.ahead = undefined;
+      this.playbackPosition = undefined;
+      this.policy = new PlaybackReadAhead(this.blockSize);
+      this.trimCache();
     }
   }
   read(offset: number, length: number): Promise<Uint8Array> {
     const run = async () => {
       const bytes = await this.readInner(offset, length);
+      if (this.playbackReadAhead && length) {
+        this.playbackPosition = offset+length-1;
+        this.policy.consumed(offset+length,performance.now());
+        this.trimCache();
+      }
       if (length) this.prefetchAfter(offset + length);
       return bytes;
     };
@@ -106,30 +123,43 @@ export class RangeReader {
     if (this.controller.signal.aborted) throw new MediaOpenError('input', '媒体读取已取消。');
     if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(length) || offset < 0 || length < 0 || offset + length > this.size) throw new MediaOpenError('input', '媒体读取范围越界。');
     if (length > 64 * 1024 * 1024) throw new MediaOpenError('resource', '单次媒体读取超过 64 MiB 上限。');
+    if (this.playbackReadAhead && length) this.policy.begin(offset,performance.now());
     const output = new Uint8Array(length);
     for (let position = offset; position < offset + length;) {
+      if (this.playbackReadAhead) this.playbackPosition = position;
       const start = Math.floor(position / this.blockSize) * this.blockSize;
       let bytes = this.cache.get(start);
       const ahead = this.ahead;
       if (!bytes && ahead && start >= ahead.start && start < ahead.end) {
         // Join the speculative request instead of fetching the same bytes twice.
+        const waitedAt = performance.now();
         await ahead.task;
         if (this.controller.signal.aborted || ahead.controller.signal.aborted) throw new MediaOpenError('input', '媒体读取已取消。');
         if (ahead.error) throw ahead.error;
+        if (this.playbackReadAhead) this.policy.waited(performance.now()-waitedAt,performance.now());
         bytes = this.cache.get(start);
       }
       if (!bytes) {
         // Coalesce scan windows into one request, keeping the same bounded
         // block cache and all Range/version/body checks. Never prefetch during
         // ordinary playback unless the caller explicitly enables it.
-        const end = Math.min(start + this.blockSize * this.readAheadBlocks, this.size);
+        const required = Math.ceil((offset+length-start)/this.blockSize);
+        const blocks = this.playbackReadAhead ? Math.max(this.readAheadBlocks,Math.min(required,this.policy.batchBytes/this.blockSize))
+          : this.readAheadBlocks;
+        let end = Math.min(start+this.blockSize*blocks,this.size);
+        if (ahead?.pending && ahead.start > start) end = Math.min(end,ahead.start);
+        if (this.playbackReadAhead) for (let at = start+this.blockSize; at < end; at += this.blockSize) {
+          if (this.cache.has(at)) { end = at; break; }
+        }
+        const waitedAt = performance.now();
         const window = await this.load(start, end);
         if (this.controller.signal.aborted) throw new MediaOpenError('input', '媒体读取已取消。');
+        if (this.playbackReadAhead) this.policy.waited(performance.now()-waitedAt,performance.now());
         this.cacheWindow(start, window);
         bytes = this.cache.get(start)!;
       }
       this.cache.delete(start); this.cache.set(start, bytes);
-      while (this.cache.size > CACHE_BYTES / this.blockSize) this.cache.delete(this.cache.keys().next().value!);
+      this.trimCache();
       const count = Math.min(bytes.length - (position - start), offset + length - position);
       output.set(bytes.subarray(position - start, position - start + count), position - offset);
       position += count;
@@ -141,8 +171,26 @@ export class RangeReader {
       // Copy blocks so an evicted window cannot stay pinned by one slice.
       this.cache.delete(start + at);
       this.cache.set(start + at, window.slice(at, at + this.blockSize));
+      this.trimCache();
     }
-    while (this.cache.size > CACHE_BYTES / this.blockSize) this.cache.delete(this.cache.keys().next().value!);
+  }
+  private trimCache() {
+    const limit = this.playbackReadAhead ? this.policy.cacheBytes : BASE_CACHE_BYTES;
+    while (this.cache.size > limit / this.blockSize) {
+      let victim = this.cache.keys().next().value!;
+      if (this.playbackPosition !== undefined) {
+        const current = Math.floor(this.playbackPosition/this.blockSize)*this.blockSize;
+        const end = current+this.policy.lowWaterBytes+this.policy.batchBytes+this.blockSize;
+        let consumed = false;
+        for (const start of this.cache.keys()) {
+          if (start < current) { victim = start; consumed = true; break; }
+        }
+        if (!consumed) for (const start of this.cache.keys()) {
+          if (start >= end) { victim = start; break; }
+        }
+      }
+      this.cache.delete(victim);
+    }
   }
   private prefetchAfter(position: number) {
     if (!this.playbackReadAhead || this.controller.signal.aborted || this.pendingAhead?.pending || this.ahead?.error) return;
@@ -150,8 +198,8 @@ export class RangeReader {
     while (this.cache.has(start)) start += this.blockSize;
     // Keep roughly one complete request available for decoding while the next
     // is in flight, including on links only moderately faster than the media.
-    if (start >= this.size || start - position >= PLAYBACK_AHEAD_BYTES) return;
-    let end = Math.min(start + PLAYBACK_AHEAD_BYTES, this.size);
+    if (start >= this.size || start - position >= this.policy.lowWaterBytes) return;
+    let end = Math.min(start + this.policy.batchBytes, this.size);
     for (let at = start + this.blockSize; at < end; at += this.blockSize) {
       if (this.cache.has(at)) { end = at; break; }
     }
@@ -159,8 +207,12 @@ export class RangeReader {
     this.ahead = this.pendingAhead = ahead;
     ahead.task = (async () => {
       try {
+        const started = performance.now();
         const bytes = await this.load(start, end, ahead.controller.signal);
-        if (this.ahead === ahead && !ahead.controller.signal.aborted && !this.controller.signal.aborted) this.cacheWindow(start, bytes);
+        if (this.ahead === ahead && !ahead.controller.signal.aborted && !this.controller.signal.aborted) {
+          this.policy.refilled(bytes.length,performance.now()-started);
+          this.cacheWindow(start, bytes);
+        }
       } catch (error) {
         // Preserve failures for the first actual consumer of this range, with
         // no detached rejection or automatic retry of a changed source.
