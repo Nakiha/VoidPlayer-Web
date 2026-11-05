@@ -5,40 +5,51 @@ import type { Arrangement } from '../../shared/presentation/viewport.ts';
 const gridPath = gridSvg.match(/d="([^"]+)"/)![1];
 const columnsPath = columnsSvg.match(/d="([^"]+)"/)![1];
 
-function outline(x: number, y: number, width: number, height: number, top: number, bottom: number) {
-  const right = x + width, lower = y + height;
-  return `M${x + top},${y} H${right - top} A${top},${top} 0 0 1 ${right},${y + top}
-    V${lower - bottom} A${bottom},${bottom} 0 0 1 ${right - bottom},${lower}
-    H${x + bottom} A${bottom},${bottom} 0 0 1 ${x},${lower - bottom}
-    V${y + top} A${top},${top} 0 0 1 ${x + top},${y} Z`;
+function cap(x: number, progress: number, lower: boolean) {
+  const width = 80 - 8 * progress, height = 80 + 16 * progress, radius = 16 * (1 - progress);
+  const y = 40 - 8 * progress;
+  // Rotate the lower cap by 180 degrees so every contour has the same winding.
+  const point = (u: number, v: number) => `${lower ? x + width - u : x + u},${lower ? 256 - y - v : y + v}`;
+  return `M${point(16, 0)} L${point(width - 16, 0)} A16,16 0 0 1 ${point(width, 16)}
+    L${point(width, height - radius)} A${radius},${radius} 0 0 1 ${point(width - radius, height)}
+    L${point(width - 16, height)} L${point(width - 16, 16)} L${point(16, 16)} L${point(16, height)}
+    L${point(radius, height)} A${radius},${radius} 0 0 1 ${point(0, height - radius)}
+    L${point(0, 16)} A16,16 0 0 1 ${point(16, 0)} Z`;
 }
 
-// The four squares grow into two columns as their middle edges and inner
-// corners recede. At the join, shared edges cancel under evenodd without a seam.
+// Open caps grow into columns. The middle bars stay at their original height
+// and fade separately, instead of sweeping shrinking subpixel edges together.
 function intermediatePath(progress: number) {
-  return [40 + 8 * progress, 136].flatMap(x => [false, true].map(lower => {
-    const y = lower ? 136 - 8 * progress : 40 - 8 * progress;
-    const top = lower ? 16 * (1 - progress) : 16, bottom = lower ? 16 : 16 * (1 - progress);
-    const width = 80 - 8 * progress, height = 80 + 16 * progress;
-    return outline(x, y, width, height, top, bottom)
-      + outline(x + 16, y + top, width - 32, height - top - bottom, 0, 0);
-  })).join(' ');
+  return [40 + 8 * progress, 136].flatMap(x => [cap(x, progress, false), cap(x, progress, true)]).join(' ');
+}
+
+function separatorPath(progress: number) {
+  return [56 + 8 * progress, 152].flatMap(x => [104, 136].map(y =>
+    `M${x},${y} h${48 - 8 * progress} v16 h${-48 + 8 * progress} Z`)).join(' ');
 }
 
 const animations = new WeakMap<HTMLElement, { progress: number; frame: number }>();
 export function animateArrangementIcon(button: HTMLElement, arrangement: Arrangement) {
   const svg = button.querySelector<SVGSVGElement>('.arrangement-icon'), path = svg?.querySelector('path');
   if (!svg || !path) return;
+  let separators = svg.querySelector<SVGPathElement>('[data-arrangement-separators]');
+  if (!separators) {
+    separators = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    separators.setAttribute('data-arrangement-separators', '');
+    svg.append(separators);
+  }
   const target = Number(arrangement === 'grid');
   const state = animations.get(button) ?? { progress: target, frame: 0 };
   animations.set(button, state);
   cancelAnimationFrame(state.frame);
   svg.dataset.icon = target ? 'columns' : 'grid';
-  svg.setAttribute('fill-rule', 'evenodd');
+  svg.setAttribute('fill-rule', 'nonzero');
   const from = state.progress;
   const paint = (progress: number) => {
     state.progress = progress;
     path.setAttribute('d', progress === 0 ? gridPath : progress === 1 ? columnsPath : intermediatePath(progress));
+    separators.setAttribute('d', separatorPath(progress));
+    separators.setAttribute('opacity', progress === 0 || progress === 1 ? '0' : String(1 - progress));
   };
   if (matchMedia('(prefers-reduced-motion: reduce)').matches || from === target) { paint(target); return; }
   const start = performance.now(), duration = 240 * Math.abs(target - from);

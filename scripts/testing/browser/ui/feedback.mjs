@@ -8,6 +8,63 @@ await withBrowserFixture({ caseName: 'feedback', engine: name, pageOptions: {vie
  await ready();
  // The entry page loads the player with a dynamic import after the HTTPS check.
  await page.waitForFunction(()=>!!window.voidPlayer?.tools);
+ // Check the icon without media: middle pixels must fade in one direction,
+ // rather than flash as thin separators move across the central gap.
+ const arrangement=await page.evaluate(async()=>{
+   const svg=document.querySelector('#arrangement svg'),nodes=[...svg.children];
+   const sizes=[18,36,Math.round(svg.getBoundingClientRect().width),Math.round(svg.getBoundingClientRect().width*devicePixelRatio)];
+   const record=async value=>{
+     const frames=[svg.outerHTML],start=performance.now();
+     window.voidPlayer.setViewport({arrangement:value});
+     await new Promise(resolve=>{
+       const sample=now=>{frames.push(svg.outerHTML);if(now-start<300)requestAnimationFrame(sample);else resolve();};
+       requestAnimationFrame(sample);
+     });
+     const pixels=[];
+     for(const frame of frames){
+       const clone=new DOMParser().parseFromString(frame,'image/svg+xml').documentElement;
+       clone.setAttribute('xmlns','http://www.w3.org/2000/svg');clone.setAttribute('fill','white');
+       const samples=[];
+       for(const size of sizes){
+         clone.setAttribute('width',String(size));clone.setAttribute('height',String(size));
+         const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'}));
+         try{
+           const image=new Image();image.src=url;await image.decode();
+           const canvas=document.createElement('canvas');canvas.width=canvas.height=size;
+           const ctx=canvas.getContext('2d');ctx.drawImage(image,0,0);
+           for(const y of [Math.floor(size/2)-1,Math.floor(size/2)])samples.push(ctx.getImageData(Math.floor(size*80/256),y,1,1).data[3]);
+         }finally{URL.revokeObjectURL(url);}
+       }
+       pixels.push(samples);
+     }
+     return {pixels,shapes:new Set(frames).size};
+   };
+   const forward=await record('grid'),backward=await record('horizontal');
+   window.voidPlayer.setViewport({arrangement:'grid'});
+   await new Promise(resolve=>setTimeout(resolve,60));
+   const before=[...svg.children].map(path=>[path.getAttribute('d'),path.getAttribute('opacity')]);
+   window.voidPlayer.setViewport({arrangement:'horizontal'});
+   const continuous=JSON.stringify(before)===JSON.stringify([...svg.children].map(path=>[path.getAttribute('d'),path.getAttribute('opacity')]));
+   await new Promise(resolve=>setTimeout(resolve,300));
+   return {forward,backward,continuous,sameNodes:nodes.every((node,i)=>node===svg.children[i]),rest:svg.querySelector('path').getAttribute('d')};
+ });
+ for(const [direction,sign] of [['forward',1],['backward',-1]]){
+   const {pixels,shapes}=arrangement[direction];
+   assert.ok(shapes>5,`${direction}: sample intermediate arrangement shapes`);
+   for(let i=1;i<pixels.length;i++)for(let p=0;p<pixels[i].length;p++){
+     assert.ok(sign*(pixels[i][p]-pixels[i-1][p])<=1,`${direction}: middle pixel ${p} must not brighten then darken (${pixels[i-1][p]} -> ${pixels[i][p]})`);
+   }
+ }
+ assert.equal(arrangement.continuous,true,'quick reversal preserves both outline and separator opacity');
+ assert.equal(arrangement.sameNodes,true,'arrangement morph keeps its SVG paths');
+ assert.equal(arrangement.rest,originalPath('squares-four'),'arrangement returns to the original grid glyph');
+ await page.emulateMedia({reducedMotion:'reduce'});
+ await page.evaluate(()=>window.voidPlayer.setViewport({arrangement:'grid'}));
+ assert.equal(await page.locator('#arrangement path').first().getAttribute('d'),originalPath('columns'));
+ assert.equal(await page.locator('#arrangement [data-arrangement-separators]').getAttribute('opacity'),'0');
+ await page.evaluate(()=>window.voidPlayer.setViewport({arrangement:'horizontal'}));
+ assert.equal(await page.locator('#arrangement path').first().getAttribute('d'),originalPath('squares-four'));
+ await page.emulateMedia({reducedMotion:'no-preference'});
  await page.evaluate(async()=>{const tool=n=>window.voidPlayer.tools.find(t=>t.name===n);const lib=await tool('list_library').execute({});await tool('load_library_item').execute({slot:'A',id:lib.entries.find(e=>e.name==='av1_10s_1920x1080.webm').id});});
  // Fit is unobscured, but the full stage remains available beneath glass at zoom.
  await page.setViewportSize({width:1280,height:520});
