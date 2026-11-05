@@ -3,6 +3,8 @@ import { settleAppearance } from '../browser-contracts.mjs';
 export async function selectDiagrams(page, choice) {
   if (!await page.locator('#analysis-panel').isVisible()) await page.locator('#toggle-analysis').click();
   const selected = Array.isArray(choice) ? choice : choice === 'overview' ? ['bitrate', 'size'] : [choice];
+  // Source restoration can update sibling choices between actions. Observe
+  // each button at its click instead of reusing one selection snapshot.
   for (const value of ['bitrate', 'size', 'nalu-size', 'nalu-types', 'references']) {
     const item = page.locator(`#analysis-diagrams [data-value="${value}"]`);
     if ((await item.getAttribute('aria-pressed') === 'true') !== selected.includes(value)) await item.click();

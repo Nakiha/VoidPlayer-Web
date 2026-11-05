@@ -1,7 +1,7 @@
 // Stable behavior groups, independent of script paths and CI job names.
 export const analysisResponsibilities = {
   navigation: { layer: 'browser-interaction', purpose: 'Range editing, zoom anchoring, seek separation and reference hierarchy', stages: ['navigation'], fixtures: ['incremental', 'references'] },
-  layout: { layer: 'browser-interaction', purpose: 'Chart mounting, row geometry, scrolling and first-paint stability', stages: ['layout'], fixtures: ['streams'] },
+  layout: { layer: 'browser-interaction', purpose: 'Local/library overlay identity and cache reuse; shared controls, scrolling and first-paint matrix', stages: ['layout'], fixtures: ['streams'] },
   overlay: { layer: 'browser-interaction', purpose: 'Overlay controls, hover details, opacity and track isolation', stages: ['layout'], fixtures: ['streams'] },
   matrix: { layer: 'media-integration', purpose: 'Real codec/input/decode-policy matrix, pixel identity and cache/range contracts', stages: ['matrix'], fixtures: [] },
   diagrams: { layer: 'media-integration', purpose: 'Visible-GOP execution, concurrency, chart gestures, multi-track isolation and limitations', stages: ['streams', 'concurrency', 'charts', 'multitrack', 'limitations'], fixtures: ['streams', 'incremental', 'queues', 'depths'] },

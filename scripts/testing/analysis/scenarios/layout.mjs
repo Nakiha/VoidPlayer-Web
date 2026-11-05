@@ -8,7 +8,7 @@ import { assertCachedDisplayReuse } from '../display-reuse.mjs';
 export async function run(context) {
 const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, call, openAnalysis, hideOverlay, setMode, stable, library } = context;
 
-      for (const input of ['local-file', 'library']) {
+      for (const input of ['local-file', 'library']) await context.stage(`layout-${input}`, async () => {
         console.log(`${engine}: overlay and opt-in analysis ${input}`);
         if (await page.locator('#analysis-diagrams').count()) await selectDiagrams(page, 'overview');
         for (const slot of ['A', 'B']) {
@@ -269,7 +269,9 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         await page.locator('#bitstream-close').click();
         await call('seek_review',{ptsUs:1000000});
         await page.setViewportSize({width:1280,height:720});
-        if(overlayOnly) continue;
+        // Input-specific overlay identity and cache/display checks above run on
+        // both paths. The shared DOM controls and full paint matrix run once.
+        if(overlayOnly || input==='local-file') return;
         assert.equal(await page.locator('.analysis-tools .analysis-chip').count(), 0, 'track controls only live beside frame numbers');
         const trackA = page.locator('#analysis-status-items .analysis-chip[data-slot="A"]');
         const trackB = page.locator('#analysis-status-items .analysis-chip[data-slot="B"]');
@@ -433,7 +435,7 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
             }
           }
         }
-      }
+      });
 
       // The same controls over three real decoded videos in both UI themes.
       // Contrast/alpha assertions complement saved screenshots; they do not infer
@@ -447,7 +449,7 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
         return {background:s.backgroundColor,color:s.color,shadow:s.boxShadow,alpha:ctx.getImageData(0,0,1,1).data[3]/255,filter:s.backdropFilter || s.webkitBackdropFilter};
       });
       const settleControl = selector => page.locator(selector).evaluate(el => Promise.all(el.getAnimations().map(a=>a.finished)));
-      for (const [background, file] of [['bright','glass-bright.mp4'],['dark','glass-dark.mp4'],['complex','stream.mp4']]) {
+      for (const [background, file] of [['bright','glass-bright.mp4'],['dark','glass-dark.mp4'],['complex','stream.mp4']]) await context.stage(`material-${background}`, async () => {
         await call('remove_review_track', {slot:'A'});
         await call('load_library_item', {slot:'A',id:library.entries.find(entry=>entry.name===file).id}); await stable();
         // Cover the chrome as well as the picture center: fitted letterboxing
@@ -505,7 +507,7 @@ const { page, artifact, engine, limitsDir, overlayOnly, errors, requests, rows, 
           assert.deepEqual(await call('get_presented_frame',{slot:'A'}),before,'hover/press feedback never changes the presented media frame');
           rows.push({kind:'glass-controls',background,colorScheme,hover:hoverReference});
         }
-      }
+      });
       const paused=await call('get_presented_frame',{slot:'A'});
       await page.evaluate(() => window.voidPlayer.play());
       await page.locator('#copy-path-A').hover();

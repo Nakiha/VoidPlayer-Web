@@ -273,6 +273,11 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
       await page.waitForFunction(before => +document.getElementById('bitstream-diagram-references').dataset.nodeRadius > before + 1, compactReferenceRadius);
       await page.getByRole('separator', { name: '调整码流分析高度', exact: true }).press('End');
       const multiple = await call('export_workspace');
+      const sharedAxis = page.locator('#analysis-shared-axis');
+      // Stream identity, viewport wiring and workspace restoration run for
+      // both inputs. Pointer/keyboard, theme and layout use the same DOM/model;
+      // their complete matrix runs once over the already verified library data.
+      if (input === 'library') await context.stage('chart-interactions', async () => {
       assert.deepEqual(multiple.layout.analysisView.diagrams, choices);
       const inspectionPosition = (await call('get_review_session')).positionUs;
       // Default appearance gives the three chart groups independent, linked tooltips.
@@ -646,7 +651,6 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
       assert.equal(compactGeometry.length, 4);
       assert.ok(compactGeometry.every(c => c.fitsPlot && c.height >= 36 && c.timeAxis === 'false'), `all selected plots retain full height without duplicate time axes: ${JSON.stringify(compactGeometry)}`);
       assert.ok(compactGeometry.every(c => Math.abs(c.left - compactGeometry[0].left) <= 1 && Math.abs(c.right - compactGeometry[0].right) <= 1), 'every chart shares the overview plot boundaries');
-      const sharedAxis = page.locator('#analysis-shared-axis');
       assert.equal(await sharedAxis.isVisible(), true);
       await openRangeEditor(page);
       const rangeStart = page.locator('.analysis-window-handle.start');
@@ -794,6 +798,7 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
       assert.equal(await page.locator('#analysis-diagrams [data-value="bitrate"]').getAttribute('aria-pressed'), 'false', 'Enter toggles a view off directly');
       await page.locator('#analysis-diagrams [data-value="bitrate"]').press('Enter');
       assert.equal(await page.locator('#analysis-diagrams [data-value="bitrate"]').getAttribute('aria-pressed'), 'true', 'Enter toggles the view back on');
+      });
       if (input === 'library') await page.screenshot({ path: artifact('multiple-chart-buttons.png') });
       await page.keyboard.press('Escape');
       await selectDiagrams(page, []);
