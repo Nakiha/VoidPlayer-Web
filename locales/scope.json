@@ -60,6 +60,7 @@
     "src/ui/annotation-thumbnails.ts",
     "src/ui/annotations/draw.ts",
     "src/ui/appearance.ts",
+    "src/ui/arrangement-icon.ts",
     "src/ui/bitstream-controls.ts",
     "src/ui/bitstream-reasons.ts",
     "src/ui/brand-cinema.ts",

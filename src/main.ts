@@ -39,6 +39,7 @@ import { AnalysisFailure } from '../shared/analysis/bitstream/failure.ts';
 import { createTrackToasts } from './ui/track-toasts.ts';
 import { installBrandEffects } from './ui/brand-effects.ts';
 import { animatePlaybackIcon } from './ui/playback-icon.ts';
+import { animateArrangementIcon } from './ui/arrangement-icon.ts';
 import { installDrawingEditor } from './ui/drawing-editor.ts';
 import { installMarkPreviewBackfill } from './ui/mark-preview-backfill.ts';
 // Feature styles in cascade order: accessibility overrides, component layout,
@@ -306,9 +307,9 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
   screens.classList.toggle('grid-layout', viewport.arrangement === 'grid');
   if ($('arrangement').dataset.arrangement !== viewport.arrangement) {
     $('arrangement').dataset.arrangement = viewport.arrangement;
-  $('arrangement').innerHTML = icon(viewport.arrangement === 'grid' ? 'columns' : 'grid');
-  $('arrangement').setAttribute('aria-label', viewport.arrangement === 'grid' ? tr(msg("player.switchToHorizontalLayout", "切换为横向布局")) : tr(msg("shell.switchToGridLayout", "切换为田字布局")));
-  $('arrangement').dataset.tooltip = viewport.arrangement === 'grid' ? tr(msg("player.arrangeTracksHorizontally", "横向排列轨道")) : tr(msg("shell.arrangeTracksInAGrid", "田字排列轨道"));
+    animateArrangementIcon($('arrangement'), viewport.arrangement);
+    $('arrangement').setAttribute('aria-label', viewport.arrangement === 'grid' ? tr(msg("player.switchToHorizontalLayout", "切换为横向布局")) : tr(msg("shell.switchToGridLayout", "切换为田字布局")));
+    $('arrangement').dataset.tooltip = viewport.arrangement === 'grid' ? tr(msg("player.arrangeTracksHorizontally", "横向排列轨道")) : tr(msg("shell.arrangeTracksInAGrid", "田字排列轨道"));
   }
   $('divider').hidden = !splitActive;
   syncSplitGeometry();

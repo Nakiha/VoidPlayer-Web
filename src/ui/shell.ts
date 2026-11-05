@@ -20,7 +20,7 @@ export function shell() {
     <button id="brand-about" class="brand" aria-label="${th(msg("shell.aboutVoidplayer", "关于 VoidPlayer"))}">VoidPlayer</button>
     <div class="view-controls" role="group" aria-label="${th(msg("shell.viewLayout", "视图布局"))}">
       <div class="segmented" id="layout-mode" role="group" aria-label="${th(msg("shell.comparisonLayout", "对比布局"))}"><button type="button" data-mode="side-by-side" data-tooltip="${shortcutTooltip(t(msg("shell.toggleSideBySideSplit", "切换并排 / 分屏")), 'layout')}" aria-pressed="true" disabled>${th(msg("shell.sideBySide", "并排"))}</button><button type="button" data-mode="split" data-tooltip="${shortcutTooltip(t(msg("shell.toggleSideBySideSplit", "切换并排 / 分屏")), 'layout')}" aria-pressed="false" disabled>${th(msg("shell.split", "分屏"))}</button></div>
-      ${iconButton({ glyph: 'grid', label: t(msg("shell.switchToGridLayout", "切换为田字布局")), tooltip: t(msg("shell.arrangeTracksInAGrid", "田字排列轨道")), attributes: { id: 'arrangement' } })}
+      ${iconButton({ glyph: 'grid', iconClass: 'arrangement-icon', label: t(msg("shell.switchToGridLayout", "切换为田字布局")), tooltip: t(msg("shell.arrangeTracksInAGrid", "田字排列轨道")), attributes: { id: 'arrangement' } })}
       <button id="zoom-select" class="choice-trigger" aria-label="${th(msg("shell.zoom", "画面缩放"))}" data-tooltip="${th(msg("shell.zoom", "画面缩放"))}" disabled></button>
       <button id="pixel-size" class="choice-trigger" aria-label="${th(msg("shell.pixelSizeMode", "像素尺寸模式"))}" data-tooltip="${th(msg("shell.pixelSizeMode", "像素尺寸模式"))}" disabled></button>
       <button id="channel-select" class="choice-trigger" aria-label="${th(msg("shell.yuvChannels", "YUV 通道"))}" data-tooltip="${th(msg("shell.yuvChannelsRawYuvFramesOnly", "YUV 通道：仅原始平面帧生效"))}" disabled></button>
