@@ -83,6 +83,25 @@ to skip reconstruction and filtering. The pinned artifact runs the execution
 media tests with the extension enabled. The VVC cases require the synced h266
 sample and report a skip if it is missing. Older cores use full execution.
 
+Eligible VVC no-pixels pictures use a parse-only task graph. Entry-point, WPP
+and collocated-motion prerequisites remain; parsing completes the motion and
+picture dependency timelines without scheduling unused reconstruction/filter
+tasks. Ineligible pictures and full replay retain the complete decoder graph.
+Block collection uses separate picture locks and atomically reserves storage
+under the existing shared 32 MiB ceiling. A bounded in-place radix sorter handles
+unique block coordinates; duplicate or unsupported coordinates preserve the
+original qsort behavior and record bytes.
+
+The threaded artifact applies configured frame contexts to H264 frame threads
+as well as VVC delayed-frame contexts, within the configured worker budget.
+One frame context keeps H264 serial. HEVC still uses one decoder thread because
+its pruning state requires serial execution; requesting two workers does not
+make HEVC decoding parallel. Result delivery retains source AU identities,
+complete draining and awaited per-picture backpressure. Between synchronous
+WASM calls, the host yields at cooperative checkpoints after about 8 ms of work
+instead of installing a timer after every packet. Cancellation checks remain
+per packet; this interval does not bound the duration of a synchronous WASM call.
+
 H264 remains an incremental analysis path. The independent Core uses FFmpeg's
 existing loop-filter discard policy because its macroblock hook already omits
 pixel reconstruction. It is not an HEVC/VVC private transaction and still reports

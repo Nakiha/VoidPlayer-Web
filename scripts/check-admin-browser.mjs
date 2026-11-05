@@ -73,8 +73,8 @@ try {
   await page.locator('#identity').filter({ hasText: '访客' }).waitFor();
 
   await page.waitForFunction(() => document.getElementById('analysis-concurrency')?.value === '8');
-  const analysisThreads = page.getByLabel('VVC 解码线程数');
-  const analysisContexts = page.getByLabel('VVC 帧上下文数');
+  const analysisThreads = page.getByLabel('解码线程上限');
+  const analysisContexts = page.getByLabel('帧上下文数');
   assert.equal(await analysisThreads.inputValue(), '1');
   assert.equal(await analysisContexts.inputValue(), '1');
   await analysisContexts.fill('2');

@@ -116,12 +116,12 @@
     "translation": "Server analysis concurrency"
   },
   "admin.analysisContexts": {
-    "source": "VVC 帧上下文数",
-    "translation": "VVC frame contexts"
+    "source": "帧上下文数",
+    "translation": "Frame contexts"
   },
   "admin.analysisDecoderHelp": {
-    "source": "每路服务端 VVC 分析默认使用 1 个线程和 1 套帧上下文。上下文数不得超过线程数。提高配置会增加 CPU 和内存开销，新建任务生效。",
-    "translation": "Each server-side VVC analysis defaults to one thread and one frame context. Contexts cannot outnumber threads. Higher settings use more CPU and memory and apply to new jobs."
+    "source": "每路服务端分析默认使用 1 个线程和 1 套帧上下文。VVC 使用两项配置，H.264 按帧上下文数并行，HEVC 暂用单线程。上下文数不得超过线程上限。提高配置会增加 CPU 和内存开销，仅对新建任务生效。",
+    "translation": "Each server analysis task defaults to 1 thread and 1 frame context. VVC uses both settings; H.264 runs frame contexts in parallel; HEVC currently uses one thread. Frame contexts cannot exceed the thread limit. Higher settings use more CPU and memory and apply only to new tasks."
   },
   "admin.analysisReload": {
     "source": "载入配置",
@@ -148,8 +148,8 @@
     "translation": "Analysis settings saved"
   },
   "admin.analysisThreads": {
-    "source": "VVC 解码线程数",
-    "translation": "VVC decoding threads"
+    "source": "解码线程上限",
+    "translation": "Decoder thread limit"
   },
   "admin.annotationMeta": {
     "source": "{author} · 版本 {revision} · {date}",

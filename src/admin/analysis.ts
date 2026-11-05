@@ -9,11 +9,11 @@ export function analysisSettingsShell() {
     <p>${th(msg('admin.analysisResourceHelp', '设置所有用户共享的服务端分析并发数。默认 8 路，可设为 1–32 路；并发越高，CPU 和内存占用越大。保存后立即生效，调低不会中断正在运行的任务。'))}</p>
     <label for="analysis-concurrency">${th(msg('admin.analysisConcurrency', '服务端分析并发数'))}</label>
     <input id="analysis-concurrency" type="number" min="1" max="32" step="1" required disabled aria-describedby="analysis-resource-status">
-    <label for="analysis-threads">${th(msg('admin.analysisThreads', 'VVC 解码线程数'))}</label>
+    <label for="analysis-threads">${th(msg('admin.analysisThreads', '解码线程上限'))}</label>
     <input id="analysis-threads" type="number" min="1" max="4" step="1" required disabled aria-describedby="analysis-decoder-help">
-    <label for="analysis-contexts">${th(msg('admin.analysisContexts', 'VVC 帧上下文数'))}</label>
+    <label for="analysis-contexts">${th(msg('admin.analysisContexts', '帧上下文数'))}</label>
     <input id="analysis-contexts" type="number" min="1" max="1" step="1" required disabled aria-describedby="analysis-decoder-help">
-    <p id="analysis-decoder-help" class="admin-caption">${th(msg('admin.analysisDecoderHelp', '每路服务端 VVC 分析默认使用 1 个线程和 1 套帧上下文。上下文数不得超过线程数。提高配置会增加 CPU 和内存开销，新建任务生效。'))}</p>
+    <p id="analysis-decoder-help" class="admin-caption">${th(msg('admin.analysisDecoderHelp', '每路服务端分析默认使用 1 个线程和 1 套帧上下文。VVC 使用两项配置，H.264 按帧上下文数并行，HEVC 暂用单线程。上下文数不得超过线程上限。提高配置会增加 CPU 和内存开销，仅对新建任务生效。'))}</p>
     <p id="analysis-resource-status" class="admin-caption" role="status"></p>
     <div class="admin-panel-footer"><span id="analysis-resource-save-state" role="status"></span><div class="admin-button-group">
       <button id="analysis-resource-reload" type="button">${th(msg('admin.analysisReload', '载入配置'))}</button>

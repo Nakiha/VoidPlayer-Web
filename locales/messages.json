@@ -128,11 +128,11 @@
     "params": {}
   },
   "admin.analysisContexts": {
-    "source": "VVC 帧上下文数",
+    "source": "帧上下文数",
     "params": {}
   },
   "admin.analysisDecoderHelp": {
-    "source": "每路服务端 VVC 分析默认使用 1 个线程和 1 套帧上下文。上下文数不得超过线程数。提高配置会增加 CPU 和内存开销，新建任务生效。",
+    "source": "每路服务端分析默认使用 1 个线程和 1 套帧上下文。VVC 使用两项配置，H.264 按帧上下文数并行，HEVC 暂用单线程。上下文数不得超过线程上限。提高配置会增加 CPU 和内存开销，仅对新建任务生效。",
     "params": {}
   },
   "admin.analysisReload": {
@@ -164,7 +164,7 @@
     "params": {}
   },
   "admin.analysisThreads": {
-    "source": "VVC 解码线程数",
+    "source": "解码线程上限",
     "params": {}
   },
   "admin.annotationMeta": {

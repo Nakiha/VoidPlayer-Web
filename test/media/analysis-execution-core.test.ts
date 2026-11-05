@@ -265,3 +265,55 @@ test('H264 retains incremental GOP summaries, exact QP/refs and cache-only reuse
  const exactCounters=emptyCounters(),result=await analyzePicture(reader(data),{product:'blocks',sourceVersion:'h264',sourcePtsUs:packet.pts,normalizedMediaUs:packet.pts-firstPtsUs,picture},async()=>countCore(await create(),exactCounters),manifest.buildId,new AbortController().signal);
  assert.equal(result.product,'blocks');assert.equal(result.confidence,'exact');assert.equal(result.capabilities.qp,'ready');assert.equal(result.qp.bitDepth,8);assert.equal(result.qp.mean,cache.get(12)!.qp.mean);assert.deepEqual(result.references,cache.get(12)!.references);assert.equal(result.picture.au,12);assert.equal(exactCounters.fullOpen,1);assert.equal(exactCounters.fastOpen,0);assert.equal(exactCounters.fallback,0);assert.equal(exactCounters.stagedBytesPeak,0);
 });
+
+async function disposeThreadedCore(core: any) {
+  core._vpa_close();
+  const workers = [...new Set([
+    ...(core.PThread.unusedWorkers ?? []), ...Object.values(core.PThread.pthreads ?? {}).map((entry: any) => entry.worker),
+  ])];
+  const stopped = Promise.all(workers.map((worker: any) => new Promise<void>(resolve => {
+    if (worker.threadId === -1) resolve();
+    else worker.once('exit', resolve);
+  })));
+  core.PThread.terminateAllThreads();
+  await stopped;
+}
+
+test('H264 frame contexts preserve every source AU and block across thread budgets and cancellation', async () => {
+  const data = await readFile('fixtures/analysis-execution/h264.mp4'), signal = new AbortController().signal;
+  const input = await openAnalysisInput(reader(data), signal), firstPtsUs = Math.min(...input.packets.map(packet => packet.pts));
+  const target = {mode: 'stream', product: 'blocks', sourceVersion: 'h264-thread-contexts', firstPtsUs,
+    durationUs: input.sourceEndUs - firstPtsUs} as const;
+  const count = input.packets.length;
+  input.close();
+  const expected: AnalysisOutput[] = [];
+  await analyzeStream(reader(data), target, create, manifest.buildId, signal, async result => { expected.push(result); }, async () => {});
+  const stem = path.resolve('public/vendor/voidplayer-analysis/voidplayer-analysis-mt');
+  const factory = (await import(pathToFileURL(stem + '.js').href)).default, binary = await readFile(stem + '.wasm');
+  const ordered = (outputs: AnalysisOutput[]) => outputs.sort((a, b) => a.picture.au - b.picture.au).map(canonical);
+  for (const [threads, contexts] of [[1, 1], [2, 1], [2, 2], [4, 2], [4, 4]]) {
+    const core = await createThreadedAnalysisCore(factory, binary, threads > 1 ? threads : 0);
+    try {
+      assert.equal(core._vpa_configure_threads(threads, contexts), 0);
+      const outputs: AnalysisOutput[] = [];
+      await analyzeStream(reader(data), target, core, manifest.buildId, signal, async result => { outputs.push(result); }, async () => {});
+      assert.equal(outputs.length, count);
+      assert.deepEqual(ordered(outputs), ordered(expected));
+      assert.equal(core._vpa_record_bytes(), 0);
+    } finally {
+      await disposeThreadedCore(core);
+    }
+  }
+  const core = await createThreadedAnalysisCore(factory, binary, 2), controller = new AbortController();
+  try {
+    assert.equal(core._vpa_configure_threads(2, 2), 0);
+    let outputs = 0;
+    await assert.rejects(analyzeStream(reader(data), target, core, manifest.buildId, controller.signal, async () => {
+      if (++outputs === 2) controller.abort();
+    }, async () => {}), {name: 'AbortError'});
+    assert.equal(outputs, 2, 'cancellation cannot publish another queued frame');
+    assert.equal(core._vpa_record_bytes(), 0, 'cancelled frame contexts release their records');
+  } finally {
+    await disposeThreadedCore(core);
+  }
+});

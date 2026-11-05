@@ -162,7 +162,8 @@ async function runPictureAttempt(
       drained = false,
       sinceOutputPackets = 0,
       sinceOutputBytes = 0,
-      outputPictures = 0;
+      outputPictures = 0,
+      nextCheckpointAt = performance.now() + 8;
     const nalus = new Map<number, import("./diagrams.ts").NaluRecord[]>();
     let last: AnalysisOutput | undefined;
     const progress = async (complete = false) => {
@@ -491,7 +492,10 @@ async function runPictureAttempt(
       cursor++;
       // Cooperative cancel/checkpoint outside synchronous WASM; hard cancellation
       // terminates the isolated worker. No producer advances while take is pending.
-      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      if (performance.now() >= nextCheckpointAt) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        nextCheckpointAt = performance.now() + 8;
+      }
     }
   } finally {
     if (opened) core._vpa_close();

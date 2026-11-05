@@ -29,7 +29,7 @@ Field picture、palette 的使用、损坏/concealment、不完整覆盖和非 4
 
 ## 独立执行与逐 picture 生命周期
 
-分析核心构建在 `VoidPlayer-FFmpeg-Build`，Web 只消费固定产物。`scripts/release-analysis.json` 固定构建修订、instrumented FFmpeg、Emscripten、ABI 和语义版本；`scripts/sync-analysis-core.sh` 验证并复制 js/wasm/manifest/LICENSE，同时生成 SHA-256 provenance。分析核心单线程，无文件系统、avformat 或网络；和播放 core 完全分离。不依赖 cross-origin isolation。
+分析核心构建在 `VoidPlayer-FFmpeg-Build`，Web 只消费固定产物。`scripts/release-analysis.json` 固定构建修订、instrumented FFmpeg、Emscripten、ABI 和语义版本；`scripts/sync-analysis-core.sh` 验证并复制 js/wasm/manifest/LICENSE，同时生成 SHA-256 provenance。浏览器分析核心为单线程，无文件系统、avformat 或网络；和播放 core 完全分离，不依赖 cross-origin isolation。服务端使用同一分析产品的 pthread 产物。
 
 旧批量 writer 已被独立 streaming collector 替换；不调用旧 finalize_frame_summaries / finish_vachunk，不全局重排、重算或在文件结尾重赋 coded_order。每个 picture 的 records 在 codec hook 中 collecting，只有成功 avcodec_receive_frame 才 sealed，排序一次后 take；take 释放分析 records，不释放 decoder 的参考帧。已交付源 AU、坐标、QP 和顺序不会回写。没有继承旧 COMPLETE/EXACT 位。
 
@@ -41,7 +41,7 @@ Field picture、palette 的使用、损坏/concealment、不完整覆盖和非 4
 
 路由是 `/api/media/:id/bitstream-analysis/{capabilities,requests,chunks/:id}` 和 `/api/bitstream-analysis/requests/:requestId`。写请求需要同源 Origin、专用 action header 和确切媒体版本；API 不接受文件路径。capabilities 是实现的 admission 范围，每个 picture 仍需独立验证。服务端 capabilities 和任务使用同一产物选择规则，返回的 buildId 对应实际执行的服务端构建；浏览器本地分析从自身的 core 清单读取 buildId。
 
-服务端全局默认同时运行 8 个独立 worker，管理页「概览 → 分析资源」可设为 1–32 路，写回配置文件 `analysisConcurrency` 并立即生效；HTTP/HTTPS 入口共享同一调度器。调高立即补充排队任务，调低不终止已启动任务。服务端码流分析构建每路 WASM heap 上限为 1 GiB，按需增长。管理页可为新建 VVC 分析任务设置 1–4 个线程以及 1 到线程数套帧上下文，默认 1/1，保存到 `analysisDecoder`。默认 8 路并发的 WASM heap 理论上限为 8 GiB，进程还需要为 JS 元数据、运行时和传输缓冲分配内存。超出运行路数的请求排队，排队单帧优先于区间和整片请求；不抢占正在运行的 decoder，等待索引或 consumer ACK 的任务也占用名额，只有 worker 终止完成才释放名额；每个 work 可以有多个 owner 隔离的 consumer lease，取消一个不终止另一个。GET 状态续租，30 秒失联回收；最后一个 consumer 退出时终止 worker。HTTP、播放和帧索引队列不等待分析。每个可信 picture checksum 校验后原子 rename 单独提交；区间 manifest 仅在完整完成后提交。异常/取消保留之前已完成的 chunks。重启、坏 checksum、截断、丢失 chunk、版本或 build 变化不能形成错误的完成覆盖。
+服务端全局默认同时运行 8 个独立 worker，管理页「概览 → 分析资源」可设为 1–32 路，写回配置文件 `analysisConcurrency` 并立即生效；HTTP/HTTPS 入口共享同一调度器。调高立即补充排队任务，调低不终止已启动任务。服务端码流分析构建每路 WASM heap 上限为 1 GiB，按需增长。管理页可为新建分析任务设置 1–4 个线程上限以及 1 到线程上限套帧上下文，默认 1/1，保存到 `analysisDecoder`。VVC 使用线程与帧上下文两项配置；H.264 按帧上下文数启用帧线程；HEVC 的裁剪状态仍要求串行，实际使用一个解码线程。默认 8 路并发的 WASM heap 理论上限为 8 GiB，进程还需要为 JS 元数据、运行时和传输缓冲分配内存。超出运行路数的请求排队，排队单帧优先于区间和整片请求；不抢占正在运行的 decoder，等待索引或 consumer ACK 的任务也占用名额，只有 worker 终止完成才释放名额；每个 work 可以有多个 owner 隔离的 consumer lease，取消一个不终止另一个。GET 状态续租，30 秒失联回收；最后一个 consumer 退出时终止 worker。HTTP、播放和帧索引队列不等待分析。每个可信 picture checksum 校验后原子 rename 单独提交；区间 manifest 仅在完整完成后提交。异常/取消保留之前已完成的 chunks。重启、坏 checksum、截断、丢失 chunk、版本或 build 变化不能形成错误的完成覆盖。
 
 | 资源 | 上限 |
 | --- | --- |
