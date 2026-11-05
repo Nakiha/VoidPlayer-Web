@@ -4,6 +4,8 @@
 
 日常 PR/main 验证在 `.github/workflows/checks.yml`；完整兼容性与独立发布在 `.github/workflows/release-preview.yml`。两者共用 `prepare-cores.yml`，core 缓存命中后仍核验固定来源及 ABI。
 
+`test/unit/http2.test.ts` 在 Node 与固定 Bun 运行时验证生产 TLS 网关的 ALPN、HTTP/1.1 回退、`:authority`/Host 冲突、真实 peer 归属、同源身份写入、Range/HEAD、无 Content-Length 的 DATA 正文、媒体/NDJSON 单流取消，以及 session 排空和强制关闭。浏览器 HTTP 入口回归另检查 HTTPS 实际协商 HTTP/2 和身份写入；性能仅在本机同条件比较。
+
 | 触发 | 必跑内容 | 边界 |
 | --- | --- | --- |
 | PR、main 推送 | `source` 与 `ci-node-media` 构成完整 Node 用例并集（当前数量由清单枚举）；`ci-pr-browser` 覆盖 Chromium/WebKit 核心流程 | 9 个执行 job：源码、两个 core、三个隔离的媒体 Node 分片、两个浏览器、最终汇总；不打三平台包，不运行性能测试 |

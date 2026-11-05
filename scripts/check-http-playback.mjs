@@ -67,6 +67,7 @@ try {
     const requests = [];
     page.on('request', request => { if (/\/api\/media\/[^/]+(?:\?|$)/.test(new URL(request.url()).pathname)) requests.push(request.url()); });
     await page.goto(base); await page.waitForFunction(() => window.voidPlayer);
+    assert.equal(await page.evaluate(() => performance.getEntriesByType('navigation')[0].nextHopProtocol), 'h2');
     assert.deepEqual(await page.evaluate(() => [isSecureContext, typeof VideoDecoder, crossOriginIsolated]), secure ? [true, 'function', true] : [false, 'undefined', false]);
     // This probe covers the WebCodecs lifecycle; the default reference SDR
     // (WASM) mode is covered by the identity playback probe.

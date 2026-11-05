@@ -158,7 +158,7 @@ test('all platform/runtime suites run independently of the compiled package jobs
     assert.doesNotMatch(body, /continue-on-error:/);
   }
   assert.match(runtimeJob.body, /if: always\(\)[\s\S]*name: native-runtime-reports-\$\{\{ matrix\.os \}\}-\$\{\{ matrix\.runtime \}\}[\s\S]*path: \.run\/test-suites\//);
-  const expectedCounts = { node: 27, bun: 42 };
+  const expectedCounts = { node: 28, bun: 43 };
   for (const runtime of ['node', 'bun']) {
     const suite = `ci-native-${runtime}`, command = `run: node scripts/run-tests.mjs ${suite}\n`;
     assert.equal(runtimeJob.body.split(command).length - 1, 1);
@@ -169,6 +169,7 @@ test('all platform/runtime suites run independently of the compiled package jobs
       assert.equal(cases.length, expectedCounts[runtime], `${runtime}/${platform} keeps every case`);
       assert.equal(new Set(cases.map(row => row.id)).size, cases.length);
       assert.ok(cases.every(row => row.required));
+      assert.ok(cases.some(row => row.id === `${runtime}-http2`), `${runtime}/${platform} preserves HTTP/2 lifecycle regressions`);
       for(const id of [`${runtime}-service-shutdown`,`${runtime}-temporal-scoring-service`]) assert.ok(cases.some(row=>row.id===id),`${runtime}/${platform} preserves real ownership/restart regressions`);
       for (const id of [`${runtime}-native-xpsnr-http`, `${runtime}-analysis-xpsnr-sequence-http`]) {
         const xpsnr = cases.find(row => row.id === id);

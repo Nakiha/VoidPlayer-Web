@@ -1,4 +1,4 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { IncomingMessage, ServerResponse } from '../http.ts';
 import { JS_TS_INDEX_BYTES } from '../../shared/media/indexing/ts-packet-index.ts';
 import { FLV_INDEX_BYTES } from '../../shared/media/indexing/flv-index-cache.ts';
 import { FFMPEG_INDEX_BYTES } from '../../shared/media/indexing/ffmpeg-index-cache.ts';

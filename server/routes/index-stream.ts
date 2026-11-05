@@ -1,4 +1,4 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { IncomingMessage, ServerResponse } from '../http.ts';
 import { FFMPEG_INDEX_RECORD_BYTES, lastFfmpegPts, FFMPEG_NO_TIMESTAMP } from '../../shared/media/indexing/ffmpeg-index-cache.ts';
 import type { MediaIndexIdentity } from '../../shared/media/indexing/media-index-identity.ts';
 import { AdminError } from '../admin.ts';

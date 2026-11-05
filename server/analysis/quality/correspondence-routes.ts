@@ -1,4 +1,4 @@
-import type {IncomingMessage,ServerResponse} from 'node:http';
+import type {IncomingMessage,ServerResponse} from '../../http.ts';
 import type {RouteContext} from '../../routes/context.ts';
 import {requireCapturedActor} from '../../identity.ts';
 import {AdminError,adminErrorBody} from '../../admin-error.ts';

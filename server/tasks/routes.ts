@@ -1,4 +1,4 @@
-import type {IncomingMessage,ServerResponse} from 'node:http';
+import type {IncomingMessage,ServerResponse} from '../http.ts';
 import type { Actor } from '../identity.ts';
 import type { TaskCenterService } from './service.ts';
 import type { ResultEvidence, ResultCommands } from '../quality-service-ports.ts';

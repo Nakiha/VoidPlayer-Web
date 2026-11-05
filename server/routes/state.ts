@@ -1,6 +1,6 @@
 import { agentErrorBody } from '../agent-errors.ts';
 import { adminErrorBody } from '../admin-error.ts';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { IncomingMessage, ServerResponse } from '../http.ts';
 import { randomUUID, createHash } from 'node:crypto';
 import { AdminError, adminWriteAllowed, readAdminJson } from '../admin.ts';
 import type { AdminController } from '../admin.ts';

@@ -1,5 +1,6 @@
+import { requestAuthority } from '../http.ts';
 import {randomBytes,timingSafeEqual} from 'node:crypto';
-import type {IncomingMessage,ServerResponse} from 'node:http';
+import type {IncomingMessage,ServerResponse} from '../http.ts';
 import {localRequest} from '../reveal.ts';
 import {PageChannel} from './page-channel.ts';
 import {BRIDGE_PATH,PAGE_BRIDGE_LIMITS as L} from '../../shared/service/page-bridge.ts';
@@ -22,7 +23,7 @@ export class ExistingPageRequests{
     const pathname=(req.url??'').split('?')[0];if(!pathname.startsWith(BRIDGE_PATH))return false;
     try{
       const socket=req.socket as typeof req.socket&{encrypted?:boolean};
-      const origin=`${socket.encrypted?'https':'http'}://${req.headers.host}`;
+      const origin=`${socket.encrypted?'https':'http'}://${requestAuthority(req)}`;
       const target=new URL(origin);
       if(!['127.0.0.1','localhost','[::1]'].includes(target.hostname)||!localRequest(req)||req.url?.includes('?')||req.headers.origin&&req.headers.origin!==origin||req.headers['sec-fetch-site']&&req.headers['sec-fetch-site']!=='same-origin')throw Error('origin-host-denied');
       const browser=req.headers['sec-fetch-site']==='same-origin'&&(!req.headers.origin||req.headers.origin===origin);

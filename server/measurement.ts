@@ -2,7 +2,7 @@ import type {MeasurementKind,MeasurementResult} from '../shared/service/measurem
 export type {MeasurementKind,MeasurementResult} from '../shared/service/measurement.ts';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { IncomingMessage, ServerResponse } from './http.ts';
 import { Readable, Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { AdminError } from './admin-error.ts';
@@ -131,14 +131,27 @@ export class Measurements {
     const upload = job.result.kind === 'upload';
     const length = Number(req.headers['content-length'] ?? 0);
     if (upload && (req.headers['content-type'] !== 'application/octet-stream' || !Number.isSafeInteger(length) || length < 1 || length > MiB)) throw new AdminError(400, '上传测试每次提交 1–1048576 字节二进制数据。');
-    if (!upload && (length || req.headers['transfer-encoding'])) throw new AdminError(400, '下载测试不接受请求正文。');
+    if (!upload) {
+      if (length || req.headers['transfer-encoding']) throw new AdminError(400, '下载测试不接受请求正文。');
+      // HTTP/2 DATA can carry a body without either HTTP/1 framing header.
+      if ('stream' in req && !req.stream.endAfterHeaders) {
+        const timer = setTimeout(() => req.destroy(new Error('Measurement body timeout')), 10000);
+        try {
+          for await (const chunk of req.iterator({ destroyOnReturn: false })) {
+            if (!chunk.length) continue;
+            res.once('finish', () => req.destroy());
+            throw new AdminError(400, '下载测试不接受请求正文。');
+          }
+        } finally { clearTimeout(timer); }
+      }
+    }
     const size = upload ? length : Math.min(MiB, job.result.media ? job.result.media.size - job.offset : MiB, job.result.limitBytes - job.reserved);
     this.reserve(job, size);
     const disconnected = () => { if (!res.writableFinished) this.stop(job, 'user'); };
     res.once('close', disconnected);
     const interrupted = () => {
       // Aborting IncomingMessage through pipeline alone can leave the HTTP
-      // socket alive with an unfinished body. Cancel the connection explicitly.
+      // transport alive with an unfinished body. In HTTP/2 destroy only this stream.
       if (job.result.reason !== 'error' || res.headersSent) { req.destroy(); res.destroy(); }
     };
     job.controller.signal.addEventListener('abort', interrupted, { once: true });
@@ -158,7 +171,10 @@ export class Measurements {
       }
     } catch (error) {
       if (!job.controller.signal.aborted) { this.stop(job, 'error', (error as Error).message); }
-      if (!res.headersSent && !res.destroyed) { res.setHeader('connection', 'close'); throw error; }
+      if (!res.headersSent && !res.destroyed) {
+        if (req.httpVersionMajor === 1) res.setHeader('connection', 'close');
+        throw error;
+      }
     } finally { job.controller.signal.removeEventListener('abort', interrupted); res.removeListener('close', disconnected); this.release(job); }
   }
   async close() { this.closed = true; if (this.job) { this.stop(this.job, 'shutdown'); await this.job.done; } }

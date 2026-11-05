@@ -1,10 +1,11 @@
+import { requestAuthority } from '../http.ts';
 import { containerFromHeader } from '../../shared/media/containers/container-header.ts';
 import { fileVersion } from '../library.ts';
 import { handleMediaQueryRoutes } from './media-query.ts';
 import { handleThumbnailRoute } from './thumbnail.ts';
 import { handleFrameIndexRoute } from './frame-index.ts';
 import { adminErrorBody } from '../admin-error.ts';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { IncomingMessage, ServerResponse } from '../http.ts';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { AdminError, adminWriteAllowed } from '../admin.ts';
@@ -24,7 +25,7 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
   }
   if (url.pathname === '/api/library/scan' && req.method === 'POST') {
     let sameOrigin = false;
-    try { const origin = new URL(req.headers.origin ?? ''); sameOrigin = origin.host === req.headers.host && origin.protocol === (encryptedRequest(req) ? 'https:' : 'http:'); } catch {}
+    try { const origin = new URL(req.headers.origin ?? ''); sameOrigin = origin.host === requestAuthority(req) && origin.protocol === (encryptedRequest(req) ? 'https:' : 'http:'); } catch {}
     if (!sameOrigin || req.headers['x-voidplayer-action'] !== 'scan') { sendJson(res, 403, { error: '请从播放器或管理页面操作扫描。' }); return true; }
     if (url.searchParams.get('action') === 'cancel') library.cancel();
     else if (!url.searchParams.has('action') || url.searchParams.get('action') === 'refresh') void library.refresh().catch(() => {});

@@ -1,4 +1,5 @@
-import type { IncomingMessage } from 'node:http';
+import { requestAuthority } from './http.ts';
+import type { IncomingMessage } from './http.ts';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
@@ -10,7 +11,7 @@ export const setClientAddress = (req: IncomingMessage, address: string) => peers
 /** A remote browser must never open a file manager on the server's desktop. */
 export function localRequest(req: IncomingMessage) {
   try {
-    return isLoopback(peers.get(req) ?? req.socket.remoteAddress ?? '') && isLoopback(new URL(`http://${req.headers.host}`).hostname);
+    return isLoopback(peers.get(req) ?? req.socket.remoteAddress ?? '') && isLoopback(new URL(`http://${requestAuthority(req)}`).hostname);
   } catch { return false; }
 }
 

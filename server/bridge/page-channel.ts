@@ -1,5 +1,6 @@
+import { requestAuthority } from '../http.ts';
 import {randomBytes,randomUUID,timingSafeEqual,createHash} from 'node:crypto';
-import type {IncomingMessage,ServerResponse} from 'node:http';
+import type {IncomingMessage,ServerResponse} from '../http.ts';
 import {BRIDGE_PATH,PAGE_TOOLS,PAGE_BRIDGE_LIMITS as L,bridgeCallSchema,pageBridgeResult} from '../../shared/service/page-bridge.ts';
 import type {PageCommand,PageScope,PageToolName} from '../../shared/service/page-bridge.ts';
 import {validateToolInput} from '../../shared/service/tool-input.ts';
@@ -81,7 +82,7 @@ export class PageChannel {
   }
   async handle(req:IncomingMessage,res:ServerResponse){
     // Guard every route on this dedicated host, including static/bootstrap.
-    if(!this.origin||req.headers.host!==new URL(this.origin).host||req.headers.origin&&req.headers.origin!==this.origin||req.headers['sec-fetch-site']==='cross-site'){
+    if(!this.origin||requestAuthority(req)!==new URL(this.origin).host||req.headers.origin&&req.headers.origin!==this.origin||req.headers['sec-fetch-site']==='cross-site'){
       json(res,403,problem('origin-host-denied'));return true;
     }
     res.setHeader('x-frame-options','DENY');res.setHeader('content-security-policy',"frame-ancestors 'none'; base-uri 'self'; object-src 'none'");

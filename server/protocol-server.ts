@@ -1,7 +1,69 @@
 import { createServer, connect, type Server, type Socket } from 'node:net';
-import type { IncomingMessage } from 'node:http';
+import { createServer as createHttpServer } from 'node:http';
+import { createSecureServer } from 'node:http2';
+import type { ServerHttp2Session } from 'node:http2';
+import type { ServerOptions as HttpsOptions } from 'node:https';
+import type { IncomingMessage, ServerResponse } from './http.ts';
 
 export type ManagedServer = Server & { closeAllConnections(): void };
+
+/** Keep routes on the compatibility API; each HTTP/2 stream retains its own request lifecycle. */
+export function createRequestServer(tls: HttpsOptions | undefined,
+  listener: (req: IncomingMessage, res: ServerResponse) => void): ManagedServer {
+  if (!tls) return createHttpServer(listener);
+  const server = createSecureServer({ ...tls, allowHTTP1: true });
+  const sessions = new Set<ServerHttp2Session>(), sockets = new Set<Socket>();
+  const http1 = new Map<Socket, number>();
+  let closing = false;
+  server.on('request', (req, res) => {
+    // Node 24's HTTP/2 compatibility response predates the Writable destroyed getter.
+    if ('stream' in req && !('destroyed' in res)) {
+      const stream = req.stream;
+      Object.defineProperty(res, 'destroyed', { get: () => stream.destroyed || stream.closed });
+    }
+    if (req.httpVersionMajor === 1) {
+      const socket = req.socket;
+      if (!http1.has(socket)) socket.once('close', () => http1.delete(socket));
+      http1.set(socket, (http1.get(socket) ?? 0) + 1);
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        const active = (http1.get(socket) ?? 1) - 1;
+        if (http1.has(socket)) http1.set(socket, active);
+        if (closing && !active) socket.end(() => socket.destroy());
+      };
+      res.once('finish', finish);
+      res.once('close', finish);
+    }
+    listener(req, res);
+  });
+  server.on('connection', socket => {
+    sockets.add(socket);
+    socket.once('close', () => sockets.delete(socket));
+  });
+  server.on('session', session => {
+    sessions.add(session);
+    session.once('close', () => sessions.delete(session));
+    if (closing) session.close();
+  });
+  // Peer resets/protocol errors belong to the affected stream/session, not the process.
+  server.on('sessionError', () => {});
+  server.on('stream', stream => { stream.on('error', () => {}); });
+  const close = server.close.bind(server);
+  server.close = callback => {
+    closing = true;
+    close(callback);
+    for (const session of sessions) session.close();
+    for (const [socket, active] of http1) if (!active) socket.destroy();
+    return server;
+  };
+  return Object.assign(server, { closeAllConnections() {
+    for (const session of sessions) session.destroy();
+    for (const socket of sockets) socket.destroy();
+  } });
+}
+
 /** The gateway uses public TCP APIs on both Node and the standalone Bun runtime.
  * Pipes preserve backpressure; TLS terminates only in the existing HTTPS server. */
 export class ProtocolGateway {

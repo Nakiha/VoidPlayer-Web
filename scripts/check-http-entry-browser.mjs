@@ -37,6 +37,9 @@ try{
  for(const p of [port,alias]){const base=`http://${address}:${p}`;assert.equal((await page.request.get(base+'/llms.txt')).status(),200);assert.equal((await page.request.get(base+'/api/library')).status(),200);assert.equal((await page.request.get(base+'/admin')).status(),200);}
  // Accepted and rejected certificate states use separate disposable contexts.
  const accepted=await pageFor(true);await accepted.page.goto(remote+original);await accepted.page.waitForURL(secure+original);await accepted.page.waitForFunction(()=>window.voidPlayer);assert.equal(await accepted.page.evaluate(()=>isSecureContext),true);
+ assert.equal(await accepted.page.evaluate(()=>performance.getEntriesByType('navigation')[0].nextHopProtocol),'h2');
+ await chooseTestGuest(accepted.page);
+ assert.equal(await accepted.page.evaluate(async()=>(await(await fetch('/api/health')).json()).actor.kind),'guest');
  const direct=await accepted.context.newPage();await direct.goto(secure+'/connection');await direct.locator('#connection-setup').waitFor();assert.equal(new URL(direct.url()).pathname,'/connection','explicit certificate page remains accessible');await direct.close();
  // A reachable server with a failed probe stays on the guide, rather than redirecting into a browser error.
  await accepted.page.route('**/api/connection/probe',route=>route.fulfill({status:503,json:{error:'unavailable'}}));await accepted.page.goto(`http://${address}:${alias}/?space=default#notes`);await accepted.page.locator('#connection-setup').waitFor();assert.equal(new URL(accepted.page.url()).protocol,'http:');

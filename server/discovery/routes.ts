@@ -1,4 +1,4 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { IncomingMessage, ServerResponse } from '../http.ts';
 import type { RouteContext } from '../routes/context.ts';
 import { AdminError } from '../admin-error.ts';
 import { adminWriteAllowed, readAdminJson } from '../admin.ts';

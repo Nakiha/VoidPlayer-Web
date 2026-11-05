@@ -1,10 +1,11 @@
+import { requestAuthority } from './http.ts';
 import {closeResources} from './shutdown.ts';
 import type {AdminStatus,RootConfiguration,LogPage,LogDocument,AnalysisSettings,RootReasonCode} from '../shared/service/admin.ts';
 export type {RootReasonCode} from '../shared/service/admin.ts';
 import { AnalysisScheduler } from './analysis/bitstream/scheduler.ts';
 import { MAX_ANALYSIS_CONCURRENCY, DEFAULT_ANALYSIS_DECODER, MAX_ANALYSIS_THREADS, validAnalysisConcurrency, validAnalysisDecoder } from './analysis/bitstream/limits.ts';
 import { promises as fs, constants } from 'node:fs';
-import type { IncomingMessage } from 'node:http';
+import type { IncomingMessage } from './http.ts';
 import path from 'node:path';
 import os from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -27,7 +28,7 @@ export function adminWriteAllowed(req: IncomingMessage, action = 'admin') {
   if (req.headers['x-voidplayer-action'] !== action) return false;
   try {
     const origin = new URL(req.headers.origin ?? '');
-    return origin.host === req.headers.host && origin.protocol === (encryptedRequest(req) ? 'https:' : 'http:');
+    return origin.host === requestAuthority(req) && origin.protocol === (encryptedRequest(req) ? 'https:' : 'http:');
   } catch { return false; }
 }
 export async function readAdminJson(req: IncomingMessage, max = 65536): Promise<unknown> {

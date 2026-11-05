@@ -1,5 +1,5 @@
 import { AdminError } from './admin-error.ts';
-import type { IncomingMessage } from 'node:http';
+import type { IncomingMessage } from './http.ts';
 
 export type Actor = { id: string; name: string; kind?: 'named' | 'guest' };
 export function guestActor(id: string | undefined): Actor | null {

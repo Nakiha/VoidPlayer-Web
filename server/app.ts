@@ -15,12 +15,13 @@ import {handleCorrespondenceRoutes} from './analysis/quality/correspondence-rout
 import { handleQualityRangeRoutes } from './analysis/quality/range-routes.ts';
 import { randomUUID } from 'node:crypto';
 import { guestActor, browserUserId } from './identity.ts';
-import { createServer } from 'node:http';
-import { createServer as createSecureServer } from 'node:https';
+import { createRequestServer } from './protocol-server.ts';
+import type { ManagedServer } from './protocol-server.ts';
+import { requestAuthority } from './http.ts';
 import type { ServerOptions as HttpsOptions } from 'node:https';
 import { encryptedRequest } from './tls.ts';
 import type { ConnectionOptions } from './connection-guide.ts';
-import type { IncomingMessage, Server, ServerResponse } from 'node:http';
+import type { IncomingMessage, ServerResponse } from './http.ts';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { localRequest, setClientAddress } from './reveal.ts';
@@ -59,7 +60,9 @@ export interface ServerOptions {
   onLog?: (entry: Record<string, unknown>) => void;
 }
 
-export function createMediaServer(options: ServerOptions): Server {
+export function createMediaServer(options: ServerOptions & { tls?: undefined }): import('node:http').Server;
+export function createMediaServer(options: ServerOptions): ManagedServer;
+export function createMediaServer(options: ServerOptions): ManagedServer {
   const roots = options.roots.map(r => path.resolve(r));
   const library = options.library ?? new MediaLibraryIndex(roots,{coreDir:process.env.VOIDPLAYER_WASM_CORE_DIR || (options.staticDir ? path.join(options.staticDir,'vendor/voidplayer-core') : undefined)});
   const quality=options.quality??library.attachedQualityApplication??new QualityApplication(library);
@@ -76,6 +79,7 @@ export function createMediaServer(options: ServerOptions): Server {
 
   const existingPages=options.pageBridge?undefined:new ExistingPageRequests();
   const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
+    if (!requestAuthority(req)) { sendJson(res, 400, { error: 'Invalid request authority' }); return; }
     if(options.clientAddress)setClientAddress(req,options.clientAddress(req));
     if(existingPages&&await existingPages.handle(req,res))return;
     if(options.pageBridge)try{if(await options.pageBridge.handle(req,res))return;}
@@ -85,7 +89,7 @@ export function createMediaServer(options: ServerOptions): Server {
     res.setHeader('x-request-id', requestId);
     res.setHeader('link', '</llms.txt>; rel="describedby"; type="text/plain", </agent.md>; rel="alternate"; type="text/markdown", </api/agent>; rel="service-desc"; type="application/json", </api/agent/tasks>; rel="item"; type="application/json"');
     let hostname = '';
-    try { hostname = new URL(`http://${req.headers.host || 'localhost'}`).hostname; } catch {}
+    try { hostname = new URL(`http://${requestAuthority(req)}`).hostname; } catch {}
     if (encryptedRequest(req) || hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '[::1]' || /^127\./.test(hostname)) {
       for (const [key, value] of Object.entries(ISOLATION_HEADERS)) res.setHeader(key, value);
     }
@@ -144,7 +148,7 @@ export function createMediaServer(options: ServerOptions): Server {
       else res.end();
     }
   };
-  const server = options.tls ? createSecureServer(options.tls, handleRequest) : createServer(handleRequest);
+  const server = createRequestServer(options.tls, handleRequest);
   server.on('close',()=>existingPages?.close());
   server.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
   server.on('close', () => {

@@ -1,5 +1,6 @@
+import { requestAuthority } from '../../http.ts';
 import { isProduct, encodeProduct, PRODUCT_SCHEMA } from '../../../shared/analysis/bitstream/products.ts';
-import type { IncomingMessage, ServerResponse } from "node:http";
+import type { IncomingMessage, ServerResponse } from '../../http.ts';
 import type { RouteContext } from "../../routes/context.ts";
 import { sendJson } from "../../http-utils.ts";
 import { encryptedRequest } from "../../tls.ts";
@@ -33,7 +34,7 @@ export async function handleAnalysisRoutes(
       const origin = req.headers.origin ? URL.parse(req.headers.origin) : null;
       if (
         !origin ||
-        origin.host !== req.headers.host ||
+        origin.host !== requestAuthority(req) ||
         origin.protocol !== (encryptedRequest(req) ? "https:" : "http:") ||
         req.headers["x-voidplayer-action"] !== "bitstream-analysis"
       ) {

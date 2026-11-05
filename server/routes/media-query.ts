@@ -1,4 +1,4 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { IncomingMessage, ServerResponse } from '../http.ts';
 import { createHash } from 'node:crypto';
 import type { RouteContext } from './context.ts';
 import { AdminError } from '../admin-error.ts';
@@ -30,7 +30,7 @@ function json(req: IncomingMessage, res: ServerResponse, status: number, body: u
   if (res.destroyed) return;
   const payload = JSON.stringify(body);
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'content-length': Buffer.byteLength(payload) });
-  res.end(req.method === 'HEAD' ? undefined : payload);
+  if (req.method === 'HEAD') res.end(); else res.end(payload);
 }
 export async function handleMediaQueryRoutes(ctx: RouteContext, req: IncomingMessage, res: ServerResponse, url: URL): Promise<boolean> {
   const match = /^\/api\/media\/([0-9a-f]{24})\/(info|index-query)$/.exec(url.pathname);

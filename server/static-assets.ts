@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { IncomingMessage, ServerResponse } from './http.ts';
 import { serveFile, sendJson } from './http-utils.ts';
 
 type Asset = { sha256: string; variants: Partial<Record<'br' | 'gzip', { suffix: string; sha256: string }>> };

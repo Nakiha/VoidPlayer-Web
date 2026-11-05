@@ -1,4 +1,4 @@
-import type {IncomingMessage,ServerResponse} from 'node:http';import type {RouteContext} from '../../routes/context.ts';
+import type {IncomingMessage,ServerResponse} from '../../http.ts';import type {RouteContext} from '../../routes/context.ts';
 import {VmafError} from '../../../shared/analysis/quality/vmaf.ts';
 import {agentRecoveryFields} from '../../agent-errors.ts';
 import {requireCapturedActor} from '../../identity.ts';import {AdminError,adminErrorBody} from '../../admin-error.ts';import {adminWriteAllowed,readAdminJson} from '../../admin.ts';import {sendJson} from '../../http-utils.ts';

@@ -5,7 +5,7 @@ import { X509Certificate, createPrivateKey, randomBytes, randomUUID, webcrypto }
 import { isIP } from 'node:net';
 import { readFile, writeFile, mkdir, rename, link, rm } from 'node:fs/promises';
 import path from 'node:path';
-import type { IncomingMessage } from 'node:http';
+import type { IncomingMessage } from './http.ts';
 
 export type TlsConfig = { hosts: string[] } | { certFile: string; keyFile: string };
 export const encryptedRequest = (req: IncomingMessage) => (req.socket as { encrypted?: boolean }).encrypted === true;
