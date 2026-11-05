@@ -1,4 +1,4 @@
-import type { AnalysisAxis, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample, AnalysisStatus } from '../../shared/analysis/metadata/types.ts';
+import type { AnalysisAxis, AnalysisQuery, AnalysisRank, AnalysisRankOptions, AnalysisResult, AnalysisSample, AnalysisStatus } from '../../shared/analysis/metadata/types.ts';
 import type { MediaSource } from '../media/contract.ts';
 import { abortableWait } from '../../shared/media/io/media-abort.ts';
 import type { Slot } from '../../shared/review/model.ts';
@@ -163,6 +163,7 @@ export async function rankTrackAnalysisFrame(
   getTrack: (slot: Slot) => SessionAnalysisTrack | undefined,
   sessionPtsUs: number,
   axis: AnalysisAxis = 'pts',
+  options?: AnalysisRankOptions,
 ): Promise<AnalysisRank | { reason: string }> {
   slotValue(slot);
   if (!Number.isInteger(sessionPtsUs)) return { reason: '展示时间必须是整数微秒。' };
@@ -176,7 +177,7 @@ export async function rankTrackAnalysisFrame(
   const offsetUs = track.offsetUs;
   let rank: AnalysisRank;
   try {
-    rank = await source.rankAnalysisTime(sessionPtsUs - offsetUs, axis);
+    rank = await source.rankAnalysisTime(sessionPtsUs - offsetUs, axis, options);
   } catch (error) {
     return { reason: errorText(error) };
   }

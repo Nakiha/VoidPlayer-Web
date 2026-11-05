@@ -1504,6 +1504,7 @@ export default {
   "tracks.showTrack": (d) => "［S~h~o~w~ t~r~a~c~k~ " + d.slot + " ········］",
   "tracks.sourceBitstreamMetadataReadByDecoder": () => "［S~o~u~r~c~e~: b~i~t~s~t~r~e~a~m~ m~e~t~a~d~a~t~a~ r~e~a~d~ b~y~ d~e~c~o~d~e~r~ ········］",
   "tracks.sourceContainerTags": () => "［S~o~u~r~c~e~: c~o~n~t~a~i~n~e~r~ t~a~g~s~ ········］",
+  "tracks.sourceDts": () => "［S~o~u~r~c~e~ D~T~S~ ········］",
   "tracks.sourcePts": () => "［S~o~u~r~c~e~ P~T~S~ ········］",
   "tracks.syncOffsetPositiveDelaysNegativeAdvancesMilliseconds": () => "［S~y~n~c~ o~f~f~s~e~t~: p~o~s~i~t~i~v~e~ d~e~l~a~y~s~, n~e~g~a~t~i~v~e~ a~d~v~a~n~c~e~s~ (m~i~l~l~i~s~e~c~o~n~d~s~) ········］",
   "tracks.track": (d) => "［T~r~a~c~k~ " + d.p0 + " ········］",

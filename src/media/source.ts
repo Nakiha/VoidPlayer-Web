@@ -243,7 +243,7 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
       getBitstreamIndex: () => analysis.bitstreamFrontier(),
       queryAnalysis: query => analysis.query(query),
       locateAnalysisSample: sampleId => analysis.locate(sampleId),
-      rankAnalysisTime: (tUs, axis) => Promise.resolve(analysis.rank(tUs, axis)),
+      rankAnalysisTime: (tUs, axis, options) => analysis.rank(tUs, axis, options),
       analysisSampleAtNumber: (number, axis) => Promise.resolve(analysis.sampleAtNumber(number, axis)),
       async frameAt(ptsUs) {
         // Resolve timestamps in the same nearest-microsecond domain that we

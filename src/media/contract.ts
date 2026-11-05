@@ -4,7 +4,7 @@ import type { FrameInfo, MediaInfo } from '../../shared/media/types.ts';
 import type { FrameDescription } from '../../shared/media/frame-description.ts';
 import type { CachedAudioBatch } from '../../shared/media/audio-types.ts';
 import type { PresentationInfo } from '../../shared/presentation/presentation-info.ts';
-import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample } from '../../shared/analysis/metadata/types.ts';
+import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisRank, AnalysisRankOptions, AnalysisResult, AnalysisSample } from '../../shared/analysis/metadata/types.ts';
 
 /** Browser resource contracts only. Consumers close frames and dispose sources;
  * implementations choose decoding, while the presenter owns painting and captures. */
@@ -83,7 +83,7 @@ export interface MediaSource {
    * 即 axis 时间严格小于 tUs 的样本数。复用分析查询的有序轴缓存，
    * O(log N) 且不物化样本数组；索引构建中返回暂定值。
    */
-  rankAnalysisTime?(tUs: number, axis: AnalysisAxis): Promise<AnalysisRank>;
+  rankAnalysisTime?(tUs: number, axis: AnalysisAxis, options?: AnalysisRankOptions): Promise<AnalysisRank>;
   analysisSampleAtNumber?(number: number, axis: AnalysisAxis): Promise<{ ptsUs: number | null; complete: boolean }>;
   /**
    * 按样本身份（桶峰值等）有界定位单个样本，不依赖某次查询是否返回了 raw 列表。

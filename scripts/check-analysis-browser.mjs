@@ -110,7 +110,7 @@ try {
     } finally { worker.terminate(); }
   }, base + '/assets/' + workerAsset);
   assert.equal(workerResult.count, 3); assert.equal(workerResult.detached, true);
-  assert.deepEqual(workerResult.rank, { rank: 1, total: 3, ordinal: 2 });
+  assert.deepEqual(workerResult.rank, { rank: 1, total: 3, ordinal: 2, sourceDtsUs: null });
   assert.equal(workerResult.sample.effectivePtsUs, 80000);
 
 

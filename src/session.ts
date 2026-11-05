@@ -31,7 +31,7 @@ import { planBackwardStep, planForwardStep, slotValue, timeUs } from '../shared/
 import type { FrameInfo, MediaInfo } from '../shared/media/types.ts';
 import type { Mark, Slot } from '../shared/review/model.ts';
 import type { DecodedFrame, MediaSource, VvcTuningAxis, VvcTuningState } from './media/contract.ts';
-import type { AnalysisAxis, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample, AnalysisStatus } from '../shared/analysis/metadata/types.ts';
+import type { AnalysisAxis, AnalysisQuery, AnalysisRank, AnalysisRankOptions, AnalysisResult, AnalysisSample, AnalysisStatus } from '../shared/analysis/metadata/types.ts';
 import { contextLog, log, operationContext, traceOperation, withLogContext } from './logging/log.ts';
 
 const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
@@ -517,8 +517,8 @@ export class ReviewSession {
    * 重复时间戳共享排名）。排名与 offset 无关（同片内相对顺序），
    * 会话层只做时间平移与实例校验；索引构建中返回暂定值。
    */
-  async rankAnalysisFrame(slot: Slot, sessionPtsUs: number, axis: AnalysisAxis = 'pts'): Promise<AnalysisRank | { reason: string }> {
-    return rankTrackAnalysisFrame(slot, s => this.tracks.get(s), sessionPtsUs, axis);
+  async rankAnalysisFrame(slot: Slot, sessionPtsUs: number, axis: AnalysisAxis = 'pts', options?: AnalysisRankOptions): Promise<AnalysisRank | { reason: string }> {
+    return rankTrackAnalysisFrame(slot, s => this.tracks.get(s), sessionPtsUs, axis, options);
   }
   /** Resolve a displayed zero-based frame number through the same packet index as rankAnalysisFrame. */
   async seekAnalysisFrameNumber(slot: Slot, number: number, axis: AnalysisAxis = 'pts'): Promise<{ sessionPtsUs: number } | { reason: string }> {

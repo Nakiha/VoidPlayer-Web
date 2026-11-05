@@ -7,31 +7,49 @@ import { chromium, webkit } from 'playwright';
 import { createMediaServer } from '../server/app.ts';
 import { MediaLibraryIndex } from '../server/library.ts';
 import { saveBrowserFailure, recordBrowserEvidence } from './browser-failure-evidence.mjs';
+import { snapshotBuild } from './testing/build.mjs';
 const root=path.resolve(import.meta.dirname,'..'), engine=process.argv[2]??'chromium';
 const temporary=await mkdtemp(path.join(tmpdir(),'voidplayer-track-metadata-')), media=path.join(temporary,'media');await mkdir(media);
 const artifacts=path.join(root,'.run/track-metadata',engine);await mkdir(artifacts,{recursive:true});
 const fixtures=[
  {name:'audio.mp4',format:'MP4',presence:'present',codec:'AAC-LC',channels:1,rate:48000},
  {name:'silent.mp4',format:'MP4',presence:'absent'},
+ {name:'reordered.mp4',format:'MP4',presence:'absent',bframes:2},
  {name:'surround.mp4',format:'MP4',presence:'present',codec:'AAC-LC',channels:6,rate:48000},
  {name:'unsupported.mkv',format:'Matroska',presence:'present',codec:'AC-3',channels:1,rate:48000},
  {name:'audio.flv',format:'FLV',presence:'present',codec:'AAC-LC',channels:1,rate:48000},
  {name:'audio.ts',format:'MPEG-TS',presence:'present',codec:'AAC-LC',channels:1,rate:48000},
  {name:'audio.webm',format:'WebM',presence:'present',codec:'Opus',channels:1,rate:48000},
 ];
-let browser,library,server,activePage,evidence;const reports=[];
+let browser,library,server,activePage,evidence;const reports=[],timings=new Map();
 try {
  for(const f of fixtures) execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-f','lavfi','-i','testsrc2=size=320x180:rate=30',
   ...(f.presence==='absent'?[]:['-f','lavfi','-i','sine=frequency=440:sample_rate=48000']),'-t','2',
-  ...(f.name.endsWith('webm')?['-c:v','libvpx-vp9','-deadline','realtime','-cpu-used','8','-c:a','libopus']:['-c:v','libx264','-preset','ultrafast','-g','30','-bf','0','-c:a',f.name.startsWith('unsupported')?'ac3':'aac']),
+  ...(f.name.endsWith('webm')?['-c:v','libvpx-vp9','-deadline','realtime','-cpu-used','8','-c:a','libopus']:['-c:v','libx264','-preset','ultrafast','-g','30','-bf',String(f.bframes??0),'-c:a',f.name.startsWith('unsupported')?'ac3':'aac']),
   ...(f.channels===6?['-ac','6']:[]),'-y',path.join(media,f.name)]);
+ for (const f of fixtures.filter(f=>f.name.endsWith('.mp4'))) {
+  const data=JSON.parse(execFileSync('ffprobe',['-v','error','-select_streams','v:0','-show_packets',
+   '-show_entries','packet=pts_time,dts_time','-of','json',path.join(media,f.name)],{encoding:'utf8'}));
+  timings.set(f.name,data.packets.map((p,index)=>({index,pts:Math.round(Number(p.pts_time)*1e6),dts:Math.round(Number(p.dts_time)*1e6)})));
+ }
  library=new MediaLibraryIndex([media],{database:path.join(temporary,'library.sqlite'),watch:false});const listing=await library.list();
  let traffic=[];
- server=createMediaServer({roots:library.roots,library,staticDir:path.join(root,'dist'),onLog(){}});
+ const staticDir=await snapshotBuild(path.join(root,'dist'),path.join(temporary,'static'));
+ server=createMediaServer({roots:library.roots,library,staticDir,onLog(){}});
  server.on('request',(req,res)=>{if(/^\/api\/media\/[a-f0-9]+(?:\?|$)/.test(req.url)&&!req.url.includes('index'))res.on('finish',()=>traffic.push({range:req.headers.range,bytes:Number(res.getHeader('content-length'))}));});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const url=`http://127.0.0.1:${server.address().port}`;
  browser=await (engine==='webkit'?webkit:chromium).launch({headless:true,...(engine==='chromium'?{args:['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']}: {})});
  const tool=(page,name,input={})=>page.evaluate(({name,input})=>window.voidPlayer.tools.find(t=>t.name===name).execute(input),{name,input});
+ const checkFrameTiming=async(page,fixture)=>{
+  const records=timings.get(fixture.name);if(!records)return;
+  const state=await tool(page,'get_review_session'),frame=state.tracks[0].frame;
+  const packet=records.find(p=>p.pts===frame.sourcePtsUs);assert.ok(packet,'displayed source PTS matches an independent packet');
+  const expected={pts:`#${records.filter(p=>p.pts<frame.sourcePtsUs).length}`,dts:`#${packet.index}`,time:`${packet.dts/1e6} s`};
+  await page.waitForFunction(expected=>document.getElementById('inspect-pts-index').textContent===expected.pts
+   &&document.getElementById('inspect-dts-index').textContent===expected.dts
+   &&document.getElementById('inspect-source-dts').textContent===expected.time,expected);
+  assert.equal((await tool(page,'get_review_session')).positionUs,state.positionUs,'inspecting packet timing never seeks');
+ };
  for(const f of fixtures) for(const local of [false,true]) {
   const pair=[];
   // Warm the server-owned index before either measured run. A cold background
@@ -69,14 +87,18 @@ try {
     const metadata=await page.evaluate(()=>window.voidPlayer.getState().tracks[0].trackMetadata);
     assert.equal(metadata.container,f.format);if(f.rate)assert.equal(metadata.audio.tracks[0].sampleRate,f.rate);
     assert.deepEqual(await page.locator('[data-metadata-group] h3').allTextContents(),['封装','视频','音频']);
-    assert.equal(await page.locator('[data-frame-timing] dt').count(),4);
+    assert.equal(await page.locator('[data-frame-timing] dt').count(),7);
+    assert.deepEqual(await page.locator('[data-frame-timing] dt').allTextContents(),
+     ['PTS序','DTS序','片内 PTS','源 PTS','源 DTS','帧时长','相对游标']);
+    assert.equal(await page.locator('#toggle-analysis').getAttribute('aria-expanded'),'false','frame facts work without opening analysis');
+    await checkFrameTiming(page,f);
     if(f.channels===6)assert.match(await page.locator('[data-metadata-group=audio]').innerText(),/当前播放路径不支持/);
     const before=await page.evaluate(()=>({reads:window.metadataEvidence.blobReads,workers:window.metadataEvidence.workers,track:window.voidPlayer.getState().tracks[0].sourceGen})),beforeTraffic=structuredClone(traffic);
     await page.evaluate(()=>{window.metadataNodes=[...document.querySelectorAll('[data-metadata-group] dl')];});
     // A real peer-tab preference change must relabel the existing grouped nodes.
     const peer=await page.context().newPage();await peer.goto(url);await peer.evaluate(()=>localStorage.setItem('voidplayer.language','en'));await page.waitForFunction(()=>document.documentElement.lang==='en');
     assert.deepEqual(await page.locator('[data-metadata-group] h3').allTextContents(),['Container','Video','Audio']);
-    assert.deepEqual(await page.locator('[data-frame-timing] dt').allTextContents(),['Clip PTS','Source PTS','Frame duration','Relative to playhead']);
+    assert.deepEqual(await page.locator('[data-frame-timing] dt').allTextContents(),['PTS order','DTS order','Clip PTS','Source PTS','Source DTS','Frame duration','Relative to playhead']);
     assert.equal(await page.evaluate(()=>window.metadataNodes.every((n,i)=>n===[...document.querySelectorAll('[data-metadata-group] dl')][i])),true);
     if(f.name==='surround.mp4'&&!local){await page.locator('#inspector-panel').screenshot({path:path.join(artifacts,'panel-en.png')});await page.locator('[data-metadata-group=audio]').scrollIntoViewIfNeeded();await page.locator('#inspector-panel').screenshot({path:path.join(artifacts,'panel-en-audio.png')});}
     await peer.evaluate(()=>localStorage.setItem('voidplayer.language','zh-CN'));await page.waitForFunction(()=>document.documentElement.lang==='zh-CN');await peer.close();
@@ -85,7 +107,16 @@ try {
     assert.deepEqual(traffic,beforeTraffic,'opening/closing/localizing metadata cannot read media');
     if(f.name==='surround.mp4'&&!local)await page.locator('#inspector-panel').screenshot({path:path.join(artifacts,'panel-zh.png')});
    }
-   for(const ptsUs of [1000000,0,500000,1900000])await tool(page,'seek_review',{ptsUs});
+   for(const ptsUs of [1000000,0,500000,1900000]) {
+    await tool(page,'seek_review',{ptsUs});
+    if(open)await checkFrameTiming(page,f);
+   }
+   if(open&&f.bframes)assert.notEqual(await page.locator('#inspect-pts-index').textContent(),
+    await page.locator('#inspect-dts-index').textContent(),'B-frame presentation and decode indices differ');
+   if(open&&f.bframes&&!local) {
+    await page.locator('[data-frame-timing]').scrollIntoViewIfNeeded();
+    await page.locator('#inspector-panel').screenshot({path:path.join(artifacts,'current-frame-timing.png')});
+   }
    await tool(page,'seek_review',{ptsUs:0});await page.locator('#play').click();
    await page.waitForFunction(()=>{const s=window.voidPlayer.getState();return !s.playing&&s.positionUs>1800000;});
    const state=await tool(page,'get_review_session');assert.equal(state.audioSlot,null);assert.equal(state.error,null);assert.ok(state.tracks[0].frame,'actual decoded frame survives inspection and seeks');

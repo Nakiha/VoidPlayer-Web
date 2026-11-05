@@ -1504,6 +1504,7 @@ export default {
   "tracks.showTrack": (d) => "Show track " + d.slot,
   "tracks.sourceBitstreamMetadataReadByDecoder": () => "Source: bitstream metadata read by decoder",
   "tracks.sourceContainerTags": () => "Source: container tags",
+  "tracks.sourceDts": () => "Source DTS",
   "tracks.sourcePts": () => "Source PTS",
   "tracks.syncOffsetPositiveDelaysNegativeAdvancesMilliseconds": () => "Sync offset: positive delays, negative advances (milliseconds)",
   "tracks.track": (d) => "Track " + d.p0,

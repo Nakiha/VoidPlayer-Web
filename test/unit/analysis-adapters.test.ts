@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createSourceQuerier, runSourceQuery, locateSampleById } from '../../shared/analysis/metadata/adapters.ts';
 import { coverageFor } from '../../shared/analysis/metadata/inspection.ts';
 import type { SourceQueryContext } from '../../shared/analysis/metadata/adapters.ts';
+import type { AnalysisRank } from '../../shared/analysis/metadata/types.ts';
 
 const ctx: SourceQueryContext = {
   mediaId: 'm1',
@@ -149,14 +150,14 @@ test('展示序排名：重排包表的 PTS 秩与二分一致，重复 PTS 共�
   ];
   const querier = createSourceQuerier();
   // PTS 排序后：0(pos2), 40000(pos0,pos1), 80000(pos4), 120000(pos3), 160000(pos5)
-  assert.deepEqual(querier.rank(mixed, 0, 'pts', -1), { rank: 0, total: 6, ordinal: null });
-  assert.deepEqual(querier.rank(mixed, 0, 'pts', 0), { rank: 0, total: 6, ordinal: 2 });
-  assert.deepEqual(querier.rank(mixed, 0, 'pts', 40000), { rank: 1, total: 6, ordinal: 0 });
-  assert.deepEqual(querier.rank(mixed, 0, 'pts', 80000), { rank: 3, total: 6, ordinal: 4 });
-  assert.deepEqual(querier.rank(mixed, 0, 'pts', 160000), { rank: 5, total: 6, ordinal: 5 });
-  assert.deepEqual(querier.rank(mixed, 0, 'pts', 99999999), { rank: 6, total: 6, ordinal: null });
+  assert.deepEqual(querier.rank(mixed, 0, 'pts', -1), { rank: 0, total: 6, ordinal: null, sourceDtsUs: null });
+  assert.deepEqual(querier.rank(mixed, 0, 'pts', 0), { rank: 0, total: 6, ordinal: 2, sourceDtsUs: 80000 });
+  assert.deepEqual(querier.rank(mixed, 0, 'pts', 40000), { rank: 1, total: 6, ordinal: 0, sourceDtsUs: 0 });
+  assert.deepEqual(querier.rank(mixed, 0, 'pts', 80000), { rank: 3, total: 6, ordinal: 4, sourceDtsUs: 160000 });
+  assert.deepEqual(querier.rank(mixed, 0, 'pts', 160000), { rank: 5, total: 6, ordinal: 5, sourceDtsUs: 200000 });
+  assert.deepEqual(querier.rank(mixed, 0, 'pts', 99999999), { rank: 6, total: 6, ordinal: null, sourceDtsUs: null });
   // DTS 轴用各自时间同一规则
-  assert.deepEqual(querier.rank(mixed, 0, 'dts', 80000), { rank: 2, total: 6, ordinal: 2 });
+  assert.deepEqual(querier.rank(mixed, 0, 'dts', 80000), { rank: 2, total: 6, ordinal: 2, sourceDtsUs: 80000 });
   assert.equal(querier.sampleAtNumber(mixed, 0, 'pts', 3), 80000);
   assert.equal(querier.sampleAtNumber(mixed, 0, 'dts', 3), 120000);
   assert.equal(querier.sampleAtNumber(mixed, 0, 'pts', 6), null);
@@ -165,8 +166,41 @@ test('展示序排名：重排包表的 PTS 秩与二分一致，重复 PTS 共�
     requestId: 10, axis: 'pts', startUs: 0, endUs: 200000, pixelWidth: 100, bitrateWindowUs: 1_000_000,
   });
   assert.equal(r.samples.length, 6);
-  assert.deepEqual(querier.rank(mixed, 0, 'pts', 80000), { rank: 3, total: 6, ordinal: 4 });
+  assert.deepEqual(querier.rank(mixed, 0, 'pts', 80000), { rank: 3, total: 6, ordinal: 4, sourceDtsUs: 160000 });
   assert.throws(() => querier.rank(mixed, 0, 'pts' as never, NaN), /有限/);
+});
+
+test('frame rank carries raw source DTS across nonzero origins and never borrows a neighboring timestamp', () => {
+  const query = createSourceQuerier(), firstPtsUs = 900_000;
+  const records = [
+    {pts: firstPtsUs, dts: -80_000, ordinal: 7, size: 100, key: true},
+    {pts: firstPtsUs + 40_000, dts: null, ordinal: 9, size: 50, key: false},
+  ];
+  assert.deepEqual(query.rank(records, firstPtsUs, 'pts', 0),
+    {rank: 0, total: 2, ordinal: 7, sourceDtsUs: -80_000});
+  assert.deepEqual(query.rank(records, firstPtsUs, 'pts', 40_000),
+    {rank: 1, total: 2, ordinal: 9, sourceDtsUs: null});
+  assert.deepEqual(query.rank(records, firstPtsUs, 'pts', 1),
+    {rank: 1, total: 2, ordinal: null, sourceDtsUs: null});
+});
+
+test('inspector rank preserves source DTS and cached-only policy while fencing a replaced source', async () => {
+  const {rankTrackAnalysisFrame} = await import('../../src/session/metadata-analysis.ts');
+  type Track = import('../../src/session/metadata-analysis.ts').SessionAnalysisTrack;
+  let release!: (value: AnalysisRank) => void;
+  const result: AnalysisRank = {rank: 3, total: 8, ordinal: 5, sourceDtsUs: -40_000, complete: true};
+  let delayed = false;
+  let current = {offsetUs: 500_000, sourceGen: 1, source: {info: {id: 'source'},
+    rankAnalysisTime(tUs: number, axis: string, options: unknown) {
+      assert.equal(tUs, 120_000); assert.equal(axis, 'pts'); assert.deepEqual(options, {cachedOnly: true});
+      return delayed ? new Promise<AnalysisRank>(resolve => { release = resolve; }) : Promise.resolve(result);
+    }}} as unknown as Track;
+  assert.deepEqual(await rankTrackAnalysisFrame('A', () => current, 620_000, 'pts', {cachedOnly: true}), result);
+  delayed = true;
+  const pending = rankTrackAnalysisFrame('A', () => current, 620_000, 'pts', {cachedOnly: true});
+  current = {...current, sourceGen: 2};
+  release(result);
+  assert.ok('reason' in await pending, 'a same-slot replacement cannot receive the prior source lookup');
 });
 
 import { FfmpegPacketIndex } from '../../shared/analysis/metadata/ffmpeg-adapter.ts';

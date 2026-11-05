@@ -7,7 +7,7 @@
 import { bitrateAt, buildBytePrefixSum, lowerBound } from './statistics.ts';
 import type { BucketResult } from './statistics.ts';
 import type {
-  AnalysisBucket, AnalysisCapability, AnalysisQuery, AnalysisResult, AnalysisSample, BitratePoint,
+  AnalysisBucket, AnalysisCapability, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample, BitratePoint,
 } from './types.ts';
 
 /** 查询所需的最小包视图；offset 等解码定位字段不在这里。 */
@@ -292,7 +292,7 @@ export interface SourceQuerier {
     firstPtsUs: number,
     axis: 'pts' | 'dts',
     tUs: number,
-  ): { rank: number; total: number; ordinal: number | null };
+  ): Omit<AnalysisRank, 'complete'>;
   sampleAtNumber(
     packets: ArrayLike<PacketView> & { length: number }, firstPtsUs: number,
     axis: 'pts' | 'dts', number: number,
@@ -339,14 +339,16 @@ export function createSourceQuerier(): SourceQuerier {
     firstPtsUs: number,
     axis: 'pts' | 'dts',
     tUs: number,
-  ): { rank: number; total: number; ordinal: number | null } => {
+  ): Omit<AnalysisRank, 'complete'> => {
     if (axis !== 'pts' && axis !== 'dts') throw new Error('时间基准必须是 pts 或 dts。');
     if (!Number.isFinite(tUs)) throw new Error('排名时间必须是有限微秒数。');
     const sorted = sortedFor(packets, firstPtsUs, axis);
     // 包时间戳与查询点都是整数微秒，可精确比较；命中 lowerBound 首位即
     // (t,pos) 稳定序下该时间的首个样本，其包表下标就是解码顺序号。
     const lo = lowerBound(sorted.times, tUs);
-    return { rank: lo, total: sorted.times.length, ordinal: sorted.times[lo] === tUs ? (packets[sorted.order[lo]].ordinal ?? sorted.order[lo]) : null };
+    const pos = sorted.times[lo] === tUs ? sorted.order[lo] : null, packet = pos == null ? null : packets[pos];
+    return { rank: lo, total: sorted.times.length, ordinal: packet ? packet.ordinal ?? pos : null,
+      sourceDtsUs: packet?.dts ?? null };
   };
   querier.sampleAtNumber = (packets, firstPtsUs, axis, number) => {
     if (!Number.isSafeInteger(number) || number < 0 || axis !== 'pts' && axis !== 'dts') return null;

@@ -6043,6 +6043,10 @@
     "source": "来源：封装标记",
     "translation": "Source: container tags"
   },
+  "tracks.sourceDts": {
+    "source": "源 DTS",
+    "translation": "Source DTS"
+  },
   "tracks.sourcePts": {
     "source": "源 PTS",
     "translation": "Source PTS"

@@ -1504,6 +1504,7 @@ export default {
   "tracks.showTrack": (d) => "显示轨道 " + d.slot,
   "tracks.sourceBitstreamMetadataReadByDecoder": () => "来源：解码器读取的码流元数据",
   "tracks.sourceContainerTags": () => "来源：封装标记",
+  "tracks.sourceDts": () => "源 DTS",
   "tracks.sourcePts": () => "源 PTS",
   "tracks.syncOffsetPositiveDelaysNegativeAdvancesMilliseconds": () => "同步偏移：正值延后，负值提前（毫秒）",
   "tracks.track": (d) => "轨道 " + d.p0,

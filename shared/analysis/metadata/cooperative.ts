@@ -67,7 +67,9 @@ export function createCooperativeQuerier() {
     *rank(packets: ArrayLike<PacketView>, firstPtsUs: number, axis: 'pts' | 'dts', tUs: number) {
       if (axis !== 'pts' && axis !== 'dts' || !Number.isFinite(tUs)) throw new Error('Invalid analysis rank.');
       const sorted = yield* sortedFor(packets, firstPtsUs, axis), at = lowerBound(sorted.times, tUs);
-      return { rank: at, total: sorted.times.length, ordinal: sorted.times[at] === tUs ? packets[sorted.order[at]].ordinal ?? sorted.order[at] : null };
+      const pos = sorted.times[at] === tUs ? sorted.order[at] : null, packet = pos == null ? null : packets[pos];
+      return { rank: at, total: sorted.times.length, ordinal: packet ? packet.ordinal ?? pos : null,
+        sourceDtsUs: packet?.dts ?? null };
     },
     *number(packets: ArrayLike<PacketView>, firstPtsUs: number, axis: 'pts' | 'dts', number: number): Generator<void, number | null> {
       if (!Number.isSafeInteger(number) || number < 0 || axis !== 'pts' && axis !== 'dts') return null;

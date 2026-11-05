@@ -42,8 +42,15 @@ export interface AnalysisRank {
    * 顺序号）；无精确匹配（解码 PTS 不在包表内）为 null，不得按邻近猜测。
    */
   ordinal: number | null;
+  /** 精确命中样本的原始源 DTS（微秒），不减 firstPts、不加轨道 offset；缺失或未命中为 null。 */
+  sourceDtsUs: number | null;
   /** false 表示索引构建中，排名与序号仅覆盖已确认部分，为暂定值，不得当精确值展示。 */
   complete: boolean;
+}
+
+export interface AnalysisRankOptions {
+  /** 只读取已有包表；不启动原生路径的元数据枚举，未建立时返回空的暂定排名。 */
+  cachedOnly?: boolean;
 }
 
 export interface AnalysisCapability {

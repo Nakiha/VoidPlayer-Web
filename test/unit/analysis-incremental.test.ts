@@ -4,6 +4,19 @@ import assert from 'node:assert/strict';
 import { createSourceQuerier, sortByAxis, mergeAppendedSort } from '../../shared/analysis/metadata/adapters.ts';
 import type { SourceQueryContext } from '../../shared/analysis/metadata/adapters.ts';
 
+test('cached-only native frame ranks do not start metadata enumeration or a worker', async () => {
+  const {NativeAnalysisAdapter} = await import('../../src/analysis/metadata/native-adapter.ts');
+  const track = new Proxy({}, {get() { throw new Error('cached inspector read attempted metadata enumeration'); }});
+  const adapter = new NativeAnalysisAdapter(track as ConstructorParameters<typeof NativeAnalysisAdapter>[0], 'unstarted', 0, 1_000_000);
+  try {
+    for (const tUs of [0, 40_000]) assert.deepEqual(await adapter.rank(tUs, 'pts', {cachedOnly: true}),
+      {rank: 0, total: 0, ordinal: null, sourceDtsUs: null, complete: false});
+    assert.equal(adapter.revision, 0);
+  } finally {
+    adapter.close();
+  }
+});
+
 function ctxFor(mediaId = 'm1'): SourceQueryContext {
   return {
     mediaId, firstPtsUs: 0, durationUs: 10_000_000,
@@ -115,7 +128,7 @@ test('native metadata worker matches the shared statistics and owns transferred 
     assert.deepEqual(result.samples.map(sample => [sample.decodeOrdinal, sample.effectivePtsUs, sample.sizeBytes]), [[1,0,100],[2,40_000,200],[0,80_000,300]]);
     assert.equal(result.indexRevision, 3); assert.equal(result.sourceVersion, 'native@3');
     assert.equal((await client.call('locate', { mediaId: 'native', firstPtsUs: 0, sampleId: 'native:v:0' }))?.effectivePtsUs, 80_000);
-    assert.deepEqual(await client.call('rank', { firstPtsUs: 0, axis: 'pts', tUs: 40_000 }), { rank: 1, total: 3, ordinal: 2 });
+    assert.deepEqual(await client.call('rank', { firstPtsUs: 0, axis: 'pts', tUs: 40_000 }), { rank: 1, total: 3, ordinal: 2, sourceDtsUs: null });
     assert.equal(await client.call('number', { firstPtsUs: 0, axis: 'dts', number: 0 }), 80_000);
   } finally { client.close(); }
 });
@@ -195,7 +208,7 @@ test('real worker cancellation stops an executing sort and executing statistics,
     const cancelled = await wait(id,m=>'ok' in m);
     assert.equal(cancelled.ok,false); assert.equal(cancelled.name,'AbortError');
     worker.postMessage({ id: id+1, type:'rank', input:{ firstPtsUs:0,axis:'pts',tUs:40000 } });
-    assert.deepEqual((await wait(id+1,m=>'ok' in m)).data,{rank:0,total:count,ordinal:count-1});
+    assert.deepEqual((await wait(id+1,m=>'ok' in m)).data,{rank:0,total:count,ordinal:count-1,sourceDtsUs:null});
   }
   assert.equal(messages.some(message => [2,4].includes(message.id) && message.ok), false, 'cancelled work never publishes partial/final results');
 });

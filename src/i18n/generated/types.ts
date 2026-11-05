@@ -1502,6 +1502,7 @@ export interface Sources {
   "tracks.showTrack": "显示轨道 {slot}";
   "tracks.sourceBitstreamMetadataReadByDecoder": "来源：解码器读取的码流元数据";
   "tracks.sourceContainerTags": "来源：封装标记";
+  "tracks.sourceDts": "源 DTS";
   "tracks.sourcePts": "源 PTS";
   "tracks.syncOffsetPositiveDelaysNegativeAdvancesMilliseconds": "同步偏移：正值延后，负值提前（毫秒）";
   "tracks.track": "轨道 {p0}";
@@ -3093,6 +3094,7 @@ export interface MessageParameters {
   "tracks.showTrack": { "slot": string | number };
   "tracks.sourceBitstreamMetadataReadByDecoder": {  };
   "tracks.sourceContainerTags": {  };
+  "tracks.sourceDts": {  };
   "tracks.sourcePts": {  };
   "tracks.syncOffsetPositiveDelaysNegativeAdvancesMilliseconds": {  };
   "tracks.track": { "p0": string | number };

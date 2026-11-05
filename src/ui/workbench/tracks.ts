@@ -15,6 +15,7 @@ import { trackTimelineRatio } from '../track-timeline.ts';
 import { marksForTrack, trackTiming } from '../workspace-state.ts';
 import type { ReviewTrack } from '../workspace-state.ts';
 import type { WorkbenchShared, WorkbenchState } from './shared.ts';
+import type { AnalysisRank } from '../../../shared/analysis/metadata/types.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const text = (tag: string, value: string, className = '') => {
@@ -27,6 +28,8 @@ export function createTracksPane(shared: WorkbenchShared) {
   let trackSignature = '';
   let dockSignature = '';
   let annotationSignature = '';
+  let frameRank: { key: string; result: AnalysisRank | { reason: string } } | undefined;
+  let frameRankPending = false;
   const cursors = new Map<Slot, { current: HTMLElement; hover: HTMLElement; startUs: number; endUs: number }>();
 
   function hideSeekPreview() { $('subtrack-preview').hidden = true; for (const c of cursors.values()) c.hover.hidden = true; }
@@ -129,6 +132,46 @@ export function createTracksPane(shared: WorkbenchShared) {
     t(msg('tracks.playbackGapP95', '上屏间隔 P95')),
     t(msg('tracks.playbackQueue', '播放队列')),
   ];
+  const frameTimingRows = () => [
+    [t(msg('analysis.ptsOrder', 'PTS序')), 'inspect-pts-index'],
+    [t(msg('analysis.dtsOrder', 'DTS序')), 'inspect-dts-index'],
+    [t(msg('tracks.clipPts', '片内 PTS')), 'inspect-pts'],
+    [t(msg('tracks.sourcePts', '源 PTS')), 'inspect-source-pts'],
+    [t(msg('tracks.sourceDts', '源 DTS')), 'inspect-source-dts'],
+    [t(msg('tracks.frameDuration', '帧时长')), 'inspect-frame-duration'],
+    [t(msg('tracks.relativeToPlayhead', '相对游标')), 'inspect-frame-delta'],
+  ];
+  const frameRankKey = (track: WorkbenchState['tracks'][number]) => JSON.stringify([
+    track.slot, track.id, track.sourceGen, track.offsetUs, track.frame?.ptsUs ?? null, track.indexState,
+    session.getAnalysisCapabilities().find(entry => entry.slot === track.slot)?.capability.indexState,
+  ]);
+  function renderFrameRank(result?: AnalysisRank | { reason: string }) {
+    const hit = result && 'rank' in result && result.ordinal != null ? result : undefined;
+    $('inspect-pts-index').textContent = hit ? `#${hit.rank}${hit.complete ? '' : '~'}` : '—';
+    $('inspect-dts-index').textContent = hit ? `#${hit.ordinal}${hit.complete ? '' : '~'}` : '—';
+    $('inspect-source-dts').textContent = hit?.sourceDtsUs == null ? '—' : `${hit.sourceDtsUs / 1e6} s`;
+  }
+  function updateFrameRank(selected: WorkbenchState['tracks'][number]) {
+    const key = frameRankKey(selected), cached = frameRank?.key === key ? frameRank.result : undefined;
+    renderFrameRank(selected.frame && !selected.failure ? cached : undefined);
+    if (!view.panels.inspector || !selected.frame || selected.failure || shared.lifecyle.signal.aborted || frameRankPending
+      || cached && (!('rank' in cached) || cached.complete)) return;
+    frameRankPending = true;
+    // Reuse the analysis panel's packet lookup, without starting native metadata
+    // enumeration. One request in flight; frame changes only queue the latest.
+    void session.rankAnalysisFrame(selected.slot, selected.frame.ptsUs + selected.offsetUs, 'pts', { cachedOnly: true }).then(result => {
+      if (shared.lifecyle.signal.aborted) return;
+      const current = session.getState().tracks.find(track => track.slot === view.selected);
+      if (!current || frameRankKey(current) !== key) return;
+      frameRank = { key, result };
+      if (view.panels.inspector) renderFrameRank(result);
+    }).catch(() => { /* A disposed source leaves the current frame's placeholders intact. */ }).finally(() => {
+      frameRankPending = false;
+      if (shared.lifecyle.signal.aborted || !view.panels.inspector) return;
+      const current = session.getState().tracks.find(track => track.slot === view.selected);
+      if (current && frameRankKey(current) !== key) updateFrameRank(current);
+    });
+  }
   function renderPlayback(state: WorkbenchState, selected: WorkbenchState['tracks'][number]) {
     const sample = state.playback;
     const playback = sample && sample.sourceGenerations[selected.slot] === selected.sourceGen && sample.wallMs > 0 ? sample : null;
@@ -179,7 +222,7 @@ export function createTracksPane(shared: WorkbenchShared) {
         const frameTitle = text('h3', t(msg('tracks.currentFrame', '当前帧'))); frameTitle.dataset.frameTitle = '';
         properties.append(frameTitle);
         const timing = document.createElement('dl'); timing.dataset.frameTiming = '';
-        for (const [label, id] of [[t(msg("tracks.clipPts", "片内 PTS")), 'inspect-pts'], [t(msg("tracks.sourcePts", "源 PTS")), 'inspect-source-pts'], [t(msg("tracks.frameDuration", "帧时长")), 'inspect-frame-duration'], [t(msg("tracks.relativeToPlayhead", "相对游标")), 'inspect-frame-delta']]) {
+        for (const [label, id] of frameTimingRows()) {
           const dd = text('dd', '—'); dd.id = id; timing.append(text('dt', label), dd);
         }
         properties.append(timing);
@@ -203,6 +246,7 @@ export function createTracksPane(shared: WorkbenchShared) {
       $('inspect-frame-duration').textContent = selected.frame ? `${+(selected.frame.durationUs / 1000).toFixed(3)} ms` : '—';
       const delta = trackTiming(selected, state.positionUs).frameDeltaUs;
       $('inspect-frame-delta').textContent = delta == null ? '—' : `${delta > 0 ? '+' : ''}${+(delta / 1000).toFixed(3)} ms`;
+      updateFrameRank(selected);
       renderPlayback(state, selected);
     }
   }
@@ -365,7 +409,7 @@ export function createTracksPane(shared: WorkbenchShared) {
       }
       $('track-properties').querySelector('[data-inspector-title]')!.textContent = t(msg('tracks.track', '轨道 {p0}'), { p0: selected.slot });
       $('track-properties').querySelector('[data-frame-title]')!.textContent = t(msg('tracks.currentFrame', '当前帧'));
-      const labels = [t(msg('tracks.clipPts','片内 PTS')),t(msg('tracks.sourcePts','源 PTS')),t(msg('tracks.frameDuration','帧时长')),t(msg('tracks.relativeToPlayhead','相对游标'))];
+      const labels = frameTimingRows().map(([label]) => label);
       [...$('track-properties').querySelectorAll('[data-frame-timing] dt')].forEach((node,i) => { node.textContent = labels[i]; });
       $('inspect-playback-title').textContent = t(msg('tracks.playbackPerformance', '播放性能'));
       const playbackLabels = performanceLabels();

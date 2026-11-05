@@ -6430,6 +6430,10 @@
     "source": "来源：封装标记",
     "params": {}
   },
+  "tracks.sourceDts": {
+    "source": "源 DTS",
+    "params": {}
+  },
   "tracks.sourcePts": {
     "source": "源 PTS",
     "params": {}

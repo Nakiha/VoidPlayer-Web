@@ -10,7 +10,7 @@ import { EncodedPacketSink } from 'mediabunny';
 import type { InputVideoTrack } from 'mediabunny';
 import { NativeAnalysisClient } from './native-client.ts';
 import type { SourceQueryContext } from '../../../shared/analysis/metadata/adapters.ts';
-import type { AnalysisCapability, AnalysisQuery, AnalysisResult, AnalysisSample } from '../../../shared/analysis/metadata/types.ts';
+import type { AnalysisCapability, AnalysisQuery, AnalysisRank, AnalysisRankOptions, AnalysisResult, AnalysisSample } from '../../../shared/analysis/metadata/types.ts';
 
 const MAX_PACKETS = 2_000_000;
 const YIELD_EVERY = 128;
@@ -117,11 +117,13 @@ export class NativeAnalysisAdapter {
    * 精确命中的解码顺序号。与区间查询共用同一份有序轴缓存；索引构建中
    * 返回已确认部分的暂定排名（complete=false），调用方不得当精确值展示。
    */
-  async rank(tUs: number, axis: 'pts' | 'dts'): Promise<{ rank: number; total: number; ordinal: number | null; complete: boolean }> {
+  async rank(tUs: number, axis: 'pts' | 'dts', options?: AnalysisRankOptions): Promise<AnalysisRank> {
     if (this.closed) throw new Error('媒体已释放。');
     if (axis === 'dts') throw new Error('该片源没有可用的 DTS 时间，无法按解码时间查看。');
-    this.ensureStarted();
+    if (!options?.cachedOnly) this.ensureStarted();
     if (this.buildError) throw this.buildError;
+    if (options?.cachedOnly && !this.packetCount)
+      return { rank: 0, total: 0, ordinal: null, sourceDtsUs: null, complete: this.done };
     const complete = this.done;
     const result = await this.client.call('rank', { firstPtsUs: this.firstPtsUs, axis, tUs });
     return { ...result, complete };
