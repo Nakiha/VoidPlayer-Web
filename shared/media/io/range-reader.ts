@@ -20,6 +20,7 @@ export class RangeReader {
   private readAheadBlocks = 1;
   private playbackReadAhead = false;
   private ahead?: ReadAhead;
+  private pendingAhead?: ReadAhead;
   constructor(input: RandomAccessInput, blockSize = BLOCK, version?: RangeVersion) {
     this.blockSize = blockSize;
     this.input = input;
@@ -59,7 +60,7 @@ export class RangeReader {
   /** Only sequential playback opts in. Each consumed window can start one
    * bounded fetch; an idle/paused consumer never keeps filling the cache. */
   setPlaybackReadAhead(enabled: boolean) {
-    this.playbackReadAhead = enabled && 'url' in this.input;
+    this.playbackReadAhead = enabled;
     if (!this.playbackReadAhead) {
       this.ahead?.controller.abort();
       this.ahead = undefined;
@@ -144,7 +145,7 @@ export class RangeReader {
     while (this.cache.size > CACHE_BYTES / this.blockSize) this.cache.delete(this.cache.keys().next().value!);
   }
   private prefetchAfter(position: number) {
-    if (!this.playbackReadAhead || this.controller.signal.aborted || this.ahead?.pending || this.ahead?.error) return;
+    if (!this.playbackReadAhead || this.controller.signal.aborted || this.pendingAhead?.pending || this.ahead?.error) return;
     let start = Math.ceil(position / this.blockSize) * this.blockSize;
     while (this.cache.has(start)) start += this.blockSize;
     // Keep roughly one complete request available for decoding while the next
@@ -155,7 +156,7 @@ export class RangeReader {
       if (this.cache.has(at)) { end = at; break; }
     }
     const ahead: ReadAhead = { start, end, controller: new AbortController(), pending: true, task: Promise.resolve() };
-    this.ahead = ahead;
+    this.ahead = this.pendingAhead = ahead;
     ahead.task = (async () => {
       try {
         const bytes = await this.load(start, end, ahead.controller.signal);
@@ -164,13 +165,21 @@ export class RangeReader {
         // Preserve failures for the first actual consumer of this range, with
         // no detached rejection or automatic retry of a changed source.
         if (!ahead.controller.signal.aborted) ahead.error = error;
-      } finally { ahead.pending = false; }
+      } finally {
+        ahead.pending = false;
+        if (this.pendingAhead === ahead) this.pendingAhead = undefined;
+      }
     })();
   }
   private async load(start: number, end: number, signal = this.controller.signal): Promise<Uint8Array> {
     try {
       signal.throwIfAborted();
-      if ('file' in this.input) return new Uint8Array(await this.input.file.slice(start, end).arrayBuffer());
+      if ('file' in this.input) {
+        const bytes = new Uint8Array(await this.input.file.slice(start, end).arrayBuffer());
+        signal.throwIfAborted();
+        if (bytes.length !== end - start) throw new MediaOpenError('input', '文件读取被截断。');
+        return bytes;
+      }
       const response = await fetch(this.input.url, { headers: { Range: `bytes=${start}-${end - 1}`, ...(this.ifRange ? { 'If-Range': this.ifRange } : {}) }, signal });
       signal.throwIfAborted();
       const validator = response.headers.get('etag') ?? response.headers.get('last-modified') ?? undefined;

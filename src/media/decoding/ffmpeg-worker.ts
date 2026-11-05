@@ -81,13 +81,13 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
       core._vp_set_vvc_frame_contexts?.(budget.vvcFrameContexts);
     }
     const tuner = createVvcTuner(core, heap, ctx, typeof budget === 'object' ? budget.vvcTuning : undefined);
-    // Blobs read on demand through the custom AVIO (FileReaderSync chunks), so
-    // no whole-file copy ever enters WASM memory. Node workers lack
-    // FileReaderSync and buffer the bytes once (capped) into MEMFS.
+    // The shared bridge performs bounded async File/URL IO outside this worker.
+    // Local compatibility inputs without it use FileReaderSync, or capped
+    // MEMFS when that synchronous Blob API is unavailable.
     onProgress('inspect');
     let ioMode: FfmpegInitResult['ioMode'] = 'memfs';
     if (payload.range) {
-      ioMode = 'http-range'; blobHandle = ctx;
+      ioMode = payload.range.source === 'blob' ? 'blob-range' : 'http-range'; blobHandle = ctx;
       const { shared, size } = payload.range;
       core.vpBlobs.set(blobHandle, rangeBlobReader(shared, size, message => port.postMessage(message), tuner?.recordInputWait));
       if (ioCall('vp_open_blob', 'number', ['number', 'number', 'i64'], [ctx, blobHandle, BigInt(size)]) !== 0) {

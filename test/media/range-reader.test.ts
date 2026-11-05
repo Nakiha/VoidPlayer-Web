@@ -111,6 +111,89 @@ test('Seeking/closing aborts speculative IO and late responses cannot refill or 
   } finally { release(); releaseClose(); reader.close(); }
 });
 
+test('File playback uses the same bounded prefetch and joins slow filesystem reads', async t => {
+  const block = 256 * 1024, file = new Blob([new Uint8Array(12 * 1024 ** 2).map((_, i) => Math.floor(i / block))]);
+  const slice = file.slice.bind(file), requests: { start: number; end: number }[] = [];
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  t.mock.method(file, 'slice', (start = 0, end = file.size) => {
+    requests.push({ start, end });
+    const part = slice(start, end), read = part.arrayBuffer.bind(part), delayed = requests.length === 2;
+    t.mock.method(part, 'arrayBuffer', async () => { if (delayed) await pending; return read(); });
+    return part;
+  });
+  const reader = new RangeReader({ file });
+  try {
+    await reader.read(0, 1);
+    reader.setPlaybackReadAhead(true);
+    await reader.readMetadata(0, 1);
+    assert.equal(requests.length, 1, 'metadata observation does not initiate playback prefetch');
+    await reader.read(1, 1);
+    assert.deepEqual(requests[1], { start: block, end: block + 2 * 1024 ** 2 });
+    assert.equal((await reader.read(2, 1))[0], 0, 'a slow mounted-file read does not block cached frames');
+    const demanded = reader.read(block, 1);
+    await Promise.resolve();
+    assert.equal(requests.length, 2, 'the actual file demand joins prefetch');
+    release();
+    assert.equal((await demanded)[0], 1);
+    for (let i = 2; i < file.size / block; i++) {
+      assert.equal((await reader.read(i * block, 1))[0], i);
+      assert.ok(reader.cachedWindows().reduce((n, window) => n + window.length, 0) <= 8 * 1024 ** 2);
+    }
+    assert.equal(requests.at(-1)!.end, file.size);
+  } finally { release(); reader.close(); }
+});
+
+test('Uncancellable file IO stays bounded across seek/resume and cannot populate the old playback window', async t => {
+  const block = 256 * 1024, file = new Blob([new Uint8Array(12 * 1024 ** 2)]), slice = file.slice.bind(file);
+  let requests = 0, release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  t.mock.method(file, 'slice', (start = 0, end = file.size) => {
+    const part = slice(start, end), read = part.arrayBuffer.bind(part), delayed = ++requests === 2;
+    t.mock.method(part, 'arrayBuffer', async () => { if (delayed) await pending; return read(); });
+    return part;
+  });
+  const reader = new RangeReader({ file });
+  try {
+    await reader.read(0, 1);
+    reader.setPlaybackReadAhead(true); await reader.read(1, 1);
+    assert.equal(requests, 2);
+    reader.setPlaybackReadAhead(false); reader.setPlaybackReadAhead(true);
+    await reader.read(0, 1);
+    assert.equal(requests, 2, 'seek/resume does not stack another uncancellable speculative read');
+    await reader.read(8 * 1024 ** 2, 1);
+    assert.equal(requests, 3, 'an unrelated demand does not wait for old prefetch');
+    release(); await new Promise<void>(resolve => setImmediate(resolve));
+    assert.equal(reader.peek(block, 1), undefined, 'late old-window bytes are discarded');
+    await reader.read(8 * 1024 ** 2, 1);
+    assert.equal(requests, 4, 'consumption can restart prefetch after the old IO settles');
+    reader.close(); await new Promise<void>(resolve => setImmediate(resolve));
+    assert.deepEqual(reader.cachedWindows(), []);
+  } finally { release(); reader.close(); }
+});
+
+for (const failure of ['short', 'unavailable']) test(`File prefetch propagates ${failure} reads without retrying`, async t => {
+  const block = 256 * 1024, file = new Blob([new Uint8Array(4 * 1024 ** 2)]), slice = file.slice.bind(file);
+  let requests = 0;
+  t.mock.method(file, 'slice', (start = 0, end = file.size) => {
+    const part = slice(start, end), read = part.arrayBuffer.bind(part), failing = ++requests === 2;
+    t.mock.method(part, 'arrayBuffer', async () => {
+      if (!failing) return read();
+      if (failure === 'unavailable') throw new DOMException('Mounted file is unavailable', 'NotReadableError');
+      return new ArrayBuffer(end - start - 1);
+    });
+    return part;
+  });
+  const reader = new RangeReader({ file });
+  try {
+    await reader.read(0, 1);
+    reader.setPlaybackReadAhead(true); await reader.read(1, 1);
+    await assert.rejects(reader.read(block, 1), error => error instanceof MediaOpenError && error.stage === 'input');
+    assert.equal(requests, 2);
+    assert.equal(reader.peek(block, 1), undefined);
+  } finally { reader.close(); }
+});
+
 test('Speculative Range failures retain strict response/version checks and reject the eventual consumer without retrying', async t => {
   const block = 256 * 1024, size = 16 * 1024 ** 2;
   for (const invalid of ['whole', 'version', 'range', 'short', 'overflow']) {
@@ -149,19 +232,25 @@ test('Synchronous FFmpeg AVIO requests bounded chunks through the async bridge a
     assert.ok(+b - +a < 262144);
     return new Response(bytes.subarray(+a, +b + 1), { status: 206, headers: { 'Content-Range': `bytes ${a}-${b}/${bytes.length}` } });
   });
-  for (const failing of [false, true]) {
-    fail = failing;
+  let referencePixels: Uint8Array | undefined;
+  for (const mode of ['url', 'failure', 'file']) {
+    fail = mode === 'failure';
     const worker = new Worker(new URL('../../src/media/decoding/ffmpeg-worker.ts', import.meta.url));
-    const bridge = createRangeBridge(worker as unknown as globalThis.Worker, 'https://test.invalid/video', bytes.length);
+    const bridge = createRangeBridge(worker as unknown as globalThis.Worker, mode === 'file' ? { file: new Blob([bytes]) }
+      : { url: 'https://test.invalid/video', size: bytes.length });
     const rpc = new WorkerRpc(worker as unknown as globalThis.Worker, () => bridge.close());
     try {
       const pending = rpc.call('init', { name: 'test',
-        glueURL: new URL('voidplayer-core.js', core).href, wasmBinary: await readFile(new URL('voidplayer-core.wasm', core)), range: { size: bytes.length, shared: bridge.shared },
+        glueURL: new URL('voidplayer-core.js', core).href, wasmBinary: await readFile(new URL('voidplayer-core.wasm', core)),
+        range: { size: bytes.length, shared: bridge.shared, source: mode === 'file' ? 'blob' : 'url' },
       });
-      if (failing) { await assert.rejects(pending, /503/); continue; }
-      const init = await pending; assert.equal(init.ioMode, 'http-range'); assert.ok(init.ticks.length > 1);
+      if (fail) { await assert.rejects(pending, /503/); continue; }
+      const init = await pending; assert.equal(init.ioMode, mode === 'file' ? 'blob-range' : 'http-range'); assert.ok(init.ticks.length > 1);
+      bridge.setPlaybackReadAhead(true);
       const frame = await rpc.call('extract', { ctx: init.ctx, index: 1 });
       assert.equal(frame.pixels.byteLength, 320 * 180 * 2); assert.ok(new Set(new Uint8Array(frame.pixels).subarray(0, 4096)).size > 2);
+      if (mode === 'url') referencePixels = new Uint8Array(frame.pixels).slice();
+      else assert.deepEqual(new Uint8Array(frame.pixels), referencePixels, 'File and URL bridges produce identical pixels');
     } finally { rpc.terminate(); }
   }
   assert.ok(requests >= 2);

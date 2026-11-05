@@ -37,7 +37,7 @@ export interface FfmpegInitResult extends FfmpegIndexRecovery {
   indexSource?: 'server' | 'client';
   localIndexBuildCalls?: number;
   seekAnchorCount?: number;
-  ioMode?: 'blob' | 'memfs' | 'http-range';
+  ioMode?: 'blob' | 'memfs' | 'http-range' | 'blob-range';
   colorPrimaries?: number;
   colorTransfer?: number;
   colorSpace?: number;
@@ -60,7 +60,7 @@ export interface FfmpegCommands {
   'analysis-locate': Command<{ ctx: number } & AnalysisOrigin & { sampleId: string }, AnalysisSample | null>;
   'analysis-rank': Command<{ ctx: number } & AnalysisOrigin & { axis: 'pts' | 'dts'; tUs: number }, Omit<AnalysisRank, 'complete'>>;
   'analysis-number': Command<{ ctx: number } & AnalysisOrigin & { axis: 'pts' | 'dts'; number: number }, number | null>;
-  init: Command<{ glueURL: string; wasmBinary?: ArrayBuffer | Uint8Array; name: string; file?: ArrayBuffer; blob?: Blob; range?: { shared: SharedArrayBuffer; size: number }; threads?: DecodeThreads; externalIndexSession?: boolean; mediaSize?: number }, FfmpegInitResult>;
+  init: Command<{ glueURL: string; wasmBinary?: ArrayBuffer | Uint8Array; name: string; file?: ArrayBuffer; blob?: Blob; range?: { shared: SharedArrayBuffer; size: number; source?: 'blob' | 'url' }; threads?: DecodeThreads; externalIndexSession?: boolean; mediaSize?: number }, FfmpegInitResult>;
   extract: Command<{ ctx: number; index: number; recycle?: ArrayBuffer }, WasmFrameOutput & { seek?: { decodedFrames: number; restarts: number } }>;
   dispose: Command<{ ctx: number; path: string }, null>;
 }

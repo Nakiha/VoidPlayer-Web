@@ -17,6 +17,38 @@ import { setWasmThreadMode, wasmThreadMode } from '../../src/media/policy/wasm-t
 import { visiblePixelHash } from '../helpers/visible-pixels.ts';
 import { createMediaServer } from '../../server/app.ts';
 import { MediaLibraryIndex } from '../../server/library.ts';
+import { nativeFrames, nativeVisibleHash } from '../helpers/media/native-pixels.ts';
+
+for (const shared of [true, false]) test(`local FFmpeg containers preserve exact seek pixels with shared IO ${shared}`, { timeout: 60000 }, async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'vp-file-bridge-')), path = join(directory, 'ffv1.avi');
+  t.after(() => rm(directory, {recursive:true,force:true}));
+  if (!shared) {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis,'SharedArrayBuffer')!;
+    Object.defineProperty(globalThis,'SharedArrayBuffer',{...descriptor,value:undefined});
+    t.after(() => Object.defineProperty(globalThis,'SharedArrayBuffer',descriptor));
+  }
+  execFileSync('ffmpeg', ['-v','error','-y','-i','fixtures/video/ffv1_yuv422p_8bit.mkv','-an','-c:v','copy','-f','avi',path]);
+  const file = new File([await readFile(path)], 'ffv1.avi'), slice = file.slice.bind(file), reads: number[] = [];
+  t.mock.method(file, 'slice', (start = 0, end = file.size) => { reads.push(end-start); return slice(start,end); });
+  const core = new URL('../../public/vendor/voidplayer-core/', import.meta.url);
+  const source = await openFFmpegMedia(file, {glueURL:new URL('voidplayer-core.js',core).href,
+    wasmBinary:await readFile(new URL('voidplayer-core.wasm',core))});
+  try {
+    assert.equal(reads.length > 0, shared, 'shared IO reads the original File outside the synchronous decoder worker');
+    assert.ok(reads.every(bytes => bytes <= 256 * 1024), 'opening retains demand-only bounded IO');
+    const positions = [0,1,30,59,0], oracle = nativeFrames(path, [...new Set(positions)], 'yuv422p', 320*180*2);
+    const probe = JSON.parse(execFileSync('ffprobe', ['-v','error','-select_streams','v:0',
+      '-show_entries','stream=time_base:frame=best_effort_timestamp','-of','json',path], {encoding:'utf8'}));
+    const [num, den] = probe.streams[0].time_base.split('/').map(Number), first = Number(probe.frames[0].best_effort_timestamp);
+    for (const position of positions) {
+      const pts = (Number(probe.frames[position].best_effort_timestamp) - first) * num * 1e6 / den;
+      const frame = await source.frameAt(Math.round(pts));
+      try { assert.equal(visiblePixelHash(frame.description,frame.pixels!), nativeVisibleHash(frame.description,oracle.get(position)!),
+        `frame ${position}, actual PTS ${frame.ptsUs}, duration ${source.info.durationUs}`); }
+      finally { frame.close(); }
+    }
+  } finally { source.dispose(); }
+});
 
 for (const backend of ['packet', 'container'] as const) test(`${backend}: released replacement budget restores actual WASM threads without changing source pixels or index`, { timeout: 120000 }, async t => {
   t.mock.getter(Navigator.prototype, 'hardwareConcurrency', () => 8);

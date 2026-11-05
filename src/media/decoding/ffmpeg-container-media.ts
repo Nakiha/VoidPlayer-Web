@@ -83,11 +83,10 @@ async function openFallbackInput(file: FallbackInput, deps: FallbackDeps): Promi
 }
 
 async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, openStart: number,threadReservation:ReturnType<typeof reserveFallbackThreads>): Promise<MediaSource> {
-  // The Blob crosses into the worker by reference; there the custom AVIO
-  // reads it in chunks via FileReaderSync, so the file never enters WASM
-  // memory at all. Environments without FileReaderSync (Node tests) buffer
-  // the whole file in the worker and enforce the byte cap there.
-  if (!('url' in file) && file.size > MAX_FALLBACK_FILE_BYTES && typeof File === 'undefined') {
+  // File and URL use the same bounded async reader outside the synchronous
+  // decoder worker. Without shared memory, local files retain FileReaderSync
+  // (or the capped MEMFS path in environments without FileReaderSync).
+  if (typeof SharedArrayBuffer === 'undefined' && !('url' in file) && file.size > MAX_FALLBACK_FILE_BYTES && typeof File === 'undefined') {
     throw new Error(`文件超过 WASM 回退解码的 ${MAX_FALLBACK_FILE_BYTES / 1024 / 1024} MiB 内存上限。`);
   }
   // In a cross-origin-isolated page, SharedArrayBuffer unlocks the
@@ -115,7 +114,9 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     const worker = deps.workerFactory?.() ?? await createWorker();
     let bridge: ReturnType<typeof createRangeBridge> | undefined;
     try {
-      if ('url' in file) bridge = createRangeBridge(worker, file.url, file.size);
+      if ('url' in file || typeof SharedArrayBuffer !== 'undefined') {
+        bridge = createRangeBridge(worker, 'url' in file ? { url: file.url, size: file.size } : { file });
+      }
     } catch (error) { worker.terminate(); throw error; }
     rpc = new WorkerRpc(worker, () => bridge?.close(), deps.onProgress);
     const activeRpc = rpc;
@@ -125,7 +126,8 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     const detachAbort = onLoadAbort(deps.signal, () => activeRpc.terminate(deps.signal!.reason));
     try {
       const payload: FfmpegCommands['init']['request'] = { glueURL, name: file.name, threads, mediaSize: file.size, externalIndexSession: !!indexUrl,
-        ...('url' in file ? { range: { shared: bridge!.shared, size: file.size } } : { blob: file }) };
+        ...(bridge ? { range: { shared: bridge.shared, size: file.size, source: 'url' in file ? 'url' as const : 'blob' as const } }
+          : { blob: file as File }) };
       const transfer: Transferable[] = [];
       if (deps.wasmBinary) {
         payload.wasmBinary = new Uint8Array(deps.wasmBinary).buffer;

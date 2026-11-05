@@ -7,7 +7,9 @@ requested length; cancellation, HTTP failures and source version changes reject
 the logical read rather than returning partially assembled bytes. Offsets remain
 safe JavaScript integers and are never coerced to 32 bits.
 
-Sequential playback opts into asynchronous compressed-byte read-ahead. When
+Sequential playback of both File/Blob and URL inputs opts into the same
+asynchronous compressed-byte read-ahead. A File can reside on a mounted network
+drive; its source type does not establish low latency. When
 less than 2 MiB remains ahead of consumption, the reader starts at most one
 2 MiB Range request, overlapping network latency with decoding. A demand for
 that range joins the existing request; cached reads remain available while it
@@ -18,6 +20,19 @@ on their existing demand/scan policies. Seek and decoder replacement disable
 read-ahead and abort the old speculative request; close also discards cached
 bytes. Late responses cannot refill the cache, and speculative response/version
 failures reject the eventual consumer with the original input error.
+Blob reads cannot be physically aborted: a cancelled speculative read keeps its
+in-flight slot until it settles, discards its result, and cannot cause repeated
+seek/resume operations to stack background file reads. Short or failed Blob
+reads reject the consumer as input errors. With shared memory, synchronous
+FFmpeg container decoding uses this same asynchronous reader and bridge for
+both source types (`blob-range` / `http-range`). Non-isolated browsers retain
+the existing local FileReaderSync compatibility path; it cannot overlap async
+IO with a synchronous decoder without shared memory.
+The bridge also retains at most 128 KiB of already-cached startup metadata
+outside the LRU, preserving cache-only metadata/audio observation after a full
+container scan. Observation never starts IO. Progressive TS startup playback
+uses its own reader; the concurrent full index scanner retains its existing
+read policy until it finishes.
 
 AVIO reads starting at or beyond the known physical EOF return an empty buffer.
 Requests crossing EOF are clipped before calculating their length. This matters

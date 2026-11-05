@@ -15,6 +15,34 @@ import {nativeFrames,nativeVisibleHash} from '../helpers/media/native-pixels.ts'
 import { loadTsCore } from '../helpers/media/ts-analysis.ts';
 import { openJsTsAnalysisInput } from '../../shared/analysis/bitstream/js-ts-input.ts';
 import { analyzePicture } from '../../shared/analysis/bitstream/runner.ts';
+import { JsContainerEngine } from '../../src/media/decoding/js-container-engine.ts';
+
+test('progressive local TS prefetch follows the playback reader and preserves the background scan policy', { timeout: 60000 }, async t => {
+  const bytes = execFileSync('ffmpeg', ['-v','error','-f','lavfi','-i','testsrc2=size=640x360:rate=25','-t','4',
+    '-c:v','libx264','-preset','ultrafast','-g','12','-bf','0','-b:v','32M','-minrate','32M','-maxrate','32M','-bufsize','32M',
+    '-x264-params','nal-hrd=cbr:filler=1','-f','mpegts','pipe:1'], { maxBuffer: 32 * 1024 ** 2 });
+  const file = new Blob([bytes]), slice = file.slice.bind(file), reads: { start: number; end: number }[] = [];
+  t.mock.method(file, 'slice', (start = 0, end = file.size) => { reads.push({start,end}); return slice(start,end); });
+  const engine = new JsContainerEngine({file}, 'progressive-prefetch', {persistent:true});
+  try {
+    const core = new URL('../../public/vendor/voidplayer-core/', import.meta.url);
+    const init = await engine.open(new URL('voidplayer-core.js',core).href, await readFile(new URL('voidplayer-core.wasm',core)), true);
+    assert.equal(init.indexState, 'building', 'exercise the actual bounded startup path');
+    let frame = await engine.at(init.firstPtsUs);
+    for (let i = 1; i < init.times.length; i++) {
+      const pts = frame.pts; frame.frame?.close();
+      frame = (await engine.next(pts))!; assert.ok(frame);
+    }
+    assert.ok(reads.some(read => read.end - read.start > 256 * 1024), 'startup playback prefetches on its own reader');
+    const scanned = reads.length, completing = engine.completeIndex();
+    const pts = frame.pts; frame.frame?.close();
+    frame = (await engine.next(pts))!; assert.ok(frame);
+    await completing;
+    frame.frame?.close();
+    assert.ok(reads.slice(scanned).every(read => read.end - read.start <= 256 * 1024), 'the background index retains demand-only IO');
+    assert.equal(engine.indexComplete, true);
+  } finally { engine.close(); }
+});
 
 test('real packet Worker TS engine drains, seeks and shares exact identity with independent codec analysis without container WASM', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'voidplayer-js-ts-engine-'));

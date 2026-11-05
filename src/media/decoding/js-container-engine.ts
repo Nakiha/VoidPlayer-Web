@@ -42,6 +42,7 @@ export class JsContainerEngine {
   private prefix?:Uint8Array;
   private startup?: TsPacketIndex;
   private startupSource?: TsContainerPacketSource;
+  private startupReader?: RangeReader;
   private firstPtsUs?: number;
   private published?: TsPlaybackPrefix;
   private waiters = new Set<()=>void>();
@@ -100,6 +101,7 @@ export class JsContainerEngine {
       this.indexPacketsScanned = candidate.packetsRead;
       this.startup = prefix;
       this.source = this.startupSource = candidate;
+      this.startupReader = reader;
       this.updateStatistics({packets});
       return prefix;
     } catch (error) {
@@ -147,6 +149,7 @@ export class JsContainerEngine {
     const durations = order.map((au,i)=>(i+1<order.length?packets[order[i+1]].pts:prefix.nextPtsUs)-packets[au].pts);
     const index = {...previous,packets,order,durations,duration:prefix.nextPtsUs-previous.firstPts};
     this.checkContinuation(prefix,index);
+    this.startupReader?.setPlaybackReadAhead(false);
     this.source = source;
     this.published = prefix;
     this.index = index;
@@ -168,6 +171,7 @@ export class JsContainerEngine {
           const index = jsDecodeIndex(document);
           if (document.kind!=='js-ts-packets' || document.recovery) throw new MediaOpenError('container','TS 后台索引改变了封装读取方式。');
           this.checkContinuation(document,index);
+          this.startupReader?.setPlaybackReadAhead(false);
           this.source = source;
           this.document = document;
           this.index = index;
@@ -300,14 +304,14 @@ export class JsContainerEngine {
   }
   async at(pts: number, recycle?: ArrayBuffer) {
     this.check();
-    this.reader.setPlaybackReadAhead(false);
+    this.setPlaybackReadAhead(false);
     if (this.primed?.pts === pts) { const frame = this.primed; this.primed = null; return this.timed(frame); }
     this.primed?.frame?.close(); this.primed = null;
     return this.timed(await this.timeline!.at(pts, recycle));
   }
   async next(pts: number, recycle?: ArrayBuffer) {
     this.check();
-    this.reader.setPlaybackReadAhead(true);
+    this.setPlaybackReadAhead(true);
     const frame = await this.timeline!.next(pts, recycle);
     return frame && this.timed(frame);
   }
@@ -319,7 +323,7 @@ export class JsContainerEngine {
   }
   async referenceWitness(glueURL: string, wasmBinary?: Uint8Array, threads: DecodeThreads = 1) {
     this.check();
-    this.reader.setPlaybackReadAhead(false);
+    this.setPlaybackReadAhead(false);
     if (this.timeline?.decoder.kind !== 'webcodecs') throw new MediaOpenError('decode', 'JS TS native decoder is not ready');
     const decoder = await this.createSoftware(this.index!, glueURL, wasmBinary, threads);
     const witness = this.makeTimeline(decoder);
@@ -327,7 +331,7 @@ export class JsContainerEngine {
     finally { witness.close(); }
   }
   private async replaceDecoder(decoder: PacketDecoder, pts = this.index!.firstPts) {
-    this.reader.setPlaybackReadAhead(false);
+    this.setPlaybackReadAhead(false);
     const next = this.makeTimeline(decoder);
     let first:PacketFrame;
     try {first=await this.first(next,pts);}
@@ -354,6 +358,13 @@ export class JsContainerEngine {
     }
     return this.decoderInfo();
   }
+  private setPlaybackReadAhead(enabled: boolean) {
+    // The progressive scanner owns its IO policy until it finishes. Startup
+    // playback has a separate reader; do not turn background indexing into
+    // speculative playback IO when its prefix becomes readable.
+    this.startupReader?.setPlaybackReadAhead(enabled && this.source === this.startupSource);
+    this.reader.setPlaybackReadAhead(enabled && !this.startup);
+  }
   close() {
     if (this.closed) return;
     this.closed = true;
@@ -364,6 +375,7 @@ export class JsContainerEngine {
       this.controller.abort(); this.wakeIndex();
       try { this.startupSource?.close(); this.source?.close(); } finally {
         this.startupSource = this.source = undefined;
+        this.startupReader = undefined;
         this.startup = this.published = undefined;
         this.indexTask = undefined;
         this.reader.close();
