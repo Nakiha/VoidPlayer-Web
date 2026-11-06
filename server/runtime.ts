@@ -1,3 +1,6 @@
+import { RuntimeLog } from './logging/runtime.ts';
+import { attachRuntimeLog, serverLog } from './logging/logger.ts';
+import { logPolicy } from '../shared/service/logging.ts';
 import {closeResources,cleanupAfterFailure} from './shutdown.ts';
 import { DATA_DIRECTORY_MARKER } from '../shared/service/data-directory.ts';
 import { stat, access, mkdir, writeFile } from 'node:fs/promises';
@@ -25,14 +28,44 @@ export async function validateServiceConfig(config: ServiceConfig, requireStatic
 }
 
 export async function startService(config: ServiceConfig, requireStatic = true, build?: { version: string; revision: string }) {
+  const runtimeLog = new RuntimeLog(path.join(config.dataDir, 'runtime-logs'), logPolicy(config.logging).runtime);
+  await runtimeLog.start();
+  const detach = attachRuntimeLog(runtimeLog);
+  try {
+    const service = await startLoggedService(config, requireStatic, build, runtimeLog);
+    let closing: Promise<void> | undefined;
+    return { ...service, runtimeLog, close: () => closing ??= (async () => {
+      try { await service.close(); }
+      catch (error) {
+        serverLog.error('service-shutdown-failed', error); detach();
+        return cleanupAfterFailure(error, 'Service shutdown and log drain failed', [['runtime logs', () => runtimeLog.close()]]);
+      }
+      serverLog.info('service-stopped'); detach();
+      await runtimeLog.close();
+    })() };
+  } catch (error) {
+    serverLog.error('service-startup-failed', error);
+    detach();
+    return cleanupAfterFailure(error, 'Service startup and log drain failed', [['runtime logs', () => runtimeLog.close()]]);
+  }
+}
+
+async function startLoggedService(config: ServiceConfig, requireStatic: boolean, build: { version: string; revision: string } | undefined,
+  runtimeLog: RuntimeLog) {
   const { staticOk } = await validateServiceConfig(config, requireStatic, false);
   await writeFile(path.join(config.dataDir, DATA_DIRECTORY_MARKER), 'VoidPlayer durable user data v1\n', { flag: 'wx' }).catch(error => { if(error.code!=='EEXIST')throw error; });
   const tls = config.tls ? await prepareTls(config.tls, config.dataDir) : undefined;
   const library = new MediaLibraryIndex(config.mediaRoots, { analysisCoreDir:process.env.VOIDPLAYER_ANALYSIS_CORE_DIR || path.join(config.staticDir,'vendor/voidplayer-analysis'), coreDir: process.env.VOIDPLAYER_WASM_CORE_DIR || path.join(config.staticDir,'vendor/voidplayer-core'), ttlMs: config.indexTtlMs, database: path.join(config.dataDir, 'library.sqlite'), settleMs: 1000, watch: config.indexWatch });
   const quality=new QualityApplication(library,{coreDir:process.env.VOIDPLAYER_WASM_CORE_DIR||path.join(config.staticDir,'vendor/voidplayer-core'),analysisCoreDir:process.env.VOIDPLAYER_ANALYSIS_CORE_DIR||path.join(config.staticDir,'vendor/voidplayer-analysis')});
-  let admin: AdminController;
-  try {await quality.ready;await Promise.all([quality.qualityCambi.capability(),quality.qualityXpsnr.capability(),quality.qualityVmaf.capability()]);library.start();admin=new AdminController(config,library,build);}
-  catch(error){return cleanupAfterFailure(error,'Service initialization failed',[['application',()=>quality.close()]]);}
+  let admin: AdminController | undefined;
+  try {
+    await quality.ready;
+    await Promise.all([quality.qualityCambi.capability(),quality.qualityXpsnr.capability(),quality.qualityVmaf.capability()]);
+    library.start();
+    admin = new AdminController(config,library,build,runtimeLog);
+    await admin.reports.start();
+  }
+  catch(error){return cleanupAfterFailure(error,'Service initialization failed',[['application',()=>quality.close(admin?.close())]]);}
   const connection = tls ? { ...tls, port: config.port } : undefined;
   const gateway = new ProtocolGateway(), listeners: ManagedServer[] = [];
   const shared = { library, quality, admin, connection, traffic:createTrafficState(), roots: library.roots, staticDir: staticOk ? config.staticDir : undefined, logsDir: config.logsDir ?? undefined,
@@ -54,7 +87,7 @@ export async function startService(config: ServiceConfig, requireStatic = true, 
   const closeStack = async () => {
     let listenerFailure: unknown;
     try { await closeListeners(); } catch(error) { listenerFailure = error; }
-    const adminStopped = admin.close(), libraryStopped = quality.close(adminStopped);
+    const adminStopped = admin!.close(), libraryStopped = quality.close(adminStopped);
     const owners = [['admin', () => adminStopped], ['library', () => libraryStopped]] as const;
     if (listenerFailure) return cleanupAfterFailure(listenerFailure, 'Service shutdown incomplete', owners);
     await closeResources('Service shutdown incomplete', owners);
@@ -74,9 +107,9 @@ export async function startService(config: ServiceConfig, requireStatic = true, 
     }else{server=createMediaServer(shared);await listen(server,config.port,config.host);}
   } catch(error){return cleanupAfterFailure(error, 'Service listener startup failed', [['service', closeStack]]);}
   const address = tls?.hosts.find(h => !['localhost', '127.0.0.1', '::1'].includes(h)) ?? config.host;
-  console.log(`媒体服务: ${tls ? 'https' : 'http'}://${address.includes(':') ? `[${address}]` : address}:${(server.address() as {port:number}).port} · ${config.mediaRoots.length} 个媒体目录`);
-  if (tls?.caFile) console.log(`首次访问：将 ${tls.caFile} 复制到客户端，导入当前用户的受信任根证书。\nCA SHA-256: ${tls.fingerprint}\nWindows: certutil -user -addstore Root voidplayer-ca.crt`);
-  if (guide) console.log(`HTTP 入口: http://${address.includes(':') ? `[${address}]` : address}:${(guide.address() as { port: number }).port}/`);
+  serverLog.info('service-listening', { message: `媒体服务: ${tls ? 'https' : 'http'}://${address.includes(':') ? `[${address}]` : address}:${(server.address() as {port:number}).port} · ${config.mediaRoots.length} 个媒体目录` });
+  if (tls?.caFile) serverLog.info('service-certificate', { message: `首次访问：将 ${tls.caFile} 复制到客户端，导入当前用户的受信任根证书。\nCA SHA-256: ${tls.fingerprint}\nWindows: certutil -user -addstore Root voidplayer-ca.crt` });
+  if (guide) serverLog.info('service-http-guide', { message: `HTTP 入口: http://${address.includes(':') ? `[${address}]` : address}:${(guide.address() as { port: number }).port}/` });
   let closing: Promise<void> | undefined;
   return { server, library, quality, tls, guide, close: () => closing ??= closeStack() };
 }

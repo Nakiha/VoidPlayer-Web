@@ -1,4 +1,6 @@
+import { clientIp } from '../client-address.ts';
 import { agentErrorBody } from '../agent-errors.ts';
+import { serverLog } from '../logging/logger.ts';
 import { adminErrorBody } from '../admin-error.ts';
 import type { IncomingMessage, ServerResponse } from '../http.ts';
 import { randomUUID, createHash } from 'node:crypto';
@@ -12,6 +14,12 @@ import { guestActor, identityCookie, requireCapturedActor } from '../identity.ts
 import { encryptedRequest } from '../tls.ts';
 import { localRequest } from '../reveal.ts';
 import type { RouteContext } from './context.ts';
+
+function logStateFailure(ctx: RouteContext, req: IncomingMessage, url: URL, error: unknown) {
+  if (error instanceof AdminError && error.status < 500) return;
+  serverLog.error('state-request-failed', error, { requestId: ctx.requestId, actorId: ctx.actor?.id ?? null,
+    clientIp: clientIp(req), method: req.method, url: url.pathname });
+}
 
 /** Identity, annotations, shares, workspaces and admin endpoints. Returns true when handled. */
 export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage, res: ServerResponse, url: URL): Promise<boolean> {
@@ -41,7 +49,7 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
         ctx.actor = options.admin.workspaces.identify(ctx.actor?.id, body.name, body.mode as 'rename' | 'create' | undefined);
       }
       res.setHeader('set-cookie', identityCookie(ctx.actor, encryptedRequest(req))); sendJson(res, 200, { actor: ctx.actor });
-    } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, agentErrorBody(error, ctx.requestId)); }
+    } catch (error) { logStateFailure(ctx, req, url, error); if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, agentErrorBody(error, ctx.requestId)); }
     return true;
   }
   if (url.pathname === '/api/annotations/spaces' || url.pathname.startsWith('/api/annotations/spaces/') || url.pathname.startsWith('/api/annotations/events/')) {
@@ -99,7 +107,7 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
         if (id && req.method === 'GET') { const record = store.read(space, id); if (!record) throw new AdminError(404, '标注不存在。', 'annotation-not-found'); sendJson(res, 200, record); return true; }
       }
       agentFailure(405, 'method-not-allowed', '不支持的标注操作。'); return true;
-    } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, agentErrorBody(error, ctx.requestId)); return true; }
+    } catch (error) { logStateFailure(ctx, req, url, error); if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, agentErrorBody(error, ctx.requestId)); return true; }
   }
   function seedWorkspace(id: string) {
     const {record, seeds} = options.admin!.workspaces.sharedWorkspace(id);
@@ -133,7 +141,7 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
         sendJson(res,200,store.update(record.id,typeof req.headers['if-match'] === 'string' ? req.headers['if-match'] : undefined,await readAdminJson(req,WORKSPACE_BYTES + 2048),ctx.actor));return true;
       }
       throw new AdminError(405, '不支持的工作区操作。');
-    } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res,error instanceof AdminError ? error.status : 500,adminErrorBody(error)); }
+    } catch (error) { logStateFailure(ctx, req, url, error); if (!res.headersSent && !res.destroyed) sendJson(res,error instanceof AdminError ? error.status : 500,adminErrorBody(error)); }
     return true;
   }
   if (url.pathname === '/api/workspaces' || url.pathname.startsWith('/api/workspaces/')) {
@@ -163,7 +171,7 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
         if (req.method === 'DELETE') { sendJson(res, 200, store.remove(id, revision, workspaceActor)); return true; }
       }
       sendJson(res, 405, { error: '不支持的工作区操作。' }); return true;
-    } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, adminErrorBody(error)); return true; }
+    } catch (error) { logStateFailure(ctx, req, url, error); if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, adminErrorBody(error)); return true; }
   }
   if (url.pathname.startsWith('/api/admin/')) {
     const admin: AdminController | undefined = options.admin;
@@ -234,7 +242,7 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
         if (req.method === 'DELETE') { sendJson(res, 200, await admin.deleteLog(name, typeof req.headers['if-match'] === 'string' ? req.headers['if-match'].replace(/^"|"$/g, '') : null)); return true; }
       }
       sendJson(res, 405, { error: '不支持的管理操作。' }); return true;
-    } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, adminErrorBody(error)); else if (!res.destroyed) res.destroy(); return true; }
+    } catch (error) { logStateFailure(ctx, req, url, error); if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, adminErrorBody(error)); else if (!res.destroyed) res.destroy(); return true; }
   }
   return false;
 }

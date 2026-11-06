@@ -1,3 +1,4 @@
+import { serverLog } from '../logging/logger.ts';
 import { AdminError } from '../admin-error.ts';
 import type { Actor } from '../identity.ts';
 import type {QualityExecutionContext} from '../analysis/quality/execution-context.ts';
@@ -29,7 +30,7 @@ export class LibraryDiscoveryService {
     this.timer=setTimeout(()=>{this.timer=undefined;try{this.store.expire(Date.now());this.pump();this.wake();}catch(error){this.failed=true;this.fatal=error;}},250);this.timer.unref();}
   private pump(){if(this.closed||this.failed||this.active)return;this.store.expire(Date.now());const job=this.store.queued();if(!job)return;
     const active={id:job.id,controller:new AbortController(),done:Promise.resolve()};this.active=active;
-    active.done=this.execute(job.id,active.controller).catch(error=>{this.failed=true;this.fatal=error;console.error('Library preparation stopped; history retained.');}).finally(()=>{if(this.active===active)this.active=undefined;this.wake();});}
+    active.done=this.execute(job.id,active.controller).catch(error=>{this.failed=true;this.fatal=error;serverLog.error('library-preparation-stopped',error);}).finally(()=>{if(this.active===active)this.active=undefined;this.wake();});}
   private async execute(id:string,controller:AbortController){
     const job=this.store.get(id);let admitted=false;
     const start=()=>{this.store.start(id,Date.now());admitted=true;};

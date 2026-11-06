@@ -21,7 +21,7 @@ if (command === 'install') {
   await access(path.join(root, 'voidplayer.config.json')).catch(() => { throw new Error('请先复制 voidplayer.config.example.json 为 voidplayer.config.json，并检查媒体目录。'); });
   if (exists()) throw new Error('该服务已经安装并运行；先 stop，再 install 更新配置。');
   await mkdir(path.dirname(file), { recursive: true }); await mkdir(path.join(root, '.run'), { recursive: true });
-  const args = [process.execPath, path.join(root, production ? 'server/main.ts' : 'scripts/dev.ts'), '--config', path.join(root, 'voidplayer.config.json')];
+  const args = [process.execPath, path.join(root, 'scripts/service-runner.mjs'), ...(production ? ['--production'] : [])];
   await writeFile(file, `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -30,10 +30,10 @@ if (command === 'install') {
 <key>WorkingDirectory</key><string>${escape(root)}</string>
 <key>EnvironmentVariables</key><dict><key>PATH</key><string>${escape(process.env.PATH ?? '/usr/bin:/bin')}</string></dict>
 <key>RunAtLoad</key><true/><key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict><key>ThrottleInterval</key><integer>5</integer>
-<key>StandardOutPath</key><string>${escape(path.join(root, '.run', `${mode}.log`))}</string>
-<key>StandardErrorPath</key><string>${escape(path.join(root, '.run', `${mode}.error.log`))}</string>
+<key>StandardOutPath</key><string>/dev/null</string>
+<key>StandardErrorPath</key><string>/dev/null</string>
 </dict></plist>\n`, { mode: 0o600 });
-  run('bootstrap', domain, file); console.log(`已安装并启动 ${mode} 用户服务；下次登录自动运行。日志: .run/${mode}.log`);
+  run('bootstrap', domain, file); console.log(`已安装并启动 ${mode} 用户服务；下次登录自动运行。启动日志: .run/service-logs/${mode}/；服务日志: 配置 dataDir/runtime-logs/`);
 } else if (command === 'start') {
   if (exists()) run('kickstart', target); else run('bootstrap', domain, file);
   console.log('服务已启动。');

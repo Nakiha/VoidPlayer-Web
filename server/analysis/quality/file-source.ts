@@ -1,3 +1,4 @@
+import { serverLog } from '../../logging/logger.ts';
 import { openSync,closeSync,readSync,fstatSync,statSync,statfsSync,realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileVersion } from '../../library.ts';
@@ -12,7 +13,7 @@ import type {QualityIndexDocument} from '../../../shared/analysis/quality/source
 import type { PairTarget,CachedPairSource,PairBudget } from '../../../shared/analysis/quality/frame-pair.ts';
 
 function changed(mediaId:string,field:string,detail?:Record<string,unknown>):never{
-  console.error(JSON.stringify({event:'quality-source-rejected',mediaId,field,...(detail?{detail}:{})}));
+  serverLog.warn('quality-source-rejected',{mediaId,field,...(detail?{detail}:{})});
   throw new FramePairError('source-changed',`Library source or cache binding changed (${field})`,field);
 }
 /** Same synchronous canonicalization for lookup and every subsequent check.

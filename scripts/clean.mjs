@@ -26,9 +26,13 @@ const repoRoot = path.resolve(import.meta.dirname, '..');
 // may contain old CLI-selected data and are never inferred to be evidence.
 const declaredOutputs = new Set();
 const configFile = path.resolve(process.env.VOIDPLAYER_CONFIG || path.join(repoRoot, 'voidplayer.config.json'));
-const configuredData = existsSync(configFile) ? JSON.parse(readFileSync(configFile, 'utf8')).dataDir : undefined;
+const configured = existsSync(configFile) ? JSON.parse(readFileSync(configFile, 'utf8')) : {};
+const configuredData = configured.dataDir;
 if (configuredData !== undefined && typeof configuredData !== 'string') throw Error('Invalid configured data directory; cleanup refused');
 const configuredDataPath = configuredData ? path.resolve(path.dirname(configFile), configuredData) : null;
+if (configured.logsDir !== undefined && configured.logsDir !== null && typeof configured.logsDir !== 'string')
+  throw Error('Invalid configured log directory; cleanup refused');
+const configuredLogsPath = configured.logsDir ? path.resolve(path.dirname(configFile), configured.logsDir) : null;
 const manifestFile = path.join(repoRoot, 'scripts/testing/manifest.json');
 if (existsSync(manifestFile)) {
   const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
@@ -178,7 +182,8 @@ for (const file of markdownFiles) {
 const isProtected = relative => {
   const normalized = relative.split(path.sep).join('/');
   const absolute = path.join(repoRoot, relative);
-  if (configuredDataPath && (configuredDataPath === absolute || configuredDataPath.startsWith(absolute + path.sep) || absolute.startsWith(configuredDataPath + path.sep))) return true;
+  if ([configuredDataPath, configuredLogsPath].some(directory => directory && (directory === absolute
+    || directory.startsWith(absolute + path.sep) || absolute.startsWith(directory + path.sep)))) return true;
   if (PROTECTED.includes(normalized)) return true;
   if ([...documentedPaths].some(reference => reference === normalized || reference.startsWith(normalized + '/'))) return true;
   // 文档里以链接形式引用的日期化证据目录

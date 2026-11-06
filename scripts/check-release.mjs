@@ -1,3 +1,4 @@
+import { verifyReleaseArchivePermissions, verifyReleaseExecutablePermissions } from './tools/release/permissions.mjs';
 import { verifyFrontendIdentity } from './release-version.mjs';
 import { httpFetch } from '../test/http-request.ts';
 import { syntheticFlv } from '../test/flv-fixture.ts';
@@ -99,6 +100,8 @@ try {
   assert.match(snapshotFiles, /shared\/analysis\/bitstream\/runner\.ts/); assert.match(snapshotFiles, /tsconfig\.shared\.json/);
   assert.match(snapshotFiles, /admin\/index\.html/); assert.match(snapshotFiles, /public\/theme-init\.js/);
   executable = path.join(folder, manifest.executable);
+  verifyReleaseArchivePermissions(archive, path.basename(folder), manifest.target, manifest.executable);
+  await verifyReleaseExecutablePermissions(executable, manifest.target);
   assert.equal(run(['--version']).trim(), `VoidPlayer ${manifest.appVersion} (${manifest.revision}${manifest.dirty ? '-dirty' : ''})`); assert.match(run(['--help']), /--init/);
   const cwdBefore = await readdir(cwd);
   const portablePort = await freePort();

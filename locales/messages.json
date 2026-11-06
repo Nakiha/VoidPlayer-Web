@@ -601,6 +601,36 @@
     "source": "日志内容会显示在这里",
     "params": {}
   },
+  "admin.logRetentionDays": {
+    "source": "{days} 天后自动删除",
+    "params": {
+      "days": "string | number"
+    }
+  },
+  "admin.logRetentionManual": {
+    "source": "保留到手动删除",
+    "params": {}
+  },
+  "admin.logStorageRuntime": {
+    "source": "运行日志：{used} / {limit}，保留 {days} 天，按 {segment} 或每天切段并压缩；丢弃 {dropped} 条。",
+    "params": {
+      "days": "string | number",
+      "dropped": "string | number",
+      "limit": "string | number",
+      "segment": "string | number",
+      "used": "string | number"
+    }
+  },
+  "admin.logStorageUploads": {
+    "source": "上传报告：{used} / {limit}，{count} / {max} 份；{retention}，满额拒收。",
+    "params": {
+      "count": "string | number",
+      "limit": "string | number",
+      "max": "string | number",
+      "retention": "string | number",
+      "used": "string | number"
+    }
+  },
   "admin.logType": {
     "source": "日志类型",
     "params": {}

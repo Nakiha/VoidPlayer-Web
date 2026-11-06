@@ -1,3 +1,4 @@
+import { serverLog } from '../../logging/logger.ts';
 import { closeResources } from "../../shutdown.ts";
 import { requirePacketOutputWitness } from "../../../shared/analysis/quality/frame-pair.ts";
 import {
@@ -479,7 +480,7 @@ export class NativeCambiService {
       a.done = this.execute(job, a.controller.signal)
         .catch((e) => {
           this.fatal = e;
-          console.error("CAMBI service stopped; history retained");
+          serverLog.error('cambi-service-stopped', e);
         })
         .finally(() => {
           this.active.delete(job.id);

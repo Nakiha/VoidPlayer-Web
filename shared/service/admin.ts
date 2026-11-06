@@ -1,3 +1,4 @@
+import type { LogStorageOverview } from './logging.ts';
 // HTTP response contracts shared by the Node service and browser clients.
 // Service return annotations enforce these shapes without importing host classes.
 export type AdminStatus = {
@@ -54,6 +55,7 @@ export type RootConfiguration = {
     reason: null | string;
 };
 export type LogPage = {
+    storage?: LogStorageOverview;
     entries: ({
         name: string;
         size: number;

@@ -8,6 +8,8 @@ import { parseTls } from './tls.ts';
 import type { TlsConfig } from './tls.ts';
 import {qualityResourceLimits} from '../shared/service/quality-resources.ts';
 import type {QualityResourceLimits,QualityResourceChange} from '../shared/service/quality-resources.ts';
+import { logPolicy } from '../shared/service/logging.ts';
+import type { LogPolicy } from '../shared/service/logging.ts';
 
 export interface ServiceConfig {
   mediaRoots: MediaRoot[]; dataDir: string; host: string; port: number; devPort: number;
@@ -15,6 +17,7 @@ export interface ServiceConfig {
   analysisDecoder?: AnalysisDecoderSettings;
   qualityResources?: QualityResourceLimits;
   qualityResourceHistory?: QualityResourceChange[];
+  logging?: LogPolicy;
   tls?: TlsConfig | null;
   httpPort?: number | null;
   origin?: { file: string; revision: string; rootsFromCli: boolean };
@@ -51,8 +54,9 @@ export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('服务配置必须是 JSON 对象。');
   // Retired keys are accepted only at the file boundary; runtime config owns no legacy settings.
   for (const key of ['adminUsers', 'nativeVmaf', 'nativeXpsnr']) delete data[key];
-  for (const key of Object.keys(data)) if (!Object.hasOwn(defaults, key) && !['tls', 'httpPort','qualityResources','qualityResourceHistory','analysisDecoder'].includes(key)) throw new Error(`未知配置项: ${key}`);
+  for (const key of Object.keys(data)) if (!Object.hasOwn(defaults, key) && !['tls', 'httpPort','qualityResources','qualityResourceHistory','analysisDecoder','logging'].includes(key)) throw new Error(`未知配置项: ${key}`);
   const config = { ...defaults, ...data, ...overrides } as ServiceConfig;
+  config.logging = logPolicy(config.logging);
   if(config.qualityResources!==undefined)config.qualityResources=qualityResourceLimits(config.qualityResources);
   if(config.qualityResourceHistory!==undefined){
     const h=config.qualityResourceHistory;

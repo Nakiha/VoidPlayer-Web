@@ -1,4 +1,7 @@
 import {QualityApplication} from './quality-application.ts';
+import { ReportLogs } from './logging/reports.ts';
+import { serverLog } from './logging/logger.ts';
+import { DEFAULT_LOG_POLICY } from '../shared/service/logging.ts';
 import {ExistingPageRequests} from './bridge/existing-pages.ts';
 import {handleCambiRoutes} from './analysis/cambi/routes.ts';
 import {handleTaskRoutes} from './tasks/routes.ts';
@@ -74,7 +77,8 @@ export function createMediaServer(options: ServerOptions): ManagedServer {
   const staticDir = options.staticDir ? path.resolve(options.staticDir) : undefined;
   const staticRoot = staticDir ? fs.realpath(staticDir).catch(() => null) : Promise.resolve(null);
   const staticAssets = staticRoot.then(root => root ? new StaticAssets(root) : null);
-  const logLine = options.onLog ?? (entry => console.log(JSON.stringify(entry)));
+  const logLine = options.onLog ?? (entry => serverLog.info('http-request', entry));
+  const reports = options.admin?.reports ?? new ReportLogs(options.logsDir ?? null, DEFAULT_LOG_POLICY.reports);
   const traffic=options.traffic ?? createTrafficState();
   const {sockets,recentRequests}=traffic;
 
@@ -99,7 +103,7 @@ export function createMediaServer(options: ServerOptions): ManagedServer {
     let logged = false;
     traffic.activeRequests++;
     const ctx: RouteContext = {
-      options, library, quality, requestId,
+      options, library, quality, requestId, reports,
       actor: guestActor(browserUserId(req)) ?? options.admin?.workspaces.user(browserUserId(req)) ?? null,
       adminExtra: { traffic, sockets, recentRequests },
     };
@@ -147,6 +151,8 @@ export function createMediaServer(options: ServerOptions): ManagedServer {
       }
       sendJson(res, 404, { error: 'not found' });
     } catch (error) {
+      serverLog.error('http-request-failed', error, { requestId, clientIp: ip, actorId: ctx.actor?.id ?? null,
+        method: req.method, url: (req.url ?? '/').split('?')[0] });
       if (!res.headersSent) sendJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
       else res.end();
     }
@@ -158,7 +164,8 @@ export function createMediaServer(options: ServerOptions): ManagedServer {
     // A supplied library remains caller-owned. The registered reader is still
     // part of the application drain if the caller closes it before this server.
     const stopped = options.library ? stopLocalAnalysis?.() : quality.close();
-    void stopped?.catch(error => console.error('Application shutdown failed', error));
+    if (!options.admin) void reports.close();
+    void stopped?.catch(error => serverLog.error('application-shutdown-failed', error));
   });
   return server;
 }

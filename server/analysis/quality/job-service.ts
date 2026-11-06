@@ -1,3 +1,4 @@
+import { serverLog } from '../../logging/logger.ts';
 import type {QualityExecutionContract} from '../../../shared/analysis/quality/reexecution.ts';
 import {randomUUID} from 'node:crypto';
 import type {ReexecutionCreation} from './reexecution-ledger.ts';
@@ -66,7 +67,7 @@ export class QualityJobService {
   }
   private poison(error: unknown) {
     this.failed = true;this.fatal = error;
-    console.error('Quality job service stopped; durable state retained', error);
+    serverLog.error('quality-job-service-stopped', error);
   }
   private wake() {
     try {

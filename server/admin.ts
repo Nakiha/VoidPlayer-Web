@@ -1,3 +1,6 @@
+import { ReportLogs } from './logging/reports.ts';
+import type { RuntimeLog } from './logging/runtime.ts';
+import { logPolicy } from '../shared/service/logging.ts';
 import { requestAuthority } from './http.ts';
 import {closeResources} from './shutdown.ts';
 import type {AdminStatus,RootConfiguration,LogPage,LogDocument,AnalysisSettings,RootReasonCode} from '../shared/service/admin.ts';
@@ -13,7 +16,7 @@ import { configRevision } from './config.ts';
 import type { ServiceConfig } from './config.ts';
 import { normalizeRoots } from './library-store.ts';
 import type { MediaRoot } from './library-store.ts';
-import { MediaLibraryIndex, fileVersion } from './library.ts';
+import { MediaLibraryIndex } from './library.ts';
 import { encryptedRequest } from './tls.ts';
 
 export { AdminError } from './admin-error.ts';
@@ -48,10 +51,11 @@ async function atomicWrite(file: string, text: string) {
     await fs.rename(temporary, file);
   } finally { await fs.rm(temporary, { force: true }); }
 }
-const logName = (name: string) => /^voidplayer-log-[A-Za-z0-9_.-]{1,180}\.json$/.test(name);
 
 
 export class AdminController {
+  readonly reports: ReportLogs;
+  private runtimeLog?: RuntimeLog;
   readonly config: ServiceConfig;
   readonly library: MediaLibraryIndex;
   private analysisInstance?: AnalysisScheduler;
@@ -71,7 +75,12 @@ export class AdminController {
   private cpu = process.cpuUsage();
   private cpuAt = performance.now();
   private cpuPercent = 0;
-  constructor(config: ServiceConfig, library: MediaLibraryIndex, build = { version: 'development', revision: 'source' }) { this.config = config; this.library = library; this.build = build; this.measurements = new Measurements(library); this.workspaces = new WorkspaceStore(path.join(config.dataDir, 'workspaces.sqlite'));
+  constructor(config: ServiceConfig, library: MediaLibraryIndex, build = { version: 'development', revision: 'source' },
+    runtimeLog?: RuntimeLog) {
+    this.runtimeLog = runtimeLog; this.reports = new ReportLogs(config.logsDir, logPolicy(config.logging).reports);
+    this.config = config; this.library = library; this.build = build;
+    this.measurements = new Measurements(library);
+    this.workspaces = new WorkspaceStore(path.join(config.dataDir, 'workspaces.sqlite'));
     try { if(config.qualityResources)library.qualityAdmission.configure(config.qualityResources);this.annotations = new AnnotationStore(path.join(config.dataDir, 'annotations.sqlite')); }
     catch (error) {
       try { this.workspaces.close(); }
@@ -185,48 +194,15 @@ export class AdminController {
     return this.analysisSettings();
   }
   async logs(before = '', limit = 40): Promise<LogPage> {
-    if (!this.config.logsDir) return { entries: [], next: null, enabled: false };
-    if (before && !logName(before)) throw new AdminError(400, '日志分页位置无效。');
-    // Keep only the next page while walking the directory. Large log folders
-    // do not become an unbounded array or synchronously block media requests.
-    const names: string[] = [];
-    const directory = await fs.opendir(this.config.logsDir).catch(error => { if (error.code === 'ENOENT') return null; throw error; });
-    if (directory) for await (const entry of directory) if (entry.isFile() && logName(entry.name) && (!before || entry.name < before)) {
-      names.push(entry.name); names.sort((a, b) => a > b ? -1 : a < b ? 1 : 0); if (names.length > limit + 1) names.pop();
-    }
-    const entries = [];
-    for (const name of names.slice(0, limit)) {
-      const stat = await fs.lstat(path.join(this.config.logsDir, name)).catch(() => null);
-      if (stat?.isFile() && !stat.isSymbolicLink()) entries.push({ name, size: stat.size, receivedAt: stat.mtime.toISOString(), version: fileVersion(stat) });
-    }
-    return { entries, next: names.length > limit ? names[limit - 1] : null, enabled: true };
+    const page = await this.reports.list(before, limit);
+    if (page.storage) page.storage.runtime = this.runtimeLog?.status() ?? null;
+    return page;
   }
-  private async logFile(name: string, version: string | null) {
-    if (!this.config.logsDir || !logName(name)) throw new AdminError(404, '日志不存在。');
-    const directory = await fs.realpath(this.config.logsDir);
-    const file = path.join(directory, name);
-    const stat = await fs.lstat(file).catch(() => null);
-    if (!stat?.isFile() || stat.isSymbolicLink()) throw new AdminError(404, '日志不存在。');
-    if (version && fileVersion(stat) !== version) throw new AdminError(409, '日志已改变，请重新载入。');
-    return { file, stat };
-  }
-  async readLog(name: string, version: string | null): Promise<LogDocument> {
-    const { file, stat } = await this.logFile(name, version);
-    if (stat.size > 11 * 1024 * 1024) throw new AdminError(413, '日志超过预览大小上限。');
-    const handle = await fs.open(file, 'r');
-    try {
-      if (fileVersion(await handle.stat()) !== fileVersion(stat)) throw new AdminError(409, '日志已改变，请重新载入。');
-      const text = await handle.readFile('utf8');
-      try { return { name, version: fileVersion(stat), document: JSON.parse(text) as unknown }; }
-      catch { throw new AdminError(422, '日志不是有效的 JSON。'); }
-    } finally { await handle.close(); }
-  }
-  async deleteLog(name: string, version: string | null) {
-    if (!version) throw new AdminError(428, '删除需要当前日志版本。');
-    const { file } = await this.logFile(name, version); await fs.unlink(file); return { ok: true };
-  }
+  readLog(name: string, version: string | null): Promise<LogDocument> { return this.reports.read(name, version); }
+  deleteLog(name: string, version: string | null) { return this.reports.delete(name, version); }
   private closing?: Promise<void>;
   close() { return this.closing ??= closeResources('Admin shutdown incomplete', [
+    ['reports', () => this.reports?.close()],
     ['measurements', () => this.measurements.close()],
     // A pending settings write may create the analysis scheduler. Drain that
     // producer before closing its eventual executor; the library waits for both.

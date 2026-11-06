@@ -1,3 +1,4 @@
+import { serverLog } from '../../logging/logger.ts';
 import {taskSummaries,taskEdges} from '../../tasks/summary.ts';
 import {createHash,randomUUID} from 'node:crypto';
 import {mkdirSync} from 'node:fs';
@@ -153,7 +154,7 @@ export class CorrespondenceService{
   }
   cancel(id:string,actor:string){this.available();const plan=this.get(id,actor);if(!terminalCorrespondence(plan.state)){if(plan.state==='queued'){plan.state='cancelled';plan.endedAt=now();}else plan.state='cancelling';this.save(plan);if(this.active?.id===id)this.active.controller.abort(new AdminError(499,'Planning explicitly cancelled.','cancelled'));}return this.get(id,actor);}
   private wake(){if(this.timer||this.closed||this.failed||!this.plans().some(p=>p.state==='queued'))return;this.timer=setTimeout(()=>{this.timer=undefined;this.pump();this.wake();},250);this.timer.unref();}
-  private pump(){if(this.active||this.closed||this.failed)return;const plan=this.plans().find(p=>p.state==='queued');if(!plan)return;const active={id:plan.id,controller:new AbortController(),done:Promise.resolve()};this.active=active;active.done=this.run(plan,active.controller).catch(e=>{this.failed=true;this.fatal=e;console.error('Correspondence planner stopped; ownership retained',e);}).finally(()=>{this.active=undefined;this.wake();});}
+  private pump(){if(this.active||this.closed||this.failed)return;const plan=this.plans().find(p=>p.state==='queued');if(!plan)return;const active={id:plan.id,controller:new AbortController(),done:Promise.resolve()};this.active=active;active.done=this.run(plan,active.controller).catch(e=>{this.failed=true;this.fatal=e;serverLog.error('correspondence-planner-stopped',e);}).finally(()=>{this.active=undefined;this.wake();});}
   private async run(initial:CorrespondencePlan,controller:AbortController){
     let plan=initial;
     if(now()-plan.createdAt>=300000){plan.state='failed';plan.endedAt=now();plan.reason={code:'queue-expired',message:'Planning queue wait exceeded five minutes; no Worker started.'};this.save(plan);return;}

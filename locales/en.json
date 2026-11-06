@@ -539,6 +539,22 @@
     "source": "日志内容会显示在这里",
     "translation": "Log contents appear here"
   },
+  "admin.logRetentionDays": {
+    "source": "{days} 天后自动删除",
+    "translation": "Automatically deleted after {days} days"
+  },
+  "admin.logRetentionManual": {
+    "source": "保留到手动删除",
+    "translation": "Retained until manually deleted"
+  },
+  "admin.logStorageRuntime": {
+    "source": "运行日志：{used} / {limit}，保留 {days} 天，按 {segment} 或每天切段并压缩；丢弃 {dropped} 条。",
+    "translation": "Runtime logs: {used} / {limit}, retained for {days} days; rotated at {segment} or daily and compressed. Dropped records: {dropped}."
+  },
+  "admin.logStorageUploads": {
+    "source": "上传报告：{used} / {limit}，{count} / {max} 份；{retention}，满额拒收。",
+    "translation": "Uploaded reports: {used} / {limit}, {count} / {max} reports; {retention}. New uploads are rejected at capacity."
+  },
   "admin.logType": {
     "source": "日志类型",
     "translation": "Log type"

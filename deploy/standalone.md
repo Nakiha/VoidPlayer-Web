@@ -2,6 +2,8 @@
 
 解压与你的系统匹配的包，直接运行，不需要安装 Node、Bun、FFmpeg，也不需要建立专用系统账号。
 
+Linux/macOS 发布包内主程序固定为 `0755`，目录为 `0755`、静态资源为 `0644`。Linux 建议使用 `tar -xzpf 包文件.tar.gz` 解压并保留权限；正常部署无需再执行 chmod。旧包或经中转复制后丢失执行位时，可用 `chmod 0755 ./voidplayer` 恢复后运行。
+
 ```sh
 ./voidplayer
 ```
@@ -66,9 +68,10 @@ macOS 用户在“钥匙串访问”的“登录”钥匙串中导入 `.crt`，�
 | `data/library.sqlite` | 媒体索引 |
 | `data/workspaces.sqlite` | 用户和保存的工作区 |
 | `data/logs/` | 用户主动上传的诊断日志 |
+| `data/runtime-logs/` | 服务端运行日志；按天或 10 MiB 切段 gzip，默认保留 60 天 / 256 MiB |
 | `data/tls/` | HTTPS 证书与私钥（启用 HTTPS 后生成） |
 
-SQLite 的 WAL、SHM 和进程锁也留在 `data/` 内。不会默认写入用户的 AppData、Application Support、XDG 目录或 `/var/lib`。程序不安装系统服务，也不自动读取启动目录的 `.env` 或 `bunfig.toml`。控制台日志输出到终端，不额外创建服务日志文件。浏览器自身保存的身份和诊断记录仍在浏览器存储里。
+SQLite 的 WAL、SHM 和进程锁也留在 `data/` 内。不会默认写入用户的 AppData、Application Support、XDG 目录或 `/var/lib`。程序不安装系统服务，也不自动读取启动目录的 `.env` 或 `bunfig.toml`。运行日志有界留档并镜像到终端；上传报告默认最多 512 MiB / 1000 份，满额拒收，保留到手动删除。浏览器自身保存的身份和诊断记录仍在浏览器存储里。策略可通过 `logging` 配置，见[日志留档](../docs/server-logging.md)。
 
 整个解压目录放在当前用户可写的位置即可；目录不可写时会报错，不会悄悄改用其他目录。
 

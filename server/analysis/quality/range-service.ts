@@ -1,3 +1,4 @@
+import { serverLog } from '../../logging/logger.ts';
 import {taskSummaries,taskEdges,rangeTaskChildren} from '../../tasks/summary.ts';
 import {ReexecutionLedger} from './reexecution-ledger.ts';
 import type {ReexecutionCreation} from './reexecution-ledger.ts';
@@ -243,7 +244,7 @@ export class QualityRangeService {
   }
   private pump(){
     if(this.active||this.closed||this.fatal)return;const job=this.rows().find(j=>j.state==='queued');if(!job)return;
-    this.active=this.execute(job).catch(e=>{this.fatal=e;console.error('Range service stopped; durable state retained',e);}).finally(()=>{this.active=undefined;this.pump();});
+    this.active=this.execute(job).catch(e=>{this.fatal=e;serverLog.error('quality-range-service-stopped',e);}).finally(()=>{this.active=undefined;this.pump();});
   }
   private async execute(initial:QualityRangeJob){
     let job=initial;job.state='running';job.startedAt=this.now();this.save(job);

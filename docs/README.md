@@ -10,6 +10,7 @@
 | 架构与失败边界 | [架构](architecture.md)、[失败隔离](failure-isolation.md)、[容器恢复](container-recovery.md) |
 | 测试、CI 与报告 | [验证说明](testing.md)、[脚本索引](../scripts/README.md) |
 | 独立程序运行与 HTTPS | [便携运行](../deploy/standalone.md) |
+| 服务端日志与上传报告 | [轮转、配额与保留](server-logging.md) |
 | 用户、访客、分享与工作区 | [身份与分享](identity-and-sharing.md)、[工作区格式](workspace-format.md) |
 | 媒体库与存储 | [媒体库索引](media-library-evolution.md)、[存储位置](library-location.md) |
 | 索引、定位与时间戳 | [渐进索引](progressive-indexing.md)、[统一索引](unified-indexing.md)、[JS 容器与索引](js-container-migration.md)、[FLV 时间线](flv-timeline.md)、[MP4 Range 边界](mp4-range-boundaries.md)、[时间戳兼容](timestamp-compatibility.md) |

@@ -135,6 +135,10 @@ export interface Sources {
   "admin.logDeleted": "日志已从服务器删除。";
   "admin.logJson": "日志 JSON";
   "admin.logPlaceholder": "日志内容会显示在这里";
+  "admin.logRetentionDays": "{days} 天后自动删除";
+  "admin.logRetentionManual": "保留到手动删除";
+  "admin.logStorageRuntime": "运行日志：{used} / {limit}，保留 {days} 天，按 {segment} 或每天切段并压缩；丢弃 {dropped} 条。";
+  "admin.logStorageUploads": "上传报告：{used} / {limit}，{count} / {max} 份；{retention}，满额拒收。";
   "admin.logType": "日志类型";
   "admin.logUploaderLine": "上传者：{user} · {size}";
   "admin.logsDesc": "查看用户上传的诊断日志，或检查服务器收到的请求。";
@@ -1727,6 +1731,10 @@ export interface MessageParameters {
   "admin.logDeleted": {  };
   "admin.logJson": {  };
   "admin.logPlaceholder": {  };
+  "admin.logRetentionDays": { "days": string | number };
+  "admin.logRetentionManual": {  };
+  "admin.logStorageRuntime": { "days": string | number; "dropped": string | number; "limit": string | number; "segment": string | number; "used": string | number };
+  "admin.logStorageUploads": { "count": string | number; "limit": string | number; "max": string | number; "retention": string | number; "used": string | number };
   "admin.logType": {  };
   "admin.logUploaderLine": { "size": string | number; "user": string | number };
   "admin.logsDesc": {  };

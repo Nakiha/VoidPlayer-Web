@@ -11,5 +11,17 @@
   "indexTtlMs": 30000,
   "indexWatch": true,
   "adminUsers": [],
-  "analysisConcurrency": 8
+  "analysisConcurrency": 8,
+  "logging": {
+    "runtime": {
+      "segmentBytes": 10485760,
+      "maxBytes": 268435456,
+      "days": 60
+    },
+    "reports": {
+      "maxBytes": 536870912,
+      "maxFiles": 1000,
+      "days": 0
+    }
+  }
 }

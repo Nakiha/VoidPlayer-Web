@@ -17,10 +17,11 @@ Linux / macOS 可以在程序目录运行：
 
 ```sh
 mkdir -p data
-nohup ./voidplayer > data/console.log 2>&1 &
+./voidplayer --check
+nohup ./voidplayer > /dev/null 2>&1 &
 ```
 
-这里的 `console.log` 是上述命令显式创建的终端输出文件，程序本身不自动创建它。停止时对该进程发送 SIGINT 或 SIGTERM，确认退出后再备份或升级。长期运行时按需清理或轮转这个文件。
+先检查配置，再后台启动。服务运行日志自动写入 `data/runtime-logs/`（自定义数据目录时跟随 `dataDir`），默认按天或 10 MiB 切段 gzip，保留 60 天、最多 256 MiB；无需再把终端镜像无界追加到 `console.log`。配置加载之前的错误需前台运行查看。停止时对进程发送 SIGINT 或 SIGTERM，等待日志排空、压缩及进程退出后再备份或升级。旧手动创建的 `console.log` 不自动清理。策略与 macOS 用户服务迁移见[日志留档](../docs/server-logging.md)。
 
 Windows 可以直接保持程序窗口开启；若需要登录后自动运行，可在任务计划程序中选择该目录内的 `voidplayer.exe`。系统服务、专用账号和外置数据目录都属于可选的运维方式，不是程序运行的前提。
 

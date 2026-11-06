@@ -1,5 +1,6 @@
 import {hashQualityProducer} from '../server/analysis/quality/producer-build.ts';
 import {selectReleaseSources} from './tools/release/source-files.mjs';
+import { normalizeReleasePermissions, verifyReleaseArchivePermissions } from './tools/release/permissions.mjs';
 import { verifyStaticAssets } from './static-assets.mjs';
 import { cp, mkdir, readFile, writeFile, readdir, stat, rm } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -100,7 +101,9 @@ async function hashFolder(folder, prefix = '') {
   }
 }
 await hashFolder(out); await writeFile(path.join(out, 'release.json'), JSON.stringify(manifest, null, 2) + '\n');
+await normalizeReleasePermissions(out, target, executable);
 execFileSync(tar, ['-czf', `${out}.tar.gz`, '-C', path.dirname(out), name]);
+verifyReleaseArchivePermissions(`${out}.tar.gz`, name, target, executable);
 const checksum = createHash('sha256').update(await readFile(`${out}.tar.gz`)).digest('hex');
 await writeFile(`${out}.tar.gz.sha256`, `${checksum}  ${name}.tar.gz\n`);
 await writeFile(path.join(root, 'artifacts/latest-release.json'), JSON.stringify({ directory: out, archive: `${out}.tar.gz`, target }, null, 2) + '\n');

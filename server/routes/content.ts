@@ -1,3 +1,5 @@
+import { REPORT_BODY_BYTES } from '../../shared/service/logging.ts';
+import { serverLog } from '../logging/logger.ts';
 import { requestAuthority } from '../http.ts';
 import { matchesEtag } from '../conditional.ts';
 import { containerFromHeader } from '../../shared/media/containers/container-header.ts';
@@ -106,19 +108,14 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
   if (url.pathname === '/api/logs' && req.method === 'POST') {
     if (!options.logsDir) { sendJson(res, 404, { error: 'log upload not enabled' }); return true; }
     if (!adminWriteAllowed(req, 'log')) { sendJson(res, 403, { error: '请从同源播放器提交日志。' }); return true; }
-    let doc: { schema?: unknown; sessionId?: unknown };
     try {
-      doc = await readAdminJson(req, 10 * 1024 * 1024) as { schema?: unknown; sessionId?: unknown };
-    } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, adminErrorBody(error)); return true; }
-    if (doc?.schema !== 'voidplayer-web-log' || typeof doc.sessionId !== 'string' || !/^[0-9a-zA-Z-]{1,100}$/.test(doc.sessionId)) {
-      sendJson(res, 400, { error: '不是有效的日志文档' });
-      return true;
+      const result = await ctx.reports.upload(() => readAdminJson(req, REPORT_BODY_BYTES) as Promise<Record<string, unknown>>,
+        { id: ctx.requestId, receivedAt: new Date().toISOString(), actorId: ctx.actor?.id ?? (localRequest(req) ? 'local' : null) });
+      sendJson(res, 201, result);
+    } catch (error) {
+      if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, adminErrorBody(error));
+      if (!(error instanceof AdminError)) serverLog.error('report-log-upload-failed', error, { requestId: ctx.requestId });
     }
-    await fs.mkdir(options.logsDir, { recursive: true });
-    const receivedAt = new Date().toISOString();
-    const name = `voidplayer-log-${receivedAt.replace(/[:.]/g, '-')}-${ctx.requestId}-${doc.sessionId.slice(0, 8)}.json`;
-    await fs.writeFile(path.join(options.logsDir, name), JSON.stringify({ ...doc, serverReceipt: { id: ctx.requestId, receivedAt, actorId: ctx.actor?.id ?? (localRequest(req) ? 'local' : null) } }), { flag: 'wx', mode: 0o600 });
-    sendJson(res, 201, { ok: true, name });
     return true;
   }
   if (url.pathname === '/api/library') {

@@ -1,3 +1,4 @@
+import { serverLog } from './logging/logger.ts';
 import { QUERY_CONCURRENCY_LIMIT } from '../shared/media/indexing/semantic-query.ts';
 import { Worker } from 'node:worker_threads';
 import { randomUUID } from 'node:crypto';
@@ -318,10 +319,9 @@ export class FrameIndexJobs {
         else {
           const value = result.value as { built?: boolean; profile?: Record<string, unknown> } | undefined;
           if (value?.built && value.profile) {
-            console.info(JSON.stringify({
-              event: 'frame-index-build-profile', mediaId: request.id, mediaVersion: request.version,
+            serverLog.info('frame-index-build-profile', { mediaId: request.id, mediaVersion: request.version,
               buildId: request.buildId, identity: request.identity, ...value.profile,
-            }));
+            });
           }
           finish(undefined, result.value);
         }

@@ -1,3 +1,4 @@
+import { serverLog } from '../../logging/logger.ts';
 import { TEMPORAL_RESOURCE_LIMITS, type TemporalMetricState, type TemporalPlanSnapshot, type TemporalPrepared } from '../../../shared/analysis/quality/temporal-contract.ts';
 import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, rmSync } from "node:fs";
@@ -538,9 +539,7 @@ export abstract class TemporalScoringService<K extends Kind, I extends Input> {
     active.done = this.execute(job.id, active.controller.signal)
       .catch((error) => {
         this.fatal = error;
-        console.error(
-          `${this.label} service stopped; durable history retained.`,
-        );
+        serverLog.error('temporal-service-stopped', error, { metric: this.label });
       })
       .finally(() => {
         this.active.delete(job.id);

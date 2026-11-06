@@ -307,6 +307,8 @@ GitHub CI 只运行 `--functional-only`，检查载入、真实呈现、解码�
 
 使用 `.bun-version` 对应的 Bun 执行 `npm run release`，可用 `BUN_BIN` 指定可执行路径。`npm run test:release` 校验最新归档并在临时目录解压运行；也可传归档路径。测试服务使用空 PATH，不依赖源码或 node_modules，覆盖配置初始化、不同工作目录、HTTP/HEAD/Range、并发、中断、鉴权、上传日志、退出及升级保留数据。`RELEASE_BENCH=1 npm run test:release` 额外用 WebKit 在独立服务上跑四组真实播放基准，需要同步样片和浏览器。
 
+POSIX 发布权限由打包阶段统一固定：主程序/目录 `0755`、普通资源 `0644`，归档后再次检查包内主程序权限；原生发布回归解压后直接执行，禁止在测试中补 chmod。已有 `node-release-pipeline` 用例增加 `0644` 无执行位与 `0700` 仅构建用户可执行的故障注入，独立核对 tar 内权限、解压权限与真实启动输出；复用原清单，无新增矩阵，使用小型临时脚本与归档，成本约数百毫秒，不依赖媒体/core。
+
 远程 WASM 专项验证包含 MP4/VVC 索引不遍历 mdat、与原 FFmpeg 路径逐像素对比、B 帧/GOP 随机跳转和尾帧、5 GiB 稀疏来源、Range 响应校验与取消。`range-media.test.ts` 使用真实本地 HTTP 服务；`range-reader.test.ts` 使用可控响应检查缓存与 AVIO 桥接，不替代浏览器网络验证。私有 FLV 继续由 `test/flv.test.ts` 和 `test:flv:browser` 覆盖。
 
 ## 专项回归与行为边界

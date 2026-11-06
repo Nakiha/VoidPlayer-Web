@@ -10,6 +10,9 @@ import { MediaLibraryIndex } from '../../server/library.ts';
 import { AdminController } from '../../server/admin.ts';
 import { createMediaServer } from '../../server/app.ts';
 import {DEFAULT_QUALITY_RESOURCES} from '../../shared/service/quality-resources.ts';
+import { RuntimeLog } from '../../server/logging/runtime.ts';
+import { attachRuntimeLog } from '../../server/logging/logger.ts';
+import { gunzipSync } from 'node:zlib';
 
 type Fixture = { root: string; media: string; base: string; library: MediaLibraryIndex; admin: AdminController; config: Awaited<ReturnType<typeof loadConfig>>; logs: Record<string,unknown>[] };
 async function fixture(run: (f: Fixture) => Promise<void>, clientAddress?: () => string) {
@@ -176,6 +179,37 @@ test('log pagination stays bounded and symlinks never grant access outside the l
     assert.equal((await fetch(base + '/api/admin/logs/voidplayer-log-link.json')).status, 404);
   }
   assert.equal((await fetch(base + '/api/admin/logs/..%2Foutside.json')).status, 404);
+}));
+
+test('concurrent HTTP report uploads return 507 at capacity and expose policy without deleting existing reports', async () => fixture(async ({ base, admin }) => {
+  admin.reports.policy.maxFiles = 1;
+  const upload = () => fetch(base + '/api/logs', { method: 'POST', headers: { origin: base, 'content-type': 'application/json', 'x-voidplayer-action': 'log' },
+    body: JSON.stringify({ schema: 'voidplayer-web-log', sessionId: 'quota-test', events: [] }) });
+  const responses = await Promise.all([upload(), upload()]);
+  assert.deepEqual(responses.map(response => response.status).sort(), [201, 507]);
+  const rejected = responses.find(response => response.status === 507)!;
+  assert.equal((await rejected.json()).code, 'log-storage-full');
+  const page = await (await fetch(base + '/api/admin/logs')).json();
+  assert.equal(page.entries.length, 1); assert.equal(page.storage.reports.maxFiles, 1);
+  assert.equal(page.storage.reports.days, 0); assert.equal(page.storage.reports.files, 1);
+}));
+
+test('unexpected admin failures persist stack and request correlation while omitting query contents', async t => fixture(async ({ base, admin, root }) => {
+  const directory = path.join(root, 'runtime-logs');
+  const logs = new RuntimeLog(directory, { segmentBytes: 65536, maxBytes: 196608, days: 14 }); await logs.start();
+  const detach = attachRuntimeLog(logs);
+  try {
+    t.mock.method(admin, 'logs', async () => { throw Error('injected storage failure'); });
+    const response = await fetch(base + '/api/admin/logs?private=secret-query');
+    assert.equal(response.status, 500); const requestId = response.headers.get('x-request-id');
+    await response.text(); await logs.close();
+    const name = (await fs.readdir(directory)).find(name => name.endsWith('.gz'))!;
+    const text = gunzipSync(await fs.readFile(path.join(directory, name))).toString();
+    const entry = JSON.parse(text.trim());
+    assert.equal(entry.requestId, requestId); assert.equal(entry.url, '/api/admin/logs');
+    assert.equal(entry.error.message, 'injected storage failure'); assert.match(entry.error.stack, /admin.test/);
+    assert.equal(text.includes('secret-query'), false);
+  } finally { detach(); await logs.close(); }
 }));
 
 test('analysis settings persist, hot-apply across listeners and reject stale or invalid writes', async () => fixture(async ({ root, base, library, admin, config }) => {

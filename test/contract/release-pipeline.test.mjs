@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm, chmod, stat } from 'node:fs/promises';
 import { execFileSync, spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { releaseVersion, readReleaseIdentity, readBuildIdentity, verifyFrontendIdentity, readReleaseNotes } from '../../scripts/release-version.mjs';
 import { verifyReleaseSet, sha256, releasePlatforms } from '../../scripts/check-release-set.mjs';
 import { stageRelease, verifyDraftReleaseSet } from '../../scripts/stage-release.mjs';
+import { normalizeReleasePermissions, verifyReleaseArchivePermissions, verifyReleaseExecutablePermissions } from '../../scripts/tools/release/permissions.mjs';
 // These structural contracts run in the identity job before npm ci. Keep them
 // dependency-free and fail closed if the workflow's job/needs syntax changes.
 function workflowJobs(source) {
@@ -160,7 +161,7 @@ test('all platform/runtime suites run independently of the compiled package jobs
     assert.doesNotMatch(body, /continue-on-error:/);
   }
   assert.match(runtimeJob.body, /if: always\(\)[\s\S]*name: native-runtime-reports-\$\{\{ matrix\.os \}\}-\$\{\{ matrix\.runtime \}\}[\s\S]*path: \.run\/test-suites\//);
-  const expectedCounts = { node: 28, bun: 43 };
+  const expectedCounts = { node: 29, bun: 44 };
   for (const runtime of ['node', 'bun']) {
     const suite = `ci-native-${runtime}`, command = `run: node scripts/run-tests.mjs ${suite}\n`;
     assert.equal(runtimeJob.body.split(command).length - 1, 1);
@@ -172,6 +173,7 @@ test('all platform/runtime suites run independently of the compiled package jobs
       assert.equal(new Set(cases.map(row => row.id)).size, cases.length);
       assert.ok(cases.every(row => row.required));
       assert.ok(cases.some(row => row.id === `${runtime}-http2`), `${runtime}/${platform} preserves HTTP/2 lifecycle regressions`);
+      assert.ok(cases.some(row => row.id === `${runtime}-server-logging`), `${runtime}/${platform} preserves log rotation and storage regressions`);
       for(const id of [`${runtime}-service-shutdown`,`${runtime}-temporal-scoring-service`]) assert.ok(cases.some(row=>row.id===id),`${runtime}/${platform} preserves real ownership/restart regressions`);
       for (const id of [`${runtime}-native-xpsnr-http`, `${runtime}-analysis-xpsnr-sequence-http`]) {
         const xpsnr = cases.find(row => row.id === id);
@@ -355,6 +357,41 @@ test('packaging rejects stale frontend versions, revisions and release modes', (
   }
   assert.throws(() => verifyFrontendIdentity(null, identity), /Frontend build version/);
 });
+
+test('POSIX releases fix missing execute bits and private umask before archiving; extracted payload runs without chmod',
+  { skip: process.platform === 'win32' }, async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'voidplayer-permissions-'));
+    const name = 'voidplayer-linux-x64', directory = path.join(root, name), executable = path.join(directory, 'voidplayer');
+    try {
+      await mkdir(path.join(directory, 'dist'), { recursive: true });
+      await writeFile(executable, '#!/bin/sh\nprintf permission-ready');
+      await writeFile(path.join(directory, 'dist/index.html'), 'static content');
+      await chmod(directory, 0o700); await chmod(path.join(directory, 'dist'), 0o700);
+      await chmod(executable, 0o644); await chmod(path.join(directory, 'dist/index.html'), 0o600);
+      await assert.rejects(verifyReleaseExecutablePermissions(executable, 'bun-linux-x64'), /0755/);
+      const archive = path.join(root, name + '.tar.gz');
+      execFileSync('tar', ['-czf', archive, '-C', root, name]);
+      assert.throws(() => verifyReleaseArchivePermissions(archive, name, 'bun-linux-x64', 'voidplayer'), /0755/);
+      // Owner-only execution can pass CI on the builder and still fail deployment.
+      await chmod(executable, 0o700);
+      await assert.rejects(verifyReleaseExecutablePermissions(executable, 'bun-linux-x64'), /0755/);
+      await normalizeReleasePermissions(directory, 'bun-linux-x64', 'voidplayer');
+      execFileSync('tar', ['-czf', archive, '-C', root, name]);
+      verifyReleaseArchivePermissions(archive, name, 'bun-linux-x64', 'voidplayer');
+      const extracted = path.join(root, 'extracted'); await mkdir(extracted);
+      // POSIX tar may apply the extracting user's umask. Check the stored modes
+      // independently and use ordinary extraction for the real execution check.
+      execFileSync('tar', ['-xzf', archive, '-C', extracted]);
+      const binary = path.join(extracted, name, 'voidplayer');
+      await verifyReleaseExecutablePermissions(binary, 'bun-linux-x64');
+      assert.equal(execFileSync(binary, [], { encoding: 'utf8' }), 'permission-ready');
+      for (const folder of [directory, path.join(directory, 'dist')]) assert.equal((await stat(folder)).mode & 0o7777, 0o755);
+      assert.equal((await stat(path.join(directory, 'dist/index.html'))).mode & 0o7777, 0o644);
+      await chmod(executable, 0o6755);
+      await normalizeReleasePermissions(directory, 'bun-darwin-arm64', 'voidplayer');
+      await verifyReleaseExecutablePermissions(executable, 'bun-darwin-arm64');
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
 
 const locked = { bunVersion: '1.4.4', coreSource: { revision: 'b'.repeat(40) }, analysisSource: {revision:'c'.repeat(40)} };
 async function makeSet(root        , mutate = (_     , __        ) => {}) {
