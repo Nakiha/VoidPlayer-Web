@@ -44,10 +44,14 @@ try {
   const records=timings.get(fixture.name);if(!records)return;
   const state=await tool(page,'get_review_session'),frame=state.tracks[0].frame;
   const packet=records.find(p=>p.pts===frame.sourcePtsUs);assert.ok(packet,'displayed source PTS matches an independent packet');
-  const expected={pts:`#${records.filter(p=>p.pts<frame.sourcePtsUs).length}`,dts:`#${packet.index}`,time:`${packet.dts/1e6} s`};
+  const seconds=value=>(value/1e6).toFixed(6).replace(/(\.\d{2,}?)0+$/,'$1')+' s';
+  const expected={pts:`#${records.filter(p=>p.pts<frame.sourcePtsUs).length}`,dts:`#${packet.index}`,time:seconds(packet.dts),source:seconds(frame.sourcePtsUs)};
   await page.waitForFunction(expected=>document.getElementById('inspect-pts-index').textContent===expected.pts
    &&document.getElementById('inspect-dts-index').textContent===expected.dts
-   &&document.getElementById('inspect-source-dts').textContent===expected.time,expected);
+   &&document.getElementById('inspect-source-dts').textContent===expected.time
+   &&document.getElementById('inspect-source-pts').textContent===expected.source,expected);
+  for(const id of ['inspect-frame-duration','inspect-frame-delta'])
+   assert.match(await page.locator(`#${id}`).textContent(),/^[+-]?\d+\.\d{2,3} ms$/,'milliseconds retain at least two decimal places');
   assert.equal((await tool(page,'get_review_session')).positionUs,state.positionUs,'inspecting packet timing never seeks');
  };
  for(const f of fixtures) for(const local of [false,true]) {
@@ -68,6 +72,12 @@ try {
     window.metadataEvidence={contexts:0,decoders:0,workers:0,workerUrls:[],blobReads:[]};
     for(const [key,counter] of [['AudioContext','contexts'],['AudioDecoder','decoders']])if(window[key]){const Native=window[key];window[key]=class extends Native{constructor(...args){super(...args);window.metadataEvidence[counter]++;}};}
     const NativeWorker=Worker;window.Worker=class extends NativeWorker{constructor(...args){super(...args);window.metadataEvidence.workers++;window.metadataEvidence.workerUrls.push(String(args[0]));this.addEventListener('message',e=>{if(e.data.type==='metadata-test-read')window.metadataEvidence.blobReads.push(e.data.read);});}};
+    window.metadataRankGate={hold:false,pending:[]};
+    const postMessage=Worker.prototype.postMessage;
+    Worker.prototype.postMessage=function(message,...args){
+     const send=()=>postMessage.call(this,message,...args);
+     if(message.type==='analysis-rank'&&window.metadataRankGate.hold)window.metadataRankGate.pending.push(send);else send();
+    };
    });
    await page.context().route(/\/assets\/(?:ffmpeg|packet)-worker-[^/]+\.js$/,async route=>{
     const response=await route.fetch();const prefix=`const spans=new WeakMap();const slice=Blob.prototype.slice;Blob.prototype.slice=function(start=0,end=this.size,...args){const part=slice.call(this,start,end,...args);spans.set(part,{offset:(spans.get(this)?.offset??0)+(start<0?Math.max(0,this.size+start):start),length:part.size});return part;};const report=blob=>self.postMessage({type:'metadata-test-read',read:spans.get(blob)??{offset:0,length:blob.size}});if(typeof FileReaderSync!=='undefined'){const Native=FileReaderSync;self.FileReaderSync=class extends Native{readAsArrayBuffer(blob){report(blob);return super.readAsArrayBuffer(blob);}}}const arrayBuffer=Blob.prototype.arrayBuffer;Blob.prototype.arrayBuffer=function(){report(this);return arrayBuffer.call(this);};\n`;
@@ -92,6 +102,24 @@ try {
      ['PTS序','DTS序','片内 PTS','源 PTS','源 DTS','帧时长','相对游标']);
     assert.equal(await page.locator('#toggle-analysis').getAttribute('aria-expanded'),'false','frame facts work without opening analysis');
     await checkFrameTiming(page,f);
+    if(f.name==='audio.mp4'&&!local){
+     // Hold the real packet lookup across a seek. Every displayed timing field
+     // must stay on the previous confirmed frame until its successor is ready.
+     const confirmed=await page.locator('[data-frame-timing] dd').allTextContents();
+     await page.evaluate(()=>{window.metadataRankGate.hold=true;});
+     await tool(page,'seek_review',{ptsUs:500000});
+     await page.waitForFunction(()=>window.metadataRankGate.pending.length===1);
+     assert.deepEqual(await page.locator('[data-frame-timing] dd').allTextContents(),confirmed,
+      'pending packet lookup preserves one complete timing snapshot without placeholders');
+     await tool(page,'seek_review',{ptsUs:1000000});
+     await page.evaluate(()=>window.metadataRankGate.pending.shift()());
+     await page.waitForFunction(()=>window.metadataRankGate.pending.length===1);
+     assert.deepEqual(await page.locator('[data-frame-timing] dd').allTextContents(),confirmed,
+      'late rank from the earlier seek cannot publish mixed frame timing');
+     await page.evaluate(()=>{window.metadataRankGate.hold=false;window.metadataRankGate.pending.splice(0).forEach(send=>send());});
+     await checkFrameTiming(page,f);
+     await tool(page,'seek_review',{ptsUs:0});await checkFrameTiming(page,f);
+    }
     if(f.channels===6)assert.match(await page.locator('[data-metadata-group=audio]').innerText(),/当前播放路径不支持/);
     const before=await page.evaluate(()=>({reads:window.metadataEvidence.blobReads,workers:window.metadataEvidence.workers,track:window.voidPlayer.getState().tracks[0].sourceGen})),beforeTraffic=structuredClone(traffic);
     await page.evaluate(()=>{window.metadataNodes=[...document.querySelectorAll('[data-metadata-group] dl')];});
@@ -117,8 +145,38 @@ try {
     await page.locator('[data-frame-timing]').scrollIntoViewIfNeeded();
     await page.locator('#inspector-panel').screenshot({path:path.join(artifacts,'current-frame-timing.png')});
    }
-   await tool(page,'seek_review',{ptsUs:0});await page.locator('#play').click();
+   await tool(page,'seek_review',{ptsUs:0});
+   if(open&&f.bframes&&!local){
+    await checkFrameTiming(page,f);
+    await page.evaluate(()=>{
+     const timing=document.querySelector('[data-frame-timing]');
+     window.metadataTimingSamples=[];
+     window.metadataTimingObserver=new MutationObserver(()=>window.metadataTimingSamples.push([...timing.querySelectorAll('dd')].map(dd=>dd.textContent)));
+     window.metadataTimingObserver.observe(timing,{childList:true,characterData:true,subtree:true});
+    });
+   }
+   await page.locator('#play').click();
    await page.waitForFunction(()=>{const s=window.voidPlayer.getState();return !s.playing&&s.positionUs>1800000;});
+   if(open&&f.bframes&&!local){
+    await checkFrameTiming(page,f);
+    const samples=await page.evaluate(()=>{window.metadataTimingObserver.disconnect();return window.metadataTimingSamples;});
+    assert.ok(new Set(samples.map(row=>row[3])).size>=10,'real playback exercises multiple confirmed timing snapshots');
+    const packets=timings.get(f.name);
+    for(const row of samples){
+     assert.ok([row[0],row[1],row[3],row[4]].every(value=>value!=='—'),'playback never flashes pending placeholders');
+     const pts=Math.round(parseFloat(row[3])*1e6),packet=packets.find(p=>p.pts===pts);
+     assert.ok(packet,'timing snapshot has a real source packet');
+     assert.equal(row[0],`#${packets.filter(p=>p.pts<pts).length}`);
+     assert.equal(row[1],`#${packet.index}`);
+     assert.equal(Math.round(parseFloat(row[4])*1e6),packet.dts,'source DTS and both indices describe the displayed PTS');
+     assert.match(row[3],/^-?\d+\.\d{2,6} s$/);
+    }
+    const performance=await page.locator('#inspect-playback dd').allTextContents();
+    assert.match(performance[0],/^\d+\.\d{2}×$/);
+    assert.match(performance[1],/^\d+\.\d{2} fps$/);
+    assert.match(performance[3],/^\d+\.\d{2} ms$/);
+    console.log(`PASS ${engine}: ${samples.length} playback timing snapshots without placeholders or mismatched packet facts`);
+   }
    const state=await tool(page,'get_review_session');assert.equal(state.audioSlot,null);assert.equal(state.error,null);assert.ok(state.tracks[0].frame,'actual decoded frame survives inspection and seeks');
    const observed=await page.evaluate(()=>window.metadataEvidence);assert.equal(observed.contexts,0);assert.equal(observed.decoders,0);assert.ok(observed.workerUrls.every(url=>!url.includes('cached-audio')&&!url.includes('metadata')),'no audio/metadata parser workers');assert.deepEqual(errors,[]);
    pair.push({open,traffic:structuredClone(traffic),...observed,metadata:state.tracks[0].trackMetadata});

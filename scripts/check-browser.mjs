@@ -1198,7 +1198,7 @@ try {
     assert.match(values[0], /^\d+\.\d{2}×$/);
     assert.ok(parseFloat(values[1]) > 0, 'playing the track records presented frames');
     assert.match(values[2], /^\d+$/);
-    assert.match(values[3], /^\d+\.\d ms$/);
+    assert.match(values[3], /^\d+\.\d{2} ms$/);
     assert.match(values[4], /^\d+ \/ \d+$/);
     await page.screenshot({ path: path.join(screenshots, `${browserName}-dolby-browser-color.png`) });
     await page.locator('#inspect-playback').scrollIntoViewIfNeeded();

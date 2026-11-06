@@ -21,6 +21,10 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const text = (tag: string, value: string, className = '') => {
   const el = document.createElement(tag); el.textContent = value; el.className = className; return el;
 };
+const inspectorNumberOptions = { minimumFractionDigits: 2, useGrouping: false };
+const secondsFormat = new Intl.NumberFormat('en-US', { ...inspectorNumberOptions, maximumFractionDigits: 6 });
+const millisecondsFormat = new Intl.NumberFormat('en-US', { ...inspectorNumberOptions, maximumFractionDigits: 3 });
+const performanceFormat = new Intl.NumberFormat('en-US', { ...inspectorNumberOptions, maximumFractionDigits: 2 });
 
 /** Track inspector + subtrack dock. Owns cursor nodes and dock signatures. */
 export function createTracksPane(shared: WorkbenchShared) {
@@ -30,6 +34,7 @@ export function createTracksPane(shared: WorkbenchShared) {
   let annotationSignature = '';
   let frameRank: { key: string; result: AnalysisRank | { reason: string } } | undefined;
   let frameRankPending = false;
+  let frameTimingSource = '';
   const cursors = new Map<Slot, { current: HTMLElement; hover: HTMLElement; startUs: number; endUs: number }>();
 
   function hideSeekPreview() { $('subtrack-preview').hidden = true; for (const c of cursors.values()) c.hover.hidden = true; }
@@ -141,46 +146,63 @@ export function createTracksPane(shared: WorkbenchShared) {
     [t(msg('tracks.frameDuration', '帧时长')), 'inspect-frame-duration'],
     [t(msg('tracks.relativeToPlayhead', '相对游标')), 'inspect-frame-delta'],
   ];
+  const frameSourceKey = (track: WorkbenchState['tracks'][number]) => JSON.stringify([
+    track.slot, track.id, track.sourceGen, track.offsetUs,
+  ]);
   const frameRankKey = (track: WorkbenchState['tracks'][number]) => JSON.stringify([
-    track.slot, track.id, track.sourceGen, track.offsetUs, track.frame?.ptsUs ?? null, track.indexState,
+    frameSourceKey(track), track.frame?.ptsUs ?? null, track.indexState,
     session.getAnalysisCapabilities().find(entry => entry.slot === track.slot)?.capability.indexState,
   ]);
   function renderFrameRank(result?: AnalysisRank | { reason: string }) {
     const hit = result && 'rank' in result && result.ordinal != null ? result : undefined;
     $('inspect-pts-index').textContent = hit ? `#${hit.rank}${hit.complete ? '' : '~'}` : '—';
     $('inspect-dts-index').textContent = hit ? `#${hit.ordinal}${hit.complete ? '' : '~'}` : '—';
-    $('inspect-source-dts').textContent = hit?.sourceDtsUs == null ? '—' : `${hit.sourceDtsUs / 1e6} s`;
+    $('inspect-source-dts').textContent = hit?.sourceDtsUs == null ? '—' : `${secondsFormat.format(hit.sourceDtsUs / 1e6)} s`;
   }
-  function updateFrameRank(selected: WorkbenchState['tracks'][number]) {
+  function renderFrameTiming(selected: WorkbenchState['tracks'][number], positionUs: number, result?: AnalysisRank | { reason: string }) {
+    const frame = selected.failure ? undefined : selected.frame;
+    frameTimingSource = frame ? frameSourceKey(selected) : '';
+    $('inspect-pts').textContent = frame ? formatTime(frame.ptsUs) : '—';
+    $('inspect-source-pts').textContent = frame ? `${secondsFormat.format(frame.sourcePtsUs / 1e6)} s` : '—';
+    $('inspect-frame-duration').textContent = frame ? `${millisecondsFormat.format(frame.durationUs / 1000)} ms` : '—';
+    const delta = frame ? trackTiming(selected, positionUs).frameDeltaUs : null;
+    $('inspect-frame-delta').textContent = delta == null ? '—' : `${delta > 0 ? '+' : ''}${millisecondsFormat.format(delta / 1000)} ms`;
+    renderFrameRank(frame ? result : undefined);
+  }
+  function updateFrameTiming(state: WorkbenchState, selected: WorkbenchState['tracks'][number]) {
     const key = frameRankKey(selected), cached = frameRank?.key === key ? frameRank.result : undefined;
-    renderFrameRank(selected.frame && !selected.failure ? cached : undefined);
+    // Keep one complete frame snapshot while the next rank is pending. Source
+    // replacement, offset changes and missing/failed frames invalidate it at once.
+    if (cached || frameTimingSource !== frameSourceKey(selected) || !selected.frame || selected.failure)
+      renderFrameTiming(selected, state.positionUs, cached);
     if (!view.panels.inspector || !selected.frame || selected.failure || shared.lifecyle.signal.aborted || frameRankPending
       || cached && (!('rank' in cached) || cached.complete)) return;
     frameRankPending = true;
     // Reuse the analysis panel's packet lookup, without starting native metadata
     // enumeration. One request in flight; frame changes only queue the latest.
-    void session.rankAnalysisFrame(selected.slot, selected.frame.ptsUs + selected.offsetUs, 'pts', { cachedOnly: true }).then(result => {
-      if (shared.lifecyle.signal.aborted) return;
-      const current = session.getState().tracks.find(track => track.slot === view.selected);
-      if (!current || frameRankKey(current) !== key) return;
-      frameRank = { key, result };
-      if (view.panels.inspector) renderFrameRank(result);
-    }).catch(() => { /* A disposed source leaves the current frame's placeholders intact. */ }).finally(() => {
-      frameRankPending = false;
-      if (shared.lifecyle.signal.aborted || !view.panels.inspector) return;
-      const current = session.getState().tracks.find(track => track.slot === view.selected);
-      if (current && frameRankKey(current) !== key) updateFrameRank(current);
-    });
+    void session.rankAnalysisFrame(selected.slot, selected.frame.ptsUs + selected.offsetUs, 'pts', { cachedOnly: true })
+      .catch(() => ({ reason: 'unavailable' })).then(result => {
+        if (shared.lifecyle.signal.aborted) return;
+        const state = session.getState(), current = state.tracks.find(track => track.slot === view.selected);
+        if (!current || frameRankKey(current) !== key) return;
+        frameRank = { key, result };
+        if (view.panels.inspector) renderFrameTiming(current, state.positionUs, result);
+      }).finally(() => {
+        frameRankPending = false;
+        if (shared.lifecyle.signal.aborted || !view.panels.inspector) return;
+        const state = session.getState(), current = state.tracks.find(track => track.slot === view.selected);
+        if (current && frameRankKey(current) !== key) updateFrameTiming(state, current);
+      });
   }
   function renderPlayback(state: WorkbenchState, selected: WorkbenchState['tracks'][number]) {
     const sample = state.playback;
     const playback = sample && sample.sourceGenerations[selected.slot] === selected.sourceGen && sample.wallMs > 0 ? sample : null;
     const track = playback?.tracks[selected.slot], buffer = playback?.buffers[selected.slot];
     const values = [
-      playback ? `${playback.speed.toFixed(2)}×` : '—',
-      track ? `${track.fps.toFixed(1)} fps` : '—',
+      playback ? `${performanceFormat.format(playback.speed)}×` : '—',
+      track ? `${performanceFormat.format(track.fps)} fps` : '—',
       track ? String(track.dropped) : '—',
-      track ? `${track.p95GapMs.toFixed(1)} ms` : '—',
+      track ? `${performanceFormat.format(track.p95GapMs)} ms` : '—',
       buffer ? `${buffer.frames} / ${buffer.capacity}` : '—',
     ];
     const cells = $('inspect-playback').querySelectorAll('dd');
@@ -204,6 +226,7 @@ export function createTracksPane(shared: WorkbenchShared) {
         button.dataset.tooltip = track.name; button.onclick = () => shared.select(track.slot); list.append(button);
       }
       const properties = $('track-properties'); properties.replaceChildren();
+      frameTimingSource = '';
       if (!selected) properties.append(text('p', t(msg("tracks.noTracksLoaded", "尚未载入轨道")), 'panel-empty'));
       else {
         const title = text('h3', t(msg('tracks.track', '轨道 {p0}'), { p0: selected.slot })); title.dataset.inspectorTitle = '';
@@ -241,12 +264,7 @@ export function createTracksPane(shared: WorkbenchShared) {
       }
     }
     if (selected) {
-      $('inspect-pts').textContent = selected.frame ? formatTime(selected.frame.ptsUs) : '—';
-      $('inspect-source-pts').textContent = selected.frame ? `${selected.frame.sourcePtsUs / 1e6} s` : '—';
-      $('inspect-frame-duration').textContent = selected.frame ? `${+(selected.frame.durationUs / 1000).toFixed(3)} ms` : '—';
-      const delta = trackTiming(selected, state.positionUs).frameDeltaUs;
-      $('inspect-frame-delta').textContent = delta == null ? '—' : `${delta > 0 ? '+' : ''}${+(delta / 1000).toFixed(3)} ms`;
-      updateFrameRank(selected);
+      updateFrameTiming(state, selected);
       renderPlayback(state, selected);
     }
   }
