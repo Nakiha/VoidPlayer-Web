@@ -83,10 +83,19 @@ export function createSourcesPane(shared: WorkbenchShared) {
     if (page) prefetchThumbnailStatuses(page.entries, 60, page.thumbnailEpoch);
     if (page && (rootsChanged || recentRevision !== page.revision)) { recentRevision = page.revision; void refreshRecent(); }
     renderSources();
-  }, lifecyle.signal, recent => {
-    if (recent) void refreshRecent();
+  }, lifecyle.signal, home => {
+    if (home) void refreshRecent();
     renderSources();
   }, shared.notify, () => !document.getElementById('empty-A')!.hidden && catalog.referencesToResolve().length > 0);
+  const group = (id: string, label: string) => {
+    const section = document.createElement('details'); section.className = 'library-root-group'; section.id = id; section.open = true;
+    const summary = document.createElement('summary'); summary.innerHTML = icon('caretRight');
+    summary.append(text('span', label, 'source-group-label'));
+    const body = document.createElement('div'); body.className = 'source-group-items'; section.append(summary, body);
+    return { section, body };
+  };
+  const mountsGroup = group('library-mounts', t(msg('libraryBrowser.library', '媒体库')));
+  const recentGroup = group('library-recents', t(msg('shell.recentlyOpened', '最近打开')));
   // Source key -> thumbnail cache key, so completion can fill the placeholder
   // <img> of the matching row in place. Bounded: rows re-register on render.
   const thumbKeyBySource = new Map<string, string>();
@@ -483,7 +492,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     const signature = JSON.stringify(items.map(item => [item.key, fingerprintOfStart(item)]));
     if (signature === startSignature) return;
     startSignature = signature;
-    const existing = new Map([...list.children].map(node => [(node as HTMLElement).dataset.sourceKey, node as HTMLElement]));
+    const existing = new Map([...list.querySelectorAll<HTMLElement>('[data-source-key]')].map(node => [node.dataset.sourceKey, node]));
     const rows: HTMLElement[] = [];
     for (const item of items) {
       const fingerprint = fingerprintOfStart(item);
@@ -506,25 +515,30 @@ export function createSourcesPane(shared: WorkbenchShared) {
   }
 
   function renderSources() {
-    const recent = libraryBrowser.isRecent();
-    const query = (recent ? $<HTMLInputElement>('source-search').value.trim() : libraryBrowser.filter()).toLocaleLowerCase();
-    const scoped = (recent ? catalog.recent() : catalog.available()).filter(item => item.name.toLocaleLowerCase().includes(query));
+    const home = libraryBrowser.isRoot();
+    const query = libraryBrowser.filter().toLocaleLowerCase();
+    const pool = home ? catalog.recent() : catalog.available();
+    if (home) for (const item of catalog.available()) {
+      if (item.file && !item.library && !pool.some(current => current.key === item.key)) pool.push(item);
+    }
+    const scoped = pool.filter(item => item.name.toLocaleLowerCase().includes(query));
     // Local files live in their own section pinned above the activity panel.
-    const local = scoped.filter(item => item.file && !item.library);
-    const items = scoped.filter(item => !(item.file && !item.library));
+    const local = home ? [] : scoped.filter(item => item.file && !item.library);
+    const items = home ? scoped : scoped.filter(item => !(item.file && !item.library));
     const page = libraryBrowser.page();
-    const folders = !recent ? page?.directories ?? [] : [];
+    const folders = home ? [] : page?.directories ?? [];
+    const mounts = home ? (page?.roots ?? []).filter(mount => mount.name.toLocaleLowerCase().includes(query)) : [];
     const loadingKey = loadingSource?.key ?? null;
     const failedKey = sourceLoadError?.key ?? null;
     // Only source and navigation state affect the list. A seek must not
     // disable every row or rebuild any of their action controls.
     const sourceSlots = (item: SourceItem) => session.getState().tracks.filter(track => sourceInUse(item, [track])).map(track => track.slot);
-    const signature = JSON.stringify([recent, query, loadingKey, loadingConfirmed, loadingConfirmed ? loadingSource?.stage ?? 'loading' : null, failedKey, sourceLoadError?.message ?? null, folders, page?.roots.map(root => [root.id, root.state]), items.map(item => [item.key, !!item.file, item.library?.version, item.library?.state, item.libraryProblem, item.openedAt ?? null, sourceSlots(item)]), local.map(item => [item.key, item.openedAt ?? null, sourceSlots(item)])]);
+    const signature = JSON.stringify([home, query, loadingKey, loadingConfirmed, loadingConfirmed ? loadingSource?.stage ?? 'loading' : null, failedKey, sourceLoadError?.message ?? null, folders, mounts.map(mount => [mount.id, mount.name, mount.state]), page?.roots.map(root => [root.id, root.name, root.state]), items.map(item => [item.key, !!item.file, item.library?.version, item.library?.state, item.libraryProblem, item.openedAt ?? null, sourceSlots(item)]), local.map(item => [item.key, item.openedAt ?? null, sourceSlots(item)])]);
     const list = $('source-list');
     // Stable per-row identity: thumbnail presence/URLs must NOT rebuild rows.
     // Volatile fields (scannedAt, thumbnail flag, full roots objects) are
     // excluded; completion patches the placeholder <img> via notify.
-    const stableRoots = page?.roots.map(root => [root.id, root.state]);
+    const stableRoots = page?.roots.map(root => [root.id, root.name, root.state]);
     const fingerprintOf = (item: SourceItem) => JSON.stringify([!!item.file, item.library?.id ?? item.libraryId ?? null, item.library?.version ?? item.version ?? null, item.library?.state ?? null, item.libraryProblem ?? null, item.library?.root ?? null, item.library?.rootId ?? null, item.name, item.size, item.lastModified, item.openedAt ?? null, loadingKey === item.key && loadingConfirmed ? loadingSource?.stage ?? 'loading' : null, failedKey === item.key ? sourceLoadError?.message : null, sourceSlots(item), stableRoots]);
     const syncActions = (container: HTMLElement, pool: SourceItem[]) => {
       const byKey = new Map(pool.map(entry => [entry.key, entry]));
@@ -541,12 +555,12 @@ export function createSourcesPane(shared: WorkbenchShared) {
     };
     if (signature !== sourceSignature) {
       sourceSignature = signature;
-      const existing = new Map([...list.children].map(node => [(node as HTMLElement).dataset.sourceKey, node as HTMLElement]));
+      const existing = new Map([...list.querySelectorAll<HTMLElement>('[data-source-key]')].map(node => [node.dataset.sourceKey, node]));
       const rows: HTMLElement[] = [];
-      const reuse = (key: string, fingerprint: string, create: () => HTMLElement) => {
+      const reuse = (key: string, fingerprint: string, create: () => HTMLElement, target = rows) => {
         const old = existing.get(key);
         const row = old?.dataset.fingerprint === fingerprint ? old : create();
-        row.dataset.sourceKey = key; row.dataset.fingerprint = fingerprint; rows.push(row);
+        row.dataset.sourceKey = key; row.dataset.fingerprint = fingerprint; target.push(row);
       };
       for (const folder of folders) {
         reuse(`folder:${folder.rootId}/${folder.path}`, JSON.stringify(folder), () => {
@@ -558,11 +572,33 @@ export function createSourcesPane(shared: WorkbenchShared) {
           row.setAttribute('aria-label', t(msg("sources.openFolder", "打开目录：{name}"), { name: folder.name })); row.append(glyph, info); row.onclick = () => libraryBrowser.navigate(folder.rootId, folder.path); return row;
         });
       }
-      for (const item of items) reuse(item.key, fingerprintOf(item), () => sourceRow(item));
-      if (!items.length && !folders.length) reuse('empty', `${recent ? 'recent' : 'available'}/${query}`, () => text('p', query ? t(msg("sources.noMatch", "没有匹配的片源")) : recent ? t(msg("sources.noRecentShort", "暂无最近片源")) : t(msg("sources.emptyDirectory", "当前目录没有片源")), 'panel-empty'));
-      // Keep unchanged nodes and their focus/scroll anchors through refreshes.
-      rows.forEach((row, index) => { if (list.children[index] !== row) list.insertBefore(row, list.children[index] ?? null); });
-      while (list.children.length > rows.length) list.lastElementChild!.remove();
+      const reconcile = (container: HTMLElement, children: HTMLElement[]) => {
+        children.forEach((row, index) => { if (container.children[index] !== row) container.insertBefore(row, container.children[index] ?? null); });
+        while (container.children.length > children.length) container.lastElementChild!.remove();
+      };
+      if (home) {
+        const mountsRows: HTMLElement[] = [], recentRows: HTMLElement[] = [];
+        for (const mount of mounts) reuse(`mount:${mount.id}`, JSON.stringify([mount.id, mount.name, mount.state]), () => {
+          const row = document.createElement('button'); row.type = 'button'; row.className = 'source-row library-folder library-mount';
+          row.dataset.rootId = mount.id; row.setAttribute('aria-label', t(msg('libraryBrowser.openMount', '打开媒体库：{name}'), { name: mount.name }));
+          const glyph = document.createElement('span'); glyph.innerHTML = icon('storage');
+          const info = text('span', '', 'source-info'); info.append(text('span', mount.name, 'filename'),
+            text('span', mount.state === 'offline' ? t(msg('sources.storageOffline', '存储离线')) : t(msg('libraryBrowser.library', '媒体库')), 'source-meta'));
+          row.append(glyph, info); row.onclick = () => libraryBrowser.navigate(mount.id, ''); return row;
+        }, mountsRows);
+        if (!mounts.length) reuse('mounts-empty', query, () => text('p', query ? t(msg('sources.noMatch', '没有匹配的片源'))
+          : t(msg('libraryBrowser.noMounts', '暂无挂载的媒体库')), 'panel-empty'), mountsRows);
+        for (const item of items) reuse(item.key, fingerprintOf(item), () => sourceRow(item), recentRows);
+        if (!items.length) reuse('recent-empty', query, () => text('p', query ? t(msg('sources.noMatch', '没有匹配的片源'))
+          : t(msg('sources.noRecentShort', '暂无最近片源')), 'panel-empty'), recentRows);
+        reconcile(mountsGroup.body, mountsRows); reconcile(recentGroup.body, recentRows);
+        rows.push(mountsGroup.section, recentGroup.section);
+      } else {
+        for (const item of items) reuse(item.key, fingerprintOf(item), () => sourceRow(item));
+        if (!items.length && !folders.length) reuse('empty', query, () => text('p', query ? t(msg('sources.noMatch', '没有匹配的片源'))
+          : t(msg('sources.emptyDirectory', '当前目录没有片源')), 'panel-empty'));
+      }
+      reconcile(list, rows);
       syncActions(list, items);
       const localList = $('local-list');
       $('local-sources').hidden = local.length === 0;
@@ -619,13 +655,13 @@ export function createSourcesPane(shared: WorkbenchShared) {
 
   /** Start a layout restore without awaiting indexing; finish with finishRestore. */
   function beginRestore(sources: { tab: string; query: string; root: string; directory: string; search: string; all: boolean; recent?: boolean }) {
-    $<HTMLInputElement>('source-search').value = sources.query;
+    if (sources.recent || sources.tab === 'recent') recentGroup.section.open = true;
     return libraryBrowser.restore({ ...sources, recent: sources.recent ?? sources.tab === 'recent' });
   }
 
   async function finishRestore(browsing: Promise<unknown>) {
     await browsing;
-    if (libraryBrowser.isRecent()) await refreshRecent();
+    if (libraryBrowser.isRoot()) await refreshRecent();
   }
 
   let locateRequest: AbortController | undefined;
@@ -643,11 +679,11 @@ export function createSourcesPane(shared: WorkbenchShared) {
       catch (error) { if (signal.aborted) return; throw error; }
       if (signal.aborted || session.getState().tracks.find(current => current.slot === slot)?.source?.id !== track.source.id) return;
       if (!entry || entry.state === 'missing') { shared.notify(t(msg('sources.locateUnavailable', '片源已不在媒体库中。'))); return; }
-      setSearching(false, false);
+      libraryBrowser.clearSearch();
       if (!await libraryBrowser.reveal(entry) || signal.aborted || session.getState().tracks.find(current => current.slot === slot)?.source?.id !== track.source.id) return;
       key = sourceKey(entry, entry.id);
     } else {
-      setSearching(false, false); renderSources(); key = sourceKey(track);
+      libraryBrowser.clearSearch(); recentGroup.section.open = true; renderSources(); key = sourceKey(track);
     }
     const row = [...document.querySelectorAll<HTMLElement>('#source-list .source-row, #local-list .source-row')].find(row => row.dataset.sourceKey === key);
     if (!row || signal.aborted) return;
@@ -671,26 +707,8 @@ export function createSourcesPane(shared: WorkbenchShared) {
   lifecyle.signal.addEventListener('abort', () => { locateRequest?.abort(); clearTimeout(locateHighlight); }, { once: true });
 
   function sourcesLayout() {
-    return { ...libraryBrowser.snapshot(), tab: (libraryBrowser.isRecent() ? 'recent' : 'available') as 'recent' | 'available', query: $<HTMLInputElement>('source-search').value };
-  }
-
-  function setSearching(open: boolean, restoreFocus = true) {
-    const tools = $('source-tools');
-    const field = $('source-search-field');
-    const input = $<HTMLInputElement>('source-search');
-    const toggle = $('sources-search-toggle');
-    if (!open && input.value) {
-      input.value = '';
-      if (!libraryBrowser.isRecent()) libraryBrowser.search('');
-      renderSources();
-    }
-    tools.classList.toggle('searching', open);
-    field.inert = !open;
-    field.setAttribute('aria-hidden', String(!open));
-    tools.querySelector<HTMLElement>('.source-navigation-rail')!.inert = open;
-    libraryBrowser.setSearchOpen(open);
-    if (open) input.focus();
-    else if (restoreFocus) toggle.focus();
+    const snapshot = libraryBrowser.snapshot();
+    return { ...snapshot, tab: 'available' as const, query: snapshot.search };
   }
 
   const scrollbar = installSourceScrollbar($('source-list'), $('source-scrollbar'), $('source-scrollbar-thumb'), lifecyle.signal);
@@ -711,9 +729,6 @@ export function createSourcesPane(shared: WorkbenchShared) {
     showIdentity();
     refreshIdentity = showIdentity;
     window.addEventListener('voidplayer-identity-change', showIdentity, { signal: lifecyle.signal });
-    $('source-search').oninput = () => { if (!libraryBrowser.isRecent()) libraryBrowser.search($<HTMLInputElement>('source-search').value); renderSources(); };
-    $('sources-search-toggle').onclick = () => setSearching(!$('source-tools').classList.contains('searching'));
-    $('source-search').onkeydown = event => { if (event.key === 'Escape') { event.preventDefault(); setSearching(false); } };
     $('source-files').onchange = () => {
       const input = $<HTMLInputElement>('source-files');
       const files = [...input.files ?? []];
@@ -754,16 +769,24 @@ export function createSourcesPane(shared: WorkbenchShared) {
     for(const row of document.querySelectorAll<HTMLElement>('.source-row[data-source-key], .start-recent-row[data-source-key]')) {
       const item=items.get(row.dataset.sourceKey!); if(item)patch(row,row.classList.contains('start-recent-row')?startRow(item,true):sourceRow(item,true));
     }
-    const recent=libraryBrowser.isRecent(),query=$<HTMLInputElement>('source-search').value.trim();
-    const empty=$('source-list').querySelector('.panel-empty');
-    if(empty)empty.textContent=query?t(msg("sources.noMatch", "没有匹配的片源")):recent?t(msg("sources.noRecentShort", "暂无最近片源")):t(msg("sources.emptyDirectory", "当前目录没有片源"));
+    mountsGroup.section.querySelector('.source-group-label')!.textContent = t(msg('libraryBrowser.library', '媒体库'));
+    recentGroup.section.querySelector('.source-group-label')!.textContent = t(msg('shell.recentlyOpened', '最近打开'));
+    const home=libraryBrowser.isRoot(),query=libraryBrowser.filter();
+    for (const empty of $('source-list').querySelectorAll<HTMLElement>('.panel-empty')) {
+      empty.textContent = query ? t(msg('sources.noMatch', '没有匹配的片源'))
+        : empty.dataset.sourceKey === 'mounts-empty' ? t(msg('libraryBrowser.noMounts', '暂无挂载的媒体库'))
+        : home ? t(msg('sources.noRecentShort', '暂无最近片源')) : t(msg('sources.emptyDirectory', '当前目录没有片源'));
+    }
     const startEmpty=document.querySelector('.start-library-empty > span:last-child');
     if(startEmpty)startEmpty.textContent=t(msg("sources.noRecentVideos", "还没有最近打开的视频"));
     for(const row of document.querySelectorAll<HTMLElement>('.library-folder')) {
       const name=row.querySelector('.filename')?.textContent??'';
-      row.setAttribute('aria-label',t(msg("sources.openFolder", "打开目录：{name}"),{name}));
+      row.setAttribute('aria-label', row.classList.contains('library-mount') ? t(msg('libraryBrowser.openMount', '打开媒体库：{name}'), {name})
+        : t(msg("sources.openFolder", "打开目录：{name}"),{name}));
       const meta=row.querySelector('.source-meta');
-      if(meta)meta.textContent=t(msg("sources.folderMetaLibrary", "媒体库 · {root}"),{root:libraryBrowser.page()?.roots.find(root=>root.id===row.dataset.rootId)?.name??''});
+      if (meta && row.classList.contains('library-mount')) meta.textContent = libraryBrowser.page()?.roots.find(root => root.id === row.dataset.rootId)?.state === 'offline'
+        ? t(msg('sources.storageOffline', '存储离线')) : t(msg('libraryBrowser.library', '媒体库'));
+      else if(meta)meta.textContent=t(msg("sources.folderMetaLibrary", "媒体库 · {root}"),{root:libraryBrowser.page()?.roots.find(root=>root.id===row.dataset.rootId)?.name??''});
     }
     sourceSignature = ''; // Reuses unchanged rows and updates source heading/count/status controls.
     refreshIdentity();

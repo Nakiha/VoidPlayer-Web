@@ -1,97 +1,84 @@
 import { fetchLibraryPage, LibraryChangedError } from '../services/library.ts';
 import { PollingCadence } from '../services/polling-cadence.ts';
-import type { LibraryPage, LibraryEntry } from '../services/library.ts';
-import { installChoiceMenu } from './choice-menu.ts';
+import type { LibraryPage, LibraryEntry, LibraryRoot } from '../services/library.ts';
 import { onLanguageChange, t, msg } from '../i18n.ts';
 import { createIconButton } from './controls.ts';
 import { icon } from './icons.ts';
+import { installContextMenu } from './context-menu.ts';
 import { libraryLocationExpression, parseLibraryLocationInput, parseLibraryLocationLink } from './library-link.ts';
 
-/** Continuous browsing with bounded requests and atomic result replacement. */
-export function installLibraryBrowser(change: (page: LibraryPage | null) => void, signal: AbortSignal, onScope?: (recent: boolean) => void,
+/** One directory owner for mounted libraries, scoped search and path navigation. */
+export function installLibraryBrowser(change: (page: LibraryPage | null) => void, signal: AbortSignal, onScope?: (home: boolean) => void,
   notify: (message: string) => void = () => {}, observeRecent: () => boolean = () => false) {
   let initial = { root: '', directory: '', all: false };
   if (new URL(location.href).searchParams.has('library')) {
     try { initial = parseLibraryLocationLink(location.href, location.href); } catch { /* Ignore malformed startup links. */ }
   }
-  let page: LibraryPage | null = null, root = initial.root, directory = initial.directory, search = '', appliedSearch = '', all = initial.all, recent = false;
+  let root = initial.all ? '' : initial.root, directory = initial.all ? '' : initial.directory;
+  let page: LibraryPage | null = null, roots: LibraryRoot[] = [], search = '', appliedSearch = '';
   let request: AbortController | undefined, sequence = 0, loading = false, pendingSearch = false;
-  const available = () => !recent;
-  let optionsSignature = '', pathSignature = '', appliedScope = '', searchTimer: ReturnType<typeof setTimeout> | undefined;
+  let pathSignature = '', appliedScope = '', searchTimer: ReturnType<typeof setTimeout> | undefined;
   const cadence = new PollingCadence(3000);
-  const list = document.getElementById('source-list')!;
-  const tools = document.getElementById('source-tools')!;
-  // Address-style location field with a separate scope dropdown.
+  const list = document.getElementById('source-list')!, tools = document.getElementById('source-tools')!;
   const nav = document.createElement('div'); nav.className = 'library-navigation'; nav.id = 'library-navigation';
-  const address = document.createElement('input'); address.id = 'library-location'; address.className = 'library-location'; address.type = 'text'; address.setAttribute('aria-label', t(msg("libraryBrowser.locationLabel", "媒体库路径或链接"))); address.autocomplete = 'off'; address.spellcheck = false;
-  const button = document.createElement('button'); button.type = 'button'; button.id = 'library-root'; button.className = 'choice-trigger'; button.setAttribute('aria-label', t(msg("libraryBrowser.scopeLabel", "媒体库范围")));
-  nav.append(address, button);
-  const back = createIconButton({ glyph: 'caretLeft', label: t(msg("libraryBrowser.goUp", "返回上一级")), className: 'crumbs-back' });
-  const toggle = createIconButton({ glyph: 'search', label: t(msg("libraryBrowser.toggleSearch", "搜索片源")), className: 'crumbs-search-toggle', attributes: { id: 'sources-search-toggle', 'aria-expanded': 'false' } });
-  const field = document.createElement('label'); field.className = 'search-field crumbs-search-field'; field.id = 'source-search-field'; field.inert = true; field.setAttribute('aria-hidden', 'true');
-  const searchIcon = document.createElement('span'); searchIcon.className = 'crumbs-search-icon'; searchIcon.innerHTML = icon('search');
-  const input = document.createElement('input'); input.id = 'source-search'; input.type = 'search'; input.placeholder = t(msg("libraryBrowser.toggleSearch", "搜索片源")); input.setAttribute('aria-label', t(msg("libraryBrowser.toggleSearch", "搜索片源")));
-  field.append(searchIcon, input);
-  const rail = document.createElement('div'); rail.className = 'source-navigation-rail'; rail.append(back, nav);
-  tools.replaceChildren(rail, toggle, field);
+  const address = document.createElement('input'); address.id = 'library-location'; address.className = 'library-location';
+  address.type = 'search'; address.autocomplete = 'off'; address.spellcheck = false;
+  nav.append(address);
+  const back = createIconButton({ glyph: 'caretLeft', label: t(msg('libraryBrowser.goUp', '返回上一级')), className: 'crumbs-back' });
+  tools.replaceChildren(back, nav);
   const pathbar = document.createElement('nav'); pathbar.id = 'library-pathbar'; pathbar.className = 'library-pathbar';
   document.getElementById('source-foot')!.prepend(pathbar);
   pathbar.addEventListener('click', event => {
     const target = (event.target as Element).closest<HTMLButtonElement>('button[data-root]');
-    if (target) navigate(target.dataset.root ?? '', target.dataset.directory ?? '');
+    if (target && !target.hasAttribute('aria-current')) navigate(target.dataset.root ?? '', target.dataset.directory ?? '');
   }, { signal });
   const pathResize = new ResizeObserver(() => { pathbar.scrollLeft = pathbar.scrollWidth; });
   pathResize.observe(pathbar);
-  function searchToggleLabel() {
-    const open = toggle.getAttribute('aria-expanded') === 'true';
-    const label = open ? t(msg("libraryBrowser.closeSearch", "关闭搜索")) : t(msg("libraryBrowser.toggleSearch", "搜索片源"));
-    toggle.setAttribute('aria-label', label); toggle.title = label;
-    toggle.dataset.tooltip = open ? t(msg("libraryBrowser.closeSearchAndClear", "关闭搜索并清空")) : label;
-  }
-  const key = (id: string, path = '') => JSON.stringify([id, path]);
-  address.addEventListener('focus', () => { address.value = recent ? '' : libraryLocationExpression({ root, directory, all }); address.select(); });
-  address.addEventListener('blur', () => { address.removeAttribute('aria-invalid'); address.value = displayPath(); });
+  installContextMenu(pathbar, {
+    id: 'library-path-menu', selector: '.library-path-item', signal, popover: 'manual',
+    actions(target) {
+      return [{ id: 'copy-library-path', label: t(msg('libraryFileMenu.copyLibraryPath', '拷贝媒体库路径')), glyph: 'copy', run() {
+        try {
+          const value = libraryLocationExpression({ root: target.dataset.root ?? '', directory: target.dataset.directory ?? '', all: false });
+          void navigator.clipboard.writeText(value).then(() => notify(t(msg('libraryFileMenu.copied', '已拷贝'))), error => notify(String(error.message ?? error)));
+        } catch (error) { notify((error as Error).message); }
+      } }];
+    },
+  });
+  const locationInput = () => /^(library:|https?:\/\/)/i.test(address.value.trim());
+  address.addEventListener('focus', () => { address.value = search; controls(); });
+  address.addEventListener('blur', () => { address.removeAttribute('aria-invalid'); controls(); });
+  const edit = () => {
+    address.removeAttribute('aria-invalid');
+    if (locationInput()) {
+      clearTimeout(searchTimer); request?.abort(); sequence++; loading = false; pendingSearch = false;
+      search = appliedSearch; controls();
+    } else searchFor(address.value);
+  };
+  address.addEventListener('input', event => { if (!(event as InputEvent).isComposing) edit(); }, { signal });
+  address.addEventListener('compositionend', edit, { signal });
   address.addEventListener('keydown', event => {
-    if (event.key === 'Escape') { event.preventDefault(); address.blur(); return; }
+    if (event.isComposing || event.keyCode === 229) return;
+    if (event.key === 'Escape') { event.preventDefault(); searchFor(''); address.blur(); return; }
     if (event.key !== 'Enter') return;
     event.preventDefault();
+    if (!locationInput()) { clearTimeout(searchTimer); if (pendingSearch) reset(); return; }
     try {
       const target = parseLibraryLocationInput(address.value, location.href);
-      if (target.root && !page?.roots.some(item => item.id === target.root)) throw new Error(t(msg("libraryBrowser.unknownLibrary", "此媒体库在当前服务中不存在。")));
-      search = ''; input.value = ''; all = target.all; root = target.root; directory = target.directory;
-      setRecent(false); reset(); address.blur();
+      if (target.root && !roots.some(item => item.id === target.root)) throw new Error(t(msg('libraryBrowser.unknownLibrary', '此媒体库在当前服务中不存在。')));
+      navigate(target.all ? '' : target.root, target.all ? '' : target.directory); address.blur();
     } catch (error) { address.setAttribute('aria-invalid', 'true'); notify((error as Error).message); address.select(); }
   }, { signal });
-  const menu = installChoiceMenu(button.id, [], value => {
-    if (value === 'recent') { setRecent(true); return; }
-    if (value === 'all') { all = true; root = directory = ''; setRecent(false); reset(); }
-    else { const [id, path] = JSON.parse(value); navigate(id, path ?? ''); }
-  }, undefined, undefined, () => nav.getBoundingClientRect());
-  function setRecent(value: boolean) {
-    if (recent === value) { onScope?.(recent); return; }
-    recent = value;
-    clearTimeout(searchTimer); request?.abort(); sequence++; loading = false; pendingSearch = false;
-    controls();
-    if (!recent) requestAnimationFrame(more);
-    onScope?.(recent);
-  }
-  // Back, location and search share the single tools row above.
-  function displayPath() {
-    const roots = page?.roots ?? [];
-    const rootName = roots.find(r => r.id === root)?.name ?? '';
-    if (recent) return t(msg("libraryBrowser.recent", "最近使用"));
-    if (all) return t(msg("libraryBrowser.allMedia", "全部媒体"));
-    if (!root) return t(msg("libraryBrowser.allLibraries", "所有媒体库"));
-    return directory ? `${rootName} / ${directory}` : rootName;
+  function displayName() {
+    return directory.split('/').at(-1) || roots.find(item => item.id === root)?.name || t(msg('libraryBrowser.library', '媒体库'));
   }
   function renderPathbar() {
-    pathbar.setAttribute('aria-label', t(msg("libraryBrowser.locationLabel", "媒体库路径或链接")));
+    pathbar.setAttribute('aria-label', t(msg('libraryBrowser.pathLabel', '媒体库路径')));
     const crumbs: { label: string; glyph: Parameters<typeof icon>[0]; root: string; directory: string }[] = [
-      { label: t(msg("libraryBrowser.library", "媒体库")), glyph: 'storage', root: '', directory: '' },
+      { label: t(msg('libraryBrowser.library', '媒体库')), glyph: 'storage', root: '', directory: '' },
     ];
-    if (recent || all) crumbs.push({ label: displayPath(), glyph: recent ? 'clock' : 'film', root: '', directory: '' });
-    else if (root) {
-      crumbs.push({ label: page?.roots.find(item => item.id === root)?.name ?? root, glyph: 'open', root, directory: '' });
+    if (root) {
+      crumbs.push({ label: roots.find(item => item.id === root)?.name ?? root, glyph: 'storage', root, directory: '' });
       const parts = directory.split('/').filter(Boolean);
       for (const [index, label] of parts.entries()) crumbs.push({ label, glyph: 'open', root, directory: parts.slice(0, index + 1).join('/') });
     }
@@ -100,68 +87,45 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
     pathSignature = signature;
     const trail = document.createElement('ol');
     for (const [index, crumb] of crumbs.entries()) {
-      const entry = document.createElement('li'), current = index === crumbs.length - 1;
+      const entry = document.createElement('li');
       if (index) {
         const separator = document.createElement('span'); separator.className = 'library-path-separator';
         separator.setAttribute('aria-hidden', 'true'); separator.innerHTML = icon('caretRight'); entry.append(separator);
       }
-      const part = document.createElement(current ? 'span' : 'button'); part.className = 'library-path-item';
-      part.dataset.root = crumb.root; part.dataset.directory = crumb.directory; part.dataset.kind = index ? 'folder' : 'library';
-      part.dataset.tooltip = crumb.label; part.innerHTML = icon(crumb.glyph);
-      if (part instanceof HTMLButtonElement) part.type = 'button';
-      if (current) part.setAttribute('aria-current', 'location');
+      const part = document.createElement('button'); part.type = 'button'; part.className = 'library-path-item';
+      part.dataset.root = crumb.root; part.dataset.directory = crumb.directory; part.dataset.kind = crumb.glyph === 'storage' ? 'library' : 'folder';
+      part.dataset.tooltip = crumb.label; part.innerHTML = icon(crumb.glyph); part.setAttribute('aria-haspopup', 'menu');
+      if (index === crumbs.length - 1) part.setAttribute('aria-current', 'location');
       const label = document.createElement('span'); label.className = 'library-path-label'; label.textContent = crumb.label;
       part.append(label); entry.append(part); trail.append(entry);
     }
-    pathbar.replaceChildren(trail);
-    pathbar.scrollLeft = pathbar.scrollWidth;
+    pathbar.replaceChildren(trail); pathbar.scrollLeft = pathbar.scrollWidth;
   }
   back.onclick = () => {
-    if (!available() || recent) return;
     if (directory) navigate(root, directory.includes('/') ? directory.slice(0, directory.lastIndexOf('/')) : '');
-    else if (root && !all) { root = ''; directory = ''; reset(); }
+    else if (root) navigate('', '');
   };
-  function renderRow() {
-    const canGoBack = available() && !recent && !all && (!!directory || !!root);
-    back.disabled = !canGoBack;
-    back.hidden = !available();
-  }
   function controls() {
-    const roots = page?.roots ?? [];
-    // The dropdown selects the scope: 最近使用 lives here instead of a
-    // separate tab. Directory navigation lives in the breadcrumb bar and
-    // the folder rows.
-    const options = [{ value: 'recent', label: t(msg("libraryBrowser.recent", "最近使用")) }, { value: 'all', label: t(msg("libraryBrowser.allMedia", "全部媒体")) }, { value: key(''), label: t(msg("libraryBrowser.allLibraries", "所有媒体库")) },
-      ...roots.map(item => ({ value: key(item.id), label: `${item.name}${item.state === 'offline' ? t(msg("libraryBrowser.offlineSuffix", " · 离线")) : ''}` }))];
-    const signature = JSON.stringify(options);
-    if (signature !== optionsSignature) { optionsSignature = signature; menu.setOptions(options); }
-    const value = recent ? 'recent' : all ? 'all' : key(root);
-    menu.sync(value, displayPath(), true);
-    if (document.activeElement !== address) address.value = displayPath();
-    renderRow();
+    back.disabled = !root;
+    address.setAttribute('aria-label', t(msg('libraryBrowser.locationLabel', '搜索当前目录或输入媒体库路径')));
+    address.placeholder = t(msg('libraryBrowser.searchUnder', '{scope} 下搜索'), { scope: displayName() });
+    if (document.activeElement !== address) address.value = search || displayName();
     renderPathbar();
-    input.placeholder = recent ? t(msg("libraryBrowser.searchRecent", "搜索最近打开")) : t(msg("libraryBrowser.searchIn", "搜索{scope}"), { scope: all ? t(msg("libraryBrowser.allMedia", "全部媒体")) : directory || roots.find(r => r.id === root)?.name || t(msg("libraryBrowser.library", "媒体库")) });
-    input.title = input.placeholder;
-    list.setAttribute('aria-busy', String(available() && (loading || pendingSearch)));
+    list.setAttribute('aria-busy', String(loading || pendingSearch));
   }
-  function render() {
-    controls();
-    // 扫描进度与读取错误只在管理后台展示，前端列表不再保留状态行，
-    // 避免长文本把片源列表顶下去。
-    change(page);
-  }
+  function render() { controls(); change(page); }
   async function load(append = false, resetView = false, restarted = false): Promise<void> {
     clearTimeout(searchTimer); pendingSearch = false;
-    if (recent) { loading = false; render(); return; }
-    const scope = JSON.stringify([root, directory, search, all]);
+    const scope = JSON.stringify([root, directory, search]);
     resetView ||= scope !== appliedScope;
     const ticket = ++sequence; request?.abort(); request = new AbortController(); loading = true; controls();
     const previous = page, targetCount = resetView ? 60 : Math.max(60, previous?.entries.length ?? 0, previous?.directories.length ?? 0);
     const abort = AbortSignal.any([signal, request.signal, AbortSignal.timeout(10000)]);
     try {
-      const query = { root: all ? undefined : root, directory: all ? '' : directory, search, recursive: all, limit: 60 };
+      const query = { root: root || undefined, directory, search: root ? search : '', recursive: !!root && !!search, limit: 60 };
       let value = await fetchLibraryPage({ ...query, offset: append ? previous?.nextOffset ?? 0 : 0, revision: resetView || restarted ? undefined : previous?.revision }, abort,
         !append && !resetView && !restarted ? previous ?? undefined : undefined);
+      if (!root) value = { ...value, entries: [], directories: [], nextOffset: null, total: 0 };
       if (append && previous) value = { ...value, entries: [...previous.entries, ...value.entries], directories: [...previous.directories, ...value.directories] };
       else if (!resetView && previous?.revision === value.revision && previous.thumbnailEpoch === value.thumbnailEpoch) {
         const fresh = new Map(value.entries.map(entry => [entry.id, entry]));
@@ -173,7 +137,7 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
         value = { ...value, entries: [...value.entries, ...more.entries], directories: [...value.directories, ...more.directories], nextOffset: more.nextOffset };
       }
       if (ticket !== sequence || signal.aborted) return;
-      page = value; appliedSearch = search; appliedScope = scope;
+      page = value; roots = value.roots; appliedSearch = search; appliedScope = scope;
       cadence.observe([scope, page.revision, page.thumbnailEpoch, page.entries.length, page.roots.map(r => [r.id, r.state, r.error])],
         page.scanning || page.entries.some(entry => entry.state === 'pending'));
     } catch (error) {
@@ -188,55 +152,56 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
     }
   }
   function more() {
-    if (available() && !loading && !pendingSearch && page?.nextOffset != null && list.clientHeight > 0 && list.scrollHeight - list.scrollTop - list.clientHeight < 180) void load(true);
+    if (root && !loading && !pendingSearch && page?.nextOffset != null && list.clientHeight > 0
+      && list.scrollHeight - list.scrollTop - list.clientHeight < 180) void load(true);
   }
   function reset() { void load(false, true); }
-  function navigate(id: string, path: string) { all = false; root = id; directory = path; setRecent(false); reset(); }
+  function navigate(id: string, path: string) {
+    root = id; directory = path; search = ''; address.value = ''; reset(); onScope?.(!root);
+  }
+  function searchFor(value: string) {
+    value = value.trim();
+    if (value === search) { controls(); return; }
+    search = value; clearTimeout(searchTimer); request?.abort(); sequence++; loading = false;
+    if (!root) { appliedSearch = search; pendingSearch = false; render(); return; }
+    pendingSearch = true; controls(); searchTimer = setTimeout(reset, 200);
+  }
   list.addEventListener('scroll', more, { signal, passive: true });
   const resize = new ResizeObserver(more); resize.observe(list);
   const timer = setInterval(() => {
-    const visible = !document.hidden && !recent && !signal.aborted && (!document.getElementById('sources-panel')!.hidden || observeRecent());
-    if (cadence.ready(visible) && !loading && !pendingSearch && !button.matches('[aria-expanded=true]')) void load();
+    const visible = !document.hidden && !signal.aborted && (!document.getElementById('sources-panel')!.hidden || observeRecent());
+    if (cadence.ready(visible) && !loading && !pendingSearch) void load();
   }, 1000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) cadence.reset(); }, { signal });
-  const stopLanguage = onLanguageChange(() => { if (!signal.aborted) {
-    address.setAttribute('aria-label',t(msg("libraryBrowser.locationLabel", "媒体库路径或链接")));
-    button.setAttribute('aria-label',t(msg("libraryBrowser.scopeLabel", "媒体库范围")));
-    const backLabel = t(msg("libraryBrowser.goUp", "返回上一级")); back.setAttribute('aria-label', backLabel); back.title = backLabel;
-    searchToggleLabel();
-    input.setAttribute('aria-label',t(msg("libraryBrowser.toggleSearch", "搜索片源")));
+  const stopLanguage = onLanguageChange(() => {
+    if (signal.aborted) return;
+    const label = t(msg('libraryBrowser.goUp', '返回上一级')); back.setAttribute('aria-label', label); back.dataset.tooltip = label;
     controls();
-  } }, signal);
+  }, signal);
   signal.addEventListener('abort', () => {
-    stopLanguage(); clearInterval(timer); clearTimeout(searchTimer); request?.abort(); resize.disconnect(); menu.dispose();
+    stopLanguage(); clearInterval(timer); clearTimeout(searchTimer); request?.abort(); resize.disconnect();
     pathResize.disconnect(); pathbar.remove();
   }, { once: true });
-  renderPathbar();
+  controls();
   return {
-    setSearchOpen(open: boolean) {
-      toggle.setAttribute('aria-expanded', String(open));
-      toggle.innerHTML = icon(open ? 'close' : 'search');
-      searchToggleLabel();
-    },
-    snapshot: () => ({ root, directory, search, all }),
-    async restore(state: { root: string; directory: string; search: string; all: boolean; recent?: boolean }) {
+    snapshot: () => ({ root, directory, search, all: false }),
+    async restore(state: { root: string; directory: string; search: string; all: boolean; recent?: boolean; query?: string }) {
       clearTimeout(searchTimer); request?.abort(); sequence++;
-      ({ root, directory, search, all } = state);
-      recent = state.recent ?? false;
+      root = state.all || state.recent ? '' : state.root;
+      directory = root ? state.directory : '';
+      search = state.recent ? state.query ?? state.search : state.search;
       page = null; appliedScope = ''; appliedSearch = search; pendingSearch = false;
-      render();
-      await load(false, true);
+      address.value = search; render(); await load(false, true);
     },
     async reveal(entry: LibraryEntry) {
       const targetRoot = entry.rootId ?? '';
       const targetDir = entry.name.includes('/') ? entry.name.slice(0, entry.name.lastIndexOf('/')) : '';
       // Fast path: already visible — highlight only, no list rebuild (avoids full flicker).
-      if (!recent && search === '' && appliedSearch === '' && page?.entries.some(item => item.id === entry.id)) return true;
-      const sameScope = !recent && !all && root === targetRoot && directory === targetDir && search === '' && appliedSearch === '' && !!page;
+      if (!!root && search === '' && appliedSearch === '' && page?.entries.some(item => item.id === entry.id)) return true;
+      const sameScope = root === targetRoot && directory === targetDir && search === '' && appliedSearch === '' && !!page;
       clearTimeout(searchTimer); request?.abort(); sequence++;
       root = targetRoot; directory = targetDir;
-      search = ''; all = false; recent = false;
-      input.value = ''; pendingSearch = false;
+      search = ''; address.value = ''; pendingSearch = false;
       // Keep the current page visible until the new one publishes: no
       // page=null + render() empty flash. load() updates controls and swaps atomically.
       let append = sameScope;
@@ -253,14 +218,8 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
       } while ((page as LibraryPage | null)?.nextOffset != null);
       return false;
     },
-    navigate, page: () => page, filter: () => appliedSearch,
+    navigate, page: () => page, filter: () => appliedSearch, isRoot: () => !root,
     load: () => load(),
-    isRecent: () => recent,
-    selectRecent() { setRecent(true); },
-    search(value: string) {
-      value = value.trim(); if (value === search) return;
-      search = value; clearTimeout(searchTimer); request?.abort(); sequence++; loading = false; pendingSearch = true; controls();
-      searchTimer = setTimeout(reset, 200);
-    },
+    clearSearch() { address.value = ''; searchFor(''); },
   };
 }

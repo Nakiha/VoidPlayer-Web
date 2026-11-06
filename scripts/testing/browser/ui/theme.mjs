@@ -51,7 +51,7 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
   const selected=document.querySelector('#layout-mode [aria-pressed=true]');
   const segmentProbe=document.createElement('span');segmentProbe.style.background='color-mix(in srgb, var(--accent) 12%, transparent)';selected.append(segmentProbe);
   const expectedSegment=getComputedStyle(segmentProbe).backgroundColor;segmentProbe.remove();
-  return {segment:bg('#layout-mode [aria-pressed=true]'),expectedSegment,search:bg('.library-navigation'),control,filter:navStyle.backdropFilter || navStyle.webkitBackdropFilter,backplateFilter:backplateStyle.backdropFilter || backplateStyle.webkitBackdropFilter,placeholder:getComputedStyle(document.querySelector('#source-search'),'::placeholder').color,grid:document.querySelector('#grid-A').getContext('2d').strokeStyle};
+  return {segment:bg('#layout-mode [aria-pressed=true]'),expectedSegment,search:bg('.library-navigation'),control,filter:navStyle.backdropFilter || navStyle.webkitBackdropFilter,backplateFilter:backplateStyle.backdropFilter || backplateStyle.webkitBackdropFilter,placeholder:getComputedStyle(document.querySelector('#library-location'),'::placeholder').color,grid:document.querySelector('#grid-A').getContext('2d').strokeStyle};
  });
  assert.equal(surfaces.segment,surfaces.expectedSegment,'selected segment uses the shared translucent accent tint');
  assert.notEqual(surfaces.segment,'rgba(0, 0, 0, 0)','selected feedback remains visible in the dark theme');

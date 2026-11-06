@@ -97,14 +97,13 @@ try {
   await page.waitForFunction(() => window.voidPlayer);
   if (generated) {
     await page.locator('#toggle-sources').click();
-    await page.locator('#library-root').click(); await page.locator('#library-root-menu [data-value]').evaluateAll(buttons => buttons.find(button => button.dataset.value === JSON.stringify(['archive',''])).click());
+    await page.getByRole('button', {name:'打开媒体库：项目归档',exact:true}).click();
     await page.getByRole('button', { name: '打开目录：分页目录', exact: true }).click();
     await page.waitForFunction(() => document.querySelectorAll('#source-list .source-actions').length === 60);
     await page.locator('#source-list').evaluate(el => { el.scrollTop = el.scrollHeight; });
     for (let attempt = 0; attempt < 20 && !await page.locator('#source-list').evaluate(el => el.textContent.includes('clip-00180')); attempt++) { await page.locator('#source-list').evaluate(el => { el.scrollTop = el.scrollHeight; }); await page.waitForTimeout(150); }
     assert.ok(await page.locator('#source-list').evaluate(el => el.textContent.includes('clip-00180')), 'scrolling reaches later items without page controls');
-    await page.locator('#sources-search-toggle').click();
-    await page.locator('#source-search').fill('clip-00777');
+    await page.locator('#library-location').fill('clip-00777');
     await page.waitForFunction(() => document.querySelectorAll('#source-list .source-actions').length === 1);
     await page.locator('#source-list').getByRole('button', { name: '添加到视图：分页目录/clip-00777.mp4', exact: true }).click();
     await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 1 && !window.voidPlayer.getState().busy);

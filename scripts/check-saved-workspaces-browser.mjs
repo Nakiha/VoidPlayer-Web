@@ -29,9 +29,9 @@ try {
   await tool(page, 'set_review_track_offset', { slot: 'B', offsetUs: 300000 });
   await tool(page, 'add_review_mark', { slot: 'A', text: '原始标注', drawings: [{ id: 'box', tool: 'rect', color: '#ff3b30', strokeWidth: 4, points: [{ x: .2, y: .2 }, { x: .6, y: .5 }] }] });
   await page.locator('#toggle-sources').click();
-  await page.locator('#library-root').click();await page.locator('#library-root-menu').getByRole('menuitemradio',{name:'全部媒体',exact:true}).click();
-  await page.locator('#sources-search-toggle').click();
-  await page.locator('#source-search').fill('h264');
+  await page.locator('#library-location').fill(`library:${listing.entries.find(entry => entry.name === 'h264_9s_1920x1080.mp4').rootId}`);
+  await page.locator('#library-location').press('Enter');
+  await page.locator('#library-location').fill('h264');
   const settings=async p=>{if(!await p.locator('#settings').evaluate(e=>e.open))await p.locator('#settings-open').click();await p.locator('#settings-tab-workspace').click();await p.waitForFunction(()=>!document.querySelector('#saved-workspace-name').disabled);};
   await settings(page);await page.locator('#saved-workspace-name').fill('镜头评审');await page.locator('#saved-workspace-save').click();
   await page.locator('.saved-workspace-open').filter({hasText:'镜头评审'}).waitFor();
@@ -70,7 +70,7 @@ try {
   }
   const entries=(await(await fetch(base+'/api/workspaces')).json()).entries;assert.equal(entries.length,1);const id=entries[0].id;
   const record=await(await fetch(base+'/api/workspaces/'+id)).json();
-  assert.equal(record.owner,identity.actor.id);assert.equal(record.document.marks.length,1);assert.equal(record.document.layout.sources.query,'h264');assert.equal(record.document.layout.sources.all,true);
+  assert.equal(record.owner,identity.actor.id);assert.equal(record.document.marks.length,1);assert.equal(record.document.layout.sources.query,'h264');assert.equal(record.document.layout.sources.all,false);
   const second=await context.newPage();
   let releaseWorkspace, releaseSource;
   const workspaceGate = new Promise(resolve => { releaseWorkspace = resolve; });
@@ -91,7 +91,7 @@ try {
   assert.equal(await second.locator('#image-A').isVisible(), true, 'the first track is presented while the later source is still opening');
   await second.screenshot({ path: path.join(root, '.run/workspace-progressive-loading.png') });
   releaseSource();
-  await second.waitForFunction(()=>window.voidPlayer?.getState().tracks.length===2&&!window.voidPlayer.getState().busy&&document.querySelector('#source-search').value==='h264');
+  await second.waitForFunction(()=>window.voidPlayer?.getState().tracks.length===2&&!window.voidPlayer.getState().busy&&document.querySelector('#library-location').value==='h264');
   assert.deepEqual((await second.evaluate(()=>window.voidPlayer.exportWorkspace())).layout.sources,record.document.layout.sources);
   await settings(second);await second.locator('#saved-workspace-name').fill('镜头评审二');await second.locator('#saved-workspace-name').press('Enter');
   await second.locator('.saved-workspace-open').filter({hasText:'镜头评审二'}).waitFor();
@@ -131,7 +131,7 @@ try {
   await page.unroute(`**/api/workspaces/${id}`, heldOpen);
   const storageState=await context.storageState();await context.close();await service.close();service=await startService(config);await service.library.refresh();
   const restarted=await browser.newContext({locale:'zh-CN', viewport:{width:1200,height:800},storageState});const restored=await restarted.newPage();restored.on('pageerror',e=>errors.push(e.message));
-  await restored.goto(base+'/?workspace='+id);await restored.waitForFunction(()=>window.voidPlayer?.getState().tracks.length===2&&!window.voidPlayer.getState().busy&&document.querySelector('#source-search').value==='h264');
+  await restored.goto(base+'/?workspace='+id);await restored.waitForFunction(()=>window.voidPlayer?.getState().tracks.length===2&&!window.voidPlayer.getState().busy&&document.querySelector('#library-location').value==='h264');
   assert.deepEqual((await restored.evaluate(()=>window.voidPlayer.exportWorkspace())).layout.sources,record.document.layout.sources);
   assert.equal((await restored.evaluate(()=>window.voidPlayer.getState())).marks.length,1);
   await restarted.close();assert.deepEqual(errors,[]);

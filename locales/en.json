@@ -2906,18 +2906,6 @@
     "source": "所有媒体库",
     "translation": "All libraries"
   },
-  "libraryBrowser.allMedia": {
-    "source": "全部媒体",
-    "translation": "All media"
-  },
-  "libraryBrowser.closeSearch": {
-    "source": "关闭搜索",
-    "translation": "Close search"
-  },
-  "libraryBrowser.closeSearchAndClear": {
-    "source": "关闭搜索并清空",
-    "translation": "Close search and clear"
-  },
   "libraryBrowser.goUp": {
     "source": "返回上一级",
     "translation": "Go up one level"
@@ -2927,32 +2915,28 @@
     "translation": "Library"
   },
   "libraryBrowser.locationLabel": {
-    "source": "媒体库路径或链接",
-    "translation": "Library path or link"
+    "source": "搜索当前目录或输入媒体库路径",
+    "translation": "Search this folder or enter a library path"
   },
-  "libraryBrowser.offlineSuffix": {
-    "source": " · 离线",
-    "translation": " · offline"
+  "libraryBrowser.noMounts": {
+    "source": "暂无挂载的媒体库",
+    "translation": "No mounted libraries"
   },
-  "libraryBrowser.recent": {
-    "source": "最近使用",
-    "translation": "Recent"
+  "libraryBrowser.openMount": {
+    "source": "打开媒体库：{name}",
+    "translation": "Open library: {name}"
+  },
+  "libraryBrowser.pathLabel": {
+    "source": "媒体库路径",
+    "translation": "Media library path"
   },
   "libraryBrowser.scopeLabel": {
     "source": "媒体库范围",
     "translation": "Library scope"
   },
-  "libraryBrowser.searchIn": {
-    "source": "搜索{scope}",
-    "translation": "Search {scope}"
-  },
-  "libraryBrowser.searchRecent": {
-    "source": "搜索最近打开",
-    "translation": "Search recently opened"
-  },
-  "libraryBrowser.toggleSearch": {
-    "source": "搜索片源",
-    "translation": "Search sources"
+  "libraryBrowser.searchUnder": {
+    "source": "{scope} 下搜索",
+    "translation": "Search in {scope}"
   },
   "libraryBrowser.unknownLibrary": {
     "source": "此媒体库在当前服务中不存在。",

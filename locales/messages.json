@@ -3112,18 +3112,6 @@
     "source": "所有媒体库",
     "params": {}
   },
-  "libraryBrowser.allMedia": {
-    "source": "全部媒体",
-    "params": {}
-  },
-  "libraryBrowser.closeSearch": {
-    "source": "关闭搜索",
-    "params": {}
-  },
-  "libraryBrowser.closeSearchAndClear": {
-    "source": "关闭搜索并清空",
-    "params": {}
-  },
   "libraryBrowser.goUp": {
     "source": "返回上一级",
     "params": {}
@@ -3133,34 +3121,32 @@
     "params": {}
   },
   "libraryBrowser.locationLabel": {
-    "source": "媒体库路径或链接",
+    "source": "搜索当前目录或输入媒体库路径",
     "params": {}
   },
-  "libraryBrowser.offlineSuffix": {
-    "source": " · 离线",
+  "libraryBrowser.noMounts": {
+    "source": "暂无挂载的媒体库",
     "params": {}
   },
-  "libraryBrowser.recent": {
-    "source": "最近使用",
+  "libraryBrowser.openMount": {
+    "source": "打开媒体库：{name}",
+    "params": {
+      "name": "string | number"
+    }
+  },
+  "libraryBrowser.pathLabel": {
+    "source": "媒体库路径",
     "params": {}
   },
   "libraryBrowser.scopeLabel": {
     "source": "媒体库范围",
     "params": {}
   },
-  "libraryBrowser.searchIn": {
-    "source": "搜索{scope}",
+  "libraryBrowser.searchUnder": {
+    "source": "{scope} 下搜索",
     "params": {
       "scope": "string | number"
     }
-  },
-  "libraryBrowser.searchRecent": {
-    "source": "搜索最近打开",
-    "params": {}
-  },
-  "libraryBrowser.toggleSearch": {
-    "source": "搜索片源",
-    "params": {}
   },
   "libraryBrowser.unknownLibrary": {
     "source": "此媒体库在当前服务中不存在。",

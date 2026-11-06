@@ -207,7 +207,7 @@ await withBrowserFixture({caseName:'i18n-dialogs',engine,pageOptions:{viewport:{
  await page.screenshot({path:artifact('welcome-en.png')});await switchLanguage('zh-CN');
  assert.equal(await welcome.locator('#identity-welcome-title').innerText(),'怎么称呼你？');
  await input.press('Escape');await input.fill('');await welcome.locator('button[type=submit]').click();await page.waitForFunction(()=>window.voidPlayer?.tools);await welcome.waitFor({state:'detached'});
- await page.locator('#toggle-sources').click();await page.locator('#library-root').click();await page.locator('#library-root-menu [data-value]').filter({hasText:'media'}).click();
+ await page.locator('#toggle-sources').click();await page.getByRole('button',{name:'打开媒体库：media',exact:true}).click();
  const folder=page.locator('#source-list .library-folder').filter({hasText:'用户目录'});await folder.waitFor();await folder.evaluate(e=>{e.focus();window.__folder=e;});
  await switchLanguage('en');assert.match(await folder.locator('.source-meta').innerText(),/^Library · /);assert.equal(await folder.getAttribute('aria-label'),'Open folder: 用户目录');
  assert.equal(await folder.evaluate(e=>e===window.__folder&&document.activeElement===e),true);

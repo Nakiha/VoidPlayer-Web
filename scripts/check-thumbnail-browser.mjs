@@ -33,8 +33,7 @@ async function openSamples(page) {
   await page.goto(base);
   await page.waitForFunction(() => window.voidPlayer);
   await page.locator('#toggle-sources').click();
-  await page.locator('#library-root').click();
-  await page.locator('#library-root-menu').getByRole('menuitemradio', { name: '项目归档', exact: true }).click();
+  await page.getByRole('button', {name:'打开媒体库：项目归档',exact:true}).click();
   await page.waitForFunction(() => document.querySelector('#source-list')?.textContent.includes('sample.mp4'));
 }
 

@@ -89,6 +89,12 @@ try {
     }
   }
 
+  async function browseLibrary(page, rootId = '', directory = '') {
+    await page.locator('#library-location').fill(rootId ? `library:${rootId}${directory ? '/' + directory : ''}` : 'library:/');
+    await page.locator('#library-location').press('Enter');
+    await page.waitForFunction(() => document.querySelector('#source-list')?.getAttribute('aria-busy') === 'false');
+  }
+
   await check('empty recent list and current identity', async page => {
     const empty = page.locator('#start-library-list .start-library-empty');
     await empty.waitFor();
@@ -232,40 +238,24 @@ try {
     assert.equal(await page.evaluate(() => window.voidPlayer.getState().tracks.length), 3, 'an oversized batch imports no files');
   }, { deviceScaleFactor: 2 });
 
-  await check('keyboard focus uses a theme fill while mouse dropdowns have no focus ring', async page => {
+  await check('keyboard focus uses a theme fill while path menus preserve pointer focus', async page => {
     await page.locator('#toggle-sources').click();
-    // macOS WebKit uses Option+Tab to include buttons in native focus navigation.
     const tabKey = browserName === 'webkit' ? 'Alt+Tab' : 'Tab';
+    const target = page.locator('#library-pathbar .library-path-item').first();
     for (const theme of ['light', 'dark']) {
       await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
-      const expected = await page.evaluate(() => {
-        const probe = document.createElement('span');
-        probe.style.background = 'color-mix(in srgb, var(--accent) 22%, transparent)';
-        document.querySelector('#source-tools').append(probe); const value = getComputedStyle(probe).backgroundColor; probe.remove(); return value;
-      });
-      await page.locator('#library-location').click();
-      await page.keyboard.press(tabKey);
-      assert.equal(await page.locator('#library-root').evaluate(el => document.activeElement === el && el.matches(':focus-visible')), true);
-      await page.waitForFunction(expected => getComputedStyle(document.getElementById('library-root')).backgroundColor === expected, expected);
-      assert.equal(await page.locator('#library-root').evaluate(el => getComputedStyle(el).backgroundColor), expected);
+      await page.locator('#library-location').click(); await page.keyboard.press(tabKey); await target.focus();
+      assert.equal(await target.evaluate(el => document.activeElement === el && el.matches(':focus-visible')), true);
+      assert.equal(await page.locator('html').getAttribute('data-keyboard-navigation'), '');
+      await target.press('Shift+F10'); await page.locator('#library-path-menu').waitFor({state:'visible'});
+      assert.equal(await page.locator('#library-path-menu button:focus').evaluate(el => getComputedStyle(el).outlineStyle), 'none');
+      await page.keyboard.press('Escape'); assert.equal(await target.evaluate(el => document.activeElement === el), true);
+      await target.click(); assert.equal(await page.locator('html').getAttribute('data-keyboard-navigation'), null);
       assert.equal(await page.locator('#library-navigation').evaluate(el => getComputedStyle(el).outlineStyle), 'none');
-      await page.keyboard.press('Enter');
-      await page.locator('#library-root-menu').waitFor({ state: 'visible' });
-      assert.equal(await page.locator('#library-root-menu button:focus').evaluate(el => getComputedStyle(el).outlineStyle), 'none');
-      await page.keyboard.press('Escape');
-      assert.equal(await page.locator('#library-root').evaluate(el => document.activeElement === el), true);
-      await page.locator('#library-root').click();
-      assert.equal(await page.locator('#library-root').evaluate(el => el.matches(':focus-visible')), false, 'mouse click does not activate the keyboard focus fill');
-      assert.equal(await page.locator('#library-navigation').evaluate(el => getComputedStyle(el).outlineStyle), 'none');
-      await page.locator('#library-root').click();
-      await page.keyboard.press(tabKey);
-      assert.equal(await page.locator('#sources-search-toggle').evaluate(el => document.activeElement === el), true);
-      await page.waitForFunction(expected => getComputedStyle(document.getElementById('sources-search-toggle')).backgroundColor === expected, expected);
-      assert.equal(await page.locator('#sources-search-toggle').evaluate(el => getComputedStyle(el).backgroundColor), expected);
     }
   });
 
-  await check('press feedback respects links, tabs and close colors; search overlays navigation', async page => {
+  await check('press feedback respects links, tabs and close colors; one field searches the current folder', async page => {
     const insetButtons = await page.locator('button.icon-button').evaluateAll(buttons => buttons.filter(el => getComputedStyle(el).backgroundClip !== 'border-box').map(el => el.id || el.getAttribute('aria-label')));
     assert.deepEqual(insetButtons, [], 'all icon buttons paint their full background by default');
     const style = selector => page.locator(selector).evaluate(el => {
@@ -297,13 +287,13 @@ try {
     await page.locator('#toggle-sources').click();
     await page.waitForTimeout(300);
     const materials = await page.locator('#source-tools').evaluate(tools =>
-      ['.crumbs-back', '.library-navigation', '#sources-search-toggle', '#source-search-field'].map(selector => {
+      ['.crumbs-back', '.library-navigation'].map(selector => {
         const s = getComputedStyle(tools.querySelector(selector));
         return { background: s.backgroundColor, filter: s.backdropFilter || s.webkitBackdropFilter };
       }));
     assert.ok(materials.every(material => material.background === materials[0].background && material.filter === 'none'), 'navigation controls share a light fill without a second blur layer');
     assert.equal(await page.locator('.crumbs-back').evaluate(el => getComputedStyle(el).opacity), '1', 'disabled back keeps the glass surface visible');
-    for (const selector of ['.crumbs-back', '#sources-search-toggle']) {
+    for (const selector of ['.crumbs-back']) {
       assert.deepEqual(await page.locator(selector).evaluate(el => {
         const s = getComputedStyle(el);
         return { clip: s.backgroundClip, padding: s.padding };
@@ -314,35 +304,15 @@ try {
     const navigation = await page.locator('#library-navigation').boundingBox();
     const tools = await page.locator('#source-tools').boundingBox();
     const list = await page.locator('#source-list').boundingBox();
-    const searchButton = await page.locator('#sources-search-toggle').boundingBox();
-    const searchIcon = await page.locator('#sources-search-toggle .icon').boundingBox();
-    await page.locator('#sources-search-toggle').click();
-    await page.waitForTimeout(60);
-    assert.deepEqual(await page.locator('#sources-search-toggle').boundingBox(), searchButton, 'one persistent button stays in place during expansion');
-    const opacity = await page.locator('#source-tools').evaluate(tools => ['.source-navigation-rail', '#source-search-field'].map(selector => getComputedStyle(tools.querySelector(selector)).opacity));
-    assert.deepEqual(opacity, ['1', '1'], 'navigation and search wipe at full opacity without crossfading');
-    await page.waitForTimeout(280);
-    const search = await page.locator('#source-search-field').boundingBox();
-    assert.ok(search.x <= navigation.x && search.x + search.width >= navigation.x + navigation.width);
+    await page.locator('#library-location').click();
+    assert.equal(await page.locator('#library-location').inputValue(), '', 'focusing the folder name opens an empty search field');
+    await page.locator('#library-location').fill('sample');
+    await page.screenshot({ path: path.join(screenshots, 'source-location-field.png') });
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#library-location').inputValue(), '媒体库');
     assert.deepEqual(await page.locator('#source-tools').boundingBox(), tools);
     assert.deepEqual(await page.locator('#source-list').boundingBox(), list);
-    assert.equal(await page.locator('.source-navigation-rail').evaluate(el => el.inert), true);
-    assert.deepEqual(await page.locator('#sources-search-toggle .icon').boundingBox(), searchIcon, 'search and close icons have identical geometry');
-    assert.equal(await page.locator('#sources-search-toggle').getAttribute('aria-label'), '关闭搜索');
-    assert.equal(await page.locator('#source-search').evaluate(el => document.activeElement === el), true);
-    await page.locator('#source-search').fill('sample');
-    await page.screenshot({ path: path.join(screenshots, 'source-search-overlay.png') });
-    await page.keyboard.press('Escape');
-    assert.equal(await page.locator('#source-search').inputValue(), '');
-    assert.equal(await page.locator('#source-search-field').evaluate(el => el.inert), true);
-    assert.equal(await page.locator('#sources-search-toggle').evaluate(el => document.activeElement === el), true);
-    assert.deepEqual(await page.locator('#library-navigation').boundingBox(), navigation);
-    await page.waitForTimeout(280);
-    await page.locator('#sources-search-toggle').click();
-    await page.locator('#source-search').fill('sample');
-    await page.locator('#sources-search-toggle').click();
-    assert.equal(await page.locator('#source-search').inputValue(), '');
-    assert.equal(await page.locator('#sources-search-toggle').getAttribute('aria-label'), '搜索片源');
+    assert.equal(await page.locator('#sources-search-toggle, #source-search-field, #library-root').count(), 0);
   }, { viewport: { width: 581, height: 664 }, reducedMotion: 'no-preference' });
 
   await check('workspace panel buttons share hover with floating controls', async page => {
@@ -354,6 +324,7 @@ try {
     await page.waitForFunction(()=>+document.querySelector('#analysis-canvas').dataset.plotRight>0);
     await page.locator('#analysis-zoom-in').click();
     await page.waitForFunction(()=>!document.querySelector('#analysis-zoom-out').disabled);
+    await browseLibrary(page, listing.entries.find(entry => entry.name === 'av1_10s_1920x1080.webm').rootId);
     const row=page.locator('#source-list .source-row').filter({has:page.locator('.filename',{hasText:'av1_10s_1920x1080.webm'})});
     await row.waitFor();
     const add=row.locator('.source-actions button');
@@ -1832,7 +1803,10 @@ try {
     assert.equal(await menu.evaluate(el => el.matches(':popover-open')), false, 'outside click dismisses');
     await row.click({button:'right'});
     await page.locator('#source-list').dispatchEvent('scroll');
-    assert.equal(await menu.evaluate(el => el.matches(':popover-open')), false, 'list scrolling dismisses');
+    assert.equal(await menu.evaluate(el => el.matches(':popover-open')), true, 'queued scroll without movement retains the menu');
+    await page.locator('#source-list').evaluate(list => {list.style.maxHeight = '24px'; list.scrollTop = list.scrollHeight;});
+    await page.waitForFunction(() => !document.querySelector('#library-file-menu').matches(':popover-open'));
+    await page.locator('#source-list').evaluate(list => {list.style.maxHeight = '';});
     for (const width of [1280, 390, 320]) {
       await page.setViewportSize({width,height:800});
       await settle(page);
@@ -1857,9 +1831,8 @@ try {
       await load.execute({ id: ids[0], slot: 'B' }); await load.execute({ id: ids[1], slot: 'C' });
     }, [nested.id, other.id]);
     await page.locator('#toggle-sources').click();
-    await page.locator('#sources-search-toggle').click();
-    await page.locator('#source-search').fill('no-file-matches-this');
-    await page.locator('#source-list .panel-empty').waitFor();
+    await page.locator('#library-location').fill('no-file-matches-this');
+    await page.locator('#library-recents .panel-empty').waitFor();
     const offsets = [];
     await page.route('**/api/library/browse?*', async route => {
       const url = new URL(route.request().url());
@@ -1879,9 +1852,9 @@ try {
       assert.equal(await badge.count(), 1, 'track badge lives in the metadata row');
       const badgeBox = await badge.boundingBox();
       assert.equal(badgeBox.width, badgeBox.height, 'track badge stays square');
-      assert.equal(await page.locator('#source-search').inputValue(), '');
-      assert.equal(await page.locator('#sources-search-toggle').getAttribute('aria-expanded'), 'false');
-      if (slot === 'B') assert.match(await page.locator('#library-location').inputValue(), /review\/shots/);
+      assert.equal(await page.locator('#library-location').evaluate(el => el === document.activeElement), false);
+      assert.equal(await page.locator('#source-search-field').count(), 0);
+      if (slot === 'B') assert.match(await page.locator('#library-location').inputValue(), /shots/);
       const box = await row.boundingBox(), list = await page.locator('#source-list').boundingBox(), foot = await page.locator('#source-foot').boundingBox();
       assert.ok(box.y >= list.y && box.y + box.height <= foot.y + 1, 'located file is visible above the footer');
       assert.equal(await page.locator('#source-activity-details').isVisible(), false, 'locating keeps the details folded');
@@ -2055,6 +2028,7 @@ try {
     await page.locator('.toast-warning').filter({ hasText: '没有空轨道' }).waitFor();
     assert.equal(pickers, 0, 'full capacity never falls back to a file picker for an occupied slot');
     if (await page.locator('#toggle-sources').getAttribute('aria-expanded') !== 'true') await page.locator('#toggle-sources').click();
+    await browseLibrary(page, listing.entries.find(entry => entry.name === 'ci_h264_smoke.mp4').rootId);
     await page.getByRole('button', { name: '添加到视图：ci_h264_smoke.mp4', exact: true }).click();
     assert.equal(await page.locator('#replace-source-dialog').count(), 0);
     assert.deepEqual(await identities(), before, 'library additions at capacity cannot alter sources or order');
@@ -2066,6 +2040,7 @@ try {
     const stalled = [];
     await page.route(`**/api/media/${encodeURIComponent(entries[0].id)}?*`, route => { stalled.push(route); });
     await page.locator('#toggle-sources').click();
+    await browseLibrary(page, entries[0].rootId);
     const row = entry => page.locator('#source-list .source-row').filter({ hasText: entry.root }).filter({ hasText: 'same.mp4' });
     const add = entry => row(entry).getByRole('button', { name: '添加到视图：same.mp4', exact: true });
     const nextRequest = () => page.waitForRequest(request => new URL(request.url()).pathname === `/api/media/${encodeURIComponent(entries[0].id)}`);
@@ -2088,13 +2063,14 @@ try {
       await page.waitForFunction(() => !document.getElementById('source-activity-time').textContent.includes('0 秒'));
       await page.setViewportSize({ width: 600, height: 800 });
       await settle(page);
+      await browseLibrary(page, listing.entries.find(entry => entry.name === 'ci_h264_smoke.mp4').rootId);
       await checkScrollBoundary(page, '#source-list');
       await page.locator('#source-list').evaluate(element => { element.scrollTop = element.scrollHeight; });
       const panelBox = await page.locator('#sources-panel').boundingBox();
       const footBox = await page.locator('#source-foot').boundingBox();
       const files = await page.locator('#source-list').boundingBox();
-      const searchToggle = await page.locator('#sources-search-toggle').boundingBox();
-      const scopeTrigger = await page.locator('#library-root').boundingBox();
+      const searchToggle = await page.locator('#library-location').boundingBox();
+      const scopeTrigger = await page.locator('.crumbs-back').boundingBox();
       const listPadBottom = await page.locator('#source-list').evaluate(el => parseFloat(getComputedStyle(el).paddingBottom));
       assert.ok(Math.abs(listPadBottom - footBox.height) <= 1, 'list bottom padding reserves exactly the floating foot height');
       assert.ok(Math.abs((footBox.y + footBox.height) - (panelBox.y + panelBox.height)) <= 1, 'foot pinned to panel bottom');
@@ -2133,29 +2109,34 @@ try {
       await settle(page);
       handle = await thumb.boundingBox();
       assert.ok(handle.y + handle.height <= footBox.y + 1, 'thumb remains above the footer at the list end');
-      await page.locator('#sources-search-toggle').click();
-      assert.equal(await page.locator('#source-search').evaluate(el => document.activeElement === el), true, 'search toggle focuses the input');
+      await page.locator('#library-location').click();
+      assert.equal(await page.locator('#library-location').evaluate(el => document.activeElement === el), true, 'folder field receives input focus');
       await page.keyboard.press('Escape');
-      assert.equal(await page.locator('#source-search-field').evaluate(el => el.inert && el.getAttribute('aria-hidden') === 'true'), true, 'escape closes search');
+      assert.equal(await page.locator('#library-location').evaluate(el => document.activeElement === el), false, 'escape returns to the folder label');
       await page.screenshot({ path: path.join(screenshots, `${browserName}-loading.png`) });
       await page.setViewportSize({ width: 1280, height: 800 });
       await settle(page);
+      await browseLibrary(page, entries[1].rootId);
       assert.equal(await add(entries[1]).isEnabled(), true);
+      await browseLibrary(page, entries[0].rootId);
       await page.locator('#source-activity-cancel').click();
       assert.equal(await page.locator('#source-activity-stage').textContent(), '已取消载入');
       assert.equal(await page.locator('#empty-A').isVisible(), true, 'cancellation returns to recent files');
       await page.waitForFunction(() => !window.voidPlayer.getState().busy);
+      await browseLibrary(page, entries[0].rootId);
       assert.equal(await add(entries[0]).isEnabled(), true);
       request = nextRequest();
       await add(entries[0]).click();
       await request;
       await cancel.waitFor();
+      await browseLibrary(page, entries[1].rootId);
       await add(entries[1]).click();
       await page.waitForFunction(id => {
         const state = window.voidPlayer.getState();
         return !state.busy && state.tracks.length === 1 && state.tracks[0].source.id === id;
       }, entries[1].id, { timeout: 10000 });
       assert.equal(await page.evaluate(() => window.voidPlayer.getState().error), null);
+      await browseLibrary(page, entries[0].rootId);
       assert.equal(await add(entries[0]).isEnabled(), true);
       assert.equal(await page.locator('.source-row[aria-busy="true"]').count(), 0);
       assert.equal(await page.locator('#source-activity-stage').textContent(), '已上屏');
@@ -2216,6 +2197,7 @@ try {
     assert.equal(entries[0].lastModified, entries[1].lastModified);
     await page.locator('#toggle-sources').click();
     for (const [i, entry] of entries.entries()) {
+      await browseLibrary(page, entry.rootId);
       const row = page.locator('#source-list .source-row').filter({ hasText: entry.root }).filter({ hasText: 'same.mp4' });
       await row.getByRole('button', { name: '添加到视图：same.mp4', exact: true }).click();
       await page.waitForFunction(count => window.voidPlayer.getState().tracks.length === count, i + 1);
@@ -2226,6 +2208,7 @@ try {
     }));
     assert.deepEqual(state.ids, entries.map(entry => entry.id));
     assert.deepEqual(new Set(state.history), new Set(state.ids));
+    await browseLibrary(page, entries[0].rootId);
     const firstRow = page.locator('#source-list .source-row').filter({ hasText: entries[0].root }).filter({ hasText: 'same.mp4' });
     await firstRow.getByRole('button', { name: '从视图移除：same.mp4', exact: true }).click();
     await page.waitForFunction(id => !window.voidPlayer.getState().tracks.some(t => t.source.id === id), entries[0].id);
@@ -2234,8 +2217,7 @@ try {
     // Re-add, then remove the same source from the recent list.
     await firstRow.getByRole('button', { name: '添加到视图：same.mp4', exact: true }).click();
     await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 2);
-    await page.locator('#library-root').click();
-    await page.locator('#library-root-menu').getByRole('menuitemradio', { name: '最近使用', exact: true }).click();
+    await browseLibrary(page);
     await firstRow.getByRole('button', { name: '从视图移除：same.mp4', exact: true }).click();
     await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 1);
     assert.deepEqual(await page.evaluate(() => window.voidPlayer.getState().tracks.map(t => t.source.id)), [entries[1].id]);
@@ -2266,9 +2248,8 @@ try {
     assert.equal(saved.find(item => item.libraryId === original.id).libraryRootId, original.rootId);
     assert.ok(saved.some(item => item.libraryId === foreignId), 'disconnected history is retained for its own library');
     await page.locator('#toggle-sources').click();
-    await page.locator('#library-root').click();
-    await page.locator('#library-root-menu').getByRole('menuitemradio', { name: '最近使用', exact: true }).click();
-    assert.equal(await page.locator('#source-list .source-row').count(), localSupported ? 2 : 1, 'both history views use the same library scope');
+    await browseLibrary(page);
+    assert.equal(await page.locator('#library-recents .source-row').count(), localSupported ? 2 : 1, 'both history views use the same library scope');
   });
 
   await check('unresolved library history keeps its origin and shares failure messages across entry points', async page => {
@@ -2284,8 +2265,7 @@ try {
     await missing.click();
     const message = '媒体库引用「missing-reference.mp4」已失效或文件已移除，请在媒体库中重新选择。';
     await page.locator('.toast').filter({ hasText: message }).waitFor();
-    await page.locator('#library-root').click();
-    await page.locator('#library-root-menu').getByRole('menuitemradio', { name: '最近使用', exact: true }).click();
+    await browseLibrary(page);
     const panel = page.locator('#source-list .source-row').filter({ hasText: 'missing-reference.mp4' });
     await panel.getByRole('button', { name: '检查媒体引用', exact: true }).click();
     assert.equal(await page.locator('.toast').filter({ hasText: message }).count(), 2, 'both entry points report the same failure');
@@ -2314,8 +2294,7 @@ try {
     await page.reload(); await page.waitForFunction(() => window.voidPlayer);
     assert.equal(await page.locator('.start-recent-row').filter({ hasText: 'local-history.mp4' }).count(), 0);
     await page.locator('#toggle-sources').click();
-    await page.locator('#library-root').click();
-    await page.locator('#library-root-menu').getByRole('menuitemradio', { name: '最近使用', exact: true }).click();
+    await browseLibrary(page);
     assert.equal(await page.locator('#source-list').getByText('local-history.mp4', { exact: true }).count(), 0);
     assert.equal((await page.evaluate(() => window.voidPlayer.getState())).tracks.length, 0);
     const logs = await page.evaluate(() => window.voidPlayer.tools.find(tool => tool.name === 'get_review_logs').execute({ limit: 2000 }));
