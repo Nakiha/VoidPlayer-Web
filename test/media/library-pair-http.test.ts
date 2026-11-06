@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, mkdir, readFile, writeFile, rm,realpath,stat } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm,realpath,stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join,resolve } from 'node:path';
 import { Worker } from 'node:worker_threads';

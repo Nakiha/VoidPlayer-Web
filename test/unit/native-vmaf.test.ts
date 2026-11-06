@@ -1,6 +1,6 @@
 import {NativeVmafService} from '../../server/analysis/vmaf/service.ts';
 import test from 'node:test';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
-import {vmafInput,vmafSequence,VMAF_LIMITS,VMAF_CAPABILITY} from '../../shared/analysis/quality/vmaf.ts';
+import {vmafInput,vmafSequence,VMAF_CAPABILITY} from '../../shared/analysis/quality/vmaf.ts';
 import {agentManifest,serviceCapabilities} from '../../shared/service/agent.ts';
 const input=()=>({schema:'voidplayer-native-vmaf-job',version:1,client:{id:'test',kind:'agent'},plan:{id:randomUUID(),attemptId:randomUUID(),digest:'a'.repeat(64)},model:'vmaf_v0_6_1',cadenceUs:250000,metrics:{psnr:true,ssim:false},budget:{maxRawBytes:1048576,maxElapsedMs:30000,nativeCpuSeconds:1,nativeMemoryBytes:536870912}});
 test('native recipe normalizes exact trusted references; arbitrary executable/model paths and budget escape reject',()=>{

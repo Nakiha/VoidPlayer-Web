@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { AnnotationPendingQueue } from '../../src/review/annotation-pending.ts';
-import type { PendingEdit } from '../../src/review/annotation-pending.ts';
 
 function deferred<T>() {
   let resolve!: (v: T) => void, reject!: (e: unknown) => void;
@@ -17,7 +16,7 @@ test('REVIEW-01: 快照重试不得覆盖中途的新编辑（阻塞 A，中途�
   const queue = new AnnotationPendingQueue();
   // 两条旧待办
   const keyA = 'u1/default/window-1/A';
-  const pendingA = queue.stage(keyA, { id: 'A', document: { mark: { id: 'A' } } as never, base: 0, space: 'default', actorId: 'u1' });
+  queue.stage(keyA, { id: 'A', document: { mark: { id: 'A' } } as never, base: 0, space: 'default', actorId: 'u1' });
   const pendingBold = queue.stage(keyB, valueOld);
   const snapshot = queue.snapshot();
 

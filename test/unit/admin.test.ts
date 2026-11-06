@@ -15,7 +15,7 @@ type Fixture = { root: string; media: string; base: string; library: MediaLibrar
 async function fixture(run: (f: Fixture) => Promise<void>) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'vp-admin-'));
   const media = path.join(root, 'media'); await fs.mkdir(media); await fs.writeFile(path.join(media, 'one.mp4'), 'video');
-  await fs.writeFile(path.join(root, 'voidplayer.config.json'), JSON.stringify({ mediaRoots: [{ id: 'archive', path: 'media', name: '媒体库' }], dataDir: 'data', logsDir: 'logs', adminUsers: ['owner'], indexWatch: false }));
+  await fs.writeFile(path.join(root, 'voidplayer.config.json'), JSON.stringify({ mediaRoots: [{ id: 'archive', path: 'media', name: '媒体库' }], dataDir: 'data', logsDir: 'logs', indexWatch: false }));
   const config = await loadConfig([], 'production', root); await fs.mkdir(config.dataDir);
   const library = new MediaLibraryIndex(config.mediaRoots, { database: path.join(config.dataDir, 'library.sqlite'), watch: false });
   library.start(); await library.refresh();
@@ -75,14 +75,14 @@ test('root edits persist stable identities, preserve unrelated config and reject
   const saved = await fetch(base + '/api/admin/roots', mutation(base, 'PUT', { revision: before.revision, roots }));
   assert.equal(saved.status, 200); const after = await saved.json(); assert.notEqual(after.revision, before.revision);
   await library.refresh(); assert.equal(library.browse().entries[0].id, original.id); assert.ok(await library.resolve(original.id));
-  const loaded = await loadConfig([], 'production', root); assert.deepEqual(loaded.mediaRoots, roots); assert.deepEqual(loaded.adminUsers, ['owner']); assert.equal(loaded.indexWatch, false);
+  const loaded = await loadConfig([], 'production', root); assert.deepEqual(loaded.mediaRoots, roots); assert.equal(loaded.logsDir, path.join(root, 'logs')); assert.equal(loaded.indexWatch, false);
   const stale = await fetch(base + '/api/admin/roots', mutation(base, 'PUT', { revision: before.revision, roots })); assert.equal(stale.status, 409);
-  await fs.writeFile(config.origin!.file, JSON.stringify({ mediaRoots: roots, adminUsers: ['new-owner'] }));
+  await fs.writeFile(config.origin!.file, JSON.stringify({ mediaRoots: roots, indexTtlMs: 45000 }));
   const externalRoots = await (await fetch(base + '/api/admin/roots')).json();
   assert.equal(externalRoots.writable, false); assert.equal(externalRoots.reasonCode, 'external-change');
   assert.equal(externalRoots.reason, '配置文件已被外部修改，请重启服务以重新载入。');
   const external = await fetch(base + '/api/admin/roots', mutation(base, 'PUT', { revision: after.revision, roots })); assert.equal(external.status, 409);
-  assert.deepEqual(JSON.parse(await fs.readFile(config.origin!.file, 'utf8')).adminUsers, ['new-owner']);
+  assert.equal(JSON.parse(await fs.readFile(config.origin!.file, 'utf8')).indexTtlMs, 45000);
 }));
 
 test('invalid roots and failed persistence leave the active index intact', async () => fixture(async ({ base, library, config }) => {

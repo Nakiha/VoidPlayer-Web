@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { getEventListeners } from 'node:events';
 import { runSourceQuery } from '../../shared/analysis/metadata/adapters.ts';
 import { bitrateAtT, localRateAtT, coarsenBucketsShared, isBucketGridCompatible, planSharedCoarseWidth, LOCAL_RATE_WINDOW_US } from '../../shared/analysis/metadata/inspection.ts';
-import { canSatisfy, clampPixelWidth, bucketWidthFor } from '../../shared/analysis/metadata/view-cache.ts';
+import { canSatisfy, clampPixelWidth } from '../../shared/analysis/metadata/view-cache.ts';
 import { ReviewSession } from '../../src/session.ts';
 import { rgbaDescription } from '../../shared/media/frame-description.ts';
 import type { MediaSource } from '../../src/media/contract.ts';

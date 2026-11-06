@@ -1,38 +1,80 @@
 # JS container packets and reusable indexes
 
-This delivery started from accepted main `f5826f4` and integrates accepted main `107c3005` (including #95). There is no dependency on an unmerged PR. It consumes the unchanged playback/analysis core pin `353088620d08ee4ec2669842508f0fc84da2db28`. Container parsing, indexing, clock metadata and packet selection stay in JS. WebCodecs and packet-fed WASM receive the same packets and index; choosing a decoder does not choose another demuxer.
+Container parsing, indexing, source clocks and packet selection belong to JS for
+MP4/MOV/fMP4, FLV, admitted MPEG-TS and Matroska/WebM inputs. WebCodecs and
+packet-fed WASM receive the same packets and index; decoder selection does not
+select another demuxer. AVI, MPEG-PS and elementary MPEG video retain the
+FFmpeg container backend. Removed MOV/Matroska/TS demuxers are not fallback
+routes for rejected JS inputs.
 
-## Admitted and verified combinations
+## Admitted combinations
 
-| Container | Video | Playback | Independent analysis | Boundaries |
-| --- | --- | --- | --- | --- |
-| 188-byte TS | H.264 | WebCodecs / packet WASM | Exact H.264 pictures | One video, confirmed no audio, static single program/configuration, progressive single-slice pictures |
-| 188-byte TS | HEVC Main / Main10 | WebCodecs / packet WASM | Exact HEVC blocks; existing QP capability limits remain | One video, no audio, static single program/configuration, progressive 4:2:0 single-layer pictures; only verified closed IDR anchors |
-| Matroska | H.264 / HEVC Main / Main10 | WebCodecs / packet WASM | Same independent packet analysis | One video track/configuration; interleaved audio allowed, existing cache-only optional audio policy retained |
-| WebM | VP8 / VP9 | WebCodecs / packet WASM | Packet/index statistics; block/QP explicitly `unsupported-codec` | Verified visible single-picture packets; hidden/show-existing/superframe, alpha/additional and laced-video layouts are outside admission |
+| Container | Video | Playback and analysis boundary |
+| --- | --- | --- |
+| 188-byte TS | H.264 / HEVC Main / Main10 | Browser or packet WASM; exact analysis additionally requires verified coding layout, source clocks and a safe reference chain. |
+| 188-byte TS | MPEG-2 frame pictures | Packet WASM playback; no new exact block/QP analysis capability. |
+| Matroska | H.264 / HEVC Main / Main10 | Browser or packet WASM and independent packet analysis under the existing codec limits. |
+| Matroska/WebM | VP8 / VP9 | Browser or packet WASM; packet statistics do not imply block/QP support. |
+| Matroska | FFV1 | Packet WASM with admitted configuration and source-plane geometry; no block/QP analysis. |
+| WebM | AV1 temporal units | Packet playback preserves hidden/show-existing inputs; no exact one-AU picture identity. |
+| MP4/MOV/fMP4 | Supported visual sample descriptions | JS sample tables drive browser or packet WASM; multiple descriptions retain the conservative software policy. |
 
-The real fixtures contain 600 output pictures each. Tests check full EOF, first/tail/later random access, complete visible pixel planes against the independent container-decoder oracle, and clocks against ffprobe. Browser tests cover local/library and software/browser policies, actual presentation, independent analysis and cancellation. Actual backend and preference are recorded separately; a WebCodecs or `prefer-hardware` result does not establish physical hardware use.
+Finite static stream/configuration rules are checked by the corresponding
+adapter. Dynamic/live TS, unsupported field layouts, linked/multiple/laced or
+invisible Matroska arrangements and unverified codec/container combinations
+remain outside admission. Multi-slice AVC and MBAFF TS playback can preserve
+actual decoded pictures while recording `exactPictureMapping:false`; playback
+success does not authorize exact analysis. AV1, FFV1 and MPEG-2 playback likewise
+do not inherit H.264/HEVC block capability.
 
-AV1/FFV1/VVC Matroska and other unmigrated codec/container combinations retain their explicitly declared existing route. Matroska crop, non-square display transforms, projection/stereo/alpha, track composition and encoded/scaled/delayed video tracks are outside this admission; those metadata have real presentation semantics in the [Matroska specification](https://www.matroska.org/technical/elements.html). TS with audio, other video codecs, non-188-byte packets, changing/fragmented PSI and unverified layouts are not declared migrated. This delivery does not remove those still-used WASM demuxers. Corrupt clocks/CRC/structure, IO/resource errors and cancellation are failures, not an excuse to switch containers. The server carries a stable `js-combination-not-migrated` admission result through Worker/RPC/NDJSON; only that declared result can select an unmigrated route before decoding. Once admitted, decoder fallback still consumes JS packets.
+Current parser provenance is defined by `shared/media/mediabunny-version.ts`;
+TS and Matroska index schemas/builds are owned by
+`shared/media/indexing/ts-packet-index.ts` and
+`shared/media/containers/matroska-packet-index.ts`. Release locks and actual core
+capability manifests define the consumed artifacts. Historical pins and initial
+migration matrices are not current support tables.
 
 ## Identity, clocks and ownership
 
-`TsPacketSource` and `MatroskaPacketSource` use Mediabunny **1.55.7**. Their opaque sequence numbers are checked against stable whole-track decode ordinals. TS locators are not payload offsets. Matroska locators are cluster data position plus the selected track's block ordinal; a small metadata supplement verifies original block clocks/size and rejects unsupported transformations/lacing, without extracting compressed payloads. Payload reads always go through the independently owned `EncodedPacketSink` cursor and verify locator, size and timestamp.
+TS locators are opaque packet locators, not payload byte offsets. The PES-header
+supplement preserves original 90 kHz ticks and explicit missingness. Derived
+presentation timestamps cannot mint exact picture identity. Matroska retains
+original cluster/block clocks and TimestampScale; raw DTS remains null and is
+never replaced with PTS. Payload reads verify the selected locator, size,
+timestamp and configuration against the source-owned index.
 
-Original TS PES ticks retain their 1/90000 timebase and explicit missingness. Derived timestamps cannot mint exact picture identity. Matroska retains the original cluster/block timestamp and TimestampScale; raw DTS stays **null**, including B-frame streams. DTS is never replaced with PTS. Static parameter sets, progressive HEVC SPS structure and safe IDR anchors are verified. Picture/cache identity includes source, selected stream, JS build, configuration and AU; old FFmpeg or incompatible JS cache documents cannot stand in for these indexes.
-
-Playback, local analysis and server analysis each own reader, demux cursor, abort state and decoder. Reusing metadata borrows none of the playback seek state. Analysis success/failure/cancellation must preserve the committed playback picture and position; the browser matrix checks that boundary.
+Playback, local analysis and server analysis each own their reader, container
+cursor, abort state and decoder. Metadata reuse borrows no playback seek state.
+Independent analysis success, failure and cancellation preserve the committed
+playback picture and position. Source/build/configuration/AU identity prevents
+old FFmpeg or incompatible JS cache documents from aliasing current pictures.
 
 ## Persistent reuse and rebuilding
 
-Self-reported `complete`, packet count and checksums are structural data, not complete-scan authority. Runtime indexes are sealed only after complete source enumeration or a verified cache delivery.
+Self-reported completeness, packet counts and checksums do not prove a complete
+scan. Runtime indexes are sealed after complete enumeration or verified delivery
+through the application's own source-bound library protocol.
 
-- **Local:** playback and independent analysis enumerate the selected Blob without a whole-file digest or cross-open persistent index. Each open has a session-local identity. File metadata and size bound the reader, but do not prove that a cached packet table belongs to the selected Blob. Eligible H.264/HEVC TS starts with a bounded prefix and extends playback as closed GOPs are verified. Prefixes are playback-only and do not authorize complete analysis identities.
-- **Library:** the server alone constructs JS indexes, checks file version before/after scanning, and persists a separate integrity seal. Uploading JS completeness claims is rejected. Only the library loading path supplies a source reference; each consumer verifies the application's own origin and current ready metadata (ID, version and size) before accepting source/build-bound HTTP delivery. A matching URL pathname or arbitrary serialized reference is not authority. Index HTTP redirects are rejected. Internal server analysis snapshots retain the server's own source checks. A new consumer Worker and a server restart preserve valid index reuse; damaged documents rebuild with the same JS parser. Library clients do not replace a missing required server index with a client full-track scan or container WASM. Ordinary URLs, including library-shaped paths on unregistered servers, enumerate and verify the complete JS packet source instead.
+- Local opens use a session-local source identity. File name, size and mtime do
+  not authenticate a cached packet table. Eligible TS can begin with a bounded
+  playback prefix; that prefix cannot authorize complete exact analysis.
+- Library indexes bind media ID/version/size, selected stream, parser build and
+  integrity. The server validates source version before and after scanning and
+  owns the persistent seal. Self-asserted complete JS uploads are rejected.
+- Library consumers verify the application's origin and current ready source
+  metadata; a matching pathname or serialized reference alone grants no trust.
+  Index redirects are rejected. Corrupt or incompatible documents rebuild with
+  JS. A missing required library index does not trigger a client full-track scan
+  or a whole-container WASM fallback.
 
-The TS JS build changes from v2 to v3, so earlier JS and FFmpeg identities rebuild rather than silently reuse changed semantics. Matroska uses its separate v3 JS build identity after the display-transform and container-output checks. Both SimpleBlock and BlockGroup Invisible video is outside admission even if the codec payload says show-frame. Nonzero video DiscardPadding, virtual blocks/references and TimeSlices likewise require explicit output mapping; ordinary ReferenceBlock dependencies do not by themselves reject a picture or establish a safe anchor. Codec syntax remains the safe-anchor authority.
+Index terminal state and retained-source integrity remain separate; see
+[container recovery](container-recovery.md). IO/version errors, cancellation,
+unsupported layouts and resource limits retain their explicit failure category.
+A full first scan can read substantial payload data. Logical read counters,
+underlying filesystem/Blob IO, decoded queue memory and process RSS describe
+different costs and must not be substituted for one another.
 
-## Reproduce
+## Verification and historical evidence
 
 ```sh
 node scripts/run-tests.mjs --case node-js-container-index,node-js-container-matrix,node-js-container-server-cache
@@ -40,4 +82,18 @@ node scripts/run-tests.mjs ci-analysis-matrix-js-containers --engine chromium
 node scripts/run-tests.mjs ci-analysis-matrix-js-containers --engine webkit
 ```
 
-Fixtures are generated locally by the registered preparation command; no local media upload is involved. The existing required CI matrix has a separate `js-containers` partition in both engines. Raw browser observations and failure screenshots are retained by the standard fixture/runner artifact lifecycle. See [delivery evidence](evidence/js-container-reuse.json) for revisions, counts, performance verdicts and remaining acceptance. #64 was independently accepted and closed by the parent task on 2026-10-14. #63 stays open: remaining global format coverage, performance acceptance and actual cross-repository demux removal still gate a new alpha.
+The registered cases verify complete native-visible pixels, EOF, seeks, raw
+clocks, independent readers, corruption, cache reuse and cancellation. Full
+codec/container assertions and required selections live in the unified test
+manifest; packet statistics are not an exact-picture oracle.
+
+[Final migration evidence](evidence/demux-removal/final/README.md) preserves the
+original functional checks, first-scan IO cost and unresolved headless Chromium
+throughput/seek-tail observations. The earlier
+[TS product matrix](evidence/js-ts-product-route.json),
+[initial CI matrix](evidence/js-ts-product-route-ci-initial.json) and
+[artifact comparison](evidence/js-ts-core-provenance-comparison.json) retain their
+negative performance results and distinct local/CI playback bytes.
+[Reuse evidence](evidence/js-container-reuse.json) records its own historical
+revision and acceptance limits. None of these earlier measurements certifies
+current performance, physical hardware decoding or display scanout.

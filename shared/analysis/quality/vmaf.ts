@@ -50,7 +50,6 @@ export const VMAF_LIMITS = Object.freeze({
   ...TEMPORAL_RESOURCE_LIMITS, frames: 1024, width: 4096, height: 2304, minDimension: 64,
 });
 export type VmafModel = keyof typeof VMAF_MODELS;
-export type VmafComponentConfig = { directory: string; manifestSha256: string };
 export type VmafInput = {
   schema: "voidplayer-native-vmaf-job";
   version: 1;

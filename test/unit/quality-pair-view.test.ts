@@ -1,15 +1,12 @@
 import {pairViewFixture as fixture} from '../helpers/pair-view-fixture.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {inspectFlvFramePair,measureFlvFramePair,requireInspectionGeometry} from '../../shared/analysis/quality/frame-pair.ts';
-import type {InspectedFramePair,PairDecoder} from '../../shared/analysis/quality/frame-pair.ts';
+import {requireInspectionGeometry} from '../../shared/analysis/quality/frame-pair.ts';
+import type {InspectedFramePair} from '../../shared/analysis/quality/frame-pair.ts';
 import {QualityPairViewSession} from '../../src/session/quality-pair-view.ts';
 import {qualityPairViewUrl,pairViewEvidence,requirePairViewGeometry,verifyPairViewPresentation,verifyInspectedPair} from '../../shared/review/quality-pair-view.ts';
 import type {PairViewPresentation} from '../../shared/review/quality-pair-view.ts';
-import type {QualityEvidence} from '../../shared/review/quality-evidence.ts';
 import type {AnnotationRecord} from '../../shared/review/annotation-record.ts';
-import {rgbaDescription} from '../../shared/media/frame-description.ts';
-import {preparedPair,pairRequest,wrapFlv,pairAvcc,admissionIdr} from '../helpers/frame-pair-fixture.ts';
 const origin='http://localhost',reference={space:'shared',annotationId:'mark',evidenceId:'evidence'};
 
 function deferred<T>() {let resolve!:(value:T)=>void;const promise=new Promise<T>(r=>resolve=r);return {promise,resolve};}

@@ -55,7 +55,7 @@ for (const [directory, dependency] of Object.entries(lock.packages)) {
   for (const license of licenses) notices += await readFile(path.join(root, directory, license), 'utf8') + '\n';
 }
 await writeFile(path.join(out, 'deploy/licenses/javascript.txt'), notices);
-await writeFile(path.join(out, 'voidplayer.config.example.json'), JSON.stringify({ mediaRoots: [{ id: 'media', name: '媒体库', path: '/absolute/path/to/media' }], host: '127.0.0.1', port: 5180, allowLocalReveal: false, indexTtlMs: 30000, indexWatch: true, analysisConcurrency: 8, analysisDecoder: { threads: 1, contexts: 1 }, adminUsers: [] }, null, 2) + '\n');
+await writeFile(path.join(out, 'voidplayer.config.example.json'), JSON.stringify({ mediaRoots: [{ id: 'media', name: '媒体库', path: '/absolute/path/to/media' }], host: '127.0.0.1', port: 5180, allowLocalReveal: false, indexTtlMs: 30000, indexWatch: true, analysisConcurrency: 8, analysisDecoder: { threads: 1, contexts: 1 } }, null, 2) + '\n');
 // Include the exact application sources needed to rebuild with a different runtime.
 // Explicit paths and Git's excludes keep media, local settings, credentials and logs out.
 const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean);

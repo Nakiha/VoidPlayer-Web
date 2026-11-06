@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { loadConfig } from '../../server/config.ts';
@@ -79,17 +79,23 @@ test('directory watch hints can be disabled without disabling periodic calibrati
 });
 
 
-test('explicit admin environment overrides JSON identities, including revoking all users', async () => {
+test('retired admin and native installer settings are discarded without changing the config file', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'vp-admin-config-'));
   const original = process.env.VOIDPLAYER_ADMIN_USERS;
   try {
-    await writeFile(path.join(root, 'voidplayer.config.json'), JSON.stringify({ mediaRoots: ['media'], adminUsers: ['json-owner'] }));
-    process.env.VOIDPLAYER_ADMIN_USERS = 'team.admin, qa.tester';
-    assert.deepEqual((await loadConfig([], 'production', root)).adminUsers, ['team.admin', 'qa.tester']);
-    process.env.VOIDPLAYER_ADMIN_USERS = '';
-    assert.deepEqual((await loadConfig([], 'production', root)).adminUsers, []);
     process.env.VOIDPLAYER_ADMIN_USERS = 'bad\nuser';
-    await assert.rejects(loadConfig([], 'production', root), /adminUsers/);
+    const file = path.join(root, 'voidplayer.config.json');
+    for (const retired of [
+      { adminUsers: ['json-owner'], nativeVmaf: { directory: 'old-vmaf', manifestSha256: 'a'.repeat(64) }, nativeXpsnr: { directory: 'old-xpsnr', manifestSha256: 'b'.repeat(64) } },
+      { adminUsers: null, nativeVmaf: 'removed-component', nativeXpsnr: {} },
+    ]) {
+      const text = JSON.stringify({ mediaRoots: ['media'], ...retired });
+      await writeFile(file, text);
+      const config = await loadConfig([], 'production', root);
+      for (const key of Object.keys(retired)) assert.equal(Object.hasOwn(config, key), false);
+      assert.deepEqual(config.mediaRoots, [path.join(root, 'media')]);
+      assert.equal(await readFile(file, 'utf8'), text);
+    }
   } finally { if (original === undefined) delete process.env.VOIDPLAYER_ADMIN_USERS; else process.env.VOIDPLAYER_ADMIN_USERS = original; await rm(root, { recursive: true, force: true }); }
 });
 

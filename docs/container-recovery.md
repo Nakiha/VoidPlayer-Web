@@ -20,20 +20,31 @@ Read progress describes work performed, not proof of valid media coverage.
 - FLV uses the shared bounded scanner on the client and server. After a gap,
   dependent pictures are discarded until a verified closed random access point.
   Exhausting recovery budgets terminates with the previously validated prefix.
-- MPEG-TS, PS, Matroska/WebM and AVI share the FFmpeg core's demux-only scanner.
-  Recognized invalid data, a TS resynchronization failure, or a corrupt video
+- MPEG-TS uses its JS transport/PES/packet owner. Short tails preserve confirmed
+  AUs; larger gaps quarantine the last dependent GOP. Clock missingness,
+  physical offsets and retained-prefix warnings survive verified cache reuse.
+  Bounded broadcast recovery does not admit arbitrary dynamic/live PSI, and a
+  HEVC CRA is not promoted to a closed seek anchor.
+- Matroska/WebM uses its JS structural and packet adapters. A finite Segment
+  may retain its declared frames when unrelated bytes follow it. Damage within
+  the declared bounds, linked/multiple Segments and unsupported output layouts
+  still fail explicitly.
+- PS, AVI and elementary MPEG video retain the FFmpeg demux-only scanner.
+  Recognized invalid data or a corrupt video
   packet may finish a prefix. The last GOP is discarded, and all retained PTS
   and DTS must be known with a monotonic decode order. When no complete GOP can
   be confirmed, the error remains fatal. Recovery does not guess a new segment
   from an arbitrary container key flag. Already-published decoder-backed
   progressive scans retain their hard-error contract rather than retracting
-  published records. The Web local and server paths use demux-only scans.
+  published records. The Web local and server residual-format paths use these
+  demux-only scans.
 - MP4's packet adapter tolerates invalid trailing bytes only after finding a
   complete `moov` and `mdat`, then validating every referenced sample against
   its declared media extent. Structural boxes and nested tables remain strict.
   A truncated `mdat` keeps complete samples from full preceding GOPs; it drops
-  the final potentially dependent GOP. Fragmented and unsupported MP4 shapes
-  remain on the shared FFmpeg adapter.
+  the final potentially dependent GOP. Finite self-contained fragmented MP4 uses
+  the JS sample-table adapter and requires complete fragments. Unsupported or
+  damaged fragmented shapes fail explicitly; no FFmpeg MP4 demuxer remains.
 
 Input/IO failures, premature EOF from a short range response, changed resource
 versions, cancellation, unsupported codec/configuration and resource limits
@@ -43,7 +54,7 @@ reconstruct missing frames or guarantee arbitrary corrupted payloads are valid.
 
 ## Cache and transport
 
-The additive core recovery ABI is version 1; packet records remain ABI v3,
+For residual FFmpeg formats, the additive recovery ABI is version 1; packet records remain ABI v3,
 48 bytes, with the same original ordinal identities. Prefix metadata preserves
 `indexEndDts` in the stream's original time base. The decoder drains at that
 decode boundary and never submits the discarded GOP. Both streamed and legacy
@@ -54,7 +65,9 @@ publishes that manifest before `complete`, including on a cold request that
 already received the building manifest. A warm reopen preserves the same
 boundary and duration. The exact core commit is pinned in
 `scripts/release-core.json`; the new build identity separates old cache entries.
-Deploy frontend, server and both core variants together.
+Deploy frontend, server and both core variants together. JS TS/Matroska indexes
+retain their own versioned schemas, source seals and integrity metadata; see
+[JS containers and reuse](js-container-migration.md).
 
 ## Verification
 

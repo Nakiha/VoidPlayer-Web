@@ -4,7 +4,7 @@ import {holdScoringWorker,controlledExecutionDeadline} from '../helpers/analysis
 import {assertOfficial} from '../helpers/official-quality-oracle.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFile,writeFile} from 'node:fs/promises';
+import {writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {cambiFixture,cambiOracle,sha} from '../helpers/native-cambi.mjs';

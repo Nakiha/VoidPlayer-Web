@@ -62,7 +62,7 @@ for(const [codec,depth] of [['h264',8],['hevc',10]] as const)test(`bounded range
   const changed=structuredClone(input);changed.pairs[0].roi.width=30;assert.equal((await post('/api/quality/ranges',changed)).status,400,'invalid SSIM edge is rejected before idempotency conflict');
   const policy={space:'default',side:'reference',metric:'psnr',maxDb:120,limit:1,minAuDistance:1,text:'Range measurement candidate',severity:3};
   const mutate=AnnotationStore.prototype.mutate;let injected=false;
-  AnnotationStore.prototype.mutate=function(...args:Parameters<AnnotationStore['mutate']>){if(!injected&&(args[1] as {action?:string}).action==='create-quality-candidate'){injected=true;if(codec==='h264')throw new Error('test: failed before annotation commit');const value=mutate.apply(this,args);throw new Error('test: response lost after annotation commit');}return mutate.apply(this,args);};
+  AnnotationStore.prototype.mutate=function(...args:Parameters<AnnotationStore['mutate']>){if(!injected&&(args[1] as {action?:string}).action==='create-quality-candidate'){injected=true;if(codec==='h264')throw new Error('test: failed before annotation commit');mutate.apply(this,args);throw new Error('test: response lost after annotation commit');}return mutate.apply(this,args);};
   try{assert.equal((await post(`/api/quality/ranges/${first.id}/candidates`,policy)).status,500);}finally{AnnotationStore.prototype.mutate=mutate;}
   assert.equal(injected,true);const frozen=await get(`/api/quality/ranges/${first.id}/candidates`).then(r=>r.json());assert.equal(frozen.selected.length,1);assert.deepEqual(frozen.createdIds,[]);
   const pendingRelease=await post(`/api/tasks/range/${first.id}/release-result`,{});assert.equal(pendingRelease.status,200);

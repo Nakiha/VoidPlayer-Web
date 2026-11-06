@@ -1,7 +1,7 @@
 import {QualityApplication} from '../../server/quality-application.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { MediaLibraryIndex } from '../../server/library.ts';

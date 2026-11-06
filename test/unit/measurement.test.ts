@@ -15,7 +15,7 @@ async function fixture(run: (f: { base: string; root: string; file: string; data
   const file = path.join(root, 'media', 'sample.mp4'); await fs.mkdir(path.dirname(file));
   const data = Buffer.alloc(4 * MiB); for (let i = 0; i < data.length; i++) data[i] = i % 251;
   await fs.writeFile(file, data);
-  await fs.writeFile(path.join(root, 'voidplayer.config.json'), JSON.stringify({ mediaRoots: [{ id: 'main', name: '素材', path: 'media' }], indexWatch: false, adminUsers: ['owner', 'other'] }));
+  await fs.writeFile(path.join(root, 'voidplayer.config.json'), JSON.stringify({ mediaRoots: [{ id: 'main', name: '素材', path: 'media' }], indexWatch: false }));
   const config = await loadConfig([], 'production', root);
   const library = new MediaLibraryIndex(config.mediaRoots, { watch: false }); await library.refresh();
   const admin = new AdminController(config, library);

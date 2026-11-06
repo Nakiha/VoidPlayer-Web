@@ -16,7 +16,6 @@ import type { QualityExecutionContract } from "../../../shared/analysis/quality/
 import { AdminError } from "../../admin-error.ts";
 import type { Actor } from "../../identity.ts";
 import type { CorrespondenceService } from "../quality/correspondence-service.ts";
-import { qualityEvidenceValue } from "../../../shared/review/quality-evidence.ts";
 import type { QualityEvidenceRef } from "../../../shared/review/quality-evidence.ts";
 import type { QualityJobResult } from "../../../shared/analysis/quality/jobs.ts";
 import type { AnnotationStore } from "../../annotations.ts";
@@ -30,7 +29,6 @@ import {
 } from "../../../shared/analysis/quality/xpsnr.ts";
 import type {
   XpsnrInput,
-  XpsnrJob,
   XpsnrResult,
   XpsnrPlanSnapshot,
   XpsnrPrepared,

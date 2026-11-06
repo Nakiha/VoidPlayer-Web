@@ -16,7 +16,7 @@ const qualityInternals = new Map([
   ['server/analysis/quality/prepared-facts.ts', ['server/analysis/vmaf/service.ts', 'server/analysis/xpsnr/service.ts']],
   ['server/analysis/quality/temporal-service.ts', ['server/analysis/vmaf/service.ts', 'server/analysis/xpsnr/service.ts']],
   ['server/analysis/quality/temporal-runner.ts', [
-    'server/analysis/quality/temporal-service.ts', 'server/analysis/vmaf/runner.ts', 'server/analysis/vmaf/wasm-runner.ts', 'server/analysis/xpsnr/wasm-runner.ts',
+    'server/analysis/quality/temporal-service.ts', 'server/analysis/vmaf/wasm-runner.ts', 'server/analysis/xpsnr/wasm-runner.ts',
   ]],
   ['server/analysis/quality/result-commands.ts', ['server/quality-application.ts', 'server/quality-service-ports.ts']],
 ]);
@@ -198,8 +198,6 @@ export function checkModuleBoundaries(root) {
       assert.ok(qualityInternals.get(to).includes(from), `${from}: quality internal capability is private: ${to}`);
     if (to.startsWith('src/admin/quality/') && !from.startsWith('src/admin/quality/'))
       assert.ok(qualityAdminEntries.has(to.slice('src/admin/quality/'.length)), `${from}: quality admin implementation is private: ${to}`);
-    if (from === 'server/analysis/vmaf/runner.ts' && to === 'server/analysis/quality/temporal-runner.ts')
-      assert.equal(edge.kind, 'type', `${from}: compatibility hooks must remain type-only`);
     if (from === 'shared/analysis/quality/temporal-contract.ts' || from === 'shared/analysis/quality/xpsnr.ts')
       assert.ok(!/^shared\/analysis\/quality\/(vmaf|xpsnr)\.ts$/.test(to), `${from}: temporal facts depend on another metric: ${to}`);
     if (from.startsWith('src/')) assert.ok(!to.startsWith('server/'), `${from}: frontend imports server ${to}`);

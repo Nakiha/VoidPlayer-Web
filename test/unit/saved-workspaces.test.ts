@@ -64,7 +64,7 @@ test('workspace listing filters owners while shared access preserves attribution
 }));
 
 test('HTTP workspace access uses trusted ownership, same-origin writes and atomic competing updates', () => temporary(async root => {
-  await fs.mkdir(path.join(root, 'media')); await fs.writeFile(path.join(root, 'voidplayer.config.json'), JSON.stringify({ mediaRoots: ['media'], dataDir: 'data', logsDir: null, adminUsers: ['admin'], indexWatch: false }));
+  await fs.mkdir(path.join(root, 'media')); await fs.writeFile(path.join(root, 'voidplayer.config.json'), JSON.stringify({ mediaRoots: ['media'], dataDir: 'data', logsDir: null, indexWatch: false }));
   const config = await loadConfig([], 'production', root); config.port = 0;
   const service = await startService(config, false); const base = `http://127.0.0.1:${(service.server.address() as { port: number }).port}`;
   const actors: Record<string, { id: string; name: string }> = {};
@@ -120,7 +120,8 @@ test('old share API creates writable workspaces, anonymous reads do not create i
   try {
     const snapshot=document(); snapshot.media[0].source={kind:'library',id:'sample',url:base+'/api/media/sample?v=0123456789abcdef01234567'};
     const guestResponse=await fetch(base+'/api/identity',{method:'POST',headers:{origin:base,'x-voidplayer-action':'identity','content-type':'application/json'},body:JSON.stringify({guest:true})});
-    const guest=(await guestResponse.json()).actor,cookie=guestResponse.headers.get('set-cookie')!.split(';')[0];
+    await guestResponse.json();
+    const cookie=guestResponse.headers.get('set-cookie')!.split(';')[0];
     const headers={cookie,origin:base,'x-voidplayer-action':'workspace','content-type':'application/json'};
     const create=(origin:string)=>fetch(base+'/api/shares',{method:'POST',headers:{...headers,origin},body:JSON.stringify(snapshot)});
     assert.equal((await create('https://other.test')).status,403);

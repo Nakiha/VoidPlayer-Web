@@ -11,7 +11,6 @@ import type { QualityExecutionContract } from "../../../shared/analysis/quality/
 import { AdminError } from "../../admin-error.ts";
 import type { Actor } from "../../identity.ts";
 import type { CorrespondenceService } from "../quality/correspondence-service.ts";
-import { qualityEvidenceValue } from "../../../shared/review/quality-evidence.ts";
 import type { QualityEvidenceRef } from "../../../shared/review/quality-evidence.ts";
 import type { QualityJobResult } from "../../../shared/analysis/quality/jobs.ts";
 import type { AnnotationStore } from "../../annotations.ts";
@@ -22,7 +21,7 @@ import {
   terminalVmaf,
   VmafError,
 } from "../../../shared/analysis/quality/vmaf.ts";
-import type { VmafInput, VmafJob, VmafResult, VmafAssociation } from "../../../shared/analysis/quality/vmaf.ts";
+import type { VmafInput, VmafAssociation } from "../../../shared/analysis/quality/vmaf.ts";
 import type { WasmVmafRunner } from "./wasm-runner.ts";
 export class NativeVmafService extends TemporalScoringService<
   "vmaf",

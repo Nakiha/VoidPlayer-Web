@@ -48,7 +48,6 @@ import './themes/accessibility.css';
 import './style.css';
 import './ui/settings.css';
 import { shell } from './ui/shell.ts';
-import { icon } from './ui/icons.ts';
 import { installWorkbench } from './ui/workbench.ts';
 import { installSourceActions } from './ui/source-actions.ts';
 import { bindTimelinePreview, syncTimelineProgress } from './ui/seek-preview.ts';

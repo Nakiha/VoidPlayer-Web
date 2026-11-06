@@ -2,11 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { Worker } from 'node:worker_threads';
 import { RangeReader } from '../../shared/media/io/range-reader.ts';
 import { readMp4Configurations } from '../../shared/media/containers/mp4-config.ts';
-import { createRangeBridge } from '../../src/media/io/range-bridge.ts';
-import { WorkerRpc } from '../../src/media/decoding/ffmpeg-media.ts';
 import { Mp4Engine } from '../../src/media/decoding/mp4-engine.ts';
 import { mp4BoundaryFixture } from '../../scripts/mp4-boundary-fixture.ts';
 

@@ -24,7 +24,6 @@ import type { VmafInput, VmafJob } from "../../../shared/analysis/quality/vmaf.t
 import type { VmafResult, VmafNativeResult } from '../../../shared/analysis/quality/vmaf.ts';
 import type { XpsnrResult, XpsnrNativeResult } from '../../../shared/analysis/quality/xpsnr.ts';
 import { sameExecutionContract } from '../../../shared/analysis/quality/reexecution.ts';
-import type { QualityExecutionContract } from '../../../shared/analysis/quality/reexecution.ts';
 import type { TemporalHooks } from './temporal-runner.ts';
 import type { XpsnrInput } from "../../../shared/analysis/quality/xpsnr.ts";
 

@@ -31,10 +31,6 @@ export const XPSNR_LIMITS = Object.freeze({
 export const XPSNR_RECIPE = "ffmpeg-xpsnr-reference-first-temporal-v1";
 export type XpsnrDb = PsnrStatistics["psnr"];
 export type XpsnrPlanes = { y: XpsnrDb; u: XpsnrDb; v: XpsnrDb };
-export type XpsnrComponentConfig = {
-  directory: string;
-  manifestSha256: string;
-};
 export type XpsnrInput = {
   schema: "voidplayer-native-xpsnr-job";
   version: 1;

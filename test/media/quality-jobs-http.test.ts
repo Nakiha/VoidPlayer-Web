@@ -48,14 +48,14 @@ export function assertNativeJob(result:QualityJobResult,raw:Uint8Array,depth:8|1
  }}
 }
 for(const [codec,depth]of [['h264',8],['hevc',8],['hevc',10]]as const)test(`durable HTTP ${codec} ${depth}-bit: native SSE, idempotency and restart history`,{timeout:90000},async t=>{
- const dir=await mkdtemp(join(tmpdir(),'vp-quality-jobs-http-')),media=join(dir,'media'),database=join(dir,'library.sqlite');
+ const dir=await mkdtemp(join(tmpdir(),'vp-quality-jobs-http-')),media=join(dir,'media');
  let service:Awaited<ReturnType<typeof startService>>|undefined;
- let library:MediaLibraryIndex|undefined,server:Awaited<ReturnType<typeof startService>>['server']|undefined;
- const stop=async()=>{await service?.close();service=undefined;server=undefined;library=undefined;};
+ let library:MediaLibraryIndex|undefined;
+ const stop=async()=>{await service?.close();service=undefined;library=undefined;};
  t.after(async()=>{await stop();await rm(dir,{recursive:true,force:true});});
  await mkdir(media);const fixture=await encodedPair(dir,codec,depth);
  for(const role of ['reference','distorted'])await writeFile(join(media,role+'.flv'),fixture.bytes);
- const start=async()=>{const config=await loadConfig([],'production',dir,{staticDir:resolve('public'),dataDir:join(dir,'data'),logsDir:join(dir,'logs'),allowEmptyRoots:true});config.mediaRoots=[media];config.logsDir=null;config.indexWatch=false;config.port=0;service=await startService(config,false);library=service.library;server=service.server;await library.refresh();return `http://127.0.0.1:${(service.server.address()as AddressInfo).port}`;};
+ const start=async()=>{const config=await loadConfig([],'production',dir,{staticDir:resolve('public'),dataDir:join(dir,'data'),logsDir:join(dir,'logs'),allowEmptyRoots:true});config.mediaRoots=[media];config.logsDir=null;config.indexWatch=false;config.port=0;service=await startService(config,false);library=service.library;await library.refresh();return `http://127.0.0.1:${(service.server.address()as AddressInfo).port}`;};
  let base=await start();const cookie=`voidplayer-user=guest-${randomUUID()}`,headers={cookie,origin:base,'content-type':'application/json','x-voidplayer-action':'quality-job'};
  const discovery=await fetch(base+'/api/agent',{headers:{cookie}}).then(r=>r.json());
  assert.equal(discovery.capabilities.find((c:any)=>c.id==='quality.jobs').readiness,'per-source');

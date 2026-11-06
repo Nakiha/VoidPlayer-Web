@@ -16,7 +16,7 @@ import { type ReferenceDecode, type ColorMode, type DecodeConfiguration } from '
 import { getColorOutput, defaultColorOutput } from '../shared/color/color-output.ts';
 import type { ColorOutput } from '../shared/color/color-output.ts';
 import type { AnnotationDocument } from '../shared/review/annotation-record.ts';import {recordPresentedFrame,updateMediaInfo} from './media/state.ts';
-import type { MediaLoadStatus, MediaLoadStage, MediaOpenProgress } from './media/progress.ts';
+import type { MediaLoadStatus, MediaOpenProgress } from './media/progress.ts';
 import { abortableLoad } from '../shared/media/io/media-abort.ts';
 import { parseWorkspace, workspaceUrl } from '../shared/review/workspace-file.ts';
 import type { ComparisonConditions, WorkspaceFile } from '../shared/review/workspace-file.ts';

@@ -42,7 +42,7 @@ test('existing page pairing is bounded, single use, independent capabilities, st
   try{assert.equal((await post(origin,P+'/status',{},cli)).status,403,'authorization deadline is not renewed by the CLI');}finally{Date.now=clock;}
   assert.equal((await post(origin,P+'/close',{},cli)).status,200);
   assert.equal((await post(origin,P+'/status',{},cli)).status,403,'EOF capability is retired');
-  const expiresDocument=await(await post(origin,P+'/document',{},pageHeaders)).json();
+  await(await post(origin,P+'/document',{},pageHeaders)).json();
   const expired=await(await post(origin,P+'/request',{})).json();
   const expiredCli={'x-voidplayer-bridge-request':expired.id,authorization:'Bearer '+expired.secret};
   await post(origin,P+'/sync',{client:{name:'x',version:'1'},revision:1,ready:true},expiredCli);

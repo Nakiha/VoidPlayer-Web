@@ -2,7 +2,7 @@ import {openPacketMedia} from '../../src/media/decoding/packet-media.ts';
 import { BrowserWorker as Worker } from '../helpers/browser-worker-host.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,7 +10,6 @@ import { pathToFileURL } from 'node:url';
 import { MediaLibraryIndex } from '../../server/library.ts';
 import { instantiateCore } from '../../shared/wasm/core.ts';
 import { createMediaServer } from '../../server/app.ts';
-import { openFFmpegMedia, openFFmpegContainerFromUrl } from '../../src/media/decoding/ffmpeg-media.ts';
 
 test('cold and warm server corruption prefixes import the same decode boundary and exact seek pixels', { timeout: 60000 }, async () => {
   const coreDir = process.env.WASM_CORE_DIR || path.resolve('public/vendor/voidplayer-core');

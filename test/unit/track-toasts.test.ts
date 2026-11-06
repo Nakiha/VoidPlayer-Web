@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createTrackToasts } from '../../src/ui/track-toasts.ts';
-import { setLanguage } from '../../src/i18n.ts';
 import type { ReviewSession } from '../../src/session.ts';
 import type { ToastOptions } from '../../src/ui/toast.ts';
 

@@ -5,8 +5,6 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import type { MediaRoot } from './library-store.ts';
 import { parseTls } from './tls.ts';
-import type {XpsnrComponentConfig} from '../shared/analysis/quality/xpsnr.ts';
-import type {VmafComponentConfig} from '../shared/analysis/quality/vmaf.ts';
 import type { TlsConfig } from './tls.ts';
 import {qualityResourceLimits} from '../shared/service/quality-resources.ts';
 import type {QualityResourceLimits,QualityResourceChange} from '../shared/service/quality-resources.ts';
@@ -15,14 +13,8 @@ export interface ServiceConfig {
   mediaRoots: MediaRoot[]; dataDir: string; host: string; port: number; devPort: number;
   staticDir: string; logsDir: string | null; allowLocalReveal: boolean; indexTtlMs: number; indexWatch: boolean; analysisConcurrency: number;
   analysisDecoder?: AnalysisDecoderSettings;
-  /** Legacy configuration, retained for compatibility; all users are trusted. */
-  adminUsers: string[];
   qualityResources?: QualityResourceLimits;
   qualityResourceHistory?: QualityResourceChange[];
-  /** Deprecated: accepted for old config files, ignored by analysis WASM scoring. */
-  nativeVmaf?:VmafComponentConfig;
-  /** Deprecated: accepted for old config files, ignored by analysis WASM scoring. */
-  nativeXpsnr?:XpsnrComponentConfig;
   tls?: TlsConfig | null;
   httpPort?: number | null;
   origin?: { file: string; revision: string; rootsFromCli: boolean };
@@ -55,10 +47,11 @@ export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd
   let configText = '';
   try { configText = await readFile(file, 'utf8'); data = JSON.parse(configText); }
   catch (error) { if (configFile || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
-  const defaults: ServiceConfig = { dataDir: paths.dataDir ?? path.resolve(cwd, '.run/data'), mediaRoots: mode === 'dev' ? [path.resolve(cwd, 'fixtures/video')] : [], host: '127.0.0.1', port: 5180, devPort: 5178, staticDir: paths.staticDir ?? path.resolve(cwd, 'dist'), logsDir: paths.logsDir ?? path.resolve(cwd, 'logs'), allowLocalReveal: false, indexTtlMs: 30000, indexWatch: true, analysisConcurrency: DEFAULT_ANALYSIS_CONCURRENCY, adminUsers: [] };
+  const defaults: ServiceConfig = { dataDir: paths.dataDir ?? path.resolve(cwd, '.run/data'), mediaRoots: mode === 'dev' ? [path.resolve(cwd, 'fixtures/video')] : [], host: '127.0.0.1', port: 5180, devPort: 5178, staticDir: paths.staticDir ?? path.resolve(cwd, 'dist'), logsDir: paths.logsDir ?? path.resolve(cwd, 'logs'), allowLocalReveal: false, indexTtlMs: 30000, indexWatch: true, analysisConcurrency: DEFAULT_ANALYSIS_CONCURRENCY };
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('服务配置必须是 JSON 对象。');
-  for (const key of Object.keys(data)) if (!Object.hasOwn(defaults, key) && !['tls', 'httpPort','nativeVmaf','nativeXpsnr','qualityResources','qualityResourceHistory','analysisDecoder'].includes(key)) throw new Error(`未知配置项: ${key}`);
-  if (process.env.VOIDPLAYER_ADMIN_USERS !== undefined) overrides.adminUsers = process.env.VOIDPLAYER_ADMIN_USERS.split(',').map(id => id.trim()).filter(Boolean);
+  // Retired keys are accepted only at the file boundary; runtime config owns no legacy settings.
+  for (const key of ['adminUsers', 'nativeVmaf', 'nativeXpsnr']) delete data[key];
+  for (const key of Object.keys(data)) if (!Object.hasOwn(defaults, key) && !['tls', 'httpPort','qualityResources','qualityResourceHistory','analysisDecoder'].includes(key)) throw new Error(`未知配置项: ${key}`);
   const config = { ...defaults, ...data, ...overrides } as ServiceConfig;
   if(config.qualityResources!==undefined)config.qualityResources=qualityResourceLimits(config.qualityResources);
   if(config.qualityResourceHistory!==undefined){
@@ -66,8 +59,6 @@ export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd
     if(!Array.isArray(h)||h.length>32||Buffer.byteLength(JSON.stringify(h))>65536)throw Error('Invalid quality resource history');
     for(const c of h){if(!c||!Number.isSafeInteger(c.at)||typeof c.actor?.id!=='string'||typeof c.actor.name!=='string'||typeof c.requestId!=='string'||!/^[a-f0-9]{64}$/.test(c.previousRevision))throw Error('Invalid quality resource change');qualityResourceLimits(c.before);qualityResourceLimits(c.after);}
   }
-  if(config.nativeVmaf!==undefined){const c=config.nativeVmaf;if(!c||typeof c!=='object'||Object.keys(c).sort().join(',')!=='directory,manifestSha256'||typeof c.directory!=='string'||!c.directory||!/^[a-f0-9]{64}$/.test(c.manifestSha256))throw Error('nativeVmaf requires trusted directory and manifestSha256');config.nativeVmaf={directory:path.resolve(path.dirname(file),c.directory),manifestSha256:c.manifestSha256};}
-  if(config.nativeXpsnr!==undefined){const c=config.nativeXpsnr;if(!c||typeof c!=='object'||Object.keys(c).sort().join(',')!=='directory,manifestSha256'||typeof c.directory!=='string'||!c.directory||!/^[a-f0-9]{64}$/.test(c.manifestSha256))throw Error('nativeXpsnr requires trusted directory and manifestSha256');config.nativeXpsnr={directory:path.resolve(path.dirname(file),c.directory),manifestSha256:c.manifestSha256};}
   config.tls = parseTls(config.tls, path.dirname(file));
   if (config.httpPort !== undefined && config.httpPort !== null && (!Number.isInteger(config.httpPort) || config.httpPort < 1 || config.httpPort > 65535 || config.httpPort === config.port)) throw new Error('httpPort 必须是与 HTTPS 端口不同的 1–65535 端口，或 null。');
   if (folders.length) config.mediaRoots = folders;
@@ -81,7 +72,6 @@ export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd
     throw new Error('analysisDecoder 需要 1–4 个线程，帧上下文数必须介于 1 和线程数之间。');
   if (!validAnalysisConcurrency(config.analysisConcurrency)) throw new Error('analysisConcurrency 必须是 1–32 的整数。');
   if (typeof config.indexWatch !== 'boolean') throw new Error('indexWatch 必须是布尔值。');
-  if (!Array.isArray(config.adminUsers) || config.adminUsers.length > 100 || config.adminUsers.some(id => typeof id !== 'string' || !id.trim() || id !== id.normalize('NFC').trim() || id.length > 128 || /[\p{Cc}\p{Cf}]/u.test(id)) || new Set(config.adminUsers).size !== config.adminUsers.length) throw new Error('adminUsers 必须是不重复的用户名列表。');
   if (!Number.isInteger(config.indexTtlMs) || config.indexTtlMs < 1000 || config.indexTtlMs > 3600000) throw new Error('indexTtlMs 必须是 1000–3600000 毫秒。');
   if (typeof config.staticDir !== 'string' || !config.staticDir || (config.logsDir !== null && (typeof config.logsDir !== 'string' || !config.logsDir))) throw new Error('staticDir / logsDir 配置无效。');
   if (typeof config.dataDir !== 'string' || !config.dataDir.trim()) throw new Error('dataDir 无效。');

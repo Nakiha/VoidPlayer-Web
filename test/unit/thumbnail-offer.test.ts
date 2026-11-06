@@ -94,7 +94,6 @@ test('accepted video-sample clones without touching the original', () => {
   assert.equal(originalClosed, false);
   // Epoch is frozen at accept.
   assert.equal(thumbnailState.cachedEpoch((offered as { context: FirstFrameContext }).context.cacheKey), 7);
-  const owned = (offered as import('../../src/thumbnails/offer.ts').AcceptedOffer).owned;
   (offered as import('../../src/thumbnails/offer.ts').AcceptedOffer).release();
   assert.equal(closes(), 1);
   assert.equal(originalClosed, false);

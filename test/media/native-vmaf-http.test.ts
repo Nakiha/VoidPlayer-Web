@@ -1,7 +1,7 @@
 import {replaceRunnerAnalysisDirectory} from '../helpers/analysis-component-fixture.ts';
 import {assertVmafOfficial as assertOfficial} from '../helpers/official-quality-oracle.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';
-import {readFile,writeFile,copyFile} from 'node:fs/promises';import path from 'node:path';import {randomUUID} from 'node:crypto';
+import {readFile,writeFile} from 'node:fs/promises';import path from 'node:path';import {randomUUID} from 'node:crypto';
 import {nativeFixture,officialOracle,until} from '../helpers/native-vmaf.mjs';
 import {qualityEvidenceValue,qualityEvidenceList} from '../../shared/review/quality-evidence.ts';
 import {AnnotationStore} from '../../server/annotations.ts';

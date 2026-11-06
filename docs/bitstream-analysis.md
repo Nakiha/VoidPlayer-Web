@@ -1,4 +1,4 @@
-# 按需码流分析 MVP
+# 按需码流分析
 
 轨道信息的「当前帧」按 PTS序、DTS序、片内 PTS、源 PTS、源 DTS、帧时长、相对游标排列。两种序号复用顶部面板的只读包表排名：从 0 开始，重复 PTS 共享展示排名，解码序号取精确命中的首个包；未精确命中或尚无索引时显示「—」，构建中的序号带 `~`。源 DTS 来自同一次匹配的包，不减片源起点或加轨道偏移，缺失时不以 PTS 代替。轨道信息只查询已有包表，不启动原生元数据枚举、解码或深度分析；换片、换帧和切换轨道后丢弃旧查询回复。
 
@@ -19,7 +19,7 @@ UI 和 Agent 使用 `ReviewSession` 的相同入口：`getPresentedFrame`、`req
 
 ## 支持矩阵与身份
 
-可执行矩阵是 `scripts/bitstream-analysis-matrix.json`；浏览器回归逐行执行本地 File / 媒体库和现有 browser / reference software 播放路径。H.264、HEVC、VVC 的真实 MP4 均有成功正向样本。WebCodecs 可用性由平台决定，实际使用的 decoder 写入测试报告；VVC 走 packet WASM。本轮新增有限 FLV 文件（AVC、legacy/private、Enhanced framing），同样逐项运行本地与媒体库组合。有限、自包含、单视频轨/单 stsd 的 fMP4 也使用共享包索引与连续 AU；完整范围和限制见 [Issue #59 状态](issue-59-status.md)。TS、MKV、外部 init、直播/混合/多配置/时间断裂分片与无 packet 身份的容器解码仍不在范围内。
+可执行矩阵是 `scripts/bitstream-analysis-matrix.json`；浏览器回归逐行执行本地 File / 媒体库和 browser / reference software 播放路径。H.264、HEVC、VVC 的普通 MP4、有限 FLV 和有限自包含 fMP4 使用共享包索引与连续 AU。已准入的 TS、Matroska 组合由独立 JS 包源进入相同分析协议，具体范围见 [JS 容器与索引](js-container-migration.md)。WebCodecs 可用性由平台决定，实际 decoder 写入报告；VVC 使用 packet WASM。外部 init、直播、混合或多配置分片、时间断裂与无可验证 picture 身份的输入不授权精确分析。
 
 持久 key 是 source version、video stream、description 配置段、稳定 sample/AU ordinal、picture 0、layer 0、frame。本地 File 使用会话中的随机来源 ID，不按文件名、长度或 mtime 拼身份；媒体库使用 `id@version`。配置、AU 索引、源时间戳缺失或重复以及不唯一的 packet/picture 映射必须拒绝。
 
@@ -64,13 +64,13 @@ Field picture、palette 的使用、损坏/concealment、不完整覆盖和非 4
 
 结果 JSON、JS 对象、WASM heap、viewport canvas 属于不同的内存开销；JSON 计量缓存配额不宣称是浏览器总 RSS 限额。预算超限只结束分析，不能改变播放 decoder、轨道 failure、时长或索引。逻辑 bytesRead 不是 RangeReader 物理网络字节；服务端无 Range 下载，测试另外记录 Range 响应时间。
 
-## 失败分类与首批交付边界
+## 失败分类与能力边界
 
 本地 worker、服务端队列、HTTP 与会话共用结构化 `reason: {code, kind, message}`。稳定码包括 `unsupported-container`、`unsupported-codec`、`unsupported-picture-layout`、`no-safe-anchor-within-budget`、`unsupported-qp-depth`、`incomplete-reference-state`、`ambiguous-picture-identity`、`resource-limit`、`source-changed`、`invalid-request`、`cancelled`、`internal-error`。分类不匹配人类可读异常文本；未知异常仍是实现错误。`resource-limit` 是 limited，合法但未支持的组合是 unsupported，源变更和内部错误是 error。界面显示对应反馈，Agent 可以直接读取原因码。
 
 服务端不再把所有 partial 输出归为内部错误；经过身份校验、无块且最多 16 KiB 的 unsupported 摘要只保留在 consumer 租约内，不写 exact chunk 或完整 manifest。10-bit HEVC 实测 blocks/modes 保持 exact、QP 为 null/unsupported；QP 选项禁用。损坏和 unsupported 输入不放宽身份、预滚预算或完整覆盖校验。
 
-第一阶段交付是普通 MP4 MVP；#56 的范围、验证依据和发布门禁见 [验收状态](issue-56-status.md)。FLV、高位深 QP、复杂随机访问（包括非闭合 IDR 起点）、更多 slice/工具属于后续能力扩展。
+容器已准入不代表所有编码工具或输出能力已准入。高位深 QP、未证明的随机访问链及复杂 slice/工具仍按各自能力明确拒绝；当前矩阵、核心实际能力和发布检查共同约束支持范围。
 
 有界区间现在按只读 MP4 索引枚举实际 picture，逐帧查询缓存，而不是依据最大时间戳或几个缓存点推断覆盖。本地查询共享会话缓存，服务端查询跨任务持久化 picture chunk；因此不同起止点的重叠区间、单帧和已提交的整片结果可以复用。每个命中校验完整 picture 身份、精确 PTS、codec、schema、buildId、recipe、分析器版本及 blocks/modes 能力；高位深 QP 的 unsupported 状态原样保留，不能冒充已支持 QP。无效、淘汰、损坏或旧构建结果作为缺口重新计算。
 
@@ -160,7 +160,11 @@ NALU 图在第 0 帧前一个帧间隔处保留标记为 −1 的虚拟容器配
 
 ## 多容器输入扩展
 
-普通 MP4 与有限 FLV 文件通过统一压缩单元接口进入相同分析 runner。首轮 FLV 的 framing、原始时间与播放身份、索引前缀及排除项见 [Issue #59 状态](issue-59-status.md)。第二阶段支持有限自包含 fMP4；TS/MKV 留待后续。
+`shared/analysis/bitstream/input.ts` 按文件头和已验证的来源身份选择 MP4、FLV、JS TS 或 JS Matroska adapter。每个 adapter 独立拥有 reader/cursor，保留容器原始配置、payload 与 PTS/DTS ticks；runner 只通过统一压缩单元接口读取，不解释容器位置。TS/Matroska 的索引与支持边界见 [JS 容器契约](js-container-migration.md)。
+
+FLV 的播放前缀不证明全局 PTS 唯一；完成索引后才可授权精确 picture 身份。前缀期间已展示的帧需经过新一次呈现/seek 才能取得已核验 token。独立分析使用完整且绑定来源的索引快照，不借用播放字节缓存或解码器。损坏恢复遵守 [FLV 时间线](flv-timeline.md#damaged-tails)。
+
+有限自包含 fMP4 保留整轨 decode-order AU、原始 tfdt/CTO 时钟和独立的 edit-list 后微秒投影。Fragment 边界不代表 GOP，不在每个 fragment 排空解码器；EOF 完整排空。当前有限分片准入要求单视频轨/单 stsd、连续 decode clock；混合普通样本与分片、外部 init、增长直播、加密、时间断裂及损坏/截断分片明确拒绝，不通过已删除的 FFmpeg MP4 解封装路径重开。
 
 ## 可见区间与暂停
 

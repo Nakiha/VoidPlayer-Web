@@ -7,7 +7,6 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { openFFmpegMedia } from '../../src/media/decoding/ffmpeg-media.ts';
 import { openPacketMedia } from '../../src/media/decoding/packet-media.ts';
 import { validateDescription } from '../../shared/media/frame-description.ts';
 

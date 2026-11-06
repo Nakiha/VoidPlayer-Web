@@ -43,14 +43,15 @@ FFmpeg 容器回退原本就调用 `vp_index_build` 扫描包建立 PTS/时长�
 | --- | --- | --- |
 | WebCodecs | `src/media/source.ts` | Mediabunny 解封装，通过文件或 HTTP Range 读取；浏览器负责支持的编码组合 |
 | MP4 压缩包 | `src/media/decoding/mp4-engine.ts`、`shared/media/codecs/hevc-timeline.ts`、`src/media/decoding/packet-media.ts`、`src/media/decoding/packet-worker.ts` | TS 读取包索引，按 GOP 读取压缩数据；缺失重排时间的 HEVC 可恢复显示序并继续 WebCodecs，其余包回退由 WASM 解码 |
-| FFmpeg 解封装回退 | `src/media/decoding/ffmpeg-media.ts`、`src/media/decoding/ffmpeg-worker.ts` | 仅用于尚不能用 TS 压缩包路径处理的文件；本地 Blob AVIO、远程 Range AVIO，不在浏览器整文件下载或写入 MEMFS；Node 本地文件测试仍有 512 MiB 上限 |
+| JS TS / Matroska | `shared/media/containers/`、`src/media/decoding/js-container-engine.ts` | 已准入组合由 JS 解析和索引，WebCodecs 或 packet WASM 解码；具体范围见 [JS 容器契约](js-container-migration.md) |
+| FFmpeg 剩余容器 | `src/media/decoding/ffmpeg-media.ts`、`src/media/decoding/ffmpeg-worker.ts` | 仅保留 AVI、MPEG-PS、原始 MPEG video；本地 Blob AVIO、远程 Range AVIO，不在浏览器整文件下载或写入 MEMFS；Node 本地文件测试仍有 512 MiB 上限 |
 | FLV | `src/media/decoding/flv-media.ts`、`src/media/decoding/flv-engine.ts`、`shared/media/containers/flv-demux.ts`、`src/media/decoding/flv-decoder.ts` | Worker 内分块/Range 解封装，WebCodecs 或 packet-only WASM 解码；不使用整文件 MEMFS |
 
 FLV 支持标准 AVC、legacy HEVC、private AV1/VVC，以及单轨 Enhanced FLV 的 avc1/hvc1/av01/vvc1。重复配置头可接受；支持从关键帧开始的同编码配置与分辨率切换，按配置段解码、drain 和定位，显示帧提交时才更新尺寸。中途更换编码种类、切换缺少关键帧、多轨 Enhanced FLV 和不支持的编码会返回诊断。它是可定位的文件播放器，不是 HTTP-FLV/RTMP 直播客户端。
 
 普通 MP4 的 sample table 已给出包大小、时间戳和关键帧位置，因此读取索引不需要遍历 `mdat`。VVC 的 `vvcC` 配置由小范围 box 读取补充，包表、B 帧排序和 edit list 由 Mediabunny 的公开接口处理。分片 MP4 可能仍需遍历 fragment 头。FLV 缺少完整 sample table，由 TS 扫描 tag 头构建索引；64 KiB 预读可能覆盖部分载荷，小包密集文件仍可能读到大部分文件，但不会整文件驻留。
 
-Range 压缩数据缓存每轨最多 8 MiB（MP4 解封装库另有最多 1 MiB 缓存）；MP4/FFmpeg 以 256 KiB 块读取，FLV 以 64 KiB 块读取。HTTP 必须返回精确的 206/Content-Range；忽略 Range、截断、响应过长及文件版本变化都报输入错误，不静默退回整文件下载。FFmpeg 同步 AVIO 通过 SharedArrayBuffer 与异步 fetch 桥接，需要 COOP/COEP 跨源隔离；MP4/FLV 的 TS 路径没有这项读取限制。FFmpeg 容器回退仍会扫描包建立索引，因此 TS/MKV 等文件的首次载入时间还可能随文件长度增长。
+Range 压缩数据缓存每轨最多 8 MiB（MP4 解封装库另有最多 1 MiB 缓存）；MP4/FFmpeg 以 256 KiB 块读取，FLV 以 64 KiB 块读取。HTTP 必须返回精确的 206/Content-Range；忽略 Range、截断、响应过长及文件版本变化都报输入错误，不静默退回整文件下载。FFmpeg 同步 AVIO 通过 SharedArrayBuffer 与异步 fetch 桥接，需要 COOP/COEP 跨源隔离。TS/MKV 的 JS 首次索引也可能扫描大量包或载荷；更换容器实现不代表首扫零 I/O。
 
 索引用于真实帧时间、关键帧定位、倒退逐帧和尾帧定位。当前已支持首帧就绪后开放轨道并在后台渐进索引。会话和 UI 区分已索引范围、暂定时长、index-wait 与 catching-up；跳转/加入轨道仅等待目标所需的前缀，未完成索引不等于不能播放。具体边界见 [渐进索引](progressive-indexing.md)。
 
