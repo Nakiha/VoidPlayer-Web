@@ -973,11 +973,12 @@ test('summary pages resume without duplicate writes; warm work has zero decode a
     const requestId = (await repair.submit(f.entry.id, f.entry.version!, request, 'repair')).requestId;
     let cursor = 0, cold = 0, cached = 0; const aus = new Set<number>(), wait = readableStreamWait('mixed-cached-gop');
     for (;;) {
-      const state = await repair.streamStatus(requestId, 'repair', cursor, true); assert.ok(state);
+      const state = await repair.streamStatus(requestId, 'repair', cursor, 'summary'); assert.ok(state);
       assert.ok(['queued', 'running', 'complete'].includes(state.state), JSON.stringify(state));
       for (const chunk of state.chunks) {
-        const values = chunk.cachedGop ?? [await repair.store.getOutput(chunk.id, chunk.au)];
-        if (chunk.cachedGop) cached += values.length; else cold++;
+        const values = chunk.cachedGop ?? chunk.summaryBatch ?? [await repair.store.getOutput(chunk.id, chunk.au)];
+        if (chunk.cachedGop) cached += values.length;
+        else { assert.ok(chunk.summaryBatch?.length); assert.ok(chunk.summaryBatch.length <= 32); assert.equal(chunk.cached, false); cold += values.length; }
         for (const value of values) { assert.ok(value); assert.ok(!aus.has(value.picture.au)); aus.add(value.picture.au); }
         cursor = chunk.cursor;
       }

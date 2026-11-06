@@ -264,7 +264,7 @@ test('evicted shared namespace cannot be revived by a late picture or plan',asyn
  }finally{service.dispose();globalThis.fetch=saved.fetch;if(saved.location)Object.defineProperty(globalThis,'location',saved.location);else Reflect.deleteProperty(globalThis,'location');}
 });
 
-test('remote cached GOP transport validates and publishes the batch atomically without picture downloads', async () => {
+test('remote cold and cached summary transport validates and publishes atomically without picture downloads', async () => {
   const { BitstreamAnalysisService } = await import('../../src/analysis/bitstream/service.ts');
   const { makeDemandPlan } = await import('../../shared/analysis/bitstream/demand.ts');
   const saved = { fetch: globalThis.fetch, location: Object.getOwnPropertyDescriptor(globalThis, 'location') };
@@ -283,23 +283,24 @@ test('remote cached GOP transport validates and publishes the batch atomically w
     if (url.includes('capabilities')) return Response.json({ buildId: 'test' });
     if (init?.method === 'POST') return Response.json({ requestId: 'request' });
     if (url.includes('/chunks/')) { downloads++; throw Error('unexpected picture download'); }
-    assert.equal(new URL(url).searchParams.get('pack'), 'gop');
+    assert.equal(new URL(url).searchParams.get('pack'), 'summary');
     const batch = structuredClone(summaries);
     if (mode === 'build') batch[1].buildId = 'other';
     if (mode === 'duplicate') batch[1] = batch[0];
     return Response.json({ state: 'complete', seq: 1, buildId: 'test', published: 2, plan,
       progress: { pictures: 2, totalPictures: 2, totalUs: 80000, checkedUs: 80000, indexComplete: true },
-      chunks: [{ startCursor: 1, cursor: mode === 'cursor' ? 3 : 2, cachedGop: batch }] });
+      chunks: [{ startCursor: 1, cursor: mode === 'cursor' ? 3 : 2, cached: mode !== 'cold',
+        ...(mode === 'cold' ? { summaryBatch: batch } : { cachedGop: batch }) }] });
   };
   try {
-    for (mode of ['valid', 'build', 'duplicate', 'cursor']) {
+    for (mode of ['valid', 'cold', 'build', 'duplicate', 'cursor']) {
       const counts: number[] = [], service = new BitstreamAnalysisService(() => { const count = service.state.stream?.pictures; if (count !== undefined) counts.push(count); });
-      if (mode === 'valid') {
+      if (mode === 'valid' || mode === 'cold') {
         assert.equal((await service.requestStream(source, target, 'A')).pictures, 2);
         assert.ok(!counts.includes(1), 'a cached GOP becomes visible in a single publication');
         assert.equal(service.queryChart(target.sourceVersion, 100, 80100, 100).count, 2);
       } else {
-        await assert.rejects(service.requestStream(source, target, 'A'), /Invalid cached GOP/);
+        await assert.rejects(service.requestStream(source, target, 'A'), /Invalid summary batch/);
         assert.equal(service.queryChart(target.sourceVersion, 100, 80100, 100).count, 0, 'invalid batches publish no partial chart');
       }
       service.dispose();

@@ -1,4 +1,6 @@
 import type { IncomingMessage, ServerResponse } from '../http.ts';
+import { createHash } from 'node:crypto';
+import { matchesEtag } from '../conditional.ts';
 import { THUMB_POST_BODY_MAX, THUMB_RECIPE_VERSION, thumbnailImageUrl } from '../../shared/thumbnails/contract.ts';
 import { AdminError, adminWriteAllowed } from '../admin.ts';
 import { adminErrorBody } from '../admin-error.ts';
@@ -35,9 +37,11 @@ export async function handleThumbnailRoute(library: RouteContext['library'], req
         const row = library.thumbnails.get(thumbId, version, recipe);
         if (!row) { res.setHeader('cache-control', 'no-store'); sendJson(res, 404, { error: 'thumbnail not found' }); return true; }
         res.setHeader('content-type', 'image/jpeg');
-        res.setHeader('content-length', String(row.bytes));
-        res.setHeader('etag', `"thumb-${version}-${row.bytes}"`);
+        const etag = `"thumb-${createHash('sha256').update(row.data).digest('base64url')}"`;
+        res.setHeader('etag', etag);
         res.setHeader('cache-control', 'private, no-cache');
+        if (matchesEtag(req.headers['if-none-match'], etag)) { res.writeHead(304); res.end(); return true; }
+        res.setHeader('content-length', String(row.bytes));
         if (req.method === 'HEAD') { res.end(); return true; }
         res.end(row.data);
         return true;

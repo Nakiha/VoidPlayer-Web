@@ -1,3 +1,4 @@
+import { PollingCadence } from '../services/polling-cadence.ts';
 import {FrozenSubmissionJournal,assertJobReceipt} from '../services/frozen-submission.ts';
 import type {FrozenSubmission} from '../services/frozen-submission.ts';
 import {QualityObservationScope} from '../analysis/quality/observation-scope.ts';
@@ -25,6 +26,7 @@ type Pending=FrozenSubmission<PreparationInput>;
 export function installDiscovery(signal:AbortSignal){
   const $=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(`discovery-${id}`)as T;
   const api=new LibraryDiscoveryClient();let active=false,owner='',busy=false,invalidDraft=false;const observation=new QualityObservationScope();
+  const historyCadence = new PollingCadence();
   let querySequence=0,detailSequence=0,identitySequence=0;
   let selected:DiscoveryItem|null=null,page:DiscoveryPage|null=null,job:PreparationJob|null=null,pending:Pending|null=null,moreJobs:number|null=null,historyAdvanced=false,selectedJobId='';
   let queryParams=new URLSearchParams();
@@ -66,7 +68,7 @@ export function installDiscovery(signal:AbortSignal){
       if(value.state==='completed'&&selected&&value.input.source.id===selected.source.id&&value.input.source.version===selected.source.version){const detailTicket=detailSequence;const fresh=await api.detail(selected.source,c.owner,c.signal);if(valid(c)&&id===selectedJobId&&detailTicket===detailSequence){selected=fresh;renderDetail();}}
     }catch(e){if(valid(c)&&id===selectedJobId)$('job-status').textContent=error(e);}});}
   function history(more=false):Promise<void>{const before=more?moreJobs??0:0;if(more)historyAdvanced=true;return observation.run('history','actor',async()=>{if(!owner)return;const c=context('actor','history');try{const result=await api.jobs(c.owner,c.signal,before);if(!valid(c))return;
-      moreJobs=result.next;$('more-jobs').hidden=moreJobs===null;if(more)historyAdvanced=true;
+      historyCadence.observeJobs(result.jobs);moreJobs=result.next;$('more-jobs').hidden=moreJobs===null;if(more)historyAdvanced=true;
       const list=$('jobs'),existing=new Map([...list.querySelectorAll<HTMLButtonElement>('button[data-job-id]')].map(b=>[b.dataset.jobId!,b]));
       for(const [index,value] of result.jobs.entries()){const button=existing.get(value.id)??document.createElement('button');existing.delete(value.id);button.type='button';button.dataset.jobId=value.id;const label=`${value.state} · ${value.input.operation} · ${value.input.source.id}@${value.input.source.version} · ${value.id}`;if(button.textContent!==label)button.textContent=label;button.onclick=()=>void chooseJob(value.id);
         if(more){if(!button.isConnected)list.append(button);}else if(list.children[index]!==button)list.insertBefore(button,list.children[index]??null);}
@@ -105,7 +107,7 @@ export function installDiscovery(signal:AbortSignal){
   $('refresh-jobs').onclick=()=>{historyAdvanced=false;void history();if(job)void inspectJob(job.id);};$('more-jobs').onclick=()=>void history(true);
   $('cancel').onclick=async()=>{if(!job||terminal(job.state))return;const c=context(),id=job.id;try{await api.cancel(id,c.owner,c.signal);if(valid(c)&&selectedJobId===id)await inspectJob(id);}catch(e){if(valid(c))$('job-status').textContent=error(e);}};
   observeIdentity(signal,{invalidated:()=>{identitySequence++;observation.invalidate();owner='';selected=null;job=null;pending=null;renderDetail();$('jobs').replaceChildren();$('job').textContent='';},confirmed:()=>{if(active)void start();},failed:e=>{if(active)$('job-status').textContent=error(e);}});
-  const timer=setInterval(()=>{if(active&&owner&&!document.hidden){if(!historyAdvanced)void history();if(job&&!terminal(job.state))void inspectJob(job.id);}},1000);
+  const timer=setInterval(()=>{const visible=active&&!!owner&&!document.hidden;if(historyCadence.ready(visible&&!historyAdvanced))void history();if(visible&&job&&!terminal(job.state))void inspectJob(job.id);},1000);
   signal.addEventListener('abort',()=>{observation.close();clearInterval(timer);},{once:true});onLanguageChange(()=>{if(active)renderDetail();},signal);
   return {activate(value:boolean){active=value;observation.invalidate();if(!value)return;const ticket=++identitySequence;void identityHealth().then(()=>{if(active&&ticket===identitySequence)void start();}).catch(e=>{if(active)$('job-status').textContent=error(e);});}};
 }

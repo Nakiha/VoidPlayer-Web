@@ -77,7 +77,9 @@ export class AnalysisStore {
     }
   }
   productFile(id: string) { return this.filename(id) + '.product'; }
-  async getOutput(id: string, au?:number): Promise<AnalysisOutput | null> {
+  async getOutput(id: string, au?:number, snapshot?: { id?: string; members?: AnalysisSummary[] }): Promise<AnalysisOutput | null> {
+    if (snapshot?.id === id) return snapshot.members?.find(member => member.picture.au === au) ?? null;
+    if (snapshot) { snapshot.id = undefined; snapshot.members = undefined; }
     const file = this.productFile(id), size = await stat(file).catch(() => null);
     if (!size) return this.get(id);
     if (size.size > PRODUCT_LIMIT.frame) { await unlink(file).catch(()=>{}); return null; }
@@ -101,6 +103,7 @@ export class AnalysisStore {
           const key=productKey({...member.picture,au:Math.floor(member.picture.au/32)*32},member.buildId,member.indexIdentity,'summary');
           if(digest(key)!==id || JSON.stringify([member.picture.sourceVersion,member.picture.stream,member.picture.configuration,member.buildId,member.recipe,member.analyzerVersion,member.indexIdentity,Math.floor(member.picture.au/32)])!==JSON.stringify([namespace.picture.sourceVersion,namespace.picture.stream,namespace.picture.configuration,namespace.buildId,namespace.recipe,namespace.analyzerVersion,namespace.indexIdentity,Math.floor(namespace.picture.au/32)]))throw Error('Mixed summary page identity');
         }
+        if (snapshot) { snapshot.id = id; snapshot.members = members; }
         const member = members.find(member => member.picture.au === au);
         await utimes(file,new Date(),new Date()); return member ?? null;
       }

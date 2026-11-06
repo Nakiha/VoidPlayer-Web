@@ -2,16 +2,15 @@ import { requestAuthority } from './http.ts';
 import type { IncomingMessage } from './http.ts';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { clientAddress } from './client-address.ts';
+export { setClientAddress } from './client-address.ts';
 
 export const isLoopback = (host: string) => ['localhost', '127.0.0.1', '::1', '[::1]', '::ffff:127.0.0.1'].includes(host);
-
-const peers = new WeakMap<IncomingMessage,string>();
-export const setClientAddress = (req: IncomingMessage, address: string) => peers.set(req,address);
 
 /** A remote browser must never open a file manager on the server's desktop. */
 export function localRequest(req: IncomingMessage) {
   try {
-    return isLoopback(peers.get(req) ?? req.socket.remoteAddress ?? '') && isLoopback(new URL(`http://${requestAuthority(req)}`).hostname);
+    return isLoopback(clientAddress(req)) && isLoopback(new URL(`http://${requestAuthority(req)}`).hostname);
   } catch { return false; }
 }
 

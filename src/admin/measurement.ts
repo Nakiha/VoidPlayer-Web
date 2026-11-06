@@ -1,3 +1,4 @@
+import { PollingCadence } from '../services/polling-cadence.ts';
 import { requestError } from './diagnostics.ts';
 import { apiError } from '../services/api-error.ts';
 import { localizedText, type LocalizedValue } from '../ui/live-localization.ts';
@@ -57,6 +58,7 @@ export function installMeasurements(life: AbortSignal, notice: (message: Localiz
     for (const [id,menu] of Object.entries(menus)) menu.sync(values[id], choices[id].find(o => o.value === values[id])?.label ?? chooseMediaLabel, !running && !active(result) && visible);
   }, life);
   let result: MeasurementResult | null = null, ownId: string | null = null, running = false, visible = false, pollBusy = false;
+  const cadence = new PollingCadence(750);
   let client: { bytes: number; requests: number; elapsedMs: number } | undefined, transfer: AbortController | null = null;
   let offset = 0, nextOffset: number | null = null, query = '', mediaSequence = 0;
   let media = new Map<string, LibraryEntry>();
@@ -90,8 +92,9 @@ export function installMeasurements(life: AbortSignal, notice: (message: Localiz
     text('measure-reason', () => current.reason ? reasons[current.reason] : '—');
   }
   async function poll() {
-    if (pollBusy || (!visible && !running) || life.aborted) return; pollBusy = true;
-    try { result = (await api<{ job: MeasurementResult | null }>('/api/admin/measurements')).job; render();
+    if (pollBusy || (!visible && !running) || document.hidden && !running || life.aborted) return; pollBusy = true;
+    try { result = (await api<{ job: MeasurementResult | null }>('/api/admin/measurements')).job;
+      cadence.observe(result, running || active(result)); render();
       if (visible && !running && !active(result) && mediaPending && ['storage', 'concurrent'].includes(kind()) && performance.now() - mediaAt > 1500) await loadMedia(); }
     catch (error) { if (!life.aborted) notice(() => requestError(error), true); }
     finally { pollBusy = false; }
@@ -167,8 +170,8 @@ export function installMeasurements(life: AbortSignal, notice: (message: Localiz
   $('measure-search-button').onclick = search; $('measure-search').onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); search(); } };
   $('measure-media-prev').onclick = () => { offset = Math.max(0, offset - 60); void safe(loadMedia); };
   $('measure-media-next').onclick = () => { if (nextOffset !== null) { offset = nextOffset; void safe(loadMedia); } };
-  const timer = setInterval(() => void poll(), 750);
+  const timer = setInterval(() => { if (cadence.ready(running || visible && !document.hidden)) void poll(); }, 750);
   life.addEventListener('abort', () => { clearInterval(timer); Object.values(menus).forEach(menu => menu.dispose()); transfer?.abort(); if (active(result) && result?.id === ownId) void fetch(`/api/admin/measurements/${ownId}`, { method: 'DELETE', headers: { 'x-voidplayer-action': 'admin' }, keepalive: true }).catch(() => {}); }, { once: true });
   configure();
-  return { activate(value: boolean) { visible = value; controls(); if (value) void poll(); } };
+  return { activate(value: boolean) { visible = value; cadence.reset(); controls(); if (value) void poll(); } };
 }

@@ -1,4 +1,5 @@
 import { requestAuthority } from '../http.ts';
+import { matchesEtag } from '../conditional.ts';
 import { containerFromHeader } from '../../shared/media/containers/container-header.ts';
 import { fileVersion } from '../library.ts';
 import { handleMediaQueryRoutes } from './media-query.ts';
@@ -38,7 +39,17 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200 || !Number.isSafeInteger(offset) || offset < 0) { sendJson(res, 400, { error: '无效分页参数。' }); return true; }
     const revision = url.searchParams.has('revision') ? Number(url.searchParams.get('revision')) : undefined;
     if (revision !== undefined && (!Number.isSafeInteger(revision) || revision < 0)) { sendJson(res, 400, { error: '无效版本参数。' }); return true; }
-    try { sendJson(res, 200, library.browse({ rootId: url.searchParams.get('root') || undefined, directory: url.searchParams.get('directory') ?? '', search: url.searchParams.get('search') ?? '', recursive: url.searchParams.get('recursive') === '1', limit, offset, revision })); }
+    try {
+      const query = { rootId: url.searchParams.get('root') || undefined, directory: url.searchParams.get('directory') ?? '', search: url.searchParams.get('search') ?? '', recursive: url.searchParams.get('recursive') === '1', limit, offset, revision };
+      const etag = library.browseEtag(query);
+      if (matchesEtag(req.headers['if-none-match'], etag)) {
+        res.writeHead(304, { etag, 'cache-control': 'private, no-cache' }); res.end();
+      } else {
+        const payload = JSON.stringify(library.browse(query));
+        res.writeHead(200, { etag, 'cache-control': 'private, no-cache', 'content-type': 'application/json; charset=utf-8' });
+        res.end(payload);
+      }
+    }
     catch (error) { sendJson(res, (error as { code?: string }).code === 'INDEX_CHANGED' ? 409 : 400, adminErrorBody(error)); }
     return true;
   }

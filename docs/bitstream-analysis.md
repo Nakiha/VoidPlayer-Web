@@ -201,7 +201,9 @@ blocks 使用 12-byte LE 记录：四个 uint16 几何值、int16 QP（-32768 �
 
 暂停终止 worker / decoder / reader / lease。恢复允许从闭合 anchor 重建参考链，但同消费者已持有摘要只收到小型 coverage 通知，不重复交付或 put 产品；进度按 AU 集合去重。cache reply 与 coverage 之间若发生淘汰，会回传仍独立拥有的合法摘要修复；服务端同样在发布引用前重验或重写失读产品，不能发布悬空覆盖。同 GOP 需求依据可靠包表的精确所选时钟和其他 GOP 的排除边界合并，不以 PTS 邻近猜测 AU。同集合中移动、后续 chunk、完成和暂停恢复都保留最新显示窗口。已暂停的用户任务不会自动继续。遮罩只读当前身份匹配的 blocks，检查 presented picture / PTS / coded geometry；缺块时不能用 summary 显示。暂停帧的精确需求可优先于自动 summary 任务，播放期间仍 cache-only。
 
-媒体库摘要恢复使用 `after` 游标和 `pack=gop`：服务端将已验证的同 GOP 缓存摘要合并在状态响应的 `cachedGop` 中，`startCursor` / `cursor` 覆盖包内各 picture 的原有确认序号。缓存缺口之前已有的成员也可成包交付；新解码结果继续逐帧发布。超过 8192 帧或 8 MiB 的 GOP 拆成有界包。浏览器先完整校验包的来源、build/index、GOP、重复 AU 和游标，再一次性发布图表更新；不再为缓存中的每帧发起 HTTP 下载，消费缓存包后立即继续请求后续 GOP。服务端复用既有摘要页，不另存 GOP 数据副本，也不新增浏览器持久结果缓存；新浏览器和服务重启后走相同流程。旧客户端仍可按每页 32 个引用消费相同 picture 游标。
+媒体库摘要使用 `after` 游标和 `pack=summary`。同 GOP 缓存摘要仍合并在 `cachedGop` 中；新解码摘要按当前已发布的同 GOP 成员放入 `summaryBatch`，每包至多一个引用页，不等待完整 GOP。两者的 `startCursor` / `cursor` 均覆盖成员的原确认序号，冷包明确 `cached=false`，不计作缓存命中。沿用共享摘要传输字节预算、两个 HTTP 读取 slot、原有未确认背压和租约；冷包不会在一个状态响应中累计多个响应预算。浏览器完整校验来源、build/index、GOP、重复 AU 和游标后一次发布，消费有内容的包后立即读下一页，空状态才等待；不再为冷摘要逐帧发起 HTTP 下载。
+
+缓存 GOP 仍按 `SUMMARY_BATCH_LIMIT` 拆成有界包；服务端每个已准入响应只暂存当前一页已验证成员，切页即丢弃，避免同页逐 AU 重读/解析。复用既有磁盘摘要页，不另存 GOP 副本或浏览器持久结果。`pack=gop` 保留只合并缓存的兼容行为；不带 pack 的旧客户端仍可按每页 32 个引用消费相同 picture 游标。单帧 blocks、legacy 产品和显式任务的生命周期不变。
 
 计数区分 init / open / feed / step / decodedAU、preroll、products、cacheHit、uniqueDelivered 和 readBytes；core 调用时间为 inclusive，不代表独立像素重建成本。payloadBytes 是实际发送产品内容的 UTF-8 metadata + owned payload，coverageBytes 单列小型通知，均不包括结构化克隆封装或 telemetry；legacy IPC 字节不可可靠直接观察，记 null，避免额外全量 JSON 序列化污染。HTTP wire 内容由浏览器 Content-Length 独立计量。逐 chunk 快照是截至最后确认 chunk 的观测下界；硬终止前未完成调用不可测。heap / Node RSS 只在明确采样点记录，不用累计 payload 或额度冒充峰值。
 

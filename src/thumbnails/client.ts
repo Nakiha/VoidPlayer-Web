@@ -123,10 +123,14 @@ async function readStatus(libraryId: string, mediaVersion: string): Promise<Thum
 export function prefetchThumbnailStatus(libraryId: string, mediaVersion: string | undefined): void {
   if (!libraryId || !mediaVersion) return;
   const key = serverCacheKey({ mediaId: libraryId, mediaVersion });
+  const cached = thumbnailState.statusCache.get(key);
+  if (cached && Date.now() - cached.at < 5 * 60 * 1000) return;
   if (statusInFlight.has(key)) return;
   const work = readStatus(libraryId, mediaVersion)
     .then(status => {
       if (status) {
+        const current = thumbnailState.statusCache.get(key);
+        if (current?.epoch !== undefined && status.epoch !== undefined && current.epoch > status.epoch) return;
         const wasReady = thumbnailState.statusCache.get(key)?.ready;
         thumbnailState.rememberStatus(key, { ready: status.state === 'ready', epoch: status.epoch, width: status.width, height: status.height });
         // Server readiness arrives after rows render imageless. Notify so the
@@ -141,7 +145,7 @@ export function prefetchThumbnailStatus(libraryId: string, mediaVersion: string 
 }
 
 /** Warm a visible page of entries; bounded count, each request bounded. */
-export function prefetchThumbnailStatuses(entries: { id: string; version?: string }[], limit = 60): void {
+export function prefetchThumbnailStatuses(entries: { id: string; version?: string; thumbnail?: boolean }[], limit = 60, epoch?: number): void {
   let started = 0;
   for (const entry of entries) {
     if (started >= limit) break;
@@ -149,6 +153,14 @@ export function prefetchThumbnailStatuses(entries: { id: string; version?: strin
     // Skip keys with a fresh status to avoid refetching on every repaint.
     const key = serverCacheKey({ mediaId: entry.id, mediaVersion: entry.version });
     const cached = thumbnailState.statusCache.get(key);
+    if (typeof entry.thumbnail === 'boolean' && Number.isSafeInteger(epoch) && epoch! >= 0) {
+      if (cached?.epoch !== undefined && cached.epoch > epoch!) continue;
+      thumbnailState.rememberStatus(key, { ready: entry.thumbnail, epoch,
+        ...(cached && cached.epoch === epoch && entry.thumbnail ? { width: cached.width, height: cached.height } : {}) });
+      if (entry.thumbnail && !cached?.ready) notifyThumbnailReady(key);
+      started++;
+      continue;
+    }
     if (cached && Date.now() - cached.at < 5 * 60 * 1000) continue;
     started++;
     prefetchThumbnailStatus(entry.id, entry.version);

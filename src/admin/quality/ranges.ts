@@ -1,4 +1,5 @@
 import { QualityObservationScope } from "../../analysis/quality/observation-scope.ts";
+import { PollingCadence } from '../../services/polling-cadence.ts';
 import { candidateAnnotations } from "../../analysis/quality/candidate-evidence.ts";
 import { qualityViewVisible } from "./navigation.ts";
 import { installQualityReexecution } from "./reexecution.ts";
@@ -37,6 +38,7 @@ export function installQualityRanges(signal: AbortSignal) {
   const $ = (id: string) => document.getElementById(`quality-range-${id}`)!;
   const api = new QualityClient();
   const observation = new QualityObservationScope();
+  const cadence = new PollingCadence();
   let active = false,
     actor = "",
     selected = "";
@@ -110,6 +112,7 @@ export function installQualityRanges(signal: AbortSignal) {
           more: boolean;
         }>(owner, `/api/quality/ranges?after=${pageAfter}&limit=10`, s);
         if (!valid(owner, s)) return;
+        cadence.observeJobs(page.entries);
         after = page.after;
         $("more").hidden = !page.more;
         const list = $("list"),
@@ -213,6 +216,7 @@ export function installQualityRanges(signal: AbortSignal) {
         }>(owner, `/api/quality/ranges/${id}`, s);
         if (!valid(owner, s) || selected !== id) return;
         const job = response.job;
+        cadence.observeJobs([job]);
         reexecution.show(job.id);
         $("detail").hidden = false;
         $("title").textContent =
@@ -343,7 +347,7 @@ export function installQualityRanges(signal: AbortSignal) {
     },
   });
   const timer = setInterval(() => {
-    if (active && qualityViewVisible("ranges")) {
+    if (cadence.ready(active && qualityViewVisible("ranges"))) {
       if (selected) void detail();
       else if (!browsingMore) void list();
     }

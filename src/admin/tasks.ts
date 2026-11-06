@@ -1,4 +1,5 @@
 import {installQualityReexecution} from './quality/reexecution.ts';
+import { PollingCadence } from '../services/polling-cadence.ts';
 import {REEXECUTION_KINDS,reexecutionKind} from '../../shared/analysis/quality/reexecution.ts';
 import {canonicalJson} from '../../shared/analysis/quality/cambi.ts';
 import {t,th,msg,formatDate} from '../i18n.ts';
@@ -37,6 +38,7 @@ export function installTasks(signal:AbortSignal){
   const clearReexecution=()=>{$('reexecution-unavailable').hidden=true;for(const view of reexecutions.values())view.clear();};
   let active=false,actor='',epoch=0,listGeneration=0,detailGeneration=0,next:string|null=null;
   let selected:{kind:TaskKind;id:string}|null=null,detail:TaskDetail|null=null;
+  const cadence = new PollingCadence(2000);
   let life=new AbortController(),detailLife=new AbortController(),detailBusy=false,releaseBusy=false;
   const fields=['limit','mediaId','mediaVersion','kind','metric','state','createdFrom','createdTo'];
   const filters=()=>{const p=new URLSearchParams();for(const key of fields){const value=(form.elements.namedItem(key)as HTMLInputElement).value;if(value)p.set(key,key==='createdFrom'||key==='createdTo'?String(new Date(value).getTime()):value);}return p;};
@@ -76,7 +78,7 @@ export function installTasks(signal:AbortSignal){
     if(!selected||detailBusy||!actor)return;detailBusy=true;
     const c=context(),target={...selected},generation=++detailGeneration,s=AbortSignal.any([c.signal,detailLife.signal]);
     const current=()=>valid(c)&&!s.aborted&&generation===detailGeneration&&selected?.kind===target.kind&&selected?.id===target.id;
-    try{const value=await api.request<TaskDetail>(c.owner,taskPath(target.kind,target.id),s);if(!current())return;detail=value;
+    try{const value=await api.request<TaskDetail>(c.owner,taskPath(target.kind,target.id),s);if(!current())return;detail=value;cadence.observeJobs([value.task]);
       if(reexecutionKind(target.kind))reexecutions.get(target.kind)!.show(target.id);$('reexecution-unavailable').hidden=true;
       $('detail').hidden=false;$('title').textContent=`${value.task.kind} · ${value.task.state} · ${value.task.id}`;$('facts').textContent=JSON.stringify(value.task,null,2);
       $('cancel').hidden=!value.links.some(l=>l.rel==='cancel');$('release').hidden=!value.links.some(l=>l.rel==='release-result');$('release').toggleAttribute('disabled',releaseBusy);$('related').replaceChildren();$('links').replaceChildren();$('candidates').replaceChildren();
@@ -119,7 +121,7 @@ export function installTasks(signal:AbortSignal){
   };
   const changed=()=>{reset();if(active){void list();void loadDetail();}};
   observeIdentity(signal,{invalidated:()=>{reset();actor='';selected=null;form.reset();},confirmed:changed});
-  const timer=setInterval(()=>{if(active&&!document.hidden)void loadDetail();},2000);
+  const timer=setInterval(()=>{if(cadence.ready(active&&!document.hidden))void loadDetail();},2000);
   signal.addEventListener('abort',()=>{clearInterval(timer);life.abort();detailLife.abort();},{once:true});
   return {activate(value:boolean){if(active===value)return;active=value;reset();if(active){void list();void loadDetail();}}};
 }

@@ -44,7 +44,8 @@ export async function handleAnalysisRoutes(
     }
     if (request) {
       if (req.method === "GET") {
-        if (url.searchParams.get('pack') === 'gop') {
+        const pack = url.searchParams.get('pack');
+        if (pack === 'gop' || pack === 'summary') {
           const controller = new AbortController();
           const abort = () => controller.abort(new AnalysisFailure('cancelled', 'Analysis result consumer disconnected'));
           res.once('close', abort);
@@ -59,7 +60,7 @@ export async function handleAnalysisRoutes(
         const after = url.searchParams.get('after');
         if (after !== null && !/^(0|[1-9][0-9]{0,6})$/.test(after))
           throw new AnalysisFailure('invalid-request', 'Invalid stream cursor');
-        const value = after === null ? scheduler.status(request[1], owner) : await scheduler.streamStatus(request[1], owner, Number(after), url.searchParams.get('pack') === 'gop');
+        const value = after === null ? scheduler.status(request[1], owner) : await scheduler.streamStatus(request[1], owner, Number(after), pack === 'summary' ? 'summary' : pack === 'gop');
         sendJson(
           res,
           value ? 200 : 404,

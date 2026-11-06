@@ -11,8 +11,8 @@ import { AdminController } from '../../server/admin.ts';
 import { createMediaServer } from '../../server/app.ts';
 import {DEFAULT_QUALITY_RESOURCES} from '../../shared/service/quality-resources.ts';
 
-type Fixture = { root: string; media: string; base: string; library: MediaLibraryIndex; admin: AdminController; config: Awaited<ReturnType<typeof loadConfig>> };
-async function fixture(run: (f: Fixture) => Promise<void>) {
+type Fixture = { root: string; media: string; base: string; library: MediaLibraryIndex; admin: AdminController; config: Awaited<ReturnType<typeof loadConfig>>; logs: Record<string,unknown>[] };
+async function fixture(run: (f: Fixture) => Promise<void>, clientAddress?: () => string) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'vp-admin-'));
   const media = path.join(root, 'media'); await fs.mkdir(media); await fs.writeFile(path.join(media, 'one.mp4'), 'video');
   await fs.writeFile(path.join(root, 'voidplayer.config.json'), JSON.stringify({ mediaRoots: [{ id: 'archive', path: 'media', name: '媒体库' }], dataDir: 'data', logsDir: 'logs', indexWatch: false }));
@@ -20,13 +20,60 @@ async function fixture(run: (f: Fixture) => Promise<void>) {
   const library = new MediaLibraryIndex(config.mediaRoots, { database: path.join(config.dataDir, 'library.sqlite'), watch: false });
   library.start(); await library.refresh();
   const admin = new AdminController(config, library, { version: 'test-version', revision: 'test-revision' });
-  const server = createMediaServer({ roots: library.roots, library, admin, logsDir: config.logsDir!, onLog: () => {} });
+  const logs: Record<string,unknown>[] = [];
+  const server = createMediaServer({ roots: library.roots, library, admin, logsDir: config.logsDir!, clientAddress, onLog: entry => logs.push(entry) });
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-  try { await run({ root, media, base, library, admin, config }); }
+  try { await run({ root, media, base, library, admin, config, logs }); }
   finally { await new Promise<void>(r => server.close(() => r())); await admin.close(); await library.close(); await fs.rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
 }
 const mutation = (base: string, method: string, value?: unknown, extra = {}) => ({ method, headers: { origin: base, 'content-type': 'application/json', 'x-voidplayer-action': 'admin', ...extra }, body: value === undefined ? undefined : JSON.stringify(value) });
+
+test('access logs and request snapshots record the actual socket IP without trusting forwarded headers', async () => fixture(async ({ base, logs }) => {
+  const response = await fetch(base + '/api/library/browse?query=private-search', {
+    headers: { 'x-forwarded-for': '203.0.113.99', forwarded: 'for="[2001:db8::99]"' },
+  });
+  await response.text();
+  assert.equal(logs.length, 1, 'finish and close must not log the request twice');
+  const entry = logs[0];
+  assert.equal(entry.clientIp, '127.0.0.1'); assert.equal(entry.requestId, response.headers.get('x-request-id'));
+  assert.equal(entry.url, '/api/library/browse', 'query contents stay out of access logs'); assert.equal(entry.completed, true);
+  const snapshot = await (await fetch(base + '/api/admin/requests')).json();
+  assert.deepEqual(snapshot.recentRequests, [entry]);
+}));
+
+test('access logs preserve mapped gateway peers, normalize IPv4 and report unavailable IPs explicitly', async () => {
+  let address = '';
+  await fixture(async ({ base, logs }) => {
+    for (const [peer, expected] of [['::ffff:203.0.113.7', '203.0.113.7'], ['2001:db8::7', '2001:db8::7'], ['', null], ['localhost', null]] as const) {
+      address = peer;
+      const response = await fetch(base + '/api/library/browse', { headers: { 'x-forwarded-for': '127.0.0.1', forwarded: 'for=127.0.0.1' } });
+      await response.text();
+      const entry = logs.find(log => log.requestId === response.headers.get('x-request-id'));
+      assert.equal(entry?.clientIp, expected, `mapped peer ${peer} is authoritative`);
+    }
+  }, () => address);
+});
+
+test('overview omits request history and the independent request snapshot supports conditional reads', async () => fixture(async ({ base, admin }) => {
+  await fetch(base + '/api/library/browse');
+  const legacy = await (await fetch(base + '/api/admin/status')).json();
+  assert.ok(legacy.recentRequests.length > 0, 'the existing status wire remains compatible');
+  const overview = await (await fetch(base + '/api/admin/status?view=overview')).json();
+  assert.equal('recentRequests' in overview, false);
+  assert.ok(overview.memory.rss > 0);
+  const first = await fetch(base + '/api/admin/requests'), etag = first.headers.get('etag')!;
+  const snapshot = await first.json(); assert.ok(snapshot.recentRequests.length > 0);
+  const unchanged = await fetch(base + '/api/admin/requests', { headers: { 'if-none-match': `W/${etag}` } });
+  assert.equal(unchanged.status, 304); assert.equal(await unchanged.text(), '');
+  const actor = admin.workspaces.identify(undefined, 'snapshot-other');
+  const foreign = await fetch(base + '/api/admin/requests', { headers: { cookie: `voidplayer-user=${actor.id}`, 'if-none-match': etag } });
+  assert.equal(foreign.status, 200); assert.notEqual(foreign.headers.get('etag'), etag, 'a new actor cannot validate the previous actor snapshot');
+  assert.deepEqual(await foreign.json(), snapshot, 'the scope check is independent of a body change');
+  await fetch(base + '/api/library/browse');
+  const changed = await fetch(base + '/api/admin/requests', { headers: { 'if-none-match': etag } });
+  assert.equal(changed.status, 200); assert.notEqual(changed.headers.get('etag'), etag);
+}));
 
 test('quality resource settings persist revisioned attribution; stale origins, actors and revisions cannot change admission',async()=>{
  await fixture(async({base,admin,library,root})=>{

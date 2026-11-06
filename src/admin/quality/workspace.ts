@@ -234,7 +234,7 @@ export function installQualityJobs(signal:AbortSignal){
     for(const picker of pickers.values()){picker.sequence++;picker.page=null;picker.target=null;}actions();
   },confirmed:()=>{if(active)void start();},failed:error=>{if(active)setError('availability',t(msg('qualityWorkflow.identityUnconfirmed','当前用户尚未由服务确认，请刷新页面重试。'))+' '+errorText(error));}});
   onLanguageChange(()=>{if(active&&observation&&confirmedActor()?.id===lastActor)render(observation);},signal);
-  const timer=setInterval(()=>{if(active&&enabled&&qualityViewVisible('single')&&confirmedActor()?.id===lastActor)void observer?.poll();},1000);
+  const timer=setInterval(()=>{void observer?.pollVisible(active&&enabled&&qualityViewVisible('single')&&confirmedActor()?.id===lastActor);},1000);
   signal.addEventListener('abort',()=>{clearInterval(timer);observer?.dispose();controller.abort();},{once:true});
   return {activate(value:boolean){cambi.activate(value);ranges.activate(value);correspondence.activate(value);vmaf.activate(value);xpsnr.activate(value);if(active===value)return;active=value;if(value)void start();else{reexecution.clear();scope++;observer?.dispose();observer=null;controller.abort();}}};
 }

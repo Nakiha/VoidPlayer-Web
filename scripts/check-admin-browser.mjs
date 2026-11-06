@@ -112,11 +112,11 @@ try {
 
   assert.equal(await page.evaluate(() => { const rows = [...document.querySelectorAll('#pane-overview .admin-properties > div')]; return rows.every((r, i) => !i || r.getBoundingClientRect().top > rows[i-1].getBoundingClientRect().top); }), true, 'properties must remain a single ordered list');
   await page.screenshot({ path: `/tmp/voidplayer-admin-overview-light-${browserName}.png` });
-  await page.route('**/api/admin/status', route => route.fulfill({ status: 503, json: { error: '服务暂不可用，请重试' } }));
+  await page.route('**/api/admin/status?view=overview', route => route.fulfill({ status: 503, json: { error: '服务暂不可用，请重试' } }));
   await page.locator('#refresh-status').click();
   await page.locator('#admin-message').filter({ hasText: '服务暂不可用' }).waitFor();
   await page.screenshot({ path: `/tmp/voidplayer-admin-status-error-${browserName}.png` });
-  await page.unroute('**/api/admin/status');
+  await page.unroute('**/api/admin/status?view=overview');
   await page.locator('#refresh-status').click();
   await page.locator('#admin-message').waitFor({ state: 'hidden' });
   await page.getByRole('button', { name: '媒体库', exact: true }).click();
@@ -274,6 +274,33 @@ try {
   await player.waitForFunction(() => document.querySelector('#server-status')?.dataset.state === 'disconnected');
   const [offlineAdmin] = await Promise.all([context.waitForEvent('page'), player.locator('#server-status').click()]);
   await offlineAdmin.waitForURL(base + '/admin'); await offlineAdmin.close();
+  await player.close();
+  await page.bringToFront();
+  await page.clock.resume();
+  const requestReads = [], overviewReads = [];
+  // WebKit can expose a revalidated response as 200 in its browser protocol.
+  // Observe the actual server response and the client's conditional header.
+  const recordResponses = (request, response) => {
+    const pathname = new URL(request.url, base).pathname;
+    response.once('finish', () => {
+      if (pathname === '/api/admin/requests') requestReads.push({ status: response.statusCode, conditional: !!request.headers['if-none-match'] });
+      if (pathname === '/api/admin/status') overviewReads.push(request.url);
+    });
+  };
+  service.server.on('request', recordResponses);
+  await page.locator('[data-pane=logs]').click(); await page.locator('[data-log-mode=requests]').click();
+  await page.waitForLoadState('networkidle'); await page.waitForTimeout(6500);
+  assert.ok(requestReads.some(read => read.status === 304 && read.conditional), 'unchanged request history sends a validator and reuses the current actor snapshot');
+  assert.ok(await page.locator('#request-list .admin-request-row').count() > 0, 'the revalidated snapshot stays rendered');
+  await page.locator('#request-list .admin-request-row > span:first-child').filter({ hasText: '127.0.0.1' }).first().waitFor();
+  assert.equal(overviewReads.length, 0, 'request history does not poll the hidden overview');
+  await page.locator('[data-pane=workspaces]').click(); await page.waitForLoadState('networkidle');
+  const readsAfterHide = requestReads.length;
+  await page.waitForTimeout(4000);
+  assert.equal(requestReads.length, readsAfterHide, 'hidden request history stops observing');
+  assert.equal(overviewReads.length, 0, 'other management panes do not fetch overview snapshots');
+  service.server.off('request', recordResponses);
+  console.log('REQUEST_OBSERVATION_EVIDENCE', JSON.stringify({ browserName, statuses: requestReads, hiddenReads: requestReads.length - readsAfterHide, overviewReads: overviewReads.length }));
   if(errors.length)console.error(JSON.stringify({browserName,clockPhase,errors,clockTrace}));
   assert.deepEqual(errors, []);
   await context.close();

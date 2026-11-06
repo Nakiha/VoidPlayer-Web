@@ -1,4 +1,5 @@
 import {t,msg} from '../../i18n.ts';
+import { PollingCadence } from '../../services/polling-cadence.ts';
 import { qualityViewVisible } from "./navigation.ts";
 import { renderQualitySummary } from "./summary.ts";
 import type { QualityScoreSummary } from "./summary.ts";
@@ -49,6 +50,7 @@ export function installTemporalQuality<Input, Score>(
   const comparison = config.installComparison?.((id) => select(id));
   const api = new QualityClient();
   const observation = new QualityObservationScope();
+  const cadence = new PollingCadence();
   let browsingMore = false,
     active = false,
     actor = "",
@@ -208,6 +210,7 @@ export function installTemporalQuality<Input, Score>(
           c.signal,
         );
         if (!valid(c)) return;
+        cadence.observeJobs(p.entries);
         after = p.after;
         $("more").hidden = !p.more;
         if (!more) $("history").replaceChildren();
@@ -332,6 +335,7 @@ export function installTemporalQuality<Input, Score>(
           c.signal,
         );
         if (!valid(c) || id !== selected) return;
+        cadence.observeJobs([j]);
         reexecution.show(j.id);
         $("detail").hidden = false;
         $("title").textContent = id + " · " + j.state;
@@ -535,7 +539,7 @@ export function installTemporalQuality<Input, Score>(
     failed: error,
   });
   const timer = setInterval(() => {
-    if (active && qualityViewVisible(kind)) {
+    if (cadence.ready(active && qualityViewVisible(kind))) {
       if (selected) void detail();
       else if (!browsingMore) void list();
     }

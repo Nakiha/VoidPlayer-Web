@@ -1,4 +1,5 @@
 import { normalizeQualityJobInput } from "../../../shared/analysis/quality/job-input.ts";
+import { PollingCadence } from '../../services/polling-cadence.ts';
 import { QualityObservationScope } from "./observation-scope.ts";
 import {
   FrozenSubmissionJournal,
@@ -35,6 +36,7 @@ export type QualityObservation = {
  * and client scopes fence every async publication, including after abort is ignored.
  * A pending request is persisted BEFORE POST; retries never reconstruct its body. */
 export class QualityJobObserver {
+  private cadence = new PollingCadence();
   private scope = new QualityObservationScope();
   private cursor = 0;
   private submitting: Promise<void> | null = null;
@@ -222,6 +224,9 @@ export class QualityJobObserver {
     this.emit();
     return this.poll();
   }
+  pollVisible(visible: boolean): Promise<void> {
+    return this.cadence.ready(visible) ? this.poll() : Promise.resolve();
+  }
   poll(): Promise<void> {
     return this.scope.run("history", "actor", async () => {
       const context = this.scope.capture("actor", "history");
@@ -246,6 +251,7 @@ export class QualityJobObserver {
           this.cursor = page.cursor;
           more = page.more;
           this.value.history = page;
+          this.cadence.observeJobs([...this.jobs.values()], !!this.value.pending);
           this.value.error = null;
           this.emit();
         } while (more && ++pages < 20);

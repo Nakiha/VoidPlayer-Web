@@ -24,7 +24,8 @@ import type { ConnectionOptions } from './connection-guide.ts';
 import type { IncomingMessage, ServerResponse } from './http.ts';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { localRequest, setClientAddress } from './reveal.ts';
+import { localRequest } from './reveal.ts';
+import { clientIp, setClientAddress } from './client-address.ts';
 import { MediaLibraryIndex } from './library.ts';
 import type { AdminController } from './admin.ts';
 import { ISOLATION_HEADERS, sendJson } from './http-utils.ts';
@@ -81,6 +82,8 @@ export function createMediaServer(options: ServerOptions): ManagedServer {
   const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     if (!requestAuthority(req)) { sendJson(res, 400, { error: 'Invalid request authority' }); return; }
     if(options.clientAddress)setClientAddress(req,options.clientAddress(req));
+    // Capture before awaiting routes: an HTTP/2 stream may detach its socket on close.
+    const ip = clientIp(req);
     if(existingPages&&await existingPages.handle(req,res))return;
     if(options.pageBridge)try{if(await options.pageBridge.handle(req,res))return;}
     catch{if(!res.headersSent&&!res.destroyed)sendJson(res,503,{code:'bridge-host-unavailable'});else res.end();return;}
@@ -105,7 +108,7 @@ export function createMediaServer(options: ServerOptions): ManagedServer {
       traffic.activeRequests--; traffic.completedRequests++; if (!res.writableFinished) traffic.abortedRequests++;
       const pathname = (req.url ?? '/').split('?')[0];
       if (pathname === '/api/health' || pathname === '/api/ready') return;
-      const entry = { t: new Date().toISOString(), requestId, actorId: ctx.actor?.id ?? (localRequest(req) ? 'local' : null), method: req.method, url: pathname, status: res.statusCode, completed: res.writableFinished, ms: Math.round(performance.now() - started) };
+      const entry = { t: new Date().toISOString(), requestId, clientIp: ip, actorId: ctx.actor?.id ?? (localRequest(req) ? 'local' : null), method: req.method, url: pathname, status: res.statusCode, completed: res.writableFinished, ms: Math.round(performance.now() - started) };
       logLine(entry);
       if (!pathname.startsWith('/api/admin/') || req.method !== 'GET') { recentRequests.push(entry); if (recentRequests.length > 200) recentRequests.shift(); }
     };

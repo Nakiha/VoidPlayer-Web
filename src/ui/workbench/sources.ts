@@ -80,13 +80,13 @@ export function createSourcesPane(shared: WorkbenchShared) {
     const rootsChanged = page ? catalog.setLibraryRoots(page.roots.map(root => root.id)) : false;
     catalog.setLibrary(page?.entries ?? []);
     // Warm thumbnail presence/epochs beside listing; never blocks opening.
-    if (page) prefetchThumbnailStatuses(page.entries);
+    if (page) prefetchThumbnailStatuses(page.entries, 60, page.thumbnailEpoch);
     if (page && (rootsChanged || recentRevision !== page.revision)) { recentRevision = page.revision; void refreshRecent(); }
     renderSources();
   }, lifecyle.signal, recent => {
     if (recent) void refreshRecent();
     renderSources();
-  }, shared.notify);
+  }, shared.notify, () => !document.getElementById('empty-A')!.hidden && catalog.referencesToResolve().length > 0);
   // Source key -> thumbnail cache key, so completion can fill the placeholder
   // <img> of the matching row in place. Bounded: rows re-register on render.
   const thumbKeyBySource = new Map<string, string>();
@@ -150,12 +150,25 @@ export function createSourcesPane(shared: WorkbenchShared) {
   const offThumbnails = onThumbnailReady(patchThumbnails);
   lifecyle.signal.addEventListener('abort', offThumbnails);
 
+  const recentLookups = new Map<string, { at: number; value: Promise<LibraryEntry | null> }>();
   async function refreshRecent() {
     const ticket = ++recentRequest;
     const ids = [...new Set(catalog.referencesToResolve().flatMap(item => item.libraryId ? [item.libraryId] : []))];
     const problems: [string, LibraryAccessProblem][] = [];
     const entries = await Promise.all(ids.map(async id => {
-      try { const entry = await fetchLibraryItem(id, AbortSignal.any([lifecyle.signal, AbortSignal.timeout(5000)])); if (!entry) problems.push([id, 'missing']); return entry ? [id, entry] as [string, LibraryEntry] : null; } catch { problems.push([id, 'unavailable']); return null; }
+      try {
+        const key = JSON.stringify([currentActor()?.id, id, libraryBrowser.page()?.etag]), now = Date.now();
+        let lookup = recentLookups.get(key);
+        if (!lookup || now - lookup.at > 1000) {
+          const value = fetchLibraryItem(id, AbortSignal.any([lifecyle.signal, AbortSignal.timeout(5000)]));
+          lookup = { at: now, value }; recentLookups.set(key, lookup);
+          void value.catch(() => { if (recentLookups.get(key)?.value === value) recentLookups.delete(key); });
+          while (recentLookups.size > 128) recentLookups.delete(recentLookups.keys().next().value!);
+        }
+        const entry = await lookup.value;
+        if (!entry) problems.push([id, 'missing']);
+        return entry ? [id, entry] as [string, LibraryEntry] : null;
+      } catch { problems.push([id, 'unavailable']); return null; }
     }));
     if (disposed || ticket !== recentRequest) return;
     catalog.setRecentLibrary(entries.filter((item): item is [string, LibraryEntry] => item !== null), problems); save(); renderSources();

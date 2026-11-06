@@ -58,6 +58,9 @@ test('media thumbnails: status, upload, first-wins, epoch races and version bind
     assert.equal(got.headers.get('cache-control'), 'private, no-cache');
     assert.ok(got.headers.get('etag'));
     assert.deepEqual([...Buffer.from(await got.arrayBuffer())], [...image]);
+    const imageTag = got.headers.get('etag')!;
+    const unchanged = await fetch(imageUrl, { headers: { 'if-none-match': `"different", W/${imageTag}` } });
+    assert.equal(unchanged.status, 304); assert.equal(await unchanged.text(), '');
     assert.equal((await fetch(imageUrl, { method: 'HEAD' })).status, 200);
     // Repeat upload dedupes without overwrite.
     const other = Buffer.concat([image, Buffer.from([0x00])]);
@@ -76,15 +79,18 @@ test('media thumbnails: status, upload, first-wins, epoch races and version bind
     const cleared = await fetch(`${base}/api/admin/caches/media-thumbnails`, { method: 'DELETE', headers: adminHeaders, body: JSON.stringify({ id: entry.id, version: entry.version }) });
     assert.deepEqual(await cleared.json(), { removed: 1 });
     assert.equal((await fetch(imageUrl)).status, 404);
+    assert.equal((await fetch(imageUrl, { headers: { 'if-none-match': imageTag } })).status, 404, 'cleared data cannot be validated from an old tag');
     // The in-flight upload accepted before the clear cannot backfill.
     assert.equal((await fetch(uploadUrl(0), { method: 'POST', headers: uploadHeaders(), body: new Blob([image]) })).status, 409);
     assert.equal((await fetch(uploadUrl(1), { method: 'POST', headers: uploadHeaders(), body: new Blob([image]) })).status, 201);
+    assert.equal((await fetch(imageUrl, { headers: { 'if-none-match': imageTag } })).status, 304, 'identical restored bytes may reuse their content validator');
     // Replaced files never inherit the old cover.
     await writeFile(path.join(media, 'one.mp4'), Buffer.alloc(4096, 9)); await library.refresh();
     const changed = library.browse().entries[0];
     assert.notEqual(changed.version, entry.version);
     assert.equal(library.thumbnails.overview().count, 0);
     assert.equal((await fetch(imageUrl)).status, 404);
+    assert.equal((await fetch(imageUrl, { headers: { 'if-none-match': imageTag } })).status, 404, 'source version validation precedes conditional success');
   } finally {
     server.closeAllConnections(); await new Promise<void>(r => server.close(() => r()));
     await admin.close(); await library.close(); await rm(root, { recursive: true, force: true });

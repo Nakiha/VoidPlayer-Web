@@ -36,7 +36,7 @@ export function installStatusReadEvidence(host = window) {
   host.fetch = async function(input, options) {
     const url = new URL(input instanceof Request ? input.url : input, host.location.href);
     const method = String(options?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
-    if (method !== 'GET' || !/bitstream-analysis\/requests\//.test(url.pathname) || url.searchParams.get('pack') !== 'gop') return fetch(input, options);
+    if (method !== 'GET' || !/bitstream-analysis\/requests\//.test(url.pathname) || !['gop', 'summary'].includes(url.searchParams.get('pack'))) return fetch(input, options);
     const signal = options?.signal ?? (input instanceof Request ? input.signal : undefined);
     const row = { url: url.href, state: 'pending', bytes: 0, signalAborted: !!signal?.aborted };
     reads.push(row);

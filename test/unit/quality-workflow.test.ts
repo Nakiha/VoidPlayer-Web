@@ -1,4 +1,5 @@
 import {normalizeQualityJobInput} from '../../shared/analysis/quality/job-input.ts';
+import { PollingCadence } from '../../src/services/polling-cadence.ts';
 import test from 'node:test';
 import {FrozenSubmissionJournal,assertJobReceipt} from '../../src/services/frozen-submission.ts';
 import {QualityObservationScope} from '../../src/analysis/quality/observation-scope.ts';
@@ -13,6 +14,26 @@ import { qualityFrameCandidates,qualityFrameQuery } from '../../shared/analysis/
 import type { LibraryPairBinding } from '../../shared/analysis/quality/library-pair.ts';
 import { wrapFlv,pairAvcc,admissionIdr,preparedPair,pairRequest } from '../helpers/frame-pair-fixture.ts';
 function deferred<T>(){let resolve!:(value:T)=>void,reject!:(reason:unknown)=>void;const promise=new Promise<T>((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};}
+
+test('read polling backs off unchanged idle observations, resumes immediately and keeps active jobs responsive', () => {
+  let now = 0;
+  const cadence = new PollingCadence(1000, 15000, () => now);
+  assert.equal(cadence.ready(), true);
+  cadence.observeJobs([]);
+  for (const delay of [1000, 2000, 4000, 8000, 15000]) {
+    now += delay - 1; assert.equal(cadence.ready(), false);
+    now++; assert.equal(cadence.ready(), true); cadence.observeJobs([]);
+  }
+  assert.equal(cadence.ready(false), false);
+  now++; assert.equal(cadence.ready(), true, 'showing a view does not wait for its old idle deadline');
+  cadence.observeJobs([{ id: 'job', state: 'running', revision: 1 }]);
+  now += 1000; assert.equal(cadence.ready(), true); cadence.observeJobs([{ id: 'job', state: 'running', revision: 1 }]);
+  now += 1000; assert.equal(cadence.ready(), true, 'a stable running job retains the base interval');
+  cadence.observeJobs([{ id: 'job', state: 'completed', revision: 2 }]);
+  now += 1000; assert.equal(cadence.ready(), true); cadence.observeJobs([{ id: 'job', state: 'completed', revision: 2 }]);
+  now += 1999; assert.equal(cadence.ready(), false);
+  cadence.reset(); assert.equal(cadence.ready(), true, 'an explicit refresh bypasses idle backoff');
+});
 function memory(){const values=new Map<string,string>();return {getItem:(key:string)=>values.get(key)??null,setItem:(key:string,value:string)=>{values.set(key,value);},removeItem:(key:string)=>{values.delete(key);}};}
 const examplePair=await preparedPair(wrapFlv('h264',pairAvcc,[admissionIdr]));
 const input={schema:'voidplayer-psnr-frame-job',version:1,client:{kind:'browser',id:'tab-1'},request:pairRequest(examplePair.target)}as QualityJobInput;

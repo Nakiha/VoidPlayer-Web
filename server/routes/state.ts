@@ -7,6 +7,7 @@ import type { AdminController } from '../admin.ts';
 import { ANNOTATION_BYTES } from '../annotations.ts';
 import { WORKSPACE_BYTES } from '../workspaces.ts';
 import { sendJson } from '../http-utils.ts';
+import { sendSnapshot } from '../conditional.ts';
 import { guestActor, identityCookie, requireCapturedActor } from '../identity.ts';
 import { encryptedRequest } from '../tls.ts';
 import { localRequest } from '../reveal.ts';
@@ -193,7 +194,11 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
         if (req.method === 'DELETE' && !measurement[2]) { sendJson(res, 200, admin.measurements.cancel(measurement[1], identity.id)); return true; }
       }
       if (url.pathname === '/api/admin/status' && req.method === 'GET') {
-        sendJson(res, 200, { ...admin.status(), identity, http: { activeRequests: traffic.activeRequests, connections: sockets.size, completedRequests: traffic.completedRequests, abortedRequests: traffic.abortedRequests }, recentRequests }); return true;
+        sendJson(res, 200, { ...admin.status(), identity, http: { activeRequests: traffic.activeRequests, connections: sockets.size, completedRequests: traffic.completedRequests, abortedRequests: traffic.abortedRequests },
+          ...(url.searchParams.get('view') === 'overview' ? {} : { recentRequests }) }); return true;
+      }
+      if (url.pathname === '/api/admin/requests' && req.method === 'GET') {
+        sendSnapshot(req, res, { recentRequests }, identity.id); return true;
       }
       if (url.pathname === '/api/admin/analysis') {
         if (req.method === 'GET') { sendJson(res, 200, await admin.analysisSettings()); return true; }

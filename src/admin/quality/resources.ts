@@ -1,4 +1,5 @@
 import { th, t, msg, formatDate } from "../../i18n.ts";
+import { PollingCadence } from '../../services/polling-cadence.ts';
 import { localizedText, type LocalizedValue } from "../../ui/live-localization.ts";
 import { observeIdentity, confirmedActor } from "../../services/identity.ts";
 import { requestError, rootReason } from "../diagnostics.ts";
@@ -73,6 +74,7 @@ export function installQualityResources(
   notice: (value: LocalizedValue, error?: boolean) => void,
 ) {
   const form = document.getElementById("quality-resources") as HTMLFormElement;
+  const cadence = new PollingCadence(2500);
   const nodes = new Map(
     [...form.querySelectorAll<HTMLElement>("[id]")].map((node) => [
       node.id,
@@ -122,6 +124,7 @@ export function installQualityResources(
     return qualityResourceLimits(limits);
   }
   function accept(value: QualityResourceSettings) {
+    cadence.observe(value, value.running > 0 || value.outstanding > 0 || value.exclusiveOwner);
     settings = value;
     dirty = false;
     for (const input of inputs) {
@@ -270,7 +273,7 @@ export function installQualityResources(
     },
   });
   const timer = setInterval(() => {
-    if (!document.hidden && !document.getElementById("pane-overview")?.hidden)
+    if (cadence.ready(!document.hidden && !document.getElementById("pane-overview")?.hidden))
       void load();
   }, 2500);
   signal.addEventListener(

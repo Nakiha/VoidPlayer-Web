@@ -28,6 +28,31 @@ async function fixture(run: (root: string, media: string) => Promise<void>) {
   if (failure) throw failure;
 }
 
+test('browse validators skip unchanged row queries while retaining scope, revision and content checks', async () => fixture(async (root, media) => {
+  await writeFile(path.join(media, 'one.mp4'), 'video');
+  const index = new MediaLibraryIndex([media], { database: path.join(root, 'library.sqlite'), watch: false, settleMs: 0 });
+  await index.refresh();
+  const server = createMediaServer({ roots: [media], library: index, onLog() {} });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}/api/library/browse`;
+  const browse = index.browse.bind(index); let rowQueries = 0;
+  index.browse = query => { rowQueries++; return browse(query); };
+  try {
+    const first = await fetch(base + '?limit=1'), etag = first.headers.get('etag')!;
+    const page = await first.json(); assert.equal(page.entries.length, 1); assert.ok(etag);
+    const unchanged = await fetch(base + `?limit=1&revision=${page.revision}`, { headers: { 'if-none-match': etag } });
+    assert.equal(unchanged.status, 304); assert.equal(await unchanged.text(), ''); assert.equal(rowQueries, 1);
+    assert.equal((await fetch(base + '?limit=2', { headers: { 'if-none-match': etag } })).status, 200);
+    assert.equal((await fetch(base + '?directory=..', { headers: { 'if-none-match': '*' } })).status, 400);
+    assert.equal((await fetch(base + `?revision=${page.revision + 1}`, { headers: { 'if-none-match': '*' } })).status, 409);
+    await writeFile(path.join(media, 'two.mp4'), 'second'); await index.refresh();
+    const changed = await fetch(base + '?limit=1', { headers: { 'if-none-match': etag } });
+    assert.equal(changed.status, 200); assert.notEqual(changed.headers.get('etag'), etag);
+  } finally {
+    server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await index.close();
+  }
+}));
+
 test('persistent index reopens offline, preserves identities on root relocation and rejects a second writer', async () => fixture(async (root, media) => {
   const file = path.join(media, 'one.mp4'); await writeFile(file, 'video');
   const database = path.join(root, 'library.sqlite');

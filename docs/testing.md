@@ -1,5 +1,13 @@
 # 验证说明
 
+IP 访问日志扩充既有 `admin` / `http2` 用例：真实 socket 与生产网关覆盖 HTTP、HTTPS/1、HTTP/2，伪造两种转发头仍须记录真实 peer；独立核对映射 IPv4、IPv6、未知地址、请求 ID、去查询路径、最近快照及 finish/close 仅记录一次。新增断言在修复前因缺少 IP 字段失败；管理页既有请求观察场景同时核对 IP 渲染。HTTP/2 取消用例等待真实 close，允许 Bun 在显式取消后报告 `NGHTTP2_CANCEL`，其他错误仍失败，原有 IO 释放与同会话继续读取断言保留；旧 HEAD 同样复现的等待误判证据在本机日志内。没有新增媒体、浏览器循环或套件，增量仅数个轻量 HTTP 请求。
+
+请求观察优化扩充已有职责用例，不新增重复媒体矩阵。`quality-workflow` 用确定时钟验证空闲退避、可见恢复和活动任务刷新；`library-index` / `admin` / `media-thumbnail-store` 用真实 HTTP 验证 304、查询/版本隔离、跳过列表查询和旧接口兼容；`thumbnail-session` 验证 browse 状态替代逐条探测及迟到旧 epoch。`analysis-products` / `bitstream-analysis` 对冷/热摘要包注入错误 build、namespace、重复 AU 和游标，拒绝整包且不发布部分图表。以上轻量增量不依赖真实媒体，沿用已登记的 Node 用例。
+
+真实 WASM 服务回归在既有摘要页恢复/缓存缺口场景内增加冷包交付检查；既有 diagrams 浏览器场景增加冷摘要零逐帧 HTTP 下载断言，并保留热缓存零解码和 300 个不同 AU 的原 reader 证据。没有增加输入循环、媒体素材或性能通过阈值；原有生命周期、取消和缓存校验仍执行。前后请求频率按相同操作窗口做本机诊断，不把请求减少直接称为跨机器性能达标。
+
+管理页浏览器回归末尾恢复此前暂停的 clock 并置前管理页：6.5 秒验证原 actor 的实际条件响应，再隐藏观察面板 4 秒验证停止观察及零概览读取。读取服务端 finish 状态和真实条件头，避免 WebKit 把重验证响应在浏览器协议中显示为 200；仍验证缓存视图保持渲染。每引擎约增加 11 秒，不新增媒体/算法循环；独立预期来自 HTTP 304 和可见性行为，不能只检查页面文本或源码定时器。
+
 套件与稳定 case ID 以 `scripts/testing/manifest.json` 为准，统一入口为 `scripts/run-tests.mjs`。`package.json` 保留原有单项命令。不要把某次历史测试数量或构建成功当作当前兼容性结论。
 
 日常 PR/main 验证在 `.github/workflows/checks.yml`；完整兼容性与独立发布在 `.github/workflows/release-preview.yml`。两者共用 `prepare-cores.yml`，core 缓存命中后仍核验固定来源及 ABI。

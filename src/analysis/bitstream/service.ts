@@ -5,7 +5,7 @@ import {emptyCounters} from '../../../shared/analysis/bitstream/counters.ts';
 import type {AnalysisCounters} from '../../../shared/analysis/bitstream/counters.ts';
 import { validateDemandPlan, demandKey } from '../../../shared/analysis/bitstream/demand.ts';
 import type { DemandPlan } from '../../../shared/analysis/bitstream/demand.ts';
-import { isProduct, isSummary, legacyOf, summaryOf, validateOutput, metadataBudgetBytes, SUMMARY_BATCH_LIMIT, readSummaryStatus, readBoundedResponse, decodeProduct, PRODUCT_LIMIT } from '../../../shared/analysis/bitstream/products.ts';
+import { isProduct, isSummary, legacyOf, summaryOf, validateOutput, validateSummaryPacket, readSummaryStatus, readBoundedResponse, decodeProduct, PRODUCT_LIMIT } from '../../../shared/analysis/bitstream/products.ts';
 import type { AnalysisOutput } from '../../../shared/analysis/bitstream/products.ts';
 import { DiagramStore } from "../../../shared/analysis/bitstream/diagrams.ts";
 import { AnalysisPollingBudget } from '../../../shared/analysis/bitstream/task-pool.ts';
@@ -569,7 +569,7 @@ export class BitstreamAnalysisService {
     let cursor = 0;
     const stream = 'mode' in target;
     const budget = new AnalysisPollingBudget(stream);
-    if (stream && target.product === 'summary') status.searchParams.set('pack', 'gop');
+    if (stream && target.product === 'summary') status.searchParams.set('pack', 'summary');
     try {
       for (;;) {
         if (stream) status.searchParams.set('after', String(cursor));
@@ -591,26 +591,15 @@ export class BitstreamAnalysisService {
           throw new Error("Invalid analysis chunk manifest");
         let restoredGop = false;
         for (const chunk of state.chunks) {
-          if (chunk.cachedGop !== undefined) {
-            if (!stream || target.product !== 'summary' || !Array.isArray(chunk.cachedGop) ||
-                !chunk.cachedGop.length || chunk.cachedGop.length > SUMMARY_BATCH_LIMIT.pictures ||
-                chunk.startCursor !== cursor + 1 || chunk.cursor !== cursor + chunk.cachedGop.length || chunk.cursor > state.published)
-              throw Error('Invalid cached GOP transport');
-            let bytes = 0; const seen = new Set<number>(), group = JSON.stringify(chunk.cachedGop[0]?.gop);
-            // Validate the entire packet before making any of it visible.
-            for (const output of chunk.cachedGop) {
-              validateOutput(output); bytes += metadataBudgetBytes(output) + 64;
-              if (!isSummary(output) || output.buildId !== state.buildId || output.picture.sourceVersion !== target.sourceVersion ||
-                  JSON.stringify(output.indexIdentity) !== JSON.stringify(analysisIndexIdentity(target.indexIdentity)) || !output.gop ||
-                  JSON.stringify(output.gop) !== group || seen.has(output.picture.au) || bytes > SUMMARY_BATCH_LIMIT.bytes)
-                throw Error('Invalid cached GOP identity');
-              seen.add(output.picture.au);
-            }
+          if (chunk.cachedGop !== undefined || chunk.summaryBatch !== undefined) {
+            if (!stream || target.product !== 'summary') throw Error('Unexpected summary transport');
+            const packet = validateSummaryPacket(chunk, { cursor, published: state.published, sourceVersion: target.sourceVersion,
+              buildId: state.buildId, indexIdentity: target.indexIdentity });
             const changed = this.changed; let dirty = false;
             this.changed = () => { dirty = true; };
-            try { for (const output of chunk.cachedGop) consume(output, true); }
+            try { for (const output of packet.results) consume(output, packet.cached); }
             finally { this.changed = changed; if (dirty) changed(); }
-            cursor = chunk.cursor; budget.progress(); restoredGop = true;
+            cursor = packet.cursor; budget.progress(); restoredGop = true;
             continue;
           }
           if (stream) {

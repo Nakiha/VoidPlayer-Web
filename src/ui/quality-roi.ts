@@ -184,7 +184,7 @@ function startMeasurement(root: HTMLDialogElement,session: ReviewSession,mode: S
   const resized=new ResizeObserver(()=>{try{redraw();}catch(error){invalidate();status.textContent=error instanceof Error?error.message:String(error);}});for(const stage of stages)resized.observe(stage);
   const unsubscribe=session.subscribe(()=>{if(!valid())root.close();});
   const revoke=()=>{lifeController.abort();root.close();};window.addEventListener('pagehide',revoke,{signal});window.addEventListener('voidplayer-identity-change',revoke,{signal});window.addEventListener('storage',event=>{if(event.key==='voidplayer.identity')revoke();},{signal});
-  const timer=setInterval(()=>{if(enabled&&valid()&&!document.hidden)void observer.poll();},1000);
+  const timer=setInterval(()=>{void observer.pollVisible(enabled&&valid()&&!document.hidden);},1000);
   root.addEventListener('close',()=>{lifeController.abort();observer.dispose();invalidate();clearInterval(timer);unsubscribe();resized.disconnect();root.remove();},{once:true});
   void discovery.then(ready=>{if(ready&&valid())void observer.poll();});actions();
 }

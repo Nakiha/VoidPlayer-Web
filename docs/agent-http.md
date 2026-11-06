@@ -6,6 +6,10 @@
 
 ## 无页面写入
 
+只读媒体库 `GET /api/library/browse` 支持私有 ETag 条件读取。校验身份绑定实例、查询范围、分页、库修订、数据库变化、缩略图 epoch 和完整扫描/根目录状态；先验证参数及指定 revision，再在 COUNT/行排序之前判断 304。错误继续 `no-store`，旧客户端无需发送条件头。缩略图在核验源可访问性和版本后按 JPEG 内容响应 ETag，已清除或换源不能由旧标签返回 304。浏览器在当前视图持有对应响应，不跨查询替换缓存。
+
+管理概览可用 `GET /api/admin/status?view=overview` 省略请求历史，默认 status 保留旧 wire。`GET /api/admin/requests` 单独返回最多 200 条最近请求，支持绑定当前 actor 的私有条件读取；只在请求记录视图观察。CPU、运行时间等动态状态不使用整包 ETag。GUI 的空闲退避只调度自动读取，不改变 Agent 的显式读取、持久提交或服务执行。
+
 HTTP 客户端先显式 POST `/api/identity` 并保存 cookie，再向 `/api/annotations/spaces/SPACE` 提交 `AnnotationOperation`。必须提供与服务匹配的 `Origin`、对应的 `X-VoidPlayer-Action` 和 JSON Content-Type。用户名与 `client` 是可信内网下的归属声明，不是身份认证；既有同源保护保持不变。
 
 持久目标由 space、标注 ID、`document.media` 中的源 ID/版本和 `mark.frame` 确定。现有文档仍带有 A–H 槽位与 decoder 来源字段；它们是兼容的显示/来源描述，不是要求 Agent 加载轨道或拥有浏览器。媒体描述必须来自已知工作区或实际探测，不能编造；接受标注不意味着服务器验证了帧内容或分数。自解释缓存媒体信息/索引的首批只读接口见 [媒体查询](media-query.md)；完整探测与技术条件筛选仍由 #120 跟踪。

@@ -1,4 +1,4 @@
-import { summaryOf, packLegacy } from '../../shared/analysis/bitstream/products.ts';
+import { summaryOf, packLegacy, validateSummaryPacket } from '../../shared/analysis/bitstream/products.ts';
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 // Local service fixtures use the same independently fetched current manifest.
@@ -272,6 +272,23 @@ test('GOP grouping follows AU order, preserves open-GOP dependence and splits co
   const value = result(); value.gop = { startAu: 0, endAu: 4, configuration: 0, anchor: 'dependent' };
   validateResult(value);
   assert.throws(() => validateResult({ ...value, gop: { ...value.gop!, endAu: 3 } }), /GOP/);
+});
+
+test('summary transport validates the complete cold or cached packet without inventing cache hits', () => {
+  const first = summaryOf({ ...result(), gop: { startAu: 0, endAu: 8, configuration: 0, anchor: 'dependent' } });
+  const second = { ...structuredClone(first), picture: { ...first.picture, au: 4 }, sourcePtsUs: 200 };
+  const expected = { cursor: 0, published: 2, sourceVersion: first.picture.sourceVersion, buildId: first.buildId };
+  const packet = { summaryBatch: [first, second], startCursor: 1, cursor: 2, cached: false };
+  assert.equal(validateSummaryPacket(packet, expected).cached, false);
+  assert.equal(validateSummaryPacket({ cachedGop: [first, second], startCursor: 1, cursor: 2, cached: true }, expected).cached, true);
+  assert.throws(() => validateSummaryPacket({ ...packet, cached: true }, expected), /transport/);
+  assert.throws(() => validateSummaryPacket({ ...packet, startCursor: 2 }, expected), /transport/);
+  assert.throws(() => validateSummaryPacket(packet, { ...expected, published: 1 }), /transport/);
+  for (const invalid of [first, { ...second, buildId: 'other' }, { ...second, picture: { ...second.picture, sourceVersion: 'other' } },
+    { ...second, indexIdentity: { ...second.indexIdentity, schemaVersion: 2 } }]) {
+    assert.throws(() => validateSummaryPacket({ ...packet, summaryBatch: [first, invalid] }, expected));
+  }
+  assert.equal(first.picture.au, 3, 'rejected packets do not modify cached data');
 });
 
 test('stream progress waits for transport completion after all pictures, and follows a growing duration', async () => {

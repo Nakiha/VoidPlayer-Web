@@ -6,7 +6,7 @@ import type {QualityApplication} from './quality-application.ts';
 import { AdminError } from './admin-error.ts';
 import { FrameIndexStore } from './frame-index-store.ts';
 import { MediaThumbnailStore } from './media-thumbnail-store.ts';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import type { Stats } from 'node:fs';
 import path from 'node:path';
@@ -27,6 +27,7 @@ const parent = (name: string) => path.posix.dirname(name) === '.' ? '' : path.po
 
 /** Persistent, progressively updated metadata. Range lookups never wait for a scan. */
 export class MediaLibraryIndex {
+  private readonly browseEpoch = randomUUID();
   readonly roots: string[];
   readonly definitions: RootRecord[];
   private store: LibraryStore;
@@ -115,13 +116,25 @@ export class MediaLibraryIndex {
     const root = this.definitions.find(r => r.id === row.root_id)!;
     return { id: row.id, name: row.path, root: root.name, rootIndex: root.index, rootId: root.id, size: row.size, lastModified: row.modified, version: row.version, state: row.state };
   }
-  browse(query: BrowseQuery = {}) {
+  private browseContext(query: BrowseQuery) {
     const revision = Number(this.store.db.prepare('SELECT revision FROM library_revision WHERE id=1').get()!.revision);
     if (query.revision !== undefined && query.revision !== revision) throw Object.assign(new Error('媒体库已更新，请从第一页重新浏览。'), { code: 'INDEX_CHANGED' });
     const limit = Math.min(200, Math.max(1, query.limit ?? 100)), offset = Math.max(0, query.offset ?? 0);
     const directory = query.directory ?? '';
     if (directory.startsWith('/') || directory.split('/').some(p => p === '..') || directory.includes('\\')) throw new Error('无效的媒体目录。');
     if (query.rootId && !this.definitions.some(r => r.id === query.rootId)) throw new Error('未知媒体根目录。');
+    return { revision, limit, offset, directory };
+  }
+  /** Validate the same scope before conditional responses, without COUNT, sorting or loading rows. */
+  browseEtag(query: BrowseQuery = {}) {
+    const { revision, limit, offset, directory } = this.browseContext(query);
+    const changes = this.store.db.prepare('SELECT total_changes() AS changes').get()!.changes;
+    const external = this.store.db.prepare('PRAGMA data_version').get();
+    return `"browse-${createHash('sha256').update(JSON.stringify([this.browseEpoch, revision, changes, external,
+      query.rootId ?? '', directory, query.search ?? '', !!query.recursive, limit, offset, this.thumbnails.epoch, this.status()])).digest('base64url')}"`;
+  }
+  browse(query: BrowseQuery = {}) {
+    const { revision, limit, offset, directory } = this.browseContext(query);
     const filters = ['r.active=1', "m.state!='missing'"], values: (string | number)[] = [];
     if (query.rootId) { filters.push('m.root_id=?'); values.push(query.rootId); }
     if (!query.recursive) { filters.push('m.parent=?'); values.push(directory); }

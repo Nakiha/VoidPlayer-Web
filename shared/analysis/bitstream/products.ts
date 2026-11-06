@@ -36,6 +36,27 @@ interface ProductMetadata extends FrameMetadata {
   encoding: 'summary-json-v1' | 'blocks-le12-v1';
 }
 export interface AnalysisSummary extends ProductMetadata { product: 'summary'; encoding: 'summary-json-v1' }
+/** Validate a complete transport packet before publishing any of its pictures. */
+export function validateSummaryPacket(packet: { cachedGop?: unknown; summaryBatch?: unknown; cached?: unknown; startCursor?: unknown; cursor?: unknown },
+  expected: { cursor: number; published: number; sourceVersion: string; buildId: string; indexIdentity?: ProductIndexIdentity | null }) {
+  const batch = packet.cachedGop ?? packet.summaryBatch, cached = packet.cachedGop !== undefined;
+  if ((cached && packet.summaryBatch !== undefined) || !Array.isArray(batch) || !batch.length ||
+      batch.length > (cached ? SUMMARY_BATCH_LIMIT.pictures : PRODUCT_LIMIT.pageItems) ||
+      packet.startCursor !== expected.cursor + 1 || packet.cursor !== expected.cursor + batch.length ||
+      !Number.isSafeInteger(expected.published) || (packet.cursor as number) > expected.published ||
+      (cached ? packet.cached !== true : !!packet.cached)) throw Error('Invalid summary batch transport');
+  let bytes = 0;
+  const seen = new Set<number>(), group = JSON.stringify(batch[0]?.gop);
+  for (const output of batch) {
+    validateOutput(output); bytes += metadataBudgetBytes(output) + 64;
+    if (!isSummary(output) || output.buildId !== expected.buildId || output.picture.sourceVersion !== expected.sourceVersion ||
+        JSON.stringify(output.indexIdentity) !== JSON.stringify(analysisIndexIdentity(expected.indexIdentity)) || !output.gop ||
+        JSON.stringify(output.gop) !== group || seen.has(output.picture.au) || bytes > SUMMARY_BATCH_LIMIT.bytes)
+      throw Error('Invalid summary batch identity');
+    seen.add(output.picture.au);
+  }
+  return { results: batch as AnalysisSummary[], cached, cursor: packet.cursor as number };
+}
 export interface AnalysisBlocks extends ProductMetadata { product: 'blocks'; encoding: 'blocks-le12-v1'; payload: ArrayBuffer }
 export type AnalysisProduct = AnalysisSummary | AnalysisBlocks;
 export type AnalysisOutput = AnalysisResult | AnalysisProduct;

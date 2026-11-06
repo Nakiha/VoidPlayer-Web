@@ -11,6 +11,7 @@ import { requestAuthority } from '../../server/http.ts';
 import type { IncomingMessage } from '../../server/http.ts';
 import { createRequestServer, ProtocolGateway } from '../../server/protocol-server.ts';
 import { localRequest, setClientAddress } from '../../server/reveal.ts';
+import { clientIp } from '../../server/client-address.ts';
 import { serveFile } from '../../server/http-utils.ts';
 import { sendMediaIndexStream } from '../../server/routes/index-stream.ts';
 import { loadConfig } from '../../server/config.ts';
@@ -69,6 +70,17 @@ test('HTTP/2 through the production gateway supports identity writes, Range/HEAD
     const health = await get('/api/health');
     assert.equal(health.status, 200);
     assert.equal(health.headers['cross-origin-embedder-policy'], 'require-corp');
+    const headers = { 'x-forwarded-for': '203.0.113.99', forwarded: 'for=203.0.113.99' };
+    const plain = await httpFetch(`http://127.0.0.1:${port}/api/library/browse`, { headers });
+    const secure = await httpFetch(base + '/api/library/browse', { ca, headers });
+    const multiplexed = await get('/api/library/browse', headers);
+    const records = (await get('/api/admin/requests')).json().recentRequests;
+    for (const id of [plain.headers.get('x-request-id'), secure.headers.get('x-request-id'), multiplexed.headers['x-request-id']]) {
+      const record = records.find((entry: Record<string,unknown>) => entry.requestId === id);
+      assert.ok(record, 'each HTTP/1, HTTPS/1 and HTTP/2 request is recorded');
+      assert.equal(record.clientIp, '127.0.0.1', 'gateway attribution ignores forwarded headers on every protocol');
+      assert.equal(record.completed, true);
+    }
     const write = (origin: string) => get('/api/identity', { ':method': 'POST', origin,
       'x-voidplayer-action': 'identity', 'content-type': 'application/json' }, JSON.stringify({ name: 'HTTP2 user' }));
     const identity = await write(`https://${host}`);
@@ -132,15 +144,15 @@ test('HTTP/2 retains the gateway peer instead of trusting loopback or forwarded 
   const tls = await prepareTls({ hosts: ['127.0.0.1'] }, root);
   const backend = createRequestServer(tls, (req, res) => {
     setClientAddress(req, gateway.clientAddress(req));
-    res.end(JSON.stringify({ peer: gateway.clientAddress(req), authority: requestAuthority(req), local: localRequest(req) }));
+    res.end(JSON.stringify({ peer: gateway.clientAddress(req), ip: clientIp(req), authority: requestAuthority(req), local: localRequest(req) }));
   });
   await new Promise<void>(resolve => backend.listen(0, '127.0.0.1', resolve));
   const port = (backend.address() as { port: number }).port, front = gateway.create(port, port);
   await new Promise<void>(resolve => front.listen(0, address, resolve));
   try {
     client = connect(`https://${address}:${(front.address() as { port: number }).port}`, { ca: tls.ca, servername: 'localhost' });
-    const value = await read(client, '/', { ':authority': 'localhost', 'x-forwarded-for': '127.0.0.1' });
-    assert.deepEqual(value.json(), { peer: address, authority: 'localhost', local: address === '127.0.0.1' });
+    const value = await read(client, '/', { ':authority': 'localhost', 'x-forwarded-for': '127.0.0.1', forwarded: 'for=127.0.0.1' });
+    assert.deepEqual(value.json(), { peer: address, ip: address, authority: 'localhost', local: address === '127.0.0.1' });
   } finally {
     client?.destroy();
     front.closeAllConnections(); backend.closeAllConnections();
@@ -169,11 +181,16 @@ test('cancelled Range and NDJSON streams release IO while another stream on the 
     for (const url of ['/file', '/index']) {
       const finished = new Promise<void>(resolve => released.set(url, resolve));
       const request = client.request({ ':path': url, range: 'bytes=0-8388607' });
-      request.on('error', () => {});
+      let cancelling = false;
+      request.on('error', (error: Error & { code?: string }) => {
+        if (!cancelling || error.code !== 'ERR_HTTP2_STREAM_ERROR' || !error.message.includes('NGHTTP2_CANCEL')) failures.push(error);
+      });
       const received = once(request, 'data');
       request.end();
       await received;
-      const closed = once(request, 'close');
+      // Bun emits the explicitly requested CANCEL as an error before close; events.once would reject it.
+      const closed = new Promise<void>(resolve => request.once('close', () => resolve()));
+      cancelling = true;
       request.close(constants.NGHTTP2_CANCEL);
       await closed;
       assert.equal((await read(client, '/health')).bytes.toString(), 'ok');

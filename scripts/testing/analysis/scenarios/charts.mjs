@@ -14,11 +14,13 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
       else await call('load_library_item', { slot: 'A', id: library.entries.find(e => e.name === 'incremental.mp4').id });
       await stable(); await call('seek_review', { ptsUs: 5_000_000 });
       if (!await page.locator('#analysis-panel').isVisible()) await page.locator('#toggle-analysis').click();
+      const coldRequests = requests.length;
       await selectDiagrams(page, 'nalu-size');
       // Streams have a no-progress budget, not a 30 s total lifetime. CI may
       // continuously consume all 300 HTTP chunks beyond that old total limit.
       // Keep the same terminal/coverage gate and the existing 60 s stream wait.
       await page.waitForFunction(() => { const s = window.voidPlayer.tools.find(t => t.name === 'get_bitstream_analysis_state').execute({slot:'A'}); return s.state === 'ready' && s.stream?.pictures === 300 && !s.completedStream; }, undefined, { timeout: 60000 });
+      if (input === 'library') assert.equal(requests.slice(coldRequests).filter(r => r.method === 'GET' && /bitstream-analysis\/chunks\//.test(r.url)).length, 0, 'cold summaries arrive in bounded status batches without per-picture HTTP downloads');
       for (const close of await page.locator('.toast-close').all()) await close.click();
       await page.locator('.toast-stack .toast').waitFor({ state: 'hidden' });
       const playback = await page.evaluate(() => ({ positionUs: window.voidPlayer.getState().positionUs, playing: window.voidPlayer.getState().playing }));
@@ -74,7 +76,7 @@ const { page, artifact, phase, checkpoint, limitsDir, requests, rows, call, stab
           await fresh.addInitScript(installStatusReadEvidence);
           freshEvidence = recordBrowserEvidence(fresh);
           const downloads = [];
-          statuses = recordStatusEvidence(fresh, request => request.method() === 'GET' && /bitstream-analysis\/requests\/.*pack=gop/.test(request.url()));
+          statuses = recordStatusEvidence(fresh, request => request.method() === 'GET' && /bitstream-analysis\/requests\/.*pack=(gop|summary)/.test(request.url()));
           fresh.on('request', request => { if (/bitstream-analysis\/chunks\//.test(request.url())) downloads.push(request.url()); });
           await fresh.addInitScript(() => { window.__vpAnalysisQA = true; });
           await fresh.goto(context.url);

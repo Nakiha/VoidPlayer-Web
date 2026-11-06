@@ -1,3 +1,4 @@
+import { PollingCadence } from '../../services/polling-cadence.ts';
 import { qualityViewVisible } from "./navigation.ts";
 import {
   renderQualitySummary,
@@ -41,6 +42,7 @@ export function installQualityCambi(signal: AbortSignal) {
     input = (id: string) => $(id) as HTMLInputElement;
   const api = new QualityClient();
   const observation = new QualityObservationScope();
+  const cadence = new PollingCadence();
   let browsingMore = false,
     active = false,
     actor = "",
@@ -281,6 +283,7 @@ export function installQualityCambi(signal: AbortSignal) {
           c.signal,
         );
         if (!valid(c)) return;
+        cadence.observeJobs(p.entries);
         after = p.after;
         $("history-more").hidden = !p.more;
         if (!more) $("history").replaceChildren();
@@ -359,6 +362,7 @@ export function installQualityCambi(signal: AbortSignal) {
           c.signal,
         );
         if (!valid(c) || id !== selected) return;
+        cadence.observeJobs([j]);
         for (const button of $("history").querySelectorAll<HTMLButtonElement>(
           "[data-cambi-job]",
         ))
@@ -641,7 +645,7 @@ export function installQualityCambi(signal: AbortSignal) {
     failed: error,
   });
   const timer = setInterval(() => {
-    if (active && qualityViewVisible("cambi")) {
+    if (cadence.ready(active && qualityViewVisible("cambi"))) {
       if (selected) void detail();
       else if (!browsingMore) void history();
     }

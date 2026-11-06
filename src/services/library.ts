@@ -38,6 +38,8 @@ export async function openLibraryItem(entry: LibraryEntry, onProgress?: MediaOpe
 
 export interface LibraryRoot { id: string; name: string; state: string; error: string | null; scannedAt: number | null }
 export interface LibraryPage {
+  /** Validator for this exact browse response; owned by the browsing view. */
+  etag?: string;
   entries: LibraryEntry[];
   directories: { rootId: string; path: string; name: string }[];
   roots: LibraryRoot[];
@@ -48,13 +50,17 @@ export interface LibraryPage {
 }
 export interface LibraryQuery { root?: string; directory?: string; search?: string; recursive?: boolean; offset?: number; revision?: number; limit?: number }
 export class LibraryChangedError extends Error {}
-export async function fetchLibraryPage(query: LibraryQuery, signal?: AbortSignal): Promise<LibraryPage> {
+export async function fetchLibraryPage(query: LibraryQuery, signal?: AbortSignal, previous?: LibraryPage): Promise<LibraryPage> {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== '') params.set(key, typeof value === 'boolean' ? value ? '1' : '0' : String(value));
-  const response = await fetch(`/api/library/browse?${params}`, { cache: 'no-store', signal });
+  const response = await fetch(`/api/library/browse?${params}`, { cache: 'no-store', signal,
+    headers: previous?.etag ? { 'if-none-match': previous.etag } : {} });
+  if (response.status === 304 && previous) return previous;
   if (response.status === 409) throw new LibraryChangedError('媒体库已更新，请重新读取');
   if (!response.ok) throw new Error(response.status === 404 ? '媒体服务需要升级，才能使用目录浏览' : '媒体库未连接，仍可添加本地文件');
-  return response.json();
+  const page: LibraryPage = await response.json();
+  page.etag = response.headers.get('etag') ?? undefined;
+  return page;
 }
 export async function fetchLibraryItem(id: string, signal?: AbortSignal): Promise<LibraryEntry | null> {
   const response = await fetch(`${mediaUrl(id)}/metadata`, { cache: 'no-store', signal });

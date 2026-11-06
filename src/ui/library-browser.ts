@@ -1,4 +1,5 @@
 import { fetchLibraryPage, LibraryChangedError } from '../services/library.ts';
+import { PollingCadence } from '../services/polling-cadence.ts';
 import type { LibraryPage, LibraryEntry } from '../services/library.ts';
 import { installChoiceMenu } from './choice-menu.ts';
 import { onLanguageChange, t, msg } from '../i18n.ts';
@@ -7,7 +8,8 @@ import { icon } from './icons.ts';
 import { libraryLocationExpression, parseLibraryLocationInput, parseLibraryLocationLink } from './library-link.ts';
 
 /** Continuous browsing with bounded requests and atomic result replacement. */
-export function installLibraryBrowser(change: (page: LibraryPage | null) => void, signal: AbortSignal, onScope?: (recent: boolean) => void, notify: (message: string) => void = () => {}) {
+export function installLibraryBrowser(change: (page: LibraryPage | null) => void, signal: AbortSignal, onScope?: (recent: boolean) => void,
+  notify: (message: string) => void = () => {}, observeRecent: () => boolean = () => false) {
   let initial = { root: '', directory: '', all: false };
   if (new URL(location.href).searchParams.has('library')) {
     try { initial = parseLibraryLocationLink(location.href, location.href); } catch { /* Ignore malformed startup links. */ }
@@ -16,6 +18,7 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
   let request: AbortController | undefined, sequence = 0, loading = false, pendingSearch = false;
   const available = () => !recent;
   let optionsSignature = '', appliedScope = '', searchTimer: ReturnType<typeof setTimeout> | undefined;
+  const cadence = new PollingCadence(3000);
   const list = document.getElementById('source-list')!;
   const tools = document.getElementById('source-tools')!;
   // Address-style location field with a separate scope dropdown.
@@ -116,15 +119,22 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
     const abort = AbortSignal.any([signal, request.signal, AbortSignal.timeout(10000)]);
     try {
       const query = { root: all ? undefined : root, directory: all ? '' : directory, search, recursive: all, limit: 60 };
-      let value = await fetchLibraryPage({ ...query, offset: append ? previous?.nextOffset ?? 0 : 0, revision: resetView || restarted ? undefined : previous?.revision }, abort);
+      let value = await fetchLibraryPage({ ...query, offset: append ? previous?.nextOffset ?? 0 : 0, revision: resetView || restarted ? undefined : previous?.revision }, abort,
+        !append && !resetView && !restarted ? previous ?? undefined : undefined);
       if (append && previous) value = { ...value, entries: [...previous.entries, ...value.entries], directories: [...previous.directories, ...value.directories] };
-      else if (!resetView && previous?.revision === value.revision) value = { ...value, entries: previous.entries, directories: previous.directories, nextOffset: previous.nextOffset };
+      else if (!resetView && previous?.revision === value.revision && previous.thumbnailEpoch === value.thumbnailEpoch) {
+        const fresh = new Map(value.entries.map(entry => [entry.id, entry]));
+        value = { ...value, entries: previous.entries.map(entry => fresh.get(entry.id) ?? entry),
+          directories: previous.directories, nextOffset: previous.nextOffset };
+      }
       else while (Math.max(value.entries.length, value.directories.length) < targetCount && value.nextOffset !== null) {
         const more = await fetchLibraryPage({ ...query, offset: value.nextOffset, revision: value.revision }, abort);
         value = { ...value, entries: [...value.entries, ...more.entries], directories: [...value.directories, ...more.directories], nextOffset: more.nextOffset };
       }
       if (ticket !== sequence || signal.aborted) return;
       page = value; appliedSearch = search; appliedScope = scope;
+      cadence.observe([scope, page.revision, page.thumbnailEpoch, page.entries.length, page.roots.map(r => [r.id, r.state, r.error])],
+        page.scanning || page.entries.some(entry => entry.state === 'pending'));
     } catch (error) {
       if (ticket !== sequence || signal.aborted) return;
       if (error instanceof LibraryChangedError && !restarted) { await load(false, resetView, true); return; }
@@ -144,8 +154,10 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
   list.addEventListener('scroll', more, { signal, passive: true });
   const resize = new ResizeObserver(more); resize.observe(list);
   const timer = setInterval(() => {
-    if (!document.hidden && !loading && !pendingSearch && !signal.aborted && !button.matches('[aria-expanded=true]') && (!document.getElementById('sources-panel')!.hidden || !document.getElementById('empty-A')!.hidden)) void load();
-  }, 3000);
+    const visible = !document.hidden && !recent && !signal.aborted && (!document.getElementById('sources-panel')!.hidden || observeRecent());
+    if (cadence.ready(visible) && !loading && !pendingSearch && !button.matches('[aria-expanded=true]')) void load();
+  }, 1000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) cadence.reset(); }, { signal });
   const stopLanguage = onLanguageChange(() => { if (!signal.aborted) {
     address.setAttribute('aria-label',t(msg("libraryBrowser.locationLabel", "媒体库路径或链接")));
     button.setAttribute('aria-label',t(msg("libraryBrowser.scopeLabel", "媒体库范围")));

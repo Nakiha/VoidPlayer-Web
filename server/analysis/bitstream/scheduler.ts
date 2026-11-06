@@ -355,7 +355,7 @@ export class AnalysisScheduler {
   }
   /** Cursor acknowledges only previously delivered descriptors. The worker
    * stalls at 32 unconsumed chunks; leases release disconnected consumers. */
-  async streamStatus(id: string, owner: string, after: number, packGops = false) {
+  async streamStatus(id: string, owner: string, after: number, packGops: boolean | 'summary' = false) {
     const status = this.status(id, owner), c = this.consumers.get(id);
     if (!status || !c) return null;
     if (!('mode' in c.work.target)) throw new AnalysisFailure('invalid-request', 'Cursor requires a stream request');
@@ -373,9 +373,29 @@ export class AnalysisScheduler {
       if (!remaining.length) throw new Error('Incomplete stream page');
       refs.push(...remaining); cursor += remaining.length;
     }
-    const chunks: (StreamChunkRef & { url: string; startCursor?: number; cachedGop?: AnalysisSummary[] })[] = [];
+    const chunks: (StreamChunkRef & { url: string; startCursor?: number; cachedGop?: AnalysisSummary[]; summaryBatch?: AnalysisSummary[] })[] = [];
+    // One validated disk page per admitted response, discarded before reading another page.
+    const snapshot: { id?: string; members?: AnalysisSummary[] } = {};
     let bytes = 0;
     for (const ref of refs) {
+      if (ref.cursor <= (chunks.at(-1)?.cursor ?? after)) continue;
+      if (packGops === 'summary' && !ref.cached && w.target.product === 'summary') {
+        const summaries: AnalysisSummary[] = [];
+        for (const member of refs.slice(refs.indexOf(ref))) {
+          if (member.cached || member.cursor !== ref.cursor + summaries.length || JSON.stringify(member.gop) !== JSON.stringify(ref.gop)) break;
+          const output = await this.store.getOutput(member.id, member.au, snapshot);
+          if (!output || !isSummary(output) || output.buildId !== w.buildId || output.picture.sourceVersion !== w.target.sourceVersion ||
+              output.picture.au !== member.au || JSON.stringify(output.indexIdentity) !== JSON.stringify(analysisIndexIdentity(w.target.indexIdentity)))
+            throw Error('Summary batch member unavailable');
+          const value = { ...output, gop: member.gop }, size = metadataBudgetBytes(value) + 64;
+          if (bytes + size > SUMMARY_BATCH_LIMIT.bytes) break;
+          summaries.push(value); bytes += size;
+        }
+        if (!summaries.length) throw new AnalysisFailure('resource-limit', 'Summary transport budget exceeded');
+        chunks.push({ ...ref, url: '', cached: false, startCursor: ref.cursor, cursor: ref.cursor + summaries.length - 1, summaryBatch: summaries });
+        // Do not accumulate several response-sized batches in the same status.
+        break;
+      }
       if (packGops && ref.cached && ref.batchEnd && w.target.product === 'summary') {
         // One transport packet per cached GOP (or bounded part). Cursor values
         // still acknowledge individual pictures, so older clients keep working.
@@ -389,7 +409,7 @@ export class AnalysisScheduler {
           for (const member of page.slice((current - 1) % 32)) {
             if (current > end) break;
             if (!member.cached || member.batchEnd !== end || member.cursor !== current || JSON.stringify(member.gop) !== JSON.stringify(ref.gop)) throw Error('Invalid cached GOP member');
-            const output = await this.store.getOutput(member.id, member.au);
+            const output = await this.store.getOutput(member.id, member.au, snapshot);
             if (!output || !isSummary(output) || output.buildId !== w.buildId || output.picture.sourceVersion !== w.target.sourceVersion || output.picture.au !== member.au ||
                 JSON.stringify(output.indexIdentity) !== JSON.stringify(analysisIndexIdentity(w.target.indexIdentity))) throw Error('Cached GOP member unavailable');
             const value = { ...output, gop: member.gop };

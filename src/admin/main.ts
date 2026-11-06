@@ -1,4 +1,6 @@
 import {installTasks} from './tasks.ts';
+import { PollingCadence } from '../services/polling-cadence.ts';
+import { confirmedActor, observeIdentity } from '../services/identity.ts';
 import { installQualityJobs } from './quality/workspace.ts';
 import { installDiscovery } from './discovery.ts';
 import { installAnalysisSettings } from './analysis.ts';
@@ -32,7 +34,7 @@ type Root = { id: string; name: string; path: string };
 
 type LogEntry = LogPage['entries'][number];
 type Scan = LibraryScanStatus & { errors: Record<string, unknown>[]; offset: number };
-type Status = AdminStatus & { identity: { id: string; name: string }; http: { activeRequests: number; connections: number; completedRequests: number; abortedRequests: number }; recentRequests: Record<string, unknown>[] };
+type Status = AdminStatus & { identity: { id: string; name: string }; http: { activeRequests: number; connections: number; completedRequests: number; abortedRequests: number } };
 const disposeLanguage = await initializeLanguage();
 const life = new AbortController();
 installFocusFeedback(life.signal);
@@ -50,6 +52,10 @@ onLanguageChange(updateTitle, life.signal); updateTitle();
 let statusError = false;
 let pane = 'overview', rootConfig: RootConfig | null = null, rootDirty = false, rootSaving = false;
 let status: Status | null = null, polling = false, errorsOffset = 0, errorsJob: unknown = null;
+let rootStates: LibraryScanStatus['roots'] = [], recentRequests: Record<string, unknown>[] = [];
+let requestSnapshot: { actor: string; etag?: string; records: Record<string, unknown>[] } | undefined;
+let requestEpoch = 0, requestAbort: AbortController | undefined;
+const scanCadence = new PollingCadence(3000), requestCadence = new PollingCadence(3000);
 let logCursor = '', nextLog: string | null = null, selectedLog: LogEntry | null = null;
 const userNames = new Map<string, string>();
 let logDocument: unknown, logsMode = 'uploads', logSequence = 0, listSequence = 0, scanSequence = 0;
@@ -87,7 +93,7 @@ async function loadRoots() {
 }
 function renderRootStates() {
   for (const row of $('root-editor').querySelectorAll<HTMLElement>('.admin-root-row')) {
-    const root = status?.library.roots.find(r => r.id === row.dataset.id);
+    const root = rootStates.find(r => r.id === row.dataset.id);
     const badge = row.querySelector<HTMLElement>('[data-root-state]')!;
     localizedText(badge, () => root ? stateLabels[String(root.state)] ?? String(root.state) : t(msg("admin.indexAfterSave", "保存后开始索引")));
     badge.dataset.state = String(root?.state ?? 'unscanned');
@@ -95,6 +101,7 @@ function renderRootStates() {
 }
 function renderStatus(value: Status) {
   status = value;
+  rootStates = value.library.roots;
   analysisSettings.update(value.analysis);
   const seconds = Math.floor(value.uptimeSeconds), hours = Math.floor(seconds / 3600);
   text('uptime', () => hours ? t(msg("admin.hoursMinutes", "{h} 小时 {m} 分"), { h: hours, m: Math.floor(seconds % 3600 / 60) }) : t(msg("activity.durationMinutesSeconds", "{m} 分 {s} 秒"), { m: Math.floor(seconds / 60), s: seconds % 60 }));
@@ -111,16 +118,48 @@ function renderStatus(value: Status) {
   renderRootStates();
   if (pane === 'logs' && logsMode === 'requests') renderRequests();
 }
-async function poll() {
+async function poll(force = false) {
   if (polling || document.hidden) return; polling = true;
-  try { renderStatus(await api<Status>('/api/admin/status')); if (statusError) notice(() => ''); if (pane === 'library') await loadScan(); }
+  try {
+    if (pane === 'overview') renderStatus(await api<Status>('/api/admin/status?view=overview'));
+    if (scanCadence.ready(pane === 'library') || force && pane === 'library') await loadScan();
+    if (requestCadence.ready(pane === 'logs' && logsMode === 'requests') || force && pane === 'logs' && logsMode === 'requests') {
+      await loadRequests();
+    }
+    if (statusError) notice(() => '');
+  }
   catch (error) { if (!life.signal.aborted) { notice(() => requestError(error), true); statusError = true; } }
   finally { polling = false; }
+}
+async function loadRequests() {
+  const actor = confirmedActor()?.id, epoch = requestEpoch;
+  if (!actor) return;
+  const cached = requestSnapshot?.actor === actor ? requestSnapshot : undefined;
+  const controller = requestAbort = new AbortController();
+  try {
+    const response = await fetch('/api/admin/requests', { cache: 'no-store', headers: cached?.etag ? { 'if-none-match': cached.etag } : {},
+      signal: AbortSignal.any([life.signal, controller.signal, AbortSignal.timeout(15000)]) });
+    if (epoch !== requestEpoch || actor !== confirmedActor()?.id || controller.signal.aborted) return;
+    let records: Record<string, unknown>[];
+    if (response.status === 304 && cached) records = cached.records;
+    else {
+      const value = await response.json();
+      if (!response.ok) throw apiError(response.status, value);
+      records = value.recentRequests;
+    }
+    if (epoch !== requestEpoch || actor !== confirmedActor()?.id || controller.signal.aborted) return;
+    requestSnapshot = { actor, etag: response.headers.get('etag') ?? (response.status === 304 ? cached?.etag : undefined), records };
+    recentRequests = records; requestCadence.observe(records); renderRequests();
+  } catch (error) { if (!controller.signal.aborted) throw error; }
+  finally { if (requestAbort === controller) requestAbort = undefined; }
 }
 async function loadScan() {
   const sequence = ++scanSequence;
   const value = await api<Scan>(`/api/admin/scan?offset=${errorsOffset}`);
   if (sequence !== scanSequence) return;
+  rootStates = value.roots; renderRootStates();
+  scanCadence.observe([value.ready, value.scanning, value.job?.state, value.job?.files, value.job?.errors,
+    value.roots.map(root => [root.id, root.state, root.error])], value.scanning);
   if (errorsJob !== value.job?.id) { errorsJob = value.job?.id; if (errorsOffset) { errorsOffset = 0; return loadScan(); } }
   text('scan-progress', () => value.job ? t(msg("admin.scanProgressLine", "{state} · {visited, plural, other {# 个目录}} · {files} 个媒体"), { state: stateLabels[String(value.job.state)] ?? value.job.state, visited: Number(value.job.visited), files: Number(value.job.files) }) : t(msg("admin.noScanJob", "尚无扫描任务")));
   text('scan-detail', () => value.scanning ? String(value.job?.current_path || t(msg("admin.scanDetailReading", "正在读取根目录…"))) : Number(value.job?.errors ?? 0) ? t(msg("admin.scanDetailPartial", "部分目录无法读取，请检查下方路径或网络挂载。")) : t(msg("admin.scanDetailOk", "目录离线时保留已有视频索引。")));
@@ -168,9 +207,9 @@ async function loadLogs() {
   }); $('log-list').replaceChildren(...rows);
 }
 function renderRequests() {
-  $('request-list').replaceChildren(...[...(status?.recentRequests ?? [])].reverse().map(request => {
+  $('request-list').replaceChildren(...recentRequests.slice().reverse().map(request => {
     const row = document.createElement('div'); row.className = 'admin-request-row';
-    const cells = () => [`${formatDate(String(request.t))} · ${userNames.get(String(request.actorId)) ?? (request.actorId === 'local' ? t(msg("admin.localUser", "本机用户")) : request.actorId ?? t(msg("admin.anonymous", "匿名")))}`, `${request.method} ${request.url}`, String(request.status), `${request.ms} ms`];
+    const cells = () => [`${formatDate(String(request.t))} · ${userNames.get(String(request.actorId)) ?? (request.actorId === 'local' ? t(msg("admin.localUser", "本机用户")) : request.actorId ?? t(msg("admin.anonymous", "匿名")))} · ${request.clientIp ?? '—'}`, `${request.method} ${request.url}`, String(request.status), `${request.ms} ms`];
     for (let i=0; i<4; i++) { const span = document.createElement('span'); localizedText(span, () => cells()[i]); row.append(span); }
     return row;
   }));
@@ -186,12 +225,13 @@ const tasks = installTasks(life.signal);
 const measurements = installMeasurements(life.signal, notice);
 for (const [id] of PANES()) document.querySelector<HTMLButtonElement>(`[data-pane=${id}]`)!.onclick = () => {
   history.replaceState(null, '', `#${id}`); pane = id; tasks.activate(id==='tasks'); qualityJobs.activate(id === 'quality'); discovery.activate(id === 'discovery'); measurements.activate(id === 'measurements'); notice(() => ''); for (const [item] of PANES()) { $(`pane-${item}`).hidden = id !== item; document.querySelector(`[data-pane=${item}]`)!.setAttribute('aria-current', id === item ? 'page' : 'false'); }
+  scanCadence.reset(); requestCadence.reset();
   if (id === 'overview') {void analysisSettings.load();void qualityResources.load();}
   if (id === 'library') void act(async () => { if (!rootConfig || !rootDirty) await loadRoots(); await loadScan(); });
   if (id === 'caches') caches.activate();
   if (id === 'workspaces') savedWorkspaces.activate();
   if (id === 'annotations') annotationAdmin.activate();
-  if (id === 'logs') void act(loadLogs);
+  if (id === 'logs') void act(logsMode === 'requests' ? () => poll(true) : loadLogs);
 };
 $('add-root').onclick = () => { const row = rootRow({ id: randomUUID().replaceAll('-', '').slice(0, 16), name: '', path: '' }); $('root-editor').append(row); renderRootStates(); row.querySelector('input')!.focus(); rootDirty = true; updateRootActions(); };
 $('reset-roots').onclick = () => void act(loadRoots);
@@ -206,12 +246,12 @@ $('scan-refresh').onclick = () => void act(async () => { await api('/api/admin/s
 $('scan-cancel').onclick = () => void act(async () => { await api('/api/admin/scan', 'POST', { action: 'cancel' }); await loadScan(); });
 $('errors-prev').onclick = () => { errorsOffset = Math.max(0, errorsOffset - 100); void act(loadScan); };
 $('errors-next').onclick = () => { errorsOffset += 100; void act(loadScan); };
-$('refresh-status').onclick = () => void poll(); $('refresh-logs').onclick = () => void act(logsMode === 'uploads' ? loadLogs : poll);
+$('refresh-status').onclick = () => void poll(true); $('refresh-logs').onclick = () => void act(logsMode === 'uploads' ? loadLogs : () => poll(true));
 $('more-logs').onclick = () => { if (nextLog) { logCursor = nextLog; clearLog(); void act(loadLogs); } };
 $('first-logs').onclick = () => { logCursor = ''; clearLog(); void act(loadLogs); };
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-log-mode]')) button.onclick = () => {
   logsMode = button.dataset.logMode!; $('uploads-view').hidden = logsMode !== 'uploads'; $('requests-view').hidden = logsMode !== 'requests';
-  for (const item of document.querySelectorAll('[data-log-mode]')) item.setAttribute('aria-pressed', String(item === button)); if (logsMode === 'requests') renderRequests();
+  for (const item of document.querySelectorAll('[data-log-mode]')) item.setAttribute('aria-pressed', String(item === button)); if (logsMode === 'requests') void poll(true);
 };
 $('download-log').onclick = () => { if (!selectedLog || logDocument === undefined) return; const url = URL.createObjectURL(new Blob([JSON.stringify(logDocument, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = selectedLog.name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); };
 $('delete-log').onclick = () => { $('delete-log-confirm').hidden = false; };
@@ -230,9 +270,16 @@ document.querySelector<HTMLAnchorElement>('.admin-back')!.onclick = event => {
 window.addEventListener('beforeunload', event => { if (rootDirty || analysisSettings.dirty || qualityResources.dirty) { event.preventDefault(); event.returnValue = ''; } });
 const timer = setInterval(() => void poll(), 3000);
 window.addEventListener('pagehide', () => { clearInterval(timer); life.abort(); disposeTheme(); disposeLanguage(); }, { once: true });
-document.addEventListener('visibilitychange', () => { if (!document.hidden) void poll(); }, { signal: life.signal });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { scanCadence.reset(); requestCadence.reset(); void poll(true); } }, { signal: life.signal });
 installLiveLocalization(document.body, life.signal);
-updateRootActions(); void analysisSettings.load(); void poll();
+observeIdentity(life.signal, {
+  invalidated() {
+    requestEpoch++; requestAbort?.abort(); requestSnapshot = undefined; recentRequests = [];
+    requestCadence.reset(); renderRequests();
+  },
+  confirmed() { if (pane === 'logs' && logsMode === 'requests') void poll(true); },
+});
+updateRootActions(); void analysisSettings.load();
 void chooseInitialIdentity(life.signal).then(()=>poll()).catch(error=>notice(() => requestError(error),true));
 
 const initialPane=location.hash.slice(1);if(PANES().some(([id])=>id===initialPane))document.querySelector<HTMLButtonElement>(`[data-pane="${initialPane}"]`)?.click();
