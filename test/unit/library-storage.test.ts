@@ -6,7 +6,7 @@ import path from 'node:path';
 import { MediaLibraryIndex } from '../../server/library.ts';
 import { openIndexDatabase } from '../../server/sqlite.ts';
 
-// Real directory and SQLite operations; only the statfs type transition is
+// Real directory and SQLite operations; statfs type and capacity are
 // injected. This is regression coverage, not a claim of real SMB/NFS acceptance.
 async function fixture(run: (context: { root: string; media: string; database: string; setType: (value: number) => void; open: (folder?: string) => MediaLibraryIndex }) => Promise<void>) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'vp-storage-'));
@@ -14,7 +14,7 @@ async function fixture(run: (context: { root: string; media: string; database: s
   const database = path.join(root, 'index.sqlite'), original = fs.statfs;
   const indexes: MediaLibraryIndex[] = [];
   let type = 101;
-  fs.statfs = (async (...args: Parameters<typeof original>) => ({ ...await original(...args), type })) as typeof original;
+  fs.statfs = (async (...args: Parameters<typeof original>) => ({ ...await original(...args), type, bsize: 4096, blocks: 1_000_000, bavail: 250_000, bfree: 400_000 })) as typeof original;
   try { await run({ root, media, database, setType: value => { type = value; }, open: (folder = media) => { const index = new MediaLibraryIndex([{ id: 'archive', path: folder }], { database, watch: false }); indexes.push(index); return index; } }); }
   finally { fs.statfs = original; for (const index of indexes) await index.close(); await fs.rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
 }
@@ -22,10 +22,14 @@ async function fixture(run: (context: { root: string; media: string; database: s
 test('empty mount underlay preserves the indexed library across restart and reconnect', async () => fixture(async ({ root, media, setType, open }) => {
   await fs.mkdir(path.join(media, 'nested')); await fs.writeFile(path.join(media, 'nested/one.mp4'), 'original');
   let index = open(); await index.refresh(); const before = index.browse({ recursive: true }).entries[0];
+  assert.equal(index.browse().roots[0].availableBytes, 1_024_000_000, 'available capacity uses bavail, excluding privileged free blocks');
+  assert.equal(index.status().roots[0].totalBytes, 4_096_000_000, 'total capacity uses filesystem block count and block size');
   // A different filesystem must not be served even before the next scan.
   setType(202); assert.equal(await index.resolve(before.id, before.version), null);
   await fs.rename(media, path.join(root, 'disconnected')); await fs.mkdir(media);
   await index.refresh(); assert.equal(index.status().roots[0].state, 'offline');
+  assert.equal(index.status().roots[0].availableBytes, null, 'offline mounts never show stale available space');
+  assert.equal(index.status().roots[0].totalBytes, null);
   assert.deepEqual(index.browse({ recursive: true }).entries, [before]);
   assert.ok(index.errors().some(error => error.code === 'ESTORAGECHANGED'));
   await index.close(); index = open();

@@ -1,5 +1,5 @@
 /* Apply to the resting state too, so release fades back just like press. */
-button:not(.analysis-progress-action), .connection-status, .numeric-choice {
+button:not(.analysis-progress-action), .connection-status, .numeric-choice, .library-root-group > summary {
   transition: background-color 240ms ease, color 240ms ease !important;
 }
 
@@ -9,8 +9,8 @@ button[role=tab]:not(.source-activity-track) { transition: none !important; }
 
 /* Press feedback takes precedence over component hover/selected fills, including
    primary buttons whose light text would be unreadable on a pale background. */
-button:active:not(:disabled):not([aria-disabled=true]):not([role=tab]):not(#settings-close):not(#mark-close):not(#bitstream-close):not(.remove-track):not(.analysis-window-handle),
-.connection-status:active {
+button:active:not(:disabled):not([aria-disabled=true]):not([role=tab]):not(#settings-close):not(#mark-close):not(#bitstream-close):not(.remove-track):not(.source-open):not(.analysis-window-handle),
+.connection-status:active, .library-root-group > summary:active {
   background: var(--button-press-fill, color-mix(in srgb, var(--accent) 22%, var(--surface-panel))) !important;
   color: var(--button-press-text, var(--text)) !important;
 }
@@ -24,7 +24,7 @@ button:active:not(:disabled):not([aria-disabled=true]):not([role=tab]):not(#sett
 }
 
 @media (prefers-reduced-motion: reduce) {
-  button:not(.analysis-progress-action), .connection-status, .numeric-choice { transition: none !important; }
+  button:not(.analysis-progress-action), .connection-status, .numeric-choice, .library-root-group > summary { transition: none !important; }
 }
 :focus-visible { outline: none; }
 

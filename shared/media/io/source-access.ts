@@ -7,7 +7,7 @@ export class LibraryAccessError extends Error {
   readonly kind: LibraryAccessProblem;
   readonly status?: number;
   constructor(kind: LibraryAccessProblem, name: string, details = '', status?: number) {
-    const message = kind === 'missing' ? `媒体库引用「${name}」已失效或文件已移除，请在媒体库中重新选择。` : kind === 'changed' ? `媒体库文件「${name}」与保存的版本不一致，请重新选择并检查标注。` : `无法确认媒体库引用「${name}」，请检查服务连接后重试。`;
+    const message = kind === 'missing' ? `无法打开「${name}」：文件已移除。` : kind === 'changed' ? `无法打开「${name}」：文件版本已变化。` : `无法打开「${name}」：媒体库暂不可用。`;
     super(message + (details ? ` ${details}` : ''));
     this.details = details;
     this.kind = kind;

@@ -36,6 +36,15 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
     sendJson(res, 202, library.status());
     return true;
   }
+  const rootLocation = /^\/api\/library\/roots\/([^/]+)\/location$/.exec(url.pathname);
+  if (rootLocation) {
+    if (req.method !== 'GET') {sendJson(res, 405, {error:'method not allowed'}); return true;}
+    let id: string;
+    try {id = decodeURIComponent(rootLocation[1]);} catch {sendJson(res, 400, {error:'invalid root id'}); return true;}
+    const root = library.definitions.find(root => root.id === id);
+    sendJson(res, root ? 200 : 404, root ? {absolutePath:root.path} : {error:'unknown library root'});
+    return true;
+  }
   if (url.pathname === '/api/library/browse' && req.method === 'GET') {
     const limit = Number(url.searchParams.get('limit') ?? 100), offset = Number(url.searchParams.get('offset') ?? 0);
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200 || !Number.isSafeInteger(offset) || offset < 0) { sendJson(res, 400, { error: '无效分页参数。' }); return true; }

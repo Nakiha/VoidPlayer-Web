@@ -38,6 +38,7 @@ import search from '@phosphor-icons/core/assets/regular/magnifying-glass.svg?raw
 import down from '@phosphor-icons/core/assets/regular/caret-down.svg?raw';
 import caretLeft from '@phosphor-icons/core/assets/regular/caret-left.svg?raw';
 import caretRight from '@phosphor-icons/core/assets/regular/caret-right.svg?raw';
+import pathSeparator from '@phosphor-icons/core/assets/bold/caret-right-bold.svg?raw';
 import film from '@phosphor-icons/core/assets/regular/film-strip.svg?raw';
 import fit from '@phosphor-icons/core/assets/regular/arrows-out.svg?raw';
 import marker from '@phosphor-icons/core/assets/regular/diamond.svg?raw';
@@ -70,7 +71,8 @@ import redo from '@phosphor-icons/core/assets/regular/arrow-clockwise.svg?raw';
 import trash from '@phosphor-icons/core/assets/regular/trash.svg?raw';
 // Partitioned source frame: the analysis overlay exposes coding blocks.
 const analysisOverlay = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2" fill="none"/><path fill="none" d="M2 10h20M10 2v20M10 16h12M16 10v12"/><path d="M16 10h6v6h-6z" fill="currentColor" fill-opacity=".22" stroke="none"/></svg>';
-const icons = { opacity, clock, analysisOverlay, speaker, speakerMuted, cpu, memory, storage, gpu, monitor, appearance, keyboard, diagnostics, info, user, check, settings, plusRegular, select, eraser, redo, trash, filePlus, focus, eye, eyeClosed, grid, chart, columns, pen, ellipse, rect, line, text: lettering, undo, center, grip, copy, download, sidebar, rows, open, shareNetwork, export: share, play, pause, previous, next, plus, close, more, note, refresh, search, zoomIn, zoomOut, fullRange, down, caretLeft, caretRight, film, fit, marker };
+import libraryVolume from '@phosphor-icons/core/assets/regular/hard-drives.svg?raw';
+const icons = { pathSeparator, libraryVolume, opacity, clock, analysisOverlay, speaker, speakerMuted, cpu, memory, storage, gpu, monitor, appearance, keyboard, diagnostics, info, user, check, settings, plusRegular, select, eraser, redo, trash, filePlus, focus, eye, eyeClosed, grid, chart, columns, pen, ellipse, rect, line, text: lettering, undo, center, grip, copy, download, sidebar, rows, open, shareNetwork, export: share, play, pause, previous, next, plus, close, more, note, refresh, search, zoomIn, zoomOut, fullRange, down, caretLeft, caretRight, film, fit, marker };
 export function icon(name: keyof typeof icons, extraClass = '') {
   return icons[name].replace('<svg ', `<svg class="icon ${extraClass}" data-icon="${name}" aria-hidden="true" focusable="false" `);
 }

@@ -43,7 +43,7 @@ function recoveryCard(checkpoint: WorkspaceFile, restore: () => Promise<void>, s
     const slot = document.createElement('span'); slot.className = `slot slot-${track.slot}`; slot.textContent = track.slot;
     name.textContent = info.name;
     row.append(thumb, slot, name); tracks.append(row);
-    fillThumbnailImage(img, key, info.source && version ? new URL(serverThumbnailImageUrl(info.source.id, version), checkpoint.serverUrl).href : undefined);
+    fillThumbnailImage(img, key, info.source && version ? new URL(serverThumbnailImageUrl(info.source.id, version), checkpoint.serverUrl).href : undefined, { visibilityTarget: thumb });
   }
   const meta = document.createElement('span'); meta.className = 'start-workspace-meta';
   const seconds = Math.floor(checkpoint.positionUs / 1_000_000);

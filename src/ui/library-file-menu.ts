@@ -4,11 +4,12 @@ import type { LibraryEntry } from '../services/library.ts';
 import { mediaActionUrl } from '../../shared/media/io/media-reference.ts';
 import { libraryLocationExpression } from './library-link.ts';
 import { installContextMenu } from './context-menu.ts';
+import type { ContextMenuAction } from './context-menu.ts';
 import type { WorkbenchAction } from './workbench/shared.ts';
 
-/** File actions stay separate from loading and session state. */
+/** File actions invoke workbench callbacks; this menu never owns session state. */
 export function installLibraryFileMenu(host: HTMLElement, act: WorkbenchAction, notify: (message: string) => void, signal: AbortSignal) {
-  const entries = new WeakMap<HTMLElement, LibraryEntry>();
+  const entries = new WeakMap<HTMLElement, {entry?: LibraryEntry; playback: () => ContextMenuAction} | {rootId:string}>();
   const copy = (value: string | Promise<string>) => {
     // Safari requires clipboard.write in the click task. A promised ClipboardItem
     // preserves that activation while the server resolves the absolute path.
@@ -19,12 +20,22 @@ export function installLibraryFileMenu(host: HTMLElement, act: WorkbenchAction, 
     }, 'ui.library-copy');
   };
   const menu = installContextMenu(host, {
-    id: 'library-file-menu', selector: '.source-row', signal,
+    id: 'library-file-menu', selector: '.source-row', signal, popover: 'manual',
+    focusTarget: row => row.querySelector<HTMLElement>('.source-open') ?? row,
     actions(row) {
-      const entry = entries.get(row);
-      if (!entry) return [];
+      const record = entries.get(row);
+      if (!record) return [];
+      if ('rootId' in record) return [{id:'copy-mount-path', label:t(msg('libraryFileMenu.copyMountPath', '拷贝挂载路径')), glyph:'copy', run:() => copy((async () => {
+        const response = await fetch(`/api/library/roots/${encodeURIComponent(record.rootId)}/location`, {cache:'no-store', signal:AbortSignal.any([signal,AbortSignal.timeout(5000)])});
+        const body = await response.json();
+        if (!response.ok || typeof body.absolutePath !== 'string') throw new Error(t(msg('libraryFileMenu.mountPathUnavailable', '无法获取挂载路径')));
+        return body.absolutePath as string;
+      })())}];
+      const {entry} = record, playback = record.playback();
+      if (!entry) return [playback];
       const source = mediaUrl(entry.id, entry.version);
       return [
+        playback,
         { id: 'copy-name', label: t(msg('libraryFileMenu.copyName', '拷贝文件名')), glyph: 'copy', run: () => copy(entry.name.split('/').at(-1)!) },
         { id: 'copy-path', label: t(msg('sourceActions.copyAbsolutePath', '拷贝绝对路径')), glyph: 'copy', run: () => copy((async () => {
           const response = await fetch(mediaActionUrl(source, 'location', location.href), { cache: 'no-store', signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]) });
@@ -41,5 +52,9 @@ export function installLibraryFileMenu(host: HTMLElement, act: WorkbenchAction, 
       ];
     },
   });
-  return { register(row: HTMLElement, entry: LibraryEntry) { entries.set(row, entry); row.tabIndex = 0; row.setAttribute('aria-haspopup', 'menu'); }, close: menu.close };
+  return { register(row: HTMLElement, entry: LibraryEntry | undefined, playback: () => ContextMenuAction) {
+    entries.set(row, {entry, playback}); row.tabIndex = -1; row.setAttribute('aria-haspopup', 'menu');
+  }, registerMount(row: HTMLElement, rootId: string) {
+    entries.set(row, {rootId}); row.setAttribute('aria-haspopup', 'menu');
+  }, close: menu.close };
 }

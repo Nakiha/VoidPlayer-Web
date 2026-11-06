@@ -36,7 +36,7 @@ export async function openLibraryItem(entry: LibraryEntry, onProgress?: MediaOpe
   return source;
 }
 
-export interface LibraryRoot { id: string; name: string; state: string; error: string | null; scannedAt: number | null }
+export interface LibraryRoot { id: string; name: string; state: string; error: string | null; scannedAt: number | null; availableBytes?: number | null; totalBytes?: number | null }
 export interface LibraryPage {
   /** Validator for this exact browse response; owned by the browsing view. */
   etag?: string;

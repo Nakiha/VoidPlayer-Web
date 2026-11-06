@@ -26,7 +26,7 @@ const browser = await (engine === 'chromium' ? chromium : webkit).launch({ headl
 const thumbReady = (name) => {
   const row = [...document.querySelectorAll('#source-list .source-row')].find(r => r.textContent.includes(name));
   const img = row?.querySelector('.source-thumb img');
-  return !!img && img.complete && img.naturalWidth > 0;
+  return !!img && img.complete && img.naturalWidth > 0 && img.dataset.thumbDecoded === 'true' && getComputedStyle(img).visibility === 'visible';
 };
 
 async function openSamples(page) {
@@ -67,6 +67,37 @@ try {
   }
   assert.equal(status.state, 'ready');
   assert.ok(status.width > 0 && status.height > 0);
+  // Recent covers must survive details hiding and rapid summary activation.
+  await page.locator('#library-location').fill('library:/'); await page.locator('#library-location').press('Enter');
+  await page.waitForFunction(thumbReady, 'sample.mp4');
+  const recent = page.locator('#library-recents'), summary = recent.locator('summary');
+  const originalCover = await recent.locator('.source-thumb img').elementHandle();
+  await originalCover.evaluate(img => {
+    window.recentCoverWrites = [];
+    window.recentCoverObserver = new MutationObserver(records => window.recentCoverWrites.push(...records.map(record => record.attributeName)));
+    window.recentCoverObserver.observe(img, {attributes:true, attributeFilter:['src']});
+  });
+  await summary.click(); await page.waitForTimeout(150); await summary.click();
+  await page.waitForFunction(thumbReady, 'sample.mp4', {timeout:5000});
+  assert.deepEqual(await page.evaluate(() => window.recentCoverWrites), [], 'rapid folding retains the loaded image without clearing or reassigning its URL');
+  const retainedSource = await originalCover.getAttribute('src');
+  await summary.click(); await page.waitForTimeout(2500);
+  assert.equal(await originalCover.getAttribute('src'), retainedSource, 'long folds retain the same loaded image too');
+  assert.equal(await originalCover.evaluate(img => img.complete && img.naturalWidth > 0), true, 'hidden cover stays decoded');
+  await summary.click();
+  await page.waitForFunction(thumbReady, 'sample.mp4', {timeout:5000});
+  assert.equal(await originalCover.evaluate(img => img.isConnected), true, 'folding keeps the original cover node');
+  await page.evaluate(() => getSelection()?.removeAllRanges());
+  await summary.dblclick();
+  assert.equal(await page.evaluate(() => getSelection()?.toString()), '', 'rapid summary clicks never select the heading or file text');
+  await summary.click({clickCount:3});
+  assert.equal(await page.evaluate(() => getSelection()?.toString()), '', 'triple clicks cannot select the list paragraph');
+  await recent.evaluate(group => {group.open=true;});
+  await page.waitForFunction(thumbReady, 'sample.mp4');
+  const foldWrites = await page.evaluate(() => {window.recentCoverObserver.disconnect();return window.recentCoverWrites;});
+  assert.deepEqual(foldWrites, [], 'all fold gestures leave the existing image URL untouched');
+  await page.getByRole('button', {name:'打开媒体库：项目归档',exact:true}).click();
+  await page.waitForFunction(img => !img.isConnected && !img.getAttribute('src'), originalCover);
   // Playback still works after the bypass ran.
   await page.evaluate(() => window.voidPlayer.seek(3000000));
   await page.waitForFunction(() => !window.voidPlayer.getState().busy);
@@ -92,9 +123,22 @@ try {
     .find(r => r.textContent.includes('sample.mp4'))?.querySelector('.source-thumb img')?.src);
   assert.match(reused, /\/api\/media\/[0-9a-f]{24}\/thumbnail\?/, 'fresh profile loads the shared image');
   assert.deepEqual(reuseVideoRequests, [], 'cached covers never reopen or read videos');
+  // A real corrupt image must never paint the browser's broken-image icon.
+  await page2.route('**/thumbnail?**', route => new URL(route.request().url()).searchParams.has('broken')
+    ? route.fulfill({status:200, contentType:'image/jpeg', body:'invalid jpeg'}) : route.continue());
+  const cachedImage = page2.locator('#source-list .source-file .source-thumb img');
+  const slotBefore = await cachedImage.locator('..').boundingBox();
+  await cachedImage.evaluate(img => {
+    img.addEventListener('error', () => {window.failedCoverPaint = getComputedStyle(img).visibility;}, {once:true});
+    img.src += '&broken=1';
+  });
+  await page2.waitForFunction(() => window.failedCoverPaint !== undefined);
+  assert.equal(await page2.evaluate(() => window.failedCoverPaint), 'hidden', 'failed images are hidden before error fallback completes');
+  assert.equal(await cachedImage.evaluate(img => getComputedStyle(img).visibility), 'hidden');
+  assert.deepEqual(await cachedImage.locator('..').boundingBox(), slotBefore, 'failure preserves the cover slot and filename position');
   await fresh.close();
   assert.deepEqual(errors, []);
-  console.log(`PASS ${engine}: origin open generates and shares a first-frame cover, fresh profiles reuse it, non-zero joins stay imageless`);
+  console.log(`PASS ${engine}: origin cover, recent fold/reopen and rapid-click selection, shared cover reuse, invisible image errors, non-zero joins stay imageless`);
 } finally {
   await browser.close(); await new Promise(r => server.close(r)); await library.close(); await rm(directory, { recursive: true, force: true });
 }

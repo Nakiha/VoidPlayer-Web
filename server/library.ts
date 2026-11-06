@@ -71,6 +71,8 @@ export class MediaLibraryIndex {
   private resumeAt = 0;
   private scheduler: LibraryScanScheduler;
   private storageReads = new Set<Promise<unknown>>();
+  // Updated by existing storage checks; browse/status never touch the filesystem.
+  private storageSpace = new Map<string, { path: string; availableBytes: number; totalBytes: number }>();
   private settleTimer: ReturnType<typeof setTimeout> | null = null;
   private changeTimer: ReturnType<typeof setTimeout> | null = null;
   private changes = new DirectoryChanges();
@@ -134,7 +136,12 @@ export class MediaLibraryIndex {
   }
   status(): LibraryScanStatus {
     const job = this.store.db.prepare('SELECT * FROM scan_jobs ORDER BY id DESC LIMIT 1').get() ?? null;
-    const roots = this.store.db.prepare('SELECT id,name,state,error,scanned_at AS scannedAt FROM roots WHERE active=1 ORDER BY name,id').all();
+    const roots = this.store.db.prepare('SELECT id,name,state,error,scanned_at AS scannedAt FROM roots WHERE active=1 ORDER BY name,id').all().map(root => {
+      const space = this.storageSpace.get(String(root.id));
+      const available = space && space.path === this.definitions.find(item => item.id === root.id)?.path
+        && (root.state === 'ready' || root.state === 'scanning');
+      return { ...root, availableBytes: available ? space.availableBytes : null, totalBytes: available ? space.totalBytes : null };
+    });
     return { ready: this.ready, scanning: !!this.pending, job, roots, watch: this.watchers?.status() ?? null,
       queuedDirectories: this.changes.size + this.automaticChanges.size + this.scheduler.queuedHints,
       errorDetailsTruncated: Number(job?.errors ?? 0) > 1000 };
@@ -291,6 +298,10 @@ export class MediaLibraryIndex {
     if (bound && (prior.platform !== process.platform || prior.fs_type !== String(current.type))) {
       throw Object.assign(new Error('媒体根目录的文件系统已改变，请恢复原存储挂载'), { code: 'ESTORAGECHANGED' });
     }
+    const totalBytes = current.blocks * current.bsize, availableBytes = Math.max(0, Math.min(current.bavail, current.blocks)) * current.bsize;
+    if (Number.isFinite(totalBytes) && totalBytes > 0 && Number.isFinite(availableBytes)) {
+      this.storageSpace.set(root.id, { path: root.path, availableBytes, totalBytes });
+    } else this.storageSpace.delete(root.id);
     if (learn && !bound) {
       this.store.db.prepare('INSERT INTO root_storage(root_id,path,platform,fs_type) VALUES(?,?,?,?) ON CONFLICT(root_id) DO UPDATE SET path=excluded.path,platform=excluded.platform,fs_type=excluded.fs_type').run(root.id, root.path, process.platform, String(current.type));
     }
@@ -551,6 +562,7 @@ export class MediaLibraryIndex {
       const rollback = await persist();
       try { this.store.configure(definitions); }
       catch (error) { await rollback(); throw error; }
+      this.storageSpace.clear();
       this.definitions.splice(0, this.definitions.length, ...definitions);
       this.roots.splice(0, this.roots.length, ...definitions.map(r => r.path));
     } finally {

@@ -3112,8 +3112,12 @@
     "source": "所有媒体库",
     "params": {}
   },
-  "libraryBrowser.goUp": {
-    "source": "返回上一级",
+  "libraryBrowser.goBack": {
+    "source": "后退",
+    "params": {}
+  },
+  "libraryBrowser.goForward": {
+    "source": "前进",
     "params": {}
   },
   "libraryBrowser.library": {
@@ -3160,8 +3164,16 @@
     "source": "拷贝媒体库路径",
     "params": {}
   },
+  "libraryFileMenu.copyMountPath": {
+    "source": "拷贝挂载路径",
+    "params": {}
+  },
   "libraryFileMenu.copyName": {
     "source": "拷贝文件名",
+    "params": {}
+  },
+  "libraryFileMenu.mountPathUnavailable": {
+    "source": "无法获取挂载路径",
     "params": {}
   },
   "libraryFileMenu.pathUnavailable": {
@@ -5666,25 +5678,25 @@
     "params": {}
   },
   "sourceAccess.libraryChanged": {
-    "source": "媒体库文件「{name}」与保存的版本不一致，请重新选择并检查标注。",
+    "source": "无法打开「{name}」：文件版本已变化。",
     "params": {
       "name": "string | number"
     }
   },
   "sourceAccess.libraryMissing": {
-    "source": "媒体库引用「{name}」已失效或文件已移除，请在媒体库中重新选择。",
+    "source": "无法打开「{name}」：文件已移除。",
     "params": {
       "name": "string | number"
     }
   },
   "sourceAccess.libraryUnavailable": {
-    "source": "无法确认媒体库引用「{name}」，请检查服务连接后重试。",
+    "source": "无法打开「{name}」：媒体库暂不可用。",
     "params": {
       "name": "string | number"
     }
   },
   "sourceAccess.localStale": {
-    "source": "本地文件「{name}」已变化或不可用，请重新选择并检查标注。",
+    "source": "无法打开本地文件「{name}」：文件已变化或不可用。",
     "params": {
       "name": "string | number"
     }
@@ -5759,33 +5771,17 @@
       "name": "string | number"
     }
   },
-  "sources.addToView": {
-    "source": "添加到视图",
-    "params": {}
-  },
   "sources.addToViewName": {
     "source": "添加到视图：{name}",
     "params": {
       "name": "string | number"
     }
   },
-  "sources.cancelAndAdd": {
-    "source": "取消当前载入并添加到视图",
-    "params": {}
-  },
-  "sources.cancelLoad": {
-    "source": "取消载入",
-    "params": {}
-  },
-  "sources.cancelLoadName": {
-    "source": "取消载入：{name}",
+  "sources.alreadyInViewName": {
+    "source": "已在视图中：{name}",
     "params": {
       "name": "string | number"
     }
-  },
-  "sources.checkReference": {
-    "source": "检查媒体引用",
-    "params": {}
   },
   "sources.currentIdentityPrefix": {
     "source": "当前身份 · ",
@@ -5794,12 +5790,6 @@
   "sources.emptyDirectory": {
     "source": "当前目录没有片源",
     "params": {}
-  },
-  "sources.folderMetaLibrary": {
-    "source": "媒体库 · {root}",
-    "params": {
-      "root": "string | number"
-    }
   },
   "sources.guest": {
     "source": "访客",
@@ -5817,24 +5807,6 @@
       "name": "string | number"
     }
   },
-  "sources.inLibrary": {
-    "source": "媒体库",
-    "params": {}
-  },
-  "sources.lastOpened": {
-    "source": " · 上次打开 {date}",
-    "params": {
-      "date": "string | number"
-    }
-  },
-  "sources.libraryReference": {
-    "source": "媒体库引用",
-    "params": {}
-  },
-  "sources.libraryReferenceUnavailable": {
-    "source": "媒体库引用不可用",
-    "params": {}
-  },
   "sources.loadFailedWith": {
     "source": "载入失败：{reason}",
     "params": {
@@ -5851,9 +5823,11 @@
     "source": "正在载入",
     "params": {}
   },
-  "sources.localFile": {
-    "source": "本地文件",
-    "params": {}
+  "sources.loadingName": {
+    "source": "正在载入：{name}",
+    "params": {
+      "name": "string | number"
+    }
   },
   "sources.localFiles": {
     "source": "本地文件",
@@ -5865,12 +5839,16 @@
       "n": "string | number"
     }
   },
-  "sources.localNoUpload": {
-    "source": "本机（不上传）",
+  "sources.localTag": {
+    "source": "(本地)",
     "params": {}
   },
   "sources.locateUnavailable": {
     "source": "片源已不在媒体库中。",
+    "params": {}
+  },
+  "sources.mountList": {
+    "source": "库列表",
     "params": {}
   },
   "sources.noEmptyTracks": {
@@ -5901,28 +5879,8 @@
       "name": "string | number"
     }
   },
-  "sources.referenceNeedsReselect": {
-    "source": " · 引用不可用，需重新选择",
-    "params": {}
-  },
-  "sources.removeFromView": {
-    "source": "从视图移除",
-    "params": {}
-  },
-  "sources.removeFromViewName": {
-    "source": "从视图移除：{name}",
-    "params": {
-      "name": "string | number"
-    }
-  },
-  "sources.reselectInSourcesName": {
-    "source": "在片源中重新选择：{name}",
-    "params": {
-      "name": "string | number"
-    }
-  },
-  "sources.reselectLocalFile": {
-    "source": "重新选择本地文件",
+  "sources.putOn": {
+    "source": "上屏",
     "params": {}
   },
   "sources.reselectName": {
@@ -5949,21 +5907,30 @@
     "source": "媒体库",
     "params": {}
   },
-  "sources.startMetaLocal": {
-    "source": "本地文件",
-    "params": {}
-  },
-  "sources.stillWriting": {
-    "source": "片源仍在写入，请稍后重试",
-    "params": {}
-  },
   "sources.storageOffline": {
     "source": "存储离线",
     "params": {}
   },
-  "sources.storageOfflineWait": {
-    "source": "媒体存储离线，请等待重新连接",
+  "sources.storageSpace": {
+    "source": "{available} 可用 / 共 {total}",
+    "params": {
+      "available": "string | number",
+      "total": "string | number"
+    }
+  },
+  "sources.storageSpaceUnavailable": {
+    "source": "空间信息不可用",
     "params": {}
+  },
+  "sources.takeOff": {
+    "source": "下屏",
+    "params": {}
+  },
+  "sources.takeOffName": {
+    "source": "下屏：{name}",
+    "params": {
+      "name": "string | number"
+    }
   },
   "sources.tooltipLibrary": {
     "source": "{name}（{root}）",

@@ -3,7 +3,7 @@ import test from 'node:test';
 import { createLocaleController, resolveLocale, parseLanguagePreference } from '../../src/i18n/locale.ts';
 import { mediaDiagnostic, MediaOpenError } from '../../shared/media/io/media-errors.ts';
 import { diagnosticMessage } from '../../src/ui/diagnostic-message.ts';
-import { setLanguage, t, th, msg } from '../../src/i18n.ts';
+import { setLanguage, t, th, msg, formatRecentDate } from '../../src/i18n.ts';
 import { formatTime } from '../../shared/review/model.ts';
 import { parseTimeInput } from '../../shared/review/time-input.ts';
 
@@ -109,3 +109,11 @@ function typedMessages() {
  msg('shell.trackActions','different source');
 }
 void typedMessages;
+
+test('recent dates omit only the current year and preserve hours minutes and seconds', async () => {
+ await setLanguage('zh-CN');
+ const now = new Date(2026,10,7,12).getTime();
+ assert.equal(formatRecentDate(new Date(2026,10,7,9).getTime(),now),'11/7 09:00:00');
+ assert.equal(formatRecentDate(new Date(2025,10,7,9).getTime(),now),'2025/11/7 09:00:00');
+ assert.equal(formatRecentDate(new Date(2026,10,7,9).getTime(),new Date(2027,0,1,12).getTime()),'2026/11/7 09:00:00');
+});

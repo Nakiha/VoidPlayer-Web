@@ -67,7 +67,7 @@ test('library history reconnects only to matching metadata, and rejects a replac
   const catalog = new SourceCatalog(); catalog.setLibrary([entry]); catalog.remember(entry, entry.id);
   const restored = new SourceCatalog(catalog.serializable()); restored.setLibrary([entry]);
   assert.equal(restored.recent()[0].library?.id, entry.id);
-  restored.setLibrary([{ ...entry, size: 20 }]); assert.equal(restored.recent()[0].library, undefined);
+  restored.setLibrary([{ ...entry, size: 20 }]); assert.deepEqual(restored.recent(), []);
   restored.setLibrary([]); assert.equal(restored.available().length, 0);
 });
 test('same-metadata library sources survive listing, history and restart as distinct identities', () => {
@@ -83,8 +83,8 @@ test('same-metadata library sources survive listing, history and restart as dist
   restored.setLibrary(entries);
   assert.deepEqual(restored.recent().map(item => item.library?.id), ['root-b', 'root-a']);
   restored.setLibrary([entries[0]]);
-  assert.equal(restored.recent()[0].library, undefined);
-  assert.equal(restored.recent()[1].library?.id, 'root-a');
+  assert.deepEqual(restored.recent().map(item => item.library?.id), ['root-a']);
+  assert.equal(restored.serializable().length, 2, 'unresolved records are not deleted from a partial directory page');
 });
 test('local and library sources with identical metadata never substitute for each other', () => {
   const file = new File(['sample'], 'same.mp4', { lastModified: 456 });
@@ -105,8 +105,8 @@ test('local and library sources with identical metadata never substitute for eac
   assert.equal(restored.recent()[0].library, undefined);
   assert.equal(restored.recent()[1].library?.id, entry.id);
   restored.setLibrary([{ ...entry, size: entry.size + 1 }]); restored.addFile(file);
-  assert.equal(restored.recent()[1].library, undefined);
-  assert.equal(restored.recent()[1].file, undefined);
+  assert.equal(restored.recent().length, 1);
+  assert.equal(restored.recent()[0].file, file);
 });
 test('history sanitizes storage, remains bounded, and exposes detached metadata', () => {
   const catalog = new SourceCatalog([null, { name: 'invalid', size: -1, lastModified: 1 }]);
@@ -188,5 +188,6 @@ test('retention in another library cannot evict this library or local file histo
   for (let i = 0; i < 110; i++) catalog.remember({ name: `b-${i}.mp4`, size: 1, lastModified: 1 }, `b-${i}`, undefined, 'b');
   assert.equal(catalog.serializable().length, 102);
   const restored = new SourceCatalog(catalog.serializable(), { isolateLibraries: true }); restored.setLibraryRoots(['a']);
-  assert.deepEqual(restored.recent().map(item => item.name), ['a.mp4', 'local.mp4']);
+  assert.deepEqual(restored.recent().map(item => item.name), ['local.mp4']);
+  assert.ok(restored.serializable().some(item => item.name === 'a.mp4'), 'unconfirmed library history stays stored but has no stale row');
 });

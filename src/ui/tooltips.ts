@@ -23,8 +23,11 @@ export function installTooltips() {
     }
   }
   migrate(document.body);
+  const filenameOf = (control: HTMLElement) => control.matches('.source-remove') ? null : control.matches('.filename') ? control
+    : control.querySelector<HTMLElement>('.filename') ?? control.closest('.source-row')?.querySelector<HTMLElement>('.filename');
+  const sizing = new ResizeObserver(() => { if (anchor && !popup.hidden) show(true); });
   function hide() {
-    clearTimeout(timer); clearTimeout(leaving);
+    clearTimeout(timer); clearTimeout(leaving); sizing.disconnect();
     if (anchor) {
       const ids = (anchor.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(id => id && id !== popup.id);
       if (ids.length) anchor.setAttribute('aria-describedby', ids.join(' ')); else anchor.removeAttribute('aria-describedby');
@@ -36,6 +39,8 @@ export function installTooltips() {
   const menuOpen = () => !!document.querySelector('.popup-menu:popover-open, .header-actions[popover]:popover-open');
   function show(reposition = false) {
     if (anchor?.hasAttribute('data-tooltip-suppressed')) { hide(); return; }
+    const filename = anchor && filenameOf(anchor);
+    if (filename && filename.scrollWidth <= filename.clientWidth) { hide(); return; }
     if (menuOpen() || !anchor?.isConnected || !anchor.getClientRects().length || document.body.classList.contains('sorting-tracks')) { hide(); return; }
     // Visible content is not an instruction. Never echo filenames, field values,
     // or complete accessible names of data rows into a generic tooltip.
@@ -63,6 +68,8 @@ export function installTooltips() {
     if (event.type === 'pointerover') dismissed = null;
     if (control === anchor) { clearTimeout(leaving); return; }
     hide(); anchor = control;
+    const filename = filenameOf(control);
+    if (filename) sizing.observe(filename);
     // Focus can be dispatched inside another popover's show operation.
     timer = setTimeout(show, event.type === 'focusin' ? 0 : delay);
   }

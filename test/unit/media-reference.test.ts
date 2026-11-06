@@ -36,7 +36,7 @@ test('pinned references survive version rotation with identical bytes, still ref
 test('history preserves versions and refuses a same-size same-time replacement after reload', () => {
   const catalog = new SourceCatalog(); catalog.setLibrary([entry]); catalog.remember(entry, id);
   const restored = new SourceCatalog(catalog.serializable()); restored.setLibrary([{ ...entry, version: 'c'.repeat(24) }]);
-  assert.equal(restored.recent()[0].version, version); assert.equal(restored.recent()[0].library, undefined);
+  assert.equal(restored.serializable()[0].version, version); assert.deepEqual(restored.recent(), []);
   restored.setLibrary([entry]); assert.equal(restored.recent()[0].library?.version, version);
   const legacy = new SourceCatalog([{ ...entry, libraryId: id, version: undefined }]); legacy.setLibrary([entry]);
   assert.equal(legacy.recent()[0].library?.id, id);
@@ -51,20 +51,30 @@ test('recent entries resolve outside the current directory page and merge migrat
   assert.equal(catalog.serializable()[0].version, version);
 });
 
-test('missing and disconnected references share reasons between history and workspace restore', async () => {
-  const catalog = new SourceCatalog([{ ...entry, libraryId: id }]);
+test('confirmed missing and obsolete history is removed, while connection failures remain recoverable without stale rows', async () => {
   for (const kind of ['missing', 'unavailable'] as const) {
+    const catalog = new SourceCatalog([{ ...entry, libraryId: id }]);
     catalog.setRecentLibrary([], [[id, kind]]);
-    assert.equal(catalog.recent()[0].libraryId, id);
-    assert.equal(catalog.recent()[0].libraryProblem, kind);
+    assert.deepEqual(catalog.recent(), []);
+    assert.equal(catalog.serializable().length, kind === 'missing' ? 0 : 1);
     const request = kind === 'missing' ? async () => new Response('', { status: 404 }) : async () => { throw new Error('offline'); };
     await assert.rejects(pinLibraryReference(info(), base, request as typeof fetch), error => error instanceof LibraryAccessError && error.kind === kind && error.message === libraryAccessMessage(entry.name, kind));
+    if (kind === 'unavailable') {
+      catalog.setRecentLibrary([[id, entry]]);
+      assert.equal(catalog.recent()[0].library?.id, id, 'automatic observation restores a reachable entry without a relink action');
+    }
   }
-  catalog.setRecentLibrary([[id, { ...entry, version: 'c'.repeat(24) }]]);
-  assert.equal(catalog.recent()[0].libraryProblem, 'changed');
-  catalog.setRecentLibrary([[id, entry]]);
-  assert.equal(catalog.recent()[0].libraryProblem, undefined);
-  assert.equal(catalog.recent()[0].library?.id, id);
+  const changed = new SourceCatalog([{ ...entry, libraryId: id }]);
+  changed.setRecentLibrary([[id, { ...entry, version: 'c'.repeat(24) }]]);
+  assert.deepEqual(changed.serializable(), []);
+  const pending = new SourceCatalog([{ ...entry, libraryId: id }]);
+  pending.setRecentLibrary([[id, { ...entry, state: 'pending', version: 'c'.repeat(24) }]]);
+  assert.equal(pending.serializable().length, 1, 'an in-progress write does not retire history');
+  const offline = new SourceCatalog([{ ...entry, libraryId: id, libraryRootId: 'archive' }]);
+  offline.setRecentLibrary([], [[id, 'missing']], new Set(['archive']));
+  assert.equal(offline.serializable().length, 1, 'an unavailable mount prevents destructive cleanup');
+  offline.setRecentLibrary([[id, { ...entry, rootId: 'archive' }]]);
+  assert.equal(offline.recent()[0].library?.id, id);
   await assert.rejects(pinLibraryReference(info(), base, (async () => new Response('', { status: 503 })) as typeof fetch), error => error instanceof LibraryAccessError && error.kind === 'unavailable' && error.status === 503);
 });
 

@@ -3,7 +3,7 @@ import type { LibraryEntry } from '../services/library.ts';
 import type { LibraryAccessProblem } from '../../shared/media/io/source-access.ts';
 
 export type RecentSource = { key: string; name: string; size: number; lastModified: number; libraryId?: string; libraryRootId?: string; version?: string; openedAt?: number };
-export type SourceItem = RecentSource & { file?: File; library?: LibraryEntry; libraryProblem?: LibraryAccessProblem };
+export type SourceItem = RecentSource & { file?: File; library?: LibraryEntry };
 const HISTORY_LIMIT = 100;
 // Each library root and the browser's local files have their own retention.
 function limitHistory(history: RecentSource[]) {
@@ -24,7 +24,6 @@ export class SourceCatalog {
   private library: LibraryEntry[] = [];
   private history: RecentSource[];
   private recentLibrary = new Map<string, LibraryEntry>();
-  private recentProblems = new Map<string, LibraryAccessProblem>();
   private activeRoots?: Set<string>;
   private options: { rememberLocalFiles?: () => boolean };
   constructor(stored: unknown = [], options: { isolateLibraries?: boolean; rememberLocalFiles?: () => boolean } = {}) {
@@ -48,7 +47,7 @@ export class SourceCatalog {
   setLibraryRoots(ids: string[]) {
     const next = new Set(ids);
     const changed = !this.activeRoots || next.size !== this.activeRoots.size || [...next].some(id => !this.activeRoots!.has(id));
-    if (changed) { this.activeRoots = next; this.recentLibrary.clear(); this.recentProblems.clear(); }
+    if (changed) { this.activeRoots = next; this.recentLibrary.clear(); }
     return changed;
   }
   /** Unscoped v1 references are only adopted after this service resolves their
@@ -57,15 +56,22 @@ export class SourceCatalog {
     return this.history.filter(item => item.libraryId && (!this.activeRoots || !item.libraryRootId || this.activeRoots.has(item.libraryRootId)));
   }
   setLibrary(entries: LibraryEntry[]) { this.library = entries; }
-  setRecentLibrary(entries: [string, LibraryEntry][], problems: [string, LibraryAccessProblem][] = []) {
+  setRecentLibrary(entries: [string, LibraryEntry][], problems: [string, LibraryAccessProblem][] = [], unavailableRoots: ReadonlySet<string> = new Set()) {
     this.recentLibrary = new Map(entries);
-    this.recentProblems = new Map(problems);
+    const confirmedMissing = new Set(problems.filter(([, reason]) => reason === 'missing').map(([id]) => id));
     for (const [, entry] of entries) this.recentLibrary.set(entry.id, entry);
     const history = new Map<string, RecentSource>();
     for (const item of this.history) {
       const entry = item.libraryId ? this.recentLibrary.get(item.libraryId) : undefined;
+      const active = !this.activeRoots || !item.libraryRootId || this.activeRoots.has(item.libraryRootId);
+      const reachable = active && (!item.libraryRootId || !unavailableRoots.has(item.libraryRootId));
+      const matches = entry && entry.size === item.size && entry.lastModified === item.lastModified && (!item.version || entry.version === item.version);
+      // Only explicit server facts retire history. Failed requests, offline roots
+      // and in-progress writes cannot prove that a saved reference is obsolete.
+      if (reachable && item.libraryId && (confirmedMissing.has(item.libraryId) || entry?.state === 'missing'
+        || entry && (!entry.state || entry.state === 'ready') && !matches)) continue;
       const scoped = entry?.rootId && (!this.activeRoots || this.activeRoots.has(entry.rootId)) && (!item.libraryRootId || item.libraryRootId === entry.rootId) ? { ...item, libraryRootId: entry.rootId } : item;
-      const current = entry && entry.size === item.size && entry.lastModified === item.lastModified && (!item.version || entry.version === item.version)
+      const current = matches
         ? { ...scoped, libraryId: entry.id, version: entry.version, key: sourceKey(entry, entry.id) } : scoped;
       if (!history.has(current.key)) history.set(current.key, current);
     }
@@ -87,7 +93,7 @@ export class SourceCatalog {
     ...this.history.filter(h => h.key !== key)];
     this.history = limitHistory(this.history);
   }
-  recent() { return this.retainedHistory().filter(item => !this.activeRoots || !item.libraryId || !!item.libraryRootId && this.activeRoots.has(item.libraryRootId)).map(h => this.resolve(h)); }
+  recent() { return this.retainedHistory().filter(item => !this.activeRoots || !item.libraryId || !!item.libraryRootId && this.activeRoots.has(item.libraryRootId)).map(h => this.resolve(h)).filter(item => !item.libraryId || !!item.library); }
   available() {
     const items = new Map<string, SourceItem>();
     for (const file of this.local.values()) items.set(sourceKey(file), this.resolve({ key: sourceKey(file), name: file.name, size: file.size, lastModified: file.lastModified }));
@@ -105,8 +111,7 @@ export class SourceCatalog {
     if (h.libraryId) {
       const candidate = this.recentLibrary.get(h.libraryId) ?? this.library.find(e => e.id === h.libraryId);
       const library = candidate && candidate.state !== 'missing' && candidate.size === h.size && candidate.lastModified === h.lastModified && (!h.version || candidate.version === h.version) ? candidate : undefined;
-      const libraryProblem = library ? undefined : candidate ? candidate.state === 'missing' ? 'missing' : 'changed' : this.recentProblems.get(h.libraryId) ?? 'unavailable';
-      return { ...h, library, libraryProblem };
+      return { ...h, library };
     }
     return { ...h, file: this.local.get(h.key) };
   }

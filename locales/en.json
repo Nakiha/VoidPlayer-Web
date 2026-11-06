@@ -2906,9 +2906,13 @@
     "source": "所有媒体库",
     "translation": "All libraries"
   },
-  "libraryBrowser.goUp": {
-    "source": "返回上一级",
-    "translation": "Go up one level"
+  "libraryBrowser.goBack": {
+    "source": "后退",
+    "translation": "Back"
+  },
+  "libraryBrowser.goForward": {
+    "source": "前进",
+    "translation": "Forward"
   },
   "libraryBrowser.library": {
     "source": "媒体库",
@@ -2950,9 +2954,17 @@
     "source": "拷贝媒体库路径",
     "translation": "Copy library path"
   },
+  "libraryFileMenu.copyMountPath": {
+    "source": "拷贝挂载路径",
+    "translation": "Copy mount path"
+  },
   "libraryFileMenu.copyName": {
     "source": "拷贝文件名",
     "translation": "Copy filename"
+  },
+  "libraryFileMenu.mountPathUnavailable": {
+    "source": "无法获取挂载路径",
+    "translation": "Unable to get mount path"
   },
   "libraryFileMenu.pathUnavailable": {
     "source": "无法获取文件绝对路径",
@@ -5342,20 +5354,20 @@
     "translation": "Zoom"
   },
   "sourceAccess.libraryChanged": {
-    "source": "媒体库文件「{name}」与保存的版本不一致，请重新选择并检查标注。",
-    "translation": "Library file “{name}” no longer matches the saved version. Select it again and review the annotations."
+    "source": "无法打开「{name}」：文件版本已变化。",
+    "translation": "Cannot open \"{name}\": the file version changed."
   },
   "sourceAccess.libraryMissing": {
-    "source": "媒体库引用「{name}」已失效或文件已移除，请在媒体库中重新选择。",
-    "translation": "The library reference for “{name}” has expired or the file was removed. Select it again in the library."
+    "source": "无法打开「{name}」：文件已移除。",
+    "translation": "Cannot open \"{name}\": the file was removed."
   },
   "sourceAccess.libraryUnavailable": {
-    "source": "无法确认媒体库引用「{name}」，请检查服务连接后重试。",
-    "translation": "Cannot verify the library reference for “{name}”. Check the service connection and try again."
+    "source": "无法打开「{name}」：媒体库暂不可用。",
+    "translation": "Cannot open \"{name}\": the media library is unavailable."
   },
   "sourceAccess.localStale": {
-    "source": "本地文件「{name}」已变化或不可用，请重新选择并检查标注。",
-    "translation": "Local file “{name}” has changed or is unavailable. Select it again and review the annotations."
+    "source": "无法打开本地文件「{name}」：文件已变化或不可用。",
+    "translation": "Cannot open local file \"{name}\": it changed or is unavailable."
   },
   "sourceAccess.localUnsupported": {
     "source": "当前浏览器不支持保存本地文件访问权限，无法直接恢复「{name}」。请重新选择文件；刷新后仍需重新选择。",
@@ -5421,29 +5433,13 @@
     "source": "本地文件访问已过期，请重新选择 {name}",
     "translation": "Local file access expired. Pick {name} again"
   },
-  "sources.addToView": {
-    "source": "添加到视图",
-    "translation": "Add to view"
-  },
   "sources.addToViewName": {
     "source": "添加到视图：{name}",
     "translation": "Add to view: {name}"
   },
-  "sources.cancelAndAdd": {
-    "source": "取消当前载入并添加到视图",
-    "translation": "Cancel the current load and add to view"
-  },
-  "sources.cancelLoad": {
-    "source": "取消载入",
-    "translation": "Cancel load"
-  },
-  "sources.cancelLoadName": {
-    "source": "取消载入：{name}",
-    "translation": "Cancel load: {name}"
-  },
-  "sources.checkReference": {
-    "source": "检查媒体引用",
-    "translation": "Check the media reference"
+  "sources.alreadyInViewName": {
+    "source": "已在视图中：{name}",
+    "translation": "Already in view: {name}"
   },
   "sources.currentIdentityPrefix": {
     "source": "当前身份 · ",
@@ -5452,10 +5448,6 @@
   "sources.emptyDirectory": {
     "source": "当前目录没有片源",
     "translation": "No sources in this folder"
-  },
-  "sources.folderMetaLibrary": {
-    "source": "媒体库 · {root}",
-    "translation": "Library · {root}"
   },
   "sources.guest": {
     "source": "访客",
@@ -5469,22 +5461,6 @@
     "source": "点击打开用户设置（当前身份：{name}）",
     "translation": "Open user settings (current identity: {name})"
   },
-  "sources.inLibrary": {
-    "source": "媒体库",
-    "translation": "Library"
-  },
-  "sources.lastOpened": {
-    "source": " · 上次打开 {date}",
-    "translation": " · last opened {date}"
-  },
-  "sources.libraryReference": {
-    "source": "媒体库引用",
-    "translation": "Library reference"
-  },
-  "sources.libraryReferenceUnavailable": {
-    "source": "媒体库引用不可用",
-    "translation": "Library reference unavailable"
-  },
   "sources.loadFailedWith": {
     "source": "载入失败：{reason}",
     "translation": "Load failed: {reason}"
@@ -5497,9 +5473,9 @@
     "source": "正在载入",
     "translation": "Loading"
   },
-  "sources.localFile": {
-    "source": "本地文件",
-    "translation": "Local file"
+  "sources.loadingName": {
+    "source": "正在载入：{name}",
+    "translation": "Loading: {name}"
   },
   "sources.localFiles": {
     "source": "本地文件",
@@ -5509,13 +5485,17 @@
     "source": "本地文件（{n}）",
     "translation": "Local files ({n})"
   },
-  "sources.localNoUpload": {
-    "source": "本机（不上传）",
-    "translation": "Local (no upload)"
+  "sources.localTag": {
+    "source": "(本地)",
+    "translation": "(Local)"
   },
   "sources.locateUnavailable": {
     "source": "片源已不在媒体库中。",
     "translation": "This source is no longer in the media library."
+  },
+  "sources.mountList": {
+    "source": "库列表",
+    "translation": "Libraries"
   },
   "sources.noEmptyTracks": {
     "source": "没有空轨道，请先关闭一个视频。",
@@ -5541,25 +5521,9 @@
     "source": "打开：{name}",
     "translation": "Open: {name}"
   },
-  "sources.referenceNeedsReselect": {
-    "source": " · 引用不可用，需重新选择",
-    "translation": " · Reference unavailable; select again"
-  },
-  "sources.removeFromView": {
-    "source": "从视图移除",
-    "translation": "Remove from view"
-  },
-  "sources.removeFromViewName": {
-    "source": "从视图移除：{name}",
-    "translation": "Remove from view: {name}"
-  },
-  "sources.reselectInSourcesName": {
-    "source": "在片源中重新选择：{name}",
-    "translation": "Pick again in sources: {name}"
-  },
-  "sources.reselectLocalFile": {
-    "source": "重新选择本地文件",
-    "translation": "Pick the local file again"
+  "sources.putOn": {
+    "source": "上屏",
+    "translation": "Add to view"
   },
   "sources.reselectName": {
     "source": "重新选择 {name}",
@@ -5581,21 +5545,25 @@
     "source": "媒体库",
     "translation": "Library"
   },
-  "sources.startMetaLocal": {
-    "source": "本地文件",
-    "translation": "Local file"
-  },
-  "sources.stillWriting": {
-    "source": "片源仍在写入，请稍后重试",
-    "translation": "The source is still being written. Retry later"
-  },
   "sources.storageOffline": {
     "source": "存储离线",
     "translation": "Storage offline"
   },
-  "sources.storageOfflineWait": {
-    "source": "媒体存储离线，请等待重新连接",
-    "translation": "Media storage is offline; wait for reconnection"
+  "sources.storageSpace": {
+    "source": "{available} 可用 / 共 {total}",
+    "translation": "{available} available / {total} total"
+  },
+  "sources.storageSpaceUnavailable": {
+    "source": "空间信息不可用",
+    "translation": "Storage space unavailable"
+  },
+  "sources.takeOff": {
+    "source": "下屏",
+    "translation": "Remove from view"
+  },
+  "sources.takeOffName": {
+    "source": "下屏：{name}",
+    "translation": "Remove from view: {name}"
   },
   "sources.tooltipLibrary": {
     "source": "{name}（{root}）",

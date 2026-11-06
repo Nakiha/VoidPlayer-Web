@@ -1,5 +1,5 @@
 import { verifyPlaybackPresentation } from './testing/playback-presentation.mjs';
-// Trusted HTTPS playback, repeated source-button clicks and decoder cleanup.
+// Trusted HTTPS playback, repeated file-row clicks and decoder cleanup.
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -74,16 +74,16 @@ try {
     await page.evaluate(() => window.voidPlayer.tools.find(t => t.name === 'set_review_color_mode').execute({ mode: 'browser' }));
     await page.locator('#start-library-more').click();
     const entry = listing.entries.find(e => e.name === 'http-1080p-a.mp4');
+    await page.getByRole('button', { name: `打开媒体库：${entry.root}`, exact: true }).click();
     const row = page.locator('#source-list .source-row').filter({ hasText: entry.name });
-    const add = row.getByRole('button', { name: `添加到视图：${entry.name}`, exact: true });
+    const add = row;
     let releaseDownload;
     const blocked = new Promise(resolve => { releaseDownload = resolve; });
     await page.route('**/api/media/**', async route => { await blocked; await route.continue(); });
     const clickedButton = await add.elementHandle();
     await add.click();
     await page.waitForFunction(() => document.querySelector('#source-list [aria-busy="true"]'));
-    await row.getByRole('button', { name: `取消载入：${entry.name}`, exact: true }).waitFor();
-    assert.equal(await add.count(), 0, 'pending source exposes cancel instead of another add action');
+    assert.equal(await row.getAttribute('aria-disabled'), 'true', 'pending row rejects duplicate additions');
     assert.equal(await page.locator('#source-activity').getAttribute('data-state'), 'loading');
     // Already queued clicks on the old element cannot start duplicate loads.
     await clickedButton.evaluate(button => { for (let i = 0; i < 30; i++) button.click(); });
@@ -91,11 +91,11 @@ try {
     releaseDownload();
     await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 1 && !window.voidPlayer.getState().busy);
     await page.unroute('**/api/media/**');
-    if (!secure) assert.equal(requests.length, 1, 'repeated + clicks must start exactly one file download');
+    if (!secure) assert.equal(requests.length, 1, 'repeated row clicks must start exactly one file download');
     assert.equal(ffmpegWorkerStarts, 0, 'WebCodecs must not open FFmpeg workers');
     assert.equal(await row.getAttribute('aria-busy'), 'false');
     assert.deepEqual(await row.locator('.source-meta .source-track-badges .slot').allTextContents(), ['A']);
-    console.log(`PASS ${protocol} + button: immediate pending state, repeated clicks, first frame, correct decoder`);
+    console.log(`PASS ${protocol} file row: immediate pending state, repeated clicks, first frame, correct decoder`);
 
     // Observe the real WebCodecs lifecycle: warm resume must neither seek nor
     // configure another decoder, including rapid pause/play in one JS turn.

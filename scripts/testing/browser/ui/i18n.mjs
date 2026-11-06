@@ -218,12 +218,14 @@ await withBrowserFixture({caseName:'i18n-dialogs',engine,pageOptions:{viewport:{
  await page.route(`**/api/media/${sample.id}?*`,route=>stalled.push(route));
  const sampleRow=page.locator('#source-list .source-row').filter({hasText:'sample.mp4'});
  const requested=page.waitForRequest(request=>new URL(request.url()).pathname===`/api/media/${sample.id}`);
- await sampleRow.getByRole('button',{name:'添加到视图：sample.mp4',exact:true}).click();await requested;
- const cancel=sampleRow.getByRole('button',{name:'取消载入：sample.mp4',exact:true});await cancel.waitFor();
+ await sampleRow.click();await requested;
+ await page.locator('#source-activity-toggle').click();
+ const cancel=page.locator('#source-activity-cancel');await cancel.waitFor();
+ await page.waitForFunction(()=>document.querySelector('#source-list .source-file[aria-busy="true"]'));
  await cancel.evaluate(e=>{e.focus();window.__cancel=e;});await switchLanguage('en');
- assert.equal(await sampleRow.locator('[data-action=cancel-load]').getAttribute('aria-label'),'Cancel load: sample.mp4');
- assert.equal(await sampleRow.locator('[data-action=cancel-load]').evaluate(e=>e===window.__cancel&&e===document.activeElement),true);
- assert.equal(await page.locator('#source-activity-details').isVisible(),false,'loading details remain collapsed by default');
+ assert.equal(await sampleRow.getAttribute('aria-label'),'Loading: sample.mp4');
+ assert.equal(await cancel.evaluate(e=>e===window.__cancel&&e===document.activeElement),true);
+ assert.equal(await page.locator('#source-activity-details').isVisible(),true,'loading details expose the shared cancel action');
  // Stalled byte IO does not freeze a particular milestone. Check the live
  // stage's translation even when decoder setup advances before the switch.
  const load = await page.evaluate(()=>window.voidPlayer.getState().mediaLoad);

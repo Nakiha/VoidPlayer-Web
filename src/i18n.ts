@@ -50,6 +50,13 @@ export function formatDate(value:string|number|Date) {
   let format=dateFormats.get(getLocale());if(!format){format=new Intl.DateTimeFormat(getLocale(),{dateStyle:'short',timeStyle:'medium'});dateFormats.set(getLocale(),format);}
   const date=new Date(value);return Number.isNaN(date.getTime())?'—':format.format(date);
 }
+/** Compact source-history dates; the year matters only across calendar years. */
+export function formatRecentDate(value: number, now = Date.now()) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return '—';
+  const year = date.getFullYear() === new Date(now).getFullYear() ? undefined : 'numeric';
+  return new Intl.DateTimeFormat(getLocale(), {year, month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit', hourCycle:'h23'}).format(date);
+}
 const numberFormats=new Map<string,Intl.NumberFormat>();
 export function formatNumber(value:number,options:Intl.NumberFormatOptions={}) {
   const key=getLocale()+JSON.stringify(options);let format=numberFormats.get(key);if(!format){format=new Intl.NumberFormat(getLocale(),options);numberFormats.set(key,format);}return format.format(value);

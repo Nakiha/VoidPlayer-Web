@@ -1,13 +1,13 @@
 import { loadStageLabel } from '../media-progress.ts';
 import type { MediaLoadStage } from '../media-progress.ts';
-import { formatDate, t, msg } from '../../i18n.ts';
+import { formatRecentDate, t, msg } from '../../i18n.ts';
 import { SLOTS } from '../../../shared/review/model.ts';
 import type { Slot } from '../../../shared/review/model.ts';
-import { createIconButton } from '../controls.ts';
 import { icon } from '../icons.ts';
+import { createIconButton } from '../controls.ts';
 import { currentActor } from '../../services/identity.ts';
 import { fetchLibraryItem, openLibraryItem } from '../../services/library.ts';
-import type { LibraryEntry } from '../../services/library.ts';
+import type { LibraryEntry, LibraryRoot } from '../../services/library.ts';
 import { localCacheKey, serverCacheKey } from '../../../shared/thumbnails/contract.ts';
 import { fillThumbnailImage, getLiveObjectUrl, materializeThumbnailUrl, onThumbnailReady, prefetchThumbnailStatus, prefetchThumbnailStatuses, serverThumbnailImageUrl } from '../../thumbnails/client.ts';
 import { getLocalThumbnail } from '../../thumbnails/local-store.ts';
@@ -20,16 +20,20 @@ import { installSourceScrollbar } from '../source-scrollbar.ts';
 import { sourceInUse, sourceKey } from '../source-catalog.ts';
 import { FileHandleError, handleKey, hasFileHandle, pickVideoFiles, restoreHandleSource, saveFileHandle, supportsFileHandles } from '../../services/file-handles.ts';
 import type { SourceItem } from '../source-catalog.ts';
-import { libraryAccessMessage, localAccessMessage } from '../source-access-message.ts';
+import { localAccessMessage } from '../source-access-message.ts';
 import type { LibraryAccessProblem, LocalAccessProblem } from '../../../shared/media/io/source-access.ts';
 import { log } from '../../logging/log.ts';
 import type { WorkbenchShared, WorkbenchState } from './shared.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-const sizeText = (n: number) => n >= 2 ** 30 ? `${(n / 2 ** 30).toFixed(1)} GB` : `${(n / 2 ** 20).toFixed(1)} MB`;
+const sizeText = (n: number) => n >= 2 ** 40 ? `${(n / 2 ** 40).toFixed(1)} TB` : n >= 2 ** 30 ? `${(n / 2 ** 30).toFixed(1)} GB` : `${(n / 2 ** 20).toFixed(1)} MB`;
+const storageText = (root?: LibraryRoot) => root?.state === 'offline' ? t(msg('sources.storageOffline', '存储离线'))
+  : root?.availableBytes != null && root.totalBytes != null
+    ? t(msg('sources.storageSpace', '{available} 可用 / 共 {total}'), { available: sizeText(root.availableBytes), total: sizeText(root.totalBytes) })
+    : t(msg('sources.storageSpaceUnavailable', '空间信息不可用'));
 const openedText = (value?: number) => {
   if (!Number.isFinite(value)) return '';
-  return formatDate(value as number);
+  return formatRecentDate(value as number);
 };
 const text = (tag: string, value: string, className = '') => {
   const el = document.createElement(tag); el.textContent = value; el.className = className; return el;
@@ -51,6 +55,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
   let confirmTimer: ReturnType<typeof setTimeout> | undefined;
   let sourceLoadError: { key: string; message: string } | null = null;
   let recentRevision = -1;
+  let recentRootsState = '', recentRetry = false;
   let recentRequest = 0;
   // History keeps local-file metadata only: after reload the live File is gone
   // and the row cannot load until the user re-picks the file. Remember which
@@ -81,7 +86,10 @@ export function createSourcesPane(shared: WorkbenchShared) {
     catalog.setLibrary(page?.entries ?? []);
     // Warm thumbnail presence/epochs beside listing; never blocks opening.
     if (page) prefetchThumbnailStatuses(page.entries, 60, page.thumbnailEpoch);
-    if (page && (rootsChanged || recentRevision !== page.revision)) { recentRevision = page.revision; void refreshRecent(); }
+    const rootsState = JSON.stringify(page?.roots.map(root => [root.id, root.state]));
+    if (page && (rootsChanged || recentRevision !== page.revision || rootsState !== recentRootsState || recentRetry)) {
+      recentRevision = page.revision; recentRootsState = rootsState; void refreshRecent();
+    }
     renderSources();
   }, lifecyle.signal, home => {
     if (home) void refreshRecent();
@@ -94,7 +102,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     const body = document.createElement('div'); body.className = 'source-group-items'; section.append(summary, body);
     return { section, body };
   };
-  const mountsGroup = group('library-mounts', t(msg('libraryBrowser.library', '媒体库')));
+  const mountsGroup = group('library-mounts', t(msg('sources.mountList', '库列表')));
   const recentGroup = group('library-recents', t(msg('shell.recentlyOpened', '最近打开')));
   // Source key -> thumbnail cache key, so completion can fill the placeholder
   // <img> of the matching row in place. Bounded: rows re-register on render.
@@ -180,14 +188,10 @@ export function createSourcesPane(shared: WorkbenchShared) {
       } catch { problems.push([id, 'unavailable']); return null; }
     }));
     if (disposed || ticket !== recentRequest) return;
-    catalog.setRecentLibrary(entries.filter((item): item is [string, LibraryEntry] => item !== null), problems); save(); renderSources();
-  }
-
-  function reportLibraryProblem(item: SourceItem) {
-    const reason = item.libraryProblem ?? 'unavailable';
-    const message = libraryAccessMessage(item.name, reason);
-    log.warn('ui', '媒体库历史引用无法恢复', { name: item.name, sourceId: item.libraryId, reason, message });
-    shared.notify(message);
+    recentRetry = problems.some(([, reason]) => reason === 'unavailable');
+    const unavailableRoots = new Set(libraryBrowser.page()?.roots.filter(root => root.state !== 'ready').map(root => root.id));
+    catalog.setRecentLibrary(entries.filter((item): item is [string, LibraryEntry] => item !== null), problems, unavailableRoots);
+    save(); renderSources();
   }
 
   async function load(item: SourceItem, slot: Slot) {
@@ -245,7 +249,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     return null;
   }
 
-  /** Cover box. Removed on load failure so missing thumbnails take 0 space. */
+  /** Once a cover slot exists, image errors stay invisible without shifting the row. */
   function makeThumbBox(key: string, url: string): HTMLElement {
     const box = document.createElement('div');
     box.className = 'source-thumb';
@@ -255,14 +259,13 @@ export function createSourcesPane(shared: WorkbenchShared) {
     img.loading = 'lazy';
     img.decoding = 'async';
     img.dataset.thumbKey = key;
-    img.onerror = () => { box.remove(); };
-    fillThumbnailImage(img, key, url.startsWith('blob:') ? undefined : url);
     box.append(img);
+    fillThumbnailImage(img, key, url.startsWith('blob:') ? undefined : url, { visibilityTarget: box, retainWhileHidden: true });
     return box;
   }
 
   /**
-   * No blank slots: a row gets a cover box only when an image is available
+   * Unknown covers take no space: a row gets a box only when an image is available
    * synchronously (live object URL or known-ready server image). Otherwise
    * the row stays coverless (0占位), and a stored local artifact inserts the
    * box once its lookup resolves; generation completion arrives via notify.
@@ -280,28 +283,49 @@ export function createSourcesPane(shared: WorkbenchShared) {
     });
   }
 
+  function addToView(item: SourceItem) {
+    if (loadingSource?.key === item.key || sourceInUse(item, session.getState().tracks)) return;
+    const offline = libraryBrowser.page()?.roots.some(root => root.id === item.library?.rootId && root.state === 'offline');
+    if (offline || item.library?.state && item.library.state !== 'ready') return;
+    if (!item.file && !item.library) { if (!item.libraryId) void reselectLocal(item); return; }
+    const empty = SLOTS.find(slot => !session.getState().tracks.some(track => track.slot === slot));
+    if (empty) void load(item, empty);
+    else void act(() => { throw new Error(t(msg('sources.noEmptyTracks', '没有空轨道，请先关闭一个视频。'))); }, 'ui.source-full');
+  }
+  function removeFromView(item: SourceItem) {
+    void act(async () => {
+      if (session.getState().busy || loadingSource) return;
+      const tracks = session.getState().tracks.filter(track => sourceInUse(item, [track]));
+      for (const track of tracks) {
+        if (session.getState().tracks.some(current => current.slot === track.slot && current.id === track.id)) await session.removeTrack(track.slot);
+      }
+    }, 'ui.source-remove', {name:item.name});
+  }
+
   function sourceRow(item: SourceItem, copyOnly = false) {
-    const row = document.createElement('div'); row.className = 'source-row';
+    const row = document.createElement('div'); row.className = 'source-row source-file';
+    const open = document.createElement('button'); open.type = 'button'; open.className = 'source-open';
     const slots = session.getState().tracks.filter(track => sourceInUse(item, [track])).map(track => track.slot);
     const used = slots.length > 0;
     const loading = loadingSource?.key === item.key && loadingConfirmed ? loadingSource.status() : null;
     const failed = sourceLoadError?.key === item.key ? sourceLoadError.message : null;
-    const blocked = !!loadingSource;
     row.setAttribute('aria-busy', String(!!loading));
     row.classList.toggle('in-use', used);
     const info = document.createElement('div'); info.className = 'source-info';
     const { base, dir } = sourceDisplayName(item.name);
     const name = text('span', base, 'filename');
-    const origin = item.library ? [item.library.root, dir].filter(Boolean).join(' / ') : item.libraryId ? t(msg('sources.libraryReference', '媒体库引用')) : t(msg("sources.localNoUpload", "本机（不上传）"));
+    const origin = item.library ? libraryBrowser.isRoot() ? [item.library.root, dir].filter(Boolean).join(' / ') : ''
+      : item.libraryId ? '' : t(msg('sources.localTag', '(本地)'));
     // Full path lives in the tooltip; the visible name stays a basename.
-    row.dataset.tooltip = item.library ? t(msg("sources.tooltipLibrary", "{name}（{root}）"), { name: item.name, root: item.library.root }) : item.libraryId ? libraryAccessMessage(item.name, item.libraryProblem ?? 'unavailable') : item.file ? t(msg("sources.tooltipLocalOnly", "{name}（本地文件，仅本机预览）"), { name: item.name }) : localAccessMessage(item.name, supportsFileHandles() ? 'unavailable' : 'unsupported');
-    const isLocal = !item.library && !item.libraryId;
+    row.dataset.tooltip = item.library ? t(msg("sources.tooltipLibrary", "{name}（{root}）"), { name: item.name, root: item.library.root }) : item.libraryId ? item.name : item.file ? t(msg("sources.tooltipLocalOnly", "{name}（本地文件，仅本机预览）"), { name: item.name }) : localAccessMessage(item.name, supportsFileHandles() ? 'unavailable' : 'unsupported');
     const pending = item.library?.state === 'pending';
     const offline = libraryBrowser.page()?.roots.some(root => root.id === item.library?.rootId && root.state === 'offline');
-    const stateLabel = loading ?? (failed ? t(msg("sources.loadFailedWith", "载入失败：{reason}"), { reason: failed }) : offline ? t(msg("sources.storageOffline", "存储离线")) : pending ? t(msg("sources.writing", "写入中")) : isLocal ? t(msg("sources.localFile", "本地文件")) : !item.library ? t(msg('sources.libraryReferenceUnavailable', '媒体库引用不可用')) : t(msg("sources.inLibrary", "媒体库")));
+    const stateLabel = loading ?? (failed ? t(msg("sources.loadFailedWith", "载入失败：{reason}"), { reason: failed }) : offline ? t(msg("sources.storageOffline", "存储离线")) : pending ? t(msg("sources.writing", "写入中")) : '');
     const opened = openedText(item.openedAt);
-    const status = text('span', '', 'source-meta');
-    const statusText = text('span', `${sizeText(item.size)} · ${stateLabel} · ${origin}${opened ? t(msg("sources.lastOpened", " · 上次打开 {date}"), { date: opened }) : ''}`, 'source-meta-copy');
+    const status = text('span', '', 'source-meta source-meta-columns');
+    const size = text('span', '', 'source-meta-size');
+    const originText = text('span', [stateLabel, origin].filter(Boolean).join(' · '), 'source-meta-origin');
+    const time = text('span', opened, 'source-meta-time');
     status.dataset.tooltip = row.dataset.tooltip;
     if (loading || failed) { status.setAttribute('role', 'status'); }
     const titleLine = document.createElement('span'); titleLine.className = 'source-title';
@@ -309,94 +333,65 @@ export function createSourcesPane(shared: WorkbenchShared) {
       const badges = document.createElement('span'); badges.className = 'source-track-badges';
       badges.setAttribute('aria-label', t(msg('sources.loadedTracks', '已上屏轨道：{slots}'), { slots: slots.join(', ') }));
       for (const slot of slots) { const badge = text('span', slot, `slot slot-${slot}`); badge.setAttribute('aria-hidden', 'true'); badges.append(badge); }
-      status.append(badges);
+      size.append(badges);
     }
-    status.append(statusText);
+    size.prepend(text('span', sizeText(item.size), 'source-size-value'));
+    status.append(size);
+    if (originText.textContent) status.append(originText);
+    if (opened) status.append(time);
     titleLine.append(name);
     name.dataset.tooltip = row.dataset.tooltip;
     info.append(titleLine, status);
-    const actions = document.createElement('div'); actions.className = 'source-actions';
+    row.setAttribute('aria-label', used ? t(msg('sources.alreadyInViewName', '已在视图中：{name}'), { name: item.name })
+      : loading ? t(msg('sources.loadingName', '正在载入：{name}'), { name: item.name })
+      : item.library || item.file ? t(msg('sources.addToViewName', '添加到视图：{name}'), { name: item.name })
+      : t(msg('sources.reselectName', '重新选择 {name}'), { name: item.name }));
+    const blocked = !!loading || !!pending || !!offline || !!item.libraryId && !item.library;
+    row.setAttribute('aria-disabled', String(!used && blocked));
+    open.dataset.tooltip = row.dataset.tooltip;
+    open.setAttribute('aria-label', row.getAttribute('aria-label')!); open.setAttribute('aria-disabled', String(used || blocked));
+    row.onclick = () => { if (row.getAttribute('aria-disabled') !== 'true') addToView(item); };
+    open.append(info); row.append(open);
     if (used) {
-      const button = createIconButton({ glyph: 'close', label: t(msg("sources.removeFromView", "从视图移除")) });
-      button.classList.add('remove-track');
-      button.disabled = blocked;
-      button.setAttribute('aria-label', t(msg("sources.removeFromViewName", "从视图移除：{name}"), { name: item.name }));
-      button.onclick = () => void act(async () => {
-        if (loadingSource) return;
-        button.disabled = true;
-        try {
-          const tracks = session.getState().tracks.filter(track => sourceInUse(item, [track]));
-          for (const track of tracks) {
-            // A closed slot may have been filled again while awaiting.
-            if (session.getState().tracks.some(current => current.slot === track.slot && current.id === track.id)) await session.removeTrack(track.slot);
-          }
-        } finally { button.disabled = false; }
-      }, 'ui.source-remove', { name: item.name });
-      actions.append(button);
+      const remove = createIconButton({glyph:'close', label:t(msg('sources.takeOffName', '下屏：{name}'), {name:item.name}), className:'source-remove remove-track'});
+      remove.setAttribute('aria-disabled', String(session.getState().busy || !!loadingSource));
+      remove.onclick = event => {event.stopPropagation(); removeFromView(item);}; row.append(remove);
     }
-    else if (loading) {
-      const button = createIconButton({ glyph: 'close', label: t(msg("sources.cancelLoad", "取消载入")) });
-      button.setAttribute('aria-label', t(msg("sources.cancelLoadName", "取消载入：{name}"), { name: item.name }));
-      button.dataset.action = 'cancel-load';
-      button.onclick = () => { session.cancelLoad(); loadingSource = null; renderSources(); };
-      actions.append(button);
-    }
-    else if (item.library || item.file) {
-      const button = createIconButton({ glyph: 'plus', label: t(msg("sources.addToView", "添加到视图")) });
-      button.disabled = !!pending || !!offline;
-      button.dataset.tooltip = session.getState().mediaLoad?.state === 'loading' ? t(msg("sources.cancelAndAdd", "取消当前载入并添加到视图")) : t(msg("sources.addToView", "添加到视图"));
-      button.title = offline ? t(msg("sources.storageOfflineWait", "媒体存储离线，请等待重新连接")) : pending ? t(msg("sources.stillWriting", "片源仍在写入，请稍后重试")) : t(msg("sources.addToView", "添加到视图")); button.setAttribute('aria-label', t(msg("sources.addToViewName", "添加到视图：{name}"), { name: item.name }));
-      button.onclick = () => {
-        const tracks = session.getState().tracks;
-        if (sourceInUse(item, tracks)) return;
-        const empty = SLOTS.find(slot => !tracks.some(t => t.slot === slot));
-        if (empty) { void load(item, empty); return; }
-        void act(() => { throw new Error(t(msg('sources.noEmptyTracks', '没有空轨道，请先关闭一个视频。'))); }, 'ui.source-full');
-      }; actions.append(button);
-    } else if (item.libraryId) {
-      const button = createIconButton({ glyph: 'refresh', label: t(msg("sources.checkReference", "检查媒体引用")) });
-      button.title = libraryAccessMessage(item.name, item.libraryProblem ?? 'unavailable'); button.onclick = () => { reportLibraryProblem(item); void refreshLibrary(); }; actions.append(button);
-    } else {
-      const button = createIconButton({ glyph: 'filePlus', label: t(msg("sources.reselectLocalFile", "重新选择本地文件")) }); button.title = t(msg("sources.reselectLocalFile", "重新选择本地文件"));
-      button.setAttribute('aria-label', t(msg("sources.reselectName", "重新选择 {name}"), { name: item.name })); button.onclick = () => { void reselectLocal(item); }; actions.append(button);
-    }
-    row.append(info, actions);
     row.dataset.sourceKey = item.key;
     if (!copyOnly) attachThumb(row, item);
-    if (item.library) fileMenu.register(row, item.library);
+    if (!copyOnly) fileMenu.register(row, item.library, () => {
+      const used = sourceInUse(item, session.getState().tracks), state = session.getState();
+      const offline = libraryBrowser.page()?.roots.some(root => root.id === item.library?.rootId && root.state === 'offline');
+      return {id:used?'remove-from-view':'add-to-view', label:used?t(msg('sources.takeOff', '下屏')):t(msg('sources.putOn', '上屏')),
+        glyph:used?'close':'plus', disabled:used?state.busy || !!loadingSource:!!offline || item.library?.state === 'pending' || loadingSource?.key === item.key,
+        run:() => {if(used)removeFromView(item);else addToView(item);}};
+    });
     return row;
   }
 
   function startRow(item: SourceItem, copyOnly = false) {
     const row = document.createElement('button');
     row.className = 'start-recent-row';
-    // Stale rows (local metadata without a live File, or a library id that no
-    // longer resolves) cannot load directly: route to re-selection instead of
-    // silently ignoring the click.
+    // Local metadata without a live File still needs browser file access.
     const staleLocal = !item.file && !item.library && !item.libraryId;
-    const staleLibrary = !item.file && !item.library && !!item.libraryId;
     // A stored handle means one click restores silently — no re-pick needed.
     const restorable = staleLocal && handleKnown.get(item.key) === true;
-    row.setAttribute('aria-label', staleLocal && !restorable ? t(msg("sources.reselectRowName", "重新选择：{name}"), { name: item.name }) : staleLibrary ? t(msg("sources.reselectInSourcesName", "在片源中重新选择：{name}"), { name: item.name }) : t(msg("sources.openName", "打开：{name}"), { name: item.name }));
+    row.setAttribute('aria-label', staleLocal && !restorable ? t(msg("sources.reselectRowName", "重新选择：{name}"), { name: item.name }) : t(msg("sources.openName", "打开：{name}"), { name: item.name }));
     const { base, dir } = sourceDisplayName(item.name);
     const name = text('span', base, 'filename');
-    const origin = item.library ? [item.library.root, dir].filter(Boolean).join(' / ') : t(msg("sources.localNoUpload", "本机（不上传）"));
+    const origin = item.library ? [item.library.root, dir].filter(Boolean).join(' / ') : '';
     const opened = openedText(item.openedAt);
-    const meta = text('span', item.library || item.libraryId ? `${sizeText(item.size)} · ${t(msg("sources.startMetaLibrary", "媒体库"))}${item.library ? ` · ${origin}` : t(msg('sources.referenceNeedsReselect', ' · 引用不可用，需重新选择'))}${opened ? ` · ${opened}` : ''}` : `${sizeText(item.size)} · ${t(msg("sources.startMetaLocal", "本地文件"))}${staleLocal && !restorable ? t(msg("sources.reselectNeeded", " · 需重新选择")) : ''}${opened ? ` · ${opened}` : ''}`, 'source-meta');
+    const meta = text('span', item.library || item.libraryId ? `${sizeText(item.size)} · ${t(msg("sources.startMetaLibrary", "媒体库"))}${origin ? ` · ${origin}` : ''}${opened ? ` · ${opened}` : ''}` : `${sizeText(item.size)} · ${t(msg('sources.localTag', '(本地)'))}${staleLocal && !restorable ? t(msg("sources.reselectNeeded", " · 需重新选择")) : ''}${opened ? ` · ${opened}` : ''}`, 'source-meta');
     const go = document.createElement('span'); go.className = 'start-recent-go'; go.setAttribute('aria-hidden', 'true'); go.innerHTML = icon('caretRight');
     const info = document.createElement('span'); info.className = 'source-info'; info.append(name, meta);
     row.append(info, go);
     row.dataset.sourceKey = item.key;
     if (!copyOnly) attachThumb(row, item);
-    row.dataset.tooltip = staleLibrary ? libraryAccessMessage(item.name, item.libraryProblem ?? 'unavailable') : staleLocal && !restorable ? localAccessMessage(item.name, supportsFileHandles() ? 'unavailable' : 'unsupported') : item.name;
+    row.dataset.tooltip = staleLocal && !restorable ? localAccessMessage(item.name, supportsFileHandles() ? 'unavailable' : 'unsupported') : item.name;
     row.onclick = () => {
       if (session.getState().busy || sourceInUse(item, session.getState().tracks)) return;
       if (staleLocal) { void reselectLocal(item); return; }
-      if (staleLibrary) {
-        reportLibraryProblem(item);
-        shared.setPanel('sources', true);
-        return;
-      }
+      if (item.libraryId && !item.library) return;
       const tracks = session.getState().tracks;
       const empty = SLOTS.find(slot => !tracks.some(t => t.slot === slot));
       if (empty) void load(item, empty);
@@ -484,7 +479,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     // Stable identity only: thumbnail readiness must NOT rebuild rows —
     // completion patches the placeholder <img> in place via notify.
     const fingerprintOfStart = (item: SourceItem) => JSON.stringify([
-      !!item.file, item.library?.id ?? item.libraryId ?? null, item.libraryProblem ?? null,
+      !!item.file, item.library?.id ?? item.libraryId ?? null,
       item.library?.version ?? item.version ?? null, item.library?.state ?? null,
       item.name, item.size, item.openedAt ?? null, sourceInUse(item, tracks),
       (!item.file && !item.library && !item.libraryId) ? handleKnown.get(item.key) ?? 'unknown' : null,
@@ -533,24 +528,25 @@ export function createSourcesPane(shared: WorkbenchShared) {
     // Only source and navigation state affect the list. A seek must not
     // disable every row or rebuild any of their action controls.
     const sourceSlots = (item: SourceItem) => session.getState().tracks.filter(track => sourceInUse(item, [track])).map(track => track.slot);
-    const signature = JSON.stringify([home, query, loadingKey, loadingConfirmed, loadingConfirmed ? loadingSource?.stage ?? 'loading' : null, failedKey, sourceLoadError?.message ?? null, folders, mounts.map(mount => [mount.id, mount.name, mount.state]), page?.roots.map(root => [root.id, root.name, root.state]), items.map(item => [item.key, !!item.file, item.library?.version, item.library?.state, item.libraryProblem, item.openedAt ?? null, sourceSlots(item)]), local.map(item => [item.key, item.openedAt ?? null, sourceSlots(item)])]);
+    const signature = JSON.stringify([home, query, loadingKey, loadingConfirmed, loadingConfirmed ? loadingSource?.stage ?? 'loading' : null, failedKey, sourceLoadError?.message ?? null, folders, mounts.map(mount => [mount.id, mount.name, mount.state, storageText(mount)]), page?.roots.map(root => [root.id, root.name, root.state]), items.map(item => [item.key, !!item.file, item.library?.version, item.library?.state, item.openedAt ?? null, sourceSlots(item)]), local.map(item => [item.key, item.openedAt ?? null, sourceSlots(item)])]);
     const list = $('source-list');
     // Stable per-row identity: thumbnail presence/URLs must NOT rebuild rows.
     // Volatile fields (scannedAt, thumbnail flag, full roots objects) are
     // excluded; completion patches the placeholder <img> via notify.
     const stableRoots = page?.roots.map(root => [root.id, root.name, root.state]);
-    const fingerprintOf = (item: SourceItem) => JSON.stringify([!!item.file, item.library?.id ?? item.libraryId ?? null, item.library?.version ?? item.version ?? null, item.library?.state ?? null, item.libraryProblem ?? null, item.library?.root ?? null, item.library?.rootId ?? null, item.name, item.size, item.lastModified, item.openedAt ?? null, loadingKey === item.key && loadingConfirmed ? loadingSource?.stage ?? 'loading' : null, failedKey === item.key ? sourceLoadError?.message : null, sourceSlots(item), stableRoots]);
-    const syncActions = (container: HTMLElement, pool: SourceItem[]) => {
+    const fingerprintOf = (item: SourceItem) => JSON.stringify([home, !!item.file, item.library?.id ?? item.libraryId ?? null, item.library?.version ?? item.version ?? null, item.library?.state ?? null, item.library?.root ?? null, item.library?.rootId ?? null, item.name, item.size, item.lastModified, item.openedAt ?? null, loadingKey === item.key && loadingConfirmed ? loadingSource?.stage ?? 'loading' : null, failedKey === item.key ? sourceLoadError?.message : null, sourceSlots(item), stableRoots]);
+    const syncRowAvailability = (container: HTMLElement, pool: SourceItem[]) => {
       const byKey = new Map(pool.map(entry => [entry.key, entry]));
       for (const row of container.querySelectorAll<HTMLElement>('.source-row')) {
         const item = byKey.get(row.dataset.sourceKey ?? '');
-        const button = row.querySelector<HTMLButtonElement>(':scope > .source-actions > button');
-        if (!item || !button || button.dataset.action === 'cancel-load') continue;
+        if (!item) continue;
         const used = sourceInUse(item, session.getState().tracks);
         const pending = item.library?.state === 'pending';
         const offline = page?.roots.some(root => root.id === item.library?.rootId && root.state === 'offline');
-        if (used) button.disabled = !!loadingSource;
-        else if (item.library || item.file) button.disabled = !!pending || !!offline;
+        const blocked = loadingSource?.key === item.key || !!pending || !!offline || !!item.libraryId && !item.library;
+        row.setAttribute('aria-disabled', String(!used && !!blocked));
+        row.querySelector('.source-open')?.setAttribute('aria-disabled', String(used || !!blocked));
+        row.querySelector('.source-remove')?.setAttribute('aria-disabled', String(session.getState().busy || !!loadingSource));
       }
     };
     if (signature !== sourceSignature) {
@@ -565,26 +561,27 @@ export function createSourcesPane(shared: WorkbenchShared) {
       for (const folder of folders) {
         reuse(`folder:${folder.rootId}/${folder.path}`, JSON.stringify(folder), () => {
           const row = document.createElement('button'); row.className = 'source-row library-folder';
-          const glyph = document.createElement('span'); glyph.innerHTML = icon('open');
+          const glyph = text('span', '', 'source-thumb library-folder-icon'); glyph.innerHTML = icon('open');
           const info = text('span', '', 'source-info');
-          info.append(text('span', folder.name, 'filename'), text('span', t(msg("sources.folderMetaLibrary", "媒体库 · {root}"), { root: page?.roots.find(root => root.id === folder.rootId)?.name ?? '' }), 'source-meta'));
+          info.append(text('span', folder.name, 'filename'));
           row.dataset.rootId = folder.rootId;
           row.setAttribute('aria-label', t(msg("sources.openFolder", "打开目录：{name}"), { name: folder.name })); row.append(glyph, info); row.onclick = () => libraryBrowser.navigate(folder.rootId, folder.path); return row;
         });
       }
       const reconcile = (container: HTMLElement, children: HTMLElement[]) => {
-        children.forEach((row, index) => { if (container.children[index] !== row) container.insertBefore(row, container.children[index] ?? null); });
+        children.forEach((row, index) => { row.classList.toggle('source-striped', index % 2 === 1); if (container.children[index] !== row) container.insertBefore(row, container.children[index] ?? null); });
         while (container.children.length > children.length) container.lastElementChild!.remove();
       };
       if (home) {
         const mountsRows: HTMLElement[] = [], recentRows: HTMLElement[] = [];
-        for (const mount of mounts) reuse(`mount:${mount.id}`, JSON.stringify([mount.id, mount.name, mount.state]), () => {
+        for (const mount of mounts) reuse(`mount:${mount.id}`, JSON.stringify([mount.id, mount.name, mount.state, storageText(mount)]), () => {
           const row = document.createElement('button'); row.type = 'button'; row.className = 'source-row library-folder library-mount';
           row.dataset.rootId = mount.id; row.setAttribute('aria-label', t(msg('libraryBrowser.openMount', '打开媒体库：{name}'), { name: mount.name }));
-          const glyph = document.createElement('span'); glyph.innerHTML = icon('storage');
-          const info = text('span', '', 'source-info'); info.append(text('span', mount.name, 'filename'),
-            text('span', mount.state === 'offline' ? t(msg('sources.storageOffline', '存储离线')) : t(msg('libraryBrowser.library', '媒体库')), 'source-meta'));
-          row.append(glyph, info); row.onclick = () => libraryBrowser.navigate(mount.id, ''); return row;
+          const glyph = text('span', '', 'source-thumb library-folder-icon'); glyph.innerHTML = icon('libraryVolume');
+          const info = text('span', '', 'source-info'); info.append(text('span', mount.name, 'filename'));
+          info.append(text('span', storageText(mount), 'source-meta'));
+          row.append(glyph, info); row.onclick = () => libraryBrowser.navigate(mount.id, '');
+          fileMenu.registerMount(row, mount.id); return row;
         }, mountsRows);
         if (!mounts.length) reuse('mounts-empty', query, () => text('p', query ? t(msg('sources.noMatch', '没有匹配的片源'))
           : t(msg('libraryBrowser.noMounts', '暂无挂载的媒体库')), 'panel-empty'), mountsRows);
@@ -599,7 +596,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
           : t(msg('sources.emptyDirectory', '当前目录没有片源')), 'panel-empty'));
       }
       reconcile(list, rows);
-      syncActions(list, items);
+      syncRowAvailability(list, items);
       const localList = $('local-list');
       $('local-sources').hidden = local.length === 0;
       $('local-sources-heading').textContent = local.length ? t(msg("sources.localFilesCount", "本地文件（{n}）"), { n: local.length }) : t(msg("sources.localFiles", "本地文件"));
@@ -613,7 +610,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
       }
       localRows.forEach((row, index) => { if (localList.children[index] !== row) localList.insertBefore(row, localList.children[index] ?? null); });
       while (localList.children.length > localRows.length) localList.lastElementChild!.remove();
-      syncActions(localList, local);
+      syncRowAvailability(localList, local);
     }
     renderStartLibrary();
     scrollbar.update();
@@ -754,14 +751,18 @@ export function createSourcesPane(shared: WorkbenchShared) {
   /** Relabel cached nodes in place; keep row focus and event handlers. */
   function localize() {
     function patch(row: HTMLElement, fresh: HTMLElement) {
-      const attrs = ['aria-label', 'title', 'data-tooltip'];
+      const attrs = ['aria-label', 'title', 'data-tooltip', 'aria-disabled'];
       for (const attr of attrs) if (fresh.hasAttribute(attr)) row.setAttribute(attr, fresh.getAttribute(attr)!);
-      for (const selector of ['.source-meta', '.filename', '.source-actions > button']) {
+      const remove = row.querySelector('.source-remove'), translatedRemove = fresh.querySelector('.source-remove');
+      if (remove && translatedRemove) remove.setAttribute('aria-label', translatedRemove.getAttribute('aria-label')!);
+      const opener = row.querySelector('.source-open');
+      if (opener && fresh.querySelector('.source-open')) for (const attr of ['aria-label','data-tooltip']) opener.setAttribute(attr, fresh.querySelector('.source-open')!.getAttribute(attr)!);
+      for (const selector of ['.source-meta:not(.source-meta-columns)', '.source-meta-origin', '.source-meta-time', '.source-size-value', '.filename']) {
         const translated = fresh.querySelectorAll<HTMLElement>(selector);
         row.querySelectorAll<HTMLElement>(selector).forEach((node,index) => {
           const copy = translated[index]; if (!copy) return;
           for (const attr of attrs) if (copy.hasAttribute(attr)) node.setAttribute(attr,copy.getAttribute(attr)!);
-          if (selector !== '.source-actions > button') node.textContent = copy.textContent;
+          node.textContent = copy.textContent;
         });
       }
     }
@@ -769,7 +770,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     for(const row of document.querySelectorAll<HTMLElement>('.source-row[data-source-key], .start-recent-row[data-source-key]')) {
       const item=items.get(row.dataset.sourceKey!); if(item)patch(row,row.classList.contains('start-recent-row')?startRow(item,true):sourceRow(item,true));
     }
-    mountsGroup.section.querySelector('.source-group-label')!.textContent = t(msg('libraryBrowser.library', '媒体库'));
+    mountsGroup.section.querySelector('.source-group-label')!.textContent = t(msg('sources.mountList', '库列表'));
     recentGroup.section.querySelector('.source-group-label')!.textContent = t(msg('shell.recentlyOpened', '最近打开'));
     const home=libraryBrowser.isRoot(),query=libraryBrowser.filter();
     for (const empty of $('source-list').querySelectorAll<HTMLElement>('.panel-empty')) {
@@ -784,9 +785,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
       row.setAttribute('aria-label', row.classList.contains('library-mount') ? t(msg('libraryBrowser.openMount', '打开媒体库：{name}'), {name})
         : t(msg("sources.openFolder", "打开目录：{name}"),{name}));
       const meta=row.querySelector('.source-meta');
-      if (meta && row.classList.contains('library-mount')) meta.textContent = libraryBrowser.page()?.roots.find(root => root.id === row.dataset.rootId)?.state === 'offline'
-        ? t(msg('sources.storageOffline', '存储离线')) : t(msg('libraryBrowser.library', '媒体库'));
-      else if(meta)meta.textContent=t(msg("sources.folderMetaLibrary", "媒体库 · {root}"),{root:libraryBrowser.page()?.roots.find(root=>root.id===row.dataset.rootId)?.name??''});
+      if (meta && row.classList.contains('library-mount')) meta.textContent = storageText(libraryBrowser.page()?.roots.find(root => root.id === row.dataset.rootId));
     }
     sourceSignature = ''; // Reuses unchanged rows and updates source heading/count/status controls.
     refreshIdentity();

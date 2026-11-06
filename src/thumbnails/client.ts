@@ -18,33 +18,71 @@ export interface ThumbnailStatus {
   height?: number;
 }
 
+export type ThumbnailImageOptions = { visibilityTarget?: Element; retainWhileHidden?: boolean };
+
 const objectUrls = new ThumbnailUrlCache();
-const images = new Map<HTMLImageElement, { key: string; serverUrl?: string; url?: string; visible: boolean }>();
+const images = new Map<HTMLImageElement, { key: string; serverUrl?: string; url?: string; visible: boolean; target: Element; retainWhileHidden: boolean }>();
+const imageTargets = new Map<Element, HTMLImageElement>();
 let imageObserver: IntersectionObserver | undefined;
 let mutationObserver: MutationObserver | undefined;
-function observeImage(img: HTMLImageElement, key: string, serverUrl?: string) {
-  const previous = images.get(img);
-  if (previous && previous.key === key) { previous.serverUrl = serverUrl; return; }
-  if (previous?.url) objectUrls.release(previous.url);
-  images.set(img, { key, serverUrl, visible: true });
+const preparedImages = new WeakSet<HTMLImageElement>();
+function concealImage(img: HTMLImageElement) {
+  img.style.visibility = 'hidden'; delete img.dataset.thumbDecoded;
+}
+function prepareImage(img: HTMLImageElement) {
+  if (preparedImages.has(img)) return;
+  preparedImages.add(img); concealImage(img);
+  img.addEventListener('error', () => { if (!img.naturalWidth) concealImage(img); });
+  img.addEventListener('load', () => {
+    const source = img.getAttribute('src');
+    if (!source) return;
+    void img.decode().then(() => {
+      if (!images.has(img) || img.getAttribute('src') !== source || !img.naturalWidth) return;
+      img.dataset.thumbDecoded = 'true'; img.style.visibility = '';
+    }).catch(() => { if (img.getAttribute('src') === source) concealImage(img); });
+  });
+}
+function assignImageUrl(img: HTMLImageElement, url: string) {
+  if (img.getAttribute('src') === url) return;
+  concealImage(img); img.src = url;
+}
+function observeImage(img: HTMLImageElement, key: string, serverUrl?: string, options?: ThumbnailImageOptions) {
+  prepareImage(img);
+  const previous = images.get(img), target = options?.visibilityTarget ?? previous?.target ?? img;
+  const retainWhileHidden = options?.retainWhileHidden ?? previous?.retainWhileHidden ?? false;
+  if (previous && previous.key === key && previous.target === target) {
+    previous.serverUrl = serverUrl; previous.retainWhileHidden = retainWhileHidden; return;
+  }
+  if (previous) {
+    if (previous.url) objectUrls.release(previous.url);
+    imageObserver?.unobserve(previous.target);
+    imageTargets.delete(previous.target);
+  }
+  images.set(img, { key, serverUrl, visible: true, target, retainWhileHidden });
+  imageTargets.set(target, img);
   imageObserver ??= typeof IntersectionObserver === 'undefined' ? undefined : new IntersectionObserver(entries => {
     for (const entry of entries) {
-      const image = entry.target as HTMLImageElement, record = images.get(image);
+      const image = imageTargets.get(entry.target);
+      if (!image) continue;
+      const record = images.get(image);
       if (!record) continue;
       record.visible = entry.isIntersecting;
       if (record.visible) fillThumbnailImage(image, record.key, record.serverUrl);
-      else {
+      else if (!record.retainWhileHidden) {
         if (record.url) objectUrls.release(record.url);
-        record.url = undefined; image.removeAttribute('src'); image.dataset.thumbSrc = '';
+        record.url = undefined; concealImage(image); image.removeAttribute('src'); image.dataset.thumbSrc = '';
       }
     }
   }, { rootMargin: '100px' });
-  imageObserver?.observe(img);
+  imageObserver?.observe(target);
   if (!mutationObserver && typeof MutationObserver !== 'undefined') {
     mutationObserver = new MutationObserver(() => {
       for (const [image, record] of images) if (!image.isConnected) {
         if (record.url) objectUrls.release(record.url);
-        imageObserver?.unobserve(image); images.delete(image);
+        imageObserver?.unobserve(record.target);
+        imageTargets.delete(record.target);
+        images.delete(image);
+        concealImage(image); image.removeAttribute('src'); image.dataset.thumbSrc = '';
       }
       objectUrls.trim();
     });
@@ -59,7 +97,7 @@ function showObjectUrl(img: HTMLImageElement, url: string) {
     if (record.url) objectUrls.release(record.url);
     record.url = url;
   }
-  img.dataset.thumbSrc = url; img.src = url;
+  img.dataset.thumbSrc = url; assignImageUrl(img, url);
 }
 
 const listeners = new Set<(key: string) => void>();
@@ -102,7 +140,7 @@ export function publishLocalThumbnail(key: string, blob: Blob): string {
 
 export function releaseThumbnailUrls() {
   imageObserver?.disconnect(); mutationObserver?.disconnect();
-  imageObserver = undefined; mutationObserver = undefined; images.clear();
+  imageObserver = undefined; mutationObserver = undefined; images.clear(); imageTargets.clear();
   objectUrls.clear();
 }
 
@@ -223,9 +261,13 @@ export async function uploadThumbnail(upload: ThumbnailUpload): Promise<UploadOu
  * placeholder so late fills never shift layout. Patches only when the element
  * still shows the same key. Single-write: server and local never both assign,
  * so the image does not flash server -> local on every first render.
+ * A per-image fixed-size visibility target survives Chromium dropping the
+ * layout box of a lazy, src-less image after a details group is closed.
+ * retainWhileHidden keeps loaded pixels/URLs for the mounted row lifetime,
+ * trading memory for fold/scroll continuity; removal still releases the image.
  */
-export function fillThumbnailImage(img: HTMLImageElement, key: string, serverUrl?: string): void {
-  observeImage(img, key, serverUrl);
+export function fillThumbnailImage(img: HTMLImageElement, key: string, serverUrl?: string, options?: ThumbnailImageOptions): void {
+  observeImage(img, key, serverUrl, options);
   if (!images.get(img)?.visible) return;
   if (img.dataset.thumbKey === key && img.dataset.thumbSrc && (
     img.dataset.thumbSrc === objectUrls.get(key) ||
@@ -261,7 +303,7 @@ export function fillThumbnailImage(img: HTMLImageElement, key: string, serverUrl
         img.onerror = null; showObjectUrl(img, url);
       });
     };
-    if (img.getAttribute('src') !== serverUrl) img.src = serverUrl;
+    assignImageUrl(img, serverUrl);
     return;
   }
   void getLocalThumbnail(key).then(stored => {

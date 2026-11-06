@@ -15,8 +15,11 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
     try { initial = parseLibraryLocationLink(location.href, location.href); } catch { /* Ignore malformed startup links. */ }
   }
   let root = initial.all ? '' : initial.root, directory = initial.all ? '' : initial.directory;
+  let publishedRoot = root;
   let page: LibraryPage | null = null, roots: LibraryRoot[] = [], search = '', appliedSearch = '';
   let request: AbortController | undefined, sequence = 0, loading = false, pendingSearch = false;
+  type Location = { root: string; directory: string; search: string };
+  let history: Location[] = [{root,directory,search}], historyIndex = 0;
   let pathSignature = '', appliedScope = '', searchTimer: ReturnType<typeof setTimeout> | undefined;
   const cadence = new PollingCadence(3000);
   const list = document.getElementById('source-list')!, tools = document.getElementById('source-tools')!;
@@ -24,8 +27,10 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
   const address = document.createElement('input'); address.id = 'library-location'; address.className = 'library-location';
   address.type = 'search'; address.autocomplete = 'off'; address.spellcheck = false;
   nav.append(address);
-  const back = createIconButton({ glyph: 'caretLeft', label: t(msg('libraryBrowser.goUp', '返回上一级')), className: 'crumbs-back' });
-  tools.replaceChildren(back, nav);
+  const back = createIconButton({ glyph: 'caretLeft', label: t(msg('libraryBrowser.goBack', '后退')), className: 'crumbs-back', attributes:{'data-tooltip-suppressed':''} });
+  const forward = createIconButton({ glyph: 'caretRight', label: t(msg('libraryBrowser.goForward', '前进')), className: 'crumbs-forward', attributes:{'data-tooltip-suppressed':''} });
+  const historyControls = document.createElement('div'); historyControls.className = 'library-history';
+  historyControls.append(back, forward); tools.replaceChildren(historyControls, nav);
   const pathbar = document.createElement('nav'); pathbar.id = 'library-pathbar'; pathbar.className = 'library-pathbar';
   document.getElementById('source-foot')!.prepend(pathbar);
   pathbar.addEventListener('click', event => {
@@ -75,10 +80,10 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
   function renderPathbar() {
     pathbar.setAttribute('aria-label', t(msg('libraryBrowser.pathLabel', '媒体库路径')));
     const crumbs: { label: string; glyph: Parameters<typeof icon>[0]; root: string; directory: string }[] = [
-      { label: t(msg('libraryBrowser.library', '媒体库')), glyph: 'storage', root: '', directory: '' },
+      { label: t(msg('libraryBrowser.library', '媒体库')), glyph: 'film', root: '', directory: '' },
     ];
     if (root) {
-      crumbs.push({ label: roots.find(item => item.id === root)?.name ?? root, glyph: 'storage', root, directory: '' });
+      crumbs.push({ label: roots.find(item => item.id === root)?.name ?? root, glyph: 'libraryVolume', root, directory: '' });
       const parts = directory.split('/').filter(Boolean);
       for (const [index, label] of parts.entries()) crumbs.push({ label, glyph: 'open', root, directory: parts.slice(0, index + 1).join('/') });
     }
@@ -88,25 +93,37 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
     const trail = document.createElement('ol');
     for (const [index, crumb] of crumbs.entries()) {
       const entry = document.createElement('li');
+      const part = document.createElement('button'); part.type = 'button'; part.className = 'library-path-item';
+      part.dataset.root = crumb.root; part.dataset.directory = crumb.directory; part.dataset.kind = crumb.glyph === 'open' ? 'folder' : 'library';
+      part.dataset.tooltipSuppressed = ''; part.innerHTML = icon(crumb.glyph); part.setAttribute('aria-haspopup', 'menu');
       if (index) {
         const separator = document.createElement('span'); separator.className = 'library-path-separator';
-        separator.setAttribute('aria-hidden', 'true'); separator.innerHTML = icon('caretRight'); entry.append(separator);
+        separator.setAttribute('aria-hidden', 'true'); separator.innerHTML = icon('pathSeparator'); part.prepend(separator);
       }
-      const part = document.createElement('button'); part.type = 'button'; part.className = 'library-path-item';
-      part.dataset.root = crumb.root; part.dataset.directory = crumb.directory; part.dataset.kind = crumb.glyph === 'storage' ? 'library' : 'folder';
-      part.dataset.tooltip = crumb.label; part.innerHTML = icon(crumb.glyph); part.setAttribute('aria-haspopup', 'menu');
       if (index === crumbs.length - 1) part.setAttribute('aria-current', 'location');
       const label = document.createElement('span'); label.className = 'library-path-label'; label.textContent = crumb.label;
       part.append(label); entry.append(part); trail.append(entry);
     }
     pathbar.replaceChildren(trail); pathbar.scrollLeft = pathbar.scrollWidth;
   }
-  back.onclick = () => {
-    if (directory) navigate(root, directory.includes('/') ? directory.slice(0, directory.lastIndexOf('/')) : '');
-    else if (root) navigate('', '');
-  };
+  const currentLocation = (): Location => ({root,directory,search});
+  function rememberNavigation(next: Location) {
+    history[historyIndex] = currentLocation();
+    if (JSON.stringify(history[historyIndex]) === JSON.stringify(next)) return;
+    history.splice(historyIndex + 1); history.push(next); historyIndex++;
+    if (history.length > 100) {history.shift(); historyIndex--;}
+  }
+  function traverse(delta: number) {
+    const next = historyIndex + delta;
+    if (next < 0 || next >= history.length) return;
+    history[historyIndex] = currentLocation(); historyIndex = next;
+    ({root,directory,search} = history[historyIndex]); address.value = search; reset();
+  }
+  back.onclick = () => traverse(-1);
+  forward.onclick = () => traverse(1);
   function controls() {
-    back.disabled = !root;
+    back.disabled = historyIndex === 0;
+    forward.disabled = historyIndex === history.length - 1;
     address.setAttribute('aria-label', t(msg('libraryBrowser.locationLabel', '搜索当前目录或输入媒体库路径')));
     address.placeholder = t(msg('libraryBrowser.searchUnder', '{scope} 下搜索'), { scope: displayName() });
     if (document.activeElement !== address) address.value = search || displayName();
@@ -119,6 +136,7 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
     const scope = JSON.stringify([root, directory, search]);
     resetView ||= scope !== appliedScope;
     const ticket = ++sequence; request?.abort(); request = new AbortController(); loading = true; controls();
+    let published = false;
     const previous = page, targetCount = resetView ? 60 : Math.max(60, previous?.entries.length ?? 0, previous?.directories.length ?? 0);
     const abort = AbortSignal.any([signal, request.signal, AbortSignal.timeout(10000)]);
     try {
@@ -137,7 +155,7 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
         value = { ...value, entries: [...value.entries, ...more.entries], directories: [...value.directories, ...more.directories], nextOffset: more.nextOffset };
       }
       if (ticket !== sequence || signal.aborted) return;
-      page = value; roots = value.roots; appliedSearch = search; appliedScope = scope;
+      page = value; roots = value.roots; appliedSearch = search; appliedScope = scope; publishedRoot = root; published = true;
       cadence.observe([scope, page.revision, page.thumbnailEpoch, page.entries.length, page.roots.map(r => [r.id, r.state, r.error])],
         page.scanning || page.entries.some(entry => entry.state === 'pending'));
     } catch (error) {
@@ -146,23 +164,25 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
     } finally {
       if (ticket === sequence && !signal.aborted) {
         loading = false; render();
+        if (published && resetView) onScope?.(!publishedRoot);
         if (resetView) list.scrollTop = 0;
         requestAnimationFrame(more);
       }
     }
   }
   function more() {
-    if (root && !loading && !pendingSearch && page?.nextOffset != null && list.clientHeight > 0
+    if (root && appliedScope === JSON.stringify([root,directory,search]) && !loading && !pendingSearch && page?.nextOffset != null && list.clientHeight > 0
       && list.scrollHeight - list.scrollTop - list.clientHeight < 180) void load(true);
   }
   function reset() { void load(false, true); }
   function navigate(id: string, path: string) {
-    root = id; directory = path; search = ''; address.value = ''; reset(); onScope?.(!root);
+    rememberNavigation({root:id,directory:path,search:''});
+    root = id; directory = path; search = ''; address.value = ''; reset();
   }
   function searchFor(value: string) {
     value = value.trim();
     if (value === search) { controls(); return; }
-    search = value; clearTimeout(searchTimer); request?.abort(); sequence++; loading = false;
+    search = value; history[historyIndex] = currentLocation(); clearTimeout(searchTimer); request?.abort(); sequence++; loading = false;
     if (!root) { appliedSearch = search; pendingSearch = false; render(); return; }
     pendingSearch = true; controls(); searchTimer = setTimeout(reset, 200);
   }
@@ -175,7 +195,9 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
   document.addEventListener('visibilitychange', () => { if (!document.hidden) cadence.reset(); }, { signal });
   const stopLanguage = onLanguageChange(() => {
     if (signal.aborted) return;
-    const label = t(msg('libraryBrowser.goUp', '返回上一级')); back.setAttribute('aria-label', label); back.dataset.tooltip = label;
+    for (const [button,label] of [[back,t(msg('libraryBrowser.goBack', '后退'))],[forward,t(msg('libraryBrowser.goForward', '前进'))]] as const) {
+      button.setAttribute('aria-label', label); button.dataset.tooltip = label;
+    }
     controls();
   }, signal);
   signal.addEventListener('abort', () => {
@@ -190,8 +212,9 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
       root = state.all || state.recent ? '' : state.root;
       directory = root ? state.directory : '';
       search = state.recent ? state.query ?? state.search : state.search;
-      page = null; appliedScope = ''; appliedSearch = search; pendingSearch = false;
-      address.value = search; render(); await load(false, true);
+      appliedScope = ''; pendingSearch = false;
+      history = [currentLocation()]; historyIndex = 0;
+      address.value = search; await load(false, true);
     },
     async reveal(entry: LibraryEntry) {
       const targetRoot = entry.rootId ?? '';
@@ -200,6 +223,7 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
       if (!!root && search === '' && appliedSearch === '' && page?.entries.some(item => item.id === entry.id)) return true;
       const sameScope = root === targetRoot && directory === targetDir && search === '' && appliedSearch === '' && !!page;
       clearTimeout(searchTimer); request?.abort(); sequence++;
+      rememberNavigation({root:targetRoot,directory:targetDir,search:''});
       root = targetRoot; directory = targetDir;
       search = ''; address.value = ''; pendingSearch = false;
       // Keep the current page visible until the new one publishes: no
@@ -218,7 +242,7 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
       } while ((page as LibraryPage | null)?.nextOffset != null);
       return false;
     },
-    navigate, page: () => page, filter: () => appliedSearch, isRoot: () => !root,
+    navigate, page: () => page, filter: () => appliedSearch, isRoot: () => !publishedRoot,
     load: () => load(),
     clearSearch() { address.value = ''; searchFor(''); },
   };

@@ -57,3 +57,5 @@ Explicit `/candidates` policy `{space,minScore,limit,scale,cellThreshold,text,se
 逐任务/逐操作的版本化发现、冷启动评分分层指南和可运行普通 HTTP 示例见 [冷启动评分](agent-quality-workflow.md)。入口兼容，质量首页分别选择 single/range/VMAF；元数据、质量缓存及分析 core 就绪不混称。示例默认只读，各类写入须显式授权，未知响应只重放原 actor/body/key。
 
 CAMBI stopped failed/interrupted/cancelled jobs now share the explicit `/jobs/{id}/reexecution-plan` → exact full-cost confirmation → `/jobs/{id}/reexecutions` protocol. No partial state, reference/C plan, automatic preparation or publication is introduced. Missing historical single-source execution witness or changed source/cache/producer/core/AU selection/component/recipe requires new intent. The same actor/body/key resolves the unique successor receipt before drift/result lookup; the metric GUI and task center expose the same lineage. See [single-source execution conditions and cumulative budgets](explicit-quality-reexecution.md#single-source-cambi-extension).
+
+`GET /api/library/roots/{rootId}/location` 按已配置的根 ID 返回 `{absolutePath}`，用于库列表显式拷贝挂载路径。返回配置的绝对目录，不访问文件系统或启动扫描；离线库仍可查询挂载位置。未知根为 404，非 GET 为 405。
