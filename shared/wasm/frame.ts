@@ -2,9 +2,14 @@ import { MediaOpenError } from '../media/io/media-errors.ts';
 import { ffmpegColorInfo } from '../media/ffmpeg-color.ts';
 import { rgbaDescription, validateDescription } from '../media/frame-description.ts';
 import type { FrameDescription } from '../media/frame-description.ts';
+import { copyPixelPlane } from './pixels.ts';
 export type WasmFrameOutput = { pts: number; duration: number; description: FrameDescription; pixels: ArrayBuffer; picture?: {au: number; stream: string; configuration: number} };
 export function requireFrameAbi(core: any): void {
   if (typeof core._vp_frame_info!=='function' || typeof core._vp_frame_format!=='function') throw new MediaOpenError('decode','WASM core 缺少完整帧描述接口，请同步当前锁定版本。');
+  if (typeof core._vp_frame_plane_abi !== 'function' || core._vp_frame_plane_abi() !== 1 ||
+    typeof core._vp_frame_plane_data !== 'function' || typeof core._vp_frame_plane_stride !== 'function') {
+    throw new MediaOpenError('decode', 'WASM core 缺少借用平面接口，请同步当前锁定版本。');
+  }
 }
 /** Copy descriptor and exactly its valid pixels before any further decode call. */
 export function readWasmFrame(core: any, heap: () => Uint8Array, ctx: number, recycle?: ArrayBuffer): WasmFrameOutput {
@@ -41,16 +46,21 @@ export function readWasmFrame(core: any, heap: () => Uint8Array, ctx: number, re
   }
   description.sourcePixelFormat=core.ccall('vp_frame_format','string',['number'],[ctx])||null;
   validateDescription(description,description.byteLength);
-  const pixelPtr=core.ccall('vp_pixels','pointer',['number'],[ctx]),len=description.byteLength;
-  const pixels=heap(); // ccall(string) can grow memory; refresh the view.
-  if(!Number.isSafeInteger(pixelPtr)||pixelPtr<=0||pixelPtr+storageBytes>pixels.byteLength)throw new MediaOpenError('decode','WASM 输出像素范围越界。');
+  const len=description.byteLength;
   const out=recycle?.byteLength===len?new Uint8Array(recycle):new Uint8Array(len);
-  if(layout===0 && (x||y||description.width!==width||description.height!==height)) {
-    for(let row=0;row<description.height;row++) {
-      const start=pixelPtr+(y+row)*storageStride+x*4;
-      out.set(pixels.subarray(start,start+description.stride!),row*description.stride!);
+  if (layout !== 0 && typeof core._vp_frame_plane_abi === 'function' && core._vp_frame_plane_abi() === 1) {
+    for (const [i,p] of description.yuv!.planes.entries()) {
+      const pointer = core._vp_frame_plane_data(ctx, i) >>> 0, stride = core._vp_frame_plane_stride(ctx, i);
+      if (!pointer) throw new MediaOpenError('decode', 'WASM 输出像素平面指针无效。');
+      copyPixelPlane(heap(), pointer, stride, out, p.offset, p.stride, p.stride, p.height);
     }
-  } else out.set(pixels.subarray(pixelPtr,pixelPtr+len));
+  } else {
+    const pixelPtr=core.ccall('vp_pixels','pointer',['number'],[ctx]);
+    const pixels=heap(); // Both string calls and lazy RGBA conversion can grow memory.
+    if(!Number.isSafeInteger(pixelPtr)||pixelPtr<=0||pixelPtr+storageBytes>pixels.byteLength)throw new MediaOpenError('decode','WASM 输出像素范围越界。');
+    copyPixelPlane(pixels, pixelPtr + (layout === 0 ? y * storageStride + x * 4 : 0), layout === 0 ? storageStride : len,
+      out, 0, layout === 0 ? description.stride! : len, layout === 0 ? description.stride! : len, layout === 0 ? description.height : 1);
+  }
   let picture: WasmFrameOutput['picture'];
   if (typeof core._vp_picture_info === 'function' && typeof core._vp_picture_abi_version === 'function' && core._vp_picture_abi_version() === 1) {
     const id = core._vp_picture_info(ctx) >>> 0;

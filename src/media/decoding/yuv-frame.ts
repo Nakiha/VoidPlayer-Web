@@ -1,4 +1,5 @@
 import { needsNativeFrameResource } from '../policy/frame-resources.ts';
+import { sharePixelFrame } from './pixel-frame.ts';
 import { getColorMode } from '../policy/color-mode.ts';
 import type { DecodedFrame } from '../contract.ts';
 import { resolveYuvColor, validateYuv } from '../../../shared/color/yuv-color.ts';
@@ -43,7 +44,7 @@ export async function prepareYuvFrame(frame: DecodedFrame, pool?:ReturnType<type
     const rotation=frame.sample.rotation;
     if(!preserveNativeSample)frame.close();
     let closed=false;
-    return {...frame,rotation,sample:preserveNativeSample?frame.sample:undefined,kind:'yuv',description,pixels,copyMs:performance.now()-start,byteSize:(preserveNativeSample?frame.byteSize:0)+pixels.byteLength,close(){if(closed)return;closed=true;if(preserveNativeSample)frame.close();pool?.release(pixels.buffer);}};
+    return sharePixelFrame({...frame,rotation,sample:preserveNativeSample?frame.sample:undefined,kind:'yuv',description,pixels,copyMs:performance.now()-start,byteSize:(preserveNativeSample?frame.byteSize:0)+pixels.byteLength,close(){if(closed)return;closed=true;if(preserveNativeSample)frame.close();pool?.release(pixels.buffer);}});
   } catch(error) {
     if(error instanceof Error && error.name==='NotSupportedError')return fallback('copyTo-not-supported');
     frame.close(); throw error;

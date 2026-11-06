@@ -165,8 +165,17 @@ packet 和 FFmpeg 容器统一调用 `readWasmFrame`，同一 ArrayBuffer 跨 wo
 不通过 swscale 降为 RGBA 后伪称保留高精度；不支持的布局/色彩才走标明的 RGBA 回退。
 当前锁定版本以 [`scripts/release-core.json`](../scripts/release-core.json) 为准（HDR 解码说明见 [HDR 支持](hdr-support.md)）。core 支持明确 BT.2020 NCL、BT.2020 primaries、至少 10-bit 的 PQ/HLG 原始平面；前端还要求实际 range 明确。HDR 使用独立传递函数，不套 SDR gamma。布局/色彩不满足条件仍显式 RGBA 回退，不将其标为已管理 HDR。
 
-core 每行复制有效字节，去掉 padding，支持负 linesize。descriptor 与缓冲只在下次输出/reset/destroy 前有效。
-Web 在下一次解码前独立复制，验证范围、尺寸、stride、位深及平面非重叠；字符串 ccall 可能增长 heap，描述必须先读完，再刷新像素 heap 视图。
+借用平面 ABI 1（`vp_frame_plane_abi/data/stride`）直接暴露当前 AVFrame 各平面指针与有符号 linesize；
+160 字节 descriptor 继续描述紧凑输出的 offset/stride/长度。Web 将有效行直接写入独立可 transfer 的缓冲，
+同时处理 padding 和负 linesize，不先在 WASM 内压紧一次。连续平面只做一次批量复制。
+descriptor 与借用平面仅在下次 receive/extract/reset/destroy 前有效，不能跨下一次解码持有视图；
+字符串 ccall 可能增长 heap，描述先读完，再刷新像素 heap 视图。生产加载要求此附加 ABI，缺少时明确拒绝。
+旧 `vp_pixels` 紧凑接口保留为按需兼容出口；未被请求的帧不生成中转像素，RGBA 回退也只在请求像素时转换。
+
+页面像素帧提供独立可关闭的 `retain()` 读句柄，共享不可修改的同一缓冲，最后一个持有者关闭后才进入源缓冲池。
+presenter 用它保留截图、暂停重绘与 GPU 恢复所需的当前帧，不每次 paint 再 `.slice()`；未知所有权的外来帧仍独立复制。
+原生 VideoSample 保留 clone/close 生命周期。WebGPU 四字节对齐只复制末尾不足四字节，WebGL 缺少最后一行 padding
+时分别上传完整行与最后有效行，不创建整帧或整平面的补齐中转。
 
 MP4 包解码保留完整 coded 平面及非零 crop 原点，不让 libavcodec 自动对齐裁剪丢掉坐标。YUV 继续由呈现器按 visibleRect 采样；RGBA 在复制 WASM 输出时只打包可见行，同时保留 coded/visible 元数据。显示 SAR 与 0/90/180/270° 旋转只用于呈现，RGBA 存储尺寸不随显示比例膨胀。
 

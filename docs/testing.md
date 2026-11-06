@@ -463,3 +463,10 @@ A prepared receipt hashes every entry's actual bytes, including `quality.html`;
 source archives and already-dirty checkouts must reject a stale receipt after any
 entry change. `test-runner.test.mjs` exercises real preparation/reuse/rejection and
 rebuild for each HTML entry, without relying on Git's dirty marker.
+
+像素传递回归扩充已有职责用例，不新增套件或媒体矩阵：`frame-description.test.ts` 以会拒绝旧 `vp_pixels`
+的替身保留修复前失败，独立核对 padding、负 stride、heap 增长、越界及复用输出；`gpu-presentation-guard.test.ts`
+核对同一像素缓冲和最后持有者回收；`yuv-color.test.ts` 核对 GPU 对齐尾部和最后一行无需整平面补齐。
+这些是无需浏览器/core 的常数成本逻辑检查。`analysis-quality-core.test.ts` 仅新增一帧 CAMBI 上传计数，
+禁止申请紧凑 staging 或调用旧 feed，要求精确上传一份输入；原有官方分数、热图、ROI、8/10-bit 与连续历史
+对照继续承担数值正确性，未扩充循环或重新生成 oracle。播放路径改动另跑实际播放 bench，结果仅代表本机同条件。

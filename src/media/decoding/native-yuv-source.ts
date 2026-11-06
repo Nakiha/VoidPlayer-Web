@@ -1,4 +1,5 @@
 import type {DecodedFrame,MediaSource} from '../contract.ts';
+import { sharePixelFrame } from './pixel-frame.ts';
 import {MediaOpenError} from '../../../shared/media/io/media-errors.ts';
 import {chromaOffset,resolveYuvColor,validateYuv,yuvSample,visibleChromaBounds} from '../../../shared/color/yuv-color.ts';
 import { hdrTransfer } from '../../../shared/color/hdr-policy.ts';
@@ -125,8 +126,8 @@ export function nativeYuvSource(source:MediaSource,depth:number,chromaLocation:n
       const description=reply.description;
       assertActive();
       let closed=false;
-      return {...frame,sample:undefined,rotation,kind:'yuv',description,pixels,byteSize:pixels.byteLength,copyMs:performance.now()-start,
-        close(){if(closed)return;closed=true;if(!terminal()&&!slot.buffer)slot.buffer=reply.buffer;}};
+      return sharePixelFrame({...frame,sample:undefined,rotation,kind:'yuv',description,pixels,byteSize:pixels.byteLength,copyMs:performance.now()-start,
+        close(){if(closed)return;closed=true;if(!terminal()&&!slot.buffer)slot.buffer=reply.buffer;}});
     }catch(error){closeSample();throw error;}
     finally{resource?.close();release(slot);}
   }

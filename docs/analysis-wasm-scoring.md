@@ -11,6 +11,12 @@ HTTP、结果与证据语义；历史修复、失败和实测在 [收敛记录](
 
 VMAF/CAMBI 通过既有分析产物的 `vpa_quality_*` ABI 1 接收像素；
 XPSNR 使用同一产物的 `vpa_xpsnr_*` ABI 1。
+两者另要求 direct-input ABI 1（`vpa_quality_input_abi` / `vpa_xpsnr_input_abi`）。
+prepare 只允许一个待提交输入；宿主通过各平面 data/stride 直接写入最终评分存储，commit 后指针立即失效，
+中途失败或取消由 close 释放尚未提交的输入。没有 JS 紧凑 staging 到 libvmaf picture 的第二次复制。
+CAMBI 的同一源帧只上传一次，两侧持有同一 libvmaf picture 的独立引用，不复制第二份像素。
+XPSNR 直接写算法的 uint16 sample 缓冲，8-bit 上传同时拓宽，10-bit 保留 little-endian 原值；
+提交仍逐样本检查输入域，reference-first、历史、池化与 flush 均不变。旧 packed feed 只保留 ABI 兼容。
 没有第三个产品 core，没有 avfilter、评分 CLI 或临时原始 YUV 文件。
 播放产物在独立后台 Worker 中解码，不访问页面播放实例。PSNR/SSIM 保留
 共享像素实现；两端选择、色彩、ROI 和源证据相同。

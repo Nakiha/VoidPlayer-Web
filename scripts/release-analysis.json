@@ -1,6 +1,6 @@
 {
   "repository": "Nakiha/VoidPlayer-FFmpeg-Build",
-  "revision": "45a5e8d8237f48ad434147b4f3d99923c1037d91",
+  "revision": "282acc4e2896f98606206659f72ac8d401fb6f8a",
   "ffmpegRepository": "Nakiha/FFmpeg",
   "ffmpegRevision": "fcc666d4605f348a94f05ec87799b56d4ebd0ba2",
   "emscripten": "6.0.9",
@@ -18,5 +18,7 @@
   "vmafRevision": "17a67b238ce0539bdeafdc95961abac64fa16ea8",
   "xpsnrAbi": 1,
   "xpsnrRevision": "8998a1a670c81a04d144c36f9e2d3aa680c10720",
-  "xpsnrFilterSha256": "4b59b32eb4a501ac74f6d767a916ef1a29833e1895b150cfa96b8e4ffb91f3d7"
+  "xpsnrFilterSha256": "4b59b32eb4a501ac74f6d767a916ef1a29833e1895b150cfa96b8e4ffb91f3d7",
+  "qualityInputAbi": 1,
+  "xpsnrInputAbi": 1
 }

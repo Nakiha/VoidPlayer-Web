@@ -100,14 +100,22 @@ export function createYuvSurface(gl: WebGLRenderingContext) {
         const textureWidth=p.stride/channels;
         const format=channels===4?gl.RGBA:channels===2?gl.LUMINANCE_ALPHA:gl.LUMINANCE;
         const length=p.stride*p.height;
-        let data=new Uint8Array(pixels.buffer,pixels.byteOffset+p.offset,Math.min(length,pixels.byteLength-p.offset));
-        if(data.length<length){const padded=new Uint8Array(length);padded.set(data);data=padded;}
+        const data=new Uint8Array(pixels.buffer,pixels.byteOffset+p.offset,Math.min(length,pixels.byteLength-p.offset));
         gl.activeTexture(gl.TEXTURE1+i);gl.bindTexture(gl.TEXTURE_2D,textures[l.semiplanar&&i===2?1:i]);
         gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
         if(!(l.semiplanar&&i===2)){
-          if(sizes[i][0]===textureWidth && sizes[i][1]===p.height && sizes[i][2]===format)gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,textureWidth,p.height,format,gl.UNSIGNED_BYTE,data);
-          else {gl.texImage2D(gl.TEXTURE_2D,0,format,textureWidth,p.height,0,format,gl.UNSIGNED_BYTE,data);sizes[i]=[textureWidth,p.height,format];}
+          const same=sizes[i][0]===textureWidth && sizes[i][1]===p.height && sizes[i][2]===format;
+          if(data.length===length){
+            if(same)gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,textureWidth,p.height,format,gl.UNSIGNED_BYTE,data);
+            else gl.texImage2D(gl.TEXTURE_2D,0,format,textureWidth,p.height,0,format,gl.UNSIGNED_BYTE,data);
+          }else{
+            if(!same)gl.texImage2D(gl.TEXTURE_2D,0,format,textureWidth,p.height,0,format,gl.UNSIGNED_BYTE,null);
+            if(p.height>1)gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,textureWidth,p.height-1,format,gl.UNSIGNED_BYTE,data.subarray(0,(p.height-1)*p.stride));
+            gl.texSubImage2D(gl.TEXTURE_2D,0,0,p.height-1,p.width,1,format,gl.UNSIGNED_BYTE,
+              data.subarray((p.height-1)*p.stride,(p.height-1)*p.stride+p.width*channels));
+          }
+          sizes[i]=[textureWidth,p.height,format];
         }
         const name=['Y','U','V'][i];gl.uniform1i(loc('plane'+name),i+1);gl.uniform2f(loc('shape'+name),textureWidth,p.height);
       }

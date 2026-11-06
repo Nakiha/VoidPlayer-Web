@@ -1,6 +1,6 @@
 {
   "repository": "Nakiha/VoidPlayer-FFmpeg-Build",
-  "revision": "f953818bc96a61c5dd8a535dc523723887bd9c97",
+  "revision": "282acc4e2896f98606206659f72ac8d401fb6f8a",
   "ffmpegRepository": "Nakiha/FFmpeg",
   "ffmpegRevision": "cfa90f8c0295ac24467acbc30a1dcfaedef0e279",
   "ffmpegRef": "wasm-n9.0.2-playback",
@@ -19,5 +19,6 @@
     "mpegvideo"
   ],
   "packetIdentityAbi": 1,
-  "packetIdentityCapacity": 512
+  "packetIdentityCapacity": 512,
+  "framePlaneAbi": 1
 }

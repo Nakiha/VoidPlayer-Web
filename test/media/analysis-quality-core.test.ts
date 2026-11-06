@@ -35,6 +35,28 @@ const oracle = JSON.parse(
   readFileSync("test/helpers/analysis-quality-oracle.json", "utf8"),
 );
 const hash = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
+test('direct input uploads a CAMBI source once without packed staging or legacy feed', () => {
+  const s = fixtures.cambi.find((s:any) => s.depth === 8 && s.pattern === 'banded');
+  const bytes = s.width * s.height * 3 / 2;
+  const f = frame(gunzipSync(Buffer.from(s.rawGzip, 'base64')).subarray(0,bytes),s.width,s.height,8);
+  let copied = 0;
+  const heaps = new Set<Uint8Array>();
+  const observed = new Proxy(core, {get(target,key) {
+    if (key === '_malloc' || key === '_vpa_quality_feed') return () => { throw Error('legacy scoring staging'); };
+    const value = (target as any)[key];
+    if (key === 'HEAPU8' && !heaps.has(value)) {
+      heaps.add(value);
+      value.set = function(source:Uint8Array, offset:number) { copied += source.byteLength; Uint8Array.prototype.set.call(this,source,offset); };
+    }
+    return value;
+  }});
+  const scorer = new AnalysisScorer(observed, {metrics:['cambi'],frames:1});
+  try {
+    scorer.feed(f,f,{x:0,y:0,width:s.width,height:s.height},0);
+    assert.equal(copied,bytes);
+    assert.ok(scorer.finish().cambi!.frames[0].score > 0);
+  } finally { scorer.close(); for (const heap of heaps) delete (heap as any).set; }
+});
 for(const depth of [8,10] as const)test(`CAMBI independently pooled prefix ${depth}-bit retains the official score and maps`,()=>{
  const sampleIndex=fixtures.cambi.findIndex((s:any)=>s.depth===depth&&s.pattern==='banded'),s=fixtures.cambi[sampleIndex];
  const expected=oracle.cases.find((c:any)=>c.metric==='cambi'&&!c.fixture&&c.sampleIndex===sampleIndex);

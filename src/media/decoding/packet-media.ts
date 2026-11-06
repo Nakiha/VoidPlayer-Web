@@ -1,4 +1,5 @@
 import {nativeLibraryTransport} from '../../../shared/review/native-presented-frame.ts';
+import { sharePixelFrame } from './pixel-frame.ts';
 import { JS_TS_MEDIA_INDEX_IDENTITY, JS_MATROSKA_MEDIA_INDEX_IDENTITY, FLV_MEDIA_INDEX_IDENTITY } from '../../../shared/media/indexing/media-index-identity.ts';
 import { decodeThreadsForCodec, wasmThreadMode } from '../policy/wasm-threads.ts';
 import { referenceVersion } from '../../../shared/media/io/media-reference.ts';
@@ -174,13 +175,13 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
       // tags. A platform may return an SDR-tagged resource for an HDR source.
       const description = info.color && !frame.description.sourceColor
         ? { ...frame.description, sourceColor: { ...info.color }, sourceColorOrigin: 'container' as const } : frame.description;
-      const rawFrame = { description, rotation: frame.rotation, kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8',
+      const rawFrame = sharePixelFrame({ description, rotation: frame.rotation, kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8',
         ...(nativePresentedInstance&&frame.nativePicture?{nativePresentedInput:{instance:nativePresentedInstance,sourceVersion:nativePresentedTransport!.sourceVersion,input:frame.nativePicture}}:{}),
         ...(frame.packetPicture ? { sourcePicture: { ...frame.packetPicture, sourceVersion: pictureVersion(), picture: 0 as const, layer: 0 as const, field: 'frame' as const } } : {}),
         width: frame.width, height: frame.height, ptsUs: frame.pts - info.firstPtsUs, sourcePtsUs: frame.pts,
         durationUs: frame.durationUs ?? durations[position], byteSize: frame.description.byteLength, sample, pixels,
         close() { if (closed) return; closed = true; sample?.close(); if (!disposed && pixels) spare = pixels.buffer as ArrayBuffer; },
-      } satisfies DecodedFrame;
+      } satisfies DecodedFrame);
       const rawForWitness = nativeWitnessReadback || verifiedNativeYuv !== undefined;
       const decoded = rawForWitness || presentationMode === 'browser' ? rawFrame : await prepareYuvFrame(rawFrame, yuvPool, deps.preserveNativeSample);
       if (disposed) { decoded.close(); throw new Error('媒体已释放。'); }

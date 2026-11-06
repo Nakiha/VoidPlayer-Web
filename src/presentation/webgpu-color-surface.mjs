@@ -1,4 +1,5 @@
 import { yuvKernel } from './webgpu-yuv-kernel.mjs';
+import { uploadPixelBuffer } from './pixel-upload.ts';
 import { resolveYuvColor, validateYuv, yuvCoefficients, chromaOffset } from '../../shared/color/yuv-color.ts';
 import { getPresentationChannel, presentationChannelCode } from './presentation-channel.ts';
 import { getColorOutput } from '../../shared/color/color-output.ts';
@@ -142,8 +143,7 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
         const length=Math.ceil(frame.pixels.byteLength/4)*4;
         if(length>device.limits.maxStorageBufferBindingSize)throw new Error('YUV frame exceeds storage budget');
         if(yuvSize!==length){yuvBuffer?.destroy();yuvBuffer=device.createBuffer({size:length,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});yuvSize=length;}
-        const data=frame.pixels.byteLength===length?frame.pixels:new Uint8Array(length);if(data!==frame.pixels)data.set(frame.pixels);
-        device.queue.writeBuffer(yuvBuffer,0,data);
+        uploadPixelBuffer(device.queue,yuvBuffer,frame.pixels);
         yuvParams=new Float32Array(48);yuvParams.set([d.width,d.height,plan.primaries==='bt2020'?3:mode==='hybrid'?(plan.primaries==='smpte170m'?1:plan.primaries==='bt470bg'?2:0):0,presentationChannelCode(getPresentationChannel()),d.visibleRect.x,d.visibleRect.y,2**l.subsampleX,2**l.subsampleY,l.bitDepth>8?2:1,l.bitShift,Number(l.semiplanar),2**l.bitDepth-1]);
         l.planes.forEach((p,i)=>new Uint32Array(yuvParams.buffer).set([p.offset,p.stride,p.width,p.height],12+i*4));
         yuvParams.set([2**(l.bitDepth-8),Number(plan.fullRange),...yuvCoefficients(plan.matrix),mode==='hybrid'&&plan.transfer==='bt709'?1.961:0,0,Number(mode==='webkit-planes'&&l.bitDepth===8),0],24);

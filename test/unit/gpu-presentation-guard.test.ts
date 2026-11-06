@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { GpuPresentationGuard } from '../../src/presentation/gpu-presentation-guard.ts';
 import { retainPresentationFrame } from '../../src/presentation/retained-frame.ts';
+import { sharePixelFrame } from '../../src/media/decoding/pixel-frame.ts';
 import { SessionResources } from '../../src/session/resources.ts';
 import { rgbaDescription } from '../../shared/media/frame-description.ts';
 import type { DecodedFrame } from '../../src/media/contract.ts';
@@ -33,6 +34,26 @@ test('retained presentation owns recycled pixels, native clones and a bounded re
 });
 
 type FakeSurface = { mode: string; disposed: boolean; dispose(): void };
+test('presentation retains shared pixels without copying or recycling before the last handle closes', () => {
+  let recycled = 0;
+  const pixels = new Uint8ClampedArray([255,0,0,255]), resources = new SessionResources(16);
+  const original = sharePixelFrame<DecodedFrame>({kind:'rgba8',width:1,height:1,byteSize:4,ptsUs:0,sourcePtsUs:0,durationUs:1,
+    description:rgbaDescription(1,1),pixels,close(){recycled++;pixels.fill(0);}});
+  const displayed = {...original,presentedCommit:7,rotation:90};
+  const retained = retainPresentationFrame(displayed,resources);
+  assert.equal(retained.pixels,pixels);
+  assert.equal(retained.presentedCommit,7);
+  assert.equal(retained.rotation,90,'Retain preserves metadata attached by source adapters');
+  original.close(); original.close();
+  assert.equal(recycled,0);
+  assert.deepEqual([...retained.pixels!],[255,0,0,255]);
+  assert.throws(() => original.retain!(), /closed/);
+  const second = retained.retain!();
+  retained.close(); retained.close();
+  assert.equal(resources.totalBytes,0); assert.equal(recycled,0);
+  second.close(); second.close();
+  assert.equal(recycled,1);
+});
 function fakeSurface(mode: string): FakeSurface {
   return { mode, disposed: false, dispose() { this.disposed = true; } };
 }

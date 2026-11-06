@@ -1,10 +1,14 @@
 import { validateSourcePlanePair } from "./psnr.ts";
 import type { PsnrFrame, PsnrRoi } from "./psnr.ts";
-import { packAnalysisPixels } from "./analysis-core.ts";
+import { writeAnalysisPixels } from "./analysis-core.ts";
 import type { QualityCore } from "./analysis-core.ts";
 
 export type XpsnrCore = Pick<QualityCore, "HEAPU8" | "_malloc" | "_free"> & {
   _vpa_xpsnr_abi(): number;
+  _vpa_xpsnr_input_abi(): number;
+  _vpa_xpsnr_prepare(index: number): number;
+  _vpa_xpsnr_input_data(role: number, plane: number): number;
+  _vpa_xpsnr_commit(index: number): number;
   _vpa_xpsnr_open(
     width: number,
     height: number,
@@ -28,23 +32,21 @@ export function validateXpsnrCore(value: unknown): asserts value is XpsnrCore {
   const core = value as XpsnrCore;
   if (
     !core ||
-    !["abi", "open", "feed", "score", "pool", "flush", "close"].every(
+    !["abi", "open", "feed", "score", "pool", "flush", "close", 'input_abi', 'prepare', 'input_data', 'commit'].every(
       (name) =>
         typeof (core as unknown as Record<string, unknown>)[
           `_vpa_xpsnr_${name}`
         ] === "function",
     ) ||
     core._vpa_xpsnr_abi() !== 1 ||
+    core._vpa_xpsnr_input_abi() !== 1 ||
     !(core.HEAPU8 instanceof Uint8Array)
   )
     throw Error("Analysis core lacks pixel XPSNR ABI 1");
 }
 /** XPSNR owns exactly one clip history. Pixels are already matched by the host;
- * the kernel only receives ordered packed planes and an exact declared rate. */
+ * the kernel receives ordered samples in its final buffers and an exact declared rate. */
 export class AnalysisXpsnrScorer {
-  private reference = 0;
-  private distorted = 0;
-  private bytes = 0;
   private geometry = "";
   private count = 0;
   private opened = false;
@@ -122,22 +124,13 @@ export class AnalysisXpsnrScorer {
         );
         this.opened = true;
         this.geometry = geometry;
-        this.bytes = ((roi.width * roi.height * 3) / 2) * (depth === 8 ? 1 : 2);
-        this.reference = this.core._malloc(this.bytes);
-        this.distorted = this.core._malloc(this.bytes);
-        if (!this.reference || !this.distorted)
-          throw Error("XPSNR input allocation failed");
       }
-      packAnalysisPixels(this.core, reference, roi, this.reference);
-      packAnalysisPixels(this.core, distorted, roi, this.distorted);
-      this.check(
-        this.core._vpa_xpsnr_feed(
-          this.reference,
-          this.distorted,
-          this.bytes,
-          index,
-        ),
-      );
+      this.check(this.core._vpa_xpsnr_prepare(index));
+      for (const [role,frame] of [reference,distorted].entries()) writeAnalysisPixels(this.core, frame, roi, plane => ({
+        pointer: this.core._vpa_xpsnr_input_data(role, plane) >>> 0,
+        stride: roi.width / (plane ? 2 : 1) * 2,
+      }), true);
+      this.check(this.core._vpa_xpsnr_commit(index));
       this.values.push({
         index,
         planes: this.planes((plane) => this.core._vpa_xpsnr_score(plane)),
@@ -170,9 +163,6 @@ export class AnalysisXpsnrScorer {
     if (this.closed) return;
     this.closed = true;
     if (this.opened) this.core._vpa_xpsnr_close();
-    if (this.reference) this.core._free(this.reference);
-    if (this.distorted) this.core._free(this.distorted);
-    this.reference = this.distorted = 0;
     this.values = [];
   }
 }

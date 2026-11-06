@@ -26,7 +26,7 @@ for (const key of [
   "ffmpegRevision",
   "abi",
   "semanticVersion",
-  "referenceAbi", "demuxAbi", "qualityAbi",
+  "referenceAbi", "demuxAbi", "qualityAbi", 'qualityInputAbi', 'xpsnrInputAbi',
 ])
   assert.equal(manifest[key], lock[key], `Analysis provenance ${key}`);
 assert.ok(

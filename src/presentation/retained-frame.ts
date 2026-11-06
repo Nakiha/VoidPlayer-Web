@@ -6,7 +6,19 @@ export function retainPresentationFrame(frame: DecodedFrame, resources?: Session
   const bytes = frame.pixels?.byteLength ?? frame.byteSize ?? frame.width * frame.height * 4;
   const release = resources?.reserve('frames', bytes, true);
   let sample: DecodedFrame['sample'], closed = false;
+  let shared: DecodedFrame | undefined;
   try {
+    if (frame.pixels && frame.retain) {
+      shared = frame.retain();
+      return {...shared, description: structuredClone(frame.description),
+        rotation: frame.rotation ?? frame.sample?.rotation ?? 0,
+        close() {
+          if (closed) return;
+          closed = true;
+          try { shared!.close(); } finally { release?.(); }
+        },
+      };
+    }
     sample = frame.kind === 'video-sample' ? frame.sample?.clone() : undefined;
     return {
       ...frame, description: structuredClone(frame.description), sample, pixels: frame.pixels?.slice(), byteSize: bytes,
@@ -18,6 +30,6 @@ export function retainPresentationFrame(frame: DecodedFrame, resources?: Session
       },
     };
   } catch (error) {
-    sample?.close(); release?.(); throw error;
+    shared?.close(); sample?.close(); release?.(); throw error;
   }
 }

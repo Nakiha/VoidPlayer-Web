@@ -171,6 +171,18 @@ try {
         paintFrame(source,{kind:'rgba8',description:rgbaDescription(5,3),pixels:rgba,width:5,height:3});const expected=read();
         results.push({viewportZoom:zoom,max:Math.max(...actual.map((v,i)=>Math.abs(v-expected[i])))});disposePresentation();
       }
+      const {sharePixelFrame}=await import('/src/media/decoding/pixel-frame.ts');
+      const shared=yuvFixture(),sharedReference=yuvToRgba(shared.description,shared.pixels);
+      let recycled=0;
+      shared.pixels.slice=()=>{throw Error('Shared presentation copied a full frame');};
+      const sharedFrame=sharePixelFrame({kind:'yuv',description:shared.description,pixels:shared.pixels,width:5,height:3,
+        close(){recycled++;shared.pixels.fill(0);}});
+      paintFrame(source,sharedFrame);sharedFrame.close();
+      if(recycled!==0)throw Error('Displayed shared pixels were recycled early');
+      const sharedActual=captureFrame(source).getContext('2d').getImageData(0,0,5,3).data;
+      results.push({sharedOwnership:true,max:Math.max(...sharedActual.map((v,i)=>Math.abs(v-sharedReference[i])))});
+      disposePresentation();
+      if(recycled!==1)throw Error('Displayed shared pixels were not released');
       const loss=yuvFixture();
       const lossFrame={kind:'yuv',description:loss.description,pixels:loss.pixels,width:5,height:3};
       setPresentationGeometry(source,{width:100,height:60,imageWidth:100,imageHeight:60,zoom:1,offsetX:0,offsetY:0,dpr:1});paintFrame(source,lossFrame);

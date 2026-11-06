@@ -1,5 +1,7 @@
 import type { PsnrFrame, PsnrRoi } from "./psnr.ts";
 import { validateSourcePlanePair } from "./psnr.ts";
+import { copyPixelPlane } from '../../wasm/pixels.ts';
+import { checkedHeap } from '../../wasm/heap.ts';
 
 /** Pixel-only exports on the existing analysis artifact. No clocks or decoder. */
 export type QualityCore = {
@@ -8,6 +10,11 @@ export type QualityCore = {
   _free(pointer: number): void;
   _vpa_quality_abi(): number;
   _vpa_quality_error(): number;
+  _vpa_quality_input_abi(): number;
+  _vpa_quality_prepare(index: number, same: number): number;
+  _vpa_quality_input_data(role: number, plane: number): number;
+  _vpa_quality_input_stride(role: number, plane: number): number;
+  _vpa_quality_commit(index: number): number;
   _vpa_quality_open(
     metrics: number,
     model: number,
@@ -51,6 +58,7 @@ const exports = [
   "heat_width",
   "heat_height",
   "close",
+  'input_abi', 'prepare', 'input_data', 'input_stride', 'commit',
 ];
 export function validateQualityCore(
   value: unknown,
@@ -65,19 +73,17 @@ export function validateQualityCore(
         ] !== "function",
     ) ||
     core._vpa_quality_abi() !== 1 ||
+    core._vpa_quality_input_abi() !== 1 ||
     !(core.HEAPU8 instanceof Uint8Array)
   ) {
     throw new Error("Analysis core lacks the pixel scoring ABI 1");
   }
 }
 
-/** Owns one clip context. Only two packed input buffers and the current heatmap
- * are retained here. libvmaf retains temporal state and bounded per-frame scalar
+/** Owns one clip context. Uploads directly into libvmaf-owned input pictures;
+ * identical inputs share a picture reference. libvmaf retains temporal state and bounded per-frame scalar
  * features until final flush; callers must declare the complete frame budget. */
 export class AnalysisScorer {
-  private reference = 0;
-  private distorted = 0;
-  private bytes = 0;
   private geometry?: { width: number; height: number; depth: number };
   private count = 0;
   private finished = false;
@@ -152,22 +158,16 @@ export class AnalysisScorer {
         );
         this.opened = true;
         this.geometry = geometry;
-        this.bytes = ((roi.width * roi.height * 3) / 2) * (depth === 8 ? 1 : 2);
-        this.reference = this.core._malloc(this.bytes);
-        this.distorted = this.core._malloc(this.bytes);
-        if (!this.reference || !this.distorted)
-          throw new Error("Scoring input allocation failed");
       }
-      packAnalysisPixels(this.core, reference, roi, this.reference);
-      packAnalysisPixels(this.core, distorted, roi, this.distorted);
-      this.check(
-        this.core._vpa_quality_feed(
-          this.reference,
-          this.distorted,
-          this.bytes,
-          index,
-        ),
-      );
+      const same = reference === distorted;
+      this.check(this.core._vpa_quality_prepare(index, Number(same)));
+      const upload = (frame:PsnrFrame, role:number) => writeAnalysisPixels(this.core, frame, roi, plane => ({
+        pointer: this.core._vpa_quality_input_data(role, plane) >>> 0,
+        stride: this.core._vpa_quality_input_stride(role, plane),
+      }));
+      upload(reference, 0);
+      if (!same) upload(distorted, 1);
+      this.check(this.core._vpa_quality_commit(index));
       this.count++;
     } catch (error) {
       this.close();
@@ -272,31 +272,48 @@ export class AnalysisScorer {
   close() {
     if (this.closed) return;
     this.closed = true;
-    if (this.reference) this.core._free(this.reference);
-    if (this.distorted) this.core._free(this.distorted);
     if (this.opened) this.core._vpa_quality_close();
   }
 }
 
-export function packAnalysisPixels(
+export function writeAnalysisPixels(
   core: Pick<QualityCore, "HEAPU8">,
   frame: PsnrFrame,
   roi: PsnrRoi,
-  pointer: number,
+  target: (plane:number) => {pointer:number;stride:number},
+  widen = false,
 ) {
   const { description: d, pixels } = frame,
     layout = d.yuv!;
   const bytes = layout.bitDepth === 8 ? 1 : 2;
   for (let plane = 0; plane < 3; plane++) {
-    const divisor = plane ? 2 : 1,
-      width = (roi.width / divisor) * bytes;
+    const divisor = plane ? 2 : 1, samples = roi.width / divisor, height = roi.height / divisor,
+      width = samples * bytes;
     const x = ((d.visibleRect.x + roi.x) / divisor) * bytes,
       top = (d.visibleRect.y + roi.y) / divisor;
     const p = layout.planes[plane];
-    for (let y = 0; y < roi.height / divisor; y++) {
-      const offset = p.offset + (top + y) * p.stride + x;
-      core.HEAPU8.set(pixels.subarray(offset, offset + width), pointer);
-      pointer += width;
+    const {pointer,stride} = target(plane), heap = core.HEAPU8;
+    const rowBytes = samples * (widen ? 2 : bytes);
+    if (!Number.isSafeInteger(stride) || stride < rowBytes) throw Error('Invalid analysis input stride');
+    checkedHeap(heap, pointer, (height - 1) * stride + rowBytes, 'analysis input plane');
+    const offset = p.offset + top * p.stride + x;
+    if (!widen || bytes === 2) {
+      copyPixelPlane(pixels, offset, p.stride, heap, pointer, stride, width, height);
+    } else {
+      // XPSNR's final sample storage is uint16 even for 8-bit sources. Typed
+      // array conversion widens directly into that storage without staging.
+      if (pointer % 2 || stride % 2) throw Error('Unaligned analysis sample plane');
+      if (littleEndian && p.stride === samples && stride === samples * 2) {
+        new Uint16Array(heap.buffer, heap.byteOffset + pointer, samples * height).set(pixels.subarray(offset,offset + samples * height));
+      } else for (let y = 0; y < height; y++) {
+        const row = pixels.subarray(offset + y * p.stride, offset + y * p.stride + samples);
+        if (littleEndian) new Uint16Array(heap.buffer, heap.byteOffset + pointer + y * stride, samples).set(row);
+        else {
+          const view = new DataView(heap.buffer, heap.byteOffset + pointer + y * stride, rowBytes);
+          for (let x = 0; x < samples; x++) view.setUint16(x * 2, row[x], true);
+        }
+      }
     }
   }
 }
+const littleEndian = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;

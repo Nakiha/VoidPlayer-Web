@@ -19,7 +19,7 @@ import { WasmMemoryBudgetError } from '../../shared/wasm/core.ts';
 const target:PairTarget={mediaId:'a'.repeat(24),mediaVersion:'b'.repeat(24),size:100,indexIdentity:{...FLV_MEDIA_INDEX_IDENTITY},indexBuildId:'test-cache',sourcePtsUs:0,
  picture:{sourceVersion:`${'a'.repeat(24)}@${'b'.repeat(24)}`,stream:'video',configuration:0,au:0,picture:0,layer:0,field:'frame'}};
 test('decode-time WASM growth denial remains an explicit budget failure and destroys its packet context',async()=>{
- let destroyed=false,freed=false;const core={_vp_frame_info(){},_vp_frame_format(){},_vp_core_build_id(){},_vp_packet_open(){},_malloc:()=>4,_free:()=>{freed=true;},
+ let destroyed=false,freed=false;const core={_vp_frame_info(){},_vp_frame_format(){},_vp_frame_plane_abi:()=>1,_vp_frame_plane_data(){},_vp_frame_plane_stride(){},_vp_core_build_id(){},_vp_packet_open(){},_malloc:()=>4,_free:()=>{freed=true;},
  ccall(name:string){if(name==='vp_core_build_id')return 'a'.repeat(40);if(name==='vp_create')return 1;if(name==='vp_packet_open')throw new WasmMemoryBudgetError();if(name==='vp_destroy')destroyed=true;}};
  const decoder=await createPairDecoder(async()=>({core,heap:()=>new Uint8Array(64)}));
  await assert.rejects(decoder.decode('h264',new Uint8Array([1]),new Uint8Array([1]),0,0,PAIR_LIMITS),{code:'budget-exceeded'});assert.equal(destroyed,true);assert.equal(freed,true);decoder.close();

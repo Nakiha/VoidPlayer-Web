@@ -1,4 +1,5 @@
 import { decodeThreadsForCodec, wasmThreadMode } from '../policy/wasm-threads.ts';
+import { sharePixelFrame } from './pixel-frame.ts';
 import { attachCachedTrackMetadata } from '../indexing/cached-track-metadata-client.ts';
 import { abortableWait } from '../../../shared/media/io/media-abort.ts';
 import type { AnalysisAxis, AnalysisQuery } from '../../../shared/analysis/metadata/types.ts';
@@ -399,7 +400,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       throw new MediaOpenError('decode', hdr ? '此 HDR 视频未提供标签明确的高位深 BT.2100 原始平面。请在“色彩与解码”中切换为“浏览器色彩”后重试。'
         : '自有色彩无法处理此视频的像素格式或颜色信息。请在“色彩与解码”中切换为“浏览器色彩”后重试。', hdr ? 'reference-hdr-unsupported' : 'reference-format-unsupported');
     }
-    return decoded;
+    return sharePixelFrame(decoded);
   };
 
   // Each iterator owns only its ordinal. Index updates/disposal use the

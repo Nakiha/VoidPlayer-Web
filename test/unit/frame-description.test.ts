@@ -72,3 +72,30 @@ test('RGBA ABI packs visible pixels while retaining coded crop and SAR identity'
   view.setInt32(144,-1,true);assert.throws(()=>readWasmFrame(core,()=>memory,1),/裁剪/);
   view.setInt32(144,1,true);view.setInt32(156,4,true);assert.throws(()=>readWasmFrame(core,()=>memory,1),/尺寸/);
 });
+
+test('borrowed WASM planes export once with padding, negative stride and heap growth, without legacy staging', () => {
+  let memory = new Uint8Array(1024);
+  const view = new DataView(memory.buffer, 8, 160);
+  for (const [offset,value] of [[16,2],[20,160],[24,2],[28,2],[36,6],[60,1],[64,1],[68,1],[72,1],[76,8],[84,1],[88,1],
+    [96,0],[100,2],[104,2],[108,2],[112,4],[116,1],[120,1],[124,1],[128,5],[132,1],[136,1],[140,1]]) view.setInt32(offset,value,true);
+  memory.set([16,235,99,99,81,145], 256); memory[320] = 100; memory[384] = 150;
+  let invalid = false;
+  const core = {
+    _vp_frame_plane_abi: () => 1,
+    _vp_frame_plane_data: (_ctx:number,p:number) => invalid && p === 1 ? 1024 : [260,320,384][p],
+    _vp_frame_plane_stride: (_ctx:number,p:number) => p ? 1 : -4,
+    ccall(name:string) {
+      if (name === 'vp_frame_info') return 8;
+      if (name === 'vp_pixels') throw Error('legacy staging copied pixels');
+      const previous = memory;
+      memory = new Uint8Array(1024); memory.set(previous);
+      structuredClone(previous.buffer, {transfer:[previous.buffer]});
+      return 'yuv420p';
+    },
+  };
+  const recycle = new ArrayBuffer(6), output = readWasmFrame(core, () => memory, 1, recycle);
+  assert.equal(output.pixels, recycle);
+  assert.deepEqual([...new Uint8Array(output.pixels)], [81,145,16,235,100,150]);
+  invalid = true;
+  assert.throws(() => readWasmFrame(core, () => memory, 1), /范围|越界/);
+});

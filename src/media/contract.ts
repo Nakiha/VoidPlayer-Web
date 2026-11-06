@@ -27,6 +27,8 @@ export interface DecodedFrame extends FrameInfo {
   readonly byteSize: number;
   readonly sample?: VideoSample;
   readonly pixels?: Uint8ClampedArray;
+  /** Independent read-only pixel handle; delays buffer recycling until closed. */
+  retain?(): DecodedFrame;
   close(): void;
 }
 export type VvcTuningAxis = 'threads' | 'contexts';

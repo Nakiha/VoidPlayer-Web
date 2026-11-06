@@ -37,6 +37,8 @@ try {
           await page.waitForFunction(() => window.voidPlayer);
           return page.evaluate(async ({ files, durationMs }) => {
             const tool = name => window.voidPlayer.tools.find(t => t.name === name);
+            const previous = await tool('get_review_session').execute({});
+            for (const track of previous.tracks) await tool('remove_review_track').execute({slot:track.slot});
             const lib = await tool('list_library').execute({});
             for (let i = 0; i < files.length; i++) {
               const entry = lib.entries?.find(e => e.name === files[i]);

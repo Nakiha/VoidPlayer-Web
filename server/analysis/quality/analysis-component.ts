@@ -46,6 +46,7 @@ export function describeAnalysisComponent(data:Record<string,Buffer>,hashes:Reco
     const provenance = JSON.parse(data["provenance.json"].toString());
     if (
       manifest.qualityAbi !== 1 ||
+      manifest.qualityInputAbi !== 1 || manifest.xpsnrInputAbi !== 1 ||
       manifest.quality?.revision !== VMAF_SOURCE_REVISION ||
       manifest.quality.avfilter !== false ||
       manifest.quality.cambiWindowSize !== 63 ||
