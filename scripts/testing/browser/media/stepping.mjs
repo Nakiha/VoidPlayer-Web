@@ -5,6 +5,7 @@ await withBrowserFixture({ caseName: 'stepping', engine: name, pageOptions: {"vi
 
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await ready();
+ assert.equal(await page.locator('#toggle-annotations').isDisabled(), true, 'annotations remain unavailable without a frame');
  
  await page.evaluate(async()=>{
    const tool=n=>window.voidPlayer.tools.find(t=>t.name===n);const lib=await tool('list_library').execute({});
@@ -23,9 +24,36 @@ await withBrowserFixture({ caseName: 'stepping', engine: name, pageOptions: {"vi
      }
    }
  }
- await call('seek_review',{ptsUs:1483000});await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });
+ await call('seek_review',{ptsUs:1483000});
+ await page.locator('#toggle-annotations').hover();
+ await page.locator('#play').focus();
+ await page.waitForTimeout(300);
+ await page.evaluate(() => {
+   const button = document.getElementById('toggle-annotations'), samples = [];
+   const sample = () => {
+     const style = getComputedStyle(button), busy = window.voidPlayer.getState().busy;
+     if (busy) button.click();
+     samples.push({ busy, disabled: button.disabled, opacity: style.opacity, background: style.backgroundColor,
+       color: style.color, ariaDisabled: button.getAttribute('aria-disabled'), toolbarHidden: document.getElementById('annotation-toolbar').hidden });
+   };
+   const observer = new MutationObserver(sample);
+   observer.observe(button, { attributes: true, attributeFilter: ['disabled', 'aria-disabled', 'aria-expanded'] });
+   sample();
+   window.stepAnnotationProbe = { observer, samples };
+ });
  await page.keyboard.press('ArrowRight');await page.waitForFunction(()=>!window.voidPlayer.getState().busy && window.voidPlayer.getState().positionUs===1500000);
  await page.keyboard.press('ArrowLeft');await page.waitForFunction(()=>!window.voidPlayer.getState().busy && window.voidPlayer.getState().positionUs<1500000);
+ const samples = await page.evaluate(() => {
+   const probe = window.stepAnnotationProbe;
+   probe.observer.disconnect(); delete window.stepAnnotationProbe;
+   return probe.samples;
+ });
+ assert.ok(samples.some(sample => sample.busy), 'trace observes real mixed-rate frame decoding');
+ assert.ok(samples.every(sample => !sample.disabled && sample.opacity === '1'), 'annotation button never dims during frame stepping');
+ assert.ok(samples.every(sample => sample.background === samples[0].background && sample.color === samples[0].color),
+   `hover appearance stays stable: ${JSON.stringify(samples)}`);
+ assert.ok(samples.filter(sample => sample.busy).every(sample => sample.ariaDisabled === 'true'), 'busy annotation action remains unavailable');
+ assert.ok(samples.every(sample => sample.toolbarHidden), 'clicking during decoding cannot open the annotation toolbar');
  await page.locator('#next').click();await page.waitForFunction(()=>!window.voidPlayer.getState().busy && window.voidPlayer.getState().positionUs===1500000);
  await page.locator('#play').click();await page.waitForFunction(()=>window.voidPlayer.getState().playing);
  await page.locator('#play').click();await page.waitForFunction(()=>!window.voidPlayer.getState().playing);

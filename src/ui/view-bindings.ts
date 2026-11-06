@@ -5,7 +5,8 @@ import type { ReviewSession } from '../session.ts';
 import { setAnnotationViewport } from './annotation-svg.ts';
 import { installPixelGrid } from './pixel-grid.ts';
 import { needsViewRecovery } from './view-recovery.ts';
-import { Viewport, fitReference, fittedSize, splitPixelGeometry, unobscuredFitArea } from '../../shared/presentation/viewport.ts';
+import { Viewport, fitReference, fittedSize, gridArrangement, splitPixelGeometry, unobscuredFitArea } from '../../shared/presentation/viewport.ts';
+import type { GridDirection } from '../../shared/presentation/viewport.ts';
 
 export type FittedTrack = { width: number; height: number; sourceWidth: number; sourceHeight: number; centerY: number };
 
@@ -25,6 +26,34 @@ export function createViewBindings(deps: ViewBindingDeps) {
   const divider = $('divider'), grip = divider.querySelector<HTMLElement>('.divider-grip')!;
   const fittedTracks = new Map<Slot, FittedTrack>();
   let primaryFitted: { width: number; height: number } | null = null;
+  let gridDirection: GridDirection = 'vertical';
+
+  function syncTrackLayout() {
+    const tracks = session.getState().tracks.filter(track => track.visible);
+    const split = viewport.mode === 'split' && tracks.length > 1;
+    const grid = viewport.arrangement === 'grid' && !split;
+    const rect = screens.getBoundingClientRect(), style = getComputedStyle(screens);
+    const layout = grid ? gridArrangement(rect.width, rect.height, tracks, viewport.pixelSize,
+      Number.parseFloat(style.getPropertyValue('--row-height')),
+      Number.parseFloat(style.getPropertyValue('--transport-height')) + Number.parseFloat(style.getPropertyValue('--transport-inset')),
+      gridDirection) : null;
+    if (layout) gridDirection = layout.direction;
+    const columns = layout?.columns ?? Math.max(1, tracks.length), rows = layout?.rows ?? 1;
+    for (const [name, value] of [['--view-columns', String(columns)], ['--view-rows', String(rows)]]) {
+      if (screens.style.getPropertyValue(name) !== value) screens.style.setProperty(name, value);
+    }
+    for (const slot of SLOTS) {
+      const card = $(`stage-${slot}`).closest<HTMLElement>('.video-card')!;
+      const index = tracks.findIndex(track => track.slot === slot), cell = layout?.cells[index];
+      const column = cell?.column ?? Math.max(0, index), row = cell?.row ?? 0;
+      const gridColumn = grid ? String(column + 1) : '', gridRow = grid ? String(row + 1) : '';
+      if (card.style.gridColumn !== gridColumn) card.style.gridColumn = gridColumn;
+      if (card.style.gridRow !== gridRow) card.style.gridRow = gridRow;
+      card.classList.toggle('column-divider', index >= 0 && column > 0);
+      card.classList.toggle('bottom-heading', !!cell?.bottomHeading);
+      card.classList.toggle('bottom-row', index >= 0 && (cell?.bottomRow ?? true));
+    }
+  }
 
   function trackGeometry(track: { slot: Slot; width: number; height: number }) {
     const stage = $(`stage-${track.slot}`), rect = stage.getBoundingClientRect();
@@ -84,6 +113,7 @@ export function createViewBindings(deps: ViewBindingDeps) {
   }
 
   function fitAll() {
+    syncTrackLayout();
     syncSplitGeometry();
     fittedTracks.clear();
     const allTracks = session.getState().tracks.filter(t => t.visible);

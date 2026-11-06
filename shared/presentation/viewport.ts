@@ -159,6 +159,49 @@ export class Viewport {
 
 export type TrackGeometry = { slotW: number; slotH: number; videoW: number; videoH: number };
 
+export type GridDirection = 'horizontal' | 'vertical';
+export type GridCell = { column: number; row: number; bottomHeading: boolean; bottomRow: boolean };
+export type GridArrangement = { direction: GridDirection; columns: number; rows: number; cells: GridCell[] };
+
+/** Keep each four-track group in reading order. Place the second group beside
+ *  or below the first, maximizing fitted picture area after reserving chrome.
+ *  A five-percent improvement is required to change direction during resize. */
+export function gridArrangement(width: number, height: number, tracks: { width: number; height: number }[],
+  pixelSize: PixelSizeMode, headingHeight: number, transportHeight: number, previous: GridDirection = 'vertical'): GridArrangement {
+  const count = tracks.length;
+  const candidate = (direction: GridDirection): GridArrangement => {
+    const horizontal = count > 4 && direction === 'horizontal';
+    const columns = horizontal ? 2 + Math.min(2, count - 4) : Math.min(2, Math.max(1, count));
+    const rows = horizontal ? 2 : Math.max(1, Math.ceil(count / 2));
+    const cells = tracks.map((_, index) => {
+      const column = horizontal ? Math.floor(index / 4) * 2 + index % 2 : index % 2;
+      const row = horizontal ? Math.floor(index % 4 / 2) : Math.floor(index / 2);
+      return { column, row, bottomHeading: index % 4 >= 2, bottomRow: row === rows - 1 };
+    });
+    return { direction, columns, rows, cells };
+  };
+  if (count <= 4) return candidate('vertical');
+  const score = (layout: GridArrangement) => {
+    const sizes = tracks.map(track => track.width > 0 && track.height > 0 ? track : { width: 16, height: 9 });
+    const slotW = width / layout.columns, slotH = height / layout.rows;
+    const densities = sizes.map((track, index) => {
+      const cell = layout.cells[index];
+      const top = cell.bottomHeading ? slotH - headingHeight - (cell.bottomRow ? transportHeight : 0) : 0;
+      const overlays = [{ left: 0, right: slotW, top, bottom: top + headingHeight }];
+      if (cell.bottomRow && transportHeight > 0) {
+        overlays.push({ left: 0, right: slotW, top: slotH - transportHeight, bottom: slotH });
+      }
+      const area = unobscuredFitArea(slotW, slotH, overlays);
+      return Math.min(area.width / track.width, area.height / track.height);
+    });
+    const uniformDensity = Math.min(...densities);
+    return sizes.reduce((area, track, index) => area + track.width * track.height
+      * (pixelSize === 'uniform' ? uniformDensity : densities[index]) ** 2, 0);
+  };
+  const current = candidate(previous), alternative = candidate(previous === 'vertical' ? 'horizontal' : 'vertical');
+  return score(alternative) > score(current) * 1.05 ? alternative : current;
+}
+
 /** fit-contain: largest video-sized box centered inside the slot. */
 export function fitContain(slotW: number, slotH: number, videoW: number, videoH: number): { width: number; height: number } {
   const width = Math.max(1, Math.min(slotW, slotH * videoW / videoH));

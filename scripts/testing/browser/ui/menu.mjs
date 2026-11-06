@@ -16,7 +16,8 @@ await withBrowserFixture({ caseName: 'menu', engine: name, pageOptions: { viewpo
   const state = () => page.evaluate(() => window.voidPlayer.getState());
   await load();
   assert.equal(await page.locator('#annotate').count(), 0, 'transport has no annotation launcher');
-  for (const width of [1280, 600, 480, 360, 280, 240]) {
+  const originalName = await page.locator('#name-A').textContent();
+  for (const width of [1280, 900, 800, 600, 480, 360, 280, 240]) {
     await page.setViewportSize({width, height:800});
     await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
     const layout=await page.evaluate(()=>{
@@ -42,8 +43,28 @@ await withBrowserFixture({ caseName: 'menu', engine: name, pageOptions: { viewpo
       assert.ok(item.x>=layout.bar.x-1 && item.right<=layout.bar.right+1,`${width}: ${item.id} stays inside bar: ${JSON.stringify({item,bar:layout.bar})}`);
       if(i) assert.ok(item.x>=layout.items[i-1].right,`${width}: controls do not overlap`);
     }
+    const heading = await page.locator('[data-track-drag=A]').evaluate(el => {
+      const name = el.querySelector('.filename'), time = el.querySelector('.frame-time');
+      const bounds = el.getBoundingClientRect();
+      const controls = [el.querySelector('.track-identity'), time, ...el.querySelectorAll('.header-actions button')]
+        .map(node => node.getBoundingClientRect()).filter(rect => rect.width > 0);
+      return { timeVisible: getComputedStyle(time).display !== 'none',
+        nameTruncated: name.scrollWidth > name.clientWidth, left: bounds.left, right: bounds.right,
+        controls: controls.map(rect => ({ left: rect.left, right: rect.right })) };
+    });
+    assert.equal(heading.timeVisible, width >= 360, `${width}: frame time only hides when the full title needs its space`);
+    assert.equal(heading.nameTruncated, width < 280, `${width}: time hides before the title truncates`);
+    for (const [i,control] of heading.controls.entries()) {
+      assert.ok(control.left >= heading.left && control.right <= heading.right, `${width}: header controls fit`);
+      if (i) assert.ok(control.left >= heading.controls[i-1].right, `${width}: header controls do not overlap`);
+    }
   }
   await page.setViewportSize({width:1280,height:800});
+  await page.locator('#name-A').evaluate(el => { el.textContent = 'long-video-filename-'.repeat(80) + '.mp4'; });
+  await page.locator('#pts-A').waitFor({state:'hidden'});
+  assert.ok(await page.locator('#name-A').evaluate(el => el.scrollWidth > el.clientWidth), 'an oversized title truncates after time hides');
+  await page.locator('#name-A').evaluate((el, name) => { el.textContent = name; }, originalName);
+  await page.locator('#pts-A').waitFor({state:'visible'});
   await page.locator('#pixel-size').hover(); await page.locator('#control-tooltip').waitFor({state:'visible'});
   async function toggle(id, menuId = `${id}-menu`) {
     const button = page.locator(`#${id}`), menu = page.locator(`#${menuId}`);
@@ -152,6 +173,7 @@ await withBrowserFixture({ caseName: 'menu', engine: name, pageOptions: { viewpo
   await page.locator('#header-more-A').waitFor({state:'visible'});
   await toggle('header-more-A','header-actions-A');
   await page.setViewportSize({width:1280,height:800});
+  await page.locator('#pts-A').waitFor({state:'visible'});
   await phase('high-contrast-appearance', async () => {
     await page.emulateMedia({contrast:'more'});
     await settleAppearance(page);

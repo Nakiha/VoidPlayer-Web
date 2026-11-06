@@ -1326,8 +1326,52 @@ try {
         }
       }
     }
-    await page.setViewportSize({ width: 1280, height: 800 });
     await panels(page, false);
+    await page.evaluate(() => window.voidPlayer.setViewport({ mode: 'side-by-side' }));
+    for (const count of [5, 6, 7, 8]) {
+      await page.evaluate(async count => {
+        const visibility = window.voidPlayer.tools.find(tool => tool.name === 'set_review_track_visibility');
+        for (const [index, slot] of ['E', 'F', 'G', 'H'].entries()) await visibility.execute({ slot, visible: index + 4 < count });
+      }, count);
+      for (const [width, height, direction] of [[2800, 900, 'horizontal'], [800, 1600, 'vertical']]) {
+        await page.setViewportSize({ width, height });
+        await settle(page);
+        const layout = await page.evaluate(() => {
+          const screens = document.querySelector('.screens'), bounds = screens.getBoundingClientRect();
+          const style = getComputedStyle(screens), dock = document.querySelector('.transport-dock').getBoundingClientRect();
+          return { bounds: bounds.toJSON(), columns: Number(style.getPropertyValue('--view-columns')),
+            rows: Number(style.getPropertyValue('--view-rows')), dock: dock.toJSON(), inset: parseFloat(style.getPropertyValue('--transport-inset')),
+            cards: [...screens.querySelectorAll('.video-card:not([hidden])')].map(card => ({ slot: card.dataset.slot,
+              box: card.getBoundingClientRect().toJSON(), heading: card.querySelector('.card-heading').getBoundingClientRect().toJSON(),
+              image: card.querySelector('.image-wrap').getBoundingClientRect().toJSON(), bottom: card.classList.contains('bottom-heading'),
+              bottomRow: card.classList.contains('bottom-row'), label: card.querySelector('.pixel-grid-label').getBoundingClientRect().toJSON() })) };
+        });
+        assert.equal(layout.columns, direction === 'horizontal' ? count === 5 ? 3 : 4 : 2, 'viewport chooses grid extension');
+        assert.equal(layout.rows, direction === 'horizontal' ? 2 : Math.ceil(count / 2));
+        assert.ok(Math.abs(layout.dock.bottom + layout.inset - layout.bounds.bottom) < 1, 'transport stays at the viewport bottom');
+        for (const [index, card] of layout.cards.entries()) {
+          const column = direction === 'horizontal' ? Math.floor(index / 4) * 2 + index % 2 : index % 2;
+          const row = direction === 'horizontal' ? Math.floor(index % 4 / 2) : Math.floor(index / 2);
+          assert.ok(Math.abs(card.box.left - layout.bounds.left - column * layout.bounds.width / layout.columns) < 1,
+            'four-track groups keep column order');
+          assert.ok(Math.abs(card.box.top - layout.bounds.top - row * layout.bounds.height / layout.rows) < 1,
+            'four-track groups keep row order');
+          assert.equal(card.bottom, index % 4 >= 2, `${card.slot}: each group repeats top/bottom header placement`);
+          assert.equal(card.bottomRow, row === layout.rows - 1);
+          const headerEdge = card.bottom ? card.bottomRow ? layout.dock.top : card.box.bottom : card.box.top;
+          assert.ok(Math.abs((card.bottom ? card.heading.bottom : card.heading.top) - headerEdge) < 1,
+            'bottom-row header sits above transport; other headers anchor to their cell edge');
+          assert.ok(card.bottom ? card.image.bottom <= card.heading.top : card.image.top >= card.heading.bottom, 'picture avoids its own header');
+          if (card.bottomRow) assert.ok(card.image.bottom <= layout.dock.top, 'last-row picture avoids transport');
+          if (card.label.width) {
+            assert.ok(card.bottom ? card.label.bottom <= card.heading.top : card.label.top >= card.heading.bottom, 'size label avoids its own header');
+            if (card.bottomRow) assert.ok(card.label.bottom <= layout.dock.top, 'last-row size label avoids transport');
+          }
+        }
+        if (count === 8) await page.locator('.viewport-surface').screenshot({ path: path.join(screenshots, `${browserName}-eight-track-grid-${direction}.png`) });
+      }
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
     await page.evaluate(() => window.voidPlayer.setViewport({ mode: 'split', splitPos: .15 }));
     await settle(page);
     const splitHeader = await page.evaluate(() => {

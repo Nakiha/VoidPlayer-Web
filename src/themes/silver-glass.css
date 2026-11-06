@@ -7,15 +7,15 @@
   --text-xs: 11px; --text-sm: 12px; --text-ui: 13px; --text-title: 14px; --text-brand: 15px;
   --space-1: 2px; --space-2: 4px; --space-3: 6px; --space-4: 8px; --space-5: 12px; --space-6: 16px;
   --transition-fast: 120ms ease;
-  --toolbar-height: 40px; --transport-height: 36px; --panel-heading-height: 32px;
+  --toolbar-height: calc(var(--button-size) + 2 * var(--toolbar-padding-block)); --transport-height: 36px; --panel-heading-height: 32px;
   --button-size: 28px; --control-height: 28px; --control-small-height: var(--button-size); --tool-inset: var(--space-1); --tool-gap: var(--space-1); --row-height: 32px;
   --track-row-height: 32px; --source-row-height: 40px; --icon-size: 18px;
   /* Semantic spacing: callers choose a role, not a different scale step per row.
      Fixed-height rows center full 28px button surfaces. */
   --control-gap: var(--space-2); --control-padding-inline: var(--space-4);
   --field-padding-inline: var(--space-3);
-  --toolbar-padding-inline: var(--space-4);
-  --toolbar-padding-block: calc((var(--toolbar-height) - var(--button-size)) / 2);
+  --toolbar-padding-inline: var(--space-2);
+  --toolbar-padding-block: var(--space-2);
   --transport-padding: var(--space-2); --transport-row-gap: 0px;
   --transport-group-gap: var(--space-2); --transport-text-size: 12px;
   --transport-inset: 0px;
@@ -104,5 +104,5 @@
   --toast-error-fill: color-mix(in srgb, #d92d20 14%, var(--viewport-chrome-fill)); --toast-error-text: #912018; --toast-error-border: color-mix(in srgb, #d92d20 38%, var(--border));
 }
 @media (max-width: 680px) {
-  :root { --toolbar-padding-inline: var(--space-2); --timeline-column-gap: var(--space-2); }
+  :root { --timeline-column-gap: var(--space-2); }
 }

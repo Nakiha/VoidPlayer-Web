@@ -10,9 +10,40 @@ await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {vi
   const focused=()=>page.locator('#toggle-chrome').getAttribute('aria-pressed');
   const beforeFocus=await page.locator('#stage-A').boundingBox();
   const beforeView=await page.evaluate(()=>window.voidPlayer.getViewport());
+  const focusButton = page.locator('#toggle-chrome');
+  const opacity = () => focusButton.evaluate(button => getComputedStyle(button).opacity);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await focusButton.click();
+  assert.ok(await focusButton.evaluate(button => getComputedStyle(button).transitionProperty.split(',').some(value => value.trim() === 'opacity')),
+    'focus exit animates opacity when motion is allowed');
+  await page.waitForTimeout(1800);
+  assert.equal(await opacity(), '1', 'focus exit stays visible during the two-second grace period');
+  await page.waitForFunction(() => getComputedStyle(document.getElementById('toggle-chrome')).opacity === '0', null, { timeout: 5000 });
+  assert.equal(await focused(), 'true', 'idle fade preserves focus mode');
+  assert.equal(await page.locator('#control-tooltip').isVisible(), false, 'idle button leaves no floating tooltip');
+  const box = await focusButton.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForFunction(() => getComputedStyle(document.getElementById('toggle-chrome')).opacity === '1');
+  await page.waitForTimeout(1100);
+  await page.mouse.move(box.x + box.width / 2 + 1, box.y + box.height / 2);
+  await page.waitForTimeout(1100);
+  assert.equal(await opacity(), '1', 'movement over the button restarts its idle timer');
+  await page.mouse.move(0, 0);
+  await page.waitForFunction(() => getComputedStyle(document.getElementById('toggle-chrome')).opacity === '0', null, { timeout: 5000 });
+  // macOS WebKit uses Option+Tab to include buttons in keyboard navigation.
+  await page.keyboard.press(name === 'webkit' ? 'Alt+Tab' : 'Tab');
+  await focusButton.focus();
+  assert.equal(await focusButton.evaluate(button => document.activeElement === button), true, 'keyboard focus can recover the faded button');
+  await page.waitForTimeout(2300);
+  assert.equal(await opacity(), '1', 'keyboard-focused exit remains visible');
+  await page.keyboard.press('f');
+  assert.equal(await focused(), 'false', 'keyboard shortcut exits after fading');
+  assert.deepEqual(await page.locator('#stage-A').boundingBox(), beforeFocus, 'fade never changes stage geometry');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.locator('#toggle-chrome').focus();
   await page.keyboard.down('f');
   assert.equal(await focused(),'true','F enters focus mode from a focused button');
+  assert.equal(await focusButton.evaluate(button => getComputedStyle(button).transitionProperty), 'none', 'reduced motion skips the fade animation');
   await page.keyboard.down('f');
   assert.equal(await focused(),'true','holding F does not toggle repeatedly');
   await page.keyboard.up('f');await page.keyboard.press('f');
@@ -58,6 +89,20 @@ await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {vi
     assert.deepEqual(await fill(id),resting,`${id}: shortcut does not tint the previously clicked control`);
     assert.equal(await page.locator('html').getAttribute('data-keyboard-navigation'),null);
   }
+  for (const id of ['toggle-sources', 'toggle-annotations', 'settings-open']) {
+    const button = page.locator(`#${id}`), expanded = await button.getAttribute('aria-expanded');
+    await button.focus();
+    const before = await page.evaluate(() => window.voidPlayer.getState().positionUs);
+    await page.keyboard.press('ArrowRight');
+    await page.waitForFunction(before => !window.voidPlayer.getState().busy && window.voidPlayer.getState().positionUs > before,
+      before, { timeout: 5000 });
+    const after = await page.evaluate(() => window.voidPlayer.getState().positionUs);
+    await page.keyboard.press('ArrowLeft');
+    await page.waitForFunction(after => !window.voidPlayer.getState().busy && window.voidPlayer.getState().positionUs < after, after);
+    assert.equal(await button.evaluate(button => document.activeElement === button), true, `${id}: frame stepping retains button focus`);
+    assert.equal(await button.getAttribute('aria-expanded'), expanded, `${id}: frame keys do not activate the focused action`);
+    assert.equal(await page.locator('html').getAttribute('data-keyboard-navigation'), null, `${id}: frame keys do not create a focus ring`);
+  }
   await page.locator('#previous').click();await page.waitForFunction(()=>!window.voidPlayer.getState().busy);
   await page.locator('#previous').focus();await page.keyboard.press(name === 'webkit' ? 'Alt+Tab' : 'Tab');
   await page.waitForFunction(()=>document.documentElement.hasAttribute('data-keyboard-navigation'));
@@ -77,6 +122,11 @@ await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {vi
   await page.locator('#previous').dispatchEvent('keydown',{key:' ',code:'Space',isComposing:true});
   assert.equal(await playing(),false,'IME composition does not trigger playback');
   await page.locator('#pixel-size').click();
+  const menuPosition = await page.evaluate(() => window.voidPlayer.getState().positionUs);
+  for (const key of ['ArrowRight', 'ArrowLeft']) {
+    await page.keyboard.press(key); await page.waitForFunction(() => !window.voidPlayer.getState().busy);
+    assert.equal(await page.evaluate(() => window.voidPlayer.getState().positionUs), menuPosition, 'open menu owns frame-direction keys');
+  }
   await page.keyboard.press('ArrowDown');
   await page.waitForFunction(()=>document.documentElement.hasAttribute('data-keyboard-navigation'));
   assert.equal(await page.locator('html').getAttribute('data-keyboard-navigation'),'','menu arrow navigation enables focus feedback');
@@ -88,6 +138,11 @@ await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {vi
   await page.locator('#settings-open').click();await page.locator('#settings-tab-shortcuts').click();
   assert.equal(await page.locator('#settings-pane-shortcuts .shortcut-row').filter({hasText:'专注模式'}).locator('kbd').textContent(),'F');
   await page.keyboard.press('f');assert.equal(await focused(),'false','F is inactive in dialogs');
+  const dialogPosition = await page.evaluate(() => window.voidPlayer.getState().positionUs);
+  for (const key of ['ArrowRight', 'ArrowLeft']) {
+    await page.keyboard.press(key); await page.waitForFunction(() => !window.voidPlayer.getState().busy);
+    assert.equal(await page.evaluate(() => window.voidPlayer.getState().positionUs), dialogPosition, 'dialog buttons do not step frames');
+  }
   await page.locator('#settings-close').focus();
   await page.keyboard.press('Space');await page.waitForFunction(()=>window.voidPlayer.getState().playing);
   assert.equal(await page.locator('#settings').evaluate(e=>e.open),true,'Space in dialog does not activate close');
@@ -97,6 +152,13 @@ await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {vi
   assert.equal(await page.locator('#position').inputValue(),'00:01.000 ');assert.equal(await playing(),false);
   await page.keyboard.press('Escape');
   await page.locator('#toggle-sources').click();await page.locator('#sources-search-toggle').click();await page.locator('#source-search').fill('sample');
+  const searchPosition = await page.evaluate(() => window.voidPlayer.getState().positionUs);
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForFunction(() => !window.voidPlayer.getState().busy);
+  assert.equal(await page.locator('#source-search').evaluate(input => input.selectionStart), 5, 'text inputs retain caret navigation');
+  assert.equal(await page.evaluate(() => window.voidPlayer.getState().positionUs), searchPosition, 'text arrows do not step frames');
+  await page.keyboard.press('ArrowRight'); await page.waitForFunction(() => !window.voidPlayer.getState().busy);
+  assert.equal(await page.evaluate(() => window.voidPlayer.getState().positionUs), searchPosition, 'text arrows never trigger frame stepping');
   await page.keyboard.press('f');
   assert.equal(await page.locator('#source-search').inputValue(),'samplef');assert.equal(await focused(),'false','typing F in search does not toggle focus mode');
   await page.locator('#source-search').fill('sample');

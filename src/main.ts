@@ -176,7 +176,11 @@ const workbench = installWorkbench(session, act, openMarkDialog, notify, id=>act
   const target = await annotationSync.qualityTarget(id);
   await attachQualityDialog(target,annotationSync.rememberQuality);
 },'ui.attach-psnr'),()=>annotationSync.scope());
-$('toggle-annotations').onclick = () => { if (drawingEditor.active()) $('mark-close').click(); else drawingEditor.open(workbench.selected()); };
+$('toggle-annotations').onclick = () => {
+  if (session.getState().busy) return;
+  if (drawingEditor.active()) $('mark-close').click();
+  else drawingEditor.open(workbench.selected());
+};
 const removeTrackDrag = installTrackDrag(session);
 const sourceActions = installSourceActions(session, act, () => { void workbench.refreshLibrary(); }, notify);
 bindTimelinePreview($<HTMLInputElement>('timeline'), $('timeline-preview'));
@@ -243,7 +247,13 @@ const workspaceTransfer = installWorkspaceTransfer(session, {
   async restore(document, resumeCloudAnnotations) { if (!resumeCloudAnnotations) await annotationSync.captureSnapshot(); viewport.apply(document.viewport); setPresentationChannel(viewport.channel); await workbench.restore(document.layout ?? workbench.getState()); render(); },
 });
 // Recovery's pagehide listener must capture the scene before disposal clears its tracks.
-window.addEventListener('pagehide',event=>{if(!event.persisted){void session.dispose();removeBrandEffects();disposePresentation();}});
+window.addEventListener('pagehide', event => {
+  if (event.persisted) return;
+  void session.dispose();
+  removeBrandEffects();
+  viewportChrome.dispose();
+  disposePresentation();
+});
 const screens = document.querySelector<HTMLElement>('.screens')!;
 const viewportChrome = installViewportChrome(document.querySelector<HTMLElement>('.viewport-surface')!, $<HTMLButtonElement>('toggle-chrome'));
 const grids = Object.fromEntries(SLOTS.map(slot => [slot, installPixelGrid($<HTMLCanvasElement>(`grid-${slot}`), $(`grid-label-${slot}`))])) as Record<Slot, ReturnType<typeof installPixelGrid>>;
@@ -251,6 +261,7 @@ const viewBindings = createViewBindings({ $, screens, canvases, grids, viewport,
 const { fittedTracks, applyViewTransform, syncSplitGeometry, fitAll } = viewBindings;
 const fitTask = createFrameTask(fitAll);
 const resizeObserver = new ResizeObserver(fitTask.schedule);
+resizeObserver.observe(screens);
 for (const slot of SLOTS) resizeObserver.observe($(`stage-${slot}`));
 for (const el of document.querySelectorAll('.viewport-surface .card-heading, .viewport-surface .transport-dock')) resizeObserver.observe(el);
 const zoomMenu = installNumericChoice('zoom-select', { glyph: 'search', presets: ZOOM_PRESETS, suffix: '×', min: ZOOM_MIN, max: ZOOM_MAX,
@@ -300,9 +311,6 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
   screens.classList.toggle('single', visibleTracks.length < 2);
   const splitActive = viewport.mode === 'split' && visibleTracks.length >= 2;
   screens.classList.toggle('split', splitActive);
-  const columns = viewport.arrangement === 'grid' ? Math.min(2, Math.max(1, visibleTracks.length)) : Math.max(1, visibleTracks.length);
-  screens.style.setProperty('--view-columns', String(columns));
-  screens.style.setProperty('--view-rows', String(Math.ceil(Math.max(1, visibleTracks.length) / columns)));
   screens.classList.toggle('grid-layout', viewport.arrangement === 'grid');
   if ($('arrangement').dataset.arrangement !== viewport.arrangement) {
     $('arrangement').dataset.arrangement = viewport.arrangement;
@@ -319,8 +327,6 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
     card.style.order = String(Math.max(0, index));
     card.classList.toggle('view-first', index === 0 || !loaded);
     card.classList.toggle('view-second', index === 1);
-    card.classList.toggle('column-divider', index > 0 && index % columns !== 0);
-    card.classList.toggle('bottom-heading', !splitActive && viewport.arrangement === 'grid' && index >= columns);
   }
   document.querySelector<HTMLElement>('.transport')!.hidden = !loaded;
   for (const card of cards) card.querySelector<HTMLElement>('.card-heading')!.hidden = !loaded;
@@ -571,14 +577,21 @@ document.addEventListener('keydown', e => {
   e.preventDefault(); button.click();
 });
 document.addEventListener('keydown', e => {
-  if (document.querySelector('dialog[open]') || drawingEditor.active()) return;
-  if (e.target instanceof HTMLElement &&
-    (e.target.matches('input,textarea,select') || e.target.isContentEditable ||
-      (e.target.matches('button') && !e.target.matches('#play,#previous,#next')))) return;
+  if (e.defaultPrevented || e.isComposing || e.keyCode === 229 || document.querySelector('dialog[open]') || drawingEditor.active()) return;
+  // Directional widgets keep their own keys. Ordinary focused buttons must not
+  // swallow frame stepping or turn the unhandled arrow into focus feedback.
+  const localKeys = 'input,textarea,select,[role="slider"],[role="separator"],[role="spinbutton"],[role="combobox"],'
+    + '[role="menu"],[role="listbox"],[role="tablist"],[role="tree"],[role="grid"],[role="radiogroup"]';
+  const path = e.composedPath();
+  if (path.some(node => node instanceof HTMLElement && (node.isContentEditable || node.matches(localKeys)))) return;
+  if (document.querySelector('.popup-menu:popover-open, .header-actions[popover]:popover-open')) return;
   if (!session.getState().tracks.length || e.ctrlKey || e.metaKey || e.altKey) return;
+  const frameStep = matchesShortcut(e, 'previous') || matchesShortcut(e, 'next');
+  const button = path.find(node => node instanceof HTMLButtonElement);
+  if (button && !frameStep && !button.matches('#play,#previous,#next')) return;
   inputTrigger = 'keyboard';
   try {
-    if (matchesShortcut(e, 'previous') || matchesShortcut(e, 'next')) { e.preventDefault(); $(matchesShortcut(e, 'previous') ? 'previous' : 'next').click(); }
+    if (frameStep) { e.preventDefault(); $(matchesShortcut(e, 'previous') ? 'previous' : 'next').click(); }
     else if (matchesShortcut(e, 'annotate')) { e.preventDefault(); openMarkDialog(); }
     else if (matchesShortcut(e, 'layout')) {
       e.preventDefault();
@@ -671,7 +684,7 @@ if (annotationLink.has('annotation')) void act(async () => {
   if(opened)await annotationSync.openSpace(space);
 },'annotation.open');
 
-import.meta.hot?.dispose(() => { unregister(); annotationSync.dispose(); identitySettings.dispose(); workspaceTransfer.dispose(); removeThemeControls(); settings.dispose(); depthMenu.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); channelMenu.dispose(); removeHeaderActions(); drawingEditor.dispose(); markPreviewBackfill.dispose(); disposePresentation(); unbindDrop(); dropFeedback.dispose(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
+import.meta.hot?.dispose(() => { unregister(); annotationSync.dispose(); identitySettings.dispose(); workspaceTransfer.dispose(); removeThemeControls(); settings.dispose(); depthMenu.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); channelMenu.dispose(); removeHeaderActions(); viewportChrome.dispose(); drawingEditor.dispose(); markPreviewBackfill.dispose(); disposePresentation(); unbindDrop(); dropFeedback.dispose(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
 render();
 // First frame is rendered and handlers are wired; only GPU warmup (background)
 // and the annotation deep-link restore (already async) are still outstanding,

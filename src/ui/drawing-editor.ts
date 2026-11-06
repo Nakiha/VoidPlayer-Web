@@ -321,7 +321,12 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
     }
   }, { capture: true, signal: life.signal });
   function render(state: ReturnType<ReviewSession['getState']>) {
-    $('toggle-annotations').toggleAttribute('disabled', state.busy || !state.tracks.some(track=>track.frame && !track.failure));
+    const button = $<HTMLButtonElement>('toggle-annotations');
+    const available = state.tracks.some(track => track.frame && !track.failure);
+    // Decode preparation must not flash the control or discard its focus/hover.
+    button.disabled = !available;
+    const disabled = String(!available || state.busy);
+    if (button.getAttribute('aria-disabled') !== disabled) button.setAttribute('aria-disabled', disabled);
     if (active && !saving && !closing && (state.playing || !annotationAnchorsCurrent([...drafts].map(([slot, d]) => ({ slot, ...d })), state.tracks))) { close(); }
     const marksSignature = JSON.stringify(state.marks);
     if (active && !saving && !closing && observedMarks && marksSignature !== observedMarks) {

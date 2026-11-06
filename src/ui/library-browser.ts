@@ -17,7 +17,7 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
   let page: LibraryPage | null = null, root = initial.root, directory = initial.directory, search = '', appliedSearch = '', all = initial.all, recent = false;
   let request: AbortController | undefined, sequence = 0, loading = false, pendingSearch = false;
   const available = () => !recent;
-  let optionsSignature = '', appliedScope = '', searchTimer: ReturnType<typeof setTimeout> | undefined;
+  let optionsSignature = '', pathSignature = '', appliedScope = '', searchTimer: ReturnType<typeof setTimeout> | undefined;
   const cadence = new PollingCadence(3000);
   const list = document.getElementById('source-list')!;
   const tools = document.getElementById('source-tools')!;
@@ -34,6 +34,14 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
   field.append(searchIcon, input);
   const rail = document.createElement('div'); rail.className = 'source-navigation-rail'; rail.append(back, nav);
   tools.replaceChildren(rail, toggle, field);
+  const pathbar = document.createElement('nav'); pathbar.id = 'library-pathbar'; pathbar.className = 'library-pathbar';
+  document.getElementById('source-foot')!.prepend(pathbar);
+  pathbar.addEventListener('click', event => {
+    const target = (event.target as Element).closest<HTMLButtonElement>('button[data-root]');
+    if (target) navigate(target.dataset.root ?? '', target.dataset.directory ?? '');
+  }, { signal });
+  const pathResize = new ResizeObserver(() => { pathbar.scrollLeft = pathbar.scrollWidth; });
+  pathResize.observe(pathbar);
   function searchToggleLabel() {
     const open = toggle.getAttribute('aria-expanded') === 'true';
     const label = open ? t(msg("libraryBrowser.closeSearch", "关闭搜索")) : t(msg("libraryBrowser.toggleSearch", "搜索片源"));
@@ -76,6 +84,38 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
     if (!root) return t(msg("libraryBrowser.allLibraries", "所有媒体库"));
     return directory ? `${rootName} / ${directory}` : rootName;
   }
+  function renderPathbar() {
+    pathbar.setAttribute('aria-label', t(msg("libraryBrowser.locationLabel", "媒体库路径或链接")));
+    const crumbs: { label: string; glyph: Parameters<typeof icon>[0]; root: string; directory: string }[] = [
+      { label: t(msg("libraryBrowser.library", "媒体库")), glyph: 'storage', root: '', directory: '' },
+    ];
+    if (recent || all) crumbs.push({ label: displayPath(), glyph: recent ? 'clock' : 'film', root: '', directory: '' });
+    else if (root) {
+      crumbs.push({ label: page?.roots.find(item => item.id === root)?.name ?? root, glyph: 'open', root, directory: '' });
+      const parts = directory.split('/').filter(Boolean);
+      for (const [index, label] of parts.entries()) crumbs.push({ label, glyph: 'open', root, directory: parts.slice(0, index + 1).join('/') });
+    }
+    const signature = JSON.stringify(crumbs);
+    if (signature === pathSignature) return;
+    pathSignature = signature;
+    const trail = document.createElement('ol');
+    for (const [index, crumb] of crumbs.entries()) {
+      const entry = document.createElement('li'), current = index === crumbs.length - 1;
+      if (index) {
+        const separator = document.createElement('span'); separator.className = 'library-path-separator';
+        separator.setAttribute('aria-hidden', 'true'); separator.innerHTML = icon('caretRight'); entry.append(separator);
+      }
+      const part = document.createElement(current ? 'span' : 'button'); part.className = 'library-path-item';
+      part.dataset.root = crumb.root; part.dataset.directory = crumb.directory; part.dataset.kind = index ? 'folder' : 'library';
+      part.dataset.tooltip = crumb.label; part.innerHTML = icon(crumb.glyph);
+      if (part instanceof HTMLButtonElement) part.type = 'button';
+      if (current) part.setAttribute('aria-current', 'location');
+      const label = document.createElement('span'); label.className = 'library-path-label'; label.textContent = crumb.label;
+      part.append(label); entry.append(part); trail.append(entry);
+    }
+    pathbar.replaceChildren(trail);
+    pathbar.scrollLeft = pathbar.scrollWidth;
+  }
   back.onclick = () => {
     if (!available() || recent) return;
     if (directory) navigate(root, directory.includes('/') ? directory.slice(0, directory.lastIndexOf('/')) : '');
@@ -99,6 +139,7 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
     menu.sync(value, displayPath(), true);
     if (document.activeElement !== address) address.value = displayPath();
     renderRow();
+    renderPathbar();
     input.placeholder = recent ? t(msg("libraryBrowser.searchRecent", "搜索最近打开")) : t(msg("libraryBrowser.searchIn", "搜索{scope}"), { scope: all ? t(msg("libraryBrowser.allMedia", "全部媒体")) : directory || roots.find(r => r.id === root)?.name || t(msg("libraryBrowser.library", "媒体库")) });
     input.title = input.placeholder;
     list.setAttribute('aria-busy', String(available() && (loading || pendingSearch)));
@@ -166,7 +207,11 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
     input.setAttribute('aria-label',t(msg("libraryBrowser.toggleSearch", "搜索片源")));
     controls();
   } }, signal);
-  signal.addEventListener('abort', () => { stopLanguage(); clearInterval(timer); clearTimeout(searchTimer); request?.abort(); resize.disconnect(); menu.dispose(); }, { once: true });
+  signal.addEventListener('abort', () => {
+    stopLanguage(); clearInterval(timer); clearTimeout(searchTimer); request?.abort(); resize.disconnect(); menu.dispose();
+    pathResize.disconnect(); pathbar.remove();
+  }, { once: true });
+  renderPathbar();
   return {
     setSearchOpen(open: boolean) {
       toggle.setAttribute('aria-expanded', String(open));

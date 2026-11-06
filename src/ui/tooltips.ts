@@ -35,6 +35,7 @@ export function installTooltips() {
   }
   const menuOpen = () => !!document.querySelector('.popup-menu:popover-open, .header-actions[popover]:popover-open');
   function show(reposition = false) {
+    if (anchor?.hasAttribute('data-tooltip-suppressed')) { hide(); return; }
     if (menuOpen() || !anchor?.isConnected || !anchor.getClientRects().length || document.body.classList.contains('sorting-tracks')) { hide(); return; }
     // Visible content is not an instruction. Never echo filenames, field values,
     // or complete accessible names of data rows into a generic tooltip.
@@ -56,7 +57,7 @@ export function installTooltips() {
     if (menuOpen()) { hide(); return; }
     if (!(event.target instanceof Element) || popup.contains(event.target)) return;
     const control = event.target.closest<HTMLElement>(selector);
-    if (!control || control.matches(rich) || control.closest('.track-drag-preview')) { hide(); return; }
+    if (!control || control.hasAttribute('data-tooltip-suppressed') || control.matches(rich) || control.closest('.track-drag-preview')) { hide(); return; }
     if (event.type === 'focusin' && pointerFocus) return;
     if (control === dismissed) return;
     if (event.type === 'pointerover') dismissed = null;
@@ -73,7 +74,8 @@ export function installTooltips() {
     if (anchor && !anchor.isConnected) hide();
     else if (anchor && !popup.hidden && records.some(record => record.type === 'attributes' && record.target === anchor)) show();
   });
-  observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['title', 'data-tooltip', 'aria-label'] });
+  observer.observe(document.body, { childList: true, subtree: true, attributes: true,
+    attributeFilter: ['title', 'data-tooltip', 'aria-label', 'data-tooltip-suppressed'] });
   document.addEventListener('beforetoggle', event => {
     if ((event.target as Element)?.matches?.('.popup-menu, .header-actions[popover]')) hide();
   }, options);

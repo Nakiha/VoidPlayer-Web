@@ -1,8 +1,53 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  PanMomentumFilter, Viewport, unobscuredFitArea, fitReference, wheelZoomFactor, ZOOM_MAX, classifyWheel, fitContain, fittedSize, normalizeWheelDelta,
+  PanMomentumFilter, Viewport, unobscuredFitArea, fitReference, wheelZoomFactor, ZOOM_MAX, classifyWheel, fitContain, fittedSize, gridArrangement, normalizeWheelDelta,
 } from '../../shared/presentation/viewport.ts';
+
+test('grid keeps the first four tracks in a two-by-two reading order', () => {
+  for (const count of [1, 2, 3, 4]) {
+    const tracks = Array.from({ length: count }, () => ({ width: 1920, height: 1080 }));
+    const layout = gridArrangement(1600, 900, tracks, 'uniform', 32, 36);
+    assert.equal(layout.columns, Math.min(2, count));
+    assert.equal(layout.rows, Math.ceil(count / 2));
+    assert.deepEqual(layout.cells.map(cell => [cell.column, cell.row, cell.bottomHeading]),
+      [[0, 0, false], [1, 0, false], [0, 1, true], [1, 1, true]].slice(0, count));
+  }
+});
+
+test('five to eight tracks keep grouped order and repeat header placement in both directions', () => {
+  for (const count of [5, 6, 7, 8]) {
+    const tracks = Array.from({ length: count }, () => ({ width: 1920, height: 1080 }));
+    const wide = gridArrangement(4000, 900, tracks, 'uniform', 32, 36);
+    const tall = gridArrangement(800, 1600, tracks, 'uniform', 32, 36);
+    assert.equal(wide.direction, 'horizontal');
+    assert.equal(tall.direction, 'vertical');
+    assert.equal(wide.columns, count === 5 ? 3 : 4);
+    assert.equal(tall.rows, count <= 6 ? 3 : 4);
+    assert.deepEqual(wide.cells.map(cell => [cell.column, cell.row]),
+      [[0, 0], [1, 0], [0, 1], [1, 1], [2, 0], [3, 0], [2, 1], [3, 1]].slice(0, count));
+    assert.deepEqual(tall.cells.map(cell => [cell.column, cell.row]),
+      [[0, 0], [1, 0], [0, 1], [1, 1], [0, 2], [1, 2], [0, 3], [1, 3]].slice(0, count));
+    for (const layout of [wide, tall]) {
+      assert.deepEqual(layout.cells.map(cell => cell.bottomHeading), [false, false, true, true, false, false, true, true].slice(0, count));
+      for (const cell of layout.cells) assert.equal(cell.bottomRow, cell.row === layout.rows - 1);
+    }
+  }
+});
+
+test('grid selection uses source aspect ratio, pixel density policy and a stable resize margin', () => {
+  const hd = Array.from({ length: 8 }, () => ({ width: 1920, height: 1080 }));
+  const cinema = hd.map(() => ({ width: 3840, height: 800 }));
+  assert.equal(gridArrangement(1600, 900, hd, 'uniform', 32, 36).direction, 'horizontal');
+  assert.equal(gridArrangement(1600, 900, cinema, 'uniform', 32, 36).direction, 'vertical');
+  const mixed = hd.map((track, index) => index < 4 ? track : { width: 720, height: 1280 });
+  assert.equal(gridArrangement(800, 900, mixed, 'uniform', 32, 36).direction, 'vertical');
+  assert.equal(gridArrangement(800, 900, mixed, 'fill', 32, 36).direction, 'horizontal');
+  for (const direction of ['horizontal', 'vertical'] as const) {
+    assert.equal(gridArrangement(1088, 900, hd, 'uniform', 32, 36, direction).direction, direction, 'near ties retain direction');
+  }
+  assert.equal(gridArrangement(1250, 900, hd, 'uniform', 32, 36, 'vertical').direction, 'horizontal');
+});
 
 test('fitContain letterboxes without upscaling past the slot', () => {
   assert.deepEqual(fitContain(2000, 1000, 3840, 2160), { width: 1777.7777777777778, height: 1000 });
