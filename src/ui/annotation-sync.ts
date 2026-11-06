@@ -14,10 +14,14 @@ import { AnnotationPendingQueue } from '../review/annotation-pending.ts';
 import type { PendingEdit } from '../review/annotation-pending.ts';
 import { annotationThumbnails, thumbnailSignature } from './annotation-thumbnails.ts';
 import { publishMarkPreview } from './mark-preview-publish.ts';
+import { PollingCadence } from '../services/polling-cadence.ts';
 
 export function installAnnotationSync(session: ReviewSession, editing: () => boolean) {
   const storage = new AnnotationStorage(), life = new AbortController(), client = new AnnotationClient(life.signal);
   const activity = installAnnotationActivity(life.signal);
+  const cadence = new PollingCadence(3000);
+  let pollRevision = 0;
+  const resetPolling = () => { pollRevision++; cadence.reset(); };
   let eventCursor: number | undefined, recentEvents: AnnotationEvent[] = [];
   let previewEpoch = 0, editGeneration=0, localFailure: string | (() => string) = '';
   // REVIEW-01：待保存队列按 key 串行、重试不产生新编辑版本。
@@ -50,13 +54,14 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     const {space,actorId}=destination,key=`${actorId}/${space}/${owner}/${id}`;
     // 用户新编辑：产生新的 seq 与 editGeneration，重试不得走这条路径。
     const pending=pendingQueue.stage(key,{id,document,base,space,actorId});editGeneration++;
+    resetPolling();
     if(space===scope && actorId===actor)managed.add(id);saving++;state();
     try {
       await pendingQueue.runIfCurrent(key,pending,async()=>{
         await storage.change(key,previous=>({key,space,actor:actorId,id,base:previous?.base ?? base,desired:document,generation:(previous?.generation ?? 0)+1,...(previous?.attempt?{attempt:previous.attempt,sentGeneration:previous.sentGeneration}:{}),...(previous?.conflict?{conflict:previous.conflict}:{})}));
         pendingQueue.removeIfCurrent(key,pending);if(!pendingQueue.size)localFailure='';
       });
-    } catch(e) {localFailure=()=>t(msg("sync.localSaveFailed", "本机保存失败：{error}"), { error: (e as Error).message });} finally {saving--;await refreshDrafts();}
+    } catch(e) {localFailure=()=>t(msg("sync.localSaveFailed", "本机保存失败：{error}"), { error: (e as Error).message });} finally {saving--;await refreshDrafts();resetPolling();}
   }
   async function persistRetry(key: string, pending: PendingEdit) {
     if(pendingQueue.get(key)!==pending)return;
@@ -115,6 +120,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     if(mark && preview.url.startsWith('data:image/jpeg;base64,') && thumbnailSignature(mark)===preview.signature)void storage.savePreview(scope,id,preview).catch(()=>{});
   },{signal:life.signal});
   function resetActivity() {
+    resetPolling();
     eventCursor = undefined; recentEvents = []; activity.update(scope, recentEvents);
   }
   async function syncActivity(space: string, captured: number) {
@@ -142,16 +148,20 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
         activity.update(space, recentEvents);
         if (!page.more) break;
       }
+      return true;
     } catch (cause) {
       // An activity failure must not block acknowledged writes or annotation sync.
       if (captured === generation && !life.signal.aborted) activity.update(space, recentEvents, true);
+      return false;
     }
   }
   async function sync() {
     if(life.signal.aborted)return;
     if(working)return syncIdle;
+    cadence.ready(!document.hidden);
     working=true;let release!:()=>void;syncIdle=new Promise(resolve=>{release=resolve;});
-    const captured=generation,space=scope,actorId=actor;
+    const captured=generation,space=scope,actorId=actor,pollTicket=pollRevision;
+    let activityFailed = false;
     try {
       // REVIEW-01：重试复用快照 pending，不产生新 seq；过期（被新编辑/删除取代）直接跳过。
       for(const [key, pending] of pendingQueue.snapshot())await persistRetry(key,pending);
@@ -182,7 +192,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
           }
         }
         if(captured!==generation)return;
-        await syncActivity(space, captured);
+        activityFailed = await syncActivity(space, captured) === false;
         if(captured!==generation)return;
         let page;
         do {page=await client.changes(space,cursor);await storage.remember(page.entries);if(captured!==generation)return;cursor=page.cursor;previewEpoch=page.previewEpoch??0;}while(page.more);
@@ -190,7 +200,16 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
       }
       if(captured===generation)await apply();
       if(captured===generation && available && space!=='local')await uploadPreviews(space,actorId).catch(()=>{});
-    } catch(e){if(captured===generation){error=available?()=>t(msg("sync.disconnectedKeepDrafts", "连接中断 · 本机草稿保留")):(e as Error).message;}}finally{working=false;await refreshDrafts();release();}
+    } catch(e){if(captured===generation){error=available?()=>t(msg("sync.disconnectedKeepDrafts", "连接中断 · 本机草稿保留")):(e as Error).message;}}
+    finally {
+      await refreshDrafts();
+      if (captured === generation && pollTicket === pollRevision) {
+        cadence.observe([space, actorId, cursor, eventCursor, previewEpoch, editGeneration],
+          !!error || !!localFailure || activityFailed || !!saving || !!pendingQueue.size || currentDrafts().some(draft => !draft.conflict));
+      }
+      working = false;
+      release();
+    }
   }
   async function switchSpace(next:string) {
     if(editing() || pendingQueue.size || saving)throw new Error(t(msg("sync.waitForDrafts", "请先结束标注并等待本机草稿保存完成。")));
@@ -207,10 +226,12 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     if(signature!==trackSignature){trackSignature=signature;void apply().catch(e => { error=(e as Error).message;state(); });}
   });
   window.addEventListener('beforeunload',event=>{if(saving || pendingQueue.size || localFailure){event.preventDefault();event.returnValue='';}},{signal:life.signal});
-  const interval=setInterval(()=>{if(!document.hidden)void sync();},3000);
-  async function connect(){try{const health=await identityHealth();actor=health.actor?.id??actor;available=!!health.capabilities?.annotations;await apply();void sync();}catch{void apply().catch(e => { error=(e as Error).message;state(); });}}
+  const interval=setInterval(()=>{if(cadence.ready(!document.hidden))void sync();},1000);
+  async function connect(){resetPolling();try{const health=await identityHealth();actor=health.actor?.id??actor;available=!!health.capabilities?.annotations;await apply();void sync();}catch{void apply().catch(e => { error=(e as Error).message;state(); });}}
   window.addEventListener('online',()=>void connect(),{signal:life.signal});
-  window.addEventListener('focus',()=>void sync(),{signal:life.signal});
+  const resume = () => { resetPolling(); if (!document.hidden) void sync(); };
+  window.addEventListener('focus',resume,{signal:life.signal});
+  document.addEventListener('visibilitychange',resume,{signal:life.signal});
   window.addEventListener('voidplayer-identity-change',()=>{
     const next=currentActor()?.id ?? 'local';if(next===actor)return;
     generation++;actor=next;resetActivity();cursor=0;versions.clear();void apply().catch(e => { error=(e as Error).message;state(); });
@@ -222,6 +243,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     async qualityTarget(id: string) {
       const captured=generation,space=scope,actorId=actor;
       if(space==='local' || !available || editing())throw new Error('Save this annotation in a shared space before attaching a result.');
+      resetPolling();
       await sync();
       const pending=await storage.drafts(space,actorId);
       if(captured!==generation || pending.some(d=>d.id===id) || pendingQueue.size || saving)
@@ -231,6 +253,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
       return {space,id,revision:record.revision,actor:actorId,document:record.document};
     },
     async rememberQuality(record: AnnotationRecord) {
+      resetPolling();
       await storage.remember([record]);
       // A late reply is cached in its original space only. Normal application
       // protects local drafts and remaps only sources in the current session.

@@ -55,6 +55,21 @@ try{
   assert.equal(await page.locator('dialog[open]').count(),0,'one click shares without a wizard');assert.equal(await page.locator('#review-sharing,#review-context').count(),0);
   const record=await page.request.get(base+'/api/workspaces/'+id).then(r=>r.json());assert.equal(record.name,'画质对比');assert.equal(record.document.marks.length,0);assert.equal(record.document.positionUs,200000);
   await page.screenshot({path:path.join(evidence,'01-one-click-sharing.png')});
+  phase='idle-backoff';await page.waitForFunction(()=>window.testAnnotationStatus?.state==='saved');
+  const idleReads=[];
+  const captureIdle=request=>{const url=new URL(request.url());if(request.method()==='GET'&&(url.pathname===`/api/annotations/events/${record.space}`||url.pathname===`/api/annotations/spaces/${record.space}`))idleReads.push({path:url.pathname,at:Date.now()});};
+  page.on('request',captureIdle);
+  await new Promise(resolve=>setTimeout(resolve,32000));
+  page.off('request',captureIdle);
+  const eventReads=idleReads.filter(request=>request.path.includes('/events/')).length,stateReads=idleReads.filter(request=>request.path.includes('/spaces/')).length;
+  assert.ok(eventReads>=2&&eventReads<=4,`32 idle seconds use at most four event reads, observed ${eventReads}`);
+  assert.equal(stateReads,eventReads,'each idle cycle reads both activity and state');
+  diagnostic('idle-backoff',{eventReads,stateReads});
+  await Promise.all([
+    page.waitForRequest(request=>request.method()==='POST'&&new URL(request.url()).pathname===`/api/annotations/spaces/${record.space}`,{timeout:2500}),
+    call(page,'update_review_mark',{id:mark.id,text:'空闲后编辑继续同步'}),
+  ]);
+  await page.waitForFunction(()=>window.testAnnotationStatus?.state==='saved');
   const recipient=await browser.newContext({locale:'zh-CN', viewport:{width:1280,height:900}});await trace(recipient,'recipient');
   const other=await recipient.newPage();watch(other,'recipient',errors);phase='recipient-restore';
   await other.goto(link);await other.locator('#identity-welcome [data-guest]').click();

@@ -61,11 +61,12 @@ async function harness(t: TestContext, shared = false) {
   const location = { href: 'http://example.test/', origin: 'http://example.test' };
   const history = { replaceState(_state: unknown, _title: string, url: URL | string) { location.href = String(url); } };
   let actor: Actor = { id: 'alice', name: 'Alice' };
+  let healthReads = 0, workspacesAvailable = true;
   const calls: Call[] = [], errors: Error[] = [];
   let intercept: ((call: Call) => Promise<Response> | Response | undefined) | undefined;
   const fetch = async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input), method = init?.method ?? 'GET';
-    if (url === '/api/health') return json({ service: 'voidplayer-media', actor, capabilities: { workspaces: true } });
+    if (url === '/api/health') { healthReads++; return json({ service: 'voidplayer-media', actor, capabilities: { workspaces: workspacesAvailable } }); }
     const call: Call = { url, method, headers: new Headers(init?.headers), body: init?.body ? JSON.parse(String(init.body)) : undefined };
     calls.push(call);
     const response = intercept?.(call); if (response) return response;
@@ -88,6 +89,7 @@ async function harness(t: TestContext, shared = false) {
   await controller.open('A');
   assert.equal(controller.binding()?.id, 'A');
   calls.length = 0;
+  healthReads = 0;
   const idle = async () => { for (let i = 0; i < 30 && el('save').disabled; i++) await setImmediate(); assert.equal(el('save').disabled, false, 'controller settled'); };
   const block = (match: (call: Call) => boolean) => {
     const started = deferred<Call>(), response = deferred<Response>();
@@ -101,10 +103,66 @@ async function harness(t: TestContext, shared = false) {
     assert.equal(el('message').hidden, true); assert.deepEqual(errors, []);
   };
   return { controller, el, calls, errors, location, idle, block, detach, assertDetached,
+    healthReads: () => healthReads,
+    serviceActor: (id: string) => { actor = { id, name: id }; },
+    available: (value: boolean) => { workspacesAvailable = value; },
+    showPane: () => element('settings').dispatchEvent(new CustomEvent('settings-pane-change', { detail: 'workspace' })),
     save: () => el('save').onclick!(), rename: (name: string) => { el('name').value = name; el('name').dispatchEvent(new Event('change')); },
     setActor: async (id: string) => { actor = { id, name: id }; await identityHealth(); assert.equal(currentActor()?.id, id); },
     clearIntercept: () => { intercept = undefined; }, failOpen: (error: Error) => { openError = error; }, lifetime };
 }
+
+test('workspace pane and open each confirm identity once, and unavailable service skips the list', async t => {
+  const h = await harness(t);
+  await h.controller.open('A');
+  assert.equal(h.healthReads(), 1);
+  assert.equal(h.calls.filter(call => call.url === '/api/workspaces/A').length, 1);
+  h.showPane();
+  for (let i = 0; i < 30 && !h.calls.some(call => call.url.startsWith('/api/workspaces?')); i++) await setImmediate();
+  assert.equal(h.healthReads(), 2);
+  assert.equal(h.calls.filter(call => call.url.startsWith('/api/workspaces?')).length, 1);
+  h.available(false); h.showPane();
+  for (let i = 0; i < 30 && h.el('message').hidden; i++) await setImmediate();
+  assert.equal(h.el('message').hidden, false);
+  assert.equal(h.calls.filter(call => call.url.startsWith('/api/workspaces?')).length, 1);
+});
+
+test('the single identity confirmation still rejects a changed cookie actor before reading a workspace', async t => {
+  const h = await harness(t);
+  h.serviceActor('bob');
+  await h.controller.open('A');
+  assert.equal(h.healthReads(), 1);
+  assert.equal(h.calls.length, 0);
+  assert.equal(h.controller.binding(), undefined);
+  assert.deepEqual(h.errors, []);
+});
+
+test('workspace search Enter cancels its pending debounce and ignores IME confirmation', async t => {
+  const h = await harness(t);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const search = h.el('search'); search.value = '镜头';
+  search.dispatchEvent(new Event('input'));
+  search.onkeydown!(Object.assign(new Event('keydown'), { key: 'Enter', isComposing: true }) as KeyboardEvent);
+  await setImmediate(); assert.equal(h.calls.length, 0, 'IME confirmation does not submit');
+  search.onkeydown!(Object.assign(new Event('keydown'), { key: 'Enter', isComposing: false }) as KeyboardEvent);
+  await h.idle();
+  t.mock.timers.tick(180); await h.idle(); await setImmediate();
+  assert.equal(h.calls.filter(call => call.url.startsWith('/api/workspaces?')).length, 1);
+  assert.equal(h.healthReads(), 1);
+});
+
+test('a search submitted while the previous search is pending refreshes the latest query once', async t => {
+  const h = await harness(t), pending = h.block(call => call.url.includes('search=first'));
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const search = h.el('search');
+  const enter = () => search.onkeydown!(Object.assign(new Event('keydown'), { key: 'Enter', isComposing: false }) as KeyboardEvent);
+  search.value = 'first'; search.dispatchEvent(new Event('input')); enter(); await pending.started;
+  search.value = 'latest'; search.dispatchEvent(new Event('input')); enter();
+  pending.resolve(json({ entries: [], next: null })); await h.idle();
+  t.mock.timers.tick(180); await h.idle(); await setImmediate();
+  assert.deepEqual(h.calls.map(call => new URL(call.url, 'http://localhost').searchParams.get('search')), ['first', 'latest']);
+  assert.equal(h.healthReads(), 2);
+});
 
 for (const status of [200, 404, 409, 500]) test(`late save ${status} after detach leaves the new workspace unbound and unmodified`, async t => {
   const h = await harness(t);

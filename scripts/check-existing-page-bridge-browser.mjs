@@ -10,7 +10,7 @@ import {startMcpClient} from './testing/mcp-client.mjs';
 
 const output=path.resolve('.run/existing-page-bridge');await mkdir(output,{recursive:true});
 const temp=await mkdtemp(path.join(os.tmpdir(),'vp-existing-browser-'));
-const checks=[],errors=[],requests=[];let browser,client,service,phase='setup';
+const checks=[],errors=[],requests=[],retireResponses=[];let browser,client,service,phase='setup';
 const check=(label,value=true)=>{assert.ok(value,label);checks.push(label);console.error('PASS '+label);};
 async function eventually(fn){const end=Date.now()+12000;for(;;){const value=await fn();if(value)return value;if(Date.now()>end)throw Error('Timeout: '+phase);await new Promise(r=>setTimeout(r,40));}}
 async function openMcpSettings(page){
@@ -27,6 +27,7 @@ try{
   for(const [file,source]of [[fileA,'testsrc2'],[fileB,'smptebars']])execFileSync('ffmpeg',['-v','error','-f','lavfi','-i',source+'=size=160x96:rate=10','-t','4','-c:v','libx264','-threads','1','-pix_fmt','yuv420p','-g','10','-bf','2','-movflags','+faststart',file]);
   const config=await loadConfig([],'production',temp,{staticDir:path.resolve('dist'),dataDir:path.join(temp,'data'),allowEmptyRoots:true});config.port=0;config.mediaRoots=[temp];config.logsDir=null;config.indexWatch=false;
   service=await startService(config,false);const origin='http://127.0.0.1:'+service.server.address().port;
+  service.server.prependListener('request',(request,response)=>{if(request.url==='/api/page-bridge/retire')response.once('finish',()=>retireResponses.push(response.statusCode));});
   browser=await chromium.launch({headless:true,...(process.env.MCP_BROWSER_EXECUTABLE?{executablePath:process.env.MCP_BROWSER_EXECUTABLE}:{})});
   const context=await browser.newContext({viewport:{width:1280,height:900},locale:'en-US'});context.setDefaultTimeout(10000);
   context.on('page',p=>{p.on('pageerror',e=>errors.push(e.message));p.on('request',r=>requests.push({method:r.method(),path:new URL(r.url()).pathname}));});
@@ -41,6 +42,9 @@ try{
   const beforeA=await a.locator('#name-A').textContent(),beforeB=await b.locator('#name-A').textContent();
   check('two ordinary pages loaded File before independent CLI exists');
   check('ordinary HTML has no launcher bootstrap',!(await (await fetch(origin)).text()).includes('name="voidplayer-page-bridge"'));
+  const unpaired=await context.newPage();await unpaired.goto(origin);await unpaired.waitForFunction(()=>!!window.voidPlayer?.tools);await unpaired.close();
+  await new Promise(resolve=>setTimeout(resolve,100));
+  check('closing an unpaired ordinary page sends no retirement request',retireResponses.length===0);
   async function start(){client=await startMcpClient({existingOrigin:origin});await client.initialize();await client.call('get_bridge_status');return client;}
   async function pair(page,code=client.pairingCode){await openMcpSettings(page);await page.locator('#page-bridge-code').fill(code);await page.locator('#page-bridge-pair').click();}
   async function connect(page,scopes=['read']){for(const scope of ['read','view','annotate'])await page.locator('#page-bridge-'+scope).setChecked(scopes.includes(scope));await page.locator('#page-bridge-connect').click();return eventually(async()=>{const s=await client.call('get_bridge_status');return s.connected?s:false;});}
@@ -104,7 +108,10 @@ try{
   check('EOF preserves File and page',await b.locator('#name-A').textContent()===beforeB);check('EOF preserves original normal service',(await fetch(origin+'/api/agent')).ok);
   phase='fresh-client-same-loaded-page';await start();await b.locator('#page-bridge-reset').click();await b.locator('#page-bridge-code').fill(client.pairingCode);await b.locator('#page-bridge-pair').click();status=await connect(b);epoch=status.epoch;
   check('fresh client pairs same loaded page without reload or file reselection',(await call('get_review_session')).tracks[0].name===beforeB);
+  const retireCount=retireResponses.length;
   await b.close();await eventually(async()=>!(await client.call('get_bridge_status')).connected);check('closing selected existing page revokes');
+  await eventually(()=>retireResponses.length>retireCount);
+  check('closing a paired page still retires its document',retireResponses.at(-1)===200);
   check('closing page preserves original service',(await fetch(origin+'/api/agent')).ok);
   check('no page exceptions',errors.length===0);check('File never uploaded',requests.filter(r=>r.method==='POST').every(r=>r.path.startsWith('/api/page-bridge/')||r.path==='/api/identity'));
   await writeFile(path.join(output,'evidence.json'),JSON.stringify({passed:true,browser:browser.version(),checks,errors,requests},null,2));console.log(JSON.stringify({passed:true,browser:browser.version(),checks:checks.length}));

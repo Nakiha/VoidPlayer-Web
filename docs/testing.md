@@ -1,5 +1,9 @@
 # 验证说明
 
+工作区请求去重扩充已有 `saved-workspaces-ui` 和双引擎 saved-workspaces 浏览器用例：Enter 清除延迟搜索且不提交输入法确认，面板/打开各只确认一次身份，能力不可用不读列表，cookie 身份变化仍围栏旧打开。独立预期为每个用户搜索只请求一次；浏览器仅增加一个搜索和约 260ms 观察窗口。页面桥既有 existing-page 用例增加一个无媒体普通标签的关闭检查，并核对已配对页面仍真实 retire；不改变授权或 Worker 生命周期。
+
+`annotation-sync` 用真实 IndexedDB 适配与可控时钟验证 3/6/12/15 秒退避、15 秒封顶、编辑/可见性/焦点/身份/重连恢复及活动事件读取失败不阻塞状态同步。已有 sharing 浏览器用例每引擎增加 32 秒空闲观察和一次本地编辑：空闲事件与状态读取各不超过四次，编辑须在 2.5 秒内发起写入；既有远端标注、冲突、重启与删除覆盖保留。不增加媒体矩阵或性能门禁；请求数量和本机耗时不代表跨机器吞吐。
+
 IP 访问日志扩充既有 `admin` / `http2` 用例：真实 socket 与生产网关覆盖 HTTP、HTTPS/1、HTTP/2，伪造两种转发头仍须记录真实 peer；独立核对映射 IPv4、IPv6、未知地址、请求 ID、去查询路径、最近快照及 finish/close 仅记录一次。新增断言在修复前因缺少 IP 字段失败；管理页既有请求观察场景同时核对 IP 渲染。HTTP/2 取消用例等待真实 close，允许 Bun 在显式取消后报告 `NGHTTP2_CANCEL`，其他错误仍失败，原有 IO 释放与同会话继续读取断言保留；旧 HEAD 同样复现的等待误判证据在本机日志内。没有新增媒体、浏览器循环或套件，增量仅数个轻量 HTTP 请求。
 
 请求观察优化扩充已有职责用例，不新增重复媒体矩阵。`quality-workflow` 用确定时钟验证空闲退避、可见恢复和活动任务刷新；`library-index` / `admin` / `media-thumbnail-store` 用真实 HTTP 验证 304、查询/版本隔离、跳过列表查询和旧接口兼容；`thumbnail-session` 验证 browse 状态替代逐条探测及迟到旧 epoch。`analysis-products` / `bitstream-analysis` 对冷/热摘要包注入错误 build、namespace、重复 AU 和游标，拒绝整包且不发布部分图表。以上轻量增量不依赖真实媒体，沿用已登记的 Node 用例。

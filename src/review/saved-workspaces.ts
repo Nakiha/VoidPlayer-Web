@@ -5,6 +5,7 @@ import type { WorkspaceFile } from '../../shared/review/workspace-file.ts';
 export type { SavedWorkspace };
 export type WorkspaceRecord = SavedWorkspace & { document: WorkspaceFile };
 export type WorkspacePage = { entries: SavedWorkspace[]; next: string | null };
+export class WorkspaceUnavailableError extends Error {}
 export class SavedWorkspaceClient {
   private signal: AbortSignal;
   constructor(signal: AbortSignal) { this.signal = signal; }
@@ -12,6 +13,7 @@ export class SavedWorkspaceClient {
     const previous = currentActor();
     const health = await identityHealth();
     if (previous && previous.id !== health.actor?.id) throw new Error('用户已切换，请重新选择工作区。');
+    if (!health.capabilities?.workspaces) throw new WorkspaceUnavailableError('工作区服务不可用。');
     const response = await fetch(url, { method, cache: 'no-store', headers: { ...(health.actor ? { 'x-voidplayer-actor': health.actor.id } : {}), ...(method === 'GET' ? {} : { 'x-voidplayer-action': 'workspace', 'content-type': 'application/json' }), ...(revision === undefined ? {} : { 'if-match': `"${revision}"` }) }, body: value === undefined ? undefined : JSON.stringify(value), signal: AbortSignal.any([this.signal, AbortSignal.timeout(30000)]) });
     const result = await response.json();
     if (!response.ok) throw apiError(response.status, result);

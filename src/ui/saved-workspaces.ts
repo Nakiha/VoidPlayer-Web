@@ -1,6 +1,6 @@
 import { t, msg, th, onLanguageChange, formatDate } from '../i18n.ts';
-import { currentActor, identityHealth } from '../services/identity.ts';
-import { SavedWorkspaceClient } from '../review/saved-workspaces.ts';
+import { currentActor } from '../services/identity.ts';
+import { SavedWorkspaceClient, WorkspaceUnavailableError } from '../review/saved-workspaces.ts';
 import type { SavedWorkspace } from '../review/saved-workspaces.ts';
 import type { WorkspaceFile } from '../../shared/review/workspace-file.ts';
 import { prepareSharedWorkspace } from '../review/shared-workspace.ts';
@@ -68,7 +68,17 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
   const actCurrent = <T>(work: () => Promise<T>, propagate = false) => act(work, propagate, captureRequest());
   async function list() {
     const request = ++sequence, context = captureRequest();
-    const page = await client.list(before, search, true);
+    let page;
+    try { page = await client.list(before, search, true); }
+    catch (error) {
+      if (!(error instanceof WorkspaceUnavailableError)) throw error;
+      if (request === sequence && isCurrent(context)) {
+        available = false;
+        message(() => t(msg('savedWorkspaces.workspaceServiceUnavailable', '工作区服务不可用。')));
+        controls();
+      }
+      return;
+    }
     if (request !== sequence || !isCurrent(context)) return;
     available = true; next = page.next;
     const rows = page.entries.map(record => {
@@ -120,8 +130,6 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
     const operation = beginOpen();
     opening = true; controls();
     try {
-      await identityHealth();
-      if (!operation.current()) return;
       const record = await client.read(id);
       if (!operation.current()) return;
       if (!await options.open(record.document, record.space ?? undefined, operation)) return;
@@ -163,7 +171,10 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
   }, { signal: options.signal });
   $('name').onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); $('name').blur(); } };
   $('reload').onclick = () => { if (binding) void act(() => load(binding!.id)); };
-  const refresh = () => void actCurrent(async () => { message(''); before = ''; search = $<HTMLInputElement>('search').value.trim(); await list(); });
+  const refresh = () => {
+    if (busy) { refreshAfterBusy = true; return; }
+    void actCurrent(async () => { message(''); before = ''; search = $<HTMLInputElement>('search').value.trim(); await list(); });
+  };
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
   const syncVisibleList = () => {
     if (options.signal.aborted || !(document.getElementById('settings') as HTMLDialogElement).open || !available || document.getElementById('settings-pane-workspace')!.hidden) return;
@@ -187,10 +198,15 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
     $('search-button').hidden = !$<HTMLInputElement>('search').value;
     clearTimeout(searchTimer);
     if ((event as InputEvent).isComposing) return;
-    searchTimer = setTimeout(() => { if (busy) refreshAfterBusy = true; else refresh(); }, 180);
+    searchTimer = setTimeout(refresh, 180);
   }, { signal: options.signal });
   options.signal.addEventListener('abort', () => clearTimeout(searchTimer), { once: true });
-  $('search').onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); refresh(); } };
+  $('search').onkeydown = event => {
+    if (event.key !== 'Enter' || event.isComposing) return;
+    event.preventDefault();
+    clearTimeout(searchTimer);
+    refresh();
+  };
   $('first').onclick = () => void actCurrent(async () => { before = ''; await list(); });
   $('next').onclick = () => void actCurrent(async () => { if (next) { before = next; await list(); } });
   window.addEventListener('voidplayer-identity-change', event => {
@@ -207,10 +223,7 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
     const context = captureRequest();
     void (async () => {
     if (busy) { refreshAfterBusy = true; return; }
-    const health = await identityHealth();
-    if (!isCurrent(context) || busy) return;
-    available = !!health.capabilities?.workspaces; controls();
-    if (available) await list(); else message(() => t(msg("savedWorkspaces.workspaceServiceUnavailable", "工作区服务不可用。")));
+    await list();
     })().catch(error => { if (isCurrent(context)) { message((error as Error).message, true); options.report(error as Error); } });
   }, { signal: options.signal });
   controls();

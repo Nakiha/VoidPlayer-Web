@@ -47,7 +47,7 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
   function revoke(message:string,retire=false){
     const old=grant;++generation;grant=undefined;controller.abort();controller=new AbortController();
     if(old)void post('revoke',{epoch:old.epoch},old.token,undefined,true).catch(()=>{});
-    if(retire)void post('retire',{},documentToken,undefined,true).catch(()=>{});
+    if(retire && documentToken)void post('retire',{},documentToken,undefined,true).catch(()=>{});
     note(message);render();
   }
   async function execute(command:PageCommand,g:NonNullable<typeof grant>,epoch:number){

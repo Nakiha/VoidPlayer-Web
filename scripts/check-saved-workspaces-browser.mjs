@@ -36,6 +36,16 @@ try {
   await settings(page);await page.locator('#saved-workspace-name').fill('镜头评审');await page.locator('#saved-workspace-save').click();
   await page.locator('.saved-workspace-open').filter({hasText:'镜头评审'}).waitFor();
   await page.waitForFunction(()=>!document.querySelector('#saved-workspace-name').disabled);
+  const searches=[];
+  const captureSearch=request=>{const url=new URL(request.url());if(url.pathname==='/api/workspaces'&&url.searchParams.get('search')==='镜头评审')searches.push(request.url());};
+  page.on('request',captureSearch);
+  await page.locator('#saved-workspace-search').fill('镜头评审');await page.locator('#saved-workspace-search').press('Enter');
+  await page.locator('.saved-workspace-open').filter({hasText:'镜头评审'}).waitFor();
+  await new Promise(resolve=>setTimeout(resolve,260));
+  page.off('request',captureSearch);
+  assert.equal(searches.length,1,'Enter submits once without a delayed duplicate search');
+  const clearedSearch=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/workspaces'&&new URL(response.url()).searchParams.get('search')==='');
+  await page.locator('#saved-workspace-search').fill('');await clearedSearch;
   await page.locator('#settings-tab-appearance').click();
   let releaseList;
   const delayedList=new Promise(resolve=>{releaseList=resolve;});
