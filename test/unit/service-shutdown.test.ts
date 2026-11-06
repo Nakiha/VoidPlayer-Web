@@ -39,6 +39,7 @@ for(const kind of ['database','build'] as const)test(`index ${kind} stop failure
 function library(failed='') {
   const calls:string[]=[],failure=Error('physical exit unconfirmed');
   const value=Object.assign(Object.create(MediaLibraryIndex.prototype),{
+    storageReads:new Set(),
     stop(){calls.push('stop');if(failed==='stop')throw failure;},store:{close(){calls.push('database');}},indexJobs:{close(){calls.push('indexJobs');if(failed==='indexJobs')throw failure;}}
   }) as MediaLibraryIndex;
   const fields={taskService:'taskCenter',reexecutionService:'reexecutions',correspondenceService:'correspondence',cambiService:'cambi',xpsnrService:'xpsnr',vmafService:'vmaf',discoveryService:'preparation',rangeService:'ranges',jobService:'jobs',pairRunner:'quality'};

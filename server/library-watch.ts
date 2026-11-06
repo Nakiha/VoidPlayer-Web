@@ -7,13 +7,18 @@ const contains = (parent: string, child: string) => !parent || child === parent 
 /** Bounded hints, never an authoritative account of additions or deletions. */
 export class DirectoryChanges {
   private roots = new Map<string, Set<string>>();
+  private recursive: boolean;
+  constructor(recursive = true) { this.recursive = recursive; }
   add({ rootId, directory }: DirectoryScope) {
     let paths = this.roots.get(rootId);
     if (!paths) this.roots.set(rootId, paths = new Set());
-    if ([...paths].some(p => contains(p, directory))) return;
-    for (const p of paths) if (contains(directory, p)) paths.delete(p);
+    if (this.recursive && [...paths].some(p => contains(p, directory))) return;
+    if (this.recursive) for (const p of paths) if (contains(directory, p)) paths.delete(p);
     paths.add(directory);
-    if (paths.size > 128) { paths.clear(); paths.add(''); }
+    if (paths.size > 128) {
+      if (this.recursive) { paths.clear(); paths.add(''); }
+      else paths.delete(paths.values().next().value!);
+    }
   }
   take(): DirectoryScope[] {
     const result = [...this.roots].flatMap(([rootId, paths]) => [...paths].map(directory => ({ rootId, directory })));
@@ -35,8 +40,9 @@ export class DirectoryWatchHints {
   constructor(changed: (scope: DirectoryScope) => void, limit = 512) { this.changed = changed; this.limit = limit; }
   beginRoot(rootId: string) {
     this.unseen.set(rootId, new Set([...this.handles].filter(([, record]) => record.rootId === rootId).map(([key]) => key)));
-    this.failures.delete(rootId); this.capped.delete(rootId);
+    this.retryRoot(rootId);
   }
+  retryRoot(rootId: string) { this.failures.delete(rootId); this.capped.delete(rootId); }
   finishRoot(rootId: string, complete: boolean) {
     if (complete) for (const key of this.unseen.get(rootId) ?? []) {
       const record = this.handles.get(key); this.handles.delete(key); record?.handle.close();

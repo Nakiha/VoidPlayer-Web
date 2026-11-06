@@ -36,7 +36,7 @@ try {
     ...(container === 'faststart' ? ['-movflags', '+faststart'] : container === 'fragmented' ? ['-movflags', '+frag_keyframe+empty_moov+default_base_moof'] : []), '-y', selected]);
   await copyFile(selected, path.join(media, `second.${extension}`));
   library = new MediaLibraryIndex([media], { database: path.join(temporary, 'library.sqlite'), watch: false });
-  const listing = await library.list();
+  const listing = await library.list(true);
   const id = listing.entries.find(e => e.name === `audio.${extension}`).id;
   const second = listing.entries.find(e => e.name === `second.${extension}`).id;
   let traffic = [];

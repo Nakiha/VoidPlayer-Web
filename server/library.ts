@@ -15,12 +15,13 @@ import { THUMB_RECIPE_VERSION } from '../shared/thumbnails/contract.ts';
 import type { MediaRoot, RootRecord, StoredMedia } from './library-store.ts';
 import { DirectoryChanges, DirectoryWatchHints } from './library-watch.ts';
 import type { DirectoryScope } from './library-watch.ts';
+import { LIBRARY_RECHECK_MS, LibraryScanScheduler } from './library-scheduler.ts';
 export { mediaId } from './library-store.ts';
 export type { MediaRoot } from './library-store.ts';
 export const MEDIA_EXTENSIONS = ['.mp4', '.m4v', '.mov', '.mkv', '.webm', '.ts', '.m2ts', '.mpg', '.mpeg', '.avi', '.flv'];
 export interface LibraryEntry { id: string; name: string; root: string; rootIndex: number; size: number; lastModified: number; rootId?: string; version?: string; state?: string }
 export interface Library { roots: string[]; entries: LibraryEntry[]; truncated: boolean }
-interface IndexOptions { analysisCoreDir?:string; database?: string; coreDir?: string; ttlMs?: number; settleMs?: number; ioTimeoutMs?: number; watch?: boolean; debounceMs?: number; scan?: typeof scanLibrary; now?: () => number }
+interface IndexOptions { analysisCoreDir?:string; database?: string; coreDir?: string; ttlMs?: number; settleMs?: number; ioTimeoutMs?: number; watch?: boolean; debounceMs?: number; scanDelayMs?: number; scanBatchDelayMs?: number; scan?: typeof scanLibrary; now?: () => number }
 export interface BrowseQuery { rootId?: string; directory?: string; search?: string; recursive?: boolean; limit?: number; offset?: number; revision?: number }
 export function fileVersion(stat: Stats) { return createHash('sha256').update(`${stat.size}:${Math.round(stat.mtimeMs)}:${Math.round(stat.ctimeMs)}:${stat.ino}`).digest('hex').slice(0, 24); }
 const parent = (name: string) => path.posix.dirname(name) === '.' ? '' : path.posix.dirname(name);
@@ -65,11 +66,16 @@ export class MediaLibraryIndex {
   readonly thumbnails: MediaThumbnailStore;
   private pending: Promise<void> | null = null;
   private abort: AbortController | null = null;
-  private timer: ReturnType<typeof setInterval> | null = null;
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private started = false;
+  private resumeAt = 0;
+  private scheduler: LibraryScanScheduler;
+  private storageReads = new Set<Promise<unknown>>();
   private settleTimer: ReturnType<typeof setTimeout> | null = null;
   private changeTimer: ReturnType<typeof setTimeout> | null = null;
   private changes = new DirectoryChanges();
-  private settling = new DirectoryChanges();
+  private automaticChanges = new DirectoryChanges(false);
+  private settling = new DirectoryChanges(false);
   private watchers: DirectoryWatchHints | null = null;
   private fullScan = false;
   private cancelGeneration = 0;
@@ -77,7 +83,6 @@ export class MediaLibraryIndex {
   private closed = false;
   private configuring = false;
   private initialized: boolean;
-  private refreshedAt = -Infinity;
   private options: IndexOptions;
   constructor(roots: MediaRoot[], options: IndexOptions = {}) {
     this.options = options;
@@ -88,8 +93,9 @@ export class MediaLibraryIndex {
     this.frameIndexes = new FrameIndexStore(this.store.db);
     this.thumbnails = new MediaThumbnailStore(this.store.db);
     try { this.store.configure(this.definitions); } catch (error) { this.store.close(); throw error; }
+    this.scheduler = new LibraryScanScheduler(this.store.db, () => this.now(), options.ttlMs ?? LIBRARY_RECHECK_MS, options.settleMs ?? 0);
     this.initialized = !!this.store.db.prepare('SELECT 1 FROM roots WHERE active=1 AND scanned_at IS NOT NULL LIMIT 1').get();
-    if (this.initialized) this.refreshedAt = this.now();
+    this.initialized ||= !!this.store.db.prepare('SELECT 1 FROM library_directory_checks WHERE checked_at IS NOT NULL LIMIT 1').get();
   }
   get corePaths(){return {decoding:this.coreDirectory,analysis:this.options.analysisCoreDir??path.join(path.dirname(this.coreDirectory),'voidplayer-analysis')};}
   get analysisDirectory() { return path.join(path.dirname(this.store.file), 'bitstream-analysis'); }
@@ -97,19 +103,41 @@ export class MediaLibraryIndex {
   get ready() { return this.initialized; }
   private now() { return (this.options.now ?? Date.now)(); }
   start() {
-    if (this.timer || this.closed) return;
-    this.stopped = false;
+    if (this.started || this.closed) return;
+    this.started = true; this.stopped = false; this.resumeAt = 0;
     if (this.options.watch !== false && !this.options.scan) this.watchers = new DirectoryWatchHints(scope => {
-      this.changes.add(scope); this.scheduleChanges();
+      this.automaticChanges.add(scope); this.scheduleChanges();
     });
-    void this.refresh().catch(() => {});
-    this.timer = setInterval(() => { void this.refresh().catch(() => {}); }, this.options.ttlMs ?? 30000);
+    this.scheduleAutomatic(0);
+  }
+  private scheduleAutomatic(delay = this.options.scanDelayMs ?? 250) {
+    if (!this.started || this.timer || this.closed || this.configuring || this.pending || this.storageReads.size) return;
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      if (this.pending || this.storageReads.size || !this.started || this.closed) return;
+      if (this.now() < this.resumeAt) { this.scheduleAutomatic(Math.min(1000, this.resumeAt - this.now())); return; }
+      const scope = this.scheduler.next();
+      if (!scope) { this.scheduleAutomatic(Math.min(this.options.ttlMs ?? LIBRARY_RECHECK_MS, 1000)); return; }
+      void this.runScan([scope], true).catch(() => {}).finally(() => this.scheduleAutomatic());
+    }, delay);
     this.timer.unref();
+  }
+  /** HTTP observations only change scheduling priority; cached replies never wait
+   * for storage, and global searches do not enqueue full scans. */
+  observeBrowse(query: BrowseQuery = {}) {
+    if (!this.started || this.closed || this.configuring || query.recursive && !query.rootId && !query.directory) return;
+    const directory = query.directory ?? '';
+    if (directory && directory.split('/').some(p => !p || p.startsWith('.')) || directory.includes('\\')) return;
+    for (const root of this.definitions) if (!query.rootId || root.id === query.rootId)
+      this.scheduler.observe({ rootId: root.id, directory }, !!query.recursive);
+    this.scheduleAutomatic();
   }
   status(): LibraryScanStatus {
     const job = this.store.db.prepare('SELECT * FROM scan_jobs ORDER BY id DESC LIMIT 1').get() ?? null;
     const roots = this.store.db.prepare('SELECT id,name,state,error,scanned_at AS scannedAt FROM roots WHERE active=1 ORDER BY name,id').all();
-    return { ready: this.ready, scanning: !!this.pending, job, roots, watch: this.watchers?.status() ?? null, queuedDirectories: this.changes.size, errorDetailsTruncated: Number(job?.errors ?? 0) > 1000 };
+    return { ready: this.ready, scanning: !!this.pending, job, roots, watch: this.watchers?.status() ?? null,
+      queuedDirectories: this.changes.size + this.automaticChanges.size + this.scheduler.queuedHints,
+      errorDetailsTruncated: Number(job?.errors ?? 0) > 1000 };
   }
   errors(limit = 100, offset = 0) { return this.store.db.prepare('SELECT * FROM scan_errors WHERE job_id=(SELECT MAX(id) FROM scan_jobs) ORDER BY root_id,path LIMIT ? OFFSET ?').all(Math.min(200, Math.max(1, limit)), Math.max(0, offset)); }
   private entry(row: StoredMedia): LibraryEntry {
@@ -156,17 +184,22 @@ export class MediaLibraryIndex {
     return { entries, directories: folders.slice(0, limit), moreDirectories: folders.length > limit, total, offset, limit, revision, nextOffset: offset + limit < total || folders.length > limit ? offset + limit : null, thumbnailEpoch: this.thumbnails.epoch, ...this.status() };
   }
   async list(force = false): Promise<Library> {
-    if (force || !this.ready || this.now() - this.refreshedAt >= (this.options.ttlMs ?? 30000)) await this.refresh();
+    if (force) await this.refresh();
     const rows = this.store.db.prepare("SELECT m.* FROM media m JOIN roots r ON r.id=m.root_id WHERE r.active=1 AND m.state!='missing' ORDER BY m.path COLLATE NOCASE,m.path,m.root_id LIMIT 5001").all() as unknown as StoredMedia[];
     return { roots: this.definitions.map(r => r.name), entries: rows.slice(0, 5000).map(r => this.entry(r)), truncated: rows.length > 5000 };
   }
   refresh(): Promise<void> {
     if (this.configuring) return Promise.reject(new Error('媒体目录配置正在更新。'));
     if (this.closed) return Promise.reject(new Error('媒体索引已关闭。'));
+    if (!this.pending && this.storageReads.size) {
+      const generation = this.cancelGeneration;
+      return Promise.allSettled([...this.storageReads]).then(() => { if (generation === this.cancelGeneration) return this.refresh(); });
+    }
     if (this.pending) {
       const generation = this.cancelGeneration;
       return this.fullScan ? this.pending : this.pending.then(() => { if (generation === this.cancelGeneration) return this.refresh(); });
     }
+    this.resumeAt = 0;
     this.changes.clear(); this.settling.clear();
     return this.runScan();
   }
@@ -180,26 +213,37 @@ export class MediaLibraryIndex {
       if (!this.definitions.some(r => r.id === scope.rootId) || scope.directory.startsWith('/') || scope.directory.includes('\\') || scope.directory !== '' && scope.directory.split('/').some(p => !p || p.startsWith('.'))) throw new Error('无效的媒体目录。');
     }
     for (const scope of scopes) this.changes.add(scope);
-    while (this.pending) { await this.pending; if (generation !== this.cancelGeneration) return; }
+    while (this.pending || this.storageReads.size) {
+      await (this.pending ?? Promise.allSettled([...this.storageReads]));
+      if (generation !== this.cancelGeneration) return;
+    }
     if (!this.changes.size) return;
     if (!this.ready || this.options.scan) return this.refresh();
     return this.runScan(this.changes.take());
   }
   private scheduleChanges() {
-    if (this.changeTimer || this.pending || this.closed || this.stopped) return;
+    if (this.changeTimer || this.pending || this.storageReads.size || this.closed || this.stopped) return;
     // A fixed batching window also bounds latency under continuous writes.
     this.changeTimer = setTimeout(() => {
       this.changeTimer = null;
-      void this.refreshDirectories([]).catch(() => {});
+      if (this.pending || this.storageReads.size || this.closed || this.stopped) return;
+      if (this.started) {
+        for (const scope of this.automaticChanges.take()) this.scheduler.hint(scope);
+        this.scheduleAutomatic();
+      } else void this.runScan(this.automaticChanges.take(), true).catch(() => {});
     }, this.options.debounceMs ?? 350);
     this.changeTimer.unref();
   }
-  private runScan(scopes?: DirectoryScope[]) {
+  private runScan(scopes?: DirectoryScope[], shallow = false) {
     const controller = this.abort = new AbortController();
     this.fullScan = !scopes;
-    this.pending = this.scan(controller.signal, scopes).finally(() => {
+    this.pending = this.scan(controller.signal, scopes, shallow).catch(error => {
+      if (shallow) for (const scope of scopes ?? []) this.scheduler.finish(scope, false);
+      throw error;
+    }).finally(() => {
       this.pending = null; this.abort = null;
-      if (this.changes.size) this.scheduleChanges();
+      if (this.automaticChanges.size) this.scheduleChanges();
+      this.scheduleAutomatic();
     });
     return this.pending;
   }
@@ -208,15 +252,24 @@ export class MediaLibraryIndex {
     this.abort?.abort();
     if (this.settleTimer) { clearTimeout(this.settleTimer); this.settleTimer = null; }
     if (this.changeTimer) { clearTimeout(this.changeTimer); this.changeTimer = null; }
-    this.changes.clear(); this.settling.clear();
+    this.changes.clear(); this.automaticChanges.clear(); this.settling.clear();
+    this.scheduler.clear(); this.resumeAt = this.now() + (this.options.ttlMs ?? LIBRARY_RECHECK_MS);
   }
   stop() {
     this.stopped = true;
-    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    this.started = false;
+    if (this.timer) { clearTimeout(this.timer); this.timer = null; }
     try { this.watchers?.close(); }
     finally { this.watchers = null; this.cancel(); }
   }
   private async io<T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> {
+    this.storageReads.add(operation);
+    const drained = () => {
+      this.storageReads.delete(operation);
+      if (this.automaticChanges.size) this.scheduleChanges();
+      this.scheduleAutomatic();
+    };
+    void operation.then(drained, drained);
     if (signal?.aborted) throw new DOMException('扫描已取消', 'AbortError');
     let timer: ReturnType<typeof setTimeout>;
     let stop: () => void = () => {};
@@ -243,15 +296,16 @@ export class MediaLibraryIndex {
     }
     return learn || bound;
   }
-  private async scan(signal: AbortSignal, scopes?: DirectoryScope[]) {
+  private async scan(signal: AbortSignal, scopes?: DirectoryScope[], shallow = false) {
     const db = this.store.db;
     const job = Number(db.prepare("INSERT INTO scan_jobs(state,started_at) VALUES('running',?)").run(this.now()).lastInsertRowid);
-    let visited = 0, files = 0, errors = 0;
+    let visited = 0, files = 0, errors = 0, reads = 0, entries = 0;
     const progress = (root?: string, directory?: string) => db.prepare('UPDATE scan_jobs SET visited=?,files=?,errors=?,current_root=?,current_path=? WHERE id=?').run(visited, files, errors, root ?? null, directory ?? null, job);
     const upsert = db.prepare(`INSERT INTO media(id,root_id,path,parent,size,modified,version,state,generation,observed_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(root_id,path) DO UPDATE SET size=excluded.size,modified=excluded.modified,version=excluded.version,state=excluded.state,generation=excluded.generation,observed_at=CASE WHEN media.version=excluded.version THEN media.observed_at ELSE excluded.observed_at END`);
     const findId = db.prepare('SELECT id FROM media WHERE root_id=? AND path=?');
     const alias = db.prepare('INSERT INTO aliases(id,media_id) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET media_id=excluded.media_id');
     const priorVersion = db.prepare('SELECT version,state,observed_at FROM media WHERE root_id=? AND path=?');
+    const insertDirectory = db.prepare('INSERT OR IGNORE INTO directories(root_id,path,parent,name,generation) VALUES(?,?,?,?,?)');
     // Keep disk commits bounded, without holding a transaction over network I/O.
     // FULL durability is retained; one commit covers up to 64 media records.
     const writes: (() => void)[] = [];
@@ -294,7 +348,8 @@ export class MediaLibraryIndex {
         const errorsBefore = errors;
         const previous = db.prepare('SELECT state,error,scanned_at FROM roots WHERE id=?').get(root.id)!;
         db.prepare("UPDATE roots SET state='scanning',error=NULL WHERE id=?").run(root.id);
-        if (wholeRoot) this.watchers?.beginRoot(root.id);
+        if (wholeRoot && !shallow) this.watchers?.beginRoot(root.id);
+        if (wholeRoot && shallow) this.watchers?.retryRoot(root.id);
         let offline = false;
         let rootReal = '';
         let storageVerified = false;
@@ -304,6 +359,8 @@ export class MediaLibraryIndex {
         catch (error) { errorAt(root, '', error); offline = true; this.watchers?.resetRoot(root.id); }
         for (const directory of offline ? [] : directories) {
           const scopeErrorsBefore = errors;
+          const scope = { rootId: root.id, directory };
+          const seenMedia = new Set<string>(), seenDirectories = new Set<string>();
           let unverifiedFiles = false;
           const stack = [directory];
           while (stack.length) {
@@ -323,12 +380,30 @@ export class MediaLibraryIndex {
             } catch (error) { errorAt(root, relative, error); if (!relative || (error as NodeJS.ErrnoException).code === 'ESTORAGECHANGED') offline = true; continue; }
             visited++;
             db.prepare('INSERT INTO directories(root_id,path,parent,name,generation) VALUES(?,?,?,?,?) ON CONFLICT(root_id,path) DO UPDATE SET generation=excluded.generation').run(root.id, relative, parent(relative), path.posix.basename(relative), job);
+            this.scheduler.remember({ rootId: root.id, directory: relative });
             for (const child of children) {
+              if (++entries % 64 === 0) {
+                flush(); progress(root.id, relative);
+                await new Promise<void>(resolve => setImmediate(resolve));
+              }
               if (signal.aborted) throw new DOMException('扫描已取消', 'AbortError');
               if (child.name.startsWith('.') || child.isSymbolicLink()) continue;
               const name = relative ? relative + '/' + child.name : child.name;
-              if (child.isDirectory()) { stack.push(name); continue; }
+              if (child.isDirectory()) {
+                if (shallow) {
+                  seenDirectories.add(name);
+                  writes.push(() => {
+                    insertDirectory.run(root.id, name, relative, child.name, job);
+                    this.scheduler.remember({ rootId: root.id, directory: name });
+                  });
+                  if (writes.length >= 64) flush();
+                } else stack.push(name);
+                continue;
+              }
               if (!child.isFile() || !MEDIA_EXTENSIONS.includes(path.extname(name).toLowerCase())) continue;
+              if (shallow && reads++ % 8 === 0 && reads > 1) {
+                await this.io(new Promise<void>(resolve => setTimeout(resolve, this.options.scanBatchDelayMs ?? 25)), signal);
+              }
               let stat: Stats;
               try { stat = await this.io(fs.lstat(path.join(rootReal, name)), signal); }
               catch (error) { errorAt(root, name, error); continue; }
@@ -342,45 +417,77 @@ export class MediaLibraryIndex {
               const pending = settleMs > 0 && (prior?.version === version ? prior.state === 'pending' && this.now() - prior.observed_at < settleMs : !!prior || this.now() - stat.mtimeMs < settleMs);
               if (pending) this.settling.add({ rootId: root.id, directory: relative });
               // Database errors fail the job, rather than being treated as a bad file.
-              put(root, name, stat.size, Math.round(stat.mtimeMs), version, pending ? 'pending' : 'ready'); files++;
-              if (files % 64 === 0) { progress(root.id, relative); await new Promise<void>(r => setImmediate(r)); }
+              const state = pending ? 'pending' : 'ready';
+              seenMedia.add(name);
+              if (!shallow || prior?.version !== version || prior.state !== state
+                || !db.prepare('SELECT 1 FROM aliases WHERE id=?').get(mediaId(root.path, name)))
+                put(root, name, stat.size, Math.round(stat.mtimeMs), version, state);
+              files++;
             }
           }
           flush();
           try { if (!await this.checkStorage(root, signal)) throw Object.assign(new Error('尚未核对原媒体存储'), { code: 'ESTORAGEUNVERIFIED' }); }
-          catch (error) { errorAt(root, directory, error); offline = true; }
+          catch (error) {
+            errorAt(root, directory, error);
+            // Legacy bindings may need an unchanged file in a deeper directory
+            // before storage can be verified. Keep that bounded discovery alive.
+            if (!shallow || (error as NodeJS.ErrnoException).code !== 'ESTORAGEUNVERIFIED') offline = true;
+          }
           if (unverifiedFiles && storageVerified) {
             errorAt(root, directory, { code: 'ERECHECK' });
-            this.changes.add({ rootId: root.id, directory });
+            this.automaticChanges.add({ rootId: root.id, directory });
           }
           // Reconcile only successfully inspected subtrees. An incomplete scope
           // must not delete old records, and an incremental scan cannot touch its siblings.
           if (errors === scopeErrorsBefore) {
-            const prefix = directory + '/';
-            const within = directory ? ' AND (path=? OR substr(path,1,?)=?)' : '';
-            const values = directory ? [directory, prefix.length, prefix] : [];
-            db.prepare("UPDATE media SET state='missing' WHERE root_id=? AND generation!=?" + within).run(root.id, job, ...values);
-            db.prepare('DELETE FROM directories WHERE root_id=? AND generation!=?' + within).run(root.id, job, ...values);
+            if (shallow) {
+              const existing = db.prepare("SELECT path FROM media WHERE root_id=? AND parent=? AND state!='missing'").all(root.id, directory);
+              for (const row of existing) if (!seenMedia.has(String(row.path)))
+                db.prepare("UPDATE media SET state='missing' WHERE root_id=? AND path=?").run(root.id, row.path);
+              const children = db.prepare("SELECT path FROM directories WHERE root_id=? AND parent=? AND path!=''").all(root.id, directory);
+              for (const row of children) if (!seenDirectories.has(String(row.path))) {
+                const name = String(row.path), prefix = name + '/';
+                db.prepare("UPDATE media SET state='missing' WHERE root_id=? AND state!='missing' AND substr(path,1,?)=?")
+                  .run(root.id, prefix.length, prefix);
+                db.prepare('DELETE FROM directories WHERE root_id=? AND (path=? OR substr(path,1,?)=?)')
+                  .run(root.id, name, prefix.length, prefix);
+                this.scheduler.prune({ rootId: root.id, directory: name });
+              }
+            } else {
+              const prefix = directory + '/';
+              const within = directory ? ' AND (path=? OR substr(path,1,?)=?)' : '';
+              const values = directory ? [directory, prefix.length, prefix] : [];
+              db.prepare("UPDATE media SET state='missing' WHERE root_id=? AND generation!=?" + within).run(root.id, job, ...values);
+              db.prepare('DELETE FROM directories WHERE root_id=? AND generation!=?' + within).run(root.id, job, ...values);
+              this.scheduler.prune(scope);
+            }
             if (this.watchers) {
               const exists = db.prepare('SELECT 1 FROM directories WHERE root_id=? AND path=?');
               this.watchers.prune({ rootId: root.id, directory }, name => !!exists.get(root.id, name));
             }
           }
+          this.scheduler.finish(scope, errors === scopeErrorsBefore, !shallow && errors === scopeErrorsBefore);
         }
-        if (wholeRoot) this.watchers?.finishRoot(root.id, errors === errorsBefore);
+        if (offline) {
+          this.scheduler.finish({ rootId: root.id, directory: '' }, false);
+          for (const directory of directories) this.scheduler.finish({ rootId: root.id, directory }, false);
+        }
+        if (wholeRoot && !shallow) this.watchers?.finishRoot(root.id, errors === errorsBefore);
         db.prepare('UPDATE roots SET state=?,error=?,scanned_at=? WHERE id=?').run(
           offline ? 'offline' : errors > errorsBefore ? 'partial' : wholeRoot ? 'ready' : previous.state,
           errors > errorsBefore ? '部分路径不可读取，查看扫描错误' : wholeRoot ? null : previous.error,
-          wholeRoot ? this.now() : previous.scanned_at, root.id);
+          wholeRoot && !shallow ? this.now() : previous.scanned_at, root.id);
       }
-      this.initialized = true; if (!scopes) this.refreshedAt = this.now(); progress();
+      this.initialized = true; progress();
       db.prepare("UPDATE scan_jobs SET state=?,finished_at=? WHERE id=?").run(errors ? 'partial' : 'completed', this.now(), job);
       db.prepare('DELETE FROM scan_errors WHERE job_id IN (SELECT id FROM scan_jobs ORDER BY id DESC LIMIT -1 OFFSET 50)').run();
       db.prepare('DELETE FROM scan_jobs WHERE id IN (SELECT id FROM scan_jobs ORDER BY id DESC LIMIT -1 OFFSET 50)').run();
+      if (this.started) this.settling.clear();
       if (this.settling.size && !this.settleTimer && !this.closed && !this.stopped) {
         this.settleTimer = setTimeout(() => {
           this.settleTimer = null;
-          void this.refreshDirectories(this.settling.take()).catch(() => {});
+          for (const scope of this.settling.take()) this.automaticChanges.add(scope);
+          this.scheduleChanges();
         }, this.options.settleMs ?? 1000); this.settleTimer.unref();
       }
     } catch (error) {
@@ -421,7 +528,8 @@ export class MediaLibraryIndex {
   stopExecution(){return this.stopping??=(async()=>{
     this.closed=true;
     await closeResources('Media execution shutdown incomplete',[
-      ['scan scheduling',()=>this.stop()],['library scan',()=>this.pending?.catch(()=>{})],['index executors',()=>this.indexJobs.close()],
+      ['scan scheduling',()=>this.stop()],['library scan',()=>this.pending?.catch(()=>{})],
+      ['storage reads',async()=>{await Promise.allSettled([...this.storageReads]);}],['index executors',()=>this.indexJobs.close()],
     ]);
   })();}
   releaseStorage(){this.store.close();}
@@ -435,10 +543,11 @@ export class MediaLibraryIndex {
     if (this.closed || this.configuring) throw new Error('媒体目录配置正在更新或服务已关闭。');
     const definitions = normalizeRoots(roots);
     this.configuring = true;
-    const restart = !!this.timer;
+    const restart = this.started;
     this.stop();
     try {
       await this.pending;
+      await Promise.allSettled([...this.storageReads]);
       const rollback = await persist();
       try { this.store.configure(definitions); }
       catch (error) { await rollback(); throw error; }

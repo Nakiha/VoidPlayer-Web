@@ -24,7 +24,7 @@ const protocol = secure ? 'https' : 'http';
 const temporary = await mkdtemp(path.join(tmpdir(), 'vp-network-playback-'));
 const tls = secure ? await prepareTls({ hosts: ['voidplayer.test'] }, temporary) : undefined;
 const library = new MediaLibraryIndex([path.join(root, '.run/playback-media')]);
-const listing = await library.list();
+const listing = await library.list(true);
 listing.entries.sort((a, b) => a.name.localeCompare(b.name));
 assert.equal(listing.entries.length, 2, 'run make-playback-fixtures.mjs first');
 assert.ok(listing.entries.every(e => e.size > 90000000), 'use real ~100 MB files');

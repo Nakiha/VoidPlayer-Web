@@ -32,7 +32,7 @@ try {
    '-show_entries','packet=pts_time,dts_time','-of','json',path.join(media,f.name)],{encoding:'utf8'}));
   timings.set(f.name,data.packets.map((p,index)=>({index,pts:Math.round(Number(p.pts_time)*1e6),dts:Math.round(Number(p.dts_time)*1e6)})));
  }
- library=new MediaLibraryIndex([media],{database:path.join(temporary,'library.sqlite'),watch:false});const listing=await library.list();
+ library=new MediaLibraryIndex([media],{database:path.join(temporary,'library.sqlite'),watch:false});const listing=await library.list(true);
  let traffic=[];
  const staticDir=await snapshotBuild(path.join(root,'dist'),path.join(temporary,'static'));
  server=createMediaServer({roots:library.roots,library,staticDir,onLog(){}});

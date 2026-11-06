@@ -40,7 +40,7 @@ export class LibraryStore {
       this.db = connection = openIndexDatabase(file);
       this.db.exec('PRAGMA busy_timeout=3000; PRAGMA foreign_keys=ON;');
       const version = this.db.prepare('PRAGMA user_version').get() as { user_version: number };
-      if (version.user_version > 7) { throw new Error('媒体索引来自更新的程序版本，请使用匹配版本或恢复升级前备份。'); }
+      if (version.user_version > 8) { throw new Error('媒体索引来自更新的程序版本，请使用匹配版本或恢复升级前备份。'); }
       const mediaIndexColumns = this.db.prepare('PRAGMA table_info(media_index_manifests)').all() as { name: string }[];
       const addMediaIndexBuildIdColumn = !mediaIndexColumns.some(column => column.name === 'build_id');
       const addMediaIndexMetadataColumn = !mediaIndexColumns.some(column => column.name === 'metadata_json');
@@ -54,6 +54,10 @@ export class LibraryStore {
         CREATE TABLE IF NOT EXISTS roots (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, state TEXT NOT NULL DEFAULT 'unscanned', error TEXT, scanned_at INTEGER);
         CREATE TABLE IF NOT EXISTS directories (root_id TEXT NOT NULL REFERENCES roots(id), path TEXT NOT NULL, parent TEXT NOT NULL, name TEXT NOT NULL, generation INTEGER NOT NULL, PRIMARY KEY(root_id,path));
         CREATE INDEX IF NOT EXISTS directory_parent ON directories(root_id,parent,name);
+        CREATE TABLE IF NOT EXISTS library_directory_checks (root_id TEXT NOT NULL REFERENCES roots(id), path TEXT NOT NULL,
+          checked_at INTEGER, attempted_at INTEGER, failed INTEGER NOT NULL DEFAULT 0,
+          next_check_at INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(root_id,path));
+        CREATE INDEX IF NOT EXISTS library_directory_due ON library_directory_checks(next_check_at,root_id,path);
         CREATE TABLE IF NOT EXISTS media (id TEXT PRIMARY KEY, root_id TEXT NOT NULL REFERENCES roots(id), path TEXT NOT NULL, parent TEXT NOT NULL, size INTEGER NOT NULL, modified INTEGER NOT NULL, version TEXT NOT NULL, state TEXT NOT NULL, generation INTEGER NOT NULL, observed_at INTEGER NOT NULL, UNIQUE(root_id,path));
         CREATE INDEX IF NOT EXISTS media_parent ON media(root_id,parent,path);
         CREATE TABLE IF NOT EXISTS aliases (id TEXT PRIMARY KEY, media_id TEXT NOT NULL REFERENCES media(id));
@@ -158,7 +162,7 @@ export class LibraryStore {
         INSERT OR IGNORE INTO thumbnail_epoch VALUES(1,0);
         CREATE TRIGGER IF NOT EXISTS thumbnail_changed AFTER UPDATE ON media WHEN old.version!=new.version OR new.state='missing' BEGIN DELETE FROM media_thumbnails WHERE media_id=new.id; END;
         CREATE TRIGGER IF NOT EXISTS thumbnail_root_changed AFTER UPDATE ON roots WHEN old.path!=new.path BEGIN DELETE FROM media_thumbnails WHERE media_id IN (SELECT id FROM media WHERE root_id=new.id); END;
-        PRAGMA user_version=7;
+        PRAGMA user_version=8;
         COMMIT;
       `);
       this.db.prepare("UPDATE scan_jobs SET state='interrupted', finished_at=? WHERE state='running'").run(Date.now());
@@ -169,7 +173,16 @@ export class LibraryStore {
     try {
       this.db.exec('UPDATE roots SET active=0');
       const statement = this.db.prepare('INSERT INTO roots(id,path,name) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET path=excluded.path,name=excluded.name,active=1');
-      for (const root of roots) statement.run(root.id, root.path, root.name);
+      for (const root of roots) {
+        const prior = this.db.prepare('SELECT path,active FROM roots WHERE id=?').get(root.id);
+        if (prior && prior.path !== root.path)
+          this.db.prepare('DELETE FROM library_directory_checks WHERE root_id=?').run(root.id);
+        statement.run(root.id, root.path, root.name);
+        this.db.prepare('INSERT OR IGNORE INTO library_directory_checks(root_id,path) VALUES(?,?)').run(root.id, '');
+      }
+      this.db.exec(`DELETE FROM library_directory_checks WHERE root_id IN (SELECT id FROM roots WHERE active=0);
+        INSERT OR IGNORE INTO library_directory_checks(root_id,path)
+          SELECT d.root_id,d.path FROM directories d JOIN roots r ON r.id=d.root_id WHERE r.active=1;`);
       this.db.exec('DELETE FROM media_index_manifests WHERE media_id IN (SELECT media.id FROM media JOIN roots ON media.root_id=roots.id WHERE roots.active=0)');
       this.db.exec('DELETE FROM media_thumbnails WHERE media_id IN (SELECT media.id FROM media JOIN roots ON media.root_id=roots.id WHERE roots.active=0)');
       this.db.exec('COMMIT');

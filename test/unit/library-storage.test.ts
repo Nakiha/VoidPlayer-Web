@@ -72,7 +72,7 @@ test('schema 1 upgrade preserves media and waits for an unchanged original befor
   await index.refresh(); assert.equal(index.status().roots[0].state, 'ready'); assert.deepEqual(index.browse().entries, before);
   await index.close();
   const upgraded = openIndexDatabase(database);
-  assert.equal(upgraded.prepare('PRAGMA user_version').get()?.user_version, 7);
+  assert.equal(upgraded.prepare('PRAGMA user_version').get()?.user_version, 8);
   assert.equal(upgraded.prepare('SELECT fs_type FROM root_storage').get()?.fs_type, '101'); upgraded.close();
 }));
 
@@ -87,8 +87,43 @@ test('schema 6 migration repairs a partially present FFmpeg stream manifest', as
   assert.ok(columns.some(column => column.name === 'build_id'));
   assert.ok(columns.some(column => column.name === 'metadata_json'));
   assert.ok(columns.some(column => column.name === 'packets'));
-  assert.equal(upgraded.prepare('PRAGMA user_version').get()?.user_version, 7);
+  assert.equal(upgraded.prepare('PRAGMA user_version').get()?.user_version, 8);
   upgraded.close();
+}));
+
+test('schema 7 upgrade seeds durable directory work without replacing cached media identities', async () => fixture(async ({ media, database, open }) => {
+  await fs.mkdir(path.join(media, 'nested')); await fs.writeFile(path.join(media, 'nested/one.mp4'), 'original');
+  let index = open(); await index.refresh(); const before = index.browse({ recursive: true }).entries; await index.close();
+  const prior = openIndexDatabase(database);
+  prior.exec('DROP TABLE library_directory_checks; PRAGMA user_version=7;'); prior.close();
+  index = open();
+  assert.deepEqual(index.browse({ recursive: true }).entries, before, 'migration must serve existing results before filesystem checks');
+  index.start();
+  const deadline = Date.now() + 5000;
+  while (true) {
+    const check = openIndexDatabase(database);
+    const completed = check.prepare('SELECT COUNT(*) AS count FROM library_directory_checks WHERE checked_at IS NOT NULL').get()?.count;
+    assert.equal(check.prepare('PRAGMA user_version').get()?.user_version, 8); check.close();
+    if (completed === 2 && !index.status().scanning) break;
+    assert.ok(Date.now() < deadline, 'upgraded directory work did not complete'); await new Promise(r => setTimeout(r, 20));
+  }
+  assert.deepEqual(index.browse({ recursive: true }).entries, before);
+}));
+
+test('automatic legacy binding can reach an unchanged file below a root with no direct media', async () => fixture(async ({ media, database, open }) => {
+  await fs.mkdir(path.join(media, 'nested')); await fs.writeFile(path.join(media, 'nested/one.mp4'), 'original');
+  let index = open(); await index.refresh(); const before = index.browse({ recursive: true }).entries; await index.close();
+  const prior = openIndexDatabase(database);
+  prior.exec('DROP TABLE root_storage; DROP TABLE library_directory_checks; PRAGMA user_version=1;'); prior.close();
+  index = open(); index.start();
+  const deadline = Date.now() + 5000;
+  while (true) {
+    const check = openIndexDatabase(database); const bound = check.prepare('SELECT fs_type FROM root_storage').get()?.fs_type; check.close();
+    if (bound === '101' && !index.status().scanning) break;
+    assert.ok(Date.now() < deadline, 'legacy binding was blocked before reaching its unchanged original');
+    await new Promise(r => setTimeout(r, 20));
+  }
+  assert.deepEqual(index.browse({ recursive: true }).entries, before);
 }));
 
 test('legacy binding rechecks files encountered before its first unchanged original', async () => fixture(async ({ media, database, open }) => {

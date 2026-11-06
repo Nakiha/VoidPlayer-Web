@@ -8,7 +8,7 @@
   "staticDir": "dist",
   "logsDir": "logs",
   "allowLocalReveal": false,
-  "indexTtlMs": 30000,
+  "indexTtlMs": 1800000,
   "indexWatch": true,
   "adminUsers": [],
   "analysisConcurrency": 8,

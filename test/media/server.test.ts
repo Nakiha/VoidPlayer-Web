@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { mediaId, resolveMediaPath, scanLibrary } from '../../server/library.ts';
+import { MediaLibraryIndex, mediaId, resolveMediaPath, scanLibrary } from '../../server/library.ts';
 import { createMediaServer } from '../../server/app.ts';
 import { Input, UrlSource, ALL_FORMATS } from 'mediabunny';
 import { inspectVideoTrack } from '../../src/media/source.ts';
@@ -25,12 +25,13 @@ async function withFixture(fn: (root: string) => Promise<void>) {
 }
 
 async function withServer(roots: string[], fn: (base: string) => Promise<void>) {
-  const server = createMediaServer({ roots, onLog: () => {} });
+  const library = new MediaLibraryIndex(roots); await library.refresh();
+  const server = createMediaServer({ roots, library, onLog: () => {} });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   const port = typeof address === 'object' && address ? address.port : 0;
   try { await fn(`http://127.0.0.1:${port}`); }
-  finally { await new Promise<void>(resolve => server.close(() => resolve())); }
+  finally { await new Promise<void>(resolve => server.close(() => resolve())); await library.close(); }
 }
 
 test('library scan lists whitelisted media with stable ids, skipping hidden and non-media files', async () => {
@@ -141,13 +142,17 @@ test('log upload requires same-origin action header and JSON content type', asyn
     try {
       const base = `http://127.0.0.1:${port}`;
       const doc = JSON.stringify({ schema: 'voidplayer-web-log', sessionId: '66c47430-e620-46de-9c72-16833e03adac', events: [] });
-      const before = await fs.readdir(logsDir).catch(() => [] as string[]);
+      // Lazy service initialization may create its SQLite ownership lock;
+      // rejected requests must not create a report or a temporary payload.
+      const payloadFiles = async () => (await fs.readdir(logsDir).catch(() => [] as string[]))
+        .filter(name => !['reports.lock', 'reports.lock-journal'].includes(name));
+      const before = await payloadFiles();
       // REVIEW-05：缺 Origin/action、跨站 Origin、text/plain 简单请求一律 403/415 且不落盘
       assert.equal((await fetch(`${base}/api/logs`, { method: 'POST', body: doc })).status, 403);
       assert.equal((await fetch(`${base}/api/logs`, { method: 'POST', headers: { origin: base, 'content-type': 'application/json' }, body: doc })).status, 403);
       assert.equal((await fetch(`${base}/api/logs`, { method: 'POST', headers: { origin: 'https://attacker.example', 'content-type': 'application/json', 'x-voidplayer-action': 'log' }, body: doc })).status, 403);
       assert.equal((await fetch(`${base}/api/logs`, { method: 'POST', headers: { origin: base, 'content-type': 'text/plain', 'x-voidplayer-action': 'log' }, body: doc })).status, 415);
-      const after = await fs.readdir(logsDir).catch(() => [] as string[]);
+      const after = await payloadFiles();
       assert.deepEqual(after, before);
     } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
   });
@@ -165,7 +170,8 @@ test('log upload stays disabled without a logs directory', async () => {
 test('health, media location, attachment and guarded local reveal share the whitelist', async () => {
   await withFixture(async root => {
     const revealed: string[] = [];
-    const server = createMediaServer({ roots: [root], allowLocalReveal: true, reveal: async p => { revealed.push(p); }, onLog: () => {} });
+    const library = new MediaLibraryIndex([root]); await library.refresh();
+    const server = createMediaServer({ roots: [root], library, allowLocalReveal: true, reveal: async p => { revealed.push(p); }, onLog: () => {} });
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
     const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
     const id = mediaId(root, 'a.mp4');
@@ -183,7 +189,7 @@ test('health, media location, attachment and guarded local reveal share the whit
       assert.equal((await fetch(url, { method: 'POST', headers: { origin: base, 'x-voidplayer-action': 'reveal' } })).status, 200);
       assert.deepEqual(revealed, [location.absolutePath]);
       assert.equal((await fetch(`${base}/api/media/${'a'.repeat(24)}/location`)).status, 404);
-    } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
+    } finally { await new Promise<void>(resolve => server.close(() => resolve())); await library.close(); }
   });
 });
 
@@ -192,7 +198,7 @@ test('shared media index coalesces scans and revalidates changed or escaped file
     let scans = 0, now = 0;
     const { MediaLibraryIndex } = await import('../../server/library.ts');
     const index = new MediaLibraryIndex([root], { ttlMs: 1000, now: () => now, scan: async roots => { scans++; return scanLibrary(roots); } });
-    const lists = await Promise.all(Array.from({ length: 8 }, () => index.list()));
+    const lists = await Promise.all(Array.from({ length: 8 }, () => index.list(true)));
     assert.equal(scans, 1);
     lists[0].entries[0].name = 'mutated';
     const id = mediaId(root, 'a.mp4');
@@ -202,7 +208,9 @@ test('shared media index coalesces scans and revalidates changed or escaped file
     await fs.writeFile(path.join(root, 'new.mp4'), 'new');
     assert.equal((await index.list()).entries.length, 2);
     assert.equal((await index.list(true)).entries.length, 3); assert.equal(scans, 2);
-    now = 1001; await Promise.all([index.list(), index.list(), index.resolve(id)]); assert.equal(scans, 3);
+    now = 1001; await Promise.all([index.list(), index.list(), index.resolve(id)]);
+    assert.equal(scans, 2, 'expired legacy reads must not start or wait for a full scan');
+    await Promise.all([index.refresh(), index.refresh()]); assert.equal(scans, 3);
     await fs.writeFile(path.join(root, 'a.mp4'), 'changed');
     assert.equal(await index.resolve(id), null);
     await index.list(true); assert.ok(await index.resolve(id));
@@ -211,7 +219,7 @@ test('shared media index coalesces scans and revalidates changed or escaped file
       await fs.writeFile(path.join(outside, 'secret.mp4'), 'changed');
       await fs.unlink(path.join(root, 'a.mp4')); await fs.symlink(path.join(outside, 'secret.mp4'), path.join(root, 'a.mp4'));
       assert.equal(await index.resolve(id), null);
-    } finally { await fs.rm(outside, { recursive: true, force: true }); }
+    } finally { await fs.rm(outside, { recursive: true, force: true }); await index.close(); }
   });
 });
 
@@ -226,6 +234,8 @@ test('Range traffic shares one index and an explicit library refresh discovers a
     try {
       assert.equal((await fetch(`${base}/api/ready`)).status, 503);
       await fetch(`${base}/api/library`);
+      assert.equal((await fetch(`${base}/api/ready`)).status, 503, 'cached legacy read does not prepare an unstarted index');
+      await fetch(`${base}/api/library?refresh=1`);
       assert.equal((await fetch(`${base}/api/ready`)).status, 200);
       for (let i = 0; i < 12; i++) {
         const response = await fetch(`${base}/api/media/${mediaId(root, 'a.mp4')}`, { headers: { range: `bytes=${i}-${i + 5}` } });

@@ -50,7 +50,7 @@ export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd
   let configText = '';
   try { configText = await readFile(file, 'utf8'); data = JSON.parse(configText); }
   catch (error) { if (configFile || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
-  const defaults: ServiceConfig = { dataDir: paths.dataDir ?? path.resolve(cwd, '.run/data'), mediaRoots: mode === 'dev' ? [path.resolve(cwd, 'fixtures/video')] : [], host: '127.0.0.1', port: 5180, devPort: 5178, staticDir: paths.staticDir ?? path.resolve(cwd, 'dist'), logsDir: paths.logsDir ?? path.resolve(cwd, 'logs'), allowLocalReveal: false, indexTtlMs: 30000, indexWatch: true, analysisConcurrency: DEFAULT_ANALYSIS_CONCURRENCY };
+  const defaults: ServiceConfig = { dataDir: paths.dataDir ?? path.resolve(cwd, '.run/data'), mediaRoots: mode === 'dev' ? [path.resolve(cwd, 'fixtures/video')] : [], host: '127.0.0.1', port: 5180, devPort: 5178, staticDir: paths.staticDir ?? path.resolve(cwd, 'dist'), logsDir: paths.logsDir ?? path.resolve(cwd, 'logs'), allowLocalReveal: false, indexTtlMs: 1800000, indexWatch: true, analysisConcurrency: DEFAULT_ANALYSIS_CONCURRENCY };
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('服务配置必须是 JSON 对象。');
   // Retired keys are accepted only at the file boundary; runtime config owns no legacy settings.
   for (const key of ['adminUsers', 'nativeVmaf', 'nativeXpsnr']) delete data[key];

@@ -13,7 +13,9 @@ for (let i = 0; i < 70; i++) await writeFile(path.join(clips, `clip-${String(i).
 await writeFile(path.join(clips, 'nested/deep-clip.mp4'), 'deep fixture');
 await copyFile('fixtures/video/ci_h264_smoke.mp4', path.join(clips, 'clip-069.mp4'));
 const sample = path.join(media, 'sample.mp4'); await copyFile('fixtures/video/ci_h264_smoke.mp4', sample); await utimes(sample, 1000, 1000);
-const library = new MediaLibraryIndex([{ id: 'archive', path: media, name: '项目归档' }]); await library.refresh();
+let libraryNow = Date.now();
+const library = new MediaLibraryIndex([{ id: 'archive', path: media, name: '项目归档' }], { watch: false, now: () => libraryNow, scanDelayMs: 10 });
+await library.refresh(); library.start();
 const server = createMediaServer({ library, roots: library.roots, staticDir: path.resolve('dist'), onLog() {} });
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}`;
@@ -69,7 +71,8 @@ try {
   await page.waitForFunction(() => document.querySelectorAll('#source-list .source-actions').length === 70);
   assert.equal(await page.locator('#source-list .library-folder').count(), 66, 'all folders remain reachable beyond the first batch');
   assert.ok(await initialNode.evaluate(el => el.isConnected), 'continuation preserves existing rows');
-  await writeFile(path.join(clips, 'aaa-new.mp4'), 'new'); await library.refresh();
+  libraryNow += 31000;
+  await writeFile(path.join(clips, 'aaa-new.mp4'), 'new');
   await page.waitForFunction(() => document.querySelector('#source-list').textContent.includes('aaa-new'));
   const listTop = await page.locator('#source-list').evaluate(el => el.getBoundingClientRect().top);
   await choose('最近使用');

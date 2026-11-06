@@ -51,6 +51,7 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
         res.writeHead(200, { etag, 'cache-control': 'private, no-cache', 'content-type': 'application/json; charset=utf-8' });
         res.end(payload);
       }
+      library.observeBrowse(query);
     }
     catch (error) { sendJson(res, (error as { code?: string }).code === 'INDEX_CHANGED' ? 409 : 400, adminErrorBody(error)); }
     return true;

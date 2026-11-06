@@ -5,6 +5,9 @@ import path from 'node:path';
 import os from 'node:os';
 import { MediaLibraryIndex } from '../../server/library.ts';
 import { DirectoryChanges, DirectoryWatchHints } from '../../server/library-watch.ts';
+import { LibraryScanScheduler } from '../../server/library-scheduler.ts';
+import { LibraryStore, normalizeRoots } from '../../server/library-store.ts';
+import { openIndexDatabase } from '../../server/sqlite.ts';
 
 async function fixture(run: (root: string, media: string) => Promise<void>) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'vp-incremental-'));
@@ -173,5 +176,133 @@ test('cancelling an incremental scan also cancels the full refresh queued behind
     index.cancel(); await Promise.all([scan, full, queued]);
     assert.equal(index.status().job?.state, 'cancelled'); assert.equal(index.status().scanning, false);
     assert.equal(index.browse({ recursive: true }).total, 1);
+  } finally { release(); fs.readdir = original; await index.close(); }
+}));
+
+test('directory scheduling shares observations, cools hot scopes and gives cold directories a turn', async () => fixture(async (root, media) => {
+  const store = new LibraryStore(); store.configure(normalizeRoots([{ id: 'archive', path: media }]));
+  let now = 100000;
+  const scheduler = new LibraryScanScheduler(store.db, () => now, 1800000);
+  const scope = (directory: string) => ({ rootId: 'archive', directory });
+  try {
+    for (const directory of ['hot', 'hot/deep', 'hotter', 'cold']) scheduler.remember(scope(directory));
+    for (let i = 0; i < 20; i++) scheduler.observe(scope('hot'), true);
+    assert.deepEqual(scheduler.next(), scope('hot'));
+    scheduler.finish(scope('hot'), true);
+    assert.deepEqual(scheduler.next(), scope('hot/deep'), 'recursive scope must not match its similarly named sibling');
+    scheduler.finish(scope('hot/deep'), true);
+    now += 31000;
+    assert.deepEqual(scheduler.next(), scope('hot')); scheduler.finish(scope('hot'), true);
+    assert.deepEqual(scheduler.next(), scope(''), 'the fourth foreground slot belongs to oldest background work');
+    scheduler.finish(scope(''), true);
+    assert.deepEqual(scheduler.next(), scope('hot/deep')); scheduler.finish(scope('hot/deep'), true);
+    assert.deepEqual(scheduler.next(), scope('cold')); scheduler.finish(scope('cold'), true);
+    assert.deepEqual(scheduler.next(), scope('hotter')); scheduler.finish(scope('hotter'), true);
+    assert.equal(scheduler.next(), undefined, 'repeated clients cannot bypass the per-directory cooldown');
+    now += 31000;
+    scheduler.observe(scope('hot'), true);
+    scheduler.finish(scope('hot'), false);
+    assert.deepEqual(scheduler.next(), scope('hot/deep'));
+    scheduler.finish(scope('hot/deep'), true);
+    assert.equal(scheduler.next(), undefined, 'observations cannot bypass failure backoff');
+    const shallow = new DirectoryChanges(false);
+    shallow.add(scope('hot')); shallow.add(scope('hot/deep'));
+    assert.deepEqual(shallow.take(), [scope('hot'), scope('hot/deep')], 'shallow hints must retain child work');
+  } finally { store.close(); }
+}));
+
+test('automatic discovery checks one directory at a time and retains completed work across restart', async () => fixture(async (root, media) => {
+  for (const file of ['root.mp4', 'a/one.mp4', 'a/deep/two.mp4', 'b/three.mp4']) {
+    await fs.mkdir(path.dirname(path.join(media, file)), { recursive: true }); await fs.writeFile(path.join(media, file), 'video');
+  }
+  const database = path.join(root, 'library.sqlite');
+  let index = new MediaLibraryIndex([{ id: 'archive', path: media }], { database, watch: false, scanDelayMs: 10 });
+  try {
+    index.start();
+    await until(() => index.browse({ recursive: true }).total === 4 && !index.status().scanning, 'cold discovery did not visit all directories');
+    const db = openIndexDatabase(database);
+    try {
+      assert.equal(db.prepare('SELECT MAX(visited) AS visited FROM scan_jobs').get()?.visited, 1);
+      assert.equal(db.prepare('SELECT COUNT(*) AS count FROM library_directory_checks WHERE checked_at IS NOT NULL').get()?.count, 4);
+    } finally { db.close(); }
+    const job = index.status().job?.id; await index.close();
+    index = new MediaLibraryIndex([{ id: 'archive', path: media }], { database, watch: false, scanDelayMs: 10 });
+    index.start();
+    assert.equal(index.browse({ recursive: true }).total, 4, 'cached results must be available synchronously after restart');
+    await new Promise(r => setTimeout(r, 60));
+    assert.equal(index.status().job?.id, job, 'restart must not schedule another full traversal of fresh directories');
+    assert.equal((await index.list()).entries.length, 4, 'legacy reads also return cached records');
+    assert.equal(index.status().job?.id, job);
+  } finally { await index.close(); }
+}));
+
+test('pending directory rechecks survive restart without relying on an in-memory stability timer', async () => fixture(async (root, media) => {
+  await fs.mkdir(path.join(media, 'nested')); await fs.writeFile(path.join(media, 'nested/one.mp4'), 'writing');
+  const database = path.join(root, 'library.sqlite'); let now = Date.now();
+  const options = { database, watch: false, settleMs: 1000, now: () => now, scanDelayMs: 5 };
+  let index = new MediaLibraryIndex([{ id: 'archive', path: media }], options);
+  try {
+    await index.refresh(); assert.equal(index.browse({ recursive: true }).entries[0].state, 'pending');
+    await index.close(); now += 1001;
+    index = new MediaLibraryIndex([{ id: 'archive', path: media }], options); index.start();
+    await until(() => index.browse({ recursive: true }).entries[0]?.state === 'ready' && !index.status().scanning, 'pending work was lost across restart');
+    assert.equal(index.status().job?.visited, 1);
+  } finally { await index.close(); }
+}));
+
+test('directory-only discovery commits partial progress and yields before the entire parent is enumerated', async () => fixture(async (root, media) => {
+  // One directory beyond the write batch boundary, with no media-stat awaits
+  // to accidentally provide the event-loop yield that directory discovery needs.
+  for (let i = 0; i < 65; i++) await fs.mkdir(path.join(media, `child-${i}`));
+  const index = new MediaLibraryIndex([{ id: 'archive', path: media }], { watch: false });
+  const original = fs.readdir; let visibleAtYield = -1;
+  fs.readdir = (async (...args: Parameters<typeof original>) => {
+    const result = await original(...args);
+    const first = (result as unknown as { isDirectory(): boolean }[])[0], isDirectory = first.isDirectory.bind(first);
+    first.isDirectory = () => {
+      setImmediate(() => { visibleAtYield = index.browse({ limit: 100 }).directories.length; index.stop(); });
+      return isDirectory();
+    };
+    return result;
+  }) as typeof original;
+  try {
+    index.start();
+    await until(() => visibleAtYield >= 0 && !index.status().scanning, 'directory discovery did not yield');
+    assert.ok(visibleAtYield > 0 && visibleAtYield < 65, 'clients must observe committed progress before the directory-only loop finishes');
+  } finally { fs.readdir = original; await index.close(); }
+}));
+
+test('automatic shallow reconciliation removes confirmed deleted subtrees and leaves unvisited siblings intact', async () => fixture(async (root, media) => {
+  for (const file of ['a/old.mp4', 'a/deep/old.mp4', 'ab/keep.mp4']) {
+    await fs.mkdir(path.dirname(path.join(media, file)), { recursive: true }); await fs.writeFile(path.join(media, file), 'video');
+  }
+  let now = Date.now();
+  const index = new MediaLibraryIndex([{ id: 'archive', path: media }], { watch: false, now: () => now, scanDelayMs: 5 });
+  try {
+    await index.refresh();
+    await fs.rm(path.join(media, 'a/deep'), { recursive: true }); await fs.rm(path.join(media, 'a/old.mp4'));
+    await fs.rm(path.join(media, 'ab/keep.mp4')); await fs.writeFile(path.join(media, 'a/new.mp4'), 'new');
+    now += 31000; index.start(); index.observeBrowse({ rootId: 'archive', directory: 'a' });
+    await until(() => index.browse({ recursive: true }).entries.some(e => e.name === 'a/new.mp4') && !index.status().scanning, 'active directory was not reconciled');
+    assert.deepEqual(index.browse({ recursive: true }).entries.map(e => e.name), ['a/new.mp4', 'ab/keep.mp4']);
+    assert.equal(index.status().job?.visited, 1);
+    assert.equal(index.browse({ rootId: 'archive', directory: 'a' }).directories.length, 0);
+  } finally { await index.close(); }
+}));
+
+test('timed out automatic IO drains physically before retry or shutdown releases ownership', async () => fixture(async (root, media) => {
+  await fs.writeFile(path.join(media, 'one.mp4'), 'video');
+  const original = fs.readdir;
+  let release: () => void = () => {}, calls = 0;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  fs.readdir = (async (...args: Parameters<typeof original>) => { calls++; await gate; return original(...args); }) as typeof original;
+  const index = new MediaLibraryIndex([{ id: 'archive', path: media }], { watch: false, ttlMs: 20, ioTimeoutMs: 30, scanDelayMs: 5 });
+  try {
+    index.start(); await until(() => index.status().job?.state === 'partial', 'IO timeout was not recorded');
+    await new Promise(r => setTimeout(r, 100));
+    assert.equal(calls, 1, 'timeouts must not accumulate blocked NFS operations');
+    let closed = false; const closing = index.close().then(() => { closed = true; });
+    await new Promise(r => setTimeout(r, 20)); assert.equal(closed, false, 'shutdown must retain ownership until IO drains');
+    release(); await closing;
   } finally { release(); fs.readdir = original; await index.close(); }
 }));

@@ -6,6 +6,7 @@ import os from 'node:os';
 import { MediaLibraryIndex, mediaId, scanLibrary } from '../../server/library.ts';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { promises as fs } from 'node:fs';
 import { openIndexDatabase } from '../../server/sqlite.ts';
 import { createMediaServer } from '../../server/app.ts';
 
@@ -50,6 +51,58 @@ test('browse validators skip unchanged row queries while retaining scope, revisi
     assert.equal(changed.status, 200); assert.notEqual(changed.headers.get('etag'), etag);
   } finally {
     server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await index.close();
+  }
+}));
+
+test('HTTP browse and conditional polling serve cached results while shared directory checks are stalled', async () => fixture(async (root, media) => {
+  for (const directory of ['hot/deep', 'cold']) await mkdir(path.join(media, directory), { recursive: true });
+  await writeFile(path.join(media, 'hot/one.mp4'), 'video');
+  let now = Date.now();
+  const index = new MediaLibraryIndex([{ id: 'archive', path: media }], { watch: false, now: () => now, scanDelayMs: 10 });
+  await index.refresh();
+  const server = createMediaServer({ roots: [media], library: index, onLog() {} });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  const original = fs.readdir, visited: string[] = [];
+  let release: () => void = () => {}, blocked = false;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const hot = await fs.realpath(path.join(media, 'hot'));
+  fs.readdir = (async (...args: Parameters<typeof original>) => {
+    visited.push(String(args[0]));
+    if (String(args[0]) === hot) { blocked = true; await gate; }
+    return original(...args);
+  }) as typeof original;
+  try {
+    await writeFile(path.join(media, 'hot/two.mp4'), 'new');
+    now += 31000; index.start();
+    // A global search observes the existing catalog without requesting a disk walk.
+    for (const search of ['two', 'one']) {
+      const response = await fetch(`${base}/api/library/browse?recursive=1&search=${search}`, { signal: AbortSignal.timeout(2000) });
+      assert.equal(response.status, 200); await response.json();
+    }
+    await new Promise(r => setTimeout(r, 30)); assert.deepEqual(visited, []);
+    const url = `${base}/api/library/browse?root=archive&directory=hot`;
+    const cached = await fetch(url, { signal: AbortSignal.timeout(2000) });
+    assert.deepEqual((await cached.json()).entries.map((e: { name: string }) => e.name), ['hot/one.mp4']);
+    const deadline = Date.now() + 3000;
+    while (!blocked) { assert.ok(Date.now() < deadline, 'directory observation did not schedule work'); await new Promise(r => setTimeout(r, 10)); }
+    const current = await fetch(url); const etag = current.headers.get('etag')!; const page = await current.json();
+    assert.equal((await fetch(url, { headers: { 'if-none-match': etag }, signal: AbortSignal.timeout(2000) })).status, 304);
+    await Promise.all(['one', 'two', 'video'].map(async search => {
+      const response = await fetch(url + `&search=${search}`, { signal: AbortSignal.timeout(2000) });
+      assert.equal(response.status, 200); await response.json();
+    }));
+    const range = await fetch(`${base}/api/media/${page.entries[0].id}?v=${page.entries[0].version}`,
+      { headers: { range: 'bytes=0-1' }, signal: AbortSignal.timeout(2000) });
+    assert.equal(range.status, 206); assert.equal(await range.text(), 'vi');
+    assert.deepEqual(visited, [hot], 'clients and changing keywords must share one shallow check');
+    release();
+    while (index.status().scanning) await new Promise(r => setTimeout(r, 10));
+    const updated = await fetch(url); assert.equal((await updated.json()).entries.length, 2);
+    await new Promise(r => setTimeout(r, 40)); assert.deepEqual(visited, [hot], 'fresh scopes must stay cooled down');
+  } finally {
+    release(); fs.readdir = original; server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve())); await index.close();
   }
 }));
 

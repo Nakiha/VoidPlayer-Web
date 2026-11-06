@@ -33,7 +33,7 @@ try {
   await mkdir(nested, { recursive: true });
   await copyFile(path.join(fixtures, 'ci_h264_smoke.mp4'), path.join(nested, 'path-tooltip.mp4'));
   library = new MediaLibraryIndex([fixtures, ...roots]);
-  const listing = await library.list();
+  const listing = await library.list(true);
   server = createMediaServer({ roots: library.roots, library, staticDir: path.join(root, 'dist'), onLog() {} });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   const base = `http://127.0.0.1:${server.address().port}`;
