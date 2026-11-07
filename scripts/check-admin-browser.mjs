@@ -595,7 +595,22 @@ try {
   page.setDefaultTimeout(15000); observeErrors(page, 'admin-second');
   await page.locator('#identity').filter({ hasText: '访客' }).waitFor();
 
+  const navigationWidth = await page.locator('.admin-navigation').evaluate(nav => nav.getBoundingClientRect().width);
+  assert.equal(await page.locator('.admin-brand .icon, .admin-nav-caption').count(), 0);
+  await page.locator('#admin-navigation-toggle').click();
+  await page.waitForFunction(() => document.querySelector('.admin-navigation').getBoundingClientRect().width === 56);
+  assert.equal(await page.locator('#admin-navigation-toggle').getAttribute('aria-expanded'), 'false');
+  await page.getByRole('button', {name:'首选项', exact:true}).click();
+  assert.equal(await page.locator('#pane-preferences #analysis-resources').isVisible(), true);
+  assert.equal(await page.locator('#pane-overview #analysis-resources').count(), 0);
+  await page.reload();
+  await page.waitForFunction(() => document.querySelector('.admin-navigation').getBoundingClientRect().width === 56);
+  assert.equal(await page.locator('#analysis-resources').isVisible(), true, 'navigation and the preferences pane survive reload');
+  await page.locator('#admin-navigation-toggle').click();
+  assert.equal(await page.locator('.admin-navigation').evaluate(nav => nav.getBoundingClientRect().width), navigationWidth);
+
   await page.waitForFunction(() => document.getElementById('analysis-concurrency')?.value === '8');
+  await page.locator('[data-pane=preferences]').click();
   const analysisThreads = page.getByLabel('解码线程上限');
   const analysisContexts = page.getByLabel('帧上下文数');
   assert.equal(await analysisThreads.inputValue(), '1');
@@ -619,6 +634,7 @@ try {
   await page.locator('#analysis-resource-reload').click();
   await page.waitForFunction(() => document.getElementById('analysis-concurrency')?.value === '12');
 
+  await page.locator('[data-pane=overview]').click();
   assert.equal(await page.evaluate(() => { const rows = [...document.querySelectorAll('#pane-overview .admin-properties > div')]; return rows.every((r, i) => !i || r.getBoundingClientRect().top > rows[i-1].getBoundingClientRect().top); }), true, 'properties must remain a single ordered list');
   await page.screenshot({ path: `/tmp/voidplayer-admin-overview-light-${browserName}.png` });
   const headingBeforeToast=await page.locator('#pane-overview .admin-heading').evaluate(el => el.offsetTop);

@@ -56,6 +56,7 @@ export interface Sources {
   "admin.clearFrames": "清理帧索引";
   "admin.clearLabel": "清理{label}";
   "admin.clearName": "清理 {name} 的{label}";
+  "admin.collapseNavigation": "折叠侧栏";
   "admin.confirmClear": "确认清理";
   "admin.confirmOne": "清理「{name}」的{label}？";
   "admin.connections": "连接数";
@@ -97,6 +98,7 @@ export interface Sources {
   "admin.errorSize": "提交内容过大。请减少数据量后重试。";
   "admin.errorTruncated": " · 详情保留前 1000 条";
   "admin.errorUnavailable": "无法完成请求。请检查连接与服务状态后重试。";
+  "admin.expandNavigation": "展开侧栏";
   "admin.exportMarks": "导出标注";
   "admin.filterMedia": "筛选媒体";
   "admin.framesDescription": "加快媒体库视频再次打开和定位。支持的 FFmpeg 容器由服务端重建索引；FLV 仍在播放时重建。";
@@ -148,7 +150,6 @@ export interface Sources {
   "admin.mediaVersion": "媒体与版本";
   "admin.moveToTrash": "移入回收站";
   "admin.nameSaved": "名称已保存。";
-  "admin.navCaption": "服务管理";
   "admin.navCategory": "管理分类";
   "admin.netRate": "网络速率";
   "admin.nextErrors": "下一页错误";
@@ -1258,6 +1259,7 @@ export interface MessageParameters {
   "admin.clearFrames": {  };
   "admin.clearLabel": { "label": string | number };
   "admin.clearName": { "label": string | number; "name": string | number };
+  "admin.collapseNavigation": {  };
   "admin.confirmClear": {  };
   "admin.confirmOne": { "label": string | number; "name": string | number };
   "admin.connections": {  };
@@ -1299,6 +1301,7 @@ export interface MessageParameters {
   "admin.errorSize": {  };
   "admin.errorTruncated": {  };
   "admin.errorUnavailable": {  };
+  "admin.expandNavigation": {  };
   "admin.exportMarks": {  };
   "admin.filterMedia": {  };
   "admin.framesDescription": {  };
@@ -1350,7 +1353,6 @@ export interface MessageParameters {
   "admin.mediaVersion": {  };
   "admin.moveToTrash": {  };
   "admin.nameSaved": {  };
-  "admin.navCaption": {  };
   "admin.navCategory": {  };
   "admin.netRate": {  };
   "admin.nextErrors": {  };

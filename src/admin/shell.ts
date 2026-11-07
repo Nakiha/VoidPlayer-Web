@@ -8,16 +8,16 @@ import { icon } from '../ui/icons.ts';
 export const PANES = () => [['overview', t(msg("admin.overviewTitle", "概览")), 'grid'], ['library', t(msg("admin.libraryTitle", "媒体库")), 'film'], ['caches', t(msg("admin.cacheTitle", "缓存")), 'database'], ['workspaces', t(msg("admin.wsTitle", "工作区")), 'stack'], ['annotations', t(msg("admin.marksTab", "标注")), 'note'], ['logs', t(msg("admin.logsTitle", "日志")), 'fileText'], ['measurements', t(msg("admin.measureTitle", "测速")), 'gauge'], ['preferences', t(msg('admin.preferencesTitle', '首选项')), 'settings']] as const;
 export function adminShell() {
   return `<div class="admin-layout">
-    <nav class="admin-navigation" aria-label="${th(msg("admin.navCategory", "管理分类"))}"><a class="admin-brand" href="/">${icon('film')}<span>VoidPlayer</span></a><span class="admin-nav-caption">${th(msg("admin.navCaption", "服务管理"))}</span>
-      ${PANES().map(([id, label, glyph]) => `<button data-pane="${id}" aria-current="${id === 'overview' ? 'page' : 'false'}">${icon(glyph)}${label}</button>`).join('')}
-      <a class="admin-back" href="/">${icon('caretLeft')}${th(msg("admin.backToPlayer", "返回播放器"))}</a>
+    <nav class="admin-navigation" aria-label="${th(msg("admin.navCategory", "管理分类"))}">
+      <div class="admin-navigation-heading"><a class="admin-brand" href="/">VoidPlayer</a><button id="admin-navigation-toggle" class="icon-button" type="button" aria-controls="admin-navigation-items" aria-expanded="true" aria-label="${th(msg('admin.collapseNavigation', '折叠侧栏'))}">${icon('sidebar')}</button></div>
+      <div id="admin-navigation-items" class="admin-navigation-items">${PANES().map(([id, label, glyph]) => `<button data-pane="${id}" aria-label="${label}" aria-current="${id === 'overview' ? 'page' : 'false'}">${icon(glyph)}<span class="admin-nav-label">${label}</span></button>`).join('')}</div>
+      <a class="admin-back" href="/" aria-label="${th(msg("admin.backToPlayer", "返回播放器"))}">${icon('caretLeft')}<span class="admin-nav-label">${th(msg("admin.backToPlayer", "返回播放器"))}</span></a>
     </nav>
     <main class="admin-content">
       <section id="pane-overview"><header class="admin-heading"><h1>${th(msg("admin.overviewTitle", "概览"))}</h1><button id="refresh-status" class="icon-button" aria-label="${th(msg("admin.refreshStatus", "刷新状态"))}">${icon('refresh')}</button></header>
         <div class="admin-metrics"><div><span>${th(msg("admin.uptime", "已运行"))}</span><strong id="uptime">—</strong></div><div><span>${th(msg("admin.procMemory", "进程内存"))}</span><strong id="memory">—</strong></div><div><span>${th(msg("admin.procCpu", "进程 CPU"))}</span><strong id="cpu">—</strong></div><div><span>${th(msg("admin.connections", "连接数"))}</span><strong id="connections">—</strong></div></div>
         <h2>${th(msg("admin.serviceTitle", "服务"))}</h2><dl class="admin-properties"><div><dt>${th(msg("admin.version", "版本"))}</dt><dd id="version">—</dd></div><div><dt>${th(msg("admin.runtime", "运行环境"))}</dt><dd id="runtime">—</dd></div><div><dt>${th(msg("admin.dataDir", "数据目录"))}</dt><dd id="data-dir">—</dd></div><div><dt>${th(msg("admin.currentIdentity", "当前身份"))}</dt><dd id="identity">—</dd></div><div><dt>${th(msg("admin.systemMemory", "系统可用内存"))}</dt><dd id="system-memory">—</dd></div><div><dt>${th(msg("admin.httpRequests", "HTTP 请求"))}</dt><dd id="requests">—</dd></div></dl>
         <h2>${th(msg("admin.indexTitle", "媒体索引"))}</h2><dl class="admin-properties"><div><dt>${th(msg("admin.rootDirs", "根目录"))}</dt><dd id="root-summary">—</dd></div><div><dt>${th(msg("admin.scanJobs", "扫描任务"))}</dt><dd id="scan-summary">—</dd></div><div><dt>${th(msg("admin.watchDirs", "目录监听"))}</dt><dd id="watch-summary">—</dd></div></dl>
-        ${analysisSettingsShell()}
       </section>
       ${cacheShell()}
       ${workspaceAdminShell()}
@@ -25,6 +25,7 @@ export function adminShell() {
       ${measurementShell()}
       <section id="pane-preferences" hidden><header class="admin-heading"><h1>${th(msg('admin.preferencesTitle', '首选项'))}</h1></header>
         <div class="admin-panel"><div class="admin-preference-row"><h2>${th(msg('admin.interfaceLanguage', '界面语言'))}</h2><div class="admin-language"><button type="button" id="language-choice" class="choice-trigger" aria-label="${th(msg("language.label", "语言 / Language"))}"></button><span id="language-status" role="status"></span></div></div></div>
+        ${analysisSettingsShell()}
       </section>
       <section id="pane-library" hidden><header class="admin-heading"><h1>${th(msg("admin.libraryTitle", "媒体库"))}</h1></header>
         <form id="roots-form" class="admin-panel"><div class="admin-section-heading admin-roots-heading">

@@ -253,6 +253,10 @@
       "name": "string | number"
     }
   },
+  "admin.collapseNavigation": {
+    "source": "折叠侧栏",
+    "params": {}
+  },
   "admin.confirmClear": {
     "source": "确认清理",
     "params": {}
@@ -438,6 +442,10 @@
   },
   "admin.errorUnavailable": {
     "source": "无法完成请求。请检查连接与服务状态后重试。",
+    "params": {}
+  },
+  "admin.expandNavigation": {
+    "source": "展开侧栏",
     "params": {}
   },
   "admin.exportMarks": {
@@ -662,10 +670,6 @@
   },
   "admin.nameSaved": {
     "source": "名称已保存。",
-    "params": {}
-  },
-  "admin.navCaption": {
-    "source": "服务管理",
     "params": {}
   },
   "admin.navCategory": {

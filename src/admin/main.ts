@@ -42,6 +42,24 @@ installFocusFeedback(life.signal);
 const app = document.getElementById('admin-app')!; mountLocalizedShell(app, adminShell, life.signal);
 installLanguageControls(life.signal);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+const adminLayout = app.querySelector<HTMLElement>('.admin-layout')!;
+let navigationCollapsed = false;
+try { navigationCollapsed = localStorage.getItem('voidplayer.admin.navigationCollapsed') === 'true'; } catch {}
+function syncNavigation() {
+  adminLayout.dataset.navigationCollapsed = String(navigationCollapsed);
+  $('admin-navigation-toggle').setAttribute('aria-expanded', String(!navigationCollapsed));
+  app.querySelector<HTMLAnchorElement>('.admin-brand')!.tabIndex = navigationCollapsed ? -1 : 0;
+}
+localizedAttribute($('admin-navigation-toggle'), 'aria-label', () => navigationCollapsed
+  ? t(msg('admin.expandNavigation', '展开侧栏')) : t(msg('admin.collapseNavigation', '折叠侧栏')));
+$('admin-navigation-toggle').addEventListener('click', () => {
+  navigationCollapsed = !navigationCollapsed;
+  syncNavigation();
+  localizedAttribute($('admin-navigation-toggle'), 'aria-label', () => navigationCollapsed
+    ? t(msg('admin.expandNavigation', '展开侧栏')) : t(msg('admin.collapseNavigation', '折叠侧栏')));
+  try { localStorage.setItem('voidplayer.admin.navigationCollapsed', String(navigationCollapsed)); } catch {}
+}, { signal: life.signal });
+syncNavigation();
 const disposeTheme = observeTheme();
 const text = (id: string, value: LocalizedValue) => { localizedText($(id), value); };
 const bytes = (n: number) => n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(1)} GB` : n >= 1024 ** 2 ? `${(n / 1024 ** 2).toFixed(1)} MB` : `${(n / 1024).toFixed(1)} KB`;
@@ -289,7 +307,7 @@ for (const [id] of PANES()) document.querySelector<HTMLButtonElement>(`[data-pan
   history.replaceState(null, '', `#${id}`); pane = id; measurements.activate(id === 'measurements'); notice(() => ''); for (const [item] of PANES()) { $(`pane-${item}`).hidden = id !== item; document.querySelector(`[data-pane=${item}]`)!.setAttribute('aria-current', id === item ? 'page' : 'false'); }
   libraryBrowser.activate(id === 'library');
   scanCadence.reset(); requestCadence.reset();
-  if (id === 'overview') {void analysisSettings.load();}
+  if (id === 'preferences') {void analysisSettings.load();}
   if (id === 'library') void act(async () => { if (!rootConfig || !rootDirty) await loadRoots(); await loadScan(); });
   if (id === 'caches') caches.activate();
   if (id === 'workspaces') savedWorkspaces.activate();

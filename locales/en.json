@@ -223,6 +223,10 @@
     "source": "清理 {name} 的{label}",
     "translation": "Clear {label} for {name}"
   },
+  "admin.collapseNavigation": {
+    "source": "折叠侧栏",
+    "translation": "Collapse sidebar"
+  },
   "admin.confirmClear": {
     "source": "确认清理",
     "translation": "Confirm clear"
@@ -386,6 +390,10 @@
   "admin.errorUnavailable": {
     "source": "无法完成请求。请检查连接与服务状态后重试。",
     "translation": "The request could not be completed. Check the connection and service, then retry."
+  },
+  "admin.expandNavigation": {
+    "source": "展开侧栏",
+    "translation": "Expand sidebar"
   },
   "admin.exportMarks": {
     "source": "导出标注",
@@ -590,10 +598,6 @@
   "admin.nameSaved": {
     "source": "名称已保存。",
     "translation": "Name saved."
-  },
-  "admin.navCaption": {
-    "source": "服务管理",
-    "translation": "Service admin"
   },
   "admin.navCategory": {
     "source": "管理分类",

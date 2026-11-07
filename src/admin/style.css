@@ -2,17 +2,30 @@
 :where(.admin-content, .admin-log-sidebar, #requests-view,
   .admin-navigation) { overscroll-behavior: contain; }
 #admin-app { height: 100%; }
-.admin-layout { display: grid; grid-template-columns: 184px minmax(0, 1fr); height: 100%; }
-.admin-navigation { display: flex; flex-direction: column; gap: 4px; padding: 20px 10px; background: var(--surface); }
+.admin-layout { --admin-navigation-width: 184px; display: grid; grid-template-columns: var(--admin-navigation-width) minmax(0, 1fr); height: 100%; transition: grid-template-columns 220ms ease; }
+.admin-navigation { display: flex; flex-direction: column; gap: 4px; padding: 10px; min-width: 0; overflow: hidden; background: var(--surface); }
+.admin-navigation-heading { display: flex; align-items: center; gap: 4px; height: 36px; flex-shrink: 0; }
+.admin-navigation .admin-brand { flex: 1; min-width: 0; max-width: 150px; overflow: hidden; padding: 0; white-space: nowrap; opacity: 1; transition: max-width 220ms ease, opacity 140ms ease; }
+.admin-navigation #admin-navigation-toggle { flex: 0 0 36px; width: 36px; padding: 9px; justify-content: center; }
+.admin-navigation-items { display: flex; flex-direction: column; gap: 4px; overflow: auto; min-height: 0; }
+.admin-navigation .icon { flex-shrink: 0; }
+.admin-nav-label { min-width: 0; max-width: 160px; overflow: hidden; white-space: nowrap; opacity: 1; transition: max-width 220ms ease, opacity 140ms ease; }
 .admin-navigation a { display: flex; align-items: center; gap: 9px; padding: 9px 10px; color: var(--text); text-decoration: none; }
 .admin-brand { font-size: 15px; font-weight: 600; }
-.admin-nav-caption { padding: 12px 10px 5px; color: var(--text-secondary); font-size: 11px; }
-.admin-navigation button { justify-content: flex-start; height: 36px; padding: 0 10px; gap: 9px; background: transparent; }
+.admin-navigation button { justify-content: flex-start; flex-shrink: 0; height: 36px; padding: 0 10px; gap: 9px; background: transparent; transition: gap 220ms ease; }
 .admin-navigation button .icon { color: var(--text-secondary); }
 .admin-navigation button[aria-current=page] { color: var(--accent); background: var(--surface-selected); }
 .admin-navigation button[aria-current=page] .icon { color: inherit; }
 .admin-navigation .admin-back { margin-top: auto; font-size: 12px; color: var(--text-secondary); }
 .admin-navigation a:hover { color: var(--accent); }
+@media (min-width: 601px) {
+  .admin-layout[data-navigation-collapsed=true] { --admin-navigation-width: 56px; }
+  [data-navigation-collapsed=true] .admin-brand, [data-navigation-collapsed=true] .admin-nav-label { max-width: 0; opacity: 0; }
+  [data-navigation-collapsed=true] .admin-navigation :is(button, a, .admin-navigation-heading) { gap: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-layout, .admin-navigation button, .admin-navigation .admin-brand, .admin-nav-label { transition: none; }
+}
 .admin-content { min-width: 0; overflow: auto; padding: 30px 32px; background: var(--surface-panel); }
 .admin-content > section { width: 100%; max-width: 1100px; margin: 0 auto; flex: 0 0 auto; }
 .admin-content [hidden] { display: none !important; }
@@ -130,7 +143,7 @@
 .admin-workspace-item .source-meta { white-space: normal; }
 .admin-analysis-status { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; margin-top: 8px; color: var(--text-secondary); font-size: 12px; }
 @media (max-width: 1000px) {
-  .admin-layout { grid-template-columns: 150px minmax(0, 1fr); }
+  .admin-layout { --admin-navigation-width: 150px; }
   .admin-content { padding: 24px; }
   .admin-log-workspace { grid-template-columns: 180px minmax(0, 1fr); gap: 16px; }
   .admin-metrics > div { padding: 14px 12px; }
@@ -155,9 +168,11 @@
 @media (max-width: 600px) {
   .admin-layout { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
   .admin-navigation { flex-direction: row; align-items: center; padding: 8px; overflow: auto; }
-  .admin-navigation .admin-brand, .admin-nav-caption { display: none; }
+  .admin-navigation-heading { display: none; }
+  .admin-navigation-items { display: contents; }
   .admin-navigation .admin-back { order: -1; margin: 0; flex-shrink: 0; font-size: 0; padding: 9px; position: sticky; left: 0; z-index: 1; background: var(--surface); }
   .admin-navigation .admin-back .icon { width: 18px; height: 18px; }
+  .admin-navigation .admin-back .admin-nav-label { display: none; }
   .admin-navigation button { flex-shrink: 0; }
   .admin-content { padding: 20px 14px; }
   .admin-heading { margin-bottom: 20px; }
