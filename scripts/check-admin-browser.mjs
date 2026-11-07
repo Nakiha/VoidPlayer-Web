@@ -7,6 +7,7 @@ import { webkit, chromium } from 'playwright';
 import { loadConfig } from '../server/config.ts';
 import { startService } from '../server/runtime.ts';
 import { advanceAdminPollClock } from './testing/admin-poll-clock.mjs';
+import {THUMB_RECIPE_VERSION} from '../shared/thumbnails/contract.ts';
 const root = path.resolve(import.meta.dirname, '..');
 const temporary = await mkdtemp(path.join(os.tmpdir(), 'vp-admin-browser-'));
 const browserName = process.argv[2] ?? 'webkit';
@@ -16,6 +17,7 @@ try {
   const media = path.join(temporary, '本机媒体'); await mkdir(media); await writeFile(path.join(media, 'sample.mp4'), Buffer.alloc(4 * 1024 * 1024, 51));
   for (let i=0;i<61;i++) await mkdir(path.join(media,`folder-${String(i).padStart(3,'0')}`));
   await mkdir(path.join(media,'z-branch','leaf'),{recursive:true});
+  await mkdir(path.join(media,'z-branch','leaf','target'));
   await copyFile(path.join(root,'fixtures/video/ci_h264_smoke.mp4'),path.join(media,'z-branch','leaf','nested.mp4'));
   const extra = path.join(temporary, 'shared-storage', '嵌套的制作素材目录'); await mkdir(extra, { recursive: true }); await writeFile(path.join(extra, 'new.mp4'), 'new');
   const file = path.join(temporary, 'voidplayer.config.json');
@@ -29,6 +31,12 @@ try {
   browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless: true });
   const context = await browser.newContext({locale:'zh-CN',  viewport: { width: 1200, height: 820 }, reducedMotion: 'reduce', colorScheme: 'light' });
   const player = await context.newPage(); const errors = [],clockTrace=[];let clockPhase='real-ui';
+  // A cached cover exercises browser image dragging without decoding an extra video.
+  const cover=await player.evaluate(() => {
+    const canvas=document.createElement('canvas');canvas.width=40;canvas.height=24;
+    const context=canvas.getContext('2d');context.fillStyle='#d77e35';context.fillRect(0,0,40,24);
+    return canvas.toDataURL('image/jpeg').split(',')[1];
+  });
   context.on('requestfailed',request=>{let owner='unknown';try{owner=request.frame().page()===player?'player':'admin';}catch{}clockTrace.push({phase:clockPhase,event:'requestfailed',page:owner,url:request.url(),failure:request.failure(),at:Date.now()});});
   const observeErrors = (target, owner) => target.on('pageerror', error => {
     errors.push(error.message);
@@ -407,8 +415,50 @@ try {
   await chooseView('columns');
   assert.equal(await active.locator('.library-item-selected').count(),0,'changing view does not retain a selection in a hidden column');
   await goLibrary('library:local/z-branch/leaf');
+  const covered=service.library.browse({rootId:'local',directory:'z-branch/leaf'}).entries[0];
+  service.library.thumbnails.put(covered.id,covered.version,THUMB_RECIPE_VERSION,service.library.thumbnails.epoch,Buffer.from(cover,'base64'),{width:40,height:24,sourcePtsUs:0});
+  await goLibrary('library:local/z-branch/leaf');
   const nestedFile=active.locator('.source-file').filter({hasText:'nested.mp4'});
   await nestedFile.waitFor();
+  const coveredColumn=active.locator('.library-column[data-directory="z-branch/leaf"]');
+  await coveredColumn.locator('[data-library-path="z-branch/leaf/target"]').click();
+  await active.locator('.library-column[data-directory="z-branch/leaf/target"]').waitFor();
+  await nestedFile.click();
+  const thumbnail=nestedFile.locator('.source-thumb img');
+  await managed.waitForFunction(() => {
+    const img=document.querySelector('.source-file[data-library-path="z-branch/leaf/nested.mp4"] .source-thumb img');
+    return img?.naturalWidth>0&&img.dataset.thumbDecoded==='true';
+  });
+  await thumbnail.scrollIntoViewIfNeeded();
+  const imageBox=await thumbnail.boundingBox();
+  const targetFolder=coveredColumn.locator('[data-library-path="z-branch/leaf/target"]');
+  const targetBox=await targetFolder.boundingBox();
+  await managed.mouse.move(imageBox.x+imageBox.width/2,imageBox.y+imageBox.height/2);await managed.mouse.down();
+  await managed.mouse.move(targetBox.x+targetBox.width/2,targetBox.y+targetBox.height/2,{steps:8});
+  await managed.locator('.library-drag-preview').waitFor();
+  await managed.waitForFunction(() => document.querySelector('.library-drag-preview')?.dataset.allowed==='true');
+  await managed.keyboard.press('Escape');await managed.mouse.up();
+  assert.equal(moveRequests,2,'a thumbnail drag can be cancelled without changing files');
+  // A final release can arrive ahead of the last coalesced move: use its own coordinates.
+  await managed.evaluate(() => document.addEventListener('pointerdown',event => {window.coverPointerId=event.pointerId;},{capture:true,once:true}));
+  await managed.mouse.move(imageBox.x+imageBox.width/2,imageBox.y+imageBox.height/2);await managed.mouse.down();
+  await managed.mouse.move(imageBox.x+imageBox.width/2+12,imageBox.y+imageBox.height/2,{steps:3});
+  await managed.locator('.library-drag-preview').waitFor();
+  assert.equal(await managed.locator('.library-drag-preview').getAttribute('data-allowed'),'false','the last move is still over the source directory');
+  const thumbnailMove=managed.waitForResponse(response => new URL(response.url()).pathname==='/api/library/files'&&response.request().method()==='POST');
+  await embedded.dispatchEvent('pointerup',{pointerId:await managed.evaluate(() => window.coverPointerId),pointerType:'mouse',button:0,
+    clientX:targetBox.x+targetBox.width/2,clientY:targetBox.y+targetBox.height/2,bubbles:true});
+  await managed.mouse.up();const movedFromThumbnail=await (await thumbnailMove).json();
+  assert.equal(movedFromThumbnail.results[0].ok,true,JSON.stringify(movedFromThumbnail));
+  assert.deepEqual(await readFile(path.join(media,'z-branch/leaf/target/nested.mp4')),await readFile(path.join(root,'fixtures/video/ci_h264_smoke.mp4')));
+  // Restore through the same public command so the existing file-link checks remain independent.
+  const movedEntry=service.library.browse({rootId:'local',directory:'z-branch/leaf/target'}).entries[0];
+  const restored=await managed.evaluate(async source => {
+    const response=await fetch('/api/library/files',{method:'POST',headers:{'content-type':'application/json','x-voidplayer-action':'library-files'},body:JSON.stringify({operation:'move',sources:[source],target:{rootId:'local',directory:'z-branch/leaf'}})});
+    return response.json();
+  },{rootId:'local',path:movedEntry.name,version:movedEntry.version,kind:'file'});
+  assert.equal(restored.results[0].ok,true);
+  await goLibrary('library:local/z-branch/leaf');
   await rootColumn().locator('.source-file').click();
   await startFileDrag();
   const divider=active.locator('.library-column-splitter').nth(2);
@@ -426,8 +476,9 @@ try {
     assert.equal(await embedded.locator('.library-drop-target').count(),0,'splitter hit areas never highlight the entire browser or an adjacent directory');
   }
   await managed.mouse.up();
-  assert.equal(moveRequests,2,'releasing over a splitter cannot move files');
+  assert.equal(moveRequests,4,'releasing over a splitter cannot move files');
   assert.equal(await managed.locator('.library-drag-preview').count(),0);
+  await managed.waitForFunction(() => document.querySelector('.source-file[data-library-path="z-branch/leaf/nested.mp4"]')?.getAttribute('aria-disabled')==='false');
   await nestedFile.click({button:'right'});
   const [destination] = await Promise.all([context.waitForEvent('page'),managed.locator('#library-file-menu [data-action=browse-in-player]').click()]);
   await destination.waitForFunction(() => !!window.voidPlayer);

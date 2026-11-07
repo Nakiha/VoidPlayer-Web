@@ -197,6 +197,10 @@ export function installLibrarySelection(host:HTMLElement, list:HTMLElement, sign
   },capture);
   document.addEventListener('pointerup',event => {
     if (!drag||drag.id!==event.pointerId) return;
+    if (drag.ghost) {
+      drag.clientX=event.clientX;drag.clientY=event.clientY;
+      track();
+    }
     const {ghost,refs,target}=drag;
     if (ghost) {event.preventDefault();event.stopImmediatePropagation();swallowClick=true;}
     stopDrag();
