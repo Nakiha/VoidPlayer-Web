@@ -738,6 +738,8 @@ export interface Sources {
   "libraryBrowser.searchUnder": "{scope} 下搜索";
   "libraryBrowser.unknownLibrary": "此媒体库在当前服务中不存在。";
   "libraryColumns.loading": "正在读取目录…";
+  "libraryColumns.resize": "调整第 {index} 列宽度";
+  "libraryColumns.scroll": "横向滚动分栏";
   "libraryColumns.unavailable": "无法读取目录，请稍后重试。";
   "libraryFileMenu.copied": "已拷贝";
   "libraryFileMenu.copyLibraryPath": "拷贝媒体库路径";
@@ -2332,6 +2334,8 @@ export interface MessageParameters {
   "libraryBrowser.searchUnder": { "scope": string | number };
   "libraryBrowser.unknownLibrary": {  };
   "libraryColumns.loading": {  };
+  "libraryColumns.resize": { "index": string | number };
+  "libraryColumns.scroll": {  };
   "libraryColumns.unavailable": {  };
   "libraryFileMenu.copied": {  };
   "libraryFileMenu.copyLibraryPath": {  };

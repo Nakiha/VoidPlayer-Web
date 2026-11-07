@@ -4,6 +4,7 @@ import type { LibraryPage } from '../services/library.ts';
 import { sourceKey } from './source-catalog.ts';
 import type { SourceItem } from './source-catalog.ts';
 import { installLibraryListing } from './library-view.ts';
+import { installLibraryColumnLayout } from './library-column-layout.ts';
 import { prefetchThumbnailStatuses } from '../thumbnails/client.ts';
 
 type Scope = {root:string; directory:string; search:string};
@@ -31,9 +32,11 @@ export function installLibraryColumns(viewport: HTMLElement, host: HTMLElement, 
       if (!enabled || signal.aborted || !current) return;
       const next = keyOf(current.location);
       if (revealed !== next) {revealed = next; viewport.scrollLeft = viewport.scrollWidth;}
+      layout.updateScrollbar();
       ensureVisible();
     });
   };
+  const layout = installLibraryColumnLayout(viewport,host,signal,schedule);
   function renderColumn(column:Column) {
     if (!current) return;
     const record = records.get(column.key)!;
@@ -141,9 +144,10 @@ export function installLibraryColumns(viewport: HTMLElement, host: HTMLElement, 
       column.primary = key === primary;
       column.branch = index===0 && root ? `mount:${root}` : index>0 && index<scopes.length-1 ? `folder:${root}/${scopes[index+1].directory}` : undefined;
       column.frame.setAttribute('aria-label',!scope.root?t(msg('libraryBrowser.library','媒体库')):scope.directory.split('/').at(-1)||value.page.roots.find(item => item.id===root)?.name||root);
-      if (host.children[index] !== column.frame) host.insertBefore(column.frame,host.children[index]??null);
-      renderColumn(column);
     }
+    const ordered = scopes.map(scope => columns.get(keyOf(scope))!);
+    layout.render(ordered.map(column => column.frame));
+    ordered.forEach(renderColumn);
     for (const [key,record] of records) if (records.size>32 && !desired.has(key)) {record.pending?.abort();records.delete(key);}
     schedule();
   }
@@ -155,6 +159,7 @@ export function installLibraryColumns(viewport: HTMLElement, host: HTMLElement, 
     return !!column && nearEnd(column.frame);
   },setEnabled(value:boolean) {
     enabled = value;
+    layout.setEnabled(value);
     if (!value) for (const record of records.values()) {record.pending?.abort();record.pending=undefined;record.sequence++;}
     else {revealed=''; if(current)render(current);}
   },localize() {

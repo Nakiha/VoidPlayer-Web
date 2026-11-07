@@ -3194,6 +3194,16 @@
     "source": "正在读取目录…",
     "params": {}
   },
+  "libraryColumns.resize": {
+    "source": "调整第 {index} 列宽度",
+    "params": {
+      "index": "string | number"
+    }
+  },
+  "libraryColumns.scroll": {
+    "source": "横向滚动分栏",
+    "params": {}
+  },
   "libraryColumns.unavailable": {
     "source": "无法读取目录，请稍后重试。",
     "params": {}

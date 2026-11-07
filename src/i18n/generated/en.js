@@ -740,6 +740,8 @@ export default {
   "libraryBrowser.searchUnder": (d) => "Search in " + d.scope,
   "libraryBrowser.unknownLibrary": () => "This library does not exist on the current service.",
   "libraryColumns.loading": () => "Reading directory…",
+  "libraryColumns.resize": (d) => "Resize column " + d.index,
+  "libraryColumns.scroll": () => "Scroll columns horizontally",
   "libraryColumns.unavailable": () => "Unable to read directory. Try again shortly.",
   "libraryFileMenu.copied": () => "Copied",
   "libraryFileMenu.copyLibraryPath": () => "Copy library path",

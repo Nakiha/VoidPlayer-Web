@@ -2982,6 +2982,14 @@
     "source": "正在读取目录…",
     "translation": "Reading directory…"
   },
+  "libraryColumns.resize": {
+    "source": "调整第 {index} 列宽度",
+    "translation": "Resize column {index}"
+  },
+  "libraryColumns.scroll": {
+    "source": "横向滚动分栏",
+    "translation": "Scroll columns horizontally"
+  },
   "libraryColumns.unavailable": {
     "source": "无法读取目录，请稍后重试。",
     "translation": "Unable to read directory. Try again shortly."

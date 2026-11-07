@@ -740,6 +740,8 @@ export default {
   "libraryBrowser.searchUnder": (d) => "［S~e~a~r~c~h~ i~n~ " + d.scope + " ········］",
   "libraryBrowser.unknownLibrary": () => "［T~h~i~s~ l~i~b~r~a~r~y~ d~o~e~s~ n~o~t~ e~x~i~s~t~ o~n~ t~h~e~ c~u~r~r~e~n~t~ s~e~r~v~i~c~e~. ········］",
   "libraryColumns.loading": () => "［R~e~a~d~i~n~g~ d~i~r~e~c~t~o~r~y~… ········］",
+  "libraryColumns.resize": (d) => "［R~e~s~i~z~e~ c~o~l~u~m~n~ " + d.index + " ········］",
+  "libraryColumns.scroll": () => "［S~c~r~o~l~l~ c~o~l~u~m~n~s~ h~o~r~i~z~o~n~t~a~l~l~y~ ········］",
   "libraryColumns.unavailable": () => "［U~n~a~b~l~e~ t~o~ r~e~a~d~ d~i~r~e~c~t~o~r~y~. T~r~y~ a~g~a~i~n~ s~h~o~r~t~l~y~. ········］",
   "libraryFileMenu.copied": () => "［C~o~p~i~e~d~ ········］",
   "libraryFileMenu.copyLibraryPath": () => "［C~o~p~y~ l~i~b~r~a~r~y~ p~a~t~h~ ········］",
