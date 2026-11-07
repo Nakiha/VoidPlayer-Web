@@ -74,7 +74,7 @@ const analysisOverlay = '<svg xmlns="http://www.w3.org/2000/svg" width="24" heig
 import listBullets from '@phosphor-icons/core/assets/regular/list-bullets.svg?raw';
 // Inward arrows compress the row spacing, distinct from the list-view glyph.
 const compactRows = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-  <path fill="none" d="M4 10h16M4 14h16M12 2v5m-3-3 3 3 3-3M12 22v-5m-3 3 3-3 3 3"/>
+  <path fill="none" d="M4 10h16M4 14h16M9 4l3 3 3-3M9 20l3-3 3 3"/>
 </svg>`;
 import caretUpDown from '@phosphor-icons/core/assets/regular/caret-up-down.svg?raw';
 import libraryVolume from '@phosphor-icons/core/assets/regular/hard-drives.svg?raw';
