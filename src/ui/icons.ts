@@ -74,7 +74,12 @@ const analysisOverlay = '<svg xmlns="http://www.w3.org/2000/svg" width="24" heig
 import listBullets from '@phosphor-icons/core/assets/regular/list-bullets.svg?raw';
 import caretUpDown from '@phosphor-icons/core/assets/regular/caret-up-down.svg?raw';
 import libraryVolume from '@phosphor-icons/core/assets/regular/hard-drives.svg?raw';
-const icons = { listBullets, caretUpDown, pathSeparator, libraryVolume, opacity, clock, analysisOverlay, speaker, speakerMuted, cpu, memory, storage, gpu, monitor, appearance, keyboard, diagnostics, info, user, check, settings, plusRegular, select, eraser, redo, trash, filePlus, focus, eye, eyeClosed, grid, chart, columns, pen, ellipse, rect, line, text: lettering, undo, center, grip, copy, download, sidebar, rows, open, shareNetwork, export: share, play, pause, previous, next, plus, close, more, note, refresh, search, zoomIn, zoomOut, fullRange, down, caretLeft, caretRight, film, fit, marker };
+const libraryManage = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <path fill="none" d="M9 19H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5l2 3h10a1 1 0 0 1 1 1v2M2 10h18"/>
+  <path fill="none" d="m16 12-.4 1.5-1.1.65-1.5-.4-1 1.75 1.1 1.1v1.3L12 19l1 1.75 1.5-.4 1.1.65L16 22h2l.4-1 1.1-.65 1.5.4 1-1.75-1.1-1.1v-1.3l1.1-1.1-1-1.75-1.5.4-1.1-.65L18 12Z"/>
+  <circle fill="none" cx="17" cy="17" r="1.75"/>
+</svg>`;
+const icons = { libraryManage, listBullets, caretUpDown, pathSeparator, libraryVolume, opacity, clock, analysisOverlay, speaker, speakerMuted, cpu, memory, storage, gpu, monitor, appearance, keyboard, diagnostics, info, user, check, settings, plusRegular, select, eraser, redo, trash, filePlus, focus, eye, eyeClosed, grid, chart, columns, pen, ellipse, rect, line, text: lettering, undo, center, grip, copy, download, sidebar, rows, open, shareNetwork, export: share, play, pause, previous, next, plus, close, more, note, refresh, search, zoomIn, zoomOut, fullRange, down, caretLeft, caretRight, film, fit, marker };
 export function icon(name: keyof typeof icons, extraClass = '') {
   return icons[name].replace('<svg ', `<svg class="icon ${extraClass}" data-icon="${name}" aria-hidden="true" focusable="false" `);
 }

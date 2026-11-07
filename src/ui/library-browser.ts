@@ -29,15 +29,15 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
   const address = document.createElement('input'); address.id = 'library-location'; address.className = 'library-location';
   address.type = 'search'; address.autocomplete = 'off'; address.spellcheck = false;
   const manage = document.createElement('a'); manage.id = 'library-manage'; manage.className = 'icon-button library-manage';
-  manage.href = '/admin#library'; manage.target = '_blank'; manage.rel = 'opener'; manage.innerHTML = icon('settings');
+  manage.href = '/admin#library'; manage.target = '_blank'; manage.rel = 'opener'; manage.innerHTML = icon('libraryManage');
   manage.setAttribute('aria-label',t(msg('libraryBrowser.manage', '媒体库管理')));
   nav.append(address);
-  if (elements.manage) nav.append(manage);
   if (elements.trailing) nav.append(elements.trailing);
   const back = createIconButton({ glyph: 'caretLeft', label: t(msg('libraryBrowser.goBack', '后退')), className: 'crumbs-back', attributes:{'data-tooltip-suppressed':''} });
   const forward = createIconButton({ glyph: 'caretRight', label: t(msg('libraryBrowser.goForward', '前进')), className: 'crumbs-forward', attributes:{'data-tooltip-suppressed':''} });
   const historyControls = document.createElement('div'); historyControls.className = 'library-history';
   historyControls.append(back, forward); tools.replaceChildren(historyControls, nav);
+  if (elements.manage) tools.append(manage);
   const pathbar = document.createElement('nav'); pathbar.id = 'library-pathbar'; pathbar.className = 'library-pathbar';
   foot.prepend(pathbar);
   pathbar.addEventListener('click', event => {

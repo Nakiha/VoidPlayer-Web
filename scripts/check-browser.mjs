@@ -298,7 +298,7 @@ try {
       }
     }
     const materials = await page.locator('#source-tools').evaluate(tools =>
-      ['.library-history', '.library-navigation'].map(selector => {
+      ['.library-history', '.library-navigation', '.library-manage'].map(selector => {
         const s = getComputedStyle(tools.querySelector(selector));
         return { background: s.backgroundColor, filter: s.backdropFilter || s.webkitBackdropFilter };
       }));
@@ -313,6 +313,21 @@ try {
     }
     assert.equal(await page.locator('#source-tools').evaluate(el => getComputedStyle(el).backdropFilter || getComputedStyle(el).webkitBackdropFilter), 'blur(6px)', 'the full toolbar retains its glass backplate');
     assert.notEqual(await page.locator('#source-tools').evaluate(el => getComputedStyle(el).backgroundColor), materials[0].background, 'the continuous glass backplate and light button fills remain distinct');
+    const management = page.locator('#library-manage');
+    await page.mouse.move(0,0);
+    await page.locator('#library-location').evaluate(el => el.blur());
+    await page.locator('#library-navigation').evaluate(el => {for(const animation of el.getAnimations())animation.finish();});
+    const restingAddress=await page.locator('#library-navigation').evaluate(el => getComputedStyle(el).backgroundColor);
+    await management.hover();
+    await page.locator('#library-navigation').evaluate(el => {for(const animation of el.getAnimations())animation.finish();});
+    assert.equal(await page.locator('#library-navigation').evaluate(el => getComputedStyle(el).backgroundColor),restingAddress,'management hover leaves the address field at rest');
+    const managementFeedback=await press('#library-manage');
+    assert.notEqual(managementFeedback.held.background,managementFeedback.hover.background,'the standalone management control uses shared press feedback');
+    await management.focus();
+    assert.equal(await page.locator('#library-navigation').evaluate(el => el.matches(':focus-within')),false,'management focus does not activate the search field');
+    const manageBox=await management.boundingBox(), fieldBox=await page.locator('#library-navigation').boundingBox();
+    assert.equal(Math.round(manageBox.x-fieldBox.x-fieldBox.width),4,'management is a separate control with a four-pixel gap');
+    await page.locator('#source-tools').screenshot({path:path.join(screenshots,`${browserName}-library-management-control.png`)});
     const navigation = await page.locator('#library-navigation').boundingBox();
     const tools = await page.locator('#source-tools').boundingBox();
     const list = await page.locator('#source-list').boundingBox();
