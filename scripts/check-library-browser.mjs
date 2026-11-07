@@ -38,7 +38,7 @@ try {
   await page.goto(base); await page.waitForFunction(() => window.voidPlayer);
   await page.locator('#toggle-sources').click();
   await page.getByRole('button', {name:'打开媒体库：项目归档', exact:true}).waitFor();
-  assert.match(await page.locator('#library-mounts .source-meta').innerText(), /可用 \/ 共/);
+  assert.match(await page.locator('#library-mounts .source-meta').innerText(), /可用\s*\/\s*共/);
   assert.equal(await page.locator('#source-tools').evaluate(el => getComputedStyle(el).gap), '4px');
   assert.equal(await page.locator('#sources-search-toggle, #source-search, #source-search-field, #library-root, #library-root-menu').count(), 0);
   assert.equal(await page.locator('#library-location').inputValue(), '媒体库');
@@ -170,12 +170,16 @@ try {
   await go(copiedLink);
   assert.deepEqual(protocolSearches, [], 'location protocols are never submitted as search terms');
   assert.equal(await page.locator('#library-location').inputValue(), '实验一');
-  const webLink = new URL(base); webLink.searchParams.set('library','1'); webLink.searchParams.set('root','archive'); webLink.searchParams.set('dir','实验一');
-  const linked = await context.newPage(); await linked.goto(webLink.href);
-  await linked.waitForFunction(() => document.querySelector('#library-location')?.value === '实验一');
-  assert.equal(await linked.locator('#sources-panel').isVisible(), true);
-  assert.equal(await linked.locator('#library-pathbar [aria-current] .library-path-label').textContent(), '实验一');
-  await linked.close(); await go(webLink.href);
+  const webLink = new URL(base); webLink.searchParams.set('library','archive'); webLink.searchParams.set('dir','实验一');
+  const legacyLink=new URL(webLink); legacyLink.searchParams.set('library','1'); legacyLink.searchParams.set('root','archive');
+  const linked = await context.newPage();
+  for (const link of [webLink,legacyLink]) {
+    await linked.goto(link.href);
+    await linked.waitForFunction(() => document.querySelector('#library-location')?.value === '实验一');
+    assert.equal(await linked.locator('#sources-panel').isVisible(), true);
+    assert.equal(await linked.locator('#library-pathbar [aria-current] .library-path-label').textContent(), '实验一');
+  }
+  await linked.close(); await go(legacyLink.href); await go(webLink.href);
   await page.locator('#library-location').fill('https://other.example/?library=1'); await page.locator('#library-location').press('Enter');
   await page.locator('.toast-stack .toast').filter({hasText:'另一个媒体服务'}).waitFor(); await clearSearch();
   if (process.argv.includes('--links-only')) {

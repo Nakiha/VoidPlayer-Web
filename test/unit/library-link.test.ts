@@ -16,6 +16,8 @@ test('media library expressions are compact, copyable, and service-relative', ()
 test('media library links preserve root IDs and nested Unicode directories', () => {
   const location = { root: 'archive', directory: '实验一/镜头 A', all: false };
   const link = libraryLocationLink(location, 'https://review.example/?share=old');
+  assert.equal(new URL(link).searchParams.get('library'),'archive');
+  assert.equal(new URL(link).searchParams.has('root'),false);
   assert.deepEqual(parseLibraryLocationLink(link, 'https://review.example/'), location);
   assert.deepEqual(parseLibraryLocationInput(link, 'https://review.example/'), location);
   assert.equal(new URL(link).searchParams.has('share'), false);
@@ -35,4 +37,23 @@ test('explicit library file links pin a file version and preserve its directory'
   assert.equal(parseLibraryFileLink('https://review.example/?library=1','https://review.example/'),null);
   assert.throws(() => parseLibraryFileLink(link.replace(`v=${entry.version}`,'v=old'),'https://review.example/'),/文件链接无效/);
   assert.throws(() => parseLibraryFileLink(link.replace('review.example','other.example'),'https://review.example/'),/另一个媒体服务/);
+});
+
+test('canonical library scopes and legacy links restore the same location', () => {
+  const base='https://review.example/';
+  for (const [location,scope,legacy] of [
+    [{root:'',directory:'',all:false},'','?library=1'],
+    [{root:'',directory:'',all:true},'*','?library=1&all=1'],
+    [{root:'archive',directory:'镜头 A',all:false},'archive','?library=1&root=archive&dir=镜头%20A'],
+  ] as const) {
+    const link=libraryLocationLink(location,base), url=new URL(link);
+    assert.equal(url.searchParams.get('library'),scope);
+    assert.equal(url.searchParams.has('root')||url.searchParams.has('all'),false);
+    assert.deepEqual(parseLibraryLocationLink(link,base),location);
+    assert.deepEqual(parseLibraryLocationLink(new URL(legacy,base).href,base),location);
+  }
+  const numeric={root:'1',directory:'',all:false};
+  assert.deepEqual(parseLibraryLocationLink(libraryLocationLink(numeric,base),base),numeric,'legacy switch value remains an unambiguous configured root');
+  assert.deepEqual(parseLibraryLocationLink(base+'?library=archive&root=other&all=1',base),{root:'archive',directory:'',all:false});
+  assert.throws(() => parseLibraryLocationLink(base+'?library=archive/../other',base),/标识无效/);
 });

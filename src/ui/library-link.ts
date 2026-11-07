@@ -33,12 +33,11 @@ export function parseLibraryLocationInput(value: string, base: string): LibraryL
 /** A location link names the library root by stable ID, not its display name. */
 export function libraryLocationLink(location: LibraryLocation, base: string): string {
   const url = new URL('/', base);
-  url.searchParams.set('library', '1');
-  if (location.all) url.searchParams.set('all', '1');
-  else {
-    if (location.root) url.searchParams.set('root', location.root);
-    if (location.directory) url.searchParams.set('dir', location.directory);
-  }
+  const {root,directory,all} = validate(location);
+  url.searchParams.set('library',all ? '*' : root);
+  // "1" was the legacy panel switch; keep this unusual configured ID distinct.
+  if (!all && root === '1') url.searchParams.set('root',root);
+  if (directory) url.searchParams.set('dir',directory);
   return url.href;
 }
 
@@ -46,9 +45,10 @@ export function parseLibraryLocationLink(value: string, base: string): LibraryLo
   let url: URL;
   try { url = new URL(value.trim()); } catch { throw new Error(t(msg("libraryLink.pasteLink", "请粘贴复制的媒体库链接。"))); }
   if (url.origin !== new URL(base).origin) throw new Error(t(msg("libraryLink.otherService", "链接来自另一个媒体服务，请在浏览器中打开该链接。")));
-  if (url.pathname !== '/' || url.searchParams.get('library') !== '1') throw new Error(t(msg("libraryLink.notLocationLink", "这不是媒体库位置链接。")));
-  const all = url.searchParams.get('all') === '1';
-  const root = all ? '' : url.searchParams.get('root') ?? '';
+  if (url.pathname !== '/' || !url.searchParams.has('library')) throw new Error(t(msg("libraryLink.notLocationLink", "这不是媒体库位置链接。")));
+  const scope = url.searchParams.get('library')!, legacy = scope === '1';
+  const all = scope === '*' || legacy && url.searchParams.get('all') === '1';
+  const root = all ? '' : legacy ? url.searchParams.get('root') ?? '' : scope;
   const directory = all ? '' : url.searchParams.get('dir') ?? '';
   return validate({ root, directory, all });
 }

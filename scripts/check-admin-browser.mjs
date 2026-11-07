@@ -267,7 +267,8 @@ try {
   await nestedFile.click({button:'right'});
   const [destination] = await Promise.all([context.waitForEvent('page'),managed.locator('#library-file-menu [data-action=browse-in-player]').click()]);
   await destination.waitForFunction(() => !!window.voidPlayer);
-  assert.equal(new URL(destination.url()).searchParams.get('root'),'local');
+  assert.equal(new URL(destination.url()).searchParams.get('library'),'local');
+  assert.equal(new URL(destination.url()).searchParams.has('root'),false);
   await destination.waitForFunction(() => {
     const state=window.voidPlayer.getState();
     return !state.busy&&state.tracks.length===1&&!!state.tracks[0].frame;
