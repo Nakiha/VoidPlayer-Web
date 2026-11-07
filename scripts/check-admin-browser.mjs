@@ -128,6 +128,22 @@ try {
     const box=row.getBoundingClientRect(), column=row.closest('.library-column').getBoundingClientRect();
     return box.top>=column.top-1&&box.bottom<=column.bottom+1;
   }),'a selected ancestor discovered on a later page is revealed in its column');
+  for (const theme of ['dark','light']) {
+    await player.evaluate(theme => localStorage.setItem('voidplayer.theme',theme),theme);
+    await managed.waitForFunction(theme => document.documentElement.dataset.theme===theme,theme);
+    for (const row of await active.locator('.library-column-selected').all()) {
+      const colors=await row.evaluate(el => ({text:getComputedStyle(el).color,icon:getComputedStyle(el.querySelector('.library-folder-icon')).color,fill:getComputedStyle(el.querySelector('.source-thumb')).background}));
+      assert.equal(colors.icon,colors.text,`${theme}: selected mount/folder icons follow their text accent`);
+      const changed=await row.evaluate(el => {
+        el.style.setProperty('--accent','rgb(180, 70, 20)');
+        const value={icon:getComputedStyle(el.querySelector('.library-folder-icon')).color,fill:getComputedStyle(el.querySelector('.source-thumb')).background};
+        el.style.removeProperty('--accent'); return value;
+      });
+      assert.equal(changed.icon,'rgb(180, 70, 20)');
+      assert.notEqual(changed.fill,colors.fill,'the selected thumbnail background responds to a changed theme accent');
+    }
+    await managed.locator('.admin-library-card').screenshot({path:`/tmp/voidplayer-library-selected-icons-${theme}-${browserName}.png`});
+  }
   const widths = () => active.locator('.library-column').evaluateAll(columns => columns.map(column => Math.round(column.getBoundingClientRect().width)));
   const scrollColumns = async x => {
     await embedded.locator('#source-list').evaluate((list,x) => {list.scrollLeft=x;},x);
@@ -262,6 +278,20 @@ try {
   assert.equal(new URL(opened.tracks[0].source.url,destination.url()).searchParams.get('v'),new URL(destination.url()).searchParams.get('v'));
   assert.equal(opened.playing,false,'the explicit file link presents the chosen file without autoplay');
   assert.equal(new URL(destination.url()).searchParams.get('dir'),'z-branch/leaf');
+  const sourceSplitter=destination.locator('#sources-resize'), sourcePanel=destination.locator('#sources-panel');
+  assert.equal(await sourceSplitter.isVisible(),true,'an initially open library panel exposes its splitter without resizing the window or toggling the panel');
+  await sourceSplitter.hover();
+  assert.equal(await sourceSplitter.evaluate(el => {
+    const box=el.getBoundingClientRect();
+    return document.elementFromPoint(box.x+box.width/2,box.y+box.height/2)?.closest('#sources-resize')===el&&el.matches(':hover');
+  }),true,'the cold-link splitter receives pointer hover instead of the panel underneath');
+  const initialPanelWidth=(await sourcePanel.boundingBox()).width, splitterBox=await sourceSplitter.boundingBox();
+  const widthDelta=initialPanelWidth+24<=Number(await sourceSplitter.getAttribute('aria-valuemax'))?24:-24;
+  await destination.mouse.down();
+  await destination.mouse.move(splitterBox.x+splitterBox.width/2-widthDelta,splitterBox.y+splitterBox.height/2,{steps:4});
+  await destination.mouse.up();
+  assert.ok(Math.abs((await sourcePanel.boundingBox()).width-initialPanelWidth-widthDelta)<1,'a cold-link panel can be dragged immediately');
+
   assert.equal(await player.evaluate(() => window.adminReturnMarker),'preserve-review');
   await destination.close();
   await goLibrary('library:/');

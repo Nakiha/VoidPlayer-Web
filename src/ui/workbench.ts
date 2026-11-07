@@ -84,11 +84,11 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
 
     }
     analysis.setOpen(view.panels.analysis);
+    panelResize.refresh();
   }
   function setPanel(panel: Panel, open: boolean) {
     view.setPanel(panel, open, window.innerWidth);
     syncPanels();
-    panelResize.refresh();
     if (!open) { tracks.hideSeekPreview(); annotations.hidePreview(); }
     render(session.getState());
     if (panel === 'sources' && open) {
@@ -206,7 +206,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       const sourcesState = layout.sources ?? { tab: 'available', query: '', root: '', directory: '', search: '', all: false };
       const browsing = sources.beginRestore(sourcesState);
       tracks.resetSignatures();
-      syncPanels(); panelResize.refresh(); render(session.getState());
+      syncPanels(); render(session.getState());
       await sources.finishRestore(browsing);
       await analysis.ready();
     },
