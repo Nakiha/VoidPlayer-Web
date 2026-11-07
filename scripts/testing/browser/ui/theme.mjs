@@ -95,7 +95,7 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  // Compact presets and custom colors stay independent of the review.
  const reviewBefore=await evidence();
  await page.locator('#settings-open').click();
- assert.equal(await page.locator('.accent-palette .accent-choices [role=radio]').count(),12);
+ assert.equal(await page.locator('.accent-palette .accent-choices [data-accent-choice]').count(),12);
  await page.locator('[data-accent-choice=sky]').click();assert.equal(await page.locator('html').getAttribute('data-accent'),'sky');
  const hex=page.locator('#accent-hex');await hex.fill('#E048B8');await hex.press('Enter');
  assert.equal(await page.locator('html').getAttribute('data-accent'),'custom');

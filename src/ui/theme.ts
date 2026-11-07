@@ -1,5 +1,5 @@
 import { t, onLanguageChange, msg } from '../i18n.ts';
-import { ACCENTS, customAccent, customTheme } from './appearance.ts';
+import { ACCENTS, BASE_COLORS, customAccent, customTheme } from './appearance.ts';
 type ThemePreference = 'system' | 'light' | 'dark' | 'custom';
 const KEY = 'voidplayer.theme';
 const ACCENT_KEY = 'voidplayer.accent';
@@ -67,6 +67,9 @@ export function installThemeControls() {
   function apply() {
     applyRoot(preference, accent, custom, base);
     document.getElementById('theme-base-controls')!.hidden = preference !== 'custom';
+    document.querySelector<HTMLElement>('.theme-base-custom')!.style.setProperty('--base-current', base.color);
+    document.getElementById('theme-base-current')!.textContent = BASE_COLORS.find(color => color.color === base.color)?.name
+      ?? t(msg('theme.custom', '自定义 · {p0}'), {p0:base.color.toUpperCase()});
     const selectedBase = baseButtons.find(button => button.dataset.baseChoice === base.color);
     for (const button of baseButtons) { const selected = button === selectedBase; button.setAttribute('aria-checked', String(selected)); button.tabIndex = selected || (!selectedBase && button === baseButtons[0]) ? 0 : -1; }
     const sample = document.querySelector<HTMLElement>('.sample-custom')!;

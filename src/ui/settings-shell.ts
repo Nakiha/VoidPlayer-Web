@@ -22,11 +22,17 @@ export function settingsShell() {
         ${paneTitle(t(msg("settingsShell.appearance", "外观")))}
         <div class="settings-section"><h4 class="settings-section-title" id="theme-label">${th(msg("settingsShell.displayMode", "显示模式"))}</h4>
         <div class="theme-options settings-card" role="radiogroup" aria-labelledby="theme-label">${[['system',t(msg("settingsShell.system", "跟随系统"))],['light',t(msg("settingsShell.light", "亮色"))],['dark',t(msg("settingsShell.dark", "暗色"))],['custom',t(msg("settingsShell.custom", "自定义"))]].map(([id,label]) => `<button role="radio" data-theme-choice="${id}" aria-checked="false"><span class="appearance-sample sample-${id}" aria-hidden="true"><span class="sample-header"></span><span class="sample-sidebar"></span><span class="sample-content"></span></span><span>${label}</span></button>`).join('')}</div>
-        <div id="theme-base-controls" class="theme-base-controls" hidden>
-          <div class="theme-base-row"><label id="theme-base-label" for="theme-base-picker">${th(msg("theme.baseColor", "基调色"))}</label><div class="theme-base-inputs"><input id="theme-base-picker" type="color" aria-label="${th(msg("theme.chooseBaseColor", "选择自定义基调色"))}"><label class="theme-base-hex-label"><span>HEX</span><input id="theme-base-hex" type="text" aria-label="${th(msg("theme.baseHex", "基调色 HEX"))}" maxlength="7" spellcheck="false" autocomplete="off" aria-describedby="theme-base-hint"></label></div></div>
-          <div class="accent-choices theme-base-choices" role="radiogroup" aria-labelledby="theme-base-label">${BASE_COLORS.map(c => `<button class="accent-choice" role="radio" data-base-choice="${c.color}" aria-checked="false" aria-label="${c.name}" data-tooltip="${c.name}" style="--base-swatch:${c.color};--base-check:${customTheme(c.color)!.dark ? '#f2f3f5' : '#16191e'}"><span class="accent-swatch">${icon('check')}</span></button>`).join('')}</div>
         </div>
-        <p id="theme-base-hint" class="settings-caption" role="status"></p>
+        <div id="theme-base-controls" class="settings-section theme-base-controls" hidden>
+          <div class="accent-heading"><h4 class="settings-section-title" id="theme-base-label">${th(msg("theme.baseColor", "基调色"))}</h4><span id="theme-base-current"></span></div>
+          <div class="accent-palette settings-card theme-base-palette">
+            <div class="accent-choices theme-base-choices" role="radiogroup" aria-labelledby="theme-base-label">${BASE_COLORS.map(c => `<button class="accent-choice" role="radio" data-base-choice="${c.color}" aria-checked="false" aria-label="${c.name}" data-tooltip="${c.name}" style="--base-swatch:${c.color};--base-check:${customTheme(c.color)!.dark ? '#f2f3f5' : '#16191e'}"><span class="accent-swatch">${icon('check')}</span></button>`).join('')}</div>
+            <div class="accent-custom-row">
+              <label class="accent-custom-choice theme-base-custom" for="theme-base-picker"><span class="accent-swatch" aria-hidden="true"></span><span>${th(msg("settingsShell.custom", "自定义"))}</span></label>
+              <div class="accent-custom-inputs"><input id="theme-base-picker" type="color" aria-label="${th(msg("theme.chooseBaseColor", "选择自定义基调色"))}"><label class="theme-base-hex-label"><span>HEX</span><input id="theme-base-hex" type="text" aria-label="${th(msg("theme.baseHex", "基调色 HEX"))}" maxlength="7" spellcheck="false" autocomplete="off" aria-describedby="theme-base-hint"></label></div>
+            </div>
+          </div>
+          <p id="theme-base-hint" class="settings-caption" role="status"></p>
         </div><div class="settings-section"><div class="accent-heading"><h4 class="settings-section-title" id="accent-label">${th(msg("settingsShell.accentColor", "主题色"))}</h4><span id="accent-current"></span></div>
         <div role="radiogroup" aria-labelledby="accent-label" class="accent-palette settings-card">
           <div class="accent-choices">${ACCENTS.map(c => `<button class="accent-choice" role="radio" data-accent-choice="${c.id}" aria-label="${c.name}" data-tooltip="${c.name}" style="--swatch-light:${c.light};--swatch-dark:${c.dark}"><span class="accent-swatch">${icon('check')}</span></button>`).join('')}</div>
