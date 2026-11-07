@@ -23,7 +23,7 @@ export function installTooltips(scope: HTMLElement = document.body) {
     }
   }
   migrate(scope);
-  const filenameOf = (control: HTMLElement) => control.matches('.source-remove') ? null : control.matches('.filename') ? control
+  const filenameOf = (control: HTMLElement) => control.matches('.source-remove, .source-meta-time[data-tooltip]') ? null : control.matches('.filename') ? control
     : control.querySelector<HTMLElement>('.filename') ?? control.closest('.source-row')?.querySelector<HTMLElement>('.filename');
   const sizing = new ResizeObserver(() => { if (anchor && !popup.hidden) show(true); });
   function hide() {

@@ -60,22 +60,24 @@ test('file drag prevents browser navigation, clears feedback, and snapshots drop
   h.dispose();
 });
 
-test('text drags stay native; empty and oversized file drops do not load anything', () => {
+test('text drags stay native; empty and oversized file drops do not load anything', async () => {
   const h = harness();
   assert.equal(h.send('drop', [], ['text/plain']).event.defaultPrevented, false);
   h.send('drop', []);
   h.send('drop', [1, 2, 3, 4, 5, 6, 7, 8, 9].map(i => new File(['a'], `${i}.mp4`)));
+  await new Promise<void>(resolve => setImmediate(resolve));
   assert.equal(h.loads.length, 0); assert.equal(h.errors.length, 2);
   h.dispose();
 });
 
-test('insufficient and full tracks refuse the whole drop without loading or throwing during hover', () => {
+test('insufficient and full tracks refuse the whole drop without loading or throwing during hover', async () => {
   for (const loaded of [SLOTS.slice(0, 7), [...SLOTS]]) {
     const h = harness(loaded), files = [new File(['a'], 'a.mp4'), new File(['b'], 'b.mp4')];
     const over = h.send('dragover', files);
     assert.equal(over.event.defaultPrevented, true);
     assert.deepEqual(h.hover, []); assert.equal(h.errors.length, 0);
     h.send('drop', files);
+    await new Promise<void>(resolve => setImmediate(resolve));
     assert.equal(h.loads.length, 0); assert.equal(h.errors.length, 1);
     assert.match(String(h.errors[0]), new RegExp(`当前有 ${8 - loaded.length} 条空轨道`));
     h.dispose();
@@ -128,4 +130,27 @@ test('Escape and dragend remove external file feedback without loading files', (
   assert.deepEqual(h.hover, []);
   h.send('dragenter', files); h.send('dragend', files);
   assert.deepEqual(h.hover, []); assert.equal(h.loads.length, 0); h.dispose();
+});
+
+test('mixed drop skips non-videos before allocating slots and keeps the right file handle', async () => {
+  const root = new EventTarget(), errors: unknown[] = [], loaded: unknown[] = [];
+  const video = new File([Uint8Array.of(0x1a,0x45,0xdf,0xa3)], 'clip-without-extension');
+  const image = new File(['png'], 'image.png'), handle = {kind:'file',name:video.name};
+  const dispose = bindFileDrop(root, {
+    loaded:() => SLOTS.slice(0,7), hover:()=>{}, error:e=>errors.push(e),
+    load:async(files, slots, handles)=>{loaded.push({files, slots, handles});},
+  });
+  const event = new Event('drop',{cancelable:true});
+  Object.defineProperty(event,'dataTransfer',{value:{types:['Files'],files:[image,video],items:[
+    {kind:'file',getAsFile:()=>image},
+    {kind:'file',getAsFile:()=>null,getAsFileSystemHandle:async()=>({kind:'directory',name:'games'})},
+    {kind:'file',getAsFile:()=>null,webkitGetAsEntry:()=>({isDirectory:true,name:'Tool.app'})},
+    {kind:'file',getAsFile:()=>video,getAsFileSystemHandle:async()=>handle},
+  ]}});
+  root.dispatchEvent(event);
+  await new Promise<void>(resolve=>setImmediate(resolve));
+  assert.deepEqual(loaded,[{files:[video],slots:['H'],handles:[handle]}]);
+  assert.equal(errors.length,1);assert.match(String(errors[0]),/3 个.*image.png/);
+  assert.equal(event.defaultPrevented,true);
+  dispose();
 });

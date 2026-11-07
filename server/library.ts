@@ -1,3 +1,4 @@
+import { VIDEO_EXTENSIONS as MEDIA_EXTENSIONS } from '../shared/media/containers/video-files.ts';
 import {closeResources} from './shutdown.ts';
 import {mutateLibraryFiles,parseLibraryFileCommand} from './library-files.ts';
 import {LibraryRelocations} from './library-relocations.ts';
@@ -19,7 +20,7 @@ import type { DirectoryScope } from './library-watch.ts';
 import { LIBRARY_RECHECK_MS, LibraryScanScheduler } from './library-scheduler.ts';
 export { mediaId } from './library-store.ts';
 export type { MediaRoot } from './library-store.ts';
-export const MEDIA_EXTENSIONS = ['.mp4', '.m4v', '.mov', '.mkv', '.webm', '.ts', '.m2ts', '.mpg', '.mpeg', '.avi', '.flv'];
+export { MEDIA_EXTENSIONS };
 export interface LibraryEntry { id: string; name: string; root: string; rootIndex: number; size: number; lastModified: number; rootId?: string; version?: string; state?: string }
 export interface Library { roots: string[]; entries: LibraryEntry[]; truncated: boolean }
 interface IndexOptions { analysisCoreDir?:string; database?: string; coreDir?: string; ttlMs?: number; settleMs?: number; ioTimeoutMs?: number; watch?: boolean; debounceMs?: number; scanDelayMs?: number; scanBatchDelayMs?: number; scan?: typeof scanLibrary; now?: () => number }

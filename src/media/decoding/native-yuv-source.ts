@@ -103,6 +103,10 @@ export function nativeYuvSource(source:MediaSource,depth:number,chromaLocation:n
     const format=d.format??'',bitDepth=format.endsWith('P10')?10:format.endsWith('P12')?12:8;
     // Keep the initial capability boundary deliberately narrow. Public native
     // APIs do not expose chroma siting; unknown uses the shared center policy.
+    if(d.format === null) {
+      closeSample();
+      throw new MediaOpenError('decode','浏览器未公开此帧的像素格式，无法读取自有色彩所需的原始 YUV 平面。','reference-format-unsupported');
+    }
     if(!frame.sample||conflicting||sourceUnsupported||(sourceHdr&&sourceHdr!==resourceHdr)||!['NV12','I420','I420P10','I420P12'].includes(format)||!resolveYuvColor(d).supported||(bitDepth!==8&&!resourceHdr)||(resourceHdr&&bitDepth<10)){closeSample();throw new MediaOpenError('decode','硬件帧无法提供色彩标签与位深一致的原始平面。');}
     const key=JSON.stringify([d.format,d.codedWidth,d.codedHeight,d.visibleRect,d.color]);
     if(signature!==undefined&&signature!==key){closeSample();throw new MediaOpenError('decode','硬件输出格式或色彩标签发生变化，请切换软件解码。');}signature=key;

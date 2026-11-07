@@ -12,6 +12,7 @@ import { setColorOutput } from '../shared/color/color-output.ts';
 import { hdrDisplayAvailable } from './presentation/display-capabilities.ts';
 import { initializeGpuPresentation, keepNativeGpuResource } from './presentation/webgpu-presenter.ts';
 import { indexProgressLabel } from './ui/index-progress.ts';
+import { LocalInputError, selectVideoInputs } from './ui/video-input.ts';
 import { fileBasename } from './ui/filename.ts';
 import { AnnotationClient } from './review/annotation-client.ts';
 import { installAnnotationSync } from './ui/annotation-sync.ts';
@@ -213,6 +214,7 @@ function showWarning(message: string, diagnostic: MediaDiagnostic | undefined = 
 }
 function showError(error: unknown) {
   if (error instanceof AnalysisFailure && error.code === 'cancelled' || error instanceof Error && error.name === 'AbortError') return;
+  if (error instanceof LocalInputError) { notify(error.message); return; }
   session.captureDiagnostics('ui-error', error);
   showWarning(error instanceof Error ? error.message : String(error), mediaDiagnostic(error));
 }
@@ -321,7 +323,8 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
     $(`empty-${slot}`).hidden = !!t || openingWorkspace;
     $(`image-${slot}`).hidden = !t;
     const name = $(`name-${slot}`);
-    name.textContent = t ? fileBasename(t.name) : (slot === 'A' ? tr(msg("player.referenceVideo", "参考视频")) : tr(msg("player.comparisonVideo", "对比视频")));
+    const basename = t ? fileBasename(t.name) : (slot === 'A' ? tr(msg("player.referenceVideo", "参考视频")) : tr(msg("player.comparisonVideo", "对比视频")));
+    if (name.textContent !== basename) name.textContent = basename;
     if (t) name.parentElement!.dataset.tooltip = t.name;
     else delete name.parentElement!.dataset.tooltip;
     // Source HDR metadata is not proof of the browser's final HDR output.
@@ -434,17 +437,24 @@ const dropFeedback = installFileDropFeedback(document.querySelector<HTMLElement>
 const unbindDrop = bindFileDrop(document.body, {
   document: {
     accepts: files => files.some(isWorkspaceFile),
-    load: files => act(async () => { const documents = files.filter(isWorkspaceFile); if (documents.length !== 1) throw new Error(tr(msg("player.openOneWorkspaceFileAtATime", "每次请打开一个工作区文件。"))); await workspaceTransfer.importFile(documents[0], files.filter(f => !isWorkspaceFile(f))); }, 'workspace.drop'),
+    load: files => traceOperation('ui', 'workspace.drop', {trigger:inputTrigger}, async () => {
+      const documents = files.filter(isWorkspaceFile);
+      if (documents.length !== 1) throw new Error(tr(msg('player.openOneWorkspaceFileAtATime', '每次请打开一个工作区文件。')));
+      await workspaceTransfer.importFile(documents[0], files.filter(f => !isWorkspaceFile(f)));
+    }),
   },
   loaded: () => session.getState().tracks.map(track => track.slot),
-  hover: slots => dropFeedback.show(slots),
+  hover: (slots, nonVideo) => dropFeedback.show(slots, nonVideo),
   load: (files, slots, handles) => act(() => importFiles(files, handles), 'files.drop', { files, slots }),
-  error: error => { log.warn('ui', '拖入文件失败', { error }); showError(error); },
+  error: error => { if (!(error instanceof LocalInputError)) log.warn('ui', '拖入文件失败', {error}); showError(error); },
 });
 for (const slot of SLOTS) {
   $<HTMLInputElement>(`file-${slot}`).onchange = event => {
     const input = event.target as HTMLInputElement; const file = input.files?.[0]; input.value = '';
-    if (file) void act(() => importFiles([file]), 'files.select', { file, slot });
+    if (file) void act(async () => {
+      const accepted = await selectVideoInputs([{file}], showError);
+      if (accepted.length) await importFiles([file]);
+    }, 'files.select', {file,slot});
   };
   $<HTMLInputElement>(`file-${slot}`).oncancel = () => log.info('ui', '取消文件选择', { slot });
   const stage = $(`stage-${slot}`);
@@ -621,6 +631,7 @@ const api = {
     return captureFrame(canvases[slot]);
   },
   loadFile: (slot: Slot, file: File) => apiCall('loadFile', { slot, file }, async () => {
+    await selectVideoInputs([{file}], error => { throw error; });
     const result = await session.load(slot, (signal, progress, configuration) => openMedia(file, undefined, progress, signal, configuration), file.name); workbench.rememberFile(file); return result;
   }),
   getWorkspace: () => workbench.getState(),

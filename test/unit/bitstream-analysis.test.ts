@@ -17,7 +17,7 @@ const result = (): AnalysisResult => ({
   codec: "h264",
   analyzerVersion: "0.1.0",
   buildId: "test",
-  recipe: "blocks-basic-v2",
+  recipe: "blocks-basic-v3",
   picture: {
     sourceVersion: "local:uuid",
     stream: "video",

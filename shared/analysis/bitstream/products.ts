@@ -95,7 +95,7 @@ export function validateRecords(frame: FrameMetadata, count: number, at: (i: num
     if (!aligned(x) || !aligned(y) || !aligned(width) || !aligned(height) ||
         x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > w || y + height > h ||
         (mode !== 'intra' && mode !== 'inter' && mode !== 'skip') ||
-        (qp === null ? qpRequired : !Number.isInteger(qp) || qp < 0 || qp > maxQp))
+        (qp === null ? qpRequired : !Number.isInteger(qp) || qp < (frame.qp.bitDepth === 10 ? 1 : 0) || qp > maxQp))
       throw new Error('Invalid packed analysis block');
     const startX = x / 4, endX = (x + width) / 4, endY = (y + height) / 4;
     for (let row = y / 4; row < endY; row++) {
@@ -131,7 +131,7 @@ export function validateProduct(value: AnalysisProduct) {
   metadataBudgetBytes(value);
   if (!value || value.productSchema !== PRODUCT_SCHEMA || !['summary','blocks'].includes(value.product) || value.encoding !== (value.product === 'summary' ? 'summary-json-v1' : 'blocks-le12-v1') || 'blocks' in value) throw new Error('Invalid analysis product');
   validateMetadata(value);
-  if (value.confidence==='exact' && (value.reasons.length || value.capabilities.blocks!=='ready' || value.capabilities.modes!=='ready' || (value.capabilities.qp==='ready' && (value.qp.bitDepth!==8||value.qp.mean===null))))throw Error('Invalid exact product quality');
+  if (value.confidence==='exact' && (value.reasons.length || value.capabilities.blocks!=='ready' || value.capabilities.modes!=='ready' || (value.capabilities.qp==='ready' && value.qp.mean===null)))throw Error('Invalid exact product quality');
   if (!Number.isSafeInteger(value.validatedBlockCount) || value.validatedBlockCount < 0 || value.validatedBlockCount > BUDGET.blocks || (value.confidence === 'exact' && !value.validatedBlockCount)) throw new Error('Invalid validated block count');
   if (!value.indexIdentity)throw Error('Missing analysis index version');
   const id=value.indexIdentity;if(id.kind==='mp4-analysis'){if(JSON.stringify(id)!==JSON.stringify(MP4_ANALYSIS_INDEX))throw Error('Unknown MP4 analysis index version');}else parseMediaIndexIdentity(id.kind,new URLSearchParams({stream:id.streamKey,schema:String(id.schemaVersion),indexer:id.indexerBuild}));

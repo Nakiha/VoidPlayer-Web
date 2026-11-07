@@ -10,6 +10,7 @@ import { referenceVersion } from '../../shared/media/io/media-reference.ts';
 import { localCacheKey, serverCacheKey } from '../../shared/thumbnails/contract.ts';
 import { fillThumbnailImage, serverThumbnailImageUrl } from '../thumbnails/client.ts';
 import { icon } from './icons.ts';
+import { createMiddleFilename } from './middle-filename.ts';
 
 function recoveryCard(checkpoint: WorkspaceFile, restore: () => Promise<void>, signal: AbortSignal) {
   const button = document.createElement('button');
@@ -39,9 +40,8 @@ function recoveryCard(checkpoint: WorkspaceFile, restore: () => Promise<void>, s
       : localCacheKey(info.name, info.size, info.lastModified);
     img.onload = () => { img.style.opacity = ''; thumb.replaceChildren(img); };
     thumb.append(img);
-    const name = document.createElement('span'); name.className = 'start-workspace-track-name';
+    const name = createMiddleFilename(info.name); name.classList.add('start-workspace-track-name');
     const slot = document.createElement('span'); slot.className = `slot slot-${track.slot}`; slot.textContent = track.slot;
-    name.textContent = info.name;
     row.append(thumb, slot, name); tracks.append(row);
     fillThumbnailImage(img, key, info.source && version ? new URL(serverThumbnailImageUrl(info.source.id, version), checkpoint.serverUrl).href : undefined, { visibilityTarget: thumb });
   }

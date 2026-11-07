@@ -256,10 +256,19 @@ async function runPictureAttempt(
         if (ptr < 0 || ptr + bytes > core.HEAPU8.length)
           throw new Error("Invalid analysis output pointer");
         const view = new DataView(core.HEAPU8.buffer, ptr, bytes);
+        // The HEVC callback clamps signed QpY to an unsigned byte. A positive
+        // Main10 value survives exactly; zero may also represent a negative QpY.
+        let qpReady = depth === 8;
+        if (!invalid && input.codec === 'hevc' && depth === 10 && n > 0) {
+          qpReady = true;
+          for (let i = 0; i < n; i++) {
+            if (view.getInt16(i * 12 + 8, true) === 0) { qpReady = false; break; }
+          }
+        }
         const blockAt = (i: number): AnalysisBlock => ({
           x: view.getUint16(i*12, true), y: view.getUint16(i*12+2, true),
           width: view.getUint16(i*12+4, true), height: view.getUint16(i*12+6, true),
-          qp: depth === 8 ? view.getInt16(i*12+8,true) : null,
+          qp: qpReady ? view.getInt16(i*12+8,true) : null,
           mode: ({1:'intra',2:'inter',3:'skip'} as const)[view.getUint8(i*12+10) as 1|2|3],
         });
         if(!sourceLayouts.has(selected.configuration))sourceLayouts.set(selected.configuration,input.codec==='h264'?avcGeometry(input.configurations[selected.configuration]):input.codec==='hevc'?hevcGeometry(input.configurations[selected.configuration]):null);
@@ -292,12 +301,12 @@ async function runPictureAttempt(
           reasons: invalid ? ["invalid-field-depth-or-decoder-output"] : [],
           reasonCodes: invalid
             ? ["incomplete-reference-state"]
-            : depth !== 8
+            : !qpReady
               ? ["unsupported-qp-depth"]
               : [],
           capabilities: {
             blocks: invalid ? "unsupported" : "ready",
-            qp: invalid || depth !== 8 ? "unsupported" : "ready",
+            qp: invalid || !qpReady ? "unsupported" : "ready",
             modes: invalid ? "unsupported" : "ready",
             motion: "unsupported",
           },
@@ -336,7 +345,7 @@ async function runPictureAttempt(
             const payload = new Uint8Array(view.buffer, view.byteOffset, blockCount * 12).slice().buffer;
             const packed = new DataView(payload);
             for (let offset = 0; offset < payload.byteLength; offset += 12) {
-              if (depth !== 8) packed.setInt16(offset + 8, -32768, true);
+              if (!qpReady) packed.setInt16(offset + 8, -32768, true);
               packed.setUint8(offset + 11, 0);
             }
             result = {...summary,product:'blocks',encoding:'blocks-le12-v1',payload};

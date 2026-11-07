@@ -41,11 +41,26 @@
 .source-title .filename { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-file.in-use .source-title { padding-right: 26px; }
 .source-file .source-meta-columns { flex-wrap: wrap; align-content: flex-start; height: 18px; column-gap: 6px; row-gap: 4px; font-variant-numeric: tabular-nums; }
-.source-meta-columns > span { height: 18px; line-height: 18px; }
+.source-meta-columns > * { height: 18px; line-height: 18px; }
 .source-meta-size { flex: 0 0 7em; display: flex; align-items: center; justify-content: space-between; gap: 4px; }
 .source-size-value { flex: none; }
 .source-meta-origin { flex: 1 0 3em; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .source-meta-time { flex: none; margin-left: auto; text-align: right; }
+/* Recent rows keep size and time on one line. The source uses the space between them. */
+.source-recent-info { container: recent-info / inline-size; }
+.source-recent-info .source-meta-columns { flex-wrap: nowrap; align-items: center; }
+.source-recent-info .source-meta-size { flex: none; min-width: 4.25em; }
+.source-recent-info .source-meta-origin { flex: 1 1 0; }
+.source-recent-info .source-track-badges { max-width: 35%; overflow: hidden; }
+.source-recent-info .recent-time-minutes, .source-recent-info .recent-time-short { display: none; }
+@container recent-info (max-width: 20em) {
+  .source-meta-time .recent-time-full { display: none; }
+  .source-meta-time .recent-time-minutes { display: inline; }
+}
+@container recent-info (max-width: 13em) {
+  .source-meta-time .recent-time-minutes { display: none; }
+  .source-meta-time .recent-time-short { display: inline; }
+}
 .source-row .source-thumb { background: var(--library-row-striped, linear-gradient(var(--surface-stripe), var(--surface-stripe)), var(--surface-panel)); }
 .source-row.source-striped .source-thumb { background: var(--library-row-plain, var(--surface-panel)); }
 .source-meta { display: flex; align-items: center; gap: var(--space-2); color: var(--text-secondary); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -129,8 +144,8 @@
 .library-list-view[hidden], .library-columns[hidden] { display: none; }
 
 /* Shared row density; changing it keeps existing rows and decoded covers. */
-.library-pane [data-library-density=compact] .source-row { min-height: 28px; padding: 4px; }
-.library-pane [data-library-density=compact] .source-open { min-height: 20px; }
-.library-pane [data-library-density=compact] .source-meta { display: none; }
-.library-pane [data-library-density=compact] .source-thumb { width: 20px; height: 20px; flex-basis: 20px; border-radius: 3px; }
-.library-pane [data-library-density=compact] .library-folder-icon > .icon { width: 18px; height: 18px; transform: none; }
+[data-library-density=compact] .source-row { min-height: 28px; padding: 4px; }
+[data-library-density=compact] .source-open { min-height: 20px; }
+[data-library-density=compact] .source-meta { display: none; }
+[data-library-density=compact] .source-thumb { width: 20px; height: 20px; flex-basis: 20px; border-radius: 3px; }
+[data-library-density=compact] .library-folder-icon > .icon { width: 18px; height: 18px; transform: none; }

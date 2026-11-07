@@ -2,9 +2,9 @@
 
 Execution ABI1 is additive to block/reference ABI1. Old cores execute fully;
 old clients also get full execution from new cores because mode defaults to zero.
-The semantic `blocks-basic-v2` recipe, EXACT rules, GOP/picture/index identities,
-resource limits and playback paths remain unchanged. Exact Core buildId/WASM
-digest separates artifact caches; full and fast outputs must be equivalent.
+The `blocks-basic-v3` recipe separates Main10 QP results from older cached summaries.
+The exact Core buildId/WASM digest also separates artifact caches. Full and fast
+execution must produce equivalent outputs.
 
 An explicit single-picture `blocks` request can use fast execution with a
 complete index and a syntax-proven closed anchor. `input.plan` supplies the
@@ -38,12 +38,7 @@ FFmpeg parameter-set parser decides whether the
 configuration really permits HEVC Main8/Main10 or VVC Main10 4:2:0 8..10 bit
 pruning. PCM/TQB/extensions stay full; VVC in-band parameter changes, film grain
 and decoded-picture-hash SEI restart the transaction exactly like their HEVC
-counterparts and report the same reasons. Main10 retains `unsupported-qp-depth`,
-unsupported QP
-capability, null block QP and null mean. Existing exact block/mode/reference
-semantics do not imply accurate Main10 QP; the clipped unsigned callback cannot
-represent its signed range. This is an execution optimization, with no ABI or
-result-capability extension.
+counterparts and report the same reasons. For HEVC Main10 the unsigned callback preserves positive luma QP exactly. If any block reports zero, the callback cannot distinguish zero from clipped negative QpY, so the entire picture retains unsupported QP and a null mean. VVC Main10 QP remains unsupported.
 
 Fast picture owners are private in the worker. Before allocating a block payload
 or legacy block array, the producer reserves metadata+payload ownership under the

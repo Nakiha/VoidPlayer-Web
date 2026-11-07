@@ -18,10 +18,10 @@ const probe=await create(),extension=typeof probe._vpa_execution_abi==='function
 const reader=(data:Uint8Array)=>({size:data.length,async read(at:number,n:number){assert.ok(at>=0&&n>=0&&at+n<=data.length);return data.slice(at,at+n);},close(){}});
 const canonical=(r:AnalysisOutput)=>{const {metrics,...rest}=r;return rest;};
 const assertMain10=(r:AnalysisOutput)=>{
- assert.equal(r.qp.bitDepth,10);assert.equal(r.capabilities.qp,'unsupported');assert.equal(r.qp.mean,null);assert.deepEqual(r.reasonCodes,['unsupported-qp-depth']);
+ assert.equal(r.qp.bitDepth,10);assert.equal(r.capabilities.qp,'ready');assert.ok(r.qp.mean! > 0 && r.qp.mean! <= 51);assert.deepEqual(r.reasonCodes,[]);
  assert.equal(r.confidence,'exact');assert.equal(r.capabilities.blocks,'ready');assert.equal(r.capabilities.modes,'ready');assert.equal(r.capabilities.motion,'unsupported');
- if(isProduct(r)){if(r.product==='blocks'){const view=new DataView(r.payload);for(let i=0;i<r.validatedBlockCount;i++)assert.equal(readBlock(view,i).qp,null);}}
- else assert.ok(r.blocks.length>0&&r.blocks.every(b=>b.qp===null));
+ if(isProduct(r)){if(r.product==='blocks'){const view=new DataView(r.payload);for(let i=0;i<r.validatedBlockCount;i++)assert.ok(readBlock(view,i).qp! > 0);}}
+ else assert.ok(r.blocks.length>0&&r.blocks.every(b=>b.qp! > 0));
 };
 for(const name of ['normal','late-hash','late-grain','late-pps','main10','main10-late-hash','main10-late-grain','main10-late-pps','open-gop'] as const)
 test(`HEVC summary ${name}: full incremental publication and same cached source identity`,async()=>{

@@ -1,3 +1,4 @@
+import { createMiddleFilename } from './middle-filename.ts';
 import { formatRecentDate, t, msg } from '../i18n.ts';
 import type { LibraryPage, LibraryRoot } from '../services/library.ts';
 import type { SourceItem } from './source-catalog.ts';
@@ -7,7 +8,7 @@ import { createIconButton } from './controls.ts';
 /** Shared browser DOM for the player and administration library surfaces. */
 export type LibraryFileView = {
   slots?: string[]; loading?: string | null; failed?: string | null; home: boolean; offline?: boolean;
-  tooltip: string; label?: string; blocked?: boolean; removeDisabled?: boolean; readOnly?: boolean;
+  tooltip: string; label?: string; blocked?: boolean; removeDisabled?: boolean; readOnly?: boolean; needsReselect?: boolean;
   open(): void; remove?(): void;
 };
 export const sizeText = (n: number) => n >= 2 ** 40 ? `${(n / 2 ** 40).toFixed(1)} TB` : n >= 2 ** 30 ? `${(n / 2 ** 30).toFixed(1)} GB` : `${(n / 2 ** 20).toFixed(1)} MB`;
@@ -15,13 +16,26 @@ export const storageText = (root?: LibraryRoot) => root?.state === 'offline' ? t
   : root?.availableBytes != null && root.totalBytes != null
     ? t(msg('sources.storageSpace', '{available} 可用 / 共 {total}'), { available: sizeText(root.availableBytes), total: sizeText(root.totalBytes) })
     : t(msg('sources.storageSpaceUnavailable', '空间信息不可用'));
-export const openedText = (value?: number) => {
-  if (!Number.isFinite(value)) return '';
-  return formatRecentDate(value as number);
-};
 const text = (tag: string, value: string, className = '') => {
   const el = document.createElement(tag); el.textContent = value; el.className = className; return el;
 };
+
+function openedTime(value: number | undefined, recent: boolean) {
+  if (typeof value !== 'number') return;
+  const date = new Date(value), now = Date.now();
+  if (!Number.isFinite(date.getTime())) return;
+  const opened = formatRecentDate(value, now);
+  const time = text('time', opened, 'source-meta-time');
+  time.setAttribute('datetime', date.toISOString());
+  if (recent) {
+    time.dataset.tooltip = opened;
+    time.setAttribute('aria-label', opened);
+    time.replaceChildren(text('span', opened, 'recent-time-full'),
+      text('span', formatRecentDate(value, now, 'minutes'), 'recent-time-minutes'),
+      text('span', formatRecentDate(value, now, 'short'), 'recent-time-short'));
+  }
+  return time;
+}
 
 function renderStorage(meta: Element, root?: LibraryRoot) {
   const ready = root?.state !== 'offline' && root?.availableBytes != null && root.totalBytes != null;
@@ -42,7 +56,7 @@ function renderStorage(meta: Element, root?: LibraryRoot) {
   if (total.textContent !== capacity) total.textContent = capacity;
 }
 
-export function sourceDisplayName(name: string) {
+function sourceDisplayName(name: string) {
   const base = name.split('/').pop() ?? name;
   return { base, dir: name.includes('/') ? name.slice(0, name.lastIndexOf('/')) : '' };
 }
@@ -70,19 +84,19 @@ export function createLibraryFileRow(item: SourceItem, state: LibraryFileView) {
   row.classList.toggle('in-use', used);
   const info = document.createElement('div'); info.className = 'source-info';
   const { base, dir } = sourceDisplayName(item.name);
-  const name = text('span', base, 'filename');
+  const name = createMiddleFilename(base);
   const origin = item.library ? state.home ? [item.library.root, dir].filter(Boolean).join(' / ') : ''
-    : item.libraryId ? '' : t(msg('sources.localTag', '(本地)'));
+    : item.libraryId ? (state.home ? t(msg('sources.startMetaLibrary', '媒体库')) : '') : t(msg('sources.localTag', '(本地)'))
+      + (state.needsReselect ? t(msg('sources.reselectNeeded', ' · 需重新选择')) : '');
   // Full path lives in the tooltip; the visible name stays a basename.
   row.dataset.tooltip = state.tooltip;
   const pending = item.library?.state === 'pending';
   const offline = state.offline;
   const stateLabel = loading ?? (failed ? t(msg("sources.loadFailedWith", "载入失败：{reason}"), { reason: failed }) : offline ? t(msg("sources.storageOffline", "存储离线")) : pending ? t(msg('sources.waitingForStableFile', '等待文件稳定')) : '');
-  const opened = openedText(item.openedAt);
   const status = text('span', '', 'source-meta source-meta-columns');
+  if (state.home) info.classList.add('source-recent-info');
   const size = text('span', '', 'source-meta-size');
   const originText = text('span', [stateLabel, origin].filter(Boolean).join(' · '), 'source-meta-origin');
-  const time = text('span', opened, 'source-meta-time');
   status.dataset.tooltip = row.dataset.tooltip;
   if (loading || failed) { status.setAttribute('role', 'status'); }
   const titleLine = document.createElement('span'); titleLine.className = 'source-title';
@@ -90,12 +104,13 @@ export function createLibraryFileRow(item: SourceItem, state: LibraryFileView) {
     const badges = document.createElement('span'); badges.className = 'source-track-badges';
     badges.setAttribute('aria-label', t(msg('sources.loadedTracks', '已上屏轨道：{slots}'), { slots: slots.join(', ') }));
     for (const slot of slots) { const badge = text('span', slot, `slot slot-${slot}`); badge.setAttribute('aria-hidden', 'true'); badges.append(badge); }
-    size.append(badges);
+    if (state.home) status.append(badges); else size.append(badges);
   }
   size.prepend(text('span', sizeText(item.size), 'source-size-value'));
-  status.append(size);
-  if (originText.textContent) status.append(originText);
-  if (opened) status.append(time);
+  status.prepend(size);
+  if (originText.textContent) size.after(originText);
+  const time = openedTime(item.openedAt, state.home);
+  if (time) status.append(time);
   titleLine.append(name);
   name.dataset.tooltip = row.dataset.tooltip;
   info.append(titleLine, status);
@@ -242,7 +257,8 @@ export function patchLibraryRow(row: HTMLElement, fresh: HTMLElement) {
     row.querySelectorAll<HTMLElement>(selector).forEach((node,index) => {
       const copy = translated[index]; if (!copy) return;
       for (const attr of attrs) if (copy.hasAttribute(attr)) node.setAttribute(attr,copy.getAttribute(attr)!);
-      node.textContent = copy.textContent;
+      if (copy.children.length) node.replaceChildren(...copy.childNodes);
+      else if (node.textContent !== copy.textContent) node.textContent = copy.textContent;
     });
   }
 }

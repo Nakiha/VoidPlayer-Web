@@ -50,12 +50,27 @@ export function formatDate(value:string|number|Date) {
   let format=dateFormats.get(getLocale());if(!format){format=new Intl.DateTimeFormat(getLocale(),{dateStyle:'short',timeStyle:'medium'});dateFormats.set(getLocale(),format);}
   const date=new Date(value);return Number.isNaN(date.getTime())?'—':format.format(date);
 }
-/** Compact source-history dates; the year matters only across calendar years. */
-export function formatRecentDate(value: number, now = Date.now()) {
-  const date = new Date(value);
+/** Recent rows progressively shorten the timestamp as the name column narrows. */
+type RecentDateDetail = 'full' | 'minutes' | 'short';
+const recentDateFormats = new Map<string, Intl.DateTimeFormat>();
+export function formatRecentDate(value: number, now = Date.now(), detail: RecentDateDetail = 'full') {
+  const date = new Date(value), today = new Date(now);
   if (!Number.isFinite(date.getTime())) return '—';
-  const year = date.getFullYear() === new Date(now).getFullYear() ? undefined : 'numeric';
-  return new Intl.DateTimeFormat(getLocale(), {year, month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit', hourCycle:'h23'}).format(date);
+  const sameDay = date.toDateString() === today.toDateString();
+  const withDate = detail !== 'short' || !sameDay;
+  const withTime = detail !== 'short' || sameDay;
+  const year = withDate && date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined;
+  const key = [getLocale(), detail, withDate, withTime, year].join('/');
+  let format = recentDateFormats.get(key);
+  if (!format) {
+    format = new Intl.DateTimeFormat(getLocale(), {
+      year, month: withDate ? 'numeric' : undefined, day: withDate ? 'numeric' : undefined,
+      hour: withTime ? '2-digit' : undefined, minute: withTime ? '2-digit' : undefined,
+      second: detail === 'full' ? '2-digit' : undefined, hourCycle: 'h23',
+    });
+    recentDateFormats.set(key, format);
+  }
+  return format.format(date);
 }
 const numberFormats=new Map<string,Intl.NumberFormat>();
 export function formatNumber(value:number,options:Intl.NumberFormatOptions={}) {

@@ -2725,6 +2725,10 @@
     "source": "松开以添加视频",
     "params": {}
   },
+  "fileDrop.videoOnly": {
+    "source": "请选择视频文件",
+    "params": {}
+  },
   "identity.chooseExisting": {
     "source": "选择已有用户",
     "params": {}
@@ -2823,6 +2827,65 @@
       "packets": "string | number",
       "percent": "string | number",
       "waiting": "string | number"
+    }
+  },
+  "input.app": {
+    "source": "「{name}」是应用程序。请选择视频文件。",
+    "params": {
+      "name": "string | number"
+    }
+  },
+  "input.audio": {
+    "source": "「{name}」是音频文件。请选择含视频轨道的文件。",
+    "params": {
+      "name": "string | number"
+    }
+  },
+  "input.disk": {
+    "source": "「{name}」是磁盘映像。请选择视频文件。",
+    "params": {
+      "name": "string | number"
+    }
+  },
+  "input.emptyDrop": {
+    "source": "未收到可打开的文件。请直接拖入视频文件。",
+    "params": {}
+  },
+  "input.folder": {
+    "source": "「{name}」是文件夹。请打开文件夹，选择其中的视频文件。",
+    "params": {
+      "name": "string | number"
+    }
+  },
+  "input.image": {
+    "source": "「{name}」是图片。请选择视频文件。",
+    "params": {
+      "name": "string | number"
+    }
+  },
+  "input.skippedFiles": {
+    "source": "已跳过 {count} 个无法作为视频打开的项目（包括「{name}」）。请选择视频文件。",
+    "params": {
+      "count": "string | number",
+      "name": "string | number"
+    }
+  },
+  "input.unreadable": {
+    "source": "无法读取「{name}」。请重新选择可访问的视频文件。",
+    "params": {
+      "name": "string | number"
+    }
+  },
+  "input.unsupported": {
+    "source": "无法将「{name}」作为视频打开。请选择支持的视频文件，例如 MP4、MOV 或 MKV。",
+    "params": {
+      "name": "string | number"
+    }
+  },
+  "input.workspace": {
+    "source": "「{name}」不是可读取的 VoidPlayer 工作区文件。请选择视频或已导出的工作区。",
+    "params": {
+      "name": "string | number"
     }
   },
   "language.label": {

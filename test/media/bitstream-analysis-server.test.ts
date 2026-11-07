@@ -292,8 +292,8 @@ test("legal interlaced and high-depth inputs report the same capability reasons 
   );
   const media = await mkdtemp(join(tmpdir(), "vp-analysis-limit-input-"));
   try {
-    for (const depth of [8, 10]) {
-      const name = `depth-${depth}.mp4`,
+    for (const [depth, qp] of [[8, 0], [10, 17], [10, 0]]) {
+      const name = `depth-${depth}-qp-${qp}.mp4`,
         path = join(media, name);
       execFileSync("ffmpeg", [
         "-y",
@@ -318,7 +318,7 @@ test("legal interlaced and high-depth inputs report the same capability reasons 
               "-c:v",
               "libx265",
               "-x265-params",
-              "pools=1:frame-threads=1:log-level=error:bframes=0",
+              `pools=1:frame-threads=1:log-level=error:bframes=0:qp=${qp}:ipratio=1:aq-mode=0`,
             ]),
         "-pix_fmt",
         depth === 8 ? "yuv420p" : "yuv420p10le",
@@ -403,15 +403,12 @@ test("legal interlaced and high-depth inputs report the same capability reasons 
             .at(-1)!;
           const remote = await scheduler.store.get(id);
           for (const r of [local, remote!]) {
-            assert.deepEqual(r.reasonCodes, ["unsupported-qp-depth"]);
+            const expected = qp > 0 ? qp : null;
+            assert.deepEqual(r.reasonCodes, expected === null ? ["unsupported-qp-depth"] : []);
             assert.equal(r.qp.bitDepth, 10);
-            assert.equal(r.qp.mean, null);
-            assert.equal(r.capabilities.qp, "unsupported");
-            assert.ok(
-              r.blocks.length > 0 && r.blocks.every((b) => b.qp === null),
-            );
-            assert.equal(r.capabilities.blocks, "ready");
-            assert.equal(r.capabilities.modes, "ready");
+            assert.equal(r.qp.mean, expected);
+            assert.equal(r.capabilities.qp, expected === null ? "unsupported" : "ready");
+            assert.ok(r.blocks.length > 0 && r.blocks.every(b => b.qp === expected));
           }
           assert.deepEqual(remote!.blocks, local.blocks);
         }

@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "recipe": "blocks-basic-v2",
+  "recipe": "blocks-basic-v3",
   "rows": [
     {
       "codec": "h264",
@@ -287,7 +287,7 @@
     "nonzero NAL layers",
     "palette mode semantics",
     "motion/advanced VVC tool visualization",
-    "QP outside 8-bit luma",
+    "Luma QP outside 8-bit and verified positive HEVC Main10 block values",
     "non-4px-aligned coded dimensions or partitions",
     "unsafe random access without a closed IDR in the preroll budget",
     "incomplete/corrupt/concealed output"

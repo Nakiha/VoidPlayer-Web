@@ -11,7 +11,7 @@ export async function prepareAnalysisFixtures(directory, profiles) {
   if (needs('depths')) for (const depth of [8, 10]) ff([
     '-f', 'lavfi', '-i', 'color=black:size=64x64:rate=1:duration=1', '-an',
     ...(depth === 8 ? ['-c:v', 'libx264', '-flags', '+ilme+ildct', '-x264-params', 'tff=1:bframes=0']
-      : ['-c:v', 'libx265', '-x265-params', 'pools=1:frame-threads=1:log-level=error:bframes=0']),
+      : ['-c:v', 'libx265', '-x265-params', 'pools=1:frame-threads=1:log-level=error:bframes=0:qp=17:ipratio=1:aq-mode=0']),
     '-pix_fmt', depth === 8 ? 'yuv420p' : 'yuv420p10le', path.join(directory, `depth-${depth}.mp4`),
   ]);
   for (const [profile, file, duration] of [['streams', 'stream', 4], ['incremental', 'incremental', 10], ['incremental', 'viewport', 32]]) if (needs(profile)) ff([

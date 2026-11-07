@@ -27,7 +27,7 @@ UI 和 Agent 使用 `ReviewSession` 的相同入口：`getPresentedFrame`、`req
 
 Presenter 在成功提交绘制后发布 token：真实 picture key、原始微秒时间戳、减去 first PTS 后的媒体时间、slot generation、commit 和几何快照。它是应用绘制提交，不是物理屏幕扫描时刻。轨道 offset 只在 session 边界换算；不进入缓存 key。coded 坐标经 visible crop、SAR 对应的共享显示矩形、旋转和当前视口变换投影。缩放和分屏只重投影；几何变化不重分析。分析层位于视频和标注之间。
 
-Field picture、palette 的使用、损坏/concealment、不完整覆盖和非 4px 网格不能显示精确遮罩。Field/concealment 在解码输出时校验；palette 在 VVC 实际 CU hook 中拒绝。VVC 复杂运动/参考语义、MV、chroma QP、高位深 luma QP 和可交互 NAL 浏览器不在 MVP 输出范围。高位深输出可以声明 blocks/modes，但 QP 为 null/unsupported。8-bit luma QP 范围 AVC/HEVC 为 0..51，VVC 为 0..63；均值按 coded 像素面积加权，包含编码边缘的 padding。
+Field picture、palette 的使用、损坏/concealment、不完整覆盖和非 4px 网格不能显示精确遮罩。Field/concealment 在解码输出时校验；palette 在 VVC 实际 CU hook 中拒绝。VVC 复杂运动/参考语义、MV、chroma QP 和可交互 NAL 浏览器不在 MVP 输出范围。HEVC Main10 只在整帧所有编码块的亮度 QP 都大于零时提供像素面积加权均值。当前核心把负 QpY 截为零；遇到零值时该帧 QP 标记为 unsupported，块和模式仍可查看。其他高位深组合不提供精确 QP。8-bit luma QP 范围 AVC/HEVC 为 0..51，VVC 为 0..63；均值按 coded 像素面积加权，包含编码边缘的 padding。
 
 ## 独立执行与逐 picture 生命周期
 
@@ -68,9 +68,9 @@ Field picture、palette 的使用、损坏/concealment、不完整覆盖和非 4
 
 本地 worker、服务端队列、HTTP 与会话共用结构化 `reason: {code, kind, message}`。稳定码包括 `unsupported-container`、`unsupported-codec`、`unsupported-picture-layout`、`no-safe-anchor-within-budget`、`unsupported-qp-depth`、`incomplete-reference-state`、`ambiguous-picture-identity`、`resource-limit`、`source-changed`、`invalid-request`、`cancelled`、`internal-error`。分类不匹配人类可读异常文本；未知异常仍是实现错误。`resource-limit` 是 limited，合法但未支持的组合是 unsupported，源变更和内部错误是 error。界面显示对应反馈，Agent 可以直接读取原因码。
 
-服务端不再把所有 partial 输出归为内部错误；经过身份校验、无块且最多 16 KiB 的 unsupported 摘要只保留在 consumer 租约内，不写 exact chunk 或完整 manifest。10-bit HEVC 实测 blocks/modes 保持 exact、QP 为 null/unsupported；QP 选项禁用。损坏和 unsupported 输入不放宽身份、预滚预算或完整覆盖校验。
+服务端不再把所有 partial 输出归为内部错误；经过身份校验、无块且最多 16 KiB 的 unsupported 摘要只保留在 consumer 租约内，不写 exact chunk 或完整 manifest。10-bit HEVC 已知常量 QP 的样片在本地和服务端返回相同的逐块值；有歧义的帧禁用 QP。损坏和 unsupported 输入不放宽身份、预滚预算或完整覆盖校验。
 
-容器已准入不代表所有编码工具或输出能力已准入。高位深 QP、未证明的随机访问链及复杂 slice/工具仍按各自能力明确拒绝；当前矩阵、核心实际能力和发布检查共同约束支持范围。
+容器已准入不代表所有编码工具或输出能力已准入。未经证实的 QP、未证明的随机访问链及复杂 slice/工具仍按各自能力明确拒绝；当前矩阵、核心实际能力和发布检查共同约束支持范围。
 
 有界区间现在按只读 MP4 索引枚举实际 picture，逐帧查询缓存，而不是依据最大时间戳或几个缓存点推断覆盖。本地查询共享会话缓存，服务端查询跨任务持久化 picture chunk；因此不同起止点的重叠区间、单帧和已提交的整片结果可以复用。每个命中校验完整 picture 身份、精确 PTS、codec、schema、buildId、recipe、分析器版本及 blocks/modes 能力；高位深 QP 的 unsupported 状态原样保留，不能冒充已支持 QP。无效、淘汰、损坏或旧构建结果作为缺口重新计算。
 
@@ -135,7 +135,7 @@ GOP 按源包表的 AU/解码 ordinal 与配置段划分；容器 key 标记仅�
 
 重新检查整片时，按已封口 GOP 枚举并验证每个持久 picture，逐块交付缓存，不在内存中积累整个 GOP 的块数组。全部命中只加载 manifest 验证 build identity，不初始化分析 WASM。部分命中保留原记录及其 metrics；仅缺口生成新结果，同一 AU 不重复交付。已启动 decoder 只有在缓存段之后存在语法证明的闭合起点或明确 EOF 时才 drain/关闭并跳过该段；遇到 dependent GOP 保持连续参考状态，或从之前已证明的闭合起点重建参考。缓存配额、旧构建、损坏或丢失的块仍作为缺口处理；250000 源包与每次无输出预算继续生效。
 
-`after` 是当前 consumer lease 已交付引用的确认游标，不能大于已交付数或倒退到已经确认的引用之前。同一 lease 的未确认页面可重读；服务重启或 lease 到期后重新提交请求，从新 lease 的 0 开始构建覆盖，不能把旧游标套给新请求。picture 缓存身份跨任务稳定，运输游标及 decoder 内存不持久化。此恢复适用于现有固定 `blocks-basic-v2` recipe，不声明任意能力集合的覆盖。
+`after` 是当前 consumer lease 已交付引用的确认游标，不能大于已交付数或倒退到已经确认的引用之前。同一 lease 的未确认页面可重读；服务重启或 lease 到期后重新提交请求，从新 lease 的 0 开始构建覆盖，不能把旧游标套给新请求。picture 缓存身份跨任务稳定，运输游标及 decoder 内存不持久化。此恢复适用于现有固定 `blocks-basic-v3` recipe，不声明任意能力集合的覆盖。
 
 ## 图示数据与开发内核
 
@@ -143,7 +143,7 @@ GOP 按源包表的 AU/解码 ordinal 与配置段划分；容器 key 标记仅�
 
 参考 ABI 1 的导出位于独立 VoidPlayer-FFmpeg-Build 的 `analysis/stream.c`、`scripts/build-analysis.sh`；解码器插桩与参考身份逻辑已直接进入 `Nakiha/FFmpeg@c160c1bb3f0faf3ac59b8fbf907a8e3fb604632e`，不再在构建时通过文本补丁注入。源帧标识直接取参考 AVFrame 的 COPY_OPAQUE，不用 POC 猜测身份。必需出口包括 reference ABI/count/pointer/invalid/type/POC，记录为 u32 AU + u32 list，take 后失效。发布锁固定已提交并推送的 `7c2f9b053e19961568b5ca4ecd5a23c123e2c73b`，声明 block ABI 1 与 reference ABI 1。Worker 初始化、runner 和准备发布核心均检查实际 WASM 接口，缺失任一参考出口直接拒绝；CI 缓存恢复也必须执行相同检查。打包拒绝 dirty 核心，原生包验收要求三种 codec 的 `references.state` 均为 `ready`。服务缓存使用 buildId，避免旧块结果遮掉新图示字段。
 
-NALU 图在第 0 帧前一个帧间隔处保留标记为 −1 的虚拟容器配置柱，柱宽与普通逐帧柱共用计算，不额外保留最小列宽：分别在大小与类型分区显示 avcC、hvcC、vvcC 内的 SPS/PPS/VPS、扩展参数集和配置 SEI，悬浮或 Home 键显示“来自容器头部”以及真实 NAL 数量和 payload 字节数。没有独立配置栏；所有图共用同一前置空间，码率、帧大小与参考图在该位置留空。−1 不是媒体帧或负时间，不定位、不进入逐帧帧数、大小、时间桶或参考层级；容器配置类型与逐帧类型合并到共用图例，图例使用“容器头部”来源徽标（双来源标明“容器头部 + 逐帧”），−1 柱使用同色斜纹与逐帧实色柱区分，点击类型同时筛选大小、类型分区及悬浮内容，配置柱仍标明“来自容器头部”；配置类型筛选不改变逐帧统计。缩放到其他区段时配置柱离开可见范围。配置摘要随流式检查结果进入会话缓存，逐帧记录淘汰后仍保留；源版本及 configuration 独立，返回值脱离内部缓存。分析 recipe 更新为 blocks-basic-v2，防止复用缺少配置元数据的旧分析缓存。选择 NALU 或帧参考图时按窗口并发设置自动开始可见轨道的流式分析。轨道按钮平滑展宽显示只读圈形进度，完成后缩回；没有开始或重新检查按钮，悬浮和键盘聚焦不再展开。当前片源自动检查只执行一次，图示/显隐/时间基准切换不会重启。
+NALU 图在第 0 帧前一个帧间隔处保留标记为 −1 的虚拟容器配置柱，柱宽与普通逐帧柱共用计算，不额外保留最小列宽：分别在大小与类型分区显示 avcC、hvcC、vvcC 内的 SPS/PPS/VPS、扩展参数集和配置 SEI，悬浮或 Home 键显示“来自容器头部”以及真实 NAL 数量和 payload 字节数。没有独立配置栏；所有图共用同一前置空间，码率、帧大小与参考图在该位置留空。−1 不是媒体帧或负时间，不定位、不进入逐帧帧数、大小、时间桶或参考层级；容器配置类型与逐帧类型合并到共用图例，图例使用“容器头部”来源徽标（双来源标明“容器头部 + 逐帧”），−1 柱使用同色斜纹与逐帧实色柱区分，点击类型同时筛选大小、类型分区及悬浮内容，配置柱仍标明“来自容器头部”；配置类型筛选不改变逐帧统计。缩放到其他区段时配置柱离开可见范围。配置摘要随流式检查结果进入会话缓存，逐帧记录淘汰后仍保留；源版本及 configuration 独立，返回值脱离内部缓存。分析 recipe 更新为 blocks-basic-v3，防止复用缺少配置元数据的旧分析缓存。选择 NALU 或帧参考图时按窗口并发设置自动开始可见轨道的流式分析。轨道按钮平滑展宽显示只读圈形进度，完成后缩回；没有开始或重新检查按钮，悬浮和键盘聚焦不再展开。当前片源自动检查只执行一次，图示/显隐/时间基准切换不会重启。
 
 
 所有图表共用「PTS / DTS」时间基准，按钮悬浮提示分别说明「展示时间 PTS / 解码时间 DTS」，纯 NALU 或参考视图也保留切换入口。逐帧 NALU 和参考节点、汇总桶、悬浮内容及共用时间轴均使用所选时间戳。分析结果保存输入包的真实 `sourceDtsUs`；PTS/DTS 各维护最多 1024 个自适应汇总桶及去重位图，详细记录淘汰后两个时间基准仍可查看汇总。缺失 DTS 的旧结果不借用 PTS，不伪造时间戳；所选轨道缺少可靠 DTS 时禁用解码时间并提示原因。PTS 模式曲线和悬浮读数称为「展示负载率」，表示展示时间窗口内帧的压缩字节量；DTS 模式称为「码率」，表示解码时间窗口内样本负载，两者都不代表网络吞吐。切换保持共用缩放范围并清空旧基准的悬浮状态；当前帧附近在 DTS 下使用对应 AU 的真实 DTS。参考层级仍按原始 PTS 与参考身份计算，不因横轴切换而变化；点击或回车始终按命中帧的 PTS 定位播放。UI 与 Agent 共用 `session.queryBitstreamChart(..., axis)`，`query_bitstream_chart` 接受可选 `axis`（默认 PTS）。

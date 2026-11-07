@@ -169,14 +169,32 @@ export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile 
   });
   return { schema: 'voidplayer-workspace', version: 1, ...(typeof d.name === 'string' ? { name: text(d.name, 200) } : {}), generatedAt: text(d.generatedAt, 100), serverUrl, positionUs: timeUs(d.positionUs), tracks, media, marks, ...(comparison ? { comparison } : {}), viewport: viewport.snapshot(), ...(layout ? { layout } : {}), thumbnails };
 }
+export class UnrecognizedWorkspaceFile extends Error {}
+
 export async function readWorkspaceFile(file: Blob, baseUrl: string): Promise<WorkspaceFile> {
   if (file.size > MAX_BYTES) throw new Error('工作区文件超过 32 MiB。');
   const signature = new Uint8Array(await file.slice(0, 2).arrayBuffer());
-  const stream = signature[0] === 31 && signature[1] === 139 ? file.stream().pipeThrough(new DecompressionStream('gzip')) : file.stream();
+  const gzip = signature[0] === 31 && signature[1] === 139;
+  const stream = gzip ? file.stream().pipeThrough(new DecompressionStream('gzip')) : file.stream();
   const reader = stream.getReader(), chunks: Uint8Array[] = []; let size = 0;
-  try { while (true) { const { done, value } = await reader.read(); if (done) break; size += value.byteLength; if (size > MAX_BYTES) throw new Error('工作区解压后超过 32 MiB。'); chunks.push(value); } }
-  finally { await reader.cancel(); }
-  return parseWorkspace(JSON.parse(await new Blob(chunks as Uint8Array<ArrayBuffer>[]).text()), baseUrl);
+  try {
+    while (true) {
+      const {done, value} = await reader.read().catch(error => {
+        if (gzip) throw new UnrecognizedWorkspaceFile();
+        throw error;
+      });
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_BYTES) throw new Error('工作区解压后超过 32 MiB。');
+      chunks.push(value);
+    }
+  } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+  const json = await new Blob(chunks as Uint8Array<ArrayBuffer>[]).text();
+  let value: unknown;
+  try { value = JSON.parse(json); } catch { throw new UnrecognizedWorkspaceFile(); }
+  if (!value || typeof value !== 'object' || !('schema' in value) ||
+      (value.schema !== 'voidplayer-workspace' && value.schema !== 'voidplayer-web-review')) throw new UnrecognizedWorkspaceFile();
+  return parseWorkspace(value, baseUrl);
 }
 export async function compressWorkspace(document: WorkspaceFile): Promise<Blob> {
   const blob = new Blob([JSON.stringify(document)]);

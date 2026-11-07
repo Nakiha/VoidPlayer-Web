@@ -110,5 +110,9 @@ test('recent dates omit only the current year and preserve hours minutes and sec
  const now = new Date(2026,10,7,12).getTime();
  assert.equal(formatRecentDate(new Date(2026,10,7,9).getTime(),now),'11/7 09:00:00');
  assert.equal(formatRecentDate(new Date(2025,10,7,9).getTime(),now),'2025/11/7 09:00:00');
+ assert.equal(formatRecentDate(new Date(2026,10,7,9).getTime(),now,'minutes'),'11/7 09:00');
+ assert.equal(formatRecentDate(new Date(2026,10,7,9).getTime(),now,'short'),'09:00');
+ assert.equal(formatRecentDate(new Date(2026,10,6,9).getTime(),now,'short'),'11/6');
+ assert.equal(formatRecentDate(new Date(2025,10,7,9).getTime(),now,'short'),'2025/11/7');
  assert.equal(formatRecentDate(new Date(2026,10,7,9).getTime(),new Date(2027,0,1,12).getTime()),'2026/11/7 09:00:00');
 });

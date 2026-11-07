@@ -1,4 +1,5 @@
-import { createLibraryFileRow, installLibraryListing, sizeText, storageText, openedText, sourceDisplayName, patchLibraryRow, preserveLibraryThumbnail } from '../library-view.ts';
+import { selectVideoInputs } from '../video-input.ts';
+import { createLibraryFileRow, installLibraryListing, storageText, patchLibraryRow, preserveLibraryThumbnail } from '../library-view.ts';
 import { installLibraryThumbnails } from '../library-thumbnails.ts';
 import { loadStageLabel } from '../media-progress.ts';
 import type { MediaLoadStage } from '../media-progress.ts';
@@ -24,9 +25,6 @@ import { log } from '../../logging/log.ts';
 import type { WorkbenchShared, WorkbenchState } from './shared.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-const text = (tag: string, value: string, className = '') => {
-  const el = document.createElement(tag); el.textContent = value; el.className = className; return el;
-};
 /** Source catalog + library browser + load transactions. Owns source signatures. */
 export function createSourcesPane(shared: WorkbenchShared) {
   const { session, act, view, catalog, lifecyle } = shared;
@@ -84,6 +82,9 @@ export function createSourcesPane(shared: WorkbenchShared) {
     if (home) void refreshRecent();
     renderSources();
   }, shared.notify, () => !document.getElementById('empty-A')!.hidden && catalog.referencesToResolve().length > 0);
+  const syncStartDensity = () => { $('start-library-list').dataset.libraryDensity = $('source-list').dataset.libraryDensity; };
+  $('source-list').addEventListener('library-density-change', syncStartDensity, {signal:lifecyle.signal});
+  syncStartDensity();
   const listing = installLibraryListing($('source-list'), {fileRow:sourceRow, navigate:libraryBrowser.navigate, registerMount:fileMenu.registerMount});
   const recentGroup = {section:listing.recentGroup};
   const thumbnails = installLibraryThumbnails(['source-list','local-list','start-library-list'].map(id => $(id)), lifecyle.signal);
@@ -193,33 +194,26 @@ export function createSourcesPane(shared: WorkbenchShared) {
   }
 
   function startRow(item: SourceItem, copyOnly = false) {
-    const row = document.createElement('button');
-    row.className = 'start-recent-row';
-    // Local metadata without a live File still needs browser file access.
     const staleLocal = !item.file && !item.library && !item.libraryId;
-    // A stored handle means one click restores silently — no re-pick needed.
-    const restorable = staleLocal && handleKnown.get(item.key) === true;
-    row.setAttribute('aria-label', staleLocal && !restorable ? t(msg("sources.reselectRowName", "重新选择：{name}"), { name: item.name }) : t(msg("sources.openName", "打开：{name}"), { name: item.name }));
-    const { base, dir } = sourceDisplayName(item.name);
-    const name = text('span', base, 'filename');
-    const origin = item.library ? [item.library.root, dir].filter(Boolean).join(' / ') : '';
-    const opened = openedText(item.openedAt);
-    const meta = text('span', item.library || item.libraryId ? `${sizeText(item.size)} · ${t(msg("sources.startMetaLibrary", "媒体库"))}${origin ? ` · ${origin}` : ''}${opened ? ` · ${opened}` : ''}` : `${sizeText(item.size)} · ${t(msg('sources.localTag', '(本地)'))}${staleLocal && !restorable ? t(msg("sources.reselectNeeded", " · 需重新选择")) : ''}${opened ? ` · ${opened}` : ''}`, 'source-meta');
-    const go = document.createElement('span'); go.className = 'start-recent-go'; go.setAttribute('aria-hidden', 'true'); go.innerHTML = icon('caretRight');
-    const info = document.createElement('span'); info.className = 'source-info'; info.append(name, meta);
-    row.append(info, go);
-    row.dataset.sourceKey = item.key;
+    const needsReselect = staleLocal && handleKnown.get(item.key) !== true;
+    const row = createLibraryFileRow(item, {
+      home:true, needsReselect,
+      label:needsReselect ? t(msg('sources.reselectRowName', '重新选择：{name}'), {name:item.name})
+        : t(msg('sources.openName', '打开：{name}'), {name:item.name}),
+      tooltip:needsReselect ? localAccessMessage(item.name, supportsFileHandles() ? 'unavailable' : 'unsupported') : item.name,
+      open() {
+        const {busy, tracks} = session.getState();
+        if (busy || sourceInUse(item, tracks)) return;
+        if (staleLocal) { void reselectLocal(item); return; }
+        const empty = SLOTS.find(slot => !tracks.some(track => track.slot === slot));
+        if (empty) void load(item, empty); else shared.setPanel('sources', true);
+      },
+    });
+    row.classList.add('start-recent-row');
+    const go = document.createElement('span'); go.className = 'start-recent-go';
+    go.setAttribute('aria-hidden', 'true'); go.innerHTML = icon('caretRight');
+    row.append(go);
     if (!copyOnly) attachThumb(row, item);
-    row.dataset.tooltip = staleLocal && !restorable ? localAccessMessage(item.name, supportsFileHandles() ? 'unavailable' : 'unsupported') : item.name;
-    row.onclick = () => {
-      if (session.getState().busy || sourceInUse(item, session.getState().tracks)) return;
-      if (staleLocal) { void reselectLocal(item); return; }
-      if (item.libraryId && !item.library) return;
-      const tracks = session.getState().tracks;
-      const empty = SLOTS.find(slot => !tracks.some(t => t.slot === slot));
-      if (empty) void load(item, empty);
-      else shared.setPanel('sources', true);
-    };
     return row;
   }
 
@@ -239,6 +233,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     if (supportsFileHandles()) {
       try {
         const restored=await restoreHandleSource(item.key);
+        if (!(await selectVideoInputs([{file:restored.file}], error => shared.notify(error.message))).length) return;
         handleKnown.set(restored.key,true);handleKnown.set(item.key,true);
         openLive(restored.file,item.key);
         return;
@@ -249,7 +244,9 @@ export function createSourcesPane(shared: WorkbenchShared) {
       try {
         const picked = await pickVideoFiles(false);
         if (!picked) return;
-        const [{ file, handle }] = picked;
+        const selected = await selectVideoInputs(picked, error => shared.notify(error.message));
+        if (!selected.length) return;
+        const {file, handle} = selected[0];
         await saveFileHandle(handleKey(file), handle, file).catch(() => {});
         handleKnown.set(handleKey(file), true);
         openLive(file);
@@ -278,7 +275,8 @@ export function createSourcesPane(shared: WorkbenchShared) {
       try {
         const picked = await pickVideoFiles(true);
         if (!picked) return;
-        for (const { file, handle } of picked) {
+        const videos = await selectVideoInputs(picked, error => shared.notify(error.message));
+        for (const { file, handle } of videos) {
           catalog.addFile(file);
           await saveFileHandle(handleKey(file), handle, file).catch(() => {});
         }
@@ -304,7 +302,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     const fingerprintOfStart = (item: SourceItem) => JSON.stringify([
       !!item.file, item.library?.id ?? item.libraryId ?? null,
       item.library?.version ?? item.version ?? null, item.library?.state ?? null,
-      item.name, item.size, item.openedAt ?? null, sourceInUse(item, tracks),
+      item.name, item.size, item.library?.root ?? null, item.openedAt ?? null, sourceInUse(item, tracks),
       (!item.file && !item.library && !item.libraryId) ? handleKnown.get(item.key) ?? 'unknown' : null,
     ]);
     const signature = JSON.stringify(items.map(item => [item.key, fingerprintOfStart(item)]));
@@ -505,15 +503,18 @@ export function createSourcesPane(shared: WorkbenchShared) {
     showIdentity();
     refreshIdentity = showIdentity;
     window.addEventListener('voidplayer-identity-change', showIdentity, { signal: lifecyle.signal });
-    $('source-files').onchange = () => {
+    $('source-files').onchange = async () => {
       const input = $<HTMLInputElement>('source-files');
-      const files = [...input.files ?? []];
+      const candidates = Array.from(input.files ?? [], file => ({file}));
+      const key = pendingReselect; pendingReselect = null;
+      input.value = '';
+      const videos = await selectVideoInputs(candidates, error => shared.notify(error.message));
+      const files = videos.map(item => item.file);
       for (const file of files) catalog.addFile(file);
-      input.value = ''; save(); renderSources();
+      if (files.length) { save(); renderSources(); }
       // Continue a start-panel reselect straight into the load when the
       // picked file matches the row that asked (name/size/mtime identity).
-      if (pendingReselect) {
-        const key = pendingReselect; pendingReselect = null;
+      if (key) {
         const match = files.find(file => sourceKey(file) === key);
         if (match && !session.getState().busy) {
           const item: SourceItem = { key, name: match.name, size: match.size, lastModified: match.lastModified, file: match };
@@ -530,7 +531,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
   /** Relabel cached nodes in place; keep row focus and event handlers. */
   function localize() {
     const items = new Map([...catalog.recent(), ...catalog.available()].map(item=>[item.key,item]));
-    for(const row of document.querySelectorAll<HTMLElement>('.source-row[data-source-key], .start-recent-row[data-source-key]')) {
+    for(const row of document.querySelectorAll<HTMLElement>('.source-row[data-source-key]')) {
       const item=items.get(row.dataset.sourceKey!); if(item)patchLibraryRow(row,row.classList.contains('start-recent-row')?startRow(item,true):sourceRow(item,true));
     }
     listing.localize(libraryBrowser.page(), libraryBrowser.isRoot(), libraryBrowser.filter());

@@ -26,22 +26,16 @@ const { page, limitsDir, checkpointOnly, call, analyze, hideOverlay, stable, lib
         const result = await call("request_bitstream_analysis", { slot: "A" });
         const state = await call("get_bitstream_analysis_state");
         assert.equal(state.state, depth === 8 ? "unsupported" : "ready");
-        assert.equal(
-          state.reason.code,
-          depth === 8 ? "incomplete-reference-state" : "unsupported-qp-depth",
-        );
+        if (depth === 8) assert.equal(state.reason.code, "incomplete-reference-state");
+        else assert.equal(result.qp.mean, 17);
         await analyze();
         await page.waitForFunction(()=>document.querySelector('#bitstream-tracks [data-slot="A"]').dataset.state!=='pending');
         if (depth === 10) {
           await page
             .locator("#bitstream-overlay-A")
             .waitFor({ state: "visible" });
-          assert.equal(await page.locator('#bitstream-mode [data-value="qp"]').isDisabled(), true, 'unavailable QP stays visible without shifting the segments');
-          await page.locator('#bitstream-mode [data-value="none"]').click();
-          assert.match(
-            await page.locator('#bitstream-tracks [data-slot="A"]').getAttribute('aria-description'),
-            /位深.*QP/,
-          );
+          assert.equal(await page.locator('#bitstream-mode [data-value="qp"]').isDisabled(), false);
+          await page.locator('#bitstream-mode [data-value="qp"]').click();
         } else {
           await page
             .locator("#bitstream-overlay-A")

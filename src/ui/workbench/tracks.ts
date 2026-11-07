@@ -12,6 +12,7 @@ import { icon } from '../icons.ts';
 import { createIconButton } from '../controls.ts';
 import { sizeText } from '../library-view.ts';
 import { fileBasename } from '../filename.ts';
+import { createMiddleFilename } from '../middle-filename.ts';
 import { trackTimelineRatio } from '../track-timeline.ts';
 import { marksForTrack, trackTiming } from '../workspace-state.ts';
 import type { ReviewTrack } from '../workspace-state.ts';
@@ -22,6 +23,11 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const text = (tag: string, value: string, className = '') => {
   const el = document.createElement(tag); el.textContent = value; el.className = className; return el;
 };
+function propertyRow(label: string, value: HTMLElement) {
+  const row = document.createElement('div');
+  row.append(text('dt', label), value);
+  return row;
+}
 const inspectorNumberOptions = { minimumFractionDigits: 2, useGrouping: false };
 const secondsFormat = new Intl.NumberFormat('en-US', { ...inspectorNumberOptions, maximumFractionDigits: 6 });
 const millisecondsFormat = new Intl.NumberFormat('en-US', { ...inspectorNumberOptions, maximumFractionDigits: 3 });
@@ -87,15 +93,19 @@ export function createTracksPane(shared: WorkbenchShared) {
   document.querySelector('.subtrack-scroll')!.addEventListener('scroll', hideSeekPreview, { signal: shared.lifecyle.signal });
   $('subtrack-add-mark').onclick = () => { if (!session.getState().busy) shared.addMark(view.selected); };
 
-  function propertyRows(track: ReviewTrack) {
+  function propertyRows(track: ReviewTrack, state: WorkbenchState) {
     const color = track.color;
     const hdr = isHdrTransfer(color?.transfer);
+    const preferHardware = state.colorMode === 'browser' || state.referenceDecode.decoder === 'hardware';
+    const acceleration = track.decoder === 'ffmpeg-wasm'
+      ? preferHardware ? t(msg('colorFlow.preferHardware2', '硬件优先')) + t(msg('player.fallback', '（已回退）')) : t(msg('colorFlow.softwareDecoding', '软件解码'))
+      : track.hardwareAcceleration === 'prefer-hardware' ? t(msg('tracks.preferHardwareActualHardwareUseUnverified', '硬件优先（实际硬件使用未验证）')) : t(msg('tracks.browserDefault', '浏览器自动选择'));
     return [
       [t(msg("tracks.codec", "编码")), track.codec], [t(msg("tracks.dimensions", "尺寸")), `${track.width} × ${track.height}`],
       ...(track.indexWarning ? [[t(msg("tracks.fileIntegrity", "文件完整性")), track.indexWarning]] : []),
       ...(track.indexState ? [[t(msg("tracks.frameIndex", "帧索引")), track.indexState === 'building' ? t(msg("tracks.durationCoversIndexedPortion", "{p0} · 时长为已索引范围"), { p0: indexProgressLabel(track) }) : track.indexState === 'error' ? t(msg("tracks.indexFailed", "索引失败：{p0}"), { p0: track.indexError ?? '' }) : track.indexSource === 'server' ? t(msg("tracks.reusedServerCache", "已复用服务器缓存")) : t(msg("tracks.complete", "已完成"))]] : []),
       [t(msg("tracks.duration", "时长")), formatTime(track.durationUs)], [t(msg("colorFlow.decode", "解码")), track.decoder === 'webcodecs' ? 'WebCodecs' : 'FFmpeg WASM'],
-      [t(msg("tracks.accelerationRequest", "加速请求")), track.decoder === 'ffmpeg-wasm' ? t(msg("colorFlow.softwareDecoding", "软件解码")) : track.hardwareAcceleration === 'prefer-hardware' ? t(msg("tracks.preferHardwareActualHardwareUseUnverified", "硬件优先（实际硬件使用未验证）")) : t(msg("tracks.browserDefault", "浏览器自动选择"))],
+      [t(msg("tracks.accelerationRequest", "加速请求")), acceleration],
       ...(track.seekStrategy ? [[t(msg("tracks.seekMethod", "定位方式")), ({ 'packet-anchor': t(msg("tracks.packetIndex", "包索引定位")), 'demuxer-keyframe': t(msg("tracks.containerKeyframes", "容器关键帧定位")), 'demuxer-timestamp': t(msg("tracks.containerTimestampsMayScanBackward", "容器时间戳定位（可能回扫）")), browser: t(msg("tracks.browserMediaIndex", "浏览器媒体索引")) })[track.seekStrategy]]] : []),
       [track.pixelFormat ? t(msg("tracks.pixelFormat", "像素格式")) : t(msg("tracks.decodedPixelFormat", "解码像素格式")), track.pixelFormat || track.decodedPixelFormat || t(msg("tracks.notProvided", "未提供")), track.pixelFormat ? 'pixel-format' : 'decoded-format'],
       [t(msg("tracks.colorPrimaries", "色域原色")), colorLabel(color?.primaries), 'color-metadata'],
@@ -106,7 +116,7 @@ export function createTracksPane(shared: WorkbenchShared) {
     ];
   }
 
-  function propertyGroups(track: ReviewTrack) {
+  function propertyGroups(track: ReviewTrack, state: WorkbenchState) {
     const metadata = track.trackMetadata, audio = metadata?.audio;
     const pending = t(msg('tracks.metadataUnknown', '尚未确认'));
     const containerRows = [[t(msg('tracks.containerFormat', '格式')), metadata?.container ?? pending]];
@@ -132,7 +142,7 @@ export function createTracksPane(shared: WorkbenchShared) {
     }
     return [
       { id: 'container', title: t(msg('tracks.containerGroup', '封装')), rows: containerRows },
-      { id: 'video', title: t(msg('tracks.videoGroup', '视频')), rows: propertyRows(track) },
+      { id: 'video', title: t(msg('tracks.videoGroup', '视频')), rows: propertyRows(track, state) },
       { id: 'audio', title: t(msg('tracks.audioGroup', '音频')), rows },
     ];
   }
@@ -227,7 +237,7 @@ export function createTracksPane(shared: WorkbenchShared) {
 
   function renderInspector(state: WorkbenchState) {
     const selected = state.tracks.find(t => t.slot === view.selected);
-    const signature = state.tracks.map(t => `${inspectorSourceKey(t)}:${t.metadataRevision ?? 0}`).join('/') + view.selected;
+    const signature = JSON.stringify([state.tracks.map(t => [inspectorSourceKey(t), t.metadataRevision]), view.selected, state.colorMode, state.referenceDecode.decoder]);
     const selection = state.tracks.map(t => inspectorSourceKey(t)).join('/') + view.selected;
     if (selection !== selectorSignature) {
       selectorSignature = selection;
@@ -236,7 +246,7 @@ export function createTracksPane(shared: WorkbenchShared) {
         const button = document.createElement('button'); button.className = 'track-choice';
         button.setAttribute('aria-label', t(msg("tracks.selectTrack", "选择轨道 {p0}"), { p0: track.slot }));
         button.setAttribute('aria-pressed', String(track.slot === view.selected));
-        button.append(text('span', track.slot, `slot slot-${track.slot}`), text('span', fileBasename(track.name), 'filename'));
+        button.append(text('span', track.slot, `slot slot-${track.slot}`), createMiddleFilename(fileBasename(track.name)));
         button.dataset.tooltip = track.name; button.onclick = () => shared.select(track.slot); list.append(button);
       }
     }
@@ -266,16 +276,16 @@ export function createTracksPane(shared: WorkbenchShared) {
       else {
         const title = text('h3', t(msg('tracks.track', '轨道 {p0}'), { p0: selected.slot })); title.dataset.inspectorTitle = '';
         const file = document.createElement('dl'); file.dataset.fileProperties = '';
-        file.append(text('dt', t(msg('tracks.fileSize', '大小'))), text('dd', sizeText(selected.size)));
+        file.append(propertyRow(t(msg('tracks.fileSize', '大小')), text('dd', sizeText(selected.size))));
         properties.append(title, file);
-        for (const group of propertyGroups(selected)) {
+        for (const group of propertyGroups(selected, state)) {
           const section = document.createElement('section'); section.dataset.metadataGroup = group.id;
           const heading = text('h3', group.title); heading.id = `inspect-heading-${group.id}`;
           section.setAttribute('aria-labelledby', heading.id);
           const dl = document.createElement('dl');
           for (const [label, value, id] of group.rows) {
             const dd = text('dd', value); decorateProperty(dd, id, selected);
-            dl.append(text('dt', label), dd);
+            dl.append(propertyRow(label, dd));
           }
           section.append(heading, dl); properties.append(section);
         }
@@ -283,7 +293,7 @@ export function createTracksPane(shared: WorkbenchShared) {
         properties.append(frameTitle);
         const timing = document.createElement('dl'); timing.dataset.frameTiming = '';
         for (const [label, id] of frameTimingRows()) {
-          const dd = text('dd', '—'); dd.id = id; timing.append(text('dt', label), dd);
+          const dd = text('dd', '—'); dd.id = id; timing.append(propertyRow(label, dd));
         }
         properties.append(timing);
         const performance = document.createElement('section');
@@ -291,12 +301,12 @@ export function createTracksPane(shared: WorkbenchShared) {
         heading.id = 'inspect-playback-title';
         performance.setAttribute('aria-labelledby', heading.id);
         const stats = document.createElement('dl'); stats.id = 'inspect-playback';
-        for (const label of performanceLabels()) stats.append(text('dt', label), text('dd', '—'));
+        for (const label of performanceLabels()) stats.append(propertyRow(label, text('dd', '—')));
         const concurrency = document.createElement('dl'); concurrency.id = 'inspect-decoder-concurrency';
         const threads = text('dd', '—'); threads.id = 'inspect-decoder-threads';
         const contexts = text('dd', '—'); contexts.id = 'inspect-decoder-contexts';
-        concurrency.append(text('dt', t(msg('tracks.decoderThreads', '解码线程'))), threads,
-          text('dt', t(msg('tracks.decoderFrameContexts', '帧上下文'))), contexts);
+        concurrency.append(propertyRow(t(msg('tracks.decoderThreads', '解码线程')), threads),
+          propertyRow(t(msg('tracks.decoderFrameContexts', '帧上下文')), contexts));
         performance.append(heading, stats, concurrency); properties.append(performance);
       }
     }
@@ -338,7 +348,7 @@ export function createTracksPane(shared: WorkbenchShared) {
         const name = document.createElement('button'); name.className = 'subtrack-name track-identity'; name.dataset.dragSurface = track.slot;
         name.setAttribute('aria-label', t(msg("tracks.inspectSubtrack", "检视子轨道 {p0}"), { p0: track.slot }));
         name.setAttribute('aria-pressed', String(track.slot === view.selected));
-        name.append(text('span', track.slot, `slot slot-${track.slot}`), text('span', fileBasename(track.name), 'filename'));
+        name.append(text('span', track.slot, `slot slot-${track.slot}`), createMiddleFilename(fileBasename(track.name)));
         name.dataset.tooltip = track.name;
         name.onclick = () => shared.inspect(track.slot);
         const lane = document.createElement('div'); lane.className = 'track-lane';
@@ -456,7 +466,7 @@ export function createTracksPane(shared: WorkbenchShared) {
       button.setAttribute('aria-label', t(msg('tracks.selectTrack', '选择轨道 {p0}'), {p0:slot}));
     }
     if (selected && $('track-properties').querySelector('[data-inspector-title]')) {
-      for (const group of propertyGroups(selected)) {
+      for (const group of propertyGroups(selected, state)) {
         const section = $('track-properties').querySelector<HTMLElement>(`[data-metadata-group="${group.id}"]`)!;
         section.querySelector('h3')!.textContent = group.title;
         [...section.querySelectorAll('dt')].forEach((node, i) => { node.textContent = group.rows[i][0]; });

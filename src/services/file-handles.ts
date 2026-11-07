@@ -1,3 +1,4 @@
+import { VIDEO_EXTENSIONS } from '../../shared/media/containers/video-files.ts';
 import { sourceKey } from '../../shared/media/io/source-identity.ts';
 import { matchMediaIdentity } from '../../shared/media/io/media-identity.ts';
 import type { LocalAccessProblem } from '../../shared/media/io/source-access.ts';
@@ -28,7 +29,7 @@ export interface FsFileHandle {
   requestPermission?(descriptor: FsPermission): Promise<PermissionState>;
 }
 type FsPickerWindow = { showOpenFilePicker?: (options?: object) => Promise<FsFileHandle[]> };
-type FsDropItem = { getAsFileSystemHandle?: () => Promise<{ kind: string } | null> };
+type FsDropItem = { getAsFileSystemHandle?: () => Promise<FsFileHandle | null> };
 export type HandleMeta = { name: string; size: number; lastModified: number };
 export type HandleRecord = HandleMeta & { key: string; handle: FsFileHandle; savedAt: number };
 export type HandleStore = {
@@ -156,7 +157,7 @@ export async function hasFileHandle(key: string, store: HandleStore = indexedDBH
 export const handleKey = (file: HandleMeta) => sourceKey(file);
 
 export type PickedVideo = { file: File; handle: FsFileHandle };
-const VIDEO_TYPES = [{ description: '视频', accept: { 'video/*': ['.mp4', '.m4v', '.mov', '.mkv', '.webm', '.ts', '.m2ts', '.mpg', '.mpeg', '.avi', '.flv'] } }];
+const VIDEO_TYPES = [{ description: '视频', accept: { 'video/*': VIDEO_EXTENSIONS } }];
 
 /** System picker returning usable Files plus persistable handles.
  * Returns null when the user cancels; throws FileHandleError('unsupported')
@@ -176,15 +177,8 @@ export async function pickVideoFiles(multiple: boolean): Promise<PickedVideo[] |
   }
 }
 
-/** Best-effort handle capture for drag-and-drop items. Reads must start in
- * the drop event; anything unresolvable is skipped without failing the drop. */
-export async function dropFileHandles(items: Iterable<DataTransferItem>): Promise<(FsFileHandle | undefined)[]> {
-  const list = [...items].filter(item => item.kind === 'file');
-  return Promise.all(list.map(async item => {
-    try {
-      const access = (item as unknown as FsDropItem).getAsFileSystemHandle;
-      const handle = typeof access === 'function' ? await access.call(item) : null;
-      return handle != null && handle.kind === 'file' ? handle as unknown as FsFileHandle : undefined;
-    } catch { return undefined; }
-  }));
+/** Start access while the browser still grants access to the drag data store. */
+export async function dropEntryHandle(item: DataTransferItem) {
+  try { return await (item as unknown as FsDropItem).getAsFileSystemHandle?.(); }
+  catch { return undefined; }
 }

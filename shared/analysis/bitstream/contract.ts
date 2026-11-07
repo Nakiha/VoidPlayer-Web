@@ -4,7 +4,7 @@ import type { FrameDescription } from "../../media/frame-description.ts";
 import { AnalysisFailure, ANALYSIS_REASON_CODES } from "./failure.ts";
 import type { AnalysisReasonCode } from "./failure.ts";
 export const ANALYSIS_SCHEMA = 1;
-export const ANALYSIS_RECIPE = "blocks-basic-v2";
+export const ANALYSIS_RECIPE = "blocks-basic-v3";
 export const ANALYZER_VERSION = "0.1.0";
 export interface SourcePictureKey {
   sourceVersion: string;
@@ -257,6 +257,8 @@ export function validateMetadata(result: Omit<AnalysisResult, "blocks">): void {
       result.capabilities.motion !== 'unsupported' || !result.qp || result.qp.component !== 'luma' || result.qp.weighting !== 'pixel-area' ||
       !Number.isInteger(result.qp.bitDepth) || (result.qp.bitDepth < 8 && !(result.confidence === "partial" && result.qp.bitDepth === 0 && result.qp.mean === null)) || result.qp.bitDepth > 16 ||
       (result.qp.mean !== null && (!Number.isFinite(result.qp.mean) || result.qp.mean < 0 || result.qp.mean > (result.codec === 'vvc' ? 63 : 51))) ||
+      (result.capabilities.qp === 'ready' && result.qp.bitDepth !== 8 &&
+        !(result.codec === 'hevc' && result.qp.bitDepth === 10 && result.qp.mean !== null && result.qp.mean >= 1)) ||
       (result.capabilities.qp !== 'ready' && result.qp.mean !== null)) throw new Error('Invalid analysis capabilities/QP');
   if (!result.metrics || Object.values(result.metrics).some(n => !Number.isFinite(n) || n < 0)) throw new Error('Invalid analysis metrics');
 }
@@ -299,7 +301,7 @@ export function validateResult(result: AnalysisResult): void {
       !["intra", "inter", "skip"].includes(b.mode) ||
       (b.qp !== null &&
         (!Number.isInteger(b.qp) ||
-          b.qp < 0 ||
+          b.qp < (result.qp.bitDepth === 10 ? 1 : 0) ||
           b.qp > (result.codec === "vvc" ? 63 : 51)))
     )
       throw new Error(`Invalid analysis block ${JSON.stringify(b)}`);

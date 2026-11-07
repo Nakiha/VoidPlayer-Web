@@ -155,6 +155,44 @@ try {
     await page.screenshot({ path: path.join(screenshots, 'start-header-narrow.png') });
   });
 
+  await check('non-video inputs explain the item and preserve the current review', async page => {
+    await page.locator('#file-A').setInputFiles(path.join(fixtures,'ci_h264_smoke.mp4'));
+    await page.waitForFunction(() => window.voidPlayer.getState().tracks[0]?.frame);
+    const before = await page.evaluate(() => {
+      const {tracks, positionUs, mediaLoad} = window.voidPlayer.getState();
+      return {id:tracks[0].id, positionUs, mediaLoad};
+    });
+    for (const [name, mime, reason] of [
+      ['installer.dmg','','磁盘映像'], ['screenshot.png','image/png','图片'], ['photo.heic','','图片'], ['sound.flac','audio/flac','音频文件'],
+      ['notes.txt','text/plain','作为视频打开'], ['legacy.wmv','video/x-ms-wmv','作为视频打开'], ['settings.json','application/json','工作区文件'],
+    ]) {
+      if (name.endsWith('.json')) {
+        await page.evaluate(name => {
+          const transfer = new DataTransfer(); transfer.items.add(new File(['{invalid'],name));
+          document.body.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:transfer}));
+        },name);
+      } else await page.locator('#file-A').setInputFiles({name,mimeType:mime,buffer:Buffer.from('not a video')});
+      await page.locator('.toast-message').filter({hasText:name}).filter({hasText:reason}).waitFor();
+    }
+    for (const [name,reason] of [['Sample.app','应用程序'],['games','文件夹']]) {
+      await page.evaluate(name => {
+        const event = new Event('drop',{bubbles:true,cancelable:true});
+        const entry = {isDirectory:true,name};
+        Object.defineProperty(event,'dataTransfer',{value:{types:['Files'],files:[],items:[{kind:'file',webkitGetAsEntry:()=>entry}]}});
+        document.body.dispatchEvent(event);
+      },name);
+      await page.locator('.toast-message').filter({hasText:name}).filter({hasText:reason}).waitFor();
+    }
+    await page.locator('#source-files').setInputFiles({name:'source.png',mimeType:'image/png',buffer:Buffer.from('image')});
+    await page.locator('.toast-message').filter({hasText:'source.png'}).waitFor();
+    const after = await page.evaluate(() => {
+      const {tracks, positionUs, mediaLoad} = window.voidPlayer.getState();
+      return {id:tracks[0].id, positionUs, mediaLoad, count:tracks.length};
+    });
+    assert.deepEqual(after,{...before,count:1},'rejected inputs never start or supersede a media load');
+    assert.equal(await page.locator('.toast-warning, .frame-loading').count(),0);
+  });
+
   await check('file drop feedback uses a centered theme bubble with borderless thirty-percent fill', async page => {
     const entry = listing.entries.find(entry => entry.name === 'ci_h264_smoke.mp4');
     const call = (name, args) => page.evaluate(({ name, args }) => window.voidPlayer.tools.find(tool => tool.name === name).execute(args), { name, args });
@@ -695,7 +733,8 @@ try {
     for (const selector of controls) {
       const control = page.locator(selector);
       assert.equal(await control.locator('.filename').textContent(), 'path-tooltip.mp4');
-      await control.locator('.filename').evaluate(el => {el.style.maxWidth='40px';});
+      await control.locator('.filename').evaluate(el => {el.style.maxWidth='54px';});
+      await page.waitForFunction(selector => /^p.*….*\.mp4$/.test(document.querySelector(selector + ' .filename')?.dataset.display), selector);
       assert.equal(await control.getAttribute('data-tooltip'), fullName);
       assert.equal(await control.getAttribute('title'), null, 'no native tooltip');
       await control.hover();
@@ -723,10 +762,20 @@ try {
     const source = page.locator('#source-list .source-file');
     await source.hover(); await page.waitForTimeout(500);
     assert.equal(await page.locator('#control-tooltip').isVisible(), false, 'source row also suppresses a fully visible filename');
-    await source.locator('.filename').evaluate(el => {el.style.maxWidth='40px';});
+    const filename = source.locator('.filename');
+    await filename.evaluate(el => {el.style.maxWidth='70px';});
+    await page.waitForFunction(() => /^p.+….*\.mp4$/.test(document.querySelector('#source-list .source-file .filename')?.dataset.display));
+    const widerLabel = await filename.getAttribute('data-display');
+    await filename.evaluate(el => {el.style.maxWidth='52px';});
+    await page.waitForFunction(wider => {
+      const shown = document.querySelector('#source-list .source-file .filename')?.dataset.display;
+      return /^p.*….*\.mp4$/.test(shown) && shown.length < wider.length;
+    }, widerLabel);
+    assert.equal(await filename.textContent(), 'path-tooltip.mp4', 'the original name stays available');
     await source.locator('.source-meta').hover();
     await page.waitForFunction(name => !document.querySelector('#control-tooltip').hidden && document.querySelector('#control-tooltip').textContent.includes(name), fullName);
-    await source.locator('.filename').evaluate(el => {el.style.maxWidth='';});
+    await filename.evaluate(el => {el.style.maxWidth='';});
+    await page.waitForFunction(() => !document.querySelector('#source-list .source-file .filename').hasAttribute('data-display'));
     await page.waitForFunction(() => document.querySelector('#control-tooltip').hidden);
   });
 
@@ -1266,6 +1315,41 @@ try {
     await page.locator('#inspect-decoder-concurrency').waitFor({ state: 'visible' });
     const containerFacts = await page.locator('[data-metadata-group=container] dd').allTextContents();
     assert.deepEqual(containerFacts, ['MP4', '1/90000 s', '1/48000 s'], 'library playback retains the original HLG stream clocks');
+    await page.locator('#toggle-analysis').click();
+    for (const button of await page.locator('#analysis-diagrams [data-value]').all()) {
+      const enabled = await button.getAttribute('aria-pressed') === 'true';
+      if (enabled !== (await button.getAttribute('data-value') === 'bitrate')) await button.click();
+    }
+    await page.locator('#analysis-resize').press('Home');
+    const canvas = page.locator('#analysis-canvas');
+    await canvas.waitFor();
+    await page.waitForFunction(() => {
+      const charts = document.querySelector('.analysis-charts');
+      return charts.scrollHeight > charts.clientHeight;
+    });
+    for (const multiple of [false, true]) {
+      if (multiple) await page.locator('#analysis-diagrams [data-value="size"]').click();
+      await page.locator('.analysis-charts').evaluate(el => {el.scrollTop = 0;});
+      const plot = await canvas.boundingBox(), port = await page.locator('.analysis-charts').boundingBox();
+      await page.mouse.move(plot.x + plot.width / 2, (plot.y + Math.min(port.y + port.height, plot.y + plot.height)) / 2);
+      await page.mouse.wheel(0, 60);
+      await page.waitForFunction(() => document.querySelector('.analysis-charts').scrollTop > 0);
+    }
+    await page.locator('#analysis-load-metrics [data-metric="qp"]').click();
+    await page.waitForFunction(() => Number(document.querySelector('#analysis-canvas').dataset.qpPoints) > 0);
+    await page.locator('#toggle-analysis').click();
+    const inspectorResize = page.locator('#inspector-resize');
+    await inspectorResize.press('Home');
+    await settle(page);
+    for (const value of ['1920 × 1080','FFmpeg WASM']) {
+      const layout = await page.locator('[data-metadata-group=video] dd').filter({hasText:value}).evaluate(el => {
+        const range = document.createRange(); range.selectNodeContents(el);
+        return {lines:range.getClientRects().length, left:el.getBoundingClientRect().left, labelEnd:el.previousElementSibling.getBoundingClientRect().right};
+      });
+      assert.equal(layout.lines, 1, `${value} fits on one line beside its short label at minimum panel width`);
+      assert.ok(layout.left >= layout.labelEnd, 'the value does not overlap its label');
+    }
+
     assert.equal(await page.locator('#inspect-decoder-concurrency').isVisible(), true);
     assert.equal(await page.locator('#inspect-decoder-threads').textContent(), String(managed.tracks[0].decoderThreads));
     assert.equal(await page.locator('#inspect-decoder-contexts').textContent(), String(managed.tracks[0].decoderFrameContexts));
@@ -1765,7 +1849,7 @@ try {
       const manifest=await fetch(new URL('/vendor/voidplayer-analysis/manifest.json',location.href)).then(r=>r.json()),buildId=manifest.buildId??manifest.revision;
       const sourceVersion='recovery-source';
       window.recovery={streams:0,pictures:0,failure:'error',commit:0};
-      const result=au=>({schema:1,codec:'h264',analyzerVersion:'0.1.0',buildId,recipe:'blocks-basic-v2',
+      const result=au=>({schema:1,codec:'h264',analyzerVersion:'0.1.0',buildId,recipe:'blocks-basic-v3',
         picture:{sourceVersion,stream:'video',configuration:0,au,picture:0,layer:0,field:'frame'},sourcePtsUs:100+au*100,
         width:16,height:16,confidence:'exact',reasons:[],capabilities:{blocks:'ready',qp:'ready',modes:'ready',motion:'unsupported'},
         qp:{component:'luma',bitDepth:8,weighting:'pixel-area',mean:23},blocks:[{x:0,y:0,width:16,height:16,qp:23,mode:'intra'}],
@@ -2419,19 +2503,28 @@ try {
     await firstRow.click();
     await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 2);
     await browseLibrary(page);
-    for (const width of [420,240]) {
+    for (const [width, detail] of [[420,'full'],[270,'minutes'],[240,'minutes'],[180,'short'],[420,'full']]) {
       await page.locator('#sources-panel').evaluate((el,width) => {el.style.width = `${width}px`;}, width);
       const columns = await page.locator('#library-recents .source-meta-columns').evaluateAll(rows => rows.map(row => {
         const rect = el => {const r=el.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom};};
-        return {meta:rect(row),size:rect(row.querySelector('.source-meta-size')),value:rect(row.querySelector('.source-size-value')),origin:rect(row.querySelector('.source-meta-origin')),time:rect(row.querySelector('.source-meta-time'))};
+        const time = row.querySelector('.source-meta-time');
+        return {meta:rect(row), value:rect(row.querySelector('.source-size-value')), origin:rect(row.querySelector('.source-meta-origin')),
+          time:rect(time), visible:[...time.children].filter(el => el.getClientRects().length).map(el => el.className)};
       }));
       assert.equal(columns.length, 2);
-      for (const item of columns) assert.ok(Math.abs(item.value.left-item.meta.left)<1, 'size text begins at the filename edge without reserved leading space');
-      assert.ok(Math.abs(columns[0].size.left-columns[1].size.left)<1 && Math.abs(columns[0].origin.left-columns[1].origin.left)<1, 'size and source columns align across loaded and unloaded rows');
-      for (const item of columns) assert.equal(item.time.top < item.meta.bottom, width === 420, 'narrow panels hide the entire time column');
-      if (width===420) assert.ok(Math.abs(columns[0].time.right-columns[1].time.right)<1, 'time columns share a right edge');
-      await page.screenshot({path:path.join(screenshots,`${browserName}-source-columns-${width}.png`)});
+      for (const item of columns) {
+        assert.deepEqual(item.visible, [`recent-time-${detail}`], 'show one timestamp at the appropriate precision');
+        assert.ok(Math.abs(item.value.left-item.meta.left)<1 && Math.abs(item.time.right-item.meta.right)<1, 'size and time anchor the two ends');
+        assert.ok(item.time.top>=item.meta.top-1 && item.time.bottom<=item.meta.bottom+1, 'time stays on the metadata line');
+        assert.ok(item.origin.left>=item.value.right && item.origin.right<=item.time.left, 'source fits between size and time');
+      }
+      assert.ok(Math.abs(columns[0].origin.left-columns[1].origin.left)<1, 'source column aligns across rows');
+      if (width === 420 || width === 240) await page.screenshot({path:path.join(screenshots,`${browserName}-source-columns-${width}.png`)});
     }
+    const time = page.locator('#library-recents .source-meta-time').first();
+    await time.hover();
+    await page.waitForFunction(() => !document.querySelector('#control-tooltip').hidden &&
+      document.querySelector('#control-tooltip').textContent === document.querySelector('#library-recents .source-meta-time').dataset.tooltip);
     await page.locator('#sources-panel').evaluate(el => {el.style.width='';});
     await firstRow.click({button:'right'});
     await page.locator('#library-file-menu [data-action=remove-from-view]').click();
@@ -2446,6 +2539,18 @@ try {
     await page.waitForFunction(() => document.querySelectorAll('#start-library-list .start-recent-row').length === 2);
     const rows = await page.locator('#start-library-list .start-recent-row').allTextContents();
     assert.ok(entries.every(entry => rows.some(text => text.includes(entry.root))));
+    const recent = page.locator('#start-library-list .start-recent-row').first();
+    const timeOnStart = recent.locator('.source-meta-time');
+    assert.ok(await timeOnStart.isVisible(), 'welcome rows use the detailed metadata layout');
+    await page.locator('#toggle-sources').click();
+    await page.locator('#library-compact').click();
+    assert.equal(await timeOnStart.isVisible(), false, 'welcome rows follow the library density');
+    await page.locator('#library-compact').click();
+    assert.equal(await timeOnStart.isVisible(), true);
+    await page.locator('#toggle-sources').click();
+    await recent.locator('.start-recent-go').click();
+    await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 1 && document.querySelector('#empty-A').hidden);
+
   });
   await check('recent history isolates disconnected library roots and migrates resolved legacy references', async page => {
     const original = listing.entries.find(entry => entry.name === 'ci_h264_smoke.mp4');

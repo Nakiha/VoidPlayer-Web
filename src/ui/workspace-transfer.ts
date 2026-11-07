@@ -9,7 +9,8 @@ import {updateMediaInfo} from '../media/state.ts';
 import type { ReviewSession } from '../session.ts';
 import type { MediaInfo } from '../../shared/media/types.ts';
 import { openMedia, openMediaFromUrl } from '../media/source.ts';
-import { parseWorkspace, readWorkspaceFile } from '../../shared/review/workspace-file.ts';
+import { LocalInputError } from './video-input.ts';
+import { parseWorkspace, readWorkspaceFile, UnrecognizedWorkspaceFile } from '../../shared/review/workspace-file.ts';
 import type { WorkspaceFile } from '../../shared/review/workspace-file.ts';
 import { mapSharedWorkspace } from '../review/shared-workspace.ts';
 import { SavedWorkspaceClient } from '../review/saved-workspaces.ts';
@@ -136,7 +137,10 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
   async function importFile(file: File, supplied: File[] = []) {
     if (importing) throw new Error(t(msg("transfer.importing", "工作区正在导入，请等待完成。")));
     const operation = saved?.beginOpen();
-    const document = await readWorkspaceFile(file, location.href);
+    const document = await readWorkspaceFile(file, location.href).catch(error => {
+      if (error instanceof UnrecognizedWorkspaceFile) throw new LocalInputError(t(msg('input.workspace', '「{name}」不是可读取的 VoidPlayer 工作区文件。请选择视频或已导出的工作区。'), {name:file.name}));
+      throw error;
+    });
     if (operation && !operation.current()) return;
     await importWorkspace(document, supplied, false, operation);
   }

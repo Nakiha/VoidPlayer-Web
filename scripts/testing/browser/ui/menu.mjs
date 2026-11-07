@@ -62,9 +62,10 @@ await withBrowserFixture({ caseName: 'menu', engine: name, pageOptions: { viewpo
   await page.setViewportSize({width:1280,height:800});
   await page.locator('#name-A').evaluate(el => { el.textContent = 'long-video-filename-'.repeat(80) + '.mp4'; });
   await page.locator('#pts-A').waitFor({state:'hidden'});
-  assert.ok(await page.locator('#name-A').evaluate(el => el.scrollWidth > el.clientWidth), 'an oversized title truncates after time hides');
+  await page.waitForFunction(() => /^long-.*….*\.mp4$/.test(document.querySelector('#name-A').dataset.display));
   await page.locator('#name-A').evaluate((el, name) => { el.textContent = name; }, originalName);
   await page.locator('#pts-A').waitFor({state:'visible'});
+  assert.equal(await page.locator('#name-A').getAttribute('data-display'), null, 'a shorter replacement restores the whole name');
   await page.locator('#pixel-size').hover(); await page.locator('#control-tooltip').waitFor({state:'visible'});
   async function toggle(id, menuId = `${id}-menu`) {
     const button = page.locator(`#${id}`), menu = page.locator(`#${menuId}`);

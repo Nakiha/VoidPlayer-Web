@@ -12,12 +12,16 @@ export function installFileDropFeedback(surface: HTMLElement) {
   bubble.innerHTML = icon('filePlus');
   const label = document.createElement('span'); bubble.append(label); overlay.append(bubble);
   surface.append(overlay);
+  let nonVideo = false;
   function text() {
-    label.textContent = t(msg('fileDrop.release', '松开以添加视频'));
+    label.textContent = nonVideo ? t(msg('fileDrop.videoOnly', '请选择视频文件')) : t(msg('fileDrop.release', '松开以添加视频'));
   }
   onLanguageChange(text, life.signal); text();
   return {
-    show(slots: Slot[]) { overlay.hidden = !slots.length; },
+    show(slots: Slot[], unsupported = false) {
+      if (nonVideo !== unsupported) { nonVideo = unsupported; text(); }
+      overlay.hidden = !slots.length && !nonVideo;
+    },
     dispose() { life.abort(); overlay.remove(); },
   };
 }

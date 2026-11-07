@@ -35,6 +35,8 @@ select { max-width: 100%; }
 .primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
 .muted { color: var(--text-secondary); font-size: var(--text-sm); }
 .filename { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; }
+middle-filename.filename { display: grid; grid-template-columns: minmax(0, 1fr); overflow: hidden; white-space: pre; }
+middle-filename[data-display]::after { grid-area: 1 / 1; justify-self: start; width: max-content; content: attr(data-display); white-space: pre; }
 .toolbar-spacer { flex: 1; }
 .topbar { display: flex; align-items: center; flex: 0 0 var(--toolbar-height); height: var(--toolbar-height); gap: var(--control-gap); padding: var(--toolbar-padding-block) var(--toolbar-padding-inline); z-index: 10; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
 .topbar::-webkit-scrollbar { display: none; }
@@ -166,11 +168,6 @@ dd { text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-n
    rows continue scrolling behind their full-bleed backplates. */
 .source-scrollbar[hidden] { display: none; }
 
-/* Square cover slot on the row's left. Fixed size in every state so image
-   arrival never shifts layout; covers render with contain, never cropped. */
-.start-recent-row .source-thumb { width: 32px; height: 32px; flex-basis: 32px; }
-/* Flex moves the whole time column to a clipped second line only when it cannot
-   fit beside a useful source label. No viewport breakpoint or truncated dates. */
 .source-section { position: sticky; top: 0; z-index: 1; margin: 0; padding: var(--space-2) var(--panel-padding-inline); font-size: var(--text-xs); font-weight: 600; color: var(--text-secondary); background: var(--surface-panel); border-top: 1px solid var(--divider); }
 .panel-empty { padding: var(--panel-padding-inline); margin: var(--panel-padding-block) 0; color: var(--text-secondary); font-size: var(--text-sm); }
 .subtracks-panel { grid-area: subtracks; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) var(--annotation-cards-height); position: relative; background: var(--surface-table); border-top: 1px solid var(--divider); }
@@ -384,11 +381,11 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .start-workspace-thumb > * { grid-area: 1 / 1; }
 .start-workspace-thumb img { width: 100%; height: 100%; min-width: 0; min-height: 0; object-fit: contain; display: block; }
 .start-workspace-thumb .icon { width: 19px; height: 19px; }
-.start-workspace-track-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); }
+.start-workspace-track-name { flex: 1; font-size: var(--text-sm); }
 .start-workspace-track > .slot { flex: none; width: 22px; height: 22px; border-radius: 5px; font-size: 12px; }
 .start-workspace-meta { color: var(--text-secondary); font-size: var(--text-sm); }
-.start-recent-row { width: 100%; display: flex; align-items: center; gap: var(--control-gap); padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
-.start-workspace-card, .start-recent-row { padding-inline-end: calc(var(--space-3) + 12px); }
+.start-recent-row { padding-inline-start: var(--space-3); cursor: pointer; }
+.start-workspace-card, #start-library-list .start-recent-row { padding-inline-end: calc(var(--space-3) + 12px); }
 .start-recent-row:nth-child(even) { background: var(--surface-stripe); }
 .start-recent-row:hover { background: var(--surface-hover); }
 .start-recent-row:hover .start-recent-go { color: var(--accent); }
@@ -857,10 +854,10 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .annotation-preview .annotation-row .mark-entry { flex:none; }
 /* Compact toolbars scroll as intact groups instead of overlapping share controls. */
 .topbar-primary-actions, .topbar-utility-actions, .view-controls { flex-shrink:0; }
-/* English property names wrap while technical values retain readable tokens. */
-.track-properties dl { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-.track-properties dt { overflow-wrap: anywhere; }
-.track-properties dd { overflow-wrap: normal; word-break: normal; }
+/* Each label/value pair shares its own line so short labels leave room for technical values. */
+.track-properties dl { display: block; }
+.track-properties dl > div { display: grid; grid-template-columns: fit-content(55%) minmax(0, 1fr); align-items: baseline; }
+.track-properties dt { overflow-wrap: break-word; }
 
 .analysis-picture-overlay { position:absolute; inset:0; width:100%; height:100%; z-index:2; pointer-events:none; }
 

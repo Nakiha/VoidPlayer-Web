@@ -1,14 +1,37 @@
 import {dropSlots} from '../../shared/review/drop-slots.ts';
 import { log } from '../logging/log.ts';
 import type { Slot } from '../../shared/review/model.ts';
-import { dropFileHandles } from '../services/file-handles.ts';
+import { dropEntryHandle } from '../services/file-handles.ts';
 import type { FsFileHandle } from '../services/file-handles.ts';
+import { LocalInputError, nonVideoMime, selectVideoInputs, type LocalItem } from './video-input.ts';
+import { t, msg } from '../i18n.ts';
+
+function droppedItems(transfer: DataTransfer): Promise<LocalItem<FsFileHandle>[]> {
+  const files = Array.from(transfer.files);
+  const items = Array.from(transfer.items ?? []).filter(item => item.kind === 'file');
+  if (!items.length) return Promise.resolve(files.map(file => ({file})));
+  return Promise.all(items.map(async (item, index): Promise<LocalItem<FsFileHandle> | null> => {
+    let entry: FileSystemEntry | null | undefined;
+    try { entry = item.webkitGetAsEntry?.(); } catch { /* Some browsers expose handles only. */ }
+    if (entry?.isDirectory) return {directory:entry.name};
+    let file: File | null | undefined;
+    try { file = item.getAsFile?.(); } catch { /* Use the drop-time FileList or handle. */ }
+    file ??= items.length === files.length ? files[index] : undefined;
+    const handle = await dropEntryHandle(item);
+    if (handle?.kind === 'directory') return {directory:handle.name};
+    if (file) return {file, handle:handle ?? undefined};
+    if (handle?.kind === 'file') {
+      try { return {file:await handle.getFile(), handle}; } catch { return {unreadable:handle.name}; }
+    }
+    return null;
+  })).then(results => results.filter(item => item !== null));
+}
 
 /** Keep File access inside the drop event, before the browser protects it again. */
 export function bindFileDrop(root: EventTarget, options: {
   document?: { accepts(files: File[]): boolean; load(files: File[]): Promise<void> };
   loaded(): Slot[];
-  hover(slots: Slot[]): void;
+  hover(slots: Slot[], nonVideo?: boolean): void;
   load(files: File[], slots: Slot[], handles?: (FsFileHandle | undefined)[]): Promise<void>;
   error(error: unknown): void;
 }) {
@@ -19,7 +42,9 @@ export function bindFileDrop(root: EventTarget, options: {
     if (!isFile(event)) return;
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
-    const count = Array.from(event.dataTransfer?.items ?? []).filter(item => item.kind === 'file').length;
+    const items = Array.from(event.dataTransfer?.items ?? []).filter(item => item.kind === 'file');
+    const count = items.filter(item => !nonVideoMime(item.type ?? '')).length;
+    if (items.length && !count) { options.hover([], true); return; }
     let slots: Slot[] = [];
     try { slots = dropSlots(Math.max(1, count), options.loaded()); } catch { /* Refused drops have no target preview. */ }
     options.hover(slots);
@@ -30,24 +55,26 @@ export function bindFileDrop(root: EventTarget, options: {
     if (!isFile(event)) return;
     event.preventDefault();
     clear();
-    const files = Array.from(event.dataTransfer?.files ?? []);
-    log.info('ui', '接收文件拖入', { files });
-    try {
-      if (options.document?.accepts(files)) { void options.document.load(files).catch(options.error); return; }
-      dropSlots(files.length, options.loaded());
-      const items = Array.from(event.dataTransfer?.items ?? []);
-      void (async () => {
-        // Handles must be captured inside the drop event; misalignment or any
-        // failure simply means this drop will not be silently restorable.
-        let handles: (FsFileHandle | undefined)[] | undefined;
-        try {
-          const captured = await dropFileHandles(items);
-          if (captured.length === files.length) handles = captured;
-        } catch { handles = undefined; }
-        // Other actions may have filled a track while handles were captured.
-        await options.load(files, dropSlots(files.length, options.loaded()), handles);
-      })().catch(options.error);
-    } catch (error) { options.error(error); }
+    void (async () => {
+      const items = await droppedItems(event.dataTransfer!);
+      if (!items.length) throw new LocalInputError(t(msg('input.emptyDrop', '未收到可打开的文件。请直接拖入视频文件。')));
+      const documents: File[] = [];
+      const videos = items.filter(item => {
+        if ('file' in item && options.document?.accepts([item.file])) { documents.push(item.file); return false; }
+        return true;
+      });
+      const accepted = await selectVideoInputs(videos, options.error);
+      const files = accepted.map(item => item.file);
+      log.info('ui', '接收文件拖入', { files, documents });
+      if (documents.length && options.document) {
+        try { await options.document.load([...documents, ...files]); return; }
+        catch (error) {
+          if (!(error instanceof LocalInputError)) throw error;
+          options.error(error);
+        }
+      }
+      if (files.length) await options.load(files, dropSlots(files.length, options.loaded()), accepted.map(item => item.handle));
+    })().catch(options.error);
   };
   const handlers = { dragenter: enter, dragover: over, dragleave: leave, drop, dragend: clear };
   for (const [name, handler] of Object.entries(handlers)) root.addEventListener(name, handler as EventListener);

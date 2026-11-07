@@ -10,7 +10,7 @@ export function installChartNavigation(options: {
   canvas.addEventListener('wheel', event => {
     if (!enabled()) return;
     // A stack scrolls vertically; horizontal wheel (or Shift+wheel) pans time.
-    const stack = canvas.closest<HTMLElement>('.analysis-charts.multiple');
+    const stack = canvas.closest<HTMLElement>('.analysis-charts');
     if (!event.ctrlKey && !event.shiftKey && Math.abs(event.deltaY) > Math.abs(event.deltaX) && stack && stack.scrollHeight > stack.clientHeight) return;
     event.preventDefault();
     event.stopPropagation();
