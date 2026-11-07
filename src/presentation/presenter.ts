@@ -1,5 +1,5 @@
 import type { SessionResources } from '../session/resources.ts';
-import { gpuPaint, gpuCapture, gpuGeometry, gpuFallbackGeometry, disposeGpuPresentation, observeGpuRecovery } from './webgpu-presenter.ts';
+import { gpuPaint, gpuCapture, gpuGeometry, gpuRedrawChannel, gpuFallbackGeometry, disposeGpuPresentation, observeGpuRecovery } from './webgpu-presenter.ts';
 import { retainPresentationFrame } from './retained-frame.ts';
 import { yuvToRgba, yuvPixelRgb, resolveYuvColor } from '../../shared/color/yuv-color.ts';
 import { getPresentationChannel } from './presentation-channel.ts';
@@ -149,6 +149,22 @@ function createFallbackSurface(canvas: HTMLCanvasElement) {
   }
   if (surface) surfaces.set(canvas, surface);
   return surface;
+}
+/** Change only presentation: preserve decoded-frame identity and existing GPU uploads. */
+export function redrawPresentationChannel() {
+  const failures: unknown[] = [];
+  for (const [canvas, frame] of retainedFrames) {
+    if (frame.kind !== 'yuv' || !currentGeometry.get(canvas)) continue;
+    try {
+      if (!gpuRedrawChannel(canvas) && !surfaces.get(canvas)?.redrawChannel()) {
+        // CPU-only output, or a lost GPU surface, still uses our retained original planes.
+        paintFrameNow(canvas, frame, true);
+        recoveryObservers.get(canvas)?.(frame);
+      }
+      canvas.dataset.channel = getPresentationChannel();
+    } catch (error) { failures.push(error); }
+  }
+  if (failures.length) throw new AggregateError(failures, '通道画面重绘失败。');
 }
 function recoverFrame(canvas: HTMLCanvasElement, replaceSurface = false) {
   const frame = retainedFrames.get(canvas);

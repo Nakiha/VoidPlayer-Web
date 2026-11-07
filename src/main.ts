@@ -68,7 +68,7 @@ import type { FsFileHandle } from './services/file-handles.ts';
 import { exportLog, getLogSessions, log, operationContext, readLogs, traceOperation, withLogContext } from './logging/log.ts';
 import { startBrowserLogging } from './logging/storage.ts';
 import { installLogPanel } from './ui/logging/panel.ts';
-import { paintFrame, captureFrame, disposePresentation, bindPresentationResources } from './presentation/presenter.ts';
+import { paintFrame, captureFrame, disposePresentation, bindPresentationResources, redrawPresentationChannel } from './presentation/presenter.ts';
 import { setPresentationChannel } from './presentation/presentation-channel.ts';
 import { Viewport, ZOOM_PRESETS, ZOOM_MIN, ZOOM_MAX } from '../shared/presentation/viewport.ts';
 import type { ChannelMode, PixelSizeMode, ViewportSnapshot } from '../shared/presentation/viewport.ts';
@@ -266,10 +266,7 @@ const channelMenu = installChoiceMenu('channel-select', () => (Object.keys(chann
   viewport.setChannel(value as ChannelMode); setPresentationChannel(viewport.channel);
   log.info('ui', '切换 YUV 通道', { channel: viewport.channel, trigger: inputTrigger });
   channelMenu.sync(viewport.channel, channelLabels()[viewport.channel], true);
-  // Playback frames pick up the new channel on their next paint; only a
-  // paused view needs an explicit re-decode of the current position.
-  const state = session.getState();
-  if (state.tracks.length && !state.playing && !state.busy) void act(() => session.seek(state.positionUs), 'channel.seek', { channel: viewport.channel });
+  void act(redrawPresentationChannel, 'channel.redraw', { channel: viewport.channel });
 },'appearance', undefined, undefined, () => {
   if (session.getState().colorMode === 'reference') return true;
   toasts.show(() => tr(msg("player.switchToManagedColorInColorDecoding", "请先在“色彩与解码”中切换为“自有色彩”，再选择 YUV 通道。")), {
@@ -642,14 +639,14 @@ const api = {
     const before = viewport.channel;
     viewport.apply(patch);
     // UI 与 Agent 共用同一 viewport 行为：通道是纯视图状态，切换后同步上屏层；
-    // 暂停时重解当前帧，播放中后续帧自动生效，不打断播放。
+    // 直接复用已上屏帧与 GPU 平面，不重新定位或解码，也不打断播放。
     if (viewport.channel !== before) {
       setPresentationChannel(viewport.channel);
+      redrawPresentationChannel();
       log.info('ui', '切换 YUV 通道', { channel: viewport.channel, trigger: 'api' });
     }
     render();
-    const state = session.getState();
-    if (viewport.channel !== before && state.tracks.length && !state.playing && !state.busy) await session.seek(state.positionUs);
+
   }),
   tools: reviewTools(session, workspaceTransfer),
   subscribePresentedFrames: (listener: Parameters<ReviewSession['subscribePresentedFrames']>[0]) => session.subscribePresentedFrames(listener),

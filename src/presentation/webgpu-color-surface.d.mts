@@ -12,6 +12,7 @@ export interface GpuSurface {
   errors: string[];
   setGeometry(geometry: PresentationGeometry | null, rotation?: number): void;
   present(frame: VideoFrame | DecodedFrame, width?: number, height?: number): void;
+  redrawChannel(): boolean;
   captureSource(target: HTMLCanvasElement): HTMLCanvasElement;
   capture(viewport?: boolean): Promise<Uint8ClampedArray>;
   captureHdrPixels(): Promise<Float32Array>;

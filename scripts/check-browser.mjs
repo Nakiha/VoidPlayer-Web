@@ -712,6 +712,44 @@ try {
     await channel.click();
     assert.equal(await page.locator('#channel-select-menu').evaluate(menu => menu.matches(':popover-open')), true);
     assert.equal(await page.locator('#channel-select-menu [data-value=y]').count(), 1);
+    await page.waitForFunction(() => !window.voidPlayer.getState().busy);
+    const original = await page.evaluate(() => {
+      const api = window.voidPlayer, state = api.getState();
+      window.channelActivity = { busy: false, presented: 0 };
+      window.stopChannelState = api.subscribeState(() => { window.channelActivity.busy ||= api.getState().busy; });
+      window.stopChannelFrames = api.subscribePresentedFrames(() => { window.channelActivity.presented++; });
+      return { positionUs: state.positionUs, frames: state.tracks.map(track => track.frame) };
+    });
+    await page.locator('#channel-select-menu [data-value=y]').click();
+    const channelResult = await page.evaluate(async () => {
+      const api = window.voidPlayer;
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const y = api.captureFrame('A'), pixels = y.getContext('2d').getImageData(0, 0, y.width, y.height).data;
+      const gray = pixels.every((value, i) => i % 4 === 3 || value === pixels[i - i % 4]);
+      for (const channel of ['u', 'v', 'rgb']) await api.setViewport({ channel });
+      window.stopChannelState(); window.stopChannelFrames();
+      const state = api.getState();
+      return { ...window.channelActivity, gray, positionUs: state.positionUs, frames: state.tracks.map(track => track.frame) };
+    });
+    assert.equal(channelResult.busy, false, 'channel switches never enter a seek/decode operation');
+    assert.equal(channelResult.presented, 0, 'channel redraw does not publish a newly decoded frame');
+    assert.equal(channelResult.gray, true, 'the retained frame immediately displays the selected channel');
+    assert.equal(channelResult.positionUs, original.positionUs);
+    assert.deepEqual(channelResult.frames, original.frames);
+    await page.evaluate(() => window.voidPlayer.play());
+    await page.waitForFunction(() => window.voidPlayer.getState().positionUs > 0);
+    const playingResult = await page.evaluate(async () => {
+      const api = window.voidPlayer, positionUs = api.getState().positionUs;
+      let interrupted = false;
+      const stop = api.subscribeState(() => { const state = api.getState(); interrupted ||= state.busy || !state.playing; });
+      for (const channel of ['y', 'u', 'v', 'rgb']) await api.setViewport({ channel });
+      stop();
+      return { interrupted, positionUs, playing: api.getState().playing };
+    });
+    assert.equal(playingResult.interrupted, false, 'channel switching preserves the running playback queue');
+    assert.equal(playingResult.playing, true);
+    await page.waitForFunction(positionUs => window.voidPlayer.getState().positionUs > positionUs, playingResult.positionUs);
+    await page.evaluate(() => window.voidPlayer.pause());
   });
 
   await check('topbar keeps every control visible across viewport widths', async page => {

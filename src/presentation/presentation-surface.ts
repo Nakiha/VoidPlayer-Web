@@ -100,6 +100,12 @@ export function createPresentationSurface(source: HTMLCanvasElement, onLost?: ()
       if(!yuv.upload(d,pixels)){useGl=false;canvas.hidden=true;source.classList.remove('frame-source');return false;}
       activeYuv=true;yuvRotation=rotation;sourceReady=false;draw();return true;
     },
+    redrawChannel() {
+      if (!activeYuv || !gl || !useGl || gl.isContextLost()) return false;
+      sourceReady = false;
+      draw();
+      return true;
+    },
     get directUpload() { return useGl && !!gl && !gl.isContextLost(); },
     captureSource() {
       if (!gl || !useGl || gl.isContextLost() || sourceReady) return source;

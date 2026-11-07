@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 const browser=await chromium.launch({headless:true,...(process.env.CHROME_EXECUTABLE_PATH?{executablePath:process.env.CHROME_EXECUTABLE_PATH}:{}),args:['--enable-unsafe-webgpu','--use-angle=swiftshader','--enable-features=Vulkan','--use-vulkan=swiftshader']});
 try {
-  const page=await browser.newPage({locale:'zh-CN'});page.on('console',m=>console.error(m.text()));page.on('pageerror',e=>console.error(e));await page.goto(process.env.BASE_URL??'http://127.0.0.1:5199');
+  const page=await browser.newPage({locale:'zh-CN'});page.on('console',m=>console.error(m.text()));page.on('pageerror',e=>console.error(e));
+  await page.route('**/visible-chroma-test',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><title>YUV presentation test</title>'}));
+  await page.goto(new URL('/visible-chroma-test',process.env.BASE_URL??'http://127.0.0.1:5199').href);
   const result=await page.evaluate(async()=>{
     const {yuvFixture}=await import('/test/helpers/yuv-fixture.ts');
     const {yuvToRgba}=await import('/shared/color/yuv-color.ts');
@@ -29,6 +31,27 @@ try {
         if(gpuPixels.some((v,i)=>Math.abs(v-expected[i])>1))throw new Error(`WebGPU mismatch ${depth}/${semi}/${siting}/${channel}: ${gpuPixels} != ${expected}`);
         cases++;
       }
+      // Switching among already-uploaded planes only writes small uniform buffers.
+      const f=yuvFixture(10,true,false,'bt709',128,72),original=f.pixels.slice();
+      gpu.present({kind:'yuv',description:f.description,pixels:f.pixels},128,72);
+      f.pixels.fill(0);
+      let uploads=0;
+      const write=gpu.device.queue.writeBuffer.bind(gpu.device.queue);
+      gpu.device.queue.writeBuffer=(buffer,offset,data,...args)=>{if(data.byteLength>192)uploads++;return write(buffer,offset,data,...args);};
+      try {
+        for(const channel of ['y','u','v','rgb']){
+          setPresentationChannel(channel);
+          if(!gpu.redrawChannel())throw Error('Uploaded YUV frame could not be redrawn');
+          await Promise.resolve();await gpu.device.queue.onSubmittedWorkDone();
+          const displayed=new OffscreenCanvas(128,72),ctx=displayed.getContext('2d');
+          ctx.drawImage(gpuCanvas,0,0);
+          const actual=ctx.getImageData(0,0,128,72).data,expected=yuvToRgba(f.description,original,channel);
+          if(actual.some((value,i)=>Math.abs(value-expected[i])>1))throw Error(`Retained WebGPU viewport mismatch: ${channel}`);
+          const captured=await gpu.capture();
+          if(captured.some((value,i)=>Math.abs(value-expected[i])>1))throw Error(`Retained WebGPU capture mismatch: ${channel}`);
+        }
+        if(uploads)throw Error('Channel redraw uploaded pixel planes again');
+      }finally{gpu.device.queue.writeBuffer=write;}
       if(gpu.errors.length)throw new Error(gpu.errors.join('; '));
       return {cases,webgl:'exact CPU match',webgpu:'CPU match within one RGB code'};
     }finally{surface.dispose();gpu.dispose();setPresentationChannel('rgb');}

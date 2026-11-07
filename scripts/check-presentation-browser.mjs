@@ -183,6 +183,34 @@ try {
       results.push({sharedOwnership:true,max:Math.max(...sharedActual.map((v,i)=>Math.abs(v-sharedReference[i])))});
       disposePresentation();
       if(recycled!==1)throw Error('Displayed shared pixels were not released');
+      const {setPresentationChannel}=await import('/src/presentation/presentation-channel.ts');
+      const {redrawPresentationChannel}=await import('/src/presentation/presenter.ts');
+      const getContext=HTMLCanvasElement.prototype.getContext;
+      for(const cpuOnly of [false,true]) {
+        if(cpuOnly)HTMLCanvasElement.prototype.getContext=function(type,...args){return type==='webgl'?null:getContext.call(this,type,...args);};
+        try {
+          const f=yuvFixture(10,true),original=f.pixels.slice();
+          const frame={kind:'yuv',description:f.description,pixels:f.pixels,width:5,height:3};
+          setPresentationGeometry(source,{width:100,height:60,imageWidth:100,imageHeight:60,zoom:1,offsetX:0,offsetY:0,dpr:1});
+          paintFrame(source,frame);
+          const commit=frame.presentedCommit;
+          const read=()=>captureFrame(source).getContext('2d').getImageData(0,0,5,3).data;
+          read(); // Prime source capture too: a channel redraw must invalidate its cached RGB pixels.
+          f.pixels.fill(0);
+          let uploads=0;
+          const gl=cpuOnly?null:document.querySelector('.frame-presentation').getContext('webgl');
+          if(gl)for(const method of ['texImage2D','texSubImage2D']){
+            const original=gl[method].bind(gl);gl[method]=(...args)=>{uploads++;return original(...args);};
+          }
+          for(const channel of ['y','u','v','rgb']) {
+            setPresentationChannel(channel);redrawPresentationChannel();
+            const actual=read(),expected=yuvToRgba(f.description,original,channel);
+            results.push({channel,cpuOnly,max:Math.max(...actual.map((v,i)=>Math.abs(v-expected[i])))});
+            if(frame.presentedCommit!==commit)throw Error('Channel redraw changed the decoded-frame commit');
+          }
+          if(uploads)throw Error('Channel redraw uploaded pixel planes again');
+        } finally {disposePresentation();setPresentationChannel('rgb');HTMLCanvasElement.prototype.getContext=getContext;}
+      }
       const loss=yuvFixture();
       const lossFrame={kind:'yuv',description:loss.description,pixels:loss.pixels,width:5,height:3};
       setPresentationGeometry(source,{width:100,height:60,imageWidth:100,imageHeight:60,zoom:1,offsetX:0,offsetY:0,dpr:1});paintFrame(source,lossFrame);

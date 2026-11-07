@@ -176,6 +176,22 @@ export function gpuGeometry(source:HTMLCanvasElement,g:PresentationGeometry|null
     return false;
   }
 }
+/** Reuse the uploaded planes; changing a channel never needs a new decoded frame. */
+export function gpuRedrawChannel(source: HTMLCanvasElement): boolean {
+  const entry = entries.get(source);
+  if (!entry || entry.disabled || !entry.geometry) return false;
+  try {
+    if (!entry.surface.available) throw new Error('WebGPU resource unavailable');
+    return entry.surface.redrawChannel();
+  } catch (error) {
+    entry.disabled = true;
+    entry.canvas.hidden = true;
+    source.classList.remove('frame-source');
+    source.dataset.colorOutputReason = 'webgpu-presentation-failed';
+    log.warn('media', 'WebGPU 通道重绘失败，使用兼容路径。', { reason: String(error) });
+    return false;
+  }
+}
 const timings=new WeakMap<HTMLCanvasElement,{values:number[];count:number}>();
 export function gpuPaint(source:HTMLCanvasElement,frame:DecodedFrame){
   const start=performance.now();
