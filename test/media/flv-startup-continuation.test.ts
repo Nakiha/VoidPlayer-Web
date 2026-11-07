@@ -23,10 +23,9 @@ async function bounded<T>(promise: Promise<T>, label: string): Promise<T> {
   finally { clearTimeout(timer!); }
 }
 
-// Same 120-packet, nonzero-origin fixture as discovery's player isolation case.
-// The committed raw oracle contains the two alternating decoded source pictures.
-const samples = JSON.parse(await readFile(new URL('../helpers/quality-http-samples.json', import.meta.url), 'utf8'));
-const sample = samples.samples.find((s: { codec: string; depth: number; tagged: boolean }) => s.codec === 'h264' && s.depth === 8 && s.tagged);
+// Repeat two committed key pictures into 120 packets with a nonzero origin.
+// The native FFmpeg oracle is independent of the playback decoder under test.
+const sample = JSON.parse(await readFile(new URL('../helpers/flv-startup-sample.json', import.meta.url), 'utf8')).sample;
 const original = Buffer.from(sample.flv, 'base64');
 const index = (await scanFlv({ size: original.length, read: async (at, n) => original.subarray(at, at + n) })).index;
 const pictures = index.packets.map(p => original.subarray(p.offset, p.offset + p.size));

@@ -88,6 +88,10 @@ test('media endpoint serves full, ranged and suffix requests with correct semant
 
       const write = await fetch(`${base}/api/media/${id}`, { method: 'POST' });
       assert.equal(write.status, 405);
+      assert.equal(write.headers.get('allow'), 'GET, HEAD');
+      const libraryWrite = await fetch(`${base}/api/library`, { method: 'POST' });
+      assert.equal(libraryWrite.status, 405);
+      assert.equal(libraryWrite.headers.get('allow'), 'GET, HEAD');
     });
   });
 });

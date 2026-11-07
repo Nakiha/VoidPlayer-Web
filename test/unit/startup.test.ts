@@ -6,11 +6,23 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-async function freePort() {
-  const listener = createServer();
-  await new Promise<void>(resolve => listener.listen(0, '127.0.0.1', resolve));
-  const port = (listener.address() as import('node:net').AddressInfo).port;
-  await new Promise<void>(resolve => listener.close(() => resolve())); return port;
+async function freePorts(count: number) {
+  const listeners: ReturnType<typeof createServer>[] = [];
+  try {
+    // Keep earlier reservations open so the OS cannot hand out the same port twice.
+    const ports: number[] = [];
+    for (let i = 0; i < count; i++) {
+      const listener = createServer(); listeners.push(listener);
+      await new Promise<void>((resolve, reject) => {
+        listener.once('error', reject);
+        listener.listen(0, '127.0.0.1', resolve);
+      });
+      ports.push((listener.address() as import('node:net').AddressInfo).port);
+    }
+    return ports;
+  } finally {
+    await Promise.all(listeners.map(listener => new Promise<void>(resolve => listener.close(() => resolve()))));
+  }
 }
 async function until(check: () => Promise<boolean>, failure: () => string) {
   const end = Date.now() + 12000;
@@ -20,7 +32,8 @@ async function until(check: () => Promise<boolean>, failure: () => string) {
 
 test('one dev process starts both listeners, proxies API and closes both on SIGTERM', async () => {
   const folder = await mkdtemp(path.join(os.tmpdir(), 'vp-start-'));
-  const apiPort = await freePort(), port = await freePort();
+  const [apiPort, port] = await freePorts(2);
+  assert.notEqual(apiPort, port);
   let output = '';
   const child = spawn(process.execPath, ['scripts/dev.ts', '--folder', folder, '--data-dir', path.join(folder, 'data'), '--port', String(port), '--api-port', String(apiPort), '--no-logs'], { stdio: ['ignore', 'pipe', 'pipe'] });
   child.stdout.on('data', chunk => { output += chunk; }); child.stderr.on('data', chunk => { output += chunk; });
@@ -56,7 +69,7 @@ async function fsCleanup(folder: string) { await rm(folder, { recursive: true, f
 
 test('production start serves the built page and API from one listener; missing build fails', async () => {
   const folder = await mkdtemp(path.join(os.tmpdir(), 'vp-prod-'));
-  const port = await freePort(); let output = '';
+  const [port] = await freePorts(1); let output = '';
   await mkdir(path.join(folder, 'web')); await writeFile(path.join(folder, 'web/index.html'), '<title>Release</title>');
   const child = spawn(process.execPath, ['server/main.ts', '--folder', folder, '--data-dir', path.join(folder, 'data'), '--static', path.join(folder, 'web'), '--port', String(port), '--no-logs'], { stdio: ['ignore', 'pipe', 'pipe'] });
   child.stdout.on('data', chunk => { output += chunk; }); child.stderr.on('data', chunk => { output += chunk; });

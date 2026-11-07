@@ -2,6 +2,13 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { selectDiagrams, inspectCurrentWindow } from '../controls.mjs';
 
+async function waitForTrackNumbers(page) {
+  // Frame ranks are loaded asynchronously from the index, independently of AU decode order.
+  await page.waitForFunction(() => {
+    const times = [...document.querySelectorAll('.analysis-linked-card .analysis-card-track-time')];
+    return times.length === 2 && times.every(time => /^\d{2}:\d{2}\.\d{3} #\d+ PTS$/.test(time.textContent));
+  });
+}
 
 export async function run(context) {
 const { page, artifact, call, stable, library } = context;
@@ -78,10 +85,11 @@ const { page, artifact, call, stable, library } = context;
 
       assert.equal(await page.locator('.analysis-linked-card > .fl-time').count(),0,'combined card has no shared pointer timestamp');
 
+      await waitForTrackNumbers(page);
       for (const slot of ['A','B']) {
         const owned=page.locator(`.analysis-linked-card .analysis-track-details[data-slot="${slot}"]`);
         const time=owned.locator('.analysis-card-track-time');
-        assert.match(await time.innerText(),/^\d{2}:\d{2}\.\d{3} · PTS$/,'each track heading carries its matched frame timestamp');
+        assert.match(await time.innerText(),/^\d{2}:\d{2}\.\d{3} #\d+ PTS$/,'each track heading carries its matched frame timestamp and ordinal');
         const hitTime=+(await time.getAttribute('data-hit-time'));
         const trackTime=+(await page.locator(`.bitstream-diagrams[data-slot="${slot}"][data-diagram="references"] canvas`).getAttribute('data-hover-time'));
         assert.equal(hitTime,trackTime,'heading time follows the track match, not the pointer');
@@ -100,7 +108,10 @@ const { page, artifact, call, stable, library } = context;
 
       await target.press('ArrowRight');
 
-      for (const slot of ['A','B']) assert.match(await page.locator(`.analysis-linked-card .analysis-track-details[data-slot="${slot}"] .analysis-card-track-time`).innerText(),/^\d{2}:\d{2}\.\d{3} · PTS$/,'deep-only panels resolve timestamps without the overview query');
+      await waitForTrackNumbers(page);
+      for (const slot of ['A','B']) {
+        assert.match(await page.locator(`.analysis-linked-card .analysis-track-details[data-slot="${slot}"] .analysis-card-track-time`).innerText(),/^\d{2}:\d{2}\.\d{3} #\d+ PTS$/,'deep-only panels resolve timestamps and ordinals without the overview query');
+      }
 
       const legendA=page.locator('.bitstream-diagrams[data-slot="A"][data-diagram="nalu-size"] [data-nalu-type="1"]');
 

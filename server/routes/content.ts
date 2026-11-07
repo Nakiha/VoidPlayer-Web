@@ -139,14 +139,18 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
     return true;
   }
   if (url.pathname === '/api/library') {
-    if (req.method !== 'GET' && req.method !== 'HEAD') return false;
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      res.setHeader('allow', 'GET, HEAD'); sendJson(res, 405, { error: 'read only' }); return true;
+    }
     const listing = await library.list(url.searchParams.get('refresh') === '1');
     sendJson(res, 200, listing);
     return true;
   }
   const mediaMatch = /^\/api\/media\/([0-9a-f]{24})$/.exec(url.pathname);
   if (mediaMatch) {
-    if (req.method !== 'GET' && req.method !== 'HEAD') return false;
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      res.setHeader('allow', 'GET, HEAD'); sendJson(res, 405, { error: 'read only' }); return true;
+    }
     const requestedVersion = url.searchParams.get('v') ?? undefined;
     const metadata = library.metadata(mediaMatch[1]);
     if (requestedVersion && metadata && requestedVersion !== metadata.version) { sendJson(res, 409, { error: '媒体内容已改变，请重新载入。' }); return true; }
