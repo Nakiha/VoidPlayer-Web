@@ -639,20 +639,20 @@ try {
   await page.screenshot({ path: `/tmp/voidplayer-admin-overview-light-${browserName}.png` });
   const headingBeforeToast=await page.locator('#pane-overview .admin-heading').evaluate(el => el.offsetTop);
   await page.route('**/api/admin/status?view=overview', route => route.fulfill({ status: 503, json: { error: '服务暂不可用，请重试' } }));
-  await page.locator('#refresh-status').click();
+  await page.waitForResponse('**/api/admin/status?view=overview');
   await page.locator('.admin-toast-stack .toast-error').filter({ hasText: '服务暂不可用' }).waitFor();
   assert.equal(await page.locator('#admin-message').count(),0,'global notices no longer occupy an in-page message panel');
   assert.equal(await page.locator('.admin-toast-stack').evaluate(el => el.matches(':popover-open')),true,'admin uses the shared top-layer toast');
   assert.equal(await page.locator('#pane-overview .admin-heading').evaluate(el => el.offsetTop),headingBeforeToast,'errors do not shift page content');
-  await page.locator('#refresh-status').click();
+  await page.waitForResponse('**/api/admin/status?view=overview');
   assert.equal(await page.locator('.admin-toast-stack .toast-error').count(),1,'repeated polling errors do not accumulate identical toasts');
   await page.screenshot({ path: `/tmp/voidplayer-admin-status-error-${browserName}.png` });
   await page.locator('.admin-toast-stack .toast-close').click();
   await page.locator('.admin-toast-stack .toast').waitFor({state:'hidden'});
-  await page.locator('#refresh-status').click();
+  await page.waitForResponse('**/api/admin/status?view=overview');
   await page.locator('.admin-toast-stack .toast-error').waitFor();
   await page.unroute('**/api/admin/status?view=overview');
-  await page.locator('#refresh-status').click();
+  await page.waitForResponse('**/api/admin/status?view=overview');
   await page.locator('.admin-toast-stack .toast').waitFor({ state: 'hidden' });
   await page.getByRole('button', { name: '媒体库', exact: true }).click();
   await page.getByLabel('目录名称').first().waitFor();
@@ -745,7 +745,9 @@ try {
   assert.equal(await page.getByLabel('目录名称').first().inputValue(), '本机拍摄素材');
 
   // Polling is intentionally observed while editing: it must preserve the input node.
-  await page.locator('#refresh-status').evaluate(button => button.click());
+  const scanWhileEditing = page.waitForResponse('**/api/admin/scan?offset=*');
+  await page.locator('[data-pane=library]').click();
+  await scanWhileEditing;
   await page.waitForFunction(() => document.querySelector('[data-field=name]')?.value === '本机拍摄素材');
   await page.getByRole('button', { name: '添加目录', exact: true }).click();
   assert.equal(await page.locator('#add-root').isDisabled(),true,'only one unsaved new library can be edited');

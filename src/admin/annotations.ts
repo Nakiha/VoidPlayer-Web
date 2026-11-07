@@ -16,8 +16,25 @@ export function installAnnotationAdmin(signal: AbortSignal, notice: (message: Lo
  const $=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(`admin-annotation${id}`) as T;
  const spaceNames=new Map<string,string>();
  const client=new AnnotationClient(signal);let space='default',deleted=false,search='',next:number|null=null,selected:AnnotationRecord|null=null,busy=false;
+ let renderedList='';
+ const panel=document.getElementById('pane-annotations')!;
+ panel.addEventListener('click',event=>{
+  if(!busy)return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+ },{capture:true,signal});
  const choice=installChoiceMenu('admin-annotation-space',[],value=>{if(busy)return;space=value;choice.sync(space,spaceNames.get(space)??space,true);void act(()=>load());});
- async function act(run:()=>Promise<void>){if(busy)return;busy=true;for(const b of document.querySelectorAll<HTMLButtonElement>('#pane-annotations button'))b.disabled=true;try{await run();notice(() => '');}catch(error){notice(() => requestError(error));}finally{busy=false;for(const b of document.querySelectorAll<HTMLButtonElement>('#pane-annotations button'))b.disabled=false;}}
+ function controls(){
+  for(const button of panel.querySelectorAll('button'))button.setAttribute('aria-disabled',String(busy));
+  $('-list').setAttribute('aria-busy',String(busy));
+ }
+ async function act(run:()=>Promise<void>){
+  if(busy)return;
+  busy=true;controls();
+  try{await run();notice(() => '');}
+  catch(error){notice(() => requestError(error));}
+  finally{busy=false;controls();}
+ }
  function select(record:AnnotationRecord|null){
   selected=record;
   for(const row of $('-list').querySelectorAll<HTMLElement>('[data-annotation-id]')){
@@ -37,6 +54,9 @@ export function installAnnotationAdmin(signal: AbortSignal, notice: (message: Lo
  async function load(more=false){
   const page=await client.request<Page>(`/api/annotations/spaces/${space}?list=1&deleted=${Number(deleted)}&search=${encodeURIComponent(search)}${more&&next?`&before=${next}`:''}`);
   next=page.next;$('s-next').hidden=!next;localizedText($('-count'), () => t(msg("admin.itemsCount", "{n, plural, other {# 条}}"), { n: page.count }));
+  const snapshot=JSON.stringify([space,deleted,search,page]);
+  if(!more&&renderedList===snapshot)return;
+  renderedList=more?'':snapshot;
   if(!more){$('-list').replaceChildren();select(null);}
   const offset=$('-list').querySelectorAll('.admin-annotation-row').length;
   for(const [index,record] of page.entries.entries()){

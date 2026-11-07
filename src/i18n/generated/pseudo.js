@@ -195,7 +195,6 @@ export default {
   "admin.refreshCaches": () => "［R~e~f~r~e~s~h~ c~a~c~h~e~s~ ········］",
   "admin.refreshLogs": () => "［R~e~f~r~e~s~h~ l~o~g~s~ ········］",
   "admin.refreshMarks": () => "［R~e~f~r~e~s~h~ m~a~r~k~s~ ········］",
-  "admin.refreshStatus": () => "［R~e~f~r~e~s~h~ s~t~a~t~u~s~ ········］",
   "admin.refreshWorkspaces": () => "［R~e~f~r~e~s~h~ w~o~r~k~s~p~a~c~e~s~ ········］",
   "admin.removeDir": () => "［R~e~m~o~v~e~ d~i~r~e~c~t~o~r~y~ ········］",
   "admin.removeDirTitle": () => "［R~e~m~o~v~e~ f~r~o~m~ t~h~e~ l~i~b~r~a~r~y~, k~e~e~p~ f~i~l~e~s~ ········］",

@@ -195,7 +195,6 @@ export default {
   "admin.refreshCaches": () => "刷新缓存",
   "admin.refreshLogs": () => "刷新日志",
   "admin.refreshMarks": () => "刷新标注",
-  "admin.refreshStatus": () => "刷新状态",
   "admin.refreshWorkspaces": () => "刷新工作区",
   "admin.removeDir": () => "移除目录",
   "admin.removeDirTitle": () => "移出媒体库，不删除文件",

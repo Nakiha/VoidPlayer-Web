@@ -849,10 +849,6 @@
     "source": "刷新标注",
     "params": {}
   },
-  "admin.refreshStatus": {
-    "source": "刷新状态",
-    "params": {}
-  },
   "admin.refreshWorkspaces": {
     "source": "刷新工作区",
     "params": {}

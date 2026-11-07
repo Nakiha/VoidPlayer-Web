@@ -331,7 +331,7 @@ $('roots-form').onsubmit = event => { event.preventDefault(); if (!rootConfig?.w
 };
 $('errors-prev').onclick = () => { errorsOffset = Math.max(0, errorsOffset - 100); void act(loadScan); };
 $('errors-next').onclick = () => { errorsOffset += 100; void act(loadScan); };
-$('refresh-status').onclick = () => void poll(true); $('refresh-logs').onclick = () => void act(logsMode === 'uploads' ? loadLogs : () => poll(true));
+$('refresh-logs').onclick = () => void act(logsMode === 'uploads' ? loadLogs : () => poll(true));
 $('more-logs').onclick = () => { if (nextLog) { logCursor = nextLog; clearLog(); void act(loadLogs); } };
 $('first-logs').onclick = () => { logCursor = ''; clearLog(); void act(loadLogs); };
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-log-mode]')) button.onclick = () => {

@@ -25,14 +25,21 @@ export function installCaches(signal: AbortSignal, notice: (text: LocalizedValue
   const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(`cache-${id}`) as T;
   let kind: CacheKind = 'frame-indexes', overview: Overview | null = null, next: number | null = null, search = '', busy = false;
   let selected: CacheEntry | 'all' | null = null;
+  let renderedList = '';
+  const panel = document.getElementById('pane-caches')!;
+  panel.addEventListener('click', event => {
+    if (!busy) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, { capture: true, signal });
   const label = () => kind === 'frame-indexes' ? t(msg("admin.kindFrameIndexes", "帧索引")) : kind === 'annotation-previews' ? t(msg("admin.kindPreviews", "标注预览")) : t(msg("admin.kindThumbs", "媒体缩略图"));
   async function api<T>(url: string, body?: unknown): Promise<T> {
     const response = await fetch(url, { method: body ? 'DELETE' : 'GET', cache: 'no-store', signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]), headers: body ? { 'x-voidplayer-action': 'admin', 'content-type': 'application/json' } : {}, ...(body ? { body: JSON.stringify(body) } : {}) });
     const value = await response.json(); if (!response.ok) throw apiError(response.status, value); return value;
   }
   function controls() {
-    for (const button of document.querySelectorAll<HTMLButtonElement>('#pane-caches button')) button.disabled = busy;
-    $('clear').toggleAttribute('disabled', busy || !overview?.types.find(type => type.kind === kind)?.count);
+    for (const button of panel.querySelectorAll('button')) button.setAttribute('aria-disabled', String(busy));
+    $('clear').toggleAttribute('disabled', !overview?.types.find(type => type.kind === kind)?.count);
     $('more').hidden = next === null; $('list').setAttribute('aria-busy', String(busy));
   }
   async function act(work: () => Promise<void>) { if (busy) return; busy = true; controls(); try { await work(); notice(() => ''); } catch (error) { if (!signal.aborted) notice(() => requestError(error), true); } finally { busy = false; controls(); } }
@@ -75,11 +82,14 @@ export function installCaches(signal: AbortSignal, notice: (text: LocalizedValue
   async function list(more = false) {
     const page = await api<Page>(`/api/admin/caches/${kind}?offset=${more ? next ?? 0 : 0}&search=${encodeURIComponent(search)}`);
     next = page.nextOffset;
-    if (!more) $('list').replaceChildren();
+    const snapshot = JSON.stringify([kind, search, page]);
+    if (!more && renderedList === snapshot) return;
+    renderedList = more ? '' : snapshot;
     const offset = more ? $('list').querySelectorAll('.cache-row').length : 0;
-    $('list').append(...page.entries.map((entry, index) => {
+    const rows = page.entries.map((entry, index) => {
       const item = row(entry); item.classList.toggle('source-striped', (offset + index) % 2 === 1); return item;
-    }));
+    });
+    if (more) $('list').append(...rows); else $('list').replaceChildren(...rows);
     if (!more && !page.entries.length) $('list').append(emptyState(() => search ? t(msg("admin.noMatchCache", "没有匹配的缓存")) : t(msg("admin.noCacheKind", "暂无{label}缓存"), { label: label() }), () => search ? t(msg("admin.tryKeywords", "换个关键词试试。")) : kind === 'frame-indexes' ? t(msg("admin.framesEmpty", "打开支持的媒体库视频后，索引会自动保存在这里。")) : kind === 'annotation-previews' ? t(msg("admin.emptyPreviews", "编辑标注后，画面预览会在播放暂停时保存。")) : t(msg("admin.emptyThumbs", "从头打开媒体库视频后，首帧小图会保存在这里。"))));
   }
   async function refresh() { const value = await api<Overview>('/api/admin/caches'); overview = value; renderOverview(); await list(); }

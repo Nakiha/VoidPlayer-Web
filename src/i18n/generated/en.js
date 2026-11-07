@@ -195,7 +195,6 @@ export default {
   "admin.refreshCaches": () => "Refresh caches",
   "admin.refreshLogs": () => "Refresh logs",
   "admin.refreshMarks": () => "Refresh marks",
-  "admin.refreshStatus": () => "Refresh status",
   "admin.refreshWorkspaces": () => "Refresh workspaces",
   "admin.removeDir": () => "Remove directory",
   "admin.removeDirTitle": () => "Remove from the library, keep files",

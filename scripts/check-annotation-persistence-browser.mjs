@@ -81,8 +81,24 @@ try {
  await admin.locator(`[data-annotation-id="${copy.id}"]`).click();
  assert.equal(await admin.locator('#admin-annotation-text').textContent(),'正常新标注');
  await admin.locator('#admin-annotation-delete').click();await admin.locator('#admin-annotation-confirm-delete').click();
- await admin.locator('#admin-annotations-trash').click();await admin.locator(`[data-annotation-id="${copy.id}"]`).click();await admin.locator('#admin-annotation-restore').click();
+ let releaseTab;
+ const tabGate=new Promise(resolve=>{releaseTab=resolve;});
+ const holdTab=async route=>{await tabGate;await route.continue();};
+ await admin.route('**/api/annotations/spaces/*?list=1&deleted=1&*',holdTab);
+ const tabRequest=admin.waitForRequest('**/api/annotations/spaces/*?list=1&deleted=1&*');
+ await admin.locator('#admin-annotations-trash').click();await tabRequest;
+ const tabOpacity=await admin.locator('.admin-annotation-tabs button').evaluateAll(tabs=>tabs.map(tab=>getComputedStyle(tab).opacity));
+ const tabResponse=admin.waitForResponse('**/api/annotations/spaces/*?list=1&deleted=1&*');
+ releaseTab();await tabResponse;await admin.unroute('**/api/annotations/spaces/*?list=1&deleted=1&*',holdTab);
+ assert.deepEqual(tabOpacity,['1','1'],'loading must not dim annotation and trash tabs');
+ await admin.locator(`[data-annotation-id="${copy.id}"]`).click();await admin.locator('#admin-annotation-restore').click();
  await admin.locator('#admin-annotations-active').click();await admin.locator(`[data-annotation-id="${copy.id}"]`).click();
+ await admin.locator(`[data-annotation-id="${copy.id}"]`).evaluate(node=>{window.retainedAnnotationRow=node;});
+ const refreshed=admin.waitForResponse('**/api/annotations/spaces/*?list=1&deleted=0&*');
+ await admin.locator('#admin-annotations-refresh').click();await refreshed;
+ await admin.waitForFunction(()=>document.querySelector('#admin-annotation-list').getAttribute('aria-busy')==='false');
+ assert.equal(await admin.locator(`[data-annotation-id="${copy.id}"]`).evaluate(node=>node===window.retainedAnnotationRow),true,'unchanged refresh retains the selected row');
+ assert.equal(await admin.locator('#admin-annotation-detail').isVisible(),true,'refresh does not blank the unchanged selected preview');
  assert.equal((await call(a,'get_review_session')).positionUs,position);
  for(const scheme of ['dark','light']){await admin.emulateMedia({colorScheme:scheme});await admin.waitForFunction(s=>document.documentElement.dataset.theme===s,scheme);await admin.screenshot({path:`/tmp/voidplayer-annotation-admin-${scheme}-${name}.png`});}
  await b.locator('#settings-open').click();await b.locator('#settings-tab-workspace').click();await b.screenshot({path:`/tmp/voidplayer-annotation-save-${name}.png`});

@@ -32,9 +32,24 @@ try {
  await page.goto(base+'/admin');await chooseTestGuest(page);await page.locator('[data-pane=caches]').click();await page.locator('.cache-row').waitFor();
  assert.equal(await page.locator('[data-pane=frame-indexes]').count(),0);assert.equal(await page.locator('#cache-total-count').textContent(),'54 个缓存');
  for(const scheme of ['dark','light']){await page.emulateMedia({colorScheme:scheme});await page.waitForFunction(s=>document.documentElement.dataset.theme===s,scheme);await page.screenshot({path:`/tmp/voidplayer-caches-frames-${scheme}-${name}.png`});}
- await page.locator('[data-cache-kind=annotation-previews]').click();await page.waitForFunction(()=>document.querySelectorAll('.cache-row').length===50);await page.locator('#cache-more').click();await page.waitForFunction(()=>document.querySelectorAll('.cache-row').length===53);
+ let releaseTab;
+ const tabGate=new Promise(resolve=>{releaseTab=resolve;});
+ const holdTab=async route=>{await tabGate;await route.continue();};
+ await page.route('**/api/admin/caches/annotation-previews?*',holdTab);
+ const tabRequest=page.waitForRequest('**/api/admin/caches/annotation-previews?*');
+ await page.locator('[data-cache-kind=annotation-previews]').click();await tabRequest;
+ const tabOpacity=await page.locator('[data-cache-kind]').evaluateAll(tabs=>tabs.map(tab=>getComputedStyle(tab).opacity));
+ const tabResponse=page.waitForResponse('**/api/admin/caches/annotation-previews?*');
+ releaseTab();await tabResponse;await page.unroute('**/api/admin/caches/annotation-previews?*',holdTab);
+ assert.deepEqual(tabOpacity,['1','1','1'],'loading must not dim the whole cache tab strip');
+ await page.waitForFunction(()=>document.querySelectorAll('.cache-row').length===50);await page.locator('#cache-more').click();await page.waitForFunction(()=>document.querySelectorAll('.cache-row').length===53);
  await page.locator('#cache-search').fill('光影');await page.locator('#cache-search-form button').click();await page.waitForFunction(()=>document.querySelectorAll('.cache-row').length===1);
  await page.screenshot({path:`/tmp/voidplayer-caches-previews-light-${name}.png`});
+ await page.locator('.cache-row img').first().evaluate(node=>{window.retainedCacheImage=node;});
+ const refreshed=page.waitForResponse('**/api/admin/caches/annotation-previews?*');
+ await page.locator('#cache-refresh').click();await refreshed;
+ await page.waitForFunction(()=>document.querySelector('#cache-list').getAttribute('aria-busy')==='false');
+ assert.equal(await page.locator('.cache-row img').first().evaluate(node=>node===window.retainedCacheImage),true,'unchanged refresh retains the decoded preview node');
  await page.locator('#cache-location summary').click();await page.screenshot({path:`/tmp/voidplayer-caches-location-${name}.png`});await page.locator('#cache-location summary').click();
  await page.locator('#cache-search').fill('没有的关键词');await page.locator('#cache-search-form button').click();await page.getByText('没有匹配的缓存',{exact:true}).waitFor();
  await page.locator('#cache-search').fill('');await page.locator('#cache-search-form button').click();await page.waitForFunction(()=>document.querySelectorAll('.cache-row').length===50);
