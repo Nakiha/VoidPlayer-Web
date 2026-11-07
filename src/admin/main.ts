@@ -14,6 +14,7 @@ import { initializeLanguage, onLanguageChange, formatDate, t, th, msg } from '..
 import { chooseInitialIdentity } from '../ui/identity-onboarding.ts';
 import { installAnnotationAdmin } from './annotations.ts';
 import { emptyState } from './presentation.ts';
+import { renderLogStorage } from './log-storage.ts';
 import { installCaches } from './caches.ts';
 import { randomUUID } from '../../shared/utils/uuid.ts';
 // Theme palettes load via render-blocking links in admin/index.html (same as the
@@ -235,19 +236,7 @@ async function loadLogs() {
   const sequence = ++listSequence;
   const page = await api<LogPage>(`/api/admin/logs?before=${encodeURIComponent(logCursor)}`);
   if (sequence !== listSequence) return;
-  const storage = page.storage;
-  text('log-storage', () => {
-    if (!storage) return '';
-    const reports = storage.reports, runtime = storage.runtime;
-    const retention = reports.days ? t(msg('admin.logRetentionDays', '{days} 天后自动删除'), { days: reports.days })
-      : t(msg('admin.logRetentionManual', '保留到手动删除'));
-    const upload = t(msg('admin.logStorageUploads', '上传报告：{used} / {limit}，{count} / {max} 份；{retention}，满额拒收。'),
-      { used: bytes(reports.bytes), limit: bytes(reports.maxBytes), count: reports.files, max: reports.maxFiles ?? 0, retention });
-    const running = runtime ? t(msg('admin.logStorageRuntime', '运行日志：{used} / {limit}，保留 {days} 天，按 {segment} 或每天切段并压缩；丢弃 {dropped} 条。'),
-      { used: bytes(runtime.bytes), limit: bytes(runtime.maxBytes), days: runtime.days,
-        segment: bytes(runtime.segmentBytes ?? 0), dropped: runtime.dropped ?? 0 }) : '';
-    return [upload, running, runtime?.error, reports.error].filter(Boolean).join(' ');
-  });
+  renderLogStorage($('log-storage'), page.storage, bytes);
   const users = await api<{ users: { id: string; name: string }[] }>('/api/users').catch(() => ({ users: [] }));
   if (sequence !== listSequence) return;
   for (const user of users.users) userNames.set(user.id, user.name);
@@ -257,14 +246,19 @@ async function loadLogs() {
   if (!page.entries.length) {
     $('log-list').replaceChildren(emptyState(() => page.enabled ? t(msg("admin.noUploadedLogs", "暂无上传日志")) : t(msg("admin.logsDisabled", "未开启日志接收")), () => page.enabled ? t(msg("admin.logsEmptyHint", "在播放器的“设置 → 日志”中点击“上传日志”，即可在这里查看。")) : t(msg("admin.logsNoDir", "服务器未设置日志接收目录。你仍可在播放器中下载本地日志。")), true)); return;
   }
-  const rows = page.entries.map(entry => {
-    const button = document.createElement('button'); button.className = 'admin-log-item'; localizedAttribute(button, 'title', () => entry.name);
+  const rows = page.entries.map((entry, index) => {
+    const button = document.createElement('button'); button.className = 'admin-log-item source-row';
+    button.classList.toggle('source-striped', index % 2 === 1);
+    button.classList.toggle('in-use', selectedLog?.name === entry.name); localizedAttribute(button, 'title', () => entry.name);
     button.setAttribute('aria-pressed', String(selectedLog?.name === entry.name));
     const title = document.createElement('strong'); localizedText(title, () => formatDate(entry.receivedAt));
     const detail = document.createElement('span'); localizedText(detail, () => `${bytes(entry.size)} · ${entry.name.split('-').at(-1)?.replace('.json', '')}`);
     button.append(title, detail); button.onclick = () => void act(async () => {
       clearLog(); selectedLog = entry; const request = ++logSequence;
-      for (const row of $('log-list').querySelectorAll('button')) row.setAttribute('aria-pressed', String(row === button));
+      for (const row of $('log-list').querySelectorAll('button')) {
+        row.setAttribute('aria-pressed', String(row === button));
+        row.classList.toggle('in-use', row === button);
+      }
       const result = await api<LogDocument>(`/api/admin/logs/${encodeURIComponent(entry.name)}?v=${entry.version}`);
       if (request !== logSequence) return;
       $('log-json').closest<HTMLElement>('.admin-log-detail')!.dataset.empty = 'false'; logDocument = result.document; ($('log-json') as HTMLTextAreaElement).value = JSON.stringify(result.document, null, 2);

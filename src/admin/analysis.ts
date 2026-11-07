@@ -4,7 +4,7 @@ import { rootReason, requestError } from './diagnostics.ts';
 import type {AnalysisSettings as Settings,AnalysisResources as Resources} from '../../shared/service/admin.ts';
 
 export function analysisSettingsShell() {
-  return `<form id="analysis-resources">
+  return `<form id="analysis-resources" class="admin-panel">
     <div class="admin-section-heading"><h2>${th(msg('admin.analysisResources', '分析资源'))}</h2><div class="admin-button-group">
       <button id="analysis-resource-reload" type="button">${th(msg('admin.analysisReload', '载入配置'))}</button>
       <button id="analysis-resource-save" type="submit" class="admin-primary" disabled>${th(msg('admin.analysisSave', '保存分析配置'))}</button>

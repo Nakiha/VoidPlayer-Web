@@ -120,12 +120,13 @@ export interface Sources {
   "admin.loadMore": "加载更多";
   "admin.localUser": "本机用户";
   "admin.logDeleted": "日志已从服务器删除。";
+  "admin.logDropped": "丢弃 {count} 条";
   "admin.logJson": "日志 JSON";
   "admin.logPlaceholder": "日志内容会显示在这里";
+  "admin.logRejectFull": "满额拒收";
   "admin.logRetentionDays": "{days} 天后自动删除";
   "admin.logRetentionManual": "保留到手动删除";
-  "admin.logStorageRuntime": "运行日志：{used} / {limit}，保留 {days} 天，按 {segment} 或每天切段并压缩；丢弃 {dropped} 条。";
-  "admin.logStorageUploads": "上传报告：{used} / {limit}，{count} / {max} 份；{retention}，满额拒收。";
+  "admin.logSegments": "按 {size} 或每天切段压缩";
   "admin.logType": "日志类型";
   "admin.logUploaderLine": "上传者：{user} · {size}";
   "admin.logsDisabled": "未开启日志接收";
@@ -195,6 +196,8 @@ export interface Sources {
   "admin.refreshWorkspaces": "刷新工作区";
   "admin.removeDir": "移除目录";
   "admin.removeDirTitle": "移出媒体库，不删除文件";
+  "admin.reportCount": "报告数量";
+  "admin.reportQuota": "{count} / {max} 份";
   "admin.reqDuration": "耗时";
   "admin.reqRequest": "请求";
   "admin.reqStatus": "状态";
@@ -217,6 +220,7 @@ export interface Sources {
   "admin.rootScanned": "已扫描";
   "admin.rootsSummary": "{n, plural, other {# 个目录}} · {o} 个离线";
   "admin.runtime": "运行环境";
+  "admin.runtimeLogs": "运行日志";
   "admin.saveCopy": "将当前版本另存副本";
   "admin.saveDirs": "保存目录";
   "admin.saveName": "保存名称";
@@ -267,6 +271,7 @@ export interface Sources {
   "admin.stateScanning": "扫描中";
   "admin.stateUnscanned": "等待扫描";
   "admin.storageLocation": "存储位置";
+  "admin.storageUsage": "存储占用";
   "admin.systemMemory": "系统可用内存";
   "admin.testConditions": "测试条件";
   "admin.testSettings": "测试设置";
@@ -279,6 +284,7 @@ export interface Sources {
   "admin.unknownUser": "未知";
   "admin.unsavedChanges": "有未保存的修改";
   "admin.uploadedLogs": "上传日志";
+  "admin.uploadedReports": "上传报告";
   "admin.uptime": "已运行";
   "admin.version": "版本";
   "admin.waitStable": "等待媒体写入稳定或扫描完成…";
@@ -1316,12 +1322,13 @@ export interface MessageParameters {
   "admin.loadMore": {  };
   "admin.localUser": {  };
   "admin.logDeleted": {  };
+  "admin.logDropped": { "count": string | number };
   "admin.logJson": {  };
   "admin.logPlaceholder": {  };
+  "admin.logRejectFull": {  };
   "admin.logRetentionDays": { "days": string | number };
   "admin.logRetentionManual": {  };
-  "admin.logStorageRuntime": { "days": string | number; "dropped": string | number; "limit": string | number; "segment": string | number; "used": string | number };
-  "admin.logStorageUploads": { "count": string | number; "limit": string | number; "max": string | number; "retention": string | number; "used": string | number };
+  "admin.logSegments": { "size": string | number };
   "admin.logType": {  };
   "admin.logUploaderLine": { "size": string | number; "user": string | number };
   "admin.logsDisabled": {  };
@@ -1391,6 +1398,8 @@ export interface MessageParameters {
   "admin.refreshWorkspaces": {  };
   "admin.removeDir": {  };
   "admin.removeDirTitle": {  };
+  "admin.reportCount": {  };
+  "admin.reportQuota": { "count": string | number; "max": string | number };
   "admin.reqDuration": {  };
   "admin.reqRequest": {  };
   "admin.reqStatus": {  };
@@ -1413,6 +1422,7 @@ export interface MessageParameters {
   "admin.rootScanned": {  };
   "admin.rootsSummary": { "n": number; "o": string | number };
   "admin.runtime": {  };
+  "admin.runtimeLogs": {  };
   "admin.saveCopy": {  };
   "admin.saveDirs": {  };
   "admin.saveName": {  };
@@ -1463,6 +1473,7 @@ export interface MessageParameters {
   "admin.stateScanning": {  };
   "admin.stateUnscanned": {  };
   "admin.storageLocation": {  };
+  "admin.storageUsage": {  };
   "admin.systemMemory": {  };
   "admin.testConditions": {  };
   "admin.testSettings": {  };
@@ -1475,6 +1486,7 @@ export interface MessageParameters {
   "admin.unknownUser": {  };
   "admin.unsavedChanges": {  };
   "admin.uploadedLogs": {  };
+  "admin.uploadedReports": {  };
   "admin.uptime": {  };
   "admin.version": {  };
   "admin.waitStable": {  };

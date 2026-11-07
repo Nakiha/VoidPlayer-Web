@@ -543,12 +543,22 @@
     "source": "日志已从服务器删除。",
     "params": {}
   },
+  "admin.logDropped": {
+    "source": "丢弃 {count} 条",
+    "params": {
+      "count": "string | number"
+    }
+  },
   "admin.logJson": {
     "source": "日志 JSON",
     "params": {}
   },
   "admin.logPlaceholder": {
     "source": "日志内容会显示在这里",
+    "params": {}
+  },
+  "admin.logRejectFull": {
+    "source": "满额拒收",
     "params": {}
   },
   "admin.logRetentionDays": {
@@ -561,24 +571,10 @@
     "source": "保留到手动删除",
     "params": {}
   },
-  "admin.logStorageRuntime": {
-    "source": "运行日志：{used} / {limit}，保留 {days} 天，按 {segment} 或每天切段并压缩；丢弃 {dropped} 条。",
+  "admin.logSegments": {
+    "source": "按 {size} 或每天切段压缩",
     "params": {
-      "days": "string | number",
-      "dropped": "string | number",
-      "limit": "string | number",
-      "segment": "string | number",
-      "used": "string | number"
-    }
-  },
-  "admin.logStorageUploads": {
-    "source": "上传报告：{used} / {limit}，{count} / {max} 份；{retention}，满额拒收。",
-    "params": {
-      "count": "string | number",
-      "limit": "string | number",
-      "max": "string | number",
-      "retention": "string | number",
-      "used": "string | number"
+      "size": "string | number"
     }
   },
   "admin.logType": {
@@ -865,6 +861,17 @@
     "source": "移出媒体库，不删除文件",
     "params": {}
   },
+  "admin.reportCount": {
+    "source": "报告数量",
+    "params": {}
+  },
+  "admin.reportQuota": {
+    "source": "{count} / {max} 份",
+    "params": {
+      "count": "string | number",
+      "max": "string | number"
+    }
+  },
   "admin.reqDuration": {
     "source": "耗时",
     "params": {}
@@ -963,6 +970,10 @@
   },
   "admin.runtime": {
     "source": "运行环境",
+    "params": {}
+  },
+  "admin.runtimeLogs": {
+    "source": "运行日志",
     "params": {}
   },
   "admin.saveCopy": {
@@ -1181,6 +1192,10 @@
     "source": "存储位置",
     "params": {}
   },
+  "admin.storageUsage": {
+    "source": "存储占用",
+    "params": {}
+  },
   "admin.systemMemory": {
     "source": "系统可用内存",
     "params": {}
@@ -1227,6 +1242,10 @@
   },
   "admin.uploadedLogs": {
     "source": "上传日志",
+    "params": {}
+  },
+  "admin.uploadedReports": {
+    "source": "上传报告",
     "params": {}
   },
   "admin.uptime": {

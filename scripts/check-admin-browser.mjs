@@ -753,9 +753,14 @@ try {
   await page.screenshot({ path: `/tmp/voidplayer-admin-library-dark-${browserName}.png` });
   await page.locator('#roots-form').screenshot({path:`/tmp/voidplayer-admin-roots-card-${browserName}.png`});
   await page.getByRole('button', { name: '日志', exact: true }).click();
-  await page.locator('#log-storage').filter({ hasText: '上传报告：' }).waitFor();
+  await page.locator('#log-storage h2').filter({ hasText: '上传报告' }).waitFor();
   assert.ok((await page.locator('#log-storage').textContent()).includes('保留到手动删除'));
-  assert.ok((await page.locator('#log-storage').textContent()).includes('运行日志：'));
+  assert.ok((await page.locator('#log-storage').textContent()).includes('运行日志'));
+  const logStorage = await page.request.get(base + '/api/admin/logs').then(response => response.json());
+  assert.equal(await page.getByRole('progressbar', {name:'报告数量', exact:true}).getAttribute('max'), String(logStorage.storage.reports.maxFiles));
+  assert.equal(await page.getByRole('progressbar', {name:'报告数量', exact:true}).getAttribute('value'), String(logStorage.storage.reports.files));
+  assert.equal(await page.getByRole('progressbar', {name:'存储占用', exact:true}).count(), 2);
+  assert.equal(await page.locator('.admin-log-item').first().evaluate(row => getComputedStyle(row).padding), '4px');
   await page.locator('.admin-log-item').first().click();
   await page.waitForFunction(() => document.getElementById('log-json')?.value.includes('admin-browser'));
   assert.ok((await page.locator('#log-json').inputValue()).includes('<script>'));
@@ -795,6 +800,9 @@ try {
     assert.ok(!(await page.locator('#measure-rate').textContent()).includes('NaN'));
   }
   await page.screenshot({ path: `/tmp/voidplayer-admin-measure-dark-${browserName}.png` });
+  assert.equal(await page.locator('.admin-measure-metrics > div').first().evaluate(tile => getComputedStyle(tile).background),
+    await page.locator('#pane-overview .admin-metrics > div').first().evaluate(tile => getComputedStyle(tile).background),
+    'overview and measurements share the same neutral metric surface');
   await player.evaluate(() => localStorage.setItem('voidplayer.theme', 'light'));
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'light');
   await page.screenshot({ path: `/tmp/voidplayer-admin-measure-light-${browserName}.png` });
