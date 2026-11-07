@@ -2248,14 +2248,6 @@
     "source": "启动未完成",
     "params": {}
   },
-  "brandCinema.detour": {
-    "source": "出去转一圈。",
-    "params": {}
-  },
-  "brandCinema.everyFrame": {
-    "source": "每一帧，都值得看见。",
-    "params": {}
-  },
   "colorFlow.approximateBrowserColors": {
     "source": "近似浏览器颜色",
     "params": {}

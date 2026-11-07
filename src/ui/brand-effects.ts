@@ -1,4 +1,4 @@
-export type BrandCinemaStyle = 'runaway' | 'portal';
+export type BrandCinemaStyle = 'film' | 'prism';
 const DWELL_MS = 1100;
 
 // Only this small hover controller is loaded at startup.
@@ -6,6 +6,7 @@ export function installBrandEffects(button: HTMLButtonElement, openAbout: () => 
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
   const life = new AbortController();
   let hovered = false, played = false, pending = false;
+  let nextScene: BrandCinemaStyle = 'film';
   let anchor = { x: 0, y: 0 };
   let epoch = 0;
   let timer: number | undefined;
@@ -25,8 +26,9 @@ export function installBrandEffects(button: HTMLButtonElement, openAbout: () => 
     const request = ++epoch;
     try {
       const { playBrandCinema } = await import('./brand-cinema.ts');
-      if (request !== epoch || life.signal.aborted || !hovered || motion.matches || document.hidden) return;
-      stop = playBrandCinema(button, Math.random() < .5 ? 'runaway' : 'portal', () => { stop = undefined; });
+      if (request !== epoch || life.signal.aborted || !hovered || motion.matches || document.hidden || document.querySelector('dialog[open]')) return;
+      stop = playBrandCinema(button, nextScene, () => { stop = undefined; });
+      nextScene = nextScene === 'film' ? 'prism' : 'film';
     } catch {
       // Optional animation failure must not change the working About button.
     } finally {

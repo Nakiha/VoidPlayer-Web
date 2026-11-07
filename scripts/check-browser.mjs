@@ -566,8 +566,11 @@ try {
 
   await check('brand cinema waits for a stationary hover and restores quickly', async page => {
     const brand = page.locator('#brand-about'), cinema = page.locator('body > .brand-cinema');
-    const chunks = [];
-    page.on('request', request => { if (/brand-cinema.*\.(js|css)/.test(request.url())) chunks.push(request.url()); });
+    const chunks = [], pictures = [];
+    page.on('request', request => {
+      if (/brand-cinema.*\.(js|css)/.test(request.url())) chunks.push(request.url());
+      if (request.resourceType() === 'image' && new URL(request.url()).pathname.startsWith('/assets/')) pictures.push(request.url());
+    });
     await page.waitForTimeout(1300);
     await brand.focus();
     assert.equal(await cinema.count(), 0, 'idle and keyboard focus must stay still');
@@ -589,17 +592,51 @@ try {
     assert.equal(await cinema.getAttribute('aria-hidden'), 'true');
     assert.equal(await brand.evaluate(el => getComputedStyle(el).opacity), '0');
     assert.ok(chunks.some(url => url.endsWith('.js')) && chunks.some(url => url.endsWith('.css')), 'both chunks load on demand');
+    const scene = () => cinema.evaluate(el => el.classList.contains('brand-cinema--film') ? 'film'
+      : el.classList.contains('brand-cinema--prism') ? 'prism' : 'unknown');
+    const checkExposure = name => page.waitForFunction(name => {
+      const canvas = document.querySelector('.brand-cinema > canvas');
+      if (!canvas || Number(canvas.style.opacity) < .8) return false;
+      const [r, , b] = canvas.getContext('2d').getImageData(canvas.width * .40, canvas.height * .08, 1, 1).data;
+      return name === 'film' ? r > b : b > r;
+    }, name);
+    const checkHeldMotion = () => cinema.evaluate(async stage => {
+      const view = stage.querySelector('canvas'), sample = document.createElement('canvas');
+      sample.width = 48; sample.height = 32;
+      const ctx = sample.getContext('2d');
+      const read = () => {
+        ctx.drawImage(view, 0, 0, sample.width, sample.height);
+        return ctx.getImageData(0, 0, sample.width, sample.height).data;
+      };
+      // Stay on the very same element past the former end of the title, then compare two later exposures.
+      await new Promise(resolve => setTimeout(resolve, 7200));
+      const before = read();
+      await new Promise(resolve => setTimeout(resolve, 650));
+      const after = read();
+      return stage.isConnected && after.some((value, i) => Math.abs(value - before[i]) > 3);
+    });
+    const first = await scene();
+    await checkExposure(first);
+    assert.ok(await checkHeldMotion(), 'the film continues to expose moving frames while the pointer stays put');
     await page.mouse.move(400, 90);
     await cinema.waitFor({ state: 'detached', timeout: 700 });
     assert.equal(await brand.evaluate(el => getComputedStyle(el).opacity), '1');
     await brand.hover(); await cinema.waitFor();
+    const second = await scene();
+    assert.deepEqual([first, second], ['film', 'prism'], 'consecutive stationary hovers show both opening titles in order');
+    await checkExposure(second);
+    assert.ok(await checkHeldMotion(), 'the prism continues to refract moving light while the pointer stays put');
+    assert.deepEqual(pictures, [], 'both titles generate their imagery without fetching a packaged picture');
     await page.keyboard.press('Escape');
     await cinema.waitFor({ state: 'detached', timeout: 700 });
     await page.waitForTimeout(1300);
     assert.equal(await cinema.count(), 0, 'Escape does not immediately replay while still hovering');
+    await page.mouse.move(400, 90);
+    await brand.hover(); await cinema.waitFor();
     await brand.click();
     assert.equal(await page.locator('#settings-pane-about').isVisible(), true, 'click opens About directly');
     assert.equal(await cinema.count(), 0);
+    assert.equal(await brand.evaluate(el => getComputedStyle(el).opacity), '1', 'clicking the active title restores the toolbar');
   }, { reducedMotion: 'no-preference' });
 
   await check('brand animation honors reduced motion and keeps About usable', async page => {

@@ -507,8 +507,6 @@ export interface Sources {
   "bootstrap.brandDescription": "· 视频对比";
   "bootstrap.startupFailed": "页面未能加载。";
   "bootstrap.startupTitle": "启动未完成";
-  "brandCinema.detour": "出去转一圈。";
-  "brandCinema.everyFrame": "每一帧，都值得看见。";
   "colorFlow.approximateBrowserColors": "近似浏览器颜色";
   "colorFlow.browserColor": "浏览器色彩";
   "colorFlow.browserColorConversion": "浏览器转换颜色";
@@ -1712,8 +1710,6 @@ export interface MessageParameters {
   "bootstrap.brandDescription": {  };
   "bootstrap.startupFailed": {  };
   "bootstrap.startupTitle": {  };
-  "brandCinema.detour": {  };
-  "brandCinema.everyFrame": {  };
   "colorFlow.approximateBrowserColors": {  };
   "colorFlow.browserColor": {  };
   "colorFlow.browserColorConversion": {  };

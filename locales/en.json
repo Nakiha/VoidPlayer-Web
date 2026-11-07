@@ -2052,14 +2052,6 @@
     "source": "启动未完成",
     "translation": "Unable to start"
   },
-  "brandCinema.detour": {
-    "source": "出去转一圈。",
-    "translation": "Taking a little detour."
-  },
-  "brandCinema.everyFrame": {
-    "source": "每一帧，都值得看见。",
-    "translation": "Every frame deserves to be seen."
-  },
   "colorFlow.approximateBrowserColors": {
     "source": "近似浏览器颜色",
     "translation": "Approximate browser colors"
