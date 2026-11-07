@@ -261,6 +261,37 @@ try {
   await active.locator('.source-open').click();
   assert.equal(context.pages().length,pagesBeforeClick,'single-clicking an administration file row does not open a player');
   assert.equal(await player.evaluate(() => window.voidPlayer.getState().tracks.length),0);
+  await managed.emulateMedia({reducedMotion:'no-preference'});
+  const pressedFile=active.locator('.source-file');
+  const sampleFileFill = async action => {
+    await pressedFile.evaluate(el => {
+      window.filePressSamples=[];
+      const sample=() => {
+        window.filePressSamples.push({fill:getComputedStyle(el).backgroundColor,inner:getComputedStyle(el.querySelector('.source-open')).backgroundColor});
+        window.filePressFrame=requestAnimationFrame(sample);
+      };
+      sample();
+    });
+    await action(); await managed.waitForTimeout(320);
+    return managed.evaluate(() => {cancelAnimationFrame(window.filePressFrame);return window.filePressSamples;});
+  };
+  for (const theme of ['dark','light']) {
+    await player.evaluate(theme => localStorage.setItem('voidplayer.theme',theme),theme);
+    await managed.waitForFunction(theme => document.documentElement.dataset.theme===theme,theme);
+    await pressedFile.locator('.filename').hover(); await managed.waitForTimeout(320);
+    const hoverFill=await pressedFile.evaluate(el => getComputedStyle(el).backgroundColor);
+    const press=await sampleFileFill(() => managed.mouse.down());
+    const heldFill=press.at(-1).fill;
+    const release=await sampleFileFill(() => managed.mouse.up());
+    assert.notEqual(heldFill,'rgba(0, 0, 0, 0)',`${theme}: pressing a file keeps a visible fill instead of exposing the dark backing`);
+    assert.notEqual(heldFill,hoverFill,`${theme}: pressing is distinct from hover`);
+    assert.equal(release.at(-1).fill,hoverFill,`${theme}: releasing returns to the hovered row`);
+    for (const [phase,samples] of [['press',press],['release',release]]) {
+      assert.ok(new Set(samples.map(sample => sample.fill)).size>2,`${theme}: ${phase} transitions the outer row without a one-frame jump`);
+      assert.ok(samples.every(sample => sample.inner==='rgba(0, 0, 0, 0)'),`${theme}: ${phase} never adds a second inner highlight`);
+    }
+  }
+  await managed.emulateMedia({reducedMotion:'reduce'});
   await goLibrary('library:local/z-branch/leaf');
   const nestedFile=active.locator('.source-file').filter({hasText:'nested.mp4'});
   await nestedFile.waitFor();
