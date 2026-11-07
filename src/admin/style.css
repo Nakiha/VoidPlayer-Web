@@ -52,11 +52,12 @@
 .admin-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .admin-actions > span { flex: 1; min-width: 0; }
 #roots-form input { height: 36px; padding: 8px 12px; border: 0; border-radius: var(--radius-control); background: var(--surface-panel); box-shadow: none; }
-.admin-roots-heading { align-items: flex-start; }
-.admin-root-actions { margin-left: auto; padding: 4px; }
-.admin-root-row { display: grid; grid-template-columns: minmax(100px, .8fr) minmax(150px, 2fr) 32px 32px; align-items: start; gap: 8px 12px; padding: 4px; border-top: 1px solid var(--border); }
+.admin-roots-heading { align-items: flex-start; gap: 4px; margin-bottom: 4px; }
+.admin-root-actions { margin-left: auto; padding: 4px; gap: 4px; }
+.admin-root-row { display: grid; grid-template-columns: minmax(100px, .8fr) minmax(150px, 2fr) 32px 32px; align-items: start; gap: 4px; padding: 4px; border-top: 1px solid var(--border); }
 .admin-root-row:first-child { border-top: 0; }
-.admin-root-row > button { margin-top: 24px; }
+.admin-root-row > label { gap: 4px; }
+.admin-root-row > button { align-self: end; margin-top: 0; margin-bottom: 2px; }
 .admin-root-scan[aria-disabled=true]:not([aria-busy=true]) { opacity: .4; }
 .admin-root-scan:is([data-state=offline], [data-state=error], [data-state=partial]) { color: var(--connection-error); }
 .admin-content .admin-danger:hover:not(:disabled), #confirm-delete-log, #admin-workspace-confirm-delete { color: var(--action-danger); background: var(--action-danger-fill); }
