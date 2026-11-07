@@ -1,17 +1,15 @@
+import { createLibraryFileRow, installLibraryListing, sizeText, storageText, openedText, sourceDisplayName, patchLibraryRow } from '../library-view.ts';
+import { installLibraryThumbnails } from '../library-thumbnails.ts';
 import { loadStageLabel } from '../media-progress.ts';
 import type { MediaLoadStage } from '../media-progress.ts';
-import { formatRecentDate, t, msg } from '../../i18n.ts';
+import { t, msg } from '../../i18n.ts';
 import { SLOTS } from '../../../shared/review/model.ts';
 import type { Slot } from '../../../shared/review/model.ts';
 import { icon } from '../icons.ts';
-import { createIconButton } from '../controls.ts';
 import { currentActor } from '../../services/identity.ts';
 import { fetchLibraryItem, openLibraryItem } from '../../services/library.ts';
-import type { LibraryEntry, LibraryRoot } from '../../services/library.ts';
-import { localCacheKey, serverCacheKey } from '../../../shared/thumbnails/contract.ts';
-import { fillThumbnailImage, getLiveObjectUrl, materializeThumbnailUrl, onThumbnailReady, prefetchThumbnailStatus, prefetchThumbnailStatuses, serverThumbnailImageUrl } from '../../thumbnails/client.ts';
-import { getLocalThumbnail } from '../../thumbnails/local-store.ts';
-import { thumbnailState } from '../../thumbnails/state.ts';
+import type { LibraryEntry } from '../../services/library.ts';
+import { prefetchThumbnailStatus, prefetchThumbnailStatuses } from '../../thumbnails/client.ts';
 import { referenceVersion } from '../../../shared/media/io/media-reference.ts';
 import { openMedia } from '../../media/source.ts';
 import { installLibraryBrowser } from '../library-browser.ts';
@@ -26,19 +24,9 @@ import { log } from '../../logging/log.ts';
 import type { WorkbenchShared, WorkbenchState } from './shared.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-const sizeText = (n: number) => n >= 2 ** 40 ? `${(n / 2 ** 40).toFixed(1)} TB` : n >= 2 ** 30 ? `${(n / 2 ** 30).toFixed(1)} GB` : `${(n / 2 ** 20).toFixed(1)} MB`;
-const storageText = (root?: LibraryRoot) => root?.state === 'offline' ? t(msg('sources.storageOffline', '存储离线'))
-  : root?.availableBytes != null && root.totalBytes != null
-    ? t(msg('sources.storageSpace', '{available} 可用 / 共 {total}'), { available: sizeText(root.availableBytes), total: sizeText(root.totalBytes) })
-    : t(msg('sources.storageSpaceUnavailable', '空间信息不可用'));
-const openedText = (value?: number) => {
-  if (!Number.isFinite(value)) return '';
-  return formatRecentDate(value as number);
-};
 const text = (tag: string, value: string, className = '') => {
   const el = document.createElement(tag); el.textContent = value; el.className = className; return el;
 };
-
 /** Source catalog + library browser + load transactions. Owns source signatures. */
 export function createSourcesPane(shared: WorkbenchShared) {
   const { session, act, view, catalog, lifecyle } = shared;
@@ -81,7 +69,8 @@ export function createSourcesPane(shared: WorkbenchShared) {
     }
   }
 
-  const libraryBrowser = installLibraryBrowser(page => {
+  const libraryBrowser = installLibraryBrowser({list:$('source-list'),tools:$('source-tools'),foot:$('source-foot'),
+    visible:() => !$('sources-panel').hidden, manage:true}, page => {
     const rootsChanged = page ? catalog.setLibraryRoots(page.roots.map(root => root.id)) : false;
     catalog.setLibrary(page?.entries ?? []);
     // Warm thumbnail presence/epochs beside listing; never blocks opening.
@@ -95,78 +84,10 @@ export function createSourcesPane(shared: WorkbenchShared) {
     if (home) void refreshRecent();
     renderSources();
   }, shared.notify, () => !document.getElementById('empty-A')!.hidden && catalog.referencesToResolve().length > 0);
-  const group = (id: string, label: string) => {
-    const section = document.createElement('details'); section.className = 'library-root-group'; section.id = id; section.open = true;
-    const summary = document.createElement('summary'); summary.innerHTML = icon('caretRight');
-    summary.append(text('span', label, 'source-group-label'));
-    const body = document.createElement('div'); body.className = 'source-group-items'; section.append(summary, body);
-    return { section, body };
-  };
-  const mountsGroup = group('library-mounts', t(msg('sources.mountList', '库列表')));
-  const recentGroup = group('library-recents', t(msg('shell.recentlyOpened', '最近打开')));
-  // Source key -> thumbnail cache key, so completion can fill the placeholder
-  // <img> of the matching row in place. Bounded: rows re-register on render.
-  const thumbKeyBySource = new Map<string, string>();
-  // Thumbnail cache key -> last known server image URL (derived from the key
-  // when status turns ready). Lets a server-ready notify patch rows without
-  // waiting for an unrelated full-list rebuild.
-  const serverUrlByThumbKey = new Map<string, string>();
-  const rememberThumbKey = (sourceKey: string, thumbKey: string, serverUrl?: string) => {
-    if (thumbKeyBySource.size > 500) thumbKeyBySource.clear();
-    thumbKeyBySource.set(sourceKey, thumbKey);
-    if (serverUrl) {
-      if (serverUrlByThumbKey.size > 500) serverUrlByThumbKey.clear();
-      serverUrlByThumbKey.set(thumbKey, serverUrl);
-    }
-  };
-  function serverUrlForThumbKey(key: string): string | undefined {
-    const cached = serverUrlByThumbKey.get(key);
-    if (cached) return cached;
-    // serverCacheKey format: v1|lib|<mediaId>|<mediaVersion>|... — derive the
-    // image URL without needing the original library entry.
-    if (!key.startsWith('v1|lib|')) return undefined;
-    const parts = key.split('|');
-    if (parts.length < 4 || !parts[2] || !parts[3]) return undefined;
-    try {
-      return serverThumbnailImageUrl(decodeURIComponent(parts[2]), decodeURIComponent(parts[3]));
-    } catch {
-      return serverThumbnailImageUrl(parts[2], parts[3]);
-    }
-  }
-  // Thumbnail completion patches in place: refresh an existing <img> or
-  // insert a cover once into a row that rendered coverless (0占位). No list
-  // rebuild, no focus/scroll/selection movement. Stable fingerprints keep
-  // rows alive, so insertion happens at most once per row.
-  const patchThumbnails = (key: string) => {
-    const live = getLiveObjectUrl(key);
-    let serverUrl: string | undefined;
-    if (!live && key.startsWith('v1|lib|')) {
-      const ready = thumbnailState.statusCache.get(key)?.ready
-        || thumbnailState.completed.has(key)
-        || serverUrlByThumbKey.has(key);
-      if (ready) serverUrl = serverUrlForThumbKey(key);
-    }
-    const url = live ?? serverUrl;
-    // Truly missing stays 0占位: no placeholder, no empty box.
-    if (!url) return;
-    for (const id of ['source-list', 'local-list', 'start-library-list']) {
-      const list = document.getElementById(id);
-      if (!list) continue;
-      for (const img of list.querySelectorAll<HTMLImageElement>('img[data-thumb-key]')) {
-        if (img.dataset.thumbKey !== key) continue;
-        if (img.dataset.thumbSrc === url) continue;
-        fillThumbnailImage(img, key, live ? undefined : serverUrl);
-      }
-      for (const row of list.querySelectorAll<HTMLElement>('[data-source-key]')) {
-        if (thumbKeyBySource.get(row.dataset.sourceKey ?? '') !== key) continue;
-        if (row.querySelector(':scope > .source-thumb')) continue;
-        row.prepend(makeThumbBox(key, url));
-      }
-    }
-  };
-  const offThumbnails = onThumbnailReady(patchThumbnails);
-  lifecyle.signal.addEventListener('abort', offThumbnails);
-
+  const listing = installLibraryListing($('source-list'), {fileRow:sourceRow, navigate:libraryBrowser.navigate, registerMount:fileMenu.registerMount});
+  const recentGroup = {section:listing.recentGroup};
+  const thumbnails = installLibraryThumbnails(['source-list','local-list','start-library-list'].map(id => $(id)), lifecyle.signal);
+  const attachThumb = thumbnails.attach;
   const recentLookups = new Map<string, { at: number; value: Promise<LibraryEntry | null> }>();
   async function refreshRecent() {
     const ticket = ++recentRequest;
@@ -229,60 +150,6 @@ export function createSourcesPane(shared: WorkbenchShared) {
     } finally { clearTimeout(confirmTimer); if (loadingSource === pendingLoad) { loadingSource = null; loadingConfirmed = false; } renderSources(); }
   }
 
-  function sourceDisplayName(name: string) {
-    const base = name.split('/').pop() ?? name;
-    return { base, dir: name.includes('/') ? name.slice(0, name.lastIndexOf('/')) : '' };
-  }
-
-  /** Versioned thumbnail identity; missing version stays imageless. */
-  function thumbIdentity(item: SourceItem): { key: string; serverUrl?: string } | null {
-    const libraryId = item.library?.id ?? item.libraryId;
-    const version = item.library?.version ?? item.version;
-    if (libraryId && version) {
-      const key = serverCacheKey({ mediaId: libraryId, mediaVersion: version });
-      const known = item.library?.thumbnail || thumbnailState.statusCache.get(key)?.ready || !!thumbnailState.completed.has(key);
-      return { key, ...(known ? { serverUrl: serverThumbnailImageUrl(libraryId, version) } : {}) };
-    }
-    if (item.file || (!item.library && !item.libraryId)) {
-      return { key: localCacheKey(item.name, item.size, item.lastModified) };
-    }
-    return null;
-  }
-
-  /** Once a cover slot exists, image errors stay invisible without shifting the row. */
-  function makeThumbBox(key: string, url: string): HTMLElement {
-    const box = document.createElement('div');
-    box.className = 'source-thumb';
-    box.setAttribute('aria-hidden', 'true');
-    const img = document.createElement('img');
-    img.alt = '';
-    img.loading = 'lazy';
-    img.decoding = 'async';
-    img.dataset.thumbKey = key;
-    box.append(img);
-    fillThumbnailImage(img, key, url.startsWith('blob:') ? undefined : url, { visibilityTarget: box, retainWhileHidden: true });
-    return box;
-  }
-
-  /**
-   * Unknown covers take no space: a row gets a box only when an image is available
-   * synchronously (live object URL or known-ready server image). Otherwise
-   * the row stays coverless (0占位), and a stored local artifact inserts the
-   * box once its lookup resolves; generation completion arrives via notify.
-   * Rows are reused by fingerprint, so insertion happens at most once.
-   */
-  function attachThumb(row: HTMLElement, item: SourceItem) {
-    const identity = thumbIdentity(item);
-    if (!identity) return;
-    rememberThumbKey(item.key, identity.key, identity.serverUrl);
-    const syncUrl = getLiveObjectUrl(identity.key) ?? identity.serverUrl;
-    if (syncUrl) { row.prepend(makeThumbBox(identity.key, syncUrl)); return; }
-    void getLocalThumbnail(identity.key).then(stored => {
-      if (!stored || !row.isConnected || row.querySelector(':scope > .source-thumb')) return;
-      row.prepend(makeThumbBox(identity.key, materializeThumbnailUrl(identity.key, stored.blob)));
-    });
-  }
-
   function addToView(item: SourceItem) {
     if (loadingSource?.key === item.key || sourceInUse(item, session.getState().tracks)) return;
     const offline = libraryBrowser.page()?.roots.some(root => root.id === item.library?.rootId && root.state === 'offline');
@@ -303,61 +170,17 @@ export function createSourcesPane(shared: WorkbenchShared) {
   }
 
   function sourceRow(item: SourceItem, copyOnly = false) {
-    const row = document.createElement('div'); row.className = 'source-row source-file';
-    const open = document.createElement('button'); open.type = 'button'; open.className = 'source-open';
     const slots = session.getState().tracks.filter(track => sourceInUse(item, [track])).map(track => track.slot);
-    const used = slots.length > 0;
-    const loading = loadingSource?.key === item.key && loadingConfirmed ? loadingSource.status() : null;
-    const failed = sourceLoadError?.key === item.key ? sourceLoadError.message : null;
-    row.setAttribute('aria-busy', String(!!loading));
-    row.classList.toggle('in-use', used);
-    const info = document.createElement('div'); info.className = 'source-info';
-    const { base, dir } = sourceDisplayName(item.name);
-    const name = text('span', base, 'filename');
-    const origin = item.library ? libraryBrowser.isRoot() ? [item.library.root, dir].filter(Boolean).join(' / ') : ''
-      : item.libraryId ? '' : t(msg('sources.localTag', '(本地)'));
-    // Full path lives in the tooltip; the visible name stays a basename.
-    row.dataset.tooltip = item.library ? t(msg("sources.tooltipLibrary", "{name}（{root}）"), { name: item.name, root: item.library.root }) : item.libraryId ? item.name : item.file ? t(msg("sources.tooltipLocalOnly", "{name}（本地文件，仅本机预览）"), { name: item.name }) : localAccessMessage(item.name, supportsFileHandles() ? 'unavailable' : 'unsupported');
-    const pending = item.library?.state === 'pending';
-    const offline = libraryBrowser.page()?.roots.some(root => root.id === item.library?.rootId && root.state === 'offline');
-    const stateLabel = loading ?? (failed ? t(msg("sources.loadFailedWith", "载入失败：{reason}"), { reason: failed }) : offline ? t(msg("sources.storageOffline", "存储离线")) : pending ? t(msg("sources.writing", "写入中")) : '');
-    const opened = openedText(item.openedAt);
-    const status = text('span', '', 'source-meta source-meta-columns');
-    const size = text('span', '', 'source-meta-size');
-    const originText = text('span', [stateLabel, origin].filter(Boolean).join(' · '), 'source-meta-origin');
-    const time = text('span', opened, 'source-meta-time');
-    status.dataset.tooltip = row.dataset.tooltip;
-    if (loading || failed) { status.setAttribute('role', 'status'); }
-    const titleLine = document.createElement('span'); titleLine.className = 'source-title';
-    if (slots.length) {
-      const badges = document.createElement('span'); badges.className = 'source-track-badges';
-      badges.setAttribute('aria-label', t(msg('sources.loadedTracks', '已上屏轨道：{slots}'), { slots: slots.join(', ') }));
-      for (const slot of slots) { const badge = text('span', slot, `slot slot-${slot}`); badge.setAttribute('aria-hidden', 'true'); badges.append(badge); }
-      size.append(badges);
-    }
-    size.prepend(text('span', sizeText(item.size), 'source-size-value'));
-    status.append(size);
-    if (originText.textContent) status.append(originText);
-    if (opened) status.append(time);
-    titleLine.append(name);
-    name.dataset.tooltip = row.dataset.tooltip;
-    info.append(titleLine, status);
-    row.setAttribute('aria-label', used ? t(msg('sources.alreadyInViewName', '已在视图中：{name}'), { name: item.name })
-      : loading ? t(msg('sources.loadingName', '正在载入：{name}'), { name: item.name })
-      : item.library || item.file ? t(msg('sources.addToViewName', '添加到视图：{name}'), { name: item.name })
-      : t(msg('sources.reselectName', '重新选择 {name}'), { name: item.name }));
-    const blocked = !!loading || !!pending || !!offline || !!item.libraryId && !item.library;
-    row.setAttribute('aria-disabled', String(!used && blocked));
-    open.dataset.tooltip = row.dataset.tooltip;
-    open.setAttribute('aria-label', row.getAttribute('aria-label')!); open.setAttribute('aria-disabled', String(used || blocked));
-    row.onclick = () => { if (row.getAttribute('aria-disabled') !== 'true') addToView(item); };
-    open.append(info); row.append(open);
-    if (used) {
-      const remove = createIconButton({glyph:'close', label:t(msg('sources.takeOffName', '下屏：{name}'), {name:item.name}), className:'source-remove remove-track'});
-      remove.setAttribute('aria-disabled', String(session.getState().busy || !!loadingSource));
-      remove.onclick = event => {event.stopPropagation(); removeFromView(item);}; row.append(remove);
-    }
-    row.dataset.sourceKey = item.key;
+    const tooltip = item.library ? t(msg('sources.tooltipLibrary', '{name}（{root}）'), {name:item.name,root:item.library.root}) : item.libraryId ? item.name
+      : item.file ? t(msg('sources.tooltipLocalOnly', '{name}（本地文件，仅本机预览）'), {name:item.name})
+      : localAccessMessage(item.name, supportsFileHandles() ? 'unavailable' : 'unsupported');
+    const row = createLibraryFileRow(item, {
+      slots, tooltip, home:libraryBrowser.isRoot(),
+      loading:loadingSource?.key === item.key && loadingConfirmed ? loadingSource.status() : null,
+      failed:sourceLoadError?.key === item.key ? sourceLoadError.message : null,
+      offline:libraryBrowser.page()?.roots.some(root => root.id === item.library?.rootId && root.state === 'offline'),
+      removeDisabled:session.getState().busy || !!loadingSource, open:() => addToView(item), remove:() => removeFromView(item),
+    });
     if (!copyOnly) attachThumb(row, item);
     if (!copyOnly) fileMenu.register(row, item.library, () => {
       const used = sourceInUse(item, session.getState().tracks), state = session.getState();
@@ -551,51 +374,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     };
     if (signature !== sourceSignature) {
       sourceSignature = signature;
-      const existing = new Map([...list.querySelectorAll<HTMLElement>('[data-source-key]')].map(node => [node.dataset.sourceKey, node]));
-      const rows: HTMLElement[] = [];
-      const reuse = (key: string, fingerprint: string, create: () => HTMLElement, target = rows) => {
-        const old = existing.get(key);
-        const row = old?.dataset.fingerprint === fingerprint ? old : create();
-        row.dataset.sourceKey = key; row.dataset.fingerprint = fingerprint; target.push(row);
-      };
-      for (const folder of folders) {
-        reuse(`folder:${folder.rootId}/${folder.path}`, JSON.stringify(folder), () => {
-          const row = document.createElement('button'); row.className = 'source-row library-folder';
-          const glyph = text('span', '', 'source-thumb library-folder-icon'); glyph.innerHTML = icon('open');
-          const info = text('span', '', 'source-info');
-          info.append(text('span', folder.name, 'filename'));
-          row.dataset.rootId = folder.rootId;
-          row.setAttribute('aria-label', t(msg("sources.openFolder", "打开目录：{name}"), { name: folder.name })); row.append(glyph, info); row.onclick = () => libraryBrowser.navigate(folder.rootId, folder.path); return row;
-        });
-      }
-      const reconcile = (container: HTMLElement, children: HTMLElement[]) => {
-        children.forEach((row, index) => { row.classList.toggle('source-striped', index % 2 === 1); if (container.children[index] !== row) container.insertBefore(row, container.children[index] ?? null); });
-        while (container.children.length > children.length) container.lastElementChild!.remove();
-      };
-      if (home) {
-        const mountsRows: HTMLElement[] = [], recentRows: HTMLElement[] = [];
-        for (const mount of mounts) reuse(`mount:${mount.id}`, JSON.stringify([mount.id, mount.name, mount.state, storageText(mount)]), () => {
-          const row = document.createElement('button'); row.type = 'button'; row.className = 'source-row library-folder library-mount';
-          row.dataset.rootId = mount.id; row.setAttribute('aria-label', t(msg('libraryBrowser.openMount', '打开媒体库：{name}'), { name: mount.name }));
-          const glyph = text('span', '', 'source-thumb library-folder-icon'); glyph.innerHTML = icon('libraryVolume');
-          const info = text('span', '', 'source-info'); info.append(text('span', mount.name, 'filename'));
-          info.append(text('span', storageText(mount), 'source-meta'));
-          row.append(glyph, info); row.onclick = () => libraryBrowser.navigate(mount.id, '');
-          fileMenu.registerMount(row, mount.id); return row;
-        }, mountsRows);
-        if (!mounts.length) reuse('mounts-empty', query, () => text('p', query ? t(msg('sources.noMatch', '没有匹配的片源'))
-          : t(msg('libraryBrowser.noMounts', '暂无挂载的媒体库')), 'panel-empty'), mountsRows);
-        for (const item of items) reuse(item.key, fingerprintOf(item), () => sourceRow(item), recentRows);
-        if (!items.length) reuse('recent-empty', query, () => text('p', query ? t(msg('sources.noMatch', '没有匹配的片源'))
-          : t(msg('sources.noRecentShort', '暂无最近片源')), 'panel-empty'), recentRows);
-        reconcile(mountsGroup.body, mountsRows); reconcile(recentGroup.body, recentRows);
-        rows.push(mountsGroup.section, recentGroup.section);
-      } else {
-        for (const item of items) reuse(item.key, fingerprintOf(item), () => sourceRow(item));
-        if (!items.length && !folders.length) reuse('empty', query, () => text('p', query ? t(msg('sources.noMatch', '没有匹配的片源'))
-          : t(msg('sources.emptyDirectory', '当前目录没有片源')), 'panel-empty'));
-      }
-      reconcile(list, rows);
+      listing.render({home,query,page,items,fingerprint:fingerprintOf});
       syncRowAvailability(list, items);
       const localList = $('local-list');
       $('local-sources').hidden = local.length === 0;
@@ -750,43 +529,13 @@ export function createSourcesPane(shared: WorkbenchShared) {
 
   /** Relabel cached nodes in place; keep row focus and event handlers. */
   function localize() {
-    function patch(row: HTMLElement, fresh: HTMLElement) {
-      const attrs = ['aria-label', 'title', 'data-tooltip', 'aria-disabled'];
-      for (const attr of attrs) if (fresh.hasAttribute(attr)) row.setAttribute(attr, fresh.getAttribute(attr)!);
-      const remove = row.querySelector('.source-remove'), translatedRemove = fresh.querySelector('.source-remove');
-      if (remove && translatedRemove) remove.setAttribute('aria-label', translatedRemove.getAttribute('aria-label')!);
-      const opener = row.querySelector('.source-open');
-      if (opener && fresh.querySelector('.source-open')) for (const attr of ['aria-label','data-tooltip']) opener.setAttribute(attr, fresh.querySelector('.source-open')!.getAttribute(attr)!);
-      for (const selector of ['.source-meta:not(.source-meta-columns)', '.source-meta-origin', '.source-meta-time', '.source-size-value', '.filename']) {
-        const translated = fresh.querySelectorAll<HTMLElement>(selector);
-        row.querySelectorAll<HTMLElement>(selector).forEach((node,index) => {
-          const copy = translated[index]; if (!copy) return;
-          for (const attr of attrs) if (copy.hasAttribute(attr)) node.setAttribute(attr,copy.getAttribute(attr)!);
-          node.textContent = copy.textContent;
-        });
-      }
-    }
     const items = new Map([...catalog.recent(), ...catalog.available()].map(item=>[item.key,item]));
     for(const row of document.querySelectorAll<HTMLElement>('.source-row[data-source-key], .start-recent-row[data-source-key]')) {
-      const item=items.get(row.dataset.sourceKey!); if(item)patch(row,row.classList.contains('start-recent-row')?startRow(item,true):sourceRow(item,true));
+      const item=items.get(row.dataset.sourceKey!); if(item)patchLibraryRow(row,row.classList.contains('start-recent-row')?startRow(item,true):sourceRow(item,true));
     }
-    mountsGroup.section.querySelector('.source-group-label')!.textContent = t(msg('sources.mountList', '库列表'));
-    recentGroup.section.querySelector('.source-group-label')!.textContent = t(msg('shell.recentlyOpened', '最近打开'));
-    const home=libraryBrowser.isRoot(),query=libraryBrowser.filter();
-    for (const empty of $('source-list').querySelectorAll<HTMLElement>('.panel-empty')) {
-      empty.textContent = query ? t(msg('sources.noMatch', '没有匹配的片源'))
-        : empty.dataset.sourceKey === 'mounts-empty' ? t(msg('libraryBrowser.noMounts', '暂无挂载的媒体库'))
-        : home ? t(msg('sources.noRecentShort', '暂无最近片源')) : t(msg('sources.emptyDirectory', '当前目录没有片源'));
-    }
+    listing.localize(libraryBrowser.page(), libraryBrowser.isRoot(), libraryBrowser.filter());
     const startEmpty=document.querySelector('.start-library-empty > span:last-child');
     if(startEmpty)startEmpty.textContent=t(msg("sources.noRecentVideos", "还没有最近打开的视频"));
-    for(const row of document.querySelectorAll<HTMLElement>('.library-folder')) {
-      const name=row.querySelector('.filename')?.textContent??'';
-      row.setAttribute('aria-label', row.classList.contains('library-mount') ? t(msg('libraryBrowser.openMount', '打开媒体库：{name}'), {name})
-        : t(msg("sources.openFolder", "打开目录：{name}"),{name}));
-      const meta=row.querySelector('.source-meta');
-      if (meta && row.classList.contains('library-mount')) meta.textContent = storageText(libraryBrowser.page()?.roots.find(root => root.id === row.dataset.rootId));
-    }
     sourceSignature = ''; // Reuses unchanged rows and updates source heading/count/status controls.
     refreshIdentity();
     renderSources();

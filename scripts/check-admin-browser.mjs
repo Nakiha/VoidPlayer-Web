@@ -14,6 +14,9 @@ assert.ok(['webkit', 'chromium'].includes(browserName));
 let service, browser;
 try {
   const media = path.join(temporary, '本机媒体'); await mkdir(media); await writeFile(path.join(media, 'sample.mp4'), Buffer.alloc(4 * 1024 * 1024, 51));
+  for (let i=0;i<61;i++) await mkdir(path.join(media,`folder-${String(i).padStart(3,'0')}`));
+  await mkdir(path.join(media,'z-branch','leaf'),{recursive:true});
+  await writeFile(path.join(media,'z-branch','leaf','nested.mp4'),'directory-only fixture');
   const extra = path.join(temporary, 'shared-storage', '嵌套的制作素材目录'); await mkdir(extra, { recursive: true }); await writeFile(path.join(extra, 'new.mp4'), 'new');
   const file = path.join(temporary, 'voidplayer.config.json');
   await writeFile(file, JSON.stringify({ mediaRoots: [{ id: 'local', name: '本机媒体', path: media }, { id: 'offline', name: '网络归档', path: path.join(temporary, 'offline-mount') }], staticDir: path.join(root, 'dist'), dataDir: 'data', logsDir: 'logs', indexWatch: false }));
@@ -61,6 +64,101 @@ try {
   })]);
   assert.equal(context.pages().length, 1);
   assert.equal(await player.evaluate(() => window.adminReturnMarker), 'preserve-review');
+  // The library's own management entry preserves the live player and opens the library pane.
+  await player.locator('#toggle-sources').click();
+  const [managed] = await Promise.all([context.waitForEvent('page'),player.locator('#library-manage').click()]);
+  observeErrors(managed,'admin-library'); await managed.waitForURL(base + '/admin#library');
+  const embedded = managed.locator('#admin-library-browser');
+  const active = embedded.locator('[data-library-view-surface]:not([hidden])');
+  await active.locator('.library-mount[data-root-id=local]').waitFor();
+  assert.equal(await managed.locator('#language-choice').isVisible(),false,'language controls do not occupy the top of every page');
+  assert.ok(await managed.locator('.admin-library-card').evaluate(el => Math.abs(el.getBoundingClientRect().height-innerHeight*.8)<1),'library card leaves space for scrolling the surrounding page');
+  const mountedStyle = row => row.evaluate(el => {
+    const s=getComputedStyle(el), box=el.querySelector('.source-thumb').getBoundingClientRect(), glyph=el.querySelector('.source-thumb .icon').getBoundingClientRect();
+    return {padding:s.padding,font:s.fontSize,thumb:[box.width,box.height],glyph:[glyph.width,glyph.height].map(value => Math.round(value*100)/100)};
+  });
+  await player.locator('#source-list .library-mount[data-root-id=local]').waitFor();
+  assert.deepEqual(await mountedStyle(active.locator('.library-mount[data-root-id=local]')),await mountedStyle(player.locator('#source-list .library-mount[data-root-id=local]')),'admin reuses the player row density and icon geometry');
+  await managed.locator('[data-pane=preferences]').click();
+  assert.equal(await managed.locator('#pane-preferences #language-choice').isVisible(),true);
+  await managed.locator('#language-choice').click(); await managed.locator('#language-choice-menu [data-value=en]').click();
+  await managed.waitForFunction(() => document.documentElement.lang==='en');
+  assert.equal(await managed.locator('[data-pane=preferences]').innerText(),'Preferences');
+  await managed.locator('#language-choice').click(); await managed.locator('#language-choice-menu [data-value="zh-CN"]').click();
+  await managed.waitForFunction(() => document.documentElement.lang==='zh-CN');
+  await managed.locator('[data-pane=library]').click();
+  assert.equal(await embedded.getAttribute('data-library-view'),'columns','administration defaults to column view');
+  assert.equal(await embedded.locator('details, .source-group-heading, [id*=library-recents]').count(),0,'administration has no folding controls, root headings or recent history');
+  const chooseView = async value => {
+    await managed.locator('#admin-library-view').click();
+    await managed.locator(`#admin-library-view-menu [data-value=${value}]`).click();
+    await managed.waitForFunction(value => document.querySelector('#admin-library-browser').dataset.libraryView===value,value);
+  };
+  const goLibrary = async value => {
+    await embedded.locator('#library-location').fill(value); await embedded.locator('#library-location').press('Enter');
+    await managed.waitForFunction(() => document.querySelector('#source-list').getAttribute('aria-busy')==='false');
+  };
+  const offsets=[];
+  managed.on('request',request => {
+    const u=new URL(request.url());
+    if(u.pathname==='/api/library/browse'&&u.searchParams.get('root')==='local'&&!u.searchParams.get('directory'))offsets.push(Number(u.searchParams.get('offset')??0));
+  });
+  await goLibrary('library:local/z-branch/leaf');
+  await active.locator('.library-column[data-directory="z-branch/leaf"] .source-file').waitFor();
+  await active.locator('.library-column[data-root=local][data-directory=""] .library-column-selected').waitFor();
+  assert.ok(offsets.includes(60),'a direct deep link loads the selected ancestor beyond its first directory page');
+  assert.equal(await active.locator('.library-column').count(),4,'root and each directory remain visible as separate columns');
+  assert.equal(await active.locator('.library-column-selected').count(),3);
+  assert.ok(await active.locator('.library-column[data-root=local][data-directory=""] .library-column-selected').evaluate(row => {
+    const box=row.getBoundingClientRect(), column=row.closest('.library-column').getBoundingClientRect();
+    return box.top>=column.top-1&&box.bottom<=column.bottom+1;
+  }),'a selected ancestor discovered on a later page is revealed in its column');
+  await managed.locator('.admin-library-card').screenshot({path:`/tmp/voidplayer-admin-columns-deep-${browserName}.png`});
+  await active.locator('.library-column[data-root=local][data-directory=""] .library-column-selected').click();
+  await active.locator('.library-column[data-directory="z-branch"] .library-folder').click();
+  await active.locator('.library-column[data-directory="z-branch/leaf"] .source-file').waitFor();
+  await chooseView('list');
+  assert.equal(await embedded.locator('#library-location').inputValue(),'leaf');
+  assert.equal(await active.locator('.source-file .filename').innerText(),'nested.mp4');
+  await embedded.locator('#library-location').focus(); await embedded.locator('#library-location').fill('nested');
+  await managed.waitForFunction(() => document.querySelector('#source-list').getAttribute('aria-busy')==='false');
+  await chooseView('columns');
+  await active.locator('.library-column').last().locator('.source-file').waitFor();
+  assert.equal(await embedded.locator('#library-location').inputValue(),'nested','view changes retain the directory search');
+  await embedded.locator('.crumbs-back').click();
+  await managed.waitForFunction(() => document.querySelector('#library-location').value==='z-branch');
+  await embedded.locator('.crumbs-forward').click();
+  await managed.waitForFunction(() => document.querySelector('#library-location').value==='nested');
+  await active.locator('.library-column').last().locator('.source-file').waitFor();
+  await managed.setViewportSize({width:390,height:820});
+  await active.locator('.library-column').last().scrollIntoViewIfNeeded();
+  assert.equal(await managed.evaluate(() => document.documentElement.scrollWidth<=innerWidth),true,'columns scroll within the card at narrow widths');
+  await managed.locator('.admin-library-card').screenshot({path:`/tmp/voidplayer-admin-columns-narrow-${browserName}.png`});
+  await managed.setViewportSize({width:1200,height:820});
+  await goLibrary('library:local');
+
+  await active.locator('.source-file').filter({hasText:'sample.mp4'}).waitFor();
+  assert.equal(await active.locator('.source-meta-origin').count(),0,'directory files do not repeat their library name');
+  await active.locator('.source-file').click({button:'right'});
+  assert.deepEqual(await managed.locator('#library-file-menu button').allTextContents(),['在播放器中浏览','拷贝文件名','拷贝绝对路径','拷贝媒体库路径','下载文件']);
+  await managed.keyboard.press('Escape');
+  const [destination] = await Promise.all([context.waitForEvent('page'),active.locator('.source-open').click()]);
+  await destination.waitForFunction(() => !!window.voidPlayer);
+  assert.equal(new URL(destination.url()).searchParams.get('root'),'local');
+  assert.equal(await destination.evaluate(() => window.voidPlayer.getState().tracks.length),0,'browsing from administration never implicitly opens or indexes media');
+  assert.equal(await player.evaluate(() => window.adminReturnMarker),'preserve-review');
+  await destination.close();
+  await goLibrary('library:/');
+  await chooseView('list'); await managed.reload();
+  await managed.waitForFunction(() => document.querySelector('#admin-library-browser')?.dataset.libraryView==='list');
+  await active.locator('.library-mount[data-root-id=local]').waitFor();
+  await chooseView('columns');
+  for (const theme of ['dark','light']) {
+    await player.evaluate(theme => localStorage.setItem('voidplayer.theme',theme),theme);
+    await managed.waitForFunction(theme => document.documentElement.dataset.theme===theme,theme);
+    await managed.locator('.admin-library-card').screenshot({path:`/tmp/voidplayer-admin-shared-library-${theme}-${browserName}.png`});
+  }
+  await managed.close(); await player.locator('#toggle-sources').click();
   const direct = await context.newPage(); await direct.goto(base + '/admin');
   await direct.getByRole('link', { name: '返回播放器', exact: true }).click(); await direct.waitForURL(base + '/');
   assert.equal(context.pages().length, 2, 'direct admin visits return within their current tab'); await direct.close();
@@ -202,7 +300,7 @@ try {
   await page.unroute('**/api/admin/measurements/*/transfer');
   for (const width of [1512, 1280, 720, 390]) {
     await page.setViewportSize({ width, height: 820 });
-    for (const name of ['概览', '媒体库', '缓存', '标注', '工作区', '日志', '测速']) {
+    for (const name of ['概览', '媒体库', '缓存', '标注', '工作区', '日志', '测速', '首选项']) {
       await page.getByRole('button', { name, exact: true }).click();
       const fits = await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && [...document.querySelectorAll('.admin-content > section:not([hidden])')].every(e => e.scrollWidth <= e.clientWidth + 1));
       assert.equal(fits, true, `${name} overflows at ${width}px`);

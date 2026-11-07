@@ -539,6 +539,10 @@
     "source": "媒体索引",
     "params": {}
   },
+  "admin.interfaceLanguage": {
+    "source": "界面语言",
+    "params": {}
+  },
   "admin.itemsCount": {
     "source": "{n, plural, other {# 条}}",
     "params": {
@@ -853,6 +857,10 @@
   },
   "admin.pageTitle": {
     "source": "管理 · VoidPlayer",
+    "params": {}
+  },
+  "admin.preferencesTitle": {
+    "source": "首选项",
     "params": {}
   },
   "admin.prevErrors": {
@@ -1396,6 +1404,28 @@
   },
   "admin.wsVideos": {
     "source": "视频",
+    "params": {}
+  },
+  "adminLibrary.columnView": {
+    "source": "分栏视图",
+    "params": {}
+  },
+  "adminLibrary.listView": {
+    "source": "列表视图",
+    "params": {}
+  },
+  "adminLibrary.openInPlayer": {
+    "source": "在播放器中浏览",
+    "params": {}
+  },
+  "adminLibrary.openInPlayerName": {
+    "source": "在播放器中浏览：{name}",
+    "params": {
+      "name": "string | number"
+    }
+  },
+  "adminLibrary.viewMode": {
+    "source": "浏览视图",
     "params": {}
   },
   "analysis.bitrate": {
@@ -3128,6 +3158,10 @@
     "source": "搜索当前目录或输入媒体库路径",
     "params": {}
   },
+  "libraryBrowser.manage": {
+    "source": "媒体库管理",
+    "params": {}
+  },
   "libraryBrowser.noMounts": {
     "source": "暂无挂载的媒体库",
     "params": {}
@@ -3154,6 +3188,14 @@
   },
   "libraryBrowser.unknownLibrary": {
     "source": "此媒体库在当前服务中不存在。",
+    "params": {}
+  },
+  "libraryColumns.loading": {
+    "source": "正在读取目录…",
+    "params": {}
+  },
+  "libraryColumns.unavailable": {
+    "source": "无法读取目录，请稍后重试。",
     "params": {}
   },
   "libraryFileMenu.copied": {

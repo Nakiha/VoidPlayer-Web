@@ -5,11 +5,11 @@ import { mediaActionUrl } from '../../shared/media/io/media-reference.ts';
 import { libraryLocationExpression } from './library-link.ts';
 import { installContextMenu } from './context-menu.ts';
 import type { ContextMenuAction } from './context-menu.ts';
-import type { WorkbenchAction } from './workbench/shared.ts';
+export type LibraryMenuAction = (action: () => unknown | Promise<unknown>, name?: string, data?: unknown) => Promise<void>;
 
 /** File actions invoke workbench callbacks; this menu never owns session state. */
-export function installLibraryFileMenu(host: HTMLElement, act: WorkbenchAction, notify: (message: string) => void, signal: AbortSignal) {
-  const entries = new WeakMap<HTMLElement, {entry?: LibraryEntry; playback: () => ContextMenuAction} | {rootId:string}>();
+export function installLibraryFileMenu(host: HTMLElement, act: LibraryMenuAction, notify: (message: string) => void, signal: AbortSignal) {
+  const entries = new WeakMap<HTMLElement, {entry?: LibraryEntry; playback: () => ContextMenuAction | undefined} | {rootId:string}>();
   const copy = (value: string | Promise<string>) => {
     // Safari requires clipboard.write in the click task. A promised ClipboardItem
     // preserves that activation while the server resolves the absolute path.
@@ -32,10 +32,10 @@ export function installLibraryFileMenu(host: HTMLElement, act: WorkbenchAction, 
         return body.absolutePath as string;
       })())}];
       const {entry} = record, playback = record.playback();
-      if (!entry) return [playback];
+      if (!entry) return playback ? [playback] : [];
       const source = mediaUrl(entry.id, entry.version);
       return [
-        playback,
+        ...(playback ? [playback] : []),
         { id: 'copy-name', label: t(msg('libraryFileMenu.copyName', '拷贝文件名')), glyph: 'copy', run: () => copy(entry.name.split('/').at(-1)!) },
         { id: 'copy-path', label: t(msg('sourceActions.copyAbsolutePath', '拷贝绝对路径')), glyph: 'copy', run: () => copy((async () => {
           const response = await fetch(mediaActionUrl(source, 'location', location.href), { cache: 'no-store', signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]) });
@@ -52,7 +52,7 @@ export function installLibraryFileMenu(host: HTMLElement, act: WorkbenchAction, 
       ];
     },
   });
-  return { register(row: HTMLElement, entry: LibraryEntry | undefined, playback: () => ContextMenuAction) {
+  return { register(row: HTMLElement, entry: LibraryEntry | undefined, playback: () => ContextMenuAction | undefined) {
     entries.set(row, {entry, playback}); row.tabIndex = -1; row.setAttribute('aria-haspopup', 'menu');
   }, registerMount(row: HTMLElement, rootId: string) {
     entries.set(row, {rootId}); row.setAttribute('aria-haspopup', 'menu');

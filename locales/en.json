@@ -479,6 +479,10 @@
     "source": "媒体索引",
     "translation": "Media index"
   },
+  "admin.interfaceLanguage": {
+    "source": "界面语言",
+    "translation": "Interface language"
+  },
   "admin.itemsCount": {
     "source": "{n, plural, other {# 条}}",
     "translation": "{n, plural, one {# item} other {# items}}"
@@ -770,6 +774,10 @@
   "admin.pageTitle": {
     "source": "管理 · VoidPlayer",
     "translation": "Administration · VoidPlayer"
+  },
+  "admin.preferencesTitle": {
+    "source": "首选项",
+    "translation": "Preferences"
   },
   "admin.prevErrors": {
     "source": "上一页错误",
@@ -1274,6 +1282,26 @@
   "admin.wsVideos": {
     "source": "视频",
     "translation": "Videos"
+  },
+  "adminLibrary.columnView": {
+    "source": "分栏视图",
+    "translation": "Column view"
+  },
+  "adminLibrary.listView": {
+    "source": "列表视图",
+    "translation": "List view"
+  },
+  "adminLibrary.openInPlayer": {
+    "source": "在播放器中浏览",
+    "translation": "Browse in player"
+  },
+  "adminLibrary.openInPlayerName": {
+    "source": "在播放器中浏览：{name}",
+    "translation": "Browse in player: {name}"
+  },
+  "adminLibrary.viewMode": {
+    "source": "浏览视图",
+    "translation": "Browse view"
   },
   "analysis.bitrate": {
     "source": "码率",
@@ -2922,6 +2950,10 @@
     "source": "搜索当前目录或输入媒体库路径",
     "translation": "Search this folder or enter a library path"
   },
+  "libraryBrowser.manage": {
+    "source": "媒体库管理",
+    "translation": "Manage library"
+  },
   "libraryBrowser.noMounts": {
     "source": "暂无挂载的媒体库",
     "translation": "No mounted libraries"
@@ -2945,6 +2977,14 @@
   "libraryBrowser.unknownLibrary": {
     "source": "此媒体库在当前服务中不存在。",
     "translation": "This library does not exist on the current service."
+  },
+  "libraryColumns.loading": {
+    "source": "正在读取目录…",
+    "translation": "Reading directory…"
+  },
+  "libraryColumns.unavailable": {
+    "source": "无法读取目录，请稍后重试。",
+    "translation": "Unable to read directory. Try again shortly."
   },
   "libraryFileMenu.copied": {
     "source": "已拷贝",

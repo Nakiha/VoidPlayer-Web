@@ -120,6 +120,7 @@ export interface Sources {
   "admin.httpRequests": "HTTP 请求";
   "admin.indexAfterSave": "保存后开始索引";
   "admin.indexTitle": "媒体索引";
+  "admin.interfaceLanguage": "界面语言";
   "admin.itemsCount": "{n, plural, other {# 条}}";
   "admin.kindFrameIndexes": "帧索引";
   "admin.kindPreviews": "标注预览";
@@ -193,6 +194,7 @@ export interface Sources {
   "admin.overviewTitle": "概览";
   "admin.pageCaption": "共 {total} 项 · 第 {n} 页，仅显示可读的非空文件";
   "admin.pageTitle": "管理 · VoidPlayer";
+  "admin.preferencesTitle": "首选项";
   "admin.prevErrors": "上一页错误";
   "admin.prevPage": "上一页";
   "admin.procCpu": "进程 CPU";
@@ -319,6 +321,11 @@ export interface Sources {
   "admin.wsNoVideos": "无视频";
   "admin.wsTitle": "工作区";
   "admin.wsVideos": "视频";
+  "adminLibrary.columnView": "分栏视图";
+  "adminLibrary.listView": "列表视图";
+  "adminLibrary.openInPlayer": "在播放器中浏览";
+  "adminLibrary.openInPlayerName": "在播放器中浏览：{name}";
+  "adminLibrary.viewMode": "浏览视图";
   "analysis.bitrate": "码率";
   "analysis.bitrateLegendHint": "码率 · 实线；点击切换，右键或长按单选，再次操作恢复。";
   "analysis.bitrateWindow": "码率窗口";
@@ -723,12 +730,15 @@ export interface Sources {
   "libraryBrowser.goForward": "前进";
   "libraryBrowser.library": "媒体库";
   "libraryBrowser.locationLabel": "搜索当前目录或输入媒体库路径";
+  "libraryBrowser.manage": "媒体库管理";
   "libraryBrowser.noMounts": "暂无挂载的媒体库";
   "libraryBrowser.openMount": "打开媒体库：{name}";
   "libraryBrowser.pathLabel": "媒体库路径";
   "libraryBrowser.scopeLabel": "媒体库范围";
   "libraryBrowser.searchUnder": "{scope} 下搜索";
   "libraryBrowser.unknownLibrary": "此媒体库在当前服务中不存在。";
+  "libraryColumns.loading": "正在读取目录…";
+  "libraryColumns.unavailable": "无法读取目录，请稍后重试。";
   "libraryFileMenu.copied": "已拷贝";
   "libraryFileMenu.copyLibraryPath": "拷贝媒体库路径";
   "libraryFileMenu.copyMountPath": "拷贝挂载路径";
@@ -1704,6 +1714,7 @@ export interface MessageParameters {
   "admin.httpRequests": {  };
   "admin.indexAfterSave": {  };
   "admin.indexTitle": {  };
+  "admin.interfaceLanguage": {  };
   "admin.itemsCount": { "n": number };
   "admin.kindFrameIndexes": {  };
   "admin.kindPreviews": {  };
@@ -1777,6 +1788,7 @@ export interface MessageParameters {
   "admin.overviewTitle": {  };
   "admin.pageCaption": { "n": string | number; "total": string | number };
   "admin.pageTitle": {  };
+  "admin.preferencesTitle": {  };
   "admin.prevErrors": {  };
   "admin.prevPage": {  };
   "admin.procCpu": {  };
@@ -1903,6 +1915,11 @@ export interface MessageParameters {
   "admin.wsNoVideos": {  };
   "admin.wsTitle": {  };
   "admin.wsVideos": {  };
+  "adminLibrary.columnView": {  };
+  "adminLibrary.listView": {  };
+  "adminLibrary.openInPlayer": {  };
+  "adminLibrary.openInPlayerName": { "name": string | number };
+  "adminLibrary.viewMode": {  };
   "analysis.bitrate": {  };
   "analysis.bitrateLegendHint": {  };
   "analysis.bitrateWindow": {  };
@@ -2307,12 +2324,15 @@ export interface MessageParameters {
   "libraryBrowser.goForward": {  };
   "libraryBrowser.library": {  };
   "libraryBrowser.locationLabel": {  };
+  "libraryBrowser.manage": {  };
   "libraryBrowser.noMounts": {  };
   "libraryBrowser.openMount": { "name": string | number };
   "libraryBrowser.pathLabel": {  };
   "libraryBrowser.scopeLabel": {  };
   "libraryBrowser.searchUnder": { "scope": string | number };
   "libraryBrowser.unknownLibrary": {  };
+  "libraryColumns.loading": {  };
+  "libraryColumns.unavailable": {  };
   "libraryFileMenu.copied": {  };
   "libraryFileMenu.copyLibraryPath": {  };
   "libraryFileMenu.copyMountPath": {  };

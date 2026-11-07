@@ -1,3 +1,4 @@
+import { librarySurfaceShell } from './library-view.ts';
 import { t, th, msg } from '../i18n.ts';
 import { settingsShell } from './settings-shell.ts';
 import { DEFAULT_ANNOTATION_COLOR } from '../../shared/review/annotation.ts';
@@ -105,19 +106,15 @@ export function shell() {
 </section>
       </div>
       </section>
-      <aside id="sources-panel" class="side-panel sources-panel glass" aria-label="${th(msg("shell.sources", "片源"))}" hidden>
-        <div class="source-tools" id="source-tools"></div>
-        <div id="source-list" class="source-list"></div>
-        <div id="source-scrollbar" class="source-scrollbar" aria-hidden="true"><span id="source-scrollbar-thumb"></span></div>
-        <div class="source-foot" id="source-foot">
-        <section id="local-sources" class="local-sources" aria-label="${th(msg("shell.localFiles", "本地文件"))}" hidden><h3 class="source-section"><span id="local-sources-heading">${th(msg("shell.localFiles", "本地文件"))}</span><button id="local-add" class="icon-button" aria-label="${th(msg("shell.chooseLocalFiles", "选择本地文件"))}" data-tooltip="${th(msg("shell.addLocalFilesToTheListLocal", "选择本地文件加入列表（仅本机预览，不上传）"))}">${icon('filePlus')}</button></h3><div id="local-list"></div></section>
+      <aside id="sources-panel" class="side-panel sources-panel glass library-pane" aria-label="${th(msg("shell.sources", "片源"))}" hidden>
+        ${librarySurfaceShell(`        <section id="local-sources" class="local-sources" aria-label="${th(msg("shell.localFiles", "本地文件"))}" hidden><h3 class="source-section"><span id="local-sources-heading">${th(msg("shell.localFiles", "本地文件"))}</span><button id="local-add" class="icon-button" aria-label="${th(msg("shell.chooseLocalFiles", "选择本地文件"))}" data-tooltip="${th(msg("shell.addLocalFilesToTheListLocal", "选择本地文件加入列表（仅本机预览，不上传）"))}">${icon('filePlus')}</button></h3><div id="local-list"></div></section>
         <section id="source-activity" class="source-activity" aria-label="${th(msg("shell.sourceLoadingStatus", "片源载入状态"))}" data-state="idle">
           <div class="source-activity-heading"><div id="source-activity-tracks" role="tablist" aria-label="${th(msg('activity.presentedTracks', '上屏轨道'))}" hidden></div><button id="source-activity-toggle" class="icon-button" type="button" aria-expanded="false" aria-controls="source-activity-details" aria-label="${th(msg('activity.expandDetails', '展开上屏详情'))}">${icon('down')}</button></div>
           <div id="source-activity-details" role="tabpanel" aria-hidden="true" inert><div class="source-activity-details-inner"><div class="source-activity-summary"><span class="source-activity-state"><span id="source-activity-state-icon" aria-hidden="true"></span><span id="source-activity-stage" role="status" aria-live="polite" aria-atomic="true">${th(msg("shell.waitingForASource", "等待添加片源"))}</span></span><button id="source-activity-cancel" class="icon-button" hidden>${icon('close')}</button></div>
           <div id="source-activity-name" class="source-activity-name" hidden></div>
           <div class="source-activity-meta"><span id="source-activity-size" hidden></span><span id="source-activity-time" hidden></span></div><div id="source-activity-hint" hidden></div></div></div>
         </section>
-        </div>
+`)}
         <input id="source-files" type="file" multiple accept="video/*,.mkv,.mov,.mp4,.webm,.ts,.avi,.flv" hidden>
       </aside>
       <section id="subtracks-panel" class="subtracks-panel marks-collapsed" aria-label="${th(msg("shell.tracks", "子轨道"))}" hidden>

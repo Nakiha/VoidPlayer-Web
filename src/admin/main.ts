@@ -1,3 +1,4 @@
+import { installAdminLibraryBrowser } from './library-browser.ts';
 import {installTasks} from './tasks.ts';
 import { PollingCadence } from '../services/polling-cadence.ts';
 import { confirmedActor, observeIdentity } from '../services/identity.ts';
@@ -236,8 +237,10 @@ const qualityJobs = installQualityJobs(life.signal);
 const discovery = installDiscovery(life.signal);
 const tasks = installTasks(life.signal);
 const measurements = installMeasurements(life.signal, notice);
+const libraryBrowser = installAdminLibraryBrowser(life.signal, message => notice(message));
 for (const [id] of PANES()) document.querySelector<HTMLButtonElement>(`[data-pane=${id}]`)!.onclick = () => {
   history.replaceState(null, '', `#${id}`); pane = id; tasks.activate(id==='tasks'); qualityJobs.activate(id === 'quality'); discovery.activate(id === 'discovery'); measurements.activate(id === 'measurements'); notice(() => ''); for (const [item] of PANES()) { $(`pane-${item}`).hidden = id !== item; document.querySelector(`[data-pane=${item}]`)!.setAttribute('aria-current', id === item ? 'page' : 'false'); }
+  libraryBrowser.activate(id === 'library');
   scanCadence.reset(); requestCadence.reset();
   if (id === 'overview') {void analysisSettings.load();void qualityResources.load();}
   if (id === 'library') void act(async () => { if (!rootConfig || !rootDirty) await loadRoots(); await loadScan(); });
@@ -251,7 +254,7 @@ $('reset-roots').onclick = () => void act(loadRoots);
 $('roots-form').onsubmit = event => { event.preventDefault(); if (!rootConfig?.writable || rootSaving) return;
   void act(async () => {
     rootSaving = true; updateRootActions();
-    try { rootConfig = await api<RootConfig>('/api/admin/roots', 'PUT', { revision: rootConfig!.revision, roots: readDraft() }); rootDirty = false; notice(() => t(msg("admin.dirsSavedNotice", "媒体目录已保存，后台开始校准索引。"))); renderRootStates(); await poll(); }
+    try { rootConfig = await api<RootConfig>('/api/admin/roots', 'PUT', { revision: rootConfig!.revision, roots: readDraft() }); rootDirty = false; notice(() => t(msg("admin.dirsSavedNotice", "媒体目录已保存，后台开始校准索引。"))); renderRootStates(); await libraryBrowser.refresh(); await poll(); }
     finally { rootSaving = false; updateRootActions(); }
   });
 };

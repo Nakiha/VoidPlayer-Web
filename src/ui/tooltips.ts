@@ -1,5 +1,5 @@
 /** One delegated tooltip for static and dynamically created controls, including dialogs. */
-export function installTooltips() {
+export function installTooltips(scope: HTMLElement = document.body) {
   const lifecycle = new AbortController();
   const options = { capture: true, signal: lifecycle.signal };
   const selector = 'button, summary, select, label[for], [role="separator"], [data-tooltip]';
@@ -22,7 +22,7 @@ export function installTooltips() {
       el.removeAttribute('title');
     }
   }
-  migrate(document.body);
+  migrate(scope);
   const filenameOf = (control: HTMLElement) => control.matches('.source-remove') ? null : control.matches('.filename') ? control
     : control.querySelector<HTMLElement>('.filename') ?? control.closest('.source-row')?.querySelector<HTMLElement>('.filename');
   const sizing = new ResizeObserver(() => { if (anchor && !popup.hidden) show(true); });
@@ -61,6 +61,7 @@ export function installTooltips() {
   function enter(event: Event) {
     if (menuOpen()) { hide(); return; }
     if (!(event.target instanceof Element) || popup.contains(event.target)) return;
+    if (!scope.contains(event.target)) {hide(); return;}
     const control = event.target.closest<HTMLElement>(selector);
     if (!control || control.hasAttribute('data-tooltip-suppressed') || control.matches(rich) || control.closest('.track-drag-preview')) { hide(); return; }
     if (event.type === 'focusin' && pointerFocus) return;
@@ -81,7 +82,7 @@ export function installTooltips() {
     if (anchor && !anchor.isConnected) hide();
     else if (anchor && !popup.hidden && records.some(record => record.type === 'attributes' && record.target === anchor)) show();
   });
-  observer.observe(document.body, { childList: true, subtree: true, attributes: true,
+  observer.observe(scope, { childList: true, subtree: true, attributes: true,
     attributeFilter: ['title', 'data-tooltip', 'aria-label', 'data-tooltip-suppressed'] });
   document.addEventListener('beforetoggle', event => {
     if ((event.target as Element)?.matches?.('.popup-menu, .header-actions[popover]')) hide();

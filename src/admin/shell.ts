@@ -9,14 +9,14 @@ import { cacheShell } from './caches.ts';
 import { workspaceAdminShell } from './workspaces.ts';
 import { measurementShell } from './measurement.ts';
 import { icon } from '../ui/icons.ts';
-export const PANES = () => [['overview', t(msg("admin.overviewTitle", "概览")), 'diagnostics'], ['library', t(msg("admin.libraryTitle", "媒体库")), 'open'], ['discovery', t(msg('discovery.title','技术选片与显式准备')), 'film'], ['caches', t(msg("admin.cacheTitle", "缓存")), 'film'], ['workspaces', t(msg("admin.wsTitle", "工作区")), 'film'], ['annotations', t(msg("admin.marksTab", "标注")), 'note'], ['tasks',t(msg('tasks.title','任务中心')),'diagnostics'], ['quality', t(msg('qualityWorkflow.title','画质评分')), 'diagnostics'], ['logs', t(msg("admin.logsTitle", "日志")), 'note'], ['measurements', t(msg("admin.measureTitle", "测速")), 'diagnostics']] as const;
+export const PANES = () => [['overview', t(msg("admin.overviewTitle", "概览")), 'diagnostics'], ['library', t(msg("admin.libraryTitle", "媒体库")), 'open'], ['discovery', t(msg('discovery.title','技术选片与显式准备')), 'film'], ['caches', t(msg("admin.cacheTitle", "缓存")), 'film'], ['workspaces', t(msg("admin.wsTitle", "工作区")), 'film'], ['annotations', t(msg("admin.marksTab", "标注")), 'note'], ['tasks',t(msg('tasks.title','任务中心')),'diagnostics'], ['quality', t(msg('qualityWorkflow.title','画质评分')), 'diagnostics'], ['logs', t(msg("admin.logsTitle", "日志")), 'note'], ['measurements', t(msg("admin.measureTitle", "测速")), 'diagnostics'], ['preferences', t(msg('admin.preferencesTitle', '首选项')), 'settings']] as const;
 export function adminShell() {
   return `<div class="admin-layout">
     <nav class="admin-navigation" aria-label="${th(msg("admin.navCategory", "管理分类"))}"><a class="admin-brand" href="/">${icon('film')}<span>VoidPlayer</span></a><span class="admin-nav-caption">${th(msg("admin.navCaption", "服务管理"))}</span>
       ${PANES().map(([id, label, glyph]) => `<button data-pane="${id}" aria-current="${id === 'overview' ? 'page' : 'false'}">${icon(glyph)}${label}</button>`).join('')}
       <a class="admin-back" href="/">${icon('previous')}${th(msg("admin.backToPlayer", "返回播放器"))}</a>
     </nav>
-    <main class="admin-content"><div class="admin-language"><button type="button" id="language-choice" class="choice-trigger" aria-label="${th(msg("language.label", "语言 / Language"))}"></button><span id="language-status" role="status"></span></div><p id="admin-message" role="status" aria-live="polite" hidden></p>
+    <main class="admin-content"><p id="admin-message" role="status" aria-live="polite" hidden></p>
       <section id="pane-overview"><header class="admin-heading"><div><h1>${th(msg("admin.overviewTitle", "概览"))}</h1><p>${th(msg("admin.overviewDesc", "查看服务状态、资源占用和媒体扫描进度。"))}</p></div><button id="refresh-status" class="icon-button" aria-label="${th(msg("admin.refreshStatus", "刷新状态"))}">${icon('refresh')}</button></header>
         <div class="admin-metrics"><div><span>${th(msg("admin.uptime", "已运行"))}</span><strong id="uptime">—</strong></div><div><span>${th(msg("admin.procMemory", "进程内存"))}</span><strong id="memory">—</strong></div><div><span>${th(msg("admin.procCpu", "进程 CPU"))}</span><strong id="cpu">—</strong></div><div><span>${th(msg("admin.connections", "连接数"))}</span><strong id="connections">—</strong></div></div>
         <h2>${th(msg("admin.serviceTitle", "服务"))}</h2><p>${th(msg("admin.serviceDesc", "可信内网模式：用户名用于内容归属，不是身份认证。访问者可选择已有身份并使用管理功能；本服务不提供安全的多租户隔离。"))}</p><dl class="admin-properties"><div><dt>${th(msg("admin.version", "版本"))}</dt><dd id="version">—</dd></div><div><dt>${th(msg("admin.runtime", "运行环境"))}</dt><dd id="runtime">—</dd></div><div><dt>${th(msg("admin.dataDir", "数据目录"))}</dt><dd id="data-dir">—</dd></div><div><dt>${th(msg("admin.currentIdentity", "当前身份"))}</dt><dd id="identity">—</dd></div><div><dt>${th(msg("admin.systemMemory", "系统可用内存"))}</dt><dd id="system-memory">—</dd></div><div><dt>${th(msg("admin.httpRequests", "HTTP 请求"))}</dt><dd id="requests">—</dd></div></dl>
@@ -32,6 +32,9 @@ export function adminShell() {
       ${tasksShell()}
       ${qualityJobsShell()}
       ${discoveryShell()}
+      <section id="pane-preferences" hidden><header class="admin-heading"><h1>${th(msg('admin.preferencesTitle', '首选项'))}</h1></header>
+        <div class="admin-panel"><div class="admin-preference-row"><h2>${th(msg('admin.interfaceLanguage', '界面语言'))}</h2><div class="admin-language"><button type="button" id="language-choice" class="choice-trigger" aria-label="${th(msg("language.label", "语言 / Language"))}"></button><span id="language-status" role="status"></span></div></div></div>
+      </section>
       <section id="pane-library" hidden><header class="admin-heading"><div><h1>${th(msg("admin.libraryTitle", "媒体库"))}</h1><p>${th(msg("admin.libraryDesc", "添加服务器目录，保存后即可在播放器中浏览视频。"))}</p></div></header>
         <form id="roots-form" class="admin-panel"><div class="admin-section-heading"><h2>${th(msg("admin.mediaDirs", "媒体目录"))}</h2><button type="button" id="add-root">${icon('plus')}${th(msg("admin.addDir", "添加目录"))}</button></div>
           <div id="root-editor" class="admin-root-editor"></div>
@@ -42,6 +45,7 @@ export function adminShell() {
           <div class="admin-scan-status"><strong id="scan-progress">${th(msg("admin.readingScan", "正在读取扫描状态…"))}</strong><p id="scan-detail" class="admin-caption"></p></div>
           <div id="scan-issues" hidden><div class="admin-section-heading"><h3 id="scan-error-count"></h3><div id="scan-error-pages" class="admin-button-group"><button id="errors-prev" class="icon-button" aria-label="${th(msg("admin.prevErrors", "上一页错误"))}">${icon('previous')}</button><button id="errors-next" class="icon-button" aria-label="${th(msg("admin.nextErrors", "下一页错误"))}">${icon('next')}</button></div></div><div id="scan-errors" class="admin-error-list"></div></div>
         </div>
+        <div class="admin-panel admin-library-card"><div id="admin-library-browser" class="library-pane" aria-label="${th(msg('shell.browseLibrary', '浏览媒体库'))}"></div></div>
       </section>
       <section id="pane-logs" class="admin-logs" hidden><header class="admin-heading"><div><h1>${th(msg("admin.logsTitle", "日志"))}</h1><p>${th(msg("admin.logsDesc", "查看用户上传的诊断日志，或检查服务器收到的请求。"))}</p></div><button id="refresh-logs" class="icon-button" aria-label="${th(msg("admin.refreshLogs", "刷新日志"))}">${icon('refresh')}</button></header>
         <p id="log-storage" class="admin-caption"></p>

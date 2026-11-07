@@ -17,7 +17,7 @@ await withBrowserFixture({caseName:'i18n-admin-layout',engine,pageOptions:{viewp
  await page.goto(url+'admin?pseudo-locale');await chooseTestGuest(page);assert.match(await page.locator('[data-pane=overview]').innerText(),/［/);
  for(const width of [1280,720,390,320]){
   await page.setViewportSize({width,height:900});
-  for(const pane of ['overview','library','caches','workspaces','annotations','logs','measurements']){
+  for(const pane of ['overview','library','caches','workspaces','annotations','logs','measurements','preferences']){
    // A pane click starts an asynchronous measurement poll. Finish its body
    // before installing routes/navigating: WebKit reports an in-flight request
    // interrupted by navigation as an access-control page error.
@@ -50,5 +50,5 @@ await withBrowserFixture({caseName:'i18n-admin-layout',engine,pageOptions:{viewp
   });checks.push({width,pane:'guide-'+os,...result});if(width===390)await page.screenshot({path:artifact(`guide-pseudo-${os}-390.png`)});
  }
  await writeFile(artifact('report.json'),JSON.stringify({engine,checks,errors},null,2));assert.deepEqual(errors,[]);assert.deepEqual(checks.filter(c=>c.errors.length||c.pageWidth>c.viewport+1),[],`expanded pseudo admin/guide controls fit`);
- console.log(`PASS ${engine}: expanded pseudo copy, all seven panels and both certificate OS steps at 1280/720/390/320px`);
+ console.log(`PASS ${engine}: expanded pseudo copy, all administration panels and both certificate OS steps at 1280/720/390/320px`);
 });

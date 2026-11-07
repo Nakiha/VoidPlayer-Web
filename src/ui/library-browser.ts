@@ -7,32 +7,39 @@ import { icon } from './icons.ts';
 import { installContextMenu } from './context-menu.ts';
 import { libraryLocationExpression, parseLibraryLocationInput, parseLibraryLocationLink } from './library-link.ts';
 
+export type LibraryBrowserElements = { list: HTMLElement; tools: HTMLElement; foot: HTMLElement; visible(): boolean; manage?: boolean; trailing?: HTMLElement; nearEnd?(): boolean };
+
 /** One directory owner for mounted libraries, scoped search and path navigation. */
-export function installLibraryBrowser(change: (page: LibraryPage | null) => void, signal: AbortSignal, onScope?: (home: boolean) => void,
+export function installLibraryBrowser(elements: LibraryBrowserElements, change: (page: LibraryPage | null) => void, signal: AbortSignal, onScope?: (home: boolean) => void,
   notify: (message: string) => void = () => {}, observeRecent: () => boolean = () => false) {
   let initial = { root: '', directory: '', all: false };
   if (new URL(location.href).searchParams.has('library')) {
     try { initial = parseLibraryLocationLink(location.href, location.href); } catch { /* Ignore malformed startup links. */ }
   }
   let root = initial.all ? '' : initial.root, directory = initial.all ? '' : initial.directory;
-  let publishedRoot = root;
+  let publishedRoot = root, publishedDirectory = directory;
   let page: LibraryPage | null = null, roots: LibraryRoot[] = [], search = '', appliedSearch = '';
   let request: AbortController | undefined, sequence = 0, loading = false, pendingSearch = false;
   type Location = { root: string; directory: string; search: string };
   let history: Location[] = [{root,directory,search}], historyIndex = 0;
   let pathSignature = '', appliedScope = '', searchTimer: ReturnType<typeof setTimeout> | undefined;
   const cadence = new PollingCadence(3000);
-  const list = document.getElementById('source-list')!, tools = document.getElementById('source-tools')!;
+  const {list,tools,foot} = elements;
   const nav = document.createElement('div'); nav.className = 'library-navigation'; nav.id = 'library-navigation';
   const address = document.createElement('input'); address.id = 'library-location'; address.className = 'library-location';
   address.type = 'search'; address.autocomplete = 'off'; address.spellcheck = false;
+  const manage = document.createElement('a'); manage.id = 'library-manage'; manage.className = 'icon-button library-manage';
+  manage.href = '/admin#library'; manage.target = '_blank'; manage.rel = 'opener'; manage.innerHTML = icon('settings');
+  manage.setAttribute('aria-label',t(msg('libraryBrowser.manage', '媒体库管理')));
   nav.append(address);
+  if (elements.manage) nav.append(manage);
+  if (elements.trailing) nav.append(elements.trailing);
   const back = createIconButton({ glyph: 'caretLeft', label: t(msg('libraryBrowser.goBack', '后退')), className: 'crumbs-back', attributes:{'data-tooltip-suppressed':''} });
   const forward = createIconButton({ glyph: 'caretRight', label: t(msg('libraryBrowser.goForward', '前进')), className: 'crumbs-forward', attributes:{'data-tooltip-suppressed':''} });
   const historyControls = document.createElement('div'); historyControls.className = 'library-history';
   historyControls.append(back, forward); tools.replaceChildren(historyControls, nav);
   const pathbar = document.createElement('nav'); pathbar.id = 'library-pathbar'; pathbar.className = 'library-pathbar';
-  document.getElementById('source-foot')!.prepend(pathbar);
+  foot.prepend(pathbar);
   pathbar.addEventListener('click', event => {
     const target = (event.target as Element).closest('li')?.querySelector<HTMLButtonElement>('button[data-root]');
     if (target && !target.hasAttribute('aria-current')) navigate(target.dataset.root ?? '', target.dataset.directory ?? '');
@@ -155,7 +162,7 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
         value = { ...value, entries: [...value.entries, ...more.entries], directories: [...value.directories, ...more.directories], nextOffset: more.nextOffset };
       }
       if (ticket !== sequence || signal.aborted) return;
-      page = value; roots = value.roots; appliedSearch = search; appliedScope = scope; publishedRoot = root; published = true;
+      page = value; roots = value.roots; appliedSearch = search; appliedScope = scope; publishedRoot = root; publishedDirectory = directory; published = true;
       cadence.observe([scope, page.revision, page.thumbnailEpoch, page.entries.length, page.roots.map(r => [r.id, r.state, r.error])],
         page.scanning || page.entries.some(entry => entry.state === 'pending'));
     } catch (error) {
@@ -172,7 +179,7 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
   }
   function more() {
     if (root && appliedScope === JSON.stringify([root,directory,search]) && !loading && !pendingSearch && page?.nextOffset != null && list.clientHeight > 0
-      && list.scrollHeight - list.scrollTop - list.clientHeight < 180) void load(true);
+      && (elements.nearEnd?.() ?? list.scrollHeight - list.scrollTop - list.clientHeight < 180)) void load(true);
   }
   function reset() { void load(false, true); }
   function navigate(id: string, path: string) {
@@ -189,7 +196,7 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
   list.addEventListener('scroll', more, { signal, passive: true });
   const resize = new ResizeObserver(more); resize.observe(list);
   const timer = setInterval(() => {
-    const visible = !document.hidden && !signal.aborted && (!document.getElementById('sources-panel')!.hidden || observeRecent());
+    const visible = !document.hidden && !signal.aborted && (elements.visible() || observeRecent());
     if (cadence.ready(visible) && !loading && !pendingSearch) void load();
   }, 1000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) cadence.reset(); }, { signal });
@@ -198,6 +205,7 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
     for (const [button,label] of [[back,t(msg('libraryBrowser.goBack', '后退'))],[forward,t(msg('libraryBrowser.goForward', '前进'))]] as const) {
       button.setAttribute('aria-label', label); button.dataset.tooltip = label;
     }
+    const label = t(msg('libraryBrowser.manage', '媒体库管理')); manage.setAttribute('aria-label',label); manage.dataset.tooltip=label;
     controls();
   }, signal);
   signal.addEventListener('abort', () => {
@@ -242,7 +250,8 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
       } while ((page as LibraryPage | null)?.nextOffset != null);
       return false;
     },
-    navigate, page: () => page, filter: () => appliedSearch, isRoot: () => !publishedRoot,
+    appliedLocation: () => ({root:publishedRoot,directory:publishedDirectory,search:appliedSearch}),
+    more, navigate, page: () => page, filter: () => appliedSearch, isRoot: () => !publishedRoot,
     load: () => load(),
     clearSearch() { address.value = ''; searchFor(''); },
   };
