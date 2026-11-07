@@ -62,7 +62,7 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
  assert.equal(await page.locator('#more-actions').count(),0);assert.equal(await page.locator('#help').count(),0);assert.equal(await page.locator('dialog.log-panel').count(),0);
  await page.locator('#settings-open').click();await page.locator('#settings').evaluate(e=>Promise.all(e.getAnimations().map(a=>a.finished)));const geometry=await page.locator('#settings').boundingBox();
  assert.equal(await page.locator('#settings-tab-annotations, #settings-pane-annotations, #annotation-space-choice, #annotation-space-create, #annotation-publish').count(),0,'legacy recovery page is removed');
- assert.equal(await page.locator('#settings [role=tab]:visible').count(),9);
+ assert.equal(await page.locator('#settings [role=tab]:visible').count(),8);
  assert.equal(await page.locator('#chart-hover-style').innerText(),'合并显示');
  assert.equal(await page.locator('#settings details, #settings summary').count(),0,'settings contain no disclosure controls');
  assert.equal(await page.locator('#settings [role=tabpanel]:not(#settings-pane-performance) select').count(),0,'settings use shared choice menus');
@@ -88,7 +88,7 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
  await page.locator('#settings-tab-logs').click();
  await page.waitForFunction(()=>document.querySelector('.log-json').value.startsWith('{')&&!document.querySelector('#log-description').disabled);
  assert.equal(await page.evaluate(()=>window.logRefreshBusy.includes('true')),false,'showing feedback never dims its controls for a background refresh');
- for(const pane of ['appearance','workspace','identity','shortcuts','logs','performance','mcp','experimental','about']) {
+ for(const pane of ['appearance','workspace','identity','shortcuts','logs','performance','experimental','about']) {
   await page.locator(`#settings-tab-${pane}`).click();assert.equal(await page.locator('[role=tabpanel]:visible').count(),1);assert.equal(await page.locator('dialog[open]').count(),1);
   assert.deepEqual(await page.locator('#settings').boundingBox(),geometry,'panes keep a stable window');
   assert.equal(await page.locator(`#settings-tab-${pane}`).getAttribute('aria-selected'),'true');
@@ -105,13 +105,8 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
   for(const check of sectionSpacing) assert.ok(Math.abs(check.gap-(check.kind==='section'?12:6))<1,`${pane} ${check.kind} spacing: ${check.gap}`);
   if(process.env.SETTINGS_SCREENSHOTS) await page.locator('#settings').screenshot({path:`${process.env.SETTINGS_SCREENSHOTS}-${pane}.png`});
   if(pane==='experimental') {
-   assert.equal(await page.locator('.topbar #quality-tasks-open').count(),0);
-   assert.equal(await page.locator('#sources-panel :is(#quality-roi-open, #quality-roi-presented-open)').count(),0);
-   assert.equal(await page.locator('#settings-pane-experimental #quality-roi-open').isVisible(),true);
-   const entry=page.locator('#settings-pane-experimental #quality-tasks-open');
-   const [quality]=await Promise.all([page.waitForEvent('popup'),entry.click()]);
-   await quality.waitForURL('**/admin/#quality');
-   await quality.close();
+   assert.equal(await page.locator('#settings-tab-mcp, #settings-pane-mcp, #quality-roi-open, #quality-tasks-open').count(),0);
+   assert.equal(await page.locator('#settings-pane-experimental #page-bridge-settings').isVisible(),true);
   }
   if(pane==='workspace') {
    for(const id of ['saved-workspace-share']) {
@@ -299,7 +294,7 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
    const downloadPromise=page.waitForEvent('download');await page.locator('.log-panel [data-action=download]').click();const download=await downloadPromise;
    const log=JSON.parse(await readFile(await download.path(),'utf8'));originalSession=log.sessionId;assert.ok(log.events.length>0);assert.equal(uploads,0,'viewing and downloading logs never uploads');
   }
-  if(['appearance','workspace','identity','shortcuts','logs','performance','mcp','experimental','about'].includes(pane))await page.locator('#settings').screenshot({path:artifact(`voidplayer-settings-unified-${pane}-${name}.png`)});
+  if(['appearance','workspace','identity','shortcuts','logs','performance','experimental','about'].includes(pane))await page.locator('#settings').screenshot({path:artifact(`voidplayer-settings-unified-${pane}-${name}.png`)});
  }
  await checkSettingsScrollbar(page,1280,artifact);
  await page.locator('#settings-tab-about').click();
@@ -312,7 +307,7 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
  await page.locator('#settings').screenshot({path:artifact(`voidplayer-settings-unified-light-${name}.png`)});
  await page.setViewportSize({width:390,height:700});
  await checkSettingsScrollbar(page,390,artifact);
- for(const pane of ['appearance','workspace','identity','shortcuts','logs','performance','mcp','experimental','about']) {
+ for(const pane of ['appearance','workspace','identity','shortcuts','logs','performance','experimental','about']) {
   await page.locator(`#settings-tab-${pane}`).click();
   const overflow=await page.locator(`#settings-pane-${pane}`).evaluate(e=>({width:e.clientWidth,scroll:e.scrollWidth}));
   assert.ok(overflow.scroll<=overflow.width+1,`no horizontal overflow in ${pane}: ${JSON.stringify(overflow)}`);
@@ -451,5 +446,5 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
    }
   } finally { await migrated.close(); }
  }
- assert.equal(uploads,0);assert.deepEqual(errors,[]);console.log(`PASS ${name}: direct settings, nine persistent panes, unified geometry/material, Escape/focus/shortcut/navigation, log download without upload, narrow layouts`);
+ assert.equal(uploads,0);assert.deepEqual(errors,[]);console.log(`PASS ${name}: direct settings, eight persistent panes, unified geometry/material, Escape/focus/shortcut/navigation, log download without upload, narrow layouts`);
 });

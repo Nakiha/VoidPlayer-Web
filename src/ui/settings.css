@@ -584,9 +584,12 @@ html[lang=en] .color-flow-link span { max-width: 34px; white-space: normal; text
 .checkpoint-capacity-item[data-full=true] .checkpoint-capacity-meter > span { background: var(--action-danger); }
 @media (max-width: 600px) { .checkpoint-capacity { gap: 16px; } .checkpoint-capacity-item { grid-template-columns: 18px minmax(0, 1fr); } .checkpoint-capacity-value { grid-column: 1 / -1; } }
 
-#settings-pane-mcp .mcp-controls { justify-content: flex-start; gap: 8px; }
+.settings-mcp { margin-top: var(--settings-section-gap); }
+.settings-mcp[hidden] { display: none; }
+.settings-mcp > .settings-section-title { margin: 0 0 var(--settings-heading-gap); padding-inline: 16px; }
+#page-bridge-settings .mcp-controls { justify-content: flex-start; gap: 8px; }
 #page-bridge-code { flex: 1 1 150px; min-width: 0; }
-#settings-pane-mcp .mcp-target { display: grid; gap: 10px; overflow-wrap: anywhere; }
+#page-bridge-settings .mcp-target { display: grid; gap: 10px; overflow-wrap: anywhere; }
 #page-bridge-client { margin: 4px 0 0; white-space: pre-wrap; color: var(--text-secondary); font-size: 12px; }
-#settings-pane-mcp .mcp-scope { flex-wrap: nowrap; font-size: 13px; line-height: 1.5; }
-#settings-pane-mcp .mcp-scope input { flex: none; accent-color: var(--accent); }
+#page-bridge-settings .mcp-scope { flex-wrap: nowrap; font-size: 13px; line-height: 1.5; }
+#page-bridge-settings .mcp-scope input { flex: none; accent-color: var(--accent); }

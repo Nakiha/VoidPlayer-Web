@@ -15,10 +15,9 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
   let documentToken=meta?.content??'',requestId='',expiresAt=0;meta?.remove();
   const pageId=crypto.randomUUID();
   const settings=document.querySelector<HTMLDialogElement>('#settings')!;
-  const tab=document.querySelector<HTMLButtonElement>('#settings-tab-mcp')!;
-  const pane=document.getElementById('settings-pane-mcp')!;
+  const pane=document.getElementById('page-bridge-settings')!;
   const $=<T extends HTMLElement=HTMLElement>(id:string)=>pane.querySelector<T>('#page-bridge-'+id)!;
-  tab.hidden=false;
+  pane.hidden=false;
   $('pairing').hidden=!existing;
   const read=$<HTMLInputElement>('read');
   read.checked=read.disabled=!existing;
@@ -109,7 +108,7 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
     render();
   };
   settings.addEventListener('settings-pane-change',event=>{
-    if((event as CustomEvent<string>).detail!=='mcp')return;
+    if((event as CustomEvent<string>).detail!=='experimental')return;
     void refresh();render();
   },{signal});
   settings.addEventListener('close',()=>{ $<HTMLInputElement>('code').value=''; },{signal});

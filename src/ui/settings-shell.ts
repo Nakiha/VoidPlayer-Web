@@ -8,14 +8,14 @@ import { shortcutLabel } from './shortcuts.ts';
 import type { Shortcut } from './shortcuts.ts';
 export const settingsPanes = () => [
   ['appearance', t(msg("settingsShell.appearance", "外观")), 'appearance'], ['workspace', t(msg("settingsShell.workspace", "工作区")), 'stack'],
-  ['identity', t(msg("settingsShell.user", "用户")), 'user'], ['shortcuts', t(msg("settingsShell.shortcuts", "快捷键")), 'keyboard'], ['logs', t(msg("settingsShell.logs", "日志")), 'fileText'], ['performance', t(msg("settingsShell.colorDecoding", "色彩与解码")), 'colorDecoding'], ['mcp', 'MCP', 'shareNetwork'],
+  ['identity', t(msg("settingsShell.user", "用户")), 'user'], ['shortcuts', t(msg("settingsShell.shortcuts", "快捷键")), 'keyboard'], ['logs', t(msg("settingsShell.logs", "日志")), 'fileText'], ['performance', t(msg("settingsShell.colorDecoding", "色彩与解码")), 'colorDecoding'],
   ['experimental', t(msg('settingsShell.experimental', '实验性功能')), 'diagnostics'], ['about', t(msg("settingsShell.about", "关于")), 'info'],
 ] as const;
 const paneTitle = (title: string, description = '') => `<div class="settings-page-title"><h3>${title}</h3>${description ? `<p>${description}</p>` : ''}</div>`;
 const shortcutRows = (entries: [string, Shortcut[]][]) => entries.map(([action, keys]) => `<div class="shortcut-row"><span>${action}</span><span class="shortcut-keys">${keys.map(key => `<kbd>${shortcutLabel(key)}</kbd>`).join('<span> / </span>')}</span></div>`).join('');
 export function settingsShell() {
   return `<dialog id="settings" class="settings-window" aria-label="${th(msg("shell.settings", "设置"))}">
-    <div class="settings-body"><nav class="settings-navigation" aria-label="${th(msg("settingsShell.settingsCategories", "设置分类"))}"><div role="tablist" aria-orientation="vertical">${settingsPanes().map(([id, label, glyph]) => `<button id="settings-tab-${id}" role="tab" data-settings-pane="${id}"${id === 'mcp' ? ' hidden' : ''} aria-controls="settings-pane-${id}" aria-selected="${id === 'appearance'}" tabindex="${id === 'appearance' ? 0 : -1}">${icon(glyph)}<span>${label}</span></button>`).join('')}</div></nav>
+    <div class="settings-body"><nav class="settings-navigation" aria-label="${th(msg("settingsShell.settingsCategories", "设置分类"))}"><div role="tablist" aria-orientation="vertical">${settingsPanes().map(([id, label, glyph]) => `<button id="settings-tab-${id}" role="tab" data-settings-pane="${id}" aria-controls="settings-pane-${id}" aria-selected="${id === 'appearance'}" tabindex="${id === 'appearance' ? 0 : -1}">${icon(glyph)}<span>${label}</span></button>`).join('')}</div></nav>
     <div class="settings-content">
       <header class="settings-floating-header"><h2 id="settings-current-title">${th(msg("settingsShell.appearance", "外观"))}</h2><button id="settings-close" class="icon-button" aria-label="${th(msg("settingsShell.closeSettings", "关闭设置"))}">${icon('close')}</button></header>
       <section id="settings-pane-appearance" role="tabpanel" aria-labelledby="settings-tab-appearance" tabindex="0">
@@ -67,7 +67,7 @@ export function settingsShell() {
         ${paneTitle(t(msg("settingsShell.shortcuts", "快捷键")))}
         <div class="settings-section"><h4 class="settings-section-title">${th(msg("settingsShell.playbackView", "播放与视图"))}</h4><div class="settings-group">${shortcutRows([[t(msg("shell.playPause", "播放 / 暂停")),['play']],[t(msg("settingsShell.previousNextFrame", "上一帧 / 下一帧")),['previous','next']],[t(msg("shell.toggleSideBySideSplit", "切换并排 / 分屏")),['layout']],[t(msg("shell.focusMode", "专注模式")),['focusMode']],[t(msg("shell.trackInfo", "轨道信息")),['panelInspector']],[t(msg("shell.bitstreamAnalysis", "码流分析")),['panelAnalysis']],[t(msg("shell.tracks", "子轨道")),['panelSubtracks']],[t(msg("shell.sources", "片源")),['panelSources']],[t(msg("shell.openSettings", "打开设置")),['settings']]])}</div>
         </div><div class="settings-section"><h4 class="settings-section-title">${th(msg("shell.annotations", "标注"))}</h4><div class="settings-group">${shortcutRows([[t(msg("settingsShell.startAnnotating", "开始标注")),['annotate']],[t(msg("settingsShell.selectPen", "选择 / 画笔")),['select','pen']],[t(msg("settingsShell.rectangleEllipse", "矩形 / 椭圆")),['rect','ellipse']],[t(msg("settingsShell.lineTextEraser", "线条 / 文字 / 橡皮擦")),['line','text','eraser']],[t(msg("shell.undo", "撤销")),['undo']],[t(msg("shell.redo", "重做")),['redo']],[t(msg("shell.deleteSelection", "删除选中对象")),['delete']],[t(msg("settingsShell.finishAnnotatingCloseWindow", "结束标注 / 关闭窗口")),['close']]])}</div>
-        <p class="settings-caption">${th(msg("settingsShell.spaceAndArrowKeysRemainAvailableWhen", "输入文字时保留空格与方向键。滚轮或捏合缩放，右键拖动或双指滚动平移。"))}</p></div>
+        </div>
       </section>
       <section id="settings-pane-logs" role="tabpanel" aria-labelledby="settings-tab-logs" tabindex="0" hidden>
         ${paneTitle(t(msg("settingsShell.logs", "日志")))}
@@ -81,41 +81,6 @@ export function settingsShell() {
           <div class="settings-action-row settings-key-value-row"><h4 id="analysis-concurrency-label">${th(msg('settingsShell.analysisConcurrency', '分析并发数'))}</h4><button id="analysis-concurrency" type="button" class="settings-choice" aria-labelledby="analysis-concurrency-label"></button></div></div>
         </div>
       </section>
-      <section id="settings-pane-mcp" role="tabpanel" aria-labelledby="settings-tab-mcp" tabindex="0" hidden>
-        <div id="page-bridge-pairing" class="settings-section" hidden>
-          <h4 class="settings-section-title"><label for="page-bridge-code">${th(msg('pageBridge.pairCode', '一次性配对信息'))}</label></h4>
-          <div class="settings-group"><div class="settings-action-row mcp-controls">
-            <input id="page-bridge-code" type="password" autocomplete="off" maxlength="32">
-            <button id="page-bridge-pair" type="button">${th(msg('pageBridge.pairReview', '核对配对'))}</button>
-            <button id="page-bridge-reset" type="button">${th(msg('pageBridge.pairReset', '配对其他客户端'))}</button>
-          </div></div>
-        </div>
-        <div class="settings-section">
-          <h4 class="settings-section-title">${th(msg('pageBridge.target', '连接对象'))}</h4>
-          <div class="settings-group"><div class="settings-action-row mcp-target">
-            <div><h4>${th(msg('pageBridge.clientLabel', 'MCP 客户端'))}</h4><pre id="page-bridge-client"></pre></div>
-            <div><h4>${th(msg('settingsShell.workspace', '工作区'))}</h4><p id="page-bridge-workspace"></p></div>
-          </div></div>
-          <p class="settings-caption">${th(msg('pageBridge.claim', '客户端名称为自行声明，并非认证身份。仅授权此页面及当前工作区，不跟随其他标签。'))}</p>
-        </div>
-        <div class="settings-section">
-          <h4 class="settings-section-title" id="page-bridge-scopes">${th(msg('pageBridge.scopes', '授权范围'))}</h4>
-          <div class="settings-group" role="group" aria-labelledby="page-bridge-scopes">
-            <label class="settings-action-row mcp-scope"><span>${th(msg('pageBridge.read', '读取此页面会话、已有标注与 ROI（不含媒体或日志字节）'))}</span><input id="page-bridge-read" type="checkbox"></label>
-            <label class="settings-action-row mcp-scope"><span>${th(msg('pageBridge.view', '允许暂停和精确定位此页面'))}</span><input id="page-bridge-view" type="checkbox"></label>
-            <label class="settings-action-row mcp-scope"><span>${th(msg('pageBridge.annotate', '允许在已暂停的当前帧创建可见标注'))}</span><input id="page-bridge-annotate" type="checkbox"></label>
-          </div>
-        </div>
-        <div class="settings-section">
-          <h4 class="settings-section-title">${th(msg('pageBridge.title', '临时本机 MCP 连接'))}</h4>
-          <div class="settings-group"><div class="settings-action-row mcp-controls">
-            <button id="page-bridge-connect" type="button" disabled>${th(msg('pageBridge.connect', '明确连接此页面'))}</button>
-            <button id="page-bridge-revoke" type="button" disabled>${th(msg('pageBridge.revoke', '撤销连接'))}</button>
-          </div></div>
-          <p id="page-bridge-status" class="settings-caption" role="status"></p>
-          <p class="settings-caption">${th(msg('pageBridge.lifetime', '授权仅存于当前进程和页面内存。撤销、重载、关页或断线即失效；已经开始的操作可能完成，取消不表示回滚，未知写入不得自动重试。'))}</p>
-        </div>
-      </section>
       <section id="settings-pane-experimental" role="tabpanel" aria-labelledby="settings-tab-experimental" tabindex="0" hidden>
         <div class="settings-section"><h4 class="settings-section-title" id="local-file-access-label">${th(msg('fileAccess.title', '持久访问本地文件'))}</h4>
           <div class="settings-group"><div class="settings-action-row">
@@ -124,6 +89,42 @@ export function settingsShell() {
           </div></div>
           <p id="local-file-access-status" class="settings-caption" role="status"></p>
           <p class="settings-caption">${th(msg('fileAccess.help', '选择一个视频以验证访问权限和本机句柄保存，不会上传或播放。曾拒绝授权时可再次尝试；浏览器未提供此能力时，本地视频仅在本次页面可用，不进入最近打开。'))}</p>
+        </div>
+        <div id="page-bridge-settings" class="settings-mcp" hidden>
+          <h4 class="settings-section-title">MCP</h4>
+          <div id="page-bridge-pairing" class="settings-section" hidden>
+            <h4 class="settings-section-title"><label for="page-bridge-code">${th(msg('pageBridge.pairCode', '一次性配对信息'))}</label></h4>
+            <div class="settings-group"><div class="settings-action-row mcp-controls">
+              <input id="page-bridge-code" type="password" autocomplete="off" maxlength="32">
+              <button id="page-bridge-pair" type="button">${th(msg('pageBridge.pairReview', '核对配对'))}</button>
+              <button id="page-bridge-reset" type="button">${th(msg('pageBridge.pairReset', '配对其他客户端'))}</button>
+            </div></div>
+          </div>
+          <div class="settings-section">
+            <h4 class="settings-section-title">${th(msg('pageBridge.target', '连接对象'))}</h4>
+            <div class="settings-group"><div class="settings-action-row mcp-target">
+              <div><h4>${th(msg('pageBridge.clientLabel', 'MCP 客户端'))}</h4><pre id="page-bridge-client"></pre></div>
+              <div><h4>${th(msg('settingsShell.workspace', '工作区'))}</h4><p id="page-bridge-workspace"></p></div>
+            </div></div>
+            <p class="settings-caption">${th(msg('pageBridge.claim', '客户端名称为自行声明，并非认证身份。仅授权此页面及当前工作区，不跟随其他标签。'))}</p>
+          </div>
+          <div class="settings-section">
+            <h4 class="settings-section-title" id="page-bridge-scopes">${th(msg('pageBridge.scopes', '授权范围'))}</h4>
+            <div class="settings-group" role="group" aria-labelledby="page-bridge-scopes">
+              <label class="settings-action-row mcp-scope"><span>${th(msg('pageBridge.read', '读取此页面会话、已有标注与 ROI（不含媒体或日志字节）'))}</span><input id="page-bridge-read" type="checkbox"></label>
+              <label class="settings-action-row mcp-scope"><span>${th(msg('pageBridge.view', '允许暂停和精确定位此页面'))}</span><input id="page-bridge-view" type="checkbox"></label>
+              <label class="settings-action-row mcp-scope"><span>${th(msg('pageBridge.annotate', '允许在已暂停的当前帧创建可见标注'))}</span><input id="page-bridge-annotate" type="checkbox"></label>
+            </div>
+          </div>
+          <div class="settings-section">
+            <h4 class="settings-section-title">${th(msg('pageBridge.title', '临时本机 MCP 连接'))}</h4>
+            <div class="settings-group"><div class="settings-action-row mcp-controls">
+              <button id="page-bridge-connect" type="button" disabled>${th(msg('pageBridge.connect', '明确连接此页面'))}</button>
+              <button id="page-bridge-revoke" type="button" disabled>${th(msg('pageBridge.revoke', '撤销连接'))}</button>
+            </div></div>
+            <p id="page-bridge-status" class="settings-caption" role="status"></p>
+            <p class="settings-caption">${th(msg('pageBridge.lifetime', '授权仅存于当前进程和页面内存。撤销、重载、关页或断线即失效；已经开始的操作可能完成，取消不表示回滚，未知写入不得自动重试。'))}</p>
+          </div>
         </div>
       </section>
       <section id="settings-pane-about" role="tabpanel" aria-labelledby="settings-tab-about" tabindex="0" hidden>

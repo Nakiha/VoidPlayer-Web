@@ -917,7 +917,6 @@ export interface Sources {
   "settingsShell.selectPen": "选择 / 画笔";
   "settingsShell.settingsCategories": "设置分类";
   "settingsShell.shortcuts": "快捷键";
-  "settingsShell.spaceAndArrowKeysRemainAvailableWhen": "输入文字时保留空格与方向键。滚轮或捏合缩放，右键拖动或双指滚动平移。";
   "settingsShell.startAnnotating": "开始标注";
   "settingsShell.system": "跟随系统";
   "settingsShell.user": "用户";
@@ -2116,7 +2115,6 @@ export interface MessageParameters {
   "settingsShell.selectPen": {  };
   "settingsShell.settingsCategories": {  };
   "settingsShell.shortcuts": {  };
-  "settingsShell.spaceAndArrowKeysRemainAvailableWhen": {  };
   "settingsShell.startAnnotating": {  };
   "settingsShell.system": {  };
   "settingsShell.user": {  };

@@ -15,7 +15,7 @@ const check=(label,value=true)=>{assert.ok(value,label);checks.push(label);conso
 async function eventually(fn){const end=Date.now()+12000;for(;;){const value=await fn();if(value)return value;if(Date.now()>end)throw Error('Timeout: '+phase);await new Promise(r=>setTimeout(r,40));}}
 async function openMcpSettings(page){
   if(!await page.locator('#settings').isVisible())await page.locator('#settings-open').click();
-  await page.locator('#settings-tab-mcp').click();
+  await page.locator('#settings-tab-experimental').click();
 }
 async function closeSettings(page){
   await page.locator('#settings-close').click();
@@ -38,7 +38,7 @@ try{
   check('existing ROI drawn through GUI before CLI exists');
   await a.evaluate(origin=>{const frame=document.createElement('iframe');frame.id='bridge-framing-test';frame.src=origin;document.body.append(frame);},origin);
   await a.frameLocator('#bridge-framing-test').locator('#app:not([data-initializing])').waitFor();
-  check('embedded ordinary page has no bridge authorization UI',await a.frameLocator('#bridge-framing-test').locator('#settings-tab-mcp[hidden]').count()===1);await a.locator('#bridge-framing-test').evaluate(e=>e.remove());
+  check('embedded ordinary page has no bridge authorization UI',await a.frameLocator('#bridge-framing-test').locator('#page-bridge-settings[hidden]').count()===1);await a.locator('#bridge-framing-test').evaluate(e=>e.remove());
   const beforeA=await a.locator('#name-A').textContent(),beforeB=await b.locator('#name-A').textContent();
   check('two ordinary pages loaded File before independent CLI exists');
   check('ordinary HTML has no launcher bootstrap',!(await (await fetch(origin)).text()).includes('name="voidplayer-page-bridge"'));
@@ -104,7 +104,7 @@ try{
   phase='reload';await a.reload();await eventually(async()=>!(await client.call('get_bridge_status')).connected);check('reload revokes');
   check('old epoch unavailable',(await call('get_review_session')).code==='host-unavailable');
   await client.close();check('EOF preserves normal service',(await fetch(origin)).ok);await start();await pair(b);status=await connect(b);epoch=status.epoch;
-  phase='EOF';check('live EOF clean exit',(await client.close()).code===0);await eventually(()=>b.locator('#settings-pane-mcp[data-connected="false"]').isVisible());
+  phase='EOF';check('live EOF clean exit',(await client.close()).code===0);await eventually(()=>b.locator('#page-bridge-settings[data-connected="false"]').isVisible());
   check('EOF preserves File and page',await b.locator('#name-A').textContent()===beforeB);check('EOF preserves original normal service',(await fetch(origin+'/api/agent')).ok);
   phase='fresh-client-same-loaded-page';await start();await b.locator('#page-bridge-reset').click();await b.locator('#page-bridge-code').fill(client.pairingCode);await b.locator('#page-bridge-pair').click();status=await connect(b);epoch=status.epoch;
   check('fresh client pairs same loaded page without reload or file reselection',(await call('get_review_session')).tracks[0].name===beforeB);

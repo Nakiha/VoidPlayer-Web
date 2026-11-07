@@ -13,7 +13,7 @@ const args=process.argv.slice(2);
 if(args[0]==='--existing-origin'){
   if(args.length!==2)throw Error('Usage: --existing-origin <exact loopback origin>');
   const {channel,pairingCode,expiresAt}=await ExistingPageClient.create(args[1]);
-  process.stderr.write(`VoidPlayer existing page: ${new URL(args[1]).origin}/\nPublic one-time matching code (not an authorization credential; enter in Settings → MCP on the intended already-open page): ${pairingCode}\nExpires: ${new Date(expiresAt).toISOString()}\nClient name is self-declared. The page must explicitly confirm permissions.\n`);
+  process.stderr.write(`VoidPlayer existing page: ${new URL(args[1]).origin}/\nPublic one-time matching code (not an authorization credential; enter in Settings → Experimental features → MCP on the intended already-open page): ${pairingCode}\nExpires: ${new Date(expiresAt).toISOString()}\nClient name is self-declared. The page must explicitly confirm permissions.\n`);
   runPageStdio(channel,async()=>{channel.close();});
 }else{
 if(args.length&&!(args.length===2&&args[0]==='--static-dir'))throw Error('Usage: node scripts/mcp-page-bridge.ts [--static-dir <built frontend>]');
@@ -32,7 +32,7 @@ const close=()=>closing??=(async()=>{channel.close();await new Promise<void>(res
 try{
   await new Promise<void>((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',()=>{server.off('error',reject);resolve();});});
   channel.origin=`http://127.0.0.1:${(server.address() as {port:number}).port}`;
-  process.stderr.write(`VoidPlayer temporary page: ${channel.origin}/\nReview permissions in Settings → MCP.\n`);
+  process.stderr.write(`VoidPlayer temporary page: ${channel.origin}/\nReview permissions in Settings → Experimental features → MCP.\n`);
   runPageStdio(channel,close);
 }catch(error){await close();throw error;}
 

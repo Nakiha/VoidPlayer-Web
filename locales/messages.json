@@ -3957,10 +3957,6 @@
     "source": "快捷键",
     "params": {}
   },
-  "settingsShell.spaceAndArrowKeysRemainAvailableWhen": {
-    "source": "输入文字时保留空格与方向键。滚轮或捏合缩放，右键拖动或双指滚动平移。",
-    "params": {}
-  },
   "settingsShell.startAnnotating": {
     "source": "开始标注",
     "params": {}

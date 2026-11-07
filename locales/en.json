@@ -3700,10 +3700,6 @@
     "source": "快捷键",
     "translation": "Shortcuts"
   },
-  "settingsShell.spaceAndArrowKeysRemainAvailableWhen": {
-    "source": "输入文字时保留空格与方向键。滚轮或捏合缩放，右键拖动或双指滚动平移。",
-    "translation": "Space and arrow keys remain available when typing. Scroll or pinch to zoom; right-drag or scroll with two fingers to pan."
-  },
   "settingsShell.startAnnotating": {
     "source": "开始标注",
     "translation": "Start annotating"

@@ -18,7 +18,7 @@ async function gateWait(gate){let timer;try{await Promise.race([gate.promise,new
 async function eventually(fn){const end=Date.now()+12000;for(;;){const value=await fn();if(value)return value;if(Date.now()>=end)throw Error('Condition timeout: '+phase);await new Promise(r=>setTimeout(r,40));}}
 async function openMcpSettings(page){
   if(!await page.locator('#settings').isVisible())await page.locator('#settings-open').click();
-  await page.locator('#settings-tab-mcp').click();
+  await page.locator('#settings-tab-experimental').click();
 }
 async function closeSettings(page){
   await page.locator('#settings-close').click();
@@ -151,7 +151,7 @@ try{
   await openMcpSettings(pageA);await pageA.locator('#page-bridge-connect').click();
   await eventually(async()=>(await client.call('get_bridge_status')).connected);check('EOF starts with a live explicit grant');
   check('stdio EOF shutdown',(await client.close()).code===0);
-  await pageA.locator('#settings-pane-mcp[data-connected="false"]').waitFor({state:'visible'});check('EOF invalidates the live page grant');
+  await pageA.locator('#page-bridge-settings[data-connected="false"]').waitFor({state:'visible'});check('EOF invalidates the live page grant');
   await writeFile(path.join(dir,'evidence.json'),JSON.stringify({passed:true,browser:browser.version(),channel:process.env.MCP_BROWSER_CHANNEL??'chromium',checks,network,pageErrors},null,2));
   console.log(JSON.stringify({passed:true,browser:browser.version(),checks:checks.length,phase}));
 }catch(error){await writeFile(path.join(dir,'failure.json'),JSON.stringify({phase,error:String(error),stack:error.stack,checks,network,pageErrors,channelResponses},null,2));throw error;}

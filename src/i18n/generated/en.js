@@ -919,7 +919,6 @@ export default {
   "settingsShell.selectPen": () => "Select / Pen",
   "settingsShell.settingsCategories": () => "Settings categories",
   "settingsShell.shortcuts": () => "Shortcuts",
-  "settingsShell.spaceAndArrowKeysRemainAvailableWhen": () => "Space and arrow keys remain available when typing. Scroll or pinch to zoom; right-drag or scroll with two fingers to pan.",
   "settingsShell.startAnnotating": () => "Start annotating",
   "settingsShell.system": () => "System",
   "settingsShell.user": () => "User",

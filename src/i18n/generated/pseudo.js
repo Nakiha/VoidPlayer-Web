@@ -919,7 +919,6 @@ export default {
   "settingsShell.selectPen": () => "［S~e~l~e~c~t~ / P~e~n~ ········］",
   "settingsShell.settingsCategories": () => "［S~e~t~t~i~n~g~s~ c~a~t~e~g~o~r~i~e~s~ ········］",
   "settingsShell.shortcuts": () => "［S~h~o~r~t~c~u~t~s~ ········］",
-  "settingsShell.spaceAndArrowKeysRemainAvailableWhen": () => "［S~p~a~c~e~ a~n~d~ a~r~r~o~w~ k~e~y~s~ r~e~m~a~i~n~ a~v~a~i~l~a~b~l~e~ w~h~e~n~ t~y~p~i~n~g~. S~c~r~o~l~l~ o~r~ p~i~n~c~h~ t~o~ z~o~o~m~; r~i~g~h~t~-d~r~a~g~ o~r~ s~c~r~o~l~l~ w~i~t~h~ t~w~o~ f~i~n~g~e~r~s~ t~o~ p~a~n~. ········］",
   "settingsShell.startAnnotating": () => "［S~t~a~r~t~ a~n~n~o~t~a~t~i~n~g~ ········］",
   "settingsShell.system": () => "［S~y~s~t~e~m~ ········］",
   "settingsShell.user": () => "［U~s~e~r~ ········］",
