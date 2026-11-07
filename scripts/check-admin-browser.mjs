@@ -291,6 +291,41 @@ try {
       assert.ok(samples.every(sample => sample.inner==='rgba(0, 0, 0, 0)'),`${theme}: ${phase} never adds a second inner highlight`);
     }
   }
+  const selectionFolder=active.locator('.library-folder').filter({hasText:'folder-000'});
+  const sampleSelection = async action => {
+    await selectionFolder.evaluate(el => {
+      window.selectionSamples=[];
+      const progress=(target,property) => target.getAnimations().find(animation => animation.transitionProperty===property)?.effect.getComputedTiming().progress ?? null;
+      const sample=() => {
+        const box=el.querySelector('.source-thumb'),row=getComputedStyle(el),thumb=getComputedStyle(box);
+        window.selectionSamples.push({text:row.color,icon:thumb.color,layers:thumb.backgroundImage,
+          textProgress:progress(el,'color'),iconProgress:progress(box,'color'),rowProgress:progress(el,'background-color'),thumbProgress:progress(box,'background-color')});
+        window.selectionFrame=requestAnimationFrame(sample);
+      };
+      sample();
+    });
+    await action(); await managed.waitForTimeout(320);
+    return managed.evaluate(() => {cancelAnimationFrame(window.selectionFrame);return window.selectionSamples;});
+  };
+  for (const theme of ['dark','light']) {
+    await player.evaluate(theme => localStorage.setItem('voidplayer.theme',theme),theme);
+    await managed.waitForFunction(theme => document.documentElement.dataset.theme===theme,theme);
+    await managed.waitForTimeout(320);
+    const select=await sampleSelection(async () => {
+      await selectionFolder.evaluate(el => el.click());
+      await managed.waitForFunction(() => document.querySelector('#library-location').value==='folder-000');
+    });
+    const deselect=await sampleSelection(() => goLibrary('library:local'));
+    for (const [phase,samples] of [['select',select],['deselect',deselect]]) {
+      const final=samples.at(-1);
+      assert.ok(samples.some(sample => sample.text!==final.text&&sample.icon!==final.icon),`${theme}: ${phase} animates the row text and icon together`);
+      const changingText=samples.filter(sample => sample.textProgress>.03&&sample.textProgress<.97);
+      assert.ok(changingText.length>2&&changingText.every(sample => sample.iconProgress!==null&&Math.abs(sample.textProgress-sample.iconProgress)<.03),`${theme}: ${phase} keeps icon and text transitions synchronized`);
+      const intermediate=samples.filter(sample => sample.rowProgress>.03&&sample.rowProgress<.97);
+      assert.ok(intermediate.length>2&&intermediate.every(sample => sample.thumbProgress!==null&&Math.abs(sample.rowProgress-sample.thumbProgress)<.03),`${theme}: ${phase} keeps thumbnail and row fill transitions synchronized`);
+      assert.equal(new Set(samples.map(sample => sample.layers)).size,1,`${theme}: ${phase} preserves the zebra backing layer throughout the transition`);
+    }
+  }
   await managed.emulateMedia({reducedMotion:'reduce'});
   await goLibrary('library:local/z-branch/leaf');
   const nestedFile=active.locator('.source-file').filter({hasText:'nested.mp4'});

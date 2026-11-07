@@ -1,5 +1,6 @@
 /* Apply to the resting state too, so release fades back just like press. */
-button:not(.analysis-progress-action), .connection-status, .library-manage, .source-file, .numeric-choice, .library-root-group > summary {
+button:not(.analysis-progress-action), .connection-status, .library-manage, .source-file, .source-row > .source-thumb,
+.numeric-choice, .library-root-group > summary {
   transition: background-color 240ms ease, color 240ms ease !important;
 }
 
@@ -24,7 +25,8 @@ button:active:not(:disabled):not([aria-disabled=true]):not([role=tab]):not(#sett
 }
 
 @media (prefers-reduced-motion: reduce) {
-  button:not(.analysis-progress-action), .connection-status, .library-manage, .source-file, .numeric-choice, .library-root-group > summary { transition: none !important; }
+  button:not(.analysis-progress-action), .connection-status, .library-manage, .source-file, .source-row > .source-thumb,
+  .numeric-choice, .library-root-group > summary { transition: none !important; }
 }
 :focus-visible { outline: none; }
 

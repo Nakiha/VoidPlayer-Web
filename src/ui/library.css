@@ -100,7 +100,7 @@
 .library-columns-resizing, .library-columns-resizing * { cursor: col-resize !important; user-select: none; -webkit-user-select: none; }
 .library-column .source-row.library-column-selected { background: var(--surface-selected); color: var(--accent); }
 .library-column .source-row.library-column-selected:hover { background: var(--surface-selected); }
-.source-row:is(.in-use, .library-column-selected) > .source-thumb { color: var(--accent); background: color-mix(in srgb, var(--accent) 24%, var(--surface-panel)); }
+.source-row:is(.in-use, .library-column-selected) > .source-thumb { color: var(--accent); background-color: color-mix(in srgb, var(--accent) 24%, var(--surface-panel)); }
 .library-branch-arrow { display: inline-flex; flex: none; }
 .library-branch-arrow .icon { width: 14px; height: 14px; flex: none; }
 .library-pane[data-library-view=columns] .source-list { overflow-x: auto; overflow-y: hidden; padding-bottom: calc(var(--foot-h) + 14px); }
