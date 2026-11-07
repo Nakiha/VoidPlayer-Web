@@ -12,7 +12,7 @@
 | 独立程序运行与 HTTPS | [便携运行](../deploy/standalone.md) |
 | 服务端日志与上传报告 | [轮转、配额与保留](server-logging.md) |
 | 用户、访客、分享与工作区 | [身份与分享](identity-and-sharing.md)、[工作区格式](workspace-format.md) |
-| 媒体库与存储 | [媒体库索引](media-library-evolution.md)、[存储位置](library-location.md) |
+| 媒体库与存储 | [媒体库索引](media-library-evolution.md)、[存储位置](library-location.md)、[文件管理](library-file-management.md) |
 | 索引、定位与时间戳 | [渐进索引](progressive-indexing.md)、[统一索引](unified-indexing.md)、[JS 容器与索引](js-container-migration.md)、[FLV 时间线](flv-timeline.md)、[MP4 Range 边界](mp4-range-boundaries.md)、[时间戳兼容](timestamp-compatibility.md) |
 | 色彩与帧资源 | [色彩链路契约](color-pipeline.md)、[HDR 支持](hdr-support.md) |
 | 发现片源并显式准备 | [技术发现](library-discovery.md)、[严格 MP4](trusted-mp4-quality.md)、[暂停原生 FLV](paused-native-quality.md) |

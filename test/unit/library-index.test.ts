@@ -29,6 +29,97 @@ async function fixture(run: (root: string, media: string) => Promise<void>) {
   if (failure) throw failure;
 }
 
+test('explicit library file commands move, rename and delete without overwriting or escaping mounts', async () => fixture(async (root,media) => {
+  const other=path.join(root,'other'),outside=path.join(root,'outside');
+  for (const directory of [other,outside,path.join(media,'target'),path.join(media,'protected'),path.join(media,'pack')]) await mkdir(directory);
+  for (const name of ['a.mp4','b.mp4','c.mp4','d.mp4']) await writeFile(path.join(media,name),name);
+  await writeFile(path.join(media,'pack','notes.txt'),'folder contents');
+  await writeFile(path.join(media,'pack','clip.mp4'),'nested');
+  await writeFile(path.join(media,'target','c.mp4'),'do not overwrite');
+  await writeFile(path.join(outside,'secret.mp4'),'outside');
+  await fs.symlink(outside,path.join(media,'link'),process.platform==='win32'?'junction':'dir');
+  const index=new MediaLibraryIndex([{id:'a',path:media},{id:'b',path:other},{id:'nested',path:path.join(media,'protected')}],{watch:false});
+  await index.refresh();
+  const server=createMediaServer({roots:[media,other],library:index,onLog(){}});
+  await new Promise<void>(resolve => server.listen(0,'127.0.0.1',resolve));
+  const base=`http://127.0.0.1:${(server.address() as {port:number}).port}`;
+  const call=(body:unknown,origin=base) => fetch(base+'/api/library/files',{method:'POST',headers:{origin,'content-type':'application/json','x-voidplayer-action':'library-files'},body:JSON.stringify(body)});
+  const file=(name:string,rootId='a') => {
+    const entry=index.browse({rootId,recursive:true}).entries.find(entry => entry.name===name)!;
+    assert.ok(entry,`indexed ${rootId}/${name}`);
+    return {rootId,path:name,kind:'file' as const,version:entry.version};
+  };
+  const target={rootId:'a',directory:'target'};
+  const link=fs.link,unlink=fs.unlink,renameFile=fs.rename;
+  try {
+    const move={operation:'move',sources:[file('a.mp4'),file('b.mp4')],target};
+    assert.equal((await call(move,'http://different.invalid')).status,403);
+    assert.equal((await call({...move,sources:[{...file('a.mp4'),version:'0'.repeat(24)}]})).status,409);
+    for (const value of ['../secret.mp4','/secret.mp4','a\\secret.mp4','']) assert.equal((await call({operation:'delete',sources:[{...file('a.mp4'),path:value}]})).status,400);
+    assert.equal((await call({operation:'move',sources:[file('a.mp4')],target:{rootId:'a',directory:'link'}})).status,409);
+    assert.equal((await call({operation:'delete',sources:[{rootId:'a',path:'protected',kind:'directory'}]})).status,409);
+    assert.equal((await call({operation:'move',sources:[{rootId:'a',path:'pack',kind:'directory'}],target:{rootId:'a',directory:'pack'}})).status,400);
+    assert.equal((await call({operation:'move',sources:[file('c.mp4'),file('d.mp4')],target})).status,409);
+    assert.equal(await fs.readFile(path.join(media,'d.mp4'),'utf8'),'d.mp4','whole-batch conflict validation precedes all writes');
+    const moved=await (await call(move)).json();
+    assert.equal(moved.indexRefreshed,true);assert.ok(moved.results.every((item:{ok:boolean}) => item.ok));
+    assert.equal(await fs.readFile(path.join(media,'target/a.mp4'),'utf8'),'a.mp4');
+    assert.equal(index.browse({rootId:'a',directory:''}).entries.some(entry => entry.name==='a.mp4'),false);
+    assert.equal((await call(move)).status,404,'a repeated uncertain request cannot act on a missing original');
+    const renamed=await (await call({operation:'rename',source:file('target/a.mp4'),name:'renamed.mp4'})).json();
+    assert.equal(renamed.results[0].ok,true);assert.ok(file('target/renamed.mp4'));
+    const deleted=await (await call({operation:'delete',sources:[file('target/b.mp4')]})).json();
+    assert.equal(deleted.results[0].ok,true);await assert.rejects(fs.stat(path.join(media,'target/b.mp4')),{code:'ENOENT'});
+    const folder=await (await call({operation:'move',sources:[{rootId:'a',path:'pack',kind:'directory'}],target:{rootId:'b',directory:''}})).json();
+    assert.equal(folder.results[0].ok,true);assert.equal(await fs.readFile(path.join(other,'pack/notes.txt'),'utf8'),'folder contents');
+    assert.ok(file('pack/clip.mp4','b'));
+    // Exercise the cross-volume file path without needing a second test volume.
+    fs.link=(async () => {throw Object.assign(new Error('cross device'),{code:'EXDEV'});}) as typeof fs.link;
+    const copied=await (await call({operation:'move',sources:[file('d.mp4')],target:{rootId:'b',directory:''}})).json();
+    assert.equal(copied.results[0].ok,true);assert.equal(await fs.readFile(path.join(other,'d.mp4'),'utf8'),'d.mp4');
+    fs.link=link;
+    // Failure after an exclusive destination exists retains both copies and reports failure.
+    fs.unlink=(async (...args:Parameters<typeof fs.unlink>) => {
+      if (String(args[0]).endsWith(path.sep+'c.mp4')) throw Object.assign(new Error('source busy'),{code:'EACCES'});
+      return unlink(...args);
+    }) as typeof fs.unlink;
+    const partial=await (await call({operation:'move',sources:[file('c.mp4')],target:{rootId:'b',directory:''}})).json();
+    assert.equal(partial.results[0].ok,false);assert.equal(await fs.readFile(path.join(media,'c.mp4'),'utf8'),'c.mp4');
+    assert.equal(await fs.readFile(path.join(other,'c.mp4'),'utf8'),'c.mp4');fs.unlink=unlink;
+    // A running write owns its lifetime; concurrent commands/configuration cannot race it.
+    let entered!:()=>void,release!:()=>void;
+    const started=new Promise<void>(resolve => {entered=resolve;}),gate=new Promise<void>(resolve => {release=resolve;});
+    fs.rename=(async (...args:Parameters<typeof fs.rename>) => {entered();await gate;return renameFile(...args);}) as typeof fs.rename;
+    const pending=call({operation:'rename',source:{rootId:'b',path:'pack',kind:'directory'},name:'renamed-pack'});
+    await started;
+    try {
+      assert.equal((await call({operation:'delete',sources:[file('d.mp4','b')]})).status,409);
+      await assert.rejects(index.reconfigure([],async () => async () => {}),{status:409});
+    } finally {release();}
+    assert.equal((await (await pending).json()).results[0].ok,true);
+    fs.rename=renameFile;
+    const removedFolder=await (await call({operation:'delete',sources:[{rootId:'b',path:'renamed-pack',kind:'directory'}]})).json();
+    assert.equal(removedFolder.results[0].ok,true);await assert.rejects(fs.stat(path.join(other,'renamed-pack')),{code:'ENOENT'});
+    // Shutdown waits for the accepted physical write; an interrupted rescan is explicit.
+    let deleting!:()=>void,finishDelete!:()=>void,stopped=false;
+    const deleteStarted=new Promise<void>(resolve => {deleting=resolve;}),deleteGate=new Promise<void>(resolve => {finishDelete=resolve;});
+    fs.unlink=(async (...args:Parameters<typeof fs.unlink>) => {deleting();await deleteGate;return unlink(...args);}) as typeof fs.unlink;
+    const deletingReply=call({operation:'delete',sources:[file('d.mp4','b')]});
+    await deleteStarted;
+    const shutdown=index.stopExecution().then(() => {stopped=true;});
+    try {await new Promise<void>(resolve => setImmediate(resolve));assert.equal(stopped,false);}
+    finally {finishDelete();}
+    const duringShutdown=await (await deletingReply).json();
+    assert.equal(duringShutdown.results[0].ok,true);assert.equal(duringShutdown.indexRefreshed,false);
+    await shutdown;assert.equal(stopped,true);
+    await assert.rejects(fs.stat(path.join(other,'d.mp4')),{code:'ENOENT'});
+    assert.equal(await fs.readFile(path.join(outside,'secret.mp4'),'utf8'),'outside');
+  } finally {
+    fs.link=link;fs.unlink=unlink;fs.rename=renameFile;
+    server.closeAllConnections();await new Promise<void>(resolve => server.close(() => resolve()));await index.close();
+  }
+}));
+
 test('browse validators skip unchanged row queries while retaining scope, revision and content checks', async () => fixture(async (root, media) => {
   await writeFile(path.join(media, 'one.mp4'), 'video');
   const index = new MediaLibraryIndex([media], { database: path.join(root, 'library.sqlite'), watch: false, settleMs: 0 });

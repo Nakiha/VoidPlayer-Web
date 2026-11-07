@@ -323,6 +323,11 @@ export interface Sources {
   "admin.wsVideos": "视频";
   "adminLibrary.columnView": "分栏视图";
   "adminLibrary.listView": "列表视图";
+  "adminLibrary.moveIndexPending": "文件操作已完成，目录索引尚未刷新，请重新扫描。";
+  "adminLibrary.moveLimit": "每次最多移动 100 个项目。";
+  "adminLibrary.movePartial": "已移动 {moved} 项，{failed} 项失败。";
+  "adminLibrary.moveUnknown": "移动结果未确认，正在刷新目录，请核对后再操作。";
+  "adminLibrary.movedItems": "已移动 {count} 个项目";
   "adminLibrary.openInPlayer": "在播放器中浏览";
   "adminLibrary.viewMode": "浏览视图";
   "analysis.bitrate": "码率";
@@ -1922,6 +1927,11 @@ export interface MessageParameters {
   "admin.wsVideos": {  };
   "adminLibrary.columnView": {  };
   "adminLibrary.listView": {  };
+  "adminLibrary.moveIndexPending": {  };
+  "adminLibrary.moveLimit": {  };
+  "adminLibrary.movePartial": { "failed": string | number; "moved": string | number };
+  "adminLibrary.moveUnknown": {  };
+  "adminLibrary.movedItems": { "count": string | number };
   "adminLibrary.openInPlayer": {  };
   "adminLibrary.viewMode": {  };
   "analysis.bitrate": {  };

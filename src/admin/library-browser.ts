@@ -13,6 +13,7 @@ import { sourceKey } from '../ui/source-catalog.ts';
 import type { SourceItem } from '../ui/source-catalog.ts';
 import { installSourceScrollbar } from '../ui/source-scrollbar.ts';
 import { installTooltips } from '../ui/tooltips.ts';
+import {installLibrarySelection} from './library-selection.ts';
 
 /** Administration supplies navigation actions, never a hidden player session. */
 export function installAdminLibraryBrowser(signal: AbortSignal, notify: (message: string) => void) {
@@ -29,6 +30,7 @@ export function installAdminLibraryBrowser(signal: AbortSignal, notify: (message
   listBody.hidden=mode!=='list'; columnsHost.hidden=mode!=='columns'; list.append(listBody,columnsHost);
   const viewButton=createIconButton({glyph:'columns',label:t(msg('adminLibrary.viewMode','浏览视图')),className:'library-view-choice',attributes:{id:'admin-library-view','data-tooltip-suppressed':''}});
   let columns:ReturnType<typeof installLibraryColumns>;
+  let selection:ReturnType<typeof installLibrarySelection>|undefined;
 
   let active = false;
   const act = async (action: () => unknown | Promise<unknown>) => {
@@ -42,9 +44,10 @@ export function installAdminLibraryBrowser(signal: AbortSignal, notify: (message
     render();
   }, signal, undefined, notify);
   const listing = installLibraryListing(listBody, {fileRow,navigate:browser.navigate,registerMount:menu.registerMount,collapsible:false,recent:false});
-  columns = installLibraryColumns(list,columnsHost,signal,{fileRow:(item,home) => fileRow(item,false,home),navigate:browser.navigate,registerMount:menu.registerMount,more:browser.more,collapsible:false,recent:false,
+  columns = installLibraryColumns(list,columnsHost,signal,{fileRow:(item,home) => fileRow(item,false,home),navigate:browser.navigate,registerMount:menu.registerMount,more:browser.more,collapsible:false,recent:false,pathClass:'library-column-path',
     localizeRow:(row,item,home) => patchLibraryRow(row,fileRow(item,true,home))});
   columns.setEnabled(mode==='columns');
+  selection=installLibrarySelection(host,list,signal,{navigate:browser.navigate,location:browser.appliedLocation,refresh:browser.load,closeMenu:menu.close,notify});
   const scrollbar = installSourceScrollbar(list, find('source-scrollbar'), find('source-scrollbar-thumb'), signal);
   const disposeTooltips = installTooltips(host);
   const viewMenu=document.createElement('div'); viewMenu.id='admin-library-view-menu'; viewMenu.className='choice-menu'; document.body.append(viewMenu);
@@ -106,7 +109,7 @@ export function installAdminLibraryBrowser(signal: AbortSignal, notify: (message
       page?.roots.map(root => [root.id,root.name,root.state])]);
     if (mode==='columns') {if(page)columns.render({location:browser.appliedLocation(),page,recent:[]});}
     else listing.render({home,query,page,items,fingerprint});
-    scrollbar.update();
+    selection?.sync();scrollbar.update();
   }
   function currentItems(): SourceItem[] {
     return browser.page()?.entries.map(entry => ({...entry,key:sourceKey(entry,entry.id),library:entry})) ?? [];

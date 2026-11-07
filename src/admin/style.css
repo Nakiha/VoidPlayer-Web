@@ -303,4 +303,5 @@
 .admin-preference-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
 .admin-preference-row h2 { margin: 0; }
 .admin-library-card { height: 80dvh; padding: 0; overflow: hidden; }
-.admin-library-card > .library-pane { height: 100%; border-radius: inherit; background: var(--surface-panel); }
+.admin-library-card > .library-pane { height: 100%; border-radius: inherit; background: transparent; }
+.admin-library-card :is(.library-columns, .library-column, .library-horizontal-scrollbar) { background: transparent; }

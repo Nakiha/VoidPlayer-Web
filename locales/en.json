@@ -1291,6 +1291,26 @@
     "source": "列表视图",
     "translation": "List view"
   },
+  "adminLibrary.moveIndexPending": {
+    "source": "文件操作已完成，目录索引尚未刷新，请重新扫描。",
+    "translation": "The file operation is complete, but the directory index has not refreshed. Please scan again."
+  },
+  "adminLibrary.moveLimit": {
+    "source": "每次最多移动 100 个项目。",
+    "translation": "Move up to 100 items at a time."
+  },
+  "adminLibrary.movePartial": {
+    "source": "已移动 {moved} 项，{failed} 项失败。",
+    "translation": "Moved {moved} items; {failed} failed."
+  },
+  "adminLibrary.moveUnknown": {
+    "source": "移动结果未确认，正在刷新目录，请核对后再操作。",
+    "translation": "The move result is unconfirmed. Refreshing the directory; check the files before trying again."
+  },
+  "adminLibrary.movedItems": {
+    "source": "已移动 {count} 个项目",
+    "translation": "Moved {count} items"
+  },
   "adminLibrary.openInPlayer": {
     "source": "在播放器中浏览",
     "translation": "Browse in player"

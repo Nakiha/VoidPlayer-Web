@@ -1414,6 +1414,31 @@
     "source": "列表视图",
     "params": {}
   },
+  "adminLibrary.moveIndexPending": {
+    "source": "文件操作已完成，目录索引尚未刷新，请重新扫描。",
+    "params": {}
+  },
+  "adminLibrary.moveLimit": {
+    "source": "每次最多移动 100 个项目。",
+    "params": {}
+  },
+  "adminLibrary.movePartial": {
+    "source": "已移动 {moved} 项，{failed} 项失败。",
+    "params": {
+      "failed": "string | number",
+      "moved": "string | number"
+    }
+  },
+  "adminLibrary.moveUnknown": {
+    "source": "移动结果未确认，正在刷新目录，请核对后再操作。",
+    "params": {}
+  },
+  "adminLibrary.movedItems": {
+    "source": "已移动 {count} 个项目",
+    "params": {
+      "count": "string | number"
+    }
+  },
   "adminLibrary.openInPlayer": {
     "source": "在播放器中浏览",
     "params": {}

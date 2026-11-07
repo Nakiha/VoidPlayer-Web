@@ -22,6 +22,16 @@ import type { RouteContext } from './context.ts';
 export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessage, res: ServerResponse, url: URL): Promise<boolean> {
   const { options, library } = ctx;
   if (await handleMediaQueryRoutes(ctx, req, res, url)) return true;
+  if (url.pathname==='/api/library/files') {
+    if (req.method!=='POST') {sendJson(res,405,{error:'method not allowed'});return true;}
+    if (!adminWriteAllowed(req,'library-files')) {sendJson(res,403,{error:'请从同源管理页面操作文件。'});return true;}
+    try {sendJson(res,200,await library.mutateFiles(await readAdminJson(req)));}
+    catch (error) {
+      const code=(error as NodeJS.ErrnoException).code;
+      sendJson(res,error instanceof AdminError?error.status:code==='ENOENT'?404:500,adminErrorBody(error));
+    }
+    return true;
+  }
   if (url.pathname === '/api/library/scan' && req.method === 'GET') {
     sendJson(res, 200, { ...library.status(), errors: library.errors() });
     return true;

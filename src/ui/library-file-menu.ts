@@ -21,7 +21,7 @@ export function installLibraryFileMenu(host: HTMLElement, act: LibraryMenuAction
   };
   const menu = installContextMenu(host, {
     id: 'library-file-menu', selector: '.source-row', signal, popover: 'manual',
-    focusTarget: row => row.querySelector<HTMLElement>('.source-open') ?? row,
+    focusTarget: row => row.querySelector<HTMLElement>('button.source-open') ?? row,
     actions(row) {
       const record = entries.get(row);
       if (!record) return [];

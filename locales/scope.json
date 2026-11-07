@@ -7,6 +7,7 @@
     "src/admin/diagnostics.ts",
     "src/admin/discovery.ts",
     "src/admin/library-browser.ts",
+    "src/admin/library-selection.ts",
     "src/admin/main.ts",
     "src/admin/measurement.ts",
     "src/admin/presentation.ts",

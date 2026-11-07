@@ -1,6 +1,6 @@
 import { chooseTestGuest } from './test-identity.mjs';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readFile, copyFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, copyFile, rm, utimes } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { webkit, chromium } from 'playwright';
@@ -120,28 +120,26 @@ try {
   });
   await goLibrary('library:local/z-branch/leaf');
   await active.locator('.library-column[data-directory="z-branch/leaf"] .source-file').waitFor();
-  await active.locator('.library-column[data-root=local][data-directory=""] .library-column-selected').waitFor();
+  await active.locator('.library-column[data-root=local][data-directory=""] .library-column-path').waitFor();
   assert.ok(offsets.includes(60),'a direct deep link loads the selected ancestor beyond its first directory page');
   assert.equal(await active.locator('.library-column').count(),4,'root and each directory remain visible as separate columns');
-  assert.equal(await active.locator('.library-column-selected').count(),3);
-  assert.ok(await active.locator('.library-column[data-root=local][data-directory=""] .library-column-selected').evaluate(row => {
+  assert.equal(await active.locator('.library-column-path').count(),3);
+  assert.ok(await active.locator('.library-column[data-root=local][data-directory=""] .library-column-path').evaluate(row => {
     const box=row.getBoundingClientRect(), column=row.closest('.library-column').getBoundingClientRect();
     return box.top>=column.top-1&&box.bottom<=column.bottom+1;
   }),'a selected ancestor discovered on a later page is revealed in its column');
   for (const theme of ['dark','light']) {
     await player.evaluate(theme => localStorage.setItem('voidplayer.theme',theme),theme);
     await managed.waitForFunction(theme => document.documentElement.dataset.theme===theme,theme);
-    for (const row of await active.locator('.library-column-selected').all()) {
-      const colors=await row.evaluate(el => ({text:getComputedStyle(el).color,icon:getComputedStyle(el.querySelector('.library-folder-icon')).color,fill:getComputedStyle(el.querySelector('.source-thumb')).background}));
-      assert.equal(colors.icon,colors.text,`${theme}: selected mount/folder icons follow their text accent`);
-      const changed=await row.evaluate(el => {
-        el.style.setProperty('--accent','rgb(180, 70, 20)');
-        const value={icon:getComputedStyle(el.querySelector('.library-folder-icon')).color,fill:getComputedStyle(el.querySelector('.source-thumb')).background};
-        el.style.removeProperty('--accent'); return value;
-      });
-      assert.equal(changed.icon,'rgb(180, 70, 20)');
-      assert.notEqual(changed.fill,colors.fill,'the selected thumbnail background responds to a changed theme accent');
+    for (const row of await active.locator('.library-column-path').all()) {
+      assert.equal(await row.getAttribute('aria-selected'),'false','path ancestors do not count as selected items');
+      assert.equal(await row.evaluate(el => el.classList.contains('library-item-selected')),false);
     }
+    const cardFills=await embedded.evaluate(el => ({card:getComputedStyle(el.closest('.admin-library-card')).backgroundColor,
+      scan:getComputedStyle(document.querySelector('#scan-refresh').closest('.admin-panel')).backgroundColor,
+      layers:[el,...el.querySelectorAll('.library-columns,.library-column,.library-horizontal-scrollbar')].map(node => getComputedStyle(node).backgroundColor)}));
+    assert.equal(cardFills.card,cardFills.scan,`${theme}: the library shares the scan card material`);
+    assert.ok(cardFills.layers.every(fill => fill==='rgba(0, 0, 0, 0)'),`${theme}: library columns do not obscure their card backing`);
     await managed.locator('.admin-library-card').screenshot({path:`/tmp/voidplayer-library-selected-icons-${theme}-${browserName}.png`});
   }
   const widths = () => active.locator('.library-column').evaluateAll(columns => columns.map(column => Math.round(column.getBoundingClientRect().width)));
@@ -229,7 +227,7 @@ try {
   await managed.waitForFunction(() => Math.round(document.querySelector('.library-column').getBoundingClientRect().width)===320);
   assert.deepEqual(await widths(),[320,280,296,280],'responsive clamping never overwrites the desired width');
   await managed.locator('.admin-library-card').screenshot({path:`/tmp/voidplayer-admin-columns-deep-${browserName}.png`});
-  await active.locator('.library-column[data-root=local][data-directory=""] .library-column-selected').click();
+  await active.locator('.library-column[data-root=local][data-directory=""] .library-column-path').click();
   await active.locator('.library-column[data-directory="z-branch"] .library-folder').click();
   await active.locator('.library-column[data-directory="z-branch/leaf"] .source-file').waitFor();
   await chooseView('list');
@@ -315,7 +313,7 @@ try {
       await selectionFolder.evaluate(el => el.click());
       await managed.waitForFunction(() => document.querySelector('#library-location').value==='folder-000');
     });
-    const deselect=await sampleSelection(() => goLibrary('library:local'));
+    const deselect=await sampleSelection(() => active.locator('.source-file').evaluate(el => el.click()));
     for (const [phase,samples] of [['select',select],['deselect',deselect]]) {
       const final=samples.at(-1);
       assert.ok(samples.some(sample => sample.text!==final.text&&sample.icon!==final.icon),`${theme}: ${phase} animates the row text and icon together`);
@@ -325,8 +323,89 @@ try {
       assert.ok(intermediate.length>2&&intermediate.every(sample => sample.thumbProgress!==null&&Math.abs(sample.rowProgress-sample.thumbProgress)<.03),`${theme}: ${phase} keeps thumbnail and row fill transitions synchronized`);
       assert.equal(new Set(samples.map(sample => sample.layers)).size,1,`${theme}: ${phase} preserves the zebra backing layer throughout the transition`);
     }
+    await goLibrary('library:local');
   }
   await managed.emulateMedia({reducedMotion:'reduce'});
+  const rootColumn=() => active.locator('.library-column[data-root=local][data-directory=""]');
+  const folderRow=name => rootColumn().locator(`.library-folder[data-library-path="${name}"]`);
+  await folderRow('folder-000').click();
+  await managed.waitForFunction(() => document.querySelector('#library-location').value==='folder-000');
+  await folderRow('folder-002').click({modifiers:['Shift']});
+  assert.equal(await active.locator('.library-item-selected').count(),3,'Shift selects a contiguous range within one column');
+  assert.equal(await embedded.locator('#library-location').inputValue(),'folder-000','multi-selection does not navigate away from its column');
+  await folderRow('folder-004').click({modifiers:['Meta']});
+  assert.equal(await active.locator('.library-item-selected').count(),4,'Command adds an individual item');
+  await folderRow('folder-001').evaluate(el => el.dispatchEvent(new MouseEvent('click',{bubbles:true,ctrlKey:true})));
+  assert.equal(await active.locator('.library-item-selected').count(),3,'Windows Control toggles an individual item');
+  assert.equal(await managed.evaluate(() => getSelection()?.toString()),'','range selection never selects page text');
+  // Selecting an item in another column clears the previous column's selection.
+  await goLibrary('library:local/z-branch/leaf');
+  await active.locator('.library-column').last().locator('.source-file').click();
+  assert.equal(await active.locator('.library-item-selected').count(),1);
+  assert.equal(await active.locator('.library-item-selected .filename').innerText(),'nested.mp4');
+  assert.equal(await active.locator('.library-column-path.library-item-selected').count(),0,'ancestor path markers remain neutral');
+  await managed.locator('.admin-library-card').screenshot({path:`/tmp/voidplayer-library-selection-${browserName}.png`});
+  await goLibrary('library:local');
+  await active.locator('.source-file').click();
+  for (const name of ['folder-000','folder-002','folder-004','folder-006']) await folderRow(name).click({modifiers:['Meta']});
+  assert.equal(await active.locator('.library-item-selected').count(),5);
+  let moveRequests=0;
+  managed.on('request',request => {if(new URL(request.url()).pathname==='/api/library/files'&&request.method()==='POST')moveRequests++;});
+  const startFileDrag=async () => {
+    const source=rootColumn().locator('.source-file');await source.scrollIntoViewIfNeeded();
+    const box=await source.boundingBox();
+    await managed.mouse.move(box.x+box.width*.5,box.y+box.height*.5);await managed.mouse.down();
+    await managed.mouse.move(box.x+box.width*.5+12,box.y+box.height*.5,{steps:3});
+    await managed.locator('.library-drag-preview').waitFor();
+  };
+  await startFileDrag();
+  assert.equal(await managed.locator('.library-drag-item').count(),5,'drag preview is a compact list of the actual selected items');
+  assert.equal(await managed.locator('.library-drag-count').innerText(),'5');
+  await managed.mouse.move(20,20);
+  assert.equal(await managed.locator('.library-drag-preview').getAttribute('data-allowed'),'false');
+  await managed.keyboard.press('Escape');await managed.mouse.up();
+  assert.equal(moveRequests,0,'cancelling a drag never mutates files');
+  assert.equal(await active.locator('.library-item-selected').count(),5,'drag cancellation preserves the selection');
+  const dropOn=async row => {
+    await row.scrollIntoViewIfNeeded();const box=await row.boundingBox();
+    await managed.mouse.move(box.x+box.width*.6,box.y+box.height*.5,{steps:5});
+    await managed.waitForFunction(() => document.querySelector('.library-drag-preview')?.dataset.allowed==='true');
+    const response=managed.waitForResponse(response => new URL(response.url()).pathname==='/api/library/files'&&response.request().method()==='POST');
+    await managed.mouse.up();const result=await (await response).json();
+    assert.ok(result.results.every(item => item.ok),JSON.stringify(result));
+    await managed.waitForFunction(() => document.querySelector('#admin-library-browser').getAttribute('aria-busy')!=='true');
+  };
+  await startFileDrag();
+  await folderRow('folder-010').scrollIntoViewIfNeeded();
+  const dragTarget=await folderRow('folder-010').boundingBox();
+  await managed.mouse.move(dragTarget.x+dragTarget.width*.5,dragTarget.y+dragTarget.height*.5,{steps:5});
+  await managed.locator('.library-drag-preview').screenshot({path:`/tmp/voidplayer-library-move-preview-${browserName}.png`});
+  await dropOn(folderRow('folder-010'));
+  assert.equal(moveRequests,1);
+  await assert.rejects(readFile(path.join(media,'sample.mp4')),{code:'ENOENT'});
+  assert.equal((await readFile(path.join(media,'folder-010/sample.mp4'))).length,4*1024*1024);
+  await goLibrary('library:local/folder-010');
+  const movedColumn=active.locator('.library-column').last();
+  await movedColumn.locator('.source-file').click();await managed.keyboard.press('ControlOrMeta+a');
+  assert.equal(await active.locator('.library-item-selected').count(),5,'select-all stays within the focused column');
+  const movedBox=await movedColumn.locator('.source-file').boundingBox();
+  await managed.mouse.move(movedBox.x+movedBox.width*.5,movedBox.y+movedBox.height*.5);await managed.mouse.down();
+  await managed.mouse.move(movedBox.x+movedBox.width*.5+12,movedBox.y+movedBox.height*.5,{steps:3});
+  await managed.locator('.library-drag-preview').waitFor();
+  await dropOn(active.locator('.library-mount[data-root-id=local]'));
+  assert.equal(moveRequests,2,'dropping on a mount moves the selection back to its root');
+  assert.equal((await readFile(path.join(media,'sample.mp4'))).length,4*1024*1024);
+  await goLibrary('library:local');
+  await chooseView('list');
+  await active.locator('.source-file').click();
+  assert.equal(await active.locator('.library-item-selected').count(),1,'list view uses the same selection model');
+  const beforeRevision=await active.locator('.source-file').getAttribute('data-library-version');
+  await utimes(path.join(media,'sample.mp4'),new Date(),new Date(Date.now()+1000));await service.library.refresh();
+  await goLibrary('library:local');
+  assert.notEqual(await active.locator('.source-file').getAttribute('data-library-version'),beforeRevision);
+  assert.equal(await active.locator('.library-item-selected').count(),1,'a metadata refresh preserves path selection without reusing its old media version');
+  await chooseView('columns');
+  assert.equal(await active.locator('.library-item-selected').count(),0,'changing view does not retain a selection in a hidden column');
   await goLibrary('library:local/z-branch/leaf');
   const nestedFile=active.locator('.source-file').filter({hasText:'nested.mp4'});
   await nestedFile.waitFor();

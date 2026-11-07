@@ -20,6 +20,7 @@ export function installLibraryColumns(viewport: HTMLElement, host: HTMLElement, 
   navigate(root:string,directory:string): void;
   registerMount(row:HTMLElement,root:string): void;
   collapsible?: boolean; recent?: boolean;
+  pathClass?:string;
   more(): void;
   localizeRow(row:HTMLElement,item:SourceItem,home:boolean): void;
 }) {
@@ -56,11 +57,11 @@ export function installLibraryColumns(viewport: HTMLElement, host: HTMLElement, 
     column.listing.render({home,query,page,items,fingerprint:item => JSON.stringify([home,item.key,item.name,item.size,item.lastModified,item.openedAt,item.library?.version,item.library?.state,current!.page.roots.map(root => [root.id,root.name,root.state])])});
     for (const row of column.body.querySelectorAll<HTMLElement>('.library-folder')) {
       const selected = row.dataset.sourceKey === column.branch;
-      row.classList.toggle('library-column-selected',selected);
+      row.classList.toggle(options.pathClass??'library-column-selected',selected);
       if (selected) row.setAttribute('aria-current','location'); else row.removeAttribute('aria-current');
     }
     column.listing.localize(page,home,query);
-    const selected = column.body.querySelector<HTMLElement>('.library-column-selected');
+    const selected = column.body.querySelector<HTMLElement>('[aria-current=location]');
     if (selected && column.frame.dataset.branch !== column.branch) {
       const bounds = column.frame.getBoundingClientRect(), row = selected.getBoundingClientRect();
       if (row.top < bounds.top) column.frame.scrollTop += row.top-bounds.top;

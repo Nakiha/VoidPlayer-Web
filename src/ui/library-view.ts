@@ -115,6 +115,10 @@ export function createLibraryFileRow(item: SourceItem, state: LibraryFileView) {
     remove.onclick = event => {event.stopPropagation(); state.remove?.();}; row.append(remove);
   }
   row.dataset.sourceKey = item.key;
+  if (item.library?.rootId) {
+    row.dataset.rootId=item.library.rootId; row.dataset.libraryPath=item.library.name;
+    row.dataset.libraryKind='file'; row.dataset.libraryVersion=item.library.version;
+  }
   return row;
 }
 
@@ -162,6 +166,7 @@ export function installLibraryListing(list: HTMLElement, options: {
         const info = text('span', '', 'source-info');
         info.append(text('span', folder.name, 'filename'));
         row.dataset.rootId = folder.rootId;
+        row.dataset.libraryPath=folder.path; row.dataset.libraryKind='directory';
         row.setAttribute('aria-label', t(msg("sources.openFolder", "打开目录：{name}"), { name: folder.name })); row.append(glyph, info, branchArrow()); row.onclick = () => options.navigate(folder.rootId, folder.path); return row;
       });
     }
@@ -174,6 +179,7 @@ export function installLibraryListing(list: HTMLElement, options: {
       for (const mount of mounts) reuse(`mount:${mount.id}`, JSON.stringify([mount.id, mount.name, mount.state, storageText(mount)]), () => {
         const row = document.createElement('button'); row.type = 'button'; row.className = 'source-row library-folder library-mount';
         row.dataset.rootId = mount.id; row.setAttribute('aria-label', t(msg('libraryBrowser.openMount', '打开媒体库：{name}'), { name: mount.name }));
+        row.dataset.libraryKind='mount'; row.dataset.libraryPath='';
         const glyph = text('span', '', 'source-thumb library-folder-icon'); glyph.innerHTML = icon('libraryVolume');
         const info = text('span', '', 'source-info'); info.append(text('span', mount.name, 'filename'));
         const meta = text('span','','source-meta'); renderStorage(meta,mount); info.append(meta);

@@ -1,4 +1,6 @@
 import {closeResources} from './shutdown.ts';
+import {mutateLibraryFiles,parseLibraryFileCommand} from './library-files.ts';
+import type {LibraryFileResult} from '../shared/service/library-files.ts';
 import {FrameIndexJobs} from './frame-index-jobs.ts';
 import {QualityAdmission} from './quality-admission.ts';
 import type {LibraryScanStatus} from '../shared/service/admin.ts';
@@ -84,6 +86,7 @@ export class MediaLibraryIndex {
   private stopped = false;
   private closed = false;
   private configuring = false;
+  private fileMutation?:Promise<LibraryFileResult>;
   private initialized: boolean;
   private options: IndexOptions;
   constructor(roots: MediaRoot[], options: IndexOptions = {}) {
@@ -534,11 +537,33 @@ export class MediaLibraryIndex {
       return real;
     } catch { return null; }
   }
+  async mutateFiles(body:unknown):Promise<LibraryFileResult> {
+    if (this.closed||this.configuring||this.fileMutation) throw new AdminError(409,'媒体库正在处理其他文件操作或配置变更。','library-files-busy');
+    const command=parseLibraryFileCommand(body);
+    const operation=(async () => {
+      const sources=command.operation==='rename'?[command.source]:command.sources;
+      const ids=new Set([...sources.map(source => source.rootId),...(command.operation==='move'?[command.target.rootId]:[])]);
+      for (const id of ids) {
+        const root=this.definitions.find(root => root.id===id);
+        if (!root) throw new AdminError(404,'媒体库不存在。');
+        if (!await this.checkStorage(root)) throw new AdminError(409,'媒体库挂载尚未核验。');
+      }
+      const {results,scopes}=await mutateLibraryFiles(this.definitions,command,fileVersion);
+      let indexRefreshed=true;
+      const generation=this.cancelGeneration;
+      try {await this.refreshDirectories(scopes);indexRefreshed=!this.closed&&generation===this.cancelGeneration;}
+      catch {indexRefreshed=false;}
+      return {results,indexRefreshed};
+    })();
+    this.fileMutation=operation;
+    try {return await operation;} finally {this.fileMutation=undefined;}
+  }
   /** Compatibility entry; the attached application is the sole quality lifetime owner. */
   close(ownersStopped?:Promise<void>){return this.closing??=this.application?this.application.close(ownersStopped):this.closeMedia(ownersStopped);}
   stopExecution(){return this.stopping??=(async()=>{
     this.closed=true;
     await closeResources('Media execution shutdown incomplete',[
+      ['library file operations',()=>this.fileMutation?.catch(()=>{})],
       ['scan scheduling',()=>this.stop()],['library scan',()=>this.pending?.catch(()=>{})],
       ['storage reads',async()=>{await Promise.allSettled([...this.storageReads]);}],['index executors',()=>this.indexJobs.close()],
     ]);
@@ -551,7 +576,7 @@ export class MediaLibraryIndex {
   /** Serialize configuration with scans. Persist first; a failed DB switch rolls
    * back the file before allowing scans again. Existing byte streams stay open. */
   async reconfigure(roots: MediaRoot[], persist: () => Promise<() => Promise<void>>) {
-    if (this.closed || this.configuring) throw new Error('媒体目录配置正在更新或服务已关闭。');
+    if (this.closed || this.configuring || this.fileMutation) throw new AdminError(409,'媒体目录配置正在更新、文件操作未完成或服务已关闭。');
     const definitions = normalizeRoots(roots);
     this.configuring = true;
     const restart = this.started;
