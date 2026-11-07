@@ -6,6 +6,7 @@ import clock from '@phosphor-icons/core/assets/regular/clock.svg?raw';
 import opacity from '@phosphor-icons/core/assets/regular/circle-half.svg?raw';
 import user from '@phosphor-icons/core/assets/regular/user.svg?raw';
 import check from '@phosphor-icons/core/assets/regular/check.svg?raw';
+import save from '@phosphor-icons/core/assets/regular/floppy-disk.svg?raw';
 // Phosphor's regular weight matches the compact optical-glass chrome. Plus,
 // close, and refresh use bold for optical balance at small sizes. Import
 // only the icons we use; no icon font, CDN, or entire catalog enters the bundle.
@@ -83,7 +84,7 @@ const libraryManage = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 2
   <path fill="none" d="m17 12 4.33 2.5v5L17 22l-4.33-2.5v-5Z"/>
   <circle fill="none" cx="17" cy="17" r="1.75"/>
 </svg>`;
-const icons = { compactRows, libraryManage, listBullets, caretUpDown, pathSeparator, libraryVolume, opacity, clock, analysisOverlay, speaker, speakerMuted, cpu, memory, storage, gpu, monitor, appearance, keyboard, diagnostics, info, user, check, settings, plusRegular, select, eraser, redo, trash, filePlus, focus, eye, eyeClosed, grid, chart, columns, pen, ellipse, rect, line, text: lettering, undo, center, grip, copy, download, sidebar, rows, open, shareNetwork, export: share, play, pause, previous, next, plus, close, more, note, refresh, search, zoomIn, zoomOut, fullRange, down, caretLeft, caretRight, film, fit, marker };
+const icons = { save, compactRows, libraryManage, listBullets, caretUpDown, pathSeparator, libraryVolume, opacity, clock, analysisOverlay, speaker, speakerMuted, cpu, memory, storage, gpu, monitor, appearance, keyboard, diagnostics, info, user, check, settings, plusRegular, select, eraser, redo, trash, filePlus, focus, eye, eyeClosed, grid, chart, columns, pen, ellipse, rect, line, text: lettering, undo, center, grip, copy, download, sidebar, rows, open, shareNetwork, export: share, play, pause, previous, next, plus, close, more, note, refresh, search, zoomIn, zoomOut, fullRange, down, caretLeft, caretRight, film, fit, marker };
 export function icon(name: keyof typeof icons, extraClass = '') {
   return icons[name].replace('<svg ', `<svg class="icon ${extraClass}" data-icon="${name}" aria-hidden="true" focusable="false" `);
 }

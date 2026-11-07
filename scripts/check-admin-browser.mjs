@@ -647,6 +647,15 @@ try {
   await page.locator('.admin-root-state').filter({ hasText: '存储离线' }).waitFor();
   const aligned = await page.locator('.admin-root-row').evaluateAll(rows => rows.every(row => { const inputs = row.querySelectorAll('input'); return Math.abs(inputs[0].getBoundingClientRect().top - inputs[1].getBoundingClientRect().top) < 1; }));
   assert.equal(aligned, true, 'name and path inputs must align independently of status captions');
+  const rootsCard=await page.locator('#roots-form').evaluate(form => {
+    const editor=form.querySelector('#root-editor').getBoundingClientRect();
+    return {controls:['reset-roots','save-roots'].map(id => form.querySelector('#'+id).getBoundingClientRect().bottom<=editor.top),
+      borders:[...form.querySelectorAll('input')].map(input => getComputedStyle(input).borderWidth),
+      saveGlyph:form.querySelector('#save-roots .icon')?.getAttribute('data-icon'),saveText:form.querySelector('#save-roots').textContent.trim()};
+  });
+  assert.ok(rootsCard.controls.every(Boolean),'save and reset actions sit above the directory editor');
+  assert.ok(rootsCard.borders.every(border => border==='0px'),'directory fields use borderless setting-style fills');
+  assert.equal(rootsCard.saveGlyph,'save');assert.equal(rootsCard.saveText,'','the save action is an accessible floppy-disk icon');
   await page.getByLabel('目录名称').first().fill('本机拍摄素材');
   const leavePrompt = page.waitForEvent('dialog');
   const returnClick = page.getByRole('link', { name: '返回播放器', exact: true }).click();
@@ -668,6 +677,7 @@ try {
   await player.evaluate(() => localStorage.setItem('voidplayer.theme', 'dark'));
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
   await page.screenshot({ path: `/tmp/voidplayer-admin-library-dark-${browserName}.png` });
+  await page.locator('#roots-form').screenshot({path:`/tmp/voidplayer-admin-roots-card-${browserName}.png`});
   await page.getByRole('button', { name: '日志', exact: true }).click();
   await page.locator('#log-storage').filter({ hasText: '上传报告：' }).waitFor();
   assert.ok((await page.locator('#log-storage').textContent()).includes('保留到手动删除'));

@@ -36,9 +36,14 @@ export function adminShell() {
         <div class="admin-panel"><div class="admin-preference-row"><h2>${th(msg('admin.interfaceLanguage', '界面语言'))}</h2><div class="admin-language"><button type="button" id="language-choice" class="choice-trigger" aria-label="${th(msg("language.label", "语言 / Language"))}"></button><span id="language-status" role="status"></span></div></div></div>
       </section>
       <section id="pane-library" hidden><header class="admin-heading"><div><h1>${th(msg("admin.libraryTitle", "媒体库"))}</h1><p>${th(msg("admin.libraryDesc", "添加服务器目录，保存后即可在播放器中浏览视频。"))}</p></div></header>
-        <form id="roots-form" class="admin-panel"><div class="admin-section-heading"><h2>${th(msg("admin.mediaDirs", "媒体目录"))}</h2><button type="button" id="add-root">${icon('plus')}${th(msg("admin.addDir", "添加目录"))}</button></div>
-          <div id="root-editor" class="admin-root-editor"></div>
-          <div class="admin-panel-footer"><span id="root-save-state" class="admin-caption" role="status"></span><div class="admin-button-group"><button type="button" id="reset-roots">${th(msg("admin.revertChanges", "还原修改"))}</button><button type="submit" id="save-roots" class="admin-primary">${icon('check')}${th(msg("admin.saveDirs", "保存目录"))}</button></div></div>
+        <form id="roots-form" class="admin-panel"><div class="admin-section-heading admin-roots-heading">
+          <div><h2>${th(msg("admin.mediaDirs", "媒体目录"))}</h2><p id="root-save-state" class="admin-caption" role="status"></p></div>
+          <div class="admin-button-group admin-root-actions">
+            <button type="button" id="add-root">${icon('plus')}${th(msg("admin.addDir", "添加目录"))}</button>
+            <button type="button" id="reset-roots">${th(msg("admin.revertChanges", "还原修改"))}</button>
+            <button type="submit" id="save-roots" class="icon-button admin-primary" aria-label="${th(msg("admin.saveDirs", "保存目录"))}" title="${th(msg("admin.saveDirs", "保存目录"))}">${icon('save')}</button>
+          </div>
+        </div><div id="root-editor" class="admin-root-editor"></div>
           <p class="admin-help">${th(msg("admin.dirHelp", "填写服务器上的完整路径。移除目录不会删除原文件。"))}</p>
         </form>
         <div class="admin-panel"><div class="admin-section-heading"><div><h2>${th(msg("admin.scanMedia", "扫描媒体"))}</h2><p>${th(msg("admin.scanDesc", "目录变化会自动更新；找不到新增视频时，可重新扫描。"))}</p></div><div class="admin-button-group"><button id="scan-cancel" hidden>${icon('close')}${th(msg("admin.stopScan", "停止扫描"))}</button><button id="scan-refresh">${icon('refresh')}${th(msg("admin.rescan", "重新扫描"))}</button></div></div>
