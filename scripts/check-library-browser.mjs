@@ -110,9 +110,14 @@ try {
   await clearSearch();
   const pathbar = page.locator('#library-pathbar');
   assert.deepEqual(await pathbar.locator('.library-path-label').allTextContents(), ['媒体库', '项目归档', '实验一']);
-  await pathbar.locator('.library-path-separator').first().click();
+  const separator = pathbar.locator('.library-path-separator').first();
+  const arrowBox = await separator.boundingBox(), capsuleBox = await pathbar.locator('.library-path-item').nth(1).boundingBox();
+  assert.ok(arrowBox.x + arrowBox.width <= capsuleBox.x + 1, 'the separator stays outside the capsule background');
+  await pathbar.locator('.library-path-item').nth(1).hover();
+  await pathbar.screenshot({path:`/tmp/voidplayer-library-path-capsules-${engine}.png`});
+  await separator.click();
   await page.waitForFunction(() => document.querySelector('#source-list').getAttribute('aria-busy') === 'false');
-  assert.equal(await page.locator('#library-location').inputValue(), '项目归档', 'the separator belongs to the following path button instead of creating a dead click area');
+  assert.equal(await page.locator('#library-location').inputValue(), '项目归档', 'the separate arrow still navigates to the following path without a dead click area');
   await historyStep('back');
   await pathbar.locator('button').first().hover(); await page.waitForTimeout(450);
   assert.equal(await page.locator('#control-tooltip').isVisible(), false, 'path buttons never display a tooltip');

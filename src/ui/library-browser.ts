@@ -34,7 +34,7 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
   const pathbar = document.createElement('nav'); pathbar.id = 'library-pathbar'; pathbar.className = 'library-pathbar';
   document.getElementById('source-foot')!.prepend(pathbar);
   pathbar.addEventListener('click', event => {
-    const target = (event.target as Element).closest<HTMLButtonElement>('button[data-root]');
+    const target = (event.target as Element).closest('li')?.querySelector<HTMLButtonElement>('button[data-root]');
     if (target && !target.hasAttribute('aria-current')) navigate(target.dataset.root ?? '', target.dataset.directory ?? '');
   }, { signal });
   const pathResize = new ResizeObserver(() => { pathbar.scrollLeft = pathbar.scrollWidth; });
@@ -98,7 +98,7 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
       part.dataset.tooltipSuppressed = ''; part.innerHTML = icon(crumb.glyph); part.setAttribute('aria-haspopup', 'menu');
       if (index) {
         const separator = document.createElement('span'); separator.className = 'library-path-separator';
-        separator.setAttribute('aria-hidden', 'true'); separator.innerHTML = icon('pathSeparator'); part.prepend(separator);
+        separator.setAttribute('aria-hidden', 'true'); separator.innerHTML = icon('pathSeparator'); entry.append(separator);
       }
       if (index === crumbs.length - 1) part.setAttribute('aria-current', 'location');
       const label = document.createElement('span'); label.className = 'library-path-label'; label.textContent = crumb.label;
