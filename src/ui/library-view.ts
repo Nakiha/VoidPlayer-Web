@@ -47,6 +47,17 @@ export function sourceDisplayName(name: string) {
   return { base, dir: name.includes('/') ? name.slice(0, name.lastIndexOf('/')) : '' };
 }
 
+/** Keep decoded pixels when only row controls/status change, never across media versions. */
+export function preserveLibraryThumbnail(previous: HTMLElement | undefined, next: HTMLElement) {
+  if (!previous || previous === next || !next.dataset.thumbnailKey) return next;
+  const cover = previous.querySelector<HTMLElement>(':scope > .source-thumb');
+  const image = cover?.querySelector<HTMLImageElement>('img');
+  if (!cover || !image?.naturalWidth || image.dataset.thumbDecoded !== 'true' || image.dataset.thumbKey !== next.dataset.thumbnailKey) return next;
+  const replacement = next.querySelector(':scope > .source-thumb');
+  if (replacement) replacement.replaceWith(cover); else next.prepend(cover);
+  return next;
+}
+
 export function createLibraryFileRow(item: SourceItem, state: LibraryFileView) {
   const row = document.createElement('div'); row.className = 'source-row source-file';
   const open = document.createElement(state.readOnly ? 'div' : 'button'); open.className = 'source-open';
@@ -141,7 +152,7 @@ export function installLibraryListing(list: HTMLElement, options: {
     const rows: HTMLElement[] = [];
     const reuse = (key: string, fingerprint: string, create: () => HTMLElement, target = rows) => {
       const old = existing.get(key);
-      const row = old?.dataset.fingerprint === fingerprint ? old : create();
+      const row = old?.dataset.fingerprint === fingerprint ? old : preserveLibraryThumbnail(old,create());
       row.dataset.sourceKey = key; row.dataset.fingerprint = fingerprint; target.push(row);
     };
     for (const folder of folders) {

@@ -1,4 +1,4 @@
-import { createLibraryFileRow, installLibraryListing, sizeText, storageText, openedText, sourceDisplayName, patchLibraryRow } from '../library-view.ts';
+import { createLibraryFileRow, installLibraryListing, sizeText, storageText, openedText, sourceDisplayName, patchLibraryRow, preserveLibraryThumbnail } from '../library-view.ts';
 import { installLibraryThumbnails } from '../library-thumbnails.ts';
 import { loadStageLabel } from '../media-progress.ts';
 import type { MediaLoadStage } from '../media-progress.ts';
@@ -315,7 +315,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     for (const item of items) {
       const fingerprint = fingerprintOfStart(item);
       const old = existing.get(item.key);
-      const row = old?.dataset.fingerprint === fingerprint ? old : startRow(item);
+      const row = old?.dataset.fingerprint === fingerprint ? old : preserveLibraryThumbnail(old,startRow(item));
       row.dataset.sourceKey = item.key;
       row.dataset.fingerprint = fingerprint;
       rows.push(row);
@@ -384,7 +384,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
       for (const item of local) {
         const old = localExisting.get(item.key);
         const fp = fingerprintOf(item);
-        const row = old?.dataset.fingerprint === fp ? old : sourceRow(item);
+        const row = old?.dataset.fingerprint === fp ? old : preserveLibraryThumbnail(old,sourceRow(item));
         row.dataset.sourceKey = item.key; row.dataset.fingerprint = fp; localRows.push(row);
       }
       localRows.forEach((row, index) => { if (localList.children[index] !== row) localList.insertBefore(row, localList.children[index] ?? null); });

@@ -107,6 +107,7 @@ export function installLibraryThumbnails(lists: HTMLElement[], signal: AbortSign
   function attachThumb(row: HTMLElement, item: SourceItem) {
     const identity = thumbIdentity(item);
     if (!identity) return;
+    row.dataset.thumbnailKey = identity.key;
     rememberThumbKey(item.key, identity.key, identity.serverUrl);
     const syncUrl = getLiveObjectUrl(identity.key) ?? identity.serverUrl;
     if (syncUrl) { row.prepend(makeThumbBox(identity.key, syncUrl)); return; }

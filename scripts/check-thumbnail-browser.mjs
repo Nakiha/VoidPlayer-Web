@@ -13,6 +13,7 @@ import { THUMB_RECIPE_VERSION } from '../shared/thumbnails/contract.ts';
 const directory = await mkdtemp(path.join(os.tmpdir(), 'vp-thumb-ui-'));
 const media = path.join(directory, 'archive');
 await mkdir(media, { recursive: true });
+await mkdir(path.join(media,'empty'));
 await copyFile('fixtures/video/h264_9s_1920x1080.mp4', path.join(media, 'sample.mp4'));
 await copyFile('fixtures/video/h264_9s_1920x1080.mp4', path.join(media, 'sample-late.mp4'));
 const library = new MediaLibraryIndex([{ id: 'archive', path: media, name: '项目归档' }]);
@@ -45,7 +46,7 @@ try {
   await openSamples(page);
   // No cover and no empty slot before anything is opened.
   assert.equal(await page.evaluate(() => !!document.querySelector('.source-thumb img[src]')), false);
-  assert.equal(await page.evaluate(() => !!document.querySelector('.source-thumb')), false);
+  assert.equal(await page.evaluate(() => !!document.querySelector('.source-file .source-thumb')), false);
   await page.locator('#source-list').getByRole('button', { name: '添加到视图：sample.mp4', exact: true }).click();
   await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 1 && !window.voidPlayer.getState().busy);
   // The first frame is up before the cover pipeline finishes.
@@ -67,6 +68,38 @@ try {
   }
   assert.equal(status.state, 'ready');
   assert.ok(status.width > 0 && status.height > 0);
+  // Track-state changes must keep the already decoded image through row refreshes.
+  const directoryCover=await page.locator('#source-list .source-file .source-thumb img').elementHandle();
+  await directoryCover.evaluate(img => {
+    window.stableCover=img; window.coverGaps=[]; window.coverWatch=true;
+    const sample=() => {
+      if(!window.coverWatch)return;
+      const row=[...document.querySelectorAll('#source-list .source-file')].find(row => row.querySelector('.filename')?.textContent==='sample.mp4');
+      const current=row?.querySelector('.source-thumb img');
+      if(current!==img||!img.complete||!img.naturalWidth||img.dataset.thumbDecoded!=='true'||getComputedStyle(img).visibility!=='visible')window.coverGaps.push({same:current===img,connected:img.isConnected,visible:getComputedStyle(img).visibility});
+      requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
+  const sampleRow=page.locator('#source-list .source-file').filter({has:page.locator('.filename',{hasText:'sample.mp4'})});
+  const assertRetained=async label => {
+    assert.equal(await sampleRow.locator('.source-thumb img').evaluate(img => img===window.stableCover),true,label);
+    assert.equal(await page.evaluate(thumbReady,'sample.mp4'),true,'a retained cover is ready immediately');
+    assert.deepEqual(await page.evaluate(() => window.coverGaps),[],'no animation frame loses the decoded cover');
+  };
+  await sampleRow.hover(); await sampleRow.locator('.source-remove').click();
+  await page.waitForFunction(() => !window.voidPlayer.getState().tracks.length);
+  await assertRetained('button removal retains the decoded cover node');
+  await sampleRow.locator('.source-open').click();
+  await page.waitForFunction(() => window.voidPlayer.getState().tracks.length===1&&!window.voidPlayer.getState().busy);
+  await assertRetained('adding the source retains the same cover throughout loading');
+  await sampleRow.click({button:'right'}); await page.locator('#library-file-menu [data-action=remove-from-view]').click();
+  await page.waitForFunction(() => !window.voidPlayer.getState().tracks.length);
+  await assertRetained('context-menu removal also retains the cover');
+  await sampleRow.click({button:'right'}); await page.locator('#library-file-menu [data-action=add-to-view]').click();
+  await page.waitForFunction(() => window.voidPlayer.getState().tracks.length===1&&!window.voidPlayer.getState().busy);
+  await assertRetained('context-menu addition retains the cover');
+  await page.evaluate(() => {window.coverWatch=false;});
   // Recent covers must survive details hiding and rapid summary activation.
   await page.locator('#library-location').fill('library:/'); await page.locator('#library-location').press('Enter');
   await page.waitForFunction(thumbReady, 'sample.mp4');
@@ -97,7 +130,11 @@ try {
   const foldWrites = await page.evaluate(() => {window.recentCoverObserver.disconnect();return window.recentCoverWrites;});
   assert.deepEqual(foldWrites, [], 'all fold gestures leave the existing image URL untouched');
   await page.getByRole('button', {name:'打开媒体库：项目归档',exact:true}).click();
+  assert.equal(await originalCover.evaluate(img => img.isConnected),true,'returning to the same source in its directory keeps the decoded image');
+  await page.getByRole('button',{name:'打开目录：empty',exact:true}).click();
   await page.waitForFunction(img => !img.isConnected && !img.getAttribute('src'), originalCover);
+  await page.locator('.crumbs-back').click();
+  await page.waitForFunction(thumbReady,'sample.mp4');
   // Playback still works after the bypass ran.
   await page.evaluate(() => window.voidPlayer.seek(3000000));
   await page.waitForFunction(() => !window.voidPlayer.getState().busy);
@@ -138,7 +175,7 @@ try {
   assert.deepEqual(await cachedImage.locator('..').boundingBox(), slotBefore, 'failure preserves the cover slot and filename position');
   await fresh.close();
   assert.deepEqual(errors, []);
-  console.log(`PASS ${engine}: origin cover, recent fold/reopen and rapid-click selection, shared cover reuse, invisible image errors, non-zero joins stay imageless`);
+  console.log(`PASS ${engine}: origin cover, continuous covers across add/remove actions, recent fold/reopen and rapid-click selection, shared cover reuse, invisible image errors, non-zero joins stay imageless`);
 } finally {
   await browser.close(); await new Promise(r => server.close(r)); await library.close(); await rm(directory, { recursive: true, force: true });
 }
