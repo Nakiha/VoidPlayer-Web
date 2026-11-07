@@ -6,17 +6,18 @@ import { RangeReader } from '../../shared/media/io/range-reader.ts';
 import type { MediaSource } from '../../src/media/contract.ts';
 const box = (name: string, ...data: Uint8Array[]) => { const b = Buffer.concat([Buffer.alloc(8), ...data]); b.writeUInt32BE(b.length); b.write(name,4); return b; };
 const handler = (name: string) => { const b = Buffer.alloc(12); b.write(name,8); return box('hdlr', b); };
-function mp4(codec?: string, channels = 2) {
+function mp4(codec?: string, channels = 2, clocks = false, version = 0) {
   const entry = Buffer.alloc(28); entry.writeUInt16BE(channels,16); entry.writeUInt32BE(48000 * 65536,24);
-  const track = (kind: string, sample?: Buffer) => box('trak', box('mdia', handler(kind), ...(sample ? [box('minf',box('stbl',box('stsd',Buffer.from([0,0,0,0,0,0,0,1]),sample)))] : [])));
+  const mdhd = (kind: string) => { const b = Buffer.alloc(version === 1 ? 32 : 24); b[0] = version; b.writeUInt32BE(kind === 'vide' ? 30000 : 48000, version === 1 ? 20 : 12); return box('mdhd', b); };
+  const track = (kind: string, sample?: Buffer) => box('trak', box('mdia', handler(kind), ...(clocks ? [mdhd(kind)] : []), ...(sample ? [box('minf',box('stbl',box('stsd',Buffer.from([0,0,0,0,0,0,0,1]),sample)))] : [])));
   return Buffer.concat([box('ftyp', Buffer.from('isom0000')), box('moov',track('vide'), ...(codec ? [track('soun',box(codec,entry))] : []))]);
 }
 const peek = (bytes: Uint8Array) => async (offset: number, length: number) => offset + length <= bytes.length ? bytes.slice(offset, offset + length) : undefined;
 const inspect = (bytes: Uint8Array) => inspectCachedTracks(bytes.length,peek(bytes));
 function element(hex: string, data: Uint8Array) { assert.ok(data.length < 127); return Buffer.concat([Buffer.from(hex,'hex'),Buffer.from([128 | data.length]),data]); }
-function mkv(codec?: string) {
+function mkv(codec?: string, scale?: number) {
   const entry = (type: number, name?: string) => element('ae',Buffer.concat([element('83',Buffer.from([type])), ...(name ? [element('86',Buffer.from(name)),element('e1',Buffer.concat([element('9f',Buffer.from([6])),element('b5',Buffer.from([0x47,0x3b,0x80,0]))]))] : [])]));
-  return Buffer.concat([element('1a45dfa3',element('4282',Buffer.from('matroska'))),element('18538067',element('1654ae6b',Buffer.concat([entry(1),...(codec ? [entry(2,codec)] : [])])))]);
+  return Buffer.concat([element('1a45dfa3',element('4282',Buffer.from('matroska'))),element('18538067',Buffer.concat([...(scale === undefined ? [] : [element('1549a966',element('2ad7b1',Buffer.from([scale >> 16,scale >> 8,scale])))]),element('1654ae6b',Buffer.concat([entry(1),...(codec ? [entry(2,codec)] : [])]))]))]);
 }
 function flv(audio: boolean, format = 10, config = [0x11,0xb0]) {
   const header = Buffer.from([70,76,86,1,audio ? 5 : 1,0,0,0,9,0,0,0,0]);
@@ -47,9 +48,9 @@ test('Matroska Tracks preserves unsupported codecs and multi-channel facts; comp
 });
 test('FLV declared presence is independent of playback filters, and incomplete config is unknown detail',async()=>{
   assert.equal((await inspect(flv(false))).audio.presence,'absent');
-  const result=await inspect(flv(true));assert.deepEqual(result.audio.tracks,[{codec:'AAC-LC',sampleRate:48000,channels:6}]);
+  const result=await inspect(flv(true));assert.deepEqual(result.audio.tracks,[{codec:'AAC-LC',sampleRate:48000,channels:6,timeBase:{numerator:1,denominator:1000}}]);
   assert.equal((await inspect(flv(true,2))).audio.presence,'present');
-  const b=flv(true);const r=await inspectCachedTracks(b.length,async(at,n)=>at+n<=16?b.slice(at,at+n):undefined);assert.equal(r.audio.presence,'present');assert.deepEqual(r.audio.tracks,[{}]);
+  const b=flv(true);const r=await inspectCachedTracks(b.length,async(at,n)=>at+n<=16?b.slice(at,at+n):undefined);assert.equal(r.audio.presence,'present');assert.deepEqual(r.audio.tracks,[{timeBase:{numerator:1,denominator:1000}}]);
 });
 test('TS identifies PMT audio beyond ADTS playback and only confirms absence for complete unambiguous tables',async()=>{
   for(const [type,codec] of [[15,'AAC'],[0x81,'AC-3'],[17,'AAC LATM']] as const){const r=await inspect(ts(type));assert.equal(r.audio.presence,'present');assert.equal(r.audio.tracks[0].codec,codec);}
@@ -122,4 +123,23 @@ test('a disposed source cannot publish a late metadata reply into a replacement 
   old.setMetadataInspectionEnabled!(true);old.requestCachedMetadata!();await new Promise(r=>setTimeout(r,10));assert.ok(started);
   dispose();release();await new Promise(r=>setTimeout(r,10));
   assert.equal(notifications,0);assert.equal(old.info.trackMetadata,undefined);assert.equal(replacement.info.trackMetadata,undefined);
+});
+
+// The fixture clocks deliberately differ from frame rate and audio sample rate.
+// This checks original container ticks, not the microseconds used by the UI.
+test('cached headers expose per-track container time bases without inventing missing clocks', async () => {
+  for (const version of [0, 1]) {
+    const result = await inspect(mp4('mp4a', 2, true, version));
+    assert.deepEqual(result.video?.[0].timeBase, { numerator: 1, denominator: 30000 });
+    assert.deepEqual(result.audio.tracks[0].timeBase, { numerator: 1, denominator: 48000 });
+  }
+  assert.equal((await inspect(mp4())).video?.[0].timeBase, undefined);
+  const matroska = await inspect(mkv('A_AC3', 2000000));
+  assert.deepEqual(matroska.video?.[0].timeBase, { numerator: 1, denominator: 500 });
+  assert.deepEqual(matroska.audio.tracks[0].timeBase, { numerator: 1, denominator: 500 });
+  const transport = await inspect(ts(15));
+  assert.deepEqual(transport.video?.[0].timeBase, { numerator: 1, denominator: 90000 });
+  assert.deepEqual(transport.audio.tracks[0].timeBase, { numerator: 1, denominator: 90000 });
+  assert.deepEqual((await inspect(flv(false))).video?.[0].timeBase, { numerator: 1, denominator: 1000 });
+  assert.equal((await inspectCachedTracks(1000, async () => undefined)).video, undefined);
 });

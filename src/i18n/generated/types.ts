@@ -1118,6 +1118,7 @@ export interface Sources {
   "tracks.audioPresence": "音轨";
   "tracks.audioPresent": "有音频";
   "tracks.audioSampleRate": "采样率";
+  "tracks.audioTimeBase": "音频时间基";
   "tracks.audioUnsupportedCodec": "音频编码或浏览器暂不支持";
   "tracks.audioUnsupportedContainer": "此容器暂不支持顺带音频";
   "tracks.audioWaiting": "等待播放或可用的附带音频";
@@ -1141,6 +1142,7 @@ export interface Sources {
   "tracks.duration": "时长";
   "tracks.durationCoversIndexedPortion": "{p0} · 时长为已索引范围";
   "tracks.fileIntegrity": "文件完整性";
+  "tracks.fileSize": "大小";
   "tracks.frameDuration": "帧时长";
   "tracks.frameIndex": "帧索引";
   "tracks.hdrDisplay": "HDR 输出";
@@ -1184,6 +1186,7 @@ export interface Sources {
   "tracks.transferFunction": "传递特性";
   "tracks.unmuteAudio": "解除轨道 {slot} 静音（仅利用视频已读数据）";
   "tracks.videoGroup": "视频";
+  "tracks.videoTimeBase": "视频时间基";
   "transfer.importing": "工作区正在导入，请等待完成。";
   "transfer.legacyConditions": "旧工作区未记录比较条件，已沿用当前色彩和解码设置。";
   "transfer.mtimeWarning": "「{name}」修改时间与工作区记录不一致，已按同名同大小文件恢复；如内容被替换请重新检查标注。";
@@ -2320,6 +2323,7 @@ export interface MessageParameters {
   "tracks.audioPresence": {  };
   "tracks.audioPresent": {  };
   "tracks.audioSampleRate": {  };
+  "tracks.audioTimeBase": {  };
   "tracks.audioUnsupportedCodec": {  };
   "tracks.audioUnsupportedContainer": {  };
   "tracks.audioWaiting": {  };
@@ -2343,6 +2347,7 @@ export interface MessageParameters {
   "tracks.duration": {  };
   "tracks.durationCoversIndexedPortion": { "p0": string | number };
   "tracks.fileIntegrity": {  };
+  "tracks.fileSize": {  };
   "tracks.frameDuration": {  };
   "tracks.frameIndex": {  };
   "tracks.hdrDisplay": {  };
@@ -2386,6 +2391,7 @@ export interface MessageParameters {
   "tracks.transferFunction": {  };
   "tracks.unmuteAudio": { "slot": string | number };
   "tracks.videoGroup": {  };
+  "tracks.videoTimeBase": {  };
   "transfer.importing": {  };
   "transfer.legacyConditions": {  };
   "transfer.mtimeWarning": { "name": string | number };

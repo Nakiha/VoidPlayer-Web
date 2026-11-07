@@ -4844,6 +4844,10 @@
     "source": "采样率",
     "params": {}
   },
+  "tracks.audioTimeBase": {
+    "source": "音频时间基",
+    "params": {}
+  },
   "tracks.audioUnsupportedCodec": {
     "source": "音频编码或浏览器暂不支持",
     "params": {}
@@ -4936,6 +4940,10 @@
   },
   "tracks.fileIntegrity": {
     "source": "文件完整性",
+    "params": {}
+  },
+  "tracks.fileSize": {
+    "source": "大小",
     "params": {}
   },
   "tracks.frameDuration": {
@@ -5136,6 +5144,10 @@
   },
   "tracks.videoGroup": {
     "source": "视频",
+    "params": {}
+  },
+  "tracks.videoTimeBase": {
+    "source": "视频时间基",
     "params": {}
   },
   "transfer.importing": {

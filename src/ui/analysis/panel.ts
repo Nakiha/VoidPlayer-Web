@@ -360,6 +360,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     deepPanelCount: () => deepPanels.size,
     diagrams: () => diagrams,
     tracks: () => tracks,
+    rankFrame: (slot, timeUs, axis) => session.rankAnalysisFrame(slot, timeUs, axis, { cachedOnly: true }),
     viewRange: () => viewRange(),
     sharedHover: () => sharedHover,
     sharedPointerY: () => sharedPointerY,

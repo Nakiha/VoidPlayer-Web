@@ -10,6 +10,7 @@ import { markSymbol, identifyMark, bindMarkHover } from '../mark-symbol.ts';
 import { seekTarget, showSeekPreview } from '../seek-preview.ts';
 import { icon } from '../icons.ts';
 import { createIconButton } from '../controls.ts';
+import { sizeText } from '../library-view.ts';
 import { fileBasename } from '../filename.ts';
 import { trackTimelineRatio } from '../track-timeline.ts';
 import { marksForTrack, trackTiming } from '../workspace-state.ts';
@@ -107,6 +108,16 @@ export function createTracksPane(shared: WorkbenchShared) {
   function propertyGroups(track: ReviewTrack) {
     const metadata = track.trackMetadata, audio = metadata?.audio;
     const pending = t(msg('tracks.metadataUnknown', '尚未确认'));
+    const containerRows = [[t(msg('tracks.containerFormat', '格式')), metadata?.container ?? pending]];
+    const timeBaseText = (base?: { numerator: number; denominator: number }) => base ? `${base.numerator}/${base.denominator} s` : pending;
+    const videos = metadata?.video?.length ? metadata.video : [{}];
+    videos.forEach((item, index) => containerRows.push([t(msg('tracks.videoTimeBase', '视频时间基'))
+      + (videos.length > 1 ? ` ${index + 1}` : ''), timeBaseText(item.timeBase)]));
+    if (audio?.presence !== 'absent') {
+      const audios = audio?.tracks.length ? audio.tracks : [{}];
+      audios.forEach((item, index) => containerRows.push([t(msg('tracks.audioTimeBase', '音频时间基'))
+        + (audios.length > 1 ? ` ${index + 1}` : ''), timeBaseText(item.timeBase)]));
+    }
     const rows: string[][] = [[t(msg('tracks.audioPresence', '音轨')), audio?.presence === 'present' ? t(msg('tracks.audioPresent', '有音频')) : audio?.presence === 'absent' ? t(msg('tracks.audioAbsent', '确认无音频')) : pending]];
     for (const [index, item] of (audio?.tracks ?? []).entries()) {
       const suffix = audio!.tracks.length > 1 ? ` ${index + 1}` : '';
@@ -119,7 +130,7 @@ export function createTracksPane(shared: WorkbenchShared) {
         [t(msg('tracks.audioPlaybackSupport', '播放支持')) + suffix, unsupported ? t(msg('tracks.audioMetadataUnsupported', '当前播放路径不支持')) : t(msg('tracks.audioMetadataUnverified', '播放时确认'))]);
     }
     return [
-      { id: 'container', title: t(msg('tracks.containerGroup', '封装')), rows: [[t(msg('tracks.containerFormat', '格式')), metadata?.container ?? pending]] },
+      { id: 'container', title: t(msg('tracks.containerGroup', '封装')), rows: containerRows },
       { id: 'video', title: t(msg('tracks.videoGroup', '视频')), rows: propertyRows(track) },
       { id: 'audio', title: t(msg('tracks.audioGroup', '音频')), rows },
     ];
@@ -230,7 +241,9 @@ export function createTracksPane(shared: WorkbenchShared) {
       if (!selected) properties.append(text('p', t(msg("tracks.noTracksLoaded", "尚未载入轨道")), 'panel-empty'));
       else {
         const title = text('h3', t(msg('tracks.track', '轨道 {p0}'), { p0: selected.slot })); title.dataset.inspectorTitle = '';
-        properties.append(title);
+        const file = document.createElement('dl'); file.dataset.fileProperties = '';
+        file.append(text('dt', t(msg('tracks.fileSize', '大小'))), text('dd', sizeText(selected.size)));
+        properties.append(title, file);
         for (const group of propertyGroups(selected)) {
           const section = document.createElement('section'); section.dataset.metadataGroup = group.id;
           const heading = text('h3', group.title); heading.id = `inspect-heading-${group.id}`;
@@ -426,6 +439,7 @@ export function createTracksPane(shared: WorkbenchShared) {
         [...section.querySelectorAll('dd')].forEach((node, i) => { node.textContent = group.rows[i][1]; decorateProperty(node, group.rows[i][2], selected); });
       }
       $('track-properties').querySelector('[data-inspector-title]')!.textContent = t(msg('tracks.track', '轨道 {p0}'), { p0: selected.slot });
+      $('track-properties').querySelector('[data-file-properties] dt')!.textContent = t(msg('tracks.fileSize', '大小'));
       $('track-properties').querySelector('[data-frame-title]')!.textContent = t(msg('tracks.currentFrame', '当前帧'));
       const labels = frameTimingRows().map(([label]) => label);
       [...$('track-properties').querySelectorAll('[data-frame-timing] dt')].forEach((node,i) => { node.textContent = labels[i]; });

@@ -377,10 +377,6 @@
 .analysis-combined-grid > .analysis-card-section { min-width: 0; }
 /* Section columns fit their minimum readable width, including a partial last
    row. The track heading only needs a second line on genuinely small cards. */
-@container (max-width: 360px) {
-  .analysis-card-track { flex-wrap: wrap; }
-  .analysis-card-track-time { flex-basis: 100%; margin: 0 0 0 3px; font-size: 11px; color: var(--text-secondary); }
-}
 .analysis-linked-card .fl-grid th, .analysis-linked-card .fl-grid td { height: 21px; padding: 1px 0; }
 .analysis-linked-card .fl-grid th { padding-right: 8px; }
 .analysis-linked-card .fl-grid td + td { padding-left: 6px; }
@@ -473,7 +469,11 @@
 .bitstream-track-badge .dot { width:7px; height:7px; border-radius:50%; flex:none; }
 .analysis-card-track { display:flex; align-items:center; gap:5px; font-weight:600; margin-top:4px; }
 .analysis-card-track-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-left:3px; font-weight:400; color:var(--text-secondary); }
-.analysis-card-track-time { flex-shrink:0; margin-left:8px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.analysis-card-track-time { flex-shrink:0; margin-left:8px; white-space:nowrap; font-size:13px; font-weight:600; font-variant-numeric:tabular-nums; color:var(--text); }
+@container (max-width: 360px) {
+  .analysis-card-track { flex-wrap:wrap; }
+  .analysis-card-track-time { flex-basis:100%; margin:0 0 0 3px; text-align:left; }
+}
 .analysis-track-details + .analysis-track-details { margin-top:7px; padding-top:5px; position:relative; }
 .analysis-track-details + .analysis-track-details::before { content:''; position:absolute; left:3px; right:3px; top:0; height:1px; background:var(--divider); }
 .analysis-track-details .analysis-combined-grid { margin-top:3px; }

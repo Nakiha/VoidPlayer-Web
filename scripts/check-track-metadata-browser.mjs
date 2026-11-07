@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromium, webkit } from 'playwright';
@@ -27,6 +27,11 @@ try {
   ...(f.presence==='absent'?[]:['-f','lavfi','-i','sine=frequency=440:sample_rate=48000']),'-t','2',
   ...(f.name.endsWith('webm')?['-c:v','libvpx-vp9','-deadline','realtime','-cpu-used','8','-c:a','libopus']:['-c:v','libx264','-preset','ultrafast','-g','30','-bf',String(f.bframes??0),'-c:a',f.name.startsWith('unsupported')?'ac3':'aac']),
   ...(f.channels===6?['-ac','6']:[]),'-y',path.join(media,f.name)]);
+ for (const f of fixtures) {
+  const probe=JSON.parse(execFileSync('ffprobe',['-v','error','-show_entries','stream=codec_type,time_base','-of','json',path.join(media,f.name)],{encoding:'utf8'}));
+  f.clocks=probe.streams.filter(stream=>['video','audio'].includes(stream.codec_type)).map(stream=>stream.time_base+' s');
+  f.bytes=(await stat(path.join(media,f.name))).size;
+ }
  for (const f of fixtures.filter(f=>f.name.endsWith('.mp4'))) {
   const data=JSON.parse(execFileSync('ffprobe',['-v','error','-select_streams','v:0','-show_packets',
    '-show_entries','packet=pts_time,dts_time','-of','json',path.join(media,f.name)],{encoding:'utf8'}));
@@ -95,6 +100,10 @@ try {
     assert.deepEqual(await page.evaluate(()=>({connected:window.metadataDock.nodes.every(n=>n.isConnected),sameInput:window.metadataDock.offset===document.querySelector('.track-offset'),value:window.metadataDock.offset.value})),{connected:true,sameInput:true,value:'pending edit'},'cached metadata preserves dock nodes and uncommitted input');
     await page.evaluate(()=>{window.metadataDock.offset.value=window.metadataDock.value;});
     const metadata=await page.evaluate(()=>window.voidPlayer.getState().tracks[0].trackMetadata);
+    const displayed=await page.locator('[data-metadata-group=container] dd').allTextContents();
+    assert.deepEqual(displayed,[f.format,...f.clocks],'time bases match independent ffprobe stream clocks');
+    assert.equal(await page.locator('[data-file-properties] dt').textContent(),'大小');
+    assert.equal(await page.locator('[data-file-properties] dd').textContent(),`${(f.bytes / 2 ** 20).toFixed(1)} MB`);
     assert.equal(metadata.container,f.format);if(f.rate)assert.equal(metadata.audio.tracks[0].sampleRate,f.rate);
     assert.deepEqual(await page.locator('[data-metadata-group] h3').allTextContents(),['封装','视频','音频']);
     assert.equal(await page.locator('[data-frame-timing] dt').count(),7);
@@ -126,6 +135,7 @@ try {
     // A real peer-tab preference change must relabel the existing grouped nodes.
     const peer=await page.context().newPage();await peer.goto(url);await peer.evaluate(()=>localStorage.setItem('voidplayer.language','en'));await page.waitForFunction(()=>document.documentElement.lang==='en');
     assert.deepEqual(await page.locator('[data-metadata-group] h3').allTextContents(),['Container','Video','Audio']);
+    assert.equal(await page.locator('[data-file-properties] dt').textContent(),'Size');
     assert.deepEqual(await page.locator('[data-frame-timing] dt').allTextContents(),['PTS order','DTS order','Clip PTS','Source PTS','Source DTS','Frame duration','Relative to playhead']);
     assert.equal(await page.evaluate(()=>window.metadataNodes.every((n,i)=>n===[...document.querySelectorAll('[data-metadata-group] dl')][i])),true);
     if(f.name==='surround.mp4'&&!local){await page.locator('#inspector-panel').screenshot({path:path.join(artifacts,'panel-en.png')});await page.locator('[data-metadata-group=audio]').scrollIntoViewIfNeeded();await page.locator('#inspector-panel').screenshot({path:path.join(artifacts,'panel-en-audio.png')});}

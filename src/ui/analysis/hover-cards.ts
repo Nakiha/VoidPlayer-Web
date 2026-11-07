@@ -1,5 +1,5 @@
 import type { InspectionState } from '../../../shared/analysis/metadata/inspection.ts';
-import type { AnalysisDiagram } from '../../../shared/analysis/metadata/types.ts';
+import type { AnalysisAxis, AnalysisDiagram, AnalysisRank } from '../../../shared/analysis/metadata/types.ts';
 import { msg, t } from '../../i18n.ts';
 import type { Slot } from '../../../shared/review/model.ts';
 import { computeLayout, formatAxis, plotGeometry } from './canvas.ts';
@@ -34,7 +34,8 @@ export interface AnalysisHoverCardsDeps {
   deepPanels: () => Iterable<DeepDiagramEntry>;
   deepPanelCount: () => number;
   diagrams: () => ReadonlySet<AnalysisDiagram>;
-  tracks: () => readonly { slot: Slot; name: string }[];
+  tracks: () => readonly { slot: Slot; name: string; mediaId: string; sourceGen: number; offsetUs: number }[];
+  rankFrame(slot: Slot, timeUs: number, axis: AnalysisAxis): Promise<AnalysisRank | { reason: string }>;
   viewRange: () => { start: number; end: number };
   sharedHover: () => ChartHover | null;
   sharedPointerY: () => number | null;
@@ -63,6 +64,36 @@ export function installAnalysisHoverCards(deps: AnalysisHoverCardsDeps) {
   });
   const cardEl = card.element;
   cardEl.classList.add('analysis-linked-card');
+  const frameNumbers = new Map<Slot, { key: string; text: string; pending: boolean; complete: boolean; ready: Promise<void> }>();
+  function showTrackTime(element: HTMLElement, slot: Slot, timeUs: number | undefined, axis: AnalysisAxis) {
+    element.dataset.hitTime = timeUs === undefined ? '' : String(timeUs);
+    if (timeUs === undefined) { element.textContent = '—'; return; }
+    const track = tracks().find(entry => entry.slot === slot);
+    if (!track) { element.textContent = '—'; return; }
+    const key = `${track.mediaId}:${track.sourceGen}:${track.offsetUs}:${axis}:${timeUs}`;
+    let cached = frameNumbers.get(slot);
+    if (cached?.key !== key || (!cached.pending && !cached.complete)) {
+      cached = { key, text: '—', pending: true, complete: false, ready: Promise.resolve() };
+      frameNumbers.set(slot, cached);
+      const entry = cached;
+      entry.ready = deps.rankFrame(slot, timeUs, axis).then(result => {
+        // A number belongs to an exact indexed frame, never an estimated time/fps product.
+        if ('rank' in result && result.ordinal !== null) {
+          entry.text = `${result.complete ? '' : '~'}${axis === 'pts' ? result.rank : result.ordinal}`;
+          entry.complete = result.complete;
+        }
+      }).catch(() => { /* Missing index evidence keeps the explicit unknown number. */ }).finally(() => { entry.pending = false; });
+    }
+    const entry = cached;
+    const update = () => { element.textContent = `${formatAxis(timeUs)} #${entry.text} ${axis.toUpperCase()}`; };
+    update();
+    void entry.ready.then(() => {
+      if (signal.aborted || !element.isConnected || frameNumbers.get(slot) !== entry) return;
+      const before = element.textContent;
+      update();
+      if (element.textContent !== before) card.position(lastClientX() ?? canvas.getBoundingClientRect().left + fracToPx(timeUs));
+    });
+  }
   type CardGroup = 'overview' | `nalu:${Slot}` | `references:${Slot}`;
   const individualLayer = document.createElement('div'); individualLayer.className = 'analysis-float-layer analysis-individual-layer';
   individualLayer.setAttribute('aria-hidden', 'true'); document.body.append(individualLayer);
@@ -222,8 +253,7 @@ export function installAnalysisHoverCards(deps: AnalysisHoverCardsDeps) {
         if (timeUs !== undefined) hitTimeUs = timeUs;
         part.append(title, contents); grid.append(part);
       }
-      time.dataset.hitTime = hitTimeUs === undefined ? '' : String(hitTimeUs);
-      time.textContent = hitTimeUs === undefined ? '—' : `${formatAxis(hitTimeUs)} · ${snapshot.axis.toUpperCase()}`;
+      showTrackTime(time, track.slot, hitTimeUs, snapshot.axis);
       cardEl.append(row);
     }
     cardEl.style.setProperty('--combined-card-width', `${widths.reduce((sum, width) => sum + width, 0) + Math.max(0, widths.length - 1) * 14 + 24}px`);
@@ -247,7 +277,7 @@ export function installAnalysisHoverCards(deps: AnalysisHoverCardsDeps) {
 
   return {
     cardEl,
-    reset: () => card.reset(),
+    reset: () => { frameNumbers.clear(); card.reset(); },
     hideAll: () => { cardEl.hidden = true; hideIndividualCards(); },
     contains: hoverCardsContain,
     text: cardText,

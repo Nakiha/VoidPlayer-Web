@@ -1,8 +1,10 @@
 import type { AudioPeek } from '../audio-types.ts';
 
-export interface AudioTrackMetadata { codec?: string; sampleRate?: number; channels?: number; }
+export interface TrackTimeBase { numerator: number; denominator: number; }
+export interface AudioTrackMetadata { codec?: string; sampleRate?: number; channels?: number; timeBase?: TrackTimeBase; }
 export interface CachedTrackMetadata {
   container?: string;
+  video?: { timeBase?: TrackTimeBase }[];
   audio: { presence: 'present' | 'absent' | 'unknown'; tracks: AudioTrackMetadata[]; complete: boolean };
 }
 const unknown = (): CachedTrackMetadata => ({ audio: { presence: 'unknown', tracks: [], complete: false } });
@@ -59,6 +61,13 @@ function boxes(bytes: Uint8Array, start = 0, end = bytes.length) {
   return result;
 }
 const codecs: Record<string, string> = { mp4a: 'mp4a', 'ac-3': 'AC-3', 'ec-3': 'E-AC-3', Opus: 'Opus', fLaC: 'FLAC', alac: 'ALAC', '.mp3': 'MP3', lpcm: 'PCM', sowt: 'PCM', twos: 'PCM' };
+function mediaTimeBase(bytes: Uint8Array, mdhd?: { start: number; end: number }): TrackTimeBase | undefined {
+  if (!mdhd || mdhd.end - mdhd.start < 4) return;
+  const version = bytes[mdhd.start], offset = version === 0 ? 12 : version === 1 ? 20 : -1;
+  if (offset < 0 || mdhd.start + offset + 4 > mdhd.end) return;
+  const denominator = u32(bytes, mdhd.start + offset);
+  if (denominator > 0) return { numerator: 1, denominator };
+}
 function esds(bytes: Uint8Array): AudioTrackMetadata {
   let at = 4;
   const descriptor = (tag: number) => {
@@ -95,15 +104,18 @@ async function mp4(reader: Budget, result: CachedTrackMetadata) {
     if (type === 'moov') {
       const bytes = await reader.read(at + count, size - count), tracks: AudioTrackMetadata[] = [];
       const children = boxes(bytes); let complete = true;
+      result.video = [];
       for (const trak of children.filter(b => b.type === 'trak')) {
         const mdia = boxes(bytes, trak.start, trak.end).find(b => b.type === 'mdia');
         if (!mdia) { complete = false; continue; }
         const media = boxes(bytes, mdia.start, mdia.end), hdlr = media.find(b => b.type === 'hdlr');
         if (!hdlr || hdlr.end - hdlr.start < 12) { complete = false; continue; }
         const handler = ascii(bytes, hdlr.start + 8, hdlr.start + 12);
+        const timeBase = mediaTimeBase(bytes, media.find(b => b.type === 'mdhd'));
+        if (handler === 'vide') result.video.push(timeBase ? { timeBase } : {});
         if (handler !== 'soun') { if (!['vide','text','sbtl','subt','clcp','hint','meta','tmcd','mdir','mdta','auxv'].includes(handler)) complete = false; continue; }
         if (tracks.length >= 32) { complete = false; break; }
-        const track: AudioTrackMetadata = {}; tracks.push(track); audio(result, tracks, false);
+        const track: AudioTrackMetadata = timeBase ? { timeBase } : {}; tracks.push(track); audio(result, tracks, false);
         const minf = media.find(b => b.type === 'minf');
         const stbl = minf && boxes(bytes, minf.start, minf.end).find(b => b.type === 'stbl');
         const stsd = stbl && boxes(bytes, stbl.start, stbl.end).find(b => b.type === 'stsd');
@@ -155,6 +167,7 @@ function elements(bytes: Uint8Array) {
 const uint = (b: Uint8Array) => b.length <= 6 ? b.reduce((n, byte) => n * 256 + byte, 0) : NaN;
 async function ebml(reader: Budget, result: CachedTrackMetadata) {
   let at = 0, limit = reader.size;
+  let timeBase: TrackTimeBase | undefined;
   for (let n = 0; n < 128 && at < limit && at < 1024 * 1024; n++) {
     const head = await reader.read(at, Math.min(12, limit - at)), id = vint(head, 0, true), size = vint(head, id.length), start = at + id.length + size.length;
     if (id.value === 0x18538067) { if (!size.unknown) limit = Math.min(limit, start + size.value); at = start; continue; }
@@ -162,16 +175,30 @@ async function ebml(reader: Budget, result: CachedTrackMetadata) {
     if (id.value === 0x1a45dfa3) {
       const doc = elements(await reader.read(start, size.value)).find(e => e.id === 0x4282);
       if (doc) { const name = ascii(doc.data); if (name === 'webm' || name === 'matroska') result.container = name === 'webm' ? 'WebM' : 'Matroska'; }
+    } else if (id.value === 0x1549a966) {
+      const field = elements(await reader.read(start, size.value)).find(e => e.id === 0x2ad7b1);
+      const scale = field ? uint(field.data) : 1000000;
+      if (Number.isSafeInteger(scale) && scale > 0 && scale <= 1e9) {
+        let a = scale, b = 1e9;
+        while (b) { const remainder = a % b; a = b; b = remainder; }
+        timeBase = { numerator: scale / a, denominator: 1e9 / a };
+      }
     } else if (id.value === 0x1654ae6b) {
       const entries = elements(await reader.read(start, size.value)).filter(e => e.id === 0xae), tracks: AudioTrackMetadata[] = [];
+      result.video = [];
       let complete = entries.length > 0;
       for (const entry of entries) {
         const fields = elements(entry.data), type = fields.find(e => e.id === 0x83);
         if (!type) { complete = false; continue; }
         const kind = uint(type.data);
+        // Non-default TrackTimestampScale needs a separately verified rational clock.
+        const scale = fields.find(e => e.id === 0x23314f);
+        const trackBase = !scale || ([4, 8].includes(scale.data.length)
+          && (scale.data.length === 4 ? view(scale.data).getFloat32(0) : view(scale.data).getFloat64(0)) === 1) ? timeBase : undefined;
+        if (kind === 1) result.video.push(trackBase ? { timeBase: trackBase } : {});
         if (kind !== 2) { if (![1,3,16,17,18,32,33].includes(kind)) complete = false; continue; }
         if (tracks.length >= 32) { complete = false; break; }
-        const track: AudioTrackMetadata = {}, codec = fields.find(e => e.id === 0x86);
+        const track: AudioTrackMetadata = trackBase ? { timeBase: trackBase } : {}, codec = fields.find(e => e.id === 0x86);
         tracks.push(track); audio(result, tracks, false);
         if (codec && codec.data.length <= 128) { const name = ascii(codec.data); track.codec = ({ A_OPUS: 'Opus', A_AAC: 'AAC', A_FLAC: 'FLAC', A_AC3: 'AC-3', A_EAC3: 'E-AC-3', 'A_MPEG/L3': 'MP3' } as Record<string,string>)[name] ?? name.replace(/^A_/, ''); }
         const settings = fields.find(e => e.id === 0xe1);
@@ -188,8 +215,9 @@ async function ebml(reader: Budget, result: CachedTrackMetadata) {
 async function flv(reader: Budget, result: CachedTrackMetadata) {
   const header = await reader.read(0, 9); result.container = 'FLV';
   if (header[3] !== 1 || header[4] & ~5) return;
+  result.video = header[4] & 1 ? [{ timeBase: { numerator: 1, denominator: 1000 } }] : [];
   if (!(header[4] & 4)) { audio(result, [], true); return; }
-  const track: AudioTrackMetadata = {}; audio(result, [track], false);
+  const track: AudioTrackMetadata = { timeBase: { numerator: 1, denominator: 1000 } }; audio(result, [track], false);
   for (let at = u32(header, 5) + 4, n = 0; n < 128 && at < 65536 && at + 11 <= reader.size; n++) {
     const h = await reader.read(at, 11), length = h[1] * 65536 + h[2] * 256 + h[3];
     if (![8, 9, 18].includes(h[0]) || at + 15 + length > reader.size) return;
@@ -229,6 +257,7 @@ async function ts(reader: Budget, result: CachedTrackMetadata) {
   }
   const pat = sections.get(0); if (!pat || pat[0] !== 0 || (pat.length - 12) % 4) return;
   const tracks: AudioTrackMetadata[] = [], aacPids = new Map<number, AudioTrackMetadata>(); let complete = true, programs = 0;
+  result.video = [];
   for (let p = 8; p + 4 <= pat.length - 4; p += 4) {
     if (!pat[p] && !pat[p + 1]) continue;
     programs++; const pmt = sections.get(((pat[p + 2] & 31) << 8) | pat[p + 3]);
@@ -251,6 +280,9 @@ async function ts(reader: Budget, result: CachedTrackMetadata) {
       if (q + 5 > end) { complete = false; break; }
       const type = pmt[q], length = ((pmt[q + 3] & 15) << 8) | pmt[q + 4];
       if (!descriptors(q + 5, q + 5 + length)) { complete = false; break; }
+      if ([1, 2, 0x10, 0x1b, 0x24, 0x33].includes(type) && result.video.length < 32) {
+        result.video.push({ timeBase: { numerator: 1, denominator: 90000 } });
+      }
       let codec = ({ 3:'MPEG audio', 4:'MPEG audio', 15:'AAC', 17:'AAC LATM', 0x81:'AC-3', 0x87:'E-AC-3', 0x83:'TrueHD', 0x84:'E-AC-3', 0x8a:'DTS' } as Record<number,string>)[type];
       if (type === 6) for (let d = q + 5; d + 2 <= q + 5 + length;) {
         const tag = pmt[d], len = pmt[d + 1]; if (d + 2 + len > q + 5 + length) break;
@@ -259,7 +291,7 @@ async function ts(reader: Budget, result: CachedTrackMetadata) {
         d += len + 2;
       }
       if (codec && tracks.length >= 32) { complete = false; break; }
-      if (codec) { const track = { codec }; tracks.push(track); if (type === 15) aacPids.set(((pmt[q + 1] & 31) << 8) | pmt[q + 2], track); }
+      if (codec) { const track: AudioTrackMetadata = { codec, timeBase: { numerator: 1, denominator: 90000 } }; tracks.push(track); if (type === 15) aacPids.set(((pmt[q + 1] & 31) << 8) | pmt[q + 2], track); }
       else if (![1,2,0x10,0x1b,0x24,0x33,0x86].includes(type)) complete = false;
       q += 5 + length;
     }

@@ -32,6 +32,7 @@ export function attachCachedTrackMetadata(source: MediaSource, peek: AudioPeek) 
         const previous = source.info.trackMetadata;
         // Cache eviction is not evidence that a previously identified track vanished.
         if (!result.container) result.container = previous?.container;
+        if (!result.video || !result.audio.complete && previous?.video?.length) result.video = previous?.video ?? result.video;
         if (previous && !result.audio.complete && (result.audio.presence === 'unknown' || previous.audio.complete)) result.audio = previous.audio;
         updateMediaInfo(source, { trackMetadata: result }, 'cached-metadata');
       } finally { busy = false; if (enabled && !disposed && current !== generation) source.requestCachedMetadata?.(); }

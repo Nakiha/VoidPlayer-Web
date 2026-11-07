@@ -116,3 +116,7 @@ The server scans with demux-only mode; `scanDecodedPackets` must be zero. Openin
 
 See [container-recovery.md](container-recovery.md) for source integrity, terminal
 prefixes, decode boundaries, cache/transport behavior and recovery limits.
+
+### Inspector container clocks
+
+The inspector shows source file size beneath the track title. Container metadata includes separate video and audio time bases in seconds per tick, preserving multiple declared tracks. The bounded cache-only header reader uses MP4 `mdhd` timescales (versions 0/1), Matroska/WebM `TimestampScale`, FLV millisecond timestamps and MPEG-TS PES 90 kHz timestamps. These are container clocks, not frame rates, audio sample rates or the normalized microsecond presentation timeline. Missing, invalid or unsupported clock metadata stays unknown; confirmed absent audio has no audio time-base row. No additional media IO or decoder work is started to populate these fields.

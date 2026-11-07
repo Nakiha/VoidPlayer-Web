@@ -16,6 +16,10 @@ import { createMediaServer } from '../server/app.ts';
 async function toggleSize(page) {
   await page.locator('#analysis-diagrams [data-value="size"]').click();
 }
+async function fullRange(page) {
+  if (await page.locator('#toggle-analysis').getAttribute('aria-expanded') !== 'true') await page.locator('#toggle-analysis').click();
+  await page.locator('[data-seg="full"]').click();
+}
 
 const engineName = process.argv[2] ?? 'webkit';
 assert.ok(['webkit', 'chromium'].includes(engineName), 'Expected webkit or chromium');
@@ -194,7 +198,7 @@ try {
     }
     throw new Error('mixed-format indexes did not complete');
   });
-  await page.locator('[data-seg="full"]').click();
+  await fullRange(page);
   const smoothWidths = [];
   // Use small deltas throughout so this checks the bucket/raw seam during
   // continuous zoom. A first -400 jump changes scale fourfold; a slow query
@@ -218,7 +222,7 @@ try {
   for (let i = 1; i < smoothWidths.length; i++) assert.ok(Math.abs(smoothWidths[i].width - smoothWidths[i - 1].width) < 0.5,
     `smooth zoom width jumped: ${JSON.stringify(smoothWidths)}`);
   await saveDiagnostics(page, 'smooth-width', { smoothWidths });
-  await page.locator('[data-seg="full"]').click();
+  await fullRange(page);
   // Wait for the full-range render before using its span as the pinch baseline.
   await page.waitForFunction(() => { const v = window.__vpAnalysis?.view; return v?.start < 0 && v?.end === window.voidPlayer.getState().durationUs; });
   // Safari trackpad pinch uses native gesture events rather than Ctrl+wheel.
@@ -236,7 +240,7 @@ try {
     return Math.abs((v.end - v.start) / (before.end - before.start) - .5) < .001;
   }, pinchBefore.view);
   assert.equal(await page.evaluate(() => window.voidPlayer.getState().positionUs), pinchBefore.positionUs, 'native pinch does not seek');
-  await page.locator('[data-seg="full"]').click();
+  await fullRange(page);
 
   await page.evaluate(async () => {
     const remove = window.voidPlayer.tools.find(t => t.name === 'remove_review_track');
@@ -435,6 +439,37 @@ try {
   const fl = await page.evaluate(() => window.__vpAnalysis.float);
   assert.ok(fl, '悬停时卡片应可见');
   assert.match(await page.locator('.analysis-linked-card .analysis-card-track-time:not([data-hit-time=""])').first().textContent(), /\d\d:\d\d\.\d\d\d/);
+  await page.waitForFunction(() => [...document.querySelectorAll('.analysis-linked-card .analysis-card-track-time:not([data-hit-time=""])')]
+    .every(el => /\d\d:\d\d\.\d\d\d #\d+ PTS$/.test(el.textContent)));
+  const headings = await page.evaluate(async () => {
+    const card = document.querySelector('.analysis-linked-card'), originalWidth = card.style.getPropertyValue('--combined-card-width');
+    const query = window.voidPlayer.tools.find(tool => tool.name === 'query_analysis');
+    const indexed = await Promise.all([...card.querySelectorAll('.analysis-track-details')].filter(row => row.querySelector('.analysis-card-track-time').dataset.hitTime).map(async row => {
+      const el = row.querySelector('.analysis-card-track-time'), time = +el.dataset.hitTime;
+      const result = await query.execute({slot:row.dataset.slot, axis:'pts', startUs:0, endUs:10000000, pixelWidth:2000});
+      return {text:el.textContent, rank:result.samples.filter(sample => sample.effectivePtsUs < time).length};
+    }));
+    const sizes = [];
+    for (const width of [300, 600]) {
+      card.style.setProperty('--combined-card-width', `${width}px`);
+      const time = card.querySelector('.analysis-card-track-time'), section = card.querySelector('.analysis-card-section');
+      const style = getComputedStyle(time);
+      sizes.push({font:style.fontSize, weight:style.fontWeight, color:style.color, textColor:getComputedStyle(card).color,
+        left:time.getBoundingClientRect().left, contentLeft:section.getBoundingClientRect().left + parseFloat(getComputedStyle(section).paddingLeft),
+        top:time.getBoundingClientRect().top, nameTop:card.querySelector('.analysis-card-track-name').getBoundingClientRect().top});
+    }
+    card.style.setProperty('--combined-card-width', originalWidth);
+    return {indexed, sizes};
+  });
+  for (const heading of headings.indexed) assert.match(heading.text, new RegExp(` #${heading.rank} PTS$`), 'frame number follows the indexed PTS order');
+  const [narrowHeading, wideHeading] = headings.sizes;
+  assert.ok(narrowHeading.top > narrowHeading.nameTop + 10, 'narrow card wraps time onto its own line');
+  assert.ok(Math.abs(narrowHeading.left - narrowHeading.contentLeft) < 1, 'wrapped time aligns with the detail content');
+  assert.equal(narrowHeading.font, wideHeading.font, 'both layouts keep the same timestamp size');
+  assert.equal(narrowHeading.font, '13px');
+  assert.equal(narrowHeading.weight, wideHeading.weight);
+  assert.equal(narrowHeading.color, wideHeading.color);
+  assert.equal(narrowHeading.color, narrowHeading.textColor, 'narrow timestamps retain the highlighted text color');
   assert.ok(fl.x >= box.x - 1 && fl.x + fl.width <= box.x + box.width + 1, `卡片横向不出绘图区：${JSON.stringify(fl)}`);
   assert.ok(fl.y >= box.y + box.height - 4, `卡片应在横轴下方、不盖图表与轴数字：${JSON.stringify(fl)}`);
   assert.ok(Math.abs((fl.x + fl.width / 2) - mx) <= fl.width / 2 + 8, '卡片水平以鼠标为中心');
@@ -466,7 +501,7 @@ try {
   assert.deepEqual(bottom.tracks.map(t => t.bitrate), top.tracks.map(t => t.bitrate));
 
   // 缩窄绘图区使全览低于 1px 柱 + 间隔容量，验证聚合桶仍按峰值定位。
-  await page.locator('[data-seg="full"]').click();
+  await fullRange(page);
   await page.setViewportSize({ width: 640, height: 800 });
   // Buckets may already exist at 1280px. Wait for the resized drawing, whose
   // full-domain padding depends on width, before capturing the click baseline.

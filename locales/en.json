@@ -4504,6 +4504,10 @@
     "source": "采样率",
     "translation": "Sample rate"
   },
+  "tracks.audioTimeBase": {
+    "source": "音频时间基",
+    "translation": "Audio time base"
+  },
   "tracks.audioUnsupportedCodec": {
     "source": "音频编码或浏览器暂不支持",
     "translation": "Audio codec or browser is not supported"
@@ -4595,6 +4599,10 @@
   "tracks.fileIntegrity": {
     "source": "文件完整性",
     "translation": "File integrity"
+  },
+  "tracks.fileSize": {
+    "source": "大小",
+    "translation": "Size"
   },
   "tracks.frameDuration": {
     "source": "帧时长",
@@ -4769,6 +4777,10 @@
   "tracks.videoGroup": {
     "source": "视频",
     "translation": "Video"
+  },
+  "tracks.videoTimeBase": {
+    "source": "视频时间基",
+    "translation": "Video time base"
   },
   "transfer.importing": {
     "source": "工作区正在导入，请等待完成。",
