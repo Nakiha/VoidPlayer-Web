@@ -43,7 +43,7 @@ try {
  // A stale single-entry deletion must not remove a newly generated preview.
  await page.locator('.cache-row button').first().click();const target=await page.locator('.cache-row').first().getAttribute('data-cache-id');const current=annotations.read('default',target);
  annotations.mutate('default',{operationId:'edit-preview',id:target,revision:1,action:'put',document:{...current.document,mark:{...current.document.mark,text:'更新后的标注'}}},{id:'reviewer',name:'剪辑师'});annotations.putPreview('default',target,2,jpeg);
- await page.locator('#cache-confirm-clear').click();await page.locator('#admin-message').filter({hasText:'预览已更新'}).waitFor();assert.ok(annotations.preview('default',target,2));await page.locator('#cache-cancel').click();
+ await page.locator('#cache-confirm-clear').click();await page.locator('.admin-toast-stack .toast-message').filter({hasText:'预览已更新'}).waitFor();assert.ok(annotations.preview('default',target,2));await page.locator('#cache-cancel').click();
  const epoch=annotations.previewEpoch;await page.locator('#cache-clear').click();await page.locator('#cache-confirm-clear').click();await page.getByText('暂无标注预览缓存',{exact:true}).waitFor();
  assert.equal(annotations.list('default').count,53);assert.equal(service.library.frameIndexes.list().count,1);assert.throws(()=>annotations.putPreview('default',target,2,jpeg,epoch),/已被清理/);
  await page.locator('[data-cache-kind=frame-indexes]').click();await page.locator('.cache-row').waitFor();await page.locator('.cache-row button').click();await page.locator('#cache-confirm-clear').click();await page.getByText('暂无帧索引缓存',{exact:true}).waitFor();

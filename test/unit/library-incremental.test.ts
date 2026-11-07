@@ -39,6 +39,7 @@ test('a subtree scan updates additions and deletions without traversing or clear
   const index = new MediaLibraryIndex([{ id: 'archive', path: media }]);
   try {
     await index.refresh(); const initial = index.browse({ recursive: true }).entries;
+    assert.deepEqual(index.status().inventory,{media:4,pending:0});
     await fs.rm(path.join(media, 'a/old.mp4'));
     await fs.mkdir(path.join(media, 'a/new')); await fs.writeFile(path.join(media, 'a/new/new.mp4'), 'new video');
     // If this directory were accidentally traversed its old record would disappear.
@@ -49,6 +50,10 @@ test('a subtree scan updates additions and deletions without traversing or clear
     assert.equal(index.metadata(initial.find(e => e.name === 'a/old.mp4')!.id)?.state, 'missing');
     const revision = index.browse().revision;
     await index.refreshDirectories([{ rootId: 'archive', directory: 'a' }]); assert.equal(index.browse().revision, revision);
+    await index.refreshDirectories([{rootId:'archive',directory:'a/deep'}]);
+    assert.equal(index.status().job?.files,1,'a small incremental pass only visits its own media');
+    assert.deepEqual(index.status().inventory,{media:4,pending:0},'inventory remains library-wide after the one-file pass');
+    assert.equal(index.status().scanMode,null,'an idle scanner does not claim a live full scan');
     await assert.rejects(index.refreshDirectories([{ rootId: 'archive', directory: '../outside' }]), /无效/);
     await assert.rejects(index.refreshDirectories([{ rootId: 'unknown', directory: '' }]), /无效/);
     await fs.rename(path.join(media, 'a'), path.join(root, 'offline-a'));
@@ -56,6 +61,7 @@ test('a subtree scan updates additions and deletions without traversing or clear
     assert.equal(index.status().roots[0].state, 'partial');
     assert.ok(index.browse({ recursive: true }).entries.some(e => e.name === 'a/deep/keep.mp4'));
     await index.refresh(); assert.deepEqual(index.browse({ recursive: true }).entries.map(e => e.name), ['ab/sibling.mp4']);
+    assert.deepEqual(index.status().inventory,{media:1,pending:0},'missing entries invalidate the inventory cache');
   } finally { await index.close(); }
 }));
 
@@ -75,6 +81,7 @@ test('changes arriving during a scan are drained and a requested full calibratio
       return result;
     }) as typeof original;
     const first = index.refreshDirectories([{ rootId: 'archive', directory: 'left' }]); await until(() => blocked, 'scan did not reach the gated directory');
+    assert.equal(index.status().scanning,true);assert.equal(index.status().scanMode,'incremental');
     await fs.writeFile(path.join(media, 'left/two.mp4'), 'new'); await fs.writeFile(path.join(media, 'right/two.mp4'), 'new');
     const queued = index.refreshDirectories([{ rootId: 'archive', directory: 'left' }]);
     const full = index.refresh();
@@ -91,9 +98,11 @@ test('pending media settles with a local rescan instead of rereading the entire 
   const index = new MediaLibraryIndex([{ id: 'archive', path: media }], { settleMs: 150, now: () => now });
   try {
     await index.refresh(); assert.equal(index.browse({ recursive: true }).entries[0].state, 'pending');
+    assert.deepEqual(index.status().inventory,{media:1,pending:1},'inventory explicitly reports settling files');
     now += 151;
     await until(() => index.browse({ recursive: true }).entries[0].state === 'ready' && !index.status().scanning, 'pending file did not finish settling');
     assert.equal(index.status().job?.visited, 1);
+    assert.deepEqual(index.status().inventory,{media:1,pending:0},'settling updates the cached inventory without a full rescan');
   } finally { await index.close(); }
 }));
 

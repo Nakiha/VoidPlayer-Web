@@ -50,8 +50,7 @@ test('messages use compiled ICU, escape user content, preserve ASCII timecode an
 for (const count of [0, 1, 2]) {
  test(`admin count messages handle ${count} in English and Chinese`, async () => {
   const render = () => ({
-   scanActive: t(msg('admin.scanActive', '扫描中 · {visited, plural, other {# 个目录}}'), {visited:count}),
-   scanProgress: t(msg('admin.scanProgressLine', '{state} · {visited, plural, other {# 个目录}} · {files} 个媒体'), {state:'Scanning',visited:count,files:7}),
+   scanProgress: t(msg('admin.scanCurrentProgress', '本轮已读取 {directories, plural, other {# 个目录}}、{media, plural, other {# 个媒体}}'), {directories:count,media:7}),
    scanErrors: t(msg('admin.scanErrors', '{count, plural, other {# 处读取错误}}{truncated}'), {count,truncated:' · details truncated'}),
    measurement: t(msg('admin.countLine', '{done} 次完成 · {errors, plural, other {# 次错误}} · {pending} 次处理中'), {done:5,errors:count,pending:3}),
    watchers: t(msg('admin.watchSummary', '{active} / {limit, plural, other {# 个目录}}{calibration}{partial}'), {active:count,limit:count,calibration:' · calibration',partial:' · partial'}),
@@ -61,16 +60,14 @@ for (const count of [0, 1, 2]) {
    const directories = count === 1 ? 'directory' : 'directories';
    const errors = count === 1 ? 'error' : 'errors';
    assert.deepEqual(render(), {
-    scanActive: `Scanning · ${count} ${directories}`,
-    scanProgress: `Scanning · ${count} ${directories} · 7 media`,
+    scanProgress: `Read ${count} ${directories} and 7 media this pass`,
     scanErrors: `${count} read ${errors} · details truncated`,
     measurement: `5 done · ${count} ${errors} · 3 active`,
     watchers: `${count} / ${count} ${directories} · calibration · partial`,
    });
   } finally { await setLanguage('zh-CN',{persist:false}); }
   assert.deepEqual(render(), {
-   scanActive: `扫描中 · ${count} 个目录`,
-   scanProgress: `Scanning · ${count} 个目录 · 7 个媒体`,
+   scanProgress: `本轮已读取 ${count} 个目录、7 个媒体`,
    scanErrors: `${count} 处读取错误 · details truncated`,
    measurement: `5 次完成 · ${count} 次错误 · 3 次处理中`,
    watchers: `${count} / ${count} 个目录 · calibration · partial`,
@@ -95,10 +92,8 @@ function typedMessages() {
  t(msg('shell.trackActions','轨道 {p0} 操作'),{p0:'A',unexpected:1});
  // @ts-expect-error plural count must be numeric
  t(msg('player.frames','{count, plural, other {# 帧}}'),{count:'two'});
- // @ts-expect-error scanned directory count must be numeric
- t(msg('admin.scanActive','扫描中 · {visited, plural, other {# 个目录}}'),{visited:'one'});
  // @ts-expect-error scan progress directory count must be numeric
- t(msg('admin.scanProgressLine','{state} · {visited, plural, other {# 个目录}} · {files} 个媒体'),{state:'Scanning',visited:'one',files:7});
+ t(msg('admin.scanCurrentProgress','本轮已读取 {directories, plural, other {# 个目录}}、{media, plural, other {# 个媒体}}'),{directories:'one',media:7});
  // @ts-expect-error read error count must be numeric
  t(msg('admin.scanErrors','{count, plural, other {# 处读取错误}}{truncated}'),{count:'one',truncated:''});
  // @ts-expect-error measurement error count must be numeric

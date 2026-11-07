@@ -43,6 +43,11 @@ root/path/state 条件只在当前有界候选窗内判断；稀疏搜索可能�
 includeUnknown 默认 1，不把未知算成负例。scope 是已注册行，
 filesystemCompleteness=not-established，目录扫描状态另查 /api/library/scan。
 
+扫描状态的 `inventory.media` 是所有启用媒体库中未标记 missing 的收录总量，包含离线时保留的记录；
+`inventory.pending` 单列等待文件稳定的数量。它们是登记事实，不认证文件系统此刻的完整性。
+`job.visited` / `job.files` 仅表示最近一轮扫描已读取的目录/媒体数，增量检查不能代替总量；
+运行时 `scanMode` 区分 full / incremental，空闲为 null，排队目录、当前路径与读取错误独立反馈。
+
 ## 首批 probe 支持范围
 
 | 容器 | 可观察范围 | 流清单 | 评分 |

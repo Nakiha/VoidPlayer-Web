@@ -635,16 +635,60 @@ try {
 
   assert.equal(await page.evaluate(() => { const rows = [...document.querySelectorAll('#pane-overview .admin-properties > div')]; return rows.every((r, i) => !i || r.getBoundingClientRect().top > rows[i-1].getBoundingClientRect().top); }), true, 'properties must remain a single ordered list');
   await page.screenshot({ path: `/tmp/voidplayer-admin-overview-light-${browserName}.png` });
+  const headingBeforeToast=await page.locator('#pane-overview .admin-heading').evaluate(el => el.offsetTop);
   await page.route('**/api/admin/status?view=overview', route => route.fulfill({ status: 503, json: { error: '服务暂不可用，请重试' } }));
   await page.locator('#refresh-status').click();
-  await page.locator('#admin-message').filter({ hasText: '服务暂不可用' }).waitFor();
+  await page.locator('.admin-toast-stack .toast-error').filter({ hasText: '服务暂不可用' }).waitFor();
+  assert.equal(await page.locator('#admin-message').count(),0,'global notices no longer occupy an in-page message panel');
+  assert.equal(await page.locator('.admin-toast-stack').evaluate(el => el.matches(':popover-open')),true,'admin uses the shared top-layer toast');
+  assert.equal(await page.locator('#pane-overview .admin-heading').evaluate(el => el.offsetTop),headingBeforeToast,'errors do not shift page content');
+  await page.locator('#refresh-status').click();
+  assert.equal(await page.locator('.admin-toast-stack .toast-error').count(),1,'repeated polling errors do not accumulate identical toasts');
   await page.screenshot({ path: `/tmp/voidplayer-admin-status-error-${browserName}.png` });
+  await page.locator('.admin-toast-stack .toast-close').click();
+  await page.locator('.admin-toast-stack .toast').waitFor({state:'hidden'});
+  await page.locator('#refresh-status').click();
+  await page.locator('.admin-toast-stack .toast-error').waitFor();
   await page.unroute('**/api/admin/status?view=overview');
   await page.locator('#refresh-status').click();
-  await page.locator('#admin-message').waitFor({ state: 'hidden' });
+  await page.locator('.admin-toast-stack .toast').waitFor({ state: 'hidden' });
   await page.getByRole('button', { name: '媒体库', exact: true }).click();
   await page.getByLabel('目录名称').first().waitFor();
   await page.locator('.admin-root-state').filter({ hasText: '存储离线' }).waitFor();
+  const actualScan=await (await fetch(base+'/api/admin/scan')).json();
+  let scanView={...actualScan,ready:true,scanning:false,scanMode:null,inventory:{media:37,pending:0},queuedDirectories:0,
+    roots:actualScan.roots.map(root => ({...root,state:'ready',error:null})),errors:[],
+    job:{...actualScan.job,state:'completed',files:1,visited:1,errors:0}};
+  await page.route('**/api/admin/scan?*',route => route.fulfill({json:scanView}));
+  const showScan=async () => {
+    const response=page.waitForResponse(response => new URL(response.url()).pathname==='/api/admin/scan');
+    await page.locator('[data-pane=library]').click();await response;
+  };
+  await showScan();
+  await page.locator('#scan-progress').filter({hasText:'扫描空闲 · 已收录 37 个媒体'}).waitFor();
+  assert.equal(await page.locator('#scan-current').isVisible(),false,'idle cards do not show incremental-pass counters');
+  assert.equal(await page.locator('.admin-root-state:visible').count(),0,'healthy roots do not add passive availability captions');
+  assert.equal(await page.locator('#root-save-state, #roots-form .admin-help, #scan-detail').count(),0,'redundant saved and explanatory captions are removed');
+  scanView={...scanView,scanning:true,scanMode:'incremental',inventory:{media:37,pending:2},queuedDirectories:3,
+    job:{...scanView.job,state:'running',current_root:'local',current_path:'z-branch/leaf'}};
+  await showScan();
+  await page.locator('#scan-progress').filter({hasText:'增量扫描中 · 已收录 37 个媒体 · 2 个文件等待稳定 · 3 个目录待扫描'}).waitFor();
+  await page.locator('#scan-current').filter({hasText:'本轮已读取 1 个目录、1 个媒体 · 本机媒体 / z-branch/leaf'}).waitFor();
+  assert.equal(await page.locator('#scan-refresh').isDisabled(),true);assert.equal(await page.locator('#scan-cancel').isVisible(),true);
+  scanView={...scanView,scanMode:'full'};await showScan();
+  await page.locator('#scan-progress').filter({hasText:'全量扫描中'}).waitFor();
+  scanView={...scanView,scanning:false,scanMode:null,inventory:{media:37,pending:0},queuedDirectories:1};await showScan();
+  await page.locator('#scan-progress').filter({hasText:'等待扫描 · 已收录 37 个媒体 · 1 个目录待扫描'}).waitFor();
+  for (const [state,label] of [['cancelled','已停止'],['interrupted','上次任务被中断'],['failed','失败']]) {
+    scanView={...scanView,queuedDirectories:0,job:{...scanView.job,state}};await showScan();
+    await page.locator('#scan-progress').filter({hasText:label+' · 已收录 37 个媒体'}).waitFor();
+  }
+  scanView={...scanView,roots:actualScan.roots,job:{...scanView.job,state:'completed',errors:1},
+    errors:[{root_id:'local',path:'unreadable',code:'EACCES'}]};await showScan();
+  await page.locator('#scan-progress').filter({hasText:'扫描存在异常 · 已收录 37 个媒体 · 1 个媒体库离线 · 1 处读取错误'}).waitFor();
+  await page.locator('#scan-errors').filter({hasText:'无法读取此目录'}).waitFor();
+  await page.unroute('**/api/admin/scan?*');await showScan();
+  await page.locator('.admin-root-state').filter({hasText:'存储离线'}).waitFor();
   const aligned = await page.locator('.admin-root-row').evaluateAll(rows => rows.every(row => { const inputs = row.querySelectorAll('input'); return Math.abs(inputs[0].getBoundingClientRect().top - inputs[1].getBoundingClientRect().top) < 1; }));
   assert.equal(aligned, true, 'name and path inputs must align independently of status captions');
   const rootsCard=await page.locator('#roots-form').evaluate(form => {
@@ -670,7 +714,7 @@ try {
   await page.screenshot({ path: `/tmp/voidplayer-admin-library-editing-${browserName}.png` });
   await page.getByLabel('目录名称').last().fill('制作素材'); await page.getByLabel('服务器上的目录路径').last().fill(extra);
   await page.getByRole('button', { name: '保存目录', exact: true }).click();
-  await page.locator('#root-save-state').filter({ hasText: '目录配置已保存' }).waitFor();
+  await page.waitForFunction(() => document.getElementById('save-roots').disabled && document.getElementById('roots-form').getAttribute('aria-busy')==='false');
   const stored = JSON.parse(await readFile(file, 'utf8')); assert.equal(stored.mediaRoots.length, 3); assert.equal(stored.mediaRoots[0].id, 'local'); assert.equal(stored.mediaRoots[0].name, '本机拍摄素材');
   await page.screenshot({ path: `/tmp/voidplayer-admin-library-light-${browserName}.png` });
   // Cross-tab theme synchronization uses the existing shared browser preference.

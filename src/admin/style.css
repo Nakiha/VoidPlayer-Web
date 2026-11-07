@@ -48,13 +48,11 @@
 .admin-properties dt, .admin-properties dd { padding: 0; margin: 0; text-align: left; }
 .admin-properties dt { color: var(--text-secondary); }
 .admin-properties dd { overflow-wrap: anywhere; }
-#admin-message { width: 100%; max-width: 1100px; flex-shrink: 0; margin: 0 auto 20px; padding: 12px 16px; border-radius: 8px; background: var(--surface-selected); overflow-wrap: anywhere; }
-#admin-message[data-error=true] { background: var(--action-danger-fill); color: var(--action-danger); }
+.admin-toast-stack { top: 16px; }
 .admin-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .admin-actions > span { flex: 1; min-width: 0; }
 #roots-form input { height: 36px; padding: 8px 12px; border: 0; border-radius: var(--radius-control); background: var(--surface-panel); box-shadow: none; }
 .admin-roots-heading { align-items: flex-start; }
-.admin-roots-heading #root-save-state { margin: 6px 0 0; font-size: 12px; }
 .admin-root-actions { margin-left: auto; }
 .admin-root-row { display: grid; grid-template-columns: minmax(130px, .8fr) minmax(180px, 2fr) 32px; align-items: start; gap: 8px 12px; padding: 16px 0; border-top: 1px solid var(--border); }
 .admin-root-row:first-child { border-top: 0; padding-top: 0; }

@@ -11,6 +11,7 @@ import { apiError } from '../services/api-error.ts';
 import { mountLocalizedShell } from '../ui/localized-shell.ts';
 import { installLanguageControls } from '../ui/language.ts';
 import { installFocusFeedback } from '../ui/focus-feedback.ts';
+import { installToasts } from '../ui/toast.ts';
 import { installLiveLocalization, localizedText, localizedFragment, localizedAttribute, type LocalizedValue } from '../ui/live-localization.ts';
 import { initializeLanguage, onLanguageChange, formatDate, t, th, msg } from '../i18n.ts';
 import { chooseInitialIdentity } from '../ui/identity-onboarding.ts';
@@ -38,6 +39,8 @@ type Scan = LibraryScanStatus & { errors: Record<string, unknown>[]; offset: num
 type Status = AdminStatus & { identity: { id: string; name: string }; http: { activeRequests: number; connections: number; completedRequests: number; abortedRequests: number } };
 const disposeLanguage = await initializeLanguage();
 const life = new AbortController();
+const toasts = installToasts(life.signal);
+toasts.stack.classList.add('admin-toast-stack');
 installFocusFeedback(life.signal);
 const app = document.getElementById('admin-app')!; mountLocalizedShell(app, adminShell, life.signal);
 installLanguageControls(life.signal);
@@ -60,7 +63,16 @@ const scanCadence = new PollingCadence(3000), requestCadence = new PollingCadenc
 let logCursor = '', nextLog: string | null = null, selectedLog: LogEntry | null = null;
 const userNames = new Map<string, string>();
 let logDocument: unknown, logsMode = 'uploads', logSequence = 0, listSequence = 0, scanSequence = 0;
-function notice(message: LocalizedValue, error = false) { statusError = false; text('admin-message', message); $('admin-message').hidden = !(typeof message === 'function' ? message() : message); $('admin-message').dataset.error = String(error); }
+let dismissNotice: (() => void) | undefined;
+function notice(message: LocalizedValue, error = false) {
+  statusError = false;
+  const value = typeof message === 'function' ? message() : message;
+  const kind = error ? 'error' : 'info';
+  const current = toasts.stack.querySelector('.toast:not([data-leaving])');
+  if (value && current?.querySelector('.toast-message')?.textContent === value && current.classList.contains('toast-error') === error) return;
+  dismissNotice?.();
+  dismissNotice = value ? toasts.show(message, {kind}) : undefined;
+}
 async function api<T>(url: string, method = 'GET', body?: unknown, headers: Record<string, string> = {}): Promise<T> {
   const response = await fetch(url, { method, cache: 'no-store', headers: { ...(method !== 'GET' ? { 'x-voidplayer-action': 'admin', 'content-type': 'application/json' } : {}), ...headers }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.any([life.signal, AbortSignal.timeout(15000)]) });
   const value = await response.json();
@@ -73,14 +85,14 @@ function updateRootActions() {
   $('reset-roots').toggleAttribute('disabled', !rootDirty || rootSaving);
   $('add-root').toggleAttribute('disabled', rootSaving || !rootConfig?.writable);
   for (const control of $('root-editor').querySelectorAll<HTMLInputElement | HTMLButtonElement>('input,button')) control.disabled = rootSaving || !rootConfig?.writable;
-  text('root-save-state', () => (rootConfig?.reason ? rootReason(rootConfig.reasonCode, rootConfig.reason) : null) ?? (rootSaving ? t(msg("admin.saving", "正在保存…")) : rootDirty ? t(msg("admin.unsavedChanges", "有未保存的修改")) : t(msg("admin.dirsSaved", "目录配置已保存"))));
+  $('roots-form').setAttribute('aria-busy',String(rootSaving));
 }
 function readDraft(): Root[] {
   return [...$('root-editor').querySelectorAll<HTMLElement>('.admin-root-row')].map(row => ({ id: row.dataset.id!, name: row.querySelector<HTMLInputElement>('[data-field=name]')!.value.trim(), path: row.querySelector<HTMLInputElement>('[data-field=path]')!.value.trim() }));
 }
 function rootRow(root: Root) {
   const row = document.createElement('div'); row.className = 'admin-root-row'; row.dataset.id = root.id;
-  localizedFragment(row, () => `<label>${th(msg("admin.wsName", "名称"))}<input data-field="name" aria-label="${th(msg("admin.dirNameAria", "目录名称"))}" placeholder="${th(msg("admin.dirNamePh", "例如：拍摄素材"))}" required maxlength="120"></label><label>${th(msg("admin.serverPath", "服务器路径"))}<input data-field="path" aria-label="${th(msg("admin.serverPathAria", "服务器上的目录路径"))}" placeholder="${th(msg("admin.serverPathPh", "填写完整目录路径"))}" required maxlength="4096" spellcheck="false"></label><button type="button" class="icon-button admin-danger" aria-label="${th(msg("admin.removeDir", "移除目录"))}" title="${th(msg("admin.removeDirTitle", "移出媒体库，不删除文件"))}">${icon('trash')}</button><span data-root-state class="admin-root-state"></span>`);
+  localizedFragment(row, () => `<label>${th(msg("admin.wsName", "名称"))}<input data-field="name" aria-label="${th(msg("admin.dirNameAria", "目录名称"))}" placeholder="${th(msg("admin.dirNamePh", "例如：拍摄素材"))}" required maxlength="120"></label><label>${th(msg("admin.serverPath", "服务器路径"))}<input data-field="path" aria-label="${th(msg("admin.serverPathAria", "服务器上的目录路径"))}" placeholder="${th(msg("admin.serverPathPh", "填写完整目录路径"))}" required maxlength="4096" spellcheck="false"></label><button type="button" class="icon-button admin-danger" aria-label="${th(msg("admin.removeDir", "移除目录"))}" title="${th(msg("admin.removeDirTitle", "移出媒体库，不删除文件"))}">${icon('trash')}</button><span data-root-state class="admin-root-state" hidden></span>`);
   row.querySelector<HTMLInputElement>('[data-field=name]')!.value = root.name;
   row.querySelector<HTMLInputElement>('[data-field=path]')!.value = root.path;
   for (const input of row.querySelectorAll('input')) { input.disabled = !rootConfig?.writable; input.addEventListener('input', () => { rootDirty = true; updateRootActions(); }); }
@@ -91,14 +103,32 @@ function rootRow(root: Root) {
 async function loadRoots() {
   rootConfig = await api<RootConfig>('/api/admin/roots'); rootDirty = false;
   $('root-editor').replaceChildren(...rootConfig.roots.map(rootRow)); updateRootActions(); renderRootStates();
+  const {reasonCode,reason}=rootConfig;
+  if (reason) notice(() => rootReason(reasonCode,reason),true);
 }
 function renderRootStates() {
   for (const row of $('root-editor').querySelectorAll<HTMLElement>('.admin-root-row')) {
     const root = rootStates.find(r => r.id === row.dataset.id);
     const badge = row.querySelector<HTMLElement>('[data-root-state]')!;
-    localizedText(badge, () => root ? stateLabels[String(root.state)] ?? String(root.state) : t(msg("admin.indexAfterSave", "保存后开始索引")));
+    badge.hidden = !root || !['offline','partial','error'].includes(String(root.state));
+    localizedText(badge, () => badge.hidden ? '' : stateLabels[String(root!.state)] ?? String(root!.state));
     badge.dataset.state = String(root?.state ?? 'unscanned');
   }
+}
+function scanSummary(value: LibraryScanStatus) {
+  const offline=value.roots.filter(root => root.state==='offline').length;
+  const errors=Number(value.job?.errors??0), state=String(value.job?.state??'');
+  const phase=value.scanning ? value.scanMode==='full' ? t(msg('admin.scanFullActive','全量扫描中')) : t(msg('admin.scanIncrementalActive','增量扫描中'))
+    : value.queuedDirectories>0 ? t(msg('admin.scanQueued','等待扫描'))
+    : ['failed','interrupted','cancelled'].includes(state) ? stateLabels[state]
+    : !value.ready ? t(msg('admin.stateUnscanned','等待扫描'))
+    : errors || value.roots.some(root => root.state==='partial'||root.state==='error') ? t(msg('admin.scanHasIssues','扫描存在异常'))
+    : t(msg('admin.scanIdle','扫描空闲'));
+  return [phase,t(msg('admin.libraryInventory','已收录 {count} 个媒体'),{count:value.inventory.media}),
+    value.inventory.pending ? t(msg('admin.scanPendingFiles','{count} 个文件等待稳定'),{count:value.inventory.pending}) : '',
+    value.queuedDirectories ? t(msg('admin.scanQueuedDirectories','{count} 个目录待扫描'),{count:value.queuedDirectories}) : '',
+    offline ? t(msg('admin.scanOfflineRoots','{count} 个媒体库离线'),{count:offline}) : '',
+    errors ? t(msg('admin.scanErrorTotal','{count} 处读取错误'),{count:errors}) : ''].filter(Boolean).join(' · ');
 }
 function renderStatus(value: Status) {
   status = value;
@@ -112,8 +142,7 @@ function renderStatus(value: Status) {
   text('system-memory', () => `${bytes(value.memory.systemFree)} / ${bytes(value.memory.systemTotal)}`);
   text('requests', () => t(msg("admin.requestsSummary", "{done} 次完成 · {active} 次处理中 · {aborted} 次中断"), { done: value.http.completedRequests, active: value.http.activeRequests, aborted: value.http.abortedRequests }));
   text('root-summary', () => t(msg("admin.rootsSummary", "{n, plural, other {# 个目录}} · {o} 个离线"), { n: value.library.roots.length, o: value.library.roots.filter(r => r.state === 'offline').length }));
-  const job = value.library.job;
-  text('scan-summary', () => value.library.scanning ? t(msg("admin.scanActive", "扫描中 · {visited, plural, other {# 个目录}}"), { visited: Number(job?.visited ?? 0) }) : job ? t(msg("admin.scanJobSummary", "{state} · {files} 个媒体"), { state: stateLabels[String(job.state)] ?? String(job.state), files: Number(job.files) }) : t(msg("admin.noScan", "尚未扫描")));
+  text('scan-summary', () => scanSummary(value.library));
   const watch = value.library.watch;
   text('watch-summary', () => watch ? t(msg("admin.watchSummary", "{active} / {limit, plural, other {# 个目录}}{calibration}{partial}"), {active:watch.active,limit:watch.limit,calibration:watch.limited ? t(msg('admin.watchCalibrated', ' · 其余由周期校准覆盖')) : '',partial:watch.unavailableRoots.length ? t(msg('admin.watchPartial', ' · 部分目录监听不可用')) : ''}) : t(msg("admin.watchPollOnly", "仅周期校准")));
   renderRootStates();
@@ -160,10 +189,17 @@ async function loadScan() {
   if (sequence !== scanSequence) return;
   rootStates = value.roots; renderRootStates();
   scanCadence.observe([value.ready, value.scanning, value.job?.state, value.job?.files, value.job?.errors,
-    value.roots.map(root => [root.id, root.state, root.error])], value.scanning);
+    value.inventory,value.queuedDirectories,value.job?.current_path,value.roots.map(root => [root.id, root.state, root.error])], value.scanning || value.queuedDirectories>0 || value.inventory.pending>0);
   if (errorsJob !== value.job?.id) { errorsJob = value.job?.id; if (errorsOffset) { errorsOffset = 0; return loadScan(); } }
-  text('scan-progress', () => value.job ? t(msg("admin.scanProgressLine", "{state} · {visited, plural, other {# 个目录}} · {files} 个媒体"), { state: stateLabels[String(value.job.state)] ?? value.job.state, visited: Number(value.job.visited), files: Number(value.job.files) }) : t(msg("admin.noScanJob", "尚无扫描任务")));
-  text('scan-detail', () => value.scanning ? String(value.job?.current_path || t(msg("admin.scanDetailReading", "正在读取根目录…"))) : Number(value.job?.errors ?? 0) ? t(msg("admin.scanDetailPartial", "部分目录无法读取，请检查下方路径或网络挂载。")) : t(msg("admin.scanDetailOk", "目录离线时保留已有视频索引。")));
+  text('scan-progress', () => scanSummary(value));
+  $('scan-current').hidden = !value.scanning;
+  text('scan-current', () => {
+    if (!value.scanning) return '';
+    const mount=value.roots.find(root => root.id===value.job?.current_root)?.name;
+    const location=[mount,value.job?.current_path].filter(Boolean).join(' / ');
+    return [t(msg('admin.scanCurrentProgress','本轮已读取 {directories, plural, other {# 个目录}}、{media, plural, other {# 个媒体}}'),
+      {directories:Number(value.job?.visited??0),media:Number(value.job?.files??0)}),location].filter(Boolean).join(' · ');
+  });
   $('scan-cancel').hidden = !value.scanning; $('scan-refresh').toggleAttribute('disabled', value.scanning);
   $('scan-cancel').toggleAttribute('disabled', !value.scanning);
   const nodes = value.errors.map(error => { const row = document.createElement('div'); row.className = 'admin-error-row';
@@ -254,7 +290,7 @@ $('reset-roots').onclick = () => void act(loadRoots);
 $('roots-form').onsubmit = event => { event.preventDefault(); if (!rootConfig?.writable || rootSaving) return;
   void act(async () => {
     rootSaving = true; updateRootActions();
-    try { rootConfig = await api<RootConfig>('/api/admin/roots', 'PUT', { revision: rootConfig!.revision, roots: readDraft() }); rootDirty = false; notice(() => t(msg("admin.dirsSavedNotice", "媒体目录已保存，后台开始校准索引。"))); renderRootStates(); await libraryBrowser.refresh(); await poll(); }
+    try { rootConfig = await api<RootConfig>('/api/admin/roots', 'PUT', { revision: rootConfig!.revision, roots: readDraft() }); rootDirty = false; renderRootStates(); await libraryBrowser.refresh(); await poll(); }
     finally { rootSaving = false; updateRootActions(); }
   });
 };

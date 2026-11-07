@@ -375,24 +375,12 @@
       "root": "string | number"
     }
   },
-  "admin.dirHelp": {
-    "source": "填写服务器上的完整路径。移除目录不会删除原文件。",
-    "params": {}
-  },
   "admin.dirNameAria": {
     "source": "目录名称",
     "params": {}
   },
   "admin.dirNamePh": {
     "source": "例如：拍摄素材",
-    "params": {}
-  },
-  "admin.dirsSaved": {
-    "source": "目录配置已保存",
-    "params": {}
-  },
-  "admin.dirsSavedNotice": {
-    "source": "媒体目录已保存，后台开始校准索引。",
     "params": {}
   },
   "admin.disk": {
@@ -531,10 +519,6 @@
     "source": "HTTP 请求",
     "params": {}
   },
-  "admin.indexAfterSave": {
-    "source": "保存后开始索引",
-    "params": {}
-  },
   "admin.indexTitle": {
     "source": "媒体索引",
     "params": {}
@@ -564,6 +548,12 @@
   "admin.libraryDesc": {
     "source": "添加服务器目录，保存后即可在播放器中浏览视频。",
     "params": {}
+  },
+  "admin.libraryInventory": {
+    "source": "已收录 {count} 个媒体",
+    "params": {
+      "count": "string | number"
+    }
   },
   "admin.libraryTitle": {
     "source": "媒体库",
@@ -786,14 +776,6 @@
   },
   "admin.noReadableMedia": {
     "source": "本页没有可读媒体",
-    "params": {}
-  },
-  "admin.noScan": {
-    "source": "尚未扫描",
-    "params": {}
-  },
-  "admin.noScanJob": {
-    "source": "尚无扫描任务",
     "params": {}
   },
   "admin.noUploadedLogs": {
@@ -1071,27 +1053,18 @@
     "source": "正在保存…",
     "params": {}
   },
-  "admin.scanActive": {
-    "source": "扫描中 · {visited, plural, other {# 个目录}}",
+  "admin.scanCurrentProgress": {
+    "source": "本轮已读取 {directories, plural, other {# 个目录}}、{media, plural, other {# 个媒体}}",
     "params": {
-      "visited": "number"
+      "directories": "number",
+      "media": "number"
     }
   },
-  "admin.scanDesc": {
-    "source": "目录变化会自动更新；找不到新增视频时，可重新扫描。",
-    "params": {}
-  },
-  "admin.scanDetailOk": {
-    "source": "目录离线时保留已有视频索引。",
-    "params": {}
-  },
-  "admin.scanDetailPartial": {
-    "source": "部分目录无法读取，请检查下方路径或网络挂载。",
-    "params": {}
-  },
-  "admin.scanDetailReading": {
-    "source": "正在读取根目录…",
-    "params": {}
+  "admin.scanErrorTotal": {
+    "source": "{count} 处读取错误",
+    "params": {
+      "count": "string | number"
+    }
   },
   "admin.scanErrors": {
     "source": "{count, plural, other {# 处读取错误}}{truncated}",
@@ -1100,12 +1073,21 @@
       "truncated": "string | number"
     }
   },
-  "admin.scanJobSummary": {
-    "source": "{state} · {files} 个媒体",
-    "params": {
-      "files": "string | number",
-      "state": "string | number"
-    }
+  "admin.scanFullActive": {
+    "source": "全量扫描中",
+    "params": {}
+  },
+  "admin.scanHasIssues": {
+    "source": "扫描存在异常",
+    "params": {}
+  },
+  "admin.scanIdle": {
+    "source": "扫描空闲",
+    "params": {}
+  },
+  "admin.scanIncrementalActive": {
+    "source": "增量扫描中",
+    "params": {}
   },
   "admin.scanJobs": {
     "source": "扫描任务",
@@ -1115,12 +1097,26 @@
     "source": "扫描媒体",
     "params": {}
   },
-  "admin.scanProgressLine": {
-    "source": "{state} · {visited, plural, other {# 个目录}} · {files} 个媒体",
+  "admin.scanOfflineRoots": {
+    "source": "{count} 个媒体库离线",
     "params": {
-      "files": "string | number",
-      "state": "string | number",
-      "visited": "number"
+      "count": "string | number"
+    }
+  },
+  "admin.scanPendingFiles": {
+    "source": "{count} 个文件等待稳定",
+    "params": {
+      "count": "string | number"
+    }
+  },
+  "admin.scanQueued": {
+    "source": "等待扫描",
+    "params": {}
+  },
+  "admin.scanQueuedDirectories": {
+    "source": "{count} 个目录待扫描",
+    "params": {
+      "count": "string | number"
     }
   },
   "admin.search": {

@@ -331,10 +331,6 @@
     "source": "{root} · {format} · {frames, plural, other {# 帧}}",
     "translation": "{root} · {format} · {frames, plural, one {# frame} other {# frames}}"
   },
-  "admin.dirHelp": {
-    "source": "填写服务器上的完整路径。移除目录不会删除原文件。",
-    "translation": "Enter the full path on the server. Removing a directory does not delete files."
-  },
   "admin.dirNameAria": {
     "source": "目录名称",
     "translation": "Directory name"
@@ -342,14 +338,6 @@
   "admin.dirNamePh": {
     "source": "例如：拍摄素材",
     "translation": "e.g. footage"
-  },
-  "admin.dirsSaved": {
-    "source": "目录配置已保存",
-    "translation": "Directory config saved"
-  },
-  "admin.dirsSavedNotice": {
-    "source": "媒体目录已保存，后台开始校准索引。",
-    "translation": "Media directories saved; background index calibration started."
   },
   "admin.disk": {
     "source": "所在磁盘",
@@ -471,10 +459,6 @@
     "source": "HTTP 请求",
     "translation": "HTTP requests"
   },
-  "admin.indexAfterSave": {
-    "source": "保存后开始索引",
-    "translation": "Indexing starts after saving"
-  },
   "admin.indexTitle": {
     "source": "媒体索引",
     "translation": "Media index"
@@ -502,6 +486,10 @@
   "admin.libraryDesc": {
     "source": "添加服务器目录，保存后即可在播放器中浏览视频。",
     "translation": "Add server directories, then browse videos in the player after saving."
+  },
+  "admin.libraryInventory": {
+    "source": "已收录 {count} 个媒体",
+    "translation": "{count} media indexed"
   },
   "admin.libraryTitle": {
     "source": "媒体库",
@@ -706,14 +694,6 @@
   "admin.noReadableMedia": {
     "source": "本页没有可读媒体",
     "translation": "No readable media on this page"
-  },
-  "admin.noScan": {
-    "source": "尚未扫描",
-    "translation": "Not scanned yet"
-  },
-  "admin.noScanJob": {
-    "source": "尚无扫描任务",
-    "translation": "No scan jobs yet"
   },
   "admin.noUploadedLogs": {
     "source": "暂无上传日志",
@@ -975,33 +955,33 @@
     "source": "正在保存…",
     "translation": "Saving…"
   },
-  "admin.scanActive": {
-    "source": "扫描中 · {visited, plural, other {# 个目录}}",
-    "translation": "Scanning · {visited, plural, one {# directory} other {# directories}}"
+  "admin.scanCurrentProgress": {
+    "source": "本轮已读取 {directories, plural, other {# 个目录}}、{media, plural, other {# 个媒体}}",
+    "translation": "Read {directories, plural, one {# directory} other {# directories}} and {media, plural, other {# media}} this pass"
   },
-  "admin.scanDesc": {
-    "source": "目录变化会自动更新；找不到新增视频时，可重新扫描。",
-    "translation": "Directory changes update automatically; rescan when new videos are missing."
-  },
-  "admin.scanDetailOk": {
-    "source": "目录离线时保留已有视频索引。",
-    "translation": "Offline directories keep their existing video index."
-  },
-  "admin.scanDetailPartial": {
-    "source": "部分目录无法读取，请检查下方路径或网络挂载。",
-    "translation": "Some directories are unreadable. Check the paths or network mounts below."
-  },
-  "admin.scanDetailReading": {
-    "source": "正在读取根目录…",
-    "translation": "Reading root directories…"
+  "admin.scanErrorTotal": {
+    "source": "{count} 处读取错误",
+    "translation": "{count} read errors"
   },
   "admin.scanErrors": {
     "source": "{count, plural, other {# 处读取错误}}{truncated}",
     "translation": "{count, plural, one {# read error} other {# read errors}}{truncated}"
   },
-  "admin.scanJobSummary": {
-    "source": "{state} · {files} 个媒体",
-    "translation": "{state} · {files} media"
+  "admin.scanFullActive": {
+    "source": "全量扫描中",
+    "translation": "Full scan running"
+  },
+  "admin.scanHasIssues": {
+    "source": "扫描存在异常",
+    "translation": "Scan has issues"
+  },
+  "admin.scanIdle": {
+    "source": "扫描空闲",
+    "translation": "Scanner idle"
+  },
+  "admin.scanIncrementalActive": {
+    "source": "增量扫描中",
+    "translation": "Incremental scan running"
   },
   "admin.scanJobs": {
     "source": "扫描任务",
@@ -1011,9 +991,21 @@
     "source": "扫描媒体",
     "translation": "Scan media"
   },
-  "admin.scanProgressLine": {
-    "source": "{state} · {visited, plural, other {# 个目录}} · {files} 个媒体",
-    "translation": "{state} · {visited, plural, one {# directory} other {# directories}} · {files} media"
+  "admin.scanOfflineRoots": {
+    "source": "{count} 个媒体库离线",
+    "translation": "{count} libraries offline"
+  },
+  "admin.scanPendingFiles": {
+    "source": "{count} 个文件等待稳定",
+    "translation": "{count} files settling"
+  },
+  "admin.scanQueued": {
+    "source": "等待扫描",
+    "translation": "Scan queued"
+  },
+  "admin.scanQueuedDirectories": {
+    "source": "{count} 个目录待扫描",
+    "translation": "{count} directories queued"
   },
   "admin.search": {
     "source": "搜索",

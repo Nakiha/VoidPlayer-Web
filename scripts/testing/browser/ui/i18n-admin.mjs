@@ -34,12 +34,12 @@ await withBrowserFixture({caseName:'i18n-admin',engine,pageOptions:{viewport:{wi
   await locale(value);
   assert.deepEqual(await page.evaluate(()=>({same:window.__root===document.querySelector('.admin-root-row:last-child [data-field=name]'),row:window.__rootRow===window.__root.closest('.admin-root-row'),focus:document.activeElement===window.__root,value:window.__root.value,path:window.__rootRow.querySelector('[data-field=path]').value,selection:[window.__root.selectionStart,window.__root.selectionEnd],canSave:!document.querySelector('#save-roots').disabled})),{same:true,row:true,focus:true,value:'未保存 User {name}',path:'/uncommitted/素材',selection:[2,6],canSave:true});
  }
- assert.match(await row.locator('[data-field=name]').getAttribute('aria-label'),/Directory/);assert.match(await page.locator('#root-save-state').innerText(),/Unsaved/);
+ assert.match(await row.locator('[data-field=name]').getAttribute('aria-label'),/Directory/);assert.equal(await page.locator('#save-roots').isDisabled(),false);assert.equal(await page.locator('#root-save-state').count(),0);
  await page.screenshot({path:artifact('admin-library-en-draft.png')});
  // A structured server conflict must preserve input and retain the raw diagnostic.
  await page.route('**/api/admin/roots',route=>route.request().method()==='PUT'?route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:'原始配置原因',code:'configuration-changed'})}):route.continue());
- await page.locator('#save-roots').click();await page.locator('#admin-message').filter({hasText:'原始配置原因'}).waitFor();
- assert.match(await page.locator('#admin-message').innerText(),/draft is preserved/);await locale('zh-CN');assert.match(await page.locator('#admin-message').innerText(),/草稿仍保留/);assert.equal(await row.locator('[data-field=name]').inputValue(),'未保存 User {name}');
+ await page.locator('#save-roots').click();await page.locator('.admin-toast-stack .toast-message').filter({hasText:'原始配置原因'}).waitFor();
+ assert.match(await page.locator('.admin-toast-stack .toast-message').innerText(),/draft is preserved/);await locale('zh-CN');assert.match(await page.locator('.admin-toast-stack .toast-message').innerText(),/草稿仍保留/);assert.equal(await row.locator('[data-field=name]').inputValue(),'未保存 User {name}');
  await page.unroute('**/api/admin/roots');await page.locator('#reset-roots').click();await page.waitForFunction(()=>document.querySelectorAll('.admin-root-row').length===1);await locale('en');
  // Seed a real workspace via the current player facade and server API.
  const player=await context.newPage();await player.goto(url);await player.waitForFunction(()=>window.voidPlayer?.tools);await chooseTestGuest(player);

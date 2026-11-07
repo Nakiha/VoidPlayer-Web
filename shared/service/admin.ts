@@ -20,24 +20,7 @@ export type AdminStatus = {
     };
     dataDir: string;
     logsEnabled: boolean;
-    library: {
-        ready: boolean;
-        scanning: boolean;
-        job: null | {
-            [key: string]: null | string | number | bigint | Uint8Array<ArrayBuffer>;
-        };
-        roots: ({
-            [key: string]: null | string | number | bigint | Uint8Array<ArrayBuffer>;
-        })[];
-        watch: null | {
-            active: number;
-            limit: number;
-            limited: boolean;
-            unavailableRoots: (string)[];
-        };
-        queuedDirectories: number;
-        errorDetailsTruncated: boolean;
-    };
+    library: LibraryScanStatus;
     version: string;
     revision: string;
 };
@@ -90,6 +73,8 @@ export type AnalysisResources = {
 export type LibraryScanStatus = {
     ready: boolean;
     scanning: boolean;
+    scanMode: 'full' | 'incremental' | null;
+    inventory: { media: number; pending: number };
     job: null | {
         [key: string]: null | string | number | bigint | Uint8Array<ArrayBuffer>;
     };

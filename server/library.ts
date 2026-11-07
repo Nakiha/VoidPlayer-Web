@@ -89,6 +89,7 @@ export class MediaLibraryIndex {
   private configuring = false;
   private fileMutation?:Promise<LibraryFileResult>;
   private relocations?:LibraryRelocations;
+  private inventoryCache?:{revision:number;media:number;pending:number};
   private initialized: boolean;
   private options: IndexOptions;
   constructor(roots: MediaRoot[], options: IndexOptions = {}) {
@@ -140,6 +141,12 @@ export class MediaLibraryIndex {
     this.scheduleAutomatic();
   }
   status(): LibraryScanStatus {
+    const revision=Number(this.store.db.prepare('SELECT revision FROM library_revision WHERE id=1').get()!.revision);
+    if (this.inventoryCache?.revision!==revision) {
+      const counts=this.store.db.prepare(`SELECT count(*) AS media,coalesce(sum(m.state='pending'),0) AS pending
+        FROM media m JOIN roots r ON r.id=m.root_id WHERE r.active=1 AND m.state!='missing'`).get()!;
+      this.inventoryCache={revision,media:Number(counts.media),pending:Number(counts.pending)};
+    }
     const job = this.store.db.prepare('SELECT * FROM scan_jobs ORDER BY id DESC LIMIT 1').get() ?? null;
     const roots = this.store.db.prepare('SELECT id,name,state,error,scanned_at AS scannedAt FROM roots WHERE active=1 ORDER BY name,id').all().map(root => {
       const space = this.storageSpace.get(String(root.id));
@@ -147,7 +154,8 @@ export class MediaLibraryIndex {
         && (root.state === 'ready' || root.state === 'scanning');
       return { ...root, availableBytes: available ? space.availableBytes : null, totalBytes: available ? space.totalBytes : null };
     });
-    return { ready: this.ready, scanning: !!this.pending, job, roots, watch: this.watchers?.status() ?? null,
+    return { ready: this.ready, scanning: !!this.pending, scanMode:this.pending?(this.fullScan?'full':'incremental'):null,
+      inventory:{media:this.inventoryCache.media,pending:this.inventoryCache.pending},job, roots, watch: this.watchers?.status() ?? null,
       queuedDirectories: this.changes.size + this.automaticChanges.size + this.scheduler.queuedHints,
       errorDetailsTruncated: Number(job?.errors ?? 0) > 1000 };
   }
