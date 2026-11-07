@@ -151,12 +151,11 @@ try {
     assert.equal(cardFills.card,cardFills.scan,`${theme}: the library shares the scan card material`);
     assert.ok(cardFills.layers.every(fill => fill==='rgba(0, 0, 0, 0)'),`${theme}: library columns do not obscure their card backing`);
     const chrome=await embedded.evaluate(el => {
-      const probe=document.createElement('span');probe.style.background='var(--surface-panel)';el.append(probe);
-      const panel=getComputedStyle(probe).backgroundColor;probe.remove();
-      return {panel,header:getComputedStyle(el.querySelector('.source-tools')).backgroundColor,footer:getComputedStyle(el.querySelector('.source-foot')).backgroundColor};
+      const scan=getComputedStyle(document.querySelector('.admin-scan-status')).backgroundColor;
+      return {scan,header:getComputedStyle(el.querySelector('.source-tools')).backgroundColor,footer:getComputedStyle(el.querySelector('.source-foot')).backgroundColor};
     });
-    assert.equal(chrome.header,chrome.panel,`${theme}: admin toolbar uses the neutral panel color`);
-    assert.equal(chrome.footer,chrome.panel,`${theme}: admin path bar matches the toolbar`);
+    assert.equal(chrome.header,chrome.scan,`${theme}: admin toolbar matches the nested scan status fill`);
+    assert.equal(chrome.footer,chrome.scan,`${theme}: admin path bar matches the nested scan status fill`);
     await managed.locator('.admin-library-card').screenshot({path:`/tmp/voidplayer-library-selected-icons-${theme}-${browserName}.png`});
   }
   const widths = () => active.locator('.library-column').evaluateAll(columns => columns.map(column => Math.round(column.getBoundingClientRect().width)));
