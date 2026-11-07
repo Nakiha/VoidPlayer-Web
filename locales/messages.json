@@ -541,10 +541,6 @@
     "source": "媒体缩略图",
     "params": {}
   },
-  "admin.libraryDesc": {
-    "source": "添加服务器目录，保存后即可在播放器中浏览视频。",
-    "params": {}
-  },
   "admin.libraryInventory": {
     "source": "已收录 {count} 个媒体",
     "params": {

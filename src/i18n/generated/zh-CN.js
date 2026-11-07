@@ -122,7 +122,6 @@ export default {
   "admin.kindFrameIndexes": () => "帧索引",
   "admin.kindPreviews": () => "标注预览",
   "admin.kindThumbs": () => "媒体缩略图",
-  "admin.libraryDesc": () => "添加服务器目录，保存后即可在播放器中浏览视频。",
   "admin.libraryInventory": (d) => "已收录 " + d.count + " 个媒体",
   "admin.libraryTitle": () => "媒体库",
   "admin.listHeadMedia": () => "媒体 / 内容",

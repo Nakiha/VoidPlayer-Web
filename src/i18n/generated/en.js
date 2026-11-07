@@ -122,7 +122,6 @@ export default {
   "admin.kindFrameIndexes": () => "Frame indexes",
   "admin.kindPreviews": () => "Mark previews",
   "admin.kindThumbs": () => "Media thumbnails",
-  "admin.libraryDesc": () => "Add server directories, then browse videos in the player after saving.",
   "admin.libraryInventory": (d) => d.count + " media indexed",
   "admin.libraryTitle": () => "Library",
   "admin.listHeadMedia": () => "Media / item",

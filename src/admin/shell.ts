@@ -27,7 +27,7 @@ export function adminShell() {
       <section id="pane-preferences" hidden><header class="admin-heading"><h1>${th(msg('admin.preferencesTitle', '首选项'))}</h1></header>
         <div class="admin-panel"><div class="admin-preference-row"><h2>${th(msg('admin.interfaceLanguage', '界面语言'))}</h2><div class="admin-language"><button type="button" id="language-choice" class="choice-trigger" aria-label="${th(msg("language.label", "语言 / Language"))}"></button><span id="language-status" role="status"></span></div></div></div>
       </section>
-      <section id="pane-library" hidden><header class="admin-heading"><div><h1>${th(msg("admin.libraryTitle", "媒体库"))}</h1><p>${th(msg("admin.libraryDesc", "添加服务器目录，保存后即可在播放器中浏览视频。"))}</p></div></header>
+      <section id="pane-library" hidden><header class="admin-heading"><h1>${th(msg("admin.libraryTitle", "媒体库"))}</h1></header>
         <form id="roots-form" class="admin-panel"><div class="admin-section-heading admin-roots-heading">
           <h2>${th(msg("admin.mediaDirs", "媒体目录"))}</h2>
           <div class="admin-button-group admin-root-actions">

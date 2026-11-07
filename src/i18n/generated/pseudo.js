@@ -122,7 +122,6 @@ export default {
   "admin.kindFrameIndexes": () => "［F~r~a~m~e~ i~n~d~e~x~e~s~ ········］",
   "admin.kindPreviews": () => "［M~a~r~k~ p~r~e~v~i~e~w~s~ ········］",
   "admin.kindThumbs": () => "［M~e~d~i~a~ t~h~u~m~b~n~a~i~l~s~ ········］",
-  "admin.libraryDesc": () => "［A~d~d~ s~e~r~v~e~r~ d~i~r~e~c~t~o~r~i~e~s~, t~h~e~n~ b~r~o~w~s~e~ v~i~d~e~o~s~ i~n~ t~h~e~ p~l~a~y~e~r~ a~f~t~e~r~ s~a~v~i~n~g~. ········］",
   "admin.libraryInventory": (d) => "［" + d.count + " m~e~d~i~a~ i~n~d~e~x~e~d~ ········］",
   "admin.libraryTitle": () => "［L~i~b~r~a~r~y~ ········］",
   "admin.listHeadMedia": () => "［M~e~d~i~a~ / i~t~e~m~ ········］",

@@ -479,10 +479,6 @@
     "source": "媒体缩略图",
     "translation": "Media thumbnails"
   },
-  "admin.libraryDesc": {
-    "source": "添加服务器目录，保存后即可在播放器中浏览视频。",
-    "translation": "Add server directories, then browse videos in the player after saving."
-  },
   "admin.libraryInventory": {
     "source": "已收录 {count} 个媒体",
     "translation": "{count} media indexed"
