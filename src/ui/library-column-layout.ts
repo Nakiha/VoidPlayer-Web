@@ -1,3 +1,4 @@
+import { createSplitter } from './splitter.ts';
 import { onLanguageChange, t, msg } from '../i18n.ts';
 
 const defaultWidth = 280, minWidth = 160, maxWidth = 960;
@@ -135,11 +136,9 @@ export function installLibraryColumnLayout(viewport: HTMLElement, host: HTMLElem
     columns.forEach((column,index) => {
       let separator = separators.get(index);
       if (!separator) {
-        separator = document.createElement('div'); separator.className = 'library-column-splitter'; separator.tabIndex = 0;
+        separator = createSplitter('vertical',t(msg('libraryColumns.resize','调整第 {index} 列宽度'),{index:index+1}),'library-column-splitter',{divider:true});
         separator.dataset.columnIndex = String(index); separator.dataset.tooltipSuppressed = '';
-        separator.setAttribute('role','separator'); separator.setAttribute('aria-orientation','vertical');
         separator.setAttribute('aria-valuemin',String(minWidth)); separator.setAttribute('aria-valuemax',String(maxWidth));
-        separator.setAttribute('aria-label',t(msg('libraryColumns.resize','调整第 {index} 列宽度'),{index:index+1}));
         separators.set(index,separator);
       }
       column.id = `library-column-${index}`; separator.setAttribute('aria-controls',column.id);

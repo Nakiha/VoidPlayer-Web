@@ -8,7 +8,7 @@ import { installLibraryBrowser } from '../ui/library-browser.ts';
 import { createLibraryFileRow, installLibraryListing, librarySurfaceShell, patchLibraryRow } from '../ui/library-view.ts';
 import { installLibraryThumbnails } from '../ui/library-thumbnails.ts';
 import { installLibraryFileMenu } from '../ui/library-file-menu.ts';
-import { libraryLocationLink } from '../ui/library-link.ts';
+import { libraryFileLink } from '../ui/library-link.ts';
 import { sourceKey } from '../ui/source-catalog.ts';
 import type { SourceItem } from '../ui/source-catalog.ts';
 import { installSourceScrollbar } from '../ui/source-scrollbar.ts';
@@ -85,18 +85,17 @@ export function installAdminLibraryBrowser(signal: AbortSignal, notify: (message
   });
   footSize.observe(foot);
   function openInPlayer(item: SourceItem) {
-    const root = item.library?.rootId ?? '', name = item.library?.name ?? '';
-    const directory = name.includes('/') ? name.slice(0,name.lastIndexOf('/')) : '';
-    window.open(libraryLocationLink({root,directory,all:false}, location.href), '_blank', 'noopener');
+    if (item.library) window.open(libraryFileLink(item.library,location.href), '_blank', 'noopener');
   }
   function fileRow(item: SourceItem, copyOnly = false, home = browser.isRoot()) {
     const offline = browser.page()?.roots.some(root => root.id === item.library?.rootId && root.state === 'offline');
-    const disabled = !!offline || !!item.library?.state && item.library.state !== 'ready';
-    const row = createLibraryFileRow(item, {home,offline,tooltip:item.name,
-      label:t(msg('adminLibrary.openInPlayerName', '在播放器中浏览：{name}'), {name:item.name}), open:() => openInPlayer(item)});
+    const disabled = !!offline || !item.library?.version || !!item.library?.state && item.library.state !== 'ready';
+    const row = createLibraryFileRow(item, {home,offline,tooltip:item.name,readOnly:true,
+      label:item.name, open:() => {}});
     if (!copyOnly) {
       thumbnails.attach(row,item);
       menu.register(row,item.library,() => ({id:'browse-in-player',label:t(msg('adminLibrary.openInPlayer', '在播放器中浏览')),glyph:'play',disabled,run:() => openInPlayer(item)}));
+      row.tabIndex = 0;
     }
     return row;
   }

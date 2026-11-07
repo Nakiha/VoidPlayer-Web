@@ -1,3 +1,4 @@
+import { configureSplitter } from './splitter.ts';
 import { installBitstreamControls } from './bitstream-controls.ts';
 import { t, msg } from '../i18n.ts';
 import { installSourceActivity } from './source-activity.ts';
@@ -128,7 +129,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     sources.syncLoadVisuals(state);
   }
 
-  const resizer = $('dock-resize');
+  const resizer = configureSplitter($('dock-resize'), 'horizontal');
   const dock = $('subtracks-panel');
   const dockBounds = () => {
     const max = Math.round(Math.min(420, window.innerHeight * .55));
@@ -152,7 +153,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   }, lifecyle.signal);
   // 顶部码流分析面板：与底部子轨道同一套高度手势（下拉放大、上推过阈值收起）。
   const analysisPanel = $('analysis-panel');
-  const analysisResizer = $('analysis-resize');
+  const analysisResizer = configureSplitter($('analysis-resize'), 'horizontal');
   const ANALYSIS_HEIGHT_KEY = 'voidplayer.analysis-height.v1';
   const analysisDefaultHeight = () => Number.parseFloat(getComputedStyle(workspace).getPropertyValue('--analysis-default-height')) || 220;
   let analysisHeight = analysisDefaultHeight();
@@ -195,6 +196,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       analysisResizer.setAttribute('aria-valuetext',t(msg('ui.pixelWidth','{width} 像素'),{width:analysisHeight})); },
     render, renderProgress, refreshLibrary: () => sources.refreshLibrary(), selected: () => view.selected,
     rememberFile(file: File) { sources.rememberFile(file); },
+    openLibraryFile: sources.openLibraryFile,
     getState: () => ({ panels: { ...view.panels }, selected: view.selected, dockHeight, marksExpanded: annotations.expanded(), filenameWidth: trackColumns.width(), sources: sources.sourcesLayout(), analysisView: analysis.getAnalysisState() }),
     async restore(layout: import('../../shared/review/workspace-file.ts').WorkspaceLayout) {
       view.panels = { ...layout.panels, analysis: layout.panels.analysis ?? false }; view.selected = layout.selected;

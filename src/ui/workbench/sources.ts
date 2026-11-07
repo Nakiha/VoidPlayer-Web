@@ -542,6 +542,12 @@ export function createSourcesPane(shared: WorkbenchShared) {
   }
 
   return {
+    async openLibraryFile(id: string, version: string) {
+      const entry = await fetchLibraryItem(id,AbortSignal.any([lifecyle.signal,AbortSignal.timeout(10000)]));
+      if (disposed || session.getState().tracks.length || session.getState().busy) return;
+      if (!entry || entry.version !== version) throw new Error(t(msg('sources.linkUnavailable','该媒体库文件已不存在或版本已变化。')));
+      await load({...entry,key:sourceKey(entry,entry.id),library:entry},'A');
+    },
     renderSources, renderStartLibrary, refreshLibrary, ensureLibrary, rememberFile, localize,
     syncCatalog, syncLoadVisuals, beginRestore, finishRestore, sourcesLayout, wireSourceControls, locateTrack,
     markDisposed() { disposed = true; },

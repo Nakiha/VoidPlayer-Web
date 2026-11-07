@@ -7,7 +7,7 @@ import { createIconButton } from './controls.ts';
 /** Shared browser DOM for the player and administration library surfaces. */
 export type LibraryFileView = {
   slots?: string[]; loading?: string | null; failed?: string | null; home: boolean; offline?: boolean;
-  tooltip: string; label?: string; blocked?: boolean; removeDisabled?: boolean;
+  tooltip: string; label?: string; blocked?: boolean; removeDisabled?: boolean; readOnly?: boolean;
   open(): void; remove?(): void;
 };
 export const sizeText = (n: number) => n >= 2 ** 40 ? `${(n / 2 ** 40).toFixed(1)} TB` : n >= 2 ** 30 ? `${(n / 2 ** 30).toFixed(1)} GB` : `${(n / 2 ** 20).toFixed(1)} MB`;
@@ -23,6 +23,25 @@ const text = (tag: string, value: string, className = '') => {
   const el = document.createElement(tag); el.textContent = value; el.className = className; return el;
 };
 
+function renderStorage(meta: Element, root?: LibraryRoot) {
+  const ready = root?.state !== 'offline' && root?.availableBytes != null && root.totalBytes != null;
+  meta.classList.toggle('source-storage',ready);
+  if (!ready) {
+    const value = storageText(root);
+    if (meta.textContent !== value) meta.textContent = value;
+    return;
+  }
+  let available = meta.querySelector('.source-storage-available'), total = meta.querySelector('.source-storage-total');
+  if (!available || !total) {
+    available = text('span','','source-storage-available'); total = text('span','','source-storage-total');
+    meta.replaceChildren(available,document.createTextNode(' '),total);
+  }
+  const free = t(msg('sources.storageAvailable','{available} 可用'),{available:sizeText(root.availableBytes!)});
+  const capacity = t(msg('sources.storageTotal','/ 共 {total}'),{total:sizeText(root.totalBytes!)});
+  if (available.textContent !== free) available.textContent = free;
+  if (total.textContent !== capacity) total.textContent = capacity;
+}
+
 export function sourceDisplayName(name: string) {
   const base = name.split('/').pop() ?? name;
   return { base, dir: name.includes('/') ? name.slice(0, name.lastIndexOf('/')) : '' };
@@ -30,7 +49,8 @@ export function sourceDisplayName(name: string) {
 
 export function createLibraryFileRow(item: SourceItem, state: LibraryFileView) {
   const row = document.createElement('div'); row.className = 'source-row source-file';
-  const open = document.createElement('button'); open.type = 'button'; open.className = 'source-open';
+  const open = document.createElement(state.readOnly ? 'div' : 'button'); open.className = 'source-open';
+  if (open instanceof HTMLButtonElement) open.type = 'button';
   const slots = state.slots ?? [];
   const used = slots.length > 0;
   const loading = state.loading;
@@ -145,7 +165,7 @@ export function installLibraryListing(list: HTMLElement, options: {
         row.dataset.rootId = mount.id; row.setAttribute('aria-label', t(msg('libraryBrowser.openMount', '打开媒体库：{name}'), { name: mount.name }));
         const glyph = text('span', '', 'source-thumb library-folder-icon'); glyph.innerHTML = icon('libraryVolume');
         const info = text('span', '', 'source-info'); info.append(text('span', mount.name, 'filename'));
-        info.append(text('span', storageText(mount), 'source-meta'));
+        const meta = text('span','','source-meta'); renderStorage(meta,mount); info.append(meta);
         row.append(glyph, info, branchArrow()); row.onclick = () => options.navigate(mount.id, '');
         options.registerMount(row, mount.id); return row;
       }, mountsRows);
@@ -178,7 +198,7 @@ export function installLibraryListing(list: HTMLElement, options: {
       row.setAttribute('aria-label', row.classList.contains('library-mount') ? t(msg('libraryBrowser.openMount', '打开媒体库：{name}'), {name})
         : t(msg('sources.openFolder', '打开目录：{name}'), {name}));
       const meta = row.querySelector('.source-meta');
-      if (meta && row.classList.contains('library-mount')) meta.textContent = storageText(page?.roots.find(root => root.id === row.dataset.rootId));
+      if (meta && row.classList.contains('library-mount')) renderStorage(meta,page?.roots.find(root => root.id === row.dataset.rootId));
     }
   }
   return {render,localize,recentGroup:recentGroup.section};

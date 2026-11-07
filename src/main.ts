@@ -50,6 +50,7 @@ import './ui/settings.css';
 import { shell } from './ui/shell.ts';
 import { installWorkbench } from './ui/workbench.ts';
 import { installSourceActions } from './ui/source-actions.ts';
+import { parseLibraryFileLink } from './ui/library-link.ts';
 import { bindTimelinePreview, syncTimelineProgress } from './ui/seek-preview.ts';
 import { installTrackDrag } from './ui/track-drag.ts';
 import { createViewBindings } from './ui/view-bindings.ts';
@@ -671,6 +672,12 @@ const api = {
 Object.defineProperty(window, 'voidPlayer', { value: Object.freeze(api), configurable: true });
 installPageBridge(session,api.tools,uiEvents.signal);
 const annotationLink = new URL(location.href).searchParams;
+if (annotationLink.has('media') && !['annotation','workspace','share','review'].some(key => annotationLink.has(key))) void act(async () => {
+  const file = parseLibraryFileLink(location.href,location.href);
+  if (!file) return;
+  await identitySettings.ready;
+  if (!uiEvents.signal.aborted) await workbench.openLibraryFile(file.id,file.version);
+},'library.open-link');
 if (annotationLink.has('annotation')) void act(async () => {
   // A cold annotation deep link must establish its actor before accepting the
   // workspace open intent, just like saved-workspace and recovery entry points.
@@ -687,6 +694,6 @@ if (annotationLink.has('annotation')) void act(async () => {
 import.meta.hot?.dispose(() => { unregister(); annotationSync.dispose(); identitySettings.dispose(); workspaceTransfer.dispose(); removeThemeControls(); settings.dispose(); depthMenu.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); channelMenu.dispose(); removeHeaderActions(); viewportChrome.dispose(); drawingEditor.dispose(); markPreviewBackfill.dispose(); disposePresentation(); unbindDrop(); dropFeedback.dispose(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
 render();
 // First frame is rendered and handlers are wired; only GPU warmup (background)
-// and the annotation deep-link restore (already async) are still outstanding,
+// and explicit deep-link loads (already async) are still outstanding,
 // so bootstrap can reveal without waiting for them.
 window.dispatchEvent(new Event('voidplayer:shell-ready'));

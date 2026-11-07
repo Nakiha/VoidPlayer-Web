@@ -1,5 +1,6 @@
 @import './ui/button-feedback.css';
 @import './ui/library.css';
+@import './ui/splitter.css';
 
 /* Layout and interaction only; appearance and density come from themes/.
    Keep standard backdrop-filter after its prefix so minification preserves it. */
@@ -175,7 +176,6 @@ dd { text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-n
 .panel-empty { padding: var(--panel-padding-inline); margin: var(--panel-padding-block) 0; color: var(--text-secondary); font-size: var(--text-sm); }
 .subtracks-panel { grid-area: subtracks; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) var(--annotation-cards-height); position: relative; background: var(--surface-table); border-top: 1px solid var(--divider); }
 .dock-resize { position: absolute; top: -3px; left: 0; right: 0; height: 6px; cursor: row-resize; touch-action: none; z-index: 5; }
-.dock-resize:hover { background: var(--surface-selected); }
 .subtracks-panel .panel-heading button:not(.icon-button) { height: var(--control-small-height); min-height: var(--control-small-height); padding: 0 var(--space-3); font-size: var(--text-sm); }
 .subtrack-scroll { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto; }
 .subtrack-columns, .subtrack-row { display: grid; grid-template-columns: var(--track-label-size, var(--track-label-width)) var(--offset-column-width) minmax(0,1fr) var(--button-size) var(--button-size); align-items: center; }
@@ -555,10 +555,6 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .side-resize { position: absolute; grid-area: 2 / 1 / 3 / -1; top: 0; bottom: 0; width: var(--panel-resize-hit-width); cursor: col-resize; touch-action: none; z-index: 8; }
 #inspector-resize { left: var(--inspector-user-width, var(--inspector-width)); transform: translateX(-50%); }
 #sources-resize { right: var(--sources-user-width, var(--sources-width)); transform: translateX(50%); }
-.side-resize::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: var(--panel-resize-line-width); transform: translateX(-50%); background: transparent; transition: background var(--transition-fast); }
-.side-resize:hover, .side-resize.resizing { background: transparent; outline: none; }
-.side-resize:hover::after, .side-resize.resizing::after { background: var(--accent); }
-.side-resize.collapse-ready::after { background: var(--action-danger); }
 @media (max-width: 680px) {
   .inspector-panel { width: var(--inspector-user-width, var(--inspector-width)); }
   .sources-panel { width: var(--sources-user-width, var(--sources-width)); }
@@ -585,7 +581,6 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .side-panel::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: var(--panel-dismiss-veil); opacity: var(--panel-veil-opacity, 0); transition: opacity var(--panel-motion-duration) var(--panel-motion-easing); z-index: 10; }
 .side-panel.panel-pushing::after { transition: none; }
 .side-panel.panel-closed::after { opacity: 1; }
-.side-resize.collapse-ready::after { background: var(--accent); }
 .subtracks-panel { position: absolute; grid-area: 3 / 1 / 4 / -1; top: 0; left: 0; right: 0; height: var(--dock-height, var(--dock-default-height)); transition: transform var(--panel-motion-duration) var(--panel-motion-easing), opacity var(--panel-motion-duration) var(--panel-motion-easing); }
 .subtracks-panel.panel-closed { transform: translateY(100%); opacity: 0; }
 .panel-closed { pointer-events: none; }
@@ -594,9 +589,6 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 
 /* One height handle for the tracks and annotation strip. */
 .dock-resize { top: calc(var(--panel-resize-hit-width) / -2); height: var(--panel-resize-hit-width); }
-.dock-resize:hover, .dock-resize.resizing { background: transparent; outline: none; }
-.dock-resize::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: var(--panel-resize-line-width); transform: translateY(-50%); background: transparent; transition: background var(--transition-fast); }
-.dock-resize:hover::after, .dock-resize.resizing::after { background: var(--accent); }
 .subtracks-panel { transform: translateY(var(--panel-push, 0px)); }
 .subtracks-panel.panel-pushing { transition: none; }
 .subtracks-panel::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: var(--panel-dismiss-veil); opacity: var(--panel-veil-opacity, 0); z-index: 10; transition: opacity var(--panel-motion-duration) var(--panel-motion-easing); }
@@ -618,9 +610,6 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 
 /* Height handle on the panel's bottom edge; mirrors .dock-resize. */
 .analysis-resize { position: absolute; bottom: calc(var(--panel-resize-hit-width) / -2); left: 0; right: 0; height: var(--panel-resize-hit-width); cursor: row-resize; touch-action: none; z-index: 5; }
-.analysis-resize:hover, .analysis-resize.resizing { background: transparent; outline: none; }
-.analysis-resize::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: var(--panel-resize-line-width); transform: translateY(-50%); background: transparent; transition: background var(--transition-fast); }
-.analysis-resize:hover::after, .analysis-resize.resizing::after { background: var(--accent); }
 .track-identity { padding-inline: var(--control-gap); touch-action: none; user-select: none; }
 .choice-trigger { display: inline-flex; align-items: center; gap: var(--control-gap); padding-inline: var(--control-gap); border: 0; background: var(--surface-control); white-space: nowrap; font-size: var(--text-sm); }
 .choice-trigger > .icon:last-child { width: 12px; }

@@ -1,3 +1,4 @@
+import { configureSplitter } from './splitter.ts';
 import { t, msg, onLanguageChange } from '../i18n.ts';
 import { animatePanelLayout } from './panel-motion.ts';
 /** Bound panel widths while reserving room for the comparison surface. */
@@ -40,7 +41,7 @@ export function installPanelResize(workspace: HTMLElement, signal: AbortSignal, 
     return { width, ...bounds };
   };
   for (const panel of panels) {
-    const handle = document.getElementById(`${panel}-resize`)!;
+    const handle = configureSplitter(document.getElementById(`${panel}-resize`)!, 'vertical');
 
     let drag: { pointer: number; x: number; width: number; previous: number; collapse: boolean } | null = null;
     const direction = panel === 'inspector' ? 1 : -1;

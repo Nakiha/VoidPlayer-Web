@@ -324,7 +324,6 @@ export interface Sources {
   "adminLibrary.columnView": "分栏视图";
   "adminLibrary.listView": "列表视图";
   "adminLibrary.openInPlayer": "在播放器中浏览";
-  "adminLibrary.openInPlayerName": "在播放器中浏览：{name}";
   "adminLibrary.viewMode": "浏览视图";
   "analysis.bitrate": "码率";
   "analysis.bitrateLegendHint": "码率 · 实线；点击切换，右键或长按单选，再次操作恢复。";
@@ -749,6 +748,7 @@ export interface Sources {
   "libraryFileMenu.pathUnavailable": "无法获取文件绝对路径";
   "libraryLink.incompletePath": "媒体库路径不完整。";
   "libraryLink.invalidDirectory": "媒体库目录无效。";
+  "libraryLink.invalidFile": "媒体库文件链接无效。";
   "libraryLink.invalidRoot": "媒体库标识无效。";
   "libraryLink.notLocationLink": "这不是媒体库位置链接。";
   "libraryLink.otherService": "链接来自另一个媒体服务，请在浏览器中打开该链接。";
@@ -1369,6 +1369,7 @@ export interface Sources {
   "sources.guest": "访客";
   "sources.identityAria": "当前身份：{name}，打开用户设置";
   "sources.identityTitle": "点击打开用户设置（当前身份：{name}）";
+  "sources.linkUnavailable": "该媒体库文件已不存在或版本已变化。";
   "sources.loadFailedWith": "载入失败：{reason}";
   "sources.loadedTracks": "已上屏轨道：{slots}";
   "sources.loading": "正在载入";
@@ -1390,9 +1391,11 @@ export interface Sources {
   "sources.reselectRowName": "重新选择：{name}";
   "sources.showingFirstFrame": "正在显示首帧";
   "sources.startMetaLibrary": "媒体库";
+  "sources.storageAvailable": "{available} 可用";
   "sources.storageOffline": "存储离线";
   "sources.storageSpace": "{available} 可用 / 共 {total}";
   "sources.storageSpaceUnavailable": "空间信息不可用";
+  "sources.storageTotal": "/ 共 {total}";
   "sources.takeOff": "下屏";
   "sources.takeOffName": "下屏：{name}";
   "sources.tooltipLibrary": "{name}（{root}）";
@@ -1920,7 +1923,6 @@ export interface MessageParameters {
   "adminLibrary.columnView": {  };
   "adminLibrary.listView": {  };
   "adminLibrary.openInPlayer": {  };
-  "adminLibrary.openInPlayerName": { "name": string | number };
   "adminLibrary.viewMode": {  };
   "analysis.bitrate": {  };
   "analysis.bitrateLegendHint": {  };
@@ -2345,6 +2347,7 @@ export interface MessageParameters {
   "libraryFileMenu.pathUnavailable": {  };
   "libraryLink.incompletePath": {  };
   "libraryLink.invalidDirectory": {  };
+  "libraryLink.invalidFile": {  };
   "libraryLink.invalidRoot": {  };
   "libraryLink.notLocationLink": {  };
   "libraryLink.otherService": {  };
@@ -2965,6 +2968,7 @@ export interface MessageParameters {
   "sources.guest": {  };
   "sources.identityAria": { "name": string | number };
   "sources.identityTitle": { "name": string | number };
+  "sources.linkUnavailable": {  };
   "sources.loadFailedWith": { "reason": string | number };
   "sources.loadedTracks": { "slots": string | number };
   "sources.loading": {  };
@@ -2986,9 +2990,11 @@ export interface MessageParameters {
   "sources.reselectRowName": { "name": string | number };
   "sources.showingFirstFrame": {  };
   "sources.startMetaLibrary": {  };
+  "sources.storageAvailable": { "available": string | number };
   "sources.storageOffline": {  };
   "sources.storageSpace": { "available": string | number; "total": string | number };
   "sources.storageSpaceUnavailable": {  };
+  "sources.storageTotal": { "total": string | number };
   "sources.takeOff": {  };
   "sources.takeOffName": { "name": string | number };
   "sources.tooltipLibrary": { "name": string | number; "root": string | number };

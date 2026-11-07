@@ -1,0 +1,16 @@
+/* Shared with the player's panel/viewport edges. Hosts only position the surface. */
+.panel-splitter { touch-action: none; }
+.panel-splitter[aria-orientation=vertical] { cursor: col-resize; }
+.panel-splitter[aria-orientation=horizontal] { cursor: row-resize; }
+.panel-splitter::before, .panel-splitter::after { content: ''; position: absolute; }
+.panel-splitter::before { background: transparent; }
+.panel-splitter::after { pointer-events: none; background: transparent; transition: background var(--transition-fast); }
+.panel-splitter[aria-orientation=vertical]::before { top: 0; bottom: 0; left: 50%; width: var(--panel-resize-hit-width); transform: translateX(-50%); }
+.panel-splitter[aria-orientation=vertical]::after { top: 0; bottom: 0; left: 50%; width: var(--panel-resize-line-width); transform: translateX(-50%); }
+.panel-splitter[aria-orientation=horizontal]::before { left: 0; right: 0; top: 50%; height: var(--panel-resize-hit-width); transform: translateY(-50%); }
+.panel-splitter[aria-orientation=horizontal]::after { left: 0; right: 0; top: 50%; height: var(--panel-resize-line-width); transform: translateY(-50%); }
+.panel-splitter[data-divider][aria-orientation=vertical]::before { background: linear-gradient(var(--divider), var(--divider)) center / 1px 100% no-repeat; }
+.panel-splitter[data-divider][aria-orientation=horizontal]::before { background: linear-gradient(var(--divider), var(--divider)) center / 100% 1px no-repeat; }
+.panel-splitter:hover, .panel-splitter.resizing { background: transparent; outline: none; }
+.panel-splitter:hover::after, .panel-splitter.resizing::after,
+:root[data-keyboard-navigation] .panel-splitter:focus-visible::after { background: var(--accent); }

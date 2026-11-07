@@ -1,6 +1,6 @@
 import { chooseTestGuest } from './test-identity.mjs';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, copyFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { webkit, chromium } from 'playwright';
@@ -16,7 +16,7 @@ try {
   const media = path.join(temporary, '本机媒体'); await mkdir(media); await writeFile(path.join(media, 'sample.mp4'), Buffer.alloc(4 * 1024 * 1024, 51));
   for (let i=0;i<61;i++) await mkdir(path.join(media,`folder-${String(i).padStart(3,'0')}`));
   await mkdir(path.join(media,'z-branch','leaf'),{recursive:true});
-  await writeFile(path.join(media,'z-branch','leaf','nested.mp4'),'directory-only fixture');
+  await copyFile(path.join(root,'fixtures/video/ci_h264_smoke.mp4'),path.join(media,'z-branch','leaf','nested.mp4'));
   const extra = path.join(temporary, 'shared-storage', '嵌套的制作素材目录'); await mkdir(extra, { recursive: true }); await writeFile(path.join(extra, 'new.mp4'), 'new');
   const file = path.join(temporary, 'voidplayer.config.json');
   await writeFile(file, JSON.stringify({ mediaRoots: [{ id: 'local', name: '本机媒体', path: media }, { id: 'offline', name: '网络归档', path: path.join(temporary, 'offline-mount') }], staticDir: path.join(root, 'dist'), dataDir: 'data', logsDir: 'logs', indexWatch: false }));
@@ -123,6 +123,23 @@ try {
   assert.equal(await active.locator('.library-column-splitter').count(),4,'each column has an independent resize edge');
   assert.ok(await active.locator('.library-column-splitter').first().evaluate(el => el.getBoundingClientRect().width===1));
   assert.equal(await active.evaluate(el => getComputedStyle(el).columnGap),'0px','columns meet at a splitter instead of padded gutters');
+  const columnSplitter=active.locator('.library-column-splitter').first(), panelSplitter=player.locator('#sources-resize');
+  const splitterSurface = handle => handle.evaluate(el => {
+    getComputedStyle(el,'::after').backgroundColor;
+    for(const animation of el.getAnimations({subtree:true}))animation.finish();
+    const line=getComputedStyle(el,'::after'), hit=getComputedStyle(el,'::before');
+    return {fill:line.backgroundColor,width:line.width,transition:line.transitionProperty,duration:line.transitionDuration,hit:hit.width};
+  });
+  await player.mouse.move(0,0); await managed.mouse.move(0,0);
+  const idleSplitter=await splitterSurface(panelSplitter);
+  assert.deepEqual(await splitterSurface(columnSplitter),idleSplitter,'column and panel splitters share the same idle line, hit area and transition');
+  assert.equal(await columnSplitter.evaluate(el => getComputedStyle(el,'::before').backgroundSize),'1px 100%','administration keeps a one-pixel idle divider on each column edge');
+  await panelSplitter.hover(); await columnSplitter.hover();
+  const hoverSplitter=await splitterSurface(panelSplitter);
+  assert.notEqual(hoverSplitter.fill,idleSplitter.fill,'the shared line fades from transparent to the theme accent');
+  assert.deepEqual(await splitterSurface(columnSplitter),hoverSplitter,'hover uses the same accent line thickness and animation as the viewport edge');
+  await managed.locator('.admin-library-card').screenshot({path:`/tmp/voidplayer-shared-splitter-${browserName}.png`});
+  await player.mouse.move(0,0); await managed.mouse.move(0,0);
   const resizeColumn = async (index,delta,cancel=false) => {
     const handle=active.locator('.library-column-splitter').nth(index), box=await handle.boundingBox();
     await managed.mouse.move(box.x+box.width/2,box.y+24); await managed.mouse.down();
@@ -132,6 +149,18 @@ try {
   };
   await resizeColumn(0,40);
   assert.deepEqual(await widths(),[320,280,280,280],'dragging one splitter only changes its own column');
+  const capacity = active.locator('.library-mount[data-root-id=local] .source-storage');
+  await resizeColumn(0,-140);
+  const capacityGeometry=await capacity.evaluate(meta => {
+    const box=meta.getBoundingClientRect(), available=meta.querySelector('.source-storage-available').getBoundingClientRect();
+    const total=meta.querySelector('.source-storage-total').getBoundingClientRect();
+    return {box:box.toJSON(),available:available.toJSON(),total:total.toJSON(),text:meta.textContent};
+  });
+  assert.ok(capacityGeometry.available.right<=capacityGeometry.box.right+1&&capacityGeometry.available.bottom<=capacityGeometry.box.bottom+1&&capacityGeometry.total.top>=capacityGeometry.box.bottom,JSON.stringify(capacityGeometry));
+  await managed.locator('.admin-library-card').screenshot({path:`/tmp/voidplayer-library-storage-narrow-${browserName}.png`});
+  await resizeColumn(0,200);
+  assert.ok(await capacity.evaluate(meta => meta.querySelector('.source-storage-total').getBoundingClientRect().bottom<=meta.getBoundingClientRect().bottom+1),'widening a column restores the complete capacity');
+  await resizeColumn(0,-60);
   await active.locator('.library-column-splitter').nth(2).focus(); await managed.keyboard.press('ArrowRight');
   assert.deepEqual(await widths(),[320,280,296,280],'splitters also resize with the keyboard');
   await resizeColumn(1,50,true);
@@ -197,10 +226,27 @@ try {
   await active.locator('.source-file').click({button:'right'});
   assert.deepEqual(await managed.locator('#library-file-menu button').allTextContents(),['在播放器中浏览','拷贝文件名','拷贝绝对路径','拷贝媒体库路径','下载文件']);
   await managed.keyboard.press('Escape');
-  const [destination] = await Promise.all([context.waitForEvent('page'),active.locator('.source-open').click()]);
+  const pagesBeforeClick=context.pages().length;
+  await active.locator('.source-open').click();
+  assert.equal(context.pages().length,pagesBeforeClick,'single-clicking an administration file row does not open a player');
+  assert.equal(await player.evaluate(() => window.voidPlayer.getState().tracks.length),0);
+  await goLibrary('library:local/z-branch/leaf');
+  const nestedFile=active.locator('.source-file').filter({hasText:'nested.mp4'});
+  await nestedFile.waitFor();
+  await nestedFile.click({button:'right'});
+  const [destination] = await Promise.all([context.waitForEvent('page'),managed.locator('#library-file-menu [data-action=browse-in-player]').click()]);
   await destination.waitForFunction(() => !!window.voidPlayer);
   assert.equal(new URL(destination.url()).searchParams.get('root'),'local');
-  assert.equal(await destination.evaluate(() => window.voidPlayer.getState().tracks.length),0,'browsing from administration never implicitly opens or indexes media');
+  await destination.waitForFunction(() => {
+    const state=window.voidPlayer.getState();
+    return !state.busy&&state.tracks.length===1&&!!state.tracks[0].frame;
+  });
+  const opened=await destination.evaluate(() => window.voidPlayer.getState());
+  assert.equal(opened.tracks[0].name,'z-branch/leaf/nested.mp4');
+  assert.equal(opened.tracks[0].source.id,new URL(destination.url()).searchParams.get('media'));
+  assert.equal(new URL(opened.tracks[0].source.url,destination.url()).searchParams.get('v'),new URL(destination.url()).searchParams.get('v'));
+  assert.equal(opened.playing,false,'the explicit file link presents the chosen file without autoplay');
+  assert.equal(new URL(destination.url()).searchParams.get('dir'),'z-branch/leaf');
   assert.equal(await player.evaluate(() => window.adminReturnMarker),'preserve-review');
   await destination.close();
   await goLibrary('library:/');

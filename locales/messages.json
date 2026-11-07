@@ -1418,12 +1418,6 @@
     "source": "在播放器中浏览",
     "params": {}
   },
-  "adminLibrary.openInPlayerName": {
-    "source": "在播放器中浏览：{name}",
-    "params": {
-      "name": "string | number"
-    }
-  },
   "adminLibrary.viewMode": {
     "source": "浏览视图",
     "params": {}
@@ -3238,6 +3232,10 @@
   },
   "libraryLink.invalidDirectory": {
     "source": "媒体库目录无效。",
+    "params": {}
+  },
+  "libraryLink.invalidFile": {
+    "source": "媒体库文件链接无效。",
     "params": {}
   },
   "libraryLink.invalidRoot": {
@@ -5859,6 +5857,10 @@
       "name": "string | number"
     }
   },
+  "sources.linkUnavailable": {
+    "source": "该媒体库文件已不存在或版本已变化。",
+    "params": {}
+  },
   "sources.loadFailedWith": {
     "source": "载入失败：{reason}",
     "params": {
@@ -5959,6 +5961,12 @@
     "source": "媒体库",
     "params": {}
   },
+  "sources.storageAvailable": {
+    "source": "{available} 可用",
+    "params": {
+      "available": "string | number"
+    }
+  },
   "sources.storageOffline": {
     "source": "存储离线",
     "params": {}
@@ -5973,6 +5981,12 @@
   "sources.storageSpaceUnavailable": {
     "source": "空间信息不可用",
     "params": {}
+  },
+  "sources.storageTotal": {
+    "source": "/ 共 {total}",
+    "params": {
+      "total": "string | number"
+    }
   },
   "sources.takeOff": {
     "source": "下屏",

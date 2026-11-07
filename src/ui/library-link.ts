@@ -1,4 +1,5 @@
 import { t, msg } from '../i18n.ts';
+import type { LibraryEntry } from '../services/library.ts';
 
 export type LibraryLocation = { root: string; directory: string; all: boolean };
 
@@ -50,4 +51,22 @@ export function parseLibraryLocationLink(value: string, base: string): LibraryLo
   const root = all ? '' : url.searchParams.get('root') ?? '';
   const directory = all ? '' : url.searchParams.get('dir') ?? '';
   return validate({ root, directory, all });
+}
+
+/** Explicit file actions carry a version-pinned item beside the directory context. */
+export function libraryFileLink(entry: LibraryEntry, base: string): string {
+  const directory = entry.rootId && entry.name.includes('/') ? entry.name.slice(0,entry.name.lastIndexOf('/')) : '';
+  const url = new URL(libraryLocationLink({root:entry.rootId ?? '',directory,all:false},base));
+  url.searchParams.set('media',entry.id); url.searchParams.set('v',entry.version ?? '');
+  parseLibraryFileLink(url.href,base);
+  return url.href;
+}
+
+export function parseLibraryFileLink(value: string, base: string): {id:string;version:string} | null {
+  const url = new URL(value,base);
+  if (!url.searchParams.has('media')) return null;
+  parseLibraryLocationLink(url.href,base);
+  const id = url.searchParams.get('media') ?? '', version = url.searchParams.get('v') ?? '';
+  if (!/^[a-f0-9]{24}$/.test(id) || !/^[a-f0-9]{24}$/.test(version)) throw new Error(t(msg('libraryLink.invalidFile','媒体库文件链接无效。')));
+  return {id,version};
 }

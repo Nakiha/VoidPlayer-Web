@@ -1295,10 +1295,6 @@
     "source": "在播放器中浏览",
     "translation": "Browse in player"
   },
-  "adminLibrary.openInPlayerName": {
-    "source": "在播放器中浏览：{name}",
-    "translation": "Browse in player: {name}"
-  },
   "adminLibrary.viewMode": {
     "source": "浏览视图",
     "translation": "Browse view"
@@ -3025,6 +3021,10 @@
   "libraryLink.invalidDirectory": {
     "source": "媒体库目录无效。",
     "translation": "Invalid library directory."
+  },
+  "libraryLink.invalidFile": {
+    "source": "媒体库文件链接无效。",
+    "translation": "Invalid library file link."
   },
   "libraryLink.invalidRoot": {
     "source": "媒体库标识无效。",
@@ -5509,6 +5509,10 @@
     "source": "点击打开用户设置（当前身份：{name}）",
     "translation": "Open user settings (current identity: {name})"
   },
+  "sources.linkUnavailable": {
+    "source": "该媒体库文件已不存在或版本已变化。",
+    "translation": "This library file no longer exists or its version has changed."
+  },
   "sources.loadFailedWith": {
     "source": "载入失败：{reason}",
     "translation": "Load failed: {reason}"
@@ -5593,6 +5597,10 @@
     "source": "媒体库",
     "translation": "Library"
   },
+  "sources.storageAvailable": {
+    "source": "{available} 可用",
+    "translation": "{available} available"
+  },
   "sources.storageOffline": {
     "source": "存储离线",
     "translation": "Storage offline"
@@ -5604,6 +5612,10 @@
   "sources.storageSpaceUnavailable": {
     "source": "空间信息不可用",
     "translation": "Storage space unavailable"
+  },
+  "sources.storageTotal": {
+    "source": "/ 共 {total}",
+    "translation": "/ {total} total"
   },
   "sources.takeOff": {
     "source": "下屏",
