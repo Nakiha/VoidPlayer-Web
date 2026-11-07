@@ -110,17 +110,19 @@ try {
       const value = el.querySelector('.start-identity-name');
       return !!value && getComputedStyle(value).color !== getComputedStyle(el).color;
     }), true, 'only the identity value uses the accent color');
-    const version = page.locator('#start-version-about');
-    assert.equal(await version.textContent(), `VoidPlayer · ${await page.locator('#settings-pane-about .about-project-row').first().locator('span').nth(1).textContent()}`);
-    await version.hover();
-    assert.equal(await version.evaluate(el => getComputedStyle(el).color),
+    assert.equal(await page.locator('.start-version, #start-version-about').count(), 0, 'start screen has no permanent version footer');
+    const bottom = await page.locator('.start-library-viewport').evaluate(el => ({ list: el.getBoundingClientRect().bottom, parent: document.getElementById('empty-A').getBoundingClientRect().bottom }));
+    assert.ok(Math.abs(bottom.list - bottom.parent) < 1, 'recent list reaches the bottom without reserved padding');
+    const brand = page.locator('#brand-about');
+    await brand.hover();
+    assert.equal(await brand.evaluate(el => getComputedStyle(el).color),
       await page.locator('#start-identity .start-identity-name').evaluate(el => getComputedStyle(el).color),
-      'hovered version uses the theme color');
-    await version.click();
+      'hovered brand uses the theme color');
+    await brand.click();
     assert.equal(await page.locator('#settings-pane-about').isVisible(), true);
     await page.locator('#settings-close').click();
-    await page.waitForFunction(() => !document.getElementById('settings')?.open && document.activeElement === document.getElementById('start-version-about'));
-    assert.equal(await version.evaluate(el => document.activeElement === el), true, 'closing About restores focus to the version');
+    await page.waitForFunction(() => !document.getElementById('settings')?.open && document.activeElement === document.getElementById('brand-about'));
+    assert.equal(await brand.evaluate(el => document.activeElement === el), true, 'closing About restores focus to the brand');
   });
 
   await check('start header and identity confirmation stay on one row at narrow widths', async page => {

@@ -396,14 +396,10 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 #start-library-list { flex: 1; min-width: 0; min-height: 0; overflow: auto; scrollbar-width: none; }
 #start-library-list::-webkit-scrollbar { display: none; width: 0; height: 0; }
 #start-library-list:has(.start-library-empty) { display: grid; place-items: center; }
-.start-version { flex: 0 0 auto; padding: var(--space-3) 0 0; text-align: center; }
-.start-version button { min-height: 0; padding: 0; border: 0; background: transparent; color: var(--text-subtle); font-size: var(--text-xs); }
-.start-version button:hover:not(:disabled) { background: transparent; color: var(--accent); }
-:root[data-keyboard-navigation] .start-version button:focus-visible { color: var(--accent); }
 .start-library-empty { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); color: var(--text-secondary); font-size: var(--text-ui); font-weight: 500; text-align: center; }
 .start-library-empty svg { width: 36px; height: 36px; color: var(--text-subtle); }
 #start-panel[data-recovery-pending] :is(#start-workspace-recovery, .start-library-viewport) { visibility: hidden; }
-#empty-A { align-self: stretch; flex: 1; width: 100%; min-height: 0; max-height: 100%; overflow: auto; padding: var(--space-4) var(--space-5); justify-content: flex-start; }
+#empty-A { align-self: stretch; flex: 1; width: 100%; min-height: 0; max-height: 100%; overflow: auto; padding: var(--space-4) var(--space-5) 0; justify-content: flex-start; }
 
 .recover-view { position: absolute; top: 50%; transform: translate(-50%, -50%); z-index: 4; background: var(--preview-fill); color: var(--text-secondary); box-shadow: var(--control-shadow); white-space: nowrap; max-width: calc(100% - 16px); font-size: var(--text-sm); }
 
@@ -690,7 +686,7 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 }
 .remove-track, .annotation-remove { --button-hover-text: var(--action-danger); }
 .primary { --button-hover-text: var(--accent-on); }
-.brand, .start-version button { --button-hover-text: var(--accent); }
+.brand { --button-hover-text: var(--accent); }
 
 /* One interaction family across floating controls and workspace panels.
    Each container retains its own material; buttons add only thin overlays. */

@@ -4036,10 +4036,6 @@
     "source": "分割线位置",
     "translation": "Split position"
   },
-  "shell.startVersionAbout": {
-    "source": "当前构建 {revision}，打开关于页面",
-    "translation": "Build {revision}; open About"
-  },
   "shell.strokeWidth": {
     "source": "笔画粗细",
     "translation": "Stroke width"

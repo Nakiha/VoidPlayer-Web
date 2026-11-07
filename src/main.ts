@@ -85,7 +85,6 @@ const removeThemeControls = installThemeControls();
 const removeHeaderActions = installHeaderActions();
 installTopbarCompact(document.querySelector<HTMLElement>('.topbar')!, uiEvents.signal);
 const settings = installSettings();
-$<HTMLElement>('start-version-about').onclick = () => settings.openPane('about', $<HTMLElement>('start-version-about'));
 $<HTMLButtonElement>('start-identity').onclick = () => settings.openPane('identity', $<HTMLButtonElement>('start-identity'));
 const removeBrandEffects = installBrandEffects($<HTMLButtonElement>('brand-about'),
   () => settings.openPane('about', $<HTMLElement>('brand-about')));

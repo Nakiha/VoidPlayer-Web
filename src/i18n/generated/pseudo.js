@@ -1003,7 +1003,6 @@ export default {
   "shell.sources": () => "［S~o~u~r~c~e~s~ ········］",
   "shell.split": () => "［S~p~l~i~t~ ········］",
   "shell.splitPosition": () => "［S~p~l~i~t~ p~o~s~i~t~i~o~n~ ········］",
-  "shell.startVersionAbout": (d) => "［B~u~i~l~d~ " + d.revision + "; o~p~e~n~ A~b~o~u~t~ ········］",
   "shell.strokeWidth": () => "［S~t~r~o~k~e~ w~i~d~t~h~ ········］",
   "shell.switchToGridLayout": () => "［S~w~i~t~c~h~ t~o~ g~r~i~d~ l~a~y~o~u~t~ ········］",
   "shell.text": () => "［T~e~x~t~ ········］",

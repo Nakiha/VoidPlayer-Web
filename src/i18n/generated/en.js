@@ -1003,7 +1003,6 @@ export default {
   "shell.sources": () => "Sources",
   "shell.split": () => "Split",
   "shell.splitPosition": () => "Split position",
-  "shell.startVersionAbout": (d) => "Build " + d.revision + "; open About",
   "shell.strokeWidth": () => "Stroke width",
   "shell.switchToGridLayout": () => "Switch to grid layout",
   "shell.text": () => "Text",

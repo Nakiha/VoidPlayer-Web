@@ -70,8 +70,8 @@ try {
   const context = await browser.newContext({locale:'zh-CN',  viewport: { width: 1280, height: 900 }, colorScheme: 'dark', reducedMotion: 'reduce' });
   const errors = []; context.on('page', p => { p.setDefaultTimeout(30000); p.on('pageerror', e => errors.push(e.message)); });
   const page = await context.newPage(); await page.goto(base);await chooseTestGuest(page);
-  assert.equal(await page.locator('#start-version-about').innerText(), `VoidPlayer · ${manifest.appVersion}`, 'start screen shows the packaged semantic version');
-  for (const entry of ['#start-version-about', '#brand-about']) {
+  assert.equal(await page.locator('.start-version, #start-version-about').count(), 0, 'start screen has no permanent version footer');
+  for (const entry of ['#brand-about']) {
     await page.locator(entry).click();
     await page.locator('#settings-pane-about').waitFor({ state: 'visible' });
     assert.equal(await page.locator('#about-version').innerText(), manifest.appVersion, 'About shows the packaged semantic version');

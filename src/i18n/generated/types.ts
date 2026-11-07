@@ -1001,7 +1001,6 @@ export interface Sources {
   "shell.sources": "片源";
   "shell.split": "分屏";
   "shell.splitPosition": "分割线位置";
-  "shell.startVersionAbout": "当前构建 {revision}，打开关于页面";
   "shell.strokeWidth": "笔画粗细";
   "shell.switchToGridLayout": "切换为田字布局";
   "shell.text": "文字";
@@ -2201,7 +2200,6 @@ export interface MessageParameters {
   "shell.sources": {  };
   "shell.split": {  };
   "shell.splitPosition": {  };
-  "shell.startVersionAbout": { "revision": string | number };
   "shell.strokeWidth": {  };
   "shell.switchToGridLayout": {  };
   "shell.text": {  };
