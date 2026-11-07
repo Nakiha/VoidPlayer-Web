@@ -1,5 +1,5 @@
 /* Shared library surface: player sidebar and administration browser card. */
-.library-pane { --foot-h: 28px; position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.library-pane { --library-row-plain: var(--surface-panel); --library-row-striped: linear-gradient(var(--surface-stripe), var(--surface-stripe)), var(--library-row-plain); --foot-h: 28px; position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .source-tools { --source-control-fill: color-mix(in srgb, var(--surface-control) 45%, transparent); position: absolute; top: 0; left: 0; right: 0; z-index: 4; display: flex; align-items: center; gap: 4px; margin: 0; padding: var(--panel-padding-block); min-height: var(--control-small-height); background: var(--viewport-chrome-fill); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); }
 .source-tools .icon-button { border: 0; background: transparent; flex: 0 0 auto; }
 .source-tools .library-history, .source-tools > .icon-button, .source-tools .library-navigation { background: var(--source-control-fill); box-shadow: var(--control-shadow); }
@@ -18,8 +18,8 @@
 .source-scrollbar.is-active { opacity: 1; }
 .source-scrollbar > span { display: block; width: 100%; border-radius: 3px; background: var(--text-subtle, var(--text-secondary)); opacity: .55; pointer-events: auto; touch-action: none; cursor: default; }
 .source-scrollbar > span:hover { opacity: .9; }
-.source-row { position: relative; display: flex; align-items: center; min-height: var(--source-row-height); gap: var(--control-gap); padding: 4px; border: 0; border-radius: 0; width: 100%; text-align: left; font-weight: 400; background: transparent; }
-.source-row.source-striped { background: var(--surface-stripe); }
+.source-row { position: relative; display: flex; align-items: center; min-height: var(--source-row-height); gap: var(--control-gap); padding: 4px; border: 0; border-radius: 0; width: 100%; text-align: left; font-weight: 400; background: var(--library-row-plain, transparent); }
+.source-row.source-striped { background: var(--library-row-striped, var(--surface-stripe)); }
 .source-row:hover { background: var(--surface-hover); }
 .source-row[aria-disabled=true], .source-open[aria-disabled=true] { cursor: default; }
 .source-open { display: flex; flex: 1; min-width: 0; min-height: 40px; justify-content: flex-start; padding: 0; border: 0; border-radius: 0; font-weight: inherit; text-align: left; }
@@ -45,8 +45,8 @@
 .source-size-value { flex: none; }
 .source-meta-origin { flex: 1 0 3em; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .source-meta-time { flex: none; margin-left: auto; text-align: right; }
-.source-row .source-thumb { background: linear-gradient(var(--surface-stripe), var(--surface-stripe)), var(--surface-panel); }
-.source-row.source-striped .source-thumb { background: var(--surface-panel); }
+.source-row .source-thumb { background: var(--library-row-striped, linear-gradient(var(--surface-stripe), var(--surface-stripe)), var(--surface-panel)); }
+.source-row.source-striped .source-thumb { background: var(--library-row-plain, var(--surface-panel)); }
 .source-meta { display: flex; align-items: center; gap: var(--space-2); color: var(--text-secondary); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-storage { flex-wrap: wrap; align-content: flex-start; height: 18px; line-height: 18px; column-gap: 4px; row-gap: 4px; }
 .source-storage > span { flex: none; max-width: 100%; height: 18px; overflow: hidden; text-overflow: ellipsis; }
@@ -71,7 +71,7 @@
 .library-root-group > summary > .icon { width: var(--icon-size); height: var(--icon-size); transition: transform var(--transition-fast); }
 .library-root-group[open] > summary > .icon { transform: rotate(90deg); }
 .library-navigation .library-location[aria-invalid=true] { color: var(--action-danger); }
-.library-folder { width: 100%; justify-content: flex-start; text-align: left; border: 0; border-radius: 0; background: transparent; font-weight: 400; }
+.library-folder { width: 100%; justify-content: flex-start; text-align: left; border: 0; border-radius: 0; background: var(--library-row-plain, transparent); font-weight: 400; }
 .library-folder > span:first-child { color: var(--text-secondary); }
 .library-folder-icon { background: var(--surface-control); }
 .library-folder-icon > .icon { width: var(--icon-size); height: var(--icon-size); flex: none; transform: scale(1.18); }

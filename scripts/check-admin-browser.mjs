@@ -156,6 +156,14 @@ try {
     });
     assert.equal(chrome.header,chrome.scan,`${theme}: admin toolbar matches the nested scan status fill`);
     assert.equal(chrome.footer,chrome.scan,`${theme}: admin path bar matches the nested scan status fill`);
+    const zebra=await active.locator('.library-column[data-root=local][data-directory=""] .library-folder:not(.library-column-path)').evaluateAll(rows => {
+      const fill=el => {const style=getComputedStyle(el);return {color:style.backgroundColor,image:style.backgroundImage};};
+      return rows.slice(0,2).map(row => ({row:fill(row),icon:fill(row.querySelector('.source-thumb'))}));
+    });
+    assert.equal(zebra.length,2);
+    assert.notDeepEqual(zebra[0].row,zebra[1].row,`${theme}: adjacent rows retain distinct fills`);
+    assert.deepEqual(zebra[0].row,zebra[1].icon,`${theme}: the first row is exactly the second icon background`);
+    assert.deepEqual(zebra[1].row,zebra[0].icon,`${theme}: the second row is exactly the first icon background`);
     await managed.locator('.admin-library-card').screenshot({path:`/tmp/voidplayer-library-selected-icons-${theme}-${browserName}.png`});
   }
   const widths = () => active.locator('.library-column').evaluateAll(columns => columns.map(column => Math.round(column.getBoundingClientRect().width)));
