@@ -42,7 +42,7 @@ export function parseLibraryFileCommand(body:unknown):LibraryFileCommand {
 /** No symlink traversal, no mount-root mutation, no overwrite or implicit retry.
  * App-owned writes are serialized by MediaLibraryIndex. Other filesystem writers
  * are not locked; verify source identity again immediately before each write. */
-export async function mutateLibraryFiles(roots:readonly Root[], command:LibraryFileCommand, version:(stat:Stats)=>string) {
+export async function mutateLibraryFiles(roots:readonly Root[], command:LibraryFileCommand, version:(stat:Stats)=>string, beforeWrite?:()=>void) {
   const sources=command.operation==='rename'?[command.source]:command.sources;
   const rootPaths=new Map<string,string>();
   const rootPath=async (id:string) => {
@@ -94,7 +94,9 @@ export async function mutateLibraryFiles(roots:readonly Root[], command:LibraryF
     planned.push({source,absolute,stat,target,destination});
   }
   for (const a of planned) for (const b of planned) if (a!==b&&(a.absolute===b.absolute||b.absolute.startsWith(a.absolute+path.sep))) throw bad('操作列表包含重复项目或父子目录。');
+  beforeWrite?.();
   const results:LibraryFileResult['results']=[];
+  const relocatedFiles:{source:LibraryFileRef;destination:{rootId:string;path:string};sourceVersion:string;version:string}[]=[];
   for (const item of planned) {
     try {
       const current=await fs.lstat(await resolve(item.source.rootId,item.source.path));
@@ -112,7 +114,15 @@ export async function mutateLibraryFiles(roots:readonly Root[], command:LibraryF
           if (after.ino!==current.ino||after.dev!==current.dev||after.size!==current.size||after.mtimeMs!==current.mtimeMs) {
             throw new AdminError(409,'源文件在移动期间变化，保留两端文件。','library-file-changed');
           }
+          const copied=await fs.lstat(item.target);
           await fs.unlink(item.absolute);
+          // The link/unlink changes ctime; a copy has a new inode as well. Only
+          // this operation's final destination version can inherit display data.
+          const destination=await fs.lstat(item.target).catch(() => undefined);
+          if (destination?.isFile()&&destination.size===current.size&&destination.ino===copied.ino
+            &&destination.dev===copied.dev&&destination.mtimeMs===copied.mtimeMs) {
+            relocatedFiles.push({source:item.source,destination:item.destination!,sourceVersion:version(current),version:version(destination)});
+          }
         } else await fs.rename(item.absolute,item.target);
       } else if (item.source.kind==='directory') await fs.rm(item.absolute,{recursive:true});
       else await fs.unlink(item.absolute);
@@ -124,5 +134,5 @@ export async function mutateLibraryFiles(roots:readonly Root[], command:LibraryF
   }
   const scopes=planned.flatMap(item => [{rootId:item.source.rootId,directory:path.posix.dirname(item.source.path).replace(/^\.$/,'')},
     ...(item.destination?[{rootId:item.destination.rootId,directory:path.posix.dirname(item.destination.path).replace(/^\.$/,'')}]:[])]);
-  return {results,scopes};
+  return {results,scopes,relocatedFiles};
 }

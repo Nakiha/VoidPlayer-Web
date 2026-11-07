@@ -8,6 +8,8 @@ import { AdminController } from '../../server/admin.ts';
 import { loadConfig } from '../../server/config.ts';
 import { createMediaServer } from '../../server/app.ts';
 import { THUMB_RECIPE_VERSION } from '../../shared/thumbnails/contract.ts';
+import {promises as fs} from 'node:fs';
+import type {LibraryFileRef} from '../../shared/service/library-files.ts';
 
 function jpeg320x240(): Uint8Array<ArrayBuffer> {
   return Uint8Array.from([
@@ -17,6 +19,60 @@ function jpeg320x240(): Uint8Array<ArrayBuffer> {
     0xff, 0xd9,
   ]);
 }
+
+test('owned moves retain ready thumbnails; pending, changed and cache-cleared files do not inherit them', async () => {
+  const root=await mkdtemp(path.join(os.tmpdir(),'vp-move-thumbs-'));
+  await mkdir(path.join(root,'target'));await mkdir(path.join(root,'pack'));
+  for (const name of ['one.mp4','pending.mp4','clear.mp4','pack/child.mp4','pack/changed.mp4']) {
+    await writeFile(path.join(root,name),name);
+    await fs.utimes(path.join(root,name),new Date(1000),new Date(1000));
+  }
+  const library=new MediaLibraryIndex([{id:'video',path:root}],{watch:false,settleMs:60000});
+  const image=jpeg320x240(),recipe=THUMB_RECIPE_VERSION;
+  const entry=(name:string) => library.browse({rootId:'video',recursive:true}).entries.find(item => item.name===name)!;
+  const ref=(name:string):LibraryFileRef => ({rootId:'video',path:name,kind:'file',version:entry(name).version});
+  const move=(source:LibraryFileRef,directory:string) => library.mutateFiles({operation:'move',sources:[source],target:{rootId:'video',directory}});
+  const verify=(name:string) => {
+    const item=entry(name);assert.ok(item.version);assert.equal(item.state,'ready',`${name} is immediately available`);
+    assert.equal(item.thumbnail,true,`${name} retains its cover in the same metadata commit`);
+    assert.deepEqual([...library.thumbnails.get(item.id,item.version,recipe)!.data],[...image]);return item;
+  };
+  try {
+    await library.refresh();
+    for (const item of library.browse({rootId:'video',recursive:true}).entries) {
+      assert.ok(item.version);
+      library.thumbnails.put(item.id,item.version,recipe,library.thumbnails.epoch,image,{width:320,height:240,sourcePtsUs:0});
+    }
+    const original=entry('one.mp4');
+    assert.equal((await move(ref('one.mp4'),'target')).results[0].ok,true);
+    const moved=verify('target/one.mp4');assert.notEqual(moved.id,original.id);
+    assert.equal((await move(ref('target/one.mp4'),'')).results[0].ok,true);
+    const returned=verify('one.mp4');assert.notEqual(returned.version,original.version,'returning to an old path does not reuse its old identity');
+    // The existing exclusive-copy fallback needs the same handoff as hard links.
+    const link=fs.link;
+    fs.link=async () => {throw Object.assign(Error('cross-device'),{code:'EXDEV'});};
+    try {assert.equal((await move(ref('one.mp4'),'target')).results[0].ok,true);verify('target/one.mp4');}
+    finally {fs.link=link;}
+    await writeFile(path.join(root,'pending.mp4'),'still being written');await library.refresh();
+    assert.equal(entry('pending.mp4').state,'pending');
+    await move(ref('pending.mp4'),'target');
+    assert.equal(entry('target/pending.mp4').state,'pending','moving a pending source does not certify it stable');
+    assert.equal(entry('target/pending.mp4').thumbnail,false);
+    const rename=fs.rename;
+    fs.rename=async (...args) => {await rename(...args);await writeFile(path.join(root,'target/pack/changed.mp4'),'external write');};
+    try {await move({rootId:'video',path:'pack',kind:'directory'},'target');}
+    finally {fs.rename=rename;}
+    verify('target/pack/child.mp4');
+    assert.equal(entry('target/pack/changed.mp4').thumbnail,false,'a changed child cannot inherit an old cover');
+    const unlink=fs.unlink;
+    fs.unlink=async (...args) => {library.thumbnails.remove();await unlink(...args);};
+    try {await move(ref('clear.mp4'),'target');}
+    finally {fs.unlink=unlink;}
+    assert.equal(entry('target/clear.mp4').state,'ready');
+    assert.equal(entry('target/clear.mp4').thumbnail,false,'a cache clear during movement wins over thumbnail handoff');
+    await library.refresh();assert.equal(entry('one.mp4'),undefined,'the source stays missing after another scan');
+  } finally {await library.close();await rm(root,{recursive:true,force:true});}
+});
 
 test('media thumbnails: status, upload, first-wins, epoch races and version binding', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'vp-thumbs-'));

@@ -453,11 +453,18 @@ try {
   assert.deepEqual(await readFile(path.join(media,'z-branch/leaf/target/nested.mp4')),await readFile(path.join(root,'fixtures/video/ci_h264_smoke.mp4')));
   // Restore through the same public command so the existing file-link checks remain independent.
   const movedEntry=service.library.browse({rootId:'local',directory:'z-branch/leaf/target'}).entries[0];
+  assert.equal(movedEntry.state,'ready','a completed move does not return to the writing/settling state');
+  assert.equal(movedEntry.thumbnail,true,'the moved file retains its already-generated cover');
+  const movedImage=service.library.thumbnails.get(movedEntry.id,movedEntry.version,THUMB_RECIPE_VERSION);
+  assert.deepEqual(Buffer.from(movedImage.data),Buffer.from(cover,'base64'),'moving preserves the exact JPEG, without decoding the video again');
   const restored=await managed.evaluate(async source => {
     const response=await fetch('/api/library/files',{method:'POST',headers:{'content-type':'application/json','x-voidplayer-action':'library-files'},body:JSON.stringify({operation:'move',sources:[source],target:{rootId:'local',directory:'z-branch/leaf'}})});
     return response.json();
   },{rootId:'local',path:movedEntry.name,version:movedEntry.version,kind:'file'});
   assert.equal(restored.results[0].ok,true);
+  const returnedEntry=service.library.browse({rootId:'local',directory:'z-branch/leaf'}).entries[0];
+  assert.equal(returnedEntry.state,'ready','moving back to a previously indexed path is immediately ready');
+  assert.equal(returnedEntry.thumbnail,true,'moving back retains the cover at the new stat version');
   await goLibrary('library:local/z-branch/leaf');
   await rootColumn().locator('.source-file').click();
   await startFileDrag();

@@ -6036,8 +6036,8 @@
       "name": "string | number"
     }
   },
-  "sources.writing": {
-    "source": "写入中",
+  "sources.waitingForStableFile": {
+    "source": "等待文件稳定",
     "params": {}
   },
   "sync.disconnectedKeepDrafts": {

@@ -1407,7 +1407,7 @@ export default {
   "sources.takeOffName": (d) => "Remove from view: " + d.name,
   "sources.tooltipLibrary": (d) => d.name + " (" + d.root + ")",
   "sources.tooltipLocalOnly": (d) => d.name + " (local file, preview on this device only)",
-  "sources.writing": () => "Writing",
+  "sources.waitingForStableFile": () => "Waiting for file to settle",
   "sync.disconnectedKeepDrafts": () => "Disconnected · local drafts kept",
   "sync.draftsUnsaved": () => "Local annotations are not saved yet. Please wait for automatic saving to finish.",
   "sync.frameMark": () => "Frame mark",

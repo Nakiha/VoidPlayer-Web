@@ -77,7 +77,7 @@ export function createLibraryFileRow(item: SourceItem, state: LibraryFileView) {
   row.dataset.tooltip = state.tooltip;
   const pending = item.library?.state === 'pending';
   const offline = state.offline;
-  const stateLabel = loading ?? (failed ? t(msg("sources.loadFailedWith", "载入失败：{reason}"), { reason: failed }) : offline ? t(msg("sources.storageOffline", "存储离线")) : pending ? t(msg("sources.writing", "写入中")) : '');
+  const stateLabel = loading ?? (failed ? t(msg("sources.loadFailedWith", "载入失败：{reason}"), { reason: failed }) : offline ? t(msg("sources.storageOffline", "存储离线")) : pending ? t(msg('sources.waitingForStableFile', '等待文件稳定')) : '');
   const opened = openedText(item.openedAt);
   const status = text('span', '', 'source-meta source-meta-columns');
   const size = text('span', '', 'source-meta-size');

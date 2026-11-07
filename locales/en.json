@@ -5653,9 +5653,9 @@
     "source": "{name}（本地文件，仅本机预览）",
     "translation": "{name} (local file, preview on this device only)"
   },
-  "sources.writing": {
-    "source": "写入中",
-    "translation": "Writing"
+  "sources.waitingForStableFile": {
+    "source": "等待文件稳定",
+    "translation": "Waiting for file to settle"
   },
   "sync.disconnectedKeepDrafts": {
     "source": "连接中断 · 本机草稿保留",

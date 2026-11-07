@@ -7,7 +7,7 @@
 import type { IndexDatabase } from './sqlite.ts';
 import { AdminError } from './admin-error.ts';
 import {
-  THUMB_CACHE_LIMIT_BYTES, THUMB_MAX_BYTES, validateThumbnailImage,
+  THUMB_CACHE_LIMIT_BYTES, THUMB_MAX_BYTES, THUMB_RECIPE_VERSION, validateThumbnailImage,
 } from '../shared/thumbnails/contract.ts';
 
 const ID_PATTERN = /^[0-9a-f]{24}$/;
@@ -85,6 +85,32 @@ export class MediaThumbnailStore {
     return new Set(rows.map(row => `${row.id}|${row.version}`));
   }
 
+  /** Called inside the scanner's metadata transaction, with an owned move's
+   * verified versions. Clearing the cache during the operation wins. */
+  copyRelocated(sourceId:string, sourceVersion:string, id:string, version:string, epoch:number) {
+    if (epoch!==this.epoch) return;
+    const inserted=this.db.prepare(`INSERT OR IGNORE INTO media_thumbnails
+      (media_id,media_version,stream_selector,recipe_version,source_pts_us,width,height,mime,bytes,data,created_at,accessed_at)
+      SELECT ?,?,stream_selector,recipe_version,source_pts_us,width,height,mime,bytes,data,created_at,?
+      FROM media_thumbnails WHERE media_id=? AND media_version=? AND stream_selector=? AND recipe_version=?
+      AND EXISTS(SELECT 1 FROM media JOIN roots ON media.root_id=roots.id
+        WHERE media.id=? AND version=? AND media.state='ready' AND roots.active=1)`)
+      .run(id,version,Date.now(),sourceId,sourceVersion,STREAM_SELECTOR,THUMB_RECIPE_VERSION,id,version);
+    if (inserted.changes) this.trim();
+  }
+
+  private trim() {
+    let total = Number(this.db.prepare('SELECT coalesce(sum(bytes),0) AS bytes FROM media_thumbnails').get()!.bytes);
+    while (total > THUMB_CACHE_LIMIT_BYTES) {
+      const oldest = this.db.prepare('SELECT media_id,media_version,stream_selector,recipe_version,bytes FROM media_thumbnails ORDER BY accessed_at,media_id LIMIT 1').get() as
+        { media_id: string; media_version: string; stream_selector:string; recipe_version:string; bytes: number } | undefined;
+      if (!oldest) break;
+      this.db.prepare('DELETE FROM media_thumbnails WHERE media_id=? AND media_version=? AND stream_selector=? AND recipe_version=?')
+        .run(oldest.media_id,oldest.media_version,oldest.stream_selector,oldest.recipe_version);
+      total -= Number(oldest.bytes);
+    }
+  }
+
   /**
    * Atomic check-and-write: epoch/version validation and the insert happen in
    * one transaction, so a concurrent clear cannot leave a pre-clear image.
@@ -114,15 +140,7 @@ export class MediaThumbnailStore {
       ).run(id, version, STREAM_SELECTOR, recipe, sourcePtsUs as number, checked.width, checked.height,
         'image/jpeg', bytes.length, Buffer.from(bytes), now, now);
       if (result.changes === 0) { this.db.exec('COMMIT'); return { ok: true, deduped: true }; }
-      let total = Number(this.db.prepare('SELECT coalesce(sum(bytes),0) AS bytes FROM media_thumbnails').get()!.bytes);
-      while (total > THUMB_CACHE_LIMIT_BYTES) {
-        const oldest = this.db.prepare('SELECT media_id,media_version,bytes FROM media_thumbnails ORDER BY accessed_at,media_id LIMIT 1').get() as
-          { media_id: string; media_version: string; bytes: number } | undefined;
-        if (!oldest) break;
-        this.db.prepare('DELETE FROM media_thumbnails WHERE media_id=? AND media_version=? AND stream_selector=? AND recipe_version=?')
-          .run(oldest.media_id, oldest.media_version, STREAM_SELECTOR, recipe);
-        total -= Number(oldest.bytes);
-      }
+      this.trim();
       this.db.exec('COMMIT');
       return { ok: true };
     } catch (error) {

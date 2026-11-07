@@ -1407,7 +1407,7 @@ export default {
   "sources.takeOffName": (d) => "［R~e~m~o~v~e~ f~r~o~m~ v~i~e~w~: " + d.name + " ········］",
   "sources.tooltipLibrary": (d) => "［" + d.name + " (" + d.root + ") ········］",
   "sources.tooltipLocalOnly": (d) => "［" + d.name + " (l~o~c~a~l~ f~i~l~e~, p~r~e~v~i~e~w~ o~n~ t~h~i~s~ d~e~v~i~c~e~ o~n~l~y~) ········］",
-  "sources.writing": () => "［W~r~i~t~i~n~g~ ········］",
+  "sources.waitingForStableFile": () => "［W~a~i~t~i~n~g~ f~o~r~ f~i~l~e~ t~o~ s~e~t~t~l~e~ ········］",
   "sync.disconnectedKeepDrafts": () => "［D~i~s~c~o~n~n~e~c~t~e~d~ · l~o~c~a~l~ d~r~a~f~t~s~ k~e~p~t~ ········］",
   "sync.draftsUnsaved": () => "［L~o~c~a~l~ a~n~n~o~t~a~t~i~o~n~s~ a~r~e~ n~o~t~ s~a~v~e~d~ y~e~t~. P~l~e~a~s~e~ w~a~i~t~ f~o~r~ a~u~t~o~m~a~t~i~c~ s~a~v~i~n~g~ t~o~ f~i~n~i~s~h~. ········］",
   "sync.frameMark": () => "［F~r~a~m~e~ m~a~r~k~ ········］",

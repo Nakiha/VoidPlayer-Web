@@ -1407,7 +1407,7 @@ export default {
   "sources.takeOffName": (d) => "下屏：" + d.name,
   "sources.tooltipLibrary": (d) => d.name + "（" + d.root + "）",
   "sources.tooltipLocalOnly": (d) => d.name + "（本地文件，仅本机预览）",
-  "sources.writing": () => "写入中",
+  "sources.waitingForStableFile": () => "等待文件稳定",
   "sync.disconnectedKeepDrafts": () => "连接中断 · 本机草稿保留",
   "sync.draftsUnsaved": () => "本机标注尚未保存，请等待自动保存完成。",
   "sync.frameMark": () => "画面标注",

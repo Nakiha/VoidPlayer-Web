@@ -1405,7 +1405,7 @@ export interface Sources {
   "sources.takeOffName": "下屏：{name}";
   "sources.tooltipLibrary": "{name}（{root}）";
   "sources.tooltipLocalOnly": "{name}（本地文件，仅本机预览）";
-  "sources.writing": "写入中";
+  "sources.waitingForStableFile": "等待文件稳定";
   "sync.disconnectedKeepDrafts": "连接中断 · 本机草稿保留";
   "sync.draftsUnsaved": "本机标注尚未保存，请等待自动保存完成。";
   "sync.frameMark": "画面标注";
@@ -3009,7 +3009,7 @@ export interface MessageParameters {
   "sources.takeOffName": { "name": string | number };
   "sources.tooltipLibrary": { "name": string | number; "root": string | number };
   "sources.tooltipLocalOnly": { "name": string | number };
-  "sources.writing": {  };
+  "sources.waitingForStableFile": {  };
   "sync.disconnectedKeepDrafts": {  };
   "sync.draftsUnsaved": {  };
   "sync.frameMark": {  };

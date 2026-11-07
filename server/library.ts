@@ -1,5 +1,6 @@
 import {closeResources} from './shutdown.ts';
 import {mutateLibraryFiles,parseLibraryFileCommand} from './library-files.ts';
+import {LibraryRelocations} from './library-relocations.ts';
 import type {LibraryFileResult} from '../shared/service/library-files.ts';
 import {FrameIndexJobs} from './frame-index-jobs.ts';
 import {QualityAdmission} from './quality-admission.ts';
@@ -87,6 +88,7 @@ export class MediaLibraryIndex {
   private closed = false;
   private configuring = false;
   private fileMutation?:Promise<LibraryFileResult>;
+  private relocations?:LibraryRelocations;
   private initialized: boolean;
   private options: IndexOptions;
   constructor(roots: MediaRoot[], options: IndexOptions = {}) {
@@ -331,10 +333,12 @@ export class MediaLibraryIndex {
     };
     const put = (root: RootRecord, relative: string, size: number, modified: number, version: string, state: string) => {
       const observedAt = this.now();
+      const relocation=this.relocations, cover=relocation?.find(root.id,relative,version);
       writes.push(() => {
         upsert.run(mediaId(root.seed, relative), root.id, relative, parent(relative), size, modified, version, state, job, observedAt);
         const record = findId.get(root.id, relative) as { id: string };
         alias.run(mediaId(root.path, relative), record.id);
+        if (state==='ready'&&cover) this.thumbnails.copyRelocated(cover.id,cover.version,record.id,version,relocation!.epoch);
       });
       if (writes.length >= 64) flush();
     };
@@ -428,7 +432,8 @@ export class MediaLibraryIndex {
               // file before accepting a first binding for an existing library.
               if (!storageVerified && prior?.version === version) storageVerified = await this.checkStorage(root, signal, true);
               if (!storageVerified) { unverifiedFiles = true; continue; }
-              const pending = settleMs > 0 && (prior?.version === version ? prior.state === 'pending' && this.now() - prior.observed_at < settleMs : !!prior || this.now() - stat.mtimeMs < settleMs);
+              const relocated=this.relocations?.find(root.id,name,version);
+              const pending = !relocated && settleMs > 0 && (prior?.version === version ? prior.state === 'pending' && this.now() - prior.observed_at < settleMs : !!prior || this.now() - stat.mtimeMs < settleMs);
               if (pending) this.settling.add({ rootId: root.id, directory: relative });
               // Database errors fail the job, rather than being treated as a bad file.
               const state = pending ? 'pending' : 'ready';
@@ -548,12 +553,18 @@ export class MediaLibraryIndex {
         if (!root) throw new AdminError(404,'媒体库不存在。');
         if (!await this.checkStorage(root)) throw new AdminError(409,'媒体库挂载尚未核验。');
       }
-      const {results,scopes}=await mutateLibraryFiles(this.definitions,command,fileVersion);
-      let indexRefreshed=true;
-      const generation=this.cancelGeneration;
-      try {await this.refreshDirectories(scopes);indexRefreshed=!this.closed&&generation===this.cancelGeneration;}
-      catch {indexRefreshed=false;}
-      return {results,indexRefreshed};
+      let relocations:LibraryRelocations|undefined;
+      try {
+        const mutation=await mutateLibraryFiles(this.definitions,command,fileVersion,() => {
+          relocations=new LibraryRelocations(this.store.db,command,this.thumbnails.epoch);
+        });
+        relocations!.approve(mutation);this.relocations=relocations;
+        let indexRefreshed=true;
+        const generation=this.cancelGeneration;
+        try {await this.refreshDirectories(mutation.scopes);indexRefreshed=!this.closed&&generation===this.cancelGeneration;}
+        catch {indexRefreshed=false;}
+        return {results:mutation.results,indexRefreshed};
+      } finally {this.relocations=undefined;relocations?.dispose();}
     })();
     this.fileMutation=operation;
     try {return await operation;} finally {this.fileMutation=undefined;}
