@@ -167,6 +167,7 @@ export function installLibraryListing(list: HTMLElement, options: {
         info.append(text('span', folder.name, 'filename'));
         row.dataset.rootId = folder.rootId;
         row.dataset.libraryPath=folder.path; row.dataset.libraryKind='directory';
+        row.setAttribute('aria-haspopup', 'menu');
         row.setAttribute('aria-label', t(msg("sources.openFolder", "打开目录：{name}"), { name: folder.name })); row.append(glyph, info, branchArrow()); row.onclick = () => options.navigate(folder.rootId, folder.path); return row;
       });
     }

@@ -19,18 +19,36 @@ export function installLibraryFileMenu(host: HTMLElement, act: LibraryMenuAction
       await write; notify(t(msg('libraryFileMenu.copied', '已拷贝')));
     }, 'ui.library-copy');
   };
+  const absolutePath = async (rootId: string, directory = '') => {
+    const response = await fetch(`/api/library/roots/${encodeURIComponent(rootId)}/location`, {
+      cache:'no-store', signal:AbortSignal.any([signal,AbortSignal.timeout(5000)]),
+    });
+    const body = await response.json();
+    if (!response.ok || typeof body.absolutePath !== 'string') throw new Error(t(msg('libraryFileMenu.mountPathUnavailable', '无法获取挂载路径')));
+    if (!directory) return body.absolutePath as string;
+    const separator = body.absolutePath.includes('\\') ? '\\' : '/';
+    return body.absolutePath.replace(/[\\/]+$/, '') + separator + directory.split('/').join(separator);
+  };
   const menu = installContextMenu(host, {
     id: 'library-file-menu', selector: '.source-row', signal, popover: 'manual',
     focusTarget: row => row.querySelector<HTMLElement>('button.source-open') ?? row,
     actions(row) {
+      const root = row.dataset.rootId;
+      const directory = row.dataset.libraryPath ?? '';
+      const copyLibraryPath: ContextMenuAction = {
+        id:'copy-library-path', label:t(msg('libraryFileMenu.copyLibraryPath', '拷贝媒体库路径')), glyph:'film',
+        run:() => copy(libraryLocationExpression({root:root!,directory,all:false})),
+      };
+      if (root && row.dataset.libraryKind === 'directory') return [
+        {id:'copy-path', label:t(msg('sourceActions.copyAbsolutePath', '拷贝绝对路径')), glyph:'copy', run:() => copy(absolutePath(root,directory))},
+        copyLibraryPath,
+      ];
       const record = entries.get(row);
       if (!record) return [];
-      if ('rootId' in record) return [{id:'copy-mount-path', label:t(msg('libraryFileMenu.copyMountPath', '拷贝挂载路径')), glyph:'copy', run:() => copy((async () => {
-        const response = await fetch(`/api/library/roots/${encodeURIComponent(record.rootId)}/location`, {cache:'no-store', signal:AbortSignal.any([signal,AbortSignal.timeout(5000)])});
-        const body = await response.json();
-        if (!response.ok || typeof body.absolutePath !== 'string') throw new Error(t(msg('libraryFileMenu.mountPathUnavailable', '无法获取挂载路径')));
-        return body.absolutePath as string;
-      })())}];
+      if ('rootId' in record) return [
+        {id:'copy-mount-path', label:t(msg('libraryFileMenu.copyMountPath', '拷贝挂载路径')), glyph:'copy', run:() => copy(absolutePath(record.rootId))},
+        copyLibraryPath,
+      ];
       const {entry} = record, playback = record.playback();
       if (!entry) return playback ? [playback] : [];
       const source = mediaUrl(entry.id, entry.version);
