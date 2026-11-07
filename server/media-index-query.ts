@@ -1,13 +1,10 @@
+import type { MediaIndexIdentity } from '../shared/media/indexing/media-index-identity.ts';
 import { packetStorage, readPacketChunk, invalidPackets, PACKET_CHUNK_BYTES, PACKET_READ_BYTES, PACKET_CHUNK_RECORDS } from './committed-packet-storage.ts';
 import { committedSemanticRecord, committedRecordSemantics } from '../shared/media/indexing/committed-record-query.ts';
 import { COMMITTED_HEADER_BYTES, COMMITTED_HEADER_SCHEMA, COMMITTED_HEADER_VERSION, validCommittedHeader } from '../shared/media/indexing/committed-index-header.ts';
-import { createHash, randomUUID } from 'node:crypto';
-import { parseMediaIndexIdentity } from '../shared/media/indexing/media-index-identity.ts';
-import { evaluateTechnicalEvidence, markTechnicalConflicts, TECHNICAL_FILTER_LIMITS, TECHNICAL_FILTER_SCHEMA } from '../shared/media/indexing/technical-filter.ts';
-import type { TechnicalFilterQuery, TechnicalEvidence } from '../shared/media/indexing/technical-filter.ts';
+import { createHash } from 'node:crypto';
 import type { IndexDatabase } from './sqlite.ts';
 import { AdminError } from './admin-error.ts';
-import type { MediaIndexIdentity } from '../shared/media/indexing/media-index-identity.ts';
 import { describeCachedIndex, supportedCachedMetadata, cachedIndexClock, FFMPEG_INDEX_RECORD_BYTES, MEDIA_QUERY_SCHEMA, MEDIA_QUERY_VERSION, MEDIA_QUERY_DICTIONARY,
   QUERY_SCAN_LIMIT, recordMatches, semanticRecord } from '../shared/media/indexing/semantic-query.ts';
 import type { SemanticQuery, SemanticRecord } from '../shared/media/indexing/semantic-query.ts';
@@ -17,8 +14,6 @@ const args = (id: string, version: string, identity: MediaIndexIdentity) => [id,
 const storageColumns = 'CASE WHEN octet_length(packet_storage)<=4096 THEN packet_storage END AS packet_storage,octet_length(packet_storage) AS storage_length';
 const evidenceColumns = 'state,complete,last_seq,frames,packets,scanned_bytes,stable_presentation_us,CASE WHEN octet_length(metadata_json)<=32768 THEN metadata_json END AS metadata_json,octet_length(metadata_json) AS metadata_length,CASE WHEN octet_length(semantic_json)<=8192 THEN semantic_json END AS semantic_json,octet_length(semantic_json) AS semantic_length,(SELECT size FROM media WHERE media.id=media_id AND media.version=media_version) AS source_size';
 const columns = `${storageColumns},kind,stream_key,schema_version,indexer_build,build_id,${evidenceColumns}`;
-// Same bounded projection, with defensive limits on persisted identity strings.
-const filterColumns = `${storageColumns},CASE WHEN octet_length(kind)<=16 THEN kind END AS kind,CASE WHEN octet_length(stream_key)<=16 THEN stream_key END AS stream_key,schema_version,CASE WHEN octet_length(indexer_build)<=80 THEN indexer_build END AS indexer_build,CASE WHEN octet_length(build_id)<=80 THEN build_id END AS build_id,${evidenceColumns}`;
 type Row = { packet_storage: string | null; storage_length: number | null; kind: string; stream_key: string; schema_version: number; indexer_build: string; build_id: string | null; state: string; complete: number; last_seq: number; frames: number; packets: number; scanned_bytes: number; stable_presentation_us: number; metadata_json: string | null; metadata_length: number | null; semantic_json: string | null; semantic_length: number | null; source_size: number };
 const header = { schema: MEDIA_QUERY_SCHEMA, version: MEDIA_QUERY_VERSION, describedBy: MEDIA_QUERY_DICTIONARY };
 function metadata(row: Row | undefined): Record<string, unknown> | null {
@@ -54,100 +49,7 @@ function describe(row: Row | undefined, identity: MediaIndexIdentity, sourceVers
 /** Deliberately bypass legacy streamManifest(): that entry may migrate a whole document. */
 export class MediaIndexQueryStore {
   private db: IndexDatabase;
-  private filterScope = randomUUID();
   constructor(db: IndexDatabase) { this.db = db; }
-  /** Bounded legacy/cache reuse for library discovery. No packet document or
-   * migration is read. A cached stream inventory never proves source absence. */
-  discoveryEvidence(id:string,version:string,limit:number){
-    const rows=this.db.prepare(`SELECT ${filterColumns} FROM media_index_manifests WHERE media_id=? AND media_version=? ORDER BY media_index_manifests.kind,media_index_manifests.stream_key,media_index_manifests.schema_version,media_index_manifests.indexer_build LIMIT ?`)
-      .all(id,version,limit+1) as unknown as Row[];
-    const indexes=[];
-    for(const row of rows.slice(0,limit)){
-      try{
-        const identity=parseMediaIndexIdentity(row.kind,new URLSearchParams({stream:row.stream_key,schema:String(row.schema_version),indexer:row.indexer_build}));
-        const overview=describe(row,identity,`${id}@${version}`),m=metadata(row);
-        // Preserve each namespace independently; never merge peer fields.
-        const conflict=m&&['codec','width','height'].some(k=>overview.technical[k]?.status==='known'&&m[k]!==undefined&&m[k]!==overview.technical[k].value);
-        indexes.push({identity,buildId:row.build_id,overview,eligible:!conflict&&overview.state==='complete'&&overview.terminal&&overview.integrity==='complete'&&(identity.kind!=='ffmpeg'||m?.size===row.source_size),reason:conflict?'cached-identity-evidence-conflict':'cached-index-incomplete-or-unsupported'});
-      }catch{/* Invalid cache identity is unavailable, never a match. */}
-    }
-    for(const item of indexes){const peers=indexes.filter(other=>other.identity.streamKey===item.identity.streamKey);
-      const conflict=['codec','width','height'].some(key=>new Set(peers.filter(p=>p.overview.state==='complete'&&p.overview.technical[key]?.status==='known').map(p=>p.overview.technical[key].value)).size>1);
-      if(conflict||rows.length>limit){item.eligible=false;item.reason=conflict?'cached-stream-evidence-conflict':'cached-evidence-truncated';}}
-    return {indexes,truncated:rows.length>limit,identitiesRead:rows.length,readBytes:rows.reduce((n,row)=>n+Buffer.byteLength(row.metadata_json??'')+Buffer.byteLength(row.semantic_json??'')+Buffer.byteLength(row.packet_storage??''),0)};
-  }
-  technicalFilter(query: TechnicalFilterQuery, expectedSnapshot?: string, cancellation?: SharedArrayBuffer) {
-    const check = () => { if (cancellation && Atomics.load(new Int32Array(cancellation), 0)) throw new AdminError(499, 'Cached query cancelled.', 'media-query-cancelled'); };
-    const changed = () => { throw new AdminError(409, 'Source or cached evidence changed; restart the bounded query.', 'technical-evidence-changed'); };
-    const stamp = () => [this.db.prepare('PRAGMA data_version').get()!.data_version, this.db.prepare('SELECT total_changes() AS changes').get()!.changes];
-    check();
-    if (!query.sources.length || query.sources.length > TECHNICAL_FILTER_LIMITS.candidates) throw new AdminError(400, 'Invalid candidate budget.', 'invalid-technical-filter');
-    const before = stamp(), fingerprint: unknown[] = [this.filterScope, query, before];
-    const candidates: { source: TechnicalFilterQuery['sources'][number]; state: 'match' | 'unknown'; reason: string | null; streamInventoryComplete: false; truncated: boolean; evidence: TechnicalEvidence[] }[] = [];
-    let identitiesInspected = 0, identitiesRead = 0, projectionReadBytes = 0;
-    this.db.exec('BEGIN');
-    try {
-      fingerprint.push(this.db.prepare('SELECT revision FROM library_revision WHERE id=1').get()!.revision);
-      for (const source of query.sources) {
-        check();
-        const media = this.db.prepare('SELECT m.version,m.state,m.size FROM media m JOIN roots r ON r.id=m.root_id WHERE m.id=? AND r.active=1').get(source.id);
-        if (!media || media.version !== source.version) changed();
-        fingerprint.push(media);
-        // Qualify raw key columns: the bounded CASE aliases in SELECT otherwise
-        // make SQLite sort every identity before LIMIT instead of seeking the PK.
-        const rows = this.db.prepare(`SELECT ${filterColumns} FROM media_index_manifests WHERE media_id=? AND media_version=? ORDER BY media_index_manifests.kind,media_index_manifests.stream_key,media_index_manifests.schema_version,media_index_manifests.indexer_build LIMIT ?`)
-          .all(source.id, source.version, TECHNICAL_FILTER_LIMITS.identitiesPerCandidate + 1) as unknown as Row[];
-        fingerprint.push(rows);
-        identitiesRead += rows.length;
-        for (const row of rows) projectionReadBytes += Buffer.byteLength(row.metadata_json ?? '') + Buffer.byteLength(row.semantic_json ?? '') + Buffer.byteLength(row.packet_storage ?? '');
-        const evidence: TechnicalEvidence[] = [];
-        for (const row of rows.slice(0, TECHNICAL_FILTER_LIMITS.identitiesPerCandidate)) {
-          check(); identitiesInspected++;
-          const identity = { kind: row.kind as MediaIndexIdentity['kind'], streamKey: row.stream_key, schemaVersion: row.schema_version, indexerBuild: row.indexer_build };
-          const safe = ['flv', 'ffmpeg', 'js-ts', 'js-matroska'].includes(row.kind) && /^video:(?:0|[1-9][0-9]{0,2})$/.test(row.stream_key ?? '')
-            && Number.isSafeInteger(row.schema_version) && row.schema_version >= 1 && row.schema_version <= 100 && /^[a-zA-Z0-9._-]{1,80}$/.test(row.indexer_build ?? '');
-          if (!safe) {
-            evidence.push({ identity: null, state: 'unknown', reason: 'invalid-cache-identity', cacheState: 'unknown', geometryScope: 'cached-stream-metadata',
-              fields: Object.fromEntries(['codec', 'width', 'height', 'recordsReady'].map(k => [k, { value: null, status: 'unknown', source: 'unavailable', reason: 'invalid-cache-identity' }])) as TechnicalEvidence['fields'], checks: [] });
-            continue;
-          }
-          let supported = true;
-          try { parseMediaIndexIdentity(identity.kind, new URLSearchParams({ stream: identity.streamKey, schema: String(identity.schemaVersion), indexer: identity.indexerBuild })); } catch { supported = false; }
-          const m = metadata(row), overview = describe(row, identity, `${source.id}@${source.version}`);
-          const sourceBound = identity.kind !== 'ffmpeg' || m?.size === row.source_size;
-          const conflict = m && ['codec', 'width', 'height'].some(key => {
-            const value = m[key], field = overview.technical[key];
-            return field?.status === 'known' && (typeof value === 'string' || typeof value === 'number') && value !== field.value;
-          });
-          const item = evaluateTechnicalEvidence(overview, query.filters, supported && sourceBound && !conflict);
-          if (supported && (!sourceBound || conflict)) item.reason = conflict ? 'cached-identity-evidence-conflict' : 'source-cache-binding-unverified';
-          if (media!.state !== 'ready') { item.state = 'unknown'; item.reason = 'source-unavailable'; item.checks = item.checks.map(c => ({ ...c, state: 'unknown' })); }
-          evidence.push(item);
-        }
-        markTechnicalConflicts(evidence);
-        candidates.push({ source, state: evidence.some(e => e.state === 'match') ? 'match' : 'unknown', reason: evidence.some(e => e.state === 'match') ? null : 'stream-inventory-incomplete',
-          streamInventoryComplete: false, truncated: rows.length > TECHNICAL_FILTER_LIMITS.identitiesPerCandidate, evidence });
-      }
-    } finally { this.db.exec('ROLLBACK'); }
-    check();
-    if (JSON.stringify(stamp()) !== JSON.stringify(before)) changed();
-    const snapshot = createHash('sha256').update(JSON.stringify(fingerprint)).digest('hex');
-    if (expectedSnapshot && expectedSnapshot !== snapshot) changed();
-    const result = { schema: TECHNICAL_FILTER_SCHEMA, version: 1, scope: 'explicit-candidates-cached-streams', filters: query.filters, snapshot,
-      candidates, streamInventoryComplete: false, libraryTotal: null, pagination: 'none', nextCursor: null, truncated: candidates.some(c => c.truncated),
-      work: { candidatesInspected: candidates.length, identitiesInspected, identitiesRead, projectionReadBytes, projectionPasses: 1,
-        limits: { ...TECHNICAL_FILTER_LIMITS, projectedTextBytesPerRequest: 2 * TECHNICAL_FILTER_LIMITS.candidates * (TECHNICAL_FILTER_LIMITS.identitiesPerCandidate + 1) * TECHNICAL_FILTER_LIMITS.projectionBytesPerIdentity } } };
-    // Trim evidence only; all explicitly requested sources retain an unknown
-    // result if their matching witness cannot fit. Never retain a hidden match.
-    while (Buffer.byteLength(JSON.stringify(result)) > query.byteBudget - Math.max(2048, Math.ceil(query.byteBudget / 8))) {
-      const candidate = [...candidates].reverse().find(c => c.evidence.length);
-      if (!candidate) throw new AdminError(413, 'Response context exceeds byteBudget.', 'response-budget-too-small');
-      candidate.evidence.pop(); candidate.truncated = result.truncated = true;
-      candidate.state = candidate.evidence.some(e => e.state === 'match') ? 'match' : 'unknown';
-      candidate.reason = candidate.state === 'match' ? null : 'response-budget-truncated';
-    }
-    return result;
-  }
   inventory(id: string, version: string, offset: number) {
     const rows = this.db.prepare(`SELECT ${columns} FROM media_index_manifests WHERE media_id=? AND media_version=? ORDER BY kind,stream_key,schema_version,indexer_build LIMIT 17 OFFSET ?`).all(id, version, offset) as unknown as Row[];
     return { ...header, indexes: rows.slice(0, 16).map(row => describe(row, {

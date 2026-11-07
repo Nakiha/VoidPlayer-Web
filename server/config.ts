@@ -6,8 +6,6 @@ import { createHash } from 'node:crypto';
 import type { MediaRoot } from './library-store.ts';
 import { parseTls } from './tls.ts';
 import type { TlsConfig } from './tls.ts';
-import {qualityResourceLimits} from '../shared/service/quality-resources.ts';
-import type {QualityResourceLimits,QualityResourceChange} from '../shared/service/quality-resources.ts';
 import { logPolicy } from '../shared/service/logging.ts';
 import type { LogPolicy } from '../shared/service/logging.ts';
 
@@ -15,8 +13,6 @@ export interface ServiceConfig {
   mediaRoots: MediaRoot[]; dataDir: string; host: string; port: number; devPort: number;
   staticDir: string; logsDir: string | null; allowLocalReveal: boolean; indexTtlMs: number; indexWatch: boolean; analysisConcurrency: number;
   analysisDecoder?: AnalysisDecoderSettings;
-  qualityResources?: QualityResourceLimits;
-  qualityResourceHistory?: QualityResourceChange[];
   logging?: LogPolicy;
   tls?: TlsConfig | null;
   httpPort?: number | null;
@@ -53,16 +49,11 @@ export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd
   const defaults: ServiceConfig = { dataDir: paths.dataDir ?? path.resolve(cwd, '.run/data'), mediaRoots: mode === 'dev' ? [path.resolve(cwd, 'fixtures/video')] : [], host: '127.0.0.1', port: 5180, devPort: 5178, staticDir: paths.staticDir ?? path.resolve(cwd, 'dist'), logsDir: paths.logsDir ?? path.resolve(cwd, 'logs'), allowLocalReveal: false, indexTtlMs: 1800000, indexWatch: true, analysisConcurrency: DEFAULT_ANALYSIS_CONCURRENCY };
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('服务配置必须是 JSON 对象。');
   // Retired keys are accepted only at the file boundary; runtime config owns no legacy settings.
-  for (const key of ['adminUsers', 'nativeVmaf', 'nativeXpsnr']) delete data[key];
-  for (const key of Object.keys(data)) if (!Object.hasOwn(defaults, key) && !['tls', 'httpPort','qualityResources','qualityResourceHistory','analysisDecoder','logging'].includes(key)) throw new Error(`未知配置项: ${key}`);
+  for (const key of ['adminUsers', 'nativeVmaf', 'nativeXpsnr', 'qualityResources', 'qualityResourceHistory']) delete data[key];
+  for (const key of Object.keys(data)) if (!Object.hasOwn(defaults, key) && !['tls', 'httpPort','analysisDecoder','logging'].includes(key)) throw new Error(`未知配置项: ${key}`);
   const config = { ...defaults, ...data, ...overrides } as ServiceConfig;
   config.logging = logPolicy(config.logging);
-  if(config.qualityResources!==undefined)config.qualityResources=qualityResourceLimits(config.qualityResources);
-  if(config.qualityResourceHistory!==undefined){
-    const h=config.qualityResourceHistory;
-    if(!Array.isArray(h)||h.length>32||Buffer.byteLength(JSON.stringify(h))>65536)throw Error('Invalid quality resource history');
-    for(const c of h){if(!c||!Number.isSafeInteger(c.at)||typeof c.actor?.id!=='string'||typeof c.actor.name!=='string'||typeof c.requestId!=='string'||!/^[a-f0-9]{64}$/.test(c.previousRevision))throw Error('Invalid quality resource change');qualityResourceLimits(c.before);qualityResourceLimits(c.after);}
-  }
+
   config.tls = parseTls(config.tls, path.dirname(file));
   if (config.httpPort !== undefined && config.httpPort !== null && (!Number.isInteger(config.httpPort) || config.httpPort < 1 || config.httpPort > 65535 || config.httpPort === config.port)) throw new Error('httpPort 必须是与 HTTPS 端口不同的 1–65535 端口，或 null。');
   if (folders.length) config.mediaRoots = folders;

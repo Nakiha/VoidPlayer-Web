@@ -80,10 +80,6 @@ try {
         await page.locator('#identity-welcome').waitFor({state:'detached'});
         await page.locator('#settings-open').click();
         await page.locator('#settings-tab-experimental').click();
-        await page.locator('#quality-roi-open').click();
-        await page.locator('#quality-roi-dialog').waitFor({state:'visible'});
-        assert.ok(qualityRequests.length > 0, 'measurement loads on explicit use');
-        await page.locator('#quality-roi-dialog .icon-button').click();
       }
       await page.close();
     }

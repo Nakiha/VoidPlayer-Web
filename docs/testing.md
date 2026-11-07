@@ -86,8 +86,6 @@ Finder 风格媒体库路径栏扩充既有 `check-library-browser` 目录场景
 
 IP 访问日志扩充既有 `admin` / `http2` 用例：真实 socket 与生产网关覆盖 HTTP、HTTPS/1、HTTP/2，伪造两种转发头仍须记录真实 peer；独立核对映射 IPv4、IPv6、未知地址、请求 ID、去查询路径、最近快照及 finish/close 仅记录一次。新增断言在修复前因缺少 IP 字段失败；管理页既有请求观察场景同时核对 IP 渲染。HTTP/2 取消用例等待真实 close，允许 Bun 在显式取消后报告 `NGHTTP2_CANCEL`，其他错误仍失败，原有 IO 释放与同会话继续读取断言保留；旧 HEAD 同样复现的等待误判证据在本机日志内。没有新增媒体、浏览器循环或套件，增量仅数个轻量 HTTP 请求。
 
-请求观察优化扩充已有职责用例，不新增重复媒体矩阵。`quality-workflow` 用确定时钟验证空闲退避、可见恢复和活动任务刷新；`library-index` / `admin` / `media-thumbnail-store` 用真实 HTTP 验证 304、查询/版本隔离、跳过列表查询和旧接口兼容；`thumbnail-session` 验证 browse 状态替代逐条探测及迟到旧 epoch。`analysis-products` / `bitstream-analysis` 对冷/热摘要包注入错误 build、namespace、重复 AU 和游标，拒绝整包且不发布部分图表。以上轻量增量不依赖真实媒体，沿用已登记的 Node 用例。
-
 真实 WASM 服务回归在既有摘要页恢复/缓存缺口场景内增加冷包交付检查；既有 diagrams 浏览器场景增加冷摘要零逐帧 HTTP 下载断言，并保留热缓存零解码和 300 个不同 AU 的原 reader 证据。没有增加输入循环、媒体素材或性能通过阈值；原有生命周期、取消和缓存校验仍执行。前后请求频率按相同操作窗口做本机诊断，不把请求减少直接称为跨机器性能达标。
 
 管理页浏览器回归末尾恢复此前暂停的 clock 并置前管理页：6.5 秒验证原 actor 的实际条件响应，再隐藏观察面板 4 秒验证停止观察及零概览读取。读取服务端 finish 状态和真实条件头，避免 WebKit 把重验证响应在浏览器协议中显示为 200；仍验证缓存视图保持渲染。每引擎约增加 11 秒，不新增媒体/算法循环；独立预期来自 HTTP 304 和可见性行为，不能只检查页面文本或源码定时器。
@@ -101,15 +99,15 @@ IP 访问日志扩充既有 `admin` / `http2` 用例：真实 socket 与生产�
 | 触发 | 必跑内容 | 边界 |
 | --- | --- | --- |
 | PR、main 推送 | `source` 与 `ci-node-media` 构成完整 Node 用例并集（当前数量由清单枚举）；`ci-pr-browser` 覆盖 Chromium/WebKit 核心流程 | 源码、共享样片准备、两个 core、三个隔离的媒体 Node 分片、两个浏览器、最终汇总；不打三平台包，不运行性能测试 |
-| 显式运行 Full verification、版本标签 | 全浏览器矩阵、完整缓存/评分流程、HEVC 全帧验证、三平台 × Node/Bun、三平台原生包与发布集校验 | 全部成功才能产出 verified release set；只有版本标签生成未公开的 Release 草稿 |
+| 显式运行 Full verification、版本标签 | 全浏览器矩阵、完整缓存流程、HEVC 全帧验证、三平台 × Node/Bun、三平台原生包与发布集校验 | 全部成功才能产出 verified release set；只有版本标签生成未公开的 Release 草稿 |
 
-日常浏览器选择在统一 manifest 的 `ci-pr-browser` 声明：真实原生帧协议、PSNR/SSIM/VMAF/CAMBI/XPSNR 到候选/原帧证据、任务重执行、身份/Agent 标注与连接引导，以及完整分析 UI。数值域的 8/10-bit、ROI、区间、多 GOP 和生命周期由完整媒体 Node 分区覆盖；GUI 的完整深度/容器组合仍在显式全量验证中。日常检查通过不等于完整兼容性认证。
+日常浏览器选择在统一 manifest 的 `ci-pr-browser` 声明，包含身份/Agent 标注、连接引导和分析 UI。完整播放、缓存和容器矩阵仍在显式全量验证中。
 
 需要完整兼容性结论或准备发版时，显式运行全量验证；变更核心 ABI、解码/呈现、时钟、持久化协议或发布流程时，至少运行受影响的专项验证，并明确尚未覆盖的平台。普通修改不再自动启动全量发布流水线。完整用例和原超时继续保留，不能靠删除失败、增加重试或扩大阈值使汇总变绿。`Required verification` 在任何前置失败、取消或跳过时失败；未完成状态不算通过。
 
 媒体 Node 的完整集合仍为 `ci-node-media`；日常执行分成清单中的三组：
-`ci-node-media-analysis`（分析 core/码流与评分）、`ci-node-media-containers`
-（TS/JS 容器与包身份）、`ci-node-media-playback-quality`（播放、源平面与评审）。
+`ci-node-media-analysis`（分析 core/码流）、`ci-node-media-containers`
+（TS/JS 容器与包身份）、`ci-node-media-playback`（播放与评审）。
 每个原用例必须恰好属于一组，三组在 Linux/macOS/Windows 上的选择并集必须
 等于完整分区；命令、required、fixture 与整例时限复用原登记，不按 hash、
 改动路径或测得速度跳过用例。当前分组为 8/8/44 项。
@@ -123,10 +121,8 @@ GitHub 的三个 matrix job 有各自的检出、素材、core、服务、Worker
 ```sh
 node scripts/run-tests.mjs ci-node-media-analysis
 node scripts/run-tests.mjs ci-node-media-containers
-node scripts/run-tests.mjs ci-node-media-playback-quality
+node scripts/run-tests.mjs ci-node-media-playback
 ```
-
-原 PR #156 的画质门禁审计与失败证据见 [browser-quality-gates.md](browser-quality-gates.md)，其中 `ci-cache-pr` 的历史策略已被上述分层替代。`ci-cache-pr` 仅保留为旧本地选择器；全量流水线必跑完整 `ci-cache`，不再另设同一用例的非阻塞诊断副本。
 
 码流分析的 `ci-analysis-browser` 保留完整本地套件。全量验证将 MP4、legacy FLV、enhanced FLV、fMP4、TS、JS 容器六个矩阵分片分别放在 Chromium/WebKit 的独立并行 job 中，使用对应 `ci-analysis-matrix-*` 选择器；每个 job 只跑一个矩阵 case，覆盖格由清单与矩阵文件枚举。流式图表、增量索引、几何、布局由 `analysis-browser` job 的 `ci-analysis-ui` 必跑，使用逐例生成的小素材，不下载 QA 样片。普通只读分析面板两引擎用例归入已有样片环境的 `uncovered` job。真实分析 Node 用例由 `unit` job 的 `ci-node-media` 必跑，不在每种浏览器重复执行。`release-set` 同时依赖 `analysis-browser` 与整个 `analysis-matrix`，任一分片失败、取消或跳过都不能产出验证通过的发布集。
 
@@ -411,21 +407,17 @@ Media indexes are stored in `library.sqlite` schema 7, keyed by media ID/version
 
 Administrators can list/search and clear individual versions or all caches under **帧索引缓存**. `list_frame_indexes` and `clear_frame_indexes` are registered through WebMCP in both the player and administration page and share the same client functions and server authorization.
 
-
 暂停续播回归：`test/session.test.ts` 验证双轨连续暂停/恢复不重新 seek 或创建迭代器；定位、替换及释放会销毁原队列。`test/playback.test.ts` 验证暂停期间未完成解码最多归还当前一帧、不继续拉取，且未显示的帧不会被丢弃。播放队列仍按 4 帧 / 64 MiB 双重背压限制，允许单帧超预算以保证进展；原生帧按 allocationSize 估算像素存储，格式不可见时才按 RGBA 估算。该值不包含解码器内部参考帧、Mediabunny 预解码队列或 GPU 的全部开销。暂停保留这些有界解码资源以便快速续播，移除轨道才完全释放。
 
 `check-http-playback.mjs --functional-only` 在真实 MP4/WebCodecs 上验证暂停无时间推进、快速反复续播不重新 configure 解码器，并继续执行原有双轨内存与资源释放检查。性能基准仍独立记录，避免把续播改善等同于持续解码达到实时。
 
 失败诊断：`test/media-diagnostics.test.ts` 覆盖带 CRC 的 PAT/PMT、跨包 PSI、连续计数缺口、188/192/204 字节 TS 包，以及 AVS3 (0xD4)、HEVC (0x24)、私有 PES (0x06) 不误识别。只有所有打开路径都失败且不是网络/资源错误时，才额外探测至多 64 KiB、远程读取至多等待 1.5 秒。诊断报告 PMT 声明的编码，不把声明当作码流有效性证明；探测失败保留原错误，不扩大下载范围。
 
-
 FLV 损坏恢复：`test/flv-recovery.test.ts` 和 `test/flv.test.ts` 验证首帧优先、尾部截断与有界内部重同步。已有有效配置和起始关键包后，标签类型/flags、stream ID、PreviousTagSize 或不完整标签等结构损坏会尝试有预算的重新定位；后续必须同时证明标签结构和独立解码锚点，不能仅凭容器 key 标志恢复。找不到安全锚点或耗尽预算时保留已验证前缀，配置头或起始关键帧缺失仍失败。IO/版本变化、取消、不支持的编码/配置和资源限制不转成可缓存的损坏文件。时长来自保留包的真实时间戳；`indexIntegrity` 区分 complete / recovered / prefix，警告及 `indexTruncatedAt` 保留损坏边界，索引 complete 仅表示终态。共享 FLV 帧索引为 schema 3 / `flv-demux-v3`，保存恢复间隙、损坏原因与解码边界；旧格式按新身份重建，客户端和服务器需一起升级。详细恢复预算与准入见 [FLV 时间线](flv-timeline.md#damaged-tails)和 [容器恢复](container-recovery.md)。
 
 真实 HEVC/私有 VVC/AVC 回归在完整码流后追加残缺视频标签，验证连续取帧、前后定位、尾帧及警告。首帧浏览器夹具包含被阻塞的大尾部和最终残缺标签，验证后台恢复、播放基准、警告显示与服务器缓存复用。缺失包可能是其他完整包的参考帧，因此恢复不保证任意损坏流都能输出每一帧；解码失败保留上下文并停止重复调用失败的解码器。worker 原始异常堆栈进入现有本地诊断日志，不额外上传。
 
-
 FLV 同编码配置/分辨率切换：索引记录每段配置和所属视频包，新配置从关键帧开始；解码或跨段定位时切换对应配置并在段末 drain，避免丢失旧段 B 帧。WASM 复用模块，通过既有 vp_packet_open 重建上下文；WebCodecs 重新 configure。`test/flv-resolution.test.ts` 生成真实 H.264/HEVC 双分辨率文件，验证顺序帧、来回定位和缓存序列化；浏览器夹具验证实际播放跨过切换点及 UI 尺寸。尺寸由 session 在显示帧时更新，不由后台预读提前改变。不支持中途更换视频编码种类；配置切换缺少关键帧仍明确报错。
-
 
 HEVC 竖屏：从 hvcC 的 SPS 数组读取编码尺寸、按色度采样单位计算的 conformance window 和 VUI SAR；配置 WebCodecs codedWidth/codedHeight 与 displayAspect，切换配置时同步更新。coded 与 SPS 不一致、visible 缺失/更小/错位、宽高互换时拒绝原生首帧并走软件回退，不能仅交换画布宽高；浏览器 visible 完全包含 SPS 可见区时只做 VideoFrame 元数据收窄（同一底层资源，无像素拷贝）并记 `hevc-visible-rect-repaired` 后继续 WebCodecs，像素区域一致时才可通过 VideoFrame 显示元数据修正比例。SPS 读取有边界/数量限制，多个不同尺寸 SPS 不猜测当前生效者。`test/hevc-geometry.test.ts` 包括 736→720 的 4:2:0 裁剪、720×1272→1270 收窄修复/拒绝分支与真实竖屏/非方形 SAR。
 
@@ -440,7 +432,6 @@ HDR 上屏一致性：自有色彩模式接收满足契约的高位深 PQ/HLG �
 WASM 堆增长：通过 Emscripten 公开的 instantiateWasm 回调取得 core 的实际 WebAssembly.Memory。每次外部包/配置写入及 RGBA 读取，按 memory.buffer 重建过期视图，再执行范围检查；不信任 pthread 扩容后可能滞后的 Module.HEAPU8，不修改生成胶水、不移除越界检查。测试覆盖非共享内存增长后旧视图脱离、另一 worker 扩容共享内存后旧视图仍有效但过短，以及真实 720×1280 HEVC 多线程 core 首帧、连续播放、回退定位。core 版本和构建锁不变。
 
 后台索引时长：子轨道 dock 的刷新签名纳入 durationUs/indexState。FLV 启动浏览器回归在阻塞尾部时记录临时时长，解除阻塞后验证子轨道时长文字和标尺更新到完整索引时长，不靠切换轨道/修改标记触发刷新。
-
 
 ### 码流分析与按需面板
 
@@ -498,7 +489,6 @@ npm run test:fate:browser
 
 `ci-analysis-matrix-fmp4` 在 WebKit/Chromium 各自独立 job 执行 12 个组合，保留既有每操作上限和 600 秒 case watchdog；加严跨片 seek 后的实际 presented token/遮罩精确匹配，并明确断言 VVC 的实际软件路径。原普通 MP4 与两 FLV 分区继续独立运行。
 
-
 ## Canonical execution and compatibility paths
 
 The manifest's `implementation` (or `script` when no forwarding alias exists) is the canonical executable. `command` invokes it exactly once; the validator rejects executing a forwarding alias or duplicating the entry. The existing `script` path is retained only as a documented compatibility alias and remains a thin import/export forwarding to that implementation. CLI arguments, engines, inputs, preparation, budgets, gate flags and reports remain unchanged. Direct legacy paths are deprecated for new automation; use stable case IDs through `scripts/run-tests.mjs`.
@@ -529,8 +519,6 @@ Release aliases keep the browser default-archive `-` token. Explicit archives by
 
 ## 模块边界与目录维护
 
-源平面 PSNR 的 `node-psnr` 进入 source/fast/contract，`node-psnr-reference` 进入 media/ci-node-media。前者验证已知整数误差、8/10 位精度、SSE 聚合、ROI/crop/stride、预算及拒绝语义；后者生成解码 YUV420 平面，与独立 FFmpeg PSNR 对照并记录版本/容差。直接执行 `node scripts/run-tests.mjs --case node-psnr --case node-psnr-reference`；支持范围与尚未提供的帧配对/评分服务见 [测量契约](source-plane-psnr.md)。
-
 Agent 标注浏览器用例在建立工作区快照前，有界等待新生成的 A/B 文件从媒体库 pending 转为 ready，不触发额外扫描、不修改状态、不重试打开/播放。浏览器 ready 区分仍在 busy 的渐进占位轨道与载入结束后的失败/relink，真实失败立即报告。管理页面轮询测试每轮仍推进完整 10.1 秒，但快进前及每个至多 1 秒的片段后等待真实网络 idle，避免虚拟定时器消耗 localhost 请求的真实执行时间；原连接/断连和 pageerror 严格为空断言保留，增加错误页面/阶段/堆栈及浏览请求追踪，不忽略 CORS 错误。
 
 JS 容器矩阵的 corrupt-cache/fresh-runtime 两次 reload 分别记录命名阶段，原 reload、原超时和第二轮 reuse 断言不变。普通日志的 `js-container-navigation` 输出主文档导航/响应/失败、页面 crash/浏览器断连、服务 listening 与限时 health、Node/host/cgroup 内存，以及有界 tracks/busy/resources 和最近 blob 归属；不包含像素、媒体字节或标注正文。每个诊断采样限 1.5 秒，普通事件至多 256 行并预留 32 行关键 reload 记录；数据 URL 省略。WebKit 此 case 开启 `pw:browser` 进程退出日志，不增加自动重试或错误豁免。pagehide 标记只证明应用 handler 已被调用，Worker close 仅表示可观察执行上下文关闭，均不冒充 OS 进程/内存已完成回收。诊断失败不会覆盖原导航错误，也不将导航失败当作成功。
@@ -538,8 +526,6 @@ JS 容器矩阵的 corrupt-cache/fresh-runtime 两次 reload 分别记录命名�
 `node-module-boundaries` 随 fast、contract、source 执行，构建也运行同一边界扫描。检查覆盖生产目录中的静态与类型导入、重新导出、字面量动态加载和 Worker URL；不存在的相对依赖会直接失败。独立 Bun 程序的条件 Worker 地址按编译后服务根目录校验，Node 地址按源码位置校验，发布回归另从真实原生包启动验证。前后端不能互相引用，共享层不能引用任何宿主，外部包仅准入 Mediabunny。计算式加载仅保留登记的资源加载入口；新增入口需明确其职责。负例覆盖间接越界、类型引用、Worker 缺失、计算式加载和未归属的顶层模块。
 
 共享层另以 `tsconfig.shared.json` 在无 DOM 类型环境编译，真实编译负例证明 window、document、IndexedDB、VideoFrame 不可进入共享代码。标准 Fetch/Blob、AbortSignal 与 WebAssembly 可由两种宿主使用。共享源码及其类型配置参与准备构建指纹、前端来源摘要和发布源码包，移动公共实现后不能复用过期构建。
-
-后台/多窗口用例等待会话事实（例如 playing 和实际位置推进）时使用有界的定时轮询，不把浏览器 rAF 当业务事实更新通知。`check-quality-annotation-browser.mjs` 以受控 rAF 饥饿作负对照：旧 rAF 等待不再采样，但真实解码/播放持续推进，同条件的50ms定时轮询仍能验证。该控制不放宽300秒用例预算、播放隔离或最终像素断言；动画/呈现时序测试继续使用各自原始要求。
 
 Frontend HTML entry names live in `scripts/frontend-entries.mjs`. Vite inputs,
 embedded source evidence and test preparation fingerprints consume that definition.

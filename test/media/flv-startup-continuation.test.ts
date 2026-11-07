@@ -6,7 +6,7 @@ import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { BrowserWorker as Worker } from '../helpers/browser-worker-host.ts';
 import { scanFlv } from '../../shared/media/containers/flv-demux.ts';
-import { wrapFlv } from '../helpers/frame-pair-fixture.ts';
+import { wrapFlv } from '../helpers/flv-wrap.ts';
 import { openPacketMedia } from '../../src/media/decoding/packet-media.ts';
 import type { DecodedFrame } from '../../src/media/contract.ts';
 import type { PacketInput } from '../../shared/media/containers/flv-demux.ts';

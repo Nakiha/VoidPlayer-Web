@@ -3,7 +3,6 @@ import { QUERY_CONCURRENCY_LIMIT } from '../shared/media/indexing/semantic-query
 import { Worker } from 'node:worker_threads';
 import { randomUUID } from 'node:crypto';
 import { AdminError } from './admin-error.ts';
-import { QualityAdmission } from './quality-admission.ts';
 import { closeResources } from './shutdown.ts';
 import { mediaIndexIdentityKey } from '../shared/media/indexing/media-index-identity.ts';
 import type { MediaIndexIdentity } from '../shared/media/indexing/media-index-identity.ts';
@@ -86,11 +85,9 @@ export class FrameIndexJobs {
   private readonly maxQueuedBuilds = 8;
   private readonly maxUploads = 2;
   private readonly defaultBuildPolicy = frameIndexBuildPolicy();
-  private qualityAdmission: QualityAdmission;
 
-  constructor(privateDatabase: string, coreDir: string, createBuildWorker: (data: {database:string;coreDir:string})=>Worker = data=>new Worker(new URL('./frame-index-build-worker.ts',import.meta.url),{workerData:data}), qualityAdmission = new QualityAdmission()) {
-    this.database = privateDatabase; this.coreDir = coreDir; this.createBuildWorker=createBuildWorker;this.qualityAdmission=qualityAdmission;
-    qualityAdmission.register(() => !!(this.stopFailed || this.stoppingWorkers.size || this.uploads || this.builds.size || this.buildWorkers.size || this.pending.size));
+  constructor(privateDatabase: string, coreDir: string, createBuildWorker: (data: {database:string;coreDir:string})=>Worker = data=>new Worker(new URL('./frame-index-build-worker.ts',import.meta.url),{workerData:data})) {
+    this.database = privateDatabase; this.coreDir = coreDir; this.createBuildWorker=createBuildWorker;
   }
 
   private available() {
@@ -126,7 +123,6 @@ export class FrameIndexJobs {
 
   acquireUpload(): () => void {
     this.available();
-    this.qualityAdmission.ordinary();
     if (this.closed || this.uploads >= this.maxUploads) throw new AdminError(503, '索引上传繁忙，请稍后重试。');
     this.uploads++;
     let released = false;
@@ -166,15 +162,14 @@ export class FrameIndexJobs {
   }
 
   async call<K extends FrameIndexOperation>(op: K, ...args: FrameIndexCallArgs<K>): Promise<FrameIndexResult<K>> {
-    if (op === 'put') this.qualityAdmission.ordinary();
     const [data = {}, transfer = [], timeoutMs = 60000] = args;
     this.available();
-    if ((op === 'cached-indexes' || op === 'semantic-query' || op === 'technical-filter' || op === 'discovery-browse' || op === 'discovery-detail') && this.pending.size >= QUERY_CONCURRENCY_LIMIT) {
+    if ((op === 'cached-indexes' || op === 'semantic-query') && this.pending.size >= QUERY_CONCURRENCY_LIMIT) {
       throw new AdminError(503, 'Cached media queries are busy; retry later.', 'media-query-busy');
     }
-    const isQuery = op === 'semantic-query' || op === 'cached-indexes' || op === 'technical-filter' || op === 'discovery-browse' || op === 'discovery-detail';
+    const isQuery = op === 'semantic-query' || op === 'cached-indexes';
     const queryData = data as { cancellation?: SharedArrayBuffer };
-    if (op === 'semantic-query' || op === 'technical-filter' || op === 'discovery-browse' || op === 'discovery-detail') queryData.cancellation ??= new SharedArrayBuffer(4);
+    if (op === 'semantic-query') queryData.cancellation ??= new SharedArrayBuffer(4);
     let timedOut = false;
     const worker = this.databaseWorker();
     const id = this.nextId++;
@@ -205,7 +200,6 @@ export class FrameIndexJobs {
   }
 
   startBuild(request: Omit<BuildRequest, 'buildId'>, options: FrameIndexBuildOptions = {}) {
-    this.qualityAdmission.ordinary();
     this.available();
     const policy = { ...(options.policy ?? this.defaultBuildPolicy) };
     if (!Number.isSafeInteger(policy.idleTimeoutMs) || policy.idleTimeoutMs < 1000
@@ -291,7 +285,7 @@ export class FrameIndexJobs {
         settled = true;
         clearTimeout(idleTimer);
         clearTimeout(absoluteTimer);
-        // Hold both the build slot and quality exclusion until physical exit.
+        // Hold both the build slot and index executor ownership until physical exit.
         void this.stopWorker(worker).then(() => {
           if (error) reject(error); else resolve(value);
         }, stopError => reject(stopError));

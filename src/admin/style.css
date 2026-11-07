@@ -250,55 +250,10 @@
 .admin-log-tabs button { white-space:normal; overflow-wrap:anywhere; }
 .admin-log-tabs { width:fit-content; }
 .admin-button-group { flex-wrap:wrap; }
-
-/* Quality tasks observe the service; both selectors remain independent of playback. */
-.quality-sources,.quality-jobs-workspace{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
-#pane-quality fieldset{min-width:0;border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0}
-#pane-quality label{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:.5rem 0}
-#pane-quality select{max-width:100%;min-width:10rem;padding:.5rem;background:var(--surface);color:inherit}
-#pane-quality [data-source-status],#pane-quality pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.8rem}
-.quality-roi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.5rem}.quality-roi input{width:100%;min-width:0}
-.quality-media-list{display:grid;max-height:12rem;overflow:auto;gap:.35rem}.quality-media-list button{text-align:left}
-.xpsnr-comparison{margin-block:1.5rem;padding-block:1rem;border-block:1px solid var(--border)}
-.xpsnr-table-scroll{overflow:auto;max-width:100%}.xpsnr-comparison table{width:100%;border-collapse:collapse;font-size:.85rem;font-variant-numeric:tabular-nums}
-.xpsnr-comparison th,.xpsnr-comparison td{text-align:left;vertical-align:top;padding:.75rem;border-bottom:1px solid var(--border);white-space:pre-line;overflow-wrap:anywhere;min-width:7rem}
-.xpsnr-comparison th{background:var(--surface-table)}.xpsnr-comparison td:first-child{min-width:11rem}.xpsnr-comparison td button{display:block;margin-top:.5rem}
-.xpsnr-history-entry{display:flex;align-items:center;gap:.75rem;margin-block:.5rem}.admin-content .xpsnr-history-entry input[type=checkbox]{width:18px;height:18px;flex:none;padding:0}
-.quality-job-row,.quality-mark-row{display:block;text-align:left;width:100%;overflow-wrap:anywhere;margin:.4rem 0}
-.quality-job-row[aria-pressed=true],.quality-mark-row[aria-pressed=true]{outline:2px solid var(--accent)}
-#quality-job-list{max-height:36rem;overflow:auto}#quality-job-detail,#quality-job-result{min-width:0}
-#quality-shared-links{display:flex;flex-direction:column;gap:.5rem}
-@media(max-width:760px){.quality-sources,.quality-jobs-workspace{grid-template-columns:1fr}.quality-roi{grid-template-columns:repeat(2,minmax(0,1fr))}}
-
-/* Keep quality forms on the same compact controls and materials as the player. */
-#pane-quality label { align-items: stretch; text-align: left; }
-#pane-quality label:has(> input[type=checkbox]),
-#pane-tasks label:has(> input[type=checkbox]) {
-  flex-direction: row; align-items: center; justify-content: flex-start;
-}
 .admin-content input[type=checkbox], .admin-content input[type=radio] {
   width: 16px; height: 16px; min-height: 0; padding: 0; flex: 0 0 auto;
   accent-color: var(--accent);
 }
-#pane-quality select { min-width: 0; width: 100%; height: 34px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface-input); }
-#pane-quality .admin-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-#pane-quality .admin-actions > input { flex: 1 1 140px; }
-#pane-quality p { line-height: 1.6; overflow-wrap: anywhere; }
-#pane-quality .admin-panel > h2:first-child { margin-top: 0; }
-.quality-navigation { gap: 2px; }
-.quality-advanced { margin-block: 12px; color: var(--text-secondary); }
-.quality-advanced summary { cursor: pointer; font-size: 12px; padding-block: 6px; }
-.quality-advanced pre { max-height: 320px; overflow: auto; color: var(--text); padding: 12px; background: var(--surface-input); border-radius: 6px; }
-#cambi-media { display: grid; gap: 4px; max-height: 240px; overflow: auto; margin-block: 12px; }
-#cambi-media button, #vmaf-history button, #cambi-history button { text-align: left; white-space: normal; overflow-wrap: anywhere; }
-#vmaf-history, #cambi-history { display: grid; gap: 4px; margin-block: 12px; }
-#pane-quality button:focus-visible, #pane-quality summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.quality-score-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 16px; margin-block: 20px; }
-.quality-score-summary dt { font-size: 12px; color: var(--text-secondary); }
-.quality-score-summary dd { margin: 6px 0 0; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.quality-resource-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:var(--space-md,12px); margin-block:16px; }
-.quality-resource-fields label { display:grid; gap:6px; }
-.quality-resource-fields input { width:100%; min-width:0; }
 
 .admin-preference-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
 .admin-preference-row h2 { margin: 0; }

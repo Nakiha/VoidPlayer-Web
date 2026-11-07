@@ -67,12 +67,8 @@ test('shared edits invalidate prepared frontend builds',async()=>{
 });
 
 test('frontend root stays limited to application entrypoints',()=>project({'src/new-helper.ts':'export const x=1;'},root=>assert.throws(()=>checkModuleBoundaries(root),/unowned frontend root module/)));
-test('analysis modules declare responsibility; quality admits shared core and isolated host adapters',()=>{
+test('analysis modules declare metadata and bitstream responsibility',()=>{
   for(const layer of ['src','shared','server']) project({[`${layer}/analysis/another-name.ts`]:'export const x=1;'},root=>assert.throws(()=>checkModuleBoundaries(root),/analysis must declare/));
-  project({'shared/analysis/quality/score.ts':'export const x=1;'},root=>assert.doesNotThrow(()=>checkModuleBoundaries(root)));
-  project({'src/analysis/quality/pair-worker.ts':'export const x=1;'},root=>assert.doesNotThrow(()=>checkModuleBoundaries(root)));
-  project({'server/analysis/quality/score.ts':'export const x=1;'},root=>assert.doesNotThrow(()=>checkModuleBoundaries(root)));
-  project({'server/analysis/quality/score.ts':"import type { Value } from '../../../src/media/value.ts';",'src/media/value.ts':'export type Value=number;'},root=>assert.throws(()=>checkModuleBoundaries(root),/server imports frontend/));
 });
 
 test('embedded Bun Worker addresses resolve from the compiled server root',()=>{
@@ -100,7 +96,7 @@ for (const specifier of ['node:fs', 'fs', 'fs/promises', 'node:worker_threads'])
       project({ 'src/media/probe.ts': syntax(specifier) }, (root) =>
         assert.throws(() => checkModuleBoundaries(root), /browser code imports Node builtin/),
       ));
-for (const from of ['src/media/decoding/probe.ts', 'src/analysis/quality/probe.ts', 'src/session/probe.ts', 'src/session.ts'])
+for (const from of ['src/media/decoding/probe.ts', 'src/analysis/bitstream/probe.ts', 'src/session/probe.ts', 'src/session.ts'])
   test(`${from} cannot depend on UI or application entries`, () => {
     for (const to of ['src/ui/view.ts', 'src/admin/panel.ts', 'src/main.ts', 'src/agent.ts'])
       project(
@@ -176,36 +172,8 @@ test('browser and server compilation keep their host globals separate', () => {
     });
 });
 
-test('quality protocols reject external type, runtime, re-export and dynamic penetration', () => {
-  const internals = ['candidate-publication', 'prepared-facts', 'temporal-service', 'temporal-runner', 'result-commands'];
-  for (const name of internals) for (const syntax of [
-    "import type {T} from 'TARGET'", "export * from 'TARGET'", "import('TARGET')", "require('TARGET')",
-  ]) {
-    const target = `server/analysis/quality/${name}.ts`;
-    project({ 'server/routes/probe.ts': syntax.replace('TARGET', `../analysis/quality/${name}.ts`), [target]: 'export type T=number;' }, root =>
-      assert.throws(() => checkModuleBoundaries(root), /quality internal capability is private/));
-  }
-  for (const name of ['candidate-publication', 'prepared-facts', 'temporal-service'])
-    project({ 'server/analysis/vmaf/service.ts': `import '../quality/${name}.ts'`, [`server/analysis/quality/${name}.ts`]: 'export {}' }, root =>
-      assert.doesNotThrow(() => checkModuleBoundaries(root)));
-});
-test('shared temporal facts and XPSNR cannot obtain contracts from VMAF', () => {
-  for (const name of ['temporal-contract', 'xpsnr'])
-    project({ [`shared/analysis/quality/${name}.ts`]: "import type {T} from './vmaf.ts'", 'shared/analysis/quality/vmaf.ts': 'export type T=number' }, root =>
-      assert.throws(() => checkModuleBoundaries(root), /temporal facts depend on another metric/));
-});
-
-test('quality admin consumers use named workspace, resource and reexecution entries', () => {
-  for (const entry of ['workspace', 'resources', 'reexecution'])
-    project({ 'src/admin/main.ts': `import './quality/${entry}.ts'`, [`src/admin/quality/${entry}.ts`]: 'export {}' }, root =>
-      assert.doesNotThrow(() => checkModuleBoundaries(root)));
-  for (const syntax of ["import type {T} from './quality/temporal.ts'", "export * from './quality/temporal.ts'", "import('./quality/temporal.ts')"])
-    project({ 'src/admin/tasks.ts': syntax, 'src/admin/quality/temporal.ts': 'export type T=number' }, root =>
-      assert.throws(() => checkModuleBoundaries(root), /quality admin implementation is private/));
-});
-
 test('media backends and analysis consumers cannot depend on the opening route, even for types', () => {
-  for (const from of ['src/media/decoding/backend.ts', 'src/media/policy/backend.ts', 'src/analysis/quality/backend.ts'])
+  for (const from of ['src/media/decoding/backend.ts', 'src/media/policy/backend.ts', 'src/analysis/bitstream/backend.ts'])
     for (const syntax of ["import type {T} from 'TARGET'", "export type {T} from 'TARGET'", "import('TARGET')", "require('TARGET')", "new URL('TARGET',import.meta.url)"])
       project({
         [from]: syntax.replace('TARGET', from.includes('/analysis/') ? '../../media/source.ts' : '../source.ts'),

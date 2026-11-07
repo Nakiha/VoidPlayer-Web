@@ -32,7 +32,6 @@ for(const kind of ['database','build'] as const)test(`runtime ${kind} terminatio
     await new Promise(r=>setImmediate(r));assert.ok(jobs.stoppingWorkers.has(worker));assert.notEqual(worker!.threadId,-1);
     await assert.rejects(jobs.call('epoch'),(e:any)=>e.code==='index-stop-uncertain');
     assert.throws(()=>jobs.acquireUpload(),(e:any)=>e.code==='index-stop-uncertain');
-    assert.throws(()=>library.qualityAdmission.acquire(),(e:any)=>e.code==='quality-busy');
     await assert.rejects(library.close(),AggregateError);assert.throws(()=>new MediaLibraryIndex([],{database,watch:false}),/另一个实例/);
   }finally{await stop?.();try{await library.close();}catch{}(library as any).store.close();await rm(root,{recursive:true,force:true});}
 });
@@ -69,7 +68,6 @@ test('identity-aware cache RPC checks media version and clear epoch', async () =
     assert.deepEqual(JSON.parse(new TextDecoder().decode(encoded)), { epoch: 1, index });
   } finally { await library.close(); await rm(root, { recursive: true, force: true }); }
 });
-
 
 test('manifest identity keeps FLV and FFmpeg payloads separate for one media version', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'vp-ffmpeg-index-worker-'));

@@ -1,4 +1,3 @@
-import {nativeLibraryTransport} from '../../../shared/review/native-presented-frame.ts';
 import { sharePixelFrame } from './pixel-frame.ts';
 import { JS_TS_MEDIA_INDEX_IDENTITY, JS_MATROSKA_MEDIA_INDEX_IDENTITY, FLV_MEDIA_INDEX_IDENTITY } from '../../../shared/media/indexing/media-index-identity.ts';
 import { decodeThreadsForCodec, wasmThreadMode } from '../policy/wasm-threads.ts';
@@ -31,11 +30,7 @@ import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisRank, Ana
 
 const isHdrTransfer = (transfer: string | null | undefined) => hdrTransfer(transfer) !== null;
 
-export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matroska', input: PacketInput, meta: MediaMeta, deps: FallbackDeps & { forceWasm?: boolean; nativePresentedLibrary?:import('../../../shared/media/io/library-reference-types.ts').LibraryIndexReference; sourceVersion?: string; preparedTs?: {rpc:WorkerRpc<PacketCommands>; session:string; hasDts:boolean} } = {}): Promise<MediaSource> {
-  const nativeLibrary='url' in input?input.library??deps.nativePresentedLibrary:undefined;
-  const nativePresentedTransport=container==='flv'&&'url' in input&&nativeLibrary
-    ?nativeLibraryTransport(input.url,nativeLibrary,globalThis.location?.origin??''):undefined;
-  const nativePresentedInstance=nativePresentedTransport?randomUUID():undefined;
+export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matroska', input: PacketInput, meta: MediaMeta, deps: FallbackDeps & { forceWasm?: boolean; sourceVersion?: string; preparedTs?: {rpc:WorkerRpc<PacketCommands>; session:string; hasDts:boolean} } = {}): Promise<MediaSource> {
   loadAborted(deps.signal);
   if((container==='ts'||container==='matroska') && !deps.sourceVersion)throw new MediaOpenError('input','JS TS source namespace is required');
   const mode = wasmThreadMode();
@@ -176,7 +171,6 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
       const description = info.color && !frame.description.sourceColor
         ? { ...frame.description, sourceColor: { ...info.color }, sourceColorOrigin: 'container' as const } : frame.description;
       const rawFrame = sharePixelFrame({ description, rotation: frame.rotation, kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8',
-        ...(nativePresentedInstance&&frame.nativePicture?{nativePresentedInput:{instance:nativePresentedInstance,sourceVersion:nativePresentedTransport!.sourceVersion,input:frame.nativePicture}}:{}),
         ...(frame.packetPicture ? { sourcePicture: { ...frame.packetPicture, sourceVersion: pictureVersion(), picture: 0 as const, layer: 0 as const, field: 'frame' as const } } : {}),
         width: frame.width, height: frame.height, ptsUs: frame.pts - info.firstPtsUs, sourcePtsUs: frame.pts,
         durationUs: frame.durationUs ?? durations[position], byteSize: frame.description.byteLength, sample, pixels,
@@ -325,7 +319,6 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
           return result;
         },
       } : {}),
-      ...(nativePresentedInstance?{nativePresentedInstance,nativePresentedTransport}:{}),
       info, ensureIndexed,
       ...((container==='ts'||container==='matroska')?{bitstreamIndexIdentity:container==='ts'?JS_TS_MEDIA_INDEX_IDENTITY:JS_MATROSKA_MEDIA_INDEX_IDENTITY}:{}),
       ...(container === 'flv' ? {

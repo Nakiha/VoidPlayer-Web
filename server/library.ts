@@ -3,9 +3,7 @@ import {mutateLibraryFiles,parseLibraryFileCommand} from './library-files.ts';
 import {LibraryRelocations} from './library-relocations.ts';
 import type {LibraryFileResult} from '../shared/service/library-files.ts';
 import {FrameIndexJobs} from './frame-index-jobs.ts';
-import {QualityAdmission} from './quality-admission.ts';
 import type {LibraryScanStatus} from '../shared/service/admin.ts';
-import type {QualityApplication} from './quality-application.ts';
 import { AdminError } from './admin-error.ts';
 import { FrameIndexStore } from './frame-index-store.ts';
 import { MediaThumbnailStore } from './media-thumbnail-store.ts';
@@ -36,35 +34,9 @@ export class MediaLibraryIndex {
   readonly definitions: RootRecord[];
   private store: LibraryStore;
   readonly indexJobs: FrameIndexJobs;
-  readonly qualityAdmission = new QualityAdmission();
-  private application?:QualityApplication;
-  attachQualityApplication(application:QualityApplication){
-    if(this.closed||this.application)throw Error('Quality application already attached or media closed');
-    this.application=application;
-  }
-  get attachedQualityApplication(){return this.application;}
-  get qualityApplication(){
-    if(!this.application)throw new AdminError(503,'Quality application must be explicitly assembled.','quality-storage-unavailable');
-    return this.application;
-  }
-  // Compatibility reads forward existing instances only; they never create resources.
-  get quality(){return this.qualityApplication.quality;}
-  get discovery(){return this.qualityApplication.discovery;}
-  get qualityJobs(){return this.qualityApplication.qualityJobs;}
-  get qualityRanges(){return this.qualityApplication.qualityRanges;}
-  get qualityCorrespondence(){return this.qualityApplication.qualityCorrespondence;}
-  get qualityCambi(){return this.qualityApplication.qualityCambi;}
-  get qualityVmaf(){return this.qualityApplication.qualityVmaf;}
-  get qualityXpsnr(){return this.qualityApplication.qualityXpsnr;}
-  get qualityReexecutions(){return this.qualityApplication.qualityReexecutions;}
-  get tasks(){return this.qualityApplication.tasks;}
-  get nativeCambiDescriptor(){return this.qualityApplication.nativeCambiDescriptor;}
-  get nativeVmafDescriptor(){return this.qualityApplication.nativeVmafDescriptor;}
-  get nativeXpsnrDescriptor(){return this.qualityApplication.nativeXpsnrDescriptor;}
   private closing?:Promise<void>;
   private stopping?:Promise<void>;
   private coreDirectory:string;
-  get durableQualityJobsEnabled(){return this.options.database!==undefined&&this.options.database!==':memory:';}
   readonly frameIndexes: FrameIndexStore;
   readonly thumbnails: MediaThumbnailStore;
   private pending: Promise<void> | null = null;
@@ -98,7 +70,7 @@ export class MediaLibraryIndex {
     this.definitions = normalizeRoots(roots); this.roots = this.definitions.map(r => r.path);
     this.store = new LibraryStore(options.database);
     this.coreDirectory=path.resolve(options.coreDir ?? process.env.VOIDPLAYER_WASM_CORE_DIR ?? path.resolve(process.cwd(),'public/vendor/voidplayer-core'));
-    this.indexJobs = new FrameIndexJobs(this.store.file, this.coreDirectory, undefined, this.qualityAdmission);
+    this.indexJobs = new FrameIndexJobs(this.store.file, this.coreDirectory);
     this.frameIndexes = new FrameIndexStore(this.store.db);
     this.thumbnails = new MediaThumbnailStore(this.store.db);
     try { this.store.configure(this.definitions); } catch (error) { this.store.close(); throw error; }
@@ -589,14 +561,22 @@ export class MediaLibraryIndex {
     this.fileMutation=operation;
     try {return await operation;} finally {this.fileMutation=undefined;}
   }
-  /** Compatibility entry; the attached application is the sole quality lifetime owner. */
-  close(ownersStopped?:Promise<void>){return this.closing??=this.application?this.application.close(ownersStopped):this.closeMedia(ownersStopped);}
+  private indexReaders = new Set<()=>Promise<void>>();
+  registerIndexReader(stop:()=>Promise<void>) {
+    if (this.closed) throw new AdminError(503, '服务正在关闭。', 'service-closed');
+    let stopped:Promise<void>|undefined;
+    const close=()=>stopped??=Promise.resolve().then(stop);
+    this.indexReaders.add(close);
+    return close;
+  }
+  close(ownersStopped?:Promise<void>){return this.closing??=this.closeMedia(ownersStopped);}
   stopExecution(){return this.stopping??=(async()=>{
     this.closed=true;
     await closeResources('Media execution shutdown incomplete',[
       ['library file operations',()=>this.fileMutation?.catch(()=>{})],
       ['scan scheduling',()=>this.stop()],['library scan',()=>this.pending?.catch(()=>{})],
-      ['storage reads',async()=>{await Promise.allSettled([...this.storageReads]);}],['index executors',()=>this.indexJobs.close()],
+      ['storage reads',async()=>{await Promise.allSettled([...this.storageReads]);}],
+      ['index readers',()=>closeResources('Index readers failed to stop',[...this.indexReaders].map((stop,i)=>[String(i),stop] as const))],['index executors',()=>this.indexJobs.close()],
     ]);
   })();}
   releaseStorage(){this.store.close();}

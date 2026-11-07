@@ -614,20 +614,6 @@ try {
   await page.waitForFunction(() => document.getElementById('analysis-concurrency')?.value === '12');
   assert.equal(await analysisThreads.inputValue(), '3');
   assert.equal(await analysisContexts.inputValue(), '2');
-  await page.locator('#quality-resource-reload').click();
-  await page.waitForFunction(()=>document.querySelector('[data-quality-resource="concurrency"]')?.value==='1');
-  await page.locator('[data-quality-resource="concurrency"]').fill('2');
-  await page.locator('[data-quality-resource="cambi"]').fill('2');
-  await page.locator('[data-quality-resource="memoryBytes"]').fill('4096');
-  await page.locator('#quality-resource-save').click();
-  await page.waitForFunction(()=>document.querySelector('#quality-resource-history')?.children.length===1);
-  const scoringConfig=JSON.parse(await readFile(file,'utf8'));
-  assert.equal(scoringConfig.qualityResources.concurrency,2);assert.equal(scoringConfig.qualityResources.perExecutor.cambi,2);
-  assert.ok(scoringConfig.qualityResourceHistory[0].actor.id);assert.equal(scoringConfig.qualityResourceHistory[0].before.concurrency,1);
-  await page.locator('[data-quality-resource="concurrency"]').fill('99');
-  assert.equal(await page.locator('#quality-resource-save').isDisabled(),true);
-  await page.locator('#quality-resource-reload').click();
-  await page.waitForFunction(()=>document.querySelector('[data-quality-resource="concurrency"]')?.value==='2');
   await page.getByLabel('服务端分析并发数').fill('33');
   assert.equal(await page.locator('#analysis-resource-save').isDisabled(), true);
   await page.locator('#analysis-resource-reload').click();
@@ -820,37 +806,13 @@ try {
       await page.screenshot({ path: `/tmp/voidplayer-admin-${name}-${width}-${browserName}.png` });
     }
   }
-  // New scoring pages share player controls; switching views must preserve drafts
-  // and must never create or cancel a background task.
-  const qualityCommands = [];
-  page.on('request', request => {
-    if (request.method() === 'POST' && new URL(request.url()).pathname.startsWith('/api/quality/')) qualityCommands.push(request.url());
-  });
-  await page.locator('[data-pane=quality]').click();
-  await page.locator('#quality-form [name=x]').fill('24');
-  for (const theme of ['light', 'dark']) {
-    await player.evaluate(theme => localStorage.setItem('voidplayer.theme', theme), theme);
-    await page.waitForFunction(theme => document.documentElement.dataset.theme === theme, theme);
-    for (const width of [1280, 390]) {
-      await page.setViewportSize({ width, height: 820 });
-      for (const view of ['single', 'correspondence', 'vmaf', 'cambi', 'ranges', 'xpsnr']) {
-        await page.locator(`[data-quality-section=${view}]`).click();
-        assert.equal(await page.locator('[data-quality-view]:visible').count(), 1);
-        assert.equal(await page.locator(`[data-quality-view=${view}]`).isVisible(), true);
-        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.querySelector('#pane-quality').scrollWidth <= document.querySelector('#pane-quality').clientWidth + 1), true, `${view} ${theme} overflows at ${width}`);
-      }
-      await page.locator('[data-quality-section=single]').click();
-      assert.equal(await page.locator('#quality-form [name=x]').inputValue(), '24');
-      const checkbox = await page.locator('#quality-ssim-enabled').boundingBox();
-      assert.ok(checkbox.width <= 20 && checkbox.height <= 20, 'checkbox keeps player-sized control');
-      await page.screenshot({path: `/tmp/voidplayer-quality-${theme}-${width}-${browserName}.png`});
-    }
+  assert.equal(await page.locator('[data-pane=quality], [data-pane=tasks], [data-pane=discovery]').count(), 0);
+  for (const pane of ['quality', 'tasks', 'discovery']) {
+    await page.goto(base + '/admin#' + pane);
+    await page.reload();
+    await page.locator('#pane-overview:visible').waitFor();
   }
-  await page.locator('[data-quality-section=vmaf]').focus();
-  await page.keyboard.press('Enter');
-  await page.reload();
-  assert.equal(await page.locator('[data-quality-view=vmaf]').isVisible(), true, 'reload restores selected workflow');
-  assert.equal(qualityCommands.length, 0, 'navigation does not create or cancel tasks');
+  await page.setViewportSize({ width: 390, height: 820 });
   await page.getByRole('button', { name: '媒体库', exact: true }).click();
   await page.screenshot({ path: `/tmp/voidplayer-admin-library-narrow-${browserName}.png` });
   assert.equal(await page.getByRole('link', { name: '返回播放器', exact: true }).isVisible(), true, 'mobile keeps a return link');

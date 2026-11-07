@@ -71,7 +71,7 @@ test('daily verification is bounded and full release verification is explicit', 
   const profile = manifest.cases.filter(row => row.suites.includes('ci-pr-browser'));
   assert.deepEqual([...new Set(profile.flatMap(row=>row.engines))].sort(),['chromium','webkit']);
   assert.ok(profile.every(row => row.required && row.fixtures.every(value => ['core', 'analysis-core'].includes(value))));
-  for (const engine of ['chromium', 'webkit']) for (const family of ['contracts', 'native-presented-protocol', 'quality-workflow-8', 'native-vmaf-8', 'native-cambi-8', 'native-xpsnr-8', 'ssim-workflow-8', 'cambi-reexecution', 'identity'])
+  for (const engine of ['chromium', 'webkit']) for (const family of ['contracts', 'identity'])
     assert.ok(profile.some(row => row.id === `browser-${family}-${engine}`), `${family}/${engine}`);
   for (const row of manifest.cases.filter(row => row.suites.includes('ci-analysis-ui') || row.suites.includes('ci-identity-browser') || row.suites.includes('ci-identity-http')))
     assert.ok(profile.includes(row), `${row.id}: daily UI/identity coverage`);
@@ -88,7 +88,7 @@ test('release workflow gates verified artifacts and draft staging on every verif
   const cores = workflowJobs(await readFile(new URL('../../.github/workflows/prepare-cores.yml', import.meta.url), 'utf8'));
   assert.match(jobs.cores.body, /uses: \.\/\.github\/workflows\/prepare-cores\.yml/);
   assert.match(cores['analysis-core'].body, /name: Verify analysis reference ABI including restored caches\n        run: node scripts\/prepare-analysis-core.mjs public\/vendor\/voidplayer-analysis/);
-  const required = ['native-release', 'native-runtime', 'unit', 'playback', 'cache-browser', 'source-logic', 'analysis-browser', 'analysis-matrix', 'ssim-browser', 'hevc-browser', 'uncovered-regressions'];
+  const required = ['native-release', 'native-runtime', 'unit', 'playback', 'cache-browser', 'source-logic', 'analysis-browser', 'analysis-matrix', 'hevc-browser', 'uncovered-regressions'];
   assert.deepEqual([...jobs['release-set'].needs].sort(), required.sort());
   assert.deepEqual(jobs.unit.needs, ['cores', 'qa-media']);
   assert.match(jobs.unit.body, /run: node scripts\/run-tests\.mjs ci-node-media\n        env:\n          VOIDPLAYER_FFMPEG_ORACLE:/);
@@ -161,7 +161,7 @@ test('all platform/runtime suites run independently of the compiled package jobs
     assert.doesNotMatch(body, /continue-on-error:/);
   }
   assert.match(runtimeJob.body, /if: always\(\)[\s\S]*name: native-runtime-reports-\$\{\{ matrix\.os \}\}-\$\{\{ matrix\.runtime \}\}[\s\S]*path: \.run\/test-suites\//);
-  const expectedCounts = { node: 29, bun: 44 };
+  const expectedCounts = { node: 15, bun: 11 };
   for (const runtime of ['node', 'bun']) {
     const suite = `ci-native-${runtime}`, command = `run: node scripts/run-tests.mjs ${suite}\n`;
     assert.equal(runtimeJob.body.split(command).length - 1, 1);
@@ -174,27 +174,12 @@ test('all platform/runtime suites run independently of the compiled package jobs
       assert.ok(cases.every(row => row.required));
       assert.ok(cases.some(row => row.id === `${runtime}-http2`), `${runtime}/${platform} preserves HTTP/2 lifecycle regressions`);
       assert.ok(cases.some(row => row.id === `${runtime}-server-logging`), `${runtime}/${platform} preserves log rotation and storage regressions`);
-      for(const id of [`${runtime}-service-shutdown`,`${runtime}-temporal-scoring-service`]) assert.ok(cases.some(row=>row.id===id),`${runtime}/${platform} preserves real ownership/restart regressions`);
-      for (const id of [`${runtime}-native-xpsnr-http`, `${runtime}-analysis-xpsnr-sequence-http`]) {
-        const xpsnr = cases.find(row => row.id === id);
-        assert.ok(xpsnr, `${runtime}/${platform} keeps both XPSNR groups`);
-        assert.equal(xpsnr.timeoutMs, 180000);
-      }
+      assert.ok(cases.some(row => row.id === `${runtime}-service-shutdown`));
     }
   }
   assert.match(runtimeJob.body, /ci-native-node\n        env:\n          NODE_OPTIONS: --test-reporter=tap/);
-  for (const suite of ['--case release-analysis', '--case release-quality', 'ci-native-http --prepared', 'ci-native-https --prepared']) assert.ok(packaged.body.includes(`run: node scripts/run-tests.mjs ${suite}\n`));
+  for (const suite of ['--case release-analysis', 'ci-native-http --prepared', 'ci-native-https --prepared']) assert.ok(packaged.body.includes(`run: node scripts/run-tests.mjs ${suite}\n`));
   assert.doesNotMatch(packaged.body, /Prepare pinned Linux native quality components/);
-  assert.equal(manifest.cases.find(row => row.id === 'release-quality').timeoutMs, 120000, 'runtime suites must not consume or enlarge the compiled acceptance budget');
-  for (const [id, deadline] of [['release-quality',120000],['release-analysis-quality',180000],['release-native-xpsnr',180000],['release-quality-reexecution',120000]]) {
-    const row=manifest.cases.find(entry=>entry.id===id);
-    assert.equal(row.required,true);
-    assert.ok(row.suites.includes('release'));
-    assert.equal(row.timeoutMs,deadline);
-    assert.deepEqual(row.platforms,['linux','darwin','win32']);
-    assert.equal(packaged.body.split(`run: node scripts/run-tests.mjs --case ${id}\n`).length-1,1);
-  }
-  assert.ok(manifest.cases.find(row=>row.id==='release-quality').command.includes('--base-only'));
 
 });
 
@@ -203,49 +188,11 @@ test('cache suite runs once in its own required job with the same pinned prepara
   const jobs = workflowJobs(workflow), cache = jobs['cache-browser'];
   const manifest = JSON.parse(await readFile(new URL('../../scripts/testing/manifest.json', import.meta.url), 'utf8'));
   const cases = manifest.cases.filter(row => row.suites.includes('ci-cache'));
-  assert.equal(cases.length, 71);
-  assert.equal(new Set(cases.map(row => row.id)).size, 71);
-  const expected=['browser-existing-page-bridge-chromium','browser-mcp-page-bridge-chromium','browser-sharing-webkit','browser-quality-reexecution-chromium','browser-quality-reexecution-webkit','browser-cambi-reexecution-chromium','browser-cambi-reexecution-webkit'];
-
-  for(const engine of ['chromium','webkit']){
-    expected.push(`browser-xpsnr-comparison-${engine}`);
-    for(const name of ['annotation-persistence','cache','library-discovery','native-presented-protocol','presented-quality','quality-annotation','quality-pair-view-10','task-center'])expected.push(`browser-${name}-${engine}`);
-    for(const name of ['native-vmaf','native-xpsnr','native-cambi','quality-correspondence','quality-ranges','quality-roi','quality-workflow'])for(const depth of [8,10])expected.push(`browser-${name}-${depth}-${engine}`);
-    for(const format of ['h264-8','hevc-8','hevc-10'])expected.push(`browser-native-cambi-mp4-${format}-${engine}`);
-    for(const name of ['mp4-quality','mp4-vmaf'])for(const format of ['h264-8','hevc-8','hevc-10'])expected.push(`browser-${name}-${format}-${engine}`);
-  }
-  assert.deepEqual(cases.map(row=>row.id).sort(),expected.sort(),'exact prior70 plus the existing-page MCP check; no silent removal/substitution');
-  const protocolIds=['browser-native-presented-protocol-chromium','browser-native-presented-protocol-webkit'];
-  const comparisonIds=['browser-xpsnr-comparison-chromium','browser-xpsnr-comparison-webkit'];
-  const priorCases=cases.filter(row=>row.id!=='browser-existing-page-bridge-chromium'&&!protocolIds.includes(row.id)&&!comparisonIds.includes(row.id)&&!row.id.startsWith('browser-quality-reexecution-')&&!row.id.startsWith('browser-cambi-reexecution-'));
-  assert.equal(priorCases.length,62,'every prior cache case still runs with unchanged mandatory status on main/tag');
-  const prCases=manifest.cases.filter(row=>row.suites.includes('ci-cache-pr'));
-  assert.equal(prCases.length,70);
-  const existingPage=prCases.find(row=>row.id==='browser-existing-page-bridge-chromium');
-  assert.deepEqual(existingPage.command,['node','scripts/check-existing-page-bridge-browser.mjs']);
-  assert.equal(existingPage.required,true);assert.deepEqual(existingPage.fixtures,['core']);assert.equal(existingPage.timeoutMs,180000);
-  for(const engine of ['chromium','webkit']){
-    const row=prCases.find(row=>row.id===`browser-xpsnr-comparison-${engine}`);
-    assert.deepEqual(row.command,['node','scripts/native/run-xpsnr-tests.mjs','node','scripts/check-xpsnr-comparison-browser.mjs',engine]);
-    assert.equal(row.required,true);assert.deepEqual(row.fixtures,['core','analysis-core']);assert.equal(row.timeoutMs,300000);
-  }
-
-  assert.deepEqual(cases.filter(row=>!prCases.includes(row)).map(row=>row.id),['browser-presented-quality-webkit']);
-  for(const engine of ['chromium','webkit']){
-    const row=prCases.find(row=>row.id===`browser-native-presented-protocol-${engine}`);
-    assert.deepEqual(row.command,['node','scripts/check-native-presented-protocol.mjs',engine]);
-    assert.equal(row.required,true);assert.deepEqual(row.fixtures,['core']);assert.equal(row.timeoutMs,300000);
-  }
-  const taskIds=['browser-task-center-chromium','browser-task-center-webkit'];
-  const taskCases=cases.filter(row=>taskIds.includes(row.id));
-  assert.deepEqual(taskCases.map(row=>row.id).sort(),taskIds);
-  for(const engine of ['chromium','webkit'])assert.deepEqual(taskCases.find(row=>row.id===`browser-task-center-${engine}`).command,['node','scripts/native/run-vmaf-tests.mjs','node','scripts/check-task-center-browser.mjs',engine]);
-  const xpsnrIds=['browser-native-xpsnr-8-chromium','browser-native-xpsnr-10-chromium','browser-native-xpsnr-8-webkit','browser-native-xpsnr-10-webkit'];
-  assert.deepEqual(cases.filter(row=>xpsnrIds.includes(row.id)).map(row=>row.id).sort(),[...xpsnrIds].sort());
-  const prior=priorCases.filter(row=>!taskIds.includes(row.id)&&!xpsnrIds.includes(row.id));
-  assert.equal(prior.length,56,'retain all prior required cache cases alongside task-center, XPSNR and CAMBI browsers');
-  assert.deepEqual(prior.find(row=>row.id==='browser-mcp-page-bridge-chromium')?.command,['node','scripts/check-mcp-page-bridge-browser.mjs']);
-  assert.equal(prior.filter(row=>row.id!=='browser-mcp-page-bridge-chromium').length,55,'retain the existing cache matrix alongside the required MCP case');
+  const expected = ['browser-existing-page-bridge-chromium', 'browser-mcp-page-bridge-chromium', 'browser-sharing-webkit',
+    'browser-annotation-persistence-chromium', 'browser-annotation-persistence-webkit', 'browser-cache-chromium', 'browser-cache-webkit'];
+  assert.deepEqual(cases.map(row => row.id).sort(), expected.sort());
+  const prCases = manifest.cases.filter(row => row.suites.includes('ci-cache-pr'));
+  assert.deepEqual(prCases.map(row => row.id).sort(), expected.sort());
   assert.ok(cases.every(row => row.required && row.kind === 'regression'));
   assert.deepEqual(cache.needs, ['cores', 'qa-media']);
   assert.match(cache.body, /^    runs-on: ubuntu-24\.04$/m);
@@ -503,7 +450,6 @@ test('draft staging refuses moved tags, published versions, changed notes and re
   }
 });
 
-
 test('analysis preparation rejects provenance claiming references when actual exports are absent', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'vp-analysis-abi-'));
   try {
@@ -558,7 +504,6 @@ test('core sync replaces both variants, drops stale unpinned metadata and preser
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-
 test('raw upstream MT sync renames its unsuffixed build manifest',async()=>{
  const {syncPlaybackCore}=await import('../../scripts/core-artifacts.mjs');
  const root=await mkdtemp(path.join(os.tmpdir(),'vp-raw-mt-sync-'));
@@ -575,7 +520,7 @@ test('raw upstream MT sync renames its unsuffixed build manifest',async()=>{
 
 test('release rebuild sources include shared implementations and their independent type configuration', async () => {
   const {selectReleaseSources}=await import('../../scripts/tools/release/source-files.mjs');
-  const required=['quality.html','shared/analysis/bitstream/runner.ts','shared/media/containers/flv-demux.ts','src/media/source.ts','server/app.ts','tsconfig.shared.json','tsconfig.json','package-lock.json','examples/http-quality.mjs'];
+  const required=['shared/analysis/bitstream/runner.ts','shared/media/containers/flv-demux.ts','src/media/source.ts','server/app.ts','tsconfig.shared.json','tsconfig.json','package-lock.json'];
   const privateFiles=['.env','.run/data/library.sqlite','fixtures/video/private.mp4','artifacts/release.tar.gz','logs/report.json'];
   assert.deepEqual(selectReleaseSources([...required,...privateFiles,required[0]]),required);
 });
@@ -625,12 +570,4 @@ test('daily and release sample consumers share one verified QA media artifact', 
     for (const id of consumers) assert.ok(jobs[id].needs.includes('qa-media'), id);
     assert.ok(!jobs.cores.needs.includes('qa-media'));
   }
-});
-
-test('SSIM dual-browser real task/evidence checks gate release output without extending serial source UI budgets',async()=>{
- const jobs=workflowJobs(await readFile(new URL('../../.github/workflows/release-preview.yml',import.meta.url),'utf8'));
- const ssim=jobs['ssim-browser'];assert.deepEqual(ssim.needs,['cores']);assert.match(ssim.body,/engine: \[chromium, webkit\]/);
- assert.match(ssim.body,/run: node scripts\/run-tests\.mjs ci-ssim --engine \$\{\{ matrix.engine \}\}/);
- assert.match(ssim.body,/if: always\(\)[\s\S]*ssim-browser-reports-/);assert.ok(jobs['release-set'].needs.includes('ssim-browser'));
- assert.doesNotMatch(ssim.body,/continue-on-error:/);
 });

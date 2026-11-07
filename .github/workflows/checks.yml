@@ -56,7 +56,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        part: [analysis, containers, playback-quality]
+        part: [analysis, containers, playback]
     steps:
       - uses: actions/checkout@v4
       - name: Use primary Ubuntu package archive
@@ -132,14 +132,7 @@ jobs:
           path: |
             .run/test-suites/ci-pr-browser/
             .run/agent-annotations/
-            .run/cambi-reexecution/
             .run/analysis-reports/
-            .run/native-vmaf/browser-${{ matrix.engine }}-8/
-            .run/native-cambi/browser-${{ matrix.engine }}-8/
-            .run/native-xpsnr/browser-${{ matrix.engine }}-8/
-            .run/native-presented-protocol/${{ matrix.engine }}/
-            .run/quality-workflow/${{ matrix.engine }}-8*/
-            .run/library-pair-browser-${{ matrix.engine }}/
             .run/browser-fixtures/bitstream-*-${{ matrix.engine }}/
             .run/browser-fixtures/browser-contracts-${{ matrix.engine }}/
             .run/playback-reports/

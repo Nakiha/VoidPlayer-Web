@@ -6,21 +6,9 @@ import ts from 'typescript-ast';
 import { isBuiltin } from 'node:module';
 
 const portable = file => file.replaceAll('\\', '/');
-const computedLoaders = new Set(['src/i18n.ts','src/media/decoding/core-loader.ts','src/analysis/bitstream/local-worker.ts','server/frame-index-builder.ts','server/analysis/bitstream/worker.ts','server/analysis/quality/task.ts','server/analysis/vmaf/decode-task.ts','server/analysis/cambi/decode-task.ts','server/analysis/quality/analysis-component.ts']);
+const computedLoaders = new Set(['src/i18n.ts','src/media/decoding/core-loader.ts','src/analysis/bitstream/local-worker.ts','server/frame-index-builder.ts','server/analysis/bitstream/worker.ts']);
 const entrypoints = new Set(['bootstrap.ts','agent.ts','build-info.ts','env.d.ts','i18n.ts','main.ts','session.ts']);
 const codeFile = file => /\.(?:[cm]?js|[cm]?ts|tsx)$/.test(file);
-// Internal protocols have named callers, not directory-wide friendship. This
-// applies to type edges and re-exports too, so a facade cannot leak the protocol.
-const qualityInternals = new Map([
-  ['server/analysis/quality/candidate-publication.ts', ['server/analysis/vmaf/service.ts', 'server/analysis/xpsnr/service.ts']],
-  ['server/analysis/quality/prepared-facts.ts', ['server/analysis/vmaf/service.ts', 'server/analysis/xpsnr/service.ts']],
-  ['server/analysis/quality/temporal-service.ts', ['server/analysis/vmaf/service.ts', 'server/analysis/xpsnr/service.ts']],
-  ['server/analysis/quality/temporal-runner.ts', [
-    'server/analysis/quality/temporal-service.ts', 'server/analysis/vmaf/wasm-runner.ts', 'server/analysis/xpsnr/wasm-runner.ts',
-  ]],
-  ['server/analysis/quality/result-commands.ts', ['server/quality-application.ts', 'server/quality-service-ports.ts']],
-]);
-const qualityAdminEntries = new Set(['workspace.ts', 'resources.ts', 'reexecution.ts']);
 export function moduleEdges(code, file) {
   const tree = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true), edges = [];
   const add = (node, kind) => { if (node && ts.isStringLiteralLike(node)) edges.push({ specifier: node.text, kind }); else if (kind === 'load') edges.push({specifier:null,kind:'computed-load'}); };
@@ -194,12 +182,6 @@ export function checkModuleBoundaries(root) {
         (from.startsWith('src/media/') && to !== 'shared/review/model.ts'), `${from}: media/color imports review-owned base contracts ${to}`);
     if (to === 'src/media/policy/fallback-budget.ts')
       assert.ok(from.startsWith('src/media/'), `${from}: fallback input budget belongs to media policy`);
-    if (qualityInternals.has(to))
-      assert.ok(qualityInternals.get(to).includes(from), `${from}: quality internal capability is private: ${to}`);
-    if (to.startsWith('src/admin/quality/') && !from.startsWith('src/admin/quality/'))
-      assert.ok(qualityAdminEntries.has(to.slice('src/admin/quality/'.length)), `${from}: quality admin implementation is private: ${to}`);
-    if (from === 'shared/analysis/quality/temporal-contract.ts' || from === 'shared/analysis/quality/xpsnr.ts')
-      assert.ok(!/^shared\/analysis\/quality\/(vmaf|xpsnr)\.ts$/.test(to), `${from}: temporal facts depend on another metric: ${to}`);
     if (from.startsWith('src/')) assert.ok(!to.startsWith('server/'), `${from}: frontend imports server ${to}`);
     if (from.startsWith('shared/')) assert.ok(!/^(src|server)\//.test(to), `${from}: shared code imports host ${to}`);
     if (from.startsWith('server/') && to.startsWith('src/')) assert.ok(false, `${from}: server imports frontend ${to}`);
@@ -224,7 +206,7 @@ export function checkModuleBoundaries(root) {
     if (name.startsWith('src/') && !name.slice(4).includes('/')) assert.ok(entrypoints.has(name.slice(4)), `${name}: unowned frontend root module`);
     assert.ok(!/^src\/(bitstream-analysis|analysis-overlay)\//.test(name), `${name}: obsolete analysis namespace`);
     for (const layer of ['shared','src','server']) if (name.startsWith(`${layer}/analysis/`)) {
-      const domains = 'metadata|bitstream|quality|vmaf|xpsnr|cambi';
+      const domains = 'metadata|bitstream';
       assert.match(name, new RegExp(`^${layer}/analysis/(${domains})/`), `${name}: analysis must declare ${domains} responsibility`);
     }
   }

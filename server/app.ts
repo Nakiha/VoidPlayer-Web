@@ -1,21 +1,10 @@
-import {QualityApplication} from './quality-application.ts';
 import { ReportLogs } from './logging/reports.ts';
 import { serverLog } from './logging/logger.ts';
 import { DEFAULT_LOG_POLICY } from '../shared/service/logging.ts';
 import {ExistingPageRequests} from './bridge/existing-pages.ts';
-import {handleCambiRoutes} from './analysis/cambi/routes.ts';
-import {handleTaskRoutes} from './tasks/routes.ts';
-import {handleXpsnrRoutes} from './analysis/xpsnr/routes.ts';
-import {handleQualityReexecutionRoutes} from './analysis/quality/reexecution-routes.ts';
-import {handleVmafRoutes} from './analysis/vmaf/routes.ts';
 import { StaticAssets } from './static-assets.ts';
 import { AnalysisScheduler } from './analysis/bitstream/scheduler.ts';
 import { handleAnalysisRoutes } from './analysis/bitstream/routes.ts';
-import { handleQualityRoutes } from './analysis/quality/routes.ts';
-import { handleDiscoveryRoutes } from './discovery/routes.ts';
-import { handleQualityJobRoutes } from './analysis/quality/job-routes.ts';
-import {handleCorrespondenceRoutes} from './analysis/quality/correspondence-routes.ts';
-import { handleQualityRangeRoutes } from './analysis/quality/range-routes.ts';
 import { randomUUID } from 'node:crypto';
 import { guestActor, browserUserId } from './identity.ts';
 import { createRequestServer } from './protocol-server.ts';
@@ -54,7 +43,6 @@ export interface ServerOptions {
   connection?: ConnectionOptions;
   clientAddress?: (req: IncomingMessage) => string;
   library?: MediaLibraryIndex;
-  quality?:QualityApplication;
   admin?: AdminController;
   allowLocalReveal?: boolean;
   reveal?: (absolutePath: string) => Promise<void>;
@@ -69,11 +57,10 @@ export function createMediaServer(options: ServerOptions): ManagedServer;
 export function createMediaServer(options: ServerOptions): ManagedServer {
   const roots = options.roots.map(r => path.resolve(r));
   const library = options.library ?? new MediaLibraryIndex(roots,{coreDir:process.env.VOIDPLAYER_WASM_CORE_DIR || (options.staticDir ? path.join(options.staticDir,'vendor/voidplayer-core') : undefined)});
-  const quality=options.quality??library.attachedQualityApplication??new QualityApplication(library);
   if (!options.library) library.start();
   const analysisCore = process.env.VOIDPLAYER_ANALYSIS_CORE_DIR || path.join(options.staticDir ?? path.join(process.cwd(), 'public'), 'vendor/voidplayer-analysis');
   const analysis = options.admin?.analysisFor(analysisCore) ?? new AnalysisScheduler(library, analysisCore, library.analysisDirectory);
-  const stopLocalAnalysis = options.admin ? undefined : quality.attachIndexReader(() => analysis.close());
+  const stopLocalAnalysis = options.admin ? undefined : library.registerIndexReader(() => analysis.close());
   const staticDir = options.staticDir ? path.resolve(options.staticDir) : undefined;
   const staticRoot = staticDir ? fs.realpath(staticDir).catch(() => null) : Promise.resolve(null);
   const staticAssets = staticRoot.then(root => root ? new StaticAssets(root) : null);
@@ -103,7 +90,7 @@ export function createMediaServer(options: ServerOptions): ManagedServer {
     let logged = false;
     traffic.activeRequests++;
     const ctx: RouteContext = {
-      options, library, quality, requestId, reports,
+      options, library, requestId, reports,
       actor: guestActor(browserUserId(req)) ?? options.admin?.workspaces.user(browserUserId(req)) ?? null,
       adminExtra: { traffic, sockets, recentRequests },
     };
@@ -118,22 +105,14 @@ export function createMediaServer(options: ServerOptions): ManagedServer {
     };
     res.once('finish', finish); res.once('close', finish);
     try {
-      await quality.ready;
       const url = new URL(req.url ?? '/', 'http://localhost');
       if (await handleConnectionRoutes(ctx, req, res, url)) return;
       if (await handleStateRoutes(ctx, req, res, url)) return;
-      if (await handleTaskRoutes(ctx,req,res,url)) return;
-      if (await handleDiscoveryRoutes(ctx,req,res,url)) return;
-      if (await handleQualityReexecutionRoutes(ctx,req,res,url)) return;
-      if(await handleCambiRoutes(ctx,req,res,url))return;
-      if(await handleVmafRoutes(ctx,req,res,url))return;
-      if(await handleXpsnrRoutes(ctx,req,res,url))return;
-      if (await handleQualityJobRoutes(ctx,req,res,url)) return;
-      if (await handleQualityRangeRoutes(ctx,req,res,url)) return;
-  if(await handleCorrespondenceRoutes(ctx,req,res,url))return;
-      if (await handleQualityRoutes(ctx,req,res,url)) return;
       if (await handleAnalysisRoutes(ctx,req,res,url,analysis)) return;
       if (await handleContentRoutes(ctx, req, res, url)) return;
+      if (url.pathname.startsWith('/api/')) {
+        sendJson(res, 404, { error: 'not found' }); return;
+      }
       if (req.method !== 'GET' && req.method !== 'HEAD') {
         sendJson(res, 405, { error: 'read only' }); return;
       }
@@ -163,7 +142,7 @@ export function createMediaServer(options: ServerOptions): ManagedServer {
   server.on('close', () => {
     // A supplied library remains caller-owned. The registered reader is still
     // part of the application drain if the caller closes it before this server.
-    const stopped = options.library ? stopLocalAnalysis?.() : quality.close();
+    const stopped = options.library ? stopLocalAnalysis?.() : library.close();
     if (!options.admin) void reports.close();
     void stopped?.catch(error => serverLog.error('application-shutdown-failed', error));
   });

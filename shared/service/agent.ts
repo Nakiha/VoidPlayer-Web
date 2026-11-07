@@ -1,17 +1,3 @@
-import {CAMBI_CAPABILITY} from '../analysis/quality/cambi.ts';
-import {TASK_LIMITS,TASK_KINDS} from './tasks.ts';
-import {XPSNR_CAPABILITY} from '../analysis/quality/xpsnr.ts';
-import {REEXECUTION_LIMITS,REEXECUTION_KINDS} from '../analysis/quality/reexecution.ts';
-import {VMAF_CAPABILITY} from '../analysis/quality/vmaf.ts';
-import {CORRESPONDENCE_LIMITS} from '../analysis/quality/correspondence.ts';
-import { SSIM_VARIANT, SSIM_LIMITS } from '../analysis/quality/ssim.ts';
-import { TECHNICAL_FILTER_PATH, TECHNICAL_FILTER_LIMITS, TECHNICAL_FILTER_SCHEMA } from '../media/indexing/technical-filter.ts';
-import { QUALITY_JOB_LIMITS } from '../analysis/quality/jobs.ts';
-import {QUALITY_RANGE_LIMITS} from '../analysis/quality/ranges.ts';
-import { PSNR_SPATIAL_LIMITS } from '../analysis/quality/psnr.ts';
-import { FORWARD_OUTPUT_GUARANTEE } from '../analysis/quality/frame-pair.ts';
-import {QUALITY_SOURCE_BUILD_LIMITS} from '../analysis/quality/source-build.ts';
-import {DISCOVERY_DICTIONARY} from '../media/discovery.ts';
 import {AGENT_TASK_CATALOG,AGENT_OPERATION_PATH,AGENT_OPERATIONS_VERSION} from './agent-operations.ts';
 import {PAGE_TOOLS,PAGE_BRIDGE_LIMITS,PAGE_MCP_VERSIONS,MCP_PAGE_TOOLS} from './page-bridge.ts';
 /** Discovery describes this deployment without starting work or creating users. */
@@ -29,36 +15,22 @@ export type AgentCapability = {
 };
 export const AGENT_TASKS = {
   library: '/agent/library.md', workspaces: '/agent/workspaces.md', annotations: '/agent/annotations.md',
-  quality: '/agent/quality.md', liveSession: '/agent/live-session.md', errors: '/agent/errors.md',
+  liveSession: '/agent/live-session.md', errors: '/agent/errors.md',
 } as const;
 
-export function agentManifest(input: { capabilities: ServiceCapabilities; libraryReady: boolean; frontendAvailable?: boolean; localPageBridge?:boolean;qualityJobsEnabled?: boolean; nativeVmaf?: {enabled:boolean;reason:unknown}|null; nativeXpsnr?: {enabled:boolean;reason:unknown}|null; nativeCambi?:{enabled:boolean;reason:unknown}|null; actor: { id: string; name: string } | null }) {
+export function agentManifest(input: { capabilities: ServiceCapabilities; libraryReady: boolean; frontendAvailable?: boolean; localPageBridge?:boolean; actor: { id: string; name: string } | null }) {
   const { capabilities: c, libraryReady, actor } = input;
   const capabilities: AgentCapability[] = [
-    {id:'tasks.read',implemented:true,enabled:!!input.qualityJobsEnabled,readiness:!input.qualityJobsEnabled?'unavailable':actor?'ready':'needs-identity',requiresBrowser:false,guide:'/agent/quality/tasks.md'},
     {id:'identity.select',implemented:true,enabled:c.admin,readiness:c.admin?'ready':'unavailable',requiresBrowser:false,guide:AGENT_TASKS.workspaces},
     { id: 'library.browse', implemented: true, enabled: true, readiness: libraryReady ? 'ready' : 'index-warming', requiresBrowser: false, guide: AGENT_TASKS.library },
-    { id: 'library.discovery', implemented: true, enabled: true, readiness: libraryReady ? 'per-source' : 'index-warming', requiresBrowser: false, guide: AGENT_TASKS.library },
-    { id: 'library.preparations', implemented: true, enabled: !!input.qualityJobsEnabled, readiness: !input.qualityJobsEnabled ? 'unavailable' : actor ? 'per-source' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.library },
     { id: 'media.cached-info', implemented: true, enabled: true, readiness: 'per-source', requiresBrowser: false, guide: AGENT_TASKS.library },
     { id: 'media.cached-index-query', implemented: true, enabled: true, readiness: 'per-source', requiresBrowser: false, guide: AGENT_TASKS.library },
-    { id: 'media.technical-filter', implemented: true, enabled: true, readiness: 'per-source', requiresBrowser: false, guide: AGENT_TASKS.library },
     { id: 'media.read', implemented: true, enabled: true, readiness: 'per-source', requiresBrowser: false, guide: AGENT_TASKS.library },
     { id: 'workspaces.read', implemented: true, enabled: c.workspaces, readiness: c.workspaces ? 'ready' : 'unavailable', requiresBrowser: false, guide: AGENT_TASKS.workspaces },
     { id: 'annotations.write', implemented: true, enabled: c.annotations, readiness: !c.annotations ? 'unavailable' : actor ? 'ready' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.annotations },
     { id: 'annotations.events', implemented: true, enabled: c.annotations, readiness: c.annotations ? 'ready' : 'unavailable', requiresBrowser: false, guide: AGENT_TASKS.annotations },
-    {id:'quality.cambi',implemented:true,enabled:!!input.nativeCambi?.enabled,readiness:!input.nativeCambi?.enabled?'unavailable':actor?'per-source':'needs-identity',requiresBrowser:false,guide:AGENT_TASKS.quality},
-    {id:'quality.vmaf',implemented:true,enabled:!!input.nativeVmaf?.enabled,readiness:!input.nativeVmaf?.enabled?'unavailable':actor?'per-source':'needs-identity',requiresBrowser:false,guide:AGENT_TASKS.quality},
-    {id:'quality.xpsnr',implemented:true,enabled:!!input.nativeXpsnr?.enabled,readiness:!input.nativeXpsnr?.enabled?'unavailable':actor?'per-source':'needs-identity',requiresBrowser:false,guide:AGENT_TASKS.quality},
-    {id:'quality.correspondence',implemented:true,enabled:!!input.qualityJobsEnabled,readiness:!input.qualityJobsEnabled?'unavailable':actor?'per-source':'needs-identity',requiresBrowser:false,guide:AGENT_TASKS.quality},
-    { id:'quality.ranges',implemented:true,enabled:!!input.qualityJobsEnabled,readiness:!input.qualityJobsEnabled?'unavailable':actor?'per-source':'needs-identity',requiresBrowser:false,guide:AGENT_TASKS.quality },
-    { id: 'quality.jobs', implemented: true, enabled: !!input.qualityJobsEnabled, readiness: !input.qualityJobsEnabled ? 'unavailable' : actor ? 'per-source' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.quality },
-    { id: 'quality.frame-pair', implemented: true, enabled: true, readiness: actor ? 'per-source' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.quality },
-    { id: 'quality.source-build', implemented: true, enabled: true, readiness: actor ? 'per-source' : 'needs-identity', requiresBrowser: false, guide: AGENT_TASKS.quality },
-    { id: 'session.presented-quality-input', implemented: true, enabled: !!input.frontendAvailable, readiness: input.frontendAvailable ? 'requires-live-session' : 'unavailable', requiresBrowser: true, guide: AGENT_TASKS.liveSession },
     { id: 'session.view', implemented: true, enabled: !!input.frontendAvailable, readiness: input.frontendAvailable ? 'requires-live-session' : 'unavailable', requiresBrowser: true, guide: AGENT_TASKS.liveSession },
     { id: 'bridge.local-mcp', implemented: true, enabled: !!input.localPageBridge&&!!input.frontendAvailable, readiness: input.localPageBridge&&input.frontendAvailable?'requires-live-session':'unavailable', requiresBrowser: true, guide: AGENT_TASKS.liveSession },
-    { id: 'compute.workers', implemented: false, enabled: false, readiness: 'unavailable', requiresBrowser: false, guide: AGENT_TASKS.quality },
   ];
   return {
     schema: 'voidplayer-agent', version: 1, service: 'voidplayer-media', actor,
@@ -67,52 +39,10 @@ export function agentManifest(input: { capabilities: ServiceCapabilities; librar
     operationDiscovery:{schema:'voidplayer-agent-tasks',version:AGENT_OPERATIONS_VERSION,readOnly:true,requiresFrontend:false},
     localMcp:{transport:'stdio',networkMcpEndpoint:false,distribution:'source-checkout-node-24-built-frontend',launch:'node scripts/mcp-page-bridge.ts',versions:PAGE_MCP_VERSIONS,ownedPageOnly:false,existingLoopbackPage:{launch:'node scripts/mcp-page-bridge.ts --existing-origin <exact-loopback-origin>',defaultScopes:[],pairing:'explicit-single-use-page-consent',pairingMs:90000,maximumGrantMs:900000},persistentAuthorization:false,automaticReconnect:false,clientIdentity:'self-declared-not-authenticated',tools:MCP_PAGE_TOOLS.map(tool=>({...tool,scope:Object.hasOwn(PAGE_TOOLS,tool.name)?PAGE_TOOLS[tool.name as keyof typeof PAGE_TOOLS].scope:'read'})),limits:PAGE_BRIDGE_LIMITS,discovery:'Use MCP tools/list for epoch/operationId envelopes and receipt/status tools.',guide:AGENT_TASKS.liveSession},
     capabilities,
-    technicalFilter: { schema: TECHNICAL_FILTER_SCHEMA, version: 1, endpoint: TECHNICAL_FILTER_PATH, limits: TECHNICAL_FILTER_LIMITS, pagination: 'none', scope: 'explicit-candidates-cached-streams' },
-    taskCenter:{schema:'voidplayer-task-page',version:1,query:'/api/tasks',detail:'/api/tasks/{kind}/{id}',cancel:'/api/tasks/{kind}/{id}/cancel',kinds:TASK_KINDS,limits:TASK_LIMITS,actor:'self-declared-current-actor-only-not-authentication',pagination:'ephemeral-frozen-snapshot;409-task-cursor-expired-restart-without-cursor',observerDisconnectCancels:false},
-    libraryDiscovery: {...DISCOVERY_DICTIONARY,detail:'/api/media/{id}/discovery?v={version}',writeAction:'library-preparation',idempotencyHeader:'Idempotency-Key',
-      capturedActorHeader:'X-VoidPlayer-Actor',observerDisconnectCancels:false,automaticRetry:false,qualityAdmission:'existing-psnr-source-and-psnr-frames-only'},
-    qualityJobs: { schema: 'voidplayer-psnr-frame-job', version: 1, metrics: ['psnr','ssim'], requiredMetrics:['psnr'],
-      ssim:{optional:true,requestField:'ssim',variant:SSIM_VARIANT,standalone:false,resultField:'result.ssim',limits:SSIM_LIMITS,
-        window:{size:8,step:4,weight:'uniform',border:'valid-truncate-to-4'},planes:'yuv420-native-code-values',weighting:'y4-u1-v1-plane-mean'}, scope: 'single-explicit-frame-pair',
-      submit: '/api/quality/jobs', changes: '/api/quality/jobs', job: '/api/quality/jobs/{jobId}',
-      result: '/api/quality/jobs/{jobId}/result', cancel: '/api/quality/jobs/{jobId}/cancel',
-      writeAction: 'quality-job', idempotencyHeader: 'Idempotency-Key', observerDisconnectCancels: false,
-      automaticRetry: false, sharedWork: false, buildsIndexes: false, limits: QUALITY_JOB_LIMITS,
-      spatial: {optional:true,requestField:'spatial',parameters:['blockWidth','blockHeight'],units:'even-visible-source-pixels',
-        partition:'roi-anchored-disjoint-even-grid',ranking:'aggregate-mse-desc-row-major-ties',resultSchema:'voidplayer-psnr-block-grid',resultVersion:1,limits:PSNR_SPATIAL_LIMITS},
-      frameCandidates:{endpoint:'/api/media/{id}/psnr-frames?v={version}&afterAu=0&limit=50',pagination:'absolute-au-with-original-buildId',eligibility:'cached-au-candidate-execution-verifies-closed-start-and-output-identity',buildsIndexes:false},
-      sourceBuild:{endpoint:'/api/media/{id}/psnr-index',method:'POST',body:['version'],actionHeader:'quality-source-build',limits:QUALITY_SOURCE_BUILD_LIMITS,
-        ownership:'one-shot-owned-worker',disconnect:'requests-cancellation-physical-exit-before-admission-release',clearsExistingCaches:false,automatic:false},
-      presentedInput:{schema:'voidplayer-native-presented-input',version:1,protocol:'webcodecs-associated-chunk-v1',transport:'page-session-tool',tool:'capture_presented_quality_frame',
-        scope:'paused-successful-native-flv-presentation',binding:'unbound-until-readonly-exact-au-cache-join',nativePixelsScored:false,buildsIndexes:false,configurationWitness:'exact-hex-max-4096-bytes',
-        transportIdentity:'actual-same-service-version-locked-library-input-not-mutable-lineage',resource:'original-video-sample-only',
-        cacheJoin:['same-origin-url-id-version','namespace','build','exact-au','configuration-bytes','packet-offset-size-clocks','visible-source-geometry'],
-        unsupported:['wasm-playback','other-containers','ambiguous-clocks-or-picture-layout','source-crop-or-non-square-sar-or-rotation']},
-      source: { registeredLibraryOnly: true, indexKind: 'flv', enhancedFlv: true, producer: 'server-flv-scan-v1',
-        additionalContainers:{mp4:{indexKind:'mp4',schemaVersion:1,indexerBuild:'mp4-quality-tables-v1',producer:'server-mp4-scan-v1',resultVersion:2,sampleEntries:['avc1','hvc1'],h264BitDepths:[8],hevcBitDepths:[8,10],matrix:'nonfragmented-self-contained-single-video-track-single-description-progressive-420-bt709-sdr-square-no-crop-no-rotation',clock:'original-ticks-rational-identity-microseconds-projection-only',decode:'complete-verified-closed-IDR-GOP-max512-AU',nativeSequenceMetrics:{vmaf:{implemented:true,containers:VMAF_CAPABILITY.containers,capability:'/api/quality/vmaf/capability',requires:'analysis-wasm-and-exact-continuous-plan-preflight'},xpsnr:{implemented:true,capability:'/api/quality/xpsnr/capability',requires:'analysis-wasm-and-exact-continuous-plan-preflight'},cambi:{implemented:true,containers:CAMBI_CAPABILITY.containers,requires:'analysis-wasm-and-exact-single-source-pixel-validation; no-C-plan'}}}},
-        codecs: ['h264', 'hevc'], bitDepths: [8, 10], chroma: 'yuv420', closedKeyAuOnly: false, gop:{mode:'packet-identity-gop-v1',packetIdentityAbi:1,explicitStartEndAu:true,packetsPerSide:512,maxPackets:1024,maxOutputFrames:1024,reordering:true,delayedOutput:true,outputAssociation:'opaque-input-token-not-pts',singleThread:true,reportedDecodeErrors:'reject',guarantee:{...FORWARD_OUTPUT_GUARANTEE}}, forward:{mode:'forward-one-output-per-au-v1',explicitStartAu:true,packetsPerSide:512,maxPackets:1024,maxOutputFrames:1024,zeroCts:true,oneImmediateOutputPerAu:true,reordering:false,guarantee:{...FORWARD_OUTPUT_GUARANTEE}},
-        explicitColorAndChromaLocation: true, explicitPairingAndSourcePts: true },
-      resultSchema: 'voidplayer-quality-job-result', resultVersion: 1 },
-    qualityReexecution:{schema:'voidplayer-quality-reexecution',version:1,kinds:REEXECUTION_KINDS,planSuffix:'/reexecution-plan',executeAndChainSuffix:'/reexecutions',limits:REEXECUTION_LIMITS,eligibleStates:['failed','interrupted','cancelled','partial'],scope:'entire-frozen-input-from-start',oneSuccessorPerOriginal:true,attemptNumberPerJob:1,lineageField:'retryOf',legacyWithoutWitness:'blocked-new-intent',automaticRetry:false,automaticPublication:false,observerDisconnectCancels:false,writeAction:'quality-job',idempotencyHeader:'Idempotency-Key'},
-    qualityCambi:{...CAMBI_CAPABILITY,reexecution:{implemented:true,eligibleStates:['failed','interrupted','cancelled','partial'],requires:'complete-frozen-single-source-execution-contract; physical-exit; exact-full-cost-confirmation'},deployment:input.nativeCambi??{enabled:false,reason:'component-unavailable'},capability:'/api/quality/cambi/capability',submit:'/api/quality/cambi/jobs',history:'/api/quality/cambi/jobs',detail:'/api/quality/cambi/jobs/{id}',result:'/api/quality/cambi/jobs/{id}/result',frames:'/api/quality/cambi/jobs/{id}/frames',heatmap:'/api/quality/cambi/jobs/{id}/heatmap?index=N&scale=S',picture:'/api/quality/cambi/jobs/{id}/picture?index=N',privateViewer:'/quality.html?cambi=1&cambiJob={id}&index=N',cancel:'/api/quality/cambi/jobs/{id}/cancel',stopAndKeep:'/api/quality/cambi/jobs/{id}/stop-and-keep',candidates:'/api/quality/cambi/jobs/{id}/candidates',writeAction:'quality-job',capturedActorHeader:'X-VoidPlayer-Actor',idempotencyHeader:'Idempotency-Key',observerDisconnectCancels:false,automaticRetry:false,buildsIndexes:false},
-    qualityVmaf:{...VMAF_CAPABILITY,deployment:input.nativeVmaf??{enabled:false,reason:'component-unavailable'},capability:'/api/quality/vmaf/capability',preflight:'/api/quality/vmaf/preflight',submit:'/api/quality/vmaf/jobs',history:'/api/quality/vmaf/jobs',detail:'/api/quality/vmaf/jobs/{id}',result:'/api/quality/vmaf/jobs/{id}/result',frames:'/api/quality/vmaf/jobs/{id}/frames',cancel:'/api/quality/vmaf/jobs/{id}/cancel',candidates:'/api/quality/vmaf/jobs/{id}/candidates',writeAction:'quality-job',capturedActorHeader:'X-VoidPlayer-Actor',idempotencyHeader:'Idempotency-Key',observerDisconnectCancels:false,automaticRetry:false,buildsIndexes:false},
-    qualityXpsnr:{...XPSNR_CAPABILITY,deployment:input.nativeXpsnr??{enabled:false,reason:'component-unavailable'},capability:'/api/quality/xpsnr/capability',preflight:'/api/quality/xpsnr/preflight',submit:'/api/quality/xpsnr/jobs',history:'/api/quality/xpsnr/jobs',detail:'/api/quality/xpsnr/jobs/{id}',result:'/api/quality/xpsnr/jobs/{id}/result',frames:'/api/quality/xpsnr/jobs/{id}/frames',cancel:'/api/quality/xpsnr/jobs/{id}/cancel',candidates:'/api/quality/xpsnr/jobs/{id}/candidates',writeAction:'quality-job',capturedActorHeader:'X-VoidPlayer-Actor',idempotencyHeader:'Idempotency-Key',observerDisconnectCancels:false,automaticRetry:false,buildsIndexes:false},
-    qualityCorrespondence:{schema:'voidplayer-quality-correspondence-plan',version:1,relations:'/api/quality/reference-relations',plans:'/api/quality/correspondence-plans',detail:'/api/quality/correspondence-plans/{id}',rows:'/api/quality/correspondence-plans/{id}/rows',rangeInput:'/api/quality/correspondence-plans/{id}/range-input',execute:'/api/quality/correspondence-plans/{id}/execute',cancel:'/api/quality/correspondence-plans/{id}/cancel',limits:CORRESPONDENCE_LIMITS,writeAction:'quality-job',idempotencyHeader:'Idempotency-Key',clock:'distorted-source-time=reference-source-time+exact-offset',clockIdentity:'original-ticks/timebase; optional offset ticks/timescale; microseconds are projections',segments:'half-open-nonoverlapping-both-domains',assessment:'caller-declared-not-content-certified',matching:'exact-unique-rational-source-time-only',rawAuFacts:true,buildsIndexes:false,automaticRetry:false,automaticPublication:false,executeBody:['digest'],execution:'existing-durable-range-stable-client-key-receipt-first'},
-    qualityRanges:{
-      schema:'voidplayer-quality-range',version:1,plan:'/api/quality/ranges/plan',submit:'/api/quality/ranges',history:'/api/quality/ranges',
-      detail:'/api/quality/ranges/{id}',results:'/api/quality/ranges/{id}/results',cancel:'/api/quality/ranges/{id}/cancel',candidates:'/api/quality/ranges/{id}/candidates',
-      limits:QUALITY_RANGE_LIMITS,writeAction:'quality-job',idempotencyHeader:'Idempotency-Key',correspondence:['explicit-au-table','constant-source-pts-offset'],sampling:['all','stride'],
-      coverage:'inclusive-reference-decode-order-au-interval',buildsIndexes:false,observerDisconnectCancels:false,automaticRetry:false,assessment:'not-subjectively-assessed',
-      futureSequenceMetrics:{implemented:false,scope:'paired-range-adapter-only; single-source NR CAMBI uses qualityCambi',metrics:['cambi'],requiredContract:['exact-pair-table','coverage-and-holes','fixed-executor-model-recipe','all-input-output-and-preroll-budgets','per-metric-progress','no-spatial-candidate-without-spatial-evidence']}
-    },
     writes: { identity: '/api/identity', identityIsAuthentication: false, originRequired: true,
       actionHeader: 'X-VoidPlayer-Action', cookieRequired: true, completion: 'server-commit', guiAcknowledgementRequired: false },
     annotations: { version: 1, spaces: '/api/annotations/spaces',
       events: '/api/annotations/events/{space}?after={cursor}',
-      originalPairViewer:{path:'/quality.html',query:['space','annotationId','evidenceId'],requiresBrowser:true,requiresFrontend:true,readOnly:true,buildsIndexes:false,controlsPlayback:false,privateJobRead:false},
-      qualityEvidence: {action:'attach-quality-result',metric:'psnr',optionalCompanion:'ssim',result:'completed-owned-job',target:'existing-primary-source-version-and-source-pts',roi:'original-visible-pixel-grid',immutable:true,maxCount:4,maxBytes:131072,importVerification:'historical',workspaceVersion:2},
-      cambiCandidate:{action:'create-cambi-candidate',reference:'cambi:{jobId,attemptId,digest,index,scale,region}',revision:0,result:'committed-completed-or-partial-owned-single-source-CAMBI',callerFields:['text','severity'],derived:['source-version','actual-source-pts','cache-namespace-build','real-heatmap-region','immutable-evidence'],assessment:'not-subjectively-assessed',receiptBeforeResultLookup:true,workspaceVersion:3,importVerification:'historical',playbackRequired:false},
-      qualityCandidate:{action:'create-quality-candidate',revision:0,result:'completed-owned-job-with-recorded-annotation-context',callerFields:['text','severity'],derived:['source-version','actual-source-pts','index-origin','frame-duration','roi','immutable-evidence'],assessment:'not-subjectively-assessed',assessmentMeaning:'at-creation-no-subjective-defect-judgment',resultContext:{field:'annotationContext',basis:'complete-flv-index-derived-v1',additionalBases:['complete-mp4-index-derived-v1'],timeUnit:'integer-microseconds',duration:'index-derived-including-estimated-last-frame',legacyMissing:'409 annotation-context-unavailable'},transaction:['annotation','evidence','receipt','event'],receiptBeforeResultLookup:true,workspaceVersion:3,importVerification:'historical',playbackRequired:false},
       identity: ['space', 'id'], concurrency: 'expected-revision', idempotency: 'operationId',
       frameTimeUnit: 'integer-microseconds', target: 'document.media + mark.mediaId + mark.frame',
       slotMeaning: 'legacy-display-hint; no loaded track required' },

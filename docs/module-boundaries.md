@@ -18,16 +18,6 @@
 
 工作区恢复跨统一 run 队列、配置 lease、源与轨道提交/回滚；分析面板的 queries、inspection 和 settled demand owner 统一在 abort 时释放订阅与观察器。不按文件长度拆 facade 或搬走闭包函数。
 
-质量评分域使用具名公开能力：指标 `service.ts` 保留 policy、准入与证据，应用通过
-`QualityApplication` 装配，跨服务命令通过 `quality-service-ports.ts` 取得窄能力。
-`candidate-publication.ts`、`prepared-facts.ts`、`temporal-service.ts`、
-`temporal-runner.ts` 和 `result-commands.ts` 只允许登记的装配/指标调用者访问。
-这也约束类型、re-export、require 和字面量动态 import。中立 `temporal-contract.ts` 不得依赖具体指标，
-XPSNR 也不得借 VMAF 取得共同合同或限制。所有权见 [质量域](quality-ownership.md)。
-
-管理端质量工作台集中在 `src/admin/quality/`。目录外只访问 `workspace.ts`、
-`resources.ts` 和任务中心复用的 `reexecution.ts`；temporal、指标面板、navigation、
-fields 和 summary 是工作台内部实现。边界负例覆盖外部类型引用、re-export 和动态加载。
 发布入口为 `src/admin/main.ts`；移动模块时须同步更新直接/动态导入、浏览器测试 hook、Worker 入口和资产 URL。
 
 ## 媒体基础合同的归属
@@ -51,7 +41,6 @@ TypeScript 加载会保留行内 `import { type T }` / `export { type T }` 的�
 `shared/media/types.ts`，请求/实际呈现事实为 `shared/presentation/presentation-info.ts`。
 `shared/review/model.ts` 保留 Slot/Mark、评审校验与多轨步进，历史媒体类型名只做纯类型兼容转发。
 shared media/color 禁止引用 review，浏览器 media 禁止经 review/model 取得基础事实。
-现有 native-presented 评审交接协议不属于这些基础媒体类型，保持独立归属。
 
 文件整体进入 MEMFS 的 512 MiB 上限归 `src/media/policy/fallback-budget.ts`，
 只允许媒体实现引用；评审模型不再执行或转发解码预算。数值、准入条件、失败阶段、

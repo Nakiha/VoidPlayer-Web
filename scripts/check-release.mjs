@@ -31,19 +31,13 @@ let executable;
 async function verifyAgentEntry(base,transport=fetch,analysisAvailable=true){
   const entry=await transport(base+'/llms.txt');assert.equal(entry.status,200);assert.match(await entry.text(),/\/api\/agent\/tasks/);
   const manifest=await (await transport(base+'/api/agent')).json(),catalog=await (await transport(base+manifest.links.taskCatalog)).json();assert.equal(catalog.schema,'voidplayer-agent-tasks');assert.equal(catalog.version,1);
-  for(const id of ['library.prepare','plan.execute','single.submit','vmaf.submit','evidence.events','tasks.query','tasks.get']){
+  for(const id of ['identity.users','identity.select','library.browse']){
     const route='/api/agent/operations/'+id,response=await transport(base+route),text=await response.text();assert.equal(response.status,200);const op=JSON.parse(text);assert.equal(op.id,id);assert.equal(op.execution.requiresBrowser,false);
     const head=await transport(base+route,{method:'HEAD'});assert.equal(head.status,200);assert.equal(await head.text(),'');assert.equal(Number(head.headers.get('content-length')),Buffer.byteLength(text));
     assert.equal((await transport(base+op.links.guide)).status,200);
   }
-  const mp4=manifest.qualityJobs.source.additionalContainers.mp4;assert.equal(mp4.nativeSequenceMetrics.cambi.implemented,true);assert.equal(mp4.nativeSequenceMetrics.vmaf.implemented,true);
-  assert.deepEqual(mp4.nativeSequenceMetrics.cambi.containers.mp4.matrix,['h264-8','hevc-8','hevc-10']);assert.deepEqual(manifest.qualityCambi.resultVersions,[1,2]);assert.equal(manifest.qualityCambi.deployment.enabled,analysisAvailable);
-  if(analysisAvailable)assert.equal(manifest.qualityCambi.deployment.component.executor,'analysis-wasm');
-  for (const metric of ['vmaf','cambi']) {
-    const capability=await (await transport(base+`/api/quality/${metric}/capability`)).json();
-    assert.equal(capability.enabled,analysisAvailable,JSON.stringify(capability));
-    if(analysisAvailable)assert.equal(capability.component.executor,'analysis-wasm');
-  }
+  assert.equal(manifest.capabilities.some(item => /quality|tasks|preparations/.test(item.id)), false);
+
 }
 const run = (args, overrides = {}) => execFileSync(executable, args, { cwd, env: { ...env, ...overrides }, encoding: 'utf8', timeout: 10000, stdio: ['ignore', 'pipe', 'pipe'] });
 async function renameReleased(source, destination) {

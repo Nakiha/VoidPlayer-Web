@@ -18,7 +18,6 @@ test('real stdio legacy handshake, fixed whitelist and no-page recovery; EOF clo
   assert.ok((await c.rpc('tools/call',{name:'get_bridge_status',arguments:null})).error,'explicit null is not an object-shaped tool input');
   const manifest=await(await fetch(c.base+'/api/agent')).json();
   assert.equal(manifest.capabilities.find(v=>v.id==='bridge.local-mcp').enabled,true);
-  assert.equal(manifest.capabilities.find(v=>v.id==='quality.jobs').enabled,false,'the page host does not own durable scoring jobs');
   assert.deepEqual(manifest.localMcp.tools.map(v=>v.inputSchema),tools.map(v=>v.inputSchema),'HTTP operation discovery reuses the actual MCP envelopes');
   assert.equal((await c.call('seek_review',{epoch:'none',operationId:'no-page',input:{ptsUs:0}})).code,'host-unavailable');
   assert.ok((await c.rpc('tools/call',{name:'eval',arguments:{script:'process.exit()'}})).error);

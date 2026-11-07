@@ -1,4 +1,3 @@
-import {ownLibraryIndexReference} from '../media/indexing/library-index-reference.ts';
 import { installWorkspaceRecovery } from './workspace-recovery.ts';
 import { FileHandleError, restoreHandleFile, handleKey } from '../services/file-handles.ts';
 import { LibraryAccessError } from '../../shared/media/io/source-access.ts';
@@ -111,8 +110,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
         const pinned = await resolveLibraryReference(info, signal);
         if (pinned.mtimeChanged) warnMtime(info.name);
         const { mtimeChanged: _ignored, ...reference } = pinned;
-        const source = await openMediaFromUrl(reference.url, info, undefined, progress, signal,undefined,
-          new URL(reference.url,location.href).origin===location.origin?ownLibraryIndexReference(reference.id,new URL(reference.url,location.href).searchParams.get('v')!):undefined,configuration); updateMediaInfo(source,{source:reference},'identity'); return source;
+        const source = await openMediaFromUrl(reference.url, info, undefined, progress, signal,undefined,configuration); updateMediaInfo(source,{source:reference},'identity'); return source;
       }, { skipUnavailable: true, progressive, signal: operation?.signal, onSkipped: (info, error) => {
         skipped.push({ name: info.name, error: error instanceof Error ? error.message : String(error) });
       } });

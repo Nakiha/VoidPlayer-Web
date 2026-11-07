@@ -6,7 +6,7 @@
 
 ```ts
 import { first, second } from './module.ts';
-const journal = new FrozenSubmissionJournal(sessionStorage, storage, cambiInput);
+const entries = new Map<string, MediaInfo>();
 const sx = x + d.visibleRect.x, sy = y + d.visibleRect.y;
 const e = clamp(signal), a = 0.17883277, b = 1 - 4 * a, c = 0.5 - a * Math.log(4 * a);
 type Point = { x: number; y: number };

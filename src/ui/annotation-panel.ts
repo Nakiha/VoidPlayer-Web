@@ -1,4 +1,3 @@
-import { currentActor } from '../services/identity.ts';
 import type { Mark, Slot } from '../../shared/review/model.ts';
 import { formatTime } from '../../shared/review/model.ts';
 import { annotationThumbnails } from './annotation-thumbnails.ts';
@@ -31,7 +30,6 @@ function markContent(mark: Mark, slot: Slot, actions?: HTMLElement, session?: Re
     const image = document.createElement('img'); image.src = preview.url; image.width = preview.width; image.height = preview.height; image.alt = t(msg("marks.previewImage", "标注画面")); image.loading = 'lazy'; image.onerror = () => { image.hidden=true; }; thumbnail.append(image);
   } else { thumbnail.textContent = mark.text || t(msg("marks.noPreview", "暂无预览")); }
   content.append(thumbnail);
-    if(mark.qualityCandidate){const badge=document.createElement('span');badge.className='quality-candidate-badge';badge.textContent=t(msg('qualityCandidate.badge','测量候选 · 创建时未作人工判断'));content.append(badge);}
   const footer = document.createElement('span'); footer.className = 'mark-footer';
   const note = document.createElement('span'); note.className = 'mark-note'; note.textContent = mark.text; note.title = mark.text;
   const author = document.createElement('span'); author.className = 'mark-author'; author.textContent = mark.author?.name || t(msg("marks.anonymous", "未署名"));
@@ -44,8 +42,6 @@ export function installAnnotationPanel(
   remove: (id: string) => void,
   edit: (id: string, ptsUs: number, slot: Slot) => void,
   modeChanged: (expanded: boolean) => void,
-  attachQuality?: (id:string) => Promise<void>,
-  qualitySpace?:()=>string,
 ) {
   const dock = document.getElementById('subtracks-panel')!;
   const list = document.getElementById('selected-marks')!;
@@ -80,22 +76,6 @@ export function installAnnotationPanel(
       confirmation.append(label, cancel, accept); container.append(confirmation); cancel.focus();
     };
     actions.append(removeButton);
-    const attach=document.createElement('button');attach.type='button';attach.className='annotation-attach-psnr';attach.textContent=t(msg('quality.attach', '关联 PSNR'));
-    attach.onclick=e=>{e.stopPropagation();hidePreview();void attachQuality?.(mark.id);};actions.append(attach);
-    const space=qualitySpace?.();if(space&&space!=='local'){const measure=document.createElement('a');measure.className='annotation-measure-psnr';measure.href=`/admin/?qualitySpace=${encodeURIComponent(space)}&qualityAnnotation=${encodeURIComponent(mark.id)}#quality`;measure.target='_blank';measure.rel='noopener';measure.textContent=t(msg('qualityWorkflow.measureForMark','测量并关联 PSNR'));measure.onclick=e=>e.stopPropagation();actions.append(measure);}
-    if(mark.qualityEvidence?.length||mark.cambiEvidence?.length){
-      const evidence=document.createElement('button');evidence.type='button';evidence.className='annotation-psnr-evidence';evidence.textContent=`${mark.cambiEvidence?.length?'CAMBI':'PSNR'} (${(mark.qualityEvidence?.length??0)+(mark.cambiEvidence?.length??0)})`;
-      evidence.onclick=async e=>{
-        e.stopPropagation();hidePreview();
-        const actor = currentActor()?.id, space = qualitySpace?.();
-        try {
-          const { showQualityEvidence } = await import('./quality-evidence.ts');
-          if (lifecycle.signal.aborted || currentActor()?.id !== actor || qualitySpace?.() !== space) return;
-          const snapshot = session.exportWorkspace(location.origin+'/'), original = snapshot.marks.find(m=>m.id===mark.id);
-          if (original) showQualityEvidence(original,{mark:original,media:snapshot.media},space);
-        } catch (error) { window.dispatchEvent(new CustomEvent('voidplayer:ui-error', { detail: error })); }
-      };actions.append(evidence);
-    }
     return actions;
   }
   // Strip cards and the hover preview share one layout; only the wrapper

@@ -11,28 +11,16 @@ import { MediaLibraryIndex } from '../../server/library.ts';
 import type { AnnotationOperation } from '../../shared/review/annotation-record.ts';
 import { AGENT_DOCUMENTS } from '../../server/agent-guide.ts';
 import { agentManifest, serviceCapabilities } from '../../shared/service/agent.ts';
-import {AGENT_OPERATIONS,AGENT_WORKFLOWS,agentOperation,agentTask} from '../../shared/service/agent-operations.ts';
-import {DISCOVERY_DICTIONARY} from '../../shared/media/discovery.ts';
-import {VMAF_CAPABILITY} from '../../shared/analysis/quality/vmaf.ts';
-import {QUALITY_RANGE_LIMITS} from '../../shared/analysis/quality/ranges.ts';
+import {AGENT_WORKFLOWS,agentOperation,agentTask} from '../../shared/service/agent-operations.ts';
 
 test('runtime discovery separates implementation, deployment and source/session readiness', () => {
-  const manifest = agentManifest({ capabilities: serviceCapabilities(false, false), libraryReady: false, frontendAvailable: true, qualityJobsEnabled: true, actor: null });
+  const manifest = agentManifest({ capabilities: serviceCapabilities(false, false), libraryReady: false, frontendAvailable: true, actor: null });
   const byId = (id: string) => manifest.capabilities.find(capability => capability.id === id)!;
   assert.equal(byId('library.browse').readiness, 'index-warming');
   assert.equal(byId('media.read').readiness, 'per-source');
   assert.equal(byId('annotations.write').implemented, true);
   assert.equal(byId('annotations.write').enabled, false);
   assert.equal(byId('session.view').readiness, 'requires-live-session');
-  assert.equal(byId('quality.jobs').implemented, true);assert.equal(byId('quality.jobs').readiness, 'needs-identity');
-  assert.equal(byId('quality.jobs').requiresBrowser, false);assert.deepEqual(manifest.qualityJobs.metrics, ['psnr','ssim']);
-  assert.equal(manifest.qualityJobs.scope, 'single-explicit-frame-pair');assert.equal(manifest.qualityJobs.submit, '/api/quality/jobs');
-  assert.equal(manifest.qualityJobs.observerDisconnectCancels, false);assert.equal(manifest.qualityJobs.automaticRetry, false);
-  assert.equal(manifest.qualityJobs.buildsIndexes, false);assert.equal(manifest.qualityJobs.sharedWork, false);
-  assert.equal(manifest.qualityJobs.spatial.optional,true);assert.equal(manifest.qualityJobs.spatial.limits.maxBlocks,64);assert.equal(manifest.qualityJobs.spatial.ranking,'aggregate-mse-desc-row-major-ties');
-  const temporary = agentManifest({capabilities:serviceCapabilities(false,false),libraryReady:true,actor:{id:'actor',name:'A'}}).capabilities.find(c=>c.id==='quality.jobs')!;
-  assert.equal(temporary.implemented,true);assert.equal(temporary.enabled,false);assert.equal(temporary.readiness,'unavailable');
-  assert.equal(byId('compute.workers').implemented,false);
   assert.equal(byId('bridge.local-mcp').implemented,true);
   assert.equal(byId('bridge.local-mcp').enabled,false,'manifest without a loopback page host grants no bridge capability');
 });
@@ -123,27 +111,11 @@ test('ordinary HTTP discovers, attributes and commits annotations without fronte
     }
     const ready = await (await fetch(base + '/api/agent', { headers: { cookie } })).json();
     assert.equal(ready.capabilities.find((c: { id: string }) => c.id === 'annotations.write').readiness, 'ready');
-    assert.equal(ready.capabilities.find((c: { id: string }) => c.id === 'quality.jobs').readiness, 'per-source');
-    assert.deepEqual(ready.qualityJobs.metrics, ['psnr','ssim']);
-    const jobs = await fetch(base + ready.qualityJobs.changes, {headers:{cookie}});
-    assert.equal(jobs.status, 200);assert.deepEqual((await jobs.json()).entries, [], 'discovery and annotation commands do not create scoring jobs');
     config.port = (service.server.address() as { port: number }).port;
     await service.close(); service = await startService(config, false);
     assert.deepEqual(await (await submit(operation)).json(), record);
     assert.equal((await (await fetch(base + '/api/annotations/events/default?after=0')).json()).events.length, 1);
   } finally { await service.close(); await rm(dir, { recursive: true, force: true }); }
-});
-
-test('progressive descriptions reuse authoritative limits and distinguish conditional VMAF from metadata and CAMBI',()=>{
-  assert.equal(new Set(AGENT_OPERATIONS.map(o=>o.id)).size,AGENT_OPERATIONS.length);
-  for(const op of AGENT_OPERATIONS){assert.ok(agentTask(op.task));for(const id of op.next)assert.ok(AGENT_OPERATIONS.some(o=>o.id===id));}
-  assert.equal(agentOperation('range.submit',[])!.request.limits,QUALITY_RANGE_LIMITS);
-  assert.equal(agentOperation('library.discover',[])!.request.limits,DISCOVERY_DICTIONARY.query);
-  const m=agentManifest({capabilities:serviceCapabilities(true,false),libraryReady:true,qualityJobsEnabled:true,nativeVmaf:{enabled:false,reason:'component-unavailable'},actor:null});
-  const native=m.qualityJobs.source.additionalContainers.mp4.nativeSequenceMetrics;
-  assert.deepEqual(native.vmaf.containers,VMAF_CAPABILITY.containers);assert.equal(native.cambi.implemented,true);assert.equal(m.qualityVmaf.deployment.enabled,false);
-  assert.match(DISCOVERY_DICTIONARY.fields.quality,/Metadata stream IDs/);
-  assert.ok(AGENT_DOCUMENTS['/agent/quality.md'].length<2500);assert.ok(AGENT_DOCUMENTS['/agent/quality/reference.md'].length>10000);
 });
 
 test('read-only deployment advertises unavailable writes and still serves embedded task documents', async () => {
@@ -163,55 +135,29 @@ test('read-only deployment advertises unavailable writes and still serves embedd
   } finally { await new Promise<void>(resolve => server.close(() => resolve())); await library.close(); await rm(dir, { recursive: true, force: true }); }
 });
 
-test('temporary library deployment never advertises or accepts durable jobs', async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'vp-agent-temporary-'));
-  const library = new MediaLibraryIndex([dir], {watch:false});
-  const server = createMediaServer({roots:[dir],library,onLog(){}});
-  server.listen(0,'127.0.0.1');await once(server,'listening');
-  const base = `http://127.0.0.1:${(server.address() as {port:number}).port}`;
+test('removed discovery, task and scoring APIs are absent while normal library and annotation APIs remain', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'vp-removed-features-'));
+  const library = new MediaLibraryIndex([dir], { database: path.join(dir, 'index.sqlite'), watch: false });
+  const server = createMediaServer({ roots: [dir], library, onLog() {} });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   try {
-    const manifest = await fetch(base+'/api/agent').then(r=>r.json());
-    const capability = manifest.capabilities.find((c:{id:string})=>c.id==='quality.jobs');
-    assert.equal(capability.implemented,true);assert.equal(capability.enabled,false);assert.equal(capability.readiness,'unavailable');
-    const response = await fetch(base+'/api/quality/jobs',{headers:{cookie:'voidplayer-user=guest-00000000-0000-4000-8000-000000000001'}});
-    assert.equal(response.status,503);assert.equal((await response.json()).code,'quality-storage-unavailable');
-  } finally {await new Promise<void>(resolve=>server.close(()=>resolve()));await library.close();await rm(dir,{recursive:true,force:true});}
-});
-
-test('quality discovery and guides disclose candidate transaction, SSIM and opaque GOP identity consistently',async()=>{
- const manifest=agentManifest({capabilities:serviceCapabilities(true,false),libraryReady:true,qualityJobsEnabled:true,actor:{id:'a',name:'A'}});
- assert.equal(manifest.annotations.qualityCandidate.action,'create-quality-candidate');assert.equal(manifest.annotations.qualityCandidate.receiptBeforeResultLookup,true);assert.equal(manifest.annotations.qualityCandidate.workspaceVersion,3);assert.equal(manifest.annotations.qualityCandidate.playbackRequired,false);
- assert.deepEqual(manifest.annotations.qualityCandidate.callerFields,['text','severity']);assert.deepEqual(manifest.annotations.qualityCandidate.transaction,['annotation','evidence','receipt','event']);
- assert.equal(manifest.qualityJobs.sourceBuild.method,'POST');assert.equal(manifest.qualityJobs.sourceBuild.automatic,false);assert.equal(manifest.qualityJobs.sourceBuild.limits.maxSourceBytes,64*1024*1024);assert.equal(manifest.qualityJobs.presentedInput.binding,'unbound-until-readonly-exact-au-cache-join');assert.equal(manifest.qualityJobs.presentedInput.nativePixelsScored,false);
- const guides=JSON.stringify(AGENT_DOCUMENTS);for(const phrase of ['create-quality-candidate','annotation-context-unavailable','not-subjectively-assessed','packet-identity-gop-v1','Zero CTS does not imply immediate output','concealmentDetection=unavailable','capture_presented_quality_frame','quality-source-build','configurationHex','UNBOUND'])assert.ok(guides.includes(phrase),phrase);
- assert.ok(!guides.includes('Delayed/reordered pictures,'),'guide must not claim all delayed pictures reject');
- const {readFile}=await import('node:fs/promises');const doc=await readFile(new URL('../../docs/agent-http.md',import.meta.url),'utf8');assert.ok(!doc.includes('SSIM/VMAF/CAMBI'));assert.match(doc,/create-quality-candidate/);assert.match(doc,/opaque token/);
-});
-
-
-test('CAMBI progressive operations retain single-source admission and unavailable recovery without metric substitution',()=>{
- const m=agentManifest({capabilities:serviceCapabilities(true,false),libraryReady:true,qualityJobsEnabled:true,actor:{id:'owner',name:'Owner'},nativeCambi:{enabled:true,reason:null}});
- assert.deepEqual(m.qualityReexecution.kinds,['single','range','vmaf','xpsnr','cambi']);assert.equal(m.qualityCambi.reexecution.implemented,true);assert.deepEqual(m.qualityCambi.reexecution.eligibleStates,['failed','interrupted','cancelled','partial']);assert.equal(agentOperation('cambi.reexecute',m.capabilities)!.execution.host,'service-with-analysis-wasm');
- const task=agentTask('quality.cambi')!;assert.equal(task.operations.length,14);const submit=agentOperation('cambi.submit',m.capabilities)!;assert.equal(submit.availability.enabled,true);assert.equal(submit.request.schema,'voidplayer-cambi-job');assert.equal(submit.execution.requiresBrowser,false);assert.equal(submit.write!.action,'quality-job');assert.ok(!submit.next.includes('plan.create'));
- assert.match(AGENT_DOCUMENTS['/agent/quality/cambi.md'],/no reference relation|reference relationship/i);assert.match(AGENT_DOCUMENTS['/agent/quality/cambi.md'],/strict.*MP4/);assert.match(AGENT_DOCUMENTS['/agent/quality.md'],/CAMBI uses one source and no C plan/);
-});
-
-
-test('every scoring discovery entry describes analysis WASM and exact rational source clocks', async () => {
-  const publicFacts = JSON.stringify({guides:AGENT_DOCUMENTS, discovery:DISCOVERY_DICTIONARY, workflows:AGENT_WORKFLOWS});
-  for (const stale of ['explicitly installed Linux x64 component', 'Non-integer microseconds are unsupported', 'exact integer-us clocks', 'ambiguous/nonintegral clocks', 'CAMBI is not implemented here', 'Continuous native VMAF', 'Continuous native XPSNR']) {
-    assert.ok(!publicFacts.includes(stale), `retired admission must not be advertised: ${stale}`);
-  }
-  assert.match(DISCOVERY_DICTIONARY.support.scoring.join(' '), /analysis WASM/);
-  assert.match(DISCOVERY_DICTIONARY.support.scoring.join(' '), /original ticks\/timebase/);
-  for (const metric of ['vmaf','xpsnr']) assert.match(agentTask('quality.'+metric)!.title, /analysis WASM/);
-  const manifest=agentManifest({capabilities:serviceCapabilities(true,false),libraryReady:true,qualityJobsEnabled:true,actor:null});
-  assert.equal(manifest.qualityCorrespondence.matching,'exact-unique-rational-source-time-only');
-  const {agentRecovery}=await import('../../shared/service/agent-recovery.ts');
-  for (const metric of ['vmaf','xpsnr','cambi']) {
-    const recovery=agentRecovery('component-unavailable',metric+'.submit');
-    assert.match(recovery.action,/analysis WASM/);
-    assert.ok(recovery.operations.includes('/api/agent/operations/'+metric+'.capability'));
-    assert.match(recovery.action,/Keep the requested metric unchanged/);
+    const manifest = await (await fetch(base + '/api/agent')).json();
+    assert.equal(manifest.capabilities.some((entry: { id: string }) => /quality|tasks|discovery|preparations|technical-filter/.test(entry.id)), false);
+    const media = 'a'.repeat(24);
+    for (const path of ['/api/quality/psnr-pair', '/api/quality/jobs', '/api/quality/ranges', '/api/quality/correspondence-plans',
+      '/api/quality/reference-relations', '/api/quality/vmaf/capability', '/api/quality/xpsnr/jobs', '/api/quality/cambi/jobs',
+      '/api/tasks', '/api/library/discovery', '/api/library/preparations', '/api/library/technical-filter',
+      `/api/media/${media}/discovery`, `/api/media/${media}/psnr-index`, '/api/admin/quality-resources']) {
+      for (const method of ['GET', 'POST']) assert.equal((await fetch(base + path, { method })).status, 404, method + ' ' + path);
+    }
+    assert.equal((await fetch(base + '/api/health')).status, 200);
+    assert.equal((await fetch(base + '/api/library/browse')).status, 200);
+    assert.equal(agentTask('quality.single'), null);
+    assert.equal(agentTask('tasks'), null);
+    assert.equal(agentOperation('library.prepare', manifest.capabilities), null);
+  } finally {
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    await library.close(); await rm(dir, { recursive: true, force: true });
   }
 });

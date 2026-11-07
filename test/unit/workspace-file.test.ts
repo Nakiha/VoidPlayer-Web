@@ -13,7 +13,7 @@ test('plain and gzip workspace files resolve recorded server URLs and preserve t
  assert.deepEqual(await readWorkspaceFile(new Blob([JSON.stringify(value)]),'http://another-host/'),value);
 });
 test('reject unsupported versions, unsafe URLs, duplicate slots, invalid refs and negative end times before load',()=>{
- const mutations: ((d: ReturnType<typeof document>) => unknown)[] = [d=>d.version=3,d=>d.media[0].source.url='file:///etc/passwd',d=>d.media[0].source.url='https://user:pass@example.com/v',d=>d.tracks.push({...d.tracks[0]}),d=>d.tracks[0].mediaId='absent',d=>d.tracks[0].offsetUs=-1000,d=>d.viewport.zoom=Infinity];
+ const mutations: ((d: ReturnType<typeof document>) => unknown)[] = [d=>d.version=4,d=>d.media[0].source.url='file:///etc/passwd',d=>d.media[0].source.url='https://user:pass@example.com/v',d=>d.tracks.push({...d.tracks[0]}),d=>d.tracks[0].mediaId='absent',d=>d.tracks[0].offsetUs=-1000,d=>d.viewport.zoom=Infinity];
  for(const mutate of mutations) {
   const value=document();mutate(value);assert.throws(()=>parseWorkspace(value));
  }
@@ -70,7 +70,6 @@ test('comparison contract round trips and rejects unsupported semantics rather t
    assert.throws(() => parseWorkspace({ ...old, tracks: [{ ...old.tracks[0], visible: 'false' }] }));
  });
 
-
 test('v2 HDR comparison retains all mapping conditions and rejects ambiguous targets',async()=>{
   const output=defaultColorOutput();output.target='hdr';output.hdrWhiteNits=250;output.preview.sourcePeakNits=4000;
   const comparison={version:2,colorMode:'reference',referenceDecode:{decoder:'hardware',depth:4},presentation:'voidplayer-color-v2',outputColorSpace:'display-p3',colorOutput:output};
@@ -118,4 +117,19 @@ test('old analysis selections migrate to the same visible charts', () => {
   assert.deepEqual(selectedAnalysisDiagrams({ ...flags, diagram: 'references' }), ['references']);
   assert.deepEqual(selectedAnalysisDiagrams({ ...flags, diagrams: [] }), []);
   assert.deepEqual(selectedAnalysisDiagrams({ ...flags, diagrams: ['references', 'size'] }), ['size', 'references']);
+});
+
+test('legacy workspace versions preserve ordinary annotations without retired measurement fields', () => {
+  for (const version of [2, 3]) {
+    const value = document();
+    const mark = { id: 'legacy', text: 'Review note', severity: 3, slot: 'A', mediaId: 'a',
+      frame: { ptsUs: 500, sourcePtsUs: 500, durationUs: 40 }, region: null, comparison: [],
+      origin: 'human', createdAt: value.generatedAt, qualityEvidence: [{ obsolete: true }],
+      qualityCandidate: { obsolete: true }, cambiEvidence: [{ obsolete: true }] };
+    const restored = parseWorkspace({ ...value, version, marks: [mark] });
+    assert.equal(restored.version, 1);
+    assert.equal(restored.marks[0].text, 'Review note');
+    assert.equal(restored.marks[0].frame.ptsUs, 500);
+    for (const field of ['qualityEvidence', 'qualityCandidate', 'cambiEvidence']) assert.equal(Object.hasOwn(restored.marks[0], field), false);
+  }
 });

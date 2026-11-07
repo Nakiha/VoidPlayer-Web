@@ -125,13 +125,6 @@ export function settingsShell() {
           <p id="local-file-access-status" class="settings-caption" role="status"></p>
           <p class="settings-caption">${th(msg('fileAccess.help', '选择一个视频以验证访问权限和本机句柄保存，不会上传或播放。曾拒绝授权时可再次尝试；浏览器未提供此能力时，本地视频仅在本次页面可用，不进入最近打开。'))}</p>
         </div>
-        <div class="settings-group"><div class="settings-action-row">
-          <h4 id="quality-tasks-label" class="settings-icon-label">${icon('chart')}<span>${th(msg('qualityWorkflow.title','画质评分'))}</span></h4>
-          <a id="quality-tasks-open" href="/admin/#quality" target="_blank" rel="noopener" aria-describedby="quality-tasks-label">${th(msg('settingsShell.openInNewTab', '在新标签页打开'))} ↗</a>
-        </div><div class="settings-action-row">
-          <h4 id="quality-roi-label" class="settings-icon-label">${icon('rect')}<span>${th(msg('qualityRoi.entry','ROI 测量'))}</span></h4>
-          <button id="quality-roi-open" type="button" aria-describedby="quality-roi-label">${th(msg('qualityRoi.openTool','打开测量'))}</button>
-        </div></div>
       </section>
       <section id="settings-pane-about" role="tabpanel" aria-labelledby="settings-tab-about" tabindex="0" hidden>
         ${paneTitle(t(msg("settingsShell.about", "关于")))}

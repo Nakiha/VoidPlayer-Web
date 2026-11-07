@@ -11,12 +11,6 @@
 | 性能 | `tools/perf/bench-frame-index.mjs`；其余 `bench-*`、`compare-index-scan-modes.mjs` | `perf` 套件或专用参数；显式 informational |
 | 发布与产物 | `tools/release/release-version.mjs`；`package-release.mjs`、`prepare-release-core.mjs`、`check-release*.mjs`、`stage-release.mjs` | workflow 管理原生平台、产物依赖和草稿；回归不触发发布 |
 
-CAMBI 本机观察：`node scripts/tools/diagnostics/evaluate-cambi.mjs --rounds=3`。
-使用固定 8/10 位媒体和官方数值/热图对照，记录已知合成阶梯的命中/漏报、
-基线筛查误报和实际任务/HTTP/内存观察；默认输出 `.run/cambi-screening/report.json`。
-这是显式本机诊断，不进入云端 CI，不设置性能或主观质量通过线。
-
-
 目录整理按契约、真实媒体、轻量逻辑、服务、其余逻辑和工具分批进行。带专用启动、打包或平台约束的工具继续保留原有入口和实现，职责由本索引及 manifest 的 kind、restrictions、required 明确区分；不能根据 `check-` 或 `test:` 名称推断它是门禁。
 
 新增浏览器或 Node 回归必须登记稳定 ID、矩阵与前置条件。领域浏览器和 `tools/` 中的模块都纳入漏登记检查；工具例外要给出理由且 `required=false`。复用 helper 不单独作为一次回归执行，Node helper 与 Worker 位于 `test/helpers/`。固定参考 JSON、媒体生成入口和旧 Worker URL 保留兼容，不重生成参考结果。
@@ -28,7 +22,6 @@ CAMBI 本机观察：`node scripts/tools/diagnostics/evaluate-cambi.mjs --rounds
 Vite 与独立程序共用 `release-version.mjs` 的版本规则。标签构建必须在构建网页和打包两个步骤使用同一个 `VOIDPLAYER_RELEASE_TAG`；标签必须匹配包版本、指向当前修订且工作区干净。分支构建保留 `-preview.<修订>`（有未提交改动时附加 `.dirty`）；无 Git 的源码网页构建标为 `-development`，不能据此制作正式包。
 
 `dist/build-info.json` 与网页模块由同一份构建信息生成。打包前校验版本、完整修订、标签和工作区状态，防止把预览网页装进正式程序。`release-version-browser` 在 Linux/Windows 原生 CI 中从解压包检查首页及关于页面，与服务端和 manifest 的版本逐字一致；可用 `node scripts/check-release-browser.mjs /path/to/package.tar.gz chromium --version-only` 单独运行，不需要视频素材。
-
 
 ## 播放核心同步与打包前校验
 
@@ -59,12 +52,4 @@ FFmpeg 源码在 `Nakiha/FFmpeg` 维护两条以 FFmpeg `n9.0.2` 为基线的分
 
 完整 CI 的三个 FATE 消费 job 使用 `.github/actions/fate-fixtures`，按精确键恢复 `fixtures/fate`，每次恢复后（包括命中）仍完整校验，成功后立即保存，再开始产品回归。无宽泛恢复键，不改素材、测试或阈值。缓存只加速固定公开素材，不是信任来源；冷缓存/被驱逐/不完整时仍依赖官方源，官方不可达就失败。损坏的精确键不可覆盖，需显式处理远端坏缓存；不能靠下载替换隐藏问题。缓存保存与后续命中须看 Actions 实际日志确认，本地通过不证明远端已有种子或上游网络恢复。
 
-- `check-quality-workflow-browser.mjs`：完整服务端 PSNR GUI 任务闭环（Chromium/WebKit × 8/10 位），实际 UI 提交、持久状态/取消/历史、显式已有标注证据和原帧对查看，要求真实 core；登记于完整 `ci-cache`。
-
-- `tools/fixtures/quality-forward.mjs`：生成固定 H.2648/HEVC10 无重排普通依赖帧 FLV 与独立 FFmpeg 原始平面对照、精确时钟和 SHA-256。完整依赖窗口、GUI/Agent/证据/原帧复核见 [工作流契约](../docs/forward-frame-quality.md)；`check-quality-workflow-browser.mjs chromium 8 forward`（另有 WebKit/10bit）登记为现有 core-backed `ci-ssim` 的必需用例，不替换旧 PSNR/SSIM 检查。
-
-- `check-quality-roi-browser.mjs`：播放器已载入媒体的显式 AU 独立快照与偶数源网格 ROI → 持久 PSNR/SSIM/grid → 原子共享测量候选 → 原帧查看，Chromium/WebKit × H2648/HEVC10；完整 `ci-cache` 必需且要求 core。不继承旧播放 token 的 PTS 关联、不完成索引，Agent 共用 `create-quality-candidate`；见 [契约与矩阵](../docs/quality-roi-candidates.md)。
-
 Existing local page MCP: `node scripts/mcp-page-bridge.ts --existing-origin http://127.0.0.1:5180`; explicitly pair/consent in the already-open page. See `docs/local-mcp-page-bridge.md`. `check-existing-page-bridge-browser.mjs` verifies the real independent stdio client against ordinary pages with existing Files/ROI; no protocol simulation substitutes for this GUI check.
-
-评分应用的装配/关闭、冻结提交、观察与清理集合见 [所有权契约](../docs/quality-ownership.md)。`clean.mjs` 不推断未知 `.run` 目录为垃圾，验收目录必须先在统一清单声明。

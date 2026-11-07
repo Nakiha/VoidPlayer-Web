@@ -127,7 +127,6 @@ button.brand:hover, :root[data-keyboard-navigation] button.brand:focus-visible {
 @container (max-width: 340px) { .transport #previous, .transport #next { display:none; } }
 @container (max-width: 300px) { .transport-actions, .transport .play-buttons { gap:0; } }
 
-
 .play-buttons { display: flex; align-items: center; gap: var(--control-gap); }
 .play-buttons button { border: 0; background: transparent; }
 .time-button { border: 0; padding: 0; background: transparent; white-space: nowrap; }
@@ -534,10 +533,7 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .drawing-divider { width: 1px; height: 22px; background: var(--border); margin: 0 3px; }
 #drawing-error { margin: 4px; color: var(--warning-text); font-size: var(--text-sm); }
 
-
-
 .connection-control { position: relative; display: flex; }
-
 
 @container (max-width: 440px) { .subtrack-ruler span:nth-child(2), .subtrack-ruler span:nth-child(4) { display: none; } }
 
@@ -685,7 +681,6 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .viewport-surface.chrome-hidden .transport-dock { background:transparent; backdrop-filter:none; -webkit-backdrop-filter:none; }
 .viewport-surface.chrome-hidden #divider { top: 0; }
 
-
 /* One material for all video overlays, including split-view headings. */
 .viewport-tool-panel, .annotation-preview, .transport-dock.glass, .screens .video-card .card-heading {
   background: var(--viewport-chrome-fill);
@@ -736,8 +731,6 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
    inherited custom-property formula had already captured the old values. */
 #position.time-input { width: calc(var(--time-input-chars, 9) * 1ch + 2 * var(--time-input-padding) + 1px); padding: 0 var(--time-input-padding); }
 
-
-
 /* Menus share one denser frosted surface; swatches and content stay opaque.
    Native closed popovers render nothing, so only the open menu incurs blur. */
 .popup-menu, .header-actions[popover] {
@@ -758,15 +751,11 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .transport .icon[data-icon=previous], .transport .icon[data-icon=next] { transform: scale(1.08); }
 .transport .icon[data-icon=fit], .viewport-eye .icon { transform: scale(1.2); }
 
-
 .timeline-playhead { width: var(--timeline-thumb-size); height: var(--timeline-pin-height); clip-path: var(--timeline-pin-shape); background: var(--accent); pointer-events: none; }
 .timeline-playhead { position: absolute; left: calc(100% * var(--progress-ratio, 0)); top: calc((100% - var(--timeline-pin-height)) / 2); transform: translateX(-50%); }
 /* A short hover tick crosses only the rail, separate from the glass pointer. */
 .timeline-hover { position: absolute; left: 0; top: calc(50% - 5px); width: calc(var(--timeline-thumb-size) * .2); height: 10px; margin-left: calc(var(--timeline-thumb-size) * -.1); pointer-events: none; }
 .timeline-hover::before { content: ''; position: absolute; inset: 0; background: var(--accent); }
-
-
-
 
 /* Bottom block floats over the list, like the transport floats over canvas:
    one frosted foot for local files + load status; the list reserves its height. */
@@ -809,10 +798,8 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .source-activity[data-state=loading] #source-activity-hint { height: 3em; }
 .source-activity[data-state="error"] #source-activity-stage { color: var(--action-danger); }
 
-
 .log-preview-navigation { display:flex; align-items:center; gap:8px; padding:8px; font-size:12px; }
 .log-preview-status { flex:1; }
-
 
 /* One optional name, one action; the custom list floats above the dialog. */
 .identity-welcome { width: min(400px, calc(100vw - 32px)); overflow: visible; padding: 24px; background: var(--glass-fill); -webkit-backdrop-filter: var(--menu-filter); backdrop-filter: var(--menu-filter); }
@@ -882,42 +869,5 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .analysis-picture-overlay { position:absolute; inset:0; width:100%; height:100%; z-index:2; pointer-events:none; }
 
 #toggle-annotations[aria-expanded=true] { color:var(--accent); background:var(--annotation-toolbar-selected); }
-
-.quality-evidence-dialog { width:min(760px,calc(100vw - 32px)); max-height:calc(100vh - 48px); overflow:auto; padding:20px; color:var(--text); background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-small); }
-.quality-evidence-dialog::backdrop { background:#0008; }
-.quality-evidence-dialog h2 { margin:0 0 12px; font-size:1.2rem; }
-.quality-evidence-dialog input { width:min(32ch,100%); }
-.quality-evidence-dialog button, .quality-evidence-dialog select { margin:4px; }
-.quality-evidence-dialog pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; max-height:40vh; overflow:auto; user-select:text; }
 .annotation-row > .annotation-card-actions { flex-wrap:wrap; justify-content:flex-end; gap:2px; }
 .annotation-card-actions > button:not(.icon-button) { font-size:11px; min-height:24px; padding:2px 5px; }
-
-.quality-roi-dialog { width: min(1050px, calc(100vw - 24px)); background: var(--surface-panel); overscroll-behavior: contain; }
-.quality-roi-dialog > .dialog-heading { position: sticky; z-index: 4; top: calc(-1 * var(--content-inset)); padding: var(--content-inset) 0 8px; margin-top: calc(-1 * var(--content-inset)); background: var(--surface-panel); }
-.quality-roi-dialog a { color: var(--accent); }
-.quality-roi-dialog:not([data-selection-mode]) { width: min(480px, calc(100vw - 24px)); }
-.quality-roi-section { display: grid; gap: 10px; padding: 14px; margin-bottom: var(--section-gap); border-radius: var(--radius-panel); background: color-mix(in srgb, var(--surface-panel), var(--text) 3%); }
-.quality-roi-section h3 { margin: 0; font-size: 14px; font-weight: 600; }
-.quality-roi-dialog p { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
-.quality-roi-dialog > p:not(:empty) { margin: 10px 0; }
-.quality-roi-dialog p:empty { display: none; }
-.quality-roi-actions, .quality-roi-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.quality-roi-dialog button { white-space: normal; }
-.quality-roi-section label { display: flex; align-items: center; gap: 8px; }
-.quality-roi-fields input { width: 76px; }
-.quality-roi-views, .quality-roi-pickers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.quality-roi-pickers fieldset { display: grid; gap: 8px; min-width: 0; margin: 0; border: 1px solid var(--divider); border-radius: var(--radius-control); }
-.quality-roi-pickers select { width: 100%; min-width: 0; }
-.quality-roi-views section { min-width: 0; }
-.quality-roi-views p { margin-bottom: 6px; }
-.quality-roi-stage { position: relative; width: 100%; background: #111; overflow: hidden; border-radius: var(--radius-control); }
-.quality-roi-stage canvas, .quality-roi-overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
-.quality-roi-overlay { touch-action: none; cursor: crosshair; z-index: 3; }
-.quality-roi-overlay rect { stroke: #ffcc00; stroke-width: 2; fill: #ffcc001a; pointer-events: none; }
-.quality-candidate-form label { display: inline-flex; gap: 8px; margin: 8px; align-items: center; }
-.quality-candidate-form button { margin: 6px; }
-.quality-candidate-form input[data-candidate-text]{min-width:240px}
-.quality-pair-open{display:block;margin:8px 0}
-@media(max-width:650px){.quality-roi-views,.quality-roi-pickers{grid-template-columns:1fr}}
-
-.quality-candidate-badge{display:block;flex:none;font-size:10px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}

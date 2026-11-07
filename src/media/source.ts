@@ -52,7 +52,7 @@ export { MediaOpenError } from '../../shared/media/io/media-errors.ts';
 export type { OpenStage } from '../../shared/media/io/media-errors.ts';
 /** File and URL differ only in byte access. Container adapters are selected
  * once, before the shared native/software/reference policy is applied. */
-async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftware?: () => Promise<MediaSource>, onProgress?: MediaOpenProgress, signal?: AbortSignal, nativePresentedLibrary?:import('../../shared/media/io/library-reference-types.ts').LibraryIndexReference, configuration:DecodeConfiguration=captureDecodeConfiguration()): Promise<MediaSource> {
+async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftware?: () => Promise<MediaSource>, onProgress?: MediaOpenProgress, signal?: AbortSignal, configuration:DecodeConfiguration=captureDecodeConfiguration()): Promise<MediaSource> {
   const pipelineStartedAt = performance.now();
   const container = 'url' in input && input.library
     ? await loadLibraryPlaybackContainer(input.url, input.size, input.library, signal)
@@ -92,7 +92,7 @@ async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftwa
     const native = async () => {
       nativeOpens++;
       return container === 'flv'
-        ? (async () => { const { openFlvMedia } = await import('./decoding/flv-media.ts'); return openFlvMedia(input, meta, { signal, onProgress, rawNative: reference, nativePresentedLibrary }); })()
+        ? (async () => { const { openFlvMedia } = await import('./decoding/flv-media.ts'); return openFlvMedia(input, meta, { signal, onProgress, rawNative: reference }); })()
         : packetJs ? tsAdmission.open(false) : packetMp4 ? openMp4Packet(false)
           : ffmpegPlan && !customSoftware ? openFfmpeg()
             : openBrowser();
@@ -127,10 +127,10 @@ async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftwa
 export async function openMedia(file: File, openFallback: ((file: File) => Promise<MediaSource>) | undefined = undefined, onProgress?: MediaOpenProgress, signal?: AbortSignal, configuration:DecodeConfiguration=captureDecodeConfiguration()): Promise<MediaSource> {
   loadAborted(signal);
   if (!(file instanceof File) || file.size === 0) throw new MediaOpenError('input', '请选择非空的视频文件。');
-  return openInput({ file }, file, openFallback ? () => openFallback(file) : undefined, onProgress, signal, undefined, configuration);
+  return openInput({ file }, file, openFallback ? () => openFallback(file) : undefined, onProgress, signal, configuration);
 }
 
-export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallback: ((url: string, meta: MediaMeta) => Promise<MediaSource>) | undefined = undefined, onProgress?: MediaOpenProgress, signal?: AbortSignal, library?:import('../../shared/media/io/library-reference-types.ts').LibraryIndexReference, nativePresentedLibrary?:import('../../shared/media/io/library-reference-types.ts').LibraryIndexReference, configuration:DecodeConfiguration=captureDecodeConfiguration()): Promise<MediaSource> {
+export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallback: ((url: string, meta: MediaMeta) => Promise<MediaSource>) | undefined = undefined, onProgress?: MediaOpenProgress, signal?: AbortSignal, library?:import('../../shared/media/io/library-reference-types.ts').LibraryIndexReference, configuration:DecodeConfiguration=captureDecodeConfiguration()): Promise<MediaSource> {
   loadAborted(signal);
   if (!meta.size) {
     const head = await fetch(url, { method: 'HEAD', signal });
@@ -139,7 +139,7 @@ export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallbac
   }
   if (!Number.isSafeInteger(meta.size) || meta.size <= 0) throw new MediaOpenError('input', '媒体文件长度无效。');
   library ??= libraryIndexReferenceFromUrl(url);
-  return openInput({ url, size: meta.size, ...(library?{library}:{}) }, meta, openFallback ? () => openFallback(url, meta) : undefined, onProgress, signal, nativePresentedLibrary, configuration);
+  return openInput({ url, size: meta.size, ...(library?{library}:{}) }, meta, openFallback ? () => openFallback(url, meta) : undefined, onProgress, signal, configuration);
 }
 
 async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortSignal, onProgress?: MediaOpenProgress, access?:RandomAccessInput, rawNative=false): Promise<MediaSource> {

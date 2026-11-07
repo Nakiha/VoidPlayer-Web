@@ -1,11 +1,7 @@
 import { installAdminLibraryBrowser } from './library-browser.ts';
-import {installTasks} from './tasks.ts';
 import { PollingCadence } from '../services/polling-cadence.ts';
 import { confirmedActor, observeIdentity } from '../services/identity.ts';
-import { installQualityJobs } from './quality/workspace.ts';
-import { installDiscovery } from './discovery.ts';
 import { installAnalysisSettings } from './analysis.ts';
-import {installQualityResources} from './quality/resources.ts';
 import { requestError, rootReason } from './diagnostics.ts';
 import { apiError } from '../services/api-error.ts';
 import { mountLocalizedShell } from '../ui/localized-shell.ts';
@@ -32,7 +28,6 @@ import { installMeasurements } from './measurement.ts';
 import { adminShell, PANES } from './shell.ts';
 import type {AdminStatus,RootConfiguration as RootConfig,LogPage,LogDocument,LibraryScanStatus} from '../../shared/service/admin.ts';
 
-
 type Root = { id: string; name: string; path: string };
 
 type LogEntry = LogPage['entries'][number];
@@ -56,7 +51,7 @@ const updateTitle = () => { document.title = t(msg('admin.pageTitle', '管理 ·
 onLanguageChange(updateTitle, life.signal); updateTitle();
 let statusError = false;
 let pane = 'overview', rootConfig: RootConfig | null = null, rootDirty = false, rootSaving = false;
-let status: Status | null = null, polling = false, errorsOffset = 0, errorsJob: unknown = null;
+let polling = false, errorsOffset = 0, errorsJob: unknown = null;
 let scanStatus: LibraryScanStatus | null = null;
 const postingScans = new Set<string>();
 let rootStates: LibraryScanStatus['roots'] = [], recentRequests: Record<string, unknown>[] = [];
@@ -164,7 +159,6 @@ function scanSummary(value: LibraryScanStatus) {
     errors ? t(msg('admin.scanErrorTotal','{count} 处读取错误'),{count:errors}) : ''].filter(Boolean).join(' · ');
 }
 function renderStatus(value: Status) {
-  status = value;
   scanStatus=value.library; rootStates = value.library.roots;
   analysisSettings.update(value.analysis);
   const seconds = Math.floor(value.uptimeSeconds), hours = Math.floor(seconds / 3600);
@@ -287,22 +281,18 @@ function renderRequests() {
   }));
 }
 const analysisSettings = installAnalysisSettings(life.signal, api, notice);
-const qualityResources = installQualityResources(life.signal,api,notice);
 const caches = installCaches(life.signal, notice);
 const annotationAdmin = installAnnotationAdmin(life.signal, notice);
 const savedWorkspaces = installWorkspaceAdmin(life.signal, notice);
-const qualityJobs = installQualityJobs(life.signal);
-const discovery = installDiscovery(life.signal);
-const tasks = installTasks(life.signal);
 const measurements = installMeasurements(life.signal, notice);
 const libraryBrowser = installAdminLibraryBrowser(life.signal, message => notice(message));
 const disposeTooltips=installTooltips(app);
 life.signal.addEventListener('abort',disposeTooltips,{once:true});
 for (const [id] of PANES()) document.querySelector<HTMLButtonElement>(`[data-pane=${id}]`)!.onclick = () => {
-  history.replaceState(null, '', `#${id}`); pane = id; tasks.activate(id==='tasks'); qualityJobs.activate(id === 'quality'); discovery.activate(id === 'discovery'); measurements.activate(id === 'measurements'); notice(() => ''); for (const [item] of PANES()) { $(`pane-${item}`).hidden = id !== item; document.querySelector(`[data-pane=${item}]`)!.setAttribute('aria-current', id === item ? 'page' : 'false'); }
+  history.replaceState(null, '', `#${id}`); pane = id; measurements.activate(id === 'measurements'); notice(() => ''); for (const [item] of PANES()) { $(`pane-${item}`).hidden = id !== item; document.querySelector(`[data-pane=${item}]`)!.setAttribute('aria-current', id === item ? 'page' : 'false'); }
   libraryBrowser.activate(id === 'library');
   scanCadence.reset(); requestCadence.reset();
-  if (id === 'overview') {void analysisSettings.load();void qualityResources.load();}
+  if (id === 'overview') {void analysisSettings.load();}
   if (id === 'library') void act(async () => { if (!rootConfig || !rootDirty) await loadRoots(); await loadScan(); });
   if (id === 'caches') caches.activate();
   if (id === 'workspaces') savedWorkspaces.activate();
@@ -341,7 +331,7 @@ document.querySelector<HTMLAnchorElement>('.admin-back')!.onclick = event => {
     event.preventDefault(); player.focus(); window.close();
   } catch { /* An opener on another origin is not a return destination. */ }
 };
-window.addEventListener('beforeunload', event => { if (rootDirty || analysisSettings.dirty || qualityResources.dirty) { event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('beforeunload', event => { if (rootDirty || analysisSettings.dirty) { event.preventDefault(); event.returnValue = ''; } });
 const timer = setInterval(() => void poll(), 3000);
 window.addEventListener('pagehide', () => { clearInterval(timer); life.abort(); disposeTheme(); disposeLanguage(); }, { once: true });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { scanCadence.reset(); requestCadence.reset(); void poll(true); } }, { signal: life.signal });

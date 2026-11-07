@@ -1,8 +1,4 @@
-import { qualityPairViewUrl } from '../shared/review/quality-pair-view.ts';
 import { frameIndexTools } from './services/frame-index.ts';
-import { attachAnnotationQuality, createQualityCandidate } from './review/quality-evidence-client.ts';
-import { AnnotationClient } from './review/annotation-client.ts';
-import type { QualityEvidenceRef } from '../shared/review/quality-evidence.ts';
 import { ANNOTATION_COORD_LIMIT } from '../shared/review/annotation.ts';
 import { SLOTS } from '../shared/review/model.ts';
 import { benchmarkPlayback } from './session/benchmark.ts';
@@ -36,22 +32,10 @@ export function reviewTools(session: ReviewSession, workspace?: WorkspaceActions
     const d=PAGE_TOOLS[name];return tool(name,d.description,d.inputSchema.properties!,[...d.inputSchema.required??[]],d.scope==='read',action);
   };
   return [
-    tool('attach_annotation_psnr','Explicitly share the immutable facts of your completed PSNR job on an existing shared annotation. Requires exact source version/source PTS/ROI and revision; never scores, creates annotations or changes playback. Reuse operationId after a lost response.',
-      {space:{type:'string'},id:{type:'string'},revision:{type:'integer',minimum:1},operationId:{type:'string'},evidence:{type:'object',properties:{jobId:{type:'string'},attemptId:{type:'string'},digest:{type:'string'},side:{enum:['reference','distorted']}},required:['jobId','attemptId','digest','side'],additionalProperties:false}},
-      ['space','id','revision','operationId','evidence'],false,p=>attachAnnotationQuality({space:p.space as string,id:p.id as string,revision:p.revision as number,operationId:p.operationId as string,evidence:p.evidence as QualityEvidenceRef},{kind:'agent'})),
-    tool('get_annotation_evidence','Read explicitly shared PSNR facts from an annotation. Historical imports are unverified; this does not grant access to the private original job or load a source.',
-      {space:{type:'string'},id:{type:'string'}},['space','id'],true,p=>{
-        if(![p.space,p.id].every(v=>typeof v==='string' && /^[a-zA-Z0-9_-]{1,200}$/.test(v)))throw new Error('Invalid annotation reference.');
-        return new AnnotationClient(AbortSignal.timeout(10000)).read(p.space as string,p.id as string);
-      }),
-    tool('get_annotation_pair_view','Return the explicit isolated original-frame/ROI viewer URL for an existing shared attachment. Following it checks the originating service, pinned cache/AU/PTS/geometry; no score, private job read or change to this playback.',
-      {space:{type:'string'},annotationId:{type:'string'},evidenceId:{type:'string'}},['space','annotationId','evidenceId'],true,p=>({url:qualityPairViewUrl({space:p.space as string,annotationId:p.annotationId as string,evidenceId:p.evidenceId as string},location.origin)})),
-    tool('create_quality_candidate','Atomically derive a shared unassessed measurement candidate and immutable evidence from an owned completed quality result. Explicit text/severity; no playback requirement; receipt replay precedes result lookup.',
-      {space:{type:'string'},id:{type:'string'},operationId:{type:'string'},evidence:{type:'object'},candidate:{type:'object'}},['space','id','operationId','evidence','candidate'],false,p=>createQualityCandidate({space:p.space as string,id:p.id as string,operationId:p.operationId as string,evidence:p.evidence as QualityEvidenceRef,candidate:p.candidate as {text:string;severity:number}},{kind:'agent'})),
+
     ...frameIndexTools(),
     tool('request_bitstream_range','Explicitly analyze a bounded half-open session-time range (up to 1 second and 32 pictures) independently of playback. Completed chunks are cached incrementally.',{slot:{enum:SLOTS},startUs:{type:'integer'},endUs:{type:'integer'}},['slot','startUs','endUs'],false,p=>session.requestBitstreamRange(slotValue(p.slot),p.startUs as number,p.endUs as number)),
-    tool('get_presented_frame','Read the successful presentation commit and optional playback picture metadata. This is not quality cache/output proof: it lacks namespace/build and cannot select a measurement by PTS. No pixels or analysis IO.',{slot:{enum:SLOTS}},['slot'],true,p=>session.getPresentedFrame(slotValue(p.slot))),
-    tool('capture_presented_quality_frame','Capture an exact successful paused WebCodecs FLV presentation input. Returns local unbound source/AU/epoch/commit evidence; join only the same AU to the existing trusted cache through its packet witness. No pixels, source scans, scoring, pause or seek. Unsupported playback paths reject. HTTP scoring remains independent of this optional browser tool.',{slot:{enum:SLOTS}},['slot'],true,p=>session.captureNativePresented(slotValue(p.slot))),
+    tool('get_presented_frame','Read the successful presentation commit and optional playback picture metadata. No pixels or analysis IO.',{slot:{enum:SLOTS}},['slot'],true,p=>session.getPresentedFrame(slotValue(p.slot))),
     tool('request_bitstream_analysis','Explicitly analyze the paused presented picture in an independent local worker or on its library server. No upload of local files.',{slot:{enum:SLOTS}},['slot'],false,p=>session.requestBitstreamAnalysis(slotValue(p.slot))),
     tool('cancel_bitstream_analysis','Cancel one track deep analysis, or all tracks when slot is omitted, without changing playback.',{slot:{enum:SLOTS}},[],false,p=>session.cancelBitstreamAnalysis(p.slot === undefined ? undefined : slotValue(p.slot))),
     tool('pause_bitstream_analysis','Pause one track analysis and retain its cached results without changing playback.',{slot:{enum:SLOTS}},['slot'],false,p=>session.pauseBitstreamAnalysis(slotValue(p.slot))),

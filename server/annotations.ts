@@ -1,4 +1,3 @@
-import type {CambiRef,CambiEvidence} from '../shared/review/cambi-evidence.ts';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -10,8 +9,6 @@ import { AnnotationCommandError, applyAnnotationOperation, parseAnnotationOperat
 import { annotationEvent } from '../shared/review/annotation-events.ts';
 import type { AnnotationEvent, AnnotationEventPage } from '../shared/review/annotation-events.ts';
 import type { AnnotationRecord, AnnotationPage } from '../shared/review/annotation-record.ts';
-import type { QualityEvidenceRef, QualityEvidence } from '../shared/review/quality-evidence.ts';
-import type { QualityJobResult } from '../shared/analysis/quality/jobs.ts';
 
 const validId = (id: unknown): id is string => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,200}$/.test(id);
 export const ANNOTATION_BYTES = 512 * 1024;
@@ -91,8 +88,7 @@ export class AnnotationStore {
       this.db.exec('COMMIT'); return page;
     } catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
-  mutate(space: string, value: unknown, actor: Actor, requestId?: string,
-    quality?: { origin: string; resolve(ref: QualityEvidenceRef): QualityJobResult;resolveCambi?(ref:CambiRef):{completedAt:number;value:CambiEvidence['value']} }): AnnotationRecord {
+  mutate(space: string, value: unknown, actor: Actor, requestId?: string): AnnotationRecord {
     this.space(space);
     this.db.exec('BEGIN IMMEDIATE');
     try {
@@ -105,25 +101,7 @@ export class AnnotationStore {
         this.db.exec('COMMIT'); return JSON.parse(String(receipt.result));
       }
       const current = this.read(space, operation.id), now = new Date().toISOString();
-      let evidence: QualityEvidence | undefined;
-      if (operation.action === 'attach-quality-result'||operation.action==='create-quality-candidate') {
-        // Resolve after the receipt and revision check: a lost response can be
-        // replayed after source/result cleanup without consulting the private job.
-        if (operation.action==='create-quality-candidate'?!!current:!current || current.deleted || current.revision !== operation.revision)
-          throw new AnnotationCommandError(409, 'annotation-revision-conflict', 'Annotation changed or was deleted.');
-        if (!quality) throw new AdminError(503, 'Quality evidence is unavailable.', 'evidence-unavailable');
-        const result = quality.resolve(operation.evidence!);
-        evidence = {schema:'voidplayer-annotation-psnr',version:1,id:operation.operationId,ref:operation.evidence!,
-          serviceOrigin:quality.origin,completedAt:result.completedAt,attachedAt:now,attachedBy:{id:actor.id,name:actor.name},
-          verification:'server-verified',value:result.value};
-      }
-      let cambi:CambiEvidence|undefined;
-      if(operation.action==='create-cambi-candidate'){
-        if(current)throw new AnnotationCommandError(409,'annotation-revision-conflict','Candidate exists');
-        if(!quality?.resolveCambi)throw new AdminError(503,'CAMBI result unavailable','evidence-unavailable');
-        const result=quality.resolveCambi(operation.cambi!);cambi={schema:'voidplayer-annotation-cambi',version:result.value.frame.target.indexIdentity.kind==='mp4'?2:1,id:operation.operationId,ref:operation.cambi!,serviceOrigin:quality.origin,completedAt:result.completedAt,attachedAt:now,attachedBy:{id:actor.id,name:actor.name},verification:'server-verified',value:result.value};
-      }
-      const document = applyAnnotationOperation(operation, current, actor, now, evidence,cambi);
+      const document = applyAnnotationOperation(operation, current, actor, now);
       const json = JSON.stringify(document);
       if (Buffer.byteLength(json) > ANNOTATION_BYTES) throw new AdminError(413, '单条标注内容过大。', 'annotation-too-large');
       this.db.exec('UPDATE annotation_clock SET sequence=sequence+1 WHERE id=1');

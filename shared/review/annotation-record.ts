@@ -1,7 +1,5 @@
 import type { Mark } from './model.ts';
 import type { MediaInfo } from '../media/types.ts';
-import { evidenceWorkspaceVersion, historicalMarks } from './quality-evidence.ts';
-import type { QualityEvidenceRef } from './quality-evidence.ts';
 import { parseWorkspace } from './workspace-file.ts';
 import { Viewport } from '../presentation/viewport.ts';
 import { randomUUID } from '../utils/uuid.ts';
@@ -12,11 +10,11 @@ export type AnnotationDocument = { mark: Mark; media: MediaInfo[] };
 export type AnnotationRecord = { id: string; space: string; revision: number; sequence: number; deleted: boolean; updatedAt: string; updatedBy: string; document: AnnotationDocument };
 /** Client labels are attribution supplied by the caller, never authentication. */
 export type AnnotationClientIdentity = { kind: 'gui' | 'agent' | 'http'; id?: string };
-export type AnnotationOperation = { operationId: string; id: string; revision: number; action: 'put' | 'delete' | 'restore' | 'attach-quality-result' | 'create-quality-candidate' | 'create-cambi-candidate'; cambi?: import('./cambi-evidence.ts').CambiRef; candidate?:{text:string;severity:number}; evidence?: QualityEvidenceRef; document?: AnnotationDocument; client?: AnnotationClientIdentity };
+export type AnnotationOperation = { operationId: string; id: string; revision: number; action: 'put' | 'delete' | 'restore'; document?: AnnotationDocument; client?: AnnotationClientIdentity };
 export type AnnotationPage = { entries: AnnotationRecord[]; cursor: number; previewEpoch?: number; more: boolean };
 export function parseAnnotationDocument(value: unknown): AnnotationDocument {
   const input = value as AnnotationDocument;
-  const document = parseWorkspace({ schema: 'voidplayer-workspace', version: input?.mark?.qualityCandidate?3:2, generatedAt: new Date().toISOString(), serverUrl: 'http://localhost/', positionUs: 0, tracks: [], media: input?.media, marks: [input?.mark], viewport: {} }, undefined, true);
+  const document = parseWorkspace({ schema: 'voidplayer-workspace', version: 1, generatedAt: new Date().toISOString(), serverUrl: 'http://localhost/', positionUs: 0, tracks: [], media: input?.media, marks: [input?.mark], viewport: {} });
   return { mark: document.marks[0], media: document.media };
 }
 /** Only version-pinned library references can be shared across new playback sessions.
@@ -41,8 +39,8 @@ export function annotationWorkspace(documents: AnnotationDocument[], serverUrl: 
       ids.set(source.id,id);
     }
     const mark=structuredClone(document.mark);mark.id=randomUUID();mark.mediaId=ids.get(mark.mediaId)!;
-    mark.comparison=mark.comparison.map(item=>({...item,mediaId:ids.get(item.mediaId)!}));marks.push(...historicalMarks([mark]));
+    mark.comparison=mark.comparison.map(item=>({...item,mediaId:ids.get(item.mediaId)!}));marks.push(mark);
   }
   const first=marks[0];
-  return {schema:'voidplayer-workspace',version:evidenceWorkspaceVersion(marks),generatedAt:new Date().toISOString(),serverUrl,media,marks,tracks:first?[{slot:first.slot,mediaId:first.mediaId,offsetUs:0}]:[],positionUs:first?.frame.ptsUs??0,viewport:new Viewport().snapshot()};
+  return {schema:'voidplayer-workspace',version:1,generatedAt:new Date().toISOString(),serverUrl,media,marks,tracks:first?[{slot:first.slot,mediaId:first.mediaId,offsetUs:0}]:[],positionUs:first?.frame.ptsUs??0,viewport:new Viewport().snapshot()};
 }

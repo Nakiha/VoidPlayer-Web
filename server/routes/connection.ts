@@ -41,7 +41,7 @@ export async function handleConnectionRoutes(ctx: RouteContext, req: IncomingMes
     }
     if(url.search){sendJson(res,400,agentErrorBody(new AdminError(400,'Discovery documents accept no query.','invalid-request'),ctx.requestId));return true;}
     const json = discovery;
-    const manifest=()=>agentManifest({ capabilities: serviceCapabilities(!!options.admin, !!options.allowLocalReveal && localRequest(req)), libraryReady: ctx.library.ready, frontendAvailable: !!options.staticDir, localPageBridge:!!options.pageBridge||(localRequest(req)&&['127.0.0.1','localhost','[::1]'].includes(new URL('http://'+requestAuthority(req)).hostname)),qualityJobsEnabled: ctx.library.durableQualityJobsEnabled, nativeVmaf:ctx.quality.nativeVmafDescriptor,nativeXpsnr:ctx.quality.nativeXpsnrDescriptor,nativeCambi:ctx.quality.nativeCambiDescriptor, actor: ctx.actor });
+    const manifest=()=>agentManifest({ capabilities: serviceCapabilities(!!options.admin, !!options.allowLocalReveal && localRequest(req)), libraryReady: ctx.library.ready, frontendAvailable: !!options.staticDir, localPageBridge:!!options.pageBridge||(localRequest(req)&&['127.0.0.1','localhost','[::1]'].includes(new URL('http://'+requestAuthority(req)).hostname)),  actor: ctx.actor });
     const value=operation!==null?agentOperation(operation,manifest().capabilities):task!==null?agentTask(task):url.pathname===AGENT_TASK_CATALOG?agentTaskCatalog():json?manifest():null;
     if(json&&!value){sendJson(res,404,agentErrorBody(new AdminError(404,'Task or operation not found.','agent-operation-not-found'),ctx.requestId));return true;}
     const body = json ? JSON.stringify(value) : document!;
@@ -58,6 +58,10 @@ export async function handleConnectionRoutes(ctx: RouteContext, req: IncomingMes
   if (url.pathname === '/api/ready' && req.method === 'GET') {
     sendJson(res, ctx.library.ready ? 200 : 503, { ready: ctx.library.ready });
     return true;
+  }
+  if (['/api/connection', '/api/connection/probe', '/api/connection/certificate', '/api/health', '/api/ready'].includes(url.pathname)) {
+    res.setHeader('allow', url.pathname === '/api/connection/certificate' ? 'GET, HEAD' : 'GET');
+    sendJson(res, 405, { error: 'method not allowed' }); return true;
   }
   return false;
 }

@@ -11,8 +11,7 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 - `src/presentation/presenter.ts` 唯一决定帧如何上屏；同目录保存 WebGPU/WebGL、HDR 与 YUV 呈现。`shared/presentation/viewport.ts` 保存纯几何与状态，DOM 接线在 `src/ui/view-bindings.ts` 和 `src/ui/viewport-gestures.ts`。
 - `src/analysis/{metadata,bitstream}/` 保存浏览器分析适配、Worker 与服务；`src/ui/analysis/` 保存面板与图表，`chart-overlay.ts` 为图表覆盖层，`picture-overlay/` 为源画面宏块/QP 覆盖层；`src/session/{metadata-analysis,bitstream-analysis}.ts` 协调会话行为。
 - `src/review/` 保存评审与工作区浏览器客户端；`src/services/` 保存媒体库、连接、身份和文件客户端；`src/logging/` 保存本地诊断；面板与交互位于 `src/ui/`，管理页面位于 `src/admin/`。
-- `server/`：Node 服务，`runtime.ts` / `app.ts` 负责入口装配，`quality-application.ts` 显式创建、恢复与关闭评分应用；媒体库不通过属性读取创建评分服务；路由在 `routes/`，深度分析服务在 `analysis/bitstream/`，配置与运行入口在 `config.ts` / `runtime.ts`。共享代码统一从 `shared/` 引入，禁止服务端与浏览器层互相引用（包括类型）。
-- `shared/analysis/quality/` 保存无宿主评分与对应计划契约，`server/analysis/{quality,vmaf,xpsnr,cambi}/` 保存文件/Worker/持久任务适配，`src/analysis/quality/`、`src/admin/quality/` 保存客户端与观察。支持域和迁移规则见下表，不按类名推断执行后端。
+- `server/`：Node 服务，`runtime.ts` / `app.ts` 负责入口装配；路由在 `routes/`，深度分析服务在 `analysis/bitstream/`，配置与运行入口在 `config.ts` / `runtime.ts`。共享代码统一从 `shared/` 引入，禁止服务端与浏览器层互相引用（包括类型）。
 - `scripts/dev.ts` 同进程启动 Vite 和媒体 API；`scripts/service.mjs` 管理 macOS 用户服务；`deploy/` 为便携运行与自动用户使用说明。
 - `test/{unit,contract,media}/`：node:test，无浏览器依赖；`helpers/` 为可复用模块，顶层旧文件为兼容入口。WASM 用例在 Node worker_threads 里跑真实 core。
 - `scripts/testing/`：统一清单、构建、生命周期与报告接入；`browser/{ui,annotations,media,workspace}/` 保存领域浏览器用例，顶层 `check-*-browser.mjs` 保留兼容入口。
@@ -25,19 +24,13 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 ## 硬约束
 
 - 浏览器、服务端与共享层禁止反向引用，包括类型。GUI 与页面 Agent 经 `session.ts` 操作浏览器会话；持久命令共用 `shared/` 规则与服务端适配，不依赖已加载轨道、暂停/播放或 GUI 确认。GUI 只观察后台变化，不自动 seek、打开媒体或抢焦点。
-- `QualityApplication` 显式装配、恢复与关闭评分服务；getter 不创建资源。`QualityAdmission` 唯一管理实例/算法/内存/读取/线程预留；父协调器不得外层获取共享许可。取消、关闭、deadline 和结果回收都要等真实 Worker/IO 退出；停止不确定时保留许可及相关存储所有权。降限不强杀既有工作。
-- 产品只有播放 core 与分析 core。后台解码使用播放产物的独立 Worker；VMAF/CAMBI/XPSNR 使用既有分析 core 像素 API，不经 avfilter/framesync、评分 CLI 或原始 YUV 临时文件，不引入仅 Linux 可用的生产组件。WASM 构建/裁剪属于 `VoidPlayer-FFmpeg-Build` 的 `wasm` 分支，本仓只消费固定产物与 release lock。
-- 宿主拥有原始有理数源时钟、AU/token、选择顺序、ROI 和完整排空，评分器只接收像素与明确序号。不得按取整微秒/nearest/来源标签猜帧，或拼接稀疏抽样冒充连续时序。参考关系不认证内容；引用完整性未认证、concealment 检测不可用。元数据就绪不代表评分准入，读取/评分/viewer 不隐式建索引。
-- 源/容器/几何/色彩/时序能力必须遵守对应专项契约，不从另一指标继承准入。MP4 保留真实 sample/table/ticks 见证，不伪造 FLV tag 或读费用；普通播放 token 不充当质量缓存身份。旧前向模式与支持重排的 packet identity 模式不能混用。
-- 数值核心与持久任务能力分开发现。PSNR/SSIM 保留输入域、有效覆盖与工作预算；SSIM 不混称高斯变种。VMAF/XPSNR 只消费已提交对应计划；XPSNR 保留 reference-first 单片段状态、官方逐平面池化及 Infinity，版本排序不代表感知优劣。
-- CAMBI 保留单源准入、五尺度热图、流式暂存及 stop-and-keep 策略；暂存不可发布或冒充已核验快照，普通取消仍丢弃未完成暂存。完整重算重新处理全部输入，失败/取消/重启不能删除独立冻结执行见证。区域统计不是裁剪重算或目标跟踪。
-- 提交正文/键先冻结；未知提交只用原 actor/body/key 或原 plan digest/policy 回放。新计算与原提交重放分开；显式重执行必须核验物理停止和冻结条件、确认全量成本、原子创建唯一后继，不复用分数或自动发布/重建索引/换模型。持久任务与回执同事务，旧指纹/附件/候选不改写成新执行身份。
-- 区间归档先持久提交意图，再回收未固定子结果；跨库中断保留 pending，仅由原 actor/ID 显式重放结算。保留输入、摘要、coverage、子 attempt/digest、历史证据和冻结发布回执；归档不派生新策略。对应计划执行意图与最终 range ID 预留纳入原配额，下游提交期间不持有外层事务或许可。
-- `FrozenSubmissionJournal` 拥有提交不确定性，`QualityObservationScope` 拥有 actor/selection/request 观察。请求票据仅围栏回复发布，已渲染控件使用 actor 票据，操作选中对象时建立 selection 票据；迟到确认不导航旧视图。管理端身份统一用 `observeIdentity` / `confirmedActor`，跨窗通知只触发服务确认，确认期间撤销旧观察，同一 actor 确认后也要恢复，不能各面板再写 storage/health 恢复。
+- 产品只有播放 core 与分析 core；本仓只消费固定产物与 release lock，WASM 构建与裁剪在上游仓库进行。后台分析使用独立 Worker，不改变播放器状态。
+- 取消和关闭必须等待真实 Worker/IO 退出；停止不确定时保留相关存储所有权。媒体库登记所有使用索引数据库的读取者，全部退出后才释放数据库。
+- 管理端身份统一用 `observeIdentity` / `confirmedActor`，跨窗通知只触发服务确认；确认期间撤销旧观察，同一 actor 确认后也要恢复。迟到回复不得导航旧视图。
 - 日志仅存本地 IndexedDB，上传只由用户在日志面板显式触发。媒体打开按 `MediaOpenError.stage` 决定回退，不新增整体 try/catch 换路径；已取得但未交付的源由打开流程负责清理。
 - 帧资源显式 `close()`，解码后端不直接画 canvas，全部经过 presenter。色彩修改同步 `docs/color-pipeline.md`，区分源标签与实际输出，不按片源叠加 HDR/SDR 修正。取像素/缩略图只用 presenter 按需 capture，不依赖每帧更新隐藏 canvas。
 - 标注是源帧坐标的矢量对象，可延伸到视频外；`strokeWidth` 为不随缩放的 CSS 像素。网格 < 视频 < 标注 < 半透明 UI，不给标注 SVG 加视频边界裁剪。UI/Agent 共用 `session.updateMark` 和持久标注命令；缩小 LINEAR、放大 NEAREST，不放大 CSS 中间位图。
-- HTTP 标注、幂等回执与操作事件同事务；事件消费不阻塞写入，过期游标明确要求快照重同步。任务中心在 SQL 筛选后检查独立快照预算，禁止各取首页伪全量筛选；冻结分页失效须重取，详情关联核对原 actor/receipt/input/attempt/digest；actor 是自述归属，不是认证。
+- HTTP 标注、幂等回执与操作事件同事务；事件消费不阻塞写入，过期游标明确要求快照重同步。actor 是自述归属，不是认证。
 - 本机 stdio 页面桥必须遵守专项授权契约：只用真实映射 peer 判定本机，顶层页面点击授予范围，凭据仅存内存，不把 Origin/epoch/声明名当认证。仅共享白名单与现有 facade，不透传全工具/任意脚本路径、不上传 File/日志、不自动连接。授权失效废弃排队命令，已派发回执未知不假回滚或换键；迟到消息按 document/epoch/correlation 围栏。关闭 stdin 真实释放自有资源，stdout 仅协议帧，modern/legacy 生命周期分别验证。
 
 ## 格式与层内边界
@@ -55,17 +48,11 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 
 | 工作流 | 实现入口与契约 |
 | --- | --- |
-| 源平面 PSNR / SSIM | `shared/analysis/quality/{psnr,ssim,frame-pair}.ts`；[PSNR](docs/source-plane-psnr.md)、[单帧桥](docs/source-frame-pair-psnr.md)、[SSIM](docs/source-plane-ssim.md) |
-| 前向 / 重排帧身份 | [有界前向](docs/forward-frame-quality.md)、[闭合 GOP token](docs/reordered-frame-quality.md) |
-| 媒体库与显式准备 | `server/discovery/`、`shared/media/{discovery,probe}.ts`；[发现](docs/library-discovery.md)、[严格 MP4](docs/trusted-mp4-quality.md)、[暂停原生 FLV](docs/paused-native-quality.md) |
-| 单帧任务与观察 | `server/analysis/quality/job-*.ts`、`src/analysis/quality/job-observer.ts`、`src/admin/quality/workspace.ts`；[文件适配](docs/source-library-psnr.md)、[持久任务](docs/source-psnr-jobs.md)、[GUI/Agent](docs/psnr-task-workflow.md) |
-| 对应计划与区间 | `shared/analysis/quality/{correspondence,ranges}.ts`、服务端同名服务；[参考时钟](docs/reference-clock-plans.md)、[区间/聚合/归档](docs/bounded-quality-ranges.md) |
-| 空间候选与证据 | `shared/review/quality-evidence.ts`、`src/ui/quality-roi.ts`；[ROI 候选](docs/quality-roi-candidates.md)、[证据挂接](docs/annotation-psnr-evidence.md)、[只读原帧](docs/annotation-psnr-pair-view.md) |
-| WASM 评分 | [架构与支持域](docs/analysis-wasm-scoring.md)、[VMAF](docs/native-vmaf.md)、[CAMBI](docs/native-cambi.md)、[XPSNR](docs/native-xpsnr.md)、[版本比较](docs/xpsnr-comparison.md)；`Native*` 与旧 wire 名为历史兼容，不代表生产原生执行器 |
-| 所有权与持久生命周期 | `temporal-service.ts` / `src/admin/quality/temporal.ts` 统一 VMAF/XPSNR 生命周期，CAMBI 保留单源策略；[所有权](docs/quality-ownership.md)、[显式重执行及存储迁移](docs/explicit-quality-reexecution.md) |
-| 任务与资源 | `server/tasks/`、`shared/service/tasks.ts`、`server/quality-admission.ts`；[任务中心](docs/unified-task-center.md)、[资源管理](docs/quality-resources.md)；查询快照与历史字节保留分别拥有预算 |
-| HTTP Agent / 页面桥 | [HTTP 入口](docs/agent-http.md)、[渐进评分工作流](docs/agent-quality-workflow.md)、[本机 stdio 桥](docs/local-mcp-page-bridge.md) |
-| 当前支持与历史证据 | [文档导航](docs/README.md)、[阶段实测与失败](docs/quality-convergence.md)；roadmap 当前状态以 #112 为汇总，历史失败不改写 |
+| 播放与索引 | `src/media/`、`server/frame-index-*.ts`；[统一索引](docs/unified-indexing.md)、[JS 容器](docs/js-container-migration.md) |
+| 媒体库与文件管理 | `server/library.ts`、`src/ui/library-*`；[文件管理](docs/library-file-management.md)、[索引](docs/media-library-evolution.md) |
+| 标注与工作区 | `shared/review/`；[工作区格式](docs/workspace-format.md)、[身份与分享](docs/identity-and-sharing.md) |
+| HTTP Agent / 页面桥 | [HTTP 入口](docs/agent-http.md)、[本机 stdio 桥](docs/local-mcp-page-bridge.md) |
+| 当前支持与历史证据 | [文档导航](docs/README.md)；历史验证结果不代表当前实现 |
 
 ## 验证
 

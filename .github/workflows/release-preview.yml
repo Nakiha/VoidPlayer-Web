@@ -107,47 +107,6 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  ssim-browser:
-    name: Verify SSIM measurement and immutable evidence (${{ matrix.engine }})
-    needs: cores
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        engine: [chromium, webkit]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Use primary Ubuntu package archive
-        run: bash scripts/testing/prepare-ci-apt.sh
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24.15.0'
-          cache: npm
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-core
-          path: public/vendor/voidplayer-core
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-analysis-core
-          path: public/vendor/voidplayer-analysis
-      - run: npm ci
-      - name: Install reference and fixture tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-      - run: npx playwright install --with-deps ${{ matrix.engine }}
-      - name: Verify real SSIM and forward-frame GUI, Agent, evidence and original pair
-        run: node scripts/run-tests.mjs ci-ssim --engine ${{ matrix.engine }}
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: ssim-browser-reports-${{ matrix.engine }}
-          path: .run/test-suites/ci-ssim/
-          if-no-files-found: error
-          retention-days: 30
-
   analysis-matrix:
     name: Verify analysis matrix (${{ matrix.engine }}, ${{ matrix.part }})
     needs: [cores, qa-media]
@@ -527,12 +486,12 @@ jobs:
           path: public/vendor/voidplayer-analysis
       - run: npm ci
       - run: node scripts/run-tests.mjs --case release-core
-      - name: Verify Node configuration, storage and scoring contracts
+      - name: Verify Node configuration, storage contracts
         if: matrix.runtime == 'node'
         run: node scripts/run-tests.mjs ci-native-node
         env:
           NODE_OPTIONS: --test-reporter=tap
-      - name: Verify Bun configuration, storage and scoring contracts
+      - name: Verify Bun configuration, storage contracts
         if: matrix.runtime == 'bun'
         run: node scripts/run-tests.mjs ci-native-bun
       - uses: actions/upload-artifact@v4
@@ -584,10 +543,6 @@ jobs:
       - run: node scripts/run-tests.mjs --case release
       - uses: ./.github/actions/qa-media
       - run: node scripts/run-tests.mjs --case release-analysis
-      - run: node scripts/run-tests.mjs --case release-quality
-      - run: node scripts/run-tests.mjs --case release-analysis-quality
-      - run: node scripts/run-tests.mjs --case release-native-xpsnr
-      - run: node scripts/run-tests.mjs --case release-quality-reexecution
       - name: Install network playback browser
         if: runner.os == 'Linux' || runner.os == 'Windows'
         run: npx playwright install --with-deps chromium
@@ -632,7 +587,7 @@ jobs:
 
   release-set:
     name: Verify complete platform release set
-    needs: [native-release, native-runtime, unit, playback, cache-browser, source-logic, analysis-browser, analysis-matrix, ssim-browser, hevc-browser, uncovered-regressions]
+    needs: [native-release, native-runtime, unit, playback, cache-browser, source-logic, analysis-browser, analysis-matrix, hevc-browser, uncovered-regressions]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10

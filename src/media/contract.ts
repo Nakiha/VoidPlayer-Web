@@ -10,7 +10,6 @@ import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisRank, Ana
  * implementations choose decoding, while the presenter owns painting and captures. */
 export type MediaInfoChange={revision:number;reason:'index'|'presented-frame'|'identity'|'cached-metadata'|'decoder';changed:string[];before:MediaInfo;after:MediaInfo};
 export interface DecodedFrame extends FrameInfo {
-  readonly nativePresentedInput?: {instance:string;sourceVersion:string;input:import('../../shared/media/codecs/native-picture-identity.ts').NativePictureIdentity};
   presentedCommit?: number;
   readonly sourcePicture?: import('../../shared/analysis/bitstream/contract.ts').SourcePictureKey;
   /** Filled only by the presenter after a successful paint; never decoder tags. */
@@ -42,8 +41,6 @@ export type VvcTuningState = {
 
 export interface MediaSource {
   tuneVvc?(axis?: VvcTuningAxis): Promise<VvcTuningState | null>;
-  readonly nativePresentedInstance?:string;
-  readonly nativePresentedTransport?:Readonly<{source:{kind:'library';id:string;url:string};sourceVersion:string}>;
   /** Retained reference only; no analysis instance or IO until explicit request. */
   bitstreamFile?: Blob;
   /** Read-only confirmed packet frontier; starts metadata indexing, never seeks. */

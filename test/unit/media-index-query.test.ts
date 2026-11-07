@@ -72,7 +72,6 @@ test('headless discovery/search/info/cache misses never build, migrate, mutate o
   f.library.indexJobs.startBuild = () => { throw Error('unexpected build'); };
   const manifest = await f.read(f.base + '/api/agent');
   assert.equal(manifest.capabilities.find((c: { id: string }) => c.id === 'media.cached-index-query').readiness, 'per-source');
-  assert.equal(manifest.capabilities.find((c: { id: string }) => c.id === 'media.technical-filter').implemented, true);
   const search = await f.read(f.base + '/api/library/browse?recursive=1&search=clip&limit=1'); assert.equal(search.entries[0].id, f.entry.id);
   const info = await f.read(f.info); assert.equal(info.technicalState, 'not-probed'); assert.deepEqual(info.indexes, []);
   const missing = await f.read(); assert.equal(missing.overview.state, 'not-indexed'); assert.equal(missing.overview.capabilities.records.ready, false);
@@ -140,7 +139,6 @@ test('oversized cache batches are rejected without expansion; file and symlink b
   if (process.platform !== 'win32') { await writeFile(path.join(f.dir, 'outside'), Buffer.alloc(10000)); await symlink(path.join(f.dir, 'outside'), path.join(f.media, 'clip.mp4')); }
   assert.equal((await fetch(f.info)).status, 409);
 });
-
 
 test('cache query admission rejects excess in-flight work with retryable feedback', async t => {
   const f = await fixture(t);
@@ -261,7 +259,6 @@ test('disconnect cancels record work but holds admission until the database call
   assert.equal((await f.read(f.info)).technicalState, 'not-probed');
 });
 
-
 test('FFmpeg GUI reassembly does not upgrade a WAL snapshot after a competing connection commit', async t => {
   const f = await fixture(t); f.put();
   const writer = openIndexDatabase(path.join(f.dir, 'index.sqlite')); let wrote = false;
@@ -282,7 +279,6 @@ test('FFmpeg GUI reassembly does not upgrade a WAL snapshot after a competing co
     assert.equal(response.index.records, recordBytes(3).toString('base64'));
   } finally { writer.close(); }
 });
-
 
 test('FFmpeg post-snapshot LRU touch does not update a different build in the same epoch', async t => {
   const f = await fixture(t); f.put(3); let replaced = false;

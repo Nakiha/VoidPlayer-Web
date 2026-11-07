@@ -1,5 +1,3 @@
-import { evidenceWorkspaceVersion } from '../shared/review/quality-evidence.ts';
-import { currentActor } from './services/identity.ts';
 import { mediaDiagnostic } from '../shared/media/io/media-errors.ts';
 import type { MediaDiagnostic } from '../shared/media/io/media-errors.ts';
 import { diagnosticMessage } from './ui/diagnostic-message.ts';
@@ -106,15 +104,6 @@ const gpuReady=initializeGpuPresentation(Object.values(canvases)).catch(error =>
   log.warn('media', 'GPU 后台初始化失败，已保留现有呈现路径。', { error: error instanceof Error ? error.message : String(error) });
 });
 const session = new ReviewSession((slot, frame) => paintFrame(canvases[slot], frame));
-$<HTMLButtonElement>('quality-roi-open').onclick=async()=>{
-  const actor = currentActor()?.id;
-  await act(async () => {
-    await settings.close();
-    const { openQualityRoi } = await import('./ui/quality-roi.ts');
-    if ($<HTMLDialogElement>('settings').open || uiEvents.signal.aborted || currentActor()?.id !== actor) return;
-    openQualityRoi(session);
-  });
-};
 session.setBitstreamAnalysisConcurrency(analysisConcurrency());
 window.addEventListener(ANALYSIS_CONCURRENCY_EVENT, event => session.setBitstreamAnalysisConcurrency((event as CustomEvent<number>).detail), { signal: uiEvents.signal });
 session.onColorModeChange=async()=>{const {refreshGpuColorMode}=await import('./presentation/webgpu-presenter.ts');await refreshGpuColorMode();};
@@ -170,13 +159,7 @@ const identitySettings = installIdentitySettings(actor => session.setActor(actor
 const drawingEditor = installDrawingEditor(session, canvases);
 const markPreviewBackfill = installMarkPreviewBackfill(session, canvases, () => drawingEditor.active());
 const notify = (message: string) => { toasts.show(message); };
-const workbench = installWorkbench(session, act, openMarkDialog, notify, id=>act(async()=>{
-  const actor = currentActor()?.id, space = annotationSync.scope();
-  const { attachQualityDialog } = await import('./ui/quality-evidence.ts');
-  if (uiEvents.signal.aborted || currentActor()?.id !== actor || annotationSync.scope() !== space) return;
-  const target = await annotationSync.qualityTarget(id);
-  await attachQualityDialog(target,annotationSync.rememberQuality);
-},'ui.attach-psnr'),()=>annotationSync.scope());
+const workbench = installWorkbench(session, act, openMarkDialog, notify);
 $('toggle-annotations').onclick = () => {
   if (session.getState().busy) return;
   if (drawingEditor.active()) $('mark-close').click();
@@ -211,7 +194,6 @@ function openMarkDialog(slot: Slot = workbench.selected(), markId?: string) {
   viewportChrome.setFocused(false);
   drawingEditor.open(slot, markId);
 }
-
 
 function showWarning(message: string, diagnostic: MediaDiagnostic | undefined = session.getErrorDiagnostic()) {
   if (message === warningMessage) return;
@@ -537,7 +519,6 @@ $<HTMLInputElement>('timeline').onchange = async e => {
   }
 };
 
-
 // Space owns transport even when a button, menu, slider or drawing layer has
 // focus. Capture prevents the focused control's native Space activation.
 document.addEventListener('keydown', e => {
@@ -631,8 +612,7 @@ const unregister = registerReviewTools(session, workspaceTransfer);
 const apiCall = <T>(name: string, data: unknown, action: () => T) => traceOperation('api', name, data, action);
 const api = {
   getState: () => session.getState(),
-  captureNativePresented: (slot:Slot) => session.captureNativePresented(slot),
-  isNativePresentedCurrent: (capture:Parameters<ReviewSession['isNativePresentedCurrent']>[0]) => session.isNativePresentedCurrent(capture),
+
   captureFrame: (slot: Slot) => {
     if (!SLOTS.includes(slot) || !session.getState().tracks.some(track => track.slot === slot)) throw new Error(tr(msg("player.noReadableFrameInThisTrack", "轨道没有可读取的画面。")));
     return captureFrame(canvases[slot]);
@@ -687,7 +667,7 @@ if (annotationLink.has('annotation')) void act(async () => {
   const record=await new AnnotationClient(uiEvents.signal).read(space,id);
   if(record.deleted)throw new Error(tr(msg("player.thisAnnotationIsInTheRecycleBin", "这条标注已在回收站。")));
   const mark=record.document.mark;
-  const opened=await workspaceTransfer.importWorkspace({schema:'voidplayer-workspace',version:evidenceWorkspaceVersion([mark]),generatedAt:new Date().toISOString(),serverUrl:location.origin+'/',positionUs:mark.frame.ptsUs,tracks:[{slot:mark.slot,mediaId:mark.mediaId,offsetUs:0}],media:record.document.media,marks:[mark],viewport:viewport.snapshot()});
+  const opened=await workspaceTransfer.importWorkspace({schema:'voidplayer-workspace',version:1,generatedAt:new Date().toISOString(),serverUrl:location.origin+'/',positionUs:mark.frame.ptsUs,tracks:[{slot:mark.slot,mediaId:mark.mediaId,offsetUs:0}],media:record.document.media,marks:[mark],viewport:viewport.snapshot()});
   if(opened)await annotationSync.openSpace(space);
 },'annotation.open');
 

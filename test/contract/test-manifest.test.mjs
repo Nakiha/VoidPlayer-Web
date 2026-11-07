@@ -137,27 +137,13 @@ test('compatibility entries point to registered domain implementations without c
   }
 });
 
-test('identity browser checks match the lightweight job while real PSNR evidence remains required with its core', () => {
+test('identity browser checks retain their lightweight prerequisites', () => {
   // The legacy identity-only selector needs no decoder; daily CI folds it into the core browser profile.
   for (const row of selectCases({suite:'ci-identity-browser',platform:'linux'}).selected) {
     assert.deepEqual(row.engines,['chromium'],`${row.id}: identity job installs Chromium only`);
     assert.deepEqual(row.fixtures,[],`${row.id}: identity job has no downloaded decoder/media`);
   }
-  const evidence = selectCases({suite:'ci-cache',platform:'linux'}).selected.filter(row=>row.script==='scripts/check-quality-annotation-browser.mjs');
-  assert.deepEqual(evidence.map(row=>[row.id,row.engines[0],row.command.at(-1)==='10'?10:8]),[
-    ['browser-quality-annotation-chromium','chromium',8],['browser-quality-pair-view-10-chromium','chromium',10],
-    ['browser-quality-annotation-webkit','webkit',8],['browser-quality-pair-view-10-webkit','webkit',10],
-  ]);
-  for (const row of evidence) {
-    assert.equal(row.required,true);
-    assert.ok(row.fixtures.includes('core'),`${row.id}: real scoring cannot use a synthetic result`);
-  }
-});
 
-test('the complete quality GUI workflow requires real core in both browsers and both depths, never identity CI',()=>{
- const rows=selectCases({suite:'ci-cache',platform:'linux'}).selected.filter(row=>row.script==='scripts/check-quality-workflow-browser.mjs');
- assert.deepEqual(rows.map(row=>[row.engines[0],Number(row.command.at(-1))]),[['chromium',8],['chromium',10],['webkit',8],['webkit',10]]);
- for(const row of rows){assert.equal(row.required,true);assert.deepEqual(row.fixtures,['core']);assert.equal(row.suites.includes('ci-identity-browser'),false);}
 });
 
 test('identity source checks require no downloaded core, media or browser build', () => {
@@ -167,7 +153,6 @@ test('identity source checks require no downloaded core, media or browser build'
     assert.deepEqual(row.engines, ['node']);
   }
 });
-
 
 test('analysis matrix, streaming diagrams and incremental indexing are independently required in CI with unchanged case budgets', () => {
   for (const engine of ['chromium', 'webkit']) {
@@ -257,7 +242,6 @@ test('all source-only Node checks run before media dependencies are prepared', (
   const missing = clone(); missing.cases.find(row => row.id === 'node-workspace-storage').suites = ['unit'];
   assert.throws(() => validateManifest(missing), /missing from source suite/);
 });
-
 
 test('canonical commands bypass compatibility aliases and reject ambiguous execution paths',()=>{
   for(const row of testManifest.cases){
@@ -395,42 +379,6 @@ test('explicit npm engine selection narrows HEVC and rejects unsupported range v
  assert.throws(()=>selectCases({alias:'test:hevc-timeline:browser',engine:'chromium',caseArguments:['webkit','local']}),/Unsupported|conflict/i);
  assert.throws(()=>selectCases({alias:'test:range:browser',engine:'chrome'}),/Unsupported/i);
  assert.throws(()=>selectCases({alias:'test:range:browser',caseArguments:['chrome']}),/Unsupported/i);
-});
-
-test('SSIM full GUI matrix is independently required with real core and cannot enter identity CI',()=>{
- const all=selectCases({suite:'ci-ssim',platform:'linux'}).selected;
- const rows=all.filter(r=>r.command[4]==='ssim');
- assert.deepEqual(rows.map(r=>[r.engines[0],Number(r.command[3]),r.command[4]]),[['chromium',8,'ssim'],['chromium',10,'ssim'],['webkit',8,'ssim'],['webkit',10,'ssim']]);
- for(const row of rows){assert.equal(row.required,true);assert.deepEqual(row.fixtures,['core']);assert.equal(row.build,true);assert.equal(row.suites.includes('ci-identity-browser'),false);}
-});
-
-
-test('forward ordinary-frame GUI matrix extends the full core-backed metric job without replacing SSIM or identity gates',()=>{
- const rows=selectCases({suite:'ci-ssim',platform:'linux'}).selected.filter(r=>r.command[4]==='forward');
- assert.deepEqual(rows.map(r=>[r.engines[0],Number(r.command[3])]),[['chromium',8],['chromium',10],['webkit',8],['webkit',10]]);
- for(const row of rows){assert.equal(row.required,true);assert.deepEqual(row.fixtures,['core']);assert.equal(row.build,true);assert.equal(row.timeoutMs,300000);assert.equal(row.suites.includes('ci-identity-browser'),false);}
- const media=selectCases({suite:'ci-node-media',platform:'linux'}).selected.find(r=>r.id==='node-quality-forward');assert.ok(media.required);assert.deepEqual(media.fixtures,['core']);assert.deepEqual(media.tools,['ffmpeg']);
-});
-
-
-test('paused native quality keeps explicit preparation and independent mandatory native identity checks', ()=> {
- const rows=selectCases({suite:'ci-cache',platform:'linux'}).selected.filter(r=>r.id.startsWith('browser-presented-quality-'));
- assert.deepEqual(rows.map(r=>r.engines[0]),['chromium','webkit']);
- for(const row of rows){assert.equal(row.required,true);assert.deepEqual(row.fixtures,['core']);assert.equal(row.build,true);assert.equal(row.timeoutMs,300000);assert.equal(row.suites.includes('ci-identity-browser'),false);}
- const pr=selectCases({suite:'ci-cache-pr',platform:'linux'}).selected;
- assert.ok(pr.some(row=>row.id==='browser-presented-quality-chromium'));
- assert.ok(!pr.some(row=>row.id==='browser-presented-quality-webkit'));
- for(const engine of ['chromium','webkit']){
-  const row=pr.find(row=>row.id===`browser-native-presented-protocol-${engine}`);
-  assert.ok(row.required);assert.equal(row.build,true);assert.equal(row.timeoutMs,300000);
- }
- const long=readFileSync(new URL('../../scripts/check-presented-quality-browser.mjs',import.meta.url),'utf8');
- assert.doesNotMatch(long,/checkNativePresentedProtocol/,'the protocol is no longer hidden behind a multi-page GPU scenario');
- const protocol=readFileSync(new URL('../../scripts/check-native-presented-protocol.mjs',import.meta.url),'utf8');
-  assert.ok(hasAwaitedCall(protocol, 'checkNativePresentedProtocol', ['browser', 'fixtures', 'engine']));
- assert.ok(selectCases({suite:'source',platform:'linux'}).selected.some(r=>r.id==='node-quality-source-build'));
- assert.ok(selectCases({suite:'ci-native-bun',platform:'win32'}).selected.some(r=>r.id==='bun-quality-source-build'));
- const release=readFileSync(new URL('../../scripts/check-quality-release.mjs',import.meta.url),'utf8');assert.match(release,/quality-source-build/);assert.ok(!release.includes('frame-index?v=${entry.version}&build=1'));
 });
 
 test('media Node domain partitions are a complete disjoint selection and reject drift',()=>{
