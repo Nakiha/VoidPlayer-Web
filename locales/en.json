@@ -115,17 +115,9 @@
     "source": "帧上下文数",
     "translation": "Frame contexts"
   },
-  "admin.analysisDecoderHelp": {
-    "source": "每路服务端分析默认使用 1 个线程和 1 套帧上下文。VVC 使用两项配置，H.264 按帧上下文数并行，HEVC 暂用单线程。上下文数不得超过线程上限。提高配置会增加 CPU 和内存开销，仅对新建任务生效。",
-    "translation": "Each server analysis task defaults to 1 thread and 1 frame context. VVC uses both settings; H.264 runs frame contexts in parallel; HEVC currently uses one thread. Frame contexts cannot exceed the thread limit. Higher settings use more CPU and memory and apply only to new tasks."
-  },
   "admin.analysisReload": {
     "source": "载入配置",
     "translation": "Load configuration"
-  },
-  "admin.analysisResourceHelp": {
-    "source": "设置所有用户共享的服务端分析并发数。默认 8 路，可设为 1–32 路；并发越高，CPU 和内存占用越大。保存后立即生效，调低不会中断正在运行的任务。",
-    "translation": "Set server analysis concurrency shared by all users. Default: 8; range: 1–32. Higher concurrency uses more CPU and memory. Changes take effect immediately; lowering the limit lets running tasks finish."
   },
   "admin.analysisResourceStatus": {
     "source": "当前上限 {limit} 路 · {running} 项运行中 · {queued} 项排队",
@@ -175,10 +167,6 @@
     "source": "缓存内容",
     "translation": "Cached contents"
   },
-  "admin.cacheDesc": {
-    "source": "查看占用，清理可重新生成的数据。",
-    "translation": "Storage use; clean up data that regenerates."
-  },
   "admin.cacheQuota": {
     "source": "缓存限额占用",
     "translation": "Cache quota usage"
@@ -202,10 +190,6 @@
   "admin.cancelTest": {
     "source": "取消测试",
     "translation": "Cancel test"
-  },
-  "admin.capNote": {
-    "source": "达到任一上限即结束。",
-    "translation": "Stops at whichever cap hits first."
   },
   "admin.chooseMedia": {
     "source": "选择媒体",
@@ -255,10 +239,6 @@
     "source": "{done} 次完成 · {errors, plural, other {# 次错误}} · {pending} 次处理中",
     "translation": "{done} done · {errors, plural, one {# error} other {# errors}} · {pending} active"
   },
-  "admin.cpuCaption": {
-    "source": "CPU 以一个逻辑核为 100%。连接数包含浏览器保持的空闲连接。",
-    "translation": "CPU is percent of one logical core. Connections include idle browser keep-alives."
-  },
   "admin.currentIdentity": {
     "source": "当前身份",
     "translation": "Current identity"
@@ -299,29 +279,13 @@
     "source": "删除服务器工作区？不删除视频或已打开的会话。",
     "translation": "Delete the server workspace? Videos and open sessions stay."
   },
-  "admin.descConcurrent": {
-    "source": "浏览器同时读取四路媒体，统计合计吞吐。包含文件读取、网络、缓存和浏览器调度。",
-    "translation": "The browser reads four media streams at once and totals throughput. Includes reads, network, caches, and browser scheduling."
-  },
-  "admin.descDownload": {
-    "source": "服务器 → 浏览器，传输内存数据，不读取媒体文件。",
-    "translation": "Server → browser, in-memory data, no media files read."
-  },
   "admin.descPreviews": {
     "source": "标注卡片使用的画面预览。清理保留文字和绘图，再次编辑对应画面时生成。",
     "translation": "Image previews for mark cards. Text and drawings are kept; regenerates while editing that frame."
   },
-  "admin.descStorage": {
-    "source": "服务器重复读取所选媒体。包含系统缓存，不代表磁盘物理带宽。",
-    "translation": "The server re-reads the selected media. Includes OS caches, not physical disk bandwidth."
-  },
   "admin.descThumbs": {
     "source": "媒体库首帧小图。清理后只在正常从头打开时重建，不主动解码。",
     "translation": "First-frame thumbnails for the library. Rebuilds only on plain reopening, never by proactive decoding."
-  },
-  "admin.descUpload": {
-    "source": "当前浏览器 → 服务器。单路上传随机数据，收到后即丢弃，不保存到磁盘。",
-    "translation": "This browser → server. One stream of random uploads, discarded on receipt, never stored."
   },
   "admin.detailFrames": {
     "source": "{root} · {format} · {frames, plural, other {# 帧}}",
@@ -547,10 +511,6 @@
     "source": "上传者：{user} · {size}",
     "translation": "Uploader: {user} · {size}"
   },
-  "admin.logsDesc": {
-    "source": "查看用户上传的诊断日志，或检查服务器收到的请求。",
-    "translation": "Uploaded diagnostic logs, or requests received by the server."
-  },
   "admin.logsDisabled": {
     "source": "未开启日志接收",
     "translation": "Log receiving is off"
@@ -567,10 +527,6 @@
     "source": "日志",
     "translation": "Logs"
   },
-  "admin.marksDesc": {
-    "source": "检索评审记录，恢复已删除的标注。",
-    "translation": "Search review records and restore deleted marks."
-  },
   "admin.marksTab": {
     "source": "标注",
     "translation": "Marks"
@@ -582,10 +538,6 @@
   "admin.measureCancelled": {
     "source": "已取消",
     "translation": "Cancelled"
-  },
-  "admin.measureDesc": {
-    "source": "选择测试类型和上限，再点击“开始测试”。",
-    "translation": "Pick a test type and caps, then click “Start test”."
   },
   "admin.measureDone": {
     "source": "已完成",
@@ -727,10 +679,6 @@
     "source": "服务端文件读取（含系统缓存）",
     "translation": "Server file reads (incl. OS caches)"
   },
-  "admin.overviewDesc": {
-    "source": "查看服务状态、资源占用和媒体扫描进度。",
-    "translation": "Service status, resource usage, and media scan progress."
-  },
   "admin.overviewTitle": {
     "source": "概览",
     "translation": "Overview"
@@ -854,10 +802,6 @@
   "admin.requestsSummary": {
     "source": "{done} 次完成 · {active} 次处理中 · {aborted} 次中断",
     "translation": "{done} completed · {active} active · {aborted} aborted"
-  },
-  "admin.resourceNote": {
-    "source": "测试期间会占用网络或存储资源。",
-    "translation": "Testing uses network or storage resources."
   },
   "admin.restoreMark": {
     "source": "恢复标注",
@@ -1051,10 +995,6 @@
     "source": "填写完整目录路径",
     "translation": "Enter the full directory path"
   },
-  "admin.serviceDesc": {
-    "source": "可信内网模式：用户名用于内容归属，不是身份认证。访问者可选择已有身份并使用管理功能；本服务不提供安全的多租户隔离。",
-    "translation": "Trusted-intranet mode: user names attribute content, they are not authentication. Visitors may pick an existing identity and use admin features; this service does not provide secure multi-tenant isolation."
-  },
   "admin.serviceTitle": {
     "source": "服务",
     "translation": "Service"
@@ -1222,10 +1162,6 @@
   "admin.wsDeleted": {
     "source": "已删除服务器工作区。",
     "translation": "Server workspace deleted."
-  },
-  "admin.wsDesc": {
-    "source": "打开已保存的评审，或修改名称、下载副本。",
-    "translation": "Open a saved review, or rename it and download a copy."
   },
   "admin.wsEmptyHint": {
     "source": "在播放器的“设置 → 工作区”中点击“保存到服务器”，即可在这里打开和管理。",

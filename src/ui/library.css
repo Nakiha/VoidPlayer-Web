@@ -1,5 +1,6 @@
 /* Shared library surface: player sidebar and administration browser card. */
-.library-pane { --library-row-plain: var(--surface-panel); --library-row-striped: linear-gradient(var(--surface-stripe), var(--surface-stripe)), var(--library-row-plain); --foot-h: 28px; position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.library-pane, .library-row-surface { --library-row-plain: var(--surface-panel); --library-row-striped: linear-gradient(var(--surface-stripe), var(--surface-stripe)), var(--library-row-plain); }
+.library-pane { --foot-h: 28px; position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .source-tools { --source-control-fill: color-mix(in srgb, var(--surface-control) 45%, transparent); position: absolute; top: 0; left: 0; right: 0; z-index: 4; display: flex; align-items: center; gap: 4px; margin: 0; padding: var(--panel-padding-block); min-height: var(--control-small-height); background: var(--viewport-chrome-fill); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); }
 .source-tools .icon-button { border: 0; background: transparent; flex: 0 0 auto; }
 .source-tools .library-history, .source-tools > .icon-button, .source-tools .library-navigation { background: var(--source-control-fill); box-shadow: var(--control-shadow); }

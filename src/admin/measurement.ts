@@ -8,23 +8,15 @@ import { icon } from '../ui/icons.ts';
 import type { MeasurementResult, MeasurementKind } from '../../shared/service/measurement.ts';
 import type { LibraryEntry, LibraryPage } from '../services/library.ts';
 const kindLabels = (): Record<MeasurementKind, string> => ({ download: t(msg("admin.speedDownload", "下载速度")), upload: t(msg("admin.speedUpload", "上传速度")), storage: t(msg("admin.speedStorage", "服务器读取速度")), concurrent: t(msg("admin.speedConcurrent", "多路视频读取")) });
-const descriptionLabels = (): Record<MeasurementKind, string> => ({
-  download: t(msg("admin.descDownload", "服务器 → 浏览器，传输内存数据，不读取媒体文件。")),
-  upload: t(msg("admin.descUpload", "当前浏览器 → 服务器。单路上传随机数据，收到后即丢弃，不保存到磁盘。")),
-  storage: t(msg("admin.descStorage", "服务器重复读取所选媒体。包含系统缓存，不代表磁盘物理带宽。")),
-  concurrent: t(msg("admin.descConcurrent", "浏览器同时读取四路媒体，统计合计吞吐。包含文件读取、网络、缓存和浏览器调度。")),
-});
 const stateLabels = () => ( { preparing: t(msg("admin.measurePreparing", "准备中")), running: t(msg("admin.measureRunning", "进行中")), stopping: t(msg("admin.measureFinishing", "正在结束，等待当前读取释放")), completed: t(msg("admin.measureDone", "已完成")), cancelled: t(msg("admin.measureCancelled", "已取消")), failed: t(msg("admin.measureFailed", "测试失败")) });
 const reasonLabels = () => ( { duration: t(msg("admin.reasonDuration", "达到时长上限")), limit: t(msg("admin.reasonData", "达到数据量上限")), user: t(msg("admin.reasonUser", "用户取消或连接中断")), client: t(msg("admin.reasonBrowser", "浏览器完成测量")), error: t(msg("admin.reasonError", "发生错误")), shutdown: t(msg("admin.reasonClosed", "服务关闭")) });
 const active = (r: MeasurementResult | null) => !!r && ['preparing', 'running', 'stopping'].includes(r.state);
 const MiB = 1024 ** 2;
 export function measurementShell() {
-  return `<section id="pane-measurements" hidden><header class="admin-heading"><div><h1>${th(msg("admin.measureTitle", "测速"))}</h1><p>${th(msg("admin.measureDesc", "选择测试类型和上限，再点击“开始测试”。"))}</p></div></header>
-    <div class="admin-panel"><div class="admin-section-heading"><h2>${th(msg("admin.testSettings", "测试设置"))}</h2></div><div class="admin-measure-options">${[['kind', t(msg("admin.optKind", "测试类型"))], ['seconds', t(msg("admin.optSeconds", "最长时长"))], ['limit', t(msg("admin.optLimit", "数据量上限"))]].map(([id, label]) => `<label>${label}<button type="button" class="admin-choice" id="measure-${id}" aria-label="${label}"></button></label>`).join('')}</div>
-    <p id="measure-description" class="admin-caption"></p>
-    <div id="measure-media-picker" hidden><div class="admin-measure-search"><label>${th(msg("admin.filterMedia", "筛选媒体"))}<input id="measure-search" type="search" placeholder="${th(msg("admin.searchLibrary", "搜索媒体库"))}" maxlength="200"></label><button id="measure-search-button">${icon('search')}${th(msg("admin.search", "搜索"))}</button></div><label class="admin-measure-file">${th(msg("admin.readMedia", "读取的媒体"))}<button type="button" class="admin-choice" id="measure-media" aria-label="${th(msg("admin.readMedia", "读取的媒体"))}"></button></label><div class="admin-actions"><span id="measure-media-page" class="admin-caption"></span><button id="measure-media-prev">${th(msg("admin.prevPage", "上一页"))}</button><button id="measure-media-next">${th(msg("admin.nextPage", "下一页"))}</button></div></div>
-    <div class="admin-panel-footer"><span id="measure-condition" class="admin-caption">${th(msg("admin.capNote", "达到任一上限即结束。"))}</span><div class="admin-button-group"><button id="measure-cancel" hidden disabled>${icon('close')}${th(msg("admin.cancelTest", "取消测试"))}</button><button id="measure-start" class="admin-primary">${icon('play')}${th(msg("admin.startTest", "开始测试"))}</button></div></div>
-    <p class="admin-help">${th(msg("admin.resourceNote", "测试期间会占用网络或存储资源。"))}</p></div>
+  return `<section id="pane-measurements" hidden><header class="admin-heading"><h1>${th(msg("admin.measureTitle", "测速"))}</h1></header>
+    <div class="admin-panel"><div class="admin-section-heading"><h2>${th(msg("admin.testSettings", "测试设置"))}</h2><div class="admin-button-group"><button id="measure-cancel" hidden disabled>${icon('close')}${th(msg("admin.cancelTest", "取消测试"))}</button><button id="measure-start" class="admin-primary">${icon('play')}${th(msg("admin.startTest", "开始测试"))}</button></div></div><div class="admin-measure-options">${[['kind', t(msg("admin.optKind", "测试类型"))], ['seconds', t(msg("admin.optSeconds", "最长时长"))], ['limit', t(msg("admin.optLimit", "数据量上限"))]].map(([id, label]) => `<label>${label}<button type="button" class="choice-trigger" id="measure-${id}" aria-label="${label}"></button></label>`).join('')}</div>
+    <div id="measure-media-picker" hidden><div class="admin-measure-search"><label>${th(msg("admin.filterMedia", "筛选媒体"))}<input id="measure-search" type="search" placeholder="${th(msg("admin.searchLibrary", "搜索媒体库"))}" maxlength="200"></label><button id="measure-search-button">${icon('search')}${th(msg("admin.search", "搜索"))}</button></div><label class="admin-measure-file">${th(msg("admin.readMedia", "读取的媒体"))}<button type="button" class="choice-trigger" id="measure-media" aria-label="${th(msg("admin.readMedia", "读取的媒体"))}"></button></label><div class="admin-actions"><span id="measure-media-page" class="admin-caption"></span><button id="measure-media-prev">${th(msg("admin.prevPage", "上一页"))}</button><button id="measure-media-next">${th(msg("admin.nextPage", "下一页"))}</button></div></div>
+    </div>
     <div class="admin-panel"><div class="admin-section-heading"><h2>${th(msg("admin.resultsTitle", "测试结果"))}</h2><span id="measure-state" class="admin-caption" role="status" aria-live="polite">${th(msg("admin.notStarted", "尚未开始"))}</span></div><p id="measure-empty" class="admin-caption">${th(msg("admin.resultsHint", "完成测试后显示速度、传输量和耗时。"))}</p>
     <div id="measure-result" hidden><div class="admin-metrics admin-measure-metrics"><div><span>${th(msg("admin.netRate", "网络速率"))}</span><strong id="measure-rate">—</strong></div><div><span>${th(msg("admin.throughput", "传输速度"))}</span><strong id="measure-speed">—</strong></div><div><span>${th(msg("admin.dataDone", "已完成数据"))}</span><strong id="measure-bytes">—</strong></div><div><span>${th(msg("admin.elapsed", "实际耗时"))}</span><strong id="measure-elapsed">—</strong></div></div>
     <dl class="admin-properties admin-measure-result"><div><dt>${th(msg("admin.testConditions", "测试条件"))}</dt><dd id="measure-result-condition">—</dd></div><div><dt>${th(msg("admin.measureSource", "测量来源"))}</dt><dd id="measure-origin">—</dd></div><div><dt>${th(msg("admin.blocks", "请求 / 读取块"))}</dt><dd id="measure-count">—</dd></div><div><dt>${th(msg("admin.mediaVersion", "媒体与版本"))}</dt><dd id="measure-source">—</dd></div><div><dt>${th(msg("admin.endReason", "结束原因"))}</dt><dd id="measure-reason">—</dd></div></dl></div></div>
@@ -33,8 +25,8 @@ export function measurementShell() {
 export function installMeasurements(life: AbortSignal, notice: (message: LocalizedValue, error?: boolean) => void) {
   const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
   const text = (id: string, value: LocalizedValue) => { localizedText($(id), value); };
-  let kinds = kindLabels(), descriptions = descriptionLabels(), labels = stateLabels(), reasons = reasonLabels();
-  onLanguageChange(() => { kinds = kindLabels(); descriptions = descriptionLabels(); labels = stateLabels(); reasons = reasonLabels(); }, life);
+  let kinds = kindLabels(), labels = stateLabels(), reasons = reasonLabels();
+  onLanguageChange(() => { kinds = kindLabels(); labels = stateLabels(); reasons = reasonLabels(); }, life);
   let chooseMediaLabel = t(msg('admin.chooseMedia', '选择媒体'));
   const values: Record<string, string> = { 'measure-kind': 'download', 'measure-seconds': '10', 'measure-limit': '256', 'measure-media': '' };
   const choices: Record<string, { value: string; label: string }[]> = {
@@ -45,7 +37,7 @@ export function installMeasurements(life: AbortSignal, notice: (message: Localiz
   };
   const menus = Object.fromEntries(Object.keys(choices).map(id => {
     const menu = installChoiceMenu(id, () => id === 'measure-kind' ? Object.entries(kinds).map(([value,label]) => ({value,label})) : id === 'measure-seconds' ? [5,10,15].map(value => ({value:String(value),label:t(msg("activity.durationSeconds", "{s} 秒"),{s:value})})) : choices[id], value => { values[id] = value; if (id === 'measure-kind') configure(); else controls(); });
-    $(`${id}-menu`).classList.add('admin-choice-menu'); return [id, menu];
+    return [id, menu];
   }));
   onLanguageChange(() => {
     chooseMediaLabel = t(msg('admin.chooseMedia', '选择媒体'));
@@ -115,7 +107,7 @@ export function installMeasurements(life: AbortSignal, notice: (message: Localiz
     text('measure-media-page', () => t(msg("admin.pageCaption", "共 {total} 项 · 第 {n} 页，仅显示可读的非空文件"), { total: page.total, n: Math.floor(offset / 60) + 1 })); controls();
   }
   function configure() {
-    text('measure-description', () => descriptions[kind()]); const needsMedia = ['storage', 'concurrent'].includes(kind());
+    const needsMedia = ['storage', 'concurrent'].includes(kind());
     $('measure-media-picker').hidden = !needsMedia; controls();
     if (needsMedia && !media.size) void safe(loadMedia);
   }

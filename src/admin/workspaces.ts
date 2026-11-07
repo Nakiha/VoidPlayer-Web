@@ -8,9 +8,9 @@ import type { WorkspaceRecord, SavedWorkspace } from '../review/saved-workspaces
 import { compressWorkspace } from '../../shared/review/workspace-file.ts';
 import { icon } from '../ui/icons.ts';
 export function workspaceAdminShell() {
-  return `<section id="pane-workspaces" class="admin-logs" hidden><header class="admin-heading"><div><h1>${th(msg("admin.wsTitle", "工作区"))}</h1><p>${th(msg("admin.wsDesc", "打开已保存的评审，或修改名称、下载副本。"))}</p></div><button id="admin-workspaces-refresh" class="icon-button" aria-label="${th(msg("admin.refreshWorkspaces", "刷新工作区"))}">${icon('refresh')}</button></header>
+  return `<section id="pane-workspaces" class="admin-logs" hidden><header class="admin-heading"><h1>${th(msg("admin.wsTitle", "工作区"))}</h1><button id="admin-workspaces-refresh" class="icon-button" aria-label="${th(msg("admin.refreshWorkspaces", "刷新工作区"))}">${icon('refresh')}</button></header>
     <div class="admin-workspaces-search"><input id="admin-workspaces-search" type="search" placeholder="${th(msg("admin.searchAllWorkspaces", "搜索全部工作区"))}" aria-label="${th(msg("admin.searchAllWorkspaces", "搜索全部工作区"))}"><button id="admin-workspaces-search-button">${th(msg("admin.search", "搜索"))}</button></div>
-    <div class="admin-log-workspace"><div class="admin-log-sidebar"><div id="admin-workspaces-list"></div><div class="admin-actions"><button id="admin-workspaces-first" disabled>${th(msg("admin.backToLatest", "返回最新"))}</button><button id="admin-workspaces-next" disabled>${th(msg("admin.nextPage", "下一页"))}</button></div></div>
+    <div class="admin-log-workspace"><div class="admin-log-sidebar"><div id="admin-workspaces-list" class="library-row-surface"></div><div class="admin-actions"><button id="admin-workspaces-first" disabled>${th(msg("admin.backToLatest", "返回最新"))}</button><button id="admin-workspaces-next" disabled>${th(msg("admin.nextPage", "下一页"))}</button></div></div>
       <div class="admin-log-detail" data-empty="true"><div class="admin-workspace-title"><label>${th(msg("admin.wsName", "名称"))}<input id="admin-workspace-name" maxlength="200" disabled></label><button id="admin-workspace-rename" disabled>${th(msg("admin.saveName", "保存名称"))}</button></div><p id="admin-workspace-meta" class="admin-caption">${th(msg("admin.selectToView", "选择一个工作区查看详情"))}</p>
         <div class="admin-actions"><a id="admin-workspace-open" hidden target="_blank" rel="noopener">${icon('open')}${th(msg("admin.openInPlayerLink", "在播放器中打开"))}</a><button id="admin-workspace-download" disabled>${icon('download')}${th(msg("admin.download", "下载"))}</button><button id="admin-workspace-delete" class="icon-button admin-danger" aria-label="${th(msg("admin.deleteSelectedWorkspace", "删除选中工作区"))}" disabled>${icon('trash')}</button></div>
         <div id="admin-workspace-conflict" class="admin-inline-confirm" hidden><span>${th(msg("admin.serverChanged", "服务器内容已改变，未覆盖任何修改。"))}</span><button id="admin-workspace-reload">${th(msg("admin.loadLatest", "载入最新版本"))}</button><button id="admin-workspace-copy">${th(msg("admin.saveCopy", "将当前版本另存副本"))}</button></div>
@@ -44,11 +44,22 @@ export function installWorkspaceAdmin(signal: AbortSignal, notice: (value: Local
   }
   async function list() {
     const request = ++generation, page = await client.list(before, search, true); if (request !== generation) return; next = page.next;
-    const rows = page.entries.map((record: SavedWorkspace) => {
-      const button = document.createElement('button'); button.className = 'admin-log-item'; button.setAttribute('aria-pressed', String(record.id === selected?.id));
+    const rows = page.entries.map((record: SavedWorkspace, index) => {
+      const button = document.createElement('button'); button.className = 'admin-workspace-item source-row';
+      button.classList.toggle('source-striped', index % 2 === 1);
+      button.classList.toggle('in-use', record.id === selected?.id);
+      button.setAttribute('aria-pressed', String(record.id === selected?.id));
       const title = document.createElement('strong'); localizedText(title, () => record.name);
-      const detail = document.createElement('span'); localizedText(detail, () => t(msg("admin.workspaceRow", "{owner} · {tracks, plural, other {# 条轨道}} · {marks, plural, other {# 个标注}}"), {owner:userName(record.owner),tracks:record.tracks,marks:record.marks}));
-      button.append(title, detail); button.onclick = () => void act(async () => { render(await client.read(record.id)); for (const row of $('admin-workspaces-list').querySelectorAll('button')) row.setAttribute('aria-pressed', String(row === button)); }); return button;
+      const detail = document.createElement('span'); detail.className = 'source-meta'; localizedText(detail, () => t(msg("admin.workspaceRow", "{owner} · {tracks, plural, other {# 条轨道}} · {marks, plural, other {# 个标注}}"), {owner:userName(record.owner),tracks:record.tracks,marks:record.marks}));
+      button.append(title, detail);
+      button.onclick = () => void act(async () => {
+        render(await client.read(record.id));
+        for (const row of $('admin-workspaces-list').querySelectorAll('button')) {
+          row.setAttribute('aria-pressed', String(row === button));
+          row.classList.toggle('in-use', row === button);
+        }
+      });
+      return button;
     });
     if (!rows.length) $('admin-workspaces-list').replaceChildren(emptyState(() => search ? t(msg("admin.noMatchWs", "没有找到匹配的工作区")) : t(msg("admin.noWsYet", "还没有保存的工作区")), () => search ? t(msg("admin.tryOtherNames", "试试其他名称，或清空搜索。")) : t(msg("admin.wsEmptyHint", "在播放器的“设置 → 工作区”中点击“保存到服务器”，即可在这里打开和管理。")), !search)); else $('admin-workspaces-list').replaceChildren(...rows);
     controls();
