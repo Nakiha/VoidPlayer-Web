@@ -117,11 +117,11 @@
 .library-drag-preview[data-allowed=false] { opacity: .6; }
 .library-branch-arrow { display: inline-flex; flex: none; }
 .library-branch-arrow .icon { width: 14px; height: 14px; flex: none; }
-.library-pane[data-library-view=columns] .source-list { overflow-x: auto; overflow-y: hidden; padding-bottom: calc(var(--foot-h) + 14px); }
-.library-horizontal-scrollbar { position: absolute; bottom: var(--foot-h); left: 0; right: 0; height: 14px; padding: 4px; z-index: 3; background: var(--surface-panel); touch-action: none; }
-.library-horizontal-scrollbar > span { display: block; height: 6px; border-radius: 3px; background: var(--text-subtle, var(--text-secondary)); opacity: .5; }
-.library-horizontal-scrollbar:hover > span, .library-horizontal-scrollbar.resizing > span, .library-horizontal-scrollbar:focus-visible > span { opacity: .85; }
-.library-pane[data-library-view=columns] > .source-scrollbar { display: none; }
+.library-pane[data-library-view=columns] .source-list { overflow-x: auto; overflow-y: hidden; padding-bottom: var(--foot-h); }
+.source-scrollbar.library-horizontal-scrollbar { top: auto; bottom: calc(var(--foot-h) + 2px); left: 4px; right: 4px; width: auto; height: 6px; z-index: 5; background: transparent; touch-action: none; }
+.source-scrollbar.library-horizontal-scrollbar > span { height: 100%; }
+.library-horizontal-scrollbar:focus-visible { opacity: 1; }
+.library-pane[data-library-view=columns] > .source-scrollbar:not(.library-horizontal-scrollbar) { display: none; }
 #admin-library-view-menu button { justify-content: flex-start; gap: 8px; }
 #admin-library-view-menu .icon { width: 18px; height: 18px; flex: none; }
 

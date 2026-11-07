@@ -150,6 +150,13 @@ try {
       layers:[el,...el.querySelectorAll('.library-columns,.library-column,.library-horizontal-scrollbar')].map(node => getComputedStyle(node).backgroundColor)}));
     assert.equal(cardFills.card,cardFills.scan,`${theme}: the library shares the scan card material`);
     assert.ok(cardFills.layers.every(fill => fill==='rgba(0, 0, 0, 0)'),`${theme}: library columns do not obscure their card backing`);
+    const chrome=await embedded.evaluate(el => {
+      const probe=document.createElement('span');probe.style.background='var(--surface-panel)';el.append(probe);
+      const panel=getComputedStyle(probe).backgroundColor;probe.remove();
+      return {panel,header:getComputedStyle(el.querySelector('.source-tools')).backgroundColor,footer:getComputedStyle(el.querySelector('.source-foot')).backgroundColor};
+    });
+    assert.equal(chrome.header,chrome.panel,`${theme}: admin toolbar uses the neutral panel color`);
+    assert.equal(chrome.footer,chrome.panel,`${theme}: admin path bar matches the toolbar`);
     await managed.locator('.admin-library-card').screenshot({path:`/tmp/voidplayer-library-selected-icons-${theme}-${browserName}.png`});
   }
   const widths = () => active.locator('.library-column').evaluateAll(columns => columns.map(column => Math.round(column.getBoundingClientRect().width)));
@@ -224,6 +231,18 @@ try {
   await scrollColumns(0);
   const horizontalRail=embedded.locator('.library-horizontal-scrollbar');
   await horizontalRail.waitFor({state:'visible'});
+  const overlay=await embedded.evaluate(el => {
+    const rail=el.querySelector('.library-horizontal-scrollbar'), column=el.querySelector('.library-column'), footer=el.querySelector('.source-foot');
+    const list=el.querySelector('#source-list'), previous=list.style.paddingBottom;
+    list.style.paddingBottom='calc(var(--foot-h) + 14px)';
+    const legacyGap=footer.getBoundingClientRect().top-column.getBoundingClientRect().bottom;
+    list.style.paddingBottom=previous;
+    return {bottom:column.getBoundingClientRect().bottom,footer:footer.getBoundingClientRect().top,height:rail.getBoundingClientRect().height,
+      position:getComputedStyle(rail).position,fill:getComputedStyle(rail).backgroundColor,legacyGap};
+  });
+  assert.ok(Math.abs(overlay.legacyGap-14)<1,'injecting the old reserved strip reproduces the missing content height');
+  assert.ok(Math.abs(overlay.bottom-overlay.footer)<1,'columns extend to the footer without a reserved scrollbar strip');
+  assert.equal(overlay.height,6);assert.equal(overlay.position,'absolute');assert.equal(overlay.fill,'rgba(0, 0, 0, 0)');
   await horizontalRail.scrollIntoViewIfNeeded();
   const thumbBox=await horizontalRail.locator('span').boundingBox();
   await managed.mouse.move(thumbBox.x+thumbBox.width/2,thumbBox.y+thumbBox.height/2); await managed.mouse.down();
@@ -231,6 +250,8 @@ try {
   assert.ok(await embedded.locator('#source-list').evaluate(el => el.scrollLeft>50),'the bottom scrollbar can be dragged');
   await horizontalRail.focus(); await managed.keyboard.press('Home');
   assert.equal(await embedded.locator('#source-list').evaluate(el => el.scrollLeft),0);
+  await managed.locator('#library-location').focus();await managed.mouse.move(0,0);
+  await managed.waitForFunction(() => !document.querySelector('.library-horizontal-scrollbar').classList.contains('is-active'));
   await managed.setViewportSize({width:320,height:820});
   await managed.waitForFunction(() => document.querySelector('.library-column').getBoundingClientRect().width<=document.querySelector('#source-list').clientWidth);
   await managed.setViewportSize({width:1200,height:820});
