@@ -117,6 +117,18 @@ test('admin trusts all users while requiring same-origin mutations', async () =>
   });
 });
 
+test('root scan requests validate the selected root and dispatch only its scoped command', async () => fixture(async ({base,library}) => {
+  const requested:string[]=[];
+  library.refreshRoot=rootId => {requested.push(rootId);return Promise.resolve();};
+  const scan=await fetch(base+'/api/admin/scan',mutation(base,'POST',{action:'refresh',rootId:'archive'}));
+  assert.equal(scan.status,202);assert.deepEqual(requested,['archive']);
+  for (const rootId of ['unknown','../archive',42,null]) {
+    const response=await fetch(base+'/api/admin/scan',mutation(base,'POST',{action:'refresh',rootId}));
+    assert.equal(response.status,400);
+  }
+  assert.deepEqual(requested,['archive'],'invalid roots cannot dispatch or fall back to a full scan');
+}));
+
 test('root edits persist stable identities, preserve unrelated config and reject stale or external edits', async () => fixture(async ({ root, media, base, library, config }) => {
   const original = library.browse().entries[0];
   const before = await (await fetch(base + '/api/admin/roots')).json();

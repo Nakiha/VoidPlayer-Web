@@ -65,6 +65,30 @@ test('a subtree scan updates additions and deletions without traversing or clear
   } finally { await index.close(); }
 }));
 
+test('an explicit root scan never broadens an uninitialized library and keeps duplicate requests owned until completion', async () => fixture(async (root, media) => {
+  const sibling=path.join(root,'sibling');await fs.mkdir(sibling);
+  await fs.writeFile(path.join(media,'target.mp4'),'target');await fs.writeFile(path.join(sibling,'untouched.mp4'),'other');
+  const index=new MediaLibraryIndex([{id:'target',path:media},{id:'other',path:sibling}]);
+  const original=fs.readdir, target=await fs.realpath(media);
+  let release:()=>void=()=>{}, blocked=false;
+  const gate=new Promise<void>(resolve => {release=resolve;});
+  try {
+    fs.readdir=(async (...args:Parameters<typeof original>) => {
+      if (String(args[0])===target && !blocked) {blocked=true;await gate;}
+      return original(...args);
+    }) as typeof original;
+    const pending=index.refreshRoot('target');await until(()=>blocked,'root scan did not reach its directory');
+    assert.equal(index.refreshRoot('target'),pending,'repeat clicks reuse the actual pending work');
+    assert.equal(index.status().roots.find(root => root.id==='target')!.scanRequested,true);
+    assert.equal(index.status().roots.find(root => root.id==='other')!.scanRequested,false);
+    release();await pending;
+    assert.deepEqual(index.browse({recursive:true}).entries.map(entry => entry.name),['target.mp4']);
+    assert.equal(index.status().roots.find(root => root.id==='other')!.scannedAt,null,'the other root was not scanned');
+    assert.equal(index.status().roots.find(root => root.id==='target')!.scanRequested,false);
+    await assert.rejects(index.refreshRoot('unknown'),/无效/);
+  } finally {release();fs.readdir=original;await index.close();}
+}));
+
 test('changes arriving during a scan are drained and a requested full calibration is not swallowed', async () => fixture(async (root, media) => {
   for (const directory of ['left', 'right']) { await fs.mkdir(path.join(media, directory)); await fs.writeFile(path.join(media, directory, 'one.mp4'), 'video'); }
   const index = new MediaLibraryIndex([{ id: 'archive', path: media }]);

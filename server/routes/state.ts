@@ -227,8 +227,14 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
           sendJson(res, 200, { ...library.status(), errors: library.errors(100, offset), offset }); return true;
         }
         if (req.method === 'POST') {
-          const body = await readAdminJson(req) as { action?: unknown } | null;
-          if (body?.action === 'refresh') void library.refresh().catch(() => {});
+          const body = await readAdminJson(req) as { action?: unknown; rootId?: unknown } | null;
+          if (body?.action === 'refresh') {
+            if (body.rootId !== undefined) {
+              if (typeof body.rootId !== 'string' || !library.status().roots.some(root => root.id===body.rootId))
+                throw new AdminError(400,'未知媒体根目录。');
+              void library.refreshRoot(body.rootId).catch(() => {});
+            } else void library.refresh().catch(() => {});
+          }
           else if (body?.action === 'cancel') library.cancel();
           else throw new AdminError(400, '未知扫描操作。');
           sendJson(res, 202, library.status()); return true;

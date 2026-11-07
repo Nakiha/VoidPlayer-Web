@@ -867,10 +867,6 @@
     "source": "{done} 次完成 · {active} 次处理中 · {aborted} 次中断",
     "translation": "{done} completed · {active} active · {aborted} aborted"
   },
-  "admin.rescan": {
-    "source": "重新扫描",
-    "translation": "Rescan"
-  },
   "admin.resourceNote": {
     "source": "测试期间会占用网络或存储资源。",
     "translation": "Testing uses network or storage resources."
@@ -1007,6 +1003,10 @@
     "source": "{count} 个目录待扫描",
     "translation": "{count} directories queued"
   },
+  "admin.scanRoot": {
+    "source": "扫描目录：{name}",
+    "translation": "Scan directory: {name}"
+  },
   "admin.search": {
     "source": "搜索",
     "translation": "Search"
@@ -1134,10 +1134,6 @@
   "admin.stateUnscanned": {
     "source": "等待扫描",
     "translation": "Waiting for scan"
-  },
-  "admin.stopScan": {
-    "source": "停止扫描",
-    "translation": "Stop scan"
   },
   "admin.storageLocation": {
     "source": "存储位置",

@@ -957,10 +957,6 @@
       "done": "string | number"
     }
   },
-  "admin.rescan": {
-    "source": "重新扫描",
-    "params": {}
-  },
   "admin.resourceNote": {
     "source": "测试期间会占用网络或存储资源。",
     "params": {}
@@ -1119,6 +1115,12 @@
       "count": "string | number"
     }
   },
+  "admin.scanRoot": {
+    "source": "扫描目录：{name}",
+    "params": {
+      "name": "string | number"
+    }
+  },
   "admin.search": {
     "source": "搜索",
     "params": {}
@@ -1245,10 +1247,6 @@
   },
   "admin.stateUnscanned": {
     "source": "等待扫描",
-    "params": {}
-  },
-  "admin.stopScan": {
-    "source": "停止扫描",
     "params": {}
   },
   "admin.storageLocation": {

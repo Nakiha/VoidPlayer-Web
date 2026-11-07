@@ -146,7 +146,7 @@ try {
       assert.equal(await row.evaluate(el => el.classList.contains('library-item-selected')),false);
     }
     const cardFills=await embedded.evaluate(el => ({card:getComputedStyle(el.closest('.admin-library-card')).backgroundColor,
-      scan:getComputedStyle(document.querySelector('#scan-refresh').closest('.admin-panel')).backgroundColor,
+      scan:getComputedStyle(document.querySelector('#roots-form')).backgroundColor,
       layers:[el,...el.querySelectorAll('.library-columns,.library-column,.library-horizontal-scrollbar')].map(node => getComputedStyle(node).backgroundColor)}));
     assert.equal(cardFills.card,cardFills.scan,`${theme}: the library shares the scan card material`);
     assert.ok(cardFills.layers.every(fill => fill==='rgba(0, 0, 0, 0)'),`${theme}: library columns do not obscure their card backing`);
@@ -654,52 +654,75 @@ try {
   await page.locator('.admin-toast-stack .toast').waitFor({ state: 'hidden' });
   await page.getByRole('button', { name: '媒体库', exact: true }).click();
   await page.getByLabel('目录名称').first().waitFor();
-  await page.locator('.admin-root-state').filter({ hasText: '存储离线' }).waitFor();
+  await page.locator('.admin-root-row[data-id=offline] .admin-root-scan[data-state=offline]').waitFor();
   const actualScan=await (await fetch(base+'/api/admin/scan')).json();
   let scanView={...actualScan,ready:true,scanning:false,scanMode:null,inventory:{media:37,pending:0},queuedDirectories:0,
-    roots:actualScan.roots.map(root => ({...root,state:'ready',error:null})),errors:[],
+    roots:actualScan.roots.map(root => ({...root,state:'ready',scanRequested:false,error:null})),errors:[],
     job:{...actualScan.job,state:'completed',files:1,visited:1,errors:0}};
-  await page.route('**/api/admin/scan?*',route => route.fulfill({json:scanView}));
+  const submitted=[];let acknowledge;
+  const accepted=new Promise(resolve => {acknowledge=resolve;});
+  await page.route('**/api/admin/scan*',async route => {
+    if (route.request().method()==='POST') {
+      submitted.push(route.request().postDataJSON());await accepted;
+      await route.fulfill({status:202,json:scanView});
+    } else await route.fulfill({json:scanView});
+  });
   const showScan=async () => {
-    const response=page.waitForResponse(response => new URL(response.url()).pathname==='/api/admin/scan');
+    const response=page.waitForResponse(response => new URL(response.url()).pathname==='/api/admin/scan' && response.request().method()==='GET');
     await page.locator('[data-pane=library]').click();await response;
   };
   await showScan();
-  await page.locator('[data-root-state]').filter({hasText:'已扫描'}).first().waitFor();
-  assert.equal(await page.locator('#scan-progress, .admin-scan-status').count(),0,'there is no standalone scanning card');
-  assert.equal(await page.locator('#scan-refresh').evaluate(el => el.closest('form')?.id),'roots-form','rescan belongs to the directory card');
-  assert.equal(await page.locator('#scan-current').isVisible(),false,'idle cards do not show incremental-pass counters');
-  assert.equal(await page.locator('.admin-root-row [data-root-state]:visible').count(),actualScan.roots.length,'each configured directory exposes one status column');
-  assert.equal(await page.locator('#root-save-state, #roots-form .admin-help, #scan-detail').count(),0,'redundant saved and explanatory captions are removed');
-  scanView={...scanView,scanning:true,scanMode:'incremental',inventory:{media:37,pending:2},queuedDirectories:3,
-    roots:scanView.roots.map(root => ({...root,state:root.id==='local'?'scanning':'ready'})),
+  const rootScan=page.locator('.admin-root-row[data-id=local] .admin-root-scan');
+  assert.equal(await page.locator('#scan-progress, #scan-current, #scan-refresh, #scan-cancel, .admin-root-state, .admin-scan-status').count(),0,
+    'only per-directory scan controls remain; there are no global scan controls or visible progress/status columns');
+  assert.equal(await page.locator('#control-tooltip').count(),1,'admin controls share one tooltip owner');
+  assert.equal(await page.locator('.admin-root-row .admin-root-scan').count(),actualScan.roots.length);
+  await rootScan.hover();await page.locator('#control-tooltip').filter({hasText:'已扫描'}).waitFor();
+  assert.equal(await rootScan.getAttribute('aria-disabled'),'false');
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  await rootScan.click();
+  await page.waitForFunction(()=>document.querySelector('.admin-root-row[data-id=local] .admin-root-scan')?.getAttribute('aria-busy')==='true');
+  assert.ok(await rootScan.locator('.icon').evaluate(el => getComputedStyle(el).animationName!=='none'),'the icon animates immediately while awaiting acceptance');
+  scanView={...scanView,scanning:true,scanMode:'incremental',
+    roots:scanView.roots.map(root => ({...root,state:root.id==='local'?'scanning':'ready',scanRequested:root.id==='local'})),
     job:{...scanView.job,state:'running',current_root:'local',current_path:'z-branch/leaf'}};
+  acknowledge();await showScan();
+  assert.deepEqual(submitted,[{action:'refresh',rootId:'local'}],'the row dispatches only its committed root');
+  await page.mouse.move(20,20);await rootScan.hover();
+  await page.locator('#control-tooltip').filter({hasText:'本轮已读取 1 个目录、1 个媒体'}).waitFor();
+  assert.match(await page.locator('#control-tooltip').innerText(),/z-branch\/leaf/);
+  const busyBox=await rootScan.boundingBox();await page.mouse.click(busyBox.x+busyBox.width/2,busyBox.y+busyBox.height/2);
+  assert.equal(submitted.length,1,'busy row clicks cannot submit duplicate scans');
+  scanView={...scanView,roots:scanView.roots.map(root => ({...root,state:'ready'})),job:{...scanView.job,current_root:'offline'}};
   await showScan();
-  await page.locator('.admin-root-row[data-id=local] [data-root-state]').filter({hasText:'扫描中'}).waitFor();
-  await page.locator('#scan-current').filter({hasText:'本轮已读取 1 个目录、1 个媒体 · 本机媒体 / z-branch/leaf'}).waitFor();
-  assert.equal(await page.locator('#scan-refresh').isDisabled(),true);assert.equal(await page.locator('#scan-cancel').isVisible(),true);
-  scanView={...scanView,scanMode:'full'};await showScan();
-  await page.locator('#scan-current').filter({hasText:'全量扫描中'}).waitFor();
-  scanView={...scanView,scanning:false,scanMode:null,inventory:{media:37,pending:2},queuedDirectories:1,
-    roots:scanView.roots.map(root => ({...root,state:'ready'}))};await showScan();
-  await page.locator('#scan-current').filter({hasText:'等待扫描 · 已收录 37 个媒体 · 2 个文件等待稳定 · 1 个目录待扫描'}).waitFor();
-  for (const [state,label] of [['cancelled','已停止'],['interrupted','上次任务被中断'],['failed','失败']]) {
-    scanView={...scanView,queuedDirectories:0,inventory:{media:37,pending:0},job:{...scanView.job,state}};await showScan();
-    await page.locator('#scan-current').filter({hasText:label+' · 已收录 37 个媒体'}).waitFor();
+  await page.locator('.admin-root-row[data-id=local] .admin-root-scan[data-state=unscanned]').waitFor();
+  assert.equal(await rootScan.getAttribute('aria-busy'),'true','a queued root stays busy while a different root is being read');
+  assert.match(await rootScan.getAttribute('data-tooltip'),/等待扫描/);
+  assert.doesNotMatch(await rootScan.getAttribute('data-tooltip'),/本轮已读取/,'unrelated-root progress is not attributed to this row');
+  scanView={...scanView,scanning:false,scanMode:null,roots:scanView.roots.map(root => ({...root,scanRequested:false})),
+    job:{...scanView.job,state:'completed',current_root:null,current_path:null}};
+  await showScan();await page.locator('.admin-root-row[data-id=local] .admin-root-scan[aria-busy=false]').waitFor();
+  assert.equal(await rootScan.locator('.icon').evaluate(el => getComputedStyle(el).animationName),'none');
+  await page.emulateMedia({reducedMotion:'reduce'});
+  for (const [state,label] of [['cancelled','已停止'],['partial','部分路径不可读'],['error','扫描出错']]) {
+    scanView={...scanView,roots:scanView.roots.map(root => root.id==='local'?{...root,state}:root)};await showScan();
+    await page.locator(`.admin-root-row[data-id=local] .admin-root-scan[data-state=${state}]`).waitFor();
+    assert.ok((await rootScan.getAttribute('data-tooltip')).includes(label));
   }
   scanView={...scanView,roots:actualScan.roots,job:{...scanView.job,state:'completed',errors:1},
     errors:[{root_id:'local',path:'unreadable',code:'EACCES'}]};await showScan();
-  await page.locator('.admin-root-row[data-id=offline] [data-root-state]').filter({hasText:'存储离线'}).waitFor();
-  assert.equal(await page.locator('#scan-issues').evaluate(el => el.closest('form')?.id),'roots-form','read errors remain attached to the affected directory configuration');
+  assert.equal(await page.locator('#scan-issues').evaluate(el => el.closest('form')?.id),'roots-form');
   await page.locator('#scan-errors').filter({hasText:'无法读取此目录'}).waitFor();
-  await page.unroute('**/api/admin/scan?*');await showScan();
-  await page.locator('.admin-root-state').filter({hasText:'存储离线'}).waitFor();
-  const aligned = await page.locator('.admin-root-row').evaluateAll(rows => rows.every(row => { const inputs = row.querySelectorAll('input'); return [inputs[1],row.querySelector('[data-root-state]')].every(cell => Math.abs(inputs[0].getBoundingClientRect().top-cell.getBoundingClientRect().top)<1); }));
-  assert.equal(aligned, true, 'name and path inputs must align independently of status captions');
+  await page.unroute('**/api/admin/scan*');await showScan();
+  await page.locator('.admin-root-row[data-id=offline] .admin-root-scan[data-state=offline]').waitFor();
+  const aligned = await page.locator('.admin-root-row').evaluateAll(rows => rows.every(row => {
+    const inputs=row.querySelectorAll('input');return Math.abs(inputs[0].getBoundingClientRect().top-inputs[1].getBoundingClientRect().top)<1;
+  }));
+  assert.equal(aligned,true,'name and path inputs remain aligned');
   assert.equal(await page.locator('.admin-root-row').evaluateAll(rows => rows.every(row => {
-    const path=row.querySelector('[data-field=path]').getBoundingClientRect(), state=row.querySelector('.admin-root-state').getBoundingClientRect();
-    return path.right<=state.left && state.width>=90 && state.right<=row.querySelector('button').getBoundingClientRect().left;
-  })),true,'the readable status column sits between the path field and the remove action');
+    const path=row.querySelector('[data-field=path]').getBoundingClientRect(), scan=row.querySelector('.admin-root-scan').getBoundingClientRect();
+    return path.right<=scan.left && scan.width===32 && scan.right<=row.querySelector('.admin-danger').getBoundingClientRect().left;
+  })),true,'the scan action is a single icon immediately before remove');
   const rootsCard=await page.locator('#roots-form').evaluate(form => {
     const editor=form.querySelector('#root-editor').getBoundingClientRect();
     return {controls:['reset-roots','save-roots'].map(id => form.querySelector('#'+id).getBoundingClientRect().bottom<=editor.top),
@@ -720,7 +743,8 @@ try {
   await page.locator('#refresh-status').evaluate(button => button.click());
   await page.waitForFunction(() => document.querySelector('[data-field=name]')?.value === '本机拍摄素材');
   await page.getByRole('button', { name: '添加目录', exact: true }).click();
-  await page.locator('.admin-root-row').last().locator('[data-root-state]').filter({hasText:'待保存'}).waitFor();
+  assert.equal(await page.locator('.admin-root-row').last().locator('.admin-root-scan').getAttribute('aria-disabled'),'true');
+  assert.match(await page.locator('.admin-root-row').last().locator('.admin-root-scan').getAttribute('data-tooltip'),/待保存/);
   await page.screenshot({ path: `/tmp/voidplayer-admin-library-editing-${browserName}.png` });
   await page.getByLabel('目录名称').last().fill('制作素材'); await page.getByLabel('服务器上的目录路径').last().fill(extra);
   await page.getByRole('button', { name: '保存目录', exact: true }).click();

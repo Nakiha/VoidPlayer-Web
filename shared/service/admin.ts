@@ -79,7 +79,7 @@ export type LibraryScanStatus = {
         [key: string]: null | string | number | bigint | Uint8Array<ArrayBuffer>;
     };
     roots: ({
-        [key: string]: null | string | number | bigint | Uint8Array<ArrayBuffer>;
+        [key: string]: null | string | number | bigint | boolean | Uint8Array<ArrayBuffer>;
     })[];
     watch: null | {
         active: number;

@@ -47,6 +47,9 @@ filesystemCompleteness=not-established，目录扫描状态另查 /api/library/s
 `inventory.pending` 单列等待文件稳定的数量。它们是登记事实，不认证文件系统此刻的完整性。
 `job.visited` / `job.files` 仅表示最近一轮扫描已读取的目录/媒体数，增量检查不能代替总量；
 运行时 `scanMode` 区分 full / incremental，空闲为 null，排队目录、当前路径与读取错误独立反馈。
+管理页逐目录按钮提交 `POST /api/admin/scan` 的 `{action:'refresh',rootId}`，仅递归检查该已注册根目录，
+初次检查也不扩大为全部媒体库；同一根的重复请求复用在途工作。`roots[].scanRequested` 在该请求排队及执行期间为 true，
+与实际读取中的根状态一起驱动按钮旋转，完成或失败后清除。管理页不再提供全量扫描按钮、状态列或独立进度段落，详情放入逐根 tooltip。
 
 ## 首批 probe 支持范围
 

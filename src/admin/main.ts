@@ -12,6 +12,7 @@ import { mountLocalizedShell } from '../ui/localized-shell.ts';
 import { installLanguageControls } from '../ui/language.ts';
 import { installFocusFeedback } from '../ui/focus-feedback.ts';
 import { installToasts } from '../ui/toast.ts';
+import { installTooltips } from '../ui/tooltips.ts';
 import { installLiveLocalization, localizedText, localizedFragment, localizedAttribute, type LocalizedValue } from '../ui/live-localization.ts';
 import { initializeLanguage, onLanguageChange, formatDate, t, th, msg } from '../i18n.ts';
 import { chooseInitialIdentity } from '../ui/identity-onboarding.ts';
@@ -56,6 +57,8 @@ onLanguageChange(updateTitle, life.signal); updateTitle();
 let statusError = false;
 let pane = 'overview', rootConfig: RootConfig | null = null, rootDirty = false, rootSaving = false;
 let status: Status | null = null, polling = false, errorsOffset = 0, errorsJob: unknown = null;
+let scanStatus: LibraryScanStatus | null = null;
+const postingScans = new Set<string>();
 let rootStates: LibraryScanStatus['roots'] = [], recentRequests: Record<string, unknown>[] = [];
 let requestSnapshot: { actor: string; etag?: string; records: Record<string, unknown>[] } | undefined;
 let requestEpoch = 0, requestAbort: AbortController | undefined;
@@ -84,20 +87,31 @@ function updateRootActions() {
   $('save-roots').toggleAttribute('disabled', !rootDirty || rootSaving || !rootConfig?.writable);
   $('reset-roots').toggleAttribute('disabled', !rootDirty || rootSaving);
   $('add-root').toggleAttribute('disabled', rootSaving || !rootConfig?.writable);
-  for (const control of $('root-editor').querySelectorAll<HTMLInputElement | HTMLButtonElement>('input,button')) control.disabled = rootSaving || !rootConfig?.writable;
+  for (const control of $('root-editor').querySelectorAll<HTMLInputElement | HTMLButtonElement>('input,button:not(.admin-root-scan)')) control.disabled = rootSaving || !rootConfig?.writable;
   $('roots-form').setAttribute('aria-busy',String(rootSaving));
+  renderRootStates();
 }
 function readDraft(): Root[] {
   return [...$('root-editor').querySelectorAll<HTMLElement>('.admin-root-row')].map(row => ({ id: row.dataset.id!, name: row.querySelector<HTMLInputElement>('[data-field=name]')!.value.trim(), path: row.querySelector<HTMLInputElement>('[data-field=path]')!.value.trim() }));
 }
 function rootRow(root: Root) {
   const row = document.createElement('div'); row.className = 'admin-root-row'; row.dataset.id = root.id;
-  localizedFragment(row, () => `<label>${th(msg("admin.wsName", "名称"))}<input data-field="name" aria-label="${th(msg("admin.dirNameAria", "目录名称"))}" placeholder="${th(msg("admin.dirNamePh", "例如：拍摄素材"))}" required maxlength="120"></label><label>${th(msg("admin.serverPath", "服务器路径"))}<input data-field="path" aria-label="${th(msg("admin.serverPathAria", "服务器上的目录路径"))}" placeholder="${th(msg("admin.serverPathPh", "填写完整目录路径"))}" required maxlength="4096" spellcheck="false"></label><span class="admin-root-state"><span>${th(msg("admin.reqStatus", "状态"))}</span><span data-root-state role="status"></span></span><button type="button" class="icon-button admin-danger" aria-label="${th(msg("admin.removeDir", "移除目录"))}" title="${th(msg("admin.removeDirTitle", "移出媒体库，不删除文件"))}">${icon('trash')}</button>`);
+  localizedFragment(row, () => `<label>${th(msg("admin.wsName", "名称"))}<input data-field="name" aria-label="${th(msg("admin.dirNameAria", "目录名称"))}" placeholder="${th(msg("admin.dirNamePh", "例如：拍摄素材"))}" required maxlength="120"></label><label>${th(msg("admin.serverPath", "服务器路径"))}<input data-field="path" aria-label="${th(msg("admin.serverPathAria", "服务器上的目录路径"))}" placeholder="${th(msg("admin.serverPathPh", "填写完整目录路径"))}" required maxlength="4096" spellcheck="false"></label><button type="button" class="icon-button admin-root-scan">${icon('refresh')}</button><button type="button" class="icon-button admin-danger" aria-label="${th(msg("admin.removeDir", "移除目录"))}" title="${th(msg("admin.removeDirTitle", "移出媒体库，不删除文件"))}">${icon('trash')}</button>`);
   row.querySelector<HTMLInputElement>('[data-field=name]')!.value = root.name;
   row.querySelector<HTMLInputElement>('[data-field=path]')!.value = root.path;
   for (const input of row.querySelectorAll('input')) { input.disabled = !rootConfig?.writable; input.addEventListener('input', () => { rootDirty = true; updateRootActions(); renderRootStates(); }); }
-  row.querySelector('button')!.disabled = !rootConfig?.writable;
-  row.querySelector('button')!.onclick = () => { row.remove(); rootDirty = true; updateRootActions(); };
+  row.querySelector<HTMLButtonElement>('.admin-danger')!.disabled = !rootConfig?.writable;
+  row.querySelector<HTMLButtonElement>('.admin-danger')!.onclick = () => { row.remove(); rootDirty = true; updateRootActions(); };
+  const scan=row.querySelector<HTMLButtonElement>('.admin-root-scan')!;
+  scan.onclick=() => void act(async () => {
+    if (scan.getAttribute('aria-disabled')==='true') return;
+    postingScans.add(root.id); renderRootStates();
+    try {
+      scanStatus=await api<LibraryScanStatus>('/api/admin/scan','POST',{action:'refresh',rootId:root.id});
+      rootStates=scanStatus.roots;
+      scanCadence.reset(); await loadScan();
+    } finally { postingScans.delete(root.id); renderRootStates(); }
+  });
   return row;
 }
 async function loadRoots() {
@@ -109,16 +123,29 @@ async function loadRoots() {
 function renderRootStates() {
   for (const row of $('root-editor').querySelectorAll<HTMLElement>('.admin-root-row')) {
     const root = rootStates.find(r => r.id === row.dataset.id);
-    const badge = row.querySelector<HTMLElement>('[data-root-state]')!;
+    const button=row.querySelector<HTMLButtonElement>('.admin-root-scan')!;
     const configured=rootConfig?.roots.find(item => item.id===row.dataset.id);
     const input=row.querySelector<HTMLInputElement>('[data-field=path]')!;
     const name=row.querySelector<HTMLInputElement>('[data-field=name]')!;
     const draft=!configured || input.value.trim()!==configured.path || name.value.trim()!==configured.name;
-    const code=draft ? 'draft' : String(root?.state??'unscanned');
-    localizedText(badge, () => draft ? t(msg('admin.rootDraft','待保存'))
-      : code==='ready' ? t(msg('admin.rootScanned','已扫描')) : stateLabels[code]??code);
-    badge.dataset.state=code;
-    localizedAttribute(badge,'title',() => draft ? '' : String(root?.error??''));
+    const requested=postingScans.has(row.dataset.id!) || !!root?.scanRequested;
+    const busy=requested || root?.state==='scanning';
+    const code=draft ? 'draft' : root?.state==='scanning' ? 'scanning' : requested ? 'unscanned' : String(root?.state??'unscanned');
+    button.setAttribute('aria-disabled',String(rootSaving || draft || busy));
+    button.setAttribute('aria-busy',String(busy));
+    button.dataset.state=code;
+    button.querySelector('.icon')!.classList.toggle('share-spinner',busy);
+    localizedAttribute(button,'aria-label',() => t(msg('admin.scanRoot','扫描目录：{name}'),{name:name.value.trim()}));
+    localizedAttribute(button,'data-tooltip',() => {
+      const label=t(msg('admin.scanRoot','扫描目录：{name}'),{name:name.value.trim()});
+      const state=draft ? t(msg('admin.rootDraft','待保存'))
+        : code==='ready' ? t(msg('admin.rootScanned','已扫描')) : stateLabels[code]??code;
+      const current=scanStatus?.scanning && scanStatus.job?.current_root===root?.id;
+      const progress=current ? t(msg('admin.scanCurrentProgress','本轮已读取 {directories, plural, other {# 个目录}}、{media, plural, other {# 个媒体}}'),
+        {directories:Number(scanStatus?.job?.visited??0),media:Number(scanStatus?.job?.files??0)}) : '';
+      return [label,state,progress,current ? String(scanStatus?.job?.current_path??'') : '',
+        draft ? '' : String(root?.error??''),!busy && root?.scannedAt ? formatDate(Number(root.scannedAt)) : ''].filter(Boolean).join('\n');
+    });
   }
 }
 function scanSummary(value: LibraryScanStatus) {
@@ -138,7 +165,7 @@ function scanSummary(value: LibraryScanStatus) {
 }
 function renderStatus(value: Status) {
   status = value;
-  rootStates = value.library.roots;
+  scanStatus=value.library; rootStates = value.library.roots;
   analysisSettings.update(value.analysis);
   const seconds = Math.floor(value.uptimeSeconds), hours = Math.floor(seconds / 3600);
   text('uptime', () => hours ? t(msg("admin.hoursMinutes", "{h} 小时 {m} 分"), { h: hours, m: Math.floor(seconds % 3600 / 60) }) : t(msg("activity.durationMinutesSeconds", "{m} 分 {s} 秒"), { m: Math.floor(seconds / 60), s: seconds % 60 }));
@@ -193,23 +220,10 @@ async function loadScan() {
   const sequence = ++scanSequence;
   const value = await api<Scan>(`/api/admin/scan?offset=${errorsOffset}`);
   if (sequence !== scanSequence) return;
-  rootStates = value.roots; renderRootStates();
+  scanStatus=value; rootStates = value.roots; renderRootStates();
   scanCadence.observe([value.ready, value.scanning, value.job?.state, value.job?.files, value.job?.errors,
     value.inventory,value.queuedDirectories,value.job?.current_path,value.roots.map(root => [root.id, root.state, root.error])], value.scanning || value.queuedDirectories>0 || value.inventory.pending>0);
   if (errorsJob !== value.job?.id) { errorsJob = value.job?.id; if (errorsOffset) { errorsOffset = 0; return loadScan(); } }
-  const attention=value.scanning || value.queuedDirectories>0 || value.inventory.pending>0
-    || ['failed','interrupted','cancelled'].includes(String(value.job?.state));
-  $('scan-current').hidden = !attention;
-  text('scan-current', () => {
-    if (!value.scanning) return attention ? scanSummary(value) : '';
-    const mount=value.roots.find(root => root.id===value.job?.current_root)?.name;
-    const location=[mount,value.job?.current_path].filter(Boolean).join(' / ');
-    return [value.scanMode==='full' ? t(msg('admin.scanFullActive','全量扫描中')) : t(msg('admin.scanIncrementalActive','增量扫描中')),
-      t(msg('admin.scanCurrentProgress','本轮已读取 {directories, plural, other {# 个目录}}、{media, plural, other {# 个媒体}}'),
-      {directories:Number(value.job?.visited??0),media:Number(value.job?.files??0)}),location].filter(Boolean).join(' · ');
-  });
-  $('scan-cancel').hidden = !value.scanning; $('scan-refresh').toggleAttribute('disabled', value.scanning);
-  $('scan-cancel').toggleAttribute('disabled', !value.scanning);
   const nodes = value.errors.map(error => { const row = document.createElement('div'); row.className = 'admin-error-row';
     const name = document.createElement('strong'); localizedText(name, () => `${value.roots.find(r => r.id === error.root_id)?.name ?? error.root_id} / ${error.path || t(msg("admin.rootFallback", "(根目录)"))}`);
     const code = document.createElement('span'); const rawCode = String(error.code); localizedText(code, () => ({ ENOENT: t(msg("admin.errNoEnt", "路径不存在")), EACCES: t(msg("admin.errAccess", "无法读取此目录")), EPERM: t(msg("admin.errAccess", "无法读取此目录")), ESTORAGECHANGED: t(msg("admin.errStorage", "网络存储已断开")) } as Record<string, string>)[rawCode] ?? rawCode); localizedAttribute(code, 'title', () => rawCode); row.append(name, code); return row; });
@@ -282,6 +296,8 @@ const discovery = installDiscovery(life.signal);
 const tasks = installTasks(life.signal);
 const measurements = installMeasurements(life.signal, notice);
 const libraryBrowser = installAdminLibraryBrowser(life.signal, message => notice(message));
+const disposeTooltips=installTooltips(app);
+life.signal.addEventListener('abort',disposeTooltips,{once:true});
 for (const [id] of PANES()) document.querySelector<HTMLButtonElement>(`[data-pane=${id}]`)!.onclick = () => {
   history.replaceState(null, '', `#${id}`); pane = id; tasks.activate(id==='tasks'); qualityJobs.activate(id === 'quality'); discovery.activate(id === 'discovery'); measurements.activate(id === 'measurements'); notice(() => ''); for (const [item] of PANES()) { $(`pane-${item}`).hidden = id !== item; document.querySelector(`[data-pane=${item}]`)!.setAttribute('aria-current', id === item ? 'page' : 'false'); }
   libraryBrowser.activate(id === 'library');
@@ -302,8 +318,6 @@ $('roots-form').onsubmit = event => { event.preventDefault(); if (!rootConfig?.w
     finally { rootSaving = false; updateRootActions(); }
   });
 };
-$('scan-refresh').onclick = () => void act(async () => { await api('/api/admin/scan', 'POST', { action: 'refresh' }); await loadScan(); });
-$('scan-cancel').onclick = () => void act(async () => { await api('/api/admin/scan', 'POST', { action: 'cancel' }); await loadScan(); });
 $('errors-prev').onclick = () => { errorsOffset = Math.max(0, errorsOffset - 100); void act(loadScan); };
 $('errors-next').onclick = () => { errorsOffset += 100; void act(loadScan); };
 $('refresh-status').onclick = () => void poll(true); $('refresh-logs').onclick = () => void act(logsMode === 'uploads' ? loadLogs : () => poll(true));

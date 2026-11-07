@@ -40,13 +40,10 @@ export function adminShell() {
           <h2>${th(msg("admin.mediaDirs", "媒体目录"))}</h2>
           <div class="admin-button-group admin-root-actions">
             <button type="button" id="add-root">${icon('plus')}${th(msg("admin.addDir", "添加目录"))}</button>
-            <button type="button" id="scan-refresh" class="icon-button" aria-label="${th(msg("admin.rescan", "重新扫描"))}">${icon('refresh')}</button>
-            <button type="button" id="scan-cancel" class="icon-button" aria-label="${th(msg("admin.stopScan", "停止扫描"))}" hidden>${icon('close')}</button>
             <button type="button" id="reset-roots">${th(msg("admin.revertChanges", "还原修改"))}</button>
             <button type="submit" id="save-roots" class="icon-button admin-primary" aria-label="${th(msg("admin.saveDirs", "保存目录"))}" title="${th(msg("admin.saveDirs", "保存目录"))}">${icon('save')}</button>
           </div>
         </div><div id="root-editor" class="admin-root-editor"></div>
-          <p id="scan-current" class="admin-caption" role="status" hidden></p>
           <div id="scan-issues" hidden><div class="admin-section-heading"><h3 id="scan-error-count"></h3><div id="scan-error-pages" class="admin-button-group"><button type="button" id="errors-prev" class="icon-button" aria-label="${th(msg("admin.prevErrors", "上一页错误"))}">${icon('previous')}</button><button type="button" id="errors-next" class="icon-button" aria-label="${th(msg("admin.nextErrors", "下一页错误"))}">${icon('next')}</button></div></div><div id="scan-errors" class="admin-error-list"></div></div>
         </form>
         <div class="admin-panel admin-library-card"><div id="admin-library-browser" class="library-pane" aria-label="${th(msg('shell.browseLibrary', '浏览媒体库'))}"></div></div>

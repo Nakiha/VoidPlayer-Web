@@ -217,7 +217,6 @@ export interface Sources {
   "admin.reqTimeUser": "时间 / 用户";
   "admin.requestRecords": "请求记录";
   "admin.requestsSummary": "{done} 次完成 · {active} 次处理中 · {aborted} 次中断";
-  "admin.rescan": "重新扫描";
   "admin.resourceNote": "测试期间会占用网络或存储资源。";
   "admin.restoreMark": "恢复标注";
   "admin.resultConditions": "{concurrency} 路 · 最长 {seconds} 秒 · 上限 {limit} MiB · {date}";
@@ -252,6 +251,7 @@ export interface Sources {
   "admin.scanPendingFiles": "{count} 个文件等待稳定";
   "admin.scanQueued": "等待扫描";
   "admin.scanQueuedDirectories": "{count} 个目录待扫描";
+  "admin.scanRoot": "扫描目录：{name}";
   "admin.search": "搜索";
   "admin.searchAllWorkspaces": "搜索全部工作区";
   "admin.searchCaches": "搜索缓存";
@@ -284,7 +284,6 @@ export interface Sources {
   "admin.stateReady": "可用";
   "admin.stateScanning": "扫描中";
   "admin.stateUnscanned": "等待扫描";
-  "admin.stopScan": "停止扫描";
   "admin.storageLocation": "存储位置";
   "admin.systemMemory": "系统可用内存";
   "admin.testConditions": "测试条件";
@@ -1820,7 +1819,6 @@ export interface MessageParameters {
   "admin.reqTimeUser": {  };
   "admin.requestRecords": {  };
   "admin.requestsSummary": { "aborted": string | number; "active": string | number; "done": string | number };
-  "admin.rescan": {  };
   "admin.resourceNote": {  };
   "admin.restoreMark": {  };
   "admin.resultConditions": { "concurrency": string | number; "date": string | number; "limit": string | number; "seconds": string | number };
@@ -1855,6 +1853,7 @@ export interface MessageParameters {
   "admin.scanPendingFiles": { "count": string | number };
   "admin.scanQueued": {  };
   "admin.scanQueuedDirectories": { "count": string | number };
+  "admin.scanRoot": { "name": string | number };
   "admin.search": {  };
   "admin.searchAllWorkspaces": {  };
   "admin.searchCaches": {  };
@@ -1887,7 +1886,6 @@ export interface MessageParameters {
   "admin.stateReady": {  };
   "admin.stateScanning": {  };
   "admin.stateUnscanned": {  };
-  "admin.stopScan": {  };
   "admin.storageLocation": {  };
   "admin.systemMemory": {  };
   "admin.testConditions": {  };

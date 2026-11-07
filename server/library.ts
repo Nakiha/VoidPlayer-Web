@@ -90,6 +90,7 @@ export class MediaLibraryIndex {
   private fileMutation?:Promise<LibraryFileResult>;
   private relocations?:LibraryRelocations;
   private inventoryCache?:{revision:number;media:number;pending:number};
+  private rootScans = new Map<string, Promise<void>>();
   private initialized: boolean;
   private options: IndexOptions;
   constructor(roots: MediaRoot[], options: IndexOptions = {}) {
@@ -152,7 +153,8 @@ export class MediaLibraryIndex {
       const space = this.storageSpace.get(String(root.id));
       const available = space && space.path === this.definitions.find(item => item.id === root.id)?.path
         && (root.state === 'ready' || root.state === 'scanning');
-      return { ...root, availableBytes: available ? space.availableBytes : null, totalBytes: available ? space.totalBytes : null };
+      return { ...root, scanRequested: this.rootScans.has(String(root.id)),
+        availableBytes: available ? space.availableBytes : null, totalBytes: available ? space.totalBytes : null };
     });
     return { ready: this.ready, scanning: !!this.pending, scanMode:this.pending?(this.fullScan?'full':'incremental'):null,
       inventory:{media:this.inventoryCache.media,pending:this.inventoryCache.pending},job, roots, watch: this.watchers?.status() ?? null,
@@ -225,9 +227,19 @@ export class MediaLibraryIndex {
   }
   /** Internal/admin callers use verified root IDs and relative directories.
    * Reconcile only these subtrees; overlapping requests are merged. */
-  async refreshDirectories(scopes: DirectoryScope[]) {
+  refreshRoot(rootId: string): Promise<void> {
+    const existing=this.rootScans.get(rootId);
+    if (existing) return existing;
+    const pending=this.refreshScopes([{rootId,directory:''}],true);
+    this.rootScans.set(rootId,pending);
+    void pending.then(() => this.rootScans.delete(rootId),() => this.rootScans.delete(rootId));
+    return pending;
+  }
+  refreshDirectories(scopes: DirectoryScope[]) { return this.refreshScopes(scopes); }
+  private async refreshScopes(scopes: DirectoryScope[], rootOnly = false) {
     if (this.configuring) throw new Error('媒体目录配置正在更新。');
     if (this.closed) throw new Error('媒体索引已关闭。');
+    if (rootOnly && this.options.scan) throw new Error('当前扫描适配器不支持单目录扫描。');
     const generation = this.cancelGeneration;
     for (const scope of scopes) {
       if (!this.definitions.some(r => r.id === scope.rootId) || scope.directory.startsWith('/') || scope.directory.includes('\\') || scope.directory !== '' && scope.directory.split('/').some(p => !p || p.startsWith('.'))) throw new Error('无效的媒体目录。');
@@ -238,7 +250,7 @@ export class MediaLibraryIndex {
       if (generation !== this.cancelGeneration) return;
     }
     if (!this.changes.size) return;
-    if (!this.ready || this.options.scan) return this.refresh();
+    if (!rootOnly && (!this.ready || this.options.scan)) return this.refresh();
     return this.runScan(this.changes.take());
   }
   private scheduleChanges() {

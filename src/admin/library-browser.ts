@@ -12,7 +12,6 @@ import { libraryFileLink } from '../ui/library-link.ts';
 import { sourceKey } from '../ui/source-catalog.ts';
 import type { SourceItem } from '../ui/source-catalog.ts';
 import { installSourceScrollbar } from '../ui/source-scrollbar.ts';
-import { installTooltips } from '../ui/tooltips.ts';
 import {installLibrarySelection} from './library-selection.ts';
 
 /** Administration supplies navigation actions, never a hidden player session. */
@@ -49,7 +48,6 @@ export function installAdminLibraryBrowser(signal: AbortSignal, notify: (message
   columns.setEnabled(mode==='columns');
   selection=installLibrarySelection(host,list,signal,{navigate:browser.navigate,location:browser.appliedLocation,refresh:browser.load,closeMenu:menu.close,notify});
   const scrollbar = installSourceScrollbar(list, find('source-scrollbar'), find('source-scrollbar-thumb'), signal);
-  const disposeTooltips = installTooltips(host);
   const viewMenu=document.createElement('div'); viewMenu.id='admin-library-view-menu'; viewMenu.className='choice-menu'; document.body.append(viewMenu);
   const choices: {value:'list'|'columns'; button:HTMLButtonElement}[] = ['list','columns'].map(value => {
     const button=document.createElement('button'); button.type='button'; button.dataset.value=value; button.setAttribute('role','menuitemradio');
@@ -123,7 +121,7 @@ export function installAdminLibraryBrowser(signal: AbortSignal, notify: (message
     }
     listing.localize(browser.page(),browser.isRoot(),browser.filter()); columns.localize(); syncChoice();
   },signal);
-  signal.addEventListener('abort', () => {cancelAnimationFrame(footFrame); footSize.disconnect(); disposeTooltips(); viewControl.dispose(); viewMenu.remove();}, {once:true});
+  signal.addEventListener('abort', () => {cancelAnimationFrame(footFrame); footSize.disconnect(); viewControl.dispose(); viewMenu.remove();}, {once:true});
   return {activate(value: boolean) {
     active = value;
     if (value) void browser.load();
