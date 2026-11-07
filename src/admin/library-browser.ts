@@ -32,7 +32,7 @@ export function installAdminLibraryBrowser(signal: AbortSignal, notify: (message
   const columnsHost=document.createElement('div'); columnsHost.className='library-columns'; columnsHost.dataset.libraryViewSurface='columns';
   listBody.hidden=mode!=='list'; columnsHost.hidden=mode!=='columns'; list.append(listBody,columnsHost);
   const viewButton=createIconButton({glyph:'columns',label:t(msg('adminLibrary.viewMode','浏览视图')),className:'library-view-choice',attributes:{id:'admin-library-view','data-tooltip-suppressed':''}});
-  const compactButton=createIconButton({glyph:'listDashes',label:t(msg('adminLibrary.compactList','紧凑列表')),attributes:{id:'admin-library-compact'}});
+  const compactButton=createIconButton({glyph:'compactRows',label:t(msg('adminLibrary.compactList','紧凑列表')),attributes:{id:'admin-library-compact'}});
   let columns:ReturnType<typeof installLibraryColumns>;
   let selection:ReturnType<typeof installLibrarySelection>|undefined;
 
