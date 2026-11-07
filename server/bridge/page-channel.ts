@@ -87,6 +87,9 @@ export class PageChannel {
     }
     res.setHeader('x-frame-options','DENY');res.setHeader('content-security-policy',"frame-ancestors 'none'; base-uri 'self'; object-src 'none'");
     const url=new URL(req.url??'/',this.origin);
+    if (req.headers['service-worker'] === 'script' || url.pathname === '/sw.js') {
+      json(res, 404, problem('host-unavailable')); return true;
+    }
     if((req.method==='GET'||req.method==='HEAD')&&url.pathname==='/'){
       if(this.documents.size>=8){json(res,429,problem('document-budget'));return true;}
       const bootstrap=randomBytes(32).toString('hex');if(req.method==='GET')this.documents.set(bootstrap,Date.now());

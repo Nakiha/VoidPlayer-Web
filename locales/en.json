@@ -3416,6 +3416,34 @@
     "source": "正在定位到当前播放位置",
     "translation": "Seeking to the current position"
   },
+  "pwa.failed": {
+    "source": "离线资源准备失败，请联网后重试。",
+    "translation": "Offline setup failed. Reconnect and try again."
+  },
+  "pwa.idle": {
+    "source": "下载播放器和解码器后，可离线打开本地视频。",
+    "translation": "Download the player and decoders to open local videos offline."
+  },
+  "pwa.offline": {
+    "source": "离线使用",
+    "translation": "Offline use"
+  },
+  "pwa.prepare": {
+    "source": "准备离线资源",
+    "translation": "Prepare for offline use"
+  },
+  "pwa.preparing": {
+    "source": "正在下载播放器资源…",
+    "translation": "Downloading player resources…"
+  },
+  "pwa.ready": {
+    "source": "已就绪，可离线打开本地视频",
+    "translation": "Ready to open local videos offline"
+  },
+  "pwa.unsupported": {
+    "source": "当前浏览器无法保存离线资源。",
+    "translation": "This browser cannot store offline resources."
+  },
   "recovery.capacityReached": {
     "source": "本机恢复记录已达容量上限，请在设置 → 工作区中导出并删除旧记录。当前工作区可手动导出或保存到服务器。",
     "translation": "Local recovery storage has reached its limit. Export and delete old records in Settings → Workspace. You can export the current workspace or save it to the server."

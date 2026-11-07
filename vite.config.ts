@@ -1,4 +1,5 @@
 import { FRONTEND_ENTRIES, FRONTEND_HTML_INPUTS } from './scripts/frontend-entries.mjs';
+import { writePlayerWorker } from './scripts/pwa/build.mjs';
 import { prepareStaticAssets } from './scripts/static-assets.mjs';
 import { lowerDescriptors } from './scripts/testing/i18n-transform.mjs';
 import { defineConfig, normalizePath } from 'vite';
@@ -43,6 +44,7 @@ async function buildInfo() {
   }
   return { ...identity, coreAssetDigests, builtAt: new Date().toISOString(), sourceDigest: hash.digest('hex'), wasmDigests };
 }
+let playerAssets: string[] = [];
 let outputDirectory = resolve(import.meta.dirname, 'dist');
 let productionBuildInfo: ReturnType<typeof buildInfo> | undefined;
 const transformBuildInfo = async (_code: string, id: string) => {
@@ -99,7 +101,14 @@ export default defineConfig({
       return [{ tag: 'script', attrs: { 'data-startup-preload': '' }, injectTo: 'head',
         children: `if(globalThis.isSecureContext&&location.pathname!=='/connection'){for(const href of ${JSON.stringify(urls)}){const link=document.createElement('link');link.rel='modulepreload';link.crossOrigin='anonymous';link.href=href;document.head.append(link);}}` }];
     } },
-    async closeBundle() { if (buildCatalog) await prepareStaticAssets(outputDirectory); },
+    generateBundle(_options, bundle) {
+      playerAssets = Object.keys(bundle).filter(name => /^assets\/.*\.(js|css)$/.test(name) && !/^assets\/(admin|connection-guide)-/.test(name));
+    },
+    async closeBundle() {
+      if (!productionBuildInfo) return;
+      await writePlayerWorker(outputDirectory, playerAssets, (await productionBuildInfo).coreAssetDigests);
+      await prepareStaticAssets(outputDirectory);
+    },
     async buildStart() {
       productionBuildInfo = buildCatalog ? buildInfo() : undefined;
       if (productionBuildInfo) this.emitFile({ type: 'asset', fileName: 'build-info.json', source: JSON.stringify(await productionBuildInfo, null, 2) + '\n' });

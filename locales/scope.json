@@ -100,6 +100,7 @@
     "src/ui/menu.ts",
     "src/ui/middle-filename.ts",
     "src/ui/numeric-choice.ts",
+    "src/ui/offline-app.ts",
     "src/ui/panel-motion.ts",
     "src/ui/panel-resize.ts",
     "src/ui/pixel-grid-model.ts",

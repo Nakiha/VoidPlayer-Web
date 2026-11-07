@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { brotliCompressSync, gzipSync, brotliDecompressSync, gunzipSync, constants } from 'node:zlib';
 import path from 'node:path';
 
-const included = name => /\.(wasm|js|css|json|html)$/.test(name) && name !== 'static-assets.json';
+const included = name => /\.(wasm|js|css|json|html|webmanifest)$/.test(name) && name !== 'static-assets.json';
 export const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 function portableGzip(bytes) {
   const compressed = gzipSync(bytes, { level: 9 });

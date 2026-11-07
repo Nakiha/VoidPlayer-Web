@@ -141,7 +141,14 @@ export function settingsShell() {
           <div class="about-project-row"><span>${th(msg("settingsShell.decoderSource", "解码器源码"))}</span><a href="https://github.com/Nakiha/VoidPlayer-FFmpeg-Build/tree/wasm" target="_blank" rel="noopener noreferrer">VoidPlayer-FFmpeg-Build ↗</a></div>
           <div class="about-project-row"><span>${th(msg("settingsShell.license", "许可证"))}</span><a href="/licenses/voidplayer-web.txt" target="_blank" rel="noopener">LGPL-2.1-or-later</a></div>
         </div>
-        </div><section class="settings-section"><h4 class="settings-section-title">${th(msg("settingsShell.openSourceCredits", "开源致谢"))}</h4><div class="settings-detail-body">
+        </div>
+        <div id="offline-app" class="settings-section" hidden>
+          <div class="settings-group"><div class="settings-action-row">
+            <div><h4>${th(msg('pwa.offline', '离线使用'))}</h4><p id="offline-app-status" role="status"></p></div>
+            <button id="offline-app-prepare" type="button">${th(msg('pwa.prepare', '准备离线资源'))}</button>
+          </div></div>
+        </div>
+        <section class="settings-section"><h4 class="settings-section-title">${th(msg("settingsShell.openSourceCredits", "开源致谢"))}</h4><div class="settings-detail-body">
         <div class="settings-credits settings-group">
           <div><a class="credit-name" href="https://github.com/Vanilagy/mediabunny" target="_blank" rel="noopener noreferrer">Mediabunny ↗</a><span>${th(msg("settingsShell.mediaDemuxing", "媒体解封装"))}</span><a href="/licenses/mediabunny.txt" target="_blank" rel="noopener">MPL-2.0</a></div>
           <div><a class="credit-name" href="https://github.com/phosphor-icons/phosphor-core" target="_blank" rel="noopener noreferrer">Phosphor Icons ↗</a><span>${th(msg("settingsShell.interfaceIcons", "界面图标"))}</span><a href="/licenses/phosphor-icons.txt" target="_blank" rel="noopener">MIT</a></div>

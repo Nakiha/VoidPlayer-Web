@@ -1,3 +1,4 @@
+import { verifyOfflinePlayer } from './testing/browser/ui/offline-player.mjs';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -68,6 +69,7 @@ try {
       await page.waitForFunction(() => window.startupFrames.length > 2);
       assert.ok((await page.evaluate(() => window.startupFrames)).every(frame => frame.ready && frame.single && !frame.inert));
       assert.deepEqual(errors, []);
+      assert.equal(await page.evaluate(() => navigator.serviceWorker.getRegistration().then(Boolean)), false, 'development uses live modules');
       releaseHealth();
       await page.locator('#identity-welcome').waitFor();
       assert.equal(qualityRequests.length, 0, 'unused measurement and evidence dialogs do not load at startup');
@@ -136,6 +138,8 @@ try {
     guide.on('request', request => { if (/\/assets\/main-[^/]+\.js/.test(request.url())) guidePlayerRequests.push(request.url()); });
     await guide.goto(builtBase + '/connection');
     await guide.locator('#connection-unavailable').waitFor({state:'visible'});
+    assert.equal(await guide.locator('link[rel=manifest]').count(), 0);
+    assert.equal(await guide.evaluate(() => navigator.serviceWorker.getRegistration().then(Boolean)), false);
     assert.equal(guidePlayerRequests.length, 0, 'connection guide does not preload the player graph');
     await guide.close();
     // A hanging request has no error event. The deadline exposes the fallback, while
@@ -162,6 +166,7 @@ try {
     await slow.clock.fastForward(20000);
     assert.equal(await slow.locator('#startup-fallback').isVisible(), false);
     await slow.close();
+    await verifyOfflinePlayer(browser, name, config.staticDir);
     await browser.close(); browser = undefined;
     console.log(`PASS ${name}: early theme, shell-first reveal, complete first UI frame, development/built entry/static/dynamic module failures, optimized dependency 504, fallback without retry, timeout/late recovery and disarmed guard`);
   }

@@ -846,6 +846,13 @@ export interface Sources {
   "progress.inspect": "正在读取视频信息";
   "progress.queued": "正在准备载入";
   "progress.synchronize": "正在定位到当前播放位置";
+  "pwa.failed": "离线资源准备失败，请联网后重试。";
+  "pwa.idle": "下载播放器和解码器后，可离线打开本地视频。";
+  "pwa.offline": "离线使用";
+  "pwa.prepare": "准备离线资源";
+  "pwa.preparing": "正在下载播放器资源…";
+  "pwa.ready": "已就绪，可离线打开本地视频";
+  "pwa.unsupported": "当前浏览器无法保存离线资源。";
   "recovery.capacityReached": "本机恢复记录已达容量上限，请在设置 → 工作区中导出并删除旧记录。当前工作区可手动导出或保存到服务器。";
   "recovery.deleteHistory": "删除这份本机恢复记录？";
   "recovery.export": "导出备份";
@@ -2060,6 +2067,13 @@ export interface MessageParameters {
   "progress.inspect": {  };
   "progress.queued": {  };
   "progress.synchronize": {  };
+  "pwa.failed": {  };
+  "pwa.idle": {  };
+  "pwa.offline": {  };
+  "pwa.prepare": {  };
+  "pwa.preparing": {  };
+  "pwa.ready": {  };
+  "pwa.unsupported": {  };
   "recovery.capacityReached": {  };
   "recovery.deleteHistory": {  };
   "recovery.export": {  };

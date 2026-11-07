@@ -42,6 +42,9 @@ try{
     await page.goto(client.base);await page.locator('#app:not([data-initializing])').waitFor({state:'visible'});await page.waitForFunction(()=>!!window.voidPlayer?.tools);await page.locator('#file-A').setInputFiles(file);
     await page.locator('#image-A').waitFor({state:'visible'});await page.waitForFunction(()=>document.querySelector('#pts-A')?.textContent!=='—');
   }
+  check('temporary credential host has no PWA registration or manifest', await pageA.evaluate(async () =>
+    !document.querySelector('link[rel=manifest]') && !(await navigator.serviceWorker.getRegistration())));
+  check('temporary host refuses the production worker', (await fetch(new URL('/sw.js', client.base))).status === 404);
   const bBefore={time:await pageB.locator('#pts-A').textContent(),name:await pageB.locator('#name-A').textContent()};
   phase='read-only';await openMcpSettings(pageA);await pageA.locator('#page-bridge-connect').click();
   let status=await eventually(async()=>{const s=await client.call('get_bridge_status');return s.connected?s:false;}),epoch=status.epoch;
