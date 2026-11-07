@@ -151,11 +151,11 @@ try {
     assert.equal(cardFills.card,cardFills.scan,`${theme}: the library shares the scan card material`);
     assert.ok(cardFills.layers.every(fill => fill==='rgba(0, 0, 0, 0)'),`${theme}: library columns do not obscure their card backing`);
     const chrome=await embedded.evaluate(el => {
-      const scan=getComputedStyle(document.querySelector('.admin-scan-status')).backgroundColor;
+      const scan=getComputedStyle(document.querySelector('#roots-form')).backgroundColor;
       return {scan,header:getComputedStyle(el.querySelector('.source-tools')).backgroundColor,footer:getComputedStyle(el.querySelector('.source-foot')).backgroundColor};
     });
-    assert.equal(chrome.header,chrome.scan,`${theme}: admin toolbar matches the nested scan status fill`);
-    assert.equal(chrome.footer,chrome.scan,`${theme}: admin path bar matches the nested scan status fill`);
+    assert.equal(chrome.header,chrome.scan,`${theme}: admin toolbar uses the shared card fill`);
+    assert.equal(chrome.footer,chrome.scan,`${theme}: admin path bar uses the shared card fill`);
     const zebra=await active.locator('.library-column[data-root=local][data-directory=""] .library-folder:not(.library-column-path)').evaluateAll(rows => {
       const fill=el => {const style=getComputedStyle(el);return {color:style.backgroundColor,image:style.backgroundImage};};
       return rows.slice(0,2).map(row => ({row:fill(row),icon:fill(row.querySelector('.source-thumb'))}));
@@ -665,32 +665,41 @@ try {
     await page.locator('[data-pane=library]').click();await response;
   };
   await showScan();
-  await page.locator('#scan-progress').filter({hasText:'扫描空闲 · 已收录 37 个媒体'}).waitFor();
+  await page.locator('[data-root-state]').filter({hasText:'已扫描'}).first().waitFor();
+  assert.equal(await page.locator('#scan-progress, .admin-scan-status').count(),0,'there is no standalone scanning card');
+  assert.equal(await page.locator('#scan-refresh').evaluate(el => el.closest('form')?.id),'roots-form','rescan belongs to the directory card');
   assert.equal(await page.locator('#scan-current').isVisible(),false,'idle cards do not show incremental-pass counters');
-  assert.equal(await page.locator('.admin-root-state:visible').count(),0,'healthy roots do not add passive availability captions');
+  assert.equal(await page.locator('.admin-root-row [data-root-state]:visible').count(),actualScan.roots.length,'each configured directory exposes one status column');
   assert.equal(await page.locator('#root-save-state, #roots-form .admin-help, #scan-detail').count(),0,'redundant saved and explanatory captions are removed');
   scanView={...scanView,scanning:true,scanMode:'incremental',inventory:{media:37,pending:2},queuedDirectories:3,
+    roots:scanView.roots.map(root => ({...root,state:root.id==='local'?'scanning':'ready'})),
     job:{...scanView.job,state:'running',current_root:'local',current_path:'z-branch/leaf'}};
   await showScan();
-  await page.locator('#scan-progress').filter({hasText:'增量扫描中 · 已收录 37 个媒体 · 2 个文件等待稳定 · 3 个目录待扫描'}).waitFor();
+  await page.locator('.admin-root-row[data-id=local] [data-root-state]').filter({hasText:'扫描中'}).waitFor();
   await page.locator('#scan-current').filter({hasText:'本轮已读取 1 个目录、1 个媒体 · 本机媒体 / z-branch/leaf'}).waitFor();
   assert.equal(await page.locator('#scan-refresh').isDisabled(),true);assert.equal(await page.locator('#scan-cancel').isVisible(),true);
   scanView={...scanView,scanMode:'full'};await showScan();
-  await page.locator('#scan-progress').filter({hasText:'全量扫描中'}).waitFor();
-  scanView={...scanView,scanning:false,scanMode:null,inventory:{media:37,pending:0},queuedDirectories:1};await showScan();
-  await page.locator('#scan-progress').filter({hasText:'等待扫描 · 已收录 37 个媒体 · 1 个目录待扫描'}).waitFor();
+  await page.locator('#scan-current').filter({hasText:'全量扫描中'}).waitFor();
+  scanView={...scanView,scanning:false,scanMode:null,inventory:{media:37,pending:2},queuedDirectories:1,
+    roots:scanView.roots.map(root => ({...root,state:'ready'}))};await showScan();
+  await page.locator('#scan-current').filter({hasText:'等待扫描 · 已收录 37 个媒体 · 2 个文件等待稳定 · 1 个目录待扫描'}).waitFor();
   for (const [state,label] of [['cancelled','已停止'],['interrupted','上次任务被中断'],['failed','失败']]) {
-    scanView={...scanView,queuedDirectories:0,job:{...scanView.job,state}};await showScan();
-    await page.locator('#scan-progress').filter({hasText:label+' · 已收录 37 个媒体'}).waitFor();
+    scanView={...scanView,queuedDirectories:0,inventory:{media:37,pending:0},job:{...scanView.job,state}};await showScan();
+    await page.locator('#scan-current').filter({hasText:label+' · 已收录 37 个媒体'}).waitFor();
   }
   scanView={...scanView,roots:actualScan.roots,job:{...scanView.job,state:'completed',errors:1},
     errors:[{root_id:'local',path:'unreadable',code:'EACCES'}]};await showScan();
-  await page.locator('#scan-progress').filter({hasText:'扫描存在异常 · 已收录 37 个媒体 · 1 个媒体库离线 · 1 处读取错误'}).waitFor();
+  await page.locator('.admin-root-row[data-id=offline] [data-root-state]').filter({hasText:'存储离线'}).waitFor();
+  assert.equal(await page.locator('#scan-issues').evaluate(el => el.closest('form')?.id),'roots-form','read errors remain attached to the affected directory configuration');
   await page.locator('#scan-errors').filter({hasText:'无法读取此目录'}).waitFor();
   await page.unroute('**/api/admin/scan?*');await showScan();
   await page.locator('.admin-root-state').filter({hasText:'存储离线'}).waitFor();
-  const aligned = await page.locator('.admin-root-row').evaluateAll(rows => rows.every(row => { const inputs = row.querySelectorAll('input'); return Math.abs(inputs[0].getBoundingClientRect().top - inputs[1].getBoundingClientRect().top) < 1; }));
+  const aligned = await page.locator('.admin-root-row').evaluateAll(rows => rows.every(row => { const inputs = row.querySelectorAll('input'); return [inputs[1],row.querySelector('[data-root-state]')].every(cell => Math.abs(inputs[0].getBoundingClientRect().top-cell.getBoundingClientRect().top)<1); }));
   assert.equal(aligned, true, 'name and path inputs must align independently of status captions');
+  assert.equal(await page.locator('.admin-root-row').evaluateAll(rows => rows.every(row => {
+    const path=row.querySelector('[data-field=path]').getBoundingClientRect(), state=row.querySelector('.admin-root-state').getBoundingClientRect();
+    return path.right<=state.left && state.width>=90 && state.right<=row.querySelector('button').getBoundingClientRect().left;
+  })),true,'the readable status column sits between the path field and the remove action');
   const rootsCard=await page.locator('#roots-form').evaluate(form => {
     const editor=form.querySelector('#root-editor').getBoundingClientRect();
     return {controls:['reset-roots','save-roots'].map(id => form.querySelector('#'+id).getBoundingClientRect().bottom<=editor.top),
@@ -711,6 +720,7 @@ try {
   await page.locator('#refresh-status').evaluate(button => button.click());
   await page.waitForFunction(() => document.querySelector('[data-field=name]')?.value === '本机拍摄素材');
   await page.getByRole('button', { name: '添加目录', exact: true }).click();
+  await page.locator('.admin-root-row').last().locator('[data-root-state]').filter({hasText:'待保存'}).waitFor();
   await page.screenshot({ path: `/tmp/voidplayer-admin-library-editing-${browserName}.png` });
   await page.getByLabel('目录名称').last().fill('制作素材'); await page.getByLabel('服务器上的目录路径').last().fill(extra);
   await page.getByRole('button', { name: '保存目录', exact: true }).click();

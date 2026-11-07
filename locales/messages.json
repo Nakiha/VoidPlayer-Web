@@ -873,10 +873,6 @@
     "source": "正在读取…",
     "params": {}
   },
-  "admin.readingScan": {
-    "source": "正在读取扫描状态…",
-    "params": {}
-  },
   "admin.reasonBrowser": {
     "source": "浏览器完成测量",
     "params": {}
@@ -1006,6 +1002,10 @@
     "source": "根目录",
     "params": {}
   },
+  "admin.rootDraft": {
+    "source": "待保存",
+    "params": {}
+  },
   "admin.rootExternal": {
     "source": "配置文件已被外部修改，请重启服务以重新载入。",
     "params": {}
@@ -1020,6 +1020,10 @@
   },
   "admin.rootPermission": {
     "source": "配置所在目录不可写，请调整数据目录权限。",
+    "params": {}
+  },
+  "admin.rootScanned": {
+    "source": "已扫描",
     "params": {}
   },
   "admin.rootsSummary": {
@@ -1091,10 +1095,6 @@
   },
   "admin.scanJobs": {
     "source": "扫描任务",
-    "params": {}
-  },
-  "admin.scanMedia": {
-    "source": "扫描媒体",
     "params": {}
   },
   "admin.scanOfflineRoots": {

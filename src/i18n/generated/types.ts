@@ -197,7 +197,6 @@ export interface Sources {
   "admin.rawData": "原始工作区数据";
   "admin.readMedia": "读取的媒体";
   "admin.reading": "正在读取…";
-  "admin.readingScan": "正在读取扫描状态…";
   "admin.reasonBrowser": "浏览器完成测量";
   "admin.reasonClosed": "服务关闭";
   "admin.reasonData": "达到数据量上限";
@@ -228,10 +227,12 @@ export interface Sources {
   "admin.reviewSpace": "评审空间";
   "admin.rootCli": "当前根目录由 --folder 覆盖，请修改启动参数或改用配置文件。";
   "admin.rootDirs": "根目录";
+  "admin.rootDraft": "待保存";
   "admin.rootExternal": "配置文件已被外部修改，请重启服务以重新载入。";
   "admin.rootFallback": "(根目录)";
   "admin.rootNoSource": "此服务未提供可写配置来源。";
   "admin.rootPermission": "配置所在目录不可写，请调整数据目录权限。";
+  "admin.rootScanned": "已扫描";
   "admin.rootsSummary": "{n, plural, other {# 个目录}} · {o} 个离线";
   "admin.runtime": "运行环境";
   "admin.saveCopy": "将当前版本另存副本";
@@ -247,7 +248,6 @@ export interface Sources {
   "admin.scanIdle": "扫描空闲";
   "admin.scanIncrementalActive": "增量扫描中";
   "admin.scanJobs": "扫描任务";
-  "admin.scanMedia": "扫描媒体";
   "admin.scanOfflineRoots": "{count} 个媒体库离线";
   "admin.scanPendingFiles": "{count} 个文件等待稳定";
   "admin.scanQueued": "等待扫描";
@@ -1800,7 +1800,6 @@ export interface MessageParameters {
   "admin.rawData": {  };
   "admin.readMedia": {  };
   "admin.reading": {  };
-  "admin.readingScan": {  };
   "admin.reasonBrowser": {  };
   "admin.reasonClosed": {  };
   "admin.reasonData": {  };
@@ -1831,10 +1830,12 @@ export interface MessageParameters {
   "admin.reviewSpace": {  };
   "admin.rootCli": {  };
   "admin.rootDirs": {  };
+  "admin.rootDraft": {  };
   "admin.rootExternal": {  };
   "admin.rootFallback": {  };
   "admin.rootNoSource": {  };
   "admin.rootPermission": {  };
+  "admin.rootScanned": {  };
   "admin.rootsSummary": { "n": number; "o": string | number };
   "admin.runtime": {  };
   "admin.saveCopy": {  };
@@ -1850,7 +1851,6 @@ export interface MessageParameters {
   "admin.scanIdle": {  };
   "admin.scanIncrementalActive": {  };
   "admin.scanJobs": {  };
-  "admin.scanMedia": {  };
   "admin.scanOfflineRoots": { "count": string | number };
   "admin.scanPendingFiles": { "count": string | number };
   "admin.scanQueued": {  };

@@ -787,10 +787,6 @@
     "source": "正在读取…",
     "translation": "Reading…"
   },
-  "admin.readingScan": {
-    "source": "正在读取扫描状态…",
-    "translation": "Reading scan status…"
-  },
   "admin.reasonBrowser": {
     "source": "浏览器完成测量",
     "translation": "Browser finished measuring"
@@ -911,6 +907,10 @@
     "source": "根目录",
     "translation": "Root directories"
   },
+  "admin.rootDraft": {
+    "source": "待保存",
+    "translation": "Unsaved"
+  },
   "admin.rootExternal": {
     "source": "配置文件已被外部修改，请重启服务以重新载入。",
     "translation": "The configuration file was changed externally. Restart the service to reload it."
@@ -926,6 +926,10 @@
   "admin.rootPermission": {
     "source": "配置所在目录不可写，请调整数据目录权限。",
     "translation": "The configuration directory is not writable. Adjust the data directory permissions."
+  },
+  "admin.rootScanned": {
+    "source": "已扫描",
+    "translation": "Scanned"
   },
   "admin.rootsSummary": {
     "source": "{n, plural, other {# 个目录}} · {o} 个离线",
@@ -986,10 +990,6 @@
   "admin.scanJobs": {
     "source": "扫描任务",
     "translation": "Scan jobs"
-  },
-  "admin.scanMedia": {
-    "source": "扫描媒体",
-    "translation": "Scan media"
   },
   "admin.scanOfflineRoots": {
     "source": "{count} 个媒体库离线",

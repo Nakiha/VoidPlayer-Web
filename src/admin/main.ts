@@ -92,10 +92,10 @@ function readDraft(): Root[] {
 }
 function rootRow(root: Root) {
   const row = document.createElement('div'); row.className = 'admin-root-row'; row.dataset.id = root.id;
-  localizedFragment(row, () => `<label>${th(msg("admin.wsName", "名称"))}<input data-field="name" aria-label="${th(msg("admin.dirNameAria", "目录名称"))}" placeholder="${th(msg("admin.dirNamePh", "例如：拍摄素材"))}" required maxlength="120"></label><label>${th(msg("admin.serverPath", "服务器路径"))}<input data-field="path" aria-label="${th(msg("admin.serverPathAria", "服务器上的目录路径"))}" placeholder="${th(msg("admin.serverPathPh", "填写完整目录路径"))}" required maxlength="4096" spellcheck="false"></label><button type="button" class="icon-button admin-danger" aria-label="${th(msg("admin.removeDir", "移除目录"))}" title="${th(msg("admin.removeDirTitle", "移出媒体库，不删除文件"))}">${icon('trash')}</button><span data-root-state class="admin-root-state" hidden></span>`);
+  localizedFragment(row, () => `<label>${th(msg("admin.wsName", "名称"))}<input data-field="name" aria-label="${th(msg("admin.dirNameAria", "目录名称"))}" placeholder="${th(msg("admin.dirNamePh", "例如：拍摄素材"))}" required maxlength="120"></label><label>${th(msg("admin.serverPath", "服务器路径"))}<input data-field="path" aria-label="${th(msg("admin.serverPathAria", "服务器上的目录路径"))}" placeholder="${th(msg("admin.serverPathPh", "填写完整目录路径"))}" required maxlength="4096" spellcheck="false"></label><span class="admin-root-state"><span>${th(msg("admin.reqStatus", "状态"))}</span><span data-root-state role="status"></span></span><button type="button" class="icon-button admin-danger" aria-label="${th(msg("admin.removeDir", "移除目录"))}" title="${th(msg("admin.removeDirTitle", "移出媒体库，不删除文件"))}">${icon('trash')}</button>`);
   row.querySelector<HTMLInputElement>('[data-field=name]')!.value = root.name;
   row.querySelector<HTMLInputElement>('[data-field=path]')!.value = root.path;
-  for (const input of row.querySelectorAll('input')) { input.disabled = !rootConfig?.writable; input.addEventListener('input', () => { rootDirty = true; updateRootActions(); }); }
+  for (const input of row.querySelectorAll('input')) { input.disabled = !rootConfig?.writable; input.addEventListener('input', () => { rootDirty = true; updateRootActions(); renderRootStates(); }); }
   row.querySelector('button')!.disabled = !rootConfig?.writable;
   row.querySelector('button')!.onclick = () => { row.remove(); rootDirty = true; updateRootActions(); };
   return row;
@@ -110,9 +110,15 @@ function renderRootStates() {
   for (const row of $('root-editor').querySelectorAll<HTMLElement>('.admin-root-row')) {
     const root = rootStates.find(r => r.id === row.dataset.id);
     const badge = row.querySelector<HTMLElement>('[data-root-state]')!;
-    badge.hidden = !root || !['offline','partial','error'].includes(String(root.state));
-    localizedText(badge, () => badge.hidden ? '' : stateLabels[String(root!.state)] ?? String(root!.state));
-    badge.dataset.state = String(root?.state ?? 'unscanned');
+    const configured=rootConfig?.roots.find(item => item.id===row.dataset.id);
+    const input=row.querySelector<HTMLInputElement>('[data-field=path]')!;
+    const name=row.querySelector<HTMLInputElement>('[data-field=name]')!;
+    const draft=!configured || input.value.trim()!==configured.path || name.value.trim()!==configured.name;
+    const code=draft ? 'draft' : String(root?.state??'unscanned');
+    localizedText(badge, () => draft ? t(msg('admin.rootDraft','待保存'))
+      : code==='ready' ? t(msg('admin.rootScanned','已扫描')) : stateLabels[code]??code);
+    badge.dataset.state=code;
+    localizedAttribute(badge,'title',() => draft ? '' : String(root?.error??''));
   }
 }
 function scanSummary(value: LibraryScanStatus) {
@@ -191,13 +197,15 @@ async function loadScan() {
   scanCadence.observe([value.ready, value.scanning, value.job?.state, value.job?.files, value.job?.errors,
     value.inventory,value.queuedDirectories,value.job?.current_path,value.roots.map(root => [root.id, root.state, root.error])], value.scanning || value.queuedDirectories>0 || value.inventory.pending>0);
   if (errorsJob !== value.job?.id) { errorsJob = value.job?.id; if (errorsOffset) { errorsOffset = 0; return loadScan(); } }
-  text('scan-progress', () => scanSummary(value));
-  $('scan-current').hidden = !value.scanning;
+  const attention=value.scanning || value.queuedDirectories>0 || value.inventory.pending>0
+    || ['failed','interrupted','cancelled'].includes(String(value.job?.state));
+  $('scan-current').hidden = !attention;
   text('scan-current', () => {
-    if (!value.scanning) return '';
+    if (!value.scanning) return attention ? scanSummary(value) : '';
     const mount=value.roots.find(root => root.id===value.job?.current_root)?.name;
     const location=[mount,value.job?.current_path].filter(Boolean).join(' / ');
-    return [t(msg('admin.scanCurrentProgress','本轮已读取 {directories, plural, other {# 个目录}}、{media, plural, other {# 个媒体}}'),
+    return [value.scanMode==='full' ? t(msg('admin.scanFullActive','全量扫描中')) : t(msg('admin.scanIncrementalActive','增量扫描中')),
+      t(msg('admin.scanCurrentProgress','本轮已读取 {directories, plural, other {# 个目录}}、{media, plural, other {# 个媒体}}'),
       {directories:Number(value.job?.visited??0),media:Number(value.job?.files??0)}),location].filter(Boolean).join(' · ');
   });
   $('scan-cancel').hidden = !value.scanning; $('scan-refresh').toggleAttribute('disabled', value.scanning);
