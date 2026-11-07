@@ -115,7 +115,7 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
   }
   if(pane==='performance') {
    const threadMode = page.locator('#wasm-thread-mode');
-   assert.equal(await page.locator('#wasm-thread-mode-label').innerText(), '解码线程');
+   assert.equal(await page.locator('#wasm-thread-mode-label').innerText(), '软件解码线程配置');
    assert.equal(await page.locator('#wasm-thread-mode-description').count(), 0);
    assert.equal(await page.locator('#hardware-depth-row + .color-setting-row #wasm-thread-mode').count(), 1);
    assert.equal(await threadMode.innerText(), '自动');

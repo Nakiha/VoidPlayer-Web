@@ -518,6 +518,8 @@ export interface Sources {
   "colorFlow.currentRuntime": "当前运行";
   "colorFlow.decode": "解码";
   "colorFlow.decoder": "解码方式";
+  "colorFlow.decoderInfo": "解码方式说明";
+  "colorFlow.decoderSessionHint": "默认使用硬件优先。调整仅在当前页面有效，刷新后恢复硬件优先。";
   "colorFlow.displayImage": "显示画面";
   "colorFlow.frameDataFlow": "帧数据流";
   "colorFlow.hardwareBufferDepth": "硬件缓冲深度";
@@ -871,8 +873,8 @@ export interface Sources {
   "settings.chartHoverCombined": "合并显示";
   "settings.chartHoverSeparate": "各图独立显示";
   "settings.unknownSettingsPage": "未知设置页面。";
-  "settings.vvcFrameContexts": "VVC 帧上下文数";
-  "settings.vvcThreads": "VVC 解码线程数";
+  "settings.vvcFrameContexts": "H.266 帧上下文数";
+  "settings.vvcThreads": "H.266 解码线程数";
   "settings.vvcTuningHint": "留空使用自动配置。修改后重新打开片源。";
   "settings.wasmThreadsAuto": "自动";
   "settings.wasmThreadsAutoGrow": "自动扩容";
@@ -922,7 +924,7 @@ export interface Sources {
   "settingsShell.user": "用户";
   "settingsShell.version": "版本";
   "settingsShell.videoDecoding": "视频解码";
-  "settingsShell.wasmThreads": "解码线程";
+  "settingsShell.wasmThreads": "软件解码线程配置";
   "settingsShell.workspace": "工作区";
   "sharing.addVideo": "请先添加视频再分享。";
   "sharing.copyLink": "复制链接";
@@ -1718,6 +1720,8 @@ export interface MessageParameters {
   "colorFlow.currentRuntime": {  };
   "colorFlow.decode": {  };
   "colorFlow.decoder": {  };
+  "colorFlow.decoderInfo": {  };
+  "colorFlow.decoderSessionHint": {  };
   "colorFlow.displayImage": {  };
   "colorFlow.frameDataFlow": {  };
   "colorFlow.hardwareBufferDepth": {  };

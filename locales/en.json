@@ -2096,6 +2096,14 @@
     "source": "解码方式",
     "translation": "Decoder"
   },
+  "colorFlow.decoderInfo": {
+    "source": "解码方式说明",
+    "translation": "Decoder information"
+  },
+  "colorFlow.decoderSessionHint": {
+    "source": "默认使用硬件优先。调整仅在当前页面有效，刷新后恢复硬件优先。",
+    "translation": "Hardware preferred is the default. Changes apply only to this page and reset on reload."
+  },
   "colorFlow.displayImage": {
     "source": "显示画面",
     "translation": "Display image"
@@ -3517,12 +3525,12 @@
     "translation": "Unknown settings page."
   },
   "settings.vvcFrameContexts": {
-    "source": "VVC 帧上下文数",
-    "translation": "VVC frame contexts"
+    "source": "H.266 帧上下文数",
+    "translation": "H.266 frame contexts"
   },
   "settings.vvcThreads": {
-    "source": "VVC 解码线程数",
-    "translation": "VVC decode threads"
+    "source": "H.266 解码线程数",
+    "translation": "H.266 decode threads"
   },
   "settings.vvcTuningHint": {
     "source": "留空使用自动配置。修改后重新打开片源。",
@@ -3721,8 +3729,8 @@
     "translation": "Video decoding"
   },
   "settingsShell.wasmThreads": {
-    "source": "解码线程",
-    "translation": "Decoder threads"
+    "source": "软件解码线程配置",
+    "translation": "Software decoder thread settings"
   },
   "settingsShell.workspace": {
     "source": "工作区",

@@ -45,7 +45,7 @@ export function isSameColorConfiguration(mode: ColorMode, decode: ReferenceDecod
 export function persistColorConfiguration(mode: ColorMode, decode: ReferenceDecode, output: ColorOutput) {
   try {
     globalThis.localStorage?.setItem('voidplayer.color-mode', mode);
-    globalThis.localStorage?.setItem('voidplayer.reference-decode', JSON.stringify(decode));
+    globalThis.localStorage?.setItem('voidplayer.reference-decode', JSON.stringify({ depth: decode.depth }));
     globalThis.localStorage?.setItem('voidplayer.color-output', JSON.stringify(output));
   } catch {}
 }

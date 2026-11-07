@@ -2292,6 +2292,14 @@
     "source": "解码方式",
     "params": {}
   },
+  "colorFlow.decoderInfo": {
+    "source": "解码方式说明",
+    "params": {}
+  },
+  "colorFlow.decoderSessionHint": {
+    "source": "默认使用硬件优先。调整仅在当前页面有效，刷新后恢复硬件优先。",
+    "params": {}
+  },
   "colorFlow.displayImage": {
     "source": "显示画面",
     "params": {}
@@ -3774,11 +3782,11 @@
     "params": {}
   },
   "settings.vvcFrameContexts": {
-    "source": "VVC 帧上下文数",
+    "source": "H.266 帧上下文数",
     "params": {}
   },
   "settings.vvcThreads": {
-    "source": "VVC 解码线程数",
+    "source": "H.266 解码线程数",
     "params": {}
   },
   "settings.vvcTuningHint": {
@@ -3978,7 +3986,7 @@
     "params": {}
   },
   "settingsShell.wasmThreads": {
-    "source": "解码线程",
+    "source": "软件解码线程配置",
     "params": {}
   },
   "settingsShell.workspace": {

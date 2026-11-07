@@ -24,10 +24,10 @@ await withBrowserFixture({caseName:'hdr-playback',engine,roots:[root]},async({pa
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.addInitScript(()=>{
    localStorage.setItem('voidplayer.color-mode','reference');
-   localStorage.setItem('voidplayer.reference-decode',JSON.stringify({decoder:'software',depth:2}));
  });
  await ready();
  const call=(name,params={})=>page.evaluate(async({name,params})=>window.voidPlayer.tools.find(t=>t.name===name).execute(params),{name,params});
+ await call('set_reference_decode',{decoder:'software',depth:2});
  const state=()=>call('get_review_session');
  const stable=async()=>{await page.waitForFunction(()=>{const s=window.voidPlayer.tools.find(t=>t.name==='get_review_session').execute({});return !s.busy&&s.tracks.length>0&&s.tracks.every(t=>t.frame&&!t.failure);});};
  let pictureIndex=0;

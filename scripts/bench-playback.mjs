@@ -23,7 +23,6 @@ try {
   for (const [scenario, files] of Object.entries(scenarios)) {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     if(process.env.BENCH_COLOR_MODE)await page.addInitScript(mode=>localStorage.setItem('voidplayer.color-mode',mode),process.env.BENCH_COLOR_MODE);
-    if(process.env.BENCH_REFERENCE_DECODE)await page.addInitScript(value=>localStorage.setItem('voidplayer.reference-decode',value),process.env.BENCH_REFERENCE_DECODE);
     if(process.env.BENCH_FORCE_WASM==='1')await page.addInitScript(()=>{globalThis.VideoDecoder=undefined;});
     // Repeat in the same page to exercise replacement/worker cleanup, not just cold starts.
     for (let repeat = 1; repeat <= repeats; repeat++) {
@@ -35,10 +34,11 @@ try {
           if (repeat === 1) await page.goto(process.env.BASE_URL ?? 'http://127.0.0.1:5180/');
           await page.bringToFront();
           await page.waitForFunction(() => window.voidPlayer);
-          return page.evaluate(async ({ files, durationMs }) => {
+          return page.evaluate(async ({ files, durationMs, referenceDecode }) => {
             const tool = name => window.voidPlayer.tools.find(t => t.name === name);
             const previous = await tool('get_review_session').execute({});
             for (const track of previous.tracks) await tool('remove_review_track').execute({slot:track.slot});
+            if (referenceDecode) await tool('set_reference_decode').execute(referenceDecode);
             const lib = await tool('list_library').execute({});
             for (let i = 0; i < files.length; i++) {
               const entry = lib.entries?.find(e => e.name === files[i]);
@@ -47,7 +47,7 @@ try {
             }
             const report=await tool('benchmark_review').execute({ durationMs });
             return {...report,presentationSurfaces:[...document.querySelectorAll('canvas[data-color-executor]')].map(c=>({performance:c.dataset.colorPerformance,id:c.id,executor:c.dataset.colorExecutor,width:c.width,height:c.height}))};
-          }, { files, durationMs });
+          }, { files, durationMs, referenceDecode: process.env.BENCH_REFERENCE_DECODE ? JSON.parse(process.env.BENCH_REFERENCE_DECODE) : null });
         };
         const report = await Promise.race([run(), crashed, new Promise((_, reject) => {
           timer = setTimeout(() => reject(new Error('scenario timeout (including navigation/load)')), durationMs + 45000);
