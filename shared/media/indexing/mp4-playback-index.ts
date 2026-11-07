@@ -1,5 +1,6 @@
 import type { Mp4Playback } from '../containers/mp4-playback.ts';
 import { MediaOpenError } from '../io/media-errors.ts';
+import type { TrackTimeBase } from '../containers/cached-track-metadata.ts';
 
 export const MP4_PLAYBACK_INDEX_BYTES = 64 * 1024 * 1024;
 
@@ -19,7 +20,16 @@ export function parseMp4Playback(value: unknown, size: number, sourceVersion: st
   const byteArray = (value: unknown): value is number[] => Array.isArray(value) && value.length <= 1024 * 1024
     && value.every(b => Number.isInteger(b) && b >= 0 && b <= 255);
   if (!doc || doc.size !== size || doc.sourceVersion !== sourceVersion || ![0, 90, 180, 270].includes(doc.rotation)) return bad();
-  const { index, nativeConfig } = doc;
+  const { index, nativeConfig, trackMetadata } = doc;
+  const clock = (value: TrackTimeBase | undefined) => value?.numerator === 1
+    && Number.isSafeInteger(value.denominator) && value.denominator > 0 && value.denominator <= 0xffffffff;
+  if (!trackMetadata || !['MP4', 'QuickTime'].includes(trackMetadata.container ?? '')
+    || !Array.isArray(trackMetadata.video) || !trackMetadata.video.length || !trackMetadata.video.every(t => t && clock(t.timeBase))
+    || !trackMetadata.audio || trackMetadata.audio.complete !== true || !Array.isArray(trackMetadata.audio.tracks)
+    || trackMetadata.audio.presence !== (trackMetadata.audio.tracks.length ? 'present' : 'absent')
+    || !trackMetadata.audio.tracks.every(t => t && clock(t.timeBase)
+      && typeof t.codec === 'string' && t.codec.length > 0 && t.codec.length <= 128
+      && Number.isFinite(t.sampleRate) && t.sampleRate! > 0 && Number.isSafeInteger(t.channels) && t.channels! > 0)) return bad();
   if (!index || !['h264','hevc','av1','vvc','mpeg4','mjpeg','prores'].includes(index.codec) || !byteArray(index.description)
     || !Array.isArray(index.configurations) || !index.configurations.length || index.configurations.length > 256
     || !index.configurations.every(byteArray) || !Array.isArray(index.packets) || !index.packets.length

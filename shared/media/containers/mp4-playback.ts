@@ -7,6 +7,31 @@ import type { Mp4Reader } from './mp4-config.ts';
 import type { PacketDecodeIndex } from '../indexing/packet-decode-index.ts';
 import { hevcDisplayOrder, recoveredHevcTimes } from '../codecs/hevc-timeline.ts';
 import type { FlvCodec, FlvPacket } from './flv-demux.ts';
+import { aacMetadata } from './cached-track-metadata.ts';
+import type { CachedTrackMetadata } from './cached-track-metadata.ts';
+
+async function mp4TrackMetadata(input: Input): Promise<CachedTrackMetadata> {
+  // These facts come from the already parsed moov. Do not read audio packets or
+  // infer a container clock from normalized packet timestamps or sample rates.
+  const video = await Promise.all((await input.getVideoTracks()).map(async track => ({
+    timeBase: { numerator: 1, denominator: await track.getTimeResolution() },
+  })));
+  const tracks = await Promise.all((await input.getAudioTracks()).map(async track => {
+    const known = await track.getCodec(), id = String(await track.getInternalCodecId());
+    const codec = ({ mp4a: 'AAC', 'ac-3': 'AC-3', 'ec-3': 'E-AC-3', Opus: 'Opus', fLaC: 'FLAC',
+      alac: 'ALAC', '.mp3': 'MP3', lpcm: 'PCM', sowt: 'PCM', twos: 'PCM' } as Record<string, string>)[id]
+      ?? known?.toUpperCase() ?? id;
+    // Only AAC config inspection is header-only; other decoder configs (DTS,
+    // for example) may inspect packets and must not be requested here.
+    const description = known === 'aac' ? (await track.getDecoderConfig())?.description : undefined;
+    const aac = description ? aacMetadata(ArrayBuffer.isView(description)
+      ? new Uint8Array(description.buffer, description.byteOffset, description.byteLength) : new Uint8Array(description)) : {};
+    return { codec, sampleRate: await track.getSampleRate(), channels: await track.getNumberOfChannels(), ...aac,
+      timeBase: { numerator: 1, denominator: await track.getTimeResolution() } };
+  }));
+  return { container: await input.getFormat() === QTFF ? 'QuickTime' : 'MP4', video,
+    audio: { presence: tracks.length ? 'present' : 'absent', tracks, complete: true } };
+}
 
 export async function inspectMp4Playback(reader: Mp4Reader, onIndex?: () => void, observe?: (offset: number, bytes: Uint8Array) => void) {
   let fragmented = false;
@@ -22,7 +47,7 @@ export async function inspectMp4Playback(reader: Mp4Reader, onIndex?: () => void
     const rotation=track.rotation as 0|90|180|270;
     const id=await track.getInternalCodecId(),known=await track.getCodec();
     const codec:PacketDecodeIndex['codec']=id==='mp4v'?'mpeg4':['jpeg','mjpa','mjpb'].includes(String(id))?'mjpeg':['apch','apcn','apcs','apco','ap4h','ap4x'].includes(String(id))?'prores':id==='vvc1'||id==='vvi1'?'vvc':({avc:'h264',hevc:'hevc',av1:'av1'} as Record<string,FlvCodec>)[known??''];
-    if(!codec)throw new MediaOpenError('codec','此 MP4 编码需要 FFmpeg 解封装。');
+    if(!codec)throw new MediaOpenError('codec','此 MP4 视频编码暂不支持。');
     const configs=await readMp4Configurations(reader,track.id);
     fragmented = !!configs.fragmentSequenceNumbers;const displayBounds=configs.descriptions.length===1?configs.displayBounds??[]:[];
     let available = configs.availableSamples ?? configs.sampleSizes!.length;
@@ -66,7 +91,8 @@ export async function inspectMp4Playback(reader: Mp4Reader, onIndex?: () => void
     // alone does not preserve per-entry color interpretation on every engine.
     // Keep those inputs on the JS packet table with the verified WASM decoder.
     const nativeConfig=containerCrop||configs.descriptions.length>1||['mpeg4','mjpeg','prores'].includes(codec)?undefined:await track.getDecoderConfig()??undefined;
-    return { index, rotation, displayBounds, nativeConfig, color: nativeConfig ? await track.getColorSpace() : null,
+    return { index, rotation, displayBounds, nativeConfig, trackMetadata: await mp4TrackMetadata(input),
+      color: nativeConfig ? await track.getColorSpace() : null,
       recovered: !!recovered, indexIntegrity: configs.indexIntegrity, indexTruncatedAt: configs.indexTruncatedAt,
       indexWarning: [configs.warning, recovered ? '容器未记录图片重排时间，已按 HEVC 图片顺序恢复等距时间线。' : undefined].filter(Boolean).join(' ') || undefined };
   } finally { input.dispose(); }

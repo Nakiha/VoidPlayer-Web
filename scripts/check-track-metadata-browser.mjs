@@ -97,8 +97,8 @@ try {
    await page.locator('#toggle-subtracks').click();
    if(open){
     await page.evaluate(()=>{window.metadataDock={nodes:[...document.querySelectorAll('#subtrack-list *, #subtrack-ruler *')],offset:document.querySelector('.track-offset'),value:document.querySelector('.track-offset').value};window.metadataDock.offset.value='pending edit';});
-    const firstSnapshot=!local&&['audio.mp4','silent.mp4'].includes(f.name);
-    if(firstSnapshot)await page.evaluate(()=>{window.metadataHeaderGate.hold=true;});
+    const firstSnapshot=!local&&f.name==='audio.flv', demuxSnapshot=!local&&f.format==='MP4';
+    if(firstSnapshot||demuxSnapshot)await page.evaluate(()=>{window.metadataHeaderGate.hold=true;});
     await page.locator('#toggle-inspector').click();
     if(firstSnapshot){
      await page.waitForFunction(()=>window.metadataHeaderGate.pending.length>0);
@@ -108,6 +108,10 @@ try {
      await page.evaluate(()=>{window.metadataHeaderGate.hold=false;for(const send of window.metadataHeaderGate.pending.splice(0))send();});
     }
     await page.waitForFunction(({presence,channels,codec})=>{const m=window.voidPlayer.getState().tracks[0].trackMetadata;return m?.audio.presence===presence&&(!channels||m.audio.tracks[0]?.channels===channels)&&(!codec||m.audio.tracks[0]?.codec===codec);},f);
+    if(demuxSnapshot){
+     assert.equal(await page.evaluate(()=>window.metadataHeaderGate.pending.length),0,'MP4 inspector uses persisted demux facts without cached-header RPC');
+     await page.evaluate(()=>{window.metadataHeaderGate.hold=false;});
+    }
     assert.deepEqual(await page.evaluate(()=>({connected:window.metadataDock.nodes.every(n=>n.isConnected),sameInput:window.metadataDock.offset===document.querySelector('.track-offset'),value:window.metadataDock.offset.value})),{connected:true,sameInput:true,value:'pending edit'},'cached metadata preserves dock nodes and uncommitted input');
     await page.evaluate(()=>{window.metadataDock.offset.value=window.metadataDock.value;});
     const metadata=await page.evaluate(()=>window.voidPlayer.getState().tracks[0].trackMetadata);
@@ -203,7 +207,7 @@ try {
    const observed=await page.evaluate(()=>window.metadataEvidence);assert.equal(observed.contexts,0);assert.equal(observed.decoders,0);assert.ok(observed.workerUrls.every(url=>!url.includes('cached-audio')&&!url.includes('metadata')),'no audio/metadata parser workers');assert.deepEqual(errors,[]);
    pair.push({open,traffic:structuredClone(traffic),...observed,metadata:state.tracks[0].trackMetadata});
    if(open&&f.name==='audio.mp4'&&!local){
-    await tool(page,'load_library_item',{slot:'B',id:listing.entries.find(e=>e.name==='silent.mp4').id});
+    await tool(page,'load_library_item',{slot:'B',id:listing.entries.find(e=>e.name==='audio.flv').id});
     await page.locator('#track-selector button').filter({has:page.locator('.slot',{hasText:'A'})}).click();
     const confirmedContainer=await page.locator('[data-metadata-group=container] dd').allTextContents();
     await page.evaluate(()=>{window.metadataHeaderGate.hold=true;});

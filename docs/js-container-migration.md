@@ -97,3 +97,5 @@ negative performance results and distinct local/CI playback bytes.
 [Reuse evidence](evidence/js-container-reuse.json) records its own historical
 revision and acceptance limits. None of these earlier measurements certifies
 current performance, physical hardware decoding or display scanout.
+
+MP4/MOV inspector metadata comes from the same JS demux result as playback: original video/audio `mdhd` time bases, audio presence and header-derived audio properties. Playback index schema 2 persists these facts and validates them on import. The browser retains them privately until inspection is enabled; showing the inspector never reparses missing MP4 headers, reads audio packets or creates an audio decoder. FFmpeg WASM may decode the compressed video packets, but does not demux MP4/MOV.

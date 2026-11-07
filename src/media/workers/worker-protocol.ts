@@ -64,7 +64,7 @@ export interface FfmpegCommands {
   extract: Command<{ ctx: number; index: number; recycle?: ArrayBuffer }, WasmFrameOutput & { seek?: { decodedFrames: number; restarts: number } }>;
   dispose: Command<{ ctx: number; path: string }, null>;
 }
-export type PacketInitResult = (NonNullable<Awaited<ReturnType<FlvEngine['open']>>> | Awaited<ReturnType<Mp4Engine['open']>> | Awaited<ReturnType<TsEngine['open']>>) & Pick<MediaInfo, 'timelineSource' | 'seekAnchorCount' | 'jsIndexReused' | 'jsIndexPacketsScanned'>;
+export type PacketInitResult = (NonNullable<Awaited<ReturnType<FlvEngine['open']>>> | Awaited<ReturnType<Mp4Engine['open']>> | Awaited<ReturnType<TsEngine['open']>>) & Pick<MediaInfo, 'trackMetadata' | 'timelineSource' | 'seekAnchorCount' | 'jsIndexReused' | 'jsIndexPacketsScanned'>;
 type Empty = Record<string, never>;
 type SoftwareOptions = { glueURL: string; wasmBinary?: Uint8Array; threads?: DecodeThreads };
 type AnalysisOrigin = { mediaId?: string; firstPtsUs?: number };

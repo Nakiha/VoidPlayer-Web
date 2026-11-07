@@ -1,12 +1,13 @@
 import type { MediaSource } from '../contract.ts';
 import type { AudioPeek } from '../../../shared/media/audio-types.ts';
 import { inspectCachedTracks } from '../../../shared/media/containers/cached-track-metadata.ts';
+import type { CachedTrackMetadata } from '../../../shared/media/containers/cached-track-metadata.ts';
 import { updateMediaInfo } from '../state.ts';
 
 /** One coalesced, bounded query for the visible inspector. No parser worker or
  * expanded byte retention is needed for muted tracks. Closing/replacing the
  * inspected source invalidates in-flight results and cancels trailing retries. */
-export function attachCachedTrackMetadata(source: MediaSource, peek: AudioPeek) {
+export function attachCachedTrackMetadata(source: MediaSource, peek: AudioPeek, demuxMetadata?: CachedTrackMetadata) {
   let enabled = false, disposed = false, generation = 0, last = -Infinity;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let job: { ready: Promise<void>; finish(): void } | undefined;
@@ -28,10 +29,10 @@ export function attachCachedTrackMetadata(source: MediaSource, peek: AudioPeek) 
       timer = undefined;
       last = performance.now(); const current = generation;
       try {
-        const result = await inspectCachedTracks(source.info.size, async (offset, length) => {
+        const result = await (demuxMetadata ? structuredClone(demuxMetadata) : inspectCachedTracks(source.info.size, async (offset, length) => {
           if (!enabled || disposed || generation !== current) return;
           return peek(offset, length);
-        });
+        }));
         if (!enabled || disposed || generation !== current) return;
         const previous = source.info.trackMetadata;
         // Cache eviction is not evidence that a previously identified track vanished.

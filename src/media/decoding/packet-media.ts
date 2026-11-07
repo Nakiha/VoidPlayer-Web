@@ -94,7 +94,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     prepared = undefined;
     const activeRpc = rpc;
     if (init.decoder === 'webcodecs' && !deps.rawNative) releaseReservation();
-    let { times, durations, ...details } = init;
+    let { times, durations, trackMetadata, ...details } = init;
     const info: MediaInfo = { id: (container==='ts'||container==='matroska')?deps.sourceVersion!:randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
       indexState: 'complete', indexKind: (container==='ts'||container==='matroska')?'packet-locators':'packet-offsets', seekStrategy: 'packet-anchor',
       ...details, ...(init.decoder === 'ffmpeg-wasm' ? { coreVariant: fallbackCoreVariant(selected) } : {}) };
@@ -465,7 +465,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
       source.framesFollowing=baseFramesFollowing;
       adapter.dispose();
     };
-    const stopMetadata = attachCachedTrackMetadata(source, (offset, length) => activeRpc.requestCachedBytes(offset, length));
+    const stopMetadata = attachCachedTrackMetadata(source, (offset, length) => activeRpc.requestCachedBytes(offset, length), trackMetadata);
     activeRpc.onCachedAudio = (generation, batch) => { if (!disposed) source.onCachedAudio?.(generation, batch); };
     if (container === 'mp4'||container==='matroska'||container==='ts') stopAudio = attachCachedContainerAudio(source, (offset, length) => activeRpc.requestCachedBytes(offset, length),undefined,()=>activeRpc.requestCachedWindows());
     return source;

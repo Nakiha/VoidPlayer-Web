@@ -120,6 +120,21 @@ test('new normal-read cache evidence refreshes unknown metadata, then reopening 
   } finally { stop(); }
 });
 
+test('demux facts survive missing header cache and remain opt-in with no byte reads', async () => {
+  const metadata = await inspect(mp4('mp4a', 2, true));
+  const source = { info: { size: 40 * 1024 * 1024 } } as MediaSource;
+  const stop = attachCachedTrackMetadata(source, async () => { throw new Error('header cache must not be consulted'); }, metadata);
+  try {
+    await source.requestCachedMetadata!();assert.equal(source.info.trackMetadata, undefined);
+    source.setMetadataInspectionEnabled!(true);
+    const ready = source.requestCachedMetadata!();assert.equal(source.requestCachedMetadata!(), ready);
+    await ready;assert.deepEqual(source.info.trackMetadata, metadata);
+    assert.notEqual(source.info.trackMetadata, metadata, 'publication does not expose mutable demux-owned facts');
+    source.setMetadataInspectionEnabled!(false);source.setMetadataInspectionEnabled!(true);
+    await source.requestCachedMetadata!();assert.deepEqual(source.info.trackMetadata, metadata);
+  } finally { stop(); }
+});
+
 test('a disposed source cannot publish a late metadata reply into a replacement generation', async () => {
   const bytes=mp4('ac-3',6), old={info:{id:'same-id',size:bytes.length}} as MediaSource, replacement={info:{id:'same-id',size:bytes.length}} as MediaSource;
   let release:()=>void=()=>{}, started=false, notifications=0;

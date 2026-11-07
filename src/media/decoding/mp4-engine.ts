@@ -67,6 +67,7 @@ export class Mp4Engine {
         ...(color?{colorSource:'container' as const,color:{primaries:color.primaries??null,transfer:color.transfer??null,matrix:color.matrix??null,fullRange:color.fullRange??null}}:{}),
         ...(recovered?{timelineSource:'hevc-poc' as const}:{}),
         indexIntegrity: playback.indexIntegrity, indexTruncatedAt: playback.indexTruncatedAt, indexWarning: playback.indexWarning,
+        trackMetadata: playback.trackMetadata,
         indexSource: 'url' in this.reader.input && this.reader.input.library ? 'server' as const : 'client' as const,
         firstPtsUs,durationUs:firstPts+duration-firstPtsUs,times:pts.filter(p=>p>=firstPtsUs).map(p=>p-firstPtsUs),durations};
     }catch(error){this.close();throw error;}

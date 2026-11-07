@@ -18,7 +18,7 @@ export const JS_MATROSKA_MEDIA_INDEX_IDENTITY:MediaIndexIdentity={kind:'js-matro
 
 export const FLV_INDEXER_BUILD = 'flv-demux-v3';
 export const MP4_PLAYBACK_MEDIA_INDEX_IDENTITY: MediaIndexIdentity = {
-  kind: 'mp4-playback', streamKey: 'video:0', schemaVersion: 1, indexerBuild: `mediabunny-${MEDIABUNNY_VERSION}-mp4-playback-v1`,
+  kind: 'mp4-playback', streamKey: 'video:0', schemaVersion: 2, indexerBuild: `mediabunny-${MEDIABUNNY_VERSION}-mp4-playback-v2`,
 };
 export const FLV_MEDIA_INDEX_IDENTITY: MediaIndexIdentity = {
   kind: 'flv',

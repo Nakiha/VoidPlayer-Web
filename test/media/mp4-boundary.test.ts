@@ -6,8 +6,29 @@ import { RangeReader } from '../../shared/media/io/range-reader.ts';
 import { readMp4Configurations } from '../../shared/media/containers/mp4-config.ts';
 import { Mp4Engine } from '../../src/media/decoding/mp4-engine.ts';
 import { mp4BoundaryFixture } from '../../scripts/mp4-boundary-fixture.ts';
+import { inspectMp4Playback } from '../../shared/media/containers/mp4-playback.ts';
+import { parseMp4Playback, serializeMp4Playback } from '../../shared/media/indexing/mp4-playback-index.ts';
 
 const fixture = await mp4BoundaryFixture();
+
+test('MP4 playback indexes persist original demux clocks and reject missing or corrupt metadata', async () => {
+  const reader = new RangeReader({ file: new Blob([fixture.valid]) });
+  try {
+    const playback = await inspectMp4Playback(reader);
+    assert.equal(playback.trackMetadata.container, 'MP4');
+    assert.equal(playback.trackMetadata.audio.presence, 'absent');
+    const doc = serializeMp4Playback(playback, reader.size, 'fixture');
+    assert.deepEqual(parseMp4Playback(JSON.parse(JSON.stringify(doc)), reader.size, 'fixture').trackMetadata, playback.trackMetadata);
+    for (const mutate of [
+      (d: typeof doc) => { delete (d as Partial<typeof doc>).trackMetadata; },
+      (d: typeof doc) => { d.trackMetadata.video![0].timeBase!.denominator = 0; },
+      (d: typeof doc) => { d.trackMetadata.audio.presence = 'present'; },
+    ]) {
+      const corrupt = structuredClone(doc);mutate(corrupt);
+      assert.throws(() => parseMp4Playback(corrupt, reader.size, 'fixture'), /播放索引无效/);
+    }
+  } finally { reader.close(); }
+});
 
 test('appended MP4 garbage preserves all verified samples and exact seek pixels', async () => {
   const glue = new URL('../../public/vendor/voidplayer-core/voidplayer-core.js', import.meta.url).href;

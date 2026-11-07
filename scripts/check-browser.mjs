@@ -1227,6 +1227,8 @@ try {
     assert.equal(await page.locator('.toast-warning').count(),0);
     await page.locator('#toggle-inspector').click();
     await page.locator('#inspect-decoder-concurrency').waitFor({ state: 'visible' });
+    const containerFacts = await page.locator('[data-metadata-group=container] dd').allTextContents();
+    assert.deepEqual(containerFacts, ['MP4', '1/90000 s', '1/48000 s'], 'library playback retains the original HLG stream clocks');
     assert.equal(await page.locator('#inspect-decoder-concurrency').isVisible(), true);
     assert.equal(await page.locator('#inspect-decoder-threads').textContent(), String(managed.tracks[0].decoderThreads));
     assert.equal(await page.locator('#inspect-decoder-contexts').textContent(), String(managed.tracks[0].decoderFrameContexts));
@@ -1238,6 +1240,8 @@ try {
 
     await page.waitForFunction(() => window.voidPlayer.getState().tracks[0].trackMetadata !== undefined);
     const nativeState = await page.evaluate(() => window.voidPlayer.getState());
+    assert.deepEqual(await page.locator('[data-metadata-group=container] dd').allTextContents(), containerFacts,
+      'decoder changes preserve the same JS container clocks');
     assert.equal(await page.locator('#inspect-decoder-concurrency').isVisible(), nativeState.tracks[0].decoder === 'ffmpeg-wasm');
     const performanceRows = page.locator('#inspect-playback dd');
     assert.equal(await page.locator('[data-frame-timing] + section #inspect-playback-title').textContent(), '播放性能');

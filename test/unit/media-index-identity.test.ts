@@ -21,6 +21,8 @@ test('parser provenance matches the installed dependency and rejects indexes fro
 });
 
 test('media index identity validates format, stream, schema, and indexer build', () => {
+  const oldMp4 = new URLSearchParams({ stream: 'video:0', schema: '1', indexer: `mediabunny-${MEDIABUNNY_VERSION}-mp4-playback-v1` });
+  assert.throws(() => parseMediaIndexIdentity('mp4-playback', oldMp4), /不受支持/, 'indexes without demux metadata must rebuild');
   const flv = new URLSearchParams('stream=video%3A0&schema=3&indexer=flv-demux-v3');
   assert.deepEqual(parseMediaIndexIdentity('flv', flv), FLV_MEDIA_INDEX_IDENTITY);
 
