@@ -4059,10 +4059,6 @@
       "p30": "string | number"
     }
   },
-  "shell.checkingConnection10OpenServerSettingsNew": {
-    "source": "正在检查连接\n打开服务管理（新标签页）",
-    "params": {}
-  },
   "shell.checkingLibraryConnectionOpenServerSettingsNew": {
     "source": "正在检查媒体库连接，打开服务管理（新标签页）",
     "params": {}
@@ -4445,6 +4441,13 @@
     "source": "媒体服务已连接",
     "params": {}
   },
+  "sourceActions.connectionTooltip": {
+    "source": "打开后端管理页\n状态：{state}\nRTT：{rtt}",
+    "params": {
+      "rtt": "string | number",
+      "state": "string | number"
+    }
+  },
   "sourceActions.copied": {
     "source": "绝对路径已拷贝",
     "params": {}
@@ -4485,12 +4488,20 @@
     "source": "网络离线；本地文件仍可播放",
     "params": {}
   },
-  "sourceActions.openAdminNewLine": {
-    "source": "\n打开服务管理（新标签页）",
-    "params": {}
-  },
   "sourceActions.openAdminSuffix": {
     "source": "，打开服务管理（新标签页）",
+    "params": {}
+  },
+  "sourceActions.statusChecking": {
+    "source": "检查中",
+    "params": {}
+  },
+  "sourceActions.statusOffline": {
+    "source": "离线",
+    "params": {}
+  },
+  "sourceActions.statusOnline": {
+    "source": "在线",
     "params": {}
   },
   "sources.accessDenied": {

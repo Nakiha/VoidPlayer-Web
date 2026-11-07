@@ -942,7 +942,6 @@ export interface Sources {
   "shell.bitstreamAnalysis": "码流分析";
   "shell.browseLibrary": "浏览媒体库";
   "shell.centerTrackKeepingZoom": "居中轨道 {p30} 画面，保留倍率";
-  "shell.checkingConnection10OpenServerSettingsNew": "正在检查连接\n打开服务管理（新标签页）";
   "shell.checkingLibraryConnectionOpenServerSettingsNew": "正在检查媒体库连接，打开服务管理（新标签页）";
   "shell.chooseLocalFiles": "选择本地文件";
   "shell.closeTrack": "关闭轨道 {p0}";
@@ -1031,6 +1030,7 @@ export interface Sources {
   "sourceAccess.localStale": "无法打开本地文件「{name}」：文件已变化或不可用。";
   "sourceAccess.localUnsupported": "当前浏览器不支持保存本地文件访问权限，无法直接恢复「{name}」。请重新选择文件；刷新后仍需重新选择。";
   "sourceActions.connected": "媒体服务已连接";
+  "sourceActions.connectionTooltip": "打开后端管理页\n状态：{state}\nRTT：{rtt}";
   "sourceActions.copied": "绝对路径已拷贝";
   "sourceActions.copyAbsolutePath": "拷贝绝对路径";
   "sourceActions.disconnected": "媒体服务未连接；本地文件仍可播放";
@@ -1041,8 +1041,10 @@ export interface Sources {
   "sourceActions.noAbsolutePath": "浏览器未提供本地绝对路径；从本机媒体库打开可使用路径和定位";
   "sourceActions.noLocate": "浏览器未提供本地文件定位；可从本机媒体库打开";
   "sourceActions.offline": "网络离线；本地文件仍可播放";
-  "sourceActions.openAdminNewLine": "\n打开服务管理（新标签页）";
   "sourceActions.openAdminSuffix": "，打开服务管理（新标签页）";
+  "sourceActions.statusChecking": "检查中";
+  "sourceActions.statusOffline": "离线";
+  "sourceActions.statusOnline": "在线";
   "sources.accessDenied": "已拒绝访问本地文件 {name}，如需打开请重新选择";
   "sources.accessExpired": "本地文件访问已过期，请重新选择 {name}";
   "sources.addToViewName": "添加到视图：{name}";
@@ -2140,7 +2142,6 @@ export interface MessageParameters {
   "shell.bitstreamAnalysis": {  };
   "shell.browseLibrary": {  };
   "shell.centerTrackKeepingZoom": { "p30": string | number };
-  "shell.checkingConnection10OpenServerSettingsNew": {  };
   "shell.checkingLibraryConnectionOpenServerSettingsNew": {  };
   "shell.chooseLocalFiles": {  };
   "shell.closeTrack": { "p0": string | number };
@@ -2229,6 +2230,7 @@ export interface MessageParameters {
   "sourceAccess.localStale": { "name": string | number };
   "sourceAccess.localUnsupported": { "name": string | number };
   "sourceActions.connected": {  };
+  "sourceActions.connectionTooltip": { "rtt": string | number; "state": string | number };
   "sourceActions.copied": {  };
   "sourceActions.copyAbsolutePath": {  };
   "sourceActions.disconnected": {  };
@@ -2239,8 +2241,10 @@ export interface MessageParameters {
   "sourceActions.noAbsolutePath": {  };
   "sourceActions.noLocate": {  };
   "sourceActions.offline": {  };
-  "sourceActions.openAdminNewLine": {  };
   "sourceActions.openAdminSuffix": {  };
+  "sourceActions.statusChecking": {  };
+  "sourceActions.statusOffline": {  };
+  "sourceActions.statusOnline": {  };
   "sources.accessDenied": { "name": string | number };
   "sources.accessExpired": { "name": string | number };
   "sources.addToViewName": { "name": string | number };

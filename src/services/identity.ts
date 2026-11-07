@@ -2,6 +2,7 @@ export type Actor = { id: string; name: string; kind?: "named" | "guest" };
 type Health = {
   service: string;
   actor: Actor | null;
+  rttMs?: number;
   capabilities?: {
     admin?: boolean;
     workspaces?: boolean;
@@ -36,6 +37,7 @@ export function identityHealth(
 ): Promise<Health> {
   const read = () =>
     serialize(async () => {
+      const started = performance.now();
       const response = await fetch("/api/health", {
         cache: "no-store",
         signal: AbortSignal.timeout(4000),
@@ -43,6 +45,7 @@ export function identityHealth(
       const health = (await response.json()) as Health;
       if (!response.ok || health.service !== "voidplayer-media")
         throw new Error("媒体服务未连接。");
+      health.rttMs = performance.now() - started;
       remember(health.actor);
       return health;
     });

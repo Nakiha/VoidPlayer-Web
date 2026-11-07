@@ -3800,10 +3800,6 @@
     "source": "居中轨道 {p30} 画面，保留倍率",
     "translation": "Center track {p30}, keeping zoom"
   },
-  "shell.checkingConnection10OpenServerSettingsNew": {
-    "source": "正在检查连接\n打开服务管理（新标签页）",
-    "translation": "Checking connection\nOpen server settings (new tab)"
-  },
   "shell.checkingLibraryConnectionOpenServerSettingsNew": {
     "source": "正在检查媒体库连接，打开服务管理（新标签页）",
     "translation": "Checking library connection; open server settings (new tab)"
@@ -4156,6 +4152,10 @@
     "source": "媒体服务已连接",
     "translation": "Media service connected"
   },
+  "sourceActions.connectionTooltip": {
+    "source": "打开后端管理页\n状态：{state}\nRTT：{rtt}",
+    "translation": "Open service admin\nStatus: {state}\nRTT: {rtt}"
+  },
   "sourceActions.copied": {
     "source": "绝对路径已拷贝",
     "translation": "Absolute path copied"
@@ -4196,13 +4196,21 @@
     "source": "网络离线；本地文件仍可播放",
     "translation": "Network offline; local files still play"
   },
-  "sourceActions.openAdminNewLine": {
-    "source": "\n打开服务管理（新标签页）",
-    "translation": "\nOpen service admin (new tab)"
-  },
   "sourceActions.openAdminSuffix": {
     "source": "，打开服务管理（新标签页）",
     "translation": ", open service admin (new tab)"
+  },
+  "sourceActions.statusChecking": {
+    "source": "检查中",
+    "translation": "Checking"
+  },
+  "sourceActions.statusOffline": {
+    "source": "离线",
+    "translation": "Offline"
+  },
+  "sourceActions.statusOnline": {
+    "source": "在线",
+    "translation": "Online"
   },
   "sources.accessDenied": {
     "source": "已拒绝访问本地文件 {name}，如需打开请重新选择",

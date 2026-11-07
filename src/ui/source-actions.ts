@@ -14,6 +14,7 @@ export function installSourceActions(session: ReviewSession, act: Action, onReco
   const locations = new Map<string, Location>();
   const pending = new Set<string>();
   let disposed = false, probing = false, canReveal = false, statusActor = '';
+  let rttMs: number | undefined;
   const lifetime = new AbortController();
   const signal = () => AbortSignal.any([lifetime.signal, AbortSignal.timeout(4000)]);
   async function probe() {
@@ -21,11 +22,12 @@ export function installSourceActions(session: ReviewSession, act: Action, onReco
     probing = true;
     const prior = status.dataset.state;
     if (!prior || prior === 'checking') status.dataset.state = 'checking';
-    let state = 'disconnected'; statusActor = '';
+    let state = 'disconnected'; statusActor = ''; rttMs = undefined;
     try {
       const health = await identityHealth();
       if (health?.service === 'voidplayer-media') {
         state = 'connected';
+        rttMs = health.rttMs;
         const actor = health.actor && typeof health.actor.id === 'string' && typeof health.actor.name === 'string' ? health.actor : null;
 
         if (actor) statusActor = actor.name; canReveal = !!health.capabilities?.reveal && localPage();
@@ -42,7 +44,11 @@ export function installSourceActions(session: ReviewSession, act: Action, onReco
     const state = status.dataset.state;
     const label = state === 'connected' ? t(msg("sourceActions.connected", "媒体服务已连接")) : state === 'offline' ? t(msg("sourceActions.offline", "网络离线；本地文件仍可播放")) : t(msg("sourceActions.disconnected", "媒体服务未连接；本地文件仍可播放"));
     status.setAttribute('aria-label', label + (statusActor ? ` · ${statusActor}` : '') + t(msg("sourceActions.openAdminSuffix", "，打开服务管理（新标签页）")));
-    status.dataset.tooltip = label + t(msg("sourceActions.openAdminNewLine", "\n打开服务管理（新标签页）"));
+    const connection = state === 'connected' ? t(msg('sourceActions.statusOnline', '在线'))
+      : state === 'checking' ? t(msg('sourceActions.statusChecking', '检查中')) : t(msg('sourceActions.statusOffline', '离线'));
+    status.dataset.tooltip = t(msg('sourceActions.connectionTooltip', '打开后端管理页\n状态：{state}\nRTT：{rtt}'), {
+      state:connection, rtt:state === 'connected' && rttMs !== undefined ? `${Math.round(rttMs)}ms` : '—',
+    });
   }
   function render(state = session.getState()) {
     for (const slot of SLOTS) {
