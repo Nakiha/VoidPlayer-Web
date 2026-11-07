@@ -88,7 +88,12 @@ const libraryManage = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 2
   <path fill="none" d="m17 12 4.33 2.5v5L17 22l-4.33-2.5v-5Z"/>
   <circle fill="none" cx="17" cy="17" r="1.75"/>
 </svg>`;
-const icons = { database, stack, fileText, gauge, save, compactRows, libraryManage, listBullets, caretUpDown, pathSeparator, libraryVolume, opacity, clock, analysisOverlay, speaker, speakerMuted, cpu, memory, storage, gpu, monitor, appearance, keyboard, diagnostics, info, user, check, settings, plusRegular, select, eraser, redo, trash, filePlus, focus, eye, eyeClosed, grid, chart, columns, pen, ellipse, rect, line, text: lettering, undo, center, grip, copy, download, sidebar, rows, open, shareNetwork, export: share, play, pause, previous, next, plus, close, more, note, refresh, search, zoomIn, zoomOut, fullRange, down, caretLeft, caretRight, film, fit, marker };
+// Source channels and a decoded picture share the existing regular stroke weight.
+const colorDecoding = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="2" y="4" width="20" height="16" rx="2" fill="none"/>
+  <path fill="none" d="M6 9v6M9 7v10M12 9v6M16 9l4 3-4 3Z"/>
+</svg>`;
+const icons = { colorDecoding, database, stack, fileText, gauge, save, compactRows, libraryManage, listBullets, caretUpDown, pathSeparator, libraryVolume, opacity, clock, analysisOverlay, speaker, speakerMuted, cpu, memory, storage, gpu, monitor, appearance, keyboard, diagnostics, info, user, check, settings, plusRegular, select, eraser, redo, trash, filePlus, focus, eye, eyeClosed, grid, chart, columns, pen, ellipse, rect, line, text: lettering, undo, center, grip, copy, download, sidebar, rows, open, shareNetwork, export: share, play, pause, previous, next, plus, close, more, note, refresh, search, zoomIn, zoomOut, fullRange, down, caretLeft, caretRight, film, fit, marker };
 export function icon(name: keyof typeof icons, extraClass = '') {
   return icons[name].replace('<svg ', `<svg class="icon ${extraClass}" data-icon="${name}" aria-hidden="true" focusable="false" `);
 }

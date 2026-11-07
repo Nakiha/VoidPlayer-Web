@@ -3889,10 +3889,6 @@
     "source": "实验性功能",
     "params": {}
   },
-  "settingsShell.feedback": {
-    "source": "反馈",
-    "params": {}
-  },
   "settingsShell.finishAnnotatingCloseWindow": {
     "source": "结束标注 / 关闭窗口",
     "params": {}
@@ -3911,6 +3907,10 @@
   },
   "settingsShell.lineTextEraser": {
     "source": "线条 / 文字 / 橡皮擦",
+    "params": {}
+  },
+  "settingsShell.logs": {
+    "source": "日志",
     "params": {}
   },
   "settingsShell.mediaDemuxing": {

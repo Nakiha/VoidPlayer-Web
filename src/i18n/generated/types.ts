@@ -900,12 +900,12 @@ export interface Sources {
   "settingsShell.enterAName": "输入名字";
   "settingsShell.enterANameOrChooseAnExisting": "输入名字或选择已有用户";
   "settingsShell.experimental": "实验性功能";
-  "settingsShell.feedback": "反馈";
   "settingsShell.finishAnnotatingCloseWindow": "结束标注 / 关闭窗口";
   "settingsShell.interfaceIcons": "界面图标";
   "settingsShell.license": "许可证";
   "settingsShell.light": "亮色";
   "settingsShell.lineTextEraser": "线条 / 文字 / 橡皮擦";
+  "settingsShell.logs": "日志";
   "settingsShell.mediaDemuxing": "媒体解封装";
   "settingsShell.name": "名字";
   "settingsShell.openSourceCredits": "开源致谢";
@@ -2100,12 +2100,12 @@ export interface MessageParameters {
   "settingsShell.enterAName": {  };
   "settingsShell.enterANameOrChooseAnExisting": {  };
   "settingsShell.experimental": {  };
-  "settingsShell.feedback": {  };
   "settingsShell.finishAnnotatingCloseWindow": {  };
   "settingsShell.interfaceIcons": {  };
   "settingsShell.license": {  };
   "settingsShell.light": {  };
   "settingsShell.lineTextEraser": {  };
+  "settingsShell.logs": {  };
   "settingsShell.mediaDemuxing": {  };
   "settingsShell.name": {  };
   "settingsShell.openSourceCredits": {  };

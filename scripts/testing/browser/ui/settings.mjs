@@ -366,7 +366,7 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
  }
  await page.setViewportSize({width:390,height:700});
  await page.locator('#settings-tab-logs').click();await page.locator('#settings').screenshot({path:artifact(`voidplayer-settings-unified-mobile-${name}.png`)});
- assert.equal(await page.locator('#settings-current-title').textContent(),'反馈');
+ assert.equal(await page.locator('#settings-current-title').textContent(),'日志');
  const headerBefore=await page.locator('.settings-floating-header').boundingBox();
  const closeBefore=await page.locator('#settings-close').boundingBox(), mobileDialog=await page.locator('#settings').boundingBox();
  assert.ok(Math.abs((closeBefore.y-mobileDialog.y)-(mobileDialog.x+mobileDialog.width-closeBefore.x-closeBefore.width))<1,'mobile close button stays in the window corner');

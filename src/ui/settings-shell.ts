@@ -7,8 +7,8 @@ import { ACCENTS, BASE_COLORS, customTheme } from './appearance.ts';
 import { shortcutLabel } from './shortcuts.ts';
 import type { Shortcut } from './shortcuts.ts';
 export const settingsPanes = () => [
-  ['appearance', t(msg("settingsShell.appearance", "外观")), 'appearance'], ['workspace', t(msg("settingsShell.workspace", "工作区")), 'open'],
-  ['identity', t(msg("settingsShell.user", "用户")), 'user'], ['shortcuts', t(msg("settingsShell.shortcuts", "快捷键")), 'keyboard'], ['logs', t(msg("settingsShell.feedback", "反馈")), 'note'], ['performance', t(msg("settingsShell.colorDecoding", "色彩与解码")), 'diagnostics'], ['mcp', 'MCP', 'shareNetwork'],
+  ['appearance', t(msg("settingsShell.appearance", "外观")), 'appearance'], ['workspace', t(msg("settingsShell.workspace", "工作区")), 'stack'],
+  ['identity', t(msg("settingsShell.user", "用户")), 'user'], ['shortcuts', t(msg("settingsShell.shortcuts", "快捷键")), 'keyboard'], ['logs', t(msg("settingsShell.logs", "日志")), 'fileText'], ['performance', t(msg("settingsShell.colorDecoding", "色彩与解码")), 'colorDecoding'], ['mcp', 'MCP', 'shareNetwork'],
   ['experimental', t(msg('settingsShell.experimental', '实验性功能')), 'diagnostics'], ['about', t(msg("settingsShell.about", "关于")), 'info'],
 ] as const;
 const paneTitle = (title: string, description = '') => `<div class="settings-page-title"><h3>${title}</h3>${description ? `<p>${description}</p>` : ''}</div>`;
@@ -70,7 +70,7 @@ export function settingsShell() {
         <p class="settings-caption">${th(msg("settingsShell.spaceAndArrowKeysRemainAvailableWhen", "输入文字时保留空格与方向键。滚轮或捏合缩放，右键拖动或双指滚动平移。"))}</p></div>
       </section>
       <section id="settings-pane-logs" role="tabpanel" aria-labelledby="settings-tab-logs" tabindex="0" hidden>
-        ${paneTitle(t(msg("settingsShell.feedback", "反馈")))}
+        ${paneTitle(t(msg("settingsShell.logs", "日志")))}
         <div id="diagnostic-logs"></div>
         </section>
       <section id="settings-pane-performance" role="tabpanel" aria-labelledby="settings-tab-performance" tabindex="0" hidden>

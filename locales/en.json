@@ -3632,10 +3632,6 @@
     "source": "实验性功能",
     "translation": "Experimental features"
   },
-  "settingsShell.feedback": {
-    "source": "反馈",
-    "translation": "Feedback"
-  },
   "settingsShell.finishAnnotatingCloseWindow": {
     "source": "结束标注 / 关闭窗口",
     "translation": "Finish annotating / Close window"
@@ -3655,6 +3651,10 @@
   "settingsShell.lineTextEraser": {
     "source": "线条 / 文字 / 橡皮擦",
     "translation": "Line / Text / Eraser"
+  },
+  "settingsShell.logs": {
+    "source": "日志",
+    "translation": "Logs"
   },
   "settingsShell.mediaDemuxing": {
     "source": "媒体解封装",
