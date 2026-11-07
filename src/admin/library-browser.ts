@@ -22,9 +22,6 @@ export function installAdminLibraryBrowser(signal: AbortSignal, notify: (message
   const find = (id: string) => host.querySelector<HTMLElement>(`#${id}`)!;
   const list = find('source-list'), foot = find('source-foot');
   const viewKey = 'voidplayer.admin.library-view';
-  const densityKey = 'voidplayer.admin.library-compact';
-  let compact = false;
-  try {compact = localStorage.getItem(densityKey) === 'true';} catch {}
   let mode:'list'|'columns' = 'columns';
   try {if(localStorage.getItem(viewKey)==='list')mode='list';} catch {}
   host.dataset.libraryView=mode;
@@ -32,7 +29,6 @@ export function installAdminLibraryBrowser(signal: AbortSignal, notify: (message
   const columnsHost=document.createElement('div'); columnsHost.className='library-columns'; columnsHost.dataset.libraryViewSurface='columns';
   listBody.hidden=mode!=='list'; columnsHost.hidden=mode!=='columns'; list.append(listBody,columnsHost);
   const viewButton=createIconButton({glyph:'columns',label:t(msg('adminLibrary.viewMode','浏览视图')),className:'library-view-choice',attributes:{id:'admin-library-view','data-tooltip-suppressed':''}});
-  const compactButton=createIconButton({glyph:'compactRows',label:t(msg('adminLibrary.compactList','紧凑列表')),attributes:{id:'admin-library-compact'}});
   let columns:ReturnType<typeof installLibraryColumns>;
   let selection:ReturnType<typeof installLibrarySelection>|undefined;
 
@@ -47,7 +43,6 @@ export function installAdminLibraryBrowser(signal: AbortSignal, notify: (message
     if (page) prefetchThumbnailStatuses(page.entries,60,page.thumbnailEpoch);
     render();
   }, signal, undefined, notify);
-  find('source-tools').append(compactButton);
   const listing = installLibraryListing(listBody, {fileRow,navigate:browser.navigate,registerMount:menu.registerMount,collapsible:false,recent:false});
   columns = installLibraryColumns(list,columnsHost,signal,{fileRow:(item,home) => fileRow(item,false,home),navigate:browser.navigate,registerMount:menu.registerMount,more:browser.more,collapsible:false,recent:false,pathClass:'library-column-path',
     localizeRow:(row,item,home) => patchLibraryRow(row,fileRow(item,true,home))});
@@ -64,10 +59,6 @@ export function installAdminLibraryBrowser(signal: AbortSignal, notify: (message
   const viewControl=installMenu(viewButton,viewMenu,{selected:() => choices.find(choice => choice.value===mode)?.button});
   function modeLabel(value:'list'|'columns') {return value==='list'?t(msg('adminLibrary.listView','列表视图')):t(msg('adminLibrary.columnView','分栏视图'));}
   function syncChoice() {
-    host.dataset.libraryDensity=compact?'compact':'comfortable';
-    compactButton.setAttribute('aria-pressed',String(compact));
-    compactButton.setAttribute('aria-label',t(msg('adminLibrary.compactList','紧凑列表')));
-    compactButton.dataset.tooltip=t(msg('adminLibrary.compactList','紧凑列表'));
     viewButton.innerHTML=icon(mode==='list'?'listBullets':'columns')+icon('caretUpDown');
     viewButton.setAttribute('aria-label',`${t(msg('adminLibrary.viewMode','浏览视图'))} · ${modeLabel(mode)}`);
     viewMenu.setAttribute('aria-label',t(msg('adminLibrary.viewMode','浏览视图')));
@@ -85,11 +76,6 @@ export function installAdminLibraryBrowser(signal: AbortSignal, notify: (message
     syncChoice(); render();
   }
   syncChoice();
-  compactButton.addEventListener('click',() => {
-    compact=!compact;
-    try {localStorage.setItem(densityKey,String(compact));} catch {}
-    syncChoice();scrollbar.update();
-  },{signal});
 
   let footFrame = 0, footHeight = -1;
   const footSize = new ResizeObserver(() => {

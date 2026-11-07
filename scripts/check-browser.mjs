@@ -326,7 +326,9 @@ try {
     await management.focus();
     assert.equal(await page.locator('#library-navigation').evaluate(el => el.matches(':focus-within')),false,'management focus does not activate the search field');
     const manageBox=await management.boundingBox(), fieldBox=await page.locator('#library-navigation').boundingBox();
-    assert.equal(Math.round(manageBox.x-fieldBox.x-fieldBox.width),4,'management is a separate control with a four-pixel gap');
+    const densityBox=await page.locator('#library-compact').boundingBox();
+    assert.equal(Math.round(densityBox.x-fieldBox.x-fieldBox.width),4,'compact density follows the address with a four-pixel gap');
+    assert.equal(Math.round(manageBox.x-densityBox.x-densityBox.width),4,'management follows compact density with a four-pixel gap');
     await page.locator('#source-tools').screenshot({path:path.join(screenshots,`${browserName}-library-management-control.png`)});
     const navigation = await page.locator('#library-navigation').boundingBox();
     const tools = await page.locator('#source-tools').boundingBox();

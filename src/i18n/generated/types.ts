@@ -322,7 +322,6 @@ export interface Sources {
   "admin.wsTitle": "工作区";
   "admin.wsVideos": "视频";
   "adminLibrary.columnView": "分栏视图";
-  "adminLibrary.compactList": "紧凑列表";
   "adminLibrary.listView": "列表视图";
   "adminLibrary.moveIndexPending": "文件操作已完成，目录索引尚未刷新，请重新扫描。";
   "adminLibrary.moveLimit": "每次最多移动 100 个项目。";
@@ -731,6 +730,7 @@ export interface Sources {
   "language.loadFailed": "语言包未能加载，请重试。";
   "language.system": "跟随浏览器";
   "libraryBrowser.allLibraries": "所有媒体库";
+  "libraryBrowser.compactList": "紧凑列表";
   "libraryBrowser.goBack": "后退";
   "libraryBrowser.goForward": "前进";
   "libraryBrowser.library": "媒体库";
@@ -1927,7 +1927,6 @@ export interface MessageParameters {
   "admin.wsTitle": {  };
   "admin.wsVideos": {  };
   "adminLibrary.columnView": {  };
-  "adminLibrary.compactList": {  };
   "adminLibrary.listView": {  };
   "adminLibrary.moveIndexPending": {  };
   "adminLibrary.moveLimit": {  };
@@ -2336,6 +2335,7 @@ export interface MessageParameters {
   "language.loadFailed": {  };
   "language.system": {  };
   "libraryBrowser.allLibraries": {  };
+  "libraryBrowser.compactList": {  };
   "libraryBrowser.goBack": {  };
   "libraryBrowser.goForward": {  };
   "libraryBrowser.library": {  };

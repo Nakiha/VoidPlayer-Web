@@ -25,6 +25,27 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
   let pathSignature = '', appliedScope = '', searchTimer: ReturnType<typeof setTimeout> | undefined;
   const cadence = new PollingCadence(3000);
   const {list,tools,foot} = elements;
+  const densityKey = 'voidplayer.library-compact';
+  let compact = false;
+  try {compact = (localStorage.getItem(densityKey) ?? localStorage.getItem('voidplayer.admin.library-compact')) === 'true';} catch {}
+  const compactButton = createIconButton({glyph:'compactRows',label:t(msg('libraryBrowser.compactList','紧凑列表')),attributes:{id:'library-compact'}});
+  function syncDensity() {
+    list.dataset.libraryDensity = compact ? 'compact' : 'comfortable';
+    compactButton.setAttribute('aria-pressed',String(compact));
+    const label = t(msg('libraryBrowser.compactList','紧凑列表'));
+    compactButton.setAttribute('aria-label',label); compactButton.dataset.tooltip=label;
+    list.dispatchEvent(new Event('library-density-change'));
+  }
+  compactButton.addEventListener('click',() => {
+    compact=!compact;
+    try {localStorage.setItem(densityKey,String(compact));} catch {}
+    syncDensity();
+  },{signal});
+  window.addEventListener('storage',event => {
+    if (event.key!==densityKey) return;
+    compact=event.newValue==='true'; syncDensity();
+  },{signal});
+  syncDensity();
   const nav = document.createElement('div'); nav.className = 'library-navigation'; nav.id = 'library-navigation';
   const address = document.createElement('input'); address.id = 'library-location'; address.className = 'library-location';
   address.type = 'search'; address.autocomplete = 'off'; address.spellcheck = false;
@@ -35,7 +56,7 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
   const back = createIconButton({ glyph: 'caretLeft', label: t(msg('libraryBrowser.goBack', '后退')), className: 'crumbs-back', attributes:{'data-tooltip-suppressed':''} });
   const forward = createIconButton({ glyph: 'caretRight', label: t(msg('libraryBrowser.goForward', '前进')), className: 'crumbs-forward', attributes:{'data-tooltip-suppressed':''} });
   const historyControls = document.createElement('div'); historyControls.className = 'library-history';
-  historyControls.append(back, forward); tools.replaceChildren(historyControls, nav);
+  historyControls.append(back, forward); tools.replaceChildren(historyControls, nav, compactButton);
   if (elements.manage) tools.append(manage);
   if (elements.trailing) tools.append(elements.trailing);
   const pathbar = document.createElement('nav'); pathbar.id = 'library-pathbar'; pathbar.className = 'library-pathbar';
@@ -202,6 +223,7 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
   document.addEventListener('visibilitychange', () => { if (!document.hidden) cadence.reset(); }, { signal });
   const stopLanguage = onLanguageChange(() => {
     if (signal.aborted) return;
+    syncDensity();
     for (const [button,label] of [[back,t(msg('libraryBrowser.goBack', '后退'))],[forward,t(msg('libraryBrowser.goForward', '前进'))]] as const) {
       button.setAttribute('aria-label', label); button.dataset.tooltip = label;
     }

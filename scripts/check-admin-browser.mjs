@@ -86,6 +86,7 @@ try {
     return {padding:s.padding,font:s.fontSize,thumb:[box.width,box.height],glyph:[glyph.width,glyph.height].map(value => Math.round(value*100)/100)};
   });
   await player.locator('#source-list .library-mount[data-root-id=local]').waitFor();
+  for (const surface of [player,managed]) assert.equal(await surface.locator('#library-navigation').evaluate(el => el.nextElementSibling?.id),'library-compact','compact is the first control after the address field');
   assert.deepEqual(await mountedStyle(active.locator('.library-mount[data-root-id=local]')),await mountedStyle(player.locator('#source-list .library-mount[data-root-id=local]')),'admin reuses the player row density and icon geometry');
   await managed.locator('[data-pane=preferences]').click();
   assert.equal(await managed.locator('#pane-preferences #language-choice').isVisible(),true);
@@ -109,8 +110,9 @@ try {
   assert.equal(await addressFill(),restingAddress,'hovering the view chooser leaves the address field at rest');
   await viewChoice.focus();
   assert.equal(await addressSurface.evaluate(el => el.matches(':focus-within')),false,'view chooser focus is independent of the address field');
-  const choiceBox=await viewChoice.boundingBox(), addressBox=await addressSurface.boundingBox();
-  assert.equal(Math.round(choiceBox.x-addressBox.x-addressBox.width),4,'the standalone view chooser has a four-pixel gap');
+  const choiceBox=await viewChoice.boundingBox(), addressBox=await addressSurface.boundingBox(), densityBox=await embedded.locator('#library-compact').boundingBox();
+  assert.equal(Math.round(densityBox.x-addressBox.x-addressBox.width),4,'compact density follows the address with a four-pixel gap');
+  assert.equal(Math.round(choiceBox.x-densityBox.x-densityBox.width),4,'the view chooser follows compact density with a four-pixel gap');
   await embedded.locator('#source-tools').screenshot({path:`/tmp/voidplayer-admin-view-control-${browserName}.png`});
   const chooseView = async value => {
     await managed.locator('#admin-library-view').click();
@@ -241,10 +243,14 @@ try {
   await chooseView('list');
   assert.equal(await embedded.locator('#library-location').inputValue(),'leaf');
   assert.equal(await active.locator('.source-file .filename').innerText(),'nested.mp4');
-  const compactButton=embedded.locator('#admin-library-compact');
+  const compactButton=embedded.locator('#library-compact');
   assert.equal(await compactButton.getAttribute('aria-pressed'),'false');
   await managed.evaluate(() => {window.compactRow=document.querySelector('#source-list .library-list-view .source-file');});
   await compactButton.click();
+  await player.waitForFunction(() => document.querySelector('#library-compact')?.getAttribute('aria-pressed')==='true');
+  const playerCompact=await player.locator('#source-list .library-mount[data-root-id=local]').evaluate(row => ({height:row.getBoundingClientRect().height,
+    metadata:getComputedStyle(row.querySelector('.source-meta')).display,thumb:row.querySelector('.source-thumb').getBoundingClientRect().width}));
+  assert.deepEqual(playerCompact,{height:28,metadata:'none',thumb:20},'player and admin share compact styling and preferences');
   const compactState=await active.locator('.source-file').evaluate(row => ({height:row.getBoundingClientRect().height,
     metadata:getComputedStyle(row.querySelector('.source-meta')).display,same:row===window.compactRow}));
   assert.ok(compactState.height<=28,'compact rows use a single short line');
@@ -257,6 +263,11 @@ try {
   await managed.locator('.admin-library-card').screenshot({path:`/tmp/voidplayer-admin-compact-${browserName}.png`});
   await compactButton.click();
   assert.equal(await embedded.locator('#library-location').inputValue(),'nested','view changes retain the directory search');
+  await player.waitForFunction(() => document.querySelector('#library-compact')?.getAttribute('aria-pressed')==='false');
+  await player.locator('#library-compact').click();
+  await managed.waitForFunction(() => document.querySelector('#library-compact')?.getAttribute('aria-pressed')==='true');
+  await player.locator('#library-compact').click();
+  await managed.waitForFunction(() => document.querySelector('#library-compact')?.getAttribute('aria-pressed')==='false');
   await embedded.locator('.crumbs-back').click();
   await managed.waitForFunction(() => document.querySelector('#library-location').value==='z-branch');
   await embedded.locator('.crumbs-forward').click();

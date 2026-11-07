@@ -44,6 +44,7 @@ export function installSourceScrollbar(initialList: HTMLElement, bar: HTMLElemen
     thumb.style.transform = `translateY(${y}px)`;
   }
   list.addEventListener('scroll', poke, { signal, passive: true });
+  list.addEventListener('library-density-change',update,{signal});
   let resizeFrame = 0;
   const watcher = new ResizeObserver(() => {
     if (resizeFrame || signal.aborted) return;

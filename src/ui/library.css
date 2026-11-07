@@ -126,3 +126,10 @@
 #admin-library-view-menu .icon { width: 18px; height: 18px; flex: none; }
 
 .library-list-view[hidden], .library-columns[hidden] { display: none; }
+
+/* Shared row density; changing it keeps existing rows and decoded covers. */
+.library-pane [data-library-density=compact] .source-row { min-height: 28px; padding: 4px; }
+.library-pane [data-library-density=compact] .source-open { min-height: 20px; }
+.library-pane [data-library-density=compact] .source-meta { display: none; }
+.library-pane [data-library-density=compact] .source-thumb { width: 20px; height: 20px; flex-basis: 20px; border-radius: 3px; }
+.library-pane [data-library-density=compact] .library-folder-icon > .icon { width: 18px; height: 18px; transform: none; }

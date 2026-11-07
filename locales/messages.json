@@ -1410,10 +1410,6 @@
     "source": "分栏视图",
     "params": {}
   },
-  "adminLibrary.compactList": {
-    "source": "紧凑列表",
-    "params": {}
-  },
   "adminLibrary.listView": {
     "source": "列表视图",
     "params": {}
@@ -3163,6 +3159,10 @@
   },
   "libraryBrowser.allLibraries": {
     "source": "所有媒体库",
+    "params": {}
+  },
+  "libraryBrowser.compactList": {
+    "source": "紧凑列表",
     "params": {}
   },
   "libraryBrowser.goBack": {
