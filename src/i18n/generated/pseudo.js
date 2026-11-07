@@ -158,7 +158,6 @@ export default {
   "admin.measureRunning": () => "［R~u~n~n~i~n~g~ ········］",
   "admin.measureSource": () => "［M~e~a~s~u~r~e~d~ b~y~ ········］",
   "admin.measureTitle": () => "［S~p~e~e~d~ t~e~s~t~ ········］",
-  "admin.mediaDirs": () => "［M~e~d~i~a~ d~i~r~e~c~t~o~r~i~e~s~ ········］",
   "admin.mediaVersion": () => "［M~e~d~i~a~ & v~e~r~s~i~o~n~ ········］",
   "admin.moveToTrash": () => "［M~o~v~e~ t~o~ t~r~a~s~h~ ········］",
   "admin.nameSaved": () => "［N~a~m~e~ s~a~v~e~d~. ········］",

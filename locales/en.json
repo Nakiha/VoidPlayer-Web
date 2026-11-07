@@ -623,10 +623,6 @@
     "source": "测速",
     "translation": "Speed test"
   },
-  "admin.mediaDirs": {
-    "source": "媒体目录",
-    "translation": "Media directories"
-  },
   "admin.mediaVersion": {
     "source": "媒体与版本",
     "translation": "Media & version"

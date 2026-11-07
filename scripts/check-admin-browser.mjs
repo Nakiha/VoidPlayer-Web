@@ -717,6 +717,9 @@ try {
   });
   assert.ok(rootsCard.controls.every(Boolean),'save and reset actions sit above the directory editor');
   assert.ok(rootsCard.borders.every(border => border==='0px'),'directory fields use borderless setting-style fills');
+  assert.deepEqual(await page.locator('.admin-root-columns > span').allTextContents(),['名称','服务器路径'],'the directory editor has one shared header');
+  assert.equal(await page.locator('.admin-root-row').evaluateAll(rows => rows.every(row => getComputedStyle(row).borderTopWidth==='0px'
+    && [...row.querySelectorAll('label')].every(label => !label.textContent.trim()))),true,'directory rows have no separators or repeated headings');
   assert.equal(rootsCard.saveGlyph,'save');assert.equal(rootsCard.saveText,'','the save action is an accessible floppy-disk icon');
   await page.getByLabel('目录名称').first().fill('本机拍摄素材');
   const leavePrompt = page.waitForEvent('dialog');
@@ -729,12 +732,19 @@ try {
   await page.locator('#refresh-status').evaluate(button => button.click());
   await page.waitForFunction(() => document.querySelector('[data-field=name]')?.value === '本机拍摄素材');
   await page.getByRole('button', { name: '添加目录', exact: true }).click();
+  assert.equal(await page.locator('#add-root').isDisabled(),true,'only one unsaved new library can be edited');
+  await page.locator('#add-root').evaluate(button => { for(let i=0;i<4;i++)button.dispatchEvent(new MouseEvent('click')); });
+  assert.equal(await page.locator('.admin-root-row').count(),3,'repeated activation cannot create extra draft rows');
+  await page.locator('.admin-root-row').last().locator('.admin-danger').click();
+  assert.equal(await page.locator('#add-root').isEnabled(),true,'discarding the draft permits another library');
+  await page.locator('#add-root').click();
   assert.equal(await page.locator('.admin-root-row').last().locator('.admin-root-scan').getAttribute('aria-disabled'),'true');
   assert.match(await page.locator('.admin-root-row').last().locator('.admin-root-scan').getAttribute('data-tooltip'),/待保存/);
   await page.screenshot({ path: `/tmp/voidplayer-admin-library-editing-${browserName}.png` });
   await page.getByLabel('目录名称').last().fill('制作素材'); await page.getByLabel('服务器上的目录路径').last().fill(extra);
   await page.getByRole('button', { name: '保存目录', exact: true }).click();
   await page.waitForFunction(() => document.getElementById('save-roots').disabled && document.getElementById('roots-form').getAttribute('aria-busy')==='false');
+  assert.equal(await page.locator('#add-root').isEnabled(),true,'saving the draft permits another library');
   const stored = JSON.parse(await readFile(file, 'utf8')); assert.equal(stored.mediaRoots.length, 3); assert.equal(stored.mediaRoots[0].id, 'local'); assert.equal(stored.mediaRoots[0].name, '本机拍摄素材');
   await page.screenshot({ path: `/tmp/voidplayer-admin-library-light-${browserName}.png` });
   // Cross-tab theme synchronization uses the existing shared browser preference.

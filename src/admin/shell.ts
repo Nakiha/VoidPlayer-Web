@@ -5,12 +5,12 @@ import { cacheShell } from './caches.ts';
 import { workspaceAdminShell } from './workspaces.ts';
 import { measurementShell } from './measurement.ts';
 import { icon } from '../ui/icons.ts';
-export const PANES = () => [['overview', t(msg("admin.overviewTitle", "概览")), 'diagnostics'], ['library', t(msg("admin.libraryTitle", "媒体库")), 'open'], ['caches', t(msg("admin.cacheTitle", "缓存")), 'film'], ['workspaces', t(msg("admin.wsTitle", "工作区")), 'film'], ['annotations', t(msg("admin.marksTab", "标注")), 'note'], ['logs', t(msg("admin.logsTitle", "日志")), 'note'], ['measurements', t(msg("admin.measureTitle", "测速")), 'diagnostics'], ['preferences', t(msg('admin.preferencesTitle', '首选项')), 'settings']] as const;
+export const PANES = () => [['overview', t(msg("admin.overviewTitle", "概览")), 'grid'], ['library', t(msg("admin.libraryTitle", "媒体库")), 'film'], ['caches', t(msg("admin.cacheTitle", "缓存")), 'database'], ['workspaces', t(msg("admin.wsTitle", "工作区")), 'stack'], ['annotations', t(msg("admin.marksTab", "标注")), 'note'], ['logs', t(msg("admin.logsTitle", "日志")), 'fileText'], ['measurements', t(msg("admin.measureTitle", "测速")), 'gauge'], ['preferences', t(msg('admin.preferencesTitle', '首选项')), 'settings']] as const;
 export function adminShell() {
   return `<div class="admin-layout">
     <nav class="admin-navigation" aria-label="${th(msg("admin.navCategory", "管理分类"))}"><a class="admin-brand" href="/">${icon('film')}<span>VoidPlayer</span></a><span class="admin-nav-caption">${th(msg("admin.navCaption", "服务管理"))}</span>
       ${PANES().map(([id, label, glyph]) => `<button data-pane="${id}" aria-current="${id === 'overview' ? 'page' : 'false'}">${icon(glyph)}${label}</button>`).join('')}
-      <a class="admin-back" href="/">${icon('previous')}${th(msg("admin.backToPlayer", "返回播放器"))}</a>
+      <a class="admin-back" href="/">${icon('caretLeft')}${th(msg("admin.backToPlayer", "返回播放器"))}</a>
     </nav>
     <main class="admin-content">
       <section id="pane-overview"><header class="admin-heading"><div><h1>${th(msg("admin.overviewTitle", "概览"))}</h1><p>${th(msg("admin.overviewDesc", "查看服务状态、资源占用和媒体扫描进度。"))}</p></div><button id="refresh-status" class="icon-button" aria-label="${th(msg("admin.refreshStatus", "刷新状态"))}">${icon('refresh')}</button></header>
@@ -29,13 +29,13 @@ export function adminShell() {
       </section>
       <section id="pane-library" hidden><header class="admin-heading"><h1>${th(msg("admin.libraryTitle", "媒体库"))}</h1></header>
         <form id="roots-form" class="admin-panel"><div class="admin-section-heading admin-roots-heading">
-          <h2>${th(msg("admin.mediaDirs", "媒体目录"))}</h2>
+          <h2>${th(msg('sources.mountList', '库列表'))}</h2>
           <div class="admin-button-group admin-root-actions">
             <button type="button" id="add-root">${icon('plus')}${th(msg("admin.addDir", "添加目录"))}</button>
             <button type="button" id="reset-roots">${th(msg("admin.revertChanges", "还原修改"))}</button>
             <button type="submit" id="save-roots" class="icon-button admin-primary" aria-label="${th(msg("admin.saveDirs", "保存目录"))}" title="${th(msg("admin.saveDirs", "保存目录"))}">${icon('save')}</button>
           </div>
-        </div><div id="root-editor" class="admin-root-editor"></div>
+        </div><div class="admin-root-columns" aria-hidden="true"><span>${th(msg("admin.wsName", "名称"))}</span><span>${th(msg("admin.serverPath", "服务器路径"))}</span></div><div id="root-editor" class="admin-root-editor"></div>
           <div id="scan-issues" hidden><div class="admin-section-heading"><h3 id="scan-error-count"></h3><div id="scan-error-pages" class="admin-button-group"><button type="button" id="errors-prev" class="icon-button" aria-label="${th(msg("admin.prevErrors", "上一页错误"))}">${icon('previous')}</button><button type="button" id="errors-next" class="icon-button" aria-label="${th(msg("admin.nextErrors", "下一页错误"))}">${icon('next')}</button></div></div><div id="scan-errors" class="admin-error-list"></div></div>
         </form>
         <div class="admin-panel admin-library-card"><div id="admin-library-browser" class="library-pane" aria-label="${th(msg('shell.browseLibrary', '浏览媒体库'))}"></div></div>

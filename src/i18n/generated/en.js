@@ -158,7 +158,6 @@ export default {
   "admin.measureRunning": () => "Running",
   "admin.measureSource": () => "Measured by",
   "admin.measureTitle": () => "Speed test",
-  "admin.mediaDirs": () => "Media directories",
   "admin.mediaVersion": () => "Media & version",
   "admin.moveToTrash": () => "Move to trash",
   "admin.nameSaved": () => "Name saved.",

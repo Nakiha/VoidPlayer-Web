@@ -78,10 +78,13 @@ async function api<T>(url: string, method = 'GET', body?: unknown, headers: Reco
   return value;
 }
 const act = async (action: () => Promise<void>) => { try { await action(); } catch (error) { if (!life.signal.aborted) notice(() => requestError(error), true); } };
+function pendingRoot() {
+  return [...$('root-editor').querySelectorAll<HTMLElement>('.admin-root-row')].find(row => !rootConfig?.roots.some(root => root.id === row.dataset.id));
+}
 function updateRootActions() {
   $('save-roots').toggleAttribute('disabled', !rootDirty || rootSaving || !rootConfig?.writable);
   $('reset-roots').toggleAttribute('disabled', !rootDirty || rootSaving);
-  $('add-root').toggleAttribute('disabled', rootSaving || !rootConfig?.writable);
+  $('add-root').toggleAttribute('disabled', rootSaving || !rootConfig?.writable || !!pendingRoot());
   for (const control of $('root-editor').querySelectorAll<HTMLInputElement | HTMLButtonElement>('input,button:not(.admin-root-scan)')) control.disabled = rootSaving || !rootConfig?.writable;
   $('roots-form').setAttribute('aria-busy',String(rootSaving));
   renderRootStates();
@@ -91,7 +94,7 @@ function readDraft(): Root[] {
 }
 function rootRow(root: Root) {
   const row = document.createElement('div'); row.className = 'admin-root-row'; row.dataset.id = root.id;
-  localizedFragment(row, () => `<label>${th(msg("admin.wsName", "名称"))}<input data-field="name" aria-label="${th(msg("admin.dirNameAria", "目录名称"))}" placeholder="${th(msg("admin.dirNamePh", "例如：拍摄素材"))}" required maxlength="120"></label><label>${th(msg("admin.serverPath", "服务器路径"))}<input data-field="path" aria-label="${th(msg("admin.serverPathAria", "服务器上的目录路径"))}" placeholder="${th(msg("admin.serverPathPh", "填写完整目录路径"))}" required maxlength="4096" spellcheck="false"></label><button type="button" class="icon-button admin-root-scan">${icon('refresh')}</button><button type="button" class="icon-button admin-danger" aria-label="${th(msg("admin.removeDir", "移除目录"))}" title="${th(msg("admin.removeDirTitle", "移出媒体库，不删除文件"))}">${icon('trash')}</button>`);
+  localizedFragment(row, () => `<label><input data-field="name" aria-label="${th(msg("admin.dirNameAria", "目录名称"))}" placeholder="${th(msg("admin.dirNamePh", "例如：拍摄素材"))}" required maxlength="120"></label><label><input data-field="path" aria-label="${th(msg("admin.serverPathAria", "服务器上的目录路径"))}" placeholder="${th(msg("admin.serverPathPh", "填写完整目录路径"))}" required maxlength="4096" spellcheck="false"></label><button type="button" class="icon-button admin-root-scan">${icon('refresh')}</button><button type="button" class="icon-button admin-danger" aria-label="${th(msg("admin.removeDir", "移除目录"))}" title="${th(msg("admin.removeDirTitle", "移出媒体库，不删除文件"))}">${icon('trash')}</button>`);
   row.querySelector<HTMLInputElement>('[data-field=name]')!.value = root.name;
   row.querySelector<HTMLInputElement>('[data-field=path]')!.value = root.path;
   for (const input of row.querySelectorAll('input')) { input.disabled = !rootConfig?.writable; input.addEventListener('input', () => { rootDirty = true; updateRootActions(); renderRootStates(); }); }
@@ -299,7 +302,13 @@ for (const [id] of PANES()) document.querySelector<HTMLButtonElement>(`[data-pan
   if (id === 'annotations') annotationAdmin.activate();
   if (id === 'logs') void act(logsMode === 'requests' ? () => poll(true) : loadLogs);
 };
-$('add-root').onclick = () => { const row = rootRow({ id: randomUUID().replaceAll('-', '').slice(0, 16), name: '', path: '' }); $('root-editor').append(row); renderRootStates(); row.querySelector('input')!.focus(); rootDirty = true; updateRootActions(); };
+$('add-root').onclick = () => {
+  if (rootSaving || !rootConfig?.writable) return;
+  const pending = pendingRoot();
+  if (pending) { pending.querySelector('input')!.focus(); return; }
+  const row = rootRow({ id: randomUUID().replaceAll('-', '').slice(0, 16), name: '', path: '' });
+  $('root-editor').append(row); row.querySelector('input')!.focus(); rootDirty = true; updateRootActions();
+};
 $('reset-roots').onclick = () => void act(loadRoots);
 $('roots-form').onsubmit = event => { event.preventDefault(); if (!rootConfig?.writable || rootSaving) return;
   void act(async () => {

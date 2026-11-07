@@ -704,10 +704,6 @@
     "source": "测速",
     "params": {}
   },
-  "admin.mediaDirs": {
-    "source": "媒体目录",
-    "params": {}
-  },
   "admin.mediaVersion": {
     "source": "媒体与版本",
     "params": {}

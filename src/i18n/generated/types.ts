@@ -156,7 +156,6 @@ export interface Sources {
   "admin.measureRunning": "进行中";
   "admin.measureSource": "测量来源";
   "admin.measureTitle": "测速";
-  "admin.mediaDirs": "媒体目录";
   "admin.mediaVersion": "媒体与版本";
   "admin.moveToTrash": "移入回收站";
   "admin.nameSaved": "名称已保存。";
@@ -1369,7 +1368,6 @@ export interface MessageParameters {
   "admin.measureRunning": {  };
   "admin.measureSource": {  };
   "admin.measureTitle": {  };
-  "admin.mediaDirs": {  };
   "admin.mediaVersion": {  };
   "admin.moveToTrash": {  };
   "admin.nameSaved": {  };
