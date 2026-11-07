@@ -78,10 +78,12 @@ try {
     for(const [key,counter] of [['AudioContext','contexts'],['AudioDecoder','decoders']])if(window[key]){const Native=window[key];window[key]=class extends Native{constructor(...args){super(...args);window.metadataEvidence[counter]++;}};}
     const NativeWorker=Worker;window.Worker=class extends NativeWorker{constructor(...args){super(...args);window.metadataEvidence.workers++;window.metadataEvidence.workerUrls.push(String(args[0]));this.addEventListener('message',e=>{if(e.data.type==='metadata-test-read')window.metadataEvidence.blobReads.push(e.data.read);});}};
     window.metadataRankGate={hold:false,pending:[]};
+    window.metadataHeaderGate={hold:false,pending:[]};
     const postMessage=Worker.prototype.postMessage;
     Worker.prototype.postMessage=function(message,...args){
      const send=()=>postMessage.call(this,message,...args);
-     if(message.type==='analysis-rank'&&window.metadataRankGate.hold)window.metadataRankGate.pending.push(send);else send();
+     if(message.type==='analysis-rank'&&window.metadataRankGate.hold)window.metadataRankGate.pending.push(send);
+     else if(message.type==='peek-audio'&&window.metadataHeaderGate.hold)window.metadataHeaderGate.pending.push(send);else send();
     };
    });
    await page.context().route(/\/assets\/(?:ffmpeg|packet)-worker-[^/]+\.js$/,async route=>{
@@ -95,7 +97,16 @@ try {
    await page.locator('#toggle-subtracks').click();
    if(open){
     await page.evaluate(()=>{window.metadataDock={nodes:[...document.querySelectorAll('#subtrack-list *, #subtrack-ruler *')],offset:document.querySelector('.track-offset'),value:document.querySelector('.track-offset').value};window.metadataDock.offset.value='pending edit';});
+    const firstSnapshot=!local&&['audio.mp4','silent.mp4'].includes(f.name);
+    if(firstSnapshot)await page.evaluate(()=>{window.metadataHeaderGate.hold=true;});
     await page.locator('#toggle-inspector').click();
+    if(firstSnapshot){
+     await page.waitForFunction(()=>window.metadataHeaderGate.pending.length>0);
+     await page.waitForTimeout(120);
+     assert.equal(await page.locator('#track-selector button[aria-pressed=true] .slot').textContent(),'A','selection responds before cached headers');
+     assert.equal(await page.locator('[data-metadata-group=container]').count(),0,'first details wait for cached facts instead of painting unknown rows');
+     await page.evaluate(()=>{window.metadataHeaderGate.hold=false;for(const send of window.metadataHeaderGate.pending.splice(0))send();});
+    }
     await page.waitForFunction(({presence,channels,codec})=>{const m=window.voidPlayer.getState().tracks[0].trackMetadata;return m?.audio.presence===presence&&(!channels||m.audio.tracks[0]?.channels===channels)&&(!codec||m.audio.tracks[0]?.codec===codec);},f);
     assert.deepEqual(await page.evaluate(()=>({connected:window.metadataDock.nodes.every(n=>n.isConnected),sameInput:window.metadataDock.offset===document.querySelector('.track-offset'),value:window.metadataDock.offset.value})),{connected:true,sameInput:true,value:'pending edit'},'cached metadata preserves dock nodes and uncommitted input');
     await page.evaluate(()=>{window.metadataDock.offset.value=window.metadataDock.value;});
@@ -134,6 +145,7 @@ try {
     await page.evaluate(()=>{window.metadataNodes=[...document.querySelectorAll('[data-metadata-group] dl')];});
     // A real peer-tab preference change must relabel the existing grouped nodes.
     const peer=await page.context().newPage();await peer.goto(url);await peer.evaluate(()=>localStorage.setItem('voidplayer.language','en'));await page.waitForFunction(()=>document.documentElement.lang==='en');
+    assert.equal(await page.locator('[data-frame-title]').textContent(),'Current frame','reopened details use the current language');
     assert.deepEqual(await page.locator('[data-metadata-group] h3').allTextContents(),['Container','Video','Audio']);
     assert.equal(await page.locator('[data-file-properties] dt').textContent(),'Size');
     assert.deepEqual(await page.locator('[data-frame-timing] dt').allTextContents(),['PTS order','DTS order','Clip PTS','Source PTS','Source DTS','Frame duration','Relative to playhead']);
@@ -191,6 +203,21 @@ try {
    const observed=await page.evaluate(()=>window.metadataEvidence);assert.equal(observed.contexts,0);assert.equal(observed.decoders,0);assert.ok(observed.workerUrls.every(url=>!url.includes('cached-audio')&&!url.includes('metadata')),'no audio/metadata parser workers');assert.deepEqual(errors,[]);
    pair.push({open,traffic:structuredClone(traffic),...observed,metadata:state.tracks[0].trackMetadata});
    if(open&&f.name==='audio.mp4'&&!local){
+    await tool(page,'load_library_item',{slot:'B',id:listing.entries.find(e=>e.name==='silent.mp4').id});
+    await page.locator('#track-selector button').filter({has:page.locator('.slot',{hasText:'A'})}).click();
+    const confirmedContainer=await page.locator('[data-metadata-group=container] dd').allTextContents();
+    await page.evaluate(()=>{window.metadataHeaderGate.hold=true;});
+    await page.locator('#track-selector button').filter({has:page.locator('.slot',{hasText:'B'})}).click();
+    await page.waitForFunction(()=>window.metadataHeaderGate.pending.length>0);
+    await page.waitForTimeout(120);
+    assert.equal(await page.locator('#track-selector button[aria-pressed=true] .slot').textContent(),'B');
+    assert.deepEqual(await page.locator('[data-metadata-group=container] dd').allTextContents(),confirmedContainer,'track switch retains coherent details while awaiting headers');
+    await page.locator('#track-selector button').filter({has:page.locator('.slot',{hasText:'A'})}).click();
+    await page.evaluate(()=>{window.metadataHeaderGate.hold=false;for(const send of window.metadataHeaderGate.pending.splice(0))send();});
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('[data-inspector-title]').textContent(),'轨道 A','late metadata cannot replace the newly selected track');
+    assert.deepEqual(await page.locator('[data-metadata-group=container] dd').allTextContents(),confirmedContainer);
+    await tool(page,'remove_review_track',{slot:'B'});
     // Exercise hidden stale rows after replacing the inspected source in-place.
     await page.locator('#toggle-inspector').click();
     await tool(page,'remove_review_track',{slot:'A'});
@@ -200,9 +227,9 @@ try {
     const peer=await context.newPage();await peer.goto(url);await peer.evaluate(()=>localStorage.setItem('voidplayer.language','en'));
     await page.waitForFunction(()=>document.documentElement.lang==='en');
     assert.deepEqual(errors,[],'localizing hidden stale inspector must not throw');
-    assert.equal(await page.locator('[data-frame-title]').textContent(),'Current frame','hidden inspector localization must finish before reopening');
     await page.locator('#toggle-inspector').click();
     await page.waitForFunction(()=>window.voidPlayer.getState().tracks[0].trackMetadata?.audio.presence==='absent');
+    assert.equal(await page.locator('[data-frame-title]').textContent(),'Current frame','reopened details use the current language');
     assert.deepEqual(await page.locator('[data-metadata-group] h3').allTextContents(),['Container','Video','Audio']);
     assert.equal(await page.locator('[data-metadata-group=audio] dd').count(),1);
     assert.equal(await page.locator('[data-metadata-group=audio] dd').innerText(),'No audio confirmed');

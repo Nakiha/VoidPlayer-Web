@@ -1226,6 +1226,7 @@ try {
     assert.equal(managed.tracks[0].presentation.actualTarget,'sdr');
     assert.equal(await page.locator('.toast-warning').count(),0);
     await page.locator('#toggle-inspector').click();
+    await page.locator('#inspect-decoder-concurrency').waitFor({ state: 'visible' });
     assert.equal(await page.locator('#inspect-decoder-concurrency').isVisible(), true);
     assert.equal(await page.locator('#inspect-decoder-threads').textContent(), String(managed.tracks[0].decoderThreads));
     assert.equal(await page.locator('#inspect-decoder-contexts').textContent(), String(managed.tracks[0].decoderFrameContexts));
@@ -1235,6 +1236,7 @@ try {
     await page.waitForFunction(() => { const state = window.voidPlayer.getState(); return state.colorMode === 'browser' && !state.busy; });
     await page.locator('#settings-close').click();
 
+    await page.waitForFunction(() => window.voidPlayer.getState().tracks[0].trackMetadata !== undefined);
     const nativeState = await page.evaluate(() => window.voidPlayer.getState());
     assert.equal(await page.locator('#inspect-decoder-concurrency').isVisible(), nativeState.tracks[0].decoder === 'ffmpeg-wasm');
     const performanceRows = page.locator('#inspect-playback dd');
@@ -1272,6 +1274,7 @@ try {
     const replacement = listing.entries.find(item => item.name === 'ci_h264_smoke.mp4').id;
     await page.locator('#remove-track-A').click();
     await page.evaluate(async id => window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ id, slot: 'A' }), replacement);
+    await page.locator('#inspect-playback').waitFor({ state: 'attached' });
     assert.deepEqual(await performanceRows.allTextContents(), ['—', '—', '—', '—', '—'], 'replacement does not inherit playback metrics');
   });
 

@@ -50,7 +50,7 @@ export class ReviewSession {
       this.metadataSource = source;
       source?.setMetadataInspectionEnabled?.(true);
     }
-    source?.requestCachedMetadata?.();
+    return source?.requestCachedMetadata?.();
   }
   private audioSlot: Slot | null = null;
   private audioSource?: MediaSource;

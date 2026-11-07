@@ -50,7 +50,7 @@ export interface MediaSource {
   bitstreamIndexIdentity?: import('../../shared/media/indexing/media-index-identity.ts').MediaIndexIdentity;
   info: MediaInfo;
   /** Cache-only, bounded metadata inspection; never enables audio output. */
-  requestCachedMetadata?(): void;
+  requestCachedMetadata?(): Promise<void>;
   setMetadataInspectionEnabled?(enabled: boolean): void;
   /** Fire-and-forget cache observation; implementations must never read missing bytes. */
   requestCachedAudio?(ptsUs: number, generation: number): void;

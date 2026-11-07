@@ -30,7 +30,8 @@ const performanceFormat = new Intl.NumberFormat('en-US', { ...inspectorNumberOpt
 /** Track inspector + subtrack dock. Owns cursor nodes and dock signatures. */
 export function createTracksPane(shared: WorkbenchShared) {
   const { session, act, view } = shared;
-  let trackSignature = '';
+  let trackSignature = '', selectorSignature = '', inspectorSource = '';
+  let metadataWait: Promise<void> | undefined;
   let dockSignature = '';
   let annotationSignature = '';
   let frameRank: { key: string; result: AnalysisRank | { reason: string } } | undefined;
@@ -157,6 +158,7 @@ export function createTracksPane(shared: WorkbenchShared) {
     [t(msg('tracks.frameDuration', '帧时长')), 'inspect-frame-duration'],
     [t(msg('tracks.relativeToPlayhead', '相对游标')), 'inspect-frame-delta'],
   ];
+  const inspectorSourceKey = (track: WorkbenchState['tracks'][number]) => JSON.stringify([track.slot, track.id, track.sourceGen]);
   const frameSourceKey = (track: WorkbenchState['tracks'][number]) => JSON.stringify([
     track.slot, track.id, track.sourceGen, track.offsetUs,
   ]);
@@ -197,12 +199,12 @@ export function createTracksPane(shared: WorkbenchShared) {
         const state = session.getState(), current = state.tracks.find(track => track.slot === view.selected);
         if (!current || frameRankKey(current) !== key) return;
         frameRank = { key, result };
-        if (view.panels.inspector) renderFrameTiming(current, state.positionUs, result);
+        if (view.panels.inspector && inspectorSource === inspectorSourceKey(current)) renderFrameTiming(current, state.positionUs, result);
       }).finally(() => {
         frameRankPending = false;
         if (shared.lifecyle.signal.aborted || !view.panels.inspector) return;
         const state = session.getState(), current = state.tracks.find(track => track.slot === view.selected);
-        if (current && frameRankKey(current) !== key) updateFrameTiming(state, current);
+        if (current && frameRankKey(current) !== key) renderInspector(state);
       });
   }
   function renderPlayback(state: WorkbenchState, selected: WorkbenchState['tracks'][number]) {
@@ -225,9 +227,10 @@ export function createTracksPane(shared: WorkbenchShared) {
 
   function renderInspector(state: WorkbenchState) {
     const selected = state.tracks.find(t => t.slot === view.selected);
-    const signature = state.tracks.map(t => `${t.slot}:${t.id}:${t.metadataRevision ?? 0}`).join('/') + view.selected;
-    if (signature !== trackSignature) {
-      trackSignature = signature;
+    const signature = state.tracks.map(t => `${inspectorSourceKey(t)}:${t.metadataRevision ?? 0}`).join('/') + view.selected;
+    const selection = state.tracks.map(t => inspectorSourceKey(t)).join('/') + view.selected;
+    if (selection !== selectorSignature) {
+      selectorSignature = selection;
       const list = $('track-selector'); list.replaceChildren();
       for (const track of state.tracks) {
         const button = document.createElement('button'); button.className = 'track-choice';
@@ -236,6 +239,27 @@ export function createTracksPane(shared: WorkbenchShared) {
         button.append(text('span', track.slot, `slot slot-${track.slot}`), text('span', fileBasename(track.name), 'filename'));
         button.dataset.tooltip = track.name; button.onclick = () => shared.select(track.slot); list.append(button);
       }
+    }
+    const ready = view.panels.inspector ? session.inspectTrackMetadata(view.selected) : undefined;
+    if (selected && !selected.trackMetadata && !selected.failure) {
+      // Publish the first metadata snapshot atomically. Keep the previous track's
+      // coherent details until ready, instead of painting/removing unknown rows.
+      if (ready && metadataWait !== ready) {
+        metadataWait = ready;
+        const source = inspectorSourceKey(selected);
+        void ready.then(() => {
+          if (metadataWait !== ready) return;
+          metadataWait = undefined;
+          if (shared.lifecyle.signal.aborted || !view.panels.inspector) return;
+          const current = session.getState(), track = current.tracks.find(t => t.slot === view.selected);
+          if (track?.trackMetadata && inspectorSourceKey(track) === source) renderInspector(current);
+        });
+      }
+      if (ready || !view.panels.inspector) return;
+    }
+    if (signature !== trackSignature) {
+      trackSignature = signature;
+      inspectorSource = selected ? inspectorSourceKey(selected) : '';
       const properties = $('track-properties'); properties.replaceChildren();
       frameTimingSource = '';
       if (!selected) properties.append(text('p', t(msg("tracks.noTracksLoaded", "尚未载入轨道")), 'panel-empty'));
@@ -420,13 +444,13 @@ export function createTracksPane(shared: WorkbenchShared) {
   }
 
   function localize(state: WorkbenchState) {
-    // A hidden inspector may still describe a replaced source. Reconcile its
-    // shape before relabeling; this only renders existing facts, without querying.
+    // Relabel only the source whose coherent snapshot is currently displayed.
+    // Hidden replacements wait for their first query when the inspector reopens.
     // Stable signatures preserve nodes, including focused property tooltips.
     renderInspector(state);
     // The dock owns editable offsets and annotation cards. Keep their nodes and
     // pending input intact, including when a peer tab changes the language.
-    const selected = state.tracks.find(track => track.slot === view.selected);
+    const selected = state.tracks.find(track => track.slot === view.selected && inspectorSourceKey(track) === inspectorSource);
     for(const button of $('track-selector').querySelectorAll<HTMLElement>('.track-choice')) {
       const slot = button.querySelector('.slot')!.textContent!;
       button.setAttribute('aria-label', t(msg('tracks.selectTrack', '选择轨道 {p0}'), {p0:slot}));
@@ -448,7 +472,7 @@ export function createTracksPane(shared: WorkbenchShared) {
       $('inspect-playback').querySelectorAll('dt').forEach((node, i) => { node.textContent = playbackLabels[i]; });
       const concurrencyLabels = [t(msg('tracks.decoderThreads', '解码线程')), t(msg('tracks.decoderFrameContexts', '帧上下文'))];
       $('inspect-decoder-concurrency').querySelectorAll('dt').forEach((node, i) => { node.textContent = concurrencyLabels[i]; });
-    } else if(!selected) $('track-properties').querySelector('.panel-empty')?.replaceChildren(t(msg('tracks.noTrackLoaded','尚未载入轨道')));
+    } else if(!state.tracks.length) $('track-properties').querySelector('.panel-empty')?.replaceChildren(t(msg('tracks.noTrackLoaded','尚未载入轨道')));
     for (const track of state.tracks) {
       const row = $('subtrack-list').querySelector<HTMLElement>(`[data-track-drag="${track.slot}"]`);
       if (!row) continue;
@@ -473,10 +497,10 @@ export function createTracksPane(shared: WorkbenchShared) {
     }
   }
 
-  function resetSignatures() { trackSignature = ''; dockSignature = ''; annotationSignature = ''; }
+  function resetSignatures() { trackSignature = ''; selectorSignature = ''; dockSignature = ''; annotationSignature = ''; }
 
   /** Selection only rebuilds the inspector; the dock syncs selection in place. */
-  function resetInspectorSignature() { trackSignature = ''; }
+  function resetInspectorSignature() { trackSignature = ''; selectorSignature = ''; }
 
   return { localize, renderInspector, renderDock, renderProgress, hideSeekPreview, resetSignatures, resetInspectorSignature };
 }

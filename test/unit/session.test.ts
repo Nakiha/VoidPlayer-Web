@@ -1300,7 +1300,7 @@ test('metadata inspection follows source instances, stays muted and does not see
   const enabled: string[] = [], queries: string[] = [];
   for (const [name, item] of [['old',a],['new',b]] as const) {
     item.source.setMetadataInspectionEnabled = value => enabled.push(`${name}:${value}`);
-    item.source.requestCachedMetadata = () => queries.push(name);
+    item.source.requestCachedMetadata = async () => { queries.push(name); };
   }
   try {
     await session.load('A', async () => a.source);

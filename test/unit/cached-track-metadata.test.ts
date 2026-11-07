@@ -94,8 +94,10 @@ test('inspection is opt-in, coalesced, and ignores late responses after close/di
   const source={info:{size:bytes.length}} as MediaSource;
   const stop=attachCachedTrackMetadata(source,async(at,n)=>{peeks++;if(peeks===1)await new Promise<void>(r=>release=r);return peek(bytes)(at,n);});
   source.requestCachedMetadata!();await new Promise(r=>setTimeout(r,10));assert.equal(peeks,0);
-  source.setMetadataInspectionEnabled!(true);source.requestCachedMetadata!();source.requestCachedMetadata!();await new Promise(r=>setTimeout(r,10));assert.equal(peeks,1);
-  source.setMetadataInspectionEnabled!(false);release();await new Promise(r=>setTimeout(r,10));assert.equal(source.info.trackMetadata,undefined);
+  source.setMetadataInspectionEnabled!(true);const ready=source.requestCachedMetadata!();
+  assert.equal(source.requestCachedMetadata!(),ready,'concurrent inspectors await the same snapshot');
+  await new Promise(r=>setTimeout(r,10));assert.equal(peeks,1);
+  source.setMetadataInspectionEnabled!(false);release();await ready;assert.equal(source.info.trackMetadata,undefined);
   stop();source.setMetadataInspectionEnabled!(true);source.requestCachedMetadata!();await new Promise(r=>setTimeout(r,10));assert.equal(peeks,1);
 });
 
@@ -104,11 +106,14 @@ test('new normal-read cache evidence refreshes unknown metadata, then reopening 
   let available = false, calls = 0, changes = 0;
   source.onInfoChange = () => { changes++; };
   const stop = attachCachedTrackMetadata(source,async(at,n)=>{calls++;return available ? peek(bytes)(at,n) : undefined;});
-  const until = async (predicate:()=>boolean) => { const end=Date.now()+3000;while(!predicate()){assert.ok(Date.now()<end,'metadata update completed');await new Promise(r=>setTimeout(r,10));} };
   try {
-    source.setMetadataInspectionEnabled!(true);source.requestCachedMetadata!();await until(()=>changes===1);
+    source.setMetadataInspectionEnabled!(true);await source.requestCachedMetadata!();assert.equal(changes,1);
     assert.equal(source.info.trackMetadata?.audio.presence,'unknown');
-    available=true;source.requestCachedMetadata!();await until(()=>changes===2);
+    const countBeforeCancel=calls, canceled=source.requestCachedMetadata!();
+    source.setMetadataInspectionEnabled!(false);await canceled;
+    assert.equal(calls,countBeforeCancel,'closing cancels the scheduled retry and settles its waiters');
+    source.setMetadataInspectionEnabled!(true);
+    available=true;await source.requestCachedMetadata!();assert.equal(changes,2);
     assert.equal(source.info.trackMetadata?.audio.presence,'present');const count=calls;
     source.setMetadataInspectionEnabled!(false);source.setMetadataInspectionEnabled!(true);source.requestCachedMetadata!();
     await new Promise(r=>setTimeout(r,20));assert.equal(calls,count,'resolved metadata needs no repeated parsing');
