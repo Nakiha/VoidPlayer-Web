@@ -324,6 +324,7 @@ export default {
   "admin.wsTitle": () => "工作区",
   "admin.wsVideos": () => "视频",
   "adminLibrary.columnView": () => "分栏视图",
+  "adminLibrary.compactList": () => "紧凑列表",
   "adminLibrary.listView": () => "列表视图",
   "adminLibrary.moveIndexPending": () => "文件操作已完成，目录索引尚未刷新，请重新扫描。",
   "adminLibrary.moveLimit": () => "每次最多移动 100 个项目。",

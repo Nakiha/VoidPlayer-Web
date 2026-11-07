@@ -241,10 +241,21 @@ try {
   await chooseView('list');
   assert.equal(await embedded.locator('#library-location').inputValue(),'leaf');
   assert.equal(await active.locator('.source-file .filename').innerText(),'nested.mp4');
+  const compactButton=embedded.locator('#admin-library-compact');
+  assert.equal(await compactButton.getAttribute('aria-pressed'),'false');
+  await managed.evaluate(() => {window.compactRow=document.querySelector('#source-list .library-list-view .source-file');});
+  await compactButton.click();
+  const compactState=await active.locator('.source-file').evaluate(row => ({height:row.getBoundingClientRect().height,
+    metadata:getComputedStyle(row.querySelector('.source-meta')).display,same:row===window.compactRow}));
+  assert.ok(compactState.height<=28,'compact rows use a single short line');
+  assert.equal(compactState.metadata,'none');assert.equal(compactState.same,true,'density changes retain the existing row and decoded thumbnail');
   await embedded.locator('#library-location').focus(); await embedded.locator('#library-location').fill('nested');
   await managed.waitForFunction(() => document.querySelector('#source-list').getAttribute('aria-busy')==='false');
   await chooseView('columns');
   await active.locator('.library-column').last().locator('.source-file').waitFor();
+  assert.equal(await compactButton.getAttribute('aria-pressed'),'true','compact density is independent of list/column mode');
+  await managed.locator('.admin-library-card').screenshot({path:`/tmp/voidplayer-admin-compact-${browserName}.png`});
+  await compactButton.click();
   assert.equal(await embedded.locator('#library-location').inputValue(),'nested','view changes retain the directory search');
   await embedded.locator('.crumbs-back').click();
   await managed.waitForFunction(() => document.querySelector('#library-location').value==='z-branch');
@@ -518,9 +529,11 @@ try {
   assert.equal(await player.evaluate(() => window.adminReturnMarker),'preserve-review');
   await destination.close();
   await goLibrary('library:/');
-  await chooseView('list'); await managed.reload();
+  await chooseView('list'); await compactButton.click(); await managed.reload();
   await managed.waitForFunction(() => document.querySelector('#admin-library-browser')?.dataset.libraryView==='list');
   await active.locator('.library-mount[data-root-id=local]').waitFor();
+  assert.equal(await compactButton.getAttribute('aria-pressed'),'true','density survives reload');
+  await compactButton.click();
   await chooseView('columns');
   assert.deepEqual(await widths(),[320],'column preferences survive reload');
   await goLibrary('library:local/z-branch/leaf');

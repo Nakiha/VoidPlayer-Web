@@ -324,6 +324,7 @@ export default {
   "admin.wsTitle": () => "Workspaces",
   "admin.wsVideos": () => "Videos",
   "adminLibrary.columnView": () => "Column view",
+  "adminLibrary.compactList": () => "Compact list",
   "adminLibrary.listView": () => "List view",
   "adminLibrary.moveIndexPending": () => "The file operation is complete, but the directory index has not refreshed. Please scan again.",
   "adminLibrary.moveLimit": () => "Move up to 100 items at a time.",

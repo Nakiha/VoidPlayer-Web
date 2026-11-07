@@ -1410,6 +1410,10 @@
     "source": "分栏视图",
     "params": {}
   },
+  "adminLibrary.compactList": {
+    "source": "紧凑列表",
+    "params": {}
+  },
   "adminLibrary.listView": {
     "source": "列表视图",
     "params": {}

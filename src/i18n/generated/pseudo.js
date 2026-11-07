@@ -324,6 +324,7 @@ export default {
   "admin.wsTitle": () => "［W~o~r~k~s~p~a~c~e~s~ ········］",
   "admin.wsVideos": () => "［V~i~d~e~o~s~ ········］",
   "adminLibrary.columnView": () => "［C~o~l~u~m~n~ v~i~e~w~ ········］",
+  "adminLibrary.compactList": () => "［C~o~m~p~a~c~t~ l~i~s~t~ ········］",
   "adminLibrary.listView": () => "［L~i~s~t~ v~i~e~w~ ········］",
   "adminLibrary.moveIndexPending": () => "［T~h~e~ f~i~l~e~ o~p~e~r~a~t~i~o~n~ i~s~ c~o~m~p~l~e~t~e~, b~u~t~ t~h~e~ d~i~r~e~c~t~o~r~y~ i~n~d~e~x~ h~a~s~ n~o~t~ r~e~f~r~e~s~h~e~d~. P~l~e~a~s~e~ s~c~a~n~ a~g~a~i~n~. ········］",
   "adminLibrary.moveLimit": () => "［M~o~v~e~ u~p~ t~o~ 100 i~t~e~m~s~ a~t~ a~ t~i~m~e~. ········］",

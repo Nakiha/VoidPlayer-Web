@@ -1287,6 +1287,10 @@
     "source": "分栏视图",
     "translation": "Column view"
   },
+  "adminLibrary.compactList": {
+    "source": "紧凑列表",
+    "translation": "Compact list"
+  },
   "adminLibrary.listView": {
     "source": "列表视图",
     "translation": "List view"
