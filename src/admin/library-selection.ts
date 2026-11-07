@@ -94,13 +94,14 @@ export function installLibrarySelection(host:HTMLElement, list:HTMLElement, sign
   function destination(x:number,y:number) {
     const element=document.elementFromPoint(x,y);
     if (!element||!host.contains(element)) return;
+    if (element.closest('.panel-splitter, .library-horizontal-scrollbar, .source-scrollbar')) return;
     const folder=element.closest<HTMLElement>('.library-folder[data-library-kind]');
     if (folder) return {target:{rootId:folder.dataset.rootId!,directory:folder.dataset.libraryPath!},highlight:folder};
     const crumb=element.closest<HTMLElement>('.library-path-item[data-root]');
     if (crumb?.dataset.root) return {target:{rootId:crumb.dataset.root,directory:crumb.dataset.directory??''},highlight:crumb};
     const column=element.closest<HTMLElement>('.library-column');
     if (column?.dataset.root) return {target:{rootId:column.dataset.root,directory:column.dataset.directory??''},highlight:column};
-    if (!column&&list.contains(element)) {
+    if (!column&&host.dataset.libraryView==='list'&&list.contains(element)) {
       const location=options.location();
       if (location.root) return {target:{rootId:location.root,directory:location.directory},highlight:list};
     }

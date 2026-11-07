@@ -409,6 +409,25 @@ try {
   await goLibrary('library:local/z-branch/leaf');
   const nestedFile=active.locator('.source-file').filter({hasText:'nested.mp4'});
   await nestedFile.waitFor();
+  await rootColumn().locator('.source-file').click();
+  await startFileDrag();
+  const divider=active.locator('.library-column-splitter').nth(2);
+  await divider.scrollIntoViewIfNeeded();
+  const dividerBox=await divider.boundingBox();
+  const center=dividerBox.x+dividerBox.width/2,y=dividerBox.y+dividerBox.height/2;
+  await managed.mouse.move(center+20,y,{steps:3});
+  await managed.waitForFunction(() => document.querySelector('.library-drag-preview')?.dataset.allowed==='true');
+  assert.equal(await embedded.locator('.library-drop-target').getAttribute('data-directory'),'z-branch/leaf','a real directory blank area still highlights only its own column');
+  for (const offset of [-3,0,3]) {
+    const x=center+offset;
+    assert.equal(await managed.evaluate(({x,y}) => !!document.elementFromPoint(x,y)?.closest('.library-column-splitter'),{x,y}),true,'exercise the splitter hit area, including both sides of its visible line');
+    await managed.mouse.move(x,y,{steps:3});
+    await managed.waitForFunction(() => document.querySelector('.library-drag-preview')?.dataset.allowed==='false');
+    assert.equal(await embedded.locator('.library-drop-target').count(),0,'splitter hit areas never highlight the entire browser or an adjacent directory');
+  }
+  await managed.mouse.up();
+  assert.equal(moveRequests,2,'releasing over a splitter cannot move files');
+  assert.equal(await managed.locator('.library-drag-preview').count(),0);
   await nestedFile.click({button:'right'});
   const [destination] = await Promise.all([context.waitForEvent('page'),managed.locator('#library-file-menu [data-action=browse-in-player]').click()]);
   await destination.waitForFunction(() => !!window.voidPlayer);
