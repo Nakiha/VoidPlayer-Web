@@ -2838,13 +2838,13 @@
     "source": "问题描述（选填）",
     "translation": "Problem description (optional)"
   },
+  "logPanel.reportDescriptionPlaceholder": {
+    "source": "(可选) 填写日志下载/发送时的描述信息",
+    "translation": "(Optional) Add a description for the downloaded or sent logs"
+  },
   "logPanel.sendLogs": {
     "source": "发送日志",
     "translation": "Send logs"
-  },
-  "logPanel.sendTo": {
-    "source": "发送到",
-    "translation": "Send to"
   },
   "logPanel.sentToTheCurrentServerOnlyWhen": {
     "source": "仅点击“发送日志”后才发送到当前服务器。",
@@ -2865,14 +2865,6 @@
   "logPanel.uploadLogs": {
     "source": "上传日志",
     "translation": "Upload logs"
-  },
-  "logPanel.uploadedOnlyWhenYouClickSend": {
-    "source": "仅在点击发送时上传",
-    "translation": "Uploaded only when you click Send"
-  },
-  "logPanel.whatHappenedHowCanItBeReproduced": {
-    "source": "遇到了什么问题？如何复现？",
-    "translation": "What happened? How can it be reproduced?"
   },
   "logPanel.youCanDownloadLogsInstead": {
     "source": "，可改用下载日志。",

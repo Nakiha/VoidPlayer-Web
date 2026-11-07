@@ -137,7 +137,7 @@ await withBrowserFixture({caseName:'i18n',engine,pageOptions:{viewport:{width:12
  assert.equal(await historyRestore.innerText(),'Restore workspace');
  assert.deepEqual(await page.evaluate(()=>({same:window.__historyRestore===document.querySelector('.checkpoint-history-row [data-checkpoint-action=restore]'),focus:document.activeElement===window.__historyRestore})),{same:true,focus:true});
  await page.locator('#settings-tab-logs').click();await page.locator('#log-description').fill('未提交 Report <原文>');await page.locator('#log-description').evaluate(e=>{e.focus();e.setSelectionRange(1,4);window.__report=e;});await switchLanguage('en');
- assert.equal(await page.locator('#log-description').inputValue(),'未提交 Report <原文>');assert.equal(await page.evaluate(()=>document.activeElement===window.__report),true);assert.match(await page.locator('#log-description').getAttribute('placeholder'),/happened|reproduce/i);
+ assert.equal(await page.locator('#log-description').inputValue(),'未提交 Report <原文>');assert.equal(await page.evaluate(()=>document.activeElement===window.__report),true);assert.match(await page.locator('#log-description').getAttribute('placeholder'),/description.*download|send/i);
  await page.locator('#settings-tab-performance').click();const originalFlow=await page.locator('#color-flow-diagram').evaluate(e=>{window.__flow=e.firstElementChild;return e.innerText;});await switchLanguage('zh-CN');assert.equal(await page.evaluate(()=>window.__flow===document.querySelector('#color-flow-diagram').firstElementChild),true);assert.notEqual(await page.locator('#color-flow-diagram').innerText(),originalFlow);
  // Open choice menus retain their nodes and focus when a peer changes locale.
  await page.locator('#settings-tab-appearance').click();await page.locator('#language-choice').click();await page.locator('#language-choice-menu [data-value=system]').focus();await switchLanguage('en');assert.equal(await page.locator('#language-choice-menu').evaluate(e=>e.matches(':popover-open')),true);assert.equal(await page.evaluate(()=>document.activeElement?.dataset.value),'system');
@@ -209,9 +209,9 @@ await withBrowserFixture({caseName:'i18n-dialogs',engine,pageOptions:{viewport:{
  await input.press('Escape');await input.fill('');await welcome.locator('button[type=submit]').click();await page.waitForFunction(()=>window.voidPlayer?.tools);await welcome.waitFor({state:'detached'});
  await page.locator('#toggle-sources').click();await page.getByRole('button',{name:'打开媒体库：media',exact:true}).click();
  const folder=page.locator('#source-list .library-folder').filter({hasText:'用户目录'});await folder.waitFor();await folder.evaluate(e=>{e.focus();window.__folder=e;});
- await switchLanguage('en');assert.match(await folder.locator('.source-meta').innerText(),/^Library · /);assert.equal(await folder.getAttribute('aria-label'),'Open folder: 用户目录');
+ await switchLanguage('en');assert.equal(await folder.locator('.source-meta').count(),0);assert.equal(await folder.getAttribute('aria-label'),'Open folder: 用户目录');
  assert.equal(await folder.evaluate(e=>e===window.__folder&&document.activeElement===e),true);
- await switchLanguage('zh-CN');assert.match(await folder.locator('.source-meta').innerText(),/^媒体库 · /);assert.equal(await folder.evaluate(e=>e===window.__folder&&document.activeElement===e),true);
+ await switchLanguage('zh-CN');assert.equal(await folder.getAttribute('aria-label'),'打开目录：用户目录');assert.equal(await folder.evaluate(e=>e===window.__folder&&document.activeElement===e),true);
  await page.waitForFunction(async()=>{const library=await window.voidPlayer.tools.find(t=>t.name==='list_library').execute({});return library.entries.find(e=>e.name==='sample.mp4')?.state==='ready';});
  const library=await page.evaluate(()=>window.voidPlayer.tools.find(t=>t.name==='list_library').execute({}));
  const sample=library.entries.find(e=>e.name==='sample.mp4');const stalled=[];

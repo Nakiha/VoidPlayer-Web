@@ -151,7 +151,7 @@ export async function getLogSessions() {
   let archives: LogSummary[] = []; let historyError: string | null = null;
   try { archives = await sessionLog.summaries(); } catch (error) { historyError = String(error); }
   const current = sessionLog.summary();
-  const documents = [current, ...archives.filter(d => d.sessionId !== current.sessionId)].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  const documents = [current, ...archives.filter(d => d.sessionId !== current.sessionId).sort((a, b) => b.startedAt.localeCompare(a.startedAt))];
   return { storage: sessionLog.storageState, error: sessionLog.storageError ?? historyError,
     sessions: documents.map(d => ({ sessionId: d.sessionId, startedAt: d.startedAt, updatedAt: d.updatedAt, events: d.events, droppedEvents: d.droppedEvents, current: d.sessionId === current.sessionId })) };
 }

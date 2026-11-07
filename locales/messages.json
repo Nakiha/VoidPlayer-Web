@@ -3055,12 +3055,12 @@
     "source": "问题描述（选填）",
     "params": {}
   },
-  "logPanel.sendLogs": {
-    "source": "发送日志",
+  "logPanel.reportDescriptionPlaceholder": {
+    "source": "(可选) 填写日志下载/发送时的描述信息",
     "params": {}
   },
-  "logPanel.sendTo": {
-    "source": "发送到",
+  "logPanel.sendLogs": {
+    "source": "发送日志",
     "params": {}
   },
   "logPanel.sentToTheCurrentServerOnlyWhen": {
@@ -3086,14 +3086,6 @@
   },
   "logPanel.uploadLogs": {
     "source": "上传日志",
-    "params": {}
-  },
-  "logPanel.uploadedOnlyWhenYouClickSend": {
-    "source": "仅在点击发送时上传",
-    "params": {}
-  },
-  "logPanel.whatHappenedHowCanItBeReproduced": {
-    "source": "遇到了什么问题？如何复现？",
     "params": {}
   },
   "logPanel.youCanDownloadLogsInstead": {

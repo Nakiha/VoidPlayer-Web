@@ -11,10 +11,11 @@ const browser=await(name==='webkit'?webkit:chromium).launch({headless:true});
 try{
  const page=await browser.newPage({locale:'zh-CN', viewport:{width:1512,height:982},colorScheme:'dark'}),errors=[];let uploads=0;
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/api/logs'))uploads++;});
- const origin=`http://127.0.0.1:${server.address().port}`;
+ const origin=`http://127.0.0.1:${server.address().port}`,sessionTime=new Date(Math.floor(Date.now()/1000)*1000+50);
+ await page.clock.setFixedTime(sessionTime);
  await page.route('**/log-migration-seed',route=>route.fulfill({contentType:'text/html',body:'<!doctype html>'}));
  await page.goto(`${origin}/log-migration-seed`);
- await page.evaluate(async()=>{
+ await page.evaluate(async startedAt=>{
    await new Promise((resolve,reject)=>{
      const request=indexedDB.open('voidplayer-diagnostics',1);
      request.onupgradeneeded=()=>request.result.createObjectStore('sessions',{keyPath:'sessionId'});
@@ -23,10 +24,11 @@ try{
        const db=request.result,tx=db.transaction('sessions','readwrite'),time=new Date(Date.now()-3600000).toISOString();
        tx.objectStore('sessions').put({schema:'voidplayer-web-log',version:1,sessionId:'migration-large-history',startedAt:time,updatedAt:time,environment:{},capacity:2000,droppedEvents:0,
          events:Array.from({length:2000},(_,i)=>({seq:i+1,tMs:i,level:'info',cat:'media',msg:`seed ${i}`,data:{details:Array(10).fill('x'.repeat(700))}}))});
+       tx.objectStore('sessions').put({schema:'voidplayer-web-log',version:1,sessionId:'same-second-history',startedAt:new Date(Date.parse(startedAt)+1).toISOString(),updatedAt:startedAt,environment:{},capacity:2000,droppedEvents:0,events:[]});
        tx.oncomplete=()=>{db.close();resolve();};tx.onabort=()=>reject(tx.error);
      };
    });
- });
+ },sessionTime.toISOString());
  await page.goto(`${origin}/`);
  const open=async()=>{await page.locator('#settings-open').click();await page.locator('#settings-tab-logs').click();await page.waitForFunction(()=>document.querySelector('.log-json').value.startsWith('{')&&!document.querySelector('.log-panel').matches('[aria-busy=true]'));};
  const read=async()=>{
@@ -36,10 +38,22 @@ try{
    return report;
  };
  await open();assert.equal(await page.locator('.log-json').isVisible(),true);assert.equal(uploads,0);const session=(await read()).sessionId;
+ assert.notEqual(session,'same-second-history','first opening selects this page rather than a newer archived session');
+ assert.match(await page.locator('#log-session').textContent(),/^本次/);
+ await page.locator('#log-session').click();
+ const options=await page.locator('#log-session-menu [data-value]').evaluateAll(nodes=>nodes.map(n=>({id:n.dataset.value,label:n.textContent,checked:n.getAttribute('aria-checked')})));
+ assert.equal(options[0].id,session,'current session stays first');
+ assert.equal(options.filter(o=>o.id===session).length,1,'the stored copy of the current session is not duplicated');
+ assert.equal(options.find(o=>o.id==='same-second-history').label.replace('历史','本次'),options[0].label,'same displayed timestamps can belong to different sessions');
+ await page.keyboard.press('Escape');
  const singleLineHeight = await page.locator('#log-description').evaluate(el => el.getBoundingClientRect().height);
  assert.equal(await page.locator('.log-settings-card [data-action=refresh], .log-description-field label').count(),0,'upload card has no manual refresh or description label');
  assert.equal(await page.locator('.log-settings-card .log-session-row').evaluate(el=>getComputedStyle(el).borderBottomWidth),'0px');
- assert.equal(await page.locator('.log-settings-card .log-send-footer').evaluate(el=>getComputedStyle(el).borderTopWidth),'0px');
+ assert.equal(await page.locator('.log-send-footer, .log-destination').count(),0,'obsolete send footer is removed');
+ assert.equal(await page.locator('#log-description').getAttribute('placeholder'),'(可选) 填写日志下载/发送时的描述信息');
+ const toolbar=await page.locator('.log-session-row').evaluate(el=>{const select=el.querySelector('#log-session').getBoundingClientRect(),actions=el.querySelector('.log-submit-row').getBoundingClientRect();return{select:{right:select.right,center:select.top+select.height/2},actions:{left:actions.left,center:actions.top+actions.height/2}};});
+ assert.ok(toolbar.actions.left>=toolbar.select.right,'download/send sit to the right of the history selector');
+ assert.ok(Math.abs(toolbar.select.center-toolbar.actions.center)<2,'log actions share one toolbar row');
  assert.ok(singleLineHeight < 60, 'empty description starts at one line');
  assert.equal(await page.locator('#log-description').evaluate(el => getComputedStyle(el).borderTopWidth), '0px');
  assert.equal(await page.locator('#log-description').evaluate(el => getComputedStyle(el).backgroundColor), await page.locator('.log-json').evaluate(el => getComputedStyle(el).backgroundColor), 'description uses the log preview surface');
@@ -100,7 +114,7 @@ await page.waitForFunction(() => document.querySelector('#control-tooltip').hidd
  await page.unroute('**/api/logs');await page.locator('.log-panel [data-action=upload]').click();
  await page.locator('#settings .toast').filter({hasText:'文件名已复制'}).waitFor();
  assert.equal(await page.locator('.log-feedback').isVisible(),false,'upload success does not insert a feedback panel');
- const files=await readdir(logsDir);assert.equal(files.length,1);
+ const files=(await readdir(logsDir)).filter(name=>/^voidplayer-log-.*\.json$/.test(name));assert.equal(files.length,1);
  assert.equal(await page.evaluate(()=>window.copiedItems.at(-1)),files[0],'successful upload copies the server filename');
  const stored=JSON.parse(await readFile(path.join(logsDir,files[0]),'utf8'));
  assert.equal(stored.report.description,description);assert.equal(stored.sessionId,session);assert.ok(stored.serverReceipt);

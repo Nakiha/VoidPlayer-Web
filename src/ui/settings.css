@@ -227,7 +227,6 @@ input.settings-choice:disabled { opacity: var(--disabled-opacity); }
 .about-version { margin: 0; font-size: 15px; font-weight: 500; }
 #settings-pane-logs .log-panel { flex: 0 0 auto; }
 #settings-pane-logs #log-description { min-height: 0; height: auto; overflow-y: hidden; }
-.log-destination { margin: 0; overflow-wrap: anywhere; }
 .log-submit-row { margin-top: 2px; }
 .log-details[open] .log-report { margin-top: 12px; min-height: 0; }
 .settings-content .log-details .log-json { flex: none; height: auto; min-height: 0; }
@@ -333,7 +332,6 @@ input.settings-choice:disabled { opacity: var(--disabled-opacity); }
 .log-settings-card .log-session-row { padding-bottom: 0; border-bottom: 0; }
 .log-settings-card .log-description-field { margin-top: 14px; }
 .log-settings-card .log-submit-row { padding-top: 0; margin-top: 0; border-top: 0; }
-.log-settings-card .log-destination { margin-top: 10px; }
 @media (max-width: 600px) {
   .workspace-name-field, .workspace-link-field, #settings-pane-identity .identity-settings-card .identity-form { grid-template-columns: 1fr; gap: 8px; }
   .workspace-link-controls { flex-wrap: wrap; }
@@ -414,10 +412,10 @@ input.settings-choice:disabled { opacity: var(--disabled-opacity); }
 
 .identity-compact #identity-current[hidden] { display: none; }
 
-/* One outline, one toolbar, and a single explanatory footer for log previews. */
-#settings-pane-logs .log-send-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 14px; padding-top: 0; border-top: 0; }
-#settings-pane-logs .log-submit-row { justify-content: flex-end; margin: 0 0 0 auto; padding: 0; border: 0; }
-#settings-pane-logs .log-destination { margin: 0; }
+/* Log actions share the session toolbar. */
+#settings-pane-logs .log-session-row { flex-wrap: wrap; gap: 4px; }
+#settings-pane-logs .log-session-row .settings-choice { flex: 1 1 160px; }
+#settings-pane-logs .log-submit-row { gap: 4px; flex-wrap: nowrap; justify-content: flex-end; margin: 0 0 0 auto; padding: 0; border: 0; }
 #settings-pane-logs .log-report { padding: 16px; }
 #settings-pane-logs .log-report-toolbar { padding: 0; gap: 8px 12px; border-bottom: 0; flex-wrap: wrap; }
 #settings-pane-logs .log-preview-status { color: var(--text); font-size: 13px; }
@@ -543,12 +541,8 @@ html[lang=en] .color-flow-link span { max-width: 34px; white-space: normal; text
 .settings-navigation [role=tab] { height: auto; min-height: 34px; white-space: normal; }
 .settings-floating-header h2 { min-width: 0; overflow-wrap: anywhere; }
 #identity-save { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
-#settings-pane-logs .log-send-footer { min-width: 0; flex-wrap: wrap; }
 #settings-pane-logs .log-submit-row { min-width: 0; max-width: 100%; }
-@media (max-width: 640px) {
-  #settings-pane-logs .log-send-footer { flex-direction: column; align-items: stretch; }
-  #settings-pane-logs .log-submit-row { width: 100%; }
-}
+
 /* Very long localized edge labels use the same readable vertical steps. */
 .color-flow[data-long-labels] .color-flow-nodes { display: flex; flex-direction: column; width: fit-content; max-width: 100%; margin-inline: auto; }
 .color-flow[data-long-labels] .color-flow-step { display: block; }
