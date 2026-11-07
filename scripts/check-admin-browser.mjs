@@ -89,6 +89,21 @@ try {
   await managed.locator('[data-pane=library]').click();
   assert.equal(await embedded.getAttribute('data-library-view'),'columns','administration defaults to column view');
   assert.equal(await embedded.locator('details, .source-group-heading, [id*=library-recents]').count(),0,'administration has no folding controls, root headings or recent history');
+  const viewChoice=embedded.locator('#admin-library-view'), addressSurface=embedded.locator('#library-navigation');
+  const addressFill=() => addressSurface.evaluate(el => {
+    getComputedStyle(el).backgroundColor;
+    for(const animation of el.getAnimations())animation.finish();
+    return getComputedStyle(el).backgroundColor;
+  });
+  await managed.mouse.move(0,0); await embedded.locator('#library-location').evaluate(el => el.blur());
+  const restingAddress=await addressFill();
+  await viewChoice.hover();
+  assert.equal(await addressFill(),restingAddress,'hovering the view chooser leaves the address field at rest');
+  await viewChoice.focus();
+  assert.equal(await addressSurface.evaluate(el => el.matches(':focus-within')),false,'view chooser focus is independent of the address field');
+  const choiceBox=await viewChoice.boundingBox(), addressBox=await addressSurface.boundingBox();
+  assert.equal(Math.round(choiceBox.x-addressBox.x-addressBox.width),4,'the standalone view chooser has a four-pixel gap');
+  await embedded.locator('#source-tools').screenshot({path:`/tmp/voidplayer-admin-view-control-${browserName}.png`});
   const chooseView = async value => {
     await managed.locator('#admin-library-view').click();
     await managed.locator(`#admin-library-view-menu [data-value=${value}]`).click();
