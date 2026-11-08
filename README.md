@@ -18,7 +18,13 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-LGPL--2.1--or--later-blue" alt="LGPL-2.1-or-later"></a>
 </p>
 
+<p align="center">简体中文 · <a href="README.en.md">English</a></p>
+
 VoidPlayer Web 是一个视频评审工具，适合对比不同编码或处理结果、检查具体帧，并用文字和矢量图形记录问题。本地视频由浏览器读取和解码，无需上传。
+
+![VoidPlayer 动态演示：多轨同步对比、标注与码流分析](docs/assets/voidplayer-demo.webp)
+
+*同源高画质与刻意劣化的编码对比 → 圈画问题 → 查看码率和编码块。应用实录，动态 WebP。*
 
 ## 在线使用
 
