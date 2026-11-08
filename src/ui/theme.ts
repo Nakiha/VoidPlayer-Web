@@ -1,3 +1,4 @@
+import type { ToastStack } from './toast.ts';
 import { t, onLanguageChange, msg } from '../i18n.ts';
 import { ACCENTS, BASE_COLORS, customAccent, customTheme } from './appearance.ts';
 type ThemePreference = 'system' | 'light' | 'dark' | 'custom';
@@ -39,7 +40,7 @@ export function observeTheme() {
 }
 
 /** Appearance is a UI preference, independent of review data and media presentation. */
-export function installThemeControls() {
+export function installThemeControls(toasts: ToastStack) {
   const system = matchMedia('(prefers-color-scheme: dark)');
   const life = new AbortController();
   const buttons = [...document.querySelectorAll<HTMLButtonElement>('[data-theme-choice]')];
@@ -47,15 +48,12 @@ export function installThemeControls() {
   let accent = readAccent(); let custom = readCustom(); let base = readBase();
   const picker = document.getElementById('accent-picker') as HTMLInputElement;
   const hex = document.getElementById('accent-hex') as HTMLInputElement;
-  const hint = document.getElementById('accent-input-hint')!;
-  const caption = hint.textContent!;
   const basePicker = document.getElementById('theme-base-picker') as HTMLInputElement;
   const baseHex = document.getElementById('theme-base-hex') as HTMLInputElement;
-  const baseHint = document.getElementById('theme-base-hint')!;
   const baseButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-base-choice]')];
-  function syncBaseInputs() { basePicker.value = base.color; baseHex.value = base.color.toUpperCase(); baseHex.removeAttribute('aria-invalid'); baseHint.textContent = ''; }
+  function syncBaseInputs() { basePicker.value = base.color; baseHex.value = base.color.toUpperCase(); baseHex.removeAttribute('aria-invalid'); }
   function savePreference() { try { if (preference === 'system') localStorage.removeItem(KEY); else localStorage.setItem(KEY, preference); } catch {} }
-  function syncInputs() { picker.value = custom.color; hex.value = custom.color.toUpperCase(); hex.removeAttribute('aria-invalid'); hint.textContent = caption; }
+  function syncInputs() { picker.value = custom.color; hex.value = custom.color.toUpperCase(); hex.removeAttribute('aria-invalid'); }
   function saveAccent() {
     try {
       // Write the cached variants before activating custom, including for peers.
@@ -100,12 +98,17 @@ export function installThemeControls() {
   }
   picker.addEventListener('input', () => { if (updateCustom(picker.value)) syncInputs(); }, { signal: life.signal });
   hex.addEventListener('input', () => {
+    hex.removeAttribute('aria-invalid');
     // Partial input remains editable; only complete six-digit values preview live.
-    if (/^#?[\da-f]{6}$/i.test(hex.value) && updateCustom(hex.value)) { picker.value = custom.color; hex.removeAttribute('aria-invalid'); hint.textContent = caption; }
+    if (/^#?[\da-f]{6}$/i.test(hex.value) && updateCustom(hex.value)) { picker.value = custom.color; }
   }, { signal: life.signal });
+  const invalidColor = (input: HTMLInputElement, message: () => string) => {
+    if (input.getAttribute('aria-invalid') !== 'true') toasts.show(message, { kind: 'error', durationMs: 5000 });
+    input.setAttribute('aria-invalid', 'true');
+  };
   const commitHex = () => {
     if (updateCustom(hex.value)) syncInputs();
-    else { hex.setAttribute('aria-invalid', 'true'); hint.textContent = t(msg("theme.enterAValidHexColorSuchAs", "请输入有效的 HEX 颜色，例如 #3478F6")); }
+    else invalidColor(hex, () => t(msg("theme.enterAValidHexColorSuchAs", "请输入有效的 HEX 颜色，例如 #3478F6")));
   };
   hex.addEventListener('change', commitHex, { signal: life.signal });
   hex.addEventListener('keydown', event => {
@@ -119,9 +122,10 @@ export function installThemeControls() {
   for (const button of baseButtons) button.addEventListener('click', () => { if (updateBase(button.dataset.baseChoice!)) syncBaseInputs(); }, { signal: life.signal });
   basePicker.addEventListener('input', () => { if (updateBase(basePicker.value)) syncBaseInputs(); }, { signal: life.signal });
   baseHex.addEventListener('input', () => {
-    if (/^#?[\da-f]{6}$/i.test(baseHex.value) && updateBase(baseHex.value)) { basePicker.value = base.color; baseHex.removeAttribute('aria-invalid'); baseHint.textContent = ''; }
+    baseHex.removeAttribute('aria-invalid');
+    if (/^#?[\da-f]{6}$/i.test(baseHex.value) && updateBase(baseHex.value)) { basePicker.value = base.color; }
   }, { signal: life.signal });
-  const invalidBase = () => { baseHex.setAttribute('aria-invalid', 'true'); baseHint.textContent = t(msg('theme.invalidBase', '请输入有效的 HEX 基调色，例如 #EEE7DE')); };
+  const invalidBase = () => invalidColor(baseHex, () => t(msg('theme.invalidBase', '请输入有效的 HEX 基调色，例如 #EEE7DE')));
   const commitBase = () => { if (updateBase(baseHex.value)) syncBaseInputs(); else invalidBase(); };
   baseHex.addEventListener('change', commitBase, { signal: life.signal });
   baseHex.addEventListener('keydown', event => {
@@ -133,7 +137,7 @@ export function installThemeControls() {
   window.addEventListener('storage', event => {
     if (event.key === KEY || event.key === ACCENT_KEY || event.key === CUSTOM_KEY || event.key === BASE_KEY || event.key === null) { preference = readPreference(); accent = readAccent(); custom = readCustom(); base = readBase(); syncBaseInputs(); syncInputs(); apply(); }
   }, { signal: life.signal });
-  onLanguageChange(() => { apply(); if (baseHex.hasAttribute('aria-invalid')) invalidBase(); if (hex.hasAttribute('aria-invalid')) hint.textContent = t(msg("theme.enterAValidHexColorSuchAs", "请输入有效的 HEX 颜色，例如 #3478F6")); }, life.signal);
+  onLanguageChange(apply, life.signal);
   apply();
   return () => life.abort();
 }

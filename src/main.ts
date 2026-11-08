@@ -83,12 +83,13 @@ installFocusFeedback(uiEvents.signal);
 
 const $ = <T extends Element = HTMLElement>(id: string) => document.getElementById(id) as unknown as T;
 mountLocalizedShell($<HTMLElement>('app'), shell, uiEvents.signal);
-installLanguageControls(uiEvents.signal);
+const toasts = installToasts(uiEvents.signal);
+installLanguageControls(uiEvents.signal, toasts);
 document.title = tr(msg("page.title", "VoidPlayer · 视频对比"));
-const removeThemeControls = installThemeControls();
+const removeThemeControls = installThemeControls(toasts);
 const removeHeaderActions = installHeaderActions();
 installTopbarCompact(document.querySelector<HTMLElement>('.topbar')!, uiEvents.signal);
-const settings = installSettings();
+const settings = installSettings(toasts);
 $<HTMLButtonElement>('start-identity').onclick = () => settings.openPane('identity', $<HTMLButtonElement>('start-identity'));
 const removeBrandEffects = installBrandEffects($<HTMLButtonElement>('brand-about'),
   () => settings.openPane('about', $<HTMLElement>('brand-about')));
@@ -158,7 +159,6 @@ void gpuReady.then(()=>{const state=session.getState();if(hdrDisplayAvailable()&
 session.subscribe(renderColorMode);renderColorMode();
 for(const button of colorButtons)button.onclick=()=>{if(session.getState().busy)return;void act(()=>session.setColorMode(button.dataset.colorMode as 'reference'|'browser')).finally(renderColorMode);};
 for(const button of decoderButtons)button.onclick=()=>{if(session.getState().busy)return;void act(()=>session.setReferenceDecode({...session.getState().referenceDecode,decoder:button.dataset.referenceDecoder as 'hardware'|'software'})).finally(renderColorMode);};
-const toasts = installToasts(uiEvents.signal);
 session.onDecoderPressure = kind => {
   if (kind === 'vvc-software') {
     toasts.show(() => tr(msg('player.vvcPlaybackPressure', 'H.266 软件解码轨道持续缺帧，可在「色彩与解码」中选择「自动扩容」或手动设置线程数，重新打开视频后生效')), {

@@ -52,6 +52,7 @@ export function installLogPanel(container: HTMLElement, toasts: ToastStack) {
   };
   const fitDescription = () => {
     if (pane.hidden) return;
+    if (!description.value) { description.style.removeProperty('height'); return; }
     description.style.height = 'auto';
     description.style.height = `${description.scrollHeight}px`;
   };

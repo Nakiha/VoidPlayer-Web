@@ -3071,6 +3071,10 @@
     "source": "允许在已暂停的当前帧创建可见标注",
     "translation": "Allow visible annotations on the current paused frame"
   },
+  "pageBridge.cancelPairing": {
+    "source": "取消",
+    "translation": "Cancel"
+  },
   "pageBridge.changed": {
     "source": "身份或工作区来源已改变，请重新明确授权",
     "translation": "Identity or workspace sources changed. Explicitly authorize again."
@@ -3082,6 +3086,10 @@
   "pageBridge.clientLabel": {
     "source": "MCP 客户端",
     "translation": "MCP client"
+  },
+  "pageBridge.codeHelp": {
+    "source": "从客户端的进程日志（stderr）复制配对码，在 90 秒内粘贴到上方。",
+    "translation": "Copy the code from the client’s process log (stderr) and paste it above within 90 seconds."
   },
   "pageBridge.connect": {
     "source": "明确连接此页面",
@@ -3099,6 +3107,10 @@
     "source": "空工作区",
     "translation": "Empty workspace"
   },
+  "pageBridge.findCode": {
+    "source": "在哪里获取配对码？",
+    "translation": "Where do I get a pairing code?"
+  },
   "pageBridge.invalid": {
     "source": "收到不符合授权范围的命令，连接已撤销",
     "translation": "A command exceeded the granted scope. Connection revoked."
@@ -3107,9 +3119,17 @@
     "source": "结果超过通道预算，写入结果可能未知；请保留原 correlation，勿自动重试",
     "translation": "The result exceeded the channel budget. A write may have an unknown outcome; retain its original correlation and never retry automatically."
   },
+  "pageBridge.launchHelp": {
+    "source": "让 MCP 客户端从 VoidPlayer 源码目录运行这条命令。",
+    "translation": "Have your MCP client run this command from the VoidPlayer source directory."
+  },
   "pageBridge.lifetime": {
     "source": "授权仅存于当前进程和页面内存，撤销、重载、关页或断线即失效；已经开始的操作可能完成，取消不表示回滚，未知写入不得自动重试",
     "translation": "Authorization exists only in process and page memory. Revoke, reload, close or disconnect invalidates it. Started operations may still complete; cancellation is not rollback. Never automatically retry unknown writes."
+  },
+  "pageBridge.localClient": {
+    "source": "AI 辅助评审",
+    "translation": "AI-assisted review"
   },
   "pageBridge.lost": {
     "source": "通道已断开；已派发写入的结果可能未知，不会自动重放",
@@ -3124,8 +3144,8 @@
     "translation": "Pairing cleared. Enter fresh one-time information and select permissions again."
   },
   "pageBridge.pairCode": {
-    "source": "一次性配对信息",
-    "translation": "One-time pairing information"
+    "source": "一次性配对码",
+    "translation": "One-time pairing code"
   },
   "pageBridge.pairExpired": {
     "source": "临时授权已到期",
@@ -3147,6 +3167,14 @@
     "source": "配对不可用：信息不符、已到期、已消费或客户端尚未就绪，请发起新请求，页面数据尚未分享",
     "translation": "Pairing unavailable: incorrect, expired, consumed, or client not ready. Start a new request; no page data was shared."
   },
+  "pageBridge.pasteCode": {
+    "source": "粘贴客户端提供的配对码",
+    "translation": "Paste the pairing code from your client"
+  },
+  "pageBridge.purpose": {
+    "source": "让电脑上的 AI 助手读取视频标注，跳到你想复查的那一帧。",
+    "translation": "Let an AI assistant on your computer read video annotations and jump to the frame you want to review."
+  },
   "pageBridge.read": {
     "source": "读取此页面会话、已有标注与 ROI（不含媒体或日志字节）",
     "translation": "Read this page session, existing annotations and ROIs (no media or log bytes)"
@@ -3162,6 +3190,10 @@
   "pageBridge.scopes": {
     "source": "授权范围",
     "translation": "Permissions"
+  },
+  "pageBridge.startPairing": {
+    "source": "配对 AI 助手",
+    "translation": "Pair AI assistant"
   },
   "pageBridge.target": {
     "source": "连接对象",

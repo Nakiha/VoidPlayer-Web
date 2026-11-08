@@ -109,6 +109,7 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('voidplayer.custom-accent')));
  assert.equal(stored.color,'#e048b8');assert.notEqual(stored.light,stored.dark);
  await hex.fill('#oops');await hex.press('Enter');assert.equal(await hex.getAttribute('aria-invalid'),'true');
+ await page.locator('.toast-error .toast-message').filter({hasText:'请输入有效的 HEX 颜色'}).waitFor();
  assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('voidplayer.custom-accent'))),stored,'invalid input never changes the active color');
  await hex.press('Escape');assert.equal(await hex.inputValue(),'#E048B8');assert.equal(await page.locator('#settings').evaluate(e=>e.open),true);
  await page.locator('[data-accent-choice=green]').click();await page.locator('[data-accent-choice=custom]').click();
@@ -174,6 +175,7 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  }
  const cached=await page.evaluate(()=>localStorage.getItem('voidplayer.custom-theme'));
  await baseHex.fill('#oops');await baseHex.press('Enter');assert.equal(await baseHex.getAttribute('aria-invalid'),'true');
+ await page.locator('.toast-error .toast-message').filter({hasText:'请输入有效的 HEX 基调色'}).waitFor();
  assert.equal(await page.evaluate(()=>localStorage.getItem('voidplayer.custom-theme')),cached);
  await baseHex.press('Escape');assert.equal(await baseHex.inputValue(),'#18304A');assert.equal(await page.locator('#settings').evaluate(e=>e.open),true);
  await page.locator('[data-theme-choice=light]').click();assert.equal(await page.locator('#theme-base-controls').isVisible(),false);assert.equal(await page.locator('html').getAttribute('data-custom-theme'),null);

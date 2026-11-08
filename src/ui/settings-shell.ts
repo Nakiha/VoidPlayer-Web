@@ -5,6 +5,7 @@ import { icon } from './icons.ts';
 import { aboutFrameGraph, aboutMark } from './about-banner.ts';
 import { buildInfo } from '../build-info.ts';
 import { ACCENTS, BASE_COLORS, customTheme } from './appearance.ts';
+import { supportsFileHandles } from '../services/file-handles.ts';
 import { shortcutLabel } from './shortcuts.ts';
 import type { Shortcut } from './shortcuts.ts';
 export const settingsPanes = () => [
@@ -13,10 +14,12 @@ export const settingsPanes = () => [
   ['experimental', t(msg('settingsShell.experimental', '实验性功能')), 'diagnostics'], ['about', t(msg("settingsShell.about", "关于")), 'info'],
 ] as const;
 const paneTitle = (title: string, description = '') => `<div class="settings-page-title"><h3>${title}</h3>${description ? `<p>${description}</p>` : ''}</div>`;
+const preferenceHelp = (id: string, text: string) =>
+  `<button type="button" class="section-title-info" data-tooltip="${text}" aria-labelledby="${id}">${icon('info')}</button><span id="${id}" hidden>${text}</span>`;
 const shortcutRows = (entries: [string, Shortcut[]][]) => entries.map(([action, keys]) => `<div class="shortcut-row"><span>${action}</span><span class="shortcut-keys">${keys.map(key => `<kbd>${shortcutLabel(key)}</kbd>`).join('<span> / </span>')}</span></div>`).join('');
 export function settingsShell() {
   return `<dialog id="settings" class="settings-window" aria-label="${th(msg("shell.settings", "设置"))}">
-    <div class="settings-body"><nav class="settings-navigation category-navigation" aria-label="${th(msg("settingsShell.settingsCategories", "设置分类"))}"><div class="category-tabs" role="tablist" aria-orientation="vertical">${settingsPanes().map(([id, label, glyph]) => `<button id="settings-tab-${id}" role="tab" data-settings-pane="${id}" aria-controls="settings-pane-${id}" aria-selected="${id === 'appearance'}" tabindex="${id === 'appearance' ? 0 : -1}">${icon(glyph)}<span>${label}</span></button>`).join('')}</div></nav>
+    <div class="settings-body"><nav class="settings-navigation category-navigation" aria-label="${th(msg("settingsShell.settingsCategories", "设置分类"))}"><div class="category-tabs" role="tablist" aria-orientation="vertical">${settingsPanes().map(([id, label, glyph]) => `<button id="settings-tab-${id}" role="tab" data-settings-pane="${id}" ${id === 'experimental' ? 'hidden' : ''} aria-controls="settings-pane-${id}" aria-selected="${id === 'appearance'}" tabindex="${id === 'appearance' ? 0 : -1}">${icon(glyph)}<span>${label}</span></button>`).join('')}</div></nav>
     <div class="settings-content">
       <header class="settings-floating-header"><h2 id="settings-current-title">${th(msg('settingsShell.preferences', '首选项'))}</h2><button id="settings-close" class="icon-button" aria-label="${th(msg("settingsShell.closeSettings", "关闭设置"))}">${icon('close')}</button></header>
       <section id="settings-pane-appearance" role="tabpanel" aria-labelledby="settings-tab-appearance" tabindex="0">
@@ -30,34 +33,40 @@ export function settingsShell() {
             <div class="accent-choices theme-base-choices" role="radiogroup" aria-labelledby="theme-base-label">${BASE_COLORS.map(c => `<button class="accent-choice" role="radio" data-base-choice="${c.color}" aria-checked="false" aria-label="${c.name}" data-tooltip="${c.name}" style="--base-swatch:${c.color};--base-check:${customTheme(c.color)!.dark ? '#f2f3f5' : '#16191e'}"><span class="accent-swatch">${icon('check')}</span></button>`).join('')}</div>
             <div class="accent-custom-row">
               <label class="accent-custom-choice theme-base-custom" for="theme-base-picker"><span class="accent-swatch" aria-hidden="true"></span><span>${th(msg("settingsShell.custom", "自定义"))}</span></label>
-              <div class="accent-custom-inputs"><input id="theme-base-picker" type="color" aria-label="${th(msg("theme.chooseBaseColor", "选择自定义基调色"))}"><label class="theme-base-hex-label"><span>HEX</span><input id="theme-base-hex" type="text" aria-label="${th(msg("theme.baseHex", "基调色 HEX"))}" maxlength="7" spellcheck="false" autocomplete="off" aria-describedby="theme-base-hint"></label></div>
+              <div class="accent-custom-inputs"><input id="theme-base-picker" type="color" aria-label="${th(msg("theme.chooseBaseColor", "选择自定义基调色"))}"><label class="theme-base-hex-label"><span>HEX</span><input id="theme-base-hex" type="text" aria-label="${th(msg("theme.baseHex", "基调色 HEX"))}" maxlength="7" spellcheck="false" autocomplete="off"></label></div>
             </div>
           </div>
-          <p id="theme-base-hint" class="settings-caption" role="status"></p>
         </div><div class="settings-section"><div class="accent-heading"><h4 class="settings-section-title" id="accent-label">${th(msg("settingsShell.accentColor", "主题色"))}</h4><span id="accent-current"></span></div>
         <div role="radiogroup" aria-labelledby="accent-label" class="accent-palette settings-card">
           <div class="accent-choices">${ACCENTS.map(c => `<button class="accent-choice" role="radio" data-accent-choice="${c.id}" aria-label="${c.name}" data-tooltip="${c.name}" style="--swatch-light:${c.light};--swatch-dark:${c.dark}"><span class="accent-swatch">${icon('check')}</span></button>`).join('')}</div>
           <div class="accent-custom-row">
             <button class="accent-custom-choice" role="radio" data-accent-choice="custom" aria-label="${th(msg("settingsShell.customAccentColor", "自定义主题色"))}"><span class="accent-swatch">${icon('check')}</span><span>${th(msg("settingsShell.custom", "自定义"))}</span></button>
-            <div class="accent-custom-inputs"><input id="accent-picker" type="color" aria-label="${th(msg("settingsShell.chooseCustomAccentColor", "选择自定义主题色"))}"><label class="accent-hex-label"><span>HEX</span><input id="accent-hex" type="text" aria-label="${th(msg("settingsShell.accentColorHex", "主题色 HEX"))}" maxlength="7" spellcheck="false" autocomplete="off" aria-describedby="accent-input-hint"></label></div>
+            <div class="accent-custom-inputs"><input id="accent-picker" type="color" aria-label="${th(msg("settingsShell.chooseCustomAccentColor", "选择自定义主题色"))}"><label class="accent-hex-label"><span>HEX</span><input id="accent-hex" type="text" aria-label="${th(msg("settingsShell.accentColorHex", "主题色 HEX"))}" maxlength="7" spellcheck="false" autocomplete="off"></label></div>
           </div>
         </div>
-        <p class="settings-caption" id="accent-input-hint" role="status"></p></div>
+        </div>
         <div class="settings-section"><h4 class="settings-section-title" id="appearance-other-label">${th(msg('settingsShell.languageInteraction', '语言与交互'))}</h4>
           <div class="settings-group" role="group" aria-labelledby="appearance-other-label">
             <div class="settings-action-row appearance-other-row">
-              <div><h4 id="language-label">${th(msg('language.label', '语言 / Language'))}</h4><p id="language-status" role="status"></p></div>
+              <div><h4 id="language-label">${th(msg('language.label', '语言 / Language'))}</h4></div>
               <button id="language-choice" type="button" class="settings-choice" aria-labelledby="language-label"></button>
             </div>
             <div class="settings-action-row appearance-other-row">
-              <div><h4 id="viewport-wheel-label">${th(msg('settingsShell.wheelBehavior', '视口滚动行为'))}</h4><p id="viewport-wheel-hint">${th(msg('settingsShell.wheelHint', '捏合或 Ctrl 加滚轮始终缩放。'))}</p></div>
+              <div><h4><span id="viewport-wheel-label">${th(msg('settingsShell.wheelBehavior', '视口滚动行为'))}</span>${preferenceHelp('viewport-wheel-hint', th(msg('settingsShell.wheelHint', '捏合或 Ctrl 加滚轮始终缩放。')))}</h4></div>
               <button id="viewport-wheel-behavior" type="button" class="settings-choice" aria-labelledby="viewport-wheel-label" aria-describedby="viewport-wheel-hint"></button>
             </div>
             <div class="settings-action-row appearance-other-row">
-              <div><h4 id="chart-hover-label" class="settings-icon-label">${icon('chart')}<span>${th(msg('settingsShell.chartHover', '码流分析悬浮面板显示方式'))}</span></h4><p id="chart-hover-hint">${th(msg('settingsShell.chartHoverHint', '各图独立显示在悬浮线旁；合并显示在上面板下方'))}</p></div>
+              <div><h4>${icon('chart', 'settings-label-glyph')}<span id="chart-hover-label">${th(msg('settingsShell.chartHover', '码流分析悬浮面板显示方式'))}</span>${preferenceHelp('chart-hover-hint', th(msg('settingsShell.chartHoverHint', '各图独立显示在悬浮线旁；合并显示在上面板下方')))}</h4></div>
               <button id="chart-hover-style" type="button" class="settings-choice" aria-labelledby="chart-hover-label" aria-describedby="chart-hover-hint"></button>
             </div>
           </div>
+        </div>
+        <div class="settings-section"><h4 class="settings-section-title"><span id="local-file-access-label">${th(msg('fileAccess.title', '持久访问本地文件'))}</span>${preferenceHelp('local-file-access-hint',
+          (supportsFileHandles() ? th(msg('fileAccess.available', '检测到文件访问接口，可以选择视频验证权限和保存能力')) : th(msg('fileAccess.unsupported', '当前浏览器未提供持久文件访问能力，本地视频按一次性文件打开'))) + '\n' + th(msg('fileAccess.help', '选择一个视频以验证访问权限和本机句柄保存，不会上传或播放，曾拒绝授权时可再次尝试；浏览器未提供此能力时，本地视频仅在本次页面可用，不进入最近打开')))}</h4>
+          <div class="settings-group"><div class="settings-action-row">
+            <span>${th(msg('fileAccess.apiName', 'File System Access API'))}</span>
+            <button id="local-file-access-try" type="button" aria-describedby="local-file-access-hint">${th(msg('fileAccess.try', '尝试启用'))}</button>
+          </div></div>
         </div>
 
       </section>
@@ -93,33 +102,38 @@ export function settingsShell() {
         </div>
       </section>
       <section id="settings-pane-experimental" role="tabpanel" aria-labelledby="settings-tab-experimental" tabindex="0" hidden>
-        <div class="settings-section"><h4 class="settings-section-title" id="local-file-access-label">${th(msg('fileAccess.title', '持久访问本地文件'))}</h4>
-          <div class="settings-group"><div class="settings-action-row">
-            <span>${th(msg('fileAccess.apiName', 'File System Access API'))}</span>
-            <button id="local-file-access-try" type="button" aria-describedby="local-file-access-status">${th(msg('fileAccess.try', '尝试启用'))}</button>
-          </div></div>
-          <p id="local-file-access-status" class="settings-caption" role="status"></p>
-          <p class="settings-caption">${th(msg('fileAccess.help', '选择一个视频以验证访问权限和本机句柄保存，不会上传或播放，曾拒绝授权时可再次尝试；浏览器未提供此能力时，本地视频仅在本次页面可用，不进入最近打开'))}</p>
-        </div>
         <div id="page-bridge-settings" class="settings-mcp" hidden>
-          <h4 class="settings-section-title">MCP</h4>
-          <div id="page-bridge-pairing" class="settings-section" hidden>
-            <h4 class="settings-section-title"><label for="page-bridge-code">${th(msg('pageBridge.pairCode', '一次性配对信息'))}</label></h4>
-            <div class="settings-group"><div class="settings-action-row mcp-controls">
-              <input id="page-bridge-code" type="password" autocomplete="off" maxlength="32">
-              <button id="page-bridge-pair" type="button">${th(msg('pageBridge.pairReview', '核对配对'))}</button>
-              <button id="page-bridge-reset" type="button">${th(msg('pageBridge.pairReset', '配对其他客户端'))}</button>
-            </div></div>
-          </div>
           <div class="settings-section">
+            <h4 class="settings-section-title">${th(msg('pageBridge.localClient', 'AI 辅助评审'))}</h4>
+            <div class="settings-card mcp-intro">
+              <div class="mcp-intro-row"><p>${th(msg('pageBridge.purpose', '让电脑上的 AI 助手读取视频标注，跳到你想复查的那一帧。'))}</p>
+                <button id="page-bridge-start" type="button" aria-controls="page-bridge-pairing" aria-expanded="false" hidden>${th(msg('pageBridge.startPairing', '配对 AI 助手'))}</button>
+              </div>
+              <div id="page-bridge-pairing" hidden>
+                <label for="page-bridge-code">${th(msg('pageBridge.pairCode', '一次性配对码'))}</label>
+                <div class="mcp-pair-row">
+                  <input id="page-bridge-code" type="password" autocomplete="off" spellcheck="false" maxlength="32" placeholder="${th(msg('pageBridge.pasteCode','粘贴客户端提供的配对码'))}">
+                  <button id="page-bridge-pair" type="button" disabled>${th(msg('pageBridge.pairReview', '核对配对'))}</button>
+                  <button id="page-bridge-cancel" type="button">${th(msg('pageBridge.cancelPairing','取消'))}</button>
+                </div>
+                <button id="page-bridge-help" type="button" aria-controls="page-bridge-guide" aria-expanded="false">${th(msg('pageBridge.findCode', '在哪里获取配对码？'))}</button>
+                <div id="page-bridge-guide" class="mcp-pair-guide" hidden>
+                  <p>${th(msg('pageBridge.launchHelp', '让 MCP 客户端从 VoidPlayer 源码目录运行这条命令。'))}</p>
+                  <code id="page-bridge-command"></code>
+                  <p>${th(msg('pageBridge.codeHelp', '从客户端的进程日志（stderr）复制配对码，在 90 秒内粘贴到上方。'))}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="page-bridge-target" class="settings-section" hidden>
             <h4 class="settings-section-title">${th(msg('pageBridge.target', '连接对象'))}</h4>
             <div class="settings-group"><div class="settings-action-row mcp-target">
-              <div><h4>${th(msg('pageBridge.clientLabel', 'MCP 客户端'))}</h4><pre id="page-bridge-client"></pre></div>
+              <div><h4>${th(msg('pageBridge.clientLabel', 'MCP 客户端'))}</h4><p id="page-bridge-client"></p></div>
               <div><h4>${th(msg('settingsShell.workspace', '工作区'))}</h4><p id="page-bridge-workspace"></p></div>
             </div></div>
             <p class="settings-caption">${th(msg('pageBridge.claim', '客户端名称为自行声明，并非认证身份，仅授权此页面及当前工作区，不跟随其他标签'))}</p>
           </div>
-          <div class="settings-section">
+          <div id="page-bridge-permissions" class="settings-section" hidden>
             <h4 class="settings-section-title" id="page-bridge-scopes">${th(msg('pageBridge.scopes', '授权范围'))}</h4>
             <div class="settings-group" role="group" aria-labelledby="page-bridge-scopes">
               <label class="settings-action-row mcp-scope"><span>${th(msg('pageBridge.read', '读取此页面会话、已有标注与 ROI（不含媒体或日志字节）'))}</span><input id="page-bridge-read" type="checkbox"></label>
@@ -127,15 +141,16 @@ export function settingsShell() {
               <label class="settings-action-row mcp-scope"><span>${th(msg('pageBridge.annotate', '允许在已暂停的当前帧创建可见标注'))}</span><input id="page-bridge-annotate" type="checkbox"></label>
             </div>
           </div>
-          <div class="settings-section">
+          <div id="page-bridge-actions" class="settings-section" hidden>
             <h4 class="settings-section-title">${th(msg('pageBridge.title', '临时本机 MCP 连接'))}</h4>
             <div class="settings-group"><div class="settings-action-row mcp-controls">
               <button id="page-bridge-connect" type="button" disabled>${th(msg('pageBridge.connect', '明确连接此页面'))}</button>
               <button id="page-bridge-revoke" type="button" disabled>${th(msg('pageBridge.revoke', '撤销连接'))}</button>
+              <button id="page-bridge-reset" type="button" hidden>${th(msg('pageBridge.pairReset', '配对其他客户端'))}</button>
             </div></div>
-            <p id="page-bridge-status" class="settings-caption" role="status"></p>
             <p class="settings-caption">${th(msg('pageBridge.lifetime', '授权仅存于当前进程和页面内存，撤销、重载、关页或断线即失效；已经开始的操作可能完成，取消不表示回滚，未知写入不得自动重试'))}</p>
           </div>
+          <p id="page-bridge-status" class="settings-caption" role="status"></p>
         </div>
       </section>
       <section id="settings-pane-about" role="tabpanel" aria-labelledby="settings-tab-about" tabindex="0" hidden>

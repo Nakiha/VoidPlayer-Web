@@ -104,14 +104,32 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
   }));
   for(const check of sectionSpacing) assert.ok(Math.abs(check.gap-(check.kind==='section'?12:6))<1,`${pane} ${check.kind} spacing: ${check.gap}`);
   if(process.env.SETTINGS_SCREENSHOTS) await page.locator('#settings').screenshot({path:`${process.env.SETTINGS_SCREENSHOTS}-${pane}.png`});
+  if(pane==='appearance') {
+   const help=page.locator('button[aria-labelledby=viewport-wheel-hint]');
+   await help.hover();
+   await page.locator('#control-tooltip').filter({hasText:'捏合或 Ctrl 加滚轮始终缩放'}).waitFor();
+   await help.click();
+   assert.equal(await page.locator('#control-tooltip').isVisible(),true);
+   assert.equal(await page.locator('#viewport-wheel-hint').isVisible(),false);
+   assert.equal(await page.locator('#local-file-access-try').isVisible(),true);
+  }
+  if(pane==='logs') {
+   const spacing=await page.locator('.log-settings-card:has(#log-description)').evaluate(card=>{
+    const box=card.getBoundingClientRect(), row=card.querySelector('.log-session-row').getBoundingClientRect();
+    const description=card.querySelector('textarea').getBoundingClientRect();
+    const action=card.querySelector('[data-action=download]').getBoundingClientRect();
+    return [row.top-box.top,description.top-row.bottom,box.bottom-description.bottom,description.height-action.height];
+   });
+   assert.deepEqual(spacing,[16,8,16,0],'upload card gives the button-height description eight pixels of space above');
+  }
   if(pane==='experimental') {
    assert.equal(await page.locator('#settings-tab-mcp, #settings-pane-mcp, #quality-roi-open, #quality-tasks-open').count(),0);
    assert.equal(await page.locator('#settings-pane-experimental #page-bridge-settings').isVisible(),true);
   }
   if(pane==='workspace') {
-   for(const id of ['saved-workspace-share']) {
-    const size=await page.locator(`#${id}`).boundingBox();assert.ok(size.height<40,'workspace actions stay on one line');
-   }
+   const [input,save,share]=await Promise.all(['saved-workspace-name','saved-workspace-save','saved-workspace-share'].map(id=>page.locator('#'+id).boundingBox()));
+   assert.deepEqual([save.x-input.x-input.width,share.x-save.x-save.width],[4,4],'both workspace control gaps are four pixels');
+   assert.deepEqual([input.y,input.height,share.y,share.height],[save.y,save.height,save.y,save.height],'name, save and share align on both edges');
   }
   if(pane==='performance') {
    const threadMode = page.locator('#wasm-thread-mode');
@@ -343,6 +361,7 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
   const header=await page.locator('.settings-floating-header').boundingBox(), pane=await page.locator('#settings-pane-appearance').boundingBox();
   assert.ok(rail.y+rail.height<=header.y+1,'portrait categories precede the page heading');
   assert.ok(Math.abs(header.y-pane.y)<1,'the floating heading overlays the scroll pane in portrait too');
+  await page.locator('#settings-pane-appearance').evaluate(pane => { pane.scrollTop = 0; });
   const firstSection=await page.locator('#settings-pane-appearance .settings-section-title').first().boundingBox();
   assert.ok(firstSection.y>=header.y+header.height,'initial content clears the floating heading');
   const close=await page.locator('#settings-close').boundingBox();

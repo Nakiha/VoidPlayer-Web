@@ -18,19 +18,41 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
   const pane=document.getElementById('page-bridge-settings')!;
   const $=<T extends HTMLElement=HTMLElement>(id:string)=>pane.querySelector<T>('#page-bridge-'+id)!;
   pane.hidden=false;
-  $('pairing').hidden=!existing;
+  document.getElementById('settings-tab-experimental')!.hidden = false;
+  $('command').textContent = `node scripts/mcp-page-bridge.ts --existing-origin ${location.origin}`;
+  const codeInput = $<HTMLInputElement>('code');
+  let pairingOpen = false;
   const read=$<HTMLInputElement>('read');
   read.checked=read.disabled=!existing;
   let grant:{token:string;epoch:string;scopes:PageScope[];binding:string;clientClaim:unknown}|undefined;
   let generation=0,refreshSequence=0,inFlight=0,connecting=false,stopped=false,descriptor:unknown,reviewedRevision:number|undefined,reviewedReady=false;
   let controller=new AbortController();
   const binding=()=>JSON.stringify([location.search,currentActor()?.id??null,session.getState().tracks.map(x=>[x.slot,x.id,x.sourceGen])]);
-  const workspace=()=>`${pageId} · ${session.getState().tracks.map(x=>`${x.slot}: ${x.name}`).join(' / ')||t(msg('pageBridge.empty','空工作区'))}`.slice(0,300);
+  const workspaceLabel=()=>session.getState().tracks.map(x=>`${x.slot}: ${x.name}`).join(' / ')||t(msg('pageBridge.empty','空工作区'));
+  const workspace=()=>`${pageId} · ${workspaceLabel()}`.slice(0,300);
   const note=(s:string)=>{$('status').textContent=s;};
   const render=()=>{
-    const client=grant?.clientClaim??descriptor;
-    $('client').textContent=typeof client==='string'?client:JSON.stringify(client,null,2)??'—';
-    $('workspace').textContent=workspace();
+    const review = !existing || !!requestId;
+    const showPair = !review && pairingOpen;
+    $('start').hidden = review || pairingOpen;
+    $('start').setAttribute('aria-expanded', String(showPair));
+    $('pairing').hidden = !showPair;
+    $('cancel').toggleAttribute('disabled', connecting);
+    if (!showPair) {
+      $('guide').hidden = true;
+      $('help').setAttribute('aria-expanded', 'false');
+    }
+    for (const id of ['target','permissions','actions']) $(id).hidden = !review;
+    $('pair').toggleAttribute('disabled', review || connecting || stopped || !codeInput.value.trim());
+    $('reset').hidden = !existing || !requestId;
+    $('connect').hidden = !!grant;
+    $('revoke').hidden = !grant;
+    if (review) {
+      const client = grant?.clientClaim ?? descriptor;
+      $('client').textContent = typeof client === 'string' ? client : client && typeof client === 'object' && 'name' in client
+        ? [client.name, 'version' in client && client.version].filter(Boolean).join(' · ') : '—';
+      $('workspace').textContent = workspaceLabel();
+    }
     $('connect').toggleAttribute('disabled',!!grant||inFlight>0||connecting||stopped||!reviewedReady||!['read','view','annotate'].some(id=>$<HTMLInputElement>(id).checked));
     $('revoke').toggleAttribute('disabled',!grant);
     for(const id of (existing?['read','view','annotate']:['view','annotate']))$(id).toggleAttribute('disabled',!!grant||connecting);
@@ -86,6 +108,15 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
     catch{if(seq===refreshSequence&&owner===generation&&!signal.aborted){reviewedReady=false;descriptor=t(msg('pageBridge.unavailable','本机桥进程不可用；普通 HTTP 后台任务不受页面连接影响'));render();}return null;}
   }
   for(const id of ['read','view','annotate'])$(id).onchange=render;
+  $('start').onclick = () => { pairingOpen = true; render(); codeInput.focus(); };
+  $('cancel').onclick = () => {
+    pairingOpen = false; codeInput.value = ''; note(''); render(); $('start').focus();
+  };
+  $('help').onclick = () => {
+    $('guide').hidden = !$('guide').hidden;
+    $('help').setAttribute('aria-expanded', String(!$('guide').hidden));
+  };
+  codeInput.oninput = render;
   if(existing)$('pair').onclick=async event=>{
     if(!event.isTrusted||!navigator.userActivation.isActive||grant||connecting||inFlight||stopped||requestId)return;
     connecting=true;render();const code=$<HTMLInputElement>('code').value;$<HTMLInputElement>('code').value='';
@@ -105,13 +136,13 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
     ++refreshSequence;requestId='';documentToken='';expiresAt=0;reviewedReady=false;descriptor=undefined;stopped=false;
     $('pair').toggleAttribute('disabled',false);$('code').toggleAttribute('disabled',false);
     for(const id of ['read','view','annotate'])$<HTMLInputElement>(id).checked=false;
-    render();
+    pairingOpen = true; render(); codeInput.focus();
   };
   settings.addEventListener('settings-pane-change',event=>{
     if((event as CustomEvent<string>).detail!=='experimental')return;
     void refresh();render();
   },{signal});
-  settings.addEventListener('close',()=>{ $<HTMLInputElement>('code').value=''; },{signal});
+  settings.addEventListener('close',()=>{ pairingOpen=false; codeInput.value=''; if (existing && !requestId) note(''); render(); },{signal});
   $('revoke').onclick=()=>revoke(t(msg('pageBridge.revoked','已撤销；已开始的操作可能仍会完成，重新连接必须再次确认')));
   $('connect').onclick=async event=>{
     if(!event.isTrusted||!navigator.userActivation.isActive||grant||inFlight||connecting||stopped)return;

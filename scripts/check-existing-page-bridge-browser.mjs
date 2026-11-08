@@ -46,14 +46,28 @@ try{
   await new Promise(resolve=>setTimeout(resolve,100));
   check('closing an unpaired ordinary page sends no retirement request',retireResponses.length===0);
   async function start(){client=await startMcpClient({existingOrigin:origin});await client.initialize();await client.call('get_bridge_status');return client;}
-  async function pair(page,code=client.pairingCode){await openMcpSettings(page);await page.locator('#page-bridge-code').fill(code);await page.locator('#page-bridge-pair').click();}
+  async function pair(page,code=client.pairingCode){await openMcpSettings(page);if(await page.locator('#page-bridge-start').isVisible())await page.locator('#page-bridge-start').click();await page.locator('#page-bridge-code').fill(code);await page.locator('#page-bridge-pair').click();}
   async function connect(page,scopes=['read']){for(const scope of ['read','view','annotate'])await page.locator('#page-bridge-'+scope).setChecked(scopes.includes(scope));await page.locator('#page-bridge-connect').click();return eventually(async()=>{const s=await client.call('get_bridge_status');return s.connected?s:false;});}
   phase='unauthorized';await start();
   check('unauthorized status has no workspace or tracks',!(await client.call('get_bridge_status')).workspace);
   check('unauthorized read denied',(await client.call('get_review_session',{epoch:'none',input:{}})).code==='host-unavailable');
+  await openMcpSettings(a);
+  check('idle UI offers pairing without showing codes, setup instructions or permissions',
+    await a.locator('#page-bridge-start').isVisible() && await a.locator('#page-bridge-guide').isHidden() && await a.locator('#page-bridge-code').isHidden() && await a.locator('#page-bridge-target').isHidden() &&
+    await a.locator('#page-bridge-permissions').isHidden() && await a.locator('#page-bridge-actions').isHidden());
+  await a.locator('#page-bridge-start').click();
+  check('pairing focuses the input and keeps technical help out of the way', await a.locator('#page-bridge-code').evaluate(el=>el===document.activeElement) && await a.locator('#page-bridge-command').isHidden());
+  await a.locator('#page-bridge-help').click();
+  check('setup command is visible on request',await a.locator('#page-bridge-command').isVisible());
+  await a.locator('#page-bridge-cancel').click();
+  check('cancelling returns to the idle card',await a.locator('#page-bridge-start').isVisible() && await a.locator('#page-bridge-code').isHidden());
+  check('pairing guide uses this running service', (await a.locator('#page-bridge-command').textContent()).endsWith('--existing-origin '+origin));
   await pair(a,'0'.repeat(32));await a.locator('#page-bridge-status').getByText('Pairing unavailable',{exact:false}).waitFor();check('wrong pairing rejected');await closeSettings(a);
   await pair(a);await eventually(()=>a.locator('#page-bridge-read').isEnabled());
   await eventually(async()=>(await a.locator('#page-bridge-client').textContent())!=='—');
+  check('paired UI reveals target and permissions while keeping connection explicit',
+    await a.locator('#page-bridge-pairing').isHidden() && await a.locator('#page-bridge-target').isVisible() &&
+    await a.locator('#page-bridge-permissions').isVisible() && await a.locator('#page-bridge-connect').isDisabled());
   check('pairing alone does not authorize',(await client.call('get_bridge_status')).connected===false);
   for(const scope of ['read','view','annotate'])check(scope+' defaults unchecked',!await a.locator('#page-bridge-'+scope).isChecked());
   check('consent names exact existing page', (await a.locator('#page-bridge-status').textContent()).includes(origin));

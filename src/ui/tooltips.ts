@@ -87,6 +87,11 @@ export function installTooltips(scope: HTMLElement = document.body) {
   document.addEventListener('beforetoggle', event => {
     if ((event.target as Element)?.matches?.('.popup-menu, .header-actions[popover]')) hide();
   }, options);
+  document.addEventListener('click', event => {
+    const help = event.target instanceof Element && event.target.closest<HTMLElement>('button.section-title-info[data-tooltip]');
+    if (!help || !scope.contains(help)) return;
+    hide(); anchor = help; show();
+  }, options);
   document.addEventListener('pointerover', enter, options);
   document.addEventListener('focusin', enter, options);
   document.addEventListener('pointerout', event => {

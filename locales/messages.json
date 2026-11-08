@@ -3321,6 +3321,10 @@
     "source": "允许在已暂停的当前帧创建可见标注",
     "params": {}
   },
+  "pageBridge.cancelPairing": {
+    "source": "取消",
+    "params": {}
+  },
   "pageBridge.changed": {
     "source": "身份或工作区来源已改变，请重新明确授权",
     "params": {}
@@ -3331,6 +3335,10 @@
   },
   "pageBridge.clientLabel": {
     "source": "MCP 客户端",
+    "params": {}
+  },
+  "pageBridge.codeHelp": {
+    "source": "从客户端的进程日志（stderr）复制配对码，在 90 秒内粘贴到上方。",
     "params": {}
   },
   "pageBridge.connect": {
@@ -3349,6 +3357,10 @@
     "source": "空工作区",
     "params": {}
   },
+  "pageBridge.findCode": {
+    "source": "在哪里获取配对码？",
+    "params": {}
+  },
   "pageBridge.invalid": {
     "source": "收到不符合授权范围的命令，连接已撤销",
     "params": {}
@@ -3357,8 +3369,16 @@
     "source": "结果超过通道预算，写入结果可能未知；请保留原 correlation，勿自动重试",
     "params": {}
   },
+  "pageBridge.launchHelp": {
+    "source": "让 MCP 客户端从 VoidPlayer 源码目录运行这条命令。",
+    "params": {}
+  },
   "pageBridge.lifetime": {
     "source": "授权仅存于当前进程和页面内存，撤销、重载、关页或断线即失效；已经开始的操作可能完成，取消不表示回滚，未知写入不得自动重试",
+    "params": {}
+  },
+  "pageBridge.localClient": {
+    "source": "AI 辅助评审",
     "params": {}
   },
   "pageBridge.lost": {
@@ -3374,7 +3394,7 @@
     "params": {}
   },
   "pageBridge.pairCode": {
-    "source": "一次性配对信息",
+    "source": "一次性配对码",
     "params": {}
   },
   "pageBridge.pairExpired": {
@@ -3400,6 +3420,14 @@
     "source": "配对不可用：信息不符、已到期、已消费或客户端尚未就绪，请发起新请求，页面数据尚未分享",
     "params": {}
   },
+  "pageBridge.pasteCode": {
+    "source": "粘贴客户端提供的配对码",
+    "params": {}
+  },
+  "pageBridge.purpose": {
+    "source": "让电脑上的 AI 助手读取视频标注，跳到你想复查的那一帧。",
+    "params": {}
+  },
   "pageBridge.read": {
     "source": "读取此页面会话、已有标注与 ROI（不含媒体或日志字节）",
     "params": {}
@@ -3414,6 +3442,10 @@
   },
   "pageBridge.scopes": {
     "source": "授权范围",
+    "params": {}
+  },
+  "pageBridge.startPairing": {
+    "source": "配对 AI 助手",
     "params": {}
   },
   "pageBridge.target": {

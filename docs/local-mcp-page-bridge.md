@@ -16,10 +16,10 @@ node scripts/mcp-page-bridge.ts
 The MCP client launches this command with stdin/stdout pipes. Open the localhost
 page URL printed on stderr. This process owns that page host, with empty media
 roots; it cannot attach to an arbitrary already-open player. The user selects
-local files in this page, opens Settings → Experimental features → MCP, reviews the self-declared client (not an
+local files in this page, opens Settings → Experimental features → AI-assisted review, reviews the self-declared client (not an
 authenticated identity), workspace and scopes, then explicitly connects.
 Read is mandatory; view control and annotation creation are separate opt-ins.
-Use Revoke in Settings → Experimental features → MCP to disconnect. No reconnect/tab following is
+Use Revoke in Settings → Experimental features → AI-assisted review to disconnect. No reconnect/tab following is
 automatic. Reload/close loses the document credential. Bridge credentials are
 random process/document-memory capabilities, never URLs, logs, browser storage,
 accounts, API keys, OAuth, extensions or startup services. Same-origin code and
@@ -72,7 +72,7 @@ The page obtains its independent random document credential directly over the
 strict same-origin channel, only when the user clicks Review pairing; pairing
 consumes the selector and document registration together without returning any
 credential. CLI, document and grant secrets never appear in stderr or stdout. In the intended existing page,
-open Settings → Experimental features → MCP, enter the one-time information and click Review pairing. Check the
+open Settings → Experimental features → AI-assisted review and choose Pair AI assistant. Paste the code and click Review pairing. The code field also offers setup instructions. Check the
 exact page/workspace, the self-declared client and expiry. Read, view and
 annotation permissions start unchecked and are independent opt-ins. Only the
 explicit Connect click grants selected scopes. No file is reselected or uploaded.
@@ -169,7 +169,7 @@ cursor requires reading again without it. This host observation does not establi
 readiness. No timestamps, file names or similar frames are guessed or aligned. The only write targets are this page's existing
 facade operations; annotation creation requires an already paused drawn frame.
 
-- host-unavailable / stale epoch: open Settings → Experimental features → MCP on the intended page, review and
+- host-unavailable / stale epoch: open Settings → Experimental features → AI-assisted review on the intended page, review and
   explicitly reconnect. For a new CLI process choose Pair another client and
   enter its new matching selector; no page reload or File reselection is needed. No automatic reconnect or attachment to another window.
 - scope-denied: the call did not run. Change scopes only through user revocation
@@ -196,6 +196,6 @@ to 15 seconds. Messages are at most 64 KiB inbound, results 48 KiB, stdout frame
 128 KiB; outbound buffering is bounded. Legacy request IDs cannot be reused in
 one session and their bounded history permits 4096 requests before an explicit
 restart. Large read results fail explicitly rather than truncate or upload media.
-Closing Settings keeps the grant active. Settings → Experimental features → MCP shows its status and
+Closing Settings keeps the grant active. Settings → Experimental features → AI-assisted review shows its status and
 offers an explicit Revoke action. An executing facade operation settles before reconnect is
 allowed; waiting for its delivery ACK is fenced separately from physical work.
