@@ -8,6 +8,7 @@ import { loadConfig } from '../server/config.ts';
 import { publishFrontend } from '../server/frontend-releases.ts';
 import { startPublishedService } from '../server/runtime.ts';
 import { chooseTestGuest } from './test-identity.mjs';
+import { withinBrowserPhase } from './browser-failure-evidence.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const temporary = await mkdtemp(path.join(tmpdir(), 'vp-frontend-publication-'));
@@ -144,6 +145,20 @@ try {
       'C assets remain available offline while the sibling keeps the A worker active');
   } finally { await app.setOffline(false); }
   await sibling.close();
+  const monitor = await app.newCDPSession(pages[1].page);
+  let waitingVersion;
+  const activated = new Promise(resolve => monitor.on('ServiceWorker.workerVersionUpdated', ({versions}) => {
+    for (const version of versions) {
+      if (version.scriptURL === base + '/sw.js' && version.status === 'installed') waitingVersion = version.versionId;
+      if (version.versionId === waitingVersion && version.status === 'activated') resolve();
+    }
+  }));
+  await monitor.send('ServiceWorker.enable');
+  // Release the final controlled document without opening a new A client
+  // before C has naturally activated. Never force an update over a review.
+  await pages[1].page.goto('about:blank');
+  await withinBrowserPhase(() => activated, 15000, {engine:'chromium',caseName:'frontend-publication',phase:'natural worker activation'});
+  await monitor.detach();
   await pages[1].page.close();
   const upgraded = await app.newPage();
   await upgraded.goto(base); await upgraded.waitForFunction(() => !!window.voidPlayer);
