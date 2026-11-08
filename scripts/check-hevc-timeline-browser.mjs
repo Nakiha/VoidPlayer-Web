@@ -57,6 +57,13 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
         const {createNativeReference}=await import('/scripts/testing/browser/native-reference.mjs');
         const url='/fixtures/video/'+name,bytes=await(await fetch(url)).arrayBuffer(),rows=[];
         const sourceCanvas=document.querySelector('canvas');
+        let gpuCaptureCanvases=0;
+        const seenGpuCanvases=new WeakSet(),getContext=OffscreenCanvas.prototype.getContext;
+        OffscreenCanvas.prototype.getContext=function(type,...args){
+          const context=getContext.call(this,type,...args);
+          if(type==='webgpu'&&context&&!seenGpuCanvases.has(this)){seenGpuCanvases.add(this);gpuCaptureCanvases++;}
+          return context;
+        };
         const control=new OffscreenCanvas(1920,1080),controlContext=control.getContext('2d',{willReadFrequently:true});
         const assert=(ok,message)=>{if(!ok)throw Error(message);};
         // Native FFmpeg's independently frozen packet/display permutation is
@@ -93,6 +100,7 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
           }finally{if(decoder&&decoder.state!=='closed')decoder.close();input.dispose();}
         };
         for(let round=0;round<2;round++){
+          const captureBaseline=gpuCaptureCanvases;
           progress('open-start',{round});
           const source=await(remote?openMediaFromUrl(new URL(url,location.href).href,{name,size:bytes.byteLength,lastModified:0}):openMedia(new File([bytes],name)));
           progress('open-complete',{round,info:source.info});
@@ -136,7 +144,7 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
               for(let y=0;y<18;y++)for(let x=0;x<32;x++){const k=(Math.floor((y+.5)*1080/18)*1920+Math.floor((x+.5)*1920/32))*4;for(let c=0;c<3;c++)gpuError+=Math.abs(gpu[k+c]-pixels[k+c]);}
               assert(gpuError/n<3,`GPU upload ${index}: RGB difference ${gpuError/n}`);
               row.maxGpuPixelError=Math.max(row.maxGpuPixelError,gpuError/n);
-              if(index%100===0||index===599)progress('frame-inspected',{round,index,ptsUs:f.ptsUs,inspectMs:Math.round(performance.now()-inspectStarted),paintMs:Math.round(paintMs),captureMs:Math.round(captureMs),readMs:Math.round(readMs),executor:sourceCanvas.dataset.colorExecutor});
+              if(index%25===0||index===599)progress('frame-inspected',{round,index,ptsUs:f.ptsUs,inspectMs:Math.round(performance.now()-inspectStarted),paintMs:Math.round(paintMs),captureMs:Math.round(captureMs),readMs:Math.round(readMs),executor:sourceCanvas.dataset.colorExecutor});
               return f.ptsUs;
             }finally{f.close();}
           };
@@ -160,6 +168,8 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
               progress('seek-complete',{round,index:i});
             }
             assert(await inspect(await source.frameAt(source.info.durationUs-1),599)===times[599],'EOF seek');
+            row.gpuCaptureCanvases=gpuCaptureCanvases-captureBaseline;
+            assert(row.gpuCaptureCanvases>0&&row.gpuCaptureCanvases<=2,'full-source capture keeps a bounded temporary GPU canvas pool');
           }finally{source.dispose();disposePresentation();nativeGpu?.dispose();}
           rows.push(row);
           progress('round-complete',{round});

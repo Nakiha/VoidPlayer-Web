@@ -17,6 +17,7 @@ const av1Encoder = ffmpegEncoders.includes('libaom-av1') ? 'libaom-av1'
 if (!av1Encoder) throw new Error('reference FLV browser check requires an FFmpeg AV1 encoder (libaom-av1 or libsvtav1).');
 const unhex = dump => Buffer.from(dump.split('\n').filter(l => l.includes(': ')).map(l => l.split(': ')[1].split('  ')[0].replaceAll(' ', '')).join(''), 'hex');
 const u24 = n => { const b = Buffer.alloc(3); b.writeUIntBE(n & 0xffffff, 0, 3); return b; };
+const nativeProbes=new Map();
 const tag = (data, time) => { const size = Buffer.alloc(4); size.writeUInt32BE(11 + data.length); return Buffer.concat([Buffer.from([9]), u24(data.length), u24(time), Buffer.from([time >>> 24, 0, 0, 0]), data, size]); };
 async function fixture(codec) {
   const file = path.join(root, `${codec}.mp4`);
@@ -26,6 +27,7 @@ async function fixture(codec) {
     '-pix_fmt', 'yuv420p', '-color_range', 'tv', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709',
     ...(codec === 'hevc' ? ['-x265-params', 'pools=1:frame-threads=1:log-level=error', '-tag:v', 'hvc1'] : []), file], { timeout: 30000 });
   const doc = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_streams', '-show_packets', '-show_data', '-of', 'json', file], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }));
+  nativeProbes.set(codec,{width:doc.streams[0].width,height:doc.streams[0].height,description:[...unhex(doc.streams[0].extradata)],packets:doc.packets.slice(0,25).map(p=>({type:p.flags.includes('K')?'key':'delta',timestamp:Math.round(Number(p.pts_time)*1e6),data:[...unhex(p.data)]}))});
   const id = codec === 'h264' ? 7 : codec === 'hevc' ? 12 : 13;
   const parts = [Buffer.from('464c5601010000000900000000', 'hex'), tag(Buffer.concat([Buffer.from([0x10 | id, 0, 0, 0, 0]), unhex(doc.streams[0].extradata)]), 0)];
   for (const packet of doc.packets) {
@@ -44,6 +46,7 @@ try {
   const engine = process.argv[2] ?? 'chromium';
   browser = await (engine === 'webkit' ? webkit : chromium).launch({ headless: true,
     ...(engine === 'chromium' && process.env.CHROME_EXECUTABLE_PATH ? { executablePath: process.env.CHROME_EXECUTABLE_PATH } : {}) });
+  let av1NativeCapability;
   async function run({ codec = 'h264', local = false, fault, software = false } = {}) {
     const context = await browser.newContext({locale:'zh-CN'}), page = await context.newPage();
     const errors = []; page.on('pageerror', e => errors.push(e.message));
@@ -99,7 +102,25 @@ try {
           && decisions.some(d => d.reason === 'native-failed')
           && state.tracks[0].decoder === 'ffmpeg-wasm';
         assert.ok(refusal || gate || webkitAv1DecodeGap || reusedSoftwareWitness || inPlaceSoftwareFallback, JSON.stringify({ decisions, events: logs.events.filter(e => e.cat === 'media') }));
-        if (codec === 'av1' && !fault && !software && !refusal && !webkitAv1DecodeGap) assert.fail(`AV1 raw-plane admission unexpectedly failed: ${JSON.stringify(gate)}`);
+        let verifiedNativeDecodeGap=false;
+        if(codec==='av1'&&!fault&&!software&&!refusal&&!webkitAv1DecodeGap){
+          // Check the encoded packets independently, without FLV/source/admission
+          // helpers. A successful capability probe alone cannot certify decoding.
+          av1NativeCapability??=await page.evaluate(async probe=>{
+            let decoder,decoded=0,failure;
+            try{
+              decoder=new VideoDecoder({output(frame){decoded++;frame.close();},error(error){failure=error.message;}});
+              decoder.configure({codec:probe.codec,codedWidth:probe.width,codedHeight:probe.height,
+                description:new Uint8Array(probe.description),hardwareAcceleration:'prefer-hardware',optimizeForLatency:true});
+              for(const packet of probe.packets)decoder.decode(new EncodedVideoChunk({...packet,data:new Uint8Array(packet.data)}));
+              await decoder.flush();return {decoded,failure:failure??null};
+            }catch(error){return {decoded,failure:failure??error.message};}
+            finally{if(decoder&&decoder.state!=='closed')decoder.close();}
+          },{...nativeProbes.get('av1'),codec:decisions.find(d=>d.reason==='capability-probe')?.codec});
+          verifiedNativeDecodeGap=!!av1NativeCapability.failure&&decisions.some(d=>d.reason==='native-failed');
+          assert.ok(verifiedNativeDecodeGap,`AV1 admission failed despite a working independent decoder: ${JSON.stringify({av1NativeCapability,gate,decisions})}`);
+          console.log(`PLATFORM GAP ${engine} av1: independent VideoDecoder failed ${JSON.stringify(av1NativeCapability)}, WASM fallback active`);
+        }
         if (webkitAv1DecodeGap) console.log('PLATFORM GAP webkit av1: probe passed but first-frame decode failed, WASM fallback active');
         else if (inPlaceSoftwareFallback) console.log(`IN-PLACE FALLBACK ${codec}: shared FLV demux/index, no second software source open`);
         else console.log(`ADMISSION REFUSAL ${codec}: ${JSON.stringify(gate?.data ?? decisions)}`);

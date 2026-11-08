@@ -14,7 +14,7 @@ export async function withAnalysisFixture(options, run) {
   const matrixCase='bitstream-analysis-matrix'+(matrixPart?'-'+matrixPart:'')+(desktopPerformance?'-desktop':'');
   const name=scenario==='matrix'?matrixCase:'bitstream-analysis-'+(scenario==='overlay'?'layout':scenario);
   const roots=scenario==='matrix'?['fixtures/video','fixtures/flv-analysis','fixtures/fmp4-analysis','fixtures/ts-analysis'].map(file=>path.join(repositoryRoot,file)):[];
-  return withBrowserFixture({caseName:name,engine,roots,signal:options.signal,pageOptions:{deviceScaleFactor:2},
+  return withBrowserFixture({caseName:name,engine,roots,signal:options.signal,pageOptions:{deviceScaleFactor:scenario==='matrix'&&engine==='chromium'&&process.platform==='linux'?1:2},
     ...(desktopPerformance?{launchOptions:{headless:false}}:{}),
     timeoutMs:['layout','overlay'].includes(scenario)?300000:600000,
     dependencies:{async startService({temp,roots,defer}) {
