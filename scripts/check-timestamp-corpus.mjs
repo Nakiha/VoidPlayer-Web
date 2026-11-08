@@ -63,13 +63,16 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
         const {paintFrame,captureFrame,disposePresentation}=await import('/src/presentation/presenter.ts');
         const {initializeGpuPresentation}=await import('/src/presentation/webgpu-presenter.ts');
         const {pixelSignature,checkSequence,checkFrame,expectedAt}=await import('/scripts/fate-oracle.ts');
+        const canvas=document.querySelector('canvas');
         const url=new URL('/timestamp-fixture/'+file,location.href).href,bytes=await(await fetch(url)).arrayBuffer(),rows=[];
         for(let round=0;round<2;round++){
           const row={round,frames:[],failures:[],phase:'open',environment:{crossOriginIsolated:globalThis.crossOriginIsolated,sharedArrayBuffer:typeof SharedArrayBuffer!=='undefined',secureContext:globalThis.isSecureContext}};let source;
-          const observe=f=>{const c=document.querySelector('canvas');paintFrame(c,f);const image=captureFrame(c);return{ptsUs:f.ptsUs,width:f.width,height:f.height,signature:pixelSignature(image.getContext('2d').getImageData(0,0,image.width,image.height).data,image.width,image.height)};};
+          // Initialization inserts the GPU output before the source canvas.
+          // Keep the registered source instead of finding that new first canvas.
+          const observe=f=>{paintFrame(canvas,f);const image=captureFrame(canvas);return{ptsUs:f.ptsUs,width:f.width,height:f.height,signature:pixelSignature(image.getContext('2d').getImageData(0,0,image.width,image.height).data,image.width,image.height)};};
           try{
             source=await(remote?openMediaFromUrl(url,{name:file,size:bytes.byteLength,lastModified:0}):openMedia(new File([bytes],file)));row.info=structuredClone(source.info);row.phase='presentation';
-            await initializeGpuPresentation([document.querySelector('canvas')]);row.phase='play';
+            await initializeGpuPresentation([canvas]);row.phase='play';
             for await(const f of source.framesFrom(0)){try{row.frames.push(observe(f));}finally{f.close();}if(row.frames.length>1000)throw Error('frame bound exceeded');}
             row.failures.push(...checkSequence(row.frames,ref));row.phase='seek';
             if(ref.length)for(const time of [0,Math.floor(source.info.durationUs/2),source.info.durationUs-1,0]){const f=await source.frameAt(time);try{row.failures.push(...checkFrame(observe(f),expectedAt(ref,time),'seek'));}finally{f.close();}}
