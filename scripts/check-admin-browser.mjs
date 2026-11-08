@@ -364,30 +364,41 @@ try {
     }
   }
   const selectionFolder=active.locator('.library-folder').filter({hasText:'folder-000'});
-  const sampleSelection = async action => {
-    await selectionFolder.evaluate(el => {
-      window.selectionSamples=[];
+  const sampleSelection = async select => {
+    const samples = await selectionFolder.evaluate(async (el,select) => {
+      const box=el.querySelector('.source-thumb');
+      await Promise.all([...el.getAnimations(),...box.getAnimations()].map(animation=>animation.finished.catch(()=>{})));
       const progress=(target,property) => target.getAnimations().find(animation => animation.transitionProperty===property)?.effect.getComputedTiming().progress ?? null;
-      const sample=() => {
-        const box=el.querySelector('.source-thumb'),row=getComputedStyle(el),thumb=getComputedStyle(box);
-        window.selectionSamples.push({text:row.color,icon:thumb.color,layers:thumb.backgroundImage,
-          textProgress:progress(el,'color'),iconProgress:progress(box,'color'),rowProgress:progress(el,'background-color'),thumbProgress:progress(box,'background-color')});
-        window.selectionFrame=requestAnimationFrame(sample);
+      const sample=()=>{
+        const row=getComputedStyle(el),thumb=getComputedStyle(box);
+        return {text:row.color,icon:thumb.color,layers:thumb.backgroundImage,
+          textProgress:progress(el,'color'),iconProgress:progress(box,'color'),rowProgress:progress(el,'background-color'),thumbProgress:progress(box,'background-color')};
       };
-      sample();
-    });
-    await action(); await managed.waitForTimeout(320);
-    return managed.evaluate(() => {cancelAnimationFrame(window.selectionFrame);return window.selectionSamples;});
+      const samples=[sample()];
+      (select?el:el.closest('[data-library-view-surface]').querySelector('.source-file')).click();
+      sample(); // Materialize transitions in the same task as the real selection.
+      const animations=[...el.getAnimations(),...box.getAnimations()].filter(animation=>['color','background-color'].includes(animation.transitionProperty));
+      if(!animations.length)throw Error('selection must create real color transitions');
+      const end=Math.max(...animations.map(animation=>animation.effect.getComputedTiming().endTime));
+      for(const animation of animations)animation.pause();
+      // One elapsed clock preserves each transition's duration, easing and delay;
+      // normalizing each animation separately would hide desynchronization.
+      for(let step=0;step<=10;step++){
+        for(const animation of animations)animation.currentTime=end*step/10;
+        samples.push(sample());
+      }
+      for(const animation of animations)animation.finish();
+      return samples;
+    },select);
+    if(select)await managed.waitForFunction(()=>document.querySelector('#library-location').value==='folder-000');
+    return samples;
   };
   for (const theme of ['dark','light']) {
     await player.evaluate(theme => localStorage.setItem('voidplayer.theme',theme),theme);
     await managed.waitForFunction(theme => document.documentElement.dataset.theme===theme,theme);
     await managed.waitForTimeout(320);
-    const select=await sampleSelection(async () => {
-      await selectionFolder.evaluate(el => el.click());
-      await managed.waitForFunction(() => document.querySelector('#library-location').value==='folder-000');
-    });
-    const deselect=await sampleSelection(() => active.locator('.source-file').evaluate(el => el.click()));
+    const select=await sampleSelection(true);
+    const deselect=await sampleSelection(false);
     for (const [phase,samples] of [['select',select],['deselect',deselect]]) {
       const final=samples.at(-1);
       assert.ok(samples.some(sample => sample.text!==final.text&&sample.icon!==final.icon),`${theme}: ${phase} animates the row text and icon together`);
