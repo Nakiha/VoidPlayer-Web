@@ -65,7 +65,7 @@ jobs:
   analysis-browser:
     name: Verify analysis panel (${{ matrix.engine }})
     needs: cores
-    runs-on: ${{ matrix.engine == 'webkit' && 'macos-26' || 'ubuntu-24.04' }}
+    runs-on: macos-26
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -120,7 +120,7 @@ jobs:
   analysis-matrix:
     name: Verify analysis matrix (${{ matrix.engine }}, ${{ matrix.part }})
     needs: [cores, qa-media]
-    runs-on: ${{ matrix.engine == 'webkit' && 'macos-26' || 'ubuntu-24.04' }}
+    runs-on: macos-26
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -371,7 +371,7 @@ jobs:
   uncovered-regressions:
     name: Verify browser regressions no other job runs
     needs: [cores, qa-media]
-    runs-on: ${{ matrix.engine == 'webkit' && 'macos-26' || 'ubuntu-24.04' }}
+    runs-on: macos-26
     timeout-minutes: 40
     strategy:
       fail-fast: false
@@ -431,9 +431,9 @@ jobs:
   hevc-browser:
     name: Verify HEVC timeline (${{ matrix.engine }}, ${{ matrix.input }})
     needs: [cores, qa-media]
-    runs-on: ${{ matrix.engine == 'webkit' && 'macos-26' || 'ubuntu-24.04' }}
-    # Chromium software graphics audits 1200 full-source captures. The case
-    # has a separate no-progress watchdog; leave room for its 30-minute budget.
+    runs-on: macos-26
+    # Native HEVC/WebGPU coverage runs on Metal for both engines; the Linux
+    # codec matrix and Node audits retain software HEVC coverage.
     timeout-minutes: 35
     strategy:
       fail-fast: false
@@ -592,7 +592,9 @@ jobs:
         if: always()
         with:
           name: native-test-reports-${{ matrix.platform }}
-          path: .run/test-suites/
+          path: |
+            .run/test-suites/
+            .run/playback-reports/
           if-no-files-found: ignore
       - name: Write download summary
         shell: bash

@@ -6,7 +6,7 @@ runs:
     - name: Ensure X display tools
       if: runner.os == 'Linux'
       shell: bash
-      run: sudo apt-get install -y xvfb x11-utils
+      run: sudo apt-get install -y xvfb x11-utils libvulkan1 mesa-vulkan-drivers
     - name: Start and verify Xvfb
       if: runner.os == 'Linux'
       shell: bash

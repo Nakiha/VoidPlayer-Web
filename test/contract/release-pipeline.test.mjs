@@ -615,3 +615,11 @@ test('daily and release sample consumers share one verified QA media artifact', 
     assert.ok(!jobs.cores.needs.includes('qa-media'));
   }
 });
+
+test('GPU-intensive browser matrices use a native Metal host without dropping engine/input cells', async () => {
+  for(const file of ['checks','release-preview']){
+    const jobs=workflowJobs(await readFile(new URL(`../../.github/workflows/${file}.yml`,import.meta.url),'utf8'));
+    const selected=file==='checks'?['browser']:['analysis-browser','analysis-matrix','uncovered-regressions','hevc-browser'];
+    for(const id of selected)assert.match(jobs[id].body,/^    runs-on: macos-26$/m,id);
+  }
+});

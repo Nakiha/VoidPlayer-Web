@@ -1,14 +1,18 @@
 import { chromium as nativeChromium, webkit, firefox } from 'playwright';
 
-// Linux CI pairs Dawn and the compositor on SwiftShader Vulkan under Xvfb.
+// Linux CI pairs Dawn and ANGLE on SwiftShader Vulkan under Xvfb.
+// Linux/Windows use full presenting Chromium; their headless compositor cannot
+// reliably share WebGPU swap textures. macOS keeps its native headless path.
 // ANGLE alone can create an adapter but lose it at getCurrentTexture().
 // Suite deadlines and device/resource errors remain fatal.
 export function chromiumLaunchOptions(options = {}, platform = process.platform, legacyScreenshot = !!process.env.PLAYWRIGHT_LEGACY_SCREENSHOT) {
   if (options.headless === false) return options;
-  const backend = platform === 'darwin' ? 'metal' : platform === 'win32' ? 'd3d11' : 'swiftshader';
+  const backend = platform === 'darwin' ? 'metal' : platform === 'win32' ? 'd3d11' : 'vulkan';
   const software = platform === 'linux'
     ? ['--use-gl=angle', '--enable-unsafe-swiftshader', '--disable-accelerated-video-decode', '--disable-gpu-watchdog',
-      '--enable-gpu', '--ignore-gpu-blocklist', '--use-vulkan=swiftshader'] : [];
+      '--enable-gpu', '--ignore-gpu-blocklist', '--use-vulkan=swiftshader',
+      '--use-webgpu-adapter=swiftshader', '--disable-vulkan-surface']
+    : platform==='win32'?['--enable-gpu','--ignore-gpu-blocklist']:[];
   const args = [...(options.args ?? [])];
   if (platform === 'linux') {
     const features = args.filter(arg => arg.startsWith('--enable-features=')).flatMap(arg => arg.slice('--enable-features='.length).split(','));
@@ -18,7 +22,7 @@ export function chromiumLaunchOptions(options = {}, platform = process.platform,
     const defaults = ['Vulkan', ...(legacyScreenshot ? [] : ['CDPScreenshotNewSurface'])];
     args.push(`--enable-features=${[...new Set([...features, ...defaults])].join(',')}`);
   }
-  return { ...options, args: [...new Set([...args, '--enable-unsafe-webgpu', `--use-angle=${backend}`, ...software])] };
+  return { ...options, ...(['linux','win32'].includes(platform)?{headless:false}:{}), args: [...new Set([...args, '--enable-unsafe-webgpu', `--use-angle=${backend}`, ...software])] };
 }
 const chromium = new Proxy(nativeChromium, {
   get(target, key) {

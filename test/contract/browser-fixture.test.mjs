@@ -9,19 +9,21 @@ import {installAdminObservationLifecycle} from '../../scripts/testing/admin-obse
 import { withBrowserFixture } from '../../scripts/testing/browser-fixture.mjs';
 import { chromiumLaunchOptions } from '../../scripts/testing/browser-engines.mjs';
 
-test('software graphics flags stay in Linux headless checks and preserve caller launch options', () => {
+test('hosted graphics flags select a presenting browser and preserve caller launch options', () => {
   const options = { headless: true, timeout: 1234, args: ['--no-sandbox', '--enable-unsafe-webgpu'] };
   const linux = chromiumLaunchOptions(options, 'linux');
   assert.equal(linux.channel, undefined);
+  assert.equal(linux.headless, false, 'Linux presents through the verified X display');
   assert.equal(linux.timeout, 1234);
-  for (const flag of ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--disable-accelerated-video-decode', '--disable-gpu-watchdog',
-    '--enable-gpu', '--use-vulkan=swiftshader', '--enable-features=Vulkan,CDPScreenshotNewSurface'])
+  for (const flag of ['--no-sandbox', '--use-gl=angle', '--use-angle=vulkan', '--disable-accelerated-video-decode', '--disable-gpu-watchdog',
+    '--enable-gpu', '--use-vulkan=swiftshader', '--use-webgpu-adapter=swiftshader', '--disable-vulkan-surface', '--enable-features=Vulkan,CDPScreenshotNewSurface'])
     assert.ok(linux.args.includes(flag), flag);
   assert.equal(linux.args.filter(flag => flag === '--enable-unsafe-webgpu').length, 1);
   assert.deepEqual(options.args, ['--no-sandbox', '--enable-unsafe-webgpu']);
   for (const [platform, backend] of [['darwin', 'metal'], ['win32', 'd3d11']]) {
     const native = chromiumLaunchOptions(options, platform);
     assert.equal(native.channel, undefined);
+    assert.equal(native.headless, platform==='win32'?false:true);
     assert.ok(native.args.includes(`--use-angle=${backend}`));
     assert.ok(!native.args.includes('--disable-gpu-watchdog'));
     assert.ok(!native.args.includes('--disable-accelerated-video-decode'));

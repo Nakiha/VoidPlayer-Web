@@ -41,7 +41,12 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
     const batch = batches.get(device);
     if (batch) { batch.commands.length = 0; batch.surfaces.clear(); for (const close of batch.closes.splice(0)) close(); }
   });
-  let geometry=null,rotation=0,previewCurrent=false,sdrBridge;
+  let geometry=null,rotation=0,previewCurrent=false,sdrBridge,captureCanvas,captureContext;
+  const releaseCapture=()=>{
+    captureContext?.unconfigure();
+    if(captureCanvas)captureCanvas.width=captureCanvas.height=1;
+    captureCanvas=captureContext=undefined;
+  };
   let context, externalUniform, yuvBuffer, yuvSize=0, yuvUniform, yuvParams, browserHdrBridge;
   try {
   context = canvas.getContext('webgpu');
@@ -204,7 +209,7 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
       retire(device,previous);
     },
     get available(){return !lost&&!disposed&&!resourceError;},
-    clear(){flush(device);current?.close();current=undefined;yuvBuffer?.destroy();yuvBuffer=undefined;yuvSize=0;copiedTexture?.destroy();copiedTexture=undefined;browserHdrBridge?.dispose?.();if(sdrBridge)sdrBridge.width=sdrBridge.height=1;},
+    clear(){flush(device);releaseCapture();current?.close();current=undefined;yuvBuffer?.destroy();yuvBuffer=undefined;yuvSize=0;copiedTexture?.destroy();copiedTexture=undefined;browserHdrBridge?.dispose?.();if(sdrBridge)sdrBridge.width=sdrBridge.height=1;},
     captureSource(target) {
       if(!current)throw new Error('No frame');
       const swap=rotation===90||rotation===270;
@@ -213,9 +218,19 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
       if(!current.yuv&&hdrTransfer(current.colorSpace?.transfer)){
         out.save();out.clearRect(0,0,w,h);out.translate(w/2,h/2);out.rotate(rotation*Math.PI/180);out.drawImage(current,-current.displayWidth/2,-current.displayHeight/2,current.displayWidth,current.displayHeight);out.restore();return target;
       }
-      const scratch=new OffscreenCanvas(w,h),ctx=scratch.getContext('webgpu');
+      captureCanvas??=new OffscreenCanvas(w,h);
+      if(captureCanvas.width!==w)captureCanvas.width=w;
+      if(captureCanvas.height!==h)captureCanvas.height=h;
+      const scratch=captureCanvas,ctx=captureContext??=scratch.getContext('webgpu');
       ctx.configure({device,format:sdrFormat,colorSpace:'srgb',alphaMode:'premultiplied'});
-      try{render(ctx.getCurrentTexture(),sdrFormat,false,true);flush(device);out.clearRect(0,0,w,h);out.drawImage(scratch,0,0);return target;}finally{ctx.unconfigure();}
+      try{
+        render(ctx.getCurrentTexture(),sdrFormat,false,true);flush(device);
+        out.clearRect(0,0,w,h);out.drawImage(scratch,0,0);
+        // Canvas2D may defer consuming the WebGPU swap texture. Complete this
+        // explicit capture before unconfiguring its temporary GPU context.
+        out.getImageData(0,0,w,h);
+        return target;
+      }finally{ctx.unconfigure();}
     },
     async capture(viewport=false) {
       if(!current)throw new Error('No frame');
@@ -257,7 +272,7 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
       }finally{buffer.destroy();texture.destroy();}
     },
     drain:()=>{flush(device);return device.queue.onSubmittedWorkDone();},
-    dispose(){if(disposed)return;flush(device);disposed=true;current?.close();current=undefined;yuvBuffer?.destroy();yuvUniform?.destroy();externalUniform?.destroy();copiedTexture?.destroy();browserHdrBridge?.dispose?.();if(sdrBridge)sdrBridge.width=sdrBridge.height=1;context.unconfigure();device.removeEventListener('uncapturederror',onError);if(ownsDevice)device.destroy();}
+    dispose(){if(disposed)return;flush(device);disposed=true;releaseCapture();current?.close();current=undefined;yuvBuffer?.destroy();yuvUniform?.destroy();externalUniform?.destroy();copiedTexture?.destroy();browserHdrBridge?.dispose?.();if(sdrBridge)sdrBridge.width=sdrBridge.height=1;context.unconfigure();device.removeEventListener('uncapturederror',onError);if(ownsDevice)device.destroy();}
   };
   } catch(error) {
     current?.close();yuvBuffer?.destroy();yuvUniform?.destroy();externalUniform?.destroy();copiedTexture?.destroy();browserHdrBridge?.dispose?.();if(sdrBridge)sdrBridge.width=sdrBridge.height=1;context?.unconfigure();

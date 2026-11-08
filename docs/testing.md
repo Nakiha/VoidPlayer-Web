@@ -2,9 +2,9 @@
 
 视频上屏收敛为 WebGPU：`presentation-browser` 将旧 WebGL/2D 回退用例迁为真实 WebGPU 的原生帧、YUV、RGBA、alpha、旋转、源尺寸捕获与采样验证，并以无 API、设备丢失和迟到初始化注入检查明确失败与一次重建。矩阵、素材及数值容差不扩大，删除旧后端专属检查；CPU 仍作为独立数值预期。标注及分析几何用例改读实际 WebGPU 画布的按需 2D 快照，保持最终截图和图层断言。原始画面采样时临时隐藏分屏握柄与其他覆盖层，合成检查再恢复；不把 UI 像素混入原画面预期。透明度用例固定受检查 2D 覆盖层的读取策略，避免像素检查触发浏览器 GPU/CPU 光栅化切换后，分数像素裁剪边缘出现无关差异，仍逐像素核对开关标签后的恢复。无 WebGPU 负例在旧实现会回到兼容画布，不能满足拒绝呈现/捕获的独立预期。
 
-Linux 功能测试中的无窗口 Chromium 使用显式 SwiftShader WebGPU；macOS/Windows 使用本机图形后端，避免把硬件解码纹理跨后端导入。有窗口诊断和播放基准保留真实显卡。WebKit 播放验证使用 macOS 26，Linux WebKit 不提供播放验收；缺失 WebGPU 的明确拒绝通过能力注入单独检查。GPU/色彩测试缺少所需 adapter 直接失败，不静默当作成功。CI 不设置软件 GPU 的性能门禁。
+图形密集的 Chromium/WebKit 浏览器 CI 均使用 macOS 26 的 Metal；Linux/Windows 原生包仍运行实际浏览器连接与播放检查。Linux 使用完整 Chromium 与 Xvfb、显式 SwiftShader Vulkan；Windows 使用完整有窗口 Chromium 与 D3D，避免无窗口 shell 的图形互操作与着色器编译器缺件。macOS 保留原生无窗口路径。显式有窗口诊断和播放基准保留调用方的真实显卡配置。WebKit 播放验证使用 macOS 26，Linux WebKit 不提供播放验收；缺失 WebGPU 的明确拒绝通过能力注入单独检查。GPU/色彩测试缺少所需 adapter 直接失败，不静默当作成功。CI 不设置软件 GPU 的性能门禁。
 
-2.1.0 的 CI 修复：Linux 使用 Playwright 默认无窗口 Chromium；Xvfb 提供临时显示，Dawn 与合成器显式共用 SwiftShader Vulkan，
+2.1.0 的 CI 修复：Linux 使用 Playwright 完整有窗口 Chromium；Xvfb 提供临时显示，Dawn 与 ANGLE 显式共用 SwiftShader Vulkan，
 避免只启用 ANGLE 时交换纹理无法建立共享图像、getCurrentTexture 导致设备丢失。软件视频解码与关闭 GPU watchdog 仅用于这些功能检查；只影响功能测试启动，真实设备丢失、资源错误和套件超时仍失败。有窗口测试、macOS/Windows 与播放基准保留原生路径。
 分析工具条换行、区间按钮和弹出编辑器的尺寸观察只调度下一帧布局更新，复用可取消的 frame task；卸载时取消待执行更新。
 复用双引擎 Sites 与 WebKit analysis-layout 的既有素材、视口和错误断言，不增加媒体/解码循环，不忽略 ResizeObserver 错误或恢复失败提示。
@@ -706,3 +706,10 @@ FATE 同时保留原 Canvas2D 路径的冻结 FFmpeg RGB 指纹，并额外核�
 独立参考复用 GPU 资源，不增加解码轮次或样片；HEVC 每帧增加一次 32×18 参考读回，FATE 使用已有小尺寸帧。
 Linux 软件 GPU 的几何测试原五分钟限时在持续取得帧进展时耗尽，现给完整矩阵二十分钟预算，常规浏览器 job 为三十五分钟；
 矩阵、截图和像素断言不减少，此预算用于功能检查，不作为云端性能标准。原生打包使用宿主默认命令环境，Windows 使用 PowerShell；仅下载摘要显式使用 Bash。
+
+完整 HEVC 时间线矩阵的两种浏览器均在 macOS 26 的 Metal 上验证原生解码，保留本地/远程、重开与所有逐帧审计。Linux 软件 HEVC 仍由容器/分析矩阵和完整 Node 媒体套件覆盖；源尺寸 GPU 截图审计不以软件光栅化速度作为发布能力标准。
+
+图形 CI 的主机选择：Chromium 的完整 UI、分析矩阵与几何截图和 WebKit 一样使用 macOS 26。Linux SwiftShader 已能初始化并通过简单取像素，
+但完整 1080p、多轨与逐帧截图出现驱动停滞，不能据此判定播放器功能或性能。所有引擎、容器、输入与解码策略组合及 DPR=2 断言保留；
+Linux 的 Node 媒体套件、两套 WASM 构建、独立包和真实 HTTP/HTTPS 浏览器启动/播放检查继续阻塞发布。Windows 也保留真实 HTTPS/WebCodecs 检查。
+Windows 无窗口 shell 的 GPU 互操作失败后，完整有窗口 Chromium 已在隔离的 hosted runner 通过同一身份、WASM 定位和 WebCodecs 用例。
