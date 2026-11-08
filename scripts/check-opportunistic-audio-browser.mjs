@@ -179,8 +179,8 @@ try {
     const presentation = await page.locator('#canvas-A').evaluate(source => {
       const canvas = source.closest('.frame-stage').querySelector('.frame-presentation');
       if (!canvas) throw new Error('Missing real presentation canvas');
-      const started=performance.now(),copy=new OffscreenCanvas(canvas.width,canvas.height),ctx=copy.getContext('2d');
-      ctx.drawImage(canvas,0,0);const pixels=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+      const started=performance.now(),copy=window.voidPlayer.captureFrame('A'),ctx=copy.getContext('2d');
+      const pixels=ctx.getImageData(0,0,copy.width,copy.height).data;
       const colors = new Set();
       for (let i = 0; i < pixels.length && colors.size < 32; i += 16) {
         if (pixels[i + 3]) colors.add(`${pixels[i]},${pixels[i + 1]},${pixels[i + 2]}`);
