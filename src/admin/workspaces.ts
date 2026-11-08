@@ -2,24 +2,30 @@ import { workspaceCopyName } from './workspace-copy-name.ts';
 import { requestError } from './diagnostics.ts';
 import { localizedText, type LocalizedValue } from '../ui/live-localization.ts';
 import { formatDate, t, th, msg } from '../i18n.ts';
-import { emptyState, properties } from './presentation.ts';
+import { emptyState, properties, recordBackButton, installRecordNavigation } from './presentation.ts';
 import { SavedWorkspaceClient } from '../review/saved-workspaces.ts';
 import type { WorkspaceRecord, SavedWorkspace } from '../review/saved-workspaces.ts';
 import { compressWorkspace } from '../../shared/review/workspace-file.ts';
 import { icon } from '../ui/icons.ts';
 export function workspaceAdminShell() {
-  return `<section id="pane-workspaces" class="admin-logs" hidden><header class="admin-heading"><h1>${th(msg("admin.wsTitle", "工作区"))}</h1><button id="admin-workspaces-refresh" class="icon-button" aria-label="${th(msg("admin.refreshWorkspaces", "刷新工作区"))}">${icon('refresh')}</button></header>
-    <div class="admin-workspaces-search"><input id="admin-workspaces-search" type="search" placeholder="${th(msg("admin.searchAllWorkspaces", "搜索全部工作区"))}" aria-label="${th(msg("admin.searchAllWorkspaces", "搜索全部工作区"))}"><button id="admin-workspaces-search-button">${th(msg("admin.search", "搜索"))}</button></div>
-    <div class="admin-log-workspace"><div class="admin-log-sidebar"><div id="admin-workspaces-list" class="library-row-surface"></div><div class="admin-actions"><button id="admin-workspaces-first" disabled>${th(msg("admin.backToLatest", "返回最新"))}</button><button id="admin-workspaces-next" disabled>${th(msg("admin.nextPage", "下一页"))}</button></div></div>
-      <div class="admin-log-detail" data-empty="true"><div class="admin-workspace-title"><label>${th(msg("admin.wsName", "名称"))}<input id="admin-workspace-name" maxlength="200" disabled></label><button id="admin-workspace-rename" disabled>${th(msg("admin.saveName", "保存名称"))}</button></div><p id="admin-workspace-meta" class="admin-caption">${th(msg("admin.selectToView", "选择一个工作区查看详情"))}</p>
+  return `<section id="pane-workspaces" class="admin-logs" hidden><header class="admin-heading"><h1>${th(msg("admin.wsTitle", "工作区"))}</h1><button id="admin-workspaces-refresh" class="icon-button" aria-label="${th(msg("admin.refreshWorkspaces", "刷新工作区"))}">${icon('refreshRegular')}</button></header>
+    <div class="admin-records"><div class="admin-record-list">
+      <h2>${th(msg('admin.savedWorkspaces', '已保存的工作区'))}</h2>
+      <div class="admin-panel admin-list-panel"><div class="admin-workspaces-search"><input id="admin-workspaces-search" type="search" placeholder="${th(msg("admin.searchAllWorkspaces", "搜索全部工作区"))}" aria-label="${th(msg("admin.searchAllWorkspaces", "搜索全部工作区"))}"><button id="admin-workspaces-search-button">${th(msg("admin.search", "搜索"))}</button></div>
+    <div class="admin-log-sidebar"><div id="admin-workspaces-list" class="library-row-surface"></div><div class="admin-actions"><button id="admin-workspaces-first" disabled>${th(msg("admin.backToLatest", "返回最新"))}</button><button id="admin-workspaces-next" disabled>${th(msg("admin.nextPage", "下一页"))}</button></div></div>
+    </div></div>
+      <div class="admin-record-detail" hidden>${recordBackButton()}<h2>${th(msg('admin.workspaceDetails', '工作区详情'))}</h2>
+      <div class="admin-panel admin-log-detail"><div class="admin-workspace-title"><label>${th(msg("admin.wsName", "名称"))}<input id="admin-workspace-name" maxlength="200" disabled></label><button id="admin-workspace-rename" disabled>${th(msg("admin.saveName", "保存名称"))}</button></div><p id="admin-workspace-meta" class="admin-caption">${th(msg("admin.selectToView", "选择一个工作区查看详情"))}</p>
         <div class="admin-actions"><a id="admin-workspace-open" hidden target="_blank" rel="noopener">${icon('open')}${th(msg("admin.openInPlayerLink", "在播放器中打开"))}</a><button id="admin-workspace-download" disabled>${icon('download')}${th(msg("admin.download", "下载"))}</button><button id="admin-workspace-delete" class="icon-button admin-danger" aria-label="${th(msg("admin.deleteSelectedWorkspace", "删除选中工作区"))}" disabled>${icon('trash')}</button></div>
         <div id="admin-workspace-conflict" class="admin-inline-confirm" hidden><span>${th(msg("admin.serverChanged", "服务器内容已改变，未覆盖任何修改"))}</span><button id="admin-workspace-reload">${th(msg("admin.loadLatest", "载入最新版本"))}</button><button id="admin-workspace-copy">${th(msg("admin.saveCopy", "将当前版本另存副本"))}</button></div>
         <div id="admin-workspace-delete-confirm" class="admin-inline-confirm" hidden><span>${th(msg("admin.deleteWsConfirm", "删除服务器工作区？不删除视频或已打开的会话"))}</span><button id="admin-workspace-cancel-delete">${th(msg("admin.cancel", "取消"))}</button><button id="admin-workspace-confirm-delete">${th(msg("admin.deleteWorkspace", "删除工作区"))}</button></div>
         <dl id="admin-workspace-summary" class="admin-properties"></dl><details class="admin-raw-data"><summary>${th(msg("admin.rawData", "原始工作区数据"))}</summary><textarea id="admin-workspace-json" readonly aria-label="${th(msg("admin.wsJson", "工作区 JSON"))}" spellcheck="false"></textarea></details>
-      </div></div></section>`;
+      </div></div></div></section>`;
 }
 export function installWorkspaceAdmin(signal: AbortSignal, notice: (value: LocalizedValue, error?: boolean) => void) {
   const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+  const detail = $('admin-workspace-name').closest<HTMLElement>('.admin-record-detail')!;
+  const navigation = installRecordNavigation(detail.parentElement!, signal);
   const client = new SavedWorkspaceClient(signal);
   let selected: WorkspaceRecord | null = null, busy = false, before = '', next: string | null = null, search = '', generation = 0;
   const users = new Map<string, string>();
@@ -33,7 +39,9 @@ export function installWorkspaceAdmin(signal: AbortSignal, notice: (value: Local
   }
   async function act(work: () => Promise<void>) { if (busy) return; busy = true; controls(); try { await work(); } catch (error) { if (!signal.aborted) { notice(() => requestError(error), true); if (selected && [409, 404].includes((error as { status?: number }).status ?? 0)) $('admin-workspace-conflict').hidden = false; } } finally { busy = false; controls(); } }
   function render(record: WorkspaceRecord | null) {
-    $('admin-workspace-json').closest<HTMLElement>('.admin-log-detail')!.dataset.empty = String(!record); selected = record; $('admin-workspace-conflict').hidden = true; $('admin-workspace-delete-confirm').hidden = true;
+    detail.hidden = !record;
+    if (!record) navigation.reset();
+    selected = record; $('admin-workspace-conflict').hidden = true; $('admin-workspace-delete-confirm').hidden = true;
     $<HTMLInputElement>('admin-workspace-name').value = record?.name ?? '';
     localizedText($('admin-workspace-meta'), () => record ? t(msg("admin.wsMetaLine", "版本 {rev} · {tracks, plural, other {# 条轨道}} · {marks, plural, other {# 个标注}}"), { rev: record.revision, tracks: record.tracks, marks: record.marks }) : t(msg("admin.selectToView", "选择一个工作区查看详情")));
     $<HTMLTextAreaElement>('admin-workspace-json').value = record ? JSON.stringify(record.document, null, 2) : '';
@@ -51,9 +59,12 @@ export function installWorkspaceAdmin(signal: AbortSignal, notice: (value: Local
       button.setAttribute('aria-pressed', String(record.id === selected?.id));
       const title = document.createElement('strong'); localizedText(title, () => record.name);
       const detail = document.createElement('span'); detail.className = 'source-meta'; localizedText(detail, () => t(msg("admin.workspaceRow", "{owner} · {tracks, plural, other {# 条轨道}} · {marks, plural, other {# 个标注}}"), {owner:userName(record.owner),tracks:record.tracks,marks:record.marks}));
-      button.append(title, detail);
+      const updated = document.createElement('time'); updated.dateTime = record.updatedAt;
+      localizedText(updated, () => formatDate(record.updatedAt));
+      button.append(title, detail, updated);
       button.onclick = () => void act(async () => {
         render(await client.read(record.id));
+        navigation.open();
         for (const row of $('admin-workspaces-list').querySelectorAll('button')) {
           row.setAttribute('aria-pressed', String(row === button));
           row.classList.toggle('in-use', row === button);

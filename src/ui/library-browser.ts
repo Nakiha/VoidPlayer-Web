@@ -50,8 +50,12 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
   const address = document.createElement('input'); address.id = 'library-location'; address.className = 'library-location';
   address.type = 'search'; address.autocomplete = 'off'; address.spellcheck = false;
   const manage = document.createElement('a'); manage.id = 'library-manage'; manage.className = 'icon-button library-manage';
-  manage.href = '/admin#library'; manage.target = '_blank'; manage.rel = 'opener'; manage.innerHTML = icon('libraryManage');
-  manage.setAttribute('aria-label',t(msg('libraryBrowser.manage', '媒体库管理')));
+  manage.href = '/admin#library'; manage.target = '_blank'; manage.rel = 'opener'; manage.innerHTML = icon('externalLink');
+  function localizeManage() {
+    manage.setAttribute('aria-label', t(msg('libraryBrowser.manage', '媒体库管理')));
+    manage.dataset.tooltip = t(msg('libraryBrowser.openManagement', '在新标签页打开媒体库管理'));
+  }
+  localizeManage();
   nav.append(address);
   const back = createIconButton({ glyph: 'caretLeft', label: t(msg('libraryBrowser.goBack', '后退')), className: 'crumbs-back', attributes:{'data-tooltip-suppressed':''} });
   const forward = createIconButton({ glyph: 'caretRight', label: t(msg('libraryBrowser.goForward', '前进')), className: 'crumbs-forward', attributes:{'data-tooltip-suppressed':''} });
@@ -227,7 +231,7 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
     for (const [button,label] of [[back,t(msg('libraryBrowser.goBack', '后退'))],[forward,t(msg('libraryBrowser.goForward', '前进'))]] as const) {
       button.setAttribute('aria-label', label); button.dataset.tooltip = label;
     }
-    const label = t(msg('libraryBrowser.manage', '媒体库管理')); manage.setAttribute('aria-label',label); manage.dataset.tooltip=label;
+    localizeManage();
     controls();
   }, signal);
   signal.addEventListener('abort', () => {

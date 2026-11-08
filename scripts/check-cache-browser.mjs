@@ -50,7 +50,8 @@ try {
  await page.locator('#cache-refresh').click();await refreshed;
  await page.waitForFunction(()=>document.querySelector('#cache-list').getAttribute('aria-busy')==='false');
  assert.equal(await page.locator('.cache-row img').first().evaluate(node=>node===window.retainedCacheImage),true,'unchanged refresh retains the decoded preview node');
- await page.locator('#cache-location summary').click();await page.screenshot({path:`/tmp/voidplayer-caches-location-${name}.png`});await page.locator('#cache-location summary').click();
+ assert.equal(await page.locator('#cache-path').isVisible(),true);
+ assert.match(await page.locator('#cache-annotation-previews-count').textContent(),/53/);
  await page.locator('#cache-search').fill('没有的关键词');await page.locator('#cache-search-form button').click();await page.getByText('没有匹配的缓存',{exact:true}).waitFor();
  await page.locator('#cache-search').fill('');await page.locator('#cache-search-form button').click();await page.waitForFunction(()=>document.querySelectorAll('.cache-row').length===50);
  await page.setViewportSize({width:390,height:844});await page.emulateMedia({colorScheme:'dark'});await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');await page.screenshot({path:`/tmp/voidplayer-caches-narrow-${name}.png`});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no horizontal overflow');

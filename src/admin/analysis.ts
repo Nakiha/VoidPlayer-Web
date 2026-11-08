@@ -4,17 +4,16 @@ import { rootReason, requestError } from './diagnostics.ts';
 import type {AnalysisSettings as Settings,AnalysisResources as Resources} from '../../shared/service/admin.ts';
 
 export function analysisSettingsShell() {
-  return `<form id="analysis-resources" class="admin-panel">
-    <div class="admin-section-heading"><h2>${th(msg('admin.analysisResources', '分析资源'))}</h2><div class="admin-button-group">
-      <button id="analysis-resource-reload" type="button">${th(msg('admin.analysisReload', '载入配置'))}</button>
-      <button id="analysis-resource-save" type="submit" class="admin-primary" disabled>${th(msg('admin.analysisSave', '保存分析配置'))}</button>
-    </div></div>
+  return `<h2 id="analysis-settings-title">${th(msg('admin.analysisResources', '分析资源'))}</h2>
+    <form id="analysis-resources" aria-labelledby="analysis-settings-title" class="admin-settings-card">
     <div class="admin-analysis-fields">
       <label>${th(msg('admin.analysisConcurrency', '服务端分析并发数'))}<input id="analysis-concurrency" type="number" min="1" max="32" step="1" required disabled aria-describedby="analysis-resource-status"></label>
       <label>${th(msg('admin.analysisThreads', '解码线程上限'))}<input id="analysis-threads" type="number" min="1" max="4" step="1" required disabled></label>
       <label>${th(msg('admin.analysisContexts', '帧上下文数'))}<input id="analysis-contexts" type="number" min="1" max="1" step="1" required disabled></label>
     </div>
     <div class="admin-analysis-status"><span id="analysis-resource-status" role="status"></span><span id="analysis-resource-save-state" role="status"></span></div>
+    <div class="admin-form-actions"><button id="analysis-resource-reload" type="button">${th(msg('admin.analysisReload', '载入配置'))}</button>
+      <button id="analysis-resource-save" type="submit" class="admin-primary" disabled>${th(msg('admin.analysisSave', '保存分析配置'))}</button></div>
   </form>`;
 }
 

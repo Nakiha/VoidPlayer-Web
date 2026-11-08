@@ -37,6 +37,25 @@ select { max-width: 100%; }
 .filename { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; }
 middle-filename.filename { display: grid; grid-template-columns: minmax(0, 1fr); overflow: hidden; white-space: pre; }
 middle-filename[data-display]::after { grid-area: 1 / 1; justify-self: start; width: max-content; content: attr(data-display); white-space: pre; }
+/* Both settings and administration turn their sidebar into one scrollable row on phones. */
+@media (max-width: 600px) {
+  nav.category-navigation > .category-tabs {
+    flex-direction: row; justify-content: flex-start; align-items: stretch; gap: 18px; height: 100%;
+  }
+  .settings-navigation [role=tablist] { width: max-content; min-width: 100%; }
+  nav.category-navigation > .category-tabs > button {
+    position: relative; flex: none; height: 100%; min-height: 0; gap: 0; padding: 0 2px; border-radius: 0;
+    white-space: nowrap; background: transparent; color: var(--text-secondary); font-size: 13px;
+  }
+  nav.category-navigation > .category-tabs > button:hover { background: var(--surface-hover); color: var(--text); }
+  nav.category-navigation > .category-tabs > button:is([aria-selected=true], [aria-current=page]) {
+    background: transparent; color: var(--accent); font-weight: 600;
+  }
+  nav.category-navigation > .category-tabs > button:is([aria-selected=true], [aria-current=page])::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; border-radius: 2px; background: var(--accent);
+  }
+  nav.category-navigation > .category-tabs > button .icon { display: none; }
+}
 .toolbar-spacer { flex: 1; }
 .topbar { display: flex; align-items: center; flex: 0 0 var(--toolbar-height); height: var(--toolbar-height); gap: var(--control-gap); padding: var(--toolbar-padding-block) var(--toolbar-padding-inline); z-index: 10; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
 .topbar::-webkit-scrollbar { display: none; }
@@ -111,12 +130,7 @@ button.brand:hover, :root[data-keyboard-navigation] button.brand:focus-visible {
 .transport-dock { position:absolute; z-index:3; left:var(--transport-inset); right:var(--transport-inset); bottom:var(--transport-inset); display:flex; align-items:center; min-width:0; height:var(--transport-height); }
 .transport-dock:has(.transport[hidden]) { display:none; }
 .transport { position:relative; flex:1; min-width:0; width:auto; height:var(--transport-height); display:flex; flex-direction:column; gap:var(--transport-row-gap); padding:var(--transport-padding); padding-right:0; border-radius:0; }
-.transport #server-update { color: var(--connection-waiting); }
-@media (prefers-reduced-motion: no-preference) {
-  #server-update:not([hidden]) svg { animation: update-hop 480ms ease-out; }
-  @keyframes update-hop { 35% { transform: translateY(-3px) rotate(15deg); } 70% { transform: translateY(1px); } }
-}
-.timeline-control { flex: 1 1 0; width: auto; height: var(--control-height); }
+.transport .timeline-control { flex: 1 1 0; width: auto; height: var(--control-height); }
 .transport-actions { display: flex; align-items: center; gap: var(--transport-group-gap); width: 100%; min-width: 0; height: var(--button-size); }
 .transport-features { display:flex; align-items:center; flex:0 0 auto; gap:var(--transport-group-gap); }
 .transport-features > .icon-button { background:transparent; }
@@ -312,6 +326,11 @@ textarea { resize: vertical; min-height: 56px; max-height: 220px; padding: var(-
 .subtrack-label { display: flex; align-items: center; min-width: 0; gap: var(--tool-gap); }
 .subtrack-name { flex: 1; }
 .connection-status { display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-small); background: transparent; color: var(--text); text-decoration: none; }
+#server-update { color: var(--connection-waiting); }
+@media (prefers-reduced-motion: no-preference) {
+  #server-update:not([hidden]) .icon { animation: update-hop 480ms ease-out; }
+  @keyframes update-hop { 35% { translate: 0 -3px; rotate: 15deg; } 70% { translate: 0 1px; } }
+}
 .connection-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--connection-waiting); }
 .connection-status[data-state=connected] .connection-dot { background: var(--connection-ok); }
 .connection-status[data-state=disconnected] .connection-dot { background: var(--connection-error); }

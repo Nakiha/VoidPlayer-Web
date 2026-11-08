@@ -1,5 +1,28 @@
-import { t, msg } from '../i18n.ts';
+import { icon } from '../ui/icons.ts';
+import { th, t, msg } from '../i18n.ts';
 import { localizedText, type LocalizedValue } from '../ui/live-localization.ts';
+export function recordBackButton() {
+  return `<button type="button" class="admin-record-back">${icon('caretLeft')}${th(msg('admin.backToList', '返回列表'))}</button>`;
+}
+
+/** Narrow screens display one side at a time. Returning leaves the selection and search in place. */
+export function installRecordNavigation(container: HTMLElement, signal: AbortSignal) {
+  const back = container.querySelector<HTMLButtonElement>('.admin-record-back')!;
+  back.addEventListener('click', () => {
+    container.removeAttribute('data-show-detail');
+    const list = container.querySelector<HTMLElement>('.admin-record-list')!;
+    const focus = list.querySelector<HTMLElement>('.source-row[aria-pressed=true]') ?? list.querySelector<HTMLElement>('input, button:not(:disabled)');
+    focus?.focus();
+  }, { signal });
+  return {
+    open() {
+      container.setAttribute('data-show-detail', '');
+      if (back.getClientRects().length) back.focus();
+    },
+    reset() { container.removeAttribute('data-show-detail'); },
+  };
+}
+
 /** Bind copy to existing nodes; server-provided values always remain text. */
 export function emptyState(title: LocalizedValue, description: LocalizedValue, player = false) {
   const box = document.createElement('div'); box.className = 'admin-empty';

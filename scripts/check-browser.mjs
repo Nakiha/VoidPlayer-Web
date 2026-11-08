@@ -359,6 +359,7 @@ try {
     await page.locator('#library-navigation').evaluate(el => {for(const animation of el.getAnimations())animation.finish();});
     const restingAddress=await page.locator('#library-navigation').evaluate(el => getComputedStyle(el).backgroundColor);
     await management.hover();
+    await page.locator('#control-tooltip').filter({hasText:'在新标签页打开媒体库管理'}).waitFor();
     await page.locator('#library-navigation').evaluate(el => {for(const animation of el.getAnimations())animation.finish();});
     assert.equal(await page.locator('#library-navigation').evaluate(el => getComputedStyle(el).backgroundColor),restingAddress,'management hover leaves the address field at rest');
     const managementFeedback=await press('#library-manage');

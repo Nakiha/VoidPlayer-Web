@@ -13,7 +13,7 @@ import { installLiveLocalization, localizedText, localizedFragment, localizedAtt
 import { initializeLanguage, onLanguageChange, formatDate, t, th, msg } from '../i18n.ts';
 import { chooseInitialIdentity } from '../ui/identity-onboarding.ts';
 import { installAnnotationAdmin } from './annotations.ts';
-import { emptyState } from './presentation.ts';
+import { emptyState, installRecordNavigation } from './presentation.ts';
 import { renderLogStorage } from './log-storage.ts';
 import { installCaches } from './caches.ts';
 import { randomUUID } from '../../shared/utils/uuid.ts';
@@ -113,7 +113,7 @@ function readDraft(): Root[] {
 }
 function rootRow(root: Root) {
   const row = document.createElement('div'); row.className = 'admin-root-row'; row.dataset.id = root.id;
-  localizedFragment(row, () => `<label><input data-field="name" aria-label="${th(msg("admin.dirNameAria", "目录名称"))}" placeholder="${th(msg("admin.dirNamePh", "例如：拍摄素材"))}" required maxlength="120"></label><label><input data-field="path" aria-label="${th(msg("admin.serverPathAria", "服务器上的目录路径"))}" placeholder="${th(msg("admin.serverPathPh", "填写完整目录路径"))}" required maxlength="4096" spellcheck="false"></label><button type="button" class="icon-button admin-root-scan">${icon('refresh')}</button><button type="button" class="icon-button admin-danger" aria-label="${th(msg("admin.removeDir", "移除目录"))}" title="${th(msg("admin.removeDirTitle", "移出媒体库，不删除文件"))}">${icon('trash')}</button>`);
+  localizedFragment(row, () => `<label><input data-field="name" aria-label="${th(msg("admin.dirNameAria", "目录名称"))}" placeholder="${th(msg("admin.dirNamePh", "例如：拍摄素材"))}" required maxlength="120"></label><label><input data-field="path" aria-label="${th(msg("admin.serverPathAria", "服务器上的目录路径"))}" placeholder="${th(msg("admin.serverPathPh", "填写完整目录路径"))}" required maxlength="4096" spellcheck="false"></label><button type="button" class="icon-button admin-root-scan">${icon('refreshRegular')}</button><button type="button" class="icon-button admin-danger" aria-label="${th(msg("admin.removeDir", "移除目录"))}" title="${th(msg("admin.removeDirTitle", "移出媒体库，不删除文件"))}">${icon('trash')}</button>`);
   row.querySelector<HTMLInputElement>('[data-field=name]')!.value = root.name;
   row.querySelector<HTMLInputElement>('[data-field=path]')!.value = root.path;
   for (const input of row.querySelectorAll('input')) { input.disabled = !rootConfig?.writable; input.addEventListener('input', () => { rootDirty = true; updateRootActions(); renderRootStates(); }); }
@@ -195,7 +195,6 @@ function renderStatus(value: Status) {
   const watch = value.library.watch;
   text('watch-summary', () => watch ? t(msg("admin.watchSummary", "{active} / {limit, plural, other {# 个目录}}{calibration}{partial}"), {active:watch.active,limit:watch.limit,calibration:watch.limited ? t(msg('admin.watchCalibrated', ' · 其余由周期校准覆盖')) : '',partial:watch.unavailableRoots.length ? t(msg('admin.watchPartial', ' · 部分目录监听不可用')) : ''}) : t(msg("admin.watchPollOnly", "仅周期校准")));
   renderRootStates();
-  if (pane === 'logs' && logsMode === 'requests') renderRequests();
 }
 async function poll(force = false) {
   if (polling || document.hidden) return; polling = true;
@@ -212,7 +211,7 @@ async function poll(force = false) {
 }
 async function loadRequests() {
   const actor = confirmedActor()?.id, epoch = requestEpoch;
-  if (!actor) return;
+  if (!actor || requestAbort) return;
   const cached = requestSnapshot?.actor === actor ? requestSnapshot : undefined;
   const controller = requestAbort = new AbortController();
   try {
@@ -228,8 +227,15 @@ async function loadRequests() {
     }
     if (epoch !== requestEpoch || actor !== confirmedActor()?.id || controller.signal.aborted) return;
     requestSnapshot = { actor, etag: response.headers.get('etag') ?? (response.status === 304 ? cached?.etag : undefined), records };
-    recentRequests = records; requestCadence.observe(records); renderRequests();
-  } catch (error) { if (!controller.signal.aborted) throw error; }
+    if (recentRequests !== records) { recentRequests = records; renderRequests(); }
+    requestCadence.observe(records);
+    syncLogViews();
+  } catch (error) {
+    if (!controller.signal.aborted) {
+      if (!cached && logsMode === 'requests') { logsMode = 'uploads'; syncLogViews(); }
+      throw error;
+    }
+  }
   finally { if (requestAbort === controller) requestAbort = undefined; }
 }
 async function loadScan() {
@@ -249,7 +255,19 @@ async function loadScan() {
   $('errors-prev').toggleAttribute('disabled', errorsOffset === 0);
   $('errors-next').toggleAttribute('disabled', errorsOffset + value.errors.length >= Math.min(count, 1000));
 }
-function clearLog() { $('log-json').closest<HTMLElement>('.admin-log-detail')!.dataset.empty = 'true'; selectedLog = null; logDocument = undefined; ++logSequence; localizedText($('log-json'), () => ''); ($('log-json') as HTMLTextAreaElement).value = ''; text('log-description', () => t(msg("admin.selectLog", "选择一份日志查看内容"))); $('download-log').setAttribute('disabled', ''); $('delete-log').setAttribute('disabled', ''); $('delete-log-confirm').hidden = true; }
+const logNavigation = installRecordNavigation($('uploads-view'), life.signal);
+const reportDetail = $('log-json').closest<HTMLElement>('.admin-record-detail')!;
+function clearLog() {
+  reportDetail.hidden = true;
+  logNavigation.reset();
+  selectedLog = null;
+  logDocument = undefined;
+  ++logSequence;
+  ($('log-json') as HTMLTextAreaElement).value = '';
+  $('download-log').setAttribute('disabled', '');
+  $('delete-log').setAttribute('disabled', '');
+  $('delete-log-confirm').hidden = true;
+}
 async function loadLogs() {
   const sequence = ++listSequence;
   const page = await api<LogPage>(`/api/admin/logs?before=${encodeURIComponent(logCursor)}`);
@@ -262,7 +280,7 @@ async function loadLogs() {
   $('more-logs').hidden = $('first-logs').hidden = !nextLog && !logCursor;
   $('more-logs').toggleAttribute('disabled', !nextLog); $('first-logs').toggleAttribute('disabled', !logCursor);
   if (!page.entries.length) {
-    $('log-list').replaceChildren(emptyState(() => page.enabled ? t(msg("admin.noUploadedLogs", "暂无上传日志")) : t(msg("admin.logsDisabled", "未开启日志接收")), () => page.enabled ? t(msg("admin.logsEmptyHint", "在播放器的“设置 → 日志”中点击“上传日志”，即可在这里查看")) : t(msg("admin.logsNoDir", "服务器未设置日志接收目录，你仍可在播放器中下载本地日志")), true)); return;
+    $('log-list').replaceChildren(emptyState(() => page.enabled ? t(msg("admin.noUploadedLogs", "暂无上传日志")) : t(msg("admin.logsDisabled", "未开启日志接收")), () => page.enabled ? t(msg("admin.logsEmptyHint", "在播放器的“设置 → 日志”中点击“上传日志”，即可在这里查看")) : t(msg("admin.logsNoDir", "服务器未设置日志接收目录，你仍可在播放器中下载本地日志")), true)); syncLogViews(); return;
   }
   const rows = page.entries.map((entry, index) => {
     const button = document.createElement('button'); button.className = 'admin-log-item source-row';
@@ -271,7 +289,8 @@ async function loadLogs() {
     button.setAttribute('aria-pressed', String(selectedLog?.name === entry.name));
     const title = document.createElement('strong'); localizedText(title, () => formatDate(entry.receivedAt));
     const detail = document.createElement('span'); localizedText(detail, () => `${bytes(entry.size)} · ${entry.name.split('-').at(-1)?.replace('.json', '')}`);
-    button.append(title, detail); button.onclick = () => void act(async () => {
+    const drill = document.createElement('span'); drill.className = 'admin-log-chevron'; drill.innerHTML = icon('caretRight');
+    button.append(title, detail, drill); button.onclick = () => void act(async () => {
       clearLog(); selectedLog = entry; const request = ++logSequence;
       for (const row of $('log-list').querySelectorAll('button')) {
         row.setAttribute('aria-pressed', String(row === button));
@@ -279,21 +298,46 @@ async function loadLogs() {
       }
       const result = await api<LogDocument>(`/api/admin/logs/${encodeURIComponent(entry.name)}?v=${entry.version}`);
       if (request !== logSequence) return;
-      $('log-json').closest<HTMLElement>('.admin-log-detail')!.dataset.empty = 'false'; logDocument = result.document; ($('log-json') as HTMLTextAreaElement).value = JSON.stringify(result.document, null, 2);
+      logDocument = result.document; ($('log-json') as HTMLTextAreaElement).value = JSON.stringify(result.document, null, 2);
       const receipt = (result.document as { serverReceipt?: { id?: string; actorId?: string } })?.serverReceipt;
       const received = receipt?.id && entry.name.includes(`-${receipt.id}-`);
       text('log-description', () => received ? t(msg("admin.logUploaderLine", "上传者：{user} · {size}"), { user: userNames.get(receipt.actorId ?? '') ?? receipt.actorId ?? t(msg("admin.unknownUser", "未知")), size: bytes(entry.size) }) : t(msg("admin.historyLogLine", "历史日志 · {size}"), { size: bytes(entry.size) }));
+      reportDetail.hidden = false; logNavigation.open();
       $('download-log').removeAttribute('disabled'); $('delete-log').removeAttribute('disabled');
     }); return button;
-  }); $('log-list').replaceChildren(...rows);
+  }); $('log-list').replaceChildren(...rows); syncLogViews();
 }
 function renderRequests() {
-  $('request-list').replaceChildren(...recentRequests.slice().reverse().map(request => {
+  const list = $('request-list');
+  const retained = new Map(Array.from(list.children, row => [(row as HTMLElement).dataset.id, row]));
+  let index = 0;
+  for (const request of recentRequests.slice().reverse()) {
+    const id = String(request.requestId);
+    const existing = retained.get(id);
+    if (existing) {
+      retained.delete(id);
+      if (list.children[index] !== existing) list.insertBefore(existing, list.children[index] ?? null);
+      index++; continue;
+    }
     const row = document.createElement('div'); row.className = 'admin-request-row';
     const cells = () => [`${formatDate(String(request.t))} · ${userNames.get(String(request.actorId)) ?? (request.actorId === 'local' ? t(msg("admin.localUser", "本机用户")) : request.actorId ?? t(msg("admin.anonymous", "匿名")))} · ${request.clientIp ?? '—'}`, `${request.method} ${request.url}`, String(request.status), `${request.ms} ms`];
     for (let i=0; i<4; i++) { const span = document.createElement('span'); localizedText(span, () => cells()[i]); row.append(span); }
-    return row;
-  }));
+    row.dataset.id = id; list.insertBefore(row, list.children[index++] ?? null);
+  }
+  for (const row of retained.values()) row.remove();
+  $('requests-empty').hidden = !requestSnapshot || recentRequests.length > 0;
+}
+
+function syncLogViews() {
+  // Keep the last ready list on screen until the requested view can be shown in one paint.
+  const requests = logsMode === 'requests';
+  if (requests ? !!requestSnapshot : $('log-list').childElementCount > 0) {
+    $('uploads-view').hidden = requests;
+    $('requests-view').hidden = !requests;
+  }
+  const tabs = document.querySelector<HTMLElement>('.admin-log-tabs')!;
+  tabs.setAttribute('aria-busy', String(requests ? !requestSnapshot : !$('log-list').childElementCount));
+  for (const tab of tabs.querySelectorAll<HTMLButtonElement>('[data-log-mode]')) tab.setAttribute('aria-pressed', String(tab.dataset.logMode === logsMode));
 }
 const analysisSettings = installAnalysisSettings(life.signal, api, notice);
 const caches = installCaches(life.signal, notice);
@@ -303,8 +347,14 @@ const measurements = installMeasurements(life.signal, notice);
 const libraryBrowser = installAdminLibraryBrowser(life.signal, message => notice(message));
 const disposeTooltips=installTooltips(app);
 life.signal.addEventListener('abort',disposeTooltips,{once:true});
+const compactNavigation = matchMedia('(max-width: 600px)');
+function revealCurrentCategory() {
+  if (compactNavigation.matches) $('admin-navigation-items').querySelector('[aria-current=page]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+compactNavigation.addEventListener('change', revealCurrentCategory, { signal: life.signal });
 for (const [id] of PANES()) document.querySelector<HTMLButtonElement>(`[data-pane=${id}]`)!.onclick = () => {
   history.replaceState(null, '', `#${id}`); pane = id; measurements.activate(id === 'measurements'); notice(() => ''); for (const [item] of PANES()) { $(`pane-${item}`).hidden = id !== item; document.querySelector(`[data-pane=${item}]`)!.setAttribute('aria-current', id === item ? 'page' : 'false'); }
+  revealCurrentCategory();
   libraryBrowser.activate(id === 'library');
   scanCadence.reset(); requestCadence.reset();
   if (id === 'preferences') {void analysisSettings.load();}
@@ -335,8 +385,11 @@ $('refresh-logs').onclick = () => void act(logsMode === 'uploads' ? loadLogs : (
 $('more-logs').onclick = () => { if (nextLog) { logCursor = nextLog; clearLog(); void act(loadLogs); } };
 $('first-logs').onclick = () => { logCursor = ''; clearLog(); void act(loadLogs); };
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-log-mode]')) button.onclick = () => {
-  logsMode = button.dataset.logMode!; $('uploads-view').hidden = logsMode !== 'uploads'; $('requests-view').hidden = logsMode !== 'requests';
-  for (const item of document.querySelectorAll('[data-log-mode]')) item.setAttribute('aria-pressed', String(item === button)); if (logsMode === 'requests') void poll(true);
+  if (button.dataset.logMode === logsMode) return;
+  logsMode = button.dataset.logMode!;
+  syncLogViews();
+  if (logsMode === 'requests') void act(loadRequests);
+  else if (!$('log-list').childElementCount) void act(loadLogs);
 };
 $('download-log').onclick = () => { if (!selectedLog || logDocument === undefined) return; const url = URL.createObjectURL(new Blob([JSON.stringify(logDocument, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = selectedLog.name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); };
 $('delete-log').onclick = () => { $('delete-log-confirm').hidden = false; };
@@ -359,8 +412,8 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) { sc
 installLiveLocalization(document.body, life.signal);
 observeIdentity(life.signal, {
   invalidated() {
-    requestEpoch++; requestAbort?.abort(); requestSnapshot = undefined; recentRequests = [];
-    requestCadence.reset(); renderRequests();
+    requestEpoch++; requestAbort?.abort(); requestAbort = undefined; requestSnapshot = undefined; recentRequests = [];
+    requestCadence.reset(); renderRequests(); $('requests-view').hidden = true; $('uploads-view').hidden = false; syncLogViews();
   },
   confirmed() { if (pane === 'logs' && logsMode === 'requests') void poll(true); },
 });

@@ -10,15 +10,32 @@ import { emptyState } from './presentation.ts';
 
 type Page = { entries: CacheEntry[]; nextOffset: number | null; count: number };
 const bytes = (value: number) => { const unit = value >= 1024 ** 3 ? 3 : value >= 1024 ** 2 ? 2 : value >= 1024 ? 1 : 0; return `${formatNumber(value / 1024 ** unit, { maximumFractionDigits: unit ? 1 : 0 })} ${['B', 'KiB', 'MiB', 'GiB'][unit]}`; };
+const cacheKinds: CacheKind[] = ['frame-indexes', 'annotation-previews', 'media-thumbnails'];
+function kindLabel(kind: CacheKind) {
+  if (kind === 'frame-indexes') return t(msg('admin.kindFrameIndexes', '帧索引'));
+  if (kind === 'annotation-previews') return t(msg('admin.kindPreviews', '标注预览'));
+  return t(msg('admin.kindThumbs', '媒体缩略图'));
+}
 export function cacheShell() {
   return `<section id="pane-caches" hidden>
-    <header class="admin-heading"><h1>${th(msg("admin.cacheTitle", "缓存"))}</h1><button id="cache-refresh" class="icon-button" aria-label="${th(msg("admin.refreshCaches", "刷新缓存"))}">${icon('refresh')}</button></header>
-    <div class="cache-overview"><div class="cache-total"><span>${th(msg("admin.cacheContents", "缓存内容"))}</span><strong id="cache-total-bytes">—</strong><span id="cache-total-count">${th(msg("admin.reading", "正在读取…"))}</span></div><div class="cache-volume"><div class="cache-volume-heading"><span>${th(msg("admin.disk", "所在磁盘"))}</span><span id="cache-volume-free">—</span></div><div class="cache-volume-bar" role="meter" aria-label="${th(msg("admin.diskUsage", "磁盘占用"))}"><span></span></div><div class="cache-volume-caption"><span id="cache-volume-used">—</span><span id="cache-volume-total">—</span></div></div></div>
-    <div class="cache-toolbar"><div class="cache-tabs" role="group" aria-label="${th(msg("admin.cacheType", "缓存类型"))}"><button data-cache-kind="frame-indexes" aria-pressed="true">${th(msg("admin.kindFrameIndexes", "帧索引"))} <span id="cache-frame-count">—</span></button><button data-cache-kind="annotation-previews" aria-pressed="false">${th(msg("admin.kindPreviews", "标注预览"))} <span id="cache-preview-count">—</span></button><button data-cache-kind="media-thumbnails" aria-pressed="false">${th(msg("admin.kindThumbs", "媒体缩略图"))} <span id="cache-thumb-count">—</span></button></div><button id="cache-clear" disabled>${th(msg("admin.clearFrames", "清理帧索引"))}</button></div>
-    <div class="cache-type-info"><div><p id="cache-description"></p><span id="cache-budget" class="admin-caption"></span><div class="cache-budget-bar" role="meter" aria-label="${th(msg("admin.cacheQuota", "缓存限额占用"))}"><span></span></div></div><details id="cache-location"><summary>${th(msg("admin.storageLocation", "存储位置"))}</summary><div><code id="cache-path"></code><p id="cache-file-size"></p><p>${th(msg("admin.sharedDb", "与业务数据共用数据库，清理后空间可复用，文件不一定缩小"))}</p></div></details></div>
+    <header class="admin-heading"><h1>${th(msg("admin.cacheTitle", "缓存"))}</h1><button id="cache-refresh" class="icon-button" aria-label="${th(msg("admin.refreshCaches", "刷新缓存"))}">${icon('refreshRegular')}</button></header>
+    <h2>${th(msg('admin.storageUsage', '存储占用'))}</h2><div class="cache-overview admin-panel"><div class="cache-total"><span>${th(msg("admin.listHeadSize", "占用"))}</span><strong id="cache-total-bytes">—</strong><div class="cache-distribution" aria-hidden="true">${cacheKinds.map(kind => `<span data-segment="${kind}"></span>`).join('')}</div><span id="cache-total-count">${th(msg("admin.reading", "正在读取…"))}</span></div><div class="cache-volume"><div class="cache-volume-heading"><span>${th(msg("admin.disk", "所在磁盘"))}</span><span id="cache-volume-free">—</span></div><div class="cache-volume-bar" role="meter" aria-label="${th(msg("admin.diskUsage", "磁盘占用"))}"><span></span></div><div class="cache-volume-caption"><span id="cache-volume-used">—</span><span id="cache-volume-total">—</span></div></div></div>
+    <h2>${th(msg('admin.cacheType', '缓存类型'))}</h2>
+    <div class="cache-types" role="group" aria-label="${th(msg('admin.cacheType', '缓存类型'))}">${cacheKinds.map((kind, i) => `
+      <button data-cache-kind="${kind}" aria-pressed="${i === 0}"><span class="cache-type-name"><i aria-hidden="true"></i>${kindLabel(kind)}</span>
+        <strong id="cache-${kind}-bytes">—</strong><span id="cache-${kind}-count" class="cache-type-count">—</span></button>`).join('')}</div>
+    <div class="admin-section-title"><h2 id="cache-detail-title">${kindLabel('frame-indexes')}</h2><button id="cache-clear" disabled>${icon('trash')}<span id="cache-clear-label">${th(msg('admin.clearFrames', '清理帧索引'))}</span></button></div>
+    <div class="admin-panel cache-entries">
+      <dl class="cache-facts">
+        <div><dt>${th(msg('admin.cacheQuota', '缓存限额占用'))}</dt><dd><span id="cache-budget">—</span><div class="cache-budget-bar" role="meter" aria-label="${th(msg('admin.cacheQuota', '缓存限额占用'))}"><span></span></div></dd></div>
+        <div><dt>${th(msg('admin.databaseSize', '数据库'))}</dt><dd id="cache-db">—</dd></div>
+        <div><dt>${th(msg('admin.journalSize', '写入日志'))}</dt><dd id="cache-journal">—</dd></div>
+      </dl>
+      <dl class="cache-location"><dt>${th(msg('admin.storageLocation', '存储位置'))}</dt><dd><code id="cache-path">—</code></dd></dl>
     <form id="cache-search-form" class="cache-search"><input id="cache-search" type="search" maxlength="200" aria-label="${th(msg("admin.searchCaches", "搜索缓存"))}" placeholder="${th(msg("admin.searchMediaName", "搜索媒体名称"))}"><button type="submit">${th(msg("admin.search", "搜索"))}</button></form>
     <div id="cache-confirm" class="admin-inline-confirm" hidden><span id="cache-confirm-text"></span><button id="cache-confirm-clear" class="admin-danger">${th(msg("admin.confirmClear", "确认清理"))}</button><button id="cache-cancel">${th(msg("admin.cancel", "取消"))}</button></div>
     <div class="cache-list-heading" aria-hidden="true"><span>${th(msg("admin.listHeadMedia", "媒体 / 内容"))}</span><span>${th(msg("admin.listHeadSize", "占用"))}</span><span>${th(msg("admin.listHeadUpdated", "更新时间"))}</span><span></span></div><div id="cache-list" class="library-row-surface" aria-live="polite"></div><div class="cache-list-footer"><button id="cache-more" hidden>${th(msg("admin.loadMore", "加载更多"))}</button></div>
+    </div>
   </section>`;
 }
 export function installCaches(signal: AbortSignal, notice: (text: LocalizedValue, error?: boolean) => void) {
@@ -32,7 +49,7 @@ export function installCaches(signal: AbortSignal, notice: (text: LocalizedValue
     event.preventDefault();
     event.stopImmediatePropagation();
   }, { capture: true, signal });
-  const label = () => kind === 'frame-indexes' ? t(msg("admin.kindFrameIndexes", "帧索引")) : kind === 'annotation-previews' ? t(msg("admin.kindPreviews", "标注预览")) : t(msg("admin.kindThumbs", "媒体缩略图"));
+
   async function api<T>(url: string, body?: unknown): Promise<T> {
     const response = await fetch(url, { method: body ? 'DELETE' : 'GET', cache: 'no-store', signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]), headers: body ? { 'x-voidplayer-action': 'admin', 'content-type': 'application/json' } : {}, ...(body ? { body: JSON.stringify(body) } : {}) });
     const value = await response.json(); if (!response.ok) throw apiError(response.status, value); return value;
@@ -54,18 +71,25 @@ export function installCaches(signal: AbortSignal, notice: (text: LocalizedValue
     localizedText($('volume-free'), () => volume ? t(msg("admin.diskFree", "{bytes} 可用"), { bytes: bytes(volume.availableBytes) }) : t(msg("admin.diskUnavailable", "磁盘容量不可用")));
     localizedText($('volume-used'), () => volume ? t(msg("admin.diskUsed", "已用 {bytes}"), { bytes: bytes(volume.usedBytes) }) : ''); localizedText($('volume-total'), () => volume ? t(msg("admin.diskTotal", "共 {bytes}"), { bytes: bytes(volume.totalBytes) }) : '');
     meter(document.querySelector('.cache-volume-bar')!, volume?.usedBytes ?? null, volume?.totalBytes ?? 0);
-    for (const type of overview.types) localizedText($(type.kind === 'frame-indexes' ? 'frame-count' : type.kind === 'annotation-previews' ? 'preview-count' : 'thumb-count'), () => String(type.count));
-    const type = overview.types.find(type => type.kind === kind)!;
-    localizedText($('description'), () => kind === 'frame-indexes' ? t(msg("admin.framesDescription", "加快媒体库视频再次打开和定位，支持的 FFmpeg 容器由服务端重建索引；FLV 仍在播放时重建")) : kind === 'annotation-previews' ? t(msg("admin.descPreviews", "标注卡片使用的画面预览，清理保留文字和绘图，再次编辑对应画面时生成")) : t(msg("admin.descThumbs", "媒体库首帧小图，清理后只在正常从头打开时重建，不主动解码")));
-    localizedText($('budget'), () => t(msg("admin.cacheBudget", "{used} / {limit} 上限 · 达到上限后自动清理旧缓存"), {used:bytes(type.bytes),limit:bytes(type.limitBytes)}));
-    meter(document.querySelector('.cache-budget-bar')!, type.bytes, type.limitBytes);
-    localizedText($('path'), () => type.location); localizedText($('file-size'), () => t(msg("admin.dbSize", "数据库 {db} · 写入日志 {journal}"), { db: bytes(type.databaseBytes), journal: bytes(type.journalBytes) }));
-    localizedText($('clear'), () => t(msg("admin.clearLabel", "清理{label}"), { label: label() }));
+    for (const type of snapshot.types) {
+      const segment = panel.querySelector<HTMLElement>(`[data-segment="${type.kind}"]`)!;
+      segment.style.width = `${snapshot.bytes ? type.bytes / snapshot.bytes * 100 : 0}%`;
+      localizedText($(`${type.kind}-bytes`), () => bytes(type.bytes));
+      localizedText($(`${type.kind}-count`), () => t(msg('admin.itemsCount', '{n, plural, other {# 条}}'), { n: type.count }));
+    }
+    const type = snapshot.types.find(type => type.kind === kind)!;
+    localizedText($('detail-title'), () => kindLabel(type.kind));
+    localizedText($('budget'), () => `${bytes(type.bytes)} / ${bytes(type.limitBytes)}`);
+    meter(panel.querySelector('.cache-budget-bar')!, type.bytes, type.limitBytes);
+    localizedText($('path'), type.location);
+    localizedText($('db'), () => bytes(type.databaseBytes));
+    localizedText($('journal'), () => bytes(type.journalBytes));
+    localizedText($('clear-label'), () => t(msg("admin.clearLabel", "清理{label}"), { label: kindLabel(type.kind) }));
     localizedAttribute($<HTMLInputElement>('search'), 'placeholder', () => kind === 'frame-indexes' ? t(msg("admin.searchMediaName", "搜索媒体名称")) : kind === 'annotation-previews' ? t(msg("admin.searchMediaMark", "搜索媒体、标注或评审空间")) : t(msg("admin.searchMediaName", "搜索媒体名称")));
   }
   function confirm(entry: CacheEntry | 'all') {
     selected = entry; $('confirm').hidden = false;
-    localizedText($('confirm-text'), () => entry === 'all' ? kind === 'frame-indexes' ? t(msg("admin.clearAllFrames", "清理全部帧索引？保留视频文件")) : kind === 'annotation-previews' ? t(msg("admin.clearAllPreviews", "清理全部标注预览？保留标注内容")) : t(msg("admin.clearAllThumbnails", "清理全部媒体缩略图？保留视频文件，仅删小图，清理后从头打开可重建")) : t(msg("admin.confirmOne", "清理「{name}」的{label}？"), { name: cacheName(entry), label: label() }));
+    localizedText($('confirm-text'), () => entry === 'all' ? kind === 'frame-indexes' ? t(msg("admin.clearAllFrames", "清理全部帧索引？保留视频文件")) : kind === 'annotation-previews' ? t(msg("admin.clearAllPreviews", "清理全部标注预览？保留标注内容")) : t(msg("admin.clearAllThumbnails", "清理全部媒体缩略图？保留视频文件，仅删小图，清理后从头打开可重建")) : t(msg("admin.confirmOne", "清理「{name}」的{label}？"), { name: cacheName(entry), label: kindLabel(kind) }));
     $('confirm-clear').focus(); $('confirm').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
   function row(entry: CacheEntry) {
@@ -76,11 +100,13 @@ export function installCaches(signal: AbortSignal, notice: (text: LocalizedValue
     const text = document.createElement('div'), name = document.createElement('strong'), detail = document.createElement('span'); localizedText(name, () => cacheName(entry)); localizedAttribute(name, 'title', () => cacheName(entry)); localizedText(detail, () => cacheDetail(entry)); localizedAttribute(detail, 'title', () => cacheDetail(entry)); text.append(name, detail); content.append(thumbnail, text);
     const size = document.createElement('span'); localizedText(size, () => bytes(entry.bytes)); size.className = 'cache-row-size';
     const date = document.createElement('time'); date.dateTime = new Date(entry.updatedAt).toISOString(); localizedText(date, () => formatDate(entry.updatedAt));
-    const clear = document.createElement('button'); clear.className = 'icon-button'; clear.innerHTML = icon('trash'); localizedAttribute(clear, 'aria-label', () => t(msg("admin.clearName", "清理 {name} 的{label}"), { name: cacheName(entry), label: label() })); localizedAttribute(clear, 'title', () => t(msg("admin.clearCache", "清理缓存"))); clear.onclick = () => confirm(entry);
+    const clear = document.createElement('button'); clear.className = 'icon-button'; clear.innerHTML = icon('trash'); localizedAttribute(clear, 'aria-label', () => t(msg("admin.clearName", "清理 {name} 的{label}"), { name: cacheName(entry), label: kindLabel(kind) })); localizedAttribute(clear, 'title', () => t(msg("admin.clearCache", "清理缓存"))); clear.onclick = () => confirm(entry);
     row.append(content, size, date, clear); return row;
   }
-  async function list(more = false) {
-    const page = await api<Page>(`/api/admin/caches/${kind}?offset=${more ? next ?? 0 : 0}&search=${encodeURIComponent(search)}`);
+  function readEntries(type: CacheKind, query: string, offset = 0) {
+    return api<Page>(`/api/admin/caches/${type}?offset=${offset}&search=${encodeURIComponent(query)}`);
+  }
+  function renderEntries(page: Page, more = false) {
     next = page.nextOffset;
     const snapshot = JSON.stringify([kind, search, page]);
     if (!more && renderedList === snapshot) return;
@@ -90,17 +116,31 @@ export function installCaches(signal: AbortSignal, notice: (text: LocalizedValue
       const item = row(entry); item.classList.toggle('source-striped', (offset + index) % 2 === 1); return item;
     });
     if (more) $('list').append(...rows); else $('list').replaceChildren(...rows);
-    if (!more && !page.entries.length) $('list').append(emptyState(() => search ? t(msg("admin.noMatchCache", "没有匹配的缓存")) : t(msg("admin.noCacheKind", "暂无{label}缓存"), { label: label() }), () => search ? t(msg("admin.tryKeywords", "换个关键词试试")) : kind === 'frame-indexes' ? t(msg("admin.framesEmpty", "打开支持的媒体库视频后，索引会自动保存在这里")) : kind === 'annotation-previews' ? t(msg("admin.emptyPreviews", "编辑标注后，画面预览会在播放暂停时保存")) : t(msg("admin.emptyThumbs", "从头打开媒体库视频后，首帧小图会保存在这里"))));
+    if (!more && !page.entries.length) $('list').append(emptyState(() => search ? t(msg("admin.noMatchCache", "没有匹配的缓存")) : t(msg("admin.noCacheKind", "暂无{label}缓存"), { label: kindLabel(kind) }), () => search ? t(msg("admin.tryKeywords", "换个关键词试试")) : kind === 'frame-indexes' ? t(msg("admin.framesEmpty", "打开支持的媒体库视频后，索引会自动保存在这里")) : kind === 'annotation-previews' ? t(msg("admin.emptyPreviews", "编辑标注后，画面预览会在播放暂停时保存")) : t(msg("admin.emptyThumbs", "从头打开媒体库视频后，首帧小图会保存在这里"))));
   }
-  async function refresh() { const value = await api<Overview>('/api/admin/caches'); overview = value; renderOverview(); await list(); }
+  async function refresh(type = kind) {
+    const query = type === kind ? search : '';
+    const [summary, page] = await Promise.all([api<Overview>('/api/admin/caches'), readEntries(type, query)]);
+    if (type !== kind) {
+      selected = null; $('confirm').hidden = true;
+      $<HTMLInputElement>('search').value = query;
+    }
+    kind = type; search = query; overview = summary;
+    for (const button of panel.querySelectorAll<HTMLButtonElement>('[data-cache-kind]')) button.setAttribute('aria-pressed', String(button.dataset.cacheKind === kind));
+    renderOverview(); renderEntries(page);
+  }
   $('refresh').onclick = () => void act(refresh);
-  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-cache-kind]')) button.onclick = () => void act(async () => {
-    kind = button.dataset.cacheKind as CacheKind; selected = null; $('confirm').hidden = true; search = ''; $<HTMLInputElement>('search').value = '';
-    for (const tab of document.querySelectorAll('[data-cache-kind]')) tab.setAttribute('aria-pressed', String((tab as HTMLElement).dataset.cacheKind === kind));
-    await refresh();
-  });
-  $('search-form').onsubmit = event => { event.preventDefault(); void act(async () => { search = $<HTMLInputElement>('search').value.trim(); await list(); }); };
-  $('more').onclick = () => void act(() => list(true)); $('clear').onclick = () => confirm('all');
+  for (const button of panel.querySelectorAll<HTMLButtonElement>('[data-cache-kind]'))
+    button.onclick = () => void act(() => refresh(button.dataset.cacheKind as CacheKind));
+  $('search-form').onsubmit = event => {
+    event.preventDefault();
+    void act(async () => {
+      const query = $<HTMLInputElement>('search').value.trim(), page = await readEntries(kind, query);
+      search = query; renderEntries(page);
+    });
+  };
+  $('more').onclick = () => void act(async () => { if (next !== null) renderEntries(await readEntries(kind, search, next), true); });
+  $('clear').onclick = () => confirm('all');
   $('cancel').onclick = () => { selected = null; $('confirm').hidden = true; };
   $('confirm-clear').onclick = () => void act(async () => {
     if (!selected) return;

@@ -757,6 +757,16 @@ try {
   assert.equal(await page.locator('#add-root').isDisabled(),true,'only one unsaved new library can be edited');
   await page.locator('#add-root').evaluate(button => { for(let i=0;i<4;i++)button.dispatchEvent(new MouseEvent('click')); });
   assert.equal(await page.locator('.admin-root-row').count(),3,'repeated activation cannot create extra draft rows');
+  const previousViewport = page.viewportSize();
+  await page.setViewportSize({width:350, height:786});
+  const rowsFit = await page.locator('.admin-root-row').evaluateAll(rows => rows.every(row => {
+    const box = selector => row.querySelector(selector).getBoundingClientRect();
+    const name = box('[data-field=name]'), path = box('[data-field=path]'), scan = box('.admin-root-scan'), remove = box('.admin-danger');
+    return name.right <= scan.left && scan.right <= remove.left && Math.abs(name.top + name.height / 2 - scan.top - scan.height / 2) < 1
+      && remove.top === scan.top && path.top >= name.bottom && Math.abs(path.right - remove.right) < 1;
+  }));
+  assert.ok(rowsFit, 'saved and draft directory actions stay beside the name, above the full-width path');
+  await page.setViewportSize(previousViewport);
   await page.locator('.admin-root-row').last().locator('.admin-danger').click();
   assert.equal(await page.locator('#add-root').isEnabled(),true,'discarding the draft permits another library');
   await page.locator('#add-root').click();
@@ -775,7 +785,8 @@ try {
   await page.screenshot({ path: `/tmp/voidplayer-admin-library-dark-${browserName}.png` });
   await page.locator('#roots-form').screenshot({path:`/tmp/voidplayer-admin-roots-card-${browserName}.png`});
   await page.getByRole('button', { name: '日志', exact: true }).click();
-  await page.locator('#log-storage h2').filter({ hasText: '上传报告' }).waitFor();
+  assert.ok(await page.locator('.admin-log-retention').evaluate(el => el.getBoundingClientRect().bottom <= document.querySelector('.admin-log-tabs').getBoundingClientRect().top));
+  await page.locator('#log-storage h3').filter({ hasText: '上传报告' }).waitFor();
   assert.ok((await page.locator('#log-storage').textContent()).includes('保留到手动删除'));
   assert.ok((await page.locator('#log-storage').textContent()).includes('运行日志'));
   const logStorage = await page.request.get(base + '/api/admin/logs').then(response => response.json());
@@ -843,6 +854,15 @@ try {
       await page.getByRole('button', { name, exact: true }).click();
       const fits = await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && [...document.querySelectorAll('.admin-content > section:not([hidden])')].every(e => e.scrollWidth <= e.clientWidth + 1));
       assert.equal(fits, true, `${name} overflows at ${width}px`);
+      if (width === 390) {
+        const visible = await page.locator('#admin-navigation-items').evaluate(strip => {
+          const buttons = [...strip.querySelectorAll('button')], active = strip.querySelector('[aria-current=page]');
+          const box = strip.getBoundingClientRect(), selected = active.getBoundingClientRect();
+          return buttons.every(button => Math.abs(button.getBoundingClientRect().top - selected.top) < 1)
+            && selected.left >= box.left - 1 && selected.right <= box.right + 1 && getComputedStyle(active, '::after').height === '2px';
+        });
+        assert.ok(visible, `${name} stays visible in a single row of categories`);
+      }
       await page.screenshot({ path: `/tmp/voidplayer-admin-${name}-${width}-${browserName}.png` });
     }
   }
@@ -904,7 +924,19 @@ try {
     });
   };
   service.server.on('request', recordResponses);
-  await page.locator('[data-pane=logs]').click(); await page.locator('[data-log-mode=requests]').click();
+  await page.locator('[data-pane=logs]').click();
+  let deliverRequests, requestStarted;
+  const held = new Promise(resolve => { deliverRequests = resolve; });
+  const started = new Promise(resolve => { requestStarted = resolve; });
+  const delayFirstHistory = async route => { requestStarted(); await held; await route.continue(); };
+  await page.route('**/api/admin/requests', delayFirstHistory);
+  await page.locator('[data-log-mode=requests]').click(); await started;
+  assert.ok(await page.locator('#uploads-view').isVisible(), 'keep reports on screen until the first history snapshot arrives');
+  await page.locator('[data-log-mode=uploads]').click();
+  deliverRequests(); await page.waitForLoadState('networkidle');
+  assert.ok(await page.locator('#uploads-view').isVisible(), 'a late response cannot switch away from reports');
+  await page.unroute('**/api/admin/requests', delayFirstHistory);
+  await page.locator('[data-log-mode=requests]').click();
   await page.waitForLoadState('networkidle'); await page.waitForTimeout(6500);
   assert.ok(requestReads.some(read => read.status === 304 && read.conditional), 'unchanged request history sends a validator and reuses the current actor snapshot');
   assert.ok(await page.locator('#request-list .admin-request-row').count() > 0, 'the revalidated snapshot stays rendered');

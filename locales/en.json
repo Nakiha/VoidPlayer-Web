@@ -139,6 +139,10 @@
     "source": "解码线程上限",
     "translation": "Decoder thread limit"
   },
+  "admin.annotationDetails": {
+    "source": "标注详情",
+    "translation": "Annotation details"
+  },
   "admin.annotationMeta": {
     "source": "{author} · 版本 {revision} · {date}",
     "translation": "{author} · Revision {revision} · {date}"
@@ -151,6 +155,10 @@
     "source": "返回最新",
     "translation": "Back to latest"
   },
+  "admin.backToList": {
+    "source": "返回列表",
+    "translation": "Back to list"
+  },
   "admin.backToPlayer": {
     "source": "返回播放器",
     "translation": "Back to player"
@@ -158,14 +166,6 @@
   "admin.blocks": {
     "source": "请求 / 读取块",
     "translation": "Requests / read blocks"
-  },
-  "admin.cacheBudget": {
-    "source": "{used} / {limit} 上限 · 达到上限后自动清理旧缓存",
-    "translation": "{used} / {limit} limit · Old caches are cleared automatically at the limit"
-  },
-  "admin.cacheContents": {
-    "source": "缓存内容",
-    "translation": "Cached contents"
   },
   "admin.cacheQuota": {
     "source": "缓存限额占用",
@@ -255,9 +255,9 @@
     "source": "已完成数据",
     "translation": "Data completed"
   },
-  "admin.dbSize": {
-    "source": "数据库 {db} · 写入日志 {journal}",
-    "translation": "Database {db} · journal {journal}"
+  "admin.databaseSize": {
+    "source": "数据库",
+    "translation": "Database"
   },
   "admin.deleteLog": {
     "source": "删除日志",
@@ -282,14 +282,6 @@
   "admin.deleteWsConfirm": {
     "source": "删除服务器工作区？不删除视频或已打开的会话",
     "translation": "Delete the server workspace? Videos and open sessions stay."
-  },
-  "admin.descPreviews": {
-    "source": "标注卡片使用的画面预览，清理保留文字和绘图，再次编辑对应画面时生成",
-    "translation": "Image previews for mark cards. Text and drawings are kept; regenerates while editing that frame."
-  },
-  "admin.descThumbs": {
-    "source": "媒体库首帧小图，清理后只在正常从头打开时重建，不主动解码",
-    "translation": "First-frame thumbnails for the library. Rebuilds only on plain reopening, never by proactive decoding."
   },
   "admin.detailFrames": {
     "source": "{root} · {format} · {frames, plural, other {# 帧}}",
@@ -395,21 +387,17 @@
     "source": "展开侧栏",
     "translation": "Expand sidebar"
   },
-  "admin.exportMarks": {
-    "source": "导出标注",
-    "translation": "Export marks"
-  },
   "admin.filterMedia": {
     "source": "筛选媒体",
     "translation": "Filter media"
   },
-  "admin.framesDescription": {
-    "source": "加快媒体库视频再次打开和定位，支持的 FFmpeg 容器由服务端重建索引；FLV 仍在播放时重建",
-    "translation": "Open library videos and seek faster. The server rebuilds indexes for supported FFmpeg containers; FLV indexes are rebuilt during playback."
-  },
   "admin.framesEmpty": {
     "source": "打开支持的媒体库视频后，索引会自动保存在这里",
     "translation": "Indexes are saved here automatically when you open supported library videos."
+  },
+  "admin.generalPreferences": {
+    "source": "通用",
+    "translation": "General"
   },
   "admin.guestId": {
     "source": "访客 · {id}",
@@ -438,6 +426,10 @@
   "admin.itemsCount": {
     "source": "{n, plural, other {# 条}}",
     "translation": "{n, plural, one {# item} other {# items}}"
+  },
+  "admin.journalSize": {
+    "source": "写入日志",
+    "translation": "Write-ahead log"
   },
   "admin.kindFrameIndexes": {
     "source": "帧索引",
@@ -515,6 +507,10 @@
     "source": "按 {size} 或每天切段压缩",
     "translation": "Rotate and compress at {size} or daily"
   },
+  "admin.logStoragePolicy": {
+    "source": "日志存储与保留策略",
+    "translation": "Log storage and retention"
+  },
   "admin.logType": {
     "source": "日志类型",
     "translation": "Log type"
@@ -587,6 +583,10 @@
     "source": "测速",
     "translation": "Speed test"
   },
+  "admin.mediaManagement": {
+    "source": "媒体管理",
+    "translation": "Media management"
+  },
   "admin.mediaVersion": {
     "source": "媒体与版本",
     "translation": "Media & version"
@@ -642,6 +642,10 @@
   "admin.noReadableMedia": {
     "source": "本页没有可读媒体",
     "translation": "No readable media on this page"
+  },
+  "admin.noRequestHistory": {
+    "source": "暂无请求记录",
+    "translation": "No requests yet"
   },
   "admin.noUploadedLogs": {
     "source": "暂无上传日志",
@@ -787,6 +791,10 @@
     "source": "报告数量",
     "translation": "Report count"
   },
+  "admin.reportDetails": {
+    "source": "报告详情",
+    "translation": "Report details"
+  },
   "admin.reportQuota": {
     "source": "{count} / {max} 份",
     "translation": "{count} / {max} reports"
@@ -898,6 +906,10 @@
   "admin.savedAsCopy": {
     "source": "已另存为当前用户的副本",
     "translation": "Saved as your own copy."
+  },
+  "admin.savedWorkspaces": {
+    "source": "已保存的工作区",
+    "translation": "Saved workspaces"
   },
   "admin.saving": {
     "source": "正在保存…",
@@ -1015,10 +1027,6 @@
     "source": "服务",
     "translation": "Service"
   },
-  "admin.sharedDb": {
-    "source": "与业务数据共用数据库，清理后空间可复用，文件不一定缩小",
-    "translation": "Shares the database with operational data. Space is reusable after cleanup; the file may not shrink."
-  },
   "admin.sourceRandom": {
     "source": "随机内存数据，不写入磁盘",
     "translation": "Random in-memory data, never written to disk"
@@ -1078,6 +1086,10 @@
   "admin.stateUnscanned": {
     "source": "等待扫描",
     "translation": "Waiting for scan"
+  },
+  "admin.storageLimit": {
+    "source": "上限 {size}",
+    "translation": "Limit {size}"
   },
   "admin.storageLocation": {
     "source": "存储位置",
@@ -1174,6 +1186,10 @@
   "admin.workspaceCopyName": {
     "source": "{name} 副本",
     "translation": "{name} copy"
+  },
+  "admin.workspaceDetails": {
+    "source": "工作区详情",
+    "translation": "Workspace details"
   },
   "admin.workspaceRow": {
     "source": "{owner} · {tracks, plural, other {# 条轨道}} · {marks, plural, other {# 个标注}}",
@@ -2698,6 +2714,10 @@
   "libraryBrowser.noMounts": {
     "source": "暂无挂载的媒体库",
     "translation": "No mounted libraries"
+  },
+  "libraryBrowser.openManagement": {
+    "source": "在新标签页打开媒体库管理",
+    "translation": "Open media library management in a new tab"
   },
   "libraryBrowser.openMount": {
     "source": "打开媒体库：{name}",

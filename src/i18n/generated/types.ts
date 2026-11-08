@@ -35,13 +35,13 @@ export interface Sources {
   "admin.analysisSave": "保存分析配置";
   "admin.analysisSaved": "分析配置已保存";
   "admin.analysisThreads": "解码线程上限";
+  "admin.annotationDetails": "标注详情";
   "admin.annotationMeta": "{author} · 版本 {revision} · {date}";
   "admin.anonymous": "匿名";
   "admin.backToLatest": "返回最新";
+  "admin.backToList": "返回列表";
   "admin.backToPlayer": "返回播放器";
   "admin.blocks": "请求 / 读取块";
-  "admin.cacheBudget": "{used} / {limit} 上限 · 达到上限后自动清理旧缓存";
-  "admin.cacheContents": "缓存内容";
   "admin.cacheQuota": "缓存限额占用";
   "admin.cacheTitle": "缓存";
   "admin.cacheType": "缓存类型";
@@ -64,15 +64,13 @@ export interface Sources {
   "admin.currentIdentity": "当前身份";
   "admin.dataDir": "数据目录";
   "admin.dataDone": "已完成数据";
-  "admin.dbSize": "数据库 {db} · 写入日志 {journal}";
+  "admin.databaseSize": "数据库";
   "admin.deleteLog": "删除日志";
   "admin.deleteLogConfirm": "从服务器删除这份日志？此操作无法撤销";
   "admin.deleteSelectedLog": "删除选中日志";
   "admin.deleteSelectedWorkspace": "删除选中工作区";
   "admin.deleteWorkspace": "删除工作区";
   "admin.deleteWsConfirm": "删除服务器工作区？不删除视频或已打开的会话";
-  "admin.descPreviews": "标注卡片使用的画面预览，清理保留文字和绘图，再次编辑对应画面时生成";
-  "admin.descThumbs": "媒体库首帧小图，清理后只在正常从头打开时重建，不主动解码";
   "admin.detailFrames": "{root} · {format} · {frames, plural, other {# 帧}}";
   "admin.dirNameAria": "目录名称";
   "admin.dirNamePh": "例如：拍摄素材";
@@ -99,10 +97,9 @@ export interface Sources {
   "admin.errorTruncated": " · 详情保留前 1000 条";
   "admin.errorUnavailable": "无法完成请求，请检查连接与服务状态后重试";
   "admin.expandNavigation": "展开侧栏";
-  "admin.exportMarks": "导出标注";
   "admin.filterMedia": "筛选媒体";
-  "admin.framesDescription": "加快媒体库视频再次打开和定位，支持的 FFmpeg 容器由服务端重建索引；FLV 仍在播放时重建";
   "admin.framesEmpty": "打开支持的媒体库视频后，索引会自动保存在这里";
+  "admin.generalPreferences": "通用";
   "admin.guestId": "访客 · {id}";
   "admin.historyLogLine": "历史日志 · {size}";
   "admin.hoursMinutes": "{h} 小时 {m} 分";
@@ -110,6 +107,7 @@ export interface Sources {
   "admin.indexTitle": "媒体索引";
   "admin.interfaceLanguage": "界面语言";
   "admin.itemsCount": "{n, plural, other {# 条}}";
+  "admin.journalSize": "写入日志";
   "admin.kindFrameIndexes": "帧索引";
   "admin.kindPreviews": "标注预览";
   "admin.kindThumbs": "媒体缩略图";
@@ -129,6 +127,7 @@ export interface Sources {
   "admin.logRetentionDays": "{days} 天后自动删除";
   "admin.logRetentionManual": "保留到手动删除";
   "admin.logSegments": "按 {size} 或每天切段压缩";
+  "admin.logStoragePolicy": "日志存储与保留策略";
   "admin.logType": "日志类型";
   "admin.logUploaderLine": "上传者：{user} · {size}";
   "admin.logsDisabled": "未开启日志接收";
@@ -147,6 +146,7 @@ export interface Sources {
   "admin.measureRunning": "进行中";
   "admin.measureSource": "测量来源";
   "admin.measureTitle": "测速";
+  "admin.mediaManagement": "媒体管理";
   "admin.mediaVersion": "媒体与版本";
   "admin.moveToTrash": "移入回收站";
   "admin.nameSaved": "名称已保存";
@@ -161,6 +161,7 @@ export interface Sources {
   "admin.noMatchWs": "没有找到匹配的工作区";
   "admin.noReadErrors": "本次扫描没有读取错误";
   "admin.noReadableMedia": "本页没有可读媒体";
+  "admin.noRequestHistory": "暂无请求记录";
   "admin.noUploadedLogs": "暂无上传日志";
   "admin.noWsYet": "还没有保存的工作区";
   "admin.notStarted": "尚未开始";
@@ -197,6 +198,7 @@ export interface Sources {
   "admin.removeDir": "移除目录";
   "admin.removeDirTitle": "移出媒体库，不删除文件";
   "admin.reportCount": "报告数量";
+  "admin.reportDetails": "报告详情";
   "admin.reportQuota": "{count} / {max} 份";
   "admin.reqDuration": "耗时";
   "admin.reqRequest": "请求";
@@ -225,6 +227,7 @@ export interface Sources {
   "admin.saveDirs": "保存目录";
   "admin.saveName": "保存名称";
   "admin.savedAsCopy": "已另存为当前用户的副本";
+  "admin.savedWorkspaces": "已保存的工作区";
   "admin.saving": "正在保存…";
   "admin.scanCurrentProgress": "本轮已读取 {directories, plural, other {# 个目录}}、{media, plural, other {# 个媒体}}";
   "admin.scanErrorTotal": "{count} 处读取错误";
@@ -254,7 +257,6 @@ export interface Sources {
   "admin.serverPathAria": "服务器上的目录路径";
   "admin.serverPathPh": "填写完整目录路径";
   "admin.serviceTitle": "服务";
-  "admin.sharedDb": "与业务数据共用数据库，清理后空间可复用，文件不一定缩小";
   "admin.sourceRandom": "随机内存数据，不写入磁盘";
   "admin.speedConcurrent": "多路视频读取";
   "admin.speedDownload": "下载速度";
@@ -270,6 +272,7 @@ export interface Sources {
   "admin.stateReady": "可用";
   "admin.stateScanning": "扫描中";
   "admin.stateUnscanned": "等待扫描";
+  "admin.storageLimit": "上限 {size}";
   "admin.storageLocation": "存储位置";
   "admin.storageUsage": "存储占用";
   "admin.systemMemory": "系统可用内存";
@@ -294,6 +297,7 @@ export interface Sources {
   "admin.watchPollOnly": "仅周期校准";
   "admin.watchSummary": "{active} / {limit, plural, other {# 个目录}}{calibration}{partial}";
   "admin.workspaceCopyName": "{name} 副本";
+  "admin.workspaceDetails": "工作区详情";
   "admin.workspaceRow": "{owner} · {tracks, plural, other {# 条轨道}} · {marks, plural, other {# 个标注}}";
   "admin.wsCreator": "创建者";
   "admin.wsDeleted": "已删除服务器工作区";
@@ -669,6 +673,7 @@ export interface Sources {
   "libraryBrowser.locationLabel": "搜索当前目录或输入媒体库路径";
   "libraryBrowser.manage": "媒体库管理";
   "libraryBrowser.noMounts": "暂无挂载的媒体库";
+  "libraryBrowser.openManagement": "在新标签页打开媒体库管理";
   "libraryBrowser.openMount": "打开媒体库：{name}";
   "libraryBrowser.pathLabel": "媒体库路径";
   "libraryBrowser.searchUnder": "{scope} 下搜索";
@@ -1272,13 +1277,13 @@ export interface MessageParameters {
   "admin.analysisSave": {  };
   "admin.analysisSaved": {  };
   "admin.analysisThreads": {  };
+  "admin.annotationDetails": {  };
   "admin.annotationMeta": { "author": string | number; "date": string | number; "revision": string | number };
   "admin.anonymous": {  };
   "admin.backToLatest": {  };
+  "admin.backToList": {  };
   "admin.backToPlayer": {  };
   "admin.blocks": {  };
-  "admin.cacheBudget": { "limit": string | number; "used": string | number };
-  "admin.cacheContents": {  };
   "admin.cacheQuota": {  };
   "admin.cacheTitle": {  };
   "admin.cacheType": {  };
@@ -1301,15 +1306,13 @@ export interface MessageParameters {
   "admin.currentIdentity": {  };
   "admin.dataDir": {  };
   "admin.dataDone": {  };
-  "admin.dbSize": { "db": string | number; "journal": string | number };
+  "admin.databaseSize": {  };
   "admin.deleteLog": {  };
   "admin.deleteLogConfirm": {  };
   "admin.deleteSelectedLog": {  };
   "admin.deleteSelectedWorkspace": {  };
   "admin.deleteWorkspace": {  };
   "admin.deleteWsConfirm": {  };
-  "admin.descPreviews": {  };
-  "admin.descThumbs": {  };
   "admin.detailFrames": { "format": string | number; "frames": number; "root": string | number };
   "admin.dirNameAria": {  };
   "admin.dirNamePh": {  };
@@ -1336,10 +1339,9 @@ export interface MessageParameters {
   "admin.errorTruncated": {  };
   "admin.errorUnavailable": {  };
   "admin.expandNavigation": {  };
-  "admin.exportMarks": {  };
   "admin.filterMedia": {  };
-  "admin.framesDescription": {  };
   "admin.framesEmpty": {  };
+  "admin.generalPreferences": {  };
   "admin.guestId": { "id": string | number };
   "admin.historyLogLine": { "size": string | number };
   "admin.hoursMinutes": { "h": string | number; "m": string | number };
@@ -1347,6 +1349,7 @@ export interface MessageParameters {
   "admin.indexTitle": {  };
   "admin.interfaceLanguage": {  };
   "admin.itemsCount": { "n": number };
+  "admin.journalSize": {  };
   "admin.kindFrameIndexes": {  };
   "admin.kindPreviews": {  };
   "admin.kindThumbs": {  };
@@ -1366,6 +1369,7 @@ export interface MessageParameters {
   "admin.logRetentionDays": { "days": string | number };
   "admin.logRetentionManual": {  };
   "admin.logSegments": { "size": string | number };
+  "admin.logStoragePolicy": {  };
   "admin.logType": {  };
   "admin.logUploaderLine": { "size": string | number; "user": string | number };
   "admin.logsDisabled": {  };
@@ -1384,6 +1388,7 @@ export interface MessageParameters {
   "admin.measureRunning": {  };
   "admin.measureSource": {  };
   "admin.measureTitle": {  };
+  "admin.mediaManagement": {  };
   "admin.mediaVersion": {  };
   "admin.moveToTrash": {  };
   "admin.nameSaved": {  };
@@ -1398,6 +1403,7 @@ export interface MessageParameters {
   "admin.noMatchWs": {  };
   "admin.noReadErrors": {  };
   "admin.noReadableMedia": {  };
+  "admin.noRequestHistory": {  };
   "admin.noUploadedLogs": {  };
   "admin.noWsYet": {  };
   "admin.notStarted": {  };
@@ -1434,6 +1440,7 @@ export interface MessageParameters {
   "admin.removeDir": {  };
   "admin.removeDirTitle": {  };
   "admin.reportCount": {  };
+  "admin.reportDetails": {  };
   "admin.reportQuota": { "count": string | number; "max": string | number };
   "admin.reqDuration": {  };
   "admin.reqRequest": {  };
@@ -1462,6 +1469,7 @@ export interface MessageParameters {
   "admin.saveDirs": {  };
   "admin.saveName": {  };
   "admin.savedAsCopy": {  };
+  "admin.savedWorkspaces": {  };
   "admin.saving": {  };
   "admin.scanCurrentProgress": { "directories": number; "media": number };
   "admin.scanErrorTotal": { "count": string | number };
@@ -1491,7 +1499,6 @@ export interface MessageParameters {
   "admin.serverPathAria": {  };
   "admin.serverPathPh": {  };
   "admin.serviceTitle": {  };
-  "admin.sharedDb": {  };
   "admin.sourceRandom": {  };
   "admin.speedConcurrent": {  };
   "admin.speedDownload": {  };
@@ -1507,6 +1514,7 @@ export interface MessageParameters {
   "admin.stateReady": {  };
   "admin.stateScanning": {  };
   "admin.stateUnscanned": {  };
+  "admin.storageLimit": { "size": string | number };
   "admin.storageLocation": {  };
   "admin.storageUsage": {  };
   "admin.systemMemory": {  };
@@ -1531,6 +1539,7 @@ export interface MessageParameters {
   "admin.watchPollOnly": {  };
   "admin.watchSummary": { "active": string | number; "calibration": string | number; "limit": number; "partial": string | number };
   "admin.workspaceCopyName": { "name": string | number };
+  "admin.workspaceDetails": {  };
   "admin.workspaceRow": { "marks": number; "owner": string | number; "tracks": number };
   "admin.wsCreator": {  };
   "admin.wsDeleted": {  };
@@ -1906,6 +1915,7 @@ export interface MessageParameters {
   "libraryBrowser.locationLabel": {  };
   "libraryBrowser.manage": {  };
   "libraryBrowser.noMounts": {  };
+  "libraryBrowser.openManagement": {  };
   "libraryBrowser.openMount": { "name": string | number };
   "libraryBrowser.pathLabel": {  };
   "libraryBrowser.searchUnder": { "scope": string | number };
