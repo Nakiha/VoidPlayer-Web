@@ -1306,6 +1306,31 @@ try {
 
   await check('HLG Dolby sample uses managed SDR preview and preserves browser compatibility', async page => {
     const id = listing.entries.find(item => item.name === 'dolby_hlg_1080p30.mp4').id;
+    // Read the sample's mdhd clocks independently of the application parser.
+    // CI generates a video-only sample; the locally synced original also has audio.
+    const bytes = await readFile(path.join(fixtures, 'dolby_hlg_1080p30.mp4'));
+    const boxes = (start, end) => {
+      const rows = [];
+      while (start < end) {
+        assert.ok(start + 8 <= end);
+        const length = bytes.readUInt32BE(start), header = length === 1 ? 16 : 8;
+        const size = length === 1 ? Number(bytes.readBigUInt64BE(start + 8)) : length || end - start;
+        assert.ok(Number.isSafeInteger(size) && size >= header && start + size <= end);
+        rows.push({type:bytes.toString('ascii',start+4,start+8), data:start+header, end:start+size});
+        start += size;
+      }
+      return rows;
+    };
+    const moov = boxes(0, bytes.length).find(box => box.type === 'moov'); assert.ok(moov);
+    const clocks = boxes(moov.data, moov.end).filter(box => box.type === 'trak').map(track => {
+      const mdia = boxes(track.data, track.end).find(box => box.type === 'mdia'); assert.ok(mdia);
+      const children = boxes(mdia.data, mdia.end), mdhd = children.find(box => box.type === 'mdhd'), hdlr = children.find(box => box.type === 'hdlr');
+      assert.ok(mdhd && hdlr);
+      const scale = bytes.readUInt32BE(mdhd.data + (bytes[mdhd.data] === 1 ? 20 : 12)); assert.ok(scale > 0);
+      return {type:bytes.toString('ascii',hdlr.data+8,hdlr.data+12), text:`1/${scale} s`};
+    });
+    const expectedClocks = ['vide', 'soun'].flatMap(type => clocks.filter(clock => clock.type === type).map(clock => clock.text));
+    assert.ok(clocks.some(clock => clock.type === 'vide'));
     const managed = await page.evaluate(async id => {
       const tool = name => window.voidPlayer.tools.find(t => t.name === name);
       await tool('set_review_color_mode').execute({ mode: 'reference' });
@@ -1320,7 +1345,7 @@ try {
     await page.locator('#toggle-inspector').click();
     await page.locator('#inspect-decoder-concurrency').waitFor({ state: 'visible' });
     const containerFacts = await page.locator('[data-metadata-group=container] dd').allTextContents();
-    assert.deepEqual(containerFacts, ['MP4', '1/90000 s', '1/48000 s'], 'library playback retains the original HLG stream clocks');
+    assert.deepEqual(containerFacts, ['MP4', ...expectedClocks], 'library playback retains the actual HLG sample stream clocks');
     await page.locator('#toggle-analysis').click();
     for (const button of await page.locator('#analysis-diagrams [data-value]').all()) {
       const enabled = await button.getAttribute('aria-pressed') === 'true';

@@ -14,6 +14,14 @@ await withBrowserFixture({ caseName: 'menu', engine: name, pageOptions: { viewpo
     await tool('load_library_item').execute({slot: 'A', id: lib.entries.find(e => e.name === 'ci_h264_smoke.mp4').id});
   });
   const state = () => page.evaluate(() => window.voidPlayer.getState());
+  async function openEditor() {
+    await page.waitForFunction(()=>!window.voidPlayer.getState().busy
+      && !document.querySelector('dialog[open], dialog[data-closing], .popup-menu:popover-open, .header-actions[popover]:popover-open'));
+    await settleAppearance(page);
+    await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });
+    await page.keyboard.press('n');
+    await page.locator('#annotation-toolbar').waitFor({state:'visible'});
+  }
   await load();
   assert.equal(await page.locator('#annotate').count(), 0, 'transport has no annotation launcher');
   const originalName = await page.locator('#name-A').textContent();
@@ -104,7 +112,7 @@ await withBrowserFixture({ caseName: 'menu', engine: name, pageOptions: { viewpo
   assert.equal(await page.locator('#more-actions').count(),0);
   await page.locator('#settings-open').click();assert.equal(await page.locator('#settings').evaluate(e=>e.open),true);await page.keyboard.press('Escape');
   await phase('settings-dismiss', () => waitForDialogClosed(page));
-  await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); }); await page.keyboard.press('n'); await page.locator('[data-drawing-tool=rect]').click();
+  await openEditor(); await page.locator('[data-drawing-tool=rect]').click();
   assert.equal(await page.locator('#annotation-toolbar').evaluate(e=>getComputedStyle(e).padding),'4px','compact wrapper preserves button targets');
   await page.mouse.move(280,240); await page.mouse.down(); await page.mouse.move(500,420,{steps:8}); await page.mouse.up();
   assert.equal((await state()).marks[0].drawings[0].color,'#ff3b30','new annotations default to red');
@@ -160,15 +168,13 @@ await withBrowserFixture({ caseName: 'menu', engine: name, pageOptions: { viewpo
   await page.locator('.topbar').click({position:{x:640,y:20}});
   assert.equal(await page.locator('.popup-menu:popover-open:not([data-menu-exit-for])').count(),0,'outside click dismisses');
   assert.equal(await page.locator('#settings').evaluate(e=>e.open),false,'dismissing the popup must not open a dialog');
-  await page.locator('#mark-close').click(); await settleAppearance(page);
-  await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); }); await page.keyboard.press('n');
-  await page.locator('#annotation-toolbar').waitFor({state:'visible'});
+  await page.locator('#mark-close').click(); await openEditor();
   assert.equal(await page.locator('#drawing-color').inputValue(),'#ff3b30','a fresh editing session defaults to red');
   assert.equal((await state()).marks[0].drawings[0].color,'#007aff','existing colors are preserved');
   await page.reload();
   // reload 后同样是动态 import 的启动过程，load() 之前必须等 window.voidPlayer 就绪。
   await page.waitForFunction(() => window.voidPlayer?.tools, { timeout: 30000 });
-  await load(); await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); }); await page.keyboard.press('n'); await page.locator('#drawing-color-choice').click();
+  await load(); await openEditor(); await page.locator('#drawing-color-choice').click();
   assert.equal(await page.getByRole('group',{name:'色盘',exact:true}).locator('button').count(),120,'palette is fixed across reloads');
   assert.equal(await page.evaluate(()=>localStorage.getItem('voidplayer.annotation.recent-colors')),null);
   assert.equal(await page.locator('#drawing-color').inputValue(),'#ff3b30','stateless palette keeps red as the default');
@@ -206,7 +212,7 @@ await withBrowserFixture({ caseName: 'menu', engine: name, pageOptions: { viewpo
   await inputProbe.dispose();
   await page.waitForFunction(() => getComputedStyle(document.querySelector('.transport .duration')).color === 'rgb(228, 231, 237)');
   assert.equal(await page.locator('.transport .duration').evaluate(e=>getComputedStyle(e).color),'rgb(228, 231, 237)');
-  await page.keyboard.press('Escape');await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });await page.keyboard.press('n');
+  await page.keyboard.press('Escape'); await openEditor();
   assert.equal(await page.locator('#annotation-toolbar').evaluate(e=>getComputedStyle(e).boxShadow),'none');
   await page.locator('#drawing-color-choice').click();
   await page.waitForFunction(() => getComputedStyle(document.querySelector('#drawing-color-choice-menu [aria-checked=true]'), '::before').backgroundColor === 'rgb(53, 59, 69)');
