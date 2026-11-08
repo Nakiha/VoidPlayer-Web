@@ -130,6 +130,6 @@ export function shell() {
   </main>
 
 
-  <input id="workspace-file" type="file" accept=".voidplayer,.json,.gz" hidden>
+  <input id="workspace-file" type="file" ${localOnly ? 'multiple' : ''} accept=".voidplayer,.json,.gz${localOnly ? ',' + VIDEO_ACCEPT : ''}" hidden>
   ${settingsShell()}`;
 }

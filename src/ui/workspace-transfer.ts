@@ -12,7 +12,7 @@ import {updateMediaInfo} from '../media/state.ts';
 import type { ReviewSession } from '../session.ts';
 import type { MediaInfo } from '../../shared/media/types.ts';
 import { openMedia, openMediaFromUrl } from '../media/source.ts';
-import { LocalInputError } from './video-input.ts';
+import { LocalInputError, selectVideoInputs } from './video-input.ts';
 import { parseWorkspace, readWorkspaceFile, UnrecognizedWorkspaceFile } from '../../shared/review/workspace-file.ts';
 import type { WorkspaceFile } from '../../shared/review/workspace-file.ts';
 import { mapSharedWorkspace } from '../review/shared-workspace.ts';
@@ -177,7 +177,18 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
     await client.request(`/api/${params.has('share')?'shares':'reviews'}/${legacyId}`);
     await saved!.open(legacyId);
   }).catch(error=>options.toasts.show((error as Error).message,{kind:'error',durationMs:0})).finally(finishOpening);
-  input.addEventListener('change', () => { const file = input.files?.[0]; input.value = ''; if (file) void options.act(() => importFile(file), 'workspace.import'); }, { signal: lifetime.signal });
+  input.addEventListener('change', () => {
+    const files = Array.from(input.files ?? []); input.value = '';
+    if (!files.length) return;
+    if (!localOnly) { void options.act(() => importFile(files[0]), 'workspace.import'); return; }
+    void options.act(async () => {
+      const documents = files.filter(isWorkspaceFile);
+      if (documents.length !== 1) throw new LocalInputError(t(msg('player.openOneWorkspaceFileAtATime', '每次请打开一个工作区文件')));
+      const supplied = await selectVideoInputs(files.filter(file => !isWorkspaceFile(file)).map(file => ({ file })),
+        error => options.toasts.show(error.message, { kind: 'warning' }));
+      await importFile(documents[0], supplied.map(item => item.file));
+    }, 'workspace.import');
+  }, { signal: lifetime.signal });
   async function refreshForUpdate(target: string) {
     const owner = currentActor()?.id ?? 'local';
     function checkReady() {

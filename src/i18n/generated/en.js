@@ -1074,7 +1074,7 @@ export default {
   "shell.zoom": () => "Zoom",
   "sites.exportWorkspace": () => "Export workspace",
   "sites.importWorkspace": () => "Import workspace",
-  "sites.localHelp": () => "Videos and annotations are processed in this browser without uploading. Workspace files do not contain videos; provide the original videos when reopening.",
+  "sites.localHelp": () => "Videos and annotations are processed in this browser without uploading. Workspace files do not contain videos; select the workspace and original videos together in the import dialog when reopening.",
   "sites.remoteUnavailable": () => "This edition supports local files only. Use the full edition to access media services.",
   "sites.searchLocal": () => "Search local sources",
   "sourceAccess.libraryChanged": (d) => "Cannot open \"" + d.name + "\": the file version changed.",

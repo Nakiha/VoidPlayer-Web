@@ -110,17 +110,29 @@ try {
     await page.waitForFunction(() => { window.dispatchEvent(new Event('focus')); return document.querySelector('#checkpoint-history-list').textContent.includes('Sites review'); });
     await page.screenshot({ path: path.join(evidence, isolated ? 'isolated.png' : 'static.png') });
     await page.locator('#settings-close').click();
-    // A new page receives the exported file and original video through the real drop flow.
+    // A new page reopens through the combined picker or the existing drop flow.
     const reopened = await context.newPage();
     await reopened.goto(base);
     await reopened.waitForFunction(() => window.voidPlayer);
-    const bytes = await readFile(video), metadata = await stat(video);
-    await reopened.evaluate(({ workspace, bytes, lastModified }) => {
-      const transfer = new DataTransfer();
-      transfer.items.add(new File([JSON.stringify(workspace)], 'review.voidplayer', { type: 'application/json' }));
-      transfer.items.add(new File([Uint8Array.from(bytes)], 'ci_h264_smoke.mp4', { type: 'video/mp4', lastModified }));
-      document.querySelector('#stage-A').dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }));
-    }, { workspace, bytes: [...bytes], lastModified: metadata.mtimeMs });
+    if (!isolated) {
+      await reopened.locator('#settings-open').click();
+      await reopened.locator('#settings-tab-workspace').click();
+      const choosing = reopened.waitForEvent('filechooser');
+      await reopened.locator('#local-workspace-import').click();
+      const chooser = await choosing;
+      assert.equal(chooser.isMultiple(), true, 'workspace picker accepts the document and original videos together');
+      const exportedFile = path.join(evidence, 'picker-workspace.voidplayer');
+      await writeFile(exportedFile, JSON.stringify(workspace));
+      await chooser.setFiles([exportedFile, video]);
+    } else {
+      const bytes = await readFile(video), metadata = await stat(video);
+      await reopened.evaluate(({ workspace, bytes, lastModified }) => {
+        const transfer = new DataTransfer();
+        transfer.items.add(new File([JSON.stringify(workspace)], 'review.voidplayer', { type: 'application/json' }));
+        transfer.items.add(new File([Uint8Array.from(bytes)], 'ci_h264_smoke.mp4', { type: 'video/mp4', lastModified }));
+        document.querySelector('#stage-A').dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }));
+      }, { workspace, bytes: [...bytes], lastModified: metadata.mtimeMs });
+    }
     await reopened.waitForFunction(id => window.voidPlayer.getState().tracks.length === 1 && window.voidPlayer.getState().marks.some(mark => mark.id === id), markId);
     await reopened.waitForFunction(() => window.voidPlayer.exportWorkspace().name === 'Sites review');
     const remote = await reopened.evaluate(async workspace => {

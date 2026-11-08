@@ -1074,7 +1074,7 @@ export default {
   "shell.zoom": () => "［Z~o~o~m~ ········］",
   "sites.exportWorkspace": () => "［E~x~p~o~r~t~ w~o~r~k~s~p~a~c~e~ ········］",
   "sites.importWorkspace": () => "［I~m~p~o~r~t~ w~o~r~k~s~p~a~c~e~ ········］",
-  "sites.localHelp": () => "［V~i~d~e~o~s~ a~n~d~ a~n~n~o~t~a~t~i~o~n~s~ a~r~e~ p~r~o~c~e~s~s~e~d~ i~n~ t~h~i~s~ b~r~o~w~s~e~r~ w~i~t~h~o~u~t~ u~p~l~o~a~d~i~n~g~. W~o~r~k~s~p~a~c~e~ f~i~l~e~s~ d~o~ n~o~t~ c~o~n~t~a~i~n~ v~i~d~e~o~s~; p~r~o~v~i~d~e~ t~h~e~ o~r~i~g~i~n~a~l~ v~i~d~e~o~s~ w~h~e~n~ r~e~o~p~e~n~i~n~g~. ········］",
+  "sites.localHelp": () => "［V~i~d~e~o~s~ a~n~d~ a~n~n~o~t~a~t~i~o~n~s~ a~r~e~ p~r~o~c~e~s~s~e~d~ i~n~ t~h~i~s~ b~r~o~w~s~e~r~ w~i~t~h~o~u~t~ u~p~l~o~a~d~i~n~g~. W~o~r~k~s~p~a~c~e~ f~i~l~e~s~ d~o~ n~o~t~ c~o~n~t~a~i~n~ v~i~d~e~o~s~; s~e~l~e~c~t~ t~h~e~ w~o~r~k~s~p~a~c~e~ a~n~d~ o~r~i~g~i~n~a~l~ v~i~d~e~o~s~ t~o~g~e~t~h~e~r~ i~n~ t~h~e~ i~m~p~o~r~t~ d~i~a~l~o~g~ w~h~e~n~ r~e~o~p~e~n~i~n~g~. ········］",
   "sites.remoteUnavailable": () => "［T~h~i~s~ e~d~i~t~i~o~n~ s~u~p~p~o~r~t~s~ l~o~c~a~l~ f~i~l~e~s~ o~n~l~y~. U~s~e~ t~h~e~ f~u~l~l~ e~d~i~t~i~o~n~ t~o~ a~c~c~e~s~s~ m~e~d~i~a~ s~e~r~v~i~c~e~s~. ········］",
   "sites.searchLocal": () => "［S~e~a~r~c~h~ l~o~c~a~l~ s~o~u~r~c~e~s~ ········］",
   "sourceAccess.libraryChanged": (d) => "［C~a~n~n~o~t~ o~p~e~n~ \"" + d.name + "\": t~h~e~ f~i~l~e~ v~e~r~s~i~o~n~ c~h~a~n~g~e~d~. ········］",

@@ -1072,7 +1072,7 @@ export interface Sources {
   "shell.zoom": "画面缩放";
   "sites.exportWorkspace": "导出工作区";
   "sites.importWorkspace": "导入工作区";
-  "sites.localHelp": "视频和标注在此浏览器内处理，不上传。工作区文件不包含视频；重新打开时请同时提供原视频。";
+  "sites.localHelp": "视频和标注在此浏览器内处理，不上传。工作区不含视频；重新打开时，可在导入窗口同时选择工作区和原视频。";
   "sites.remoteUnavailable": "此版本仅支持本地文件，请使用完整版访问媒体服务";
   "sites.searchLocal": "搜索本地片源";
   "sourceAccess.libraryChanged": "无法打开「{name}」：文件版本已变化";

@@ -12,7 +12,7 @@ export function savedWorkspaceShell() {
   if (localOnly) return `<div class="settings-section"><h4 class="settings-section-title">${th(msg('savedWorkspaces.currentWorkspace', '当前工作区'))}</h4>
     <div class="workspace-current-section settings-card"><div class="workspace-current-row"><input id="local-workspace-name" maxlength="200" aria-label="${th(msg('savedWorkspaces.workspaceName', '工作区名称'))}" placeholder="${th(msg('savedWorkspaces.untitledWorkspace', '未命名工作区'))}">
       <div class="workspace-current-actions"><button id="local-workspace-import">${th(msg('sites.importWorkspace', '导入工作区'))}</button><button id="local-workspace-export">${th(msg('sites.exportWorkspace', '导出工作区'))}</button></div></div>
-      <p class="settings-caption">${th(msg('sites.localHelp', '视频和标注在此浏览器内处理，不上传。工作区文件不包含视频；重新打开时请同时提供原视频。'))}</p>
+      <p class="settings-caption">${th(msg('sites.localHelp', '视频和标注在此浏览器内处理，不上传。工作区不含视频；重新打开时，可在导入窗口同时选择工作区和原视频。'))}</p>
     </div></div>${annotationActivityShell()}${checkpointHistoryShell()}`;
   return `<div class="settings-section"><h4 class="settings-section-title">${th(msg("savedWorkspaces.currentWorkspace", "当前工作区"))}</h4><div class="workspace-current-section settings-card">
     <div class="workspace-current-row"><input id="saved-workspace-name" maxlength="200" aria-label="${th(msg("savedWorkspaces.workspaceName", "工作区名称"))}" placeholder="${th(msg("savedWorkspaces.untitledWorkspace", "未命名工作区"))}"><div class="workspace-current-actions"><button id="saved-workspace-save">${th(msg("identitySettings.save", "保存"))}</button><button id="saved-workspace-share">${icon('shareNetwork')}<span>${th(msg("shell.share", "分享"))}</span></button></div></div>
