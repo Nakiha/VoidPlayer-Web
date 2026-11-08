@@ -840,7 +840,7 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .toast-multiple-actions { flex-wrap: wrap; }
 .toast-multiple-actions .toast-message { flex-basis: 100%; }
 .toast-multiple-actions .toast-close { margin-left: auto; }
-.toast-warning { background: var(--warning-fill); color: var(--warning-text); border-color: color-mix(in srgb, var(--warning-text) 35%, var(--border)); }
+.toast-warning { background: var(--toast-warning-fill); color: var(--toast-warning-text); border-color: color-mix(in srgb, var(--warning-text) 35%, var(--border)); }
 .toast-error { background: var(--toast-error-fill); color: var(--toast-error-text); border-color: var(--toast-error-border); }
 .toast-action { flex: none; }
 .toast-close { flex: none; }

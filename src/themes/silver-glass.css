@@ -101,6 +101,7 @@
   --header-actions-breakpoint: 180px; --header-divider-width: 1px; --side-panel-min-width: 160px; --side-panel-max-width: 480px; --comparison-min-width: 360px; --panel-resize-hit-width: 10px; --panel-resize-line-width: 2px; --panel-collapse-distance: 32px;
   --panel-motion-duration: 220ms; --panel-motion-easing: cubic-bezier(.2,.8,.2,1); --panel-dismiss-veil: color-mix(in srgb, var(--surface-panel) 60%, transparent);
   --toast-enter-duration: 120ms; --toast-exit-duration: var(--panel-motion-duration);
+  --toast-warning-fill: color-mix(in srgb, #f59e0b 16%, var(--viewport-chrome-fill)); --toast-warning-text: #4b290b;
   --toast-error-fill: color-mix(in srgb, #d92d20 14%, var(--viewport-chrome-fill)); --toast-error-text: #912018; --toast-error-border: color-mix(in srgb, #d92d20 38%, var(--border));
 }
 @media (max-width: 680px) {
