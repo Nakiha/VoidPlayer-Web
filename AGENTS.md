@@ -1,110 +1,66 @@
 # AGENTS.md
 
-VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建裁剪版 FFmpeg WASM 解码后端
-（FFV1 / MPEG-2 / H.266 / 浏览器不支持的 profile 组合；与 JS 容器层正交）。
+VoidPlayer Web 用于在浏览器中同步播放多路视频，逐帧对比不同编码或处理结果，并在具体帧上标注问题。
 
-## 结构
+## 开发入口
 
-- `src/main.ts` 页面入口；`src/session.ts` 是 UI 与页面 Agent 共用的浏览器会话 facade；`src/session/` 保存播放、色彩、元数据分析与深度码流任务的会话协调。无宿主依赖的标注构造、编辑和持久命令规则在 `shared/review/`；HTTP 与浏览器适配器调用同一套规则。
-- `shared/`：无宿主依赖的公共实现。基础帧时间/媒体描述在 `media/types.ts`，源色彩在 `color/color-info.ts`，呈现事实在 `presentation/presentation-info.ts`。`media/{containers,codecs,indexing,io}/` 保存容器解析、压缩包身份、索引与字节读取；`analysis/metadata/` 保存包统计、滑窗、排序与查询；`analysis/bitstream/` 保存深度码流契约、NALU/GOP、执行器与缓存；`review/`、`presentation/viewport.ts`、`color/`、`thumbnails/`、`service/` 保存相应纯逻辑和数据契约。
-- `src/media/`：`contract.ts` 保存浏览器帧/源/媒体元数据合同，`source.ts` 为打开与 WebCodecs 入口；`decoding/` 保存 FFmpeg/packet/FLV/JS 容器后端及 Worker，`indexing/` 保存浏览器索引客户端与 IndexedDB 适配，`audio/` 只观察已有缓存，`policy/` 保存解码选择，`io/` 保存同步 Range 桥接，`workers/` 保存 RPC 与协议。
-- `src/presentation/presenter.ts` 唯一决定帧如何上屏；同目录保存唯一 WebGPU 上屏后端、HDR/YUV 呈现与必要的 2D 色彩中转。`shared/presentation/viewport.ts` 保存纯几何与状态，DOM 接线在 `src/ui/view-bindings.ts` 和 `src/ui/viewport-gestures.ts`。
-- `src/analysis/{metadata,bitstream}/` 保存浏览器分析适配、Worker 与服务；`src/ui/analysis/` 保存面板与图表，`chart-overlay.ts` 为图表覆盖层，`picture-overlay/` 为源画面宏块/QP 覆盖层；`src/session/{metadata-analysis,bitstream-analysis}.ts` 协调会话行为。
-- `src/review/` 保存评审与工作区浏览器客户端；`src/services/` 保存媒体库、连接、身份和文件客户端；`src/logging/` 保存本地诊断；面板与交互位于 `src/ui/`，管理页面位于 `src/admin/`。
-- `server/`：Node 服务，`runtime.ts` / `app.ts` 负责入口装配；路由在 `routes/`，深度分析服务在 `analysis/bitstream/`，配置与运行入口在 `config.ts` / `runtime.ts`。共享代码统一从 `shared/` 引入，禁止服务端与浏览器层互相引用（包括类型）。
-- `scripts/dev.ts` 同进程启动 Vite 和媒体 API；`scripts/service.mjs` 管理 macOS 用户服务；`deploy/` 为便携运行与自动用户使用说明。
-- `test/{unit,contract,media}/`：node:test，无浏览器依赖；`helpers/` 为可复用模块，顶层旧文件为兼容入口。WASM 用例在 Node worker_threads 里跑真实 core。
-- `scripts/testing/`：统一清单、构建、生命周期与报告接入；`browser/{ui,annotations,media,workspace}/` 保存领域浏览器用例，顶层 `check-*-browser.mjs` 保留兼容入口。
-- `scripts/tools/{development,fixtures,diagnostics,perf,release}/`：已归类工具实现，旧入口保留兼容；专用工具与职责索引见 `scripts/README.md`。
-- `scripts/`：`sync-wasm-core.sh`（从 VoidPlayer-FFmpeg-Build 产物同步 core，可用
-  `WASM_CORE_DIR` 覆盖）、`sync-samples.sh`（样片进 `fixtures/video/`，可用
-  `VOIDPLAYER_SAMPLES` 覆盖）、`bench-playback.mjs`（Playwright 离屏播放基准）。
-- `public/vendor/voidplayer-core/`：gitignored 的 core 产物，由 sync 脚本填充。
+- 使用 Node.js 24+ 和 `npm ci`。按[开发说明](README.md)准备本机配置与媒体目录。`npm run dev` 启动 Vite 和媒体 API；`npm run serve` 提供已发布的完整版前端。
+- 播放和分析是两个独立 core。用 `bash scripts/sync-wasm-core.sh` 和 `bash scripts/sync-analysis-core.sh` 同步上游产物，来源目录可分别用 `WASM_CORE_DIR` 和 `ANALYSIS_CORE_DIR` 指定。产物位于被 Git 忽略的 `public/vendor/voidplayer-core/` 和 `public/vendor/voidplayer-analysis/`。WASM 构建与裁剪在上游仓库进行。
+- Sites 使用 `npm run dev:sites` 或 `npm run build:sites`。能力由 `src/services/build-profile.ts` 在构建时确定；勿按请求失败或 URL 参数切换模式。Sites 不调用媒体 API，不装配服务器身份、媒体库、分享、日志上传、stdio 页面桥或 PWA。须支持无跨源隔离的本地单线程路径。详见 [Sites 分发](deploy/sites.md)。
+- 默认在 `src/`、`server/`、`shared/` 查实现，在 `test/`、`scripts/` 的代码文件中查回归。按需查大 JSON 样本和 `docs/evidence/`。从[文档导航](docs/README.md)找契约；历史报告仅代表对应修订与环境。
 
-## 硬约束
+## 容器与解码
 
-- 浏览器、服务端与共享层禁止反向引用，包括类型。GUI 与页面 Agent 经 `session.ts` 操作浏览器会话；持久命令共用 `shared/` 规则与服务端适配，不依赖已加载轨道、暂停/播放或 GUI 确认。GUI 只观察后台变化，不自动 seek、打开媒体或抢焦点。
-- 产品只有播放 core 与分析 core；本仓只消费固定产物与 release lock，WASM 构建与裁剪在上游仓库进行。后台分析使用独立 Worker，不改变播放器状态。
-- 取消和关闭必须等待真实 Worker/IO 退出；停止不确定时保留相关存储所有权。媒体库登记所有使用索引数据库的读取者，全部退出后才释放数据库。
-- 管理端身份统一用 `observeIdentity` / `confirmedActor`，跨窗通知只触发服务确认；确认期间撤销旧观察，同一 actor 确认后也要恢复。迟到回复不得导航旧视图。
-- 日志仅存本地 IndexedDB，上传只由用户在日志面板显式触发。媒体打开按 `MediaOpenError.stage` 决定回退，不新增整体 try/catch 换路径；已取得但未交付的源由打开流程负责清理。
-- 帧资源显式 `close()`，解码后端不直接画 canvas，全部经过 presenter。色彩修改同步 `docs/color-pipeline.md`，区分源标签与实际输出，不按片源叠加 HDR/SDR 修正。取像素/缩略图只用 presenter 按需 capture，不依赖每帧更新隐藏 canvas。
-- 标注是源帧坐标的矢量对象，可延伸到视频外；`strokeWidth` 为不随缩放的 CSS 像素。网格 < 视频 < 标注 < 半透明 UI，不给标注 SVG 加视频边界裁剪。UI/Agent 共用 `session.updateMark` 和持久标注命令；缩小 LINEAR、放大 NEAREST，不放大 CSS 中间位图。
-- HTTP 标注、幂等回执与操作事件同事务；事件消费不阻塞写入，过期游标明确要求快照重同步。actor 是自述归属，不是认证。
-- 本机 stdio 页面桥必须遵守专项授权契约：只用真实映射 peer 判定本机，顶层页面点击授予范围，凭据仅存内存，不把 Origin/epoch/声明名当认证。仅共享白名单与现有 facade，不透传全工具/任意脚本路径、不上传 File/日志、不自动连接。授权失效废弃排队命令，已派发回执未知不假回滚或换键；迟到消息按 document/epoch/correlation 围栏。关闭 stdin 真实释放自有资源，stdout 仅协议帧，modern/legacy 生命周期分别验证。
+- 本地文件和媒体库 URL 共用容器选择策略。JS 解封装后，WebCodecs 与 FFmpeg WASM 解码器使用同一套压缩包、时间戳和索引。切换解码器不改变解封装器。
+- JS 路径拒绝流布局、缺少必需的媒体库索引或读取失败时，保留原失败原因，不转交已裁掉的 FFmpeg 解封装器重试。扩展支持前，分别核对容器准入条件和解码能力，见 [JS 容器契约](docs/js-container-migration.md)。
 
-## 格式与层内边界
+## 改动前按职责查阅
 
-- UI 未经用户明确要求不得新增边框，包括 `border` 或用 inset shadow 模拟的实线边框；沿用既有主题色与背景层次。
+| 工作流 | 实现入口 | 契约 |
+| --- | --- | --- |
+| 页面与会话 | 播放器由 `src/bootstrap.ts` 载入 `src/main.ts`；UI 与页面 Agent 共用 `src/session.ts`，会话协调在 `src/session/`；管理页入口为 `src/admin/main.ts` | [模块边界](docs/module-boundaries.md)、[失败隔离](docs/failure-isolation.md) |
+| 打开、解码、索引与音频 | `src/media/contract.ts` 定义帧与源，`src/media/source.ts` 路由打开；容器与索引公共实现在 `shared/media/`，浏览器适配在 `src/media/`。`server/frame-index-build-worker.ts` 按索引类型分派服务端构建任务 | [JS 容器](docs/js-container-migration.md)、[统一索引](docs/unified-indexing.md)、[顺带音频](docs/opportunistic-audio.md) |
+| 呈现、视口与缩略图 | `src/presentation/presenter.ts` 决定上屏；`shared/presentation/viewport.ts` 管几何，`src/ui/viewport-gestures.ts` 接手势，`src/thumbnails/` 管浏览器缩略图 | [色彩与帧资源](docs/color-pipeline.md)、[HDR](docs/hdr-support.md) |
+| 元数据与深度码流分析 | `shared/analysis/` 管包统计与码流计算；`src/analysis/`、`server/analysis/bitstream/` 拥有各自宿主资源；`src/ui/analysis/` 管面板、图表与画面覆盖层 | [码流分析](docs/bitstream-analysis.md)、[执行边界](docs/analysis-execution.md)、[会话所有权](docs/session-bitstream-ownership.md)、[本地 Worker 生命周期](docs/local-analysis-worker-lifecycle.md) |
+| 标注、工作区与身份 | `shared/review/` 管标注规则和工作区格式；`src/review/` 接浏览器持久化与分享；`server/annotations.ts`、`server/workspaces.ts` 接服务端存储 | [工作区格式](docs/workspace-format.md)、[身份与分享](docs/identity-and-sharing.md) |
+| 媒体库、文件与索引查询 | `server/library.ts` 管媒体库；`server/routes/` 管 HTTP 路由；`src/services/` 和 `src/ui/library-browser.ts` 接浏览器 | [文件管理](docs/library-file-management.md)、[媒体库索引](docs/media-library-evolution.md)、[只读媒体查询](docs/media-query.md) |
+| HTTP Agent 与本机页面桥 | 服务端路由与 `shared/service/` 共用协议；`server/bridge/` 与 `src/agent/page-bridge.ts` 连接获授权的页面会话 | [HTTP 接口](docs/agent-http.md)、[本机 stdio 桥](docs/local-mcp-page-bridge.md) |
+| 界面、文案与诊断 | `src/ui/`、`src/admin/`、`src/themes/` 管界面；`locales/` 管消息；浏览器与服务端日志分别在 `src/logging/`、`server/logging/` | [主题约定](src/themes/README.md)、[本地化](docs/localization.md)、[服务端日志](docs/server-logging.md) |
 
-- [紧凑格式](docs/code-format.md)：2 空格、LF、单引号、分号，目标约 140 字符；短变量组、数据声明、getter、转发方法及简单 guard 允许单行，副作用和生命周期操作清楚分行。不因触碰文件就整文件重排，格式迁移须明确选择范围并单独审查。`npm run format:check -- --base origin/main` 只查改动行的基础卫生，不强制完整布局；不要用源码空格断言行为。
-- [模块边界](docs/module-boundaries.md)：浏览器禁止 Node 内建依赖；media/analysis/session 不反向依赖 UI 或入口，media/analysis 不依赖 session 或具体 presenter；静态运行时依赖禁止循环，纯类型和 Worker URL 单独处理。
-- `check:shared` 不带 Node 类型，只允许明确的可移植 Web API；`check:environments` 分别编译浏览器与服务端。Node Worker 测试兼容只由 `test/helpers/browser-worker-*` 提供。新增全局环境能力须明确契约和负例。
-- 默认在 `src server shared` 查实现、在 `test scripts` 的代码文件中查回归。大 JSON 样本和 `docs/evidence` 只在需要对应证据时检索。
+## 实现约束
 
-## 按工作流查阅契约
+- **宿主与依赖。** 浏览器和服务端都可引用 `shared/`，彼此禁止引用，包括类型。共享层仅使用准入的可移植 API；浏览器禁止 Node 内建依赖。media、analysis、session 不反向依赖 UI 或应用入口，media、analysis 也不依赖 session 或具体 presenter。静态运行时依赖不得成环；纯类型和 Worker URL 分别检查。Node Worker 测试适配只放在 `test/helpers/`；新增全局能力须有契约和负例。
+- **打开与释放。** 依据 `MediaOpenError.stage` 决定回退，禁止用整体 try/catch 重试另一条路径。已取得但未交付的源由打开流程清理。取消或关闭须等待真实 Worker/IO 退出；停止状态不确定时保留存储所有权。媒体库须登记全部索引数据库读取者，最后一个退出后才释放数据库。后台深度分析使用独立 Worker，不改变播放状态。
+- **呈现与色彩。** 解码后端只交付帧，消费者显式 `close()`。视频只经 presenter 用 WebGPU 上屏；GPU 不可用时明确报告呈现失败。2D 色彩中转不得充当显示后端。缩小用 LINEAR、放大用 NEAREST，不放大 CSS 中间位图。修改色彩行为须同步[色彩契约](docs/color-pipeline.md)，区分源标签与实际输出，不按片源叠加 HDR/SDR 修正。
+- **取像素与缩略图。** 对当前画面取像素或生成标注预览时，按需调用 `presenter.captureFrame`。媒体库封面从独立持有的首帧生成 RGB 小图，不随播放通道变化。两条路径都不逐帧刷新隐藏画布。
+- **标注与工作区。** 矢量几何使用源帧坐标，可延伸到视频外；`strokeWidth` 是不随缩放的 CSS 像素。保持网格、视频、标注、半透明 UI 的从底到顶顺序，勿给标注 SVG 加视频边界裁剪。UI 与页面 Agent 共用 `session.updateMark`。工作区格式要兼容旧文件；布局保存片源栏导航与搜索状态，文件不嵌入视频。片源不可用时保留已有标注。
+- **持久命令与事件。** HTTP 与浏览器适配器复用 `shared/review/` 规则。持久命令不依赖页面、已载入轨道、暂停状态或 GUI 确认。标注写入、幂等回执与操作事件同事务；事件消费不阻塞写入，过期游标须明确要求快照重同步。GUI 观察后台变更，不自动 seek、打开媒体或抢焦点。
+- **身份与日志。** actor 仅表示自述归属。管理端以 `observeIdentity` / `confirmedActor` 为准；跨窗通知触发服务确认，期间撤销旧观察，同一 actor 确认后也要恢复。迟到回复不得导航旧视图。浏览器诊断存本地 IndexedDB，只由用户在日志面板主动上传。服务端运行日志与上传报告各自遵守配额和保留规则。
+- **stdio 桥。** 临时宿主页与已有页面配对均以真实映射 peer 判定本机；顶层页面须由用户点击授予范围，凭据仅存内存。Origin、epoch、配对码和客户声明名均不能代替授权。仅开放共享白名单与会话 facade，不透传任意脚本、路径或全部工具，不上传 File 或日志，不自动连接。撤销后废弃排队命令；已派发且回执未知时不假定回滚，不换键重试。以 document、epoch、correlation 排除迟到消息。stdin 关闭要实际释放自有资源，stdout 仅输出协议帧；分别验证 modern/legacy 生命周期。
 
-修改相关模块前先读对应文档；具体支持域、版本和数值上限以负责该行为的契约及共享常量为准，不在本文件复制另一套版本表。
+## 界面与代码格式
 
-| 工作流 | 实现入口与契约 |
+- 沿用主题色与背景层次。未经用户明确要求，不新增边框，也不用 inset shadow 模拟实线边框。
+- UI 文案使用稳定消息 ID 和中文默认文案；新增受管模块须在 `locales/scope.json` 分类。变更消息后运行 `npm run i18n:extract`、审阅英文翻译，再运行 `npm run i18n:compile` 和 `npm run i18n:check`。协议值、持久键、用户内容和原始诊断保留原值。
+- 按[紧凑格式](docs/code-format.md)使用 2 空格、LF、单引号和分号，行长目标约 140 字符。短声明和简单 guard 可单行；副作用与生命周期操作清楚分行。只调整相关代码，格式迁移单独审查。`npm run format:check -- --base origin/main` 检查改动行的基础卫生；测试不得用源码空格断言行为。
+
+## 按改动选择验证
+
+统一入口是 `scripts/run-tests.mjs`。[测试清单](scripts/testing/manifest.json)登记 case、矩阵、素材与工具，[验证说明](docs/testing.md)列出准备步骤和 CI 范围。用 `npm run test:suite -- browser --list` 查可运行项，再以 `--case <id>` 选择。Node 用例在 `test/{unit,contract,media}/`，浏览器用例在 `scripts/testing/browser/`；从清单找实际实现，避免重复执行旧入口。
+
+| 改动范围 | 验证 |
 | --- | --- |
-| 播放与索引 | `src/media/`、`server/frame-index-*.ts`；[统一索引](docs/unified-indexing.md)、[JS 容器](docs/js-container-migration.md) |
-| 媒体库与文件管理 | `server/library.ts`、`src/ui/library-*`；[文件管理](docs/library-file-management.md)、[索引](docs/media-library-evolution.md) |
-| 标注与工作区 | `shared/review/`；[工作区格式](docs/workspace-format.md)、[身份与分享](docs/identity-and-sharing.md) |
-| HTTP Agent / 页面桥 | [HTTP 入口](docs/agent-http.md)、[本机 stdio 桥](docs/local-mcp-page-bridge.md) |
-| 当前支持与历史证据 | [文档导航](docs/README.md)；历史验证结果不代表当前实现 |
+| 基础逻辑、宿主边界、构建 | `npm run test:fast` 无需媒体、core 或浏览器；测试基础设施用 `npm run test:contract`。`npm run build` 包含本地化、模块边界、共享层、浏览器与服务端类型检查，再生成完整版前端。 |
+| 媒体打开、播放、解码 | 载入改动运行对应媒体回归；完整 Node 套件 `npm test` 含真实媒体与 WASM。播放或解码路径改动还必须跑播放基准：在提供本次构建的服务上运行 `node scripts/bench-playback.mjs webkit`，默认有窗口，可加 `--headless`。性能只在本机同条件比较，云端 CI 不设性能门禁。 |
+| 视图尺寸、轨道操作、片源 UI | 准备样片、core 与 Playwright WebKit，运行 `npm run test:browser`（默认基础 WebKit UI）。呈现改动运行 `npm run test:presentation:browser`；完整自动化浏览器套件用 `npm run test:browser:all`。 |
+| 标注、媒体库、工作区 | 按职责选 `npm run test:annotations:rendering`、`npm run test:annotations:browser`、`npm run test:library:browser`、`npm run test:saved-workspaces:browser`。UI 控件变更时同步维护对应浏览器操作与断言。 |
+| Sites 或两种分发共用的本地流程 | `npm run test:sites:browser`（WebKit）、`npm run test:sites:browser -- chromium`。用纯静态服务验证隔离与无隔离场景以及零媒体 API 请求；托管环境的能力另在实际站点验收。 |
 
-## 验证
+新增测试须登记清单，优先扩充已有职责用例。同一 PR 说明行为缺口、独立预期、测试层级与运行成本，包含新增循环和素材。修 bug 保留修复前失败、修复后通过或等价故障注入证据；迁移用行为映射核对覆盖。成本摘要只作诊断。专项夹具、诊断与基准见[脚本索引](scripts/README.md)。
 
-云端 CI 不设置性能门禁；性能仅在本机同条件下实测，不据功能绿色宣称跨机器性能达标。
+## 发布与本地数据
 
-```sh
-npm run check:boundaries # 宿主依赖、模块归属与 Worker 入口
-npm run check:shared     # 可移植 Web API、无 Node 类型的共享层编译
-npm run check:environments # 浏览器与服务端分别编译
-npm run format:check     # 改动行的 LF、缩进 Tab 和尾随空白（只读）
-npm run test:fast        # 无媒体/core/浏览器依赖的快速逻辑与基础设施契约
-npm run test:contract    # 清单、生命周期、发布与执行报告契约
-npm run test:browser:all # 完整自动化浏览器套件（单次构建，独立结果）
-npm run test:suite -- browser --list # 统一清单与矩阵枚举
-npm test                 # 单元 + Node 内真实 WASM 解码
-npm run build            # tsc --noEmit && vite build
-npm run fixtures:flv     # 从 QA 样片生成 FLV 回归素材（需要 ffmpeg/ffprobe）
-npm run fixtures:hlg     # 从 H.265 样片合成 HLG 回归样片（QA 稀疏检出不含此文件，CI 必跑）
-npm run test:hlg:browser # HLG 完整帧、尾帧、seek/逐帧与像素身份（需要 ffprobe）
-npm run test:annotations:rendering # DPR 2 双轨连续缩放、最终像素、图层与工具条约束
-npm run test:annotations:browser # 标注交互与实际采样像素回归
-npm run test:range:browser # MP4/VVC 和 FFmpeg Range、seek、播放基准
-npm run test:flv:browser # FLV WebKit 解码、Range、seek 和播放回归
-npm run test:saved-workspaces:browser # 双窗口冲突、副本、管理与服务重启还原
-npm run test:admin:browser # 管理配置/日志、主动测速取消与亮暗响应式布局
-npm run test:library:browser # 目录分页、搜索、离线恢复与版本引用（WebKit）
-npm run test:release:browser -- /path/to/package.tar.gz webkit # 只从原生包运行浏览器回归，不重新构建
-npm run test:browser     # 兼容入口：仅基础 WebKit UI 回归，非完整浏览器套件
-npm run test:presentation:browser # WebGPU 上传、按需源像素、旋转、明确失败与有限重建
-npm run test:webgpu:browser -- chrome msedge # 有窗口的 Windows Chrome/Edge 呈现回归
-npm run test:color:windows # 默认资源契约、彩色色块、H264/HEVC/10-bit 与独立 FFmpeg 平面对照
-npm run repro:color:native # 独立浏览器原生/内存帧及 GPU 导入入口诊断，不代表验收通过
-npm run test:connection:browser # HTTP 引导、Windows/macOS 步骤与公开证书下载
-node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
-```
-
-改动播放/解码路径后必须跑 bench；改动载入路径后跑测试即可。
-源画布按需由 presenter.captureFrame 生成；取像素/缩略图不得依赖隐藏画布在每帧更新。
-改动视图尺寸调度、轨道操作或片源 UI 后跑 test:browser；需先同步样片/core 并安装 Playwright WebKit。
-
-本地会产生大量可再生成产物（`.run/` 的历史验收证据与测试素材、`artifacts/` 的历史打包产物）。
-用 `npm run clean` 先看各分类体积（默认 dry-run），`npm run clean -- --apply` 才删除；
-`--keep-days=N` 控制保留窗口（默认 14 天），`--only=media,logs` 限定分类。
-脚本只删「位于仓库内 + 被 git 忽略 + 不在保护清单」的路径，`.run/data`（服务端 SQLite）、
-`.run/identity-private`、`logs/`、`artifacts/latest-release.json` 与文档引用的取证报告永不删除。未知 `.run` 目录不属于清理集合；验收输出按统一清单声明，配置数据目录、历史数据库与 `.voidplayer-user-data` 标记另行保护。
-
-套件注册与 CI 选例共用 `scripts/testing/manifest.json`，执行入口为 `scripts/run-tests.mjs`；新增测试必须登记。完整说明见 `docs/testing.md`。旧 npm 命令和脚本路径保留兼容。
-
-新增或扩充测试同 PR 说明行为缺口、独立预期、必要层级及运行成本；修 bug 保留修复前失败/修复后通过或等价故障注入证据。默认扩充已有职责用例，内部循环与素材扩充也需审查成本。迁移用行为映射核对替代覆盖，不按入口数或源码布局冻结测试；成本摘要只作诊断，不改变云端通过判定。
-
-## 独立发布
-
-- 日常 PR/main 检查走 `.github/workflows/checks.yml`；正式打包由手动或版本标签触发 `.github/workflows/release-preview.yml`：固定解码器源码/工具链后准备共享 core，再在 Linux x64、Windows x64、macOS ARM64 原生 runner 打包和测试。
-- `scripts/release-core.json` 固定上游修订，更新前先推送解码器源码；不要引用本地未提交改动或浮动版本。
-- `scripts/package-release.mjs` 生成独立程序、资源、来源清单与校验和；`npm run test:release` 校验解压产物，无需真实片源。手动全量验证的分支运行上传预览 artifact；版本标签需匹配包版本和发布说明，经三平台汇总校验后生成 Release 草稿，不自动公开发布。`node --test test/release-pipeline.test.mjs` 验证版本、产物汇总和草稿重跑边界。
+- 完整版 `npm run build` 生成候选 `dist/`；更新运行中的服务使用 `npm run publish:frontend -- dist`，按[前端发布说明](deploy/operations.md#只发布前端)选择目标服务的配置。Sites 独立输出到 `artifacts/sites/`，`npm run package:sites` 只生成静态分发包。
+- 日常 PR/main 走[常规检查](.github/workflows/checks.yml)。[发布工作流](.github/workflows/release-preview.yml)由手动运行或版本标签触发；播放和分析分别由 `scripts/release-core.json`、`scripts/release-analysis.json` 锁定。更新锁前先推送上游源码，不引用本地未提交改动或浮动版本。
+- `scripts/package-release.mjs` 校验两套 core 的来源和哈希后打包；`npm run test:release` 校验解压产物，无需真实片源。正式标签须匹配包版本和发布说明，经 Linux x64、Windows x64、macOS ARM64 原生包与汇总校验后生成未公开的 Release 草稿；手动分支运行产出预览 artifact。
+- 清理可再生成产物先运行 `npm run clean` 预览；`npm run clean -- --apply` 才删除。可用 `--keep-days=N`（默认 14 天）和 `--only=media,logs` 缩小范围。仅清理仓库内、Git 忽略且明确归类的产物；保护配置的数据目录、历史数据库、`.voidplayer-user-data`、`.run/data`、`.run/identity-private`、`logs/`、`artifacts/latest-release.json` 和文档引用的取证产物。未知 `.run/` 目录不纳入清理。
