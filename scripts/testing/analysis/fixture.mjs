@@ -46,7 +46,9 @@ export async function withAnalysisFixture(options, run) {
         try { server.closeAllConnections(); if (server.listening) await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
         finally { await library.close(); }
       };
-      defer('partial-server', close); library.start();
+      defer('partial-server', close);
+      await library.refresh();
+      library.start();
       await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
       return { server, close, url: `http://127.0.0.1:${server.address().port}/` };
     }},
