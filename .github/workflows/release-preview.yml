@@ -1,12 +1,19 @@
-name: Diagnose Linux WebGPU capture
+name: Diagnose Linux playback screenshots
 on:
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
+  cores:
+    uses: ./.github/workflows/prepare-cores.yml
   probe:
+    needs: cores
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [stock, no-surface, cdp, headed]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -14,43 +21,40 @@ jobs:
           node-version: '24.15.0'
           cache: npm
       - run: npm ci
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-core
+          path: public/vendor/voidplayer-core
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-analysis-core
+          path: public/vendor/voidplayer-analysis
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: npx playwright install --with-deps chromium
       - uses: ./.github/actions/browser-display
-      - name: Compare software swapchain capture configurations
+      - name: Write isolated launch adapter
         run: |
-          node --input-type=module <<'JS'
+          mkdir -p .run
+          cat > .run/gpu-capture-launch.mjs <<'JS'
           import {chromium} from 'playwright';
-          import {createServer} from 'node:http';
-          import {chromiumLaunchOptions} from './scripts/testing/browser-engines.mjs';
-          const server=createServer((req,res)=>{res.setHeader('content-type','text/html');res.end('<canvas id="c" width="128" height="128"></canvas>');});
-          await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-          const base=chromiumLaunchOptions({headless:true},'linux');
-          const cdp=args=>args.map(arg=>arg.startsWith('--enable-features=')?arg+',CDPScreenshotNewSurface':arg);
-          const minimal=['--use-angle=swiftshader','--enable-unsafe-swiftshader','--enable-unsafe-webgpu','--ignore-gpu-blocklist','--enable-gpu','--enable-features=Vulkan','--use-vulkan=swiftshader'];
-          const variants=[['stock',base],['no-surface',{...base,args:[...base.args,'--disable-vulkan-surface']}],['cdp',{...base,args:cdp(base.args)}],['cdp-no-surface',{...base,args:[...cdp(base.args),'--disable-vulkan-surface']}],['minimal',{headless:true,args:minimal}],['headed',{...base,headless:false}]];
-          let passed=0;
-          for(const [name,options]of variants){
-            let browser;
-            try{
-              browser=await chromium.launch(options);
-              const page=await browser.newPage({viewport:{width:128,height:128}});
-              await page.goto(`http://127.0.0.1:${server.address().port}/`);
-              await page.evaluate(async()=>{
-                const adapter=await navigator.gpu.requestAdapter(),device=await adapter.requestDevice();
-                window.probe={adapter,device,lost:null};device.lost.then(info=>window.probe.lost=info.message);
-                const context=document.getElementById('c').getContext('webgpu');
-                context.configure({device,format:navigator.gpu.getPreferredCanvasFormat()});
-                let count=0;
-                function draw(){const encoder=device.createCommandEncoder();encoder.beginRenderPass({colorAttachments:[{view:context.getCurrentTexture().createView(),clearValue:{r:1,g:0,b:0,a:1},loadOp:'clear',storeOp:'store'}]}).end();device.queue.submit([encoder.finish()]);window.probe.count=++count;requestAnimationFrame(draw);}draw();
-              });
-              await page.waitForFunction(()=>window.probe.count>=3);
-              const start=Date.now(),png=await page.screenshot({timeout:5000});
-              const result=await page.evaluate(async bytes=>{const image=await createImageBitmap(new Blob([new Uint8Array(bytes)],{type:'image/png'}));const canvas=new OffscreenCanvas(128,128),ctx=canvas.getContext('2d');ctx.drawImage(image,0,0);image.close();return {pixel:[...ctx.getImageData(64,64,1,1).data],lost:window.probe.lost,frames:window.probe.count};},[...png]);
-              const ok=result.pixel.join(',')==='255,0,0,255'&&!result.lost;passed+=Number(ok);
-              console.log(JSON.stringify({name,ok,screenshotMs:Date.now()-start,...result}));
-            }catch(error){console.log(JSON.stringify({name,ok:false,error:String(error)}));}
-            finally{await browser?.close();}
-          }
-          server.close();
-          if(!passed)process.exitCode=1;
+          const launch=chromium.launch.bind(chromium);
+          chromium.launch=options=>{
+            if(process.env.CAPTURE_MODE==='headed')options={...options,headless:false};
+            if(process.env.CAPTURE_MODE==='no-surface')options={...options,args:[...(options.args??[]),'--disable-vulkan-surface']};
+            if(process.env.CAPTURE_MODE==='cdp')options={...options,args:options.args.map(arg=>arg.startsWith('--enable-features=')?arg+',CDPScreenshotNewSurface':arg)};
+            return launch(options);
+          };
           JS
+      - name: Run unchanged Agent annotation regression
+        env:
+          CAPTURE_MODE: ${{ matrix.mode }}
+          DEBUG: pw:browser
+        run: NODE_OPTIONS="--import=$PWD/.run/gpu-capture-launch.mjs" node scripts/run-tests.mjs --case browser-agent-annotations-chromium
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: capture-probe-${{ matrix.mode }}
+          include-hidden-files: true
+          path: |
+            .run/test-suites/selected/
+            .run/agent-annotations/
