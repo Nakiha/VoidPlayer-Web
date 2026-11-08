@@ -152,7 +152,14 @@ try {
   await run(); await run({ local: true }); await run({ codec: 'hevc' }); await run({ codec: 'hevc', local: true }); await run({ codec: 'av1' }); await run({ codec: 'av1', local: true });
   await run({ software: true });
   // Faults exercise readback and full-plane certification, not just selection.
-  if (engine === 'chromium') { await run({ codec: 'av1', fault: 'unsupported' }); await run({ codec: 'av1', fault: 'readback' }); await run({ codec: 'av1', fault: 'mismatch' }); }
+  if (engine === 'chromium') {
+    await run({codec:'av1',fault:'unsupported'});
+    // Certification faults must reach a working native decoder, even on hosts
+    // whose AV1 implementation fails its independent first-frame probe.
+    const certificationCodec=av1NativeCapability?.failure?'h264':'av1';
+    await run({codec:certificationCodec,fault:'readback'});
+    await run({codec:certificationCodec,fault:'mismatch'});
+  }
 } finally {
   await browser?.close();
   if (server) { server.closeAllConnections(); await new Promise(r => server.close(r)); }
