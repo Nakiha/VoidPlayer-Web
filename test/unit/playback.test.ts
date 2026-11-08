@@ -167,8 +167,10 @@ test('VVC growth chooses one axis, waits for two measured windows and blocks an 
   const core = { threads: 6, contexts: 6, inFlight: 5, dispatched: 100, saturated: 50,
     submitted: 30, full: 30, maxFrameWaitUs: 4000, heapBytes: 100, maxThreads: 12, maxContexts: 12 };
   assert.equal(policy.choose(slow, { ...core, inputWaitMs: 1500, sampleMs: 2000 }), undefined);
-  assert.equal(policy.choose(slow, { ...core, inputWaitMs: 20, sampleMs: 2000 }), 'threads');
-  assert.equal(policy.choose(slow, core), 'threads');
+  assert.equal(policy.choose(slow, { ...core, inputWaitMs: 20, sampleMs: 2000 }), 'contexts');
+  assert.equal(policy.choose(slow, { ...core, full: 0 }), 'threads');
+  assert.equal(policy.choose(slow, { ...core, maxFrameWaitUs: 0 }), 'threads');
+  assert.equal(policy.choose(slow, { ...core, contexts: core.maxContexts }), 'threads');
   policy.applied('threads', slow, core, { ...core, threads: 8 });
   assert.equal(policy.choose(slow, core), undefined);
   assert.equal(policy.assess(slow), undefined); // Warm-up.
@@ -187,4 +189,22 @@ test('VVC growth chooses one axis, waits for two measured windows and blocks an 
   assert.equal(policy.assess(faster)?.helpful, true);
   assert.equal(policy.choose({ ...faster, speed: 1, grow: false }, contextLimited), undefined);
   assert.equal(policy.choose(slow, contextLimited), 'contexts');
+});
+
+test('persistent pressure on both VVC resources probes each before growing either twice', () => {
+  const policy = new VvcGrowthPolicy(new Set());
+  const slow = { speed: .70, starvation: .30, skipped: 0, grow: true };
+  let core = { threads: 6, contexts: 6, inFlight: 6, dispatched: 100, saturated: 50,
+    submitted: 30, full: 30, maxFrameWaitUs: 4000, heapBytes: 100, maxThreads: 12, maxContexts: 12 };
+  for (const axis of ['contexts', 'threads', 'contexts'] as const) {
+    assert.equal(policy.choose(slow, core), axis);
+    const next = { ...core, [axis]: core[axis] + 2 };
+    policy.applied(axis, slow, core, next);
+    const improved = { ...slow, speed: slow.speed + .04 };
+    assert.equal(policy.assess(improved), undefined);
+    assert.equal(policy.assess(improved), undefined);
+    assert.equal(policy.assess(improved)?.helpful, true);
+    core = next;
+    slow.speed = improved.speed;
+  }
 });

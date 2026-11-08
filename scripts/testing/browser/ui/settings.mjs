@@ -198,8 +198,15 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
    for(const mode of ['reference','browser']) {
     await page.locator(`[data-color-mode=${mode}]`).click();
     await page.waitForFunction(mode=>document.querySelector('#color-flow-diagram').dataset.mode===mode,mode);
-    for(const width of [1280,550,390,320]) {
+    for(const width of [1280,620,550,390,320]) {
      await page.setViewportSize({width,height:800});
+     if(mode==='reference') {
+      const fits=await decoderGroup.evaluate(group=>[...group.children].every(button=>{
+       const range=document.createRange();range.selectNodeContents(button);
+       return range.getClientRects().length===1 && button.scrollWidth<=button.clientWidth+1;
+      }) && group.parentElement.scrollWidth<=group.parentElement.clientWidth+1);
+      assert.ok(fits,`decoder labels stay on one line at ${width}px`);
+     }
      const lanes=await page.locator('.color-flow-nodes').evaluateAll(lanes=>lanes.map(lane=>{
       const rect=el=>el.getBoundingClientRect().toJSON();
       const horizontal=getComputedStyle(lane).display==='grid';

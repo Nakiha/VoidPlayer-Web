@@ -198,6 +198,7 @@ export function vvcInputLimited(core: VvcTuningState) {
 
 export class VvcGrowthPolicy {
   private trial?: { axis: VvcTuningAxis; before: VvcObservation; warmup: boolean; first?: VvcObservation };
+  private lastGrowth?: VvcTuningAxis;
 
   private readonly blocked: Set<VvcTuningAxis>;
 
@@ -213,13 +214,17 @@ export class VvcGrowthPolicy {
   choose(window: VvcObservation, core: VvcTuningState): VvcTuningAxis | undefined {
     if (this.trial || !window.grow || !core.dispatched || vvcInputLimited(core)) return;
     const saturated = core.saturated / core.dispatched >= .12;
-    if (saturated && core.threads < core.maxThreads && !this.blocked.has('threads')) return 'threads';
     const full = core.submitted > 0 && core.full / core.submitted >= .75 && core.maxFrameWaitUs >= 1000;
-    if (full && core.contexts < core.maxContexts && !this.blocked.has('contexts')) return 'contexts';
+    const canGrowThreads = saturated && core.threads < core.maxThreads && !this.blocked.has('threads');
+    const canGrowContexts = full && core.contexts < core.maxContexts && !this.blocked.has('contexts');
+    // When both signals persist, test frame overlap first and give each resource a turn.
+    if (canGrowContexts && (!canGrowThreads || this.lastGrowth !== 'contexts')) return 'contexts';
+    if (canGrowThreads) return 'threads';
   }
 
   applied(axis: VvcTuningAxis, before: VvcObservation, old: VvcTuningState, next: VvcTuningState | null) {
     if (!next || next[axis] <= old[axis]) { this.blocked.add(axis); return; }
+    this.lastGrowth = axis;
     this.trial = { axis, before, warmup: true };
   }
 

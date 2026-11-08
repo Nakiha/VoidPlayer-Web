@@ -513,6 +513,8 @@ input.settings-choice:disabled { opacity: var(--disabled-opacity); }
 /* Preferences share the label / control layout. */
 .settings-content :is(.appearance-other-row, .settings-key-value-row) { display:grid; grid-template-columns:minmax(0,1fr) minmax(105px,.7fr); align-items:center; gap:16px; }
 .settings-content :is(.appearance-other-row, .settings-key-value-row) > :is(.settings-choice, .segmented) { width:100%; min-width:0; max-width:100%; }
+#reference-decode-settings .color-setting-row { display:flex; flex-wrap:wrap; justify-content:space-between; }
+#reference-decode-settings #reference-decoder { width:max-content; grid-template-columns:repeat(2, 1fr); }
 .settings-icon-label { display:flex; align-items:center; gap:8px; }
 .settings-icon-label .icon { width:17px; height:17px; flex:0 0 17px; color:var(--text-secondary); }
 #language-status:empty { display:none; }
