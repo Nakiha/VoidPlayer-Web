@@ -108,13 +108,15 @@ let savedColorMode:'reference'|'browser'='browser';
 try{if(localStorage.getItem('voidplayer.color-mode')==='reference')savedColorMode='reference';}catch{}
 // Explicit diagnostic URLs retain their original backend-selection semantics.
 if(!new URLSearchParams(location.search).has('colorPipeline'))setColorMode(savedColorMode);
-// GPU warmup runs after first paint: early frames use the canvas path, surface
-// creation failures already fall back inside initializeGpuPresentation, and
-// color policy (set above) is only read lazily at decode time.
+// Finish WebGPU preparation before exposing load/restore actions. The shell
+// remains usable on unsupported systems; video commands report the stored error.
 configureFrameResourceDemand(keepNativeGpuResource);
-const gpuReady=initializeGpuPresentation(Object.values(canvases)).catch(error => {
-  log.warn('media', 'GPU 后台初始化失败，已保留现有呈现路径。', { error: error instanceof Error ? error.message : String(error) });
+let gpuStartupError: unknown;
+const gpuReady = initializeGpuPresentation(Object.values(canvases)).catch(error => {
+  gpuStartupError = error;
+  log.warn('media', 'WebGPU 初始化失败，视频显示不可用。', {error: String(error)});
 });
+await gpuReady;
 const session = new ReviewSession((slot, frame) => paintFrame(canvases[slot], frame));
 const framePositions = installFramePositions(session, uiEvents.signal);
 session.setBitstreamAnalysisConcurrency(analysisConcurrency());
@@ -239,7 +241,10 @@ async function act(action: () => unknown | Promise<unknown>, name = 'ui.action',
   render();
 }
 for (const slot of SLOTS) bindPresentationResources(canvases[slot], session.resources, frame => session.recordRecoveredPresentation(slot, frame));
+window.addEventListener('voidplayer:presentation-recovering', () => session.pause(), {signal: uiEvents.signal});
+if (gpuStartupError) queueMicrotask(() => showError(gpuStartupError));
 window.addEventListener('voidplayer:presentation-error', () => {
+  session.pause();
   showWarning(tr(msg('player.graphicsRecoveryFailed', '画面恢复失败，请刷新页面；若仍无画面，请完全退出并重新打开浏览器')));
 }, { signal: uiEvents.signal });
 window.addEventListener('voidplayer:ui-error', event => showError((event as CustomEvent).detail), { signal: uiEvents.signal });

@@ -21,7 +21,7 @@ export function verifyNativeWitness(native:DecodedFrame,reference:DecodedFrame){
   const [aOx,aOy]=chromaOffset(a.yuv),[bOx,bOy]=chromaOffset(b.yuv);
   if(aOx!==bOx||aOy!==bOy)return reject('色度采样位置不一致。');
   // Compare every cell used by crop-bounded reconstruction. CTU padding
-  // outside these cells is ignored by CPU, WebGL and WebGPU presentation.
+  // outside these cells is ignored by CPU reference and WebGPU presentation.
   const bounds=visibleChromaBounds(a);
   for(let c=0;c<3;c++){
     const sx=c?2**a.yuv.subsampleX:1,sy=c?2**a.yuv.subsampleY:1;

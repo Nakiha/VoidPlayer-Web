@@ -196,7 +196,7 @@ test('cache suite runs once in its own required job with the same pinned prepara
   assert.deepEqual(prCases.map(row => row.id).sort(), expected.sort());
   assert.ok(cases.every(row => row.required && row.kind === 'regression'));
   assert.deepEqual(cache.needs, ['cores', 'qa-media']);
-  assert.match(cache.body, /^    runs-on: ubuntu-24\.04$/m);
+  assert.match(cache.body, /^    runs-on: macos-26$/m, 'WebKit playback requires a Metal/WebGPU-capable host');
   assert.match(cache.body, /^    timeout-minutes: 45$/m);
   assert.match(jobs.playback.body, /^    timeout-minutes: 45$/m);
   assert.doesNotMatch(cache.body, /strategy:|--engine|--stop-on-failure/);

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import { chromium } from 'playwright';
+import { chromium } from './testing/browser-engines.mjs';
 import { routeInsecureTestOrigin } from './testing/http-origin.mjs';
 import { loadConfig } from '../server/config.ts';
 import { startService } from '../server/runtime.ts';

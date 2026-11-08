@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright';
+import {chromium} from './testing/browser-engines.mjs';
 import {mkdir,writeFile} from 'node:fs/promises';
 const reports=[];
 for(const channel of ['chrome','msedge']){

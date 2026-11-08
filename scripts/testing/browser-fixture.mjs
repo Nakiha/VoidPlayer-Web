@@ -114,7 +114,7 @@ export async function withBrowserFixture({ caseName, engine = 'webkit', pageOpti
       if (dependencies.launchBrowser) return dependencies.launchBrowser(engine);
       // Own signal cleanup through this fixture, including legacy direct CLI
       // entries; Playwright must not exit the process before teardown finishes.
-      return (await import('playwright'))[engine].launch({ headless: true,
+      return (await import('./browser-engines.mjs'))[engine].launch({ headless: true,
         handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false, ...launchOptions });
     }, value => value.close());
     context = await acquire('browser-context', () => browser.newContext({ locale: 'zh-CN', ...pageOptions }), value => value.close());

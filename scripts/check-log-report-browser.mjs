@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp,readFile,readdir,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {webkit,chromium} from 'playwright';
+import {webkit,chromium} from './testing/browser-engines.mjs';
 import {createMediaServer} from '../server/app.ts';
 const name=process.argv[2]??'webkit',logsDir=await mkdtemp(path.join(os.tmpdir(),'vp-report-'));
 const server=createMediaServer({roots:[],staticDir:path.resolve('dist'),logsDir,onLog(){}});

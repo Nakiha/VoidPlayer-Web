@@ -1,256 +1,139 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'vite';
-import { chromium, webkit } from 'playwright';
-const server = await createServer({ server: { port: 0, host: '127.0.0.1' } });
+import { chromium, webkit } from './testing/browser-engines.mjs';
+const server = await createServer({server:{port:0,host:'127.0.0.1'}});
 await server.listen();
 let browser;
 try {
-  for (const [name, engine] of Object.entries({ chromium, webkit })) {
-    browser = await engine.launch({ headless: true });
-    const page = await browser.newPage({locale:'zh-CN'});
-    const errors = [];page.on('pageerror', error => errors.push(error.message));
-    await page.route('**/presentation-test', route => route.fulfill({ contentType: 'text/html', body: '<div class="frame-stage"><canvas id="source" width="2" height="2"></canvas></div>' }));
+  const targets=process.argv.slice(2);
+  if(!targets.length)targets.push('chromium',...(process.platform==='darwin'?['webkit']:[]));
+  for (const name of targets) {
+    const engine={chromium,webkit}[name];if(!engine)throw Error(`Unknown browser: ${name}`);
+    browser = await engine.launch({headless:true});
+    const page = await browser.newPage({locale:'zh-CN'}), errors=[];
+    page.on('pageerror',error=>errors.push(error.message));
+    await page.route('**/presentation-test',route=>route.fulfill({contentType:'text/html',body:'<div class="frame-stage"><canvas id="source"></canvas></div>'}));
     await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/presentation-test`);
     const result = await page.evaluate(async () => {
-      const { paintFrame, captureFrame, setPresentationGeometry, disposePresentation } = await import('/src/presentation/presenter.ts');
-      const { VideoSample } = await import('/node_modules/mediabunny/dist/modules/src/index.js');
-      const source = document.getElementById('source');
-      const geometry = { width: 200, height: 200, imageWidth: 200, imageHeight: 200, zoom: 1, offsetX: 0, offsetY: 0, dpr: 1 };
-      setPresentationGeometry(source, geometry);
-      let sourceContexts = 0;
-      const original = source.getContext.bind(source);
-      source.getContext = (...args) => { if (args[0] === '2d') sourceContexts++; return original(...args); };
-      const colors = new Uint8ClampedArray([255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,255,255]);
+      const gpu=await import('/src/presentation/webgpu-presenter.ts');
+      const {paintFrame,captureFrame,setPresentationGeometry,disposePresentation,redrawPresentationChannel}=await import('/src/presentation/presenter.ts');
+      const {setPresentationChannel}=await import('/src/presentation/presentation-channel.ts');
+      const {setColorMode}=await import('/src/media/policy/color-mode.ts');setColorMode('reference');
       const {rgbaDescription}=await import('/shared/media/frame-description.ts');
       const {sampleDescription}=await import('/src/media/decoding/frame-resource.ts');
-      const rgba = pixels => ({ description:rgbaDescription(2,2),kind: 'rgba8', width: 2, height: 2, pixels });
-      paintFrame(source, rgba(colors));
-      const eager = sourceContexts;
-      const pixels = () => [...captureFrame(source).getContext('2d').getImageData(0, 0, source.width, source.height).data];
-      const first = pixels();
-      const input = document.createElement('canvas'); input.width = input.height = 2;
-      input.getContext('2d').putImageData(new ImageData(colors, 2, 2), 0, 0);
-      const sample = new VideoSample(new VideoFrame(input, { timestamp: 0 }));
-      const beforeNative = sourceContexts;
-      paintFrame(source, { description:sampleDescription(sample,16),kind: 'video-sample', width: 2, height: 2, sample }); sample.close();
-      const nativeEager = sourceContexts - beforeNative;
-      setPresentationGeometry(source, { ...geometry, zoom: 3, offsetX: 80 });
-      const native = pixels();
-      const rotated = new VideoSample(new VideoFrame(input, { timestamp: 0 }), { rotation: 90 });
-      const expected = document.createElement('canvas'); expected.width = expected.height = 2;
-      rotated.draw(expected.getContext('2d'), 0, 0, 2, 2);
-      paintFrame(source, { description:sampleDescription(rotated,16),kind: 'video-sample', width: 2, height: 2, sample: rotated }); rotated.close();
-      const rotation = pixels(), rotationExpected = [...expected.getContext('2d').getImageData(0,0,2,2).data];
-      const recycled = new Uint8ClampedArray(colors); paintFrame(source, rgba(recycled)); recycled.fill(0);
-      const retained = pixels();
-      disposePresentation();
-      // Force the existing 2D fallback; it must still show and capture the frame.
-      const getContext = HTMLCanvasElement.prototype.getContext;
-      HTMLCanvasElement.prototype.getContext = function(type, ...args) { return type === 'webgl' ? null : getContext.call(this, type, ...args); };
-      setPresentationGeometry(source, geometry); paintFrame(source, rgba(colors));
-      const fallback = pixels(); disposePresentation();
-      HTMLCanvasElement.prototype.getContext = function(type, ...args) {
-        if (type === 'webgl') return {createShader(){return {};},shaderSource(){},compileShader(){},getShaderParameter(){return false;},
-          getShaderInfoLog(){return 'Injected shader setup failure';},getExtension(){return null;}};
-        return getContext.call(this,type,...args);
-      };
-      setPresentationGeometry(source,geometry);paintFrame(source,rgba(colors));
-      const failedGl = pixels();disposePresentation();
-      HTMLCanvasElement.prototype.getContext = function(type, ...args) {
-        if (this.classList.contains('frame-presentation')) return null;
-        return getContext.call(this,type,...args);
-      };
-      setPresentationGeometry(source,geometry);paintFrame(source,rgba(colors));
-      const missingViewport = pixels(), sourceVisible = !source.classList.contains('frame-source');disposePresentation();
-      HTMLCanvasElement.prototype.getContext = getContext;
-      return { eager, nativeEager, first, native, rotation, rotationExpected, retained, fallback, failedGl, missingViewport, sourceVisible,
-        expected: [...colors], surfaces: document.querySelectorAll('.frame-presentation').length };
-    });
-    assert.equal(result.eager, 0, 'RGBA playback does not draw the hidden canvas');
-    assert.equal(result.nativeEager, 0, 'native playback does not draw the hidden canvas');
-    for (const key of ['first','native','retained','fallback','failedGl','missingViewport']) assert.deepEqual(result[key], result.expected, key);
-    assert.equal(result.sourceVisible,true,'unavailable viewport contexts do not hide a working source canvas');
-    assert.deepEqual(result.rotation, result.rotationExpected);
-    assert.equal(result.surfaces, 0);
-    console.log(`PASS ${name}: direct native/RGBA upload, lazy pixels, rotation, buffer recycling, 2D fallback and cleanup`);
-    // A slot can switch from opaque YUV to an alpha-bearing image without a new viewport.
-    const transition = await page.evaluate(async () => {
-      const { paintFrame, captureFrame, setPresentationGeometry, disposePresentation } = await import('/src/presentation/presenter.ts');
-      const { rgbaDescription } = await import('/shared/media/frame-description.ts');
-      const { yuvFixture } = await import('/test/helpers/yuv-fixture.ts');
-      const source = document.getElementById('source'), f = yuvFixture();
-      setPresentationGeometry(source, { width: 12, height: 8, imageWidth: 6, imageHeight: 4, zoom: 1, offsetX: 0, offsetY: 0, dpr: 1 });
-      paintFrame(source, { kind: 'yuv', description: f.description, pixels: f.pixels, width: 5, height: 3 });
-      const first = document.querySelector('.frame-presentation');
-      const opaque = first.getContext('webgl').getContextAttributes().premultipliedAlpha;
-      paintFrame(source, {kind: 'rgba8', description: rgbaDescription(1, 1), width: 1, height: 1, pixels: new Uint8ClampedArray([255, 0, 0, 128])});
-      const surface = document.querySelector('.frame-presentation');
-      const scratch = document.createElement('canvas'); scratch.width = 12; scratch.height = 8;
-      const ctx = scratch.getContext('2d'); ctx.fillStyle = 'blue'; ctx.fillRect(0, 0, 12, 8); ctx.drawImage(surface, 0, 0);
-      const at = (x,y) => [...ctx.getImageData(x,y,1,1).data];
-      const result = { opaque, center: at(6,4), margin: at(0,0), original: [...captureFrame(source).getContext('2d').getImageData(0,0,1,1).data] };
-      disposePresentation(); return result;
-    });
-    assert.deepEqual(transition, { opaque: true, center: [128,0,127,255], margin: [0,0,255,255], original: [255,0,0,128] });
-    const hdrResults = await page.evaluate(async () => {
-      const { paintFrame, captureFrame, setPresentationGeometry, disposePresentation } = await import('/src/presentation/presenter.ts');
-      const { VideoSample } = await import('/node_modules/mediabunny/dist/modules/src/index.js');
-      const source = document.getElementById('source');
-      const geometry = { width: 200, height: 200, imageWidth: 200, imageHeight: 200, zoom: 1, offsetX: 0, offsetY: 0, dpr: 1 };
-      const results = [];
-      for (const transfer of ['pq', 'hlg']) {
-        // Identical HDR pixels in distinct samples isolate presentation changes
-        // from scene motion. Use real VideoFrame + Mediabunny clone semantics.
-        const makeSample = timestamp => new VideoSample(new VideoFrame(new Uint8Array([40, 90, 140, 190, 128, 128]), {
-          format: 'I420', codedWidth: 2, codedHeight: 2, timestamp,
-          colorSpace: { primaries: 'bt2020', transfer, matrix: 'bt2020-ncl', fullRange: false },
-        }));
-        const {sampleDescription}=await import('/src/media/decoding/frame-resource.ts');
-        const frame = sample => ({ description:sampleDescription(sample,16),kind: 'video-sample', width: 2, height: 2, sample });
-        const pixels = () => [...captureFrame(source).getContext('2d').getImageData(0, 0, 2, 2).data];
-        const primed = makeSample(0), clone = primed.clone();
-        // Exactly the application sequence: draw first, then create the surface.
-        paintFrame(source, frame(clone)); clone.close();
-        const first = pixels();
-        setPresentationGeometry(source, geometry);
-        const initialized = pixels();
-        const gl = document.querySelector('.frame-presentation').getContext('webgl');
-        let nativeUploads = 0;
-        const upload = gl.texImage2D.bind(gl);
-        gl.texImage2D = (...args) => { if (args.at(-1) instanceof VideoFrame) nativeUploads++; return upload(...args); };
-        const playback = [];
-        for (let i = 1; i <= 3; i++) {
-          const sample = makeSample(i * 40000);
-          paintFrame(source, frame(sample)); sample.close(); playback.push(pixels());
-        }
-        const seek = primed.clone(); paintFrame(source, frame(seek)); seek.close();
-        const sought = pixels();
-        const roundtrip = primed.toVideoFrame();
-        const metadata = { sample: primed.colorSpace.transfer, frame: roundtrip.colorSpace.transfer };
-        roundtrip.close(); primed.close();
-        // A following SDR frame must immediately regain direct upload.
-        const sdr = new VideoSample(new VideoFrame(source, { timestamp: 200000 }));
-        paintFrame(source, frame(sdr)); sdr.close();
-        const sdrUploads = nativeUploads;
-        disposePresentation();
-        results.push({ transfer, first, initialized, playback, sought, metadata, sdrUploads });
-      }
-      return results;
-    });
-    for (const r of hdrResults) {
-      assert.equal(r.metadata.sample, r.transfer); assert.equal(r.metadata.frame, r.transfer);
-      assert.deepEqual(r.initialized, r.first, `${r.transfer}: surface creation`);
-      for (const pixels of [...r.playback, r.sought]) assert.deepEqual(pixels, r.first, `${r.transfer}: HDR first/play/seek pixels`);
-      assert.equal(r.sdrUploads, 1, 'only the following SDR frame uses native upload');
-      assert.ok(new Set(r.first.filter((_, i) => i % 4 !== 3)).size > 1, 'HDR ramp is not blank');
-    }
-    console.log(`PASS ${name}: PQ/HLG clone metadata and first/play/seek pixel consistency; SDR direct upload restored`);
-    const yuvResults=await page.evaluate(async()=>{
-      const {paintFrame,captureFrame,setPresentationGeometry,disposePresentation}=await import('/src/presentation/presenter.ts');
+      const {VideoSample}=await import('/node_modules/mediabunny/dist/modules/src/index.js');
       const {yuvFixture}=await import('/test/helpers/yuv-fixture.ts');
       const {yuvToRgba}=await import('/shared/color/yuv-color.ts');
-      const source=document.getElementById('source'),results=[];
+      const source=document.getElementById('source'), geometry={width:13,height:11,imageWidth:5,imageHeight:3,zoom:1,offsetX:1.2,offsetY:-.4,dpr:2};
+      let sourceDraws=0,glContexts=0,denyContext=false;
+      const getContext=HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext=function(type,...args){
+        if(type==='webgpu'&&denyContext)return null;
+        if(type.startsWith('webgl')){glContexts++;throw Error('Removed WebGL path was used');}
+        if(this===source&&type==='2d')sourceDraws++;
+        return getContext.call(this,type,...args);
+      };
+      await gpu.initializeGpuPresentation([source]);
+      setPresentationGeometry(source,geometry);
+      const read=()=>[...captureFrame(source).getContext('2d').getImageData(0,0,source.width,source.height).data];
+      const delta=(a,b)=>Math.max(...a.map((v,i)=>Math.abs(v-b[i])));
+      const settleGpu=async label=>{await gpu.gpuDrain(source);await new Promise(r=>setTimeout(r,0));if(source.dataset.colorOutputReason==='webgpu-resource-error')throw Error(`GPU resource error after ${label}`);};
+      const cases=[];
       for(const depth of [8,10,12,16])for(const semi of [false,true])for(const full of [false,true])for(const matrix of ['bt709','smpte170m','bt2020-ncl']){
-        const f=yuvFixture(depth,semi,full,matrix);
-        const frame={kind:'yuv',description:f.description,pixels:f.pixels,width:5,height:3};
-        // CPU first-frame path then GPU playback, independently quantized.
-        paintFrame(source,frame);
-        const reference=yuvToRgba(f.description,f.pixels);
-        setPresentationGeometry(source,{width:100,height:60,imageWidth:100,imageHeight:60,zoom:1,offsetX:0,offsetY:0,dpr:2});
-        paintFrame(source,frame);
-        const actual=captureFrame(source).getContext('2d').getImageData(0,0,5,3).data;
-        results.push({depth,semi,full,matrix,max:Math.max(...actual.map((v,i)=>Math.abs(v-reference[i])))});
-        disposePresentation();
+        const f=yuvFixture(depth,semi,full,matrix),frame={kind:'yuv',description:f.description,pixels:f.pixels,width:5,height:3};
+        paintFrame(source,frame);cases.push({depth,semi,full,matrix,max:delta(read(),yuvToRgba(f.description,f.pixels))});
       }
       for(const transfer of ['pq','hlg','smpte2084','arib-std-b67'])for(const depth of [10,12,16])for(const semi of [false,true]){
         const f=yuvFixture(depth,semi,false,'bt2020-ncl');f.description.color.transfer=transfer;
-        const frame={kind:'yuv',description:f.description,pixels:f.pixels,width:5,height:3};
-        paintFrame(source,frame);const reference=yuvToRgba(f.description,f.pixels);
-        setPresentationGeometry(source,{width:100,height:60,imageWidth:100,imageHeight:60,zoom:1,offsetX:0,offsetY:0,dpr:2});paintFrame(source,frame);
-        const actual=captureFrame(source).getContext('2d').getImageData(0,0,5,3).data;
-        results.push({depth,semi,transfer,max:Math.max(...actual.map((v,i)=>Math.abs(v-reference[i])))});disposePresentation();
+        paintFrame(source,{kind:'yuv',description:f.description,pixels:f.pixels,width:5,height:3});
+        cases.push({transfer,depth,semi,max:delta(read(),yuvToRgba(f.description,f.pixels))});
       }
+      await settleGpu('YUV');
       const f=yuvFixture(10,true,false,'bt709',5,3,6);
       f.description.visibleRect={x:1,y:1,width:3,height:1};f.description.width=3;f.description.height=1;
       const reference=yuvToRgba(f.description,f.pixels);
       for(const rotation of [0,90,180,270]){
-        const frame={kind:'yuv',description:f.description,pixels:f.pixels,width:3,height:1,sample:{rotation}};
-        paintFrame(source,frame);
-        const expected=source.getContext('2d').getImageData(0,0,source.width,source.height).data;
-        setPresentationGeometry(source,{width:100,height:60,imageWidth:100,imageHeight:60,zoom:1,offsetX:0,offsetY:0,dpr:2});paintFrame(source,frame);
-        const actual=captureFrame(source).getContext('2d').getImageData(0,0,source.width,source.height).data;
-        results.push({rotation,max:Math.max(...actual.map((v,i)=>Math.abs(v-expected[i])))});disposePresentation();
+        paintFrame(source,{kind:'yuv',description:f.description,pixels:f.pixels,width:3,height:1,rotation});
+        const expected=[];for(const index of rotation===180||rotation===270?[2,1,0]:[0,1,2])expected.push(...reference.slice(index*4,index*4+4));
+        cases.push({rotation,max:delta(read(),expected)});
       }
-      for(const zoom of [.25,.6,1,3]){
-        const f=yuvFixture(),rgba=yuvToRgba(f.description,f.pixels);
-        const {rgbaDescription}=await import('/shared/media/frame-description.ts');
-        setPresentationGeometry(source,{width:13,height:11,imageWidth:5,imageHeight:3,zoom,offsetX:1.2,offsetY:-.4,dpr:2});
-        const read=()=>{const gl=document.querySelector('.frame-presentation').getContext('webgl');const out=new Uint8Array(gl.drawingBufferWidth*gl.drawingBufferHeight*4);gl.readPixels(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight,gl.RGBA,gl.UNSIGNED_BYTE,out);return out;};
-        paintFrame(source,{kind:'yuv',description:f.description,pixels:f.pixels,width:5,height:3});const actual=read();
-        paintFrame(source,{kind:'rgba8',description:rgbaDescription(5,3),pixels:rgba,width:5,height:3});const expected=read();
-        results.push({viewportZoom:zoom,max:Math.max(...actual.map((v,i)=>Math.abs(v-expected[i])))});disposePresentation();
+      await settleGpu('crop rotations');
+      const shared=await import('/src/media/decoding/pixel-frame.ts');let recycled=0;
+      const owned=yuvFixture(),expected=yuvToRgba(owned.description,owned.pixels);
+      const frame=shared.sharePixelFrame({kind:'yuv',description:owned.description,pixels:owned.pixels,width:5,height:3,close(){recycled++;owned.pixels.fill(0);}});
+      paintFrame(source,frame);frame.close();if(recycled)throw Error('Retained pixels released early');
+      cases.push({ownership:true,max:delta(read(),expected)});
+      const commit=frame.presentedCommit;
+      for(const channel of ['y','u','v','rgb']){
+        setPresentationChannel(channel);redrawPresentationChannel();
+        cases.push({channel,max:delta(read(),yuvToRgba(owned.description,owned.pixels,channel))});
+        if(frame.presentedCommit!==commit)throw Error('Channel redraw changed frame identity');
       }
-      const {sharePixelFrame}=await import('/src/media/decoding/pixel-frame.ts');
-      const shared=yuvFixture(),sharedReference=yuvToRgba(shared.description,shared.pixels);
-      let recycled=0;
-      shared.pixels.slice=()=>{throw Error('Shared presentation copied a full frame');};
-      const sharedFrame=sharePixelFrame({kind:'yuv',description:shared.description,pixels:shared.pixels,width:5,height:3,
-        close(){recycled++;shared.pixels.fill(0);}});
-      paintFrame(source,sharedFrame);sharedFrame.close();
-      if(recycled!==0)throw Error('Displayed shared pixels were recycled early');
-      const sharedActual=captureFrame(source).getContext('2d').getImageData(0,0,5,3).data;
-      results.push({sharedOwnership:true,max:Math.max(...sharedActual.map((v,i)=>Math.abs(v-sharedReference[i])))});
+      await settleGpu('retained channels');
+      const eager=sourceDraws;
+      const colors=new Uint8ClampedArray([255,0,0,255,0,255,0,255,0,0,255,255,255,255,255,255]);
+      const rgba=pixels=>({kind:'rgba8',description:rgbaDescription(2,2),pixels,width:2,height:2});
+      paintFrame(source,rgba(colors));const rgbaPixels=read();
+      if(recycled!==1)throw Error('Replaced frame lease was not released');
+      await settleGpu('RGBA');
+      const input=new OffscreenCanvas(2,2);input.getContext('2d').putImageData(new ImageData(colors,2,2),0,0);
+      const native=[];
+      for(const rotation of [0,90,180,270]){
+        const sample=new VideoSample(new VideoFrame(input,{timestamp:0}),{rotation}),target=new OffscreenCanvas(2,2);
+        sample.draw(target.getContext('2d'),0,0,2,2);
+        const before=sourceDraws;paintFrame(source,{kind:'video-sample',description:sampleDescription(sample),sample,width:2,height:2});sample.close();
+        if(sourceDraws!==before)throw Error('Playback drew the source canvas');
+        native.push({rotation,max:delta(read(),target.getContext('2d').getImageData(0,0,2,2).data)});await settleGpu(`native rotation ${rotation}`);
+      }
+      const hdr=[];
+      for(const transfer of ['pq','hlg']){
+        const sample=new VideoSample(new VideoFrame(new Uint8Array([40,90,140,190,128,128]),{format:'I420',codedWidth:2,codedHeight:2,timestamp:0,colorSpace:{primaries:'bt2020',transfer,matrix:'bt2020-ncl',fullRange:false}}));
+        const target=new OffscreenCanvas(2,2);sample.draw(target.getContext('2d'),0,0,2,2);
+        const frame={kind:'video-sample',description:sampleDescription(sample),sample,width:2,height:2};
+        paintFrame(source,frame);const first=read();paintFrame(source,frame);
+        hdr.push({transfer,executor:source.dataset.colorExecutor,max:delta(first,target.getContext('2d').getImageData(0,0,2,2).data),repeat:delta(read(),first)});sample.close();await settleGpu(`HDR ${transfer}`);
+      }
+      for(const size of [2,4096]){
+        const pixels=new Uint8ClampedArray(size*4);
+        for(let x=0;x<size;x++)pixels.set(x%2?[0,0,255,255]:[255,0,0,255],x*4);
+        setPresentationGeometry(source,{width:80,height:20,imageWidth:80,imageHeight:20,zoom:1,offsetX:0,offsetY:0,dpr:2});
+        paintFrame(source,{kind:'rgba8',description:rgbaDescription(size,1),pixels,width:size,height:1});
+        const viewport=await gpu.gpuCaptureViewport(source);
+        for(const x of [37,84,129]){
+          const pixel=viewport.slice((20*160+x)*4,(20*160+x)*4+4),u=(x+.5)/160,sample=Math.max(0,Math.min(size-1,u*size-.5));
+          const fraction=sample-Math.floor(sample),red=Math.floor(sample)%2?fraction:1-fraction;
+          const expected=size===2?(Math.floor(u*size)%2?0:255):Math.round(red*255);
+          cases.push({sampling:size,x,pixel:[...pixel],expected,max:Math.abs(pixel[0]-expected)});
+        }
+      }
+      setPresentationGeometry(source,geometry);
+      paintFrame(source,{kind:'rgba8',description:rgbaDescription(1,1),width:1,height:1,pixels:new Uint8ClampedArray([255,0,0,128])});
+      const alpha=read();await Promise.resolve();
+      const surface=document.querySelector('.frame-presentation'),mix=new OffscreenCanvas(surface.width,surface.height),ctx=mix.getContext('2d');
+      ctx.fillStyle='blue';ctx.fillRect(0,0,mix.width,mix.height);ctx.drawImage(surface,0,0);
+      const center=[...ctx.getImageData(16,10,1,1).data],margin=[...ctx.getImageData(0,0,1,1).data];
       disposePresentation();
-      if(recycled!==1)throw Error('Displayed shared pixels were not released');
-      const {setPresentationChannel}=await import('/src/presentation/presentation-channel.ts');
-      const {redrawPresentationChannel}=await import('/src/presentation/presenter.ts');
-      const getContext=HTMLCanvasElement.prototype.getContext;
-      for(const cpuOnly of [false,true]) {
-        if(cpuOnly)HTMLCanvasElement.prototype.getContext=function(type,...args){return type==='webgl'?null:getContext.call(this,type,...args);};
-        try {
-          const f=yuvFixture(10,true),original=f.pixels.slice();
-          const frame={kind:'yuv',description:f.description,pixels:f.pixels,width:5,height:3};
-          setPresentationGeometry(source,{width:100,height:60,imageWidth:100,imageHeight:60,zoom:1,offsetX:0,offsetY:0,dpr:1});
-          paintFrame(source,frame);
-          const commit=frame.presentedCommit;
-          const read=()=>captureFrame(source).getContext('2d').getImageData(0,0,5,3).data;
-          read(); // Prime source capture too: a channel redraw must invalidate its cached RGB pixels.
-          f.pixels.fill(0);
-          let uploads=0;
-          const gl=cpuOnly?null:document.querySelector('.frame-presentation').getContext('webgl');
-          if(gl)for(const method of ['texImage2D','texSubImage2D']){
-            const original=gl[method].bind(gl);gl[method]=(...args)=>{uploads++;return original(...args);};
-          }
-          for(const channel of ['y','u','v','rgb']) {
-            setPresentationChannel(channel);redrawPresentationChannel();
-            const actual=read(),expected=yuvToRgba(f.description,original,channel);
-            results.push({channel,cpuOnly,max:Math.max(...actual.map((v,i)=>Math.abs(v-expected[i])))});
-            if(frame.presentedCommit!==commit)throw Error('Channel redraw changed the decoded-frame commit');
-          }
-          if(uploads)throw Error('Channel redraw uploaded pixel planes again');
-        } finally {disposePresentation();setPresentationChannel('rgb');HTMLCanvasElement.prototype.getContext=getContext;}
+      const nativeGpu=navigator.gpu, unavailable=[];
+      let paintRejected=false,captureRejected=false;
+      for(const [label,api] of [['missing-api',undefined],['missing-adapter',{requestAdapter:async()=>null}],
+        ['device-failure',{requestAdapter:async()=>({requestDevice:async()=>{throw Error('Injected device failure');}})}],['missing-context',nativeGpu]]){
+        denyContext=label==='missing-context';Object.defineProperty(navigator,'gpu',{value:api,configurable:true});
+        let failed=false;try{await gpu.initializeGpuPresentation([source]);}catch(error){failed=/WebGPU/.test(error.message);}
+        unavailable.push({label,failed});
+        try{paintFrame(source,rgba(colors));}catch{paintRejected=true;}
+        try{captureFrame(source);}catch{captureRejected=true;}
       }
-      const loss=yuvFixture();
-      const lossFrame={kind:'yuv',description:loss.description,pixels:loss.pixels,width:5,height:3};
-      setPresentationGeometry(source,{width:100,height:60,imageWidth:100,imageHeight:60,zoom:1,offsetX:0,offsetY:0,dpr:1});paintFrame(source,lossFrame);
-      const surface=document.querySelector('.frame-presentation');
-      const commit = lossFrame.presentedCommit;
-      const originalPixels = loss.pixels.slice();
-      loss.pixels.fill(0); // Decoder buffers may be recycled while the player is paused.
-      const lost=new Promise(resolve=>surface.addEventListener('webglcontextlost',resolve,{once:true}));
-      surface.getContext('webgl').getExtension('WEBGL_lose_context').loseContext();await lost;
-      const recovered=captureFrame(source).getContext('2d').getImageData(0,0,5,3).data;
-      const cpu=yuvToRgba(loss.description,originalPixels);
-      if (lossFrame.presentedCommit !== commit || source.dataset.presentationRecovery !== 'ready') throw new Error('Paused recovery changed frame identity or failed');
-      results.push({contextLoss:source.dataset.colorExecutor,max:Math.max(...recovered.map((v,i)=>Math.abs(v-cpu[i])))});
-      setPresentationGeometry(source,{width:100,height:60,imageWidth:100,imageHeight:60,zoom:2,offsetX:3,offsetY:-2,dpr:2});
-      const resized=captureFrame(source).getContext('2d').getImageData(0,0,5,3).data;
-      results.push({contextLossResize:true,max:Math.max(...resized.map((v,i)=>Math.abs(v-cpu[i])))});
-      disposePresentation();
-      return results;
+      const hidden=source.classList.contains('frame-source');
+      disposePresentation();HTMLCanvasElement.prototype.getContext=getContext;
+      return {cases,native,hdr,rgbaPixels,expected:[...colors],alpha,center,margin,glContexts,eager,unavailable,paintRejected,captureRejected,hidden,surfaces:document.querySelectorAll('.frame-presentation').length};
     });
-    for(const r of yuvResults)assert.ok(r.max<=1,JSON.stringify(r));
-    console.log(`PASS ${name}: ${yuvResults.length} YUV reference cases, range/matrix/depth/layout/crop/rotation`);
+    for(const r of [...result.cases,...result.native,...result.hdr])assert.ok(r.max<=1,JSON.stringify(r));
+    for(const r of result.hdr){assert.equal(r.executor,'webgpu-browser-sdr');assert.equal(r.repeat,0);}
+    assert.deepEqual(result.rgbaPixels,result.expected);
+    assert.deepEqual(result.alpha,[255,0,0,128]);assert.deepEqual(result.center,[128,0,127,255]);assert.deepEqual(result.margin,[0,0,255,255]);
+    assert.equal(result.glContexts,0);assert.equal(result.surfaces,0);
+    assert.ok(result.unavailable.every(r=>r.failed)&&result.paintRejected&&result.captureRejected&&result.hidden);
+    console.log(`PASS ${name}: ${result.cases.length} YUV vectors, native rotations, RGBA alpha, HDR SDR intermediates, explicit unavailable errors without GL/2D fallback`);
     const recovery = await browser.newPage();
     recovery.on('pageerror', error => errors.push(error.message));
     await recovery.route('**/gpu-recovery-test', route => route.fulfill({contentType:'text/html',body:'<div class="frame-stage"><canvas id="source"></canvas></div>'}));
@@ -295,29 +178,26 @@ try {
       window.recoveryTest={gpu,presenter,source,resources,frame,expected:read(),read,notices:()=>notices};
       f.pixels.fill(0);window.testDevices[0].lose();
     });
-    await recovery.waitForFunction(() => window.releaseGpu && document.getElementById('source').dataset.presentationRecovery === 'ready');
+    await recovery.waitForFunction(() => window.releaseGpu && document.getElementById('source').dataset.presentationRecovery === 'recovering');
     const during = await recovery.evaluate(() => {
-      const t=window.recoveryTest;return {actual:t.read(),expected:t.expected,notices:t.notices(),devices:window.testDevices.length,commit:t.frame.presentedCommit};
+      const t=window.recoveryTest;let rejected=false;
+      try{t.read();}catch{rejected=true;}
+      return {rejected,notices:t.notices(),devices:window.testDevices.length,hidden:t.source.classList.contains('frame-source')};
     });
-    assert.deepEqual(during.actual,during.expected,'paused frame survives recycled bytes and device loss');
-    assert.equal(during.devices,2);assert.equal(during.notices,1);
-    await recovery.evaluate(async () => {
-      const t=window.recoveryTest,{yuvFixture}=await import('/test/helpers/yuv-fixture.ts');
-      const f=yuvFixture();f.pixels[0]=235;
-      t.latest={...t.frame,pixels:f.pixels};t.presenter.paintFrame(t.source,t.latest);t.latestExpected=t.read();
-      window.releaseGpu();
-    });
-    await recovery.waitForFunction(() => document.getElementById('source').dataset.colorExecutor === 'webgpu-yuv');
-    assert.deepEqual(await recovery.evaluate(()=>window.recoveryTest.read()),await recovery.evaluate(()=>window.recoveryTest.latestExpected),'recovery redraws the latest frame');
+    assert.deepEqual(during,{rejected:true,notices:0,devices:2,hidden:true},'loss never exposes a stale 2D source or reports successful recovery');
+    await recovery.evaluate(() => window.releaseGpu());
+    await recovery.waitForFunction(() => document.getElementById('source').dataset.presentationRecovery === 'ready');
+    assert.deepEqual(await recovery.evaluate(()=>window.recoveryTest.read()),await recovery.evaluate(()=>window.recoveryTest.expected),'rebuild restores retained pixels after the decoder recycled its buffer');
+    assert.equal(await recovery.evaluate(()=>window.recoveryTest.notices()),1);
     await recovery.evaluate(()=>window.testDevices[1].lose());
-    await recovery.waitForFunction(()=>document.getElementById('source').dataset.colorExecutor !== 'webgpu-yuv');
+    await recovery.waitForFunction(()=>document.getElementById('source').dataset.presentationRecovery === 'failed');
     assert.equal(await recovery.evaluate(()=>window.testDevices.length),2,'repeated loss stops after one rebuild');
-    assert.deepEqual(await recovery.evaluate(()=>window.recoveryTest.read()),await recovery.evaluate(()=>window.recoveryTest.latestExpected));
+    assert.equal(await recovery.evaluate(()=>{try{window.recoveryTest.read();return false;}catch{return true;}}),true);
     await recovery.evaluate(async () => {
-      window.deadNextDevice=true;
-      await window.recoveryTest.gpu.initializeGpuPresentation([window.recoveryTest.source]);
+      window.deadNextDevice=true;let rejected=false;
+      try{await window.recoveryTest.gpu.initializeGpuPresentation([window.recoveryTest.source]);}catch{rejected=true;}
+      if(!rejected)throw Error('Already-lost initialization succeeded');
     });
-    assert.deepEqual(await recovery.evaluate(()=>window.recoveryTest.read()),await recovery.evaluate(()=>window.recoveryTest.latestExpected),'already-lost device keeps the fallback frame');
     await recovery.evaluate(() => {
       window.holdNextGpu=true;window.releaseGpu=null;
       window.lateInitialization=window.recoveryTest.gpu.initializeGpuPresentation([window.recoveryTest.source]);
@@ -331,7 +211,7 @@ try {
     });
     assert.deepEqual(remaining,{bytes:0,live:0,surfaces:0});
     await recovery.close();
-    assert.deepEqual(errors, [], 'presentation failures recover without uncaught page errors');
+    assert.deepEqual(errors, [], 'presentation reports unavailable resources without uncaught page errors');
     console.log(`PASS ${name}: injected WebGPU loss, paused/latest frame redraw, bounded rebuild and complete resource cleanup`);
     await browser.close(); browser = null;
   }

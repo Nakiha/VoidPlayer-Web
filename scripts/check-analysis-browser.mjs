@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import path from 'node:path';
 import { settleAppearance } from './testing/browser-contracts.mjs';
 import { snapshotBuild } from './testing/build.mjs';
-import { chromium, webkit } from 'playwright';
+import { chromium, webkit } from './testing/browser-engines.mjs';
 import { createMediaServer } from '../server/app.ts';
 
 

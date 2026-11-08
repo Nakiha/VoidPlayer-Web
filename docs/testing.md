@@ -1,5 +1,9 @@
 # 验证说明
 
+视频上屏收敛为 WebGPU：`presentation-browser` 将旧 WebGL/2D 回退用例迁为真实 WebGPU 的原生帧、YUV、RGBA、alpha、旋转、源尺寸捕获与采样验证，并以无 API、设备丢失和迟到初始化注入检查明确失败与一次重建。矩阵、素材及数值容差不扩大，删除旧后端专属检查；CPU 仍作为独立数值预期。标注及分析几何用例改读实际 WebGPU 画布的按需 2D 快照，保持最终截图和图层断言。原始画面采样时临时隐藏分屏握柄与其他覆盖层，合成检查再恢复；不把 UI 像素混入原画面预期。透明度用例固定受检查 2D 覆盖层的读取策略，避免像素检查触发浏览器 GPU/CPU 光栅化切换后，分数像素裁剪边缘出现无关差异，仍逐像素核对开关标签后的恢复。无 WebGPU 负例在旧实现会回到兼容画布，不能满足拒绝呈现/捕获的独立预期。
+
+Linux 功能测试中的无窗口 Chromium 使用显式 SwiftShader WebGPU；macOS/Windows 使用本机图形后端，避免把硬件解码纹理跨后端导入。有窗口诊断和播放基准保留真实显卡。WebKit 播放验证使用 macOS 26，Linux WebKit 不提供播放验收；缺失 WebGPU 的明确拒绝通过能力注入单独检查。GPU/色彩测试缺少所需 adapter 直接失败，不静默当作成功。CI 不设置软件 GPU 的性能门禁。
+
 专注模式玻璃残留复用 shortcuts 双引擎用例：在正式构建后验证进入、闲置淡出时的底板透明且所有受支持的 backdrop filter 均为 none，
 退出后恢复原材质。修复前 Chromium 的实际计算样式仍为 blur；调整前缀声明顺序后，压缩产物保留标准取消规则。
 沿用现有片源、窗口与淡出等待，只增加计算样式观察，不增加媒体加载、播放或浏览器矩阵。
@@ -277,7 +281,7 @@ node scripts/run-tests.mjs ci-node-media
 
 `browser` 是自动化浏览器套件。需要 Windows 可见桌面的 Chrome/Edge 色彩与 WebGPU 检查属于清单中的 `manual-regression`，仍使用原有专用命令；外部服务、用户指定媒体的诊断/实验/基准属于显式工具分类，不会自动变成发布门禁。清单记录限制和理由，不能把 `npm test` 当作 fast，也不能把旧 `test:browser` 当作完整浏览器套件。
 
-FLV 浏览器回归固定 640×480 视口，两种引擎均解码原始尺寸的输入。Chromium 的隔离 headless 进程显式启用 SwiftShader WebGL，避免 GPU 黑名单把整帧 YUV 转换送进逐像素 CPU 兜底；这不代表物理 GPU 或大视口性能验收。普通本地命令仍按原有全部性能阈值必过。GitHub CI 不执行性能基准：FLV、Range、参考解码、HDR、分析矩阵与 HTTPS 功能流程验证实际呈现帧的推进、身份和暂停稳定性；HTTPS 继续做三轮双轨播放、队列容量和资源释放检查。`VOIDPLAYER_FUNCTIONAL_ONLY=1` 可在本机复现该功能路径，普通本地命令仍保留原基准阈值。历史云端性能报告只保留为历史证据，不作为当前验收结论。
+FLV 浏览器回归固定 640×480 视口，两种引擎均解码原始尺寸的输入。Linux Chromium 的隔离 headless 进程显式启用 SwiftShader WebGPU，macOS/Windows 使用本机图形后端；不提供 CPU 视频呈现兜底；这不代表物理 GPU 或大视口性能验收。普通本地命令仍按原有全部性能阈值必过。GitHub CI 不执行性能基准：FLV、Range、参考解码、HDR、分析矩阵与 HTTPS 功能流程验证实际呈现帧的推进、身份和暂停稳定性；HTTPS 继续做三轮双轨播放、队列容量和资源释放检查。`VOIDPLAYER_FUNCTIONAL_ONLY=1` 可在本机复现该功能路径，普通本地命令仍保留原基准阈值。历史云端性能报告只保留为历史证据，不作为当前验收结论。
 
 HEVC 时间线检查保留每个输入两轮各 600 帧、每帧源尺寸截图、帧身份和 seek/逐帧/尾帧断言。Linux Chromium 每次全尺寸截图实测可耗时约 0.6–1.4 秒，因此 Chromium 单项总预算为 30 分钟，CI job 留出 35 分钟；这不是实时播放性能阈值。每 100 帧以及打开、seek、重开边界记录进度和呈现/截图/读回耗时；页面连续 180 秒没有进度则立即失败并输出最后阶段，关闭页面与浏览器。播放基准的帧率、延迟与停顿阈值不变。
 
@@ -455,7 +459,7 @@ npm run test:connection:browser
 npm run test:presentation:browser
 ```
 
-前者检查 Windows/macOS 安装步骤、实际公开 CA 下载、HTTPS 链接与未配置状态，并确认未加载播放器或解码 Worker；后者在 Chromium/WebKit 中检查原生帧和 RGBA 直接上传、按需源像素、旋转、像素缓冲复用、无 WebGL 回退与资源清理。页面取源像素应使用 `window.voidPlayer.captureFrame(slot)`，不要直接读取可能尚未生成的隐藏 canvas。
+前者检查 Windows/macOS 安装步骤、实际公开 CA 下载、HTTPS 链接与未配置状态，并确认未加载播放器或解码 Worker；后者在 Chromium/WebKit 中检查原生帧和 RGBA 直接上传、按需源像素、旋转、像素缓冲复用、无 WebGPU 时明确失败与资源清理。页面取源像素应使用 `window.voidPlayer.captureFrame(slot)`，不要直接读取可能尚未生成的隐藏 canvas。
 
 发布工作流使用 `VOIDPLAYER_HTTPS_TEST=1 node scripts/check-http-playback.mjs` 验证可信 HTTPS 下的重复载入和播放：只在一次性 Actions runner 中导入测试根证书，结束后删除信任项；浏览器不使用忽略证书错误的参数。样片由 `node scripts/make-playback-fixtures.mjs` 生成，报告写入 `.run/playback-reports/`。Linux 和 Windows 还检查用户设置、重启恢复、解码出帧与标注。本机播放基准使用上文的 localhost 媒体服务，无需更改本机证书信任。
 
@@ -509,7 +513,7 @@ HEVC 竖屏：从 hvcC 的 SPS 数组读取编码尺寸、按色度采样单位�
 
 HDR 上屏一致性：自有色彩模式接收满足契约的高位深 PQ/HLG 平面；浏览器原生 HDR 在浮点桥接与扩展画布能力满足时输出 HDR，其余环境走 SDR 兼容预览。首帧、播放、定位应使用同一路径，截图与缩略图保持 SDR。以实际资源 transfer 为准，不用容器标签覆盖已转换资源。具体准入、降级原因与真实屏幕测试入口见 [HDR 支持](hdr-support.md)及 [色彩链路契约](color-pipeline.md)；普通呈现回归不认证物理 HDR 显示。
 
-`check-presentation-browser.mjs` 使用相同 PQ/HLG 像素的真实 VideoFrame 和 VideoSample，验证 clone/toVideoFrame 元数据、展示层创建前后、连续帧、回到首帧的像素完全一致，并检查随后 SDR 恢复直接上传；保留旋转、像素提取、无 WebGL 回退和资源释放检查。
+`check-presentation-browser.mjs` 使用相同 PQ/HLG 像素的真实 VideoFrame 和 VideoSample，验证 clone/toVideoFrame 元数据、WebGPU 展示层的首帧与连续帧像素完全一致，并检查随后 SDR 恢复直接上传；保留旋转、像素提取、缺失 WebGPU 时明确失败、有限重建和资源释放检查。
 
 WASM 堆增长：通过 Emscripten 公开的 instantiateWasm 回调取得 core 的实际 WebAssembly.Memory。每次外部包/配置写入及 RGBA 读取，按 memory.buffer 重建过期视图，再执行范围检查；不信任 pthread 扩容后可能滞后的 Module.HEAPU8，不修改生成胶水、不移除越界检查。测试覆盖非共享内存增长后旧视图脱离、另一 worker 扩容共享内存后旧视图仍有效但过短，以及真实 720×1280 HEVC 多线程 core 首帧、连续播放、回退定位。core 版本和构建锁不变。
 

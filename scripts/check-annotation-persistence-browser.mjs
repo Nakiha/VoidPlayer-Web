@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import {webkit,chromium} from 'playwright';
+import {webkit,chromium} from './testing/browser-engines.mjs';
 import {loadConfig} from '../server/config.ts';
 import {startService} from '../server/runtime.ts';
 const root=path.resolve(import.meta.dirname,'..'), temp=await mkdtemp(path.join(os.tmpdir(),'vp-annotation-sync-'));

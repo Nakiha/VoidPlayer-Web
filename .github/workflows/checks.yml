@@ -96,7 +96,7 @@ jobs:
   browser:
     name: Verify core browser flows (${{ matrix.engine }})
     needs: cores
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.engine == 'webkit' && 'macos-26' || 'ubuntu-24.04' }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -104,7 +104,8 @@ jobs:
         engine: [chromium, webkit]
     steps:
       - uses: actions/checkout@v4
-      - run: bash scripts/testing/prepare-ci-apt.sh
+      - if: runner.os == 'Linux'
+        run: bash scripts/testing/prepare-ci-apt.sh
       - uses: actions/setup-node@v4
         with:
           node-version: '24.15.0'
@@ -120,8 +121,12 @@ jobs:
           path: public/vendor/voidplayer-analysis
       - name: Prepare generated-media browser tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            brew install ffmpeg
+          else
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
           npx playwright install --with-deps ${{ matrix.engine }}
       - run: node scripts/run-tests.mjs ci-pr-browser --engine ${{ matrix.engine }}
       - uses: actions/upload-artifact@v4

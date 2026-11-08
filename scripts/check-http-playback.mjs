@@ -5,7 +5,7 @@ import { mkdir, readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
-import { chromium } from 'playwright';
+import { chromium } from './testing/browser-engines.mjs';
 import { createMediaServer } from '../server/app.ts';
 import { MediaLibraryIndex } from '../server/library.ts';
 import { prepareTls } from '../server/tls.ts';

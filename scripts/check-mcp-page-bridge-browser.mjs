@@ -3,7 +3,7 @@ import {mkdtemp,mkdir,writeFile,rm,readFile} from 'node:fs/promises';
 import {execFileSync} from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
-import {chromium} from 'playwright';
+import {chromium} from './testing/browser-engines.mjs';
 import {startMcpClient} from './testing/mcp-client.mjs';
 
 // Agent actions only use this independent real stdin/stdout client. Browser

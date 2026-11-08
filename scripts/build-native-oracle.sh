@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Minimal native reference decoder for raw-plane comparisons in Linux CI.
+# Minimal native reference decoder for raw-plane comparisons in CI.
 # Source revision is supplied by the same immutable release lock as the WASM core.
 set -euo pipefail
 source_dir="$(cd "$1" && pwd)"

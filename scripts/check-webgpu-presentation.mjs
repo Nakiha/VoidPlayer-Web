@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createServer} from 'vite';
-import {chromium,webkit} from 'playwright';
+import {chromium,webkit} from './testing/browser-engines.mjs';
 import {mkdir,writeFile} from 'node:fs/promises';
 import {platform,release,arch} from 'node:os';
 const targets=process.argv.slice(2);
@@ -32,9 +32,6 @@ try{
    const adapter=await navigator.gpu?.requestAdapter();
    const environment={userAgent:navigator.userAgent,adapter:adapter?.info?{vendor:adapter.info.vendor,architecture:adapter.info.architecture,device:adapter.info.device,description:adapter.info.description,isFallbackAdapter:adapter.info.isFallbackAdapter}:null};
    const source=document.querySelector('#source');
-   // Exercise GPU readiness after a visible GL frame, rather than only warm starts.
-   setPresentationGeometry(source,{width:2,height:2,imageWidth:2,imageHeight:2,zoom:1,offsetX:0,offsetY:0,dpr:1});
-   paintFrame(source,{kind:'rgba8',description:rgbaDescription(2,2),pixels:new Uint8ClampedArray(16).fill(255),width:2,height:2});
    await initializeGpuPresentation([source]);
    if(keepNativeGpuResource()===unified||!document.querySelector('.frame-presentation'))throw new Error('Wrong GPU resource policy');
    const geometry={width:96,height:64,imageWidth:96,imageHeight:64,zoom:1,offsetX:0,offsetY:0,dpr:2};
@@ -79,7 +76,6 @@ try{
    }
    const {yuvToRgba}=await import('/shared/color/yuv-color.ts');
    const chromaCases=[];
-   const glStage=document.createElement('div');glStage.className='frame-stage';const glSource=document.createElement('canvas');glStage.append(glSource);document.body.append(glStage);setPresentationGeometry(glSource,geometry);
    for(const depth of [8,10,16])for(const semi of [false,true])for(const siting of [null,1,2,3,4,5,6]){
     const bytes=depth===8?1:2,scale=2**(depth-8),shift=depth===10?6:0,pixels=new Uint8ClampedArray(24*bytes),view=new DataView(pixels.buffer);
     const codes=Array(16).fill(100*scale).concat(semi?[64,80,192,170,90,200,160,60].map(n=>n*scale):[64,192,90,160,80,170,200,60].map(n=>n*scale));
@@ -87,8 +83,7 @@ try{
     const planes=[{offset:0,stride:4*bytes,width:4,height:4},{offset:16*bytes,stride:(semi?4:2)*bytes,width:2,height:2},...semi?[]:[{offset:20*bytes,stride:2*bytes,width:2,height:2}]];
     const d={revision:1,width:4,height:4,codedWidth:4,codedHeight:4,visibleRect:{x:0,y:0,width:4,height:4},displayWidth:4,displayHeight:4,stride:null,byteLength:pixels.length,format:'YUV',color:{matrix:'bt709',primaries:'bt709',transfer:'bt709',fullRange:false},yuv:{bitDepth:depth,bitShift:shift,subsampleX:1,subsampleY:1,semiplanar:semi,chromaLocation:siting,planes}};
     const expected=yuvToRgba(d,pixels);paintFrame(source,{kind:'yuv',description:d,pixels,width:4,height:4});const got=pixelRead().bytes;
-    paintFrame(glSource,{kind:'yuv',description:d,pixels,width:4,height:4});const glCapture=captureFrame(glSource),glPixels=glCapture.getContext('2d').getImageData(0,0,4,4).data;
-    chromaCases.push({depth,semi,siting,max:Math.max(...got.map((v,i)=>Math.abs(v-expected[i]))),glMax:Math.max(...glPixels.map((v,i)=>Math.abs(v-expected[i]))),glExecutor:glSource.dataset.colorExecutor});
+    chromaCases.push({depth,semi,siting,max:Math.max(...got.map((v,i)=>Math.abs(v-expected[i])))});
    }
    const executor=source.dataset.colorExecutor,contract=source.dataset.colorContract;
    paintFrame(source,{kind:'rgba8',description:rgbaDescription(3,2),pixels:colors,width:3,height:2});
@@ -98,22 +93,22 @@ try{
    paintFrame(source,{kind:'video-sample',description:sampleDescription(resumed),sample:resumed,width:3,height:2});resumed.close();
    const resumedExecutor=source.dataset.colorExecutor;
    await new Promise(resolve=>setTimeout(resolve,50));
-   if(source.closest('.frame-stage').querySelectorAll('.frame-presentation').length!==1||!source.classList.contains('frame-source'))throw new Error('GPU handoff retained a GL surface or late context loss reset source visibility');
+   if(source.closest('.frame-stage').querySelectorAll('.frame-presentation').length!==1||!source.classList.contains('frame-source'))throw new Error('Video presentation must own exactly one hidden-source WebGPU surface');
    disposePresentation();
    const {readLogs}=await import('/src/logging/log.ts');
    return{environment,logs:await readLogs({limit:50}),results,depths,colorVectors,chromaCases,executor,contract,fallback,resumedExecutor,remaining:document.querySelectorAll('.frame-presentation').length};
   },unified);
   evidence.results.push({name,version:browser.version(),report});
-  assert.equal(report.executor,'webgpu-yuv');assert.equal(report.remaining,0);assert.equal(report.fallback.executor,'rgba-upload');assert.deepEqual(report.fallback.pixels.bytes,report.results[0].reference);assert.equal(report.resumedExecutor,'webgpu-external');
+  assert.equal(report.executor,'webgpu-yuv');assert.equal(report.remaining,0);assert.equal(report.fallback.executor,'webgpu-rgba');assert.deepEqual(report.fallback.pixels.bytes,report.results[0].reference);assert.equal(report.resumedExecutor,'webgpu-external');
   assert.equal(report.contract,'common-yuv-sdr');
   for(const c of report.colorVectors)assert.ok(c.got.every((v,i)=>Math.abs(v-c.expected[i])<=1),JSON.stringify(c));
-  for(const c of report.chromaCases){assert.ok(c.max<=1&&c.glMax<=1,JSON.stringify(c));assert.equal(c.glExecutor,'webgl-yuv');}
+  for(const c of report.chromaCases){assert.ok(c.max<=1,JSON.stringify(c));}
   for(const [i,r]of report.results.entries()){
    if(!i)assert.equal(r.eager,0,'native playback must not touch source 2D canvas');
    assert.deepEqual(r.got.bytes,r.reference,`${name} rotation ${r.rotation}`);assert.deepEqual(r.moved,r.got,'paused capture must not change with viewport');
   }
   for(const c of report.depths){assert.equal(c.width,5);assert.equal(c.height,3);assert.ok(c.black.every(v=>v<=1),JSON.stringify(c));assert.ok(c.white.every(v=>v>=254),JSON.stringify(c));}
-  console.log(`PASS ${name}: ${unified?'common planes':'default resource contracts'} without calibration, clone ownership, sync capture, four rotations, paused zoom, ${report.depths.length} high-depth/shift/layout cases, RGBA fallback/re-entry, cleanup`);
+  console.log(`PASS ${name}: ${unified?'common planes':'default resource contracts'} without calibration, clone ownership, sync capture, four rotations, paused zoom, ${report.depths.length} high-depth/shift/layout cases, RGBA upload/re-entry, cleanup`);
   await page.evaluate(async () => {
     const request = navigator.gpu.requestAdapter.bind(navigator.gpu);
     window.lossDevices = [];
@@ -142,15 +137,29 @@ try{
   const restored = await page.evaluate(() => ({actual:window.realLoss.read(),expected:window.realLoss.expected}));
   assert.deepEqual(restored.actual,restored.expected,'real device rebuild restores the paused frame');
   await page.evaluate(() => window.lossDevices[1].destroy());
-  await page.waitForFunction(() => window.realLoss.source.dataset.colorExecutor !== 'webgpu-yuv');
-  const fallbackLoss = await page.evaluate(() => {
-    const value={actual:window.realLoss.read(),expected:window.realLoss.expected,devices:window.lossDevices.length};
+  await page.waitForFunction(() => window.realLoss.source.dataset.presentationRecovery === 'failed');
+  const failedLoss = await page.evaluate(() => {
+    let rejected=false;try{window.realLoss.read();}catch{rejected=true;}
+    const value={rejected,devices:window.lossDevices.length};
     window.realLoss.presenter.disposePresentation();return value;
   });
-  assert.deepEqual(fallbackLoss.actual,fallbackLoss.expected,'repeated real device loss retains compatibility pixels');
-  assert.equal(fallbackLoss.devices,2,'real device rebuild has a finite retry budget');
-  evidence.results.at(-1).deviceLoss = {restored:true,repeatedLossFallback:true,devices:fallbackLoss.devices};
-  console.log(`PASS ${name}: real device destruction, paused rebuild and bounded repeated-loss fallback`);
+  assert.equal(failedLoss.rejected,true,'a lost GPU cannot return stale source pixels');
+  assert.equal(failedLoss.devices,2,'real device rebuild has a finite retry budget');
+  evidence.results.at(-1).deviceLoss = {restored:true,repeatedLossRejected:true,devices:failedLoss.devices};
+  console.log(`PASS ${name}: real device destruction, paused rebuild and explicit bounded failure`);
+  await page.evaluate(async()=>{
+    const t=window.realLoss;await t.presenter.disposePresentation();
+    const gpu=await import('/src/presentation/webgpu-presenter.ts');
+    const {yuvFixture}=await import('/test/helpers/yuv-fixture.ts'),f=yuvFixture();
+    await gpu.initializeGpuPresentation([t.source]);
+    t.presenter.setPresentationGeometry(t.source,{width:50,height:30,imageWidth:50,imageHeight:30,zoom:1,offsetX:0,offsetY:0,dpr:1});
+    t.presenter.paintFrame(t.source,{kind:'yuv',description:f.description,pixels:f.pixels,width:5,height:3});
+    window.lossDevices.at(-1).createBuffer({size:4,usage:0}); // Real validation error, not device loss.
+  });
+  await page.waitForFunction(()=>window.realLoss.source.dataset.colorOutputReason==='webgpu-resource-error');
+  assert.equal(await page.evaluate(()=>{try{window.realLoss.read();return false;}catch{return true;}}),true,'async validation errors cannot expose stale pixels');
+  await page.evaluate(()=>window.realLoss.presenter.disposePresentation());
+  console.log(`PASS ${name}: asynchronous GPU resource errors explicitly stop presentation`);
   await browser.close();browser=undefined;
  }
 }catch(error){evidence.error=String(error);throw error;}

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { webkit, chromium } from 'playwright';
+import { webkit, chromium } from './testing/browser-engines.mjs';
 import { loadConfig } from '../server/config.ts';
 import { startService } from '../server/runtime.ts';
 import { AnnotationStore } from '../server/annotations.ts';

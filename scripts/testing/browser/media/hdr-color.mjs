@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'vite';
-import { chromium, webkit } from 'playwright';
+import { chromium, webkit } from '../../browser-engines.mjs';
 
-const args = process.argv.slice(2), requireWebGpu = args.includes('--require-webgpu'), experimentalHdr = args.includes('--experimental-hdr');
+const args = process.argv.slice(2), requireWebGpu = true, experimentalHdr = args.includes('--experimental-hdr');
 if (experimentalHdr && !requireWebGpu) throw new Error('--experimental-hdr requires --require-webgpu');
 const targets = args.filter(a => !['--require-webgpu', '--experimental-hdr'].includes(a));
 if (!targets.length) targets.push('chromium');
@@ -13,13 +13,13 @@ let browser;
 try {
   for (const name of targets) {
     const engine = name === 'webkit' ? webkit : chromium;
-    browser = await engine.launch({ headless: !requireWebGpu, ...(experimentalHdr ? { args:['--enable-blink-features=CanvasGlobalHDRHeadroom'] } : {}), ...(['chrome', 'msedge'].includes(name) ? { channel: name } : {}) });
+    browser = await engine.launch({ headless: true, ...(experimentalHdr ? { args:['--enable-blink-features=CanvasGlobalHDRHeadroom'] } : {}), ...(['chrome', 'msedge'].includes(name) ? { channel: name } : {}) });
     const page = await browser.newPage();
     await page.route('**/hdr-color-test', route => route.fulfill({ contentType: 'text/html', body: '<canvas id="gl" width="1" height="1"></canvas>' }));
     await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/hdr-color-test`);
     const result = await page.evaluate(async requireWebGpu => {
       const { hdrToSdrPreview, hdrToDisplayNits, hdrToDisplayP3, HDR_PREVIEW_POLICY } = await import('/shared/color/hdr-color.ts');
-      const { hdrPreviewGlsl, hdrPreviewWgsl } = await import('/src/presentation/hdr-shader.ts');
+      const { hdrPreviewWgsl } = await import('/src/presentation/hdr-shader.ts');
       const vectors = [];
       for (const transfer of ['pq', 'hlg']) {
         for (let i = 0; i <= 256; i++) vectors.push({ rgb: [i / 256, i / 256, i / 256], transfer });
@@ -28,33 +28,6 @@ try {
       }
       const policies = [HDR_PREVIEW_POLICY, { ...HDR_PREVIEW_POLICY, sourcePeakNits: 4000 }, { ...HDR_PREVIEW_POLICY, sourcePeakNits: 2000, exposureWhiteNits: 300, hlgDisplayPeakNits: 2000, hlgSystemGamma: 1.326 }];
       const params = p => [p.sourcePeakNits, p.exposureWhiteNits, p.hlgDisplayPeakNits, p.hlgSystemGamma];
-      const gl = document.querySelector('#gl').getContext('webgl', { alpha: false, preserveDrawingBuffer: true });
-      if (!gl) throw new Error('WebGL is required for HDR kernel regression');
-      const compile = (type, code) => {
-        const shader = gl.createShader(type); gl.shaderSource(shader, code); gl.compileShader(shader);
-        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader));
-        return shader;
-      };
-      const vertex = compile(gl.VERTEX_SHADER, 'attribute vec2 position;void main(){gl_Position=vec4(position,0.,1.);}');
-      const fragment = compile(gl.FRAGMENT_SHADER, `precision highp float;uniform vec3 rgb;uniform float transfer;uniform vec4 policy;${hdrPreviewGlsl}void main(){gl_FragColor=vec4(hdrPreview(rgb,transfer,policy),1.);}`);
-      const program = gl.createProgram(); gl.attachShader(program, vertex); gl.attachShader(program, fragment); gl.linkProgram(program);
-      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
-      const buffer = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buffer); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,3,-1,-1,3]), gl.STATIC_DRAW);
-      gl.useProgram(program); const position = gl.getAttribLocation(program, 'position'); gl.enableVertexAttribArray(position); gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
-      gl.viewport(0, 0, 1, 1); gl.disable(gl.DITHER);
-      const rgbUniform = gl.getUniformLocation(program, 'rgb'), transferUniform = gl.getUniformLocation(program, 'transfer'), policyUniform = gl.getUniformLocation(program, 'policy');
-      let glMax = 0, glWorst;
-      const pixel = new Uint8Array(4);
-      for (const policy of policies) for (const v of vectors) {
-        gl.uniform3fv(rgbUniform, v.rgb); gl.uniform1f(transferUniform, v.transfer === 'pq' ? 1 : 2); gl.uniform4fv(policyUniform, params(policy));
-        gl.drawArrays(gl.TRIANGLES, 0, 3); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
-        const expected = hdrToSdrPreview(v.rgb, v.transfer, policy).map(v => Math.round(v * 255));
-        const delta = Math.max(...expected.map((c, i) => Math.abs(c - pixel[i])));
-        if (delta > glMax) { glMax = delta; glWorst = { ...v, policy, expected, actual: [...pixel] }; }
-        if (pixel[3] !== 255) throw new Error('Unexpected GLSL output alpha');
-      }
-      const glError = gl.getError();
-      gl.deleteBuffer(buffer); gl.deleteProgram(program); gl.deleteShader(vertex); gl.deleteShader(fragment);
       let gpu = { required: requireWebGpu, tested: false };
       if (requireWebGpu) {
         const adapter = await navigator.gpu?.requestAdapter();
@@ -143,14 +116,15 @@ try {
             if(Math.max(...retained.map((v,i)=>Math.abs(v-pixels[i])))>.004)throw Error('Peer presentation overwrote another track');
           } finally { peer.dispose(); }
           if(!surface.available)throw Error('Disposing a borrowed surface destroyed the shared device');
-          const native=new VideoFrame(new Uint16Array([64,940,64,940,512,512]),{format:'I420P10',codedWidth:2,codedHeight:2,timestamp:0,colorSpace:{matrix:'bt2020-ncl',primaries:'bt2020',transfer:'pq',fullRange:false}});
+          const native=new VideoFrame(surface.nativeHdrAvailable?new Uint16Array([64,940,64,940,512,512]):new Uint8Array([16,235,16,235,128,128]),{format:surface.nativeHdrAvailable?'I420P10':'I420',codedWidth:2,codedHeight:2,timestamp:0,colorSpace:{matrix:'bt2020-ncl',primaries:'bt2020',transfer:'pq',fullRange:false}});
           try {
             extended={simulatedDisplayCapability:true,max,maxPreview,maxCapture,nativeHdrAvailable:surface.nativeHdrAvailable,nativeHdrReason:surface.nativeHdrReason};
             if(surface.nativeHdrAvailable){surface.present(native);const raw=await surface.captureHdrPixels();extended.nativeMax=Math.max(...raw);}
             else {
-              let failure;try{surface.present(native);}catch(error){failure=error;}
-              if(failure?.message!==surface.nativeHdrReason)throw Error('Unavailable native HDR bridge must reject the resource explicitly');
-              extended.nativeRejected=true;
+              surface.present(native);
+              if(surface.outputTarget!=='sdr')throw Error('Unavailable HDR bridge must produce an explicit WebGPU SDR preview');
+              const preview=await surface.capture();if(!preview.some((v,i)=>i%4!==3&&v>0))throw Error('SDR preview is blank');
+              extended.nativeSdrPreview=true;
             }
           }
           finally{native.close();}
@@ -171,9 +145,8 @@ try {
           finally{copy.dispose();}
         } finally{browserSurface.dispose();window.matchMedia=original;setColorOutput(defaultColorOutput());setColorMode(previousMode);}
       }
-      return { vectors: vectors.length, policies: policies.length, glMax, glWorst, glError, gpu, extended };
+      return { vectors: vectors.length, policies: policies.length, gpu, extended };
     }, requireWebGpu);
-    assert.equal(result.glError, 0); assert.ok(result.glMax <= 1, `${name}: GLSL ${JSON.stringify(result.glWorst)}`);
     if (requireWebGpu) {
       assert.equal(result.gpu.tested, true); assert.deepEqual(result.gpu.errors, []);
       assert.ok(result.gpu.maxCodeDelta <= 1, `${name}: WGSL code error ${result.gpu.maxCodeDelta}`);
@@ -181,7 +154,7 @@ try {
       if(experimentalHdr)assert.equal(result.extended.nativeHdrAvailable,true,'Experimental HDR must exercise the native float bridge');
     }
     if(requireWebGpu)console.log('Extended surface diagnostics (simulated display capability): '+JSON.stringify(result.extended));
-    console.log(`PASS ${name}: ${result.vectors} vectors × ${result.policies} policies; GLSL max ${result.glMax} code; ${requireWebGpu ? `WGSL max ${result.gpu.maxCodeDelta} code, nits relative ${result.gpu.maxNitsRelative}` : 'WebGPU not requested'}`);
+    console.log(`PASS ${name}: ${result.vectors} vectors × ${result.policies} policies; ${requireWebGpu ? `WGSL max ${result.gpu.maxCodeDelta} code, nits relative ${result.gpu.maxNitsRelative}` : 'WebGPU not requested'}`);
     await browser.close(); browser = undefined;
   }
 } finally { await browser?.close(); await server.close(); }

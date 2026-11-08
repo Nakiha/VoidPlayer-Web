@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
 import path from 'node:path';
 import os from 'node:os';
-import { webkit, chromium } from 'playwright';
+import { webkit, chromium } from './testing/browser-engines.mjs';
 import { loadConfig } from '../server/config.ts';
 import { startService } from '../server/runtime.ts';
 const root = path.resolve(import.meta.dirname, '..'), name = process.argv[2] ?? 'webkit';

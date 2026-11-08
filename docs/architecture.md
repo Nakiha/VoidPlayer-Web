@@ -59,7 +59,7 @@ WASM core 的源码、裁剪和构建位于独立 `VoidPlayer-FFmpeg-Build` 仓�
 
 换片准备期间仍保留旧源及其预算用于失败回滚。旧源释放后，软件源在下一次主动取帧时重新申请可用线程，按当前轨道数量和 CPU 余量恢复，不能把新源永久固定在换片重叠期间的低配额。增加预算与同源取帧串行；普通解码器的线程设置只影响新上下文，因此候选使用独立 pthread 池，并在命中原始目标帧后才替换旧解码器。压缩包路径保留同一 reader 和索引；FFmpeg 容器路径等待索引完整后，在候选 core 中导入原有记录、损坏前段边界和原始 ticks，不重建索引。失败释放新增预算并保留原解码器，输入错误仍传播；已释放源不能被迟到的预算回滚复活。单线程模式不升级，VVC 实验性在线增长继续走既有 tuner。所有候选均归片源 Worker 所有，关闭片源一并终止。
 
-`presenter.ts` 是上屏入口，解码器不直接绘制。呈现层优先使用 WebGPU，回退由 `presentation-surface.ts` 使用视口大小的 WebGL 表面或 Canvas 2D；缩小时 LINEAR、放大时 NEAREST。源帧 canvas 在像素工具和缩略图请求 presenter.captureFrame 时才生成。500× 缩放不会分配 500× 的显示缓冲。
+`presenter.ts` 是上屏入口，解码器不直接绘制。视频呈现层只使用视口大小的 WebGPU 表面，`presentation-surface.ts` 仅保留几何合同；缺失 WebGPU 或呈现失败明确报错，不切换后端。必要的浏览器色彩转换使用 2D 中转后仍交给 WebGPU；缩小时 LINEAR、放大时 NEAREST。源帧 canvas 在像素工具和缩略图请求 presenter.captureFrame 时才生成。500× 缩放不会分配 500× 的显示缓冲。
 
 HDR 显示目标为显式选择：合法高位深 PQ/HLG 平面可使用自有 HDR 转换；浏览器原生帧仅在 float16 Display-P3、无限 HDR headroom 和扩展 WebGPU 画布能力满足时使用浮点桥接，其余环境明确降级为 SDR 预览。截图与缩略图始终为 SDR。能力与验证边界见 [HDR 支持](hdr-support.md)。WASM ABI v2 交付原精度 YUV，由呈现层转换，兼容资源仍可使用 RGBA；浏览器色彩管理、真实显示扫描和不同设备性能需要分别验证，解码成功不是显示准确性的证明。实际资源、源标签与转换责任见 [色彩链路契约](color-pipeline.md)。
 

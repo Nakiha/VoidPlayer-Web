@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, copyFile, writeFile, rm } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
-import { chromium } from 'playwright';
+import { chromium } from './testing/browser-engines.mjs';
 import { loadConfig } from '../server/config.ts';
 import { startService } from '../server/runtime.ts';
 import { openIndexDatabase } from '../server/sqlite.ts';

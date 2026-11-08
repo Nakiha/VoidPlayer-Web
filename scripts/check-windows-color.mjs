@@ -6,7 +6,7 @@ import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {platform,release,arch} from 'node:os';
 import {createServer} from 'vite';
-import {chromium} from 'playwright';
+import {chromium} from './testing/browser-engines.mjs';
 import {createHash} from 'node:crypto';
 
 const channels=[],args=process.argv.slice(2);let localFile,pipeline='auto';

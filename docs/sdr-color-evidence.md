@@ -65,13 +65,13 @@ Schema 2 adds isolation within the same decoded frame:
 | Field | A → B, signed difference is B minus A | Purpose |
 | --- | --- | --- |
 | `nativeToWasm` | Native production presenter → WASM production presenter | Existing same-file backend comparison |
-| `nativeDirectToCanvas` | Native WebGL upload → native sRGB Canvas 2D | Same VideoSample, no additional seek/decode; isolate the browser presentation entry |
+| `nativeDirectToCanvas` | Native WebGPU upload → independent browser sRGB Canvas 2D | Same VideoSample, no additional seek/decode; isolate the browser presentation entry |
 | `nativeCanvasToWasm` | Native sRGB Canvas → WASM production presenter | Determine whether a shared browser presentation entry changes the observed gap |
 | `wasmInputToPresenter` | Decoded RGBA bytes → captured production output | Check byte upload/capture independently of YUV conversion |
 
-`nativeDirectToCanvas` is omitted if WebGL was unavailable. Native/WASM
+`nativeDirectToCanvas` compares the WebGPU output with an independently drawn native sample when that sample is available. Native/WASM
 comparisons still require matching actual PTS/dimensions and no detected HDR.
-The Canvas probe uses the existing presenter without a WebGL surface; it does
+The Canvas probe calls the browser sample draw operation as a conversion reference, never as a video presentation backend; it does
 not replace the production path or alter tags. Optional PNGs include a
 `native-canvas` image. `pixelsOver2` and `pixelsOver8` count pixels whose maximum
 RGB-channel difference exceeds those code-value thresholds; they supplement the

@@ -6,7 +6,7 @@ import {Input,BlobSource,ALL_FORMATS,EncodedPacketSink} from 'mediabunny';
 import {wasmFlvDecoder} from '../src/media/decoding/flv-decoder.ts';
 import {yuvPixelRgb} from '../shared/color/yuv-color.ts';
 import {createServer} from 'vite';
-import {webkit,chromium} from 'playwright';
+import {webkit,chromium} from './testing/browser-engines.mjs';
 const selectedBrowser=process.argv[2],selectedInput=process.argv[3];
 const auditStarted=performance.now();
 const audit=(stage,detail={})=>console.log('hevc-timeline: '+JSON.stringify({stage,elapsedMs:Math.round(performance.now()-auditStarted),...detail}));

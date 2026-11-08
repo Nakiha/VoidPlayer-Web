@@ -14,8 +14,12 @@ runs:
     - name: Prepare media fixtures
       shell: bash
       run: |
-        sudo apt-get update
-        sudo apt-get install -y ffmpeg libnss3-tools libdav1d-dev
+        if [ "$RUNNER_OS" = "macOS" ]; then
+          brew install ffmpeg nss dav1d pkg-config
+        else
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libnss3-tools libdav1d-dev
+        fi
         npm run fixtures:flv
         npm run fixtures:hlg
     - name: Prepare verified pinned FATE fixtures

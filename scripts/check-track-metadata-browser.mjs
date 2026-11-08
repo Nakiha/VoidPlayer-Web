@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { chromium, webkit } from 'playwright';
+import { chromium, webkit } from './testing/browser-engines.mjs';
 import { createMediaServer } from '../server/app.ts';
 import { MediaLibraryIndex } from '../server/library.ts';
 import { saveBrowserFailure, recordBrowserEvidence } from './browser-failure-evidence.mjs';

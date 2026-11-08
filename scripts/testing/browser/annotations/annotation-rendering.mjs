@@ -5,16 +5,12 @@ await withBrowserFixture({ caseName: 'annotation-rendering', engine: name, pageO
 
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await checkSplitHeaders(await newContext({viewport:{width:1408,height:789},deviceScaleFactor:2}),base);
- // 本回归校验的是 WebGL 呈现面（presentation-surface.ts）的采样与图层约束：
- // 断言直接读 gl.texParameteri / gl.readPixels。浏览器模式在支持 WebGPU 的机器
- // 上会异步切到 WebGPU 画布（无 role、无 webgl 上下文），使这些断言在最需要它
- // 的平台上读到 null。移除 navigator.gpu 让 createExternalSurface 必然失败，
- // 应用保留既有 WebGL 路径，从而在 CI（无 WebGPU）与 Apple Silicon 上结果一致。
- await page.addInitScript(()=>{Object.defineProperty(navigator,'gpu',{value:undefined,configurable:true});});
  await ready();
  
  await page.evaluate(async()=>{const tool=n=>window.voidPlayer.tools.find(t=>t.name===n);const lib=await tool('list_library').execute({});for(const [slot,name]of [['A','av1_10s_1920x1080.webm'],['B','ffv1_yuv422p_8bit.mkv']]) await tool('load_library_item').execute({slot,id:lib.entries.find(e=>e.name===name).id});});
- await page.locator('#toggle-sources').click();
+ if(await page.locator('#toggle-sources').getAttribute('aria-expanded')==='true')await page.locator('#toggle-sources').click();
+ await page.waitForFunction(()=>![...document.getAnimations()].some(a=>a.playState==='running'&&a.effect?.getComputedTiming().iterations!==Infinity));
+ while(await page.locator('.toast-close').count())await page.locator('.toast-close').first().click();
  await page.evaluate(()=>window.voidPlayer.setViewport({zoom:4.568,offsetX:-52,offsetY:-81}));
  await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); }); await page.keyboard.press('n');
  await page.locator('[data-drawing-tool=rect]').click();
@@ -24,13 +20,15 @@ await withBrowserFixture({ caseName: 'annotation-rendering', engine: name, pageO
   await page.evaluate(p=>window.voidPlayer.setViewport(p),{zoom,offsetX,offsetY});
   await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
   const sample = await page.evaluate(()=>{
-    const c=document.querySelector('#stage-A .frame-presentation'),r=c.getBoundingClientRect(),gl=c.getContext('webgl');
-    const x=Math.floor(r.left+r.width/2),y=Math.floor(r.top+r.height/2),p=new Uint8Array(4);
-    gl.readPixels(Math.round((x-r.left)*devicePixelRatio),c.height-Math.round((y-r.top)*devicePixelRatio)-1,1,1,gl.RGBA,gl.UNSIGNED_BYTE,p);
+    const c=document.querySelector('#stage-A .frame-presentation'),r=c.getBoundingClientRect(),image=document.querySelector('#image-A').getBoundingClientRect();
+    const x=Math.floor(r.left+r.width/2),y=Math.floor(r.top+r.height/2),source=window.voidPlayer.captureFrame('A');
+    const sx=Math.floor((x+.5-image.left)/image.width*source.width),sy=Math.floor((y+.5-image.top)/image.height*source.height);
+    if(image.width*devicePixelRatio<source.width)throw Error('This zoom replay requires source-nearest magnification');
+    const p=source.getContext('2d').getImageData(sx,sy,1,1).data;
     const handle=document.querySelector('#drawing-B [data-corner=nw] ellipse:last-child').getBoundingClientRect();
-    return {x,y,pixel:[...p],error:gl.getError(),lost:gl.isContextLost(),handleWidth:handle.width,handleHeight:handle.height};
+    return {x,y,pixel:[...p],handleWidth:handle.width,handleHeight:handle.height};
   });
-  assert.equal(sample.error,0);assert.equal(sample.lost,false);assert.equal(sample.pixel[3],255);
+  assert.equal(sample.pixel[3],255);
   assert.ok(Math.abs(sample.handleWidth-9)<.1 && Math.abs(sample.handleHeight-9)<.1,'handles keep their screen size');
   const png=await page.screenshot({clip:{x:sample.x,y:sample.y,width:1,height:1}});
   const displayed=await page.evaluate(async bytes=>{const b=await createImageBitmap(new Blob([new Uint8Array(bytes)],{type:'image/png'}));const c=document.createElement('canvas');c.width=b.width;c.height=b.height;const ctx=c.getContext('2d');ctx.drawImage(b,0,0);b.close();return [...ctx.getImageData(0,0,1,1).data];},[...png]);
@@ -110,6 +108,7 @@ async function checkWorkspace(context, url) {
  const zoom=async value=>{await page.evaluate(zoom=>window.voidPlayer.setViewport({zoom,offsetX:0,offsetY:0}),value);await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));};
  const drag=async(a,b)=>{await page.mouse.move(...a);await page.mouse.down();await page.mouse.move(...b,{steps:10});await page.mouse.up();};
  await zoom(1);
+ while(await page.locator('.toast-close').count())await page.locator('.toast-close').first().click();
  const stage=await page.locator('#stage-B').boundingBox(),image=await page.locator('#image-B').boundingBox();
  const first={x:image.x-20,y:image.y-70,width:80,height:140};
  await page.mouse.click(stage.x+30,stage.y+100);

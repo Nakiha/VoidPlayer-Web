@@ -65,7 +65,7 @@ jobs:
   analysis-browser:
     name: Verify analysis panel (${{ matrix.engine }})
     needs: cores
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.engine == 'webkit' && 'macos-26' || 'ubuntu-24.04' }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -91,8 +91,12 @@ jobs:
       - run: npm ci
       - name: Install analysis fixture tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            brew install ffmpeg
+          else
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
       - run: npx playwright install --with-deps chromium webkit
       - run: node scripts/run-tests.mjs --prepare
       - name: Verify analysis panel on ${{ matrix.engine }}
@@ -115,7 +119,7 @@ jobs:
   analysis-matrix:
     name: Verify analysis matrix (${{ matrix.engine }}, ${{ matrix.part }})
     needs: [cores, qa-media]
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.engine == 'webkit' && 'macos-26' || 'ubuntu-24.04' }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -143,8 +147,12 @@ jobs:
       - uses: ./.github/actions/qa-media
       - name: Install analysis fixture tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            brew install ffmpeg
+          else
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
       - run: npx playwright install --with-deps ${{ matrix.engine }}
       - run: node scripts/run-tests.mjs --prepare
       - name: Verify ${{ matrix.part }} analysis matrix on ${{ matrix.engine }}
@@ -207,7 +215,7 @@ jobs:
   playback:
     name: Verify trusted HTTPS, WebCodecs and source UI
     needs: [cores, qa-media]
-    runs-on: ubuntu-24.04
+    runs-on: macos-26
     # Node and cache suites have separate required jobs; preserve the original
     # browser/FATE case deadlines and this job budget.
     timeout-minutes: 45
@@ -260,8 +268,7 @@ jobs:
       - name: Generate approximately 100 MB 1080p playback inputs
         id: playback-inputs
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg libnss3-tools libdav1d-dev
+          brew install ffmpeg nss dav1d pkg-config
           node scripts/make-playback-fixtures.mjs
       - name: Test FLV native decode policy
         if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
@@ -304,7 +311,7 @@ jobs:
   cache-browser:
     name: Verify annotation persistence and unified cache management
     needs: [cores, qa-media]
-    runs-on: ubuntu-24.04
+    runs-on: macos-26
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -335,8 +342,7 @@ jobs:
       - name: Generate approximately 100 MB 1080p playback inputs
         id: playback-inputs
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg libnss3-tools libdav1d-dev
+          brew install ffmpeg nss dav1d pkg-config
           node scripts/make-playback-fixtures.mjs
       - name: Verify annotation persistence and unified cache management
         env:
@@ -361,7 +367,7 @@ jobs:
   uncovered-regressions:
     name: Verify browser regressions no other job runs
     needs: [cores, qa-media]
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.engine == 'webkit' && 'macos-26' || 'ubuntu-24.04' }}
     timeout-minutes: 40
     strategy:
       fail-fast: false
@@ -388,8 +394,12 @@ jobs:
       - uses: ./.github/actions/qa-media
       - name: Prepare generated fixtures
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            brew install ffmpeg
+          else
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
           npm run fixtures:flv
           npm run fixtures:hlg
       - name: Prepare verified pinned FATE fixtures
@@ -416,7 +426,7 @@ jobs:
   hevc-browser:
     name: Verify HEVC timeline (${{ matrix.engine }}, ${{ matrix.input }})
     needs: [cores, qa-media]
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.engine == 'webkit' && 'macos-26' || 'ubuntu-24.04' }}
     # Chromium software graphics audits 1200 full-source captures. The case
     # has a separate no-progress watchdog; leave room for its 30-minute budget.
     timeout-minutes: 35

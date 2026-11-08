@@ -65,7 +65,7 @@ export function yuvChannelGray(d: FrameDescription, pixels: Uint8Array | Uint8Cl
   const gray = Math.round(Math.max(0, Math.min(1, normalized)) * 255);
   return [gray, gray, gray];
 }
-/** Independent CPU reference and no-WebGL fallback. High depth stays intact
+/** Independent CPU reference and thumbnail conversion. High depth stays intact
  * through range/matrix arithmetic, quantized only at final RGB output. Channel
  * 'y'/'u'/'v' isolates the source plane as gray without matrix conversion. */
 export function yuvToRgba(d: FrameDescription, pixels: Uint8Array | Uint8ClampedArray, channel: 'rgb' | 'y' | 'u' | 'v' = 'rgb'): Uint8ClampedArray<ArrayBuffer> {

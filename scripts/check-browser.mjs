@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, copyFile, utimes, rm, access, realpath, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { chromium, webkit } from 'playwright';
+import { chromium, webkit } from './testing/browser-engines.mjs';
 import { createMediaServer } from '../server/app.ts';
 import { MediaLibraryIndex } from '../server/library.ts';
 import { sourceKey } from '../shared/media/io/source-identity.ts';
@@ -1052,6 +1052,14 @@ try {
   });
 
   await check('picture overlay opacity is linear from zero to full coverage', async page => {
+    // Pixel inspection must not switch this 2D overlay from GPU to CPU midway
+    // through the comparison: fractional clip edges differ between rasterizers.
+    await page.evaluate(()=>{
+      const original=HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext=function(type,options){
+        return original.call(this,type,type==='2d'&&this.classList.contains('analysis-picture-overlay')?{...options,willReadFrequently:true}:options);
+      };
+    });
     let analysisRequests=0;
     page.on('request',request=>{if(request.url().includes('/api/bitstream-analysis/'))analysisRequests++;});
     const media=listing.entries.find(entry=>entry.name==='ci_h264_smoke.mp4');
@@ -1104,7 +1112,8 @@ try {
     const requestsBeforeLabels=analysisRequests,positionBeforeLabels=await page.evaluate(()=>window.voidPlayer.getState().positionUs);
     for(const mode of ['qp','modes']) {
       await page.locator(`#bitstream-mode [data-value="${mode}"]`).click();
-      const plain=await page.locator('#bitstream-overlay-A').evaluate(c=>c.toDataURL());
+      await page.waitForFunction(()=>!document.getAnimations().some(a=>a.playState==='running'&&a.effect?.getComputedTiming().iterations!==Infinity));
+      const plain=await page.locator('#bitstream-overlay-A').evaluate(c=>{window.overlayPlain={width:c.width,height:c.height,bytes:c.getContext('2d').getImageData(0,0,c.width,c.height).data,viewport:window.voidPlayer.getViewport(),image:document.querySelector('#image-A').getBoundingClientRect().toJSON()};return c.toDataURL();});
       await toggle.click();
       await page.waitForFunction(()=>Number(document.querySelector('#bitstream-overlay-A').dataset.labels)>0);
       const labeled=await page.locator('#bitstream-overlay-A').evaluate(c=>c.toDataURL());
@@ -1116,7 +1125,14 @@ try {
       await page.setViewportSize({width:1000,height:800});
       await page.waitForFunction(()=>Number(document.querySelector('#bitstream-overlay-A').dataset.labels)>0);
       await toggle.click();
-      assert.equal(await page.locator('#bitstream-overlay-A').evaluate(c=>c.toDataURL()),plain,'turning labels off restores the exact original canvas');
+      await page.waitForFunction(()=>!document.getAnimations().some(a=>a.playState==='running'&&a.effect?.getComputedTiming().iterations!==Infinity));
+      await settle(page);
+      const restored=await page.locator('#bitstream-overlay-A').evaluate(c=>{
+        const p=window.overlayPlain,bytes=c.getContext('2d').getImageData(0,0,c.width,c.height).data;
+        let count=0,max=0;const examples=[];for(let i=0;i<bytes.length;i++)if(bytes[i]!==p.bytes[i]){count++;max=Math.max(max,Math.abs(bytes[i]-p.bytes[i]));if(examples.length<8)examples.push([i,bytes[i],p.bytes[i]]);}
+        return {count,max,examples,beforeImage:p.image,afterImage:document.querySelector('#image-A').getBoundingClientRect().toJSON(),beforeSize:[p.width,p.height],afterSize:[c.width,c.height],before:p.viewport,after:window.voidPlayer.getViewport()};
+      });
+      assert.equal(restored.count,0,`turning labels off restores every original pixel: ${JSON.stringify(restored)}`);
     }
     assert.equal(await page.evaluate(()=>window.voidPlayer.getState().positionUs),positionBeforeLabels,'text controls never seek');
     assert.equal(analysisRequests,requestsBeforeLabels,'text controls reuse the cached block analysis');
@@ -1399,7 +1415,7 @@ try {
     assert.equal(await page.locator('[data-frame-timing] + section #inspect-playback-title').textContent(), '播放性能');
     assert.deepEqual(await performanceRows.allTextContents(), ['—', '—', '—', '—', '—']);
     await page.locator('#play').click();
-    // A virtual runner can use CPU HDR conversion without WebGL/WebGPU.
+    // A virtual runner uses software WebGPU; HDR display output is checked separately.
     // This checks eventual UI playback; the separate benchmarks check speed.
     try {
       await page.waitForFunction(() => {
@@ -1441,7 +1457,7 @@ try {
     await panels(page, true);
     await settle(page);
     const executor = await page.locator('#canvas-A').getAttribute('data-color-executor');
-    const surface = page.locator(executor?.startsWith('webgpu') ? '#stage-A .frame-presentation:not([role])' : '#stage-A .frame-presentation[role="img"]');
+    const surface = page.locator('#stage-A .frame-presentation[role="img"]');
     const geometry = () => surface.evaluate(c => ({ width: c.width, height: c.height, box: [c.clientWidth, c.clientHeight] }));
     const before = await geometry();
     const pixels = await surface.screenshot();
@@ -1778,14 +1794,14 @@ try {
       try {
         setColorMode('reference');
         await initializeGpuPresentation(sources);
-        assert(stats.devices===1 && stats.pipelines===4, 'eight SDR surfaces share one native/YUV program set');
+        assert(stats.devices===1 && stats.pipelines===6, 'eight SDR surfaces share one native/YUV program set');
         const before = nodes(); await refreshGpuColorMode();
         assert(stats.devices===1 && nodes().every((node,i)=>node===before[i]), 'unchanged restoration retains the device and canvases');
         const output = getColorOutput(); setColorOutput({...output,hdrWhiteNits:250}); await refreshGpuColorMode();
         assert(stats.devices===2 && nodes().every(node=>!before.includes(node)), 'changed output rebuilds presentation');
         devices.at(-1).lose(); await until(()=>stats.devices===3 && nodes().length===8 && keepNativeGpuResource());
         devices.at(-1).lose(); await new Promise(r=>setTimeout(r,10));
-        assert(stats.devices===3, 'a second device loss stays in fallback without another automatic rebuild');
+        assert(stats.devices===3, 'a second device loss reports failure without another automatic rebuild');
         await refreshGpuColorMode(); assert(stats.devices===4, 'an explicit refresh cannot reuse a lost device');
         disposeGpuPresentation();
         let gate = deferred(); blockNext=gate;

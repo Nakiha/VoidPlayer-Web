@@ -3,7 +3,7 @@ import { playbackBenchmarksEnabled, verifyPlaybackPresentation } from './testing
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
-import { webkit, chromium } from 'playwright';
+import { webkit, chromium } from './testing/browser-engines.mjs';
 import { createMediaServer } from '../server/app.ts';
 // The native-decode policy (prefer WebCodecs when the platform accepts the
 // config) can only be observed where the platform accepts it. When the

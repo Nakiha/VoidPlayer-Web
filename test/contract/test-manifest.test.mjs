@@ -114,7 +114,7 @@ test('single-engine scripts cannot be advertised as a different browser matrix',
   for (const row of testManifest.cases) {
     if (!row.script.startsWith('scripts/')) continue;
     const source = readFileSync(new URL('../../' + (row.implementation ?? row.script), import.meta.url), 'utf8');
-    const imports = /import\s*\{([^}]+)\}\s*from\s*['"]playwright['"]/.exec(source)?.[1].split(',').map(name => name.trim());
+    const imports = /import\s*\{([^}]+)\}\s*from\s*['"](?:playwright|[^'"]*browser-engines\.mjs)['"]/.exec(source)?.[1].split(',').map(name => name.trim());
     if (!imports) continue;
     for (const engine of row.engines.filter(engine => ['chromium','webkit'].includes(engine))) {
       assert.ok(imports.includes(engine), `${row.id}: does not import ${engine}`);

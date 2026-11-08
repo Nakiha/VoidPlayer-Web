@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {webkit} from 'playwright';
+import {webkit} from './testing/browser-engines.mjs';
 import {createServer} from 'vite';
 import {loadConfig} from '../server/config.ts';
 import {startService} from '../server/runtime.ts';

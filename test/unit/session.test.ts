@@ -25,9 +25,9 @@ test('presentation recovery updates actual output without decoding or advancing 
     source.frameAt = async time => { reads++; return read(time); };
     await session.load('A', async () => source);
     const token = session.getPresentedFrame('A'), before = session.getState(), readCount = reads;
-    const recovered = {...presented,presentation:{...presented.presentation!,executor:'cpu-yuv'}};
+    const recovered = {...presented,presentation:{...presented.presentation!,executor:'webgpu-browser-sdr'}};
     session.recordRecoveredPresentation('A', recovered);
-    assert.equal(session.getState().tracks[0].presentation?.executor, 'cpu-yuv');
+    assert.equal(session.getState().tracks[0].presentation?.executor, 'webgpu-browser-sdr');
     assert.deepEqual(session.getPresentedFrame('A'), token);
     assert.equal(session.getState().positionUs, before.positionUs); assert.equal(reads, readCount);
     await session.seek(40000);

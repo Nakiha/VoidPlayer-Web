@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,writeFile,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import {chromium,webkit} from 'playwright';
+import {chromium,webkit} from './testing/browser-engines.mjs';
 import {loadConfig} from '../server/config.ts';
 import {startService} from '../server/runtime.ts';
 const address=Object.values(os.networkInterfaces()).flat().find(i=>i && i.family==='IPv4' && !i.internal)?.address;if(!address)throw new Error('HTTP entry regression requires a non-loopback IPv4 interface');

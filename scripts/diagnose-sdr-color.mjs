@@ -90,6 +90,8 @@ try {
               const stage = document.createElement('div'); stage.className = 'frame-stage';
               const canvas = document.createElement('canvas'); stage.append(canvas); document.body.append(stage);
               try {
+                const {initializeGpuPresentation}=await import('/src/presentation/webgpu-presenter.ts');
+                await initializeGpuPresentation([canvas]);
                 frame = await source.frameAt(target);
                 if (frame.width * frame.height > 16777216) throw new Error('Capture exceeds 16M pixel diagnostic budget');
                 setPresentationGeometry(canvas, { width: frame.width, height: frame.height, imageWidth: frame.width, imageHeight: frame.height, zoom: 1, offsetX: 0, offsetY: 0, dpr: 1 });
@@ -99,7 +101,7 @@ try {
                 const policy = presentationColor(frame.kind, frame.description);
                 pair[mode] = { ptsUs: frame.ptsUs, sourcePtsUs: frame.sourcePtsUs, width: frame.width, height: frame.height,
                   description: frame.description, copyMs: frame.copyMs, policy, summary: summarizeRgba(data),
-                  renderer: stage.querySelector('.frame-presentation')?.getContext('webgl') ? 'webgl' : 'canvas2d' };
+                  renderer: 'webgpu' };
                 pixels[mode] = data;
                 if (images) await window.saveEvidenceImage(`file-${fileNumber}-time-${target}-${mode}.png`, capture.toDataURL('image/png'));
                 if (mode === 'wasm' && frame.kind === 'rgba8' && frame.pixels) {
@@ -110,15 +112,15 @@ try {
                 if(frame.kind==='yuv') pair[mode].shaderToCpuReference=compareRgba(yuvToRgba(frame.description,frame.pixels),data);
                 if (mode === 'native') {
                   // Reuse this exact decoded sample, not another seek/decode.
-                  // A canvas without a presentation surface selects the real
-                  // presenter's existing sRGB 2D path without patching globals.
+                  // Independent browser conversion reference, never a video presentation backend.
                   const fallback = document.createElement('canvas');
                   try {
-                    paintFrame(fallback, frame.kind==='yuv'?{...frame,kind:'video-sample',pixels:undefined,description:{...frame.description,yuv:undefined}}:frame);
+                    if(!frame.sample)throw Error('Native sample unavailable for browser conversion reference');
+                    fallback.width=frame.width;fallback.height=frame.height;
+                    frame.sample.draw(fallback.getContext('2d',{colorSpace:'srgb'}),0,0,frame.width,frame.height);
                     pixels.nativeCanvas = fallback.getContext('2d').getImageData(0, 0, fallback.width, fallback.height).data;
-                    pair.nativeCanvas = { path: 'presenter-canvas2d-srgb', sameDecodedFrame: true, summary: summarizeRgba(pixels.nativeCanvas) };
-                    if (pair.native.renderer === 'webgl') pair.nativeDirectToCanvas = compareRgba(data, pixels.nativeCanvas);
-                    else pair.nativeCanvas.notCompared = 'Production capture already used Canvas 2D; no WebGL baseline';
+                    pair.nativeCanvas = { path: 'browser-reference-canvas2d-srgb', sameDecodedFrame: true, summary: summarizeRgba(pixels.nativeCanvas) };
+                    if (pair.native.renderer === 'webgpu') pair.nativeDirectToCanvas = compareRgba(data, pixels.nativeCanvas);
                     if (images) await window.saveEvidenceImage(`file-${fileNumber}-time-${target}-native-canvas.png`, fallback.toDataURL('image/png'));
                   } catch (e) { pair.nativeCanvas = { error: String(e) }; }
                   finally { fallback.width = fallback.height = 1; }

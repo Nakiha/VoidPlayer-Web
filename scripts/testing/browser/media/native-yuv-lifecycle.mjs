@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {mkdir,writeFile} from 'node:fs/promises';
 import {createServer} from 'vite';
-import {chromium,webkit} from 'playwright';
+import {chromium,webkit} from '../../browser-engines.mjs';
 const engine=process.argv[2]??'chromium';
 assert.ok(['chromium','webkit'].includes(engine));
 const server=await createServer({server:{port:0,host:'127.0.0.1'}});let browser;

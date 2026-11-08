@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, copyFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { webkit, chromium } from 'playwright';
+import { webkit, chromium } from './testing/browser-engines.mjs';
 import { MediaLibraryIndex } from '../server/library.ts';
 import { createMediaServer } from '../server/app.ts';
 import { THUMB_RECIPE_VERSION } from '../shared/thumbnails/contract.ts';

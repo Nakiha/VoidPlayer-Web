@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import { execFileSync } from 'node:child_process';
 import { access, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { chromium, webkit } from 'playwright';
+import { chromium, webkit } from '../../browser-engines.mjs';
 
 const root = path.resolve(import.meta.dirname, '../../../..');
 const engine = process.argv[2] ?? 'webkit';

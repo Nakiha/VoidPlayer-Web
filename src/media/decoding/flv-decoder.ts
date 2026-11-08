@@ -91,7 +91,7 @@ export async function nativeFlvDecoder(index: PacketDecodeIndex, initialConfig?:
       }
       catch (e) { frame.close(); error = packetDecodeError(e, '浏览器输出校验'); notify?.(); return; }
       // Restore logical time in the frame envelope, not by cloning/relabeling
-      // the GPU resource. WebKit's nested metadata clones can trap in WebGL.
+      // the GPU resource, preserving its original resource identity.
       const pts = frame.timestamp + timestampOrigin;
       if (pts < minimum) frame.close();
       else {

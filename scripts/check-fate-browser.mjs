@@ -2,7 +2,7 @@ import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {createServer} from 'vite';
-import {chromium,webkit} from 'playwright';
+import {chromium,webkit} from './testing/browser-engines.mjs';
 import {classify} from './fate-oracle.ts';
 const manifest=JSON.parse(await readFile(new URL('./fate-samples.json',import.meta.url))).filter(s=>/multi-stsd|4bf|brokensps|interlaced_crop/.test(s.file));
 const onlyEngine=process.argv.find(arg=>arg.startsWith('--engine='))?.slice('--engine='.length),onlySample=process.argv.find(arg=>arg.startsWith('--sample='))?.slice('--sample='.length);

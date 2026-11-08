@@ -3,7 +3,7 @@ import {mkdir,mkdtemp,rm,writeFile} from 'node:fs/promises';
 import {execFileSync} from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
-import {chromium} from 'playwright';
+import {chromium} from './testing/browser-engines.mjs';
 import {startService} from '../server/runtime.ts';
 import {loadConfig} from '../server/config.ts';
 import {startMcpClient} from './testing/mcp-client.mjs';

@@ -7,7 +7,7 @@ import { mkdtemp, writeFile, rm,readdir } from 'node:fs/promises';
 import { RangeReader } from '../shared/media/io/range-reader.ts';
 import { readMp4Configurations } from '../shared/media/containers/mp4-config.ts';
 import { mp4BoundaryFixture } from './mp4-boundary-fixture.ts';
-import { chromium, webkit } from 'playwright';
+import { chromium, webkit } from './testing/browser-engines.mjs';
 import { createMediaServer } from '../server/app.ts';
 import { MediaLibraryIndex } from '../server/library.ts';
 const root = path.resolve(import.meta.dirname, '..');

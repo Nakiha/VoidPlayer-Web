@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { chromium, webkit } from 'playwright';
+import { chromium, webkit } from './testing/browser-engines.mjs';
 import { MediaLibraryIndex } from '../server/library.ts';
 import { createMediaServer } from '../server/app.ts';
 

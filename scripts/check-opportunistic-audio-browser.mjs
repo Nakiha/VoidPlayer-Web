@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, rm, copyFile, writeFile, readdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { chromium, webkit } from 'playwright';
+import { chromium, webkit } from './testing/browser-engines.mjs';
 import { saveBrowserFailure, recordBrowserEvidence } from './browser-failure-evidence.mjs';
 import { createHash } from 'node:crypto';
 import { snapshotBuild } from './testing/build.mjs';
@@ -68,7 +68,7 @@ try {
   // while preserving source pixels, frame traversal, audio and IO assertions.
   browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless: true,
     ...(browserName === 'chromium' && process.env.CHROME_EXECUTABLE_PATH ? { executablePath: process.env.CHROME_EXECUTABLE_PATH } : {}),
-    ...(browserName === 'chromium' ? { args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] } : {}) });
+    ...(browserName === 'chromium' ? { args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--enable-unsafe-webgpu'] } : {}) });
   const report = [];
   async function tool(page, name, input = {}) { return page.evaluate(({ name, input }) => window.voidPlayer.tools.find(t => t.name === name).execute(input), { name, input }); }
   async function state(page) { return tool(page, 'get_review_session'); }
@@ -95,24 +95,17 @@ try {
           window.audioLifecycle(name + '-enter');
           const result = original.apply(this, args);
           window.audioLifecycle(name + '-return');
-          if (name === 'getExtension' && args[0] === 'WEBGL_lose_context' && result && !result.audioInstrumented) {
-            result.audioInstrumented = true; instrument(result, 'loseContext');
-          }
           return result;
         };
       };
-      for (const name of ['deleteTexture', 'deleteBuffer', 'deleteProgram', 'getExtension']) instrument(window.WebGLRenderingContext?.prototype, name);
+      instrument(window.GPUDevice?.prototype, 'destroy');
       instrument(window.Element?.prototype, 'remove');
       window.audioGlBackends = [];
       const contexts = new WeakSet(), getContext = HTMLCanvasElement.prototype.getContext;
       HTMLCanvasElement.prototype.getContext = function(type, ...args) {
         const context = getContext.call(this, type, ...args);
-        if (context && ['webgl', 'webgl2', 'experimental-webgl'].includes(type) && !contexts.has(context)) {
-          contexts.add(context);
-          const debug = context.getExtension('WEBGL_debug_renderer_info');
-          window.audioGlBackends.push({ api: type, canvas: this.id || this.className,
-            renderer: context.getParameter(debug?.UNMASKED_RENDERER_WEBGL ?? context.RENDERER),
-            vendor: context.getParameter(debug?.UNMASKED_VENDOR_WEBGL ?? context.VENDOR) });
+        if (context && type==='webgpu' && !contexts.has(context)) {
+          contexts.add(context);window.audioGlBackends.push({api:type,canvas:this.id||this.className});
         }
         return context;
       };
@@ -186,21 +179,19 @@ try {
     const presentation = await page.locator('#canvas-A').evaluate(source => {
       const canvas = source.closest('.frame-stage').querySelector('.frame-presentation');
       if (!canvas) throw new Error('Missing real presentation canvas');
-      const gl = canvas.getContext('webgl'), started = performance.now();
-      const pixels = new Uint8Array(canvas.width * canvas.height * 4);
-      if (gl) gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-      else pixels.set(canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data);
+      const started=performance.now(),copy=new OffscreenCanvas(canvas.width,canvas.height),ctx=copy.getContext('2d');
+      ctx.drawImage(canvas,0,0);const pixels=ctx.getImageData(0,0,canvas.width,canvas.height).data;
       const colors = new Set();
       for (let i = 0; i < pixels.length && colors.size < 32; i += 16) {
         if (pixels[i + 3]) colors.add(`${pixels[i]},${pixels[i + 1]},${pixels[i + 2]}`);
       }
       return { width: canvas.width, height: canvas.height, sourceWidth: source.width, sourceHeight: source.height,
-        webgl: !!gl, colors: colors.size, readbackMs: performance.now() - started };
+        webgpu: true, colors: colors.size, readbackMs: performance.now() - started };
     });
     assert.ok(presentation.colors >= 4, 'the fixture presents nonblank multicolor video pixels');
     assert.equal(presentation.sourceWidth, 320); assert.equal(presentation.sourceHeight, 180);
     glBackends = await page.evaluate(() => window.audioGlBackends);
-    if (browserName === 'chromium') assert.ok(presentation.webgl && glBackends.length > 0, 'Chromium exercises the real WebGL presentation path');
+    if (browserName === 'chromium') assert.ok(presentation.webgpu && glBackends.length > 0, 'Chromium exercises the real WebGPU presentation path');
     report.push({ enabled, renderer, glBackends, presentation, blobReads: await page.evaluate(() => window.audioBlobReads), traffic: [...traffic], audio: audioEvidence, video: { positionUs: result.positionUs, durationUs: result.durationUs, error: result.error, drawnFrames: result.playback.tracks.A.drawn, fps: result.playback.tracks.A.fps, speed: result.playback.speed, wallMs: result.playback.wallMs } });
     if (enabled) {
       // Arm before playback. Real output-node starts drive the assertions in a

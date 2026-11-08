@@ -5,6 +5,7 @@ export interface GpuSurface {
   adapter: { vendor?: string; architecture?: string; device?: string; description?: string } | null;
   lost: Promise<{ reason: string; message: string }>;
   available: boolean;
+  failure?: Promise<Error>;
   outputTarget: 'sdr' | 'hdr';
   outputFallbackReason: string | null;
   nativeHdrAvailable: boolean;
@@ -12,11 +13,12 @@ export interface GpuSurface {
   outputConfiguration: { displayHdr: boolean; format: string; colorSpace: 'srgb' | 'display-p3'; toneMapping: 'standard' | 'extended' };
   errors: string[];
   setGeometry(geometry: PresentationGeometry | null, rotation?: number): void;
-  present(frame: VideoFrame | DecodedFrame, width?: number, height?: number): void;
+  present(frame: VideoFrame | DecodedFrame, width?: number, height?: number, preview?: boolean): void;
   redrawChannel(): boolean;
   captureSource(target: HTMLCanvasElement): HTMLCanvasElement;
   capture(viewport?: boolean): Promise<Uint8ClampedArray>;
   captureHdrPixels(): Promise<Float32Array>;
+  drain(): Promise<void>;
   clear(): void;
   dispose(): void;
 }

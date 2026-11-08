@@ -20,8 +20,8 @@ ff(['-i', path.join(directory, 'rgb-encoded.mp4'), '-c', 'copy', path.join(direc
 for (const rotation of [90, 270])
     ff(['-display_rotation', String(-rotation), '-i', path.join(directory, 'rgb-0.mp4'), '-c', 'copy', path.join(directory, `rgb-${rotation}.mp4`)]);
 await withBrowserFixture({ caseName: 'bitstream-geometry', engine, roots: [directory], pageOptions: { viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 } }, async ({ page, ready, artifact }) => {
-    await page.addInitScript(() => Object.defineProperty(navigator, 'gpu', { value: undefined, configurable: true }));
     await ready();
+    await page.addStyleTag({content:'.geometry-raw-capture .video-card:has(#stage-A){clip-path:none!important}.geometry-raw-capture .video-card:not(:has(#stage-A)),.geometry-raw-capture #bitstream-overlay-A,.geometry-raw-capture #divider,.geometry-raw-capture .analysis-card{visibility:hidden!important}'});
     if (await page.locator('#identity-welcome').isVisible())
         await page.locator('#identity-welcome [data-guest]').click();
     const call = (name, params = {}) => page.evaluate(async ({ name, params }) => window.voidPlayer.tools.find(t => t.name === name).execute(params), { name, params });
@@ -72,7 +72,12 @@ await withBrowserFixture({ caseName: 'bitstream-geometry', engine, roots: [direc
                         await page.evaluate(async () => { for (let i = 0; i < 5; i++)
                             await new Promise(requestAnimationFrame); });
                         await page.locator('#bitstream-overlay-A').waitFor({ state: 'visible' });
-                        const pixels = await page.evaluate(({ rotation }) => {
+                        await page.evaluate(()=>document.body.classList.add('geometry-raw-capture'));
+                        await page.evaluate(()=>{window.voidPlayer.setViewport({offsetX:3.26});window.voidPlayer.setViewport({offsetX:3.25});});
+                        await page.evaluate(()=>new Promise(requestAnimationFrame));
+                        const shot=await page.locator('#stage-A .frame-presentation').screenshot();
+                        await page.evaluate(()=>document.body.classList.remove('geometry-raw-capture'));
+                        const pixels = await page.evaluate(async ({ rotation,bytes }) => {
                             const box = document.querySelector('#image-A').getBoundingClientRect();
                             const projected = (x, y) => {
                                 let u = (x - 8) / 48, v = (y - 4) / 48;
@@ -82,26 +87,24 @@ await withBrowserFixture({ caseName: 'bitstream-geometry', engine, roots: [direc
                                     [u, v] = [v, 1 - u];
                                 return { x: box.x + u * box.width, y: box.y + v * box.height };
                             };
-                            const c = document.querySelector('#stage-A .frame-presentation'), rect = c.getBoundingClientRect(), gl = c.getContext('webgl');
+                            const c = document.querySelector('#stage-A .frame-presentation'), rect = c.getBoundingClientRect(), copy = new OffscreenCanvas(c.width,c.height), video = copy.getContext('2d');
+                            const bitmap=await createImageBitmap(new Blob([new Uint8Array(bytes)],{type:'image/png'}));video.drawImage(bitmap,0,0);bitmap.close();
                             const overlay = document.querySelector('#bitstream-overlay-A'), o = overlay.getBoundingClientRect(), ctx = overlay.getContext('2d');
                             const read = (p) => {
-                                const out = new Uint8Array(4);
-                                gl.readPixels(Math.floor((p.x - rect.x) * c.width / rect.width), c.height - 1 - Math.floor((p.y - rect.y) * c.height / rect.height), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, out);
-                                return [...out];
+                                return [...video.getImageData(Math.floor((p.x-rect.x)*c.width/rect.width),Math.floor((p.y-rect.y)*c.height/rect.height),1,1).data];
                             };
                             const alpha = p => ctx.getImageData(Math.floor((p.x - o.x) * overlay.width / o.width), Math.floor((p.y - o.y) * overlay.height / o.height), 1, 1).data[3];
                             // x=32 is a coded block edge; y=28 is inside a block. At 8x both
                             // points stay near the center, so the readback remains in the viewport.
                             const edge = projected(32, 28), hit = projected(31, 28);
                             return { aspect: box.width / box.height, white: read(hit), black: read(projected(33, 28)), edgeAlpha: alpha(edge), insideAlpha: alpha(hit), hit,
-                                edge, overlayRect: { x: o.x, y: o.y, width: o.width, height: o.height }, overlayHidden: overlay.hidden, overlayParent: overlay.parentElement.id, glError: gl.getError(), clip: getComputedStyle(document.querySelector('#stage-A').closest('.video-card')).clipPath };
-                        }, { rotation });
+                                edge, overlayRect: { x: o.x, y: o.y, width: o.width, height: o.height }, overlayHidden: overlay.hidden, overlayParent: overlay.parentElement.id, clip: getComputedStyle(document.querySelector('#stage-A').closest('.video-card')).clipPath };
+                        }, { rotation,bytes:[...shot] });
                         assert.ok(Math.abs(pixels.aspect - (rotation ? .5 : 2)) < .01, 'display aspect includes SAR and rotation');
                         assert.ok(pixels.white.slice(0, 3).every(v => v > 220), `white stripe maps to coded x=31: ${JSON.stringify(pixels)}`);
-                        assert.ok(pixels.black.slice(0, 3).every(v => v < 25), 'black stripe maps to coded x=33');
+                        assert.ok(pixels.black.slice(0, 3).every(v => v < 25), `black stripe maps to coded x=33 (${mode}/${zoom}): ${JSON.stringify(pixels)}`);
                         assert.ok(pixels.edgeAlpha > 0, `coded edge mismatch ${mode}/${zoom}: ${JSON.stringify(pixels)}`);
                         assert.equal(pixels.insideAlpha, 0, 'block interior has no stray grid line');
-                        assert.equal(pixels.glError, 0);
                         assert.equal(pixels.overlayParent, 'stage-A');
                         if (mode === 'split')
                             assert.notEqual(pixels.clip, 'none', 'overlay shares the video split clip');
@@ -155,21 +158,21 @@ await withBrowserFixture({ caseName: 'bitstream-geometry', engine, roots: [direc
         assert.deepEqual(token.geometry.visibleRect, { x: 8, y: 4, width: 48, height: 48 });
         assert.equal(token.geometry.rotation, rotation);
         assert.equal(await page.locator('#canvas-A').getAttribute('data-color-contract'), 'rgba-resource', 'fixture exercises the RGBA presenter');
-        const pixels = await page.evaluate(rotation => {
+        const shot=await page.locator('#stage-A .frame-presentation').screenshot();
+        const pixels = await page.evaluate(async ({rotation,bytes}) => {
             const box = document.querySelector('#image-A').getBoundingClientRect();
-            const c = document.querySelector('#stage-A .frame-presentation'), r = c.getBoundingClientRect(), gl = c.getContext('webgl');
+            const c = document.querySelector('#stage-A .frame-presentation'), r = c.getBoundingClientRect(), copy = new OffscreenCanvas(c.width,c.height), video = copy.getContext('2d');
+                            const bitmap=await createImageBitmap(new Blob([new Uint8Array(bytes)],{type:'image/png'}));video.drawImage(bitmap,0,0);bitmap.close();
             const read = x => {
                 let u = (x - 8) / 48, v = .5;
                 if (rotation === 90)
                     [u, v] = [1 - v, u];
                 else if (rotation === 270)
                     [u, v] = [v, 1 - u];
-                const out = new Uint8Array(4);
-                gl.readPixels(Math.floor((box.x + box.width * u - r.x) * c.width / r.width), c.height - 1 - Math.floor((box.y + box.height * v - r.y) * c.height / r.height), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, out);
-                return [...out];
+                return [...video.getImageData(Math.floor((box.x+box.width*u-r.x)*c.width/r.width),Math.floor((box.y+box.height*v-r.y)*c.height/r.height),1,1).data];
             };
             return { white: read(24), black: read(40), aspect: box.width / box.height };
-        }, rotation);
+        }, {rotation,bytes:[...shot]});
         assert.ok(pixels.white.slice(0, 3).every(v => v > 220), JSON.stringify(pixels));
         assert.ok(pixels.black.slice(0, 3).every(v => v < 25), JSON.stringify(pixels));
         assert.ok(Math.abs(pixels.aspect - (rotation ? .5 : 2)) < .01);

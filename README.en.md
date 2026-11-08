@@ -26,6 +26,8 @@ VoidPlayer Web is a video review tool for comparing encodes or processing result
 
 *Compare high-quality and deliberately degraded encodes of the same clip, mark an issue, then inspect bitrate and coding blocks. Recorded from the application; animated WebP.*
 
+Video display requires a working WebGPU adapter in a secure context (HTTPS or localhost). WebGL and Canvas 2D video fallbacks are not provided. Canvas 2D remains in use for color-conversion intermediates, captures, thumbnails and UI graphics.
+
 ## Try online
 
 **[Open VoidPlayer →](https://voidplayer-local-review.akanemeguri1296.chatgpt.site/)**

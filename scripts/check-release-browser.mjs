@@ -9,7 +9,7 @@ import { once } from 'node:events';
 import { gunzipSync } from 'node:zlib';
 import os from 'node:os';
 import path from 'node:path';
-import { webkit, chromium } from 'playwright';
+import { webkit, chromium } from './testing/browser-engines.mjs';
 import { sha256 } from './check-release-set.mjs';
 import { generatedLibrary } from './check-generated-library.mjs';
 const root = path.resolve(import.meta.dirname, '..');

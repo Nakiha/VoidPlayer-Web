@@ -1,5 +1,5 @@
 // Local, serial codec/path smoke and playback matrix. No uploads or persistent service changes.
-import {chromium,webkit} from 'playwright';
+import {chromium,webkit} from './testing/browser-engines.mjs';
 import {createMediaServer} from '../server/app.ts';
 import {mkdir,writeFile} from 'node:fs/promises';
 import path from 'node:path';

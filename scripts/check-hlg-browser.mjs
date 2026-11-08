@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
-import { chromium, webkit } from 'playwright';
+import { chromium, webkit } from './testing/browser-engines.mjs';
 
 const engine = process.argv[2] ?? 'webkit';
 assert.ok(['webkit', 'chromium'].includes(engine));

@@ -1,12 +1,11 @@
 import type { SessionResources } from '../session/resources.ts';
-import { gpuPaint, gpuCapture, gpuRendererName, gpuGeometry, gpuRedrawChannel, gpuFallbackGeometry, disposeGpuPresentation, observeGpuRecovery } from './webgpu-presenter.ts';
+import { gpuPaint, gpuCapture, gpuRendererName, gpuGeometry, gpuRedrawChannel, disposeGpuPresentation, observeGpuRecovery } from './webgpu-presenter.ts';
 import { retainPresentationFrame } from './retained-frame.ts';
-import { yuvToRgba, yuvPixelRgb, resolveYuvColor } from '../../shared/color/yuv-color.ts';
+import { yuvPixelRgb, resolveYuvColor } from '../../shared/color/yuv-color.ts';
 import { getPresentationChannel } from './presentation-channel.ts';
 import { validateDescription } from '../../shared/media/frame-description.ts';
 import { presentationColor } from './presentation-color.ts';
 import { THUMB_MAX_EDGE } from '../../shared/thumbnails/contract.ts';
-import { createPresentationSurface } from './presentation-surface.ts';
 import type { PresentationGeometry } from './presentation-surface.ts';
 import type { DecodedFrame } from '../media/contract.ts';
 import { log } from '../logging/log.ts';
@@ -17,7 +16,7 @@ import { HDR_PREVIEW_POLICY } from '../../shared/color/hdr-policy.ts';
 // Presentation is the only place that decides HOW a decoded frame reaches the
 // canvas. Backends deliver timestamps plus a resource (WebCodecs sample or
 // RGBA8 pixels); they never paint. Native HDR uses browser-owned float
-// conversion when available, otherwise the sRGB compatibility preview.
+// conversion when available, otherwise an sRGB intermediate; only WebGPU displays video.
 let presentedCommit = 0;
 const performanceSamples = new WeakMap<HTMLCanvasElement, { copy: number[]; submit: number[]; count: number }>();
 export function paintFrame(canvas: HTMLCanvasElement, frame: DecodedFrame) {
@@ -27,38 +26,21 @@ export function paintFrame(canvas: HTMLCanvasElement, frame: DecodedFrame) {
   retainedFrames.set(canvas, retained);
 }
 function paintFrameNow(canvas: HTMLCanvasElement, frame: DecodedFrame, recovering = false) {
-  const record=()=>{if(!recovering)frame.presentedCommit=++presentedCommit;const requestedTarget=getColorOutput().target,hdr=canvas.dataset.displayTarget==='hdr',displayHdr=hdrDisplayAvailable();frame.presentation={requestedTarget,actualTarget:hdr?'hdr':'sdr',captureTarget:'sdr',executor:canvas.dataset.colorExecutor??'unknown',contract:canvas.dataset.colorContract??'unknown',displayHdr,outputColorSpace:hdr?'display-p3':'srgb',outputFormat:hdr?'float16':'unorm8',toneMapping:hdr?'extended':'standard',...(requestedTarget==='hdr'&&!hdr?{fallbackReason:canvas.dataset.colorOutputReason??(!displayHdr?'hdr-display-unavailable':'webgpu-not-ready')}: {})};};
-  if(gpuPaint(canvas,frame)){
-    // GPU warmup may finish after a GL frame. Retire its viewport surface only
-    // after successful GPU presentation; two visible surfaces retain stale pixels.
-    const legacy=surfaces.get(canvas);if(legacy){const hiddenSource=canvas.classList.contains('frame-source');surfaces.delete(canvas);legacy.dispose();canvas.classList.toggle('frame-source',hiddenSource);}
-    record();return;
-  }
-  canvas.dataset.displayTarget='sdr';canvas.dataset.captureTarget='sdr';
-  canvas.dataset.colorContract=frame.kind==='yuv'?(presentationColor(frame.kind,frame.description).hdr?'common-yuv-hdr-preview':'common-yuv-sdr'):frame.kind==='rgba8'?'rgba-resource':'browser-managed';
-  const geometry = gpuFallbackGeometry(canvas) ?? currentGeometry.get(canvas);
-  if (geometry) {
-    const surface = surfaces.get(canvas);
-    if (surface?.opaqueOnly && !hasOpaquePicture(frame)) {
-      surfaces.delete(canvas);
-      surface.dispose();
-    }
-    if (!surfaces.has(canvas)) createFallbackSurface(canvas, frame)?.geometry(geometry);
-  }
-  const start=performance.now();
-  paintFrameContent(canvas,frame);
-  if(frame.kind!=='yuv')canvas.dataset.colorExecutor=frame.kind==='rgba8'?'rgba-upload':'browser-managed';
-  record();
-  const state=performanceSamples.get(canvas)??{copy:[],submit:[],count:0};
-  const index=state.count++%256;
-  state.copy[index]=frame.copyMs??0;state.submit[index]=performance.now()-start;performanceSamples.set(canvas,state);
-  if(state.count%32===1)canvas.dataset.colorPerformance=JSON.stringify(presentationPerformance(canvas));
+  const start = performance.now();
+  gpuPaint(canvas, frame);
+  if (!recovering) frame.presentedCommit = ++presentedCommit;
+  const requestedTarget = getColorOutput().target, hdr = canvas.dataset.displayTarget === 'hdr';
+  frame.presentation = {requestedTarget, actualTarget: hdr ? 'hdr' : 'sdr', captureTarget: 'sdr',
+    executor: canvas.dataset.colorExecutor!, contract: canvas.dataset.colorContract!, displayHdr: hdrDisplayAvailable(),
+    outputColorSpace: hdr ? 'display-p3' : 'srgb', outputFormat: hdr ? 'float16' : 'unorm8', toneMapping: hdr ? 'extended' : 'standard',
+    ...(requestedTarget === 'hdr' && !hdr ? {fallbackReason: canvas.dataset.colorOutputReason ?? 'hdr-output-unavailable'} : {})};
+  const state = performanceSamples.get(canvas) ?? {copy: [], submit: [], count: 0}, index = state.count++ % 256;
+  state.copy[index] = frame.copyMs ?? 0;
+  state.submit[index] = performance.now() - start;
+  performanceSamples.set(canvas, state);
 }
-/** Queried only for diagnostics. Use the existing context without probing a different adapter. */
-export function presentationRendererName(canvas: HTMLCanvasElement) {
-  const surface = surfaces.get(canvas);
-  return surface ? surface.rendererName() : gpuRendererName(canvas);
-}
+/** Queried only for diagnostics, without requesting another adapter. */
+export function presentationRendererName(canvas: HTMLCanvasElement) { return gpuRendererName(canvas); }
 /** Bounded CPU submission timings, not GPU completion or physical scanout. */
 export function presentationPerformance(canvas:HTMLCanvasElement) {
   const state=performanceSamples.get(canvas);if(!state)return null;
@@ -66,143 +48,43 @@ export function presentationPerformance(canvas:HTMLCanvasElement) {
   return {count:state.count,window:state.copy.length,copyMs:summary(state.copy),submitMs:summary(state.submit)};
 }
 
-const colorStates = new WeakMap<HTMLCanvasElement, string>();
-function paintFrameContent(canvas: HTMLCanvasElement, frame: DecodedFrame) {
-  validateDescription(frame.description,frame.pixels?.byteLength);
-  const channel = frame.kind === 'yuv' ? getPresentationChannel() : 'rgb';
-  if(frame.kind==='yuv'||frame.kind==='rgba8') {
-    const d=frame.description, rotation=frame.rotation??frame.sample?.rotation??0;
-    const width=rotation===90||rotation===270?d.height:d.width;
-    const height=rotation===90||rotation===270?d.width:d.height;
-    if(canvas.width!==width)canvas.width=width;if(canvas.height!==height)canvas.height=height;
-  }
-  if (frame.kind==='video-sample' && canvas.width !== frame.width) canvas.width = frame.width;
-  if (frame.kind==='video-sample' && canvas.height !== frame.height) canvas.height = frame.height;
-  const surface = surfaces.get(canvas);
-  const policy = presentationColor(frame.kind, frame.description);
-  const colorState = JSON.stringify({ kind: frame.kind, channel, ...policy });
-  if (colorStates.get(canvas) !== colorState) {
-    colorStates.set(canvas, colorState);
-    log.info('media', '上屏色彩路径', { canvas: canvas.id, kind: frame.kind, ...policy, sourcePtsUs: frame.sourcePtsUs });
-    if (policy.unsupportedHdr) log.warn('media', '软件 RGBA8 输出未完成 HDR 到 SDR 的色彩转换，当前画面不适合色彩评审。', { canvas: canvas.id, ...policy });
-  }
-  if(frame.kind==='yuv') {
-    if(!frame.pixels)throw new Error('YUV 帧缺少像素数据。');
-    const rotation=frame.rotation??frame.sample?.rotation??0;
-    if(surface?.uploadYuv(frame.description,frame.pixels,rotation)){canvas.dataset.colorExecutor='webgl-yuv';canvas.dataset.channel=channel;return;}
-    canvas.dataset.colorExecutor='cpu-yuv';
-    canvas.dataset.channel=channel;
-    const pixels=yuvToRgba(frame.description,frame.pixels,channel);
-    const ctx=canvas.getContext('2d',{colorSpace:'srgb'});if(!ctx)throw new Error('浏览器无法创建画布。');
-    const image=new ImageData(pixels,frame.description.width,frame.description.height);
-    if(rotation){
-      const scratch=new OffscreenCanvas(image.width,image.height);scratch.getContext('2d')!.putImageData(image,0,0);
-      ctx.save();ctx.translate(canvas.width/2,canvas.height/2);ctx.rotate(rotation*Math.PI/180);ctx.drawImage(scratch,-image.width/2,-image.height/2);ctx.restore();
-    }else ctx.putImageData(image,0,0);
-    surface?.upload();return;
-  }
-  canvas.dataset.channel = 'rgb';
-  if (surface?.directUpload) {
-    if (frame.kind === 'rgba8' && !frame.rotation) {
-      if (!frame.pixels) throw new Error('RGBA 帧缺少像素数据。');
-      surface.upload(frame.pixels);
-      return;
-    }
-    if (frame.kind !== 'rgba8' && !frame.sample) throw new Error('视频帧缺少采样内容。');
-    if (frame.sample?.rotation === 0 && !policy.canvasConversion) {
-      const resource = frame.sample.toVideoFrame();
-      try { surface.upload(resource); } finally { resource.close(); }
-      return;
-    }
-  }
-  // Direct VideoFrame -> WebGL and drawImage -> sRGB canvas do not have the
-  // same HDR conversion on every browser. Use drawImage for ALL PQ/HLG frames,
-  // including clones, seeks and playback. Never relabel already-converted pixels
-  // with container HDR metadata. SDR retains direct upload; no CPU readback.
-  const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
-  if (!ctx) throw new Error('浏览器无法创建画布。');
-  if (frame.kind === 'rgba8') {
-    if (!frame.pixels) throw new Error('RGBA 帧缺少像素数据。');
-    const image = new ImageData(frame.pixels as Uint8ClampedArray<ArrayBuffer>, frame.description.width, frame.description.height);
-    if(frame.rotation) {
-      const scratch=new OffscreenCanvas(image.width,image.height);scratch.getContext('2d')!.putImageData(image,0,0);
-      ctx.save();ctx.translate(canvas.width/2,canvas.height/2);ctx.rotate(frame.rotation*Math.PI/180);ctx.drawImage(scratch,-image.width/2,-image.height/2);ctx.restore();
-    } else ctx.putImageData(image,0,0);
-    surface?.upload();
-    return;
-  }
-  if (!frame.sample) throw new Error('视频帧缺少采样内容。');
-  frame.sample.draw(ctx, 0, 0, canvas.width, canvas.height);
-  surface?.upload();
-}
-
 const captureBudgets = new WeakMap<HTMLCanvasElement, SessionResources>();
 const captureLeases = new Map<HTMLCanvasElement, () => void>();
 const retainedFrames = new Map<HTMLCanvasElement, DecodedFrame>();
 const recoveryObservers = new WeakMap<HTMLCanvasElement, (frame: DecodedFrame) => void>();
-const cpuFallback = new WeakSet<HTMLCanvasElement>();
 export function bindPresentationResources(canvas: HTMLCanvasElement, resources: SessionResources, recovered?: (frame: DecodedFrame) => void) {
   captureBudgets.set(canvas, resources);
   if (recovered) recoveryObservers.set(canvas, recovered);
 }
-function hasOpaquePicture(frame: DecodedFrame) {
-  if (frame.kind === 'yuv') return true; // The raw-plane renderer emits opaque RGB.
-  if (frame.kind !== 'video-sample' || frame.sample?.rotation !== 0 || presentationColor(frame.kind, frame.description).canvasConversion) return false;
-  const format = frame.description.format ?? '';
-  return /^(I(420|422|444)(P10|P12)?|NV12|RGBX|BGRX)$/.test(format);
-}
-
-function createFallbackSurface(canvas: HTMLCanvasElement, frame: DecodedFrame) {
-  let surface: ReturnType<typeof createPresentationSurface> = null;
-  try {
-    surface = createPresentationSurface(canvas, () => {
-      if (!surface || surfaces.get(canvas) !== surface) return;
-      cpuFallback.add(canvas);
-      recoverFrame(canvas, true);
-    }, cpuFallback.has(canvas), hasOpaquePicture(frame));
-  } catch (error) {
-    if (cpuFallback.has(canvas)) throw error;
-    cpuFallback.add(canvas);
-    log.warn('media', 'WebGL 初始化失败，使用兼容画布。', { reason: String(error) });
-    surface = createPresentationSurface(canvas, undefined, true);
-  }
-  if (surface) surfaces.set(canvas, surface);
-  return surface;
-}
-/** Change only presentation: preserve decoded-frame identity and existing GPU uploads. */
+/** Reuse uploaded planes without decoding or changing frame identity. */
 export function redrawPresentationChannel() {
-  const failures: unknown[] = [];
   for (const [canvas, frame] of retainedFrames) {
     if (frame.kind !== 'yuv' || !currentGeometry.get(canvas)) continue;
-    try {
-      if (!gpuRedrawChannel(canvas) && !surfaces.get(canvas)?.redrawChannel()) {
-        // CPU-only output, or a lost GPU surface, still uses our retained original planes.
-        paintFrameNow(canvas, frame, true);
-        recoveryObservers.get(canvas)?.(frame);
-      }
-      canvas.dataset.channel = getPresentationChannel();
-    } catch (error) { failures.push(error); }
+    if (!gpuRedrawChannel(canvas)) throw new Error('WebGPU 通道画面不可用。');
+    canvas.dataset.channel = getPresentationChannel();
   }
-  if (failures.length) throw new AggregateError(failures, '通道画面重绘失败。');
 }
-function recoverFrame(canvas: HTMLCanvasElement, replaceSurface = false) {
+function recoverFrame(canvas: HTMLCanvasElement) {
   const frame = retainedFrames.get(canvas);
   if (!frame || !currentGeometry.get(canvas)) return;
   try {
-    if (replaceSurface) { const surface = surfaces.get(canvas); surfaces.delete(canvas); surface?.dispose(); }
-    const geometry = currentGeometry.get(canvas)!;
-    if (!surfaces.has(canvas) && !gpuGeometry(canvas, geometry)) createFallbackSurface(canvas, frame)?.geometry(geometry);
+    gpuGeometry(canvas, currentGeometry.get(canvas)!);
     paintFrameNow(canvas, frame, true);
     recoveryObservers.get(canvas)?.(frame);
     canvas.dataset.presentationRecovery = 'ready';
-    log.info('media', '图形资源恢复后已重绘同一帧。', { canvas: canvas.id, sourcePtsUs: frame.sourcePtsUs, executor: canvas.dataset.colorExecutor });
   } catch (error) {
     canvas.dataset.presentationRecovery = 'failed';
-    log.warn('media', '图形画面恢复失败。', { canvas: canvas.id, reason: String(error) });
-    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('voidplayer:presentation-error', { detail: error }));
+    log.warn('media', 'WebGPU 画面恢复失败。', {canvas: canvas.id, reason: String(error)});
+    window.dispatchEvent(new CustomEvent('voidplayer:presentation-error', {detail: error}));
   }
 }
-observeGpuRecovery(sources => { for (const source of sources) recoverFrame(source); });
+observeGpuRecovery((sources, change) => {
+  if (change === 'restored') for (const source of sources) recoverFrame(source);
+  else {
+    for (const source of sources) source.dataset.presentationRecovery = change === 'lost' ? 'recovering' : 'failed';
+    window.dispatchEvent(new CustomEvent(change === 'lost' ? 'voidplayer:presentation-recovering' : 'voidplayer:presentation-error'));
+  }
+});
 /** Materialize source-sized pixels on demand; playback never calls this. */
 export function captureFrame(canvas: HTMLCanvasElement) {
   const resources = captureBudgets.get(canvas), bytes = canvas.width * canvas.height * 4;
@@ -210,7 +92,7 @@ export function captureFrame(canvas: HTMLCanvasElement) {
   const retained = resources?.reserve('readback', bytes, true);
   if (retained) captureLeases.set(canvas, retained);
   const scratch = resources?.reserve('readback', bytes, true);
-  try { return gpuCapture(canvas) ?? surfaces.get(canvas)?.captureSource() ?? canvas; }
+  try { return gpuCapture(canvas); }
   finally { scratch?.(); }
 }
 
@@ -303,26 +185,24 @@ export function renderThumbnailCanvas(frame: DecodedFrame, maxEdge = THUMB_MAX_E
   } catch { return null; }
 }
 
-const surfaces = new Map<HTMLCanvasElement, NonNullable<ReturnType<typeof createPresentationSurface>>>();
 const geometryObservers=new WeakMap<HTMLCanvasElement,Set<(g:PresentationGeometry|null)=>void>>();
 let currentGeometry=new WeakMap<HTMLCanvasElement,PresentationGeometry|null>();
 export function observePresentationGeometry(canvas:HTMLCanvasElement,listener:(g:PresentationGeometry|null)=>void){const set=geometryObservers.get(canvas)??new Set();set.add(listener);geometryObservers.set(canvas,set);listener(currentGeometry.get(canvas)??null);return()=>{set.delete(listener);if(!set.size)geometryObservers.delete(canvas);};}
 export function setPresentationGeometry(canvas: HTMLCanvasElement, geometry: PresentationGeometry | null) {
-  currentGeometry.set(canvas,geometry);for(const listener of geometryObservers.get(canvas)??[]){try{listener(geometry);}catch{}}
+  currentGeometry.set(canvas, geometry);
+  for (const listener of geometryObservers.get(canvas) ?? []) { try { listener(geometry); } catch {} }
   if (!geometry) {
     captureLeases.get(canvas)?.(); captureLeases.delete(canvas);
-    retainedFrames.get(canvas)?.close(); retainedFrames.delete(canvas); cpuFallback.delete(canvas);
+    retainedFrames.get(canvas)?.close(); retainedFrames.delete(canvas);
+    canvas.width = canvas.height = 1;
   }
-  if(gpuGeometry(canvas,geometry))return;
-  if (!geometry) {
-    if (surfaces.has(canvas)) { surfaces.get(canvas)!.dispose(); surfaces.delete(canvas); canvas.width = canvas.height = 1; }
-    return;
-  }
-  const frame = retainedFrames.get(canvas);
-  if (!surfaces.has(canvas) && frame) createFallbackSurface(canvas, frame);
-  surfaces.get(canvas)?.geometry(geometry);
+  gpuGeometry(canvas, geometry);
 }
 export function disposePresentation() {
   currentGeometry = new WeakMap();
-  for (const [canvas, frame] of retainedFrames) { frame.close(); cpuFallback.delete(canvas); } retainedFrames.clear();
-  for (const release of captureLeases.values()) release(); captureLeases.clear(); disposeGpuPresentation(); for (const surface of surfaces.values()) surface.dispose(); surfaces.clear(); }
+  for (const frame of retainedFrames.values()) frame.close();
+  retainedFrames.clear();
+  for (const release of captureLeases.values()) release();
+  captureLeases.clear();
+  disposeGpuPresentation();
+}

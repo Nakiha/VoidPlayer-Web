@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { playbackBenchmarksEnabled, assertBenchmarkCorrectness, verifyPlaybackPresentation } from './testing/playback-presentation.mjs';
 await mkdir('.run/playback-reports', { recursive: true });
-import { chromium, webkit } from 'playwright';
+import { chromium, webkit } from './testing/browser-engines.mjs';
 import { resolutionFlv, prerollMp4 } from './flv-resolution-fixture.ts';
 import { openGopFlv } from './open-gop-fixture.ts';
 import { startupFixture } from './flv-startup-fixture.ts';

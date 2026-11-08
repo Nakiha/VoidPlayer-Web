@@ -6,13 +6,13 @@
 
 打开“色彩与解码”，选择“自有色彩”。默认 SDR 目标将 HDR 映射为可复现的 SDR 预览；“HDR”目标在支持的屏幕、浏览器与浮点 WebGPU 环境中开启扩展输出，其余环境明确显示 SDR 预览并保留目标。假定峰值档位是算法参数，不能当作源母版或屏幕测量结果。
 
-浏览器色彩的 HDR 目标已接入原生帧 → 浏览器 float16 Display-P3 转换 → 浮点纹理复制 → WebGPU extended 输出。无需原始 YUV 读回或逐帧软件重解码；多一次转换/复制，不能称为 external texture 零拷贝直通。要求浏览器开放 `globalHDRHeadroom` 并接受 Infinity，以及真实 float16 2D 与 extended GPU 画布。当前 Chromium 默认未开放 headroom 接口时继续 SDR 兼容预览，并在“当前运行”、Agent 和本地日志显示原因；自有色彩的 HDR 输出不依赖此实验接口。软件回退交付合法 HDR 平面时可使用同一自有 HDR 输出。截图和缩略图始终是 SDR，普通图片不冒充 HDR 导出。
+浏览器色彩的 HDR 目标已接入原生帧 → 浏览器 float16 Display-P3 转换 → 浮点纹理复制 → WebGPU extended 输出。无需原始 YUV 读回或逐帧软件重解码；多一次转换/复制，不能称为 external texture 零拷贝直通。要求浏览器开放 `globalHDRHeadroom` 并接受 Infinity，以及真实 float16 2D 与 extended GPU 画布。当前 Chromium 默认未开放 headroom 接口时经过浏览器 sRGB 2D 中转后由 WebGPU 显示 SDR 预览，并在“当前运行”、Agent 和本地日志显示原因；自有色彩的 HDR 输出不依赖此实验接口。软件回退交付合法 HDR 平面时可使用同一自有 HDR 输出。截图和缩略图始终是 SDR，普通图片不冒充 HDR 导出。
 
 ## 数学与资源
 
 - `hdr-policy.ts`：明确的实际资源准入、别名和版本化策略。只接受有 BT.2020 primaries、BT.2020 NCL matrix、PQ/HLG、明确 range、10/12/14/16-bit 的实际平面；不从容器标签还原 RGBA8 或补未知字段。
 - `hdr-color.ts` / `hdr-shader.ts`：PQ EOTF → 绝对 cd/m²；HLG 逆 OETF → 场景光，再按场景亮度执行 OOTF → 显示光。HLG 不逐通道独立 gamma。
-- SDR 策略 `voidplayer-hdr-sdr-preview-v1`：扩展 Reinhard 亮度映射、线性 BT.2020→709、朝映射亮度去饱和以压缩色域、sRGB 编码。CPU、GLSL、WGSL 使用同一规则。
+- SDR 策略 `voidplayer-hdr-sdr-preview-v1`：扩展 Reinhard 亮度映射、线性 BT.2020→709、朝映射亮度去饱和以压缩色域、sRGB 编码。CPU 参考、WGSL 使用同一规则。
 - 默认源峰值 1000、曝光白 203、HLG 参考显示 1000 nits、gamma 1.2。203 是算法曝光参数，不表示 SDR 映射后保留 203 nits。超过假定源峰值会饱和到输出白；参数随工作区保存。
 - 自有 HDR 输出：Display-P3、rgba16float、extended canvas；显示光除以显式参考白 hdrWhiteNits（默认 203、范围 80–400），扩展 P3 编码保留 >1 高亮，色域外负通道钳制。不会先执行 SDR tone mapping；浏览器/系统处理最终显示动态范围。
 
@@ -28,7 +28,7 @@ UI 和 Agent 的 `set_review_color_output` 都使用 `session.setColorOutput`。
 
 ## 验证
 
-- `npm run test:hdr:color`：标准亮度锚点、HLG 彩色 OOTF、单调灰阶、色域/亮度约束、原始平面精度和标签准入；Chromium WebGL/WebGPU、WebKit WebGL 每个浏览器 794 个向量 × 3 组策略。SDR 最大误差预算为 1 个 8-bit 码值，显示光浮点相对误差预算 0.001。
+- `npm run test:hdr:color`：标准亮度锚点、HLG 彩色 OOTF、单调灰阶、色域/亮度约束、原始平面精度和标签准入；Chromium/WebKit WebGPU 每个浏览器 794 个向量 × 3 组策略。SDR 最大误差预算为 1 个 8-bit 码值，显示光浮点相对误差预算 0.001。
 - 扩展画布测试模拟 `dynamic-range: high`，读回浮点高亮 >1，验证普通截图重新执行同一 SDR 策略；内存创建的原生帧仅作为导入诊断，不能推定所有解码资源的行为。缺少 WebGPU 的显式 GPU 测试必须失败。
 - `npm run test:hdr:browser`：生成真实 10-bit PQ/HLG HEVC，验证本地/Range、seek/逐帧/尾帧、峰值修改/恢复、混合 SDR、播放、v2 工作区还原与浏览器模式降级，登记为 ci-playback 必跑用例。
 - `npm run test:presentation:browser`：包含 24 个 HDR 原始布局组合（别名 × 10/12/16-bit × planar/semiplanar），与 CPU 对照，同时覆盖原有 SDR、裁剪、旋转、采样与原生 HDR 兼容路径。

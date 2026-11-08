@@ -4,7 +4,7 @@ import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {createServer} from 'vite';
-import {webkit,chromium} from 'playwright';
+import {webkit,chromium} from './testing/browser-engines.mjs';
 import {openFFmpegMedia} from '../src/media/decoding/ffmpeg-media.ts';
 import {pixelSignature,checkSequence,checkFrame,expectedAt} from './fate-oracle.ts';
 const official=JSON.parse(await readFile(new URL('./fate-timestamp-samples.json',import.meta.url)));

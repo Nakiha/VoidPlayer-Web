@@ -130,8 +130,9 @@ try {
         const c=document.createElement('canvas');const stage=document.createElement('div');stage.className='frame-stage';stage.append(c);document.querySelector('main').append(stage);
         if(gpuMode!=='strict')return{c:stage,s:await createExternalSurface(c,gpu.device,gpuMode)};
         const {paintFrame,setPresentationGeometry}=await import('/src/presentation/presenter.ts');
+        const {initializeGpuPresentation,gpuDrain}=await import('/src/presentation/webgpu-presenter.ts');await initializeGpuPresentation([c]);
         return{c:stage,s:{errors:[],present(f,w,h){setPresentationGeometry(c,{width:w,height:h,imageWidth:w,imageHeight:h,zoom:1,offsetX:0,offsetY:0,dpr:1});paintFrame(c,f);},
-          async drain(){const gl=stage.querySelector('.frame-presentation')?.getContext('webgl');if(!gl)throw new Error('Strict benchmark requires WebGL');gl.finish();},dispose(){setPresentationGeometry(c,null);}}};
+          async drain(){await gpuDrain(c);},dispose(){setPresentationGeometry(c,null);}}};
       }));
       let count=0;const positions=modes.map(()=>0),start=performance.now();
       try{

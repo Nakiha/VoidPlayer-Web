@@ -55,8 +55,8 @@ try {
         try {
           paintFrame(source,decoded);
           if(!surface.nativeHdrAvailable){
-            let rejected=false;try{surface.present(frame);}catch{rejected=true;}
-            return {label,format:frame.format,rejected,presentation:decoded.presentation};
+            surface.present(frame);
+            return {label,format:frame.format,preview:surface.outputTarget==='sdr',presentation:decoded.presentation};
           }
           surface.present(frame);frame.close(); // Retained clone must survive caller closure.
           const pixels=await surface.captureHdrPixels(),w=sample.displayWidth,h=sample.displayHeight;
@@ -122,7 +122,7 @@ try {
         assert.ok(row.points[3][0]>row.points[2][0]+.2,'HDR highlights do not get an SDR shoulder');
         assert.ok(row.points[6][0]>row.points[6][2]&&row.points[7][1]>row.points[7][0]&&row.points[8][2]>row.points[8][1],'colored patches survive browser conversion');
       }else{
-        assert.equal(row.rejected,true);assert.equal(row.presentation.actualTarget,'sdr');
+        assert.equal(row.preview,true);assert.equal(row.presentation.actualTarget,'sdr');
         assert.equal(row.presentation.fallbackReason,'browser-hdr-headroom-unavailable');
       }
     }

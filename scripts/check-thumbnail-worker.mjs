@@ -1,7 +1,7 @@
 // Measure the actual CPU-thumbnail path, with no decoder or media URL available.
 import assert from 'node:assert/strict';
 import { createServer } from 'vite';
-import { chromium, webkit } from 'playwright';
+import { chromium, webkit } from './testing/browser-engines.mjs';
 const web = await createServer({ logLevel: 'error', server: { host: '127.0.0.1', port: 0 } });
 await web.listen();
 try {

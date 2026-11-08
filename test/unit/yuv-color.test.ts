@@ -3,9 +3,8 @@ import assert from 'node:assert/strict';
 import { resolveYuvColor, yuvToRgba, validateYuv } from '../../shared/color/yuv-color.ts';
 import { yuvFixture } from '../helpers/yuv-fixture.ts';
 import { uploadPixelBuffer } from '../../src/presentation/pixel-upload.ts';
-import { createYuvSurface } from '../../src/presentation/yuv-surface.ts';
 
-test('GPU upload copies only alignment tails and preserves strided planes with missing final padding', () => {
+test('GPU upload copies only alignment tails; truncated final padding preserves source samples', () => {
   for (const length of [1,2,3,4,7,8,9]) {
     const pixels = new Uint8Array(length + 3).fill(17).subarray(3), result = new Uint8Array(Math.ceil(length / 4) * 4);
     let borrowed = 0, copied = 0;
@@ -21,17 +20,8 @@ test('GPU upload copies only alignment tails and preserves strided planes with m
   const f = yuvFixture(8,false,false,'bt709',5,3), last = f.description.yuv!.planes.at(-1)!;
   const end = last.offset + (last.height - 1) * last.stride + last.width;
   const pixels = f.pixels.subarray(0,end), description = {...f.description,byteLength:end};
-  const uploads:Uint8Array[] = [];
-  const gl = new Proxy({MAX_TEXTURE_SIZE:1,getParameter:()=>4096,getShaderParameter:()=>true,getProgramParameter:()=>true,
-    texImage2D(...args:any[]){if(args.at(-1))uploads.push(args.at(-1));},
-    texSubImage2D(...args:any[]){uploads.push(args.at(-1));},
-  },{get(target,key){return target[key as keyof typeof target] ?? (()=>({}));}}) as unknown as WebGLRenderingContext;
-  const surface = createYuvSurface(gl);
-  try {
-    assert.equal(surface.upload(description,pixels),true);
-    assert.ok(uploads.length > 3);
-    assert.ok(uploads.every(bytes => bytes.buffer === pixels.buffer), 'No plane-sized padding allocation');
-  } finally { surface.dispose(); }
+  assert.doesNotThrow(() => validateYuv(description,pixels.byteLength));
+  assert.deepEqual(yuvToRgba(description,pixels),yuvToRgba(f.description,f.pixels));
 });
 
 test('SDR reference endpoints retain exact 8/10/12/16 bit ranges and neutral chroma',()=>{

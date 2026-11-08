@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { appendFile, cp, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { chromium } from 'playwright';
+import { chromium } from './testing/browser-engines.mjs';
 import { build } from 'vite';
 import { loadConfig } from '../server/config.ts';
 import { publishFrontend } from '../server/frontend-releases.ts';
