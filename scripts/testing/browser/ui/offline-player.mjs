@@ -67,7 +67,15 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
       await first.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
       assert.ok(await first.getByRole('button', { name: 'Installed', exact: true }).isDisabled());
     } else {
+      const notice = first.locator('.toast-message').filter({ hasText: 'File → Add to Dock' });
+      await notice.waitFor();
+      assert.match(await first.locator('#web-app-hint').innerText(), /File → Add to Dock/);
       await install.click();
+      assert.match(await first.locator('#web-app-hint').innerText(), /Finder’s Open With/);
+      await first.reload();
+      await first.locator('#settings-open').click();
+      await first.locator('#settings-tab-about').click();
+      assert.equal(await notice.count(), 0);
       assert.match(await first.locator('#web-app-hint').innerText(), /File → Add to Dock/);
       assert.equal(await first.evaluate(() => navigator.serviceWorker.getRegistration().then(Boolean)), false);
       await first.addInitScript(() => Object.defineProperty(navigator, 'standalone', { value: true }));

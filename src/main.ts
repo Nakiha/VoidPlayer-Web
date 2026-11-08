@@ -16,6 +16,7 @@ import { LocalInputError, selectVideoInputs } from './ui/video-input.ts';
 import { fileBasename } from './ui/filename.ts';
 import { AnnotationClient } from './review/annotation-client.ts';
 import { installAnnotationSync } from './ui/annotation-sync.ts';
+import { installOfflineControls } from './ui/offline-app.ts';
 import { installIdentitySettings } from './ui/identity-settings.ts';
 import { installWorkspaceTransfer, isWorkspaceFile } from './ui/workspace-transfer.ts';
 import { installThemeControls } from './ui/theme.ts';
@@ -666,6 +667,10 @@ const api = {
   subscribeState: (listener: () => void) => session.subscribe(listener),
 };
 Object.defineProperty(window, 'voidPlayer', { value: Object.freeze(api), configurable: true });
+// Capture the temporary host marker before the bridge consumes its document credential.
+if (import.meta.env.PROD && window.top === window && !document.querySelector('meta[name="voidplayer-page-bridge"]')) {
+  window.addEventListener('voidplayer:startup-ready', () => { void installOfflineControls(toasts, identitySettings.ready); }, { once: true });
+}
 installPageBridge(session,api.tools,uiEvents.signal);
 const annotationLink = new URL(location.href).searchParams;
 if (annotationLink.has('media') && !['annotation','workspace','share','review'].some(key => annotationLink.has(key))) void act(async () => {

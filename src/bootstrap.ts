@@ -1,5 +1,4 @@
 import { initializeLanguage, t, msg } from './i18n.ts';
-import { installOfflineControls } from './ui/offline-app.ts';
 export {};
 function revealApp() {
   const app = document.getElementById('app')!;
@@ -29,12 +28,9 @@ try {
     const shell = new Promise<void>(resolve => { shellReady = resolve; });
     window.addEventListener('voidplayer:shell-ready', () => shellReady(), { once: true });
     disposeLanguage = await initializeLanguage();
-    // The page bridge consumes its document credential during main module evaluation.
-    const offlineApp = import.meta.env.PROD && window.top === window && !document.querySelector('meta[name="voidplayer-page-bridge"]');
     const loaded = import('./main.ts');
     await Promise.race([shell, loaded]);
     revealApp();
-    if (offlineApp) void installOfflineControls();
     await loaded;
   }
 } catch (error) {

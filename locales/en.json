@@ -3444,9 +3444,17 @@
     "source": "已就绪，可离线打开本地视频",
     "translation": "Ready to open local videos offline"
   },
+  "pwa.safariFinder": {
+    "source": "应用会保存在个人「应用程序」文件夹。如需在 Finder 的「打开方式」中选择 VoidPlayer，请通过桌面 Chrome 或 Edge 安装。",
+    "translation": "The app is saved in your home Applications folder. To use VoidPlayer in Finder’s Open With menu, install it using desktop Chrome or Edge."
+  },
   "pwa.safariInstall": {
     "source": "在 Safari 的「文件」菜单中选择「添加到程序坞」，然后点「添加」。",
     "translation": "In Safari, choose File → Add to Dock, then click Add."
+  },
+  "pwa.safariVisit": {
+    "source": "Safari 可通过「文件 → 添加到程序坞」安装 VoidPlayer。要让 Finder 用它打开视频，请用 Chrome 或 Edge 安装。",
+    "translation": "In Safari, choose File → Add to Dock to install VoidPlayer. To open videos with it from Finder, install it using Chrome or Edge."
   },
   "pwa.unsupported": {
     "source": "当前浏览器无法保存离线资源。",
