@@ -1,0 +1,35 @@
+name: Linux browser display
+description: Supply a job-owned X display for Chromium WebGPU swapchain compositing.
+runs:
+  using: composite
+  steps:
+    - name: Ensure X display tools
+      if: runner.os == 'Linux'
+      shell: bash
+      run: sudo apt-get install -y xvfb x11-utils
+    - name: Start and verify Xvfb
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        if [ -n "${DISPLAY:-}" ]; then
+          xdpyinfo -display "$DISPLAY" > /dev/null
+          exit 0
+        fi
+        Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp > "$RUNNER_TEMP/voidplayer-xvfb.log" 2>&1 &
+        display_pid=$!
+        # The disposable runner owns this process and reaps it on job exit.
+        for attempt in {1..50}; do
+          if xdpyinfo -display :99 > /dev/null 2>&1; then
+            echo 'DISPLAY=:99' >> "$GITHUB_ENV"
+            exit 0
+          fi
+          if ! kill -0 "$display_pid" 2>/dev/null; then
+            cat "$RUNNER_TEMP/voidplayer-xvfb.log"
+            exit 1
+          fi
+          sleep 0.1
+        done
+        kill "$display_pid"
+        wait "$display_pid" || true
+        cat "$RUNNER_TEMP/voidplayer-xvfb.log"
+        exit 1

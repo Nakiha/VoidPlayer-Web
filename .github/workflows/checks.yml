@@ -128,6 +128,7 @@ jobs:
             sudo apt-get install -y ffmpeg
           fi
           npx playwright install --with-deps ${{ matrix.engine }}
+      - uses: ./.github/actions/browser-display
       - run: node scripts/run-tests.mjs ci-pr-browser --engine ${{ matrix.engine }}
         env:
           DEBUG: pw:browser

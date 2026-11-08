@@ -1,15 +1,22 @@
 import { chromium as nativeChromium, webkit, firefox } from 'playwright';
 
-// Linux software graphics uses full Chromium's new headless mode, rather than
-// the separate headless shell. Slow shader compilation has no GPU watchdog in
-// these functional checks; suite deadlines and device/resource errors still fail.
+// Linux CI pairs Dawn and the compositor on SwiftShader Vulkan under Xvfb.
+// ANGLE alone can create an adapter but lose it at getCurrentTexture().
+// Suite deadlines and device/resource errors remain fatal.
 export function chromiumLaunchOptions(options = {}, platform = process.platform) {
   if (options.headless === false) return options;
   const backend = platform === 'darwin' ? 'metal' : platform === 'win32' ? 'd3d11' : 'swiftshader';
   const software = platform === 'linux'
-    ? ['--use-gl=angle', '--enable-unsafe-swiftshader', '--disable-accelerated-video-decode', '--disable-gpu-watchdog'] : [];
+    ? ['--use-gl=angle', '--enable-unsafe-swiftshader', '--disable-accelerated-video-decode', '--disable-gpu-watchdog',
+      '--enable-gpu', '--ignore-gpu-blocklist', '--use-vulkan=swiftshader'] : [];
+  const args = [...(options.args ?? [])];
+  if (platform === 'linux') {
+    const features = args.filter(arg => arg.startsWith('--enable-features=')).flatMap(arg => arg.slice('--enable-features='.length).split(','));
+    for (let i = args.length - 1; i >= 0; i--) if (args[i].startsWith('--enable-features=')) args.splice(i, 1);
+    args.push(`--enable-features=${[...new Set([...features, 'Vulkan'])].join(',')}`);
+  }
   const channel = platform === 'linux' && !options.executablePath ? { channel: 'chromium' } : {};
-  return { ...channel, ...options, args: [...new Set([...(options.args ?? []), '--enable-unsafe-webgpu', `--use-angle=${backend}`, ...software])] };
+  return { ...channel, ...options, args: [...new Set([...args, '--enable-unsafe-webgpu', `--use-angle=${backend}`, ...software])] };
 }
 const chromium = new Proxy(nativeChromium, {
   get(target, key) {

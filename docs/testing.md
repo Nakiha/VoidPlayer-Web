@@ -4,8 +4,8 @@
 
 Linux 功能测试中的无窗口 Chromium 使用显式 SwiftShader WebGPU；macOS/Windows 使用本机图形后端，避免把硬件解码纹理跨后端导入。有窗口诊断和播放基准保留真实显卡。WebKit 播放验证使用 macOS 26，Linux WebKit 不提供播放验收；缺失 WebGPU 的明确拒绝通过能力注入单独检查。GPU/色彩测试缺少所需 adapter 直接失败，不静默当作成功。CI 不设置软件 GPU 的性能门禁。
 
-2.1.0 的 CI 修复：Linux 使用完整 Chromium 的新无窗口模式，而非独立 headless shell；显式使用 ANGLE/SwiftShader 和软件视频解码，
-关闭软件图形进程的 GPU watchdog，避免慢速 shader 编译被浏览器终止；只影响功能测试启动，真实设备丢失、资源错误和套件超时仍失败。有窗口测试、macOS/Windows 与播放基准保留原生路径。
+2.1.0 的 CI 修复：Linux 使用完整 Chromium 的新无窗口模式；Xvfb 提供临时显示，Dawn 与合成器显式共用 SwiftShader Vulkan，
+避免只启用 ANGLE 时交换纹理无法建立共享图像、getCurrentTexture 导致设备丢失。软件视频解码与关闭 GPU watchdog 仅用于这些功能检查；只影响功能测试启动，真实设备丢失、资源错误和套件超时仍失败。有窗口测试、macOS/Windows 与播放基准保留原生路径。
 分析工具条换行、区间按钮和弹出编辑器的尺寸观察只调度下一帧布局更新，复用可取消的 frame task；卸载时取消待执行更新。
 复用双引擎 Sites 与 WebKit analysis-layout 的既有素材、视口和错误断言，不增加媒体/解码循环，不忽略 ResizeObserver 错误或恢复失败提示。
 浏览器启动契约补充 Linux 软件参数、原生平台、有窗口配置、调用者参数保留与去重检查，无需启动浏览器。

@@ -22,6 +22,44 @@ function workflowJobs(source) {
     }));
 }
 
+test('every browser installation prepares its Linux display before running tests', async () => {
+  for (const name of ['checks', 'release-preview']) {
+    const source = await readFile(new URL(`../../.github/workflows/${name}.yml`, import.meta.url), 'utf8');
+    for (const [id, { body }] of Object.entries(workflowJobs(source))) {
+      const install = body.indexOf('npx playwright install --with-deps');
+      if (install < 0) continue;
+      const display = body.indexOf('uses: ./.github/actions/browser-display');
+      assert.ok(display > install, `${name}/${id}: display follows browser dependencies`);
+      assert.ok(display < body.indexOf('node scripts/run-tests.mjs', install), `${name}/${id}: display precedes tests`);
+    }
+  }
+});
+
+test('CI display setup reuses a verified display and fails when its owned server cannot start', async () => {
+  if (process.platform === 'win32') return;
+  const action = await readFile(new URL('../../.github/actions/browser-display/action.yml', import.meta.url), 'utf8');
+  const script = /      run: \|\n([\s\S]*)/.exec(action)[1].replace(/^        /gm, '');
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'vp-ci-display-'));
+  try {
+    const envFile = path.join(directory, 'env'), trace = path.join(directory, 'started');
+    await writeFile(path.join(directory, 'Xvfb'), '#!/bin/bash\necho started > "$DISPLAY_TRACE"\nexit 1\n', {mode:0o755});
+    await writeFile(path.join(directory, 'xdpyinfo'), '#!/bin/bash\nexit "$DISPLAY_STATUS"\n', {mode:0o755});
+    const run = (display, status) => spawnSync('bash', ['-e', '-o', 'pipefail', '-c', script], {
+      encoding: 'utf8', timeout: 10000,
+      env: { ...process.env, PATH: `${directory}:${process.env.PATH}`, RUNNER_TEMP: directory, GITHUB_ENV: envFile,
+        DISPLAY: display, DISPLAY_STATUS: String(status), DISPLAY_TRACE: trace },
+    });
+    assert.equal(run(':123', 0).status, 0);
+    await assert.rejects(stat(trace), {code:'ENOENT'});
+    assert.notEqual(run(':123', 1).status, 0, 'an unusable inherited display is rejected');
+    assert.notEqual(run('', 1).status, 0, 'a failed X server cannot make the step green');
+    assert.equal((await readFile(trace, 'utf8')).trim(), 'started');
+    await assert.rejects(stat(envFile), {code:'ENOENT'});
+    assert.equal(run('', 0).status, 0);
+    assert.equal(await readFile(envFile, 'utf8'), 'DISPLAY=:99\n');
+  } finally { await rm(directory, {recursive:true,force:true}); }
+});
+
 test('daily verification is bounded and full release verification is explicit', async () => {
   const read = name => readFile(new URL(`../../.github/workflows/${name}.yml`, import.meta.url), 'utf8');
   const daily = await read('checks'), release = await read('release-preview'), cores = await read('prepare-cores');
