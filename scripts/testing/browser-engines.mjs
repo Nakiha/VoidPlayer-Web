@@ -1,14 +1,15 @@
 import { chromium as nativeChromium, webkit, firefox } from 'playwright';
 
-// Software graphics on Linux CI can exceed Chromium's GPU watchdog during
-// shader compilation. Keep that watchdog off only in these headless functional
-// checks; the suite still owns its deadline and fails on device/resource errors.
+// Linux software graphics uses full Chromium's new headless mode, rather than
+// the separate headless shell. Slow shader compilation has no GPU watchdog in
+// these functional checks; suite deadlines and device/resource errors still fail.
 export function chromiumLaunchOptions(options = {}, platform = process.platform) {
   if (options.headless === false) return options;
   const backend = platform === 'darwin' ? 'metal' : platform === 'win32' ? 'd3d11' : 'swiftshader';
   const software = platform === 'linux'
     ? ['--use-gl=angle', '--enable-unsafe-swiftshader', '--disable-accelerated-video-decode', '--disable-gpu-watchdog'] : [];
-  return { ...options, args: [...new Set([...(options.args ?? []), '--enable-unsafe-webgpu', `--use-angle=${backend}`, ...software])] };
+  const channel = platform === 'linux' && !options.executablePath ? { channel: 'chromium' } : {};
+  return { ...channel, ...options, args: [...new Set([...(options.args ?? []), '--enable-unsafe-webgpu', `--use-angle=${backend}`, ...software])] };
 }
 const chromium = new Proxy(nativeChromium, {
   get(target, key) {

@@ -129,6 +129,8 @@ jobs:
           fi
           npx playwright install --with-deps ${{ matrix.engine }}
       - run: node scripts/run-tests.mjs ci-pr-browser --engine ${{ matrix.engine }}
+        env:
+          DEBUG: pw:browser
       - uses: actions/upload-artifact@v7
         if: always()
         with:

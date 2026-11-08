@@ -12,6 +12,7 @@ import { chromiumLaunchOptions } from '../../scripts/testing/browser-engines.mjs
 test('software graphics flags stay in Linux headless checks and preserve caller launch options', () => {
   const options = { headless: true, timeout: 1234, args: ['--no-sandbox', '--enable-unsafe-webgpu'] };
   const linux = chromiumLaunchOptions(options, 'linux');
+  assert.equal(linux.channel, 'chromium');
   assert.equal(linux.timeout, 1234);
   for (const flag of ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--disable-accelerated-video-decode', '--disable-gpu-watchdog'])
     assert.ok(linux.args.includes(flag), flag);
@@ -19,6 +20,7 @@ test('software graphics flags stay in Linux headless checks and preserve caller 
   assert.deepEqual(options.args, ['--no-sandbox', '--enable-unsafe-webgpu']);
   for (const [platform, backend] of [['darwin', 'metal'], ['win32', 'd3d11']]) {
     const native = chromiumLaunchOptions(options, platform);
+    assert.equal(native.channel, undefined);
     assert.ok(native.args.includes(`--use-angle=${backend}`));
     assert.ok(!native.args.includes('--disable-gpu-watchdog'));
     assert.ok(!native.args.includes('--disable-accelerated-video-decode'));
@@ -26,6 +28,8 @@ test('software graphics flags stay in Linux headless checks and preserve caller 
   const visible = { ...options, headless: false };
   assert.equal(chromiumLaunchOptions(visible, 'linux'), visible);
   assert.ok(chromiumLaunchOptions({}, 'linux').args.includes('--disable-gpu-watchdog'));
+  assert.equal(chromiumLaunchOptions({ channel: 'chrome' }, 'linux').channel, 'chrome');
+  assert.equal(chromiumLaunchOptions({ executablePath: '/custom/chromium' }, 'linux').channel, undefined);
 });
 
 async function scenario(body) {
