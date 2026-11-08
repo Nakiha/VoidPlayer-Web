@@ -39,3 +39,26 @@
 修复前后日志分别为 `.run/sites-online/import-before.log` 与 `.run/sites-online/import-after.log`。
 线上资源报告为 `.run/sites-online/assets.json`，截图在 `.run/sites-online/`；
 这些证据只代表本次浏览器与短样片，不替代其他浏览器、大文件或性能验收。
+
+## 2026-11-09 修正版复验
+
+修正版已部署到同一私有站点，部署状态为 `succeeded`：
+
+- 应用提交：`f3fd62c1524ec8fb829cee6b88744d55b31ece37`。
+- Sites 源码提交：`9416fa4decec028bef4c1e20bccc1e89bd1854b3`。
+- 部署 ID：`appgdep_6af09c1d3c508191b5ea29c7b9af625a`。
+- 线上组合选择器允许同时选择工作区与原视频，实测恢复三轨、一条标注、
+  `300000 µs` 位置、工作区名以及 `local` 片源搜索；恢复后可见标注卡片。
+- HTTPS 安全上下文为真，`crossOriginIsolated` 和 SharedArrayBuffer 为假；
+  FFV1、AVI 均采用现有单线程 core，未增加服务端解码或视频上传路径。
+
+三轨 30 fps / 2 秒小尺寸合成片的线上播放检查通过：每轨实际绘制 59 帧、
+零丢帧，约 0.999 倍速；P95 绘制间隔约 35 ms、最长约 37 ms，暂停约 1.4 ms，
+暂停后无迟到画面。原 10 fps 片的 P95 自然约 103 ms，触发固定 75 ms 门槛；
+这是素材帧率与门槛不匹配，保留原始失败报告，不据此修改性能门槛或声称播放回归。
+这轮实测不代表大文件、高分辨率或其他机器的性能验收。
+
+证据：`.run/sites-online/playback.json`、`.run/sites-online/playback30.json`、
+`.run/sites-online/final.jpg`；本地 Sites 双浏览器回归、完整版基础 WebKit 回归、
+快速套件 65/65、构建及格式检查均通过。最终 UI 验收使用内置浏览器，
+不把先前本机 WebKit/Chromium 的静态服务回归描述为两种浏览器均已在线实测。
