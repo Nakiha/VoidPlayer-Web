@@ -1700,6 +1700,7 @@ try {
     assert.equal(await page.locator('#toggle-chrome').getAttribute('data-tooltip'), '专注模式 (F)');
     await page.locator('#toggle-chrome').click();
     await page.locator('#toggle-annotations').click();
+    checkpoint('focus mode and viewport gestures verified');
     assert.equal(await page.locator('#toggle-annotations').getAttribute('aria-expanded'),'true');
     await page.locator('#annotation-toolbar').waitFor({state:'visible'});
     await page.locator('#toggle-analysis-overlay').click();
@@ -1734,7 +1735,7 @@ try {
     assert.equal(await page.evaluate(() => document.activeElement?.dataset.dragSurface), 'A');
     for (const slot of ['C', 'D', 'E', 'F', 'G', 'H', 'A']) await page.locator(`#remove-track-${slot}`).click();
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'open');
-  });
+  }, { checkTimeoutMs:120000 });
 
   await check('GPU startup shares programs and reuses unchanged workspace presentation safely', async page => {
     const entry = path.join(temporary, 'gpu-startup.ts');

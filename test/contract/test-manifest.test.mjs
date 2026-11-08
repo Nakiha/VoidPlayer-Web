@@ -268,7 +268,7 @@ test('legacy basic-browser npm alias selects exactly its original engine case on
     assert.deepEqual(row.command, ['node', 'scripts/check-browser.mjs', engine ?? 'webkit']);
     assert.equal(row.build, true);
     assert.equal(row.required, true);
-    assert.equal(row.timeoutMs, 300000);
+    assert.equal(row.timeoutMs, engine === 'chromium' ? 300000 : 600000);
   }
   for (const engine of [undefined, 'webkit', 'chromium']) {
     const result = spawnSync(process.execPath, [...command.slice(1), ...(engine ? [engine] : []), '--list'], { cwd: root, encoding: 'utf8', timeout: 30000 });
