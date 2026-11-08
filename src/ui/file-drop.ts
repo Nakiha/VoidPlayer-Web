@@ -27,14 +27,54 @@ function droppedItems(transfer: DataTransfer): Promise<LocalItem<FsFileHandle>[]
   })).then(results => results.filter(item => item !== null));
 }
 
-/** Keep File access inside the drop event, before the browser protects it again. */
-export function bindFileDrop(root: EventTarget, options: {
-  document?: { accepts(files: File[]): boolean; load(files: File[]): Promise<void> };
+type FileOrigin = 'drop' | 'launch';
+export interface LocalFileActions {
+  document?: { accepts(files: File[]): boolean; load(files: File[], origin: FileOrigin): Promise<void> };
   loaded(): Slot[];
-  hover(slots: Slot[], nonVideo?: boolean): void;
-  load(files: File[], slots: Slot[], handles?: (FsFileHandle | undefined)[]): Promise<void>;
+  load(files: File[], slots: Slot[], handles: (FsFileHandle | undefined)[], origin: FileOrigin): Promise<void>;
   error(error: unknown): void;
-}) {
+}
+
+async function openItems(items: LocalItem<FsFileHandle>[], actions: LocalFileActions, origin: FileOrigin) {
+  const documents: File[] = [];
+  const videos = items.filter(item => {
+    if ('file' in item && actions.document?.accepts([item.file])) { documents.push(item.file); return false; }
+    return true;
+  });
+  const accepted = await selectVideoInputs(videos, actions.error);
+  const files = accepted.map(item => item.file);
+  log.info('ui', origin === 'drop' ? '接收文件拖入' : '接收系统打开的文件', { files, documents });
+  if (documents.length && actions.document) {
+    try { await actions.document.load([...documents, ...files], origin); return; }
+    catch (error) {
+      if (!(error instanceof LocalInputError)) throw error;
+      actions.error(error);
+    }
+  }
+  if (files.length) await actions.load(files, dropSlots(files.length, actions.loaded()), accepted.map(item => item.handle), origin);
+}
+
+interface FileLaunchQueue { setConsumer(consume: (launch: { files: readonly FsFileHandle[] }) => void): void }
+export function bindFileLaunch(actions: LocalFileActions, ready: Promise<void>, signal: AbortSignal) {
+  const queue = (window as Window & { launchQueue?: FileLaunchQueue }).launchQueue;
+  if (!queue) return;
+  let pending = ready;
+  queue.setConsumer(({ files }) => {
+    if (!files.length || signal.aborted) return;
+    pending = pending.then(async () => {
+      if (signal.aborted) return;
+      const items = await Promise.all(files.map(async (handle): Promise<LocalItem<FsFileHandle>> => {
+        if (handle.kind === 'directory') return { directory: handle.name };
+        try { return { file: await handle.getFile(), handle }; }
+        catch { return { unreadable: handle.name }; }
+      }));
+      if (!signal.aborted) await openItems(items, actions, 'launch');
+    }).catch(actions.error);
+  });
+}
+
+/** Keep File access inside the drop event, before the browser protects it again. */
+export function bindFileDrop(root: EventTarget, options: LocalFileActions & { hover(slots: Slot[], nonVideo?: boolean): void }) {
   let depth = 0;
   const clear = () => { depth = 0; options.hover([]); };
   const isFile = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes('Files');
@@ -58,22 +98,7 @@ export function bindFileDrop(root: EventTarget, options: {
     void (async () => {
       const items = await droppedItems(event.dataTransfer!);
       if (!items.length) throw new LocalInputError(t(msg('input.emptyDrop', '未收到可打开的文件。请直接拖入视频文件。')));
-      const documents: File[] = [];
-      const videos = items.filter(item => {
-        if ('file' in item && options.document?.accepts([item.file])) { documents.push(item.file); return false; }
-        return true;
-      });
-      const accepted = await selectVideoInputs(videos, options.error);
-      const files = accepted.map(item => item.file);
-      log.info('ui', '接收文件拖入', { files, documents });
-      if (documents.length && options.document) {
-        try { await options.document.load([...documents, ...files]); return; }
-        catch (error) {
-          if (!(error instanceof LocalInputError)) throw error;
-          options.error(error);
-        }
-      }
-      if (files.length) await options.load(files, dropSlots(files.length, options.loaded()), accepted.map(item => item.handle));
+      await openItems(items, options, 'drop');
     })().catch(options.error);
   };
   const handlers = { dragenter: enter, dragover: over, dragleave: leave, drop, dragend: clear };

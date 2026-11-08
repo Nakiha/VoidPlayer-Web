@@ -35,6 +35,14 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
     if (engine === 'chromium') {
       const session = await context.newCDPSession(first);
       assert.deepEqual((await session.send('Page.getInstallabilityErrors')).installabilityErrors, []);
+      const parsed = await session.send('Page.getAppManifest');
+      assert.deepEqual(parsed.errors, []);
+      const [handler] = JSON.parse(parsed.data).file_handlers;
+      assert.equal(new URL(handler.action, base).href, base + '/?open=files');
+      assert.equal(parsed.manifest.launchHandler.clientMode, 'kNavigateNew');
+      const extensions = Object.values(handler.accept).flat();
+      for (const ext of ['.voidplayer', '.mp4', '.mkv']) assert.ok(extensions.includes(ext));
+      for (const ext of ['.ts', '.gz', '.json']) assert.ok(!extensions.includes(ext));
       await session.detach();
       await first.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
     } else {
@@ -56,7 +64,11 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
     await service.close();
     service = undefined;
     const offline = await context.newPage();
-    const navigation = await offline.goto(base + '/?pwa-test=offline');
+    if (engine === 'chromium') await offline.addInitScript(() => {
+      // Supply the OS delivery boundary without changing the host's default applications.
+      Object.defineProperty(window, 'launchQueue', { value: { setConsumer(fn) { window.deliverFiles = fn; } } });
+    });
+    const navigation = await offline.goto(base + (engine === 'chromium' ? manifest.file_handlers[0].action : '/?pwa-test=offline'));
     assert.equal(navigation.fromServiceWorker(), true);
     await offline.locator('#settings-open').waitFor({ state: 'visible' });
     await offline.locator(status('ready')).waitFor({ state: 'attached' });
@@ -70,7 +82,16 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
     await assert.rejects(admin.goto(base + '/admin'));
     await admin.close();
     const fixture = path.resolve('fixtures/video/ffv1_yuv422p_8bit.mkv');
-    await offline.locator('#file-A').setInputFiles(fixture);
+    if (engine === 'chromium') {
+      await offline.evaluate(async encoded => {
+        const root = await navigator.storage.getDirectory();
+        const video = await root.getFileHandle('offline-clip.mkv', { create: true });
+        const stream = await video.createWritable();
+        await stream.write(Uint8Array.from(atob(encoded), ch => ch.charCodeAt(0)));
+        await stream.close();
+        window.deliverFiles({ files: [video] });
+      }, (await readFile(fixture)).toString('base64'));
+    } else await offline.locator('#file-A').setInputFiles(fixture);
     await offline.waitForFunction(() => window.voidPlayer.getState().tracks[0]?.frame, null, { timeout: 45000 });
     assert.equal(await offline.evaluate(() => window.voidPlayer.getState().tracks[0].decoder), 'ffmpeg-wasm');
     const next = await offline.evaluate(async () => {
@@ -78,6 +99,22 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
       return window.voidPlayer.getState().positionUs;
     });
     assert.ok(next > 0, 'offline local file can advance a frame');
+    if (engine === 'chromium') {
+      await offline.evaluate(async () => {
+        const workspace = window.voidPlayer.exportWorkspace();
+        workspace.positionUs = 0;
+        const root = await navigator.storage.getDirectory();
+        const doc = await root.getFileHandle('review.voidplayer', { create: true });
+        const stream = await doc.createWritable();
+        await new Blob([JSON.stringify(workspace)]).stream().pipeThrough(new CompressionStream('gzip')).pipeTo(stream);
+        window.deliverFiles({ files: [doc, await root.getFileHandle('offline-clip.mkv')] });
+      });
+      await offline.waitForFunction(() => {
+        const state = window.voidPlayer.getState();
+        return state.positionUs === 0 && state.tracks.length === 1 && state.tracks[0].name === 'offline-clip.mkv' && state.tracks[0].frame;
+      });
+      await offline.evaluate(() => window.voidPlayer.step(1));
+    }
     const initial = await offline.evaluate(async () => {
       const [cacheName] = await caches.keys();
       const keys = (await (await caches.open(cacheName)).keys()).map(key => new URL(key.url));

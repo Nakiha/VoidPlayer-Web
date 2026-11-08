@@ -62,7 +62,7 @@ import { formatTime } from '../shared/review/model.ts';
 import type { Slot } from '../shared/review/model.ts';
 import { registerReviewTools, reviewTools } from './agent.ts';
 import {installPageBridge} from './agent/page-bridge.ts';
-import { bindFileDrop } from './ui/file-drop.ts';
+import { bindFileDrop, bindFileLaunch, type LocalFileActions } from './ui/file-drop.ts';
 import { installFileDropFeedback } from './ui/file-drop-feedback.ts';
 import { handleKey, saveFileHandle } from './services/file-handles.ts';
 import type { FsFileHandle } from './services/file-handles.ts';
@@ -434,20 +434,22 @@ async function importFiles(files: File[], handles?: (FsFileHandle | undefined)[]
   }
 }
 const dropFeedback = installFileDropFeedback(document.querySelector<HTMLElement>('.viewport-surface')!);
-const unbindDrop = bindFileDrop(document.body, {
+const fileActions: LocalFileActions = {
   document: {
     accepts: files => files.some(isWorkspaceFile),
-    load: files => traceOperation('ui', 'workspace.drop', {trigger:inputTrigger}, async () => {
+    load: (files, origin) => traceOperation('ui', `workspace.${origin}`, { trigger: origin === 'launch' ? 'system' : inputTrigger }, async () => {
       const documents = files.filter(isWorkspaceFile);
       if (documents.length !== 1) throw new Error(tr(msg('player.openOneWorkspaceFileAtATime', '每次请打开一个工作区文件。')));
       await workspaceTransfer.importFile(documents[0], files.filter(f => !isWorkspaceFile(f)));
     }),
   },
   loaded: () => session.getState().tracks.map(track => track.slot),
-  hover: (slots, nonVideo) => dropFeedback.show(slots, nonVideo),
-  load: (files, slots, handles) => act(() => importFiles(files, handles), 'files.drop', { files, slots }),
-  error: error => { if (!(error instanceof LocalInputError)) log.warn('ui', '拖入文件失败', {error}); showError(error); },
-});
+  load: (files, slots, handles, origin) => act(() => importFiles(files, handles), `files.${origin}`, { files, slots }),
+  error: error => { if (!(error instanceof LocalInputError)) log.warn('ui', '打开本地文件失败', {error}); showError(error); },
+};
+const unbindDrop = bindFileDrop(document.body, { ...fileActions, hover: (slots, nonVideo) => dropFeedback.show(slots, nonVideo) });
+if (import.meta.env.PROD && window.top === window && location.pathname === '/' && location.search === '?open=files'
+    && !document.querySelector('meta[name="voidplayer-page-bridge"]')) bindFileLaunch(fileActions, identitySettings.ready, uiEvents.signal);
 for (const slot of SLOTS) {
   $<HTMLInputElement>(`file-${slot}`).onchange = event => {
     const input = event.target as HTMLInputElement; const file = input.files?.[0]; input.value = '';
