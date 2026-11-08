@@ -2166,11 +2166,14 @@ try {
     await page.locator('#toggle-sources').click();
     await page.locator('#library-location').fill('no-file-matches-this');
     await page.locator('#library-recents .panel-empty').waitFor();
-    const offsets = [];
+    const offsets = [], refreshes = [];
     await page.route('**/api/library/browse?*', async route => {
       const url = new URL(route.request().url());
       if (url.searchParams.get('root') !== nested.rootId || url.searchParams.get('directory') !== 'review/shots') return route.continue();
-      const offset = Number(url.searchParams.get('offset') ?? 0); offsets.push(offset);
+      const offset = Number(url.searchParams.get('offset') ?? 0);
+      // A revision-qualified first page revalidates the loaded view; it is not
+      // another locate. Pagination still must visit exactly offsets 0 and 60.
+      (offset === 0 && url.searchParams.has('revision') ? refreshes : offsets).push(offset);
       const response = await route.fetch(), data = await response.json();
       const entries = offset === 0 ? Array.from({length:60}, (_, i) => ({...nested, id:`decoy-${i}`, name:`review/shots/decoy-${i}.mp4`})) : [nested];
       await route.fulfill({response, json:{...data, entries, directories:[], total:61, offset, nextOffset:offset === 0 ? 60 : null}});
@@ -2191,8 +2194,22 @@ try {
       const box = await row.boundingBox(), list = await page.locator('#source-list').boundingBox(), foot = await page.locator('#source-foot').boundingBox();
       assert.ok(box.y >= list.y && box.y + box.height <= foot.y + 1, 'located file is visible above the footer');
       assert.equal(await page.locator('#source-activity-details').isVisible(), false, 'locating keeps the details folded');
+      if (slot === 'B') {
+        const refresh = page.waitForResponse(response => {
+          const url = new URL(response.url());
+          return url.pathname === '/api/library/browse' && url.searchParams.get('root') === nested.rootId
+            && url.searchParams.get('directory') === 'review/shots' && url.searchParams.get('offset') === '0'
+            && url.searchParams.has('revision');
+        });
+        // Exercise the existing background refresh while the located view is open.
+        await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+        await refresh;
+        await page.waitForFunction(() => document.querySelector('#source-list')?.getAttribute('aria-busy') === 'false');
+        assert.equal(await page.locator('#source-list .source-row.is-located .filename').textContent(), 'path-tooltip.mp4');
+      }
     }
     assert.deepEqual(offsets, [0, 60], 'locate automatically reaches files beyond the first page');
+    assert.ok(refreshes.length > 0, 'background refresh is exercised without discarding the located row');
     await page.locator('#remove-track-B').click();
     await page.waitForFunction(() => document.querySelector('#source-list .source-track-badges')?.textContent === 'C');
     await page.screenshot({ path: path.join(screenshots, `${browserName}-source-locate-badges.png`) });
