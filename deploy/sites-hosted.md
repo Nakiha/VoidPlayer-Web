@@ -1,11 +1,12 @@
 # Sites 部署与线上验收
 
 站点：[VoidPlayer 本地视频评审](https://voidplayer-local-review.akanemeguri1296.chatgpt.site)。
-访问范围为所有者私有，通过 ChatGPT 登录；没有开启公众访问。
+当前访问范围为公开：任何取得链接的人都可以打开播放器，无需 ChatGPT 登录。
+2026-11-09 按用户要求由所有者私有改为公开；下文私有访问结果为首次上线时的历史记录。
 
 - Site ID：`appgprj_6af0985045708191bd98833d76761fad`。
 - 部署专用源码目录：`artifacts/sites-hosted/`；绑定身份在该目录的 `.openai/hosting.json`。
-- 上游实现分支：`codex/sites-local-player`。
+- 上游实现已合入 `main`；原实现分支为 `codex/sites-local-player`。
 - 便携构建目录仍为 `artifacts/sites/`，不携带已注册 Site 的身份。
 
 后续更新复用同一 Site 和专用源码仓库，不重复注册。先构建并验证本地静态版，
@@ -62,3 +63,12 @@
 `.run/sites-online/final.jpg`；本地 Sites 双浏览器回归、完整版基础 WebKit 回归、
 快速套件 65/65、构建及格式检查均通过。最终 UI 验收使用内置浏览器，
 不把先前本机 WebKit/Chromium 的静态服务回归描述为两种浏览器均已在线实测。
+
+## 2026-11-09 主干与公开访问
+
+实现与验收记录已快进合入并推送到 `origin/main`（合入点 `6b39dc3d`）。
+现有 Site 的访问策略更新为 `public`，策略修订为 2，没有重新创建站点或修改部署代码。
+匿名 HTTP 请求未携带 Cookie、Authorization 或 Sites 服务凭据，首页返回 200、
+`text/html`，包含播放器应用 shell 与启动脚本，不含登录门禁。
+验证结果保存在 `.run/sites-online/public-access.json`。
+公开访问仅改变网页的可访问范围，访客本地视频与标注仍在各自浏览器内处理。
