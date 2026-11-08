@@ -599,6 +599,16 @@ try {
   // 帧号查询的占位与结果不得在临界宽度下反复触发表头换行。
   await page.evaluate(() => window.voidPlayer.tools.find(t => t.name === 'seek_review').execute({ptsUs:800000}));
   await page.waitForFunction(() => [...document.querySelectorAll('#analysis-status-items .st-num')].every(button => !button.disabled));
+  const headingAppearance = () => page.locator('#pts-A, #pts-B').evaluateAll(buttons => buttons.map(button => {
+    const style = getComputedStyle(button); return {color:style.color, background:style.backgroundColor};
+  }));
+  await page.mouse.move(0, 0); await settleAppearance(page);
+  const timeAppearance = await headingAppearance();
+  await page.locator('#pts-A').click();
+  await page.waitForFunction(() => ['A', 'B'].every(slot => /^PTS#\d+$/.test(document.getElementById(`pts-${slot}`).textContent)
+    && document.getElementById(`pts-${slot}`).getAttribute('aria-busy') === 'false'));
+  await page.mouse.move(0, 0); await settleAppearance(page);
+  assert.deepEqual(await headingAppearance(), timeAppearance, 'PTS mode keeps the same neutral text and background as time mode');
   let wrapWidth = 600, inlineWidth = 1280;
   while (inlineWidth - wrapWidth > 1) {
     const width = Math.floor((wrapWidth + inlineWidth) / 2);
@@ -619,11 +629,15 @@ try {
     window.frameNumberButtons = [...document.querySelectorAll('#analysis-status-items .st-num')];
     const sample = () => window.frameNumberLayouts.push({
       header:document.querySelector('.analysis-head').getBoundingClientRect().height,
+      headings:['A', 'B'].map(slot => { const button = document.getElementById(`pts-${slot}`); return {
+        text:button.textContent, width:button.getBoundingClientRect().width, pending:button.getAttribute('aria-busy') === 'true',
+      }; }),
       items:[...document.querySelectorAll('#analysis-status-items .st-num')].map((button, i) => ({text:button.textContent, width:button.getBoundingClientRect().width,
         pending:button.getAttribute('aria-busy') === 'true', disabled:button.disabled, retained:button === window.frameNumberButtons[i]})),
     });
     window.frameNumberObserver = new MutationObserver(sample);
     window.frameNumberObserver.observe(document.querySelector('#analysis-status-items'), {childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:['aria-busy']});
+    for (const slot of ['A', 'B']) window.frameNumberObserver.observe(document.getElementById(`pts-${slot}`), {childList:true, characterData:true, subtree:true, attributes:true, attributeFilter:['aria-busy']});
     sample();
   });
   // 播放共存：面板打开时播放推进且无错误。
@@ -639,7 +653,10 @@ try {
   assert.ok(frameNumberLayouts.some(layout => layout.items.some(item => item.pending)), 'observe ranks while asynchronous lookup is pending');
   assert.ok(frameNumberLayouts.every(layout => layout.items.every(item => /^#\d+$/.test(item.text) && !item.disabled)), 'playback retains confirmed numbers while waiting for ranks');
   assert.ok(frameNumberLayouts.every(layout => layout.items.every(item => item.retained)), 'frame updates retain number buttons and their focus/hover state');
+  assert.ok(frameNumberLayouts.some(layout => layout.headings.some(item => item.pending)), 'header ranks are observed while pending');
+  assert.ok(frameNumberLayouts.every(layout => layout.headings.every(item => /^PTS#\d+$/.test(item.text))), 'headers retain valid ranks during playback');
   await page.waitForFunction(() => [...document.querySelectorAll('#analysis-status-items .st-num')].every(button => button.getAttribute('aria-busy') === 'false'));
+  await page.waitForFunction(() => ['A', 'B'].every(slot => document.getElementById(`pts-${slot}`).getAttribute('aria-busy') === 'false'));
   const pausedNumbers = await page.locator('#analysis-status-items .st-num').allTextContents();
   const pausedRanks = await page.evaluate(async () => {
     const api = window.voidPlayer;
@@ -651,6 +668,15 @@ try {
     }));
   });
   assert.deepEqual(pausedNumbers, pausedRanks, 'paused frame numbers converge to the currently presented frames');
+  assert.deepEqual(await page.locator('#pts-A, #pts-B').allTextContents(), pausedRanks.map(rank => 'PTS' + rank), 'header ranks match the presented PTS order');
+  for (const index of [0, 1]) {
+    assert.ok(new Set(frameNumberLayouts.map(layout => layout.headings[index].text)).size > 1, `track ${index} header advances during playback`);
+    assert.ok(spread(frameNumberLayouts.map(layout => layout.headings[index].width)) < 1, `track ${index} header width stays stable`);
+  }
+  await page.locator('#pts-B').click();
+  for (const text of await page.locator('#pts-A, #pts-B').allTextContents()) assert.match(text, /^\d\d:\d\d\.\d\d\d$/);
+  await page.locator('#pts-A').press('Enter');
+  await page.waitForFunction(ranks => ['A', 'B'].every((slot, i) => document.getElementById(`pts-${slot}`).textContent === 'PTS' + ranks[i]), pausedRanks);
   for (const index of [0, 1]) assert.ok(spread(frameNumberLayouts.map(layout => layout.items[index].width)) < 1, `track ${index} frame-number width stays stable during playback`);
   assert.ok(spread(frameNumberLayouts.map(layout => layout.header)) < 1, 'frame-number updates do not change the number of header rows');
 
@@ -688,6 +714,7 @@ try {
     await load.execute({ id: ids['h264_9s_1920x1080.mp4'], slot: 'B' });
   }, ids);
   await page.waitForFunction(() => !document.getElementById('toggle-analysis').disabled, undefined, { timeout: 30000 });
+  await page.waitForFunction(() => ['A', 'B'].every(slot => /^PTS#\d+$/.test(document.getElementById(`pts-${slot}`).textContent)), undefined, { timeout: 15000 });
   await page.locator('#toggle-analysis').click();
   await page.waitForFunction(() => !document.getElementById('analysis-panel').hidden);
   await page.waitForFunction(() => {

@@ -21,6 +21,7 @@ import { installIdentitySettings } from './ui/identity-settings.ts';
 import { installWorkspaceTransfer, isWorkspaceFile } from './ui/workspace-transfer.ts';
 import { installThemeControls } from './ui/theme.ts';
 import { installTimeInput } from './ui/time-input.ts';
+import { installFramePositions } from './ui/frame-position.ts';
 import { parseTimeInput } from '../shared/review/time-input.ts';
 import { analysisConcurrency, ANALYSIS_CONCURRENCY_EVENT } from './ui/analysis/concurrency.ts';
 import { installSettings } from './ui/settings.ts';
@@ -112,6 +113,7 @@ const gpuReady=initializeGpuPresentation(Object.values(canvases)).catch(error =>
   log.warn('media', 'GPU 后台初始化失败，已保留现有呈现路径。', { error: error instanceof Error ? error.message : String(error) });
 });
 const session = new ReviewSession((slot, frame) => paintFrame(canvases[slot], frame));
+const framePositions = installFramePositions(session, uiEvents.signal);
 session.setBitstreamAnalysisConcurrency(analysisConcurrency());
 window.addEventListener(ANALYSIS_CONCURRENCY_EVENT, event => session.setBitstreamAnalysisConcurrency((event as CustomEvent<number>).detail), { signal: uiEvents.signal });
 session.onColorModeChange=async()=>{const {refreshGpuColorMode}=await import('./presentation/webgpu-presenter.ts');await refreshGpuColorMode();};
@@ -289,6 +291,7 @@ const channelMenu = installChoiceMenu('channel-select', () => (Object.keys(chann
 function syncZoomSelect(loaded:boolean) { zoomMenu.sync(String(viewport.zoom),`${+viewport.zoom.toFixed(2)}×`,loaded); }
 function render() {
   const state = session.getState();
+  framePositions.update(state.tracks);
   const openingWorkspace = $('app').hasAttribute('data-workspace-opening');
   const loaded = state.tracks.length > 0 || openingWorkspace;
   const visibleTracks = state.tracks.filter(t => t.visible);
@@ -341,8 +344,6 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
     const hdr = t?.color && isHdrTransfer(t.color.transfer);
     const hdrTag = hdr ? (t.presentation?.actualTarget==='hdr' ? tr(msg("player.hdrDisplay", " · HDR 输出")) : t.presentation?.actualTarget==='sdr' ? tr(msg("player.hdrSourceSdrFallback", " · HDR 源（SDR 预览）")) : tr(msg("player.hdrSource", " · HDR 源"))) : '';
     $(`meta-${slot}`).textContent = t ? `${t.width} × ${t.height} · ${t.codec} · ${t.decoder === 'ffmpeg-wasm' ? tr(msg("player.wasmSoftwareDecoding", "WASM 软件解码")) : t.hardwareAcceleration === 'prefer-hardware' ? tr(msg("player.webcodecsPreferHardware", "WebCodecs · 硬件优先")) : tr(msg("player.webcodecsBrowserDecoding", "WebCodecs · 浏览器解码"))}${hdrTag}${t.syncState ? (t.syncState === 'index-wait' ? tr(msg("player.waitingForIndexFrameNotSynchronized", " · 等待索引，画面暂未同步")) : tr(msg("player.catchingUpToPlayback", " · 正在追赶播放位置"))) : ''}${t.indexState === 'building' ? ` · ${indexProgressLabel(t)}` : t.indexState === 'error' ? tr(msg("player.indexFailed", " · 索引失败")) : t.indexWarning ? tr(msg("player.incompleteTailPlayingCompletePortion", " · 尾部不完整，播放完整部分")) : ''}` : tr(msg("player.notLoaded", "尚未载入"));
-    $(`pts-${slot}`).textContent = t?.frame ? formatTime(t.frame.ptsUs) : '—';
-    $(`pts-${slot}`).title = t?.frame ? tr(msg("player.sourceTimestampSFrameDurationS", "源时间戳 {p0} µs · 帧时长 {p1} µs"), { p0: t.frame.sourcePtsUs, p1: t.frame.durationUs }) : '';
   }
   fitTask.schedule();
   for (const button of document.querySelectorAll<HTMLButtonElement>('#layout-mode button')) {

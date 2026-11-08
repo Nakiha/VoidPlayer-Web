@@ -3560,6 +3560,14 @@
     "source": "独立显示所有轨道",
     "params": {}
   },
+  "player.showFrameTime": {
+    "source": "切换为帧时间",
+    "params": {}
+  },
+  "player.showPtsFrameNumber": {
+    "source": "切换为 PTS 序帧号",
+    "params": {}
+  },
   "player.softwareFallbackIsAnApproximationColorsMay": {
     "source": "软件回退仅近似匹配，颜色可能与原生帧不同",
     "params": {}
@@ -3582,6 +3590,14 @@
   "player.thisAnnotationIsInTheRecycleBin": {
     "source": "这条标注已在回收站",
     "params": {}
+  },
+  "player.toggleFramePosition": {
+    "source": "轨道 {slot}：{value}，{action}",
+    "params": {
+      "action": "string | number",
+      "slot": "string | number",
+      "value": "string | number"
+    }
   },
   "player.trackDisabledFrameUpdatesHaveStoppedPlease": {
     "source": "轨道 {p0} 已停用 · 画面已停止更新（{p1}），请重新载入此片源",

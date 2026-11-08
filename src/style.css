@@ -90,7 +90,7 @@ button.brand:hover, :root[data-keyboard-navigation] button.brand:focus-visible {
 .track-identity .slot { flex-shrink: 0; }
 .slot { flex: 0 0 auto; display: inline-flex; justify-content: center; align-items: center; width: 20px; height: 20px; min-height: 20px; padding: 0; border: 0; border-radius: var(--radius-small); font: 500 var(--text-sm)/1 var(--font-ui); color: var(--slot-text); background: var(--slot-a); }
 .slot-B { background: var(--slot-b); }
-.frame-time { font: var(--text-xs)/1 var(--font-mono); color: var(--viewport-muted); white-space: nowrap; }
+.frame-time { flex: 0 0 auto; min-width: calc(var(--frame-position-chars, 9) * 1ch); padding: 0; border: 0; background: transparent; font: var(--text-xs)/1 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--viewport-muted); white-space: nowrap; }
 .file-button { display: inline-flex; align-items: center; justify-content: center; width: var(--control-small-height); height: var(--control-small-height); color: var(--viewport-muted); cursor: pointer; }
 .file-button input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
 .frame-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }

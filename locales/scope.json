@@ -75,6 +75,7 @@
     "src/ui/filename.ts",
     "src/ui/floating-panels.ts",
     "src/ui/focus-feedback.ts",
+    "src/ui/frame-position.ts",
     "src/ui/frame-task.ts",
     "src/ui/header-actions.ts",
     "src/ui/icons.ts",

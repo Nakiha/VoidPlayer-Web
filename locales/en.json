@@ -3297,6 +3297,14 @@
     "source": "独立显示所有轨道",
     "translation": "Show all tracks separately"
   },
+  "player.showFrameTime": {
+    "source": "切换为帧时间",
+    "translation": "Switch to frame time"
+  },
+  "player.showPtsFrameNumber": {
+    "source": "切换为 PTS 序帧号",
+    "translation": "Switch to PTS frame number"
+  },
   "player.softwareFallbackIsAnApproximationColorsMay": {
     "source": "软件回退仅近似匹配，颜色可能与原生帧不同",
     "translation": "Software fallback is an approximation; colors may differ from native frames."
@@ -3316,6 +3324,10 @@
   "player.thisAnnotationIsInTheRecycleBin": {
     "source": "这条标注已在回收站",
     "translation": "This annotation is in the recycle bin."
+  },
+  "player.toggleFramePosition": {
+    "source": "轨道 {slot}：{value}，{action}",
+    "translation": "Track {slot}: {value}, {action}"
   },
   "player.trackDisabledFrameUpdatesHaveStoppedPlease": {
     "source": "轨道 {p0} 已停用 · 画面已停止更新（{p1}），请重新载入此片源",
