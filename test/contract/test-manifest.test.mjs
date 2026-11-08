@@ -98,7 +98,8 @@ test('local and CI select the same applicable matrix; filters cannot fake engine
 test('CI uses the catalog for required suites and keeps platform/input matrices and informational gates', () => {
   const workflow = readFileSync(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
   for (const suite of ['source','ci-node-media','ci-analysis-ui','ci-playback','ci-cache','ci-flv','flv-startup','ci-fate','ci-https','uncovered','ci-native-node','ci-native-bun','ci-native-http','ci-native-https','ci-native-console']) {
-    assert.match(workflow, new RegExp(`scripts/run-tests\\.mjs ${suite}(?: |\\n)`));
+    if(suite==='ci-node-media')assert.match(workflow,/scripts\/run-tests\.mjs ci-node-media-\$\{\{ matrix.part \}\}/);
+    else assert.match(workflow, new RegExp(`scripts/run-tests\\.mjs ${suite}(?: |\\n)`));
     assert.ok(selectCases({ suite, platform: suite === 'ci-native-console' ? 'win32' : 'linux' }).selected.length);
   }
   assert.doesNotMatch(workflow, /npm run (?:test:|build|release)/);

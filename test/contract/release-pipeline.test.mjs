@@ -129,10 +129,15 @@ test('release workflow gates verified artifacts and draft staging on every verif
   const required = ['native-release', 'native-runtime', 'unit', 'playback', 'cache-browser', 'source-logic', 'analysis-browser', 'analysis-matrix', 'hevc-browser', 'uncovered-regressions'];
   assert.deepEqual([...jobs['release-set'].needs].sort(), required.sort());
   assert.deepEqual(jobs.unit.needs, ['cores', 'qa-media']);
-  assert.match(jobs.unit.body, /run: node scripts\/run-tests\.mjs ci-node-media\n        env:\n          VOIDPLAYER_FFMPEG_ORACLE:/);
-  assert.equal((workflow.match(/run: node scripts\/run-tests\.mjs ci-node-media(?:\n|$)/g) ?? []).length, 1, 'media Node partition runs exactly once with no case filter');
+  assert.match(jobs.unit.body, /run: node scripts\/run-tests\.mjs ci-node-media-\$\{\{ matrix.part \}\}\n        env:\n          VOIDPLAYER_FFMPEG_ORACLE:/);
+  assert.match(jobs.unit.body,/part: \[playback, containers, analysis\]/);
+  const manifest=JSON.parse(await readFile(new URL('../../scripts/testing/manifest.json',import.meta.url),'utf8'));
+  const parts=['playback','containers','analysis'];
+  const selected=parts.flatMap(part=>manifest.cases.filter(row=>row.suites.includes('ci-node-media-'+part)).map(row=>row.id));
+  assert.equal(new Set(selected).size,selected.length,'release Node partitions do not repeat cases');
+  assert.deepEqual(selected.sort(),manifest.cases.filter(row=>row.suites.includes('ci-node-media')).map(row=>row.id).sort());
   assert.doesNotMatch(jobs.playback.body, /run-tests\.mjs unit/);
-  assert.match(jobs.unit.body, /if: always\(\)[\s\S]*name: media-node-reports[\s\S]*\.run\/test-suites\/ci-node-media\//);
+  assert.match(jobs.unit.body, /if: always\(\)[\s\S]*name: media-node-reports-\$\{\{ matrix.part \}\}[\s\S]*\.run\/test-suites\/ci-node-media-\$\{\{ matrix.part \}\}\//);
 
   const dependencies = id => new Set(jobs[id].needs.flatMap(need => {
     assert.ok(jobs[need], `unknown dependency ${need}`);
