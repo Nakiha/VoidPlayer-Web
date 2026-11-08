@@ -274,3 +274,7 @@ rollback and late-source disposal remain owned by the existing restore lease.
 页面装配通过 `media/policy/frame-resources.ts` 注入当前消费者的 native resource 需求；解码准备不再导入具体 WebGPU presenter。每次取帧读取需求，browser 模式继续保留浏览器资源，reference/显式平面路径仍在媒体源背压内等待 copyTo，关闭和缓冲回收沿原 owner 完成。低层诊断入口显式装配自己的需求查询。
 
 布局、校验、可见 chroma 边界和采样统一由 `shared/color/yuv-planes.ts` 拥有，YUV 与 HDR 转换单向依赖它。`yuv-color.ts` 兼容导出保留；本次不改变矩阵、范围、传递函数、采样或数值精度。
+
+显式 `captureFrame` 的临时 WebGPU 画布须在解除配置前完成 Canvas2D 读回，避免延迟图像拷贝引用已释放的交换纹理。此同步只发生在主动取像素/预览请求，不加入逐帧呈现路径。
+
+同一呈现 surface 复用一张按需读取的临时画布，源尺寸改变时调整尺寸，清空或释放 surface 时回收。连续导出/取像素不得为每帧累积独立 GPU 画布。

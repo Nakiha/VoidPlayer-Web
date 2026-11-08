@@ -8,7 +8,8 @@ export function chromiumLaunchOptions(options = {}, platform = process.platform,
   const backend = platform === 'darwin' ? 'metal' : platform === 'win32' ? 'd3d11' : 'swiftshader';
   const software = platform === 'linux'
     ? ['--use-gl=angle', '--enable-unsafe-swiftshader', '--disable-accelerated-video-decode', '--disable-gpu-watchdog',
-      '--enable-gpu', '--ignore-gpu-blocklist', '--use-vulkan=swiftshader'] : [];
+      '--enable-gpu', '--ignore-gpu-blocklist', '--use-vulkan=swiftshader']
+    : platform==='win32'?['--enable-gpu','--ignore-gpu-blocklist']:[];
   const args = [...(options.args ?? [])];
   if (platform === 'linux') {
     const features = args.filter(arg => arg.startsWith('--enable-features=')).flatMap(arg => arg.slice('--enable-features='.length).split(','));
