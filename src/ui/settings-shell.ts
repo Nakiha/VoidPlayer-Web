@@ -1,3 +1,4 @@
+import { localOnly } from '../services/build-profile.ts';
 import { t, th, msg } from '../i18n.ts';
 import { colorSettingsShell } from './color-flow.ts';
 import { savedWorkspaceShell } from './saved-workspaces.ts';
@@ -8,11 +9,11 @@ import { ACCENTS, BASE_COLORS, customTheme } from './appearance.ts';
 import { supportsFileHandles } from '../services/file-handles.ts';
 import { shortcutLabel } from './shortcuts.ts';
 import type { Shortcut } from './shortcuts.ts';
-export const settingsPanes = () => [
+export const settingsPanes = () => ([
   ['appearance', t(msg('settingsShell.preferences', '首选项')), 'settings'], ['workspace', t(msg("settingsShell.workspace", "工作区")), 'stack'],
   ['identity', t(msg("settingsShell.user", "用户")), 'user'], ['shortcuts', t(msg("settingsShell.shortcuts", "快捷键")), 'keyboard'], ['logs', t(msg("settingsShell.logs", "日志")), 'fileText'], ['performance', t(msg("settingsShell.colorDecoding", "色彩与解码")), 'colorDecoding'],
   ['experimental', t(msg('settingsShell.experimental', '实验性功能')), 'diagnostics'], ['about', t(msg("settingsShell.about", "关于")), 'info'],
-] as const;
+] as const).filter(([key]) => !localOnly || key !== 'identity');
 const paneTitle = (title: string, description = '') => `<div class="settings-page-title"><h3>${title}</h3>${description ? `<p>${description}</p>` : ''}</div>`;
 const preferenceHelp = (id: string, text: string) =>
   `<button type="button" class="section-title-info" data-tooltip="${text}" aria-labelledby="${id}">${icon('info')}</button><span id="${id}" hidden>${text}</span>`;

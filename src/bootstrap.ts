@@ -1,4 +1,5 @@
 import { initializeLanguage, t, msg } from './i18n.ts';
+import { localOnly } from './services/build-profile.ts';
 export {};
 function revealApp() {
   const app = document.getElementById('app')!;
@@ -14,7 +15,7 @@ function revealApp() {
 // heavier warmup (GPU, library) finishes after reveal without blocking it.
 let disposeLanguage = () => {};
 try {
-  if (!globalThis.isSecureContext || location.pathname === '/connection') {
+  if (!localOnly && (!globalThis.isSecureContext || location.pathname === '/connection')) {
     disposeLanguage = await initializeLanguage();
     const { showConnectionGuide } = await import('./ui/connection-guide.ts');
     const ready = showConnectionGuide({ automatic: location.pathname !== '/connection' });

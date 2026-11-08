@@ -407,11 +407,11 @@ input.settings-choice:disabled { opacity: var(--disabled-opacity); }
 #identity-id { overflow-wrap: anywhere; font-size: 11px; }
 .identity-combo:focus-within { background: color-mix(in srgb, var(--settings-card-fill), var(--text) 8%); }
 #settings-pane-identity #identity-users { flex: 0 0 30px; }
-.settings-content :is(#log-description, #saved-workspace-name) { background: var(--surface-panel); border: 0; border-radius: 8px; height: var(--control-height); min-height: var(--control-height); padding: var(--space-2) 12px; }
+.settings-content :is(#log-description, #saved-workspace-name, #local-workspace-name) { background: var(--surface-panel); border: 0; border-radius: 8px; height: var(--control-height); min-height: var(--control-height); padding: var(--space-2) 12px; }
 .settings-content :is(#log-session, #hardware-buffer-depth, #language-choice, #chart-hover-style):hover:not(:disabled) { background: var(--surface-hover); }
 .settings-content :is(#log-session, #hardware-buffer-depth, #language-choice, #chart-hover-style)[aria-expanded=true]:not(:disabled) { background: var(--surface-selected); }
 .settings-content :is(#log-session, #hardware-buffer-depth, #language-choice, #chart-hover-style)[aria-expanded=true]:hover:not(:disabled) { background: var(--glass-control-selected-hover); }
-.settings-content .workspace-current-section #saved-workspace-name { width: 100%; min-width: 0; box-shadow: none; font-size: 13px; transition: none; }
+.settings-content .workspace-current-section :is(#saved-workspace-name, #local-workspace-name) { width: 100%; min-width: 0; box-shadow: none; font-size: 13px; transition: none; }
 .settings-content .log-report { background: var(--settings-card-fill); border: 0; }
 .settings-content .log-report-toolbar button { flex: none; white-space: nowrap; }
 .settings-content .settings-secondary {   border-top: 0; }

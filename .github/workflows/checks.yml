@@ -132,6 +132,7 @@ jobs:
           path: |
             .run/test-suites/ci-pr-browser/
             .run/agent-annotations/
+            .run/sites-browser/
             .run/analysis-reports/
             .run/browser-fixtures/bitstream-*-${{ matrix.engine }}/
             .run/browser-fixtures/browser-contracts-${{ matrix.engine }}/

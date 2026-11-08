@@ -1,4 +1,5 @@
 import { createMiddleFilename } from './middle-filename.ts';
+import { localOnly } from '../services/build-profile.ts';
 import { formatRecentDate, t, msg } from '../i18n.ts';
 import type { LibraryPage, LibraryRoot } from '../services/library.ts';
 import type { SourceItem } from './source-catalog.ts';
@@ -208,7 +209,7 @@ export function installLibraryListing(list: HTMLElement, options: {
       if (options.recent !== false && !items.length) reuse('recent-empty', query, () => text('p', query ? t(msg('sources.noMatch', '没有匹配的片源'))
         : t(msg('sources.noRecentShort', '暂无最近片源')), 'panel-empty'), recentRows);
       reconcile(mountsGroup.body, mountsRows); reconcile(recentGroup.body, recentRows);
-      rows.push(mountsGroup.section);
+      if (!localOnly) rows.push(mountsGroup.section);
       if (options.recent !== false) rows.push(recentGroup.section);
     } else {
       for (const item of items) reuse(item.key, fingerprint(item), () => options.fileRow(item));

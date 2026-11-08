@@ -25,7 +25,7 @@ npm run build
 npm run serve
 ```
 
-打开 http://127.0.0.1:5180/。服务运行期间，再次构建后用 `npm run publish:frontend -- dist` 切换线上入口。已打开的普通网页和 PWA 可以继续读取所属版本的解码资源，保留期和回退步骤见[前端发布](deploy/operations.md#只发布前端)。仅播放浏览器选择的本地文件时，也可将 `dist/` 作为静态网站提供；服务端媒体库为可选功能。
+打开 http://127.0.0.1:5180/。服务运行期间，再次构建后用 `npm run publish:frontend -- dist` 切换线上入口。已打开的普通网页和 PWA 可以继续读取所属版本的解码资源，保留期和回退步骤见[前端发布](deploy/operations.md#只发布前端)。用于 ChatGPT Sites 或其他静态托管的本地文件版，使用 `npm run package:sites`，见 [Sites 分发说明](deploy/sites.md)。该目标移除服务器连接、媒体库及分享入口，输出独立目录，不覆盖完整版 `dist/`。
 
 解压后直接运行，所有运行数据集中在程序旁边的 `data/`。无需系统服务、专用账号或网关，见 [便携运行说明](deploy/standalone.md)。
 

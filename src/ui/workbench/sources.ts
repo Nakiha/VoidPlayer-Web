@@ -1,4 +1,6 @@
 import { selectVideoInputs } from '../video-input.ts';
+import { localOnly } from '../../services/build-profile.ts';
+import { installLocalSourceBrowser } from '../local-source-browser.ts';
 import { createLibraryFileRow, installLibraryListing, storageText, patchLibraryRow, preserveLibraryThumbnail } from '../library-view.ts';
 import { installLibraryThumbnails } from '../library-thumbnails.ts';
 import { loadStageLabel } from '../media-progress.ts';
@@ -67,7 +69,8 @@ export function createSourcesPane(shared: WorkbenchShared) {
     }
   }
 
-  const libraryBrowser = installLibraryBrowser({list:$('source-list'),tools:$('source-tools'),foot:$('source-foot'),
+  const libraryElements = {list:$('source-list'),tools:$('source-tools'),foot:$('source-foot'),visible:() => !$('sources-panel').hidden,manage:true,trailing:$('local-add')};
+  const libraryBrowser = localOnly ? installLocalSourceBrowser(libraryElements, () => renderSources(), lifecyle.signal) : installLibraryBrowser({list:$('source-list'),tools:$('source-tools'),foot:$('source-foot'),
     visible:() => !$('sources-panel').hidden, manage:true}, page => {
     const rootsChanged = page ? catalog.setLibraryRoots(page.roots.map(root => root.id)) : false;
     catalog.setLibrary(page?.entries ?? []);
@@ -91,6 +94,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
   const attachThumb = thumbnails.attach;
   const recentLookups = new Map<string, { at: number; value: Promise<LibraryEntry | null> }>();
   async function refreshRecent() {
+    if (localOnly) return;
     const ticket = ++recentRequest;
     const ids = [...new Set(catalog.referencesToResolve().flatMap(item => item.libraryId ? [item.libraryId] : []))];
     const problems: [string, LibraryAccessProblem][] = [];
@@ -544,6 +548,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
 
   return {
     async openLibraryFile(id: string, version: string) {
+      if (localOnly) throw new Error(t(msg('sites.remoteUnavailable', '此版本仅支持本地文件，请使用完整版访问媒体服务')));
       const entry = await fetchLibraryItem(id,AbortSignal.any([lifecyle.signal,AbortSignal.timeout(10000)]));
       if (disposed || session.getState().tracks.length || session.getState().busy) return;
       if (!entry || entry.version !== version) throw new Error(t(msg('sources.linkUnavailable','该媒体库文件已不存在或版本已变化')));

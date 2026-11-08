@@ -1,4 +1,5 @@
 import { mergeAnnotationEvents } from '../../shared/review/annotation-events.ts';
+import { localOnly } from '../services/build-profile.ts';
 import type { AnnotationEvent } from '../../shared/review/annotation-events.ts';
 import { installAnnotationActivity } from './annotation-activity.ts';
 import { t, msg, onLanguageChange } from '../i18n.ts';
@@ -34,8 +35,9 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
   const versions = new Map<string, number>(), managed = new Set<string>();
   let owner = randomUUID();
   try { if (performance.getEntriesByType('navigation').some(entry => (entry as PerformanceNavigationTiming).type === 'reload')) owner = sessionStorage.getItem('voidplayer.annotation-window') || owner; sessionStorage.setItem('voidplayer.annotation-window', owner); if (performance.getEntriesByType('navigation').some(entry => (entry as PerformanceNavigationTiming).type === 'reload')) scope=sessionStorage.getItem('voidplayer.annotation-space')||'local'; } catch {}
+  if (localOnly) scope = 'local';
   let actor = currentActor()?.id ?? 'local';
-  try { actor=currentActor()?.id ?? JSON.parse(localStorage.getItem('voidplayer.identity') ?? 'null')?.id ?? 'local'; } catch {}
+  try { if (!localOnly) actor=currentActor()?.id ?? JSON.parse(localStorage.getItem('voidplayer.identity') ?? 'null')?.id ?? 'local'; } catch {}
   const currentDrafts = () => drafts.filter(draft=>draft.space===scope && draft.actor===actor && draft.key.startsWith(`${actor}/${scope}/${owner}/`));
   function state() {
     const pending=currentDrafts(), conflicts=pending.filter(draft=>draft.conflict);
@@ -212,6 +214,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     }
   }
   async function switchSpace(next:string) {
+    if (localOnly && next !== 'local') throw new Error(t(msg('sites.remoteUnavailable', '此版本仅支持本地文件，请使用完整版访问媒体服务')));
     if(editing() || pendingQueue.size || saving)throw new Error(t(msg("sync.waitForDrafts", "请先结束标注并等待本机草稿保存完成")));
     // Restoring the current scope (e.g. failed-import rollback) must not
     // touch live marks: there is nothing to load that the session lacks.
@@ -227,7 +230,16 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
   });
   window.addEventListener('beforeunload',event=>{if(saving || pendingQueue.size || localFailure){event.preventDefault();event.returnValue='';}},{signal:life.signal});
   const interval=setInterval(()=>{if(cadence.ready(!document.hidden))void sync();},1000);
-  async function connect(){resetPolling();try{const health=await identityHealth();actor=health.actor?.id??actor;available=!!health.capabilities?.annotations;await apply();void sync();}catch{void apply().catch(e => { error=(e as Error).message;state(); });}}
+  async function connect() {
+    resetPolling();
+    try {
+      if (!localOnly) {
+        const health = await identityHealth();
+        actor = health.actor?.id ?? actor; available = !!health.capabilities?.annotations;
+      }
+      await apply(); void sync();
+    } catch { void apply().catch(e => { error = (e as Error).message; state(); }); }
+  }
   window.addEventListener('online',()=>void connect(),{signal:life.signal});
   const resume = () => { resetPolling(); if (!document.hidden) void sync(); };
   window.addEventListener('focus',resume,{signal:life.signal});
@@ -244,6 +256,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     scope: () => scope,
     locallySaved: () => !saving && !pendingQueue.size && !localFailure,
     async attachWorkspace(space: string, seededIds: string[] = []) {
+      if (localOnly) throw new Error(t(msg('sites.remoteUnavailable', '此版本仅支持本地文件，请使用完整版访问媒体服务')));
       // Read the seeded records before switching scope so edits made during the
       // request keep their local draft. Set all bases before staging remote edits.
       const records=new Map<string,AnnotationRecord>();

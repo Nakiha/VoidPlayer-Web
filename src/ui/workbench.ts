@@ -1,4 +1,5 @@
 import { configureSplitter } from './splitter.ts';
+import { localOnly } from '../services/build-profile.ts';
 import { parseLibraryLocationLink } from './library-link.ts';
 import { installBitstreamControls } from './bitstream-controls.ts';
 import { t, msg } from '../i18n.ts';
@@ -29,7 +30,7 @@ function readHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KE
 
 export function installWorkbench(session: ReviewSession, act: Action, addMark: (slot: Slot, markId?: string) => void, notify: (message: string) => void = () => {}) {
   const view = new WorkspaceState();
-  if (new URL(location.href).searchParams.has('library')) {
+  if (!localOnly && new URL(location.href).searchParams.has('library')) {
     try { parseLibraryLocationLink(location.href,location.href); view.panels.sources = true; } catch { /* Ignore malformed startup links. */ }
   }
   const catalog = new SourceCatalog(readHistory(), { isolateLibraries: true, rememberLocalFiles: supportsFileHandles });

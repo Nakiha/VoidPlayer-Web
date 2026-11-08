@@ -1,3 +1,4 @@
+import { localOnly } from './services/build-profile.ts';
 import { frameIndexTools } from './services/frame-index.ts';
 import { ANNOTATION_COORD_LIMIT } from '../shared/review/annotation.ts';
 import { SLOTS } from '../shared/review/model.ts';
@@ -33,7 +34,7 @@ export function reviewTools(session: ReviewSession, workspace?: WorkspaceActions
   };
   return [
 
-    ...frameIndexTools(),
+    ...(localOnly ? [] : frameIndexTools()),
     tool('request_bitstream_range','Explicitly analyze a bounded half-open session-time range (up to 1 second and 32 pictures) independently of playback. Completed chunks are cached incrementally.',{slot:{enum:SLOTS},startUs:{type:'integer'},endUs:{type:'integer'}},['slot','startUs','endUs'],false,p=>session.requestBitstreamRange(slotValue(p.slot),p.startUs as number,p.endUs as number)),
     tool('get_presented_frame','Read the successful presentation commit and optional playback picture metadata. No pixels or analysis IO.',{slot:{enum:SLOTS}},['slot'],true,p=>session.getPresentedFrame(slotValue(p.slot))),
     tool('request_bitstream_analysis','Explicitly analyze the paused presented picture in an independent local worker or on its library server. No upload of local files.',{slot:{enum:SLOTS}},['slot'],false,p=>session.requestBitstreamAnalysis(slotValue(p.slot))),
@@ -92,7 +93,7 @@ export function reviewTools(session: ReviewSession, workspace?: WorkspaceActions
         if (!entry) throw new Error('媒体库中没有该文件，或服务未连接。');
         return session.load(slotValue(p.slot), (signal, progress, configuration) => openLibraryItem(entry, progress, signal, configuration), entry.name);
       }),
-  ];
+  ].filter(entry => !localOnly || !['list_library', 'load_library_item'].includes(entry.name));
 }
 export function registerReviewTools(session: ReviewSession, workspace?: WorkspaceActions) {
   const context = (document as unknown as { modelContext?: Registry }).modelContext ?? (navigator as unknown as { modelContext?: Registry }).modelContext;

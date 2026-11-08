@@ -1,4 +1,5 @@
 import { mediaDiagnostic } from '../shared/media/io/media-errors.ts';
+import { localOnly } from './services/build-profile.ts';
 import type { MediaDiagnostic } from '../shared/media/io/media-errors.ts';
 import { diagnosticMessage } from './ui/diagnostic-message.ts';
 import { mountLocalizedShell } from './ui/localized-shell.ts';
@@ -175,7 +176,7 @@ let inputTrigger = 'pointer';
 let warningMessage = '';
 let dismissWarning: (() => void) | null = null;
 let mixedColorToast: (() => void) | null = null;
-const identitySettings = installIdentitySettings(actor => session.setActor(actor));
+const identitySettings = localOnly ? { ready: Promise.resolve(), dispose() {} } : installIdentitySettings(actor => session.setActor(actor));
 const drawingEditor = installDrawingEditor(session, canvases);
 const markPreviewBackfill = installMarkPreviewBackfill(session, canvases, () => drawingEditor.active());
 const notify = (message: string) => { toasts.show(message); };
@@ -186,7 +187,7 @@ $('toggle-annotations').onclick = () => {
   else drawingEditor.open(workbench.selected());
 };
 const removeTrackDrag = installTrackDrag(session);
-const sourceActions = installSourceActions(session, act, () => { void workbench.refreshLibrary(); }, notify, {
+const sourceActions = localOnly ? { render(_state: ReturnType<ReviewSession['getState']>) {}, dispose() {} } : installSourceActions(session, act, () => { void workbench.refreshLibrary(); }, notify, {
   toasts, refresh: buildId => workspaceTransfer.refreshForUpdate(buildId),
 });
 bindTimelinePreview($<HTMLInputElement>('timeline'), $('timeline-preview'));
@@ -683,18 +684,18 @@ const api = {
 };
 Object.defineProperty(window, 'voidPlayer', { value: Object.freeze(api), configurable: true });
 // Capture the temporary host marker before the bridge consumes its document credential.
-if (import.meta.env.PROD && window.top === window && !document.querySelector('meta[name="voidplayer-page-bridge"]')) {
+if (!localOnly && import.meta.env.PROD && window.top === window && !document.querySelector('meta[name="voidplayer-page-bridge"]')) {
   window.addEventListener('voidplayer:startup-ready', () => { void installOfflineControls(toasts, identitySettings.ready); }, { once: true });
 }
-installPageBridge(session,api.tools,uiEvents.signal);
+if (!localOnly) installPageBridge(session,api.tools,uiEvents.signal);
 const annotationLink = new URL(location.href).searchParams;
-if (annotationLink.has('media') && !['annotation','workspace','share','review'].some(key => annotationLink.has(key))) void act(async () => {
+if (!localOnly && annotationLink.has('media') && !['annotation','workspace','share','review'].some(key => annotationLink.has(key))) void act(async () => {
   const file = parseLibraryFileLink(location.href,location.href);
   if (!file) return;
   await identitySettings.ready;
   if (!uiEvents.signal.aborted) await workbench.openLibraryFile(file.id,file.version);
 },'library.open-link');
-if (annotationLink.has('annotation')) void act(async () => {
+if (!localOnly && annotationLink.has('annotation')) void act(async () => {
   // A cold annotation deep link must establish its actor before accepting the
   // workspace open intent, just like saved-workspace and recovery entry points.
   await identitySettings.ready;

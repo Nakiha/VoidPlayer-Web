@@ -4305,6 +4305,26 @@
     "source": "画面缩放",
     "translation": "Zoom"
   },
+  "sites.exportWorkspace": {
+    "source": "导出工作区",
+    "translation": "Export workspace"
+  },
+  "sites.importWorkspace": {
+    "source": "导入工作区",
+    "translation": "Import workspace"
+  },
+  "sites.localHelp": {
+    "source": "视频和标注在此浏览器内处理，不上传。工作区文件不包含视频；重新打开时请同时提供原视频。",
+    "translation": "Videos and annotations are processed in this browser without uploading. Workspace files do not contain videos; provide the original videos when reopening."
+  },
+  "sites.remoteUnavailable": {
+    "source": "此版本仅支持本地文件，请使用完整版访问媒体服务",
+    "translation": "This edition supports local files only. Use the full edition to access media services."
+  },
+  "sites.searchLocal": {
+    "source": "搜索本地片源",
+    "translation": "Search local sources"
+  },
   "sourceAccess.libraryChanged": {
     "source": "无法打开「{name}」：文件版本已变化",
     "translation": "Cannot open \"{name}\": the file version changed."

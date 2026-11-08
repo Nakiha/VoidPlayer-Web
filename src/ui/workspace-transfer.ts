@@ -1,3 +1,4 @@
+import { localOnly } from '../services/build-profile.ts';
 import { currentActor } from '../services/identity.ts';
 import { prepareOfflineUpdate } from './offline-app.ts';
 import { installWorkspaceRecovery } from './workspace-recovery.ts';
@@ -64,17 +65,18 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
   const input = document.getElementById('workspace-file') as HTMLInputElement;
   const lifetime = new AbortController(); let importing = false;
   const params = new URL(location.href).searchParams;
-  const savedId = params.get('workspace'), legacyId = params.get('share') ?? params.get('review');
+  const savedId = localOnly ? null : params.get('workspace'), legacyId = localOnly ? null : params.get('share') ?? params.get('review');
   const openingLink = /^[a-f0-9-]{36}$/.test(savedId ?? legacyId ?? '');
   document.getElementById('app')!.toggleAttribute('data-workspace-opening', openingLink);
   let saved: ReturnType<typeof installSavedWorkspaces> | undefined;
   let sharing: ReturnType<typeof installWorkspaceSharing> | undefined;
   function exportWorkspace() {
-    const document = { ...session.exportWorkspace(new URL('/', location.href).href), ...options.capture(), name: saved?.name() ?? t(msg("savedWorkspaces.untitledWorkspace", "未命名工作区")) };
+    const document = { ...session.exportWorkspace(new URL('/', location.href).href), ...options.capture(), name: saved?.name() ?? (window.document.querySelector<HTMLInputElement>('#local-workspace-name')?.value.trim() || t(msg("savedWorkspaces.untitledWorkspace", "未命名工作区"))) };
     document.thumbnails = document.marks.flatMap(mark => { const image = annotationThumbnails.get(mark.id); return image?.url.startsWith('data:image/jpeg;base64,') ? [{ id: mark.id, ...image }] : []; });
     return document;
   }
   async function resolveLibraryReference(info: MediaInfo, signal: AbortSignal) {
+    if (localOnly) throw new Error(t(msg('sites.remoteUnavailable', '此版本仅支持本地文件，请使用完整版访问媒体服务')));
     try { return await pinLibraryReference(info, location.href, fetch, signal); }
     catch (error) {
       if (error instanceof LibraryAccessError) error.message = libraryAccessMessage(info.name, error.kind) + (error.details ? ` ${error.details}` : '');
@@ -130,6 +132,8 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       if (!current()) return false;
       if (!fromShare) { sharing?.detach(); const url=new URL(location.href);url.searchParams.delete('workspace');url.searchParams.delete('share');url.searchParams.delete('review');history.replaceState(null,'',url); }
       if (operation) operation.detach(document.name); else saved?.detach(document.name);
+      const localName = window.document.querySelector<HTMLInputElement>('#local-workspace-name');
+      if (localName) localName.value = document.name ?? '';
       if (skipped.length) options.toasts.show(() => t(msg('transfer.sourcesSkipped', '以下片源无法打开，已跳过：{details}'), {
         details: skipped.map(item => `${item.name}：${item.error}`).join('；'),
       }), { kind: 'warning', durationMs: 8000 });
@@ -147,12 +151,23 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
     if (operation && !operation.current()) return;
     await importWorkspace(document, supplied, false, operation);
   }
-  saved = installSavedWorkspaces({ signal: lifetime.signal, snapshot: exportWorkspace, open: async (value, space, operation) => { const opened=await importWorkspace(space ? mapSharedWorkspace(value,location.origin) : value, [], !!space, operation); if(opened && space && operation.current())await options.openSharedSpace(space); return opened && operation.current(); }, copyLink: id => sharing!.copySaved(id), canSave: () => session.getState().tracks.length > 0, changed: () => sharing?.update(), report: error => { if (!document.querySelector<HTMLDialogElement>('#settings')!.open) void options.act(() => { throw error; }, 'workspace.server'); } });
-  // A seek keeps the last committed workspace snapshot valid. Sharing is
-  // available once loaded tracks and their workspace binding are ready; the snapshot is captured
-  // synchronously before any network work begins.
-  sharing = installWorkspaceSharing({ signal:lifetime.signal, snapshot:exportWorkspace, binding:saved.binding, save:saved.share, toasts:options.toasts, openSpace:options.openSharedSpace, scope:options.annotationScope, isOpening:saved.isOpening, canShare:()=>session.getState().tracks.length>0&&!saved!.isOpening(), report:error=>void options.act(()=>{throw error;}, 'workspace.share') });
+  if (!localOnly) {
+    saved = installSavedWorkspaces({ signal: lifetime.signal, snapshot: exportWorkspace, open: async (value, space, operation) => { const opened=await importWorkspace(space ? mapSharedWorkspace(value,location.origin) : value, [], !!space, operation); if(opened && space && operation.current())await options.openSharedSpace(space); return opened && operation.current(); }, copyLink: id => sharing!.copySaved(id), canSave: () => session.getState().tracks.length > 0, changed: () => sharing?.update(), report: error => { if (!document.querySelector<HTMLDialogElement>('#settings')!.open) void options.act(() => { throw error; }, 'workspace.server'); } });
+    // A seek keeps the last committed workspace snapshot valid. Sharing is
+    // available once loaded tracks and their workspace binding are ready; the snapshot is captured
+    // synchronously before any network work begins.
+    sharing = installWorkspaceSharing({ signal:lifetime.signal, snapshot:exportWorkspace, binding:saved.binding, save:saved.share, toasts:options.toasts, openSpace:options.openSharedSpace, scope:options.annotationScope, isOpening:saved.isOpening, canShare:()=>session.getState().tracks.length>0&&!saved!.isOpening(), report:error=>void options.act(()=>{throw error;}, 'workspace.share') });
+  }
   const recovery = installWorkspaceRecovery(session, { snapshot: exportWorkspace, restore: (document, update) => importWorkspace(document, [], false, undefined, update), ready: options.identityReady, toasts: options.toasts });
+  if (localOnly) {
+    document.getElementById('local-workspace-import')!.addEventListener('click', () => input.click(), { signal: lifetime.signal });
+    document.getElementById('local-workspace-export')!.addEventListener('click', () => {
+      const snapshot = exportWorkspace();
+      const url = URL.createObjectURL(new Blob([JSON.stringify(snapshot)], { type: 'application/json' }));
+      const link = document.createElement('a'); link.href = url; link.download = 'workspace.voidplayer';
+      link.click(); setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }, { signal: lifetime.signal });
+  }
   const unsubscribe = session.subscribe(() => { saved?.update(); sharing?.update(); });
   const finishOpening = () => { if (lifetime.signal.aborted) return; document.getElementById('app')!.removeAttribute('data-workspace-opening'); options.openingChanged?.(); };
   if (savedId && /^[a-f0-9-]{36}$/.test(savedId)) void options.identityReady.then(()=>saved!.open(savedId)).catch(error=>options.toasts.show((error as Error).message,{kind:'error',durationMs:0})).finally(finishOpening);
@@ -188,5 +203,5 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
     if (health?.frontendBuildId !== target || (health.actor?.id ?? 'local') !== owner) throw new Error(t(msg('update.retry', '目标版本已变化或服务暂不可用，请稍后再刷新。')));
     await recovery.refresh(snapshot, target, checkReady);
   }
-  return { exportWorkspace, importWorkspace, importFile, refreshForUpdate, shareWorkspace: sharing.create, dispose() { recovery.dispose(); lifetime.abort(); unsubscribe(); sharing.dispose(); } };
+  return { exportWorkspace, importWorkspace, importFile, refreshForUpdate, shareWorkspace: sharing?.create, dispose() { recovery.dispose(); lifetime.abort(); unsubscribe(); sharing?.dispose(); } };
 }

@@ -4610,6 +4610,26 @@
     "source": "画面缩放",
     "params": {}
   },
+  "sites.exportWorkspace": {
+    "source": "导出工作区",
+    "params": {}
+  },
+  "sites.importWorkspace": {
+    "source": "导入工作区",
+    "params": {}
+  },
+  "sites.localHelp": {
+    "source": "视频和标注在此浏览器内处理，不上传。工作区文件不包含视频；重新打开时请同时提供原视频。",
+    "params": {}
+  },
+  "sites.remoteUnavailable": {
+    "source": "此版本仅支持本地文件，请使用完整版访问媒体服务",
+    "params": {}
+  },
+  "sites.searchLocal": {
+    "source": "搜索本地片源",
+    "params": {}
+  },
   "sourceAccess.libraryChanged": {
     "source": "无法打开「{name}」：文件版本已变化",
     "params": {

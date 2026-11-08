@@ -1070,6 +1070,11 @@ export interface Sources {
   "shell.yuvChannels": "YUV 通道";
   "shell.yuvChannelsRawYuvFramesOnly": "YUV 通道：仅原始平面帧生效";
   "shell.zoom": "画面缩放";
+  "sites.exportWorkspace": "导出工作区";
+  "sites.importWorkspace": "导入工作区";
+  "sites.localHelp": "视频和标注在此浏览器内处理，不上传。工作区文件不包含视频；重新打开时请同时提供原视频。";
+  "sites.remoteUnavailable": "此版本仅支持本地文件，请使用完整版访问媒体服务";
+  "sites.searchLocal": "搜索本地片源";
   "sourceAccess.libraryChanged": "无法打开「{name}」：文件版本已变化";
   "sourceAccess.libraryMissing": "无法打开「{name}」：文件已移除";
   "sourceAccess.libraryUnavailable": "无法打开「{name}」：媒体库暂不可用";
@@ -2335,6 +2340,11 @@ export interface MessageParameters {
   "shell.yuvChannels": {  };
   "shell.yuvChannelsRawYuvFramesOnly": {  };
   "shell.zoom": {  };
+  "sites.exportWorkspace": {  };
+  "sites.importWorkspace": {  };
+  "sites.localHelp": {  };
+  "sites.remoteUnavailable": {  };
+  "sites.searchLocal": {  };
   "sourceAccess.libraryChanged": { "name": string | number };
   "sourceAccess.libraryMissing": { "name": string | number };
   "sourceAccess.libraryUnavailable": { "name": string | number };

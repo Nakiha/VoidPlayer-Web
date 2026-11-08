@@ -1,3 +1,4 @@
+import { localOnly } from '../../services/build-profile.ts';
 import { mountLocalizedShell } from '../localized-shell.ts';
 import { t, th, onLanguageChange, formatDate, msg } from '../../i18n.ts';
 import { logPreview } from '../../logging/preview.ts';
@@ -11,10 +12,10 @@ export function installLogPanel(container: HTMLElement, toasts: ToastStack) {
   const pane = document.getElementById('settings-pane-logs')!;
   const panel = document.createElement('div'); panel.className = 'log-panel';
   const stopPanelLanguage = mountLocalizedShell(panel, () => {
-    const tip = [th(msg("logPanel.keepsTheLast3SessionsLocallyFor", "本机保留最近 3 次会话最长 7 天")), th(msg("logPanel.logsIncludeDeviceInformationFilenamesActionsAnd", "日志包含设备信息、文件名、操作记录及你填写的问题描述不含视频或标注正文")), th(msg("logPanel.sentToTheCurrentServerOnlyWhen", "仅点击“发送日志”后才发送到当前服务器"))].join("\n");
+    const tip = [th(msg("logPanel.keepsTheLast3SessionsLocallyFor", "本机保留最近 3 次会话最长 7 天")), th(msg("logPanel.logsIncludeDeviceInformationFilenamesActionsAnd", "日志包含设备信息、文件名、操作记录及你填写的问题描述不含视频或标注正文")), ...(localOnly ? [] : [th(msg("logPanel.sentToTheCurrentServerOnlyWhen", "仅点击“发送日志”后才发送到当前服务器"))])].join("\n");
     const previous = th(msg("logPanel.previousPage", "上一页")), next = th(msg("savedWorkspaces.nextPage", "下一页"));
     const copy = th(msg("logPanel.copyLogs", "复制日志"));
-    return `<div class="settings-section"><h4 class="settings-section-title">${th(msg("logPanel.uploadLogs", "上传日志"))}<span class="section-title-info" role="img" tabindex="0" aria-label="${th(msg("logPanel.aboutLogs", "日志说明"))}" data-tooltip="${tip}">${icon('info')}</span></h4><div class="settings-card log-settings-card"><div class="log-session-row"><button type="button" id="log-session" class="settings-choice" aria-label="${th(msg("logPanel.logSession", "日志会话"))}"></button><div class="log-submit-row"><button type="button" data-action="download">${icon('download')}${th(msg("logPanel.downloadLogs", "下载日志"))}</button><button type="button" class="primary" data-action="upload">${icon('export')}${th(msg("logPanel.sendLogs", "发送日志"))}</button></div></div>
+    return `<div class="settings-section"><h4 class="settings-section-title">${localOnly ? th(msg("logPanel.localLogs", "本地日志")) : th(msg("logPanel.uploadLogs", "上传日志"))}<span class="section-title-info" role="img" tabindex="0" aria-label="${th(msg("logPanel.aboutLogs", "日志说明"))}" data-tooltip="${tip}">${icon('info')}</span></h4><div class="settings-card log-settings-card"><div class="log-session-row"><button type="button" id="log-session" class="settings-choice" aria-label="${th(msg("logPanel.logSession", "日志会话"))}"></button><div class="log-submit-row"><button type="button" data-action="download">${icon('download')}${th(msg("logPanel.downloadLogs", "下载日志"))}</button><button ${localOnly ? 'hidden' : ''} type="button" class="primary" data-action="upload">${icon('export')}${th(msg("logPanel.sendLogs", "发送日志"))}</button></div></div>
     <div class="log-description-field"><textarea id="log-description" aria-label="${th(msg("logPanel.problemDescriptionOptional", "问题描述（选填）"))}" maxlength="${LOG_DESCRIPTION_LIMIT}" rows="1" placeholder="${th(msg("logPanel.reportDescriptionPlaceholder", "(可选) 填写日志下载/发送时的描述信息"))}" spellcheck="false"></textarea></div>
     </div><div class="log-feedback" hidden><p class="log-storage" role="status" hidden></p><p class="log-result" role="status" hidden></p></div>
     </div><section class="settings-section">
@@ -172,6 +173,7 @@ export function installLogPanel(container: HTMLElement, toasts: ToastStack) {
     }
   }));
   panel.querySelector('[data-action="upload"]')!.addEventListener('click', () => void action('upload', async () => {
+    if (localOnly) return;
     const { json } = await snapshot(true);
     let response: Response;
     try { response = await fetch('/api/logs', { method: 'POST', headers: { 'content-type': 'application/json', 'x-voidplayer-action': 'log' }, body: json }); }

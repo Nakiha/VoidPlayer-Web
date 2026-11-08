@@ -6,7 +6,7 @@ import { defineConfig, normalizePath } from 'vite';
 import { readBuildIdentity } from './scripts/release-version.mjs';
 import { sealFrontend } from './server/frontend-releases.ts';
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, rm } from 'node:fs/promises';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 const buildId = randomUUID();
@@ -54,11 +54,15 @@ let productionBuildInfo: ReturnType<typeof buildInfo> | undefined;
 const transformBuildInfo = async (_code: string, id: string) => {
   if (normalizePath(id.split('?')[0]) === normalizePath(infoFile)) return { code: `export const buildInfo = ${JSON.stringify(await (productionBuildInfo ?? buildInfo()))}`, map: null };
 };
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const sites = mode === 'sites';
+  const entries = sites ? { player: FRONTEND_ENTRIES.player } : FRONTEND_ENTRIES;
+  const htmlInputs = Object.values(entries);
+  return {
   // Vite builds Worker entrypoints in a separate plugin pipeline. Their WASM
   // URLs must use the same content versions as the main-thread glue URLs.
   worker: { plugins: () => [{ name: 'voidplayer-worker-build-evidence', transform: transformBuildInfo }] },
-  build: { rollupOptions: { input: Object.fromEntries(Object.entries(FRONTEND_ENTRIES).map(([name,file]) => [name,resolve(import.meta.dirname,file)])) } },
+  build: { rollupOptions: { input: Object.fromEntries(Object.entries(entries).map(([name,file]) => [name,resolve(import.meta.dirname,file)])) } },
   plugins: [{ name: 'voidplayer-i18n-catalog-url', enforce: 'pre',
     configResolved(config) { buildCatalog = config.command === 'build'; outputDirectory = resolve(config.root, config.build.outDir); publicDirectory = config.publicDir; },
     buildStart() { if(buildCatalog) englishCatalogRef=this.emitFile({type:'chunk',id:resolve(sourceDir,'i18n/generated/en.js'),name:'en'}); },
@@ -69,6 +73,7 @@ export default defineConfig({
   }, { name: 'voidplayer-i18n-descriptors', enforce: 'pre', transform: lowerDescriptors }, {
     name: 'voidplayer-admin-entry',
     configureServer(server) {
+      if (sites) return;
       // Vite's conditional module responses bypass server.headers. WebKit
       // validates isolation on those 304s too, including shared Worker imports.
       server.middlewares.use((_req, res, next) => {
@@ -117,10 +122,14 @@ export default defineConfig({
         const versioned = 'assets/' + file.replace('.js', '-' + createHash('sha256').update(bytes).digest('hex').slice(0, 16) + '.js');
         await writeFile(resolve(outputDirectory, versioned), bytes);
         playerAssets.push(versioned);
-        for (const entry of FRONTEND_HTML_INPUTS) {
+        for (const entry of htmlInputs) {
           const target = resolve(outputDirectory, entry), html = await readFile(target, 'utf8');
           await writeFile(target, html.replace('src="/' + file + '"', 'src="/' + versioned + '"'));
         }
+      }
+      if (sites) {
+        await rm(resolve(outputDirectory, 'manifest.webmanifest'), { force: true });
+        return;
       }
       await writePlayerWorker(outputDirectory, playerAssets, (await productionBuildInfo).coreAssetDigests);
       await prepareStaticAssets(outputDirectory);
@@ -142,7 +151,8 @@ export default defineConfig({
   server: {
     // Generated failure HTML must not reload unrelated browser harnesses.
     watch: { ignored: ['**/.run/**', '**/artifacts/**'] },
-    proxy: { '/api': { target: 'http://127.0.0.1:5180', changeOrigin: false } },
-    headers: isolationHeaders,
+    proxy: sites ? undefined : { '/api': { target: 'http://127.0.0.1:5180', changeOrigin: false } },
+    headers: sites ? {} : isolationHeaders,
   },
+  };
 });

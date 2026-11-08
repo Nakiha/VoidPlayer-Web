@@ -86,6 +86,7 @@
     "src/ui/index-progress.ts",
     "src/ui/language.ts",
     "src/ui/library-browser.ts",
+    "src/ui/local-source-browser.ts",
     "src/ui/library-column-layout.ts",
     "src/ui/library-columns.ts",
     "src/ui/library-file-menu.ts",
