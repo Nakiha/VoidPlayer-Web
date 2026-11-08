@@ -1,8 +1,12 @@
-name: Linux browser display
-description: Supply a job-owned X display for Chromium WebGPU swapchain compositing.
+name: Browser display and visual baseline
+description: Prepare disposable runner graphics and default visual preferences for browser checks.
 runs:
   using: composite
   steps:
+    - name: Normalize default transparency preference
+      if: runner.os == 'macOS'
+      shell: bash
+      run: defaults write com.apple.universalaccess reduceTransparency -bool false
     - name: Ensure X display tools
       if: runner.os == 'Linux'
       shell: bash

@@ -295,7 +295,7 @@ node scripts/run-tests.mjs ci-node-media
 
 `browser` 是自动化浏览器套件。需要 Windows 可见桌面的 Chrome/Edge 色彩与 WebGPU 检查属于清单中的 `manual-regression`，仍使用原有专用命令；外部服务、用户指定媒体的诊断/实验/基准属于显式工具分类，不会自动变成发布门禁。清单记录限制和理由，不能把 `npm test` 当作 fast，也不能把旧 `test:browser` 当作完整浏览器套件。
 
-FLV 浏览器回归固定 640×480 视口，两种引擎均解码原始尺寸的输入。Linux Chromium 的隔离 headless 进程显式启用 SwiftShader WebGPU，macOS/Windows 使用本机图形后端；不提供 CPU 视频呈现兜底；这不代表物理 GPU 或大视口性能验收。普通本地命令仍按原有全部性能阈值必过。GitHub CI 不执行性能基准：FLV、Range、参考解码、HDR、分析矩阵与 HTTPS 功能流程验证实际呈现帧的推进、身份和暂停稳定性；HTTPS 继续做三轮双轨播放、队列容量和资源释放检查。`VOIDPLAYER_FUNCTIONAL_ONLY=1` 可在本机复现该功能路径，普通本地命令仍保留原基准阈值。历史云端性能报告只保留为历史证据，不作为当前验收结论。
+FLV 浏览器回归固定 640×480 视口，两种引擎均解码原始尺寸的输入。Linux Chromium 的隔离完整浏览器进程显式启用 SwiftShader WebGPU，macOS/Windows 使用本机图形后端；不提供 CPU 视频呈现兜底；这不代表物理 GPU 或大视口性能验收。普通本地命令仍按原有全部性能阈值必过。GitHub CI 不执行性能基准：FLV、Range、参考解码、HDR、分析矩阵与 HTTPS 功能流程验证实际呈现帧的推进、身份和暂停稳定性；HTTPS 继续做三轮双轨播放、队列容量和资源释放检查。`VOIDPLAYER_FUNCTIONAL_ONLY=1` 可在本机复现该功能路径，普通本地命令仍保留原基准阈值。历史云端性能报告只保留为历史证据，不作为当前验收结论。
 
 HEVC 时间线检查保留每个输入两轮各 600 帧、每帧源尺寸截图、帧身份和 seek/逐帧/尾帧断言。Linux Chromium 每次全尺寸截图实测可耗时约 0.6–1.4 秒，因此 Chromium 单项总预算为 30 分钟，CI job 留出 35 分钟；这不是实时播放性能阈值。每 100 帧以及打开、seek、重开边界记录进度和呈现/截图/读回耗时；页面连续 180 秒没有进度则立即失败并输出最后阶段，关闭页面与浏览器。播放基准的帧率、延迟与停顿阈值不变。
 
@@ -715,3 +715,7 @@ Linux 的 Node 媒体套件、两套 WASM 构建、独立包和真实 HTTP/HTTPS
 Windows 无窗口 shell 的 GPU 互操作失败后，完整有窗口 Chromium 已在隔离的 hosted runner 通过同一身份、WASM 定位和 WebCodecs 用例。
 
 原生 AV1 探测通过却实际解码失败的平台，参考 FLV 用例用同一批编码包直接调用独立 VideoDecoder 验证；只有独立解码也失败才接受既有 WASM 回退，独立解码成功仍阻断。读回失败与平面篡改注入在此类主机改用已验证可工作的 H.264 原生解码器，继续要求真实注入原因与软件回退；AV1 可用的主机仍使用 AV1 注入。增加一次最多 25 包的独立解码，不增加素材或完整播放循环。
+
+JS 容器的 fresh-runtime 软件封面检查在 reload 后重新设置 reference/software 前置条件；Agent 会话配置不假定跨刷新持久化。媒体、索引重建和 Worker JPEG 的原断言不变，没有增加载入或解码轮次。
+
+默认视觉样式检查在一次性 macOS runner 上关闭 reduceTransparency 系统默认项，独立浏览器探针确认 prefers-reduced-transparency 为 no-preference；高对比度和减少动态效果仍由既有用例显式模拟。测试不改本机系统或产品的无障碍行为。管理页按压采样保留原观察窗口和逐帧颜色检查，但末值等待真实 CSS transition 完成，避免把未结束的插值色当作 hover 终值。

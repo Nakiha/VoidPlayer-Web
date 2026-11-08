@@ -367,6 +367,7 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
   const close=await page.locator('#settings-close').boundingBox();
   assert.ok(rail.x+rail.width<=close.x,'category scrolling leaves the close button accessible');
   assert.equal(await page.locator('#settings-tab-appearance').evaluate(el=>el.matches(':focus-visible')),true,'keyboard navigation keeps a visible focus cue');
+  await page.waitForFunction(()=>getComputedStyle(document.querySelector('#settings-tab-appearance')).backgroundColor!=='rgba(0, 0, 0, 0)',undefined,{timeout:5000});
   assert.notEqual(await page.locator('#settings-tab-appearance').evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)','keyboard focus uses a light background');
   await page.locator('#settings-tab-about').click();await page.locator('#settings-tab-appearance').click();
   const tabFeedback=await page.locator('#settings-tab-appearance').evaluate(el=>{
