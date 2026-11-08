@@ -112,9 +112,10 @@ try {
  await b.route(routePattern,async route=>{if(route.request().method()==='POST' && !lost){lost=true;await route.fetch();await route.abort();}else await route.continue();});
  const retry=await call(b,'add_review_mark',{slot:'A',text:'响应丢失重试'});
  await until(()=>b.request.get(endpoint).then(r=>r.json()),page=>page.entries.some(e=>e.id===retry.id));
- await b.reload();await b.waitForFunction(()=>window.voidPlayer?.getState().tracks.length===1 && !window.voidPlayer.getState().busy);
+ await b.reload();await b.waitForFunction(()=>window.voidPlayer?.getState().tracks.length===1 && !window.voidPlayer.getState().busy && !document.querySelector('[data-workspace-opening]'));
  await until(()=>readDrafts(b),drafts=>!drafts.some(draft=>draft.id===retry.id));
  const retried=await b.request.get(endpoint).then(r=>r.json());assert.equal(retried.entries.find(e=>e.id===retry.id).revision,1);await b.unroute(routePattern);
+ assert.equal(await b.evaluate(()=>window.testAnnotationStatus?.space),space,'the shared workspace is attached before editing its preview');
  phase='editor-thumbnail-persistence';
  // Generate a real thumbnail through the editor and verify it reaches the cache separately.
  await b.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });await b.keyboard.press('n');await b.locator('[data-drawing-tool=rect]').click();
