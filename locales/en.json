@@ -3416,21 +3416,25 @@
     "source": "正在定位到当前播放位置",
     "translation": "Seeking to the current position"
   },
+  "pwa.browserInstall": {
+    "source": "请在浏览器菜单中选择安装应用。如果没有此选项，请用桌面 Chrome 或 Edge 打开本页。",
+    "translation": "Choose the install option in your browser menu. If it is unavailable, open this page in desktop Chrome or Edge."
+  },
   "pwa.failed": {
     "source": "离线资源准备失败，请联网后重试。",
     "translation": "Offline setup failed. Reconnect and try again."
   },
-  "pwa.idle": {
-    "source": "下载播放器和解码器后，可离线打开本地视频。",
-    "translation": "Download the player and decoders to open local videos offline."
+  "pwa.install": {
+    "source": "安装",
+    "translation": "Install"
   },
-  "pwa.offline": {
-    "source": "离线使用",
-    "translation": "Offline use"
+  "pwa.installed": {
+    "source": "已安装",
+    "translation": "Installed"
   },
-  "pwa.prepare": {
-    "source": "准备离线资源",
-    "translation": "Prepare for offline use"
+  "pwa.iosInstall": {
+    "source": "轻点分享按钮，选择「添加到主屏幕」。",
+    "translation": "Tap Share, then choose Add to Home Screen."
   },
   "pwa.preparing": {
     "source": "正在下载播放器资源…",
@@ -3440,9 +3444,17 @@
     "source": "已就绪，可离线打开本地视频",
     "translation": "Ready to open local videos offline"
   },
+  "pwa.safariInstall": {
+    "source": "在 Safari 的「文件」菜单中选择「添加到程序坞」，然后点「添加」。",
+    "translation": "In Safari, choose File → Add to Dock, then click Add."
+  },
   "pwa.unsupported": {
     "source": "当前浏览器无法保存离线资源。",
     "translation": "This browser cannot store offline resources."
+  },
+  "pwa.webApp": {
+    "source": "Web 应用",
+    "translation": "Web app"
   },
   "recovery.capacityReached": {
     "source": "本机恢复记录已达容量上限，请在设置 → 工作区中导出并删除旧记录。当前工作区可手动导出或保存到服务器。",

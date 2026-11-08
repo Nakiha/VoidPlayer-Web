@@ -20,8 +20,12 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
     config.port = service.server.address().port;
     const base = 'http://127.0.0.1:' + config.port;
     const first = await context.newPage();
+    if (engine === 'webkit') await first.addInitScript(() => {
+      Object.defineProperty(navigator, 'platform', { value: 'MacIntel' });
+      Object.defineProperty(navigator, 'userAgent', { value: 'Mozilla/5.0 (Macintosh) Version/18.0 Safari/605.1.15' });
+    });
     await first.goto(base + '/');
-    const status = state => `#offline-app-status[data-state="${state}"]`;
+    const status = state => `#web-app[data-offline="${state}"]`;
     await first.locator(status('idle')).waitFor({ state: 'attached' });
     assert.equal(await first.evaluate(() => navigator.serviceWorker.getRegistration().then(Boolean)), false);
     const manifest = await first.evaluate(async () => {
@@ -32,6 +36,11 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
     assert.equal(manifest.start_url, '/');
     assert.equal(manifest.display, 'standalone');
     assert.deepEqual(manifest.icons.filter(icon => icon.purpose === 'any').map(icon => icon.sizes), ['192x192', '512x512']);
+    await first.locator('#identity-welcome [data-guest]').click();
+    await first.locator('#settings-open').click();
+    await first.locator('#settings-tab-about').click();
+    const install = first.locator('.about-project #web-app').getByRole('button', { name: 'Install', exact: true });
+    assert.ok(await install.isVisible());
     if (engine === 'chromium') {
       const session = await context.newCDPSession(first);
       assert.deepEqual((await session.send('Page.getInstallabilityErrors')).installabilityErrors, []);
@@ -44,19 +53,32 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
       for (const ext of ['.voidplayer', '.mp4', '.mkv']) assert.ok(extensions.includes(ext));
       for (const ext of ['.ts', '.gz', '.json']) assert.ok(!extensions.includes(ext));
       await session.detach();
+      await first.evaluate(() => {
+        window.promptCalls = 0;
+        const event = Object.assign(new Event('beforeinstallprompt', { cancelable: true }), {
+          prompt: async () => { window.promptCalls++; }, userChoice: Promise.resolve({ outcome: 'dismissed' }),
+        });
+        window.dispatchEvent(event);
+      });
+      await install.click();
+      assert.equal(await first.evaluate(() => window.promptCalls), 1);
+      assert.ok(await install.isEnabled());
+      assert.equal(await first.evaluate(() => navigator.serviceWorker.getRegistration().then(Boolean)), false);
       await first.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
+      assert.ok(await first.getByRole('button', { name: 'Installed', exact: true }).isDisabled());
     } else {
-      await first.locator('#identity-welcome [data-guest]').click();
-      await first.locator('#settings-open').click();
-      await first.locator('#settings-tab-about').click();
-      const prepare = first.getByRole('button', { name: 'Prepare for offline use' });
+      await install.click();
+      assert.match(await first.locator('#web-app-hint').innerText(), /File → Add to Dock/);
+      assert.equal(await first.evaluate(() => navigator.serviceWorker.getRegistration().then(Boolean)), false);
+      await first.addInitScript(() => Object.defineProperty(navigator, 'standalone', { value: true }));
       const icon = path.join(dist, 'icon-512.png'), bytes = await readFile(icon);
       await writeFile(icon, 'incomplete deployment');
-      await prepare.click();
-      await first.locator(status('failed')).waitFor({ state: 'visible' });
+      await first.reload();
+      await first.locator(status('failed')).waitFor({ state: 'attached' });
+      assert.equal(await first.locator('#web-app-install').textContent(), 'Installed');
       assert.deepEqual(await first.evaluate(() => caches.keys()), []);
       await writeFile(icon, bytes);
-      await prepare.click();
+      await first.reload();
     }
     await first.locator(status('ready')).waitFor({ state: 'attached', timeout: 45000 });
     // No media has been opened yet. All decoding below runs after the real service has stopped.
@@ -72,6 +94,7 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
     assert.equal(navigation.fromServiceWorker(), true);
     await offline.locator('#settings-open').waitFor({ state: 'visible' });
     await offline.locator(status('ready')).waitFor({ state: 'attached' });
+    assert.equal(await offline.locator('#web-app-install').textContent(), 'Install', 'a cached ordinary tab is not an installed app window');
     assert.equal(await offline.locator('html').getAttribute('lang'), 'en');
     assert.ok(await offline.evaluate(() => crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined'));
     const onlineOnly = ['/admin', '/connection', '/api/health', '/missing-file', '/vendor/voidplayer-core/voidplayer-core.wasm?v=old'];

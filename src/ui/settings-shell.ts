@@ -137,16 +137,14 @@ export function settingsShell() {
         ${paneTitle(t(msg("settingsShell.about", "关于")))}
         <div class="settings-section"><h4 class="settings-section-title">VoidPlayer</h4><div class="about-project settings-group">
           <div class="about-project-row"><span>${th(msg("settingsShell.version", "版本"))}</span><span id="about-version">${buildInfo?.version ?? t(msg("settingsShell.developmentBuild", "开发版本"))}</span></div>
+          <div id="web-app" class="about-project-row" hidden>
+            <div><span>${th(msg('pwa.webApp', 'Web 应用'))}</span><p id="web-app-hint" class="settings-caption" role="status" hidden></p></div>
+            <button id="web-app-install" type="button" aria-describedby="web-app-hint"></button>
+          </div>
           <div class="about-project-row"><span>${th(msg("settingsShell.projectSource", "项目源码"))}</span><a href="https://github.com/Nakiha/VoidPlayer-Web" target="_blank" rel="noopener noreferrer">VoidPlayer-Web ↗</a></div>
           <div class="about-project-row"><span>${th(msg("settingsShell.decoderSource", "解码器源码"))}</span><a href="https://github.com/Nakiha/VoidPlayer-FFmpeg-Build/tree/wasm" target="_blank" rel="noopener noreferrer">VoidPlayer-FFmpeg-Build ↗</a></div>
           <div class="about-project-row"><span>${th(msg("settingsShell.license", "许可证"))}</span><a href="/licenses/voidplayer-web.txt" target="_blank" rel="noopener">LGPL-2.1-or-later</a></div>
         </div>
-        </div>
-        <div id="offline-app" class="settings-section" hidden>
-          <div class="settings-group"><div class="settings-action-row">
-            <div><h4>${th(msg('pwa.offline', '离线使用'))}</h4><p id="offline-app-status" role="status"></p></div>
-            <button id="offline-app-prepare" type="button">${th(msg('pwa.prepare', '准备离线资源'))}</button>
-          </div></div>
         </div>
         <section class="settings-section"><h4 class="settings-section-title">${th(msg("settingsShell.openSourceCredits", "开源致谢"))}</h4><div class="settings-detail-body">
         <div class="settings-credits settings-group">

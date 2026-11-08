@@ -1,29 +1,43 @@
 import { msg, onLanguageChange, t } from '../i18n.ts';
 
-export async function installOfflineControls() {
-  const manifest = document.createElement('link');
-  manifest.rel = 'manifest';
-  manifest.href = '/manifest.webmanifest';
-  document.head.append(manifest);
+interface InstallPrompt extends Event {
+  prompt(): Promise<unknown>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
 
-  const panel = document.getElementById('offline-app')!;
-  const label = document.getElementById('offline-app-status')!;
-  const button = document.getElementById('offline-app-prepare') as HTMLButtonElement;
+function installHelp() {
+  if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+    return t(msg('pwa.iosInstall', '轻点分享按钮，选择「添加到主屏幕」。'));
+  }
+  if (/Safari\//.test(navigator.userAgent) && !/Chrome\/|Chromium\/|Edg\//.test(navigator.userAgent) && /Mac/.test(navigator.platform)) {
+    return t(msg('pwa.safariInstall', '在 Safari 的「文件」菜单中选择「添加到程序坞」，然后点「添加」。'));
+  }
+  return t(msg('pwa.browserInstall', '请在浏览器菜单中选择安装应用。如果没有此选项，请用桌面 Chrome 或 Edge 打开本页。'));
+}
+
+export async function installOfflineControls() {
+  const row = document.getElementById('web-app')!;
+  const hint = document.getElementById('web-app-hint')!;
+  const button = document.getElementById('web-app-install') as HTMLButtonElement;
   const lifetime = new AbortController();
   const options = { signal: lifetime.signal };
   window.addEventListener('pagehide', event => { if (!event.persisted) lifetime.abort(); }, options);
+  const standalone = matchMedia('(display-mode: standalone)');
+  const inApp = () => standalone.matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  let installed = inApp(), prompting = false, showHelp = false;
+  let deferred: InstallPrompt | undefined;
   let state: 'idle' | 'preparing' | 'ready' | 'failed' | 'unsupported' = 'idle';
+
   function render() {
-    const labels = {
-      idle: msg('pwa.idle', '下载播放器和解码器后，可离线打开本地视频。'),
-      preparing: msg('pwa.preparing', '正在下载播放器资源…'),
-      ready: msg('pwa.ready', '已就绪，可离线打开本地视频'),
-      failed: msg('pwa.failed', '离线资源准备失败，请联网后重试。'),
-      unsupported: msg('pwa.unsupported', '当前浏览器无法保存离线资源。'),
-    };
-    label.dataset.state = state;
-    label.textContent = t(labels[state]);
-    button.hidden = state !== 'idle' && state !== 'failed';
+    row.dataset.offline = state;
+    button.textContent = installed ? t(msg('pwa.installed', '已安装')) : t(msg('pwa.install', '安装'));
+    button.disabled = installed || prompting;
+    hint.textContent = showHelp && !installed ? installHelp()
+      : installed && state === 'failed' ? t(msg('pwa.failed', '离线资源准备失败，请联网后重试。'))
+      : installed && state === 'unsupported' ? t(msg('pwa.unsupported', '当前浏览器无法保存离线资源。')) : '';
+    hint.hidden = !hint.textContent;
+    button.title = installed && state === 'ready' ? t(msg('pwa.ready', '已就绪，可离线打开本地视频'))
+      : installed && state === 'preparing' ? t(msg('pwa.preparing', '正在下载播放器资源…')) : '';
   }
   function observe(registration: ServiceWorkerRegistration) {
     const track = () => {
@@ -50,18 +64,46 @@ export async function installOfflineControls() {
       render();
     }
   }
+  function didInstall() {
+    installed = true;
+    showHelp = false;
+    deferred = undefined;
+    render();
+    void prepare();
+  }
+  window.addEventListener('appinstalled', didInstall, options);
+  standalone.addEventListener('change', () => { if (inApp()) didInstall(); }, options);
+  window.addEventListener('beforeinstallprompt', event => {
+    event.preventDefault();
+    deferred = event as InstallPrompt;
+    installed = inApp();
+    showHelp = false;
+    render();
+  }, options);
+  button.addEventListener('click', async () => {
+    if (!deferred) { showHelp = true; render(); return; }
+    const prompt = deferred;
+    deferred = undefined; // Each event can prompt once, in the original user gesture.
+    prompting = true;
+    showHelp = false;
+    render();
+    try {
+      await prompt.prompt();
+      await prompt.userChoice;
+    } catch { showHelp = true; }
+    finally { prompting = false; render(); }
+  }, options);
   onLanguageChange(render, lifetime.signal);
-  // A normal online visit does not fetch optional decoders until the user asks for offline use.
+  const manifest = document.createElement('link');
+  manifest.rel = 'manifest';
+  manifest.href = '/manifest.webmanifest';
+  document.head.append(manifest);
+  row.hidden = false;
+  render();
   try {
     const registration = await navigator.serviceWorker.getRegistration('/');
     const worker = registration?.active ?? registration?.waiting ?? registration?.installing;
     if (registration && worker && new URL(worker.scriptURL).pathname === '/sw.js') observe(registration);
-    button.addEventListener('click', prepare, options);
-    window.addEventListener('appinstalled', prepare, options);
-    if (matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone) void prepare();
-  } catch {
-    state = 'unsupported';
-  }
-  panel.hidden = false;
-  render();
+    if (installed) void prepare();
+  } catch { state = 'unsupported'; render(); }
 }
