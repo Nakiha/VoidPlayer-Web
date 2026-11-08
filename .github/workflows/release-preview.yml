@@ -1,85 +1,28 @@
-name: Full verification and standalone releases
-
+name: Diagnose Linux playback screenshots
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
-    inputs:
-      stage_draft:
-        description: 'Stage an unpublished release draft after verification'
-        type: boolean
-        default: true
-
 permissions:
   contents: read
-
-env:
-  VOIDPLAYER_RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
-
-concurrency:
-  group: standalone-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref_type != 'tag' }}
-
 jobs:
-  identity:
-    name: Verify release version and automation
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24.15.0'
-          cache: npm
-      - run: npm ci
-      - run: node scripts/release-version.mjs
-      - run: node --test test/release-pipeline.test.mjs test/test-manifest.test.mjs
-
-  qa-media:
-    needs: identity
-    uses: ./.github/workflows/prepare-qa-media.yml
-
   cores:
-    needs: identity
     uses: ./.github/workflows/prepare-cores.yml
-
-  source-logic:
-    name: Verify all source-only Node logic
+  qa-media:
+    uses: ./.github/workflows/prepare-qa-media.yml
+  probe:
+    needs: [cores, qa-media]
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24.15.0'
-          cache: npm
-      - run: npm ci
-      - run: node scripts/run-tests.mjs source
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: source-logic-reports
-          path: .run/test-suites/source/
-          if-no-files-found: error
-
-  analysis-browser:
-    name: Verify analysis panel (${{ matrix.engine }})
-    needs: cores
-    runs-on: ${{ matrix.engine == 'webkit' && 'macos-26' || 'ubuntu-24.04' }}
-    timeout-minutes: 30
+    timeout-minutes: 12
     strategy:
       fail-fast: false
       matrix:
-        engine: [chromium, webkit]
+        mode: [cdp, headed]
     steps:
       - uses: actions/checkout@v7
-      - name: Use primary Ubuntu package archive
-        if: runner.os == 'Linux'
-        run: bash scripts/testing/prepare-ci-apt.sh
       - uses: actions/setup-node@v7
         with:
           node-version: '24.15.0'
           cache: npm
+      - run: npm ci
       - uses: actions/download-artifact@v8
         with:
           name: release-core
@@ -88,575 +31,67 @@ jobs:
         with:
           name: release-analysis-core
           path: public/vendor/voidplayer-analysis
-      - run: npm ci
-      - name: Install analysis fixture tools
-        run: |
-          if [ "$RUNNER_OS" = "macOS" ]; then
-            brew install ffmpeg
-          else
-            sudo apt-get update
-            sudo apt-get install -y ffmpeg
-          fi
-      - run: npx playwright install --with-deps chromium webkit
-      - uses: ./.github/actions/browser-display
-      - run: node scripts/run-tests.mjs --prepare
-      - name: Verify analysis panel on ${{ matrix.engine }}
-        run: node scripts/run-tests.mjs ci-analysis-ui --engine ${{ matrix.engine }} --prepared
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: analysis-browser-reports-${{ matrix.engine }}
-          # B4：诊断与临时输入分离，脚本写入固定目录；失败现场保留，
-          # 缺件时报错而不静默忽略。
-          path: |
-            .run/analysis-reports/${{ matrix.engine }}/
-            .run/test-suites/ci-analysis-ui/
-            .run/test-suites/selected/
-            .run/analysis-lifecycle/
-            .run/browser-fixtures/bitstream-*-${{ matrix.engine }}/
-          if-no-files-found: error
-          retention-days: 14
-
-  analysis-matrix:
-    name: Verify analysis matrix (${{ matrix.engine }}, ${{ matrix.part }})
-    needs: [cores, qa-media]
-    runs-on: ${{ matrix.engine == 'webkit' && 'macos-26' || 'ubuntu-24.04' }}
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        engine: [chromium, webkit]
-        part: [mp4, flv-legacy, flv-enhanced, fmp4, ts, js-containers]
-    steps:
-      - uses: actions/checkout@v7
-      - name: Use primary Ubuntu package archive
-        if: runner.os == 'Linux'
-        run: bash scripts/testing/prepare-ci-apt.sh
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24.15.0'
-          cache: npm
-      - uses: actions/download-artifact@v8
-        with:
-          name: release-core
-          path: public/vendor/voidplayer-core
-      - uses: actions/download-artifact@v8
-        with:
-          name: release-analysis-core
-          path: public/vendor/voidplayer-analysis
-      - run: npm ci
-      - uses: ./.github/actions/qa-media
-      - name: Install analysis fixture tools
-        run: |
-          if [ "$RUNNER_OS" = "macOS" ]; then
-            brew install ffmpeg
-          else
-            sudo apt-get update
-            sudo apt-get install -y ffmpeg
-          fi
-      - run: npx playwright install --with-deps ${{ matrix.engine }}
-      - uses: ./.github/actions/browser-display
-      - run: node scripts/run-tests.mjs --prepare
-      - name: Verify ${{ matrix.part }} analysis matrix on ${{ matrix.engine }}
-        run: node scripts/run-tests.mjs ci-analysis-matrix-${{ matrix.part }} --engine ${{ matrix.engine }} --prepared
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: analysis-matrix-reports-${{ matrix.engine }}-${{ matrix.part }}
-          # B4：诊断与临时输入分离，脚本写入固定目录；失败现场保留，
-          # 缺件时报错而不静默忽略。
-          path: |
-            .run/analysis-reports/${{ matrix.engine }}/
-            .run/test-suites/ci-analysis-matrix-${{ matrix.part }}/
-            .run/browser-fixtures/bitstream-analysis-matrix-${{ matrix.part }}-${{ matrix.engine }}/
-            .run/browser-fixtures/js-containers-${{ matrix.engine }}/
-          if-no-files-found: error
-          retention-days: 14
-
-  unit:
-    name: Verify media-dependent Node regressions
-    needs: [cores, qa-media]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v7
-      - name: Use primary Ubuntu package archive
-        if: runner.os == 'Linux'
-        run: bash scripts/testing/prepare-ci-apt.sh
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24.15.0'
-          cache: npm
-      - uses: actions/download-artifact@v8
-        with:
-          name: release-core
-          path: public/vendor/voidplayer-core
-      - uses: actions/download-artifact@v8
-        with:
-          name: release-analysis-core
-          path: public/vendor/voidplayer-analysis
-      - run: npm ci
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - uses: ./.github/actions/media-fixtures
         with:
           ffmpeg-repository: ${{ needs.cores.outputs.ffmpegRepository }}
           ffmpeg-revision: ${{ needs.cores.outputs.ffmpegRevision }}
-      - run: node scripts/run-tests.mjs ci-node-media
-        env:
-          VOIDPLAYER_FFMPEG_ORACLE: ${{ github.workspace }}/.run/native-oracle/ffmpeg
-      - name: Preserve complete unit outcomes and failures
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: media-node-reports
-          path: |
-            .run/test-suites/ci-node-media/
-            .run/test-suites/build-receipt.json
-          if-no-files-found: error
-          retention-days: 30
-
-  playback:
-    name: Verify trusted HTTPS, WebCodecs and source UI
-    needs: [cores, qa-media]
-    runs-on: macos-26
-    # Node and cache suites have separate required jobs; preserve the original
-    # browser/FATE case deadlines and this job budget.
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v7
-      - name: Use primary Ubuntu package archive
-        if: runner.os == 'Linux'
-        run: bash scripts/testing/prepare-ci-apt.sh
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24.15.0'
-          cache: npm
-      - uses: actions/download-artifact@v8
-        with:
-          name: release-core
-          path: public/vendor/voidplayer-core
-      - uses: actions/download-artifact@v8
-        with:
-          name: release-analysis-core
-          path: public/vendor/voidplayer-analysis
-      - run: npm ci
-      - uses: ./.github/actions/media-fixtures
-        with:
-          ffmpeg-repository: ${{ needs.cores.outputs.ffmpegRepository }}
-          ffmpeg-revision: ${{ needs.cores.outputs.ffmpegRevision }}
-      - run: npx playwright install --with-deps chromium webkit
+      - run: npx playwright install --with-deps chromium
       - uses: ./.github/actions/browser-display
-      - name: Build browser regression inputs
-        id: browser-inputs
-        run: node scripts/run-tests.mjs --prepare
-      - name: Verify identity and Agent annotation flows
-        if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
-        run: node scripts/run-tests.mjs --case browser-agent-annotations-chromium,browser-identity-chromium,identity-http-guide --prepared
-      - name: Verify opportunistic audio before the full playback suites
-        if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
-        run: node scripts/run-tests.mjs ci-audio --prepared
-      - name: Preserve audio navigation and output evidence
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: opportunistic-audio-reports
-          path: |
-            .run/opportunistic-audio/
-            .run/track-metadata/
-            .run/test-suites/ci-audio/
-          if-no-files-found: ignore
-          retention-days: 30
-      - name: Verify independent playback and source UI cases
-        if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
-        run: node scripts/run-tests.mjs ci-playback --prepared
-      - name: Generate approximately 100 MB 1080p playback inputs
-        id: playback-inputs
+      - name: Write isolated launch adapter
         run: |
-          brew install ffmpeg nss dav1d pkg-config
-          node scripts/make-playback-fixtures.mjs
-      - name: Test FLV native decode policy
-        if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
+          mkdir -p .run
+          cat > .run/gpu-capture-launch.mjs <<'JS'
+          import {chromium} from 'playwright';
+          const launch=chromium.launch.bind(chromium);
+          chromium.launch=options=>{
+            if(process.env.CAPTURE_MODE==='headed')options={...options,headless:false};
+            if(process.env.CAPTURE_MODE==='no-surface')options={...options,args:[...(options.args??[]),'--disable-vulkan-surface']};
+            if(process.env.CAPTURE_MODE==='cdp')options={...options,args:options.args.map(arg=>arg.startsWith('--enable-features=')?arg+',CDPScreenshotNewSurface':arg)};
+            return launch(options);
+          };
+          JS
+      - name: Run unchanged FLV overlay regression
         env:
-          FLV_CASE: standard-h264
-        run: node scripts/run-tests.mjs ci-flv --prepared
-      - name: Verify FLV startup in each engine independently
-        if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
-        run: node scripts/run-tests.mjs flv-startup --prepared
-      - name: Verify FATE browser frame contracts
-        timeout-minutes: 6
-        if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
-        run: node scripts/run-tests.mjs ci-fate --case fate-browser --prepared --directory .run/test-suites/ci-fate-browser
-      - name: Verify FATE native metadata and frame regressions
-        timeout-minutes: 6
-        if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
-        run: node scripts/run-tests.mjs ci-fate --case fate --prepared --directory .run/test-suites/ci-fate-native
-      - name: Audit FATE transport-stream clock faults (exploratory report)
-        timeout-minutes: 8
-        run: |
-          node scripts/make-timestamp-fixtures.mjs
-          node scripts/check-timestamp-corpus.mjs --report-only
-      - name: Test trusted HTTPS loading and repeated dual WebCodecs playback
-        if: ${{ !cancelled() && steps.playback-inputs.outcome == 'success' }}
-        run: node scripts/run-tests.mjs ci-https --prepared
-        env:
-          VOIDPLAYER_HTTPS_TEST: '1'
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: https-playback-reports
-          path: |
-            .run/playback-reports/
-            .run/test-suites/
-            .run/native-yuv-lifecycle/
-            .run/browser-fixtures/ui-*/
-          if-no-files-found: ignore
-          retention-days: 30
-
-  cache-browser:
-    name: Verify annotation persistence and unified cache management
-    needs: [cores, qa-media]
-    runs-on: macos-26
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v7
-      - name: Use primary Ubuntu package archive
-        if: runner.os == 'Linux'
-        run: bash scripts/testing/prepare-ci-apt.sh
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24.15.0'
-          cache: npm
-      - uses: actions/download-artifact@v8
-        with:
-          name: release-core
-          path: public/vendor/voidplayer-core
-      - uses: actions/download-artifact@v8
-        with:
-          name: release-analysis-core
-          path: public/vendor/voidplayer-analysis
-      - run: npm ci
-      - uses: ./.github/actions/media-fixtures
-        with:
-          ffmpeg-repository: ${{ needs.cores.outputs.ffmpegRepository }}
-          ffmpeg-revision: ${{ needs.cores.outputs.ffmpegRevision }}
-      - run: npx playwright install --with-deps chromium webkit
-      - uses: ./.github/actions/browser-display
-      - name: Build browser regression inputs
-        id: browser-inputs
-        run: node scripts/run-tests.mjs --prepare
-      - name: Generate approximately 100 MB 1080p playback inputs
-        id: playback-inputs
-        run: |
-          brew install ffmpeg nss dav1d pkg-config
-          node scripts/make-playback-fixtures.mjs
-      - name: Verify annotation persistence and unified cache management
-        env:
+          CAPTURE_MODE: ${{ matrix.mode }}
           DEBUG: pw:browser
-        if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
-        run: node scripts/run-tests.mjs ci-cache --prepared
+        run: NODE_OPTIONS="--import=$PWD/.run/gpu-capture-launch.mjs" node scripts/run-tests.mjs --case browser-bitstream-analysis-flv-legacy-chromium
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: annotation-cache-screenshots
+          name: capture-probe-${{ matrix.mode }}
           include-hidden-files: true
           path: |
-            /tmp/voidplayer-annotation-*.png
-            /tmp/voidplayer-caches-*.png
-            .run/workspace-sharing-browser-*/
-            .run/test-suites/ci-cache/
-            .run/test-suites/preparation/
-            .run/test-suites/build-receipt.json
-            .run/playback-reports/
-          if-no-files-found: ignore
-
-  uncovered-regressions:
-    name: Verify browser regressions no other job runs
-    needs: [cores, qa-media]
-    runs-on: ${{ matrix.engine == 'webkit' && 'macos-26' || 'ubuntu-24.04' }}
-    timeout-minutes: 40
-    strategy:
-      fail-fast: false
-      matrix:
-        engine: [chromium, webkit]
-    steps:
-      - uses: actions/checkout@v7
-      - name: Use primary Ubuntu package archive
-        if: runner.os == 'Linux'
-        run: bash scripts/testing/prepare-ci-apt.sh
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24.15.0'
-          cache: npm
-      - uses: actions/download-artifact@v8
-        with:
-          name: release-core
-          path: public/vendor/voidplayer-core
-      - uses: actions/download-artifact@v8
-        with:
-          name: release-analysis-core
-          path: public/vendor/voidplayer-analysis
-      - run: npm ci
-      - uses: ./.github/actions/qa-media
-      - name: Prepare generated fixtures
-        run: |
-          if [ "$RUNNER_OS" = "macOS" ]; then
-            brew install ffmpeg
-          else
-            sudo apt-get update
-            sudo apt-get install -y ffmpeg
-          fi
-          npm run fixtures:flv
-          npm run fixtures:hlg
-      - name: Prepare verified pinned FATE fixtures
-        uses: ./.github/actions/fate-fixtures
-      - run: npx playwright install --with-deps chromium webkit
-      - uses: ./.github/actions/browser-display
-      - run: node scripts/run-tests.mjs --prepare
-      - name: Verify regressions that no other job runs
-        # The runner records every exit status and fails only after all cases ran.
-        run: node scripts/run-tests.mjs uncovered --prepared --engine ${{ matrix.engine }}
-      - name: Verify language switching and expanded layouts
-        run: node scripts/run-tests.mjs ci-i18n --prepared --engine ${{ matrix.engine }}
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: uncovered-browser-reports-${{ matrix.engine }}
-          path: |
-            .run/test-suites/uncovered/
-            .run/test-suites/ci-i18n/
-            .run/analysis-reports/${{ matrix.engine }}/
-            .run/playback-reports/
-          if-no-files-found: error
-          retention-days: 30
-
-  hevc-browser:
-    name: Verify HEVC timeline (${{ matrix.engine }}, ${{ matrix.input }})
-    needs: [cores, qa-media]
-    runs-on: ${{ matrix.engine == 'webkit' && 'macos-26' || 'ubuntu-24.04' }}
-    # Chromium software graphics audits 1200 full-source captures. The case
-    # has a separate no-progress watchdog; leave room for its 30-minute budget.
-    timeout-minutes: 35
-    strategy:
-      fail-fast: false
-      matrix:
-        engine: [chromium, webkit]
-        input: [local, remote]
-    steps:
-      - uses: actions/checkout@v7
-      - name: Use primary Ubuntu package archive
-        if: runner.os == 'Linux'
-        run: bash scripts/testing/prepare-ci-apt.sh
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24.15.0'
-          cache: npm
-      - uses: actions/download-artifact@v8
-        with:
-          name: release-core
-          path: public/vendor/voidplayer-core
-      - uses: actions/download-artifact@v8
-        with:
-          name: release-analysis-core
-          path: public/vendor/voidplayer-analysis
-      - run: npm ci
-      - uses: ./.github/actions/qa-media
-      - run: npx playwright install --with-deps ${{ matrix.engine }}
-      - uses: ./.github/actions/browser-display
-      # Preserve all eight full 600-frame sweeps (two reopen rounds per cell).
-      - run: node scripts/run-tests.mjs --case hevc-timeline-${{ matrix.engine }}-${{ matrix.input }}
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: hevc-timeline-${{ matrix.engine }}-${{ matrix.input }}
-          path: |
-            .run/playback-reports/hevc-timeline-browser.json
             .run/test-suites/selected/
-            .run/analysis-lifecycle/
-          if-no-files-found: error
-
-  native-runtime:
-    name: Verify runtime suites (${{ matrix.os }}, ${{ matrix.runtime }})
+            .run/browser-fixtures/
+            .run/analysis-reports/
+  macos-reference:
     needs: cores
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        runtime: [node, bun]
-        os: [ubuntu-24.04, windows-2022, macos-15]
-    steps:
-      - uses: actions/checkout@v7
-      - name: Use primary Ubuntu package archive
-        if: runner.os == 'Linux'
-        run: bash scripts/testing/prepare-ci-apt.sh
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24.15.0'
-          cache: npm
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-      - uses: actions/download-artifact@v8
-        with:
-          name: release-core
-          path: public/vendor/voidplayer-core
-      - uses: actions/download-artifact@v8
-        with:
-          name: release-analysis-core
-          path: public/vendor/voidplayer-analysis
-      - run: npm ci
-      - run: node scripts/run-tests.mjs --case release-core
-      - name: Verify Node configuration, storage contracts
-        if: matrix.runtime == 'node'
-        run: node scripts/run-tests.mjs ci-native-node
-        env:
-          NODE_OPTIONS: --test-reporter=tap
-      - name: Verify Bun configuration, storage contracts
-        if: matrix.runtime == 'bun'
-        run: node scripts/run-tests.mjs ci-native-bun
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: native-runtime-reports-${{ matrix.os }}-${{ matrix.runtime }}
-          path: .run/test-suites/
-          if-no-files-found: ignore
-
-  native-release:
-    name: Standalone ${{ matrix.platform }}
-    needs: [cores, qa-media]
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { os: ubuntu-24.04, platform: linux-x64 }
-          - { os: windows-2022, platform: windows-x64 }
-          - { os: macos-15, platform: darwin-arm64 }
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v7
-      - name: Use primary Ubuntu package archive
-        if: runner.os == 'Linux'
-        run: bash scripts/testing/prepare-ci-apt.sh
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24.15.0'
-          cache: npm
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-      - uses: actions/download-artifact@v8
-        with:
-          name: release-core
-          path: public/vendor/voidplayer-core
-      - uses: actions/download-artifact@v8
-        with:
-          name: release-analysis-core
-          path: public/vendor/voidplayer-analysis
-      - run: npm ci
-      - run: node scripts/run-tests.mjs --case release-core
-      - run: node scripts/run-tests.mjs --prepare
-      - run: node scripts/package-release.mjs --target bun-${{ matrix.platform }}
-      - run: node scripts/run-tests.mjs --case release
-      - uses: ./.github/actions/qa-media
-      - run: node scripts/run-tests.mjs --case release-analysis
-      - name: Install network playback browser
-        if: runner.os == 'Linux' || runner.os == 'Windows'
-        run: npx playwright install --with-deps chromium
-      - uses: ./.github/actions/browser-display
-      - name: Install certificate test utility
-        if: runner.os == 'Linux'
-        run: sudo apt-get install -y libnss3-tools
-      - name: Verify ordinary HTTP connection guide
-        if: runner.os == 'Linux'
-        run: node scripts/run-tests.mjs ci-native-http --prepared
-        env:
-          VOIDPLAYER_HTTP_TEST: '1'
-          VOIDPLAYER_HTTP_PLAYBACK: '1'
-      - name: Verify trusted HTTPS and WebCodecs on client platforms
-        timeout-minutes: 3
-        if: runner.os == 'Linux' || runner.os == 'Windows'
-        run: node scripts/run-tests.mjs ci-native-https --prepared
-        env:
-          VOIDPLAYER_HTTPS_TEST: '1'
-          VOIDPLAYER_HTTP_PLAYBACK: '1'
-      - name: Verify Windows console shutdown
-        if: runner.os == 'Windows'
-        run: node scripts/run-tests.mjs ci-native-console
-      - uses: actions/upload-artifact@v7
-        with:
-          name: voidplayer-${{ matrix.platform }}
-          path: artifacts/*.tar.gz*
-          if-no-files-found: error
-          retention-days: 30
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: native-test-reports-${{ matrix.platform }}
-          path: .run/test-suites/
-          if-no-files-found: ignore
-      - name: Write download summary
-        shell: bash
-        env:
-          PLATFORM: ${{ matrix.platform }}
-        run: |
-          echo "### $PLATFORM" >> "$GITHUB_STEP_SUMMARY"
-          echo '构建与独立运行测试通过。请下载本次运行的同名 artifact，解压后核验 .sha256。' >> "$GITHUB_STEP_SUMMARY"
-          echo '最终用户无需安装 Node/Bun。分支构建提供预览产物；版本标签在全平台验证通过后生成 Release 草稿。' >> "$GITHUB_STEP_SUMMARY"
-
-  release-set:
-    name: Verify complete platform release set
-    needs: [native-release, native-runtime, unit, playback, cache-browser, source-logic, analysis-browser, analysis-matrix, hevc-browser, uncovered-regressions]
-    if: ${{ always() }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24.15.0'
-      - name: Require every verification job to succeed
-        env:
-          VERIFICATION_RESULTS: ${{ toJSON(needs) }}
-        run: |
-          node --input-type=module <<'JS'
-          const results = JSON.parse(process.env.VERIFICATION_RESULTS);
-          const incomplete = Object.entries(results).filter(([, job]) => job.result !== 'success');
-          if (!Object.keys(results).length || incomplete.length) {
-            console.error('Required verification jobs did not succeed:', incomplete.map(([id, job]) => `${id}=${job.result}`).join(', ') || 'missing results');
-            process.exit(1);
-          }
-          JS
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: voidplayer-*
-          merge-multiple: true
-          path: artifacts/release-set
-      - run: node scripts/run-tests.mjs --case release-set
-      - uses: actions/upload-artifact@v7
-        with:
-          name: verified-release-set
-          path: artifacts/release-set/
-          if-no-files-found: error
-          retention-days: 30
-
-  release-draft:
-    name: Stage verified release draft
-    if: github.ref_type == 'tag' && (github.event_name != 'workflow_dispatch' || inputs.stage_draft)
-    needs: release-set
-    runs-on: ubuntu-24.04
+    runs-on: macos-26
     timeout-minutes: 15
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: '24.15.0'
+          cache: npm
+      - run: npm ci
       - uses: actions/download-artifact@v8
         with:
-          name: verified-release-set
-          path: artifacts/release-set
-      - name: Reverify archives and stage unpublished draft
+          name: release-core
+          path: public/vendor/voidplayer-core
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-analysis-core
+          path: public/vendor/voidplayer-analysis
+      - run: brew install ffmpeg
+      - run: npx playwright install chromium
+      - run: node scripts/run-tests.mjs --case browser-reference-flv-chromium --case browser-opportunistic-audio-chromium
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: node scripts/stage-release.mjs
+          VOIDPLAYER_FUNCTIONAL_ONLY: '1'
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: macos-reference-diagnostics
+          include-hidden-files: true
+          path: .run/test-suites/selected/

@@ -99,7 +99,7 @@ try {
           && decisions.some(d => d.reason === 'native-failed')
           && state.tracks[0].decoder === 'ffmpeg-wasm';
         assert.ok(refusal || gate || webkitAv1DecodeGap || reusedSoftwareWitness || inPlaceSoftwareFallback, JSON.stringify({ decisions, events: logs.events.filter(e => e.cat === 'media') }));
-        if (codec === 'av1' && !fault && !software && !refusal && !webkitAv1DecodeGap) assert.fail(`AV1 raw-plane admission unexpectedly failed: ${JSON.stringify(gate)}`);
+        if (codec === 'av1' && !fault && !software && !refusal && !webkitAv1DecodeGap) assert.fail(`AV1 raw-plane admission unexpectedly failed: ${JSON.stringify({gate,decisions,events:logs.events.filter(e=>e.cat==='media')})}`);
         if (webkitAv1DecodeGap) console.log('PLATFORM GAP webkit av1: probe passed but first-frame decode failed, WASM fallback active');
         else if (inPlaceSoftwareFallback) console.log(`IN-PLACE FALLBACK ${codec}: shared FLV demux/index, no second software source open`);
         else console.log(`ADMISSION REFUSAL ${codec}: ${JSON.stringify(gate?.data ?? decisions)}`);
