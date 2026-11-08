@@ -69,6 +69,12 @@ try {
   page.setDefaultTimeout(30000);
   const errors = [];
   const decoderNotices = [];
+  const browseResponses=[], revisionConflicts=[];
+  page.on('response',response=>{
+    if(new URL(response.url()).pathname!=='/api/library/browse')return;
+    browseResponses.push({response,url:response.url(),status:response.status(),
+      body:response.status()===200?response.json().then(value=>({value}),error=>({readError:error.message})):undefined});
+  });
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {
     if (message.type() !== 'error') return;
@@ -76,7 +82,15 @@ try {
     // FFmpeg writes this AV1 size-limit notice to stderr; preserve it as
     // evidence while still rejecting every actual error and unexpected line.
     if (/^\[libdav1d @ 0x[0-9a-f]+\] Frame size limit reduced from 2147483647 to 67108864\.$/.test(text)) decoderNotices.push(text);
-    else errors.push(text);
+    else {
+      const location=message.location().url;
+      let url;try{url=new URL(location);}catch{}
+      if(/^Failed to load resource: the server responded with a status of 409 \(Conflict\)$/.test(text)
+        &&url?.origin===new URL(base).origin&&url.pathname==='/api/library/browse'&&url.searchParams.has('revision')){
+        revisionConflicts.push(location);
+      }
+      else errors.push(`${text} (${location})`);
+    }
   });
   const panelRequests = [];
   page.on('request', request => { if (/\/panel-[^/]+\.js/.test(request.url())) panelRequests.push(request.url()); });
@@ -503,12 +517,14 @@ try {
   // 缩窄绘图区使全览低于 1px 柱 + 间隔容量，验证聚合桶仍按峰值定位。
   await fullRange(page);
   await page.setViewportSize({ width: 640, height: 800 });
+  await settleAppearance(page);
   // Buckets may already exist at 1280px. Wait for the resized drawing, whose
   // full-domain padding depends on width, before capturing the click baseline.
   await page.waitForFunction(() => {
     const canvas = document.getElementById('analysis-canvas'), qa = window.__vpAnalysis;
-    return qa?.glyphs.some(g => g.kind === 'bucket')
+    return qa?.queryPending.length===0&&qa.glyphs.some(g => g.kind === 'bucket')
       && Math.abs(canvas.width / Math.min(2, devicePixelRatio || 1) - canvas.getBoundingClientRect().width) <= 1
+      && Math.abs(canvas.height / Math.min(2, devicePixelRatio || 1) - canvas.getBoundingClientRect().height) <= 1
       && +canvas.dataset.axisStart === qa.view.start && +canvas.dataset.axisEnd === qa.view.end;
   });
   const bucketBox = await page.locator('#analysis-canvas').boundingBox();
@@ -517,9 +533,25 @@ try {
     return bs[Math.floor(bs.length / 2)];
   });
   assert.ok(bucket, '全览应有区间桶 glyph');
+  const peak=await page.evaluate(async bucket=>{
+    const query=window.voidPlayer.tools.find(tool=>tool.name==='query_analysis');
+    const result=await query.execute({slot:bucket.slot,axis:'pts',startUs:bucket.startUs,endUs:bucket.endUs,pixelWidth:4096});
+    const samples=result.samples.filter(sample=>sample.effectivePtsUs>=bucket.startUs
+      &&sample.effectivePtsUs<bucket.endUs&&sample.sizeBytes!=null);
+    return samples.reduce((peak,sample)=>!peak||sample.sizeBytes>peak.sizeBytes?sample:peak,null);
+  },bucket);
+  assert.ok(peak&&Number.isSafeInteger(peak.effectivePtsUs),'桶的独立包查询须含可定位峰值');
   const viewB0 = await page.evaluate(() => window.__vpAnalysis.view);
-  await page.mouse.click(bucketBox.x + bucket.cx, bucketBox.y + bucket.cy);
-  await page.waitForFunction(pos => document.getElementById('position').value !== pos, posBefore, { timeout: 8000 });
+  await saveDiagnostics(page,'bucket-click-target',{bucket,bucketBox,peak,view:viewB0});
+  // The responsive header can move the canvas after its glyphs are ready.
+  // Locator-relative trusted input waits for the actual canvas to settle.
+  await page.locator('#analysis-canvas').click({position:{x:bucket.cx,y:bucket.cy}});
+  await page.waitForFunction(expected=>window.voidPlayer.getState().positionUs===expected
+    &&!window.voidPlayer.getState().busy,peak.effectivePtsUs,{timeout:8000});
+  await page.waitForFunction(bucket=>{
+    const direct=window.__vpAnalysis.inspection?.direct;
+    return direct?.kind==='bucket'&&direct.slot===bucket.slot&&direct.bucketStartUs===bucket.startUs&&direct.bucketEndUs===bucket.endUs;
+  },bucket,{timeout:8000});
   const viewB1 = await page.evaluate(() => window.__vpAnalysis.view);
   assert.deepEqual(viewB1, viewB0, '桶点击只定位，不缩放视图');
   posBefore = await page.locator('#position').inputValue();
@@ -549,9 +581,10 @@ try {
   const clicked = await page.evaluate(() => window.__vpAnalysis.glyphs.find(g => g.kind === 'sample' && g.slot === 'B' && !g.stacked));
   assert.ok(clicked, '应有 B 逐样本 glyph');
   const viewBefore = await page.evaluate(() => window.__vpAnalysis.view);
-  await page.mouse.click(box.x + clicked.cx, box.y + clicked.cy);
+  await page.locator('#analysis-canvas').click({position:{x:clicked.cx,y:clicked.cy}});
   try {
-    await page.waitForFunction(pos => document.getElementById('position').value !== pos, posBefore, { timeout: 8000 });
+    await page.waitForFunction(expected=>window.voidPlayer.getState().positionUs===expected
+      &&!window.voidPlayer.getState().busy,clicked.axisUs,{timeout:8000});
   } catch {
     // 失败保留现场：目标 glyph、检查快照与视图一起带出，不改测试快照换目标。
     const scene = await page.evaluate(() => ({ inspection: window.__vpAnalysis.inspection, view: window.__vpAnalysis.view }));
@@ -778,6 +811,33 @@ try {
   assert.match(await page.locator('#analysis-status').getAttribute('aria-label'), /PTS序/);
   assert.equal(await page.locator('#analysis-axis [data-axis="pts"]').getAttribute('aria-pressed'), 'true');
 
+  // Library revision conflicts are an explicit restart protocol, not an
+  // application error. Accept only a real conflict followed by a fresh first
+  // page in the same scope, rather than ignoring HTTP console failures.
+  const checkedConflicts=new Set();
+  for(const location of revisionConflicts){
+    const response=browseResponses.find(response=>!checkedConflicts.has(response)
+      &&response.url===location&&response.status===409);
+    assert.ok(response,'revision console notice must have a matching HTTP conflict');
+    checkedConflicts.add(response);
+    assert.equal(response.response.request().method(),'GET');
+    assert.match(response.response.headers()['content-type'],/application\/json/);
+    const stale=new URL(location),index=browseResponses.indexOf(response);
+    const fresh=response=>{
+      const url=new URL(response.url);
+      return response.status===200&&!url.searchParams.has('revision')&&url.searchParams.get('offset')==='0'
+        &&['root','directory','search','recursive','limit'].every(key=>url.searchParams.get(key)===stale.searchParams.get(key));
+    };
+    let recovery=browseResponses.slice(index+1).find(fresh);
+    if(!recovery){
+      const received=await page.waitForResponse(response=>fresh({url:response.url(),status:response.status()}),{timeout:10000});
+      recovery=browseResponses.find(entry=>entry.response===received);
+    }
+    const recovered=await recovery.body;
+    assert.ok(recovered.value,JSON.stringify(recovered));
+    assert.ok(recovered.value.revision>Number(stale.searchParams.get('revision')),'library conflict must recover with a newer first page');
+    console.log('LIBRARY_REVISION_RECOVERY_EVIDENCE',JSON.stringify({conflict:location,recovery:recovery.url,revision:recovered.value.revision}));
+  }
   assert.deepEqual(errors, []);
   // 成功截图写入固定诊断目录（CI 按目录上传），同时校验落盘存在。
   await page.screenshot({ path: join(reportDir, 'analysis-panel.png') });

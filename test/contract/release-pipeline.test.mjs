@@ -9,6 +9,7 @@ import { releaseVersion, readReleaseIdentity, readBuildIdentity, verifyFrontendI
 import { verifyReleaseSet, sha256, releasePlatforms } from '../../scripts/check-release-set.mjs';
 import { stageRelease, verifyDraftReleaseSet } from '../../scripts/stage-release.mjs';
 import { normalizeReleasePermissions, verifyReleaseArchivePermissions, verifyReleaseExecutablePermissions } from '../../scripts/tools/release/permissions.mjs';
+import { selectCases } from '../../scripts/testing/manifest.mjs';
 // These structural contracts run in the identity job before npm ci. Keep them
 // dependency-free and fail closed if the workflow's job/needs syntax changes.
 function workflowJobs(source) {
@@ -126,7 +127,7 @@ test('release workflow gates verified artifacts and draft staging on every verif
   const cores = workflowJobs(await readFile(new URL('../../.github/workflows/prepare-cores.yml', import.meta.url), 'utf8'));
   assert.match(jobs.cores.body, /uses: \.\/\.github\/workflows\/prepare-cores\.yml/);
   assert.match(cores['analysis-core'].body, /name: Verify analysis reference ABI including restored caches\n        run: node scripts\/prepare-analysis-core.mjs public\/vendor\/voidplayer-analysis/);
-  const required = ['native-release', 'native-runtime', 'unit', 'playback', 'cache-browser', 'source-logic', 'analysis-browser', 'analysis-matrix', 'hevc-browser', 'uncovered-regressions'];
+  const required = ['native-release', 'native-runtime', 'unit', 'playback', 'https-playback', 'cache-browser', 'source-logic', 'analysis-browser', 'analysis-matrix', 'hevc-browser', 'uncovered-regressions'];
   assert.deepEqual([...jobs['release-set'].needs].sort(), required.sort());
   assert.deepEqual(jobs.unit.needs, ['cores', 'qa-media']);
   assert.match(jobs.unit.body, /run: node scripts\/run-tests\.mjs ci-node-media-\$\{\{ matrix.part \}\}\n        env:\n          VOIDPLAYER_FFMPEG_ORACLE:/);
@@ -145,7 +146,12 @@ test('release workflow gates verified artifacts and draft staging on every verif
   }));
   assert.equal(jobs['paired-https'], undefined, 'cloud benchmark comparison is removed');
   assert.doesNotMatch(workflow, /ci-perf|bench-playback|benchmark-only|VIRTUAL_PERF|performance-reports/);
-  assert.match(jobs.playback.body, /run-tests\.mjs ci-https --prepared/);
+  assert.match(jobs['https-playback'].body, /run-tests\.mjs ci-https --prepared/);
+  const httpsRunner=/^    runs-on: (.+)$/m.exec(jobs['https-playback'].body)?.[1];
+  const platform=httpsRunner?.startsWith('ubuntu-')?'linux':httpsRunner?.startsWith('windows-')?'win32':httpsRunner?.startsWith('macos-')?'darwin':undefined;
+  assert.ok(platform,'HTTPS has an explicit native host');
+  assert.deepEqual(selectCases({suite:'ci-https',platform},manifest).selected.map(row=>row.id),['https-playback-functional'],'host migration must never select zero HTTPS cases');
+  assert.doesNotMatch(jobs.playback.body,/ci-https|make-playback-fixtures/);
   assert.deepEqual([...dependencies('release-set')].sort(), Object.keys(jobs).filter(id => !['release-set', 'release-draft'].includes(id)).sort(),
     'every new required verification job must be in the release dependency graph');
   for (const id of dependencies('release-set')) {
@@ -256,7 +262,7 @@ test('cache suite runs once in its own required job with the same pinned prepara
     'same checkout, pinned core/QA/FATE/oracle, native tools, Playwright and verified build preparation');
   const fixtures = body => /      - name: Generate approximately 100 MB 1080p playback inputs\n[\s\S]*?(?=      - )/.exec(body)?.[0];
   assert.ok(fixtures(cache.body));
-  assert.equal(fixtures(cache.body), fixtures(jobs.playback.body), 'preserve every preceding generated input');
+  assert.match(jobs['https-playback'].body,/name: Generate approximately 100 MB 1080p playback inputs\n        run: node scripts\/make-playback-fixtures\.mjs/,'HTTPS retains its two large synthetic inputs on the certificate-capable host');
   assert.match(cache.body, /if: always\(\)[\s\S]*name: annotation-cache-screenshots\n          include-hidden-files: true/);
   for (const artifact of ['/tmp/voidplayer-annotation-*.png', '/tmp/voidplayer-caches-*.png', '.run/workspace-sharing-browser-*/', '.run/test-suites/ci-cache/', '.run/test-suites/preparation/', '.run/test-suites/build-receipt.json', '.run/playback-reports/']) {
     assert.ok(cache.body.includes(`            ${artifact}\n`), `cache evidence retained: ${artifact}`);
@@ -272,7 +278,8 @@ test('browser workflow collects independent outcomes and uploads failure evidenc
   assert.match(jobs['uncovered-regressions'].body, /if: always\(\)[\s\S]*name: uncovered-browser-reports[\s\S]*\.run\/test-suites\/uncovered\//);
   assert.match(jobs.playback.body, /if: \$\{\{ !cancelled\(\) && steps\.browser-inputs\.outcome == 'success' \}\}\n        run: node scripts\/run-tests\.mjs flv-startup --prepared/);
   assert.match(jobs.playback.body, /\.run\/test-suites\//);
-  assert.match(jobs.playback.body, /if: always\(\)[\s\S]*name: https-playback-reports[\s\S]*\.run\/native-yuv-lifecycle\//);
+  assert.match(jobs.playback.body, /if: always\(\)[\s\S]*name: playback-browser-reports[\s\S]*\.run\/native-yuv-lifecycle\//);
+  assert.match(jobs['https-playback'].body,/if: always\(\)[\s\S]*name: https-playback-reports[\s\S]*\.run\/test-suites\/ci-https\//);
 });
 
 test('analysis matrix runs as independent required jobs with distinct evidence', async () => {

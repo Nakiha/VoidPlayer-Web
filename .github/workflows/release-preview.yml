@@ -219,7 +219,7 @@ jobs:
           retention-days: 30
 
   playback:
-    name: Verify trusted HTTPS, WebCodecs and source UI
+    name: Verify playback, FATE and source UI
     needs: [cores, qa-media]
     runs-on: macos-26
     # Node and cache suites have separate required jobs; preserve the original
@@ -272,11 +272,6 @@ jobs:
       - name: Verify independent playback and source UI cases
         if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
         run: node scripts/run-tests.mjs ci-playback --prepared
-      - name: Generate approximately 100 MB 1080p playback inputs
-        id: playback-inputs
-        run: |
-          brew install ffmpeg nss dav1d pkg-config
-          node scripts/make-playback-fixtures.mjs
       - name: Test FLV native decode policy
         if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
         env:
@@ -298,8 +293,50 @@ jobs:
         run: |
           node scripts/make-timestamp-fixtures.mjs
           node scripts/check-timestamp-corpus.mjs --report-only
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: playback-browser-reports
+          path: |
+            .run/playback-reports/
+            .run/test-suites/
+            .run/native-yuv-lifecycle/
+            .run/browser-fixtures/ui-*/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  https-playback:
+    name: Verify trusted HTTPS and repeated dual WebCodecs playback
+    needs: cores
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Use primary Ubuntu package archive
+        run: bash scripts/testing/prepare-ci-apt.sh
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-core
+          path: public/vendor/voidplayer-core
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-analysis-core
+          path: public/vendor/voidplayer-analysis
+      - run: npm ci
+      - name: Install generated-media and certificate tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libnss3-tools
+      - run: npx playwright install --with-deps chromium
+      - uses: ./.github/actions/browser-display
+      - run: node scripts/run-tests.mjs --prepare
+      - name: Generate approximately 100 MB 1080p playback inputs
+        run: node scripts/make-playback-fixtures.mjs
       - name: Test trusted HTTPS loading and repeated dual WebCodecs playback
-        if: ${{ !cancelled() && steps.playback-inputs.outcome == 'success' }}
         run: node scripts/run-tests.mjs ci-https --prepared
         env:
           VOIDPLAYER_HTTPS_TEST: '1'
@@ -309,9 +346,7 @@ jobs:
           name: https-playback-reports
           path: |
             .run/playback-reports/
-            .run/test-suites/
-            .run/native-yuv-lifecycle/
-            .run/browser-fixtures/ui-*/
+            .run/test-suites/ci-https/
           if-no-files-found: ignore
           retention-days: 30
 
@@ -611,7 +646,7 @@ jobs:
 
   release-set:
     name: Verify complete platform release set
-    needs: [native-release, native-runtime, unit, playback, cache-browser, source-logic, analysis-browser, analysis-matrix, hevc-browser, uncovered-regressions]
+    needs: [native-release, native-runtime, unit, playback, https-playback, cache-browser, source-logic, analysis-browser, analysis-matrix, hevc-browser, uncovered-regressions]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
