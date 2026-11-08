@@ -13,14 +13,27 @@ await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {vi
   const beforeView=await page.evaluate(()=>window.voidPlayer.getViewport());
   const focusButton = page.locator('#toggle-chrome');
   const opacity = () => focusButton.evaluate(button => getComputedStyle(button).opacity);
+  const dockMaterial = () => page.locator('.transport-dock').evaluate(dock => {
+    const style = getComputedStyle(dock);
+    return { background: style.backgroundColor, blur: style.getPropertyValue('backdrop-filter'), webkitBlur: style.getPropertyValue('-webkit-backdrop-filter') };
+  });
+  const normalMaterial = await dockMaterial();
+  const assertFocusMaterial = async () => {
+    const material = await dockMaterial();
+    assert.equal(material.background, 'rgba(0, 0, 0, 0)', 'focus mode leaves no transport backing fill');
+    assert.ok([material.blur, material.webkitBlur].every(value => !value || value === 'none'),
+      `focus mode removes both supported backdrop filters: ${JSON.stringify(material)}`);
+  };
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await focusButton.click();
+  await assertFocusMaterial();
   assert.ok(await focusButton.evaluate(button => getComputedStyle(button).transitionProperty.split(',').some(value => value.trim() === 'opacity')),
     'focus exit animates opacity when motion is allowed');
   await page.waitForTimeout(1800);
   assert.equal(await opacity(), '1', 'focus exit stays visible during the two-second grace period');
   await page.waitForFunction(() => getComputedStyle(document.getElementById('toggle-chrome')).opacity === '0', null, { timeout: 5000 });
   assert.equal(await focused(), 'true', 'idle fade preserves focus mode');
+  await assertFocusMaterial();
   assert.equal(await page.locator('#control-tooltip').isVisible(), false, 'idle button leaves no floating tooltip');
   const box = await focusButton.boundingBox();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -39,6 +52,7 @@ await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {vi
   assert.equal(await opacity(), '1', 'keyboard-focused exit remains visible');
   await page.keyboard.press('f');
   assert.equal(await focused(), 'false', 'keyboard shortcut exits after fading');
+  assert.deepEqual(await dockMaterial(), normalMaterial, 'exiting focus mode restores the transport material');
   assert.deepEqual(await page.locator('#stage-A').boundingBox(), beforeFocus, 'fade never changes stage geometry');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.locator('#toggle-chrome').focus();

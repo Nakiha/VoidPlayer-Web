@@ -697,7 +697,7 @@ button[aria-haspopup=menu], .choice-menu button { -webkit-user-select: none; use
 .viewport-surface.chrome-hidden .card-heading, .viewport-surface.chrome-hidden .transport,
 .viewport-surface.chrome-hidden .pixel-grid-label,
 .viewport-surface.chrome-hidden .frame-annotations, .viewport-surface.chrome-hidden .image-wrap svg { visibility: hidden; pointer-events: none; }
-.viewport-surface.chrome-hidden .transport-dock { background:transparent; backdrop-filter:none; -webkit-backdrop-filter:none; }
+.viewport-surface.chrome-hidden .transport-dock { background:transparent; -webkit-backdrop-filter:none; backdrop-filter:none; }
 .viewport-surface.chrome-hidden #divider { top: 0; }
 
 /* One material for all video overlays, including split-view headings. */

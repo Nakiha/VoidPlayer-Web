@@ -124,7 +124,8 @@ test('release workflow gates verified artifacts and draft staging on every verif
   });
   assert.notEqual(verifyResults({}).status, 0, 'missing results cannot pass');
   assert.deepEqual(jobs['release-draft'].needs, ['release-set']);
-  assert.match(jobs['release-draft'].body, /^    if: github\.ref_type == 'tag'$/m);
+  assert.match(jobs['release-draft'].body, /^    if: github\.ref_type == 'tag' && \(github\.event_name != 'workflow_dispatch' \|\| inputs\.stage_draft\)$/m);
+  assert.match(workflow, /workflow_dispatch:\n    inputs:\n      stage_draft:\n        description: [^\n]+\n        type: boolean\n        default: true/);
   assert.doesNotMatch(jobs['release-draft'].body, /continue-on-error:/);
   assert.match(jobs['release-set'].body, /name: verified-release-set/);
   assert.match(jobs['release-draft'].body, /name: verified-release-set/);

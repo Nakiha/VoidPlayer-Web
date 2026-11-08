@@ -4,6 +4,11 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      stage_draft:
+        description: 'Stage an unpublished release draft after verification'
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -624,7 +629,7 @@ jobs:
 
   release-draft:
     name: Stage verified release draft
-    if: github.ref_type == 'tag'
+    if: github.ref_type == 'tag' && (github.event_name != 'workflow_dispatch' || inputs.stage_draft)
     needs: release-set
     runs-on: ubuntu-24.04
     timeout-minutes: 15
