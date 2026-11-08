@@ -52,7 +52,9 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
         const progress=(stage,detail={})=>console.log('hevc-timeline: '+JSON.stringify({stage,remote,elapsedMs:Math.round(performance.now()-started),...detail}));
         const {openMedia,openMediaFromUrl}=await import('/src/media/source.ts');
         const {paintFrame,captureFrame,disposePresentation,setPresentationGeometry}=await import('/src/presentation/presenter.ts');
+        const {initializeGpuPresentation}=await import('/src/presentation/webgpu-presenter.ts');
         const {yuvPixelRgb}=await import('/shared/color/yuv-color.ts');
+        const {createNativeReference}=await import('/scripts/testing/browser/native-reference.mjs');
         const url='/fixtures/video/'+name,bytes=await(await fetch(url)).arrayBuffer(),rows=[];
         const sourceCanvas=document.querySelector('canvas');
         const control=new OffscreenCanvas(1920,1080),controlContext=control.getContext('2d',{willReadFrequently:true});
@@ -95,8 +97,8 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
           const source=await(remote?openMediaFromUrl(new URL(url,location.href).href,{name,size:bytes.byteLength,lastModified:0}):openMedia(new File([bytes],name)));
           progress('open-complete',{round,info:source.info});
           if(source.info.decoder==='webcodecs'&&!nativeRefs){progress('native-reference-start',{round});nativeRefs=await nativeReference();progress('native-reference-complete',{round,count:nativeRefs.length});}
+          const nativeGpu=source.info.decoder==='webcodecs'?await createNativeReference():null;
           const row={remote,round,info:structuredClone(source.info),count:0,maxPixelError:0,maxGpuPixelError:0,maxNativePlaneError:0,seeks:[]};
-          setPresentationGeometry(sourceCanvas,{width:640,height:360,imageWidth:1920,imageHeight:1080,zoom:1,offsetX:0,offsetY:0,dpr:1});
           const inspect=async(f,index)=>{
             const inspectStarted=performance.now();
             try{
@@ -108,11 +110,14 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
               }
               // RGB differences across backends remain diagnostic. Native
               // frame identity above is exact; software retains its RGB oracle.
-              // GPU readback is checked against this browser's Canvas2D output.
+              // Native GPU upload is checked against an independent external-texture render.
               // Only the 32×18 sample offsets below are ever read; converting
               // whole 1080p software frames per step would dominate the audit.
               let pixels;
-              if(f.sample){f.sample.draw(controlContext,0,0,1920,1080);pixels=controlContext.getImageData(0,0,1920,1080).data;}
+              if(f.sample){const raw=f.sample.toVideoFrame();let grid;
+                try{grid=await nativeGpu.sample(raw,32,18);}finally{raw.close();}
+                pixels=new Uint8ClampedArray(1920*1080*4);
+                for(let y=0;y<18;y++)for(let x=0;x<32;x++){const k=(Math.floor((y+.5)*1080/18)*1920+Math.floor((x+.5)*1920/32))*4;pixels.set(grid.subarray((y*32+x)*4,(y*32+x+1)*4),k);}}
               else if(f.description.yuv){pixels=new Uint8ClampedArray(1920*1080*4);
                 for(let y=0;y<18;y++)for(let x=0;x<32;x++){const px=Math.floor((x+.5)*1920/32),py=Math.floor((y+.5)*1080/18),k=(py*1920+px)*4,[r,g,b]=yuvPixelRgb(f.description,f.pixels,px,py);pixels[k]=r;pixels[k+1]=g;pixels[k+2]=b;pixels[k+3]=255;}}
               else{controlContext.putImageData(new ImageData(f.pixels,1920,1080),0,0);pixels=controlContext.getImageData(0,0,1920,1080).data;}
@@ -136,6 +141,8 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
             }finally{f.close();}
           };
           try{
+            await initializeGpuPresentation([sourceCanvas]);
+            setPresentationGeometry(sourceCanvas,{width:640,height:360,imageWidth:1920,imageHeight:1080,zoom:1,offsetX:0,offsetY:0,dpr:1});
             assert(source.info.timelineSource==='hevc-poc','missing timeline recovery provenance');
             await inspect(await source.frameAt(0),0);
             const times=[];
@@ -153,7 +160,7 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
               progress('seek-complete',{round,index:i});
             }
             assert(await inspect(await source.frameAt(source.info.durationUs-1),599)===times[599],'EOF seek');
-          }finally{source.dispose();disposePresentation();}
+          }finally{source.dispose();disposePresentation();nativeGpu?.dispose();}
           rows.push(row);
           progress('round-complete',{round});
         }return rows;

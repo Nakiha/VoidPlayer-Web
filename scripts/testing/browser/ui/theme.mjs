@@ -136,7 +136,7 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  await peer.waitForFunction(()=>document.querySelector('#accent-hex').value==='#AABBCC');
  await page.locator('#settings-close').click();await page.waitForFunction(()=>!document.querySelector('#settings').open);
  // Custom bases derive reading surfaces without changing review data or drawing ink.
- for(const close of await page.locator('.toast-close').all()) await close.click();
+ await page.locator('.toast-close').evaluateAll(buttons=>buttons.forEach(button=>button.click()));
  await page.locator('#settings-open').click();
  assert.equal(await page.locator('.theme-options [role=radio]').count(),4);
  await page.locator('[data-theme-choice=custom]').click();

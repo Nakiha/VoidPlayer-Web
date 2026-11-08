@@ -198,7 +198,9 @@ test('all platform/runtime suites run independently of the compiled package jobs
     assert.match(body, /run: npm ci\n/);
     assert.match(body, /run: node scripts\/run-tests\.mjs --case release-core\n/);
     assert.doesNotMatch(body, /continue-on-error:/);
+    assert.doesNotMatch(body, /^    defaults:/m, 'native commands use the host shell, including Windows PowerShell');
   }
+  assert.match(packaged.body, /name: Write download summary\n        shell: bash/);
   assert.match(runtimeJob.body, /if: always\(\)[\s\S]*name: native-runtime-reports-\$\{\{ matrix\.os \}\}-\$\{\{ matrix\.runtime \}\}[\s\S]*path: \.run\/test-suites\//);
   const expectedCounts = { node: 15, bun: 11 };
   for (const runtime of ['node', 'bun']) {

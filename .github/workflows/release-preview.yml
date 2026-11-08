@@ -483,9 +483,6 @@ jobs:
       matrix:
         runtime: [node, bun]
         os: [ubuntu-24.04, windows-2022, macos-15]
-    defaults:
-      run:
-        shell: bash
     steps:
       - uses: actions/checkout@v7
       - name: Use primary Ubuntu package archive
@@ -535,9 +532,6 @@ jobs:
           - { os: windows-2022, platform: windows-x64 }
           - { os: macos-15, platform: darwin-arm64 }
     runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        shell: bash
     steps:
       - uses: actions/checkout@v7
       - name: Use primary Ubuntu package archive
@@ -601,6 +595,7 @@ jobs:
           path: .run/test-suites/
           if-no-files-found: ignore
       - name: Write download summary
+        shell: bash
         env:
           PLATFORM: ${{ matrix.platform }}
         run: |

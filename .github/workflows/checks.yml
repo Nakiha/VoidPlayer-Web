@@ -97,7 +97,7 @@ jobs:
     name: Verify core browser flows (${{ matrix.engine }})
     needs: cores
     runs-on: ${{ matrix.engine == 'webkit' && 'macos-26' || 'ubuntu-24.04' }}
-    timeout-minutes: 20
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:

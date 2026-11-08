@@ -31,32 +31,46 @@ for(const [browserName,engine] of Object.entries({chromium,webkit})){
       const rows=await Promise.race([page.evaluate(async ({url,name,remote,ref})=>{
         const {openMedia,openMediaFromUrl}=await import('/src/media/source.ts');
         const {paintFrame,captureFrame,setPresentationGeometry,disposePresentation}=await import('/src/presentation/presenter.ts');
+        const {initializeGpuPresentation}=await import('/src/presentation/webgpu-presenter.ts');
+        const {createNativeReference}=await import('/scripts/testing/browser/native-reference.mjs');
         const {pixelSignature,checkFrame,checkSequence,expectedAt}=await import('/scripts/fate-oracle.ts');
         const bytes=await (await fetch(url)).arrayBuffer(), rows=[];
         for(let round=0;round<2;round++){
-          let source;const row={round,phase:'open',frames:[],seeks:[],failures:[]};
+          let source,nativeGpu;const row={round,phase:'open',frames:[],seeks:[],failures:[]};
           try {
             source=await (remote?openMediaFromUrl(url,{name,size:bytes.byteLength,lastModified:0}):openMedia(new File([bytes],name)));
-            row.info=structuredClone(source.info);row.phase='first';
+            row.info=structuredClone(source.info);row.phase='presentation';
             const canvas=document.querySelector('canvas');
-            const observe=frame=>{
+            await initializeGpuPresentation([canvas]);
+            nativeGpu=source.info.decoder==='webcodecs'?await createNativeReference():null;
+            const control=new OffscreenCanvas(1,1),context=control.getContext('2d',{willReadFrequently:true});
+            row.phase='first';
+            const observe=async frame=>{
               paintFrame(canvas,frame);const image=captureFrame(canvas);
-              const pixels=image.getContext('2d').getImageData(0,0,image.width,image.height).data;
+              let pixels=image.getContext('2d').getImageData(0,0,image.width,image.height).data;
+              if(frame.sample){const raw=frame.sample.toVideoFrame();let expected;
+                try{expected=await nativeGpu.sample(raw);}finally{raw.close();}
+                let difference=0;for(let i=0;i<pixels.length;i++)if(i%4!==3)difference+=Math.abs(pixels[i]-expected[i]);
+                if(difference/(pixels.length/4*3)>=3)throw Error('Native GPU upload differs from independent external-texture reference');
+                // Retain the frozen FFmpeg RGB decode oracle through its original Canvas2D conversion.
+                control.width=frame.width;control.height=frame.height;frame.sample.draw(context,0,0,frame.width,frame.height);
+                pixels=context.getImageData(0,0,frame.width,frame.height).data;
+              }
               return {ptsUs:frame.ptsUs,width:frame.width,height:frame.height,bytes:pixels.byteLength,signature:pixelSignature(pixels,image.width,image.height)};
             };
-            const first=await source.frameAt(0);try{row.failures.push(...checkFrame(observe(first),ref.frames[0],'first'));}finally{first.close();}
+            const first=await source.frameAt(0);try{row.failures.push(...checkFrame(await observe(first),ref.frames[0],'first'));}finally{first.close();}
             setPresentationGeometry(canvas,{width:320,height:240,imageWidth:320,imageHeight:240,zoom:1,offsetX:0,offsetY:0,dpr:1});
             row.phase='index';await source.ensureIndexed?.();row.phase='play';
             for await(const frame of source.framesFrom(0)){
-              try{row.frames.push(observe(frame));}finally{frame.close();}
+              try{row.frames.push(await observe(frame));}finally{frame.close();}
               if(row.frames.length>500)throw new Error('audit frame limit');
             }
             row.failures.push(...checkSequence(row.frames,ref.frames));
             row.phase='seek';for(const pts of [Math.floor(source.info.durationUs/2),Math.max(0,source.info.durationUs-1),0]){
-              const f=await source.frameAt(pts);try{const actual=observe(f);row.seeks.push({requested:pts,...actual});row.failures.push(...checkFrame(actual,expectedAt(ref.frames,pts),`seek ${pts}`));}finally{f.close();}
+              const f=await source.frameAt(pts);try{const actual=await observe(f);row.seeks.push({requested:pts,...actual});row.failures.push(...checkFrame(actual,expectedAt(ref.frames,pts),`seek ${pts}`));}finally{f.close();}
             }
             row.phase='complete';
-          }catch(e){row.error={message:e.message,stage:e.stage};row.failures.push({code:`${row.phase}:${e.stage??'decode'}`,detail:e.message});}finally{source?.dispose();disposePresentation();}
+          }catch(e){row.error={message:e.message,stage:e.stage};row.failures.push({code:`${row.phase}:${e.stage??'decode'}`,detail:e.message});}finally{source?.dispose();disposePresentation();nativeGpu?.dispose();}
           rows.push(row);
         }return rows;
       },{url:base+'/fixtures/fate/'+sample.file,name:sample.file,remote,ref:{...reference.samples[sample.path],frames:reference.samples[sample.path].frames.map(({planeSignature,...f})=>f)}}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('case exceeded 60 seconds')),60000);})]);
