@@ -106,8 +106,7 @@ input.settings-choice:disabled { opacity: var(--disabled-opacity); }
 .settings-content a { color: var(--text); text-decoration: none; }
 .settings-content a:hover { color: var(--accent); }
 .about-project-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px; font-size: 13px; }
-.about-project-row > span, #web-app > div > span { color: var(--text-secondary); }
-#web-app-hint { margin: 4px 0 0; }
+.about-project-row > span { color: var(--text-secondary); }
 #web-app-install { flex: none; }
 .about-project-row + .about-project-row, .settings-credits > div + div { border-top: 1px solid var(--divider); }
 .settings-credits > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 12px; padding: 9px 14px; font-size: 13px; }

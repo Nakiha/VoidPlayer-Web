@@ -138,8 +138,8 @@ export function settingsShell() {
         <div class="settings-section"><h4 class="settings-section-title">VoidPlayer</h4><div class="about-project settings-group">
           <div class="about-project-row"><span>${th(msg("settingsShell.version", "版本"))}</span><span id="about-version">${buildInfo?.version ?? t(msg("settingsShell.developmentBuild", "开发版本"))}</span></div>
           <div id="web-app" class="about-project-row" hidden>
-            <div><span>${th(msg('pwa.webApp', 'Web 应用'))}</span><p id="web-app-hint" class="settings-caption" role="status" hidden></p></div>
-            <button id="web-app-install" type="button" aria-describedby="web-app-hint"></button>
+            <span>${th(msg('pwa.webApp', 'Web 应用'))}</span>
+            <button id="web-app-install" type="button"></button>
           </div>
           <div class="about-project-row"><span>${th(msg("settingsShell.projectSource", "项目源码"))}</span><a href="https://github.com/Nakiha/VoidPlayer-Web" target="_blank" rel="noopener noreferrer">VoidPlayer-Web ↗</a></div>
           <div class="about-project-row"><span>${th(msg("settingsShell.decoderSource", "解码器源码"))}</span><a href="https://github.com/Nakiha/VoidPlayer-FFmpeg-Build/tree/wasm" target="_blank" rel="noopener noreferrer">VoidPlayer-FFmpeg-Build ↗</a></div>

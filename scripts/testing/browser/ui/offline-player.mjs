@@ -69,14 +69,22 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
     } else {
       const notice = first.locator('.toast-message').filter({ hasText: 'File → Add to Dock' });
       await notice.waitFor();
-      assert.match(await first.locator('#web-app-hint').innerText(), /File → Add to Dock/);
+      const row = first.locator('.about-project #web-app');
+      const rowText = (await row.innerText()).trim();
+      assert.deepEqual(rowText.split(/\s+/), ['Web', 'app', 'Install']);
+      const bounds = await row.boundingBox();
       await install.click();
-      assert.match(await first.locator('#web-app-hint').innerText(), /Finder’s Open With/);
+      const warning = first.getByRole('alert').filter({ hasText: 'Choose File → Add to Dock.' });
+      await warning.waitFor();
+      await install.click();
+      assert.equal(await first.locator('.toast-warning:not([data-leaving])').filter({ hasText: 'Choose File → Add to Dock.' }).count(), 1);
+      assert.equal((await row.innerText()).trim(), rowText);
+      assert.equal((await row.boundingBox()).height, bounds.height);
       await first.reload();
       await first.locator('#settings-open').click();
       await first.locator('#settings-tab-about').click();
       assert.equal(await notice.count(), 0);
-      assert.match(await first.locator('#web-app-hint').innerText(), /File → Add to Dock/);
+      assert.equal((await row.innerText()).trim(), rowText);
       assert.equal(await first.evaluate(() => navigator.serviceWorker.getRegistration().then(Boolean)), false);
       await first.addInitScript(() => Object.defineProperty(navigator, 'standalone', { value: true }));
       const icon = path.join(dist, 'icon-512.png'), bytes = await readFile(icon);
