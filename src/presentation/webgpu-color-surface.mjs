@@ -215,7 +215,14 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
       }
       const scratch=new OffscreenCanvas(w,h),ctx=scratch.getContext('webgpu');
       ctx.configure({device,format:sdrFormat,colorSpace:'srgb',alphaMode:'premultiplied'});
-      try{render(ctx.getCurrentTexture(),sdrFormat,false,true);flush(device);out.clearRect(0,0,w,h);out.drawImage(scratch,0,0);return target;}finally{ctx.unconfigure();}
+      try{
+        render(ctx.getCurrentTexture(),sdrFormat,false,true);flush(device);
+        out.clearRect(0,0,w,h);out.drawImage(scratch,0,0);
+        // Canvas2D may defer consuming the WebGPU swap texture. Complete this
+        // explicit capture before unconfiguring its temporary GPU context.
+        out.getImageData(0,0,w,h);
+        return target;
+      }finally{ctx.unconfigure();}
     },
     async capture(viewport=false) {
       if(!current)throw new Error('No frame');
