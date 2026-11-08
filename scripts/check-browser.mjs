@@ -2755,6 +2755,11 @@ try {
     const json = await readFile(await file.path(), 'utf8'), trace = JSON.parse(json);
     assert.equal(trace.schema, 'voidplayer-viewport-trace');
     assert.equal(trace.endReason, 'manual');
+    for (const snapshot of [trace.context, trace.endContext]) {
+      const track = snapshot.tracks.find(t => t.slot === 'A');
+      assert.ok(track.colorExecutor && (track.renderer === null || typeof track.renderer === 'string'),
+        'a recording identifies the actual presentation path even when the renderer name is unavailable');
+    }
     assert.ok(trace.rows.some(r => r.type === 'input' && r.kind === 'drag' && r.onImage && r.decision === 'apply'));
     assert.ok(trace.rows.some(r => r.type === 'input' && r.kind === 'wheel-pan'));
     assert.ok(trace.rows.some(r => r.type === 'commit' && r.firstInput && r.lastInput && r.gridMs >= 0));
@@ -2805,15 +2810,25 @@ try {
         await window.voidPlayer.setViewport({ zoom: 1.5, offsetX: 19, offsetY: -8 });
         await frame(); await frame();
         const grid = document.querySelector('#grid-A'), before = Number(grid.dataset.gridDraws);
+        let maxDrift = 0;
+        const image = document.querySelector('#image-A');
         for (const [clientX, clientY, deltaY] of [[180, 200, -4], [230, 215, 6], [290, 224, -8], [204, 177, -3]]) {
+          const before = burst ? null : image.getBoundingClientRect();
           el.dispatchEvent(new WheelEvent('wheel', { clientX, clientY, deltaY, ctrlKey: true, bubbles: true, cancelable: true }));
-          if (!burst) await frame();
+          if (before) {
+            await frame();
+            const after = image.getBoundingClientRect();
+            const x = after.left + (clientX - before.left) * after.width / before.width;
+            const y = after.top + (clientY - before.top) * after.height / before.height;
+            maxDrift = Math.max(maxDrift, Math.abs(x - clientX) * devicePixelRatio, Math.abs(y - clientY) * devicePixelRatio);
+          }
         }
         await frame();
-        results.push({ view: window.voidPlayer.getViewport(), box: document.querySelector('#annotations-A').getAttribute('viewBox'), paints: Number(grid.dataset.gridDraws) - before });
+        results.push({ maxDrift, view: window.voidPlayer.getViewport(), box: document.querySelector('#annotations-A').getAttribute('viewBox'), paints: Number(grid.dataset.gridDraws) - before });
       }
       return results;
     });
+    assert.ok(zoom[0].maxDrift < 1, 'the source point under each moving cursor stays within one physical pixel');
     assert.equal(zoom[0].paints, 4);
     assert.equal(zoom[1].paints, 1, 'one frame of zoom inputs paints the final geometry once');
     assert.deepEqual(zoom[1].view, zoom[0].view, 'batching preserves every moving zoom anchor and reversal');

@@ -4,6 +4,7 @@ import type { ReviewSession } from '../session.ts';
 import type { Slot } from '../../shared/review/model.ts';
 import type { Viewport, WheelBehavior } from '../../shared/presentation/viewport.ts';
 import { localizedText } from './live-localization.ts';
+import { presentationRendererName } from '../presentation/presenter.ts';
 import { presentationRect, type PresentationGeometry } from '../presentation/presentation-surface.ts';
 
 type Bounds = { left: number; top: number; width: number; height: number };
@@ -34,9 +35,12 @@ export function installViewportTrace(session: ReviewSession, viewport: Viewport,
     const state = session.getState();
     return { buildId: buildInfo?.buildId, browser: navigator.userAgent, dpr: devicePixelRatio, width: innerWidth, height: innerHeight,
       standalone: matchMedia('(display-mode: standalone)').matches, viewport: viewport.snapshot(), wheelBehavior: wheelBehavior(), playing: state.playing,
-      tracks: state.tracks.map(({ slot, width, height, visible, decoder }) => ({ slot, width, height, visible, decoder,
-        colorExecutor: document.getElementById(`canvas-${slot}`)?.dataset.colorExecutor,
-        pictureOverlay: !!document.querySelector(`#bitstream-overlay-${slot}:not([hidden])`) })) };
+      tracks: state.tracks.map(({ slot, width, height, visible, decoder }) => {
+        const canvas = document.querySelector<HTMLCanvasElement>(`#canvas-${slot}`);
+        return { slot, width, height, visible, decoder, colorExecutor: canvas?.dataset.colorExecutor,
+          renderer: canvas ? presentationRendererName(canvas) : null,
+          pictureOverlay: !!document.querySelector(`#bitstream-overlay-${slot}:not([hidden])`) };
+      }) };
   }
   function row(type: string, data: Record<string, unknown>) {
     if (!active) return;

@@ -1,5 +1,5 @@
 import type { SessionResources } from '../session/resources.ts';
-import { gpuPaint, gpuCapture, gpuGeometry, gpuRedrawChannel, gpuFallbackGeometry, disposeGpuPresentation, observeGpuRecovery } from './webgpu-presenter.ts';
+import { gpuPaint, gpuCapture, gpuRendererName, gpuGeometry, gpuRedrawChannel, gpuFallbackGeometry, disposeGpuPresentation, observeGpuRecovery } from './webgpu-presenter.ts';
 import { retainPresentationFrame } from './retained-frame.ts';
 import { yuvToRgba, yuvPixelRgb, resolveYuvColor } from '../../shared/color/yuv-color.ts';
 import { getPresentationChannel } from './presentation-channel.ts';
@@ -53,6 +53,11 @@ function paintFrameNow(canvas: HTMLCanvasElement, frame: DecodedFrame, recoverin
   const index=state.count++%256;
   state.copy[index]=frame.copyMs??0;state.submit[index]=performance.now()-start;performanceSamples.set(canvas,state);
   if(state.count%32===1)canvas.dataset.colorPerformance=JSON.stringify(presentationPerformance(canvas));
+}
+/** Queried only for diagnostics. Use the existing context without probing a different adapter. */
+export function presentationRendererName(canvas: HTMLCanvasElement) {
+  const surface = surfaces.get(canvas);
+  return surface ? surface.rendererName() : gpuRendererName(canvas);
 }
 /** Bounded CPU submission timings, not GPU completion or physical scanout. */
 export function presentationPerformance(canvas:HTMLCanvasElement) {

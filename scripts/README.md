@@ -37,6 +37,14 @@ FFmpeg 源码在 `Nakiha/FFmpeg` 维护两条以 FFmpeg `n9.0.2` 为基线的分
 
 码流遮罩真实几何回归：`node scripts/testing/browser/media/bitstream-geometry.mjs webkit`（或 `chromium`），生成独占的裁剪/SAR/旋转 MP4，验证实际视频、遮罩像素、命中、分屏截图及 RGBA 回退。已登记在 `browser` 和 `ci-analysis-browser`，需要 ffmpeg/libx264。
 
+## 视口平移与缩放基准
+
+启动带生产构建的本机服务后运行 `npm run bench:viewport`；使用 `npm run bench:viewport -- --headless` 对照无窗口 Chromium。`BASE_URL` 默认指向本机 5180。脚本在独立浏览器会话中依次载入固定 H.264 样片与 MPEG-2 样片，在 1280×800、DPR 2 下对暂停的单轨和双轨各重复两轮。每轮从 1.4× 开始，连续 70 帧，每帧发送四次滚动输入并交替方向，分别测平移和 Ctrl 滚轮缩放。
+
+报告按窗口模式保存在 `.run/viewport-bench/`，也可用 `BENCH_REPORT` 指定输出文件。比较相同构建或改动前后数据时，请核对浏览器版本、GPU 设备、浏览器合成状态、轨道及呈现方式。P95 和超过 25 ms 的次数衡量手势期间浏览器动画帧的间隔；物理输入和屏幕扫描输出不在测量范围。用户自己录制的本地视口轨迹也会记录当前视频画布可报告的渲染器名称，浏览器未提供名称时为 `null`。
+
+## 其他本地性能实验
+
 码流分析持续争用：`node scripts/bench-analysis-sustained.mjs webkit`，需已构建网页、两种 core、QA 视频和可见桌面。默认运行至少 120 秒，8 路实际消费独立媒体库流，中途持久化 8→4→8 并发设置；旁路运行原 4×3×8 秒播放基准和 seek/Range 探测，阈值不变。`ANALYSIS_STRESS_MS` 可设为 120000–600000。报告保存在 `.run/browser-fixtures/analysis-sustained-webkit/`，包括逐秒 CPU/RSS/每路消费数、Range/seek 分位数、逻辑 I/O、取消延迟及原始播放数据。已登记为 `perf-analysis-sustained`；测量范围由机器和素材限定，不能推断任意并发或硬件的性能。
 
 分析产品 #99 的 Mac 配对入口：先从干净 baseline / candidate 独立 worktree 运行

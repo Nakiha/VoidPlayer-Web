@@ -67,6 +67,7 @@
     "test:color:settings:browser": "node scripts/run-tests.mjs --alias test:color:settings:browser",
     "test:recovery:browser": "node scripts/run-tests.mjs --alias test:recovery:browser",
     "test:thumbnail-worker": "node scripts/run-tests.mjs --alias test:thumbnail-worker",
+    "bench:viewport": "node scripts/tools/perf/bench-viewport.mjs",
     "bench:index": "node scripts/bench-frame-index.mjs",
     "bench:index:modes": "node scripts/compare-index-scan-modes.mjs",
     "test:media-open-matrix": "node scripts/run-tests.mjs --alias test:media-open-matrix",

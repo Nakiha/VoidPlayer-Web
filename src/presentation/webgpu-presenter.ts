@@ -229,6 +229,12 @@ export function gpuPaint(source:HTMLCanvasElement,frame:DecodedFrame){
   if(timing.count%32===0){const sorted=[...values].sort((a,b)=>a-b);source.dataset.colorPerformance=JSON.stringify({submitP50:sorted[Math.floor(sorted.length*.5)],submitP95:sorted[Math.floor(sorted.length*.95)],submitMax:sorted.at(-1)});}
   return true;
 }
+export function gpuRendererName(source: HTMLCanvasElement) {
+  const entry = entries.get(source);
+  const adapter = entry?.surface.adapter;
+  if (!adapter || entry.disabled || !entry.geometry || !entry.surface.available) return null;
+  return adapter.description || [adapter.vendor, adapter.architecture, adapter.device].filter(Boolean).join(' ') || null;
+}
 export function gpuCapture(source:HTMLCanvasElement){
   const entry=entries.get(source);if(!entry||entry.disabled)return undefined;
   // The entry can be committed before the first GPU paint (async init racing

@@ -22,6 +22,7 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
   const adapter = sharedDevice ? null : await navigator.gpu.requestAdapter();
   if (!adapter && !sharedDevice) throw new Error('WebGPU adapter unavailable');
   const device = sharedDevice ?? await adapter.requestDevice();
+  const adapterInfo = device.adapterInfo ?? adapter?.info;
   const ownsDevice = !sharedDevice;const token={};
   const errors = [];
   const onError = e => { errors.push(e.error.message); if (errors.length > 32) errors.shift(); };
@@ -131,7 +132,7 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
     setGeometry(g,r=rotation){if(JSON.stringify(g)===JSON.stringify(geometry)&&r===rotation)return;geometry=g;rotation=r;if(current&&g)this.presentRetained();},
     presentRetained(){const w=geometry?Math.max(1,Math.round(geometry.width*geometry.dpr)):canvas.width,h=geometry?Math.max(1,Math.round(geometry.height*geometry.dpr)):canvas.height;if(canvas.width!==w)canvas.width=w;if(canvas.height!==h)canvas.height=h;if(current?.yuv&&yuvParams)yuvParams[3]=presentationChannelCode(getPresentationChannel());render(context.getCurrentTexture(),format,geometry?geometry.imageWidth*geometry.zoom*geometry.dpr<current.displayWidth:w<current.displayWidth);},
     redrawChannel(){if(!current?.yuv)return false;this.presentRetained();return true;},
-    device, lost: device.lost, adapter: adapter ? {vendor:adapter.info?.vendor,architecture:adapter.info?.architecture,device:adapter.info?.device} : null,errors,
+    device, lost: device.lost, adapter: adapterInfo ? {vendor:adapterInfo.vendor,architecture:adapterInfo.architecture,device:adapterInfo.device,description:adapterInfo.description} : null,errors,
     // Own one clone so paused redraw and capture use precisely the same resource.
     present(frame,width=frame.displayWidth,height=frame.displayHeight) {
       beforeWrite(device,token);

@@ -96,6 +96,11 @@ export function createPresentationSurface(source: HTMLCanvasElement, onLost?: ()
   source.classList.add('frame-source'); upload();
   return {
     opaqueOnly: !!gl && opaqueOnly,
+    rendererName() {
+      if (!gl || !useGl || gl.isContextLost()) return null;
+      const info = gl.getExtension('WEBGL_debug_renderer_info');
+      return info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) as string : null;
+    },
     upload,
     uploadYuv(d:FrameDescription,pixels:Uint8ClampedArray,rotation=0) {
       if(!gl || !useGl || !texture || gl.isContextLost())return false;
