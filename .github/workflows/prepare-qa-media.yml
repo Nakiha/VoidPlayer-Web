@@ -11,20 +11,20 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/cache/restore@v4
+      - uses: actions/checkout@v7
+      - uses: actions/cache/restore@v6
         id: restore
         with:
           path: .run/qa-media/qa-media.tar.gz
           key: qa-media-${{ hashFiles('scripts/fetch-qa-media.sh') }}
       - name: Verify and extract pinned sample archive
         run: bash scripts/fetch-qa-media.sh .run/qa-media fixtures/video
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v6
         if: steps.restore.outputs.cache-hit != 'true'
         with:
           path: .run/qa-media/qa-media.tar.gz
           key: ${{ steps.restore.outputs.cache-primary-key }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: qa-media
           path: fixtures/video/

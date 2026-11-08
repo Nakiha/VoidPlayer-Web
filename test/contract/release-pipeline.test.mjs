@@ -116,7 +116,7 @@ test('release workflow gates verified artifacts and draft staging on every verif
   assert.ok(gate, 'required result guard exists');
   assert.match(gate, /VERIFICATION_RESULTS: \$\{\{ toJSON\(needs\) \}\}/);
   assert.doesNotMatch(gate, /if:|continue-on-error:/);
-  assert.ok(jobs['release-set'].body.indexOf(gate) < jobs['release-set'].body.indexOf('uses: actions/download-artifact@v4'));
+  assert.ok(jobs['release-set'].body.indexOf(gate) < jobs['release-set'].body.indexOf('uses: actions/download-artifact@v8'));
   const guard = /^          node --input-type=module <<'JS'\n([\s\S]*?)^          JS$/m.exec(gate)?.[1];
   assert.ok(guard, 'result guard uses the checked inline Node script');
   const verifyResults = results => spawnSync(process.execPath, ['--input-type=module', '-e', guard.replace(/^          /gm, '')], {
@@ -152,7 +152,7 @@ test('all platform/runtime suites run independently of the compiled package jobs
   assert.match(runtimeJob.body, /fail-fast: false\n      matrix:\n        runtime: \[node, bun\]\n        os: \[ubuntu-24\.04, windows-2022, macos-15\]/);
   assert.deepEqual([...packaged.body.matchAll(/platform: ([\w-]+)/g)].map(match => match[1]).sort(), ['darwin-arm64', 'linux-x64', 'windows-x64']);
   for (const body of [runtimeJob.body, packaged.body]) {
-    assert.match(body, /uses: actions\/checkout@v4/);
+    assert.match(body, /uses: actions\/checkout@v7/);
     assert.match(body, /node-version: '24\.15\.0'/);
     assert.match(body, /bun-version-file: \.bun-version/);
     assert.match(body, /name: release-core\n          path: public\/vendor\/voidplayer-core/);
@@ -543,22 +543,22 @@ test('every FATE consumer restores an exact manifest cache and verifies before s
   for (const id of ['unit', 'cache-browser', 'playback']) assert.match(jobs[id].body, /uses: \.\/\.github\/actions\/media-fixtures/);
   const action = await readFile(new URL('../../.github/actions/fate-fixtures/action.yml',import.meta.url),'utf8');
   assert.match(action,/node scripts\/sync-fate-samples\.mjs --cache-key/);
-  assert.match(action,/uses: actions\/cache\/restore@v4/);
+  assert.match(action,/uses: actions\/cache\/restore@v6/);
   assert.doesNotMatch(action,/restore-keys:|continue-on-error:|always\(\)/);
   assert.equal((action.match(/key: \$\{\{ steps\.manifest\.outputs\.key \}\}/g) ?? []).length,2);
   assert.equal((action.match(/path: fixtures\/fate/g) ?? []).length,2);
   assert.match(action,/id: verify\n      shell: bash\n      run: node scripts\/sync-fate-samples\.mjs\n/,'cache hits must still be verified');
-  assert.match(action,/if: success\(\) && steps\.verify\.outcome == 'success' && steps\.restore\.outputs\.cache-hit != 'true'\n      uses: actions\/cache\/save@v4/);
-  assert.ok(action.indexOf('id: verify')>action.indexOf('uses: actions/cache/restore@v4'));
-  assert.ok(action.indexOf('uses: actions/cache/save@v4')>action.indexOf('id: verify'));
+  assert.match(action,/if: success\(\) && steps\.verify\.outcome == 'success' && steps\.restore\.outputs\.cache-hit != 'true'\n      uses: actions\/cache\/save@v6/);
+  assert.ok(action.indexOf('id: verify')>action.indexOf('uses: actions/cache/restore@v6'));
+  assert.ok(action.indexOf('uses: actions/cache/save@v6')>action.indexOf('id: verify'));
 });
 
 test('daily and release sample consumers share one verified QA media artifact', async () => {
   const read = name => readFile(new URL(`../../.github/workflows/${name}.yml`, import.meta.url), 'utf8');
   const prepare = await read('prepare-qa-media');
-  assert.match(prepare, /run: bash scripts\/fetch-qa-media\.sh[\s\S]*uses: actions\/cache\/save@v4[\s\S]*name: qa-media/);
+  assert.match(prepare, /run: bash scripts\/fetch-qa-media\.sh[\s\S]*uses: actions\/cache\/save@v6[\s\S]*name: qa-media/);
   const action = await readFile(new URL('../../.github/actions/qa-media/action.yml', import.meta.url), 'utf8');
-  assert.match(action, /uses: actions\/download-artifact@v4[\s\S]*name: qa-media\n\s+path: fixtures\/video/);
+  assert.match(action, /uses: actions\/download-artifact@v8[\s\S]*name: qa-media\n\s+path: fixtures\/video/);
   const mediaFixtures = await readFile(new URL('../../.github/actions/media-fixtures/action.yml', import.meta.url), 'utf8');
   assert.match(mediaFixtures, /uses: \.\/\.github\/actions\/qa-media/);
   assert.doesNotMatch(mediaFixtures, /lfs: true|sync-samples/);

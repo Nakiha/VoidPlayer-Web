@@ -11,7 +11,7 @@ runs:
         echo "key=$fate_key" >> "$GITHUB_OUTPUT"
     - name: Restore pinned FATE bytes
       id: restore
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@v6
       with:
         path: fixtures/fate
         key: ${{ steps.manifest.outputs.key }}
@@ -21,7 +21,7 @@ runs:
       run: node scripts/sync-fate-samples.mjs
     - name: Save complete verified FATE bytes before product tests
       if: success() && steps.verify.outcome == 'success' && steps.restore.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@v6
       with:
         path: fixtures/fate
         key: ${{ steps.manifest.outputs.key }}

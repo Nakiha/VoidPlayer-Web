@@ -18,10 +18,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24.15.0'
           cache: npm
@@ -33,7 +33,7 @@ jobs:
         run: npm run format:check -- --base "$FORMAT_BASE"
       - run: npm run check:environments
       - run: node scripts/run-tests.mjs source
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: source-logic-reports
@@ -58,19 +58,19 @@ jobs:
       matrix:
         part: [analysis, containers, playback]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Use primary Ubuntu package archive
         if: runner.os == 'Linux'
         run: bash scripts/testing/prepare-ci-apt.sh
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24.15.0'
           cache: npm
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-core
           path: public/vendor/voidplayer-core
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-analysis-core
           path: public/vendor/voidplayer-analysis
@@ -84,7 +84,7 @@ jobs:
           VOIDPLAYER_FFMPEG_ORACLE: ${{ github.workspace }}/.run/native-oracle/ffmpeg
       - name: Preserve complete unit outcomes and failures
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: media-node-reports-${{ matrix.part }}
           path: |
@@ -103,19 +103,19 @@ jobs:
       matrix:
         engine: [chromium, webkit]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - if: runner.os == 'Linux'
         run: bash scripts/testing/prepare-ci-apt.sh
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24.15.0'
           cache: npm
       - run: npm ci
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-core
           path: public/vendor/voidplayer-core
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-analysis-core
           path: public/vendor/voidplayer-analysis
@@ -129,7 +129,7 @@ jobs:
           fi
           npx playwright install --with-deps ${{ matrix.engine }}
       - run: node scripts/run-tests.mjs ci-pr-browser --engine ${{ matrix.engine }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: core-browser-reports-${{ matrix.engine }}

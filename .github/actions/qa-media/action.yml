@@ -3,7 +3,7 @@ description: Download the QA media prepared once for this workflow run.
 runs:
   using: composite
   steps:
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v8
       with:
         name: qa-media
         path: fixtures/video

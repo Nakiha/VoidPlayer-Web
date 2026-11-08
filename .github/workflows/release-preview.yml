@@ -26,8 +26,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '24.15.0'
           cache: npm
@@ -48,14 +48,14 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '24.15.0'
           cache: npm
       - run: npm ci
       - run: node scripts/run-tests.mjs source
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: source-logic-reports
@@ -72,19 +72,19 @@ jobs:
       matrix:
         engine: [chromium, webkit]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Use primary Ubuntu package archive
         if: runner.os == 'Linux'
         run: bash scripts/testing/prepare-ci-apt.sh
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24.15.0'
           cache: npm
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-core
           path: public/vendor/voidplayer-core
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-analysis-core
           path: public/vendor/voidplayer-analysis
@@ -101,7 +101,7 @@ jobs:
       - run: node scripts/run-tests.mjs --prepare
       - name: Verify analysis panel on ${{ matrix.engine }}
         run: node scripts/run-tests.mjs ci-analysis-ui --engine ${{ matrix.engine }} --prepared
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: analysis-browser-reports-${{ matrix.engine }}
@@ -127,19 +127,19 @@ jobs:
         engine: [chromium, webkit]
         part: [mp4, flv-legacy, flv-enhanced, fmp4, ts, js-containers]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Use primary Ubuntu package archive
         if: runner.os == 'Linux'
         run: bash scripts/testing/prepare-ci-apt.sh
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24.15.0'
           cache: npm
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-core
           path: public/vendor/voidplayer-core
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-analysis-core
           path: public/vendor/voidplayer-analysis
@@ -157,7 +157,7 @@ jobs:
       - run: node scripts/run-tests.mjs --prepare
       - name: Verify ${{ matrix.part }} analysis matrix on ${{ matrix.engine }}
         run: node scripts/run-tests.mjs ci-analysis-matrix-${{ matrix.part }} --engine ${{ matrix.engine }} --prepared
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: analysis-matrix-reports-${{ matrix.engine }}-${{ matrix.part }}
@@ -177,19 +177,19 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Use primary Ubuntu package archive
         if: runner.os == 'Linux'
         run: bash scripts/testing/prepare-ci-apt.sh
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24.15.0'
           cache: npm
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-core
           path: public/vendor/voidplayer-core
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-analysis-core
           path: public/vendor/voidplayer-analysis
@@ -203,7 +203,7 @@ jobs:
           VOIDPLAYER_FFMPEG_ORACLE: ${{ github.workspace }}/.run/native-oracle/ffmpeg
       - name: Preserve complete unit outcomes and failures
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: media-node-reports
           path: |
@@ -220,19 +220,19 @@ jobs:
     # browser/FATE case deadlines and this job budget.
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Use primary Ubuntu package archive
         if: runner.os == 'Linux'
         run: bash scripts/testing/prepare-ci-apt.sh
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24.15.0'
           cache: npm
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-core
           path: public/vendor/voidplayer-core
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-analysis-core
           path: public/vendor/voidplayer-analysis
@@ -253,7 +253,7 @@ jobs:
         run: node scripts/run-tests.mjs ci-audio --prepared
       - name: Preserve audio navigation and output evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: opportunistic-audio-reports
           path: |
@@ -296,7 +296,7 @@ jobs:
         run: node scripts/run-tests.mjs ci-https --prepared
         env:
           VOIDPLAYER_HTTPS_TEST: '1'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: https-playback-reports
@@ -314,19 +314,19 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Use primary Ubuntu package archive
         if: runner.os == 'Linux'
         run: bash scripts/testing/prepare-ci-apt.sh
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24.15.0'
           cache: npm
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-core
           path: public/vendor/voidplayer-core
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-analysis-core
           path: public/vendor/voidplayer-analysis
@@ -349,7 +349,7 @@ jobs:
           DEBUG: pw:browser
         if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
         run: node scripts/run-tests.mjs ci-cache --prepared
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: annotation-cache-screenshots
@@ -374,19 +374,19 @@ jobs:
       matrix:
         engine: [chromium, webkit]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Use primary Ubuntu package archive
         if: runner.os == 'Linux'
         run: bash scripts/testing/prepare-ci-apt.sh
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24.15.0'
           cache: npm
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-core
           path: public/vendor/voidplayer-core
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-analysis-core
           path: public/vendor/voidplayer-analysis
@@ -411,7 +411,7 @@ jobs:
         run: node scripts/run-tests.mjs uncovered --prepared --engine ${{ matrix.engine }}
       - name: Verify language switching and expanded layouts
         run: node scripts/run-tests.mjs ci-i18n --prepared --engine ${{ matrix.engine }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: uncovered-browser-reports-${{ matrix.engine }}
@@ -436,19 +436,19 @@ jobs:
         engine: [chromium, webkit]
         input: [local, remote]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Use primary Ubuntu package archive
         if: runner.os == 'Linux'
         run: bash scripts/testing/prepare-ci-apt.sh
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24.15.0'
           cache: npm
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-core
           path: public/vendor/voidplayer-core
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-analysis-core
           path: public/vendor/voidplayer-analysis
@@ -457,7 +457,7 @@ jobs:
       - run: npx playwright install --with-deps ${{ matrix.engine }}
       # Preserve all eight full 600-frame sweeps (two reopen rounds per cell).
       - run: node scripts/run-tests.mjs --case hevc-timeline-${{ matrix.engine }}-${{ matrix.input }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: hevc-timeline-${{ matrix.engine }}-${{ matrix.input }}
@@ -481,22 +481,22 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Use primary Ubuntu package archive
         if: runner.os == 'Linux'
         run: bash scripts/testing/prepare-ci-apt.sh
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24.15.0'
           cache: npm
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-core
           path: public/vendor/voidplayer-core
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-analysis-core
           path: public/vendor/voidplayer-analysis
@@ -510,7 +510,7 @@ jobs:
       - name: Verify Bun configuration, storage contracts
         if: matrix.runtime == 'bun'
         run: node scripts/run-tests.mjs ci-native-bun
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: native-runtime-reports-${{ matrix.os }}-${{ matrix.runtime }}
@@ -533,22 +533,22 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Use primary Ubuntu package archive
         if: runner.os == 'Linux'
         run: bash scripts/testing/prepare-ci-apt.sh
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24.15.0'
           cache: npm
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-core
           path: public/vendor/voidplayer-core
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-analysis-core
           path: public/vendor/voidplayer-analysis
@@ -581,13 +581,13 @@ jobs:
       - name: Verify Windows console shutdown
         if: runner.os == 'Windows'
         run: node scripts/run-tests.mjs ci-native-console
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: voidplayer-${{ matrix.platform }}
           path: artifacts/*.tar.gz*
           if-no-files-found: error
           retention-days: 30
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: native-test-reports-${{ matrix.platform }}
@@ -608,8 +608,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '24.15.0'
       - name: Require every verification job to succeed
@@ -624,13 +624,13 @@ jobs:
             process.exit(1);
           }
           JS
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: voidplayer-*
           merge-multiple: true
           path: artifacts/release-set
       - run: node scripts/run-tests.mjs --case release-set
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: verified-release-set
           path: artifacts/release-set/
@@ -646,11 +646,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '24.15.0'
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: verified-release-set
           path: artifacts/release-set

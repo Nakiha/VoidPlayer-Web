@@ -17,8 +17,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '24.15.0'
       - name: Read analysis lock
@@ -29,18 +29,18 @@ jobs:
           const lock=JSON.parse(readFileSync("scripts/release-analysis.json","utf8"));
           for(const [key,value]of Object.entries(lock))appendFileSync(process.env.GITHUB_OUTPUT,`${key}=${value}\n`);
           '
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         id: analysis-cache
         with:
           path: public/vendor/voidplayer-analysis
           key: release-analysis-v1-${{ hashFiles('scripts/release-analysis.json', 'scripts/prepare-analysis-core.mjs', 'scripts/core-capabilities.mjs', 'scripts/core-artifacts.mjs') }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: steps.analysis-cache.outputs.cache-hit != 'true'
         with:
           repository: ${{ steps.analysis-lock.outputs.repository }}
           ref: ${{ steps.analysis-lock.outputs.revision }}
           path: .run/analysis-source
-      - uses: mymindstorm/setup-emsdk@v14
+      - uses: emscripten-core/setup-emsdk@v16
         if: steps.analysis-cache.outputs.cache-hit != 'true'
         with:
           version: ${{ steps.analysis-lock.outputs.emscripten }}
@@ -56,7 +56,7 @@ jobs:
           node scripts/prepare-analysis-core.mjs .run/analysis-source/dist/voidplayer-analysis
       - name: Verify analysis reference ABI including restored caches
         run: node scripts/prepare-analysis-core.mjs public/vendor/voidplayer-analysis
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-analysis-core
           path: public/vendor/voidplayer-analysis/
@@ -71,8 +71,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '24.15.0'
       - name: Read decoder lock
@@ -85,38 +85,38 @@ jobs:
           '
       - name: Restore exact decoder build
         id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: public/vendor/voidplayer-core
           key: release-core-v1-${{ runner.os }}-${{ hashFiles('scripts/release-core.json', 'scripts/prepare-release-core.mjs', 'scripts/core-capabilities.mjs', 'scripts/core-artifacts.mjs') }}
       - name: Checkout decoder build source
         if: steps.cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ steps.core.outputs.repository }}
           ref: ${{ steps.core.outputs.revision }}
           path: .run/core-source
       - name: Checkout FFmpeg source
         if: steps.cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ steps.core.outputs.ffmpegRepository }}
           ref: ${{ steps.core.outputs.ffmpegRevision }}
           path: .run/core-source/.build/sources/ffmpeg-wasm
       - name: Checkout dav1d source
         if: steps.cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ steps.core.outputs.dav1dRepository }}
           ref: ${{ steps.core.outputs.dav1dRevision }}
           path: .run/core-source/.build/sources/dav1d-wasm
       - name: Setup Emscripten
         if: steps.cache.outputs.cache-hit != 'true'
-        uses: mymindstorm/setup-emsdk@v14
+        uses: emscripten-core/setup-emsdk@v16
         with:
           version: ${{ steps.core.outputs.emscripten }}
           actions-cache-folder: .run/emsdk-cache
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         if: steps.cache.outputs.cache-hit != 'true'
         with:
           python-version: '3.12'
@@ -145,7 +145,7 @@ jobs:
           node scripts/prepare-release-core.mjs .run/core-source
       - name: Verify decoder provenance and required interfaces
         run: node scripts/run-tests.mjs --case release-core
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-core
           path: public/vendor/voidplayer-core/
