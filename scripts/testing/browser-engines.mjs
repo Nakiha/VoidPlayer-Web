@@ -8,7 +8,8 @@ export function chromiumLaunchOptions(options = {}, platform = process.platform,
   const backend = platform === 'darwin' ? 'metal' : platform === 'win32' ? 'd3d11' : 'swiftshader';
   const software = platform === 'linux'
     ? ['--use-gl=angle', '--enable-unsafe-swiftshader', '--disable-accelerated-video-decode', '--disable-gpu-watchdog',
-      '--enable-gpu', '--ignore-gpu-blocklist', '--use-vulkan=swiftshader'] : [];
+      '--enable-gpu', '--ignore-gpu-blocklist', '--use-vulkan=swiftshader']
+    : platform==='win32'?['--enable-gpu','--ignore-gpu-blocklist']:[];
   const args = [...(options.args ?? [])];
   if (platform === 'linux') {
     const features = args.filter(arg => arg.startsWith('--enable-features=')).flatMap(arg => arg.slice('--enable-features='.length).split(','));
@@ -18,7 +19,7 @@ export function chromiumLaunchOptions(options = {}, platform = process.platform,
     const defaults = ['Vulkan', ...(legacyScreenshot ? [] : ['CDPScreenshotNewSurface'])];
     args.push(`--enable-features=${[...new Set([...features, ...defaults])].join(',')}`);
   }
-  return { ...options, args: [...new Set([...args, '--enable-unsafe-webgpu', `--use-angle=${backend}`, ...software])] };
+  return { ...options, ...(platform==='win32'?{headless:false}:{}), args: [...new Set([...args, '--enable-unsafe-webgpu', `--use-angle=${backend}`, ...software])] };
 }
 const chromium = new Proxy(nativeChromium, {
   get(target, key) {

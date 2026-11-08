@@ -7,11 +7,12 @@ import { loadConfig } from '../server/config.ts';
 import { startService } from '../server/runtime.ts';
 import { trustTestCertificate } from './test-certificate-trust.mjs';
 import { routeInsecureTestOrigin } from './testing/http-origin.mjs';
+import {saveBrowserFailure, recordBrowserEvidence, withinBrowserPhase} from './browser-failure-evidence.mjs';
 import { identityBrowserService, cleanupIdentityBrowser } from './identity-browser-lifecycle.mjs';
 const insecure = process.env.VOIDPLAYER_HTTP_TEST === '1';
 const secure = process.env.VOIDPLAYER_HTTPS_TEST === '1';
 const temp = await mkdtemp(path.join(os.tmpdir(), 'vp-identity-browser-'));
-let service, lifecycle, browser, untrust, failure;
+let service, lifecycle, browser, untrust, failure, primaryPage, primaryEvidence;
 const errors = [], events = [];
 let phase = 'startup';
 const record = (page, label, event, details = {}) => {
@@ -43,6 +44,7 @@ try {
   const a = await browser.newContext({locale:'zh-CN',  viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' });
   const b = await browser.newContext({locale:'zh-CN'});
   const page = await a.newPage(), other = await b.newPage();
+  primaryPage=page;primaryEvidence=recordBrowserEvidence(page);
   observe(page, 'primary'); observe(other, 'other-user');
   // Labels can update before the following user-list refresh finishes. Drain
   // normal requests before navigation/restart/close so WebKit does not report
@@ -320,6 +322,10 @@ try {
   }
 } catch (error) {
   failure = { error };
+  let reviewLogs;
+  if(primaryPage)try{reviewLogs=await withinBrowserPhase(()=>primaryPage.evaluate(()=>window.voidPlayer?.tools.find(t=>t.name==='get_review_logs').execute({limit:100})),3000,{caseName:'identity',engine:process.env.IDENTITY_BROWSER??'chromium',phase:'failure-logs'});}catch{}
+  console.error('Identity playback failure media logs:',JSON.stringify(reviewLogs?.events?.filter(e=>e.cat==='media'||e.cat==='session')));
+  await saveBrowserFailure({page:primaryPage,name:'identity',context:{phase,engine:process.env.IDENTITY_BROWSER??'chromium'},error,evidence:primaryEvidence,extra:{reviewLogs}}).catch(()=>{});
 } finally {
   try {
     const directory = '.run/playback-reports';

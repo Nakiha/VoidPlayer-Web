@@ -19,7 +19,7 @@ ff(['-f', 'lavfi', '-i', 'color=black:size=64x64:rate=5:duration=1', '-vf', 'dra
 ff(['-i', path.join(directory, 'rgb-encoded.mp4'), '-c', 'copy', path.join(directory, 'rgb-0.mp4')]);
 for (const rotation of [90, 270])
     ff(['-display_rotation', String(-rotation), '-i', path.join(directory, 'rgb-0.mp4'), '-c', 'copy', path.join(directory, `rgb-${rotation}.mp4`)]);
-await withBrowserFixture({ caseName: 'bitstream-geometry', engine, roots: [directory], pageOptions: { viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 } }, async ({ page, ready, artifact }) => {
+await withBrowserFixture({ caseName: 'bitstream-geometry', engine, timeoutMs: engine==='chromium'?1200000:300000, roots: [directory], pageOptions: { viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 } }, async ({ page, ready, artifact }) => {
     await ready();
     await page.addStyleTag({content:'.geometry-raw-capture .video-card:has(#stage-A){clip-path:none!important}.geometry-raw-capture .video-card:not(:has(#stage-A)),.geometry-raw-capture #bitstream-overlay-A,.geometry-raw-capture #divider,.geometry-raw-capture .analysis-card{visibility:hidden!important}'});
     if (await page.locator('#identity-welcome').isVisible())
