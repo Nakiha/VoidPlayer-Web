@@ -52,7 +52,7 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
   async function execute(command:PageCommand,g:NonNullable<typeof grant>,epoch:number){
     if(epoch!==generation||grant!==g||g.binding!==binding())return;
     const d=PAGE_TOOLS[command.name];
-    if(!d||!Object.hasOwn(PAGE_TOOLS,command.name)||!g.scopes.includes(d.scope)||command.epoch!==g.epoch){revoke(t(msg('pageBridge.invalid','收到不符合授权范围的命令，连接已撤销。')));return;}
+    if(!d||!Object.hasOwn(PAGE_TOOLS,command.name)||!g.scopes.includes(d.scope)||command.epoch!==g.epoch){revoke(t(msg('pageBridge.invalid','收到不符合授权范围的命令，连接已撤销')));return;}
     const tool=tools.find(t=>t.name===command.name);if(!tool){revoke('unknown-tool');return;}
     inFlight++;render();let executing=true;
     const physicallyFinished=()=>{if(executing){executing=false;inFlight--;render();}};
@@ -66,24 +66,24 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
       physicallyFinished();
       result=pageBridgeResult(command.name,result,g.scopes);
       if(epoch!==generation||grant!==g||g.binding!==binding())return;
-      if(new TextEncoder().encode(JSON.stringify(result)??'').byteLength>L.resultBytes){revoke(t(msg('pageBridge.large','结果超过通道预算，写入结果可能未知；请保留原 correlation，勿自动重试。')));return;}
+      if(new TextEncoder().encode(JSON.stringify(result)??'').byteLength>L.resultBytes){revoke(t(msg('pageBridge.large','结果超过通道预算，写入结果可能未知；请保留原 correlation，勿自动重试')));return;}
       await post('reply',{epoch:g.epoch,correlation:command.correlation,result},g.token,controller.signal);
-    }catch{if(epoch===generation)revoke(t(msg('pageBridge.lost','通道已断开；已派发写入的结果可能未知，不会自动重放。')));}
+    }catch{if(epoch===generation)revoke(t(msg('pageBridge.lost','通道已断开；已派发写入的结果可能未知，不会自动重放')));}
     finally{physicallyFinished();}
   }
   async function poll(g:NonNullable<typeof grant>,epoch:number){
     try{while(epoch===generation&&grant===g&&!signal.aborted){
       const value=await post('poll',{epoch:g.epoch},g.token,controller.signal);
       if(epoch!==generation||grant!==g)return;
-      if(g.binding!==binding()){revoke(t(msg('pageBridge.changed','身份或工作区来源已改变，请重新明确授权。')));return;}
+      if(g.binding!==binding()){revoke(t(msg('pageBridge.changed','身份或工作区来源已改变，请重新明确授权')));return;}
       if(value.command){if(inFlight){revoke('concurrent-command');return;}void execute(value.command,g,epoch);}
-    }}catch{if(epoch===generation)revoke(t(msg('pageBridge.lost','通道已断开；已派发写入的结果可能未知，不会自动重放。')));}
+    }}catch{if(epoch===generation)revoke(t(msg('pageBridge.lost','通道已断开；已派发写入的结果可能未知，不会自动重放')));}
   }
   async function refresh(){
     if(existing&&!requestId){reviewedReady=false;render();return null;}
     const seq=++refreshSequence,owner=generation;
-    try{const r=await fetch(BRIDGE_PATH+'/descriptor',{cache:'no-store',headers:existing?{authorization:'Bearer '+documentToken,'x-voidplayer-bridge-request':requestId}:{},signal:AbortSignal.timeout(3000)});if(!r.ok)throw Error('host-unavailable');const d=await r.json();if(seq!==refreshSequence||owner!==generation||signal.aborted)return null;reviewedRevision=d.clientRevision;reviewedReady=d.ready;descriptor=d.clientClaim??t(msg('pageBridge.noClient','MCP 客户端尚未初始化。'));render();return d;}
-    catch{if(seq===refreshSequence&&owner===generation&&!signal.aborted){reviewedReady=false;descriptor=t(msg('pageBridge.unavailable','本机桥进程不可用；普通 HTTP 后台任务不受页面连接影响。'));render();}return null;}
+    try{const r=await fetch(BRIDGE_PATH+'/descriptor',{cache:'no-store',headers:existing?{authorization:'Bearer '+documentToken,'x-voidplayer-bridge-request':requestId}:{},signal:AbortSignal.timeout(3000)});if(!r.ok)throw Error('host-unavailable');const d=await r.json();if(seq!==refreshSequence||owner!==generation||signal.aborted)return null;reviewedRevision=d.clientRevision;reviewedReady=d.ready;descriptor=d.clientClaim??t(msg('pageBridge.noClient','MCP 客户端尚未初始化'));render();return d;}
+    catch{if(seq===refreshSequence&&owner===generation&&!signal.aborted){reviewedReady=false;descriptor=t(msg('pageBridge.unavailable','本机桥进程不可用；普通 HTTP 后台任务不受页面连接影响'));render();}return null;}
   }
   for(const id of ['read','view','annotate'])$(id).onchange=render;
   if(existing)$('pair').onclick=async event=>{
@@ -95,13 +95,13 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
       if(signal.aborted||stopped)return;
       documentToken=document.documentToken;requestId=paired.id;expiresAt=paired.expiresAt;
       $('pair').toggleAttribute('disabled',true);$('code').toggleAttribute('disabled',true);
-      await refresh();note(t(msg('pageBridge.pairReviewTarget','请核对此页面：{page}。配对信息已单次消费。临时授权最晚于 {expiry} 到期。'),{page:`${location.origin}${location.pathname} · ${pageId}`,expiry:new Date(expiresAt).toLocaleTimeString()}));
-    }catch{note(t(msg('pageBridge.pairUnavailable','配对不可用：信息不符、已到期、已消费或客户端尚未就绪。请发起新请求，页面数据尚未分享。')));}
+      await refresh();note(t(msg('pageBridge.pairReviewTarget','请核对此页面：{page}；配对信息已单次消费，临时授权最晚于 {expiry} 到期'),{page:`${location.origin}${location.pathname} · ${pageId}`,expiry:new Date(expiresAt).toLocaleTimeString()}));
+    }catch{note(t(msg('pageBridge.pairUnavailable','配对不可用：信息不符、已到期、已消费或客户端尚未就绪，请发起新请求，页面数据尚未分享')));}
     finally{connecting=false;render();}
   };
   if(existing)$('reset').onclick=event=>{
     if(!event.isTrusted||!navigator.userActivation.isActive||inFlight||connecting||signal.aborted)return;
-    revoke(t(msg('pageBridge.pairCleared','已清除配对。请输入新的一次性信息，并重新选择权限。')),true);
+    revoke(t(msg('pageBridge.pairCleared','已清除配对，请输入新的一次性信息，并重新选择权限')),true);
     ++refreshSequence;requestId='';documentToken='';expiresAt=0;reviewedReady=false;descriptor=undefined;stopped=false;
     $('pair').toggleAttribute('disabled',false);$('code').toggleAttribute('disabled',false);
     for(const id of ['read','view','annotate'])$<HTMLInputElement>(id).checked=false;
@@ -112,7 +112,7 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
     void refresh();render();
   },{signal});
   settings.addEventListener('close',()=>{ $<HTMLInputElement>('code').value=''; },{signal});
-  $('revoke').onclick=()=>revoke(t(msg('pageBridge.revoked','已撤销；已开始的操作可能仍会完成。重新连接必须再次确认。')));
+  $('revoke').onclick=()=>revoke(t(msg('pageBridge.revoked','已撤销；已开始的操作可能仍会完成，重新连接必须再次确认')));
   $('connect').onclick=async event=>{
     if(!event.isTrusted||!navigator.userActivation.isActive||grant||inFlight||connecting||stopped)return;
     connecting=true;render();
@@ -123,15 +123,15 @@ export function installPageBridge(session:ReviewSession,tools:ReturnType<typeof 
       const accepted=await post('connect',{context:pageId,workspace:workspace(),scopes,clientRevision:reviewedRevision},documentToken,AbortSignal.timeout(4000));
       if(current!==generation||original!==binding()||signal.aborted){void post('revoke',{epoch:accepted.epoch},accepted.token).catch(()=>{});return;}
       grant={token:accepted.token,epoch:accepted.epoch,scopes,binding:original,clientClaim};
-      note(t(msg('pageBridge.connected','已连接此页面。关闭设置后授权仍有效，可在此撤销。')));void poll(grant,current);
-    }catch{if(current===generation){await refresh();note(t(msg('pageBridge.connectFailed','未能确认连接。请检查客户端及目标页面；不会自动重连或跟随其他标签。')));}}
+      note(t(msg('pageBridge.connected','已连接此页面，关闭设置后授权仍有效，可在此撤销')));void poll(grant,current);
+    }catch{if(current===generation){await refresh();note(t(msg('pageBridge.connectFailed','未能确认连接，请检查客户端及目标页面；不会自动重连或跟随其他标签')));}}
     finally{connecting=false;render();}
   };
   render();
-  const expiry=setInterval(()=>{if(existing&&expiresAt&&Date.now()>=expiresAt){expiresAt=0;stopped=true;revoke(t(msg('pageBridge.pairExpired','临时授权已到期。')),true);}},500);
-  const unsubscribe=session.subscribe(()=>{if(grant&&grant.binding!==binding())revoke(t(msg('pageBridge.changed','身份或工作区来源已改变，请重新明确授权。')));});
-  window.addEventListener('voidplayer-identity-change',()=>{if(grant)revoke(t(msg('pageBridge.changed','身份或工作区来源已改变，请重新明确授权。')));},{signal});
-  for(const name of ['popstate','hashchange'])window.addEventListener(name,()=>{if(grant&&grant.binding!==binding())revoke(t(msg('pageBridge.changed','身份或工作区来源已改变，请重新明确授权。')));},{signal});
+  const expiry=setInterval(()=>{if(existing&&expiresAt&&Date.now()>=expiresAt){expiresAt=0;stopped=true;revoke(t(msg('pageBridge.pairExpired','临时授权已到期')),true);}},500);
+  const unsubscribe=session.subscribe(()=>{if(grant&&grant.binding!==binding())revoke(t(msg('pageBridge.changed','身份或工作区来源已改变，请重新明确授权')));});
+  window.addEventListener('voidplayer-identity-change',()=>{if(grant)revoke(t(msg('pageBridge.changed','身份或工作区来源已改变，请重新明确授权')));},{signal});
+  for(const name of ['popstate','hashchange'])window.addEventListener(name,()=>{if(grant&&grant.binding!==binding())revoke(t(msg('pageBridge.changed','身份或工作区来源已改变，请重新明确授权')));},{signal});
   window.addEventListener('pagehide',()=>{stopped=true;clearInterval(expiry);revoke('',true);},{signal});
   signal.addEventListener('abort',()=>{stopped=true;clearInterval(expiry);revoke('',true);unsubscribe();},{once:true});
 }

@@ -5,8 +5,8 @@ export type LibraryLocation = { root: string; directory: string; all: boolean };
 
 function validate(location: LibraryLocation): LibraryLocation {
   const { root, directory, all } = location;
-  if (root && !/^[a-zA-Z0-9_-]{1,64}$/.test(root)) throw new Error(t(msg("libraryLink.invalidRoot", "媒体库标识无效。")));
-  if (directory && (!root || directory.startsWith('/') || directory.split('/').some(part => !part || part === '.' || part === '..' || part.includes('\\')))) throw new Error(t(msg("libraryLink.invalidDirectory", "媒体库目录无效。")));
+  if (root && !/^[a-zA-Z0-9_-]{1,64}$/.test(root)) throw new Error(t(msg("libraryLink.invalidRoot", "媒体库标识无效")));
+  if (directory && (!root || directory.startsWith('/') || directory.split('/').some(part => !part || part === '.' || part === '..' || part.includes('\\')))) throw new Error(t(msg("libraryLink.invalidDirectory", "媒体库目录无效")));
   return { root: all ? '' : root, directory: all ? '' : directory, all };
 }
 
@@ -21,7 +21,7 @@ export function parseLibraryLocationInput(value: string, base: string): LibraryL
   const input = value.trim();
   if (/^library:/i.test(input)) {
     const path = input.slice('library:'.length);
-    if (!path) throw new Error(t(msg("libraryLink.incompletePath", "媒体库路径不完整。")));
+    if (!path) throw new Error(t(msg("libraryLink.incompletePath", "媒体库路径不完整")));
     if (path === '*') return { root: '', directory: '', all: true };
     if (path === '/') return { root: '', directory: '', all: false };
     const slash = path.indexOf('/');
@@ -43,9 +43,9 @@ export function libraryLocationLink(location: LibraryLocation, base: string): st
 
 export function parseLibraryLocationLink(value: string, base: string): LibraryLocation {
   let url: URL;
-  try { url = new URL(value.trim()); } catch { throw new Error(t(msg("libraryLink.pasteLink", "请粘贴复制的媒体库链接。"))); }
-  if (url.origin !== new URL(base).origin) throw new Error(t(msg("libraryLink.otherService", "链接来自另一个媒体服务，请在浏览器中打开该链接。")));
-  if (url.pathname !== '/' || !url.searchParams.has('library')) throw new Error(t(msg("libraryLink.notLocationLink", "这不是媒体库位置链接。")));
+  try { url = new URL(value.trim()); } catch { throw new Error(t(msg("libraryLink.pasteLink", "请粘贴复制的媒体库链接"))); }
+  if (url.origin !== new URL(base).origin) throw new Error(t(msg("libraryLink.otherService", "链接来自另一个媒体服务，请在浏览器中打开该链接")));
+  if (url.pathname !== '/' || !url.searchParams.has('library')) throw new Error(t(msg("libraryLink.notLocationLink", "这不是媒体库位置链接")));
   const scope = url.searchParams.get('library')!, legacy = scope === '1';
   const all = scope === '*' || legacy && url.searchParams.get('all') === '1';
   const root = all ? '' : legacy ? url.searchParams.get('root') ?? '' : scope;
@@ -67,6 +67,6 @@ export function parseLibraryFileLink(value: string, base: string): {id:string;ve
   if (!url.searchParams.has('media')) return null;
   parseLibraryLocationLink(url.href,base);
   const id = url.searchParams.get('media') ?? '', version = url.searchParams.get('v') ?? '';
-  if (!/^[a-f0-9]{24}$/.test(id) || !/^[a-f0-9]{24}$/.test(version)) throw new Error(t(msg('libraryLink.invalidFile','媒体库文件链接无效。')));
+  if (!/^[a-f0-9]{24}$/.test(id) || !/^[a-f0-9]{24}$/.test(version)) throw new Error(t(msg('libraryLink.invalidFile','媒体库文件链接无效')));
   return {id,version};
 }

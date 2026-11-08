@@ -98,7 +98,7 @@ export function installLibraryBrowser(elements: LibraryBrowserElements, change: 
     if (!locationInput()) { clearTimeout(searchTimer); if (pendingSearch) reset(); return; }
     try {
       const target = parseLibraryLocationInput(address.value, location.href);
-      if (target.root && !roots.some(item => item.id === target.root)) throw new Error(t(msg('libraryBrowser.unknownLibrary', '此媒体库在当前服务中不存在。')));
+      if (target.root && !roots.some(item => item.id === target.root)) throw new Error(t(msg('libraryBrowser.unknownLibrary', '此媒体库在当前服务中不存在')));
       navigate(target.all ? '' : target.root, target.all ? '' : target.directory); address.blur();
     } catch (error) { address.setAttribute('aria-invalid', 'true'); notify((error as Error).message); address.select(); }
   }, { signal });

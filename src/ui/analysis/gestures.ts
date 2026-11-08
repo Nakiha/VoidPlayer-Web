@@ -141,7 +141,7 @@ export function installAnalysisGestures(options: {
       // 定位解析：不依赖本次查询是否恰好返回 raw 样本，也不从 id 字符串猜时间。
       const peakId = g.maxSampleId;
       if (!peakId) {
-        live.textContent = t(msg("analysis.noLocatablePeak", "轨道 {slot}：该区间没有可定位的峰值样本。"), { slot: g.slot });
+        live.textContent = t(msg("analysis.noLocatablePeak", "轨道 {slot}：该区间没有可定位的峰值样本"), { slot: g.slot });
       } else {
         const inView = scene.results.get(g.slot)?.samples.find(v => v.sampleId === peakId);
         if (inView) {
@@ -161,7 +161,7 @@ export function installAnalysisGestures(options: {
             try {
               res = await session.seekAnalysisSample(g.slot, peakId, { signal });
             } catch {
-              if (!signal.aborted) live.textContent = t(msg("analysis.peakSeekFailed", "轨道 {slot}：峰值样本定位失败。"), { slot: g.slot });
+              if (!signal.aborted) live.textContent = t(msg("analysis.peakSeekFailed", "轨道 {slot}：峰值样本定位失败"), { slot: g.slot });
               return;
             }
             if (signal.aborted || !scene.open) return;
@@ -256,7 +256,7 @@ export function installAnalysisGestures(options: {
         updateInspection(rect.left + (scene.lastGeom ? xOf(scene.lastModel, {
           gutter: scene.lastGeom.gutter, plotW: scene.lastGeom.plotW,
         } as never, inspection.state.hoverUs) : 0), rect.top + 20);
-        live.textContent = t(msg("analysis.trackFocusWithContext", "轨道焦点 {slot}。{rest}"), { slot: inspection.state.kbTrack, rest: live.textContent ?? '' });
+        live.textContent = t(msg("analysis.trackFocusWithContext", "轨道焦点 {slot} {rest}"), { slot: inspection.state.kbTrack, rest: live.textContent ?? '' });
       } else {
         live.textContent = t(msg("analysis.trackFocus", "轨道焦点 {slot}"), { slot: inspection.state.kbTrack });
       }
@@ -272,7 +272,7 @@ export function installAnalysisGestures(options: {
         else { live.textContent = resolved.reason; }
         return;
       }
-      live.textContent = t(msg("analysis.noSampleAtTime", "轨道 {slot} 在该时间无可定位样本。"), { slot: focus });
+      live.textContent = t(msg("analysis.noSampleAtTime", "轨道 {slot} 在该时间无可定位样本"), { slot: focus });
     } else if (event.key === 'i' || event.key === 'I') {
       // 冻结/解冻当前检查，不改变播放。
       event.preventDefault();

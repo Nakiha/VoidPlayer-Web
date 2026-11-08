@@ -32,7 +32,7 @@ export async function showConnectionGuide({automatic=false}={}) {
       <div class="connection-language"><button id="language-choice" type="button" class="choice-trigger" aria-label="${th(msg('language.label', '语言 / Language'))}"></button><span id="language-status" role="status"></span></div>
       <header class="connection-header">
         <h1 id="connection-title"><span class="connection-brand">VoidPlayer</span><span class="connection-title-divider">-</span><span id="connection-page-title">${automatic?t(msg("connection.pageTitle", "连接")):t(msg("connection.certSettings", "证书设置"))}</span></h1>
-        <details id="connection-about" class="connection-about"><summary>${th(msg("connection.whyTitle", "为什么需要证书？"))}</summary><p>${th(msg("connection.whyBody", "信任服务器证书后，浏览器可以建立可信的 HTTPS 连接，使用 WebCodecs 原生解码。实际硬件加速取决于浏览器、显卡和视频格式。"))}</p></details>
+        <details id="connection-about" class="connection-about"><summary>${th(msg("connection.whyTitle", "为什么需要证书？"))}</summary><p>${th(msg("connection.whyBody", "信任服务器证书后，浏览器可以建立可信的 HTTPS 连接，使用 WebCodecs 原生解码，实际硬件加速取决于浏览器、显卡和视频格式"))}</p></details>
       </header>
       <div id="connection-status-row" class="connection-status-row">
         <p id="connection-status" role="status">${th(msg("connection.checkingConfig", "正在检查连接配置…"))}</p>
@@ -47,22 +47,22 @@ export async function showConnectionGuide({automatic=false}={}) {
               <div><strong>voidplayer-ca.crt</strong><span>${th(msg("connection.serverCa", "服务器信任证书"))}</span></div>
             </div>
             <a id="connection-download" class="connection-button secondary" href="/api/connection/certificate" download="voidplayer-ca.crt">${icon(download)}<span id="connection-download-label">${th(msg("connection.downloadCert", "下载证书"))}</span></a>
-            <p class="connection-note">${th(msg("connection.verifyNote", "安装前，请与管理员核对服务器地址和证书指纹。"))}</p>
+            <p class="connection-note">${th(msg("connection.verifyNote", "安装前，请与管理员核对服务器地址和证书指纹"))}</p>
             <details class="connection-fingerprint"><summary>${th(msg("connection.viewFingerprint", "查看证书指纹"))}</summary><span>SHA-256</span><code id="connection-fingerprint"></code></details>
           </section>
           <section class="connection-trust-step" aria-labelledby="connection-trust-title">
             <div class="connection-step-heading"><span class="connection-number">2</span><h2 id="connection-trust-title">${th(msg("connection.installTitle", "安装并信任"))}</h2></div>
             <div class="connection-os" role="group" aria-label="${th(msg("connection.os", "操作系统"))}"><button type="button" data-os="windows" aria-pressed="true" aria-controls="connection-windows">${icon(windows)}Windows</button><button type="button" data-os="macos" aria-pressed="false" aria-controls="connection-macos">${icon(apple)}macOS</button></div>
-            <ol id="connection-windows"><li>${t(msg('connection.winRich1', '双击下载的证书，选择<strong>安装证书</strong>。'))}</li><li>${t(msg('connection.winRich2', '选择<strong>当前用户</strong>，点击“下一步”。'))}</li><li>${t(msg('connection.winRich3', '选择“将所有的证书都放入下列存储”，浏览并选中<strong>受信任的根证书颁发机构</strong>。'))}</li><li>${th(msg('connection.winStep4', '核对来源与指纹，按系统提示完成导入。'))}</li></ol>
-            <ol id="connection-macos" hidden><li>${t(msg('connection.macRich1', '打开<strong>钥匙串访问</strong>，选中“登录”，通过“文件 → 导入项目”导入下载的证书。'))}</li><li>${t(msg('connection.macRich2', '找到 <strong>VoidPlayer Local CA</strong> 证书，双击打开。'))}</li><li>${t(msg('connection.macRich3', '展开“信任”，将<strong>安全套接字层（SSL）</strong>设为“始终信任”。'))}</li><li>${th(msg('connection.macStep4', '关闭窗口，按系统提示验证身份并保存。'))}</li></ol>
-            <details class="connection-install-help"><summary>${th(msg("connection.cantInstall", "无法安装或找不到证书？"))}</summary><p>${th(msg("connection.cantInstallBody", "浏览器不能代替你安装系统证书。请确认已下载 voidplayer-ca.crt；如果设备由组织管理，请联系管理员部署。"))}</p></details>
+            <ol id="connection-windows"><li>${t(msg('connection.winRich1', '双击下载的证书，选择<strong>安装证书</strong>'))}</li><li>${t(msg('connection.winRich2', '选择<strong>当前用户</strong>，点击“下一步”'))}</li><li>${t(msg('connection.winRich3', '选择“将所有的证书都放入下列存储”，浏览并选中<strong>受信任的根证书颁发机构</strong>'))}</li><li>${th(msg('connection.winStep4', '核对来源与指纹，按系统提示完成导入'))}</li></ol>
+            <ol id="connection-macos" hidden><li>${t(msg('connection.macRich1', '打开<strong>钥匙串访问</strong>，选中“登录”，通过“文件 → 导入项目”导入下载的证书'))}</li><li>${t(msg('connection.macRich2', '找到 <strong>VoidPlayer Local CA</strong> 证书，双击打开'))}</li><li>${t(msg('connection.macRich3', '展开“信任”，将<strong>安全套接字层（SSL）</strong>设为“始终信任”'))}</li><li>${th(msg('connection.macStep4', '关闭窗口，按系统提示验证身份并保存'))}</li></ol>
+            <details class="connection-install-help"><summary>${th(msg("connection.cantInstall", "无法安装或找不到证书？"))}</summary><p>${th(msg("connection.cantInstallBody", "浏览器不能代替你安装系统证书，请确认已下载 voidplayer-ca.crt；如果设备由组织管理，请联系管理员部署"))}</p></details>
           </section>
         </section>
         <section id="connection-enter" class="connection-enter" hidden>
-          <div><div class="connection-step-heading"><span id="connection-enter-number" class="connection-number">3</span><h2>${th(msg("admin.openInPlayer", "打开播放器"))}</h2></div><p id="connection-enter-hint">${th(msg("connection.openPlayerHint", "安装完成后，点击“打开播放器”重新检查。"))}</p><p id="connection-address" class="connection-address"></p></div>
+          <div><div class="connection-step-heading"><span id="connection-enter-number" class="connection-number">3</span><h2>${th(msg("admin.openInPlayer", "打开播放器"))}</h2></div><p id="connection-enter-hint">${th(msg("connection.openPlayerHint", "安装完成后，点击“打开播放器”重新检查"))}</p><p id="connection-address" class="connection-address"></p></div>
           <a id="connection-open" class="connection-button" href="/">${th(msg("admin.openInPlayer", "打开播放器"))} ${icon(arrow)}</a>
         </section>
-        <section id="connection-unavailable" class="connection-help" hidden><span class="connection-emblem">${icon(lock)}</span><h2>${th(msg("connection.httpsUnavailable", "服务器未开启 HTTPS"))}</h2><p>${th(msg("connection.contactAdmin", "请联系管理员开启 HTTPS。"))}</p><details><summary>${th(msg("connection.viewServerDocs", "查看服务器设置说明"))}</summary><p>${th(msg("connection.standaloneExample", "独立程序启动示例："))}</p><code>./voidplayer --https SERVER_IP</code><p>${th(msg("connection.defaultPorts", "默认 HTTPS 端口为 5180，证书引导页端口为 5181。已启用时，请使用管理员提供的引导地址。"))}</p></details></section>
+        <section id="connection-unavailable" class="connection-help" hidden><span class="connection-emblem">${icon(lock)}</span><h2>${th(msg("connection.httpsUnavailable", "服务器未开启 HTTPS"))}</h2><p>${th(msg("connection.contactAdmin", "请联系管理员开启 HTTPS"))}</p><details><summary>${th(msg("connection.viewServerDocs", "查看服务器设置说明"))}</summary><p>${th(msg("connection.standaloneExample", "独立程序启动示例："))}</p><code>./voidplayer --https SERVER_IP</code><p>${th(msg("connection.defaultPorts", "默认 HTTPS 端口为 5180，证书引导页端口为 5181，已启用时，请使用管理员提供的引导地址"))}</p></details></section>
       </div>
     </main>`, life.signal);
   installLanguageControls(life.signal);
@@ -115,11 +115,11 @@ export async function showConnectionGuide({automatic=false}={}) {
       const info = await response.json() as ConnectionInfo;
       if (!info.configured) {
         destination=null;
-        setStatus('waiting', () => t(msg("connection.httpsOff", "服务器尚未开启 HTTPS。"))); $('unavailable').hidden = false;$('setup').hidden=$('enter').hidden=true; return;
+        setStatus('waiting', () => t(msg("connection.httpsOff", "服务器尚未开启 HTTPS"))); $('unavailable').hidden = false;$('setup').hidden=$('enter').hidden=true; return;
       }
       const target = info.httpsUrl ? connectionTarget(info.httpsUrl,requested) : null;
       if (!target || target.protocol !== 'https:') {
-        setStatus('waiting', () => t(msg("connection.certReady", "服务器已配置证书，请向管理员获取与证书匹配的 HTTPS 地址。"))); return;
+        setStatus('waiting', () => t(msg("connection.certReady", "服务器已配置证书，请向管理员获取与证书匹配的 HTTPS 地址"))); return;
       }
       destination=target;
       if(enterWhenTrusted && await probeHttps(target)){location.replace(target.href);return;}
@@ -131,8 +131,8 @@ export async function showConnectionGuide({automatic=false}={}) {
       localizedText($('fingerprint'), () => info.fingerprint ?? '');
       ($('open') as HTMLAnchorElement).href = target.href;
       localizedText($('address'), () => target.origin);
-      localizedText($('enter-hint'), () => install ? t(msg("connection.openPlayerHint", "安装完成后，点击“打开播放器”重新检查。")) : t(msg("connection.ownCertHint", "此服务器使用自有证书。若浏览器仍提示证书问题，请联系管理员。")));
-      setStatus(enterWhenTrusted?'waiting':'ready',() => enterWhenTrusted?t(msg("connection.untrusted", "暂时无法建立可信的 HTTPS 连接。安装证书后可重新检查。")):'');
+      localizedText($('enter-hint'), () => install ? t(msg("connection.openPlayerHint", "安装完成后，点击“打开播放器”重新检查")) : t(msg("connection.ownCertHint", "此服务器使用自有证书，若浏览器仍提示证书问题，请联系管理员")));
+      setStatus(enterWhenTrusted?'waiting':'ready',() => enterWhenTrusted?t(msg("connection.untrusted", "暂时无法建立可信的 HTTPS 连接，安装证书后可重新检查")):'');
     } catch (error) { setStatus('error', () => requestError(error)); }
     finally { retry.disabled = false;checking=false; }
   }

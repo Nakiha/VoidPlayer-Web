@@ -158,7 +158,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     if (!item.file && !item.library) { if (!item.libraryId) void reselectLocal(item); return; }
     const empty = SLOTS.find(slot => !session.getState().tracks.some(track => track.slot === slot));
     if (empty) void load(item, empty);
-    else void act(() => { throw new Error(t(msg('sources.noEmptyTracks', '没有空轨道，请先关闭一个视频。'))); }, 'ui.source-full');
+    else void act(() => { throw new Error(t(msg('sources.noEmptyTracks', '没有空轨道，请先关闭一个视频'))); }, 'ui.source-full');
   }
   function removeFromView(item: SourceItem) {
     void act(async () => {
@@ -452,7 +452,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
       try { entry = await fetchLibraryItem(track.source.id, signal); }
       catch (error) { if (signal.aborted) return; throw error; }
       if (signal.aborted || session.getState().tracks.find(current => current.slot === slot)?.source?.id !== track.source.id) return;
-      if (!entry || entry.state === 'missing') { shared.notify(t(msg('sources.locateUnavailable', '片源已不在媒体库中。'))); return; }
+      if (!entry || entry.state === 'missing') { shared.notify(t(msg('sources.locateUnavailable', '片源已不在媒体库中'))); return; }
       libraryBrowser.clearSearch();
       if (!await libraryBrowser.reveal(entry) || signal.aborted || session.getState().tracks.find(current => current.slot === slot)?.source?.id !== track.source.id) return;
       key = sourceKey(entry, entry.id);
@@ -546,7 +546,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     async openLibraryFile(id: string, version: string) {
       const entry = await fetchLibraryItem(id,AbortSignal.any([lifecyle.signal,AbortSignal.timeout(10000)]));
       if (disposed || session.getState().tracks.length || session.getState().busy) return;
-      if (!entry || entry.version !== version) throw new Error(t(msg('sources.linkUnavailable','该媒体库文件已不存在或版本已变化。')));
+      if (!entry || entry.version !== version) throw new Error(t(msg('sources.linkUnavailable','该媒体库文件已不存在或版本已变化')));
       await load({...entry,key:sourceKey(entry,entry.id),library:entry},'A');
     },
     renderSources, renderStartLibrary, refreshLibrary, ensureLibrary, rememberFile, localize,

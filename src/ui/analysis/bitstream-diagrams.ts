@@ -60,7 +60,7 @@ export function installBitstreamDiagrams(host: HTMLElement, session: ReviewSessi
     }
     }
     const note = document.createElement('p'); note.className = 'analysis-card-note';
-    note.textContent = t(msg('analysis.containerNaluHint', '不计入逐帧 NALU 和帧大小。'));
+    note.textContent = t(msg('analysis.containerNaluHint', '不计入逐帧 NALU 和帧大小'));
     headerCard.element.replaceChildren(table, note); headerCard.element.hidden = false;
     headerCard.element.dataset.column = '-1';
     const clip = host.closest('.analysis-charts')!.getBoundingClientRect(), rect = (host.closest('.bitstream-nalu-group:not([hidden])') ?? host).getBoundingClientRect();
@@ -187,7 +187,7 @@ export function installBitstreamDiagrams(host: HTMLElement, session: ReviewSessi
     const inferred = pictures.some(p => p.referenceLayer?.source === 'inferred');
     layerBadge.hidden = mode !== 'references' || !pictures.some(p => p.referenceLayer);
     layerBadge.textContent = t(inferred ? msg('analysis.inferredLayer', '推断层级') : msg('analysis.temporalLayer', '时间层级'));
-    layerBadge.title = inferred ? t(msg('analysis.inferredLayerHint', '按相邻 I/P 锚帧间的局部参考关系推断，不代表码流标记的时间层。* 表示参考信息不完整。')) : t(msg('analysis.temporalLayerHint', '层级来自图像 VCL NAL 的 Temporal ID。'));
+    layerBadge.title = inferred ? t(msg('analysis.inferredLayerHint', '按相邻 I/P 锚帧间的局部参考关系推断，不代表码流标记的时间层，* 表示参考信息不完整')) : t(msg('analysis.temporalLayerHint', '层级来自图像 VCL NAL 的 Temporal ID'));
     const style = getComputedStyle(host);
     const minimumPlot = Number.parseFloat(style.getPropertyValue('--analysis-chart-min-plot-height')) || 36;
     const minimumTypeRow = Number.parseFloat(style.getPropertyValue('--analysis-type-row-min-height')) || 10;
@@ -220,11 +220,11 @@ export function installBitstreamDiagrams(host: HTMLElement, session: ReviewSessi
     empty.hidden = hasRecords; canvas.hidden = !data?.count; legend.hidden = !hasRecords;
     const inspection = options.inspection();
     const noResults = !base?.count;
-    emptyTitle.textContent = !slot ? t(msg('analysis.diagramNoTrack', '先载入一条视频轨道。'))
+    emptyTitle.textContent = !slot ? t(msg('analysis.diagramNoTrack', '先载入一条视频轨道'))
       : noResults ? inspection.state !== 'idle' ? inspection.status : t(msg('analysis.streamNotStarted','{slot} 尚未检查'), { slot })
-      : mode === 'references' && (pictures.length || buckets.length) ? t(msg('analysis.diagramReferencesUnsupported', '这些帧没有可用的参考记录。需要支持参考列表的分析内核。'))
-      : t(msg('analysis.diagramUnanalyzed', '此范围尚未收到检查结果。'));
-    emptyDescription.textContent = noResults ? inspection.pending ? t(msg('analysis.streamLiveHint','结果会随分析进度逐步显示。')) : t(msg('analysis.streamEmptyHint','正在准备分析，NALU 和帧参考结果会自动显示。')) : inspection.status;
+      : mode === 'references' && (pictures.length || buckets.length) ? t(msg('analysis.diagramReferencesUnsupported', '这些帧没有可用的参考记录，需要支持参考列表的分析内核'))
+      : t(msg('analysis.diagramUnanalyzed', '此范围尚未收到检查结果'));
+    emptyDescription.textContent = noResults ? inspection.pending ? t(msg('analysis.streamLiveHint','结果会随分析进度逐步显示')) : t(msg('analysis.streamEmptyHint','正在准备分析，NALU 和帧参考结果会自动显示')) : inspection.status;
     emptyDescription.title = inspection.name;
     emptyAction.hidden = noResults || inspection.pending || !slot || (mode === 'references' && !!(pictures.length || buckets.length));
     emptyAction.textContent = t(msg('analysis.fullRange','完整范围'));
@@ -256,7 +256,7 @@ export function installBitstreamDiagrams(host: HTMLElement, session: ReviewSessi
         dot.style.backgroundColor = item.color;
         if (entry.dataset.referenceList === '1') { dot.style.backgroundColor = 'transparent'; dot.style.borderTop = `2px dashed ${item.color}`; }
         entry.append(dot, document.createTextNode(item.label));
-        const filterHint = item.type === undefined ? '' : t(msg('analysis.naluSoloHint', '点击切换筛选；右键或长按单选，再次操作恢复全部。'));
+        const filterHint = item.type === undefined ? '' : t(msg('analysis.naluSoloHint', '点击切换筛选；右键或长按单选，再次操作恢复全部'));
         if (filterHint) entry.title = filterHint;
         if (item.origin) {
           entry.dataset.origin = item.origin; dot.className = 'container-nalu-swatch';
@@ -328,7 +328,7 @@ export function installBitstreamDiagrams(host: HTMLElement, session: ReviewSessi
         }
         ctx.restore();
       }
-      canvas.setAttribute('aria-label', t(msg('analysis.referenceCanvas', '帧参考关系图。横轴为整片时间；总览显示帧类型分布，放大后显示参考金字塔和连线。方向键选择，回车查看。')));
+      canvas.setAttribute('aria-label', t(msg('analysis.referenceCanvas', '帧参考关系图，横轴为整片时间，总览显示帧类型分布，放大后显示参考金字塔和连线；方向键选择，回车查看')));
     } else {
       const types = [...new Set([...data!.types, ...headerTypes])].sort((a,b) => a-b), shownTypes = types.filter(type => !hiddenTypes.has(type));
       let rowTypes: number[];
@@ -346,7 +346,7 @@ export function installBitstreamDiagrams(host: HTMLElement, session: ReviewSessi
       canvas.dataset.containerColumn = headerVisible ? '-1' : '';
       canvas.dataset.containerTypes = headerVisible ? shownHeaderTypes.join(',') : '';
       empty.hidden = !!shownTypes.length;
-      if (!shownTypes.length) { emptyTitle.textContent = t(msg('analysis.naluFilterEmpty', '没有选中 NALU 类型。点击图例或“全部”恢复显示。')); emptyDescription.textContent = ''; emptyAction.hidden = true; }
+      if (!shownTypes.length) { emptyTitle.textContent = t(msg('analysis.naluFilterEmpty', '没有选中 NALU 类型，点击图例或“全部”恢复显示')); emptyDescription.textContent = ''; emptyAction.hidden = true; }
       const samples = buckets.length ? buckets.map(b => ({ bucket: b, x: xOf((b.startUs + b.endUs) / 2), width: (b.endUs - b.startUs) / (endUs - startUs) * span, counts: b.naluCounts, bytes: b.naluBytes, divisor: b.pictures }))
         : pictures.map(p => { const counts = Array(64).fill(0), bytes = Array(64).fill(0); for (const n of p.nalus) { counts[n.type]++; bytes[n.type] += n.size; } return { picture: p, x: xOf(pictureTime(p)), width: frameWidth, counts, bytes, divisor: 1 }; });
       canvas.dataset.renderedNalus = String(samples.reduce((sum, p) => sum + shownTypes.reduce((s, type) => s + p.counts[type], 0), 0));
@@ -381,7 +381,7 @@ export function installBitstreamDiagrams(host: HTMLElement, session: ReviewSessi
         ctx.fillStyle = text; ctx.textAlign = 'center'; ctx.fillText('−1', headerX, top + 7); ctx.textAlign = 'left';
       }
       ctx.restore();
-      canvas.setAttribute('aria-label', t(mode === 'nalu-size' ? msg('analysis.naluSizeCanvas', 'NALU 大小图。横轴为整片时间；放大查看逐帧大小。点击图例筛选类型，方向键选择，回车查看。') : msg('analysis.naluTypeCanvas', 'NALU 类型图。横轴为整片时间；放大查看逐帧类型。点击图例筛选类型，方向键选择，回车查看。')));
+      canvas.setAttribute('aria-label', t(mode === 'nalu-size' ? msg('analysis.naluSizeCanvas', 'NALU 大小图，横轴为整片时间，放大可查看逐帧大小；点击图例筛选类型，方向键选择，回车查看') : msg('analysis.naluTypeCanvas', 'NALU 类型图，横轴为整片时间，放大可查看逐帧类型；点击图例筛选类型，方向键选择，回车查看')));
     }
     points = points.filter(p => inPlot(p.x));
     const cursorTimeUs = sharedHover?.cursorTimeUs ?? sharedHover?.timeUs;
@@ -392,9 +392,9 @@ export function installBitstreamDiagrams(host: HTMLElement, session: ReviewSessi
     }
     drawTimeAxis(ctx, { width: w, height: h, viewStart: startUs, viewEnd: endUs, showTimeAxis, colors: { grid, axisText: text, text, key: '', delta: '', unknown: '' } });
     const picked = points.find(p => chosenAu !== undefined ? p.picture?.picture.au === chosenAu : chosenBucket !== undefined && p.bucket?.startUs === chosenBucket);
-    detail.textContent = picked ? pointDetail(picked) : data?.detailMissing ? t(msg('analysis.diagramDetailEvicted', '当前范围保留了汇总；重新检查可恢复逐帧细节。'))
-      : buckets.length ? mode === 'references' ? t(msg('analysis.referenceOverview', '整片帧类型分布 · 放大查看参考金字塔与 L0 / L1 连线。')) : t(msg('analysis.naluOverview', '汇总：每个时间段按选中类型显示平均帧大小与类型分布 · 放大查看逐帧细节。'))
-      : mode === 'references' ? t(msg('analysis.referenceLegend', 'L0 实线 · L1 长虚线 · 点线指向视图外参考帧；活动参考列表不表示每个块都使用该参考帧。')) : t(msg('analysis.naluLegend', '横轴为时间 · 大小不含长度前缀 · 点击图例筛选，点击帧定位。'));
+    detail.textContent = picked ? pointDetail(picked) : data?.detailMissing ? t(msg('analysis.diagramDetailEvicted', '当前范围保留了汇总；重新检查可恢复逐帧细节'))
+      : buckets.length ? mode === 'references' ? t(msg('analysis.referenceOverview', '整片帧类型分布 · 放大查看参考金字塔与 L0 / L1 连线')) : t(msg('analysis.naluOverview', '汇总：每个时间段按选中类型显示平均帧大小与类型分布 · 放大查看逐帧细节'))
+      : mode === 'references' ? t(msg('analysis.referenceLegend', 'L0 实线 · L1 长虚线 · 点线指向视图外参考帧；活动参考列表不表示每个块都使用该参考帧')) : t(msg('analysis.naluLegend', '横轴为时间 · 大小不含长度前缀 · 点击图例筛选，点击帧定位'));
     detail.title = detail.textContent;
     options.rendered?.();
   }
@@ -518,7 +518,7 @@ export function installBitstreamDiagrams(host: HTMLElement, session: ReviewSessi
         return { element, exact: !!point.picture, timeUs: point.picture ? sessionTime(pictureTime(point.picture)) : undefined };
       }
       const message = document.createElement('p');
-      message.textContent = t(mode === 'references' ? msg('analysis.referenceMissing', '参考记录不可用') : msg('analysis.hoverDetailMissing', '此时间没有逐帧检查记录。'));
+      message.textContent = t(mode === 'references' ? msg('analysis.referenceMissing', '参考记录不可用') : msg('analysis.hoverDetailMissing', '此时间没有逐帧检查记录'));
       const element = document.createElement('div');
       const heading = document.createElement('div'); heading.className = 'analysis-card-track';
       heading.append(analysisTrackBadge(slot));

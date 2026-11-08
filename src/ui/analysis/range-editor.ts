@@ -207,7 +207,7 @@ export function installAnalysisRangeEditor(deps: AnalysisRangeEditorDeps) {
             const value = parseTimeInput(raw, 's', true), domain = dataDomainBounds(), range = viewRange();
             const min = edge === 'start' ? domain.start : Math.max(domain.start, range.start) + MIN_SPAN_US;
             const max = edge === 'start' ? range.end - MIN_SPAN_US : domain.end;
-            if (value < min || value > max) throw new Error(t(msg('analysis.invalidRange', '请输入片源范围内的起止时间，结束时间须晚于起始时间。')));
+            if (value < min || value > max) throw new Error(t(msg('analysis.invalidRange', '请输入片源范围内的起止时间，结束时间须晚于起始时间')));
             rangeError.hidden = true;
             return value;
           } catch (error) {

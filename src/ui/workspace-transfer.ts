@@ -23,7 +23,7 @@ import type { WorkspaceOpenOperation } from './saved-workspaces.ts';
 import { t, msg } from '../i18n.ts';
 
 function fileMtimeWarning(name: string) {
-  return t(msg('transfer.mtimeWarning','「{name}」修改时间与工作区记录不一致，已按同名同大小文件恢复；如内容被替换请重新检查标注。'),{name});
+  return t(msg('transfer.mtimeWarning','「{name}」修改时间与工作区记录不一致，已按同名同大小文件恢复；如内容被替换请重新检查标注'),{name});
 }
 export const isWorkspaceFile = (file: File) => /\.(voidplayer|json|gz)$/i.test(file.name);
 
@@ -79,7 +79,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
     }
   }
   async function importWorkspace(value: unknown, supplied: File[] = [], fromShare = false, operation?: WorkspaceOpenOperation) {
-    if (importing) throw new Error(t(msg("transfer.importing", "工作区正在导入，请等待完成。")));
+    if (importing) throw new Error(t(msg("transfer.importing", "工作区正在导入，请等待完成")));
     operation ??= saved?.beginOpen();
     const current = () => !lifetime.signal.aborted && (!operation || operation.current());
     if (!current()) return false;
@@ -130,15 +130,15 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       if (skipped.length) options.toasts.show(() => t(msg('transfer.sourcesSkipped', '以下片源无法打开，已跳过：{details}'), {
         details: skipped.map(item => `${item.name}：${item.error}`).join('；'),
       }), { kind: 'warning', durationMs: 8000 });
-      else if (!document.comparison) options.toasts.show(() => t(msg("transfer.legacyConditions", "旧工作区未记录比较条件，已沿用当前色彩和解码设置。")));
+      else if (!document.comparison) options.toasts.show(() => t(msg("transfer.legacyConditions", "旧工作区未记录比较条件，已沿用当前色彩和解码设置")));
       return true;
     } finally { importing = false; }
   }
   async function importFile(file: File, supplied: File[] = []) {
-    if (importing) throw new Error(t(msg("transfer.importing", "工作区正在导入，请等待完成。")));
+    if (importing) throw new Error(t(msg("transfer.importing", "工作区正在导入，请等待完成")));
     const operation = saved?.beginOpen();
     const document = await readWorkspaceFile(file, location.href).catch(error => {
-      if (error instanceof UnrecognizedWorkspaceFile) throw new LocalInputError(t(msg('input.workspace', '「{name}」不是可读取的 VoidPlayer 工作区文件。请选择视频或已导出的工作区。'), {name:file.name}));
+      if (error instanceof UnrecognizedWorkspaceFile) throw new LocalInputError(t(msg('input.workspace', '「{name}」不是可读取的 VoidPlayer 工作区文件，请选择视频或已导出的工作区'), {name:file.name}));
       throw error;
     });
     if (operation && !operation.current()) return;

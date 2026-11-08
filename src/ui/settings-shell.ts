@@ -49,7 +49,7 @@ export function settingsShell() {
               <button id="language-choice" type="button" class="settings-choice" aria-labelledby="language-label"></button>
             </div>
             <div class="settings-action-row appearance-other-row">
-              <div><h4 id="chart-hover-label" class="settings-icon-label">${icon('chart')}<span>${th(msg('settingsShell.chartHover', '码流分析悬浮面板显示方式'))}</span></h4><p id="chart-hover-hint">${th(msg('settingsShell.chartHoverHint', '各图独立显示在悬浮线旁；合并显示在上面板下方。'))}</p></div>
+              <div><h4 id="chart-hover-label" class="settings-icon-label">${icon('chart')}<span>${th(msg('settingsShell.chartHover', '码流分析悬浮面板显示方式'))}</span></h4><p id="chart-hover-hint">${th(msg('settingsShell.chartHoverHint', '各图独立显示在悬浮线旁；合并显示在上面板下方'))}</p></div>
               <button id="chart-hover-style" type="button" class="settings-choice" aria-labelledby="chart-hover-label" aria-describedby="chart-hover-hint"></button>
             </div>
           </div>
@@ -94,7 +94,7 @@ export function settingsShell() {
             <button id="local-file-access-try" type="button" aria-describedby="local-file-access-status">${th(msg('fileAccess.try', '尝试启用'))}</button>
           </div></div>
           <p id="local-file-access-status" class="settings-caption" role="status"></p>
-          <p class="settings-caption">${th(msg('fileAccess.help', '选择一个视频以验证访问权限和本机句柄保存，不会上传或播放。曾拒绝授权时可再次尝试；浏览器未提供此能力时，本地视频仅在本次页面可用，不进入最近打开。'))}</p>
+          <p class="settings-caption">${th(msg('fileAccess.help', '选择一个视频以验证访问权限和本机句柄保存，不会上传或播放，曾拒绝授权时可再次尝试；浏览器未提供此能力时，本地视频仅在本次页面可用，不进入最近打开'))}</p>
         </div>
         <div id="page-bridge-settings" class="settings-mcp" hidden>
           <h4 class="settings-section-title">MCP</h4>
@@ -112,7 +112,7 @@ export function settingsShell() {
               <div><h4>${th(msg('pageBridge.clientLabel', 'MCP 客户端'))}</h4><pre id="page-bridge-client"></pre></div>
               <div><h4>${th(msg('settingsShell.workspace', '工作区'))}</h4><p id="page-bridge-workspace"></p></div>
             </div></div>
-            <p class="settings-caption">${th(msg('pageBridge.claim', '客户端名称为自行声明，并非认证身份。仅授权此页面及当前工作区，不跟随其他标签。'))}</p>
+            <p class="settings-caption">${th(msg('pageBridge.claim', '客户端名称为自行声明，并非认证身份，仅授权此页面及当前工作区，不跟随其他标签'))}</p>
           </div>
           <div class="settings-section">
             <h4 class="settings-section-title" id="page-bridge-scopes">${th(msg('pageBridge.scopes', '授权范围'))}</h4>
@@ -129,7 +129,7 @@ export function settingsShell() {
               <button id="page-bridge-revoke" type="button" disabled>${th(msg('pageBridge.revoke', '撤销连接'))}</button>
             </div></div>
             <p id="page-bridge-status" class="settings-caption" role="status"></p>
-            <p class="settings-caption">${th(msg('pageBridge.lifetime', '授权仅存于当前进程和页面内存。撤销、重载、关页或断线即失效；已经开始的操作可能完成，取消不表示回滚，未知写入不得自动重试。'))}</p>
+            <p class="settings-caption">${th(msg('pageBridge.lifetime', '授权仅存于当前进程和页面内存，撤销、重载、关页或断线即失效；已经开始的操作可能完成，取消不表示回滚，未知写入不得自动重试'))}</p>
           </div>
         </div>
       </section>

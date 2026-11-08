@@ -17,8 +17,8 @@ export function installAnnotationActivity(signal: AbortSignal) {
     root.hidden = scope === 'local';
     root.querySelector('h4')!.textContent = t(msg('activity.title', '评审活动')) + (events.length ? ` (${events.length})` : '');
     root.querySelector('p')!.textContent = failed
-      ? t(msg('activity.disconnected', '活动连接中断，恢复后自动续读。'))
-      : events.length ? t(msg('activity.recent', '共享评审空间的最近操作；不会改变当前播放。')) : t(msg('activity.empty', '此评审空间暂无操作记录。'));
+      ? t(msg('activity.disconnected', '活动连接中断，恢复后自动续读'))
+      : events.length ? t(msg('activity.recent', '共享评审空间的最近操作；不会改变当前播放')) : t(msg('activity.empty', '此评审空间暂无操作记录'));
     const list = root.querySelector('ol')!;
     const existing = new Map([...list.querySelectorAll<HTMLElement>('li')].map(row => [row.dataset.eventKey, row]));
     const rows = [...events].reverse().map(event => {

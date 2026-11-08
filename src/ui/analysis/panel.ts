@@ -87,7 +87,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
           <button type="button" data-axis="dts">DTS</button>
         </div>
         <button type="button" id="analysis-window" class="choice-trigger" aria-label="${th(msg("analysis.bitrateWindow", "码率窗口"))}" title="${th(msg("analysis.bitrateWindowTitle", "码率窗口：视频样本负载码率的滑动时间窗（真实时间窗，非 N 帧窗）"))}"></button>
-        <button type="button" id="analysis-layout" class="choice-trigger" aria-label="${th(msg("analysis.multiTrackLayout", "多轨布局"))}" title="${th(msg("analysis.multiTrackLayoutTitle", "只影响码率和帧大小；NALU 与帧参考始终按轨道分开显示。"))}"></button>
+        <button type="button" id="analysis-layout" class="choice-trigger" aria-label="${th(msg("analysis.multiTrackLayout", "多轨布局"))}" title="${th(msg("analysis.multiTrackLayoutTitle", "只影响码率和帧大小；NALU 与帧参考始终按轨道分开显示"))}"></button>
         <div class="analysis-zoom-controls">
           <button type="button" id="analysis-range-trigger" class="analysis-range-trigger" aria-haspopup="dialog" aria-expanded="false" aria-controls="analysis-range-editor"><span></span></button>
           <button type="button" id="analysis-zoom-in" class="icon-button">${icon('zoomIn')}</button>
@@ -102,7 +102,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     <div class="analysis-notice" role="status" aria-live="polite" hidden></div>
     <div class="analysis-body" id="analysis-body">
       <div class="analysis-plot" id="analysis-plot">
-        <canvas id="analysis-canvas" tabindex="0" role="img" aria-label="${th(msg("analysis.canvasLabel", "码流分析图：码率曲线与帧大小柱。方向键移动检查位置，回车定位，Escape 退出检查。"))}"></canvas>
+        <canvas id="analysis-canvas" tabindex="0" role="img" aria-label="${th(msg("analysis.canvasLabel", "码流分析图：码率曲线与帧大小柱，方向键移动检查位置，回车定位，Escape 退出检查"))}"></canvas>
         <canvas id="analysis-overlay" aria-hidden="true"></canvas>
         <div class="analysis-line analysis-playhead" hidden></div>
         <div class="analysis-line analysis-hover" hidden></div>
@@ -249,7 +249,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     diagramLabels().forEach(({ value, label }) => {
       for (const button of diagramButtons.filter(button => button.dataset.value === value)) {
         button.setAttribute('aria-label', label);
-        button.dataset.tooltip = `${label}\n${t(msg('analysis.diagramSoloHint', '点击切换；右键或长按单选，再次操作同一图表恢复之前的选择。'))}`;
+        button.dataset.tooltip = `${label}\n${t(msg('analysis.diagramSoloHint', '点击切换；右键或长按单选，再次操作同一图表恢复之前的选择'))}`;
         button.setAttribute('aria-pressed', String(diagrams.has(value as AnalysisDiagram)));
       }
     });
@@ -263,7 +263,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     for(const button of loadLegend.querySelectorAll<HTMLButtonElement>('button')) {
       button.textContent=button.dataset.metric==='qp'?'QP':t(msg('analysis.bitrate','码率'));
       button.setAttribute('aria-pressed', String(loadMetrics.has(button.dataset.metric as 'bitrate'|'qp')));
-      button.dataset.tooltip = button.dataset.metric==='qp' ? t(msg('analysis.qpLegendHint','平均亮度 QP · 虚线；点击切换，右键或长按单选，再次操作恢复。')) : t(msg('analysis.bitrateLegendHint','码率 · 实线；点击切换，右键或长按单选，再次操作恢复。'));
+      button.dataset.tooltip = button.dataset.metric==='qp' ? t(msg('analysis.qpLegendHint','平均亮度 QP · 虚线；点击切换，右键或长按单选，再次操作恢复')) : t(msg('analysis.bitrateLegendHint','码率 · 实线；点击切换，右键或长按单选，再次操作恢复'));
     }
     const span = viewRange().end-viewRange().start, domain = fullRange();
     $<HTMLButtonElement>('#analysis-zoom-in').disabled = !tracks.length || span <= MIN_SPAN_US+1;
@@ -319,7 +319,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     if (sharedAxisHost.hidden) closeRangeEditor();
     overviewHost.style.setProperty('--overview-weight', String(Math.max(1, overviewRows)));
     overviewHost.style.setProperty('--overview-min-height', `calc(max(36px, var(--analysis-view-min-height)) * ${Math.max(1, overviewRows)} + ${prefs.showBitrate ? 25 : 0}px)`);
-    none.hidden = diagrams.size > 0; noneCopy.textContent = t(msg('analysis.chooseCharts', '选择要显示的图表。'));
+    none.hidden = diagrams.size > 0; noneCopy.textContent = t(msg('analysis.chooseCharts', '选择要显示的图表'));
     if (!overview) { cardEl.hidden = true; queries.suspend(); }
     else scheduleQuery();
     refreshStream();
@@ -696,10 +696,10 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       button.textContent = button.dataset.axis!.toUpperCase();
       const explanation = t(button.dataset.axis === 'pts' ? msg('analysis.presentationTime', '展示时间 PTS') : msg('analysis.decodingTime', '解码时间 DTS'));
       button.disabled = !hasTracks || (button.dataset.axis === 'dts' && !dtsOk);
-      button.title = button.dataset.axis === 'dts' && !dtsOk ? `${explanation}\n${t(msg('analysis.missingDts', '所选轨道缺少可靠 DTS，无法按解码时间显示。'))}` : explanation;
+      button.title = button.dataset.axis === 'dts' && !dtsOk ? `${explanation}\n${t(msg('analysis.missingDts', '所选轨道缺少可靠 DTS，无法按解码时间显示'))}` : explanation;
     }
     const windowButton = $<HTMLButtonElement>('#analysis-window');
-    windowButton.title = t(prefs.axis === 'pts' ? msg('analysis.presentationLoadWindowHint', '展示负载率：按展示时间窗口统计帧的压缩字节量，不表示网络吞吐。') : msg('analysis.decodeBitrateWindowHint', '码率：按解码时间窗口统计压缩样本负载，不表示网络吞吐。'));
+    windowButton.title = t(prefs.axis === 'pts' ? msg('analysis.presentationLoadWindowHint', '展示负载率：按展示时间窗口统计帧的压缩字节量，不表示网络吞吐') : msg('analysis.decodeBitrateWindowHint', '码率：按解码时间窗口统计压缩样本负载，不表示网络吞吐'));
     windowMenu.sync(String(prefs.windowUs), WINDOW_LABELS[prefs.windowUs] ?? '', selectedTracks().length > 0);
     layoutMenu.sync(prefs.layoutMode, layoutLabel(prefs.layoutMode), true);
     $<HTMLElement>('#analysis-layout').hidden = !overviewVisible() || selectedTracks().length < 2;
@@ -716,7 +716,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     const triggers = [
       ['analysis-axis', msg("analysis.timeBase", "时间基准"), msg("analysis.timeBaseTitle", "PTS 为展示时间，DTS 为解码时间；无可靠 DTS 的轨道不支持 DTS 视图")],
       ['analysis-window', msg("analysis.bitrateWindow", "码率窗口"), msg("analysis.bitrateWindowTitle", "码率窗口：视频样本负载码率的滑动时间窗（真实时间窗，非 N 帧窗）")],
-      ['analysis-layout', msg("analysis.multiTrackLayout", "多轨布局"), msg("analysis.multiTrackLayoutTitle", "只影响码率和帧大小；NALU 与帧参考始终按轨道分开显示。")],
+      ['analysis-layout', msg("analysis.multiTrackLayout", "多轨布局"), msg("analysis.multiTrackLayoutTitle", "只影响码率和帧大小；NALU 与帧参考始终按轨道分开显示")],
     ] as const;
     for (const [id, key, title] of triggers) {
       const trigger = section.querySelector(`#${id}`);
@@ -733,7 +733,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       const button=$<HTMLButtonElement>(selector); button.setAttribute('aria-label',t(label)); button.dataset.tooltip=t(label);
     }
     statusEl.setAttribute('aria-label', t(msg("analysis.currentFrameNumbers", "当前上屏帧号")));
-    canvas.setAttribute('aria-label', t(msg("analysis.canvasLabel", "码流分析图：码率曲线与帧大小柱。方向键移动检查位置，回车定位，Escape 退出检查。")));
+    canvas.setAttribute('aria-label', t(msg("analysis.canvasLabel", "码流分析图：码率曲线与帧大小柱，方向键移动检查位置，回车定位，Escape 退出检查")));
   }
 
   function localize() {
@@ -803,11 +803,11 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       if (cap?.indexState === 'error') return [t(msg("analysis.indexFailed", "轨道 {slot} 索引失败：{error}"), {
         slot: track.slot, error: cap.indexError ?? t(msg("analysis.unknownError", "未知错误")),
       })];
-      if (cap?.hasSize === false) return [t(msg("analysis.trackUnsupported", "轨道 {slot}：当前片源路径暂不支持码流分析。"), { slot: track.slot })];
+      if (cap?.hasSize === false) return [t(msg("analysis.trackUnsupported", "轨道 {slot}：当前片源路径暂不支持码流分析"), { slot: track.slot })];
       const error = queryErrors.get(track.slot);
       if (error !== undefined) return [t(msg("analysis.queryFailed", "轨道 {slot} 查询失败：{error}"), { slot: track.slot, error })];
       const untimed = results.get(track.slot)?.untimed;
-      return untimed?.sampleCount ? [t(msg("analysis.untimedPackets", "轨道 {slot}：{count} 个包缺少时间戳（{bytes} 字节），无法计入时间轴码率。"), { slot: track.slot, count: untimed.sampleCount, bytes: untimed.totalBytes })] : [];
+      return untimed?.sampleCount ? [t(msg("analysis.untimedPackets", "轨道 {slot}：{count} 个包缺少时间戳（{bytes} 字节），无法计入时间轴码率"), { slot: track.slot, count: untimed.sampleCount, bytes: untimed.totalBytes })] : [];
     }).join('\n');
     // Keep failures visible beside any healthy tracks, or in the empty state.
     // The screen-reader output is also used by hover and cannot own error state.
@@ -819,8 +819,8 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       // 空态画布无高度，plot 按 body 撑满，提示文字才有地方居中，不从 0px 盒溢出。
       plot.style.minHeight = '100%';
       emptyEl.hidden = false;
-      emptyEl.textContent = !tracks.length ? t(msg("analysis.emptyNoVideo", "尚未载入视频。载入后可在此检查码率与帧大小走向。"))
-        : !sel.length ? t(msg("analysis.emptyAllHidden", "已全部隐藏，请在工具条中选择要对比的轨道。"))
+      emptyEl.textContent = !tracks.length ? t(msg("analysis.emptyNoVideo", "尚未载入视频，载入后可在此检查码率与帧大小走向"))
+        : !sel.length ? t(msg("analysis.emptyAllHidden", "已全部隐藏，请在工具条中选择要对比的轨道"))
         : problems || t(msg("analysis.emptyQuerying", "正在查询统计…"));
       playheadEl.hidden = true;
       hoverEl.hidden = true;

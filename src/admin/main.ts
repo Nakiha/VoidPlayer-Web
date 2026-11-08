@@ -262,7 +262,7 @@ async function loadLogs() {
   $('more-logs').hidden = $('first-logs').hidden = !nextLog && !logCursor;
   $('more-logs').toggleAttribute('disabled', !nextLog); $('first-logs').toggleAttribute('disabled', !logCursor);
   if (!page.entries.length) {
-    $('log-list').replaceChildren(emptyState(() => page.enabled ? t(msg("admin.noUploadedLogs", "暂无上传日志")) : t(msg("admin.logsDisabled", "未开启日志接收")), () => page.enabled ? t(msg("admin.logsEmptyHint", "在播放器的“设置 → 日志”中点击“上传日志”，即可在这里查看。")) : t(msg("admin.logsNoDir", "服务器未设置日志接收目录。你仍可在播放器中下载本地日志。")), true)); return;
+    $('log-list').replaceChildren(emptyState(() => page.enabled ? t(msg("admin.noUploadedLogs", "暂无上传日志")) : t(msg("admin.logsDisabled", "未开启日志接收")), () => page.enabled ? t(msg("admin.logsEmptyHint", "在播放器的“设置 → 日志”中点击“上传日志”，即可在这里查看")) : t(msg("admin.logsNoDir", "服务器未设置日志接收目录，你仍可在播放器中下载本地日志")), true)); return;
   }
   const rows = page.entries.map((entry, index) => {
     const button = document.createElement('button'); button.className = 'admin-log-item source-row';
@@ -341,7 +341,7 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('[data-log-mod
 $('download-log').onclick = () => { if (!selectedLog || logDocument === undefined) return; const url = URL.createObjectURL(new Blob([JSON.stringify(logDocument, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = selectedLog.name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); };
 $('delete-log').onclick = () => { $('delete-log-confirm').hidden = false; };
 $('cancel-delete-log').onclick = () => { $('delete-log-confirm').hidden = true; };
-$('confirm-delete-log').onclick = () => void act(async () => { if (!selectedLog) return; await api(`/api/admin/logs/${encodeURIComponent(selectedLog.name)}`, 'DELETE', undefined, { 'if-match': `"${selectedLog.version}"` }); clearLog(); await loadLogs(); notice(() => t(msg("admin.logDeleted", "日志已从服务器删除。"))); });
+$('confirm-delete-log').onclick = () => void act(async () => { if (!selectedLog) return; await api(`/api/admin/logs/${encodeURIComponent(selectedLog.name)}`, 'DELETE', undefined, { 'if-match': `"${selectedLog.version}"` }); clearLog(); await loadLogs(); notice(() => t(msg("admin.logDeleted", "日志已从服务器删除"))); });
 // Keep the original review alive when returning from its management tab.
 // Direct visits, closed players, and modified clicks keep normal link behavior.
 document.querySelector<HTMLAnchorElement>('.admin-back')!.onclick = event => {

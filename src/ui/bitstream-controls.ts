@@ -235,7 +235,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
       const status=pending ? t(msg('analysis.streamProgress','{slot} {percent}% · {count} 帧'),{slot,percent,count:stream?.pictures ?? 0}) : entry.message ?? (analysis.reason ? bitstreamReasonText(analysis.reason.code) : '');
       button.setAttribute('aria-pressed',String(entry.enabled)); button.dataset.state=pending?'pending':analysis.state;
       const label=t(entry.enabled ? msg('bitstream.hideTrackOverlay','隐藏轨道 {slot} 的遮罩') : msg('bitstream.showTrackOverlay','显示轨道 {slot} 的遮罩'),{slot});
-      button.setAttribute('aria-label',label); button.title=`${label} · ${track.name}${status?' · '+status:''}\n${t(msg('analysis.trackSoloHint', '右键或长按单选此轨道，再次操作恢复全部。'))}`; button.setAttribute('aria-description',status);
+      button.setAttribute('aria-label',label); button.title=`${label} · ${track.name}${status?' · '+status:''}\n${t(msg('analysis.trackSoloHint', '右键或长按单选此轨道，再次操作恢复全部'))}`; button.setAttribute('aria-description',status);
       const progress=button.querySelector<HTMLElement>('.bitstream-track-progress')!;
       progress.setAttribute('aria-label',t(msg('bitstream.analysisProgress','分析进度')));progress.setAttribute('aria-valuenow',String(percent));progress.setAttribute('aria-hidden',String(!pending));
       progress.style.setProperty('--inspection-progress',String(100-percent));progress.classList.toggle('is-waiting',percent===0);

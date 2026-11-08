@@ -56,7 +56,7 @@ export function colorSettingsShell() {
         <button data-color-mode="browser" aria-pressed="false"><strong>${th(msg("colorFlow.browserColor", "浏览器色彩"))}</strong><span>${th(msg("colorFlow.nativeFrameConversion", "沿用原生帧转换"))}</span></button>
       </div>
       <div id="reference-decode-settings">
-        <div class="color-setting-row settings-key-value-row"><span>${th(msg("colorFlow.decoder", "解码方式"))}<span class="section-title-info" role="img" tabindex="0" aria-label="${th(msg('colorFlow.decoderInfo', '解码方式说明'))}" data-tooltip="${th(msg('colorFlow.decoderSessionHint', '默认使用硬件优先。调整仅在当前页面有效，刷新后恢复硬件优先。'))}">${icon('info')}</span></span><div id="reference-decoder" class="color-segmented segmented" role="group" aria-label="${th(msg("colorFlow.decoder", "解码方式"))}"><button data-reference-decoder="software" aria-pressed="false">${th(msg("colorFlow.software", "软件"))}</button><button data-reference-decoder="hardware" aria-pressed="false">${th(msg("colorFlow.preferHardware2", "硬件优先"))}</button></div></div>
+        <div class="color-setting-row settings-key-value-row"><span>${th(msg("colorFlow.decoder", "解码方式"))}<span class="section-title-info" role="img" tabindex="0" aria-label="${th(msg('colorFlow.decoderInfo', '解码方式说明'))}" data-tooltip="${th(msg('colorFlow.decoderSessionHint', '默认使用硬件优先，调整仅在当前页面有效，刷新后恢复硬件优先'))}">${icon('info')}</span></span><div id="reference-decoder" class="color-segmented segmented" role="group" aria-label="${th(msg("colorFlow.decoder", "解码方式"))}"><button data-reference-decoder="software" aria-pressed="false">${th(msg("colorFlow.software", "软件"))}</button><button data-reference-decoder="hardware" aria-pressed="false">${th(msg("colorFlow.preferHardware2", "硬件优先"))}</button></div></div>
       </div>
       <figure class="color-flow"><figcaption>${th(msg("colorFlow.frameDataFlow", "帧数据流"))} <span>${th(msg("colorFlow.pathOverview", "路径示意"))}</span></figcaption><div id="color-flow-diagram"></div></figure>
       <p id="color-mode-description" class="color-flow-note" role="status"></p>
@@ -65,7 +65,7 @@ export function colorSettingsShell() {
       <div id="vvc-manual-settings" hidden>
         <div class="color-setting-row settings-key-value-row"><label for="vvc-thread-mode">${th(msg('settings.vvcThreads', 'H.266 解码线程数'))}</label><input id="vvc-thread-mode" type="number" class="settings-choice" min="1" step="1"></div>
         <div class="color-setting-row settings-key-value-row"><label for="vvc-frame-contexts">${th(msg('settings.vvcFrameContexts', 'H.266 帧上下文数'))}</label><input id="vvc-frame-contexts" type="number" class="settings-choice" min="1" step="1"></div>
-        <p class="color-flow-note">${th(msg('settings.vvcTuningHint', '留空使用自动配置。修改后重新打开片源。'))}</p>
+        <p class="color-flow-note">${th(msg('settings.vvcTuningHint', '留空使用自动配置，修改后重新打开片源'))}</p>
       </div>
       <div class="color-setting-row settings-key-value-row"><span>${th(msg("colorOutput.displayTarget", "显示目标"))}</span><div id="color-output-target" class="color-segmented segmented" role="group" aria-label="${th(msg("colorOutput.displayTarget", "显示目标"))}"><button data-color-target="sdr" aria-pressed="false">SDR</button><button data-color-target="hdr" aria-pressed="false">HDR</button></div></div>
       <div id="hdr-source-peak-row" class="color-setting-row settings-key-value-row" hidden><label for="hdr-source-peak">${th(msg("colorOutput.assumedPeak", "HDR 假定峰值"))}</label><button id="hdr-source-peak" class="settings-choice"></button></div>

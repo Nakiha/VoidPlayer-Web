@@ -26,8 +26,8 @@ export function createTrackToasts(toasts: Pick<ToastStack, 'show'>, openLogs: ()
       notices.get(track.slot)?.dismiss();
       const failed = !!track.failure;
       const dismiss = toasts.show(() => failed
-        ? t(msg('player.trackDisabledFrameUpdatesHaveStoppedPlease', '轨道 {p0} 已停用 · 画面已停止更新。{p1} 请重新载入此片源。'), { p0: track.slot, p1: track.failure!.message })
-        : t(msg('player.trackFrameNotSynchronizedOtherTracksContinue', '轨道 {p0} {p1} · 当前画面暂未同步，其他轨道继续播放。'), { p0: track.slot, p1: track.syncState === 'index-wait'
+        ? t(msg('player.trackDisabledFrameUpdatesHaveStoppedPlease', '轨道 {p0} 已停用 · 画面已停止更新（{p1}），请重新载入此片源'), { p0: track.slot, p1: track.failure!.message })
+        : t(msg('player.trackFrameNotSynchronizedOtherTracksContinue', '轨道 {p0} {p1} · 当前画面暂未同步，其他轨道继续播放'), { p0: track.slot, p1: track.syncState === 'index-wait'
           ? t(msg('player.waitingForIndexData', '等待索引数据'))
           : t(msg('player.catchingUpToPlayback2', '正在追赶播放位置')) }), {
         kind: failed ? 'warning' : 'info', durationMs: 0,

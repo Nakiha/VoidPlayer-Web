@@ -21,11 +21,11 @@ export function installSettings() {
   const fileStatus = document.getElementById('local-file-access-status')!;
   let fileAccessResult: 'idle' | 'success' | 'cancelled' | 'failed' = 'idle';
   const syncFileAccess = () => {
-    fileStatus.textContent = !supportsFileHandles() ? t(msg('fileAccess.unsupported', '当前浏览器未提供持久文件访问能力。本地视频按一次性文件打开。'))
-      : fileAccessResult === 'success' ? t(msg('fileAccess.success', '已验证文件访问和句柄保存。刷新后仍需浏览器允许读取；曾拒绝时可以重新尝试。'))
-      : fileAccessResult === 'cancelled' ? t(msg('fileAccess.cancelled', '已取消选择，可以再次尝试。'))
-      : fileAccessResult === 'failed' ? t(msg('fileAccess.failed', '未能取得或保存文件访问权限。请检查浏览器的网站权限后重试。'))
-      : t(msg('fileAccess.available', '检测到文件访问接口，可以选择视频验证权限和保存能力。'));
+    fileStatus.textContent = !supportsFileHandles() ? t(msg('fileAccess.unsupported', '当前浏览器未提供持久文件访问能力，本地视频按一次性文件打开'))
+      : fileAccessResult === 'success' ? t(msg('fileAccess.success', '已验证文件访问和句柄保存，刷新后仍需浏览器允许读取；曾拒绝时可以重新尝试'))
+      : fileAccessResult === 'cancelled' ? t(msg('fileAccess.cancelled', '已取消选择，可以再次尝试'))
+      : fileAccessResult === 'failed' ? t(msg('fileAccess.failed', '未能取得或保存文件访问权限，请检查浏览器的网站权限后重试'))
+      : t(msg('fileAccess.available', '检测到文件访问接口，可以选择视频验证权限和保存能力'));
   };
   fileAccess.addEventListener('click', () => {
     // Invoke the native picker directly in the click gesture, before any storage work.
@@ -164,7 +164,7 @@ export function installSettings() {
     if (matchesShortcut(event, 'settings') && !event.isComposing) { event.preventDefault(); if (!document.querySelector('dialog[open]') || dialog.open) open(document.activeElement instanceof HTMLElement ? document.activeElement : trigger); }
   }, { signal: life.signal });
   return { openPane(id: string, invoker: HTMLElement | null = trigger) {
-    if (!tabs.some(tab => !tab.hidden && tab.dataset.settingsPane === id)) throw new Error(t(msg("settings.unknownSettingsPage", "未知设置页面。")));
+    if (!tabs.some(tab => !tab.hidden && tab.dataset.settingsPane === id)) throw new Error(t(msg("settings.unknownSettingsPage", "未知设置页面")));
     if (dialog.open) select(id); else selected = id;
     open(invoker); tabs.find(t => t.dataset.settingsPane === id)!.focus({ preventScroll: true });
   }, close: dismiss, dispose() { ++closeEpoch; life.abort(); dialog.close(); } };

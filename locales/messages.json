@@ -14,7 +14,7 @@
     "params": {}
   },
   "activity.disconnected": {
-    "source": "活动连接中断，恢复后自动续读。",
+    "source": "活动连接中断，恢复后自动续读",
     "params": {}
   },
   "activity.durationMinutesSeconds": {
@@ -39,7 +39,7 @@
     "params": {}
   },
   "activity.empty": {
-    "source": "此评审空间暂无操作记录。",
+    "source": "此评审空间暂无操作记录",
     "params": {}
   },
   "activity.expandDetails": {
@@ -78,7 +78,7 @@
     "params": {}
   },
   "activity.recent": {
-    "source": "共享评审空间的最近操作；不会改变当前播放。",
+    "source": "共享评审空间的最近操作；不会改变当前播放",
     "params": {}
   },
   "activity.restored": {
@@ -221,15 +221,15 @@
     "params": {}
   },
   "admin.clearAllFrames": {
-    "source": "清理全部帧索引？保留视频文件。",
+    "source": "清理全部帧索引？保留视频文件",
     "params": {}
   },
   "admin.clearAllPreviews": {
-    "source": "清理全部标注预览？保留标注内容。",
+    "source": "清理全部标注预览？保留标注内容",
     "params": {}
   },
   "admin.clearAllThumbnails": {
-    "source": "清理全部媒体缩略图？保留视频文件，仅删小图。清理后从头打开可重建。",
+    "source": "清理全部媒体缩略图？保留视频文件，仅删小图，清理后从头打开可重建",
     "params": {}
   },
   "admin.clearCache": {
@@ -304,7 +304,7 @@
     "params": {}
   },
   "admin.deleteLogConfirm": {
-    "source": "从服务器删除这份日志？此操作无法撤销。",
+    "source": "从服务器删除这份日志？此操作无法撤销",
     "params": {}
   },
   "admin.deleteSelectedLog": {
@@ -320,15 +320,15 @@
     "params": {}
   },
   "admin.deleteWsConfirm": {
-    "source": "删除服务器工作区？不删除视频或已打开的会话。",
+    "source": "删除服务器工作区？不删除视频或已打开的会话",
     "params": {}
   },
   "admin.descPreviews": {
-    "source": "标注卡片使用的画面预览。清理保留文字和绘图，再次编辑对应画面时生成。",
+    "source": "标注卡片使用的画面预览，清理保留文字和绘图，再次编辑对应画面时生成",
     "params": {}
   },
   "admin.descThumbs": {
-    "source": "媒体库首帧小图。清理后只在正常从头打开时重建，不主动解码。",
+    "source": "媒体库首帧小图，清理后只在正常从头打开时重建，不主动解码",
     "params": {}
   },
   "admin.detailFrames": {
@@ -386,11 +386,11 @@
     "params": {}
   },
   "admin.emptyPreviews": {
-    "source": "编辑标注后，画面预览会在播放暂停时保存。",
+    "source": "编辑标注后，画面预览会在播放暂停时保存",
     "params": {}
   },
   "admin.emptyThumbs": {
-    "source": "从头打开媒体库视频后，首帧小图会保存在这里。",
+    "source": "从头打开媒体库视频后，首帧小图会保存在这里",
     "params": {}
   },
   "admin.endReason": {
@@ -410,11 +410,11 @@
     "params": {}
   },
   "admin.errorAccess": {
-    "source": "操作未获授权。请从服务器的同源页面重试。",
+    "source": "操作未获授权，请从服务器的同源页面重试",
     "params": {}
   },
   "admin.errorConflict": {
-    "source": "内容已改变。请载入最新版本后重试；你的草稿仍保留。",
+    "source": "内容已改变，请载入最新版本后重试；你的草稿仍保留",
     "params": {}
   },
   "admin.errorDiagnostic": {
@@ -425,15 +425,15 @@
     }
   },
   "admin.errorInvalid": {
-    "source": "请求无法处理。请检查输入和当前版本后重试。",
+    "source": "请求无法处理，请检查输入和当前版本后重试",
     "params": {}
   },
   "admin.errorMissing": {
-    "source": "内容已不存在。请刷新列表后重试。",
+    "source": "内容已不存在，请刷新列表后重试",
     "params": {}
   },
   "admin.errorSize": {
-    "source": "提交内容过大。请减少数据量后重试。",
+    "source": "提交内容过大，请减少数据量后重试",
     "params": {}
   },
   "admin.errorTruncated": {
@@ -441,7 +441,7 @@
     "params": {}
   },
   "admin.errorUnavailable": {
-    "source": "无法完成请求。请检查连接与服务状态后重试。",
+    "source": "无法完成请求，请检查连接与服务状态后重试",
     "params": {}
   },
   "admin.expandNavigation": {
@@ -457,11 +457,11 @@
     "params": {}
   },
   "admin.framesDescription": {
-    "source": "加快媒体库视频再次打开和定位。支持的 FFmpeg 容器由服务端重建索引；FLV 仍在播放时重建。",
+    "source": "加快媒体库视频再次打开和定位，支持的 FFmpeg 容器由服务端重建索引；FLV 仍在播放时重建",
     "params": {}
   },
   "admin.framesEmpty": {
-    "source": "打开支持的媒体库视频后，索引会自动保存在这里。",
+    "source": "打开支持的媒体库视频后，索引会自动保存在这里",
     "params": {}
   },
   "admin.guestId": {
@@ -548,7 +548,7 @@
     "params": {}
   },
   "admin.logDeleted": {
-    "source": "日志已从服务器删除。",
+    "source": "日志已从服务器删除",
     "params": {}
   },
   "admin.logDropped": {
@@ -601,11 +601,11 @@
     "params": {}
   },
   "admin.logsEmptyHint": {
-    "source": "在播放器的“设置 → 日志”中点击“上传日志”，即可在这里查看。",
+    "source": "在播放器的“设置 → 日志”中点击“上传日志”，即可在这里查看",
     "params": {}
   },
   "admin.logsNoDir": {
-    "source": "服务器未设置日志接收目录。你仍可在播放器中下载本地日志。",
+    "source": "服务器未设置日志接收目录，你仍可在播放器中下载本地日志",
     "params": {}
   },
   "admin.logsTitle": {
@@ -617,7 +617,7 @@
     "params": {}
   },
   "admin.measureBusyError": {
-    "source": "已有测速任务。请等待完成，或取消当前任务后重试。",
+    "source": "已有测速任务，请等待完成，或取消当前任务后重试",
     "params": {}
   },
   "admin.measureCancelled": {
@@ -633,7 +633,7 @@
     "params": {}
   },
   "admin.measureFinishError": {
-    "source": "当前读取仍在结束。请稍等片刻再提交测量结果。",
+    "source": "当前读取仍在结束，请稍等片刻再提交测量结果",
     "params": {}
   },
   "admin.measureFinishing": {
@@ -641,7 +641,7 @@
     "params": {}
   },
   "admin.measureMediaError": {
-    "source": "媒体不可读或版本已改变。请重新选择当前可读的非空媒体。",
+    "source": "媒体不可读或版本已改变，请重新选择当前可读的非空媒体",
     "params": {}
   },
   "admin.measurePreparing": {
@@ -669,7 +669,7 @@
     "params": {}
   },
   "admin.nameSaved": {
-    "source": "名称已保存。",
+    "source": "名称已保存",
     "params": {}
   },
   "admin.navCategory": {
@@ -834,7 +834,7 @@
     "params": {}
   },
   "admin.recentRequests": {
-    "source": "最近 200 条请求，服务重启后清空。",
+    "source": "最近 200 条请求，服务重启后清空",
     "params": {}
   },
   "admin.refreshCaches": {
@@ -914,7 +914,7 @@
     }
   },
   "admin.resultsHint": {
-    "source": "完成测试后显示速度、传输量和耗时。",
+    "source": "完成测试后显示速度、传输量和耗时",
     "params": {}
   },
   "admin.resultsTitle": {
@@ -930,7 +930,7 @@
     "params": {}
   },
   "admin.rootCli": {
-    "source": "当前根目录由 --folder 覆盖，请修改启动参数或改用配置文件。",
+    "source": "当前根目录由 --folder 覆盖，请修改启动参数或改用配置文件",
     "params": {}
   },
   "admin.rootDirs": {
@@ -942,7 +942,7 @@
     "params": {}
   },
   "admin.rootExternal": {
-    "source": "配置文件已被外部修改，请重启服务以重新载入。",
+    "source": "配置文件已被外部修改，请重启服务以重新载入",
     "params": {}
   },
   "admin.rootFallback": {
@@ -950,11 +950,11 @@
     "params": {}
   },
   "admin.rootNoSource": {
-    "source": "此服务未提供可写配置来源。",
+    "source": "此服务未提供可写配置来源",
     "params": {}
   },
   "admin.rootPermission": {
-    "source": "配置所在目录不可写，请调整数据目录权限。",
+    "source": "配置所在目录不可写，请调整数据目录权限",
     "params": {}
   },
   "admin.rootScanned": {
@@ -989,7 +989,7 @@
     "params": {}
   },
   "admin.savedAsCopy": {
-    "source": "已另存为当前用户的副本。",
+    "source": "已另存为当前用户的副本",
     "params": {}
   },
   "admin.saving": {
@@ -1105,7 +1105,7 @@
     "params": {}
   },
   "admin.serverChanged": {
-    "source": "服务器内容已改变，未覆盖任何修改。",
+    "source": "服务器内容已改变，未覆盖任何修改",
     "params": {}
   },
   "admin.serverPath": {
@@ -1125,7 +1125,7 @@
     "params": {}
   },
   "admin.sharedDb": {
-    "source": "与业务数据共用数据库。清理后空间可复用，文件不一定缩小。",
+    "source": "与业务数据共用数据库，清理后空间可复用，文件不一定缩小",
     "params": {}
   },
   "admin.sourceRandom": {
@@ -1225,11 +1225,11 @@
     "params": {}
   },
   "admin.tryKeywords": {
-    "source": "换个关键词试试。",
+    "source": "换个关键词试试",
     "params": {}
   },
   "admin.tryOtherNames": {
-    "source": "试试其他名称，或清空搜索。",
+    "source": "试试其他名称，或清空搜索",
     "params": {}
   },
   "admin.unknownUser": {
@@ -1304,11 +1304,11 @@
     "params": {}
   },
   "admin.wsDeleted": {
-    "source": "已删除服务器工作区。",
+    "source": "已删除服务器工作区",
     "params": {}
   },
   "admin.wsEmptyHint": {
-    "source": "在播放器的“设置 → 工作区”中点击“保存到服务器”，即可在这里打开和管理。",
+    "source": "在播放器的“设置 → 工作区”中点击“保存到服务器”，即可在这里打开和管理",
     "params": {}
   },
   "admin.wsJson": {
@@ -1352,22 +1352,22 @@
     "params": {}
   },
   "adminLibrary.moveIndexPending": {
-    "source": "文件操作已完成，目录索引尚未刷新，请重新扫描。",
+    "source": "文件操作已完成，目录索引尚未刷新，请重新扫描",
     "params": {}
   },
   "adminLibrary.moveLimit": {
-    "source": "每次最多移动 100 个项目。",
+    "source": "每次最多移动 100 个项目",
     "params": {}
   },
   "adminLibrary.movePartial": {
-    "source": "已移动 {moved} 项，{failed} 项失败。",
+    "source": "已移动 {moved} 项，{failed} 项失败",
     "params": {
       "failed": "string | number",
       "moved": "string | number"
     }
   },
   "adminLibrary.moveUnknown": {
-    "source": "移动结果未确认，正在刷新目录，请核对后再操作。",
+    "source": "移动结果未确认，正在刷新目录，请核对后再操作",
     "params": {}
   },
   "adminLibrary.movedItems": {
@@ -1389,7 +1389,7 @@
     "params": {}
   },
   "analysis.bitrateLegendHint": {
-    "source": "码率 · 实线；点击切换，右键或长按单选，再次操作恢复。",
+    "source": "码率 · 实线；点击切换，右键或长按单选，再次操作恢复",
     "params": {}
   },
   "analysis.bitrateWindow": {
@@ -1405,11 +1405,11 @@
     "params": {}
   },
   "analysis.canvasLabel": {
-    "source": "码流分析图：码率曲线与帧大小柱。方向键移动检查位置，回车定位，Escape 退出检查。",
+    "source": "码流分析图：码率曲线与帧大小柱，方向键移动检查位置，回车定位，Escape 退出检查",
     "params": {}
   },
   "analysis.chooseCharts": {
-    "source": "选择要显示的图表。",
+    "source": "选择要显示的图表",
     "params": {}
   },
   "analysis.codedFrame": {
@@ -1441,7 +1441,7 @@
     }
   },
   "analysis.containerNaluHint": {
-    "source": "不计入逐帧 NALU 和帧大小。",
+    "source": "不计入逐帧 NALU 和帧大小",
     "params": {}
   },
   "analysis.containerOrigin": {
@@ -1457,7 +1457,7 @@
     "params": {}
   },
   "analysis.decodeBitrateWindowHint": {
-    "source": "码率：按解码时间窗口统计压缩样本负载，不表示网络吞吐。",
+    "source": "码率：按解码时间窗口统计压缩样本负载，不表示网络吞吐",
     "params": {}
   },
   "analysis.decodingTime": {
@@ -1474,23 +1474,23 @@
     }
   },
   "analysis.diagramDetailEvicted": {
-    "source": "当前范围保留了汇总；重新检查可恢复逐帧细节。",
+    "source": "当前范围保留了汇总；重新检查可恢复逐帧细节",
     "params": {}
   },
   "analysis.diagramNoTrack": {
-    "source": "先载入一条视频轨道。",
+    "source": "先载入一条视频轨道",
     "params": {}
   },
   "analysis.diagramReferencesUnsupported": {
-    "source": "这些帧没有可用的参考记录。需要支持参考列表的分析内核。",
+    "source": "这些帧没有可用的参考记录，需要支持参考列表的分析内核",
     "params": {}
   },
   "analysis.diagramSoloHint": {
-    "source": "点击切换；右键或长按单选，再次操作同一图表恢复之前的选择。",
+    "source": "点击切换；右键或长按单选，再次操作同一图表恢复之前的选择",
     "params": {}
   },
   "analysis.diagramUnanalyzed": {
-    "source": "此范围尚未收到检查结果。",
+    "source": "此范围尚未收到检查结果",
     "params": {}
   },
   "analysis.diagrams": {
@@ -1513,11 +1513,11 @@
     }
   },
   "analysis.emptyAllHidden": {
-    "source": "已全部隐藏，请在工具条中选择要对比的轨道。",
+    "source": "已全部隐藏，请在工具条中选择要对比的轨道",
     "params": {}
   },
   "analysis.emptyNoVideo": {
-    "source": "尚未载入视频。载入后可在此检查码率与帧大小走向。",
+    "source": "尚未载入视频，载入后可在此检查码率与帧大小走向",
     "params": {}
   },
   "analysis.emptyQuerying": {
@@ -1532,7 +1532,7 @@
     }
   },
   "analysis.frameNumberMustBeNonNegativeInteger": {
-    "source": "帧号必须是非负整数。",
+    "source": "帧号必须是非负整数",
     "params": {}
   },
   "analysis.frameRate": {
@@ -1612,7 +1612,7 @@
     }
   },
   "analysis.hoverDetailMissing": {
-    "source": "此时间没有逐帧检查记录。",
+    "source": "此时间没有逐帧检查记录",
     "params": {}
   },
   "analysis.indexFailed": {
@@ -1631,7 +1631,7 @@
     "params": {}
   },
   "analysis.inferredLayerHint": {
-    "source": "按相邻 I/P 锚帧间的局部参考关系推断，不代表码流标记的时间层。* 表示参考信息不完整。",
+    "source": "按相邻 I/P 锚帧间的局部参考关系推断，不代表码流标记的时间层，* 表示参考信息不完整",
     "params": {}
   },
   "analysis.inferredLayerPartial": {
@@ -1639,7 +1639,7 @@
     "params": {}
   },
   "analysis.invalidRange": {
-    "source": "请输入片源范围内的起止时间，结束时间须晚于起始时间。",
+    "source": "请输入片源范围内的起止时间，结束时间须晚于起始时间",
     "params": {}
   },
   "analysis.layoutMerged": {
@@ -1659,7 +1659,7 @@
     "params": {}
   },
   "analysis.missingDts": {
-    "source": "所选轨道缺少可靠 DTS，无法按解码时间显示。",
+    "source": "所选轨道缺少可靠 DTS，无法按解码时间显示",
     "params": {}
   },
   "analysis.multiTrackLayout": {
@@ -1667,7 +1667,7 @@
     "params": {}
   },
   "analysis.multiTrackLayoutTitle": {
-    "source": "只影响码率和帧大小；NALU 与帧参考始终按轨道分开显示。",
+    "source": "只影响码率和帧大小；NALU 与帧参考始终按轨道分开显示",
     "params": {}
   },
   "analysis.naluCountUnit": {
@@ -1679,15 +1679,15 @@
     "params": {}
   },
   "analysis.naluFilterEmpty": {
-    "source": "没有选中 NALU 类型。点击图例或“全部”恢复显示。",
+    "source": "没有选中 NALU 类型，点击图例或“全部”恢复显示",
     "params": {}
   },
   "analysis.naluLegend": {
-    "source": "横轴为时间 · 大小不含长度前缀 · 点击图例筛选，点击帧定位。",
+    "source": "横轴为时间 · 大小不含长度前缀 · 点击图例筛选，点击帧定位",
     "params": {}
   },
   "analysis.naluOverview": {
-    "source": "汇总：每个时间段按选中类型显示平均帧大小与类型分布 · 放大查看逐帧细节。",
+    "source": "汇总：每个时间段按选中类型显示平均帧大小与类型分布 · 放大查看逐帧细节",
     "params": {}
   },
   "analysis.naluSelected": {
@@ -1699,15 +1699,15 @@
     "params": {}
   },
   "analysis.naluSizeCanvas": {
-    "source": "NALU 大小图。横轴为整片时间；放大查看逐帧大小。点击图例筛选类型，方向键选择，回车查看。",
+    "source": "NALU 大小图，横轴为整片时间，放大可查看逐帧大小；点击图例筛选类型，方向键选择，回车查看",
     "params": {}
   },
   "analysis.naluSoloHint": {
-    "source": "点击切换筛选；右键或长按单选，再次操作恢复全部。",
+    "source": "点击切换筛选；右键或长按单选，再次操作恢复全部",
     "params": {}
   },
   "analysis.naluTypeCanvas": {
-    "source": "NALU 类型图。横轴为整片时间；放大查看逐帧类型。点击图例筛选类型，方向键选择，回车查看。",
+    "source": "NALU 类型图，横轴为整片时间，放大可查看逐帧类型；点击图例筛选类型，方向键选择，回车查看",
     "params": {}
   },
   "analysis.naluTypes": {
@@ -1715,13 +1715,13 @@
     "params": {}
   },
   "analysis.noLocatablePeak": {
-    "source": "轨道 {slot}：该区间没有可定位的峰值样本。",
+    "source": "轨道 {slot}：该区间没有可定位的峰值样本",
     "params": {
       "slot": "string | number"
     }
   },
   "analysis.noSampleAtTime": {
-    "source": "轨道 {slot} 在该时间无可定位样本。",
+    "source": "轨道 {slot} 在该时间无可定位样本",
     "params": {
       "slot": "string | number"
     }
@@ -1745,7 +1745,7 @@
     }
   },
   "analysis.peakSeekFailed": {
-    "source": "轨道 {slot}：峰值样本定位失败。",
+    "source": "轨道 {slot}：峰值样本定位失败",
     "params": {
       "slot": "string | number"
     }
@@ -1759,7 +1759,7 @@
     "params": {}
   },
   "analysis.presentationLoadWindowHint": {
-    "source": "展示负载率：按展示时间窗口统计帧的压缩字节量，不表示网络吞吐。",
+    "source": "展示负载率：按展示时间窗口统计帧的压缩字节量，不表示网络吞吐",
     "params": {}
   },
   "analysis.presentationTime": {
@@ -1775,7 +1775,7 @@
     "params": {}
   },
   "analysis.qpLegendHint": {
-    "source": "平均亮度 QP · 虚线；点击切换，右键或长按单选，再次操作恢复。",
+    "source": "平均亮度 QP · 虚线；点击切换，右键或长按单选，再次操作恢复",
     "params": {}
   },
   "analysis.qpPending": {
@@ -1806,11 +1806,11 @@
     "params": {}
   },
   "analysis.referenceCanvas": {
-    "source": "帧参考关系图。横轴为整片时间；总览显示帧类型分布，放大后显示参考金字塔和连线。方向键选择，回车查看。",
+    "source": "帧参考关系图，横轴为整片时间，总览显示帧类型分布，放大后显示参考金字塔和连线；方向键选择，回车查看",
     "params": {}
   },
   "analysis.referenceLegend": {
-    "source": "L0 实线 · L1 长虚线 · 点线指向视图外参考帧；活动参考列表不表示每个块都使用该参考帧。",
+    "source": "L0 实线 · L1 长虚线 · 点线指向视图外参考帧；活动参考列表不表示每个块都使用该参考帧",
     "params": {}
   },
   "analysis.referenceMissing": {
@@ -1818,7 +1818,7 @@
     "params": {}
   },
   "analysis.referenceOverview": {
-    "source": "整片帧类型分布 · 放大查看参考金字塔与 L0 / L1 连线。",
+    "source": "整片帧类型分布 · 放大查看参考金字塔与 L0 / L1 连线",
     "params": {}
   },
   "analysis.referencePyramid": {
@@ -1890,11 +1890,11 @@
     }
   },
   "analysis.streamEmptyHint": {
-    "source": "正在准备分析，NALU 和帧参考结果会自动显示。",
+    "source": "正在准备分析，NALU 和帧参考结果会自动显示",
     "params": {}
   },
   "analysis.streamLiveHint": {
-    "source": "结果会随分析进度逐步显示。",
+    "source": "结果会随分析进度逐步显示",
     "params": {}
   },
   "analysis.streamNotStarted": {
@@ -1937,7 +1937,7 @@
     "params": {}
   },
   "analysis.temporalLayerHint": {
-    "source": "层级来自图像 VCL NAL 的 Temporal ID。",
+    "source": "层级来自图像 VCL NAL 的 Temporal ID",
     "params": {}
   },
   "analysis.timeBase": {
@@ -1959,7 +1959,7 @@
     }
   },
   "analysis.trackFocusWithContext": {
-    "source": "轨道焦点 {slot}。{rest}",
+    "source": "轨道焦点 {slot} {rest}",
     "params": {
       "rest": "string | number",
       "slot": "string | number"
@@ -1979,11 +1979,11 @@
     }
   },
   "analysis.trackSoloHint": {
-    "source": "右键或长按单选此轨道，再次操作恢复全部。",
+    "source": "右键或长按单选此轨道，再次操作恢复全部",
     "params": {}
   },
   "analysis.trackUnsupported": {
-    "source": "轨道 {slot}：当前片源路径暂不支持码流分析。",
+    "source": "轨道 {slot}：当前片源路径暂不支持码流分析",
     "params": {
       "slot": "string | number"
     }
@@ -1993,7 +1993,7 @@
     "params": {}
   },
   "analysis.untimedPackets": {
-    "source": "轨道 {slot}：{count} 个包缺少时间戳（{bytes} 字节），无法计入时间轴码率。",
+    "source": "轨道 {slot}：{count} 个包缺少时间戳（{bytes} 字节），无法计入时间轴码率",
     "params": {
       "bytes": "string | number",
       "count": "string | number",
@@ -2117,7 +2117,7 @@
     "params": {}
   },
   "bitstream.ambiguousIdentity": {
-    "source": "无法唯一确定源画面，已隐藏精确遮罩。",
+    "source": "无法唯一确定源画面，已隐藏精确遮罩",
     "params": {}
   },
   "bitstream.analysisProgress": {
@@ -2137,7 +2137,7 @@
     "params": {}
   },
   "bitstream.cancelled": {
-    "source": "分析已取消。",
+    "source": "分析已取消",
     "params": {}
   },
   "bitstream.closeOverlay": {
@@ -2159,7 +2159,7 @@
     }
   },
   "bitstream.incompleteReferences": {
-    "source": "参考状态不完整，无法生成精确遮罩。",
+    "source": "参考状态不完整，无法生成精确遮罩",
     "params": {}
   },
   "bitstream.inter": {
@@ -2167,7 +2167,7 @@
     "params": {}
   },
   "bitstream.internalError": {
-    "source": "分析执行出错，请重试。",
+    "source": "分析执行出错，请重试",
     "params": {}
   },
   "bitstream.intra": {
@@ -2175,7 +2175,7 @@
     "params": {}
   },
   "bitstream.invalidRequest": {
-    "source": "分析目标或区间无效。",
+    "source": "分析目标或区间无效",
     "params": {}
   },
   "bitstream.noFill": {
@@ -2183,7 +2183,7 @@
     "params": {}
   },
   "bitstream.noSafeAnchor": {
-    "source": "预滚预算内没有可验证的闭合 IDR 起点。",
+    "source": "预滚预算内没有可验证的闭合 IDR 起点",
     "params": {}
   },
   "bitstream.opacity": {
@@ -2203,7 +2203,7 @@
     "params": {}
   },
   "bitstream.resourceLimit": {
-    "source": "分析达到资源上限，请缩短区间或选择更近的起点。",
+    "source": "分析达到资源上限，请缩短区间或选择更近的起点",
     "params": {}
   },
   "bitstream.showTrackOverlay": {
@@ -2217,23 +2217,23 @@
     "params": {}
   },
   "bitstream.sourceChanged": {
-    "source": "片源已变更，请重新载入后分析。",
+    "source": "片源已变更，请重新载入后分析",
     "params": {}
   },
   "bitstream.unsupportedCodec": {
-    "source": "此编码暂不支持码流分析。",
+    "source": "此编码暂不支持码流分析",
     "params": {}
   },
   "bitstream.unsupportedContainer": {
-    "source": "此封装暂不支持分析；首批仅支持普通 MP4。",
+    "source": "此封装暂不支持分析；首批仅支持普通 MP4",
     "params": {}
   },
   "bitstream.unsupportedLayout": {
-    "source": "此画面布局或编码工具暂不支持精确遮罩。",
+    "source": "此画面布局或编码工具暂不支持精确遮罩",
     "params": {}
   },
   "bitstream.unsupportedQpDepth": {
-    "source": "此位深的 QP 暂不支持，块和模式仍可查看。",
+    "source": "此位深的 QP 暂不支持，块和模式仍可查看",
     "params": {}
   },
   "bootstrap.brandDescription": {
@@ -2241,7 +2241,7 @@
     "params": {}
   },
   "bootstrap.startupFailed": {
-    "source": "页面未能加载。",
+    "source": "页面未能加载",
     "params": {}
   },
   "bootstrap.startupTitle": {
@@ -2289,7 +2289,7 @@
     "params": {}
   },
   "colorFlow.decoderSessionHint": {
-    "source": "默认使用硬件优先。调整仅在当前页面有效，刷新后恢复硬件优先。",
+    "source": "默认使用硬件优先，调整仅在当前页面有效，刷新后恢复硬件优先",
     "params": {}
   },
   "colorFlow.displayImage": {
@@ -2385,7 +2385,7 @@
     "params": {}
   },
   "colorOutput.browserPreview": {
-    "source": "浏览器未开放原生 HDR 浮点转换，当前使用 SDR 预览；可切换自有色彩输出 HDR。",
+    "source": "浏览器未开放原生 HDR 浮点转换，当前使用 SDR 预览；可切换自有色彩输出 HDR",
     "params": {}
   },
   "colorOutput.displayTarget": {
@@ -2397,7 +2397,7 @@
     "params": {}
   },
   "colorOutput.fallbackDescription": {
-    "source": "当前环境使用 SDR 预览；HDR 显示目标已保留。",
+    "source": "当前环境使用 SDR 预览；HDR 显示目标已保留",
     "params": {}
   },
   "colorOutput.gpuUnavailable": {
@@ -2421,11 +2421,11 @@
     "params": {}
   },
   "connection.cantInstallBody": {
-    "source": "浏览器不能代替你安装系统证书。请确认已下载 voidplayer-ca.crt；如果设备由组织管理，请联系管理员部署。",
+    "source": "浏览器不能代替你安装系统证书，请确认已下载 voidplayer-ca.crt；如果设备由组织管理，请联系管理员部署",
     "params": {}
   },
   "connection.certReady": {
-    "source": "服务器已配置证书，请向管理员获取与证书匹配的 HTTPS 地址。",
+    "source": "服务器已配置证书，请向管理员获取与证书匹配的 HTTPS 地址",
     "params": {}
   },
   "connection.certSettings": {
@@ -2445,11 +2445,11 @@
     "params": {}
   },
   "connection.contactAdmin": {
-    "source": "请联系管理员开启 HTTPS。",
+    "source": "请联系管理员开启 HTTPS",
     "params": {}
   },
   "connection.defaultPorts": {
-    "source": "默认 HTTPS 端口为 5180，证书引导页端口为 5181。已启用时，请使用管理员提供的引导地址。",
+    "source": "默认 HTTPS 端口为 5180，证书引导页端口为 5181，已启用时，请使用管理员提供的引导地址",
     "params": {}
   },
   "connection.downloadAgain": {
@@ -2465,7 +2465,7 @@
     "params": {}
   },
   "connection.httpsOff": {
-    "source": "服务器尚未开启 HTTPS。",
+    "source": "服务器尚未开启 HTTPS",
     "params": {}
   },
   "connection.httpsUnavailable": {
@@ -2477,23 +2477,23 @@
     "params": {}
   },
   "connection.macRich1": {
-    "source": "打开<strong>钥匙串访问</strong>，选中“登录”，通过“文件 → 导入项目”导入下载的证书。",
+    "source": "打开<strong>钥匙串访问</strong>，选中“登录”，通过“文件 → 导入项目”导入下载的证书",
     "params": {}
   },
   "connection.macRich2": {
-    "source": "找到 <strong>VoidPlayer Local CA</strong> 证书，双击打开。",
+    "source": "找到 <strong>VoidPlayer Local CA</strong> 证书，双击打开",
     "params": {}
   },
   "connection.macRich3": {
-    "source": "展开“信任”，将<strong>安全套接字层（SSL）</strong>设为“始终信任”。",
+    "source": "展开“信任”，将<strong>安全套接字层（SSL）</strong>设为“始终信任”",
     "params": {}
   },
   "connection.macStep4": {
-    "source": "关闭窗口，按系统提示验证身份并保存。",
+    "source": "关闭窗口，按系统提示验证身份并保存",
     "params": {}
   },
   "connection.openPlayerHint": {
-    "source": "安装完成后，点击“打开播放器”重新检查。",
+    "source": "安装完成后，点击“打开播放器”重新检查",
     "params": {}
   },
   "connection.os": {
@@ -2501,7 +2501,7 @@
     "params": {}
   },
   "connection.ownCertHint": {
-    "source": "此服务器使用自有证书。若浏览器仍提示证书问题，请联系管理员。",
+    "source": "此服务器使用自有证书，若浏览器仍提示证书问题，请联系管理员",
     "params": {}
   },
   "connection.pageTitle": {
@@ -2529,11 +2529,11 @@
     "params": {}
   },
   "connection.untrusted": {
-    "source": "暂时无法建立可信的 HTTPS 连接。安装证书后可重新检查。",
+    "source": "暂时无法建立可信的 HTTPS 连接，安装证书后可重新检查",
     "params": {}
   },
   "connection.verifyNote": {
-    "source": "安装前，请与管理员核对服务器地址和证书指纹。",
+    "source": "安装前，请与管理员核对服务器地址和证书指纹",
     "params": {}
   },
   "connection.viewFingerprint": {
@@ -2545,7 +2545,7 @@
     "params": {}
   },
   "connection.whyBody": {
-    "source": "信任服务器证书后，浏览器可以建立可信的 HTTPS 连接，使用 WebCodecs 原生解码。实际硬件加速取决于浏览器、显卡和视频格式。",
+    "source": "信任服务器证书后，浏览器可以建立可信的 HTTPS 连接，使用 WebCodecs 原生解码，实际硬件加速取决于浏览器、显卡和视频格式",
     "params": {}
   },
   "connection.whyTitle": {
@@ -2553,23 +2553,23 @@
     "params": {}
   },
   "connection.winRich1": {
-    "source": "双击下载的证书，选择<strong>安装证书</strong>。",
+    "source": "双击下载的证书，选择<strong>安装证书</strong>",
     "params": {}
   },
   "connection.winRich2": {
-    "source": "选择<strong>当前用户</strong>，点击“下一步”。",
+    "source": "选择<strong>当前用户</strong>，点击“下一步”",
     "params": {}
   },
   "connection.winRich3": {
-    "source": "选择“将所有的证书都放入下列存储”，浏览并选中<strong>受信任的根证书颁发机构</strong>。",
+    "source": "选择“将所有的证书都放入下列存储”，浏览并选中<strong>受信任的根证书颁发机构</strong>",
     "params": {}
   },
   "connection.winStep4": {
-    "source": "核对来源与指纹，按系统提示完成导入。",
+    "source": "核对来源与指纹，按系统提示完成导入",
     "params": {}
   },
   "drawing.changed": {
-    "source": "画面已变化，未将编辑写入其他帧。",
+    "source": "画面已变化，未将编辑写入其他帧",
     "params": {}
   },
   "drawing.enterText": {
@@ -2609,11 +2609,11 @@
     "params": {}
   },
   "error.allTracksDisabled": {
-    "source": "所有轨道均已停用，请重新载入片源。",
+    "source": "所有轨道均已停用，请重新载入片源",
     "params": {}
   },
   "error.changingColorMode": {
-    "source": "正在切换色彩模式。",
+    "source": "正在切换色彩模式",
     "params": {}
   },
   "error.diagnostic": {
@@ -2626,63 +2626,63 @@
     }
   },
   "error.duplicateSource": {
-    "source": "该片源已在视图中，不能重复添加。",
+    "source": "该片源已在视图中，不能重复添加",
     "params": {}
   },
   "error.emptyVideoFile": {
-    "source": "请选择非空的视频文件。",
+    "source": "请选择非空的视频文件",
     "params": {}
   },
   "error.finishSeekFirst": {
-    "source": "请先完成画面定位。",
+    "source": "请先完成画面定位",
     "params": {}
   },
   "error.loadVideoFirst": {
-    "source": "请先载入视频。",
+    "source": "请先载入视频",
     "params": {}
   },
   "error.noValidFrameForMark": {
-    "source": "当前轨道没有可标注的有效画面，请重新载入停用的片源。",
+    "source": "当前轨道没有可标注的有效画面，请重新载入停用的片源",
     "params": {}
   },
   "error.openVideoFirst": {
-    "source": "请先打开视频。",
+    "source": "请先打开视频",
     "params": {}
   },
   "error.pauseBeforeEditMark": {
-    "source": "请暂停并等待画面定位完成后再编辑标注。",
+    "source": "请暂停并等待画面定位完成后再编辑标注",
     "params": {}
   },
   "error.pauseBeforeMark": {
-    "source": "请暂停并等待画面定位完成后再标注。",
+    "source": "请暂停并等待画面定位完成后再标注",
     "params": {}
   },
   "error.referenceFormat": {
-    "source": "自有色彩不支持此像素格式或颜色信息。请切换为浏览器色彩后重试。",
+    "source": "自有色彩不支持此像素格式或颜色信息，请切换为浏览器色彩后重试",
     "params": {}
   },
   "error.referenceHdr": {
-    "source": "此 HDR 视频未提供可核对的高位深平面。请切换为浏览器色彩后重试。",
+    "source": "此 HDR 视频未提供可核对的高位深平面，请切换为浏览器色彩后重试",
     "params": {}
   },
   "error.returnToMarkFrame": {
-    "source": "请返回标注对应的画面后再编辑。",
+    "source": "请返回标注对应的画面后再编辑",
     "params": {}
   },
   "error.trackNotSyncedForMark": {
-    "source": "当前轨道尚未同步，请等待追赶完成或定位后再标注。",
+    "source": "当前轨道尚未同步，请等待追赶完成或定位后再标注",
     "params": {}
   },
   "error.waitColorMode": {
-    "source": "请等待色彩模式切换完成。",
+    "source": "请等待色彩模式切换完成",
     "params": {}
   },
   "error.waitOperationBeforePlay": {
-    "source": "请等待当前操作完成后再播放。",
+    "source": "请等待当前操作完成后再播放",
     "params": {}
   },
   "error.wasmCoreIncompatible": {
-    "source": "软件解码器资源与播放器版本不匹配，请更新解码器资源并刷新页面后重试。",
+    "source": "软件解码器资源与播放器版本不匹配，请更新解码器资源并刷新页面后重试",
     "params": {}
   },
   "fileAccess.apiName": {
@@ -2690,23 +2690,23 @@
     "params": {}
   },
   "fileAccess.available": {
-    "source": "检测到文件访问接口，可以选择视频验证权限和保存能力。",
+    "source": "检测到文件访问接口，可以选择视频验证权限和保存能力",
     "params": {}
   },
   "fileAccess.cancelled": {
-    "source": "已取消选择，可以再次尝试。",
+    "source": "已取消选择，可以再次尝试",
     "params": {}
   },
   "fileAccess.failed": {
-    "source": "未能取得或保存文件访问权限。请检查浏览器的网站权限后重试。",
+    "source": "未能取得或保存文件访问权限，请检查浏览器的网站权限后重试",
     "params": {}
   },
   "fileAccess.help": {
-    "source": "选择一个视频以验证访问权限和本机句柄保存，不会上传或播放。曾拒绝授权时可再次尝试；浏览器未提供此能力时，本地视频仅在本次页面可用，不进入最近打开。",
+    "source": "选择一个视频以验证访问权限和本机句柄保存，不会上传或播放，曾拒绝授权时可再次尝试；浏览器未提供此能力时，本地视频仅在本次页面可用，不进入最近打开",
     "params": {}
   },
   "fileAccess.success": {
-    "source": "已验证文件访问和句柄保存。刷新后仍需浏览器允许读取；曾拒绝时可以重新尝试。",
+    "source": "已验证文件访问和句柄保存，刷新后仍需浏览器允许读取；曾拒绝时可以重新尝试",
     "params": {}
   },
   "fileAccess.title": {
@@ -2718,7 +2718,7 @@
     "params": {}
   },
   "fileAccess.unsupported": {
-    "source": "当前浏览器未提供持久文件访问能力。本地视频按一次性文件打开。",
+    "source": "当前浏览器未提供持久文件访问能力，本地视频按一次性文件打开",
     "params": {}
   },
   "fileDrop.release": {
@@ -2758,7 +2758,7 @@
     "params": {}
   },
   "identity.usersLoadFailed": {
-    "source": "暂时无法读取用户，可直接输入名字继续。",
+    "source": "暂时无法读取用户，可直接输入名字继续",
     "params": {}
   },
   "identity.welcomeTitle": {
@@ -2814,7 +2814,7 @@
     "params": {}
   },
   "identitySettings.unableToReadUserList": {
-    "source": "无法读取用户列表。",
+    "source": "无法读取用户列表",
     "params": {}
   },
   "identitySettings.unconfirmed": {
@@ -2830,60 +2830,60 @@
     }
   },
   "input.app": {
-    "source": "「{name}」是应用程序。请选择视频文件。",
+    "source": "「{name}」是应用程序，请选择视频文件",
     "params": {
       "name": "string | number"
     }
   },
   "input.audio": {
-    "source": "「{name}」是音频文件。请选择含视频轨道的文件。",
+    "source": "「{name}」是音频文件，请选择含视频轨道的文件",
     "params": {
       "name": "string | number"
     }
   },
   "input.disk": {
-    "source": "「{name}」是磁盘映像。请选择视频文件。",
+    "source": "「{name}」是磁盘映像，请选择视频文件",
     "params": {
       "name": "string | number"
     }
   },
   "input.emptyDrop": {
-    "source": "未收到可打开的文件。请直接拖入视频文件。",
+    "source": "未收到可打开的文件，请直接拖入视频文件",
     "params": {}
   },
   "input.folder": {
-    "source": "「{name}」是文件夹。请打开文件夹，选择其中的视频文件。",
+    "source": "「{name}」是文件夹，请打开文件夹，选择其中的视频文件",
     "params": {
       "name": "string | number"
     }
   },
   "input.image": {
-    "source": "「{name}」是图片。请选择视频文件。",
+    "source": "「{name}」是图片，请选择视频文件",
     "params": {
       "name": "string | number"
     }
   },
   "input.skippedFiles": {
-    "source": "已跳过 {count} 个无法作为视频打开的项目（包括「{name}」）。请选择视频文件。",
+    "source": "已跳过 {count} 个无法作为视频打开的项目（包括「{name}」），请选择视频文件",
     "params": {
       "count": "string | number",
       "name": "string | number"
     }
   },
   "input.unreadable": {
-    "source": "无法读取「{name}」。请重新选择可访问的视频文件。",
+    "source": "无法读取「{name}」，请重新选择可访问的视频文件",
     "params": {
       "name": "string | number"
     }
   },
   "input.unsupported": {
-    "source": "无法将「{name}」作为视频打开。请选择支持的视频文件，例如 MP4、MOV 或 MKV。",
+    "source": "无法将「{name}」作为视频打开，请选择支持的视频文件，例如 MP4、MOV 或 MKV",
     "params": {
       "name": "string | number"
     }
   },
   "input.workspace": {
-    "source": "「{name}」不是可读取的 VoidPlayer 工作区文件。请选择视频或已导出的工作区。",
+    "source": "「{name}」不是可读取的 VoidPlayer 工作区文件，请选择视频或已导出的工作区",
     "params": {
       "name": "string | number"
     }
@@ -2893,7 +2893,7 @@
     "params": {}
   },
   "language.loadFailed": {
-    "source": "语言包未能加载，请重试。",
+    "source": "语言包未能加载，请重试",
     "params": {}
   },
   "language.system": {
@@ -2945,7 +2945,7 @@
     }
   },
   "libraryBrowser.unknownLibrary": {
-    "source": "此媒体库在当前服务中不存在。",
+    "source": "此媒体库在当前服务中不存在",
     "params": {}
   },
   "libraryColumns.loading": {
@@ -2963,7 +2963,7 @@
     "params": {}
   },
   "libraryColumns.unavailable": {
-    "source": "无法读取目录，请稍后重试。",
+    "source": "无法读取目录，请稍后重试",
     "params": {}
   },
   "libraryFileMenu.copied": {
@@ -2991,31 +2991,31 @@
     "params": {}
   },
   "libraryLink.incompletePath": {
-    "source": "媒体库路径不完整。",
+    "source": "媒体库路径不完整",
     "params": {}
   },
   "libraryLink.invalidDirectory": {
-    "source": "媒体库目录无效。",
+    "source": "媒体库目录无效",
     "params": {}
   },
   "libraryLink.invalidFile": {
-    "source": "媒体库文件链接无效。",
+    "source": "媒体库文件链接无效",
     "params": {}
   },
   "libraryLink.invalidRoot": {
-    "source": "媒体库标识无效。",
+    "source": "媒体库标识无效",
     "params": {}
   },
   "libraryLink.notLocationLink": {
-    "source": "这不是媒体库位置链接。",
+    "source": "这不是媒体库位置链接",
     "params": {}
   },
   "libraryLink.otherService": {
-    "source": "链接来自另一个媒体服务，请在浏览器中打开该链接。",
+    "source": "链接来自另一个媒体服务，请在浏览器中打开该链接",
     "params": {}
   },
   "libraryLink.pasteLink": {
-    "source": "请粘贴复制的媒体库链接。",
+    "source": "请粘贴复制的媒体库链接",
     "params": {}
   },
   "logPanel.aboutLogs": {
@@ -3023,7 +3023,7 @@
     "params": {}
   },
   "logPanel.copyFailedDownloadLogsToSaveThe": {
-    "source": "复制失败，请使用下载日志保存完整内容。",
+    "source": "复制失败，请使用下载日志保存完整内容",
     "params": {}
   },
   "logPanel.copyLogs": {
@@ -3043,7 +3043,7 @@
     "params": {}
   },
   "logPanel.downloadStarted": {
-    "source": "下载已开始。",
+    "source": "下载已开始",
     "params": {}
   },
   "logPanel.history": {
@@ -3051,7 +3051,7 @@
     "params": {}
   },
   "logPanel.keepsTheLast3SessionsLocallyFor": {
-    "source": "本机保留最近 3 次会话最长 7 天。",
+    "source": "本机保留最近 3 次会话最长 7 天",
     "params": {}
   },
   "logPanel.localLogs": {
@@ -3059,7 +3059,7 @@
     "params": {}
   },
   "logPanel.localSavingFailedDownloadABackupOf": {
-    "source": "本地保存失败，请下载日志备份。",
+    "source": "本地保存失败，请下载日志备份",
     "params": {}
   },
   "logPanel.logContents": {
@@ -3075,11 +3075,11 @@
     "params": {}
   },
   "logPanel.logsCopied": {
-    "source": "日志已复制。",
+    "source": "日志已复制",
     "params": {}
   },
   "logPanel.logsIncludeDeviceInformationFilenamesActionsAnd": {
-    "source": "日志包含设备信息、文件名、操作记录及你填写的问题描述不含视频或标注正文。",
+    "source": "日志包含设备信息、文件名、操作记录及你填写的问题描述不含视频或标注正文",
     "params": {}
   },
   "logPanel.logsUploadedFilenameCopied": {
@@ -3127,11 +3127,11 @@
     "params": {}
   },
   "logPanel.sentToTheCurrentServerOnlyWhen": {
-    "source": "仅点击“发送日志”后才发送到当前服务器。",
+    "source": "仅点击“发送日志”后才发送到当前服务器",
     "params": {}
   },
   "logPanel.unableToConnectToThisServerRetry": {
-    "source": "无法连接当前服务器，请重试或下载日志。",
+    "source": "无法连接当前服务器，请重试或下载日志",
     "params": {}
   },
   "logPanel.unableToReadLogHistory": {
@@ -3152,7 +3152,7 @@
     "params": {}
   },
   "logPanel.youCanDownloadLogsInstead": {
-    "source": "，可改用下载日志。",
+    "source": "，可改用下载日志",
     "params": {}
   },
   "marks.addHint": {
@@ -3298,11 +3298,11 @@
     "params": {}
   },
   "pageBridge.changed": {
-    "source": "身份或工作区来源已改变，请重新明确授权。",
+    "source": "身份或工作区来源已改变，请重新明确授权",
     "params": {}
   },
   "pageBridge.claim": {
-    "source": "客户端名称为自行声明，并非认证身份。仅授权此页面及当前工作区，不跟随其他标签。",
+    "source": "客户端名称为自行声明，并非认证身份，仅授权此页面及当前工作区，不跟随其他标签",
     "params": {}
   },
   "pageBridge.clientLabel": {
@@ -3314,11 +3314,11 @@
     "params": {}
   },
   "pageBridge.connectFailed": {
-    "source": "未能确认连接。请检查客户端及目标页面；不会自动重连或跟随其他标签。",
+    "source": "未能确认连接，请检查客户端及目标页面；不会自动重连或跟随其他标签",
     "params": {}
   },
   "pageBridge.connected": {
-    "source": "已连接此页面。关闭设置后授权仍有效，可在此撤销。",
+    "source": "已连接此页面，关闭设置后授权仍有效，可在此撤销",
     "params": {}
   },
   "pageBridge.empty": {
@@ -3326,27 +3326,27 @@
     "params": {}
   },
   "pageBridge.invalid": {
-    "source": "收到不符合授权范围的命令，连接已撤销。",
+    "source": "收到不符合授权范围的命令，连接已撤销",
     "params": {}
   },
   "pageBridge.large": {
-    "source": "结果超过通道预算，写入结果可能未知；请保留原 correlation，勿自动重试。",
+    "source": "结果超过通道预算，写入结果可能未知；请保留原 correlation，勿自动重试",
     "params": {}
   },
   "pageBridge.lifetime": {
-    "source": "授权仅存于当前进程和页面内存。撤销、重载、关页或断线即失效；已经开始的操作可能完成，取消不表示回滚，未知写入不得自动重试。",
+    "source": "授权仅存于当前进程和页面内存，撤销、重载、关页或断线即失效；已经开始的操作可能完成，取消不表示回滚，未知写入不得自动重试",
     "params": {}
   },
   "pageBridge.lost": {
-    "source": "通道已断开；已派发写入的结果可能未知，不会自动重放。",
+    "source": "通道已断开；已派发写入的结果可能未知，不会自动重放",
     "params": {}
   },
   "pageBridge.noClient": {
-    "source": "MCP 客户端尚未初始化。",
+    "source": "MCP 客户端尚未初始化",
     "params": {}
   },
   "pageBridge.pairCleared": {
-    "source": "已清除配对。请输入新的一次性信息，并重新选择权限。",
+    "source": "已清除配对，请输入新的一次性信息，并重新选择权限",
     "params": {}
   },
   "pageBridge.pairCode": {
@@ -3354,7 +3354,7 @@
     "params": {}
   },
   "pageBridge.pairExpired": {
-    "source": "临时授权已到期。",
+    "source": "临时授权已到期",
     "params": {}
   },
   "pageBridge.pairReset": {
@@ -3366,14 +3366,14 @@
     "params": {}
   },
   "pageBridge.pairReviewTarget": {
-    "source": "请核对此页面：{page}。配对信息已单次消费。临时授权最晚于 {expiry} 到期。",
+    "source": "请核对此页面：{page}；配对信息已单次消费，临时授权最晚于 {expiry} 到期",
     "params": {
       "expiry": "string | number",
       "page": "string | number"
     }
   },
   "pageBridge.pairUnavailable": {
-    "source": "配对不可用：信息不符、已到期、已消费或客户端尚未就绪。请发起新请求，页面数据尚未分享。",
+    "source": "配对不可用：信息不符、已到期、已消费或客户端尚未就绪，请发起新请求，页面数据尚未分享",
     "params": {}
   },
   "pageBridge.read": {
@@ -3385,7 +3385,7 @@
     "params": {}
   },
   "pageBridge.revoked": {
-    "source": "已撤销；已开始的操作可能仍会完成。重新连接必须再次确认。",
+    "source": "已撤销；已开始的操作可能仍会完成，重新连接必须再次确认",
     "params": {}
   },
   "pageBridge.scopes": {
@@ -3401,7 +3401,7 @@
     "params": {}
   },
   "pageBridge.unavailable": {
-    "source": "本机桥进程不可用；普通 HTTP 后台任务不受页面连接影响。",
+    "source": "本机桥进程不可用；普通 HTTP 后台任务不受页面连接影响",
     "params": {}
   },
   "pageBridge.view": {
@@ -3457,11 +3457,11 @@
     "params": {}
   },
   "player.fallsBackToSoftwareIfFirstFrame": {
-    "source": "首帧核对失败则改用软件解码；读回帧有额外开销。",
+    "source": "首帧核对失败则改用软件解码；读回帧有额外开销",
     "params": {}
   },
   "player.fileImportWasSupersededByANewer": {
-    "source": "文件导入已被新的请求取代。",
+    "source": "文件导入已被新的请求取代",
     "params": {}
   },
   "player.fillView": {
@@ -3475,7 +3475,7 @@
     }
   },
   "player.graphicsRecoveryFailed": {
-    "source": "画面恢复失败，请刷新页面；若仍无画面，请完全退出并重新打开浏览器。",
+    "source": "画面恢复失败，请刷新页面；若仍无画面，请完全退出并重新打开浏览器",
     "params": {}
   },
   "player.hdrDisplay": {
@@ -3499,7 +3499,7 @@
     "params": {}
   },
   "player.invalidAnnotationAddress": {
-    "source": "标注地址无效。",
+    "source": "标注地址无效",
     "params": {}
   },
   "player.lastSeekMs": {
@@ -3509,11 +3509,11 @@
     }
   },
   "player.mixingSoftwareAndNativeFramesInBrowser": {
-    "source": "浏览器色彩下软件帧与原生帧混合上屏，色彩可能不准，建议切换色彩模式。",
+    "source": "浏览器色彩下软件帧与原生帧混合上屏，色彩可能不准，建议切换色彩模式",
     "params": {}
   },
   "player.noReadableFrameInThisTrack": {
-    "source": "轨道没有可读取的画面。",
+    "source": "轨道没有可读取的画面",
     "params": {}
   },
   "player.notLoaded": {
@@ -3525,7 +3525,7 @@
     "params": {}
   },
   "player.openOneWorkspaceFileAtATime": {
-    "source": "每次请打开一个工作区文件。",
+    "source": "每次请打开一个工作区文件",
     "params": {}
   },
   "player.pause": {
@@ -3541,7 +3541,7 @@
     "params": {}
   },
   "player.preservesOriginalFramePrecisionWithConsistentConversion": {
-    "source": "保留原始帧精度，按统一规则转换；HDR 使用明确参数映射。",
+    "source": "保留原始帧精度，按统一规则转换；HDR 使用明确参数映射",
     "params": {}
   },
   "player.rawPlanes": {
@@ -3557,7 +3557,7 @@
     "params": {}
   },
   "player.softwareFallbackIsAnApproximationColorsMay": {
-    "source": "软件回退仅近似匹配，颜色可能与原生帧不同。",
+    "source": "软件回退仅近似匹配，颜色可能与原生帧不同",
     "params": {}
   },
   "player.sourceTimestampSFrameDurationS": {
@@ -3572,22 +3572,22 @@
     "params": {}
   },
   "player.switchToManagedColorInColorDecoding": {
-    "source": "请先在“色彩与解码”中切换为“自有色彩”，再选择 YUV 通道。",
+    "source": "请先在“色彩与解码”中切换为“自有色彩”，再选择 YUV 通道",
     "params": {}
   },
   "player.thisAnnotationIsInTheRecycleBin": {
-    "source": "这条标注已在回收站。",
+    "source": "这条标注已在回收站",
     "params": {}
   },
   "player.trackDisabledFrameUpdatesHaveStoppedPlease": {
-    "source": "轨道 {p0} 已停用 · 画面已停止更新。{p1} 请重新载入此片源。",
+    "source": "轨道 {p0} 已停用 · 画面已停止更新（{p1}），请重新载入此片源",
     "params": {
       "p0": "string | number",
       "p1": "string | number"
     }
   },
   "player.trackFrameNotSynchronizedOtherTracksContinue": {
-    "source": "轨道 {p0} {p1} · 当前画面暂未同步，其他轨道继续播放。",
+    "source": "轨道 {p0} {p1} · 当前画面暂未同步，其他轨道继续播放",
     "params": {
       "p0": "string | number",
       "p1": "string | number"
@@ -3684,11 +3684,11 @@
     "params": {}
   },
   "pwa.browserInstall": {
-    "source": "请在浏览器菜单中选择安装应用。如果没有此选项，请用桌面 Chrome 或 Edge 打开本页。",
+    "source": "请在浏览器菜单中选择安装应用，若没有此选项，请用桌面 Chrome 或 Edge 打开本页",
     "params": {}
   },
   "pwa.failed": {
-    "source": "离线资源准备失败，请联网后重试。",
+    "source": "离线资源准备失败，请联网后重试",
     "params": {}
   },
   "pwa.install": {
@@ -3700,7 +3700,7 @@
     "params": {}
   },
   "pwa.iosInstall": {
-    "source": "请选择「分享 → 添加到主屏幕」。",
+    "source": "请选择「分享 → 添加到主屏幕」",
     "params": {}
   },
   "pwa.preparing": {
@@ -3712,15 +3712,11 @@
     "params": {}
   },
   "pwa.safariInstall": {
-    "source": "请选择「文件 → 添加到程序坞」。",
-    "params": {}
-  },
-  "pwa.safariVisit": {
-    "source": "Safari 通过「文件 → 添加到程序坞」安装。Finder 文件关联需用 Chrome 或 Edge。",
+    "source": "在 Safari 中选「文件 → 添加到程序坞」即可安装；如需在 Finder 的「打开方式」中选择 VoidPlayer，请通过桌面 Chrome 或 Edge 安装",
     "params": {}
   },
   "pwa.unsupported": {
-    "source": "当前浏览器无法保存离线资源。",
+    "source": "当前浏览器无法保存离线资源",
     "params": {}
   },
   "pwa.webApp": {
@@ -3728,7 +3724,7 @@
     "params": {}
   },
   "recovery.capacityReached": {
-    "source": "本机恢复记录已达容量上限，请在设置 → 工作区中导出并删除旧记录。当前工作区可手动导出或保存到服务器。",
+    "source": "本机恢复记录已达容量上限，请在设置 → 工作区中导出并删除旧记录，当前工作区可手动导出或保存到服务器",
     "params": {}
   },
   "recovery.deleteHistory": {
@@ -3744,7 +3740,7 @@
     "params": {}
   },
   "recovery.historyChanged": {
-    "source": "恢复记录已改变，请刷新列表后重试。",
+    "source": "恢复记录已改变，请刷新列表后重试",
     "params": {}
   },
   "recovery.historyCounts": {
@@ -3759,7 +3755,7 @@
     "params": {}
   },
   "recovery.readFailed": {
-    "source": "无法读取本机工作区恢复记录，请检查浏览器存储。",
+    "source": "无法读取本机工作区恢复记录，请检查浏览器存储",
     "params": {}
   },
   "recovery.recordCount": {
@@ -3771,15 +3767,15 @@
     "params": {}
   },
   "recovery.restored": {
-    "source": "工作区已恢复。",
+    "source": "工作区已恢复",
     "params": {}
   },
   "recovery.saveFailed": {
-    "source": "工作区本机自动恢复保存失败，请导出文件或显式保存到服务器。",
+    "source": "工作区本机自动恢复保存失败，请导出文件或显式保存到服务器",
     "params": {}
   },
   "recovery.savingResumed": {
-    "source": "工作区本机自动恢复已恢复保存。",
+    "source": "工作区本机自动恢复已恢复保存",
     "params": {}
   },
   "recovery.storageEstimate": {
@@ -3811,7 +3807,7 @@
     "params": {}
   },
   "savedWorkspaces.emptySaveHint": {
-    "source": "保存当前工作区后，可在这里打开或复制链接。",
+    "source": "保存当前工作区后，可在这里打开或复制链接",
     "params": {}
   },
   "savedWorkspaces.guest": {
@@ -3843,7 +3839,7 @@
     "params": {}
   },
   "savedWorkspaces.tryAnotherSearch": {
-    "source": "试试其他工作区名或用户名。",
+    "source": "试试其他工作区名或用户名",
     "params": {}
   },
   "savedWorkspaces.untitledWorkspace": {
@@ -3851,7 +3847,7 @@
     "params": {}
   },
   "savedWorkspaces.updatedReopen": {
-    "source": "工作区已被更新，请重新打开后继续。",
+    "source": "工作区已被更新，请重新打开后继续",
     "params": {}
   },
   "savedWorkspaces.workspaceName": {
@@ -3859,7 +3855,7 @@
     "params": {}
   },
   "savedWorkspaces.workspaceServiceUnavailable": {
-    "source": "工作区服务不可用。",
+    "source": "工作区服务不可用",
     "params": {}
   },
   "settings.analysisConcurrencyCount": {
@@ -3877,7 +3873,7 @@
     "params": {}
   },
   "settings.unknownSettingsPage": {
-    "source": "未知设置页面。",
+    "source": "未知设置页面",
     "params": {}
   },
   "settings.vvcFrameContexts": {
@@ -3889,7 +3885,7 @@
     "params": {}
   },
   "settings.vvcTuningHint": {
-    "source": "留空使用自动配置。修改后重新打开片源。",
+    "source": "留空使用自动配置，修改后重新打开片源",
     "params": {}
   },
   "settings.wasmThreadsAuto": {
@@ -3937,7 +3933,7 @@
     "params": {}
   },
   "settingsShell.chartHoverHint": {
-    "source": "各图独立显示在悬浮线旁；合并显示在上面板下方。",
+    "source": "各图独立显示在悬浮线旁；合并显示在上面板下方",
     "params": {}
   },
   "settingsShell.chooseAUserOrRenameYourself": {
@@ -4093,7 +4089,7 @@
     "params": {}
   },
   "sharing.addVideo": {
-    "source": "请先添加视频再分享。",
+    "source": "请先添加视频再分享",
     "params": {}
   },
   "sharing.copyLink": {
@@ -4455,7 +4451,7 @@
     "params": {}
   },
   "shell.tracksHiddenHint": {
-    "source": "点击轨道旁的眼睛图标，或显示所有轨道以继续查看。",
+    "source": "点击轨道旁的眼睛图标，或显示所有轨道以继续查看",
     "params": {}
   },
   "shell.tracksHiddenTitle": {
@@ -4515,31 +4511,31 @@
     "params": {}
   },
   "sourceAccess.libraryChanged": {
-    "source": "无法打开「{name}」：文件版本已变化。",
+    "source": "无法打开「{name}」：文件版本已变化",
     "params": {
       "name": "string | number"
     }
   },
   "sourceAccess.libraryMissing": {
-    "source": "无法打开「{name}」：文件已移除。",
+    "source": "无法打开「{name}」：文件已移除",
     "params": {
       "name": "string | number"
     }
   },
   "sourceAccess.libraryUnavailable": {
-    "source": "无法打开「{name}」：媒体库暂不可用。",
+    "source": "无法打开「{name}」：媒体库暂不可用",
     "params": {
       "name": "string | number"
     }
   },
   "sourceAccess.localStale": {
-    "source": "无法打开本地文件「{name}」：文件已变化或不可用。",
+    "source": "无法打开本地文件「{name}」：文件已变化或不可用",
     "params": {
       "name": "string | number"
     }
   },
   "sourceAccess.localUnsupported": {
-    "source": "当前浏览器不支持保存本地文件访问权限，无法直接恢复「{name}」。请重新选择文件；刷新后仍需重新选择。",
+    "source": "当前浏览器不支持保存本地文件访问权限，无法直接恢复「{name}」，请重新选择文件；刷新后仍需重新选择",
     "params": {
       "name": "string | number"
     }
@@ -4660,7 +4656,7 @@
     }
   },
   "sources.linkUnavailable": {
-    "source": "该媒体库文件已不存在或版本已变化。",
+    "source": "该媒体库文件已不存在或版本已变化",
     "params": {}
   },
   "sources.loadFailedWith": {
@@ -4700,7 +4696,7 @@
     "params": {}
   },
   "sources.locateUnavailable": {
-    "source": "片源已不在媒体库中。",
+    "source": "片源已不在媒体库中",
     "params": {}
   },
   "sources.mountList": {
@@ -4708,7 +4704,7 @@
     "params": {}
   },
   "sources.noEmptyTracks": {
-    "source": "没有空轨道，请先关闭一个视频。",
+    "source": "没有空轨道，请先关闭一个视频",
     "params": {}
   },
   "sources.noMatch": {
@@ -4822,7 +4818,7 @@
     "params": {}
   },
   "sync.draftsUnsaved": {
-    "source": "本机标注尚未保存，请等待自动保存完成。",
+    "source": "本机标注尚未保存，请等待自动保存完成",
     "params": {}
   },
   "sync.frameMark": {
@@ -4850,7 +4846,7 @@
     "params": {}
   },
   "sync.savingDrafts": {
-    "source": "本机草稿正在保存，请稍后重试。",
+    "source": "本机草稿正在保存，请稍后重试",
     "params": {}
   },
   "sync.savingLocal": {
@@ -4862,7 +4858,7 @@
     "params": {}
   },
   "sync.waitForDrafts": {
-    "source": "请先结束标注并等待本机草稿保存完成。",
+    "source": "请先结束标注并等待本机草稿保存完成",
     "params": {}
   },
   "theme.baseColor": {
@@ -4884,11 +4880,11 @@
     }
   },
   "theme.enterAValidHexColorSuchAs": {
-    "source": "请输入有效的 HEX 颜色，例如 #3478F6。",
+    "source": "请输入有效的 HEX 颜色，例如 #3478F6",
     "params": {}
   },
   "theme.invalidBase": {
-    "source": "请输入有效的 HEX 基调色，例如 #EEE7DE。",
+    "source": "请输入有效的 HEX 基调色，例如 #EEE7DE",
     "params": {}
   },
   "toast.dismissNotification": {
@@ -5250,15 +5246,15 @@
     "params": {}
   },
   "transfer.importing": {
-    "source": "工作区正在导入，请等待完成。",
+    "source": "工作区正在导入，请等待完成",
     "params": {}
   },
   "transfer.legacyConditions": {
-    "source": "旧工作区未记录比较条件，已沿用当前色彩和解码设置。",
+    "source": "旧工作区未记录比较条件，已沿用当前色彩和解码设置",
     "params": {}
   },
   "transfer.mtimeWarning": {
-    "source": "「{name}」修改时间与工作区记录不一致，已按同名同大小文件恢复；如内容被替换请重新检查标注。",
+    "source": "「{name}」修改时间与工作区记录不一致，已按同名同大小文件恢复；如内容被替换请重新检查标注",
     "params": {
       "name": "string | number"
     }
@@ -5298,15 +5294,15 @@
     }
   },
   "workspace.actorChanged": {
-    "source": "用户已切换，请在当前工作区重新分享。",
+    "source": "用户已切换，请在当前工作区重新分享",
     "params": {}
   },
   "workspace.changed": {
-    "source": "当前工作区已切换，请在新工作区重新分享。",
+    "source": "当前工作区已切换，请在新工作区重新分享",
     "params": {}
   },
   "workspace.closed": {
-    "source": "工作区页面已关闭。",
+    "source": "工作区页面已关闭",
     "params": {}
   },
   "workspace.columns": {
@@ -5314,7 +5310,7 @@
     "params": {}
   },
   "workspace.conflict": {
-    "source": "工作区已被更新，请重新打开后继续。",
+    "source": "工作区已被更新，请重新打开后继续",
     "params": {}
   },
   "workspace.copyNamed": {
@@ -5324,7 +5320,7 @@
     }
   },
   "workspace.saving": {
-    "source": "工作区正在保存，请稍后再分享。",
+    "source": "工作区正在保存，请稍后再分享",
     "params": {}
   }
 }

@@ -139,7 +139,7 @@ export function installLibrarySelection(host:HTMLElement, list:HTMLElement, sign
     if (!drag.row.classList.contains('library-item-selected')) select(drag.row,event.shiftKey,event.metaKey||event.ctrlKey);
     const picked=chosen();
     if (!picked.length||picked.some(row => row.dataset.libraryKind==='mount'||row.getAttribute('aria-disabled')==='true')) {drag=undefined;return;}
-    if (picked.length>LIBRARY_FILE_BATCH_LIMIT) {options.notify(t(msg('adminLibrary.moveLimit','每次最多移动 100 个项目。')));drag=undefined;return;}
+    if (picked.length>LIBRARY_FILE_BATCH_LIMIT) {options.notify(t(msg('adminLibrary.moveLimit','每次最多移动 100 个项目')));drag=undefined;return;}
     drag.refs=picked.map(ref);
     const ghost=document.createElement('div');ghost.className='library-drag-preview';ghost.setAttribute('aria-hidden','true');
     for (const row of picked.slice(0,5)) {
@@ -168,17 +168,17 @@ export function installLibrarySelection(host:HTMLElement, list:HTMLElement, sign
       const result=await mutateLibraryFiles({operation:'move',sources,target});
       if (signal.aborted) return;
       const failed=result.results.filter(item => !item.ok);
-      if (failed.length) options.notify(t(msg('adminLibrary.movePartial','已移动 {moved} 项，{failed} 项失败。'),{moved:result.results.length-failed.length,failed:failed.length})+'\n'+failed.map(item => item.error).filter(Boolean).join('\n'));
+      if (failed.length) options.notify(t(msg('adminLibrary.movePartial','已移动 {moved} 项，{failed} 项失败'),{moved:result.results.length-failed.length,failed:failed.length})+'\n'+failed.map(item => item.error).filter(Boolean).join('\n'));
       else options.notify(t(msg('adminLibrary.movedItems','已移动 {count} 个项目'),{count:result.results.length}));
       const location=options.location();
       const relocated=result.results.find(item => item.ok&&item.destination&&item.source.kind==='directory'&&item.source.rootId===location.root
         && (location.directory===item.source.path||location.directory.startsWith(item.source.path+'/')));
       if (relocated?.destination) options.navigate(relocated.destination.rootId,relocated.destination.path+location.directory.slice(relocated.source.path.length));
       clear();await options.refresh();
-      if (!result.indexRefreshed) options.notify(t(msg('adminLibrary.moveIndexPending','文件操作已完成，目录索引尚未刷新，请重新扫描。')));
+      if (!result.indexRefreshed) options.notify(t(msg('adminLibrary.moveIndexPending','文件操作已完成，目录索引尚未刷新，请重新扫描')));
     } catch (error) {
       if (!signal.aborted) {
-        options.notify(error instanceof LibraryFileOutcomeUnknownError?t(msg('adminLibrary.moveUnknown','移动结果未确认，正在刷新目录，请核对后再操作。')):(error as Error).message);
+        options.notify(error instanceof LibraryFileOutcomeUnknownError?t(msg('adminLibrary.moveUnknown','移动结果未确认，正在刷新目录，请核对后再操作')):(error as Error).message);
         await options.refresh();
       }
     } finally {busy=false;host.removeAttribute('aria-busy');}

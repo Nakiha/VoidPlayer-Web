@@ -88,7 +88,7 @@ export function installCheckpointHistory(store: WorkspaceCheckpoints, options: {
         };
         const read = async () => {
           const record = await store.exact(owner, entry.id);
-          if (!record || record.updatedAt !== entry.updatedAt) throw new Error(t(msg('recovery.historyChanged', '恢复记录已改变，请刷新列表后重试。')));
+          if (!record || record.updatedAt !== entry.updatedAt) throw new Error(t(msg('recovery.historyChanged', '恢复记录已改变，请刷新列表后重试')));
           return record.document;
         };
         action('restore', async () => { const document = await read(); if (current(owner)) await options.restore(document); });
@@ -99,7 +99,7 @@ export function installCheckpointHistory(store: WorkspaceCheckpoints, options: {
           setTimeout(() => URL.revokeObjectURL(url), 1000);
         });
         const remove = action('delete', async () => {
-          if (!await store.remove(owner, entry.id, entry.updatedAt)) throw new Error(t(msg('recovery.historyChanged', '恢复记录已改变，请刷新列表后重试。')));
+          if (!await store.remove(owner, entry.id, entry.updatedAt)) throw new Error(t(msg('recovery.historyChanged', '恢复记录已改变，请刷新列表后重试')));
           await refresh();
         });
         remove.dataset.current = String(entry.id === options.currentId());

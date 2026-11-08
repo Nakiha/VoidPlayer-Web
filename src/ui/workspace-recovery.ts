@@ -93,11 +93,11 @@ export function installWorkspaceRecovery(session: ReviewSession, options: {
     writing = true;
     try {
       await store.save({ id: `${id}:${savingActor}`, actor: savingActor, updatedAt: Date.now(), document: snapshot }); if (actor === savingActor) last = signature;
-      if (warned) { warned = false; options.toasts.show(() => t(msg('recovery.savingResumed', '工作区本机自动恢复已恢复保存。'))); }
+      if (warned) { warned = false; options.toasts.show(() => t(msg('recovery.savingResumed', '工作区本机自动恢复已恢复保存'))); }
     } catch (error) {
       if (!warned) { warned = true; options.toasts.show(() => error instanceof CheckpointCapacityError
-        ? t(msg('recovery.capacityReached', '本机恢复记录已达容量上限，请在设置 → 工作区中导出并删除旧记录。当前工作区可手动导出或保存到服务器。'))
-        : t(msg('recovery.saveFailed', '工作区本机自动恢复保存失败，请导出文件或显式保存到服务器。')), { kind: 'error' }); }
+        ? t(msg('recovery.capacityReached', '本机恢复记录已达容量上限，请在设置 → 工作区中导出并删除旧记录，当前工作区可手动导出或保存到服务器'))
+        : t(msg('recovery.saveFailed', '工作区本机自动恢复保存失败，请导出文件或显式保存到服务器')), { kind: 'error' }); }
     } finally { writing = false; if (again) { again = false; void flush(); } }
   }
   const schedule = () => { clearTimeout(timer); timer = setTimeout(() => void flush(), 500); };
@@ -130,14 +130,14 @@ export function installWorkspaceRecovery(session: ReviewSession, options: {
             if (ok) {
               active = true; clearRecovery(); schedule();
               if (session.getState().tracks.length === checkpoint.document.tracks.length)
-                options.toasts.show(() => t(msg('recovery.restored', '工作区已恢复。')));
+                options.toasts.show(() => t(msg('recovery.restored', '工作区已恢复')));
             }
           } catch (error) { options.toasts.show(String(error), { kind: 'error' }); }
         },cardLife.signal));
         recovery.hidden = false;
       }
     } catch {
-      options.toasts.show(() => t(msg('recovery.readFailed', '无法读取本机工作区恢复记录，请检查浏览器存储。')), { kind: 'error' });
+      options.toasts.show(() => t(msg('recovery.readFailed', '无法读取本机工作区恢复记录，请检查浏览器存储')), { kind: 'error' });
     } finally {
       if (!disposed && actor === expectedActor && generation === currentGeneration) {
         initialized = true;

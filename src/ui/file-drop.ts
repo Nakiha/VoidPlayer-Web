@@ -97,7 +97,7 @@ export function bindFileDrop(root: EventTarget, options: LocalFileActions & { ho
     clear();
     void (async () => {
       const items = await droppedItems(event.dataTransfer!);
-      if (!items.length) throw new LocalInputError(t(msg('input.emptyDrop', '未收到可打开的文件。请直接拖入视频文件。')));
+      if (!items.length) throw new LocalInputError(t(msg('input.emptyDrop', '未收到可打开的文件，请直接拖入视频文件')));
       await openItems(items, options, 'drop');
     })().catch(options.error);
   };

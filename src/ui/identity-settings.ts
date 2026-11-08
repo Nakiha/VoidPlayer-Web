@@ -43,7 +43,7 @@ export function installIdentitySettings(setActor: (actor: Actor | null) => void)
   }
   async function refreshUsers() {
     const response = await fetch('/api/users', { cache: 'no-store', signal: AbortSignal.any([life.signal, AbortSignal.timeout(4000)]) });
-    const result = await response.json(); if (!response.ok) throw new Error(result.error ?? t(msg("identitySettings.unableToReadUserList", "无法读取用户列表。")));
+    const result = await response.json(); if (!response.ok) throw new Error(result.error ?? t(msg("identitySettings.unableToReadUserList", "无法读取用户列表")));
     users = result.users; loaded = true;
     menu.setOptions(() => [...users.map(user => ({ value: user.id, label: user.name })), ...(currentActor()?.kind !== 'guest' && currentActor() ? [{ value: 'rename', label: t(msg("identitySettings.renameCurrentUser", "修改当前用户名…")) }] : [])]);
     render();

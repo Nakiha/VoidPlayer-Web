@@ -7,7 +7,7 @@ export class LibraryAccessError extends Error {
   readonly kind: LibraryAccessProblem;
   readonly status?: number;
   constructor(kind: LibraryAccessProblem, name: string, details = '', status?: number) {
-    const message = kind === 'missing' ? `无法打开「${name}」：文件已移除。` : kind === 'changed' ? `无法打开「${name}」：文件版本已变化。` : `无法打开「${name}」：媒体库暂不可用。`;
+    const message = kind === 'missing' ? `无法打开「${name}」：文件已移除` : kind === 'changed' ? `无法打开「${name}」：文件版本已变化` : `无法打开「${name}」：媒体库暂不可用`;
     super(message + (details ? ` ${details}` : ''));
     this.details = details;
     this.kind = kind;

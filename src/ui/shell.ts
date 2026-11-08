@@ -63,7 +63,7 @@ export function shell() {
             <div class="tracks-hidden-content">
               ${icon('eyeClosed', 'tracks-hidden-icon')}
               <h2 id="tracks-hidden-title">${th(msg("shell.tracksHiddenTitle", "所有轨道已隐藏"))}</h2>
-              <p>${th(msg("shell.tracksHiddenHint", "点击轨道旁的眼睛图标，或显示所有轨道以继续查看。"))}</p>
+              <p>${th(msg("shell.tracksHiddenHint", "点击轨道旁的眼睛图标，或显示所有轨道以继续查看"))}</p>
               <button id="show-all-tracks">${icon('eye')}<span>${th(msg("shell.showAllTracks", "显示所有轨道"))}</span></button>
             </div>
           </section>

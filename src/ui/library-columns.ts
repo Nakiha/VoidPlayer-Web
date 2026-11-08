@@ -49,7 +49,7 @@ export function installLibraryColumns(viewport: HTMLElement, host: HTMLElement, 
     column.signature = signature;
     if (!page) {
       const message = document.createElement('p'); message.className = 'panel-empty';
-      message.textContent = record.error ? t(msg('libraryColumns.unavailable','无法读取目录，请稍后重试。')) : t(msg('libraryColumns.loading','正在读取目录…'));
+      message.textContent = record.error ? t(msg('libraryColumns.unavailable','无法读取目录，请稍后重试')) : t(msg('libraryColumns.loading','正在读取目录…'));
       column.body.replaceChildren(message); return;
     }
     const query = home ? (!current.location.root ? current.location.search.toLocaleLowerCase() : '') : record.scope.search.toLocaleLowerCase();

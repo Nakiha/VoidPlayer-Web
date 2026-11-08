@@ -90,7 +90,7 @@ async function choose(signal: AbortSignal) {
   }
   let showAllUsers = false;
   function localizeEmpty() {
-    empty.textContent = listState === 'loading' ? t(msg("identity.loadingUsers", "正在读取用户…")) : listState === 'error' ? t(msg("identity.usersLoadFailed", "暂时无法读取用户，可直接输入名字继续。")) : filtered.length ? '' : t(msg("identity.noMatchingUsers", "没有匹配的用户"));
+    empty.textContent = listState === 'loading' ? t(msg("identity.loadingUsers", "正在读取用户…")) : listState === 'error' ? t(msg("identity.usersLoadFailed", "暂时无法读取用户，可直接输入名字继续")) : filtered.length ? '' : t(msg("identity.noMatchingUsers", "没有匹配的用户"));
     empty.hidden = !empty.textContent;
   }
   function localize() {
@@ -169,7 +169,7 @@ async function choose(signal: AbortSignal) {
     try {
       const response = await fetch('/api/users', { cache: 'no-store', signal: AbortSignal.any([signal, controller.signal, AbortSignal.timeout(4000)]) });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? t(msg("identitySettings.unableToReadUserList", "无法读取用户列表。")));
+      if (!response.ok) throw new Error(result.error ?? t(msg("identitySettings.unableToReadUserList", "无法读取用户列表")));
       users = result.users; listState = 'ready';
     } catch { listState = 'error'; }
     if (closing) return;

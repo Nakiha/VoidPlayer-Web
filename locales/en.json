@@ -12,7 +12,7 @@
     "translation": "Deleted annotation"
   },
   "activity.disconnected": {
-    "source": "活动连接中断，恢复后自动续读。",
+    "source": "活动连接中断，恢复后自动续读",
     "translation": "Activity is disconnected. Updates will resume when the connection returns."
   },
   "activity.durationMinutesSeconds": {
@@ -32,7 +32,7 @@
     "translation": "Waiting"
   },
   "activity.empty": {
-    "source": "此评审空间暂无操作记录。",
+    "source": "此评审空间暂无操作记录",
     "translation": "No operations in this review space yet."
   },
   "activity.expandDetails": {
@@ -68,7 +68,7 @@
     "translation": "Presented tracks"
   },
   "activity.recent": {
-    "source": "共享评审空间的最近操作；不会改变当前播放。",
+    "source": "共享评审空间的最近操作；不会改变当前播放",
     "translation": "Recent operations in this shared review space. Playback is unchanged."
   },
   "activity.restored": {
@@ -196,15 +196,15 @@
     "translation": "Choose media"
   },
   "admin.clearAllFrames": {
-    "source": "清理全部帧索引？保留视频文件。",
+    "source": "清理全部帧索引？保留视频文件",
     "translation": "Clear all frame indexes? Video files are kept."
   },
   "admin.clearAllPreviews": {
-    "source": "清理全部标注预览？保留标注内容。",
+    "source": "清理全部标注预览？保留标注内容",
     "translation": "Clear all annotation previews? Annotation content is kept."
   },
   "admin.clearAllThumbnails": {
-    "source": "清理全部媒体缩略图？保留视频文件，仅删小图。清理后从头打开可重建。",
+    "source": "清理全部媒体缩略图？保留视频文件，仅删小图，清理后从头打开可重建",
     "translation": "Clear all media thumbnails? Video files are kept. Thumbnails are rebuilt when you open videos from the start."
   },
   "admin.clearCache": {
@@ -264,7 +264,7 @@
     "translation": "Delete log"
   },
   "admin.deleteLogConfirm": {
-    "source": "从服务器删除这份日志？此操作无法撤销。",
+    "source": "从服务器删除这份日志？此操作无法撤销",
     "translation": "Delete this log from the server? This cannot be undone."
   },
   "admin.deleteSelectedLog": {
@@ -280,15 +280,15 @@
     "translation": "Delete workspace"
   },
   "admin.deleteWsConfirm": {
-    "source": "删除服务器工作区？不删除视频或已打开的会话。",
+    "source": "删除服务器工作区？不删除视频或已打开的会话",
     "translation": "Delete the server workspace? Videos and open sessions stay."
   },
   "admin.descPreviews": {
-    "source": "标注卡片使用的画面预览。清理保留文字和绘图，再次编辑对应画面时生成。",
+    "source": "标注卡片使用的画面预览，清理保留文字和绘图，再次编辑对应画面时生成",
     "translation": "Image previews for mark cards. Text and drawings are kept; regenerates while editing that frame."
   },
   "admin.descThumbs": {
-    "source": "媒体库首帧小图。清理后只在正常从头打开时重建，不主动解码。",
+    "source": "媒体库首帧小图，清理后只在正常从头打开时重建，不主动解码",
     "translation": "First-frame thumbnails for the library. Rebuilds only on plain reopening, never by proactive decoding."
   },
   "admin.detailFrames": {
@@ -336,11 +336,11 @@
     "translation": "Elapsed"
   },
   "admin.emptyPreviews": {
-    "source": "编辑标注后，画面预览会在播放暂停时保存。",
+    "source": "编辑标注后，画面预览会在播放暂停时保存",
     "translation": "Edit a mark and its frame preview is saved on pause."
   },
   "admin.emptyThumbs": {
-    "source": "从头打开媒体库视频后，首帧小图会保存在这里。",
+    "source": "从头打开媒体库视频后，首帧小图会保存在这里",
     "translation": "Open a library video from the start and its first-frame thumbnail lands here."
   },
   "admin.endReason": {
@@ -360,11 +360,11 @@
     "translation": "Network storage disconnected"
   },
   "admin.errorAccess": {
-    "source": "操作未获授权。请从服务器的同源页面重试。",
+    "source": "操作未获授权，请从服务器的同源页面重试",
     "translation": "This action is not authorized. Retry from a page on the server’s origin."
   },
   "admin.errorConflict": {
-    "source": "内容已改变。请载入最新版本后重试；你的草稿仍保留。",
+    "source": "内容已改变，请载入最新版本后重试；你的草稿仍保留",
     "translation": "The content has changed. Load the latest version and retry; your draft is preserved."
   },
   "admin.errorDiagnostic": {
@@ -372,15 +372,15 @@
     "translation": "{summary}\nOriginal cause: {reason}"
   },
   "admin.errorInvalid": {
-    "source": "请求无法处理。请检查输入和当前版本后重试。",
+    "source": "请求无法处理，请检查输入和当前版本后重试",
     "translation": "The request could not be processed. Check your input and the current version, then retry."
   },
   "admin.errorMissing": {
-    "source": "内容已不存在。请刷新列表后重试。",
+    "source": "内容已不存在，请刷新列表后重试",
     "translation": "The content no longer exists. Refresh the list and retry."
   },
   "admin.errorSize": {
-    "source": "提交内容过大。请减少数据量后重试。",
+    "source": "提交内容过大，请减少数据量后重试",
     "translation": "The submitted content is too large. Reduce its size and retry."
   },
   "admin.errorTruncated": {
@@ -388,7 +388,7 @@
     "translation": " · details kept for the first 1000"
   },
   "admin.errorUnavailable": {
-    "source": "无法完成请求。请检查连接与服务状态后重试。",
+    "source": "无法完成请求，请检查连接与服务状态后重试",
     "translation": "The request could not be completed. Check the connection and service, then retry."
   },
   "admin.expandNavigation": {
@@ -404,11 +404,11 @@
     "translation": "Filter media"
   },
   "admin.framesDescription": {
-    "source": "加快媒体库视频再次打开和定位。支持的 FFmpeg 容器由服务端重建索引；FLV 仍在播放时重建。",
+    "source": "加快媒体库视频再次打开和定位，支持的 FFmpeg 容器由服务端重建索引；FLV 仍在播放时重建",
     "translation": "Open library videos and seek faster. The server rebuilds indexes for supported FFmpeg containers; FLV indexes are rebuilt during playback."
   },
   "admin.framesEmpty": {
-    "source": "打开支持的媒体库视频后，索引会自动保存在这里。",
+    "source": "打开支持的媒体库视频后，索引会自动保存在这里",
     "translation": "Indexes are saved here automatically when you open supported library videos."
   },
   "admin.guestId": {
@@ -484,7 +484,7 @@
     "translation": "Local user"
   },
   "admin.logDeleted": {
-    "source": "日志已从服务器删除。",
+    "source": "日志已从服务器删除",
     "translation": "Log deleted from the server."
   },
   "admin.logDropped": {
@@ -528,11 +528,11 @@
     "translation": "Log receiving is off"
   },
   "admin.logsEmptyHint": {
-    "source": "在播放器的“设置 → 日志”中点击“上传日志”，即可在这里查看。",
+    "source": "在播放器的“设置 → 日志”中点击“上传日志”，即可在这里查看",
     "translation": "In the player, open “Settings → Logs” and click “Upload logs” to see them here."
   },
   "admin.logsNoDir": {
-    "source": "服务器未设置日志接收目录。你仍可在播放器中下载本地日志。",
+    "source": "服务器未设置日志接收目录，你仍可在播放器中下载本地日志",
     "translation": "The server has no log directory configured. You can still download local logs in the player."
   },
   "admin.logsTitle": {
@@ -544,7 +544,7 @@
     "translation": "Marks"
   },
   "admin.measureBusyError": {
-    "source": "已有测速任务。请等待完成，或取消当前任务后重试。",
+    "source": "已有测速任务，请等待完成，或取消当前任务后重试",
     "translation": "A speed test is already running. Wait for it to finish, or cancel the current test and retry."
   },
   "admin.measureCancelled": {
@@ -560,7 +560,7 @@
     "translation": "Failed"
   },
   "admin.measureFinishError": {
-    "source": "当前读取仍在结束。请稍等片刻再提交测量结果。",
+    "source": "当前读取仍在结束，请稍等片刻再提交测量结果",
     "translation": "The current reads are still finishing. Wait a moment before submitting the measurement result."
   },
   "admin.measureFinishing": {
@@ -568,7 +568,7 @@
     "translation": "Finishing, waiting for reads to release"
   },
   "admin.measureMediaError": {
-    "source": "媒体不可读或版本已改变。请重新选择当前可读的非空媒体。",
+    "source": "媒体不可读或版本已改变，请重新选择当前可读的非空媒体",
     "translation": "The media is unreadable or its version has changed. Select a readable, nonempty media file again."
   },
   "admin.measurePreparing": {
@@ -596,7 +596,7 @@
     "translation": "Move to trash"
   },
   "admin.nameSaved": {
-    "source": "名称已保存。",
+    "source": "名称已保存",
     "translation": "Name saved."
   },
   "admin.navCategory": {
@@ -756,7 +756,7 @@
     "translation": "Cancelled by user or connection lost"
   },
   "admin.recentRequests": {
-    "source": "最近 200 条请求，服务重启后清空。",
+    "source": "最近 200 条请求，服务重启后清空",
     "translation": "Recent 200 requests, cleared on restart."
   },
   "admin.refreshCaches": {
@@ -824,7 +824,7 @@
     "translation": "{concurrency} streams · Up to {seconds} seconds · {limit} MiB limit · {date}"
   },
   "admin.resultsHint": {
-    "source": "完成测试后显示速度、传输量和耗时。",
+    "source": "完成测试后显示速度、传输量和耗时",
     "translation": "Speed, volume, and elapsed time appear after a run."
   },
   "admin.resultsTitle": {
@@ -840,7 +840,7 @@
     "translation": "Review space"
   },
   "admin.rootCli": {
-    "source": "当前根目录由 --folder 覆盖，请修改启动参数或改用配置文件。",
+    "source": "当前根目录由 --folder 覆盖，请修改启动参数或改用配置文件",
     "translation": "The current roots are overridden by --folder. Change the startup arguments or use a configuration file."
   },
   "admin.rootDirs": {
@@ -852,7 +852,7 @@
     "translation": "Unsaved"
   },
   "admin.rootExternal": {
-    "source": "配置文件已被外部修改，请重启服务以重新载入。",
+    "source": "配置文件已被外部修改，请重启服务以重新载入",
     "translation": "The configuration file was changed externally. Restart the service to reload it."
   },
   "admin.rootFallback": {
@@ -860,11 +860,11 @@
     "translation": "(root)"
   },
   "admin.rootNoSource": {
-    "source": "此服务未提供可写配置来源。",
+    "source": "此服务未提供可写配置来源",
     "translation": "This service has no writable configuration source."
   },
   "admin.rootPermission": {
-    "source": "配置所在目录不可写，请调整数据目录权限。",
+    "source": "配置所在目录不可写，请调整数据目录权限",
     "translation": "The configuration directory is not writable. Adjust the data directory permissions."
   },
   "admin.rootScanned": {
@@ -896,7 +896,7 @@
     "translation": "Save name"
   },
   "admin.savedAsCopy": {
-    "source": "已另存为当前用户的副本。",
+    "source": "已另存为当前用户的副本",
     "translation": "Saved as your own copy."
   },
   "admin.saving": {
@@ -996,7 +996,7 @@
     "translation": "Select a workspace to view"
   },
   "admin.serverChanged": {
-    "source": "服务器内容已改变，未覆盖任何修改。",
+    "source": "服务器内容已改变，未覆盖任何修改",
     "translation": "Server content changed; nothing was overwritten."
   },
   "admin.serverPath": {
@@ -1016,7 +1016,7 @@
     "translation": "Service"
   },
   "admin.sharedDb": {
-    "source": "与业务数据共用数据库。清理后空间可复用，文件不一定缩小。",
+    "source": "与业务数据共用数据库，清理后空间可复用，文件不一定缩小",
     "translation": "Shares the database with operational data. Space is reusable after cleanup; the file may not shrink."
   },
   "admin.sourceRandom": {
@@ -1116,11 +1116,11 @@
     "translation": "Trash"
   },
   "admin.tryKeywords": {
-    "source": "换个关键词试试。",
+    "source": "换个关键词试试",
     "translation": "Try other keywords."
   },
   "admin.tryOtherNames": {
-    "source": "试试其他名称，或清空搜索。",
+    "source": "试试其他名称，或清空搜索",
     "translation": "Try other names, or clear the search."
   },
   "admin.unknownUser": {
@@ -1184,11 +1184,11 @@
     "translation": "Creator"
   },
   "admin.wsDeleted": {
-    "source": "已删除服务器工作区。",
+    "source": "已删除服务器工作区",
     "translation": "Server workspace deleted."
   },
   "admin.wsEmptyHint": {
-    "source": "在播放器的“设置 → 工作区”中点击“保存到服务器”，即可在这里打开和管理。",
+    "source": "在播放器的“设置 → 工作区”中点击“保存到服务器”，即可在这里打开和管理",
     "translation": "In the player, open “Settings → Workspaces” and click “Save to server” to manage them here."
   },
   "admin.wsJson": {
@@ -1228,19 +1228,19 @@
     "translation": "List view"
   },
   "adminLibrary.moveIndexPending": {
-    "source": "文件操作已完成，目录索引尚未刷新，请重新扫描。",
+    "source": "文件操作已完成，目录索引尚未刷新，请重新扫描",
     "translation": "The file operation is complete, but the directory index has not refreshed. Please scan again."
   },
   "adminLibrary.moveLimit": {
-    "source": "每次最多移动 100 个项目。",
+    "source": "每次最多移动 100 个项目",
     "translation": "Move up to 100 items at a time."
   },
   "adminLibrary.movePartial": {
-    "source": "已移动 {moved} 项，{failed} 项失败。",
+    "source": "已移动 {moved} 项，{failed} 项失败",
     "translation": "Moved {moved} items; {failed} failed."
   },
   "adminLibrary.moveUnknown": {
-    "source": "移动结果未确认，正在刷新目录，请核对后再操作。",
+    "source": "移动结果未确认，正在刷新目录，请核对后再操作",
     "translation": "The move result is unconfirmed. Refreshing the directory; check the files before trying again."
   },
   "adminLibrary.movedItems": {
@@ -1260,9 +1260,8 @@
     "translation": "Bitrate"
   },
   "analysis.bitrateLegendHint": {
-    "source": "码率 · 实线；点击切换，右键或长按单选，再次操作恢复。",
-    "translation": "Bitrate · solid line; click to toggle, right-click or hold to solo, repeat to restore.",
-    "needsReview": false
+    "source": "码率 · 实线；点击切换，右键或长按单选，再次操作恢复",
+    "translation": "Bitrate · solid line; click to toggle, right-click or hold to solo, repeat to restore."
   },
   "analysis.bitrateWindow": {
     "source": "码率窗口",
@@ -1277,11 +1276,11 @@
     "translation": "Frames in bin"
   },
   "analysis.canvasLabel": {
-    "source": "码流分析图：码率曲线与帧大小柱。方向键移动检查位置，回车定位，Escape 退出检查。",
+    "source": "码流分析图：码率曲线与帧大小柱，方向键移动检查位置，回车定位，Escape 退出检查",
     "translation": "Bitstream plot: bitrate curve and frame-size bars. Arrow keys move the inspection point, Enter seeks, Escape exits inspection."
   },
   "analysis.chooseCharts": {
-    "source": "选择要显示的图表。",
+    "source": "选择要显示的图表",
     "translation": "Choose the charts to display."
   },
   "analysis.codedFrame": {
@@ -1309,7 +1308,7 @@
     "translation": "{count} units"
   },
   "analysis.containerNaluHint": {
-    "source": "不计入逐帧 NALU 和帧大小。",
+    "source": "不计入逐帧 NALU 和帧大小",
     "translation": "Excluded from frame NALU and frame size totals."
   },
   "analysis.containerOrigin": {
@@ -1325,7 +1324,7 @@
     "translation": "Current on-screen frame numbers: no video loaded"
   },
   "analysis.decodeBitrateWindowHint": {
-    "source": "码率：按解码时间窗口统计压缩样本负载，不表示网络吞吐。",
+    "source": "码率：按解码时间窗口统计压缩样本负载，不表示网络吞吐",
     "translation": "Bitrate: compressed sample payload within a decode-time window; not network throughput."
   },
   "analysis.decodingTime": {
@@ -1337,24 +1336,23 @@
     "translation": "{start}–{end} · {count} frames · {values}"
   },
   "analysis.diagramDetailEvicted": {
-    "source": "当前范围保留了汇总；重新检查可恢复逐帧细节。",
+    "source": "当前范围保留了汇总；重新检查可恢复逐帧细节",
     "translation": "This range retains summaries; check again to restore per-frame details."
   },
   "analysis.diagramNoTrack": {
-    "source": "先载入一条视频轨道。",
+    "source": "先载入一条视频轨道",
     "translation": "Load a video track first."
   },
   "analysis.diagramReferencesUnsupported": {
-    "source": "这些帧没有可用的参考记录。需要支持参考列表的分析内核。",
+    "source": "这些帧没有可用的参考记录，需要支持参考列表的分析内核",
     "translation": "These pictures have no usable reference records. A core supporting reference lists is required."
   },
   "analysis.diagramSoloHint": {
-    "source": "点击切换；右键或长按单选，再次操作同一图表恢复之前的选择。",
-    "translation": "Click to toggle; right-click or long-press to show only this chart. Repeat on the same chart to restore your previous selection.",
-    "needsReview": false
+    "source": "点击切换；右键或长按单选，再次操作同一图表恢复之前的选择",
+    "translation": "Click to toggle; right-click or long-press to show only this chart. Repeat on the same chart to restore your previous selection."
   },
   "analysis.diagramUnanalyzed": {
-    "source": "此范围尚未收到检查结果。",
+    "source": "此范围尚未收到检查结果",
     "translation": "No inspection results received for this range yet."
   },
   "analysis.diagrams": {
@@ -1374,11 +1372,11 @@
     "translation": "Track {slot} {axis} frame number; activate to edit"
   },
   "analysis.emptyAllHidden": {
-    "source": "已全部隐藏，请在工具条中选择要对比的轨道。",
+    "source": "已全部隐藏，请在工具条中选择要对比的轨道",
     "translation": "All hidden; pick tracks to compare in the toolbar."
   },
   "analysis.emptyNoVideo": {
-    "source": "尚未载入视频。载入后可在此检查码率与帧大小走向。",
+    "source": "尚未载入视频，载入后可在此检查码率与帧大小走向",
     "translation": "No video loaded yet. Load one to inspect bitrate and frame-size trends here."
   },
   "analysis.emptyQuerying": {
@@ -1390,7 +1388,7 @@
     "translation": "Type the {axis} frame number of track {slot}, then press Enter to seek"
   },
   "analysis.frameNumberMustBeNonNegativeInteger": {
-    "source": "帧号必须是非负整数。",
+    "source": "帧号必须是非负整数",
     "translation": "The frame number must be a non-negative integer."
   },
   "analysis.frameRate": {
@@ -1454,7 +1452,7 @@
     "translation": "Hide track {slot}"
   },
   "analysis.hoverDetailMissing": {
-    "source": "此时间没有逐帧检查记录。",
+    "source": "此时间没有逐帧检查记录",
     "translation": "No per-frame inspection record at this time."
   },
   "analysis.indexFailed": {
@@ -1470,7 +1468,7 @@
     "translation": "Inferred layer"
   },
   "analysis.inferredLayerHint": {
-    "source": "按相邻 I/P 锚帧间的局部参考关系推断，不代表码流标记的时间层。* 表示参考信息不完整。",
+    "source": "按相邻 I/P 锚帧间的局部参考关系推断，不代表码流标记的时间层，* 表示参考信息不完整",
     "translation": "Inferred from local references between consecutive I/P anchors, not a signaled temporal layer. * indicates incomplete reference information."
   },
   "analysis.inferredLayerPartial": {
@@ -1478,7 +1476,7 @@
     "translation": "Inferred layer (incomplete references)"
   },
   "analysis.invalidRange": {
-    "source": "请输入片源范围内的起止时间，结束时间须晚于起始时间。",
+    "source": "请输入片源范围内的起止时间，结束时间须晚于起始时间",
     "translation": "Enter times within the source range, with the end after the start."
   },
   "analysis.layoutMerged": {
@@ -1499,7 +1497,7 @@
     "translation": "Mean per frame · KiB"
   },
   "analysis.missingDts": {
-    "source": "所选轨道缺少可靠 DTS，无法按解码时间显示。",
+    "source": "所选轨道缺少可靠 DTS，无法按解码时间显示",
     "translation": "The selected tracks lack reliable DTS and cannot be displayed by decode time."
   },
   "analysis.multiTrackLayout": {
@@ -1507,7 +1505,7 @@
     "translation": "Multi-track layout"
   },
   "analysis.multiTrackLayoutTitle": {
-    "source": "只影响码率和帧大小；NALU 与帧参考始终按轨道分开显示。",
+    "source": "只影响码率和帧大小；NALU 与帧参考始终按轨道分开显示",
     "translation": "Applies only to bitrate and frame size. NALU and frame references always use separate tracks."
   },
   "analysis.naluCountUnit": {
@@ -1519,15 +1517,15 @@
     "translation": "All"
   },
   "analysis.naluFilterEmpty": {
-    "source": "没有选中 NALU 类型。点击图例或“全部”恢复显示。",
+    "source": "没有选中 NALU 类型，点击图例或“全部”恢复显示",
     "translation": "No NALU types selected. Click a legend item or “All” to show them again."
   },
   "analysis.naluLegend": {
-    "source": "横轴为时间 · 大小不含长度前缀 · 点击图例筛选，点击帧定位。",
+    "source": "横轴为时间 · 大小不含长度前缀 · 点击图例筛选，点击帧定位",
     "translation": "Horizontal axis: time · Sizes exclude length prefixes · Click legend to filter, click frame to seek."
   },
   "analysis.naluOverview": {
-    "source": "汇总：每个时间段按选中类型显示平均帧大小与类型分布 · 放大查看逐帧细节。",
+    "source": "汇总：每个时间段按选中类型显示平均帧大小与类型分布 · 放大查看逐帧细节",
     "translation": "Summary: average frame size by selected type and type distribution per time interval · Zoom in for individual frames."
   },
   "analysis.naluSelected": {
@@ -1539,16 +1537,15 @@
     "translation": "NALU size"
   },
   "analysis.naluSizeCanvas": {
-    "source": "NALU 大小图。横轴为整片时间；放大查看逐帧大小。点击图例筛选类型，方向键选择，回车查看。",
+    "source": "NALU 大小图，横轴为整片时间，放大可查看逐帧大小；点击图例筛选类型，方向键选择，回车查看",
     "translation": "NALU size chart. Horizontal axis: whole-source time; zoom in for per-frame sizes. Click legend to filter, arrow keys to select and Enter to inspect."
   },
   "analysis.naluSoloHint": {
-    "source": "点击切换筛选；右键或长按单选，再次操作恢复全部。",
-    "translation": "Click to toggle filtering; right-click or long-press to show only this type, then repeat to restore all.",
-    "needsReview": false
+    "source": "点击切换筛选；右键或长按单选，再次操作恢复全部",
+    "translation": "Click to toggle filtering; right-click or long-press to show only this type, then repeat to restore all."
   },
   "analysis.naluTypeCanvas": {
-    "source": "NALU 类型图。横轴为整片时间；放大查看逐帧类型。点击图例筛选类型，方向键选择，回车查看。",
+    "source": "NALU 类型图，横轴为整片时间，放大可查看逐帧类型；点击图例筛选类型，方向键选择，回车查看",
     "translation": "NALU type chart. Horizontal axis: whole-source time; zoom in for per-frame types. Click legend to filter, arrow keys to select and Enter to inspect."
   },
   "analysis.naluTypes": {
@@ -1556,11 +1553,11 @@
     "translation": "NALU types"
   },
   "analysis.noLocatablePeak": {
-    "source": "轨道 {slot}：该区间没有可定位的峰值样本。",
+    "source": "轨道 {slot}：该区间没有可定位的峰值样本",
     "translation": "Track {slot}: no locatable peak sample in this range."
   },
   "analysis.noSampleAtTime": {
-    "source": "轨道 {slot} 在该时间无可定位样本。",
+    "source": "轨道 {slot} 在该时间无可定位样本",
     "translation": "Track {slot} has no locatable sample at this time."
   },
   "analysis.noVideoYet": {
@@ -1580,7 +1577,7 @@
     "translation": "Pause analysis for track {slot}"
   },
   "analysis.peakSeekFailed": {
-    "source": "轨道 {slot}：峰值样本定位失败。",
+    "source": "轨道 {slot}：峰值样本定位失败",
     "translation": "Track {slot}: peak sample seek failed."
   },
   "analysis.pinnedSuffix": {
@@ -1592,7 +1589,7 @@
     "translation": "Presentation load"
   },
   "analysis.presentationLoadWindowHint": {
-    "source": "展示负载率：按展示时间窗口统计帧的压缩字节量，不表示网络吞吐。",
+    "source": "展示负载率：按展示时间窗口统计帧的压缩字节量，不表示网络吞吐",
     "translation": "Presentation load: compressed frame bytes within a presentation-time window; not network throughput."
   },
   "analysis.presentationTime": {
@@ -1608,9 +1605,8 @@
     "translation": "PTS order"
   },
   "analysis.qpLegendHint": {
-    "source": "平均亮度 QP · 虚线；点击切换，右键或长按单选，再次操作恢复。",
-    "translation": "Mean luma QP · dashed line; click to toggle, right-click or hold to solo, repeat to restore.",
-    "needsReview": false
+    "source": "平均亮度 QP · 虚线；点击切换，右键或长按单选，再次操作恢复",
+    "translation": "Mean luma QP · dashed line; click to toggle, right-click or hold to solo, repeat to restore."
   },
   "analysis.qpPending": {
     "source": "QP 分析中…",
@@ -1639,11 +1635,11 @@
     "translation": "Start time"
   },
   "analysis.referenceCanvas": {
-    "source": "帧参考关系图。横轴为整片时间；总览显示帧类型分布，放大后显示参考金字塔和连线。方向键选择，回车查看。",
+    "source": "帧参考关系图，横轴为整片时间，总览显示帧类型分布，放大后显示参考金字塔和连线；方向键选择，回车查看",
     "translation": "Frame reference chart. Horizontal axis: whole-source time. Overview shows frame types; zoom in for reference pyramids and connections. Arrow keys select, Enter inspects."
   },
   "analysis.referenceLegend": {
-    "source": "L0 实线 · L1 长虚线 · 点线指向视图外参考帧；活动参考列表不表示每个块都使用该参考帧。",
+    "source": "L0 实线 · L1 长虚线 · 点线指向视图外参考帧；活动参考列表不表示每个块都使用该参考帧",
     "translation": "Solid L0 · Long-dashed L1 · Dotted lines lead to offscreen reference frames; active lists do not mean every block uses every reference."
   },
   "analysis.referenceMissing": {
@@ -1651,7 +1647,7 @@
     "translation": "Reference records unavailable"
   },
   "analysis.referenceOverview": {
-    "source": "整片帧类型分布 · 放大查看参考金字塔与 L0 / L1 连线。",
+    "source": "整片帧类型分布 · 放大查看参考金字塔与 L0 / L1 连线",
     "translation": "Whole-source frame type distribution · Zoom in for reference pyramids and L0 / L1 connections."
   },
   "analysis.referencePyramid": {
@@ -1707,11 +1703,11 @@
     "translation": "{slot} completed · {count} frames"
   },
   "analysis.streamEmptyHint": {
-    "source": "正在准备分析，NALU 和帧参考结果会自动显示。",
+    "source": "正在准备分析，NALU 和帧参考结果会自动显示",
     "translation": "Preparing analysis. NALU and frame reference results appear automatically."
   },
   "analysis.streamLiveHint": {
-    "source": "结果会随分析进度逐步显示。",
+    "source": "结果会随分析进度逐步显示",
     "translation": "Results appear progressively as analysis proceeds."
   },
   "analysis.streamNotStarted": {
@@ -1743,7 +1739,7 @@
     "translation": "Temporal layer"
   },
   "analysis.temporalLayerHint": {
-    "source": "层级来自图像 VCL NAL 的 Temporal ID。",
+    "source": "层级来自图像 VCL NAL 的 Temporal ID",
     "translation": "Layer from the picture VCL NAL Temporal ID."
   },
   "analysis.timeBase": {
@@ -1763,7 +1759,7 @@
     "translation": "Track focus {slot}"
   },
   "analysis.trackFocusWithContext": {
-    "source": "轨道焦点 {slot}。{rest}",
+    "source": "轨道焦点 {slot} {rest}",
     "translation": "Track focus {slot}. {rest}"
   },
   "analysis.trackFrameNumber": {
@@ -1775,12 +1771,11 @@
     "translation": "Track {slot}: no on-screen frame"
   },
   "analysis.trackSoloHint": {
-    "source": "右键或长按单选此轨道，再次操作恢复全部。",
-    "translation": "Right-click or long-press to show only this track, then repeat to restore all.",
-    "needsReview": false
+    "source": "右键或长按单选此轨道，再次操作恢复全部",
+    "translation": "Right-click or long-press to show only this track, then repeat to restore all."
   },
   "analysis.trackUnsupported": {
-    "source": "轨道 {slot}：当前片源路径暂不支持码流分析。",
+    "source": "轨道 {slot}：当前片源路径暂不支持码流分析",
     "translation": "Track {slot}: the current media path does not support bitstream analysis."
   },
   "analysis.unknownError": {
@@ -1788,7 +1783,7 @@
     "translation": "Unknown error"
   },
   "analysis.untimedPackets": {
-    "source": "轨道 {slot}：{count} 个包缺少时间戳（{bytes} 字节），无法计入时间轴码率。",
+    "source": "轨道 {slot}：{count} 个包缺少时间戳（{bytes} 字节），无法计入时间轴码率",
     "translation": "Track {slot}: {count} packets have no timestamp ({bytes} bytes) and cannot be included in timeline bitrate."
   },
   "analysis.visibleEnd": {
@@ -1920,7 +1915,7 @@
     "translation": "Teal"
   },
   "bitstream.ambiguousIdentity": {
-    "source": "无法唯一确定源画面，已隐藏精确遮罩。",
+    "source": "无法唯一确定源画面，已隐藏精确遮罩",
     "translation": "The source picture cannot be uniquely identified; the exact overlay is hidden."
   },
   "bitstream.analysisProgress": {
@@ -1941,7 +1936,7 @@
     "translation": "Block boundaries"
   },
   "bitstream.cancelled": {
-    "source": "分析已取消。",
+    "source": "分析已取消",
     "translation": "Analysis cancelled."
   },
   "bitstream.closeOverlay": {
@@ -1963,7 +1958,7 @@
     "needsReview": false
   },
   "bitstream.incompleteReferences": {
-    "source": "参考状态不完整，无法生成精确遮罩。",
+    "source": "参考状态不完整，无法生成精确遮罩",
     "translation": "Incomplete reference state prevents an exact overlay."
   },
   "bitstream.inter": {
@@ -1971,7 +1966,7 @@
     "translation": "Inter"
   },
   "bitstream.internalError": {
-    "source": "分析执行出错，请重试。",
+    "source": "分析执行出错，请重试",
     "translation": "Analysis execution failed; please try again."
   },
   "bitstream.intra": {
@@ -1979,7 +1974,7 @@
     "translation": "Intra"
   },
   "bitstream.invalidRequest": {
-    "source": "分析目标或区间无效。",
+    "source": "分析目标或区间无效",
     "translation": "The analysis target or interval is invalid."
   },
   "bitstream.noFill": {
@@ -1987,7 +1982,7 @@
     "translation": "None"
   },
   "bitstream.noSafeAnchor": {
-    "source": "预滚预算内没有可验证的闭合 IDR 起点。",
+    "source": "预滚预算内没有可验证的闭合 IDR 起点",
     "translation": "No verified closed IDR anchor was found within the preroll budget."
   },
   "bitstream.opacity": {
@@ -2008,7 +2003,7 @@
     "translation": "QP heatmap"
   },
   "bitstream.resourceLimit": {
-    "source": "分析达到资源上限，请缩短区间或选择更近的起点。",
+    "source": "分析达到资源上限，请缩短区间或选择更近的起点",
     "translation": "Analysis reached a resource limit. Shorten the interval or choose a closer anchor."
   },
   "bitstream.showTrackOverlay": {
@@ -2021,23 +2016,23 @@
     "translation": "Skip"
   },
   "bitstream.sourceChanged": {
-    "source": "片源已变更，请重新载入后分析。",
+    "source": "片源已变更，请重新载入后分析",
     "translation": "The source has changed. Reload it before analyzing."
   },
   "bitstream.unsupportedCodec": {
-    "source": "此编码暂不支持码流分析。",
+    "source": "此编码暂不支持码流分析",
     "translation": "This codec is not yet supported for bitstream analysis."
   },
   "bitstream.unsupportedContainer": {
-    "source": "此封装暂不支持分析；首批仅支持普通 MP4。",
+    "source": "此封装暂不支持分析；首批仅支持普通 MP4",
     "translation": "This container is not yet supported for analysis; the initial scope is progressive MP4."
   },
   "bitstream.unsupportedLayout": {
-    "source": "此画面布局或编码工具暂不支持精确遮罩。",
+    "source": "此画面布局或编码工具暂不支持精确遮罩",
     "translation": "This picture layout or coding tool is not yet supported for an exact overlay."
   },
   "bitstream.unsupportedQpDepth": {
-    "source": "此位深的 QP 暂不支持，块和模式仍可查看。",
+    "source": "此位深的 QP 暂不支持，块和模式仍可查看",
     "translation": "QP is not yet supported at this bit depth; blocks and modes remain available."
   },
   "bootstrap.brandDescription": {
@@ -2045,7 +2040,7 @@
     "translation": "· Video comparison"
   },
   "bootstrap.startupFailed": {
-    "source": "页面未能加载。",
+    "source": "页面未能加载",
     "translation": "The page failed to load."
   },
   "bootstrap.startupTitle": {
@@ -2093,7 +2088,7 @@
     "translation": "Decoder information"
   },
   "colorFlow.decoderSessionHint": {
-    "source": "默认使用硬件优先。调整仅在当前页面有效，刷新后恢复硬件优先。",
+    "source": "默认使用硬件优先，调整仅在当前页面有效，刷新后恢复硬件优先",
     "translation": "Hardware preferred is the default. Changes apply only to this page and reset on reload."
   },
   "colorFlow.displayImage": {
@@ -2189,9 +2184,8 @@
     "translation": "Assumed HDR peak"
   },
   "colorOutput.browserPreview": {
-    "source": "浏览器未开放原生 HDR 浮点转换，当前使用 SDR 预览；可切换自有色彩输出 HDR。",
-    "translation": "The browser does not expose native HDR float conversion. Using an SDR preview; select managed color for HDR output.",
-    "needsReview": false
+    "source": "浏览器未开放原生 HDR 浮点转换，当前使用 SDR 预览；可切换自有色彩输出 HDR",
+    "translation": "The browser does not expose native HDR float conversion. Using an SDR preview; select managed color for HDR output."
   },
   "colorOutput.displayTarget": {
     "source": "显示目标",
@@ -2203,7 +2197,7 @@
     "needsReview": false
   },
   "colorOutput.fallbackDescription": {
-    "source": "当前环境使用 SDR 预览；HDR 显示目标已保留。",
+    "source": "当前环境使用 SDR 预览；HDR 显示目标已保留",
     "translation": "This environment uses an SDR preview; the HDR display target is retained."
   },
   "colorOutput.gpuUnavailable": {
@@ -2230,11 +2224,11 @@
     "translation": "Cannot install or find the certificate?"
   },
   "connection.cantInstallBody": {
-    "source": "浏览器不能代替你安装系统证书。请确认已下载 voidplayer-ca.crt；如果设备由组织管理，请联系管理员部署。",
+    "source": "浏览器不能代替你安装系统证书，请确认已下载 voidplayer-ca.crt；如果设备由组织管理，请联系管理员部署",
     "translation": "The browser cannot install a system certificate for you. Make sure voidplayer-ca.crt is downloaded; on a managed device, ask your administrator to deploy it."
   },
   "connection.certReady": {
-    "source": "服务器已配置证书，请向管理员获取与证书匹配的 HTTPS 地址。",
+    "source": "服务器已配置证书，请向管理员获取与证书匹配的 HTTPS 地址",
     "translation": "The server has a certificate. Ask your administrator for the matching HTTPS address."
   },
   "connection.certSettings": {
@@ -2254,11 +2248,11 @@
     "translation": "Connecting · VoidPlayer"
   },
   "connection.contactAdmin": {
-    "source": "请联系管理员开启 HTTPS。",
+    "source": "请联系管理员开启 HTTPS",
     "translation": "Ask your administrator to enable HTTPS."
   },
   "connection.defaultPorts": {
-    "source": "默认 HTTPS 端口为 5180，证书引导页端口为 5181。已启用时，请使用管理员提供的引导地址。",
+    "source": "默认 HTTPS 端口为 5180，证书引导页端口为 5181，已启用时，请使用管理员提供的引导地址",
     "translation": "Default HTTPS port is 5180 and the certificate guide port is 5181. When enabled, use the guide address from your administrator."
   },
   "connection.downloadAgain": {
@@ -2274,7 +2268,7 @@
     "translation": "Downloading…"
   },
   "connection.httpsOff": {
-    "source": "服务器尚未开启 HTTPS。",
+    "source": "服务器尚未开启 HTTPS",
     "translation": "The server has not enabled HTTPS."
   },
   "connection.httpsUnavailable": {
@@ -2286,23 +2280,23 @@
     "translation": "Install and trust"
   },
   "connection.macRich1": {
-    "source": "打开<strong>钥匙串访问</strong>，选中“登录”，通过“文件 → 导入项目”导入下载的证书。",
+    "source": "打开<strong>钥匙串访问</strong>，选中“登录”，通过“文件 → 导入项目”导入下载的证书",
     "translation": "Open <strong>Keychain Access</strong>, select “login”, and import the downloaded certificate using “File → Import Items”."
   },
   "connection.macRich2": {
-    "source": "找到 <strong>VoidPlayer Local CA</strong> 证书，双击打开。",
+    "source": "找到 <strong>VoidPlayer Local CA</strong> 证书，双击打开",
     "translation": "Find the <strong>VoidPlayer Local CA</strong> certificate and double-click it."
   },
   "connection.macRich3": {
-    "source": "展开“信任”，将<strong>安全套接字层（SSL）</strong>设为“始终信任”。",
+    "source": "展开“信任”，将<strong>安全套接字层（SSL）</strong>设为“始终信任”",
     "translation": "Expand “Trust” and set <strong>Secure Sockets Layer (SSL)</strong> to “Always Trust”."
   },
   "connection.macStep4": {
-    "source": "关闭窗口，按系统提示验证身份并保存。",
+    "source": "关闭窗口，按系统提示验证身份并保存",
     "translation": "Close the window, verify your identity when prompted, and save."
   },
   "connection.openPlayerHint": {
-    "source": "安装完成后，点击“打开播放器”重新检查。",
+    "source": "安装完成后，点击“打开播放器”重新检查",
     "translation": "When done, click “Open the player” to recheck."
   },
   "connection.os": {
@@ -2310,7 +2304,7 @@
     "translation": "Operating system"
   },
   "connection.ownCertHint": {
-    "source": "此服务器使用自有证书。若浏览器仍提示证书问题，请联系管理员。",
+    "source": "此服务器使用自有证书，若浏览器仍提示证书问题，请联系管理员",
     "translation": "This server uses its own certificate. If the browser still warns about certificates, contact your administrator."
   },
   "connection.pageTitle": {
@@ -2338,11 +2332,11 @@
     "translation": "Standalone launch example:"
   },
   "connection.untrusted": {
-    "source": "暂时无法建立可信的 HTTPS 连接。安装证书后可重新检查。",
+    "source": "暂时无法建立可信的 HTTPS 连接，安装证书后可重新检查",
     "translation": "Cannot establish a trusted HTTPS connection yet. Recheck after installing the certificate."
   },
   "connection.verifyNote": {
-    "source": "安装前，请与管理员核对服务器地址和证书指纹。",
+    "source": "安装前，请与管理员核对服务器地址和证书指纹",
     "translation": "Before installing, confirm the server address and certificate fingerprint with your administrator."
   },
   "connection.viewFingerprint": {
@@ -2354,7 +2348,7 @@
     "translation": "View the server setup guide"
   },
   "connection.whyBody": {
-    "source": "信任服务器证书后，浏览器可以建立可信的 HTTPS 连接，使用 WebCodecs 原生解码。实际硬件加速取决于浏览器、显卡和视频格式。",
+    "source": "信任服务器证书后，浏览器可以建立可信的 HTTPS 连接，使用 WebCodecs 原生解码，实际硬件加速取决于浏览器、显卡和视频格式",
     "translation": "Once you trust the server certificate, the browser can open a trusted HTTPS connection with native WebCodecs decoding. Actual hardware acceleration depends on the browser, GPU, and video format."
   },
   "connection.whyTitle": {
@@ -2362,23 +2356,23 @@
     "translation": "Why is a certificate needed?"
   },
   "connection.winRich1": {
-    "source": "双击下载的证书，选择<strong>安装证书</strong>。",
+    "source": "双击下载的证书，选择<strong>安装证书</strong>",
     "translation": "Double-click the downloaded certificate and select <strong>Install Certificate</strong>."
   },
   "connection.winRich2": {
-    "source": "选择<strong>当前用户</strong>，点击“下一步”。",
+    "source": "选择<strong>当前用户</strong>，点击“下一步”",
     "translation": "Select <strong>Current User</strong>, then click “Next”."
   },
   "connection.winRich3": {
-    "source": "选择“将所有的证书都放入下列存储”，浏览并选中<strong>受信任的根证书颁发机构</strong>。",
+    "source": "选择“将所有的证书都放入下列存储”，浏览并选中<strong>受信任的根证书颁发机构</strong>",
     "translation": "Select “Place all certificates in the following store”, then browse to <strong>Trusted Root Certification Authorities</strong>."
   },
   "connection.winStep4": {
-    "source": "核对来源与指纹，按系统提示完成导入。",
+    "source": "核对来源与指纹，按系统提示完成导入",
     "translation": "Verify the source and fingerprint, then finish the import as prompted."
   },
   "drawing.changed": {
-    "source": "画面已变化，未将编辑写入其他帧。",
+    "source": "画面已变化，未将编辑写入其他帧",
     "translation": "The frame changed. Edits were not written to a different frame."
   },
   "drawing.enterText": {
@@ -2418,11 +2412,11 @@
     "translation": "Thin · 2 px"
   },
   "error.allTracksDisabled": {
-    "source": "所有轨道均已停用，请重新载入片源。",
+    "source": "所有轨道均已停用，请重新载入片源",
     "translation": "All tracks are disabled. Reload a source."
   },
   "error.changingColorMode": {
-    "source": "正在切换色彩模式。",
+    "source": "正在切换色彩模式",
     "translation": "Switching color mode."
   },
   "error.diagnostic": {
@@ -2430,64 +2424,63 @@
     "translation": "{summary}\n[{code} / {stage}] {reason}"
   },
   "error.duplicateSource": {
-    "source": "该片源已在视图中，不能重复添加。",
+    "source": "该片源已在视图中，不能重复添加",
     "translation": "This source is already in the view and cannot be added again."
   },
   "error.emptyVideoFile": {
-    "source": "请选择非空的视频文件。",
+    "source": "请选择非空的视频文件",
     "translation": "Choose a non-empty video file."
   },
   "error.finishSeekFirst": {
-    "source": "请先完成画面定位。",
+    "source": "请先完成画面定位",
     "translation": "Finish seeking to a frame first."
   },
   "error.loadVideoFirst": {
-    "source": "请先载入视频。",
+    "source": "请先载入视频",
     "translation": "Load a video first."
   },
   "error.noValidFrameForMark": {
-    "source": "当前轨道没有可标注的有效画面，请重新载入停用的片源。",
+    "source": "当前轨道没有可标注的有效画面，请重新载入停用的片源",
     "translation": "The current track has no valid frame to annotate. Reload the disabled source."
   },
   "error.openVideoFirst": {
-    "source": "请先打开视频。",
+    "source": "请先打开视频",
     "translation": "Open a video first."
   },
   "error.pauseBeforeEditMark": {
-    "source": "请暂停并等待画面定位完成后再编辑标注。",
+    "source": "请暂停并等待画面定位完成后再编辑标注",
     "translation": "Pause playback and wait for frame positioning to finish before editing the annotation."
   },
   "error.pauseBeforeMark": {
-    "source": "请暂停并等待画面定位完成后再标注。",
+    "source": "请暂停并等待画面定位完成后再标注",
     "translation": "Pause playback and wait for frame positioning to finish before annotating."
   },
   "error.referenceFormat": {
-    "source": "自有色彩不支持此像素格式或颜色信息。请切换为浏览器色彩后重试。",
+    "source": "自有色彩不支持此像素格式或颜色信息，请切换为浏览器色彩后重试",
     "translation": "Managed color does not support this pixel format or color metadata. Switch to browser color and retry."
   },
   "error.referenceHdr": {
-    "source": "此 HDR 视频未提供可核对的高位深平面。请切换为浏览器色彩后重试。",
-    "translation": "Managed color needs verifiable high-depth HDR planes. Switch to browser color and retry.",
-    "needsReview": false
+    "source": "此 HDR 视频未提供可核对的高位深平面，请切换为浏览器色彩后重试",
+    "translation": "Managed color needs verifiable high-depth HDR planes. Switch to browser color and retry."
   },
   "error.returnToMarkFrame": {
-    "source": "请返回标注对应的画面后再编辑。",
+    "source": "请返回标注对应的画面后再编辑",
     "translation": "Return to the annotated frame before editing."
   },
   "error.trackNotSyncedForMark": {
-    "source": "当前轨道尚未同步，请等待追赶完成或定位后再标注。",
+    "source": "当前轨道尚未同步，请等待追赶完成或定位后再标注",
     "translation": "The current track is not synchronized yet. Wait for it to catch up or seek before annotating."
   },
   "error.waitColorMode": {
-    "source": "请等待色彩模式切换完成。",
+    "source": "请等待色彩模式切换完成",
     "translation": "Wait for the color mode switch to finish."
   },
   "error.waitOperationBeforePlay": {
-    "source": "请等待当前操作完成后再播放。",
+    "source": "请等待当前操作完成后再播放",
     "translation": "Wait for the current operation to finish before playing."
   },
   "error.wasmCoreIncompatible": {
-    "source": "软件解码器资源与播放器版本不匹配，请更新解码器资源并刷新页面后重试。",
+    "source": "软件解码器资源与播放器版本不匹配，请更新解码器资源并刷新页面后重试",
     "translation": "Software decoder assets do not match this player version. Update the decoder assets, refresh the page, and try again."
   },
   "fileAccess.apiName": {
@@ -2495,23 +2488,23 @@
     "translation": "File System Access API"
   },
   "fileAccess.available": {
-    "source": "检测到文件访问接口，可以选择视频验证权限和保存能力。",
+    "source": "检测到文件访问接口，可以选择视频验证权限和保存能力",
     "translation": "File access is available. Select a video to verify permission and handle storage."
   },
   "fileAccess.cancelled": {
-    "source": "已取消选择，可以再次尝试。",
+    "source": "已取消选择，可以再次尝试",
     "translation": "Selection cancelled. You can try again."
   },
   "fileAccess.failed": {
-    "source": "未能取得或保存文件访问权限。请检查浏览器的网站权限后重试。",
+    "source": "未能取得或保存文件访问权限，请检查浏览器的网站权限后重试",
     "translation": "Could not obtain or save file access. Check this site’s browser permissions and try again."
   },
   "fileAccess.help": {
-    "source": "选择一个视频以验证访问权限和本机句柄保存，不会上传或播放。曾拒绝授权时可再次尝试；浏览器未提供此能力时，本地视频仅在本次页面可用，不进入最近打开。",
+    "source": "选择一个视频以验证访问权限和本机句柄保存，不会上传或播放，曾拒绝授权时可再次尝试；浏览器未提供此能力时，本地视频仅在本次页面可用，不进入最近打开",
     "translation": "Select a video to verify file access and local handle storage. It will not be uploaded or played. You can try again after denying access. If the browser does not provide this capability, local videos are available only on this page and do not appear in Recently opened."
   },
   "fileAccess.success": {
-    "source": "已验证文件访问和句柄保存。刷新后仍需浏览器允许读取；曾拒绝时可以重新尝试。",
+    "source": "已验证文件访问和句柄保存，刷新后仍需浏览器允许读取；曾拒绝时可以重新尝试",
     "translation": "File access and handle storage verified. Reopening after a refresh still requires browser permission; you can try again after denying access."
   },
   "fileAccess.title": {
@@ -2523,7 +2516,7 @@
     "translation": "Try enabling"
   },
   "fileAccess.unsupported": {
-    "source": "当前浏览器未提供持久文件访问能力。本地视频按一次性文件打开。",
+    "source": "当前浏览器未提供持久文件访问能力，本地视频按一次性文件打开",
     "translation": "This browser does not provide persistent file access. Local videos are opened for this page only."
   },
   "fileDrop.release": {
@@ -2563,7 +2556,7 @@
     "translation": "The user list is not confirmed yet; continuing matches or creates a user by name"
   },
   "identity.usersLoadFailed": {
-    "source": "暂时无法读取用户，可直接输入名字继续。",
+    "source": "暂时无法读取用户，可直接输入名字继续",
     "translation": "Cannot load users right now; type a name to continue."
   },
   "identity.welcomeTitle": {
@@ -2615,7 +2608,7 @@
     "translation": "Switch"
   },
   "identitySettings.unableToReadUserList": {
-    "source": "无法读取用户列表。",
+    "source": "无法读取用户列表",
     "translation": "Unable to read user list."
   },
   "identitySettings.unconfirmed": {
@@ -2627,43 +2620,43 @@
     "translation": "{waiting, select, yes {Waiting for index data} other {Building index}} {percent}%{packets, select, none {} other { · {packets} packets}}"
   },
   "input.app": {
-    "source": "「{name}」是应用程序。请选择视频文件。",
+    "source": "「{name}」是应用程序，请选择视频文件",
     "translation": "“{name}” is an application. Choose a video file."
   },
   "input.audio": {
-    "source": "「{name}」是音频文件。请选择含视频轨道的文件。",
+    "source": "「{name}」是音频文件，请选择含视频轨道的文件",
     "translation": "“{name}” is an audio file. Choose a file with a video track."
   },
   "input.disk": {
-    "source": "「{name}」是磁盘映像。请选择视频文件。",
+    "source": "「{name}」是磁盘映像，请选择视频文件",
     "translation": "“{name}” is a disk image. Choose a video file."
   },
   "input.emptyDrop": {
-    "source": "未收到可打开的文件。请直接拖入视频文件。",
+    "source": "未收到可打开的文件，请直接拖入视频文件",
     "translation": "No file could be opened. Drop a video file directly."
   },
   "input.folder": {
-    "source": "「{name}」是文件夹。请打开文件夹，选择其中的视频文件。",
+    "source": "「{name}」是文件夹，请打开文件夹，选择其中的视频文件",
     "translation": "“{name}” is a folder. Open it and choose a video file inside."
   },
   "input.image": {
-    "source": "「{name}」是图片。请选择视频文件。",
+    "source": "「{name}」是图片，请选择视频文件",
     "translation": "“{name}” is an image. Choose a video file."
   },
   "input.skippedFiles": {
-    "source": "已跳过 {count} 个无法作为视频打开的项目（包括「{name}」）。请选择视频文件。",
+    "source": "已跳过 {count} 个无法作为视频打开的项目（包括「{name}」），请选择视频文件",
     "translation": "Skipped {count} items that could not be opened as videos, including “{name}”. Choose a video file."
   },
   "input.unreadable": {
-    "source": "无法读取「{name}」。请重新选择可访问的视频文件。",
+    "source": "无法读取「{name}」，请重新选择可访问的视频文件",
     "translation": "Could not read “{name}”. Choose a video file you can access."
   },
   "input.unsupported": {
-    "source": "无法将「{name}」作为视频打开。请选择支持的视频文件，例如 MP4、MOV 或 MKV。",
+    "source": "无法将「{name}」作为视频打开，请选择支持的视频文件，例如 MP4、MOV 或 MKV",
     "translation": "Could not open “{name}” as a video. Choose a supported video file, such as MP4, MOV or MKV."
   },
   "input.workspace": {
-    "source": "「{name}」不是可读取的 VoidPlayer 工作区文件。请选择视频或已导出的工作区。",
+    "source": "「{name}」不是可读取的 VoidPlayer 工作区文件，请选择视频或已导出的工作区",
     "translation": "“{name}” is not a readable VoidPlayer workspace. Choose a video or an exported workspace."
   },
   "language.label": {
@@ -2671,7 +2664,7 @@
     "translation": "Language"
   },
   "language.loadFailed": {
-    "source": "语言包未能加载，请重试。",
+    "source": "语言包未能加载，请重试",
     "translation": "Unable to load this language. Please retry."
   },
   "language.system": {
@@ -2719,7 +2712,7 @@
     "translation": "Search in {scope}"
   },
   "libraryBrowser.unknownLibrary": {
-    "source": "此媒体库在当前服务中不存在。",
+    "source": "此媒体库在当前服务中不存在",
     "translation": "This library does not exist on the current service."
   },
   "libraryColumns.loading": {
@@ -2735,7 +2728,7 @@
     "translation": "Scroll columns horizontally"
   },
   "libraryColumns.unavailable": {
-    "source": "无法读取目录，请稍后重试。",
+    "source": "无法读取目录，请稍后重试",
     "translation": "Unable to read directory. Try again shortly."
   },
   "libraryFileMenu.copied": {
@@ -2763,31 +2756,31 @@
     "translation": "Unable to get the absolute file path"
   },
   "libraryLink.incompletePath": {
-    "source": "媒体库路径不完整。",
+    "source": "媒体库路径不完整",
     "translation": "Incomplete library path."
   },
   "libraryLink.invalidDirectory": {
-    "source": "媒体库目录无效。",
+    "source": "媒体库目录无效",
     "translation": "Invalid library directory."
   },
   "libraryLink.invalidFile": {
-    "source": "媒体库文件链接无效。",
+    "source": "媒体库文件链接无效",
     "translation": "Invalid library file link."
   },
   "libraryLink.invalidRoot": {
-    "source": "媒体库标识无效。",
+    "source": "媒体库标识无效",
     "translation": "Invalid library identifier."
   },
   "libraryLink.notLocationLink": {
-    "source": "这不是媒体库位置链接。",
+    "source": "这不是媒体库位置链接",
     "translation": "This is not a library location link."
   },
   "libraryLink.otherService": {
-    "source": "链接来自另一个媒体服务，请在浏览器中打开该链接。",
+    "source": "链接来自另一个媒体服务，请在浏览器中打开该链接",
     "translation": "This link belongs to another media service. Open it in a browser."
   },
   "libraryLink.pasteLink": {
-    "source": "请粘贴复制的媒体库链接。",
+    "source": "请粘贴复制的媒体库链接",
     "translation": "Paste a copied library link."
   },
   "logPanel.aboutLogs": {
@@ -2795,7 +2788,7 @@
     "translation": "About logs"
   },
   "logPanel.copyFailedDownloadLogsToSaveThe": {
-    "source": "复制失败，请使用下载日志保存完整内容。",
+    "source": "复制失败，请使用下载日志保存完整内容",
     "translation": "Copy failed. Download logs to save the full contents."
   },
   "logPanel.copyLogs": {
@@ -2815,7 +2808,7 @@
     "translation": "Download logs"
   },
   "logPanel.downloadStarted": {
-    "source": "下载已开始。",
+    "source": "下载已开始",
     "translation": "Download started."
   },
   "logPanel.history": {
@@ -2823,7 +2816,7 @@
     "translation": "History"
   },
   "logPanel.keepsTheLast3SessionsLocallyFor": {
-    "source": "本机保留最近 3 次会话最长 7 天。",
+    "source": "本机保留最近 3 次会话最长 7 天",
     "translation": "Keeps the last 3 sessions locally for up to 7 days."
   },
   "logPanel.localLogs": {
@@ -2831,7 +2824,7 @@
     "translation": "Local logs"
   },
   "logPanel.localSavingFailedDownloadABackupOf": {
-    "source": "本地保存失败，请下载日志备份。",
+    "source": "本地保存失败，请下载日志备份",
     "translation": "Local saving failed. Download a backup of your logs."
   },
   "logPanel.logContents": {
@@ -2847,11 +2840,11 @@
     "translation": "Log session"
   },
   "logPanel.logsCopied": {
-    "source": "日志已复制。",
+    "source": "日志已复制",
     "translation": "Logs copied."
   },
   "logPanel.logsIncludeDeviceInformationFilenamesActionsAnd": {
-    "source": "日志包含设备信息、文件名、操作记录及你填写的问题描述不含视频或标注正文。",
+    "source": "日志包含设备信息、文件名、操作记录及你填写的问题描述不含视频或标注正文",
     "translation": "Logs include device information, filenames, actions and your problem description, but no video or annotation text."
   },
   "logPanel.logsUploadedFilenameCopied": {
@@ -2891,11 +2884,11 @@
     "translation": "Send logs"
   },
   "logPanel.sentToTheCurrentServerOnlyWhen": {
-    "source": "仅点击“发送日志”后才发送到当前服务器。",
+    "source": "仅点击“发送日志”后才发送到当前服务器",
     "translation": "Sent to the current server only when you click “Send logs”."
   },
   "logPanel.unableToConnectToThisServerRetry": {
-    "source": "无法连接当前服务器，请重试或下载日志。",
+    "source": "无法连接当前服务器，请重试或下载日志",
     "translation": "Unable to connect to this server. Retry or download logs."
   },
   "logPanel.unableToReadLogHistory": {
@@ -2911,7 +2904,7 @@
     "translation": "Upload logs"
   },
   "logPanel.youCanDownloadLogsInstead": {
-    "source": "，可改用下载日志。",
+    "source": "，可改用下载日志",
     "translation": "; you can download logs instead."
   },
   "marks.addHint": {
@@ -3051,11 +3044,11 @@
     "translation": "Allow visible annotations on the current paused frame"
   },
   "pageBridge.changed": {
-    "source": "身份或工作区来源已改变，请重新明确授权。",
+    "source": "身份或工作区来源已改变，请重新明确授权",
     "translation": "Identity or workspace sources changed. Explicitly authorize again."
   },
   "pageBridge.claim": {
-    "source": "客户端名称为自行声明，并非认证身份。仅授权此页面及当前工作区，不跟随其他标签。",
+    "source": "客户端名称为自行声明，并非认证身份，仅授权此页面及当前工作区，不跟随其他标签",
     "translation": "The client name is self-declared, not an authenticated identity. Authorize only this page and workspace; other tabs are never followed."
   },
   "pageBridge.clientLabel": {
@@ -3067,11 +3060,11 @@
     "translation": "Explicitly connect this page"
   },
   "pageBridge.connectFailed": {
-    "source": "未能确认连接。请检查客户端及目标页面；不会自动重连或跟随其他标签。",
+    "source": "未能确认连接，请检查客户端及目标页面；不会自动重连或跟随其他标签",
     "translation": "Connection could not be confirmed. Check the client and target page; no automatic reconnect or tab following occurs."
   },
   "pageBridge.connected": {
-    "source": "已连接此页面。关闭设置后授权仍有效，可在此撤销。",
+    "source": "已连接此页面，关闭设置后授权仍有效，可在此撤销",
     "translation": "This page is connected. The grant stays active after closing Settings. Revoke it here at any time."
   },
   "pageBridge.empty": {
@@ -3079,27 +3072,27 @@
     "translation": "Empty workspace"
   },
   "pageBridge.invalid": {
-    "source": "收到不符合授权范围的命令，连接已撤销。",
+    "source": "收到不符合授权范围的命令，连接已撤销",
     "translation": "A command exceeded the granted scope. Connection revoked."
   },
   "pageBridge.large": {
-    "source": "结果超过通道预算，写入结果可能未知；请保留原 correlation，勿自动重试。",
+    "source": "结果超过通道预算，写入结果可能未知；请保留原 correlation，勿自动重试",
     "translation": "The result exceeded the channel budget. A write may have an unknown outcome; retain its original correlation and never retry automatically."
   },
   "pageBridge.lifetime": {
-    "source": "授权仅存于当前进程和页面内存。撤销、重载、关页或断线即失效；已经开始的操作可能完成，取消不表示回滚，未知写入不得自动重试。",
+    "source": "授权仅存于当前进程和页面内存，撤销、重载、关页或断线即失效；已经开始的操作可能完成，取消不表示回滚，未知写入不得自动重试",
     "translation": "Authorization exists only in process and page memory. Revoke, reload, close or disconnect invalidates it. Started operations may still complete; cancellation is not rollback. Never automatically retry unknown writes."
   },
   "pageBridge.lost": {
-    "source": "通道已断开；已派发写入的结果可能未知，不会自动重放。",
+    "source": "通道已断开；已派发写入的结果可能未知，不会自动重放",
     "translation": "Channel disconnected. Dispatched writes may have unknown outcomes and are never automatically replayed."
   },
   "pageBridge.noClient": {
-    "source": "MCP 客户端尚未初始化。",
+    "source": "MCP 客户端尚未初始化",
     "translation": "The MCP client has not initialized."
   },
   "pageBridge.pairCleared": {
-    "source": "已清除配对。请输入新的一次性信息，并重新选择权限。",
+    "source": "已清除配对，请输入新的一次性信息，并重新选择权限",
     "translation": "Pairing cleared. Enter fresh one-time information and select permissions again."
   },
   "pageBridge.pairCode": {
@@ -3107,7 +3100,7 @@
     "translation": "One-time pairing information"
   },
   "pageBridge.pairExpired": {
-    "source": "临时授权已到期。",
+    "source": "临时授权已到期",
     "translation": "Temporary authorization expired."
   },
   "pageBridge.pairReset": {
@@ -3119,11 +3112,11 @@
     "translation": "Review pairing"
   },
   "pageBridge.pairReviewTarget": {
-    "source": "请核对此页面：{page}。配对信息已单次消费。临时授权最晚于 {expiry} 到期。",
+    "source": "请核对此页面：{page}；配对信息已单次消费，临时授权最晚于 {expiry} 到期",
     "translation": "Review exact page: {page}. Pairing consumed once. Temporary authorization expires by {expiry}."
   },
   "pageBridge.pairUnavailable": {
-    "source": "配对不可用：信息不符、已到期、已消费或客户端尚未就绪。请发起新请求，页面数据尚未分享。",
+    "source": "配对不可用：信息不符、已到期、已消费或客户端尚未就绪，请发起新请求，页面数据尚未分享",
     "translation": "Pairing unavailable: incorrect, expired, consumed, or client not ready. Start a new request; no page data was shared."
   },
   "pageBridge.read": {
@@ -3135,7 +3128,7 @@
     "translation": "Revoke connection"
   },
   "pageBridge.revoked": {
-    "source": "已撤销；已开始的操作可能仍会完成。重新连接必须再次确认。",
+    "source": "已撤销；已开始的操作可能仍会完成，重新连接必须再次确认",
     "translation": "Revoked. Started operations may still complete. Reconnection requires explicit consent again."
   },
   "pageBridge.scopes": {
@@ -3151,7 +3144,7 @@
     "translation": "Temporary local MCP connection"
   },
   "pageBridge.unavailable": {
-    "source": "本机桥进程不可用；普通 HTTP 后台任务不受页面连接影响。",
+    "source": "本机桥进程不可用；普通 HTTP 后台任务不受页面连接影响",
     "translation": "Local bridge process unavailable. Ordinary HTTP background jobs do not depend on this page connection."
   },
   "pageBridge.view": {
@@ -3203,11 +3196,11 @@
     "translation": " (fallback)"
   },
   "player.fallsBackToSoftwareIfFirstFrame": {
-    "source": "首帧核对失败则改用软件解码；读回帧有额外开销。",
+    "source": "首帧核对失败则改用软件解码；读回帧有额外开销",
     "translation": "Falls back to software if first-frame verification fails; reading frames back adds overhead."
   },
   "player.fileImportWasSupersededByANewer": {
-    "source": "文件导入已被新的请求取代。",
+    "source": "文件导入已被新的请求取代",
     "translation": "File import was superseded by a newer request."
   },
   "player.fillView": {
@@ -3219,7 +3212,7 @@
     "translation": "{count, plural, one {# frame} other {# frames}}"
   },
   "player.graphicsRecoveryFailed": {
-    "source": "画面恢复失败，请刷新页面；若仍无画面，请完全退出并重新打开浏览器。",
+    "source": "画面恢复失败，请刷新页面；若仍无画面，请完全退出并重新打开浏览器",
     "translation": "The picture could not be restored. Refresh the page; if it is still missing, fully exit and reopen the browser."
   },
   "player.hdrDisplay": {
@@ -3245,7 +3238,7 @@
     "translation": " · Index failed"
   },
   "player.invalidAnnotationAddress": {
-    "source": "标注地址无效。",
+    "source": "标注地址无效",
     "translation": "Invalid annotation address."
   },
   "player.lastSeekMs": {
@@ -3253,11 +3246,11 @@
     "translation": "Last seek {p0} ms"
   },
   "player.mixingSoftwareAndNativeFramesInBrowser": {
-    "source": "浏览器色彩下软件帧与原生帧混合上屏，色彩可能不准，建议切换色彩模式。",
+    "source": "浏览器色彩下软件帧与原生帧混合上屏，色彩可能不准，建议切换色彩模式",
     "translation": "Mixing software and native frames in Browser color may produce inconsistent colors. Consider switching color modes."
   },
   "player.noReadableFrameInThisTrack": {
-    "source": "轨道没有可读取的画面。",
+    "source": "轨道没有可读取的画面",
     "translation": "No readable frame in this track."
   },
   "player.notLoaded": {
@@ -3269,7 +3262,7 @@
     "translation": "Open color settings"
   },
   "player.openOneWorkspaceFileAtATime": {
-    "source": "每次请打开一个工作区文件。",
+    "source": "每次请打开一个工作区文件",
     "translation": "Open one workspace file at a time."
   },
   "player.pause": {
@@ -3285,7 +3278,7 @@
     "translation": "Playing · Muted"
   },
   "player.preservesOriginalFramePrecisionWithConsistentConversion": {
-    "source": "保留原始帧精度，按统一规则转换；HDR 使用明确参数映射。",
+    "source": "保留原始帧精度，按统一规则转换；HDR 使用明确参数映射",
     "translation": "Preserves source precision with a shared transform. HDR uses explicit mapping parameters."
   },
   "player.rawPlanes": {
@@ -3301,7 +3294,7 @@
     "translation": "Show all tracks separately"
   },
   "player.softwareFallbackIsAnApproximationColorsMay": {
-    "source": "软件回退仅近似匹配，颜色可能与原生帧不同。",
+    "source": "软件回退仅近似匹配，颜色可能与原生帧不同",
     "translation": "Software fallback is an approximation; colors may differ from native frames."
   },
   "player.sourceTimestampSFrameDurationS": {
@@ -3313,19 +3306,19 @@
     "translation": "Switch to horizontal layout"
   },
   "player.switchToManagedColorInColorDecoding": {
-    "source": "请先在“色彩与解码”中切换为“自有色彩”，再选择 YUV 通道。",
+    "source": "请先在“色彩与解码”中切换为“自有色彩”，再选择 YUV 通道",
     "translation": "Switch to Managed color in Color & decoding before choosing a YUV channel."
   },
   "player.thisAnnotationIsInTheRecycleBin": {
-    "source": "这条标注已在回收站。",
+    "source": "这条标注已在回收站",
     "translation": "This annotation is in the recycle bin."
   },
   "player.trackDisabledFrameUpdatesHaveStoppedPlease": {
-    "source": "轨道 {p0} 已停用 · 画面已停止更新。{p1} 请重新载入此片源。",
+    "source": "轨道 {p0} 已停用 · 画面已停止更新（{p1}），请重新载入此片源",
     "translation": "Track {p0} disabled · Frame updates have stopped. {p1} Please reload this source."
   },
   "player.trackFrameNotSynchronizedOtherTracksContinue": {
-    "source": "轨道 {p0} {p1} · 当前画面暂未同步，其他轨道继续播放。",
+    "source": "轨道 {p0} {p1} · 当前画面暂未同步，其他轨道继续播放",
     "translation": "Track {p0}: {p1} · Frame not synchronized; other tracks continue playing."
   },
   "player.tracks": {
@@ -3417,11 +3410,11 @@
     "translation": "Seeking to the current position"
   },
   "pwa.browserInstall": {
-    "source": "请在浏览器菜单中选择安装应用。如果没有此选项，请用桌面 Chrome 或 Edge 打开本页。",
+    "source": "请在浏览器菜单中选择安装应用，若没有此选项，请用桌面 Chrome 或 Edge 打开本页",
     "translation": "Choose the install option in your browser menu. If it is unavailable, open this page in desktop Chrome or Edge."
   },
   "pwa.failed": {
-    "source": "离线资源准备失败，请联网后重试。",
+    "source": "离线资源准备失败，请联网后重试",
     "translation": "Offline setup failed. Reconnect and try again."
   },
   "pwa.install": {
@@ -3433,8 +3426,8 @@
     "translation": "Installed"
   },
   "pwa.iosInstall": {
-    "source": "请选择「分享 → 添加到主屏幕」。",
-    "translation": "Choose Share → Add to Home Screen."
+    "source": "请选择「分享 → 添加到主屏幕」",
+    "translation": "Choose Share → Add to Home Screen"
   },
   "pwa.preparing": {
     "source": "正在下载播放器资源…",
@@ -3445,15 +3438,11 @@
     "translation": "Ready to open local videos offline"
   },
   "pwa.safariInstall": {
-    "source": "请选择「文件 → 添加到程序坞」。",
-    "translation": "Choose File → Add to Dock."
-  },
-  "pwa.safariVisit": {
-    "source": "Safari 通过「文件 → 添加到程序坞」安装。Finder 文件关联需用 Chrome 或 Edge。",
-    "translation": "In Safari, choose File → Add to Dock. For Finder file associations, use Chrome or Edge."
+    "source": "在 Safari 中选「文件 → 添加到程序坞」即可安装；如需在 Finder 的「打开方式」中选择 VoidPlayer，请通过桌面 Chrome 或 Edge 安装",
+    "translation": "In Safari, choose File → Add to Dock to install. To see VoidPlayer in Finder’s Open With menu, install it using desktop Chrome or Edge"
   },
   "pwa.unsupported": {
-    "source": "当前浏览器无法保存离线资源。",
+    "source": "当前浏览器无法保存离线资源",
     "translation": "This browser cannot store offline resources."
   },
   "pwa.webApp": {
@@ -3461,7 +3450,7 @@
     "translation": "Web app"
   },
   "recovery.capacityReached": {
-    "source": "本机恢复记录已达容量上限，请在设置 → 工作区中导出并删除旧记录。当前工作区可手动导出或保存到服务器。",
+    "source": "本机恢复记录已达容量上限，请在设置 → 工作区中导出并删除旧记录，当前工作区可手动导出或保存到服务器",
     "translation": "Local recovery storage has reached its limit. Export and delete old records in Settings → Workspace. You can export the current workspace or save it to the server."
   },
   "recovery.deleteHistory": {
@@ -3477,7 +3466,7 @@
     "translation": "Local recovery records"
   },
   "recovery.historyChanged": {
-    "source": "恢复记录已改变，请刷新列表后重试。",
+    "source": "恢复记录已改变，请刷新列表后重试",
     "translation": "The recovery record changed. Refresh the list and try again."
   },
   "recovery.historyCounts": {
@@ -3489,7 +3478,7 @@
     "translation": "No local recovery records"
   },
   "recovery.readFailed": {
-    "source": "无法读取本机工作区恢复记录，请检查浏览器存储。",
+    "source": "无法读取本机工作区恢复记录，请检查浏览器存储",
     "translation": "Cannot read local workspace recovery. Check browser storage."
   },
   "recovery.recordCount": {
@@ -3501,15 +3490,15 @@
     "translation": "Restore workspace"
   },
   "recovery.restored": {
-    "source": "工作区已恢复。",
+    "source": "工作区已恢复",
     "translation": "Workspace restored."
   },
   "recovery.saveFailed": {
-    "source": "工作区本机自动恢复保存失败，请导出文件或显式保存到服务器。",
+    "source": "工作区本机自动恢复保存失败，请导出文件或显式保存到服务器",
     "translation": "Local recovery saving failed. Export a file or save explicitly to the server."
   },
   "recovery.savingResumed": {
-    "source": "工作区本机自动恢复已恢复保存。",
+    "source": "工作区本机自动恢复已恢复保存",
     "translation": "Local workspace recovery saving has resumed."
   },
   "recovery.storageEstimate": {
@@ -3537,7 +3526,7 @@
     "translation": "Current workspace"
   },
   "savedWorkspaces.emptySaveHint": {
-    "source": "保存当前工作区后，可在这里打开或复制链接。",
+    "source": "保存当前工作区后，可在这里打开或复制链接",
     "translation": "Save the current workspace to open it here or copy its link."
   },
   "savedWorkspaces.guest": {
@@ -3569,7 +3558,7 @@
     "translation": "Search workspace or user name"
   },
   "savedWorkspaces.tryAnotherSearch": {
-    "source": "试试其他工作区名或用户名。",
+    "source": "试试其他工作区名或用户名",
     "translation": "Try another workspace name or user name."
   },
   "savedWorkspaces.untitledWorkspace": {
@@ -3577,7 +3566,7 @@
     "translation": "Untitled workspace"
   },
   "savedWorkspaces.updatedReopen": {
-    "source": "工作区已被更新，请重新打开后继续。",
+    "source": "工作区已被更新，请重新打开后继续",
     "translation": "This workspace has changed. Reopen it to continue."
   },
   "savedWorkspaces.workspaceName": {
@@ -3585,7 +3574,7 @@
     "translation": "Workspace name"
   },
   "savedWorkspaces.workspaceServiceUnavailable": {
-    "source": "工作区服务不可用。",
+    "source": "工作区服务不可用",
     "translation": "Workspace service unavailable."
   },
   "settings.analysisConcurrencyCount": {
@@ -3601,7 +3590,7 @@
     "translation": "Separate cards"
   },
   "settings.unknownSettingsPage": {
-    "source": "未知设置页面。",
+    "source": "未知设置页面",
     "translation": "Unknown settings page."
   },
   "settings.vvcFrameContexts": {
@@ -3613,7 +3602,7 @@
     "translation": "H.266 decode threads"
   },
   "settings.vvcTuningHint": {
-    "source": "留空使用自动配置。修改后重新打开片源。",
+    "source": "留空使用自动配置，修改后重新打开片源",
     "translation": "Leave blank for Auto. Reopen the source after changing these settings."
   },
   "settings.wasmThreadsAuto": {
@@ -3661,7 +3650,7 @@
     "translation": "Bitstream analysis hover panel layout"
   },
   "settingsShell.chartHoverHint": {
-    "source": "各图独立显示在悬浮线旁；合并显示在上面板下方。",
+    "source": "各图独立显示在悬浮线旁；合并显示在上面板下方",
     "translation": "Separate cards appear beside each inspection line; a combined card appears below the top panel."
   },
   "settingsShell.chooseAUserOrRenameYourself": {
@@ -3817,7 +3806,7 @@
     "translation": "Workspace"
   },
   "sharing.addVideo": {
-    "source": "请先添加视频再分享。",
+    "source": "请先添加视频再分享",
     "translation": "Add a video before sharing."
   },
   "sharing.copyLink": {
@@ -4161,7 +4150,7 @@
     "translation": "Tracks"
   },
   "shell.tracksHiddenHint": {
-    "source": "点击轨道旁的眼睛图标，或显示所有轨道以继续查看。",
+    "source": "点击轨道旁的眼睛图标，或显示所有轨道以继续查看",
     "translation": "Click the eye icon next to a track, or show all tracks to continue viewing."
   },
   "shell.tracksHiddenTitle": {
@@ -4217,23 +4206,23 @@
     "translation": "Zoom"
   },
   "sourceAccess.libraryChanged": {
-    "source": "无法打开「{name}」：文件版本已变化。",
+    "source": "无法打开「{name}」：文件版本已变化",
     "translation": "Cannot open \"{name}\": the file version changed."
   },
   "sourceAccess.libraryMissing": {
-    "source": "无法打开「{name}」：文件已移除。",
+    "source": "无法打开「{name}」：文件已移除",
     "translation": "Cannot open \"{name}\": the file was removed."
   },
   "sourceAccess.libraryUnavailable": {
-    "source": "无法打开「{name}」：媒体库暂不可用。",
+    "source": "无法打开「{name}」：媒体库暂不可用",
     "translation": "Cannot open \"{name}\": the media library is unavailable."
   },
   "sourceAccess.localStale": {
-    "source": "无法打开本地文件「{name}」：文件已变化或不可用。",
+    "source": "无法打开本地文件「{name}」：文件已变化或不可用",
     "translation": "Cannot open local file \"{name}\": it changed or is unavailable."
   },
   "sourceAccess.localUnsupported": {
-    "source": "当前浏览器不支持保存本地文件访问权限，无法直接恢复「{name}」。请重新选择文件；刷新后仍需重新选择。",
+    "source": "当前浏览器不支持保存本地文件访问权限，无法直接恢复「{name}」，请重新选择文件；刷新后仍需重新选择",
     "translation": "This browser cannot retain access to local files, so “{name}” cannot be reopened directly. Select the file again; you will need to reselect it after refreshing."
   },
   "sourceActions.connected": {
@@ -4337,7 +4326,7 @@
     "translation": "Open user settings (current identity: {name})"
   },
   "sources.linkUnavailable": {
-    "source": "该媒体库文件已不存在或版本已变化。",
+    "source": "该媒体库文件已不存在或版本已变化",
     "translation": "This library file no longer exists or its version has changed."
   },
   "sources.loadFailedWith": {
@@ -4369,7 +4358,7 @@
     "translation": "(Local)"
   },
   "sources.locateUnavailable": {
-    "source": "片源已不在媒体库中。",
+    "source": "片源已不在媒体库中",
     "translation": "This source is no longer in the media library."
   },
   "sources.mountList": {
@@ -4377,7 +4366,7 @@
     "translation": "Libraries"
   },
   "sources.noEmptyTracks": {
-    "source": "没有空轨道，请先关闭一个视频。",
+    "source": "没有空轨道，请先关闭一个视频",
     "translation": "No empty tracks. Close a video first."
   },
   "sources.noMatch": {
@@ -4469,7 +4458,7 @@
     "translation": "Disconnected · local drafts kept"
   },
   "sync.draftsUnsaved": {
-    "source": "本机标注尚未保存，请等待自动保存完成。",
+    "source": "本机标注尚未保存，请等待自动保存完成",
     "translation": "Local annotations are not saved yet. Please wait for automatic saving to finish."
   },
   "sync.frameMark": {
@@ -4493,7 +4482,7 @@
     "translation": "Saved locally · waiting to sync"
   },
   "sync.savingDrafts": {
-    "source": "本机草稿正在保存，请稍后重试。",
+    "source": "本机草稿正在保存，请稍后重试",
     "translation": "Local drafts are being saved. Try again shortly."
   },
   "sync.savingLocal": {
@@ -4505,7 +4494,7 @@
     "translation": "Synced"
   },
   "sync.waitForDrafts": {
-    "source": "请先结束标注并等待本机草稿保存完成。",
+    "source": "请先结束标注并等待本机草稿保存完成",
     "translation": "Finish annotating and wait for local drafts to save."
   },
   "theme.baseColor": {
@@ -4525,11 +4514,11 @@
     "translation": "Custom · {p0}"
   },
   "theme.enterAValidHexColorSuchAs": {
-    "source": "请输入有效的 HEX 颜色，例如 #3478F6。",
+    "source": "请输入有效的 HEX 颜色，例如 #3478F6",
     "translation": "Enter a valid HEX color, such as #3478F6."
   },
   "theme.invalidBase": {
-    "source": "请输入有效的 HEX 基调色，例如 #EEE7DE。",
+    "source": "请输入有效的 HEX 基调色，例如 #EEE7DE",
     "translation": "Enter a valid HEX base color, such as #EEE7DE."
   },
   "toast.dismissNotification": {
@@ -4863,15 +4852,15 @@
     "translation": "Video time base"
   },
   "transfer.importing": {
-    "source": "工作区正在导入，请等待完成。",
+    "source": "工作区正在导入，请等待完成",
     "translation": "The workspace is importing. Wait for it to finish."
   },
   "transfer.legacyConditions": {
-    "source": "旧工作区未记录比较条件，已沿用当前色彩和解码设置。",
+    "source": "旧工作区未记录比较条件，已沿用当前色彩和解码设置",
     "translation": "The old workspace recorded no compare conditions; current color and decode settings apply."
   },
   "transfer.mtimeWarning": {
-    "source": "「{name}」修改时间与工作区记录不一致，已按同名同大小文件恢复；如内容被替换请重新检查标注。",
+    "source": "「{name}」修改时间与工作区记录不一致，已按同名同大小文件恢复；如内容被替换请重新检查标注",
     "translation": "The modification time of “{name}” differs from the workspace record. The file was restored using its name and size; recheck marks if its contents were replaced."
   },
   "transfer.sourcesSkipped": {
@@ -4900,15 +4889,15 @@
     "translation": "{p0} pixels"
   },
   "workspace.actorChanged": {
-    "source": "用户已切换，请在当前工作区重新分享。",
+    "source": "用户已切换，请在当前工作区重新分享",
     "translation": "The user has changed. Share again from the current workspace."
   },
   "workspace.changed": {
-    "source": "当前工作区已切换，请在新工作区重新分享。",
+    "source": "当前工作区已切换，请在新工作区重新分享",
     "translation": "The workspace has changed. Share again from the new workspace."
   },
   "workspace.closed": {
-    "source": "工作区页面已关闭。",
+    "source": "工作区页面已关闭",
     "translation": "The workspace page has closed."
   },
   "workspace.columns": {
@@ -4916,7 +4905,7 @@
     "translation": "Name / user · Updated ↓"
   },
   "workspace.conflict": {
-    "source": "工作区已被更新，请重新打开后继续。",
+    "source": "工作区已被更新，请重新打开后继续",
     "translation": "This workspace has changed. Reopen it to continue."
   },
   "workspace.copyNamed": {
@@ -4924,7 +4913,7 @@
     "translation": "Copy workspace link: {name}"
   },
   "workspace.saving": {
-    "source": "工作区正在保存，请稍后再分享。",
+    "source": "工作区正在保存，请稍后再分享",
     "translation": "The workspace is being saved. Try sharing again shortly."
   }
 }

@@ -13,7 +13,7 @@ export function installLanguageControls(signal: AbortSignal) {
   const menu = installChoiceMenu('language-choice', options, value => {
     const ticket = ++request;
     void setLanguage(value as LanguagePreference).then(() => { if (ticket === request) sync(); }).catch(() => {
-      if (ticket === request) { sync(); status.textContent = t(msg("language.loadFailed", "语言包未能加载，请重试。")); }
+      if (ticket === request) { sync(); status.textContent = t(msg("language.loadFailed", "语言包未能加载，请重试")); }
     });
   });
   const sync = () => {

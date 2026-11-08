@@ -212,7 +212,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     }
   }
   async function switchSpace(next:string) {
-    if(editing() || pendingQueue.size || saving)throw new Error(t(msg("sync.waitForDrafts", "请先结束标注并等待本机草稿保存完成。")));
+    if(editing() || pendingQueue.size || saving)throw new Error(t(msg("sync.waitForDrafts", "请先结束标注并等待本机草稿保存完成")));
     // Restoring the current scope (e.g. failed-import rollback) must not
     // touch live marks: there is nothing to load that the session lacks.
     if(next===scope)return;
@@ -249,7 +249,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
       let after=0,page;
       do { page=await client.changes(space,after);await storage.remember(page.entries);after=page.cursor;for(const record of page.entries)records.set(record.id,record); } while(page.more);
       await syncIdle;
-      if (pendingQueue.size || saving) throw new Error(t(msg("sync.savingDrafts", "本机草稿正在保存，请稍后重试。")));
+      if (pendingQueue.size || saving) throw new Error(t(msg("sync.savingDrafts", "本机草稿正在保存，请稍后重试")));
       const snapshot=session.exportWorkspace(location.origin+'/');
       generation++; scope=space; resetActivity(); cursor=after; versions.clear(); managed.clear();
       for(const record of records.values())versions.set(record.id,record.revision);
@@ -264,7 +264,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
       }
       await sync();
     },
-    snapshotMode(){if(pendingQueue.size)throw new Error(t(msg("sync.draftsUnsaved", "本机标注尚未保存，请等待自动保存完成。")));const previous=scope;generation++;scope='local';resetActivity();try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();managed.clear();state();return ()=>switchSpace(previous);},
+    snapshotMode(){if(pendingQueue.size)throw new Error(t(msg("sync.draftsUnsaved", "本机标注尚未保存，请等待自动保存完成")));const previous=scope;generation++;scope='local';resetActivity();try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();managed.clear();state();return ()=>switchSpace(previous);},
     async captureSnapshot(){const snapshot=session.exportWorkspace(location.origin+'/');for(const mark of snapshot.marks){const ids=new Set([mark.mediaId,...mark.comparison.map(item=>item.mediaId)]);await enqueue(mark.id,{mark,media:snapshot.media.filter(media=>ids.has(media.id))},0);}},
     dispose(){life.abort();clearInterval(interval);unsubscribe();unsubscribeMarks();storage.close();},
   };

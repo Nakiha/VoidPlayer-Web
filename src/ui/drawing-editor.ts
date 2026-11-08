@@ -135,7 +135,7 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
     saving = true;
     try {
       const state = session.getState();
-      if (!annotationAnchorsCurrent([...drafts].map(([slot, d]) => ({ slot, ...d })), state.tracks) || state.playing || state.busy) throw new Error(t(msg("drawing.changed", "画面已变化，未将编辑写入其他帧。")));
+      if (!annotationAnchorsCurrent([...drafts].map(([slot, d]) => ({ slot, ...d })), state.tracks) || state.playing || state.busy) throw new Error(t(msg("drawing.changed", "画面已变化，未将编辑写入其他帧")));
       for (const [slot, draft] of drafts) for (const group of draft.groups) {
         const drawings = group.drawings.filter(d => d.tool !== 'text' || d.text?.trim());
         const exists = session.getState().marks.find(m => m.id === group.markId);

@@ -38,16 +38,16 @@ export function installWorkspaceSharing(options: {
     options.toasts.show(() => t(msg('sharing.editableCopied', '工作区链接已复制，接收者可编辑和保存')));
   }
   async function create() {
-    if (busy) throw new Error(t(msg("workspace.saving", "工作区正在保存，请稍后再分享。")));
-    if (options.isOpening()) throw new Error(t(msg("workspace.saving", "工作区正在保存，请稍后再分享。")));
+    if (busy) throw new Error(t(msg("workspace.saving", "工作区正在保存，请稍后再分享")));
+    if (options.isOpening()) throw new Error(t(msg("workspace.saving", "工作区正在保存，请稍后再分享")));
     // A retry retains the same request and ID if the server response was lost.
     const previous = options.binding();
     pending ??= { id: previous?.id ?? randomUUID(), document: structuredClone(options.snapshot()), previous, pinned: false, attached: !!previous?.space && options.scope() === previous.space };
     const request = pending, stamp = epoch;
-    const ensureCurrent = () => { if(stamp !== epoch) throw new Error(t(msg("workspace.changed", "当前工作区已切换，请在新工作区重新分享。"))); };
+    const ensureCurrent = () => { if(stamp !== epoch) throw new Error(t(msg("workspace.changed", "当前工作区已切换，请在新工作区重新分享"))); };
     busy = true; update();
     try {
-      if (!options.canShare()) throw new Error(t(msg("sharing.addVideo", "请先添加视频再分享。")));
+      if (!options.canShare()) throw new Error(t(msg("sharing.addVideo", "请先添加视频再分享")));
       if (!request.pinned) { request.document = await prepareSharedWorkspace(request.document); request.pinned = true; }
       ensureCurrent();
       const record = await options.save(request.document, request.id, request.previous);

@@ -11,7 +11,7 @@ export function installLogPanel(container: HTMLElement, toasts: ToastStack) {
   const pane = document.getElementById('settings-pane-logs')!;
   const panel = document.createElement('div'); panel.className = 'log-panel';
   const stopPanelLanguage = mountLocalizedShell(panel, () => {
-    const tip = [th(msg("logPanel.keepsTheLast3SessionsLocallyFor", "本机保留最近 3 次会话最长 7 天。")), th(msg("logPanel.logsIncludeDeviceInformationFilenamesActionsAnd", "日志包含设备信息、文件名、操作记录及你填写的问题描述不含视频或标注正文。")), th(msg("logPanel.sentToTheCurrentServerOnlyWhen", "仅点击“发送日志”后才发送到当前服务器。"))].join("\n");
+    const tip = [th(msg("logPanel.keepsTheLast3SessionsLocallyFor", "本机保留最近 3 次会话最长 7 天")), th(msg("logPanel.logsIncludeDeviceInformationFilenamesActionsAnd", "日志包含设备信息、文件名、操作记录及你填写的问题描述不含视频或标注正文")), th(msg("logPanel.sentToTheCurrentServerOnlyWhen", "仅点击“发送日志”后才发送到当前服务器"))].join("\n");
     return `<div class="settings-section"><h4 class="settings-section-title">${th(msg("logPanel.uploadLogs", "上传日志"))}<span class="section-title-info" role="img" tabindex="0" aria-label="${th(msg("logPanel.aboutLogs", "日志说明"))}" data-tooltip="${tip}">${icon('info')}</span></h4><div class="settings-card log-settings-card"><div class="log-session-row"><button type="button" id="log-session" class="settings-choice" aria-label="${th(msg("logPanel.logSession", "日志会话"))}"></button><div class="log-submit-row"><button type="button" data-action="download">${icon('download')}${th(msg("logPanel.downloadLogs", "下载日志"))}</button><button type="button" class="primary" data-action="upload">${icon('export')}${th(msg("logPanel.sendLogs", "发送日志"))}</button></div></div>
     <div class="log-description-field"><textarea id="log-description" aria-label="${th(msg("logPanel.problemDescriptionOptional", "问题描述（选填）"))}" maxlength="${LOG_DESCRIPTION_LIMIT}" rows="1" placeholder="${th(msg("logPanel.reportDescriptionPlaceholder", "(可选) 填写日志下载/发送时的描述信息"))}" spellcheck="false"></textarea></div>
     </div><div class="log-feedback" hidden><p class="log-storage" role="status" hidden></p><p class="log-result" role="status" hidden></p></div>
@@ -51,7 +51,7 @@ export function installLogPanel(container: HTMLElement, toasts: ToastStack) {
   let messageText: string | (() => string) = '';
   const message = (text: string | (() => string) = '', error = false) => { messageText = text; result.textContent = typeof text === 'function' ? text() : text; result.dataset.error = String(error); showFeedback(); };
   const storageStatus = () => {
-    storage.textContent = sessionLog.storageState === 'failed' ? t(msg("logPanel.localSavingFailedDownloadABackupOf", "本地保存失败，请下载日志备份。")) : '';
+    storage.textContent = sessionLog.storageState === 'failed' ? t(msg("logPanel.localSavingFailedDownloadABackupOf", "本地保存失败，请下载日志备份")) : '';
     showFeedback();
   };
   const unsubscribe = sessionLog.subscribe(storageStatus);
@@ -141,24 +141,24 @@ export function installLogPanel(container: HTMLElement, toasts: ToastStack) {
     const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
     const link = document.createElement('a'); link.href = url; link.download = filename;
     document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000);
-    message(() => t(msg("logPanel.downloadStarted", "下载已开始。")));
+    message(() => t(msg("logPanel.downloadStarted", "下载已开始")));
   }));
   panel.querySelector('[data-action="copy"]')!.addEventListener('click', () => void action('copy', async () => {
     const { json } = await snapshot(true);
-    try { await navigator.clipboard.writeText(json); message(() => t(msg("logPanel.logsCopied", "日志已复制。"))); }
+    try { await navigator.clipboard.writeText(json); message(() => t(msg("logPanel.logsCopied", "日志已复制"))); }
     catch (error) {
       log.warn('ui', '剪贴板复制失败', { error });
-      message(() => t(msg("logPanel.copyFailedDownloadLogsToSaveThe", "复制失败，请使用下载日志保存完整内容。")));
+      message(() => t(msg("logPanel.copyFailedDownloadLogsToSaveThe", "复制失败，请使用下载日志保存完整内容")));
     }
   }));
   panel.querySelector('[data-action="upload"]')!.addEventListener('click', () => void action('upload', async () => {
     const { json } = await snapshot(true);
     let response: Response;
     try { response = await fetch('/api/logs', { method: 'POST', headers: { 'content-type': 'application/json', 'x-voidplayer-action': 'log' }, body: json }); }
-    catch (error) { log.warn('ui', '日志上传请求失败', { error }); throw new Error(t(msg("logPanel.unableToConnectToThisServerRetry", "无法连接当前服务器，请重试或下载日志。"))); }
+    catch (error) { log.warn('ui', '日志上传请求失败', { error }); throw new Error(t(msg("logPanel.unableToConnectToThisServerRetry", "无法连接当前服务器，请重试或下载日志"))); }
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      throw new Error(t(msg("logPanel.uploadFailed", "上传失败（{p0}）{p1}"), { p0: response.status, p1: body?.error ? `：${body.error}` : t(msg("logPanel.youCanDownloadLogsInstead", "，可改用下载日志。")) }));
+      throw new Error(t(msg("logPanel.uploadFailed", "上传失败（{p0}）{p1}"), { p0: response.status, p1: body?.error ? `：${body.error}` : t(msg("logPanel.youCanDownloadLogsInstead", "，可改用下载日志")) }));
     }
     const body = await response.json();
     try {

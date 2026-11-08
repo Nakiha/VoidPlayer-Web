@@ -45,15 +45,15 @@ async function fileKind(file: File): Promise<Rejection | undefined> {
 
 function rejectionMessage(rejected: Rejected[]) {
   const {kind, name} = rejected[0];
-  if (rejected.length > 1) return t(msg('input.skippedFiles', '已跳过 {count} 个无法作为视频打开的项目（包括「{name}」）。请选择视频文件。'), {count:rejected.length, name});
+  if (rejected.length > 1) return t(msg('input.skippedFiles', '已跳过 {count} 个无法作为视频打开的项目（包括「{name}」），请选择视频文件'), {count:rejected.length, name});
   switch (kind) {
-    case 'folder': return t(msg('input.folder', '「{name}」是文件夹。请打开文件夹，选择其中的视频文件。'), {name});
-    case 'app': return t(msg('input.app', '「{name}」是应用程序。请选择视频文件。'), {name});
-    case 'disk': return t(msg('input.disk', '「{name}」是磁盘映像。请选择视频文件。'), {name});
-    case 'image': return t(msg('input.image', '「{name}」是图片。请选择视频文件。'), {name});
-    case 'audio': return t(msg('input.audio', '「{name}」是音频文件。请选择含视频轨道的文件。'), {name});
-    case 'unreadable': return t(msg('input.unreadable', '无法读取「{name}」。请重新选择可访问的视频文件。'), {name});
-    default: return t(msg('input.unsupported', '无法将「{name}」作为视频打开。请选择支持的视频文件，例如 MP4、MOV 或 MKV。'), {name});
+    case 'folder': return t(msg('input.folder', '「{name}」是文件夹，请打开文件夹，选择其中的视频文件'), {name});
+    case 'app': return t(msg('input.app', '「{name}」是应用程序，请选择视频文件'), {name});
+    case 'disk': return t(msg('input.disk', '「{name}」是磁盘映像，请选择视频文件'), {name});
+    case 'image': return t(msg('input.image', '「{name}」是图片，请选择视频文件'), {name});
+    case 'audio': return t(msg('input.audio', '「{name}」是音频文件，请选择含视频轨道的文件'), {name});
+    case 'unreadable': return t(msg('input.unreadable', '无法读取「{name}」，请重新选择可访问的视频文件'), {name});
+    default: return t(msg('input.unsupported', '无法将「{name}」作为视频打开，请选择支持的视频文件，例如 MP4、MOV 或 MKV'), {name});
   }
 }
 

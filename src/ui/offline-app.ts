@@ -13,9 +13,9 @@ function safariPlatform() {
   if (/Mac/.test(platform)) return 'mac';
 }
 function installHelp(platform: ReturnType<typeof safariPlatform>) {
-  if (platform === 'ios') return t(msg('pwa.iosInstall', '请选择「分享 → 添加到主屏幕」。'));
-  if (platform === 'mac') return t(msg('pwa.safariInstall', '请选择「文件 → 添加到程序坞」。'));
-  return t(msg('pwa.browserInstall', '请在浏览器菜单中选择安装应用。如果没有此选项，请用桌面 Chrome 或 Edge 打开本页。'));
+  if (platform === 'ios') return t(msg('pwa.iosInstall', '请选择「分享 → 添加到主屏幕」'));
+  if (platform === 'mac') return t(msg('pwa.safariInstall', '在 Safari 中选「文件 → 添加到程序坞」即可安装；如需在 Finder 的「打开方式」中选择 VoidPlayer，请通过桌面 Chrome 或 Edge 安装'));
+  return t(msg('pwa.browserInstall', '请在浏览器菜单中选择安装应用，若没有此选项，请用桌面 Chrome 或 Edge 打开本页'));
 }
 
 export async function installOfflineControls(toasts: ToastStack, identityReady: Promise<void>) {
@@ -37,8 +37,8 @@ export async function installOfflineControls(toasts: ToastStack, identityReady: 
     row.dataset.offline = state;
     button.textContent = installed ? t(msg('pwa.installed', '已安装')) : t(msg('pwa.install', '安装'));
     button.disabled = installed || prompting;
-    const problem = state === 'failed' ? msg('pwa.failed', '离线资源准备失败，请联网后重试。')
-      : state === 'unsupported' ? msg('pwa.unsupported', '当前浏览器无法保存离线资源。') : undefined;
+    const problem = state === 'failed' ? msg('pwa.failed', '离线资源准备失败，请联网后重试')
+      : state === 'unsupported' ? msg('pwa.unsupported', '当前浏览器无法保存离线资源') : undefined;
     if (installed && problem && changed) toasts.show(() => t(problem), { kind: 'warning' });
     button.title = !installed ? '' : problem ? t(problem)
       : state === 'ready' ? t(msg('pwa.ready', '已就绪，可离线打开本地视频'))
@@ -117,9 +117,7 @@ export async function installOfflineControls(toasts: ToastStack, identityReady: 
         localStorage.setItem(key, '1');
       } catch { return; }
       if (dismissHint) return;
-      dismissHint = toasts.show(() => safari === 'mac'
-        ? t(msg('pwa.safariVisit', 'Safari 通过「文件 → 添加到程序坞」安装。Finder 文件关联需用 Chrome 或 Edge。'))
-        : installHelp(safari), { durationMs: 8000 });
+      dismissHint = toasts.show(() => installHelp(safari), { durationMs: 8000 });
     };
     document.addEventListener('visibilitychange', showVisitHint, options);
     showVisitHint();

@@ -120,7 +120,7 @@ try {
     await page.locator('#start-panel').screenshot({ path: process.env.RECOVERY_SCREENSHOTS });
   }
   await card.click();
-  await page.getByText('工作区已恢复。', { exact: true }).waitFor();
+  await page.getByText('工作区已恢复', { exact: true }).waitFor();
   let restored = await page.evaluate(() => window.voidPlayer.exportWorkspace());
   assert.deepEqual(restored.tracks, snapshot.tracks); assert.deepEqual(restored.marks, snapshot.marks);
   assert.deepEqual(restored.comparison, snapshot.comparison); assert.equal(restored.positionUs, snapshot.positionUs);

@@ -22,6 +22,8 @@ button.textContent = t(msg('player.frames', '{count, plural, other {# 帧}}'), {
 
 Adding comments, changing line numbers or moving a descriptor between files does not change the committed inventory or compiled catalogs. Such refactors can run `i18n:check` directly; no extraction is required for position-only changes. Refresh the local index with `i18n:extract` when needed. `check` neither reads nor writes that index, so a clean CI checkout does not need it. Moving or adding UI modules still requires the existing `scope.json` classification. Actual ID/default/parameter changes retain the extraction, translation review and compilation workflow above.
 
+Chinese interface copy omits full stops in prompts, alerts and help text. Preserve punctuation inside filenames, URLs and user-supplied or diagnostic details.
+
 Use complete messages with typed parameters. ICU plural/select/number formatting comes from the mature MessageFormat parser/compiler. Escape rendered HTML with `th`; prefer `t` with `textContent` and attributes. Never pass user strings through the translator. Technical `mm:ss.mmm` timecodes continue to use `formatTime` and `parseTimeInput`, with ASCII separators and microsecond semantics. Localized dates/numbers are limited to UI summaries and use cached Intl formatters.
 
 ## Choice and build cost

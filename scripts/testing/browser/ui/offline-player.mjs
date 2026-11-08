@@ -74,10 +74,11 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
       assert.deepEqual(rowText.split(/\s+/), ['Web', 'app', 'Install']);
       const bounds = await row.boundingBox();
       await install.click();
-      const warning = first.getByRole('alert').filter({ hasText: 'Choose File → Add to Dock.' });
+      const installGuidance = /File → Add to Dock.*Finder.*desktop Chrome or Edge/;
+      const warning = first.getByRole('alert').filter({ hasText: installGuidance });
       await warning.waitFor();
       await install.click();
-      assert.equal(await first.locator('.toast-warning:not([data-leaving])').filter({ hasText: 'Choose File → Add to Dock.' }).count(), 1);
+      assert.equal(await first.locator('.toast-warning:not([data-leaving])').filter({ hasText: installGuidance }).count(), 1);
       assert.equal((await row.innerText()).trim(), rowText);
       assert.equal((await row.boundingBox()).height, bounds.height);
       await first.reload();

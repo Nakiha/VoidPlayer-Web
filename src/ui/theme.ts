@@ -105,7 +105,7 @@ export function installThemeControls() {
   }, { signal: life.signal });
   const commitHex = () => {
     if (updateCustom(hex.value)) syncInputs();
-    else { hex.setAttribute('aria-invalid', 'true'); hint.textContent = t(msg("theme.enterAValidHexColorSuchAs", "请输入有效的 HEX 颜色，例如 #3478F6。")); }
+    else { hex.setAttribute('aria-invalid', 'true'); hint.textContent = t(msg("theme.enterAValidHexColorSuchAs", "请输入有效的 HEX 颜色，例如 #3478F6")); }
   };
   hex.addEventListener('change', commitHex, { signal: life.signal });
   hex.addEventListener('keydown', event => {
@@ -121,7 +121,7 @@ export function installThemeControls() {
   baseHex.addEventListener('input', () => {
     if (/^#?[\da-f]{6}$/i.test(baseHex.value) && updateBase(baseHex.value)) { basePicker.value = base.color; baseHex.removeAttribute('aria-invalid'); baseHint.textContent = ''; }
   }, { signal: life.signal });
-  const invalidBase = () => { baseHex.setAttribute('aria-invalid', 'true'); baseHint.textContent = t(msg('theme.invalidBase', '请输入有效的 HEX 基调色，例如 #EEE7DE。')); };
+  const invalidBase = () => { baseHex.setAttribute('aria-invalid', 'true'); baseHint.textContent = t(msg('theme.invalidBase', '请输入有效的 HEX 基调色，例如 #EEE7DE')); };
   const commitBase = () => { if (updateBase(baseHex.value)) syncBaseInputs(); else invalidBase(); };
   baseHex.addEventListener('change', commitBase, { signal: life.signal });
   baseHex.addEventListener('keydown', event => {
@@ -133,7 +133,7 @@ export function installThemeControls() {
   window.addEventListener('storage', event => {
     if (event.key === KEY || event.key === ACCENT_KEY || event.key === CUSTOM_KEY || event.key === BASE_KEY || event.key === null) { preference = readPreference(); accent = readAccent(); custom = readCustom(); base = readBase(); syncBaseInputs(); syncInputs(); apply(); }
   }, { signal: life.signal });
-  onLanguageChange(() => { apply(); if (baseHex.hasAttribute('aria-invalid')) invalidBase(); if (hex.hasAttribute('aria-invalid')) hint.textContent = t(msg("theme.enterAValidHexColorSuchAs", "请输入有效的 HEX 颜色，例如 #3478F6。")); }, life.signal);
+  onLanguageChange(() => { apply(); if (baseHex.hasAttribute('aria-invalid')) invalidBase(); if (hex.hasAttribute('aria-invalid')) hint.textContent = t(msg("theme.enterAValidHexColorSuchAs", "请输入有效的 HEX 颜色，例如 #3478F6")); }, life.signal);
   apply();
   return () => life.abort();
 }

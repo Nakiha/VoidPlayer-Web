@@ -124,7 +124,7 @@ try {
         const card = await built.locator('.startup-card').boundingBox();
         assert.ok(card.x >= 0 && card.x + card.width <= width, 'failure card fits narrow and desktop widths');
         assert.equal(await built.locator('#startup-title').textContent(), '启动未完成');
-        assert.equal(await built.locator('#startup-description').textContent(), '页面未能加载。');
+        assert.equal(await built.locator('#startup-description').textContent(), '页面未能加载');
         assert.equal(await built.locator('#startup-reload').count(), 0, 'the failure card offers no retry button');
         await built.screenshot({path:`/tmp/voidplayer-startup-failure-${name}-${theme}-${width}.png`});
       }

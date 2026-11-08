@@ -111,7 +111,7 @@ export function installAnalysisStatus(options: {
       const selected = prefs.selected.includes(entry.slot);
       control.dataset.selected = String(selected); toggle.setAttribute('aria-pressed', String(selected));
       toggle.title = (selected ? t(msg('analysis.hideTrack', '隐藏轨道 {slot}'), { slot: entry.slot }) : t(msg('analysis.showTrack', '显示轨道 {slot}（{name}）'), { slot: entry.slot, name: entry.name }))
-        + `\n${t(msg('analysis.trackSoloHint', '右键或长按单选此轨道，再次操作恢复全部。'))}`;
+        + `\n${t(msg('analysis.trackSoloHint', '右键或长按单选此轨道，再次操作恢复全部'))}`;
       toggle.setAttribute('aria-label', toggle.title.split('\n')[0]);
       badge.style.background = options.colors().get(entry.slot) ?? '#888';
       const value = displayed ? (prefs.axis === 'pts' ? displayed.rank : displayed.ordinal) : undefined;
@@ -144,7 +144,7 @@ export function installAnalysisStatus(options: {
           editingNumber = false; lastStatusSig = ''; renderStatus();
           if (!commit) return;
           if (!/^\d+$/.test(raw) || !Number.isSafeInteger(Number(raw))) {
-            live.textContent = t(msg("analysis.frameNumberMustBeNonNegativeInteger", "帧号必须是非负整数。")); return;
+            live.textContent = t(msg("analysis.frameNumberMustBeNonNegativeInteger", "帧号必须是非负整数")); return;
           }
           const number = Number(raw);
           void act(async () => {

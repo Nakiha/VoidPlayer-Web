@@ -139,11 +139,11 @@ const renderColorMode=()=>{
   peakMenu.sync(String(state.colorOutput.preview.sourcePeakNits),`${state.colorOutput.preview.sourcePeakNits} nits`,!state.busy);
   const fallback=state.colorOutput.target==='hdr'&&state.tracks.length>0&&state.tracks.some(track=>track.presentation?.actualTarget!=='hdr');
   const nativeBlocked=state.tracks.some(track=>track.presentation?.fallbackReason?.startsWith('browser-hdr-'));
-  $('color-output-description').textContent=nativeBlocked?tr(msg("colorOutput.browserPreview", "浏览器未开放原生 HDR 浮点转换，当前使用 SDR 预览；可切换自有色彩输出 HDR。")):fallback?tr(msg("colorOutput.fallbackDescription", "当前环境使用 SDR 预览；HDR 显示目标已保留。")):'';
+  $('color-output-description').textContent=nativeBlocked?tr(msg("colorOutput.browserPreview", "浏览器未开放原生 HDR 浮点转换，当前使用 SDR 预览；可切换自有色彩输出 HDR")):fallback?tr(msg("colorOutput.fallbackDescription", "当前环境使用 SDR 预览；HDR 显示目标已保留")):'';
   const key=`${getLocale()}/${mode}/${decoder}`;
   if(key!==flowKey){
     flowKey=key;updateColorFlow($('color-flow-diagram'),mode,decoder);
-    $('color-mode-description').textContent=mode==='browser'?tr(msg("player.softwareFallbackIsAnApproximationColorsMay", "软件回退仅近似匹配，颜色可能与原生帧不同。")):decoder==='hardware'?tr(msg("player.fallsBackToSoftwareIfFirstFrame", "首帧核对失败则改用软件解码；读回帧有额外开销。")):tr(msg("player.preservesOriginalFramePrecisionWithConsistentConversion", "保留原始帧精度，按统一规则转换；HDR 使用明确参数映射。"));
+    $('color-mode-description').textContent=mode==='browser'?tr(msg("player.softwareFallbackIsAnApproximationColorsMay", "软件回退仅近似匹配，颜色可能与原生帧不同")):decoder==='hardware'?tr(msg("player.fallsBackToSoftwareIfFirstFrame", "首帧核对失败则改用软件解码；读回帧有额外开销")):tr(msg("player.preservesOriginalFramePrecisionWithConsistentConversion", "保留原始帧精度，按统一规则转换；HDR 使用明确参数映射"));
   }
 };
 for(const button of outputButtons)button.onclick=()=>{if(session.getState().busy)return;void act(()=>session.setColorOutput({...session.getState().colorOutput,target:button.dataset.colorTarget as 'sdr'|'hdr'})).finally(renderColorMode);};
@@ -225,7 +225,7 @@ async function act(action: () => unknown | Promise<unknown>, name = 'ui.action',
 }
 for (const slot of SLOTS) bindPresentationResources(canvases[slot], session.resources, frame => session.recordRecoveredPresentation(slot, frame));
 window.addEventListener('voidplayer:presentation-error', () => {
-  showWarning(tr(msg('player.graphicsRecoveryFailed', '画面恢复失败，请刷新页面；若仍无画面，请完全退出并重新打开浏览器。')));
+  showWarning(tr(msg('player.graphicsRecoveryFailed', '画面恢复失败，请刷新页面；若仍无画面，请完全退出并重新打开浏览器')));
 }, { signal: uiEvents.signal });
 window.addEventListener('voidplayer:ui-error', event => showError((event as CustomEvent).detail), { signal: uiEvents.signal });
 const annotationSync = installAnnotationSync(session, () => drawingEditor.active());
@@ -272,7 +272,7 @@ const channelMenu = installChoiceMenu('channel-select', () => (Object.keys(chann
   void act(redrawPresentationChannel, 'channel.redraw', { channel: viewport.channel });
 },'appearance', undefined, undefined, () => {
   if (session.getState().colorMode === 'reference') return true;
-  toasts.show(() => tr(msg("player.switchToManagedColorInColorDecoding", "请先在“色彩与解码”中切换为“自有色彩”，再选择 YUV 通道。")), {
+  toasts.show(() => tr(msg("player.switchToManagedColorInColorDecoding", "请先在“色彩与解码”中切换为“自有色彩”，再选择 YUV 通道")), {
     action: { label: () => tr(msg("player.openColorSettings", "前往色彩设置")), onClick: () => settings.openPane('performance', $<HTMLElement>('channel-select')) },
   });
   return false;
@@ -377,7 +377,7 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
   timeline.setAttribute('aria-busy', String(state.busy));
   renderProgress(state.positionUs, state.durationUs);
   $('duration').textContent = formatTime(state.durationUs);
-  $('status').textContent = openingWorkspace ? tr(msg('transfer.importing', '工作区正在导入，请等待完成。')) : state.busy ? tr(msg("player.decoding", "正在解码…")) : state.playing ? tr(msg("player.playingMuted", "播放中 · 静音")) : loaded ? tr(msg("player.paused", "已暂停")) : tr(msg("player.waitingForVideo", "等待视频"));
+  $('status').textContent = openingWorkspace ? tr(msg('transfer.importing', '工作区正在导入，请等待完成')) : state.busy ? tr(msg("player.decoding", "正在解码…")) : state.playing ? tr(msg("player.playingMuted", "播放中 · 静音")) : loaded ? tr(msg("player.paused", "已暂停")) : tr(msg("player.waitingForVideo", "等待视频"));
   $('decode').textContent = state.playback && state.playback.wallMs > 500 ? tr(msg("player.actualSpeed", "实际速度 {p0}×"), { p0: state.playback.speed.toFixed(2) }) : loaded ? tr(msg("player.lastSeekMs", "最近定位 {p0} ms"), { p0: state.lastDecodeMs }) : '—';
   renderTrackToasts(state.tracks);
   const warning = state.error;
@@ -392,7 +392,7 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
     && presented.some(t => t.decoder === 'ffmpeg-wasm');
   if (mixedColor) {
     if (!mixedColorToast) {
-      mixedColorToast = toasts.show(() => tr(msg("player.mixingSoftwareAndNativeFramesInBrowser", "浏览器色彩下软件帧与原生帧混合上屏，色彩可能不准，建议切换色彩模式。")), {
+      mixedColorToast = toasts.show(() => tr(msg("player.mixingSoftwareAndNativeFramesInBrowser", "浏览器色彩下软件帧与原生帧混合上屏，色彩可能不准，建议切换色彩模式")), {
         kind: 'error', durationMs: 0,
         action: { label: () => tr(msg("player.openColorSettings", "前往色彩设置")), onClick: () => settings.openPane('performance', $<HTMLElement>('settings-open')) },
       });
@@ -424,7 +424,7 @@ async function importFiles(files: File[], handles?: (FsFileHandle | undefined)[]
   const context = operationContext();
   const revision = ++importRevision;
   for (let i = 0; i < files.length; i++) {
-    if (revision !== importRevision) throw new DOMException(tr(msg("player.fileImportWasSupersededByANewer", "文件导入已被新的请求取代。")), 'AbortError');
+    if (revision !== importRevision) throw new DOMException(tr(msg("player.fileImportWasSupersededByANewer", "文件导入已被新的请求取代")), 'AbortError');
     const slot = dropSlots(files.length - i, session.getState().tracks.map(track => track.slot))[0];
     await withLogContext(context, () => session.load(slot, (signal, progress, configuration) => openMedia(files[i], undefined, progress, signal, configuration), files[i].name));
     workbench.rememberFile(files[i]);
@@ -440,7 +440,7 @@ const fileActions: LocalFileActions = {
     accepts: files => files.some(isWorkspaceFile),
     load: (files, origin) => traceOperation('ui', `workspace.${origin}`, { trigger: origin === 'launch' ? 'system' : inputTrigger }, async () => {
       const documents = files.filter(isWorkspaceFile);
-      if (documents.length !== 1) throw new Error(tr(msg('player.openOneWorkspaceFileAtATime', '每次请打开一个工作区文件。')));
+      if (documents.length !== 1) throw new Error(tr(msg('player.openOneWorkspaceFileAtATime', '每次请打开一个工作区文件')));
       await workspaceTransfer.importFile(documents[0], files.filter(f => !isWorkspaceFile(f)));
     }),
   },
@@ -520,7 +520,7 @@ $<HTMLButtonElement>('fullscreen').disabled = !document.fullscreenEnabled;
 $('open').onclick = () => {
   const state = session.getState();
   const slot = SLOTS.find(slot => !state.tracks.some(t => t.slot === slot));
-  if (!slot) { showWarning(tr(msg('sources.noEmptyTracks', '没有空轨道，请先关闭一个视频。'))); return; }
+  if (!slot) { showWarning(tr(msg('sources.noEmptyTracks', '没有空轨道，请先关闭一个视频'))); return; }
   $<HTMLInputElement>(`file-${slot}`).click();
 };
 $('play').onclick = () => { if (!session.getState().busy) void act(() => session.getState().playing ? session.pause() : session.play(), 'play.toggle'); };
@@ -630,7 +630,7 @@ const api = {
   getState: () => session.getState(),
 
   captureFrame: (slot: Slot) => {
-    if (!SLOTS.includes(slot) || !session.getState().tracks.some(track => track.slot === slot)) throw new Error(tr(msg("player.noReadableFrameInThisTrack", "轨道没有可读取的画面。")));
+    if (!SLOTS.includes(slot) || !session.getState().tracks.some(track => track.slot === slot)) throw new Error(tr(msg("player.noReadableFrameInThisTrack", "轨道没有可读取的画面")));
     return captureFrame(canvases[slot]);
   },
   loadFile: (slot: Slot, file: File) => apiCall('loadFile', { slot, file }, async () => {
@@ -684,9 +684,9 @@ if (annotationLink.has('annotation')) void act(async () => {
   // workspace open intent, just like saved-workspace and recovery entry points.
   await identitySettings.ready;
   const space=annotationLink.get('space') ?? 'default', id=annotationLink.get('annotation')!;
-  if(!/^[a-zA-Z0-9_-]{1,200}$/.test(space) || !/^[a-zA-Z0-9_-]{1,200}$/.test(id))throw new Error(tr(msg("player.invalidAnnotationAddress", "标注地址无效。")));
+  if(!/^[a-zA-Z0-9_-]{1,200}$/.test(space) || !/^[a-zA-Z0-9_-]{1,200}$/.test(id))throw new Error(tr(msg("player.invalidAnnotationAddress", "标注地址无效")));
   const record=await new AnnotationClient(uiEvents.signal).read(space,id);
-  if(record.deleted)throw new Error(tr(msg("player.thisAnnotationIsInTheRecycleBin", "这条标注已在回收站。")));
+  if(record.deleted)throw new Error(tr(msg("player.thisAnnotationIsInTheRecycleBin", "这条标注已在回收站")));
   const mark=record.document.mark;
   const opened=await workspaceTransfer.importWorkspace({schema:'voidplayer-workspace',version:1,generatedAt:new Date().toISOString(),serverUrl:location.origin+'/',positionUs:mark.frame.ptsUs,tracks:[{slot:mark.slot,mediaId:mark.mediaId,offsetUs:0}],media:record.document.media,marks:[mark],viewport:viewport.snapshot()});
   if(opened)await annotationSync.openSpace(space);
