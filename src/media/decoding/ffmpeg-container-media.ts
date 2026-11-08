@@ -418,7 +418,8 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   }
 
   source = {
-    info, ensureIndexed,
+    info, ensureIndexed, wasmThreadMode: mode,
+    get inputWaitMs() { return rangeBridge?.inputWaitMs; },
     ...(mode === 'auto-grow' && info.codec === 'vvc' ? {
       async tuneVvc(axis?: VvcTuningAxis) {
         if (disposed) return null;

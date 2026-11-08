@@ -187,6 +187,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
       }
       return decoded;
     };
+    let inputWaitMs = 0;
     const extract = (pts:number,next=false):Promise<DecodedFrame|null> => {
       verifiedFrame.clear();
       const task = serial.then(async () => {
@@ -196,6 +197,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
         const recycle = spare; spare = undefined;
         const frame = await activeRpc.call(next?'next':'at', {pts:pts+info.firstPtsUs,recycle}, recycle ? [recycle] : [], 60000, true);
         if(!frame)return null;
+        inputWaitMs += frame.inputWaitMs ?? 0;
         if (info.indexState === 'building' && !indexing && backgroundTimer === undefined) backgroundTimer = setTimeout(() => { if (!disposed) void completeIndex().catch(() => {}); }, 0);
         return toDecodedFrame(frame);
       });
@@ -309,6 +311,8 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     };
     let stopAudio = () => {};
     const source: MediaSource = {
+      wasmThreadMode: mode,
+      get inputWaitMs() { return inputWaitMs; },
       ...(mode === 'auto-grow' && info.codec === 'vvc' ? {
         async tuneVvc(axis?: VvcTuningAxis) {
           if (disposed || info.decoder !== 'ffmpeg-wasm') return null;

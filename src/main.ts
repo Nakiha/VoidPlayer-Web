@@ -156,6 +156,15 @@ session.subscribe(renderColorMode);renderColorMode();
 for(const button of colorButtons)button.onclick=()=>{if(session.getState().busy)return;void act(()=>session.setColorMode(button.dataset.colorMode as 'reference'|'browser')).finally(renderColorMode);};
 for(const button of decoderButtons)button.onclick=()=>{if(session.getState().busy)return;void act(()=>session.setReferenceDecode({...session.getState().referenceDecode,decoder:button.dataset.referenceDecoder as 'hardware'|'software'})).finally(renderColorMode);};
 const toasts = installToasts(uiEvents.signal);
+session.onDecoderPressure = kind => {
+  if (kind === 'vvc-software') {
+    toasts.show(() => tr(msg('player.vvcPlaybackPressure', 'H.266 软件解码轨道持续缺帧，可在「色彩与解码」中选择「自动扩容」或手动设置线程数，重新打开视频后生效')), {
+      kind: 'warning', action: { label: () => tr(msg('settingsShell.colorDecoding', '色彩与解码')), onClick: () => settings.openPane('performance') },
+    });
+  } else {
+    toasts.show(() => tr(msg('player.hardwarePlaybackPressure', '硬件优先的解码轨道持续缺帧，多轨播放时可关闭部分轨道以减轻负担')), { kind: 'warning' });
+  }
+};
 const renderTrackToasts = createTrackToasts(toasts, () => settings.openPane('logs', $<HTMLElement>('settings-open')), uiEvents.signal);
 const removeLogPanel = installLogPanel($('diagnostic-logs'), toasts);
 const removeTooltips = installTooltips();

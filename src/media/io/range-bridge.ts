@@ -11,11 +11,12 @@ export function createRangeBridge(worker: Worker, input: RandomAccessInput) {
   // Preserve the startup bytes already available to the old local Blob
   // observer, even after a full container scan evicts the initial LRU blocks.
   let prefix = new Uint8Array(Math.min(128 * 1024, reader.size)), prefixLength = 0;
-  let closed = false;
+  let closed = false, inputWaitMs = 0, readStarted: number | undefined;
   const receive = async (message: { type?: string; offset: number; length: number }) => {
     if (message.type !== 'read-range' || closed) return;
     try {
       if (!Number.isSafeInteger(message.length) || message.length <= 0 || message.length > data.length) throw new MediaOpenError('input', 'WASM 请求的读取块过大。');
+      readStarted = performance.now();
       const bytes = await reader.read(message.offset, message.length);
       if (closed) return;
       while (prefixLength < prefix.length) {
@@ -28,6 +29,9 @@ export function createRangeBridge(worker: Worker, input: RandomAccessInput) {
       if (closed) return;
       const bytes = new TextEncoder().encode(error instanceof Error ? error.message : String(error));
       data.set(bytes.subarray(0, data.length)); Atomics.store(control, 1, Math.min(bytes.length, data.length)); Atomics.store(control, 0, -1);
+    } finally {
+      if (readStarted !== undefined) inputWaitMs += performance.now() - readStarted;
+      readStarted = undefined;
     }
     Atomics.notify(control, 0);
   };
@@ -44,7 +48,8 @@ export function createRangeBridge(worker: Worker, input: RandomAccessInput) {
   const peek = (offset: number, length: number) => reader.peek(offset,length)
     ?? (!closed && Number.isSafeInteger(offset) && Number.isSafeInteger(length) && offset >= 0 && length >= 0 && length <= 65536
       && offset + length <= prefixLength ? prefix.slice(offset,offset+length) : undefined);
-  return { shared, setPlaybackReadAhead: (enabled: boolean) => reader.setPlaybackReadAhead(enabled), cachedWindows, peek, close() {
+  return { shared, get inputWaitMs() { return inputWaitMs + (readStarted === undefined ? 0 : performance.now() - readStarted); },
+    setPlaybackReadAhead: (enabled: boolean) => reader.setPlaybackReadAhead(enabled), cachedWindows, peek, close() {
     closed = true; reader.close();
     prefix = new Uint8Array(); prefixLength = 0;
     Atomics.store(control, 0, -2); Atomics.notify(control, 0);

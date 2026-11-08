@@ -3215,6 +3215,10 @@
     "source": "画面恢复失败，请刷新页面；若仍无画面，请完全退出并重新打开浏览器",
     "translation": "The picture could not be restored. Refresh the page; if it is still missing, fully exit and reopen the browser."
   },
+  "player.hardwarePlaybackPressure": {
+    "source": "硬件优先的解码轨道持续缺帧，多轨播放时可关闭部分轨道以减轻负担",
+    "translation": "A track using hardware-preferred decoding is falling behind. If several tracks are playing, close some to reduce the load"
+  },
   "player.hdrDisplay": {
     "source": " · HDR 输出",
     "translation": " · HDR output",
@@ -3336,6 +3340,10 @@
   "player.vChannel": {
     "source": "V 通道",
     "translation": "V channel"
+  },
+  "player.vvcPlaybackPressure": {
+    "source": "H.266 软件解码轨道持续缺帧，可在「色彩与解码」中选择「自动扩容」或手动设置线程数，重新打开视频后生效",
+    "translation": "The H.266 software decoder is falling behind. In Color & decoding, try Auto-expand or set the thread count manually, then reopen the video"
   },
   "player.waitingForFrame": {
     "source": "等待帧",

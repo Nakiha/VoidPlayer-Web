@@ -30,6 +30,7 @@ export interface DecodedFrame extends FrameInfo {
   retain?(): DecodedFrame;
   close(): void;
 }
+export type WasmThreadMode = 'auto' | 'auto-grow' | 'manual' | 'single-thread';
 export type VvcTuningAxis = 'threads' | 'contexts';
 export type VvcTuningState = {
   threads: number; contexts: number; inFlight: number; dispatched: number; saturated: number;
@@ -40,6 +41,10 @@ export type VvcTuningState = {
 };
 
 export interface MediaSource {
+  /** Thread configuration captured when this source's software decoder was opened. */
+  readonly wasmThreadMode?: WasmThreadMode;
+  /** Accumulated time waiting for compressed input on the playback path, where observable. */
+  readonly inputWaitMs?: number;
   tuneVvc?(axis?: VvcTuningAxis): Promise<VvcTuningState | null>;
   /** Retained reference only; no analysis instance or IO until explicit request. */
   bitstreamFile?: Blob;

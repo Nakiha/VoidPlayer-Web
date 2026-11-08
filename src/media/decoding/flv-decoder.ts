@@ -23,7 +23,7 @@ import { createVvcTuner } from './vvc-tuning.ts';
 
 /** pts is the logical source clock; a platform resource's internal timestamp
  * may use a shifted decoder clock and must never be used as frame identity. */
-export interface PacketFrame { rotation?: 0 | 90 | 180 | 270; packetPicture?: import('../../../shared/media/codecs/packet-picture.ts').PacketPicture; durationUs?: number; description: FrameDescription; pts: number; width: number; height: number; frame?: VideoFrame; pixels?: ArrayBuffer; }
+export interface PacketFrame { rotation?: 0 | 90 | 180 | 270; packetPicture?: import('../../../shared/media/codecs/packet-picture.ts').PacketPicture; durationUs?: number; inputWaitMs?: number; description: FrameDescription; pts: number; width: number; height: number; frame?: VideoFrame; pixels?: ArrayBuffer; }
 export type FlvFrame = PacketFrame;
 type PacketConfiguration = Pick<PacketDecodeIndex, 'codec' | 'description' | 'codecParameters'>;
 function packetDecoderConfig(index: PacketConfiguration): VideoDecoderConfig | null {

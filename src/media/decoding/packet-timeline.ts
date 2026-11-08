@@ -17,6 +17,7 @@ export class PacketTimeline {
   private pending:PacketFrame|null=null;
   private failure:unknown;
   private operation=0;
+  private inputWaitMs = 0;
   private actualPacket:PacketDecodePacket|undefined;
   private segmentStart=0;
   private growth?: () => Promise<void>;
@@ -78,6 +79,7 @@ export class PacketTimeline {
         if(!Number.isSafeInteger(frame.pts)||frame.pts<this.lastPts){frame.frame?.close();throw new MediaOpenError('decode',`解码输出显示顺序无效：${frame.pts} < ${this.lastPts}`);}
         if(frame.pts===this.lastPts){frame.frame?.close();continue;}
         this.lastPts=frame.pts;
+        if (this.inputWaitMs) { frame.inputWaitMs = this.inputWaitMs; this.inputWaitMs = 0; }
         const picture=this.pictures.get(frame.pts);frame.packetPicture=picture&&this.validPicture(frame.pts,picture)?picture:undefined;this.pictures.delete(frame.pts);return frame;
       }
       if (blocked) {
@@ -107,9 +109,14 @@ export class PacketTimeline {
       // Random access starts at a CRA; negative-leading HEVC/VVC pictures can
       // reference the previous GOP, so retain the explicit anchor boundary.
       if((this.index.codec==='hevc'||this.index.codec==='vvc'||this.index.codec==='mpeg2video'||this.index.packets[this.anchorIndex()].discontinuity)&&packet.pts<this.index.packets[this.anchorIndex()].pts){this.cursor++;continue;}
-      const readStarted = this.decoder.recordInputWait ? performance.now() : 0;
+      const measureInput = this.decoder.recordInputWait || this.index.codec === 'vvc' || this.decoder.hardwareAcceleration === 'prefer-hardware';
+      const readStarted = measureInput ? performance.now() : 0;
       const bytes=await this.read(packet);
-      this.decoder.recordInputWait?.(performance.now() - readStarted);
+      if (measureInput) {
+        const waited = performance.now() - readStarted;
+        this.inputWaitMs += waited;
+        this.decoder.recordInputWait?.(waited);
+      }
       let inputPicture: {au:number;configuration:number;singlePicture:boolean}|undefined;
       if (this.identifyPictures && this.pictures.size < 512) {
         const evidence=inspectPacketPicture(this.index.codec,this.index.configurations?.[this.configuration]??this.index.description,bytes);

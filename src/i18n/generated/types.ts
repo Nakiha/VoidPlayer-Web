@@ -798,6 +798,7 @@ export interface Sources {
   "player.fillView": "填满视图";
   "player.frames": "{count, plural, other {# 帧}}";
   "player.graphicsRecoveryFailed": "画面恢复失败，请刷新页面；若仍无画面，请完全退出并重新打开浏览器";
+  "player.hardwarePlaybackPressure": "硬件优先的解码轨道持续缺帧，多轨播放时可关闭部分轨道以减轻负担";
   "player.hdrDisplay": " · HDR 输出";
   "player.hdrSource": " · HDR 源";
   "player.hdrSourceSdrFallback": " · HDR 源（SDR 预览）";
@@ -828,6 +829,7 @@ export interface Sources {
   "player.uChannel": "U 通道";
   "player.uniformPixels": "统一像素";
   "player.vChannel": "V 通道";
+  "player.vvcPlaybackPressure": "H.266 软件解码轨道持续缺帧，可在「色彩与解码」中选择「自动扩容」或手动设置线程数，重新打开视频后生效";
   "player.waitingForFrame": "等待帧";
   "player.waitingForIndexData": "等待索引数据";
   "player.waitingForIndexFrameNotSynchronized": " · 等待索引，画面暂未同步";
@@ -2022,6 +2024,7 @@ export interface MessageParameters {
   "player.fillView": {  };
   "player.frames": { "count": number };
   "player.graphicsRecoveryFailed": {  };
+  "player.hardwarePlaybackPressure": {  };
   "player.hdrDisplay": {  };
   "player.hdrSource": {  };
   "player.hdrSourceSdrFallback": {  };
@@ -2052,6 +2055,7 @@ export interface MessageParameters {
   "player.uChannel": {  };
   "player.uniformPixels": {  };
   "player.vChannel": {  };
+  "player.vvcPlaybackPressure": {  };
   "player.waitingForFrame": {  };
   "player.waitingForIndexData": {  };
   "player.waitingForIndexFrameNotSynchronized": {  };

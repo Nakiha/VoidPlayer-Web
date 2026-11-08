@@ -1,5 +1,5 @@
 import type { SessionResources } from './resources.ts';
-import type { DecodedFrame, VvcTuningAxis, VvcTuningState } from '../media/contract.ts';
+import type { DecodedFrame, MediaSource, VvcTuningAxis, VvcTuningState } from '../media/contract.ts';
 import type { Slot } from '../../shared/review/model.ts';
 
 /** One independent, bounded producer per track. Never await decoding on the presentation path. */
@@ -24,6 +24,7 @@ export class FrameQueue {
   readonly done: Promise<void>;
   private gen: AsyncGenerator<DecodedFrame>;
   private nextStartedMs: number | null = null;
+  get producing() { return this.nextStartedMs !== null; }
   readonly capacity: number;
   readonly budgetBytes: number;
   constructor(gen: AsyncGenerator<DecodedFrame>, capacity = 4, budgetBytes?: number, resources?: SessionResources, estimateBytes = 0) {
@@ -160,17 +161,19 @@ export class PlaybackMeasurements {
 }
 
 /** Observe continuous playback in separate windows, excluding pauses and long UI ticks. */
-export class VvcGrowthMonitor {
+export class PlaybackStarvationMonitor {
   private wallMs = 0;
   private skippedMs = 0;
   private advanceUs = 0;
   private starvedMs = 0;
+  private inputWaitMs = 0;
   private slowWindows = 0;
 
-  reset() { this.wallMs = this.skippedMs = this.advanceUs = this.starvedMs = this.slowWindows = 0; }
+  reset() { this.wallMs = this.skippedMs = this.advanceUs = this.starvedMs = this.inputWaitMs = this.slowWindows = 0; }
 
-  sample(elapsed: number, advanceUs: number, starved: boolean, eligible: boolean) {
+  sample(elapsed: number, advanceUs: number, starved: boolean, eligible: boolean, inputWaitMs = 0) {
     if (!eligible) { this.reset(); return; }
+    this.inputWaitMs += inputWaitMs;
     if (elapsed > 100) {
       this.skippedMs += elapsed;
     } else {
@@ -183,14 +186,21 @@ export class VvcGrowthMonitor {
     const skipped = this.skippedMs / total;
     const speed = this.wallMs ? this.advanceUs / (this.wallMs * 1000) : 1;
     const starvation = this.wallMs ? this.starvedMs / this.wallMs : 0;
-    this.wallMs = this.skippedMs = this.advanceUs = this.starvedMs = 0;
-    this.slowWindows = skipped < .5 && speed < .95 && starvation >= .10 ? this.slowWindows + 1 : 0;
+    const inputLimited = this.inputWaitMs > total * .25;
+    this.wallMs = this.skippedMs = this.advanceUs = this.starvedMs = this.inputWaitMs = 0;
+    this.slowWindows = !inputLimited && skipped < .5 && speed < .95 && starvation >= .10 ? this.slowWindows + 1 : 0;
     return { speed, starvation, skipped, grow: this.slowWindows >= 2 };
   }
 }
 
+export type DecoderPressure = 'vvc-software' | 'hardware-preferred';
 
-type VvcObservation = NonNullable<ReturnType<VvcGrowthMonitor['sample']>>;
+export function decoderPressureKind({ info, wasmThreadMode }: MediaSource): DecoderPressure | undefined {
+  if (info.decoder === 'ffmpeg-wasm' && info.codec === 'vvc' && wasmThreadMode === 'auto') return 'vvc-software';
+  if (info.decoder === 'webcodecs' && info.hardwareAcceleration === 'prefer-hardware') return 'hardware-preferred';
+}
+
+type VvcObservation = NonNullable<ReturnType<PlaybackStarvationMonitor['sample']>>;
 
 export function vvcInputLimited(core: VvcTuningState) {
   return (core.inputWaitMs ?? 0) > (core.sampleMs ?? 0) * .25;

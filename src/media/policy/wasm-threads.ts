@@ -1,4 +1,5 @@
-export type WasmThreadMode = 'auto' | 'auto-grow' | 'manual' | 'single-thread';
+import type { WasmThreadMode } from '../contract.ts';
+export type { WasmThreadMode } from '../contract.ts';
 
 const key = 'voidplayer.wasm-thread-mode-v2';
 let mode: WasmThreadMode | undefined;

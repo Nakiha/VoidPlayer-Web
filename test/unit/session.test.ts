@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { ReviewSession } from '../../src/session.ts';
 import {getColorOutput,setColorOutput,defaultColorOutput} from '../../shared/color/color-output.ts';
 import {getColorMode,setColorMode,getReferenceDecode,setReferenceDecode} from '../../src/media/policy/color-mode.ts';
+import { setWasmThreadMode, wasmThreadMode } from '../../src/media/policy/wasm-threads.ts';
 import { minFrameDurationUs, planBackwardStep, planForwardStep, regionValue, timeUs, SLOTS } from '../../shared/review/model.ts';
 import { reviewTools } from '../../src/agent.ts';
 import type { MediaSource } from '../../src/media/contract.ts';
@@ -394,6 +395,80 @@ test('pause during playback stops drawing and keeps the last frame', async () =>
   assert.equal(drawn.length, count);
   assert.equal(session.getState().playing, false);
   await session.dispose();
+});
+
+test('automatic decode pressure warnings follow the limiting track and each fire once per session', async t => {
+  let now = 0;
+  t.mock.method(performance, 'now', () => now);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const previousMode = wasmThreadMode();
+  const notices: string[] = [];
+  let session = new ReviewSession(() => {});
+  session.onDecoderPressure = kind => notices.push(kind);
+  const track = (name: string, stepUs: number): MediaSource => {
+    const source = media(name, [0], 60_000_000).source;
+    source.framesFollowing = async function* (pts) {
+      while (pts < this.info.durationUs) {
+        pts += stepUs;
+        yield { ...await this.frameAt(0), ptsUs: pts };
+      }
+    };
+    return source;
+  };
+  const play = async () => {
+    await session.play();
+    for (let i = 0; i < 90; i++) {
+      now += 50;
+      t.mock.timers.tick(50);
+      await new Promise(resolve => setImmediate(resolve));
+    }
+    session.pause();
+  };
+  try {
+    setWasmThreadMode('auto');
+    let inputBound = true, inputWait = 0;
+    const software = { ...track('vvc', 1000), wasmThreadMode: 'auto' as const, get inputWaitMs() { return inputBound ? now : inputWait; } };
+    Object.assign(software.info, { codec: 'vvc', decoder: 'ffmpeg-wasm', indexState: 'building' });
+    const hardware = track('hardware', 50_000);
+    hardware.info.hardwareAcceleration = 'prefer-hardware';
+    await session.load('A', async () => software);
+    await session.load('B', async () => hardware);
+    await play();
+    assert.deepEqual([...notices], [], 'indexing and a faster peer waiting on the common clock are not decoder pressure');
+    software.info.indexState = 'complete';
+    await play();
+    assert.deepEqual([...notices], [], 'persistent input waits do not recommend more decoder threads');
+    inputWait = now; inputBound = false;
+    await play();
+    await play();
+    assert.deepEqual([...notices], ['vvc-software']);
+    await session.removeTrack('A');
+    await session.removeTrack('B');
+    const slowHardware = track('replacement', 1000);
+    slowHardware.info.hardwareAcceleration = 'prefer-hardware';
+    await session.load('B', async () => slowHardware);
+    setWasmThreadMode('manual');
+    await play();
+    assert.deepEqual([...notices], ['vvc-software']);
+    setWasmThreadMode('auto');
+    await play();
+    await play();
+    assert.deepEqual([...notices], ['vvc-software', 'hardware-preferred']);
+    await session.dispose();
+    session = new ReviewSession(() => {});
+    session.onDecoderPressure = kind => notices.push(kind);
+    const fresh = track('new-page', 1000);
+    fresh.info.hardwareAcceleration = 'no-preference';
+    await session.load('A', async () => fresh);
+    await play();
+    assert.equal(notices.length, 2, 'browser default does not establish a hardware preference');
+    fresh.info.hardwareAcceleration = 'prefer-hardware';
+    await play();
+    assert.deepEqual([...notices], ['vvc-software', 'hardware-preferred', 'hardware-preferred']);
+  } finally {
+    await session.dispose();
+    setWasmThreadMode(previousMode);
+  }
 });
 
 test('slow decode cannot finish playback before the final frame is drawn', async () => {

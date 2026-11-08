@@ -10,6 +10,7 @@ import { getPresentationChannel, setPresentationChannel } from './presentation/p
 import { SessionResources } from './session/resources.ts';
 import { schedulePresentationTick } from './presentation/presentation-tick.ts';
 import { getColorMode, getReferenceDecode } from './media/policy/color-mode.ts';
+import { wasmThreadMode } from './media/policy/wasm-threads.ts';
 import { type ReferenceDecode, type ColorMode, type DecodeConfiguration } from '../shared/color/decode-policy-types.ts';
 import { getColorOutput, defaultColorOutput } from '../shared/color/color-output.ts';
 import type { ColorOutput } from '../shared/color/color-output.ts';
@@ -24,7 +25,7 @@ import { applyMarkEdit, buildMark, mergeStoredMarks } from '../shared/review/mar
 import { getTrackAnalysisCapabilities, locateTrackAnalysisSample, queryTrackAnalysis, rankTrackAnalysisFrame, resolveTrackAnalysisSeek } from './session/metadata-analysis.ts';
 import { currentColorEvidence, currentComparisonConditions, isSameColorConfiguration, persistColorConfiguration, validateColorTransition } from './session/color.ts';
 import { offerSessionThumbnail } from './session/thumbnail.ts';
-import { FrameQueue, PlaybackMeasurements, VvcGrowthMonitor, VvcGrowthPolicy, vvcInputLimited } from './session/playback.ts';
+import { decoderPressureKind, type DecoderPressure, FrameQueue, PlaybackMeasurements, PlaybackStarvationMonitor, VvcGrowthPolicy, vvcInputLimited } from './session/playback.ts';
 import { planBackwardStep, planForwardStep, slotValue, timeUs } from '../shared/review/model.ts';
 import type { FrameInfo, MediaInfo } from '../shared/media/types.ts';
 import type { Mark, Slot } from '../shared/review/model.ts';
@@ -950,6 +951,8 @@ export class ReviewSession {
     return this.getState();
   }
   private readonly vvcGrowth = new WeakMap<MediaSource, { policy: VvcGrowthPolicy; blocked: Set<VvcTuningAxis>; pending: boolean }>();
+  onDecoderPressure?: (kind: DecoderPressure) => void;
+  private readonly reportedPressure = new Set<DecoderPressure>();
   // Decoders run independently. A bounded queue provides backpressure; the
   // common clock waits for both tracks instead of leaving their frames behind.
   private async playbackLoop(revision: number, base: number, start: number) {
@@ -964,9 +967,13 @@ export class ReviewSession {
     });
     readers.forEach(r => r.resume());
     const metrics = this.measurements = new PlaybackMeasurements(Object.fromEntries(entries.map(([slot, track]) => [slot, track.sourceGen])));
+    const pressureWatches = this.onDecoderPressure && wasmThreadMode() === 'auto' ? entries.flatMap(([, track], i) => {
+      const kind = decoderPressureKind(track.source);
+      return kind && !this.reportedPressure.has(kind) ? [{ kind, track, i, monitor: new PlaybackStarvationMonitor(), inputWaitMs: track.source.inputWaitMs ?? 0 }] : [];
+    }) : [];
     const tuningSource = this.tracks.size === 1 ? entries[0]?.[1].source : undefined;
     const tuneVvc = tuningSource?.tuneVvc?.bind(tuningSource);
-    const monitor = tuneVvc ? new VvcGrowthMonitor() : null;
+    const monitor = tuneVvc ? new PlaybackStarvationMonitor() : null;
     let tuning = tuningSource && this.vvcGrowth.get(tuningSource);
     if (tuneVvc && tuningSource && !tuning) {
       const blocked = new Set<VvcTuningAxis>();
@@ -975,8 +982,8 @@ export class ReviewSession {
     }
     const growth = tuning;
     growth?.policy.restartObservation();
-    let deferred: { core: VvcTuningState; window: NonNullable<ReturnType<VvcGrowthMonitor['sample']>>; deadline: number } | undefined;
-    const grow = async (axis: VvcTuningAxis, core: VvcTuningState, window: NonNullable<ReturnType<VvcGrowthMonitor['sample']>>) => {
+    let deferred: { core: VvcTuningState; window: NonNullable<ReturnType<PlaybackStarvationMonitor['sample']>>; deadline: number } | undefined;
+    const grow = async (axis: VvcTuningAxis, core: VvcTuningState, window: NonNullable<ReturnType<PlaybackStarvationMonitor['sample']>>) => {
       if (!active() || this.tracks.size !== 1 || globalThis.document?.visibilityState === 'hidden') return;
       try {
         const result = await tuneVvc!(axis);
@@ -1013,12 +1020,32 @@ export class ReviewSession {
           else if (track.syncState) track.syncState = reader.ended || (reader.frames.at(-1)?.ptsUs ?? track.frame!.ptsUs) + track.offsetUs >= this.positionUs ? undefined : 'catching-up';
         });
         const waitingForIndex = (i: number) => !!entries[i][1].syncState;
-        const coverage = Math.min(...readers.map((r, i) => entries[i][1].failure || waitingForIndex(i) ? Infinity : r.ended ? this.durationUs - 1
-          : (r.frames.at(-1)?.ptsUs ?? entries[i][1].frame!.ptsUs) + entries[i][1].offsetUs));
+        const trackCoverage = readers.map((r, i) => entries[i][1].failure || waitingForIndex(i) ? Infinity : r.ended ? this.durationUs - 1
+          : (r.frames.at(-1)?.ptsUs ?? entries[i][1].frame!.ptsUs) + entries[i][1].offsetUs);
+        const coverage = Math.min(...trackCoverage);
         const target = Math.max(this.positionUs, Math.min(this.durationUs - 1,
           this.positionUs + Math.round(elapsed * 1000), coverage));
         const advance = target - this.positionUs;
         metrics.waitingMs += Math.max(0, elapsed - advance / 1000);
+        for (const watch of pressureWatches) {
+          const { kind, track, i } = watch;
+          if (this.reportedPressure.has(kind)) continue;
+          const { info } = track.source;
+          const localTime = target - track.offsetUs;
+          const eligible = !track.failure && !track.syncState && !readers[i].ended && !readers[i].error && !info.indexWaiting
+            && (!info.indexState || info.indexState === 'complete') && localTime >= 0 && localTime < info.durationUs
+            && globalThis.document?.visibilityState !== 'hidden' && decoderPressureKind(track.source) === kind;
+          // Attribute lost clock time only to a track that actually exhausted its frame coverage.
+          const starved = trackCoverage[i] === coverage && coverage < this.positionUs + elapsed * 1000
+            && (readers[i].frames.length > 0 || readers[i].producing);
+          const inputWaitMs = track.source.inputWaitMs ?? 0;
+          const sample = watch.monitor.sample(elapsed, advance, starved, eligible, Math.max(0, inputWaitMs - watch.inputWaitMs));
+          watch.inputWaitMs = inputWaitMs;
+          if (sample?.grow && sample.speed > 0 && wasmThreadMode() === 'auto') {
+            this.reportedPressure.add(kind);
+            this.onDecoderPressure?.(kind);
+          }
+        }
         if (monitor && tuneVvc && tuningSource && growth && !growth.pending) {
           const reader = readers[0];
           const eligible = !reader.ended && !reader.error && tuningSource.info.indexState === 'complete'

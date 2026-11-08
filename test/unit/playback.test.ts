@@ -1,7 +1,7 @@
 import { rgbaDescription } from '../../shared/media/frame-description.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { FrameQueue, PlaybackMeasurements, VvcGrowthMonitor, VvcGrowthPolicy } from '../../src/session/playback.ts';
+import { FrameQueue, PlaybackMeasurements, PlaybackStarvationMonitor, VvcGrowthPolicy } from '../../src/session/playback.ts';
 import { assessPlayback } from '../../src/session/benchmark.ts';
 import { WorkerRpc } from '../../src/media/decoding/ffmpeg-media.ts';
 const turn = () => new Promise<void>(r => setTimeout(r, 0));
@@ -143,9 +143,9 @@ test('queue diagnostics distinguish an in-flight producer from queued frame cove
 });
 
 test('VVC growth needs consecutive windows of slow playback with an empty decode queue', () => {
-  const monitor = new VvcGrowthMonitor();
+  const monitor = new PlaybackStarvationMonitor();
   const window = (starved: boolean, longTick = false) => {
-    let result: ReturnType<VvcGrowthMonitor['sample']>;
+    let result: ReturnType<PlaybackStarvationMonitor['sample']>;
     if (longTick) monitor.sample(150, 0, true, true);
     for (let i = 0; i < (longTick ? 37 : 40); i++) result = monitor.sample(50, 40000, starved, true);
     assert.ok(result);
