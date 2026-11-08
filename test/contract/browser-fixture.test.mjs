@@ -12,7 +12,7 @@ import { chromiumLaunchOptions } from '../../scripts/testing/browser-engines.mjs
 test('software graphics flags stay in Linux headless checks and preserve caller launch options', () => {
   const options = { headless: true, timeout: 1234, args: ['--no-sandbox', '--enable-unsafe-webgpu'] };
   const linux = chromiumLaunchOptions(options, 'linux');
-  assert.equal(linux.channel, 'chromium');
+  assert.equal(linux.channel, undefined);
   assert.equal(linux.timeout, 1234);
   for (const flag of ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--disable-accelerated-video-decode', '--disable-gpu-watchdog',
     '--enable-gpu', '--use-vulkan=swiftshader', '--enable-features=Vulkan'])

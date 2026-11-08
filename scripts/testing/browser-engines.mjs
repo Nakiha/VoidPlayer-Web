@@ -15,8 +15,7 @@ export function chromiumLaunchOptions(options = {}, platform = process.platform)
     for (let i = args.length - 1; i >= 0; i--) if (args[i].startsWith('--enable-features=')) args.splice(i, 1);
     args.push(`--enable-features=${[...new Set([...features, 'Vulkan'])].join(',')}`);
   }
-  const channel = platform === 'linux' && !options.executablePath ? { channel: 'chromium' } : {};
-  return { ...channel, ...options, args: [...new Set([...args, '--enable-unsafe-webgpu', `--use-angle=${backend}`, ...software])] };
+  return { ...options, args: [...new Set([...args, '--enable-unsafe-webgpu', `--use-angle=${backend}`, ...software])] };
 }
 const chromium = new Proxy(nativeChromium, {
   get(target, key) {
