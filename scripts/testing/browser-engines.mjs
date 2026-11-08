@@ -3,7 +3,7 @@ import { chromium as nativeChromium, webkit, firefox } from 'playwright';
 // Linux CI pairs Dawn and the compositor on SwiftShader Vulkan under Xvfb.
 // ANGLE alone can create an adapter but lose it at getCurrentTexture().
 // Suite deadlines and device/resource errors remain fatal.
-export function chromiumLaunchOptions(options = {}, platform = process.platform) {
+export function chromiumLaunchOptions(options = {}, platform = process.platform, legacyScreenshot = !!process.env.PLAYWRIGHT_LEGACY_SCREENSHOT) {
   if (options.headless === false) return options;
   const backend = platform === 'darwin' ? 'metal' : platform === 'win32' ? 'd3d11' : 'swiftshader';
   const software = platform === 'linux'
@@ -13,7 +13,10 @@ export function chromiumLaunchOptions(options = {}, platform = process.platform)
   if (platform === 'linux') {
     const features = args.filter(arg => arg.startsWith('--enable-features=')).flatMap(arg => arg.slice('--enable-features='.length).split(','));
     for (let i = args.length - 1; i >= 0; i--) if (args[i].startsWith('--enable-features=')) args.splice(i, 1);
-    args.push(`--enable-features=${[...new Set([...features, 'Vulkan'])].join(',')}`);
+    // Chromium keeps the last enable-features switch, including over Playwright's
+    // defaults. Preserve its screenshot surface instead of silently reverting it.
+    const defaults = ['Vulkan', ...(legacyScreenshot ? [] : ['CDPScreenshotNewSurface'])];
+    args.push(`--enable-features=${[...new Set([...features, ...defaults])].join(',')}`);
   }
   return { ...options, args: [...new Set([...args, '--enable-unsafe-webgpu', `--use-angle=${backend}`, ...software])] };
 }

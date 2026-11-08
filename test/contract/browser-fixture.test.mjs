@@ -15,7 +15,7 @@ test('software graphics flags stay in Linux headless checks and preserve caller 
   assert.equal(linux.channel, undefined);
   assert.equal(linux.timeout, 1234);
   for (const flag of ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--disable-accelerated-video-decode', '--disable-gpu-watchdog',
-    '--enable-gpu', '--use-vulkan=swiftshader', '--enable-features=Vulkan'])
+    '--enable-gpu', '--use-vulkan=swiftshader', '--enable-features=Vulkan,CDPScreenshotNewSurface'])
     assert.ok(linux.args.includes(flag), flag);
   assert.equal(linux.args.filter(flag => flag === '--enable-unsafe-webgpu').length, 1);
   assert.deepEqual(options.args, ['--no-sandbox', '--enable-unsafe-webgpu']);
@@ -32,7 +32,10 @@ test('software graphics flags stay in Linux headless checks and preserve caller 
   assert.equal(chromiumLaunchOptions({ channel: 'chrome' }, 'linux').channel, 'chrome');
   assert.equal(chromiumLaunchOptions({ executablePath: '/custom/chromium' }, 'linux').channel, undefined);
   const features = chromiumLaunchOptions({ args: ['--enable-features=CanvasHDR', '--enable-features=CanvasHDR,OtherFeature'] }, 'linux').args;
-  assert.deepEqual(features.filter(arg => arg.startsWith('--enable-features=')), ['--enable-features=CanvasHDR,OtherFeature,Vulkan']);
+  assert.deepEqual(features.filter(arg => arg.startsWith('--enable-features=')), ['--enable-features=CanvasHDR,OtherFeature,Vulkan,CDPScreenshotNewSurface']);
+  const legacy = chromiumLaunchOptions({}, 'linux', true);
+  assert.ok(legacy.args.includes('--enable-features=Vulkan'));
+  assert.ok(!legacy.args.some(arg => arg.includes('CDPScreenshotNewSurface')));
 });
 
 async function scenario(body) {

@@ -9,6 +9,9 @@ Linux 功能测试中的无窗口 Chromium 使用显式 SwiftShader WebGPU；mac
 分析工具条换行、区间按钮和弹出编辑器的尺寸观察只调度下一帧布局更新，复用可取消的 frame task；卸载时取消待执行更新。
 复用双引擎 Sites 与 WebKit analysis-layout 的既有素材、视口和错误断言，不增加媒体/解码循环，不忽略 ResizeObserver 错误或恢复失败提示。
 浏览器启动契约补充 Linux 软件参数、原生平台、有窗口配置、调用者参数保留与去重检查，无需启动浏览器。
+合并 Vulkan 功能开关时保留 Playwright 默认的 `CDPScreenshotNewSurface`（仍尊重其 legacy 截图诊断选项），
+避免重复 `--enable-features` 覆盖默认开关后，播放中的截图阻塞或改变后续交互。独立 Linux 对照使用同一标注用例：
+[原配置失败，保留截图开关后通过](https://github.com/Nakiha/VoidPlayer-Web/actions/runs/42516311397)，没有修改行为断言。
 
 Actions 迁移到 checkout/setup-node/setup-python v7、cache（含 restore/save）v6、upload-artifact v7、download-artifact v8；
 Emscripten 安装迁移至 emscripten-core/setup-emsdk v16，core 与编译器锁不变。保留压缩 artifact、隐藏文件配置、校验失败门禁和现有缓存键；
