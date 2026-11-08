@@ -1,3 +1,5 @@
+import { buildInfo } from '../build-info.ts';
+import type { ToastStack } from './toast.ts';
 import { identityHealth } from '../services/identity.ts';
 import { SLOTS } from '../../shared/review/model.ts';
 import type { ReviewSession } from '../session.ts';
@@ -9,8 +11,27 @@ type Action = (action: () => unknown | Promise<unknown>, name?: string, data?: u
 type Location = { absolutePath: string; reveal: boolean };
 const localPage = () => ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
 
-export function installSourceActions(session: ReviewSession, act: Action, onReconnect: () => void = () => {}, notify: (message: string) => void = () => {}) {
-  const status = document.getElementById('server-status')!;
+export function installSourceActions(session: ReviewSession, act: Action, onReconnect: () => void = () => {}, notify: (message: string) => void, updates: { toasts: ToastStack; refresh(buildId: string): Promise<void> }) {
+  const status = document.querySelector<HTMLAnchorElement>('#server-status')!;
+  const update = document.querySelector<HTMLButtonElement>('#server-update')!;
+  let target = '', dismissUpdate: (() => void) | undefined, refreshing = false;
+  const refreshLabel = () => t(msg('update.refresh', '保存现场并刷新'));
+  function showRelease(id: string) {
+    const next = buildInfo?.buildId && id !== buildInfo.buildId ? id : '';
+    if (next === target) return;
+    target = next;
+    dismissUpdate?.(); dismissUpdate = undefined;
+    if (target) dismissUpdate = updates.toasts.show(() => t(msg('update.available', '后端已发布新版，可以继续当前评审，或刷新到新版。')), {
+      kind: 'warning', action: { label: refreshLabel, onClick: () => update.click() },
+    });
+  }
+  update.onclick = async () => {
+    if (!target || refreshing || update.disabled) return;
+    refreshing = true; update.disabled = true;
+    try { await updates.refresh(target); }
+    catch (error) { updates.toasts.show(error instanceof Error ? error.message : String(error), { kind: 'warning' }); }
+    finally { refreshing = false; renderStatus(); }
+  };
   const locations = new Map<string, Location>();
   const pending = new Set<string>();
   let disposed = false, probing = false, canReveal = false, statusActor = '';
@@ -28,6 +49,7 @@ export function installSourceActions(session: ReviewSession, act: Action, onReco
       if (health?.service === 'voidplayer-media') {
         state = 'connected';
         rttMs = health.rttMs;
+        if (!disposed && health.frontendBuildId) showRelease(health.frontendBuildId);
         const actor = health.actor && typeof health.actor.id === 'string' && typeof health.actor.name === 'string' ? health.actor : null;
 
         if (actor) statusActor = actor.name; canReveal = !!health.capabilities?.reveal && localPage();
@@ -42,12 +64,15 @@ export function installSourceActions(session: ReviewSession, act: Action, onReco
   }
   function renderStatus() {
     const state = status.dataset.state;
+    status.hidden = !!target && state === 'connected'; update.hidden = !status.hidden;
+    update.disabled = refreshing || state !== 'connected';
+    update.setAttribute('aria-label', refreshLabel()); update.dataset.tooltip = refreshLabel();
     const label = state === 'connected' ? t(msg("sourceActions.connected", "媒体服务已连接")) : state === 'offline' ? t(msg("sourceActions.offline", "网络离线；本地文件仍可播放")) : t(msg("sourceActions.disconnected", "媒体服务未连接；本地文件仍可播放"));
-    status.setAttribute('aria-label', label + (statusActor ? ` · ${statusActor}` : '') + t(msg("sourceActions.openAdminSuffix", "，打开服务管理（新标签页）")));
+    if (state !== 'checking') status.setAttribute('aria-label', label + (statusActor ? ` · ${statusActor}` : '') + t(msg("sourceActions.openAdminSuffix", "，打开服务管理（新标签页）")));
     const connection = state === 'connected' ? t(msg('sourceActions.statusOnline', '在线'))
       : state === 'checking' ? t(msg('sourceActions.statusChecking', '检查中')) : t(msg('sourceActions.statusOffline', '离线'));
-    status.dataset.tooltip = t(msg('sourceActions.connectionTooltip', '打开后端管理页\n状态：{state}\nRTT：{rtt}'), {
-      state:connection, rtt:state === 'connected' && rttMs !== undefined ? `${Math.round(rttMs)}ms` : '—',
+    status.dataset.tooltip = t(msg('sourceActions.connectionTooltip', '打开后端管理页\n{address}\n状态：{state}\nRTT：{rtt}'), {
+      address:status.href, state:connection, rtt:state === 'connected' && rttMs !== undefined ? `${Math.round(rttMs)}ms` : '—',
     });
   }
   function render(state = session.getState()) {
@@ -89,10 +114,12 @@ export function installSourceActions(session: ReviewSession, act: Action, onReco
   }
 
   const stopLanguage = onLanguageChange(() => { if (!disposed) { renderStatus(); render(); } }, lifetime.signal);
+  window.addEventListener('focus', () => void probe(), { signal: lifetime.signal });
   window.addEventListener('online', () => void probe(), { signal: lifetime.signal });
   window.addEventListener('offline', () => void probe(), { signal: lifetime.signal });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) void probe(); }, { signal: lifetime.signal });
   const timer = setInterval(() => { if (!document.hidden) { pending.clear(); void probe(); } }, 10000);
+  renderStatus();
   void probe();
-  return { render, dispose() { disposed = true; clearInterval(timer); stopLanguage(); lifetime.abort(); } };
+  return { render, dispose() { disposed = true; dismissUpdate?.(); clearInterval(timer); stopLanguage(); lifetime.abort(); } };
 }

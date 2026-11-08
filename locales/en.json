@@ -4250,8 +4250,8 @@
     "translation": "Media service connected"
   },
   "sourceActions.connectionTooltip": {
-    "source": "打开后端管理页\n状态：{state}\nRTT：{rtt}",
-    "translation": "Open service admin\nStatus: {state}\nRTT: {rtt}"
+    "source": "打开后端管理页\n{address}\n状态：{state}\nRTT：{rtt}",
+    "translation": "Open service admin\n{address}\nStatus: {state}\nRTT: {rtt}"
   },
   "sourceActions.copied": {
     "source": "绝对路径已拷贝",
@@ -4895,6 +4895,38 @@
   "ui.releaseCollapse": {
     "source": "松开收起面板",
     "translation": "Release to collapse panel"
+  },
+  "update.available": {
+    "source": "后端已发布新版，可以继续当前评审，或刷新到新版。",
+    "translation": "The server has published an update. Continue this review or refresh to use the new version."
+  },
+  "update.bound": {
+    "source": "当前工作区已连接到服务器。请保存工作区后重新打开，当前窗口可以继续使用。",
+    "translation": "This workspace is linked to the server. Save it and reopen it to update. You can keep using this window."
+  },
+  "update.changed": {
+    "source": "工作区正在变化，请稍后再刷新。",
+    "translation": "The workspace is changing. Try refreshing again in a moment."
+  },
+  "update.localFile": {
+    "source": "刷新后无法重新读取「{name}」。请继续使用当前窗口，或先导出工作区。",
+    "translation": "“{name}” cannot be reopened after refreshing. Keep using this window or export the workspace first."
+  },
+  "update.preparing": {
+    "source": "新版离线资源尚未准备好，请稍后再刷新。",
+    "translation": "The new offline assets are still being prepared. Try refreshing again shortly."
+  },
+  "update.refresh": {
+    "source": "保存现场并刷新",
+    "translation": "Save this session and refresh"
+  },
+  "update.retry": {
+    "source": "目标版本已变化或服务暂不可用，请稍后再刷新。",
+    "translation": "The target version changed or the service is unavailable. Try refreshing again shortly."
+  },
+  "update.wait": {
+    "source": "请先暂停播放，完成标注并等载入和保存结束，再刷新。",
+    "translation": "Pause playback, finish editing annotations and wait for loading and saving to complete before refreshing."
   },
   "workbench.collapsePanel": {
     "source": "收起{panel}",

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="gOcean" x1="0" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#4cbfff"/>
+      <stop offset="1" stop-color="#1756ce"/>
+    </linearGradient>
+    <linearGradient id="gSky" x1="0" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#9ae8ff"/>
+      <stop offset="1" stop-color="#329dde"/>
+    </linearGradient>
+    <linearGradient id="gCyan" x1="0" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#10cde2"/>
+      <stop offset="1" stop-color="#0385bb"/>
+    </linearGradient>
+    <linearGradient id="gLagoon" x1="0" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#178ddb"/>
+      <stop offset="1" stop-color="#0567b9"/>
+    </linearGradient>
+    <linearGradient id="gAqua" x1="0" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#29cbdf"/>
+      <stop offset="1" stop-color="#009bb9"/>
+    </linearGradient>
+    <linearGradient id="gTurquoise" x1="0" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#22d4d5"/>
+      <stop offset="1" stop-color="#099fa9"/>
+    </linearGradient>
+    <linearGradient id="gMint" x1="0" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#72f3d8"/>
+      <stop offset="1" stop-color="#04bfad"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#gOcean)" d="M260 190H512V488H184V266A76 76 0 0 1 260 190Z"/>
+  <path fill="url(#gSky)" d="M512 190H764A76 76 0 0 1 840 266V488H512Z"/>
+  <path fill="url(#gCyan)" d="M184 488H512V830H260A76 76 0 0 1 184 754Z"/>
+  <path fill="url(#gLagoon)" d="M512 488H676V652H512Z"/>
+  <path fill="url(#gAqua)" d="M676 488H840V652H676Z"/>
+  <path fill="url(#gTurquoise)" d="M512 652H676V830H512Z"/>
+  <path fill="url(#gMint)" d="M676 652H840V754A76 76 0 0 1 764 830H676Z"/>
+</svg>

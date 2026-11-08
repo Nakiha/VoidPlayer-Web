@@ -44,7 +44,7 @@ middle-filename[data-display]::after { grid-area: 1 / 1; justify-self: start; wi
 .topbar .add-video { flex: 0 0 auto; height: var(--button-size); white-space: nowrap; color: var(--text); background: var(--surface-control); --button-hover-text: var(--accent); --button-press-text: var(--accent); --button-press-fill: var(--glass-control-selected-pressed); }
 .topbar .add-video:hover:not(:disabled) { color: var(--accent); background: var(--glass-control-selected-hover); }
 .topbar .add-video:disabled { cursor: default; }
-.brand { font-size: var(--text-brand); font-weight: 600; letter-spacing: -.4px; margin-right: var(--control-gap); white-space: nowrap; }
+.brand { font-size: var(--text-brand); font-weight: 600; letter-spacing: -.4px; white-space: nowrap; }
 /* 品牌按钮保持纯文字；静止悬停按需加载片头，点击打开关于。 */
 button.brand { border: 0; background: transparent; padding: 0; min-height: 0; border-radius: var(--radius-small); gap: 0; }
 /* Product title remains a plain button; the temporary effect copy animates independently. */
@@ -111,7 +111,12 @@ button.brand:hover, :root[data-keyboard-navigation] button.brand:focus-visible {
 .transport-dock { position:absolute; z-index:3; left:var(--transport-inset); right:var(--transport-inset); bottom:var(--transport-inset); display:flex; align-items:center; min-width:0; height:var(--transport-height); }
 .transport-dock:has(.transport[hidden]) { display:none; }
 .transport { position:relative; flex:1; min-width:0; width:auto; height:var(--transport-height); display:flex; flex-direction:column; gap:var(--transport-row-gap); padding:var(--transport-padding); padding-right:0; border-radius:0; }
-.transport .timeline-control { flex: 1 1 0; width: auto; height: var(--control-height); }
+.transport #server-update { color: var(--connection-waiting); }
+@media (prefers-reduced-motion: no-preference) {
+  #server-update:not([hidden]) svg { animation: update-hop 480ms ease-out; }
+  @keyframes update-hop { 35% { transform: translateY(-3px) rotate(15deg); } 70% { transform: translateY(1px); } }
+}
+.timeline-control { flex: 1 1 0; width: auto; height: var(--control-height); }
 .transport-actions { display: flex; align-items: center; gap: var(--transport-group-gap); width: 100%; min-width: 0; height: var(--button-size); }
 .transport-features { display:flex; align-items:center; flex:0 0 auto; gap:var(--transport-group-gap); }
 .transport-features > .icon-button { background:transparent; }

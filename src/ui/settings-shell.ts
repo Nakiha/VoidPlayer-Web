@@ -2,6 +2,7 @@ import { t, th, msg } from '../i18n.ts';
 import { colorSettingsShell } from './color-flow.ts';
 import { savedWorkspaceShell } from './saved-workspaces.ts';
 import { icon } from './icons.ts';
+import { aboutFrameGraph, aboutMark } from './about-banner.ts';
 import { buildInfo } from '../build-info.ts';
 import { ACCENTS, BASE_COLORS, customTheme } from './appearance.ts';
 import { shortcutLabel } from './shortcuts.ts';
@@ -135,8 +136,14 @@ export function settingsShell() {
       </section>
       <section id="settings-pane-about" role="tabpanel" aria-labelledby="settings-tab-about" tabindex="0" hidden>
         ${paneTitle(t(msg("settingsShell.about", "关于")))}
-        <div class="settings-section"><h4 class="settings-section-title">VoidPlayer</h4><div class="about-project settings-group">
-          <div class="about-project-row"><span>${th(msg("settingsShell.version", "版本"))}</span><span id="about-version">${buildInfo?.version ?? t(msg("settingsShell.developmentBuild", "开发版本"))}</span></div>
+        <header class="about-banner">
+          ${aboutFrameGraph}<div class="about-ruler" aria-hidden="true"></div>
+          <div class="about-banner-copy"><h3>VoidPlayer</h3>
+            <p>${th(msg("settingsShell.version", "版本"))} <span id="about-version">${buildInfo?.version ?? t(msg("settingsShell.developmentBuild", "开发版本"))}</span></p>
+          </div>
+          ${aboutMark}
+        </header>
+        <div class="settings-section"><div class="about-project settings-group">
           <div id="web-app" class="about-project-row" hidden>
             <span>${th(msg('pwa.webApp', 'Web 应用'))}</span>
             <button id="web-app-install" type="button"></button>

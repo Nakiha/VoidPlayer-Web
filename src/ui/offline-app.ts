@@ -18,6 +18,27 @@ function installHelp(platform: ReturnType<typeof safariPlatform>) {
   return t(msg('pwa.browserInstall', '请在浏览器菜单中选择安装应用，若没有此选项，请用桌面 Chrome 或 Edge 打开本页'));
 }
 
+export async function prepareOfflineUpdate(buildId: string) {
+  if (!navigator.serviceWorker?.controller) return;
+  const registration = await navigator.serviceWorker.getRegistration();
+  if (!registration) return;
+  const ready = async () => {
+    const name = (await caches.keys()).find(key => key.startsWith(`voidplayer-offline-${buildId}-`));
+    return !!name && !!await caches.match('/index.html', { cacheName: name, ignoreVary: true });
+  };
+  if (await ready()) return;
+  await registration.update();
+  const worker = registration.installing;
+  if (worker?.state === 'installing') await new Promise<void>(resolve => {
+    const done = () => { clearTimeout(timeout); worker.removeEventListener('statechange', changed); resolve(); };
+    const changed = () => { if (worker.state !== 'installing') done(); };
+    const timeout = setTimeout(done, 45000);
+    worker.addEventListener('statechange', changed);
+    changed();
+  });
+  if (!await ready()) throw new Error(t(msg('update.preparing', '新版离线资源尚未准备好，请稍后再刷新。')));
+}
+
 export async function installOfflineControls(toasts: ToastStack, identityReady: Promise<void>) {
   const safari = safariPlatform();
   const row = document.getElementById('web-app')!;

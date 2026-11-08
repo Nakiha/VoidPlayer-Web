@@ -3,6 +3,7 @@ type Health = {
   service: string;
   actor: Actor | null;
   rttMs?: number;
+  frontendBuildId?: string;
   capabilities?: {
     admin?: boolean;
     workspaces?: boolean;

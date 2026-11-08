@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="ocean" x2="0.2" y2="1"><stop stop-color="#259fff"/><stop offset="1" stop-color="#0575e5"/></linearGradient>
+    <linearGradient id="sky" x2="0.2" y2="1"><stop stop-color="#72dbff"/><stop offset="1" stop-color="#29acf0"/></linearGradient>
+    <linearGradient id="cyan" x2="0.3" y2="1"><stop stop-color="#12b5f1"/><stop offset="1" stop-color="#0395d1"/></linearGradient>
+    <linearGradient id="mint" x2="0.3" y2="1"><stop stop-color="#50f3db"/><stop offset="1" stop-color="#10c8bb"/></linearGradient>
+  </defs>
+  <rect x="184" y="190" width="656" height="640" rx="76" fill="url(#ocean)"/>
+  <path fill="url(#sky)" d="M512 190H764A76 76 0 0 1 840 266V488H512Z"/>
+  <path fill="url(#cyan)" d="M184 488H512V830H260A76 76 0 0 1 184 754Z"/>
+  <path fill="#078fd6" d="M512 488H676V652H512Z"/>
+  <path fill="#16b8db" d="M676 488H840V652H676Z"/>
+  <path fill="#0cbec7" d="M512 652H676V830H512Z"/>
+  <path fill="url(#mint)" d="M676 652H840V754A76 76 0 0 1 764 830H676Z"/>
+</svg>

@@ -1,7 +1,8 @@
 import path from 'node:path';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, stat, writeFile } from 'node:fs/promises';
+import { publishFrontend, verifyFrontendBuild } from './frontend-releases.ts';
 import { loadConfig, configRevision } from './config.ts';
-import { startService, validateServiceConfig } from './runtime.ts';
+import { startPublishedService, validateServiceConfig } from './runtime.ts';
 import { normalizeRoots } from './library-store.ts';
 import { request as httpsRequest } from 'node:https';
 import { prepareTls } from './tls.ts';
@@ -33,6 +34,7 @@ async function main() {
   --https IP或域名             开启内置 HTTPS；多个地址用逗号分隔，默认监听所有网卡
   --http-port 5181             额外 HTTP 入口，默认主端口加 1
   --no-http-guide              禁用额外入口；主端口仍兼容 HTTP
+  --publish-frontend /path/dist   校验并发布前端，然后退出
   --static /path/dist          覆盖随包网页资源目录
   --no-logs                   禁用用户主动上传日志
   --check                     检查配置与目录后退出
@@ -46,10 +48,14 @@ async function main() {
   }
   let dataDir = defaultDataDirectory();
   const args: string[] = [];
+  let publish: string | undefined;
   let init = false, check = false, healthcheck = false;
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i];
-    if (flag === '--init') init = true;
+    if (flag === '--publish-frontend') {
+      publish = argv[++i];
+      if (!publish || publish.startsWith('--')) throw new Error('--publish-frontend 缺少构建目录');
+    } else if (flag === '--init') init = true;
     else if (flag === '--check') check = true;
     else if (flag === '--healthcheck') healthcheck = true;
     else if (flag === '--data-dir' || flag.startsWith('--data-dir=')) {
@@ -58,10 +64,14 @@ async function main() {
       dataDir = path.resolve(value);
     } else args.push(flag);
   }
-  if (Number(init) + Number(check) + Number(healthcheck) > 1) throw new Error('--init、--check 和 --healthcheck 不能组合。');
+  if (Number(init) + Number(check) + Number(healthcheck) + Number(!!publish) > 1) throw new Error('--init、--check、--healthcheck 和 --publish-frontend 不能组合。');
   if (init && (process.env.VOIDPLAYER_CONFIG || args.some(a => a === '--config' || a.startsWith('--config=')))) throw new Error('--init 请使用 --data-dir 指定位置，不要同时指定 --config / VOIDPLAYER_CONFIG。');
   const configFile = path.join(dataDir, 'voidplayer.config.json');
   const config = await loadConfig(args, 'production', process.cwd(), { configFile, dataDir, staticDir: path.join(appDir, 'dist'), logsDir: path.join(dataDir, 'logs'), allowEmptyRoots: true });
+  if (publish) {
+    console.log('已发布前端', await publishFrontend(path.resolve(publish), path.join(config.dataDir, 'frontend-releases')));
+    return;
+  }
   if (healthcheck) {
     const host = config.host === '0.0.0.0' ? '127.0.0.1' : config.host === '::' ? '[::1]' : config.host.includes(':') ? `[${config.host}]` : config.host;
     if (config.tls) {
@@ -97,7 +107,12 @@ async function main() {
     await validateServiceConfig(config);
     if (config.tls) await prepareTls(config.tls, config.dataDir);
     if (init) await initialize();
-    else console.log(`配置与目录检查通过: ${config.origin?.file}`);
+    else {
+      if (await stat(path.join(config.staticDir, 'frontend-release.json')).catch(error => { if (error.code !== 'ENOENT') throw error; })) {
+        await verifyFrontendBuild(config.staticDir);
+      }
+      console.log(`配置与目录检查通过: ${config.origin?.file}`);
+    }
     return;
   }
   // A bare launch creates its own portable config; explicit config files are never replaced.
@@ -108,7 +123,7 @@ async function main() {
   console.log(`VoidPlayer ${version} (${revision})\n数据目录: ${dataDir}`);
   // The HTTP service and embedded agent guides are useful without frontend
   // assets. Explicit --init/--check retain full deployment validation above.
-  const service = await startService(config, false, { version, revision });
+  const service = await startPublishedService(config, false, { version, revision });
   let closing = false;
   const close = async () => { if (closing) return; closing = true; await service.close(); };
   const stop = () => { void close().catch(error => { console.error(error); process.exitCode = 1; }); };

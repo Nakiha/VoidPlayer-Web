@@ -27,7 +27,7 @@
 .source-row .source-open, .source-row .source-open:hover, .source-row .source-open:active { background: transparent !important; box-shadow: none !important; }
 .source-file:has(.source-open:active:not([aria-disabled=true])) { background: var(--button-press-fill, color-mix(in srgb, var(--accent) 22%, var(--surface-panel))) !important; }
 :root[data-keyboard-navigation] .source-file:has(.source-open:focus-visible) { background: var(--button-focus-fill) !important; }
-.source-remove { position: absolute; top: 2px; right: 2px; width: 24px; height: 24px; min-width: 24px; min-height: 24px; padding: 2px; opacity: 0; pointer-events: none; background: transparent; color: var(--text-secondary); }
+.source-row > .source-remove { position: absolute; inset-block: 0; right: 2px; margin-block: auto; padding: 2px; opacity: 0; pointer-events: none; background: transparent; color: var(--text-secondary); }
 .source-remove:hover { color: var(--action-danger); background: var(--action-danger-fill); }
 .source-row:hover .source-remove, .source-row:focus-within .source-remove { opacity: 1; pointer-events: auto; }
 .source-file, .library-mount, .library-path-item { -webkit-touch-callout: none; }
@@ -39,7 +39,8 @@
 .source-track-badges { display: flex; flex-wrap: wrap; gap: 2px; flex: none; max-width: 50%; }
 .source-track-badges .slot { flex: none; width: 18px; min-width: 18px; height: 18px; min-height: 18px; font-size: 11px; border-radius: 4px; }
 .source-title .filename { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.source-file.in-use .source-title { padding-right: 26px; }
+.source-file.in-use .source-title { padding-right: var(--button-size); }
+.source-file.in-use:is(:hover, :focus-within) .source-meta-columns { margin-right: var(--button-size); }
 .source-file .source-meta-columns { flex-wrap: wrap; align-content: flex-start; height: 18px; column-gap: 6px; row-gap: 4px; font-variant-numeric: tabular-nums; }
 .source-meta-columns > * { height: 18px; line-height: 18px; }
 .source-meta-size { flex: 0 0 7em; display: flex; align-items: center; justify-content: space-between; gap: 4px; }
@@ -147,5 +148,13 @@
 [data-library-density=compact] .source-row { min-height: 28px; padding: 4px; }
 [data-library-density=compact] .source-open { min-height: 20px; }
 [data-library-density=compact] .source-meta { display: none; }
+[data-library-density=compact] .source-file.in-use { --button-size: 20px; gap: 4px; padding-right: calc(var(--button-size) + 6px); }
+[data-library-density=compact] .source-remove > .icon { width: 14px; height: 14px; }
+/* Keep the existing badges in the compact title line for both recent and directory rows. */
+[data-library-density=compact] .source-file.in-use .source-info { flex-direction: row; align-items: center; gap: 4px; }
+[data-library-density=compact] .source-file.in-use :is(.source-meta-columns, .source-meta-size) { display: contents; }
+[data-library-density=compact] .source-file.in-use :is(.source-size-value, .source-meta-origin, .source-meta-time) { display: none; }
+[data-library-density=compact] .source-file.in-use .source-title { order: 1; flex: 1; padding-right: 0; }
+[data-library-density=compact] .source-file.in-use .source-track-badges { max-width: 60%; overflow: visible; }
 [data-library-density=compact] .source-thumb { width: 20px; height: 20px; flex-basis: 20px; border-radius: 3px; }
 [data-library-density=compact] .library-folder-icon > .icon { width: 18px; height: 18px; transform: none; }

@@ -839,7 +839,7 @@ try {
   });
 
   await check('topbar keeps every control visible across viewport widths', async page => {
-    for (const width of [320, 375, 480, 600, 680, 681, 793, 900, 1120, 1121, 1280]) {
+    for (const width of [320, 375, 480, 600, 680, 681, 743, 793, 900, 1120, 1121, 1280]) {
       await page.setViewportSize({ width, height: 800 });
       await settle(page);
       const layout = await page.evaluate(() => {
@@ -851,6 +851,11 @@ try {
         return { overflow: document.documentElement.scrollWidth > innerWidth, header: header.toJSON(), scrollWidth: bar.scrollWidth, clientWidth: bar.clientWidth, buttons };
       });
       assert.equal(layout.overflow, false, `${width}px document overflow`);
+      if (width === 743) {
+        const brand = layout.buttons.find(button => button.id === 'brand-about');
+        const arrangement = await page.locator('#layout-mode').boundingBox();
+        assert.ok(brand && arrangement && Math.abs(arrangement.x - brand.rect.right - 4) < 0.1, 'brand and layout controls have a 4px gap');
+      }
       for (const { id, rect } of layout.buttons) {
         assert.ok(rect.top >= layout.header.top - 1 && rect.bottom <= layout.header.bottom + 1, `${width}px wraps ${id}`);
         if (layout.scrollWidth === layout.clientWidth) assert.ok(rect.left >= -1 && rect.right <= width + 1, `${width}px clips ${id}`);
@@ -2490,6 +2495,23 @@ try {
     assert.deepEqual(new Set(state.history), new Set(state.ids));
     await browseLibrary(page, entries[0].rootId);
     const firstRow = page.locator(`#source-list .source-row[data-source-key=${JSON.stringify(sourceKey(entries[0],entries[0].id))}]`);
+    async function checkLoadedRowDensity() {
+      await firstRow.hover();
+      const button = firstRow.locator('.source-remove'), normal = await button.boundingBox();
+      const row = await firstRow.boundingBox();
+      assert.ok(Math.abs(normal.y + normal.height / 2 - row.y - row.height / 2) < 1, 'comfortable remove button is centered');
+      await page.locator('#library-compact').click();
+      await firstRow.hover(); await button.hover();
+      const compact = await firstRow.boundingBox(), small = await button.boundingBox();
+      const badge = await firstRow.locator('.source-track-badges .slot').first().boundingBox();
+      const thumb = await firstRow.locator('.source-thumb').boundingBox(), name = await firstRow.locator('.filename').boundingBox();
+      assert.ok(badge && Math.abs(badge.x - thumb.x - thumb.width - 4) < 1 && badge.x + badge.width <= name.x,
+        'compact track badge sits between the thumbnail and filename with a 4px thumbnail gap');
+      assert.ok(small.height < normal.height && small.y > compact.y && small.y + small.height < compact.y + compact.height,
+        'compact remove button fits inside the row');
+    }
+    await checkLoadedRowDensity();
+    await page.locator('#library-compact').click();
     for (const theme of ['light','dark']) {
       await page.emulateMedia({colorScheme:theme}); await firstRow.hover();
       await page.screenshot({path:path.join(screenshots,`${browserName}-source-hover-remove-${theme}.png`)});
@@ -2533,8 +2555,10 @@ try {
     await firstRow.click({button:'right'});
     await page.locator('#library-file-menu [data-action=add-to-view]').click();
     await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 2);
-    await firstRow.hover(); await firstRow.locator('.source-remove').click();
+    await checkLoadedRowDensity();
+    await firstRow.locator('.source-remove').click();
     await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 1);
+    await page.locator('#library-compact').click();
     await page.reload(); await page.waitForFunction(() => window.voidPlayer);
     await page.waitForFunction(() => document.querySelectorAll('#start-library-list .start-recent-row').length === 2);
     const rows = await page.locator('#start-library-list .start-recent-row').allTextContents();

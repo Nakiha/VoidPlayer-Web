@@ -242,6 +242,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
   return {
     openSpace: switchSpace,
     scope: () => scope,
+    locallySaved: () => !saving && !pendingQueue.size && !localFailure,
     async attachWorkspace(space: string, seededIds: string[] = []) {
       // Read the seeded records before switching scope so edits made during the
       // request keep their local draft. Set all bases before staging remote edits.

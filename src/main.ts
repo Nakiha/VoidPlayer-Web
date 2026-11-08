@@ -185,7 +185,9 @@ $('toggle-annotations').onclick = () => {
   else drawingEditor.open(workbench.selected());
 };
 const removeTrackDrag = installTrackDrag(session);
-const sourceActions = installSourceActions(session, act, () => { void workbench.refreshLibrary(); }, notify);
+const sourceActions = installSourceActions(session, act, () => { void workbench.refreshLibrary(); }, notify, {
+  toasts, refresh: buildId => workspaceTransfer.refreshForUpdate(buildId),
+});
 bindTimelinePreview($<HTMLInputElement>('timeline'), $('timeline-preview'));
 let timelineDragging = false;
 let pendingTimelineUs: number | null = null;
@@ -244,6 +246,7 @@ const viewport = new Viewport();
 const workspaceTransfer = installWorkspaceTransfer(session, {
   openSharedSpace: (space, seededIds) => seededIds ? annotationSync.attachWorkspace(space, seededIds) : annotationSync.openSpace(space),
   annotationScope: annotationSync.scope,
+  editsReady: () => !drawingEditor.active() && annotationSync.locallySaved(),
   identityReady: identitySettings.ready, act, toasts, closeSettings: settings.close, capture: () => ({ viewport: viewport.snapshot(), layout: workbench.getState() }),
   openingChanged: () => render(),
   beforeRestore() { if (drawingEditor.active()) $('mark-close').click(); return annotationSync.snapshotMode(); },

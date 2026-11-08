@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { loadConfig } from '../../../../server/config.ts';
 import { startService } from '../../../../server/runtime.ts';
-import { writePlayerWorker } from '../../../pwa/build.mjs';
+import { isPlayerAsset, writePlayerWorker } from '../../../pwa/build.mjs';
 
 export async function verifyOfflinePlayer(browser, engine, staticDir) {
   const root = await mkdtemp(path.join(tmpdir(), 'vp-offline-')), dist = path.join(root, 'dist');
@@ -36,6 +37,11 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
     assert.equal(manifest.start_url, '/');
     assert.equal(manifest.display, 'standalone');
     assert.deepEqual(manifest.icons.filter(icon => icon.purpose === 'any').map(icon => icon.sizes), ['192x192', '512x512']);
+    for (const icon of manifest.icons) {
+      const url = new URL(icon.src, base);
+      const bytes = await readFile(path.join(dist, url.pathname));
+      assert.equal(url.searchParams.get('v'), createHash('sha256').update(bytes).digest('hex'));
+    }
     await first.locator('#identity-welcome [data-guest]').click();
     await first.locator('#settings-open').click();
     await first.locator('#settings-tab-about').click();
@@ -88,7 +94,7 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
       assert.equal((await row.innerText()).trim(), rowText);
       assert.equal(await first.evaluate(() => navigator.serviceWorker.getRegistration().then(Boolean)), false);
       await first.addInitScript(() => Object.defineProperty(navigator, 'standalone', { value: true }));
-      const icon = path.join(dist, 'icon-512.png'), bytes = await readFile(icon);
+      const icon = path.join(dist, 'icon-maskable-512.png'), bytes = await readFile(icon);
       await writeFile(icon, 'incomplete deployment');
       await first.reload();
       await first.locator(status('failed')).waitFor({ state: 'attached' });
@@ -155,13 +161,19 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
       });
       await offline.evaluate(() => window.voidPlayer.step(1));
     }
-    const initial = await offline.evaluate(async () => {
+    const initial = await offline.evaluate(async icons => {
       const [cacheName] = await caches.keys();
       const keys = (await (await caches.open(cacheName)).keys()).map(key => new URL(key.url));
-      return { cacheName, privateUrls: keys.filter(url => url.search && !url.pathname.startsWith('/vendor/') ||
+      const iconUrls = icons.map(icon => new URL(icon.src, location.origin).href);
+      const tabIcons = [...document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]')].map(link => link.href);
+      const offlineIcons = await Promise.all([...iconUrls, ...tabIcons].map(async url => (await fetch(url)).ok));
+      return { cacheName, tabIcons, offlineIcons, privateUrls: keys.filter(url => url.search && !url.pathname.startsWith('/vendor/') && !iconUrls.includes(url.href) ||
         !/^\/(?:assets\/|vendor\/|(?:index\.html|theme-init\.js|startup-guard\.js|manifest\.webmanifest|.*\.(?:png|ico|svg))$)/.test(url.pathname)).map(String) };
-    });
+    }, manifest.icons);
     assert.deepEqual(initial.privateUrls, []);
+    assert.ok(initial.offlineIcons.every(Boolean));
+    assert.equal(initial.tabIcons.length, 3);
+    for (const url of initial.tabIcons) assert.match(new URL(url).pathname, /^\/assets\/(?:favicon|apple-touch-icon)-.+\.(?:ico|svg|png)$/);
     service = await startService(config);
     const range = await offline.evaluate(async () => {
       const res = await fetch('/icon-192.png', { headers: { Range: 'bytes=0-3' } });
@@ -172,12 +184,15 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
 
     if (engine === 'chromium') {
       // Publish a second build with a real changed startup asset. An incomplete deployment fails integrity first.
-      const chunks = (await readdir(path.join(dist, 'assets'))).filter(name => /\.(js|css)$/.test(name) && !/^(admin|connection-guide)-/.test(name));
+      const chunks = (await readdir(path.join(dist, 'assets'))).map(name => 'assets/' + name).filter(isPlayerAsset);
       const info = JSON.parse(await readFile(path.join(dist, 'build-info.json'), 'utf8'));
       const guard = path.join(dist, 'startup-guard.js'), previous = await readFile(guard, 'utf8');
       const updated = previous + '\n// PWA update fixture\n';
+      const index = path.join(dist, 'index.html');
+      const nextHtml = (await readFile(index, 'utf8')).replace('<head>', '<head><meta name="next-build" content="true">');
+      await writeFile(index, nextHtml);
       await writeFile(guard, updated);
-      await writePlayerWorker(dist, chunks.map(name => 'assets/' + name), info.coreAssetDigests);
+      await writePlayerWorker(dist, chunks, info.coreAssetDigests);
       await writeFile(guard, previous);
       const update = () => offline.evaluate(async () => {
         const reg = await navigator.serviceWorker.ready;
@@ -196,11 +211,24 @@ export async function verifyOfflinePlayer(browser, engine, staticDir) {
       assert.equal(await update(), 'installed');
       assert.ok(await offline.evaluate(async () => (await navigator.serviceWorker.ready).waiting));
       assert.equal(await offline.evaluate(() => window.voidPlayer.getState().positionUs), next);
+      const parallel = await context.newPage();
+      await parallel.goto(base);
+      assert.equal(await parallel.locator('meta[name=next-build]').count(), 0, 'a waiting update cannot mix new HTML into the active module graph');
+      assert.equal(await parallel.evaluate(() => fetch('/startup-guard.js').then(r => r.text())), previous);
+      const lazy = chunks.find(file => file.startsWith('assets/js-container-media-') && file.endsWith('.js'));
+      assert.ok(lazy, 'the JS container loader is a lazy player module');
+      const lazyFile = path.join(dist, lazy), lazyBytes = await readFile(lazyFile);
+      await rm(lazyFile);
+      assert.equal((await fetch(base + '/' + lazy)).status, 404);
+      await parallel.evaluate(url => import(url).then(() => true), '/' + lazy);
+      await writeFile(lazyFile, lazyBytes);
+      await parallel.close();
       await offline.evaluate(() => caches.open('unrelated-cache'));
       await offline.close();
       const reopened = await context.newPage();
       await reopened.goto(base);
       await reopened.waitForFunction(async old => !(await caches.keys()).includes(old), initial.cacheName);
+      assert.equal(await reopened.locator('meta[name=next-build]').count(), 1);
       assert.ok(await reopened.evaluate(() => caches.has('unrelated-cache')));
     }
     console.log(`PASS ${engine}: installable manifest, offline cold launch, isolated local decoding, online-only data and Range`);

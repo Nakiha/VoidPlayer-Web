@@ -10,6 +10,7 @@ export type RouteContext = {
   actor: Actor | null;
   requestId: string;
   reports: ReportLogs;
+  currentFrontend?: () => Promise<string | undefined>;
   adminExtra: {
     traffic: { activeRequests: number; completedRequests: number; abortedRequests: number };
     sockets: Set<unknown>;

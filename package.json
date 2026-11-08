@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/dev.ts",
-    "build": "npm run i18n:check && npm run check:boundaries && npm run check:shared && npm run check:environments && tsc --noEmit && vite build",
+    "build": "npm run i18n:check && npm run check:boundaries && npm run check:shared && npm run check:environments && tsc --noEmit && node scripts/build-frontend.mjs",
+    "publish:frontend": "node scripts/publish-frontend.mjs",
     "icons:generate": "node scripts/make-icons.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "test": "node scripts/run-tests.mjs unit",

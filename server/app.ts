@@ -2,6 +2,7 @@ import { ReportLogs } from './logging/reports.ts';
 import { serverLog } from './logging/logger.ts';
 import { DEFAULT_LOG_POLICY } from '../shared/service/logging.ts';
 import {ExistingPageRequests} from './bridge/existing-pages.ts';
+import { FrontendReleases } from './frontend-releases.ts';
 import { StaticAssets } from './static-assets.ts';
 import { AnalysisScheduler } from './analysis/bitstream/scheduler.ts';
 import { handleAnalysisRoutes } from './analysis/bitstream/routes.ts';
@@ -47,6 +48,7 @@ export interface ServerOptions {
   allowLocalReveal?: boolean;
   reveal?: (absolutePath: string) => Promise<void>;
   staticDir?: string;
+  frontendStore?: string;
   /** Directory that receives user-submitted logs (POST /api/logs). */
   logsDir?: string;
   onLog?: (entry: Record<string, unknown>) => void;
@@ -63,7 +65,8 @@ export function createMediaServer(options: ServerOptions): ManagedServer {
   const stopLocalAnalysis = options.admin ? undefined : library.registerIndexReader(() => analysis.close());
   const staticDir = options.staticDir ? path.resolve(options.staticDir) : undefined;
   const staticRoot = staticDir ? fs.realpath(staticDir).catch(() => null) : Promise.resolve(null);
-  const staticAssets = staticRoot.then(root => root ? new StaticAssets(root) : null);
+  const releases = options.frontendStore ? new FrontendReleases(options.frontendStore) : undefined;
+  const flat = staticRoot.then(root => root ? { root, assets: new StaticAssets(root) } : undefined);
   const logLine = options.onLog ?? (entry => serverLog.info('http-request', entry));
   const reports = options.admin?.reports ?? new ReportLogs(options.logsDir ?? null, DEFAULT_LOG_POLICY.reports);
   const traffic=options.traffic ?? createTrafficState();
@@ -90,7 +93,7 @@ export function createMediaServer(options: ServerOptions): ManagedServer {
     let logged = false;
     traffic.activeRequests++;
     const ctx: RouteContext = {
-      options, library, requestId, reports,
+      options, library, requestId, reports, currentFrontend: releases && (() => releases.currentBuildId()),
       actor: guestActor(browserUserId(req)) ?? options.admin?.workspaces.user(browserUserId(req)) ?? null,
       adminExtra: { traffic, sockets, recentRequests },
     };
@@ -118,11 +121,16 @@ export function createMediaServer(options: ServerOptions): ManagedServer {
       }
       if (staticDir) {
         const rel = decodeURIComponent(['/', '/connection'].includes(url.pathname) ? '/index.html' : ['/admin', '/admin/'].includes(url.pathname) ? '/admin/index.html' : url.pathname);
-        const root = await staticRoot;
+        const version = url.searchParams.get('v');
+        const view = releases ? await releases.resolve(rel.slice(1), version) : await flat;
+        const root = view?.root;
+        if (releases && !root && version && rel.startsWith('/vendor/')) {
+          sendJson(res, 409, { error: '静态资源版本已过保留期，请刷新页面。' }); return;
+        }
         const candidate = root ? path.join(root, rel) : '';
         const real = await fs.realpath(candidate).catch(() => null);
-        if (root && real && (real === root || real.startsWith(root + path.sep)) && (await fs.stat(real)).isFile()) {
-          await (await staticAssets)!.serve(req, res, url, real);
+        if (view && root && real && (real === root || real.startsWith(root + path.sep)) && (await fs.stat(real)).isFile()) {
+          await view.assets.serve(req, res, url, real);
           return;
         }
         sendJson(res, 404, { error: 'not found' });

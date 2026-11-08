@@ -1,17 +1,21 @@
 import { FRONTEND_ENTRIES, FRONTEND_HTML_INPUTS } from './scripts/frontend-entries.mjs';
-import { writePlayerWorker } from './scripts/pwa/build.mjs';
-import { prepareStaticAssets } from './scripts/static-assets.mjs';
+import { isPlayerAsset, writePlayerWorker } from './scripts/pwa/build.mjs';
+import { prepareStaticAssets, verifyStaticAssets } from './scripts/static-assets.mjs';
 import { lowerDescriptors } from './scripts/testing/i18n-transform.mjs';
 import { defineConfig, normalizePath } from 'vite';
 import { readBuildIdentity } from './scripts/release-version.mjs';
-import { createHash } from 'node:crypto';
+import { sealFrontend } from './server/frontend-releases.ts';
+import { createHash, randomUUID } from 'node:crypto';
+import { readFile, writeFile } from 'node:fs/promises';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+const buildId = randomUUID();
 const sourceDir = resolve(import.meta.dirname, 'src');
 let englishCatalogRef = '';
 let buildCatalog = false;
 const infoFile = resolve(sourceDir, 'build-info.ts');
-const coreDir = resolve(import.meta.dirname, 'public/vendor/voidplayer-core');
+let publicDirectory = resolve(import.meta.dirname, 'public');
+const coreDir = () => resolve(publicDirectory, 'vendor/voidplayer-core');
 const isolationHeaders = {
   'cross-origin-opener-policy': 'same-origin',
   'cross-origin-embedder-policy': 'require-corp',
@@ -33,16 +37,16 @@ async function buildInfo() {
   hashSources(resolve(import.meta.dirname, 'shared'), 'shared/');
   for (const file of ['package-lock.json', 'vite.config.ts', ...FRONTEND_HTML_INPUTS, 'public/theme-init.js', 'public/startup-guard.js']) hash.update(file).update(readFileSync(resolve(import.meta.dirname, file)));
   const wasmDigests = Object.fromEntries(['voidplayer-core.wasm', 'voidplayer-core-mt.wasm'].map(name => {
-    try { return [name, createHash('sha256').update(readFileSync(resolve(coreDir, name))).digest('hex')]; }
+    try { return [name, createHash('sha256').update(readFileSync(resolve(coreDir(), name))).digest('hex')]; }
     catch { return [name, null]; }
   }));
   const coreAssetDigests: Record<string, string> = {};
   for (const folder of ['voidplayer-core', 'voidplayer-analysis']) {
-    const directory = resolve(import.meta.dirname, 'public/vendor', folder);
+    const directory = resolve(publicDirectory, 'vendor', folder);
     try { for (const name of readdirSync(directory)) if (/\.(js|wasm|json)$/.test(name))
       coreAssetDigests[`/vendor/${folder}/${name}`] = createHash('sha256').update(readFileSync(resolve(directory, name))).digest('hex'); } catch {}
   }
-  return { ...identity, coreAssetDigests, builtAt: new Date().toISOString(), sourceDigest: hash.digest('hex'), wasmDigests };
+  return { ...identity, buildId, coreAssetDigests, builtAt: new Date().toISOString(), sourceDigest: hash.digest('hex'), wasmDigests };
 }
 let playerAssets: string[] = [];
 let outputDirectory = resolve(import.meta.dirname, 'dist');
@@ -56,7 +60,7 @@ export default defineConfig({
   worker: { plugins: () => [{ name: 'voidplayer-worker-build-evidence', transform: transformBuildInfo }] },
   build: { rollupOptions: { input: Object.fromEntries(Object.entries(FRONTEND_ENTRIES).map(([name,file]) => [name,resolve(import.meta.dirname,file)])) } },
   plugins: [{ name: 'voidplayer-i18n-catalog-url', enforce: 'pre',
-    configResolved(config) { buildCatalog = config.command === 'build'; outputDirectory = resolve(config.root, config.build.outDir); },
+    configResolved(config) { buildCatalog = config.command === 'build'; outputDirectory = resolve(config.root, config.build.outDir); publicDirectory = config.publicDir; },
     buildStart() { if(buildCatalog) englishCatalogRef=this.emitFile({type:'chunk',id:resolve(sourceDir,'i18n/generated/en.js'),name:'en'}); },
     transform(code,id) {
       if(normalizePath(id.split('?')[0])!==normalizePath(resolve(sourceDir,'i18n.ts')))return;
@@ -98,16 +102,30 @@ export default defineConfig({
       const urls = [...files].map(file => '/' + file).filter(url => !html.includes(`href="${url}"`));
       // Fetch/compile only: bootstrap still selects the language before evaluating main.
       // The HTTP connection guide must never preload the player graph.
-      return [{ tag: 'script', attrs: { 'data-startup-preload': '' }, injectTo: 'head',
+      return [{ tag: 'meta', attrs: { name: 'voidplayer-offline-shell', content: 'player' }, injectTo: 'head' },
+        { tag: 'script', attrs: { 'data-startup-preload': '' }, injectTo: 'head',
         children: `if(globalThis.isSecureContext&&location.pathname!=='/connection'){for(const href of ${JSON.stringify(urls)}){const link=document.createElement('link');link.rel='modulepreload';link.crossOrigin='anonymous';link.href=href;document.head.append(link);}}` }];
     } },
     generateBundle(_options, bundle) {
-      playerAssets = Object.keys(bundle).filter(name => /^assets\/.*\.(js|css)$/.test(name) && !/^assets\/(admin|connection-guide)-/.test(name));
+      playerAssets = Object.keys(bundle).filter(isPlayerAsset);
     },
     async closeBundle() {
       if (!productionBuildInfo) return;
+      // Classic bootstrap scripts run before the module graph. Pin them to the HTML that selected them.
+      for (const file of ['theme-init.js', 'startup-guard.js']) {
+        const bytes = await readFile(resolve(outputDirectory, file));
+        const versioned = 'assets/' + file.replace('.js', '-' + createHash('sha256').update(bytes).digest('hex').slice(0, 16) + '.js');
+        await writeFile(resolve(outputDirectory, versioned), bytes);
+        playerAssets.push(versioned);
+        for (const entry of FRONTEND_HTML_INPUTS) {
+          const target = resolve(outputDirectory, entry), html = await readFile(target, 'utf8');
+          await writeFile(target, html.replace('src="/' + file + '"', 'src="/' + versioned + '"'));
+        }
+      }
       await writePlayerWorker(outputDirectory, playerAssets, (await productionBuildInfo).coreAssetDigests);
       await prepareStaticAssets(outputDirectory);
+      await verifyStaticAssets(outputDirectory);
+      await sealFrontend(outputDirectory);
     },
     async buildStart() {
       productionBuildInfo = buildCatalog ? buildInfo() : undefined;
@@ -115,7 +133,7 @@ export default defineConfig({
     },
     transform: transformBuildInfo,
     handleHotUpdate({ file, server }) {
-      if (normalizePath(file).startsWith(normalizePath(sourceDir)) || normalizePath(file).startsWith(normalizePath(resolve(import.meta.dirname, 'shared'))) || normalizePath(file).startsWith(normalizePath(coreDir))) {
+      if (normalizePath(file).startsWith(normalizePath(sourceDir)) || normalizePath(file).startsWith(normalizePath(resolve(import.meta.dirname, 'shared'))) || normalizePath(file).startsWith(normalizePath(coreDir()))) {
         const module = server.moduleGraph.getModuleById(infoFile);
         if (module) server.moduleGraph.invalidateModule(module);
       }

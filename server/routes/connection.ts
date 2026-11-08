@@ -52,7 +52,7 @@ export async function handleConnectionRoutes(ctx: RouteContext, req: IncomingMes
   }
   if (url.pathname === '/favicon.ico' && !options.staticDir && ['GET', 'HEAD'].includes(req.method ?? '')) { res.writeHead(204); res.end(); return true; }
   if (url.pathname === '/api/health' && req.method === 'GET') {
-    sendJson(res, 200, { service: 'voidplayer-media', version: 1, actor: ctx.actor, capabilities: serviceCapabilities(!!options.admin, !!options.allowLocalReveal && localRequest(req)) });
+    sendJson(res, 200, { service: 'voidplayer-media', version: 1, frontendBuildId: await ctx.currentFrontend?.(), actor: ctx.actor, capabilities: serviceCapabilities(!!options.admin, !!options.allowLocalReveal && localRequest(req)) });
     return true;
   }
   if (url.pathname === '/api/ready' && req.method === 'GET') {

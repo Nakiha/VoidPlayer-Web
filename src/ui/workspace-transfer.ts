@@ -1,3 +1,5 @@
+import { currentActor } from '../services/identity.ts';
+import { prepareOfflineUpdate } from './offline-app.ts';
 import { installWorkspaceRecovery } from './workspace-recovery.ts';
 import { FileHandleError, restoreHandleFile, handleKey } from '../services/file-handles.ts';
 import { LibraryAccessError } from '../../shared/media/io/source-access.ts';
@@ -55,6 +57,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
   identityReady: Promise<void>;
   openSharedSpace(space: string, seededIds?: string[]): Promise<void>;
   annotationScope(): string;
+  editsReady(): boolean;
   toasts: ToastStack;
   openingChanged?(): void;
 }) {
@@ -78,7 +81,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       throw error;
     }
   }
-  async function importWorkspace(value: unknown, supplied: File[] = [], fromShare = false, operation?: WorkspaceOpenOperation) {
+  async function importWorkspace(value: unknown, supplied: File[] = [], fromShare = false, operation?: WorkspaceOpenOperation, strict = false) {
     if (importing) throw new Error(t(msg("transfer.importing", "工作区正在导入，请等待完成")));
     operation ??= saved?.beginOpen();
     const current = () => !lifetime.signal.aborted && (!operation || operation.current());
@@ -95,7 +98,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       if (!files || !current()) return false;
       const skipped: { name: string; error: string }[] = [];
       const rollback=options.beforeRestore();
-      const progressive = session.getState().tracks.length === 0 && document.tracks.length > 0;
+      const progressive = !strict && session.getState().tracks.length === 0 && document.tracks.length > 0;
       let layout: Promise<void> | undefined, stopLayout: (() => void) | undefined;
       if (progressive) stopLayout = session.subscribe(() => {
         const state = session.getState(), selected = document.layout?.selected;
@@ -112,7 +115,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
         if (pinned.mtimeChanged) warnMtime(info.name);
         const { mtimeChanged: _ignored, ...reference } = pinned;
         const source = await openMediaFromUrl(reference.url, info, undefined, progress, signal,undefined,configuration); updateMediaInfo(source,{source:reference},'identity'); return source;
-      }, { skipUnavailable: true, progressive, signal: operation?.signal, onSkipped: (info, error) => {
+      }, { skipUnavailable: !strict, progressive, signal: operation?.signal, onSkipped: (info, error) => {
         skipped.push({ name: info.name, error: error instanceof Error ? error.message : String(error) });
       } });
         await layout;
@@ -149,7 +152,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
   // available once loaded tracks and their workspace binding are ready; the snapshot is captured
   // synchronously before any network work begins.
   sharing = installWorkspaceSharing({ signal:lifetime.signal, snapshot:exportWorkspace, binding:saved.binding, save:saved.share, toasts:options.toasts, openSpace:options.openSharedSpace, scope:options.annotationScope, isOpening:saved.isOpening, canShare:()=>session.getState().tracks.length>0&&!saved!.isOpening(), report:error=>void options.act(()=>{throw error;}, 'workspace.share') });
-  const recovery = installWorkspaceRecovery(session, { snapshot: exportWorkspace, restore: document => importWorkspace(document), ready: options.identityReady, toasts: options.toasts });
+  const recovery = installWorkspaceRecovery(session, { snapshot: exportWorkspace, restore: (document, update) => importWorkspace(document, [], false, undefined, update), ready: options.identityReady, toasts: options.toasts });
   const unsubscribe = session.subscribe(() => { saved?.update(); sharing?.update(); });
   const finishOpening = () => { if (lifetime.signal.aborted) return; document.getElementById('app')!.removeAttribute('data-workspace-opening'); options.openingChanged?.(); };
   if (savedId && /^[a-f0-9-]{36}$/.test(savedId)) void options.identityReady.then(()=>saved!.open(savedId)).catch(error=>options.toasts.show((error as Error).message,{kind:'error',durationMs:0})).finally(finishOpening);
@@ -160,5 +163,30 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
     await saved!.open(legacyId);
   }).catch(error=>options.toasts.show((error as Error).message,{kind:'error',durationMs:0})).finally(finishOpening);
   input.addEventListener('change', () => { const file = input.files?.[0]; input.value = ''; if (file) void options.act(() => importFile(file), 'workspace.import'); }, { signal: lifetime.signal });
-  return { exportWorkspace, importWorkspace, importFile, shareWorkspace: sharing.create, dispose() { recovery.dispose(); lifetime.abort(); unsubscribe(); sharing.dispose(); } };
+  async function refreshForUpdate(target: string) {
+    const owner = currentActor()?.id ?? 'local';
+    function checkReady() {
+      const state = session.getState();
+      if ((currentActor()?.id ?? 'local') !== owner || importing || saved?.isOpening() || state.busy || state.playing || state.mediaLoad?.state === 'loading' || !options.editsReady())
+        throw new Error(t(msg('update.wait', '请先暂停播放，完成标注并等载入和保存结束，再刷新。')));
+      if (saved?.binding() || options.annotationScope() !== 'local' || ['workspace','share','review'].some(key => new URL(location.href).searchParams.has(key)))
+        throw new Error(t(msg('update.bound', '当前工作区已连接到服务器。请保存工作区后重新打开，当前窗口可以继续使用。')));
+    }
+    checkReady();
+    const snapshot = exportWorkspace();
+    for (const track of snapshot.tracks) {
+      const media = snapshot.media.find(item => item.id === track.mediaId)!;
+      if (media.source) await resolveLibraryReference(media, lifetime.signal);
+      else {
+        const file = await restoreHandleFile(handleKey(media), undefined, false).catch(() => null);
+        if (!file || !matchMediaIdentity(media, file).ok) throw new Error(t(msg('update.localFile', '刷新后无法重新读取「{name}」。请继续使用当前窗口，或先导出工作区。'), { name: media.name }));
+      }
+    }
+    await prepareOfflineUpdate(target);
+    const response = await fetch('/api/health', { cache: 'no-store', signal: AbortSignal.any([lifetime.signal, AbortSignal.timeout(4000)]) });
+    const health = response.ok ? await response.json() : null;
+    if (health?.frontendBuildId !== target || (health.actor?.id ?? 'local') !== owner) throw new Error(t(msg('update.retry', '目标版本已变化或服务暂不可用，请稍后再刷新。')));
+    await recovery.refresh(snapshot, target, checkReady);
+  }
+  return { exportWorkspace, importWorkspace, importFile, refreshForUpdate, shareWorkspace: sharing.create, dispose() { recovery.dispose(); lifetime.abort(); unsubscribe(); sharing.dispose(); } };
 }

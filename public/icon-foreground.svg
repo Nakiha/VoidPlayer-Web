@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="145 145 734 734" width="734" height="734"><title>VoidPlayer</title>
+  <g id="Mint"><defs xmlns="http://www.w3.org/2000/svg">
+    <linearGradient id="layer-0-gMint" x1="0" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#73FFE0"/>
+      <stop offset="1" stop-color="#27DCC0"/>
+    </linearGradient>
+  </defs>
+  <path xmlns="http://www.w3.org/2000/svg" fill="url(#layer-0-gMint)" d="M695.29 670.7H878.57V714.75A154.88 154.88 0 0 1 723.69 869.63H695.29Z"/></g>
+  <g id="Turquoise"><defs xmlns="http://www.w3.org/2000/svg">
+    <linearGradient id="layer-1-gTurquoise" x1="0" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#32C6F9"/>
+      <stop offset="1" stop-color="#1499F0"/>
+    </linearGradient>
+  </defs>
+  <path xmlns="http://www.w3.org/2000/svg" fill="url(#layer-1-gTurquoise)" d="M512 670.7H695.29V869.63H512Z"/></g>
+  <g id="Aqua"><defs xmlns="http://www.w3.org/2000/svg">
+    <linearGradient id="layer-2-gAqua" x1="0" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#00D6E4"/>
+      <stop offset="1" stop-color="#029FD8"/>
+    </linearGradient>
+  </defs>
+  <path xmlns="http://www.w3.org/2000/svg" fill="url(#layer-2-gAqua)" d="M695.29 487.41H878.57V670.7H695.29Z"/></g>
+  <g id="Lagoon"><defs xmlns="http://www.w3.org/2000/svg">
+    <linearGradient id="layer-3-gLagoon" x1="0" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#8A84FF"/>
+      <stop offset="1" stop-color="#5B73EE"/>
+    </linearGradient>
+  </defs>
+  <path xmlns="http://www.w3.org/2000/svg" fill="url(#layer-3-gLagoon)" d="M512 487.41H695.29V670.7H512Z"/></g>
+  <g id="Cyan"><defs xmlns="http://www.w3.org/2000/svg">
+    <linearGradient id="layer-4-gCyan" x1="0" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#00B6F4"/>
+      <stop offset="1" stop-color="#007ED2"/>
+    </linearGradient>
+  </defs>
+  <path xmlns="http://www.w3.org/2000/svg" fill="url(#layer-4-gCyan)" d="M145.43 487.41H512V869.63H300.31A154.88 154.88 0 0 1 145.43 714.75Z"/></g>
+  <g id="Sky"><defs xmlns="http://www.w3.org/2000/svg">
+    <linearGradient id="layer-5-gSky" x1="0" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#37D9FF"/>
+      <stop offset="1" stop-color="#069AE9"/>
+    </linearGradient>
+  </defs>
+  <path xmlns="http://www.w3.org/2000/svg" fill="url(#layer-5-gSky)" d="M512 154.37H723.69A154.88 154.88 0 0 1 878.57 309.25V487.41H512Z"/></g>
+  <g id="Ocean"><defs xmlns="http://www.w3.org/2000/svg">
+    <linearGradient id="layer-6-gOcean" x1="0" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#4F9EFF"/>
+      <stop offset="1" stop-color="#4779F9"/>
+    </linearGradient>
+  </defs>
+  <path xmlns="http://www.w3.org/2000/svg" fill="url(#layer-6-gOcean)" d="M300.31 154.37H512V487.41H145.43V309.25A154.88 154.88 0 0 1 300.31 154.37Z"/></g>
+  <g id="Play"><defs xmlns="http://www.w3.org/2000/svg">
+    <linearGradient id="layer-7-surface" x1=".10" y1="0" x2=".8" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.4" stop-color="#fffdfa" stop-opacity="0.99"/>
+      <stop offset="0.76" stop-color="#e6f0ff" stop-opacity="0.84"/>
+      <stop offset="1" stop-color="#a3c8ed" stop-opacity="0.64"/>
+    </linearGradient>
+  </defs>
+  <path xmlns="http://www.w3.org/2000/svg" d="M352.18 333.18Q352.18 258.3 417 295.19L684.11 450.53Q763.46 494.12 684.11 534.35L417 689.7Q352.18 728.81 352.18 652.82Z" fill="url(#layer-7-surface)"/></g>
+</svg>

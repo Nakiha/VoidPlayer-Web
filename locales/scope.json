@@ -16,6 +16,7 @@
     "src/admin/workspaces.ts",
     "src/agent/page-bridge.ts",
     "src/main.ts",
+    "src/ui/about-banner.ts",
     "src/ui/analysis/bitstream-diagrams.ts",
     "src/ui/analysis/canvas.ts",
     "src/ui/analysis/card.ts",

@@ -1,3 +1,4 @@
+import { prepareBundledFrontend } from './frontend-releases.ts';
 import { RuntimeLog } from './logging/runtime.ts';
 import { attachRuntimeLog, serverLog } from './logging/logger.ts';
 import { logPolicy } from '../shared/service/logging.ts';
@@ -26,12 +27,19 @@ export async function validateServiceConfig(config: ServiceConfig, requireStatic
   return { staticOk };
 }
 
-export async function startService(config: ServiceConfig, requireStatic = true, build?: { version: string; revision: string }) {
+export async function startPublishedService(config: ServiceConfig, requireStatic = true, build?: { version: string; revision: string }) {
+  const store = path.join(config.dataDir, 'frontend-releases');
+  const active = await prepareBundledFrontend(config.staticDir, store);
+  if (!active) return startService(config, requireStatic, build);
+  return startService({ ...config, staticDir: path.join(store, active) }, requireStatic, build, store);
+}
+
+export async function startService(config: ServiceConfig, requireStatic = true, build?: { version: string; revision: string }, frontendStore?: string) {
   const runtimeLog = new RuntimeLog(path.join(config.dataDir, 'runtime-logs'), logPolicy(config.logging).runtime);
   await runtimeLog.start();
   const detach = attachRuntimeLog(runtimeLog);
   try {
-    const service = await startLoggedService(config, requireStatic, build, runtimeLog);
+    const service = await startLoggedService(config, requireStatic, build, runtimeLog, frontendStore);
     let closing: Promise<void> | undefined;
     return { ...service, runtimeLog, close: () => closing ??= (async () => {
       try { await service.close(); }
@@ -50,7 +58,7 @@ export async function startService(config: ServiceConfig, requireStatic = true, 
 }
 
 async function startLoggedService(config: ServiceConfig, requireStatic: boolean, build: { version: string; revision: string } | undefined,
-  runtimeLog: RuntimeLog) {
+  runtimeLog: RuntimeLog, frontendStore?: string) {
   const { staticOk } = await validateServiceConfig(config, requireStatic, false);
   await writeFile(path.join(config.dataDir, DATA_DIRECTORY_MARKER), 'VoidPlayer durable user data v1\n', { flag: 'wx' }).catch(error => { if(error.code!=='EEXIST')throw error; });
   const tls = config.tls ? await prepareTls(config.tls, config.dataDir) : undefined;
@@ -64,7 +72,7 @@ async function startLoggedService(config: ServiceConfig, requireStatic: boolean,
   catch(error){return cleanupAfterFailure(error,'Service initialization failed',[['application',()=>library.close(admin?.close())]]);}
   const connection = tls ? { ...tls, port: config.port } : undefined;
   const gateway = new ProtocolGateway(), listeners: ManagedServer[] = [];
-  const shared = { library, admin, connection, traffic:createTrafficState(), roots: library.roots, staticDir: staticOk ? config.staticDir : undefined, logsDir: config.logsDir ?? undefined,
+  const shared = { library, admin, frontendStore, connection, traffic:createTrafficState(), roots: library.roots, staticDir: staticOk ? config.staticDir : undefined, logsDir: config.logsDir ?? undefined,
     clientAddress: gateway.clientAddress,
     allowLocalReveal: config.allowLocalReveal && ['127.0.0.1', 'localhost', '::1'].includes(config.host) && ['darwin', 'win32'].includes(process.platform),
   };

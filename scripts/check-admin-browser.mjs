@@ -55,6 +55,9 @@ try {
   await player.goto(base); await chooseTestGuest(player); await player.waitForFunction(() => document.getElementById('server-status')?.dataset.state === 'connected');
   await player.locator('#server-status').hover();
   await player.locator('#control-tooltip').filter({ hasText: '打开后端管理页' }).waitFor({ state: 'visible' });
+  const tooltip = (await player.locator('#control-tooltip').innerText()).split('\n');
+  assert.deepEqual(tooltip.slice(0, 3), ['打开后端管理页', base + '/admin', '状态：在线']);
+  assert.equal(tooltip.length, 4); assert.match(tooltip[3], /^RTT：\d+ms$/);
   let [page] = await Promise.all([context.waitForEvent('page', { timeout: 5000 }), player.locator('#server-status').click()]);
   page.setDefaultTimeout(15000); observeErrors(page, 'admin-first');
   await page.waitForURL(base + '/admin'); await page.locator('#identity').filter({ hasText: '访客' }).waitFor();

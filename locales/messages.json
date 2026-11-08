@@ -4569,8 +4569,9 @@
     "params": {}
   },
   "sourceActions.connectionTooltip": {
-    "source": "打开后端管理页\n状态：{state}\nRTT：{rtt}",
+    "source": "打开后端管理页\n{address}\n状态：{state}\nRTT：{rtt}",
     "params": {
+      "address": "string | number",
       "rtt": "string | number",
       "state": "string | number"
     }
@@ -5297,6 +5298,40 @@
   },
   "ui.releaseCollapse": {
     "source": "松开收起面板",
+    "params": {}
+  },
+  "update.available": {
+    "source": "后端已发布新版，可以继续当前评审，或刷新到新版。",
+    "params": {}
+  },
+  "update.bound": {
+    "source": "当前工作区已连接到服务器。请保存工作区后重新打开，当前窗口可以继续使用。",
+    "params": {}
+  },
+  "update.changed": {
+    "source": "工作区正在变化，请稍后再刷新。",
+    "params": {}
+  },
+  "update.localFile": {
+    "source": "刷新后无法重新读取「{name}」。请继续使用当前窗口，或先导出工作区。",
+    "params": {
+      "name": "string | number"
+    }
+  },
+  "update.preparing": {
+    "source": "新版离线资源尚未准备好，请稍后再刷新。",
+    "params": {}
+  },
+  "update.refresh": {
+    "source": "保存现场并刷新",
+    "params": {}
+  },
+  "update.retry": {
+    "source": "目标版本已变化或服务暂不可用，请稍后再刷新。",
+    "params": {}
+  },
+  "update.wait": {
+    "source": "请先暂停播放，完成标注并等载入和保存结束，再刷新。",
     "params": {}
   },
   "workbench.collapsePanel": {

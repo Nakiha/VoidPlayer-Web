@@ -1056,7 +1056,7 @@ export interface Sources {
   "sourceAccess.localStale": "无法打开本地文件「{name}」：文件已变化或不可用";
   "sourceAccess.localUnsupported": "当前浏览器不支持保存本地文件访问权限，无法直接恢复「{name}」，请重新选择文件；刷新后仍需重新选择";
   "sourceActions.connected": "媒体服务已连接";
-  "sourceActions.connectionTooltip": "打开后端管理页\n状态：{state}\nRTT：{rtt}";
+  "sourceActions.connectionTooltip": "打开后端管理页\n{address}\n状态：{state}\nRTT：{rtt}";
   "sourceActions.copied": "绝对路径已拷贝";
   "sourceActions.copyAbsolutePath": "拷贝绝对路径";
   "sourceActions.disconnected": "媒体服务未连接；本地文件仍可播放";
@@ -1217,6 +1217,14 @@ export interface Sources {
   "transfer.sourcesSkipped": "以下片源无法打开，已跳过：{details}";
   "ui.pixelWidth": "{width} 像素";
   "ui.releaseCollapse": "松开收起面板";
+  "update.available": "后端已发布新版，可以继续当前评审，或刷新到新版。";
+  "update.bound": "当前工作区已连接到服务器。请保存工作区后重新打开，当前窗口可以继续使用。";
+  "update.changed": "工作区正在变化，请稍后再刷新。";
+  "update.localFile": "刷新后无法重新读取「{name}」。请继续使用当前窗口，或先导出工作区。";
+  "update.preparing": "新版离线资源尚未准备好，请稍后再刷新。";
+  "update.refresh": "保存现场并刷新";
+  "update.retry": "目标版本已变化或服务暂不可用，请稍后再刷新。";
+  "update.wait": "请先暂停播放，完成标注并等载入和保存结束，再刷新。";
   "workbench.collapsePanel": "收起{panel}";
   "workbench.expandPanel": "展开{panel}";
   "workbench.pixels": "{p0} 像素";
@@ -2285,7 +2293,7 @@ export interface MessageParameters {
   "sourceAccess.localStale": { "name": string | number };
   "sourceAccess.localUnsupported": { "name": string | number };
   "sourceActions.connected": {  };
-  "sourceActions.connectionTooltip": { "rtt": string | number; "state": string | number };
+  "sourceActions.connectionTooltip": { "address": string | number; "rtt": string | number; "state": string | number };
   "sourceActions.copied": {  };
   "sourceActions.copyAbsolutePath": {  };
   "sourceActions.disconnected": {  };
@@ -2446,6 +2454,14 @@ export interface MessageParameters {
   "transfer.sourcesSkipped": { "details": string | number };
   "ui.pixelWidth": { "width": string | number };
   "ui.releaseCollapse": {  };
+  "update.available": {  };
+  "update.bound": {  };
+  "update.changed": {  };
+  "update.localFile": { "name": string | number };
+  "update.preparing": {  };
+  "update.refresh": {  };
+  "update.retry": {  };
+  "update.wait": {  };
   "workbench.collapsePanel": { "panel": string | number };
   "workbench.expandPanel": { "panel": string | number };
   "workbench.pixels": { "p0": string | number };

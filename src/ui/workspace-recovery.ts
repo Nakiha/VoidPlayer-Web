@@ -61,13 +61,16 @@ function recoveryCard(checkpoint: WorkspaceFile, restore: () => Promise<void>, s
 }
 
 export function installWorkspaceRecovery(session: ReviewSession, options: {
-  snapshot(): WorkspaceFile; restore(document: WorkspaceFile): Promise<boolean>; ready: Promise<void>; toasts: ToastStack;
+  snapshot(): WorkspaceFile; restore(document: WorkspaceFile, update?: boolean): Promise<boolean>; ready: Promise<void>; toasts: ToastStack;
 }) {
   const store = new WorkspaceCheckpoints();
   let id: string = crypto.randomUUID();
   let previousId = '', actor = '', active = false, initialized = false, disposed = false;
   let last = '', timer: ReturnType<typeof setTimeout> | undefined, writing = false, again = false, warned = false;
-  let generation = 0;
+  const updateKey = 'voidplayer.refresh-checkpoint';
+  let generation = 0, savingUpdate = false;
+  let pendingWrite: Promise<void> | undefined;
+  const snapshotKey = (value: WorkspaceFile) => JSON.stringify({ ...value, generatedAt: '' });
   const recovery = document.getElementById('start-workspace-recovery')!;
   const start = document.getElementById('start-panel')!;
   let cardLife = new AbortController();
@@ -78,7 +81,7 @@ export function installWorkspaceRecovery(session: ReviewSession, options: {
     sessionStorage.setItem('voidplayer.checkpoint', id);
   } catch {}
   async function flush() {
-    if (!initialized || disposed) return;
+    if (!initialized || disposed || savingUpdate) return;
     if (writing) { again = true; return; }
     const state = session.getState();
     if (state.busy || state.mediaLoad?.state === 'loading') return;
@@ -88,17 +91,19 @@ export function installWorkspaceRecovery(session: ReviewSession, options: {
     const snapshot = options.snapshot();
     // Thumbnail JPEGs are derived; vector marks and all source references stay.
     snapshot.thumbnails = [];
-    const signature = JSON.stringify({ ...snapshot, generatedAt: '' });
+    const signature = snapshotKey(snapshot);
     if (signature === last) return;
     writing = true;
     try {
-      await store.save({ id: `${id}:${savingActor}`, actor: savingActor, updatedAt: Date.now(), document: snapshot }); if (actor === savingActor) last = signature;
+      pendingWrite = store.save({ id: `${id}:${savingActor}`, actor: savingActor, updatedAt: Date.now(), document: snapshot });
+      await pendingWrite;
+      if (actor === savingActor) last = signature;
       if (warned) { warned = false; options.toasts.show(() => t(msg('recovery.savingResumed', '工作区本机自动恢复已恢复保存'))); }
     } catch (error) {
       if (!warned) { warned = true; options.toasts.show(() => error instanceof CheckpointCapacityError
         ? t(msg('recovery.capacityReached', '本机恢复记录已达容量上限，请在设置 → 工作区中导出并删除旧记录，当前工作区可手动导出或保存到服务器'))
         : t(msg('recovery.saveFailed', '工作区本机自动恢复保存失败，请导出文件或显式保存到服务器')), { kind: 'error' }); }
-    } finally { writing = false; if (again) { again = false; void flush(); } }
+    } finally { pendingWrite = undefined; writing = false; if (again) { again = false; void flush(); } }
   }
   const schedule = () => { clearTimeout(timer); timer = setTimeout(() => void flush(), 500); };
   const unsubscribe = session.subscribe(schedule);
@@ -122,6 +127,17 @@ export function installWorkspaceRecovery(session: ReviewSession, options: {
       const checkpoint = await store.read(actor, `${previousId}:${actor}`);
       if (disposed || actor !== expectedActor || generation !== currentGeneration) return;
       const url = new URL(location.href);
+      // Only the window and actor that explicitly requested an update may auto-restore this exact record.
+      const requested = url.searchParams.get('vp-update');
+      let handoff: string | null = null;
+      try { handoff = sessionStorage.getItem(updateKey); } catch {}
+      if (requested && id === previousId && checkpoint?.id === `${id}:${actor}` && handoff === JSON.stringify([checkpoint.id, requested])
+        && !session.getState().tracks.length && !['share', 'workspace', 'review'].some(key => url.searchParams.has(key))) {
+        sessionStorage.removeItem(updateKey);
+        try {
+          if (await options.restore(checkpoint.document, true)) { active = true; schedule(); return; }
+        } catch (error) { options.toasts.show(String(error), { kind: 'warning' }); }
+      }
       const restorable = checkpoint?.document.tracks.some(track => supportsFileHandles() || checkpoint.document.media.find(media => media.id === track.mediaId)?.source);
       if (restorable && checkpoint && !session.getState().tracks.length && !url.searchParams.has('share') && !url.searchParams.has('workspace')) {
         recovery.replaceChildren(recoveryCard(checkpoint.document, async () => {
@@ -147,5 +163,27 @@ export function installWorkspaceRecovery(session: ReviewSession, options: {
   }
   void options.ready.then(initialize, () => start.removeAttribute('data-recovery-pending'));
   window.addEventListener('voidplayer-identity-change', () => { void initialize(); }, { signal: lifetime.signal });
-  return { flush, dispose() { disposed = true; clearTimeout(timer); clearInterval(interval); unsubscribe(); lifetime.abort(); clearRecovery(); start.removeAttribute('data-recovery-pending'); store.close(); } };
+  async function refresh(snapshot: WorkspaceFile, target: string, checkReady: () => void) {
+    const changed = () => new Error(t(msg('update.changed', '工作区正在变化，请稍后再刷新。')));
+    if (!initialized || disposed || savingUpdate || actor !== (currentActor()?.id ?? 'local')) throw changed();
+    savingUpdate = true;
+    const revision = generation, recordId = `${id}:${actor}`, signature = snapshotKey(snapshot);
+    const check = () => {
+      checkReady();
+      if (revision !== generation || disposed || signature !== snapshotKey(options.snapshot())) throw changed();
+    };
+    try {
+      await pendingWrite;
+      check();
+      await store.save({ id: recordId, actor, updatedAt: Date.now(), document: snapshot });
+      check();
+      const url = new URL(location.href);
+      for (const key of ['media','v','annotation','space']) url.searchParams.delete(key);
+      url.searchParams.set('vp-update', target);
+      sessionStorage.setItem(updateKey, JSON.stringify([recordId, target]));
+      history.replaceState(history.state, '', url);
+      location.reload();
+    } finally { savingUpdate = false; }
+  }
+  return { flush, refresh, dispose() { disposed = true; clearTimeout(timer); clearInterval(interval); unsubscribe(); lifetime.abort(); clearRecovery(); start.removeAttribute('data-recovery-pending'); store.close(); } };
 }
