@@ -33,6 +33,20 @@ test('directory hints collapse ancestors and cap a burst without losing an affec
   assert.equal(changes.size, 0);
 });
 
+test('an unconfigured library is ready without a scan but a fresh configured root waits for its first check', async () => fixture(async (_root, media) => {
+  const empty = new MediaLibraryIndex([]), configured = new MediaLibraryIndex([media]);
+  try {
+    assert.equal(empty.ready, true, 'a new portable installation needs no media scan');
+    assert.equal(empty.status().ready, true);
+    assert.deepEqual((await empty.list()).entries, []);
+    assert.equal(configured.ready, false, 'configured roots retain their initial check requirement');
+    await empty.reconfigure([media], async () => async () => {});
+    assert.equal(empty.ready, false, 'adding a first root must not inherit empty-library readiness');
+    await empty.reconfigure([], async () => async () => {});
+    assert.equal(empty.ready, true, 'removing all roots restores empty-library readiness');
+  } finally { await Promise.all([empty.close(), configured.close()]); }
+}));
+
 test('a subtree scan updates additions and deletions without traversing or clearing its siblings', async () => fixture(async (root, media) => {
   for (const directory of ['a/deep', 'ab', 'b']) await fs.mkdir(path.join(media, directory), { recursive: true });
   for (const file of ['a/old.mp4', 'a/deep/keep.mp4', 'ab/sibling.mp4', 'b/sibling.mp4']) await fs.writeFile(path.join(media, file), 'video');

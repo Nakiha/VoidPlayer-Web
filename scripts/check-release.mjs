@@ -121,10 +121,10 @@ try {
   assert.equal((await (await fetch(portableBase + '/api/admin/status')).json()).analysis.concurrency, 8);
   await stop();
   // Embedded progressive guides and JSON need no frontend, even in the compiled
-  // executable with an empty PATH and unrelated cwd. Restore assets before the
-  // existing full release acceptance; this does not alter its coverage.
+  // executable with an empty PATH and unrelated cwd. Use a fresh data directory
+  // so retained frontend publications cannot satisfy the missing-assets check.
   const hiddenDist=path.join(folder,'dist-offline');await renameReleased(path.join(folder,'dist'),hiddenDist);
-  try{portableBase=await start(portablePort,{},[],null);assert.equal((await fetch(portableBase)).status,404);await verifyAgentEntry(portableBase,fetch,false);}
+  try{portableBase=await start(portablePort,{},[],path.join(temp,'backend-only data'));assert.equal((await fetch(portableBase)).status,404);await verifyAgentEntry(portableBase,fetch,false);}
   finally{await stop();await renameReleased(hiddenDist,path.join(folder,'dist'));}
   assert.deepEqual(await readdir(cwd), cwdBefore, 'bare startup must not write into the invoking directory');
   const relocated = path.join(temp, 'portable moved');
@@ -153,7 +153,10 @@ try {
   await stop();
   assert.deepEqual(await readdir(cwd), cwdBefore, 'TLS startup with an empty PATH stays inside the application folder');
   run(['--init', '--data-dir', data, '--folder', media]);
-  const configPath = path.join(data, 'voidplayer.config.json'), original = await readFile(configPath, 'utf8');
+  const configPath = path.join(data, 'voidplayer.config.json');
+  const initializedConfig = JSON.parse(await readFile(configPath, 'utf8'));
+  await writeFile(configPath, JSON.stringify({ ...initializedConfig, indexTtlMs: 1000 }, null, 2) + '\n');
+  const original = await readFile(configPath, 'utf8');
   assert.equal(JSON.parse(original).staticDir, undefined, 'configuration must not pin old program assets');
   assert.equal(JSON.parse(original).logsDir, 'logs', 'backup can relocate the data directory');
   assert.equal(JSON.parse(original).mediaRoots[0].path, media);
@@ -164,6 +167,15 @@ try {
   assert.throws(() => run(['--check', '--data-dir', data, '--folder', path.join(temp, 'missing')]), /媒体目录不存在/);
   run(['--check', '--data-dir', data, '--host', '0.0.0.0']);
   const port = await freePort(); let base = await start(port);
+  const waitForEntries = async predicate => {
+    const deadline = Date.now() + 8000;
+    while (Date.now() < deadline) {
+      const page = await (await fetch(base + '/api/library/browse?recursive=1')).json();
+      if (predicate(page.entries)) return;
+      await new Promise(r => setTimeout(r, 50));
+    }
+    throw new Error('Packaged directory watcher did not reconcile changes: ' + output);
+  };
   run(['--healthcheck', '--data-dir', data, '--port', String(port)]);
   const homepage = await fetch(base); assert.equal(homepage.status, 200); assert.match(await homepage.text(), /VoidPlayer/);
   assert.equal(homepage.headers.get('cross-origin-opener-policy'), 'same-origin'); assert.equal(homepage.headers.get('cross-origin-embedder-policy'), 'require-corp');
@@ -172,6 +184,7 @@ try {
   const adminStatus = await (await fetch(base + '/api/admin/status')).json();
   assert.equal(adminStatus.version, manifest.appVersion); assert.equal(adminStatus.identity.id, 'local');
   const wasm = await fetch(base + '/vendor/voidplayer-core/voidplayer-core.wasm', { method: 'HEAD' }); assert.equal(wasm.status, 200); assert.match(wasm.headers.get('content-type'), /application\/wasm/);
+  await waitForEntries(entries => entries.some(entry => entry.name === '子目录/sample.mp4' && entry.state === 'ready'));
   const listing = await (await fetch(base + '/api/library')).json(); assert.equal(listing.entries.length, 1);
   assert.match(listing.entries[0].version, /^[0-9a-f]{24}$/);
   assert.equal((await readFile(path.join(data, 'library.sqlite'))).subarray(0, 16).toString(), 'SQLite format 3\0');
@@ -202,15 +215,6 @@ try {
   assert.deepEqual((await (await fetch(indexUrl)).json()).index, frameIndex);
   // Exercise the compiled runtime's real watcher before the 30 s full scan.
   // Querying browse must not itself trigger a refresh.
-  const waitForEntries = async predicate => {
-    const deadline = Date.now() + 8000;
-    while (Date.now() < deadline) {
-      const page = await (await fetch(base + '/api/library/browse?recursive=1')).json();
-      if (predicate(page.entries)) return;
-      await new Promise(r => setTimeout(r, 50));
-    }
-    throw new Error('Packaged directory watcher did not reconcile changes: ' + output);
-  };
   const watchState = await (await fetch(base + '/api/library/scan')).json();
   assert.ok(watchState.watch?.active >= 2, 'packaged runtime registered directory watchers');
   // Cold FLV builds must use the embedded build worker too, with no checkout or runtime on PATH.
@@ -246,29 +250,36 @@ try {
   const controller = new AbortController(); const streaming = await fetch(url, { signal: controller.signal }); await streaming.body.getReader().read(); controller.abort();
   assert.equal((await fetch(base + '/api/ready')).status, 200);
   const uploaded = await fetch(base + '/api/logs', { method: 'POST', headers: { origin: base, 'content-type': 'application/json', 'x-voidplayer-action': 'log' }, body: JSON.stringify({ schema: 'voidplayer-web-log', sessionId: 'release-test' }) }); assert.equal(uploaded.status, 201);
-  assert.equal((await readdir(path.join(data, 'logs'))).length, 1);
+  const uploadedName = (await uploaded.json()).name;
+  assert.match(uploadedName, /^voidplayer-log-.*\.json$/);
+  const reportFiles = async () => (await readdir(path.join(data, 'logs'))).filter(name => /^voidplayer-log-.*\.json$/.test(name));
+  assert.deepEqual(await reportFiles(), [uploadedName]);
+  const uploadedBytes = await readFile(path.join(data, 'logs', uploadedName));
   const receivedLogs = await (await fetch(base + '/api/admin/logs')).json();
   assert.equal(receivedLogs.entries.length, 1);
   const received = await (await fetch(base + '/api/admin/logs/' + receivedLogs.entries[0].name)).json();
   assert.equal(received.document.serverReceipt.actorId, 'local');
   await stop();
-  // Exercise the compiled runtime's actual schema 1 -> 5 migration. The old
+  // Exercise the compiled runtime's actual schema 1 -> 8 migration. The old
   // mount now exposes an empty directory instead of returning ENOENT.
   const legacyIndex = openIndexDatabase(path.join(data, 'library.sqlite'));
-  legacyIndex.exec('DROP TABLE root_storage; PRAGMA user_version=1;'); legacyIndex.close();
+  legacyIndex.exec('DROP TABLE root_storage; DROP TABLE library_directory_checks; PRAGMA user_version=1;'); legacyIndex.close();
   const migrationOffline = media + '-migration-offline';
   await renameReleased(media, migrationOffline); await mkdir(media);
   const upgraded = path.join(temp, 'upgraded program'); await renameReleased(folder, upgraded); executable = path.join(upgraded, manifest.executable);
-  base = await start(port); assert.equal((await fetch(base)).status, 200); assert.equal(await readFile(configPath, 'utf8'), original); assert.equal((await readdir(path.join(data, 'logs'))).length, 1);
-  async function waitForStorage(state) {
+  base = await start(port); assert.equal((await fetch(base)).status, 200); assert.equal(await readFile(configPath, 'utf8'), original);
+  assert.deepEqual(await reportFiles(), [uploadedName]); assert.deepEqual(await readFile(path.join(data, 'logs', uploadedName)), uploadedBytes);
+  async function waitForStorage(state, errorCode) {
+    const states = Array.isArray(state) ? state : [state];
     for (let i = 0; i < 100; i++) {
       const scan = await (await fetch(base + '/api/library/scan')).json();
-      if (!scan.scanning && scan.roots.every(root => root.state === state)) return scan;
+      if (!scan.scanning && scan.roots.every(root => states.includes(root.state))
+        && (!errorCode || scan.errors.some(error => error.code === errorCode))) return scan;
       await new Promise(r => setTimeout(r, 50));
     }
     throw new Error('Storage state did not settle to ' + state);
   }
-  const unverified = await waitForStorage('offline');
+  const unverified = await waitForStorage(['partial', 'offline'], 'ESTORAGEUNVERIFIED');
   assert.ok(unverified.errors.some(error => error.code === 'ESTORAGEUNVERIFIED'));
   assert.equal((await (await fetch(base + '/api/library')).json()).entries[0].id, listing.entries[0].id);
   assert.equal((await fetch(url)).status, 404);
@@ -293,7 +304,7 @@ try {
   const offlineMedia = media + '-offline'; await renameReleased(media, offlineMedia);
   base = await start(port);
   assert.equal(await readFile(configPath, 'utf8'), original);
-  assert.equal((await readdir(path.join(data, 'logs'))).length, 1);
+  assert.deepEqual(await reportFiles(), [uploadedName]); assert.deepEqual(await readFile(path.join(data, 'logs', uploadedName)), uploadedBytes);
   await verifyWorkspaceRestore(workspaceTransport, savedWorkspace);
   const restored = await (await fetch(base + '/api/library')).json();
   assert.equal(restored.entries.length, 1, 'restored index stays queryable while storage is offline');

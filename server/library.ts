@@ -82,7 +82,7 @@ export class MediaLibraryIndex {
   get corePaths(){return {decoding:this.coreDirectory,analysis:this.options.analysisCoreDir??path.join(path.dirname(this.coreDirectory),'voidplayer-analysis')};}
   get analysisDirectory() { return path.join(path.dirname(this.store.file), 'bitstream-analysis'); }
   get indexDatabase() { return this.store.file; }
-  get ready() { return this.initialized; }
+  get ready() { return !this.definitions.length || this.initialized; }
   private now() { return (this.options.now ?? Date.now)(); }
   start() {
     if (this.started || this.closed) return;
