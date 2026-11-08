@@ -2229,12 +2229,26 @@ try {
       const samples = [];
       for (const expanded of [true, false]) {
         document.querySelector('#source-activity-toggle').click();
-        const frames = [], deadline = performance.now() + 350;
-        while (performance.now() < deadline) {
-          await new Promise(requestAnimationFrame);
-          frames.push({ height: details.getBoundingClientRect().height, foot: foot.getBoundingClientRect().height,
-            reserve: parseFloat(document.querySelector('#sources-panel').style.getPropertyValue('--foot-h')) });
+        details.getBoundingClientRect(); // Materialize the real CSS transitions.
+        const animations=details.getAnimations().filter(animation=>animation.effect.getComputedTiming().endTime>0);
+        if(!animations.length)throw Error('fold must create real transitions');
+        for(const animation of animations)animation.pause();
+        const frames = [];
+        for(const progress of [0,.2,.4,.6,.8,1]){
+          for(const animation of animations)animation.currentTime=animation.effect.getComputedTiming().endTime*progress;
+          // RO publishes the measured reserve in the following frame. Sample
+          // fixed animation positions, rather than demanding a cloud frame rate.
+          for(let frame=0;frame<5;frame++){
+            await new Promise(requestAnimationFrame);
+            const reserve=parseFloat(document.querySelector('#sources-panel').style.getPropertyValue('--foot-h'));
+            if(frame>0&&Math.abs(reserve-foot.getBoundingClientRect().height)<=1)break;
+          }
+          const sample={ height: details.getBoundingClientRect().height, foot: foot.getBoundingClientRect().height,
+            reserve: parseFloat(document.querySelector('#sources-panel').style.getPropertyValue('--foot-h')) };
+          if(Math.abs(sample.reserve-sample.foot)>1)throw Error('list reserve must follow every sampled footer height');
+          frames.push(sample);
         }
+        for(const animation of animations)animation.finish();
         samples.push({ expanded, frames });
       }
       return samples;
