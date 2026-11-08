@@ -417,12 +417,15 @@ input.settings-choice:disabled { opacity: var(--disabled-opacity); }
 #settings-pane-logs .log-session-row { flex-wrap: wrap; gap: 4px; }
 #settings-pane-logs .log-session-row .settings-choice { flex: 1 1 160px; }
 #settings-pane-logs .log-submit-row { gap: 4px; flex-wrap: nowrap; justify-content: flex-end; margin: 0 0 0 auto; padding: 0; border: 0; }
-#settings-pane-logs .log-report { padding: 16px; }
-#settings-pane-logs .log-report-toolbar { padding: 0; gap: 8px 12px; border-bottom: 0; flex-wrap: wrap; }
-#settings-pane-logs .log-preview-status { color: var(--text); font-size: 13px; }
-#settings-pane-logs .log-detail-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 12px; margin-left: auto; }
-#settings-pane-logs .log-preview-navigation { padding: 0; gap: 4px; flex-wrap: nowrap; }
+#settings-pane-logs .log-report { padding: 16px; container: log-report / inline-size; }
+#settings-pane-logs .log-report-toolbar { padding: 0; gap: 8px; justify-content: flex-start; flex-wrap: nowrap; }
+#settings-pane-logs .log-preview-status { flex: 0 1 auto; min-width: 0; white-space: normal; color: var(--text); font-size: 13px; }
+#settings-pane-logs .log-preview-navigation { flex: none; padding: 0; gap: 2px; flex-wrap: nowrap; }
 #settings-pane-logs .log-report-toolbar button { margin: 0; }
+#settings-pane-logs .log-report-toolbar [data-action=copy] { width: max-content; margin-inline-start: auto; white-space: nowrap; }
+@container log-report (max-width: 280px) {
+  .log-report-toolbar:has(.log-preview-navigation:not([hidden])) [data-action=copy] span { display: none; }
+}
 #settings-pane-logs .log-json { border: 0; border-radius: 8px; outline-offset: -2px; padding: 12px; margin: 12px 0 0; background: var(--surface-panel); }
 
 /* Settings spacing contract. Sections own vertical rhythm; children never add to it. */
@@ -523,8 +526,6 @@ input.settings-choice:disabled { opacity: var(--disabled-opacity); }
   html[lang=en] .workspace-current-actions { flex-wrap: wrap; min-width: 0; max-width: 100%; }
   html[lang=en] .workspace-current-actions button { max-width: 100%; white-space: normal; }
 }
-#settings-pane-logs :is(.log-detail-actions, .log-preview-navigation) { max-width: 100%; min-width: 0; flex-wrap: wrap; }
-#settings-pane-logs .log-report-toolbar button,
 .settings-content :is(.settings-file-actions, .identity-actions, .log-submit-row) > button { max-width: 100%; white-space: normal; }
 .settings-content :is(p, h4, strong, span) { overflow-wrap: anywhere; }
 .color-decode-controls, #hardware-depth-row { flex-wrap: wrap; min-width: 0; }

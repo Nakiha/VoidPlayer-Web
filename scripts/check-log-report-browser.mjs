@@ -64,10 +64,25 @@ try{
  assert.equal(await page.locator('.log-json').evaluate(el => getComputedStyle(el).backgroundColor), await page.locator('#settings').evaluate(el => getComputedStyle(el).backgroundColor), 'log text matches the background behind the local logs heading');
  assert.deepEqual(await page.locator('.log-preview-status').evaluate(el => ({ color: getComputedStyle(el).color, size: getComputedStyle(el).fontSize })), await page.locator('.log-report-toolbar [data-action=copy]').evaluate(el => ({ color: getComputedStyle(el).color, size: getComputedStyle(el).fontSize })), 'page status matches the action text');
  assert.equal(await page.locator('.log-preview-hint').count(),0);
+ await page.setViewportSize({width:620,height:786});
+ assert.ok(await page.getByRole('button',{name:'上一页',exact:true}).isHidden(),'a single page needs no page controls');
+ const reportHeader=page.locator('.log-report-toolbar');
+ const oneRow=()=>reportHeader.evaluate(el=>{
+  const boxes=[...el.querySelectorAll('.log-preview-status,button')].map(item=>item.getBoundingClientRect()).filter(box=>box.width>0);
+  const label=document.createRange();
+  label.selectNodeContents(el.querySelector('[data-action=copy] span'));
+  return boxes.every(box=>Math.abs(box.top+box.height/2-(boxes[0].top+boxes[0].height/2))<2)
+    && label.getClientRects().length<=1 && el.scrollWidth<=el.clientWidth+1;
+ });
+ assert.ok(await oneRow(),'page summary and copy share a row at 620px');
  await page.locator('#log-session').click();await page.locator('#log-session-menu [data-value="migration-large-history"]').click();
  await page.waitForFunction(()=>document.querySelector('.log-json').dataset.sessionId==='migration-large-history'&&document.querySelector('.log-panel').getAttribute('aria-busy')==='false');
  assert.ok((await page.locator('.log-json').inputValue()).length<=24000);
  assert.match(await page.locator('.log-preview-status').textContent(),/80/);
+ assert.ok(await oneRow(),'pagination and copy share a row with 80 pages at 620px');
+ await page.setViewportSize({width:320,height:700});
+ assert.ok(await oneRow(),'long page counts and controls fit the narrow card');
+ await page.setViewportSize({width:1512,height:982});
  assert.equal((await read()).events.length,2000,'schema 1 migration and bounded preview preserve the complete report');
  await page.locator('[data-page=previous]').click();assert.match(await page.locator('.log-preview-status').textContent(),/79\/80/);
  await page.locator('#settings-tab-workspace').click();await page.locator('#settings-tab-logs').click();
@@ -95,10 +110,10 @@ try{
   assert.equal(await page.locator('.log-feedback').isVisible(),false);
   await page.locator('#settings').screenshot({path:`/tmp/voidplayer-log-report-${theme}-${name}.png`});
  }
- await page.locator('.section-title-info').hover();
+ await page.getByRole('img',{name:'日志说明',exact:true}).hover();
 await page.waitForFunction(() => { const tip = document.querySelector('#control-tooltip'); return tip instanceof HTMLElement && !tip.hidden && (tip.textContent ?? '').includes('最近 3 次会话'); });
 assert.match(await page.locator('#control-tooltip').textContent() ?? '', /保留最近 3 次会话[\s\S]*发送日志/);
-await page.locator('.section-title-info').click();
+await page.getByRole('img',{name:'日志说明',exact:true}).click();
 await page.waitForFunction(() => document.querySelector('#control-tooltip').hidden);
  assert.equal(await page.locator('#settings').evaluate(el=>el.open),true);
  const downloaded=page.waitForEvent('download');void downloaded.catch(()=>{});await page.locator('.log-panel [data-action=download]').click();
