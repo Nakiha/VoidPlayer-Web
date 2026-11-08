@@ -188,5 +188,6 @@ try {
   await browser?.close();
   untrust?.();
   await new Promise(resolve => { server.close(resolve); server.closeAllConnections(); });
+  await library.close();
   await rm(temporary, { recursive: true, force: true });
 }

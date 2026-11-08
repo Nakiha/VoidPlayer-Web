@@ -148,7 +148,7 @@ test('all platform/runtime suites run independently of the compiled package jobs
   assert.match(runtimeJob.body, /^    runs-on: \$\{\{ matrix\.os \}\}$/m);
   assert.match(runtimeJob.body, /^    timeout-minutes: 20$/m);
   assert.match(packaged.body, /^    timeout-minutes: 20$/m);
-  assert.match(runtimeJob.body, /fail-fast: false\n      matrix:\n        runtime: \[node, bun\]\n        os: \[ubuntu-24\.04, windows-2022, macos-14\]/);
+  assert.match(runtimeJob.body, /fail-fast: false\n      matrix:\n        runtime: \[node, bun\]\n        os: \[ubuntu-24\.04, windows-2022, macos-15\]/);
   assert.deepEqual([...packaged.body.matchAll(/platform: ([\w-]+)/g)].map(match => match[1]).sort(), ['darwin-arm64', 'linux-x64', 'windows-x64']);
   for (const body of [runtimeJob.body, packaged.body]) {
     assert.match(body, /uses: actions\/checkout@v4/);

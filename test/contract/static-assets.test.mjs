@@ -93,6 +93,7 @@ test('frontend publication retains immutable versions and leaves the active entr
     await writeFile(path.join(root, 'admin/index.html'), label); await writeFile(path.join(root, 'manifest.webmanifest'), '{}');
     await writeFile(path.join(root, 'sw.js'), 'const assets = {};\n');
     await prepareStaticAssets(root); await sealFrontend(root);
+    await verifyStaticAssets(root);
     return {root,buildId};
   }
   try {

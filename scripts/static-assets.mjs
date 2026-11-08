@@ -3,7 +3,9 @@ import { createHash } from 'node:crypto';
 import { brotliCompressSync, gzipSync, brotliDecompressSync, gunzipSync, constants } from 'node:zlib';
 import path from 'node:path';
 
-const included = name => /\.(wasm|js|css|json|html|webmanifest)$/.test(name) && name !== 'static-assets.json';
+// The frontend catalog seals this manifest afterwards and is verified separately.
+const included = name => /\.(wasm|js|css|json|html|webmanifest)$/.test(name)
+  && !['static-assets.json', 'frontend-release.json'].includes(name);
 export const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 function portableGzip(bytes) {
   const compressed = gzipSync(bytes, { level: 9 });
