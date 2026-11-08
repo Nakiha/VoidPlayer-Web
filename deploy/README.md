@@ -6,6 +6,8 @@
 
 - [发布新版前端并保留旧窗口](operations.md#只发布前端)
 - [运行、目录与升级](standalone.md)
+- [桌面安装与离线使用](web-app.md)
+- [在线版与静态分发](sites.md)
 - [可选后台运行与备份](operations.md)
 - [媒体库与服务管理](admin.md)
 

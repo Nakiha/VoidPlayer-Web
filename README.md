@@ -1,89 +1,106 @@
-# VoidPlayer Web
+<p align="center">
+  <img src="public/icon-192.png" alt="VoidPlayer 图标" width="88" height="88">
+</p>
 
-浏览器内的视频评审工具：最多八轨（A–H）同步播放、逐帧对比和矢量标注。优先使用 WebCodecs，不支持的编码组合通过本地 FFmpeg WASM 解码；不上传视频，默认静音。
+<h1 align="center">VoidPlayer Web</h1>
 
-## 启动
+<p align="center">在浏览器里同步播放、逐帧对比和标注视频。</p>
 
-从 [最新公开 Release](https://github.com/Nakiha/VoidPlayer-Web/releases/latest) 下载对应平台的独立包，运行无需安装 Node/Bun，见 [独立运行说明](deploy/standalone.md)。
+<p align="center">
+  <a href="https://voidplayer-local-review.akanemeguri1296.chatgpt.site/">在线使用</a> ·
+  <a href="https://github.com/Nakiha/VoidPlayer-Web/releases/latest">下载运行包</a> ·
+  <a href="docs/README.md">文档</a> ·
+  <a href="https://github.com/Nakiha/VoidPlayer-Web/issues">反馈问题</a>
+</p>
 
-以下为源码开发方式，需要 Node.js 24+。首次运行：
+<p align="center">
+  <a href="https://github.com/Nakiha/VoidPlayer-Web/actions/workflows/checks.yml"><img src="https://github.com/Nakiha/VoidPlayer-Web/actions/workflows/checks.yml/badge.svg" alt="CI 状态"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-LGPL--2.1--or--later-blue" alt="LGPL-2.1-or-later"></a>
+</p>
+
+VoidPlayer Web 是一个视频评审工具，适合对比不同编码或处理结果、检查具体帧，并用文字和矢量图形记录问题。本地视频由浏览器读取和解码，无需上传。
+
+## 在线使用
+
+**[打开 VoidPlayer →](https://voidplayer-local-review.akanemeguri1296.chatgpt.site/)**
+
+无需安装或登录。打开网页后，选择或拖入本地视频即可开始：
+
+1. 添加要对比的视频，在同一时间轴上播放；用左右方向键逐帧查看。
+2. 暂停后添加标注，或打开轨道信息、像素工具和码流分析。
+3. 在「设置 → 工作区」导出评审内容；下次导入时，同时选择工作区文件和原视频。
+
+工作区文件不包含视频。本机恢复依赖浏览器存储与文件授权，重要评审请主动导出备份。
+
+## 能做什么
+
+- **多轨对比**：最多八轨（A–H）同步播放，支持并排、网格、双轨分屏擦拭、轨道排序和时间偏移。
+- **逐帧检查**：前后逐帧、时间定位、平移缩放、像素取样与截图。
+- **评审标注**：文字和矢量绘图、回复与解决状态、标注卡片及帧缩略图。
+- **媒体分析**：编码与色彩信息、码率和包统计，以及支持范围内的 NAL、GOP、参考关系和块/QP 分析。
+- **浏览器解码**：优先使用 WebCodecs，不支持的编码组合通过 FFmpeg WASM 软件解码。
+- **中英文界面**：亮色、暗色和自定义主题，常用操作支持快捷键。
+
+默认静音，可显式开启单轨声音；音频只利用视频读取时已有的缓存。具体边界见[音频说明](docs/opportunistic-audio.md)。编码、分析和 HDR 能力取决于片源与运行环境，详见[架构说明](docs/architecture.md)和 [HDR 支持](docs/hdr-support.md)。
+
+## 选择使用方式
+
+| | 在线版 | 本地运行包 / 自托管 |
+| --- | --- | --- |
+| 本地视频、多轨对比、标注与分析 | 支持 | 支持 |
+| 工作区文件与本机恢复 | 支持 | 支持 |
+| 服务器媒体库、目录浏览与文件管理 | — | 支持 |
+| 服务器工作区、分享与标注同步 | — | 支持 |
+| 桌面安装与离线资源准备 | — | 支持，取决于浏览器 |
+
+在线版当前使用单线程 WASM，高分辨率、多轨软件解码的速度取决于设备和片源。部署自己的静态版本见 [Sites 使用与分发](deploy/sites.md)。
+
+需要媒体库或共享评审时，从 [Releases](https://github.com/Nakiha/VoidPlayer-Web/releases/latest) 下载对应平台的运行包，解压后启动：
+
+```sh
+./voidplayer
+# Windows：运行 voidplayer.exe
+```
+
+打开 `http://127.0.0.1:5180/`。运行包无需安装 Node.js、Bun 或 FFmpeg，数据保存在程序旁边的 `data/`。媒体库配置、局域网 HTTPS 和更新步骤见[便携运行说明](deploy/standalone.md)；桌面安装见[安装与离线使用](deploy/web-app.md)。
+
+## 开发
+
+需要 **Node.js 24+**。播放 core 和分析 core 来自独立的 [VoidPlayer-FFmpeg-Build](https://github.com/Nakiha/VoidPlayer-FFmpeg-Build/tree/wasm) 仓库，本仓库消费固定产物，不在这里编译 WASM。
+
+先准备好 core 产物，再运行：
 
 ```sh
 npm ci
 bash scripts/sync-wasm-core.sh
-bash scripts/sync-samples.sh
+bash scripts/sync-analysis-core.sh
 cp voidplayer.config.example.json voidplayer.config.json
 npm run dev
 ```
 
-开发页面为 http://127.0.0.1:5178/，媒体 API 为 5180。配置文件中的 `mediaRoots` 指定媒体库白名单目录。解码 core 来自独立的 `VoidPlayer-FFmpeg-Build` 仓库 `wasm` 分支，也可通过 `WASM_CORE_DIR` 指向已构建产物。
+同步脚本默认从相邻的解码器仓库读取产物，也可分别通过 `WASM_CORE_DIR`、`ANALYSIS_CORE_DIR` 指定目录。配置中的 `mediaRoots` 指向本机媒体目录；默认 QA 样片目录可通过 `bash scripts/sync-samples.sh` 填充。
 
-使用正式构建：
+开发页面默认位于 `http://127.0.0.1:5178/`，媒体 API 位于 `5180`。
 
-```sh
-npm run build
-npm run serve
-```
+| 命令 | 用途 |
+| --- | --- |
+| `npm run build` | 构建完整版前端 |
+| `npm run serve` | 启动媒体服务，提供已发布的前端 |
+| `npm run dev:sites` | 开发仅使用本地文件的静态版 |
+| `npm run package:sites` | 生成静态项目、分发归档和校验和 |
+| `npm run test:fast` | 运行无需媒体、core 或浏览器的快速检查 |
 
-打开 http://127.0.0.1:5180/。服务运行期间，再次构建后用 `npm run publish:frontend -- dist` 切换线上入口。已打开的普通网页和 PWA 可以继续读取所属版本的解码资源，保留期和回退步骤见[前端发布](deploy/operations.md#只发布前端)。用于 ChatGPT Sites 或其他静态托管的本地文件版，使用 `npm run package:sites`，见 [Sites 分发说明](deploy/sites.md)。该目标移除服务器连接、媒体库及分享入口，输出独立目录，不覆盖完整版 `dist/`。
+正式构建与前端更新见[发布操作](deploy/operations.md#只发布前端)；完整测试矩阵和准备条件见[验证说明](docs/testing.md)。
 
-解压后直接运行，所有运行数据集中在程序旁边的 `data/`。无需系统服务、专用账号或网关，见 [便携运行说明](deploy/standalone.md)。
+## 文档与参与
 
-## 安装与离线使用
+- [文档导航](docs/README.md)：功能契约、部署与专项说明。
+- [架构](docs/architecture.md) · [色彩链路](docs/color-pipeline.md) · [工作区格式](docs/workspace-format.md)。
+- [HTTP Agent 接口](docs/agent-http.md) · [本机页面桥](docs/local-mcp-page-bridge.md)。
+- [主题开发](src/themes/README.md) · [本地化](docs/localization.md) · [图标资源](design/README.md)。
 
-在本机打开正式构建的播放器首页，或通过已受信任的 HTTPS 访问远程部署。Chrome / Edge 可从地址栏或浏览器菜单安装 VoidPlayer。Safari 可将页面添加到程序坞或主屏幕。开发页面使用实时资源。
-
-正式版的「设置 → 关于 → Web 应用」提供「安装」按钮。Chrome / Edge 支持时会弹出原生安装窗口；Mac Safari 首次访问会提示一次，点击「安装」会弹出简短的操作指引。使用「文件 → 添加到程序坞」，完成后可在个人「应用程序」文件夹找到 VoidPlayer。安装后的独立窗口显示「已安装」，首次联网打开会在后台准备播放器、语言包及解码器。Mac Safari Web 应用可在个人「应用程序」文件夹中移到废纸篓。媒体库、共享与服务器工作区需要连接原服务。浏览器清除站点数据后，需要再次联网准备。升级期间可以继续当前评审，关闭所有旧播放器窗口后，已准备好的新版本会接替旧版。
-
-安装到桌面的 Chrome 或 Edge 后，可在系统「打开方式」中选择 VoidPlayer 打开 `.voidplayer` 工作区或本地视频。一次选择多个视频会在新窗口按顺序占用空轨道；同时选择一个工作区和原视频可还原本地片源。文件由浏览器在本地读取。默认打开方式由用户在系统中选择。通用的 `.json`、`.gz` 和可能是源码的 `.ts` 保留拖放和应用内打开。Safari 等未提供文件交付接口的浏览器也可使用这些入口。
-
-正式图标的可编辑源文件是 [VoidPlayer.icon](design/VoidPlayer.icon)。图标采用 G2 配色，乳白色玻璃播放键叠在蓝青色拼块上，尖端下方保留蓝紫色，右下角以薄荷绿点缀。在 macOS 上用 Apple Icon Composer 打开工程即可调整颜色、材质与投影。安装 Xcode 和 Playwright Chromium 后，运行 `npm run icons:generate` 可更新网页标签、主屏幕和安装图标。正式构建会按安装图标的内容生成版本化地址。已安装的桌面 Chrome 应用再次联网打开后可发现图标变化；如果窗口菜单提示应用更新，确认新图标后会更新程序坞图标。
-
-App 内需要无背板的图标时，直接引用 [icon-foreground.svg](public/icon-foreground.svg)，页面路径为 `/icon-foreground.svg`。它和网页图标由同一份工程导出，外围透明，播放键作为独立前景覆盖在拼块上。
-
-早期取景框设计和[动效样稿](design/studies/VoidPlayer-motion.svg)保存在 `design/studies/`。
-
-## 当前功能
-
-- 多根目录持久化媒体索引、嵌套目录浏览、分页和搜索；后台扫描与视频读取并行。
-- `/admin` 管理媒体根目录、扫描任务、已上传日志和工作区，查看运行状态并主动测速。
-- 设置中可主动保存服务器工作区，按用户归属隔离，编辑冲突时可保留副本。
-
-- “设置 → 外观”提供亮色、暗色、跟随系统、12 种预设主题色及自定义取色 / HEX 输入；外观偏好保存在当前浏览器。
-
-- 并排、田字布局与双轨分屏擦拭；缩放最高 500×，支持平移、轨道排序和偏移。
-- 空格播放/暂停，左右方向键逐帧；正在输入文字或使用输入法时保留输入行为。完整快捷键见应用内“设置 → 快捷键”。
-- 公共时间轴使用所有轨道偏移后的最大结束时间；短轨道结束后保持最后一帧。
-- 子轨道窗格的喇叭位于可视按钮左侧，点击后仅该轨道可以出声，再次点击恢复静音。支持 FLV、MP4（含 faststart / 分片文件）、MPEG-TS、WebM / MKV 中可解码的单/双声道音频，仅利用视频读取已缓存的数据；缺包时保持安静，不为音频增加读取。刷新、还原或替换片源后仍默认静音，见 [顺带音频边界](docs/opportunistic-audio.md)。
-- 暂停画面拖动、N 快捷键或标注列表可进入编辑。支持图形、文字、移动、缩放、擦除和撤销；修改自动写入当前评审会话。
-- 标注列表、时间轴和折叠栏使用 ID 推导的五种形状与八种色系；不保存身份外观，允许重复。悬停可预览已有标注缩略图。
-- 轨道检查显示编码、像素格式、色域原色、传递特性、矩阵系数和 PC/TV 范围；未标记信息保持未知。
-
-## 数据与限制
-
-**关闭或刷新前请导出工作区，或主动保存到服务器。** `.voidplayer` 是 gzip 压缩的 JSON，保存媒体服务地址、片源引用、轨道顺序和偏移、位置、标注及已有缩略图、对比布局和工具区展开状态；拖入文件或使用“设置 → 工作区 → 打开”还原。普通工作区 JSON 和旧版评审 JSON 也可导入。
-
-工作区不包含视频文件。本地片源需要重新选择原文件；媒体库片源需要接收者能访问记录的服务地址，从不同域名部署的网页打开时，服务需允许该网页的跨域访问。`localhost` / `127.0.0.1` 始终指向接收者自己的电脑，分享媒体库工作区时应从双方可访问的服务网址打开应用。旧版评审未记录后端地址和布局，按导入页面的服务地址及默认视图恢复。导入失败不会替换原会话。详见 [工作区格式](docs/workspace-format.md)。
-
-视频在浏览器内解码。远程 WebCodecs 使用 `./voidplayer --https 服务器IP` 开启内置 HTTPS，在客户端信任程序生成的根证书后访问 HTTPS 地址，详见[远程 WebCodecs 与硬件解码](deploy/standalone.md#远程-webcodecs-与硬件解码)。应用优先请求硬件解码；界面区分 WebCodecs 硬件优先、浏览器自动选择和 WASM 软件解码，不把配置请求冒充实际 GPU 使用证据。普通 HTTP 内网地址进入证书连接引导页；H.266 等浏览器不支持的编码在 HTTPS 下仍使用 WASM，其速度取决于客户端 CPU、编码、分辨率和轨道数。
-
-远程 WASM 不再预先下载整文件：MP4 的 AVC/HEVC/AV1/VVC 使用 TS 包索引与按 GOP 读取；FLV 由 TS 扫描 tag 头建索引并按需读取。其他 FFmpeg 封装回退通过有界 Range AVIO 读取，需要跨源隔离，且可能仍需扫描全文件建立索引。远程文件不再受 512 MiB 整文件内存上限限制，详情见架构说明。媒体库加号将片源载入空轨道；轨道全满时选择替换目标。载入期间显示下载、建立索引或首帧状态，并阻止重复点击；失败后可重试。FLV 使用分块读取和独立解封装。WASM 通过 ABI v2 交付原精度 YUV，呈现层负责色彩转换；支持解码 HDR 文件不代表验证了 HDR 显示效果，见 [色彩链路契约](docs/color-pipeline.md)。当前不支持直播，音频仅限上述顺带播放；服务器工作区没有自动保存、完整版本历史或实时协作。
-
-诊断日志保存在本机 IndexedDB，只有用户在日志面板明确点击上传时才发送到配置的服务器。
-
-## 开发入口
-
-- [文档导航](docs/README.md)：当前行为契约、验证入口及历史验收记录。
-- [架构与行为边界](docs/architecture.md)：会话、解码、呈现、标注与 Agent 接口。
-- [HTTP Agent 与操作同步](docs/agent-http.md)：渐进式能力发现、无页面标注操作与 GUI 活动记录；后续计划见 [roadmap #112](https://github.com/Nakiha/VoidPlayer-Web/issues/112)。
-- [验证说明](docs/testing.md)：统一测试套件、单项筛选、准备条件、CI 门禁与结果报告。
-- [主题与 UI 约定](src/themes/README.md)：颜色、材质、密度及主题适配边界。
-- [HDR 支持](docs/hdr-support.md)、[本地化维护](docs/localization.md)、[容器恢复边界](docs/container-recovery.md)。
-- [媒体库演进方案](docs/media-library-evolution.md)：媒体库配置、索引、缓存及存储边界。
-- [AGENTS.md](AGENTS.md)：仓库工作约束。
-
-文档记录当前行为和可重复执行的验证方式。历史阶段记录单独列在文档导航中；当时的分支、计数和性能结果不能代替当前验收。
+欢迎提交 [Issue](https://github.com/Nakiha/VoidPlayer-Web/issues) 和 Pull Request。报告播放问题时，请说明浏览器、系统、片源的封装/编码及复现步骤；日志可从应用内下载。提交代码前请阅读 [AGENTS.md](AGENTS.md) 并运行改动对应的检查。
 
 ## 许可证
 
-VoidPlayer Web 使用 [LGPL-2.1-or-later](LICENSE)。第三方依赖保留各自许可证，可在「设置 → 关于」查看项目链接与许可证全文。
+[LGPL-2.1-or-later](LICENSE)。第三方依赖保留各自许可证，可在应用内「设置 → 关于」查看。

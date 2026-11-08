@@ -10,7 +10,7 @@
 | 架构与失败边界 | [架构](architecture.md)、[失败隔离](failure-isolation.md)、[容器恢复](container-recovery.md) |
 | 测试、CI 与报告 | [验证说明](testing.md)、[脚本索引](../scripts/README.md) |
 | ChatGPT Sites 与纯静态分发 | [Sites 本地文件版](../deploy/sites.md) |
-| 独立程序运行与 HTTPS | [便携运行](../deploy/standalone.md) |
+| 独立程序、HTTPS 与桌面安装 | [便携运行](../deploy/standalone.md)、[安装与离线使用](../deploy/web-app.md) |
 | 服务端日志与上传报告 | [轮转、配额与保留](server-logging.md) |
 | 用户、访客、分享与工作区 | [身份与分享](identity-and-sharing.md)、[工作区格式](workspace-format.md) |
 | 媒体库与存储 | [媒体库索引](media-library-evolution.md)、[存储位置](library-location.md)、[文件管理](library-file-management.md) |
@@ -18,7 +18,7 @@
 | 色彩与帧资源 | [色彩链路契约](color-pipeline.md)、[HDR 支持](hdr-support.md) |
 | HTTP Agent 与可选页面宿主 | [HTTP 接口](agent-http.md)、[本机页面桥](local-mcp-page-bridge.md) |
 | 默认静音与单轨出声 | [顺带音频边界](opportunistic-audio.md) |
-| 外观与界面 | [主题约定](../src/themes/README.md)、[本地化维护](localization.md) |
+| 外观与界面 | [主题约定](../src/themes/README.md)、[本地化维护](localization.md)、[图标资源](../design/README.md) |
 
 ## 专项验证与诊断
 
