@@ -126,6 +126,11 @@ try {
     const action = lane.standalone ? page.locator('.toast-warning button').filter({hasText:/保存现场并刷新|Save this session and refresh/}).last() : page.locator('#server-update');
     await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded'}), action.click()]);
     await page.waitForFunction(() => window.voidPlayer?.getState().tracks[0]?.frame && !window.voidPlayer.getState().busy && !document.querySelector('[data-recovery-pending]'));
+    await page.waitForFunction(layout => {
+      const current = window.voidPlayer.getWorkspace();
+      return Object.entries(layout.panels).every(([key, value]) => current.panels[key] === value)
+        && Object.entries(layout.sources ?? {}).every(([key, value]) => current.sources?.[key] === value);
+    }, before.layout);
     assert.deepEqual(await scene(), before, 'explicit update restores the review document');
     assert.ok((await readFile(path.join(candidate,'index.html'),'utf8')).includes(await page.locator('script[type=module][src]').first().getAttribute('src')));
     console.log('PASS explicit refresh:', lane.standalone ? 'PWA' : 'tab', before.positionUs, 'µs');

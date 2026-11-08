@@ -586,7 +586,7 @@ html[lang=en] .color-flow-link span { max-width: 34px; white-space: normal; text
 .settings-floating-header h2 { min-width: 0; overflow-wrap: anywhere; }
 #identity-save { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 #settings-pane-logs .log-submit-row { min-width: 0; max-width: 100%; }
-#settings-pane-logs .log-session-row .log-submit-row > button { white-space: nowrap; }
+#settings-pane-logs .log-session-row .log-submit-row > button { white-space: normal; overflow-wrap: anywhere; }
 
 /* Very long localized edge labels use the same readable vertical steps. */
 .color-flow[data-long-labels] .color-flow-nodes { display: flex; flex-direction: column; width: fit-content; max-width: 100%; margin-inline: auto; }

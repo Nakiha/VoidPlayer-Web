@@ -292,6 +292,7 @@ jobs:
             .run/playback-reports/
             .run/test-suites/
             .run/native-yuv-lifecycle/
+            .run/browser-fixtures/ui-*/
           if-no-files-found: ignore
           retention-days: 30
 

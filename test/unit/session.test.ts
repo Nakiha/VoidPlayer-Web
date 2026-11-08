@@ -620,6 +620,13 @@ test('stored annotation sync replaces marks in place, appends new and removes de
   assert.deepEqual(session.getState().marks.map(mark => mark.id), ['m1', 'm2', 'm3']);
   session.applyStoredAnnotations([doc('m4', 120000)], ['m1']);
   assert.deepEqual(session.getState().marks.map(mark => mark.id), ['m2', 'm3', 'm4']);
+  const retained = session.getState().marks;
+  await session.removeTrack('A');
+  session.applyStoredAnnotations([doc('m2', 40000), doc('m3', 80000), doc('m4', 120000), doc('unloaded', 160000)],
+    ['m2', 'm3', 'm4', 'unloaded']);
+  assert.deepEqual(session.getState().marks, retained, 'unavailable sources retain existing history without exposing unrelated stored marks');
+  session.applyStoredAnnotations([doc('m3', 80000), doc('m4', 120000)], ['m2', 'm3', 'm4']);
+  assert.deepEqual(session.getState().marks.map(mark => mark.id), ['m3', 'm4'], 'an explicit stored deletion still removes historical marks');
   await session.dispose();
 });
 

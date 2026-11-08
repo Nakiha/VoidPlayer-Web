@@ -204,9 +204,9 @@ try {
   assert.deepEqual(state.tracks, []);
   assert.deepEqual(state.marks, snapshot.marks); assert.equal(state.positionUs, 0);
   assert.equal(await page.locator('#image-A').isVisible(), false, 'missing track must not show the previous review frame');
-  await page.locator('.toast').filter({ hasText: '已失效或文件已移除' }).waitFor();
+  await page.locator('.toast-warning').filter({ hasText: '无法打开「clip.mp4」：文件已移除' }).waitFor();
   const logs = await call('get_review_logs', { limit: 2000 });
-  assert.ok(logs.events.some(event => event.msg === '工作区片源恢复失败，已跳过' && event.data.sourceKind === 'library' && event.data.reason === 'missing' && event.data.error.includes('已失效')));
+  assert.ok(logs.events.some(event => event.msg === '工作区片源恢复失败，已跳过' && event.data.sourceKind === 'library' && event.data.reason === 'missing' && event.data.error.includes('文件已移除')));
   // Rename changes ctime/version on some filesystems, so local reattachment
   // below uses the exact saved fingerprint instead of silently accepting a new server version.
   await rename(clip + '.offline', clip);

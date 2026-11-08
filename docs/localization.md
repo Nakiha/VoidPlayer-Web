@@ -42,6 +42,8 @@ Initialization uses a valid `voidplayer.language` preference, then the ordered b
 
 The compiled pseudo catalog is QA-only. Development supports `?pseudo-locale`; the dedicated layout suite builds with `VITE_I18N_PSEUDO=1` into `.run/i18n-pseudo-dist`, leaving the ordinary distribution untouched. Normal production builds cannot activate pseudo mode by URL. Certificate instructions are complete static rich sentences. Build validation allows only the same ordered `<strong>` tags in both catalogs, with no variables or attributes; pseudo expansion preserves these tags. All user values continue through text/attribute escaping. Pseudo expands literal text without changing placeholder syntax; settings controls wrap instead of overflowing, and the font stack contains PingFang SC, Microsoft YaHei and Noto Sans CJK SC fallbacks.
 
+The certificate guide owns its passive rich instruction contents separately from the fixed shell bindings. Punctuation may add a text node after `<strong>` in English; it must not shift shell binding indices or interrupt later dynamic label updates. Language changes preserve the instruction rows, OS selection, details, focus and download destination. Log download/upload labels wrap within narrow settings panes, including expanded pseudo translations.
+
 ## Verification and comparison
 
 All cases use #39’s manifest and public fixture/lifecycle framework:

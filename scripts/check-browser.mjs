@@ -1516,7 +1516,7 @@ try {
     await page.screenshot({ path: path.join(screenshots, `${browserName}-track-visibility.png`) });
   });
 
-  await check('resize, split/grid layout, focus mode and track-close focus', async page => {
+  await check('resize, split/grid layout, focus mode and track-close focus', async (page, checkpoint) => {
     const names = ['h264_9s_1920x1080.mp4', 'mpeg2_10s_1280x720.ts', 'mhw_hevc_fullrange_bt709_3s.mp4', 'h265_10s_1920x1080.mp4', 'ci_h264_smoke.mp4', 'vp9_10s_1920x1080.webm', 'mhw_x265_aq_qg16_4s_1920x1080.mkv', 'av1_10s_1920x1080.webm'];
     const ids = names.map(name => {
       const entry = listing.entries.find(item => item.name === name);
@@ -1527,6 +1527,7 @@ try {
       for (const [i, id] of ids.entries()) await load.execute({ id, slot: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'][i] });
       window.voidPlayer.setViewport({ arrangement: 'grid' });
     }, ids);
+    checkpoint('eight tracks loaded');
     for (const width of [1280, 600]) {
       await page.setViewportSize({ width, height: 800 });
       for (const open of [false, true]) {
@@ -1597,6 +1598,7 @@ try {
       }
     }
     await page.setViewportSize({ width: 1280, height: 800 });
+    checkpoint('grid geometry verified');
     await page.evaluate(() => window.voidPlayer.setViewport({ mode: 'split', splitPos: .15 }));
     await settle(page);
     const splitHeader = await page.evaluate(() => {
@@ -1655,7 +1657,10 @@ try {
     await page.setViewportSize({ width: 1280, height: 800 });
     await panels(page, false); await panels(page, true); await panels(page, false);
     await page.waitForFunction(() => !document.getElementById('workspace').classList.contains('panel-motion'));
-    await page.waitForFunction(() => document.getAnimations().every(animation => animation.playState !== 'running'));
+    // Indexing indicators may spin indefinitely; only finite UI transitions settle.
+    await page.waitForFunction(() => document.getAnimations().filter(animation => animation.effect?.getTiming().iterations !== Infinity)
+      .every(animation => animation.playState !== 'running'));
+    checkpoint('panel transitions finished');
     await page.evaluate(() => window.voidPlayer.setViewport({ mode: 'side-by-side', zoom: 2, offsetX: 20, offsetY: 15 }));
     await settle(page);
     await page.evaluate(() => window.voidPlayer.setViewport({ zoom: 1, offsetX: 0, offsetY: 0 })); await settle(page);

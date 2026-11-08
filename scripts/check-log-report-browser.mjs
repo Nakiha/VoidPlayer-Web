@@ -110,7 +110,8 @@ try{
   assert.equal(await page.locator('.log-feedback').isVisible(),false);
   await page.locator('#settings').screenshot({path:`/tmp/voidplayer-log-report-${theme}-${name}.png`});
  }
- await page.getByRole('img',{name:'日志说明',exact:true}).hover();
+ const help=page.getByRole('img',{name:'日志说明',exact:true});
+ await page.keyboard.press('Tab');await help.focus();
 await page.waitForFunction(() => { const tip = document.querySelector('#control-tooltip'); return tip instanceof HTMLElement && !tip.hidden && (tip.textContent ?? '').includes('最近 3 次会话'); });
 assert.match(await page.locator('#control-tooltip').textContent() ?? '', /保留最近 3 次会话[\s\S]*发送日志/);
 await page.getByRole('img',{name:'日志说明',exact:true}).click();

@@ -53,8 +53,8 @@ export async function showConnectionGuide({automatic=false}={}) {
           <section class="connection-trust-step" aria-labelledby="connection-trust-title">
             <div class="connection-step-heading"><span class="connection-number">2</span><h2 id="connection-trust-title">${th(msg("connection.installTitle", "安装并信任"))}</h2></div>
             <div class="connection-os" role="group" aria-label="${th(msg("connection.os", "操作系统"))}"><button type="button" data-os="windows" aria-pressed="true" aria-controls="connection-windows">${icon(windows)}Windows</button><button type="button" data-os="macos" aria-pressed="false" aria-controls="connection-macos">${icon(apple)}macOS</button></div>
-            <ol id="connection-windows"><li>${t(msg('connection.winRich1', '双击下载的证书，选择<strong>安装证书</strong>'))}</li><li>${t(msg('connection.winRich2', '选择<strong>当前用户</strong>，点击“下一步”'))}</li><li>${t(msg('connection.winRich3', '选择“将所有的证书都放入下列存储”，浏览并选中<strong>受信任的根证书颁发机构</strong>'))}</li><li>${th(msg('connection.winStep4', '核对来源与指纹，按系统提示完成导入'))}</li></ol>
-            <ol id="connection-macos" hidden><li>${t(msg('connection.macRich1', '打开<strong>钥匙串访问</strong>，选中“登录”，通过“文件 → 导入项目”导入下载的证书'))}</li><li>${t(msg('connection.macRich2', '找到 <strong>VoidPlayer Local CA</strong> 证书，双击打开'))}</li><li>${t(msg('connection.macRich3', '展开“信任”，将<strong>安全套接字层（SSL）</strong>设为“始终信任”'))}</li><li>${th(msg('connection.macStep4', '关闭窗口，按系统提示验证身份并保存'))}</li></ol>
+            <ol id="connection-windows"><li></li><li></li><li></li><li>${th(msg('connection.winStep4', '核对来源与指纹，按系统提示完成导入'))}</li></ol>
+            <ol id="connection-macos" hidden><li></li><li></li><li></li><li>${th(msg('connection.macStep4', '关闭窗口，按系统提示验证身份并保存'))}</li></ol>
             <details class="connection-install-help"><summary>${th(msg("connection.cantInstall", "无法安装或找不到证书？"))}</summary><p>${th(msg("connection.cantInstallBody", "浏览器不能代替你安装系统证书，请确认已下载 voidplayer-ca.crt；如果设备由组织管理，请联系管理员部署"))}</p></details>
           </section>
         </section>
@@ -68,6 +68,24 @@ export async function showConnectionGuide({automatic=false}={}) {
   installLanguageControls(life.signal);
   installLiveLocalization(document.body, life.signal);
   const $ = (id: string) => document.getElementById(`connection-${id}`)!;
+  // Rich sentences may add a trailing text node in one language. Keep these
+  // passive descriptions outside the fixed shell binding indices.
+  const instructions: [Element, () => string][] = [
+    [$('windows').children[0], () => t(msg('connection.winRich1', '双击下载的证书，选择<strong>安装证书</strong>'))],
+    [$('windows').children[1], () => t(msg('connection.winRich2', '选择<strong>当前用户</strong>，点击“下一步”'))],
+    [$('windows').children[2], () => t(msg('connection.winRich3', '选择“将所有的证书都放入下列存储”，浏览并选中<strong>受信任的根证书颁发机构</strong>'))],
+    [$('macos').children[0], () => t(msg('connection.macRich1', '打开<strong>钥匙串访问</strong>，选中“登录”，通过“文件 → 导入项目”导入下载的证书'))],
+    [$('macos').children[1], () => t(msg('connection.macRich2', '找到 <strong>VoidPlayer Local CA</strong> 证书，双击打开'))],
+    [$('macos').children[2], () => t(msg('connection.macRich3', '展开“信任”，将<strong>安全套接字层（SSL）</strong>设为“始终信任”'))],
+  ];
+  const localizeInstructions = () => {
+    for (const [node, render] of instructions) {
+      const html = render();
+      if (node.innerHTML !== html) node.innerHTML = html;
+    }
+  };
+  localizeInstructions();
+  onLanguageChange(localizeInstructions, life.signal);
   const setStatus = (state: 'loading' | 'ready' | 'waiting' | 'error', message: LocalizedValue = '') => {
     $('status').dataset.state = state;
     localizedText($('status'), message);

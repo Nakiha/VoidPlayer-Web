@@ -9,6 +9,7 @@ import { readMp4Configurations } from '../shared/media/containers/mp4-config.ts'
 import { mp4BoundaryFixture } from './mp4-boundary-fixture.ts';
 import { chromium, webkit } from 'playwright';
 import { createMediaServer } from '../server/app.ts';
+import { MediaLibraryIndex } from '../server/library.ts';
 const root = path.resolve(import.meta.dirname, '..');
 const name = process.argv[2] ?? 'webkit';
 const temporary = await mkdtemp(path.join(os.tmpdir(), 'vp-range-browser-'));
@@ -17,7 +18,9 @@ await writeFile(path.join(temporary, 'h264_boundary.mp4'), boundary.oversized);
 const tableReader = new RangeReader({ file: new Blob([boundary.valid]) });
 const table = await readMp4Configurations(tableReader, 1); tableReader.close();
 await writeFile(path.join(temporary, 'h264_truncated.mp4'), boundary.valid.subarray(0, table.sampleOffsets[13] + 1));
-const server = createMediaServer({ roots: [path.join(root, 'fixtures/video'),path.join(root,'fixtures/demux-removal'), temporary], staticDir: path.join(root, 'dist'), onLog() {} });
+const library = new MediaLibraryIndex([path.join(root, 'fixtures/video'),path.join(root,'fixtures/demux-removal'), temporary], { watch: false });
+await library.refresh();
+const server = createMediaServer({ library, roots: library.roots, staticDir: path.join(root, 'dist'), onLog() {} });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 let browser;
 try {
@@ -149,9 +152,10 @@ try {
     ['mpeg4.mp4','mp4-packet',24],['mjpeg.mov','mp4-packet',24],['prores.mov','mp4-packet',24],
   ])for(const mode of ['browser','reference'])for(const input of ['library','local']){
     const page=await browser.newPage({locale:'zh-CN'}),errors=[];page.on('pageerror',error=>errors.push(error.message));
-    await page.addInitScript(mode=>{localStorage.setItem('voidplayer.color-mode',mode);localStorage.setItem('voidplayer.reference-decode',JSON.stringify({decoder:'software',depth:2}));},mode);
+    await page.addInitScript(mode=>localStorage.setItem('voidplayer.color-mode',mode),mode);
     try{
       await page.goto(base);await page.waitForFunction(()=>window.voidPlayer);
+      if(mode==='reference')await page.evaluate(()=>window.voidPlayer.tools.find(tool=>tool.name==='set_reference_decode').execute({decoder:'software',depth:2}));
       if(input==='local')await page.locator('#file-A').setInputFiles(path.join(root,file.endsWith('.mov')||file==='mpeg4.mp4'?'fixtures/demux-removal':'fixtures/video',file));
       else await page.evaluate(async file=>{const call=(name,args={})=>window.voidPlayer.tools.find(t=>t.name===name).execute(args),entry=(await call('list_library',{search:file})).entries.find(e=>e.name===file);if(!entry)throw Error('Missing fixture '+file);const result=await call('load_library_item',{id:entry.id,slot:'A'});if(result.error)throw Error(result.error);},file);
       await page.waitForFunction(file=>{const state=window.voidPlayer.getState();return !state.busy&&state.tracks[0]?.name===file&&!!state.tracks[0]?.frame;},file,{timeout:60000});
@@ -187,4 +191,4 @@ try {
       console.log(JSON.stringify({browser:name,file,mode,input,decoder:result.first.decoder,demuxBackend:result.selected.demuxBackend,outputs:result.outputs,tail:result.tail,seeks:result.seeks,passed:true}));
     }finally{await page.close();}
   }
-} finally { await browser?.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await rm(temporary, { recursive: true, force: true }); }
+} finally { await browser?.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await library.close(); await rm(temporary, { recursive: true, force: true }); }

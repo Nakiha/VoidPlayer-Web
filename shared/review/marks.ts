@@ -82,7 +82,10 @@ export function mergeStoredMarks(current: Mark[], documents: AnnotationDocument[
   // Moving echoed marks to the end would reshuffle the annotation strip on
   // every sync roundtrip.
   const incomingById = new Map(incoming.map(mark => [mark.id, mark]));
-  const removed = new Set(removeIds.filter(id => !incomingById.has(id)));
+  // A stored document whose source is currently unavailable still owns its
+  // imported history. Only a missing document represents a stored deletion.
+  const documented = new Set(documents.map(document => document.mark.id));
+  const removed = new Set(removeIds.filter(id => !documented.has(id)));
   const existing = new Set(current.map(mark => mark.id));
   const next: Mark[] = [];
   for (const mark of current) {

@@ -82,11 +82,11 @@ try {
     });
     await page.addInitScript(software => {
       localStorage.setItem('voidplayer.color-mode', software ? 'reference' : 'browser');
-      localStorage.setItem('voidplayer.reference-decode', JSON.stringify({ decoder: software ? 'software' : 'hardware', depth: 2 }));
     }, software);
     try {
       await page.goto(base); await page.waitForFunction(() => window.voidPlayer);
       const call = (name, args = {}) => page.evaluate(({ name, args }) => window.voidPlayer.tools.find(t => t.name === name).execute(args), { name, args });
+      if (software) await call('set_reference_decode', { decoder: 'software', depth: 2 });
       if (local) {
         await page.locator('#file-A').setInputFiles(path.join(root, name));
         await page.waitForFunction(() => !window.voidPlayer.getState().busy && window.voidPlayer.getState().tracks[0]?.frame, null, { timeout: 60000 });

@@ -47,10 +47,9 @@ try {
   async function run({ codec = 'h264', local = false, fault, software = false } = {}) {
     const context = await browser.newContext({locale:'zh-CN'}), page = await context.newPage();
     const errors = []; page.on('pageerror', e => errors.push(e.message));
-    await page.addInitScript(software => {
+    await page.addInitScript(() => {
       localStorage.setItem('voidplayer.color-mode', 'reference');
-      if (software) localStorage.setItem('voidplayer.reference-decode', JSON.stringify({ decoder: 'software', depth: 2 }));
-    }, software);
+    });
     if (fault) await page.route(/\/assets\/(packet-worker|native-yuv-worker)-.*\.js$/, async route => {
       const response = await route.fetch(); let prefix = '';
       if (fault === 'unsupported' && route.request().url().includes('/packet-worker-')) prefix = 'VideoDecoder.isConfigSupported=async config=>({supported:false,config});';
@@ -63,6 +62,7 @@ try {
     try {
       await page.goto(base); await page.waitForFunction(() => window.voidPlayer);
       const call = (name, args = {}) => page.evaluate(({ name, args }) => window.voidPlayer.tools.find(t => t.name === name).execute(args), { name, args });
+      if (software) await call('set_reference_decode', { decoder: 'software', depth: 2 });
       const loadLibraryItem = async args => {
         try { return await call('load_library_item', args); }
         catch (error) {
@@ -125,7 +125,7 @@ try {
         }
       }
       assert.deepEqual(errors, []);
-      console.log(`PASS ${engine}: ${codec} ${local ? 'local sniff' : 'remote'} ${fault ?? (software ? 'saved software' : 'default hardware')} -> ${state.tracks[0].decoder}`);
+      console.log(`PASS ${engine}: ${codec} ${local ? 'local sniff' : 'remote'} ${fault ?? (software ? 'page software' : 'default hardware')} -> ${state.tracks[0].decoder}`);
     } finally { await context.close(); }
   }
   await run(); await run({ local: true }); await run({ codec: 'hevc' }); await run({ codec: 'hevc', local: true }); await run({ codec: 'av1' }); await run({ codec: 'av1', local: true });
