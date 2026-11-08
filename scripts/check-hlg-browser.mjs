@@ -21,6 +21,7 @@ try {
   browser = await (engine === 'webkit' ? webkit : chromium).launch({ headless: true });
   const page = await browser.newPage({locale:'zh-CN'}), errors = [], ranges = [];
   page.on('pageerror', error => errors.push(error.message));
+  page.on('console',message=>{if(message.text().startsWith('HLG audit:'))console.log(message.text());});
   page.on('request', request => { if (request.url().includes('dolby_hlg_1080p30.mp4')) ranges.push(request.headers().range); });
   await page.route('**/hlg-test', route => route.fulfill({ contentType: 'text/html', body: '<body></body>' }));
   await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/hlg-test`);
@@ -30,6 +31,7 @@ try {
     const assert = (value, message) => { if (!value) throw Error(message); };
     const url = new URL('/fixtures/video/dolby_hlg_1080p30.mp4', location.href).href;
     const signatures = new Map(), rows = [], samplePixels = createHlgPixelSampler();
+    const started=performance.now(),progress=(phase,detail={})=>console.log('HLG audit: '+JSON.stringify({phase,elapsedMs:Math.round(performance.now()-started),...detail}));
     const seekOrdinals = [0, 8, 9, 10, Math.floor(expected.length / 2), expected.length - 2, expected.length - 1, 0];
     const seekSamples = seekOrdinals.reduce((count, i) => count + (i + 1 < expected.length ? 2 : 1), 0);
     for (const remote of [true, false]) {
@@ -39,7 +41,9 @@ try {
       const inspect = async (output, ordinal) => {
         try {
           assert(!!output && Math.abs(output.pts - expected[ordinal]) <= 2, `frame ${ordinal}: PTS=${output?.pts}, expected=${expected[ordinal]}`);
+          if(ordinal%25===0)progress('readback-start',{remote,ordinal,format:output.frame?.format});
           const signature = await samplePixels(output);
+          if(ordinal%25===0)progress('readback-complete',{remote,ordinal,path:signature.readbackPath});
           row.pixelSamples++;
           const { values, ...layout } = signature;
           Object.assign(row, { outputFormat: signature.outputFormat, readbackPath: signature.readbackPath, signatureLayout: layout });
@@ -55,9 +59,11 @@ try {
         } finally { output?.frame?.close(); }
       };
       try {
+        progress('open-start',{remote});
         const { times: _times, durations: _durations, ...info } = await source.open(new URL('/vendor/voidplayer-core/voidplayer-core.js', location.href).href, undefined, false);
-        row.info = info;
-        let frame = await source.at(expected[0]);
+        row.info = info;progress('open-complete',{remote,info});
+        progress('first-frame-start',{remote});
+        let frame = await source.at(expected[0]);progress('first-frame-complete',{remote});
         for (let i = 0; i < expected.length; i++) {
           const pts = await inspect(frame, i); row.count++;
           frame = await source.next(pts);

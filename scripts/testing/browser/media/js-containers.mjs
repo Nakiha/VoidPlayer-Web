@@ -107,7 +107,11 @@ await withBrowserFixture({caseName:'js-containers',engine,timeoutMs:600000,roots
  };
  await call('remove_review_track',{slot:'A'});
  await call('set_review_color_mode',{mode:'reference'});await call('set_reference_decode',{decoder:'software',depth:2});
- await stage('fresh-runtime-reload',()=>navigation.reload('fresh-runtime-reload',()=>page.reload()));await page.waitForFunction(()=>window.voidPlayer?.tools);await clearThumbnails();
+ await stage('fresh-runtime-reload',()=>navigation.reload('fresh-runtime-reload',()=>page.reload()));await page.waitForFunction(()=>window.voidPlayer?.tools);
+ // Agent configuration belongs to the current session. Reapply the software
+ // thumbnail precondition after a fresh runtime, independently of host codecs.
+ await call('set_review_color_mode',{mode:'reference'});await call('set_reference_decode',{decoder:'software',depth:2});
+ await clearThumbnails();
  await page.locator('#file-A').setInputFiles(path.join(repositoryRoot,'fixtures/js-container',name));await stable();
  const restored=(await call('get_review_session')).tracks[0];
  assert.equal(restored.decoder,'ffmpeg-wasm');assert.equal(restored.indexSource,'client');assert.equal(restored.indexIntegrity,'complete');
